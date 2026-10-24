@@ -1945,6 +1945,40 @@ textarea.in{resize:vertical;min-height:96px}
 .hf-tile.hf-fall{animation:hf-fall .5s cubic-bezier(.2,.7,.3,1) both;animation-delay:var(--hfd,0ms)}
 @keyframes hf-fall{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
 @media (prefers-reduced-motion:reduce){.hf-tile.hf-fall{animation:none}}
+/* (Tanda 4 del feed) Bandeja de historias de la semana: círculos estilo
+   Instagram sobre la grilla. Aro degradé = historia viva o por salir;
+   aro gris = ya salió un día anterior. Sin historias, la bandeja no
+   existe en el DOM (la arma homeStoriesTrayHTML solo con datos). */
+.hf-stories{display:flex;gap:14px;overflow-x:auto;padding:14px 12px 6px;background:#fff;scrollbar-width:none}
+.hf-stories::-webkit-scrollbar{display:none}
+.hf-story{display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:none;padding:0;cursor:pointer;flex:none;font:inherit}
+.hf-story-ring{display:block;padding:3px;border-radius:50%;background:conic-gradient(from 210deg,#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5,#feda75)}
+.hf-story-ring.past{background:#d9d9d9}
+.hf-story-in{display:block;width:60px;height:60px;border-radius:50%;border:2.5px solid #fff;overflow:hidden;background:#eef2f5}
+.hf-story-in>img,.hf-story-in>video{width:100%;height:100%;object-fit:cover;display:block}
+.hf-story-lbl{font-size:11px;color:var(--txt);max-width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* (Tanda 4 del feed) El porqué de la grilla: una línea sobre la grilla. */
+.hf-why{padding:12px 14px 4px;font-size:13px;line-height:1.5;color:var(--dim);background:#fff}
+/* (Tanda 4 del feed) Visor de historias 9:16 estilo Instagram. */
+.hf-sv{position:fixed;inset:0;z-index:200;background:rgba(5,10,16,.97);display:flex;align-items:center;justify-content:center}
+.hf-sv-stage{position:relative;width:min(100vw,56.25dvh);aspect-ratio:9/16;max-height:100dvh;background:#000;overflow:hidden}
+@media (min-width:520px){.hf-sv-stage{border-radius:14px}}
+.hf-sv-media{position:absolute;inset:0}
+.hf-sv-media>img,.hf-sv-media>video{width:100%;height:100%;object-fit:cover;display:block}
+.hf-sv-bars{position:absolute;top:10px;left:8px;right:8px;display:flex;gap:4px;z-index:3}
+.hf-sv-bar{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.35);overflow:hidden;display:block}
+.hf-sv-bar>i{display:block;height:100%;width:0;background:#fff;border-radius:2px}
+.hf-sv-head{position:absolute;top:20px;left:12px;right:8px;display:flex;align-items:center;justify-content:space-between;z-index:3;color:#fff;font-size:13px;font-weight:600;text-shadow:0 1px 6px rgba(0,0,0,.55)}
+.hf-sv-x{background:rgba(0,0,0,.35);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer;flex:none}
+.hf-sv-zone{position:absolute;top:0;bottom:0;background:none;border:none;z-index:2;cursor:pointer;padding:0}
+.hf-sv-zone.prev{left:0;width:34%}
+.hf-sv-zone.next{right:0;width:66%}
+body.hf-sv-open{overflow:hidden}
+/* (Tanda 4 del feed) Modo «Mover»: barra de estado + tile origen. */
+.hf-move-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:120;background:var(--txt);color:#fff;display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:14px;box-shadow:0 10px 30px rgba(10,30,51,.35);font-size:13.5px;line-height:1.35;max-width:92vw}
+.hf-move-x{background:var(--yl);color:var(--txt);border:none;font-weight:800;border-radius:9px;padding:6px 11px;cursor:pointer;font:inherit;flex:none}
+.hf-tile.hf-move-src{outline:3px solid var(--yl);outline-offset:-3px}
+.hf-tile.hf-swapping{opacity:.55;pointer-events:none}
 /* (Frente 3 · suma 2) Hoja de acciones del feed: el input de
    reprogramación dentro de la hoja vigente (.pcsheet). */
 .hf-resched{margin:2px 0 8px}

@@ -11901,6 +11901,116 @@ function homeHeadHTML(prof, bizName, opts) {
     <div class="hf-tabs" aria-hidden="true"><span class="hf-tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></span><span class="hf-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3.2 9.4h17.6M8.2 3.4l2.1 5.8M13.9 3.4l2.1 5.8" stroke-linecap="round"/><path d="M10.4 12.7v4.6c0 .55.62.9 1.1.64l3.9-2.3c.46-.28.46-1 0-1.28l-3.9-2.3c-.48-.26-1.1.09-1.1.63z" fill="currentColor" stroke="none"/></svg></span><span class="hf-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 19.4c1-2.8 3.2-4.2 5.8-4.2s4.8 1.4 5.8 4.2"/></svg></span></div>
   </div>`;
 }
+/* ===== (Tanda 4 del feed) BANDEJA DE HISTORIAS + PORQUÉ DE LA GRILLA =====
+   Funciones puras del bloque (se extraen en test-frente4-feed): solo usan
+   esc/mv y los helpers de fecha del bundle (pcParseDate/pcTz y los
+   sched*), igual que hfChipText. Ningún dato se inventa: la bandeja
+   nace de los posteos historia REALES de la cuenta y el porqué nace de
+   la composición REAL de la semana en su orden final de grilla. */
+let HOME_STORIES = []; // la tira de historias vigente (la llena inicioView; el visor la lee)
+// Historias de ESTA semana (lunes a domingo, tz del negocio), publicadas
+// o programadas — los borradores de historia NO entran (la bandeja
+// muestra lo que sale o ya salió, no propuestas). Sin historias: [].
+function hfStoriesOfWeek(all, tz) {
+  try {
+    const posts = Array.isArray(all) ? all : [];
+    const today = schedTodayYmd(tz);
+    const mon = schedMondayOf(today), sun = schedAddDays(mon, 6);
+    const out = [];
+    for (const p of posts) {
+      if (!p || String(p.media_type || '') !== 'story') continue;
+      if (p.status !== 'scheduled' && p.status !== 'published') continue;
+      if (!p.image_path) continue;
+      const iso = p.status === 'published' ? (p.published_at || p.scheduled_at) : p.scheduled_at;
+      const dt = pcParseDate(iso);
+      if (!dt) continue;
+      const day = schedDayKeyOf(dt, tz);
+      if (!day || day < mon || day > sun) continue;
+      const path = String(p.image_path);
+      out.push({
+        id: p.id, path, isVideo: /\.(mp4|mov|webm)(\?|$)/i.test(path),
+        status: p.status, day, iso: String(iso || ''), t: dt.getTime(),
+        // Ya salió un día anterior: su historia venció (aro gris). La de
+        // hoy publicada sigue «viva» y la programada está por salir:
+        // ambas llevan el aro degradé.
+        past: p.status === 'published' && day < today,
+      });
+    }
+    out.sort((x, y) => x.t - y.t);
+    return out;
+  } catch (e) { return []; }
+}
+function hfStoryDayLabel(day, en) {
+  try {
+    const today = schedTodayYmd(pcTz());
+    if (day === today) return en ? 'Today' : 'Hoy';
+    const d = schedYmdToDate(day);
+    if (!d) return '';
+    const s = d.toLocaleDateString(en ? 'en-US' : 'es-AR', { weekday: 'short', timeZone: 'UTC' }).replace(/\./g, '');
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  } catch (e) { return ''; }
+}
+function homeStoriesTrayHTML(stories, opts) {
+  const en = !!(opts && opts.en);
+  const list = Array.isArray(stories) ? stories : [];
+  if (!list.length) return ''; // sin historias NO hay bandeja: nunca relleno
+  const circ = list.map((s, i) => {
+    const media = s.isVideo
+      ? `<video src="${esc(s.path)}" muted playsinline preload="metadata"></video>`
+      : `<img src="${esc(mv(s.path, 240))}" loading="lazy" alt="" onerror="__imgFb(this)">`;
+    const lbl = hfStoryDayLabel(s.day, en);
+    return `<button type="button" class="hf-story" data-sidx="${i}" aria-label="${en ? 'Story' : 'Historia'} ${esc(lbl)}"><span class="hf-story-ring${s.past ? ' past' : ''}"><span class="hf-story-in">${media}</span></span><span class="hf-story-lbl">${esc(lbl)}</span></button>`;
+  }).join('');
+  return `<div class="hf-stories" aria-label="${en ? 'Stories this week' : 'Historias de esta semana'}">${circ}</div>`;
+}
+/* El porqué de la grilla: UNA línea derivada de la composición real de
+   la semana (las tiles futuras EN SU ORDEN FINAL de grilla, con el
+   `tipo` persistido de cada posteo y su formato). Reglas, en orden:
+   1) alternancia producto/personas: grupos por tipo (detras/social =
+      personas; novedad/promo/tip = producto) con ≥2 de cada grupo y
+      ningún grupo repetido pegado en la secuencia → la línea del
+      ejemplo del dueño.
+   2) mezcla real de formatos: ≥1 reel y ≥2 posteos/carruseles.
+   3) variedad real de ángulos: ≥3 tipos distintos, nombrados.
+   Sin patrón verdadero (o con menos de 3 piezas futuras): '' — la
+   línea no se muestra. Nada de catálogo genérico. */
+function hfGridWhyLine(tiles, opts) {
+  try {
+    const en = !!(opts && opts.en);
+    const ups = (tiles || []).filter((t) => t && t.kind === 'post' && t.post && (t.post.status === 'draft' || t.post.status === 'scheduled'));
+    if (ups.length < 3) return '';
+    const grp = (p) => {
+      const tp = String(p.tipo || '').toLowerCase();
+      if (tp === 'detras' || tp === 'social') return 'people';
+      if (tp === 'novedad' || tp === 'promo' || tp === 'tip') return 'product';
+      return '';
+    };
+    const gs = ups.map((t) => grp(t.post));
+    const nPeople = gs.filter((g) => g === 'people').length;
+    const nProduct = gs.filter((g) => g === 'product').length;
+    let alternates = false;
+    if (nPeople >= 2 && nProduct >= 2) {
+      const seq = gs.filter(Boolean);
+      alternates = seq.length >= 4 && seq.every((g, i) => i === 0 || g !== seq[i - 1]);
+    }
+    if (alternates) return en
+      ? '💡 This week we alternate product and people: that is how accounts in your niche grow.'
+      : '💡 Esta semana alternamos producto y personas: así crecen las cuentas de tu rubro.';
+    const reels = ups.filter((t) => String(t.post.media_type || '') === 'video').length;
+    const cars = ups.filter((t) => String(t.post.media_type || '') === 'carousel' || (t.post.carousel_paths && String(t.post.carousel_paths).length > 2)).length;
+    const imgs = ups.length - reels - cars;
+    if (reels >= 1 && (imgs + cars) >= 2) return en
+      ? '💡 This week mixes reels and posts: video brings new people in, and posts do the selling.'
+      : '💡 Esta semana combinamos reels y posteos: el video trae gente nueva y los posteos venden.';
+    const tipos = [...new Set(ups.map((t) => String(t.post.tipo || '').toLowerCase()).filter(Boolean))];
+    if (tipos.length >= 3) {
+      const names = { promo: en ? 'offers' : 'ofertas', tip: en ? 'tips' : 'consejos', social: en ? 'community' : 'comunidad', detras: en ? 'behind the scenes' : 'detrás de escena', novedad: en ? 'new arrivals' : 'novedades' };
+      const list = tipos.slice(0, 3).map((t) => names[t] || t).join(' · ');
+      return en ? `💡 Every post attacks a different angle this week: ${list}.` : `💡 Cada posteo ataca un ángulo distinto esta semana: ${list}.`;
+    }
+    return '';
+  } catch (e) { return ''; }
+}
 /* ===== /HOME_FEED ===== */
 
 let HOME_PROF = null; // v331: último payload de /api/home/profile (réplica del perfil)
@@ -11980,6 +12090,16 @@ async function inicioView() {
       : proposedLabelFor(p, pl.proposals, tz);
     vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null, user: (prof && prof.username) || '', pic: (prof && prof.pic) || '' }));
   }
+  // (Tanda 4) Bandeja de historias de la semana + el porqué de la
+  // grilla: ambos nacen de datos reales ya cargados (los posteos de la
+  // cuenta y la composición final de tiles). Sin historias no hay
+  // bandeja; sin patrón verdadero no hay línea.
+  const enHome = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const weekStories = hfStoriesOfWeek(allPosts, tz);
+  HOME_STORIES = weekStories;
+  const storiesHTML = homeStoriesTrayHTML(weekStories, { en: enHome });
+  const whyLine = tiles.length ? hfGridWhyLine(tiles, { en: enHome }) : '';
+  const whyHTML = whyLine ? `<div class="hf-why">${esc(whyLine)}</div>` : '';
   const gridHTML = tiles.length
     ? `<div class="hf-grid">${tiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
     : homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
@@ -12000,7 +12120,9 @@ async function inicioView() {
   return `<div id="inicioView" class="hf-wrap">
   ${igLine}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyToday: homeStoryToday })}
+  ${storiesHTML}
   ${kitHTML}
+  ${whyHTML}
   ${gridHTML}
   ${stripHTML}
   <div id="mzIdeasSlot"></div>
@@ -12164,6 +12286,7 @@ function hfOpenActionsSheet(tile) {
     <button type="button" class="pcsheet-opt" data-hf-act="edit">✏️ ${en ? 'Edit' : 'Editar'}<small>${en ? 'Opens this post right here in your feed' : 'Se abre este posteo acá mismo, en tu feed'}</small></button>
     <button type="button" class="pcsheet-opt" data-hf-act="hold">⏸ ${en ? 'Stop' : 'Frenar'}<small>${en ? 'Back to draft — it will not go out' : 'Vuelve a borrador — no va a salir'}</small></button>
     <button type="button" class="pcsheet-opt" data-hf-act="resched">🗓️ ${en ? 'Reschedule' : 'Reprogramar'}<small>${en ? 'Pick a new day and time' : 'Elegí un día y una hora nuevos'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hf-act="move">🔀 ${en ? 'Move' : 'Mover'}<small>${en ? 'Swap days with another upcoming post' : 'Intercambiá el día con otro posteo que viene'}</small></button>
     <div class="hf-resched" hidden>
       <input type="datetime-local" class="pcsheet-select hf-resched-inp" value="${esc(isoToLocalInput(tile.dataset.schedAt || ''))}" aria-label="${en ? 'New day and time' : 'Nuevo día y hora'}">
       <button type="button" class="pcsheet-opt" data-hf-act="resched-save" style="margin-top:8px">✓ ${en ? 'Save new time' : 'Guardar nueva fecha'}</button>
@@ -12192,6 +12315,7 @@ function hfActionsAct(act, id, tile, bd) {
     if (!pop) location.hash = '#/app/post/' + encodeURIComponent(id); // respaldo: el detalle vigente
     return;
   }
+  if (act === 'move') { pcCloseSheet(); hfMoveStart(tile); return; }
   if (act === 'resched') {
     const box = bd.querySelector('.hf-resched');
     if (box) { box.hidden = false; const inp = box.querySelector('.hf-resched-inp'); if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) {} } }
@@ -12263,6 +12387,229 @@ async function hfReschedule(id, tile, bd) {
   toast('🗓️ ' + (hfIsEn() ? 'Rescheduled — ' : 'Reprogramado — ') + hfChipText(iso));
   try { render(); } catch (e) {}
 }
+/* ===== (Tanda 4 del feed) VISOR DE HISTORIAS + MOVER =====
+   Visor 9:16 estilo Instagram sobre la tira de la bandeja: barras de
+   progreso arriba, avance por toque (derecha sigue, izquierda vuelve),
+   avance automático (5s en imágenes; en videos manda su duración
+   real) y pausa al mantener apretado, como en Instagram. */
+const HF_SV = { idx: 0, timer: null, startedAt: 0, total: 0, remain: 0, paused: false };
+function hfSvBar(i, frac, ms) {
+  const bar = document.querySelector(`#hfSv .hf-sv-bar i[data-b="${i}"]`);
+  if (!bar) return;
+  bar.style.transition = 'none';
+  bar.style.width = (Math.max(0, Math.min(1, frac)) * 100) + '%';
+  if (ms) {
+    void bar.offsetWidth; // fija el punto de partida antes de animar
+    bar.style.transition = `width ${ms}ms linear`;
+    bar.style.width = '100%';
+  }
+}
+function hfSvSchedule(ms) {
+  if (HF_SV.timer) { clearTimeout(HF_SV.timer); HF_SV.timer = null; }
+  HF_SV.total = ms; HF_SV.remain = ms; HF_SV.startedAt = Date.now(); HF_SV.paused = false;
+  hfSvBar(HF_SV.idx, 0, ms);
+  HF_SV.timer = setTimeout(() => hfStoryShow(HF_SV.idx + 1), ms);
+}
+function hfStoryPause(on) {
+  const ov = document.getElementById('hfSv');
+  if (!ov || HF_SV.paused === on) return;
+  const vid = ov.querySelector('.hf-sv-media video');
+  if (on) {
+    HF_SV.paused = true;
+    if (HF_SV.timer) { clearTimeout(HF_SV.timer); HF_SV.timer = null; }
+    const el = Math.min(HF_SV.total || 0, Date.now() - HF_SV.startedAt);
+    HF_SV.remain = Math.max(0, (HF_SV.total || 0) - el);
+    hfSvBar(HF_SV.idx, HF_SV.total ? el / HF_SV.total : 0, 0);
+    if (vid) { try { vid.pause(); } catch (e) {} }
+  } else {
+    HF_SV.paused = false;
+    HF_SV.total = HF_SV.remain; HF_SV.startedAt = Date.now();
+    hfSvBar(HF_SV.idx, 0, 0);
+    const cur = ov.querySelector(`.hf-sv-bar i[data-b="${HF_SV.idx}"]`);
+    if (cur) { const w = parseFloat(cur.style.width) || 0; hfSvBar(HF_SV.idx, w / 100, HF_SV.remain); }
+    if (vid) { try { const pr = vid.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {} }
+    if (HF_SV.timer) clearTimeout(HF_SV.timer);
+    HF_SV.timer = setTimeout(() => hfStoryShow(HF_SV.idx + 1), HF_SV.remain);
+  }
+}
+function hfStoryClose() {
+  if (HF_SV.timer) { clearTimeout(HF_SV.timer); HF_SV.timer = null; }
+  HF_SV.paused = false;
+  const ov = document.getElementById('hfSv');
+  if (ov) ov.remove();
+  try { document.body.classList.remove('hf-sv-open'); } catch (e) {}
+}
+function hfStoryShow(i) {
+  const list = HOME_STORIES;
+  if (!list.length) { hfStoryClose(); return; }
+  if (i < 0) i = 0;
+  if (i >= list.length) { hfStoryClose(); return; }
+  HF_SV.idx = i;
+  if (HF_SV.timer) { clearTimeout(HF_SV.timer); HF_SV.timer = null; }
+  HF_SV.paused = false;
+  const ov = document.getElementById('hfSv');
+  if (!ov) return;
+  const s = list[i];
+  list.forEach((_, k) => hfSvBar(k, k < i ? 1 : 0, 0));
+  const en = hfIsEn();
+  const when = ov.querySelector('.hf-sv-when');
+  if (when) when.textContent = (hfStoryDayLabel(s.day, en) || '') + (s.status === 'scheduled' ? ' · 🕐 ' + (hfChipText(s.iso) || '') : '');
+  const box = ov.querySelector('.hf-sv-media');
+  if (!box) return;
+  if (s.isVideo) {
+    box.innerHTML = `<video src="${esc(s.path)}" autoplay muted loop playsinline></video>`;
+    const v = box.querySelector('video');
+    let armed = false;
+    const arm = (ms) => { if (armed) return; armed = true; hfSvSchedule(ms); };
+    v.addEventListener('loadedmetadata', () => { if (isFinite(v.duration) && v.duration > 0) arm(Math.round(v.duration * 1000)); });
+    setTimeout(() => arm(10000), 600); // sin metadata a tiempo: avanza igual a los 10s
+    try { const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {}
+  } else {
+    box.innerHTML = `<img src="${esc(s.path)}" alt="">`;
+    hfSvSchedule(5000);
+  }
+}
+function hfStoryOpen(i) {
+  if (!HOME_STORIES.length) return;
+  hfStoryClose();
+  const en = hfIsEn();
+  const ov = document.createElement('div');
+  ov.className = 'hf-sv';
+  ov.id = 'hfSv';
+  ov.innerHTML = `<div class="hf-sv-stage">
+      <div class="hf-sv-bars">${HOME_STORIES.map((s, k) => `<span class="hf-sv-bar"><i data-b="${k}"></i></span>`).join('')}</div>
+      <div class="hf-sv-head"><span class="hf-sv-when"></span><button type="button" class="hf-sv-x" aria-label="${en ? 'Close' : 'Cerrar'}">✕</button></div>
+      <div class="hf-sv-media"></div>
+      <button type="button" class="hf-sv-zone prev" aria-label="${en ? 'Previous' : 'Anterior'}"></button>
+      <button type="button" class="hf-sv-zone next" aria-label="${en ? 'Next' : 'Siguiente'}"></button>
+    </div>`;
+  document.body.appendChild(ov);
+  try { document.body.classList.add('hf-sv-open'); } catch (e) {}
+  ov.querySelector('.hf-sv-x').addEventListener('click', (e) => { e.stopPropagation(); hfStoryClose(); });
+  ov.querySelector('.hf-sv-zone.prev').addEventListener('click', () => hfStoryShow(HF_SV.idx - 1));
+  ov.querySelector('.hf-sv-zone.next').addEventListener('click', () => hfStoryShow(HF_SV.idx + 1));
+  // Mantener apretado pausa (como Instagram); soltar reanuda. El click
+  // posterior de las zonas navega igual que siempre.
+  const stage = ov.querySelector('.hf-sv-stage');
+  stage.addEventListener('pointerdown', () => hfStoryPause(true));
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => stage.addEventListener(ev, () => hfStoryPause(false)));
+  hfStoryShow(i || 0);
+}
+
+/* MOVER — resolución de la gramática de gestos (DECLARADA):
+   el arrastre continuo táctil choca con TODO lo vivo — preview de reel
+   a los 350ms, hoja de acciones a los 600ms, cancelación por movimiento
+   >10px y el scroll vertical (pan-y) que el navegador captura con
+   pointercancel. En vez de pelear esa precedencia, mover nace de la
+   hoja de acciones: «Mover» → tocar la tile destino. Ningún gesto vivo
+   cambia. El intercambio vale SOLO entre futuros PROGRAMADOS: un
+   borrador no tiene día propio persistido (su lugar es una propuesta
+   calculada en el cliente) y el único endpoint que fija una fecha
+   también lo programa — moverlo así lo aceptaría en silencio. Y usa
+   EXACTAMENTE el camino de Reprogramar: hfReschedQuotaOk (ambos
+   sentidos) + PATCH /api/posts/:id + planLimitModal ante un 403. */
+let HF_MOVE = null; // { id, tile } — el origen elegido, si el modo está activo
+function hfMoveStart(tile) {
+  hfMoveCancel();
+  if (!tile || !tile.dataset || !tile.dataset.postId) return;
+  HF_MOVE = { id: String(tile.dataset.postId), tile };
+  tile.classList.add('hf-move-src');
+  const en = hfIsEn();
+  const bar = document.createElement('div');
+  bar.className = 'hf-move-bar';
+  bar.id = 'hfMoveBar';
+  bar.innerHTML = `<span>🔀 ${en ? 'Tap the post to swap days with' : 'Tocá el posteo con el que querés intercambiar el día'}</span><button type="button" class="hf-move-x">${en ? 'Cancel' : 'Cancelar'}</button>`;
+  document.body.appendChild(bar);
+  bar.querySelector('.hf-move-x').addEventListener('click', () => hfMoveCancel());
+}
+function hfMoveCancel() {
+  if (HF_MOVE && HF_MOVE.tile) { try { HF_MOVE.tile.classList.remove('hf-move-src'); } catch (e) {} }
+  HF_MOVE = null;
+  const bar = document.getElementById('hfMoveBar');
+  if (bar) bar.remove();
+}
+function hfMoveBind(root) {
+  if (!root || root._hfMoveBound) return;
+  root._hfMoveBound = true;
+  // Captura: corre ANTES que el click de siempre de las tiles
+  // (bindScfMinis) y lo suprime solo mientras el modo Mover está activo.
+  root.addEventListener('click', (e) => {
+    if (!HF_MOVE) return;
+    const t = e.target && e.target.closest ? e.target.closest('.hf-tile') : null;
+    if (!t) return; // toques fuera de las tiles no cancelan ni disparan
+    e.preventDefault(); e.stopPropagation();
+    const en = hfIsEn();
+    if (String(t.dataset.postId || '') === HF_MOVE.id) { hfMoveCancel(); return; }
+    if (!t.dataset.postId) { toast(en ? 'That one is already out — pick an upcoming post' : 'Ese ya salió — elegí un posteo que viene'); return; }
+    if (t.dataset.status !== 'scheduled') { toast(en ? 'That post is still a draft — accept it first, then you can move it' : 'Ese posteo todavía es borrador — aceptalo primero y después lo movés'); return; }
+    const src = HF_MOVE.tile;
+    hfMoveCancel();
+    hfSwapPosts(src, t);
+  }, true);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hfMoveCancel(); });
+}
+async function hfSwapPosts(aTile, bTile) {
+  const en = hfIsEn();
+  const aId = String(aTile.dataset.postId || ''), bId = String(bTile.dataset.postId || '');
+  const aIso = aTile.dataset.schedAt || '', bIso = bTile.dataset.schedAt || '';
+  if (!aId || !bId || !aIso || !bIso) { toast(en ? 'Could not swap those posts' : 'No se pudieron intercambiar esos posteos'); return; }
+  aTile.classList.add('hf-swapping'); bTile.classList.add('hf-swapping');
+  const patch = async (id, iso) => {
+    try { return await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: iso }); }
+    catch (e) { if (isPlanLimitErr(e)) { pcCloseSheet(); planLimitModal(e); } throw e; }
+  };
+  const fail = (msg) => { toast('⚠️ ' + msg); try { render(); } catch (e) {} };
+  try {
+    // Cupo de la semana destino en los dos sentidos (el mismo chequeo
+    // que Reprogramar; dentro de la misma semana no cambia ningún cupo
+    // y el chequeo lo sabe). Si una semana destino está llena, su modal
+    // lo explica y no se movió nada.
+    if (!(await hfReschedQuotaOk(aId, aTile, bIso))) { try { render(); } catch (e) {} return; }
+    if (!(await hfReschedQuotaOk(bId, bTile, aIso))) { try { render(); } catch (e) {} return; }
+    // Danza de intercambio por el camino vigente: el servidor no deja
+    // dos posteos del feed el mismo día, así que al pedir primero el
+    // día del otro, el primero se ubica en el próximo día libre (la
+    // respuesta trae su fecha real); con su día ya liberado, el segundo
+    // cae exacto en el día del primero, y el primero cierra exacto en
+    // el día que el segundo acaba de dejar.
+    await patch(aId, bIso);
+    try { await patch(bId, aIso); }
+    catch (e) { try { await patch(aId, aIso); } catch (e2) {} fail(en ? 'Could not complete the swap' : 'No se pudo completar el intercambio'); return; }
+    try { await patch(aId, bIso); }
+    catch (e) {
+      try { await patch(bId, bIso); } catch (e2) {}
+      try { await patch(aId, aIso); } catch (e3) {}
+      fail(en ? 'Could not complete the swap' : 'No se pudo completar el intercambio');
+      return;
+    }
+    // Verificación contra la verdad del servidor + reparación simple
+    // si la danza dejó a alguno fuera de su día destino.
+    try {
+      const tz = pcTz();
+      const dayOf = (iso) => { const d = pcParseDate(iso); return d ? schedDayKeyOf(d, tz) : ''; };
+      const posts = await api.get('/api/posts').catch(() => null);
+      if (Array.isArray(posts)) {
+        let pa = posts.find((p) => String(p.id) === aId);
+        let pb = posts.find((p) => String(p.id) === bId);
+        if (pa && pb && dayOf(pa.scheduled_at) === dayOf(bIso) && dayOf(pb.scheduled_at) !== dayOf(aIso)) {
+          await patch(bId, aIso).catch(() => {});
+        }
+        const posts2 = await api.get('/api/posts').catch(() => null);
+        if (Array.isArray(posts2)) {
+          pa = posts2.find((p) => String(p.id) === aId);
+          pb = posts2.find((p) => String(p.id) === bId);
+          if (pa && pb && dayOf(pb.scheduled_at) === dayOf(aIso) && dayOf(pa.scheduled_at) !== dayOf(bIso)) {
+            await patch(aId, bIso).catch(() => {});
+          }
+        }
+      }
+    } catch (e) { /* la grilla re-renderizada muestra el estado real igual */ }
+    toast('🔀 ' + (en ? 'Swapped — ' : 'Intercambiados — ') + hfChipText(bIso) + ' ↔ ' + hfChipText(aIso));
+    try { render(); } catch (e) {}
+  } catch (e) {
+    fail((en ? 'Could not swap: ' : 'No se pudo intercambiar: ') + ((e && e.message) || ''));
+  }
+}
 /* ===== /(Frente 3 · suma 2) FEED VIVO ===== */
 
 function bindInicio() {
@@ -12274,6 +12621,15 @@ function bindInicio() {
   // press-and-hold + hoja de acciones en futuros): capa extra sobre el
   // cableado de siempre, sin reemplazarlo.
   hfFeedGesturesBind(document.getElementById('inicioView'));
+  // (Tanda 4) Modo «Mover»: se cancela cualquier resto de una vista
+  // anterior y se arma el interceptor de toques (solo actúa con el modo
+  // activo; con el modo apagado no toca ningún click).
+  try { hfMoveCancel(); } catch (e) {}
+  hfMoveBind(document.getElementById('inicioView'));
+  // (Tanda 4) Bandeja de historias: tocar un círculo abre el visor 9:16.
+  $$('#inicioView .hf-story').forEach((el) => {
+    el.onclick = () => hfStoryOpen(Number(el.dataset.sidx) || 0);
+  });
   // Franja de revisión: "Aceptar todo" — el handler de siempre
   // (doAcceptAll completa los ítems desde REVIEW_DRAFTS, que
   // inicioView ya cargó con todos los borradores de la cuenta).
