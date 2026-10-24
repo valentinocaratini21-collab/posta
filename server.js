@@ -4373,7 +4373,17 @@ app.post('/api/admin/digest/rebuild', requireAdminToken, express.json(), async (
       const descBefore = String(prof.description || '');
       let descAfter = descBefore, descRepaired = false;
       const descLow = descBefore.toLowerCase();
-      const contaminated = removedItems.some((it) => it && it.trim().length >= 8 && descLow.includes(it.trim().toLowerCase()));
+      let contaminated = removedItems.some((it) => it && it.trim().length >= 8 && descLow.includes(it.trim().toLowerCase()));
+      if (!contaminated && /^ofrece:/i.test(descBefore.trim())) {
+        // La descripción DERIVADA («Ofrece: ítem, ítem.») se juzga por
+        // SUS propios ítems: si alguno no pasaría la puerta hoy, está
+        // contaminada — aunque el ADN ya venga depurado de la lectura
+        // (readDna filtra antes de que este handler vea los ítems, así
+        // que removedItems puede venir vacío con la descripción sucia:
+        // fue exactamente el caso de la cuenta 80 en la primera corrida).
+        const listed = descBefore.trim().replace(/^ofrece:\s*/i, '').replace(/\.\s*$/, '').split(',').map((s) => s.trim()).filter(Boolean);
+        contaminated = listed.some((it) => !clientDigest.isPlausibleOfferItem(it));
+      }
       if (contaminated) {
         const itemNames = (arr) => (arr || []).map((x) => String((x && (x.nombre || x.titulo || x.name)) || x || '')).filter(Boolean);
         const items = [...itemNames(digest.productos), ...itemNames(digest.servicios)];
@@ -18583,7 +18593,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v390';
+const BUILD_ID = '20261024-v391';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
