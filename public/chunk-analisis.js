@@ -569,6 +569,11 @@ function anaLetterMinimalHTML(a) {
       h += `<p class="ana-ltr-p">${esc(it.text || '')}</p>`;
     }
   });
+  // (v384 · ítem 8) La Carta con audio: botón a su página firmada.
+  if (a && a.carta_url) {
+    const enL = a.lang === 'en';
+    h += `<p style="text-align:center;margin:16px 0 4px"><a href="${esc(a.carta_url)}" target="_blank" rel="noopener" style="display:inline-block;border:2px solid #2793C8;color:#2793C8;font-weight:800;font-size:14.5px;padding:10px 24px;border-radius:999px;text-decoration:none">${enL ? '🎧 Listen to your letter' : '🎧 Escuchá tu carta'}</a></p>`;
+  }
   return h;
 }
 

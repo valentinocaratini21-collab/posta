@@ -462,6 +462,22 @@ CREATE TABLE IF NOT EXISTS trial_sample_reels (
   video TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS carta_audio (
+  key TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  ref TEXT NOT NULL,
+  lang TEXT NOT NULL DEFAULT 'es',
+  script TEXT NOT NULL,
+  script_hash TEXT NOT NULL,
+  audio_file TEXT DEFAULT '',
+  state TEXT NOT NULL DEFAULT 'pending',
+  chars INTEGER DEFAULT 0,
+  provider TEXT DEFAULT '',
+  model TEXT DEFAULT '',
+  voice TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+);
 `);
 
 // Eliminación de datos (requerido por Meta): solicitudes vía signed_request

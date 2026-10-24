@@ -197,11 +197,11 @@ async function call(method, p, body) {
   const carIdea = seedIdea({ angle: 'chip:carrusel', format: 'carrusel', title: 'Cómo elegir un ramo' });
   const makeCar = await call('POST', `/api/ideas/${carIdea}/make`, {});
   assert.strictEqual(makeCar.status, 200, 'make carrusel: ' + JSON.stringify(makeCar.json));
-  ok('el draft es media_type carousel con portada + 3 placas reales', () => {
+  ok('el draft es media_type carousel con portada IA + placas (total 3–6, v384)', () => {
     const post = db.prepare('SELECT media_type, image_path, carousel_paths FROM posts WHERE id = ?').get(makeCar.json.post_id);
     assert.strictEqual(post.media_type, 'carousel');
     const paths = JSON.parse(post.carousel_paths || '[]');
-    assert.strictEqual(paths.length, 4, 'paths: ' + JSON.stringify(paths));
+    assert.ok(paths.length >= 3 && paths.length <= 6, 'paths (3–6): ' + JSON.stringify(paths));
     assert.strictEqual(paths[0], post.image_path, 'la primera placa es la portada');
     for (const p of paths) assert.ok(fs.existsSync(path.join(TMP, 'media', path.basename(p))), 'existe en disco: ' + p);
   });

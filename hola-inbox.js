@@ -109,7 +109,7 @@ function classifyReply(input) {
 // del fundador se firma como Valentino/fundador). Sin marcador, el remitente
 // contra trial_cache.email identifica destinatarios de la Carta (la Carta
 // deja gift_state='sent' y el email del lead en esa tabla).
-const CARTA_MARKERS = ['tus posteos ya estan listos', 'your posts are ready', 'ver mi semana completa', 'see my full week', 'carta de posty'];
+const CARTA_MARKERS = ['tus posteos ya estan listos', 'your posts are ready', 'ver mi semana completa', 'see my full week', 'carta de posty', 'escucha tu carta', 'listen to your letter'];
 const TOQUE_MARKERS = ['valentino', 'fundador', 'founder', 'toque del fundador', 'founder touch'];
 
 function determineLink(db, input) {

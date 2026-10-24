@@ -48,6 +48,8 @@ const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
 const approval = require('./approval'); // "Posty te avisa": firmas y avisos de aprobación
+let cartaAudio = null;
+try { cartaAudio = require('./carta-audio'); } catch (e) { console.error('[carta-audio] módulo no disponible:', e.message); }
 const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispositivo: cuentas guardadas en la entrada, hash + rotación + revocación
 const { reconcileUser } = require('./billing-sync');
 const { startTokenRefresh } = require('./tokenrefresh');
@@ -183,7 +185,7 @@ let scoreCanvasCover = null, qaScrollStopB64 = null, SCROLLSTOP_MIN = 60;
 try { ({ scoreCanvasCover, qaScrollStopB64, SCROLLSTOP_MIN } = require('./scrollstop')); }
 catch (e) { console.error('[init] scrollstop no disponible:', e.message); }
 let splitCarouselSlides = null, buildCarouselCaption = (c) => String(c || '');
-try { ({ splitCarouselSlides, buildCarouselCaption } = require('./carousel')); }
+try { ({ splitCarouselSlides, buildCarouselCaption, CAROUSEL_MIN = 3 } = require('./carousel')); }
 catch (e) { console.error('[init] carousel no disponible:', e.message); }
 // Extras para el system prompt de captions de un usuario: PRIMERO el brief unificado
 // (contexto de quién es el cliente), después checklist anti-genérico + voz real.
@@ -2071,7 +2073,7 @@ async function makeIdeaDraft(uid, idea) {
       console.error('[ideas-loop] carrusel de la idea falló:', e.message);
       return { ok: false, reason: 'no_carousel' };
     }
-    const paths = [gen.coverPath, ...gen.slidePaths].slice(0, 5);
+    const paths = [gen.coverPath, ...gen.slidePaths].slice(0, 6);
     const rc = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
       VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(uid, gen.coverPath, gen.caption, hashtags, JSON.stringify(paths), String(idea.title || '').slice(0, 200), String('idea:' + (idea.angle_key || '')).slice(0, 120),
@@ -6833,6 +6835,12 @@ async function buildAccountAnalysis(uid, opts = {}) {
 function analysisPayload(uid, analysis) {
   const plan = planForUid(uid);
   const view = analysisEngine.gateForPlan(analysis, plan.id);
+  // (v384 · ítem 8) La carta dominical suma su página con audio: el
+  // cliente la abre desde Análisis con un link firmado (sin sesión).
+  try {
+    const aid = view && (view.id || (analysis && analysis.id));
+    if (view && view.letter && aid && approval.signCartaLink) view.carta_url = '/carta/' + approval.signCartaLink('domingo', String(aid));
+  } catch (e) {}
   return {
     ok: true,
     plan: plan.id,
@@ -8810,10 +8818,37 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         return external + created >= ppw;
       } catch (e) { return false; }
     }
-    // Carousel automático: como máximo 1 por semana, para la idea más
-    // carousel-friendly (tips/educativo). El claim es sincrónico: sin race
-    // entre los 3 workers.
-    let carouselClaimed = false;
+    // (v384 · MODO CARRUSEL aceptado) Carruseles automáticos: hasta el
+    // cupo del plan (carouselsPerWeek = 2 en el base), elegidos por la
+    // ESTRATEGIA de la semana que armó planSalesWeek: primero la pieza
+    // estrella, después la oferta; tips/educativo solo como fallback.
+    // La elección se precomputa sincrónica (sin race entre workers).
+    let carouselQuota = 2;
+    try {
+      const uq = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid) || {};
+      const plq = getPlan(uq.plan_status === 'active' ? uq.plan : TRIAL_PLAN);
+      if (plq && plq.carouselsPerWeek != null) carouselQuota = Math.max(0, plq.carouselsPerWeek);
+    } catch (e) {}
+    let carouselCount = 0;
+    const carouselSet = new Set();
+    const carouselReason = {};
+    try {
+      const scored = picks.map((p, idx) => {
+        let score = 0, reason = '';
+        const ang = (p._sales && p._sales.angle) || '';
+        const intent = (p._sales && p._sales.intent) || '';
+        if (ang === 'estrella') { score = 100; reason = 'estrella'; }
+        else if (p.promo || intent === 'venta') { score = 60; reason = 'oferta'; }
+        else if (intent === 'reserva' || intent === 'consulta') { score = 40; reason = 'estrategia'; }
+        else {
+          let ri = '';
+          try { ri = resolveExplicitIntent({ tipo: p.tipo || '', theme: p.titulo || '', angle: p.angulo || p.porque || '' }).intent; } catch (e) {}
+          if (ri === 'tips' || ri === 'educativo') { score = 10; reason = 'tips'; }
+        }
+        return { idx, score, reason };
+      }).filter((s) => s.score > 0).sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
+      for (const s of scored.slice(0, carouselQuota)) { carouselSet.add(s.idx); carouselReason[s.idx] = s.reason; }
+    } catch (e) {}
     // Reference lock: la primera foto de producto de la semana (si ya existe)
     // viaja como referencia para que el producto se vea idéntico en todos
     // los posteos. Se resuelve por worker justo antes de generar.
@@ -8843,8 +8878,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         let isCarousel = false;
         let pendingId = null; // tarjeta inmediata (se crea más abajo, tras el texto)
         try {
-          const ri = resolveExplicitIntent({ tipo: idea.tipo || '', theme: idea.titulo || '', angle: idea.angulo || idea.porque || '' });
-          if (!carouselClaimed && (ri.intent === 'tips' || ri.intent === 'educativo')) { carouselClaimed = true; isCarousel = true; }
+          if (carouselSet.has(i) && carouselCount < carouselQuota) { carouselCount++; isCarousel = true; }
         } catch (e) {}
         try {
           const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, i, idea._sales), key);
@@ -8909,7 +8943,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // referencia para que el producto se vea idéntico en todos los posteos.
           const productRef = weekProductRef();
           if (isCarousel) {
-            // Carousel automático: portada scroll-stop + 3 placas IA.
+            // Carousel automático (v384): portada IA única + placas reales/render.
             try {
               carouselGen = await generateCarouselSet({
                 uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
@@ -9054,7 +9088,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           } else {
             // El carousel se guarda como UN post con media_type='carousel'.
             if (weekFullNow()) { console.log(`[pipeline:${tag}] semana completa al guardar — carousel descartado`); weekFullStop = true; return; }
-            const paths = [carouselGen.coverPath, ...carouselGen.slidePaths].slice(0, 5);
+            const paths = [carouselGen.coverPath, ...carouselGen.slidePaths].slice(0, 6);
             const carInfo = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type,
               carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review,
               style_code, style_reason, intent, product_ref, hook_id, sales_intent, sales_angle)
@@ -9062,7 +9096,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               .run(uid, carouselGen.coverPath, carouselGen.caption, hashtags, JSON.stringify(paths),
                 idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500),
                 weekKey, (needRev || carouselGen.needsReview) ? 1 : 0,
-                'carousel', `carousel automático (${carouselGen.slidePaths.length} placas)`,
+                'carousel', `carousel automático (${carouselReason[i] || 'estrategia'} · ${paths.length} placas)`,
                 finalIntent || 'tips', finalProductRef, finalHookId, salesIntent, salesAngle);
             if (carInfo && carInfo.lastInsertRowid) { runCreatedIds.add(carInfo.lastInsertRowid); stampPostDigest(carInfo.lastInsertRowid, uid, content && content._anchored === false); }
           }
@@ -13709,17 +13743,16 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   return `/media/${imgName}`;
 }
 
-// generateCarouselSet — carousel automático: portada canvas (scroll-stop) +
-// 3 placas IA (una idea cada una). La portada usa brand-card.py (gratis,
-// instantánea) con QA determinístico de contraste/miniatura; cada placa pasa
-// scroll-stop QA de visión con 1 reintento. Devuelve
-// { coverPath, slidePaths, caption, scrollScore, needsReview }.
-// Lanza si no se puede armar (el llamador cae a imagen simple).
-// (v231) Gramática de carrusel (adopción Predis/IKEA): continuidad de
-// escena entre placas — mismo fondo, misma luz, misma cámara; solo
-// cambia el producto (uno por placa). La primera placa corre el
-// sujeto a la derecha y lo corta levemente por ese borde (bleed
-// lateral medido: invita al swipe).
+// generateCarouselSet — (v384 · MODO CARRUSEL aceptado) portada = la
+// ÚNICA imagen IA del set (con la foto real del cliente como referencia/
+// protagonista cuando existe) con el titular compuesto por programa; las
+// placas salen del material real del cliente (su álbum, producto primero)
+// o de renders de datos — nunca IA, nunca stock. Total por defecto 5
+// (portada + 4), clamp 3–6: si el material no alcanza el mínimo de 3, se
+// lanza y el llamador cae a imagen simple (degradación honesta, sin
+// relleno); si alcanza 3–4, sale con needsReview. Costo de IA del set:
+// 1 imagen + el split. Devuelve
+// { coverPath, slidePaths, caption, scrollScore, needsReview, aiImages }.
 function carouselContinuityNote(idx) {
   const base = 'CAROUSEL CONTINUITY (this image is ONE slide of a carousel set): the EXACT same scene as its sibling slides — same setting, same background, same surface, same light, same camera angle and distance; ONLY the product changes. ONE single product in the frame, the unmistakable hero.';
   return idx === 0
@@ -13743,12 +13776,47 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles, 
   let logoAbs = null;
   try { logoAbs = logoAbsPath(uid); } catch (e) {}
   let needsReview = false;
-  // --- Portada: brand-card.py + QA determinístico (contraste + miniatura) ---
+  // Material real del cliente (producto primero): pool para referencias
+  // de la portada y para las placas.
+  let realPool = [];
+  try {
+    const picked = albumRefsForPiece(uid, { tipo, texts: [titulo, String(caption || '').split('\n')[0]].filter(Boolean).join(' '), max: 8 });
+    realPool = (picked.refs || []).filter(Boolean);
+  } catch (e) { realPool = []; }
+  const absOf = (ref) => path.join(MEDIA_DIR, path.basename(String(ref)));
+  // --- Portada: la ÚNICA imagen IA del set ---
+  let sceneAbs = null, coverScore = 0;
+  const coverRefs = realPool.slice(0, 2);
+  for (let attempt = 0; attempt < 2 && !sceneAbs; attempt++) {
+    try {
+      const p = await conceptShotGenerateQueued({
+        uid, idea: { titulo: split.cover, porque: porque || titulo }, tipo,
+        headline: '', refs: coverRefs, apiKey, usedStyles, usedFamilies,
+        extraPrompt: attempt ? 'High-impact Instagram cover image: stop the scroll in half a second.' : undefined,
+      });
+      if (!p) continue;
+      const abs = absOf(p);
+      if (qaScrollStopB64) {
+        let b64 = null;
+        try { b64 = fs.readFileSync(abs).toString('base64'); } catch (e) {}
+        const qa = b64 ? await qaScrollStopB64(b64, apiKey) : null;
+        if (qa) {
+          coverScore = qa.score;
+          console.log(`[carousel] portada scroll-stop: score=${qa.score} (intento ${attempt + 1})`);
+          if (!qa.pass && attempt === 0) continue;
+        }
+      }
+      sceneAbs = abs;
+    } catch (e) { console.error('[carousel] portada IA falló:', e.message); }
+  }
+  if (!sceneAbs) needsReview = true; // sin escena IA: foto real o tarjeta (declarado)
+  // --- Titular de portada compuesto (QA determinístico, como siempre) ---
   let coverPath = null, coverTries = 0, coverBg = bgHex, coverText = '#FFFFFF';
+  const coverPhotoAbs = sceneAbs || (realPool[0] ? absOf(realPool[0]) : null);
   while (coverTries < 3 && !coverPath) {
     coverTries++;
     try {
-      const abs = brandCardPng({ headline: split.cover, bgHex: coverBg, textHex: coverText, business, logoAbs, photoAbs: null, outDir: MEDIA_DIR });
+      const abs = brandCardPng({ headline: split.cover, bgHex: coverBg, textHex: coverText, business, logoAbs, photoAbs: coverPhotoAbs, outDir: MEDIA_DIR });
       const words = split.cover.trim().split(/\s+/).length;
       const fontEst = words <= 4 ? 104 : words <= 7 ? 80 : 56;
       const qa = scoreCanvasCover ? scoreCanvasCover({ headline: split.cover, textHex: coverText, bgHex: coverBg, fontPx: fontEst, canvasW: 1080 }) : { score: 100, pass: true, fixes: [] };
@@ -13757,52 +13825,27 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles, 
         if (!qa.pass) { needsReview = true; console.log('[carousel] portada bajo el mínimo tras 3 intentos → needs_review'); }
         coverPath = '/media/' + path.basename(abs);
       } else {
-        // Ajuste: forzar máximo contraste (texto blanco sobre navy).
         coverBg = '#0A1E33'; coverText = '#FFFFFF';
       }
     } catch (e) { console.error('[carousel] portada falló:', e.message); }
   }
   if (!coverPath) throw new Error('no se pudo renderizar la portada');
-  // --- Placas: una foto IA por punto, con scroll-stop QA de visión ---
+  // --- Placas: material real del cliente o render de datos. CERO IA. ---
   const slidePaths = [];
-  let coverScoreSum = 0;
-  const slideJobs = split.slides.map((s, idx) => (async () => {
-    const styleOut = {};
-    let extraPrompt = carouselContinuityNote(idx);
-    let p = null, sScore = 0, sOk = false;
-    for (let attempt = 0; attempt < 2 && !sOk; attempt++) {
-      try {
-        p = await conceptShotGenerateQueued({
-          uid, idea: { titulo: `${titulo}: ${s.title}`, porque: s.text }, tipo,
-          headline: '', refs: [], apiKey, usedStyles, usedFamilies, styleOut, extraPrompt: extraPrompt || undefined,
-        });
-        // Scroll-stop QA de visión sobre la placa generada.
-        if (qaScrollStopB64) {
-          const abs = path.join(MEDIA_DIR, path.basename(String(p)));
-          let b64 = null;
-          try { b64 = fs.readFileSync(abs).toString('base64'); } catch (e) {}
-          const qa = b64 ? await qaScrollStopB64(b64, apiKey) : null;
-          if (qa) {
-            sScore = qa.score;
-            console.log(`[carousel] placa ${idx + 1} scroll-stop: score=${qa.score} (intento ${attempt + 1})`);
-            if (qa.pass) { sOk = true; break; }
-            extraPrompt = `${carouselContinuityNote(idx)} SCROLL-STOP FIX: ${qa.fixes.join(' ')}. Regenerate as a high-impact Instagram image that stops the scroll in half a second.`;
-          } else { sOk = true; } // QA no disponible: se acepta la placa
-        } else { sOk = true; }
-      } catch (e) { console.error(`[carousel] placa ${idx + 1} falló:`, e.message); break; }
-    }
-    return { path: p, score: sScore, ok: !!p };
-  })());
-  const slideResults = await Promise.all(slideJobs);
-  for (const r of slideResults) {
-    if (r.path) { slidePaths.push(r.path); coverScoreSum += r.score; }
+  for (let idx = 0; idx < split.slides.length; idx++) {
+    const s = split.slides[idx];
+    const photo = realPool[idx] || null;
+    try {
+      const abs = brandCardPng({ headline: s.title, bgHex, textHex: '#FFFFFF', business, logoAbs, photoAbs: photo ? absOf(photo) : null, outDir: MEDIA_DIR });
+      if (abs) slidePaths.push('/media/' + path.basename(abs));
+    } catch (e) { console.error(`[carousel] placa ${idx + 1} falló:`, e.message); }
   }
-  if (!slidePaths.length) throw new Error('no se pudo generar ninguna placa');
-  if (slidePaths.length < split.slides.length) needsReview = true;
-  const avgSlideScore = slidePaths.length ? Math.round(coverScoreSum / slidePaths.length) : 0;
+  const total = 1 + slidePaths.length;
+  if (total < CAROUSEL_MIN) throw new Error(`material insuficiente para el carrusel (mínimo ${CAROUSEL_MIN} placas, hay ${total})`);
+  if (total < 5) needsReview = true; // degradación honesta a 3–4 placas
   const finalCaption = buildCarouselCaption(caption);
-  console.log(`[carousel] usuario ${uid}: portada + ${slidePaths.length} placas, score placas≈${avgSlideScore}, needsReview=${needsReview}`);
-  return { coverPath, slidePaths, caption: finalCaption, scrollScore: avgSlideScore, needsReview };
+  console.log(`[carousel] usuario ${uid}: portada IA + ${slidePaths.length} placas reales/render (total ${total}), score portada=${coverScore}, needsReview=${needsReview}`);
+  return { coverPath, slidePaths, caption: finalCaption, scrollScore: coverScore, needsReview, aiImages: 1 };
 }
 
 // Diagnóstico de generación de imagen (solo fundador, por sesión).
@@ -14861,13 +14904,25 @@ app.post('/api/care/close', requireAuth, planGateMiddleware(db, 'cierre_pago'), 
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
-// "🎠 Hacer carousel": convierte un borrador en carousel automático — portada
-// scroll-stop + 3 placas IA. El post pasa a media_type='carousel'.
+// "🎠 Hacer carousel": convierte un borrador en carousel automático —
+// (v384) portada IA única + placas de material real o renders. El post
+// pasa a media_type='carousel'. Tope semanal: el del plan (2 en el base),
+// el mismo del pipeline automático.
 app.post('/api/carousel-generate', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
     try { costs.assertAiOk(uid); }
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    try {
+      const uq2 = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid) || {};
+      const plq2 = getPlan(uq2.plan_status === 'active' ? uq2.plan : TRIAL_PLAN);
+      const quota2 = Math.max(0, plq2 && plq2.carouselsPerWeek != null ? plq2.carouselsPerWeek : 2);
+      const nowD = new Date();
+      const mondayD = new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate() - ((nowD.getDay() + 6) % 7));
+      const mondayStr = mondayD.toISOString().slice(0, 10) + ' 00:00:00';
+      const used2 = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND media_type = 'carousel' AND status != 'cancelled' AND created_at >= ?`).get(uid, mondayStr);
+      if (used2 && used2.c >= quota2) return res.status(429).json({ ok: false, error: `Ya armaste los ${quota2} carruseles de esta semana 🎠` });
+    } catch (e) {}
     const { postId = null } = req.body || {};
     const pid = Number(postId);
     if (!pid) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
@@ -14882,7 +14937,7 @@ app.post('/api/carousel-generate', requireAuth, requireTrialValid, express.json(
       idea: { titulo: post.source_topic || post.caption || '', porque: post.source_angle || '' },
       tipo: post.tipo || '', caption: post.caption || '', key: openaiKeyFor(uid), usedStyles,
     });
-    const paths = [gen.coverPath, ...gen.slidePaths].slice(0, 5);
+    const paths = [gen.coverPath, ...gen.slidePaths].slice(0, 6);
     db.prepare(`UPDATE posts SET media_type = 'carousel', carousel_paths = ?, image_path = ?,
       caption = ?, needs_review = ?, style_code = 'carousel' WHERE id = ?`)
       .run(JSON.stringify(paths), gen.coverPath, gen.caption, gen.needsReview ? 1 : 0, pid);
@@ -17525,6 +17580,9 @@ async function sendTrialGiftEmail(email, payload, lang) {
   const igK = trialLock ? trialLock.normalizeIg(payload.ig || '') : '';
   const handle = igK ? '@' + igK : (payload.business || '');
   const link = base + (en ? '/en/prueba' : '/prueba') + (igK ? '?ig=' + encodeURIComponent(igK) + '&src=email-salida' : '?src=email-salida');
+  // (v384 · ítem 8) La Carta con audio: link firmado a su página /carta.
+  let cartaUrl = '';
+  try { if (igK && approval.signCartaLink) cartaUrl = base + '/carta/' + approval.signCartaLink('prueba', igK); } catch (e) {}
   const escH = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const abs = (src) => {
     const s = String(src || '');
@@ -17584,6 +17642,7 @@ async function sendTrialGiftEmail(email, payload, lang) {
     ${P(escH(leader))}
     ${P(`<b>${en ? 'I truly believe I can help you sell more on Instagram. If you do well, we both win.' : 'De verdad creo que puedo ayudarte a vender más por Instagram. Si a vos te va bien, ganamos los dos.'}</b>`)}
     <p style="text-align:center;margin:26px 0 8px"><a href="${link}" style="display:inline-block;background:#2793C8;color:#FFFFFF;font-weight:800;font-size:16.5px;padding:15px 38px;border-radius:999px;text-decoration:none">${en ? 'See my full week' : 'Ver mi semana completa'}</a></p>
+    ${cartaUrl ? `<p style="text-align:center;margin:0 0 10px"><a href="${cartaUrl}" style="display:inline-block;background:#FFFFFF;color:#2793C8;font-weight:800;font-size:15px;padding:12px 30px;border-radius:999px;text-decoration:none;border:2px solid #2793C8">${en ? '🎧 Listen to your letter' : '🎧 Escuchá tu carta'}</a></p>` : ''}
     <p style="font-size:13.5px;color:#47617A;text-align:center;margin:0 0 22px">${en ? 'Free for 3 days. No card. No commitment.' : 'Gratis por 3 días. Sin tarjeta. Sin compromiso.'}</p>
     ${P(en ? 'With love,' : 'Con amor,')}
     <p style="margin:0 0 6px"><img src="${base}/firma-posty.png" alt="Posty" style="width:190px;height:auto;display:block"></p>
@@ -17603,13 +17662,26 @@ async function sendTrialGiftEmail(email, payload, lang) {
     en ? 'Free for 3 days. No card. No commitment.' : 'Gratis por 3 días. Sin tarjeta. Sin compromiso.',
     en ? 'With love,\nPosty\npostycommunitymanager.com' : 'Con amor,\nPosty\npostycommunitymanager.com',
   ].filter(Boolean).join('\n\n');
+  // (v384 · ítem 8) El guion del audio = ESTE texto, tal cual (sin la
+  // línea de escucha, que es navegación, no carta). Se guarda durable:
+  // la página /carta lo lee de ahí y el audio se genera una sola vez.
+  const cartaScript = (igK && cartaAudio) ? cartaAudio.scriptFromLetterText(text) : '';
+  const textOut = cartaUrl ? text + '\n\n' + (en ? `Listen to your letter: ${cartaUrl}` : `Escuchá tu carta: ${cartaUrl}`) : text;
   const r = await sendEmail({
     to: email,
     from: 'Posty <hola@postycommunitymanager.com>',
     subject: en ? `Your posts are ready, ${handle}` : `Tus posteos ya están listos, ${handle}`,
     html,
-    text,
+    text: textOut,
   });
+  if (cartaScript) {
+    try {
+      const key = cartaAudio.audioKey('prueba', igK, lang, cartaScript);
+      db.prepare(`INSERT INTO carta_audio (key, kind, ref, lang, script, script_hash, state, chars, created_at)
+        VALUES (?, 'prueba', ?, ?, ?, ?, 'pending', ?, ?)
+        ON CONFLICT(key) DO NOTHING`).run(key, igK, lang, cartaScript, cartaAudio.scriptHash(cartaScript), cartaScript.length, Date.now());
+    } catch (e) { console.error('[carta-audio] no se pudo guardar el guion:', e.message); }
+  }
   return !!(r && r.ok);
 }
 
@@ -17661,7 +17733,144 @@ app.post('/api/trial/gift-email', express.json({ limit: '16kb' }), async (req, r
     // tanda del sistema de email (sin lector automático todavía).
     try { track(null, 'carta_entregada', igKey || trialLock.normalizeDomain((payload && payload.business) || '')); } catch (e) {}
   }
-  res.json({ ok: true, sent, queued: !sent });
+  let carta_url = '';
+  try { if (approval.signCartaLink) carta_url = '/carta/' + approval.signCartaLink('prueba', igKey); } catch (e) {}
+  res.json({ ok: true, sent, queued: !sent, carta_url });
+});
+
+// ---------- (v384 · ítem 8) LA CARTA CON AUDIO: página /carta/:token ----------
+// El audio se genera AL ABRIR la página (ni al enviar la carta — se
+// quemaría en cartas en cola por Resend — ni con loop): una sola vez por
+// carta, cacheado en carta_audio + MEDIA_DIR. La página sirve igual con
+// su texto completo si el TTS falla. Declaración honesta: el envío real
+// de la Carta sigue frenado por la verificación del dominio en Resend.
+const cartaAudioInflight = new Set();
+function cartaAudioRow(kind, ref) {
+  try { return db.prepare('SELECT * FROM carta_audio WHERE kind = ? AND ref = ? ORDER BY created_at DESC LIMIT 1').get(kind, String(ref)); } catch (e) { return null; }
+}
+function ensureCartaAudio(row) {
+  if (!row || !cartaAudio) return row;
+  if (row.state === 'ready' && row.audio_file) return row;
+  if (cartaAudioInflight.has(row.key)) return row;
+  try {
+    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    const n = db.prepare("SELECT COUNT(*) AS c FROM carta_audio WHERE created_at >= ? AND state IN ('ready','error')").get(dayStart.getTime());
+    if (n && n.c >= 200) return row; // tope diario: la página sale con su texto
+  } catch (e) {}
+  cartaAudioInflight.add(row.key);
+  (async () => {
+    try {
+      const buf = await cartaAudio.synthesize({ script: row.script, lang: row.lang });
+      const file = await cartaAudio.writeAudio(MEDIA_DIR, row.key, buf);
+      db.prepare("UPDATE carta_audio SET state = 'ready', audio_file = ?, provider = 'openai', model = 'gpt-4o-mini-tts', voice = ? WHERE key = ?")
+        .run(file, process.env.CARTA_TTS_VOICE || 'coral', row.key);
+      try { costs.logApiCost({ userId: null, feature: 'carta-audio', model: 'gpt-4o-mini-tts', minutes: Math.max(1, Math.round((row.chars || String(row.script || '').length) / 850)) }); } catch (e) {}
+      console.log(`[carta-audio] ${row.kind}/${row.ref}: audio listo (${row.chars} caracteres)`);
+    } catch (e) {
+      try { db.prepare("UPDATE carta_audio SET state = 'error' WHERE key = ?").run(row.key); } catch (e2) {}
+      console.error('[carta-audio] síntesis falló:', e.message);
+    } finally { cartaAudioInflight.delete(row.key); }
+  })();
+  return row;
+}
+function cartaResolve(kind, ref) {
+  if (!cartaAudio) return null;
+  if (kind === 'prueba') {
+    const row = cartaAudioRow('prueba', ref);
+    if (!row) return null; // la carta existe recién cuando el regalo la compuso
+    let payload = null;
+    try { const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(ref); if (hit) payload = JSON.parse(hit.payload); } catch (e) {}
+    let heroImg = '';
+    if (payload && Array.isArray(payload.posts)) {
+      const hero = payload.posts.find((p) => p && p.type !== 'video' && p.image);
+      if (hero) heroImg = String(hero.image || '');
+    }
+    const en = row.lang === 'en';
+    return {
+      title: payload ? (payload.business || ('@' + ref)) : ('@' + ref),
+      lang: row.lang,
+      paragraphs: String(row.script || '').split('\n\n').filter(Boolean),
+      heroImg,
+      ctaHref: (en ? '/en/prueba?ig=' : '/prueba?ig=') + encodeURIComponent(ref) + '&src=carta',
+      ctaLabel: en ? 'See my full week' : 'Ver mi semana completa',
+      row,
+    };
+  }
+  if (kind === 'domingo') {
+    let ana = null;
+    try { const r = db.prepare('SELECT payload FROM account_analysis WHERE id = ?').get(Number(ref)); if (r) ana = JSON.parse(r.payload); } catch (e) {}
+    if (!ana || !ana.letter) return null;
+    const lang = ana.lang || 'es';
+    const segs = cartaAudio.sundayLetterSegments(ana);
+    if (!segs.length) return null;
+    const script = cartaAudio.segmentsToScript(segs);
+    let row = cartaAudioRow('domingo', String(ref));
+    if (!row) {
+      try {
+        const key = cartaAudio.audioKey('domingo', String(ref), lang, script);
+        db.prepare(`INSERT INTO carta_audio (key, kind, ref, lang, script, script_hash, state, chars, created_at) VALUES (?, 'domingo', ?, ?, ?, ?, 'pending', ?, ?) ON CONFLICT(key) DO NOTHING`)
+          .run(key, String(ref), lang, script, cartaAudio.scriptHash(script), script.length, Date.now());
+        row = cartaAudioRow('domingo', String(ref));
+      } catch (e) {}
+    }
+    if (!row) return null;
+    const en = lang === 'en';
+    return {
+      title: en ? 'Your Sunday letter' : 'Tu carta del domingo',
+      lang,
+      paragraphs: String(script || '').split('\n\n').filter(Boolean),
+      heroImg: (ana.letter && ana.letter.photo) || '',
+      ctaHref: '/#/app/analisis',
+      ctaLabel: en ? 'Open my analysis' : 'Ver mi análisis',
+      row,
+    };
+  }
+  return null;
+}
+function cartaNotFound(res, en) {
+  return res.status(404).send(`<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;text-align:center;padding:60px 20px;color:#0A1E33"><h1>${en ? 'This letter is not available' : 'Esta carta no está disponible'}</h1><p>${en ? 'The link expired or the letter was not generated yet.' : 'El link venció o la carta todavía no se generó.'}</p></body></html>`);
+}
+function cartaPageHTML(data, token) {
+  const en = data.lang === 'en';
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const ready = data.row && data.row.state === 'ready' && data.row.audio_file;
+  const waitMsg = en ? 'The audio could not be made this time — the letter is right below 👇' : 'El audio no se pudo hacer esta vez — la carta está acá abajo 👇';
+  const player = ready
+    ? `<audio controls preload="metadata" src="${esc(data.row.audio_file)}" style="width:100%"></audio>`
+    : `<div id="cartaWait" style="background:#EAF4FA;border-radius:12px;padding:14px 16px;font-size:15px;color:#0A1E33;text-align:center">${en ? '🎧 Posty is reading your letter… one moment.' : '🎧 Posty está leyendo tu carta… un momento.'}</div>`
+      + `<script>(function(){var t='/carta/${token}/audio.json';var iv=setInterval(function(){fetch(t).then(function(r){return r.json()}).then(function(j){var w=document.getElementById('cartaWait');if(!w){clearInterval(iv);return}if(j.state==='ready'&&j.url){clearInterval(iv);w.outerHTML='<audio controls autoplay src="'+j.url+'" style="width:100%"></audio>'}else if(j.state==='error'){clearInterval(iv);w.textContent='${waitMsg}'}}).catch(function(){})},3000)})();</script>`;
+  const paras = data.paragraphs.map((p) => `<p style="font-size:16.5px;line-height:1.65;margin:0 0 16px">${esc(p)}</p>`).join('');
+  const hero = data.heroImg ? `<img src="${esc(data.heroImg)}" alt="" style="width:100%;height:auto;border-radius:12px;display:block;margin:0 0 18px">` : '';
+  return `<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(data.title)} — Posty</title></head>
+<body style="margin:0;background:#F6F9FB;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0A1E33">
+<div style="max-width:600px;margin:0 auto;background:#FFFFFF;padding:30px 26px 36px">
+  <p style="text-align:center;margin:0 0 18px"><img src="/posty-avatar-saludando.png" alt="Posty" style="width:130px;height:auto"></p>
+  <h1 style="font-size:23px;line-height:1.25;text-align:center;margin:0 0 18px">${esc(data.title)}</h1>
+  <div style="margin:0 0 22px">${player}</div>
+  ${hero}
+  ${paras}
+  <p style="text-align:center;margin:26px 0 8px"><a href="${esc(data.ctaHref)}" style="display:inline-block;background:#2793C8;color:#FFFFFF;font-weight:800;font-size:16.5px;padding:15px 38px;border-radius:999px;text-decoration:none">${esc(data.ctaLabel)}</a></p>
+  <p style="text-align:center;font-size:14px;color:#47617A;margin:18px 0 0">${en ? 'With love,' : 'Con amor,'}</p>
+  <p style="text-align:center;margin:6px 0 0"><img src="/firma-posty.png" alt="Posty" style="width:170px;height:auto"></p>
+</div></body></html>`;
+}
+app.get('/carta/:token', (req, res) => {
+  const v = approval.verifyCartaLink ? approval.verifyCartaLink(req.params.token) : null;
+  if (!v) return cartaNotFound(res, false);
+  const data = cartaResolve(v.kind, v.ref);
+  if (!data || !data.row) return cartaNotFound(res, false);
+  ensureCartaAudio(data.row);
+  res.set('Cache-Control', 'private, no-store');
+  res.send(cartaPageHTML(data, req.params.token));
+});
+app.get('/carta/:token/audio.json', (req, res) => {
+  const v = approval.verifyCartaLink ? approval.verifyCartaLink(req.params.token) : null;
+  if (!v) return res.status(404).json({ ok: false });
+  const data = cartaResolve(v.kind, v.ref);
+  if (!data || !data.row) return res.status(404).json({ ok: false });
+  ensureCartaAudio(data.row);
+  const fresh = cartaAudioRow(v.kind, v.ref) || data.row;
+  res.json({ ok: true, state: fresh.state, url: fresh.state === 'ready' ? fresh.audio_file : null });
 });
 
 // ---------- (v323 · pieza 7) REEL DE MUESTRA CON COMPUERTA ----------
@@ -18180,7 +18389,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v386';
+const BUILD_ID = '20261024-v387';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

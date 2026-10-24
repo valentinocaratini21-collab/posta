@@ -40,6 +40,7 @@ const MODEL_PRICES = {
   'gpt-image-1@high': { perImage: 0.167 }, // v209: fallback de gpt-image-2 en high (1024x1280 high ≈ $0.167 de lista)
   'gemini-3-pro-image': { perImage: 0.134 }, // v205: Nano Banana Pro (Google) — precio de lista por imagen del benchmark 2026-10-18; lo usa SOLO el demo ilustrado con feature 'demo-ai-nano'
   'whisper-1':   { perMin: 0.006 },                  // notas de voz / ADN por audio
+  'gpt-4o-mini-tts': { perMin: 0.015 },              // (v384) La Carta con audio: ≈USD 0,02 por carta de prueba (~1,3 min)
 };
 
 function estCostUsd(model, inTok, outTok, images, minutes) {

@@ -183,12 +183,41 @@ async function notifyMissed(db, post, reason) {
   return { ok: false, channel: 'none' };
 }
 
+// (v384) Enlaces firmados de LA CARTA (ítem 8): la página /carta/:token
+// no lleva sesión; el token ata (kind, ref, exp) con la MISMA primitiva
+// HMAC de arriba. kind = 'prueba' (ref = ig normalizado) o 'domingo'
+// (ref = id de account_analysis). TTL largo: la carta se reenvía.
+function signCartaLink(kind, ref, expHours = 24 * 90) {
+  const exp = Math.floor(Date.now() / 1000) + Math.floor(Number(expHours) * 3600);
+  const payload = `carta:${String(kind)}:${String(ref)}:${exp}`;
+  const sig = hmacHex(payload);
+  return Buffer.from(`${kind}.${ref}.${exp}.${sig}`).toString('base64url');
+}
+
+function verifyCartaLink(token) {
+  try {
+    const raw = Buffer.from(String(token || ''), 'base64url').toString('utf8');
+    const parts = raw.split('.');
+    if (parts.length < 4) return null;
+    const sig = parts.pop();
+    const exp = Number(parts.pop());
+    const kind = parts.shift();
+    const ref = parts.join('.'); // el ig puede traer puntos
+    if (!kind || !ref || !Number.isFinite(exp) || exp <= Math.floor(Date.now() / 1000)) return null;
+    const expected = hmacHex(`carta:${kind}:${ref}:${exp}`);
+    if (!timingSafeEq(sig, expected)) return null;
+    return { kind, ref };
+  } catch (e) { return null; }
+}
+
 module.exports = {
   approvalSecret,
   signAction,
   verifyAction,
   signWeekAction,
   verifyWeekAction,
+  signCartaLink,
+  verifyCartaLink,
   isFirstWeek,
   absoluteMediaUrl,
   userHourLabel,

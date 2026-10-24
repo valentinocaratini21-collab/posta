@@ -1,16 +1,18 @@
 // carousel.js — Carousels automáticos de Posty.
 //
-// Un carousel = portada que frena el scroll (diseño canvas con titular grande)
-// + 3 placas (fotos IA, una idea cada una). Rinden más que la foto sola y
-// nadie los hace a mano porque dan trabajo — por eso los arma Posty.
+// Un carousel = portada que frena el scroll — la ÚNICA imagen IA del set,
+// con la foto real del cliente como protagonista cuando existe — más
+// placas de material real del cliente o renders de datos (nunca IA,
+// nunca stock). Total por defecto 5, clamp 3–6. (Modo aceptado, v384.)
 //
 // Este módulo tiene la lógica pura (split de la idea en placas, caption).
 // La generación vive en server.js (generateCarouselSet) porque necesita
 // conceptShotGenerate, DB y MEDIA_DIR.
 'use strict';
 
-const CAROUSEL_SLIDES = 3; // portada + 3 placas
-const CAROUSEL_MAX = 5;    // tope de placas (portada + 4)
+const CAROUSEL_SLIDES = 4; // placas tras la portada (total por defecto: 5)
+const CAROUSEL_MAX = 6;    // tope TOTAL de placas (portada incluida)
+const CAROUSEL_MIN = 3;    // mínimo TOTAL: con menos material no hay carrusel
 
 // (v231) ARCO NARRATIVO del carrusel (adopción del estudio: gramática
 // de series tipo IKEA) — cada placa cumple UN rol del arco qué → por
@@ -43,13 +45,14 @@ async function splitCarouselSlides({ titulo = '', porque = '', angulo = '', capt
         messages: [
           { role: 'system', content:
 `Armás carousels de Instagram que la gente DESLIZA hasta el final. Respondé SOLO con JSON, sin explicaciones:
-{"cover":"...","slides":[{"title":"...","text":"..."},{"title":"...","text":"..."},{"title":"...","text":"..."}]}
+{"cover":"...","slides":[{"title":"...","text":"..."},{"title":"...","text":"..."},{"title":"...","text":"..."},{"title":"...","text":"..."}]}
 - cover: el GANCHO de la portada — 8 palabras máximo, curiosidad o promesa fuerte. Sin emojis.
-- slides: exactamente 3 placas que cumplen el ARCO qué → por qué → precio/dónde. Cada una: title (5 palabras máx, el punto) y text (1-2 líneas que desarrollan el punto, tono de amigo, sin emojis).
+- slides: exactamente 4 placas que cumplen el ARCO qué → por qué → prueba → precio/dónde. Cada una: title (5 palabras máx, el punto) y text (1-2 líneas que desarrollan el punto, tono de amigo, sin emojis).
   · Placa 1 — ${CAROUSEL_ARC[0].label}.
   · Placa 2 — ${CAROUSEL_ARC[1].label}.
-  · Placa 3 — ${CAROUSEL_ARC[2].label}.
-- Nada de relleno: si la idea no da para 3 placas distintas, igual entregá 3 pero que cada una aporte algo real.
+  · Placa 3 — POR QUÉ, segunda vuelta: otra prueba u otro beneficio concreto, distinto de la placa 2.
+  · Placa 4 — ${CAROUSEL_ARC[2].label}.
+- Nada de relleno: si la idea no da para 4 placas distintas, igual entregá 4 pero que cada una aporte algo real.
 - Español rioplatense.` },
           { role: 'user', content: `Idea: ${String(titulo).slice(0, 200)}\nPorqué: ${String(porque || angulo).slice(0, 300)}\nCaption: ${String(caption).slice(0, 400)}` },
         ],
@@ -85,4 +88,4 @@ function buildCarouselCaption(baseCaption) {
   return `${base}\n\nDeslizá 👉`.trim();
 }
 
-module.exports = { CAROUSEL_SLIDES, CAROUSEL_MAX, CAROUSEL_ARC, arcForSlide, splitCarouselSlides, buildCarouselCaption };
+module.exports = { CAROUSEL_SLIDES, CAROUSEL_MAX, CAROUSEL_MIN, CAROUSEL_ARC, arcForSlide, splitCarouselSlides, buildCarouselCaption };

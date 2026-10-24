@@ -86,7 +86,7 @@ async function main() {
   t('carousel: caption con Deslizá', /Deslizá/.test(fs.readFileSync(path.join(__dirname, 'carousel.js'), 'utf8')));
   t('carousel: portada con scroll-stop determinístico', /scoreCanvasCover/.test(serverSrc));
   t('carousel: placas con scroll-stop QA de visión', /qaScrollStopB64/.test(serverSrc));
-  t('carousel: pipeline integra max 1/semana (carouselClaimed)', serverSrc.includes('carouselClaimed'));
+  t('carousel: pipeline integra cupo del plan con selección por estrategia (v384)', serverSrc.includes('carouselSet') && serverSrc.includes('carouselsPerWeek') && !serverSrc.includes('carouselClaimed'));
   t('buildCarouselCaption agrega Deslizá 👉', C.buildCarouselCaption('Hola') === 'Hola\n\nDeslizá 👉');
   t('buildCarouselCaption no duplica si ya está', C.buildCarouselCaption('Deslizá para ver') === 'Deslizá para ver');
   {
@@ -104,7 +104,7 @@ async function main() {
     });
     try {
       const sp = await C.splitCarouselSlides({ titulo: 'Test', porque: 'x', caption: 'y' }, 'fake-key');
-      t('splitCarouselSlides: cover + 3 slides', sp && sp.cover.length > 0 && sp.slides.length === 3, JSON.stringify(sp));
+      t('splitCarouselSlides: cover + slides del stub (3)', sp && sp.cover.length > 0 && sp.slides.length === 3, JSON.stringify(sp));
     } catch (e) { t('splitCarouselSlides: no lanza', false, e.message); }
     global.fetch = realFetch;
   }
