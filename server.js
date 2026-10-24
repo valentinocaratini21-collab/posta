@@ -11911,6 +11911,41 @@ function retainQaFailedFile({ uid, postId, gate, reason, absPath }) {
     console.log(`[qa-retain] media rechazada retenida (${gate}): ${name}`);
   } catch (e) { console.error('[qa-retain]', e.message); }
 }
+// ── Retención estable de TODA evaluación qa_audit (Frente 1, 2026-10-23) ──
+// qa_audit.image_path apuntaba al archivo suelto en /media/: cuando el
+// posteo se regenera, se borra o el janitor barre el huérfano, la fila de
+// auditoría quedaba apuntando a un archivo muerto y Mora no podía revisar
+// la evaluación con el ojo (precedentes: ids 43 y 48; la propuesta de
+// 2026-10-08/10 era copiar a ruta estable al guardar la evaluación). Las
+// FALLIDAS ya tenían su copia en media/qa-failed/ (v198-A), pero las
+// APROBADAS — la mayoría — no tenían ninguna. Ahora, al guardar CADA
+// evaluación (aprobada, fallida o sin veredicto), la imagen final se copia
+// a media/qa-audit/ (subdirectorio: el janitor no lo barre, igual que
+// qa-failed/) y el image_path de la fila apunta a esa copia. El original
+// no se toca (el posteo lo sigue referenciando) y qué/cuándo se evalúa no
+// cambia. Poda acotada: las 120 copias más recientes (la ventana que
+// /api/qa-audit expone es de 100 filas). Todo en try/catch: si la copia
+// falla, la fila cae al path de siempre — nunca bloquea la generación.
+const QA_AUDIT_DIR = path.join(MEDIA_DIR, 'qa-audit');
+const QA_AUDIT_MAX_FILES = 120;
+function retainQaAuditCopy(imgName) {
+  try {
+    if (!imgName) return null;
+    const src = path.join(MEDIA_DIR, path.basename(String(imgName)));
+    if (!fs.existsSync(src)) return null;
+    fs.mkdirSync(QA_AUDIT_DIR, { recursive: true });
+    const name = path.basename(String(imgName));
+    fs.copyFileSync(src, path.join(QA_AUDIT_DIR, name));
+    try {
+      const files = fs.readdirSync(QA_AUDIT_DIR)
+        .filter((f) => /\.(jpe?g|png|webp)$/i.test(f))
+        .map((f) => { let mt = 0; try { mt = fs.statSync(path.join(QA_AUDIT_DIR, f)).mtimeMs; } catch (e) {} return { f, mt }; })
+        .sort((a, b) => b.mt - a.mt);
+      for (const x of files.slice(QA_AUDIT_MAX_FILES)) { try { fs.unlinkSync(path.join(QA_AUDIT_DIR, x.f)); } catch (e) {} }
+    } catch (e) {}
+    return `/media/qa-audit/${name}`;
+  } catch (e) { console.error('[qa-audit-retain]', e.message); return null; }
+}
 // ── Limpieza de media (2026-10-15) ─────────────────────────────────────
 // NUNCA hubo retención: cada imagen/reel generado quedaba en el volumen
 // para siempre y el disco se llenó (ENOSPC → img_fail 5/5). El janitor
@@ -13194,13 +13229,19 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       try {
         db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
         try { db.exec("ALTER TABLE qa_audit ADD COLUMN image_path TEXT"); } catch (e) { /* ya existe */ }
+        // (Frente 1, 2026-10-23) Copia estable de la imagen evaluada: el
+        // image_path de la fila apunta a media/qa-audit/ (ver
+        // retainQaAuditCopy); si la copia no se pudo hacer, cae al path
+        // suelto de siempre. Vale para las tres salidas (sin veredicto,
+        // aprobada y fallida): toda evaluación queda auditable con el ojo.
+        const auditPath = retainQaAuditCopy(imgName) || `/media/${imgName}`;
         if (!qa) {
-          db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(null, JSON.stringify({ qa_unavailable: true }), `/media/${imgName}`);
+          db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(null, JSON.stringify({ qa_unavailable: true }), auditPath);
           return;
         }
         const qaPassed = !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok && qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false);
         try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, contraste: qa.contraste_ok, elementos: qa.elementos_ok, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
-        db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000), `/media/${imgName}`);
+        db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000), auditPath);
         // ===== Reintento CORRECTIVO (2026-10-16): si la auditoría encontró un
         // defecto DURO, se regenera UNA vez con la corrección explícita en el
         // prompt y se reemplaza la imagen del borrador. Corre en background
@@ -17657,7 +17698,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261023-v353';
+const BUILD_ID = '20261023-v354';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
