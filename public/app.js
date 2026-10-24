@@ -238,7 +238,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261024-v399'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261024-v400'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -7031,10 +7031,10 @@ function weekCardHTML(d, o) {
       <div class="igmock-head">${avaHTML}<span class="igmock-name">${esc(headName)}</span>${o.count ? `
         <span class="igmock-count">${esc(o.count)}</span>` : ''}<span class="igmock-dots" aria-hidden="true">•••</span></div>
       <div class="igmock-when-top"><span>${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
-        ${statusHTML}</div>
+        ${statusHTML}${d.image_path ? `<button type="button" class="hf-crop-tog hf-crop-mini" data-hf-crop aria-pressed="false" aria-label="${enW ? 'See how it crops' : 'Ver cómo se recorta'}">▦</button>` : ''}</div>
       ${isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
-        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : '✏️ Editar este posteo'}" aria-label="Ver posteo">${media}</button>`}
+        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : '✏️ Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}</button>`}
       ${foot}
       ${f3ThreadHTML(d)}
     </div>`;
@@ -7728,6 +7728,8 @@ function schedJumpDay(ymd) {
 function bindScfMinis(root) {
   if (!root) return;
   root.querySelectorAll('.scf-mini-x').forEach(w => {
+    if (w._scfBound) return; // (6B) idempotente: el espejo vivo re-cablea solo las tiles nuevas
+    w._scfBound = true;
     let t = null;
     w.addEventListener('mouseenter', () => {
       if (SCF_PINNED) return; // hay una capa fijada: el hover no la roba
@@ -12741,6 +12743,172 @@ function hfAnchorBarHTML(p, en) {
     <button type="button" class="hf-anchor-x" data-hf-anchor-x aria-label="${en ? 'Remove anchor' : 'Quitar el anclaje'}">✕</button>
   </div>`;
 }
+// ===== (Tanda feed 6B) Piezas puras de los ítems 4, 5, 7 y 8 =====
+// Ítem 4 (espejo vivo): foto comparable del payload que compone la
+// grilla. Solo entran los campos que el diff vigila (id, status,
+// scheduled_at, image_path, pinned, published_at) + los conteos del
+// encabezado. Función pura: la cadencia y el parcheo viven fuera del
+// bloque (hfLive* junto a los gestos).
+function hfLiveSnapshot(tiles, prof) {
+  const posts = {};
+  for (const t of (Array.isArray(tiles) ? tiles : [])) {
+    if (!t) continue;
+    if (t.kind === 'post' && t.post && t.post.id !== null && t.post.id !== undefined) {
+      const p = t.post;
+      posts[String(p.id)] = {
+        id: String(p.id), status: String(p.status || ''), scheduled_at: String(p.scheduled_at || ''),
+        image_path: String(p.image_path || ''), pinned: p.pinned ? 1 : 0, published_at: String(p.published_at || ''),
+      };
+    } else if (t.kind === 'ig' && t.img) {
+      posts['ig:' + String(t.img)] = { id: 'ig:' + String(t.img), status: 'ig', scheduled_at: '', image_path: String(t.img), pinned: t.pinned ? 1 : 0, published_at: '' };
+    }
+  }
+  const P = prof || {};
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v)) ? v : null;
+  return { posts, counts: { posts_count: num(P.posts_count), followers: num(P.followers), following: num(P.following) } };
+}
+// Diff puro del espejo vivo: sin cambios → todo vacío (cero mutaciones
+// del DOM aguas abajo). justPublished = pasó a published en este salto.
+function hfLiveDiff(prev, next) {
+  const out = { changed: [], added: [], removed: [], justPublished: [], countsChanged: false };
+  if (!prev || !next) { out.countsChanged = true; return out; }
+  const A = prev.posts || {}, B = next.posts || {};
+  for (const id of Object.keys(B)) {
+    if (!(id in A)) { out.added.push(id); if (B[id].status === 'published') out.justPublished.push(id); continue; }
+    const a = A[id], b = B[id];
+    if (a.status !== b.status || a.scheduled_at !== b.scheduled_at || a.image_path !== b.image_path || a.pinned !== b.pinned || a.published_at !== b.published_at) {
+      out.changed.push(id);
+      if (a.status !== 'published' && b.status === 'published') out.justPublished.push(id);
+    }
+  }
+  for (const id of Object.keys(A)) { if (!(id in B)) out.removed.push(id); }
+  const ca = prev.counts || {}, cb = next.counts || {};
+  if (ca.posts_count !== cb.posts_count || ca.followers !== cb.followers || ca.following !== cb.following) out.countsChanged = true;
+  return out;
+}
+// Ítem 7 («Ver cómo se recorta»): geometría del recorte de grilla de
+// Instagram (3:4 centrado) sobre una foto que LLENA su caja (cover).
+// Devuelve porcentajes del marco conservado dentro de la caja.
+function hfCropPct(rw, rh) {
+  const box = (Number(rw) > 0 && Number(rh) > 0) ? Number(rw) / Number(rh) : 0.8;
+  const T = 3 / 4;
+  if (box > T) { const w = T / box * 100; return { x: (100 - w) / 2, y: 0, w, h: 100 }; }
+  const h = box / T * 100; return { x: 0, y: (100 - h) / 2, w: 100, h };
+}
+// Ítem 7 en el detalle (object-fit: contain): marco en píxeles del
+// recorte 3:4 centrado sobre la foto TAL como se exhibe (con su
+// letterbox) dentro de la caja cw×ch. Pura y testeable.
+function hfCrop34Rect(cw, ch, iw, ih) {
+  const W = Number(cw) || 0, H = Number(ch) || 0, w0 = Number(iw) || 0, h0 = Number(ih) || 0;
+  if (!(W > 0 && H > 0 && w0 > 0 && h0 > 0)) return { x: 0, y: 0, w: 0, h: 0 };
+  const s = Math.min(W / w0, H / h0);
+  const dw = w0 * s, dh = h0 * s, dx = (W - dw) / 2, dy = (H - dh) / 2, T = 3 / 4;
+  if (dw / dh > T) { const w = dh * T; return { x: dx + (dw - w) / 2, y: dy, w, h: dh }; }
+  const h = dw / T; return { x: dx, y: dy + (dh - h) / 2, w: dw, h };
+}
+// Overlay del recorte (detalle y tarjetas Día/Semana): marco nítido con
+// la sombra que atenúa lo que la grilla descarta + su rótulo honesto.
+function hfCropOverlayHTML(rw, rh, en) {
+  const r = hfCropPct(rw, rh);
+  const f = (n) => Math.round(n * 100) / 100;
+  return `<div class="hf-cropov" hidden><div class="hf-cropov-frame" style="left:${f(r.x)}%;top:${f(r.y)}%;width:${f(r.w)}%;height:${f(r.h)}%"></div><div class="hf-cropov-label">${en ? 'How it looks in the grid' : 'Así se ve en la grilla'}</div></div>`;
+}
+// Ítem 5 (peek): tarjeta ampliada de un posteo propio. Estado + fecha
+// de salida (o métricas REALES si es publicado con fuente: sin fuente,
+// ninguna línea de números) + extracto del caption tal cual + acciones
+// rápidas que reusan las piezas de la Fase A (chat anclado, rehacer
+// con su contador, fijar/desfijar) y la vista de seguidor del ítem 8.
+function hfPeekHTML(p, en, opts) {
+  const o = opts || {};
+  if (!p) return '';
+  const isV = String(p.media_type || '') === 'video';
+  const media = !p.image_path
+    ? '<span class="hf-tile-ph">✨</span>'
+    : isV
+      ? `<video src="${esc(p.image_path)}" autoplay muted loop playsinline></video>`
+      : `<img src="${esc(mv(p.image_path, 640))}" alt="" onerror="__imgFb(this)">`;
+  let stateLine = '';
+  if (p.status === 'published') {
+    const rel = hfRelShort(p.published_at || p.scheduled_at, en);
+    const lk = (p.likes === null || p.likes === undefined || !Number.isFinite(Number(p.likes))) ? null : Number(p.likes);
+    const cc = (p.comments_count === null || p.comments_count === undefined || !Number.isFinite(Number(p.comments_count))) ? null : Number(p.comments_count);
+    const mets = [];
+    if (lk !== null) mets.push(`${lk.toLocaleString(en ? 'en-US' : 'es-AR')} ${en ? (lk === 1 ? 'like' : 'likes') : 'Me gusta'}`);
+    if (cc !== null && cc > 0) mets.push(`${cc.toLocaleString(en ? 'en-US' : 'es-AR')} ${en ? (cc === 1 ? 'comment' : 'comments') : (cc === 1 ? 'comentario' : 'comentarios')}`);
+    stateLine = `<div class="hf-peek-state">✅ ${en ? 'Published' : 'Publicado'}${rel ? ' · ' + esc(rel) : ''}${mets.length ? ' · ' + esc(mets.join(' · ')) : ''}</div>`;
+  } else if (p.status === 'scheduled') {
+    const chip = hfWhenChip(p) || hfChipText(p.scheduled_at);
+    stateLine = `<div class="hf-peek-state">🕐 ${chip ? esc((en ? 'Goes out ' : 'Sale el ') + chip) : (en ? 'Scheduled' : 'Programado')}</div>`;
+  } else {
+    stateLine = `<div class="hf-peek-state">📝 ${en ? 'Draft' : 'Borrador'}</div>`;
+  }
+  const capFull = (String(p.caption || '') + (String(p.hashtags || '').trim() ? ' ' + String(p.hashtags || '').trim() : '')).trim();
+  const capEx = capFull.length > 140 ? capFull.slice(0, 140).trimEnd() + '…' : capFull;
+  const cap = capEx ? `<div class="hf-peek-cap">${esc(capEx)}</div>` : '';
+  const left = o.visitor ? null : hfRedoLeft(p);
+  const redoBtn = left === null ? '' : (left > 0
+    ? `<button type="button" class="hf-peek-act" data-hf-peek-act="redo">↻ ${en ? 'Redo' : 'Rehacer'} · ${left}</button>`
+    : `<button type="button" class="hf-peek-act" data-hf-peek-act="redo" disabled>↻ ${en ? 'Redo' : 'Rehacer'} · 0</button>`);
+  const redoLine = (left === 0) ? hfRedoLineHTML(p, en) : '';
+  const acts = o.visitor ? '' : `<div class="hf-peek-acts">
+      <button type="button" class="hf-peek-act" data-hf-peek-act="chat">💬 ${en ? 'Chat' : 'Chat'}</button>
+      ${redoBtn}
+      <button type="button" class="hf-peek-act" data-hf-peek-act="pin">${p.pinned ? (en ? '📌 Unpin' : '📌 Desfijar') : (en ? '📌 Pin' : '📌 Fijar')}</button>
+      <button type="button" class="hf-peek-act" data-hf-peek-act="followers">👁 ${en ? 'Followers view' : 'Vista de seguidor'}</button>
+    </div>${redoLine}`;
+  return `<div class="hf-peek" data-post-id="${esc(String(p.id))}" role="dialog" aria-label="${en ? 'Post preview' : 'Vista rápida del posteo'}">
+    <div class="hf-peek-media">${media}</div>
+    ${stateLine}
+    ${cap}
+    ${acts}
+  </div>`;
+}
+// Ítem 8 («Ver en el inicio»): el posteo como lo ven los seguidores en
+// su inicio de Instagram. Render de cliente con los datos ya cargados:
+// «Me gusta»/comentarios SOLO con fuente real (null → la línea no
+// existe, como manda la regla de la tanda 5).
+function hfFollowerHTML(p, opts) {
+  const o = opts || {};
+  const en = !!o.en;
+  if (!p) return '';
+  const user = String(o.user || '').replace(/^@/, '');
+  const headName = user || String(o.name || '');
+  const ava = o.pic
+    ? `<img class="hf-d-ava" src="${esc(o.pic)}" alt="" onerror="this.remove()">`
+    : `<span class="hf-d-ava hf-d-ava-l">${esc((headName || 'P').charAt(0).toUpperCase())}</span>`;
+  const isV = String(p.media_type || '') === 'video';
+  const media = !p.image_path
+    ? '<span class="hf-tile-ph">✨</span>'
+    : isV
+      ? `<video src="${esc(p.image_path)}" autoplay muted loop playsinline></video>`
+      : `<img src="${esc(p.image_path)}" alt="" onerror="__imgFb(this)">`;
+  const lk = (p.likes === null || p.likes === undefined || !Number.isFinite(Number(p.likes))) ? null : Number(p.likes);
+  const cc = (p.comments_count === null || p.comments_count === undefined || !Number.isFinite(Number(p.comments_count))) ? null : Number(p.comments_count);
+  const likesLine = lk === null ? ''
+    : lk > 0 ? `<div class="hf-fv-likes">${lk.toLocaleString(en ? 'en-US' : 'es-AR')} ${en ? (lk === 1 ? 'like' : 'likes') : 'Me gusta'}</div>`
+    : `<div class="hf-fv-likes">${en ? 'Be the first to like this' : 'Sé el primero en indicar que te gusta'}</div>`;
+  const commentsLine = (cc !== null && cc > 0)
+    ? `<div class="hf-fv-comments">${en ? (cc === 1 ? 'View 1 comment' : `View all ${cc.toLocaleString('en-US')} comments`) : (cc === 1 ? 'Ver el comentario' : `Ver los ${cc.toLocaleString('es-AR')} comentarios`)}</div>` : '';
+  const capFull = (String(p.caption || '') + (String(p.hashtags || '').trim() ? (String(p.caption || '') ? '\n' : '') + String(p.hashtags || '').trim() : '')).trim();
+  const capLong = capFull.length > 125;
+  const capShown = capLong ? capFull.slice(0, 125).trimEnd() : capFull;
+  const capHTML = capFull ? `<div class="hf-fv-cap">${user ? `<b>${esc(user)}</b> ` : ''}<span class="hf-fv-cap-tx">${esc(capShown)}</span>${capLong ? `… <button type="button" class="hf-fv-more" data-hf-fv-more data-full="${esc(capFull)}" data-shown="${esc(capShown)}">${en ? 'more' : 'más'}</button>` : ''}</div>` : '';
+  const rel = p.status === 'published' ? hfRelShort(p.published_at || p.scheduled_at, en) : '';
+  const dateLine = rel ? `<div class="hf-fv-date">${esc(rel)}</div>` : '';
+  return `<div class="hf-fv" data-post-id="${esc(String(p.id))}">
+    <div class="hf-fv-label">👁 ${en ? 'How your followers see it' : 'Así lo ven tus seguidores'}</div>
+    <div class="hf-fv-card">
+      <div class="hf-fv-head">${ava}<span class="hf-fv-user">${esc(headName)}</span><span class="hf-fv-dots" aria-hidden="true">•••</span></div>
+      <div class="hf-fv-media">${media}</div>
+      <div class="hf-fv-bar" aria-hidden="true"><span class="hf-fv-ic">${HF_D_HEART}</span><span class="hf-fv-ic">${HF_D_COMMENT}</span><span class="hf-fv-ic">${HF_D_SHARE}</span><span class="hf-fv-sp"></span><span class="hf-fv-ic">${HF_D_SAVE}</span></div>
+      ${likesLine}
+      ${capHTML}
+      ${commentsLine}
+      ${dateLine}
+    </div>
+    <button type="button" class="hf-fv-close" data-hf-fv-close>${en ? 'Close' : 'Cerrar'}</button>
+  </div>`;
+}
 function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
@@ -12773,7 +12941,13 @@ function homeTileHTML(t, i) {
   // t.fall/t.fallDelay una única vez por generación (ver hfFallMark).
   const fallCls = t.fall ? ' hf-fall' : '';
   const fallStyle = t.fall ? ` style="--hfd:${Math.max(0, Number(t.fallDelay) || 0)}ms"` : '';
-  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${glyph}${chatBtn}</span>`;
+  // (Tanda feed 6B · ítem 4) Realce de sesión del espejo vivo: el
+  // posteo que acaba de pasar a published entra con esta clase y su
+  // chapita «recién publicado» — la marca la pone SOLO el parcheo en
+  // vivo (t.justPub), jamás un render común.
+  const justCls = t.justPub ? ' hf-justpub' : '';
+  const justChip = t.justPub ? `<span class="hf-just-chip">✨ ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Just published' : 'Recién publicado'}</span>` : '';
+  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}${chatBtn}</span>`;
 }
 function homeHeadHTML(prof, bizName, opts) {
   const P = prof || {};
@@ -13057,7 +13231,13 @@ function hfDetailHTML(p, opts) {
       : isCar
         ? `<div class="hf-d-track">${slides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="" loading="lazy" onerror="__imgFb(this)"></span>`).join('')}</div><span class="hf-d-count">1/${slides.length}</span>`
         : `<img src="${esc(slides[0])}" alt="" onerror="__imgFb(this)">`;
-  const media = `<div class="igmock-media hf-d-media${isV ? ' is-v' : ''}">${mediaInner}</div>${isCar ? `<div class="hf-d-dots">${slides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}`;
+  // (Tanda feed 6B · ítem 7) Overlay del recorte 3:4 dentro de la
+  // media + su interruptor junto a ella: el cableado (delegado global
+  // data-hf-crop) lo muestra/oculta y, en el detalle, afina el marco a
+  // píxeles con hfCrop34Rect según la foto real exhibida.
+  const cropOv = slides.length ? hfCropOverlayHTML(4, 5, en) : '';
+  const cropTog = slides.length ? `<button type="button" class="hf-crop-tog" data-hf-crop aria-pressed="false">▦ ${en ? 'See how it crops' : 'Ver cómo se recorta'}</button>` : '';
+  const media = `<div class="igmock-media hf-d-media${isV ? ' is-v' : ''}">${mediaInner}${cropOv}</div>${isCar ? `<div class="hf-d-dots">${slides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}${cropTog}`;
   // Números SOLO reales: likes/comments llegan de post_metrics (vía
   // /api/posts) — null sin fuente: la línea no se dibuja. Un 0 real
   // (métricas leídas con cero) sí es un dato: IG muestra su variante.
@@ -13087,6 +13267,7 @@ function hfDetailHTML(p, opts) {
       <button type="button" class="hf-d-act${p.owner_liked ? ' on' : ''}" data-hfd-act="like" aria-label="${en ? 'Like' : 'Me gusta'}">${p.owner_liked ? HF_D_HEART_FULL : HF_D_HEART}</button>
       <button type="button" class="hf-d-act" data-hfd-act="comment" aria-label="${en ? 'Ask Posty for a change' : 'Pedirle un cambio a Posty'}">${HF_D_COMMENT}</button>
       <button type="button" class="hf-d-act" data-hfd-act="share" aria-label="${en ? 'Share' : 'Compartir'}">${HF_D_SHARE}</button>
+      <button type="button" class="hf-d-act hf-d-eye" data-hfd-act="followers" aria-label="${en ? 'See it in the feed' : 'Ver en el inicio'}">👁</button>
       <span class="hf-d-sp"></span>
       <button type="button" class="hf-d-act${p.owner_saved ? ' on' : ''}" data-hfd-act="save" aria-label="${en ? 'Save' : 'Guardar'}">${p.owner_saved ? HF_D_SAVE_FULL : HF_D_SAVE}</button>
     </div>`;
@@ -13199,6 +13380,9 @@ async function inicioView() {
   // detalle IG y las pestañas (que filtran sin recomponer).
   HF_TILES = tiles;
   HF_CUR_PROF = prof;
+  // (Tanda feed 6B · ítem 4) El espejo vivo nace con esta foto del
+  // payload: los sondeos siguientes difieren contra ella.
+  try { HF_LIVE.snap = hfLiveSnapshot(tiles, prof); HF_LIVE.pending = null; } catch (e) {}
   // (Tanda 4) Bandeja de historias de la semana + el porqué de la
   // grilla: ambos nacen de datos reales ya cargados (los posteos de la
   // cuenta y la composición final de tiles). Sin historias no hay
@@ -13322,7 +13506,12 @@ function mzCloseSheet() {
      intacto — el movimiento >10px cancela cualquier hold pendiente
      (y pointercancel, que dispara el navegador al tomar el scroll,
      también). El click que sigue a un hold ya consumido se suprime en
-     captura para que no abra el detalle por accidente. */
+     captura para que no abra el detalle por accidente.
+   · (6B · ítem 5) PEEK: sobre TODA tile propia, el hold ≥350ms abre
+     además la tarjeta ampliada (hfPeekOpen) con acciones rápidas. En
+     futuros convive con la hoja: si el hold llega a 600ms, la hoja la
+     reemplaza. Soltar, tocar fuera o mover >10px tras el hold cierra
+     el peek y libera el gesto. El botón 💬 (6A) nunca inicia gestos. */
 // La semana «cae» en la grilla UNA vez por generación: la marca vive en
 // localStorage por semana (lunes) + huella de ids de esa semana. Una
 // generación nueva cambia la huella → cae de nuevo; re-renders y
@@ -13349,6 +13538,10 @@ function hfFallMark(tiles) {
   }
 }
 function hfIsEn() { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); }
+// (Tanda feed 6B · ítem 5) Estado del peek y del gesto en curso: el
+// espejo vivo (ítem 4) no parchea mientras un gesto vive.
+let HF_PEEK = null; // { post, tile, ov }
+let HF_GESTURE_ACTIVE = false;
 function hfFeedGesturesBind(root) {
   if (!root) return;
   // Supresión del click post-hold (captura en el root: corre antes que
@@ -13360,30 +13553,39 @@ function hfFeedGesturesBind(root) {
       const t = e.target && e.target.closest ? e.target.closest('.hf-tile') : null;
       if (t && t._hfHoldAt && Date.now() - t._hfHoldAt < 800) { e.stopPropagation(); e.preventDefault(); }
     }, true);
+    // (6B · ítem 5) El menú del sistema no se abre sobre la grilla:
+    // el gesto largo es del peek, no del SO.
+    root.addEventListener('contextmenu', (e) => {
+      if (e.target && e.target.closest && e.target.closest('.hf-tile')) e.preventDefault();
+    });
   }
   root.querySelectorAll('.hf-tile[data-post-id]').forEach((tile) => {
     if (tile._hfBound) return;
+    tile._hfBound = true;
     const video = tile.querySelector('video[data-hf-reel]');
     const isFuture = tile.dataset.status === 'scheduled';
-    if (!isFuture && !video) return;
-    tile._hfBound = true;
-    let sx = 0, sy = 0, tSheet = null, tPrev = null, previewing = false;
+    let sx = 0, sy = 0, tSheet = null, tPrev = null, tPeek = null, previewing = false, peekOpen = false;
     const stopPreview = () => {
       if (!previewing) return;
       previewing = false;
       tile.classList.remove('hf-previewing');
       if (video) { try { video.pause(); } catch (e) {} try { video.currentTime = 0; } catch (e) {} }
     };
+    const closePeek = () => { if (peekOpen) { peekOpen = false; try { hfPeekClose(); } catch (e) {} } };
     const clearTimers = () => {
       if (tSheet) { clearTimeout(tSheet); tSheet = null; }
       if (tPrev) { clearTimeout(tPrev); tPrev = null; }
+      if (tPeek) { clearTimeout(tPeek); tPeek = null; }
     };
     tile.addEventListener('pointerdown', (e) => {
+      if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 tiene su target propio
       sx = e.clientX || 0; sy = e.clientY || 0;
+      HF_GESTURE_ACTIVE = true;
       if (isFuture) {
         tSheet = setTimeout(() => {
           tSheet = null;
           tile._hfHoldAt = Date.now();
+          closePeek();
           hfOpenActionsSheet(tile);
         }, 600);
       } else if (video) {
@@ -13400,15 +13602,293 @@ function hfFeedGesturesBind(root) {
           } catch (err) {}
         }, 350);
       }
+      // (6B · ítem 5) Peek: hold ≥350ms sin mover abre la tarjeta
+      // ampliada del posteo propio. Convive con las ramas de arriba:
+      // en futuros, si el hold sigue hasta 600ms, la hoja de acciones
+      // reemplaza al peek; en reels, la preview de la tile y el peek
+      // (que trae su propio video en loop) nacen juntos.
+      // PUNTO DE EXTENSIÓN (Fase B2): sobre esta misma máquina, un
+      // arrastre posterior al hold moverá la tile; hoy el movimiento
+      // >10px tras el hold cierra el peek y libera el gesto.
+      tPeek = setTimeout(() => {
+        tPeek = null;
+        tile._hfHoldAt = Date.now();
+        peekOpen = true;
+        try { hfPeekOpen(tile); } catch (err) { peekOpen = false; }
+      }, 350);
     });
     tile.addEventListener('pointermove', (e) => {
-      if (!tSheet && !tPrev && !previewing) return;
-      if (Math.abs((e.clientX || 0) - sx) > 10 || Math.abs((e.clientY || 0) - sy) > 10) { clearTimers(); stopPreview(); }
+      if (!tSheet && !tPrev && !tPeek && !previewing && !peekOpen) return;
+      if (Math.abs((e.clientX || 0) - sx) > 10 || Math.abs((e.clientY || 0) - sy) > 10) { clearTimers(); stopPreview(); closePeek(); HF_GESTURE_ACTIVE = false; }
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => {
-      tile.addEventListener(ev, () => { clearTimers(); stopPreview(); });
+      tile.addEventListener(ev, () => { clearTimers(); stopPreview(); closePeek(); HF_GESTURE_ACTIVE = false; });
     });
   });
+}
+// (Tanda feed 6B · ítem 5) Peek: tarjeta ampliada mientras dura el
+// hold. Soltar, tocar fuera o mover >10px la cierra (la máquina de
+// gestos de arriba). Las acciones rápidas viven delegadas en la propia
+// lámina: si el soltar cae sobre una acción, la acción se ejecuta.
+function hfPeekOpen(tile) {
+  if (!tile || !tile.dataset) return;
+  const id = tile.dataset.postId;
+  const t = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES.find((x) => x && x.kind === 'post' && String(x.post.id) === String(id)) : null;
+  if (!t || !t.post) return;
+  hfPeekClose();
+  const post = t.post;
+  const ov = document.createElement('div');
+  ov.className = 'hf-peek-back';
+  ov.innerHTML = hfPeekHTML(post, hfIsEn(), { visitor: HF_VISITOR });
+  document.body.appendChild(ov);
+  HF_PEEK = { post, tile, ov };
+  const fire = (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('[data-hf-peek-act]') : null;
+    if (b && !ov._hfActed) { ov._hfActed = true; hfPeekAct(b.dataset.hfPeekAct, post, tile); return true; }
+    return false;
+  };
+  ov.addEventListener('pointerup', (e) => { fire(e); });
+  ov.addEventListener('click', (e) => { if (!fire(e) && e.target === ov) hfPeekClose(); });
+}
+function hfPeekClose() {
+  if (HF_PEEK && HF_PEEK.ov) { try { HF_PEEK.ov.remove(); } catch (e) {} }
+  HF_PEEK = null;
+  try { hfLiveFlush(); } catch (e) {}
+}
+function hfPeekAct(act, post, tile) {
+  if (act === 'chat') { hfPeekClose(); hfOpenChatForPost(post); return; }
+  if (act === 'redo') {
+    if (hfRedoLeft(post) === 0) { try { toast(hfIsEn() ? 'You already used the 3 redos for this post' : 'Ya usaste los 3 rehaces de este posteo'); } catch (e) {} return; }
+    hfPeekClose();
+    try { hfSetAnchor(post); } catch (e) {}
+    hfRedoPost(post.id);
+    return;
+  }
+  if (act === 'pin') { hfPeekClose(); hfPinToggle(!post.pinned, String(post.id)); return; }
+  if (act === 'followers') { hfPeekClose(); hfFollowerOpen(post); return; }
+}
+// (Tanda feed 6B · ítem 8) «Ver en el inicio»: lámina con el posteo
+// como lo ven los seguidores. Cero endpoints: sale de hfFollowerHTML
+// con los datos ya cargados del posteo y del perfil.
+function hfFollowerOpen(post) {
+  if (!post) return;
+  hfFollowerClose();
+  const prof = HF_CUR_PROF || {};
+  const ov = document.createElement('div');
+  ov.className = 'hf-fv-back';
+  ov.innerHTML = hfFollowerHTML(post, { en: hfIsEn(), user: prof.username || '', pic: prof.pic || '', name: prof.name || '' });
+  document.body.appendChild(ov);
+  ov._hfFv = true;
+  ov.addEventListener('click', (e) => {
+    if (e.target === ov) { hfFollowerClose(); return; }
+    const more = e.target && e.target.closest ? e.target.closest('[data-hf-fv-more]') : null;
+    if (more) {
+      const tx = more.parentElement ? more.parentElement.querySelector('.hf-fv-cap-tx') : null;
+      const full = more.dataset.full || '';
+      const shown = more.dataset.shown || '';
+      const expanded = more.dataset.expanded === '1';
+      if (tx) tx.textContent = expanded ? shown : full;
+      more.dataset.expanded = expanded ? '0' : '1';
+      more.textContent = expanded ? (hfIsEn() ? 'more' : 'más') : (hfIsEn() ? 'less' : 'menos');
+      return;
+    }
+    if (e.target && e.target.closest && e.target.closest('[data-hf-fv-close]')) hfFollowerClose();
+  });
+}
+function hfFollowerClose() {
+  document.querySelectorAll('.hf-fv-back').forEach((el) => { try { el.remove(); } catch (e) {} });
+}
+// (Tanda feed 6B · ítem 7) Interruptor del recorte 3:4, delegado
+// global: vive en el detalle (.hf-d) y en las tarjetas Día/Semana
+// (.igmock). En el detalle el marco se afina a píxeles con la foto
+// real exhibida (object-fit: contain); en las tarjetas la media es
+// 4:5 que llena su caja y el marco % de hfCropOverlayHTML ya es exacto.
+document.addEventListener('click', (e) => {
+  const btn = e.target && e.target.closest ? e.target.closest('[data-hf-crop]') : null;
+  if (!btn) return;
+  e.stopPropagation();
+  const host = btn.closest('.hf-d, .igmock');
+  if (!host) return;
+  const ov = host.querySelector('.hf-cropov');
+  if (!ov) return;
+  const show = ov.hidden;
+  ov.hidden = !show;
+  btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+  btn.classList.toggle('on', show);
+  if (show) {
+    const mediaBox = host.querySelector('.hf-d-media');
+    if (mediaBox) {
+      const m = mediaBox.querySelector('img, video');
+      const iw = m ? (m.naturalWidth || m.videoWidth || 0) : 0;
+      const ih = m ? (m.naturalHeight || m.videoHeight || 0) : 0;
+      const frame = ov.querySelector('.hf-cropov-frame');
+      if (frame && iw > 0 && ih > 0 && mediaBox.clientWidth > 0) {
+        const r = hfCrop34Rect(mediaBox.clientWidth, mediaBox.clientHeight, iw, ih);
+        frame.style.left = r.x + 'px'; frame.style.top = r.y + 'px';
+        frame.style.width = r.w + 'px'; frame.style.height = r.h + 'px';
+      }
+    }
+  }
+});
+/* ===== (Tanda feed 6B · ítem 4) ESPEJO VIVO =====
+   Con el home abierto y visible, cada ~50 s (y al volver la pestaña
+   a visible/foco) se re-lee el MISMO payload que compone la grilla
+   (/api/posts + /api/home/profile). El diff puro (hfLiveDiff) decide:
+   sin cambios, cero mutaciones; con cambios, parcheo en el lugar de
+   las tiles afectadas (sin re-render, sin tocar el scroll). Guardas:
+   detalle abierto, peek abierto, chat en escritura o gesto en curso
+   difieren el parcheo (queda pendiente y se aplica al liberarse). */
+const HF_LIVE = { started: false, busy: false, lastFetch: 0, snap: null, pending: null, justPub: new Set() };
+function hfLiveCompose(allPosts, prof) {
+  const tz = pcTz();
+  const pl = schedPlacements(allPosts, tz);
+  const upcoming = [];
+  for (const ymd of [...pl.byDay.keys()].sort()) {
+    for (const it of (pl.byDay.get(ymd) || [])) {
+      if (it.p.status === 'draft' || it.p.status === 'scheduled') upcoming.push({ p: it.p, ymd });
+    }
+  }
+  const published = allPosts.filter((p) => p.status === 'published');
+  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [] });
+  const props = {};
+  for (const t of tiles) {
+    if (t.kind !== 'post' || !t.post) continue;
+    if (!t.day) { const dt = pcParseDate(t.post.published_at || t.post.scheduled_at); if (dt) t.day = schedDayKeyOf(dt, tz); }
+    props[t.post.id] = t.post.status === 'published'
+      ? { label: '✅ ' + homeWhenLabel(t.post.published_at || t.post.scheduled_at), iso: null }
+      : proposedLabelFor(t.post, pl.proposals, tz);
+  }
+  return { tiles, props };
+}
+function hfLiveBusy() {
+  try {
+    if (typeof HF_DETAIL !== 'undefined' && HF_DETAIL) return true;
+    if (HF_PEEK) return true;
+    if (HF_GESTURE_ACTIVE) return true;
+    if (typeof HF_MOVE !== 'undefined' && HF_MOVE) return true;
+    const ci = document.getElementById('chatInput');
+    if (ci && document.activeElement === ci) return true;
+    const sheet = document.getElementById('mzSheet');
+    if (sheet && !sheet.hidden && ci && String(ci.value || '').trim()) return true;
+  } catch (e) {}
+  return false;
+}
+function hfLiveStart() {
+  if (HF_LIVE.started) return;
+  HF_LIVE.started = true;
+  setInterval(() => { try { hfLiveTick(false); } catch (e) {} }, 50000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { hfLiveTick(true); } catch (e) {} } });
+  window.addEventListener('focus', () => { try { hfLiveTick(true); } catch (e) {} });
+}
+async function hfLiveTick(force) {
+  if (HF_LIVE.busy) return;
+  if (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) return;
+  if (!(location.hash || '').startsWith('#/app/inicio')) return;
+  if (document.hidden) return;
+  const now = Date.now();
+  if (!force && now - HF_LIVE.lastFetch < 40000) return;
+  if (force && now - HF_LIVE.lastFetch < 10000) return;
+  HF_LIVE.busy = true;
+  try {
+    const [allPosts, hp] = await Promise.all([
+      api.get('/api/posts').catch(() => null),
+      api.get('/api/home/profile').catch(() => null),
+    ]);
+    HF_LIVE.lastFetch = Date.now();
+    if (!Array.isArray(allPosts)) return;
+    const prof = (hp && hp.ok) ? hp : HF_CUR_PROF;
+    const { tiles, props } = hfLiveCompose(allPosts, prof);
+    const snap = hfLiveSnapshot(tiles, prof);
+    if (!HF_LIVE.snap) { HF_LIVE.snap = snap; return; }
+    const diff = hfLiveDiff(HF_LIVE.snap, snap);
+    const empty = !diff.changed.length && !diff.added.length && !diff.removed.length && !diff.countsChanged;
+    HF_LIVE.snap = snap;
+    if (empty) return;
+    const job = { tiles, props, prof, diff };
+    if (hfLiveBusy()) { HF_LIVE.pending = job; return; }
+    hfLiveApply(job);
+  } catch (e) {} finally { HF_LIVE.busy = false; }
+}
+function hfLiveFlush() {
+  if (!HF_LIVE.pending) return;
+  if (hfLiveBusy()) return;
+  const job = HF_LIVE.pending;
+  HF_LIVE.pending = null;
+  try { hfLiveApply(job); } catch (e) {}
+}
+function hfLiveApply(job) {
+  const root = document.getElementById('inicioView');
+  if (!root) return;
+  const { tiles, props, prof, diff } = job;
+  const grid = root.querySelector('.hf-grid');
+  const nextById = {};
+  tiles.forEach((t, i) => { if (t.kind === 'post' && t.post) nextById[String(t.post.id)] = { t, i }; });
+  // Conteos del encabezado: se actualizan los <b> en el orden en que
+  // homeHeadHTML los emite (publicaciones · seguidores · seguidos),
+  // solo si el conjunto de conteos presentes no cambió; si cambió,
+  // el próximo render común lo deja exacto.
+  if (diff.countsChanged && prof) {
+    try {
+      const keys = ['posts_count', 'followers', 'following'];
+      const prevKeys = keys.filter((k) => HF_LIVE.snap && typeof (HF_CUR_PROF || {})[k] === 'number');
+      const nextKeys = keys.filter((k) => typeof prof[k] === 'number');
+      if (prevKeys.join(',') === nextKeys.join(',')) {
+        // Mismo formato que homeHeadHTML: completo hasta 9.999 y
+        // abreviado desde 10 mil (12,4 mil / 12.4K · 1,2 M / 1.2M).
+        const enC = hfIsEn();
+        const fmtC = (n) => {
+          const v = Number(n);
+          if (!Number.isFinite(v)) return '';
+          if (v < 10000) return v.toLocaleString(enC ? 'en-US' : 'es-AR');
+          const trim1 = (x) => x.toFixed(1).replace(/\.0$/, '');
+          if (v < 1000000) return enC ? trim1(v / 1000) + 'K' : trim1(v / 1000).replace('.', ',') + ' mil';
+          return enC ? trim1(v / 1000000) + 'M' : trim1(v / 1000000).replace('.', ',') + ' M';
+        };
+        const els = root.querySelectorAll('.hf-stat b');
+        nextKeys.forEach((k, idx) => { if (els[idx]) els[idx].textContent = fmtC(prof[k]); });
+      }
+    } catch (e) {}
+  }
+  if (prof) { HF_CUR_PROF = prof; HOME_PROF = prof; }
+  HF_PROPS = props;
+  // Tiles removidas (salieron de la composición, p. ej. archivadas).
+  for (const id of diff.removed) {
+    if (String(id).startsWith('ig:')) continue;
+    const el = root.querySelector(`.hf-tile[data-post-id="${CSS.escape ? CSS.escape(String(id)) : String(id)}"]`);
+    if (el) el.remove();
+  }
+  // Tiles cambiadas: reemplazo en el lugar (outerHTML), preservando
+  // posición y scroll. La que acaba de publicarse entra con realce.
+  for (const id of diff.changed) {
+    const rec = nextById[String(id)];
+    if (!rec) continue;
+    const el = root.querySelector(`.hf-tile[data-post-id="${CSS.escape ? CSS.escape(String(id)) : String(id)}"]`);
+    if (!el) continue;
+    const t2 = Object.assign({}, rec.t);
+    if (diff.justPublished.includes(String(id))) { t2.justPub = true; HF_LIVE.justPub.add(String(id)); }
+    if (HF_VISITOR) t2.visitor = true;
+    el.outerHTML = homeTileHTML(t2, rec.i);
+  }
+  // Tiles nuevas: entran en su sección (las que vienen, antes de la
+  // primera publicada; las recién publicadas, al frente de las pub).
+  if (grid) {
+    for (const id of diff.added) {
+      const rec = nextById[String(id)];
+      if (!rec) continue;
+      const t2 = Object.assign({}, rec.t);
+      if (diff.justPublished.includes(String(id))) { t2.justPub = true; HF_LIVE.justPub.add(String(id)); }
+      if (HF_VISITOR) t2.visitor = true;
+      const firstPub = grid.querySelector('.hf-tile.pub');
+      if (firstPub) firstPub.insertAdjacentHTML('beforebegin', homeTileHTML(t2, rec.i));
+      else grid.insertAdjacentHTML('beforeend', homeTileHTML(t2, rec.i));
+    }
+  }
+  HF_TILES = tiles;
+  // Las tiles nuevas/reemplazadas necesitan sus gestos y su 💬.
+  try { hfFeedGesturesBind(root); } catch (e) {}
+  try { hfChatBtnBind(root); } catch (e) {}
+  try { bindScfMinis(root); } catch (e) {}
+  try { hfDurBind(root); } catch (e) {}
 }
 // Hoja de acciones estilo Instagram para un posteo futuro (mismo sistema
 // de hojas que pcOpenImageSheet: .pcsheet-backdrop + .pcsheet, se cierra
@@ -13571,6 +14051,7 @@ function hfDetailClose() {
   if (HF_DETAIL && HF_DETAIL.ov) { try { HF_DETAIL.ov.remove(); } catch (e) {} }
   HF_DETAIL = null;
   try { document.body.classList.remove('hf-d-open'); } catch (e) {}
+  try { hfLiveFlush(); } catch (e) {} // (6B) un parcheo diferido por el detalle se aplica al cerrar
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && HF_DETAIL) hfDetailClose(); });
 function hfDetailWire(ov, post, tile) {
@@ -13659,6 +14140,7 @@ function hfDetailWire(ov, post, tile) {
     }
     if (name === 'keep') { hfDetailClose(); return; }
     if (name === 'share') { hfDetailShare(post); return; }
+    if (name === 'followers') { hfFollowerOpen(post); return; } // (6B · ítem 8) lámina sobre el detalle
     if (name === 'menu') {
       const t = tile;
       hfDetailClose();
@@ -13679,6 +14161,7 @@ function hfDetailMenu(post) {
     <div class="pcsheet-handle"></div>
     <button type="button" class="pcsheet-opt" data-hfdm="pin">${post.pinned ? '📌 ' + (en ? 'Unpin from your profile' : 'Desfijar de tu perfil') : '📌 ' + (en ? 'Pin to your profile' : 'Fijar en tu perfil')}<small>${en ? 'Pinned posts show first in your grid' : 'Los fijados se ven primeros en tu grilla'}</small></button>
     <button type="button" class="pcsheet-opt" data-hfdm="edit">✏️ ${en ? 'Edit' : 'Editar'}<small>${en ? 'Open this post to edit it' : 'Abrí este posteo para editarlo'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hfdm="followers">👁 ${en ? 'See it in the feed' : 'Ver en el inicio'}<small>${en ? 'How your followers see this post' : 'Cómo ven este posteo tus seguidores'}</small></button>
     <button type="button" class="pcsheet-close" data-hfdm="close">${en ? 'Close' : 'Cerrar'}</button>
   </div>`;
   document.body.appendChild(bd);
@@ -13688,6 +14171,7 @@ function hfDetailMenu(post) {
     if (a === 'close') { pcCloseSheet(); return; }
     if (a === 'pin') { hfPinToggle(!post.pinned, String(post.id)); return; }
     if (a === 'edit') { pcCloseSheet(); location.hash = '#/app/post/' + encodeURIComponent(post.id); return; }
+    if (a === 'followers') { pcCloseSheet(); hfFollowerOpen(post); return; } // (6B · ítem 8)
   }));
 }
 async function hfDetailShare(post) {
@@ -14124,6 +14608,9 @@ function bindInicio() {
   // press-and-hold + hoja de acciones en futuros): capa extra sobre el
   // cableado de siempre, sin reemplazarlo.
   hfFeedGesturesBind(document.getElementById('inicioView'));
+  // (Tanda feed 6B · ítem 4) Espejo vivo: arranca el sondeo liviano
+  // del home (una sola vez por sesión; se autolimita por ruta/visible).
+  try { hfLiveStart(); } catch (e) {}
   // (Tanda 4) Modo «Mover»: se cancela cualquier resto de una vista
   // anterior y se arma el interceptor de toques (solo actúa con el modo
   // activo; con el modo apagado no toca ningún click).
