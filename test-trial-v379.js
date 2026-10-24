@@ -59,7 +59,7 @@ ok(appJs.includes('Posty trabaja completo por sí solo'), 'invariante v376: auto
 ok(enHtml.includes('Does Posty work on its own, or do I need to hire anything else?'), 'invariante v376: autonomía EN');
 const av = fs.readFileSync(path.join(__dirname, 'public/ai-avatar.png'));
 ok(crypto.createHash('sha256').update(av).digest('hex').startsWith('c8feaff7'), 'invariante: avatar placa corregida (sha c8feaff7…)');
-ok(serverJs.includes("BUILD_ID = '20261024-v398'"), 'BUILD_ID 20261024-v398');
+ok(serverJs.includes("BUILD_ID = '20261024-v398'"), 'BUILD_ID 20261024-v388');
 
 console.log(`test-trial-v379: ${okN} ok / ${failN} fallas`);
 process.exit(failN ? 1 : 0);

@@ -2284,10 +2284,10 @@ function landingView(cfg) {
       <a href="#faq">Preguntas</a>
       <a data-posty-chat role="button" tabindex="0" style="cursor:pointer">Ayuda</a>
       <a href="/en" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a>
-      <a href="#/login">Entrar</a>
+      <a href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
       <a class="btn btn-primary btn-sm" href="/prueba">Probar gratis</a>
     </div>
-    <a class="lp-entrar" href="#/login">Entrar</a>
+    <a class="lp-entrar" href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
     <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Abrir menú"><span></span><span></span><span></span></button>
   </div>
   <div class="mobile-menu" id="mobileMenu">
@@ -2299,7 +2299,7 @@ function landingView(cfg) {
     <a href="#faq">Preguntas</a>
     <a data-posty-chat role="button" tabindex="0" style="cursor:pointer" onclick="toggleMobileMenu()">Ayuda</a>
     <a href="/en" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a>
-    <a href="#/login">Entrar</a>
+    <a href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
     <a class="btn btn-primary btn-block" href="/prueba">Probar gratis</a>
   </div></div>
   <div class="hero"><div class="wrap">
@@ -2703,11 +2703,67 @@ function landingView(cfg) {
    intercambia el token por una sesión, sin contraseña. La × quita la
    cuenta de este dispositivo Y revoca el token en el servidor. */
 const SAVED_ACCOUNTS_KEY = 'posty_saved_accounts';
-function savedAccountsLang() {
+// Idioma de la UI SIN sesión: manda la preferencia 'posty-lang' — la estampan
+// los links de entrada de CADA superficie (la EN estampa 'en', la ES estampa
+// 'es': cambio de idioma = cambio total, en los dos sentidos) —; sin sello,
+// el idioma del navegador; si no, español.
+function anonUiLang() {
   try { const p = localStorage.getItem('posty-lang'); if (p === 'en' || p === 'es') return p; } catch (e) {}
   try { if (/^en/i.test(navigator.language || '')) return 'en'; } catch (e) {}
   return 'es';
 }
+function savedAccountsLang() { return anonUiLang(); }
+// Idioma de las vistas de AUTH (login/registro/forgot/reset) sin sesión:
+// 1) ?lang= del hash — los links de los emails salen en el idioma de la
+// CUENTA y lo traen puesto; queda estampado como preferencia —;
+// 2) la superficie de entrada, vía anonUiLang. Tras el login manda users.lang.
+function authLang() {
+  try {
+    const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+    const l = q.get('lang');
+    if (l === 'en' || l === 'es') { try { localStorage.setItem('posty-lang', l); } catch (e) {} return l; }
+  } catch (e) {}
+  return anonUiLang();
+}
+const AUTH_STR = {
+  es: {
+    navCreate: 'Crear cuenta', navLogin: 'Entrar',
+    loginH2: 'Bienvenido de vuelta 👋', loginSub: 'Entrá para seguir automatizando.',
+    regH2: 'Creá tu cuenta 🚀', regSub: 'Probalo gratis, sin tarjeta.',
+    emailPh: 'vos@tunegocio.com', passLabel: 'Contraseña', passPh: 'Mínimo 6 caracteres',
+    btnLogin: 'Entrar', btnReg: 'Crear cuenta',
+    footLogin: '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a> · <a href="#/forgot" style="color:var(--cel)">Olvidé mi contraseña</a>',
+    footReg: '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>',
+    forgotH2: 'Recuperá tu contraseña 🔑', forgotSub: 'Te mando un link a tu email para elegir una nueva.',
+    forgotBtn: 'Mandame el link', backLogin: 'Volver a entrar',
+    forgotEmpty: 'Escribí tu email 📧',
+    forgotOk: '¡Listo! 📬 Si ese email tiene cuenta, ya te mandé el link para cambiar tu contraseña. Revisá tu casilla (y el spam).',
+    resetH2: 'Elegí tu nueva contraseña 🔑', resetSub: 'Que sea de 6 caracteres como mínimo.',
+    resetLabel: 'Nueva contraseña', resetBtn: 'Guardar y entrar',
+    resetFoot: '<a href="#/forgot" style="color:var(--cel)">¿El link venció? Pedí uno nuevo</a> · <a href="#/login" style="color:var(--cel)">Volver a entrar</a>',
+    resetBadLink: 'Este link no sirve 😅 <a href="#/forgot" style="color:var(--cel);font-weight:700">Pedí uno nuevo</a>',
+    resetNewLink: 'Pedí un link nuevo',
+  },
+  en: {
+    navCreate: 'Create account', navLogin: 'Log in',
+    loginH2: 'Welcome back 👋', loginSub: 'Log in to keep automating.',
+    regH2: 'Create your account 🚀', regSub: 'Try it free, no card needed.',
+    emailPh: 'you@yourbusiness.com', passLabel: 'Password', passPh: 'At least 6 characters',
+    btnLogin: 'Log in', btnReg: 'Create account',
+    footLogin: 'No account yet? <a href="#/registro" style="color:var(--cel)">Sign up</a> · <a href="#/forgot" style="color:var(--cel)">Forgot my password</a>',
+    footReg: 'Already have an account? <a href="#/login" style="color:var(--cel)">Log in</a>',
+    forgotH2: 'Reset your password 🔑', forgotSub: 'I will send you a link to your email so you can choose a new one.',
+    forgotBtn: 'Send me the link', backLogin: 'Back to log in',
+    forgotEmpty: 'Enter your email 📧',
+    forgotOk: 'Done! 📬 If that email has an account, I just sent you the link to reset your password. Check your inbox (and spam).',
+    resetH2: 'Choose your new password 🔑', resetSub: 'Make it at least 6 characters.',
+    resetLabel: 'New password', resetBtn: 'Save and log in',
+    resetFoot: '<a href="#/forgot" style="color:var(--cel)">Link expired? Request a new one</a> · <a href="#/login" style="color:var(--cel)">Back to log in</a>',
+    resetBadLink: 'This link is no good 😅 <a href="#/forgot" style="color:var(--cel);font-weight:700">Request a new one</a>',
+    resetNewLink: 'Request a new link',
+  },
+};
+function authStr() { return AUTH_STR[authLang()] || AUTH_STR.es; }
 const SAVED_STR = {
   es: { cont: 'Continuar como', other: 'Usar otra cuenta', remove: 'Quitar', savedTitle: 'Tus cuentas en este dispositivo', soft: 'Esa entrada ya no sirve en este dispositivo 😅 Entrá con tu contraseña y queda guardada de nuevo.', net: 'Sin conexión justo ahora 😅 Probá de nuevo en un toque.' },
   en: { cont: 'Continue as', other: 'Use another account', remove: 'Remove', savedTitle: 'Your accounts on this device', soft: 'That sign-in no longer works on this device 😅 Log in with your password and it will be saved again.', net: 'No connection right now 😅 Try again in a sec.' },
@@ -2814,58 +2870,61 @@ function bindSavedAccounts() {
 
 function authView(mode) {
   const isLogin = mode === 'login';
+  const S = authStr();
   return `
   <div class="nav"><div class="wrap">
     <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
-    <div class="nav-links"><a href="#/${isLogin ? 'registro' : 'login'}">${isLogin ? 'Crear cuenta' : 'Entrar'}</a></div>
+    <div class="nav-links"><a href="#/${isLogin ? 'registro' : 'login'}">${isLogin ? S.navCreate : S.navLogin}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
-    <h2>${isLogin ? 'Bienvenido de vuelta 👋' : 'Creá tu cuenta 🚀'}</h2>
-    <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : 'Probalo gratis, sin tarjeta.'}</p>
+    <h2>${isLogin ? S.loginH2 : S.regH2}</h2>
+    <p class="sub">${isLogin ? S.loginSub : S.regSub}</p>
     ${isLogin ? '<div id="savedAccounts"></div>' : ''}
     <div id="authFormFields">
     <div id="formErr"></div>
-    <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com"${isLogin ? ' autocomplete="email"' : ' autocomplete="off" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
-    <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"${isLogin ? ' autocomplete="current-password"' : ' autocomplete="new-password" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
-    <button class="btn btn-primary btn-block" id="btnAuth">${isLogin ? 'Entrar' : 'Crear cuenta'}</button>
+    <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="${S.emailPh}"${isLogin ? ' autocomplete="email"' : ' autocomplete="off" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
+    <div class="field"><label>${S.passLabel}</label><input id="f_pass" type="password" placeholder="${S.passPh}"${isLogin ? ' autocomplete="current-password"' : ' autocomplete="new-password" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
+    <button class="btn btn-primary btn-block" id="btnAuth">${isLogin ? S.btnLogin : S.btnReg}</button>
     <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
-      ${isLogin ? '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a> · <a href="#/forgot" style="color:var(--cel)">Olvidé mi contraseña</a>' : '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>'}
+      ${isLogin ? S.footLogin : S.footReg}
     </p>
     </div>
   </div></div>`;
 }
 
 function forgotView() {
+  const S = authStr();
   return `
   <div class="nav"><div class="wrap">
     <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
-    <div class="nav-links"><a href="#/login">Entrar</a></div>
+    <div class="nav-links"><a href="#/login">${S.navLogin}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
-    <h2>Recuperá tu contraseña 🔑</h2>
-    <p class="sub">Te mando un link a tu email para elegir una nueva.</p>
+    <h2>${S.forgotH2}</h2>
+    <p class="sub">${S.forgotSub}</p>
     <div id="forgotMsg"></div>
-    <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com" autocomplete="email" style="font-size:16px"></div>
-    <button class="btn btn-primary btn-block" id="btnForgot">Mandame el link</button>
+    <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="${S.emailPh}" autocomplete="email" style="font-size:16px"></div>
+    <button class="btn btn-primary btn-block" id="btnForgot">${S.forgotBtn}</button>
     <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
-      <a href="#/login" style="color:var(--cel)">Volver a entrar</a>
+      <a href="#/login" style="color:var(--cel)">${S.backLogin}</a>
     </p>
   </div></div>`;
 }
 
 function resetView() {
+  const S = authStr();
   return `
   <div class="nav"><div class="wrap">
     <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
   </div></div>
   <div class="wrap"><div class="form-card">
-    <h2>Elegí tu nueva contraseña 🔑</h2>
-    <p class="sub">Que sea de 6 caracteres como mínimo.</p>
+    <h2>${S.resetH2}</h2>
+    <p class="sub">${S.resetSub}</p>
     <div id="resetMsg"></div>
-    <div class="field"><label>Nueva contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" style="font-size:16px"></div>
-    <button class="btn btn-primary btn-block" id="btnReset">Guardar y entrar</button>
+    <div class="field"><label>${S.resetLabel}</label><input id="f_pass" type="password" placeholder="${S.passPh}" autocomplete="new-password" style="font-size:16px"></div>
+    <button class="btn btn-primary btn-block" id="btnReset">${S.resetBtn}</button>
     <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
-      <a href="#/forgot" style="color:var(--cel)">¿El link venció? Pedí uno nuevo</a> · <a href="#/login" style="color:var(--cel)">Volver a entrar</a>
+      ${S.resetFoot}
     </p>
   </div></div>`;
 }
@@ -11899,7 +11958,7 @@ async function render() {
       const email = $('#f_email').value, password = $('#f_pass').value;
       try {
         const isReg = path !== '#/login';
-        const body = { email, password };
+        const body = { email, password, lang: authLang() };
         if (isReg) {
           // Registro viniendo de /prueba: pasamos el @ TAMBIÉN en registro
           // (el server importa la semana y siembra el fundamento al crear la
@@ -11971,10 +12030,10 @@ async function render() {
       if (btnForgotEl.disabled) return;
       btnForgotEl.disabled = true;
       const email = ($('#f_email').value || '').trim();
-      if (!email) { $('#forgotMsg').innerHTML = `<div class="err">Escribí tu email 📧</div>`; btnForgotEl.disabled = false; return; }
+      if (!email) { $('#forgotMsg').innerHTML = '<div class="err">' + authStr().forgotEmpty + '</div>'; btnForgotEl.disabled = false; return; }
       try {
-        await api.post('/api/auth/forgot', { email });
-        $('#forgotMsg').innerHTML = `<div class="ok-msg">¡Listo! 📬 Si ese email tiene cuenta, ya te mandé el link para cambiar tu contraseña. Revisá tu casilla (y el spam).</div>`;
+        await api.post('/api/auth/forgot', { email, lang: authLang() });
+        $('#forgotMsg').innerHTML = '<div class="ok-msg">' + authStr().forgotOk + '</div>';
       } catch (e) {
         $('#forgotMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
         btnForgotEl.disabled = false;
@@ -11987,7 +12046,7 @@ async function render() {
     LANDING_ON = false;
     if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = resetView();
-    if (!token) $('#resetMsg').innerHTML = `<div class="err">Este link no sirve 😅 <a href="#/forgot" style="color:var(--cel);font-weight:700">Pedí uno nuevo</a></div>`;
+    if (!token) $('#resetMsg').innerHTML = '<div class="err">' + authStr().resetBadLink + '</div>';
     const btnResetEl = $('#btnReset');
     { const inpR = $('#f_pass'); if (inpR) inpR.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); btnResetEl.click(); } }); }
     btnResetEl.onclick = async () => {
@@ -11995,14 +12054,14 @@ async function render() {
       btnResetEl.disabled = true;
       const password = $('#f_pass').value || '';
       try {
-        const resetResp = await api.post('/api/auth/reset', { token, password });
+        const resetResp = await api.post('/api/auth/reset', { token, password, lang: authLang() });
         // (Frente 5) El reset revoca los tokens viejos y emite uno fresco:
         // este dispositivo guarda la cuenta con el token nuevo.
         savedAccountsSave(resetResp && resetResp.email, resetResp && resetResp.device_token);
         await refreshSession();
         postAuthLanding();
       } catch (e) {
-        $('#resetMsg').innerHTML = `<div class="err">${esc(e.message)} <a href="#/forgot" style="color:var(--cel);font-weight:700">Pedí un link nuevo</a></div>`;
+        $('#resetMsg').innerHTML = '<div class="err">' + esc(e.message) + ' <a href="#/forgot" style="color:var(--cel);font-weight:700">' + authStr().resetNewLink + '</a></div>';
         btnResetEl.disabled = false;
       }
     };
@@ -14529,6 +14588,9 @@ function bindSchedule() {
 }
 
 async function doLogout() {
+  // El login que sigue a un logout sale en el idioma de la CUENTA que salió:
+  // queda estampado como preferencia de entrada (cambio total, los 2 sentidos).
+  try { if (typeof ME !== 'undefined' && ME && (ME.lang === 'en' || ME.lang === 'es')) localStorage.setItem('posty-lang', ME.lang); } catch (e) {}
   // Salir DE VERDAD: limpiamos el estado en memoria y repintamos nosotros.
   // Antes el handler solo cambiaba el hash a '#/' y confiaba en el evento
   // hashchange: la vista de la app (con los datos del negocio) quedaba

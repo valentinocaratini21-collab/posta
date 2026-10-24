@@ -1619,9 +1619,12 @@ function recordTrialImport(userId, trialIg, nImp, hadPostsBefore) {
 }
 
 app.post('/api/auth/register', (req, res) => {
-  const { email, password, ref, trial_ig, utm } = req.body || {};
+  const { email, password, ref, trial_ig, utm, lang } = req.body || {};
+  // (v398 · paridad) El alta desde la superficie EN nace lang='en' y sus
+  // errores salen en ese idioma; sin lang, el ES histórico exacto.
+  const regEn = lang === 'en';
   if (!email || !password || password.length < 6)
-    return res.status(400).json({ error: 'Necesito tu email y una contraseña de 6 caracteres como mínimo 🔑' });
+    return res.status(400).json({ error: regEn ? 'I need your email and a password of at least 6 characters 🔑' : 'Necesito tu email y una contraseña de 6 caracteres como mínimo 🔑' });
   try {
     const hash = bcrypt.hashSync(password, 10);
     const code = newReferralCode();
@@ -1636,7 +1639,7 @@ app.post('/api/auth/register', (req, res) => {
     // organico/directo/otro) para que el tablero separe sin adivinar textos.
     const utmS = LA.normalizeSrc(utm && utm.source) || String((utm && utm.source) || '').slice(0, 40);
     const utmC = String((utm && utm.campaign) || '').slice(0, 80);
-    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC);
+    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC, regEn ? 'en' : 'es');
     const newUserId = r.lastInsertRowid;
     // Si viene de /prueba con el mismo @, su semana generada lo espera adentro como borradores
     try {
@@ -1669,22 +1672,23 @@ app.post('/api/auth/register', (req, res) => {
     // de DB con ese mensaje dejaba al usuario entrando a una cuenta que
     // nunca se creó. El resto es un 500 honesto.
     if (/UNIQUE constraint failed/i.test((e && e.message) || ''))
-      return res.status(400).json({ error: 'Ese email ya tiene cuenta 😄 Probá entrando directamente' });
+      return res.status(400).json({ error: regEn ? 'That email already has an account 😄 Try logging in instead' : 'Ese email ya tiene cuenta 😄 Probá entrando directamente' });
     console.error('[posta] register:', e.message);
-    res.status(500).json({ error: 'Algo falló de nuestro lado 😅 Probá de nuevo en un rato' });
+    res.status(500).json({ error: regEn ? 'Something failed on our side 😅 Please try again in a bit' : 'Algo falló de nuestro lado 😅 Probá de nuevo en un rato' });
   }
 });
 
 app.post('/api/auth/login', (req, res) => {
-  const { email, password, trial_ig } = req.body || {};
+  const { email, password, trial_ig, lang } = req.body || {};
+  const liEn = lang === 'en'; // (v398) errores en el idioma de la superficie
   const emL = (email || '').trim().toLowerCase();
   const rlKey = 'login|' + emL + '|' + (req.ip || '');
   if (authHitCount(rlKey, 15 * 60 * 1000) >= 10)
-    return res.status(429).json({ error: 'Demasiados intentos 😅 Esperá 15 minutos y probá de nuevo.' });
+    return res.status(429).json({ error: liEn ? 'Too many attempts 😅 Wait 15 minutes and try again.' : 'Demasiados intentos 😅 Esperá 15 minutos y probá de nuevo.' });
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(emL);
   if (!user || !user.password_hash || !bcrypt.compareSync(password || '', user.password_hash)) {
     authHitRecord(rlKey);
-    return res.status(401).json({ error: 'Mmm, ese email o contraseña no me cierran 🤔 Probá de nuevo' });
+    return res.status(401).json({ error: liEn ? "Hmm, that email or password doesn't look right 🤔 Try again" : 'Mmm, ese email o contraseña no me cierran 🤔 Probá de nuevo' });
   }
   authHitClear(rlKey);
   // Sesión regenerada al autenticar (anti fijación): la respuesta viaja en
@@ -2526,14 +2530,15 @@ function authHitRecord(key) {
 function authHitClear(key) { AUTH_HITS.delete(key); }
 // Página mínima de marca para callbacks/links abiertos desde un email o una
 // app externa: nada de texto plano sin salida (auditoría 2026-10-21).
-function htmlLinkPage(title, msg) {
-  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Posty</title></head>'
+function htmlLinkPage(title, msg, lang) {
+  const en = lang === 'en';
+  return '<!doctype html><html lang="' + (en ? 'en' : 'es') + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Posty</title></head>'
     + '<body style="margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#F2F9FD;color:#0A1E33;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px;box-sizing:border-box">'
     + '<div style="max-width:420px;width:100%;background:#fff;border-radius:18px;padding:32px 28px;text-align:center;box-shadow:0 10px 40px rgba(10,30,51,.10)">'
     + '<img src="/ai-avatar.png" alt="Posty" width="72" height="72" style="border-radius:50%">'
     + '<h1 style="font-size:21px;margin:16px 0 8px">' + title + '</h1>'
     + '<p style="font-size:15px;line-height:1.55;color:#47617A;margin:0 0 22px">' + msg + '</p>'
-    + '<a href="/#/login" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:15px;padding:13px 30px;border-radius:999px;text-decoration:none">Volver a Posty</a>'
+    + '<a href="/#/login" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:15px;padding:13px 30px;border-radius:999px;text-decoration:none">' + (en ? 'Back to Posty' : 'Volver a Posty') + '</a>'
     + '</div></body></html>';
 }
 
@@ -2558,19 +2563,23 @@ app.post('/api/auth/magic-request', async (req, res) => {
     if (n >= 5) return res.json({ ok: true });
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    // (v369 · paridad de idioma) El email de acceso sale en el idioma de la
+    // CUENTA si ya existe; si no, en el que trae el funnel (lang del body).
+    // (v398) Se resuelve ANTES de armar el payload: el idioma queda guardado
+    // en el token y lo heredan el alta por canje (users.lang) y, si el link
+    // vence, la página de error del canje.
+    const acctLang = (db.prepare('SELECT lang FROM users WHERE email = ?').get(em) || {}).lang;
+    magicLang = acctLang === 'en' || acctLang === 'es' ? acctLang
+      : (String((req.body || {}).lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es');
     const payload = JSON.stringify({
       trial_ig: trial_ig || null,
       ref: ref || null,
       utm: utm || null,
       trial_profile: trial_profile || null,
+      lang: magicLang,
     });
     db.prepare('INSERT INTO magic_tokens (token_hash, email, payload, created_at, expires_at, used) VALUES (?,?,?,?,?,0)')
       .run(tokenHash, em, payload, Date.now(), Date.now() + 15 * 60 * 1000);
-    // (v369 · paridad de idioma) El email de acceso sale en el idioma de la
-    // CUENTA si ya existe; si no, en el que trae el funnel (lang del body).
-    const acctLang = (db.prepare('SELECT lang FROM users WHERE email = ?').get(em) || {}).lang;
-    magicLang = acctLang === 'en' || acctLang === 'es' ? acctLang
-      : (String((req.body || {}).lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es');
     if (process.env.RESEND_API_KEY) {
       const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
       const link = `${base}/api/auth/magic?token=${token}`;
@@ -2595,8 +2604,8 @@ app.post('/api/auth/magic-request', async (req, res) => {
         }
         const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
         const utmO = (utm && typeof utm === 'object') ? utm : {};
-        const r2 = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1)")
-          .run(em, code, referredBy, trialEnds, String(utmO.source || '').slice(0, 40), String(utmO.campaign || '').slice(0, 80));
+        const r2 = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1, ?)")
+          .run(em, code, referredBy, trialEnds, String(utmO.source || '').slice(0, 40), String(utmO.campaign || '').slice(0, 80), magicLang);
         const userId = r2.lastInsertRowid;
         try {
           const expBiz = (trial_profile && trial_profile.business_name) || null;
@@ -2643,11 +2652,15 @@ app.post('/api/auth/magic-request', async (req, res) => {
 // Usuario existente → solo entra (+ importa la semana de /prueba si hay).
 app.get('/api/auth/magic', (req, res) => {
   const token = String((req.query && req.query.token) || '');
+  let magicRowLang = 'es'; // (v398) idioma en que nació el pedido, si la fila existe
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const row = db.prepare('SELECT * FROM magic_tokens WHERE token_hash = ? AND used = 0').get(tokenHash);
+    if (row) { try { if (JSON.parse(row.payload || '{}').lang === 'en') magicRowLang = 'en'; } catch (e) {} }
     if (!row || row.expires_at < Date.now())
-      return res.status(400).send(htmlLinkPage('Ese link venció o ya se usó 😅', 'Pedí uno nuevo desde la app: dura 15 minutos y entrás directo.'));
+      return res.status(400).send(magicRowLang === 'en'
+        ? htmlLinkPage('That link expired or was already used 😅', 'Request a new one from the app: it lasts 15 minutes and takes you straight in.', 'en')
+        : htmlLinkPage('Ese link venció o ya se usó 😅', 'Pedí uno nuevo desde la app: dura 15 minutos y entrás directo.'));
     db.prepare('UPDATE magic_tokens SET used = 1 WHERE token_hash = ?').run(tokenHash);
     let payload = {};
     try { payload = JSON.parse(row.payload || '{}'); } catch (e) {}
@@ -2666,8 +2679,8 @@ app.get('/api/auth/magic', (req, res) => {
       const utm = (payload.utm && typeof payload.utm === 'object') ? payload.utm : {};
       const utmS = String(utm.source || '').slice(0, 40);
       const utmC = String(utm.campaign || '').slice(0, 80);
-      const r = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1)")
-        .run(email, code, referredBy, trialEnds, utmS, utmC);
+      const r = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1, ?)")
+        .run(email, code, referredBy, trialEnds, utmS, utmC, payload.lang === 'en' ? 'en' : 'es');
       const userId = r.lastInsertRowid;
       try {
         // El negocio esperado sale del perfil de la prueba (lo que el usuario
@@ -2679,6 +2692,7 @@ app.get('/api/auth/magic', (req, res) => {
         recordTrialImport(userId, payload.trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
         streakFromTrialImport(userId, nImp);
       } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
+      applyTrialLang(userId, payload.trial_ig); // tokens viejos sin payload.lang: la prueba EN también siembra
       applyTrialProfile(userId, payload.trial_profile);
       seedFromTrialDigest(userId, payload.trial_ig); // (v229) FUNDAMENTO: transferencia total también en el canje magic
       track(userId, 'registered');
@@ -2698,7 +2712,9 @@ app.get('/api/auth/magic', (req, res) => {
     return req.session.regenerate(() => { req.session.userId = sessUserId; res.redirect('/#/'); });
   } catch (e) {
     console.error('[magic] redeem:', e.message);
-    return res.status(400).send(htmlLinkPage('Ese link no me cierra 😅', 'Pedí uno nuevo desde la app y probá de nuevo.'));
+    return res.status(400).send(magicRowLang === 'en'
+      ? htmlLinkPage("That link doesn't look right 😅", 'Request a new one from the app and try again.', 'en')
+      : htmlLinkPage('Ese link no me cierra 😅', 'Pedí uno nuevo desde la app y probá de nuevo.'));
   }
 });
 
@@ -2714,16 +2730,17 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
 // Siempre responde OK para no revelar si el email existe.
 app.post('/api/auth/forgot', async (req, res) => {
   const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+  const foEn = !!(req.body && req.body.lang === 'en'); // (v398) errores en el idioma de entrada
   // Sin proveedor de email configurado el link JAMÁS sale: responder ok era
   // el éxito falso del incidente 2026-10-21. Error honesto y visible.
   if (!process.env.RESEND_API_KEY) {
     console.error('[posta] forgot: RESEND_API_KEY ausente — el email de reset no puede salir');
-    return res.status(503).json({ error: 'El envío de emails está en mantenimiento 😅 Probá de nuevo en un rato.' });
+    return res.status(503).json({ error: foEn ? 'Email delivery is under maintenance 😅 Please try again in a bit.' : 'El envío de emails está en mantenimiento 😅 Probá de nuevo en un rato.' });
   }
   // Rate-limit: máx 5 pedidos por hora por email+IP (espejo del magic-request).
   const rlKey = 'forgot|' + email + '|' + (req.ip || '');
   if (authHitCount(rlKey, 3600 * 1000) >= 5)
-    return res.status(429).json({ error: 'Ya pediste varios links 😅 Esperá una hora y probá de nuevo.' });
+    return res.status(429).json({ error: foEn ? "You've already requested several links 😅 Wait an hour and try again." : 'Ya pediste varios links 😅 Esperá una hora y probá de nuevo.' });
   authHitRecord(rlKey);
   try {
     const user = db.prepare('SELECT id, email, lang FROM users WHERE email = ?').get(email);
@@ -2736,7 +2753,7 @@ app.post('/api/auth/forgot', async (req, res) => {
       // BASE_URL canónica (antes: header Host — un proxy o un request armado
       // podía mandar el link a otro dominio; magic ya usaba BASE_URL).
       const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
-      const link = `${base}/#/reset?token=${token}`;
+      const link = `${base}/#/reset?token=${token}&lang=${user.lang === 'en' ? 'en' : 'es'}`; // (v398) la pantalla de reset abre en el idioma de la cuenta
       // (v369 · paridad de idioma) El email sale en el idioma de la cuenta.
       const fen = user.lang === 'en';
       const r = await sendEmail({
@@ -2754,12 +2771,12 @@ app.post('/api/auth/forgot', async (req, res) => {
       });
       if (!r || !r.ok) {
         console.error('[posta] forgot: sendEmail no entregó:', r && (r.error || r.skipped ? 'omitido' : 'sin detalle'));
-        return res.status(502).json({ error: 'No pude enviar el email 😅 Probá de nuevo en un rato.' });
+        return res.status(502).json({ error: foEn ? "I couldn't send the email 😅 Please try again in a bit." : 'No pude enviar el email 😅 Probá de nuevo en un rato.' });
       }
     }
   } catch (e) {
     console.error('[posta] forgot:', e.message);
-    return res.status(500).json({ error: 'Algo falló de nuestro lado 😅 Probá de nuevo' });
+    return res.status(500).json({ error: foEn ? 'Something failed on our side 😅 Please try again' : 'Algo falló de nuestro lado 😅 Probá de nuevo' });
   }
   res.json({ ok: true });
 });
@@ -2767,19 +2784,31 @@ app.post('/api/auth/forgot', async (req, res) => {
 app.post('/api/auth/reset', (req, res) => {
   const token = String((req.body && req.body.token) || '');
   const password = String((req.body && req.body.password) || '');
+  // (v398 · paridad) Errores en el idioma de ENTRADA (body.lang, resuelto por
+  // el cliente desde la superficie o el link del email); si no viene, el de la
+  // CUENTA dueña del token; si no, el ES histórico.
+  let rsLang = (req.body && (req.body.lang === 'en' || req.body.lang === 'es')) ? req.body.lang : null;
+  if (!rsLang && token) {
+    try {
+      const th = crypto.createHash('sha256').update(token).digest('hex');
+      const prow = db.prepare('SELECT u.lang AS lang FROM password_resets pr JOIN users u ON u.id = pr.user_id WHERE pr.token_hash = ?').get(th);
+      if (prow && (prow.lang === 'en' || prow.lang === 'es')) rsLang = prow.lang;
+    } catch (e) {}
+  }
+  const rsEn = rsLang === 'en';
   const rlKey = 'reset|' + (req.ip || '');
   if (authHitCount(rlKey, 15 * 60 * 1000) >= 10)
-    return res.status(429).json({ error: 'Demasiados intentos 😅 Esperá 15 minutos y pedí un link nuevo.' });
+    return res.status(429).json({ error: rsEn ? 'Too many attempts 😅 Wait 15 minutes and request a new link.' : 'Demasiados intentos 😅 Esperá 15 minutos y pedí un link nuevo.' });
   if (!token || password.length < 6) {
     authHitRecord(rlKey);
-    return res.status(400).json({ error: 'Necesito el link válido y una contraseña de 6 caracteres como mínimo 🔑' });
+    return res.status(400).json({ error: rsEn ? 'I need the valid link and a password of at least 6 characters 🔑' : 'Necesito el link válido y una contraseña de 6 caracteres como mínimo 🔑' });
   }
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const row = db.prepare('SELECT * FROM password_resets WHERE token_hash = ? AND used = 0').get(tokenHash);
     if (!row || row.expires_at < Date.now()) {
       authHitRecord(rlKey);
-      return res.status(400).json({ error: 'Ese link venció o ya se usó 😅 Pedí uno nuevo' });
+      return res.status(400).json({ error: rsEn ? 'That link expired or was already used 😅 Request a new one' : 'Ese link venció o ya se usó 😅 Pedí uno nuevo' });
     }
     const hash = bcrypt.hashSync(password, 10);
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, row.user_id);
@@ -2812,7 +2841,7 @@ app.post('/api/auth/reset', (req, res) => {
       res.json({ ok: true, email: emR, device_token: dt ? dt.token : null, device_token_expires_at: dt ? dt.expiresAt : null });
     });
   } catch (e) {
-    res.status(400).json({ error: 'No pude cambiarla 😅 Probá de nuevo' });
+    res.status(400).json({ error: rsEn ? "I couldn't change it 😅 Please try again" : 'No pude cambiarla 😅 Probá de nuevo' });
   }
 });
 
@@ -18281,139 +18310,6 @@ app.get('/carta/:token/audio.json', (req, res) => {
   ensureCartaAudio(data.row);
   const fresh = cartaAudioRow(v.kind, v.ref) || data.row;
   res.json({ ok: true, state: fresh.state, url: fresh.state === 'ready' ? fresh.audio_file : null });
-});
-
-// ---------- (v398) COMPARTIR MI SEMANA: link público firmado de SOLO LECTURA ----------
-// El dueño le muestra su semana a un socio o a la familia SIN dar su
-// contraseña: token HMAC (approval.signWeekShareLink) que ata (userId,
-// gen, exp). La página es una vista VIVA de la semana vigente — la misma
-// selección que el dueño ve en su home: semana actual en su zona,
-// posteos del feed (imagen/video/carrusel), sin cancelados ni piezas en
-// revisión — y de SOLO LECTURA: sin chat, sin botones de acción, sin
-// email, plan ni métricas. El control es del dueño: apagar el link
-// (week_share_on=0) o regenerarlo (week_share_gen+1) mata el anterior
-// al instante.
-function weekShareState(uid) {
-  const u = db.prepare('SELECT week_share_gen, week_share_on FROM users WHERE id = ?').get(uid) || {};
-  return { gen: Number(u.week_share_gen) || 0, on: Number(u.week_share_on) === 1 };
-}
-function weekSharePath(uid) {
-  const st = weekShareState(uid);
-  if (!st.on || !st.gen || !approval.signWeekShareLink) return null;
-  return '/semana/' + approval.signWeekShareLink(uid, st.gen);
-}
-app.get('/api/week-share', requireAuth, (req, res) => {
-  const uid = req.session.userId;
-  const st = weekShareState(uid);
-  res.json({ ok: true, active: !!(st.on && st.gen > 0), url: weekSharePath(uid) });
-});
-app.post('/api/week-share/enable', requireAuth, (req, res) => {
-  const uid = req.session.userId;
-  const st = weekShareState(uid);
-  const gen = st.gen > 0 ? st.gen : 1;
-  db.prepare('UPDATE users SET week_share_gen = ?, week_share_on = 1 WHERE id = ?').run(gen, uid);
-  res.json({ ok: true, active: true, url: weekSharePath(uid) });
-});
-app.post('/api/week-share/regenerate', requireAuth, (req, res) => {
-  const uid = req.session.userId;
-  const st = weekShareState(uid);
-  db.prepare('UPDATE users SET week_share_gen = ?, week_share_on = 1 WHERE id = ?').run(st.gen + 1, uid);
-  res.json({ ok: true, active: true, url: weekSharePath(uid) });
-});
-app.post('/api/week-share/revoke', requireAuth, (req, res) => {
-  db.prepare('UPDATE users SET week_share_on = 0 WHERE id = ?').run(req.session.userId);
-  res.json({ ok: true, active: false, url: null });
-});
-function weekSharePosts(uid) {
-  const tz = userTz(uid);
-  const curWeek = mondayKeyOf(tzToday(tz));
-  return db.prepare('SELECT * FROM posts WHERE user_id = ? AND status != ?').all(uid, 'cancelled')
-    .filter((p) => !Number(p.needs_review || 0)
-      && ['image', 'video', 'carousel'].includes(String(p.media_type || 'image'))
-      && postWeekKey(p, tz) === curWeek)
-    .sort((a, b) => String(a.scheduled_at || a.created_at).localeCompare(String(b.scheduled_at || b.created_at)));
-}
-function semanaEsc(s) {
-  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-function semanaMediaUrl(p) {
-  const raw = String(p || '');
-  if (/^https?:\/\//i.test(raw)) return raw;
-  return '/media/' + raw.split('/').filter(Boolean).pop();
-}
-function semanaWhenLabel(p, tz, en) {
-  const raw = p.status === 'published' ? (p.published_at || p.scheduled_at) : p.scheduled_at;
-  if (!raw) return '';
-  try {
-    const ymd = ymdInTz(raw, tz);
-    if (!ymd) return '';
-    const [y, m, d] = ymd.split('-').map(Number);
-    const day = new Intl.DateTimeFormat(en ? 'en-US' : 'es-AR', { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d, 12)));
-    const s = String(raw);
-    const dt = new Date(s.length === 16 ? s : s.replace(' ', 'T'));
-    const hm = isNaN(dt) ? '' : new Intl.DateTimeFormat(en ? 'en-US' : 'es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }).format(dt);
-    const verb = p.status === 'published' ? (en ? 'Posted' : 'Publicado') : (en ? 'Goes out' : 'Sale');
-    return `${verb} · ${day} ${d}/${m}${hm ? ' · ' + hm : ''}`;
-  } catch (e) { return ''; }
-}
-function semanaNotFound(res, en) {
-  return res.status(404).send(`<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Posty</title></head><body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;text-align:center;padding:60px 20px;color:#0A1E33"><h1>${en ? 'This link is no longer available' : 'Este link ya no está disponible'}</h1><p>${en ? 'The owner may have turned it off or created a new one.' : 'Puede que el dueño lo haya apagado o creado uno nuevo.'}</p></body></html>`);
-}
-function semanaPageHTML(data) {
-  const en = data.lang === 'en';
-  const head = `<p style="text-align:center;margin:0 0 10px"><img src="/posty-avatar-saludando.png" alt="Posty" style="width:84px;height:auto"></p>`
-    + `<h1 style="font-size:23px;line-height:1.25;text-align:center;margin:0 0 6px">${en ? 'The week of' : 'La semana de'} @${semanaEsc(data.handle)}</h1>`
-    + (data.business ? `<p style="text-align:center;font-size:15px;color:#47617A;margin:0 0 4px">${semanaEsc(data.business)}</p>` : '')
-    + `<p style="text-align:center;font-size:14.5px;color:#47617A;margin:0 0 22px">${en ? 'These are the posts Posty made for this week.' : 'Estos son los posteos que Posty armó para esta semana.'}</p>`;
-  let body = '';
-  if (!data.posts.length) {
-    body = `<p style="text-align:center;font-size:16px;color:#47617A;padding:26px 10px">${en ? 'No posts are ready for this week yet — Posty is on it.' : 'Todavía no hay posteos armados para esta semana — Posty está en eso.'}</p>`;
-  } else {
-    body = data.posts.map((p) => {
-      let media = '';
-      if (p.media_type === 'video') {
-        media = `<video src="${semanaEsc(p.media[0] || '')}" controls playsinline preload="metadata" style="width:100%;border-radius:12px;display:block;background:#000"></video>`;
-      } else if (p.media.length > 1) {
-        media = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">${p.media.map((m) => `<img src="${semanaEsc(m)}" alt="" loading="lazy" style="width:82%;flex:none;border-radius:12px;display:block">`).join('')}</div>`;
-      } else if (p.media.length === 1) {
-        media = `<img src="${semanaEsc(p.media[0])}" alt="" loading="lazy" style="width:100%;height:auto;border-radius:12px;display:block">`;
-      }
-      const when = p.when ? `<p style="font-size:13px;font-weight:700;color:#2793C8;margin:12px 0 6px">${semanaEsc(p.when)}</p>` : '';
-      const cap = p.caption ? `<p style="font-size:15.5px;line-height:1.55;margin:0;white-space:pre-wrap">${semanaEsc(p.caption)}</p>` : '';
-      return `<article style="border:1px solid #E3EDF3;border-radius:16px;padding:14px;margin:0 0 20px">${media}${when}${cap}</article>`;
-    }).join('');
-  }
-  const foot = `<p style="text-align:center;font-size:13px;color:#8496A5;margin:26px 0 0">${en ? 'Made with' : 'Hecha con'} <a href="/" style="color:#2793C8;font-weight:700;text-decoration:none">Posty</a> · postycommunitymanager.com</p>`;
-  return `<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${en ? 'The week of' : 'La semana de'} @${semanaEsc(data.handle)} — Posty</title></head>
-<body style="margin:0;background:#F6F9FB;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0A1E33">
-<div style="max-width:600px;margin:0 auto;background:#FFFFFF;padding:30px 26px 36px">
-${head}
-${body}
-${foot}
-</div></body></html>`;
-}
-app.get('/semana/:token', (req, res) => {
-  const v = approval.verifyWeekShareLink ? approval.verifyWeekShareLink(req.params.token) : null;
-  if (!v) return semanaNotFound(res, false);
-  const u = db.prepare('SELECT id, lang FROM users WHERE id = ?').get(v.userId);
-  if (!u) return semanaNotFound(res, false);
-  const en = u.lang === 'en';
-  const st = weekShareState(u.id);
-  if (!st.on || st.gen !== v.gen) return semanaNotFound(res, en);
-  const prof = getProfile(u.id) || {};
-  const tz = userTz(u.id);
-  const posts = weekSharePosts(u.id).map((p) => {
-    let media = [];
-    if (String(p.media_type || 'image') === 'carousel' && p.carousel_paths) {
-      try { const arr = JSON.parse(p.carousel_paths); if (Array.isArray(arr)) media = arr.filter(Boolean).map(semanaMediaUrl); } catch (e) {}
-    }
-    if (!media.length && p.image_path) media = [semanaMediaUrl(p.image_path)];
-    const cap = [String(p.caption || '').trim(), String(p.hashtags || '').trim()].filter(Boolean).join('\n');
-    return { media_type: String(p.media_type || 'image'), media, caption: cap, when: semanaWhenLabel(p, tz, en) };
-  });
-  const handle = String(prof.ig_username || '').replace(/^@+/, '').trim() || (en ? 'this business' : 'este negocio');
-  res.set('Cache-Control', 'private, no-store');
-  res.send(semanaPageHTML({ lang: en ? 'en' : 'es', handle, business: String(prof.business_name || '').trim(), posts }));
 });
 
 // ---------- (v323 · pieza 7) REEL DE MUESTRA CON COMPUERTA ----------

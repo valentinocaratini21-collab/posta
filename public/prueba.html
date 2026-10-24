@@ -726,7 +726,7 @@ body.sfb-on{padding-bottom:88px}
 <body>
 <div class="nav"><div class="wrap">
   <a class="logo-posty" href="/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
-  <span class="nav-right"><a class="nav-lang" href="/en/prueba" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a><a class="nav-entrar" id="btnEntrar" href="/#/login">Entrar</a></span>
+  <span class="nav-right"><a class="nav-lang" href="/en/prueba" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a><a class="nav-entrar" id="btnEntrar" href="/#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a></span>
 </div></div>
 <div id="campBanner" style="display:none;background:#EAF6FC;border-bottom:1px solid #E2EDF5;padding:10px 16px;text-align:center;font-weight:700;font-size:14.5px;color:#0A1E33"></div>
 
@@ -1101,7 +1101,7 @@ body.sfb-on{padding-bottom:88px}
         <p class="lock-sub" id="lockSub"></p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
           <button class="btn btn-primary btn-sm" id="lockCta">Crear mi cuenta</button>
-          <a class="btn btn-ghost btn-sm" href="/#/login" style="text-decoration:none">Ya tengo cuenta</a>
+          <a class="btn btn-ghost btn-sm" href="/#/login" style="text-decoration:none" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Ya tengo cuenta</a>
         </div>
       </div>
       <p class="tiny" id="rTime" style="display:none;margin-top:8px"></p>
@@ -1357,7 +1357,7 @@ body.sfb-on{padding-bottom:88px}
   <button class="btn btn-primary btn-block" id="btnReg">Mandar mi link de acceso 📧</button>
   <p class="tiny">Sin tarjeta · Desde $199.999/mes al terminar · Cancelá cuando quieras</p>
   <p class="tiny" style="margin-top:6px">🔒 Tu Instagram se conecta con Meta — sin compartir tu contraseña</p>
-  <p class="tiny" style="margin-top:8px">¿Ya tenés cuenta? <a href="/#/login" style="color:var(--cel);font-weight:700">Entrá</a></p>
+  <p class="tiny" style="margin-top:8px">¿Ya tenés cuenta? <a href="/#/login" style="color:var(--cel);font-weight:700" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrá</a></p>
 </div></div>
 
 <!-- LIGHTBOX -->
@@ -3739,7 +3739,7 @@ function closeReg() {
   const b = $('#btnReg');
   b.disabled = true; b.textContent = 'Mandando tu link…';
   try {
-    const body = { email };
+    const body = { email, lang: 'es' };
     if (TRIAL && TRIAL.ig) body.trial_ig = TRIAL.ig;
     try { const rf = localStorage.getItem('posta_ref'); if (rf) body.ref = rf; } catch (e) {}
     // Puente /prueba → cuenta: el servidor importa el perfil al canjear el magic link.
