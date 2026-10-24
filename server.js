@@ -16225,6 +16225,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
               } catch (e) { /* best-effort */ }
             }
           }
+          if (cachedOut.diagnosis) send('diagnosis', cachedOut.diagnosis);
           cachedOut.cached = true;
           cachedOut.spots_left = spotsLeft();
           cachedOut.week = buildTrialWeek((cachedOut.posts || []).length, cachedOut.lang);
@@ -16417,6 +16418,37 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
       formText: richGoal, feedPalette, registro: feedRegister, deep, rubro: rubroRes,
     });
+    // (v379 · ítem 5 — reaplicado en v380) DIAGNÓSTICO EXPRESS: la paleta
+    // completa del feed, su registro lumínico y su línea YA se calculan
+    // durante la espera (feedPalette/feedRegister y el fundamento de
+    // arriba); acá se emiten al visitante en el momento, sin una sola
+    // llamada extra. Sin @ no hay diagnóstico: el flujo sigue exactamente
+    // como hoy. Fricción cero: ningún paso nuevo.
+    let trialDiagnosis = null;
+    if (ig && trialDigest) {
+      const lineThemes = Array.isArray(trialDigest.temas_feed) ? trialDigest.temas_feed.filter(Boolean).slice(0, 3) : [];
+      const star = trialDigest.producto_estrella || null;
+      if (feedPalette || feedRegister || lineThemes.length || star) {
+        trialDiagnosis = {
+          palette: feedPalette ? {
+            principal: feedPalette.principal || null,
+            accent: feedPalette.accent || null,
+            dark: feedPalette.dark || null,
+            light: feedPalette.light || null,
+            bg: feedPalette.bg || null,
+          } : null,
+          register: feedRegister || null,
+          color_source: colorSource,
+          themes: lineThemes,
+          star,
+        };
+        send('diagnosis', trialDiagnosis);
+      }
+    }
+    // (v379 · ítem 4 — reaplicado en v380) LA ETIQUETA REAL: la
+    // trazabilidad del packshot anclado nace acá y se resuelve tras
+    // generar las piezas (bloque junto al paso de video).
+    let uploadProduct = { classified: false };
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
     const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang });
@@ -16685,6 +16717,76 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       }
     }
 
+    // (v379 · ítem 4 — reaplicado en v380) LA ETIQUETA REAL EN LA PIEZA:
+    // si el visitante subió una foto, hasta acá el motor la pegaba literal
+    // en las plantillas — y en feeds ilustrados la ruta IA la pisaba. Ahora:
+    // si la foto CLASIFICA como un producto/servicio real del fundamento
+    // (el mismo mapa foto→producto que clasifica las fotos de la web, con
+    // la misma vara de confianza), UNA pieza — la de ese producto — se
+    // genera con su foto como referencia con el rol 'product' y la
+    // cláusula de fidelidad de las cuentas (forma, color, packaging y
+    // etiqueta exactos), pasa el MISMO QA de fidelidad y solo si lo pasa
+    // reemplaza a la pieza literal; con 1 reintento reforzado. Sin
+    // clasificación no se genera nada: anclar a ciegas fabricaría el
+    // packshot genérico que este ítem prohíbe. Si el QA no pasa, queda la
+    // foto literal (el producto real, fiel por construcción).
+    if (photoPath && demoApiKey && costs.demoAiCapOk()) {
+      try {
+        const upItemNames = [...((webData && webData.services) || []),
+          ...(((deep && deep.catalog && deep.catalog.items) || [])).map((x) => x.nombre),
+          ...(((deep && deep.bioLink && deep.bioLink.items) || [])).map((x) => x.nombre),
+          ...((trialDigest.productos || []).map((p) => (typeof p === 'string' ? p : (p && p.nombre) || ''))),
+          ...((trialDigest.servicios || []).map((s) => (typeof s === 'string' ? s : (s && s.nombre) || ''))),
+          trialDigest.producto_estrella || '',
+        ].filter(Boolean);
+        const upEntries = await raceMs(trialPhotoEntries([{ url: 'upload://foto', path: photoPath }], upItemNames), 6000);
+        const upEntry = upEntries && upEntries[0];
+        if (upEntry && upEntry.es_producto && upEntry.item) {
+          uploadProduct = { classified: true, item: upEntry.item, piece: null, fidelity: 'pending' };
+          let anchorIdx = specPosts.findIndex((sp) => sp && sp.photo_product && clientDigest.sameItemName(sp.photo_product, upEntry.item));
+          if (anchorIdx < 0) anchorIdx = topics.findIndex((t) => t && t.digest_anchor && clientDigest.sameItemName(t.digest_anchor, upEntry.item));
+          if (anchorIdx < 0) anchorIdx = specPosts.findIndex((sp) => sp && sp.sales_intent === 'vender');
+          if (anchorIdx < 0) anchorIdx = 0;
+          const aSpec = specPosts[anchorIdx];
+          const aPost = posts[anchorIdx];
+          if (aSpec && aPost && aPost.type === 'image') {
+            uploadProduct.piece = anchorIdx;
+            const origB64 = fs.readFileSync(photoPath).toString('base64');
+            const genGpt = (prompt, refs) => demoAi.genConceptImage(prompt, refs, demoApiKey, 'high');
+            const mkPrompt = (clause) => demoAi.expandArtBrief({
+              artBrief: `${aSpec.headline || aPost.headline || aSpec.kind || 'post'} — ${aSpec.subline || ''}`.trim(),
+              stylePrompt: (spec.styles[anchorIdx] && spec.styles[anchorIdx].prompt) || '',
+              kind: aSpec.kind, business, category: effCategory, subcat: spec.subcat || '',
+              paletteHex: [accent, btn], productRef: false, lang,
+            }) + '\n\nStudio packshot: THE EXACT product from the reference photo is the hero of the scene, in a setting true to this business. ' + clause;
+            let candB64 = await demoAi.generateDemoPieceImage({ prompt: mkPrompt(refRoles.FIDELITY_CLAUSE), refs: [photoPath], refNote: refRoles.buildRefNote(['product']), genGpt }).catch(() => null);
+            let verdict = candB64 ? await qaFidelityB64(origB64, candB64, demoApiKey).catch(() => null) : null;
+            if (candB64 && (!verdict || !verdict.ok)) {
+              const retryB64 = await demoAi.generateDemoPieceImage({ prompt: mkPrompt(refRoles.FIDELITY_CLAUSE + ' ' + refRoles.FIDELITY_REINFORCE), refs: [photoPath], refNote: refRoles.buildRefNote(['product']), genGpt }).catch(() => null);
+              if (retryB64) {
+                const v2 = await qaFidelityB64(origB64, retryB64, demoApiKey).catch(() => null);
+                if (v2 && v2.ok) { candB64 = retryB64; verdict = v2; uploadProduct.retried = true; }
+              }
+            }
+            if (candB64 && verdict && verdict.ok) {
+              const comp = await demoAi.compositeDemoPiece({ aiB64: candB64, post: aPost, spec: aSpec, accent, btn, business, palette: spec.palette || null, headerBand: spec.headerBand || null, runDir, idx: anchorIdx, lang }).catch(() => null);
+              if (comp && comp.jpegPath) {
+                aPost.image = 'data:image/jpeg;base64,' + fs.readFileSync(comp.jpegPath).toString('base64');
+                aPost.ai = true;
+                aPost.upload_anchored = true;
+                uploadProduct.fidelity = 'passed';
+                send('post', { index: anchorIdx, day: week[anchorIdx] && week[anchorIdx].day, date: week[anchorIdx] && week[anchorIdx].date, hour: week[anchorIdx] && week[anchorIdx].hour, post: aPost });
+              } else {
+                uploadProduct.fidelity = 'unverified';
+              }
+            } else {
+              uploadProduct.fidelity = candB64 ? 'fallback' : 'unverified';
+            }
+          }
+        }
+      } catch (e) { console.error('[posta] packshot anclado (stream):', e.message); }
+    }
+
     // 4) El video (v182): recorre TODOS los diseños con cortes (tour por
     // las piezas), ya no anima una sola tarjeta estática. Necesita los 5
     // diseños listos, así que arranca acá; los JPG ya están en runDir.
@@ -16841,6 +16943,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       feed_kind: feedKind,
       feed_formula: feedFormula,
       feed_palette: feedPalette,
+      diagnosis: trialDiagnosis, // (v379 · ítem 5) diagnóstico express de su línea
+      upload_product: uploadProduct, // (v379 · ítem 4) trazabilidad del packshot anclado
       demo_ai: demoAiInfo,
       ig_pic: igPic, ig_name: igName,
       profile: trialProfile,
