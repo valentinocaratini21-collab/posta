@@ -197,6 +197,19 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 /* Compartir */
 .share-row{text-align:center;margin:14px 0 4px}
 .share-btn{border:2px solid var(--cel);background:#fff;color:var(--cel);border-radius:999px;padding:11px 26px;font-size:15px;font-weight:800;cursor:pointer}
+.share-btn.wa{background:#25D366;border-color:#25D366;color:#fff;margin-left:8px}
+/* (v379 · item 5) Express diagnosis of their line */
+#diagBox{max-width:480px;margin:26px auto 0}
+.diag-card{background:#fff;border:2px solid #E3EDF4;border-radius:18px;padding:18px;text-align:left}
+.diag-card h4{margin:0 0 4px;font-size:16.5px;color:#0A1E33}
+.diag-sub{margin:0 0 12px;font-size:13.5px;color:#47617A;line-height:1.5}
+.diag-swatches{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.diag-sw{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;color:#47617A;font-weight:700}
+.diag-sw i{width:40px;height:40px;border-radius:12px;border:1px solid #E3EDF4;display:block}
+.diag-line{font-size:14px;line-height:1.55;color:#0A1E33;margin:0}
+.diag-first{margin-top:14px}
+.diag-first img{width:100%;border-radius:14px;display:block}
+.diag-first p{margin:8px 0 0;font-size:13.5px;font-weight:800;color:#0A1E33;text-align:center}
 /* Chat de la prueba */
 .chat{background:#fff;border:1.5px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 12px 40px rgba(10,30,51,.07)}
 .chat-msgs{padding:20px;display:flex;flex-direction:column;gap:12px;max-height:340px;overflow-y:auto;background:var(--bg2)}
@@ -1100,6 +1113,9 @@ body.sfb-on{padding-bottom:88px}
     <!-- (v323 · piece 19) Your competition in one line: only with data actually read -->
     <div id="compLine" style="display:none;background:#FFF6E0;border:1px solid #FEC14D;border-radius:14px;padding:14px 18px;margin-bottom:14px;font-size:15.5px;line-height:1.55;color:#0A1E33"></div>
 
+    <!-- (v379 · item 5) Express diagnosis: their real palette + their line + their first post in that line -->
+    <div id="diagBox" style="display:none"></div>
+
     <!-- Proyección de perfil (v184): se llena por JS si el perfil real llegó -->
     <div id="projBox" style="display:none"></div>
 
@@ -1158,7 +1174,7 @@ body.sfb-on{padding-bottom:88px}
           <button class="btn btn-primary" id="btnSave" style="font-size:19px;padding:18px 46px;max-width:100%">Save your week 👇</button>
           <p class="tiny">No card to try · Cancel anytime</p>
         </div>
-        <div class="share-row"><button class="share-btn" id="btnShare">📤 Share my week</button></div>
+        <div class="share-row"><button class="share-btn" id="btnShare">📤 Share my week</button><button class="share-btn wa" id="btnShareWa">💬 Share on WhatsApp</button></div>
         <p style="text-align:center;margin:4px 0 0"><a href="#" id="chatLink" style="color:var(--cel);font-weight:800;text-decoration:none;font-size:15px">Something off? Ask in the chat 👇</a></p>
       <!-- (v323 · piece 17) Price at the peak, well told: the hero plan per
            day, from the live prices the server serves — never hand-typed. -->
@@ -2027,7 +2043,7 @@ async function generateWithStream(fd) {
   STREAM_DONE = false; STREAM_ERRORED = false; STREAM_LOCKED = false; STREAM_N = 0; FIRST_POST_SENT = false;
   enterStreamingMode();
   try {
-    await readSSE(res.body, { status: onStreamStatus, post: onStreamPost, profile: onStreamProfile, audit: onStreamAudit, done: onStreamDone, error: onStreamError, locked: onStreamLocked });
+    await readSSE(res.body, { status: onStreamStatus, post: onStreamPost, profile: onStreamProfile, audit: onStreamAudit, diagnosis: onStreamDiagnosis, done: onStreamDone, error: onStreamError, locked: onStreamLocked });
   } catch (e) { /* cae al chequeo de abajo */ }
   if (!STREAM_DONE && !STREAM_ERRORED && !STREAM_LOCKED) onStreamError({ error: 'The connection dropped.' });
   return true;
@@ -2110,6 +2126,11 @@ function enterStreamingMode() {
   TRIAL_AUDIT = null;
   const ab = $('#auditBox');
   if (ab) { ab.style.display = 'none'; ab.innerHTML = ''; }
+  // (v379 · item 5) The express diagnosis starts clean on every run.
+  STREAM_DIAG = null;
+  STREAM_FIRST_POST = null;
+  const dbx = $('#diagBox');
+  if (dbx) { dbx.style.display = 'none'; dbx.innerHTML = ''; }
   const ig = cleanIg($('#f_ig').value);
   $('#rTitle').textContent = 'Building your week… ⚙️';
   $('#rSub').textContent = 'Watch me build it live 👇';
@@ -2152,11 +2173,45 @@ function onStreamPost(d) {
   const feed = $('#rWeek');
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
+  // (v379 · item 5) Post 1 is the express-diagnosis post: if the block is
+  // already on screen, its photo fills the block's slot.
+  if (idx === 0 && p.image) { STREAM_FIRST_POST = p; if (STREAM_DIAG) renderDiagnosis(); }
   projAddPiece(idx, p);
   $('#rStreamFill').style.width = Math.min(95, Math.round((STREAM_N / 6) * 100)) + '%';
   const ti = Math.min(TK_STEPS.length - 1, STREAM_N);
   $('#rStreamText').textContent = TK_STEPS[ti][1];
   trk('prueba_stream_post', { n: STREAM_N });
+}
+/* (v379 · item 5) Express diagnosis: their feed's real palette, their line
+   and their first post in that line, visible during the wait. Without an
+   @ the event never arrives and the block never shows (today's flow). */
+let STREAM_DIAG = null;
+let STREAM_FIRST_POST = null;
+function diagLineText(d) {
+  const bits = [];
+  if (d.register) bits.push(d.register === 'dark' ? 'your feed has a dark register' : 'your feed is light and bright');
+  if (d.themes && d.themes.length) bits.push('you post about ' + d.themes.join(', '));
+  if (d.star) bits.push('your star product is ' + d.star);
+  return bits.length ? 'Your line: ' + bits.join(' · ') + '. Your week comes out in this same line.' : '';
+}
+function renderDiagnosis() {
+  const box = $('#diagBox');
+  if (!box || !STREAM_DIAG) return;
+  const d = STREAM_DIAG;
+  const roles = [['principal', 'Main'], ['accent', 'Accent'], ['bg', 'Background'], ['dark', 'Dark'], ['light', 'Light']];
+  let sw = '';
+  if (d.palette) sw = '<div class="diag-swatches">' + roles.filter(([k]) => d.palette[k]).map(([k, lab]) => `<span class="diag-sw"><i style="background:${esc(d.palette[k])}"></i>${lab}</span>`).join('') + '</div>';
+  const sub = d.palette ? 'This is your real palette, taken from your latest posts:' : 'Here is what I read from your feed:';
+  const line = diagLineText(d);
+  const first = STREAM_FIRST_POST && STREAM_FIRST_POST.image
+    ? `<div class="diag-first"><img src="${STREAM_FIRST_POST.image}" alt="Your first post"><p>👆 Your first post, in your line — and the rest are coming</p></div>` : '';
+  box.innerHTML = `<div class="diag-card"><h4>🎨 I already read your Instagram</h4><p class="diag-sub">${sub}</p>${sw}${line ? `<p class="diag-line">${esc(line)}</p>` : ''}${first}</div>`;
+  box.style.display = 'block';
+}
+function onStreamDiagnosis(d) {
+  if (!d) return;
+  STREAM_DIAG = d;
+  renderDiagnosis();
 }
 function onStreamDone(d) {
   const out = (d && d.out) || d;
@@ -2755,6 +2810,15 @@ function renderResults() {
   // Semana (extraída a función para re-renderizar cuando el chat edita textos)
   renderWeek();
 
+  // (v379 · item 5) Express diagnosis in results and restores too: it
+  // comes from the payload (diagnosis + first post), no stream needed.
+  if (t.diagnosis) {
+    STREAM_DIAG = t.diagnosis;
+    const fp0 = (t.posts || [])[0];
+    if (fp0 && fp0.type === 'image' && fp0.image) STREAM_FIRST_POST = fp0;
+    renderDiagnosis();
+  }
+
   // Proyección de perfil (v184): tarjeta compacta arriba de la semana,
   // solo si el payload trae el perfil real del visitante.
   projFromTrial();
@@ -3011,6 +3075,8 @@ function lbDayName() {
 }
 $('#lbPhoto').onclick = () => { $('#lb').classList.remove('open'); openPhotoSheet(lbPost); };
 $('#btnShare').onclick = () => shareWeek();
+const btnShareWaEl = $('#btnShareWa');
+if (btnShareWaEl) btnShareWaEl.onclick = () => shareWeekWhatsApp();
 $('#lbImprove').onclick = () => {
   $('#lb').classList.remove('open');
   const inp = $('#chatIn');
@@ -3492,6 +3558,22 @@ async function shareWeek() {
       toast('Copy the link of this page to share it');
     }
   }
+}
+/* (v379 · item 6) Share the result on WhatsApp: Web Share API when
+   available, wa.me otherwise. The message talks only about Posty. */
+function shareWeekWhatsApp() {
+  const t = TRIAL;
+  if (!t) return;
+  const url = location.origin + '/en/prueba' + (t.ig ? '?ig=' + encodeURIComponent(String(t.ig).replace(/^@/, '')) + '&src=prueba-compartida' : '?src=prueba-compartida');
+  const text = `Look at the week of posts Posty made for ${t.business} 👇 Try it free:`;
+  if (navigator.share) {
+    navigator.share({ title: 'My week with Posty', text, url }).catch((e) => {
+      if (e && e.name === 'AbortError') return;
+      window.open('https://wa.me/?text=' + encodeURIComponent(text + ' ' + url), '_blank');
+    });
+    return;
+  }
+  window.open('https://wa.me/?text=' + encodeURIComponent(text + ' ' + url), '_blank');
 }
 /* ---------- Sheet de fotos ---------- */
 let photoSheetIdx = -1;
