@@ -127,6 +127,7 @@ function parseEmbedPosts(html) {
     const re = new RegExp('\\{' + esc(Q) + '__typename' + esc(Q) + ':' + esc(Q) +
       '(GraphImage|GraphVideo|GraphSidecar)' + esc(Q), 'g');
     let m;
+    const seenPostKeys = new Set(); // (2026-10-24) el embed REPITE nodos del mismo posteo
     while ((m = re.exec(html)) && posts.length < MAX_POSTS) {
       const segRaw = html.slice(m.index, m.index + 9000);
       const seg = segRaw.split(Q).join('"'); // un nivel de escape menos
@@ -137,11 +138,22 @@ function parseEmbedPosts(html) {
       const qe = '\\\\"'; // en regex: casa con \" del archivo
       const capRaw = fRaw(new RegExp(qe + 'text' + qe + ':' + qe + '((?:[^"\\\\]|\\\\.){0,500})'));
       const thumbRaw = f(/"display_url":"((?:[^"\\]|\\.){0,600})/);
+      const takenAt = f(/"taken_at_timestamp":(\d+)/) ? parseInt(f(/"taken_at_timestamp":(\d+)/), 10) : null;
+      const caption = cleanCaptionResidue(decodeCaption(capRaw || ''));
+      // (2026-10-24) Nodo duplicado del MISMO posteo (misma fecha + mismo
+      // caption, otro shortcode de CDN): el embed de la cuenta 12 traía la
+      // Pieza 1 dos veces y la lectura contaba 8 «posteos» sobre 2 reales.
+      // Se conserva la primera aparición; el resto es el mismo posteo.
+      if (takenAt != null) {
+        const dupKey = takenAt + '|' + caption.slice(0, 80);
+        if (seenPostKeys.has(dupKey)) continue;
+        seenPostKeys.add(dupKey);
+      }
       posts.push({
         type: m[1],
         shortcode: f(/"shortcode":"([A-Za-z0-9_-]+)"/),
-        taken_at: f(/"taken_at_timestamp":(\d+)/) ? parseInt(f(/"taken_at_timestamp":(\d+)/), 10) : null,
-        caption: cleanCaptionResidue(decodeCaption(capRaw || '')),
+        taken_at: takenAt,
+        caption,
         comments: f(/"edge_media_to_comment":\{"count":(\d+)/) ? parseInt(f(/"edge_media_to_comment":\{"count":(\d+)/), 10) : null,
         // (D3) Los likes están en el mismo objeto del embed y se descartaban:
         // sin ellos, el 27% de las cuentas quedaba sin ranking mejor/peor

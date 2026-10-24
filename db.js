@@ -131,6 +131,12 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN pinned INTEGER DEFAULT 0`); } catch 
 try { db.exec(`ALTER TABLE posts ADD COLUMN pinned_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN owner_liked INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN owner_saved INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// (2026-10-24) Espejo de Instagram: estado del posteo EN Instagram según
+// la última lectura completa del perfil (feed-reconcile.js). 'live' =
+// está en la grilla; 'archived_ext' = fue archivado/borrado en IG y deja
+// de rendirse en el feed, sin tocar status/ledger/analítica.
+try { db.exec(`ALTER TABLE posts ADD COLUMN ig_state TEXT DEFAULT 'live'`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN ig_state_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Costos IA (costs.js, 2026-10-02): tokens cacheados por prompt caching.
 try { db.exec(`ALTER TABLE api_costs ADD COLUMN cached_tokens INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Abrir y listo (2026-10-03): 1 = Posty arma y programa la semana solo.

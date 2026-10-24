@@ -12486,7 +12486,10 @@ function homeGridCompose(input) {
     if (p.status !== 'draft' && p.status !== 'scheduled') continue;
     tiles.push({ kind: 'post', post: p, ymd: it.ymd || null, day: it.ymd || null, isNew: p.status === 'draft' });
   }
-  const pubs = published.filter((p) => p && !isStory(p) && p.status === 'published')
+  // (2026-10-24) Los archivados/borrados EN Instagram (ig_state =
+  // 'archived_ext', reconciliación del servidor) no rinden en la grilla
+  // ni anclan minPubMs: el espejo sigue a la grilla real de la cuenta.
+  const pubs = published.filter((p) => p && !isStory(p) && p.status === 'published' && p.ig_state !== 'archived_ext')
     .slice().sort((a, b) => String(b.published_at || b.scheduled_at || '').localeCompare(String(a.published_at || a.scheduled_at || '')));
   let minPubMs = Infinity;
   for (const p of pubs) {

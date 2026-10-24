@@ -271,6 +271,7 @@ const mp = require('./mercadopago');
 const stripeBilling = require('./stripe-billing'); // (v285) cobro US en USD — fail-closed sin STRIPE_SECRET_KEY
 const demo = require('./demo');
 const feedAudit = require('./feed-audit');
+const feedReconcile = require('./feed-reconcile');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
 const feedDirector = require('./feed-director');
@@ -10319,7 +10320,11 @@ async function homeProfileFromRead(handle, data) {
   if (!data || !data.ok || !data.profile) return null;
   const prof = feedAudit.trialProfileFromAudit(data, null);
   if (!prof) return null;
-  const posts = (data.posts || []).filter((x) => x && x.thumb);
+  // (2026-10-24) Solo posteos de PRIMER NIVEL: los hijos de un carrusel
+  // (sin fecha ni caption en el embed) son placas del carrusel, no
+  // posteos — rendirlos como tiles sueltos mete contenido «de otra
+  // cuenta» (las muestras del carrusel) en la grilla del dueño.
+  const posts = (data.posts || []).filter((x) => x && x.thumb && feedReconcile.isTopLevelReadPost(x));
   const loc = { handle: prof.handle, photos: posts.map((x) => x.thumb) };
   try { await feedAudit.localizeTrialPhotos(loc, MEDIA_DIR); } catch (e) { /* quedan las que haya */ }
   let pic = prof.pic || null;
@@ -10363,7 +10368,19 @@ async function homeProfileFromRead(handle, data) {
 async function homeProfileReadAndStore(uid, handle) {
   const data = await feedAudit.fetchAuditData(handle).catch(() => null);
   const payload = await homeProfileFromRead(handle, data).catch(() => null);
-  if (payload) homeSnapshotPut(uid, handle, payload);
+  if (payload) {
+    homeSnapshotPut(uid, handle, payload);
+    // (2026-10-24) Reconciliación del espejo: con la lectura completa
+    // recién hecha, los publicados propios que ya NO están en la grilla
+    // de Instagram (archivados/borrados allá) dejan de rendirse en el
+    // feed. Lectura parcial o fallida no toca nada (feed-reconcile.js).
+    try {
+      const rec = feedReconcile.reconcilePublishedMirror(db, uid, data);
+      if (rec && (rec.archived || rec.restored)) {
+        console.log(`[feed-reconcile] user ${uid} @${handle}: archivados_ext=${rec.archived} restaurados=${rec.restored} (grilla leída ${rec.seen}/${rec.total})`);
+      }
+    } catch (e) { /* la reconciliación nunca frena la home */ }
+  }
   return payload;
 }
 function homeProfileRefreshOnce(uid, handle) {
@@ -18593,7 +18610,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v391';
+const BUILD_ID = '20261024-v392';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
