@@ -3177,7 +3177,7 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 @media(max-width:560px){.sc-card-lp{max-width:100%}}
 
 /* --- v384 · FRANJA VIVA «El feed se arma solo» (#feed) — patrón de familia
-   (el jardín de Growty): escena mandada por el scroll. ESTADO POR DEFECTO =
+   (el patrón de la franja): escena mandada por el scroll. ESTADO POR DEFECTO =
    LA ESCENA COMPLETA: sin JS, o con prefers-reduced-motion, las tarjetas ya
    están en su grilla final perfecta (ninguna regla las esconde ni las mueve);
    el JS solo escribe transform/opacity en línea al avanzar el scroll, y al
