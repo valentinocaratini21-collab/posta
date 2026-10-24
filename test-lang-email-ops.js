@@ -167,6 +167,18 @@ CREATE TABLE settings (user_id INTEGER, timezone TEXT DEFAULT 'America/Argentina
   t('ES línea histórica exacta', W.referralWinLine(fakeDb, 1, 'abc123', 'https://postycommunitymanager.com') === '\nconocés a alguien con negocio? los dos ganan 50% off 👇\nhttps://postycommunitymanager.com/?ref=abc123');
   t('EN línea en inglés', W.referralWinLine(fakeDb, 1, 'abc123', 'https://postycommunitymanager.com', 'en') === '\nknow someone with a business? you both get 50% off 👇\nhttps://postycommunitymanager.com/?ref=abc123');
 
+  // ---------- email.js · toque del fundador a los 3 días (v395: gemelo EN) ----------
+  console.log('— email.js · toque del fundador (borrador, no envía) —');
+  const weekLink = base + '/#/semana/tok123';
+  const tEn = E.founderTouchEmail({ email: 'en@x.com', lang: 'en' }, base, weekLink, 'en');
+  t('EN toque asunto', tEn.subject === "I'm Valentino — writing to you myself");
+  t('EN toque cuerpo + firma + link, sin ES', /behind Posty there's a person/.test(tEn.text) && /Valentino Caratini\nFounder of Posty/.test(tEn.text) && tEn.text.includes(weekLink) && !/(Te escribo|Gracias por leer|Fundador de Posty|¿me contás)/.test(tEn.text));
+  const tEn2 = E.founderTouchEmail({ email: 'en@x.com', lang: 'en' }, base, weekLink);
+  t('EN toque resuelto por lead.lang', tEn2.subject === tEn.subject && tEn2.text === tEn.text);
+  const tEs = E.founderTouchEmail({ email: 'es@x.com' }, base, weekLink);
+  t('ES toque asunto histórico', tEs.subject === 'Soy Valentino — te escribo yo');
+  t('ES toque copy aprobado + sin posdata', /Te escribo yo mismo, desde mi mail de siempre/.test(tEs.text) && /atrás de Posty hay una persona, y soy yo/.test(tEs.text) && /Valentino Caratini\nFundador de Posty/.test(tEs.text) && !/P\.D\.|Posdata|Postdata/.test(tEs.text));
+
   stub.close();
   console.log(`\n== test-lang-email-ops: ${ok} ok · ${bad} fallas ==`);
   process.exit(bad ? 1 : 0);

@@ -11115,44 +11115,50 @@ app.get('/api/connections/tiendanube/install/info', (req, res) => {
 app.post('/api/connections/tiendanube/install/claim', async (req, res) => {
   const v = tnInstall.validateClaimBody(req.body || {});
   if (!v.ok) return res.status(400).json({ ok: false, mensaje: v.error });
+  // (v395 · paridad) Desde la página EN: mensajes en inglés y el alta nace
+  // con users.lang='en'. Sin lang, mensajes e INSERT históricos intactos.
+  const en = v.lang === 'en';
   const state = String((req.body || {}).t || '');
   if (!tnInstall.pendingStoreInfo(db, state, SESSION_SECRET)) {
-    return res.status(410).json({ ok: false, error: 'instalacion_vencida', mensaje: 'El link de instalación venció (dura 30 min). Volvé a tocar «Instalar» en Tiendanube 🙏' });
+    return res.status(410).json({ ok: false, error: 'instalacion_vencida', mensaje: en ? 'Your install link expired (it lasts 30 minutes). Tap "Install" again in Tiendanube 🙏' : 'El link de instalación venció (dura 30 min). Volvé a tocar «Instalar» en Tiendanube 🙏' });
   }
   let userId = null;
   if (v.mode === 'login') {
     const rlKey = 'login|' + v.email + '|' + (req.ip || '');
     if (authHitCount(rlKey, 15 * 60 * 1000) >= 10)
-      return res.status(429).json({ ok: false, mensaje: 'Demasiados intentos 😅 Esperá 15 minutos y probá de nuevo.' });
+      return res.status(429).json({ ok: false, mensaje: en ? 'Too many attempts 😅 Wait 15 minutes and try again.' : 'Demasiados intentos 😅 Esperá 15 minutos y probá de nuevo.' });
     const u = db.prepare('SELECT id, password_hash FROM users WHERE email = ?').get(v.email);
     if (!u || !u.password_hash || !bcrypt.compareSync(v.password, u.password_hash)) {
       authHitRecord(rlKey);
-      return res.status(401).json({ ok: false, mensaje: 'Email o contraseña incorrectos. ¿Probás de nuevo? Si no tenés cuenta, tocá «Crear mi cuenta» 🙏' });
+      return res.status(401).json({ ok: false, mensaje: en ? 'Wrong email or password. Want to try again? If you don\'t have an account, tap "Create my account" 🙏' : 'Email o contraseña incorrectos. ¿Probás de nuevo? Si no tenés cuenta, tocá «Crear mi cuenta» 🙏' });
     }
     authHitClear(rlKey);
     userId = u.id;
   } else {
     const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(v.email);
     if (existing) {
-      return res.status(409).json({ ok: false, mensaje: 'Ese email ya tiene cuenta en Posty. Tocá «Ya tengo cuenta» y entrá con tu contraseña 👆' });
+      return res.status(409).json({ ok: false, mensaje: en ? 'That email already has a Posty account. Tap "I already have an account" and log in with your password 👆' : 'Ese email ya tiene cuenta en Posty. Tocá «Ya tengo cuenta» y entrá con tu contraseña 👆' });
     }
     try {
       const hash = bcrypt.hashSync(v.password, 10);
       const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
-      const result = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, ?, ?, NULL, ?, ?, ?, 1, 1)')
-        .run(v.email, hash, newReferralCode(), trialEnds, 'tiendanube', '');
+      const result = en
+        ? db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, ?, ?, NULL, ?, ?, ?, 1, 1, ?)')
+          .run(v.email, hash, newReferralCode(), trialEnds, 'tiendanube', '', 'en')
+        : db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, ?, ?, NULL, ?, ?, ?, 1, 1)')
+          .run(v.email, hash, newReferralCode(), trialEnds, 'tiendanube', '');
       userId = result.lastInsertRowid;
     } catch (e) {
       if (/UNIQUE constraint failed/i.test((e && e.message) || ''))
-        return res.status(409).json({ ok: false, mensaje: 'Ese email ya tiene cuenta en Posty. Tocá «Ya tengo cuenta» y entrá con tu contraseña 👆' });
+        return res.status(409).json({ ok: false, mensaje: en ? 'That email already has a Posty account. Tap "I already have an account" and log in with your password 👆' : 'Ese email ya tiene cuenta en Posty. Tocá «Ya tengo cuenta» y entrá con tu contraseña 👆' });
       console.error('[tiendanube/install] alta:', e.message);
-      return res.status(500).json({ ok: false, mensaje: 'Algo falló de nuestro lado 😅 Probá de nuevo en un rato' });
+      return res.status(500).json({ ok: false, mensaje: en ? 'Something failed on our side 😅 Try again in a little while' : 'Algo falló de nuestro lado 😅 Probá de nuevo en un rato' });
     }
     track(userId, 'registered', 'via_tiendanube');
     try { evTrack(userId, 'account_created', { via: 'tiendanube' }); } catch (e) {}
   }
   const claimed = tnInstall.claimPendingInstall(db, state, SESSION_SECRET, userId);
-  if (!claimed) return res.status(410).json({ ok: false, error: 'instalacion_vencida', mensaje: 'El link de instalación venció. Volvé a tocar «Instalar» en Tiendanube 🙏' });
+  if (!claimed) return res.status(410).json({ ok: false, error: 'instalacion_vencida', mensaje: en ? 'Your install link expired. Tap "Install" again in Tiendanube 🙏' : 'El link de instalación venció. Volvé a tocar «Instalar» en Tiendanube 🙏' });
   track(userId, 'tiendanube_connected', 'via_store_install');
   // Sesión regenerada al autenticar (anti fijación; mismo patrón que
   // /api/auth/register y /api/auth/login). La respuesta viaja adentro.
@@ -15660,6 +15666,15 @@ app.get('/en/founders', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'public', 'en-fundadores.html'));
 });
+// (v395 · paridad) Gemelas EN de /auditoria y /demo (eran solo-ES).
+app.get('/en/auditoria', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'en-auditoria.html'));
+});
+app.get('/en/demo', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'en-demo.html'));
+});
 // Las páginas /en referencian assets con rutas relativas ("ig-cafe.jpg",
 // "posty-rubros.mp4"): esta ruta acotada por extensión los resuelve contra
 // public/ sin exponer nada más.
@@ -15687,31 +15702,36 @@ app.get('/auditoria', (req, res) => {
 });
 app.post('/api/audit', express.json({ limit: '16kb' }), async (req, res) => {
   const ip = demo.clientIp(req);
+  // (v395 · paridad) La página EN manda lang:'en': caché, prompt y errores
+  // en inglés. Sin lang, todo el comportamiento ES histórico.
+  const en = (req.body || {}).lang === 'en';
+  const lang = en ? 'en' : 'es';
   const ig = feedAudit.sanitizeHandle((req.body || {}).ig);
-  if (!ig) return res.status(400).json({ ok: false, error: 'Pasame tu @ de Instagram' });
-  const cached = feedAudit.getCachedAudit(ig);
+  if (!ig) return res.status(400).json({ ok: false, error: en ? 'Send me your Instagram @' : 'Pasame tu @ de Instagram' });
+  const cached = feedAudit.getCachedAudit(ig, lang);
   if (cached) {
     track(null, 'audit_done', ig + '|cached');
     return res.json({ ok: true, audit: cached.audit, cached: true });
   }
   const rl = feedAudit.consumeAuditAttempt(ip);
-  if (!rl.ok) return res.status(429).json({ ok: false, error: 'Llegaste al límite de 5 auditorías por día. Volvé mañana 🔍' });
+  if (!rl.ok) return res.status(429).json({ ok: false, error: en ? "You've hit the limit of 5 audits per day. Come back tomorrow 🔍" : 'Llegaste al límite de 5 auditorías por día. Volvé mañana 🔍' });
   let ok = false;
   try {
-    const r = await feedAudit.auditFeed(db, ig);
+    const r = await feedAudit.auditFeed(db, ig, { lang });
     if (!r.ok) return res.status(422).json({ ok: false, error: r.error });
     ok = true;
     track(null, 'audit_done', ig);
     res.json({ ok: true, audit: r.audit, cached: false });
   } catch (e) {
     console.error('[posta] Error en audit:', e.message);
-    res.status(500).json({ ok: false, error: 'No pudimos analizar ese Instagram ahora. Probá de nuevo en unos minutos.' });
+    res.status(500).json({ ok: false, error: en ? "We couldn't analyze that Instagram right now. Try again in a few minutes." : 'No pudimos analizar ese Instagram ahora. Probá de nuevo en unos minutos.' });
   } finally {
     if (!ok) feedAudit.refundAuditAttempt(ip); // falló: no se consume
   }
 });
 app.get('/api/audit/:handle', (req, res) => {
-  const cached = feedAudit.getCachedAudit(req.params.handle);
+  // (v395 · paridad) El link compartido EN pide ?lang=en: lee SU caché.
+  const cached = feedAudit.getCachedAudit(req.params.handle, req.query.lang === 'en' ? 'en' : 'es');
   if (!cached) return res.status(404).json({ ok: false, cached: false });
   res.json({ ok: true, audit: cached.audit, cached: true });
 });
@@ -18675,7 +18695,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v394';
+const BUILD_ID = '20261024-v395';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

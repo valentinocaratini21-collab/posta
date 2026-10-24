@@ -720,8 +720,47 @@ const CLICHES = [
   'contenido auténtico', 'sé auténtico', 'se autentico',
 ];
 
-function buildAuditPrompt(profile, signals, captions) {
+function buildAuditPrompt(profile, signals, captions, lang) {
   const capLines = captions.slice(0, 10).map((c, i) => `${i + 1}. "${c.slice(0, 160)}"`).join('\n');
+  // (v395 · paridad) Rama EN: la auditoría pública acepta lang='en' y el
+  // reporte sale íntegro en inglés (mismas reglas, mismos datos). Sin lang
+  // (o 'es') el prompt histórico queda byte a byte como siempre.
+  if (lang === 'en') {
+    return {
+      system: [
+        'You are Posty, an Instagram auditor for businesses. You analyze REAL data from a public profile and return ONLY valid JSON (no markdown, no explanations).',
+        'GOLDEN ANTI-GENERIC RULE: every finding must cite a concrete data point from what I give you (numbers, verbatim examples). FORBIDDEN to say "post more often", "improve your photos", "be consistent", "quality content" or any advice that would work for any account.',
+        'If a data point is unavailable (null), do not invent: that dimension gets score null and line "Not enough data".',
+        'Tone: direct and friendly. Like a friend who knows Instagram.',
+        'Exact JSON format:',
+        '{ "score": 0-100, "summary": "2 lines max",',
+        '  "dimensions": [ {"key":"bio","label":"Bio","score":0-100|null,"line":"1 line with a concrete data point"}, {"key":"consistencia","label":"Visual consistency",...}, {"key":"captions","label":"Captions that sell",...}, {"key":"frecuencia","label":"Posting frequency",...}, {"key":"marca","label":"Brand & trust",...} ],',
+        '  "fixes": [ {"title":"short","evidence":"concrete data point WITH A NUMBER or a verbatim quote","fix":"what to do, concrete and actionable","example":"an example rewritten for THEIR business"} ] (3 to 5, prioritized: highest impact first),',
+        '  "wins": ["1-2 things they already do well, with a concrete data point"] }',
+        'Calibration: 90+ excellent, 70-89 good, 50-69 needs work, under 50 urgent.',
+        'Write EVERY string in the JSON in English (summary, labels, lines, fixes, wins, examples).',
+      ].join('\n'),
+      user: [
+        `Profile: @${profile.handle}${profile.name ? ` (${profile.name})` : ''}`,
+        signals.bio_unread
+          ? 'Bio: (could not be read — the public HTML does not include it; do NOT treat it as empty: bio dimension with score null and line "Not enough data")'
+          : `Bio (${signals.bio_length} characters): "${(profile.bio || '(empty)').slice(0, 300)}"`,
+        `Followers: ${profile.followers ?? 'unknown'} · Total posts: ${profile.total_posts ?? 'unknown'}`,
+        `Detected industry: ${profile.category || 'other'}`,
+        '',
+        'SIGNALS (latest posts analyzed: ' + signals.n_posts + '):',
+        `- Frequency: ${signals.posts_per_week ?? 'no data'} posts/week (over ${signals.days_span ?? '?'} days)`,
+        `- Mix: ${signals.videos} videos, ${signals.images} images, ${signals.carousels} carousels`,
+        `- Captions with text: ${signals.captions_with_text_pct}% · average length: ${signals.avg_caption_words} words`,
+        `- With a concrete CTA: ${signals.cta_pct}% · with hashtags: ${signals.hashtag_pct}% (average ${signals.avg_hashtags} per post) · with emojis: ${signals.emoji_pct}%`,
+        `- Distinct color palettes in the feed: ${signals.palette_hues ?? 'no data'}`,
+        `- The bio says what they sell: ${signals.bio_has_what == null ? 'no data (bio not read)' : (signals.bio_has_what ? 'yes' : 'no')}`,
+        '',
+        'Latest captions:',
+        capLines || '(no captions)',
+      ].join('\n'),
+    };
+  }
   return {
     system: [
       'Sos Posty, auditor de Instagram para negocios. Analizás DATOS REALES de un perfil público y devolvés SOLO JSON válido (sin markdown, sin explicaciones).',
@@ -825,27 +864,39 @@ function validateAudit(obj) {
 
 // ---------------------------------------------------------------------------
 // Cache 72h por handle
+// (v395 · paridad) El caché es POR IDIOMA: la clave histórica (el handle
+// pelado) es la ES y queda intacta; la EN vive bajo '<handle>#en'. Sin esta
+// separación, una auditoría pedida en inglés devolvía el reporte en español
+// cacheado (y viceversa).
 // ---------------------------------------------------------------------------
-function getCachedAudit(handle) {
+function auditCacheKey(handle, lang) {
   const ig = sanitizeHandle(handle);
   if (!ig) return null;
+  return lang === 'en' ? ig + '#en' : ig;
+}
+
+function getCachedAudit(handle, lang) {
+  const key = auditCacheKey(handle, lang);
+  if (!key) return null;
   try {
-    const hit = db.prepare('SELECT payload, created_at FROM audit_cache WHERE handle = ?').get(ig);
+    const hit = db.prepare('SELECT payload, created_at FROM audit_cache WHERE handle = ?').get(key);
     if (hit && Date.now() - hit.created_at < AUDIT_CACHE_HOURS * 3600 * 1000) {
       const audit = JSON.parse(hit.payload);
       return { audit, cached: true };
     }
-    if (hit) db.prepare('DELETE FROM audit_cache WHERE handle = ?').run(ig);
+    if (hit) db.prepare('DELETE FROM audit_cache WHERE handle = ?').run(key);
     if (Math.random() < 0.05) db.exec(`DELETE FROM audit_cache WHERE created_at < ${Date.now() - AUDIT_CACHE_HOURS * 3600 * 1000}`);
   } catch (_) {}
   return null;
 }
 
-function saveAuditCache(handle, audit) {
+function saveAuditCache(handle, audit, lang) {
+  const key = auditCacheKey(handle, lang);
+  if (!key) return;
   try {
     db.prepare(`INSERT INTO audit_cache (handle, payload, created_at) VALUES (?, ?, ?)
       ON CONFLICT(handle) DO UPDATE SET payload=excluded.payload, created_at=excluded.created_at`)
-      .run(sanitizeHandle(handle), JSON.stringify(audit), Date.now());
+      .run(key, JSON.stringify(audit), Date.now());
   } catch (_) {}
 }
 
@@ -853,28 +904,32 @@ function saveAuditCache(handle, audit) {
 // Orquestador principal. opts: { fetch, llm } para inyección en tests.
 // ---------------------------------------------------------------------------
 async function auditFeed(dbArg, handle, opts = {}) {
+  // (v395 · paridad) opts.lang 'en': prompt, caché y errores en inglés.
+  const en = opts.lang === 'en';
   const ig = sanitizeHandle(handle);
-  if (!ig) return { ok: false, error: 'Pasame tu @ de Instagram' };
-  const cached = getCachedAudit(ig);
+  if (!ig) return { ok: false, error: en ? 'Send me your Instagram @' : 'Pasame tu @ de Instagram' };
+  const cached = getCachedAudit(ig, opts.lang);
   if (cached) return { ok: true, audit: cached.audit, cached: true };
 
   const data = await fetchAuditData(ig, opts.fetch);
-  if (!data.ok) return { ok: false, error: data.error };
-  if (!data.posts.length) return { ok: false, error: 'Ese Instagram no tiene posteos públicos para analizar' };
+  if (!data.ok) return { ok: false, error: en ? "We couldn't find that Instagram (it may be private or it may not exist)" : data.error };
+  if (!data.posts.length) return { ok: false, error: en ? 'That Instagram has no public posts to analyze' : 'Ese Instagram no tiene posteos públicos para analizar' };
 
   const signals = computeSignals(data.profile, data.posts);
   try {
     signals.palette_hues = opts.palette !== undefined ? opts.palette : await analyzePalette(data.posts);
   } catch (_) { signals.palette_hues = null; }
 
-  const prompt = buildAuditPrompt(data.profile, signals, data.posts.map((p) => p.caption).filter(Boolean));
+  const prompt = buildAuditPrompt(data.profile, signals, data.posts.map((p) => p.caption).filter(Boolean), opts.lang);
 
   // Hasta 2 intentos: si el JSON es inválido o tiene clichés, se reintenta
   // con una instrucción más dura.
   let lastErr = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const p = attempt === 0 ? prompt : {
-      system: prompt.system + '\n\nTU RESPUESTA ANTERIOR FUE RECHAZADA (' + lastErr + '). Esta vez CADA fix debe citar un número o cita textual concreta en "evidence", y está TERMINANTEMENTE PROHIBIDO cualquier consejo genérico.',
+      system: prompt.system + (en
+        ? '\n\nYOUR PREVIOUS ANSWER WAS REJECTED (' + lastErr + '). This time EVERY fix must cite a number or a verbatim quote in "evidence", and generic advice is STRICTLY FORBIDDEN.'
+        : '\n\nTU RESPUESTA ANTERIOR FUE RECHAZADA (' + lastErr + '). Esta vez CADA fix debe citar un número o cita textual concreta en "evidence", y está TERMINANTEMENTE PROHIBIDO cualquier consejo genérico.'),
       user: prompt.user,
     };
     const r = await callAuditLlm(p, opts.llm);
@@ -890,12 +945,12 @@ async function auditFeed(dbArg, handle, opts = {}) {
         pic: data.profile.pic || null,
         audited_at: Date.now(),
       });
-      saveAuditCache(ig, audit);
+      saveAuditCache(ig, audit, opts.lang);
       return { ok: true, audit, cached: false };
     }
     lastErr = v.errors.join(',');
   }
-  return { ok: false, error: 'No pudimos analizar ese Instagram ahora. Probá de nuevo en unos minutos.' };
+  return { ok: false, error: en ? "We couldn't analyze that Instagram right now. Try again in a few minutes." : 'No pudimos analizar ese Instagram ahora. Probá de nuevo en unos minutos.' };
 }
 
 module.exports = {

@@ -362,6 +362,76 @@ function trialAbandonEmail(lead, baseUrl, bizName, link, lang) {
   return sendEmail({ to: lead.email, subject, html });
 }
 
+// ---------------------------------------------------------------------------
+// TOQUE DEL FUNDADOR a las 72 h de la Carta (rescate "founder-rescue").
+// Copy ES APROBADO por Valentino el 2026-10-22: asunto «Soy Valentino — te
+// escribo yo», cuerpo natural en primera persona, firma con nombre y
+// apellido («Valentino Caratini / Fundador de Posty») y SIN posdata (la P.D.
+// se probó y él la sacó). Hasta v395 la pieza existía SOLO como copy aprobado
+// fuera del código (lista de liquidación §0); el reloj del toque es el
+// evento `carta_entregada` y las respuestas las asocia hola-inbox ('toque').
+// ESTAS FUNCIONES NO ENVÍAN: el toque sale PERSONAL desde el Hotmail de
+// Valentino (vía conector Outlook, tope 15/día, jamás cadena, fail-closed).
+// Lo que hacen es ARMAR el borrador que la cola del sistema prepara para
+// cada destinatario, en SU idioma — con el mismo criterio de v373: la
+// cuenta manda por users.lang; si todavía es lead de la prueba, manda el
+// idioma de su Carta. Devuelven { subject, text } (email personal, texto
+// plano, sin shell de marca: el sobre es Valentino, no Posty).
+// (v392 · paridad total) Gemelo EN completo de la pieza.
+// ---------------------------------------------------------------------------
+function founderTouchEmailEn(lead, baseUrl, weekLink) {
+  const link = String(weekLink || baseUrl || '').trim();
+  const subject = "I'm Valentino — writing to you myself";
+  const text = [
+    'Hi,',
+    '',
+    "I'm writing to you myself, from my usual email. The letter you got from Posty may have looked like one more company email, and I wanted you to know that behind Posty there's a person — and that person is me.",
+    '',
+    "I built Posty because I kept seeing good businesses lose sales over an abandoned Instagram — not for lack of trying: the day just isn't long enough. And the alternative, a human community manager, is expensive, and you still have to chase them to get anything posted.",
+    '',
+    "Posty is that team member who never misses: it reads your Instagram and your website, builds and publishes your posts and your reel with your products and your way of speaking, gives you a heads-up 30 minutes before every post, keeps an eye on your competitors, and writes you its letter every Sunday. If you have a store, it works with your real catalog and your real stock. And whatever you don't like, you change over chat — like talking to an employee.",
+    '',
+    'Your week is already built, with your products. Take a look, no commitment:',
+    link,
+    '',
+    "It's free for 3 days, no card required. And if something is holding you back from trying it, will you tell me what it is? Tell me and we'll sort it out together — that's exactly why I'm writing myself instead of sending a robot.",
+    '',
+    'Thanks for reading this far.',
+    '',
+    'Valentino Caratini',
+    'Founder of Posty',
+  ].join('\n');
+  return { subject, text };
+}
+
+function founderTouchEmail(lead, baseUrl, weekLink, lang) {
+  // Resolución de idioma (criterio v373): manda el parámetro lang; si no
+  // viene, manda lead.lang (users.lang de la cuenta o el idioma de su Carta).
+  if ((lang || (lead && lead.lang)) === 'en') return founderTouchEmailEn(lead, baseUrl, weekLink);
+  const link = String(weekLink || baseUrl || '').trim();
+  const subject = 'Soy Valentino — te escribo yo';
+  const text = [
+    'Hola,',
+    '',
+    'Te escribo yo mismo, desde mi mail de siempre. La carta que te llegó de Posty pudo parecer un correo más de una empresa, y quería que supieras que atrás de Posty hay una persona, y soy yo.',
+    '',
+    'Creé Posty porque vi demasiados negocios buenos perdiendo ventas por tener el Instagram abandonado — no por falta de ganas: es que el día no alcanza. Y la alternativa, un community manager humano, sale cara y encima hay que perseguirlo para que publique.',
+    '',
+    'Posty es ese miembro del equipo que no falta: lee tu Instagram y tu web, arma y publica tus posteos y tu reel con tus productos y tu forma de hablar, te avisa 30 minutos antes de cada publicación, mira a tu competencia y cada domingo te escribe su carta. Si tenés tienda, trabaja con tu catálogo y tu stock real. Y lo que no te guste, lo cambiás por chat, como quien le habla a un empleado.',
+    '',
+    'Tu semana ya está armada, con tus productos. Fijate, sin compromiso:',
+    link,
+    '',
+    'Es gratis por 3 días, sin tarjeta. Y si hay algo que te frene para probarlo, ¿me contás qué es? Contame y lo vemos juntos — para eso te escribo yo y no un robot.',
+    '',
+    'Gracias por leer hasta acá.',
+    '',
+    'Valentino Caratini',
+    'Fundador de Posty',
+  ].join('\n');
+  return { subject, text };
+}
+
 // Nudge "semana vacía": no hay borradores ni nada programado. Tono positivo y
 // honesto: no promete posteos que no existen, vende lo fácil que es tenerlos.
 // (v373 · paridad total) Variante EN de la semana vacía.
@@ -715,4 +785,4 @@ function photoRitualEmail(user, baseUrl, missionText) {
   return sendEmail({ to: user.email, subject, html });
 }
 
-module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialExpiryEmail, magicLinkEmail, firstPublishNudgeEmail, photoRitualEmail };
+module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, magicLinkEmail, firstPublishNudgeEmail, photoRitualEmail };

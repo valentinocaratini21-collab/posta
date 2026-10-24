@@ -159,16 +159,20 @@ function cleanupExpiredInstalls(db, nowMs) {
 function validateClaimBody(body) {
   const b = body || {};
   const mode = b.mode === 'login' ? 'login' : 'register';
+  // (v395 · paridad) La página EN de instalación manda lang:'en': los
+  // mensajes de validación salen en el idioma de la página. Sin lang, los
+  // textos ES históricos quedan byte a byte.
+  const en = b.lang === 'en';
   const email = String(b.email || '').trim().toLowerCase();
   const password = String(b.password || '');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-    return { ok: false, mode, email, error: 'Escribí un email válido para tu cuenta 📧' };
+    return { ok: false, mode, email, lang: en ? 'en' : 'es', error: en ? 'Enter a valid email for your account 📧' : 'Escribí un email válido para tu cuenta 📧' };
   }
-  if (!password) return { ok: false, mode, email, error: 'Falta tu contraseña 🔑' };
+  if (!password) return { ok: false, mode, email, lang: en ? 'en' : 'es', error: en ? 'Your password is missing 🔑' : 'Falta tu contraseña 🔑' };
   if (mode === 'register' && password.length < 6) {
-    return { ok: false, mode, email, error: 'La contraseña necesita 6 caracteres como mínimo 🔑' };
+    return { ok: false, mode, email, lang: en ? 'en' : 'es', error: en ? 'Your password needs at least 6 characters 🔑' : 'La contraseña necesita 6 caracteres como mínimo 🔑' };
   }
-  return { ok: true, mode, email, password };
+  return { ok: true, mode, email, password, lang: en ? 'en' : 'es' };
 }
 
 module.exports = {
