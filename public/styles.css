@@ -299,7 +299,14 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 /* Numerito de orden en el picker multi-foto del creador */
 .car-ord{position:absolute;top:4px;left:4px;min-width:22px;height:22px;border-radius:11px;background:var(--cel);color:#fff;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 6px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .igmock-head{display:flex;align-items:center;gap:10px;padding:12px 14px}
-.igmock-ava{width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff}
+.igmock-ava{width:36px;height:36px;max-width:36px;max-height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff}
+/* (v361) Contrato duro del avatar del encabezado: dentro de una tarjeta
+   .igmock el avatar vive en su caja de 36px SIEMPRE. La guarda (0-2-0)
+   le gana a cualquier regla genérica de contenedor (<x> img{100%x100%})
+   que intente inflarlo — el bug del banner gigante (captura 24/10): la
+   capa .scf-pop se monta dentro de la tile .hf-tile y su regla de media
+   se filtraba a toda imagen de la tarjeta, avatar incluido. */
+.igmock .igmock-ava{width:36px;height:36px;max-width:36px;max-height:36px}
 .igmock-name{font-weight:800;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .igmock-count{margin-left:auto;font-size:11px;color:var(--mut);font-weight:700;background:var(--bg2);padding:5px 11px;border-radius:999px;white-space:nowrap;flex-shrink:0}
 .igmock-dots{margin-left:auto;color:#262626;font-weight:800;font-size:13px;letter-spacing:1.5px;flex:none}
@@ -1913,7 +1920,10 @@ textarea.in{resize:vertical;min-height:96px}
 .hf-tab svg{width:26px;height:26px}
 .hf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:#fff}
 .hf-tile{position:relative;display:block;aspect-ratio:3/4;background:#eef1f4;overflow:hidden;border:0;border-radius:0;box-shadow:none;padding:0;cursor:pointer;width:100%}
-.hf-tile img,.hf-tile video{width:100%;height:100%;object-fit:cover;object-position:center 30%;display:block}
+/* (v361) Solo el media PROPIO de la tile (hijo directo): la capa .scf-pop
+   con la tarjeta completa se monta dentro de la tile y NO debe heredar
+   este 100%x100% (así nació el banner gigante del encabezado). */
+.hf-tile>img,.hf-tile>video{width:100%;height:100%;object-fit:cover;object-position:center 30%;display:block}
 .hf-tile-ph{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:30px;background:linear-gradient(140deg,#eaf6fd,#fdf3d7)}
 /* (v334) Publicados ATENUADOS en la home-feed: ya salieron — el ojo va a los que se vienen (brillo completo). Solo la media se oscurece; glifos y marcas quedan nítidos. */
 .hf-tile.pub img,.hf-tile.pub video{filter:brightness(.58) saturate(.85)}
@@ -2601,7 +2611,8 @@ textarea.in{resize:vertical;min-height:96px}
 .hs-feed{margin:2px auto 4px;max-width:560px}
 .fp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px}
 .fp-tile{position:relative;display:block;width:100%;aspect-ratio:3/4;border:none;border-radius:0;overflow:hidden;background:#e9e9e9;padding:0;cursor:pointer;font-family:inherit;touch-action:manipulation;min-width:0}
-.fp-tile img,.fp-tile video{width:100%;height:100%;object-fit:cover;object-position:center 30%;display:block}
+/* (v361) Idem .hf-tile: solo el media propio (hijo directo) de la tile. */
+.fp-tile>img,.fp-tile>video{width:100%;height:100%;object-fit:cover;object-position:center 30%;display:block}
 .fp-tile-ph{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:22px;background:linear-gradient(160deg,#EAF4FA,#FDF3D8)}
 /* (v334) Idem en la vista Feed de la agenda: publicados atenuados, por salir con brillo completo. */
 .fp-tile.pub img,.fp-tile.pub video{filter:brightness(.58) saturate(.85)}
