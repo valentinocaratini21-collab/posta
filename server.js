@@ -5279,6 +5279,14 @@ app.post('/api/ads/boost', requireAuth, async (req, res) => {
       db.prepare(`UPDATE ad_boosts SET status='active', meta_campaign_id=?, meta_adset_id=?, meta_ad_id=?, started_at=datetime('now'), error='' WHERE id=?`)
         .run(r.campaignId, r.adsetId, r.adId, boostId);
       launched = true;
+      // Ledger de publicación (publish-guard): el boost queda asentado
+      // como kind 'boost' SOLO a fines de auditoría — es una llamada a la
+      // Ads API sobre un posteo ya publicado; no consume el presupuesto
+      // orgánico de media_publish que protege el guard.
+      try {
+        const pg = require('./publish-guard');
+        pg.record(db, { userId: req.session.userId, postId, kind: 'boost', status: 'published', detail: `boost ${boostId} camp ${r.campaignId || ''}` });
+      } catch (e) { /* el ledger nunca bloquea una pauta lograda */ }
     } catch (e) {
       launchError = String(e.message || e).slice(0, 300);
       db.prepare(`UPDATE ad_boosts SET error=? WHERE id=?`).run(launchError, boostId);
@@ -17649,7 +17657,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261023-v352';
+const BUILD_ID = '20261023-v353';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

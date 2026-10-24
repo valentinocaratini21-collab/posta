@@ -5,6 +5,8 @@ const fs = require('fs');
 const { publishPost, publishVideo, publishStory, publishCarousel } = require('./instagram');
 const approval = require('./approval');
 const autopilot = require('./autopilot');
+const publishGuard = require('./publish-guard');
+const publishWatchdog = require('./publish-watchdog');
 const { activationNudge } = require('./activation-nudge');
 const { firstPublishNudge } = require('./first-publish-nudge');
 
@@ -100,6 +102,39 @@ async function publishSinglePost(db, post, opts = {}) {
   } catch (e) { /* ante la duda, seguir como antes */ }
   const settings = getSettings(db, post.user_id) || {};
   const demoMode = settings.demo_mode !== 0;
+  // 🛡️ publish-guard (2026-10-22, portado a v353): antes de quemar un
+  // intento real — (a) una aprobación DENEGADA es una decisión: un posteo
+  // vetado no se publica jamás, ni siquiera por un link de aprobación
+  // viejo que se ejecute después del veto; (b) presupuesto de la ventana
+  // móvil de 24 h (PUBLISH_DAILY_CAP, default 10): sin margen, el posteo
+  // se reprograma solo (no se intenta). La cuenta de la casa (dogfood)
+  // registra ledger pero no se frena acá: sus tandas las opera el equipo
+  // con aprobación explícita.
+  if (!demoMode) {
+    try {
+      publishGuard.ensureSchema(db);
+      const fresh = db.prepare('SELECT approval FROM posts WHERE id = ?').get(post.id);
+      if (fresh && fresh.approval === 'rejected') {
+        publishGuard.denyPost(db, post, 'client_rejected', 'aprobación denegada por el cliente');
+        console.log(`[posta] publishSinglePost bloqueado: post ${post.id} vetado por el cliente (decisión registrada)`);
+        return { blocked: 'denied_decision' };
+      }
+      if (!opts.house) {
+        const pf = publishGuard.preflight(db, post);
+        if (!pf.ok) {
+          const d = publishGuard.deferPost(db, post, { reason: `presupuesto 24h agotado (${pf.used}/${pf.cap})` });
+          console.log(`[posta] Post #${post.id} reprogramado por presupuesto IG 24h → ${d.nextAt}`);
+          return { deferred: true, nextAt: d.nextAt };
+        }
+      }
+      publishGuard.record(db, {
+        userId: post.user_id, postId: post.id, kind: publishGuard.kindOf(post),
+        status: 'attempted', detail: opts.house ? 'house' : '',
+      });
+      post.__guardAttempt = true;
+    } catch (e) { console.error('[publish-guard]', e.message); }
+  }
+  let publishWasDemo = demoMode;
   db.prepare(`UPDATE posts SET status = 'publishing', error = '' WHERE id = ?`).run(post.id);
   try {
     const mediaUrl = publicImageUrl(post.image_path, settings.image_base_url);
@@ -136,6 +171,15 @@ async function publishSinglePost(db, post, opts = {}) {
     db.prepare(
       `UPDATE posts SET status = 'published', ig_permalink = ?, ig_media_id = ?, published_at = datetime('now') WHERE id = ?`
     ).run(result.permalink || '', result.mediaId || '', post.id);
+    // Ledger: la publicación real queda asentada (fuente del presupuesto).
+    if (post.__guardAttempt) {
+      try {
+        publishGuard.record(db, {
+          userId: post.user_id, postId: post.id, kind: publishGuard.kindOf(post),
+          status: 'published', detail: result.mediaId || '',
+        });
+      } catch (e) { /* el ledger nunca bloquea una publicación lograda */ }
+    }
     // Historia gemela (2026-10-17; FIX v231 2026-10-18): cada posteo de
     // feed publicado sale también como historia el mismo día (+3 h), sin
     // trabajo del cliente. La gemela lleva UN SOLO gancho corto (el
@@ -259,6 +303,34 @@ async function publishSinglePost(db, post, opts = {}) {
     return { ok: true, permalink: result.permalink || '' };
   } catch (e) {
     const msg = String(e.message).slice(0, 500);
+    // 🛡️ publish-guard (2026-10-22, portado a v353): el límite de
+    // Instagram NO es un posteo fallido y un permiso denegado NO es un
+    // error reintentable.
+    //  - límite (429) → reprogramación automática a la próxima ventana
+    //    segura + UN aviso tranquilo (deferPost deduplica por posteo).
+    //  - denegado → decisión registrada; el ítem no se reintenta solo.
+    if (!publishWasDemo) {
+      try {
+        const cls = publishGuard.classifyError(msg);
+        if (cls === 'limit') {
+          const d = publishGuard.deferPost(db, post, { reason: msg });
+          console.log(`[posta] Post #${post.id} limitado por IG → reprogramado a ${d.nextAt}`);
+          return { deferred: true, nextAt: d.nextAt };
+        }
+        if (cls === 'denied') {
+          if (/\b190\b|OAuthException/i.test(msg)) {
+            try { db.prepare(`UPDATE settings SET ig_token_warning = 1 WHERE user_id = ?`).run(post.user_id); } catch (e2) {}
+          }
+          publishGuard.denyPost(db, post, 'meta_denied', msg);
+          schedEvent(db, post.user_id, 'post_failed', {
+            post_id: post.id, kind: 'denied_decision', cause: msg,
+            media_type: post.media_type || '', scheduled_at: post.scheduled_at || '',
+          });
+          console.log(`[posta] Post #${post.id} denegado por Meta → pausado como decisión, sin reintento`);
+          return { denied: true };
+        }
+      } catch (e2) { console.error('[publish-guard] catch:', e2.message); }
+    }
     db.prepare(`UPDATE posts SET status = 'failed', error = ? WHERE id = ?`).run(msg, post.id);
     // Token de IG vencido/revocado (error 190 de Meta): se marca el aviso en
     // settings para que Schedule muestre el banner de reconexión (antes el
@@ -321,7 +393,7 @@ async function processDuePosts(db) {
        JOIN users u ON u.id = p.user_id
        WHERE p.status = 'scheduled' AND p.scheduled_at <= ?
        AND COALESCE(p.needs_review, 0) = 0
-       ORDER BY p.scheduled_at ASC LIMIT 5`
+       ORDER BY (CASE WHEN p.media_type = 'story' THEN 1 ELSE 0 END) ASC, p.scheduled_at ASC LIMIT 5`
     )
     .all(now);
 
@@ -490,6 +562,32 @@ function startScheduler(db) {
     processDuePosts(db);
     processApprovalNotifications(db).catch((e) => console.error('[notif]', e.message));
   }, 10000);
+  // 🕵️ Vigía de vencidos (publish-watchdog.js, v353): barrido periódico
+  // + pasada al boot (a los 30 s, DESPUÉS del primer processDuePosts,
+  // para que la cola normal tenga su oportunidad primero). Detecta
+  // posteos 'scheduled' vencidos sin recibo verificado y los reprograma
+  // para la cola única — si el vigía reprogramó algo, se dispara un
+  // processDuePosts inmediato (la misma cola de siempre, una sola vez
+  // por barrido) — o los escala con nombre propio si no son
+  // reintentables / reinciden. Nunca publica por su cuenta.
+  try {
+    const wdEvery = publishWatchdog.intervalMin();
+    cron.schedule(`*/${wdEvery} * * * *`, () => {
+      try {
+        const r = publishWatchdog.sweep(db);
+        if (r && r.requeued) processDuePosts(db);
+      } catch (e) { console.error('[publish-watchdog]', e.message); }
+    });
+    setTimeout(() => {
+      try {
+        const r = publishWatchdog.sweep(db);
+        if (r && r.requeued) processDuePosts(db);
+      } catch (e) { console.error('[publish-watchdog] boot:', e.message); }
+    }, 30000);
+    console.log(`[posta] Vigía de vencidos activo (barrido cada ${wdEvery} min + pasada al boot)`);
+  } catch (e) {
+    console.error('[publish-watchdog] no se pudo programar:', e.message);
+  }
   // Recordatorio semanal por email: lunes 10:00 (Buenos Aires).
   // Solo a quienes tienen cuenta y NO instalaron la app en el teléfono.
   try {
@@ -2013,4 +2111,4 @@ async function postyWeeklyDigest(db) {
   }
 }
 
-module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendFirstPublishEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily, postyWeeklyDigest, activationNudge, firstPublishNudge, celebrateWinsChat };
+module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, sweepOverduePosts: publishWatchdog.sweep, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendFirstPublishEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily, postyWeeklyDigest, activationNudge, firstPublishNudge, celebrateWinsChat };

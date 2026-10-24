@@ -217,6 +217,39 @@ db.exec(`CREATE TABLE IF NOT EXISTS events (
 db.exec(`CREATE INDEX IF NOT EXISTS idx_events_name ON events(name, created_at)`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id, created_at)`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_events_sid ON events(session_id, created_at)`);
+// Ledger de publicación (publish-guard, portado 2026-10-23): TODOS los
+// intentos orgánicos de publicación (vía el choke point publishSinglePost)
+// y los boosts (kind aparte, solo auditoría) quedan asentados con su
+// recibo. Es la fuente del presupuesto diario (PUBLISH_DAILY_CAP) y del
+// vigía de vencidos (publish-watchdog.js): sin fila 'published' en este
+// ledger (ni evidencia legacy en la fila del posteo), un posteo vencido
+// no se considera publicado. publish-guard.ensureSchema crea la misma
+// tabla de forma perezosa para esquemas mínimos/tests.
+db.exec(`CREATE TABLE IF NOT EXISTS publish_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  post_id INTEGER,
+  kind TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT '',
+  detail TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_publish_ledger_user_time ON publish_ledger(user_id, created_at)`);
+// Vigía de vencidos (publish-watchdog.js): registro durable de cada
+// escalación — un posteo comprometido que no salió ni tras los reintentos
+// del vigía queda acá con nombre propio (user_id, post_id, hora original,
+// motivo), nunca en silencio.
+db.exec(`CREATE TABLE IF NOT EXISTS publish_watchdog_escalations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  post_id INTEGER NOT NULL,
+  original_scheduled_at TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT '',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  detail TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_watchdog_esc_post ON publish_watchdog_escalations(post_id, reason, created_at)`);
 db.exec(`CREATE TABLE IF NOT EXISTS comment_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
