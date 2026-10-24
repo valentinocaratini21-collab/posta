@@ -62,6 +62,21 @@ const makeHeadline = (text, maxWords = 6, maxChars = 70) => {
   return out;
 };
 
+// ¿Hay una sesión que proteger en este dispositivo? Ruta de la app
+// (#/app…), ME ya cargado, o una cuenta guardada con su token (Frente 5:
+// posty_saved_accounts). Lo usan el wrapper api ante un 401 y ttEnhance:
+// sin contexto de sesión, un 401 en una ruta pública es un error común —
+// jamás un rebote al login (v371).
+function hasSessionContext() {
+  try {
+    if ((location.hash || '').startsWith('#/app')) return true;
+    if (typeof ME !== 'undefined' && ME) return true;
+    const sa = JSON.parse(localStorage.getItem('posty_saved_accounts') || '[]');
+    if (Array.isArray(sa) && sa.some((a) => a && a.token)) return true;
+  } catch (e) {}
+  return false;
+}
+
 const api = {
   async req(method, url, body, opts = {}) {
     let r;
@@ -80,15 +95,27 @@ const api = {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
       if (r.status === 401 && !url.includes('/api/auth/')) {
-        // Sesión muerta a mitad de uso (logout en otra pestaña, sesión purgada):
-        // nada de error crudo "No autenticado" — guardamos el destino y
-        // rebotamos a login; postAuthLanding devuelve al usuario a su pantalla.
-        if (typeof ME !== 'undefined') ME = null;
-        try { if ((location.hash || '').startsWith('#/app')) sessionStorage.setItem('posta_return_to', location.hash); } catch (e) {}
-        try { location.hash = '#/login'; } catch (e) {}
-        const err401 = new Error('Tu sesión se cerró, entrá de nuevo 🔑');
-        err401.status = 401;
-        throw err401;
+        // Sesión muerta a mitad de uso (logout en otra pestaña, sesión
+        // purgada): nada de error crudo "No autenticado" — guardamos el
+        // destino y rebotamos a login; postAuthLanding devuelve al usuario
+        // a su pantalla. PERO solo si hay una sesión que proteger: en una
+        // ruta pública y sin sesión (visitante anónimo), un 401 de un
+        // llamado de fondo NO es una sesión cerrada — es un error común, y
+        // rebotar sacaba al anónimo de la landing a los ~80 ms (v371:
+        // ttEnhance pedía /api/tiktok/status en cada render, también en
+        // las rutas públicas, y este efecto lateral lo mandaba al login).
+        if (hasSessionContext()) {
+          if (typeof ME !== 'undefined') ME = null;
+          try { if ((location.hash || '').startsWith('#/app')) sessionStorage.setItem('posta_return_to', location.hash); } catch (e) {}
+          try { location.hash = '#/login'; } catch (e) {}
+          const err401 = new Error('Tu sesión se cerró, entrá de nuevo 🔑');
+          err401.status = 401;
+          throw err401;
+        }
+        const errAnon = new Error(data.message || data.error || 'Error');
+        errAnon.status = 401;
+        errAnon.data = data;
+        throw errAnon;
       }
       if (r.status === 402 && data.error === 'trial_expired') {
         if (typeof ME !== 'undefined' && ME) ME.trial_expired = true;
@@ -7854,6 +7881,11 @@ function ttStatusOnce() {
 }
 async function ttEnhance() {
   try {
+    // Sin sesión no hay nada que encender: el botón vive en posteos
+    // publicados de cuentas conectadas. Pedir /api/tiktok/status como
+    // anónimo era un 401 garantizado en CADA render — también en la
+    // landing pública, que es donde nacía el rebote al login (v371).
+    if (!hasSessionContext()) return;
     const st = await ttStatusOnce();
     if (st && st.connected) document.querySelectorAll('[data-pc-act="tiktok"], [data-pc-act="tiktok-inbox"]').forEach(b => { b.hidden = false; });
   } catch (e) {}
