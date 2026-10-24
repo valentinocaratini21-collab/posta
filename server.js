@@ -701,6 +701,24 @@ app.use('/media', express.static(MEDIA_DIR, {
   // vistas repintan al instante sin re-descargar las imágenes.
   maxAge: '30d', immutable: true,
 }));
+// 🩹 Cáscara auto-curable (2026-10-24): el shell (public/index.html) se sirve
+// con el BUILD_ID inyectado en el marcador __POSTY_BUILD__. El propio index
+// compara ese build contra /api/version en vivo en cada apertura: si un
+// teléfono quedó con la cáscara vieja guardada (caché/PWA de iOS), se refresca
+// solo una vez y queda al día — sin que nadie borre datos a mano. Aplica a
+// TODOS los dominios por igual (mismo servidor): la divergencia que se veía
+// entre dominios era cáscara local vieja, nunca despliegues distintos.
+const POSTY_SHELL_FILE = path.join(__dirname, 'public', 'index.html');
+function servePostyShell(req, res) {
+  fs.readFile(POSTY_SHELL_FILE, 'utf8', (err, html) => {
+    if (err) { res.status(500).type('text').send('error'); return; }
+    res.setHeader('Cache-Control', 'no-cache');
+    res.type('html').send(html.split('__POSTY_BUILD__').join(BUILD_ID));
+  });
+}
+app.get('/', servePostyShell);
+app.get('/index.html', servePostyShell);
+
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, fp) => {
     // sw.js: SIEMPRE fresco — si queda cacheado, la PWA no se entera de
@@ -19786,7 +19804,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v411';
+const BUILD_ID = '20261024-v412';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

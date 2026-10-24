@@ -19,6 +19,30 @@
   } catch (e) {}
 })();
 </script>
+<script>
+/* 🩹 Auto-cura de cáscara: compara el build con el que se SIRVIÓ este HTML
+   (lo inyecta el servidor en __POSTY_BUILD__) contra /api/version en vivo.
+   Si difieren, este teléfono quedó con una copia vieja guardada (caché/PWA
+   de iOS): recarga UNA vez con sello fresco y la cáscara nueva queda puesta.
+   La guarda de sesión impide cualquier bucle de recargas. */
+(function () {
+  try {
+    var served = '__POSTY_BUILD__';
+    if (!served || served.indexOf('__POSTY') === 0) return;
+    fetch('/api/version?shellcheck=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.build || d.build === served) return;
+        var key = 'posty_shell_heal_' + d.build;
+        try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (e) {}
+        var u = new URL(location.href);
+        u.searchParams.set('fresh', d.build);
+        location.replace(u.toString());
+      })
+      .catch(function () {});
+  } catch (e) {}
+})();
+</script>
 <title>Posty — Tu community manager 🤖</title>
 <meta name="description" content="Posty es tu community manager completo: publica, responde comentarios y mensajes, cuida tus reseñas y potencia tu contenido. Probalo 3 días gratis, sin tarjeta.">
 <link rel="canonical" href="https://postycommunitymanager.com/">
