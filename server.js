@@ -280,6 +280,7 @@ const analysisEngine = require('./analysis-engine'); // 🧠 Análisis (2026-10-
 const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
 const showcase = require('./showcase'); // 📣 PRUEBA SOCIAL REAL (v370): la primera historia de un cliente pago, con su consentimiento
 const rubroId = require('./rubro-id'); // (v235) IDENTIFICACIÓN ESPECIALISTA DE RUBRO: voto multi-señal + confianza
+const tasteMemory = require('./taste-memory'); // 🧠 MEMORIA DE GUSTOS (v392): el cliente enseña, Posty anota (registro en el fundamento)
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
 const webExtract = require('./web-extract');
@@ -3627,6 +3628,51 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       return res.json({ reply, idea: null });
     }
   }
+  // 🧠 MEMORIA DE GUSTOS (v392): dos atajos sin IA, antes del modelo.
+  // (a) Si hay una PROPUESTA de gusto abierta y el mensaje es un «sí» o
+  //     un «no» pelado, es su respuesta: se aprende (o no) y se acusa.
+  // (b) Si el mensaje ES una preferencia estable («sin hashtags», «de
+  //     ahora en más, textos cortos», «nunca la palabra X»), se anota al
+  //     instante en el fundamento y el acuse sale en voz de chat — ese
+  //     acuse ES el momento del producto. La preferencia explícita manda
+  //     sobre la respuesta a la propuesta (un «no uses emojis» con una
+  //     propuesta abierta es un gusto nuevo, no un «no»).
+  {
+    const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+    const tmLang = langOfUser(uidChat);
+    const tmPersist = (reply) => {
+      try {
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
+      } catch (e) {}
+    };
+    let tmDet = null;
+    try { tmDet = tasteMemory.detectExplicit(lastUserText); } catch (e) { tmDet = null; }
+    if (tmDet) {
+      try {
+        const { gusto } = tasteMemory.learn(db, uidChat, { ...tmDet, origen: 'explicito', ejemplo: lastUserText, lang: tmLang });
+        if (gusto) {
+          const reply = tasteMemory.ackFor(gusto, tmLang);
+          tmPersist(reply);
+          return res.json({ reply, idea: null, taste_proposal: tasteMemory.proposalPayload(db, uidChat, tmLang) });
+        }
+      } catch (e) { console.error('[gustos] learn:', e.message); }
+    }
+    let tmPend = null;
+    try { tmPend = tasteMemory.pendingProposal(db, uidChat); } catch (e) { tmPend = null; }
+    if (tmPend) {
+      const ans = tasteMemory.parseYesNo(lastUserText);
+      if (ans !== null) {
+        try {
+          const r = tasteMemory.answerProposal(db, uidChat, tmPend.tipo, ans, tmLang);
+          if (r.ok) {
+            tmPersist(r.ack);
+            return res.json({ reply: r.ack, idea: null, taste_proposal: tasteMemory.proposalPayload(db, uidChat, tmLang) });
+          }
+        } catch (e) { console.error('[gustos] answer:', e.message); }
+      }
+    }
+  }
   // Nombre del cliente: "me llamo X" / "llamame X" / respuesta pelada a "¿cómo te llamo?" → se guarda y se usa.
   {
     const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
@@ -3829,18 +3875,31 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         dnaSaved = true;
       } catch (e) { console.error('[chat] dna save:', e.message); }
     }
-    // La IA dictó una regla de estilo explícita → agregarla o quitarla
+    // La IA dictó una regla de estilo explícita → agregarla o quitarla.
+    // (v392) La regla entra al REGISTRO de la MEMORIA DE GUSTOS (visible
+    // y borrable en «Lo que aprendí de vos») y desde ahí se sincroniza a
+    // style_rules — ya no nace invisible. Si choca con una regla dura,
+    // queda en pausa y NO se sincroniza. Ante cualquier error, el camino
+    // histórico directo a style_rules queda como red de seguridad.
     if (out.rule && typeof out.rule === 'object') {
       try {
         const { normKey } = require('./style-learn');
         if (out.rule.add) {
-          const key = normKey(out.rule.add);
-          if (key) db.prepare(`INSERT INTO style_rules (user_id, rule_key, rule_text, hits, active) VALUES (?, ?, ?, 1, 1)
-            ON CONFLICT(user_id, rule_key) DO UPDATE SET rule_text=excluded.rule_text, active=1`).run(uid, key, String(out.rule.add).slice(0, 200));
+          let tmOk = false;
+          try { tmOk = !!tasteMemory.learnFromText(db, uid, String(out.rule.add).slice(0, 200), langOfUser(uid)).gusto; } catch (e) { tmOk = false; }
+          if (!tmOk) {
+            const key = normKey(out.rule.add);
+            if (key) db.prepare(`INSERT INTO style_rules (user_id, rule_key, rule_text, hits, active) VALUES (?, ?, ?, 1, 1)
+              ON CONFLICT(user_id, rule_key) DO UPDATE SET rule_text=excluded.rule_text, active=1`).run(uid, key, String(out.rule.add).slice(0, 200));
+          }
         }
         if (out.rule.remove) {
-          const key = normKey(out.rule.remove);
-          if (key) db.prepare('DELETE FROM style_rules WHERE user_id = ? AND rule_key = ?').run(uid, key);
+          let tmGone = null;
+          try { tmGone = tasteMemory.forgetByText(db, uid, String(out.rule.remove)); } catch (e) { tmGone = null; }
+          if (!tmGone) {
+            const key = normKey(out.rule.remove);
+            if (key) db.prepare('DELETE FROM style_rules WHERE user_id = ? AND rule_key = ?').run(uid, key);
+          }
         }
       } catch (e) { console.error('[chat] rule save:', e.message); }
     }
@@ -3891,6 +3950,11 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
           ed.hashtags !== undefined ? ed.hashtags : post.hashtags,
           post.id
         );
+        // (v392) MEMORIA DE GUSTOS: una corrección aplicada vía chat
+        // también es evidencia para la vía por patrón.
+        if (captionChanged || (ed.hashtags !== undefined && String(ed.hashtags) !== String(post.hashtags || ''))) {
+          try { tasteMemory.noteCaptionEdit(db, uid, { oldCaption: post.caption, newCaption, oldHashtags: post.hashtags, newHashtags: ed.hashtags !== undefined ? ed.hashtags : post.hashtags }); } catch (e) {}
+        }
         // Cambio de foto: el índice refiere a sus fotos guardadas (0 = la más nueva)
         let pickedOwnPhoto = false;
         let photoFailed = false;
@@ -4064,7 +4128,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     // usuario (tope de 3 en paralelo) ya acota los 429s, y el preview reutiliza la imagen
     // (draftFromPreview) así que no hay doble gasto.
     if (out.idea && (out.idea.titulo || out.idea.title)) pregenIdeaImage(uidChat, out.idea);
-    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts });
+    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
   } catch (e) {
     console.error('[chat]', e.message);
     res.status(500).json({ error: 'Uh, me trabé un segundo 😅 Dame otro intento que esta sale' });
@@ -5229,7 +5293,7 @@ app.get('/api/admin/client/:id', requireAdminToken, (req, res) => {
     }
     const pl = getPlan(user.plan);
     const postsRaw = db.prepare(`SELECT p.id, p.media_type, p.status, p.image_path, p.caption,
-        p.scheduled_at, p.published_at, p.created_at, p.ig_permalink, p.ig_likes, p.ig_comments, p.tipo, p.week_key, p.ig_state,
+        p.scheduled_at, p.published_at, p.created_at, p.ig_permalink, p.ig_likes, p.ig_comments, p.tipo, p.week_key,
         m.reach, m.likes AS m_likes, m.comments AS m_comments
       FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
       WHERE p.user_id = ? ORDER BY p.id DESC LIMIT 60`).all(uid);
@@ -5951,7 +6015,36 @@ app.get('/api/ideas/chat', requireAuth, (req, res) => {
       db.prepare('UPDATE users SET posty_welcomed = 1 WHERE id = ?').run(uid);
     }
   } catch (e) { console.error('[chat] welcome:', e.message); }
-  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome, first_pick, welcome_regen });
+  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome, first_pick, welcome_regen, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
+});
+
+// ---------- 🧠 MEMORIA DE GUSTOS (v392) ----------
+// El registro vive en el fundamento (taste-memory.js). Acá: la lectura
+// para la pantalla «Lo que aprendí de vos» (Ajustes), el borrado por
+// ítem y la respuesta a una propuesta por patrón (la otra vía de
+// respuesta es el «sí/no» pelado en el chat mismo).
+app.get('/api/gustos', requireAuth, (req, res) => {
+  try {
+    res.json({ ok: true, ...tasteMemory.listForApi(db, req.session.userId, langOfUser(req.session.userId)) });
+  } catch (e) { res.status(500).json({ error: 'gustos' }); }
+});
+app.delete('/api/gustos/:id', requireAuth, (req, res) => {
+  try {
+    const g = tasteMemory.forget(db, req.session.userId, String(req.params.id || ''));
+    res.json({ ok: !!g });
+  } catch (e) { res.status(500).json({ error: 'gustos' }); }
+});
+app.post('/api/gustos/propuestas/responder', requireAuth, (req, res) => {
+  const tipo = String(((req.body || {}).tipo) || '');
+  const accept = !!((req.body || {}).accept);
+  const lang = langOfUser(req.session.userId);
+  try {
+    const r = tasteMemory.answerProposal(db, req.session.userId, tipo, accept, lang);
+    if (!r.ok) return res.status(404).json({ ok: false, error: 'sin_propuesta' });
+    // El acuse queda en el historial del chat, como si Posty lo dijera ahí.
+    try { db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(req.session.userId, 'assistant', r.ack); } catch (e) {}
+    res.json({ ok: true, reply: r.ack, taste_proposal: tasteMemory.proposalPayload(db, req.session.userId, lang) });
+  } catch (e) { res.status(500).json({ error: 'gustos' }); }
 });
 
 // Feedback de la sugerencia de arranque (first_pick): el usuario elige el
@@ -7312,9 +7405,13 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     // Guarda cambios en un borrador SIN programarlo (flujo de revisión del autopilot).
     // También acepta image_path para la regeneración de un borrador (↻).
     const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags) || (image_path && image_path !== post.image_path);
-    // Style-learn: si editó el caption a mano, aprendemos QUÉ cambió (sin emojis, más corto, con precios...)
+    // (v392) MEMORIA DE GUSTOS: si editó el caption a mano, la corrección
+    // suma EVIDENCIA (sin hashtags, más corto, sin emojis, con precio) y
+    // a las 2 iguales Posty PROPONE el gusto en el chat — sin su
+    // confirmación no se aprende. Reemplaza en este camino la activación
+    // silenciosa que hacía style-learn al 2º hit.
     if (caption !== undefined && caption !== post.caption) {
-      try { require('./style-learn').learnFromCaptionEdit(db, req.session.userId, post.caption, caption); } catch (e) {}
+      try { tasteMemory.noteCaptionEdit(db, req.session.userId, { oldCaption: post.caption, newCaption: caption, oldHashtags: post.hashtags, newHashtags: hashtags !== undefined ? hashtags : post.hashtags }); } catch (e) {}
     }
     db.prepare(`UPDATE posts SET caption=?, hashtags=?, image_path=?, prev_image_path=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, image_path || post.image_path, (image_path && image_path !== post.image_path) ? (post.image_path || '') : (post.prev_image_path || ''), post.id);
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto en revisión
@@ -7383,6 +7480,13 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       }
     }
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto antes de que salga
+  }
+  // (v392) MEMORIA DE GUSTOS: la rama default también guarda caption al
+  // programar — la corrección cuenta como evidencia igual que en
+  // save-draft (los retornos tempranos de error nunca llegan hasta acá,
+  // así que solo cuentan ediciones efectivamente guardadas).
+  if (caption !== undefined && caption !== post.caption) {
+    try { tasteMemory.noteCaptionEdit(db, req.session.userId, { oldCaption: post.caption, newCaption: caption, oldHashtags: post.hashtags, newHashtags: hashtags !== undefined ? hashtags : post.hashtags }); } catch (e) {}
   }
   // Al programar, la respuesta confirma la fecha real (el cliente la anuncia al aceptar).
   res.json(scheduledInfo ? { ok: true, scheduled_at: scheduledInfo.scheduled_at, week_key: scheduledInfo.week_key } : { ok: true });
@@ -11115,50 +11219,44 @@ app.get('/api/connections/tiendanube/install/info', (req, res) => {
 app.post('/api/connections/tiendanube/install/claim', async (req, res) => {
   const v = tnInstall.validateClaimBody(req.body || {});
   if (!v.ok) return res.status(400).json({ ok: false, mensaje: v.error });
-  // (v395 · paridad) Desde la página EN: mensajes en inglés y el alta nace
-  // con users.lang='en'. Sin lang, mensajes e INSERT históricos intactos.
-  const en = v.lang === 'en';
   const state = String((req.body || {}).t || '');
   if (!tnInstall.pendingStoreInfo(db, state, SESSION_SECRET)) {
-    return res.status(410).json({ ok: false, error: 'instalacion_vencida', mensaje: en ? 'Your install link expired (it lasts 30 minutes). Tap "Install" again in Tiendanube 🙏' : 'El link de instalación venció (dura 30 min). Volvé a tocar «Instalar» en Tiendanube 🙏' });
+    return res.status(410).json({ ok: false, error: 'instalacion_vencida', mensaje: 'El link de instalación venció (dura 30 min). Volvé a tocar «Instalar» en Tiendanube 🙏' });
   }
   let userId = null;
   if (v.mode === 'login') {
     const rlKey = 'login|' + v.email + '|' + (req.ip || '');
     if (authHitCount(rlKey, 15 * 60 * 1000) >= 10)
-      return res.status(429).json({ ok: false, mensaje: en ? 'Too many attempts 😅 Wait 15 minutes and try again.' : 'Demasiados intentos 😅 Esperá 15 minutos y probá de nuevo.' });
+      return res.status(429).json({ ok: false, mensaje: 'Demasiados intentos 😅 Esperá 15 minutos y probá de nuevo.' });
     const u = db.prepare('SELECT id, password_hash FROM users WHERE email = ?').get(v.email);
     if (!u || !u.password_hash || !bcrypt.compareSync(v.password, u.password_hash)) {
       authHitRecord(rlKey);
-      return res.status(401).json({ ok: false, mensaje: en ? 'Wrong email or password. Want to try again? If you don\'t have an account, tap "Create my account" 🙏' : 'Email o contraseña incorrectos. ¿Probás de nuevo? Si no tenés cuenta, tocá «Crear mi cuenta» 🙏' });
+      return res.status(401).json({ ok: false, mensaje: 'Email o contraseña incorrectos. ¿Probás de nuevo? Si no tenés cuenta, tocá «Crear mi cuenta» 🙏' });
     }
     authHitClear(rlKey);
     userId = u.id;
   } else {
     const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(v.email);
     if (existing) {
-      return res.status(409).json({ ok: false, mensaje: en ? 'That email already has a Posty account. Tap "I already have an account" and log in with your password 👆' : 'Ese email ya tiene cuenta en Posty. Tocá «Ya tengo cuenta» y entrá con tu contraseña 👆' });
+      return res.status(409).json({ ok: false, mensaje: 'Ese email ya tiene cuenta en Posty. Tocá «Ya tengo cuenta» y entrá con tu contraseña 👆' });
     }
     try {
       const hash = bcrypt.hashSync(v.password, 10);
       const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
-      const result = en
-        ? db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, ?, ?, NULL, ?, ?, ?, 1, 1, ?)')
-          .run(v.email, hash, newReferralCode(), trialEnds, 'tiendanube', '', 'en')
-        : db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, ?, ?, NULL, ?, ?, ?, 1, 1)')
-          .run(v.email, hash, newReferralCode(), trialEnds, 'tiendanube', '');
+      const result = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, ?, ?, NULL, ?, ?, ?, 1, 1)')
+        .run(v.email, hash, newReferralCode(), trialEnds, 'tiendanube', '');
       userId = result.lastInsertRowid;
     } catch (e) {
       if (/UNIQUE constraint failed/i.test((e && e.message) || ''))
-        return res.status(409).json({ ok: false, mensaje: en ? 'That email already has a Posty account. Tap "I already have an account" and log in with your password 👆' : 'Ese email ya tiene cuenta en Posty. Tocá «Ya tengo cuenta» y entrá con tu contraseña 👆' });
+        return res.status(409).json({ ok: false, mensaje: 'Ese email ya tiene cuenta en Posty. Tocá «Ya tengo cuenta» y entrá con tu contraseña 👆' });
       console.error('[tiendanube/install] alta:', e.message);
-      return res.status(500).json({ ok: false, mensaje: en ? 'Something failed on our side 😅 Try again in a little while' : 'Algo falló de nuestro lado 😅 Probá de nuevo en un rato' });
+      return res.status(500).json({ ok: false, mensaje: 'Algo falló de nuestro lado 😅 Probá de nuevo en un rato' });
     }
     track(userId, 'registered', 'via_tiendanube');
     try { evTrack(userId, 'account_created', { via: 'tiendanube' }); } catch (e) {}
   }
   const claimed = tnInstall.claimPendingInstall(db, state, SESSION_SECRET, userId);
-  if (!claimed) return res.status(410).json({ ok: false, error: 'instalacion_vencida', mensaje: en ? 'Your install link expired. Tap "Install" again in Tiendanube 🙏' : 'El link de instalación venció. Volvé a tocar «Instalar» en Tiendanube 🙏' });
+  if (!claimed) return res.status(410).json({ ok: false, error: 'instalacion_vencida', mensaje: 'El link de instalación venció. Volvé a tocar «Instalar» en Tiendanube 🙏' });
   track(userId, 'tiendanube_connected', 'via_store_install');
   // Sesión regenerada al autenticar (anti fijación; mismo patrón que
   // /api/auth/register y /api/auth/login). La respuesta viaja adentro.
@@ -15666,15 +15764,6 @@ app.get('/en/founders', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'public', 'en-fundadores.html'));
 });
-// (v395 · paridad) Gemelas EN de /auditoria y /demo (eran solo-ES).
-app.get('/en/auditoria', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(path.join(__dirname, 'public', 'en-auditoria.html'));
-});
-app.get('/en/demo', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(path.join(__dirname, 'public', 'en-demo.html'));
-});
 // Las páginas /en referencian assets con rutas relativas ("ig-cafe.jpg",
 // "posty-rubros.mp4"): esta ruta acotada por extensión los resuelve contra
 // public/ sin exponer nada más.
@@ -15702,36 +15791,31 @@ app.get('/auditoria', (req, res) => {
 });
 app.post('/api/audit', express.json({ limit: '16kb' }), async (req, res) => {
   const ip = demo.clientIp(req);
-  // (v395 · paridad) La página EN manda lang:'en': caché, prompt y errores
-  // en inglés. Sin lang, todo el comportamiento ES histórico.
-  const en = (req.body || {}).lang === 'en';
-  const lang = en ? 'en' : 'es';
   const ig = feedAudit.sanitizeHandle((req.body || {}).ig);
-  if (!ig) return res.status(400).json({ ok: false, error: en ? 'Send me your Instagram @' : 'Pasame tu @ de Instagram' });
-  const cached = feedAudit.getCachedAudit(ig, lang);
+  if (!ig) return res.status(400).json({ ok: false, error: 'Pasame tu @ de Instagram' });
+  const cached = feedAudit.getCachedAudit(ig);
   if (cached) {
     track(null, 'audit_done', ig + '|cached');
     return res.json({ ok: true, audit: cached.audit, cached: true });
   }
   const rl = feedAudit.consumeAuditAttempt(ip);
-  if (!rl.ok) return res.status(429).json({ ok: false, error: en ? "You've hit the limit of 5 audits per day. Come back tomorrow 🔍" : 'Llegaste al límite de 5 auditorías por día. Volvé mañana 🔍' });
+  if (!rl.ok) return res.status(429).json({ ok: false, error: 'Llegaste al límite de 5 auditorías por día. Volvé mañana 🔍' });
   let ok = false;
   try {
-    const r = await feedAudit.auditFeed(db, ig, { lang });
+    const r = await feedAudit.auditFeed(db, ig);
     if (!r.ok) return res.status(422).json({ ok: false, error: r.error });
     ok = true;
     track(null, 'audit_done', ig);
     res.json({ ok: true, audit: r.audit, cached: false });
   } catch (e) {
     console.error('[posta] Error en audit:', e.message);
-    res.status(500).json({ ok: false, error: en ? "We couldn't analyze that Instagram right now. Try again in a few minutes." : 'No pudimos analizar ese Instagram ahora. Probá de nuevo en unos minutos.' });
+    res.status(500).json({ ok: false, error: 'No pudimos analizar ese Instagram ahora. Probá de nuevo en unos minutos.' });
   } finally {
     if (!ok) feedAudit.refundAuditAttempt(ip); // falló: no se consume
   }
 });
 app.get('/api/audit/:handle', (req, res) => {
-  // (v395 · paridad) El link compartido EN pide ?lang=en: lee SU caché.
-  const cached = feedAudit.getCachedAudit(req.params.handle, req.query.lang === 'en' ? 'en' : 'es');
+  const cached = feedAudit.getCachedAudit(req.params.handle);
   if (!cached) return res.status(404).json({ ok: false, cached: false });
   res.json({ ok: true, audit: cached.audit, cached: true });
 });
@@ -18695,7 +18779,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v395';
+const BUILD_ID = '20261024-v394';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

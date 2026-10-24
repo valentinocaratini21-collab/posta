@@ -169,6 +169,11 @@ function ajustesView() {
     <div class="src-row" id="srcCommentsCard"><p class="hint">Cargando…</p></div>
     <div class="src-row" id="placesZone"><p class="hint">Cargando…</p></div>
     </div>
+    <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
+      <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;margin-bottom:10px">📝 ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "What I've learned from you" : 'Lo que aprendí de vos'}</div>
+    <p class="src-intro">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Your standing tastes: what you taught me in the chat or by correcting me. They shape every new week — delete one and it stops applying from the next generation.' : 'Tus gustos fijos: lo que me enseñaste en el chat o corrigiéndome. Dan forma a cada semana nueva — borrás uno y deja de aplicar desde la próxima generación.'}</p>
+    <div id="gustosZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
+    </div>
   </div></div>
   <div class="card ajsec${openSec==='conex' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔌 Conexiones</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">📸 Instagram</div>
@@ -456,6 +461,34 @@ async function tnZoneLoad() {
 // v186: galería "🎨 Estilos de tus posteos" — muestras fieles (mismo motor
 // de composición que los posteos) y hasta 3 favoritos persistidos. Todo
 // opcional: sin favoritos, Posty elige como siempre.
+// --- 📝 MEMORIA DE GUSTOS: «Lo que aprendí de vos» (GET /api/gustos) ---
+async function gustosZoneLoad() {
+  const zone = document.getElementById('gustosZone');
+  if (!zone) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  let data = null;
+  try { data = await api.get('/api/gustos'); } catch (e) { /* queda el fallback */ }
+  const list = (data && Array.isArray(data.gustos)) ? data.gustos : [];
+  if (!list.length) {
+    zone.innerHTML = `<p class="hint">${en ? "I haven't learned any of your tastes yet 📝 Correct me twice the same way and I'll offer to note it in the chat — or just tell me («no hashtags», «short texts») and I note it right away." : 'Todavía no aprendí ningún gusto tuyo 📝 Cuando me corrijas dos veces lo mismo, te propongo anotarlo en el chat — y si me lo pedís directo («sin hashtags», «textos cortos»), lo anoto al instante.'}</p>`;
+    return;
+  }
+  zone.innerHTML = list.map(g => `
+    <div class="set-row" style="align-items:flex-start">
+      <div><div class="t">${esc(g.label || '')}</div>
+      <div class="d">${esc(g.origen_label || '')}${g.ejemplo ? `<br><span style="color:var(--dim)">«${esc(String(g.ejemplo).slice(0, 90))}»</span>` : ''}</div>
+      ${g.estado === 'pausa_regla' ? `<div class="hint" style="margin-top:4px;color:#B3402E">⏸ ${en ? 'paused by a quality rule' : 'en pausa por regla de calidad'}: ${esc(g.regla || '')} — ${en ? 'the rule wins' : 'la regla manda'}</div>` : ''}</div>
+      <button class="btn btn-danger btn-sm" style="flex:none" data-gusto-del="${esc(g.id)}">🗑 ${en ? 'Delete' : 'Borrar'}</button>
+    </div>`).join('');
+  zone.querySelectorAll('[data-gusto-del]').forEach(b => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try { await api.delete('/api/gustos/' + encodeURIComponent(b.dataset.gustoDel)); } catch (e) {}
+      gustosZoneLoad();
+    };
+  });
+}
+
 async function styleGalleryLoad() {
   const box = document.getElementById('styleGallery');
   if (!box) return;
@@ -509,6 +542,7 @@ function bindSettings() {
   try { ggZoneLoad(); } catch (e) {}
   try { tnZoneLoad(); } catch (e) {}
   try { styleGalleryLoad(); } catch (e) {}
+  try { gustosZoneLoad(); } catch (e) {}
   // --- Página pública del negocio (v169) ---
   const btnCopyPage = $('#btnCopyPage');
   if (btnCopyPage) btnCopyPage.onclick = async () => {

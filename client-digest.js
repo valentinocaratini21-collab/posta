@@ -526,6 +526,16 @@ function emptyDigest() {
     // es la semana en curso; el refresco lo preserva (copia base) pero
     // la semana siguiente ya no se usa. null = sin respuesta esta semana.
     radar: null,
+    // (v392) MEMORIA DE GUSTOS (taste-memory.js): lo que el DUEÑO enseñó
+    // en el chat (explícito) o con sus ediciones repetidas (patrón, solo
+    // con su confirmación). gustos = registro canónico { tipo, valor,
+    // ejemplo, at, origen, estado }; pendientes = propuestas esperando
+    // su sí/no; evidencia = correcciones contadas por tipo; rechazos =
+    // cooldown tras un «no». El hash de anclas NO los cubre (no son
+    // fundamento leído) y el refresco semanal los preserva:
+    // applyDeepBlocks parte del digest guardado y el fresco nunca los
+    // trae.
+    gustos: [], gustos_pendientes: [], gustos_evidencia: {}, gustos_rechazos: {},
   };
 }
 
