@@ -1086,6 +1086,31 @@ function captionPasses(caption, input) {
       return { ok: false, reason: `binomio vacío (CUERPO-BINOMIO): "${pm[1]} y ${pm[2]}" es relleno de folleto — ningún dueño habla así de su producto; nombrá lo concreto que lo hace bueno (el material, la medida, el uso, el tiempo que dura) o sacá el par` };
     }
   }
+  // LISTA-TRUNCADA (Juli, 2026-10-24 — ids 449 y 436 reales de
+  // producción, generados el 23-24/10 sobre v383): el generador anuncia
+  // una enumeración y la deja CORTADA — el id 449 cierra con «…detrás
+  // de tu negocio. 3.» (el ítem 3 vacío, al final del caption) y el
+  // id 436 anuncia «los 3 errores más comunes al elegir un servicio:
+  // 1.» y salta al CTA sin escribir ni el primero. Ningún gate lo
+  // miraba: ambos pasaban captionPasses reconstruidos con CTA válido
+  // (verificado contra la función real). Un humano jamás publica una
+  // lista a mitad de escribir: es la firma más literal de texto
+  // generado cortado. Firma angosta: un ítem numerado «N.» o «N)»
+  // seguido de fin de línea, de línea en blanco o del fin del texto
+  // (sin hashtags) — el ítem completo siempre lleva su texto en la
+  // misma línea («1. Mostrá tu producto…» no matchea).
+  {
+    const sinTags = c.replace(/(^|\n)\s*#[^\n]*$/gm, '').trim();
+    // El ítem vacío a mitad de línea (id 449: «…tu negocio. 3.» tras los
+    // ítems 1 y 2 en la MISMA línea) se caza por línea: la línea del ítem
+    // vacío también trae un ítem completo. Una oración suelta que cierra
+    // con número («Nos quedan 3.») vive en su propia línea sin ítems:
+    // no matchea.
+    const emptyItemSameLine = sinTags.split('\n').some((ln) => /\b\d{1,2}[.)]\s+\S/.test(ln) && /[\s:;.!?…]\d{1,2}[.)]\s*$/.test(ln));
+    if (/(?:^|[\s:;,])\d{1,2}[.)]\s*$/.test(sinTags) || /(?:^|\n)\s*\d{1,2}[.)]\s*(?:\n|$)/.test(sinTags) || /:\s*\d{1,2}[.)]\s*\n/.test(sinTags) || emptyItemSameLine) {
+      return { ok: false, reason: 'lista truncada (LISTA-TRUNCADA): el caption anuncia una enumeración y la deja cortada (un ítem numerado vacío: «…: 1.» o un «3.» final sin texto) — completá TODOS los ítems en la misma línea o sacá la enumeración y contá la idea en una frase' };
+    }
+  }
   // ===== Verificación contra datos del negocio (tanda D, casos 92-100) =====
   // Precios del caption vs lista de precios del negocio: un precio desactualizado
   // o inventado se rechaza (se avisa y se corrige antes de publicar).

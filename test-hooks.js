@@ -148,6 +148,22 @@ t('v4: pregunta que abre y sigue en minúscula es estilo, no costura',
 t('v4: cadena de imperativos del dueño no es costura',
   captionOpenIsGarbled('Vení, probá las facturas calentitas de siempre', 'Lo de Marta') === false);
 
+// 12. captionOpenIsGarbled LINT v5 (Juli, 2026-10-24) — regla (g): el
+// empalme h11 sin puntuación: el tema cosido tras «después de probar»
+// es una frase imperativa (id 448 real, cuenta 81, generado sobre v383).
+t('v5: id 448 real — tema-imperativo tras «después de probar» es empalme',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probar Unite a nuestra comunidad de negocios en Posty', 'Posty') === true);
+t('v5: variante con «probarlo» + imperativo capitalizado',
+  captionOpenIsGarbled('Lo que nos dijo un cliente después de probarlo Sumate a la comunidad de siempre', 'Posty') === true);
+t('v5: tema sustantivo tras «después de probar» NO es empalme',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probar las medialunas de siempre', 'Lo de Marta') === false);
+t('v5: el negocio tras «después de probar» NO es empalme (enmascarado)',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probar Posty por una semana entera', 'Posty') === false);
+t('v5: «después de probar» + pronombre NO es empalme',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probarlo en su local de siempre', 'Posty') === false);
+t('v5: imperativo en minúscula tras punto no es esta firma',
+  captionOpenIsGarbled('Salió el menú nuevo de la casa. Después de probarlo, unite no tiene sentido acá', 'Posty') === false);
+
 // 10. node --check hooks.js
 let checkOk = false;
 try {

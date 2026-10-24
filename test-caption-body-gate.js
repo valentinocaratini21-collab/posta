@@ -168,5 +168,41 @@ ok('control: la versión concreta del 422 (material + medida) pasa', () => {
   assert.strictEqual(chk.ok, true, chk.reason);
 });
 
+console.log('== (h) Lista truncada (LISTA-TRUNCADA — ids 449/436 reales, 2026-10-24) ==');
+ok('id 449 reconstruido con CTA: cierra con «3.» vacío y se rechaza', () => {
+  const cap = '¿Qué posteo hoy? 🤔\nSi querés que tu negocio brille en Instagram, seguí estas ideas. 1. Un posteo mostrando tu producto estrella. 2. Una historia detrás de tu negocio. 3.\nEscribime por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/lista truncada/i.test(chk.reason), chk.reason);
+});
+ok('id 436 reconstruido: anuncia «los 3 errores…: 1.» y salta al CTA — se rechaza', () => {
+  const cap = 'El secreto está en un buen servicio.\nTe comparto los 3 errores más comunes al elegir un servicio: 1.\nReservá tu lugar en Gesty hoy mismo. Escribime por DM.';
+  const chk = gen.captionPasses(cap, { business: 'Gesty', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/lista truncada/i.test(chk.reason), chk.reason);
+});
+ok('ítem vacío a mitad de caption (salto de línea tras «2.») se rechaza', () => {
+  const cap = 'Tres ideas para tu semana 📅\n1. Mostrá tu producto estrella.\n2.\nEscribime por DM y lo armamos juntos esta semana.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/lista truncada/i.test(chk.reason), chk.reason);
+});
+ok('control: lista COMPLETA con los 3 ítems escritos pasa', () => {
+  const cap = 'Tres ideas para tu semana 📅\n1. Mostrá tu producto estrella. 2. Contá cómo trabajás. 3. Cerrá con una promo real.\nEscribime por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: precio con decimales «$12.500» no es ítem truncado y pasa', () => {
+  const cap = 'Salió la docena de medialunas a $12.500 para retirar hoy por el local, recién horneadas como siempre.\n\nPasá por el local hoy y llevate la tuya calentita.';
+  const chk = gen.captionPasses(cap, { business: 'Lo de Marta', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('id 448 real pasa por la puerta vía lint (g): empalme h11 sin puntuación', () => {
+  const cap = 'Lo que nos dijo una clienta después de probar Unite a nuestra comunidad de negocios en Posty.\n\n¿Te imaginás tener un Instagram activo sin mover un dedo? Escribime por DM y contame qué te gustaría lograr.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/empalm/i.test(chk.reason), chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

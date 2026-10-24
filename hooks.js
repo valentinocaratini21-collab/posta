@@ -296,6 +296,25 @@ function captionOpenIsGarbled(caption, negocio) {
     if (seg.startsWith('¿') || seg.startsWith('¡')) continue;
     return true;
   }
+  // (g) LINT v5 (Juli, 2026-10-24) — el empalme de la fórmula h11 SIN
+  // puntuación ni título: id 448 real de producción (cuenta 81, generado
+  // HOY sobre v383): «Lo que nos dijo una clienta después de probar
+  // Unite a nuestra comunidad de negocios en Posty» — el tema cosido en
+  // el slot de h11 («después de probar {tema}») es una FRASE IMPERATIVA
+  // completa, no un sustantivo. Las firmas (d)/(d') no lo cazan (no hay
+  // palabra común capitalizada de su lista: «Unite» es verbo) y la (e)
+  // exige puntuación débil antes del imperativo: acá la costura es un
+  // espacio. Firma angosta: tras «después de probar/probarlo/probarla/
+  // probando» (+ hasta 3 palabras), un imperativo del banco CON
+  // MAYÚSCULA inicial es el arranque del tema-frase cosido. El tema
+  // legítimo es sustantivo («las medialunas», «nuestro café») o el
+  // negocio (ya enmascarado a «negocio»): ninguno es imperativo
+  // capitalizado. Lista local por la regla de autocontención de (e).
+  {
+    const IMP_G = 'unite|sumate|reservá|reserva|descubrí|descubri|conocé|conoce|probá|proba|mirá|mira|vení|veni|hacé|hace|pedí|pedi|escribí|escribi|escribinos|aprovechá|aprovecha|animate|fijate|regalá|regala|pasá|pasa|entrá|entra|comprá|compra|llamá|llama|elegí|elegi|armá|arma|mostrá|mostra|buscá|busca|contanos|dale';
+    const mg = masked.match(new RegExp('\\b[Dd]espu[eé]s de prob(?:ar|arlo|arla|arlos|arlas|ando)\\b((?:\\s+\\S+){0,3}?)\\s+([A-ZÁÉÍÓÚÑ][a-záéíóúüñ]*)'));
+    if (mg && new RegExp('^(?:' + IMP_G + ')$', 'i').test(mg[2])) return true;
+  }
   const biz = String(negocio || '').trim().toLowerCase();
   // (e) LINT v4: la FÓRMULA cosida tras el tema. Las costuras de
   // producción (v142 y familia) no siempre traen la firma del título: a
