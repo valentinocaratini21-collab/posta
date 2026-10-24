@@ -939,6 +939,83 @@ function lpShowcaseInit() {
     }).catch(() => {});
   } catch (e) {}
 }
+// 🌈 FRANJA VIVA «El feed se arma solo» (v381, #feed) — patrón de familia
+// (el jardín de Growty): escena mandada por el scroll. Las tarjetas vuelan
+// desordenadas y se acomodan en la grilla perfecta; capítulos del método
+// (Pienso · Diseño · Publico) por umbrales de progreso. ESTADO POR DEFECTO =
+// ESCENA COMPLETA: sin JS o con prefers-reduced-motion no se escribe ningún
+// transform y la grilla se ve final. Solo transform/opacity, y todo es
+// función pura de la posición → reversible al retroceder.
+const LP_FEED_SCATTER = [
+  { x: -58, y: -36, r: -14 }, { x: 10, y: -60, r: 9 }, { x: 62, y: -28, r: 16 },
+  { x: -74, y: 4, r: 11 }, { x: 0, y: -16, r: -7 }, { x: 72, y: 8, r: -12 },
+  { x: -54, y: 42, r: 8 }, { x: 14, y: 60, r: -10 }, { x: 56, y: 38, r: 13 }
+];
+const LP_FEED_LINES = [
+  'Primero pienso las ideas de tu semana.',
+  'Después las diseño con tus fotos y tus colores.',
+  'Y tu feed queda perfecto, publicándose solo.'
+];
+let LP_FEED = null, LP_FEED_WIRED = false, LP_FEED_TICK = false;
+function lpFeedInit() {
+  const scene = document.getElementById('lpFeedScene');
+  if (!scene) { LP_FEED = null; return; }
+  try { if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { LP_FEED = null; return; } } catch (e) {}
+  const cards = Array.prototype.slice.call(scene.querySelectorAll('.lp-feed-card'));
+  if (!cards.length) { LP_FEED = null; return; }
+  LP_FEED = {
+    scene: scene,
+    cards: cards,
+    chaps: Array.prototype.slice.call(document.querySelectorAll('#lpFeedChaps .lp-feed-chap')),
+    line: document.getElementById('lpFeedLine'),
+    posty: document.getElementById('lpFeedPosty'),
+    chap: -1
+  };
+  if (!LP_FEED_WIRED) {
+    LP_FEED_WIRED = true;
+    window.addEventListener('scroll', lpFeedAsk, { passive: true });
+    window.addEventListener('resize', lpFeedAsk);
+  }
+  lpFeedStep();
+}
+function lpFeedAsk() {
+  if (LP_FEED_TICK) return;
+  LP_FEED_TICK = true;
+  requestAnimationFrame(lpFeedStep);
+}
+function lpFeedStep() {
+  LP_FEED_TICK = false;
+  const F = LP_FEED;
+  if (!F || !document.contains(F.scene)) return;
+  const r = F.scene.getBoundingClientRect();
+  const vh = window.innerHeight || 800;
+  let p = (vh - r.top) / (vh + r.height);
+  p = Math.max(0, Math.min(1, p));
+  F.cards.forEach((c, i) => {
+    const s = LP_FEED_SCATTER[i % LP_FEED_SCATTER.length];
+    const a = 0.08 + i * 0.045, b = a + 0.42;
+    let t = (p - a) / (b - a);
+    t = Math.max(0, Math.min(1, t));
+    const e = 1 - Math.pow(1 - t, 3);
+    const k = 1 - e;
+    c.style.transform = 'translate(' + (s.x * k).toFixed(1) + '%, ' + (s.y * k).toFixed(1) + '%) rotate(' + (s.r * k).toFixed(1) + 'deg) scale(' + (0.88 + 0.12 * e).toFixed(3) + ')';
+    c.style.opacity = (0.3 + 0.7 * e).toFixed(2);
+  });
+  if (F.posty) {
+    F.posty.style.transform = 'translateY(' + ((1 - p) * 16).toFixed(1) + 'px)';
+    F.posty.style.opacity = (0.85 + 0.15 * p).toFixed(2);
+  }
+  const chap = p < 0.34 ? 0 : (p < 0.70 ? 1 : 2);
+  if (chap !== F.chap) {
+    F.chap = chap;
+    F.chaps.forEach((el, j) => el.classList.toggle('on', j === chap));
+    if (F.line && LP_FEED_LINES[chap]) {
+      const lineEl = F.line, txt = LP_FEED_LINES[chap];
+      lineEl.classList.add('swap');
+      setTimeout(() => { if (LP_FEED === F) { lineEl.textContent = txt; lineEl.classList.remove('swap'); } }, 180);
+    }
+  }
+}
 function cleanIgHandle(v) {
   let s = String(v || '').trim().toLowerCase();
   s = s.replace(/^https?:\/\//, '').replace(/^www\./, '');
@@ -958,6 +1035,7 @@ function lpInitHero() {
   lpInitCarousel();
   lpInitWall();
   lpShowcaseInit(); // 📣 v370: «Historias reales» — solo si hay casos activos
+  lpFeedInit(); // 🌈 v381: franja viva «El feed se arma solo» (#feed)
   /* v377: la semana de muestra navegable — solo rubros con semana completa y
      captions auditados; la grilla inicial (mixto) se re-renderiza con visor */
   lpWeekFilterChips();
@@ -2309,6 +2387,30 @@ function landingView(cfg) {
       <div class="lp-view-body"><span class="lp-view-tag" id="lpViewTag"></span><div class="lp-view-cap" id="lpViewCap"></div><div class="lp-view-why" id="lpViewWhy"></div></div>
     </div>
   </div>
+  <div class="section lp-feed-sec" id="feed"><div class="wrap">
+    <h2>El feed se arma solo</h2>
+    <p class="lede">Mirá cómo nace tu semana: las tarjetas sueltas son las ideas; el acomodo, el diseño; y la grilla perfecta, lo que sale publicado.</p>
+    <div class="lp-feed-chaps" id="lpFeedChaps" aria-hidden="true">
+      <span class="lp-feed-chap on">✍️ Pienso</span>
+      <span class="lp-feed-chap">🎨 Diseño</span>
+      <span class="lp-feed-chap">📮 Publico</span>
+    </div>
+    <div class="lp-feed-scene" id="lpFeedScene">
+      <div class="lp-feed-grid" id="lpFeedGrid">
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-cafe.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-barber.jpg" alt="Posteo de Instagram de una barbería hecho por Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-moda.jpg" alt="Posteo de Instagram de una tienda de ropa hecho por Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-fitness.jpg" alt="Posteo de Instagram de un gimnasio hecho por Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-belleza.jpg" alt="Posteo de Instagram de una estética hecho por Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-gastro.jpg" alt="Posteo de Instagram de un restaurante hecho por Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-mascotas.jpg" alt="Posteo de Instagram de un pet shop hecho por Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="g-latte.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="g-tazas.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"></div>
+      </div>
+      <img class="lp-feed-posty" id="lpFeedPosty" loading="lazy" decoding="async" src="posty-disenando-hero.jpg" alt="Posty diseñando los posteos de tu semana">
+    </div>
+    <p class="lp-feed-line" id="lpFeedLine">Primero pienso las ideas de tu semana.</p>
+  </div></div>
   <div class="section"><div class="wrap">
     <h2>Un video premium cada semana 🎬</h2>
     <p class="lede">Posty crea un video cinematográfico de tu producto, listo para publicar — incluido en todos los planes.</p>
@@ -2394,7 +2496,7 @@ function landingView(cfg) {
       <div class="lp-job"><div class="lp-job-i">🚀</div><h3>Potencia lo que mejor anda</h3><p>Cuando un posteo la rompe, Posty lo detecta y te propone potenciarlo con pauta. Vos fijás el tope de gasto.</p></div>
       <div class="lp-job"><div class="lp-job-i">💡</div><h3>Ideas nuevas cada semana</h3><p>Posty mira a tu competencia, las fechas que venden y tu posteo que mejor anduvo — y te propone ideas listas para aprobar con un toque.</p></div>
       <div class="lp-job"><div class="lp-job-i">📊</div><h3>Tu resumen, cada semana</h3><p>Qué posteos funcionaron, qué sigue y el foco del mes — te llega solo, sin que tengas que pedirlo.</p></div>
-      <div class="lp-job" style="padding:0;overflow:hidden"><video src="posty-working.mp4?v=5" poster="posty-working-poster.jpg?v=5" autoplay muted loop playsinline preload="metadata" aria-label="Posty trabajando en la computadora" style="width:100%;height:100%;object-fit:cover;object-position:center 32%;display:block"></video></div>
+      <div class="lp-job" style="padding:0;overflow:hidden"><video src="posty-working.mp4?v=4" poster="posty-working-poster.jpg?v=4" autoplay muted loop playsinline preload="metadata" aria-label="Posty trabajando en la computadora" style="width:100%;height:100%;object-fit:cover;object-position:center 32%;display:block"></video></div>
     </div>
     <div style="text-align:center;margin-top:30px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Probá gratis 3 días</a></div>
   </div></div>

@@ -77,7 +77,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261024h">
+<link rel="stylesheet" href="/styles.css?v=20261024i">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -756,6 +756,43 @@
       <div class="lp-view-body"><span class="lp-view-tag" id="lpViewTag"></span><div class="lp-view-cap" id="lpViewCap"></div><div class="lp-view-why" id="lpViewWhy"></div></div>
     </div>
   </div>
+  <div class="section lp-feed-sec" id="feed"><div class="wrap">
+    <h2>Your feed builds itself</h2>
+    <p class="lede">Watch your week come together: the loose cards are the ideas, the settling is the design, and the perfect grid is what gets published.</p>
+    <div class="lp-feed-chaps" id="lpFeedChaps" aria-hidden="true">
+      <span class="lp-feed-chap on">✍️ I think</span>
+      <span class="lp-feed-chap">🎨 I design</span>
+      <span class="lp-feed-chap">📮 I publish</span>
+    </div>
+    <div class="lp-feed-scene" id="lpFeedScene">
+      <div class="lp-feed-grid" id="lpFeedGrid">
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="/ig-cafe.jpg" alt="Instagram post of a coffee shop made by Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="/ig-barber.jpg" alt="Instagram post of a barbershop made by Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="/ig-moda.jpg" alt="Instagram post of a clothing store made by Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="/ig-fitness.jpg" alt="Instagram post of a gym made by Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="/ig-belleza.jpg" alt="Instagram post of a beauty studio made by Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="/ig-gastro.jpg" alt="Instagram post of a restaurant made by Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="/ig-mascotas.jpg" alt="Instagram post of a pet store made by Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="/g-latte.jpg" alt="Instagram post of a coffee shop made by Posty"></div>
+        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="/g-tazas.jpg" alt="Instagram post of a coffee shop made by Posty"></div>
+      </div>
+      <img class="lp-feed-posty" id="lpFeedPosty" loading="lazy" decoding="async" src="/posty-disenando-hero.jpg" alt="Posty designing your week's posts">
+    </div>
+    <p class="lp-feed-line" id="lpFeedLine">First I come up with the ideas for your week.</p>
+    <script>(function(){var scene=document.getElementById('lpFeedScene');if(!scene)return;try{if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;}catch(e){}
+var cards=[].slice.call(scene.querySelectorAll('.lp-feed-card'));if(!cards.length)return;
+var chaps=[].slice.call(document.querySelectorAll('#lpFeedChaps .lp-feed-chap'));
+var line=document.getElementById('lpFeedLine');var posty=document.getElementById('lpFeedPosty');
+var SC=[[-58,-36,-14],[10,-60,9],[62,-28,16],[-74,4,11],[0,-16,-7],[72,8,-12],[-54,42,8],[14,60,-10],[56,38,13]];
+var LINES=['First I come up with the ideas for your week.','Then I design them with your photos and your colors.','And your feed ends up perfect — posting on its own.'];
+var chap=-1,ticking=false;
+function step(){ticking=false;var r=scene.getBoundingClientRect();var vh=window.innerHeight||800;var p=(vh-r.top)/(vh+r.height);p=Math.max(0,Math.min(1,p));
+cards.forEach(function(c,i){var s=SC[i%SC.length];var a=0.08+i*0.045,b=a+0.42;var t=(p-a)/(b-a);t=Math.max(0,Math.min(1,t));var e=1-Math.pow(1-t,3);var k=1-e;c.style.transform='translate('+(s[0]*k).toFixed(1)+'%, '+(s[1]*k).toFixed(1)+'%) rotate('+(s[2]*k).toFixed(1)+'deg) scale('+(0.88+0.12*e).toFixed(3)+')';c.style.opacity=(0.3+0.7*e).toFixed(2);});
+if(posty){posty.style.transform='translateY('+((1-p)*16).toFixed(1)+'px)';posty.style.opacity=(0.85+0.15*p).toFixed(2);}
+var nc=p<0.34?0:(p<0.70?1:2);if(nc!==chap){chap=nc;chaps.forEach(function(el,j){el.classList.toggle('on',j===chap)});if(line&&LINES[chap]){line.classList.add('swap');setTimeout(function(){line.textContent=LINES[chap];line.classList.remove('swap');},180);}}}
+function ask(){if(!ticking){ticking=true;requestAnimationFrame(step);}}
+window.addEventListener('scroll',ask,{passive:true});window.addEventListener('resize',ask);step();})();</script>
+  </div></div>
   <div class="section"><div class="wrap">
     <h2>One premium video every week 🎬</h2>
     <p class="lede">Posty creates a cinematic video of your product, ready to post — included in every plan.</p>
@@ -842,7 +879,7 @@
       <div class="lp-job"><div class="lp-job-i">🚀</div><h3>Boosts what works best</h3><p>When a post takes off, Posty spots it and offers to boost it with ads. You set the spending cap.</p></div>
       <div class="lp-job"><div class="lp-job-i">💡</div><h3>New ideas every week</h3><p>Posty looks at your competition, the dates that sell and your best-performing post — and proposes ideas ready to approve with one tap.</p></div>
       <div class="lp-job"><div class="lp-job-i">📊</div><h3>Your summary, every week</h3><p>Which posts worked, what's next and the month's focus — it arrives on its own, no asking needed.</p></div>
-      <div class="lp-job" style="padding:0;overflow:hidden"><video src="posty-working.mp4?v=5" poster="posty-working-poster.jpg?v=5" autoplay muted loop playsinline preload="metadata" aria-label="Posty working at the computer" style="width:100%;height:100%;object-fit:cover;object-position:center 32%;display:block"></video></div>
+      <div class="lp-job" style="padding:0;overflow:hidden"><video src="posty-working.mp4?v=4" poster="posty-working-poster.jpg?v=4" autoplay muted loop playsinline preload="metadata" aria-label="Posty working at the computer" style="width:100%;height:100%;object-fit:cover;object-position:center 32%;display:block"></video></div>
     </div>
     <div style="text-align:center;margin-top:30px"><a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:16px 36px">Try it free for 3 days</a></div>
   </div></div>
