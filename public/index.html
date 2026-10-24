@@ -205,6 +205,14 @@
             "@type": "Answer",
             "text": "Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo con pauta. Cargás crédito en la app, fijás cuánto querés gastar y listo: tu mejor contenido llega a mucha más gente."
           }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Posty funciona solo, o necesito contratar algo más?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Funciona solo. Posty es un producto completo por sí mismo: pienso las ideas, diseño, publico, respondo y promociono — todo dentro de tu plan, sin que contrates a nadie más ni sumes otros servicios. Con Posty alcanza para que tu Instagram esté atendido de punta a punta."
+          }
         }
       ]
     }
@@ -272,7 +280,7 @@
 /* v210: splash calmo — Posty estatico, sin malabares. */
 </style>
 <script>setTimeout(function(){var b=document.getElementById('posty-boot');if(b)b.remove();},6000);</script>
-<script src="/app.js?v=250"></script>
+<script src="/app.js?v=251"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
 fetch('/api/campaign/current?lang=es').then(function(r){return r.json()}).then(function(d){
