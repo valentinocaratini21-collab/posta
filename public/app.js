@@ -12380,6 +12380,20 @@ function homeGridCompose(input) {
     if (minPubMs !== Infinity && (typeof r.taken_at !== 'number' || !(r.taken_at * 1000 < minPubMs))) continue;
     tiles.push({ kind: 'ig', img: r.img, type: r.type || 'image', taken_at: (typeof r.taken_at === 'number' ? r.taken_at : null), isNew: false, pinned: r.pinned === true, likes: (typeof r.likes === 'number' ? r.likes : null), comments: (typeof r.comments === 'number' ? r.comments : null) });
   }
+  // (Tanda feed 5 · ítem 3) FIJADOS del dueño (📌): las piezas propias
+  // con pinned cargado rinden PRIMERAS, en su orden de fijado
+  // (pinned_at, el más viejo primero, como los fijó), igual que en
+  // Instagram. Sin fijadas, la composición es exactamente la vigente.
+  const pinTiles = [];
+  const restTiles = [];
+  for (const t of tiles) {
+    if (t && t.kind === 'post' && t.post && t.post.pinned) pinTiles.push(t);
+    else restTiles.push(t);
+  }
+  if (pinTiles.length) {
+    pinTiles.sort((x, y) => String(x.post.pinned_at || '').localeCompare(String(y.post.pinned_at || '')) || ((x.post.id || 0) - (y.post.id || 0)));
+    return pinTiles.concat(restTiles).slice(0, cap);
+  }
   return tiles.slice(0, cap);
 }
 const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
@@ -12427,7 +12441,7 @@ function homeTileHTML(t, i) {
     : isV
       ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="none" data-hf-reel="1"></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
-  const glyph = p.pinned === true ? HOME_PIN_SVG : isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
+  const glyph = p.pinned ? HOME_PIN_SVG : isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
   const pill = t.isNew ? '<span class="hf-new"><i></i>NUEVO</span>' : '';
   // (Frente 3 · suma 2) Chapita de programación: SOLO en posteos futuros
   // programados (status 'scheduled' con fecha real) — es la ÚNICA señal
@@ -12439,7 +12453,7 @@ function homeTileHTML(t, i) {
   // t.fall/t.fallDelay una única vez por generación (ver hfFallMark).
   const fallCls = t.fall ? ' hf-fall' : '';
   const fallStyle = t.fall ? ` style="--hfd:${Math.max(0, Number(t.fallDelay) || 0)}ms"` : '';
-  return `<span class="scf-mini-x hf-tile${p.status === 'published' ? ' pub' : ''}${fallCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="Ver posteo">${media}${pill}${chip}${glyph}</span>`;
+  return `<span class="scf-mini-x hf-tile${p.status === 'published' ? ' pub' : ''}${fallCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${pill}${chip}${glyph}</span>`;
 }
 function homeHeadHTML(prof, bizName, opts) {
   const P = prof || {};
@@ -12475,15 +12489,36 @@ function homeHeadHTML(prof, bizName, opts) {
   const bio = String(P.bio || '').trim();
   const bioHTML = bio && !P.bio_unread ? `<div class="hf-bio">${esc(bio)}</div>` : '';
   const rawLink = String(P.link || '').trim();
-  const linkHTML = rawLink
-    ? `<a class="hf-link" href="${esc(rawLink)}" target="_blank" rel="noopener">${esc(rawLink.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a>`
-    : user ? `<a class="hf-link" href="https://www.instagram.com/${esc(user)}/" target="_blank" rel="noopener">instagram.com/${esc(user)}</a>` : '';
+  const linkOne = (x) => `<a class="hf-link" href="${esc(x)}" target="_blank" rel="noopener">${esc(x.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a>`;
+  // (Tanda feed 5 · ítem 8) Links múltiples SOLO si el payload los trae
+  // como lista (links[]): la lectura pública de hoy expone un solo link
+  // y la lista llega vacía — jamás se completa con ficción.
+  const linksArr = (Array.isArray(P.links) ? P.links : []).map((x) => String(x || '').trim()).filter(Boolean);
+  const linkHTML = linksArr.length > 1
+    ? `<span class="hf-links">${linksArr.map(linkOne).join('')}</span>`
+    : rawLink
+      ? linkOne(rawLink)
+      : user ? `<a class="hf-link" href="https://www.instagram.com/${esc(user)}/" target="_blank" rel="noopener">instagram.com/${esc(user)}</a>` : '';
+  // (Tanda feed 5 · ítem 8) Chip de Threads junto al @: SOLO si el
+  // payload trae la cuenta de Threads (hoy ninguna fuente la expone).
+  const threadsHTML = (typeof P.threads === 'string' && P.threads.trim())
+    ? `<span class="hf-threads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="12" cy="12" r="3.4"/><path d="M12 2.8a9.2 9.2 0 1 0 9.2 9.2" stroke-linecap="round"/></svg>${esc(P.threads.trim().replace(/^@/, ''))}</span>` : '';
+  // (Tanda feed 5 · ítem 4) Anillo de historia del avatar: nace de las
+  // historias de LA SEMANA (opts.storyRing): 'live' = degradé (hay
+  // vivas o por salir), 'past' = gris (todas pasaron o ya se vieron en
+  // la sesión), '' = sin anillo. Con anillo, el avatar es botón y abre
+  // el visor de historias existente.
+  const ringCls = opts && opts.storyRing === 'past' ? ' story seen' : opts && opts.storyRing ? ' story' : '';
+  const avaInner = `<div class="hf-ava-in${ringCls}"><span class="hf-ava-letter">${letter}</span>${pic}</div>`;
+  const avaHTML = (opts && opts.storyRing)
+    ? `<button type="button" class="hf-ava-btn" data-hf-ava="1" aria-label="${en ? "See this week's stories" : 'Ver las historias de esta semana'}">${avaInner}</button>`
+    : avaInner;
   const hls = (Array.isArray(P.highlights) ? P.highlights : []).filter((h) => h && h.title);
   const hlHTML = hls.length ? `<div class="hf-hls">${hls.map((h) => `<div class="hf-hl"><div class="hf-hl-ring">${h.cover ? `<img src="${esc(h.cover)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="hf-hl-letter">${esc(String(h.title).charAt(0).toUpperCase())}</span>`}</div><div class="hf-hl-t">${esc(h.title)}</div></div>`).join('')}</div>` : '';
   return `<div class="hf-head">
-    ${user ? `<div class="hf-user">${esc(user)}</div>` : ''}
+    ${user ? `<div class="hf-user">${esc(user)}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
-      <div class="hf-ava"><div class="hf-ava-in${opts && opts.storyToday ? ' story' : ''}"><span class="hf-ava-letter">${letter}</span>${pic}</div>${noteHTML}</div>
+      <div class="hf-ava">${avaHTML}${noteHTML}</div>
       ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
     </div>
     ${name ? `<div class="hf-name">${esc(name)}</div>` : ''}
@@ -12659,16 +12694,10 @@ async function inicioView() {
   // la semana recién generada para su animación de entrada ÚNICA (la
   // composición de homeGridCompose no se toca; esto solo anota tiles).
   try { hfFallMark(tiles); } catch (e) {}
-  // (Frente 3b) Historia de HOY: alguna pieza story programada o ya
-  // publicada con fecha de hoy, de los posteos que esta vista ya cargó
-  // (/api/posts). Con eso la home decide el aro de la foto de perfil.
-  const todayYmdH = schedTodayYmd(tz);
-  const homeStoryToday = allPosts.some(p => {
-    if (!p || String(p.media_type || '') !== 'story') return false;
-    if (p.status !== 'scheduled' && p.status !== 'published') return false;
-    const dt = pcParseDate(p.status === 'published' ? (p.published_at || p.scheduled_at) : p.scheduled_at);
-    return !!dt && schedDayKeyOf(dt, tz) === todayYmdH;
-  });
+  // (Tanda feed 5 · ítem 4) El anillo del avatar nace de las historias
+  // de LA SEMANA (hfStoriesOfWeek, abajo): degradé si hay alguna viva
+  // o por salir; gris si todas ya pasaron o si el dueño ya las vio en
+  // esta sesión. Sin historias en la semana, no hay anillo.
   // Cofre con las tarjetas completas (el detalle EXISTENTE: día/hora,
   // caption, Aceptar/Editar/Frenar) — la ampliación de la home mueve la
   // tarjeta acá, igual que Semana (patrón #scfVault).
@@ -12710,9 +12739,18 @@ async function inicioView() {
   const kitHTML = prof && prof.source === 'kit'
     ? `<div class="hf-kitnote">🌱 <span><b>Así va a nacer tu perfil</b> — es la propuesta de Posty desde tu negocio y tu rubro. Cuando salga tu primera semana, esta misma pantalla pasa a ser tu Instagram de verdad.</span></div>`
     : '';
+  let storiesSeen = false;
+  try { storiesSeen = sessionStorage.getItem('posty_hf_stories_seen') === '1'; } catch (e) {}
+  const storyRing = !weekStories.length ? '' : (storiesSeen || weekStories.every((s) => s.past)) ? 'past' : 'live';
+  // (Tanda feed 5 · ítem 8) Tira de Panel profesional (el cromo de IG
+  // para cuentas de negocio): lleva al Análisis. SIN número de alcance:
+  // no existe fuente de alcance de cuenta en el producto — jamás se
+  // inventa una métrica para llenar la tira.
+  const prodashHTML = `<a class="hf-prodash" href="#/app/analisis"><span class="hf-prodash-t">📊 ${enHome ? 'Professional dashboard' : 'Panel profesional'}</span><span class="hf-prodash-s">${enHome ? 'See how your account is doing' : 'Mirá cómo viene tu cuenta'}</span><span class="hf-prodash-go" aria-hidden="true">›</span></a>`;
   return `<div id="inicioView" class="hf-wrap">
   ${igLine}
-  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyToday: homeStoryToday })}
+  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing })}
+  ${prodashHTML}
   ${storiesHTML}
   ${kitHTML}
   ${whyHTML}
@@ -12880,6 +12918,7 @@ function hfOpenActionsSheet(tile) {
     <button type="button" class="pcsheet-opt" data-hf-act="hold">⏸ ${en ? 'Stop' : 'Frenar'}<small>${en ? 'Back to draft — it will not go out' : 'Vuelve a borrador — no va a salir'}</small></button>
     <button type="button" class="pcsheet-opt" data-hf-act="resched">🗓️ ${en ? 'Reschedule' : 'Reprogramar'}<small>${en ? 'Pick a new day and time' : 'Elegí un día y una hora nuevos'}</small></button>
     <button type="button" class="pcsheet-opt" data-hf-act="move">🔀 ${en ? 'Move' : 'Mover'}<small>${en ? 'Swap days with another upcoming post' : 'Intercambiá el día con otro posteo que viene'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hf-act="${tile.dataset.pinned === '1' ? 'unpin' : 'pin'}">📌 ${tile.dataset.pinned === '1' ? (en ? 'Unpin from your profile' : 'Desfijar de tu perfil') : (en ? 'Pin to your profile' : 'Fijar en tu perfil')}<small>${en ? 'Pinned posts show first in your grid' : 'Los fijados se ven primeros en tu grilla'}</small></button>
     <div class="hf-resched" hidden>
       <input type="datetime-local" class="pcsheet-select hf-resched-inp" value="${esc(isoToLocalInput(tile.dataset.schedAt || ''))}" aria-label="${en ? 'New day and time' : 'Nuevo día y hora'}">
       <button type="button" class="pcsheet-opt" data-hf-act="resched-save" style="margin-top:8px">✓ ${en ? 'Save new time' : 'Guardar nueva fecha'}</button>
@@ -12909,6 +12948,7 @@ function hfActionsAct(act, id, tile, bd) {
     return;
   }
   if (act === 'move') { pcCloseSheet(); hfMoveStart(tile); return; }
+  if (act === 'pin' || act === 'unpin') { hfPinToggle(act === 'pin', id); return; }
   if (act === 'resched') {
     const box = bd.querySelector('.hf-resched');
     if (box) { box.hidden = false; const inp = box.querySelector('.hf-resched-inp'); if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) {} } }
@@ -12978,6 +13018,27 @@ async function hfReschedule(id, tile, bd) {
   }
   pcCloseSheet();
   toast('🗓️ ' + (hfIsEn() ? 'Rescheduled — ' : 'Reprogramado — ') + hfChipText(iso));
+  try { render(); } catch (e) {}
+}
+// (Tanda feed 5 · ítem 3) Fijar/desfijar desde la hoja de acciones: el
+// servidor manda (tope 3, como IG); la grilla re-renderiza con los
+// fijados primero (homeGridCompose).
+async function hfPinToggle(pin, id) {
+  const en = hfIsEn();
+  try {
+    await api.patch('/api/posts/' + encodeURIComponent(id), { action: pin ? 'pin' : 'unpin' });
+  } catch (e) {
+    pcCloseSheet();
+    const raw = String((e && e.message) || '');
+    if (/pin_limit/.test(raw) || /3 posteos fijados/.test(raw)) {
+      toast('📌 ' + (en ? 'You already have 3 pinned posts — unpin one first' : 'Ya tenés 3 posteos fijados — desfijá uno primero'));
+      return;
+    }
+    toast((en ? 'Could not update the pin: ' : 'No se pudo actualizar el fijado: ') + raw);
+    return;
+  }
+  pcCloseSheet();
+  toast(pin ? (en ? '📌 Pinned to your profile' : '📌 Fijado en tu perfil') : (en ? '📌 Unpinned' : '📌 Desfijado'));
   try { render(); } catch (e) {}
 }
 /* ===== (Tanda 4 del feed) VISOR DE HISTORIAS + MOVER =====
@@ -13064,6 +13125,10 @@ function hfStoryShow(i) {
 }
 function hfStoryOpen(i) {
   if (!HOME_STORIES.length) return;
+  // (Tanda feed 5 · ítem 4) Abrir el visor marca las historias como
+  // vistas en la sesión: el anillo del avatar pasa a gris.
+  try { sessionStorage.setItem('posty_hf_stories_seen', '1'); } catch (e) {}
+  try { const ain = document.querySelector('#inicioView .hf-ava-in.story'); if (ain) ain.classList.add('seen'); } catch (e) {}
   hfStoryClose();
   const en = hfIsEn();
   const ov = document.createElement('div');
@@ -13222,6 +13287,10 @@ function bindInicio() {
   // (Tanda 4) Bandeja de historias: tocar un círculo abre el visor 9:16.
   $$('#inicioView .hf-story').forEach((el) => {
     el.onclick = () => hfStoryOpen(Number(el.dataset.sidx) || 0);
+  });
+  // (Tanda feed 5 · ítem 4) El avatar con anillo abre el mismo visor.
+  $$('#inicioView [data-hf-ava]').forEach((el) => {
+    el.onclick = () => hfStoryOpen(0);
   });
   // Franja de revisión: "Aceptar todo" — el handler de siempre
   // (doAcceptAll completa los ítems desde REVIEW_DRAFTS, que

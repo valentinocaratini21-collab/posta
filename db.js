@@ -123,6 +123,14 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN product_ref TEXT DEFAULT ''`); } cat
 try { db.exec(`ALTER TABLE posts ADD COLUMN hook_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Learning loop (learning.js): 1 = métricas ya ingeridas.
 try { db.exec(`ALTER TABLE posts ADD COLUMN learning_ingested INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// (Tanda feed 5) Fijados del dueño (📌, tope 3 por cuenta, como IG) y
+// señales del detalle IG de la home: ♡ gusto y 🔖 guardado del dueño.
+// Son datos reales de la cuenta, cargados por el propio dueño desde el
+// detalle; el aprendizaje los lee desde posts (SELECT p.* los expone).
+try { db.exec(`ALTER TABLE posts ADD COLUMN pinned INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN pinned_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN owner_liked INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN owner_saved INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Costos IA (costs.js, 2026-10-02): tokens cacheados por prompt caching.
 try { db.exec(`ALTER TABLE api_costs ADD COLUMN cached_tokens INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Abrir y listo (2026-10-03): 1 = Posty arma y programa la semana solo.
