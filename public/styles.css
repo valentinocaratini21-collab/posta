@@ -3300,3 +3300,49 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-cms{display:flex;flex-direction:column;gap:7px;padding-top:6px}
 .hf-cm{font-size:14px;line-height:1.45;color:var(--txt);overflow-wrap:anywhere}
 .hf-cm-at{color:#8e8e8e;font-size:12.5px;white-space:nowrap}
+
+/* ===== (Tanda feed 6D · ítems 11–14) PERFIL: COMPARTIR · CUBIERTAS · EDITAR · ARCHIVO =====
+   Láminas del perfil sobre el patrón hf-cover (overlay + tarjeta
+   min(94vw,…)): a 360px la tarjeta mide 338px y a 390px, 366px — sin
+   overflow horizontal; las filas internas envuelven. */
+.hf-pacts{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 2px;scrollbar-width:none}
+.hf-pacts::-webkit-scrollbar{display:none}
+.hf-pact{flex:none;border:1.5px solid var(--line);background:#fff;color:var(--txt);border-radius:999px;padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+.hf-ps-back{position:fixed;inset:0;z-index:1500;background:rgba(10,30,51,.55);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:18px 12px}
+.hf-ps-card{background:#fff;border-radius:18px;width:min(94vw,430px);box-shadow:0 22px 60px rgba(10,30,51,.4);padding:18px 16px 14px}
+.hf-ps-title{font-weight:800;font-size:17px;color:var(--txt);margin-bottom:10px}
+.hf-ps-note{font-size:13px;color:#666;line-height:1.55;margin:0 0 10px}
+.hf-ps-qr{display:flex;justify-content:center;padding:8px 0 2px}
+.hf-ps-qr svg{width:min(232px,72vw);height:auto}
+.hf-ps-user{text-align:center;font-weight:800;font-size:15px;color:var(--txt);margin-top:6px}
+.hf-ps-link{text-align:center;font-size:12.5px;color:#8e8e8e;overflow-wrap:anywhere;margin-top:2px}
+.hf-ps-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;justify-content:center}
+.hf-ps-btn{background:#2793C8;color:#fff;border:0;border-radius:999px;padding:11px 16px;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit}
+.hf-ps-wa{background:#25D366;color:#fff;border:0;border-radius:999px;padding:11px 16px;font-weight:800;font-size:14px;text-decoration:none;font-family:inherit}
+.hf-ps-alt{background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;color:var(--txt);font-family:inherit}
+.hf-ps-msg{font-size:13px;color:var(--txt);margin-top:8px;min-height:0;text-align:center}
+.hf-cov-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+.hf-cov-item{margin:0;text-align:center;min-width:0}
+.hf-cov-art{border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.hf-cov-art svg{width:100%;height:auto;display:block}
+.hf-cov-item figcaption{font-size:13px;font-weight:700;color:var(--txt);margin:6px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hf-cov-dl{background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:7px 12px;font-weight:700;font-size:12.5px;cursor:pointer;color:var(--txt);font-family:inherit}
+.hf-ed-preview{border:1px solid var(--line);border-radius:14px;padding:4px 0 12px;margin-bottom:14px;overflow:hidden}
+.hf-ed-field{margin-bottom:12px}
+.hf-ed-field label{display:block;font-size:13px;font-weight:700;color:var(--txt);margin-bottom:6px}
+.hf-ed-row{display:flex;gap:8px}
+.hf-ed-row input{flex:1;min-width:0}
+.hf-ed-field input[type="text"],.hf-ed-field textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;font-size:14px;color:var(--txt);background:#fff}
+.hf-ed-row input[type="text"]{width:auto}
+.hf-ed-copy{flex:none;background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:0 12px;font-weight:700;font-size:13px;cursor:pointer;color:var(--txt);font-family:inherit}
+.hf-ed-count{font-size:12px;color:#8e8e8e;text-align:right;margin-top:4px}
+.hf-ar-sec{margin-top:16px}
+.hf-ar-sec h3{font-size:14.5px;font-weight:800;color:var(--txt);margin:0 0 4px}
+.hf-ar-empty{font-size:13px;color:#8e8e8e;line-height:1.5;margin:4px 0 0}
+.hf-ar-item{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.hf-ar-item img,.hf-ar-noimg{width:54px;height:54px;border-radius:9px;object-fit:cover;flex:none;background:#f4f4f4}
+.hf-ar-tx{flex:1;min-width:0}
+.hf-ar-cap{font-size:13.5px;color:var(--txt);line-height:1.4;overflow-wrap:anywhere}
+.hf-ar-meta{font-size:12px;color:#8e8e8e;margin-top:3px;line-height:1.45}
+.hf-ar-btn{margin-top:6px;background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:6px 12px;font-weight:700;font-size:12.5px;cursor:pointer;color:var(--txt);font-family:inherit}
+.hf-ar-link{font-size:12.5px;font-weight:700;color:#2793C8}

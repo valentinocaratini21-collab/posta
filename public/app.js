@@ -13464,6 +13464,256 @@ function hfDetailHTML(p, opts) {
     ${accept}
   </div>`;
 }
+/* ===== (Tanda feed 6D · ítems 11–14) COMPARTIR · CUBIERTAS · EDITAR · ARCHIVO =====
+   Piezas puras del bloque: solo usan esc/mv y homeHeadHTML (del mismo
+   bloque). Regla de verdad de la tanda: sin handle no hay QR ni links;
+   las cubiertas nacen de la paleta REAL de la cuenta con el nombre
+   FUERA de la imagen (rótulo en la lista, nunca texto en el medio);
+   el Archivo pinta solo lo que /api/archive trae de sus fuentes. */
+function hfIgUrl(prof) {
+  const user = String((prof && prof.username) || '').replace(/^@+/, '').trim();
+  return user ? 'https://www.instagram.com/' + user + '/' : '';
+}
+function hfShareText(prof, en) {
+  const name = String((prof && (prof.name || prof.username)) || '').trim();
+  if (en) return 'Check out ' + (name ? name + ' ' : '') + 'on Instagram';
+  return 'Mirá ' + (name ? name + ' ' : '') + 'en Instagram';
+}
+function hfWaUrl(prof, en) {
+  const url = hfIgUrl(prof);
+  return url ? 'https://wa.me/?text=' + encodeURIComponent(hfShareText(prof, en) + ': ' + url) : '';
+}
+function hfQrMatrix(text) {
+  // Matriz del QR con el generador vendoreado (public/qr-vendor.js,
+  // qrcode-generator MIT, cargado a demanda). Sin librería o sin texto:
+  // null — la lámina lo muestra honesto, jamás un QR falso.
+  try {
+    if (typeof qrcode !== 'function' || !text) return null;
+    const qr = qrcode(0, 'M');
+    qr.addData(String(text));
+    qr.make();
+    const n = qr.getModuleCount();
+    const rows = [];
+    for (let r = 0; r < n; r++) { const row = []; for (let c = 0; c < n; c++) row.push(!!qr.isDark(r, c)); rows.push(row); }
+    return rows;
+  } catch (e) { return null; }
+}
+function hfQrSVG(text, size) {
+  const m = hfQrMatrix(text);
+  if (!m) return '';
+  const n = m.length, q = 4, tot = n + q * 2;
+  let d = '';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (m[r][c]) d += 'M' + (c + q) + ' ' + (r + q) + 'h1v1h-1z';
+  const px = size || 232;
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + tot + ' ' + tot + '" width="' + px + '" height="' + px + '" role="img" aria-label="QR"><rect width="' + tot + '" height="' + tot + '" fill="#fff"/><path d="' + d + '" fill="#0A1E33"/></svg>';
+}
+function hfShareSheetHTML(prof, en) {
+  const url = hfIgUrl(prof);
+  const user = String((prof && prof.username) || '').replace(/^@+/, '');
+  const close = '<button type="button" class="hf-ps-alt" data-hf-ps-close>' + (en ? 'Close' : 'Cerrar') + '</button>';
+  if (!url) {
+    return '<div class="hf-ps-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</div>'
+      + '<p class="hf-ps-note">' + (en ? 'We do not have your Instagram handle yet, so there is nothing to share. Add it in Settings and this sheet will show your QR and your link.' : 'Todavía no tenemos tu usuario de Instagram, así que no hay nada para compartir. Cargalo en Ajustes y esta lámina va a mostrar tu QR y tu link.') + '</p>'
+      + '<div class="hf-ps-acts">' + close + '</div></div>';
+  }
+  return '<div class="hf-ps-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</div>'
+    + '<div class="hf-ps-qr" data-hf-qr>' + hfQrSVG(url) + '</div>'
+    + '<div class="hf-ps-user">@' + esc(user) + '</div>'
+    + '<div class="hf-ps-link">' + esc(url) + '</div>'
+    + '<div class="hf-ps-acts">'
+    + '<a class="hf-ps-wa" href="' + esc(hfWaUrl(prof, en)) + '" target="_blank" rel="noopener">' + (en ? 'Send by WhatsApp' : 'Enviar por WhatsApp') + '</a>'
+    + '<button type="button" class="hf-ps-btn" data-hf-ps-act="copy">' + (en ? 'Copy link' : 'Copiar link') + '</button>'
+    + '<button type="button" class="hf-ps-btn" data-hf-ps-act="native">' + (en ? 'Share…' : 'Compartir…') + '</button>'
+    + close
+    + '</div><div class="hf-ps-msg" data-hf-ps-msg></div></div>';
+}
+function hfProfileActionsHTML(en) {
+  const b = (act, ic, es, enT) => '<button type="button" class="hf-pact" data-hf-pact="' + act + '">' + ic + ' ' + (en ? enT : es) + '</button>';
+  return '<div class="hf-pacts">'
+    + b('share', '📤', 'Compartir mi perfil', 'Share my profile')
+    + b('edit', '✏️', 'Editar perfil', 'Edit profile')
+    + b('covers', '🎨', 'Crear mis cubiertas', 'Create my highlight covers')
+    + b('archive', '🗂️', 'Tu archivo', 'Archive')
+    + '</div>';
+}
+/* — Ítem 12: cubiertas de destacadas (render determinístico, $0 de IA) — */
+const HF_COVER_ICONS = {
+  star: '<path d="M24 7l4.9 10.9 11.9 1.3-8.8 8 2.4 11.7L24 33l-10.4 5.9 2.4-11.7-8.8-8 11.9-1.3z"/>',
+  percent: '<circle cx="15" cy="15" r="4.6"/><circle cx="33" cy="33" r="4.6"/><path d="M35 13L13 35"/>',
+  chat: '<rect x="7" y="9" width="34" height="24" rx="6"/><path d="M16 33l-2.2 8.5L24 33"/>',
+  bag: '<path d="M13 17h22l-1.7 22.2a3 3 0 0 1-3 2.8H17.7a3 3 0 0 1-3-2.8z"/><path d="M18 17v-2.5a6 6 0 0 1 12 0V17"/>',
+  cart: '<circle cx="17.5" cy="41.5" r="3"/><circle cx="35" cy="41.5" r="3"/><path d="M5 7h6l3.4 23.4a3 3 0 0 0 3 2.6h16.8a3 3 0 0 0 3-2.6L40 14H13"/>',
+  users: '<circle cx="17" cy="16.5" r="6"/><path d="M5.5 41c1.2-6.2 5.6-9.5 11.5-9.5s10.3 3.3 11.5 9.5"/><circle cx="33.5" cy="18.5" r="4.6"/><path d="M31.5 31.9c5.2.4 9 3.4 10 9.1"/>',
+  clock: '<circle cx="24" cy="24" r="16.5"/><path d="M24 14.5V24l6.8 4"/>',
+  spark: '<path d="M24 5v11M24 32v11M5 24h11M32 24h11M10.5 10.5l7.5 7.5M30 30l7.5 7.5M37.5 10.5L30 18M18 30l-7.5 7.5"/>',
+  gift: '<rect x="8.5" y="18.5" width="31" height="9"/><path d="M12.5 27.5h23V42h-23z"/><path d="M24 18.5V42"/><path d="M24 18.5c-4.8 0-7.5-2-7.5-4.7 0-2.4 2-4 4.3-3.6 2.7.5 3.2 4 3.2 8.3zM24 18.5c4.8 0 7.5-2 7.5-4.7 0-2.4-2-4-4.3-3.6-2.7.5-3.2 4-3.2 8.3z"/>',
+  camera: '<rect x="6.5" y="14.5" width="35" height="25" rx="4"/><circle cx="24" cy="27" r="6.6"/><path d="M16.5 14.5L19 9h10l2.5 5.5"/>',
+  pin: '<path d="M24 42.5S11 30.9 11 20.8a13 13 0 0 1 26 0c0 10.1-13 21.7-13 21.7z"/><circle cx="24" cy="20.5" r="4.6"/>',
+  heart: '<path d="M24 40.5S8 29.8 8 18.2C8 12.7 12 9 16.7 9c3 0 5.8 1.6 7.3 4.1C25.5 10.6 28.3 9 31.3 9 36 9 40 12.7 40 18.2c0 11.6-16 22.3-16 22.3z"/>',
+};
+function hfCoverIconFor(title) {
+  const t = String(title || '').toLowerCase();
+  if (/estrella|star|destacad/.test(t)) return 'star';
+  if (/promo|oferta|descuento|deal|offer|sale/.test(t)) return 'percent';
+  if (/opinion|reseña|resena|review|testimonio/.test(t)) return 'chat';
+  if (/cat[aá]logo|catalog|producto|product|menu|menú|carta/.test(t)) return 'bag';
+  if (/comprar|compra|buy|shop|pedido|order/.test(t)) return 'cart';
+  if (/nosotros|about|equipo|team|historia(?!s)|story of/.test(t)) return 'users';
+  if (/horario|hora|hours|turno|cita|booking|reserva/.test(t)) return 'clock';
+  if (/regalo|gift|premio/.test(t)) return 'gift';
+  if (/foto|photo|galer/.test(t)) return 'camera';
+  if (/ubicaci|d[oó]nde|location|mapa|local/.test(t)) return 'pin';
+  if (/comunidad|community|club|amor|love/.test(t)) return 'heart';
+  return 'spark';
+}
+function hfCoverPlan(prof, en) {
+  const hls = (prof && Array.isArray(prof.highlights) ? prof.highlights : []).filter((h) => h && h.title);
+  if (hls.length) return hls.map((h) => ({ title: String(h.title), icon: hfCoverIconFor(h.title) }));
+  const gen = en
+    ? ['The star', 'Catalog', 'Deals', 'Reviews', 'How to buy', 'About us']
+    : ['Lo estrella', 'Catálogo', 'Promos', 'Opiniones', 'Cómo comprar', 'Nosotros'];
+  return gen.map((t) => ({ title: t, icon: hfCoverIconFor(t) }));
+}
+function hfCoverPalette(prof) {
+  const raw = (prof && Array.isArray(prof.palette) ? prof.palette : [])
+    .map((h) => String(h || '').trim()).filter((h) => /^#[0-9a-fA-F]{6}$/.test(h));
+  // Sin paleta leída en ninguna fuente: neutros (nunca la marca de otro).
+  return raw.length ? raw : ['#262626', '#595959', '#8E8E8E', '#404040'];
+}
+function hfCoverInk(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || ''));
+  if (!m) return '#FFFFFF';
+  const v = parseInt(m[1], 16);
+  const lum = (0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255)) / 255;
+  return lum > 0.62 ? '#0A1E33' : '#FFFFFF';
+}
+function hfCoverSVG(cover, palette, idx) {
+  const pal = (Array.isArray(palette) && palette.length) ? palette : hfCoverPalette(null);
+  const bg = pal[Math.abs(idx || 0) % pal.length];
+  const accent = pal[(Math.abs(idx || 0) + 1) % pal.length];
+  const ink = hfCoverInk(bg);
+  const icon = HF_COVER_ICONS[(cover && cover.icon) || 'spark'] || HF_COVER_ICONS.spark;
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080" role="img">'
+    + '<rect width="1080" height="1080" fill="' + esc(bg) + '"/>'
+    + '<circle cx="892" cy="168" r="330" fill="' + esc(accent) + '" opacity="0.16"/>'
+    + '<circle cx="128" cy="928" r="262" fill="' + esc(accent) + '" opacity="0.12"/>'
+    + '<g transform="translate(300 300) scale(10)" fill="none" stroke="' + esc(ink) + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + icon + '</g>'
+    + '</svg>';
+}
+function hfCoversSheetHTML(prof, en) {
+  const plan = hfCoverPlan(prof, en);
+  const pal = hfCoverPalette(prof);
+  const items = plan.map((c, i) => '<figure class="hf-cov-item"><div class="hf-cov-art">' + hfCoverSVG(c, pal, i) + '</div>'
+    + '<figcaption>' + esc(c.title) + '</figcaption>'
+    + '<button type="button" class="hf-cov-dl" data-hf-cov-dl="' + i + '">' + (en ? 'Download PNG' : 'Descargar PNG') + '</button></figure>').join('');
+  return '<div class="hf-ps-card hf-cov-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Your highlight covers' : 'Tus cubiertas de destacadas') + '</div>'
+    + '<p class="hf-ps-note">' + (en ? 'Made with your feed palette. Instagram does not let Posty apply them for you: download each cover and set it in Instagram — edit the highlight, edit cover, and pick the image. It takes seconds.' : 'Hechas con la paleta de tu feed. Instagram no deja que Posty las aplique por vos: descargá cada cubierta y ponela en Instagram — editá la destacada, tocá Editar portada y elegí la imagen. Son segundos.') + '</p>'
+    + '<div class="hf-cov-grid">' + items + '</div>'
+    + '<div class="hf-ps-acts"><button type="button" class="hf-ps-btn" data-hf-cov-all>' + (en ? 'Download all' : 'Descargar todas') + '</button>'
+    + '<button type="button" class="hf-ps-alt" data-hf-ps-close>' + (en ? 'Close' : 'Cerrar') + '</button></div>'
+    + '<div class="hf-ps-msg" data-hf-cov-msg></div></div>';
+}
+/* — Ítem 13: editar perfil (preview = el mismo homeHeadHTML) — */
+function hfEditPreviewProf(prof, vals) {
+  const v = vals || {};
+  const out = Object.assign({}, prof || {});
+  if (v.name !== undefined) out.name = v.name;
+  if (v.bio !== undefined) { out.bio = v.bio; out.bio_unread = false; }
+  if (v.link !== undefined) out.link = v.link;
+  return out;
+}
+function hfEditProfileHTML(prof, disp, en) {
+  const d = disp || {};
+  const f = (key, label, inner) => '<div class="hf-ed-field"><label>' + label + '</label><div class="hf-ed-row">' + inner
+    + '<button type="button" class="hf-ed-copy" data-hf-ed-copy="' + key + '">' + (en ? 'Copy' : 'Copiar') + '</button></div></div>';
+  return '<div class="hf-ps-card hf-ed-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Edit profile' : 'Editar perfil') + '</div>'
+    + '<div class="hf-ed-preview" data-hf-ed-preview></div>'
+    + f('name', en ? 'Name' : 'Nombre', '<input type="text" data-hf-ed="name" maxlength="30" value="' + esc(d.name || '') + '" autocomplete="off">')
+    + '<div class="hf-ed-field"><label>' + (en ? 'Bio' : 'Bio') + '</label><textarea data-hf-ed="bio" maxlength="150" rows="3">' + esc(d.bio || '') + '</textarea>'
+    + '<div class="hf-ed-count"><span data-hf-ed-count>' + String(d.bio || '').length + '</span>/150</div>'
+    + '<div class="hf-ed-row" style="margin-top:6px;justify-content:flex-end"><button type="button" class="hf-ed-copy" data-hf-ed-copy="bio">' + (en ? 'Copy' : 'Copiar') + '</button></div></div>'
+    + f('link', en ? 'Link' : 'Link', '<input type="text" data-hf-ed="link" value="' + esc(d.link || '') + '" placeholder="tunegocio.com" autocomplete="off" autocapitalize="off">')
+    + '<p class="hf-ps-note">' + (en ? 'This is saved in Posty. Instagram does not let anyone change your profile from outside: copy each field and paste it in Instagram, in Edit profile.' : 'Esto queda guardado en Posty. Instagram no deja cambiar tu perfil desde afuera: copiá cada campo y pegalo en Editar perfil de Instagram.') + '</p>'
+    + '<div class="hf-ps-acts"><button type="button" class="hf-ps-btn" data-hf-ed-save>' + (en ? 'Save in Posty' : 'Guardar en Posty') + '</button>'
+    + '<button type="button" class="hf-ps-alt" data-hf-ps-close>' + (en ? 'Close' : 'Cerrar') + '</button></div>'
+    + '<div class="hf-ps-msg" data-hf-ed-msg></div></div>';
+}
+/* — Ítem 14: tu archivo — */
+function hfArchDate(v, en) {
+  try {
+    let d = null;
+    if (typeof v === 'number' && v > 0) d = new Date(v);
+    else if (v) { const p = (typeof pcParseDate === 'function') ? pcParseDate(v) : null; d = p || new Date(String(v).replace(' ', 'T') + 'Z'); }
+    if (!d || isNaN(d)) return '';
+    return d.toLocaleDateString(en ? 'en-US' : 'es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch (e) { return ''; }
+}
+function hfArchStatusLabel(st, en) {
+  const m = en
+    ? { draft: 'Draft', scheduled: 'Scheduled', published: 'Published', cancelled: 'Discarded' }
+    : { draft: 'Borrador', scheduled: 'Programado', published: 'Publicado', cancelled: 'Descartado' };
+  return m[st] || String(st || '');
+}
+function hfArchThumb(src) {
+  return src ? '<img src="' + esc(mv(src, 240)) + '" alt="" loading="lazy" onerror="__imgFb(this)">' : '<span class="hf-ar-noimg"></span>';
+}
+function hfArchiveHTML(data, en) {
+  const D = data || {};
+  const vers = Array.isArray(D.versions) ? D.versions : [];
+  const recs = Array.isArray(D.recycled) ? D.recycled : [];
+  const canc = Array.isArray(D.cancelled) ? D.cancelled : [];
+  const arch = Array.isArray(D.archived) ? D.archived : [];
+  const cap = (s) => esc(String(s || '').trim().slice(0, 110)) || '<i>' + (en ? 'No caption' : 'Sin pie de foto') + '</i>';
+  const sec = (title, body) => '<div class="hf-ar-sec"><h3>' + title + '</h3>' + body + '</div>';
+  const empty = (t) => '<p class="hf-ar-empty">' + t + '</p>';
+  let vBody = '';
+  if (vers.length) {
+    vBody = vers.map((v) => {
+      const canSwap = v.post_status === 'draft' || v.post_status === 'scheduled';
+      const dt = hfArchDate(v.created_at, en);
+      return '<div class="hf-ar-item">' + hfArchThumb(v.image_path) + '<div class="hf-ar-tx"><div class="hf-ar-cap">' + cap(v.caption) + '</div>'
+        + '<div class="hf-ar-meta">' + (en ? 'Post ' : 'Posteo ') + '#' + esc(String(v.post_id)) + ' · ' + esc(hfArchStatusLabel(v.post_status, en)) + (dt ? ' · ' + esc(dt) : '') + '</div>'
+        + (canSwap
+          ? '<button type="button" class="hf-ar-btn" data-hf-ar-ver="' + esc(String(v.id)) + '">' + (en ? 'Back to this version' : 'Volver a esta versión') + '</button>'
+          : '<div class="hf-ar-meta">' + (en ? 'Already published: versions are restored before a post goes out.' : 'Ya publicado: las versiones se restauran antes de que el posteo salga.') + '</div>')
+        + '</div></div>';
+    }).join('');
+  } else vBody = empty(en ? 'No earlier versions yet: they appear when Posty remakes or edits a post.' : 'Todavía no hay versiones anteriores: aparecen cuando Posty rehace o edita un posteo.');
+  let rBody = '';
+  const rItems = [];
+  for (const r of recs) {
+    const dt = hfArchDate(r.created_at, en);
+    rItems.push('<div class="hf-ar-item">' + hfArchThumb(r.old_image) + '<div class="hf-ar-tx"><div class="hf-ar-cap">' + cap(r.old_caption) + '</div>'
+      + '<div class="hf-ar-meta">' + (en ? 'It flew and Posty republished it as draft ' : 'Voló y Posty lo republicó como el borrador ') + '#' + esc(String(r.new_post_id || '')) + (r.new_status ? ' · ' + esc(hfArchStatusLabel(r.new_status, en)) : '') + (dt ? ' · ' + esc(dt) : '') + '</div>'
+      + (r.new_status === 'draft' && r.new_post_id ? '<button type="button" class="hf-ar-btn" data-hf-ar-goto="' + esc(String(r.new_post_id)) + '">' + (en ? 'See the draft' : 'Ver el borrador') + '</button>' : '')
+      + '</div></div>');
+  }
+  for (const c of canc) {
+    const dt = hfArchDate(c.created_at, en);
+    rItems.push('<div class="hf-ar-item">' + hfArchThumb(c.image_path) + '<div class="hf-ar-tx"><div class="hf-ar-cap">' + cap(c.caption) + '</div>'
+      + '<div class="hf-ar-meta">' + (en ? 'Discarded draft' : 'Borrador descartado') + (dt ? ' · ' + esc(dt) : '') + '</div>'
+      + '<button type="button" class="hf-ar-btn" data-hf-ar-restore="' + esc(String(c.id)) + '">' + (en ? 'Restore as draft' : 'Restaurar como borrador') + '</button>'
+      + '</div></div>');
+  }
+  rBody = rItems.length ? rItems.join('') : empty(en ? 'Nothing discarded or republished yet. Discarded drafts are kept here.' : 'Todavía no hay descartados ni republicados. Los borradores descartados quedan guardados acá.');
+  let aBody = '';
+  if (arch.length) {
+    aBody = '<p class="hf-ps-note">' + (en ? 'You archived these in Instagram, so they left your grid there too. To bring one back, unarchive it in Instagram.' : 'Los archivaste en Instagram, por eso también salieron de tu grilla allá. Para que vuelva a tu perfil, desarchivarlo en Instagram.') + '</p>'
+      + arch.map((p) => '<div class="hf-ar-item">' + hfArchThumb(p.image_path) + '<div class="hf-ar-tx"><div class="hf-ar-cap">' + cap(p.caption) + '</div>'
+        + '<div class="hf-ar-meta">' + (en ? 'Archived in Instagram' : 'Archivado en Instagram') + (p.published_at ? ' · ' + esc(hfArchDate(p.published_at, en)) : '') + '</div>'
+        + (p.ig_permalink ? '<a class="hf-ar-link" href="' + esc(p.ig_permalink) + '" target="_blank" rel="noopener">' + (en ? 'See it in Instagram' : 'Verlo en Instagram') + '</a>' : '')
+        + '</div></div>').join('');
+  } else aBody = empty(en ? 'Nothing archived in Instagram: when you archive a post there, it shows up here.' : 'Nada archivado en Instagram: cuando archivás un posteo allá, aparece acá.');
+  const allEmpty = !vers.length && !recs.length && !canc.length && !arch.length;
+  return '<div class="hf-ps-card hf-ar-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Your archive' : 'Tu archivo') + '</div>'
+    + (allEmpty ? '<p class="hf-ps-note">' + (en ? 'Your archive is empty for now. Earlier versions, discarded drafts and posts archived in Instagram will live here.' : 'Tu archivo está vacío por ahora. Acá van a vivir las versiones anteriores, los borradores descartados y los posteos archivados en Instagram.') + '</p>' : '')
+    + sec(en ? 'Earlier versions' : 'Versiones anteriores', vBody)
+    + sec(en ? 'Discarded and republished' : 'Descartados y republicados', rBody)
+    + sec(en ? 'Archived in Instagram' : 'Archivados en Instagram', aBody)
+    + '<div class="hf-ps-acts"><button type="button" class="hf-ps-alt" data-hf-ps-close>' + (en ? 'Close' : 'Cerrar') + '</button></div>'
+    + '<div class="hf-ps-msg" data-hf-ar-msg></div></div>';
+}
+
 /* ===== /HOME_FEED ===== */
 
 let HOME_PROF = null; // v331: último payload de /api/home/profile (réplica del perfil)
@@ -13614,6 +13864,7 @@ async function inicioView() {
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${igLine}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB })}
+  ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
   ${prodashHTML}
   ${storiesHTML}
   ${kitHTML}
@@ -13963,6 +14214,235 @@ async function hfDragPerform(srcPost, dstPost) {
    con canvas DEL LADO DEL CLIENTE (cero servidor de video, cero IA) y
    lo sube crudo a POST /api/posts/:id/cover — el mismo almacenamiento
    de las fotos del cliente (MEDIA_DIR). */
+/* ===== (Tanda feed 6D · ítems 11–14) LÁMINAS DEL PERFIL =====
+   Cableado de las piezas puras de arriba: lámina genérica (el patrón
+   de hfCoverOpen: overlay en body + cerrar tocando fuera), QR con el
+   vendoreado cargado A DEMANDA, cubiertas como PNG por canvas y el
+   Archivo contra /api/archive. Todo vive en la home, junto al
+   encabezado (hfProfileActionsHTML / hfProfileBind). */
+function hfSheetShow(html) {
+  hfSheetClose();
+  const ov = document.createElement('div');
+  ov.className = 'hf-ps-back';
+  ov.innerHTML = html;
+  document.body.appendChild(ov);
+  ov.addEventListener('click', (e) => { if (e.target === ov) hfSheetClose(); });
+  ov.querySelectorAll('[data-hf-ps-close]').forEach((b) => b.addEventListener('click', () => hfSheetClose()));
+  return ov;
+}
+function hfSheetClose() {
+  document.querySelectorAll('.hf-ps-back').forEach((el) => { try { el.remove(); } catch (e) {} });
+}
+async function hfClipboard(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(String(text || '')); return true; }
+  } catch (e) {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = String(text || '');
+    ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    const okCopy = document.execCommand('copy');
+    ta.remove();
+    return !!okCopy;
+  } catch (e) { return false; }
+}
+let HF_QR_LOADING = null;
+function hfLoadQrVendor() {
+  if (typeof qrcode === 'function') return Promise.resolve(true);
+  if (HF_QR_LOADING) return HF_QR_LOADING;
+  HF_QR_LOADING = new Promise((resolve) => {
+    try {
+      const sc = document.createElement('script');
+      sc.src = '/qr-vendor.js';
+      sc.onload = () => resolve(typeof qrcode === 'function');
+      sc.onerror = () => resolve(false);
+      document.head.appendChild(sc);
+    } catch (e) { resolve(false); }
+  });
+  return HF_QR_LOADING;
+}
+function hfShareOpen() {
+  const en = hfIsEn();
+  const prof = (typeof HF_CUR_PROF !== 'undefined' && HF_CUR_PROF) || (typeof HOME_PROF !== 'undefined' && HOME_PROF) || {};
+  const url = hfIgUrl(prof);
+  const ov = hfSheetShow(hfShareSheetHTML(prof, en));
+  const msg = ov.querySelector('[data-hf-ps-msg]');
+  const say = (t) => { if (msg) msg.textContent = t; };
+  if (url && !hfQrSVG(url)) {
+    // La librería llega a demanda: mientras tanto, la lámina ya sirve
+    // (link y acciones); el QR se pinta apenas carga.
+    const box = ov.querySelector('[data-hf-qr]');
+    if (box) box.innerHTML = '<span class="hf-ps-note">' + (en ? 'Loading your QR…' : 'Cargando tu QR…') + '</span>';
+    hfLoadQrVendor().then((okLoad) => {
+      const b2 = ov.querySelector('[data-hf-qr]');
+      if (!b2) return;
+      const svg = okLoad ? hfQrSVG(url) : '';
+      b2.innerHTML = svg || '<span class="hf-ps-note">' + (en ? 'The QR could not be drawn here — the link below works the same.' : 'El QR no se pudo dibujar acá — el link de abajo funciona igual.') + '</span>';
+    });
+  }
+  ov.querySelectorAll('[data-hf-ps-act]').forEach((b) => b.addEventListener('click', async () => {
+    if (b.dataset.hfPsAct === 'copy') {
+      const okCopy = await hfClipboard(url);
+      say(okCopy ? '✅ ' + (en ? 'Copied' : 'Copiado') : (en ? 'Could not copy — long-press the link' : 'No se pudo copiar — mantené apretado el link'));
+      return;
+    }
+    if (b.dataset.hfPsAct === 'native') {
+      let shared = false;
+      try {
+        if (navigator.share) { await navigator.share({ title: document.title, text: hfShareText(prof, en), url }); shared = true; }
+      } catch (e) { shared = false; }
+      if (!shared) {
+        const okCopy = await hfClipboard(url);
+        say(okCopy ? '✅ ' + (en ? 'Copied' : 'Copiado') : (en ? 'Sharing is not available here' : 'Compartir no está disponible acá'));
+      }
+    }
+  }));
+}
+function hfCoverDownloadAt(prof, idx, msgEl, en) {
+  try {
+    const plan = hfCoverPlan(prof, en);
+    const pal = hfCoverPalette(prof);
+    const c = plan[idx];
+    if (!c) return;
+    const svg = hfCoverSVG(c, pal, idx);
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const cv = document.createElement('canvas');
+        cv.width = 1080; cv.height = 1080;
+        cv.getContext('2d').drawImage(img, 0, 0, 1080, 1080);
+        URL.revokeObjectURL(url);
+        cv.toBlob((blob) => {
+          if (!blob) { if (msgEl) msgEl.textContent = en ? 'Could not create that PNG' : 'No se pudo crear ese PNG'; return; }
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'destacada-' + String(c.title || 'cover').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-') + '.png';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        }, 'image/png');
+      } catch (e) { if (msgEl) msgEl.textContent = en ? 'Could not create that PNG' : 'No se pudo crear ese PNG'; }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); if (msgEl) msgEl.textContent = en ? 'Could not create that PNG' : 'No se pudo crear ese PNG'; };
+    img.src = url;
+  } catch (e) { if (msgEl) msgEl.textContent = en ? 'Could not create that PNG' : 'No se pudo crear ese PNG'; }
+}
+function hfCoversOpen() {
+  const en = hfIsEn();
+  const prof = (typeof HF_CUR_PROF !== 'undefined' && HF_CUR_PROF) || (typeof HOME_PROF !== 'undefined' && HOME_PROF) || {};
+  const ov = hfSheetShow(hfCoversSheetHTML(prof, en));
+  const msg = ov.querySelector('[data-hf-cov-msg]');
+  ov.querySelectorAll('[data-hf-cov-dl]').forEach((b) => b.addEventListener('click', () => hfCoverDownloadAt(prof, Number(b.dataset.hfCovDl) || 0, msg, en)));
+  const all = ov.querySelector('[data-hf-cov-all]');
+  if (all) all.addEventListener('click', () => {
+    const n = hfCoverPlan(prof, en).length;
+    for (let i = 0; i < n; i++) setTimeout(() => hfCoverDownloadAt(prof, i, msg, en), i * 450);
+  });
+}
+function hfEditOpen() {
+  const en = hfIsEn();
+  const prof = (typeof HF_CUR_PROF !== 'undefined' && HF_CUR_PROF) || (typeof HOME_PROF !== 'undefined' && HOME_PROF) || {};
+  const disp = (prof && prof.profile_display) || {};
+  const vals = {
+    name: disp.name || String((prof && prof.name) || ''),
+    bio: disp.bio || ((prof && !prof.bio_unread) ? String(prof.bio || '') : ''),
+    link: disp.link || String((prof && prof.link) || ''),
+  };
+  const ov = hfSheetShow(hfEditProfileHTML(prof, vals, en));
+  const prev = ov.querySelector('[data-hf-ed-preview]');
+  const msg = ov.querySelector('[data-hf-ed-msg]');
+  const inp = (k) => ov.querySelector('[data-hf-ed="' + k + '"]');
+  const read = () => ({ name: inp('name') ? inp('name').value : '', bio: inp('bio') ? inp('bio').value : '', link: inp('link') ? inp('link').value : '' });
+  const paint = () => {
+    const v = read();
+    const cnt = ov.querySelector('[data-hf-ed-count]');
+    if (cnt) cnt.textContent = String(v.bio.length);
+    if (prev) {
+      const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name) || '';
+      try { prev.innerHTML = homeHeadHTML(hfEditPreviewProf(prof, v), bizName, { en, tab: 'posts' }); } catch (e) {}
+    }
+  };
+  ['name', 'bio', 'link'].forEach((k) => { const el = inp(k); if (el) el.addEventListener('input', paint); });
+  paint();
+  ov.querySelectorAll('[data-hf-ed-copy]').forEach((b) => b.addEventListener('click', async () => {
+    const v = read();
+    const okCopy = await hfClipboard(v[b.dataset.hfEdCopy] || '');
+    if (msg) msg.textContent = okCopy ? '✅ ' + (en ? 'Copied' : 'Copiado') : (en ? 'Could not copy' : 'No se pudo copiar');
+  }));
+  const save = ov.querySelector('[data-hf-ed-save]');
+  if (save) save.addEventListener('click', async () => {
+    const v = read();
+    try {
+      await api.put('/api/profile', { profile_name: v.name.trim(), profile_bio: v.bio, profile_link: v.link.trim() });
+    } catch (e) {
+      if (msg) msg.textContent = (e && e.message) || (en ? 'Could not save' : 'No se pudo guardar');
+      return;
+    }
+    try {
+      if (typeof PROFILE !== 'undefined' && PROFILE) { PROFILE.profile_name = v.name.trim(); PROFILE.profile_bio = v.bio; PROFILE.profile_link = v.link.trim(); }
+      const np = hfEditPreviewProf(prof, { name: v.name.trim(), bio: v.bio, link: v.link.trim() });
+      if (typeof HOME_PROF !== 'undefined' && HOME_PROF) { HOME_PROF.name = np.name; HOME_PROF.bio = np.bio; HOME_PROF.bio_unread = false; HOME_PROF.link = np.link; HOME_PROF.profile_display = { name: v.name.trim(), bio: v.bio, link: v.link.trim() }; }
+      HF_CUR_PROF = (typeof HOME_PROF !== 'undefined' && HOME_PROF) || np;
+    } catch (e) {}
+    hfSheetClose();
+    toast('✅ ' + (en ? 'Profile saved in Posty' : 'Perfil guardado en Posty'));
+    try { render(); } catch (e) {}
+  });
+}
+async function hfArchiveOpen() {
+  const en = hfIsEn();
+  const ov = hfSheetShow('<div class="hf-ps-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Your archive' : 'Tu archivo') + '</div><p class="hf-ps-note">' + (en ? 'Loading…' : 'Cargando…') + '</p></div>');
+  let data = null;
+  try { data = await api.get('/api/archive'); } catch (e) { data = null; }
+  if (!document.body.contains(ov)) return;
+  if (!data || !data.ok) {
+    ov.innerHTML = '<div class="hf-ps-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Your archive' : 'Tu archivo') + '</div><p class="hf-ps-note">' + (en ? 'The archive could not be loaded right now.' : 'El archivo no se pudo cargar ahora.') + '</p><div class="hf-ps-acts"><button type="button" class="hf-ps-alt" data-hf-ps-close>' + (en ? 'Close' : 'Cerrar') + '</button></div></div>';
+    ov.querySelectorAll('[data-hf-ps-close]').forEach((b) => b.addEventListener('click', () => hfSheetClose()));
+    return;
+  }
+  ov.innerHTML = hfArchiveHTML(data, en);
+  ov.querySelectorAll('[data-hf-ps-close]').forEach((b) => b.addEventListener('click', () => hfSheetClose()));
+  const msg = ov.querySelector('[data-hf-ar-msg]');
+  ov.querySelectorAll('[data-hf-ar-ver]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try {
+      await api.post('/api/archive/restore-version', { version_id: Number(b.dataset.hfArVer) });
+      toast('✅ ' + (en ? 'Back to that version — the one you had is saved as the latest version' : 'Volvimos a esa versión — la que tenías quedó guardada como la última versión'));
+      hfArchiveOpen();
+      try { render(); } catch (e) {}
+    } catch (e) { if (msg) msg.textContent = (e && e.message) || ''; b.disabled = false; }
+  }));
+  ov.querySelectorAll('[data-hf-ar-restore]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try {
+      await api.post('/api/archive/restore-post', { post_id: Number(b.dataset.hfArRestore) });
+      toast('✅ ' + (en ? 'Draft restored' : 'Borrador restaurado'));
+      hfArchiveOpen();
+      try { render(); } catch (e) {}
+    } catch (e) { if (msg) msg.textContent = (e && e.message) || ''; b.disabled = false; }
+  }));
+  ov.querySelectorAll('[data-hf-ar-goto]').forEach((b) => b.addEventListener('click', () => {
+    hfSheetClose();
+    location.hash = '#/app/post/' + encodeURIComponent(b.dataset.hfArGoto);
+  }));
+}
+function hfProfileBind(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-hf-pact]').forEach((el) => {
+    el.onclick = () => {
+      const act = el.dataset.hfPact;
+      if (act === 'share') hfShareOpen();
+      else if (act === 'edit') hfEditOpen();
+      else if (act === 'covers') hfCoversOpen();
+      else if (act === 'archive') hfArchiveOpen();
+    };
+  });
+}
+
 function hfCoverOpen(post) {
   if (!post) return;
   hfCoverClose();
@@ -15104,6 +15584,7 @@ function bindInicio() {
   // (Tanda feed 5 · ítem 1) El detalle IG de las piezas + la duración
   // real en las tiles de la pestaña Reels.
   hfDetailBind(document.getElementById('inicioView'));
+  try { hfProfileBind(document.getElementById('inicioView')); } catch (e) {}
   hfDurBind(document.getElementById('inicioView'));
   // Franja de revisión: "Aceptar todo" — el handler de siempre
   // (doAcceptAll completa los ítems desde REVIEW_DRAFTS, que

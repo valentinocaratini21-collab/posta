@@ -87,6 +87,13 @@ try { db.exec(`ALTER TABLE profiles ADD COLUMN page_slug TEXT DEFAULT ''`); } ca
 try { db.exec(`ALTER TABLE profiles ADD COLUMN page_enabled INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
 // Días de cierre del negocio (v283): JSON de días ISO 1=Lun..7=Dom en que NO se programa nada automático.
 try { db.exec(`ALTER TABLE profiles ADD COLUMN closed_days TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (Tanda feed 6D · ítem 13) Nombre/bio/link DEL PERFIL que muestra el
+// espejo de la home cuando el dueño los edita en Posty: viven en la
+// MISMA tabla profiles y se guardan por el PUT /api/profile de siempre.
+// Vacío = sin override: manda la lectura de Instagram o el kit.
+try { db.exec(`ALTER TABLE profiles ADD COLUMN profile_name TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE profiles ADD COLUMN profile_bio TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE profiles ADD COLUMN profile_link TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN timezone TEXT DEFAULT 'America/Argentina/Buenos_Aires'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_issued_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_warning INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }

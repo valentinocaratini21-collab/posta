@@ -3183,6 +3183,23 @@ app.put('/api/profile', requireAuth, (req, res) => {
   const { business_name, category, tone, description, ig_username, competitors, goal, monthly_goal, whatsapp, page_slug, page_enabled, closed_days } = req.body || {};
   const uid = req.session.userId;
   getProfile(uid);
+  // (Tanda feed 6D · ítem 13) Nombre/bio/link DEL PERFIL (los que muestra
+  // el espejo de la home): guardado parcial por ESTE MISMO endpoint y la
+  // MISMA tabla profiles — no exige business_name ni toca el resto del
+  // perfil. profile_* vacío = sin override (manda la lectura de IG/kit).
+  if (req.body && (req.body.profile_name !== undefined || req.body.profile_bio !== undefined || req.body.profile_link !== undefined)) {
+    const sets = []; const vals = [];
+    if (req.body.profile_name !== undefined) { sets.push('profile_name=?'); vals.push(String(req.body.profile_name || '').trim().slice(0, 30)); }
+    if (req.body.profile_bio !== undefined) { sets.push('profile_bio=?'); vals.push(String(req.body.profile_bio || '').slice(0, 150)); }
+    if (req.body.profile_link !== undefined) {
+      let lk = String(req.body.profile_link || '').trim().slice(0, 200);
+      if (lk && !/^https?:\/\//i.test(lk)) lk = 'https://' + lk.replace(/^\/+/, '');
+      if (lk && !/^https?:\/\/[^\s.]+\.[^\s]{2,}$/i.test(lk)) return res.status(400).json({ error: 'Ese link no vale 😅 Revisá que sea una dirección completa (ej.: tunegocio.com)' });
+      sets.push('profile_link=?'); vals.push(lk);
+    }
+    if (sets.length) db.prepare(`UPDATE profiles SET ${sets.join(', ')}, updated_at=datetime('now') WHERE user_id=?`).run(...vals, uid);
+    return res.json({ ok: true, profile_display: true });
+  }
   // Página pública + WhatsApp (v169): se guardan si vienen en el body, sin
   // exigir el resto del form de perfil (la sección "Tu página" guarda sola).
   let pageTouched = false;
@@ -10775,12 +10792,34 @@ function homeProfileKit(uid, prof) {
     captured_at: null,
   };
 }
+// (Tanda feed 6D · ítem 13) Override del dueño sobre el espejo: si editó
+// nombre/bio/link en Posty (profiles.profile_*), ESO manda sobre la
+// lectura de Instagram y sobre el kit — es su perfil guardado. También
+// viaja la paleta real de la cuenta (fundamento; si no, los colores de
+// marca de Ajustes) para las cubiertas de destacadas del ítem 12.
+function homeDisplayOverlay(uid, prof, payload) {
+  try {
+    const out = Object.assign({}, payload || {});
+    const pn = String((prof && prof.profile_name) || '').trim();
+    const pb = String((prof && prof.profile_bio) || '');
+    const pl = String((prof && prof.profile_link) || '').trim();
+    if (pn) out.name = pn;
+    if (pb.trim()) { out.bio = pb; out.bio_unread = false; }
+    if (pl) out.link = pl;
+    let pal = [];
+    try { const dg = clientDigest.getDigest(db, uid); if (dg && Array.isArray(dg.paleta)) pal = dg.paleta.map((x) => x && x.hex).filter((h) => /^#[0-9a-fA-F]{6}$/.test(h || '')); } catch (e) {}
+    if (!pal.length && typeof parseBrandHexes === 'function') { try { pal = parseBrandHexes((getSettings(uid) || {}).brand_colors); } catch (e) {} }
+    out.palette = pal;
+    out.profile_display = { name: pn, bio: pb, link: pl };
+    return out;
+  } catch (e) { return payload; }
+}
 app.get('/api/home/profile', requireAuth, async (req, res) => {
   const uid = req.session.userId;
   try {
     const prof = getProfile(uid) || {};
     const handle = String(prof.ig_username || '').replace(/^@+/, '').trim().toLowerCase();
-    if (!handle) return res.json({ ok: true, ...homeProfileKit(uid, prof) });
+    if (!handle) return res.json({ ok: true, ...homeDisplayOverlay(uid, prof, homeProfileKit(uid, prof)) });
     const snap = homeSnapshotGet(uid);
     if (snap && snap.payload && snap.payload.username === handle) {
       // (v360) Snapshots previos a v360 no traen category/note: se
@@ -10792,10 +10831,10 @@ app.get('/api/home/profile', requireAuth, async (req, res) => {
       // fundamento (digest), compuesta al servir como la categoría.
       // Sin ciudad en el fundamento, null: la línea no se dibuja.
       if (snap.payload.location === undefined) { try { snap.payload.location = (clientDigest.getDigest(db, uid) || {}).ciudad || null; } catch (e) { snap.payload.location = null; } }
-      if (Date.now() - snap.fetched_at < HOME_SNAPSHOT_TTL_MS) return res.json({ ok: true, ...snap.payload });
+      if (Date.now() - snap.fetched_at < HOME_SNAPSHOT_TTL_MS) return res.json({ ok: true, ...homeDisplayOverlay(uid, prof, snap.payload) });
       // Vencido: se sirve al instante y el refresco corre en segundo plano.
       homeProfileRefreshOnce(uid, handle);
-      return res.json({ ok: true, ...snap.payload });
+      return res.json({ ok: true, ...homeDisplayOverlay(uid, prof, snap.payload) });
     }
     // Primera lectura de esta cuenta (o cambió el @): se intenta en
     // línea con presupuesto corto; si Instagram no responde a tiempo,
@@ -10810,12 +10849,78 @@ app.get('/api/home/profile', requireAuth, async (req, res) => {
     } catch (e) { payload = null; }
     if (payload) {
       if (payload.location === undefined) { try { payload.location = (clientDigest.getDigest(db, uid) || {}).ciudad || null; } catch (e) { payload.location = null; } }
-      return res.json({ ok: true, ...payload });
+      return res.json({ ok: true, ...homeDisplayOverlay(uid, prof, payload) });
     }
-    return res.json({ ok: true, ...homeProfileKit(uid, prof), pending_read: true });
+    return res.json({ ok: true, ...homeDisplayOverlay(uid, prof, homeProfileKit(uid, prof)), pending_read: true });
   } catch (e) {
     res.json({ ok: false, error: 'home_profile' });
   }
+});
+
+/* ---------- (Tanda feed 6D · ítem 14) TU ARCHIVO ----------
+   Lectura de lo que la cuenta YA tiene guardado, en tres fuentes reales:
+   · versiones anteriores de los rehaces/ediciones (post_versions),
+   · republicaciones (recycled_posts: el posteo que voló y su borrador
+     nuevo) + posteos descartados (posts status='cancelled'),
+   · archivados EN Instagram (posts.ig_state='archived_ext', la marca de
+     la reconciliación del espejo). Nada se borra desde acá: las únicas
+     acciones son volver a una versión (el INTERCAMBIO de la Fase A) y
+     restaurar un descartado a borrador. */
+app.get('/api/archive', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const versions = db.prepare(`SELECT pv.id, pv.post_id, pv.caption, pv.hashtags, pv.image_path, pv.created_at,
+        p.status AS post_status, p.scheduled_at AS post_scheduled_at, p.published_at AS post_published_at
+      FROM post_versions pv JOIN posts p ON p.id = pv.post_id
+      WHERE p.user_id = ? ORDER BY pv.id DESC LIMIT 100`).all(uid);
+    const recycled = db.prepare(`SELECT rp.post_id, rp.new_post_id, rp.created_at,
+        o.caption AS old_caption, o.image_path AS old_image, o.published_at AS old_published_at,
+        n.status AS new_status
+      FROM recycled_posts rp JOIN posts o ON o.id = rp.post_id
+      LEFT JOIN posts n ON n.id = rp.new_post_id
+      WHERE o.user_id = ? ORDER BY rp.created_at DESC LIMIT 50`).all(uid);
+    const cancelled = db.prepare(`SELECT id, caption, image_path, created_at, scheduled_at FROM posts
+      WHERE user_id = ? AND status = 'cancelled' ORDER BY id DESC LIMIT 50`).all(uid);
+    const archived = db.prepare(`SELECT id, caption, image_path, published_at, ig_permalink, ig_state_at FROM posts
+      WHERE user_id = ? AND ig_state = 'archived_ext' ORDER BY id DESC LIMIT 50`).all(uid);
+    res.json({ ok: true, versions, recycled, cancelled, archived });
+  } catch (e) { console.error('[archive]', e.message); res.json({ ok: false, error: 'archive' }); }
+});
+// Volver a una versión = el INTERCAMBIO de la Fase A (el mismo del
+// «volver» del chat): la vigente queda guardada como la última versión
+// y la elegida pasa a vigente (caption, hashtags E imagen). Gratis:
+// no toca redo_left ni consume rehaces. Solo posteos que no salieron.
+app.post('/api/archive/restore-version', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const vid = Number((req.body || {}).version_id);
+    if (!vid) return res.status(400).json({ ok: false, error: 'Versión inválida' });
+    const ver = db.prepare(`SELECT pv.* FROM post_versions pv JOIN posts p ON p.id = pv.post_id WHERE pv.id = ? AND p.user_id = ?`).get(vid, uid);
+    if (!ver) return res.status(404).json({ ok: false, error: 'Versión no encontrada' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(ver.post_id, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
+      return res.status(409).json({ ok: false, error: 'Solo se puede volver a una versión en posteos que todavía no salieron' });
+    db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path) VALUES (?,?,?,?)`)
+      .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''));
+    db.prepare(`UPDATE posts SET caption = ?, hashtags = ?, image_path = ? WHERE id = ?`)
+      .run(ver.caption, ver.hashtags, ver.image_path, post.id);
+    db.prepare(`DELETE FROM post_versions WHERE id = ?`).run(ver.id);
+    res.json({ ok: true, post_id: post.id });
+  } catch (e) { console.error('[archive-restore-version]', e.message); res.status(500).json({ ok: false, error: 'No se pudo volver a esa versión' }); }
+});
+// Restaurar un descartado: vuelve a borrador (sin fecha; la semana lo
+// reubica por el camino de siempre). No existía camino: nace acá.
+app.post('/api/archive/restore-post', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const pid = Number((req.body || {}).post_id);
+    if (!pid) return res.status(400).json({ ok: false, error: 'Posteo inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(pid, uid);
+    if (!post) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
+    if (post.status !== 'cancelled') return res.status(409).json({ ok: false, error: 'Ese posteo no está descartado' });
+    db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, approval = 'pending', error = '' WHERE id = ?`).run(post.id);
+    res.json({ ok: true, post_id: post.id, status: 'draft' });
+  } catch (e) { console.error('[archive-restore-post]', e.message); res.status(500).json({ ok: false, error: 'No se pudo restaurar el borrador' }); }
 });
 // Prepara el OAuth de Instagram: valida la Embed URL, guarda state en sesión
 // y devuelve la URL de autorización de Meta.
@@ -19154,7 +19259,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v403';
+const BUILD_ID = '20261024-v404';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
