@@ -51,6 +51,8 @@ const approval = require('./approval'); // "Posty te avisa": firmas y avisos de 
 let cartaAudio = null;
 try { cartaAudio = require('./carta-audio'); } catch (e) { console.error('[carta-audio] módulo no disponible:', e.message); }
 const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispositivo: cuentas guardadas en la entrada, hash + rotación + revocación
+const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleados, gating por pack, registro durable, fundamento-vista y bandeja con la matriz forzada en el servidor
+try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
 const { reconcileUser } = require('./billing-sync');
 const { startTokenRefresh } = require('./tokenrefresh');
 const { analyzeWebsite } = require('./website-study');
@@ -15538,6 +15540,107 @@ app.post('/api/bookings/:id/reminder-sent', requireAuth, planGateMiddleware(db, 
   catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-02 FUNDACIÓN (módulo del segundo empleado de la oficina)
+// Spec: gesty-g02-build-spec.md. Todo el módulo vive en gesty.js; acá
+// solo se montan las rutas /api/gesty/* detrás de requireAuth + gating
+// por pack EN EL SERVIDOR (sin pack, la API responde 403). La matriz de
+// aprobación se valida en gesty.approveCard — la pantalla solo pide.
+// Las tarjetas de Gesty se aprueban DE A UNA: no existe ruta de
+// aprobación masiva para tipos Gesty (R3 de la spec).
+// =====================================================================
+app.get('/api/gesty/estado', requireAuth, (req, res) => {
+  // La única ruta no gateada: le dice al cliente si Gesty existe para
+  // esta cuenta (para mostrar u ocultar el módulo). No expone datos.
+  try {
+    const uid = req.session.userId;
+    const pack = gesty.packOf(db, uid);
+    res.json({ ok: true, enabled: pack !== 'ninguno', pack, capacidades: gesty.capacidadesOf(pack) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/modulo', requireAuth, gesty.gestyMiddleware(db), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const pack = gesty.packOf(db, uid);
+    const empleados = gesty.listEmpleados(db);
+    res.json({ ok: true, empleado: empleados.find((e) => e.id === 'gesty') || null, pack, capacidades: gesty.capacidadesOf(pack), pendientes_ok: gesty.countPending(db, uid) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/fundamento', requireAuth, gesty.gestyMiddleware(db), (req, res) => {
+  try { res.json({ ok: true, fundamento: gesty.foundationForOwner(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/aprendido', requireAuth, gesty.gestyMiddleware(db), (req, res) => {
+  try { res.json({ ok: true, aprendido: gesty.learnedView(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/fundamento', requireAuth, gesty.gestyMiddleware(db), express.json(), (req, res) => {
+  // Alta de un dato por el dueño (el alta «de sistema» de los motores
+  // va por la capa de servicio, no por HTTP): origen siempre `dueno`.
+  try {
+    const b = req.body || {};
+    const dato = gesty.setData(db, req.session.userId, {
+      grupo: b.grupo, campo: b.campo, valor: b.valor,
+      origen: 'dueno', origen_ref: b.origen_ref || 'vista-fundamento', cargado_por: 'dueno',
+    });
+    res.json({ ok: true, dato: gesty.datoParaApi(dato) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/fundamento/:id/corregir', requireAuth, gesty.gestyMiddleware(db), express.json(), (req, res) => {
+  try {
+    const r = gesty.correctData(db, req.session.userId, Number(req.params.id), { valor: (req.body || {}).valor, actor: 'dueno' });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/bandeja', requireAuth, gesty.gestyMiddleware(db), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    res.json({ ok: true, tarjetas: gesty.listCards(db, uid, {}), pendientes: gesty.countPending(db, uid) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/bandeja', requireAuth, gesty.gestyMiddleware(db), express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    const tarjeta = gesty.createCard(db, req.session.userId, {
+      tipo: b.tipo, titulo: b.titulo, detalle: b.detalle, monto: b.monto,
+      moneda: b.moneda, vence: b.vence, usa_datos: b.usa_datos, creado_por: 'gesty',
+    });
+    res.json({ ok: true, tarjeta });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/bandeja/:id/aprobar', requireAuth, gesty.gestyMiddleware(db), express.json(), (req, res) => {
+  // EL acto de aprobación es gesty.approveCard: valida tarjeta propia,
+  // matriz, estado, versión vigente, vencimiento e idempotencia. Acá
+  // no se aprueba nada «desde la pantalla» por fuera de ese camino.
+  try {
+    const r = gesty.approveCard(db, req.session.userId, Number(req.params.id), {
+      version_documento: (req.body || {}).version_documento,
+      usuario: 'dueno',
+    });
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, motivo: r.motivo, devuelta: !!r.devuelta, tarjeta: r.card || null });
+    res.json({ ok: true, idempotente: !!r.idempotente, approval: r.approval, tarjeta: r.card });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/bandeja/:id/editar', requireAuth, gesty.gestyMiddleware(db), express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    const tarjeta = gesty.editCard(db, req.session.userId, Number(req.params.id), { detalle: b.detalle, titulo: b.titulo, monto: b.monto, actor: 'dueno' });
+    res.json({ ok: true, tarjeta });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/bandeja/:id/frenar', requireAuth, gesty.gestyMiddleware(db), express.json(), (req, res) => {
+  try {
+    const tarjeta = gesty.stopCard(db, req.session.userId, Number(req.params.id), { usuario: 'dueno', motivo: (req.body || {}).motivo || '' });
+    res.json({ ok: true, tarjeta });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/eventos', requireAuth, gesty.gestyMiddleware(db), (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, eventos: gesty.listEvents(db, req.session.userId, { entidad_tipo: q.entidad_tipo, entidad_id: q.entidad_id, limit: q.limit }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -19264,7 +19367,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v405';
+const BUILD_ID = '20261024-v406';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
