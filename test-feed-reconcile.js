@@ -126,6 +126,26 @@ const child = parsed.find((p) => p.shortcode === 'CHILD1');
 ok('el hijo del carrusel NO es posteo de primer nivel', !!child && fr.isTopLevelReadPost(child) === false);
 ok('el carrusel y la foto real SÍ son de primer nivel', parsed.filter((p) => p.shortcode !== 'CHILD1').every((p) => fr.isTopLevelReadPost(p) === true));
 
+// El destacado suelto del embed (fuera de graphql_media): mismo caption
+// que el posteo real pero OTRO shortcode y otra fecha — la deduplicación
+// no lo colapsa; lo excluye el recorte por posts_count de fetchAuditData.
+async function parte2b() {
+  console.log('— feed-reconcile: recorte de la lectura a la grilla real');
+  const featured = `${Q}shortcode_media${Q}:` + withCap(node('GraphImage', { shortcode: 'FEATURED9', taken_at_timestamp: 1792536152, display_url: 'https://scontent.cdninstagram.com/f.jpg' }), 'Hola soy el posteo');
+  const html2 = '<html>' + `${Q}posts_count${Q}:2,` + `${Q}followers_count${Q}:8,`
+    + withCap(node('GraphSidecar', { shortcode: 'SIDECAR1', taken_at_timestamp: 1792760598, display_url: 'https://scontent.cdninstagram.com/s.jpg' }), 'Caption del carrusel') + PAD
+    + node('GraphImage', { shortcode: 'CHILD1', display_url: 'https://scontent.cdninstagram.com/c1.jpg' }) + PAD
+    + withCap(node('GraphImage', { shortcode: 'IMGREAL1', taken_at_timestamp: 1792627352, display_url: 'https://scontent.cdninstagram.com/a.jpg' }), 'Hola soy el posteo') + PAD
+    + featured
+    + '</html>';
+  const data = await feedAudit.fetchAuditData('cuenta.x', async () => html2, { pic: null, name: '' });
+  ok('fetchAuditData leyó posts_count=2', !!data.ok && data.profile.posts_count === 2, JSON.stringify(data.profile || {}));
+  const tops = (data.posts || []).filter((p) => fr.isTopLevelReadPost(p)).map((p) => p.shortcode);
+  ok('la lectura queda recortada a la grilla real (sin el destacado)', JSON.stringify(tops) === JSON.stringify(['SIDECAR1', 'IMGREAL1']), tops.join(','));
+  ok('el hijo del carrusel sigue en la lectura cruda (lo filtra el consumidor)', (data.posts || []).some((p) => p.shortcode === 'CHILD1'));
+}
+
+async function resto() {
 // ---------- Parte 3: la composición de la grilla excluye archivados ----------
 console.log('— feed-reconcile: composición del home');
 const APP = fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8');
@@ -170,3 +190,6 @@ ok('index.html bumpeó el ?v= de app.js', !INDEX.includes('/app.js?v=258'));
 
 console.log(`\nfeed-reconcile: ${passed}/${passed + failed}`);
 process.exit(failed ? 1 : 0);
+}
+
+parte2b().then(resto).catch((e) => { console.error('ERROR', e); process.exit(1); });

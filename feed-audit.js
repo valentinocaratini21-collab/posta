@@ -118,6 +118,26 @@ function cleanCaptionResidue(s) {
     .trim();
 }
 
+// (2026-10-24) La grilla real tiene posts_count posteos, pero el embed
+// trae ADEMÁS un nodo suelto fuera de graphql_media (un shortcode_media
+// destacado al final del documento) que el escaneo lineal cuenta como
+// posteo extra: la cuenta 12 leía su Pieza 1 DOS VECES (con otro shortcode
+// y, según la variante del HTML, hasta otra fecha parseada, así que la
+// deduplicación no siempre lo colapsa). Regla: se conservan los primeros
+// posts_count posteos de PRIMER NIVEL en orden de documento (los hijos de
+// carrusel — sin fecha ni caption — no cuentan ni se descartan acá; los
+// filtra cada consumidor). Sin contador confiable, no se recorta nada.
+function capPostsToGrid(posts, postsCount) {
+  if (!Array.isArray(posts) || typeof postsCount !== 'number' || !(postsCount >= 0)) return posts;
+  let seen = 0;
+  return posts.filter((p) => {
+    const top = !!p && ((typeof p.taken_at === 'number' && p.taken_at > 0) || !!String(p.caption || '').trim());
+    if (!top) return true;
+    seen++;
+    return seen <= postsCount;
+  });
+}
+
 function parseEmbedPosts(html) {
   const posts = [];
   try {
@@ -190,7 +210,8 @@ async function fetchAuditData(handle, fetchOverride, profOverride) {
   const bioUnread = !html.includes('\\"biography\\"');
   const seg = html.split(String.fromCharCode(92) + '"').join('"');
   const f = (rx) => { const m = rx.exec(seg); return m ? m[1] : null; };
-  const posts = parseEmbedPosts(html);
+  const postsCountRaw = f(/"posts_count":(\d+)/);
+  const posts = capPostsToGrid(parseEmbedPosts(html), postsCountRaw ? parseInt(postsCountRaw, 10) : null);
   // Foto de perfil (best-effort, para mostrar en el reporte). Si el llamador
   // ya trajo el perfil (profOverride = resultado de demo.fetchIgProfile),
   // no se repite la descarga.
@@ -220,7 +241,7 @@ async function fetchAuditData(handle, fetchOverride, profOverride) {
       link: /^https?:\/\//i.test(bioLink) ? bioLink : '',
       link_unread: linkRaw == null,
       followers: f(/"followers_count":(\d+)/) ? parseInt(f(/"followers_count":(\d+)/), 10) : null,
-      posts_count: f(/"posts_count":(\d+)/) ? parseInt(f(/"posts_count":(\d+)/), 10) : null,
+      posts_count: postsCountRaw ? parseInt(postsCountRaw, 10) : null,
       following: followingRaw ? parseInt(followingRaw, 10) : null,
       category: demo.categoryFromText(bio + ' ' + fullName),
       pic,

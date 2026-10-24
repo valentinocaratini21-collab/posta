@@ -5229,7 +5229,7 @@ app.get('/api/admin/client/:id', requireAdminToken, (req, res) => {
     }
     const pl = getPlan(user.plan);
     const postsRaw = db.prepare(`SELECT p.id, p.media_type, p.status, p.image_path, p.caption,
-        p.scheduled_at, p.published_at, p.created_at, p.ig_permalink, p.ig_likes, p.ig_comments, p.tipo, p.week_key,
+        p.scheduled_at, p.published_at, p.created_at, p.ig_permalink, p.ig_likes, p.ig_comments, p.tipo, p.week_key, p.ig_state,
         m.reach, m.likes AS m_likes, m.comments AS m_comments
       FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
       WHERE p.user_id = ? ORDER BY p.id DESC LIMIT 60`).all(uid);
@@ -18675,7 +18675,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v393';
+const BUILD_ID = '20261024-v394';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
