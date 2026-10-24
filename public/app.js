@@ -6243,7 +6243,7 @@ function weekCardHTML(d, o) {
   // la tarjeta va corta (solo la hora) para que no se peleé con el botón
   // Aceptar en pantallas chicas ("jue 22 · 12:0…" cortado).
   const whenTxt = o.dia ? String(prop.label || '').replace(/^(\S+)\s+[^·]*·\s*/, '$1 ') : prop.label;
-  return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
+  return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}" data-f3-status="${esc(String(d.status || ''))}" data-f3-appr="${esc(String(d.approval || ''))}">
       <div class="igmock-head">${avaHTML}<span class="igmock-name">${esc(headName)}</span>${o.count ? `
         <span class="igmock-count">${esc(o.count)}</span>` : ''}<span class="igmock-dots" aria-hidden="true">•••</span></div>
       <div class="igmock-when-top"><span>${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
@@ -6252,6 +6252,7 @@ function weekCardHTML(d, o) {
         ? `<div class="igmock-media igmock-pending">${media}</div>`
         : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : '✏️ Editar este posteo'}" aria-label="Ver posteo">${media}</button>`}
       ${foot}
+      ${f3ThreadHTML(d)}
     </div>`;
 }
 
@@ -8879,6 +8880,7 @@ async function runAutopilot(n, tag) {
     const poolRender = () => {
       // Mensaje de completitud desordenada: importa cuántos están listos, no cuál.
       prog.innerHTML = `<div class="okmsg">⏳ creando… ${doneCount} de ${picks.length} listos</div>${liveHTML()}`;
+      try { f3RevealCheck(); } catch (e) {}
     };
     async function apWorker() {
       while (!quotaStopped) {
@@ -12742,6 +12744,7 @@ function bindApp(tab) {
   if (dlo) dlo.onclick = () => { closeDrawer(); doLogout(); };
 
   if (tab === 'ajustes' && typeof bindSettings === 'function') bindSettings(); // el chunk ya lo cargó render()
+  try { f3Init(tab); } catch (e) {}
 }
 
 
@@ -12972,6 +12975,7 @@ async function approvalPostView(id) {
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
     ${actions}${draftActions}
+    ${f3ThreadHTML(p)}
   </div>`;
 }
 function bindApprovalPost() {
@@ -13064,6 +13068,478 @@ function bindApprovalPost() {
   const apm = document.querySelector('.apv-media [data-lightbox]');
   if (apm) apm.onclick = () => lbOpenFrom(apm);
 }
+/* ============================================================
+   FRENTE 3 · SUMA 3 (v357+): COMPORTAMIENTO DEL FEED
+   1) Editar comentando el posteo: la caja de comentarios del
+      detalle ES la edición — enruta al MISMO motor del chat
+      (POST /api/ideas/chat, bloques ```edit del servidor) con
+      ESTE posteo como contexto; Posty responde en el hilo y la
+      pieza se actualiza en la misma vista.
+   2) Doble toque para aprobar en la vista abierta (corazón IG).
+   3) La semana se cuelga en vivo: revelado progresivo en la
+      grilla (polling vigente de /api/posts, sin spinner global).
+   4) Tacto IG: pinch-to-zoom con retorno, presión visual y
+      artefactos web eliminados (CSS en styles.css, sección F3).
+   Nada de sistemas paralelos: todo se cuelga de lo vigente
+   (chatExchange/api /api/ideas/chat, bindReview/pcApprove/
+   apvAccept, homeGridCompose/homeTileHTML/feedPreviewHTML).
+   ============================================================ */
+function f3En() { try { return typeof ME !== 'undefined' && ME && ME.lang === 'en'; } catch (e) { return false; } }
+
+/* ---------- Ítem 1: hilo de edición por posteo ---------- */
+// Persistencia: NO existe hilo por posteo en el backend. El turno
+// SÍ queda persistido en el chat global (POST /api/ideas/chat
+// guarda user+assistant en chat_messages, server.js). El hilo
+// visible por posteo se guarda local (localStorage, cap 30) —
+// mínima viable sin backend nuevo (declarado como resto).
+function f3ThreadKey(id) { return 'f3thread:' + String(id); }
+function f3ThreadLoad(id) {
+  try { const v = JSON.parse(localStorage.getItem(f3ThreadKey(id)) || '[]'); return Array.isArray(v) ? v.filter(m => m && (m.role === 'user' || m.role === 'posty') && m.text) : []; }
+  catch (e) { return []; }
+}
+function f3ThreadSave(id, msgs) {
+  try { localStorage.setItem(f3ThreadKey(id), JSON.stringify((msgs || []).slice(-30))); } catch (e) {}
+}
+function f3MsgHTML(m) {
+  if (m.role === 'user') return `<div class="f3-msg f3-msg-user"><span class="f3-who">${f3En() ? 'You' : 'Vos'}</span><span class="f3-txt">${esc(m.text)}</span></div>`;
+  return `<div class="f3-msg f3-msg-posty"><img class="f3-ava" src="ai-avatar.png" alt="Posty"><span class="f3-txt">${esc(m.text)}</span></div>`;
+}
+// La caja SOLO en posteos editables (borrador/programado con
+// imagen, no pendientes de creación): el motor de chat del
+// servidor solo edita draft/scheduled — un publicado no se
+// edita comentando (declarado en el informe).
+function f3ThreadHTML(d) {
+  if (!d || d.id == null) return '';
+  const st = String(d.status || '');
+  if (st !== 'draft' && st !== 'scheduled') return '';
+  if (!d.image_path) return '';
+  const en = f3En();
+  return `<div class="f3-thread" data-f3-thread="${esc(String(d.id))}">
+    <div class="f3-msgs" data-f3-msgs></div>
+    <form class="f3-form" data-f3-form>
+      <input class="f3-input" data-f3-input type="text" maxlength="500" autocomplete="off" placeholder="${en ? 'Ask Posty for a change…' : 'Pedile un cambio a Posty…'}" aria-label="${en ? 'Ask Posty for a change on this post' : 'Pedile un cambio a Posty en este posteo'}">
+      <button class="f3-send" data-f3-send type="submit">${en ? 'Post' : 'Enviar'}</button>
+    </form>
+    <div class="f3-hint">${en ? 'whatever you type here, Posty changes it on this post' : 'lo que escribas acá, Posty lo cambia en este posteo'}</div>
+  </div>`;
+}
+function f3ThreadPush(wrap, id, msg) {
+  const msgs = f3ThreadLoad(id);
+  msgs.push(msg);
+  f3ThreadSave(id, msgs);
+  const box = wrap.querySelector('[data-f3-msgs]');
+  if (box) { box.insertAdjacentHTML('beforeend', f3MsgHTML(msg)); box.scrollTop = box.scrollHeight; }
+}
+function f3PaintThreads() {
+  document.querySelectorAll('[data-f3-thread]').forEach(wrap => {
+    if (wrap.dataset.f3Painted) return;
+    wrap.dataset.f3Painted = '1';
+    const box = wrap.querySelector('[data-f3-msgs]');
+    if (!box) return;
+    box.innerHTML = f3ThreadLoad(wrap.dataset.f3Thread).map(f3MsgHTML).join('');
+  });
+}
+// Tras una edición exitosa del servidor: refrescar LA vista
+// abierta (caption + imagen) sin salir de la pantalla.
+async function f3ApplyEditedPost(id, wrap) {
+  let p = null;
+  try { const r = await api.get('/api/posts/' + encodeURIComponent(id)); p = (r && r.post) ? r.post : r; } catch (e) {}
+  if (!p) { try { render(); } catch (e) {} return; }
+  const card = wrap.closest ? wrap.closest('[data-post-id]') : null;
+  if (card && card.classList.contains('igmock')) {
+    const cap = card.querySelector('.igmock-cap');
+    if (cap && p.caption != null) { cap.textContent = String(p.caption || ''); cap.dataset.full = String(p.caption || ''); }
+    const img = card.querySelector('.igmock-media img');
+    const vid = card.querySelector('.igmock-media video');
+    if (img && p.image_path) img.src = p.image_path;
+    if (vid && p.image_path) vid.src = p.image_path;
+    const mb = card.querySelector('.igmock-media');
+    if (mb && p.image_path) mb.dataset.lightbox = p.image_path;
+    return;
+  }
+  const apv = wrap.closest ? wrap.closest('.apv-wrap') : null;
+  if (apv) {
+    const capEl = apv.querySelector('.apv-caption');
+    if (capEl) {
+      const tags = String(p.hashtags || '').trim();
+      capEl.innerHTML = esc(String(p.caption || 'Sin texto todavía')).replace(/\n/g, '<br>') + (tags ? `<div class="apv-tags">${esc(tags)}</div>` : '');
+    }
+    const img = apv.querySelector('.apv-media img');
+    const vid = apv.querySelector('.apv-media video');
+    if (img && p.image_path) { img.src = p.image_path; img.dataset.lightbox = p.image_path; }
+    if (vid && p.image_path) vid.src = p.image_path;
+  }
+}
+async function f3ThreadSend(form) {
+  const wrap = form.closest('[data-f3-thread]');
+  if (!wrap) return;
+  const id = wrap.dataset.f3Thread;
+  const inp = wrap.querySelector('[data-f3-input]');
+  const btn = wrap.querySelector('[data-f3-send]');
+  const text = ((inp && inp.value) || '').trim();
+  if (!text) return;
+  if (inp) inp.value = '';
+  f3ThreadPush(wrap, id, { role: 'user', text });
+  if (btn) btn.disabled = true;
+  wrap.classList.add('f3-busy');
+  const box = wrap.querySelector('[data-f3-msgs]');
+  const typing = document.createElement('div');
+  typing.className = 'f3-msg f3-msg-posty f3-typing';
+  typing.innerHTML = `<img class="f3-ava" src="ai-avatar.png" alt="Posty"><span class="f3-txt">${f3En() ? 'posty is on it…' : 'posty está en eso…'}</span>`;
+  if (box) { box.appendChild(typing); box.scrollTop = box.scrollHeight; }
+  try {
+    // Contexto del MISMO motor vigente: el servidor reconstruye
+    // sus borradores y el modelo aplica el bloque ```edit sobre
+    // el posteo identificado (id + arranque del caption).
+    let capTxt = '';
+    try {
+      const card = wrap.closest('[data-post-id]');
+      const capEl = card ? card.querySelector('.igmock-cap') : document.querySelector('.apv-caption');
+      capTxt = capEl ? String(capEl.dataset.full || capEl.textContent || '').trim().slice(0, 160) : '';
+    } catch (e) {}
+    const ctx = f3En()
+      ? `(editing ONLY post #${id}${capTxt ? `, whose caption starts: "${capTxt}"` : ''}. apply the change to that post only.) `
+      : `(editá SOLO el posteo #${id}${capTxt ? `, cuyo texto empieza: "${capTxt}"` : ''}. aplicá el cambio solo a ese posteo.) `;
+    const r = await api.post('/api/ideas/chat', {
+      messages: [{ role: 'user', text: ctx + text }],
+      drafts: (typeof chatDraftsCtx === 'function') ? chatDraftsCtx() : [],
+    });
+    try { typing.remove(); } catch (e) {}
+    f3ThreadPush(wrap, id, { role: 'posty', text: String((r && r.reply) || (f3En() ? 'done ✅' : 'listo ✅')) });
+    if (r && r.edit && r.edit.ok) { await f3ApplyEditedPost(id, wrap); }
+  } catch (e) {
+    try { typing.remove(); } catch (e2) {}
+    f3ThreadPush(wrap, id, { role: 'posty', text: f3En() ? 'hmm, i could not do that one 😅 try again?' : 'uy, no pude con ese 😅 probás de nuevo?' });
+  }
+  wrap.classList.remove('f3-busy');
+  if (btn) btn.disabled = false;
+  if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) {} }
+}
+
+/* ---------- Ítem 2: doble toque para aprobar ---------- */
+// Modo de aprobación: la fuente vigente es GET /api/autopilot
+// (enabled/trust_level). Cacheado por sesión de página.
+// DECISIÓN AUTOPILOTO: corazón SOLO visual, SIN cambio de
+// estado. Por qué: en autopiloto el posteo ya sale solo — no
+// hay decisión pendiente; si el corazón aprobara, aprobaría
+// algo que no necesitaba aprobación y el usuario creería que
+// su gesto era necesario (estado falso). El corazón queda
+// como "me gusta" afectivo y el indicador de estado sigue
+// siendo el de siempre (pastilla Programado / Salió solo).
+let F3_APPR_MODE = null; // Promise<{manual:boolean}>
+function f3ApprovalMode() {
+  if (F3_APPR_MODE) return F3_APPR_MODE;
+  F3_APPR_MODE = (async () => {
+    try {
+      const r = await api.get('/api/autopilot');
+      return { manual: !(r && r.enabled) };
+    } catch (e) { return { manual: false }; } // sin dato: corazón solo (nada invisible)
+  })();
+  return F3_APPR_MODE;
+}
+const F3_HEART_SVG = '<svg viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+function f3HeartBurst(host) {
+  if (!host) return;
+  try {
+    const h = document.createElement('span');
+    h.className = 'f3-heart';
+    h.innerHTML = F3_HEART_SVG;
+    host.appendChild(h);
+    setTimeout(() => { try { h.remove(); } catch (e) {} }, 950);
+  } catch (e) {}
+}
+// Aprobación por gesto = EXACTAMENTE la acción del botón
+// vigente en cada superficie (mismo endpoint/estado):
+//  - detalle apv: click en #apvAccept (POST /approve) o en
+//    #apvAcceptDraft (PATCH + signal, flujo del borrador).
+//  - tarjeta weekCard: click en su [data-revaccept] cableado
+//    por bindReview (onclick asignado); si esa superficie no
+//    lo cableó, réplica mínima del núcleo (gate IG + PATCH con
+//    la hora propuesta + signal + render).
+//  - tarjeta programada pendiente (approval='pending'): pcApprove.
+async function f3GestureApprove(media) {
+  const mode = await f3ApprovalMode();
+  if (!mode.manual) { try { track('f3_dbltap_like', { autopilot: true }); } catch (e) {} return; }
+  const apvAcc = document.getElementById('apvAccept');
+  if (apvAcc && !apvAcc.disabled && document.querySelector('.apv-media') === (media.closest ? media.closest('.apv-media') : null)) { apvAcc.click(); return; }
+  const apvDraft = document.getElementById('apvAcceptDraft');
+  if (apvDraft && !apvDraft.disabled && document.querySelector('.apv-media') === (media.closest ? media.closest('.apv-media') : null)) { apvDraft.click(); return; }
+  const root = media.closest ? media.closest('[data-post-id]') : null;
+  if (!root) return;
+  const id = root.dataset.postId;
+  const rev = root.querySelector('[data-revaccept]');
+  if (rev && !rev.disabled) {
+    if (typeof rev.onclick === 'function') { rev.click(); return; }
+    // Superficie sin bindReview: núcleo vigente del Aceptar.
+    if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
+      try { igGateFeedback(rev); } catch (e) { toast(f3En() ? 'Connect your Instagram first 📸' : 'Conectá tu Instagram primero 📸'); }
+      return;
+    }
+    rev.disabled = true;
+    try {
+      const proposed = rev.dataset.proposed;
+      const when = proposed ? new Date(proposed).toISOString() : null;
+      await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: when });
+      try { await api.post('/api/posts/' + encodeURIComponent(id) + '/signal', { signal: 'approved' }); } catch (e) {}
+      try { track('f3_dbltap_approve', { id, draft: true }); } catch (e) {}
+      toast('✅ <b>¡Listo!</b> Quedó programado 🙌');
+    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo programar')); if (rev) rev.disabled = false; return; }
+    try { render(); } catch (e) {}
+    return;
+  }
+  if (root.dataset.f3Status === 'scheduled' && (root.dataset.f3Appr || 'pending') === 'pending') {
+    try { track('f3_dbltap_approve', { id, draft: false }); } catch (e) {}
+    pcApprove(id, root, null);
+  }
+}
+// Detección de doble toque SIN tocar los bindings vigentes:
+// pointerup emparejado (<320ms, <42px, mismo media). El click
+// simple sigue su curso normal (lightbox). Al detectarse el
+// segundo toque: se suprime SU click (capture) y se cierra el
+// lightbox que abrió el primer toque — el corazón manda.
+// TILE: NO se implementa (resto declarado): la tile ya carga
+// tap→abrir, scroll de la grilla y el press-and-hold de la
+// suma 2; un doble tap ahí exigiría demorar el tap simple o
+// dispararse con scrolls — falsos positivos inaceptables.
+let F3_TAP = { t: 0, x: 0, y: 0, key: '' };
+let F3_SUPPRESS = { key: '', until: 0 };
+function f3MediaKey(media) {
+  const root = media.closest ? media.closest('[data-post-id]') : null;
+  if (root && root.dataset.postId) return 'post:' + root.dataset.postId;
+  if (media.closest && media.closest('.apv-media')) return 'apv';
+  return '';
+}
+function f3OnPointerUp(e) {
+  try {
+    if (e.isPrimary === false) return;
+    const media = e.target && e.target.closest ? e.target.closest('.igmock-media, .apv-media') : null;
+    if (!media) { F3_TAP = { t: 0, x: 0, y: 0, key: '' }; return; }
+    if (e.target.closest('[data-f3-thread], button:not(.igmock-media), a, input, textarea, select')) return;
+    const key = f3MediaKey(media);
+    if (!key) return;
+    const now = Date.now();
+    const dx = Math.abs((e.clientX || 0) - F3_TAP.x), dy = Math.abs((e.clientY || 0) - F3_TAP.y);
+    if (F3_TAP.key === key && now - F3_TAP.t < 320 && dx < 42 && dy < 42) {
+      F3_TAP = { t: 0, x: 0, y: 0, key: '' };
+      F3_SUPPRESS = { key, until: now + 500 };
+      try { closeLightbox(); } catch (err) {}
+      const host = media.classList.contains('igmock-media') ? media : media.closest('.apv-media') || media;
+      f3HeartBurst(host);
+      f3GestureApprove(media);
+    } else {
+      F3_TAP = { t: now, x: e.clientX || 0, y: e.clientY || 0, key };
+    }
+  } catch (err) {}
+}
+function f3OnClickCapture(e) {
+  try {
+    if (!F3_SUPPRESS.until || Date.now() > F3_SUPPRESS.until) return;
+    const media = e.target && e.target.closest ? e.target.closest('.igmock-media, .apv-media') : null;
+    if (!media) return;
+    if (f3MediaKey(media) !== F3_SUPPRESS.key) return;
+    e.stopPropagation();
+    e.preventDefault();
+    F3_SUPPRESS = { key: '', until: 0 };
+  } catch (err) {}
+}
+
+/* ---------- Ítem 4a: pinch-to-zoom en la foto abierta ---------- */
+// Pointer events: SOLO actúa con 2 punteros (el gesto de un
+// dedo — scroll incluido — no se toca). Al soltar, transition
+// de vuelta a escala 1. Clamp 1–3x. touch-action: pan-y en CSS
+// deja el pinch en manos de JS sin bloquear el scroll vertical.
+const F3_PINCH = { pts: new Map(), img: null, d0: 0, s0: 1, s: 1 };
+function f3PinchImg(e) {
+  const t = e.target;
+  if (!t || t.tagName !== 'IMG') return null;
+  if (!(t.closest('.apv-media') || t.closest('.igmock-media'))) return null;
+  return t;
+}
+function f3PinchDist() {
+  const a = [...F3_PINCH.pts.values()];
+  if (a.length < 2) return 0;
+  const dx = a[0].x - a[1].x, dy = a[0].y - a[1].y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+function f3PinchDown(e) {
+  const img = f3PinchImg(e);
+  if (!img) return;
+  if (F3_PINCH.img && F3_PINCH.img !== img) f3PinchReset();
+  F3_PINCH.img = img;
+  F3_PINCH.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (F3_PINCH.pts.size === 2) {
+    F3_PINCH.d0 = f3PinchDist() || 1;
+    F3_PINCH.s0 = F3_PINCH.s || 1;
+    img.classList.add('f3-zooming');
+    img.style.transition = 'none';
+  }
+}
+function f3PinchMove(e) {
+  if (!F3_PINCH.img || !F3_PINCH.pts.has(e.pointerId)) return;
+  F3_PINCH.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (F3_PINCH.pts.size !== 2) return;
+  const d = f3PinchDist();
+  if (!d) return;
+  let s = F3_PINCH.s0 * (d / (F3_PINCH.d0 || 1));
+  s = Math.max(1, Math.min(3, s));
+  F3_PINCH.s = s;
+  try { e.preventDefault(); } catch (err) {}
+  F3_PINCH.img.style.transform = s > 1 ? `scale(${s.toFixed(3)})` : '';
+}
+function f3PinchUp(e) {
+  if (F3_PINCH.pts.has(e.pointerId)) F3_PINCH.pts.delete(e.pointerId);
+  if (F3_PINCH.pts.size < 2 && F3_PINCH.img) {
+    const img = F3_PINCH.img;
+    img.style.transition = 'transform .3s ease';
+    img.style.transform = '';
+    F3_PINCH.s = 1; F3_PINCH.s0 = 1;
+    setTimeout(() => { try { img.classList.remove('f3-zooming'); img.style.transition = ''; } catch (err) {} }, 320);
+    if (!F3_PINCH.pts.size) F3_PINCH.img = null;
+  }
+}
+function f3PinchReset() {
+  try { if (F3_PINCH.img) { F3_PINCH.img.style.transform = ''; F3_PINCH.img.classList.remove('f3-zooming'); } } catch (e) {}
+  F3_PINCH.pts.clear(); F3_PINCH.img = null; F3_PINCH.s = 1; F3_PINCH.s0 = 1;
+}
+
+/* ---------- Ítem 3: la semana se cuelga en vivo ---------- */
+// Señal incremental REAL: la generación crea los posteos de a
+// uno en el servidor (pool del autopilot / pipeline de
+// /api/week/ensure) y GET /api/posts los refleja a medida que
+// quedan listos — el mismo polling que la app ya usa para
+// refrescar la home (setTimeout render de inicioView y el loop
+// hs_gen_retry). Acá NO hay re-render global ni spinner: solo
+// se reconstruye LA grilla, los posteos nuevos entran con
+// .hf-tile-enter escalonados en su posición final (la de
+// homeGridCompose / feedPreviewHTML) y el cofre se repone en
+// silencio (está oculto).
+const F3_LIVE = { timer: null, polls: 0, pending: -1, idlePolls: 0 };
+function f3TileHasMedia(el) { return !!(el && el.querySelector('img, video')); }
+function f3HomeTilesFrom(all, tz) {
+  const pl = schedPlacements(all, tz);
+  const upcoming = [];
+  for (const ymd of [...pl.byDay.keys()].sort()) {
+    for (const it of (pl.byDay.get(ymd) || [])) {
+      if (it.p.status === 'draft' || it.p.status === 'scheduled') upcoming.push({ p: it.p, ymd });
+    }
+  }
+  const published = all.filter(p => p.status === 'published');
+  const tiles = homeGridCompose({ upcoming, published, recents: (typeof HOME_PROF !== 'undefined' && HOME_PROF && HOME_PROF.recents) || [] });
+  for (const t of tiles) {
+    if (t.kind === 'post' && !t.day) {
+      const dt = pcParseDate(t.post.published_at || t.post.scheduled_at);
+      if (dt) t.day = schedDayKeyOf(dt, tz);
+    }
+  }
+  return { tiles, pl };
+}
+async function f3RevealCheck() {
+  const hfGrid = document.querySelector('.hf-grid');
+  const fpGrid = document.querySelector('.fp-grid');
+  if (!hfGrid && !fpGrid) return false;
+  let all = null;
+  try { all = await api.get('/api/posts'); } catch (e) { return false; }
+  if (!Array.isArray(all)) return false;
+  F3_LIVE.pending = all.filter(p => p && p.status === 'draft' && !p.image_path).length;
+  const tz = pcTz();
+  if (hfGrid) {
+    const before = new Map();
+    hfGrid.querySelectorAll('[data-post-id]').forEach(el => before.set(el.dataset.postId, f3TileHasMedia(el)));
+    const { tiles, pl } = f3HomeTilesFrom(all, tz);
+    const fresh = tiles.filter(t => t.kind === 'post' && t.post.image_path && (!before.has(String(t.post.id)) || before.get(String(t.post.id)) === false));
+    if (!fresh.length) return false;
+    const freshIds = new Set(fresh.map(t => String(t.post.id)));
+    hfGrid.innerHTML = tiles.map((t, i) => homeTileHTML(t, i)).join('');
+    const vault = document.getElementById('scfVault');
+    if (vault) {
+      const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
+      const seen = new Set(); const cards = [];
+      for (const t of tiles) {
+        if (t.kind !== 'post' || !t.post || seen.has(t.post.id)) continue;
+        seen.add(t.post.id);
+        const p = t.post;
+        const prop = p.status === 'published'
+          ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
+          : proposedLabelFor(p, pl.proposals, tz);
+        cards.push(weekCardHTML(p, { bizName, tz, prop, count: null }));
+      }
+      vault.innerHTML = cards.join('');
+    }
+    let k = 0;
+    hfGrid.querySelectorAll('[data-post-id]').forEach(el => {
+      if (freshIds.has(el.dataset.postId)) { el.classList.add('hf-tile-enter'); el.style.animationDelay = (k++ * 160) + 'ms'; }
+    });
+    try { bindScfMinis(document.getElementById('inicioView') || hfGrid.parentElement); } catch (e) {}
+    try { document.querySelectorAll('#inicioView [data-lightbox]').forEach(el => { el.onclick = () => lbOpenFrom(el); }); } catch (e) {}
+    try { f3PaintThreads(); } catch (e) {}
+    try { track('f3_live_reveal', { n: fresh.length, surface: 'home' }); } catch (e) {}
+    return true;
+  }
+  // Vista Feed de Schedule: misma idea sobre .fp-grid.
+  const beforeF = new Map();
+  fpGrid.querySelectorAll('[data-post-id]').forEach(el => beforeF.set(el.dataset.postId, f3TileHasMedia(el)));
+  const prof = (typeof FEED_PROFILE !== 'undefined') ? FEED_PROFILE : null;
+  const html = feedPreviewHTML(all, tz, prof);
+  if (!html) return false;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const newGrid = tmp.querySelector('.fp-grid');
+  if (!newGrid) return false;
+  const freshIdsF = new Set();
+  newGrid.querySelectorAll('[data-post-id]').forEach(el => {
+    if (f3TileHasMedia(el) && (!beforeF.has(el.dataset.postId) || beforeF.get(el.dataset.postId) === false)) freshIdsF.add(el.dataset.postId);
+  });
+  if (!freshIdsF.size) return false;
+  fpGrid.replaceWith(newGrid);
+  let k2 = 0;
+  newGrid.querySelectorAll('[data-post-id]').forEach(el => {
+    if (freshIdsF.has(el.dataset.postId)) { el.classList.add('hf-tile-enter'); el.style.animationDelay = (k2++ * 160) + 'ms'; }
+  });
+  try { newGrid.querySelectorAll('[data-feed-day]').forEach(b => { b.onclick = () => schedJumpDay(b.dataset.feedDay); }); } catch (e) {}
+  try { newGrid.querySelectorAll('[data-lightbox]').forEach(el => { el.onclick = () => lbOpenFrom(el); }); } catch (e) {}
+  try { track('f3_live_reveal', { n: freshIdsF.size, surface: 'feed' }); } catch (e) {}
+  return true;
+}
+function f3MaybeWatchLive() {
+  if (F3_LIVE.timer) return;
+  if (!document.querySelector('.hf-grid, .fp-grid')) return;
+  const generating = !!document.querySelector('.igmock-pending, .hs-generating, .hs-completing, .hf-tile-ph, .fp-tile-ph')
+    || (typeof AUTOPILOT_RUNNING !== 'undefined' && !!AUTOPILOT_RUNNING);
+  if (!generating) return;
+  F3_LIVE.polls = 0; F3_LIVE.idlePolls = 0;
+  F3_LIVE.timer = setInterval(async () => {
+    F3_LIVE.polls++;
+    try { await f3RevealCheck(); } catch (e) {}
+    const running = (typeof AUTOPILOT_RUNNING !== 'undefined' && !!AUTOPILOT_RUNNING) || !!document.querySelector('.igmock-pending, .hs-generating, .hs-completing');
+    if ((!running && F3_LIVE.pending === 0) || F3_LIVE.polls >= 75) {
+      F3_LIVE.idlePolls++;
+      if (F3_LIVE.idlePolls >= 2 || F3_LIVE.polls >= 75) { clearInterval(F3_LIVE.timer); F3_LIVE.timer = null; }
+    } else F3_LIVE.idlePolls = 0;
+    if (!document.querySelector('.hf-grid, .fp-grid')) { clearInterval(F3_LIVE.timer); F3_LIVE.timer = null; }
+  }, 4000);
+}
+
+/* ---------- Init Frente 3 (lo llama bindApp en cada render) ---------- */
+function f3Init(tab) {
+  try { f3PaintThreads(); } catch (e) {}
+  try { f3MaybeWatchLive(); } catch (e) {}
+  if (window.__f3Bound) return;
+  window.__f3Bound = true;
+  document.addEventListener('submit', (e) => {
+    const form = e.target && e.target.closest ? e.target.closest('[data-f3-form]') : null;
+    if (!form) return;
+    e.preventDefault();
+    f3ThreadSend(form);
+  });
+  document.addEventListener('pointerup', f3OnPointerUp, true);
+  document.addEventListener('click', f3OnClickCapture, true);
+  document.addEventListener('pointerdown', f3PinchDown, true);
+  document.addEventListener('pointermove', f3PinchMove, { capture: true, passive: false });
+  document.addEventListener('pointerup', f3PinchUp, true);
+  document.addEventListener('pointercancel', f3PinchUp, true);
+}
+
+
 /* ---------- Pedido de permiso push oportuno: solo tras conectar IG ---------- */
 // Se muestra UNA vez (flag localStorage 'push-ask-ig'). Nunca en frío al abrir la app.
 function maybeAskPushPostIg() {

@@ -2927,3 +2927,53 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .founder-card.mini img{max-width:320px}
 .founder-card.mini h3{font-size:20px}
 .founder-card.mini .fc-body{font-size:15px;line-height:1.55}
+
+/* ============================================================
+   FRENTE 3 · SUMA 3 (v357+): COMPORTAMIENTO DEL FEED
+   Hilo-editor (ítem 1), corazón de doble toque (ítem 2),
+   entrada de tiles en vivo (ítem 3), tacto IG (ítem 4).
+   La atenuación .pub de publicados NO se toca: la presión
+   visual vive en el ELEMENTO tile (filter propio), nunca
+   sobre el img/video que ya lleva el filtro .pub.
+   ============================================================ */
+/* --- Ítem 1: hilo de edición en el detalle --- */
+.f3-thread{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;text-align:left}
+.f3-msgs{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto}
+.f3-msgs:empty{display:none}
+.f3-msg{display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.45;color:var(--txt);overflow-wrap:anywhere}
+.f3-msg .f3-txt{text-transform:none;user-select:text;-webkit-user-select:text}
+.f3-msg-user .f3-who{font-weight:800;flex:none}
+.f3-ava{width:26px;height:26px;border-radius:50%;flex:none;object-fit:cover}
+.f3-typing .f3-txt{color:var(--mut)}
+.f3-form{display:flex;gap:8px;align-items:center;margin-top:10px}
+.f3-input{flex:1;min-width:0;border:1px solid var(--line);border-radius:999px;padding:10px 14px;font-size:14.5px;font-family:inherit;color:var(--txt);background:#fff;user-select:text;-webkit-user-select:text}
+.f3-send{flex:none;border:none;background:none;color:var(--cel);font-weight:800;font-size:14.5px;font-family:inherit;cursor:pointer;padding:10px 4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.f3-send:disabled{opacity:.45;cursor:default}
+.f3-hint{font-size:11.5px;color:var(--dim);margin-top:6px;line-height:1.4}
+.f3-busy .f3-input{opacity:.6}
+/* --- Ítem 2: corazón de doble toque --- */
+.igmock-media{position:relative}
+.apv-media{position:relative}
+.f3-heart{position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;z-index:6;pointer-events:none;filter:drop-shadow(0 6px 18px rgba(10,30,51,.45));animation:f3Heart .92s ease-out forwards}
+.f3-heart svg{width:100%;height:100%;display:block}
+@keyframes f3Heart{0%{transform:scale(.3);opacity:0}18%{transform:scale(1.12);opacity:1}32%{transform:scale(.96)}48%{transform:scale(1)}72%{opacity:1}100%{transform:scale(1.04) translateY(-8px);opacity:0}}
+/* --- Ítem 3: entrada de tiles en vivo (posición final del motor de balance) --- */
+.hf-tile-enter{animation:f3TileIn .5s cubic-bezier(.2,.8,.3,1) both}
+.fp-tile.hf-tile-enter{animation:f3TileIn .5s cubic-bezier(.2,.8,.3,1) both}
+@keyframes f3TileIn{0%{opacity:0;transform:scale(.86)}100%{opacity:1;transform:scale(1)}}
+/* --- Ítem 4b: presión visual transitoria en tiles y detalle --- */
+.hf-tile{transition:filter .12s ease}
+.hf-tile:active{filter:brightness(.8)}
+.fp-tile{transition:filter .12s ease}
+.fp-tile:active{filter:brightness(.8)}
+.scf-mini{transition:filter .12s ease}
+.scf-mini:active{filter:brightness(.82)}
+.igmock-media{transition:filter .12s ease}
+.igmock-media:active{filter:brightness(.88)}
+/* --- Ítem 4a: pinch-to-zoom (el retorno lo anima JS) --- */
+.apv-media img,.igmock-media img{touch-action:pan-y;transform-origin:center center}
+.apv-media img.f3-zooming,.igmock-media img.f3-zooming{cursor:zoom-in;will-change:transform}
+/* --- Ítem 4c: artefactos web fuera de las superficies de gesto --- */
+.hf-tile,.fp-tile,.scf-mini,.scf-mini-x,.igmock,.igmock-media,.apv-media,.apv-wrap,.scf-pop,.pubsheet,.pubsheet-ov,#lightbox .lb-content{-webkit-tap-highlight-color:transparent}
+.hf-tile,.fp-tile,.scf-mini,.scf-mini-x,.igmock-media,.apv-media,.scf-pop,.pubsheet,#lightbox .lb-content{user-select:none;-webkit-user-select:none}
+.f3-input,.f3-msg .f3-txt,.apv-caption,.igmock-cap,textarea,input{user-select:text;-webkit-user-select:text}
