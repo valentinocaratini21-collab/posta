@@ -251,7 +251,7 @@ async function publishSinglePost(db, post, opts = {}) {
     const notifyPublished = (isFirstPost || wasAuto) && !result.demo;
     try {
       if (notifyPublished) {
-        const u = db.prepare('SELECT email, name, COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
+        const u = db.prepare('SELECT email, name, lang, COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
         if (u && u.email && !u.oo) {
           const { publishedEmail } = require('./email');
           const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
@@ -1274,7 +1274,7 @@ async function sendWeeklyReminders(db) {
   }
   const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const users = db.prepare(`
-    SELECT id, email FROM users
+    SELECT id, email, lang FROM users
     WHERE email IS NOT NULL AND email != ''
       AND COALESCE(pwa_installed, 0) = 0
       AND COALESCE(email_opt_out, 0) = 0
@@ -1323,7 +1323,7 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
   }
   const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const users = db.prepare(`
-    SELECT u.id, u.email, p.business_name FROM users u
+    SELECT u.id, u.email, u.lang, p.business_name FROM users u
     LEFT JOIN profiles p ON p.user_id = u.id
     WHERE u.email IS NOT NULL AND u.email != ''
       AND COALESCE(u.email_opt_out, 0) = 0
@@ -1352,13 +1352,13 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
       `).get(u.id).c;
       const name = (u.business_name || '').trim() || u.email.split('@')[0];
       if (drafts > 0) {
-        const r = await draftsNudgeEmail({ email: u.email, name, count: drafts }, base);
+        const r = await draftsNudgeEmail({ email: u.email, name, count: drafts, lang: u.lang }, base);
         if (r && r.ok) {
           db.prepare(`INSERT INTO nudges (user_id, kind) VALUES (?, 'drafts')`).run(u.id);
           sent++;
         }
       } else {
-        const r = await emptyWeekEmail({ email: u.email, name }, base);
+        const r = await emptyWeekEmail({ email: u.email, name, lang: u.lang }, base);
         if (r && r.ok) {
           db.prepare(`INSERT INTO nudges (user_id, kind) VALUES (?, 'empty')`).run(u.id);
           sent++;
@@ -1408,12 +1408,21 @@ async function sendTrialAbandonEmails(db) {
         continue;
       }
       let biz = '';
-      try { biz = String(JSON.parse(l.payload || '{}').business || '').trim(); } catch (e) {}
-      const link = `${base}/prueba?ig=${encodeURIComponent(l.ig)}`;
+      let pLang = '';
+      try {
+        const pl = JSON.parse(l.payload || '{}');
+        biz = String(pl.business || '').trim();
+        // (v373 · paridad) El lead no tiene cuenta: su idioma es el de su
+        // prueba, guardado en el payload (las pruebas EN guardan lang='en').
+        if (pl.lang === 'en') pLang = 'en';
+      } catch (e) {}
+      const link = pLang === 'en'
+        ? `${base}/en/prueba?ig=${encodeURIComponent(l.ig)}`
+        : `${base}/prueba?ig=${encodeURIComponent(l.ig)}`;
       // Idempotencia: marcar ANTES de enviar (si el envío falla, no se reintenta:
       // es un único aviso, no una notificación crítica).
       db.prepare('UPDATE trial_cache SET abandon_sent = 1 WHERE ig = ?').run(l.ig);
-      const r = await trialAbandonEmail({ email }, base, biz, link);
+      const r = await trialAbandonEmail({ email }, base, biz, link, pLang);
       if (r && r.ok) sent++;
       else console.error('[abandono] no se pudo enviar a', email);
     } catch (e) {
@@ -1458,7 +1467,7 @@ async function sendTrialExpiryEmails(db) {
   let users = [];
   try {
     users = db.prepare(`
-      SELECT id, email, trial_ends_at, trial_extended_until, created_at
+      SELECT id, email, lang, trial_ends_at, trial_extended_until, created_at
       FROM users
       WHERE COALESCE(plan_status, 'trial') = 'trial'
         AND email IS NOT NULL AND email != ''
@@ -1473,7 +1482,7 @@ async function sendTrialExpiryEmails(db) {
       const end = trialExpiryEffectiveEnd(u, now);
       if (!end || end < lo || end > hi) { skipped++; continue; }
       db.prepare('UPDATE users SET trial_expiry_email_sent = 1 WHERE id = ?').run(u.id);
-      const r = await trialExpiryEmail({ email: u.email }, base);
+      const r = await trialExpiryEmail({ email: u.email, lang: u.lang }, base);
       if (r && r.ok) { sent++; console.log(`[vence-mañana] email enviado a ${u.email}`); }
       else console.error('[vence-mañana] no se pudo enviar a', u.email);
     } catch (e) {
@@ -1504,7 +1513,7 @@ async function sendFirstPublishEmails(db) {
   let users = [];
   try {
     users = db.prepare(`
-      SELECT id, email, client_name AS name, created_at
+      SELECT id, email, lang, client_name AS name, created_at
       FROM users
       WHERE email IS NOT NULL AND email != ''
         AND COALESCE(email_opt_out, 0) = 0
@@ -1527,7 +1536,7 @@ async function sendFirstPublishEmails(db) {
       // Idempotencia: marcar ANTES de enviar.
       db.prepare(`INSERT INTO nudges (user_id, kind) VALUES (?, 'first_publish')`).run(u.id);
       const nm = String(u.name || '').trim() || String(u.email || '').split('@')[0];
-      const r = await firstPublishNudgeEmail({ email: u.email, name: nm, drafts }, base);
+      const r = await firstPublishNudgeEmail({ email: u.email, name: nm, drafts, lang: u.lang }, base);
       if (r && r.ok) { sent++; console.log(`[primer-posteo] email enviado a ${u.email}`); }
       else console.error('[primer-posteo] no se pudo enviar a', u.email);
     } catch (e) {
@@ -1551,7 +1560,7 @@ async function sendWeeklyReports(db) {
   }
   const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const users = db.prepare(`
-    SELECT DISTINCT u.id, u.email, u.client_name AS name FROM users u
+    SELECT DISTINCT u.id, u.email, u.lang, u.client_name AS name FROM users u
     JOIN posts p ON p.user_id = u.id
     WHERE p.status = 'published'
       AND datetime(p.published_at) >= datetime('now', '-7 days')
@@ -1588,7 +1597,7 @@ async function sendWeeklyReports(db) {
         rows.push({ caption: p.caption, image_path: p.image_path, media_type: p.media_type, ...(m || {}) });
         await new Promise((r) => setTimeout(r, 300));
       }
-      const r = await weeklyReportEmail({ email: u.email, name: u.name }, base, rows);
+      const r = await weeklyReportEmail({ email: u.email, name: u.name, lang: u.lang }, base, rows);
       if (r && r.ok) sent++;
     } catch (e) {
       console.error('[reporte semanal] falló', u.email, e.message);

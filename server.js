@@ -6545,7 +6545,7 @@ async function albumRitualSweep(opts = {}) {
       // --- Email: el mismo pedido, con botón directo a la subida.
       if (!mission.emailed_at && !founder && planOrTrialOk(u.id)) {
         try {
-          const urow = db.prepare('SELECT id, email, client_name AS name, created_at, COALESCE(email_opt_out, 0) AS oo, COALESCE(pwa_installed, 0) AS pwa FROM users WHERE id = ?').get(u.id);
+          const urow = db.prepare('SELECT id, email, lang, client_name AS name, created_at, COALESCE(email_opt_out, 0) AS oo, COALESCE(pwa_installed, 0) AS pwa FROM users WHERE id = ?').get(u.id);
           const ageOk = !!(urow && urow.created_at && (Date.parse(String(urow.created_at).replace(' ', 'T') + 'Z') < now.getTime() - 86400000));
           if (urow && urow.email && !urow.oo && ageOk && Number(urow.pwa) === 1) {
             const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
@@ -11005,7 +11005,7 @@ const fmtPesos = (n) => '$' + Math.round(Number(n) || 0).toLocaleString('es-AR')
 // Si MP rechaza, NO se toca la DB y el próximo evento reintenta.
 async function revalidateReferralDiscount(referrerId) {
   try {
-    const u = db.prepare(`SELECT id, email, plan, plan_status, mp_preapproval_id, mp_base_amount, referral_discount FROM users WHERE id = ?`).get(referrerId);
+    const u = db.prepare(`SELECT id, email, lang, plan, plan_status, mp_preapproval_id, mp_base_amount, referral_discount FROM users WHERE id = ?`).get(referrerId);
     if (!u) return { ok: false, reason: 'no-user' };
     if (u.plan_status !== 'active' || !u.mp_preapproval_id) return { ok: false, reason: 'no-preapproval' };
     const st = referralStats(u.id);
@@ -11029,20 +11029,32 @@ async function revalidateReferralDiscount(referrerId) {
     console.log(`[referral-discount] user=${u.id} count=${st.referred_count} discount=${cur}->${want} old=${fmtPesos(base)} new=${fmtPesos(newAmount)} ok=true`);
     try {
       if (u.email) {
-        const priceFull = fmtPesos(base), priceHalf = fmtPesos(base * REFERRAL_DISCOUNT);
+        // (v373 · paridad) El email sale en el idioma de la cuenta; la rama
+        // ES conserva fmtPesos y los textos históricos exactos.
+        const ren = u.lang === 'en';
+        const fmt = ren ? (n) => '$' + Math.round(Number(n) || 0).toLocaleString('en-US') : fmtPesos;
+        const priceFull = fmt(base), priceHalf = fmt(base * REFERRAL_DISCOUNT);
         await sendEmail({
           to: u.email,
-          subject: want ? '¡Tus 2 referidos ya están adentro! 🎉' : 'Uno de tus referidos canceló 😅',
+          subject: ren
+            ? (want ? 'Your 2 referrals are in! 🎉' : 'One of your referrals cancelled 😅')
+            : (want ? '¡Tus 2 referidos ya están adentro! 🎉' : 'Uno de tus referidos canceló 😅'),
           html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
             <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
               <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
             </div>
             <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
               ${want
-                ? `<p style="font-size:16px;line-height:1.6">¡Tus 2 referidos ya están adentro! 🎉 Desde este mes pagás la mitad: <b>${priceHalf}</b> en vez de ${priceFull}.</p>
-                   <p style="font-size:13px;line-height:1.6;color:#47617A">Mientras tus 2 referidos sigan suscriptos, el descuento sigue 😊</p>`
-                : `<p style="font-size:16px;line-height:1.6">Che, uno de tus referidos canceló 😅 Volvés al precio normal de tu plan (${priceFull}).</p>
-                   <p style="font-size:13px;line-height:1.6;color:#47617A">Traé a otro y recuperás el 50% off 💪</p>`}
+                ? (ren
+                  ? `<p style="font-size:16px;line-height:1.6">Your 2 referrals are in! 🎉 Starting this month you pay half: <b>${priceHalf}</b> instead of ${priceFull}.</p>
+                   <p style="font-size:13px;line-height:1.6;color:#47617A">As long as your 2 referrals stay subscribed, the discount stays 😊</p>`
+                  : `<p style="font-size:16px;line-height:1.6">¡Tus 2 referidos ya están adentro! 🎉 Desde este mes pagás la mitad: <b>${priceHalf}</b> en vez de ${priceFull}.</p>
+                   <p style="font-size:13px;line-height:1.6;color:#47617A">Mientras tus 2 referidos sigan suscriptos, el descuento sigue 😊</p>`)
+                : (ren
+                  ? `<p style="font-size:16px;line-height:1.6">Hey, one of your referrals cancelled 😅 You're back to your plan's regular price (${priceFull}).</p>
+                   <p style="font-size:13px;line-height:1.6;color:#47617A">Bring in another one and you'll get the 50% off back 💪</p>`
+                  : `<p style="font-size:16px;line-height:1.6">Che, uno de tus referidos canceló 😅 Volvés al precio normal de tu plan (${priceFull}).</p>
+                   <p style="font-size:13px;line-height:1.6;color:#47617A">Traé a otro y recuperás el 50% off 💪</p>`)}
             </div></div>`,
         });
       }
@@ -11060,7 +11072,7 @@ async function revalidateReferralDiscount(referrerId) {
 // vale también en trial (el descuento se aplica al suscribirse).
 async function maybeReferralNudge(referrerId, baseUrl) {
   try {
-    const u = db.prepare('SELECT id, email, referral_code, referral_nudge_sent, COALESCE(email_opt_out,0) AS email_opt_out FROM users WHERE id = ?').get(referrerId);
+    const u = db.prepare('SELECT id, email, lang, referral_code, referral_nudge_sent, COALESCE(email_opt_out,0) AS email_opt_out FROM users WHERE id = ?').get(referrerId);
     if (!u) return { ok: false, reason: 'no-user' };
     if (u.referral_nudge_sent) return { ok: false, reason: 'already' };
     const st = referralStats(u.id);
@@ -11069,8 +11081,11 @@ async function maybeReferralNudge(referrerId, baseUrl) {
     // Flag ANTES de enviar: si el webhook reintenta, no se duplica.
     db.prepare('UPDATE users SET referral_nudge_sent = 1 WHERE id = ?').run(u.id);
     console.log(`[referral-nudge] user=${u.id} llegó a 1 referido: avisando`);
-    const title = '🎁 Te falta 1 para pagar la mitad';
-    const body = 'Cuando otro amigo se suscriba con tu link, pagás la mitad todos los meses.';
+    // (v373 · paridad) Push y email salen en el idioma de la cuenta; la
+    // rama ES conserva los textos históricos exactos.
+    const ren = u.lang === 'en';
+    const title = ren ? "🎁 You're 1 away from paying half" : '🎁 Te falta 1 para pagar la mitad';
+    const body = ren ? 'When one more friend subscribes with your link, you pay half every month.' : 'Cuando otro amigo se suscriba con tu link, pagás la mitad todos los meses.';
     try {
       await push.sendPush(u.id, {
         title, body, url: '/#/app/ajustes?plan=1',
@@ -11087,11 +11102,11 @@ async function maybeReferralNudge(referrerId, baseUrl) {
               <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
             </div>
             <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-              <p style="font-size:16px;line-height:1.6;margin:0 0 8px"><b>🎁 Te falta 1 para pagar la mitad.</b></p>
-              <p style="font-size:15px;line-height:1.6;margin:0 0 16px">Ya tenés 1 referido suscripto. Cuando otro amigo se suscriba con tu link, <b>pagás la mitad todos los meses</b> 💪</p>
-              <p style="font-size:13px;color:#47617A;margin:0 0 8px">Tu link:</p>
+              <p style="font-size:16px;line-height:1.6;margin:0 0 8px"><b>${ren ? "🎁 You're 1 away from paying half." : '🎁 Te falta 1 para pagar la mitad.'}</b></p>
+              <p style="font-size:15px;line-height:1.6;margin:0 0 16px">${ren ? 'You already have 1 subscribed referral. When one more friend subscribes with your link, ' : 'Ya tenés 1 referido suscripto. Cuando otro amigo se suscriba con tu link, '}<b>${ren ? 'you pay half every month' : 'pagás la mitad todos los meses'}</b> 💪</p>
+              <p style="font-size:13px;color:#47617A;margin:0 0 8px">${ren ? 'Your link:' : 'Tu link:'}</p>
               <p style="font-size:14px;margin:0 0 16px"><a href="${link}" style="color:#2793C8;font-weight:700">${link}</a></p>
-              <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;padding:12px 22px;border-radius:10px;text-decoration:none">Compartir mi link →</a>
+              <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;padding:12px 22px;border-radius:10px;text-decoration:none">${ren ? 'Share my link →' : 'Compartir mi link →'}</a>
             </div></div>`,
         });
       } catch (e) { console.error('[referral-nudge] email:', e.message); }
@@ -18020,7 +18035,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v372';
+const BUILD_ID = '20261024-v373';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

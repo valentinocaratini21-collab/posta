@@ -27,7 +27,7 @@ function getUser(db, userId) {
     // este try/catch y TODOS los emails del módulo devolvían "usuario sin
     // email" sin enviar jamás (aprobaciones y posteos perdidos muertos
     // desde su origen).
-    const r = db.prepare('SELECT email, client_name AS name FROM users WHERE id = ?').get(userId);
+    const r = db.prepare('SELECT email, lang, client_name AS name FROM users WHERE id = ?').get(userId);
     return r || null;
   } catch (e) {
     return null;
@@ -44,7 +44,14 @@ function getImageBaseUrl(db, userId) {
 }
 
 // Misma cabecera visual que los emails de email.js (posty. en celeste + fondo claro).
-function emailShell(inner) {
+// (v373 · paridad total) lang='en' → pie en inglés (el mismo texto que usa
+// el emailShell de email.js); sin lang, el pie ES histórico exacto.
+function emailShell(inner, lang) {
+  const foot = lang === 'en'
+    ? `We're writing because you have content pending in Posty.<br>
+      Don't want these notices? Write to us at <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.`
+    : `Te avisamos porque tenés contenido pendiente en Posty.<br>
+      ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.`;
   return `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
   <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
@@ -53,8 +60,7 @@ function emailShell(inner) {
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     ${inner}
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">
-      Te avisamos porque tenés contenido pendiente en Posty.<br>
-      ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
+      ${foot}
     </p>
   </div>
 </div>`;
@@ -62,7 +68,8 @@ function emailShell(inner) {
 
 // "lun 18:00": día + hora del posteo en el timezone del usuario.
 // userHourLabel de approval.js da solo la hora; acá sumamos el día corto.
-function dayHourLabel(db, userId, isoUtc) {
+// (v373) lang='en' → el día corto sale en inglés ("Mon 18:00").
+function dayHourLabel(db, userId, isoUtc, lang) {
   let tz = 'America/Argentina/Buenos_Aires';
   try {
     const r = db.prepare('SELECT timezone FROM settings WHERE user_id = ?').get(userId);
@@ -73,7 +80,7 @@ function dayHourLabel(db, userId, isoUtc) {
     if (!s) return '';
     const d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s.replace(' ', 'T') + 'Z');
     if (Number.isNaN(d.getTime())) return '';
-    const parts = new Intl.DateTimeFormat('es-AR', {
+    const parts = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'es-AR', {
       weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz,
     }).formatToParts(d);
     const get = (t) => ((parts.find((p) => p.type === t) || {}).value || '').replace(/\.$/, '');
@@ -98,8 +105,9 @@ async function sendApprovalEmail(db, post) {
     if (!gate.ok) return gate;
 
     const base = BASE_URL();
+    const en = gate.user.lang === 'en';
     const hhmm = userHourLabel(db, post.user_id, post.scheduled_at) || '';
-    const subject = `Tu posteo de las ${hhmm} está listo 👀`;
+    const subject = en ? `Your ${hhmm} post is ready 👀` : `Tu posteo de las ${hhmm} está listo 👀`;
 
     const a = signAction(post.id, 'approve', 4);
     const r = signAction(post.id, 'reject', 4);
@@ -111,17 +119,17 @@ async function sendApprovalEmail(db, post) {
     const captionHtml = esc(caption.slice(0, 200)) + (caption.length > 200 ? '…' : '');
 
     const html = emailShell(`
-    <p style="font-size:16px;margin:0 0 16px">Te lo muestro para que lo apruebes con un toque 👇</p>
+    <p style="font-size:16px;margin:0 0 16px">${en ? "Here's your post — approve it in one tap 👇" : 'Te lo muestro para que lo apruebes con un toque 👇'}</p>
     ${img ? `<img src="${esc(img)}" alt="Posteo" style="width:100%;border-radius:12px;display:block;margin:0 0 16px">` : ''}
     ${captionHtml ? `<p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#0A1E33">${captionHtml}</p>` : ''}
-    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#0A1E33"><b>Sale hoy a las ${esc(hhmm)}</b></p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#0A1E33"><b>${en ? `It goes out today at ${esc(hhmm)}` : `Sale hoy a las ${esc(hhmm)}`}</b></p>
     <p style="text-align:center;margin:0 0 12px">
-      <a href="${approveUrl}" style="display:inline-block;min-width:200px;background:#2793C8;color:#fff;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none">✅ Aceptar</a>
+      <a href="${approveUrl}" style="display:inline-block;min-width:200px;background:#2793C8;color:#fff;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none">✅ ${en ? 'Approve' : 'Aceptar'}</a>
     </p>
     <p style="text-align:center;margin:0 0 20px">
-      <a href="${rejectUrl}" style="display:inline-block;min-width:200px;background:#fff;color:#47617A;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none;border:2px solid #B9CBD9">❌ Rechazar</a>
+      <a href="${rejectUrl}" style="display:inline-block;min-width:200px;background:#fff;color:#47617A;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none;border:2px solid #B9CBD9">❌ ${en ? 'Reject' : 'Rechazar'}</a>
     </p>
-    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">Si no hacés nada, sale solo en 3 horas. — <b>Posty</b> 🤖</p>`);
+    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">${en ? 'If you do nothing, it goes out on its own in 3 hours. — ' : 'Si no hacés nada, sale solo en 3 horas. — '}<b>Posty</b> 🤖</p>`, en ? 'en' : undefined);
     return await sendEmail({ to: gate.user.email, subject, html });
   } catch (e) {
     console.error(`[notify-email] aprobación post #${post && post.id}:`, e.message);
@@ -136,15 +144,25 @@ async function sendMissedEmail(db, post) {
     if (!gate.ok) return gate;
 
     const base = BASE_URL();
+    const en = gate.user.lang === 'en';
     const hhmm = userHourLabel(db, post.user_id, post.scheduled_at) || '';
-    const subject = `No publiqué tu posteo de las ${hhmm} 😅`;
+    const subject = en ? `I didn't publish your ${hhmm} post 😅` : `No publiqué tu posteo de las ${hhmm} 😅`;
     // FASE 3 — CTA firmado con signAction: un toque aprueba sin login ni app
     // (GET /api/posts/:id/approve con firma válida aprueba directo y muestra
     // la página de confirmación). Antes llevaba a /#/app/post/:id, que exige login.
     const a = signAction(post.id, 'approve', 4);
     const cta = `${base}/api/posts/${post.id}/approve?sig=${a.sig}&exp=${a.exp}`;
 
-    const html = emailShell(`
+    const html = emailShell(en ? `
+    <p style="font-size:16px;margin:0 0 12px">I haven't published it yet 😅</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Since you haven't approved anything yet, I'd rather not publish without your OK.
+      Once you approve the first few, they'll go out on their own after that. 🚀<br>
+      <span style="font-size:13px"><b>Posty</b> 🤖</span>
+    </p>
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Approve it now</a>
+    </p>` : `
     <p style="font-size:16px;margin:0 0 12px">Todavía no lo publiqué 😅</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       Como todavía no me aprobaste nada, prefiero no publicar sin tu OK.
@@ -153,7 +171,7 @@ async function sendMissedEmail(db, post) {
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Aprobarlo ahora</a>
-    </p>`);
+    </p>`, en ? 'en' : undefined);
     return await sendEmail({ to: gate.user.email, subject, html });
   } catch (e) {
     console.error(`[notify-email] missed post #${post && post.id}:`, e.message);
@@ -169,14 +187,21 @@ async function sendWeekReady(db, userId, n) {
     const user = getUser(db, userId);
     if (!user || !String(user.email || '').trim()) return { ok: false, reason: 'usuario sin email' };
     const base = BASE_URL();
-    const subject = 'Tu semana está lista 🎉';
-    const html = emailShell(`
+    const en = user.lang === 'en';
+    const subject = en ? 'Your week is ready 🎉' : 'Tu semana está lista 🎉';
+    const html = emailShell(en ? `
+    <p style="font-size:18px;font-weight:800;margin:0 0 12px">Hi${user.name ? ' ' + esc(user.name) : ''}! I'm Posty 🤖</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;color:#0A1E33">I built your week and already scheduled it: <b>${n} ${n === 1 ? 'post goes out on its own' : 'posts go out on their own'}</b> at their times ✨</p>
+    <p style="text-align:center;margin:0 0 20px">
+      <a href="${base}/#/app/schedule" style="display:inline-block;min-width:200px;background:#2793C8;color:#fff;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none">See my week 👀</a>
+    </p>
+    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">Want to change anything? You can adjust it from your week in one tap 👇</p>` : `
     <p style="font-size:18px;font-weight:800;margin:0 0 12px">¡Hola${user.name ? ' ' + esc(user.name) : ''}! Soy Posty 🤖</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 16px;color:#0A1E33">Armé tu semana y ya la dejé programada: <b>${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'}</b> en su horario ✨</p>
     <p style="text-align:center;margin:0 0 20px">
       <a href="${base}/#/app/schedule" style="display:inline-block;min-width:200px;background:#2793C8;color:#fff;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none">Ver mi semana 👀</a>
     </p>
-    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">Si querés cambiar algo, lo ajustás desde tu semana con un toque 👇</p>`);
+    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">Si querés cambiar algo, lo ajustás desde tu semana con un toque 👇</p>`, en ? 'en' : undefined);
     return await sendEmail({ to: user.email, subject, html });
   } catch (e) {
     console.error(`[notify-email] semana lista usuario ${userId}:`, e.message);
@@ -219,16 +244,17 @@ async function sendWeekPreview(db, userId, weekKey, drafts) {
     } catch (e) { console.error('[notify-email] week preview slots:', e.message); }
 
     const base = BASE_URL();
+    const en = user.lang === 'en';
     const { sig, exp } = signWeekAction(userId, weekKey, 72);
     const publishUrl = `${base}/api/week/${encodeURIComponent(weekKey)}/publish?uid=${encodeURIComponent(userId)}&sig=${sig}&exp=${exp}`;
-    const subject = 'Tu semana está lista ✨';
+    const subject = en ? 'Your week is ready ✨' : 'Tu semana está lista ✨';
 
     const cards = rows.map((d) => {
       const file = String(d.image_path || '').split('/').pop();
       const img = file ? absoluteMediaUrl(d.image_path, getImageBaseUrl(db, userId)) : '';
       const caption = String(d.caption || '').trim();
       const captionHtml = esc(caption.slice(0, 180)) + (caption.length > 180 ? '…' : '');
-      const when = dayHourLabel(db, userId, d.scheduled_at);
+      const when = dayHourLabel(db, userId, d.scheduled_at, en ? 'en' : undefined);
       return `<div style="background:#fff;border-radius:12px;padding:16px;margin:0 0 16px;border:1px solid #DCE9F2">` +
         (img ? `<img src="${esc(img)}" alt="Posteo" style="width:100%;border-radius:8px;display:block;margin:0 0 12px">` : '') +
         (when ? `<p style="font-size:13px;font-weight:800;color:#2793C8;margin:0 0 8px;text-transform:uppercase">📅 ${esc(when)}</p>` : '') +
@@ -237,7 +263,15 @@ async function sendWeekPreview(db, userId, weekKey, drafts) {
     }).join('');
 
     const n = rows.length;
-    const html = emailShell(`
+    const html = emailShell(en ? `
+    <p style="font-size:18px;font-weight:800;margin:0 0 12px">Hi${user.name ? ' ' + esc(user.name) : ''}! I'm Posty 🤖</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#0A1E33">I built your week: <b>${n} ${n === 1 ? 'post' : 'posts'}</b> ready to go out 👇</p>
+    ${cards}
+    <p style="text-align:center;margin:8px 0 12px">
+      <a href="${publishUrl}" style="display:inline-block;min-width:220px;background:#2793C8;color:#fff;font-weight:800;font-size:18px;padding:18px 44px;border-radius:999px;text-decoration:none">🚀 Publish week</a>
+    </p>
+    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0 0 8px;text-align:center">One tap and they're scheduled. No opening the app, no chat. ✨</p>
+    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">Want to change something or skip this week? Just ignore this email: nothing gets published without your OK.</p>` : `
     <p style="font-size:18px;font-weight:800;margin:0 0 12px">¡Hola${user.name ? ' ' + esc(user.name) : ''}! Soy Posty 🤖</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#0A1E33">Armé tu semana: <b>${n} ${n === 1 ? 'posteo' : 'posteos'}</b> listos para salir 👇</p>
     ${cards}
@@ -245,7 +279,7 @@ async function sendWeekPreview(db, userId, weekKey, drafts) {
       <a href="${publishUrl}" style="display:inline-block;min-width:220px;background:#2793C8;color:#fff;font-weight:800;font-size:18px;padding:18px 44px;border-radius:999px;text-decoration:none">🚀 Publicar semana</a>
     </p>
     <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0 0 8px;text-align:center">Un toque y quedan programados. Sin entrar a la app, sin chat. ✨</p>
-    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">¿Preferís cambiar algo o saltear esta semana? Ignorá este email: nada se publica sin tu OK.</p>`);
+    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">¿Preferís cambiar algo o saltear esta semana? Ignorá este email: nada se publica sin tu OK.</p>`, en ? 'en' : undefined);
     return await sendEmail({ to: user.email, subject, html });
   } catch (e) {
     console.error(`[notify-email] week preview usuario ${userId}:`, e.message);
@@ -268,34 +302,45 @@ async function sendUpcomingEmail(db, post, opts) {
     const user = getUser(db, post.user_id);
     if (!user || !String(user.email || '').trim()) return { ok: false, reason: 'no_email' };
     const base = BASE_URL();
-    const when = dayHourLabel(db, post.user_id, post.scheduled_at);
+    const en = user.lang === 'en';
+    const when = dayHourLabel(db, post.user_id, post.scheduled_at, en ? 'en' : undefined);
     const firstLine = String(post.caption || '').split('\n')[0].trim().slice(0, 120);
     const img = absoluteMediaUrl(post.image_path, getImageBaseUrl(db, post.user_id));
-    const subject = mode === 'manual'
-      ? '⏰ Sale en 30 minutos: ¿lo publicamos?'
-      : '⏰ Tu posteo sale en 30 minutos';
+    const subject = en
+      ? (mode === 'manual' ? '⏰ Going out in 30 minutes: shall we publish it?' : '⏰ Your post goes out in 30 minutes')
+      : (mode === 'manual' ? '⏰ Sale en 30 minutos: ¿lo publicamos?' : '⏰ Tu posteo sale en 30 minutos');
     let actionHtml = '';
     if (mode === 'manual') {
       const a = signAction(post.id, 'approve', 4);
       const approveUrl = `${base}/api/posts/${post.id}/approve?sig=${a.sig}&exp=${a.exp}`;
-      actionHtml = `
+      actionHtml = en ? `
+    <p style="text-align:center;margin:0 0 12px">
+      <a href="${approveUrl}" style="display:inline-block;min-width:200px;background:#2793C8;color:#fff;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none">✅ Yes, publish it</a>
+    </p>
+    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">One tap and it's out. If you do nothing, it won't be published without your OK.</p>` : `
     <p style="text-align:center;margin:0 0 12px">
       <a href="${approveUrl}" style="display:inline-block;min-width:200px;background:#2793C8;color:#fff;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none">✅ Sí, publicalo</a>
     </p>
     <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">Un toque y sale. Si no hacés nada, no se publica sin tu OK.</p>`;
     } else {
-      actionHtml = `
+      actionHtml = en ? `
+    <p style="font-size:14px;line-height:1.6;color:#47617A;margin:0;text-align:center">It goes out on its own, as always. If you want to stop it or change it, open your week 👇</p>
+    <p style="text-align:center;margin:12px 0 0">
+      <a href="${base}/#/app/semana?post=${post.id}" style="display:inline-block;min-width:200px;background:#fff;color:#47617A;font-weight:800;font-size:15px;padding:12px 32px;border-radius:999px;text-decoration:none;border:2px solid #B9CBD9">See the post</a>
+    </p>` : `
     <p style="font-size:14px;line-height:1.6;color:#47617A;margin:0;text-align:center">Sale solo, como siempre. Si querés frenarlo o cambiarlo, entrá a tu semana 👇</p>
     <p style="text-align:center;margin:12px 0 0">
       <a href="${base}/#/app/semana?post=${post.id}" style="display:inline-block;min-width:200px;background:#fff;color:#47617A;font-weight:800;font-size:15px;padding:12px 32px;border-radius:999px;text-decoration:none;border:2px solid #B9CBD9">Ver el posteo</a>
     </p>`;
     }
     const html = emailShell(`
-    <p style="font-size:16px;margin:0 0 16px">${mode === 'manual' ? 'Este posteo sale en 30 minutos y todavía no me diste tu ok 👇' : 'En 30 minutos publico este posteo 👇'}</p>
+    <p style="font-size:16px;margin:0 0 16px">${en
+      ? (mode === 'manual' ? "This post goes out in 30 minutes and you haven't given me your OK yet 👇" : "In 30 minutes I'll publish this post 👇")
+      : (mode === 'manual' ? 'Este posteo sale en 30 minutos y todavía no me diste tu ok 👇' : 'En 30 minutos publico este posteo 👇')}</p>
     ${img && post.image_path ? `<img src="${esc(img)}" alt="Posteo" style="width:100%;border-radius:12px;display:block;margin:0 0 16px">` : ''}
     ${firstLine ? `<p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#0A1E33">${esc(firstLine)}</p>` : ''}
-    ${when ? `<p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#0A1E33"><b>Sale el ${esc(when)}</b> (hora de tu cuenta)</p>` : ''}
-    ${actionHtml}`);
+    ${when ? `<p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#0A1E33"><b>${en ? `Going out ${esc(when)}` : `Sale el ${esc(when)}`}</b> ${en ? "(your account's time)" : '(hora de tu cuenta)'}</p>` : ''}
+    ${actionHtml}`, en ? 'en' : undefined);
     const r = await sendEmail({ to: user.email, subject, html });
     if (r && r.ok) return { ok: true };
     if (r && r.skipped) return { ok: false, reason: 'no_config' };

@@ -37,12 +37,22 @@ function winDecision(score, kind, prev) {
 }
 
 const fmtInt = (n) => Math.round(Number(n) || 0).toLocaleString('es-AR');
+// (v373 · paridad) Formato según idioma de la cuenta (ES conserva es-AR).
+const fmtIntL = (n, lang) => Math.round(Number(n) || 0).toLocaleString(lang === 'en' ? 'en-US' : 'es-AR');
 
 function vecesTxt(ratio) {
   const r = Math.round(Number(ratio) || 0);
   if (r === 2) return 'el doble de tu promedio';
   if (r === 3) return 'el triple de tu promedio';
   return `${r} veces tu promedio`;
+}
+
+// (v373 · paridad) Espejo EN de vecesTxt.
+function vecesTxtEn(ratio) {
+  const r = Math.round(Number(ratio) || 0);
+  if (r === 2) return 'twice your average';
+  if (r === 3) return 'three times your average';
+  return `${r} times your average`;
 }
 
 function appBaseUrl() {
@@ -52,13 +62,15 @@ function appBaseUrl() {
 // Línea discreta de referido para los momentos de dopamina (testeable).
 // Devuelve '' si el usuario ya tiene >=2 referidos activos (no hay nada que ofrecer)
 // o no tiene código. Activo = referred_by con plan_status 'active' (igual que referralStats).
-function referralWinLine(db, userId, referralCode, baseUrl) {
+function referralWinLine(db, userId, referralCode, baseUrl, lang) {
   if (!referralCode) return '';
   try {
     const rr = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE referred_by = ? AND plan_status = 'active'`).get(userId);
     if (rr && rr.n >= 2) return '';
   } catch (e) { return ''; }
   const base = String(baseUrl || '').replace(/\/$/, '');
+  // (v373 · paridad) lang='en' → la línea sale en inglés; default ES exacto.
+  if (lang === 'en') return `\nknow someone with a business? you both get 50% off 👇\n${base}/?ref=${referralCode}`;
   return `\nconocés a alguien con negocio? los dos ganan 50% off 👇\n${base}/?ref=${referralCode}`;
 }
 
@@ -72,7 +84,7 @@ async function celebrateWins(db) {
   let cands = [];
   try {
     cands = db.prepare(`
-      SELECT p.*, u.email AS uemail, u.name AS uname,
+      SELECT p.*, u.email AS uemail, u.name AS uname, u.lang AS ulang,
              u.referral_code AS referral_code,
              COALESCE(u.email_opt_out, 0) AS email_opt_out,
              COALESCE(u.last_win_at, '') AS last_win_at
@@ -115,19 +127,31 @@ async function celebrateWins(db) {
       const dec = winDecision(score, kind, prev);
       if (!dec.win) continue;
       // Copy con números reales, nunca inventados.
+      // (v373 · paridad) El festejo completo (push, email y chat) sale en el
+      // idioma de la cuenta; la rama ES conserva los textos exactos.
       const deepUrl = `${base}/#/app/post/${p.id}`;
+      const pLang = p.ulang === 'en' ? 'en' : 'es';
       let body;
-      if (kind === 'reach') {
+      if (pLang === 'en') {
+        if (kind === 'reach') {
+          body = `${fmtIntL(score, pLang)} people have seen it so far` + (dec.ratio >= WIN_FACTOR ? ` — ${vecesTxtEn(dec.ratio)}.` : '.');
+        } else {
+          const likes = fmtIntL(m.likes, pLang), comments = fmtIntL(m.comments, pLang);
+          body = `${likes} likes and ${comments} comments` + (dec.ratio >= WIN_FACTOR ? ` — ${vecesTxtEn(dec.ratio)}.` : '.');
+        }
+      } else if (kind === 'reach') {
         body = `${fmtInt(score)} personas ya lo vieron` + (dec.ratio >= WIN_FACTOR ? ` — ${vecesTxt(dec.ratio)}.` : '.');
       } else {
         const likes = fmtInt(m.likes), comments = fmtInt(m.comments);
         body = `${likes} me gusta y ${comments} comentarios` + (dec.ratio >= WIN_FACTOR ? ` — ${vecesTxt(dec.ratio)}.` : '.');
       }
-      const title = '🔥 Tu posteo la está rompiendo';
+      const title = pLang === 'en' ? '🔥 Your post is crushing it' : '🔥 Tu posteo la está rompiendo';
       // El festejo vive en el chat: Posty se lo dice ahí con su voz.
       // Pico de dopamina: una línea discreta de referido si le falta (<2 activos).
-      const refLine = referralWinLine(db, p.user_id, p.referral_code, base);
-      const chatText = `🔥 tu posteo la está rompiendo! ${body} seguí así que vamos bien 👌${refLine}`;
+      const refLine = referralWinLine(db, p.user_id, p.referral_code, base, pLang);
+      const chatText = pLang === 'en'
+        ? `🔥 your post is crushing it! ${body} keep it up, we're on a roll 👌${refLine}`
+        : `🔥 tu posteo la está rompiendo! ${body} seguí así que vamos bien 👌${refLine}`;
       let chatOk = false;
       try {
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(p.user_id, 'assistant', chatText.slice(0, 2000));
@@ -159,7 +183,7 @@ async function celebrateWins(db) {
                 ${image ? `<img src="${image}" style="width:100%;border-radius:10px;margin-bottom:16px" alt="">` : ''}
                 <p style="font-size:17px;font-weight:700;margin:0 0 8px">${title} 🎉</p>
                 <p style="font-size:15px;line-height:1.6;margin:0 0 16px">${body}</p>
-                <a href="${deepUrl}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;padding:12px 22px;border-radius:10px;text-decoration:none">Ver mi posteo →</a>
+                <a href="${deepUrl}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;padding:12px 22px;border-radius:10px;text-decoration:none">${pLang === 'en' ? 'See my post →' : 'Ver mi posteo →'}</a>
               </div></div>`,
           });
           emailOk = !!(r && r.ok);
