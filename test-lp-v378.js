@@ -80,7 +80,7 @@ ok(styles.includes('.lp-view{'), 'CSS: overlay .lp-view presente');
 /* ---------- ítem 2: comparador honesto ---------- */
 ok(appJs.includes('CM freelance') && appJs.includes('Lo hacés vos') && appJs.includes('id="cmpPostyPrice"'), 'ES: comparador de 4 vías con precio de Posty inyectado');
 ok(appJs.includes('referencia de mercado'), 'ES: rangos rotulados como referencia de mercado');
-ok(appJs.includes('$300.000 a $600.000 *'), 'ES: ancla CM freelance oficial con asterisco');
+ok(appJs.includes('Desde $1.000.000 *'), 'ES: ancla CM freelance oficial con asterisco');
 ok(enHtml.includes('Freelance CM') && enHtml.includes('Do it yourself') && enHtml.includes('Market reference prices'), 'EN: comparador de 4 vías + referencia rotulada');
 ok(enHtml.includes('$1,500–$3,000+ *'), 'EN: ancla oficial $1,500–$3,000+ con asterisco');
 ok(styles.includes('.cmp-table.cmp4'), 'CSS: grilla de 5 columnas del comparador');
@@ -103,7 +103,7 @@ ok(appJs.includes('Posty trabaja completo por sí solo'), 'invariante v376: acla
 ok(enHtml.includes('Does Posty work on its own, or do I need to hire anything else?'), 'invariante v376: FAQ de autonomía EN entera');
 const av = fs.readFileSync(path.join(__dirname, 'public/ai-avatar.png'));
 ok(crypto.createHash('sha256').update(av).digest('hex').startsWith('c8feaff7'), 'invariante: avatar canónico con placa (sha c8feaff7…)');
-ok(idxHtml.includes('/app.js?v=257'), 'index: app.js ?v=257');
+ok(idxHtml.includes('/app.js?v=258'), 'index: app.js ?v=258');
 ok(idxHtml.includes('/styles.css?v=20261024i') && enHtml.includes('/styles.css?v=20261024i'), 'styles.css ?v=20261024i en ES y EN');
 ok(/BUILD_ID = '202610\d\d-v\d+'/.test(serverJs), 'BUILD_ID presente (el exacto lo afirma el test de la tanda vigente)');
 

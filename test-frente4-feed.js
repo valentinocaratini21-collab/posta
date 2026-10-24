@@ -154,7 +154,7 @@ ok(CSS.includes('.hf-why{'), 'CSS: la línea del porqué');
 // Reglas duras
 const cssT4 = CSS.slice(CSS.indexOf('/* (Tanda 4 del feed) Bandeja'), CSS.indexOf('/* (Frente 3 · suma 2) Hoja de acciones'));
 ok(cssT4.length > 500 && !cssT4.includes('text-transform:uppercase'), 'Tanda 4: ningún mayúsculas forzadas nuevo en su bloque CSS');
-ok(IDX.includes('/app.js?v=257') && IDX.includes('/styles.css?v=20261024i'), 'index: bumps ?v= app.js 257 + styles.css 20261024i');
+ok(IDX.includes('/app.js?v=258') && IDX.includes('/styles.css?v=20261024i'), 'index: bumps ?v= app.js 258 + styles.css 20261024i');
 
 console.log(`\nfrente4-feed: ${total - fails}/${total} ok`);
 process.exit(fails ? 1 : 0);

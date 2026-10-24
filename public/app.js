@@ -2467,7 +2467,7 @@ function landingView(cfg) {
   </div></div>
   <div class="section" id="cm"><div class="wrap">
     <h2>Un community manager hace mucho más que publicar</h2>
-    <p class="lede">Un Instagram que vende no se mantiene solo: hay que publicar seguido, conversar con la gente, responder todo y promocionar lo que funciona. Eso es lo que hace un community manager. Y cobra <b>$300.000 o más por mes</b>. <b>Posty hace ese mismo trabajo, todos los días.</b></p>
+    <p class="lede">Un Instagram que vende no se mantiene solo: hay que publicar seguido, conversar con la gente, responder todo y promocionar lo que funciona. Eso es lo que hace un community manager. Y cobra <b>desde $1.000.000 por mes</b>. <b>Posty hace ese mismo trabajo, todos los días.</b></p>
     <div class="lp-cm-cards">
       <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>Comunidad</h3><p class="lp-cm-tag">Que nadie quede sin respuesta</p><p>Responde comentarios y mensajes (con tu OK en un toque), contesta tus reseñas de Google, y arma historias que hacen participar a tu audiencia: encuestas, preguntas y cuentas regresivas. Una comunidad se construye conversando, no solo publicando.</p></div>
       <div class="lp-cm-card"><div class="lp-cm-i">📈</div><h3>Crecimiento</h3><p class="lp-cm-tag">Que te descubra gente nueva</p><p>Detecta tus posteos que mejor andan y los potencia con pauta (vos fijás el tope), te da tu página pública lista para compartir con botón de WhatsApp, y cada mes trabaja con un foco de crecimiento que vos elegís.</p></div>
@@ -2481,7 +2481,7 @@ function landingView(cfg) {
       <div class="lp-cm-row" role="row"><div class="crit">Potencia lo que anda con pauta</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Piensa el foco de cada mes</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Está disponible</div><div>En su horario</div><div class="win">Todos los días, a toda hora</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>$300.000+ por mes</div><div class="win">Desde $6.667 por día</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>Desde $1.000.000 por mes</div><div class="win">Desde $6.667 por día</div></div>
     </div>
     <p class="lp-cm-close">El mismo trabajo. Sin sueldos, sin cargas sociales, sin vacaciones.</p>
     <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Quiero mi community manager →</a></div>
@@ -2520,10 +2520,10 @@ function landingView(cfg) {
   ${lpCapSectionsHTML()}
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
     <h2>El único que hace todo por vos</h2>
-    <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen $300.000+ por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
+    <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen desde $1.000.000 por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
     <div class="cmp-scroll"><div class="cmp-table cmp4" role="table" aria-label="Comparación: hacerlo vos, un community manager freelance, una agencia o Posty">
       <div class="cmp-row cmp-head" role="row"><div></div><div>Lo hacés vos</div><div>CM freelance</div><div>Agencia</div><div class="win">Posty</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>$0 de bolsillo — pero es tu tiempo</div><div>$300.000 a $600.000 *</div><div>Más que un CM freelance *</div><div class="win" id="cmpPostyPrice">Desde ${esc(lpPlanLabel)}</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>$0 de bolsillo — pero es tu tiempo</div><div>Desde $1.000.000 *</div><div>Más que un CM freelance *</div><div class="win" id="cmpPostyPrice">Desde ${esc(lpPlanLabel)}</div></div>
       <div class="cmp-row" role="row"><div class="crit">Qué incluye</div><div>Lo que llegues a hacer</div><div>Posteos; reels e historias, según acuerdo</div><div>Posteos y estrategia</div><div class="win">7 posteos por semana en todos los planes; reels e historias según tu plan</div></div>
       <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>Horas, cada semana</div><div>Días</div><div>1 a 2 semanas</div><div class="win">1 minuto</div></div>
       <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>—</div><div>Coordinación y aprobaciones</div><div>Varias por mes</div><div class="win">Cero</div></div>
@@ -2534,7 +2534,7 @@ function landingView(cfg) {
       <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>—</div><div>Mes a mes, informal</div><div>3 a 6 meses</div><div class="win">Mensual, cancelás cuando querés</div></div>
     </div></div>
     <p class="cmp-note">* Precios de referencia de mercado para un servicio equivalente. El precio de Posty es el real: el de los planes de acá abajo.</p>
-    <p class="unico-line">Un community manager cuesta <b>$300.000 a $600.000 por mes — o más</b>. Posty arranca en <b>$199.999</b>.</p>
+    <p class="unico-line">Un community manager cuesta <b>desde $1.000.000 por mes</b>. Posty arranca en <b>$199.999</b>.</p>
     <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Podés frenar cualquier posteo antes de que salga</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
@@ -2600,7 +2600,7 @@ function landingView(cfg) {
       </div>
       <div class="lp-calc-out" id="lpCalcOut">Tu Instagram hoy te cuesta ≈ <b>${lpFmt(lpDefCost)}</b> por mes (<b>${lpHorasMes} horas</b> tuyas).<br>Con Posty: <b>${esc(lpPlanLabel)} por mes</b> (≈ ${lpPerDaySym}${lpPerDay.toLocaleString('es-AR')} por día) y <b>0 horas tuyas</b> — te quedan <b>${lpHorasMes} horas por mes</b> para tu negocio.</div>
     </div>
-    <p class="lp-calc-cm">Y si lo tercerizás: un community manager que lo haga por vos cuesta <b>$300.000+ por mes</b>.</p>
+    <p class="lp-calc-cm">Y si lo tercerizás: un community manager que lo haga por vos cuesta <b>desde $1.000.000 por mes</b>.</p>
   </div></div>
   <div class="section lp-ctl" id="control"><div class="wrap" style="max-width:920px">
     <h2>Tranqui: vos siempre tenés el freno de mano</h2>
@@ -2617,7 +2617,7 @@ function landingView(cfg) {
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
       <div class="lp-stat"><div class="lp-stat-n">7 posteos + 1 reel</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">$6.667<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">$6.667<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta desde $1.000.000 por mes</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
   </div></div>

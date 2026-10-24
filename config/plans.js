@@ -181,9 +181,9 @@ const PLANS_UY = {
 };
 
 // Texto de ancla de precio por país (se muestra sobre las tarjetas de planes).
-// Valores confirmados por Valentino (2026-10-22, tercera escalera); el «desde» sigue a la escalera vigente (familia Bambooty, 2026-10-24). El cm (el costo del humano) NO cambia.
+// Valores confirmados por Valentino (2026-10-22, tercera escalera); el «desde» sigue a la escalera vigente (familia Bambooty, 2026-10-24). Corrección de Valentino (2026-10-24): el cm AR es «desde $1.000.000 por mes» (mínimo real de un CM en Argentina); el rango $300.000–$600.000 quedó MUERTO y no se cita más.
 const PLAN_ANCHOR = {
-  AR: { cm: '$300.000 a $600.000 por mes — o más', desde: '$199.999' },
+  AR: { cm: 'desde $1.000.000 por mes', desde: '$199.999' },
   UY: { cm: 'más de $U 25.000 por mes', desde: '$U 4.990' },
 };
 
