@@ -734,7 +734,7 @@ function wireIdeasBlock(slot) {
 // Un toque (opciones) o una línea de texto; "Ahora no" no insiste.
 let QUESTION_CACHE_HTML = null; // null = todavía no cargó; '' = esta semana no hay pregunta
 function questionCardHTML(q) {
-  let h = `<div class="hs-question" data-qid="${q.id}">`;
+  let h = `<div class="hs-question" data-qid="${q.id}" data-qkind="${esc(q.kind || '')}">`;
   h += '<div class="hs-question-title">🤔 Posty te pregunta</div>';
   h += `<div class="hs-question-text">${esc(q.texto)}</div>`;
   if ((q.opciones || []).length) {
@@ -784,6 +784,16 @@ function wireQuestionCard(slot) {
   const answer = async (payload) => {
     try {
       await api.post('/api/questions/' + id + '/answer', payload);
+      // (v370) 📣 PRUEBA SOCIAL REAL: el «sí» abre el borrador de su
+      // historia — la tarjeta del borrador vive justo debajo (slot
+      // #hs-showcase) y se pinta al instante; el «gracias» genérico de
+      // las preguntas del fundamento no aplica acá.
+      if (card.getAttribute('data-qkind') === 'showcase' && payload && payload.value === 'si') {
+        const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+        questionSwap(`<div class="hs-question"><div class="hs-question-text">${en ? '✅ done! I drafted your story with your real numbers — check it below 👇' : '✅ dale! te armé la historia con tus datos reales — mirala acá abajo 👇'}</div></div>`);
+        try { enhanceShowcase(true); } catch (e) {}
+        return;
+      }
       questionSwap('<div class="hs-question"><div class="hs-question-text">✅ gracias! ya lo tengo en cuenta para tus próximos posteos.</div></div>');
       try { toast('✅ gracias! respuesta guardada'); } catch (e) {}
     } catch (e) {
@@ -823,6 +833,110 @@ function wireQuestionCard(slot) {
     questionSwap('<div class="hs-question"><div class="hs-question-text">👌 dale — la semana que viene te pregunto otra cosa.</div></div>');
   };
 }
+// 📣 PRUEBA SOCIAL REAL (v370): la tarjeta de SU historia en Schedule,
+// pegada a la de Posty pregunta. Dos estados con salida en un toque:
+//  · draft — dijo que sí: ve el borrador armado con sus datos reales,
+//    lo edita si quiere y lo aprueba; ESE texto literal es el que sale.
+//  · active — su historia está en la home: la ve y la puede sacar.
+// Sin caso (o sin sí), la tarjeta no existe. Mismo patrón anti-flash
+// que la pregunta: caché de sesión y pintado sincrónico al re-render.
+let SHOWCASE_CACHE_HTML = null; // null = todavía no cargó; '' = sin historia
+function showcaseCardHTML(s) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en') || s.lang === 'en';
+  const who = `${esc(s.business_name)}${s.rubro_label ? ' · ' + esc(s.rubro_label) : ''}${s.city ? ' · ' + esc(s.city) : ''}`;
+  let h = '<div class="hs-question sc-card">';
+  if (s.state === 'draft') {
+    h += `<div class="hs-question-title">${en ? '📣 Your story for Posty\'s page' : '📣 Tu historia para la página de Posty'}</div>`;
+    h += `<div class="hs-question-text">${en ? 'I drafted it with your real stuff — your best post, your words, your numbers. edit it however you like: what you approve is exactly what goes live.' : 'te la armé con tus cosas reales: tu mejor posteo, tus palabras y un dato de tu cuenta. editala como quieras: lo que aprobás es exactamente lo que sale.'}</div>`;
+    if (s.image) h += `<div class="sc-prev"><img src="${esc(s.image)}" alt=""><div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">📊 ${esc(s.metric_label || '')}</span></div></div>`;
+    else h += `<div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">📊 ${esc(s.metric_label || '')}</span></div>`;
+    h += `<textarea class="in sc-quote" id="scQuote" rows="3" maxlength="280">${esc(s.quote_text || '')}</textarea>`;
+    h += `<div class="pq-foot"><button type="button" class="btn btn-primary btn-sm" id="scApprove">${en ? 'Publish it ✨' : 'Publicarla ✨'}</button><button type="button" class="btn btn-ghost btn-sm" id="scRevoke">${en ? 'Never mind' : 'Mejor no'}</button></div>`;
+  } else { // active
+    h += `<div class="hs-question-title">${en ? '✨ Your story is live on Posty\'s page' : '✨ Tu historia está en la página de Posty'}</div>`;
+    h += `<div class="hs-question-text">«${esc(s.quote_text || '')}»</div>`;
+    h += `<div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">📊 ${esc(s.metric_label || '')}</span></div>`;
+    h += `<div class="pq-foot"><button type="button" class="btn btn-ghost btn-sm" id="scRevoke">${en ? 'Take it down' : 'Sacar mi historia'}</button><span class="pq-hint">${en ? 'one tap and it\'s gone — no questions asked.' : 'un toque y desaparece — sin preguntas.'}</span></div>`;
+  }
+  h += '</div>';
+  return h;
+}
+function showcaseSwap(html) {
+  SHOWCASE_CACHE_HTML = html;
+  const cur = document.getElementById('hs-showcase');
+  if (cur) { cur.dataset.done = '1'; cur.innerHTML = html; wireShowcaseCard(cur); }
+}
+async function enhanceShowcase(force) {
+  const slot = document.getElementById('hs-showcase');
+  if (!slot) return;
+  if (!force && SHOWCASE_CACHE_HTML !== null) {
+    if (slot.dataset.done !== '1') {
+      slot.dataset.done = '1';
+      slot.innerHTML = SHOWCASE_CACHE_HTML;
+      wireShowcaseCard(slot);
+    }
+    return;
+  }
+  if (slot.dataset.done && !force) return;
+  slot.dataset.done = '1';
+  let r;
+  try { r = await api.get('/api/showcase/me'); } catch (e) { slot.dataset.done = ''; return; }
+  if (!r || !r.ok) { slot.dataset.done = ''; return; }
+  showcaseSwap(r.showcase ? showcaseCardHTML(r.showcase) : '');
+}
+function wireShowcaseCard(slot) {
+  const card = slot && slot.querySelector('.sc-card');
+  if (!card || card.dataset.wired) return;
+  card.dataset.wired = '1';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const ap = card.querySelector('#scApprove');
+  if (ap) ap.onclick = async () => {
+    const ta = card.querySelector('#scQuote');
+    const quote = String((ta && ta.value) || '').trim();
+    ap.disabled = true;
+    try {
+      await api.post('/api/showcase/approve', { quote });
+      try { toast(en ? '✨ your story is live!' : '✨ tu historia ya está en la página!'); } catch (e) {}
+      enhanceShowcase(true);
+    } catch (e) {
+      ap.disabled = false;
+      try { toast('😅 ' + ((e && e.message) || (en ? 'could not publish it, try again' : 'no pude publicarla, probá de nuevo'))); } catch (e2) {}
+    }
+  };
+  const rv = card.querySelector('#scRevoke');
+  if (rv) rv.onclick = async () => {
+    rv.disabled = true;
+    try { await api.post('/api/showcase/revoke', {}); } catch (e) {}
+    showcaseSwap('');
+    try { toast(en ? '👌 done — your story is not shown anymore' : '👌 listo — tu historia ya no se muestra'); } catch (e) {}
+  };
+}
+// 📣 PRUEBA SOCIAL REAL (v370) — LANDING: la sección «Historias reales»
+// se inyecta SOLO si /api/showcase devuelve casos activos. Sin casos (o
+// ante cualquier falla) no se inserta NADA: la sección no existe en el
+// HTML servido ni queda una caja vacía — la home de hoy queda idéntica.
+function lpShowcaseCardHTML(c) {
+  const who = `${esc(c.business_name)}${c.rubro ? ' · ' + esc(c.rubro) : ''}${c.city ? ' · ' + esc(c.city) : ''}`;
+  const img = c.image ? `<div class="sc-phone"><div class="sc-phone-head"><b>${esc(c.business_name)}</b><span>•••</span></div><img loading="lazy" src="${esc(c.image)}" alt="Posteo real de ${esc(c.business_name)}, hecho con Posty"></div>` : '';
+  const inner = `<figure class="sc-card-lp">${img}<blockquote>«${esc(c.quote)}»</blockquote><figcaption><b>${who}</b><span class="sc-chip">📊 ${esc(c.metric_label || '')}</span></figcaption></figure>`;
+  return c.permalink ? `<a class="sc-link" href="${esc(c.permalink)}" target="_blank" rel="noopener">${inner}</a>` : inner;
+}
+function lpShowcaseInit() {
+  try {
+    fetch('/api/showcase').then((r) => r.json()).then((d) => {
+      const cases = (d && Array.isArray(d.cases)) ? d.cases : [];
+      if (!cases.length) return;
+      const anchor = document.querySelector('.lp-week-sec');
+      if (!anchor || document.getElementById('historias-reales')) return;
+      anchor.insertAdjacentHTML('afterend',
+        `<div class="section sc-sec" id="historias-reales"><div class="wrap">` +
+        `<h2>Historias reales 💛</h2>` +
+        `<p class="lede">Negocios que ya no tocan su Instagram: Posty se lo trabaja — y ellos lo cuentan.</p>` +
+        `<div class="sc-row">${cases.map(lpShowcaseCardHTML).join('')}</div>` +
+        `</div></div>`);
+    }).catch(() => {});
+  } catch (e) {}
+}
 function cleanIgHandle(v) {
   let s = String(v || '').trim().toLowerCase();
   s = s.replace(/^https?:\/\//, '').replace(/^www\./, '');
@@ -841,6 +955,7 @@ let LP_LIVE_TIMER = null, LP_LIVE_IO = null;
 function lpInitHero() {
   lpInitCarousel();
   lpInitWall();
+  lpShowcaseInit(); // 📣 v370: «Historias reales» — solo si hay casos activos
   // — (v344) Medición del mini-bloque del fundador en Planes: una impresión
   // por visita cuando entra en pantalla (pipeline track() → /api/track).
   const fc = document.getElementById('homeFounderCard');
@@ -11696,6 +11811,7 @@ async function scheduleView() {
     <div id="adsBoostSlot"></div>
     <div id="hs-ideas"${IDEAS_PANEL_OPEN ? '' : ' class="ideas-closed"'}></div>
     <div id="hs-question"></div>
+    <div id="hs-showcase"></div>
     ${homeChatBlock}
     ${armBlock}
   </div>`;
@@ -13021,6 +13137,7 @@ function bindSchedule() {
   try { enhanceIdeas(); } catch (e) {} // 💡 v223: ideas con ciclo propio (caché de sesión; su slot vive fuera de la agenda)
   try { enhanceAdsBoost(); } catch (e) {} // 🚀 pauta pendiente/recomendados: ciclo propio, no bloquea la agenda
   try { enhanceQuestion(); } catch (e) {} // 🤔 v238: Posty pregunta — tarjeta propia sobre el chat, mismo ciclo anti-flash
+  try { enhanceShowcase(); } catch (e) {} // 📣 v370: su historia (borrador/activa) — tarjeta hermana, mismo ciclo
   // (v236) Chip de ideas: el cableado sigue el patrón de la casa (se
   // recablea en cada pintado) y el estado visible se re-aplica
   // sincrónico tras el render — badge, expandido y panel como estaban.

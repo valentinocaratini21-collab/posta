@@ -275,6 +275,7 @@ const feedDirector = require('./feed-director');
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
 const analysisEngine = require('./analysis-engine'); // 🧠 Análisis (2026-10-19): radiografía + mercado + nacimiento + porqué + loop
 const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
+const showcase = require('./showcase'); // 📣 PRUEBA SOCIAL REAL (v370): la primera historia de un cliente pago, con su consentimiento
 const rubroId = require('./rubro-id'); // (v235) IDENTIFICACIÓN ESPECIALISTA DE RUBRO: voto multi-señal + confianza
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
@@ -2345,6 +2346,74 @@ app.post('/api/questions/:id/dismiss', requireAuth, (req, res) => {
   } catch (e) { res.status(500).json({ error: 'no pude guardarla 😅' }); }
 });
 
+// ---------- 📣 PRUEBA SOCIAL REAL (2026-10-24, v370) ----------
+// El hueco de la home para la primera historia de un cliente pago
+// (showcase.js). La pregunta que lo enciende es kind 'showcase' dentro
+// de Posty pregunta; acá viven la lectura pública (sin sesión: la home
+// la consume y, si viene vacía o falla, la sección simplemente no
+// existe) y las rutas del cliente (su borrador, su aprobación literal,
+// su baja en un toque). Solo casos 'active' con consentimiento Y cuenta
+// todavía paga al leer: revocar o darse de baja lo apaga solo.
+function showcasePostView(postId) {
+  if (!postId) return { image: '', permalink: '' };
+  try {
+    const p = db.prepare('SELECT user_id, image_path, ig_permalink FROM posts WHERE id = ?').get(postId);
+    if (!p) return { image: '', permalink: '' };
+    return { image: absImageUrl(p.user_id, p.image_path), permalink: p.ig_permalink || '' };
+  } catch (e) { return { image: '', permalink: '' }; }
+}
+
+app.get('/api/showcase', (req, res) => {
+  try {
+    const cases = showcase.publicCases(db).map((c) => {
+      const v = showcasePostView(c.post_id);
+      return {
+        business_name: c.business_name, rubro: c.rubro_label, city: c.city,
+        quote: c.quote_text, lang: c.lang, metric_label: c.metric_label,
+        image: v.image, permalink: v.permalink,
+      };
+    });
+    res.json({ ok: true, cases });
+  } catch (e) { res.json({ ok: true, cases: [] }); }
+});
+
+app.get('/api/showcase/me', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const mine = showcase.myShape(db, uid);
+    if (!mine) return res.json({ ok: true, showcase: null });
+    const v = showcasePostView(mine.post_id);
+    res.json({ ok: true, showcase: { ...mine, image: v.image, permalink: v.permalink } });
+  } catch (e) { res.json({ ok: true, showcase: null }); }
+});
+
+app.post('/api/showcase/approve', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const body = req.body || {};
+    const r = showcase.approve(db, uid, typeof body.quote === 'string' ? body.quote : '');
+    if (!r.ok) {
+      if (r.reason === 'no_draft') return res.status(404).json({ error: 'no hay una historia esperando tu aprobación 😅' });
+      if (r.reason === 'not_paid') return res.status(403).json({ error: 'tu cuenta no está activa 😅' });
+      return res.status(400).json({ error: 'no pude publicarla 😅 probá de nuevo' });
+    }
+    try { track(uid, 'showcase_approved', ''); } catch (e) {}
+    res.json({ ok: true, state: r.state });
+  } catch (e) {
+    console.error('[showcase] approve:', e.message);
+    res.status(500).json({ error: 'no pude publicarla 😅 probá de nuevo' });
+  }
+});
+
+app.post('/api/showcase/revoke', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const r = showcase.revoke(db, uid);
+    try { track(uid, 'showcase_revoked', ''); } catch (e) {}
+    res.json({ ok: true, changed: r.changed });
+  } catch (e) { res.status(500).json({ error: 'no pude sacarla 😅 probá de nuevo' }); }
+});
+
 // Los endpoints admin del loop viven tras requireAdminToken (definido más
 // abajo, junto al resto de rutas /api/admin/*): buscar "admin/ideas/run".
 
@@ -4275,6 +4344,15 @@ app.get('/api/admin/email-log', requireAdminToken, (req, res) => {
     const rows = db.prepare('SELECT id, ts, to_email, subject, from_addr, status, http_status, provider_id, error FROM email_send_log ORDER BY id DESC LIMIT ?').all(limit);
     const lastError = rows.find((r) => r.status === 'rejected' || r.status === 'error' || r.status === 'not_attempted') || null;
     res.json({ ok: true, count: rows.length, last_error: lastError, rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// 📣 PRUEBA SOCIAL REAL (v370): los casos y su estado, SOLO LECTURA —
+// el diseño no tiene ningún camino de alta admin: un caso nace solo del
+// consentimiento registrado del cliente (ver showcase.js).
+app.get('/api/admin/showcase-cases', requireAdminToken, (req, res) => {
+  try {
+    const rows = showcase.adminList(db);
+    res.json({ ok: true, count: rows.length, rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // Inspección y freno de emergencia por usuario (2026-10-16): ver qué tiene
@@ -17942,7 +18020,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v371';
+const BUILD_ID = '20261024-v372';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

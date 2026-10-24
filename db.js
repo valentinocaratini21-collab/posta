@@ -791,6 +791,34 @@ CREATE TABLE IF NOT EXISTS posty_questions (
   acted_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_posty_questions_user ON posty_questions(user_id, status, id);
+-- 📣 PRUEBA SOCIAL REAL (v370, showcase.js): el caso de cada cliente pago
+-- que aceptó contar su historia en la home. UNA fila por cuenta, con el
+-- consentimiento y su timestamp, el texto aprobado LITERAL, el posteo
+-- elegido y la métrica con su fuente (publish_ledger) y fecha de cálculo.
+-- Estados: watching (paga observada, reloj de elegibilidad corriendo) →
+-- draft (dijo que sí, borrador a aprobar) → active (aprobado, público) /
+-- declined (dijo que no dos veces) / revoked (baja voluntaria o la
+-- cuenta dejó de estar paga: la historia no sobrevive a la relación).
+-- Sin fila no hay caso: el admin solo puede mirar (no hay API de alta).
+CREATE TABLE IF NOT EXISTS showcase_cases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  state TEXT NOT NULL DEFAULT 'watching',
+  first_paid_seen_at TEXT NOT NULL DEFAULT '',
+  consent_at TEXT NOT NULL DEFAULT '',
+  quote_text TEXT NOT NULL DEFAULT '',
+  business_name TEXT NOT NULL DEFAULT '',
+  rubro_label TEXT NOT NULL DEFAULT '',
+  city TEXT NOT NULL DEFAULT '',
+  post_id INTEGER NOT NULL DEFAULT 0,
+  metric_type TEXT NOT NULL DEFAULT '',
+  metric_value INTEGER NOT NULL DEFAULT 0,
+  metric_source TEXT NOT NULL DEFAULT '',
+  metric_at TEXT NOT NULL DEFAULT '',
+  lang TEXT NOT NULL DEFAULT 'es',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 -- Caché semanal de la lectura pública de cada competidor (la misma maquinaria
 -- de la prueba/auditoría; cadencia semanal, nada de scraping agresivo).
 CREATE TABLE IF NOT EXISTS competitor_snapshots (

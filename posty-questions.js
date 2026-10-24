@@ -492,7 +492,16 @@ function ensureWeeklyQuestion(db, uid, weekKey, nowMs, opts) {
       }
     }
   } catch (e) {}
-  const cand = pickWeeklyCandidate(digest, dna, history, now, {
+  // (v370) 📣 PRUEBA SOCIAL REAL: la pregunta de la historia tiene su
+  // propio momento (cuenta paga real con trabajo publicado, ≥14 días de
+  // paga observada) y su propia memoria (1 vez + 1 insistencia en la vida
+  // de la cuenta) — vive en showcase.js. Si la ofrece, ocupa el slot de
+  // esta semana como cualquier otra pregunta (el techo de 1/semana y la
+  // tarjeta son los de siempre); si no, el flujo del fundamento sigue
+  // intacto. Un fallo de showcase NUNCA rompe las preguntas del digest.
+  let scCand = null;
+  try { scCand = require('./showcase').candidateFor(db, uid, now, { lang: (opts && opts.lang) || 'es' }); } catch (e) { scCand = null; }
+  const cand = scCand || pickWeeklyCandidate(digest, dna, history, now, {
     weekKey, lang: (opts && opts.lang) || 'es', preferGap,
   });
   if (!cand) return null;
@@ -660,6 +669,19 @@ function applyAnswer(db, uid, questionId, answer) {
     };
     storedAnswer = tipo === 'nada' ? 'nada' : (detalle ? `${tipo}: ${detalle}` : tipo);
     applied = `radar:${tipo}`;
+  } else if (row.kind === 'showcase') {
+    // (v370) 📣 PRUEBA SOCIAL REAL: el «sí» no guarda un dato del
+    // fundamento — abre el BORRADOR de la historia, que showcase.js arma
+    // desde los datos reales de la cuenta (mejor posteo, métrica del
+    // ledger, frase propuesta). El cliente lo aprueba o lo edita desde
+    // su tarjeta en Schedule; recién ahí hay caso público. Cualquier
+    // respuesta que no sea el «sí» no es válida en esta pregunta (la
+    // salida es el botón «Ahora no», que la consume como dismiss).
+    if (value !== 'si') return { ok: false, reason: 'bad_option' };
+    let r = null;
+    try { r = require('./showcase').applyYes(db, uid); } catch (e) { r = null; }
+    if (!r || !r.ok) return { ok: false, reason: 'empty' };
+    applied = 'showcase:draft';
   } else if (row.kind === 'clave') {
     // (v306) PREGUNTA CLAVE del rubro: la respuesta es combustible de
     // contenido — cae al mismo bloque perenne de la semana (digest

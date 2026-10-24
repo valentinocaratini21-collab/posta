@@ -3026,3 +3026,25 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-tile,.fp-tile,.scf-mini,.scf-mini-x,.igmock,.igmock-media,.apv-media,.apv-wrap,.scf-pop,.pubsheet,.pubsheet-ov,#lightbox .lb-content{-webkit-tap-highlight-color:transparent}
 .hf-tile,.fp-tile,.scf-mini,.scf-mini-x,.igmock-media,.apv-media,.scf-pop,.pubsheet,#lightbox .lb-content{user-select:none;-webkit-user-select:none}
 .f3-input,.f3-msg .f3-txt,.apv-caption,.igmock-cap,textarea,input{user-select:text;-webkit-user-select:text}
+
+/* --- 📣 v370 PRUEBA SOCIAL REAL: «Historias reales» en la home + tarjeta
+   de la historia en Schedule. La sección de la home SOLO existe si hay
+   casos activos (la inyecta el cliente desde /api/showcase): sin casos
+   no hay markup, ni caja vacía. Tarjeta blanca y radio 28 como lp-week;
+   el posteo del cliente va en marco tipo teléfono. --- */
+.sc-sec{padding-top:44px;padding-bottom:10px}
+.sc-row{display:flex;gap:22px;flex-wrap:wrap;justify-content:center;margin-top:26px}
+.sc-link{text-decoration:none;color:inherit;display:block}
+.sc-card-lp{background:#fff;border:1.5px solid var(--cel-line);border-radius:28px;box-shadow:var(--shadow-lg);padding:22px;max-width:340px;text-align:left;margin:0}
+.sc-card-lp blockquote{font-weight:700;font-size:17.5px;line-height:1.45;color:var(--txt);margin:16px 0 12px}
+.sc-card-lp figcaption{display:flex;flex-direction:column;gap:8px;font-size:14.5px;color:var(--mut)}
+.sc-phone{border:2px solid #E3EDF4;border-radius:26px;overflow:hidden;background:#fff}
+.sc-phone-head{display:flex;justify-content:space-between;align-items:center;padding:9px 13px;font-size:13.5px;color:var(--txt)}
+.sc-phone-head span{color:var(--dim);letter-spacing:1px}
+.sc-phone img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover}
+.sc-chip{display:inline-block;background:var(--cel-soft);color:var(--cel);font-weight:800;font-size:12.5px;padding:4px 10px;border-radius:999px}
+.sc-prev{display:flex;gap:12px;align-items:center;margin:10px 0}
+.sc-prev img{width:64px;height:64px;object-fit:cover;border-radius:14px;border:1.5px solid #E3EDF4}
+.sc-prev-meta{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--mut);align-items:flex-start}
+.sc-quote{width:100%;margin:10px 0 4px;font:inherit;font-size:14.5px;line-height:1.45}
+@media(max-width:560px){.sc-card-lp{max-width:100%}}
