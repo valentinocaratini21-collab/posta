@@ -15718,6 +15718,105 @@ app.post('/api/gesty/comprobantes/:id/corregir', requireAuth, gesty.gestyMiddlew
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-04 FACTURACIÓN (preparar y controlar)
+// Spec: gesty-cola-builds.md G-04 + gesty-areas-detalle.md §2 +
+// gesty-g02-build-spec.md §4/§7. El módulo vive en
+// gesty-facturacion.js; acá solo se monta la API detrás de
+// requireAuth + gating de pack + capacidad «facturacion» EN EL
+// SERVIDOR. Emitir es SIEMPRE con OK del dueño (decisión de
+// Valentino, 2026-10-24): el borrador pide su tarjeta
+// `factura-emision` y SOLO el ejecutor que approveCard invoca tras
+// validar la aprobación pasa la factura a lista-para-emitir — no
+// existe ruta directa. El envío por email usa el canal de email de
+// la app (sendEmail, ./email) inyectado en el módulo.
+// =====================================================================
+const gestyFacturacion = require('./gesty-facturacion');
+try {
+  gestyFacturacion.configure({ sendEmail: (o) => sendEmail(o) });
+} catch (e) { console.error('[gesty] facturacion configure:', e.message); }
+
+const gestyFactMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'facturacion')];
+
+app.post('/api/gesty/facturas', ...gestyFactMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, factura: gestyFacturacion.crearBorrador(db, req.session.userId, { ...(req.body || {}), creado_por: 'dueno' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/facturas/excepcion', ...gestyFactMW, (req, res) => {
+  try { res.json({ ok: true, excepcion: gestyFacturacion.getAjusteExcepcion(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/facturas/excepcion', ...gestyFactMW, express.json(), (req, res) => {
+  // El ajuste de la excepción es del dueño: activar (con tope),
+  // editar o apagar en un toque — todo queda en el registro.
+  try { res.json({ ok: true, excepcion: gestyFacturacion.setAjusteExcepcion(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/facturas/resumen', ...gestyFactMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyFacturacion.resumenFacturas(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/facturas', ...gestyFactMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    const r = gestyFacturacion.listFacturas(db, req.session.userId, {
+      estado: q.estado, cliente_cuit: q.cliente_cuit, desde: q.desde, hasta: q.hasta,
+      vencidas: q.vencidas === '1' || q.vencidas === 'true',
+      a_cobrar: q.a_cobrar === '1' || q.a_cobrar === 'true',
+      limit: q.limit, offset: q.offset,
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/facturas/:id/documento', ...gestyFactMW, (req, res) => {
+  // El documento armado del modo respaldo (vista/descarga imprimible).
+  try { res.type('html').send(gestyFacturacion.documentoFactura(db, req.session.userId, Number(req.params.id))); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/facturas/:id/excepcion', ...gestyFactMW, (req, res) => {
+  try {
+    const f = gestyFacturacion.getFactura(db, req.session.userId, Number(req.params.id));
+    if (!f) return res.status(400).json({ ok: false, error: 'Esa factura no es de esta cuenta.' });
+    res.json({ ok: true, evaluacion: gestyFacturacion.evaluarExcepcion(db, req.session.userId, f), excepcion_aplicable: f.excepcion_aplicable });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/facturas/:id', ...gestyFactMW, (req, res) => {
+  try {
+    const f = gestyFacturacion.getFactura(db, req.session.userId, Number(req.params.id));
+    if (!f) return res.status(400).json({ ok: false, error: 'Esa factura no es de esta cuenta.' });
+    res.json({ ok: true, factura: f, historial: gesty.listEvents(db, req.session.userId, { entidad_tipo: 'factura', entidad_id: String(f.id) }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/facturas/:id/editar', ...gestyFactMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, factura: gestyFacturacion.editarBorrador(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/facturas/:id/duplicar', ...gestyFactMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, factura: gestyFacturacion.duplicarFactura(db, req.session.userId, Number(req.params.id), { ...(req.body || {}), creado_por: 'dueno' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/facturas/:id/pedir-ok', ...gestyFactMW, express.json(), (req, res) => {
+  // Pedir el OK crea la tarjeta con el documento completo: NO emite.
+  try { res.json({ ok: true, ...gestyFacturacion.pedirOK(db, req.session.userId, Number(req.params.id), { creado_por: 'gesty' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/facturas/:id/enviar', ...gestyFactMW, express.json(), async (req, res) => {
+  // Enviar exige lista-para-emitir (que exige el OK): el servidor lo
+  // valida contra el estado, no contra la pantalla.
+  try { res.json({ ok: true, ...(await gestyFacturacion.enviarFactura(db, req.session.userId, Number(req.params.id), req.body || {})) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/facturas/:id/registrar-cobro', ...gestyFactMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyFacturacion.registrarCobro(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/facturas/:id/anular', ...gestyFactMW, express.json(), (req, res) => {
+  // Anular también es de la matriz: esto crea la tarjeta
+  // `factura-anulacion` (con motivo obligatorio); no anula directo.
+  try { res.json({ ok: true, ...gestyFacturacion.solicitarAnulacion(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -19444,7 +19543,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v407';
+const BUILD_ID = '20261024-v408';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
