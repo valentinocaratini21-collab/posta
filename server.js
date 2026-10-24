@@ -15817,6 +15817,83 @@ app.post('/api/gesty/facturas/:id/anular', ...gestyFactMW, express.json(), (req,
   catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-05 COBRANZAS
+// Spec: gesty-cola-builds.md G-05 + gesty-areas-detalle.md §3 +
+// gesty-sistema-operativo.md §2.3/§5. El módulo vive en
+// gesty-cobranzas.js; acá solo se monta la API detrás de
+// requireAuth + gating de pack + capacidad «cobranzas» EN EL
+// SERVIDOR. Los mensajes de cobranza salen SIEMPRE con el OK del
+// dueño, sin excepción: el escaneo prepara la tarjeta `cobranza`
+// con el mensaje listo; aprobarla sella el envío (ejecutor de la
+// matriz) y el despacho por el canal exige ese sello — no existe
+// ruta ni función que envíe por fuera de ese acto. El envío por
+// email usa el canal de email de la app (sendEmail, ./email)
+// inyectado en el módulo, como en G-04.
+// =====================================================================
+const gestyCobranzas = require('./gesty-cobranzas');
+try {
+  gestyCobranzas.configure({ sendEmail: (o) => sendEmail(o) });
+} catch (e) { console.error('[gesty] cobranzas configure:', e.message); }
+
+const gestyCobMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'cobranzas')];
+
+app.post('/api/gesty/cobranzas/escanear', ...gestyCobMW, express.json(), (req, res) => {
+  // El motor de vencimientos: detecta, prepara tarjetas de los
+  // escalones nuevos y cierra las cobranzas de deudas saldadas.
+  try { res.json({ ok: true, escaneo: gestyCobranzas.escanearVencimientos(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/cobranzas/politica', ...gestyCobMW, (req, res) => {
+  try { res.json({ ok: true, politica: gestyCobranzas.getPolitica(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/cobranzas/politica', ...gestyCobMW, express.json(), (req, res) => {
+  // La escalera de cobranza es del dueño: vive en su fundamento,
+  // con su procedencia, y cada cambio queda en el registro.
+  try { res.json({ ok: true, politica: gestyCobranzas.setPolitica(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/cobranzas/resumen', ...gestyCobMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyCobranzas.resumenCobranzas(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/cobranzas', ...gestyCobMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    const r = gestyCobranzas.listCobranzas(db, req.session.userId, {
+      estado: q.estado, factura_id: q.factura_id, cliente_cuit: q.cliente_cuit,
+      cliente: q.cliente, escalon: q.escalon, limit: q.limit, offset: q.offset,
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/cobranzas/:id', ...gestyCobMW, (req, res) => {
+  try {
+    const c = gestyCobranzas.getCobranza(db, req.session.userId, Number(req.params.id));
+    if (!c) return res.status(400).json({ ok: false, error: 'Esa cobranza no es de esta cuenta.' });
+    res.json({ ok: true, cobranza: c, historial: gesty.listEvents(db, req.session.userId, { entidad_tipo: 'cobranza', entidad_id: String(c.id) }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/cobranzas/:id/enviar', ...gestyCobMW, express.json(), async (req, res) => {
+  // Despachar exige el envío APROBADO por la tarjeta: el módulo lo
+  // valida contra el sello del ejecutor, no contra la pantalla.
+  try { res.json({ ok: true, ...(await gestyCobranzas.enviarCobranza(db, req.session.userId, Number(req.params.id), req.body || {})) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/cobranzas/:id/respuestas', ...gestyCobMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, cobranza: gestyCobranzas.registrarRespuesta(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/cobranzas/:id/registrar-pago', ...gestyCobMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyCobranzas.registrarPago(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/cobranzas/:id/vincular-comprobante', ...gestyCobMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyCobranzas.vincularComprobantePago(db, req.session.userId, { ...(req.body || {}), cobranza_id: Number(req.params.id) }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -19543,7 +19620,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v408';
+const BUILD_ID = '20261024-v409';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
