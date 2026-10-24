@@ -6154,6 +6154,16 @@ function proposedLabelFor(d, proposedIsos, tz) {
 //   para que TODAS las tarjetas midan exactamente lo mismo.
 // Los publicados solo llegan acá desde la vista Día de Schedule: salen
 // con su pastilla ✅ Publicado y sin acciones de borrador.
+// (Frente 3b) Tiempo relativo estilo Instagram desde una fecha ISO:
+// «hace 25 min», «hace 2 h», «hace 3 días», «hace 2 sem» (EN: 25m/2h/3d/2w).
+function igRelTime(iso, en) {
+  const t = Date.parse(iso || '');
+  if (!Number.isFinite(t)) return '';
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  const m = Math.floor(s / 60), h = Math.floor(s / 3600), dd = Math.floor(s / 86400), w = Math.floor(dd / 7);
+  if (en) return m < 60 ? Math.max(1, m) + 'm' : h < 24 ? h + 'h' : dd < 7 ? dd + 'd' : w + 'w';
+  return m < 60 ? 'hace ' + Math.max(1, m) + ' min' : h < 24 ? 'hace ' + h + ' h' : dd < 7 ? 'hace ' + dd + (dd === 1 ? ' día' : ' días') : 'hace ' + w + ' sem';
+}
 function weekCardHTML(d, o) {
   o = o || {};
   const tz = o.tz || 'America/Argentina/Buenos_Aires';
@@ -6162,6 +6172,17 @@ function weekCardHTML(d, o) {
   const isV = String(d.media_type || '') === 'video';
   const isS = String(d.media_type || '') === 'story';
   const isPub = String(d.status) === 'published';
+  // (Frente 3b) Encabezado literal de Instagram: foto + username + «•••».
+  // El username sale de o.user o del perfil cargado; sin username se
+  // muestra el nombre del negocio (nunca se inventa un @).
+  const igUser = String(o.user || (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_username) || '').replace(/^@/, '').trim();
+  const headName = igUser || bizName;
+  let avaSrc = o.pic || '';
+  if (!avaSrc) { try { const lg = (typeof assetLogo === 'function') ? assetLogo() : null; if (lg && lg.file_path) avaSrc = lg.file_path; } catch (e) {} }
+  const bizColorW = (() => { try { const c = (typeof brandColors === 'function') ? brandColors() : []; return c[0] || '#2793C8'; } catch (e) { return '#2793C8'; } })();
+  const avaHTML = avaSrc
+    ? `<img class="igmock-ava" src="${esc(avaSrc)}" alt="" onerror="this.remove()">`
+    : `<span class="igmock-ava" style="background:${esc(bizColorW)}">${esc((headName || 'P').charAt(0).toUpperCase())}</span>`;
   // Tarjeta inmediata: borrador nacido sin imagen, creándose ahora mismo.
   const isPending = !d.image_path && d.status === 'draft';
   const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">✨</span><b>Creando imagen…</b></span>'
@@ -6197,7 +6218,10 @@ function weekCardHTML(d, o) {
       : isPending
         ? `<span class="pcard-creating">⏳ Creando…</span>`
         : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`;
-  const capHTML = capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>` : '';
+  const capHTML = capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}"${igUser ? ` data-capuser="${esc(igUser)}"` : ''} title="Tocá para editar">${igUser ? `<b class="igmock-cap-user">${esc(igUser)}</b> ` : ''}${esc(capFull)}</div>` : '';
+  // (Frente 3b) Tiempo relativo estilo IG bajo el pie, solo en posteos ya
+  // publicados y fuera del esqueleto fijo de Día: «hace 2 h».
+  const timeHTML = (isPub && !o.dia) ? (() => { const rt = igRelTime(d.published_at || d.scheduled_at, (typeof ME !== 'undefined' && ME && ME.lang === 'en')); return rt ? `<div class="igmock-time">${esc(rt)}</div>` : ''; })() : '';
   // (v251) El porqué TAMBIÉN en Día/Semana: mismo tratamiento que la tarjeta
   // de revisión (reviewCardHTML) — ya venía en el payload de /api/posts.
   const whyHTML = d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : '';
@@ -6211,6 +6235,7 @@ function weekCardHTML(d, o) {
     : `<div class="igmock-foot">
         ${igChrome}
         ${capHTML}
+        ${timeHTML}
         ${acts}
         ${whyHTML}
       </div>`;
@@ -6219,8 +6244,8 @@ function weekCardHTML(d, o) {
   // Aceptar en pantallas chicas ("jue 22 · 12:0…" cortado).
   const whenTxt = o.dia ? String(prop.label || '').replace(/^(\S+)\s+[^·]*·\s*/, '$1 ') : prop.label;
   return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
-      <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>${o.count ? `
-        <span class="igmock-count">${esc(o.count)}</span>` : ''}</div>
+      <div class="igmock-head">${avaHTML}<span class="igmock-name">${esc(headName)}</span>${o.count ? `
+        <span class="igmock-count">${esc(o.count)}</span>` : ''}<span class="igmock-dots" aria-hidden="true">•••</span></div>
       <div class="igmock-when-top"><span>${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
         ${statusHTML}</div>
       ${isPending
@@ -6797,7 +6822,7 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
 // (prof: avatar público cacheado + seguidores reales si existen). Lo que la
 // cuenta no tiene (bio leída, seguidos, total de posteos de IG) se omite con
 // gracia: jamás un número fabricado (regla de verdad).
-function feedProfileHeadHTML(prof, bizName) {
+function feedProfileHeadHTML(prof, bizName, opts) {
   const u = prof && prof.username ? String(prof.username) : '';
   const name = ((prof && prof.name) || bizName || '').trim();
   if (!u && !name) return '';
@@ -6808,7 +6833,7 @@ function feedProfileHeadHTML(prof, bizName) {
   const statsHTML = stats.length ? `<div class="fp-stats">${stats.join('')}</div>` : '';
   return `<div class="fp-head">
     <div class="fp-head-top">
-      <div class="fp-ava"><div class="fp-ava-in"><span class="fp-ava-letter">${letter}</span>${pic}</div></div>
+      <div class="fp-ava${opts && opts.storyToday ? ' story' : ''}"><div class="fp-ava-in"><span class="fp-ava-letter">${letter}</span>${pic}</div></div>
       <div class="fp-head-right">${u ? `<div class="fp-user">${esc(u)}</div>` : ''}${statsHTML}</div>
     </div>
     ${name ? `<div class="fp-name">${esc(name)}</div>` : ''}
@@ -6840,13 +6865,16 @@ function feedPreviewHTML(all, tz, prof) {
   // v223: glifo de reel blanco estilo IG (sin círculo de fondo) y la
   // pastillita de fecha corta para los programados.
   const REEL_SVG = '<svg class="fp-reel" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
+  // (Frente 3b) Glifo de carrusel (capas), espejo del de la home (HOME_CAR_SVG).
+  const CAR_SVG = '<svg class="fp-reel" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M8.5 3.5h10A2 2 0 0 1 20.5 5.5v10a2 2 0 0 1-2 2H17v-11a1.5 1.5 0 0 0-1.5-1.5H8.5v-1.5z" opacity=".92"/><rect x="3.5" y="6.5" width="13" height="13" rx="2"/></svg>';
   const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   const grid = parts.map((t, i) => {
     const p = t.p;
     const isV = String(p.media_type || '') === 'video';
+    const isCar = String(p.media_type || '') === 'carousel' || !!(p.carousel_paths && String(p.carousel_paths).length > 2);
     const extra = i >= VIS ? ' fp-extra' : '';
     const media = tileMedia(p, isV);
-    const reel = isV ? REEL_SVG : '';
+    const reel = isV ? REEL_SVG : isCar ? CAR_SVG : '';
     if (t.kind === 'up') {
       const sched = p.status === 'scheduled';
       let when = t.ymd;
@@ -6870,8 +6898,17 @@ function feedPreviewHTML(all, tz, prof) {
   // filtro — sin rótulo propio (la identidad la da el segmento "Feed");
   // la línea de honestidad queda como pie discreto de la vista.
   const bizNameF = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
+  // (Frente 3b) Aro de historia SOLO si hay una historia publicada o
+  // programada para HOY entre los posteos que esta vista ya cargó.
+  const todayF = schedTodayYmd(tz);
+  const storyTodayF = (Array.isArray(all) ? all : []).some(p => {
+    if (!p || String(p.media_type || '') !== 'story') return false;
+    if (p.status !== 'scheduled' && p.status !== 'published') return false;
+    const dt = pcParseDate(p.status === 'published' ? (p.published_at || p.scheduled_at) : p.scheduled_at);
+    return !!dt && schedDayKeyOf(dt, tz) === todayF;
+  });
   return `<section class="hs-feed" id="hsFeed">
-    ${feedProfileHeadHTML(prof, bizNameF)}
+    ${feedProfileHeadHTML(prof, bizNameF, { storyToday: storyTodayF })}
     <div class="fp-grid">${grid}</div>
     ${anyUp ? '<div class="fp-line">Los que llevan pastillita todavía no salieron 😉</div>' : ''}${moreBtn}
   </section>`;
@@ -7892,7 +7929,7 @@ async function pcSaveCap(card, id, btn) {
   // guardar y el caption "desaparece" hasta refrescar (bug 2026-10-16).
   document.querySelectorAll('[data-post-id="' + id + '"]').forEach(c => {
     const ce = c.querySelector('.pcard-cap, .igmock-cap');
-    if (ce) { ce.dataset.full = v; ce.textContent = v; ce.style.display = ''; }
+    if (ce) { ce.dataset.full = v; ce.textContent = v; if (ce.dataset.capuser) ce.innerHTML = '<b class="igmock-cap-user">' + esc(ce.dataset.capuser) + '</b> ' + esc(v); ce.style.display = ''; }
     const we = c.querySelector('.pcard-edit');
     if (we) we.remove();
   });
@@ -8124,7 +8161,7 @@ async function pcPublishNow(id, root, btn) {
     const v = ta.value.trim();
     try { await api.patch('/api/posts/' + encodeURIComponent(id), { caption: v }); } catch (e) {}
     const ce = root.querySelector('.pcard-cap, .igmock-cap');
-    if (ce) { ce.dataset.full = v; ce.textContent = v; ce.style.display = ''; }
+    if (ce) { ce.dataset.full = v; ce.textContent = v; if (ce.dataset.capuser) ce.innerHTML = '<b class="igmock-cap-user">' + esc(ce.dataset.capuser) + '</b> ' + esc(v); ce.style.display = ''; }
     const we = root.querySelector('.pcard-edit');
     if (we) we.remove();
   }
@@ -11757,17 +11794,28 @@ function homeTileHTML(t, i) {
   const pill = t.isNew ? '<span class="hf-new"><i></i>NUEVO</span>' : '';
   return `<span class="scf-mini-x hf-tile${p.status === 'published' ? ' pub' : ''}" data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" role="button" aria-label="Ver posteo">${media}${pill}${glyph}</span>`;
 }
-function homeHeadHTML(prof, bizName) {
+function homeHeadHTML(prof, bizName, opts) {
   const P = prof || {};
+  const en = !!(opts && opts.en);
   const user = String(P.username || '').replace(/^@/, '');
   const name = String(P.name || bizName || '').trim();
   const letter = esc((name || user || 'P').charAt(0).toUpperCase());
   const pic = P.pic ? `<img src="${esc(P.pic)}" alt="" onerror="this.remove()">` : '';
-  const fmtN = (n) => Number(n).toLocaleString('es-AR');
+  // (Frente 3b) Conteos como los muestra Instagram: completos con
+  // separador local hasta 9.999 (ES 1.234 · EN 1,234) y abreviados
+  // desde 10 mil (ES 12,4 mil / 1,2 M · EN 12.4K / 1.2M).
+  const fmtN = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return '';
+    if (v < 10000) return v.toLocaleString(en ? 'en-US' : 'es-AR');
+    const trim1 = (x) => x.toFixed(1).replace(/\.0$/, '');
+    if (v < 1000000) return en ? trim1(v / 1000) + 'K' : trim1(v / 1000).replace('.', ',') + ' mil';
+    return en ? trim1(v / 1000000) + 'M' : trim1(v / 1000000).replace('.', ',') + ' M';
+  };
   const stats = [];
-  if (typeof P.posts_count === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.posts_count)}</b><span>${P.posts_count === 1 ? 'publicación' : 'publicaciones'}</span></div>`);
-  if (typeof P.followers === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.followers)}</b><span>${P.followers === 1 ? 'seguidor' : 'seguidores'}</span></div>`);
-  if (typeof P.following === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.following)}</b><span>${P.following === 1 ? 'seguido' : 'seguidos'}</span></div>`);
+  if (typeof P.posts_count === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.posts_count)}</b><span>${en ? (P.posts_count === 1 ? 'post' : 'posts') : (P.posts_count === 1 ? 'publicación' : 'publicaciones')}</span></div>`);
+  if (typeof P.followers === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.followers)}</b><span>${en ? (P.followers === 1 ? 'follower' : 'followers') : (P.followers === 1 ? 'seguidor' : 'seguidores')}</span></div>`);
+  if (typeof P.following === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.following)}</b><span>${en ? 'following' : (P.following === 1 ? 'seguido' : 'seguidos')}</span></div>`);
   const bio = String(P.bio || '').trim();
   const bioHTML = bio && !P.bio_unread ? `<div class="hf-bio">${esc(bio)}</div>` : '';
   const rawLink = String(P.link || '').trim();
@@ -11779,7 +11827,7 @@ function homeHeadHTML(prof, bizName) {
   return `<div class="hf-head">
     ${user ? `<div class="hf-user">${esc(user)}</div>` : ''}
     <div class="hf-prow">
-      <div class="hf-ava"><div class="hf-ava-in"><span class="hf-ava-letter">${letter}</span>${pic}</div></div>
+      <div class="hf-ava"><div class="hf-ava-in${opts && opts.storyToday ? ' story' : ''}"><span class="hf-ava-letter">${letter}</span>${pic}</div></div>
       ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
     </div>
     ${name ? `<div class="hf-name">${esc(name)}</div>` : ''}
@@ -11840,6 +11888,16 @@ async function inicioView() {
       if (dt) t.day = schedDayKeyOf(dt, tz);
     }
   }
+  // (Frente 3b) Historia de HOY: alguna pieza story programada o ya
+  // publicada con fecha de hoy, de los posteos que esta vista ya cargó
+  // (/api/posts). Con eso la home decide el aro de la foto de perfil.
+  const todayYmdH = schedTodayYmd(tz);
+  const homeStoryToday = allPosts.some(p => {
+    if (!p || String(p.media_type || '') !== 'story') return false;
+    if (p.status !== 'scheduled' && p.status !== 'published') return false;
+    const dt = pcParseDate(p.status === 'published' ? (p.published_at || p.scheduled_at) : p.scheduled_at);
+    return !!dt && schedDayKeyOf(dt, tz) === todayYmdH;
+  });
   // Cofre con las tarjetas completas (el detalle EXISTENTE: día/hora,
   // caption, Aceptar/Editar/Frenar) — la ampliación de la home mueve la
   // tarjeta acá, igual que Semana (patrón #scfVault).
@@ -11852,7 +11910,7 @@ async function inicioView() {
     const prop = p.status === 'published'
       ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
       : proposedLabelFor(p, pl.proposals, tz);
-    vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null }));
+    vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null, user: (prof && prof.username) || '', pic: (prof && prof.pic) || '' }));
   }
   const gridHTML = tiles.length
     ? `<div class="hf-grid">${tiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
@@ -11873,7 +11931,7 @@ async function inicioView() {
     : '';
   return `<div id="inicioView" class="hf-wrap">
   ${igLine}
-  ${homeHeadHTML(prof, bizName)}
+  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyToday: homeStoryToday })}
   ${kitHTML}
   ${gridHTML}
   ${stripHTML}
