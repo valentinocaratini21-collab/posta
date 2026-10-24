@@ -11776,6 +11776,34 @@ function homeGridCompose(input) {
 }
 const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
 const HOME_CAR_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M8.5 3.5h10A2 2 0 0 1 20.5 5.5v10a2 2 0 0 1-2 2H17v-11a1.5 1.5 0 0 0-1.5-1.5H8.5v-1.5z" opacity=".92"/><rect x="3.5" y="6.5" width="13" height="13" rx="2"/></svg>';
+// (Frente 3 · suma 2) Texto de la chapita de programación estilo IG
+// profesional: «vie 31 · 18:00» — día localizado ES/EN (vie/fri, sáb/sat),
+// día del mes y hora HH:MM, SIEMPRE desde el scheduled_at REAL del
+// posteo (nada hardcodeado). Defensiva a propósito: el bloque HOME_FEED
+// se extrae en tests sin el resto del bundle (pcParseDate/pcTz/ME pueden
+// no existir) y ante cualquier duda devuelve '' (sin chapita, jamás una
+// fecha inventada).
+function hfChipText(scheduledAt) {
+  try {
+    if (!scheduledAt) return '';
+    let d = null;
+    if (typeof pcParseDate === 'function') d = pcParseDate(scheduledAt);
+    if (!d) {
+      const s = String(scheduledAt).replace(' ', 'T');
+      d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z');
+    }
+    if (!d || isNaN(d)) return '';
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const loc = en ? 'en-US' : 'es-AR';
+    const tz = (typeof pcTz === 'function') ? pcTz() : undefined;
+    const zo = tz ? { timeZone: tz } : {};
+    const wd = d.toLocaleDateString(loc, Object.assign({ weekday: 'short' }, zo)).replace(/\./g, '').toLowerCase();
+    const dm = d.toLocaleDateString(loc, Object.assign({ day: 'numeric' }, zo));
+    const hh = d.toLocaleTimeString(loc, Object.assign({ hour: '2-digit', minute: '2-digit', hour12: false }, zo));
+    if (!wd || !dm || !hh) return '';
+    return `${wd} ${dm} · ${hh}`;
+  } catch (e) { return ''; }
+}
 function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
@@ -11788,11 +11816,21 @@ function homeTileHTML(t, i) {
   const media = !p.image_path
     ? '<span class="hf-tile-ph">✨</span>'
     : isV
-      ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
+      ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="none" data-hf-reel="1"></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
   const glyph = isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
   const pill = t.isNew ? '<span class="hf-new"><i></i>NUEVO</span>' : '';
-  return `<span class="scf-mini-x hf-tile${p.status === 'published' ? ' pub' : ''}" data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" role="button" aria-label="Ver posteo">${media}${pill}${glyph}</span>`;
+  // (Frente 3 · suma 2) Chapita de programación: SOLO en posteos futuros
+  // programados (status 'scheduled' con fecha real) — es la ÚNICA señal
+  // de estado sobre esas tiles (sin badges de colores ni estados extra).
+  // Publicados/pasados y borradores: sin chapita.
+  const chipTxt = p.status === 'scheduled' ? hfChipText(p.scheduled_at) : '';
+  const chip = chipTxt ? `<span class="hf-chip">🕐 ${esc(chipTxt)}</span>` : '';
+  // (Frente 3 · suma 2) La semana «cae» en la grilla: inicioView marca
+  // t.fall/t.fallDelay una única vez por generación (ver hfFallMark).
+  const fallCls = t.fall ? ' hf-fall' : '';
+  const fallStyle = t.fall ? ` style="--hfd:${Math.max(0, Number(t.fallDelay) || 0)}ms"` : '';
+  return `<span class="scf-mini-x hf-tile${p.status === 'published' ? ' pub' : ''}${fallCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="Ver posteo">${media}${pill}${chip}${glyph}</span>`;
 }
 function homeHeadHTML(prof, bizName, opts) {
   const P = prof || {};
@@ -11888,6 +11926,10 @@ async function inicioView() {
       if (dt) t.day = schedDayKeyOf(dt, tz);
     }
   }
+  // (Frente 3 · suma 2) La semana «cae» en la grilla: marca las tiles de
+  // la semana recién generada para su animación de entrada ÚNICA (la
+  // composición de homeGridCompose no se toca; esto solo anota tiles).
+  try { hfFallMark(tiles); } catch (e) {}
   // (Frente 3b) Historia de HOY: alguna pieza story programada o ya
   // publicada con fecha de hoy, de los posteos que esta vista ya cargó
   // (/api/posts). Con eso la home decide el aro de la foto de perfil.
@@ -11977,11 +12019,235 @@ function mzCloseSheet() {
   try { document.body.classList.remove('mz-sheet-open'); } catch (e) {}
 }
 
+/* ===== (Frente 3 · suma 2) FEED VIVO: gestos sobre las tiles =====
+   REGLA DE PRECEDENCIA (única, simple):
+   · Tile de posteo FUTURO programado (status 'scheduled'), sea foto o
+     reel: press-and-hold ≥600ms abre la hoja de acciones (Editar ·
+     Frenar · Reprogramar). En estas tiles NO hay preview de reel: la
+     hoja manda porque el posteo todavía no salió.
+   · Tile de reel NO futura (publicado, borrador o pasado): press-and-
+     hold ≥350ms reproduce la preview MUDA en loop mientras se mantiene
+     apretado; al soltar (pointerup/leave/cancel) se detiene.
+   · Ningún gesto nuevo es obligatorio: el tap simple sigue abriendo el
+     detalle como siempre (bindScfMinis) y el scroll vertical queda
+     intacto — el movimiento >10px cancela cualquier hold pendiente
+     (y pointercancel, que dispara el navegador al tomar el scroll,
+     también). El click que sigue a un hold ya consumido se suprime en
+     captura para que no abra el detalle por accidente. */
+// La semana «cae» en la grilla UNA vez por generación: la marca vive en
+// localStorage por semana (lunes) + huella de ids de esa semana. Una
+// generación nueva cambia la huella → cae de nuevo; re-renders y
+// visitas siguientes con la misma huella → no se repite.
+function hfFallMark(tiles) {
+  const byWeek = new Map();
+  for (const t of tiles || []) {
+    if (!t || t.kind !== 'post' || !t.post || !t.day) continue;
+    if (t.post.status !== 'draft' && t.post.status !== 'scheduled') continue;
+    const wk = schedMondayOf(t.day);
+    if (!wk) continue;
+    if (!byWeek.has(wk)) byWeek.set(wk, []);
+    byWeek.get(wk).push(t);
+  }
+  let n = 0;
+  for (const [wk, arr] of byWeek) {
+    const fp = arr.map((t) => String(t.post.id)).sort().join(',');
+    const key = 'posty_hf_fall_' + wk;
+    let seen = null;
+    try { seen = localStorage.getItem(key); } catch (e) {}
+    if (seen === fp) continue;
+    for (const t of arr) { t.fall = true; t.fallDelay = Math.min(n, 12) * 45; n++; }
+    try { localStorage.setItem(key, fp); } catch (e) {}
+  }
+}
+function hfIsEn() { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); }
+function hfFeedGesturesBind(root) {
+  if (!root) return;
+  // Supresión del click post-hold (captura en el root: corre antes que
+  // el click de bindScfMinis sobre la tile).
+  if (!root._hfCapBound) {
+    root._hfCapBound = true;
+    root.addEventListener('click', (e) => {
+      const t = e.target && e.target.closest ? e.target.closest('.hf-tile') : null;
+      if (t && t._hfHoldAt && Date.now() - t._hfHoldAt < 800) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
+  }
+  root.querySelectorAll('.hf-tile[data-post-id]').forEach((tile) => {
+    if (tile._hfBound) return;
+    const video = tile.querySelector('video[data-hf-reel]');
+    const isFuture = tile.dataset.status === 'scheduled';
+    if (!isFuture && !video) return;
+    tile._hfBound = true;
+    let sx = 0, sy = 0, tSheet = null, tPrev = null, previewing = false;
+    const stopPreview = () => {
+      if (!previewing) return;
+      previewing = false;
+      tile.classList.remove('hf-previewing');
+      if (video) { try { video.pause(); } catch (e) {} try { video.currentTime = 0; } catch (e) {} }
+    };
+    const clearTimers = () => {
+      if (tSheet) { clearTimeout(tSheet); tSheet = null; }
+      if (tPrev) { clearTimeout(tPrev); tPrev = null; }
+    };
+    tile.addEventListener('pointerdown', (e) => {
+      sx = e.clientX || 0; sy = e.clientY || 0;
+      if (isFuture) {
+        tSheet = setTimeout(() => {
+          tSheet = null;
+          tile._hfHoldAt = Date.now();
+          hfOpenActionsSheet(tile);
+        }, 600);
+      } else if (video) {
+        tPrev = setTimeout(() => {
+          tPrev = null;
+          previewing = true;
+          tile._hfHoldAt = Date.now();
+          tile.classList.add('hf-previewing');
+          try {
+            video.muted = true;
+            video.loop = true;
+            const pr = video.play();
+            if (pr && pr.catch) pr.catch(() => {});
+          } catch (err) {}
+        }, 350);
+      }
+    });
+    tile.addEventListener('pointermove', (e) => {
+      if (!tSheet && !tPrev && !previewing) return;
+      if (Math.abs((e.clientX || 0) - sx) > 10 || Math.abs((e.clientY || 0) - sy) > 10) { clearTimers(); stopPreview(); }
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => {
+      tile.addEventListener(ev, () => { clearTimers(); stopPreview(); });
+    });
+  });
+}
+// Hoja de acciones estilo Instagram para un posteo futuro (mismo sistema
+// de hojas que pcOpenImageSheet: .pcsheet-backdrop + .pcsheet, se cierra
+// con pcCloseSheet o tocando el fondo). El cliente NO sale del feed.
+function hfOpenActionsSheet(tile) {
+  const id = tile && tile.dataset ? tile.dataset.postId : '';
+  if (!id) return;
+  try { scfClosePop(); } catch (e) {}
+  pcCloseSheet();
+  const en = hfIsEn();
+  const chipTxt = hfChipText(tile.dataset.schedAt || '');
+  const bd = document.createElement('div');
+  bd.className = 'pcsheet-backdrop';
+  bd.innerHTML = `<div class="pcsheet hf-actions" data-post-id="${esc(String(id))}" role="dialog" aria-modal="true">
+    <div class="pcsheet-handle"></div>
+    <div class="pcsheet-title">${chipTxt ? '🕐 ' + esc(chipTxt) : (en ? 'Scheduled' : 'Programado')}</div>
+    <button type="button" class="pcsheet-opt" data-hf-act="edit">✏️ ${en ? 'Edit' : 'Editar'}<small>${en ? 'Opens this post right here in your feed' : 'Se abre este posteo acá mismo, en tu feed'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hf-act="hold">⏸ ${en ? 'Stop' : 'Frenar'}<small>${en ? 'Back to draft — it will not go out' : 'Vuelve a borrador — no va a salir'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hf-act="resched">🗓️ ${en ? 'Reschedule' : 'Reprogramar'}<small>${en ? 'Pick a new day and time' : 'Elegí un día y una hora nuevos'}</small></button>
+    <div class="hf-resched" hidden>
+      <input type="datetime-local" class="pcsheet-select hf-resched-inp" value="${esc(isoToLocalInput(tile.dataset.schedAt || ''))}" aria-label="${en ? 'New day and time' : 'Nuevo día y hora'}">
+      <button type="button" class="pcsheet-opt" data-hf-act="resched-save" style="margin-top:8px">✓ ${en ? 'Save new time' : 'Guardar nueva fecha'}</button>
+      <div class="pcsheet-msg hf-resched-msg"></div>
+    </div>
+    <button type="button" class="pcsheet-close" data-hf-act="close">${en ? 'Close' : 'Cerrar'}</button>
+  </div>`;
+  document.body.appendChild(bd);
+  bd.addEventListener('click', (e) => { if (e.target === bd) pcCloseSheet(); });
+  bd.querySelectorAll('[data-hf-act]').forEach((b) => {
+    b.addEventListener('click', () => { hfActionsAct(b.dataset.hfAct, id, tile, bd); });
+  });
+}
+function hfActionsAct(act, id, tile, bd) {
+  if (act === 'close') { pcCloseSheet(); return; }
+  if (act === 'hold') { pcCloseSheet(); pcHold(id); return; }
+  if (act === 'edit') {
+    pcCloseSheet();
+    // El flujo vigente de edición SIN salir del feed: la tarjeta
+    // completa del cofre (#scfVault) fijada sobre la tile — la misma
+    // ampliación de siempre — con su editor de texto ya abierto.
+    try { scfOpenPop(tile, true); } catch (e) {}
+    const pop = tile.querySelector('.scf-pop');
+    const eb = pop ? pop.querySelector('[data-pc-act="edit-cap"]') : null;
+    if (eb) { eb.click(); return; }
+    if (!pop) location.hash = '#/app/post/' + encodeURIComponent(id); // respaldo: el detalle vigente
+    return;
+  }
+  if (act === 'resched') {
+    const box = bd.querySelector('.hf-resched');
+    if (box) { box.hidden = false; const inp = box.querySelector('.hf-resched-inp'); if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) {} } }
+    return;
+  }
+  if (act === 'resched-save') { hfReschedule(id, tile, bd); return; }
+}
+// Cupo de la semana DESTINO (la del posteo si se mueve ahí): mismo
+// conteo que el servidor (programados/en publicación/publicados por
+// fecha de salida, pool por formato: reels aparte, feed = foto+carrusel)
+// y mismo límite que trae /api/quota. Mover DENTRO de su propia semana
+// no cambia el conteo. Ante cualquier duda no bloquea: el PATCH vigente
+// sigue siendo la autoridad final (su 403 plan_limit abre planLimitModal).
+async function hfReschedQuotaOk(id, tile, targetIso) {
+  try {
+    const tz = pcTz();
+    const td = pcParseDate(targetIso);
+    if (!td) return true;
+    const tDay = schedDayKeyOf(td, tz);
+    const tMon = schedMondayOf(tDay), tSun = schedAddDays(tMon, 6);
+    const cur = tile.dataset.schedAt ? pcParseDate(tile.dataset.schedAt) : null;
+    const curDay = cur ? schedDayKeyOf(cur, tz) : '';
+    if (curDay && curDay >= tMon && curDay <= tSun) return true;
+    const mt = String(tile.dataset.media || 'image');
+    if (mt === 'story') return true;
+    const [posts, q] = await Promise.all([
+      api.get('/api/posts').catch(() => []),
+      api.get('/api/quota').catch(() => null),
+    ]);
+    if (!q) return true;
+    const limit = mt === 'video' ? Number(q.reels && q.reels.limit) : Number(q.limit);
+    if (!(limit > 0)) return true; // el gate por formato es de creación, no de reprogramación
+    let used = 0;
+    for (const p of (Array.isArray(posts) ? posts : [])) {
+      if (!p || String(p.id) === String(id)) continue;
+      if (p.status !== 'scheduled' && p.status !== 'publishing' && p.status !== 'published') continue;
+      const m2 = String(p.media_type || 'image');
+      if (mt === 'video' ? m2 !== 'video' : (m2 === 'video' || m2 === 'story')) continue;
+      const d2 = pcParseDate(p.scheduled_at || p.published_at || p.created_at);
+      if (!d2) continue;
+      const k = schedDayKeyOf(d2, tz);
+      if (k >= tMon && k <= tSun) used++;
+    }
+    if (used >= limit) { quotaModal({ limit, used, left: 0, plan_name: q.plan_name || '' }); return false; }
+    return true;
+  } catch (e) { return true; }
+}
+async function hfReschedule(id, tile, bd) {
+  const inp = bd.querySelector('.hf-resched-inp');
+  const msg = bd.querySelector('.hf-resched-msg');
+  const btn = bd.querySelector('[data-hf-act="resched-save"]');
+  const v = inp ? inp.value : '';
+  if (!v) { if (msg) msg.textContent = hfIsEn() ? 'Pick a day and time first' : 'Elegí un día y una hora primero'; return; }
+  const d = new Date(v);
+  if (isNaN(d)) { if (msg) msg.textContent = hfIsEn() ? 'That date does not work' : 'Esa fecha no sirve'; return; }
+  const iso = d.toISOString(); // la misma conversión del flujo vigente (inputs data-revwhen de la revisión)
+  if (btn) btn.disabled = true;
+  try {
+    const okQ = await hfReschedQuotaOk(id, tile, iso);
+    if (!okQ) { pcCloseSheet(); return; } // quotaModal ya explicó el tope de ESA semana
+    await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: iso });
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    if (isPlanLimitErr(e)) { pcCloseSheet(); planLimitModal(e); return; }
+    if (msg) msg.textContent = (hfIsEn() ? 'Could not reschedule: ' : 'No se pudo reprogramar: ') + ((e && e.message) || '');
+    return;
+  }
+  pcCloseSheet();
+  toast('🗓️ ' + (hfIsEn() ? 'Rescheduled — ' : 'Reprogramado — ') + hfChipText(iso));
+  try { render(); } catch (e) {}
+}
+/* ===== /(Frente 3 · suma 2) FEED VIVO ===== */
+
 function bindInicio() {
   // (v331) La home es el feed literal: se cablea la MISMA ampliación de
   // Semana sobre las minis de la grilla (hover agranda centrado, click
   // fija; el detalle es la tarjeta existente del cofre #scfVault).
   bindScfMinis(document.getElementById('inicioView'));
+  // (Frente 3 · suma 2) Gestos del feed vivo (preview de reels con
+  // press-and-hold + hoja de acciones en futuros): capa extra sobre el
+  // cableado de siempre, sin reemplazarlo.
+  hfFeedGesturesBind(document.getElementById('inicioView'));
   // Franja de revisión: "Aceptar todo" — el handler de siempre
   // (doAcceptAll completa los ítems desde REVIEW_DRAFTS, que
   // inicioView ya cargó con todos los borradores de la cuenta).

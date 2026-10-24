@@ -1916,6 +1916,25 @@ textarea.in{resize:vertical;min-height:96px}
 .hf-new{position:absolute;top:6px;left:6px;display:inline-flex;align-items:center;gap:5px;background:rgba(10,30,51,.82);color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.6px;padding:3px 7px;border-radius:999px}
 .hf-new i{width:6px;height:6px;border-radius:50%;background:#fec14d;display:block}
 .hf-glyph{position:absolute;top:6px;right:6px;width:20px;height:20px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+/* (Frente 3 · suma 2) Chapita de programación estilo IG profesional:
+   neutra, discreta, abajo a la izquierda — la ÚNICA señal de estado en
+   las tiles futuras programadas. Sin colores de marca ni de estado. */
+.hf-chip{position:absolute;left:6px;bottom:6px;z-index:2;display:inline-flex;align-items:center;background:rgba(0,0,0,.55);color:#fff;font-size:10.5px;font-weight:600;line-height:1;padding:4px 6px;border-radius:6px;letter-spacing:.1px;white-space:nowrap}
+/* (Frente 3 · suma 2) Gestos del feed: el scroll vertical manda
+   (pan-y: el navegador toma el gesto y dispara pointercancel, que
+   detiene la preview / cancela la hoja). */
+.hf-tile{touch-action:pan-y}
+.hf-tile.hf-previewing video{filter:none}
+/* (Frente 3 · suma 2) La semana «cae» en la grilla: entrada breve y
+   ÚNICA por generación (la marca vive en localStorage, ver hfFallMark
+   en app.js) — fade + deslizamiento corto, sin bucles ni persistencia. */
+.hf-tile.hf-fall{animation:hf-fall .5s cubic-bezier(.2,.7,.3,1) both;animation-delay:var(--hfd,0ms)}
+@keyframes hf-fall{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media (prefers-reduced-motion:reduce){.hf-tile.hf-fall{animation:none}}
+/* (Frente 3 · suma 2) Hoja de acciones del feed: el input de
+   reprogramación dentro de la hoja vigente (.pcsheet). */
+.hf-resched{margin:2px 0 8px}
+.hf-resched .pcsheet-opt{margin-bottom:0}
 .hf-review{display:flex;align-items:center;gap:12px;margin:16px 16px 4px;background:#eaf6fd;border:1px solid #cfe9f7;border-radius:16px;padding:13px 14px}
 .hf-review-tx{flex:1;min-width:0}
 .hf-review-tx b{display:block;font-size:14.5px;color:#0a1e33}
