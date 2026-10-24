@@ -15894,6 +15894,65 @@ app.post('/api/gesty/cobranzas/:id/vincular-comprobante', ...gestyCobMW, express
   catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-06 REPORTES Y CIERRE MENSUAL (+ PRONÓSTICO DE CAJA)
+// Spec: gesty-cola-builds.md G-06 + gesty-areas-detalle.md §8 +
+// gesty-build-spec.md §13.2. El módulo vive en gesty-reportes.js;
+// acá solo se monta la API detrás de requireAuth + gating de pack
+// + capacidad «reportes» EN EL SERVIDOR. Reportes no aprueba nada:
+// el dueño solo lee. Cada número sale de una entidad real y guarda
+// su desglose; lo que no se puede saber queda marcado «faltante»
+// en el propio cierre — jamás un número inventado. El cierre es
+// una entidad durable (con su evento) y la carpeta del mes se
+// exporta en JSON o CSV (el patrón de exportación de la casa).
+// =====================================================================
+const gestyReportes = require('./gesty-reportes');
+
+const gestyRepMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'reportes')];
+
+app.get('/api/gesty/reportes/pronostico', ...gestyRepMW, (req, res) => {
+  // El pronóstico de caja a 30 días (spec §13.2): entra / sale /
+  // queda solo desde registros reales, con su cobertura declarada.
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, pronostico: gestyReportes.pronosticoCaja(db, req.session.userId, { desde: q.desde, dias: q.dias }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reportes/cierre', ...gestyRepMW, express.json(), (req, res) => {
+  // Generar el cierre lo PERSISTE como entidad durable con su
+  // desglose por fuente y sus faltantes (y su evento durable).
+  try { res.json({ ok: true, cierre: gestyReportes.generarCierre(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reportes/cierre', ...gestyRepMW, (req, res) => {
+  // La última generación del cierre del período (o null si el
+  // período todavía no se cerró: el reporte no se finge).
+  try {
+    const c = gestyReportes.getCierre(db, req.session.userId, (req.query || {}).periodo);
+    res.json({ ok: true, cierre: c });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reportes/cierres', ...gestyRepMW, (req, res) => {
+  // La «fila del cierre»: la última generación de cada período.
+  try { res.json({ ok: true, cierres: gestyReportes.listCierres(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reportes/carpeta', ...gestyRepMW, (req, res) => {
+  // La carpeta del mes para el contador: índice de comprobantes
+  // clasificados + el reporte. JSON por default; ?formato=csv
+  // descarga el índice como CSV (patrón de la casa).
+  try {
+    const q = req.query || {};
+    const carpeta = gestyReportes.carpetaDelMes(db, req.session.userId, q.periodo);
+    if (String(q.formato || '').toLowerCase() === 'csv') {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="gesty-carpeta-${carpeta.periodo}.csv"`);
+      return res.send(gestyReportes.carpetaCSV(carpeta));
+    }
+    res.json({ ok: true, carpeta });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -19620,7 +19679,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v409';
+const BUILD_ID = '20261024-v410';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
