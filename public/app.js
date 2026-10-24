@@ -2606,6 +2606,7 @@ function appShell(tab, content) {
       <img src="ai-avatar.png" alt="Posty" class="side-posty-ava">
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
+    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">🏠</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
     <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Semana<span class="sched-count" id="schedCount" style="display:none"></span></button>
     <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">📊</span>Análisis</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
@@ -6210,7 +6211,20 @@ function weekCardHTML(d, o) {
   else if (prop.iso) { const dd = new Date(prop.iso.slice(0, 10) + 'T12:00:00Z'); const dn = dd.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' }); dayLabel = dn.charAt(0).toUpperCase() + dn.slice(1) + ' ' + dd.getUTCDate() + ' a las ' + prop.iso.slice(11, 16); }
   // La forma de Instagram: íconos + "Me gusta" solo cuando hay pieza
   // (un borrador creándose todavía no tiene qué mostrar).
-  const igChrome = (!isPending && d.image_path) ? `<div class="igmock-acts" aria-hidden="true">${LP_WEEK_ICONS}</div><div class="igmock-likes">Sé el primero en indicar que te gusta</div>` : '';
+  // (v360) Likes/comentarios CON DATOS: /api/posts trae likes y
+  // comments_count desde post_metrics (insights reales de IG) — null si
+  // el posteo no tiene métricas: jamás se inventa un conteo ni un
+  // nombre. Sin datos o en 0 queda la variante vigente de cero likes.
+  const enW = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const lkN = (d.likes === null || d.likes === undefined || !Number.isFinite(Number(d.likes))) ? null : Number(d.likes);
+  const likesLine = (lkN !== null && lkN > 0)
+    ? `<div class="igmock-likes">${lkN.toLocaleString(enW ? 'en-US' : 'es-AR')} ${enW ? (lkN === 1 ? 'like' : 'likes') : 'Me gusta'}</div>`
+    : `<div class="igmock-likes">${enW ? 'Be the first to like this' : 'Sé el primero en indicar que te gusta'}</div>`;
+  const ccN = (d.comments_count === null || d.comments_count === undefined || !Number.isFinite(Number(d.comments_count))) ? null : Number(d.comments_count);
+  const commentsLine = (!o.dia && ccN !== null && ccN > 0)
+    ? `<div class="igmock-comments">${enW ? (ccN === 1 ? 'View 1 comment' : `View all ${ccN.toLocaleString('en-US')} comments`) : (ccN === 1 ? 'Ver el comentario' : `Ver los ${ccN.toLocaleString('es-AR')} comentarios`)}</div>`
+    : '';
+  const igChrome = (!isPending && d.image_path) ? `<div class="igmock-acts" aria-hidden="true">${LP_WEEK_ICONS}</div>${likesLine}` : '';
   const statusHTML = d.status === 'scheduled'
     ? `<span class="pcard-scheduled">📮 Programado</span>`
     : isPub
@@ -6235,6 +6249,7 @@ function weekCardHTML(d, o) {
     : `<div class="igmock-foot">
         ${igChrome}
         ${capHTML}
+        ${commentsLine}
         ${timeHTML}
         ${acts}
         ${whyHTML}
@@ -11772,11 +11787,12 @@ function homeGridCompose(input) {
   for (const r of recents) {
     if (!r || !r.img) continue;
     if (minPubMs !== Infinity && (typeof r.taken_at !== 'number' || !(r.taken_at * 1000 < minPubMs))) continue;
-    tiles.push({ kind: 'ig', img: r.img, type: r.type || 'image', taken_at: (typeof r.taken_at === 'number' ? r.taken_at : null), isNew: false });
+    tiles.push({ kind: 'ig', img: r.img, type: r.type || 'image', taken_at: (typeof r.taken_at === 'number' ? r.taken_at : null), isNew: false, pinned: r.pinned === true, likes: (typeof r.likes === 'number' ? r.likes : null), comments: (typeof r.comments === 'number' ? r.comments : null) });
   }
   return tiles.slice(0, cap);
 }
 const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
+const HOME_PIN_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M15.6 3.5l4.9 4.9-2.1.7-2.3 2.3.02 3.4c0 .4-.42.62-.75.4l-3.35-2.26-2.94 2.94a1.06 1.06 0 0 1-1.5-1.5l2.94-2.94L8.56 8.03a.53.53 0 0 1 .4-.76l3.4.02 2.3-2.3.7-2.44a.5.5 0 0 1 .24-.05z"/></svg>';
 const HOME_CAR_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M8.5 3.5h10A2 2 0 0 1 20.5 5.5v10a2 2 0 0 1-2 2H17v-11a1.5 1.5 0 0 0-1.5-1.5H8.5v-1.5z" opacity=".92"/><rect x="3.5" y="6.5" width="13" height="13" rx="2"/></svg>';
 // (Frente 3 · suma 2) Texto de la chapita de programación estilo IG
 // profesional: «vie 31 · 18:00» — día localizado ES/EN (vie/fri, sáb/sat),
@@ -11809,7 +11825,7 @@ function hfChipText(scheduledAt) {
 function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
-    const glyph = t.type === 'video' ? HOME_REEL_SVG : t.type === 'carousel' ? HOME_CAR_SVG : '';
+    const glyph = t.pinned ? HOME_PIN_SVG : t.type === 'video' ? HOME_REEL_SVG : t.type === 'carousel' ? HOME_CAR_SVG : '';
     return `<button type="button" class="hf-tile pub" data-lightbox="${esc(t.img)}" data-video="0" data-cap="" data-tags="" aria-label="Posteo de tu Instagram"><img src="${esc(t.img)}" loading="lazy" alt="" onerror="__imgFb(this)">${glyph}</button>`;
   }
   const p = t.post;
@@ -11820,7 +11836,7 @@ function homeTileHTML(t, i) {
     : isV
       ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="none" data-hf-reel="1"></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
-  const glyph = isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
+  const glyph = p.pinned === true ? HOME_PIN_SVG : isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
   const pill = t.isNew ? '<span class="hf-new"><i></i>NUEVO</span>' : '';
   // (Frente 3 · suma 2) Chapita de programación: SOLO en posteos futuros
   // programados (status 'scheduled' con fecha real) — es la ÚNICA señal
@@ -11856,6 +11872,13 @@ function homeHeadHTML(prof, bizName, opts) {
   if (typeof P.posts_count === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.posts_count)}</b><span>${en ? (P.posts_count === 1 ? 'post' : 'posts') : (P.posts_count === 1 ? 'publicación' : 'publicaciones')}</span></div>`);
   if (typeof P.followers === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.followers)}</b><span>${en ? (P.followers === 1 ? 'follower' : 'followers') : (P.followers === 1 ? 'seguidor' : 'seguidores')}</span></div>`);
   if (typeof P.following === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.following)}</b><span>${en ? 'following' : (P.following === 1 ? 'seguido' : 'seguidos')}</span></div>`);
+  // (v360) Línea gris de categoría pública (la trae /api/home/profile
+  // desde el rubro real; sin categoría, no hay línea) y burbuja de nota
+  // sobre la foto (solo si el payload trae una nota real: hoy la
+  // lectura pública no la expone y el campo llega null).
+  const catTxt = en ? String(P.category_en || '') : String(P.category || '');
+  const catHTML = catTxt ? `<div class="hf-cat">${esc(catTxt)}</div>` : '';
+  const noteHTML = (typeof P.note === 'string' && P.note.trim()) ? `<span class="hf-note">${esc(P.note.trim())}</span>` : '';
   const bio = String(P.bio || '').trim();
   const bioHTML = bio && !P.bio_unread ? `<div class="hf-bio">${esc(bio)}</div>` : '';
   const rawLink = String(P.link || '').trim();
@@ -11867,10 +11890,11 @@ function homeHeadHTML(prof, bizName, opts) {
   return `<div class="hf-head">
     ${user ? `<div class="hf-user">${esc(user)}</div>` : ''}
     <div class="hf-prow">
-      <div class="hf-ava"><div class="hf-ava-in${opts && opts.storyToday ? ' story' : ''}"><span class="hf-ava-letter">${letter}</span>${pic}</div></div>
+      <div class="hf-ava"><div class="hf-ava-in${opts && opts.storyToday ? ' story' : ''}"><span class="hf-ava-letter">${letter}</span>${pic}</div>${noteHTML}</div>
       ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
     </div>
     ${name ? `<div class="hf-name">${esc(name)}</div>` : ''}
+    ${catHTML}
     ${bioHTML}
     ${linkHTML}
     ${hlHTML}

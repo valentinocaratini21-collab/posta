@@ -6717,13 +6717,13 @@ app.get('/api/analysis/:id', requireAuth, (req, res) => {
 
 app.get('/api/posts', requireAuth, (req, res) => {
   const { status } = req.query;
-  const join = 'LEFT JOIN post_signals s ON s.user_id = p.user_id AND s.post_id = p.id';
+  const join = 'LEFT JOIN post_signals s ON s.user_id = p.user_id AND s.post_id = p.id LEFT JOIN post_metrics pm ON pm.post_id = p.id';
   const vis = `AND COALESCE(p.needs_review, 0) = 0`; // "rueditas": en revisión no se muestra
   let rows;
   if (status) {
-    rows = db.prepare(`SELECT p.*, s.client_signal AS signal FROM posts p ${join} WHERE p.user_id = ? AND p.status = ? ${vis} ORDER BY p.scheduled_at ASC, p.created_at DESC`).all(req.session.userId, status);
+    rows = db.prepare(`SELECT p.*, s.client_signal AS signal, pm.likes AS likes, pm.comments AS comments_count FROM posts p ${join} WHERE p.user_id = ? AND p.status = ? ${vis} ORDER BY p.scheduled_at ASC, p.created_at DESC`).all(req.session.userId, status);
   } else {
-    rows = db.prepare(`SELECT p.*, s.client_signal AS signal FROM posts p ${join} WHERE p.user_id = ? ${vis} ORDER BY p.created_at DESC LIMIT 100`).all(req.session.userId);
+    rows = db.prepare(`SELECT p.*, s.client_signal AS signal, pm.likes AS likes, pm.comments AS comments_count FROM posts p ${join} WHERE p.user_id = ? ${vis} ORDER BY p.created_at DESC LIMIT 100`).all(req.session.userId);
   }
   // 🧠 Porqué (2026-10-19): todo posteo visible lleva su porqué. Los caminos
   // de creación que no cargan strategy_why lo reciben acá, una sola vez,
@@ -9833,6 +9833,45 @@ function homeSnapshotPut(uid, username, payload) {
 // CUAL (null si no vinieron), posteos recientes con tipo y fecha
 // reales, miniaturas y foto LOCALIZADAS en /media (las URLs de la CDN
 // de IG expiran y no se dejan hotlinkear: mismo criterio que /prueba).
+// (v360) Categoría PÚBLICA del perfil: la línea gris estilo Instagram
+// («Restaurante», «Producto/servicio») sale del rubro REAL de la cuenta
+// (el detectado de su bio en la lectura, o el declarado en su perfil) vía
+// este mapa de etiquetas. 'otro' o sin dato -> null: la línea no se
+// muestra y jamás se inventa una categoría.
+const IG_CATEGORY_LABELS = {
+  gastronomia: ['Restaurante', 'Restaurant'],
+  cafeteria: ['Cafetería', 'Coffee shop'],
+  bar: ['Bar', 'Bar'],
+  barberia: ['Barbería', 'Barber shop'],
+  belleza: ['Salón de belleza', 'Beauty salon'],
+  moda: ['Tienda de ropa', 'Clothing store'],
+  calzado: ['Tienda de calzado', 'Shoe store'],
+  mascotas: ['Tienda de mascotas', 'Pet store'],
+  fitness: ['Gimnasio', 'Gym'],
+  salud: ['Salud y bienestar', 'Health & wellness'],
+  hogar: ['Artículos para el hogar', 'Home goods store'],
+  deco: ['Decoración del hogar', 'Home decor'],
+  inmobiliaria: ['Agente inmobiliario', 'Real estate agent'],
+  autos: ['Automóviles', 'Automotive'],
+  educacion: ['Educación', 'Education'],
+  eventos: ['Organización de eventos', 'Event planner'],
+  fotografia: ['Fotógrafo', 'Photographer'],
+  joyeria: ['Joyería', 'Jewelry store'],
+  flores: ['Florería', 'Florist'],
+  arte: ['Arte', 'Art'],
+  turismo: ['Viajes y turismo', 'Travel & tourism'],
+  viajes: ['Viajes y turismo', 'Travel & tourism'],
+  boliche: ['Club nocturno', 'Night club'],
+  profesionales: ['Producto/servicio', 'Product/service'],
+  servicios: ['Producto/servicio', 'Product/service'],
+  tecnologia: ['Producto/servicio', 'Product/service'],
+};
+function igCategoryFields(key) {
+  const k = String(key || '').trim().toLowerCase();
+  const pair = IG_CATEGORY_LABELS[k];
+  if (!pair) return { category: null, category_en: null };
+  return { category: pair[0], category_en: pair[1] };
+}
 async function homeProfileFromRead(handle, data) {
   if (!data || !data.ok || !data.profile) return null;
   const prof = feedAudit.trialProfileFromAudit(data, null);
@@ -9851,6 +9890,11 @@ async function homeProfileFromRead(handle, data) {
     username: prof.handle || String(handle || '').replace(/^@/, ''),
     name: prof.name || '',
     pic,
+    // (v360) Categoría pública desde el rubro detectado de SU bio
+    // (data.profile.category, categoryFromText) y contrato de nota:
+    // la lectura pública no expone la nota de IG -> note siempre null.
+    ...igCategoryFields(data.profile && data.profile.category),
+    note: null,
     bio: prof.bio || '',
     bio_unread: !!prof.bio_unread,
     link: prof.link || '',
@@ -9863,6 +9907,12 @@ async function homeProfileFromRead(handle, data) {
       type: x.type === 'GraphVideo' ? 'video' : x.type === 'GraphSidecar' ? 'carousel' : 'image',
       taken_at: (typeof x.taken_at === 'number' && x.taken_at > 0) ? x.taken_at : null,
       shortcode: x.shortcode || null,
+      // (v360) Conteos REALES del embed (edge_liked_by / edge_media_to_comment)
+      // que el parser ya traía y esta proyección descartaba; pinned solo
+      // si el embed lo marcó (pinned_for_users): sin marca, null.
+      likes: num(x.likes),
+      comments: num(x.comments),
+      pinned: x.pinned === true ? true : null,
     })).filter((r) => r.img),
     captured_at: Date.now(),
   };
@@ -9894,6 +9944,9 @@ function homeProfileKit(uid, prof) {
   } catch (e) { kit = null; }
   return {
     source: 'kit',
+    // (v360) Misma categoría pública, desde el rubro declarado del perfil.
+    ...igCategoryFields(prof && prof.category),
+    note: null,
     username: (prof && prof.ig_username || '').replace(/^@/, ''),
     name: (kit && kit.display_name) || (prof && prof.business_name) || '',
     pic: null,
@@ -9915,6 +9968,11 @@ app.get('/api/home/profile', requireAuth, async (req, res) => {
     if (!handle) return res.json({ ok: true, ...homeProfileKit(uid, prof) });
     const snap = homeSnapshotGet(uid);
     if (snap && snap.payload && snap.payload.username === handle) {
+      // (v360) Snapshots previos a v360 no traen category/note: se
+      // completan al servir desde el rubro vigente (nunca se pisa un
+      // valor que la lectura ya haya traído).
+      if (snap.payload.category === undefined) Object.assign(snap.payload, igCategoryFields(prof.category));
+      if (snap.payload.note === undefined) snap.payload.note = null;
       if (Date.now() - snap.fetched_at < HOME_SNAPSHOT_TTL_MS) return res.json({ ok: true, ...snap.payload });
       // Vencido: se sirve al instante y el refresco corre en segundo plano.
       homeProfileRefreshOnce(uid, handle);
@@ -17789,7 +17847,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261023-v359';
+const BUILD_ID = '20261024-v360';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

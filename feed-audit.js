@@ -147,6 +147,7 @@ function parseEmbedPosts(html) {
         // sin ellos, el 27% de las cuentas quedaba sin ranking mejor/peor
         // posteo. analysis-engine.signalsFromPosts ya consume p.likes.
         likes: f(/"edge_liked_by":\{"count":(\d+)/) ? parseInt(f(/"edge_liked_by":\{"count":(\d+)/), 10) : null,
+        pinned: (() => { const pm = /"pinned_for_users":\[([^\]]{0,200})\]/.exec(seg); return pm ? (pm[1].trim() ? true : false) : null; })(), // (v360) fijado según el embed; sin marca -> null
         thumb: thumbRaw ? thumbRaw.replace(/\\\//g, '/') : null,
       });
     }

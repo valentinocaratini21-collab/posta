@@ -45,7 +45,7 @@
 const crypto = require('crypto');
 const LA = require('./launch-analytics');
 
-const BASE_URL = () => (process.env.APP_URL || process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+const BASE_URL = () => (process.env.APP_URL || process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, ''); // (v360) fallback alineado al default vigente post-v351 (server.js): sin env, ningún link cae al dominio viejo
 // Prefijos de proactive_log que cuentan como TOQUE EXTRA entregado.
 // '[relacion:mitad:sin-toque:...]' NO cuenta: es el registro de que NO se
 // tocó (el silencio de relacion.js no consume el techo de nadie).
