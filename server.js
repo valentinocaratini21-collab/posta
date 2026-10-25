@@ -43,7 +43,7 @@ const bookingMod = require('./booking');
 const followupsMod = require('./followups');
 const paymentCloseMod = require('./payment-close');
 const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
-const { upcomingEphemeris } = require('./ephemeris');
+const { upcomingEphemeris, catsMatch } = require('./ephemeris');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
@@ -54,6 +54,7 @@ const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispos
 const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleados, gating por pack, registro durable, fundamento-vista y bandeja con la matriz forzada en el servidor
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
 const { reconcileUser } = require('./billing-sync');
+const weekRedo = require('./week-redo'); // (ARMA TODO · ítem 3) garantía de primera semana: registro durable del rehacer
 const { startTokenRefresh } = require('./tokenrefresh');
 const { analyzeWebsite } = require('./website-study');
 const meliApi = require('./meli'); // MercadoLibre: API pública sin key (Track 4)
@@ -387,8 +388,10 @@ function ephemerisFor(profile) {
   if (!eph) return null;
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
+  const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return null;
-  return EPHEMERIS_GIFT_OK.test(cat) ? eph : null;
+  const m = catsMatch(eph, cat + ' ' + biz + ' ' + desc);
+  return (m !== null ? m : EPHEMERIS_GIFT_OK.test(cat)) ? eph : null;
 }
 // C1 + paquete de titulares (2026-10-16, aprobado por Valentino "arma
 // todo"; paquete makeheadline-decision-v113 de Mora + spec M53 de Uma):
@@ -603,6 +606,9 @@ function stripeHooks() {
   return {
     onActivated: (uid, planId) => {
       try { stampFounder(uid); } catch (e) {}
+      // (ítem 3) Activación = nace la garantía de primera semana (weekKey
+      // calculada acá, el dueño del cálculo; INSERT OR IGNORE idempotente).
+      try { weekRedo.grantFirstWeekRedo(db, uid, mondayKeyOf(tzToday(userTz(uid)))); } catch (e) { console.error('[first-week-redo] grant stripe:', e.message); }
       reactivatePausedPosts(uid);
       track(uid, 'subscribed', planId);
       evTrack(uid, 'payment_ok', { plan: planId, provider: 'stripe' });
@@ -1875,9 +1881,9 @@ function ephemerisWindowFor(profile, days) {
   if (!list.length) return [];
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
+  const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return [];
-  if (!EPHEMERIS_GIFT_OK.test(cat)) return [];
-  return list;
+  return list.filter(e => { const m = catsMatch(e, cat + ' ' + biz + ' ' + desc); return m !== null ? m : EPHEMERIS_GIFT_OK.test(cat); });
 }
 
 // Lectura pública de un competidor, con caché de 6 días en competitor_snapshots.
@@ -3178,7 +3184,16 @@ app.get('/api/profile', requireAuth, (req, res) => {
     const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(req.session.userId);
     if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
   } catch (e) {}
-  res.json({ ...p, ig_pending: pending, best_hour: bestHour });
+  // (v426 · ÍTEM 4 «ARMA TODO») Primera semana en marcha: true si existe
+  // AL MENOS un posteo del usuario con status 'scheduled' o 'published'
+  // (en autopiloto nacen programados; en manual, aceptar = programar).
+  // Única fuente de verdad del paso «primera semana» del checklist de
+  // activación: el front lo consume como PROFILE.first_week_live.
+  let firstWeekLive = false;
+  try {
+    firstWeekLive = !!db.prepare(`SELECT 1 FROM posts WHERE user_id = ? AND status IN ('scheduled', 'published') LIMIT 1`).get(req.session.userId);
+  } catch (e) { /* si la lectura falla, el paso queda pendiente: nunca rompe el perfil */ }
+  res.json({ ...p, ig_pending: pending, best_hour: bestHour, first_week_live: firstWeekLive });
 });
 
 app.put('/api/profile', requireAuth, (req, res) => {
@@ -7751,6 +7766,99 @@ app.get('/api/week/last-result', requireAuth, (req, res) => {
   return res.json({ ok: true, has: true, result: r });
 });
 
+// ---------- (ARMA TODO · ítem 3) GARANTÍA DE PRIMERA SEMANA ----------
+// «Si tu primera semana no te convence, te la rehacemos entera, gratis.»
+// El registro durable vive en week-redo.js (tabla first_week_redo, creada
+// en la activación del plan). Alcance REAL del rehacer (verificado sobre
+// generateWeekDrafts): la corrida repone el déficit COMPLETO de la semana
+// — posteos de feed (image/carousel, vía weekOccupancyRows) Y los extras
+// del plan (generateWeekExtras: historias + reels, por su propio déficit
+// sobre week_key) — por eso el descarte incluye story/video: al quedar
+// en 'cancelled' salen de TODAS las cuentas de ocupación y el pipeline
+// los regenera. Los publicados ('published'/'publishing') JAMÁS se tocan.
+app.get('/api/week/first-redo', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const wk = mondayKeyOf(tzToday(userTz(uid)));
+    const st = weekRedo.firstRedoStatus(db, uid, wk);
+    return res.json({ ok: true, state: st.state, grant_week_key: st.grant_week_key, week_key: wk });
+  } catch (e) {
+    console.error('[first-week-redo] status:', e.message);
+    return res.json({ ok: true, state: 'none', grant_week_key: null });
+  }
+});
+
+app.post('/api/week/first-redo', requireAuth, requireTrialValid, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const wk = mondayKeyOf(tzToday(userTz(uid)));
+    const st = weekRedo.firstRedoStatus(db, uid, wk);
+    if (st.state !== 'available') {
+      return res.status(409).json({ ok: false, error: 'first_redo_unavailable', state: st.state,
+        message: 'La garantía de tu primera semana ya no está disponible.' });
+    }
+    if (!planOrTrialOk(uid)) {
+      return res.status(409).json({ ok: false, error: 'no_plan', message: 'Necesitás un plan activo para rehacer tu semana.' });
+    }
+    // El cap de IA se chequea ANTES de tocar nada: si frena, no se consume
+    // la garantía ni se descarta un solo posteo (la garantía queda intacta).
+    try { costs.assertAiOk(uid); }
+    catch (e) { return res.status(429).json({ ok: false, error: 'ai_cap', message: String((e && e.message) || 'Tope de IA alcanzado').slice(0, 200) }); }
+    const grantWk = st.grant_week_key;
+    // Consumo ATÓMICO primero (actúa de candado): si un doble toque ya la
+    // consumió, este pedido sale sin descartar nada — descartar antes de
+    // consumir podría tirar la semana NUEVA que el otro pedido ya está
+    // generando. El UPDATE condicional de week-redo garantiza un solo uso.
+    if (!weekRedo.consumeFirstWeekRedo(db, uid, wk)) {
+      return res.status(409).json({ ok: false, error: 'first_redo_unavailable', state: 'used',
+        message: 'La garantía de tu primera semana ya se usó.' });
+    }
+    // Descarte con el mecanismo de la casa: status='cancelled' (el mismo
+    // de /api/posts/:id/dismiss-failed y del rechazo) — los posteos salen
+    // de weekOccupancyRows y de la cuenta de extras, NO se borran: quedan
+    // visibles en «Tu archivo» (/api/archive) y se pueden restaurar.
+    // Semana = week_key del grant O fecha programada dentro de esa
+    // semana (el mismo criterio de ocupación de weekOccupancyRows).
+    const disc = db.prepare(`UPDATE posts SET status = 'cancelled', error = ''
+      WHERE user_id = ? AND status IN ('draft','scheduled','paused','failed')
+        AND (week_key = ? OR (scheduled_at IS NOT NULL AND date(scheduled_at) >= date(?) AND date(scheduled_at) < date(?, '+7 days')))`
+    ).run(uid, grantWk, grantWk, grantWk);
+    console.log(`[first-week-redo] usuario ${uid} semana ${grantWk}: ${disc.changes} posteos no publicados descartados → regenerando entera`);
+    // Regeneración en segundo plano (patrón /api/week/ensure): la
+    // respuesta vuelve al toque y el progreso se ve por last-result.
+    generateWeekDrafts(uid, { weekKey: grantWk, tag: 'first-week-redo' })
+      .then(async r => {
+        console.log(`[first-week-redo] usuario ${uid} semana ${grantWk}:`, r && r.ok ? `${r.created} creados` : `falló (${r && r.reason})`);
+        try { LAST_WEEK_RESULT.set(uid, { ...r, at: Date.now(), weekKey: grantWk }); } catch (e) {}
+        // Borde de verdad: si el feed de la semana ya estaba COMPLETO y
+        // publicado, generateWeekDrafts corta en 'already_complete' ANTES
+        // del bloque de extras — las historias/reels descartados arriba
+        // no se repondrían y la semana no quedaría entera. Solo en ese
+        // caso, los extras se reponen acá con las imágenes publicadas de
+        // la semana como fuente (generateWeekExtras es idempotente por
+        // déficit: si el pipeline ya los hizo, esto no crea nada).
+        if (r && r.reason === 'already_complete') {
+          try {
+            const { generateWeekExtras } = require('./story-reel');
+            const feedPub = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND week_key = ? AND status = 'published' AND media_type = 'image' ORDER BY created_at ASC`).all(uid, grantWk);
+            let isFounderX = false;
+            try { isFounderX = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
+            const xr = await generateWeekExtras({ db, uid, weekKey: grantWk, tag: 'first-week-redo', mediaDir: MEDIA_DIR, feedDrafts: feedPub, needsReview: (!isFounderX && autopilot.trustLevel(db, uid) === 0) });
+            console.log(`[first-week-redo] usuario ${uid}: extras repuestos tras already_complete:`, JSON.stringify(xr && { stories: xr.stories, reels: xr.reels }));
+          } catch (e) { console.error('[first-week-redo] extras tras already_complete:', e.message); }
+        }
+      })
+      .catch(e => {
+        console.error('[first-week-redo] pipeline:', e.message);
+        try { LAST_WEEK_RESULT.set(uid, { ok: false, reason: 'exception', error: String(e.message || e).slice(0, 300), at: Date.now(), weekKey: grantWk }); } catch (e2) {}
+      });
+    return res.json({ ok: true, started: true, discarded: disc.changes, week_key: grantWk });
+  } catch (e) {
+    console.error('[first-week-redo]:', e.message);
+    return res.status(500).json({ ok: false, error: 'No se pudo rehacer tu semana. Probá de nuevo.' });
+  }
+});
+
 // Fix auditoría #2 (2026-09-30): "⚡ Rearmar mi semana" del welcome honesto.
 // La importación de /prueba trajo 0 (cache vencido / payload roto, marcado en
 // users.trial_import_n): se genera la semana de nuevo en segundo plano con el
@@ -12023,6 +12131,9 @@ app.post('/api/billing/webhook', async (req, res) => {
       db.prepare(`UPDATE users SET plan=?, plan_status='active', mp_preapproval_id=? WHERE id=?`)
         .run(planId, String(mpId), Number(userId));
       try { stampFounder(Number(userId)); } catch (e) {}
+      // (ítem 3) Activación = nace la garantía de primera semana (weekKey
+      // calculada acá, el dueño del cálculo; INSERT OR IGNORE idempotente).
+      try { weekRedo.grantFirstWeekRedo(db, Number(userId), mondayKeyOf(tzToday(userTz(Number(userId))))); } catch (e) { console.error('[first-week-redo] grant MP:', e.message); }
       reactivatePausedPosts(Number(userId));
       track(Number(userId), 'subscribed', planId);
       evTrack(Number(userId), 'payment_ok', { plan: planId });
@@ -20541,7 +20652,8 @@ function cartaResolve(kind, ref) {
   }
   if (kind === 'domingo') {
     let ana = null;
-    try { const r = db.prepare('SELECT payload FROM account_analysis WHERE id = ?').get(Number(ref)); if (r) ana = JSON.parse(r.payload); } catch (e) {}
+    let anaRow = null;
+    try { anaRow = db.prepare('SELECT user_id, payload, created_at FROM account_analysis WHERE id = ?').get(Number(ref)); if (anaRow) ana = JSON.parse(anaRow.payload); } catch (e) {}
     if (!ana || !ana.letter) return null;
     const lang = ana.lang || 'es';
     const segs = cartaAudio.sundayLetterSegments(ana);
@@ -20558,6 +20670,17 @@ function cartaResolve(kind, ref) {
     }
     if (!row) return null;
     const en = lang === 'en';
+    // (v426 · ARMA TODO ítem 5) Botón «Aprobar mi semana» de la Carta: el
+    // mapeo es limpio (account_analysis trae user_id y la fecha de la
+    // carta), así que la página suma el link firmado a la landing
+    // /aprobar/:token — SOLO si la semana que la Carta presenta tiene
+    // borradores pendientes de ESA cuenta (regla de verdad: sin semana
+    // aprobable, el botón no sale).
+    let approveUrl = '';
+    try {
+      const info = anaRow ? cartaApproveWeekInfo(anaRow.user_id, ana.created_at || anaRow.created_at) : null;
+      if (info) approveUrl = '/aprobar/' + approval.signApproveWeekLink(info.userId, info.weekKey);
+    } catch (e) {}
     return {
       title: en ? 'Your Sunday letter' : 'Tu carta del domingo',
       lang,
@@ -20565,6 +20688,7 @@ function cartaResolve(kind, ref) {
       heroImg: (ana.letter && ana.letter.photo) || '',
       ctaHref: '/#/app/analisis',
       ctaLabel: en ? 'Open my analysis' : 'Ver mi análisis',
+      approveUrl,
       row,
     };
   }
@@ -20584,6 +20708,10 @@ function cartaPageHTML(data, token) {
       + `<script>(function(){var t='/carta/${token}/audio.json';var iv=setInterval(function(){fetch(t).then(function(r){return r.json()}).then(function(j){var w=document.getElementById('cartaWait');if(!w){clearInterval(iv);return}if(j.state==='ready'&&j.url){clearInterval(iv);w.outerHTML='<audio controls autoplay src="'+j.url+'" style="width:100%"></audio>'}else if(j.state==='error'){clearInterval(iv);w.textContent='${waitMsg}'}}).catch(function(){})},3000)})();</script>`;
   const paras = data.paragraphs.map((p) => `<p style="font-size:16.5px;line-height:1.65;margin:0 0 16px">${esc(p)}</p>`).join('');
   const hero = data.heroImg ? `<img src="${esc(data.heroImg)}" alt="" style="width:100%;height:auto;border-radius:12px;display:block;margin:0 0 18px">` : '';
+  // (v426 · ítem 5) El botón de aprobación va SOLO cuando cartaResolve
+  // encontró semana aprobable (data.approveUrl vacío = no sale nada).
+  const approve = data.approveUrl ? `<p style="text-align:center;margin:4px 0 8px"><a href="${esc(data.approveUrl)}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16.5px;padding:15px 38px;border-radius:999px;text-decoration:none">${en ? '✅ Approve my week' : '✅ Aprobar mi semana'}</a></p>
+  <p style="text-align:center;font-size:13.5px;color:#47617A;margin:0 0 18px">${en ? 'The week this letter presents is ready: one tap shows it and approves it.' : 'La semana que presenta esta carta ya está lista: un toque la muestra y la aprueba.'}</p>` : '';
   return `<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(data.title)} — Posty</title></head>
 <body style="margin:0;background:#F6F9FB;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0A1E33">
 <div style="max-width:600px;margin:0 auto;background:#FFFFFF;padding:30px 26px 36px">
@@ -20593,6 +20721,7 @@ function cartaPageHTML(data, token) {
   ${hero}
   ${paras}
   <p style="text-align:center;margin:26px 0 8px"><a href="${esc(data.ctaHref)}" style="display:inline-block;background:#2793C8;color:#FFFFFF;font-weight:800;font-size:16.5px;padding:15px 38px;border-radius:999px;text-decoration:none">${esc(data.ctaLabel)}</a></p>
+  ${approve}
   <p style="text-align:center;font-size:14px;color:#47617A;margin:18px 0 0">${en ? 'With love,' : 'Con amor,'}</p>
   <p style="text-align:center;margin:6px 0 0"><img src="/firma-posty.png" alt="Posty" style="width:170px;height:auto"></p>
 </div></body></html>`;
@@ -20614,6 +20743,212 @@ app.get('/carta/:token/audio.json', (req, res) => {
   ensureCartaAudio(data.row);
   const fresh = cartaAudioRow(v.kind, v.ref) || data.row;
   res.json({ ok: true, state: fresh.state, url: fresh.state === 'ready' ? fresh.audio_file : null });
+});
+
+// ---------- (v426 · ARMA TODO ítem 5) APROBAR MI SEMANA DESDE LA CARTA ----------
+// La Carta dominical presenta la semana que viene; este es su botón de
+// aprobación SIN sesión: token firmado (approval.signApproveWeekLink, que
+// reusa signWeekAction/verifyWeekAction) atado a (userId, weekKey de la
+// semana presentada) con TTL 72h. La landing /aprobar/:token muestra la
+// semana y confirma con POST — el GET NUNCA muta (los escáneres de email
+// y de mensajería pre-cargan los links). La aceptación ejecuta LA lógica
+// canónica de siempre (acceptAllDrafts con includeNeedsReview, la misma
+// de GET /api/week/:weekKey/publish y del «Aceptar todos» de la app):
+// acá no se reimplementa nada.
+// La semana que la Carta PRESENTA: la que empieza el lunes siguiente a
+// la fecha de la carta, en la zona del cliente (los borradores de esa
+// semana se generan el domingo 07:00; la Carta sale el domingo ~21:00).
+// Determinista desde la fecha de la carta: abrirla días después sigue
+// apuntando a LA semana de esa Carta, no a «la actual».
+function cartaPresentedWeekKey(uid, letterIso) {
+  const tz = userTz(uid);
+  let ymd = '';
+  try { ymd = ymdInTz(letterIso, tz) || ''; } catch (e) {}
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) ymd = tzToday(tz);
+  return shiftDays(mondayKeyOf(ymd), 7);
+}
+// Borradores aprobables de una semana: LA MISMA selección que acepta la
+// ruta canónica GET /api/week/:weekKey/publish (FASE 2).
+function approveWeekDrafts(uid, weekKey) {
+  try {
+    return db.prepare(`SELECT * FROM posts
+      WHERE user_id = ? AND week_key = ? AND status = 'draft'
+        AND media_type IN ('image','carousel','video')
+      ORDER BY created_at ASC`).all(uid, weekKey);
+  } catch (e) { return []; }
+}
+function approveWeekDone(uid, weekKey) {
+  try {
+    return db.prepare(`SELECT * FROM posts
+      WHERE user_id = ? AND week_key = ? AND status IN ('scheduled','published')
+        AND media_type IN ('image','carousel','video')
+      ORDER BY created_at ASC`).all(uid, weekKey);
+  } catch (e) { return []; }
+}
+// ¿La Carta de esta cuenta tiene semana aprobable? Devuelve { userId,
+// weekKey } SOLO si la semana presentada tiene borradores pendientes:
+// sin semana aprobable no hay botón ni link (regla de verdad).
+function cartaApproveWeekInfo(uid, letterIso) {
+  if (!uid || !approval.signApproveWeekLink) return null;
+  const weekKey = cartaPresentedWeekKey(uid, letterIso);
+  if (!approveWeekDrafts(uid, weekKey).length) return null;
+  return { userId: uid, weekKey };
+}
+function aprobarNotFound(res, en) {
+  return res.status(404).send(`<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Posty</title></head><body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;text-align:center;padding:60px 20px;color:#0A1E33"><h1>${en ? 'This link is not available' : 'Este link no está disponible'}</h1><p>${en ? 'The link expired or is not valid. Open Posty to approve your week.' : 'El link venció o no es válido. Entrá a Posty para aprobar tu semana.'}</p></body></html>`);
+}
+function aprobarWeekRangeLabel(weekKey, en) {
+  try {
+    const end = shiftDays(weekKey, 6);
+    const fmt = (ymd) => {
+      const [y, m, d] = ymd.split('-').map(Number);
+      return new Intl.DateTimeFormat(en ? 'en-US' : 'es-AR', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d, 12)));
+    };
+    return en ? `Week of ${fmt(weekKey)} – ${fmt(end)}` : `Semana del ${fmt(weekKey)} al ${fmt(end)}`;
+  } catch (e) { return ''; }
+}
+// Horarios que se MUESTRAN en la landing: los persistidos del posteo; si
+// falta, la propuesta EN MEMORIA de assignScheduleSlots (la misma función
+// que el POST va a usar: mostrar no persiste nada — el GET no muta).
+function aprobarShownPosts(uid, drafts) {
+  let slots = new Map();
+  try {
+    const missing = drafts.filter((d) => !d.scheduled_at);
+    if (missing.length) slots = assignScheduleSlots(uid, missing);
+  } catch (e) {}
+  return drafts.map((d) => ({ ...d, shown_at: d.scheduled_at || slots.get(d.id) || null }));
+}
+function aprobarPageHTML(data) {
+  const en = data.lang === 'en';
+  const tz = data.tz;
+  const cards = data.posts.map((p) => {
+    let media = '';
+    const mt = String(p.media_type || 'image');
+    if (mt === 'video') {
+      media = `<video src="${semanaEsc(semanaMediaUrl(p.image_path))}" controls playsinline preload="metadata" style="width:100%;border-radius:12px;display:block;background:#000"></video>`;
+    } else if (mt === 'carousel' && p.carousel_paths) {
+      let arr = [];
+      try { const j = JSON.parse(p.carousel_paths); if (Array.isArray(j)) arr = j.filter(Boolean); } catch (e) {}
+      if (arr.length > 1) media = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">${arr.map((m) => `<img src="${semanaEsc(semanaMediaUrl(m))}" alt="" loading="lazy" style="width:82%;flex:none;border-radius:12px;display:block">`).join('')}</div>`;
+      else if (arr.length === 1) media = `<img src="${semanaEsc(semanaMediaUrl(arr[0]))}" alt="" loading="lazy" style="width:100%;height:auto;border-radius:12px;display:block">`;
+      else if (p.image_path) media = `<img src="${semanaEsc(semanaMediaUrl(p.image_path))}" alt="" loading="lazy" style="width:100%;height:auto;border-radius:12px;display:block">`;
+    } else if (p.image_path) {
+      media = `<img src="${semanaEsc(semanaMediaUrl(p.image_path))}" alt="" loading="lazy" style="width:100%;height:auto;border-radius:12px;display:block">`;
+    }
+    const fakeP = { ...p, scheduled_at: p.shown_at, status: 'scheduled' };
+    const when = p.shown_at ? semanaWhenLabel(fakeP, tz, en) : '';
+    const capFull = String(p.caption || '').trim();
+    const cap = capFull.length > 180 ? capFull.slice(0, 180).trimEnd() + '…' : capFull;
+    return `<article style="border:1px solid #E3EDF3;border-radius:16px;padding:14px;margin:0 0 20px">${media}`
+      + (when ? `<p style="font-size:13px;font-weight:700;color:#2793C8;margin:12px 0 6px">${semanaEsc(when)}</p>` : '')
+      + (cap ? `<p style="font-size:15.5px;line-height:1.55;margin:0;white-space:pre-wrap">${semanaEsc(cap)}</p>` : '')
+      + `</article>`;
+  }).join('');
+  const action = data.state === 'pending'
+    ? `<form method="post" action="/aprobar/${semanaEsc(data.token)}" style="text-align:center;margin:6px 0 10px"><button type="submit" style="display:inline-block;background:#2793C8;color:#FFFFFF;font-weight:800;font-size:18px;padding:17px 44px;border-radius:999px;border:none;cursor:pointer;min-width:240px">${en ? '✅ Approve my week' : '✅ Aprobar mi semana'}</button></form>
+  <p style="text-align:center;font-size:13.5px;color:#47617A;margin:0 0 18px">${en ? 'One tap and these posts are scheduled. Posty takes care of the rest.' : 'Un toque y estos posteos quedan programados. Posty se encarga del resto.'}</p>`
+    : data.state === 'already'
+      ? `<p style="text-align:center;font-size:16.5px;font-weight:700;color:#2793C8;margin:6px 0 18px">${en ? 'Your week was already approved 🎉' : 'Tu semana ya estaba aprobada 🎉'}</p>`
+      : data.state === 'past'
+        ? `<p style="text-align:center;font-size:15.5px;line-height:1.55;color:#47617A;margin:6px 0 18px">${en ? 'This week already went by. Open Posty to see your current week.' : 'Esta semana ya pasó. Entrá a Posty para ver tu semana actual.'}</p>`
+        : `<p style="text-align:center;font-size:15.5px;line-height:1.55;color:#47617A;margin:6px 0 18px">${en ? 'There are no pending posts in this week.' : 'No hay posteos pendientes en esta semana.'}</p>`;
+  return `<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${en ? 'Approve my week' : 'Aprobar mi semana'} — Posty</title></head>
+<body style="margin:0;background:#F6F9FB;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0A1E33">
+<div style="max-width:600px;margin:0 auto;background:#FFFFFF;padding:30px 26px 36px">
+  <p style="text-align:center;margin:0 0 18px"><img src="/posty-avatar-saludando.png" alt="Posty" style="width:110px;height:auto"></p>
+  <h1 style="font-size:23px;line-height:1.25;text-align:center;margin:0 0 6px">${en ? 'Your week is ready' : 'Tu semana está lista'}</h1>
+  ${data.business ? `<p style="text-align:center;font-size:15.5px;font-weight:700;margin:0 0 2px">${semanaEsc(data.business)}</p>` : ''}
+  ${data.rangeLabel ? `<p style="text-align:center;font-size:14px;color:#47617A;margin:0 0 22px">${semanaEsc(data.rangeLabel)}</p>` : ''}
+  ${cards}
+  ${action}
+  <p style="text-align:center;font-size:13px;color:#8496A5;margin:26px 0 0">${en ? 'Made with' : 'Hecha con'} <a href="/" style="color:#2793C8;font-weight:700;text-decoration:none">Posty</a> · postycommunitymanager.com</p>
+</div></body></html>`;
+}
+function aprobarResultPage(en, state, opts = {}) {
+  let title, msg;
+  if (state === 'done') {
+    title = en ? 'Done! Your week is approved 🎉' : '¡Listo! Tu semana quedó aprobada 🎉';
+    msg = en
+      ? `${opts.n} ${opts.n === 1 ? 'post is' : 'posts are'} scheduled. Posty takes care of the rest 🚀`
+      : `${opts.n} ${opts.n === 1 ? 'posteo quedó programado' : 'posteos quedaron programados'}. Posty se encarga del resto 🚀`;
+  } else if (state === 'already') {
+    title = en ? 'Your week was already approved 🎉' : 'Tu semana ya estaba aprobada 🎉';
+    msg = en ? 'These posts were already scheduled — nothing changed.' : 'Estos posteos ya estaban programados — no cambió nada.';
+  } else if (state === 'past') {
+    title = en ? 'This week already went by' : 'Esta semana ya pasó';
+    msg = en ? 'Open Posty to see and approve your current week.' : 'Entrá a Posty para ver y aprobar tu semana actual.';
+  } else if (state === 'limit') {
+    title = en ? 'Plan limit' : 'Límite de tu plan';
+    msg = en
+      ? `Your ${opts.plan || ''} plan does not cover publishing the whole week at once. Upgrade your plan and tap the button again.`
+      : `Tu plan ${opts.plan || ''} no alcanza para publicar toda la semana de una. Mejorá tu paquete y volvé a tocar el botón.`;
+  } else {
+    title = en ? 'Nothing to approve' : 'Nada para aprobar';
+    msg = en ? 'There were no pending posts in this week.' : 'No había posteos pendientes en esta semana.';
+  }
+  return `<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${title} — Posty</title></head>
+<body style="margin:0;background:#F6F9FB;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0A1E33">
+<div style="max-width:600px;margin:0 auto;background:#FFFFFF;padding:44px 26px 40px;text-align:center">
+  <p style="margin:0 0 18px"><img src="/posty-avatar-saludando.png" alt="Posty" style="width:110px;height:auto"></p>
+  <h1 style="font-size:23px;line-height:1.3;margin:0 0 12px">${title}</h1>
+  <p style="font-size:16px;line-height:1.6;color:#47617A;margin:0">${msg}</p>
+</div></body></html>`;
+}
+// GET /aprobar/:token — SOLO LECTURA: muestra la semana firmada (posteos,
+// día/hora y caption) y el botón de confirmación. Nunca muta.
+app.get('/aprobar/:token', (req, res) => {
+  const v = approval.verifyApproveWeekLink ? approval.verifyApproveWeekLink(req.params.token) : null;
+  if (!v) return aprobarNotFound(res, false);
+  const u = db.prepare('SELECT id, lang FROM users WHERE id = ?').get(v.userId);
+  if (!u) return aprobarNotFound(res, false);
+  const en = u.lang === 'en';
+  const tz = userTz(u.id);
+  const drafts = approveWeekDrafts(u.id, v.weekKey);
+  const done = drafts.length ? [] : approveWeekDone(u.id, v.weekKey);
+  let state = 'empty';
+  if (drafts.length) state = v.weekKey < mondayKeyOf(tzToday(tz)) ? 'past' : 'pending';
+  else if (done.length) state = 'already';
+  const shown = state === 'pending' ? aprobarShownPosts(u.id, drafts) : (drafts.length ? drafts.map((d) => ({ ...d, shown_at: d.scheduled_at || null })) : done.map((d) => ({ ...d, shown_at: d.scheduled_at || null })));
+  const prof = getProfile(u.id) || {};
+  res.set('Cache-Control', 'private, no-store');
+  res.send(aprobarPageHTML({
+    lang: en ? 'en' : 'es', tz, token: req.params.token, state,
+    business: String(prof.business_name || '').trim(),
+    rangeLabel: aprobarWeekRangeLabel(v.weekKey, en),
+    posts: shown,
+  }));
+});
+// POST /aprobar/:token — el toque del botón ES la aprobación: ejecuta la
+// aceptación canónica de LA semana firmada para ESA cuenta (la misma de
+// /api/week/:weekKey/publish). Idempotente: si ya estaba aprobada, éxito
+// igual («ya estaba aprobada»).
+app.post('/aprobar/:token', (req, res) => {
+  const v = approval.verifyApproveWeekLink ? approval.verifyApproveWeekLink(req.params.token) : null;
+  if (!v) return aprobarNotFound(res, false);
+  const u = db.prepare('SELECT id, lang FROM users WHERE id = ?').get(v.userId);
+  if (!u) return aprobarNotFound(res, false);
+  const en = u.lang === 'en';
+  res.set('Cache-Control', 'private, no-store');
+  const drafts = approveWeekDrafts(u.id, v.weekKey);
+  if (!drafts.length) {
+    if (approveWeekDone(u.id, v.weekKey).length) return res.send(aprobarResultPage(en, 'already'));
+    return res.send(aprobarResultPage(en, 'nothing'));
+  }
+  const tz = userTz(u.id);
+  if (v.weekKey < mondayKeyOf(tzToday(tz))) return res.send(aprobarResultPage(en, 'past'));
+  let slots = new Map();
+  try {
+    const missing = drafts.filter((d) => !d.scheduled_at);
+    if (missing.length) slots = assignScheduleSlots(u.id, missing);
+  } catch (e) { console.error('[aprobar] slots:', e.message); }
+  const items = drafts.map((d) => ({ id: d.id, scheduled_at: d.scheduled_at || slots.get(d.id) || null }));
+  const r = acceptAllDrafts(u.id, items, { includeNeedsReview: true });
+  if (r.reason === 'plan_limit') {
+    const qf = r.quota || {};
+    return res.status(403).send(aprobarResultPage(en, 'limit', { plan: qf.plan_name || '' }));
+  }
+  if (!r.ok || !r.accepted) return res.send(aprobarResultPage(en, 'nothing'));
+  return res.send(aprobarResultPage(en, 'done', { n: r.accepted }));
 });
 
 // ---------- (v398) COMPARTIR MI SEMANA: link público firmado de SOLO LECTURA ----------
@@ -21265,7 +21600,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v429';
+const BUILD_ID = '20261024-v432';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -3409,7 +3409,7 @@ function refreshSetupChecklist() {
     const sec = card.closest('.setup-secondary');
     // (v326) El refresh conserva el omitIg de Inicio: si no, la fila de IG
     // (y el conteo) cambiaban solos a mitad de sesión.
-    const h = setupChecklistHtml(sec ? 'Para que la magia siga ✨' : undefined, (card.closest && card.closest('#inicioView')) ? { omitIg: true } : undefined);
+    const h = setupChecklistHtml(sec ? 'Para que la magia siga ✨' : undefined, (card.closest && (card.closest('#inicioView') || card.closest('#schedView'))) ? { omitIg: true } : undefined);
     if (!h) { (sec || card).remove(); return; }
     const t = document.createElement('template');
     t.innerHTML = h.trim();
@@ -3438,6 +3438,10 @@ function mzTabsHTML(tab) {
 }
 
 function appShell(tab, content) {
+  // (ARMA TODO · Corrección 1) La tira de activación YA NO se antepone en
+  // inicio/schedule: cada una de esas vistas la incluye tras su contenido
+  // principal (scheduleView / inicioView). En chat no va; en las demás
+  // tabs el comportamiento es el de siempre.
   return `
   <div class="mtop">
     <button class="mtop-burger" id="mtopBurger" aria-label="Abrir menú">≡</button>
@@ -3456,7 +3460,7 @@ function appShell(tab, content) {
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
   </aside>
-  ${tab === 'chat' ? '' : setupChecklistHtml(undefined, (tab === 'inicio' || tab === 'schedule') ? { omitIg: true } : undefined)}
+  ${(tab === 'chat' || tab === 'inicio' || tab === 'schedule') ? '' : setupChecklistHtml(undefined)}
   <div class="app-shell">
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${(tab === 'inicio' || tab === 'schedule') ? '<div id="relacionSlot"></div>' : ''}${content}</div>
   </div>
@@ -7116,7 +7120,7 @@ function weekCardHTML(d, o) {
         ? `<div class="igmock-media igmock-pending">${media}</div>`
         : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : '✏️ Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}</button>`}
       ${foot}
-      ${f3ThreadHTML(d)}
+      ${hfAskChangeBtnHTML(d)}
     </div>`;
 }
 
@@ -7687,10 +7691,31 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
 // (prof: avatar público cacheado + seguidores reales si existen). Lo que la
 // cuenta no tiene (bio leída, seguidos, total de posteos de IG) se omite con
 // gracia: jamás un número fabricado (regla de verdad).
+/* (ARMA TODO · Corrección 1) Chip compacto de estado de Instagram para el
+   ENCABEZADO del perfil: reemplaza a la tarjeta grande que scheduleView
+   apilaba encima del feed (igBanner). Mismos dos estados y mismo destino
+   de siempre (#/app/ajustes?ig=1): sin conectar → «Conectar Instagram»;
+   conectado con aviso de token → «Reconectar Instagram». ES/EN por ME.lang.
+   Vive UNA sola vez por encabezado: lo usan feedProfileHeadHTML (Feed de
+   la agenda) y homeHeadHTML (Inicio), cada uno en su render. */
+function igHeadChipHTML(en) {
+  try {
+    const style = 'display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 12px;border-radius:999px;background:var(--cel);color:#fff;font-size:12px;font-weight:700;text-decoration:none';
+    if (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected) {
+      return `<a class="ig-head-chip" href="#/app/ajustes?ig=1" style="${style}">📸 ${en ? 'Connect Instagram' : 'Conectar Instagram'}</a>`;
+    }
+    if (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.ig_token_warning) {
+      return `<a class="ig-head-chip" href="#/app/ajustes?ig=1" style="${style}">📸 ${en ? 'Reconnect Instagram' : 'Reconectar Instagram'}</a>`;
+    }
+  } catch (e) {}
+  return '';
+}
 function feedProfileHeadHTML(prof, bizName, opts) {
   const u = prof && prof.username ? String(prof.username) : '';
   const name = ((prof && prof.name) || bizName || '').trim();
-  if (!u && !name) return '';
+  const enF = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const chipF = (typeof igHeadChipHTML === 'function') ? igHeadChipHTML(enF) : '';
+  if (!u && !name) return chipF ? `<div class="fp-head">${chipF}</div>` : '';
   const letter = esc((name || u || 'P').charAt(0).toUpperCase());
   const pic = prof && prof.pic ? `<img src="${esc(prof.pic)}" alt="" loading="lazy" onerror="this.remove()">` : '';
   const stats = [];
@@ -7703,6 +7728,7 @@ function feedProfileHeadHTML(prof, bizName, opts) {
     </div>
     ${name ? `<div class="fp-name">${esc(name)}</div>` : ''}
     ${u ? `<a class="fp-link" href="https://www.instagram.com/${esc(u)}/" target="_blank" rel="noopener">instagram.com/${esc(u)}</a>` : ''}
+    ${chipF}
   </div>`;
 }
 function feedPreviewHTML(all, tz, prof) {
@@ -12572,22 +12598,12 @@ async function scheduleView() {
   const slots = suggestSlots(drafts.length, schedPosts);
   const { expBanner } = xpStripHTML(sk, st, drafts.length); // (el xpStrip del nivel se eliminó: vive en el avatar del chat)
   const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
-  // 📸 Instagram desconectado (2026-10-20): sin conexión ningún posteo puede
-  // salir — se avisa PRIMERO que todo en la agenda, sin tono de error. Se
-  // computa en cada render: al reconectar, el aviso desaparece solo.
-  const igBanner = (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected)
-    ? `<div class="card card-hi-yl" style="margin:0 0 12px;padding:14px 16px;border-radius:14px">
-        <div style="font-weight:800;font-size:14px;margin-bottom:6px">📸 Tu Instagram no está conectado</div>
-        <div style="font-size:13px;line-height:1.6;color:var(--mut)">Tu semana se sigue armando, pero ningún posteo puede salir hasta que conectes tu cuenta. Es una sola vez y queda.</div>
-        <a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?ig=1">Conectar Instagram</a>
-      </div>`
-    : (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.ig_token_warning)
-    ? `<div class="card card-hi-yl" style="margin:0 0 12px;padding:14px 16px;border-radius:14px">
-        <div style="font-weight:800;font-size:14px;margin-bottom:6px">📸 Tu conexión con Instagram venció</div>
-        <div style="font-size:13px;line-height:1.6;color:var(--mut)">Tu semana se sigue armando, pero ningún posteo puede salir hasta que renueves la conexión. Es un toque y queda.</div>
-        <a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?ig=1">Reconectar Instagram</a>
-      </div>`
-    : '';
+  // (ARMA TODO · Corrección 1) La tarjeta grande de Instagram (igBanner,
+  // «Tu Instagram no está conectado» / «Tu conexión con Instagram venció»)
+  // SALIÓ de scheduleView: encima del feed no va ninguna tarjeta. El estado
+  // de IG vive ahora como chip compacto en el ENCABEZADO del perfil
+  // (igHeadChipHTML en feedProfileHeadHTML / homeHeadHTML), en la tira de
+  // activación donde no está omitido y en Ajustes — sin duplicados.
   // Posty dogfood: la propuesta de hoy para @posty.communitymanager, primero que todo.
   let dogfoodPost = null;
   try { const r = await api.get('/api/dogfood/pending'); dogfoodPost = (r && r.post) || null; } catch (e) {}
@@ -12712,7 +12728,7 @@ async function scheduleView() {
       <img src="ai-avatar.png" alt="Posty" class="hs-brand-ava">
       <div class="hs-brand-txt"><b>Posty<span style="color:var(--cel)">.</span></b><span>Tu semana, lista sola</span></div>
     </div>
-    ${igBanner}
+    ${homeWeekBlock}
     ${trialBanner}
     ${firstRedoBlock}
     ${dogfoodBlock}
@@ -12721,7 +12737,7 @@ async function scheduleView() {
     ${fpBlock}
     ${ftBlock}
     ${failedBlock}
-    ${homeWeekBlock}
+    ${setupChecklistHtml(undefined, { omitIg: true })}
     <div id="adsBoostSlot"></div>
     <div id="hs-ideas"${IDEAS_PANEL_OPEN ? '' : ' class="ideas-closed"'}></div>
     <div id="hs-question"></div>
@@ -12964,7 +12980,7 @@ function hfRedoLineHTML(p, en) {
   return `<div class="hf-redo-line hf-redo-zero">${en ? 'You already used the 3 redos for this post' : 'Ya usaste los 3 rehaces de este posteo'}</div>`;
 }
 // (Tanda feed 6A · ítem 2) Barra de contexto del chat anclado a un
-// posteo: miniatura + «Estás hablando de este posteo» + ✕ + chips
+// posteo: miniatura + «Editando este posteo» + ✕ + chips
 // rápidos (foto · texto · día y hora · rehacer) + la línea del contador.
 function hfAnchorBarHTML(p, en) {
   if (!p || p.id === null || p.id === undefined) return '';
@@ -12976,7 +12992,7 @@ function hfAnchorBarHTML(p, en) {
   return `<div class="hf-anchor" data-anchor-id="${esc(String(p.id))}">
     ${thumb}
     <div class="hf-anchor-main">
-      <div class="hf-anchor-t">${en ? "You're talking about this post" : 'Estás hablando de este posteo'}</div>
+      <div class="hf-anchor-t">${en ? 'Editing this post' : 'Editando este posteo'}</div>
       ${redo}
       <div class="hf-anchor-chips">
         <button type="button" class="hf-chipq" data-hf-chipq="photo">${en ? 'Change the photo' : 'Cambiar la foto'}</button>
@@ -13363,6 +13379,7 @@ function homeHeadHTML(prof, bizName, opts) {
     ${catHTML}
     ${bioHTML}
     ${linkHTML}
+    ${(typeof igHeadChipHTML === 'function') ? igHeadChipHTML(en) : ''}
     ${hlHTML}
     <div class="hf-tabs" role="tablist" aria-label="${en ? 'Profile sections' : 'Secciones del perfil'}"><button type="button" role="tab" aria-selected="${tabA === 'posts'}" class="hf-tab${tabA === 'posts' ? ' on' : ''}" data-hf-tab="posts" aria-label="${en ? 'Posts' : 'Publicaciones'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></button><button type="button" role="tab" aria-selected="${tabA === 'reels'}" class="hf-tab${tabA === 'reels' ? ' on' : ''}" data-hf-tab="reels" aria-label="Reels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3.2 9.4h17.6M8.2 3.4l2.1 5.8M13.9 3.4l2.1 5.8" stroke-linecap="round"/><path d="M10.4 12.7v4.6c0 .55.62.9 1.1.64l3.9-2.3c.46-.28.46-1 0-1.28l-3.9-2.3c-.48-.26-1.1.09-1.1.63z" fill="currentColor" stroke="none"/></svg></button><button type="button" role="tab" aria-selected="${tabA === 'tagged'}" class="hf-tab${tabA === 'tagged' ? ' on' : ''}" data-hf-tab="tagged" aria-label="${en ? 'Tagged' : 'Etiquetados'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 19.4c1-2.8 3.2-4.2 5.8-4.2s4.8 1.4 5.8 4.2"/></svg></button></div>
   </div>`;
@@ -14057,6 +14074,7 @@ async function inicioView() {
   ${stripHTML}
   ${visitorHTML}
   ${HF_VISITOR ? '' : `<div id="mzIdeasSlot"></div>`}
+  ${HF_VISITOR ? '' : setupChecklistHtml(undefined, { omitIg: true })}
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
     <button type="button" class="mz-ph" id="mzChatOpen">Escribile a Posty…</button>
@@ -15714,6 +15732,66 @@ function hfOpenChatForPost(post) {
   const inp = document.getElementById('chatInput');
   if (inp) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) {} }, 350);
 }
+
+/* (ARMA TODO · Corrección 2 · UN SOLO CHAT) El botón que reemplaza a la
+   caja f3 en el detalle del posteo (weekCardHTML y approvalPostView):
+   misma elegibilidad que tenía la caja (borrador/programado con imagen;
+   un publicado no se edita pidiendo un cambio). El objeto del posteo
+   queda registrado por id para que el handler delegado recupere el
+   posteo completo (miniatura y contador de rehaces del ancla) sin
+   importar en qué superficie vive la tarjeta. */
+var HF_ASK_POSTS = {};
+var HF_CHAT_OPEN_PENDING = false;
+function hfAskChangeBtnHTML(p) {
+  if (!p || p.id == null) return '';
+  const stA = String(p.status || '');
+  if (stA !== 'draft' && stA !== 'scheduled') return '';
+  if (!p.image_path) return '';
+  try {
+    HF_ASK_POSTS[String(p.id)] = {
+      id: p.id, image_path: p.image_path || '', caption: p.caption || '',
+      redo_left: (p.redo_left === null || p.redo_left === undefined) ? 3 : p.redo_left,
+      status: p.status || '', media_type: p.media_type || '',
+    };
+  } catch (e) {}
+  const enA = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  return `<button type="button" class="hf-ask-change btn btn-soft btn-block" data-hf-ask-change="${esc(String(p.id))}" style="margin-top:10px">💬 ${enA ? 'Ask for a change' : 'Pedir un cambio'}</button>`;
+}
+// Cierra el detalle que contenga al botón por su mecanismo propio
+// (la ampliación scf-pop de Semana/Inicio, el detalle IG o una hoja
+// pcsheet) y lleva al chat principal con el ancla fijada, reutilizando
+// hfOpenChatForPost (mzSheet en Inicio / scroll a #chatCard en Agenda).
+// En el detalle standalone (apv) no hay chat en la vista: el ancla ya
+// quedó fijada en HF_CHAT_ANCHOR (global) y se navega a Inicio, donde
+// bindInicio abre la hoja del chat único (HF_CHAT_OPEN_PENDING).
+function hfAskChange(post) {
+  if (!post || post.id == null) return;
+  try { scfClosePop(); } catch (e) {}
+  try { hfDetailClose(); } catch (e) {}
+  try { pcCloseSheet(); } catch (e) {}
+  const hadChat = !!(document.getElementById('mzSheet') || document.getElementById('chatCard'));
+  hfOpenChatForPost(post);
+  if (!hadChat) {
+    HF_CHAT_OPEN_PENDING = true;
+    if ((location.hash || '').split('?')[0] !== mzHomeHash()) location.hash = mzHomeHash();
+    else { try { render(); } catch (e) {} }
+  }
+}
+// Delegado global en captura (una sola vez): corre antes que los
+// gestos de la tile/tarjeta, igual que el botón 💬 (hfChatBtnBind).
+function hfAskChangeBind() {
+  if (window.__hfAskBound) return;
+  window.__hfAskBound = true;
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('[data-hf-ask-change]') : null;
+    if (!b) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const id = b.dataset.hfAskChange;
+    const post = (typeof HF_ASK_POSTS !== 'undefined' && HF_ASK_POSTS[String(id)]) || { id };
+    hfAskChange(post);
+  }, true);
+}
 // Delegado en captura sobre el root de la home: corre ANTES que el
 // detalle táctil, el hover del cofre y el supresor post-hold.
 function hfChatBtnBind(root) {
@@ -15736,6 +15814,14 @@ function bindInicio() {
   // fija; el detalle es la tarjeta existente del cofre #scfVault).
   bindScfMinis(document.getElementById('inicioView'));
   try { hfChatBtnBind(document.getElementById('inicioView')); } catch (e) {}
+  // (ARMA TODO · Corrección 2) «Pedir un cambio» desde el detalle
+  // standalone (apv): el ancla ya quedó fijada; se abre la hoja del
+  // chat único ni bien Inicio pinta.
+  if (typeof HF_CHAT_OPEN_PENDING !== 'undefined' && HF_CHAT_OPEN_PENDING) {
+    HF_CHAT_OPEN_PENDING = false;
+    try { mzOpenSheet(true); } catch (e) {}
+    try { hfPaintAnchor(); } catch (e) {}
+  }
   // (Frente 3 · suma 2) Gestos del feed vivo (preview de reels con
   // press-and-hold + hoja de acciones en futuros): capa extra sobre el
   // cableado de siempre, sin reemplazarlo.
@@ -16501,7 +16587,7 @@ async function approvalPostView(id) {
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
     ${actions}${draftActions}
-    ${f3ThreadHTML(p)}
+    ${hfAskChangeBtnHTML(p)}
   </div>`;
 }
 function bindApprovalPost() {
@@ -16596,11 +16682,10 @@ function bindApprovalPost() {
 }
 /* ============================================================
    FRENTE 3 · SUMA 3 (v357+): COMPORTAMIENTO DEL FEED
-   1) Editar comentando el posteo: la caja de comentarios del
-      detalle ES la edición — enruta al MISMO motor del chat
-      (POST /api/ideas/chat, bloques ```edit del servidor) con
-      ESTE posteo como contexto; Posty responde en el hilo y la
-      pieza se actualiza en la misma vista.
+   1) Editar comentando el posteo — RETIRADO por la Corrección 2
+      de ARMA TODO (un solo chat): la caja del detalle desapareció;
+      el botón «💬 Pedir un cambio» fija el ancla y abre el chat
+      principal, que edita con el MISMO motor (anchor_post_id).
    2) Doble toque para aprobar en la vista abierta (corazón IG).
    3) La semana se cuelga en vivo: revelado progresivo en la
       grilla (polling vigente de /api/posts, sin spinner global).
@@ -16612,135 +16697,13 @@ function bindApprovalPost() {
    ============================================================ */
 function f3En() { try { return typeof ME !== 'undefined' && ME && ME.lang === 'en'; } catch (e) { return false; } }
 
-/* ---------- Ítem 1: hilo de edición por posteo ---------- */
-// Persistencia: NO existe hilo por posteo en el backend. El turno
-// SÍ queda persistido en el chat global (POST /api/ideas/chat
-// guarda user+assistant en chat_messages, server.js). El hilo
-// visible por posteo se guarda local (localStorage, cap 30) —
-// mínima viable sin backend nuevo (declarado como resto).
-function f3ThreadKey(id) { return 'f3thread:' + String(id); }
-function f3ThreadLoad(id) {
-  try { const v = JSON.parse(localStorage.getItem(f3ThreadKey(id)) || '[]'); return Array.isArray(v) ? v.filter(m => m && (m.role === 'user' || m.role === 'posty') && m.text) : []; }
-  catch (e) { return []; }
-}
-function f3ThreadSave(id, msgs) {
-  try { localStorage.setItem(f3ThreadKey(id), JSON.stringify((msgs || []).slice(-30))); } catch (e) {}
-}
-function f3MsgHTML(m) {
-  if (m.role === 'user') return `<div class="f3-msg f3-msg-user"><span class="f3-who">${f3En() ? 'You' : 'Vos'}</span><span class="f3-txt">${esc(m.text)}</span></div>`;
-  return `<div class="f3-msg f3-msg-posty"><img class="f3-ava" src="ai-avatar.png" alt="Posty"><span class="f3-txt">${esc(m.text)}</span></div>`;
-}
-// La caja SOLO en posteos editables (borrador/programado con
-// imagen, no pendientes de creación): el motor de chat del
-// servidor solo edita draft/scheduled — un publicado no se
-// edita comentando (declarado en el informe).
-function f3ThreadHTML(d) {
-  if (!d || d.id == null) return '';
-  const st = String(d.status || '');
-  if (st !== 'draft' && st !== 'scheduled') return '';
-  if (!d.image_path) return '';
-  const en = f3En();
-  return `<div class="f3-thread" data-f3-thread="${esc(String(d.id))}">
-    <div class="f3-msgs" data-f3-msgs></div>
-    <form class="f3-form" data-f3-form>
-      <input class="f3-input" data-f3-input type="text" maxlength="500" autocomplete="off" placeholder="${en ? 'Ask Posty for a change…' : 'Pedile un cambio a Posty…'}" aria-label="${en ? 'Ask Posty for a change on this post' : 'Pedile un cambio a Posty en este posteo'}">
-      <button class="f3-send" data-f3-send type="submit">${en ? 'Post' : 'Enviar'}</button>
-    </form>
-    <div class="f3-hint">${en ? 'whatever you type here, Posty changes it on this post' : 'lo que escribas acá, Posty lo cambia en este posteo'}</div>
-  </div>`;
-}
-function f3ThreadPush(wrap, id, msg) {
-  const msgs = f3ThreadLoad(id);
-  msgs.push(msg);
-  f3ThreadSave(id, msgs);
-  const box = wrap.querySelector('[data-f3-msgs]');
-  if (box) { box.insertAdjacentHTML('beforeend', f3MsgHTML(msg)); box.scrollTop = box.scrollHeight; }
-}
-function f3PaintThreads() {
-  document.querySelectorAll('[data-f3-thread]').forEach(wrap => {
-    if (wrap.dataset.f3Painted) return;
-    wrap.dataset.f3Painted = '1';
-    const box = wrap.querySelector('[data-f3-msgs]');
-    if (!box) return;
-    box.innerHTML = f3ThreadLoad(wrap.dataset.f3Thread).map(f3MsgHTML).join('');
-  });
-}
-// Tras una edición exitosa del servidor: refrescar LA vista
-// abierta (caption + imagen) sin salir de la pantalla.
-async function f3ApplyEditedPost(id, wrap) {
-  let p = null;
-  try { const r = await api.get('/api/posts/' + encodeURIComponent(id)); p = (r && r.post) ? r.post : r; } catch (e) {}
-  if (!p) { try { render(); } catch (e) {} return; }
-  const card = wrap.closest ? wrap.closest('[data-post-id]') : null;
-  if (card && card.classList.contains('igmock')) {
-    const cap = card.querySelector('.igmock-cap');
-    if (cap && p.caption != null) { cap.textContent = String(p.caption || ''); cap.dataset.full = String(p.caption || ''); }
-    const img = card.querySelector('.igmock-media img');
-    const vid = card.querySelector('.igmock-media video');
-    if (img && p.image_path) img.src = p.image_path;
-    if (vid && p.image_path) vid.src = p.image_path;
-    const mb = card.querySelector('.igmock-media');
-    if (mb && p.image_path) mb.dataset.lightbox = p.image_path;
-    return;
-  }
-  const apv = wrap.closest ? wrap.closest('.apv-wrap') : null;
-  if (apv) {
-    const capEl = apv.querySelector('.apv-caption');
-    if (capEl) {
-      const tags = String(p.hashtags || '').trim();
-      capEl.innerHTML = esc(String(p.caption || 'Sin texto todavía')).replace(/\n/g, '<br>') + (tags ? `<div class="apv-tags">${esc(tags)}</div>` : '');
-    }
-    const img = apv.querySelector('.apv-media img');
-    const vid = apv.querySelector('.apv-media video');
-    if (img && p.image_path) { img.src = p.image_path; img.dataset.lightbox = p.image_path; }
-    if (vid && p.image_path) vid.src = p.image_path;
-  }
-}
-async function f3ThreadSend(form) {
-  const wrap = form.closest('[data-f3-thread]');
-  if (!wrap) return;
-  const id = wrap.dataset.f3Thread;
-  const inp = wrap.querySelector('[data-f3-input]');
-  const btn = wrap.querySelector('[data-f3-send]');
-  const text = ((inp && inp.value) || '').trim();
-  if (!text) return;
-  if (inp) inp.value = '';
-  f3ThreadPush(wrap, id, { role: 'user', text });
-  if (btn) btn.disabled = true;
-  wrap.classList.add('f3-busy');
-  const box = wrap.querySelector('[data-f3-msgs]');
-  const typing = document.createElement('div');
-  typing.className = 'f3-msg f3-msg-posty f3-typing';
-  typing.innerHTML = `<img class="f3-ava" src="ai-avatar.png" alt="Posty"><span class="f3-txt">${f3En() ? 'posty is on it…' : 'posty está en eso…'}</span>`;
-  if (box) { box.appendChild(typing); box.scrollTop = box.scrollHeight; }
-  try {
-    // Contexto del MISMO motor vigente: el servidor reconstruye
-    // sus borradores y el modelo aplica el bloque ```edit sobre
-    // el posteo identificado (id + arranque del caption).
-    let capTxt = '';
-    try {
-      const card = wrap.closest('[data-post-id]');
-      const capEl = card ? card.querySelector('.igmock-cap') : document.querySelector('.apv-caption');
-      capTxt = capEl ? String(capEl.dataset.full || capEl.textContent || '').trim().slice(0, 160) : '';
-    } catch (e) {}
-    const ctx = f3En()
-      ? `(editing ONLY post #${id}${capTxt ? `, whose caption starts: "${capTxt}"` : ''}. apply the change to that post only.) `
-      : `(editá SOLO el posteo #${id}${capTxt ? `, cuyo texto empieza: "${capTxt}"` : ''}. aplicá el cambio solo a ese posteo.) `;
-    const r = await api.post('/api/ideas/chat', {
-      messages: [{ role: 'user', text: ctx + text }],
-      drafts: (typeof chatDraftsCtx === 'function') ? chatDraftsCtx() : [],
-    });
-    try { typing.remove(); } catch (e) {}
-    f3ThreadPush(wrap, id, { role: 'posty', text: String((r && r.reply) || (f3En() ? 'done ✅' : 'listo ✅')) });
-    if (r && r.edit && r.edit.ok) { await f3ApplyEditedPost(id, wrap); }
-  } catch (e) {
-    try { typing.remove(); } catch (e2) {}
-    f3ThreadPush(wrap, id, { role: 'posty', text: f3En() ? 'hmm, i could not do that one 😅 try again?' : 'uy, no pude con ese 😅 probás de nuevo?' });
-  }
-  wrap.classList.remove('f3-busy');
-  if (btn) btn.disabled = false;
-  if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) {} }
-}
+/* ---------- Ítem 1: hilo de edición por posteo — RETIRADO ----------
+   (ARMA TODO · Corrección 2 · UN SOLO CHAT) La caja f3 del detalle
+   (f3ThreadHTML + su hilo en localStorage + f3ThreadSend +
+   f3PaintThreads + f3ApplyEditedPost) se eliminó por completo: el
+   formulario no existe en ninguna vista y editar un posteo se pide
+   desde el botón «💬 Pedir un cambio» (hfAskChangeBtnHTML), que fija
+   el ancla y lleva al chat principal único (anchor_post_id). */
 
 /* ---------- Ítem 2: doble toque para aprobar ---------- */
 // Modo de aprobación: la fuente vigente es GET /api/autopilot
@@ -16840,7 +16803,7 @@ function f3OnPointerUp(e) {
     if (e.isPrimary === false) return;
     const media = e.target && e.target.closest ? e.target.closest('.igmock-media, .apv-media') : null;
     if (!media) { F3_TAP = { t: 0, x: 0, y: 0, key: '' }; return; }
-    if (e.target.closest('[data-f3-thread], button:not(.igmock-media), a, input, textarea, select')) return;
+    if (e.target.closest('button:not(.igmock-media), a, input, textarea, select')) return;
     const key = f3MediaKey(media);
     if (!key) return;
     const now = Date.now();
@@ -16997,7 +16960,6 @@ async function f3RevealCheck() {
     });
     try { bindScfMinis(document.getElementById('inicioView') || hfGrid.parentElement); } catch (e) {}
     try { document.querySelectorAll('#inicioView [data-lightbox]').forEach(el => { el.onclick = () => lbOpenFrom(el); }); } catch (e) {}
-    try { f3PaintThreads(); } catch (e) {}
     try { track('f3_live_reveal', { n: fresh.length, surface: 'home' }); } catch (e) {}
     return true;
   }
@@ -17047,16 +17009,14 @@ function f3MaybeWatchLive() {
 
 /* ---------- Init Frente 3 (lo llama bindApp en cada render) ---------- */
 function f3Init(tab) {
-  try { f3PaintThreads(); } catch (e) {}
+  // (ARMA TODO · Corrección 2) El hilo f3 quedó retirado por
+  // completo: ni pintado de hilos ni submit delegado de su
+  // formulario (ya no existe en ninguna vista). En su lugar se
+  // cablea el botón único «Pedir un cambio» (hfAskChangeBind).
+  try { hfAskChangeBind(); } catch (e) {}
   try { f3MaybeWatchLive(); } catch (e) {}
   if (window.__f3Bound) return;
   window.__f3Bound = true;
-  document.addEventListener('submit', (e) => {
-    const form = e.target && e.target.closest ? e.target.closest('[data-f3-form]') : null;
-    if (!form) return;
-    e.preventDefault();
-    f3ThreadSend(form);
-  });
   document.addEventListener('pointerup', f3OnPointerUp, true);
   document.addEventListener('click', f3OnClickCapture, true);
   document.addEventListener('pointerdown', f3PinchDown, true);
