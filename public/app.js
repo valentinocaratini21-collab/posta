@@ -14441,6 +14441,15 @@ async function inicioView() {
     const hp = await api.get('/api/home/profile').catch(() => null);
     if (hp && hp.ok) { prof = hp; HOME_PROF = hp; }
   } catch (e) {}
+  // (v457 · TIRA DE NIVEL) El tallo vivo de Posty: mismo endpoint y mismo
+  // modulo que el tallo del website (niveles.js via /api/oficina/nivel).
+  // Si falla o es visitante, no hay tira: la pantalla sigue igual, y la
+  // tira nace en la primera pintura (sin CLS: no se inyecta despues).
+  let nivelPosty = null;
+  if (!HF_VISITOR) {
+    try { const nv = await api.get('/api/oficina/nivel?poder=posty').catch(() => null); if (nv && nv.ok) nivelPosty = nv; } catch (e) {}
+  }
+  HF_NIVEL = nivelPosty;
   const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
   // Composición de la grilla: la semana en su posición final (el orden
   // de schedPlacements), publicados y posteos reales leídos (HOME_FEED).
@@ -14573,12 +14582,14 @@ async function inicioView() {
   // píldora flotante; 4) el chat único (barra + hoja, SIN prólogo). El
   // botón-anuncio de Ideas y la burbuja de relación salieron de la
   // pantalla principal (v442).
+  const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${HF_VISITOR ? '' : setupMainHTML()}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
   ${visitorToggleHTML}
   ${storiesHTML}
+  ${nivelStripHTML}
   ${gridHTML}
   ${stripHTML}
   ${visitorPillHTML}
@@ -14596,6 +14607,141 @@ async function inicioView() {
 
 </div>`;
 }
+/* ===== TIRA DE NIVEL POSTY — tallo vivo en Inicio (v457) ===== */
+// La tira vive debajo del perfil literal (bio y destacadas) y arriba de la
+// grilla. USA EL MISMO endpoint y el mismo modulo que el tallo vivo del
+// website (GET /api/oficina/nivel -> niveles.js): mismo nivel, mismas
+// palabras, mismo proximo paso en ambos lados. Un toque en la tira abre
+// «Mi negocio» (la coleccion de lo aprendido); el chip hace el proximo
+// paso. Sin puntajes numericos, sin lenguaje de fracaso, sin rachas.
+let HF_NIVEL = null;
+function pzNivelChip(clave, en) {
+  const M = {
+    fundamento_leido: ['#/app/negocio', 'Ver lo que ya sabe de vos', 'See what it already knows'],
+    semana_generada: ['#/app/schedule', 'Armar tu semana', 'Build your week'],
+    decision_bandeja: ['#/app/bandeja', 'Decidir en tu Bandeja', 'Decide in your Bandeja'],
+    semana_aceptada: ['#/app/schedule', 'Aceptar tu semana', 'Accept your week'],
+    pieza_aceptada_primera: ['#/app/schedule', 'Aceptar piezas sin cambios', 'Accept pieces as-is'],
+    semana_publicada: ['#/app/schedule', 'Revisar tu semana', 'Review your week'],
+    pregunta_respondida: ['#/app/chat', 'Responderle a Posty', 'Answer Posty'],
+  };
+  const d = M[clave] || ['#/app/negocio', 'Ver lo que sabe de vos', 'See what it knows'];
+  return { hash: d[0], label: en ? d[2] : d[1] };
+}
+function pzNivelUnlock(nivel, en) {
+  const M = {
+    2: ['Ya terminé de leer tu mundo: tu semana nace de tu fundamento.', 'I finished reading your world: your week is born from your fundamento.'],
+    3: ['Ya armé tu primera semana y aprendí tu primera decisión: conozco tu gusto.', 'I built your first week and learned your first decision: I know your taste.'],
+    4: ['Tus semanas salen aceptadas: acierto de primera.', 'Your weeks come out accepted: right the first time.'],
+    5: ['Soy tu socio de contenido: propongo con tu gusto afinado.', "I'm your content partner: I propose with your taste dialed in."],
+  };
+  const d = M[nivel] || M[2];
+  return en ? d[1] : d[0];
+}
+function pzNivelStemHTML(nivel, color, celeb) {
+  let h = '';
+  for (let i = 1; i <= 5; i++) {
+    const cls = i < nivel ? 'pz-nudo on' : (i === nivel ? 'pz-nudo cur' : 'pz-nudo');
+    h += `<span class="${cls}"${celeb ? ` style="animation-delay:${((i - 1) * 0.22).toFixed(2)}s"` : ''}></span>`;
+    if (i < 5) h += `<span class="pz-tramo${i + 1 <= nivel ? ' on' : ''}"${celeb ? ` style="animation-delay:${((i - 1) * 0.22 + 0.11).toFixed(2)}s"` : ''}></span>`;
+  }
+  return `<span class="pz-tallo" style="--pz-cel:${esc(color || '#2793C8')}">${h}</span>`;
+}
+function pzNivelStripHTML(nv, en) {
+  const falt = Array.isArray(nv.faltantes) ? nv.faltantes : [];
+  const n = falt.length;
+  const chip = (nv.nivel >= 5) ? { hash: '#/app/negocio', label: en ? 'See your garden' : 'Ver tu jardín' } : pzNivelChip(falt[0] ? falt[0].clave : '', en);
+  const sub = nv.nivel >= 5
+    ? (en ? 'We keep growing together' : 'Seguimos creciendo juntos')
+    : (n === 1
+      ? (en ? `1 thing left to be ${nv.nombre_siguiente}` : `te falta 1 cosa para ser ${nv.nombre_siguiente}`)
+      : (en ? `${n} things left to be ${nv.nombre_siguiente}` : `te faltan ${n} cosas para ser ${nv.nombre_siguiente}`));
+  return `<div class="pz-nivel" id="pzNivelStrip" role="button" tabindex="0" aria-label="${esc(en ? `Your level with Posty: ${nv.nombre_nivel}` : `Tu nivel con Posty: ${nv.nombre_nivel}`)}">
+    ${pzNivelStemHTML(nv.nivel, nv.color, false)}
+    <span class="pz-nivel-tx"><strong>${esc(nv.nombre_nivel)}</strong><span>${esc(sub)}</span></span>
+    <button type="button" class="pz-nivel-chip" data-pz-nivel-accion="${esc(chip.hash)}">${esc(chip.label)}</button>
+  </div>`;
+}
+function pzNivelCelebShow(nv, en) {
+  const prev = document.getElementById('pzCelebFondo');
+  if (prev) { try { prev.remove(); } catch (e) {} }
+  const unlock = pzNivelUnlock(nv.nivel, en);
+  const div = document.createElement('div');
+  div.id = 'pzCelebFondo';
+  div.className = 'pz-celeb-fondo';
+  div.innerHTML = `<div class="pz-celeb" role="dialog" aria-modal="true" aria-label="${esc(en ? 'Level up' : 'Subiste de nivel')}">
+    <button type="button" class="pz-celeb-x" data-pz-celeb-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button>
+    ${pzNivelStemHTML(nv.nivel, nv.color, true)}
+    <img class="pz-celeb-av" src="ai-avatar.png" alt="Posty">
+    <h3>${esc(en ? `You leveled up to ${nv.nombre_nivel}!` : `¡Subiste a ${nv.nombre_nivel}!`)} 🎉</h3>
+    <p class="pz-celeb-unlock">${esc(unlock)}</p>
+    <p class="pz-celeb-sub">${esc(en ? 'You will see it in your next week.' : 'Esto ya cambia tu próxima semana.')}</p>
+    <button type="button" class="pz-celeb-share" data-pz-celeb-share>${esc(en ? 'Share as story' : 'Compartir como historia')}</button>
+    <button type="button" class="pz-celeb-ok" data-pz-celeb-x>${esc(en ? 'Keep going' : 'Seguir')}</button>
+  </div>`;
+  document.body.appendChild(div);
+  div.addEventListener('click', (ev) => {
+    if (ev.target.closest && ev.target.closest('[data-pz-celeb-x]')) { try { div.remove(); } catch (e) {} return; }
+    if (ev.target.closest && ev.target.closest('[data-pz-celeb-share]')) { pzNivelStoryShow(nv, en); return; }
+    if (ev.target === div) { try { div.remove(); } catch (e) {} }
+  });
+}
+function pzNivelStoryShow(nv, en) {
+  const prev = document.getElementById('pzStoryFondo');
+  if (prev) { try { prev.remove(); } catch (e) {} }
+  const unlock = pzNivelUnlock(nv.nivel, en);
+  const texto = en ? `I leveled up to ${nv.nombre_nivel} with Posty! ${unlock}` : `¡Subí a ${nv.nombre_nivel} con Posty! ${unlock}`;
+  const div = document.createElement('div');
+  div.id = 'pzStoryFondo';
+  div.className = 'pz-celeb-fondo';
+  div.innerHTML = `<div class="pz-story" role="dialog" aria-modal="true">
+    <button type="button" class="pz-celeb-x" data-pz-story-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button>
+    <div class="pz-story-card">
+      <img class="pz-story-av" src="ai-avatar.png" alt="Posty">
+      <div class="pz-story-big">${esc(en ? `I leveled up to ${nv.nombre_nivel}!` : `¡Subí a ${nv.nombre_nivel}!`)} 🎉</div>
+      <div class="pz-story-unlock">${esc(unlock)}</div>
+      <div class="pz-story-firma">posty.</div>
+    </div>
+    <p class="pz-story-note">${esc(en ? 'Ready for your story — post it from your Instagram whenever you want. Posty never posts alone.' : 'Lista para tu historia — publicala desde tu Instagram cuando quieras. Posty nunca publica solo.')}</p>
+    <button type="button" class="pz-celeb-share" data-pz-story-copy>${esc(en ? 'Copy text' : 'Copiar texto')}</button>
+    <button type="button" class="pz-celeb-ok" data-pz-story-x>${esc(en ? 'Done' : 'Listo')}</button>
+  </div>`;
+  document.body.appendChild(div);
+  div.addEventListener('click', async (ev) => {
+    if (ev.target.closest && ev.target.closest('[data-pz-story-x]')) { try { div.remove(); } catch (e) {} return; }
+    const cp = ev.target.closest ? ev.target.closest('[data-pz-story-copy]') : null;
+    if (cp) {
+      try { await navigator.clipboard.writeText(texto); } catch (e) {
+        try { const ta = document.createElement('textarea'); ta.value = texto; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } catch (e2) {}
+      }
+      cp.textContent = en ? 'Copied ✓' : 'Copiado ✓';
+    }
+  });
+}
+function pzNivelMount() {
+  const strip = document.getElementById('pzNivelStrip');
+  if (strip && !strip.dataset.pzBound) {
+    strip.dataset.pzBound = '1';
+    strip.addEventListener('click', (e) => {
+      const chip = (e.target && e.target.closest) ? e.target.closest('[data-pz-nivel-accion]') : null;
+      if (chip) { location.hash = chip.dataset.pzNivelAccion; return; }
+      location.hash = '#/app/negocio';
+    });
+    strip.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = '#/app/negocio'; }
+    });
+  }
+  const nv = (typeof HF_NIVEL !== 'undefined') ? HF_NIVEL : null;
+  if (!nv || !nv.celebrar || !(nv.nivel > 1)) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const uid = (typeof ME !== 'undefined' && ME && ME.id) ? ME.id : 'x';
+  const key = 'pz_nivel_celeb_' + uid + '_' + nv.nivel;
+  try { if (localStorage.getItem(key) === '1') return; } catch (e) {}
+  try { localStorage.setItem(key, '1'); } catch (e) {}
+  try { api.post('/api/oficina/nivel/celebrar', { poder: nv.poder, nivel: nv.nivel }).catch(() => {}); } catch (e) {}
+  pzNivelCelebShow(nv, en);
+}
+
 function mzOpenSheet(focus) {
   const sh = $('#mzSheet');
   if (!sh) return;
@@ -16357,6 +16503,7 @@ function hfChatBtnBind(root) {
 }
 
 function bindInicio() {
+  try { pzNivelMount(); } catch (e) {}
   // (v442) Píldora de activación a un costado: su toggle vive en la vista.
   try { bindSetupPill(document.getElementById('inicioView')); } catch (e) {}
   // (v331) La home es el feed literal: se cablea la MISMA ampliación de

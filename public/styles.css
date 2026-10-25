@@ -3542,6 +3542,42 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .bb-msg .bb-av{margin-top:14px}
 @media (prefers-reduced-motion: reduce){.bb-spin,.bb-festejo{animation:none}.bb-tallo-crece,.bb-barra span{transition:none}}
 /* ================= FIN ESPINA BAMBOOTY ================= */
+/* ===== TIRA DE NIVEL POSTY — tallo vivo en Inicio (v457) ===== */
+.pz-nivel{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:2px 0 12px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:16px;cursor:pointer}
+.pz-tallo{display:inline-flex;align-items:center;flex:none}
+.pz-nudo{width:11px;height:11px;border-radius:50%;background:#D6EAF5;flex:none}
+.pz-nudo.on{background:var(--pz-cel)}
+.pz-nudo.cur{width:15px;height:15px;background:var(--pz-cel);box-shadow:0 0 0 3px rgba(39,147,200,.25);animation:pzPulso 2s infinite}
+.pz-tramo{width:7px;height:3px;background:#D6EAF5;flex:none}
+.pz-tramo.on{background:var(--pz-cel)}
+@keyframes pzPulso{0%,100%{box-shadow:0 0 0 3px rgba(39,147,200,.25)}50%{box-shadow:0 0 0 6px rgba(39,147,200,.12)}}
+.pz-nivel-tx{display:flex;flex-direction:column;line-height:1.25;min-width:0;flex:1}
+.pz-nivel-tx strong{font-size:14px}
+.pz-nivel-tx span{font-size:12px;color:var(--mut)}
+.pz-nivel-chip{flex:none;border:0;border-radius:999px;padding:8px 12px;font-weight:700;font-size:12.5px;background:#2793C8;color:#fff;cursor:pointer}
+.pz-celeb-fondo{position:fixed;inset:0;background:rgba(10,30,51,.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:300}
+.pz-celeb{background:#FFFDF8;border-radius:24px;padding:28px 22px;text-align:center;max-width:340px;width:100%;animation:pzPop .45s cubic-bezier(.2,1.6,.4,1);position:relative}
+.pz-celeb .pz-tallo{display:flex;justify-content:center;margin:0 auto 12px}
+.pz-celeb .pz-nudo,.pz-celeb .pz-tramo{animation:pzEnciende .4s both}
+@keyframes pzEnciende{from{opacity:.25}to{opacity:1}}
+@keyframes pzPop{from{transform:scale(.8);opacity:0}}
+.pz-celeb-x{position:absolute;top:10px;right:12px;border:0;background:none;font-size:18px;cursor:pointer}
+.pz-celeb-av{width:84px;height:84px;border-radius:50%;margin:6px auto 10px;display:block}
+.pz-celeb h3{margin:0 0 8px;font-size:21px;line-height:1.25}
+.pz-celeb-unlock{font-size:15px;line-height:1.45;margin:0 0 8px}
+.pz-celeb-sub{font-size:13px;color:var(--mut);margin:0 0 16px}
+.pz-celeb-share{display:block;width:100%;border:0;border-radius:999px;padding:12px;font-weight:800;background:#2793C8;color:#fff;cursor:pointer;margin-bottom:8px}
+.pz-celeb-ok{display:block;width:100%;border:0;background:none;padding:10px;font-weight:700;cursor:pointer}
+.pz-story{background:#FFFDF8;border-radius:24px;padding:22px;text-align:center;max-width:340px;width:100%;position:relative;animation:pzPop .45s cubic-bezier(.2,1.6,.4,1)}
+.pz-story-card{width:min(100%,29.25vh);aspect-ratio:9/16;margin:0 auto 14px;background:linear-gradient(180deg,#2793C8,#0A1E33);border-radius:18px;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:22px}
+.pz-story-av{width:72px;height:72px;border-radius:50%}
+.pz-story-big{font-size:21px;font-weight:800;line-height:1.25}
+.pz-story-unlock{font-size:13.5px;line-height:1.45;opacity:.92}
+.pz-story-firma{font-weight:800;opacity:.8}
+.pz-story-note{font-size:13px;color:var(--mut);line-height:1.45;margin:0 0 14px}
+@media (prefers-reduced-motion: reduce){.pz-nudo.cur,.pz-celeb,.pz-story{animation:none}.pz-celeb .pz-nudo,.pz-celeb .pz-tramo{animation:none}}
+
+
 
 /* Rediseño botones tarjeta del posteo (2026-10-25): una principal llena + secundarias en texto */
 .pcard-actions .pcard-main{display:block;width:100%;text-align:center;background:var(--cel);color:#fff !important;border-color:var(--cel) !important;border-radius:999px;padding:10px 14px;font-size:13px;font-weight:800;text-decoration:none}

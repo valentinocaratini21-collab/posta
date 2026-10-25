@@ -3244,6 +3244,46 @@ app.put('/api/oficina/push-prefs', requireAuth, (req, res) => {
     res.json({ ok: true, prefs: pushOficinaMod.getPrefs(db, req.session.userId) });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// ---------- Tira de nivel Posty — tallo vivo (v457) ----------
+// CONTRATO COMPARTIDO website <-> app: un solo modulo (niveles.js) y un
+// solo endpoint. El tallo vivo del website y la tira de Inicio leen este
+// endpoint: mismo nivel, mismas palabras (nombre y falta vienen del
+// servidor) y mismo proximo paso en ambos lados. La celebracion en
+// pantalla es UNICA por nivel: la marca durable vive en
+// nivel_celebraciones (el push de celebracion ya existe en
+// oficina.festejarSubida y sigue su puerta unica).
+function nivelCelebracionesEnsure() {
+  try { db.exec(`CREATE TABLE IF NOT EXISTS nivel_celebraciones (user_id INTEGER NOT NULL, poder TEXT NOT NULL, nivel INTEGER NOT NULL, ts INTEGER NOT NULL, UNIQUE(user_id, poder, nivel))`); } catch (e) {}
+}
+app.get('/api/oficina/nivel', requireAuth, (req, res) => {
+  try {
+    nivelCelebracionesEnsure();
+    const poder = String(req.query.poder || 'posty');
+    const def = oficina.niveles.PODERES[oficina.niveles.resolverPoder(poder)];
+    if (!def) return res.status(400).json({ ok: false, error: 'poder_desconocido' });
+    const niv = oficina.niveles.computarNivel(db, req.session.userId, poder, oficina.metricas(db, req.session.userId));
+    let celebrado = false;
+    try { celebrado = db.prepare('SELECT COUNT(*) AS n FROM nivel_celebraciones WHERE user_id = ? AND poder = ? AND nivel = ?').get(req.session.userId, niv.poder, niv.nivel).n > 0; } catch (e) {}
+    res.json({
+      ok: true, poder: niv.poder, nivel: niv.nivel,
+      nombre_nivel: niv.nombre_nivel,
+      nombre_siguiente: niv.nivel < 5 ? def.niveles[niv.nivel] : null,
+      color: niv.color, proximo_paso: niv.proximo_paso,
+      faltantes: niv.gate.pendientes,
+      celebrar: niv.nivel > 1 && !celebrado,
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/oficina/nivel/celebrar', requireAuth, (req, res) => {
+  try {
+    nivelCelebracionesEnsure();
+    const poder = String((req.body || {}).poder || 'posty');
+    const nivel = Number((req.body || {}).nivel || 0);
+    if (!Number.isInteger(nivel) || nivel < 2 || nivel > 5) return res.status(400).json({ ok: false, error: 'nivel_invalido' });
+    db.prepare('INSERT OR IGNORE INTO nivel_celebraciones (user_id, poder, nivel, ts) VALUES (?,?,?,?)').run(req.session.userId, poder, nivel, Date.now());
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 // Vaciado periódico de la cola agrupable de push (buenas noticias): Bambooty
 // las resume; jamás despierta de noche (la política vive en push-oficina).
 setInterval(() => {
@@ -22122,7 +22162,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v456';
+const BUILD_ID = '20261025-v457';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
