@@ -82,6 +82,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .country-row{display:flex;gap:10px}
 .country-btn{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-family:inherit;font-weight:700;font-size:15px;color:var(--navy);cursor:pointer}
 .country-btn.on{border-color:var(--cel);background:var(--bg2)}
+/* (pais-selector) Country selector on the trial: 10 flags + note with currency and rail */
+.pz-pais-toggle{display:flex;justify-content:center;gap:8px;margin:0 0 10px}
+.pz-pais-toggle button{width:40px;height:40px;padding:0;font-size:20px;line-height:1;border-radius:50%;border:1.5px solid var(--line);background:#fff;cursor:pointer;font-family:inherit}
+.pz-pais-toggle button.on{border-color:var(--yl,#FEC14D);box-shadow:0 0 0 3px var(--yl,#FEC14D)}
+.pz-pais-nota{text-align:center;color:#47617A;font-size:13px;margin:0 0 16px}
 .btn{display:inline-block;border:none;cursor:pointer;font-family:inherit;font-weight:800;border-radius:14px;padding:16px 34px;font-size:17px;text-decoration:none;transition:transform .12s,box-shadow .12s}
 .btn-primary{background:var(--yl);color:var(--navy);box-shadow:0 8px 24px rgba(254,193,77,.45)}
 .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(254,193,77,.55)}
@@ -1047,7 +1052,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
     </div>
   </div>
 
-    <p class="price-contrast">A community manager charges ~$2,000 a month. <b>Posty, from $199.99.</b></p>
+    <p class="price-contrast" id="priceContrast">A community manager charges ~$2,000 a month. <b>Posty, from $199.99.</b></p>
 
   <!-- (v341) Mini-bloque de fundador junto al formulario: foto entera,
        textos aprobados del módulo (pieza 20). -->
@@ -1327,6 +1332,8 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
         <p style="text-align:center;margin:4px 0 0"><a href="#" id="chatLink" style="color:var(--cel);font-weight:800;text-decoration:none;font-size:15px">Something off? Ask in the chat 👇</a></p>
       <!-- (v323 · piece 17) Price at the peak, well told: the hero plan per
            day, from the live prices the server serves — never hand-typed. -->
+      <div class="pz-pais-toggle" id="pruebaCountryToggle"></div>
+      <p class="pz-pais-nota" id="pruebaCountryNote"></p>
       <div class="price-card" id="priceCard" style="display:none">
         <p style="margin:0;font-size:14px;font-weight:700;color:#47617A">PRO PLAN · THE FAVORITE</p>
         <p class="pc-per" id="pricePerDay"></p>
@@ -1554,6 +1561,50 @@ let TRIAL = null;      // respuesta del backend
 // semana guardada por un motor viejo NO se restaura — se genera de nuevo.
 const TRIAL_ENGINE_V = 25;
 let COUNTRY = 'US';
+// (pais-selector) PAIS_PRECIO = billing country of the selector: it NEVER
+// overwrites COUNTRY (the demo country). Order: ?pais= (from the home) >
+// stored > US. EC/VE are absent: unpublished until confirmed against an
+// official Mercado Pago source.
+const PZ_PAISES_PRUEBA = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
+const PZ_META_PRUEBA = {
+  US: { flag: '\u{1F1FA}\u{1F1F8}', nombre: 'United States', nota: 'Prices in USD.' },
+  AR: { flag: '\u{1F1E6}\u{1F1F7}', nombre: 'Argentina', nota: 'Prices in Argentine pesos. Pay with Mercado Pago.' },
+  BR: { flag: '\u{1F1E7}\u{1F1F7}', nombre: 'Brazil', nota: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  MX: { flag: '\u{1F1F2}\u{1F1FD}', nombre: 'Mexico', nota: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  CL: { flag: '\u{1F1E8}\u{1F1F1}', nombre: 'Chile', nota: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  CO: { flag: '\u{1F1E8}\u{1F1F4}', nombre: 'Colombia', nota: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  PE: { flag: '\u{1F1F5}\u{1F1EA}', nombre: 'Peru', nota: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  UY: { flag: '\u{1F1FA}\u{1F1FE}', nombre: 'Uruguay', nota: 'Prices in Uruguayan pesos. Pay with Mercado Pago.' },
+  GB: { flag: '\u{1F1EC}\u{1F1E7}', nombre: 'United Kingdom', nota: 'Prices in pounds. Pay with Stripe.' },
+  EU: { flag: '\u{1F1EA}\u{1F1FA}', nombre: 'Eurozone', nota: 'Prices in euros. Pay with Stripe.' },
+};
+let PAIS_PRECIO = (() => {
+  try {
+    const q = new URLSearchParams(location.search).get('pais');
+    if (q && PZ_PAISES_PRUEBA.includes(q.toUpperCase())) return q.toUpperCase();
+    const g = localStorage.getItem('posta-pais');
+    if (g && PZ_PAISES_PRUEBA.includes(g)) return g;
+  } catch (e) {}
+  return 'US';
+})();
+function pzFmtPruebaEN(pp) {
+  const sym = { ARS: '$', UYU: '$U ', USD: '$', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[pp.currency] || '$';
+  const dec = (pp.currency === 'ARS' || pp.currency === 'UYU') ? 0 : 2;
+  return sym + Number(pp.price).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function pzRenderSelectorPrueba() {
+  const host = document.getElementById('pruebaCountryToggle');
+  if (!host) return;
+  host.innerHTML = PZ_PAISES_PRUEBA.map((c) => `<button type="button" class="${PAIS_PRECIO === c ? 'on' : ''}" data-country="${c}" title="${PZ_META_PRUEBA[c].nombre}" aria-label="${PZ_META_PRUEBA[c].nombre}" aria-pressed="${PAIS_PRECIO === c}">${PZ_META_PRUEBA[c].flag}</button>`).join('');
+  host.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    PAIS_PRECIO = b.getAttribute('data-country');
+    try { localStorage.setItem('posta-pais', PAIS_PRECIO); } catch (e) {}
+    pzRenderSelectorPrueba();
+    renderPriceCard();
+  }));
+  const nota = document.getElementById('pruebaCountryNote');
+  if (nota && PZ_META_PRUEBA[PAIS_PRECIO]) nota.textContent = PZ_META_PRUEBA[PAIS_PRECIO].nota;
+}
 let TONE = 'vos';
 const LANG = 'en'; // (v274) esta página ES el funnel EN: toda la prueba sale en inglés
 // Persistencia local (IndexedDB): si recargás por accidente, tu semana sigue ahí.
@@ -3009,6 +3060,7 @@ function renderResults() {
   try { renderBenefits(); } catch (e) {}
   try { renderGiftRow(); } catch (e) {}
   try { renderReelRow(); } catch (e) {}
+  try { pzRenderSelectorPrueba(); } catch (e) {}
   try { renderPriceCard(); } catch (e) {}
 }
 
@@ -3574,7 +3626,7 @@ async function renderPriceCard() {
   const card = $('#priceCard');
   if (!card) return;
   try {
-    const r = await fetch('/api/billing/plans?country=' + encodeURIComponent(COUNTRY || 'US'));
+    const r = await fetch('/api/billing/plans?country=' + encodeURIComponent(PAIS_PRECIO || 'US'));
     const j = await r.json();
     const pro = j && (j.plans || []).find((p) => p.id === 'pro');
     const base = (j && (j.plans || []).find((p) => p.id === 'esencial')) || pro;
@@ -3588,19 +3640,41 @@ async function renderPriceCard() {
     } else if (j.country === 'UY') {
       perTxt = '$U ' + fmt(Math.round(per), 0) + ' <small>per day</small>';
       anchor = 'A community manager costs more than $U 25,000 a month. Posty from $U ' + fmt(base.price, 0) + '/month.';
+    } else if (j.country === 'GB') {
+      perTxt = '\u00a3' + fmt(per, 2) + ' <small>per day</small>';
+      anchor = 'Posty from \u00a3' + fmt(base.price, 2) + '/month.';
+    } else if (j.country === 'EU') {
+      perTxt = '\u20ac' + fmt(per, 2) + ' <small>per day</small>';
+      anchor = 'Posty from \u20ac' + fmt(base.price, 2) + '/month.';
+    } else if (['BR', 'MX', 'CL', 'CO', 'PE'].includes(j.country)) {
+      perTxt = 'USD ' + fmt(per, 2) + ' <small>per day</small>';
+      anchor = 'Posty from USD ' + fmt(base.price, 2) + '/month.';
     } else {
       perTxt = '$' + fmt(Math.round(per), 0) + ' <small>per day</small>';
       anchor = 'A community manager costs from $1,000,000 a month. Posty from $' + fmt(base.price, 0) + '/month.';
     }
     $('#pricePerDay').innerHTML = perTxt;
     $('#priceAnchor').textContent = anchor;
+    // The static contrast follows the chosen country (no approved anchor
+    // outside AR/UY/US: just «Posty, from…», never an invented CM figure).
+    const pc = $('#priceContrast');
+    if (pc) {
+      pc.innerHTML = j.country === 'US'
+        ? 'A community manager charges ~$2,000 a month. <b>Posty, from $199.99.</b>'
+        : j.country === 'UY'
+        ? 'A community manager charges more than $U 25,000 a month. <b>Posty, from $U 4,990.</b>'
+        : j.country === 'AR'
+        ? 'A community manager charges from $1,000,000 a month. <b>Posty, from $199,999.</b>'
+        : 'Posty, from <b>' + pzFmtPruebaEN(base) + '.</b>';
+    }
     // (v390) Full "for you" detail of all 3 plans: tap the card and it
     // expands in place (no leaving the page, no scroll loss). Each plan
     // has its own button: it stores the choice (posta_chosen_plan, the
     // signup bridge) and opens registration.
     const wrap = $('#pricePlans');
     if (wrap && Array.isArray(j.plans) && j.plans.length) {
-      wrap.innerHTML = j.plans.map((p) => `
+      const planesEN = j.plans.map((pp) => ({ ...pp, price_label: pzFmtPruebaEN(pp) }));
+      wrap.innerHTML = planesEN.map((p) => `
         <div class="pc-plan">
           <div class="pc-plan-h"><b>${esc(p.name)}</b><span>${esc(p.price_label || '')}<small>/mo</small></span></div>
           <ul>${(p.detail || []).map((f) => `<li>${esc(f)}</li>`).join('')}</ul>

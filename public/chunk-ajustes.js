@@ -1477,11 +1477,22 @@ function bindSettings() {
   (async () => {
     const z = $('#planZone');
     if (!z) return;
+    // (pais-selector) País del paywall: el elegido en la home/prueba
+    // ('posta-pais'); si no hay, lang en→US, si no AR. El RIEL lo decide el
+    // país, no el idioma: GB/EU pagan por Stripe aunque el usuario hable ES.
+    const PZ_PAY_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
+    const PZ_PAY_STRIPE = ['US', 'GB', 'EU'];
+    let pzPayCountry = 'AR';
+    try {
+      const g = localStorage.getItem('posta-pais');
+      if (g && PZ_PAY_PAISES.includes(g)) pzPayCountry = g;
+      else if (typeof ME !== 'undefined' && ME && ME.lang === 'en') pzPayCountry = 'US';
+    } catch (e) { if (typeof ME !== 'undefined' && ME && ME.lang === 'en') pzPayCountry = 'US'; }
     // Carga de planes con reintento: es la pantalla de pago, no puede fallar en silencio.
     const loadPlans = async () => {
       let lastErr = null;
       for (let i = 0; i < 2; i++) {
-        try { return await api.get('/api/billing/plans' + ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? '?country=US' : '')); }
+        try { return await api.get('/api/billing/plans?country=' + pzPayCountry); }
         catch (e) { lastErr = e; console.error('[planes] intento ' + (i + 1) + ':', e.message); }
       }
       throw lastErr;
@@ -1520,12 +1531,20 @@ function bindSettings() {
       }
       const { plans, mp_configured, stripe_configured } = await loadPlans();
       const isUS = !!(ME && ME.lang === 'en');
+      const isStripe = PZ_PAY_STRIPE.includes(pzPayCountry);
+      (plans || []).forEach((pp) => {
+        const sym = { ARS: '$', UYU: '$U ', USD: isUS ? '$' : 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[pp.currency] || '$';
+        const dec = (pp.currency === 'ARS' || pp.currency === 'UYU') ? 0 : 2;
+        pp.price_label = sym + Number(pp.price).toLocaleString(isUS ? 'en-US' : 'es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+      });
       const cur = (ME && ME.plan) || 'esencial';
       const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
       const pcm = document.getElementById('planConfirmMsg');
       if (pcm) pcm.innerHTML = hasActive
         ? (isUS ? '✅ Payment received! Your plan is now active.' : '✅ ¡Pago recibido! Tu plan ya está activo.')
-        : (isUS ? '⏳ Your payment is being confirmed with Stripe. In a few seconds your plan will activate on its own — nothing else to do.' : '⏳ Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.');
+        : isStripe
+        ? (isUS ? '⏳ Your payment is being confirmed with Stripe. In a few seconds your plan will activate on its own — nothing else to do.' : '⏳ Tu pago está confirmándose con Stripe. En unos segundos tu plan se activa solo — no hace falta que hagas nada.')
+        : (isUS ? '⏳ Your payment is being confirmed with MercadoPago. In a few seconds your plan will activate on its own — nothing else to do.' : '⏳ Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.');
       const statusTag = !hasActive ? `<span style="font-size:11.5px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
       const trialLeft = (ME && ME.trial_days_left) || 0;
       // refInfo se obtiene una sola vez acá: lo usan bindSub (clic Suscribirse) y los banners
@@ -1552,7 +1571,9 @@ function bindSettings() {
       };
       const pmMixDup = /(\d+\s*(posts?|reels|historias)\b|historias todos los días)/i;
       const planCard = (p) => {
-        const pmSym = (p.currency === 'UYU' ? '$U ' : '$');
+        const pmSym = ({ ARS: '$', UYU: '$U ', USD: isUS ? '$' : 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' })[p.currency] || '$';
+        const pmDec = (p.currency === 'ARS' || p.currency === 'UYU') ? 0 : 2;
+        const pmPer = (p.price / 30).toLocaleString(isUS ? 'en-US' : 'es-AR', { minimumFractionDigits: pmDec, maximumFractionDigits: pmDec });
         const feats = (p.features || []).filter(f => !pmMixDup.test(f)).slice(0, 6);
         return `
           <div class="plan-mini${p.id === cur && hasActive ? ' cur' : ''}${p.highlighted ? ' rec' : ''}">
@@ -1560,7 +1581,7 @@ function bindSettings() {
             <div class="pm-top"><b>${esc(p.name)}</b>${p.id === cur && hasActive ? '<span class="pm-cur-tag">Tu plan</span>' : ''}</div>
             ${p.tagline ? `<p class="pm-tagline">${esc(p.tagline)}</p>` : ''}
             <div class="pm-price">${esc(p.price_label)}<small>/mes</small></div>
-            <div class="pm-perday">≈ ${pmSym}${Math.round(p.price / 30).toLocaleString('es-AR')} por día</div>
+            <div class="pm-perday">≈ ${pmSym}${pmPer} por día</div>
             ${pmMixHTML(p)}
             <ul class="pm-feats">${feats.map(f => `<li><span class="tick">✓</span><span>${esc(f)}</span></li>`).join('')}</ul>
             <button class="btn ${p.id === cur && hasActive ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && hasActive ? 'disabled' : ''}>${p.id === cur && hasActive ? 'Plan actual' : 'Suscribirse'}</button>
@@ -1575,14 +1596,15 @@ function bindSettings() {
       const bindSub = () => {
         $$('#planList [data-sub]').forEach(b => b.onclick = async () => {
           track('plan_select', { plan: b.dataset.sub });
-          // (v285) Cuentas US (lang=en): el cobro va por Stripe Checkout —
-          // sin paso de email de MP; Stripe pide los datos en su página.
-          if (isUS) {
-            if (!stripe_configured) { $('#planMsg').innerHTML = `<div class="err">Payments are not configured yet.</div>`; return; }
+          // (v285, pais-selector) Países Stripe (US/GB/EU): el cobro va por
+          // Stripe Checkout — sin paso de email de MP; Stripe pide los datos
+          // en su página. El idioma de los textos sigue siendo el del usuario.
+          if (isStripe) {
+            if (!stripe_configured) { $('#planMsg').innerHTML = `<div class="err">${isUS ? 'Payments are not configured yet.' : 'Pagos no configurados todavía.'}</div>`; return; }
             b.disabled = true;
-            $('#planMsg').innerHTML = `<div style="font-size:12.5px;color:var(--mut)">⏳ Taking you to secure checkout…</div>`;
+            $('#planMsg').innerHTML = `<div style="font-size:12.5px;color:var(--mut)">${isUS ? '⏳ Taking you to secure checkout…' : '⏳ Llevándote al pago seguro…'}</div>`;
             try {
-              const { url } = await api.post('/api/billing/stripe/checkout', { plan: b.dataset.sub });
+              const { url } = await api.post('/api/billing/stripe/checkout', { plan: b.dataset.sub, country: pzPayCountry });
               track('checkout_start', { plan: b.dataset.sub, kind: 'plan' }); trackBeacon();
               location.href = url;
             } catch (e) {
@@ -1595,10 +1617,11 @@ function bindSettings() {
           // Paso 1: pedir el email de la cuenta de MercadoPago (debe coincidir con la que paga)
           const preset = esc((ME && (ME.mp_payer_email || ME.email)) || '');
           const subPlan = plans.find(p => p.id === b.dataset.sub) || curPlan;
+          const discSym = ({ ARS: '$', UYU: '$U ', USD: isUS ? '$' : 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' })[subPlan.currency] || '$';
           const discLine = (refInfo && refInfo.discount_active)
-            ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>50% off</b> por referidos: este plan te queda en <b>$${Math.round(subPlan.price / 2).toLocaleString('es-AR')}/mes</b>.</div>`
+            ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>50% off</b> por referidos: este plan te queda en <b>${discSym}${Math.round(subPlan.price / 2).toLocaleString(isUS ? 'en-US' : 'es-AR')}/mes</b>.</div>`
             : (refInfo && refInfo.invited)
-              ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>20% off</b> de invitado: este plan te queda en <b>$${Math.round(subPlan.price * 0.8).toLocaleString('es-AR')}/mes</b>.</div>`
+              ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>20% off</b> de invitado: este plan te queda en <b>${discSym}${Math.round(subPlan.price * 0.8).toLocaleString(isUS ? 'en-US' : 'es-AR')}/mes</b>.</div>`
               : '';
           $('#planMsg').innerHTML = `
             <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px">
@@ -1620,7 +1643,7 @@ function bindSettings() {
             const btn = $('#btnGoMP');
             btn.disabled = true; btn.textContent = '⏳ Redirigiendo a MercadoPago...';
             try {
-              const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em });
+              const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em, country: pzPayCountry });
               track('checkout_start', { plan: b.dataset.sub, kind: 'plan' }); trackBeacon();
               location.href = init_point;
             } catch (e) {

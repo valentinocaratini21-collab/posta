@@ -121,6 +121,12 @@ button{font-family:inherit}
 .country-toggle{display:flex;justify-content:center;gap:10px;margin-bottom:28px}
 .country-toggle button{border:1.5px solid var(--line);background:var(--card);color:var(--mut);font-weight:700;font-size:13px;padding:10px 24px;border-radius:999px;cursor:pointer;font-family:inherit;transition:all .15s}
 .country-toggle button.on{background:var(--yl);border-color:var(--yl);color:#0A1E33;box-shadow:0 6px 18px rgba(254,193,77,.45)}
+/* (pais-selector) El selector pasa de 2 pastillas con nombre a 10 botones solo
+   bandera: redondos, compactos, con anillo amarillo en el país activo. La
+   nota debajo (.lp-pais-nota) dice el país, la moneda y el riel. */
+.country-toggle button{padding:0;width:44px;height:44px;font-size:22px;line-height:1;border-radius:50%}
+.country-toggle button.on{box-shadow:0 0 0 3px var(--yl),0 6px 18px rgba(254,193,77,.45)}
+.lp-pais-nota{text-align:center;color:var(--mut);font-size:13px;margin:-12px 0 20px}
 .anchor-line{text-align:center;font-size:16.5px;color:var(--txt);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 24px;max-width:640px;margin:0 auto 14px;box-shadow:var(--shadow)}
 .anchor-line b{color:var(--cel)}
 .scarcity{text-align:center;font-size:14px;color:var(--mut);margin-bottom:40px}

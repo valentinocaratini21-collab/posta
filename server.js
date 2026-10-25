@@ -69,7 +69,7 @@ const { mineComments, buildDnaPatch, fetchCommentsForMedia } = require('./ig-com
 const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { postyLevel, LEVEL_UP_MSGS } = require('./posty-level'); // 🧠 Niveles de conocimiento de Posty
-const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR } = require('./config/plans');
+const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR, SELECTOR_COUNTRIES, COUNTRY_META, getRail } = require('./config/plans');
 const LA = require('./launch-analytics'); // (v322) analytics de lanzamiento: época, tablero, termómetro, alertas, carta
 const metaDeauth = require('./meta-deauthorize'); // (Frente 4b) Deauthorize callback de Meta: baja lógica IG + evento durable
 const holaInbox = require('./hola-inbox'); // (Frente 4b) Lector SOLO LECTURA de respuestas a hola@ (Carta/toque), clasificador por reglas
@@ -12679,12 +12679,19 @@ async function maybeReferralNudge(referrerId, baseUrl) {
 
 // ---------- Facturación (Mercado Pago) ----------
 app.get('/api/billing/plans', (req, res) => {
-  const country = ['UY', 'US', 'GB', 'CA'].includes(req.query.country) ? req.query.country : 'AR';
+  // (Tablero 2026-10-25) 10 países del selector + CA solo-API (no se toca).
+  // Default intacto: sin código válido, AR. EC/VE no existen acá: no se publican.
+  const q = String(req.query.country || '').toUpperCase();
+  const country = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU', 'CA'].includes(q) ? q : 'AR';
   const plans = getPlans(country);
   const anchor = PLAN_ANCHOR[country];
+  const meta = COUNTRY_META[country] || COUNTRY_META.AR;
   res.json({
     country,
-    currency: country === 'UY' ? 'UYU' : (country === 'US' ? 'USD' : (country === 'GB' ? 'GBP' : (country === 'CA' ? 'CAD' : 'ARS'))),
+    currency: plans.esencial.currency,
+    rail: meta.rail,
+    local_price_pending: !!meta.pending,
+    countries: SELECTOR_COUNTRIES.map((c) => ({ code: c, ...COUNTRY_META[c] })),
     plans: Object.values(plans).map((p) => ({ ...p, price_label: formatPrice(p) })),
     anchor,
     trial_plan: TRIAL_PLAN,
@@ -12727,7 +12734,11 @@ app.all('/api/admin/grant-free', (req, res) => {
 
 app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
   const { plan: planId, country, payer_email } = req.body || {};
-  const plans = getPlans(country === 'UY' ? 'UY' : 'AR');
+  // (Tablero 2026-10-25) Riel MP: AR + UY + BR/MX/CL/CO/PE (estos últimos con
+  // escalera USD base; la verificación de pago humano real por MP en esos
+  // países sigue pendiente por separado y NO se declara hecha acá).
+  const mpCountry = String(country || '').toUpperCase();
+  const plans = getPlans(['AR', 'UY', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(mpCountry) ? mpCountry : 'AR');
   const plan = plans[planId];
   if (!plan) return res.status(400).json({ error: 'Plan inválido' });
   if (!mp.mpConfigured()) {
@@ -12883,15 +12894,17 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
 // error limpio y nada más cambia (el sitio y la app quedan como siempre).
 app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
   const { plan: planId } = req.body || {};
-  const plan = getPlans('US')[planId];
+  // (Tablero 2026-10-25) Riel Stripe: US + GB (GBP) + EU (EUR). Sin país válido, US.
+  const stripeCountry = ['US', 'GB', 'EU'].includes(String((req.body && req.body.country) || '').toUpperCase()) ? String(req.body.country).toUpperCase() : 'US';
+  const plan = getPlans(stripeCountry)[planId];
   if (!plan) return res.status(400).json({ error: 'Invalid plan' });
   if (!stripeBilling.stripeConfigured()) {
     return res.status(400).json({ error: 'Payments are not configured yet.' });
   }
   try {
     const user = db.prepare('SELECT id, email, plan_status, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, created_at, lang, founder_number, founder_price, founder_currency, founder_plan, founder_price_at FROM users WHERE id = ?').get(req.session.userId);
-    if (!user || user.lang !== 'en') {
-      return res.status(400).json({ error: 'Stripe checkout is only available for US accounts.' });
+    if (!user) {
+      return res.status(400).json({ error: 'Stripe checkout is only available for US, UK and Eurozone accounts.' });
     }
     if (user.plan_status === 'active' && user.stripe_subscription_id) {
       return res.status(400).json({ error: 'You already have an active subscription. To change plans, manage your current one first from My plan.' });
@@ -12910,7 +12923,7 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
     // monto de alta (las suscripciones vivas ya conservan su precio solas).
     let founderPriceId = null;
     if (user.founder_number && Number(user.founder_price) > 0 && user.founder_plan === plan.id
-        && String(user.founder_currency || '') === 'USD'
+        && String(user.founder_currency || '') === 'USD' && String(plan.currency || '') === 'USD'
         && Number(user.founder_price_at) > 0 && (Date.now() - Number(user.founder_price_at)) < 365 * 24 * 3600 * 1000
         && Number(user.founder_price) !== Number(plan.price)) {
       try { founderPriceId = await stripeBilling.ensureFounderPrice(null, plan, Number(user.founder_price)); }
@@ -22488,7 +22501,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v464';
+const BUILD_ID = '20261025-v465';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

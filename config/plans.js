@@ -407,13 +407,21 @@ const PLANS_US = {
   },
 };
 
-// (Addendum 2026-10-22, consolidación M96) UK y Canadá — cobro SOLO Stripe:
-// la website EN los ofrece con la misma escalera de roles que US.
-// GBP \u00a3159/239/319 · CAD C$279/409/549 (2026-10-24: misma proporción por tramo de la escalera anterior — GB ≈0,79× el USD de su tramo, CA ≈1,39/1,36/1,38× — redondeada al precio cerrado en 9, como los viejos 79/149/229 y 139/259/399). Sin ancla de precio en esta pasada.
+// (Tablero Bambooty 2026-10-25, «dale a todo») UK y Eurozona — cobro SOLO Stripe.
+// GBP £149,99/£224,99/£299,99 y EUR €179,99/€269,99/€359,99: espejos APROBADOS
+// por el tablero. El espejo GB anterior MUERE: este espejo lo reemplaza
+// en todas las superficies. CA no se toca (sigue C$279/409/549, solo API).
 const PLANS_GB = {
-  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 159, currency: 'GBP' },
-  pro: { ...PLANS_US.pro, id: 'pro', price: 239, currency: 'GBP' },
-  total: { ...PLANS_US.total, id: 'total', price: 319, currency: 'GBP' },
+  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 149.99, currency: 'GBP' },
+  pro: { ...PLANS_US.pro, id: 'pro', price: 224.99, currency: 'GBP' },
+  total: { ...PLANS_US.total, id: 'total', price: 299.99, currency: 'GBP' },
+};
+
+// Eurozona — espejo aprobado, riel Stripe. Misma escalera de roles que US.
+const PLANS_EU = {
+  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 179.99, currency: 'EUR' },
+  pro: { ...PLANS_US.pro, id: 'pro', price: 269.99, currency: 'EUR' },
+  total: { ...PLANS_US.total, id: 'total', price: 359.99, currency: 'EUR' },
 };
 
 const PLANS_CA = {
@@ -432,8 +440,49 @@ function getPlans(country) {
   if (country === 'UY') return PLANS_UY;
   if (country === 'US') return PLANS_US;
   if (country === 'GB') return PLANS_GB;
+  if (country === 'EU') return PLANS_EU;
   if (country === 'CA') return PLANS_CA;
+  // Latam MP sin precio local publicado (tablero 2026-10-25): la escalera que
+  // se MUESTRA es la USD base real, rotulada USD, sin cifra local inventada.
+  // El riel es Mercado Pago (ver COUNTRY_META.rail). Cuando el tablero pase
+  // la tabla de anclas, estos países ganan su PLANS propio.
+  if (['BR', 'MX', 'CL', 'CO', 'PE'].includes(country)) return PLANS_US;
   return PLANS_AR;
+}
+
+// Meta del selector de país (única fuente: la API la sirve y los clientes la
+// pintan). Orden = el de la familia (Venty/Atenty/Gesty, mismo «dale a todo»).
+// pending = sin precio local publicado: se muestra USD base + nota, jamás un
+// precio inventado. EC/VE NO están acá: no se publican hasta confirmar contra
+// fuente oficial de Mercado Pago.
+const SELECTOR_COUNTRIES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
+const COUNTRY_META = {
+  US: { flag: '\u{1F1FA}\u{1F1F8}', name_es: 'Estados Unidos', name_en: 'United States', currency: 'USD', rail: 'stripe', pending: false,
+        note_es: 'Precios en USD.', note_en: 'Prices in USD.' },
+  AR: { flag: '\u{1F1E6}\u{1F1F7}', name_es: 'Argentina', name_en: 'Argentina', currency: 'ARS', rail: 'mercadopago', pending: false,
+        note_es: 'Precios en pesos argentinos. Pagás con Mercado Pago.', note_en: 'Prices in Argentine pesos. Pay with Mercado Pago.' },
+  BR: { flag: '\u{1F1E7}\u{1F1F7}', name_es: 'Brasil', name_en: 'Brazil', currency: 'BRL', rail: 'mercadopago', pending: true,
+        note_es: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.', note_en: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  MX: { flag: '\u{1F1F2}\u{1F1FD}', name_es: 'México', name_en: 'Mexico', currency: 'MXN', rail: 'mercadopago', pending: true,
+        note_es: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.', note_en: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  CL: { flag: '\u{1F1E8}\u{1F1F1}', name_es: 'Chile', name_en: 'Chile', currency: 'CLP', rail: 'mercadopago', pending: true,
+        note_es: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.', note_en: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  CO: { flag: '\u{1F1E8}\u{1F1F4}', name_es: 'Colombia', name_en: 'Colombia', currency: 'COP', rail: 'mercadopago', pending: true,
+        note_es: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.', note_en: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  PE: { flag: '\u{1F1F5}\u{1F1EA}', name_es: 'Perú', name_en: 'Peru', currency: 'PEN', rail: 'mercadopago', pending: true,
+        note_es: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.', note_en: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  UY: { flag: '\u{1F1FA}\u{1F1FE}', name_es: 'Uruguay', name_en: 'Uruguay', currency: 'UYU', rail: 'mercadopago', pending: false,
+        note_es: 'Precios en pesos uruguayos. Pagás con Mercado Pago.', note_en: 'Prices in Uruguayan pesos. Pay with Mercado Pago.' },
+  GB: { flag: '\u{1F1EC}\u{1F1E7}', name_es: 'Reino Unido', name_en: 'United Kingdom', currency: 'GBP', rail: 'stripe', pending: false,
+        note_es: 'Precios en libras. Pagás con Stripe.', note_en: 'Prices in pounds. Pay with Stripe.' },
+  EU: { flag: '\u{1F1EA}\u{1F1FA}', name_es: 'Eurozona', name_en: 'Eurozone', currency: 'EUR', rail: 'stripe', pending: false,
+        note_es: 'Precios en euros. Pagás con Stripe.', note_en: 'Prices in euros. Pay with Stripe.' },
+  CA: { flag: '\u{1F1E8}\u{1F1E6}', name_es: 'Canadá', name_en: 'Canada', currency: 'CAD', rail: 'stripe', pending: false,
+        note_es: 'Precios en dólares canadienses. Pagás con Stripe.', note_en: 'Prices in Canadian dollars. Pay with Stripe.' },
+};
+function getRail(country) {
+  const m = COUNTRY_META[country];
+  return m ? m.rail : 'mercadopago';
 }
 
 function getPlan(id, country) {
@@ -460,7 +509,10 @@ function formatPrice(plan) {
   if ((plan.currency || 'ARS') === 'CAD') {
     return 'C$' + Number(plan.price).toLocaleString('en-CA');
   }
+  if ((plan.currency || 'ARS') === 'EUR') {
+    return '\u20ac' + Number(plan.price).toLocaleString('en-IE');
+  }
   return '$' + Number(plan.price).toLocaleString('es-AR');
 }
 
-module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLANS_GB, PLANS_CA, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice };
+module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLANS_GB, PLANS_EU, PLANS_CA, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice, SELECTOR_COUNTRIES, COUNTRY_META, getRail };

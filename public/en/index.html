@@ -77,7 +77,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261029">
+<link rel="stylesheet" href="/styles.css?v=20261034">
 <link rel="stylesheet" href="/gj.css?v=3">
 <script type="application/ld+json">
 {
@@ -979,7 +979,19 @@ window.addEventListener('scroll',ask,{passive:true});window.addEventListener('re
     <h2>Pick your plan</h2>
     <p class="lede">Try it free for 3 days first. If you like your week, pick your plan here.</p>
     <div class="lp-offer"><b>The offer is simple:</b> you try 3 days free, you see your week ready before paying a cent and, if you don't love it, you pay nothing. No card, no contract, no fine print.</div>
-    <div class="country-toggle"><button class="on" type="button">🇺🇸 United States · USD</button></div>
+    <div class="country-toggle">
+      <button class="on" type="button" data-country="US" onclick="switchPlansCountry('US')" title="United States" aria-label="United States" aria-pressed="true">🇺🇸</button>
+      <button type="button" data-country="AR" onclick="switchPlansCountry('AR')" title="Argentina" aria-label="Argentina" aria-pressed="false">🇦🇷</button>
+      <button type="button" data-country="BR" onclick="switchPlansCountry('BR')" title="Brazil" aria-label="Brazil" aria-pressed="false">🇧🇷</button>
+      <button type="button" data-country="MX" onclick="switchPlansCountry('MX')" title="Mexico" aria-label="Mexico" aria-pressed="false">🇲🇽</button>
+      <button type="button" data-country="CL" onclick="switchPlansCountry('CL')" title="Chile" aria-label="Chile" aria-pressed="false">🇨🇱</button>
+      <button type="button" data-country="CO" onclick="switchPlansCountry('CO')" title="Colombia" aria-label="Colombia" aria-pressed="false">🇨🇴</button>
+      <button type="button" data-country="PE" onclick="switchPlansCountry('PE')" title="Peru" aria-label="Peru" aria-pressed="false">🇵🇪</button>
+      <button type="button" data-country="UY" onclick="switchPlansCountry('UY')" title="Uruguay" aria-label="Uruguay" aria-pressed="false">🇺🇾</button>
+      <button type="button" data-country="GB" onclick="switchPlansCountry('GB')" title="United Kingdom" aria-label="United Kingdom" aria-pressed="false">🇬🇧</button>
+      <button type="button" data-country="EU" onclick="switchPlansCountry('EU')" title="Eurozone" aria-label="Eurozone" aria-pressed="false">🇪🇺</button>
+    </div>
+    <p class="lp-pais-nota" id="plansCountryNote">Prices in USD.</p>
     <div class="anchor-line" id="anchorLine">A community manager costs <b>$1,500–$3,000+ a month</b>. Posty from <b>$199.99</b>.</div>
     <div class="plans-row" id="plansRow">
     <div class="price-card" data-plan-card="esencial">
@@ -1058,7 +1070,7 @@ window.addEventListener('scroll',ask,{passive:true});window.addEventListener('re
     <p class="lede">Scheduling apps give you more work. Community managers run $2,000+ a month. Agencies sell you meetings. I hand you the finished week.</p>
     <div class="cmp-scroll"><div class="cmp-table cmp4" role="table" aria-label="Comparison: doing it yourself, a freelance community manager, an agency, or Posty">
       <div class="cmp-row cmp-head" role="row"><div></div><div>Do it yourself</div><div>Freelance CM</div><div>Agency</div><div class="win">Posty</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Price per month</div><div>$0 out of pocket — but it's your time</div><div>$1,500–$3,000+ *</div><div>More than a freelance CM *</div><div class="win">From $199.99</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Price per month</div><div>$0 out of pocket — but it's your time</div><div>$1,500–$3,000+ *</div><div>More than a freelance CM *</div><div class="win cmp-posty-from">From $199.99</div></div>
       <div class="cmp-row" role="row"><div class="crit">What's included</div><div>Whatever you get around to</div><div>Posts; reels and stories by arrangement</div><div>Posts and strategy</div><div class="win">7 posts a week on every plan; reels and stories by plan</div></div>
       <div class="cmp-row" role="row"><div class="crit">Your week ready in</div><div>Hours, every week</div><div>Days</div><div>1 to 2 weeks</div><div class="win">1 minute</div></div>
       <div class="cmp-row" role="row"><div class="crit">Meetings</div><div>—</div><div>Coordination and approvals</div><div>Several per month</div><div class="win">Zero</div></div>
@@ -1069,7 +1081,7 @@ window.addEventListener('scroll',ask,{passive:true});window.addEventListener('re
       <div class="cmp-row" role="row"><div class="crit">Contract</div><div>—</div><div>Month to month, informal</div><div>Locked in for 3 to 6 months</div><div class="win">Monthly, cancel anytime</div></div>
     </div></div>
     <p class="cmp-note">* Market reference prices for an equivalent service. Posty's price is the real one: it's the plans right below.</p>
-    <p class="unico-line">A community manager costs <b>$1,500–$3,000+ a month</b>. Posty from <b>$199.99</b>.</p>
+    <p class="unico-line" id="unicoLine">A community manager costs <b>$1,500–$3,000+ a month</b>. Posty from <b>$199.99</b>.</p>
     <p class="lp-trust">🔒 We publish through Meta's official API · You sign in with the official login, without giving us your password · You can pause any post before it goes out</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/en/prueba">Try it free</a></div>
   </div></div>
@@ -1760,7 +1772,9 @@ function lpCalcUpdate() {
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
   const horasMes = Math.round(h * 4.33);
   const costo = h * 4.33 * LP_CALC_RATE;
-  out.innerHTML = `Your Instagram costs you today ≈ <b>$${fmt(costo)}</b> per month (<b>${horasMes} hours</b> of your time).<br>With Posty: <b>$199.99 per month</b> (≈ $6.67 per day) and <b>0 hours of your time</b> — you get <b>${horasMes} hours a month</b> back for your business.`;
+  var postyBase = (typeof LP_CALC_BASE !== 'undefined' && LP_CALC_BASE) ? LP_CALC_BASE : '$199.99';
+  var postyDia = (typeof LP_CALC_PERDAY !== 'undefined' && LP_CALC_PERDAY) ? LP_CALC_PERDAY : '$6.67';
+  out.innerHTML = `Your Instagram costs you today ≈ <b>$${fmt(costo)}</b> per month (<b>${horasMes} hours</b> of your time).<br>With Posty: <b>${postyBase} per month</b> (≈ ${postyDia} per day) and <b>0 hours of your time</b> — you get <b>${horasMes} hours a month</b> back for your business.`;
 }
 function lpCalcRate(btn) {
   LP_CALC_RATE = parseInt(btn.getAttribute('data-rate'), 10) || 25;
@@ -1881,6 +1895,91 @@ document.addEventListener('click', function (e) {
   if (btn) { btn.setAttribute('aria-expanded', open ? 'true' : 'false'); btn.firstChild.textContent = open ? 'Show less ' : 'See everything it does for you '; }
   if (open) { try { trk('plan_detail_open', { plan: card.getAttribute('data-plan-card') || '' }); } catch (err) {} }
 });
+</script>
+<script>
+/* (pais-selector) Selector de país + espejos — misma lista, orden y notas que
+   la familia (Venty/Atenty/Gesty). EC/VE no están: no se publican hasta
+   confirmar contra fuente oficial de Mercado Pago. El país persiste en
+   localStorage ('posta-pais') y viaja a /en/prueba como ?pais=. */
+var PZ_PAISES_EN = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
+var PZ_META_EN = {
+  US: { nota: 'Prices in USD.' },
+  AR: { nota: 'Prices in Argentine pesos. Pay with Mercado Pago.' },
+  BR: { nota: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  MX: { nota: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  CL: { nota: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  CO: { nota: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  PE: { nota: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  UY: { nota: 'Prices in Uruguayan pesos. Pay with Mercado Pago.' },
+  GB: { nota: 'Prices in pounds. Pay with Stripe.' },
+  EU: { nota: 'Prices in euros. Pay with Stripe.' }
+};
+var LP_CALC_BASE = '$199.99';
+var LP_CALC_PERDAY = '$6.67';
+function pzFmtEN(p) {
+  var sym = { ARS: '$', UYU: '$U ', USD: '$', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[p.currency] || '$';
+  var dec = (p.currency === 'ARS' || p.currency === 'UYU') ? 0 : 2;
+  return sym + Number(p.price).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function pzDiaEN(p) {
+  var sym = { ARS: '$', UYU: '$U ', USD: '$', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[p.currency] || '$';
+  var dec = (p.currency === 'ARS' || p.currency === 'UYU') ? 0 : 2;
+  return sym + (Number(p.price) / 30).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function pzApplyEN(c, cfg) {
+  document.querySelectorAll('.country-toggle button').forEach(function (b) {
+    var on = b.getAttribute('data-country') === c;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  var nota = document.getElementById('plansCountryNote');
+  if (nota && PZ_META_EN[c]) nota.textContent = PZ_META_EN[c].nota;
+  (cfg.plans || []).forEach(function (p) {
+    var card = document.querySelector('[data-plan-card="' + p.id + '"]');
+    if (!card) return;
+    var pr = card.querySelector('.price');
+    if (pr) pr.innerHTML = pzFmtEN(p) + '<small>/mo</small>';
+    var pd = card.querySelector('.pz-perday');
+    if (pd) pd.textContent = '\u2248 ' + pzDiaEN(p) + ' per day';
+  });
+  var esc = (cfg.plans || []).find(function (p) { return p.id === 'esencial'; }) || (cfg.plans || [])[0];
+  if (esc) {
+    var base = pzFmtEN(esc);
+    // El ancla con salario de CM solo existe en EN para US; en el resto, solo
+    // «Posty from…» (jamás una cifra de CM inventada en otro país).
+    var ancla = c === 'US'
+      ? 'A community manager costs <b>$1,500–$3,000+ a month</b>. Posty from <b>' + base + '</b>.'
+      : 'Posty from <b>' + base + '</b>.';
+    var a = document.getElementById('anchorLine');
+    if (a) a.innerHTML = ancla;
+    var u = document.getElementById('unicoLine');
+    if (u) u.innerHTML = ancla;
+    var cmp = document.querySelector('.cmp-posty-from');
+    if (cmp) cmp.textContent = 'From ' + base;
+    LP_CALC_BASE = base;
+    LP_CALC_PERDAY = pzDiaEN(esc);
+    if (typeof lpCalcUpdate === 'function') lpCalcUpdate();
+  }
+  var suf = c === 'US' ? '' : ('?pais=' + c);
+  document.querySelectorAll('a[href="/en/prueba"], a[href^="/en/prueba?"]').forEach(function (a) {
+    a.setAttribute('href', '/en/prueba' + suf);
+  });
+}
+function switchPlansCountry(c) {
+  if (PZ_PAISES_EN.indexOf(c) < 0) c = 'US';
+  try { localStorage.setItem('posta-pais', c); } catch (e) {}
+  fetch('/api/billing/plans?country=' + c).then(function (r) { return r.json(); }).then(function (cfg) {
+    pzApplyEN(c, cfg);
+  }).catch(function () {});
+}
+(function () {
+  var init = 'US';
+  try {
+    var g = localStorage.getItem('posta-pais');
+    if (g && PZ_PAISES_EN.indexOf(g) >= 0) init = g;
+  } catch (e) {}
+  if (init !== 'US') switchPlansCountry(init);
+})();
 </script>
 <script src="/showcase-lp.js?v=1" defer></script>
 <script src="/gj.js?v=3" defer></script>

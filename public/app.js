@@ -592,7 +592,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261025-v436'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261025-v465'; // (pais-selector) bump: chunk-ajustes cambia; el ?v= viejo congelaba el chunk
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -813,12 +813,60 @@ const catSel = v => catKnown(v) ? v : 'otro';
 const catCustom = v => (catKnown(v) || v === 'otro' || !v) ? '' : v;
 
 /* ---------- LANDING ---------- */
+// (Tablero 2026-10-25) Selector de país — misma lista, orden y notas que la
+// familia (Venty/Atenty/Gesty). EC/VE no están: no se publican hasta confirmar
+// contra fuente oficial de Mercado Pago. El país elegido persiste en
+// localStorage ('posta-pais') y viaja a /prueba como ?pais= para que el
+// paywall cobre con el mismo país y riel.
+const PZ_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
+const PZ_PAIS_META = {
+  US: { flag: '\u{1F1FA}\u{1F1F8}', nombre: 'Estados Unidos', nota: 'Precios en USD.' },
+  AR: { flag: '\u{1F1E6}\u{1F1F7}', nombre: 'Argentina', nota: 'Precios en pesos argentinos. Pagás con Mercado Pago.' },
+  BR: { flag: '\u{1F1E7}\u{1F1F7}', nombre: 'Brasil', nota: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.' },
+  MX: { flag: '\u{1F1F2}\u{1F1FD}', nombre: 'México', nota: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.' },
+  CL: { flag: '\u{1F1E8}\u{1F1F1}', nombre: 'Chile', nota: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.' },
+  CO: { flag: '\u{1F1E8}\u{1F1F4}', nombre: 'Colombia', nota: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.' },
+  PE: { flag: '\u{1F1F5}\u{1F1EA}', nombre: 'Perú', nota: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.' },
+  UY: { flag: '\u{1F1FA}\u{1F1FE}', nombre: 'Uruguay', nota: 'Precios en pesos uruguayos. Pagás con Mercado Pago.' },
+  GB: { flag: '\u{1F1EC}\u{1F1E7}', nombre: 'Reino Unido', nota: 'Precios en libras. Pagás con Stripe.' },
+  EU: { flag: '\u{1F1EA}\u{1F1FA}', nombre: 'Eurozona', nota: 'Precios en euros. Pagás con Stripe.' },
+};
+function pzPaisGuardado() {
+  try {
+    const g = localStorage.getItem('posta-pais');
+    if (g && PZ_PAISES.includes(g)) return g;
+  } catch (e) {}
+  return 'AR';
+}
+function pzPaisGuardar(c) {
+  try { localStorage.setItem('posta-pais', c); } catch (e) {}
+}
+// Precio con convención española (como la familia): $199.999 · $U 4.990 ·
+// USD 199,99 · £149,99 · €179,99. El label del servidor queda como respaldo.
+function pzFmtPrecioES(p) {
+  const sym = { ARS: '$', UYU: '$U ', USD: 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[p.currency] || '$';
+  const dec = (p.currency === 'ARS' || p.currency === 'UYU') ? 0 : 2;
+  return sym + Number(p.price).toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function pzSimbolo(p) {
+  return { ARS: '$', UYU: '$U ', USD: 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[p.currency] || '$';
+}
+// Los CTA a /prueba llevan el país elegido (?pais=) para que la prueba y el
+// paywall sigan el mismo país. AR no lleva parámetro (URLs limpias, como siempre).
+function pzPaisPruebaLinks() {
+  const c = (typeof PLANS_COUNTRY !== 'undefined' && PLANS_COUNTRY) || pzPaisGuardado();
+  const suf = (c && c !== 'AR') ? ('?pais=' + c) : '';
+  document.querySelectorAll('a[href="/prueba"], a[href^="/prueba?"]').forEach((a) => {
+    a.setAttribute('href', '/prueba' + suf);
+  });
+}
 // Precio por día bajo cada plan (landing)
 function pzPerDayHTML(p) {
-  const per = Math.round(Number(p.price || 0) / 30);
-  if (!per) return '';
-  const sym = p.currency === 'UYU' ? '$U ' : '$';
-  return `<div class="pz-perday">≈ ${sym}${per.toLocaleString('es-AR')} por día</div>`;
+  const val = Number(p.price || 0) / 30;
+  if (!val) return '';
+  const dec = (p.currency === 'ARS' || p.currency === 'UYU') ? 0 : 2;
+  const txt = val.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  return `<div class="pz-perday">≈ ${pzSimbolo(p)}${txt} por día</div>`;
 }
 function planDetailHTML(p) {
   const lines = (p && p.detail) || [];
@@ -904,17 +952,32 @@ document.addEventListener('click', function (e) {
   if (href.length > 1 && href.charAt(1) !== '/') closeMobileMenu();
 });
 async function switchPlansCountry(c) {
-  PLANS_COUNTRY = (c === 'UY') ? 'UY' : 'AR';
+  PLANS_COUNTRY = PZ_PAISES.includes(c) ? c : 'AR';
+  pzPaisGuardar(PLANS_COUNTRY);
   document.querySelectorAll('.country-toggle button').forEach(b => b.classList.toggle('on', b.dataset.country === PLANS_COUNTRY));
+  const nota = document.getElementById('plansCountryNote');
+  if (nota && PZ_PAIS_META[PLANS_COUNTRY]) nota.textContent = PZ_PAIS_META[PLANS_COUNTRY].nota;
   try {
     const cfg = await api.get('/api/billing/plans?country=' + PLANS_COUNTRY);
     PLANS_CACHE = cfg;
+    const planes = (cfg.plans || []).map(pp => ({ ...pp, price_label: pzFmtPrecioES(pp) }));
     const row = document.getElementById('plansRow');
-    if (row) row.innerHTML = planCardsHTML(cfg.plans);
+    if (row) row.innerHTML = planCardsHTML(planes);
+    // El ancla se actualiza SIEMPRE: sin ancla aprobada para el país (GB/EU/
+    // latam), no se deja el ancla argentina vieja: solo «Posty arranca en…».
     const anchor = document.getElementById('anchorLine');
-    if (anchor && cfg.anchor) anchor.innerHTML = anchorHTML(cfg.anchor);
+    if (anchor) {
+      anchor.innerHTML = cfg.anchor ? anchorHTML(cfg.anchor) : ('Posty arranca en <b>' + (planes.find(pp => pp.id === 'esencial') ? planes.find(pp => pp.id === 'esencial').price_label : '') + '</b>.');
+    }
+    const unico = document.getElementById('unicoLine');
+    if (unico) {
+      unico.innerHTML = cfg.anchor
+        ? anchorHTML(cfg.anchor)
+        : ('Posty arranca en <b>' + (planes.find(pp => pp.id === 'esencial') ? planes.find(pp => pp.id === 'esencial').price_label : '') + '</b>.');
+    }
     /* v377: el comparador y la calculadora siguen al plan real del país elegido */
-    if (cfg.plans) lpCalcSetPlan(cfg.plans.find(p => p.id === 'esencial') || cfg.plans[0]);
+    if (planes.length) lpCalcSetPlan(planes.find(pp => pp.id === 'esencial') || planes[0]);
+    pzPaisPruebaLinks();
   } catch (e) { /* mantiene los planes actuales */ }
 }
 
@@ -1449,6 +1512,7 @@ function lpGoTrial(e) {
 }
 let LP_LIVE_TIMER = null, LP_LIVE_IO = null;
 function lpInitHero() {
+  pzPaisPruebaLinks();
   lpInitCarousel();
   lpInitWall();
   lpShowcaseInit(); // 📣 v370: «Historias reales» — solo si hay casos activos
@@ -1857,11 +1921,17 @@ function lpCalcPlanMoney(n) { return LP_CALC_PLAN.sym + Math.round(n).toLocaleSt
 function lpCalcSetPlan(p) {
   if (!p || !p.price_label) return;
   LP_ESENCIAL_OBJ = p;
-  LP_CALC_PLAN = { label: p.price_label, perDay: Math.round(Number(p.price || 0) / 30), sym: p.currency === 'UYU' ? '$U ' : '$' };
-  const uy = p.currency === 'UYU';
-  LP_CALC_CFG = uy ? { sym: '$U ', min: 100, max: 2500, step: 50 } : { sym: '$', min: 1000, max: 30000, step: 250 };
-  const presets = uy ? [200, 350, 600] : [3000, 5000, 10000];
-  if (LP_CALC_RATE < LP_CALC_CFG.min || LP_CALC_RATE > LP_CALC_CFG.max) LP_CALC_RATE = uy ? 350 : 5000;
+  LP_CALC_PLAN = { label: p.price_label, perDay: Math.round(Number(p.price || 0) / 30), sym: pzSimbolo(p) };
+  const cur = p.currency || 'ARS';
+  if (cur === 'UYU') {
+    LP_CALC_CFG = { sym: '$U ', min: 100, max: 2500, step: 50 };
+  } else if (cur === 'ARS') {
+    LP_CALC_CFG = { sym: '$', min: 1000, max: 30000, step: 250 };
+  } else {
+    LP_CALC_CFG = { sym: pzSimbolo(p), min: 5, max: 200, step: 5 };
+  }
+  const presets = cur === 'UYU' ? [200, 350, 600] : cur === 'ARS' ? [3000, 5000, 10000] : [10, 25, 50];
+  if (LP_CALC_RATE < LP_CALC_CFG.min || LP_CALC_RATE > LP_CALC_CFG.max) LP_CALC_RATE = cur === 'UYU' ? 350 : cur === 'ARS' ? 5000 : 25;
   const r = document.getElementById('lpCalcR');
   if (r) { r.min = LP_CALC_CFG.min; r.max = LP_CALC_CFG.max; r.step = LP_CALC_CFG.step; r.value = LP_CALC_RATE; }
   document.querySelectorAll('.lp-crate').forEach((b, i) => {
@@ -2634,26 +2704,27 @@ function lpCapSectionsHTML() {
  * del tour de capacidades, justo antes de planes. Espeja la grilla de
  * /prueba ("Todo lo que Posty hace por vos"). */
 function landingView(cfg) {
-  const plans = (cfg && cfg.plans) || [];
+  const plansRaw = (cfg && cfg.plans) || [];
+  const plans = plansRaw.map(pp => ({ ...pp, price_label: pzFmtPrecioES(pp) }));
   const country = (cfg && cfg.country) || 'AR';
   PLANS_COUNTRY = country;
   const planCards = planCardsHTML(plans);
   /* v377: comparador honesto + calculadora — el precio de Posty sale del plan real */
   const lpEsencial = plans.find(p => p.id === 'esencial') || plans[0] || null;
-  const lpUy = country === 'UY';
-  const lpChips = lpUy ? [200, 350, 600] : [3000, 5000, 10000];
-  const lpDefRate = lpUy ? 350 : 5000;
-  const lpSym = lpUy ? '$U ' : '$';
+  const lpCur = (lpEsencial && lpEsencial.currency) || 'ARS';
+  const lpChips = lpCur === 'UYU' ? [200, 350, 600] : lpCur === 'ARS' ? [3000, 5000, 10000] : [10, 25, 50];
+  const lpDefRate = lpCur === 'UYU' ? 350 : lpCur === 'ARS' ? 5000 : 25;
+  const lpSym = lpEsencial ? pzSimbolo(lpEsencial) : '$';
   const lpFmt = (n) => lpSym + Math.round(n).toLocaleString('es-AR');
   const lpDefCost = Math.round(6 * 4.33 * lpDefRate);
   const lpHorasMes = Math.round(6 * 4.33);
   const lpPlanLabel = (lpEsencial && lpEsencial.price_label) || '$199.999';
   const lpPerDay = lpEsencial ? Math.round(Number(lpEsencial.price || 0) / 30) : 6667;
-  const lpPerDaySym = lpEsencial && lpEsencial.currency === 'UYU' ? '$U ' : '$';
+  const lpPerDaySym = lpEsencial ? pzSimbolo(lpEsencial) : '$';
   LP_CALC_RATE = lpDefRate;
   LP_ESENCIAL_OBJ = lpEsencial;
   LP_CALC_PLAN = { label: lpPlanLabel, perDay: lpPerDay, sym: lpPerDaySym };
-  LP_CALC_CFG = lpUy ? { sym: '$U ', min: 100, max: 2500, step: 50 } : { sym: '$', min: 1000, max: 30000, step: 250 };
+  LP_CALC_CFG = lpCur === 'UYU' ? { sym: '$U ', min: 100, max: 2500, step: 50 } : lpCur === 'ARS' ? { sym: '$', min: 1000, max: 30000, step: 250 } : { sym: lpSym, min: 5, max: 200, step: 5 };
   return `
   ${pzRefBandHTML()}
   <div class="nav nav-landing"><div class="wrap">
@@ -2970,13 +3041,13 @@ function landingView(cfg) {
     <p class="lede">Primero probá gratis 3 días. Si te gusta tu semana, elegís tu plan acá.</p>
     <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar un peso y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
     <div class="country-toggle">
-      <button class="${country === 'AR' ? 'on' : ''}" data-country="AR" onclick="switchPlansCountry('AR')">🇦🇷 Argentina</button>
-      <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
+      ${PZ_PAISES.map(c => `<button type="button" class="${country === c ? 'on' : ''}" data-country="${c}" onclick="switchPlansCountry('${c}')" title="${PZ_PAIS_META[c].nombre}" aria-label="${PZ_PAIS_META[c].nombre}" aria-pressed="${country === c ? 'true' : 'false'}">${PZ_PAIS_META[c].flag}</button>`).join('')}
     </div>
+    <p class="lp-pais-nota" id="plansCountryNote">${(PZ_PAIS_META[country] && PZ_PAIS_META[country].nota) || ''}</p>
     <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
-    <p class="lp-plans-note">Precios en pesos · Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
+    <p class="lp-plans-note">Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
     <p class="lp-plans-note">Si tu primera semana no te convence, te la rehacemos entera, gratis.</p>
     <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque los planes suban.</p>
 
@@ -3006,7 +3077,7 @@ function landingView(cfg) {
       <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>—</div><div>Mes a mes, informal</div><div>3 a 6 meses</div><div class="win">Mensual, cancelás cuando querés</div></div>
     </div></div>
     <p class="cmp-note">* Precios de referencia de mercado para un servicio equivalente. El precio de Posty es el real: el de los planes de acá abajo.</p>
-    <p class="unico-line">Un community manager cuesta <b>desde $1.000.000 por mes</b>. Posty arranca en <b>$199.999</b>.</p>
+    <p class="unico-line" id="unicoLine">Un community manager cuesta <b>desde $1.000.000 por mes</b>. Posty arranca en <b>$199.999</b>.</p>
     <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Podés frenar cualquier posteo antes de que salga</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
@@ -12361,7 +12432,7 @@ async function render() {
   // Anclas dentro de la landing (#como-funciona, #incluye, #planes, #faq): no son rutas de la app
   if (!path.startsWith('#/')) {
     if (!LANDING_ON) {
-      PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
+      PLANS_CACHE = await api.get('/api/billing/plans?country=' + pzPaisGuardado()).catch(() => null);
       if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = landingView(PLANS_CACHE);
       LANDING_ON = true;
@@ -12536,7 +12607,7 @@ async function render() {
     // Visitante no logueado: la landing pública no cambia.
     await refreshSession();
     if (ME) { postAuthLanding(); return; }
-    PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
+    PLANS_CACHE = await api.get('/api/billing/plans?country=' + pzPaisGuardado()).catch(() => null);
     if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;

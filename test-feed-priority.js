@@ -338,10 +338,10 @@ ok(!appJs.includes('Estás hablando de este posteo') && !appJs.includes("You're 
 ok(appJs.includes('anchor_post_id') && appJs.includes('HF_CHAT_ANCHOR.id'), 'chat principal intacto: el envío sigue mandando anchor_post_id desde HF_CHAT_ANCHOR');
 
 console.log('— A: index.html y CHUNK_V');
-ok(indexHtml.includes('/app.js?v=294'), 'index.html: app.js bumpeado a ?v=292 (v462)');
-ok(!indexHtml.includes('/app.js?v=293'), 'index.html: sin ?v=293 residual');
-ok(indexHtml.includes('/styles.css?v=20261032'), 'index.html: styles.css bumpeado a ?v=20261031 (v462)');
-ok(appJs.includes("const CHUNK_V = '20261025-v436';"), 'app.js: CHUNK_V bumpeado al build v436');
+ok(indexHtml.includes('/app.js?v=296'), 'index.html: app.js bumpeado a ?v=292 (v462)');
+ok(!indexHtml.includes('/app.js?v=295'), 'index.html: sin ?v=293 residual');
+ok(indexHtml.includes('/styles.css?v=20261034'), 'index.html: styles.css bumpeado a ?v=20261031 (v462)');
+ok(appJs.includes("const CHUNK_V = '20261025-v465';"), 'app.js: CHUNK_V bumpeado al build v436');
 
 /* ================= Parte B: comportamiento ================= */
 console.log('— B: chip IG (extraído, 2 estados × 2 idiomas)');
