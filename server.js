@@ -17025,6 +17025,66 @@ app.post('/api/gesty/conciliacion/matches/:id/deshacer', ...gestyConciliacionMW,
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// G-18 · DETECTOR DE HUECOS (tanda aprobada G-17…G-22)
+// El módulo vive en gesty-huecos.js; acá solo se monta la API
+// detrás de requireAuth + gating de pack + capacidad
+// «comprobantes» (los huecos viven sobre el motor de papeles).
+// Tres detectores con una sola forma de salida (la del acople
+// tipado de G-15): correlatividad de facturas propias (número
+// faltante = hueco con el rango exacto; la anulada con motivo
+// es hueco explicado, no alerta), proveedor habitual que no
+// facturó en su ciclo (base mínima 3 comprobantes; tolerancia
+// max(7 días, 25% del ciclo)) y papeles mensuales esperados del
+// fundamento (solo datos estructurados; solo períodos
+// cerrados). Nada de este build envía nada: su salida es el
+// faltante para el dueño y para el cierre. La vista
+// /faltantes junta los huecos con los del cierre (G-06) y los
+// pedidos del contador (G-15) sin tocar esos módulos.
+// =====================================================================
+const gestyHuecos = require('./gesty-huecos');
+
+const gestyHuecosMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'comprobantes')];
+
+app.get('/api/gesty/huecos/resumen', ...gestyHuecosMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyHuecos.resumenHuecos(db, req.session.userId, { hoy: req.query.hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/huecos/faltantes', ...gestyHuecosMW, (req, res) => {
+  try {
+    const periodo = req.query.periodo || undefined;
+    res.json({ ok: true, ...gestyHuecos.faltantesDelPeriodo(db, req.session.userId, periodo) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/huecos', ...gestyHuecosMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyHuecos.listHuecos(db, req.session.userId, {
+      periodo: q.periodo || undefined, estado: q.estado || undefined, tipo: q.tipo || undefined,
+      limit: q.limit, offset: q.offset,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/huecos/escanear', ...gestyHuecosMW, express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = gestyHuecos.escanearHuecos(db, req.session.userId, { hoy: b.hoy, periodo: b.periodo });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/huecos/:id/explicar', ...gestyHuecosMW, express.json(), (req, res) => {
+  try {
+    const hueco = gestyHuecos.explicarHueco(db, req.session.userId, Number(req.params.id), { nota: (req.body || {}).nota });
+    res.json({ ok: true, hueco });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/huecos/:id/vincular', ...gestyHuecosMW, express.json(), (req, res) => {
+  try {
+    const hueco = gestyHuecos.vincularPapel(db, req.session.userId, Number(req.params.id), { comprobante_id: (req.body || {}).comprobante_id });
+    res.json({ ok: true, hueco });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -20751,7 +20811,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v421';
+const BUILD_ID = '20261024-v422';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
