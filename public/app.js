@@ -2630,9 +2630,9 @@ function landingView(cfg) {
          textos aprobados del módulo (el mismo de /prueba v341). -->
     <div class="founder-card mini" id="homeFounderCard" aria-label="El fundador de Posty">
       <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
-      <p class="fc-eye">FUNDADOR DE POSTY</p>
-      <h3>Soy Valentino, creé Posty.</h3>
-      <p class="fc-body">Analizamos tu Instagram y tu website para crear posteos de tu negocio de verdad: tus productos, tus colores, tu forma de hablar. Quiero ser tu community manager: vos solo monitoreás, y si algo no te gusta, lo ajustamos juntos.</p>
+      <h3 style="margin-top:18px">Valentino Caratini</h3>
+      <p class="fc-eye" style="margin-top:2px">Founder de Posty</p>
+      <p class="fc-body">Creé Posty porque identifiqué un problema en cada negocio que conozco: gente talentosa ocupándose de Instagram en vez de ocuparse de su negocio. Y pensé: esto no lo tiene que hacer el dueño. Lo tiene que hacer alguien por él. Ese alguien es Posty. Quiero ser tu community manager: vos solo monitoreás, y si algo no te gusta, lo ajustamos juntos.</p>
     </div>
   </div></div>
   ${lpAtencionHTML()}

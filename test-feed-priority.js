@@ -338,7 +338,7 @@ ok(!appJs.includes('Estás hablando de este posteo') && !appJs.includes("You're 
 ok(appJs.includes('anchor_post_id') && appJs.includes('HF_CHAT_ANCHOR.id'), 'chat principal intacto: el envío sigue mandando anchor_post_id desde HF_CHAT_ANCHOR');
 
 console.log('— A: index.html y CHUNK_V');
-ok(indexHtml.includes('/app.js?v=279'), 'index.html: app.js bumpeado a ?v=279 (v444)');
+ok(indexHtml.includes('/app.js?v=281'), 'index.html: app.js bumpeado a ?v=281 (v448)');
 ok(!indexHtml.includes('/app.js?v=278'), 'index.html: sin ?v=278 residual');
 ok(indexHtml.includes('/styles.css?v=20261025w'), 'index.html: styles.css bumpeado a ?v=20261025w (v444)');
 ok(appJs.includes("const CHUNK_V = '20261025-v436';"), 'app.js: CHUNK_V bumpeado al build v436');
