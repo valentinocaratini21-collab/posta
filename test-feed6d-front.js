@@ -1,4 +1,5 @@
 'use strict';
+global.pzIc = (name, px) => '<span class="pz-ic"></span>'; // stub: en producción pzIc es global de app.js (sistema de íconos 2026-10-25)
 /* test-feed6d-front.js — Tanda feed 6D · ítems 11–14 (frente): piezas
  * puras del bloque HOME_FEED real + el QR vendoreado real:
  *  · ítem 11: hfIgUrl/hfWaUrl y la lámina de compartir — con handle,
@@ -37,6 +38,7 @@ const sb = {
   pcTz: () => 'America/Argentina/Buenos_Aires',
   pcParseDate: (s0) => { const s = String(s0 || ''); if (!s) return null; let x = s.replace(' ', 'T'); if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(x)) x += 'Z'; const d = new Date(x); return isNaN(d) ? null : d; },
   ME: undefined,
+  pzIc: (name, px) => '<span class="pz-ic"></span>', // stub: en producción pzIc es global de app.js
 };
 vm.createContext(sb);
 // El QR vendoreado REAL, como lo carga el navegador a demanda.

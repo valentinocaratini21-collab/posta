@@ -24,21 +24,21 @@ function ajustesView() {
     : (q.get('estilos') || q.get('marca')) ? 'marca'
     : q.get('referidos') ? 'referidos'
     : 'negocio';
-  const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
-    : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
-  const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">✅ ¡TikTok conectado! Ya podés compartir tus posteos 🎵</div>`
-    : q.get('tiktok') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar TikTok')}</div>` : '';
-  const ggMsg = q.get('google') === 'ok' ? `<div class="okmsg">✅ ¡Google conectado! Ya podés responder tus reseñas ⭐</div>`
-    : q.get('google') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar Google')}</div>` : '';
-  const tnMsg = q.get('tn') === 'ok' ? `<div class="okmsg">✅ ¡Tiendanube conectada! Posty ya lee tu catálogo, tu stock y tus ventas 🛍️</div>`
-    : q.get('tn') === 'error' ? `<div class="err">❌ No pudimos conectar tu Tiendanube. Probá de nuevo desde Conexiones.</div>` : '';
-  const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago…</div>`
-    : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
+  const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} Instagram conectado: @${esc(p.ig_username)}</div>`
+    : q.get('ig') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
+  const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡TikTok conectado! Ya podés compartir tus posteos 🎵</div>`
+    : q.get('tiktok') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar TikTok')}</div>` : '';
+  const ggMsg = q.get('google') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡Google conectado! Ya podés responder tus reseñas ⭐</div>`
+    : q.get('google') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar Google')}</div>` : '';
+  const tnMsg = q.get('tn') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡Tiendanube conectada! Posty ya lee tu catálogo, tu stock y tus ventas 🛍️</div>`
+    : q.get('tn') === 'error' ? `<div class="err">${pzIc('reject', 15)} No pudimos conectar tu Tiendanube. Probá de nuevo desde Conexiones.</div>` : '';
+  const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">${pzIc('clock', 15)} Confirmando tu pago…</div>`
+    : q.get('plan') === 'pending' ? `<div class="okmsg">${pzIc('clock', 15)} Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
     // (ARMA TODO ítem 1) plan=error: aviso AMABLE arriba, sin rojo ni ❌ — no
     // hubo cargo y el reintento vive en Mi plan (esta misma vista scrollea
     // hasta ahí). El parámetro se limpia en bindSettings tras el scroll.
     : q.get('plan') === 'error' ? `<div id="planErrorMsg" style="margin:0 0 12px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.55">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "The payment wasn't completed — no charge was made. Whenever you're ready, we can try again from My plan." : 'El pago no se completó — no se hizo ningún cargo. Cuando quieras, lo intentamos de nuevo desde Mi plan.'}</div>` : '';
-  const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
+  const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">${pzIc('alert', 15)} <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
   const bc = brandColors();
   // Resúmenes de estado en el título de cada sección (v257): texto chico a la
   // derecha del título. Todo con guardas: si el dato no está, no se muestra nada.
@@ -62,7 +62,7 @@ function ajustesView() {
     <div id="igVerifyMsg" style="margin-top:10px"></div>`;
   const igKnowRow = `
     <div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-soft btn-sm" id="btnKnowUpdate">🔄 Actualizar lo que Posty sabe de mí</button>
+      <button class="btn btn-soft btn-sm" id="btnKnowUpdate">${pzIc('refresh', 18)} Actualizar lo que Posty sabe de mí</button>
       <span class="hint" id="knowMsg"></span>
     </div>
     <div class="hint" style="margin-top:6px">Relee tu Instagram completo: tu estilo visual, cómo escribís y tu brief — en ese orden.</div>`;
@@ -70,9 +70,9 @@ function ajustesView() {
     <div id="igMsg"></div>` : `
     <div class="ig-checklist">
       <div class="t">Tu Instagram está listo cuando:</div>
-      <div class="ig-check ${(p.ig_connected && p.ig_username) ? 'ok' : ''}">${(p.ig_connected && p.ig_username) ? '✅' : '⬜'} Cuenta profesional conectada</div>
-      <div class="ig-check ${!s.demo_mode ? 'ok' : ''}">${!s.demo_mode ? '✅' : '⬜'} Modo demo apagado</div>
-      <div class="ig-check ${IG_VERIFIED_AT ? 'ok' : ''}">${IG_VERIFIED_AT ? '✅' : '⬜'} Conexión verificada${IG_VERIFIED_AT ? ` <span style="color:var(--dim);font-weight:400">(${IG_VERIFIED_AT})</span>` : ''}</div>
+      <div class="ig-check ${(p.ig_connected && p.ig_username) ? 'ok' : ''}">${(p.ig_connected && p.ig_username) ? pzIc('checkCircle', 15) : pzIc('circleEmpty', 15)} Cuenta profesional conectada</div>
+      <div class="ig-check ${!s.demo_mode ? 'ok' : ''}">${!s.demo_mode ? pzIc('checkCircle', 15) : pzIc('circleEmpty', 15)} Modo demo apagado</div>
+      <div class="ig-check ${IG_VERIFIED_AT ? 'ok' : ''}">${IG_VERIFIED_AT ? pzIc('checkCircle', 15) : pzIc('circleEmpty', 15)} Conexión verificada${IG_VERIFIED_AT ? ` <span style="color:var(--dim);font-weight:400">(${IG_VERIFIED_AT})</span>` : ''}</div>
     </div>
     <div class="set-row"><div><div class="t">${s.demo_mode ? '🧪 Modo Demo' : '🚀 Modo Real'}</div>
       <div class="d">${s.demo_mode ? 'Posty <b>simula</b> las publicaciones: probás el flujo completo sin que salga nada real.' : 'Al conectar tu Instagram, Posty publica <b>de verdad</b>.'}</div></div>
@@ -99,15 +99,15 @@ function ajustesView() {
         <li>Elegí <b>Creator</b> o <b>Business</b> y completá los pasos</li>
       </ol>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <a class="btn btn-soft btn-sm" href="https://www.instagram.com/" target="_blank" rel="noopener">📲 Abrir Instagram</a>
-        <button class="btn btn-primary btn-sm" id="btnIgRetry">🔄 Ya la hice profesional — conectar</button>
+        <a class="btn btn-soft btn-sm" href="https://www.instagram.com/" target="_blank" rel="noopener">${pzIc('install', 18)} Abrir Instagram</a>
+        <button class="btn btn-primary btn-sm" id="btnIgRetry">${pzIc('refresh', 18)} Ya la hice profesional — conectar</button>
       </div>
       <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
     </div>
     <div id="igMsg"></div>`;
   return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu Instagram, tu plan y tu marca.</p></div></div>
   ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
-  <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3>${stBiz}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('store', 20)} Tu negocio</h3>${stBiz}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
   <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">🤖 Uso estos datos para crear tus posteos.</p>
     <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
     <div class="row2">
@@ -158,8 +158,8 @@ function ajustesView() {
       <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
       <span id="profDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
       <span style="flex:1"></span>
-      <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
-      <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
+      <button class="btn btn-ghost btn-sm" id="btnOnb">${pzIc('compass', 18)} Retomar guía inicial</button>
+      <button class="btn btn-ghost btn-sm" id="btnPreview">${pzIc('eye', 18)} Vista previa</button>
     </div>
     <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
       <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;margin-bottom:10px">🧠 Lo que Posty sabe de tu negocio <span class="lvl-pill" id="lvlPill" style="display:none"><span class="lvl-num" id="lvlPillNum">Nivel 1</span><span class="lvl-name" id="lvlPillName"></span></span></div>
@@ -177,7 +177,7 @@ function ajustesView() {
     <div id="gustosZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='conex' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔌 Conexiones</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='conex' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('plug', 20)} Conexiones</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">📸 Instagram</div>
     ${igBody}
     <div id="pzBioSealSlot"></div>
@@ -194,7 +194,7 @@ function ajustesView() {
     <div id="tnZone"><p class="hint">Cargando…</p></div>
     <div id="tnMsg"></div>
   </div></div>
-  <div class="card ajsec${openSec==='auto' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🚀 Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='auto' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('bolt', 20)} Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">⏸ Pausar todo</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">¿Vacaciones o una semana sin publicar? Frená todo con un toque: lo programado vuelve a borrador y nada sale hasta que reanudes. Tu semana y tus borradores quedan guardados, tal como están.</p>
     <div style="display:flex;align-items:center;gap:12px">
@@ -216,7 +216,7 @@ function ajustesView() {
       <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='avisos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔔 Avisos</h3><span class="ajsec-st" id="ajStAvisos"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='avisos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('bell', 20)} Avisos</h3><span class="ajsec-st" id="ajStAvisos"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:14px">Posty te avisa por notificación en tu celu — solo cuando importa, nada de ruido.</p>
     <div style="font-weight:800;margin-bottom:8px">Aviso antes de publicar</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Te aviso 30 minutos antes de que salga cada posteo automático, para que puedas frenarlo desde Schedule si querés.</p>
@@ -238,19 +238,19 @@ function ajustesView() {
     </div>
     <div class="hint" id="avisosPushHint" style="display:none;margin-top:14px">📱 Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar. Cuando Posty te pida permiso para mandar notificaciones, tocá <b>Permitir</b>.</div>
   </div></div>
-  <div class="card ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3>${stPlan}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('card', 20)} Mi plan</h3>${stPlan}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
     <p style="font-size:12.5px;color:var(--mut);margin-top:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</p>
     <div id="founderZone"></div>
   </div></div>
-  <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('palette', 20)} Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
     <div class="row2">
       <div class="field"><label>Logo</label>
         <div style="display:flex;gap:10px;align-items:center">
           ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:12.5px">Sin logo</span>'}
-          <button class="btn btn-ghost btn-sm" id="btnBrandLogo">📤 ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
-          ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">🗑️ Quitar</button>' : ''}
+          <button class="btn btn-ghost btn-sm" id="btnBrandLogo">${pzIc('share', 18)} ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
+          ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">' + pzIc('trash', 18) + ' Quitar</button>' : ''}
         </div>
         <input type="file" id="s_logofile" accept="image/*,.pdf,.docx" style="display:none">
         <div class="hint" style="font-size:10.5px;color:var(--dim);margin-top:6px">Aceptamos imagen, PDF o Word.</div>
@@ -296,13 +296,13 @@ function ajustesView() {
     <div class="hint" id="styleFavMsg" style="margin-top:10px"></div>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='pagina' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🌐 Tu página</h3>${stPage}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='pagina' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('globe', 20)} Tu página</h3>${stPage}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: una página linda con tu negocio y tus posteos ya publicados, con botón directo a tu WhatsApp. Cada persona que la visita conoce Posty 🐾</p>
     <div class="field"><label>Tu dirección</label>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-size:13.5px;color:var(--mut)">postycommunitymanager.com/p/</span>
         <input id="s_slug" value="${esc(p.page_slug || '')}" maxlength="40" style="flex:1;min-width:150px" autocomplete="off" autocapitalize="none">
-        <button class="btn btn-ghost btn-sm" id="btnCopyPage" type="button" style="flex:none">📋 Copiar link</button>
+        <button class="btn btn-ghost btn-sm" id="btnCopyPage" type="button" style="flex:none">${pzIc('copy', 18)} Copiar link</button>
       </div>
       <div class="hint">Solo letras minúsculas, números y guiones. Si la dirección está libre, queda para vos.</div></div>
     <div class="field"><label>💬 WhatsApp de tu negocio</label><input id="s_whats" value="${esc(p.whatsapp || '')}" placeholder="Ej.: 5491123456789" inputmode="tel" maxlength="20" autocomplete="off"><div class="hint">El número al que te escriben tus clientes, con código de país (Argentina: 54 9 + tu número). Aparece como botón grande en tu página.</div></div>
@@ -313,11 +313,11 @@ function ajustesView() {
       <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página →</a>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='semana' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔗 ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'}</h3><span class="ajsec-st" id="ajStSemana"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='semana' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('link', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'}</h3><span class="ajsec-st" id="ajStSemana"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Show your week to your partner or your family before it goes out: a read-only link with your posts just as they are on your home. No password, no access to your account — they only see the week.' : 'Mostrale tu semana a tu socio o a tu familia antes de que salga: un link de solo lectura con tus posteos tal cual están en tu home. Sin tu contraseña y sin entrar a tu cuenta: solo ven la semana.'}</p>
     <div id="weekShareZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
   </div></div>
-  ${IS_NATIVE ? '' : `<div class="card ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  ${IS_NATIVE ? '' : `<div class="card ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>`}
   <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
@@ -337,7 +337,7 @@ function ajustesView() {
     </div>
     <button class="btn btn-primary" id="btnSaveSettings">Guardar</button> <span id="setMsg"></span>
   </details>
-  <div class="card" style="margin-top:16px"><button class="btn btn-danger btn-block" id="btnLogoutAj">🚪 Salir</button></div>`;
+  <div class="card" style="margin-top:16px"><button class="btn btn-danger btn-block" id="btnLogoutAj">${pzIc('logout', 18)} Salir</button></div>`;
 }
 
 // Zona TikTok: estado desde /api/tiktok/status (configurado / conectado).
@@ -430,7 +430,7 @@ async function tnZoneLoad() {
   }
   if (st.broken) {
     zone.innerHTML = `<div class="set-row"><div><div class="t">🛍️ Tiendanube</div>
-      <div class="d">⚠️ La conexión con ${st.store_name ? esc(st.store_name) : 'tu tienda'} se cortó. Volvé a conectarla para que Posty siga leyendo tu stock y tus ventas.</div></div>
+      <div class="d">${pzIc('alert', 15)} La conexión con ${st.store_name ? esc(st.store_name) : 'tu tienda'} se cortó. Volvé a conectarla para que Posty siga leyendo tu stock y tus ventas.</div></div>
       <button class="btn btn-primary btn-sm" id="btnTnConn" style="flex:none">Reconectar</button></div>`;
     const bc = $('#btnTnConn');
     if (bc) bc.onclick = () => { location.href = '/api/connections/tiendanube/start'; };
@@ -485,7 +485,7 @@ async function gustosZoneLoad() {
       <div><div class="t">${esc(g.label || '')}</div>
       <div class="d">${esc(g.origen_label || '')}${g.ejemplo ? `<br><span style="color:var(--dim)">«${esc(String(g.ejemplo).slice(0, 90))}»</span>` : ''}</div>
       ${g.estado === 'pausa_regla' ? `<div class="hint" style="margin-top:4px;color:#B3402E">⏸ ${en ? 'paused by a quality rule' : 'en pausa por regla de calidad'}: ${esc(g.regla || '')} — ${en ? 'the rule wins' : 'la regla manda'}</div>` : ''}</div>
-      <button class="btn btn-danger btn-sm" style="flex:none" data-gusto-del="${esc(g.id)}">🗑 ${en ? 'Delete' : 'Borrar'}</button>
+      <button class="btn btn-danger btn-sm" style="flex:none" data-gusto-del="${esc(g.id)}">${pzIc('trash', 18)} ${en ? 'Delete' : 'Borrar'}</button>
     </div>`).join('');
   zone.querySelectorAll('[data-gusto-del]').forEach(b => {
     b.onclick = async () => {
@@ -514,7 +514,7 @@ async function styleGalleryLoad() {
       return `<div class="sgal-card${on ? ' on' : ''}">
         <img class="sgal-img" src="/api/style-sample?style=${encodeURIComponent(s.code)}" alt="Muestra del estilo ${esc(s.name)}" loading="lazy" onerror="this.style.opacity='0'">
         <div class="sgal-name">${esc(s.name)}</div>
-        <button type="button" class="sgal-btn" data-sgal-code="${esc(s.code)}">${on ? '⭐ Favorito' : '☆ Marcar favorito'}</button>
+        <button type="button" class="sgal-btn" data-sgal-code="${esc(s.code)}">${on ? (pzIc('starFill', 18) + ' Favorito') : (pzIc('star', 18) + ' Marcar favorito')}</button>
       </div>`;
     }).join('') + '</div>';
     box.querySelectorAll('[data-sgal-code]').forEach((b) => { b.onclick = () => toggle(b.getAttribute('data-sgal-code')); });
@@ -553,12 +553,12 @@ async function weekShareLoad() {
     zone.innerHTML = `
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input id="wsUrl" readonly value="${url}" style="flex:1;min-width:200px" onclick="this.select()">
-        <button class="btn btn-ghost btn-sm" id="wsCopy" type="button">📋 ${en ? 'Copy link' : 'Copiar link'}</button>
+        <button class="btn btn-ghost btn-sm" id="wsCopy" type="button">${pzIc('copy', 18)} ${en ? 'Copy link' : 'Copiar link'}</button>
       </div>
       <div class="hint">${en ? 'Anyone with the link sees your week (read-only). If you make a new one or turn it off, this one stops working right away.' : 'Quien tenga el link ve tu semana (solo lectura). Si generás uno nuevo o lo apagás, este deja de funcionar al instante.'}</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
-        <button class="btn btn-ghost btn-sm" id="wsRegen" type="button">🔄 ${en ? 'Make a new link' : 'Generar uno nuevo'}</button>
-        <button class="btn btn-ghost btn-sm" id="wsRevoke" type="button">🚫 ${en ? 'Turn off link' : 'Apagar link'}</button>
+        <button class="btn btn-ghost btn-sm" id="wsRegen" type="button">${pzIc('refresh', 18)} ${en ? 'Make a new link' : 'Generar uno nuevo'}</button>
+        <button class="btn btn-ghost btn-sm" id="wsRevoke" type="button">${pzIc('ban', 18)} ${en ? 'Turn off link' : 'Apagar link'}</button>
       </div>`;
     const cp = document.getElementById('wsCopy');
     if (cp) cp.onclick = async () => {
@@ -573,7 +573,7 @@ async function weekShareLoad() {
     if (stEl) stEl.textContent = '';
     zone.innerHTML = `
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" id="wsEnable" type="button">🔗 ${en ? 'Create my link' : 'Crear mi link'}</button>
+        <button class="btn btn-primary btn-sm" id="wsEnable" type="button">${pzIc('link', 18)} ${en ? 'Create my link' : 'Crear mi link'}</button>
       </div>
       <div class="hint">${en ? 'Your link shows your current week and updates as the week changes.' : 'Tu link muestra tu semana actual y se actualiza a medida que la semana cambia.'}</div>`;
     const en2 = document.getElementById('wsEnable');
@@ -607,7 +607,7 @@ function bindSettings() {
   if (btnCopyPage) btnCopyPage.onclick = async () => {
     const slug = (($('#s_slug') && $('#s_slug').value.trim()) || (PROFILE && PROFILE.page_slug) || '');
     const url = 'https://postycommunitymanager.com/p/' + slug.replace(/^\/+/, '');
-    try { await navigator.clipboard.writeText(url); btnCopyPage.textContent = '✅ ¡Copiado!'; setTimeout(() => { btnCopyPage.textContent = '📋 Copiar link'; }, 1800); }
+    try { await navigator.clipboard.writeText(url); btnCopyPage.innerHTML = pzIc('checkCircle', 15) + ' ¡Copiado!'; setTimeout(() => { btnCopyPage.innerHTML = pzIc('copy', 15) + ' Copiar link'; }, 1800); }
     catch (e) { window.prompt('Copiá tu link:', url); }
   };
   const btnSavePage = $('#btnSavePage');
@@ -646,7 +646,7 @@ function bindSettings() {
         const on = !!(r && r.enabled);
         __apOn = on; paintAjStAuto();
         btnAp.disabled = false;
-        btnAp.textContent = on ? '🟢 Activado' : '⚪ Activar';
+        btnAp.innerHTML = on ? (pzIc('checkCircle', 15) + ' Activado') : (pzIc('circleEmpty', 15) + ' Activar');
         btnAp.classList.toggle('btn-primary', !on);
         const demoOn = !!((typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.demo_mode));
         $('#autopilotStatus').textContent = on
@@ -667,7 +667,7 @@ function bindSettings() {
           const pnSt = $('#preNotifyStatus');
           if (((r && r.trust_level) || 0) >= 2) {
             btnPn.disabled = false;
-            btnPn.textContent = pnOn ? '🟢 Activado' : '⚪ Activar';
+            btnPn.innerHTML = pnOn ? (pzIc('checkCircle', 15) + ' Activado') : (pzIc('circleEmpty', 15) + ' Activar');
             btnPn.classList.toggle('btn-primary', !pnOn);
             if (pnSt) pnSt.textContent = pnOn ? 'Te aviso 30 min antes de cada publicación automática.' : 'Sin aviso: los posteos automáticos salen directo.';
             btnPn.onclick = async () => {
@@ -749,7 +749,7 @@ function bindSettings() {
       const paintT = (btn, st, on, onText, offText) => {
         if (!btn) return;
         btn.disabled = false;
-        btn.textContent = on ? '🟢 Activado' : '⚪ Activar';
+        btn.innerHTML = on ? (pzIc('checkCircle', 15) + ' Activado') : (pzIc('circleEmpty', 15) + ' Activar');
         btn.classList.toggle('btn-primary', !on);
         if (st) st.textContent = on ? onText : offText;
       };
@@ -795,7 +795,7 @@ function bindSettings() {
         const r = await api.get('/api/settings/auto-week');
         const on = !!(r && r.enabled);
         __awOn = on; paintAjStAuto();
-        btnAw.textContent = on ? '🟢 Activado' : '⚪ Activar';
+        btnAw.innerHTML = on ? (pzIc('checkCircle', 15) + ' Activado') : (pzIc('circleEmpty', 15) + ' Activar');
         btnAw.classList.toggle('btn-primary', !on);
         $('#autoWeekStatus').textContent = (__pausedAll && on)
           ? '⏸ En pausa: tu semana no se arma mientras esté todo pausado.'
@@ -1101,24 +1101,24 @@ function bindSettings() {
     if (st) webStatus = st;
     if (!webZone) return;
     if (!webStatus) {
-      webZone.innerHTML = srcRow('🌐', 'Tu web', '⚠️ no se pudo cargar', srcRetryBtn('btnWebRetry', 'Reintentar'));
+      webZone.innerHTML = srcRow(pzIc('globe', 20), 'Tu web', (pzIc('alert', 15) + ' no se pudo cargar'), srcRetryBtn('btnWebRetry', 'Reintentar'));
       const br = $('#btnWebRetry');
       if (br) br.onclick = () => api.get('/api/website/status').then(s2 => paintWebZone(s2)).catch(() => paintWebZone(null));
       return;
     }
     if (errMsg) {
-      webZone.innerHTML = srcRow('🌐', 'Tu web', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnWebRe', 'Reintentar'));
+      webZone.innerHTML = srcRow(pzIc('globe', 20), 'Tu web', `${pzIc('alert', 15)} ${esc(errMsg)}`, srcRetryBtn('btnWebRe', 'Reintentar'));
       const b = $('#btnWebRe');
       if (b) b.onclick = () => runWebAnalyze({ force: true });
       return;
     }
     if (webStatus.ok) {
-      webZone.innerHTML = srcRow('🌐', 'Tu web', `✅ al día · ${esc(fmtWebAt(webStatus.analyzed_at))}${webStatus.partial ? ' (parcial)' : ''}`, srcRetryBtn('btnWebRe', 'Analizar de nuevo'));
+      webZone.innerHTML = srcRow(pzIc('globe', 20), 'Tu web', `${pzIc('checkCircle', 15)} al día · ${esc(fmtWebAt(webStatus.analyzed_at))}${webStatus.partial ? ' (parcial)' : ''}`, srcRetryBtn('btnWebRe', 'Analizar de nuevo'));
       const b = $('#btnWebRe');
       if (b) b.onclick = () => runWebAnalyze({ force: true });
     } else {
       const det = String(webStatus.url || '').trim();
-      webZone.innerHTML = srcRow('🌐', 'Tu web', det ? '⚪ la detecté en tu bio 👇' : '⚪ pegá tu link y la estudio', '',
+      webZone.innerHTML = srcRow(pzIc('globe', 20), 'Tu web', det ? (pzIc('circleEmpty', 15) + ' la detecté en tu bio 👇') : (pzIc('circleEmpty', 15) + ' pegá tu link y la estudio'), '',
         `<input id="s_weburl" value="${esc(det)}" placeholder="https://tuweb.com" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn btn-primary btn-sm" id="btnWebGo">Analizar</button>`);
       const b = $('#btnWebGo');
       if (b) b.onclick = () => {
@@ -1130,7 +1130,7 @@ function bindSettings() {
   };
   const runWebAnalyze = async (body) => {
     if (!webZone) return;
-    webZone.innerHTML = srcRow('🌐', 'Tu web', '⏳ analizando…', '');
+    webZone.innerHTML = srcRow(pzIc('globe', 20), 'Tu web', (pzIc('clock', 15) + ' analizando…'), '');
     try {
       await api.post('/api/website/analyze', body, { timeout: 240000 });
       try { webStatus = await api.get('/api/website/status'); } catch (e) { /* queda el anterior */ }
@@ -1158,30 +1158,30 @@ function bindSettings() {
     if (st) storiesStatus = st;
     if (!storiesZone) return;
     if (!storiesStatus) {
-      storiesZone.innerHTML = srcRow('📱', 'Historias', '⚠️ no se pudo cargar', srcRetryBtn('btnStoriesRetry', 'Reintentar'));
+      storiesZone.innerHTML = srcRow(pzIc('install', 20), 'Historias', (pzIc('alert', 15) + ' no se pudo cargar'), srcRetryBtn('btnStoriesRetry', 'Reintentar'));
       const br = $('#btnStoriesRetry');
       if (br) br.onclick = () => api.get('/api/ig/stories-status').then(s2 => paintStoriesZone(s2)).catch(() => paintStoriesZone(null));
       return;
     }
     if (errMsg) {
-      storiesZone.innerHTML = srcRow('📱', 'Historias', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnStoriesGo', 'Reintentar'));
+      storiesZone.innerHTML = srcRow(pzIc('install', 20), 'Historias', `${pzIc('alert', 15)} ${esc(errMsg)}`, srcRetryBtn('btnStoriesGo', 'Reintentar'));
       const b = $('#btnStoriesGo');
       if (b) b.onclick = runStoriesAnalyze;
       return;
     }
     if (storiesStatus.ok) {
-      storiesZone.innerHTML = srcRow('📱', 'Historias', `✅ al día · ${esc(fmtWebAt(storiesStatus.analyzed_at))}`, srcRetryBtn('btnStoriesGo', 'Analizar de nuevo'));
+      storiesZone.innerHTML = srcRow(pzIc('install', 20), 'Historias', `${pzIc('checkCircle', 15)} al día · ${esc(fmtWebAt(storiesStatus.analyzed_at))}`, srcRetryBtn('btnStoriesGo', 'Analizar de nuevo'));
       const b = $('#btnStoriesGo');
       if (b) b.onclick = runStoriesAnalyze;
     } else {
-      storiesZone.innerHTML = srcRow('📱', 'Historias', '⚪ leo tus promos y anuncios', `<button class="btn btn-primary btn-sm" id="btnStoriesGo">Analizar</button>`);
+      storiesZone.innerHTML = srcRow(pzIc('install', 20), 'Historias', (pzIc('circleEmpty', 15) + ' leo tus promos y anuncios'), `<button class="btn btn-primary btn-sm" id="btnStoriesGo">Analizar</button>`);
       const b = $('#btnStoriesGo');
       if (b) b.onclick = runStoriesAnalyze;
     }
   };
   const runStoriesAnalyze = async () => {
     if (!storiesZone) return;
-    storiesZone.innerHTML = srcRow('📱', 'Historias', '⏳ analizando…', '');
+    storiesZone.innerHTML = srcRow(pzIc('install', 20), 'Historias', (pzIc('clock', 15) + ' analizando…'), '');
     try {
       await api.post('/api/ig/mine-stories', {}, { timeout: 240000 });
       try { storiesStatus = await api.get('/api/ig/stories-status'); } catch (e) { /* queda el anterior */ }
@@ -1214,13 +1214,13 @@ function bindSettings() {
     if (st) srcCommentsStatus = st;
     if (!srcCommentsCard) return;
     if (!srcCommentsStatus) {
-      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', '⚠️ no se pudo cargar', srcRetryBtn('btnSrcCommentsRetry', 'Reintentar'));
+      srcCommentsCard.innerHTML = srcRow(pzIc('chat', 20), 'Comentarios', (pzIc('alert', 15) + ' no se pudo cargar'), srcRetryBtn('btnSrcCommentsRetry', 'Reintentar'));
       const br = $('#btnSrcCommentsRetry');
       if (br) br.onclick = () => api.get('/api/ig/comments-status').then(s2 => paintSrcComments(s2)).catch(() => paintSrcComments(null));
       return;
     }
     if (errMsg) {
-      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnSrcCommentsGo', 'Reintentar'));
+      srcCommentsCard.innerHTML = srcRow(pzIc('chat', 20), 'Comentarios', `${pzIc('alert', 15)} ${esc(errMsg)}`, srcRetryBtn('btnSrcCommentsGo', 'Reintentar'));
       const b = $('#btnSrcCommentsGo');
       if (b) b.onclick = () => runCommentsMine({});
       return;
@@ -1228,18 +1228,18 @@ function bindSettings() {
     if (srcCommentsStatus.ok) {
       const c = srcCommentsStatus.counts || {};
       const n = Number(c.comments || 0);
-      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', `✅ ${n} comentarios · ${esc(fmtSrcAt(srcCommentsStatus.analyzed_at))}`, srcRetryBtn('btnSrcCommentsRe', 'Analizar de nuevo'));
+      srcCommentsCard.innerHTML = srcRow(pzIc('chat', 20), 'Comentarios', `${pzIc('checkCircle', 15)} ${n} comentarios · ${esc(fmtSrcAt(srcCommentsStatus.analyzed_at))}`, srcRetryBtn('btnSrcCommentsRe', 'Analizar de nuevo'));
       const b = $('#btnSrcCommentsRe');
       if (b) b.onclick = () => runCommentsMine({ force: true });
     } else {
-      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', '⚪ descubro qué te preguntan', `<button class="btn btn-primary btn-sm" id="btnSrcCommentsGo">Analizar</button>`);
+      srcCommentsCard.innerHTML = srcRow(pzIc('chat', 20), 'Comentarios', (pzIc('circleEmpty', 15) + ' descubro qué te preguntan'), `<button class="btn btn-primary btn-sm" id="btnSrcCommentsGo">Analizar</button>`);
       const b = $('#btnSrcCommentsGo');
       if (b) b.onclick = () => runCommentsMine({});
     }
   };
   const runCommentsMine = async (body) => {
     if (!srcCommentsCard) return;
-    srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', '⏳ analizando…', '');
+    srcCommentsCard.innerHTML = srcRow(pzIc('chat', 20), 'Comentarios', (pzIc('clock', 15) + ' analizando…'), '');
     try {
       await api.post('/api/ig/mine-comments', body, { timeout: 240000 });
       try { srcCommentsStatus = await api.get('/api/ig/comments-status'); } catch (e) { /* queda el anterior */ }
@@ -1259,29 +1259,29 @@ function bindSettings() {
     if (st) placesStatus = st;
     if (!placesZone) return;
     if (!placesStatus) {
-      placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⚠️ no se pudo cargar', srcRetryBtn('btnPlacesRetry', 'Reintentar'));
+      placesZone.innerHTML = srcRow(pzIc('star', 20), 'Reseñas', (pzIc('alert', 15) + ' no se pudo cargar'), srcRetryBtn('btnPlacesRetry', 'Reintentar'));
       const br = $('#btnPlacesRetry');
       if (br) br.onclick = () => api.get('/api/places/status').then(s2 => paintPlacesZone(s2)).catch(() => paintPlacesZone(null));
       return;
     }
     // Sin key: una línea, la clave se pide por chat.
     if (!placesStatus.has_key) {
-      placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⚪ falta', '', `<span class="hint">Pedime la clave de Google Places en el chat y la activo por vos.</span>`);
+      placesZone.innerHTML = srcRow(pzIc('star', 20), 'Reseñas', (pzIc('circleEmpty', 15) + ' falta'), '', `<span class="hint">Pedime la clave de Google Places en el chat y la activo por vos.</span>`);
       return;
     }
     if (errMsg) {
-      placesZone.innerHTML = srcRow('⭐', 'Reseñas', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnPlacesGo', 'Reintentar'));
+      placesZone.innerHTML = srcRow(pzIc('star', 20), 'Reseñas', `${pzIc('alert', 15)} ${esc(errMsg)}`, srcRetryBtn('btnPlacesGo', 'Reintentar'));
       const b = $('#btnPlacesGo');
       if (b) b.onclick = () => runPlacesAnalyze({});
       return;
     }
     if (placesStatus.ok) {
       const rating = placesStatus.rating ? ` · ★ ${esc(String(placesStatus.rating))}` : '';
-      placesZone.innerHTML = srcRow('⭐', 'Reseñas', `✅ al día · ${esc(fmtWebAt(placesStatus.analyzed_at))}${rating}`, srcRetryBtn('btnPlacesRe', 'Buscar de nuevo'));
+      placesZone.innerHTML = srcRow(pzIc('star', 20), 'Reseñas', `${pzIc('checkCircle', 15)} al día · ${esc(fmtWebAt(placesStatus.analyzed_at))}${rating}`, srcRetryBtn('btnPlacesRe', 'Buscar de nuevo'));
       const b = $('#btnPlacesRe');
       if (b) b.onclick = () => runPlacesAnalyze({ force: true });
     } else {
-      placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⚪ busco tu negocio en Google', '',
+      placesZone.innerHTML = srcRow(pzIc('star', 20), 'Reseñas', (pzIc('circleEmpty', 15) + ' busco tu negocio en Google'), '',
         `<input id="s_placesq" placeholder="Ej: Pizzería Lo de Juan" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn btn-primary btn-sm" id="btnPlacesGo">Buscar</button>`);
       const b = $('#btnPlacesGo');
       if (b) b.onclick = () => runPlacesAnalyze({ query: (($('#s_placesq') || {}).value || '').trim() });
@@ -1289,7 +1289,7 @@ function bindSettings() {
   };
   const runPlacesAnalyze = async (body) => {
     if (!placesZone) return;
-    placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⏳ buscando…', '');
+    placesZone.innerHTML = srcRow(pzIc('star', 20), 'Reseñas', (pzIc('clock', 15) + ' buscando…'), '');
     try {
       await api.post('/api/places/analyze', body, { timeout: 240000 });
       try { placesStatus = await api.get('/api/places/status'); } catch (e) { /* queda el anterior */ }
@@ -1309,23 +1309,23 @@ function bindSettings() {
     if (st) fbStatus = st;
     if (!fbZone) return;
     if (!fbStatus) {
-      fbZone.innerHTML = srcRow('📘', 'Facebook', '⚠️ no se pudo cargar', srcRetryBtn('btnFbRetry', 'Reintentar'));
+      fbZone.innerHTML = srcRow(pzIc('book', 20), 'Facebook', (pzIc('alert', 15) + ' no se pudo cargar'), srcRetryBtn('btnFbRetry', 'Reintentar'));
       const br = $('#btnFbRetry');
       if (br) br.onclick = () => api.get('/api/fb/status').then(s2 => paintFbZone(s2)).catch(() => paintFbZone(null));
       return;
     }
     if (errMsg) {
-      fbZone.innerHTML = srcRow('📘', 'Facebook', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnFbGo', 'Reintentar'));
+      fbZone.innerHTML = srcRow(pzIc('book', 20), 'Facebook', `${pzIc('alert', 15)} ${esc(errMsg)}`, srcRetryBtn('btnFbGo', 'Reintentar'));
       const b = $('#btnFbGo');
       if (b) b.onclick = () => runFbAnalyze({});
       return;
     }
     if (fbStatus.ok) {
-      fbZone.innerHTML = srcRow('📘', 'Facebook', `✅ al día · ${esc(fmtWebAt(fbStatus.analyzed_at))}${fbStatus.partial ? ' (parcial)' : ''}`, srcRetryBtn('btnFbRe', 'Analizar de nuevo'));
+      fbZone.innerHTML = srcRow(pzIc('book', 20), 'Facebook', `${pzIc('checkCircle', 15)} al día · ${esc(fmtWebAt(fbStatus.analyzed_at))}${fbStatus.partial ? ' (parcial)' : ''}`, srcRetryBtn('btnFbRe', 'Analizar de nuevo'));
       const b = $('#btnFbRe');
       if (b) b.onclick = () => runFbAnalyze({ force: true });
     } else {
-      fbZone.innerHTML = srcRow('📘', 'Facebook', '⚪ la estudio: horarios, ubicación y opiniones', '',
+      fbZone.innerHTML = srcRow(pzIc('book', 20), 'Facebook', (pzIc('circleEmpty', 15) + ' la estudio: horarios, ubicación y opiniones'), '',
         `<input id="s_fbpage" placeholder="facebook.com/tu-negocio" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn btn-primary btn-sm" id="btnFbGo">Analizar</button>`);
       const b = $('#btnFbGo');
       if (b) b.onclick = () => runFbAnalyze({ page: (($('#s_fbpage') || {}).value || '').trim() });
@@ -1333,7 +1333,7 @@ function bindSettings() {
   };
   const runFbAnalyze = async (body) => {
     if (!fbZone) return;
-    fbZone.innerHTML = srcRow('📘', 'Facebook', '⏳ analizando…', '');
+    fbZone.innerHTML = srcRow(pzIc('book', 20), 'Facebook', (pzIc('clock', 15) + ' analizando…'), '');
     try {
       await api.post('/api/fb/analyze', body, { timeout: 120000 });
       try { fbStatus = await api.get('/api/fb/status'); } catch (e) { /* queda el anterior */ }
@@ -1499,7 +1499,7 @@ function bindSettings() {
     };
     const showPlansError = (err) => {
       const detail = err && err.message ? `<br><small style="opacity:.65;font-size:11px">Motivo: ${esc(String(err.message)).slice(0, 160)}</small>` : '';
-      z.innerHTML = `<div class="err">No se pudieron cargar los planes. Revisá tu conexión.${detail}<br><button class="btn btn-soft btn-sm" id="plansRetry" style="margin-top:8px">🔄 Reintentar</button></div>`;
+      z.innerHTML = `<div class="err">No se pudieron cargar los planes. Revisá tu conexión.${detail}<br><button class="btn btn-soft btn-sm" id="plansRetry" style="margin-top:8px">${pzIc('refresh', 18)} Reintentar</button></div>`;
       const rb = document.getElementById('plansRetry');
       if (rb) rb.onclick = () => { z.innerHTML = '<p style="color:var(--dim)">Cargando...</p>'; run(); };
     };
@@ -1835,7 +1835,7 @@ function bindSettings() {
       <div class="pz-refbar"><div style="width:${pct}%"></div></div>
       <p style="font-size:12.5px;color:var(--mut)"><b>${n}/${need}</b> referidos</p>
       ${(info.joined && info.joined.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">Se unieron con tu link 🎉</div>${info.joined.map(nm => `<div class="pz-ref-join">✓ ${esc(nm)}</div>`).join('')}</div>` : ''}
-      ${(info.pending && info.pending.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">En camino 🚶</div><div class="pz-ref-pending-sub">Se registraron con tu link y están en prueba. Un mensaje tuyo los convierte 👇</div>${info.pending.map((p, i) => `<div class="pz-ref-join">⏳ ${esc(p.name)}${p.days_left > 0 ? `<span class="pz-ref-days"> · le quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba</span>` : ''} <button class="btn btn-ghost btn-sm" data-nudge="${i}" style="margin-left:6px">📋 Copiar mensaje</button></div>`).join('')}</div>` : ''}
+      ${(info.pending && info.pending.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">En camino 🚶</div><div class="pz-ref-pending-sub">Se registraron con tu link y están en prueba. Un mensaje tuyo los convierte 👇</div>${info.pending.map((p, i) => `<div class="pz-ref-join">${pzIc('clock', 15)} ${esc(p.name)}${p.days_left > 0 ? `<span class="pz-ref-days"> · le quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba</span>` : ''} <button class="btn btn-ghost btn-sm" data-nudge="${i}" style="margin-left:6px">${pzIc('copy', 18)} Copiar mensaje</button></div>`).join('')}</div>` : ''}
       ${info.discount_active
         ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b>${half$ ? ` en tu suscripción: pagás <b>${half$}/mes</b>` : ' en tu suscripción'}.</div>`
         : `<p style="font-size:12.5px">${missing === 1 ? 'Nos falta <b>1</b> referido' : `Nos faltan <b>${missing}</b> referidos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}

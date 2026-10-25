@@ -2,6 +2,80 @@
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* ---------- Sistema de íconos Posty/Bambooty (2026-10-25) ----------
+   Un solo sistema para todo el chrome: SVG inline 24x24, trazo 2px,
+   celeste #2793C8 + dorado #FEC14D. Sin emojis en chrome. */
+const PZ_IC_CEL = '#2793C8', PZ_IC_GOLD = '#FEC14D';
+const PZ_IC = {
+  posty: '<circle cx="12" cy="14" r="7"/><path d="M12 7V4.5"/><circle cx="12" cy="3" r="1.4" fill="' + PZ_IC_GOLD + '" stroke="none"/><circle cx="9.5" cy="13.5" r="1.2" fill="' + PZ_IC_CEL + '" stroke="none"/><circle cx="14.5" cy="13.5" r="1.2" fill="' + PZ_IC_CEL + '" stroke="none"/><path d="M9.5 17.2Q12 18.6 14.5 17.2"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v3M16 3v3M3 10h18"/><circle cx="12" cy="15.5" r="2.2" stroke="' + PZ_IC_GOLD + '"/>',
+  stems: '<path d="M6 20V12M12 20V8M18 20V5"/><path d="M4.5 15h3M10.5 12h3M16.5 9h3"/><path d="M18 5Q18 2 21 2Q21 5 18 5Z" stroke="' + PZ_IC_GOLD + '"/><path d="M18 5Q18 2 15 2Q15 5 18 5Z" stroke="' + PZ_IC_GOLD + '"/>',
+  gear: '<circle cx="12" cy="12" r="3.5"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.2 5.2l1.8 1.8M16.9 16.9l1.8 1.8M18.8 5.2l-1.8 1.8M7.1 16.9l-1.8 1.8"/><circle cx="12" cy="12" r="1.1" fill="' + PZ_IC_GOLD + '" stroke="none"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  sprout: '<path d="M12 21V9"/><path d="M12 14Q8 14 5.5 10.5Q9 9.5 12 14Z"/><path d="M12 11Q16 11 18.5 7.5Q15 6.5 12 11Z"/>',
+  share: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6.5" r="2.5"/><circle cx="18" cy="17.5" r="2.5"/><path d="M8.3 10.8 15.6 7.7M8.3 13.2 15.6 16.3"/>',
+  pencil: '<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/>',
+  eye: '<path d="M2.5 12Q12 5.5 21.5 12Q12 18.5 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
+  archive: '<rect x="3" y="4" width="18" height="4.5" rx="1.5"/><path d="M5 8.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.5"/><path d="M9.5 13.5h5"/>',
+  camera: '<rect x="3" y="7" width="18" height="13" rx="3"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8.5 7 10 4.5h4L15.5 7"/>',
+  checkCircle: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16.5 9"/>',
+  circleEmpty: '<circle cx="12" cy="12" r="9"/>',
+  store: '<path d="M3.5 9 5 4h14l1.5 5"/><path d="M5 9v11h14V9"/><path d="M10 20v-5h4v5"/>',
+  install: '<rect x="8" y="2.5" width="8" height="19" rx="2"/><path d="M12 6v6"/><path d="M9 9.5 12 12.5 15 9.5"/>',
+  bell: '<path d="M18 9a6 6 0 0 0-12 0c0 6-2.5 7.5-2.5 7.5h17S18 15 18 9Z"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/>',
+  bellOff: '<path d="M18 9a6 6 0 0 0-12 0c0 6-2.5 7.5-2.5 7.5h17S18 15 18 9Z"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/><path d="M4 4l16 16"/>',
+  card: '<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6 15h4"/>',
+  bolt: '<path d="M13 2 5 14h6l-1 8 9-13h-6Z"/>',
+  chat: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/>',
+  trash: '<path d="M4 7h16"/><path d="M9.5 7V5h5v2"/><path d="M6.5 7 7.5 21h9L17.5 7"/><path d="M10 11v6M14 11v6"/>',
+  refresh: '<path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="9" r="1.8"/><path d="M4.5 19 10 13.5 14 17.5 17 14.5 19.5 17"/>',
+  layers: '<path d="M12 3 21 9l-9 6-9-6Z"/><path d="M3 13l9 6 9-6"/>',
+  reel: '<path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 13h18"/><path d="M7.5 7 9 4.5M12.5 7 14 4.5M17.5 7 19 4.5"/>',
+  story: '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M10.8 9.8 15 12l-4.2 2.2Z"/>',
+  post: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5"/>',
+  sparkle: '<path d="M12 3l1.8 7.2L21 12l-7.2 1.8L12 21l-1.8-7.2L3 12l7.2-1.8Z"/>',
+  idea: '<path d="M12 3a5.5 5.5 0 0 0-3.2 10c.8.6 1.2 1.4 1.2 2.5h4c0-1.1.4-1.9 1.2-2.5A5.5 5.5 0 0 0 12 3Z"/><path d="M10 18.5h4M10.5 21h3"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3M9 21h6"/>',
+  pin: '<path d="M12 21.5Q5.5 15.5 5.5 10a6.5 6.5 0 0 1 13 0Q18.5 15.5 12 21.5Z"/><circle cx="12" cy="10" r="2.5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+  swap: '<path d="M4 8h13"/><path d="M14 5l3 3-3 3"/><path d="M20 16H7"/><path d="M10 13l-3 3 3 3"/>',
+  alert: '<path d="M12 3 22 20H2Z"/><path d="M12 10v4"/><circle cx="12" cy="17.5" r="1.1" fill="' + PZ_IC_CEL + '" stroke="none"/>',
+  reject: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  ban: '<circle cx="12" cy="12" r="9"/><path d="M5.5 5.5 18.5 18.5"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 7 12 13.5 20.5 7"/>',
+  palette: '<circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.2" fill="' + PZ_IC_CEL + '" stroke="none"/><circle cx="12" cy="7.5" r="1.2" fill="' + PZ_IC_GOLD + '" stroke="none"/><circle cx="15.5" cy="10" r="1.2" fill="' + PZ_IC_CEL + '" stroke="none"/><path d="M12 21c-2.5 0-4-1.2-4-2.5 0-1.5 1.8-2.5 4-2.5"/>',
+  dice: '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="' + PZ_IC_CEL + '" stroke="none"/><circle cx="15.5" cy="8.5" r="1.3" fill="' + PZ_IC_CEL + '" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="' + PZ_IC_GOLD + '" stroke="none"/><circle cx="8.5" cy="15.5" r="1.3" fill="' + PZ_IC_CEL + '" stroke="none"/><circle cx="15.5" cy="15.5" r="1.3" fill="' + PZ_IC_CEL + '" stroke="none"/>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5Z"/><path d="M4 19.5V6.5"/>',
+  moon: '<path d="M20 13.5A8 8 0 1 1 10.5 4 6.5 6.5 0 0 0 20 13.5Z"/>',
+  download: '<path d="M12 4v11"/><path d="M7 10.5 12 15.5 17 10.5"/><path d="M4 20h16"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 13 13l-4.5 2.5L11 11Z"/>',
+  link: '<path d="M10 14a4.5 4.5 0 0 0 6.4.4l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1.4 1.4"/><path d="M14 10a4.5 4.5 0 0 0-6.4-.4L5 12.2a4.5 4.5 0 0 0 6.4 6.4l1.4-1.4"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3Z"/>',
+  gift: '<rect x="4" y="11" width="16" height="9" rx="1.5"/><path d="M12 11v9M4 7h16"/><path d="M12 7c-1.5-2.5-5-2.5-5 0s3.5 2 5 0ZM12 7c1.5-2.5 5-2.5 5 0s-3.5 2-5 0Z"/>',
+  plug: '<path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0Z"/><path d="M12 16v4"/>',
+  flask: '<path d="M10 3v5L5 19h14l-5-11V3"/><path d="M10 3h4"/>',
+  star: '<path d="M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.8-5.4 2.8 1-6.1L3.2 9.4l6.1-.9Z"/>',
+  starFill: '<path d="M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.8-5.4 2.8 1-6.1L3.2 9.4l6.1-.9Z" fill="' + PZ_IC_GOLD + '" stroke="' + PZ_IC_GOLD + '"/>',
+  music: '<path d="M9 18V6l12-2v11"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="18.5" cy="15" r="2.5"/>',
+  pause: '<path d="M9 5v14M15 5v14"/>',
+  skip: '<path d="M5 5l12 7-12 7Z"/><path d="M19 5v14"/>',
+  back: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.3 9a2.7 2.7 0 0 1 5.4.5c0 1.8-2.7 1.6-2.7 3.2"/><circle cx="12" cy="17.5" r="1.1" fill="' + PZ_IC_CEL + '" stroke="none"/>',
+  map: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2Z"/><path d="M9 4v14M15 6v14"/>',
+  save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+  headphones: '<path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/>'
+};
+function pzIc(name, px) {
+  const p = PZ_IC[name];
+  if (!p) return '';
+  const s = px || 24;
+  return '<span class="pz-ic" style="display:inline-flex;line-height:0;vertical-align:-0.18em"><svg viewBox="0 0 24 24" width="' + s + '" height="' + s + '" fill="none" stroke="' + PZ_IC_CEL + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg></span>';
+}
+
 // Variante liviana de una imagen /media (la maestra no se toca: es la que
 // se publica). @640.webp para tarjetas, @24.webp de placeholder borroso.
 // Si la variante no existe (imágenes viejas), __imgFb cae a la maestra.
@@ -358,7 +432,7 @@ function bbFestejo(subida, alCerrar) {
     <p class="bb-festejo-k">¡Nivel nuevo!</p>
     <h3>${esc(subida.nombre)} ahora es<br>${esc(subida.nombre_nivel)}</h3>
     <p class="bb-festejo-h">Nivel ${subida.nivel} de 5 — ganado con trabajo real, registrado en el río.</p>
-    <button class="bb-btn bb-btn-gold" id="bbFestejoOk">A seguir 🌿</button>
+    <button class="bb-btn bb-btn-gold" id="bbFestejoOk">A seguir ${pzIc('sprout', 18)}</button>
   </div>`;
   document.body.appendChild(div);
   document.getElementById('bbFestejoOk').addEventListener('click', () => { div.remove(); if (typeof alCerrar === 'function') alCerrar(); });
@@ -382,7 +456,7 @@ async function bbNegocioContent() {
   const avisos = prefs ? `<section class="bb-bloque"><h2>Cómo te avisa tu oficina</h2>
     <p class="bb-sub">Cada agente te escribe solo por tres motivos: una decisión que espera tu toque, una buena noticia que ya pasó, o una urgencia real. De noche, silencio (22 a 8) salvo urgencia.</p>
     ${agentes.map((a) => { const m = BB_META[a]; const on = !prefs.agentes || prefs.agentes[a] !== false; return `<div class="bb-pref"><span>${bbAvatarHTML(a, null, m.n, m.c, 'bb-av bb-av-sm')} ${m.n}</span><button class="bb-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" onclick="bbTogglePref('${a}', this)"><span></span></button></div>`; }).join('')}
-    <div class="bb-pref bb-pref-total"><span>🔕 Silencio total de la oficina</span><button class="bb-switch${prefs.silencio ? ' on' : ''}" role="switch" aria-checked="${!!prefs.silencio}" onclick="bbToggleSilencio(this)"><span></span></button></div>
+    <div class="bb-pref bb-pref-total"><span>${pzIc('bellOff', 18)} Silencio total de la oficina</span><button class="bb-switch${prefs.silencio ? ' on' : ''}" role="switch" aria-checked="${!!prefs.silencio}" onclick="bbToggleSilencio(this)"><span></span></button></div>
     <p class="bb-sub">Los especialistas — Desy, Talenty, Growty y Bossty — no son de todos los días: solo te escriben cuando tienen un proyecto activo con vos.</p>
   </section>` : '';
   return `
@@ -491,7 +565,7 @@ async function bbAvisosEnAjustes() {
   div.innerHTML = `<h2>Cómo te avisa tu oficina</h2>
     <p class="bb-sub">Cada agente te escribe solo por tres motivos: una decisión que espera tu toque, una buena noticia que ya pasó, o una urgencia real. De noche, silencio (22 a 8) salvo urgencia.</p>
     ${agentes.map((a) => { const m = BB_META[a]; const on = !prefs.agentes || prefs.agentes[a] !== false; return `<div class="bb-pref"><span>${bbAvatarHTML(a, null, m.n, m.c, 'bb-av bb-av-sm')} ${m.n}</span><button class="bb-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" onclick="bbTogglePref('${a}', this)"><span></span></button></div>`; }).join('')}
-    <div class="bb-pref bb-pref-total"><span>🔕 Silencio total de la oficina</span><button class="bb-switch${prefs.silencio ? ' on' : ''}" role="switch" aria-checked="${!!prefs.silencio}" onclick="bbToggleSilencio(this)"><span></span></button></div>`;
+    <div class="bb-pref bb-pref-total"><span>${pzIc('bellOff', 18)} Silencio total de la oficina</span><button class="bb-switch${prefs.silencio ? ' on' : ''}" role="switch" aria-checked="${!!prefs.silencio}" onclick="bbToggleSilencio(this)"><span></span></button></div>`;
   host.appendChild(div);
 }
 // ================= FIN ESPINA BAMBOOTY =================
@@ -598,7 +672,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261025-v465'; // (pais-selector) bump: chunk-ajustes cambia; el ?v= viejo congelaba el chunk
+const CHUNK_V = '20261025-v473'; // (pais-selector) bump: chunk-ajustes cambia; el ?v= viejo congelaba el chunk
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -1106,18 +1180,18 @@ async function enhanceIdeas(force) {
   const ideas = r.ideas || [];
   IDEAS_PENDING_COUNT = ideas.length; // (v236) el badge del chip sale de la MISMA respuesta que pinta el panel
   const comps = r.competitors || [];
-  const fmtChip = { post: '📸 Posteo', reel: '🎬 Reel', carrusel: '🖼️ Carrusel' };
+  const fmtChip = { post: pzIc('camera', 15) + ' Posteo', reel: pzIc('reel', 15) + ' Reel', carrusel: pzIc('image', 15) + ' Carrusel' };
   let h = '<div class="hs-ideas">';
-  h += '<div class="hs-ideas-title">💡 Ideas de Posty para vos</div>';
+  h += '<div class="hs-ideas-title">' + pzIc('idea', 18) + ' Ideas de Posty para vos</div>';
   if (ideas.length) {
     h += '<div class="hs-ideas-sub">Las pensé mirando tu competencia, lo que mejor te funcionó y lo que se viene. ¿Alguna te gusta?</div>';
     for (const it of ideas) {
       h += `<div class="idea-card" data-idea-card="${it.id}">
-        <div class="idea-top"><span class="idea-fmt">${fmtChip[it.format] || '📸 Posteo'}</span></div>
+        <div class="idea-top"><span class="idea-fmt">${fmtChip[it.format] || (pzIc('camera', 15) + ' Posteo')}</span></div>
         <div class="idea-title">${esc(it.title)}</div>
         <div class="idea-why">${esc(it.why)}</div>
         <div class="idea-actions">
-          <button type="button" class="btn btn-primary btn-sm" data-idea-make="${it.id}">💪 Hacelo</button>
+          <button type="button" class="btn btn-primary btn-sm" data-idea-make="${it.id}">${pzIc('bolt', 18)} Hacelo</button>
           <button type="button" class="btn btn-ghost btn-sm" data-idea-dismiss="${it.id}">Ahora no</button>
         </div>
       </div>`;
@@ -1177,7 +1251,7 @@ function wireIdeasBlock(slot) {
         setTimeout(() => { refreshIdeas(); try { render(); } catch (e) {} }, 900);
       } catch (e) {
         b.disabled = false;
-        b.textContent = '💪 Hacelo';
+        b.innerHTML = pzIc('bolt', 18) + ' Hacelo';
         try { toast('😅 ' + (e.message || 'No pude armarlo ahora')); } catch (e2) {}
       }
     };
@@ -1223,7 +1297,7 @@ function wireIdeasBlock(slot) {
 let QUESTION_CACHE_HTML = null; // null = todavía no cargó; '' = esta semana no hay pregunta
 function questionCardHTML(q) {
   let h = `<div class="hs-question" data-qid="${q.id}" data-qkind="${esc(q.kind || '')}">`;
-  h += '<div class="hs-question-title">🤔 Posty te pregunta</div>';
+  h += '<div class="hs-question-title">' + pzIc('help', 18) + ' Posty te pregunta</div>';
   h += `<div class="hs-question-text">${esc(q.texto)}</div>`;
   if ((q.opciones || []).length) {
     h += '<div class="pq-opts">';
@@ -1336,14 +1410,14 @@ function showcaseCardHTML(s) {
   if (s.state === 'draft') {
     h += `<div class="hs-question-title">${en ? '📣 Your story for Posty\'s page' : '📣 Tu historia para la página de Posty'}</div>`;
     h += `<div class="hs-question-text">${en ? 'I drafted it with your real stuff — your best post, your words, your numbers. edit it however you like: what you approve is exactly what goes live.' : 'te la armé con tus cosas reales: tu mejor posteo, tus palabras y un dato de tu cuenta. editala como quieras: lo que aprobás es exactamente lo que sale.'}</div>`;
-    if (s.image) h += `<div class="sc-prev"><img src="${esc(s.image)}" alt=""><div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">📊 ${esc(s.metric_label || '')}</span></div></div>`;
-    else h += `<div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">📊 ${esc(s.metric_label || '')}</span></div>`;
+    if (s.image) h += `<div class="sc-prev"><img src="${esc(s.image)}" alt=""><div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">${pzIc('stems', 15)} ${esc(s.metric_label || '')}</span></div></div>`;
+    else h += `<div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">${pzIc('stems', 15)} ${esc(s.metric_label || '')}</span></div>`;
     h += `<textarea class="in sc-quote" id="scQuote" rows="3" maxlength="280">${esc(s.quote_text || '')}</textarea>`;
-    h += `<div class="pq-foot"><button type="button" class="btn btn-primary btn-sm" id="scApprove">${en ? 'Publish it ✨' : 'Publicarla ✨'}</button><button type="button" class="btn btn-ghost btn-sm" id="scRevoke">${en ? 'Never mind' : 'Mejor no'}</button></div>`;
+    h += `<div class="pq-foot"><button type="button" class="btn btn-primary btn-sm" id="scApprove">${en ? 'Publish it ' : 'Publicarla '}${pzIc('sparkle', 18)}</button><button type="button" class="btn btn-ghost btn-sm" id="scRevoke">${en ? 'Never mind' : 'Mejor no'}</button></div>`;
   } else { // active
     h += `<div class="hs-question-title">${en ? '✨ Your story is live on Posty\'s page' : '✨ Tu historia está en la página de Posty'}</div>`;
     h += `<div class="hs-question-text">«${esc(s.quote_text || '')}»</div>`;
-    h += `<div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">📊 ${esc(s.metric_label || '')}</span></div>`;
+    h += `<div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">${pzIc('stems', 15)} ${esc(s.metric_label || '')}</span></div>`;
     h += `<div class="pq-foot"><button type="button" class="btn btn-ghost btn-sm" id="scRevoke">${en ? 'Take it down' : 'Sacar mi historia'}</button><span class="pq-hint">${en ? 'one tap and it\'s gone — no questions asked.' : 'un toque y desaparece — sin preguntas.'}</span></div>`;
   }
   h += '</div>';
@@ -3671,7 +3745,7 @@ function pushAskCard() {
         <div style="font-size:37px">🔔</div>
         <h2>¿Te aviso cuando pase algo?</h2>
         <p class="pz-exp-sub">Te mando un avisito cuando tu posteo salga publicado y cuando tu semana esté lista para revisar. Nada de spam, lo prometo 🤙</p>
-        <button class="btn btn-primary btn-block" id="pzPushYes">Sí, avisame 👍</button>
+        <button class="btn btn-primary btn-block" id="pzPushYes">Sí, avisame ${pzIc('checkCircle', 18)}</button>
         <button class="btn btn-soft btn-block" id="pzPushNo" style="margin-top:8px">Ahora no</button>
       </div>`;
     document.body.appendChild(ov);
@@ -3801,21 +3875,21 @@ function setupChecklistHtml(title, opts) {
   // la desaparición de la tarjeta ni la celebración (eso mira `rows`).
   let infoRows = [];
   if (!(PROFILE && (PROFILE.business_name || '').trim())) {
-    rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">🏪</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
+    rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">${pzIc('store', 20)}</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
   }
   if (!(PROFILE && PROFILE.ig_connected)) {
-    rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">📸</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar →</span></button>`);
+    rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">${pzIc('camera', 20)}</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar →</span></button>`);
   }
   // (v426 · ÍTEM 4) Paso «primera semana»: pendiente solo si la semana
   // todavía no está en marcha (PROFILE.first_week_live, del server).
   // Va DESPUÉS de la fila de Instagram, como pide la spec de activación.
   if (!(PROFILE && PROFILE.first_week_live)) {
     rows.push(en
-      ? `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">📅</span><span class="setup-txt"><b>Review your first week</b><small>Take a look at the posts I made for you and get them ready.</small></span><span class="setup-go">See my week →</span></button>`
-      : `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">📅</span><span class="setup-txt"><b>Revisá tu primera semana</b><small>Mirá los posteos que armé para vos y dejalos listos.</small></span><span class="setup-go">Ver mi semana →</span></button>`);
+      ? `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">${pzIc('calendar', 20)}</span><span class="setup-txt"><b>Review your first week</b><small>Take a look at the posts I made for you and get them ready.</small></span><span class="setup-go">See my week →</span></button>`
+      : `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">${pzIc('calendar', 20)}</span><span class="setup-txt"><b>Revisá tu primera semana</b><small>Mirá los posteos que armé para vos y dejalos listos.</small></span><span class="setup-go">Ver mi semana →</span></button>`);
   }
   if (pwaIsMobile() && !pwaIsInstalled() && !pwaDismissed()) {
-    rows.push(`<button class="setup-row" id="pwaInstallBtn"><span class="setup-ico">📲</span><span class="setup-txt"><b>Instalá la app</b><small>Acceso directo en tu teléfono.</small></span><span class="setup-go">Instalar →</span></button>`);
+    rows.push(`<button class="setup-row" id="pwaInstallBtn"><span class="setup-ico">${pzIc('install', 20)}</span><span class="setup-txt"><b>Instalá la app</b><small>Acceso directo en tu teléfono.</small></span><span class="setup-go">Instalar →</span></button>`);
   }
   // 🔔 Notificaciones: obligatorias. Sin botón de descartar: el paso se cumple
   // activando push, o por email si el OS lo bloquea (el email siempre llega).
@@ -3823,7 +3897,7 @@ function setupChecklistHtml(title, opts) {
     if (pushPerm() === 'denied') {
       rows.push(`<div class="setup-row setup-done"><span class="setup-ico">📧</span><span class="setup-txt"><b>Te aviso por email</b><small>Bloqueaste las notificaciones: los avisos llegan a tu email.</small></span><span class="setup-go">✓</span></div>`);
     } else {
-      rows.push(`<button class="setup-row" id="setupPushRow"><span class="setup-ico">🔔</span><span class="setup-txt"><b>Activá las notificaciones</b><small>Te aviso antes de publicar cada posteo.</small></span><span class="setup-go">Activar →</span></button>`);
+      rows.push(`<button class="setup-row" id="setupPushRow"><span class="setup-ico">${pzIc('bell', 20)}</span><span class="setup-txt"><b>Activá las notificaciones</b><small>Te aviso antes de publicar cada posteo.</small></span><span class="setup-go">Activar →</span></button>`);
     }
   }
   // (v426 · ÍTEM 4) Paso «plan», según el estado REAL de la cuenta (ME):
@@ -3838,8 +3912,8 @@ function setupChecklistHtml(title, opts) {
       : `<div class="setup-row setup-done"><span class="setup-ico">⏳</span><span class="setup-txt"><b>Tu prueba está en curso</b><small>${dLeft === 1 ? 'Te queda 1 día de prueba' : `Te quedan ${dLeft} días de prueba`} — tu plan se activa cuando quieras.</small></span><span class="setup-go">✓</span></div>`);
   } else if (planStatus === 'cancelled' || (planStatus === 'trial' && ME && ME.trial_expired)) {
     rows.push(en
-      ? `<button class="setup-row" id="setupPlanRow"><span class="setup-ico">💳</span><span class="setup-txt"><b>Activate your plan</b><small>Your trial is over: pick a plan and I'll keep working for you.</small></span><span class="setup-go">See plans →</span></button>`
-      : `<button class="setup-row" id="setupPlanRow"><span class="setup-ico">💳</span><span class="setup-txt"><b>Activá tu plan</b><small>Tu prueba terminó: elegí un plan y sigo trabajando para vos.</small></span><span class="setup-go">Ver planes →</span></button>`);
+      ? `<button class="setup-row" id="setupPlanRow"><span class="setup-ico">${pzIc('card', 20)}</span><span class="setup-txt"><b>Activate your plan</b><small>Your trial is over: pick a plan and I'll keep working for you.</small></span><span class="setup-go">See plans →</span></button>`
+      : `<button class="setup-row" id="setupPlanRow"><span class="setup-ico">${pzIc('card', 20)}</span><span class="setup-txt"><b>Activá tu plan</b><small>Tu prueba terminó: elegí un plan y sigo trabajando para vos.</small></span><span class="setup-go">Ver planes →</span></button>`);
   }
   // La detección de transición vive acá: cubre TODAS las rutas que pintan el checklist
   // (refreshSetupChecklist, appShell, chatView), porque todas pasan por esta función.
@@ -3854,8 +3928,8 @@ function setupChecklistHtml(title, opts) {
   if (!rows.length) return '';
   const n = (opts && opts.omitIg) ? totalSteps : rows.length;
   const t = title || (en
-    ? `🚀 ${n === 1 ? '1 step to go' : `${n} steps to go`}`
-    : `🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}`);
+    ? `${pzIc('sprout', 18)} ${n === 1 ? '1 step to go' : `${n} steps to go`}`
+    : `${pzIc('sprout', 18)} Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}`);
   return `<div class="setup-card"><div class="setup-title">${t}</div>${rows.join('')}${infoRows.join('')}</div>`;
 }
 // (v442 · Corrección de Valentino 02:13: «este boton ponerlo a un
@@ -3871,7 +3945,7 @@ function setupMainHTML() {
   const card = setupChecklistHtml(undefined, { omitIg: true });
   if (!card) return '';
   const m = card.match(/<div class="setup-title">([\s\S]*?)<\/div>/);
-  const label = m ? m[1] : '🚀';
+  const label = m ? m[1] : pzIc('sprout', 18);
   return `<div class="setup-pillwrap"><button type="button" class="setup-pill" data-setup-pill aria-expanded="false"><span data-setup-pill-label>${label}</span><span class="setup-pill-chev" aria-hidden="true">▾</span></button><div class="setup-pill-pop" hidden>${card}</div></div>`;
 }
 // Cablea la píldora dentro de una vista (Inicio/Semana): toggle del
@@ -3990,7 +4064,7 @@ function mzTabsHTML(tab) {
     : tab === 'analisis' ? 'analisis'
     : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', '🏠', 'Inicio')}${t('semana', 'schedule', '📅', 'Semana')}${t('analisis', 'analisis', '🧠', 'Análisis')}${t('ajustes', 'ajustes', '⚙️', 'Ajustes')}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('posty'), 'Inicio')}${t('semana', 'schedule', pzIc('calendar'), 'Semana')}${t('analisis', 'analisis', pzIc('stems'), 'Análisis')}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>`;
 }
 
 function appShell(tab, content) {
@@ -4011,12 +4085,12 @@ function appShell(tab, content) {
       <img src="ai-avatar.png" alt="Posty" class="side-posty-ava">
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
-    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">🏠</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
-    <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Semana<span class="sched-count" id="schedCount" style="display:none"></span></button>
-    <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">📊</span>Análisis</button>
-    <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
+    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('posty')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
+    <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">${pzIc('calendar')}</span>Semana<span class="sched-count" id="schedCount" style="display:none"></span></button>
+    <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('stems')}</span>Análisis</button>
+    <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
-    <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
+    <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">${pzIc('logout')}</span>Salir</button>
   </aside>
   ${(tab === 'chat' || tab === 'inicio' || tab === 'schedule') ? '' : setupChecklistHtml(undefined)}
   <div class="app-shell">
@@ -4536,7 +4610,7 @@ function checklistHTML(postsCount){
     <div class="check-steps">
       ${step(s1, 1, 'Contanos tu negocio', 'Unos 2 minutos, una sola vez.', '<a class="btn btn-soft btn-sm" href="#/app/ajustes">Completar</a>')}
       ${step(s2, 2, 'Conectá tu Instagram', 'Dejá tu semana lista para publicar.', '<button class="btn btn-primary btn-sm" data-ig-connect>Conectar Instagram</button>')}
-      ${step(s3, 3, 'Creá tu primer posteo', 'O armamos tu semana en 1 tap.', '<a class="btn btn-primary btn-sm" href="#/app/schedule">⚡ Armar mi semana</a>')}
+      ${step(s3, 3, 'Creá tu primer posteo', 'O armamos tu semana en 1 tap.', '<a class="btn btn-primary btn-sm" href="#/app/schedule">' + pzIc('bolt', 18) + ' Armar mi semana</a>')}
     </div>
   </div>`;
 }
@@ -4549,9 +4623,9 @@ function weekDoneCardHTML() {
     <h3 style="margin:0 0 6px">✅ Tu semana está armada</h3>
     <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 14px">Los posteos salen solos en sus horarios. Nada que hacer — solo vendé.</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <a class="btn btn-soft btn-sm" data-opencreator style="cursor:pointer">✨ Sumar otro posteo</a>
+      <a class="btn btn-soft btn-sm" data-opencreator style="cursor:pointer">${pzIc('sparkle', 18)} Sumar otro posteo</a>
       <button class="btn btn-ghost btn-sm" data-autopilot="semana">↻ Rehacer la semana</button>
-      <button class="btn btn-ghost btn-sm" id="btnVaciarDrafts">🗑️ Vaciar</button>
+      <button class="btn btn-ghost btn-sm" id="btnVaciarDrafts">${pzIc('trash', 18)} Vaciar</button>
     </div>
     <div id="apProg-semana"></div>
   </div>`;
@@ -4568,14 +4642,14 @@ function autopilotCardHTML(tag) {
   const opts = [3, 5, 7].filter(v => v <= ppw).map(v => `<option value="${v}" ${v === ppw ? 'selected' : ''}>${v} posteos por semana</option>`).join('');
   return `
   <div class="card card-hi-yl" id="autopilotCard-${t}">
-    <h3>🚀 Armemos tu semana</h3>
+    <h3>${pzIc('bolt', 20)} Armemos tu semana</h3>
     <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y reels con tus fotos. Salen solos — y si algo no te gusta, lo frenás o lo cambiás en un toque.</p>
     <p style="font-size:11.5px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos${(ME && ME.reels_per_week) ? ` + ${ME.reels_per_week} reel${ME.reels_per_week > 1 ? 'es' : ''} 🎬` : ''} por semana${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:16px;padding:12px 14px;font-family:inherit;font-weight:600">
         ${opts}
       </select>
-      <button class="btn btn-primary" data-autopilot="${t}">⚡ Armemos tu semana</button>
+      <button class="btn btn-primary" data-autopilot="${t}">${pzIc('bolt', 18)} Armemos tu semana</button>
     </div>
     <div id="apProg-${t}" style="margin-top:16px"></div>
     <div style="margin-top:4px">
@@ -4672,7 +4746,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">${title || '📋 Tus posteos de la semana'}</h3>
     <p style="color:var(--mut);font-size:12.5px;margin:0 0 4px">Revisalos y aceptalos — al aceptar, salen solos a la hora indicada.</p>
-    ${n ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:6px 0 10px">🚀 Activar mi semana</button>` : ''}
+    ${n ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:6px 0 10px">${pzIc('bolt', 18)} Activar mi semana</button>` : ''}
     <div class="igmock-carousel">
       ${drafts.length > 1 ? `<button class="car-arrow left" data-carprev aria-label="Posteo anterior">‹</button>` : ''}
       <div class="igmock-track">
@@ -4707,12 +4781,12 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
             <span class="igmock-badge">🎞️ Carrusel</span>`;
           }
           if (!d.image_path && d.media_type !== 'video') {
-            return `<div class="igmock-nodesign"><span>♻️ Republicado con texto fresco</span><button class="btn btn-primary" data-revregen="${d.id}">✨ Generar diseño</button></div>`;
+            return `<div class="igmock-nodesign"><span>♻️ Republicado con texto fresco</span><button class="btn btn-primary" data-revregen="${d.id}">${pzIc('sparkle', 18)} Generar diseño</button></div>`;
           }
           return `${d.media_type === 'video'
             ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" data-lightbox="${esc(d.image_path)}" data-video="1"></video>`
             : `<img class="vimg" src="${esc(mv(d.image_path, 640))}" style="background-image:url('${esc(mv(d.image_path, 24))}')" data-full="${esc(d.image_path)}" data-lightbox="${esc(d.image_path)}" onerror="__imgFb(this)" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} alt="Diseño del borrador ${i + 1}">`}
-          ${d.media_type === 'video' ? `<span class="igmock-badge">🎬 Reel</span>` : ''}
+          ${d.media_type === 'video' ? `<span class="igmock-badge">${pzIc('reel', 15)} Reel</span>` : ''}
           ${d.media_type === 'story' ? `<span class="igmock-badge">📱 Historia</span>` : ''}`;
         })()}
       </div>
@@ -4724,17 +4798,17 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
           <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="margin-top:6px;padding:8px 10px">
         </div>
-        <button class="igmock-accept" data-revaccept="${d.id}">✅ Aceptar<span data-revacceptwhen="${d.id}">${(() => { const wt = fmtWhenTxt(isoToLocalInput(s[i] || '')); return wt === 'Elegir día y hora' ? '' : ` · sale ${wt}`; })()}</span></button>
-        ${d.needs_review ? '' : `<button class="igmock-now" data-pubnow="${d.id}" style="margin-top:8px">⚡ Publicar ahora</button>`}
-        <div class="igmock-whenrow"><label class="igmock-when2"><span>📅</span><span data-revwhentxt="${d.id}">${fmtWhenPill(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
+        <button class="igmock-accept" data-revaccept="${d.id}">${pzIc('checkCircle', 18)} Aceptar<span data-revacceptwhen="${d.id}">${(() => { const wt = fmtWhenTxt(isoToLocalInput(s[i] || '')); return wt === 'Elegir día y hora' ? '' : ` · sale ${wt}`; })()}</span></button>
+        ${d.needs_review ? '' : `<button class="igmock-now" data-pubnow="${d.id}" style="margin-top:8px">${pzIc('bolt', 18)} Publicar ahora</button>`}
+        <div class="igmock-whenrow"><label class="igmock-when2"><span>${pzIc('calendar', 15)}</span><span data-revwhentxt="${d.id}">${fmtWhenPill(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
         <div class="igmock-icos" style="margin-top:8px">
-          <button data-revedit="${d.id}">✏️ Editar</button>
-          ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}" title="Generar otro diseño para este posteo">✨ Otro diseño</button>`}
-          ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">🔄 Otras 3</button>`}
-          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">🎬 Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">🖼️ Otra foto</button><button data-revphotopick=\"${d.id}\" title=\"Elegir una foto de tu librería o subir una nueva\">📷 Foto</button>${d.media_type !== 'carousel' ? `<button data-revrestyle=\"${d.id}\" title=\"Restylear TU foto con el estilo elegido arriba (mismo producto, otro estilo)\">🎨 Restylear</button><button data-revenhance=\"${d.id}\" title=\"Mejorar la foto: luz, nitidez y color en un tap\">✨ Mejorar</button><button data-revcarousel=\"${d.id}\" title=\"Convertir en carousel: portada que frena + 3 placas\">🎠 Carousel</button><button data-revreel=\\\"${d.id}\\\" title=\\\"Armar reel: Ken Burns + headline, 1080×1920 (máx 2/semana)\\\">🎬 Reel</button>` : ''}`}
-          <button class="danger" data-revdel="${d.id}">🗑️</button>
+          <button data-revedit="${d.id}">${pzIc('pencil', 18)} Editar</button>
+          ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}" title="Generar otro diseño para este posteo">${pzIc('sparkle', 18)} Otro diseño</button>`}
+          ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">${pzIc('refresh', 18)} Otras 3</button>`}
+          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">${pzIc('reel', 18)} Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">${pzIc('image', 18)} Otra foto</button><button data-revphotopick=\"${d.id}\" title=\"Elegir una foto de tu librería o subir una nueva\">${pzIc('camera', 18)} Foto</button>${d.media_type !== 'carousel' ? `<button data-revrestyle=\"${d.id}\" title=\"Restylear TU foto con el estilo elegido arriba (mismo producto, otro estilo)\">${pzIc('palette', 18)} Restylear</button><button data-revenhance=\"${d.id}\" title=\"Mejorar la foto: luz, nitidez y color en un tap\">${pzIc('sparkle', 18)} Mejorar</button><button data-revcarousel=\"${d.id}\" title=\"Convertir en carousel: portada que frena + 3 placas\">${pzIc('layers', 18)} Carousel</button><button data-revreel=\\\"${d.id}\\\" title=\\\"Armar reel: Ken Burns + headline, 1080×1920 (máx 2/semana)\\\">${pzIc('reel', 18)} Reel</button>` : ''}`}
+          <button class="danger" data-revdel="${d.id}">${pzIc('trash', 18)}</button>
         </div>
-        ${d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
+        ${d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">${pzIc('idea', 15)} <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
         ${d.media_type === 'video' && d.script ? `<div style="font-size:11px;color:var(--dim);line-height:1.6;margin-top:8px;overflow-wrap:anywhere">🎬 <b>Guion:</b><br>${(() => { try { return JSON.parse(d.script).map((sc, k) => `${k + 1}. <b>${esc(sc.seg || '')}</b> ${esc(sc.texto || sc.visual || '')}`).join('<br>'); } catch (e) { return ''; } })()}</div>` : ''}
         <button class="rev-nowsub" data-revnow="${d.id}">o publicalo ahora →</button>
         <div class="aiedit" id="aiedit-${d.id}" hidden>
@@ -5369,7 +5443,7 @@ function bindActivateWeek() {
 // Orden: 1) dentro del pop si el toque fue ahí; 2) el #revMsg DE ESTA VISTA;
 // 3) toast como último recurso. El tono es de paso amable, no de error.
 function igGateFeedback(anchorBtn) {
-  const html = `<div class="ig-gate-note">📸 <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm ig-gate-go" type="button">Conectar Instagram →</button></div>`;
+  const html = `<div class="ig-gate-note">${pzIc('camera', 18)} <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm ig-gate-go" type="button">Conectar Instagram →</button></div>`;
   const wire = (root) => { const g = root && root.querySelector ? root.querySelector('.ig-gate-go') : null; if (g) g.onclick = () => igConnectHere(); };
   try {
     const pop = anchorBtn && anchorBtn.closest ? anchorBtn.closest('.scf-pop') : null;
@@ -5466,7 +5540,7 @@ async function doAcceptAll(btn) {
   } catch (e) {
     if (isPlanLimitErr(e)) { planLimitModal(e); }
     else if (m) { m.innerHTML = `<div class="err">😅 ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-    if (b) { b.disabled = false; b.textContent = '✅ Aceptar todo'; }
+    if (b) { b.disabled = false; b.innerHTML = pzIc('checkCircle', 18) + ' Aceptar todo'; }
   }
 }
 function bindAcceptAll() {
@@ -6226,7 +6300,7 @@ function chatMsgHtml(role, text) {
   if (role !== 'user' && FP_MARKER_RE.test(String(text || ''))) {
     return `<div class="chat-msg ai fp-banner">`
       + `<div>${esc(chatStripFpMarker(text))}</div>`
-      + `<button type="button" class="btn btn-primary btn-block" data-fp-pub style="margin-top:10px;min-height:48px;touch-action:manipulation">🚀 Publicar mi primero</button>`
+      + `<button type="button" class="btn btn-primary btn-block" data-fp-pub style="margin-top:10px;min-height:48px;touch-action:manipulation">${pzIc('bolt', 18)} Publicar mi primero</button>`
       + `</div>`;
   }
   const m = String(text || '').match(LC_MARKER_RE);
@@ -6238,8 +6312,8 @@ function chatMsgHtml(role, text) {
   return `<div class="chat-msg ai lc-banner" data-lc="${esc(imgPath)}" style="touch-action:manipulation">`
     + `<div>${esc(chatStripLcMarker(text))}</div>${img}`
     + `<div style="display:flex;gap:8px;margin-top:8px">`
-    + `<button class="lc-yes" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:12px;background:#1F9D55;color:#fff;font-size:15px;font-weight:700">Sí, ese es ✅</button>`
-    + `<button class="lc-no" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:12px;background:#EEF0F2;color:#333;font-size:15px;font-weight:700">No ❌</button>`
+    + `<button class="lc-yes" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:12px;background:#1F9D55;color:#fff;font-size:15px;font-weight:700">Sí, ese es ${pzIc('checkCircle', 18)}</button>`
+    + `<button class="lc-no" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:12px;background:#EEF0F2;color:#333;font-size:15px;font-weight:700">No ${pzIc('reject', 18)}</button>`
     + `</div></div>`;
 }
 
@@ -6338,7 +6412,7 @@ async function chatLoadHistory() {
       const box = $('#chatBox');
       if (box && !document.getElementById('trialRebuildBtn')) {
         box.insertAdjacentHTML('beforeend',
-          `<div style="margin:10px 0 4px"><button class="btn btn-primary btn-sm" id="trialRebuildBtn">⚡ Rearmar mi semana</button></div>`);
+          `<div style="margin:10px 0 4px"><button class="btn btn-primary btn-sm" id="trialRebuildBtn">${pzIc('bolt', 18)} Rearmar mi semana</button></div>`);
         const rb = document.getElementById('trialRebuildBtn');
         if (rb) rb.onclick = trialRebuildWeek;
       }
@@ -6439,7 +6513,7 @@ async function draftFromPreview(idea, prev) {
 // cambia el lugar, no la semántica. ES/EN por ME.lang.
 function acceptPillHTML(n, id) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  return `<button type="button" class="accept-pill" id="${id}">✅ ${en ? 'Accept all' : 'Aceptar todo'} (${n})</button>`;
+  return `<button type="button" class="accept-pill" id="${id}">${pzIc('checkCircle', 18)} ${en ? 'Accept all' : 'Aceptar todo'} (${n})</button>`;
 }
 // (v436) La línea del saludo con la semana que viene: es la MISMA
 // cuenta que pintaba la línea de cupo de la Agenda (schedWeekCounts →
@@ -6478,19 +6552,19 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
   // su #albumFile y su #albumMsg (el festejo/clasificación de siempre).
   const chips = (!msgs && !schedMode) ? `
     <div class="chat-chips" id="chatChips">
-      <button data-chip="Haceme un posteo de promo para esta semana">✨ Haceme un posteo</button>
+      <button data-chip="Haceme un posteo de promo para esta semana">${pzIc('sparkle', 18)} Haceme un posteo</button>
       ${noEditChip ? '' : `<button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">✏️ Editá un borrador</button>`}
-      <button data-chip="Dame una idea para vender más esta semana">💡 Dame una idea</button>
+      <button data-chip="Dame una idea para vender más esta semana">${pzIc('idea', 18)} Dame una idea</button>
     </div>` : '';
   // (v236) A la derecha de la subida, el chip de ideas: nace en el
   // HTML estático ya con su estado (badge y aria-expanded salen del
   // estado en memoria) para que ningún repintado lo mueva ni lo prenda
   // tarde. El badge tiene geometría fija reservada (CSS): el número
   // jamás empuja el layout al aparecer o cambiar.
-  const ideasChip = schedMode ? `<button type="button" class="ideas-chip" id="ideasChip" aria-expanded="${IDEAS_PANEL_OPEN ? 'true' : 'false'}" aria-controls="hs-ideas">💡 Ideas <span class="ideas-badge${(typeof IDEAS_PENDING_COUNT === 'number' && IDEAS_PENDING_COUNT > 0) ? '' : ' off'}" id="ideasBadge">${typeof IDEAS_PENDING_COUNT === 'number' ? IDEAS_PENDING_COUNT : 0}</span></button>` : '';
+  const ideasChip = schedMode ? `<button type="button" class="ideas-chip" id="ideasChip" aria-expanded="${IDEAS_PANEL_OPEN ? 'true' : 'false'}" aria-controls="hs-ideas">${pzIc('idea', 18)} Ideas <span class="ideas-badge${(typeof IDEAS_PENDING_COUNT === 'number' && IDEAS_PENDING_COUNT > 0) ? '' : ' off'}" id="ideasBadge">${typeof IDEAS_PENDING_COUNT === 'number' ? IDEAS_PENDING_COUNT : 0}</span></button>` : '';
   const upRow = schedMode ? `
     <div class="sched-up-row">
-      <button type="button" class="ag-upload-btn" id="agUploadBtn">📸 Subir fotos o video</button>
+      <button type="button" class="ag-upload-btn" id="agUploadBtn">${pzIc('camera', 18)} Subir fotos o video</button>
       ${ideasChip}
       <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
       <div class="album-row-msg" id="albumMsg" aria-live="polite"></div>
@@ -6506,11 +6580,11 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
     <div class="chat-input-row">
       ${schedMode ? '' : `<button class="btn btn-soft" id="chatPlus" title="Agregar foto o video">＋</button>`}
       <input id="chatInput" class="in" placeholder="Escribile a Posty…" maxlength="2000" autocomplete="off">
-      <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">🎙</button>
+      <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">${pzIc('mic', 18)}</button>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
       ${schedMode ? '' : `<div class="chat-plus-menu" id="chatPlusMenu" hidden>
-        <button data-k="photo">📷 Foto</button>
-        <button data-k="video">🎬 Video</button>
+        <button data-k="photo">${pzIc('camera', 18)} Foto</button>
+        <button data-k="video">${pzIc('reel', 18)} Video</button>
       </div>`}
     </div>
     <div id="chatMsg"></div>
@@ -6574,7 +6648,7 @@ function renderChatShowDrafts(drafts) {
     const card = document.createElement('div');
     card.className = 'chat-idea-card';
     card.style.cursor = 'default';
-    const badge = d.media_type === 'video' ? '🎬 Reel' : d.media_type === 'story' ? '📸 Historia' : d.media_type === 'carousel' ? '🖼️ Carrusel' : '📝 Post';
+    const badge = d.media_type === 'video' ? (pzIc('reel', 15) + ' Reel') : d.media_type === 'story' ? (pzIc('camera', 15) + ' Historia') : d.media_type === 'carousel' ? (pzIc('image', 15) + ' Carrusel') : (pzIc('post', 15) + ' Post');
     const st = d.status === 'scheduled' && d.when ? ` · ⏰ ${esc(String(d.when).slice(0, 16).replace('T', ' '))}` : ' · 📝 borrador';
     card.innerHTML = `
       ${d.image_url ? `<img src="${esc(String(d.image_url))}" style="width:100%;border-radius:10px;margin-bottom:6px;display:block" loading="lazy" alt="">` : ''}
@@ -7024,7 +7098,7 @@ async function showCommentsInChat() {
         <div style="font-size:12.5px;margin-bottom:6px"><b>@${esc(c.username || '')}</b>: ${esc(c.text || '')}</div>
         <textarea class="in" data-chatcmreply="${c.id}" rows="2" style="font-size:16px" aria-label="Respuesta sugerida">${esc(c.suggested || '')}</textarea>
         <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="btn btn-primary btn-sm" data-chatcmdo="reply" data-id="${c.id}">💬 Responder</button>
+          <button class="btn btn-primary btn-sm" data-chatcmdo="reply" data-id="${c.id}">${pzIc('chat', 18)} Responder</button>
           <button class="btn btn-ghost btn-sm" data-chatcmdo="dismiss" data-id="${c.id}">Descartar</button>
         </div>
         <div class="hint" data-chatcmmsg="${c.id}" style="margin:6px 0 0"></div>
@@ -7087,7 +7161,7 @@ async function showDMsInChat() {
         <div style="font-size:12.5px;margin-bottom:6px"><b>@${esc(d.username || '')}</b>: ${esc(d.text || '')}</div>
         <textarea class="in" data-chatdmreply="${d.id}" rows="2" style="font-size:16px" aria-label="Respuesta sugerida">${esc(d.suggested || '')}</textarea>
         <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="btn btn-primary btn-sm" data-chatdmdo="reply" data-id="${d.id}">📩 Responder</button>
+          <button class="btn btn-primary btn-sm" data-chatdmdo="reply" data-id="${d.id}">${pzIc('mail', 18)} Responder</button>
           <button class="btn btn-ghost btn-sm" data-chatdmdo="dismiss" data-id="${d.id}">Descartar</button>
         </div>
         <div class="hint" data-chatdmmsg="${d.id}" style="margin:6px 0 0"></div>
@@ -7627,7 +7701,7 @@ function weekCardHTML(d, o) {
   // Tarjeta inmediata: borrador nacido sin imagen, creándose ahora mismo.
   const isPending = !d.image_path && d.status === 'draft';
   const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">✨</span><b>Creando imagen…</b></span>'
-    : !d.image_path ? '<span class="pcard-nothumb">📝</span>'
+    : !d.image_path ? '<span class="pcard-nothumb">' + pzIc('post', 20) + '</span>'
     : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
     : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
   const capFull = String(d.caption || d.source_topic || '');
@@ -7643,16 +7717,16 @@ function weekCardHTML(d, o) {
   // Si el estado no admite una acción, no se renderiza (no se grisacea).
   const L = (es, en) => ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? en : es);
   const igLink = (d.ig_permalink && /^https:\/\//.test(String(d.ig_permalink)) && !String(d.ig_permalink).includes('/demo_')) ? String(d.ig_permalink) : '';
-  const askBtn = `<button type="button" class="pcard-ask" data-pc-act="ask-change">💬 ${L('Pedir un cambio', 'Request a change')}</button>`;
+  const askBtn = `<button type="button" class="pcard-ask" data-pc-act="ask-change">${pzIc('chat', 15)} ${L('Pedir un cambio', 'Request a change')}</button>`;
   let actsInner = '';
   if (isPub) {
     if (igLink) actsInner += `<a class="pcard-main" href="${esc(igLink)}" target="_blank" rel="noopener">${L('Ver en Instagram ↗', 'See it on Instagram ↗')}</a>`;
     actsInner += askBtn;
   } else if (d.status === 'scheduled') {
-    actsInner += `<button type="button" class="pcard-main" data-pc-act="hold">⏸ ${L('Frenar', 'Hold')}</button>`;
+    actsInner += `<button type="button" class="pcard-main" data-pc-act="hold">${pzIc('pause', 18)} ${L('Frenar', 'Hold')}</button>`;
     actsInner += askBtn;
   } else if (d.status === 'draft' && !isPending) {
-    if (canPubNow) actsInner += `<button type="button" class="pcard-main" data-pc-act="pubnow">⚡ ${L('Publicar ahora', 'Publish now')}</button>`;
+    if (canPubNow) actsInner += `<button type="button" class="pcard-main" data-pc-act="pubnow">${pzIc('bolt', 18)} ${L('Publicar ahora', 'Publish now')}</button>`;
     actsInner += askBtn;
     actsInner += `<button type="button" class="pcard-del" data-pc-act="del-draft" data-del-confirm="${esc(L('¿Eliminar este borrador para siempre?', 'Delete this draft forever?'))}">${L('Eliminar', 'Delete')}</button>`;
   }
@@ -7684,19 +7758,19 @@ function weekCardHTML(d, o) {
     : '';
   const igChrome = (!isPending && d.image_path) ? `<div class="igmock-acts" aria-hidden="true">${LP_WEEK_ICONS}</div>${likesLine}` : '';
   const statusHTML = d.status === 'scheduled'
-    ? `<span class="pcard-scheduled">📮 Programado</span>`
+    ? `<span class="pcard-scheduled">${pzIc('clock', 15)} Programado</span>`
     : isPub
-      ? `<span class="pcard-published">✅ Publicado</span>`
+      ? `<span class="pcard-published">${pzIc('checkCircle', 15)} Publicado</span>`
       : isPending
         ? `<span class="pcard-creating">⏳ Creando…</span>`
-        : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`;
+        : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">${pzIc('checkCircle', 18)} Aceptar</button>`;
   const capHTML = capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}"${igUser ? ` data-capuser="${esc(igUser)}"` : ''} title="Tocá para editar">${igUser ? `<b class="igmock-cap-user">${esc(igUser)}</b> ` : ''}${esc(capFull)}</div>` : '';
   // (Frente 3b) Tiempo relativo estilo IG bajo el pie, solo en posteos ya
   // publicados y fuera del esqueleto fijo de Día: «hace 2 h».
   const timeHTML = (isPub && !o.dia) ? (() => { const rt = igRelTime(d.published_at || d.scheduled_at, (typeof ME !== 'undefined' && ME && ME.lang === 'en')); return rt ? `<div class="igmock-time">${esc(rt)}</div>` : ''; })() : '';
   // (v251) El porqué TAMBIÉN en Día/Semana: mismo tratamiento que la tarjeta
   // de revisión (reviewCardHTML) — ya venía en el payload de /api/posts.
-  const whyHTML = d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : '';
+  const whyHTML = d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">${pzIc('idea', 15)} <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : '';
   const foot = o.dia
     ? `<div class="igmock-foot">
         <div class="igmock-chrome">${igChrome}</div>
@@ -7723,7 +7797,7 @@ function weekCardHTML(d, o) {
         ${statusHTML}${d.image_path ? `<button type="button" class="hf-crop-tog hf-crop-mini" data-hf-crop aria-pressed="false" aria-label="${enW ? 'See how it crops' : 'Ver cómo se recorta'}">▦</button>` : ''}</div>
       ${isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
-        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : '✏️ Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}</button>`}
+        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}</button>`}
       ${foot}
       ${hfAskChangeBtnHTML(d)}
     </div>`;
@@ -7763,7 +7837,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     <b>Posty está armando tu semana ✨</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
-    <button type="button" class="btn btn-ghost btn-sm" id="hsDiagBtn" style="margin-top:12px">🔍 ¿Por qué tarda tanto?</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="hsDiagBtn" style="margin-top:12px">${pzIc('search', 18)} ¿Por qué tarda tanto?</button>
     <div id="hsDiagOut" style="margin-top:10px;text-align:left"></div>
   </div>`;
     // Solo usuario NUEVO de verdad ve "armando": si alguna vez tuvo posteos,
@@ -7826,7 +7900,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   const quotaLine = schedQuotaHTML(list, quota, schedWeekCounts(all, tz, proposedIsos));
   // 2026-10-09: flechas laterales del carrusel (pedido de Valentino) — sin números.
   return `<div class="hs-week">
-    <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo (${list.filter(p => p.status === 'draft').length})</button>` : ''}</div>
+    <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">${pzIc('checkCircle', 18)} Aceptar todo (${list.filter(p => p.status === 'draft').length})</button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
     ${generating ? `<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>` : ''}
@@ -8140,10 +8214,10 @@ function igHeadChipHTML(en) {
   try {
     const style = 'display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 12px;border-radius:999px;background:var(--cel);color:#fff;font-size:12px;font-weight:700;text-decoration:none';
     if (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected) {
-      return `<a class="ig-head-chip" href="#/app/ajustes?ig=1" style="${style}">📸 ${en ? 'Connect Instagram' : 'Conectar Instagram'}</a>`;
+      return `<a class="ig-head-chip" href="#/app/ajustes?ig=1" style="${style}">${pzIc('camera', 15)} ${en ? 'Connect Instagram' : 'Conectar Instagram'}</a>`;
     }
     if (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.ig_token_warning) {
-      return `<a class="ig-head-chip" href="#/app/ajustes?ig=1" style="${style}">📸 ${en ? 'Reconnect Instagram' : 'Reconectar Instagram'}</a>`;
+      return `<a class="ig-head-chip" href="#/app/ajustes?ig=1" style="${style}">${pzIc('camera', 15)} ${en ? 'Reconnect Instagram' : 'Reconectar Instagram'}</a>`;
     }
   } catch (e) {}
   return '';
@@ -8369,7 +8443,7 @@ async function chatView() {
     <div id="revMsg"></div>
     ${homeWeekHTML(posts, quota, weekGenerating, weekNoDna)}
     <div id="albumCard"></div>
-    ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">🚀 Activar mi semana (${nDrafts})</button>` : ''}
+    ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">${pzIc('bolt', 18)} Activar mi semana (${nDrafts})</button>` : ''}
     <div class="hs-chat-label"><b>💬 ¿Cambiamos algo?</b></div>
     ${chatCardHTML(true, true, true)}
   </div>`;
@@ -8486,8 +8560,8 @@ async function bindAlbumCard() {
         <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
       </label>
       <div style="font-size:12px;opacity:.65;margin-top:5px">Videos de hasta 90 segundos: Posty los usa en tus reels 🎬</div>
-      <button type="button" class="btn btn-soft btn-block" id="talkReelBtn" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? '🎬 Talking reel: record yourself presenting your product' : '🎬 Reel hablado: grabate contando tu producto'}</button>
-      ${(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.category === 'boliche') ? `<button type="button" class="btn btn-soft btn-block" id="flyerBtn" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? '🎉 Party flyer: build the one for your next night' : '🎉 Flyer de fiesta: armá el de tu próxima fecha'}</button><div style="font-size:12px;opacity:.65;margin-top:5px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'The feed flyer, the story and the countdown, with your party’s real details.' : 'El flyer de feed, la historia y la cuenta regresiva, con los datos reales de tu fiesta.'}</div>` : ''}
+      <button type="button" class="btn btn-soft btn-block" id="talkReelBtn" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? (pzIc('reel', 18) + ' Talking reel: record yourself presenting your product') : (pzIc('reel', 18) + ' Reel hablado: grabate contando tu producto')}</button>
+      ${(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.category === 'boliche') ? `<button type="button" class="btn btn-soft btn-block" id="flyerBtn" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? (pzIc('sparkle', 18) + ' Party flyer: build the one for your next night') : (pzIc('sparkle', 18) + ' Flyer de fiesta: armá el de tu próxima fecha')}</button><div style="font-size:12px;opacity:.65;margin-top:5px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'The feed flyer, the story and the countdown, with your party’s real details.' : 'El flyer de feed, la historia y la cuenta regresiva, con los datos reales de tu fiesta.'}</div>` : ''}
       <div style="font-size:12px;opacity:.65;margin-top:5px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You talk for 20–40 seconds and Posty edits it: subtitles in your own words and cuts to your product.' : 'Hablás 20–40 segundos y Posty lo edita: subtítulos con tus palabras y cortes a tu producto.'}</div>
     </div>`;
   const perfHTML = data.perf
@@ -8504,11 +8578,11 @@ async function bindAlbumCard() {
   // muestra solo las subidas del cliente (esto, que viene de /api/album).
   const gridInner = items.length
     ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${items.map(ph => ph.kind === 'video'
-      ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span><button type="button" data-videoreel="${ph.id}" title="Usar este video en un reel" style="position:absolute;left:5px;bottom:5px;background:#2793C8;color:#fff;border:none;font-size:11px;line-height:1;padding:5px 8px;border-radius:999px;cursor:pointer">🎬 Reel</button></div>`
+      ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span><button type="button" data-videoreel="${ph.id}" title="Usar este video en un reel" style="position:absolute;left:5px;bottom:5px;background:#2793C8;color:#fff;border:none;font-size:11px;line-height:1;padding:5px 8px;border-radius:999px;cursor:pointer">${pzIc('reel', 15)} Reel</button></div>`
       : `<img src="${esc(mv(ph.path, 640))}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`).join('')}</div>`
     : '';
   const grid = items.length
-    ? `<button type="button" class="btn btn-soft btn-sm" id="albumToggle" style="margin-top:8px">🖼️ Ver mi álbum (${items.length})</button><div id="albumGrid" style="display:none">${gridInner}</div>`
+    ? `<button type="button" class="btn btn-soft btn-sm" id="albumToggle" style="margin-top:8px">${pzIc('image', 18)} Ver mi álbum (${items.length})</button><div id="albumGrid" style="display:none">${gridInner}</div>`
     : `<div style="font-size:14px;background:#F1F8FD;border-radius:12px;padding:10px 12px;margin:8px 0">Todavía no nos pasaste fotos: Posty crea las imágenes por vos, pero con las tuyas los posteos salen con tu negocio real.</div>`;
   box.innerHTML = `
   <div class="card" style="margin-top:14px">
@@ -8574,13 +8648,13 @@ async function bindAlbumRow() {
   const items = data.photos || [];
   const gridInner = items.length
     ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${items.map(ph => `<div style="position:relative">${ph.kind === 'video'
-      ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span><button type="button" data-videoreel="${ph.id}" title="Usar este video en un reel" style="position:absolute;left:5px;bottom:5px;background:#2793C8;color:#fff;border:none;font-size:11px;line-height:1;padding:5px 8px;border-radius:999px;cursor:pointer">🎬 Reel</button></div>`
+      ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span><button type="button" data-videoreel="${ph.id}" title="Usar este video en un reel" style="position:absolute;left:5px;bottom:5px;background:#2793C8;color:#fff;border:none;font-size:11px;line-height:1;padding:5px 8px;border-radius:999px;cursor:pointer">${pzIc('reel', 15)} Reel</button></div>`
       : `<img src="${esc(mv(ph.path, 640))}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`}<button type="button" class="media-del" data-albumdel="${esc(String(ph.id))}" title="Borrar" aria-label="Borrar archivo" style="position:absolute;top:4px;right:4px;z-index:2">×</button></div>`).join('')}</div>`
     : `<div style="font-size:13.5px;background:#F1F8FD;border-radius:12px;padding:10px 12px;margin:8px 0">Todavía no nos pasaste fotos: Posty crea las imágenes por vos, pero con las tuyas los posteos salen con tu negocio real.</div>`;
   box.innerHTML = `
   <div class="album-row">
     <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
-    <button type="button" class="album-row-btn" id="albumRowToggle" aria-expanded="false"><span>🖼️ Ver mi álbum (${items.length})</span><span aria-hidden="true">▾</span></button>
+    <button type="button" class="album-row-btn" id="albumRowToggle" aria-expanded="false"><span>${pzIc('image', 18)} Ver mi álbum (${items.length})</span><span aria-hidden="true">▾</span></button>
     <div class="album-row-panel" id="albumRowPanel" hidden>
       <div>${chip('Productos', n.producto || 0, t.producto)}${chip('Tu local', n.local || 0, t.local)}${chip('Tu equipo', n.equipo || 0, t.equipo)}</div>
       ${gridInner}
@@ -8927,7 +9001,7 @@ function paintTasteProposal(p) {
   wrap.id = 'tasteProposalBar';
   wrap.innerHTML = chatMsgHtml('assistant', p.texto)
     + `<div style="margin:2px 0 10px;display:flex;gap:8px;flex-wrap:wrap">`
-    + `<button class="btn btn-primary btn-sm" id="tastePropYes">${en ? '📝 yes, note it' : '📝 sí, anotalo'}</button>`
+    + `<button class="btn btn-primary btn-sm" id="tastePropYes">${pzIc('post', 15)} ${en ? 'yes, note it' : 'sí, anotalo'}</button>`
     + `<button class="btn btn-soft btn-sm" id="tastePropNo">${en ? 'no, thanks' : 'no, gracias'}</button></div>`;
   box.appendChild(wrap);
   const answer = async (accept) => {
@@ -8971,7 +9045,7 @@ function renderFirstPick(fp) {
     ${excerpt ? `<div class="fp-cap">${esc(excerpt)}</div>` : ''}
     ${fp.reason ? `<div class="fp-reason">📸 ${esc(String(fp.reason))}</div>` : ''}
     <div class="fp-btns">
-      <button type="button" class="btn btn-primary btn-sm" data-fpchoice="picked">Dale, ese 👍</button>
+      <button type="button" class="btn btn-primary btn-sm" data-fpchoice="picked">Dale, ese ${pzIc('checkCircle', 18)}</button>
       <button type="button" class="btn btn-soft btn-sm" data-fpchoice="other">Prefiero otro</button>
       <button type="button" class="btn btn-ghost btn-sm" data-fpchoice="dismissed">Ahora no</button>
     </div>
@@ -9066,7 +9140,7 @@ async function chatGreet() {
     }
   } else {
     text = '¿Te armo tu semana? 👇';
-    cta = `<div class="chat-cta-row"><button class="btn btn-primary" data-autopilot="semana">⚡ Armar mi semana</button></div>`;
+    cta = `<div class="chat-cta-row"><button class="btn btn-primary" data-autopilot="semana">${pzIc('bolt', 18)} Armar mi semana</button></div>`;
   }
   chatSayLocal(text);
   const box = document.getElementById('chatBox');
@@ -9149,7 +9223,7 @@ function pcFmtHour(d, tz) { try { return d.toLocaleTimeString('es-AR', { hour: '
 function pcBadge(p) {
   if (String(p.status) === 'published') return '<span class="pcard-badge pcard-badge-done">✅ Salió</span>';
   const mt = String(p.media_type || '');
-  if (mt === 'video') return '<span class="pcard-badge">🎬 Reel</span>';
+  if (mt === 'video') return '<span class="pcard-badge">' + pzIc('reel', 15) + ' Reel</span>';
   if (mt === 'story') return '<span class="pcard-badge">📸 Story</span>';
   if (mt === 'carousel') return '<span class="pcard-badge">🖼️ Carrusel</span>';
   return '<span class="pcard-badge">📝 Post</span>';
@@ -9164,28 +9238,28 @@ function postCardHTML(p, opts) {
   const when = d ? pcFmtDay(d, tz) + ' · ' + pcFmtHour(d, tz) : '';
   const dayLabel = d ? pcFmtDayLong(d, tz) + ' a las ' + pcFmtHour(d, tz) : '';
   const isV = String(p.media_type || '') === 'video';
-  const media = !p.image_path ? '<span class="pcard-nothumb">📝</span>'
+  const media = !p.image_path ? '<span class="pcard-nothumb">' + pzIc('post', 20) + '</span>'
     : isV ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
     : `<img src="${esc(p.image_path)}" alt="" loading="lazy">`;
   const capFull = String(p.caption || p.source_topic || 'Posteo');
   const canApprove = String(p.approval) === 'pending' && String(p.status) === 'scheduled';
   const actions = isPub ? '' : `<div class="pcard-actions">
-      ${isV ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
-      <button type="button" data-pc-act="skip">⏭️ Saltar</button>
-      ${String(p.status) === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
-      ${canApprove ? '<button type="button" data-pc-act="approve" class="pcard-approve">✅ Aprobar</button>' : ''}
+      ${isV ? '' : '<button type="button" data-pc-act="image">' + pzIc('image', 18) + ' Imagen</button>'}
+      <button type="button" data-pc-act="skip">${pzIc('skip', 18)} Saltar</button>
+      ${String(p.status) === 'scheduled' ? '<button type="button" data-pc-act="hold">' + pzIc('pause', 18) + ' Frenar</button>' : ''}
+      ${canApprove ? '<button type="button" data-pc-act="approve" class="pcard-approve">' + pzIc('checkCircle', 18) + ' Aprobar</button>' : ''}
     </div>`;
   // TikTok (v166): solo posteos publicados y solo si el usuario conectó su
   // cuenta — el botón nace oculto y ttEnhance() lo muestra según /api/tiktok/status.
   const ttActs = !isPub ? '' : (p.tiktok_publish_id
-    ? `<div class="pcard-actions"><span style="font-size:11.5px;font-weight:700;color:var(--dim)">🎵 Ya está en TikTok ✓</span></div>`
-    : `<div class="pcard-actions"><button type="button" data-pc-act="tiktok" hidden>🎵 Compartir en TikTok</button>${isV ? '<button type="button" data-pc-act="tiktok-inbox" hidden>📥 Borrador TikTok</button>' : ''}</div>`);
+    ? `<div class="pcard-actions"><span style="font-size:11.5px;font-weight:700;color:var(--dim)">${pzIc('music', 15)} Ya está en TikTok ✓</span></div>`
+    : `<div class="pcard-actions"><button type="button" data-pc-act="tiktok" hidden>${pzIc('music', 18)} Compartir en TikTok</button>${isV ? '<button type="button" data-pc-act="tiktok-inbox" hidden>' + pzIc('download', 18) + ' Borrador TikTok</button>' : ''}</div>`);
   return `<div class="pcard pcard-${layout}" data-post-id="${esc(String(p.id))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
     <button type="button" class="pcard-media" data-pc-act="open" aria-label="Ver posteo">${media}</button>
     <div class="pcard-body">
       <div class="pcard-meta"><b>${esc(when)}</b>${pcBadge(p)}</div>
       <div class="pcard-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>
-      ${p.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(p.strategy_why)}</div>` : ''}
+      ${p.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">${pzIc('idea', 15)} <b>Por qué:</b> ${esc(p.strategy_why)}</div>` : ''}
       ${actions}${ttActs}
     </div>
   </div>`;
@@ -9360,18 +9434,18 @@ function pcOpenImageSheet(id) {
   bd.innerHTML = `<div class="pcsheet" data-post-id="${esc(String(id))}" role="dialog" aria-modal="true">
     <div class="pcsheet-handle"></div>
     <div class="pcsheet-title">Cambiar imagen</div>
-    <button type="button" class="pcsheet-opt" data-pc-act="img-style">🎨 Otro estilo<small>La rehago con otro look — se ve al momento</small></button>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-style">${pzIc('palette', 20)} Otro estilo<small>La rehago con otro look — se ve al momento</small></button>
     <div class="pcsheet-stylewrap" hidden>
       <div class="pcsheet-reclabel">✨ Para este posteo, te recomiendo:</div>
       <div class="pcsheet-recbtns"><div class="pcsheet-loading">Cargando…</div></div>
-      <button type="button" class="pcsheet-opt" data-pc-act="img-surprise">🎲 Sorprendeme<small>Posty elige un look de tu rubro por vos</small></button>
-      <button type="button" class="pcsheet-opt" data-pc-act="img-all">📚 Ver todos los de mi rubro<small class="pcsheet-allcount"></small></button>
+      <button type="button" class="pcsheet-opt" data-pc-act="img-surprise">${pzIc('dice', 20)} Sorprendeme<small>Posty elige un look de tu rubro por vos</small></button>
+      <button type="button" class="pcsheet-opt" data-pc-act="img-all">${pzIc('book', 20)} Ver todos los de mi rubro<small> class="pcsheet-allcount"></small></button>
       <div class="pcsheet-all" hidden></div>
     </div>
-    <button type="button" class="pcsheet-opt" data-pc-act="img-upload">📸 Usar una foto tuya<small>Subila y la uso en este posteo: sale tu negocio real</small></button>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-upload">${pzIc('camera', 20)} Usar una foto tuya<small>Subila y la uso en este posteo: sale tu negocio real</small></button>
     <input type="file" accept="image/*" class="pcsheet-file" hidden>
-    <button type="button" class="pcsheet-opt" data-pc-act="img-enhance">✨ Mejorar esta<small>Retoco la actual: luz, color y nitidez</small></button>
-    <button type="button" class="pcsheet-opt" data-pc-act="img-revert" hidden>↩️ Volver a la anterior<small>Recuperás la imagen que tenía antes del cambio — gratis</small></button>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-enhance">${pzIc('sparkle', 20)} Mejorar esta<small>Retoco la actual: luz, color y nitidez</small></button>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-revert" hidden>${pzIc('back', 20)} Volver a la anterior<small>Recuperás la imagen que tenía antes del cambio — gratis</small></button>
     <div class="pcsheet-note"></div>
     <button type="button" class="pcsheet-close" data-pc-act="img-close">Cerrar</button>
     <div class="pcsheet-msg"></div>
@@ -9635,7 +9709,7 @@ async function paintUpcoming(mount) {
   if (!up.length || !mount.isConnected) return;
   const items = up.map(({ p }) => postCardHTML(p, { layout: 'row' })).join('');
   mount.insertAdjacentHTML('afterbegin', `<div class="chat-upcoming">
-    <button type="button" class="cu-head" data-cu-go="schedule">📅 Se viene <span class="cu-go">Ver todo →</span></button>
+    <button type="button" class="cu-head" data-cu-go="schedule">${pzIc('calendar', 18)} Se viene <span class="cu-go">Ver todo →</span></button>
     <div class="cu-list">${items}</div>
   </div>`);
   // Debajo de la tira de cupo si ya está (orden estable sin importar el timing).
@@ -10432,7 +10506,7 @@ function rebuildFrustrated() {
     d.setAttribute('style', 'border:1.5px solid #FEC14D;background:#FFF9EC;margin:0 0 12px');
     d.innerHTML = '<h3 style="margin:0 0 4px">🛑 Frenemos un toque</h3>' +
       '<p style="margin:0 0 12px;color:var(--mut);font-size:12.5px">Ya armamos tu semana 2 veces y la vaciaste de nuevo — regenerar a ciegas sería quemar tu tiempo y tu plata.</p>' +
-      '<a class="btn btn-primary btn-sm" href="#/app/chat">💬 Contame en el chat qué no te cierra</a>';
+      '<a class="btn btn-primary btn-sm" href="#/app/chat">' + pzIc('chat', 18) + ' Contame en el chat qué no te cierra</a>';
     main.prepend(d);
   }
 }
@@ -10645,7 +10719,7 @@ function openLightbox(src, isVideo, cap, tags, postId, postLabel) {
     ? `<div class="lb-cap">${capT ? `<div class="lb-cap-txt">${esc(capT)}</div>` : ''}${tagsT ? `<div class="lb-cap-tags">${esc(tagsT)}</div>` : ''}</div>`
     : '';
   const actHTML = pid
-    ? `<div class="lb-actions"><button type="button" class="lb-edit" id="lbEditBtn">${esc(postLabel || '✏️ Editar este posteo')}</button></div>`
+    ? `<div class="lb-actions"><button type="button" class="lb-edit" id="lbEditBtn">${pzIc('pencil', 15)} ${postLabel ? esc(postLabel) : 'Editar este posteo'}</button></div>`
     : '';
   const content = lb.querySelector('.lb-content');
   content.classList.toggle('with-cap', hasCap);
@@ -10815,7 +10889,7 @@ function fastTrackCardHTML(candidates) {
     </div></div>
     <div class="ft-step"><div class="ft-stepn">2</div><div class="ft-stepbody">
       <div class="ft-stept">Una foto <span style="font-weight:400;color:var(--mut)">(opcional)</span></div>
-      <button type="button" class="btn btn-soft ft-upload" id="ftPhotoBtn">📷 Subí una foto de lo que vendés</button>
+      <button type="button" class="btn btn-soft ft-upload" id="ftPhotoBtn">${pzIc('camera', 18)} Subí una foto de lo que vendés</button>
       <input type="file" id="ftPhotoInput" accept="image/*" style="display:none">
       <div class="ft-photo-st" id="ftPhotoSt">Si subís una foto tuya, la usamos en el posteo.</div>
       <button type="button" class="ft-skip" id="ftPhotoSkip">saltear →</button>
@@ -10823,8 +10897,8 @@ function fastTrackCardHTML(candidates) {
     <div class="ft-step"><div class="ft-stepn">3</div><div class="ft-stepbody">
       <div class="ft-stept">Publicar</div>
       ${connected
-        ? `<button type="button" class="btn btn-primary btn-block ft-pub" id="ftPublish">🚀 Publicar ahora</button>`
-        : `<button type="button" class="btn btn-primary btn-block ft-pub" id="ftConnect">📸 Conectar Instagram</button>
+        ? `<button type="button" class="btn btn-primary btn-block ft-pub" id="ftPublish">${pzIc('bolt', 18)} Publicar ahora</button>`
+        : `<button type="button" class="btn btn-primary btn-block ft-pub" id="ftConnect">${pzIc('camera', 18)} Conectar Instagram</button>
            <div class="ft-hint">Primero conectá tu Instagram; después publicás con un tap.</div>`}
       <div id="ftPubMount"></div>
     </div></div>
@@ -10918,7 +10992,7 @@ function bindFastTrack() {
         <div class="big-emoji">🎉</div>
         <h3 style="margin:12px 0 4px">¡Tu primer posteo está saliendo!</h3>
         <p class="d" style="font-size:14px">Ya está publicado (o publicándose) en tu Instagram.<br>Mientras sale, <b>contame de tu negocio 🎙️</b> — así los próximos posteos salen todavía mejor.</p>
-        <button class="btn btn-primary btn-block" id="ftCelebVoice" style="margin-top:10px;font-size:14px">🎙️ Contame de tu negocio</button>
+        <button class="btn btn-primary btn-block" id="ftCelebVoice" style="margin-top:10px;font-size:14px">${pzIc('mic', 18)} Contame de tu negocio</button>
         <button class="btn btn-ghost btn-block" id="ftCelebClose" style="margin-top:8px">Ahora no</button>`);
       const vb = document.getElementById('ftCelebVoice');
       if (vb) vb.onclick = () => {
@@ -10953,7 +11027,7 @@ function firstPublishCardHTML(drafts) {
   <div class="card" id="firstPublishCard" style="border:2px solid var(--yel);background:#FFF9EC">
     <h3 style="margin:0 0 4px">🚀 Tu primer posteo</h3>
     <p class="hint" style="margin:0 0 10px">${sub}</p>
-    <button type="button" class="btn btn-primary btn-block" id="btnFirstPublish" style="min-height:52px;font-size:16px;touch-action:manipulation">🚀 Publicar mi primero</button>
+    <button type="button" class="btn btn-primary btn-block" id="btnFirstPublish" style="min-height:52px;font-size:16px;touch-action:manipulation">${pzIc('bolt', 18)} Publicar mi primero</button>
     <div id="fpPubMount" style="margin-top:10px"></div>
   </div>`;
 }
@@ -11055,7 +11129,7 @@ let SEM_NUDGES = [];
 function sigBtns(p) {
   const a = p.signal === 'approved' ? ' on' : '';
   const r = p.signal === 'rejected' ? ' on' : '';
-  return `<button class="sig-btn${a}" data-sig="approved" data-id="${p.id}" title="Me gustó, así">👍</button><button class="sig-btn${r}" data-sig="rejected" data-id="${p.id}" title="No me gustó">👎</button>`;
+  return `<button class="sig-btn${a}" data-sig="approved" data-id="${p.id}" title="Me gustó, así">${pzIc('checkCircle', 18)}</button><button class="sig-btn${r}" data-sig="rejected" data-id="${p.id}" title="No me gustó">${pzIc('reject', 18)}</button>`;
 }
 function bindSignalBtns() {
   $$('[data-sig]').forEach(b => b.onclick = async () => {
@@ -11190,7 +11264,7 @@ function fmtStreakLeft(ms) {
   return Math.floor(h / 24) + 'd';
 }
 function streakShareBtns() {
-  return `<button class="btn btn-primary btn-block" id="streakShareBtn" style="margin-top:10px">📤 Compartir mi racha</button>
+  return `<button class="btn btn-primary btn-block" id="streakShareBtn" style="margin-top:10px">${pzIc('share', 18)} Compartir mi racha</button>
   <button class="btn btn-ghost btn-block" id="streakCloseBtn" style="margin-top:8px">Cerrar</button>`;
 }
 function wireStreakModalBtns(sk) {
@@ -11442,7 +11516,7 @@ async function adsRecAction(card, opts) {
     <div style="background:#FFF7E8;border:1px solid var(--yel);border-radius:12px;padding:10px 12px;font-size:12.5px">
       <div style="margin-bottom:8px">Se debitan <b>${fmtARSc(budget)}</b> de tu crédito por 7 días de pauta en Instagram y Facebook.</div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-primary btn-sm" data-ok style="flex:1">Confirmar 🚀</button>
+        <button class="btn btn-primary btn-sm" data-ok style="flex:1">Confirmar ${pzIc('bolt', 18)}</button>
         <button class="btn btn-ghost btn-sm" data-no style="flex:1">Cancelar</button>
       </div>
     </div>`;
@@ -11605,7 +11679,7 @@ async function adsView() {
          <div class="st-empty-ico">⭐</div>
          <b>Las recomendaciones van a vivir acá</b>
          <p>Cuando tus posteos junten alcance, te marcamos acá cuáles conviene potenciar.</p>
-         <a class="btn btn-primary btn-sm" href="#/app/schedule" style="margin-top:12px">📅 Ir a mi semana</a>
+         <a class="btn btn-primary btn-sm" href="#/app/schedule" style="margin-top:12px">${pzIc('calendar', 18)} Ir a mi semana</a>
        </div>`;
 
   const bl = (boosts && boosts.boosts) || [];
@@ -11732,7 +11806,7 @@ function streakPillModal(sk) {
     ? `<div class="stk-count danger">⏳ Tu racha se apaga en <b>${left}</b></div>`
     : `<div class="stk-count">🔥 Racha viva · le quedan <b>${left}</b></div>`;
   // Acción concreta: exacto qué hacer + botón que lo lleva ahí.
-  const cta = `<div class="stk-cta"><p>Programá 1 posteo y la racha sigue viva.</p><button class="btn btn-primary btn-block" id="stkGoSched">📅 Programar mi semana</button></div>`;
+  const cta = `<div class="stk-cta"><p>Programá 1 posteo y la racha sigue viva.</p><button class="btn btn-primary btn-block" id="stkGoSched">${pzIc('calendar', 18)} Programar mi semana</button></div>`;
   const journey = levels.map((l, i) => {
     const isCur = i === curIdx;
     const done = !isCur && sk.current >= l.min;
@@ -12253,8 +12327,8 @@ function obSummaryHTML() {
     ${o.colors.length >= 2 ? `<div class="cm-tip"><span>🎨</span><span><b>Colores:</b> ${o.colors.map(c => `<span style="display:inline-block;width:18px;height:18px;border-radius:6px;background:${esc(c)};border:1px solid var(--line);vertical-align:-3px;margin-right:4px"></span>`).join('')} <span style="color:var(--mut);font-size:11.5px">de tu logo</span></span></div>` : ''}
     <div id="obMsg" style="margin-top:8px"></div>
     <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
-      <button class="btn btn-ghost" id="obFix">✏️ Corregir</button>
-      <button class="btn btn-primary" id="obConfirm" style="flex:1">✅ Todo bien, arranquemos</button>
+      <button class="btn btn-ghost" id="obFix">${pzIc('pencil', 18)} Corregir</button>
+      <button class="btn btn-primary" id="obConfirm" style="flex:1">${pzIc('checkCircle', 18)} Todo bien, arranquemos</button>
     </div>
     <div style="text-align:center;margin-top:14px"><a href="#/app/schedule" style="color:var(--dim);font-size:12.5px">Hacerlo después →</a></div>
   </div>`;
@@ -12285,7 +12359,7 @@ function obFormHTML() {
     <div class="field" style="margin-bottom:6px"><label>¿Qué vendés?</label><textarea id="obfDesc" rows="3" maxlength="600" placeholder="En 1-2 líneas: qué ofrecés y qué te hace diferente"></textarea></div>
     <div id="obFormMsg" style="margin-top:8px"></div>
     <button class="btn btn-primary btn-block" id="obFormGo" style="margin-top:14px">Armar mi semana →</button>
-    <p style="text-align:center;margin:12px 0 0"><button type="button" id="obChatAlt" style="background:none;border:0;color:var(--cel);font-size:12.5px;font-weight:700;cursor:pointer">¿Preferís contármelo charlando? 💬</button></p>
+    <p style="text-align:center;margin:12px 0 0"><button type="button" id="obChatAlt" style="background:none;border:0;color:var(--cel);font-size:12.5px;font-weight:700;cursor:pointer">¿Preferís contármelo charlando? ${pzIc('chat', 15)}</button></p>
   </div>`;
 }
 
@@ -12309,8 +12383,8 @@ function obChatHTML(o) {
     <div class="chat-box" id="obBox" style="min-height:230px;max-height:48vh">${msgs}${o.loading ? `<div class="chat-msg ai">⏳ …</div>` : ''}</div>
     ${o.chips && !o.loading ? `<div class="chat-chips" style="margin-top:10px">${o.chips.map(c => `<button data-obchip="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
     <div class="chat-input-row" style="margin-top:10px">
-      ${o.awaitLogo && !o.loading ? `<button class="btn btn-soft" id="obLogoBtn" title="Subir logo">📤</button><input type="file" id="obLogoFile" accept="image/*,.pdf,.docx" hidden>` : ''}
-      ${o.awaitPhotos && !o.loading ? `<button class="btn btn-soft" id="obPhotosBtn" title="Subir fotos">📸</button><input type="file" id="obPhotosFile" accept="image/*" multiple hidden>` : ''}
+      ${o.awaitLogo && !o.loading ? `<button class="btn btn-soft" id="obLogoBtn" title="Subir logo">${pzIc('share', 18)}</button><input type="file" id="obLogoFile" accept="image/*,.pdf,.docx" hidden>` : ''}
+      ${o.awaitPhotos && !o.loading ? `<button class="btn btn-soft" id="obPhotosBtn" title="Subir fotos">${pzIc('camera', 18)}</button><input type="file" id="obPhotosFile" accept="image/*" multiple hidden>` : ''}
       <input id="obInput" class="in" placeholder="${o.awaitPhotos ? 'O escribí "saltear"' : 'Escribí tu respuesta…'}" maxlength="600" autocomplete="off" ${o.loading ? 'disabled' : ''}>
       <button class="btn btn-primary" id="obSend" title="Enviar" ${o.loading ? 'disabled' : ''}>➤</button>
     </div>
@@ -12883,7 +12957,7 @@ function pzPostPayMagicRender(box, d, en) {
         ? f.colores.map((c) => `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${esc2(c)};border:1px solid var(--line);vertical-align:middle;margin-right:4px" title="${esc2(c)}"></span>`).join('')
         : esc2(en ? f.valor_en : f.valor);
       const picker = (f.opciones && f.opciones.length)
-        ? `<button class="pz-magic-edit" data-ficha="${esc2(f.id)}" style="background:none;border:0;cursor:pointer;font-size:14px" title="${en ? 'Correct' : 'Corregir'}">✏️</button>
+        ? `<button class="pz-magic-edit" data-ficha="${esc2(f.id)}" style="background:none;border:0;cursor:pointer;font-size:14px" title="${en ? 'Correct' : 'Corregir'}">${pzIc('pencil', 15)}</button>
            <span class="pz-magic-picker" data-picker="${esc2(f.id)}" hidden style="display:block;margin-top:6px"></span>`
         : '';
       return `<div style="font-size:13px;line-height:1.5;margin-bottom:6px"><span style="color:var(--dim)">${esc2(en ? f.en : f.es)}:</span> <b>${val}</b>${f.corregida ? ` <span style="font-size:11px;color:var(--dim)">(${en ? 'corrected by you' : 'corregido por vos'})</span>` : ''} ${picker}</div>`;
@@ -13079,10 +13153,10 @@ async function pzPostpayTray() {
     let rows = '';
     if (d.idea24) {
       const it = d.idea24;
-      rows += `<div class="pv-row" id="pzIdea24Row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${en ? '💡 Your first idea as a client' : '💡 Tu primera idea como cliente'}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden>
+      rows += `<div class="pv-row" id="pzIdea24Row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${pzIc('idea', 18)} ${en ? 'Your first idea as a client' : 'Tu primera idea como cliente'}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden>
         <div style="font-size:13.5px;line-height:1.55"><b>${esc(it.title)}</b><div style="color:var(--mut);margin-top:4px">${esc(it.why || '')}</div>
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-          <button type="button" class="btn btn-primary btn-sm" id="pzIdea24Make" data-idea="${it.id}">💪 ${en ? 'Make it' : 'Hacelo'}</button>
+          <button type="button" class="btn btn-primary btn-sm" id="pzIdea24Make" data-idea="${it.id}">${pzIc('bolt', 18)} ${en ? 'Make it' : 'Hacelo'}</button>
           <button type="button" class="btn btn-ghost btn-sm" id="pzIdea24X">${en ? 'Dismiss' : 'Descartar'}</button>
         </div><div id="pzIdea24Msg" style="font-size:12.5px;margin-top:8px"></div></div></div></div>`;
     }
@@ -13096,7 +13170,7 @@ async function pzPostpayTray() {
           ${m.best.permalink ? `<a href="${esc(m.best.permalink)}" target="_blank" rel="noopener">${en ? 'See it on Instagram →' : 'Verlo en Instagram →'}</a>` : ''}</div></div>`;
       }
       if (m.level) body += `<div style="font-size:13px;line-height:1.5;margin-top:10px">${en ? 'What I already learned about you: ' : 'Esto es lo que ya aprendí de vos: '}<b>${esc(m.level.level_name)}</b></div>`;
-      rows += `<div class="pv-row" id="pzMonth30Row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${en ? '🎉 Your first month with Posty' : '🎉 Tu primer mes con Posty'}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden>${body}
+      rows += `<div class="pv-row" id="pzMonth30Row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${pzIc('sparkle', 18)} ${en ? 'Your first month with Posty' : 'Tu primer mes con Posty'}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden>${body}
         <div style="margin-top:10px"><button type="button" class="btn btn-ghost btn-sm" id="pzMonth30X">✕ ${en ? 'Got it' : 'Entendido'}</button></div></div></div>`;
     }
     if (!rows) return;
@@ -13119,7 +13193,7 @@ async function pzPostpayTray() {
         if (msg) msg.textContent = (r && r.ok) ? (en ? '✓ Done! Your draft is in your week.' : '✓ ¡Lista! Tu borrador está en tu semana.') : (en ? 'I could not make it right now 😅' : 'No la pude armar ahora 😅');
         if (r && r.ok) { const row = document.getElementById('pzIdea24Row'); if (row) setTimeout(() => row.remove(), 4000); }
         else mk.disabled = false;
-      } catch (e) { mk.disabled = false; mk.textContent = '💪 ' + (en ? 'Make it' : 'Hacelo'); }
+      } catch (e) { mk.disabled = false; mk.innerHTML = pzIc('bolt', 18) + ' ' + (en ? 'Make it' : 'Hacelo'); }
     };
     const dx = document.getElementById('pzIdea24X');
     if (dx) dx.onclick = async () => {
@@ -13232,7 +13306,7 @@ function failedCardHTML(failed) {
         <div style="font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 60))}</div>
         ${p.error ? `<div style="font-size:11.5px;color:var(--mut)">${esc(humanError(p.error))}</div>` : ''}
       </div>
-      <button class="btn btn-soft btn-sm" data-failed-retry="${p.id}">🔄 Reintentar</button>
+      <button class="btn btn-soft btn-sm" data-failed-retry="${p.id}">${pzIc('refresh', 18)} Reintentar</button>
       <button class="btn btn-soft btn-sm" data-failed-dismiss="${p.id}" title="Descartar este posteo">✕</button>
     </div>`).join('')}
     <div class="hint" data-failed-msg style="margin-top:4px"></div>
@@ -13912,10 +13986,10 @@ function hfPeekHTML(p, en, opts) {
     : `<button type="button" class="hf-peek-act" data-hf-peek-act="redo" disabled>↻ ${en ? 'Redo' : 'Rehacer'} · 0</button>`);
   const redoLine = (left === 0) ? hfRedoLineHTML(p, en) : '';
   const acts = o.visitor ? '' : `<div class="hf-peek-acts">
-      <button type="button" class="hf-peek-act" data-hf-peek-act="chat">💬 ${en ? 'Chat' : 'Chat'}</button>
+      <button type="button" class="hf-peek-act" data-hf-peek-act="chat">${pzIc('chat', 18)} ${en ? 'Chat' : 'Chat'}</button>
       ${redoBtn}
-      <button type="button" class="hf-peek-act" data-hf-peek-act="pin">${p.pinned ? (en ? '📌 Unpin' : '📌 Desfijar') : (en ? '📌 Pin' : '📌 Fijar')}</button>
-      <button type="button" class="hf-peek-act" data-hf-peek-act="followers">👁 ${en ? 'Followers view' : 'Vista de seguidor'}</button>
+      <button type="button" class="hf-peek-act" data-hf-peek-act="pin">${p.pinned ? (pzIc('pin', 18) + ' ' + (en ? 'Unpin' : 'Desfijar')) : (pzIc('pin', 18) + ' ' + (en ? 'Pin' : 'Fijar'))}</button>
+      <button type="button" class="hf-peek-act" data-hf-peek-act="followers">${pzIc('eye', 18)} ${en ? 'Followers view' : 'Vista de seguidor'}</button>
     </div>${redoLine}`;
   return `<div class="hf-peek" data-post-id="${esc(String(p.id))}" role="dialog" aria-label="${en ? 'Post preview' : 'Vista rápida del posteo'}">
     <div class="hf-peek-media">${media}</div>
@@ -14475,26 +14549,26 @@ function hfDetailHTML(p, opts) {
       <button type="button" class="hf-d-act${p.owner_liked ? ' on' : ''}" data-hfd-act="like" aria-label="${en ? 'Like' : 'Me gusta'}">${p.owner_liked ? HF_D_HEART_FULL : HF_D_HEART}</button>
       <button type="button" class="hf-d-act" data-hfd-act="comment" aria-label="${en ? 'Ask Posty for a change' : 'Pedirle un cambio a Posty'}">${HF_D_COMMENT}</button>
       <button type="button" class="hf-d-act" data-hfd-act="share" aria-label="${en ? 'Share' : 'Compartir'}">${HF_D_SHARE}</button>
-      <button type="button" class="hf-d-act hf-d-eye" data-hfd-act="followers" aria-label="${en ? 'See it in the feed' : 'Ver en el inicio'}">👁</button>
+      <button type="button" class="hf-d-act hf-d-eye" data-hfd-act="followers" aria-label="${en ? 'See it in the feed' : 'Ver en el inicio'}">${pzIc('eye', 18)}</button>
       <span class="hf-d-sp"></span>
       <button type="button" class="hf-d-act${p.owner_saved ? ' on' : ''}" data-hfd-act="save" aria-label="${en ? 'Save' : 'Guardar'}">${p.owner_saved ? HF_D_SAVE_FULL : HF_D_SAVE}</button>
     </div>`;
   const accept = (!o.visitor && p.status === 'draft')
-    ? `<button type="button" class="hf-d-accept" data-revaccept="${esc(String(p.id))}"${o.propIso ? ` data-proposed="${esc(o.propIso)}"` : ''}>✅ ${en ? 'Accept' : 'Aceptar'}</button>` : '';
+    ? `<button type="button" class="hf-d-accept" data-revaccept="${esc(String(p.id))}"${o.propIso ? ` data-proposed="${esc(o.propIso)}"` : ''}>${pzIc('checkCircle', 18)} ${en ? 'Accept' : 'Aceptar'}</button>` : '';
   // (Tanda feed 6A · ítem 3) Contador de rehaces en el detalle: línea +
   // botón Rehacer mientras quedan; a 0, el aviso y los caminos gratis
   // (Mi foto · Retocar el texto · Dejarlo así). Solo no publicados
   // alcanzados por el contador y fuera del modo visitante.
   const redoLeftD = o.visitor ? null : hfRedoLeft(p);
   const redoHTML = redoLeftD === null ? '' : (redoLeftD > 0
-    ? `<div class="hf-redo">${hfRedoLineHTML(p, en)}<button type="button" class="hf-redo-btn" data-hfd-act="redo">🔁 ${en ? 'Redo' : 'Rehacer'}</button></div>`
-    : `<div class="hf-redo hf-redo-0">${hfRedoLineHTML(p, en)}<div class="hf-redo-alt"><button type="button" class="hf-redo-altb" data-hfd-act="myphoto">📸 ${en ? 'My photo' : 'Mi foto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="retext">✏️ ${en ? 'Touch up the text' : 'Retocar el texto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="keep">✓ ${en ? 'Leave it as is' : 'Dejarlo así'}</button></div></div>`);
+    ? `<div class="hf-redo">${hfRedoLineHTML(p, en)}<button type="button" class="hf-redo-btn" data-hfd-act="redo">${pzIc('refresh', 18)} ${en ? 'Redo' : 'Rehacer'}</button></div>`
+    : `<div class="hf-redo hf-redo-0">${hfRedoLineHTML(p, en)}<div class="hf-redo-alt"><button type="button" class="hf-redo-altb" data-hfd-act="myphoto">${pzIc('camera', 18)} ${en ? 'My photo' : 'Mi foto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="retext">${pzIc('pencil', 18)} ${en ? 'Touch up the text' : 'Retocar el texto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="keep">✓ ${en ? 'Leave it as is' : 'Dejarlo así'}</button></div></div>`);
   // (Tanda feed 6C · ítem 6) Portada a elección del reel todavía no
   // publicado: la acción vive en el detalle (y en su menú •••). Con
   // portada del dueño, «Volver al video» la quita. La del director
   // (sin origen frame@) se puede cambiar pero no quitar desde acá.
   const coverRow = (isV && !o.visitor && p.status !== 'published')
-    ? `<div class="hf-cover-row"><button type="button" class="hf-cover-btn" data-hfd-act="cover">🖼 ${covD.has ? (en ? 'Change the reel cover' : 'Cambiar la portada del reel') : (en ? 'Choose the reel cover' : 'Elegir la portada del reel')}</button>${covD.user ? `<button type="button" class="hf-cover-btn hf-cover-clear" data-hfd-act="cover-clear">${en ? 'Back to the video' : 'Volver al video'}</button>` : ''}</div>` : '';
+    ? `<div class="hf-cover-row"><button type="button" class="hf-cover-btn" data-hfd-act="cover">${pzIc('image', 18)} ${covD.has ? (en ? 'Change the reel cover' : 'Cambiar la portada del reel') : (en ? 'Choose the reel cover' : 'Elegir la portada del reel')}</button>${covD.user ? `<button type="button" class="hf-cover-btn hf-cover-clear" data-hfd-act="cover-clear">${en ? 'Back to the video' : 'Volver al video'}</button>` : ''}</div>` : '';
   // (Tanda feed 6C · ítem 10) Contenedor de la lista de comentarios
   // reales: nace vacío y oculto; hfDetailWire lo carga lazy desde
   // /api/posts/:id/comments y solo lo muestra si vino lista. Sin
@@ -14595,11 +14669,11 @@ function hfProfileActionsHTML(en) {
   // recorta» NO son de esta fila (son del detalle del posteo) y no se tocan.
   const sec = (attrs, txt) => '<button type="button" class="hf-psec" ' + attrs + '>' + txt + '</button>';
   return '<div class="hf-pacts">'
-    + '<button type="button" class="hf-pmain" data-hf-pact="share">📤 ' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</button>'
+    + '<button type="button" class="hf-pmain" data-hf-pact="share">' + pzIc('share', 18) + ' ' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</button>'
     + '<div class="hf-psecs">'
-    + sec('data-hf-pact="edit"', '✏️ ' + (en ? 'Edit profile' : 'Editar perfil'))
-    + sec('data-hf-visitor="1"', '👁 ' + (en ? 'View as visitor' : 'Ver como visitante'))
-    + sec('data-hf-pact="archive"', '🗂️ ' + (en ? 'Archive' : 'Tu archivo'))
+    + sec('data-hf-pact="edit"', pzIc('pencil', 15) + ' ' + (en ? 'Edit profile' : 'Editar perfil'))
+    + sec('data-hf-visitor="1"', pzIc('eye', 15) + ' ' + (en ? 'View as visitor' : 'Ver como visitante'))
+    + sec('data-hf-pact="archive"', pzIc('archive', 15) + ' ' + (en ? 'Archive' : 'Tu archivo'))
     + '</div></div>';
 }
 /* — Ítem 12: cubiertas de destacadas (render determinístico, $0 de IA) — */
@@ -14942,7 +15016,7 @@ async function inicioView() {
   // como acción chica en la zona del encabezado del perfil, junto a sus
   // acciones — ya no ocupa un bloque propio bajo la grilla.
   const visitorPillHTML = HF_VISITOR
-    ? `<button type="button" class="hf-vpill" data-hf-visitor="0">👁 ${enHome ? 'You are seeing your profile as a visitor' : 'Estás viendo tu perfil como visitante'} · <b>${enHome ? 'Back to your view' : 'Volver a tu vista'}</b></button>`
+    ? `<button type="button" class="hf-vpill" data-hf-visitor="0">${pzIc('eye', 15)} ${enHome ? 'You are seeing your profile as a visitor' : 'Estás viendo tu perfil como visitante'} · <b>${enHome ? 'Back to your view' : 'Volver a tu vista'}</b></button>`
     : '';
   // (v461 · cabecera) «Ver como visitante» ya no tiene fila propia:
   // es una de las secundarias en texto de hfProfileActionsHTML.
@@ -14981,7 +15055,7 @@ async function inicioView() {
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
     <button type="button" class="mz-ph" id="mzChatOpen">Escribile a Posty…</button>
-    <button type="button" class="mz-mic" id="mzMic" aria-label="Pedir con nota de voz">🎙️</button>
+    <button type="button" class="mz-mic" id="mzMic" aria-label="Pedir con nota de voz">${pzIc('mic', 20)}</button>
   </div>
   <div class="mz-sheet" id="mzSheet" hidden>
     <div class="mz-sheet-card">
@@ -15084,7 +15158,7 @@ function pzNivelDetalleHTML(nv, en) {
 // contenido permanente). Desafio + prueba viven en el detalle desplegable.
 function pzNivelExtraHTML(nv, en) {
   let h = '';
-  if (nv.brote) h += `<div class="pz-brote" id="pzNivelBrote"><span>🌱 ${esc(en ? 'Surprise sprout: ' : 'Brote sorpresa: ')}${esc(nv.brote.texto)}</span><button type="button" class="pz-brote-x" data-pz-brote-x data-pz-brote-fuente="${esc(nv.brote.fuente)}" data-pz-brote-id="${esc(String(nv.brote.id || 0))}" aria-label="${en ? 'Close' : 'Cerrar'}">✕</button></div>`;
+  if (nv.brote) h += `<div class="pz-brote" id="pzNivelBrote"><span>${pzIc('sprout', 18)} ${esc(en ? 'Surprise sprout: ' : 'Brote sorpresa: ')}${esc(nv.brote.texto)}</span><button type="button" class="pz-brote-x" data-pz-brote-x data-pz-brote-fuente="${esc(nv.brote.fuente)}" data-pz-brote-id="${esc(String(nv.brote.id || 0))}" aria-label="${en ? 'Close' : 'Cerrar'}">✕</button></div>`;
   if (nv.ausencia) {
     const lines = (nv.ausencia.aprendido || []).map((x) => `<div>· ${esc(x)}</div>`).join('');
     h += `<div class="pz-ausencia" id="pzNivelAusencia"><button type="button" class="pz-brote-x" data-pz-ausencia-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button><strong>${esc(en ? `While you were away (${nv.ausencia.dias} days)` : `Mientras no estabas (${nv.ausencia.dias} días)`)}</strong>${nv.ausencia.subio ? `<div>${esc(en ? 'Posty leveled up while you were gone.' : 'Posty subió de nivel mientras no mirabas.')}</div>` : ''}${lines}</div>`;
@@ -16267,11 +16341,11 @@ function hfOpenActionsSheet(tile) {
   bd.innerHTML = `<div class="pcsheet hf-actions" data-post-id="${esc(String(id))}" role="dialog" aria-modal="true">
     <div class="pcsheet-handle"></div>
     <div class="pcsheet-title">${chipTxt ? '🕐 ' + esc(chipTxt) : (en ? 'Scheduled' : 'Programado')}</div>
-    <button type="button" class="pcsheet-opt" data-hf-act="edit">✏️ ${en ? 'Edit' : 'Editar'}<small>${en ? 'Opens this post right here in your feed' : 'Se abre este posteo acá mismo, en tu feed'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hf-act="edit">${pzIc('pencil', 20)} ${en ? 'Edit' : 'Editar'}<small>${en ? 'Opens this post right here in your feed' : 'Se abre este posteo acá mismo, en tu feed'}</small></button>
     <button type="button" class="pcsheet-opt" data-hf-act="hold">⏸ ${en ? 'Stop' : 'Frenar'}<small>${en ? 'Back to draft — it will not go out' : 'Vuelve a borrador — no va a salir'}</small></button>
-    <button type="button" class="pcsheet-opt" data-hf-act="resched">🗓️ ${en ? 'Reschedule' : 'Reprogramar'}<small>${en ? 'Pick a new day and time' : 'Elegí un día y una hora nuevos'}</small></button>
-    <button type="button" class="pcsheet-opt" data-hf-act="move">🔀 ${en ? 'Move' : 'Mover'}<small>${en ? 'Swap days with another upcoming post' : 'Intercambiá el día con otro posteo que viene'}</small></button>
-    <button type="button" class="pcsheet-opt" data-hf-act="${tile.dataset.pinned === '1' ? 'unpin' : 'pin'}">📌 ${tile.dataset.pinned === '1' ? (en ? 'Unpin from your profile' : 'Desfijar de tu perfil') : (en ? 'Pin to your profile' : 'Fijar en tu perfil')}<small>${en ? 'Pinned posts show first in your grid' : 'Los fijados se ven primeros en tu grilla'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hf-act="resched">${pzIc('calendar', 20)} ${en ? 'Reschedule' : 'Reprogramar'}<small>${en ? 'Pick a new day and time' : 'Elegí un día y una hora nuevos'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hf-act="move">${pzIc('swap', 20)} ${en ? 'Move' : 'Mover'}<small>${en ? 'Swap days with another upcoming post' : 'Intercambiá el día con otro posteo que viene'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hf-act="${tile.dataset.pinned === '1' ? 'unpin' : 'pin'}">${pzIc('pin', 20)} ${tile.dataset.pinned === '1' ? (en ? 'Unpin from your profile' : 'Desfijar de tu perfil') : (en ? 'Pin to your profile' : 'Fijar en tu perfil')}<small>${en ? 'Pinned posts show first in your grid' : 'Los fijados se ven primeros en tu grilla'}</small></button>
     <div class="hf-resched" hidden>
       <input type="datetime-local" class="pcsheet-select hf-resched-inp" value="${esc(isoToLocalInput(tile.dataset.schedAt || ''))}" aria-label="${en ? 'New day and time' : 'Nuevo día y hora'}">
       <button type="button" class="pcsheet-opt" data-hf-act="resched-save" style="margin-top:8px">✓ ${en ? 'Save new time' : 'Guardar nueva fecha'}</button>
@@ -16535,10 +16609,10 @@ function hfDetailMenu(post) {
   bd.className = 'pcsheet-backdrop';
   bd.innerHTML = `<div class="pcsheet hf-actions" data-post-id="${esc(String(post.id))}" role="dialog" aria-modal="true">
     <div class="pcsheet-handle"></div>
-    <button type="button" class="pcsheet-opt" data-hfdm="pin">${post.pinned ? '📌 ' + (en ? 'Unpin from your profile' : 'Desfijar de tu perfil') : '📌 ' + (en ? 'Pin to your profile' : 'Fijar en tu perfil')}<small>${en ? 'Pinned posts show first in your grid' : 'Los fijados se ven primeros en tu grilla'}</small></button>
-    <button type="button" class="pcsheet-opt" data-hfdm="edit">✏️ ${en ? 'Edit' : 'Editar'}<small>${en ? 'Open this post to edit it' : 'Abrí este posteo para editarlo'}</small></button>
-    <button type="button" class="pcsheet-opt" data-hfdm="followers">👁 ${en ? 'See it in the feed' : 'Ver en el inicio'}<small>${en ? 'How your followers see this post' : 'Cómo ven este posteo tus seguidores'}</small></button>
-    ${(String(post.media_type || '') === 'video' && post.status !== 'published') ? `<button type="button" class="pcsheet-opt" data-hfdm="cover">🖼 ${en ? 'Reel cover' : 'Portada del reel'}<small>${en ? 'Pick the frame your grid shows' : 'Elegí el cuadro que muestra tu grilla'}</small></button>${hfCoverState(post).user ? `<button type="button" class="pcsheet-opt" data-hfdm="cover-clear">🎬 ${en ? 'Back to the video' : 'Volver al video'}<small>${en ? 'Remove your chosen cover' : 'Quitá la portada que elegiste'}</small></button>` : ''}` : ''}
+    <button type="button" class="pcsheet-opt" data-hfdm="pin">${post.pinned ? (pzIc('pin', 20) + ' ' + (en ? 'Unpin from your profile' : 'Desfijar de tu perfil')) : (pzIc('pin', 20) + ' ' + (en ? 'Pin to your profile' : 'Fijar en tu perfil'))}<small>${en ? 'Pinned posts show first in your grid' : 'Los fijados se ven primeros en tu grilla'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hfdm="edit">${pzIc('pencil', 20)} ${en ? 'Edit' : 'Editar'}<small>${en ? 'Open this post to edit it' : 'Abrí este posteo para editarlo'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hfdm="followers">${pzIc('eye', 20)} ${en ? 'See it in the feed' : 'Ver en el inicio'}<small>${en ? 'How your followers see this post' : 'Cómo ven este posteo tus seguidores'}</small></button>
+    ${(String(post.media_type || '') === 'video' && post.status !== 'published') ? `<button type="button" class="pcsheet-opt" data-hfdm="cover">${pzIc('image', 20)} ${en ? 'Reel cover' : 'Portada del reel'}<small>${en ? 'Pick the frame your grid shows' : 'Elegí el cuadro que muestra tu grilla'}</small></button>${hfCoverState(post).user ? `<button type="button" class="pcsheet-opt" data-hfdm="cover-clear">${pzIc('reel', 20)} ${en ? 'Back to the video' : 'Volver al video'}<small>${en ? 'Remove your chosen cover' : 'Quitá la portada que elegiste'}</small></button>` : ''}` : ''}
     <button type="button" class="pcsheet-close" data-hfdm="close">${en ? 'Close' : 'Cerrar'}</button>
   </div>`;
   document.body.appendChild(bd);
@@ -16773,7 +16847,7 @@ function hfMoveStart(tile) {
   const bar = document.createElement('div');
   bar.className = 'hf-move-bar';
   bar.id = 'hfMoveBar';
-  bar.innerHTML = `<span>🔀 ${en ? 'Tap the post to swap days with' : 'Tocá el posteo con el que querés intercambiar el día'}</span><button type="button" class="hf-move-x">${en ? 'Cancel' : 'Cancelar'}</button>`;
+  bar.innerHTML = `<span>${pzIc('swap', 18)} ${en ? 'Tap the post to swap days with' : 'Tocá el posteo con el que querés intercambiar el día'}</span><button type="button" class="hf-move-x">${en ? 'Cancel' : 'Cancelar'}</button>`;
   document.body.appendChild(bar);
   bar.querySelector('.hf-move-x').addEventListener('click', () => hfMoveCancel());
 }
@@ -17308,7 +17382,7 @@ function bindStats() {
             <span>Seguidores</span>
           </div>
           <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-            <a class="btn btn-primary btn-sm" href="#/app/schedule">📅 Ir a mi semana</a>
+            <a class="btn btn-primary btn-sm" href="#/app/schedule">${pzIc('calendar', 18)} Ir a mi semana</a>
             ${(typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected) ? '<a class="btn btn-soft btn-sm" href="#/app/ajustes?ig=1">📸 Conectar Instagram</a>' : ''}
           </div>
         </div>`;
@@ -17696,12 +17770,12 @@ function apvPill(p, d, dOk) {
   const tz = apvTz();
   if (st === 'published') {
     const link = p.permalink || p.ig_permalink || p.url || '';
-    return `<span class="apv-pill apv-pill-ok">✅ Publicado</span>${link ? ` <a class="apv-link" href="${esc(link)}" target="_blank" rel="noopener">Ver en Instagram ↗</a>` : ''}`;
+    return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Publicado</span>${link ? ` <a class="apv-link" href="${esc(link)}" target="_blank" rel="noopener">Ver en Instagram ↗</a>` : ''}`;
   }
   if (st === 'failed') return '<span class="apv-pill apv-pill-warn">⚠️ No salió: ' + esc(humanError(p.error) || 'sin aprobación a tiempo') + '</span>';
-  if (ap === 'rejected' || st === 'cancelled') return '<span class="apv-pill apv-pill-bad">❌ Rechazado — no se publica</span>';
+  if (ap === 'rejected' || st === 'cancelled') return '<span class="apv-pill apv-pill-bad">' + pzIc('reject', 15) + ' Rechazado — no se publica</span>';
   if (ap === 'auto') return '<span class="apv-pill apv-pill-auto">🤖 Salió solo (no lo viste a tiempo)</span>';
-  if (ap === 'approved' && st === 'scheduled') return `<span class="apv-pill apv-pill-ok">✅ Aprobado — sale a las ${esc(dOk ? apvHM(d, tz) : '')}</span>`;
+  if (ap === 'approved' && st === 'scheduled') return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Aprobado — sale a las ${esc(dOk ? apvHM(d, tz) : '')}</span>`;
   if (ap === 'pending' && st === 'scheduled' && dOk && d.getTime() > Date.now()) return `<span class="apv-pill apv-pill-pend">⏳ Pendiente — sale ${esc(apvCountdown(d))} (o antes si lo aprobás)</span>`;
   return '<span class="apv-pill apv-pill-pend">⏳ Pendiente</span>';
 }
@@ -17736,7 +17810,7 @@ function dogfoodCardHTML(p) {
     ${p.image_path ? `<img src="${esc(p.image_path)}" alt="Propuesta de Posty" style="width:100%;border-radius:12px" loading="eager">` : ''}
     <p style="margin:10px 0 4px">${cap}${String(p.caption || '').length > 220 ? '…' : ''}</p>
     <div style="display:flex;gap:10px;margin-top:12px">
-      <button class="btn btn-primary" id="dogfoodApprove" data-dfid="${p.id}" style="flex:1;padding:14px;font-size:17px">✅ Publicar</button>
+      <button class="btn btn-primary" id="dogfoodApprove" data-dfid="${p.id}" style="flex:1;padding:14px;font-size:17px">${pzIc('checkCircle', 18)} Publicar</button>
       <button class="btn btn-soft" id="dogfoodDismiss" data-dfid="${p.id}" style="flex:1;padding:14px;font-size:17px">⏭️ Saltar</button>
     </div>
   </div>`;
@@ -17813,9 +17887,9 @@ async function approvalPostView(id) {
   const editPrompt = dOk ? apvEditPrompt(d, tz) : 'Quiero editar ese posteo';
   const actions = canAct ? `
     <div class="apv-actions" id="apvActions">
-      <button class="btn btn-primary" id="apvAccept" data-apvid="${esc(String(p.id))}">Aceptar ✅</button>
-      <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ✏️</button>
-      <button class="btn btn-danger" id="apvReject">Rechazar ❌</button>
+      <button class="btn btn-primary" id="apvAccept" data-apvid="${esc(String(p.id))}">Aceptar ${pzIc('checkCircle', 18)}</button>
+      <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ${pzIc('pencil', 18)}</button>
+      <button class="btn btn-danger" id="apvReject">Rechazar ${pzIc('reject', 18)}</button>
     </div>
     <div class="apv-confirm" id="apvConfirm" hidden>
       <p><b>¿Seguro?</b> No se va a publicar.</p>
@@ -17829,9 +17903,9 @@ async function approvalPostView(id) {
   // prefill de siempre y Rechazar lo cancela con confirmación.
   const draftActions = isDraft ? `
     <div class="apv-actions" id="apvActions">
-      <button class="btn btn-primary" id="apvAcceptDraft" data-apvid="${esc(String(p.id))}" data-apvwhen="${esc(String(p.scheduled_at || ''))}">Aceptar ✅</button>
-      <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ✏️</button>
-      <button class="btn btn-danger" id="apvReject">Rechazar ❌</button>
+      <button class="btn btn-primary" id="apvAcceptDraft" data-apvid="${esc(String(p.id))}" data-apvwhen="${esc(String(p.scheduled_at || ''))}">Aceptar ${pzIc('checkCircle', 18)}</button>
+      <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ${pzIc('pencil', 18)}</button>
+      <button class="btn btn-danger" id="apvReject">Rechazar ${pzIc('reject', 18)}</button>
     </div>
     <div id="apvGate"></div>
     <div class="apv-confirm" id="apvConfirm" hidden>
@@ -17901,7 +17975,7 @@ function bindApprovalPost() {
     if (!(PROFILE && PROFILE.ig_connected)) {
       const g = document.getElementById('apvGate');
       if (g) {
-        g.innerHTML = `<div class="ig-gate-note">📸 <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm ig-gate-go" type="button">Conectar Instagram →</button></div>`;
+        g.innerHTML = `<div class="ig-gate-note">${pzIc('camera', 18)} <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm ig-gate-go" type="button">Conectar Instagram →</button></div>`;
         const go = g.querySelector('.ig-gate-go');
         if (go) go.onclick = () => igConnectHere();
         try { g.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}

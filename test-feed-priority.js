@@ -1,4 +1,5 @@
 'use strict';
+global.pzIc = (name, px) => '<span class="pz-ic"></span>'; // stub: en producción pzIc es global de app.js (sistema de íconos 2026-10-25)
 /* test-feed-priority.js — (ARMA TODO · Correcciones prioritarias 1 y 2)
  *
  * Corrección 1 · AL ENTRAR, EL FEED MANDA:
@@ -341,10 +342,10 @@ ok(!appJs.includes('Estás hablando de este posteo') && !appJs.includes("You're 
 ok(appJs.includes('anchor_post_id') && appJs.includes('HF_CHAT_ANCHOR.id'), 'chat principal intacto: el envío sigue mandando anchor_post_id desde HF_CHAT_ANCHOR');
 
 console.log('— A: index.html y CHUNK_V');
-ok(indexHtml.includes('/app.js?v=303'), 'index.html: app.js bumpeado a ?v=302 (v471)');
+ok(indexHtml.includes('/app.js?v=304'), 'index.html: app.js bumpeado a ?v=304 (v473)');
 ok(!indexHtml.includes('/app.js?v=301'), 'index.html: sin ?v=301 residual');
-ok(indexHtml.includes('/styles.css?v=20261038'), 'index.html: styles.css bumpeado a ?v=20261036 (v469)');
-ok(appJs.includes("const CHUNK_V = '20261025-v465';"), 'app.js: CHUNK_V bumpeado al build v436');
+ok(indexHtml.includes('/styles.css?v=20261039'), 'index.html: styles.css bumpeado a ?v=20261039 (v473)');
+ok(appJs.includes("const CHUNK_V = '20261025-v473';"), 'app.js: CHUNK_V bumpeado al build v473');
 
 /* ================= Parte B: comportamiento ================= */
 console.log('— B: chip IG (extraído, 2 estados × 2 idiomas)');
@@ -439,9 +440,9 @@ console.log('— B: (v436) píldora de aceptación total (extraída)');
   const pillSrc = extractFn(appJs, 'acceptPillHTML') || '';
   const pill = new Function('ME', pillSrc + '\nreturn acceptPillHTML;')({ lang: 'es' });
   const es = pill(3, 'hsAcceptAll');
-  ok(es.includes('✅ Aceptar todo (3)') && es.includes('id="hsAcceptAll"') && es.includes('accept-pill'), 'píldora ES: «✅ Aceptar todo (3)» con su id y clase flotante');
+  ok(es.includes('Aceptar todo (3)') && es.includes('pz-ic') && !es.includes('✅') && es.includes('id="hsAcceptAll"') && es.includes('accept-pill'), 'píldora ES: «Aceptar todo (3)» con ícono dibujado, id y clase flotante');
   const pillEn = new Function('ME', pillSrc + '\nreturn acceptPillHTML;')({ lang: 'en' });
-  ok(pillEn(2, 'hfAcceptAll').includes('✅ Accept all (2)') && pillEn(2, 'hfAcceptAll').includes('id="hfAcceptAll"'), 'píldora EN: «✅ Accept all (2)»');
+  ok(pillEn(2, 'hfAcceptAll').includes('Accept all (2)') && pillEn(2, 'hfAcceptAll').includes('pz-ic') && !pillEn(2, 'hfAcceptAll').includes('✅') && pillEn(2, 'hfAcceptAll').includes('id="hfAcceptAll"'), 'píldora EN: «Accept all (2)» con ícono dibujado');
 }
 
 console.log('— B: (v436) línea de la semana que viene en el saludo (extraída)');
@@ -479,7 +480,7 @@ console.log('— B: (v436) schedFilterBlockHTML compone solo el feed (extraída,
   const posts = [{ id: 1, status: 'draft' }, { id: 2, status: 'draft' }, { id: 3, status: 'published' }];
   const html = built.f(posts, { limit: 7 }, false, false);
   ok(html.includes('FEEDBODY'), 'con posteos: el cuerpo es el feed');
-  ok(html.includes('✅ Aceptar todo (2)') && html.includes('id="hsAcceptAll"'), 'con 2 borradores: píldora «Aceptar todo (2)»');
+  ok(html.includes('Aceptar todo (2)') && html.includes('pz-ic') && !html.includes('✅') && html.includes('id="hsAcceptAll"'), 'con 2 borradores: píldora «Aceptar todo (2)» con ícono dibujado');
   ok(!html.includes('QUOTA') && built.quota() === false, 'sin la línea de cupo (schedQuotaHTML no se llama)');
   ok(built.nw() && built.nw().n === 5 && built.nw().total === 7, 'CHAT_NEXT_WEEK queda cargado (5 de 7) para el saludo del chat');
   const htmlPub = built.f([{ id: 3, status: 'published' }], { limit: 7 }, false, false);

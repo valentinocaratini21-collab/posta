@@ -60,7 +60,7 @@ function creatorView(embed) {
         <div id="c_prodPhotoBox"></div>
         <input type="file" id="c_prodPhotoFile" accept="image/*" style="display:none">
         <div class="hint">Si la subís, las 6 opciones usan TU foto. Ideal para vender tu producto exacto. Si no, usamos fotos del banco.</div></div>
-      <button class="btn btn-soft" id="btnGen">✨ Armar mi posteo</button>
+      <button class="btn btn-soft" id="btnGen">${pzIc('sparkle', 18)} Armar mi posteo</button>
       <div id="genErr"></div>
       <div id="genOut" style="margin-top:24px;${c.caption ? '' : 'display:none'}">
         <div class="field"><label>Caption</label><textarea id="c_caption" style="min-height:150px">${esc(c.caption)}</textarea></div>
@@ -106,9 +106,9 @@ function creatorView(embed) {
               </div>
             </div>` : `
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-ghost btn-sm" id="btnPhotoAdd" type="button">📷 Subir foto</button>
-              ${assetPhotos().length ? `<button class="btn btn-ghost btn-sm" id="btnPhotoLib" type="button">🖼️ Mis fotos</button>` : ''}
-              ${assetPhotos().length >= 2 ? `<button class="btn btn-ghost btn-sm" id="btnCarousel" type="button">🎞️ Carrusel</button>` : ''}
+              <button class="btn btn-ghost btn-sm" id="btnPhotoAdd" type="button">${pzIc('camera', 18)} Subir foto</button>
+              ${assetPhotos().length ? `<button class="btn btn-ghost btn-sm" id="btnPhotoLib" type="button">${pzIc('image', 18)} Mis fotos</button>` : ''}
+              ${assetPhotos().length >= 2 ? `<button class="btn btn-ghost btn-sm" id="btnCarousel" type="button">${pzIc('layers', 18)} Carrusel</button>` : ''}
             </div>
             <div id="photoLib" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px">
               ${assetPhotos().map(a => `<img src="${a.file_path}" data-lib="${a.file_path}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:pointer">`).join('')}
@@ -146,7 +146,7 @@ function creatorView(embed) {
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <span style="font-weight:700">📷 Tus fotos</span>
         <div class="mp-row" id="mpRow" style="margin:0">${libPhotos.map(a => `<span style="position:relative;display:inline-block"><img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto"><button data-mpdel="${a.id}" title="Borrar foto" aria-label="Borrar foto" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:1.5px solid #fff;background:#0A1E33;color:#fff;font-size:12.5px;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3)">×</button></span>`).join('')}</div>
-        <button class="btn btn-ghost btn-sm" id="btnUploadPhotos">📤 Subir más</button>
+        <button class="btn btn-ghost btn-sm" id="btnUploadPhotos">${pzIc('share', 18)} Subir más</button>
         <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
       </div>
       <div id="mpMsg"></div>
@@ -155,7 +155,7 @@ function creatorView(embed) {
       <div class="mp-title">📷 Tus fotos</div>
       <p class="mp-text">Para vender tu producto exacto (como tu buzo), subí sus fotos una vez y el creador las usa siempre.</p>
       <div class="mp-row" id="mpRow"><span class="mut">Todavía no subiste fotos.</span></div>
-      <button class="btn btn-soft" id="btnUploadPhotos">📤 Subir fotos de tus productos</button>
+      <button class="btn btn-soft" id="btnUploadPhotos">${pzIc('share', 18)} Subir fotos de tus productos</button>
       <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
       <div id="mpMsg"></div>
     </div>`}
@@ -171,9 +171,9 @@ function creatorView(embed) {
         ${o.caption ? `<p class="opt-caption">${esc(o.caption)}</p>` : ''}
         <div class="opt-actions">
           <button class="btn btn-primary btn-sm opt-use" data-use="${i}">Usar este diseño →</button>
-          <button class="btn btn-ghost btn-sm opt-myphoto" data-mp="${i}">📷 Mi foto</button>
+          <button class="btn btn-ghost btn-sm opt-myphoto" data-mp="${i}">${pzIc('camera', 18)} Mi foto</button>
         </div>
-        <button class="opt-customlink" data-custom="${i}">✏️ Personalizar a mano</button>
+        <button class="opt-customlink" data-custom="${i}">${pzIc('pencil', 18)} Personalizar a mano</button>
       </div>`).join('')}
     </div>
     <div id="multiBar" style="display:none">
@@ -181,7 +181,7 @@ function creatorView(embed) {
       <button class="btn btn-primary" id="btnMultiSched">Programar (0)</button>
     </div>
     <div style="display:flex;justify-content:center;margin:4px 0 26px">
-      <button class="btn btn-soft" id="btnRegen">🔄 Regenerar opciones</button>
+      <button class="btn btn-soft" id="btnRegen">${pzIc('refresh', 18)} Regenerar opciones</button>
     </div>
     <div class="feedback-card">
       <p class="feedback-title">¿Querés cambiar algo? Decime y lo arreglamos. O lo mejoramos.</p>
@@ -199,7 +199,7 @@ function creatorView(embed) {
         <div id="schedMsg"></div>
         <div class="modal-actions">
           <button class="btn btn-ghost" id="btnSchedCancel">Cancelar</button>
-          <button class="btn btn-primary" id="btnSchedConfirm">✅ Confirmar</button>
+          <button class="btn btn-primary" id="btnSchedConfirm">${pzIc('checkCircle', 18)} Confirmar</button>
         </div>
       </div>
     </div>
@@ -213,7 +213,7 @@ function creatorView(embed) {
     <div id="photoPickModal" class="modal-ov" style="display:none">
       <div class="modal-card">
         <h3>📷 Foto para este diseño</h3>
-        <button class="btn btn-soft btn-block" id="btnPickUpload" style="margin:12px 0">📤 Subir nueva foto</button>
+        <button class="btn btn-soft btn-block" id="btnPickUpload" style="margin:12px 0">${pzIc('share', 18)} Subir nueva foto</button>
         <input type="file" id="pickFile" accept="image/*" style="display:none">
         <p class="mut" style="margin:6px 0 8px"><b>De tu librería</b></p>
         <div class="mp-row" id="pickLib"></div>
@@ -242,9 +242,9 @@ function creatorView(embed) {
     <div class="row2" style="margin-top:24px">
       <div class="field"><label>Fecha y hora de publicación</label><input type="datetime-local" id="p_when" min="${minDt}" value="${minDt}"></div>
       <div class="field"><label>&nbsp;</label><div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-primary" id="btnSchedule">📅 Programar</button>
-        <button class="btn btn-soft" id="btnNow">⚡ Publicar ahora</button>
-        <button class="btn btn-ghost" id="btnDraft">💾 Borrador</button>
+        <button class="btn btn-primary" id="btnSchedule">${pzIc('calendar', 18)} Programar</button>
+        <button class="btn btn-soft" id="btnNow">${pzIc('bolt', 18)} Publicar ahora</button>
+        <button class="btn btn-ghost" id="btnDraft">${pzIc('save', 18)} Borrador</button>
       </div></div>
     </div>
     <div id="pubMsg"></div>
@@ -268,8 +268,8 @@ function bindCreator() {
             </div>
           </div>`
         : `<div style="display:flex;gap:8px;flex-wrap:wrap">
-             <button class="btn btn-ghost" id="btnProdPhAdd" type="button">📷 Agregar foto de tu producto</button>
-             ${assetPhotos().length ? `<button class="btn btn-ghost" id="btnProdPhLib" type="button">🖼️ Tus fotos</button>` : ''}
+             <button class="btn btn-ghost" id="btnProdPhAdd" type="button">${pzIc('camera', 18)} Agregar foto de tu producto</button>
+             ${assetPhotos().length ? `<button class="btn btn-ghost" id="btnProdPhLib" type="button">${pzIc('image', 18)} Tus fotos</button>` : ''}
            </div>
            <div id="prodPhLib" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px">
              ${assetPhotos().map(a => `<img src="${esc(a.file_path)}" data-prodpick="${esc(a.file_path)}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:pointer" alt="Tu foto">`).join('')}
@@ -309,7 +309,7 @@ function bindCreator() {
         c.topic = [p.business_name, p.category].filter(Boolean).join(' — ') || 'Posteo para mi negocio';
       }
       const btn = $('#btnGen');
-      btn.disabled = true; btn.textContent = '🎨 Armándo tus 6 opciones...';
+      btn.disabled = true; btn.innerHTML = pzIc('palette', 18) + ' Armándo tus 6 opciones...';
       try {
         const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
         if (!out || !Array.isArray(out.options) || out.options.length !== 6) throw new Error('Respuesta incompleta');
@@ -330,7 +330,7 @@ function bindCreator() {
           $('#genOut').style.display = 'block';
           $('#c_caption').value = c.caption; $('#c_tags').value = c.hashtags;
         } catch (e2) { $('#genErr').innerHTML = `<div class="err">${esc(e2.message)}</div>`; }
-        btn.disabled = false; btn.textContent = '✨ Armar mi posteo';
+        btn.disabled = false; btn.innerHTML = pzIc('sparkle', 18) + ' Armar mi posteo';
       }
     };
     const toDesign = $('#btnToDesign');
@@ -395,7 +395,7 @@ function bindCreator() {
         }
         c.imagePath = c.carouselPhotos[0]; c.isCarousel = true; c.step = 3; render(); return;
       }
-      $('#btnSaveDesign').disabled = true; $('#btnSaveDesign').textContent = '⏳ Guardando...';
+      $('#btnSaveDesign').disabled = true; $('#btnSaveDesign').innerHTML = pzIc('clock', 15) + ' Guardando...';
       try {
         const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
         const r = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
@@ -572,7 +572,7 @@ function bindCreator() {
           <img src="${esc(o.image)}" class="sched-thumb" alt="">
           <div class="sched-info"><b>${esc(o.title || 'Diseño')}</b><span class="mut">${esc((o.caption || '').slice(0, 60))}…</span></div>
           <input type="datetime-local" data-swhen="${r.idx}" value="${isoToLocalInput(r.iso)}">
-          <button class="btn btn-soft btn-sm sched-now" data-now="${r.idx}" title="Publicar ahora en Instagram">⚡ Postear ahora</button>
+          <button class="btn btn-soft btn-sm sched-now" data-now="${r.idx}" title="Publicar ahora en Instagram">${pzIc('bolt', 18)} Postear ahora</button>
         </div>
         <div class="pubnow-mount" data-mount="${r.idx}"></div>`;
       }).join('');
@@ -599,7 +599,7 @@ function bindCreator() {
             const inp = row ? row.querySelector('input[data-swhen]') : null;
             if (inp) inp.disabled = true;
             if (row) row.style.opacity = '.55';
-            b.textContent = '✅ Posteado';
+            b.innerHTML = pzIc('checkCircle', 15) + ' Posteado';
           } else {
             b.disabled = false;
           }
@@ -615,7 +615,7 @@ function bindCreator() {
     $('#schedModal').onclick = (e) => { if (e.target.id === 'schedModal') $('#schedModal').style.display = 'none'; };
     $('#btnSchedConfirm').onclick = async () => {
       const btn = $('#btnSchedConfirm');
-      btn.disabled = true; btn.textContent = '⏳ Programando...';
+      btn.disabled = true; btn.innerHTML = pzIc('clock', 15) + ' Programando...';
       try {
         const items = c.selected.map(idx => {
           const o = c.options[idx];
@@ -625,7 +625,7 @@ function bindCreator() {
           return { image: o.image, caption: o.caption || '', hashtags: o.hashtags || '', scheduled_at: new Date(v).toISOString() };
         });
         const r = await api.post('/api/creator/schedule', { items });
-        $('#schedMsg').innerHTML = `<div class="okmsg">✅ ${r.count} ${r.count === 1 ? 'posteo programado' : 'posteos programados'} — <a href="#/app/schedule">ver en Schedule</a></div>`;
+        $('#schedMsg').innerHTML = `<div class="okmsg">${pzIc('checkCircle', 15)} ${r.count} ${r.count === 1 ? 'posteo programado' : 'posteos programados'} — <a href="#/app/schedule">ver en Schedule</a></div>`;
         c.selected = [];
         $$('.opt-selbox').forEach(ch => { ch.checked = false; });
         $$('.opt-card').forEach(cd => cd.classList.remove('selected'));
@@ -633,13 +633,13 @@ function bindCreator() {
         setTimeout(() => { $('#schedModal').style.display = 'none'; location.hash = '#/app/schedule'; }, 1800);
       } catch (e) {
         $('#schedMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-        btn.disabled = false; btn.textContent = '✅ Confirmar';
+        btn.disabled = false; btn.innerHTML = pzIc('checkCircle', 18) + ' Confirmar';
       }
     };
     $('#btnRegen').onclick = async () => {
       if (!confirm('¿Genero 6 opciones nuevas? Las actuales se reemplazan.')) return;
       const btn = $('#btnRegen');
-      btn.disabled = true; btn.textContent = '🎨 Generando nuevas opciones...';
+      btn.disabled = true; btn.innerHTML = pzIc('palette', 18) + ' Generando nuevas opciones...';
       try {
         const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
         if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');
@@ -662,7 +662,7 @@ function bindCreator() {
       } catch (e) {
         const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana 💪') : null;
         $('#optErr').innerHTML = `<div class="${capMsg ? 'okmsg' : 'err'}">${esc(capMsg || e.message)}</div>`;
-        btn.disabled = false; btn.textContent = '🔄 Regenerar opciones';
+        btn.disabled = false; btn.innerHTML = pzIc('refresh', 18) + ' Regenerar opciones';
       }
     };
     $('#btnFeedback').onclick = async () => {
@@ -671,7 +671,7 @@ function bindCreator() {
       const msg = $('#feedbackMsg');
       if (!fb) { msg.innerHTML = `<div class="hint" style="margin:10px 0 0">Contame qué querés cambiar 👇</div>`; return; }
       const btn = $('#btnFeedback');
-      btn.disabled = true; btn.textContent = '🔧 Arreglándolo...';
+      btn.disabled = true; btn.innerHTML = pzIc('gear', 18) + ' Arreglándolo...';
       try {
         const out = await api.post('/api/creator/options', { topic: c.topic, feedback: fb, productPhoto: c.productPhoto || undefined });
         if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');

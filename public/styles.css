@@ -3673,3 +3673,8 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-vitrina{display:flex;flex-wrap:wrap;gap:8px}
 .pz-vit-badge{display:inline-flex;flex-direction:column;gap:2px;padding:8px 12px;border:1px solid #D8ECF7;border-radius:999px;background:#F4FAFE;font-size:13px;line-height:1.3}
 .pz-vit-badge span{font-size:11px;color:var(--mut)}
+
+/* ---------- Sistema de íconos Posty/Bambooty (2026-10-25) ---------- */
+.pz-ic{display:inline-flex;line-height:0;vertical-align:-0.18em}
+.pz-ic svg{display:block;flex:none}
+.mz-tab-ic.pz-ic,.di.pz-ic{vertical-align:0}

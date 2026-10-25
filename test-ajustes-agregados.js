@@ -195,8 +195,8 @@ async function partA() {
     ok(evHook > 0, 'evTrack (server) también dispara el aviso de fallo');
     const sweepBlock = serverSrc.slice(serverSrc.indexOf('async function refreshAnalysesSweep'), serverSrc.indexOf('async function refreshAnalysesSweep') + 4000);
     ok(sweepBlock.includes('notifySundayLetter') && sweepBlock.includes('sundayWindow && fresh'), 'el barrido avisa solo en ventana y con carta nueva');
-    const iAvisos = chunkSrc.indexOf('🔔 Avisos');
-    const iAuto = chunkSrc.indexOf('🚀 Posty en automático');
+    const iAvisos = chunkSrc.indexOf("pzIc('bell', 20)} Avisos"); // ícono dibujado (sin emoji desde v473)
+    const iAuto = chunkSrc.indexOf("pzIc('bolt', 20)} Posty en automático");
     const iPre = chunkSrc.indexOf('id="btnPreNotifyToggle"');
     ok(iAuto > 0 && iAvisos > iAuto && iPre > iAvisos, 'chunk: Avisos va tras Automático y el aviso pre-publicación vive SOLO ahí');
     const autoSeg = chunkSrc.slice(iAuto, iAvisos);

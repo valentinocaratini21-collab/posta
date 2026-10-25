@@ -370,8 +370,8 @@ function anaMarketHTML(a) {
   }
   const teaser = a.market_teaser;
   if (teaser && Array.isArray(teaser.items) && teaser.items.length) {
-    const items = teaser.items.map((it) => `<p class="ana-t" style="margin-top:8px">📌 ${esc(it.text || '')}${it.now ? ` — <span style="color:var(--mut);font-weight:600">${esc(it.now)}</span>` : ''}</p>`).join('');
-    return `<p class="ana-sec-t">${anaT('🗺️ Tu mercado', '🗺️ Your market')} <span class="ana-badge">${anaT('MUESTRA', 'TASTE')}</span></p>${items}`
+    const items = teaser.items.map((it) => `<p class="ana-t" style="margin-top:8px">${pzIc('pin', 15)} ${esc(it.text || '')}${it.now ? ` — <span style="color:var(--mut);font-weight:600">${esc(it.now)}</span>` : ''}</p>`).join('');
+    return `<p class="ana-sec-t">${anaT(pzIc('map', 20) + ' Tu mercado', pzIc('map', 20) + ' Your market')} <span class="ana-badge">${anaT('MUESTRA', 'TASTE')}</span></p>${items}`
       + `<p class="ana-upsell">${anaT('El mapa completo — tu competencia una por una, tu posición en el rubro y las decisiones que tomamos con eso — es parte de <b>Growth</b> (planes Pro y Total).', 'The full map — your competition one by one, your position in the category and the decisions we make with it — is part of <b>Growth</b> (Pro and Total plans).')}</p>`
       + `<a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?plan=1">${anaT('Ver planes →', 'See plans →')}</a>`;
   }
@@ -562,7 +562,7 @@ function anaLetterMinimalHTML(a) {
   // (v384 · ítem 8) La Carta con audio: botón a su página firmada.
   if (a && a.carta_url) {
     const enL = a.lang === 'en';
-    h += `<p style="text-align:center;margin:16px 0 4px"><a href="${esc(a.carta_url)}" target="_blank" rel="noopener" style="display:inline-block;border:2px solid #2793C8;color:#2793C8;font-weight:800;font-size:14.5px;padding:10px 24px;border-radius:999px;text-decoration:none">${enL ? '🎧 Listen to your letter' : '🎧 Escuchá tu carta'}</a></p>`;
+    h += `<p style="text-align:center;margin:16px 0 4px"><a href="${esc(a.carta_url)}" target="_blank" rel="noopener" style="display:inline-block;border:2px solid #2793C8;color:#2793C8;font-weight:800;font-size:14.5px;padding:10px 24px;border-radius:999px;text-decoration:none">${enL ? (pzIc('headphones', 18) + ' Listen to your letter') : (pzIc('headphones', 18) + ' Escuchá tu carta')}</a></p>`;
   }
   return h;
 }
@@ -676,7 +676,7 @@ function anaShareBlockHTML(a) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   setTimeout(() => { try { anaWireShareBlock(); } catch (e) {} }, 40);
   return `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
-    <button class="btn btn-primary btn-block" onclick="anaShareWeek(this)">${en ? '📤 Share my week' : '📤 Compartir mi semana'}</button>
+    <button class="btn btn-primary btn-block" onclick="anaShareWeek(this)">${en ? (pzIc('share', 18) + ' Share my week') : (pzIc('share', 18) + ' Compartir mi semana')}</button>
     <p class="d" style="text-align:center;margin-top:6px">${en ? 'A card with your best post of the week — ready for your stories.' : 'Una tarjeta con tu mejor posteo de la semana, lista para tus historias.'}</p>
     <div id="anaRefLine"></div>
   </div>`;
