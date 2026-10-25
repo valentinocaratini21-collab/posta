@@ -387,7 +387,7 @@ async function playComercial(db, user, ctx) {
   } else {
     const emailMod = require('./email');
     if (emailMod.emailConfigured() && user.email) {
-      const r = await emailMod.sendEmail({ to: user.email, subject, html: `<p style="font-size:15px;line-height:1.6">${text.replace(link, `<a href="${link}">${link}</a>`)}</p>`, text });
+      const r = await emailMod.sendEmail({ to: user.email, subject, html: `${emailMod.emailFaceHeader(lang)}<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33"><div style="background:#F2F9FD;padding:24px 28px;border-radius:0 0 14px 14px"><p style="font-size:15px;line-height:1.6;margin:0">${text.replace(link, `<a href="${link}">${link}</a>`)}</p></div></div>`, text });
       if (r && r.ok) channel = 'email';
       else if (r && r.skipped) channel = null; // sin RESEND_API_KEY: cae al chat, honestamente
       else return { executed: false, reason: 'email_fallo_transitorio' };
@@ -445,22 +445,16 @@ function handleCancellation(db, userId, deps) {
     ? `I\u2019m sorry to see you go 💙 Your account stays saved for 30 days (until ${until}) — if you come back, everything is right where you left it. One last tap, so I can do better: what weighed most?\n${lineLinks}`
     : `lamento que te vayas 💙 Tu cuenta queda guardada por 30 días (hasta el ${until}): si volvés, todo sigue como lo dejaste. Un último toque, para poder mejorar: ¿qué pesó más?\n${lineLinks}`;
   setEffect(db, userId, 'pregunta_salida', '', { until, links: links.map(l => l.reason) });
+  // (2026-10-25 · REGLA DE LOS DOS MOTIVOS, ambiguo A8) La pregunta de
+  // salida y el aviso de guardado viven SOLO en la app: este flujo se
+  // invoca desde la cancelación in-app (y desde el webhook de MP), y la
+  // constancia —cuenta guardada por 30 días— más la pregunta con sus
+  // links firmados de respuesta de un toque (30 días) quedan en el chat
+  // de la cuenta, que es donde la persona está cancelando. Las dos
+  // piernas de email (la directa y la inyectada vía deps.sendExit)
+  // quedaron eliminadas: nada de email en una cancelación.
   let channel = 'chat';
   try { chatInsert(db, userId, text); } catch (e) { channel = 'none'; }
-  if (deps && typeof deps.sendExit === 'function') {
-    try { const r = deps.sendExit(db, user, { text, links, until }); if (r && r.ok) channel = r.channel || 'email'; } catch (e) {}
-  } else {
-    try {
-      const emailMod = require('./email');
-      if (emailMod.emailConfigured() && user.email) {
-        const htmlLinks = links.map(l => `<a href="${l.url}">${labels[l.reason]}</a>`).join(' · ');
-        emailMod.sendEmail({ to: user.email, subject: lang === 'en' ? 'Your account stays saved for 30 days 💙' : 'Tu cuenta queda guardada por 30 días 💙',
-          html: `<p style="font-size:15px;line-height:1.6">${lang === 'en' ? 'One last tap, so I can do better: what weighed most?' : 'Un último toque, para poder mejorar: ¿qué pesó más?'}</p><p>${htmlLinks}</p>`, text })
-          .then(r => { /* fire-and-forget: el chat ya la lleva */ }).catch(() => {});
-        channel = 'chat+email';
-      }
-    } catch (e) {}
-  }
   trackEvent(db, userId, 'health_exit_question', { channel, until });
   return { ok: true, channel, until };
 }

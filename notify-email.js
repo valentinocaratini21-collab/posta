@@ -7,7 +7,7 @@
 // si no hay email configurado o el usuario no tiene email (el push cubre).
 'use strict';
 
-const { sendEmail, emailConfigured } = require('./email');
+const { sendEmail, emailConfigured, emailFaceHeader } = require('./email');
 const { signAction, signWeekAction, absoluteMediaUrl, userHourLabel } = require('./approval');
 
 const BASE_URL = () => process.env.APP_URL || 'https://postycommunitymanager.com';
@@ -43,7 +43,8 @@ function getImageBaseUrl(db, userId) {
   }
 }
 
-// Misma cabecera visual que los emails de email.js (posty. en celeste + fondo claro).
+// Misma cabecera visual que los emails de email.js: la CARA compartida
+// (emailFaceHeader — avatar + «Posty — tu community manager») sobre fondo claro.
 // (v373 · paridad total) lang='en' → pie en inglés (el mismo texto que usa
 // el emailShell de email.js); sin lang, el pie ES histórico exacto.
 function emailShell(inner, lang) {
@@ -54,9 +55,7 @@ function emailShell(inner, lang) {
       ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.`;
   return `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-    <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
-  </div>
+  ${emailFaceHeader(lang)}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     ${inner}
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">

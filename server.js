@@ -288,7 +288,7 @@ const tasteMemory = require('./taste-memory'); // 🧠 MEMORIA DE GUSTOS (v392):
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
 const webExtract = require('./web-extract');
-const { sendEmail, magicLinkEmail, setSendLogger } = require('./email');
+const { sendEmail, magicLinkEmail, setSendLogger, emailFaceHeader } = require('./email');
 // (P0 2026-10-24) Todo envío queda registrado en email_send_log (tabla en
 // db.js): el motivo literal del rechazo de Resend deja de vivir solo en los
 // logs efímeros de Railway. Lectura: GET /api/admin/email-log.
@@ -2787,9 +2787,7 @@ app.post('/api/auth/forgot', async (req, res) => {
         to: user.email,
         subject: fen ? 'Reset your password 🔑' : 'Recuperá tu contraseña 🔑',
         html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-          <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-            <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
-          </div>
+          ${emailFaceHeader(fen ? 'en' : 'es')}
           <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
             <p style="font-size:16px;line-height:1.6">${fen ? "Hi! I'm Posty 🤖 You asked to reset your password. Tap the button and choose a new one:" : '¡Hola! Soy Posty 🤖 Me pediste cambiar tu contraseña. Tocá el botón y elegí una nueva:'}</p>
             <p style="text-align:center;margin:26px 0"><a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 34px;border-radius:999px;text-decoration:none">${fen ? 'Reset my password' : 'Cambiar mi contraseña'}</a></p>
@@ -11897,35 +11895,43 @@ async function revalidateReferralDiscount(referrerId) {
     db.prepare(`UPDATE users SET referral_discount = ?, mp_mult = ? WHERE id = ?`).run(want, want ? REFERRAL_DISCOUNT : 1, u.id);
     console.log(`[referral-discount] user=${u.id} count=${st.referred_count} discount=${cur}->${want} old=${fmtPesos(base)} new=${fmtPesos(newAmount)} ok=true`);
     try {
-      if (u.email) {
-        // (v373 · paridad) El email sale en el idioma de la cuenta; la rama
-        // ES conserva fmtPesos y los textos históricos exactos.
-        const ren = u.lang === 'en';
-        const fmt = ren ? (n) => '$' + Math.round(Number(n) || 0).toLocaleString('en-US') : fmtPesos;
-        const priceFull = fmt(base), priceHalf = fmt(base * REFERRAL_DISCOUNT);
-        await sendEmail({
-          to: u.email,
-          subject: ren
-            ? (want ? 'Your 2 referrals are in! 🎉' : 'One of your referrals cancelled 😅')
-            : (want ? '¡Tus 2 referidos ya están adentro! 🎉' : 'Uno de tus referidos canceló 😅'),
-          html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-            <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-              <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
-            </div>
-            <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-              ${want
-                ? (ren
+      // (v373 · paridad) Los avisos salen en el idioma de la cuenta; la rama
+      // ES conserva fmtPesos y los textos históricos exactos.
+      const ren = u.lang === 'en';
+      const fmt = ren ? (n) => '$' + Math.round(Number(n) || 0).toLocaleString('en-US') : fmtPesos;
+      const priceFull = fmt(base), priceHalf = fmt(base * REFERRAL_DISCOUNT);
+      if (want) {
+        // GANÓ el descuento: es BUENA NOTICIA — sigue saliendo por email,
+        // ahora con la cara compartida (regla de los dos motivos, 2026-10-25).
+        if (u.email) {
+          await sendEmail({
+            to: u.email,
+            subject: ren ? 'Your 2 referrals are in! 🎉' : '¡Tus 2 referidos ya están adentro! 🎉',
+            html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
+              ${emailFaceHeader(ren ? 'en' : 'es')}
+              <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
+                ${ren
                   ? `<p style="font-size:16px;line-height:1.6">Your 2 referrals are in! 🎉 Starting this month you pay half: <b>${priceHalf}</b> instead of ${priceFull}.</p>
                    <p style="font-size:13px;line-height:1.6;color:#47617A">As long as your 2 referrals stay subscribed, the discount stays 😊</p>`
                   : `<p style="font-size:16px;line-height:1.6">¡Tus 2 referidos ya están adentro! 🎉 Desde este mes pagás la mitad: <b>${priceHalf}</b> en vez de ${priceFull}.</p>
-                   <p style="font-size:13px;line-height:1.6;color:#47617A">Mientras tus 2 referidos sigan suscriptos, el descuento sigue 😊</p>`)
-                : (ren
-                  ? `<p style="font-size:16px;line-height:1.6">Hey, one of your referrals cancelled 😅 You're back to your plan's regular price (${priceFull}).</p>
-                   <p style="font-size:13px;line-height:1.6;color:#47617A">Bring in another one and you'll get the 50% off back 💪</p>`
-                  : `<p style="font-size:16px;line-height:1.6">Che, uno de tus referidos canceló 😅 Volvés al precio normal de tu plan (${priceFull}).</p>
-                   <p style="font-size:13px;line-height:1.6;color:#47617A">Traé a otro y recuperás el 50% off 💪</p>`)}
-            </div></div>`,
-        });
+                   <p style="font-size:13px;line-height:1.6;color:#47617A">Mientras tus 2 referidos sigan suscriptos, el descuento sigue 😊</p>`}
+              </div></div>`,
+          });
+        }
+      } else {
+        // (A1 · REGLA DE LOS DOS MOTIVOS, decisión 2026-10-25) PERDIÓ el
+        // descuento: NO sale por email — no es una buena noticia ni un OK.
+        // El aviso vive en la app: mensaje de Posty en su chat (el canal de
+        // avisos de cuenta de la casa — el mismo que usan las jugadas de
+        // salud y los festejos) y el hecho queda visible en su superficie
+        // de plan/referidos (GET /api/referrals/mine pasa a devolver
+        // discount_active=false y su precio vuelve al pleno en Mi plan).
+        try {
+          const msg = ren
+            ? `Hey, one of your referrals cancelled 😅 You're back to your plan's regular price (${priceFull}). Bring in another one and you'll get the 50% off back 💪`
+            : `Che, uno de tus referidos canceló 😅 Volvés al precio normal de tu plan (${priceFull}). Traé a otro y recuperás el 50% off 💪`;
+          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(u.id, 'assistant', msg);
+        } catch (e) { console.error('[referral-discount] aviso in-app:', e.message); }
       }
     } catch (e) { console.error('[referral-discount] email:', e.message); }
     return { ok: true, changed: true, discount: want, count: st.referred_count };
@@ -11950,8 +11956,8 @@ async function maybeReferralNudge(referrerId, baseUrl) {
     // Flag ANTES de enviar: si el webhook reintenta, no se duplica.
     db.prepare('UPDATE users SET referral_nudge_sent = 1 WHERE id = ?').run(u.id);
     console.log(`[referral-nudge] user=${u.id} llegó a 1 referido: avisando`);
-    // (v373 · paridad) Push y email salen en el idioma de la cuenta; la
-    // rama ES conserva los textos históricos exactos.
+    // (v373 · paridad) El aviso sale en el idioma de la cuenta; la rama ES
+    // conserva los textos históricos exactos.
     const ren = u.lang === 'en';
     const title = ren ? "🎁 You're 1 away from paying half" : '🎁 Te falta 1 para pagar la mitad';
     const body = ren ? 'When one more friend subscribes with your link, you pay half every month.' : 'Cuando otro amigo se suscriba con tu link, pagás la mitad todos los meses.';
@@ -11961,25 +11967,10 @@ async function maybeReferralNudge(referrerId, baseUrl) {
         data: { url: '/#/app/ajustes?plan=1' },
       });
     } catch (e) { console.error('[referral-nudge] push:', e.message); }
-    if (u.email && !u.email_opt_out) {
-      try {
-        await sendEmail({
-          to: u.email,
-          subject: title,
-          html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-            <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-              <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
-            </div>
-            <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-              <p style="font-size:16px;line-height:1.6;margin:0 0 8px"><b>${ren ? "🎁 You're 1 away from paying half." : '🎁 Te falta 1 para pagar la mitad.'}</b></p>
-              <p style="font-size:15px;line-height:1.6;margin:0 0 16px">${ren ? 'You already have 1 subscribed referral. When one more friend subscribes with your link, ' : 'Ya tenés 1 referido suscripto. Cuando otro amigo se suscriba con tu link, '}<b>${ren ? 'you pay half every month' : 'pagás la mitad todos los meses'}</b> 💪</p>
-              <p style="font-size:13px;color:#47617A;margin:0 0 8px">${ren ? 'Your link:' : 'Tu link:'}</p>
-              <p style="font-size:14px;margin:0 0 16px"><a href="${link}" style="color:#2793C8;font-weight:700">${link}</a></p>
-              <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;padding:12px 22px;border-radius:10px;text-decoration:none">${ren ? 'Share my link →' : 'Compartir mi link →'}</a>
-            </div></div>`,
-        });
-      } catch (e) { console.error('[referral-nudge] email:', e.message); }
-    }
+    // (A2 · REGLA DE LOS DOS MOTIVOS, decisión 2026-10-25) La pierna EMAIL
+    // de este nudge se apaga: el hito se avisa SOLO por el push de arriba
+    // (que queda intacto). El email duplicaba el mismo aviso por un canal
+    // que la regla no habilita para un nudge promocional.
     return { ok: true };
   } catch (e) {
     console.error(`[referral-nudge] user=${referrerId} ERROR:`, e.message);
@@ -21659,7 +21650,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v444';
+const BUILD_ID = '20261025-v445';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

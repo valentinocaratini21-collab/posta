@@ -658,16 +658,18 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[abandono] no se pudo programar:', e.message);
   }
-  // Email "mañana se termina tu prueba" (paywall): todos los días 10:00
-  // (Buenos Aires). Solo a usuarios en trial cuyo fin efectivo cae en 20-28h.
-  // Un solo email por cuenta (trial_expiry_email_sent, se setea antes de enviar).
+  // Aviso de CIERRE de prueba (2026-10-25 · A5): cuando la prueba TERMINA
+  // sin compra sale UN solo aviso — push si la persona lo habilitó; email
+  // de respaldo si no tiene push; los dos jamás. Reemplaza al email
+  // «vence mañana», apagado en la misma tanda. Cada hora, para avisar
+  // cerca del momento del cierre efectivo.
   try {
-    cron.schedule('0 10 * * *', () => {
-      sendTrialExpiryEmails(db).catch((e) => console.error('[vence-mañana]', e.message));
+    cron.schedule('15 * * * *', () => {
+      sendTrialCloseNotices(db).catch((e) => console.error('[cierre-prueba]', e.message));
     }, { timezone: 'America/Argentina/Buenos_Aires' });
-    console.log('[posta] Email "vence mañana" (paywall): todos los días 10:00 (Buenos Aires)');
+    console.log('[posta] Aviso de cierre de prueba: cada hora (Buenos Aires)');
   } catch (e) {
-    console.error('[vence-mañana] no se pudo programar:', e.message);
+    console.error('[cierre-prueba] no se pudo programar:', e.message);
   }
   // Nudge "ya tenemos tus posteos listos": todos los días 10:30 (Buenos Aires).
   // Solo a usuarios con borradores sin revisar o semana vacía, con topes anti-spam.
@@ -1415,6 +1417,12 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
 // (si se registró, no se molesta). UN solo email por lead: abandon_sent = 1
 // se setea ANTES de enviar (idempotencia ante doble corrida del cron).
 async function sendTrialAbandonEmails(db) {
+  // APAGADO (2026-10-25 · REGLA DE LOS DOS MOTIVOS, ambiguo A6): el email
+  // al lead de /prueba que no volvió NO clasifica — no es una buena
+  // noticia ni pide su OK — y deja de enviarse, sin reemplazo. Función y
+  // plantilla (trialAbandonEmail) conservadas por si el tablero revierte.
+  console.log('[abandono] email apagado por la regla de los dos motivos (2026-10-25)');
+  return { sent: 0, skipped: 0, disabled: 'regla-dos-motivos' };
   const { emailConfigured, trialAbandonEmail } = require('./email');
   if (!emailConfigured()) {
     console.log('[abandono] sin RESEND_API_KEY: no se envía nada');
@@ -1492,6 +1500,12 @@ function trialExpiryEffectiveEnd(u, now) {
 // trial_expiry_email_sent = 1 se setea ANTES de enviar (un solo intento,
 // idempotencia ante doble corrida del cron).
 async function sendTrialExpiryEmails(db) {
+  // APAGADO (2026-10-25 · A5): el aviso «vence mañana» quedó REEMPLAZADO
+  // por el aviso de cierre de prueba (sendTrialCloseNotices, abajo): un
+  // solo aviso cuando la prueba TERMINA sin compra, por push si la
+  // persona lo habilitó o por email de respaldo — los dos jamás.
+  console.log('[vence-mañana] apagado: reemplazado por el aviso de cierre de prueba (2026-10-25)');
+  return { sent: 0, skipped: 0, disabled: 'regla-dos-motivos' };
   const { emailConfigured, trialExpiryEmail } = require('./email');
   if (!emailConfigured()) {
     console.log('[vence-mañana] sin RESEND_API_KEY: no se envía nada');
@@ -1530,6 +1544,91 @@ async function sendTrialExpiryEmails(db) {
   return { sent, skipped };
 }
 
+// AVISO DE CIERRE DE PRUEBA (2026-10-25 · A5, reemplaza al «vence mañana»).
+// Cuando la prueba TERMINA sin compra sale UN SOLO aviso, en el momento
+// del cierre: personal, con su negocio y su semana («tu semana quedó lista
+// y guardada; te espera si te sumás» — es verdad: su fundamento viaja a la
+// cuenta). Canal ÚNICO elegido por disponibilidad: push si la persona lo
+// habilitó al probar; email SOLO como respaldo si no tiene push; los dos
+// JAMÁS. Sin descuento inventado, sin escasez falsa, sin secuencia
+// posterior: si no responde, silencio.
+// Idempotencia durable: users.trial_closed_notified se marca ANTES de
+// avisar (sin registro no hay promesa — y tampoco duplicados).
+function ensureTrialClosedColumn(db) {
+  try {
+    const cols = db.prepare('PRAGMA table_info(users)').all();
+    if (!cols.some((c) => c.name === 'trial_closed_notified')) {
+      db.exec('ALTER TABLE users ADD COLUMN trial_closed_notified INTEGER NOT NULL DEFAULT 0');
+    }
+  } catch (e) { console.error('[cierre-prueba] columna:', e.message); }
+}
+
+async function sendTrialCloseNotices(db) {
+  ensureTrialClosedColumn(db);
+  const { emailConfigured, trialClosedEmail } = require('./email');
+  const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
+  const now = Date.now();
+  let users = [];
+  try {
+    users = db.prepare(`
+      SELECT u.id, u.email, u.lang, u.client_name AS name,
+             u.trial_ends_at, u.trial_extended_until, u.created_at,
+             COALESCE(u.email_opt_out, 0) AS email_opt_out,
+             COALESCE(p.business_name, '') AS biz
+      FROM users u
+      LEFT JOIN profiles p ON p.user_id = u.id
+      WHERE COALESCE(u.plan_status, 'trial') = 'trial'
+        AND u.trial_ends_at IS NOT NULL
+        AND COALESCE(u.trial_closed_notified, 0) = 0
+        AND EXISTS (SELECT 1 FROM posts WHERE user_id = u.id)
+    `).all();
+  } catch (e) { console.error('[cierre-prueba] candidatos:', e.message); return { sent: 0, push: 0, email: 0, skipped: 0 }; }
+  let sentPush = 0, sentEmail = 0, skipped = 0;
+  for (const u of users) {
+    try {
+      const end = trialExpiryEffectiveEnd(u, now);
+      // La semana prometida existe (EXISTS posts), pero el cierre efectivo
+      // todavía no llegó (extensión vigente, política) → no es cierre aún.
+      if (!end || end > now) { skipped++; continue; }
+      // Marca durable ANTES de avisar: una única vez por cuenta.
+      db.prepare('UPDATE users SET trial_closed_notified = 1 WHERE id = ?').run(u.id);
+      const lang = u.lang === 'en' ? 'en' : 'es';
+      let hasPush = 0;
+      try { hasPush = db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?').get(u.id).n; } catch (e) {}
+      if (hasPush > 0) {
+        // Canal elegido: PUSH. El email NO sale (los dos jamás), aunque la
+        // entrega push falle: la elección de canal es por disponibilidad.
+        const { sendPush } = require('./push');
+        const r = await sendPush(u.id, {
+          title: lang === 'en' ? 'Your week is saved 💙' : 'Tu semana quedó guardada 💙',
+          body: lang === 'en'
+            ? 'Your trial ended — your week is ready and saved, waiting for you if you join.'
+            : 'Tu prueba terminó — tu semana quedó lista y guardada, y te espera si te sumás.',
+          url: '/#/app/schedule',
+        });
+        if (r && r.ok) sentPush++;
+        else console.log(`[cierre-prueba] push sin entrega a usuario ${u.id}:`, (r && r.reason) || 'sin_motivo');
+      } else if (u.email && !u.email_opt_out && emailConfigured()) {
+        // Respaldo: EMAIL (con la cara, vía trialClosedEmail).
+        const r = await trialClosedEmail({ email: u.email, name: u.name, lang: u.lang, biz: u.biz }, base);
+        if (r && r.ok) sentEmail++;
+        else console.error('[cierre-prueba] no se pudo enviar a', u.email);
+      } else {
+        // Sin push y sin email usable: queda marcado; silencio (sin canal
+        // no hay aviso posible, y no se reintenta para siempre).
+        skipped++;
+      }
+    } catch (e) {
+      console.error('[cierre-prueba] usuario', u.id, e.message);
+    }
+    await new Promise((r) => setTimeout(r, 400)); // no saturar los proveedores
+  }
+  if (sentPush || sentEmail || skipped || users.length) {
+    console.log(`[cierre-prueba] push: ${sentPush}, email: ${sentEmail}, omitidos: ${skipped}, candidatos: ${users.length}`);
+  }
+  return { sent: sentPush + sentEmail, push: sentPush, email: sentEmail, skipped };
+}
+
 // Email día 2 "publicá tu primero" (2026-09-30, mejora "garantizar el primer posteo").
 // Candidatos: cuenta creada hace 20-52h, con email, sin opt-out, trial o plan
 // activo (y trial EFECTIVAMENTE vigente vía schedCanPublish), con 0 posteos
@@ -1540,6 +1639,13 @@ async function sendTrialExpiryEmails(db) {
 // (first_publish_nudged_at): no queremos el mismo "publicá tu primero" dos
 // veces en el mismo día por dos canales.
 async function sendFirstPublishEmails(db) {
+  // APAGADO (2026-10-25 · REGLA DE LOS DOS MOTIVOS, ambiguo A4): el email
+  // «Primer posteo día 2» NO clasifica — no es una buena noticia lograda
+  // ni pide su OK — y deja de enviarse. El hito conserva SOLO su nudge de
+  // chat (firstPublishNudge, cron 12:00, intacto). Función y plantilla
+  // (firstPublishNudgeEmail) conservadas por si el tablero revierte.
+  console.log('[primer-posteo] email apagado por la regla de los dos motivos (2026-10-25)');
+  return { sent: 0, skipped: 0, disabled: 'regla-dos-motivos' };
   const { emailConfigured, firstPublishNudgeEmail } = require('./email');
   if (!emailConfigured()) {
     console.log('[primer-posteo] sin RESEND_API_KEY: no se envía nada');
@@ -2130,4 +2236,4 @@ async function postyWeeklyDigest(db) {
   }
 }
 
-module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, autopilotPreNotify, sweepOverduePosts: publishWatchdog.sweep, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendFirstPublishEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily, postyWeeklyDigest, activationNudge, firstPublishNudge, celebrateWinsChat };
+module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, autopilotPreNotify, sweepOverduePosts: publishWatchdog.sweep, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendTrialCloseNotices, sendFirstPublishEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily, postyWeeklyDigest, activationNudge, firstPublishNudge, celebrateWinsChat };

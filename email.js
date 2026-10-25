@@ -169,9 +169,7 @@ function weeklyReminderEmailEn(user, baseUrl, streak, mission) {
     </div>` : '';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-    <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
-  </div>
+  ${emailFaceHeader('en')}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋</p>
     ${streakLine}
@@ -212,9 +210,7 @@ function weeklyReminderEmail(user, baseUrl, streak, mission) {
     </div>` : '';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-    <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
-  </div>
+  ${emailFaceHeader()}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
     ${streakLine}
@@ -237,6 +233,22 @@ function weeklyReminderEmail(user, baseUrl, streak, mission) {
   return sendEmail({ to: user.email, subject, html });
 }
 
+// LA CARA (2026-10-25 · regla de los dos motivos): todo email a un cliente
+// abre con la cara de quien lo manda — avatar + nombre + rol. El nombre y
+// el rol van en TEXTO visible siempre: el email se sostiene sin imágenes
+// (si el cliente las bloquea, la cabecera sigue diciendo quién escribe).
+// Cabecera COMPARTIDA: vive solo acá y la reusan todos los shells
+// (email.js, notify-email.js, ideas-email.js, wins.js, health-plays.js y
+// los emails inline de server.js). Avatar = el servido del producto.
+const EMAIL_FACE_BASE = () => process.env.BASE_URL || process.env.APP_URL || 'https://postycommunitymanager.com';
+function emailFaceHeader(lang) {
+  const role = lang === 'en' ? 'your community manager' : 'tu community manager';
+  return `<div style="background:#2793C8;padding:20px 28px;border-radius:14px 14px 0 0">
+    <img src="${EMAIL_FACE_BASE()}/ai-avatar.png" alt="Posty" width="46" height="46" style="border-radius:50%;display:inline-block;vertical-align:middle">
+    <span style="display:inline-block;vertical-align:middle;margin-left:12px;font-size:17px;font-weight:800;color:#fff">Posty <span style="font-weight:600">— ${role}</span></span>
+  </div>`;
+}
+
 function emailShell(inner, lang) {
   const foot = lang === 'en' ? `
       We're writing because you have content pending in Posty.<br>
@@ -245,9 +257,7 @@ function emailShell(inner, lang) {
       ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.`;
   return `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-    <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
-  </div>
+  ${emailFaceHeader(lang)}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     ${inner}
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">${foot}
@@ -341,9 +351,7 @@ function trialAbandonEmailEn(lead, baseUrl, bizName, link) {
   const subject = 'Your week is still saved 👀';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-    <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
-  </div>
+  ${emailFaceHeader('en')}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     <p style="font-size:16px;margin:0 0 12px">Hey 👋</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
@@ -370,9 +378,7 @@ function trialAbandonEmail(lead, baseUrl, bizName, link, lang) {
   const subject = 'Tu semana sigue guardada 👀';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-    <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
-  </div>
+  ${emailFaceHeader()}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     <p style="font-size:16px;margin:0 0 12px">Che 👋</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
@@ -816,4 +822,37 @@ function photoRitualEmail(user, baseUrl, missionText) {
   return sendEmail({ to: user.email, subject, html });
 }
 
-module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, magicLinkEmail, firstPublishNudgeEmail, photoRitualEmail };
+// Aviso de CIERRE de prueba (2026-10-25 · A5): cuando la prueba TERMINA
+// sin compra sale UN solo aviso, en el momento del cierre — personal, con
+// su negocio y su semana guardada (es verdad: su fundamento viaja a la
+// cuenta si se suma). Es el email de RESPALDO del barrido
+// sendTrialCloseNotices (scheduler.js): el canal principal es el push y
+// este email va SOLO si la persona no habilitó push — los dos jamás.
+// Sin descuento inventado, sin escasez falsa, sin secuencia posterior.
+function trialClosedEmailEn(user, baseUrl) {
+  const name = (user.name || '').trim();
+  const biz = String(user.biz || '').replace(/</g, '&lt;').slice(0, 80);
+  const subject = 'Your trial ended — your week is saved 💙';
+  const inner = `
+    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Your trial just ended${biz ? ` — and everything we built for <strong style="color:#0A1E33">${biz}</strong> stays right here` : ''}: your week is ready and saved, with your posts, your colors and everything we learned about your business. If you join, it's all waiting for you exactly as you left it.
+    </p>
+    <a href="${baseUrl}/#/app/schedule" style="display:inline-block;background:#2793C8;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 22px;border-radius:12px">See my saved week 👀</a>`;
+  return sendEmail({ to: user.email, subject, html: emailShell(inner, 'en') });
+}
+function trialClosedEmail(user, baseUrl) {
+  if (user && user.lang === 'en') return trialClosedEmailEn(user, baseUrl);
+  const name = (user.name || '').trim();
+  const biz = String(user.biz || '').replace(/</g, '&lt;').slice(0, 80);
+  const subject = 'Tu prueba terminó — tu semana quedó guardada 💙';
+  const inner = `
+    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Tu prueba acaba de terminar${biz ? ` — y todo lo que armamos para <strong style="color:#0A1E33">${biz}</strong> queda acá` : ''}: tu semana quedó lista y guardada, con tus posteos, tus colores y todo lo que aprendimos de tu negocio. Si te sumás, te espera tal cual la dejaste.
+    </p>
+    <a href="${baseUrl}/#/app/schedule" style="display:inline-block;background:#2793C8;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 22px;border-radius:12px">Ver mi semana guardada 👀</a>`;
+  return sendEmail({ to: user.email, subject, html: emailShell(inner) });
+}
+
+module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, firstPublishNudgeEmail, photoRitualEmail };

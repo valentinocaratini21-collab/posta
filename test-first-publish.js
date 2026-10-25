@@ -82,7 +82,12 @@ console.log('\n[1] Nudge proactivo en el chat (first-publish-nudge.js)');
 }
 
 // ---------- 2. Email día 2 ----------
-console.log('\n[2] Email día 2 (sendFirstPublishEmails)');
+// (2026-10-25 · REGLA DE LOS DOS MOTIVOS, ambiguo A4) El email «Primer
+// posteo día 2» NO clasifica y quedó APAGADO a la cabeza del barrido: el
+// hito conserva solo su nudge de chat (sección [1]). Esta sección ahora
+// verifica el apagado: nadie recibe nada, no se marca ningún nudge y el
+// retorno trae la marca de la regla.
+console.log('\n[2] Email día 2 APAGADO por la regla (sendFirstPublishEmails)');
 {
   const captured = [];
   const realFetch = globalThis.fetch;
@@ -96,31 +101,20 @@ console.log('\n[2] Email día 2 (sendFirstPublishEmails)');
   db.prepare(`INSERT INTO posts (user_id, status) VALUES (?, 'draft')`).run(g); // 1 borrador
   const h = addUser(db, { h: 25, email: 'h@t.com' });
   db.prepare(`INSERT INTO posts (user_id, status) VALUES (?, 'published')`).run(h); // publicado → NO
-  const i = addUser(db, { h: 25, email: 'i@t.com' }); // 0 borradores → SÍ (copy alternativo)
-  const j = addUser(db, { h: 5, email: 'j@t.com' });  // 5h → NO
-  const k = addUser(db, { h: 25, email: 'k@t.com', optOut: 1 }); // opt-out → NO
-  const l = addUser(db, { h: 100, email: 'l@t.com' }); // 100h → fuera de ventana → NO
+  const i = addUser(db, { h: 25, email: 'i@t.com' }); // 0 borradores
+  const j = addUser(db, { h: 5, email: 'j@t.com' });  // 5h
+  const k = addUser(db, { h: 25, email: 'k@t.com', optOut: 1 }); // opt-out
+  const l = addUser(db, { h: 100, email: 'l@t.com' }); // 100h
 
   (async () => {
     const r1 = await sendFirstPublishEmails(db);
-    check('envía a los 2 candidatos (con/sin borradores)', r1.sent === 2, `sent=${r1.sent}`);
-    check('capturados 2 POST a Resend', captured.length === 2, `n=${captured.length}`);
-    const bodies = captured.map(c => c.body);
-    const mailG = bodies.find(b => b.to[0] === 'g2@t.com');
-    const mailI = bodies.find(b => b.to[0] === 'i@t.com');
-    check('asunto día 2', !!mailG && /primer posteo/i.test(mailG.subject), mailG && mailG.subject);
-    check('CTA directo a publicar (link a la app)', !!mailG && mailG.html.includes('/#/app/schedule') && mailG.html.includes('🚀 Publicar mi primero'));
-    check('copy honesto con borradores', !!mailG && /armo|armados/i.test(mailG.html));
-    check('copy honesto sin borradores (genera primero)', !!mailI && /armo tu primer posteo/i.test(mailI.html));
-    check('el de 1 publicado no recibe email', !bodies.some(b => b.to[0] === 'h@t.com'));
-    check('el de 5h no recibe email', !bodies.some(b => b.to[0] === 'j@t.com'));
-    check('opt-out no recibe email', !bodies.some(b => b.to[0] === 'k@t.com'));
-    check('fuera de ventana (100h) no recibe email', !bodies.some(b => b.to[0] === 'l@t.com'));
+    check('apagado: no envía a nadie', r1.sent === 0, `sent=${r1.sent}`);
+    check("apagado: marca 'regla-dos-motivos'", r1.disabled === 'regla-dos-motivos', `disabled=${r1.disabled}`);
+    check('apagado: cero POST a Resend', captured.length === 0, `n=${captured.length}`);
     const nudgeRows = db.prepare(`SELECT COUNT(*) AS n FROM nudges WHERE kind = 'first_publish'`).get().n;
-    check("idempotencia en tabla nudges (kind='first_publish')", nudgeRows === 2, `n=${nudgeRows}`);
-    captured.length = 0;
+    check('apagado: no marca nudges (el corte es antes de todo)', nudgeRows === 0, `n=${nudgeRows}`);
     const r2 = await sendFirstPublishEmails(db);
-    check('una sola vez: 2da corrida no reenvía', r2.sent === 0 && captured.length === 0, `sent=${r2.sent}`);
+    check('apagado: 2da corrida igual (deshabilitado, sin envíos)', r2.sent === 0 && r2.disabled === 'regla-dos-motivos' && captured.length === 0, `sent=${r2.sent}`);
     globalThis.fetch = realFetch;
     db.close();
     staticChecks();

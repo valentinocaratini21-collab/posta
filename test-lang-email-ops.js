@@ -166,6 +166,30 @@ CREATE TABLE settings (user_id INTEGER, timezone TEXT DEFAULT 'America/Argentina
   await NE.sendUpcomingEmail(db, postEs, { mode: 'autopilot' });
   t('ES asunto upcoming autopilot histórico', last().subject === '⏰ Tu posteo sale en 30 minutos');
 
+  // ---------- LA CARA (2026-10-25): cabecera compartida avatar+nombre+rol ----------
+  console.log('— la cara compartida: email.js + notify-email.js —');
+  const vis = (html) => String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  t('emailFaceHeader exportada y bilingüe', typeof E.emailFaceHeader === 'function'
+    && vis(E.emailFaceHeader()).includes('Posty — tu community manager')
+    && vis(E.emailFaceHeader('en')).includes('Posty — your community manager')
+    && E.emailFaceHeader().includes('/ai-avatar.png'));
+  await E.publishedEmail({ email: 'es@x.com', name: 'Ana' }, { media_type: 'image' }, base, '', false, '');
+  t('ES shell email.js abre con la cara', last().html.includes('/ai-avatar.png') && vis(last().html).includes('Posty — tu community manager'));
+  await E.publishedEmail({ email: 'en@x.com', name: 'Ana', lang: 'en' }, { media_type: 'image' }, base, '', false, '');
+  t('EN shell email.js abre con la cara', last().html.includes('/ai-avatar.png') && vis(last().html).includes('Posty — your community manager'));
+  await NE.sendWeekReady(db, 2, 5);
+  t('ES shell notify-email abre con la cara', last().html.includes('/ai-avatar.png') && vis(last().html).includes('Posty — tu community manager'));
+  await NE.sendWeekReady(db, 7, 5);
+  t('EN shell notify-email abre con la cara', last().html.includes('/ai-avatar.png') && vis(last().html).includes('Posty — your community manager'));
+
+  console.log('— email.js · aviso de cierre de prueba (A5, 2026-10-25) —');
+  await E.trialClosedEmail({ email: 'es@x.com', name: 'Ana', biz: 'Café Sol' }, base);
+  t('ES cierre: asunto', last().subject === 'Tu prueba terminó — tu semana quedó guardada 💙');
+  t('ES cierre: semana guardada + negocio + cara', /tu semana quedó lista y guardada/.test(last().html) && last().html.includes('Café Sol') && vis(last().html).includes('Posty — tu community manager'));
+  await E.trialClosedEmail({ email: 'en@x.com', name: 'Ana', lang: 'en', biz: 'Sun Café' }, base);
+  t('EN cierre: asunto', last().subject === 'Your trial ended — your week is saved 💙');
+  t('EN cierre: cuerpo', /your week is ready and saved/.test(last().html) && last().html.includes('Sun Café') && vis(last().html).includes('Posty — your community manager'));
+
   // ---------- wins.js: línea de referido del festejo ----------
   console.log('— wins.js · línea de referido —');
   const W = require('./wins');
