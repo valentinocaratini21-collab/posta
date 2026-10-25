@@ -16853,6 +16853,87 @@ app.post('/api/gesty/reservas/:id/reintentar', requireAdminToken, express.json()
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// ── G-09b · RESERVAS POR LOS CANALES DE GESTY (gesty-reservas-canal.js:
+// la capacidad de agenda de Gesty sobre booking, el sistema de turnos
+// de la app — jamás uno paralelo). Toda la lógica vive en el módulo:
+// consultar los huecos reales de un día, la toma atómica de una
+// reserva a pedido del canal (WhatsApp/llamadas llegan con G-12/G-13
+// y llaman a ingresarPedido; acá NO hay transporte), la seña
+// registrada desde la política del fundamento, el recordatorio del
+// día anterior y el borrador de factura al cumplirse el turno. Todo
+// detrás de sesión + pack + capacidad «agenda»: cuenta sin pack, 403
+// (el módulo sigue apagado para todos hasta el lanzamiento). ──
+const gestyReservasCanal = require('./gesty-reservas-canal');
+const gestyReservasCanalMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'agenda')];
+app.get('/api/gesty/reservas-canal/disponibilidad', ...gestyReservasCanalMW, (req, res) => {
+  try {
+    res.json({
+      ok: true,
+      disponibilidad: gestyReservasCanal.consultarDisponibilidad(db, req.session.userId, {
+        fecha: String(req.query.fecha || ''), duracion_min: req.query.duracion_min, servicio: String(req.query.servicio || ''),
+        hoy: String(req.query.hoy || '') || undefined, ahora: String(req.query.ahora || '') || undefined,
+      }),
+    });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reservas-canal/config', ...gestyReservasCanalMW, (req, res) => {
+  try { res.json({ ok: true, config: gestyReservasCanal.getConfig(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reservas-canal/config', ...gestyReservasCanalMW, (req, res) => {
+  try { res.json({ ok: true, config: gestyReservasCanal.setConfig(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reservas-canal/pedidos', ...gestyReservasCanalMW, (req, res) => {
+  try {
+    const r = gestyReservasCanal.ingresarPedido(db, req.session.userId, req.body || {}, { hoy: String(req.query.hoy || '') || undefined, ahora: String(req.query.ahora || '') || undefined });
+    res.json({ ok: !!r.ok, resultado: r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reservas-canal/resumen', ...gestyReservasCanalMW, (req, res) => {
+  try {
+    res.json({ ok: true, resumen: gestyReservasCanal.resumenReservasCanal(db, req.session.userId, { hoy: String(req.query.hoy || '') || undefined, ahora: String(req.query.ahora || '') || undefined }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reservas-canal', ...gestyReservasCanalMW, (req, res) => {
+  try {
+    const r = gestyReservasCanal.listReservas(db, req.session.userId, {
+      estado: String(req.query.estado || '') || undefined, canal: String(req.query.canal || '') || undefined,
+      desde: String(req.query.desde || '') || undefined, hasta: String(req.query.hasta || '') || undefined,
+      limit: Number(req.query.limit) || undefined, offset: Number(req.query.offset) || undefined,
+    });
+    res.json({ ok: true, reservas: r.reservas, total: r.total });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reservas-canal/:id', ...gestyReservasCanalMW, (req, res) => {
+  try {
+    const r = gestyReservasCanal.getReserva(db, req.session.userId, Number(req.params.id));
+    if (!r) return res.status(404).json({ ok: false, mensaje: 'Esa reserva no es de esta cuenta.' });
+    res.json({ ok: true, reserva: r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reservas-canal/:id/cancelar', ...gestyReservasCanalMW, (req, res) => {
+  try {
+    const r = gestyReservasCanal.pedirCancelacion(db, req.session.userId, Number(req.params.id), req.body || {});
+    res.json({ ok: true, aplicado: r.aplicado, requiere_ok: r.requiere_ok, ya_preparada: !!r.ya_preparada, reserva: r.reserva, tarjeta: r.tarjeta });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reservas-canal/:id/reprogramar', ...gestyReservasCanalMW, (req, res) => {
+  try {
+    const r = gestyReservasCanal.pedirReprogramacion(db, req.session.userId, Number(req.params.id), req.body || {}, { hoy: String(req.query.hoy || '') || undefined, ahora: String(req.query.ahora || '') || undefined });
+    res.json({ ok: true, aplicado: r.aplicado, requiere_ok: r.requiere_ok, ya_preparada: !!r.ya_preparada, reserva: r.reserva, tarjeta: r.tarjeta });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reservas-canal/procesar-cumplidas', ...gestyReservasCanalMW, (req, res) => {
+  try {
+    const r = gestyReservasCanal.procesarCumplidas(db, req.session.userId, {
+      hoy: String(req.query.hoy || '') || undefined, ahora: String(req.query.ahora || '') || undefined,
+      reintentar: !!((req.body || {}).reintentar),
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -20579,7 +20660,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v419';
+const BUILD_ID = '20261024-v420';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
