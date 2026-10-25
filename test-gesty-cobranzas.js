@@ -156,7 +156,7 @@ let dbA, cobA, tarjetaA;
 
   const esc = cob.escanearVencimientos(dbA, 1, { hoy: '2026-10-24' }); // 7 días de mora → firme
   ok('escaneo: una cobranza creada y una tarjeta nueva', esc.creadas === 1 && esc.tarjetas_nuevas === 1, JSON.stringify(esc));
-  const lista = cob.listCobranzas(dbA, 1, {});
+  const lista = cob.listCobranzas(dbA, 1, { hoy: '2026-10-24' }); // mismo reloj que el escaneo: la suite no depende de la fecha del sistema
   cobA = lista.cobranzas[0];
   ok('la cobranza nace abierta, atada a su factura, con 7 días de mora',
     lista.total === 1 && cobA.estado === 'abierta' && cobA.factura_id === f.id && cobA.dias_mora === 7 && cobA.factura.saldo === 925000);

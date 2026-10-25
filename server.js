@@ -16060,6 +16060,114 @@ app.post('/api/gesty/pagos/ordenes/:id/anular', ...gestyProvMW, express.json(), 
   catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-08 PRESUPUESTOS
+// Spec: gesty-cola-builds.md G-08 + gesty-areas-detalle.md §1 +
+// gesty-sistema-operativo.md §2.1/§5. El módulo vive en
+// gesty-presupuestos.js; acá solo se monta la API detrás de
+// requireAuth + gating de pack + capacidad «presupuestos» EN EL
+// SERVIDOR. Enviar un presupuesto es SIEMPRE con OK del dueño: el
+// borrador pide su tarjeta `presupuesto` con el documento
+// completo, el ejecutor que approveCard invoca SELLA el envío y el
+// despacho (enviarPresupuesto / enviarRecordatorio) solo mueve
+// envíos sellados — no existe ruta directa de envío. El
+// recordatorio de vencimiento lo PREPARA procesarSeguimiento como
+// tarjeta nueva: tampoco sale solo. El envío por email usa el
+// canal de email de la app (sendEmail, ./email) inyectado.
+// =====================================================================
+const gestyPresupuestos = require('./gesty-presupuestos');
+try {
+  gestyPresupuestos.configure({ sendEmail: (o) => sendEmail(o) });
+} catch (e) { console.error('[gesty] presupuestos configure:', e.message); }
+
+const gestyPresMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'presupuestos')];
+
+app.post('/api/gesty/presupuestos', ...gestyPresMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, presupuesto: gestyPresupuestos.crearBorrador(db, req.session.userId, { ...(req.body || {}), creado_por: 'dueno' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/presupuestos/politica', ...gestyPresMW, (req, res) => {
+  try { res.json({ ok: true, politica: gestyPresupuestos.getPolitica(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/presupuestos/politica', ...gestyPresMW, express.json(), (req, res) => {
+  // La política es del dueño: validez habitual, seña, días de
+  // seguimiento, canal y lista de precios — todo al fundamento.
+  try { res.json({ ok: true, politica: gestyPresupuestos.setPolitica(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/presupuestos/seguimiento', ...gestyPresMW, express.json(), (req, res) => {
+  // La rutina de seguimiento: marca vencidos y PREPARA las
+  // tarjetas de recordatorio. Nunca envía nada.
+  try { res.json({ ok: true, seguimiento: gestyPresupuestos.procesarSeguimiento(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/presupuestos/resumen', ...gestyPresMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyPresupuestos.resumenPresupuestos(db, req.session.userId, {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/presupuestos', ...gestyPresMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    const r = gestyPresupuestos.listPresupuestos(db, req.session.userId, {
+      estado: q.estado, cliente_cuit: q.cliente_cuit, cliente: q.cliente,
+      desde: q.desde, hasta: q.hasta,
+      sin_respuesta: q.sin_respuesta === '1' || q.sin_respuesta === 'true',
+      por_vencer: q.por_vencer === '1' || q.por_vencer === 'true',
+      limit: q.limit, offset: q.offset,
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/presupuestos/:id/documento', ...gestyPresMW, (req, res) => {
+  // El documento armado (vista/descarga imprimible, rotulado como
+  // presupuesto: nunca como comprobante fiscal).
+  try { res.type('html').send(gestyPresupuestos.documentoPresupuesto(db, req.session.userId, Number(req.params.id))); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/presupuestos/:id', ...gestyPresMW, (req, res) => {
+  try {
+    const p = gestyPresupuestos.getPresupuesto(db, req.session.userId, Number(req.params.id));
+    if (!p) return res.status(400).json({ ok: false, error: 'Ese presupuesto no es de esta cuenta.' });
+    res.json({ ok: true, presupuesto: p, historial: gesty.listEvents(db, req.session.userId, { entidad_tipo: 'presupuesto', entidad_id: String(p.id) }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/presupuestos/:id/editar', ...gestyPresMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, presupuesto: gestyPresupuestos.editarBorrador(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/presupuestos/:id/responder', ...gestyPresMW, express.json(), (req, res) => {
+  // La respuesta a LA pregunta del armado: lo respondido queda
+  // guardado en el fundamento para siempre.
+  try { res.json({ ok: true, presupuesto: gestyPresupuestos.responderPregunta(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/presupuestos/:id/pedir-ok', ...gestyPresMW, express.json(), (req, res) => {
+  // Pedir el OK crea la tarjeta con el documento completo: NO envía.
+  try { res.json({ ok: true, ...gestyPresupuestos.pedirOK(db, req.session.userId, Number(req.params.id), { creado_por: 'gesty' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/presupuestos/:id/enviar', ...gestyPresMW, express.json(), async (req, res) => {
+  // Despachar exige el sello del ejecutor (tarjeta aprobada): el
+  // servidor lo valida contra el registro, no contra la pantalla.
+  try { res.json({ ok: true, ...(await gestyPresupuestos.enviarPresupuesto(db, req.session.userId, Number(req.params.id), req.body || {})) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/presupuestos/:id/enviar-recordatorio', ...gestyPresMW, express.json(), async (req, res) => {
+  try { res.json({ ok: true, ...(await gestyPresupuestos.enviarRecordatorio(db, req.session.userId, Number(req.params.id), req.body || {})) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/presupuestos/:id/respuestas', ...gestyPresMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, presupuesto: gestyPresupuestos.registrarRespuesta(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/presupuestos/:id/crear-factura', ...gestyPresMW, express.json(), (req, res) => {
+  // Aceptado → alimenta G-04 por el acople origen_ref que
+  // facturación ya soporta (sin tocar G-04).
+  try { res.json({ ok: true, ...gestyPresupuestos.crearFacturaDesdePresupuesto(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -19786,7 +19894,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v412';
+const BUILD_ID = '20261024-v413';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

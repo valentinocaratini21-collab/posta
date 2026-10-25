@@ -328,11 +328,11 @@ function cobranzaActivaDeFactura(db, userId, facturaId) {
   return db.prepare(`SELECT * FROM gesty_cobranzas WHERE user_id = ? AND factura_id = ? AND estado = 'abierta'`)
     .get(userId, Number(facturaId)) || null;
 }
-function getCobranza(db, userId, id) {
+function getCobranza(db, userId, id, opts) {
   ensureSchema(db);
   sincronizarCierre(db, userId, Number(id));
   const r = db.prepare('SELECT * FROM gesty_cobranzas WHERE id = ? AND user_id = ?').get(Number(id), userId);
-  return r ? parseCobranzaRow(db, userId, r) : null;
+  return r ? parseCobranzaRow(db, userId, r, (opts || {}).hoy) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -771,7 +771,7 @@ function listCobranzas(db, userId, opts) {
   const lim = Math.min(Math.max(Number(o.limit) || 200, 1), 1000);
   const off = Math.max(Number(o.offset) || 0, 0);
   const rows = db.prepare('SELECT * FROM gesty_cobranzas WHERE user_id = ? ORDER BY id DESC').all(userId);
-  let out = rows.map((r) => parseCobranzaRow(db, userId, r));
+  let out = rows.map((r) => parseCobranzaRow(db, userId, r, o.hoy));
   if (o.estado) out = out.filter((c) => c.estado === String(o.estado));
   if (o.factura_id) out = out.filter((c) => c.factura_id === Number(o.factura_id));
   if (o.cliente_cuit) out = out.filter((c) => c.factura && soloDigitos(c.factura.cliente.cuit) === soloDigitos(o.cliente_cuit));
