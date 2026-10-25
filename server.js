@@ -17133,6 +17133,73 @@ app.get('/api/gesty/fiscal/vencimientos', ...gestyFiscalMW, (req, res) => {
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// G-20 · REGLAS APRENDIDAS DEL NEGOCIO (tanda aprobada G-17…G-22)
+// El módulo vive en gesty-reglas.js; acá solo se monta la API
+// detrás de requireAuth + gating de pack — el mismo gating que
+// las rutas del fundamento y de «Lo que Gesty aprendió» (no
+// existe capacidad «fundamento» en el pack: declarado en la
+// cabecera del módulo). Al cargarse, el módulo registra en G-03
+// su proveedor de clasificación aprendida y su listener de
+// correcciones: la regla aprobada clasifica sola, con rastro.
+// LA FRONTERA DURA: ninguna ruta de este bloque aprueba, crea ni
+// ejecuta tarjetas, ni envía, paga ni emite nada — las reglas
+// solo ajustan autopiloto (clasificar, sugerencias de borrador).
+// Aprobar/descartar/revocar una regla es acto del dueño.
+// =====================================================================
+const gestyReglas = require('./gesty-reglas');
+
+const gestyReglasMW = [requireAuth, gesty.gestyMiddleware(db)];
+
+app.get('/api/gesty/reglas/resumen', ...gestyReglasMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyReglas.resumenReglas(db, req.session.userId, { hoy: req.query.hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reglas/propuestas', ...gestyReglasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyReglas.listPropuestas(db, req.session.userId, { estado: req.query.estado || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reglas/activas', ...gestyReglasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyReglas.listReglasActivas(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reglas/observaciones', ...gestyReglasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyReglas.listObservaciones(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reglas/sugerencia-pago', ...gestyReglasMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    const sugerencia = gestyReglas.sugerenciaPagoProveedor(db, req.session.userId,
+      q.campo ? String(q.campo) : { cuit: q.cuit || undefined, nombre: q.nombre || undefined });
+    res.json({ ok: true, sugerencia });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/reglas/sugerencia-descuento', ...gestyReglasMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    const sugerencia = gestyReglas.sugerenciaDescuentoCliente(db, req.session.userId,
+      q.campo ? String(q.campo) : { cuit: q.cuit || undefined, nombre: q.nombre || undefined });
+    res.json({ ok: true, sugerencia });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reglas/escanear', ...gestyReglasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, escaneo: gestyReglas.escanearPatrones(db, req.session.userId, { hoy: (req.body || {}).hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reglas/propuestas/:id/aprobar', ...gestyReglasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyReglas.aprobarPropuesta(db, req.session.userId, Number(req.params.id), { actor: 'dueno' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reglas/propuestas/:id/descartar', ...gestyReglasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyReglas.descartarPropuesta(db, req.session.userId, Number(req.params.id), { motivo: (req.body || {}).motivo || '' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reglas/propuestas/:id/revocar', ...gestyReglasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyReglas.revocarRegla(db, req.session.userId, Number(req.params.id), {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -20859,7 +20926,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v423';
+const BUILD_ID = '20261024-v424';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

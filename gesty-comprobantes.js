@@ -118,6 +118,28 @@ function registerExtractor(fn) {
   _extractor = fn;
 }
 
+// G-20 · Reglas aprendidas: proveedores de clasificación que el
+// clasificador consulta ANTES de sus reglas genéricas (y DESPUÉS
+// de la corrección del dueño, que manda sobre todo). Cada
+// proveedor recibe (db, userId, c) y devuelve { clasificacion,
+// regla } o null. Sin proveedores registrados — o sin regla
+// aprobada para la contraparte — el comportamiento es el de
+// siempre: clasificar corre igual que antes de G-20.
+const _reglasClasificacion = [];
+function registerReglaClasificacion(fn) {
+  if (typeof fn !== 'function') fail('La regla de clasificación aprendida debe ser una función.');
+  _reglasClasificacion.push(fn);
+}
+// Listeners de corrección: cuando el dueño corrige la clasificación
+// de un papel que una regla aprendida había clasificado, los
+// registrados se enteran (G-20 debilita/apaga su regla). Reciben
+// (db, userId, info) con el id de la regla y el comprobante.
+const _listenersCorreccion = [];
+function registerCorreccionListener(fn) {
+  if (typeof fn !== 'function') fail('El listener de corrección debe ser una función.');
+  _listenersCorreccion.push(fn);
+}
+
 // ---------------------------------------------------------------------------
 // Esquema (aditivo, idempotente)
 // ---------------------------------------------------------------------------
@@ -469,14 +491,32 @@ function getComprobante(db, userId, id) {
   return parseRow(r);
 }
 
+// La clasificación final de un papel, en orden de mando:
+// 1) lo que el dueño ya fijó (corrección o carga suya),
+// 2) una regla aprendida APROBADA para la contraparte (G-20, con
+//    su rastro «regla-aprendida-<id>»),
+// 3) las reglas genéricas de clasificar().
+// Sin regla aprobada, el resultado es idéntico al histórico.
+function resolverClasificacion(db, userId, c) {
+  if (c.clasificacion && CLASIFICACIONES.includes(c.clasificacion)) {
+    return { clasificacion: c.clasificacion, regla: 'corregida-por-el-dueno' };
+  }
+  for (const fn of _reglasClasificacion) {
+    let r = null;
+    try { r = fn(db, userId, c); } catch (e) { r = null; }
+    if (r && CLASIFICACIONES.includes(String(r.clasificacion || ''))) {
+      return { clasificacion: String(r.clasificacion), regla: String(r.regla || 'regla-aprendida') };
+    }
+  }
+  return clasificar(c);
+}
+
 // Al terminar la lectura: evaluación, eventos y propuestas al
 // fundamento. Devuelve la fila ya persistida (parseada).
 function cerrarLectura(db, userId, id, c, opts) {
   const o = opts || {};
   const { estado, dudosos, pregunta } = evaluar(c);
-  const { clasificacion, regla } = c.clasificacion && CLASIFICACIONES.includes(c.clasificacion)
-    ? { clasificacion: c.clasificacion, regla: 'corregida-por-el-dueno' }
-    : clasificar(c);
+  const { clasificacion, regla } = resolverClasificacion(db, userId, c);
   c.clasificacion = clasificacion;
   const extraccion = {
     via: o.via || '',
@@ -744,6 +784,23 @@ function corregirComprobante(db, userId, id, campos, opts) {
   }
   const comp = cerrarLectura(db, userId, row.id, c, { via: (actual.extraccion && actual.extraccion.via) || '' });
   const propuestas = proponerAlFundamento(db, userId, comp);
+  // G-20: si el dueño corrigió la clasificación de un papel que una
+  // regla aprendida había clasificado (y la cambió de verdad), los
+  // listeners se enteran: la corrección cuenta EN CONTRA de la
+  // regla que lo clasificó.
+  const reglaPrevia = actual.extraccion && actual.extraccion.clasificacion_regla;
+  if (cambios.clasificacion !== undefined && String(cambios.clasificacion) !== String(actual.clasificacion || '')
+    && /^regla-aprendida-\d+$/.test(String(reglaPrevia || ''))) {
+    for (const fn of _listenersCorreccion) {
+      try {
+        fn(db, userId, {
+          regla: String(reglaPrevia), comprobante_id: row.id,
+          clasificacion_anterior: actual.clasificacion, clasificacion_nueva: comp.clasificacion,
+          direccion: comp.direccion, emisor: comp.emisor, receptor: comp.receptor,
+        });
+      } catch (e) { /* un listener jamás rompe la corrección del dueño */ }
+    }
+  }
   return { comprobante: comp, propuestas };
 }
 
@@ -792,6 +849,8 @@ module.exports = {
   REGLAS_CLASIFICACION, CAMPOS_CORREGIBLES,
   // configuración / inyección
   configure, registerExtractor,
+  // reglas aprendidas (G-20): registro de proveedores y listeners
+  registerReglaClasificacion, registerCorreccionListener,
   // esquema
   ensureSchema,
   // ingesta
