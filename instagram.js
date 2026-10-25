@@ -175,16 +175,23 @@ async function publishPost(media, creds, demoMode) {
 // ---------- Video / Reels ----------
 // Publicación real en dos pasos: crear el contenedor REEL, esperar que Meta
 // termine de procesarlo, y publicarlo.
-async function publishVideoReal({ videoUrl, caption }, { igUserId, accessToken }) {
+async function publishVideoReal({ videoUrl, caption, coverUrl }, { igUserId, accessToken }) {
+  // (Gap 1, 2026-10-25) PORTADA QUE VIAJA: la portada que el dueño eligió
+  // frame a frame en la app (posts.cover_path) y la que el director de
+  // feed graduó TIENEN que llegar a Instagram — Meta acepta `cover_url`
+  // al crear el contenedor REELS. Sin este parámetro, IG publica con el
+  // frame que quiere y la elección del cliente era una promesa vacía.
+  const containerBody = {
+    media_type: 'REELS',
+    video_url: videoUrl,
+    caption,
+    access_token: accessToken,
+  };
+  if (coverUrl) containerBody.cover_url = coverUrl;
   const createRes = await igFetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      media_type: 'REELS',
-      video_url: videoUrl,
-      caption,
-      access_token: accessToken,
-    }),
+    body: JSON.stringify(containerBody),
   });
   const created = await createRes.json();
   if (created.error) throw new Error(created.error.message);

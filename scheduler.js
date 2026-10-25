@@ -162,7 +162,7 @@ async function publishSinglePost(db, post, opts = {}) {
     }
     const result =
       post.media_type === 'video'
-        ? await publishVideo({ videoUrl: mediaUrl, caption }, creds, demoMode)
+        ? await publishVideo({ videoUrl: mediaUrl, caption, coverUrl: post.cover_path ? publicImageUrl(post.cover_path, settings.image_base_url) : '' }, creds, demoMode)
         : isStory
           ? await publishStory({ imageUrl: mediaUrl }, creds, demoMode)
           : isCarousel
