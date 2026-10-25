@@ -17085,6 +17085,54 @@ app.post('/api/gesty/huecos/:id/vincular', ...gestyHuecosMW, express.json(), (re
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// G-19 · CALENDARIO FISCAL CALCULADO (tanda aprobada G-17…G-22)
+// El módulo vive en gesty-fiscal.js; acá solo se monta la API
+// detrás de requireAuth + gating de pack + capacidad «agenda»
+// (el calendario fiscal alimenta la agenda, G-09). Los
+// vencimientos se CALCULAN desde el CUIT y el régimen del
+// fundamento con una tabla de reglas versionada por jurisdicción
+// (AR nacional; cada cálculo cita su regla y su versión). Si el
+// régimen o la jurisdicción no están en la tabla: sin-cobertura
+// declarada + la pregunta única — jamás una fecha estimada. La
+// fecha se calcula; el monto NO (lo liquida el contador). La
+// vista /vencimientos une lo calculado con lo cargado a mano en
+// el fundamento sin duplicar (una obligación, una fecha, dos
+// fuentes). G-09 no se toca: la fuente calculada queda ofrecida
+// como función consumible del módulo.
+// =====================================================================
+const gestyFiscal = require('./gesty-fiscal');
+
+const gestyFiscalMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'agenda')];
+
+app.get('/api/gesty/fiscal/resumen', ...gestyFiscalMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyFiscal.resumenFiscal(db, req.session.userId, { hoy: req.query.hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/fiscal/perfil', ...gestyFiscalMW, (req, res) => {
+  try { res.json({ ok: true, perfil: gestyFiscal.perfilFiscal(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/fiscal/reglas', ...gestyFiscalMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyFiscal.tablaDeReglas() }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/fiscal/vencimientos', ...gestyFiscalMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    if (q.periodo) {
+      const calculo = gestyFiscal.calcularPeriodo(db, req.session.userId, String(q.periodo), { hoy: q.hoy || undefined });
+      const vista = gestyFiscal.vencimientosUnificados(db, req.session.userId, { periodo: String(q.periodo), hoy: q.hoy || undefined });
+      res.json({ ok: true, calculo, vista });
+    } else {
+      const vista = gestyFiscal.vencimientosUnificados(db, req.session.userId, {
+        desde: q.desde || undefined, hasta: q.hasta || undefined, hoy: q.hoy || undefined,
+      });
+      res.json({ ok: true, vista });
+    }
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -20811,7 +20859,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v422';
+const BUILD_ID = '20261024-v423';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
