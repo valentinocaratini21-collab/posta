@@ -43,7 +43,7 @@ const bookingMod = require('./booking');
 const followupsMod = require('./followups');
 const paymentCloseMod = require('./payment-close');
 const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
-const { upcomingEphemeris, catsMatch } = require('./ephemeris');
+const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
@@ -387,10 +387,8 @@ function ephemerisFor(profile) {
   if (!eph) return null;
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
-  const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return null;
-  const m = catsMatch(eph, cat + ' ' + biz + ' ' + desc);
-  return (m !== null ? m : EPHEMERIS_GIFT_OK.test(cat)) ? eph : null;
+  return EPHEMERIS_GIFT_OK.test(cat) ? eph : null;
 }
 // C1 + paquete de titulares (2026-10-16, aprobado por Valentino "arma
 // todo"; paquete makeheadline-decision-v113 de Mora + spec M53 de Uma):
@@ -1877,9 +1875,9 @@ function ephemerisWindowFor(profile, days) {
   if (!list.length) return [];
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
-  const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return [];
-  return list.filter(e => { const m = catsMatch(e, cat + ' ' + biz + ' ' + desc); return m !== null ? m : EPHEMERIS_GIFT_OK.test(cat); });
+  if (!EPHEMERIS_GIFT_OK.test(cat)) return [];
+  return list;
 }
 
 // Lectura pública de un competidor, con caché de 6 días en competitor_snapshots.
@@ -17275,6 +17273,86 @@ app.post('/api/gesty/cierre-dia/rutina', ...gestyCierreDiaMW, express.json(), as
   try {
     const b = req.body || {};
     res.json({ ok: true, rutina: await gestyCierreDia.correrRutinaDiaria(db, req.session.userId, { hoy: b.hoy || undefined }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
+// =====================================================================
+// G-22 · AUDITORÍA DE PRECIOS DE PROVEEDORES (tanda aprobada G-17…G-22)
+// El módulo vive en gesty-precios.js; acá solo se monta la API
+// detrás de requireAuth + gating de pack + capacidad
+// «proveedores». La serie histórica de precios por (proveedor,
+// concepto) se deriva de los comprobantes recibidos de G-03 (el
+// monto del papel: neto si está, total si no — la base es parte de
+// la identidad de la serie) y del precio unitario de las órdenes
+// de compra de G-10, sin mezclar magnitudes. La alerta nace solo
+// sobre el umbral del fundamento (default 10%) contra el precio
+// anterior Y la mediana de la serie, con el número concreto y la
+// serie completa citada; por debajo, silencio registrado. Una
+// alerta abierta por serie: el salto nuevo la evoluciona, la
+// reversión la cierra, y marcarla vista no la recrea. La
+// comparación entre proveedores es consulta informativa — este
+// build no sugiere cambiar de proveedor por ningún canal. El
+// disparo es explícito (la rutina de G-21 podrá sumarlo después;
+// no se cablea acá).
+// =====================================================================
+const gestyPrecios = require('./gesty-precios');
+
+const gestyPreciosMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'proveedores')];
+
+app.get('/api/gesty/precios/resumen', ...gestyPreciosMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyPrecios.resumenPrecios(db, req.session.userId, { hoy: req.query.hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/precios/config', ...gestyPreciosMW, (req, res) => {
+  try { res.json({ ok: true, config: gestyPrecios.getConfig(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/precios/config', ...gestyPreciosMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, config: gestyPrecios.setConfig(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/precios/series', ...gestyPreciosMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyPrecios.listSeries(db, req.session.userId, {
+      proveedor: q.proveedor || undefined, familia: q.familia || undefined, q: q.q || undefined,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/precios/serie', ...gestyPreciosMW, (req, res) => {
+  try {
+    const serie = gestyPrecios.getSerie(db, req.session.userId, String(req.query.serie || ''));
+    if (!serie) return res.status(404).json({ ok: false, error: 'Esa serie no existe en esta cuenta.' });
+    res.json({ ok: true, serie });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/precios/alertas', ...gestyPreciosMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyPrecios.listAlertas(db, req.session.userId, {
+      estado: q.estado || undefined, limit: q.limit, offset: q.offset,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/precios/comparacion', ...gestyPreciosMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyPrecios.compararProveedores(db, req.session.userId, {
+      hoy: q.hoy || undefined, dias: q.dias ? Number(q.dias) : undefined,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/precios/escanear', ...gestyPreciosMW, express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = gestyPrecios.escanearPrecios(db, req.session.userId, { hoy: b.hoy });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/precios/alertas/:id/vista', ...gestyPreciosMW, express.json(), (req, res) => {
+  try {
+    const alerta = gestyPrecios.marcarVista(db, req.session.userId, Number(req.params.id));
+    res.json({ ok: true, alerta });
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
