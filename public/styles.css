@@ -3554,6 +3554,52 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-nivel-tx strong{font-size:14px}
 .pz-nivel-tx span{font-size:12px;color:var(--mut)}
 .pz-nivel-chip{flex:none;border:0;border-radius:999px;padding:8px 12px;font-weight:700;font-size:12.5px;background:#2793C8;color:#fff;cursor:pointer}
+/* ===== EVOLUCIÓN DE POSTY (v459) — Posty crece DENTRO de la tira ===== */
+/* La tira reserva su altura (min-height): el crecimiento es transform, nunca
+   layout — sin CLS aunque Posty crezca. Cara congelada: mismo ai-avatar.png. */
+.pz-nivel{position:relative;min-height:88px}
+.pz-evo-wrap{position:relative;width:64px;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+.pz-evo-wrap .pz-tallo .pz-nudo{width:8px;height:8px}
+.pz-evo-wrap .pz-tallo .pz-nudo.cur{width:11px;height:11px}
+.pz-evo{position:relative;display:block;width:64px;height:58px;flex:none;transform:scale(var(--evo-s,1));transform-origin:bottom center}
+.pz-evo.evo-L1{--evo-s:.62}.pz-evo.evo-L2{--evo-s:.74}.pz-evo.evo-L3{--evo-s:.86}.pz-evo.evo-L4{--evo-s:.97}.pz-evo.evo-L5{--evo-s:1.08}
+.pz-evo-av{position:absolute;left:5px;bottom:0;width:54px;height:54px;border-radius:50%;z-index:1}
+.pz-evo-brote{position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:20px;height:20px;z-index:2;color:#5B8C5A}
+.pz-evo-brote svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pz-evo-brillo{position:absolute;top:0;right:6px;width:16px;height:16px;z-index:2;color:#FEC14D}
+.pz-evo-brillo svg{width:100%;height:100%;fill:currentColor}
+.pz-evo-anillo{position:absolute;left:5px;bottom:0;width:54px;height:54px;border-radius:50%;border:2px solid #DFA856;z-index:2}
+.pz-evo-anillo-oro{box-shadow:0 0 0 3px rgba(223,168,86,.35)}
+.pz-evo-aura{position:absolute;inset:-6px;border-radius:50%;background:radial-gradient(circle,rgba(39,147,200,.35),transparent 70%);z-index:0}
+.pz-evo-aura-oro{background:radial-gradient(circle,rgba(223,168,86,.5),transparent 70%)}
+.pz-evo-kit{position:absolute;right:0;bottom:2px;width:26px;height:16px;z-index:2}
+.pz-evo-kit svg{width:100%;height:100%;fill:#fff;stroke:#2793C8;stroke-width:1.2}
+.pz-evo-next{width:52px;flex:none;display:flex;flex-direction:column;align-items:center;gap:1px}
+.pz-evo-fantasma{position:relative;width:40px;height:40px;opacity:.4;filter:grayscale(1) brightness(1.6)}
+.pz-evo-fantasma .pz-evo{width:40px;height:40px;transform:none}
+.pz-evo-fantasma .pz-evo-av{left:0;bottom:0;width:40px;height:40px}
+.pz-evo-fantasma .pz-evo-brote{width:14px;height:14px;top:-3px}
+.pz-evo-fantasma .pz-evo-brillo{width:11px;height:11px;right:2px}
+.pz-evo-fantasma .pz-evo-anillo{left:0;bottom:0;width:40px;height:40px;border-width:1.5px}
+.pz-evo-fantasma .pz-evo-aura{inset:-4px}
+.pz-evo-fantasma .pz-evo-kit{width:18px;height:12px}
+.pz-evo-next-tx{font-size:9.5px;line-height:1.2;color:var(--mut);text-align:center}
+.pz-evo-max-estrella{font-size:22px;color:#DFA856;line-height:1}
+.pz-nivel-evolabel{font-size:9.5px;letter-spacing:.06em;color:var(--mut);font-weight:700}
+.pz-evo-burbuja{position:absolute;left:12px;bottom:calc(100% + 4px);max-width:280px;background:#fff;border:1px solid #D8ECF7;border-radius:12px;padding:8px 10px;font-size:13px;line-height:1.4;box-shadow:0 6px 18px rgba(10,30,51,.15);opacity:0;pointer-events:none;transition:opacity .2s;z-index:5}
+.pz-evo-burbuja.on{opacity:1}
+.pz-evo-rebota{animation:pzRebote .5s}
+.pz-evo-crece{animation:pzCrece .9s}
+@keyframes pzRebote{30%{transform:scale(var(--evo-s,1)) translateY(-6px)}60%{transform:scale(var(--evo-s,1)) translateY(0)}}
+@keyframes pzCrece{0%{transform:scale(var(--evo-s,1))}50%{transform:scale(calc(var(--evo-s,1)*1.3));filter:drop-shadow(0 0 10px rgba(254,193,77,.8))}100%{transform:scale(var(--evo-s,1))}}
+.pz-celeb-evo{display:block;width:96px;height:96px;margin:6px auto 10px;position:relative}
+.pz-celeb-evo .pz-evo{width:96px;height:96px;transform:none;animation:pzCrece .9s}
+.pz-celeb-evo .pz-evo-av{left:50%;bottom:0;width:88px;height:88px;transform:translateX(-50%)}
+.pz-celeb-evo .pz-evo-anillo{left:50%;bottom:0;width:88px;height:88px;transform:translateX(-50%)}
+.pz-celeb-evo .pz-evo-brote{top:0;width:26px;height:26px}
+.pz-celeb-evo .pz-evo-brillo{width:22px;height:22px}
+.pz-celeb-evo .pz-evo-kit{width:34px;height:22px}
+@media (prefers-reduced-motion: reduce){.pz-evo-rebota,.pz-evo-crece,.pz-celeb-evo .pz-evo{animation:none}}
 .pz-celeb-fondo{position:fixed;inset:0;background:rgba(10,30,51,.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:300}
 .pz-celeb{background:#FFFDF8;border-radius:24px;padding:28px 22px;text-align:center;max-width:340px;width:100%;animation:pzPop .45s cubic-bezier(.2,1.6,.4,1);position:relative}
 .pz-celeb .pz-tallo{display:flex;justify-content:center;margin:0 auto 12px}

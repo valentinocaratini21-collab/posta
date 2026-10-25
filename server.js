@@ -3271,6 +3271,14 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
     const niv = oficina.niveles.computarNivel(db, req.session.userId, poder, oficina.metricas(db, req.session.userId));
     let celebrado = false;
     try { celebrado = db.prepare('SELECT COUNT(*) AS n FROM nivel_celebraciones WHERE user_id = ? AND poder = ? AND nivel = ?').get(req.session.userId, niv.poder, niv.nivel).n > 0; } catch (e) {}
+    // (v459 · evolución) Socio desde: mes REAL de la subida a L5, leído del
+    // río (oficina_registros tipo subida_nivel, resumen exacto). Sin registro
+    // no hay fecha: nunca se inventa. El cliente formatea el mes en su idioma.
+    let socio_desde_ts = null;
+    try {
+      const r = db.prepare(`SELECT MIN(ts) AS ts FROM oficina_registros WHERE user_id = ? AND poder = ? AND tipo = 'subida_nivel' AND resumen = ?`).get(req.session.userId, niv.poder, `${def.nombre} subió a ${def.niveles[4]}`);
+      if (r && r.ts) socio_desde_ts = r.ts;
+    } catch (e) {}
     res.json({
       ok: true, poder: niv.poder, nivel: niv.nivel,
       nombre_nivel: niv.nombre_nivel,
@@ -3278,6 +3286,7 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
       color: niv.color, proximo_paso: niv.proximo_paso,
       faltantes: niv.gate.pendientes,
       celebrar: niv.nivel > 1 && !celebrado,
+      socio_desde_ts,
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -22169,7 +22178,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v458';
+const BUILD_ID = '20261025-v459';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
