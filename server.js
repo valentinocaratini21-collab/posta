@@ -16073,6 +16073,163 @@ app.post('/api/gesty/contador/pedidos/:id/descartar', ...gestyContMW, express.js
 });
 
 // =====================================================================
+// GESTY · G-15b PORTAL DE SOLO LECTURA DEL CONTADOR
+// Spec: gesty-cola-builds.md G-15 (aceptación completa) +
+// gesty-build-spec.md §13.1. El módulo vive en
+// gesty-contador-acceso.js; acá se montan DOS superficies:
+// (1) la del dueño — /api/gesty/contador/accesos* detrás de
+// requireAuth + gating de pack + capacidad «reportes», como el
+// resto de G-15: crear el acceso, el SELLO de la invitación, su
+// salida por email (única vía, sellada), compartir el enlace
+// (registrado, con su medio), revocar en un toque, reinvitar
+// (ronda nueva: el token viejo muere) y consultar el log;
+// (2) la del contador — /api/portal-contador*, PÚBLICA y sin
+// sesión de la app: entra con su token propio (header
+// x-portal-contador, Authorization: Bearer o ?t= del enlace del
+// email), guardado hasheado en el servidor. El portal es SOLO
+// LECTURA y de alcance cerrado: únicamente los paquetes de su
+// dueño, para su email, ya entregados. Cualquier escritura cae
+// en el handler final: 405 y, si el token es válido, el intento
+// queda registrado en el log del acceso.
+// =====================================================================
+const gestyContadorAcceso = require('./gesty-contador-acceso');
+try {
+  gestyContadorAcceso.configure({ sendEmail: (o) => sendEmail(o) });
+} catch (e) { console.error('[gesty] contador-acceso configure:', e.message); }
+
+app.post('/api/gesty/contador/accesos', ...gestyContMW, express.json(), (req, res) => {
+  // Crear el acceso NO envía nada ni mienta el enlace: deja la
+  // invitación preparada, esperando el OK del dueño para salir.
+  try { res.json({ ok: true, acceso: gestyContadorAcceso.crearAcceso(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/contador/accesos', ...gestyContMW, (req, res) => {
+  try { res.json({ ok: true, accesos: gestyContadorAcceso.listAccesos(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/contador/accesos/:id/log', ...gestyContMW, (req, res) => {
+  // El log de accesos del contador: qué entró a ver, qué bajó,
+  // qué intentos quedaron registrados. Consultable por el dueño.
+  try {
+    const acceso = gestyContadorAcceso.getAcceso(db, req.session.userId, Number(req.params.id));
+    if (!acceso) return res.status(400).json({ ok: false, error: 'Ese acceso no es de esta cuenta.' });
+    res.json({
+      ok: true, acceso,
+      log: gestyContadorAcceso.listAccesoLog(db, req.session.userId, acceso.id, { limit: (req.query || {}).limit }),
+      invitaciones: gestyContadorAcceso.listInvitaciones(db, req.session.userId, acceso.id),
+    });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/accesos/:id/aprobar-invitacion', ...gestyContMW, express.json(), (req, res) => {
+  // EL SELLO de la invitación: el OK del dueño sobre la ronda
+  // vigente. Los rechazos (ronda vieja, revocado, vencido, ya
+  // salió) devuelven 400 con su motivo y quedan en el registro.
+  try {
+    const r = gestyContadorAcceso.aprobarInvitacion(db, req.session.userId, Number(req.params.id), req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, motivo: r.motivo });
+    res.json({ ok: true, acceso: r.acceso, idempotente: !!r.idempotente });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/accesos/:id/enviar-invitacion', ...gestyContMW, express.json(), async (req, res) => {
+  // La única vía de salida por email: exige el sello de la
+  // ronda. Sin OK no sale (y el intento queda registrado).
+  // El token nace en esta salida: la respuesta trae el enlace
+  // vigente para el dueño (reemplaza a cualquier anterior).
+  try { res.json({ ok: true, ...await gestyContadorAcceso.enviarInvitacion(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/accesos/:id/compartir', ...gestyContMW, express.json(), (req, res) => {
+  // El dueño copia el enlace y lo entrega por su cuenta: como
+  // la entrega manual de G-15, no pide sello pero sí su medio,
+  // y queda registrado.
+  try { res.json({ ok: true, ...gestyContadorAcceso.compartirInvitacion(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/accesos/:id/revocar', ...gestyContMW, express.json(), (req, res) => {
+  // Revocación en un toque: el enlace muere en el acto (la
+  // validación es por request, sin caché de sesiones).
+  try { res.json({ ok: true, acceso: gestyContadorAcceso.revocarAcceso(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/accesos/:id/reinvitar', ...gestyContMW, express.json(), (req, res) => {
+  // Ronda nueva: el token anterior muere acá mismo, el sello
+  // anterior no sirve y la validez corre de nuevo.
+  try { res.json({ ok: true, acceso: gestyContadorAcceso.reinvitarAcceso(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
+// --- El portal del contador (público, con su token propio) ---
+function portalTokenDeReq(req) {
+  const h = req.headers || {};
+  const auth = String(h.authorization || '');
+  if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
+  if (h['x-portal-contador']) return String(h['x-portal-contador']);
+  return String((req.query || {}).t || '');
+}
+function portalResolver(req, res) {
+  const r = gestyContadorAcceso.resolverAcceso(db, portalTokenDeReq(req), { ip: req.ip || '' });
+  if (!r.ok) { res.status(r.status).json({ ok: false, error: r.error, motivo: r.motivo }); return null; }
+  return r.acceso;
+}
+app.get('/api/portal-contador', (req, res) => {
+  // La entrada del portal: quién lo invitó, hasta cuándo vale
+  // su acceso y los paquetes que le fueron entregados.
+  try {
+    const acceso = portalResolver(req, res);
+    if (!acceso) return;
+    res.json({ ok: true, portal: gestyContadorAcceso.portalResumen(db, acceso) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/portal-contador/paquetes/:id', (req, res) => {
+  // Un paquete entregado, tal como salió (versión y formato
+  // congelados). Un paquete que no le fue entregado a ESTE
+  // contador es indistinguible de uno inexistente: 404.
+  try {
+    const acceso = portalResolver(req, res);
+    if (!acceso) return;
+    const paquete = gestyContadorAcceso.portalPaquete(db, acceso, Number(req.params.id));
+    if (!paquete) return res.status(404).json({ ok: false, error: 'Ese paquete no está en tu carpeta.' });
+    res.json({ ok: true, paquete });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/portal-contador/paquetes/:id/csv', (req, res) => {
+  try {
+    const acceso = portalResolver(req, res);
+    if (!acceso) return;
+    const r = gestyContadorAcceso.portalPaqueteCSV(db, acceso, Number(req.params.id));
+    if (!r) return res.status(404).json({ ok: false, error: 'Ese paquete no está en tu carpeta.' });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="gesty-carpeta-contador-${r.paquete.periodo}-v${r.paquete.version}.csv"`);
+    return res.send(r.csv);
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/portal-contador/paquetes/:id/json', (req, res) => {
+  try {
+    const acceso = portalResolver(req, res);
+    if (!acceso) return;
+    const paquete = gestyContadorAcceso.portalPaqueteJSON(db, acceso, Number(req.params.id));
+    if (!paquete) return res.status(404).json({ ok: false, error: 'Ese paquete no está en tu carpeta.' });
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="gesty-carpeta-contador-${paquete.periodo}-v${paquete.version}.json"`);
+    return res.send(JSON.stringify(paquete, null, 2));
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.use('/api/portal-contador', (req, res) => {
+  // Todo lo que no es una lectura válida del portal: una
+  // escritura es 405 (el portal es de solo lectura y el
+  // intento, si el token es válido, queda registrado); una
+  // lectura a una ruta que no existe es 404.
+  if (req.method !== 'GET') {
+    try {
+      const r = gestyContadorAcceso.resolverAcceso(db, portalTokenDeReq(req), { ip: req.ip || '' });
+      if (r.ok) gestyContadorAcceso.registrarIntentoEscritura(db, r.acceso, req.method, req.originalUrl || req.url || '');
+    } catch (e) { /* el 405 sale igual */ }
+    return res.status(405).json({ ok: false, error: 'El portal del contador es de solo lectura.' });
+  }
+  return res.status(404).json({ ok: false, error: 'Esa ruta del portal no existe.' });
+});
+
+// =====================================================================
 // GESTY · G-07 PROVEEDORES Y PAGOS
 // Spec: gesty-cola-builds.md G-07 + gesty-areas-detalle.md §6 +
 // gesty-sistema-operativo.md §5 (matriz) + build-spec §11
@@ -20251,7 +20408,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v416';
+const BUILD_ID = '20261024-v417';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
