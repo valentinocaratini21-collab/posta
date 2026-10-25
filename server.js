@@ -17458,6 +17458,59 @@ app.post('/api/gesty/precios/alertas/:id/vista', ...gestyPreciosMW, express.json
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-23 — EL BUZÓN DE PAPELES (gesty-buzon.js)
+// La dirección de email del negocio (papeles+<token>@
+// gestyofficemanager.com): el comprobante reenviado entra SOLO como
+// papel de G-03 por su ingesta de email existente. La ingesta es
+// PÚBLICA sin sesión — el token de la dirección ES la credencial,
+// validado por su huella sha256 (patrón G-14/G-15b: rate-limit
+// propio primero, token que no resuelve = 404 y jamás archiva en
+// ninguna cuenta). El token jamás se loguea: en el servidor, en el
+// fundamento y en el registro vive solo su huella. Las consultas y
+// la generación/regeneración de la dirección van detrás de sesión +
+// pack + capacidad «comprobantes». El transporte real (el Worker
+// de Cloudflare Email Routing que reenvía el correo crudo a
+// /ingresar con el contrato del módulo) es H-G23-1, declarado: la
+// capacidad queda construida antes que el canal, como G-09b.
+// =====================================================================
+const gestyBuzon = require('./gesty-buzon');
+
+const gestyBuzonMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'comprobantes')];
+
+app.post('/api/gesty/buzon/ingresar', express.json({ limit: '30mb' }), async (req, res) => {
+  try {
+    const r = await gestyBuzon.ingresarEmail(db, req.body || {}, {
+      ip: req.ip || (req.connection && req.connection.remoteAddress) || '',
+    });
+    res.json({ ok: true, ingesta: r.ingesta });
+  } catch (e) {
+    const status = e.code === 'RATE_LIMIT' ? 429 : e.code === 'TOKEN' ? 404 : 400;
+    res.status(status).json({ ok: false, error: e.message });
+  }
+});
+app.get('/api/gesty/buzon/estado', ...gestyBuzonMW, (req, res) => {
+  try { res.json({ ok: true, estado: gestyBuzon.estadoBuzon(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/buzon/direccion', ...gestyBuzonMW, express.json(), (req, res) => {
+  try {
+    // La dirección en claro sale SOLO en esta respuesta (una vez por generación).
+    const d = gestyBuzon.generarDireccion(db, req.session.userId, {});
+    res.json({ ok: true, direccion: d.direccion, huella_corta: d.huella_corta, generada_en: d.generada_en, generacion: d.generacion });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/buzon/ingestas', ...gestyBuzonMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyBuzon.listIngestas(db, req.session.userId, { limit: q.limit, offset: q.offset }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/buzon/resumen', ...gestyBuzonMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyBuzon.resumenBuzon(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -21184,7 +21237,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v427';
+const BUILD_ID = '20261024-v428';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
