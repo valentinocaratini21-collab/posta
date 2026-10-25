@@ -1286,9 +1286,8 @@ function lpCellsHTML(p, tiles) {
   }).join('');
 }
 /* ---------- Tarjeta compacta de perfil por rubro: cabecera + stats +
-   bio corta + grilla 3×3. Nació como pared densa en v208; desde la tanda
-   de vidriera deslizable la landing la muestra en la galería de 20
-   destacados (ver LP_GAL_FEATURED). */
+   bio corta + grilla 3×3. Nació como pared densa en v208; desde v211 la
+   landing la muestra en páginas de 4 con flechas (ver lpWallPagesHTML). */
 function lpWallCardHTML(p) {
   const tiles = lpTiles(p);
   const ava = p.ava || tiles[0];
@@ -1304,89 +1303,82 @@ function lpWallCardHTML(p) {
     <div class="lp-wall-foot">${p.rubro}</div>
   </div>`;
 }
-/* ---------- VIDRIERA DESLIZABLE (tanda 2026-10-25, orden de Valentino):
-   «donde haya muestras, que se puedan DESLIZAR, y las demos muestran 20
-   NEGOCIOS DISTINTOS usando el producto». La pared paginada de v211 pasa a
-   ser UNA galería horizontal de 20 negocios destacados del registro de
-   ejemplos (LP_PROFILES): tira con scroll-snap en todos los tamaños —
-   táctil en el celular; en desktop, arrastre con el mouse, rueda que se
-   convierte mientras la tira puede correr y flechas ‹ › que avanzan de a
-   una tarjeta con .off en los extremos (la mecánica de la casa). Sin
-   librerías; las imágenes ya nacen lazy en lpCellsHTML. Los perfiles del
-   registro que no entran en los 20 quedan a un toque en «Ver más ejemplos»
-   (lpGalMoreHTML), cada uno con su link /p/<slug> — las páginas de la
-   vidriera viven en showcase-pages.js y resuelven siempre. ---------- */
-const LP_GAL_FEATURED = ['cafe-aurora', 'bustos', 'tiendacora', 'roca', 'nocta', 'elcorte', 'dental-prado', 'estetica-alma', 'academia-ritmo', 'laesquina', 'eltrigodorado', 'gymnorte', 'andrada', 'patitas', 'herrera', 'casalinda', 'elrosedal', 'donroque', 'cerveceria-ambar', 'vet-norte'];
-function lpGalFeatured() { return LP_GAL_FEATURED.map((slug) => LP_PROFILES.find((p) => p.link === slug)).filter(Boolean); }
-function lpGalRest() { return LP_PROFILES.filter((p) => LP_GAL_FEATURED.indexOf(p.link) === -1); }
-function lpGalHTML() { return lpGalFeatured().map(lpWallCardHTML).join(''); }
-function lpGalMoreHTML() {
-  return lpGalRest().map((p) => `<a class="lp-gal-chip" href="/p/${p.link}">${p.name} · ${p.rubro}</a>`).join('');
+/* ---------- v211: la pared pasa a UNA SOLA FILA de 4 con flechas ‹ ›
+   (orden de Valentino 20/10: la grilla 4+4 "ocupa demasiado lugar y no
+   me gusta"). Páginas de 4 con la mecánica del carrusel de /prueba
+   (.ej-*): track que se traslada −100% por página, flechas con .off en
+   los extremos y swipe táctil. En pantallas ≤1023px las páginas se
+   aplanan (display:contents en CSS) y el track vuelve a ser la tira
+   horizontal con scroll-snap de v208: ahí las flechas avanzan de a una
+   tarjeta y el estado .off sale del scroll. ---------- */
+const LP_WALL_PER = 4;
+let LP_WALL_PAGE = 0;
+function lpWallPagesHTML() {
+  const pages = [];
+  for (let i = 0; i < LP_PROFILES.length; i += LP_WALL_PER) {
+    pages.push(`<div class="lp-wall-page">${LP_PROFILES.slice(i, i + LP_WALL_PER).map(lpWallCardHTML).join('')}</div>`);
+  }
+  return pages.join('');
 }
-function lpGalToggle(btn) {
-  const box = document.getElementById('lpGalMore');
-  if (!box) return;
-  const open = box.classList.toggle('open');
-  if (btn) btn.textContent = open ? 'Ver menos ejemplos' : 'Ver más ejemplos';
-}
-function lpGalStepPx(track) {
-  const card = track.querySelector('.lp-wall-card');
-  if (!card) return track.clientWidth;
-  const second = card.nextElementSibling;
-  return second ? (second.offsetLeft - card.offsetLeft) : card.offsetWidth + 14;
-}
-function lpGalSync() {
+function lpWallMobile() { return window.matchMedia('(max-width:1023px)').matches; }
+function lpWallSyncArrows() {
   const track = document.getElementById('lpWallTrack');
   const prev = document.getElementById('lpWallPrev');
   const next = document.getElementById('lpWallNext');
-  if (!track) return;
-  const max = track.scrollWidth - track.clientWidth;
-  if (prev) prev.classList.toggle('off', track.scrollLeft <= 2);
-  if (next) next.classList.toggle('off', track.scrollLeft >= max - 2);
-  const c = document.getElementById('lpWallCount');
-  if (c && track.children.length) {
-    const idx = Math.max(0, Math.min(track.children.length - 1, Math.round(track.scrollLeft / lpGalStepPx(track))));
-    c.textContent = (idx + 1) + ' / ' + track.children.length;
+  if (!track || !prev || !next) return;
+  if (lpWallMobile()) {
+    const max = track.scrollWidth - track.clientWidth;
+    prev.classList.toggle('off', track.scrollLeft <= 2);
+    next.classList.toggle('off', track.scrollLeft >= max - 2);
+    return;
   }
+  const pages = track.children.length;
+  prev.classList.toggle('off', LP_WALL_PAGE <= 0);
+  next.classList.toggle('off', LP_WALL_PAGE >= pages - 1);
+  const c = document.getElementById('lpWallCount');
+  if (c) c.textContent = (LP_WALL_PAGE + 1) + ' / ' + pages;
+}
+function lpWallSync() {
+  const track = document.getElementById('lpWallTrack');
+  if (!track) return;
+  if (lpWallMobile()) { track.style.transform = ''; lpWallSyncArrows(); return; }
+  const pages = track.children.length;
+  LP_WALL_PAGE = Math.max(0, Math.min(pages - 1, LP_WALL_PAGE));
+  track.style.transform = 'translateX(' + (-LP_WALL_PAGE * 100) + '%)';
+  lpWallSyncArrows();
 }
 function lpWallStep(d) {
   const track = document.getElementById('lpWallTrack');
   if (!track) return;
-  track.scrollBy({ left: d * lpGalStepPx(track), behavior: 'smooth' });
+  if (lpWallMobile()) {
+    const card = track.querySelector('.lp-wall-card');
+    const w = card ? card.offsetWidth + 10 : track.clientWidth;
+    track.scrollBy({ left: d * w, behavior: 'smooth' });
+    return;
+  }
+  LP_WALL_PAGE += d;
+  lpWallSync();
 }
 function lpInitWall() {
   const track = document.getElementById('lpWallTrack');
   if (!track || track.dataset.bound) return;
   track.dataset.bound = '1';
+  let tx = null;
+  track.addEventListener('touchstart', (e) => { tx = e.changedTouches[0].clientX; }, { passive: true });
+  track.addEventListener('touchend', (e) => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    tx = null;
+    if (Math.abs(dx) >= 40 && !lpWallMobile()) lpWallStep(dx < 0 ? 1 : -1);
+  }, { passive: true });
   let raf = false;
   track.addEventListener('scroll', () => {
     if (raf) return;
     raf = true;
-    requestAnimationFrame(() => { raf = false; lpGalSync(); });
+    requestAnimationFrame(() => { raf = false; lpWallSyncArrows(); });
   }, { passive: true });
-  window.addEventListener('resize', lpGalSync);
-  track.addEventListener('dragstart', (e) => e.preventDefault());
-  // Arrastre con el mouse en desktop (el swipe táctil lo da el scroll nativo).
-  let drag = null;
-  track.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'mouse') return;
-    drag = { x: e.clientX, sl: track.scrollLeft };
-    track.classList.add('dragging');
-    try { track.setPointerCapture(e.pointerId); } catch (err) {}
-  });
-  track.addEventListener('pointermove', (e) => { if (drag) track.scrollLeft = drag.sl - (e.clientX - drag.x); });
-  ['pointerup', 'pointercancel'].forEach((ev) => track.addEventListener(ev, () => { drag = null; track.classList.remove('dragging'); }));
-  // Rueda: mientras la tira puede correr en ese sentido, la rueda la mueve;
-  // en los extremos no frena el scroll de la página.
-  track.addEventListener('wheel', (e) => {
-    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    const max = track.scrollWidth - track.clientWidth;
-    const nl = Math.max(0, Math.min(max, track.scrollLeft + e.deltaY));
-    if (nl === track.scrollLeft) return;
-    e.preventDefault();
-    track.scrollLeft = nl;
-  }, { passive: false });
-  lpGalSync();
+  window.addEventListener('resize', lpWallSync);
+  lpWallSync();
 }
 function lpProfileHTML(p) {
   const tiles = lpTiles(p);
@@ -2350,12 +2342,11 @@ function landingView(cfg) {
       <div class="lp-wall" id="lpWall">
         <button type="button" class="lp-wall-nav prev off" id="lpWallPrev" aria-label="Perfiles anteriores" onclick="lpWallStep(-1)">‹</button>
         <div class="lp-wall-viewport" id="lpWallViewport">
-          <div class="lp-wall-track" id="lpWallTrack">${lpGalHTML()}</div>
+          <div class="lp-wall-track" id="lpWallTrack">${lpWallPagesHTML()}</div>
         </div>
         <button type="button" class="lp-wall-nav next" id="lpWallNext" aria-label="Perfiles siguientes" onclick="lpWallStep(1)">›</button>
       </div>
-      <div class="lp-wall-meta"><span class="lp-wall-note">Perfiles armados por Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 20</span></div>
-      <div class="lp-gal-morewrap"><button type="button" class="lp-gal-btn" id="lpGalMoreBtn" onclick="lpGalToggle(this)">Ver más ejemplos</button><div class="lp-gal-more" id="lpGalMore">${lpGalMoreHTML()}</div></div>
+      <div class="lp-wall-meta"><span class="lp-wall-note">Perfiles armados por Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 7</span></div>
       <div class="lp-show-cta">
         <form class="lp-igform lp-show-form" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
           <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
@@ -2411,6 +2402,60 @@ function landingView(cfg) {
     <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Posty trabaja completo por sí solo.</b> Todo lo que tu Instagram necesita lo hago yo, dentro de tu plan — no necesitás contratar a nadie más ni sumar ningún otro servicio.</p>     <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
+  <div class="section gj-levels" data-gj-levels><div class="wrap">
+    <p class="gj-eyebrow">🌱 ASÍ APRENDE POSTY</p>
+    <h2>Cuanto más te conozco, <span class="hl">mejor trabajo</span></h2>
+    <p class="gj-lede">Posty no usa plantillas: aprende tu negocio de verdad — tu rubro, tus colores, tu producto estrella y tu forma de hablar — y cada semana sabe más de vos.</p>
+    <div class="gj-stem" role="list" aria-label="Cómo crece lo que Posty sabe de tu negocio">
+      <div class="gj-node" role="listitem"><span class="gj-dot">🌱</span><div><b>Nuevo en tu feed</b><small>Leo tu Instagram y tu web: tu rubro, tus colores y tu onda.</small></div></div>
+      <div class="gj-seg" aria-hidden="true"><i></i></div>
+      <div class="gj-node" role="listitem"><span class="gj-dot">🔍</span><div><b>Leyendo tu mundo</b><small>Confirmo tu oferta real y tu producto estrella: posteo lo que vendés, nunca relleno.</small></div></div>
+      <div class="gj-seg" aria-hidden="true"><i></i></div>
+      <div class="gj-node" role="listitem"><span class="gj-dot">🏠</span><div><b>De la casa</b><small>Conozco tu paleta, tu tono y tus días fuertes: acierto de primera.</small></div></div>
+      <div class="gj-seg" aria-hidden="true"><i></i></div>
+      <div class="gj-node" role="listitem"><span class="gj-dot">🤝</span><div><b>Mano derecha de tu Instagram</b><small>Anticipo: ideas desde tu competencia, tus posteos ganadores y tu calendario.</small></div></div>
+      <div class="gj-seg" aria-hidden="true"><i></i></div>
+      <div class="gj-node" role="listitem"><span class="gj-dot">⭐</span><div><b>Tu socio de contenido</b><small>Tu semana entera sale sola, en tu línea: vos solo aceptás.</small></div></div>
+    </div>
+    <div class="gj-cta-row"><a class="btn btn-primary" href="/prueba">Empezá tu viaje →</a></div>
+    <p class="gj-note">Así aprende Posty: trabajando con vos, semana a semana.</p>
+  </div></div>
+  <div class="section gj-office" data-gj-office><div class="wrap">
+    <p class="gj-eyebrow">☀️ UN DÍA EN LA OFICINA</p>
+    <h2>Entrá a la oficina: <span class="hl">Posty ya está trabajando</span></h2>
+    <p class="gj-lede">Bajá despacio y mirá su sector: su pared de posteos, su calendario y su escritorio, con la luz celeste de su rincón y la placa de la casa en su pared. Así pasa su día, todos los días, por tu negocio.</p>
+  </div>
+  <div class="gj-stage-wrap"><div class="gj-stage">
+    <div class="gj-room" role="img" aria-label="El sector de Posty en la oficina: su pared de posteos, su calendario y su escritorio">
+      <div class="gj-sectors" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="gj-sectorlight" aria-hidden="true"></div>
+      <div class="gj-wallp">
+        <div class="gj-wallhead">
+          <img class="gj-plaque" src="/bambooty-placa.webp" alt="Bambooty" loading="lazy" decoding="async">
+          <div class="gj-cal" aria-hidden="true"><span class="gj-cal-t">Tu semana</span><span class="gj-days"><i>L</i><i>M</i><i>M</i><i>J</i><i>V</i><i>S</i><i>D</i></span></div>
+        </div>
+        <div class="gj-feedwall" aria-hidden="true">
+          <figure class="gj-op"><img src="g-latte.jpg" alt="" loading="lazy" decoding="async"></figure>
+          <figure class="gj-op"><img src="g-pasta.jpg" alt="" loading="lazy" decoding="async"></figure>
+          <figure class="gj-op"><img src="g-tazas.jpg" alt="" loading="lazy" decoding="async"></figure>
+          <figure class="gj-op"><img src="g-vaso.jpg" alt="" loading="lazy" decoding="async"></figure>
+          <figure class="gj-op"><img src="g-tres.jpg" alt="" loading="lazy" decoding="async"></figure>
+          <figure class="gj-op"><img src="g-gourmet.jpg" alt="" loading="lazy" decoding="async"></figure>
+        </div>
+      </div>
+      <div class="gj-deskp">
+        <img class="gj-posty" src="posty-disenando-hero.jpg" alt="Posty, con su lápiz y sus posteos, trabajando en su escritorio" loading="lazy" decoding="async">
+        <div class="gj-comment" aria-hidden="true">
+          <div class="gj-cin">¿Siguen con la promo del jueves? 🙏</div>
+          <div class="gj-cout"><img src="ai-avatar.png" alt="">¡Sí! Este jueves sigue 💛 ¿Te reservo?</div>
+        </div>
+      </div>
+      <div class="gj-glow" aria-hidden="true"></div>
+    </div>
+    <p class="gj-cap" data-gj-cap>Posty llega a su sector y piensa tu semana.</p>
+  </div></div>
+  <p class="gj-note">Un día típico de Posty en su oficina, con posteos de ejemplo de la vidriera.</p>
+  </div>
   <div class="section lp-audit" id="auditoria"><div class="wrap" style="max-width:760px">
     <h2>¿Tu Instagram está vendiendo?</h2>
     <p class="lede">Posty analiza tu perfil <b>gratis</b> y te dice qué está frenando tus ventas: qué publicar, qué responder, qué mejorar.</p>

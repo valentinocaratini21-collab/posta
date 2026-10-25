@@ -734,6 +734,98 @@ body.sfb-on{padding-bottom:88px}
   ]
 }
 </script>
+
+<style id="gj-css">
+/* ===== CAPA DE JUEGO /prueba (2026-10-25): el viaje que crece + botones vivos ===== */
+.gj-journey{max-width:560px;margin:0 auto 14px;background:#fff;border:1.5px solid #E4EEF5;border-radius:16px;padding:14px 16px 10px;box-shadow:0 6px 18px rgba(10,30,51,.05)}
+.gj-jstem{display:flex;align-items:flex-start}
+.gj-jnode{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:5px;width:86px;text-align:center}
+.gj-jdot{width:30px;height:30px;border-radius:50%;border:2.5px solid #D7E6F2;background:#fff;color:#8AA5BB;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .4s ease}
+.gj-jnode b{font-size:11.5px;line-height:1.25;color:#47617A}
+.gj-jnode.act .gj-jdot{border-color:#2793C8;color:#2793C8;animation:gjPulse 1.2s ease-in-out infinite}
+.gj-jnode.act b{color:#0A1E33}
+.gj-jnode.done .gj-jdot{border-color:#DBA453;background:linear-gradient(180deg,#FDF3D8,#F9E3AC);color:#0A1E33}
+.gj-jnode.done b{color:#0A1E33}
+.gj-jseg{flex:1 1 auto;height:4px;border-radius:99px;background:#E4EEF5;margin-top:13px;overflow:hidden}
+.gj-jseg i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2793C8,#DFA856);transition:width .7s ease}
+.gj-jseg.done i{width:100%}
+@keyframes gjPulse{0%,100%{box-shadow:0 0 0 0 rgba(39,147,200,.35)}50%{box-shadow:0 0 0 6px rgba(39,147,200,0)}}
+.gj-jstatus{text-align:center;font-size:13.5px;color:#47617A;margin:9px 0 2px;min-height:19px}
+.gj-journey.gj-celebrate{border-color:#DBA453;box-shadow:0 0 0 4px rgba(223,168,86,.25),0 10px 26px rgba(219,164,83,.30)}
+.res-hero.gj-glow{animation:gjGlow 1.6s ease-out 1}
+@keyframes gjGlow{0%{filter:drop-shadow(0 0 0 rgba(223,168,86,0))}35%{filter:drop-shadow(0 0 22px rgba(223,168,86,.75))}100%{filter:drop-shadow(0 0 0 rgba(223,168,86,0))}}
+#btnGo,#btnPrefillGo,#btnWebTrialGo,#btnGo2,#btnSave{animation:gjBreathe 2.8s ease-in-out infinite}
+@keyframes gjBreathe{0%,100%{box-shadow:0 6px 18px rgba(39,147,200,.28),0 0 0 0 rgba(223,168,86,0)}50%{box-shadow:0 8px 24px rgba(39,147,200,.30),0 0 0 6px rgba(223,168,86,.32),0 0 22px 2px rgba(219,164,83,.35)}}
+.btn-primary{transition:transform .16s cubic-bezier(.34,1.56,.64,1)}
+.btn-primary:active{transform:scale(.965)}
+.gj-working{display:flex!important;align-items:center;justify-content:center;gap:9px;animation:none!important}
+.gj-bava{width:24px;height:24px;border-radius:50%}
+.gj-dots{display:inline-flex;gap:3px}
+.gj-dots i{width:5px;height:5px;border-radius:50%;background:#fff;animation:gjDot 1s infinite}
+.gj-dots i:nth-child(2){animation-delay:.15s}.gj-dots i:nth-child(3){animation-delay:.3s}
+@keyframes gjDot{0%,100%{opacity:.35;transform:translateY(0)}50%{opacity:1;transform:translateY(-2px)}}
+.gj-pub-l{transform:translateX(-100%) scale(.5) rotate(-6deg)}
+.gj-pub .gj-demo{font-size:9px;letter-spacing:.08em;background:#0A1E33;color:#F6DC96;border-radius:99px;padding:2px 6px}
+.gj-pub-wrap{position:relative}
+.gj-pub{position:absolute;top:8px;right:8px;z-index:5;display:inline-flex;align-items:center;gap:6px;
+  background:linear-gradient(180deg,#FDF3D8,#F6DC96);color:#0A1E33;border:1.5px solid #DBA453;
+  font-size:12px;font-weight:900;padding:5px 10px;border-radius:999px;box-shadow:0 8px 20px rgba(185,126,28,.35);
+  opacity:0;transform:scale(.5) rotate(-6deg);pointer-events:none}
+.gj-pub.on{animation:gjPub .55s cubic-bezier(.34,1.56,.64,1) forwards}
+.gj-pub-l.on{animation-name:gjPubL}
+@keyframes gjPub{to{opacity:1;transform:scale(1) rotate(-3deg)}}
+@keyframes gjPubL{from{opacity:0;transform:translateX(-100%) scale(.5) rotate(-6deg)}to{opacity:1;transform:translateX(-100%) scale(1) rotate(-3deg)}}
+/* --- el sector de Posty en /prueba: su pared detrás del formulario y su
+   escritorio debajo; la semana nace y aparece en su pared --- */
+.gj-deskband{max-width:560px;margin:0 auto -14px;position:relative;z-index:0;display:flex;align-items:center;gap:12px;
+  background:linear-gradient(180deg,#FFF6E3,#FDF1DC);border:1.5px solid #F0E2C4;border-bottom:none;
+  border-radius:18px 18px 0 0;padding:12px 16px 24px}
+.gj-db-plaque{width:46px;height:46px;border-radius:50%;box-shadow:0 5px 14px rgba(185,126,28,.35)}
+.gj-db-days{display:flex;gap:4px}
+.gj-db-days i{width:9px;height:9px;border-radius:50%;background:linear-gradient(180deg,#F6DC96,#DBA453);opacity:.85}
+.gj-db-posts{margin-left:auto;display:flex;gap:6px}
+.gj-db-posts img{width:34px;height:42px;object-fit:cover;border-radius:7px;border:2px solid #fff;box-shadow:0 4px 10px rgba(10,30,51,.15)}
+.gj-db-posts img:nth-child(1){transform:rotate(-4deg)}
+.gj-db-posts img:nth-child(2){transform:rotate(2deg)}
+.gj-db-posts img:nth-child(3){transform:rotate(5deg)}
+#formCard{position:relative;z-index:1}
+#v-loading .tracker{position:relative}
+#v-loading .tracker::before{content:"";position:absolute;top:14px;right:14px;width:34px;height:34px;
+  background:url(/bambooty-placa.webp) center/contain no-repeat;filter:drop-shadow(0 4px 8px rgba(185,126,28,.3))}
+#v-results .sec:has(.phone){background:linear-gradient(180deg,#FFF8EA,#FFFDF6);border:1.5px solid #F0E2C4;border-radius:26px}
+#v-results .phone{position:relative}
+#v-results .phone::after{content:"";position:absolute;top:-24px;right:-12px;width:54px;height:54px;z-index:4;
+  background:url(/bambooty-placa.webp) center/contain no-repeat;filter:drop-shadow(0 6px 12px rgba(185,126,28,.35))}
+@media(max-width:560px){#v-results .phone::after{width:44px;height:44px;right:-4px;top:-20px}}
+/* --- capa de scroll: la luz viaja con la lectura; las secciones y los
+   posteos del resultado entran como si Posty los trajera --- */
+.gj-light{position:fixed;top:0;left:0;right:0;height:3px;z-index:2000;pointer-events:none;opacity:0;transition:opacity .5s ease}
+html.gj-scroll .gj-light{opacity:1}
+.gj-light i{display:block;height:100%;transform-origin:0 50%;transform:scaleX(0);
+  background:linear-gradient(90deg,#2793C8,#DFA856 55%,#DBA453);box-shadow:0 1px 10px rgba(219,164,83,.55);will-change:transform}
+html.gj-armed [data-gj-rv]{opacity:0;transform:translateY(16px)}
+html.gj-armed [data-gj-rv].gj-in{opacity:1;transform:none;transition:opacity .7s ease,transform .7s cubic-bezier(.22,.8,.32,1)}
+#rWeek .day{animation:gjDayIn .5s cubic-bezier(.22,.8,.32,1) both}
+#rWeek .day:nth-child(2){animation-delay:.06s}#rWeek .day:nth-child(3){animation-delay:.12s}
+#rWeek .day:nth-child(4){animation-delay:.18s}#rWeek .day:nth-child(5){animation-delay:.24s}
+#rWeek .day:nth-child(6){animation-delay:.3s}
+@keyframes gjDayIn{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+@media(max-width:560px){.gj-jnode{width:62px}.gj-jnode b{font-size:10.5px}}
+@media (prefers-reduced-motion: reduce){
+ #btnGo,#btnPrefillGo,#btnWebTrialGo,#btnGo2,#btnSave{animation:none}
+ .gj-jnode.act .gj-jdot{animation:none}
+ .gj-dots i{animation:none}
+ .res-hero.gj-glow{animation:none}
+ .gj-jseg i{transition:none}
+ .btn-primary{transition:none}
+ .gj-light{display:none}
+ html.gj-armed [data-gj-rv]{opacity:1!important;transform:none!important;transition:none!important}
+ #rWeek .day{animation:none}
+ .gj-pub{animation:none!important}
+ .gj-pub.on{opacity:1;transform:scale(1) rotate(-3deg)}
+ .gj-pub-l.on{transform:translateX(-100%) scale(1) rotate(-3deg)}
+}
+</style>
 </head>
 <body>
 <div class="nav"><div class="wrap">
@@ -812,6 +904,12 @@ body.sfb-on{padding-bottom:88px}
     </div>
 
     <p class="audit-hook">Y de regalo, el <span class="hl2">diagnóstico de tu Instagram</span>: qué mejorar, qué subir y qué bajar.</p>
+    <div class="gj-deskband" aria-hidden="true">
+      <img class="gj-db-plaque" src="/bambooty-placa.webp" alt="" loading="lazy" decoding="async">
+      <span class="gj-db-days"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="gj-db-posts"><img src="g-latte.jpg" alt="" loading="lazy"><img src="g-pasta.jpg" alt="" loading="lazy"><img src="g-tazas.jpg" alt="" loading="lazy"></span>
+    </div>
+    <div data-gjourney></div>
     <div class="card form-card" id="formCard">
       <div class="err" id="obErr"></div>
       <!-- Paso 1: el @ de Instagram y, pegada abajo, la web del negocio -->
@@ -1087,7 +1185,8 @@ body.sfb-on{padding-bottom:88px}
         <h2 id="tkTitle">Armando tu semana…</h2>
       </div>
       <p class="sub">Esto es lo que haríamos por vos cada semana, en automático.</p>
-      <div id="tkSteps"></div>
+      <div data-gjourney></div>
+    <div id="tkSteps"></div>
       <div class="pbar"><i id="tkBar"></i></div>
       <p class="tiny" id="tkPct">0%</p>
       <p class="tiny" id="tkTip" style="margin-top:8px;min-height:18px"></p>
@@ -1098,6 +1197,8 @@ body.sfb-on{padding-bottom:88px}
 <!-- VISTA: resultados -->
 <div id="v-results" style="display:none">
   <div class="wrap">
+    <div data-gjourney></div>
+    
     <div id="shareBanner" style="display:none;background:#EAF6FD;border:1.5px solid #2793C8;border-radius:14px;padding:12px 16px;margin-bottom:14px;text-align:center">
       <p style="margin:0 0 8px;font-size:14.5px">Estás viendo la semana que Posty le armó a <b id="shareBannerBiz">@negocio</b> 💛</p>
       <button class="btn btn-primary btn-sm" id="btnMakeMine">Quiero mi semana gratis</button>
@@ -3858,6 +3959,157 @@ fetch('/api/campaign/current?lang=es').then(function(r){return r.json()}).then(f
   if('IntersectionObserver' in window){
     var io=new IntersectionObserver(function(es){ for(var i=0;i<es.length;i++){ if(es[i].isIntersecting){ fire(); io.disconnect(); break; } } },{threshold:.3});
     io.observe(el);
+  }
+})();
+</script>
+
+<script>
+/* ===== CAPA DE JUEGO /prueba (2026-10-25) =====
+   El viaje que crece: cada paso REAL del visitante suma un nudo al tallo.
+   La semana que aparece ES el premio. Solo números reales: los posteos
+   que efectivamente llegaron al feed de resultados. */
+(function () {
+  var TXT = { n1:'Tu negocio', n2:'Tu rubro y tu onda', n3:'Tu semana', n4:'\u00a1Lista!',
+  s0:'\uD83C\uDF31 Tu viaje: pasame tu @ o tu web y empiezo a conocerte.',
+  s1:'\uD83D\uDC40 Ya te estoy conociendo: confirm\u00e1 tu negocio y sigo.',
+  s2:'\uD83C\uDFA8 Creando tus posteos\u2026',
+  s4:'\uD83C\uDF89 \u00a1Tu semana est\u00e1 lista! Este es tu premio: trabajo real, hecho para tu negocio.',
+  posts:function(n){ return '\uD83C\uDFA8 ' + n + (n === 1 ? ' posteo creado' : ' posteos creados') + '\u2026 ya vienen los dem\u00e1s'; },
+  wIg:'Leyendo tu Instagram\u2026', wWeb:'Leyendo tu web\u2026', wGen:'Creando tus posteos\u2026',
+  pub:'\u2713 \u00a1Publicado!', pubTitle:'Demo: as\u00ed publica el piloto autom\u00e1tico de Posty, solo' };
+  function $(s) { return document.querySelector(s); }
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-gjourney]'));
+  if (!boxes.length) return;
+  var LABELS = [TXT.n1, TXT.n2, TXT.n3, TXT.n4];
+  boxes.forEach(function (b) {
+    b.innerHTML = '<div class="gj-journey"><div class="gj-jstem">' + LABELS.map(function (t, i) {
+      return (i ? '<span class="gj-jseg"><i></i></span>' : '') +
+        '<span class="gj-jnode"><span class="gj-jdot">' + (i + 1) + '</span><b>' + t + '</b></span>';
+    }).join('') + '</div><p class="gj-jstatus" aria-live="polite"></p></div>';
+  });
+  var phase = 0, celebrated = false;
+  function vis(el) { return !!el && el.style.display !== 'none' && el.offsetParent !== null; }
+  function postCount() { var w = $('#rWeek'); return w ? w.children.length : 0; }
+  function statusText() {
+    if (phase === 4) return TXT.s4;
+    if (phase === 2) { var n = postCount(); return n > 0 ? TXT.posts(n) : TXT.s2; }
+    if (phase === 1) return TXT.s1;
+    return TXT.s0;
+  }
+  function render() {
+    boxes.forEach(function (b) {
+      var j = b.querySelector('.gj-journey'); if (!j) return;
+      var nodes = j.querySelectorAll('.gj-jnode'), segs = j.querySelectorAll('.gj-jseg');
+      for (var i = 0; i < nodes.length; i++) {
+        var done = (phase === 4) || i < phase;
+        nodes[i].classList.toggle('done', done);
+        nodes[i].classList.toggle('act', phase < 4 && i === phase);
+        nodes[i].querySelector('.gj-jdot').textContent = done ? '\u2713' : String(i + 1);
+      }
+      for (var k = 0; k < segs.length; k++) segs[k].classList.toggle('done', phase === 4 || k < phase);
+      var st = j.querySelector('.gj-jstatus'); if (st) st.textContent = statusText();
+      if (phase === 4 && !celebrated) {
+        celebrated = true;
+        var inRes = b.closest ? b.closest('#v-results') : null;
+        if (inRes) j.classList.add('gj-celebrate');
+        var hero = document.querySelector('#v-results .res-hero');
+        if (hero) hero.classList.add('gj-glow');
+      }
+    });
+  }
+  function target() {
+    if (vis($('#weekDone'))) return 4;
+    if (vis($('#v-loading')) || (vis($('#v-results')) && vis($('#rStreamBar')))) return 2;
+    if (vis($('#prefillCard')) || vis($('#webCard')) || vis($('#detailForm')) || vis($('#rubroCard')) || vis($('#v-questions'))) return 1;
+    return 0;
+  }
+  function evaluate() {
+    if (vis($('#obErr'))) restoreButtons();
+    var t = target();
+    if (t !== phase) {
+      if (t < phase && !vis($('#v-onboarding')) && !vis($('#v-questions'))) t = phase; // sin retrocesos a mitad de transición
+      if (t !== phase) { phase = t; restoreButtons(); }
+    }
+    render();
+  }
+  /* Botones que muestran el trabajo adentro */
+  function restoreButtons() {
+    Array.prototype.forEach.call(document.querySelectorAll('.gj-working'), function (b) {
+      b.classList.remove('gj-working');
+      if (b.getAttribute('data-gj-orig')) b.innerHTML = b.getAttribute('data-gj-orig');
+    });
+  }
+  var WB = { btnGo: TXT.wIg, btnWebGo: TXT.wWeb, btnPrefillGo: TXT.wGen, btnWebTrialGo: TXT.wGen, btnGo2: TXT.wGen };
+  Object.keys(WB).forEach(function (id) {
+    var b = document.getElementById(id); if (!b) return;
+    b.addEventListener('click', function () {
+      if (b.classList.contains('gj-working')) return;
+      b.setAttribute('data-gj-orig', b.innerHTML);
+      b.classList.add('gj-working');
+      b.innerHTML = '<img src="ai-avatar.png" alt="" class="gj-bava">' + WB[id] + '<span class="gj-dots"><i></i><i></i><i></i></span>';
+      setTimeout(restoreButtons, 25000);
+    });
+  });
+  var watch = ['#v-onboarding', '#v-questions', '#v-loading', '#v-results', '#prefillCard', '#webCard', '#detailForm', '#rubroCard', '#weekDone', '#rStreamBar', '#obErr'];
+  if ('MutationObserver' in window) {
+    var mo = new MutationObserver(function () { evaluate(); });
+    watch.forEach(function (s) { var el = $(s); if (el) mo.observe(el, { attributes: true, attributeFilter: ['style'] }); });
+    var wk = $('#rWeek'); if (wk) mo.observe(wk, { childList: true });
+  }
+  evaluate();
+
+  /* ===== capa de scroll: la luz viaja, las secciones entran, y un posteo
+     de ejemplo se publica solo (demo, sobre el material de ejemplo) ===== */
+  var RM2 = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (!RM2) {
+    var light = document.createElement('div');
+    light.className = 'gj-light'; light.setAttribute('aria-hidden', 'true'); light.innerHTML = '<i></i>';
+    document.documentElement.appendChild(light);
+    var bar = light.firstChild, tk = false;
+    var onSc = function () {
+      if (tk) return; tk = true;
+      requestAnimationFrame(function () {
+        tk = false;
+        var h = document.documentElement, max = h.scrollHeight - h.clientHeight;
+        var p = max > 0 ? Math.min(1, (window.scrollY || h.scrollTop) / max) : 0;
+        bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
+        h.classList.toggle('gj-scroll', p > 0.005);
+      });
+    };
+    addEventListener('scroll', onSc, { passive: true });
+    addEventListener('resize', onSc, { passive: true });
+    onSc();
+  }
+  if ('IntersectionObserver' in window && !RM2) {
+    document.documentElement.classList.add('gj-armed');
+    var rio = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('gj-in'); rio.unobserve(e.target); } });
+    }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+    Array.prototype.forEach.call(document.querySelectorAll('#v-onboarding .sec, #v-onboarding .work3, #v-onboarding .steps3, #v-onboarding .founder-card'), function (el) {
+      if (el.getBoundingClientRect().top > (window.innerHeight || 700) * 0.92) { el.setAttribute('data-gj-rv', ''); rio.observe(el); }
+    });
+    var ejCards = Array.prototype.slice.call(document.querySelectorAll('.ej-card'));
+    ejCards.forEach(function (c, i) { c.setAttribute('data-gj-rv', ''); c.style.transitionDelay = Math.min(i, 5) * 90 + 'ms'; rio.observe(c); });
+    if (ejCards.length) {
+      var pubFired = false;
+      var pio = new IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+          if (!e.isIntersecting || pubFired) return;
+          pubFired = true; pio.disconnect();
+          setTimeout(function () {
+            var card = ejCards[0];
+            card.classList.add('gj-pub-wrap');
+            var b = document.createElement('span');
+            b.className = 'gj-pub';
+            b.innerHTML = TXT.pub + ' <span class="gj-demo">DEMO</span>';
+            b.title = TXT.pubTitle;
+            card.appendChild(b);
+            requestAnimationFrame(function () { b.classList.add('on'); });
+          }, 1100);
+        });
+      }, { threshold: 0.35 });
+      pio.observe(ejCards[0]);
+    }
   }
 })();
 </script>
