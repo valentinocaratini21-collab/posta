@@ -16168,6 +16168,105 @@ app.post('/api/gesty/presupuestos/:id/crear-factura', ...gestyPresMW, express.js
   catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-09 AGENDA ADMINISTRATIVA
+// Spec: gesty-cola-builds.md G-09 + gesty-areas-detalle.md §4 +
+// gesty-sistema-operativo.md §2.4/§5. El módulo vive en
+// gesty-agenda.js; acá solo se monta la API detrás de requireAuth +
+// gating de pack + capacidad «agenda» EN EL SERVIDOR. La agenda es
+// una VISTA que se compone en cada lectura desde las áreas (facturas
+// por cobrar, obligaciones con proveedores, presupuestos, calendario
+// fiscal estructurado del fundamento, turnos de booking.js leídos sin
+// duplicar y compromisos propios): ningún ítem se guarda dos veces y
+// cada uno cita su fuente. SIN sincronización externa: en el repo no
+// existe integración con calendarios de terceros (google.js es
+// Business Profile), así que la API declara «sin-conectar» — la
+// conexión con la agenda del cliente es la tanda +30 días del MVP
+// (spec §12.2). Mover o cancelar un compromiso que toca a un cliente
+// nace como tarjeta de la matriz y SOLO la aplica el ejecutor tras el
+// OK del dueño; el interno se mueve directo. Los recordatorios
+// corren por el push de la app (push.sendPush inyectado) y quedan en
+// el registro durable con la entrega real del canal.
+// =====================================================================
+const gestyAgenda = require('./gesty-agenda');
+try {
+  gestyAgenda.configure({ notify: (uid, payload) => push.sendPush(uid, payload) });
+} catch (e) { console.error('[gesty] agenda configure:', e.message); }
+
+const gestyAgendaMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'agenda')];
+
+app.get('/api/gesty/agenda/hoy', ...gestyAgendaMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyAgenda.agendaHoy(db, req.session.userId, { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/agenda/semana', ...gestyAgendaMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyAgenda.agendaSemana(db, req.session.userId, { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/agenda/config', ...gestyAgendaMW, (req, res) => {
+  try { res.json({ ok: true, config: gestyAgenda.getConfig(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/agenda/config', ...gestyAgendaMW, express.json(), (req, res) => {
+  // La anticipación de los recordatorios es una regla del dueño:
+  // vive en su fundamento (reglas-dueno · agenda).
+  try { res.json({ ok: true, config: gestyAgenda.setConfig(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/agenda/recordatorios', ...gestyAgendaMW, express.json(), async (req, res) => {
+  // La rutina de recordatorios: emite por push lo que vence en la
+  // ventana configurada y lo deja registrado. Nada se finge: el
+  // evento guarda la entrega real del canal.
+  try { res.json({ ok: true, ...(await gestyAgenda.procesarRecordatorios(db, req.session.userId, req.body || {})) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/agenda/eventos', ...gestyAgendaMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyAgenda.listEventos(db, req.session.userId, {
+      estado: q.estado, desde: q.desde, hasta: q.hasta, limit: q.limit, offset: q.offset,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/agenda/eventos', ...gestyAgendaMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyAgenda.crearEvento(db, req.session.userId, { ...(req.body || {}) }, { creado_por: 'dueno' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/agenda/eventos/:id', ...gestyAgendaMW, (req, res) => {
+  try {
+    const ev = gestyAgenda.getEvento(db, req.session.userId, Number(req.params.id));
+    if (!ev) return res.status(400).json({ ok: false, error: 'Ese compromiso no es de esta cuenta.' });
+    res.json({ ok: true, evento: ev, historial: gesty.listEvents(db, req.session.userId, { entidad_tipo: 'agenda-evento', entidad_id: String(ev.id) }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/agenda/eventos/:id/editar', ...gestyAgendaMW, express.json(), (req, res) => {
+  // Editar NO mueve: cambiar fecha/hora por acá está rechazado en el
+  // módulo (mover tiene su flujo, con tarjeta si toca a un cliente).
+  try { res.json({ ok: true, ...gestyAgenda.editarEvento(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/agenda/eventos/:id/mover', ...gestyAgendaMW, express.json(), (req, res) => {
+  // Con cliente → prepara la tarjeta «compromiso-mover» (el cambio
+  // completo) y NO aplica nada; interno → aplica en el acto.
+  try { res.json({ ok: true, ...gestyAgenda.pedirMover(db, req.session.userId, Number(req.params.id), req.body || {}, { creado_por: 'dueno' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/agenda/eventos/:id/cancelar', ...gestyAgendaMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyAgenda.pedirCancelar(db, req.session.userId, Number(req.params.id), req.body || {}, { creado_por: 'dueno' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/agenda/eventos/:id/cumplir', ...gestyAgendaMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyAgenda.cumplirEvento(db, req.session.userId, Number(req.params.id), {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/agenda', ...gestyAgendaMW, (req, res) => {
+  // La vista compuesta en un rango (default: hoy).
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyAgenda.componerAgenda(db, req.session.userId, { desde: q.desde, hasta: q.hasta, hoy: q.fecha }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -19894,7 +19993,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v413';
+const BUILD_ID = '20261024-v414';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
