@@ -2728,7 +2728,7 @@ function landingView(cfg) {
   return `
   ${pzRefBandHTML()}
   <div class="nav nav-landing"><div class="wrap">
-    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="#/">posty<span class="pdot">.</span></a>
     <div class="nav-links">
       <a href="#analisis">Análisis</a>
       <a href="#capacidades">Todo lo que hace</a>
@@ -3164,7 +3164,7 @@ function landingView(cfg) {
     <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
   </div></div>
   <div class="footer"><div class="wrap">
-    <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
+    <span class="logo logo-posty" style="font-size:17.5px">posty<span class="pdot">.</span></span>
     <span>Posty, tu community manager con IA · © 2026</span>
     <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a> · <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);cursor:pointer">Soporte</a></span>
   </div></div>
@@ -3360,9 +3360,10 @@ function bindSavedAccounts() {
 function authView(mode) {
   const isLogin = mode === 'login';
   const S = authStr();
+  const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}">posty<span class="pdot">.</span></a>
     <div class="nav-links"><a href="#/${isLogin ? 'registro' : 'login'}">${isLogin ? S.navCreate : S.navLogin}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
@@ -3384,9 +3385,10 @@ function authView(mode) {
 
 function forgotView() {
   const S = authStr();
+  const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}">posty<span class="pdot">.</span></a>
     <div class="nav-links"><a href="#/login">${S.navLogin}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
@@ -3403,9 +3405,10 @@ function forgotView() {
 
 function resetView() {
   const S = authStr();
+  const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}">posty<span class="pdot">.</span></a>
   </div></div>
   <div class="wrap"><div class="form-card">
     <h2>${S.resetH2}</h2>
