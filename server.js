@@ -43,7 +43,7 @@ const bookingMod = require('./booking');
 const followupsMod = require('./followups');
 const paymentCloseMod = require('./payment-close');
 const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
-const { upcomingEphemeris, catsMatch } = require('./ephemeris');
+const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
@@ -387,10 +387,8 @@ function ephemerisFor(profile) {
   if (!eph) return null;
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
-  const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return null;
-  const m = catsMatch(eph, cat + ' ' + biz + ' ' + desc);
-  return (m !== null ? m : EPHEMERIS_GIFT_OK.test(cat)) ? eph : null;
+  return EPHEMERIS_GIFT_OK.test(cat) ? eph : null;
 }
 // C1 + paquete de titulares (2026-10-16, aprobado por Valentino "arma
 // todo"; paquete makeheadline-decision-v113 de Mora + spec M53 de Uma):
@@ -1877,9 +1875,9 @@ function ephemerisWindowFor(profile, days) {
   if (!list.length) return [];
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
-  const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return [];
-  return list.filter(e => { const m = catsMatch(e, cat + ' ' + biz + ' ' + desc); return m !== null ? m : EPHEMERIS_GIFT_OK.test(cat); });
+  if (!EPHEMERIS_GIFT_OK.test(cat)) return [];
+  return list;
 }
 
 // Lectura pública de un competidor, con caché de 6 días en competitor_snapshots.
@@ -17200,6 +17198,82 @@ app.post('/api/gesty/reglas/propuestas/:id/descartar', ...gestyReglasMW, express
 app.post('/api/gesty/reglas/propuestas/:id/revocar', ...gestyReglasMW, express.json(), (req, res) => {
   try { res.json({ ok: true, ...gestyReglas.revocarRegla(db, req.session.userId, Number(req.params.id), {}) }); }
   catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
+// =====================================================================
+// G-21 · CIERRE DEL DÍA + RUTINA DIARIA (tanda aprobada G-17…G-22)
+// El módulo vive en gesty-cierre-dia.js; acá solo se monta la API
+// detrás de requireAuth + gating de pack + capacidad «reportes».
+// El cierre es una FOTO DURABLE por (cuenta, fecha, versión)
+// compuesta SOLO de registros reales — papeles que entraron
+// (G-03), cobros y pagos asentados (G-04/G-07), lo que vence
+// mañana (agenda compuesta G-09), lo que espera el OK (bandeja
+// G-02, contada y jamás tocada) y la foto de caja con la
+// proyección corta de G-06. Día vacío = mensaje corto y honesto,
+// nunca relleno. La rutina diaria corre en orden los cinco
+// escaneos (recordatorios G-09 → cobranzas G-05 → huecos G-18 →
+// patrones G-20 → conciliación G-17): si uno falla, se declara y
+// los demás siguen; la rutina no aprueba ni envía nada de
+// negocio (los recordatorios de G-09 son el único envío y ya es
+// autopilot de la matriz). La entrega sale por el push de la app
+// con la entrega REAL registrada. H-G21-1 DECLARADO: no existe
+// un programador diario por cuenta en el server — el disparo
+// programado (cron por cuenta a la hora del fundamento) queda
+// como hueco; la rutina/cierre/entrega se invocan por endpoint.
+// =====================================================================
+const gestyCierreDia = require('./gesty-cierre-dia');
+try {
+  gestyCierreDia.configure({ notify: (uid, payload) => push.sendPush(uid, payload) });
+} catch (e) { console.error('[gesty] cierre-dia configure:', e.message); }
+
+const gestyCierreDiaMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'reportes')];
+
+app.get('/api/gesty/cierre-dia/resumen', ...gestyCierreDiaMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyCierreDia.resumenCierreDia(db, req.session.userId, { hoy: req.query.hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/cierre-dia/config', ...gestyCierreDiaMW, (req, res) => {
+  try { res.json({ ok: true, config: gestyCierreDia.getConfig(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/cierre-dia/config', ...gestyCierreDiaMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, config: gestyCierreDia.setConfig(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/cierre-dia/historial', ...gestyCierreDiaMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyCierreDia.listCierres(db, req.session.userId, {
+      desde: q.desde || undefined, hasta: q.hasta || undefined,
+      limit: q.limit ? Number(q.limit) : undefined,
+      todas_las_versiones: q.versiones === '1',
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/cierre-dia/:fecha', ...gestyCierreDiaMW, (req, res) => {
+  try {
+    const cierre = gestyCierreDia.getCierre(db, req.session.userId, String(req.params.fecha));
+    if (!cierre) return res.status(404).json({ ok: false, error: 'Ese día todavía no tiene cierre generado.' });
+    res.json({ ok: true, cierre });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/cierre-dia/generar', ...gestyCierreDiaMW, express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json({ ok: true, cierre: gestyCierreDia.generarCierre(db, req.session.userId, { fecha: b.fecha || undefined, hoy: b.hoy || undefined }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/cierre-dia/entregar', ...gestyCierreDiaMW, express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json({ ok: true, ...(await gestyCierreDia.entregarCierre(db, req.session.userId, { fecha: b.fecha || undefined, hoy: b.hoy || undefined })) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/cierre-dia/rutina', ...gestyCierreDiaMW, express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json({ ok: true, rutina: await gestyCierreDia.correrRutinaDiaria(db, req.session.userId, { hoy: b.hoy || undefined }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
 // --- Seguimiento a no-cerradores (plan Total) ---
