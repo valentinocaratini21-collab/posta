@@ -15954,6 +15954,125 @@ app.get('/api/gesty/reportes/carpeta', ...gestyRepMW, (req, res) => {
 });
 
 // =====================================================================
+// GESTY · G-15 CONTADOR ALIADO
+// Spec: gesty-cola-builds.md G-15 + gesty-build-spec.md §13.1 +
+// gesty-areas-detalle.md §7/§8. El módulo vive en
+// gesty-contador.js; acá solo se monta la API detrás de
+// requireAuth + gating de pack + capacidad «reportes» EN EL
+// SERVIDOR (el Contador Aliado vive dentro de Reportes: no es
+// una capacidad nueva). La carpeta y el cierre son los de G-06
+// (este build no duplica ni un número): el contador vive en el
+// fundamento (grupo contador), el paquete es la entrega durable
+// y versionada de esa carpeta en SU formato, y el envío es un
+// acto hacia un tercero que solo sale con el sello del dueño
+// sobre la versión exacta (el módulo lo impone: sin sello no
+// hay envío, y todo rechazo queda en el registro durable).
+// =====================================================================
+const gestyContador = require('./gesty-contador');
+try {
+  gestyContador.configure({ sendEmail: (o) => sendEmail(o) });
+} catch (e) { console.error('[gesty] contador configure:', e.message); }
+
+const gestyContMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'reportes')];
+
+app.get('/api/gesty/contador', ...gestyContMW, (req, res) => {
+  // El perfil del contador tal como vive en el fundamento, con
+  // lo que falta declarado (definido / formato efectivo).
+  try { res.json({ ok: true, contador: gestyContador.getContador(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.put('/api/gesty/contador', ...gestyContMW, express.json(), (req, res) => {
+  // Se aprende una vez: nombre, email, formato preferido de
+  // carpeta, día habitual de entrega y canal. Queda en el
+  // fundamento con su procedencia (origen dueño).
+  try { res.json({ ok: true, contador: gestyContador.setContador(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/contador/resumen', ...gestyContMW, (req, res) => {
+  // El estado del Contador Aliado para «La oficina»: perfil,
+  // paquete del período sugerido (el mes que cerró) y pedidos.
+  try { res.json({ ok: true, resumen: gestyContador.resumenContador(db, req.session.userId, { hoy: (req.query || {}).fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/paquetes', ...gestyContMW, express.json(), (req, res) => {
+  // Armar el paquete NO lo envía: lo deja durable y versionado,
+  // esperando el OK del dueño.
+  try { res.json({ ok: true, paquete: gestyContador.armarPaquete(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/contador/paquetes', ...gestyContMW, (req, res) => {
+  try { res.json({ ok: true, paquetes: gestyContador.listPaquetes(db, req.session.userId, { periodo: (req.query || {}).periodo || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/contador/paquetes/:id/csv', ...gestyContMW, (req, res) => {
+  // El índice del paquete en CSV, EN EL ORDEN de su formato
+  // (patrón de exportación de la casa).
+  try {
+    const paquete = gestyContador.getPaquete(db, req.session.userId, Number(req.params.id));
+    if (!paquete) return res.status(400).json({ ok: false, error: 'Ese paquete no es de esta cuenta.' });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="gesty-carpeta-contador-${paquete.periodo}-v${paquete.version}.csv"`);
+    return res.send(gestyContador.paqueteCSV(db, req.session.userId, paquete.id));
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/contador/paquetes/:id', ...gestyContMW, (req, res) => {
+  try {
+    const paquete = gestyContador.getPaquete(db, req.session.userId, Number(req.params.id));
+    if (!paquete) return res.status(400).json({ ok: false, error: 'Ese paquete no es de esta cuenta.' });
+    res.json({ ok: true, paquete, historial: gesty.listEvents(db, req.session.userId, { entidad_tipo: 'paquete-contador', entidad_id: String(paquete.id) }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/paquetes/:id/aprobar', ...gestyContMW, express.json(), (req, res) => {
+  // EL SELLO: el OK del dueño sobre la versión exacta del
+  // paquete. Los rechazos (versión vieja, ajeno, sin
+  // destinatario) devuelven 400 con su motivo y quedan en el
+  // registro — aprobar nunca es un atajo.
+  try {
+    const r = gestyContador.aprobarPaquete(db, req.session.userId, Number(req.params.id), req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, motivo: r.motivo });
+    res.json({ ok: true, paquete: r.paquete, idempotente: !!r.idempotente });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/paquetes/:id/frenar', ...gestyContMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, paquete: gestyContador.frenarPaquete(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/paquetes/:id/enviar', ...gestyContMW, express.json(), async (req, res) => {
+  // La única vía de salida por email: exige el sello vigente de
+  // la versión. Sin OK no sale (y el intento queda registrado).
+  try { res.json({ ok: true, ...await gestyContador.enviarPaquete(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/paquetes/:id/entrega-manual', ...gestyContMW, express.json(), (req, res) => {
+  // El dueño baja el paquete y lo entrega por su cuenta: no es
+  // un envío de Gesty, pero queda registrado con su medio.
+  try { res.json({ ok: true, ...gestyContador.registrarEntregaManual(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/pedidos', ...gestyContMW, express.json(), (req, res) => {
+  // La devolución del contador («me falta el papel X»): nace
+  // como faltante de primera clase del período.
+  try { res.json({ ok: true, pedido: gestyContador.registrarPedido(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/contador/pedidos', ...gestyContMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, pedidos: gestyContador.listPedidos(db, req.session.userId, { periodo: q.periodo || undefined, estado: q.estado || undefined }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/pedidos/:id/resolver', ...gestyContMW, express.json(), (req, res) => {
+  // El papel llegó: se vincula el comprobante y el pedido sale
+  // de los faltantes del próximo paquete.
+  try { res.json({ ok: true, pedido: gestyContador.resolverPedido(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/contador/pedidos/:id/descartar', ...gestyContMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, pedido: gestyContador.descartarPedido(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
+// =====================================================================
 // GESTY · G-07 PROVEEDORES Y PAGOS
 // Spec: gesty-cola-builds.md G-07 + gesty-areas-detalle.md §6 +
 // gesty-sistema-operativo.md §5 (matriz) + build-spec §11
@@ -20132,7 +20251,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v415';
+const BUILD_ID = '20261024-v416';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
