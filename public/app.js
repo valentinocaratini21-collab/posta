@@ -2709,6 +2709,43 @@ function lpCapSectionsHTML() {
 /* 📋 Grilla resumen (2026-10-20): las 12 cosas que Posty hace, como cierre
  * del tour de capacidades, justo antes de planes. Espeja la grilla de
  * /prueba ("Todo lo que Posty hace por vos"). */
+function gjSistemaHTML() {
+  return `<div class="gj-sistema" data-gj-sistema style="margin:36px auto 0;max-width:1020px;text-align:left">
+    <p class="gj-eyebrow">🎮 EL SISTEMA DE NIVELES</p>
+    <h3 style="font-size:24px;line-height:1.25;color:#0A1E33;margin:8px 0 10px">Un nivel no es un premio: es cuánto te conoce Posty</h3>
+    <p style="background:#F2F9FD;border:1.5px solid #E3EDF4;border-left:5px solid #2793C8;border-radius:14px;padding:13px 16px;font-size:15px;line-height:1.55;color:#0A1E33;margin:0 0 22px"><b>Esto es el sistema, no tu nivel:</b> tu nivel real aparece en la app cuando Posty empieza a trabajar con vos.</p>
+    <h4 style="font-size:18px;color:#0A1E33;margin:0 0 6px">Cómo se sube de nivel</h4>
+    <p style="font-size:15px;line-height:1.55;color:#33566B;margin:0 0 12px">Solo con hechos reales. Cada cosa que Posty aprende de tu negocio queda registrada — y el nivel mide exactamente eso.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">Lee tus fuentes</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Web, Instagram, catálogo y lista de precios.</span></div>
+      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">Tus respuestas</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Cada respuesta suma, y no se vuelve a preguntar.</span></div>
+      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">Tu material real</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Fotos, documentos y conexiones.</span></div>
+      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">Tus decisiones</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Cada Aceptar o cambio en la Bandeja le enseña tu gusto.</span></div>
+      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">El trabajo que salió bien</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Piezas aceptadas sin cambios.</span></div>
+      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">La continuidad</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Semanas trabajando sobre el mismo mundo.</span></div>
+    </div>
+    <p style="font-size:15px;line-height:1.55;color:#0A1E33;margin:0 0 22px"><b>Nunca se sube por pagar más:</b> pagar compra el poder, usarlo lo hace crecer. Nunca solo por el paso del tiempo.</p>
+    <h4 style="font-size:18px;color:#0A1E33;margin:0 0 6px">Qué cambia cuando sube</h4>
+    <ul style="font-size:15px;line-height:1.6;color:#33566B;margin:0 0 16px;padding-left:20px">
+      <li><b style="color:#0A1E33">Pregunta menos</b> — lo que ya sabe, no lo vuelve a pedir. Jamás.</li>
+      <li><b style="color:#0A1E33">Acierta más de primera</b> — menos cambios por pieza.</li>
+      <li><b style="color:#0A1E33">Hace más solo</b> — dentro de los límites que fijaste una vez.</li>
+      <li><b style="color:#0A1E33">Desde Mano derecha, anticipa</b> — propone antes de que le pidas.</li>
+    </ul>
+    <p style="font-size:14px;line-height:1.6;color:#5A7186;margin:0 0 8px"><b style="color:#0A1E33">Las reglas:</b> nunca baja — lo aprendido no se pierde. Sin comparación entre clientes — tu progreso es con vos mismo. No bloquea lo esencial — el producto funciona completo desde el día 1. Lo sensible no se gamifica.</p>
+    <p style="font-size:15px;line-height:1.55;color:#0A1E33;margin:0 0 22px"><b>Y Socio no es un techo:</b> es un título que se acumula con tu trabajo real — y el juego pasa a ser toda la oficina socia.</p>
+    <h4 style="font-size:18px;color:#0A1E33;margin:0 0 6px">Cuando subís, pasan 7 cosas</h4>
+    <ol style="font-size:15px;line-height:1.6;color:#33566B;margin:0;padding-left:20px">
+      <li><b style="color:#0A1E33">La colección de lo aprendido</b> — lo que Posty sabe de vos, en fichas que podés corregir de un toque.</li>
+      <li><b style="color:#0A1E33">«Subí — y ya te traje esto»</b> — en 24 h te demuestra el desbloqueo con su primera idea anticipada, sin que la pidas.</li>
+      <li><b style="color:#0A1E33">Semanas creciendo juntos</b> — un contador que solo suma.</li>
+      <li><b style="color:#0A1E33">El mes de tu oficina</b> — el resumen mensual de qué aprendieron y qué subió.</li>
+      <li><b style="color:#0A1E33">La subida se comparte</b> — la celebración sale como historia lista, solo si querés.</li>
+      <li><b style="color:#0A1E33">La familia festeja</b> — los demás poderes reaccionan a cada subida.</li>
+      <li><b style="color:#0A1E33">Tu jardín, antes y hoy</b> — tu feed de hace 3 meses junto al de hoy.</li>
+    </ol>
+  </div>`;
+}
 function landingView(cfg) {
   const plansRaw = (cfg && cfg.plans) || [];
   const plans = plansRaw.map(pp => ({ ...pp, price_label: pzFmtPrecioES(pp) }));
@@ -2863,6 +2900,7 @@ function landingView(cfg) {
     </div>
     <div class="gj-cta-row"><a class="btn btn-primary" href="/prueba">Empezá tu viaje →</a></div>
     <p class="gj-note">Así aprende Posty: trabajando con vos, semana a semana.</p>
+    ${gjSistemaHTML()}
   </div></div>
   <div class="section gj-office" data-gj-office><div class="wrap">
     <p class="gj-eyebrow">☀️ UN DÍA EN LA OFICINA</p>
