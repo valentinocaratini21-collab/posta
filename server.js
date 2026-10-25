@@ -16934,6 +16934,97 @@ app.post('/api/gesty/reservas-canal/procesar-cumplidas', ...gestyReservasCanalMW
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// G-17 · CONCILIACIÓN AUTOMÁTICA (tanda aprobada G-17…G-22)
+// El módulo vive en gesty-conciliacion.js; acá solo se monta la
+// API detrás de requireAuth + gating de pack + capacidad
+// «comprobantes» (la conciliación vive sobre el motor de
+// papeles) EN EL SERVIDOR. Los extractos entran como papeles por
+// G-03 y se declaran acá; sus movimientos (del lector, si el
+// papel trae el detalle, o de la carga asistida del dueño —
+// nunca inventados) se cruzan contra facturas por cobrar (G-04/
+// G-05) y obligaciones con proveedores (G-07). Solo el MATCH
+// FUERTE asienta solo (monto exacto al saldo + contraparte
+// identificada + ventana + unicidad cruzada, con el par y el
+// motivo en el registro durable); lo ambiguo queda como
+// propuesta de un toque FUERA de la bandeja (la matriz es una
+// lista cerrada — precedente G-15/G-16). Deshacer revierte por
+// los circuitos de cada área.
+// =====================================================================
+const gestyConciliacion = require('./gesty-conciliacion');
+
+const gestyConciliacionMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'comprobantes')];
+
+app.get('/api/gesty/conciliacion/resumen', ...gestyConciliacionMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyConciliacion.resumenConciliacion(db, req.session.userId, { hoy: req.query.hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/conciliacion/estado', ...gestyConciliacionMW, (req, res) => {
+  try {
+    res.json({ ok: true, ...gestyConciliacion.estadoConciliacion(db, req.session.userId, {
+      desde: req.query.desde || undefined, hasta: req.query.hasta || undefined,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/conciliacion/extractos', ...gestyConciliacionMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyConciliacion.listExtractos(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/conciliacion/extractos', ...gestyConciliacionMW, express.json(), (req, res) => {
+  try {
+    const r = gestyConciliacion.declararExtracto(db, req.session.userId, Number((req.body || {}).comprobante_id), { declarado_por: 'dueno' });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/conciliacion/extractos/:id/movimientos', ...gestyConciliacionMW, express.json(), (req, res) => {
+  try {
+    const r = gestyConciliacion.cargarMovimientos(db, req.session.userId, Number(req.params.id), (req.body || {}).movimientos || [], {});
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/conciliacion/movimientos', ...gestyConciliacionMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyConciliacion.listMovimientos(db, req.session.userId, {
+      estado: q.estado || undefined, comprobante_id: q.comprobante_id || undefined,
+      extracto_id: q.extracto_id || undefined, desde: q.desde || undefined, hasta: q.hasta || undefined,
+      limit: q.limit, offset: q.offset,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/conciliacion/escanear', ...gestyConciliacionMW, express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = gestyConciliacion.conciliar(db, req.session.userId, { hoy: b.hoy, desde: b.desde, hasta: b.hasta });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/conciliacion/propuestas', ...gestyConciliacionMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyConciliacion.listPropuestas(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/conciliacion/propuestas/:id/aceptar', ...gestyConciliacionMW, express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    const match = gestyConciliacion.aceptarPropuesta(db, req.session.userId, Number(req.params.id), {
+      par_tipo: b.par_tipo, par_id: b.par_id, hoy: b.hoy,
+    });
+    res.json({ ok: true, match });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/conciliacion/propuestas/:id/descartar', ...gestyConciliacionMW, express.json(), (req, res) => {
+  try {
+    const match = gestyConciliacion.descartarPropuesta(db, req.session.userId, Number(req.params.id), { motivo: (req.body || {}).motivo });
+    res.json({ ok: true, match });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/conciliacion/matches/:id/deshacer', ...gestyConciliacionMW, express.json(), (req, res) => {
+  try {
+    const match = gestyConciliacion.deshacerConciliacion(db, req.session.userId, Number(req.params.id), { motivo: (req.body || {}).motivo });
+    res.json({ ok: true, match });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -20660,7 +20751,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v420';
+const BUILD_ID = '20261024-v421';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
