@@ -295,9 +295,9 @@ ok(!appJs.includes('Estás hablando de este posteo') && !appJs.includes("You're 
 ok(appJs.includes('anchor_post_id') && appJs.includes('HF_CHAT_ANCHOR.id'), 'chat principal intacto: el envío sigue mandando anchor_post_id desde HF_CHAT_ANCHOR');
 
 console.log('— A: index.html y CHUNK_V');
-ok(indexHtml.includes('/app.js?v=276'), 'index.html: app.js bumpeado a ?v=276 (v440)');
-ok(!indexHtml.includes('/app.js?v=275'), 'index.html: sin ?v=275 residual');
-ok(indexHtml.includes('/styles.css?v=20261025'), 'index.html: styles.css bumpeado a ?v=20261025 (v436: regla .accept-pill)');
+ok(indexHtml.includes('/app.js?v=277'), 'index.html: app.js bumpeado a ?v=277 (vidriera deslizable)');
+ok(!indexHtml.includes('/app.js?v=276'), 'index.html: sin ?v=276 residual');
+ok(indexHtml.includes('/styles.css?v=20261025v'), 'index.html: styles.css bumpeado a ?v=20261025v (vidriera deslizable)');
 ok(appJs.includes("const CHUNK_V = '20261025-v436';"), 'app.js: CHUNK_V bumpeado al build v436');
 
 /* ================= Parte B: comportamiento ================= */
