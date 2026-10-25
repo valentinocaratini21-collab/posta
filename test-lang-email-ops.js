@@ -59,6 +59,12 @@ async function main() {
   t('EN cuerpo + pie EN', /Schedule my posts/.test(last().html) && /We're writing because/.test(last().html));
   await E.draftsNudgeEmail({ email: 'es@x.com', name: 'Ana', count: 5 }, base);
   t('ES asunto histórico', last().subject === 'Tus posteos de la semana para Instagram ya están listos 👀');
+  // (2026-10-25 · regla de los dos motivos) Con approveUrl, la decisión
+  // viaja DENTRO del email: botón firmado «Aprobar mi semana» / EN.
+  await E.draftsNudgeEmail({ email: 'en@x.com', name: 'Ana', count: 5, lang: 'en', approveUrl: base + '/aprobar/TOK123' }, base);
+  t('EN borradores: OK con un toque en el email', /✅ Approve my week/.test(last().html) && last().html.includes(base + '/aprobar/TOK123'));
+  await E.draftsNudgeEmail({ email: 'es@x.com', name: 'Ana', count: 5, approveUrl: base + '/aprobar/TOK123' }, base);
+  t('ES borradores: OK con un toque en el email', /✅ Aprobar mi semana/.test(last().html) && last().html.includes(base + '/aprobar/TOK123'));
   await E.emptyWeekEmail({ email: 'en@x.com', name: 'Ana', lang: 'en' }, base);
   t('EN asunto semana vacía', last().subject === 'Your posts for the week, ready in 2 minutes ⚡');
   await E.emptyWeekEmail({ email: 'es@x.com', name: 'Ana' }, base);

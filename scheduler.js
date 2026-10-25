@@ -1266,6 +1266,16 @@ async function postyNudgesDaily(db) {
 // Destinatarios: usuarios con email que NO instalaron la PWA en el teléfono,
 // sin opt-out, con cuenta creada hace más de 1 día, en trial o plan activo.
 async function sendWeeklyReminders(db) {
+  // REGLA DE LOS DOS MOTIVOS (2026-10-25 · spec EMAILS-REGLA-DOS-MOTIVOS):
+  // el recordatorio semanal NO clasifica como email — no anuncia una buena
+  // noticia ya lograda ni pide un OK sobre algo armado; es un recordatorio,
+  // y los recordatorios viven en la app. Su contenido (racha + misión de
+  // fotos) ya tiene hogar: la Agenda y el push del ritual de fotos.
+  // El envío queda APAGADO en este único punto de corte (cubre el cron y
+  // cualquier llamada administrativa). La función y la plantilla se
+  // conservan intactas debajo por si el tablero revierte la decisión.
+  console.log('[email semanal] envío apagado por la regla de los dos motivos (2026-10-25)');
+  return { sent: 0, skipped: 0, failed: 0, disabled: 'regla-dos-motivos' };
   const { emailConfigured, weeklyReminderEmail } = require('./email');
   const streaks = require('./streaks');
   if (!emailConfigured()) {
@@ -1352,17 +1362,43 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
       `).get(u.id).c;
       const name = (u.business_name || '').trim() || u.email.split('@')[0];
       if (drafts > 0) {
-        const r = await draftsNudgeEmail({ email: u.email, name, count: drafts, lang: u.lang }, base);
+        // REGLA DE LOS DOS MOTIVOS (2026-10-25): este email pide SU OK
+        // sobre una semana YA armada → la decisión viaja DENTRO del
+        // email, con un toque: link firmado /aprobar (el mismo mecanismo
+        // de la Carta, v431). Solo se ofrece si los borradores son de la
+        // semana corriente o una futura — una semana pasada ya no se
+        // aprueba (la landing lo dice honestamente; acá ni se ofrece).
+        let approveUrl = '';
+        try {
+          const wk = db.prepare(`
+            SELECT week_key FROM posts
+            WHERE user_id = ? AND status = 'draft' AND week_key IS NOT NULL AND week_key != ''
+            GROUP BY week_key ORDER BY COUNT(*) DESC, MAX(created_at) DESC LIMIT 1
+          `).get(u.id);
+          if (wk && wk.week_key) {
+            const st = getSettings(db, u.id) || {};
+            const tz = st.timezone || 'America/Argentina/Buenos_Aires';
+            const streaks = require('./streaks');
+            const curMon = streaks.mondayKeyOf(streaks.tzToday(tz));
+            if (String(wk.week_key) >= curMon) {
+              const { signApproveWeekLink } = require('./approval');
+              approveUrl = `${base}/aprobar/${signApproveWeekLink(u.id, wk.week_key)}`;
+            }
+          }
+        } catch (e) { console.error('[nudges] link de aprobación:', e.message); }
+        const r = await draftsNudgeEmail({ email: u.email, name, count: drafts, lang: u.lang, approveUrl }, base);
         if (r && r.ok) {
           db.prepare(`INSERT INTO nudges (user_id, kind) VALUES (?, 'drafts')`).run(u.id);
           sent++;
         }
       } else {
-        const r = await emptyWeekEmail({ email: u.email, name, lang: u.lang }, base);
-        if (r && r.ok) {
-          db.prepare(`INSERT INTO nudges (user_id, kind) VALUES (?, 'empty')`).run(u.id);
-          sent++;
-        }
+        // REGLA DE LOS DOS MOTIVOS (2026-10-25): el email de «semana
+        // vacía» NO clasifica — nada se logró todavía y no hay ningún
+        // OK que pedir; es una invitación a generar, y las invitaciones
+        // viven en la app (bloque de la semana + chat de Posty). Ya no
+        // sale por email: se cuenta como omitido y NO se registra nudge
+        // (no se envió nada).
+        skipped++;
       }
     } catch (e) {
       console.error('[nudges] error con usuario', u.id, e.message);

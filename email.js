@@ -263,16 +263,32 @@ function draftsNudgeEmailEn(user, baseUrl) {
   const name = (user.name || '').trim();
   const cta = `${baseUrl}/#/app/ideas`;
   const subject = `Your Instagram posts for this week are ready 👀`;
+  // REGLA DE LOS DOS MOTIVOS (2026-10-25): si el barrido trae el link
+  // firmado de aprobación (user.approveUrl), la decisión se da CON UN
+  // TOQUE desde el email — botón principal «Approve my week» — y la app
+  // queda como camino secundario para revisar/editar antes. Sin
+  // approveUrl, la pieza sale exactamente como siempre.
+  const approve = user && user.approveUrl ? String(user.approveUrl) : '';
+  const lead = approve
+    ? 'Approve them right here in one tap and they go out on schedule —'
+    : 'Jump in and schedule them in one click —';
+  const buttons = approve ? `
+    <p style="text-align:center;margin:0 0 10px">
+      <a href="${approve}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">✅ Approve my week</a>
+    </p>
+    <p style="text-align:center;margin:0 0 8px;font-size:13px">
+      <a href="${cta}" style="color:#2793C8;font-weight:700;text-decoration:none">or review and edit them in the app first →</a>
+    </p>` : `
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Schedule my posts</a>
+    </p>`;
   const html = emailShell(`
     <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      I already built them with your brand and your style. Jump in and schedule them in one click —
+      I already built them with your brand and your style. ${lead}
       or edit anything you want before they go out. I'll be waiting 😄<br>
       <span style="font-size:13px"><b>Posty</b> 🤖</span>
-    </p>
-    <p style="text-align:center;margin:0 0 8px">
-      <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Schedule my posts</a>
-    </p>`, 'en');
+    </p>${buttons}`, 'en');
   return sendEmail({ to: user.email, subject, html });
 }
 
@@ -282,16 +298,31 @@ function draftsNudgeEmail(user, baseUrl) {
   const n = user.count || 0;
   const cta = `${baseUrl}/#/app/ideas`;
   const subject = `Tus posteos de la semana para Instagram ya están listos 👀`;
+  // REGLA DE LOS DOS MOTIVOS (2026-10-25): con user.approveUrl (link
+  // firmado /aprobar del barrido), la decisión se da CON UN TOQUE desde
+  // el email — botón principal «Aprobar mi semana» — y la app queda como
+  // camino secundario. Sin approveUrl, la pieza sale como siempre.
+  const approve = user && user.approveUrl ? String(user.approveUrl) : '';
+  const lead = approve
+    ? 'Aprobalos acá mismo, con un toque, y salen programados —'
+    : 'Entrá y programalos con un clic —';
+  const buttons = approve ? `
+    <p style="text-align:center;margin:0 0 10px">
+      <a href="${approve}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">✅ Aprobar mi semana</a>
+    </p>
+    <p style="text-align:center;margin:0 0 8px;font-size:13px">
+      <a href="${cta}" style="color:#2793C8;font-weight:700;text-decoration:none">o revisalos y editalos en la app antes →</a>
+    </p>` : `
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Programar mis posteos</a>
+    </p>`;
   const html = emailShell(`
     <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Ya los armé con tu marca y tu estilo. Entrá y programalos con un clic —
+      Ya los armé con tu marca y tu estilo. ${lead}
       o editá lo que quieras antes de que salgan. Te espero 😄<br>
       <span style="font-size:13px"><b>Posty</b> 🤖</span>
-    </p>
-    <p style="text-align:center;margin:0 0 8px">
-      <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Programar mis posteos</a>
-    </p>`);
+    </p>${buttons}`);
   return sendEmail({ to: user.email, subject, html });
 }
 

@@ -6879,6 +6879,10 @@ app.use('/api/album/photo', (err, req, res, next) => {
 // (sendWeeklyReminders), que trae la misma misión de fotos + su racha —
 // mandarle también este era el duplicado que se eliminó. El push no cambia.
 // Ambos canales aterrizan en el bloque de fotos de la semana (?fotos=semana).
+// (2026-10-25) La pierna EMAIL se apagó por la regla de los dos motivos
+// (pedido operativo → vive en la app): queda solo el PUSH + el bloque en
+// la Agenda. Lo escrito arriba sobre la audiencia email queda como
+// registro histórico de cómo funcionaba hasta esa fecha.
 // opts (solo tests): now = instante a evaluar; pushFn/emailFn = senders.
 async function albumRitualSweep(opts = {}) {
   const now = opts.now ? new Date(opts.now) : new Date();
@@ -6911,25 +6915,14 @@ async function albumRitualSweep(opts = {}) {
         } catch (e) {}
         try { db.prepare(`UPDATE album_missions SET pushed_at = datetime('now') WHERE user_id = ? AND week_key = ?`).run(u.id, mission.week_key); pushed++; } catch (e) {}
       }
-      // --- Email: el mismo pedido, con botón directo a la subida.
-      if (!mission.emailed_at && !founder && planOrTrialOk(u.id)) {
-        try {
-          const urow = db.prepare('SELECT id, email, lang, client_name AS name, created_at, COALESCE(email_opt_out, 0) AS oo, COALESCE(pwa_installed, 0) AS pwa FROM users WHERE id = ?').get(u.id);
-          const ageOk = !!(urow && urow.created_at && (Date.parse(String(urow.created_at).replace(' ', 'T') + 'Z') < now.getTime() - 86400000));
-          if (urow && urow.email && !urow.oo && ageOk && Number(urow.pwa) === 1) {
-            const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
-            const r = opts.emailFn
-              ? await opts.emailFn(urow, base, mission.mission_text)
-              : await require('./email').photoRitualEmail(urow, base, mission.mission_text);
-            // skipped = sin RESEND_API_KEY: se marca igual (no reintentar toda
-            // la semana); un error real de Resend NO marca y reintenta en el
-            // próximo tick dentro de la ventana del lunes 10:00.
-            if (r && (r.ok || r.skipped)) {
-              try { db.prepare(`UPDATE album_missions SET emailed_at = datetime('now') WHERE user_id = ? AND week_key = ?`).run(u.id, mission.week_key); emailed++; } catch (e) {}
-            }
-          }
-        } catch (e) { console.error('[ritual-fotos] email:', e.message); }
-      }
+      // --- Email del ritual: APAGADO por la REGLA DE LOS DOS MOTIVOS
+      // (2026-10-25 · spec EMAILS-REGLA-DOS-MOTIVOS). Pedir fotos es un
+      // pedido operativo: no es una buena noticia ya lograda ni un OK
+      // sobre algo armado, así que no sale por email. El pedido vive en
+      // la app (bloque de fotos de la Semana) y en el PUSH de este mismo
+      // barrido, que sigue saliendo igual que siempre. `emailed` queda
+      // siempre en 0 y emailed_at ya no se marca; la plantilla
+      // photoRitualEmail queda en email.js sin llamadores de producción.
     } catch (e) {}
   }
   if (pushed || emailed) console.log(`[ritual-fotos] push: ${pushed}, email: ${emailed}`);
@@ -21666,7 +21659,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v437';
+const BUILD_ID = '20261025-v438';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
