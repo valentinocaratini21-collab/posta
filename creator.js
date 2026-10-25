@@ -386,7 +386,9 @@ function headlineFor(topic) {
     const n = norm(w).replace(/[^a-z]/g, '');
     return n.length > 1 && !colorNames.has(n) && !FILLER.has(n);
   });
-  const h = words.slice(0, 3).join(' ').toUpperCase().slice(0, 26);
+  // (Gap 12, 2026-10-25) Sin toUpperCase forzado: el titular se lee
+  // como se escribió (regla de la casa: el texto nunca en mayúsculas).
+  const h = words.slice(0, 3).join(' ').slice(0, 26);
   return h || 'NOVEDAD';
 }
 
@@ -413,9 +415,15 @@ async function renderOptions(posts) {
     fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: topColors, posts }));
     await runRender([DEMO_SCRIPT, specPath, runDir]);
     return posts.map((p, i) => {
-      const src = path.join(runDir, `post-${i}.png`);
+      // (Gap 12, 2026-10-25) demo_render.py escribe post-N.jpg desde el
+      // 2026-10-17 (JPEG q90 por velocidad) pero acá se buscaba el .png
+      // histórico: TODA opción del Creador (generateOptions y «Mi foto»)
+      // moría con «Render no generó post-N». Se lee el archivo que el
+      // render realmente escribe y el destino conserva su extensión.
+      const srcJpg = path.join(runDir, `post-${i}.jpg`);
+      const src = fs.existsSync(srcJpg) ? srcJpg : path.join(runDir, `post-${i}.png`);
       if (!fs.existsSync(src)) throw new Error('Render no generó post-' + i);
-      const name = `creator-${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${i}.png`;
+      const name = `creator-${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${i}${path.extname(src)}`;
       const dest = path.join(MEDIA_DIR, name);
       fs.copyFileSync(src, dest);
       return { ...p, image: `/media/${name}` };
@@ -488,7 +496,7 @@ async function generateOptions({ topic, feedback, profile, settings, openaiKey, 
     style,
     focus: 0.5,
     pill: 'NUEVO',
-    bar: (business || 'TU NEGOCIO').toUpperCase().slice(0, 28),
+    bar: (business || 'Tu negocio').slice(0, 28), // (Gap 12) caso natural, sin mayúsculas forzadas
     headline: headlineFor(topic),
     subline,
     cta: 'Escribinos por DM',
@@ -547,8 +555,8 @@ async function rerenderOption({ style, template, photo, headline, title, subline
     style: style || template || 'promo',
     focus: 0.5,
     pill: pill || 'NUEVO',
-    bar: (bar || '').toUpperCase().slice(0, 28),
-    headline: (headline || title || 'NOVEDAD').toUpperCase().slice(0, 30),
+    bar: (bar || '').slice(0, 28), // (Gap 12) la barra conserva el caso del cliente
+    headline: (headline || title || 'Novedad').slice(0, 30), // (Gap 12) el titular de «Mi foto» conserva su caso
     subline: subline || subtitle || '',
     cta: cta || 'Escribinos por DM',
     watermark: '',

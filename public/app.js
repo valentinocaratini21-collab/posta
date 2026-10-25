@@ -7897,6 +7897,7 @@ function wireAlbumUpload(inp, onDone) {
     const msg = document.getElementById('albumMsg');
     let okCount = 0;
     let okVideos = 0;
+    let videoIssues = [];
     let lastErr = '';
     // Subida secuencial: el servidor festeja/clasifica cada foto en 2º plano.
     for (let i = 0; i < files.length; i++) {
@@ -7909,6 +7910,7 @@ function wireAlbumUpload(inp, onDone) {
         if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No pude subirla 😅');
         okCount++;
         if (isVid || d.kind === 'video') okVideos++;
+        if (d.kind === 'video' && Array.isArray(d.quality_issues) && d.quality_issues.length) videoIssues = d.quality_issues;
       } catch (e) {
         lastErr = e.message || 'No pude subirla. Probá de nuevo.';
         break; // ej.: llegó al tope de 20 — no tiene sentido seguir
@@ -7916,12 +7918,38 @@ function wireAlbumUpload(inp, onDone) {
     }
     if (msg) {
       if (okCount && files.length > 1) msg.innerHTML = `✅ <b>¡${okCount} archivos nuevos!</b> Posty ya los tiene para tus posteos y reels ✨${lastErr ? `<br>😅 ${esc(lastErr)}` : ''}`;
+      else if (okCount && okVideos && videoIssues.length) { const ISSUE_ES = { oscura: 'se ve oscuro', movida: 'salió movido', 'baja-res': 'tiene poca definición', cortada: 'quedó cortado' }; const itx = videoIssues.map(x => ISSUE_ES[x] || x).join(' y '); msg.innerHTML = `✅ <b>¡Video guardado!</b> Ojo: ${itx} 😅 Queda guardado igual, pero si lo grabás con buena luz y el celu quieto, el reel sale mucho mejor 🎬`; }
       else if (okCount && okVideos) msg.innerHTML = '✅ <b>¡Video guardado!</b> Posty lo va a usar en tus reels 🎬';
       else if (okCount) msg.innerHTML = '✅ <b>¡Hermosa!</b> Posty la está convirtiendo en un posteo — te aviso cuando esté listo ✨';
       else msg.textContent = '😅 ' + (lastErr || 'No pude subirla. Probá de nuevo.');
     }
     if (okCount) setTimeout(() => { try { onDone(); } catch (e) {} }, 2500);
   };
+}
+// (Gap 2, 2026-10-25) «🎬 Reel» en los videos del álbum: el video del
+// cliente como protagonista — el servidor lo convierte en un reel
+// borrador de su semana (entero si es corto, con su audio y su mejor
+// frame de portada). El gate de calidad responde con el consejo amable.
+function wireVideoReelButtons(refresh) {
+  const EN = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  $$('[data-videoreel]').forEach((btn) => {
+    btn.onclick = async (ev) => {
+      if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+      const msg = document.getElementById('albumMsg');
+      btn.disabled = true;
+      const old = btn.textContent;
+      btn.textContent = '⏳…';
+      try {
+        await api.post('/api/album/video-reel', { asset_id: Number(btn.getAttribute('data-videoreel')) });
+        if (msg) msg.innerHTML = EN ? '✅ <b>Your video is now a reel!</b> Find it in your week 🎬' : '✅ <b>¡Tu video ya es un reel!</b> Miralo en tu semana 🎬';
+        setTimeout(() => { try { (refresh || bindAlbumCard)(); } catch (e) {} }, 1200);
+      } catch (e) {
+        if (msg) msg.textContent = '😅 ' + ((e && e.message) || (EN ? 'I could not build the reel. Try again in a bit.' : 'No pude armar el reel. Probá de nuevo en un rato.'));
+        btn.disabled = false;
+        btn.textContent = old;
+      }
+    };
+  });
 }
 async function bindAlbumCard() {
   const box = document.getElementById('albumCard');
@@ -7974,7 +8002,7 @@ async function bindAlbumCard() {
   // muestra solo las subidas del cliente (esto, que viene de /api/album).
   const gridInner = items.length
     ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${items.map(ph => ph.kind === 'video'
-      ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span></div>`
+      ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span><button type="button" data-videoreel="${ph.id}" title="Usar este video en un reel" style="position:absolute;left:5px;bottom:5px;background:#2793C8;color:#fff;border:none;font-size:11px;line-height:1;padding:5px 8px;border-radius:999px;cursor:pointer">🎬 Reel</button></div>`
       : `<img src="${esc(mv(ph.path, 640))}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`).join('')}</div>`
     : '';
   const grid = items.length
@@ -8019,6 +8047,7 @@ async function bindAlbumCard() {
       }
     }
   } catch (e) {}
+  wireVideoReelButtons(bindAlbumCard);
   wireAlbumUpload(document.getElementById('albumFile'), bindAlbumCard);
   // v208: recordatorio de fotos de la semana dentro del chat de Schedule.
   try { maybePhotoWeekReminder(data); } catch (e) {}
@@ -8043,7 +8072,7 @@ async function bindAlbumRow() {
   const items = data.photos || [];
   const gridInner = items.length
     ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${items.map(ph => `<div style="position:relative">${ph.kind === 'video'
-      ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span></div>`
+      ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span><button type="button" data-videoreel="${ph.id}" title="Usar este video en un reel" style="position:absolute;left:5px;bottom:5px;background:#2793C8;color:#fff;border:none;font-size:11px;line-height:1;padding:5px 8px;border-radius:999px;cursor:pointer">🎬 Reel</button></div>`
       : `<img src="${esc(mv(ph.path, 640))}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`}<button type="button" class="media-del" data-albumdel="${esc(String(ph.id))}" title="Borrar" aria-label="Borrar archivo" style="position:absolute;top:4px;right:4px;z-index:2">×</button></div>`).join('')}</div>`
     : `<div style="font-size:13.5px;background:#F1F8FD;border-radius:12px;padding:10px 12px;margin:8px 0">Todavía no nos pasaste fotos: Posty crea las imágenes por vos, pero con las tuyas los posteos salen con tu negocio real.</div>`;
   box.innerHTML = `
@@ -8072,6 +8101,7 @@ async function bindAlbumRow() {
     try { await api.delete('/api/assets/' + b.dataset.albumdel); } catch (e) {}
     try { bindAlbumRow(); } catch (e) {}
   });
+  wireVideoReelButtons(bindAlbumRow);
   wireAlbumUpload(document.getElementById('albumFile'), bindAlbumRow);
   // Deep link del ritual (push/email → ?fotos=semana): aterriza en la
   // agenda, que sigue existiendo — la fila se despliega y se enfoca.
