@@ -149,13 +149,13 @@ ok(sb.hfProfileActionsHTML(false).includes('class="hf-pmain"') && sb.hfProfileAc
   && !sb.hfProfileActionsHTML(false).includes('class="hf-pact"'),
   'cabecera v462: una clase de pastilla principal + secundarias en texto, sin pastillas viejas');
 const headPlus = sb.homeHeadHTML({ username: 'u', name: 'N', bio: '', bio_unread: false, link: '', pic: null, followers: null, posts_count: null, following: null, highlights: [{ title: 'Menú', cover: '' }] }, 'X', { en: false, coversPlus: true });
-ok(headPlus.includes('data-hf-pact="covers"') && headPlus.includes('Cubiertas') && headPlus.indexOf('hf-hl-plus') < headPlus.indexOf('Menú'),
+ok(headPlus.includes('data-hf-pact="covers"') && headPlus.includes('Crear cubierta') && !headPlus.includes('Cubiertas') && headPlus.indexOf('hf-hl-plus') < headPlus.indexOf('Menú'),
   'cabecera v462: cubiertas como primer tile «+» de la tira (vista del dueño)');
 const headNoPlus = sb.homeHeadHTML({ username: 'u', name: 'N', bio: '', bio_unread: false, link: '', pic: null, followers: null, posts_count: null, following: null, highlights: [{ title: 'Menú', cover: '' }] }, 'X', { en: false });
 ok(!headNoPlus.includes('hf-hl-plus') && headNoPlus.includes('Menú'),
   'cabecera v462: sin coversPlus no hay tile «+» (preview de edición intacto)');
 const headPlusEmpty = sb.homeHeadHTML({ username: 'u', name: 'N', bio: '', bio_unread: false, link: '', pic: null, followers: null, posts_count: null, following: null, highlights: [] }, 'X', { en: true, coversPlus: true });
-ok(headPlusEmpty.includes('data-hf-pact="covers"') && headPlusEmpty.includes('Covers'),
+ok(headPlusEmpty.includes('data-hf-pact="covers"') && headPlusEmpty.includes('Create cover') && !headPlusEmpty.includes('>Covers<'),
   'cabecera v462: con coversPlus la tira existe aunque no haya destacadas');
 
 console.log(`\nfeed6d-front: ${total - fails}/${total}`);

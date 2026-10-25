@@ -2045,7 +2045,8 @@ body.hf-d-open{overflow:hidden}
 /* (v461 · cabecera) Tile «+» de cubiertas: primer tile de la tira, con
    la misma geometría que las destacadas (anillo 60px, etiqueta 12px). */
 .hf-hl-plus{background:none;border:0;padding:0;font:inherit;cursor:pointer}
-.hf-hl-ring-plus{font-size:26px;font-weight:800;color:#2793c8;border-style:dashed}
+.hf-hl-plus .hf-hl-t{white-space:normal;line-height:1.25}
+.hf-hl-ring-plus{background:#2793c8;border:0;color:#fff;font-size:34px;font-weight:800}
 .hf-tabs{display:flex;border-top:1px solid #e5e5e5;margin-top:18px}
 .hf-tab{flex:1;display:flex;justify-content:center;padding:9px 0 7px;color:#8e8e8e;border-top:1px solid transparent;margin-top:-1px}
 .hf-tab.on{color:#0a1e33;border-top-color:#0a1e33}

@@ -119,10 +119,10 @@ for (const c of ['.pz-nivel-detalle', '.pz-strip-chev', '.pz-mini-festejo', '.pz
 console.log('— pines v469 —');
 const idx = fs.readFileSync(path.join(__dirname, 'public/index.html'), 'utf8');
 const idxEn = fs.readFileSync(path.join(__dirname, 'public/en/index.html'), 'utf8');
-t(idx.includes('app.js?v=300'), 'index ES: app.js?v=300');
-t(idx.includes('styles.css?v=20261036'), 'index ES: styles.css?v=20261036');
-t(idxEn.includes('styles.css?v=20261036'), 'index EN: styles.css?v=20261036');
-t(srv0.includes("BUILD_ID = '20261025-v469'"), 'server: BUILD_ID 20261025-v469');
+t(idx.includes('app.js?v=301'), 'index ES: app.js?v=301');
+t(idx.includes('styles.css?v=20261037'), 'index ES: styles.css?v=20261037');
+t(idxEn.includes('styles.css?v=20261037'), 'index EN: styles.css?v=20261037');
+t(srv0.includes("BUILD_ID = '20261025-v470'"), 'server: BUILD_ID 20261025-v469');
 
 console.log(`\n${ok} ok, ${fail} fallos`);
 process.exit(fail ? 1 : 0);
