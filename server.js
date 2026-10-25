@@ -16267,6 +16267,145 @@ app.get('/api/gesty/agenda', ...gestyAgendaMW, (req, res) => {
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-10 STOCK BÁSICO
+// Spec: gesty-cola-builds.md G-10 + gesty-areas-detalle.md §5/§6 +
+// gesty-sistema-operativo.md §5 (matriz: la orden de compra SIEMPRE
+// con OK del dueño; Stock no compra nada). El módulo vive en
+// gesty-stock.js; acá solo se monta la API detrás de requireAuth +
+// gating de pack + capacidad «stock» EN EL SERVIDOR. El stock se
+// DERIVA de los movimientos asentados (no hay número editable); lo
+// que nace de un papel o una foto entra A CONFIRMAR y no suma hasta
+// el toque del dueño; la orden de compra nace de la alerta con su
+// tarjeta de la matriz (ejecutor en el módulo) y la recepción suma
+// SOLO con el remito de G-03 vinculado.
+// =====================================================================
+const gestyStock = require('./gesty-stock');
+try {
+  gestyStock.configure({ apiKeyFor: (uid) => openaiKeyFor(uid) });
+} catch (e) { console.error('[gesty] stock configure:', e.message); }
+
+const gestyStockMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'stock')];
+
+app.get('/api/gesty/stock', ...gestyStockMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyStock.resumenStock(db, req.session.userId, { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/stock/items', ...gestyStockMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyStock.listItems(db, req.session.userId, {
+      hoy: q.fecha, solo_alertas: q.solo_alertas === '1', incluir_inactivos: q.incluir_inactivos === '1',
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/items', ...gestyStockMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyStock.crearItem(db, req.session.userId, req.body || {}, { creado_por: 'dueno' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/stock/items/:id', ...gestyStockMW, (req, res) => {
+  try {
+    const item = gestyStock.getItem(db, req.session.userId, Number(req.params.id), { hoy: req.query.fecha || undefined });
+    if (!item) return res.status(400).json({ ok: false, error: 'Ese ítem de stock no es de esta cuenta.' });
+    res.json({ ok: true, item, historial: gesty.listEvents(db, req.session.userId, { entidad_tipo: 'stock-item', entidad_id: String(item.id) }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/items/:id', ...gestyStockMW, express.json(), (req, res) => {
+  // Editar la FICHA (mínimo, proveedor, plazo). El stock NO se
+  // edita: el módulo rechaza cualquier campo de cantidad en voz alta.
+  try { res.json({ ok: true, ...gestyStock.actualizarItem(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/items/:id/movimientos', ...gestyStockMW, express.json(), (req, res) => {
+  try {
+    res.json({ ok: true, ...gestyStock.registrarMovimiento(db, req.session.userId,
+      { ...(req.body || {}), item_id: Number(req.params.id) }, { creado_por: 'dueno' }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/items/:id/conteo', ...gestyStockMW, express.json(), (req, res) => {
+  try {
+    res.json({ ok: true, ...gestyStock.registrarConteo(db, req.session.userId,
+      { ...(req.body || {}), item_id: Number(req.params.id) }, { creado_por: 'dueno' }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/stock/movimientos', ...gestyStockMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyStock.listMovimientos(db, req.session.userId, {
+      item_id: q.item_id, estado: q.estado, tipo: q.tipo, origen: q.origen, limit: q.limit, offset: q.offset,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/movimientos/:id/confirmar', ...gestyStockMW, express.json(), (req, res) => {
+  // El toque que asienta lo que nació de un papel o una foto.
+  try { res.json({ ok: true, ...gestyStock.confirmarMovimiento(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/movimientos/:id/descartar', ...gestyStockMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyStock.descartarMovimiento(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/conteo-foto', ...gestyStockMW,
+  express.raw({ type: ['image/*'], limit: '15mb' }), async (req, res) => {
+  // Conteo por foto (un toque, body crudo como /api/media): la
+  // lectura propone ajustes A CONFIRMAR; sin lector no se toca nada.
+  try {
+    if (!req.body || !req.body.length) return res.status(400).json({ ok: false, error: 'Archivo vacío' });
+    const r = await gestyStock.contarDesdeFoto(db, req.session.userId, {
+      buffer: req.body, mime: req.headers['content-type'] || 'image/jpeg',
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/sincronizar', ...gestyStockMW, express.json(), (req, res) => {
+  // Las propuestas desde los papeles (compras de G-03, ventas de
+  // G-04) + el escaneo de alertas que arma las órdenes que falten.
+  try {
+    const hoy = (req.body && req.body.hoy) || undefined;
+    const desdeComprobantes = gestyStock.sincronizarDesdeComprobantes(db, req.session.userId, { hoy });
+    const desdeFacturas = gestyStock.sincronizarDesdeFacturas(db, req.session.userId, { hoy });
+    const alertas = gestyStock.evaluarAlertas(db, req.session.userId, { hoy });
+    res.json({ ok: true, desde_comprobantes: desdeComprobantes, desde_facturas: desdeFacturas, ...alertas });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/stock/alertas', ...gestyStockMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyStock.listAlertas(db, req.session.userId, { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/stock/ordenes', ...gestyStockMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyStock.listOrdenesCompra(db, req.session.userId, { estado: q.estado, limit: q.limit, offset: q.offset }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/ordenes', ...gestyStockMW, express.json(), (req, res) => {
+  // Armar una orden desde un pedido explícito (o desde las alertas
+  // si el body viene vacío): nace en borrador y pide su OK.
+  try { res.json({ ok: true, ...gestyStock.prepararOrdenCompra(db, req.session.userId, req.body || {}, { creado_por: 'dueno' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/stock/ordenes/:id', ...gestyStockMW, (req, res) => {
+  try {
+    const orden = gestyStock.getOrdenCompra(db, req.session.userId, Number(req.params.id));
+    if (!orden) return res.status(400).json({ ok: false, error: 'Esa orden de compra no es de esta cuenta.' });
+    res.json({ ok: true, orden, historial: gesty.listEvents(db, req.session.userId, { entidad_tipo: 'orden-compra', entidad_id: String(orden.id) }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/ordenes/:id/pedir-ok', ...gestyStockMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, orden: gestyStock.pedirOKOrdenCompra(db, req.session.userId, Number(req.params.id)) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/ordenes/:id/recepcion', ...gestyStockMW, express.json(), (req, res) => {
+  // El cierre del ciclo: el remito de G-03 vinculado asienta los
+  // ingresos de la orden. Sin papel vinculado, no se mueve nada.
+  try { res.json({ ok: true, ...gestyStock.vincularRecepcion(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/stock/ordenes/:id/anular', ...gestyStockMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, orden: gestyStock.anularOrdenCompra(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -19993,7 +20132,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v414';
+const BUILD_ID = '20261024-v415';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
