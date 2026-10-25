@@ -14,8 +14,20 @@
  *     «Reconectar Instagram» si SETTINGS.ig_token_warning, ES/EN, en
  *     feedProfileHeadHTML (Feed de la agenda) y en homeHeadHTML (Inicio).
  *   - appShell ya NO antepone la tira de activación en inicio/schedule;
- *     cada vista la incluye tras su contenido (schedule: junto a los
- *     bloques secundarios; inicio: tras la grilla, antes del chat).
+ *     cada vista la incluye adentro (v440: como PRIMER elemento).
+ *
+ * TANDA v440 · SOLO FEED COMPLETO (decisión de Valentino 25/10 00:44 +
+ * corrección 01:48: la tira «🚀 Te faltan N pasos» va «arriba de todo.
+ * no abajo»):
+ *   - scheduleView: return = tira PRIMERO → homeWeekBlock (perfil +
+ *     grilla + píldora) → chat único → #hs-ideas → bloques secundarios
+ *     relegados debajo de todo, en su orden relativo histórico
+ *     (trial, firstRedo, dogfood, exp, fp, ft, failed) + slots + arm.
+ *   - inicioView: return = tira PRIMERO → encabezado literal (con su
+ *     chip IG y el toggle «ver como visitante» como acción chica) →
+ *     historias → grilla + píldora → chat (barra + hoja) → #mzIdeasSlot
+ *     debajo de todo. Fuera del flujo: igLine (mz-igbar; el estado IG
+ *     vive en el chip del encabezado), prodash, kit, why.
  *
  * TANDA v436 · LA PANTALLA ES SOLAMENTE EL FEED (decisión de Valentino,
  * 25/10: «que sea solamente el feed»):
@@ -205,8 +217,10 @@ for (const tok of ['${trialBanner}', '${firstRedoBlock}', '${dogfoodBlock}', '${
 // Orden relativo original entre bloques secundarios (el de la base v431):
 const relOrder = ['${trialBanner}', '${firstRedoBlock}', '${dogfoodBlock}', '${expBanner}', '${fpBlock}', '${ftBlock}', '${failedBlock}'];
 ok(relOrder.every((tok, i) => i === 0 || idxOf(retSeg, tok) > idxOf(retSeg, relOrder[i - 1])), 'return: orden relativo entre bloques secundarios conservado');
-ok(idxOf(retSeg, '${homeChatBlock}') > idxOf(retSeg, '${failedBlock}'), 'return: el chat sigue debajo de los bloques (como en la base)');
-ok(idxOf(retSeg, '${setupChecklistHtml(undefined, { omitIg: true })}') > idxOf(retSeg, '${homeWeekBlock}'), 'scheduleView: la tira de activación va tras el contenido, junto a los bloques secundarios');
+ok(idxOf(retSeg, '${homeChatBlock}') > idxOf(retSeg, '${homeWeekBlock}') && idxOf(retSeg, '${homeChatBlock}') < idxOf(retSeg, '${trialBanner}') && idxOf(retSeg, '${homeChatBlock}') < idxOf(retSeg, '${failedBlock}'), 'return (v440): el chat único va tras el feed y ANTES de los bloques relegados');
+ok(idxOf(retSeg, 'id="hs-ideas"') > idxOf(retSeg, '${homeChatBlock}'), 'return (v440): Ideas va debajo del chat, relegado con el resto');
+ok(idxOf(retSeg, '${setupChecklistHtml(undefined, { omitIg: true })}') > -1 && idxOf(retSeg, '${setupChecklistHtml(undefined, { omitIg: true })}') < idxOf(retSeg, '${homeWeekBlock}'), 'scheduleView (v440): la tira de activación va PRIMERO, arriba de todo (corrección 01:48)');
+ok(retSeg.indexOf('${') === idxOf(retSeg, '${setupChecklistHtml(undefined, { omitIg: true })}'), 'scheduleView (v440): la tira es la PRIMERA interpolación del return');
 
 console.log('— A: appShell ya no antepone la tira en inicio/schedule');
 const shellSrc = extractFn(appJs, 'appShell') || '';
@@ -214,12 +228,19 @@ ok(!!shellSrc, 'appShell se pudo extraer');
 ok(shellSrc.includes("(tab === 'chat' || tab === 'inicio' || tab === 'schedule') ? '' : setupChecklistHtml(undefined)"), 'appShell: inicio/schedule (y chat) no reciben la tira antepuesta; las demás tabs la conservan');
 ok((shellSrc.match(/setupChecklistHtml\(/g) || []).length === 1, 'appShell: una sola invocación de setupChecklistHtml (la de las demás tabs)');
 
-console.log('— A: inicio incluye la tira tras la grilla, antes del chat');
+console.log('— A: (v440) inicio: la tira va PRIMERO; prodash/kit/why/igLine fuera; ideas debajo de todo');
 const iniStart = appJs.indexOf('async function inicioView()');
 ok(iniStart > -1, 'inicioView existe');
-const iniRet = iniStart > -1 ? appJs.slice(appJs.indexOf('return `<div id="inicioView"', iniStart), appJs.indexOf('return `<div id="inicioView"', iniStart) + 2600) : '';
-ok(idxOf(iniRet, '${gridHTML}') > -1 && idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') > idxOf(iniRet, '${gridHTML}'), 'inicioView: la tira va después de la grilla');
-ok(idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') > -1 && idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') < idxOf(iniRet, 'id="mzChatBar"'), 'inicioView: la tira va antes de la barra del chat');
+const iniRet = iniStart > -1 ? appJs.slice(appJs.indexOf('return `<div id="inicioView"', iniStart), appJs.indexOf('return `<div id="inicioView"', iniStart) + 3200) : '';
+ok(idxOf(iniRet, '${gridHTML}') > -1 && idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') > -1 && idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') < idxOf(iniRet, '${gridHTML}'), 'inicioView (v440): la tira va PRIMERO, antes de la grilla (corrección 01:48)');
+ok(idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') < idxOf(iniRet, '${homeHeadHTML'), 'inicioView (v440): la tira va antes del encabezado del perfil');
+ok(idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') < idxOf(iniRet, 'id="mzChatBar"'), 'inicioView (v440): la tira va antes de la barra del chat');
+for (const tok of ['${igLine}', '${prodashHTML}', '${kitHTML}', '${whyHTML}', 'mz-igbar', 'hf-prodash', 'hf-kitnote', 'class="hf-why"']) {
+  ok(!iniRet.includes(tok), `inicioView (v440): fuera del flujo principal — ${tok}`);
+}
+ok(!appJs.includes('class="mz-igbar"'), 'bundle (v440): el markup de la barra ancha de IG salió; el estado IG vive en el chip del encabezado');
+ok(idxOf(iniRet, '${visitorToggleHTML}') > -1 && idxOf(iniRet, '${visitorToggleHTML}') < idxOf(iniRet, '${gridHTML}'), 'inicioView (v440): «ver como visitante» es acción chica en la zona del encabezado, no un bloque bajo la grilla');
+ok(idxOf(iniRet, 'id="mzIdeasSlot"') > idxOf(iniRet, 'id="mzSheet"'), 'inicioView (v440): el slot de Ideas va debajo de todo (tras la hoja del chat)');
 const refreshSrc = extractFn(appJs, 'refreshSetupChecklist') || '';
 ok(refreshSrc.includes("card.closest('#schedView')"), 'refreshSetupChecklist: el refresh conserva omitIg también dentro de #schedView');
 
@@ -274,8 +295,8 @@ ok(!appJs.includes('Estás hablando de este posteo') && !appJs.includes("You're 
 ok(appJs.includes('anchor_post_id') && appJs.includes('HF_CHAT_ANCHOR.id'), 'chat principal intacto: el envío sigue mandando anchor_post_id desde HF_CHAT_ANCHOR');
 
 console.log('— A: index.html y CHUNK_V');
-ok(indexHtml.includes('/app.js?v=275'), 'index.html: app.js bumpeado a ?v=275 (v438)');
-ok(!indexHtml.includes('/app.js?v=273'), 'index.html: sin ?v=273 residual');
+ok(indexHtml.includes('/app.js?v=276'), 'index.html: app.js bumpeado a ?v=276 (v440)');
+ok(!indexHtml.includes('/app.js?v=275'), 'index.html: sin ?v=275 residual');
 ok(indexHtml.includes('/styles.css?v=20261025'), 'index.html: styles.css bumpeado a ?v=20261025 (v436: regla .accept-pill)');
 ok(appJs.includes("const CHUNK_V = '20261025-v436';"), 'app.js: CHUNK_V bumpeado al build v436');
 

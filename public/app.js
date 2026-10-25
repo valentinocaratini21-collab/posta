@@ -3382,10 +3382,11 @@ function mzTabsHTML(tab) {
 }
 
 function appShell(tab, content) {
-  // (ARMA TODO · Corrección 1) La tira de activación YA NO se antepone en
-  // inicio/schedule: cada una de esas vistas la incluye tras su contenido
-  // principal (scheduleView / inicioView). En chat no va; en las demás
-  // tabs el comportamiento es el de siempre.
+  // (ARMA TODO · Corrección 1 + v440) La tira de activación YA NO se
+  // antepone en inicio/schedule: cada una de esas vistas la incluye como
+  // PRIMER elemento de su pantalla (corrección de Valentino, 01:48: «esto
+  // hay que ponerlo arriba de todo. no abajo»). En chat no va; en las
+  // demás tabs el comportamiento es el de siempre.
   return `
   <div class="mtop">
     <button class="mtop-burger" id="mtopBurger" aria-label="Abrir menú">≡</button>
@@ -12452,8 +12453,17 @@ async function scheduleView() {
   // es el cuarto modo del filtro de la agenda (Día·Semana·Mes·Feed) y
   // la pinta schedFilterBlockHTML adentro de homeWeekBlock.
   const homeChatBlock = `<div class="hs-chat-label" style="margin-top:18px"><b>💬 ¿Cambiamos algo?</b></div>${chatCardHTML(true, true, true, true)}`;
+  // (v440 · SOLO FEED, corrección de Valentino 01:48) Composición final de
+  // la pantalla: 1) la tira «Te faltan N pasos» ARRIBA DE TODO («esto hay
+  // que ponerlo arriba de todo. no abajo»); 2) el feed (perfil literal +
+  // grilla + píldora flotante dentro de homeWeekBlock); 3) el chat único;
+  // 4) Ideas y, relegados debajo de todo, los bloques secundarios en su
+  // orden relativo de siempre — nada compite encima del feed.
   return `<div id="schedView" class="sched-wrap">
+    ${setupChecklistHtml(undefined, { omitIg: true })}
     ${homeWeekBlock}
+    ${homeChatBlock}
+    <div id="hs-ideas"${IDEAS_PANEL_OPEN ? '' : ' class="ideas-closed"'}></div>
     ${trialBanner}
     ${firstRedoBlock}
     ${dogfoodBlock}
@@ -12461,12 +12471,9 @@ async function scheduleView() {
     ${fpBlock}
     ${ftBlock}
     ${failedBlock}
-    ${setupChecklistHtml(undefined, { omitIg: true })}
     <div id="adsBoostSlot"></div>
-    <div id="hs-ideas"${IDEAS_PANEL_OPEN ? '' : ' class="ideas-closed"'}></div>
     <div id="hs-question"></div>
     <div id="hs-showcase"></div>
-    ${homeChatBlock}
     ${armBlock}
   </div>`;
 }
@@ -13737,8 +13744,9 @@ async function inicioView() {
   const weekStories = hfStoriesOfWeek(allPosts, tz);
   HOME_STORIES = weekStories;
   const storiesHTML = homeStoriesTrayHTML(weekStories, { en: enHome });
-  const whyLine = (tiles.length && !HF_VISITOR && HF_TAB === 'posts') ? hfGridWhyLine(tiles, { en: enHome }) : '';
-  const whyHTML = whyLine ? `<div class="hf-why">${esc(whyLine)}</div>` : '';
+  // (v440 · SOLO FEED) La línea «porqué de la grilla» (hf-why) SALIÓ del
+  // flujo principal de Inicio: la pantalla es tira + perfil + grilla +
+  // píldora + chat. hfGridWhyLine queda definida en el bloque del feed.
   // (Tanda feed 5 · ítems 2 y 7) La grilla que se ve: en modo
   // visitante solo lo publicado (sin atenuar); la pestaña activa
   // filtra sin recomponer; en Reels las tiles de video piden su
@@ -13758,9 +13766,10 @@ async function inicioView() {
       ? `<div class="hf-grid">${displayTiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
       : `${tabEmptyHTML}<div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`)
     : HF_VISITOR ? hfVisitorEmptyHTML(enHome) : homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
-  const igLine = (!HF_VISITOR && typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected)
-    ? `<a class="mz-igbar" href="#/app/ajustes?ig=1">📸 <span><b>Instagram sin conectar</b> — tu semana no puede salir.</span><span class="mz-igbar-go">Conectar →</span></a>`
-    : '';
+  // (v440 · SOLO FEED) La barra ancha «Instagram sin conectar» (mz-igbar)
+  // SALIÓ de Inicio: el estado de IG vive UNA sola vez, como píldora
+  // compacta en el encabezado del perfil (igHeadChipHTML dentro de
+  // homeHeadHTML) — cero duplicados en la pantalla principal.
   // Franja de revisión (mock aprobado): contador de piezas nuevas +
   // Aceptar todo. Sin borradores pendientes, la franja no aparece.
   // (v436) La franja de revisión se jubiló: aceptar la semana es la
@@ -13771,9 +13780,9 @@ async function inicioView() {
   const stripHTML = (!HF_VISITOR && drafts.length)
     ? `${acceptPillHTML(drafts.length, 'hfAcceptAll')}<div id="revMsg"></div>`
     : '';
-  const kitHTML = (!HF_VISITOR && prof && prof.source === 'kit')
-    ? `<div class="hf-kitnote">🌱 <span><b>Así va a nacer tu perfil</b> — es la propuesta de Posty desde tu negocio y tu rubro. Cuando salga tu primera semana, esta misma pantalla pasa a ser tu Instagram de verdad.</span></div>`
-    : '';
+  // (v440 · SOLO FEED) La nota del kit de nacimiento (hf-kitnote) SALIÓ
+  // del flujo principal de Inicio: con perfil kit, el encabezado y la
+  // grilla ya muestran la propuesta; la nota competía con el feed.
   let storiesSeen = false;
   try { storiesSeen = sessionStorage.getItem('posty_hf_stories_seen') === '1'; } catch (e) {}
   const storyRing = !weekStories.length ? '' : (storiesSeen || weekStories.every((s) => s.past)) ? 'past' : 'live';
@@ -13781,12 +13790,19 @@ async function inicioView() {
   // para cuentas de negocio): lleva al Análisis. SIN número de alcance:
   // no existe fuente de alcance de cuenta en el producto — jamás se
   // inventa una métrica para llenar la tira.
-  const prodashHTML = HF_VISITOR ? '' : `<a class="hf-prodash" href="#/app/analisis"><span class="hf-prodash-t">📊 ${enHome ? 'Professional dashboard' : 'Panel profesional'}</span><span class="hf-prodash-s">${enHome ? 'See how your account is doing' : 'Mirá cómo viene tu cuenta'}</span><span class="hf-prodash-go" aria-hidden="true">›</span></a>`;
-  // (Tanda feed 5 · ítem 7) «Ver como visitante»: el espejo puro de
-  // Instagram — sin marcas de Posty ni gestión. La salida es una
-  // píldora fija que devuelve la vista del dueño.
-  const visitorHTML = HF_VISITOR
+  // (v440 · SOLO FEED) La tira «Panel profesional» (hf-prodash) SALIÓ
+  // del flujo principal de Inicio: el Análisis vive en su pestaña; la
+  // tira competía con el feed en la pantalla principal.
+  // (Tanda feed 5 · ítem 7 + v440) «Ver como visitante»: el espejo puro
+  // de Instagram — sin marcas de Posty ni gestión. La SALIDA sigue como
+  // píldora fija que devuelve la vista del dueño; la ENTRADA (v440) vive
+  // como acción chica en la zona del encabezado del perfil, junto a sus
+  // acciones — ya no ocupa un bloque propio bajo la grilla.
+  const visitorPillHTML = HF_VISITOR
     ? `<button type="button" class="hf-vpill" data-hf-visitor="0">👁 ${enHome ? 'You are seeing your profile as a visitor' : 'Estás viendo tu perfil como visitante'} · <b>${enHome ? 'Back to your view' : 'Volver a tu vista'}</b></button>`
+    : '';
+  const visitorToggleHTML = HF_VISITOR
+    ? ''
     : `<div class="hf-vrow"><button type="button" class="hf-vtoggle" data-hf-visitor="1">👁 ${enHome ? 'View as visitor' : 'Ver como visitante'}</button></div>`;
   // (v436) El saludo del chat de Inicio hereda el aviso de la semana
   // que viene (la misma cuenta que antes pintaba la línea de cupo).
@@ -13795,19 +13811,20 @@ async function inicioView() {
     const qT = Number(quota && quota.limit) || 0;
     CHAT_NEXT_WEEK = (wk.nextDrafts > 0 && qT > 0) ? { n: wk.nextDrafts, total: qT } : null;
   } catch (e) { CHAT_NEXT_WEEK = null; }
+  // (v440 · SOLO FEED, corrección de Valentino 01:48) Composición final de
+  // Inicio: 1) la tira «Te faltan N pasos» ARRIBA DE TODO; 2) el perfil
+  // literal (encabezado con su chip IG + acciones + «ver como visitante»
+  // como acción chica + historias); 3) la grilla con la píldora flotante;
+  // 4) el chat único (barra + hoja); 5) Ideas relegado debajo de todo.
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
-  ${igLine}
+  ${HF_VISITOR ? '' : setupChecklistHtml(undefined, { omitIg: true })}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
-  ${prodashHTML}
+  ${visitorToggleHTML}
   ${storiesHTML}
-  ${kitHTML}
-  ${whyHTML}
   ${gridHTML}
   ${stripHTML}
-  ${visitorHTML}
-  ${HF_VISITOR ? '' : `<div id="mzIdeasSlot"></div>`}
-  ${HF_VISITOR ? '' : setupChecklistHtml(undefined, { omitIg: true })}
+  ${visitorPillHTML}
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
     <button type="button" class="mz-ph" id="mzChatOpen">Escribile a Posty…</button>
@@ -13819,6 +13836,7 @@ async function inicioView() {
       <div class="mz-sheet-body">${chatCardHTML(true, true, true, true)}</div>
     </div>
   </div>
+  ${HF_VISITOR ? '' : `<div id="mzIdeasSlot"></div>`}
 </div>`;
 }
 function mzOpenSheet(focus) {
