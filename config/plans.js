@@ -105,6 +105,51 @@ const AI_LIMITS = {
 // cambian; la venta es por resultado — Plan 1 = Community Manager (presencia),
 // Plan 2 = + Growth (crecimiento), Plan 3 = + Atención al cliente (consultas
 // respondidas). Growth y Atención operan gated hasta Meta Live.
+// ─────────────────────────────────────────────────────────────────────────
+// DESCUENTO POR EQUIPO (decisión de Valentino, 2026-10-24 — spec canónica:
+// workspace/bambooty-precios/DESCUENTO-POR-EQUIPO.md). REGISTRO SIN LÓGICA
+// TODAVÍA: cuando «Sumar un puesto» exista, lo computa EL SERVIDOR al
+// facturar, como línea visible «Descuento por equipo −X%», sobre la SUMA
+// de los precios contratados vigentes de los puestos activos de la cuenta:
+// 2 puestos −10% · 3 puestos −15% · 4 o más −20%. Nace al llegar a 2
+// puestos activos y cesa desde el ciclo siguiente si la cuenta vuelve a 1.
+// La base de cada puesto es SU precio contratado (el fundador congelado
+// de users.founder_price incluido; nada se recalcula a lista) y NO se
+// acumula con Bambooty completo (USD 799,99 / 1.199,99 / 1.599,99,
+// precio fundador), que ya es el mejor precio por agente. Aplica solo a cargos recurrentes, nunca a pagos únicos.
+// HOY Posty es el ÚNICO puesto vivo: sin segundo puesto no hay descuento
+// aplicable todavía.
+// ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// BAMBOOTY SUPREMO (decisión de Valentino, 2026-10-24 — spec:
+// workspace/bambooty-supremo/BAMBOOTY-SUPREMO.md): el nivel máximo de la
+// familia se denomina «Bambooty» (en la app: «Bambooty completo»); el
+// nombre comercial «Pack Oficina Completa» quedó RETIRADO de las
+// vidrieras. PRECIO FUNDADOR: USD 799,99 / 1.199,99 / 1.599,99
+// (reemplaza a 1.499,99 / 1.999,99 / 2.499,99; nadie pagó el precio
+// anterior — la reserva nunca cobró — así que no hay conflicto con
+// «lo vendido no se retira»).
+// El 1/4/2027 la app se renombra a Bambooty: la app ES Bambooty y su
+// nivel supremo también.
+// ─────────────────────────────────────────────────────────────────────────
+// MARCO BAMBOOTY CON PODERES (doctrina comercial, Valentino 2026-10-24 —
+// spec §1 bis): el contrato/marco en la app es «Bambooty» con poderes
+// activos; cada puesto contratado = un poder prendido. «Sumar un puesto»
+// se lee internamente como sumar un poder a tu Bambooty (la matemática
+// del descuento por equipo NO cambia). Los paquetes («Para que te vean» ·
+// «Para vender más» · «Para que todo ande solo» · «Completo») son
+// configuraciones precargadas de Bambooty; «Armá el tuyo» es la
+// configuración libre. La pantalla «Sumar un puesto» se diseña: paquetes
+// primero, poderes prender/apagar después, total en vivo.
+// ESCALERA ÚNICA (Valentino, 2026-10-24): TODOS los poderes cuestan
+// USD 199,99 / 299,99 / 399,99 — el precio de Posty ya no es «el más
+// barato»: es EL precio de todo poder. Con esa escalera: la suma de los
+// ocho Esencial = USD 1.599,92 y Bambooty completo fundador (799,99) es
+// exactamente la mitad (ahorro 799,93); los paquetes quedan en
+// USD 359,98 («Para que te vean» y «Para que todo ande solo») y
+// USD 509,97 («Para vender más»), suma de sus poderes con el descuento
+// por equipo aplicado.
+// ─────────────────────────────────────────────────────────────────────────
 const PLANS_AR = {
   esencial: {
     id: 'esencial',
@@ -153,6 +198,12 @@ const PLANS_AR = {
     ],
     highlighted: true,
   },
+  // LO VENDIDO NO SE RETIRA (regla de la casa, Valentino 2026-10-24):
+  // quien contrata el plan Total mantiene la capa Atención al Cliente
+  // (con reseñas de Google) INCLUIDA de por vida de su plan, al precio
+  // contratado, aunque esa capa mañana se convierta en un agente propio
+  // (Atenty) que se venda aparte. Mecanismo precedente: users.founder_price
+  // (el precio contratado manda, nunca se re-precia a lista).
   total: {
     id: 'total',
     name: 'Total',
