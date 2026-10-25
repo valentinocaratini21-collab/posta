@@ -52,6 +52,8 @@ let cartaAudio = null;
 try { cartaAudio = require('./carta-audio'); } catch (e) { console.error('[carta-audio] módulo no disponible:', e.message); }
 const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispositivo: cuentas guardadas en la entrada, hash + rotación + revocación
 const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleados, gating por pack, registro durable, fundamento-vista y bandeja con la matriz forzada en el servidor
+const oficina = require('./oficina'); // ESPINA BAMBOOTY (programa TestFlight): fundamento único, río de la oficina, Bandeja «Para vos», partes (contrato Bossty) y chat que rutea. La presentación Bambooty vive SOLO en el shell (la web pública sigue siendo Posty).
+try { oficina.init(db); } catch (e) { console.error('[oficina] init:', e.message); }
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
 const { reconcileUser } = require('./billing-sync');
 const weekRedo = require('./week-redo'); // (ARMA TODO · ítem 3) garantía de primera semana: registro durable del rehacer
@@ -3130,7 +3132,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
-  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, email_verified, lang, founder_number, founder_public, founder_price, founder_currency, founder_plan, founder_price_at FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, email_verified, lang, founder_number, founder_public, founder_price, founder_currency, founder_plan, founder_price_at, bambooty_shell FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.json({ user: null });
   // Sello de fundador (red de seguridad): cualquier alta paga real —MP, Stripe
   // o manual— recibe su número al primer /me, en orden, hasta 200.
@@ -3145,6 +3147,7 @@ app.get('/api/auth/me', (req, res) => {
   res.json({
     user: {
       id: user.id,
+      bambooty_shell: !!user.bambooty_shell,
       email: user.email,
       email_verified: !!user.email_verified,
       mp_payer_email: user.mp_payer_email || '',
@@ -3168,6 +3171,75 @@ app.get('/api/auth/me', (req, res) => {
     },
   });
 });
+
+
+// ---------- ESPINA BAMBOOTY (programa TestFlight) ----------
+// Superficies de la oficina: SOLO datos del propio usuario; la presentación
+// Bambooty vive en el shell (app nativa / cuenta con bambooty_shell).
+const pushOficinaMod = require('./push-oficina');
+app.get('/api/oficina/estado', requireAuth, (req, res) => {
+  try { res.json({ ok: true, ...oficina.estadoOficina(db, req.session.userId) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/oficina/fundamento', requireAuth, (req, res) => {
+  try { res.json({ ok: true, ...oficina.fundamentoCompleto(db, req.session.userId) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/oficina/bandeja', requireAuth, (req, res) => {
+  try { res.json({ ok: true, items: oficina.listarBandeja(db, req.session.userId, { soloPendientes: req.query.pendientes === '1' }) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/oficina/bandeja/:id/accion', requireAuth, (req, res) => {
+  try {
+    const r = oficina.accionarBandeja(db, req.session.userId, Number(req.params.id), (req.body || {}).accion, (req.body || {}).nota);
+    if (!r.ok) return res.status(400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/oficina/partes', requireAuth, (req, res) => {
+  try { res.json({ ok: true, ...oficina.partesDeLaSemana(db, req.session.userId) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/oficina/registro/:ref', requireAuth, (req, res) => {
+  try {
+    const reg = oficina.resolverRegistro(db, req.session.userId, req.params.ref);
+    if (!reg) return res.status(404).json({ ok: false, error: 'registro no encontrado' });
+    res.json({ ok: true, registro: reg });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/oficina/chat', requireAuth, async (req, res) => {
+  try {
+    const texto = String((req.body || {}).text || '').slice(0, 2000).trim();
+    if (!texto) return res.status(400).json({ ok: false, error: 'sin_texto' });
+    const r = await oficina.responderChat(db, req.session.userId, texto);
+    // El hilo vive en el mismo almacén que el chat clásico (persiste).
+    try {
+      db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(req.session.userId, 'user', texto);
+      db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(req.session.userId, 'assistant', r.reply);
+    } catch (e) { /* el registro del río ya guardó el turno */ }
+    res.json({ ok: true, reply: r.reply, poder: r.poder });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/oficina/push-prefs', requireAuth, (req, res) => {
+  try { res.json({ ok: true, prefs: pushOficinaMod.getPrefs(db, req.session.userId) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.put('/api/oficina/push-prefs', requireAuth, (req, res) => {
+  try {
+    const b = req.body || {};
+    if (typeof b.silencio === 'boolean') pushOficinaMod.setSilencioGlobal(db, req.session.userId, b.silencio);
+    if (b.agente && typeof b.activado === 'boolean') pushOficinaMod.setPrefAgente(db, req.session.userId, String(b.agente), b.activado);
+    res.json({ ok: true, prefs: pushOficinaMod.getPrefs(db, req.session.userId) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Vaciado periódico de la cola agrupable de push (buenas noticias): Bossty
+// las resume; jamás despierta de noche (la política vive en push-oficina).
+setInterval(() => {
+  try {
+    const rows = db.prepare("SELECT DISTINCT user_id FROM push_oficina_log WHERE estado = 'en_espera'").all();
+    for (const r of rows) pushOficinaMod.procesarEsperas(db, r.user_id).catch(() => {});
+  } catch (e) { /* tabla aún no creada en este proceso */ }
+}, 15 * 60 * 1000);
 
 // ---------- Perfil del negocio ----------
 app.get('/api/profile', requireAuth, (req, res) => {
@@ -4380,6 +4452,15 @@ app.post('/api/admin/ideas/make', requireAdminToken, express.json(), async (req,
     const r = await makeIdeaDraft(idea.user_id, idea);
     res.json(r);
   } catch (e) { res.status(500).json({ error: String(e.message || e).slice(0, 200) }); }
+});
+
+// ESPINA BAMBOOTY: seed del negocio de prueba único del programa
+// (Café Aroma). Idempotente; jamás toca otra cuenta. Gate: ADMIN_TOKEN.
+app.post('/api/admin/oficina/seed-cafe-aroma', requireAdminToken, express.json(), async (req, res) => {
+  try {
+    const r = await oficina.seedCafeAroma(db, { password: (req.body || {}).password || undefined });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 function funnelUniquesPrev(name, days, era) {
   // Período anterior equivalente: [2*days, days] — para tendencias.
@@ -22005,7 +22086,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v449';
+const BUILD_ID = '20261025-v450';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -1606,12 +1606,12 @@ async function sendTrialCloseNotices(db) {
             : 'Tu prueba terminó — tu semana quedó lista y guardada, y te espera si te sumás.',
           url: '/#/app/schedule',
         });
-        if (r && r.ok) sentPush++;
+        if (r && r.ok) { sentPush++; try { require('./push-oficina')._log(db, { user_id: u.id, agente: 'posty', motivo: 'cierre_prueba', titulo: 'Tu semana quedó guardada', cuerpo: '', url: '/#/app/schedule', estado: 'enviada', causa: 'cierre_prueba_a5' }); } catch (e) {} }
         else console.log(`[cierre-prueba] push sin entrega a usuario ${u.id}:`, (r && r.reason) || 'sin_motivo');
       } else if (u.email && !u.email_opt_out && emailConfigured()) {
         // Respaldo: EMAIL (con la cara, vía trialClosedEmail).
         const r = await trialClosedEmail({ email: u.email, name: u.name, lang: u.lang, biz: u.biz }, base);
-        if (r && r.ok) sentEmail++;
+        if (r && r.ok) { sentEmail++; try { require('./push-oficina')._log(db, { user_id: u.id, agente: 'posty', motivo: 'cierre_prueba', titulo: 'Tu semana quedó guardada', cuerpo: '', url: '/#/app/schedule', estado: 'enviada', causa: 'cierre_prueba_a5_email' }); } catch (e) {} }
         else console.error('[cierre-prueba] no se pudo enviar a', u.email);
       } else {
         // Sin push y sin email usable: queda marcado; silencio (sin canal

@@ -136,6 +136,357 @@ const api = {
   del: (u) => api.req('DELETE', u),
 };
 
+// ================= ESPINA BAMBOOTY · SHELL DE PRUEBA =================
+// La presentación Bambooty vive SOLO dentro del shell: la app nativa
+// (Capacitor) o una cuenta con el shell activado (ME.bambooty_shell).
+// La web pública sigue siendo Posty — nada de esto corre para ella.
+let BB = { estado: null, prefs: null, pendingAsk: '' };
+const BB_META = {
+  posty: { n: 'Posty', c: '#2793C8', a: '/ai-avatar.png' },
+  gesty: { n: 'Gesty', c: '#5B8C5A', a: null },
+  venty: { n: 'Venty', c: '#FF7A59', a: null },
+  growty: { n: 'Growty', c: '#8BC34A', a: null },
+  atenty: { n: 'Atenty', c: '#2E8C83', a: null },
+  desy: { n: 'Desy', c: '#E0218A', a: null },
+  talenty: { n: 'Talenty', c: '#F0A868', a: null },
+  bossty: { n: 'Bossty', c: '#C9962E', a: null },
+  oficina: { n: 'Bambooty', c: '#DBA453', a: '/bambooty-avatar.webp' },
+};
+function BB_SHELL_ON() {
+  try {
+    if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
+  } catch (e) {}
+  return !!(typeof ME !== 'undefined' && ME && ME.bambooty_shell);
+}
+function bbGo(hash) { if (location.hash !== hash) location.hash = hash; else if (typeof render === 'function') render(); }
+function bbHace(ts) {
+  const s = Math.max(0, (Date.now() - ts) / 1000);
+  if (s < 90) return 'recién';
+  if (s < 3600) return 'hace ' + Math.round(s / 60) + ' min';
+  if (s < 86400) return 'hace ' + Math.round(s / 3600) + ' h';
+  if (s < 172800) return 'ayer';
+  try { return new Date(ts).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }); } catch (e) { return ''; }
+}
+function bbToast(msg) {
+  let t = document.getElementById('bbToast');
+  if (!t) { t = document.createElement('div'); t.id = 'bbToast'; t.className = 'bb-toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2600);
+}
+// Identidad visual de un poder: su cara si el repo la tiene; si no, su
+// medallón con inicial en SU color (nada de imágenes rotas ni emoji suelto).
+function bbAvatarHTML(poder, avatar, nombre, color, cls) {
+  const m = BB_META[poder] || {};
+  const av = avatar || m.a;
+  const nom = nombre || m.n || poder;
+  const col = color || m.c || '#D6A463';
+  if (av) return `<img class="${cls || 'bb-av'}" src="${esc(av)}" alt="${esc(nom)}">`;
+  return `<span class="${cls || 'bb-av'} bb-av-letra" style="background:${esc(col)}">${esc(String(nom).charAt(0))}</span>`;
+}
+// El tallo: crece de la raíz a la copa con un nudo por nivel (GAMIFICACIÓN).
+function bbTalloHTML(nivel, color, alto) {
+  if (!nivel) return '';
+  const pct = nivel.gate ? nivel.gate.progreso_pct : 0;
+  const fill = nivel.nivel >= 5 ? 100 : ((nivel.nivel - 1 + pct / 100) / 5) * 100;
+  let nudos = '';
+  for (let k = 1; k <= 5; k++) nudos += `<span class="bb-nudo${k <= nivel.nivel ? ' lleno' : ''}" style="bottom:${(k / 5) * 100}%"></span>`;
+  return `<div class="bb-tallo" style="--bbc:${color};height:${alto || 140}px"><span class="bb-tallo-via"></span><span class="bb-tallo-crece" style="height:${fill}%"></span>${nudos}</div>`;
+}
+function bbBarraHTML(nivel, color) {
+  if (!nivel) return '';
+  const pct = nivel.nivel >= 5 ? 100 : (nivel.gate ? nivel.gate.progreso_pct : 0);
+  return `<div class="bb-barra" style="--bbc:${color}"><span style="width:${pct}%"></span></div>`;
+}
+function bbShell(tab, content) {
+  const act = tab === 'inicio' ? 'oficina' : tab;
+  const n = (BB.estado && BB.estado.bandeja_count) || 0;
+  const ic = {
+    oficina: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
+    bandeja: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-5l2-7z"/></svg>',
+    negocio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M2.5 6.5 4 3h16l1.5 3.5a3.2 3.2 0 0 1-6.1 1.4 3.4 3.4 0 0 1-6.8 0 3.2 3.2 0 0 1-6.1-1.4z"/><path d="M9.5 20v-6h5v6"/></svg>',
+    ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></svg>',
+  };
+  const tabBtn = (key, hash, label) => `<button class="bb-tab${act === key ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[key] || ''}</span><span>${label}</span>${key === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
+  return `<div class="bb-app">
+    <header class="bb-top"><img class="bb-top-av" src="/bambooty-avatar.webp" alt="Bambooty"><div class="bb-top-tx"><strong class="bb-gold-tx">Bambooty</strong><span>${BB.estado && BB.estado.negocio ? esc(BB.estado.negocio) + ' · tu oficina' : 'Tu oficina'}</span></div></header>
+    <main class="bb-main">${content}</main>
+    <nav class="bb-bar">
+      ${tabBtn('oficina', '#/app/oficina', 'Oficina')}
+      ${tabBtn('bandeja', '#/app/bandeja', 'Para vos')}
+      <button class="bb-medal${act === 'chat' ? ' on' : ''}" onclick="bbGo('#/app/chat')" aria-label="Hablar con Bambooty"><img src="/bambooty-avatar.webp" alt="Bambooty"></button>
+      ${tabBtn('negocio', '#/app/negocio', 'Mi negocio')}
+      ${tabBtn('ajustes', '#/app/ajustes', 'Ajustes')}
+    </nav>
+  </div>`;
+}
+async function bbLoadEstado(force) {
+  if (BB.estado && !force) return BB.estado;
+  const r = await api.get('/api/oficina/estado');
+  if (r && r.ok) BB.estado = r;
+  return BB.estado;
+}
+
+// ————— Vista: LA OFICINA —————
+async function bbOficinaContent() {
+  let est;
+  try { est = await bbLoadEstado(true); } catch (e) { est = null; }
+  if (!est) return '<div class="bb-error"><p>No pude abrir tu oficina.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>';
+  const no = est.nivel_oficina || {};
+  const poderCard = (p) => {
+    const pend = (est.bandeja_pendientes || []).filter((i) => i.poder === p.poder).length;
+    const estadoTxt = p.estado === 'activo'
+      ? (p.ultima_actividad ? esc(p.ultima_actividad.resumen) : 'Trabajando')
+      : p.estado === 'sombra_declarado' ? 'Modo sombra declarado: arma sin gastar un peso'
+      : p.estado === 'leyendo_tu_mundo' ? 'Ya leyó tu fundamento'
+      : 'Todavía no corre su flujo' + (p.dia_plan ? ' — entra el ' + p.dia_plan + ' del programa' : '');
+    const sig = p.nivel && p.nivel.proximo_paso
+      ? `<p class="bb-card-sig">Qué sigue: ${esc(p.nivel.proximo_paso)}</p>` : '<p class="bb-card-sig">Copa completa 🌳</p>';
+    return `<article class="bb-card">
+      <div class="bb-card-head">${bbAvatarHTML(p.poder, p.avatar, p.nombre, p.color)}<div><strong>${esc(p.nombre)}</strong><span class="bb-card-rol">${esc(p.rol)}</span></div></div>
+      <p class="bb-card-estado">${estadoTxt}</p>
+      <div class="bb-card-nivel"><span class="bb-nivel-chip">${esc(p.nivel.nombre_nivel)} · ${p.nivel.nivel}/5</span>${bbBarraHTML(p.nivel, p.color)}</div>
+      ${sig}
+      <div class="bb-card-btns">
+        ${pend ? `<button class="bb-btn bb-btn-gold" onclick="bbGo('#/app/bandeja')">${pend} para tu OK</button>` : ''}
+        <button class="bb-btn bb-btn-ghost" onclick="bbPreguntar('${esc(p.nombre)}')">Preguntar</button>
+      </div>
+    </article>`;
+  };
+  const rio = (est.rio || []).map((r) => {
+    const p = (est.poderes || []).find((x) => x.poder === r.poder);
+    const nom = p ? p.nombre : (BB_META[r.poder] || {}).n || r.poder;
+    return `<div class="bb-rio-row">${bbAvatarHTML(r.poder, p ? p.avatar : null, nom, p ? p.color : null, 'bb-av bb-av-sm')}<div class="bb-rio-tx"><p><strong>${esc(nom)}</strong> · ${esc(r.resumen)}</p><span>${bbHace(r.ts)}</span></div><button class="bb-mini" onclick="bbVerRegistro('${esc(r.registro_ref)}')">Recibo</button></div>`;
+  }).join('');
+  return `
+    <section class="bb-hero">
+      ${bbTalloHTML(no, '#D6A463', 150)}
+      <div class="bb-hero-tx">
+        <h1>Tu oficina</h1>
+        <p class="bb-hero-neg">${esc(est.negocio || 'Tu negocio')}${est.dueno ? ' · con ' + esc(est.dueno) : ''}</p>
+        <p class="bb-nivel-nom">${esc(no.nombre_nivel || '')} <span>nivel ${no.nivel || 1} de 5</span></p>
+        ${no.proximo_paso ? `<p class="bb-sig">Qué sigue: ${esc(no.proximo_paso)}</p>` : '<p class="bb-sig">La copa entera: tu oficina trabaja sola y vos solo aceptás. 🌳</p>'}
+        ${est.bandeja_count ? `<button class="bb-btn bb-btn-gold" onclick="bbGo('#/app/bandeja')">Tenés ${est.bandeja_count} esperando tu OK</button>` : ''}
+      </div>
+    </section>
+    <section class="bb-poderes">${(est.poderes || []).map(poderCard).join('')}</section>
+    <section class="bb-bloque"><h2>El río de tu oficina</h2>${rio || '<p class="bb-vacio">El río corre con trabajo real: cada cosa que tu oficina haga aparece acá con su recibo.</p>'}</section>
+    <section class="bb-bloque"><h2>Lo que tu oficina ya sabe</h2><div class="bb-chips">${(est.aprendido || []).map((f) => `<span class="bb-chip">✓ ${esc(f.hecho)}</span>`).join('') || '<p class="bb-vacio">Todavía nada — el fundamento se está cargando.</p>'}</div></section>
+  `;
+}
+function bbPreguntar(nombre) {
+  BB.pendingAsk = '¿Cómo viene ' + nombre + '?';
+  bbGo('#/app/chat');
+}
+async function bbVerRegistro(ref) {
+  let r;
+  try { r = await api.get('/api/oficina/registro/' + encodeURIComponent(ref)); } catch (e) { r = null; }
+  const old = document.getElementById('bbSheet'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'bbSheet'; div.className = 'bb-sheet-fondo';
+  if (!r || !r.ok) {
+    div.innerHTML = '<div class="bb-sheet"><p>No encontré ese registro.</p><button class="bb-btn" onclick="document.getElementById(\'bbSheet\').remove()">Cerrar</button></div>';
+  } else {
+    const rec = r.registro;
+    div.innerHTML = `<div class="bb-sheet"><div class="bb-sheet-head"><strong>Recibo del río</strong><button class="bb-x" onclick="document.getElementById('bbSheet').remove()">✕</button></div>
+      <p class="bb-sheet-res">${esc(rec.resumen)}</p>
+      <p class="bb-sheet-meta">${esc(rec.registro_ref)} · ${bbHace(rec.ts)} · estado: ${esc(rec.estado)}</p>
+      ${rec.recibo ? `<pre class="bb-sheet-pre">${esc(JSON.stringify(rec.recibo, null, 2))}</pre>` : '<p class="bb-vacio">Este registro no trae recibo adjunto.</p>'}
+    </div>`;
+  }
+  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+}
+
+// ————— Vista: BANDEJA «PARA VOS» —————
+async function bbBandejaContent() {
+  let r;
+  try { r = await api.get('/api/oficina/bandeja'); } catch (e) { r = null; }
+  if (!r || !r.ok) return '<div class="bb-error"><p>No pude abrir tu Bandeja.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>';
+  const items = r.items || [];
+  const pend = items.filter((i) => i.estado === 'pendiente');
+  const resueltas = items.filter((i) => i.estado !== 'pendiente').slice(0, 8);
+  const focusId = (location.hash.match(/[?&]item=(\d+)/) || [])[1];
+  const card = (i) => `<article class="bb-bcard${String(i.id) === String(focusId) ? ' foco' : ''}" id="bb-item-${i.id}">
+      <div class="bb-card-head">${bbAvatarHTML(i.poder, i.avatar, i.nombre, i.color)}<div><strong>${esc(i.nombre)}</strong><span class="bb-card-rol">espera tu OK · ${bbHace(i.espera_desde)}</span></div></div>
+      <h3>${esc(i.que)}</h3>
+      ${i.propuesta ? `<p class="bb-bcard-prop">${esc(i.propuesta)}</p>` : ''}
+      <div class="bb-bcard-btns" id="bb-btns-${i.id}">
+        <button class="bb-btn bb-btn-gold" onclick="bbAccion(${i.id}, 'aceptar', this)">Aceptar</button>
+        <button class="bb-btn bb-btn-ghost" onclick="bbPedirCambio(${i.id})">Pedir un cambio</button>
+      </div>
+      <div class="bb-cambio" id="bb-cambio-${i.id}" hidden>
+        <textarea id="bb-nota-${i.id}" rows="2" placeholder="Contale qué cambiar…"></textarea>
+        <div class="bb-bcard-btns"><button class="bb-btn bb-btn-gold" onclick="bbAccion(${i.id}, 'cambio', this)">Enviar el cambio</button><button class="bb-btn bb-btn-ghost" onclick="document.getElementById('bb-cambio-${i.id}').hidden = true">Cancelar</button></div>
+      </div>
+    </article>`;
+  const res = (i) => `<div class="bb-res-row"><span class="bb-res-est ${i.estado === 'aceptada' ? 'ok' : ''}">${i.estado === 'aceptada' ? '✓ Aceptada' : '↩ Cambio pedido'}</span><p>${esc(i.que)}</p><span class="bb-res-hora">${bbHace(i.resuelta_en || i.espera_desde)}</span></div>`;
+  const html = `
+    <section class="bb-bloque bb-bloque-top"><h1>Para vos</h1><p class="bb-sub">Solo llega acá lo que necesita TU decisión. Todo lo demás, tu oficina lo resuelve sola.</p></section>
+    ${pend.length ? pend.map(card).join('') : '<div class="bb-libre"><p class="bb-libre-big">🎉 Nada esperando tu OK</p><p>Tu oficina sigue trabajando. Cuando algo necesite tu toque, aparece acá — y te avisa su agente, con su voz.</p></div>'}
+    ${resueltas.length ? `<section class="bb-bloque"><h2>Resueltas</h2>${resueltas.map(res).join('')}</section>` : ''}
+  `;
+  BB.estado = null;
+  return html;
+}
+function bbPedirCambio(id) {
+  const box = document.getElementById('bb-cambio-' + id);
+  if (box) { box.hidden = false; const ta = document.getElementById('bb-nota-' + id); if (ta) ta.focus(); }
+}
+async function bbAccion(id, accion, btn) {
+  const notaEl = document.getElementById('bb-nota-' + id);
+  const nota = accion === 'cambio' && notaEl ? notaEl.value.trim() : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  let r;
+  try { r = await api.post('/api/oficina/bandeja/' + id + '/accion', { accion, nota }); } catch (e) { r = null; }
+  if (!r || !r.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = accion === 'aceptar' ? 'Aceptar' : 'Enviar el cambio'; }
+    bbToast('No se guardó. Probá de nuevo en un toque.');
+    return;
+  }
+  BB.estado = null;
+  if (r.subida) { bbFestejo(r.subida, () => render()); }
+  else { bbToast(accion === 'aceptar' ? 'Aceptado ✓ Quedó registrado.' : 'Cambio pedido ✓ Quedó registrado.'); render(); }
+}
+function bbFestejo(subida, alCerrar) {
+  const old = document.getElementById('bbFestejo'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'bbFestejo'; div.className = 'bb-festejo-fondo';
+  div.innerHTML = `<div class="bb-festejo">
+    ${bbAvatarHTML(subida.poder, subida.avatar, subida.nombre, subida.color, 'bb-av bb-av-xl')}
+    <p class="bb-festejo-k">¡Nivel nuevo!</p>
+    <h3>${esc(subida.nombre)} ahora es<br>${esc(subida.nombre_nivel)}</h3>
+    <p class="bb-festejo-h">Nivel ${subida.nivel} de 5 — ganado con trabajo real, registrado en el río.</p>
+    <button class="bb-btn bb-btn-gold" id="bbFestejoOk">A seguir 🌿</button>
+  </div>`;
+  document.body.appendChild(div);
+  document.getElementById('bbFestejoOk').addEventListener('click', () => { div.remove(); if (typeof alCerrar === 'function') alCerrar(); });
+}
+
+// ————— Vista: MI NEGOCIO (el fundamento, en fichas) —————
+const BB_CAPAS = { negocio: 'Tu negocio', identidad: 'Tu identidad', operacion: 'Tu operación — precios, políticas y límites', 'dueño': 'Vos, el dueño', historia: 'Su historia con Bambooty', gerencia: 'Gerencia' };
+async function bbNegocioContent() {
+  let f, prefs;
+  try { f = await api.get('/api/oficina/fundamento'); } catch (e) { f = null; }
+  try { const pr = await api.get('/api/oficina/push-prefs'); if (pr && pr.ok) { BB.prefs = pr.prefs; prefs = pr.prefs; } } catch (e) {}
+  if (!f || !f.ok) return '<div class="bb-error"><p>No pude leer tu fundamento.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>';
+  const ordenCapas = Object.keys(BB_CAPAS).concat(Object.keys(f.capas || {}).filter((c) => !BB_CAPAS[c]));
+  const capas = ordenCapas.filter((c) => (f.capas || {})[c]).map((c) => `
+    <section class="bb-bloque"><h2>${BB_CAPAS[c] || esc(c)}</h2>
+      ${(f.capas[c] || []).map((h) => `<div class="bb-hecho"><div><strong>${esc(h.hecho)}</strong>${h.detalle ? `<p>${esc(h.detalle)}</p>` : ''}</div><span class="bb-hecho-ok" title="Verificado">${h.verificado ? '✓' : ''}</span></div>`).join('')}
+    </section>`).join('');
+  const agentes = ['posty', 'gesty', 'venty', 'growty', 'atenty', 'desy', 'talenty', 'bossty'];
+  const avisos = prefs ? `<section class="bb-bloque"><h2>Cómo te avisa tu oficina</h2>
+    <p class="bb-sub">Cada agente te escribe solo por tres motivos: una decisión que espera tu toque, una buena noticia que ya pasó, o una urgencia real. De noche, silencio (22 a 8) salvo urgencia.</p>
+    ${agentes.map((a) => { const m = BB_META[a]; const on = !prefs.agentes || prefs.agentes[a] !== false; return `<div class="bb-pref"><span>${bbAvatarHTML(a, null, m.n, m.c, 'bb-av bb-av-sm')} ${m.n}</span><button class="bb-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" onclick="bbTogglePref('${a}', this)"><span></span></button></div>`; }).join('')}
+    <div class="bb-pref bb-pref-total"><span>🔕 Silencio total de la oficina</span><button class="bb-switch${prefs.silencio ? ' on' : ''}" role="switch" aria-checked="${!!prefs.silencio}" onclick="bbToggleSilencio(this)"><span></span></button></div>
+  </section>` : '';
+  return `
+    <section class="bb-bloque bb-bloque-top"><h1>Mi negocio</h1><p class="bb-sub">Esto es lo que tu oficina sabe de tu negocio — su fundamento. Los ocho poderes trabajan sobre estas mismas fichas: ninguno inventa lo que no está acá.</p></section>
+    ${capas}
+    ${avisos}
+    <button class="bb-btn bb-btn-ghost bb-ancho" onclick="bbGo('#/app/chat')">¿Falta algo o algo cambió? Contale a Bambooty</button>
+  `;
+}
+async function bbTogglePref(agente, el) {
+  const on = !el.classList.contains('on');
+  el.classList.toggle('on', on); el.setAttribute('aria-checked', on);
+  let r;
+  try { r = await api.put('/api/oficina/push-prefs', { agente, activado: on }); } catch (e) { r = null; }
+  if (!r || !r.ok) { el.classList.toggle('on', !on); bbToast('No se guardó el cambio.'); }
+  else bbToast(on ? 'Ese agente te vuelve a avisar.' : 'Ese agente queda en silencio.');
+}
+async function bbToggleSilencio(el) {
+  const on = !el.classList.contains('on');
+  el.classList.toggle('on', on); el.setAttribute('aria-checked', on);
+  let r;
+  try { r = await api.put('/api/oficina/push-prefs', { silencio: on }); } catch (e) { r = null; }
+  if (!r || !r.ok) { el.classList.toggle('on', !on); bbToast('No se guardó el cambio.'); }
+  else bbToast(on ? 'Oficina en silencio. Tu Bandeja sigue guardando todo.' : 'Tu oficina te vuelve a avisar.');
+}
+
+// ————— Vista: CHAT CON BAMBOOTY (rutea y se ve) —————
+function bbChatMsgHtml(m) {
+  if (m.role === 'user') return `<div class="bb-msg user"><p>${esc(m.text)}</p></div>`;
+  const poder = m.poder || 'bossty';
+  const meta = BB_META[poder] || BB_META.bossty;
+  return `<div class="bb-msg ai">${bbAvatarHTML(poder, null, meta.n, meta.c, 'bb-av bb-av-sm')}<div><span class="bb-msg-quien">${esc(meta.n)}</span><p>${esc(m.text)}</p></div></div>`;
+}
+async function bbChatContent() {
+  try {
+    const r = await api.get('/api/ideas/chat');
+    if (r && Array.isArray(r.messages) && r.messages.length) {
+      CHAT = r.messages.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.text).map((m) => ({ role: m.role, text: String(m.text).slice(0, 2000) }));
+    }
+  } catch (e) {}
+  return `
+    <div class="bb-chat">
+      <div class="bb-chat-box" id="bbChatBox">${CHAT.length ? CHAT.map(bbChatMsgHtml).join('') : '<div class="bb-chat-vacio"><img src="/bambooty-avatar.webp" alt="Bambooty"><p><strong>Tu oficina, en una conversación.</strong></p><p>Pedime lo que necesites: derivo tu pedido al poder que corresponde y trabaja con tu fundamento.</p></div>'}</div>
+      <div class="bb-chat-input"><textarea id="bbChatText" rows="1" placeholder="Escribile a tu oficina…"></textarea><button class="bb-btn bb-btn-gold" id="bbChatSend" onclick="bbChatSend()">Enviar</button></div>
+    </div>`;
+}
+function bbChatBind() {
+  const box = document.getElementById('bbChatBox'); if (box) box.scrollTop = box.scrollHeight;
+  const ta = document.getElementById('bbChatText');
+  if (ta) {
+    if (BB.pendingAsk) { ta.value = BB.pendingAsk; BB.pendingAsk = ''; }
+    ta.focus();
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); bbChatSend(); } });
+  }
+}
+// El despachante de la espina: render() lo llama para sus cuatro vistas.
+async function bbContentFor(tab) {
+  if (tab === 'bandeja') return bbBandejaContent();
+  if (tab === 'negocio') return bbNegocioContent();
+  if (tab === 'chat') return bbChatContent();
+  return bbOficinaContent();
+}
+async function bbChatSend() {
+  const ta = document.getElementById('bbChatText');
+  const box = document.getElementById('bbChatBox');
+  if (!ta || !box) return;
+  const text = ta.value.trim();
+  if (!text) return;
+  ta.value = '';
+  const vacio = box.querySelector('.bb-chat-vacio'); if (vacio) vacio.remove();
+  CHAT.push({ role: 'user', text });
+  box.insertAdjacentHTML('beforeend', bbChatMsgHtml({ role: 'user', text }));
+  box.scrollTop = box.scrollHeight;
+  const btn = document.getElementById('bbChatSend');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  let r;
+  try { r = await api.post('/api/oficina/chat', { text }); } catch (e) { r = null; }
+  if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; }
+  if (!r || !r.ok) { bbToast('No llegó. Probá de nuevo.'); return; }
+  const m = { role: 'assistant', text: r.reply || '', poder: r.poder || 'bossty' };
+  CHAT.push(m);
+  box.insertAdjacentHTML('beforeend', bbChatMsgHtml(m));
+  box.scrollTop = box.scrollHeight;
+  BB.estado = null;
+}
+// ————— Los avisos también viven en AJUSTES (DETALLE-TOTAL §5) —————
+// La vista de Ajustes clásica se renderiza dentro del shell; al terminar,
+// se le suma la tarjeta de la oficina con los mismos controles que en
+// Mi negocio (una sola puerta de datos: /api/oficina/push-prefs).
+async function bbAvisosEnAjustes() {
+  if (!BB_SHELL_ON() || document.getElementById('bbAvisosCard')) return;
+  const host = document.querySelector('.bb-main');
+  if (!host) return;
+  let prefs = BB.prefs;
+  if (!prefs) {
+    try { const pr = await api.get('/api/oficina/push-prefs'); if (pr && pr.ok) { BB.prefs = pr.prefs; prefs = pr.prefs; } } catch (e) {}
+  }
+  if (!prefs || document.getElementById('bbAvisosCard')) return;
+  const agentes = ['posty', 'gesty', 'venty', 'growty', 'atenty', 'desy', 'talenty', 'bossty'];
+  const div = document.createElement('section');
+  div.id = 'bbAvisosCard'; div.className = 'bb-bloque'; div.style.marginTop = '14px';
+  div.innerHTML = `<h2>Cómo te avisa tu oficina</h2>
+    <p class="bb-sub">Cada agente te escribe solo por tres motivos: una decisión que espera tu toque, una buena noticia que ya pasó, o una urgencia real. De noche, silencio (22 a 8) salvo urgencia.</p>
+    ${agentes.map((a) => { const m = BB_META[a]; const on = !prefs.agentes || prefs.agentes[a] !== false; return `<div class="bb-pref"><span>${bbAvatarHTML(a, null, m.n, m.c, 'bb-av bb-av-sm')} ${m.n}</span><button class="bb-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" onclick="bbTogglePref('${a}', this)"><span></span></button></div>`; }).join('')}
+    <div class="bb-pref bb-pref-total"><span>🔕 Silencio total de la oficina</span><button class="bb-switch${prefs.silencio ? ' on' : ''}" role="switch" aria-checked="${!!prefs.silencio}" onclick="bbToggleSilencio(this)"><span></span></button></div>`;
+  host.appendChild(div);
+}
+// ================= FIN ESPINA BAMBOOTY =================
+
 // IS_NATIVE: la app corre empaquetada (Capacitor iOS / TWA Android). Sin ventas: cero precios, cero CTAs de pago.
 const IS_NATIVE = (() => { try {
   if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
@@ -3498,7 +3849,7 @@ function refreshSetupChecklist() {
 function mzIsMobile() {
   try { return !!(window.matchMedia && window.matchMedia('(max-width: 820px)').matches); } catch (e) { return false; }
 }
-function mzHomeHash() { return '#/app/inicio'; } // (v331 addendum 22/10) decisión de Valentino: la home es el feed literal EN TODOS los tamaños — el aterrizaje por defecto es Inicio también en desktop; la Agenda queda a un toque (tab Semana).
+function mzHomeHash() { return BB_SHELL_ON() ? '#/app/oficina' : '#/app/inicio'; } // (v331 addendum 22/10) decisión de Valentino: la home es el feed literal EN TODOS los tamaños — el aterrizaje por defecto es Inicio también en desktop; la Agenda queda a un toque (tab Semana).
 function mzTabsHTML(tab) {
   if (tab === 'chat') return ''; // el chat es pantalla completa con su input fijo: sin pestañas
   const on = tab === 'inicio' ? 'inicio'
@@ -3510,6 +3861,7 @@ function mzTabsHTML(tab) {
 }
 
 function appShell(tab, content) {
+  if (BB_SHELL_ON()) return bbShell(tab, content);
   // (ARMA TODO · Corrección 1 + v440) La tira de activación YA NO se
   // antepone en inicio/schedule: cada una de esas vistas la incluye como
   // PRIMER elemento de su pantalla (corrección de Valentino, 01:48: «esto
@@ -12146,7 +12498,8 @@ async function render() {
   // en #/app/chat como escape hatch para retoques puntuales.
   let tab = tabRaw || 'inicio';
   let content = '';
-  if (tab === 'chat') content = await chatView();
+  if (BB_SHELL_ON() && (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'inicio' || tab === 'chat')) content = await bbContentFor(tab);
+  else if (tab === 'chat') content = await chatView();
   else if (tab === 'inicio') content = await inicioView(); // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') content = await scheduleView();
@@ -12169,6 +12522,8 @@ async function render() {
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  if (BB_SHELL_ON() && tab === 'ajustes') { try { bbAvisosEnAjustes(); } catch (e) {} }
+  if (BB_SHELL_ON() && tab === 'chat') { try { bbChatBind(); } catch (e) {} }
   // El banner de trial vencido lleva id único: si algún re-render lo duplicara, queda solo uno.
   try {
     const _tbs = document.querySelectorAll('#pzTrialBanner');
