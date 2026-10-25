@@ -23,7 +23,8 @@ const FIXED = [
   { m: 3, d: 8, name: 'Día de la Mujer', emoji: '💜', angle: 'homenaje y protagonismo femenino del negocio' },
   { m: 5, d: 1, name: 'Día del Trabajador', emoji: '🛠️', angle: 'saludo + el trabajo que hay detrás del negocio' },
   { m: 7, d: 9, name: 'Día de la Independencia', emoji: '🇦🇷', angle: 'orgullo argentino del negocio' },
-  { m: 10, d: 31, name: 'Halloween', emoji: '🎃', angle: 'contenido divertido y temático' },
+  { m: 10, d: 31, name: 'Halloween', emoji: '🎃', angle: 'contenido divertido y temático', cats: 'pastel|panad|chocolat|gastro|helad|maquill|makeup|disfraz|cotill' },
+  { m: 11, d: 2, name: 'CyberMonday', emoji: '🛒', angle: 'descuentos online con fecha límite (2–4/11)', cats: 'retail|moda|indumentaria|ropa|deco|hogar|muebl|joyeria|electro|tecnologia|mascotas|pet|belleza|estetica' },
   { m: 12, d: 24, name: 'Nochebuena', emoji: '🎄', angle: 'saludo cálido + horarios de las fiestas' },
   { m: 12, d: 25, name: 'Navidad', emoji: '🎄', angle: 'saludo navideño del equipo' },
   { m: 12, d: 31, name: 'Fin de año', emoji: '🥂', angle: 'balance del año y gracias a los clientes' },
@@ -67,4 +68,13 @@ function upcomingEphemeris(days = 12) {
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-module.exports = { upcomingEphemeris };
+// Lista propia por fecha: si la efeméride trae `cats` (regex de fragmentos),
+// decide si el texto del negocio (categoría + nombre + descripción) pertenece
+// a esa fecha. Sin `cats` no hay opinión por fecha (null) y manda el criterio
+// general del consumidor.
+function catsMatch(eph, text) {
+  if (eph && eph.cats) return new RegExp(eph.cats, 'i').test(String(text || ''));
+  return null;
+}
+
+module.exports = { upcomingEphemeris, catsMatch };

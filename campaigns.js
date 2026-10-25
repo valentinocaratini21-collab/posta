@@ -10,6 +10,14 @@
 // fragmentos que el category del perfil puede contener (texto libre/normalizado).
 const CAMPAIGNS = [
   {
+    id: 'cybermonday-ar-2026', emoji: '🛒',
+    name: { es: 'CyberMonday', en: 'Cyber Monday' },
+    start: '2026-10-26', end: '2026-11-04',
+    frame: { es: 'la semana de tu negocio para CyberMonday', en: 'your business’s week for Cyber Monday' },
+    cats: ['retail','moda','indumentaria','ropa','deco','hogar','muebl','joyeria','electro','tecnologia','mascotas','pet','belleza','estetica'],
+    angle: { es: 'CyberMonday AR (2–4/11, CACE): la palabra-dinero es % OFF real + fecha límite + canal (solo web / link en bio) + cuotas si el negocio las ofrece de verdad. La pieza es el producto estrella PUESTO/en uso con tercio limpio para el % — nunca flyer tipográfico puro. Servicios de turnos (barbería, fitness, estética de agenda) quedan FUERA salvo pase/pack vendible online declarado en el ADN.', en: 'AR Cyber Monday (Nov 2–4, CACE): the money-word is a real % OFF + deadline + channel (online only / link in bio). Star product worn/in use with a clean third for the % — never a pure type flyer.' },
+  },
+  {
     id: 'black-friday-2026', emoji: '🛍️',
     name: { es: 'Black Friday', en: 'Black Friday' },
     start: '2026-11-23', end: '2026-11-30',
