@@ -34,9 +34,10 @@ function ajustesView() {
     : q.get('tn') === 'error' ? `<div class="err">❌ No pudimos conectar tu Tiendanube. Probá de nuevo desde Conexiones.</div>` : '';
   const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago…</div>`
     : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
-    : q.get('plan') === 'error' ? ((typeof ME !== 'undefined' && ME && ME.lang === 'en')
-      ? `<div class="err">❌ The payment was not completed. Tap <b>Subscribe</b> to try again.</div>`
-      : `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>`) : '';
+    // (ARMA TODO ítem 1) plan=error: aviso AMABLE arriba, sin rojo ni ❌ — no
+    // hubo cargo y el reintento vive en Mi plan (esta misma vista scrollea
+    // hasta ahí). El parámetro se limpia en bindSettings tras el scroll.
+    : q.get('plan') === 'error' ? `<div id="planErrorMsg" style="margin:0 0 12px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.55">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "The payment wasn't completed — no charge was made. Whenever you're ready, we can try again from My plan." : 'El pago no se completó — no se hizo ningún cargo. Cuando quieras, lo intentamos de nuevo desde Mi plan.'}</div>` : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
   const bc = brandColors();
   // Resúmenes de estado en el título de cada sección (v257): texto chico a la
@@ -580,6 +581,14 @@ async function weekShareLoad() {
 }
 
 function bindSettings() {
+  // (ARMA TODO ítem 1) plan=error ya se mostró en ajustesView: limpiamos el
+  // parámetro para que un refresh no resucite el aviso. Diferido a propósito:
+  // render() usa el MISMO parámetro, apenas después de bindApp, para abrir la
+  // sección Mi plan y scrollear hasta ella (su timeout es de 80 ms).
+  try {
+    const _pqErr = new URLSearchParams(location.hash.split('?')[1] || '');
+    if (_pqErr.get('plan') === 'error') setTimeout(() => { try { if ((location.hash || '').indexOf('plan=error') > -1) history.replaceState(null, '', location.pathname + '#/app/ajustes'); } catch (e) {} }, 400);
+  } catch (e) {}
   // Acordeón de secciones en móvil
   $$('.ajsec-h').forEach(h => {
     const tg = () => h.parentElement.classList.toggle('open');

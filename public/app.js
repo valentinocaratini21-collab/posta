@@ -238,7 +238,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261024-v403'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261024-v426'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -12191,6 +12191,8 @@ async function render() {
       if (_card) setTimeout(() => _card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
     }
   } catch (e) {}
+  // (ARMA TODO ítem 1) Retorno post-pago: ?plan=ok aterriza en LA SEMANA con su tarjeta de bienvenida.
+  try { if (tab === 'schedule') maybePostPayWelcome(); } catch (e) {}
   handleIgResult();    // toast del OAuth (?ig=) en cualquier pantalla
   renderIgResume(); // banner "terminar de conectar" si el OAuth quedó a medias
   if (!(PROFILE && PROFILE.ig_pending)) maybeShowIgPopup(tab); // popup de conectar Instagram (primer ingreso)
@@ -12219,6 +12221,98 @@ function showExpiredNoticeNative() {
   main.prepend(n);
   const x = document.getElementById('pzExpNativeX');
   if (x) x.onclick = () => n.remove();
+}
+
+/* ---------- Bienvenida post-pago (ARMA TODO ítem 1): ?plan=ok en Schedule ----------
+   Stripe y MercadoPago devuelven al que pagó a #/app/schedule?plan=ok. La
+   activación la hace el webhook y puede tardar segundos: si /api/auth/me ya
+   dice plan_status 'active', la tarjeta celebra la semana en marcha con el
+   nombre del plan; si todavía no, avisa que se está activando y re-consulta
+   (refreshSession) cada ~5 s hasta 4 veces — al flipear, el texto se
+   actualiza solo. El parámetro se limpia AL MOSTRARLA (un refresh no la
+   resucita); el flag en memoria la repone si la vista se re-renderiza, y la
+   ✕ la cierra para siempre. El nombre del plan sale del catálogo de
+   /api/billing/plans (el mismo de Mi plan); SIN nombre jamás se inventa:
+   antes del flip el plan comprado todavía no figura en /me (ME.plan sigue
+   siendo el de la prueba), así que el texto de espera va sin nombre. */
+let PZ_POSTPAY = null; // { checks: int, timer: id } mientras la bienvenida vive
+async function pzPostPayPlanName(planId, en) {
+  if (!planId) return '';
+  try {
+    const d = await api.get('/api/billing/plans' + (en ? '?country=US' : ''));
+    const p = ((d && d.plans) || []).find(x => x.id === planId);
+    if (p && p.name) return p.name; // nombre lindo del catálogo (el de Mi plan)
+  } catch (e) {}
+  return planId.charAt(0).toUpperCase() + planId.slice(1); // patrón de la casa (autopilotCardHTML)
+}
+async function paintPostPayCard() {
+  if (!PZ_POSTPAY) return;
+  const main = document.querySelector('.main');
+  if (!main) return;
+  const en = !!(typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const active = !!(ME && ME.plan_status === 'active');
+  let el = document.getElementById('pzPostPayCard');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'pzPostPayCard';
+    el.innerHTML = `
+    <div style="margin:10px 14px 0;background:var(--bg2);border:1px solid var(--cel);border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between">
+      <div id="pzPostPayTxt" style="font-size:13.5px;line-height:1.55"></div>
+      <button id="pzPostPayX" aria-label="Cerrar" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--dim);flex:none">✕</button>
+    </div>`;
+    main.prepend(el);
+    const x = el.querySelector('#pzPostPayX');
+    if (x) x.onclick = () => {
+      if (PZ_POSTPAY && PZ_POSTPAY.timer) { try { clearInterval(PZ_POSTPAY.timer); } catch (e) {} }
+      PZ_POSTPAY = null;
+      el.remove();
+    };
+  }
+  const txt = el.querySelector('#pzPostPayTxt');
+  if (!txt) return;
+  if (active) {
+    const name = await pzPostPayPlanName(ME.plan, en);
+    if (!PZ_POSTPAY || !document.body.contains(el)) return; // se cerró o la vista cambió
+    txt.textContent = en
+      ? (name ? `🎉 You're live! Your ${name} plan is active and your week is already scheduled: I post for you. Just watch your Instagram grow.` : `🎉 You're live! Your plan is active and your week is already scheduled: I post for you. Just watch your Instagram grow.`)
+      : (name ? `🎉 ¡Ya está en marcha! Tu plan ${name} quedó activo y tu semana ya está programada: yo publico por vos. Vos solo mirá cómo crece tu Instagram.` : `🎉 ¡Ya está en marcha! Tu plan quedó activo y tu semana ya está programada: yo publico por vos. Vos solo mirá cómo crece tu Instagram.`);
+  } else if (ME && ME.trial_expired) {
+    // Prueba vencida: los posteos están PAUSADOS hasta que el webhook active
+    // (reactivatePausedPosts) — nada de "publicándose" hasta el flip.
+    txt.textContent = en
+      ? `🎉 You're in! We're activating your plan — in a few seconds your week is back up and running on your new plan.`
+      : `🎉 ¡Ya sos parte! Estamos activando tu plan — en unos segundos tu semana vuelve a estar en marcha con tu plan nuevo.`;
+  } else {
+    // La semana de la prueba ya existe, está programada y el autopiloto la
+    // publica solo: eso es verdad hoy, antes y después del flip.
+    txt.textContent = en
+      ? `🎉 You're in! We're activating your plan — in a few seconds your week will be running on your new plan. Your current week is already scheduled and posting.`
+      : `🎉 ¡Ya sos parte! Estamos activando tu plan — en unos segundos tu semana queda en marcha con tu plan nuevo. Tu semana actual ya está programada y publicándose.`;
+  }
+}
+function maybePostPayWelcome() {
+  let planParam = null;
+  try { planParam = new URLSearchParams(location.hash.split('?')[1] || '').get('plan'); } catch (e) {}
+  if (planParam === 'ok' && !PZ_POSTPAY) {
+    PZ_POSTPAY = { checks: 0, timer: null };
+    // Limpieza inmediata: la bienvenida vive del flag, no del parámetro.
+    try { history.replaceState(null, '', location.pathname + '#/app/schedule'); } catch (e) {}
+  }
+  if (!PZ_POSTPAY || typeof ME === 'undefined' || !ME) return;
+  paintPostPayCard();
+  if (ME.plan_status !== 'active' && !PZ_POSTPAY.timer) {
+    PZ_POSTPAY.timer = setInterval(async () => {
+      if (!PZ_POSTPAY) return;
+      PZ_POSTPAY.checks++;
+      try { await refreshSession(); } catch (e) {}
+      if (!PZ_POSTPAY) return;
+      if ((ME && ME.plan_status === 'active') || PZ_POSTPAY.checks >= 4) {
+        try { clearInterval(PZ_POSTPAY.timer); } catch (e) {}
+        PZ_POSTPAY.timer = null;
+      }
+      paintPostPayCard();
+    }, 5000);
+  }
 }
 
 /* ---------- Modal agresivo: trial vencido ---------- */

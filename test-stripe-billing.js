@@ -101,8 +101,12 @@ async function partA() {
   ok(params.subscription_data.trial_end === trialEnd, 'trial_end = fin exacto de la prueba de la app (no cobra antes)');
   ok(params.metadata.user_id === '42' && params.metadata.plan_id === 'pro'
     && params.subscription_data.metadata.plan_id === 'pro', 'metadata con user_id y plan en sesión y suscripción');
-  ok(params.customer === 'cus_42' && params.success_url.includes('plan=ok') && params.cancel_url.includes('plan=error'),
-    'customer reusado y URLs de retorno a la app');
+  // (ARMA TODO ítem 1, 2026-10-24) El éxito ya NO vuelve a Ajustes: aterriza
+  // en la semana (schedule?plan=ok, donde vive la bienvenida post-pago). La
+  // aserción vieja solo chequeaba includes('plan=ok'/'plan=error') y no
+  // detectaba el destino; ahora se fijan las rutas exactas de ambos retornos.
+  ok(params.customer === 'cus_42' && params.success_url.endsWith('/#/app/schedule?plan=ok') && params.cancel_url.endsWith('/#/app/ajustes?plan=error'),
+    'customer reusado y retornos exactos: éxito → la semana (?plan=ok), cancelación → Ajustes (?plan=error)');
   const params2 = sb.buildCheckoutParams({
     priceId: cat1.esencial, plan: { id: 'esencial' }, baseUrl: 'https://postyhacetodo.com',
     user: { id: 7, email: 'new@example.com', stripe_customer_id: '' }, trialEndSec: null,

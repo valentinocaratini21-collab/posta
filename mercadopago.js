@@ -49,8 +49,11 @@ async function createSubscription({ plan, userId, baseUrl, payerEmail }) {
   if (!payerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail)) {
     throw new Error('Falta el email de MercadoPago.');
   }
+  // (ARMA TODO ítem 1) El éxito aterriza en LA SEMANA (schedule?plan=ok),
+  // espejo de Stripe: ahí vive la bienvenida post-pago de app.js. Pending y
+  // failure quedan en Ajustes (failure lo lee chunk-ajustes con su aviso).
   const backUrls = {
-    success: `${baseUrl}/#/app/ajustes?plan=ok`,
+    success: `${baseUrl}/#/app/schedule?plan=ok`,
     pending: `${baseUrl}/#/app/ajustes?plan=pending`,
     failure: `${baseUrl}/#/app/ajustes?plan=error`,
   };

@@ -43,7 +43,7 @@ const bookingMod = require('./booking');
 const followupsMod = require('./followups');
 const paymentCloseMod = require('./payment-close');
 const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
-const { upcomingEphemeris } = require('./ephemeris');
+const { upcomingEphemeris, catsMatch } = require('./ephemeris');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
@@ -387,8 +387,10 @@ function ephemerisFor(profile) {
   if (!eph) return null;
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
+  const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return null;
-  return EPHEMERIS_GIFT_OK.test(cat) ? eph : null;
+  const m = catsMatch(eph, cat + ' ' + biz + ' ' + desc);
+  return (m !== null ? m : EPHEMERIS_GIFT_OK.test(cat)) ? eph : null;
 }
 // C1 + paquete de titulares (2026-10-16, aprobado por Valentino "arma
 // todo"; paquete makeheadline-decision-v113 de Mora + spec M53 de Uma):
@@ -1875,9 +1877,9 @@ function ephemerisWindowFor(profile, days) {
   if (!list.length) return [];
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
+  const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return [];
-  if (!EPHEMERIS_GIFT_OK.test(cat)) return [];
-  return list;
+  return list.filter(e => { const m = catsMatch(e, cat + ' ' + biz + ' ' + desc); return m !== null ? m : EPHEMERIS_GIFT_OK.test(cat); });
 }
 
 // Lectura pública de un competidor, con caché de 6 días en competitor_snapshots.
@@ -21002,7 +21004,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v425';
+const BUILD_ID = '20261024-v426';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

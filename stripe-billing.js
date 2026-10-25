@@ -130,7 +130,9 @@ function buildCheckoutParams({ priceId, plan, user, baseUrl, trialEndSec }) {
     subscription_data: {
       metadata: { user_id: String(user.id), plan_id: plan.id },
     },
-    success_url: `${baseUrl}/#/app/ajustes?plan=ok`,
+    // (ARMA TODO ítem 1) El éxito aterriza en LA SEMANA (schedule?plan=ok): ahí
+    // vive la bienvenida post-pago de app.js. El abandono vuelve a Ajustes.
+    success_url: `${baseUrl}/#/app/schedule?plan=ok`,
     cancel_url: `${baseUrl}/#/app/ajustes?plan=error`,
   };
   if (user.stripe_customer_id) params.customer = user.stripe_customer_id;
