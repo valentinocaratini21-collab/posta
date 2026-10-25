@@ -2267,31 +2267,6 @@ function lpCapSectionsHTML() {
 /* 📋 Grilla resumen (2026-10-20): las 12 cosas que Posty hace, como cierre
  * del tour de capacidades, justo antes de planes. Espeja la grilla de
  * /prueba ("Todo lo que Posty hace por vos"). */
-function lpRecapHTML() {
-  const items = [
-    ['🎨', 'Diseña tu semana', 'Posteos, reels e historias con tu marca: tus fotos, tus colores y tu producto exacto. Nada de plantillas iguales para todos.'],
-    ['✍️', 'Escribe para vender', 'Captions y hashtags en tu tono, pensados para que te compren, no para rellenar.'],
-    ['⏰', 'Publica solo', 'A la mejor hora, todos los días. Te avisa 30 minutos antes por si querés frenar algo.'],
-    ['🔍', 'Estudia tu negocio', 'Lee tu Instagram y tu rubro: qué vende, qué está funcionando y qué hace tu competencia.'],
-    ['📆', 'Caza las fechas que venden', 'Día de la Madre, Hot Sale, Navidad: tu semana se adapta sola, sin que te acuerdes vos.'],
-    ['💡', 'Te propone ideas', 'Cada semana, ideas nuevas para tu negocio, listas para aprobar con un toque.'],
-    ['💬', 'Responde tus comentarios', 'La respuesta lista en tu tono; la mandás con un toque. Nada sale sin tu OK.'],
-    ['📩', 'Responde tus mensajes', 'Tu bandeja de Instagram, en cero.'],
-    ['⭐', 'Cuida tus reseñas', 'Contesta tus reseñas de Google por vos.'],
-    ['🚀', 'Potencia lo que anda', 'Detecta el posteo que la rompe y te propone impulsarlo con pauta. Vos fijás el tope de gasto.'],
-    ['🌐', 'Tu página, lista para compartir', 'Una página pública de tu negocio con botón de WhatsApp directo a vos.'],
-    ['🤚', 'Vos mandás', 'Frenás cualquier posteo con un toque, pedís cambios en el chat como si hablaras con tu CM, o aprobás todo a mano si preferís.'],
-  ];
-  return `
-  <div class="section lp-recap"><div class="wrap">
-    <h2>Todo esto, en un solo Posty</h2>
-    <p class="lede">El trabajo completo de un community manager, en un solo lugar.</p>
-    <div class="lp-recap-grid">${items.map((it) => `<div class="lp-recap-item"><div class="he">${it[0]}</div><div><b>${it[1]}</b><p>${it[2]}</p></div></div>`).join('')}</div>
-    <p class="lp-recap-foot">Y cada semana te llega el resumen: qué funcionó, qué sigue y el foco del mes.</p>
-    <div style="text-align:center;margin-top:22px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Probá gratis 3 días</a></div>
-  </div></div>`;
-}
-
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
   const country = (cfg && cfg.country) || 'AR';
@@ -2409,6 +2384,33 @@ function landingView(cfg) {
     <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷 · Publicamos con la API oficial de Meta · Nunca te pedimos tu contraseña</div>
   </div></div>
   ${lpAnalisisHTML()}
+  <div class="section" id="como-funciona"><div class="wrap">
+    <h2>Así trabajo yo 👇</h2>
+    <p class="lede">Vos seguí atendiendo tu negocio. Del resto me ocupo yo.</p>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pido más nada.</p></div>
+      <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
+      <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Tu semana sale en los mejores horarios sin que toques nada. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
+    </div>
+    <h2>Y trabajo con tres reglas, siempre</h2>
+    <p class="lede">Son mi forma de trabajar, con cada negocio.</p>
+    <div class="steps">
+      <div class="step"><div class="num">🔍</div><h3>Entiendo tu rubro</h3><p>Leo tu Instagram y tu web antes de crear: tus productos reales, tus precios, tus colores y tu forma de hablar. Nada genérico — si una pieza podría salir igual en otra cuenta, no sale.</p></div>
+      <div class="step"><div class="num">🔌</div><h3>Me conecto a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
+      <div class="step"><div class="num">💬</div><h3>Pregunto solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estoy seguro de tu rubro, te pregunto antes de generar — nunca adivino. Y tu respuesta queda guardada: no te la vuelvo a hacer.</p></div>
+    </div>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Posty trabaja completo por sí solo.</b> Todo lo que tu Instagram necesita lo hago yo, dentro de tu plan — no necesitás contratar a nadie más ni sumar ningún otro servicio.</p>     <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
+  </div></div>
+  <div class="section lp-audit" id="auditoria"><div class="wrap" style="max-width:760px">
+    <h2>¿Tu Instagram está vendiendo?</h2>
+    <p class="lede">Posty analiza tu perfil <b>gratis</b> y te dice qué está frenando tus ventas: qué publicar, qué responder, qué mejorar.</p>
+    <form class="lp-igform lp-audit-form" onsubmit="return lpGoAudit(event)">
+      <input id="lpAuditIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
+      <button class="btn btn-primary" type="submit">Auditar mi Instagram gratis</button>
+    </form>
+    <p class="lp-audit-note">Sin registrarte · El resultado llega en menos de un minuto</p>
+  </div></div>
   <div class="section lp-week-sec"><div class="wrap">
     <div class="lp-week" aria-label="Ejemplo de una semana armada por Posty">
       <div class="lp-week-head"><span class="lp-week-title">📅 Tu semana de Instagram en Posty</span><span class="lp-week-badge">Se publica sola ✨</span></div>
@@ -2489,24 +2491,6 @@ function landingView(cfg) {
     </div>
     <script>(function(){var vs=document.querySelectorAll('.vp-card video,.hero-video');if(!vs.length||!('IntersectionObserver' in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.play().catch(function(){})}else{e.target.pause()}})},{threshold:.3});vs.forEach(function(v){io.observe(v)});})();</script>
   </div></div>
-  <div class="section" id="como-funciona"><div class="wrap">
-    <h2>Así trabajo yo 👇</h2>
-    <p class="lede">Vos seguí atendiendo tu negocio. Del resto me ocupo yo.</p>
-    <div class="steps">
-      <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pido más nada.</p></div>
-      <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
-      <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Tu semana sale en los mejores horarios sin que toques nada. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
-    </div>
-    <h2>Y trabajo con tres reglas, siempre</h2>
-    <p class="lede">Son mi forma de trabajar, con cada negocio.</p>
-    <div class="steps">
-      <div class="step"><div class="num">🔍</div><h3>Entiendo tu rubro</h3><p>Leo tu Instagram y tu web antes de crear: tus productos reales, tus precios, tus colores y tu forma de hablar. Nada genérico — si una pieza podría salir igual en otra cuenta, no sale.</p></div>
-      <div class="step"><div class="num">🔌</div><h3>Me conecto a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
-      <div class="step"><div class="num">💬</div><h3>Pregunto solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estoy seguro de tu rubro, te pregunto antes de generar — nunca adivino. Y tu respuesta queda guardada: no te la vuelvo a hacer.</p></div>
-    </div>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Posty trabaja completo por sí solo.</b> Todo lo que tu Instagram necesita lo hago yo, dentro de tu plan — no necesitás contratar a nadie más ni sumar ningún otro servicio.</p>     <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
-    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
-  </div></div>
   <div class="section" id="cm"><div class="wrap">
     <h2>Un community manager hace mucho más que publicar</h2>
     <p class="lede">Un Instagram que vende no se mantiene solo: hay que publicar seguido, conversar con la gente, responder todo y promocionar lo que funciona. Eso es lo que hace un community manager. Y cobra <b>desde $1.000.000 por mes</b>. <b>Posty hace ese mismo trabajo, todos los días.</b></p>
@@ -2528,38 +2512,63 @@ function landingView(cfg) {
     <p class="lp-cm-close">El mismo trabajo. Sin sueldos, sin cargas sociales, sin vacaciones.</p>
     <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Quiero mi community manager →</a></div>
   </div></div>
-  <div class="section lp-work" id="trabajando"><div class="wrap">
-    <h2>Así trabaja Posty, todos los días</h2>
-    <p class="lede">Esto pasa en tu cuenta mientras vos atendés tu negocio.</p>
-    <div class="lp-work-flex">
-      <div class="lp-work-vid"><video src="posty-rubros.mp4?v=2" poster="posty-rubros-poster.jpg?v=2" autoplay muted loop playsinline preload="metadata" aria-label="Video real de Posty trabajando: arma un posteo y un reel para un café"></video></div>
-      <ul class="lp-work-list">
-        <li>🎨 <b>Arma tus posteos</b> con tus fotos, tus colores y tu tono.</li>
-        <li>🎬 <b>Crea tus reels</b> y los deja listos para publicarse solos.</li>
-        <li>📮 <b>Publica a la mejor hora</b> — y te avisa antes, por si querés frenar algo.</li>
-      </ul>
-    </div>
-  </div></div>
-  <div class="section" id="trabajo"><div class="wrap">
-    <h2>Así trabaja Posty por vos</h2>
-    <p class="lede">Comunidad, crecimiento y ventas no pasan por arte de magia: pasan por hacer estas 9 cosas todas las semanas. Las hace Posty.</p>
-    <div class="lp-jobs">
-      <div class="lp-job"><div class="lp-job-i">🔍</div><h3>Estudia tu rubro</h3><p>Mira qué funciona en negocios como el tuyo y arma ideas para vender, no para rellenar.</p></div>
-      <div class="lp-job"><div class="lp-job-i">📅</div><h3>Caza las fechas que venden</h3><p>Día de la Madre, Navidad, el día de tu rubro: tu semana se adapta sola a lo que la gente está comprando.</p></div>
-      <div class="lp-job"><div class="lp-job-i">🎨</div><h3>Diseña con tu marca</h3><p>Tus fotos, tus colores y tu logo en cada pieza. Nada de plantillas iguales para todos.</p></div>
-      <div class="lp-job"><div class="lp-job-i">✍️</div><h3>Escribe como tu negocio</h3><p>Textos en rioplatense, con tu tono y cero errores. Como si los hubieras escrito vos.</p></div>
-      <div class="lp-job"><div class="lp-job-i">⏰</div><h3>Publica a la mejor hora</h3><p>Cada posteo sale cuando tu audiencia está mirando. Y te avisa antes, por si querés frenarlo. Y cada posteo sale también como historia.</p></div>
-      <div class="lp-job"><div class="lp-job-i">🧠</div><h3>Aprende de tus gustos</h3><p>Lo que te encanta se repite; lo que no, no vuelve. Cada semana se parece más a vos. Y una vez por semana te pregunta lo justo para conocer tu negocio como un empleado: tu producto estrella, tus promos y qué no publicar jamás.</p></div>
-      <div class="lp-job"><div class="lp-job-i">💬</div><h3>Responde tus comentarios</h3><p>Posty lee cada comentario que te dejan, prepara la respuesta en tu tono y la mandás con un toque. Nada sale sin tu OK.</p></div>
-      <div class="lp-job"><div class="lp-job-i">📩</div><h3>Responde tus mensajes</h3><p>Los mensajes de Instagram, igual: la respuesta llega lista y la mandás con un toque. Tu bandeja, en cero.</p></div>
-      <div class="lp-job"><div class="lp-job-i">🚀</div><h3>Potencia lo que mejor anda</h3><p>Cuando un posteo la rompe, Posty lo detecta y te propone potenciarlo con pauta. Vos fijás el tope de gasto.</p></div>
-      <div class="lp-job"><div class="lp-job-i">💡</div><h3>Ideas nuevas cada semana</h3><p>Posty mira a tu competencia, las fechas que venden y tu posteo que mejor anduvo — y te propone ideas listas para aprobar con un toque.</p></div>
-      <div class="lp-job"><div class="lp-job-i">📊</div><h3>Tu resumen, cada semana</h3><p>Qué posteos funcionaron, qué sigue y el foco del mes — te llega solo, sin que tengas que pedirlo.</p></div>
-      <div class="lp-job" style="padding:0;overflow:hidden"><video src="posty-working.mp4?v=5" poster="posty-working-poster.jpg?v=5" autoplay muted loop playsinline preload="metadata" aria-label="Posty trabajando en la computadora" style="width:100%;height:100%;object-fit:cover;object-position:center 32%;display:block"></video></div>
-    </div>
-    <div style="text-align:center;margin-top:30px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Probá gratis 3 días</a></div>
-  </div></div>
   ${lpCapSectionsHTML()}
+  <div class="section" id="fotos"><div class="wrap">
+    <h2>Con tus fotos, es tu negocio de verdad. Sin fotos, Posty lo crea igual.</h2>
+    <p class="lede">Los posteos que ves arriba salen por dos caminos — y los dos funcionan:</p>
+    <div class="lp-foto-grid">
+      <div class="lp-foto-card">
+        <div class="lp-foto-i">📸</div>
+        <h3>Nos pasás fotos y videos de tu negocio</h3>
+        <p>Tus productos, tu local, tu equipo: nada vende como lo real. Posty usa <b>tu</b> material en los posteos, y cuanto más nos pasás, mejores y más tuyos salen.</p>
+        <div class="lp-foto-check">✅ Sale tu negocio de verdad, no uno parecido</div>
+      </div>
+      <div class="lp-foto-card">
+        <div class="lp-foto-i">🤖</div>
+        <h3>¿No tenés material? Lo creamos nosotros</h3>
+        <p>Posty diseña las imágenes desde cero con tu marca, tus colores y tu estilo. Nunca te quedás sin publicar por no tener fotos.</p>
+        <div class="lp-foto-check">✅ Tu semana sale igual, siempre</div>
+      </div>
+    </div>
+    <p class="lp-foto-cta"><a href="/prueba">En la prueba gratuita podés subir una foto tuya y ver la diferencia →</a></p>
+    <div style="text-align:center;margin-top:26px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Probá gratis 3 días</a></div>
+  </div></div>
+  <div class="section lp-ctl" id="control"><div class="wrap" style="max-width:920px">
+    <h2>Tranqui: vos siempre tenés el freno de mano</h2>
+    <p class="lede">Posty trabaja solo, pero nada sale sin que puedas frenarlo. Así de simple:</p>
+    <div class="lp-ctl-grid">
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">🔔</div><b>Te avisa antes</b><p>30 minutos antes de publicar cada posteo te llega el aviso. Lo ves venir, siempre.</p></div>
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">⏸</div><b>Frenás con un toque</b><p>El botón Frenar lo vuelve a borrador al instante. Sin explicaciones, sin vueltas.</p></div>
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">🎨</div><b>¿No te cierra la imagen?</b><p>Tenés 1 rehacer con otro estilo por posteo, gratis. Posty la arma de nuevo.</p></div>
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">↩️</div><b>Volvés a la anterior</b><p>Si el rehacer no te gusta, volvés a la imagen anterior cuando quieras.</p></div>
+    </div>
+    <p class="lp-ctl-close">Posty trabaja solo. <b>Vos mandás.</b></p>
+  </div></div>
+  <div class="section" id="planes"><div class="wrap">
+    <h2>Elegí tu plan</h2>
+    <p class="lede">Primero probá gratis 3 días. Si te gusta tu semana, elegís tu plan acá.</p>
+    <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar un peso y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
+    <div class="country-toggle">
+      <button class="${country === 'AR' ? 'on' : ''}" data-country="AR" onclick="switchPlansCountry('AR')">🇦🇷 Argentina</button>
+      <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
+    </div>
+    <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
+    <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
+    <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
+    <p class="lp-plans-note">Precios en pesos · Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
+    <p class="lp-plans-note">Si tu primera semana no te convence, te la rehacemos entera, gratis.</p>
+    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque los planes suban.</p>
+
+    <!-- (v344) Mini-bloque del fundador en Planes: foto entera,
+         textos aprobados del módulo (el mismo de /prueba v341). -->
+    <div class="founder-card mini" id="homeFounderCard" aria-label="El fundador de Posty">
+      <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
+      <p class="fc-eye">FUNDADOR DE POSTY</p>
+      <h3>Soy Valentino, creé Posty.</h3>
+      <p class="fc-body">Analizamos tu Instagram y tu website para crear posteos de tu negocio de verdad: tus productos, tus colores, tu forma de hablar. Quiero ser tu community manager: vos solo monitoreás, y si algo no te gusta, lo ajustamos juntos.</p>
+    </div>
+  </div></div>
+  ${lpAtencionHTML()}
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
     <h2>El único que hace todo por vos</h2>
     <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen desde $1.000.000 por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
@@ -2609,26 +2618,6 @@ function landingView(cfg) {
     </div>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Quiero no hacer nada 😎</a></div>
   </div></div>
-  <div class="section" id="fotos"><div class="wrap">
-    <h2>Con tus fotos, es tu negocio de verdad. Sin fotos, Posty lo crea igual.</h2>
-    <p class="lede">Los posteos que ves arriba salen por dos caminos — y los dos funcionan:</p>
-    <div class="lp-foto-grid">
-      <div class="lp-foto-card">
-        <div class="lp-foto-i">📸</div>
-        <h3>Nos pasás fotos y videos de tu negocio</h3>
-        <p>Tus productos, tu local, tu equipo: nada vende como lo real. Posty usa <b>tu</b> material en los posteos, y cuanto más nos pasás, mejores y más tuyos salen.</p>
-        <div class="lp-foto-check">✅ Sale tu negocio de verdad, no uno parecido</div>
-      </div>
-      <div class="lp-foto-card">
-        <div class="lp-foto-i">🤖</div>
-        <h3>¿No tenés material? Lo creamos nosotros</h3>
-        <p>Posty diseña las imágenes desde cero con tu marca, tus colores y tu estilo. Nunca te quedás sin publicar por no tener fotos.</p>
-        <div class="lp-foto-check">✅ Tu semana sale igual, siempre</div>
-      </div>
-    </div>
-    <p class="lp-foto-cta"><a href="/prueba">En la prueba gratuita podés subir una foto tuya y ver la diferencia →</a></p>
-    <div style="text-align:center;margin-top:26px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Probá gratis 3 días</a></div>
-  </div></div>
   <div class="section lp-calc" id="calculadora"><div class="wrap" style="max-width:820px">
     <h2>¿Cuánto te cuesta hoy tu Instagram?</h2>
     <p class="lede">Mové el control y hacé la cuenta con tus números reales.</p>
@@ -2644,49 +2633,12 @@ function landingView(cfg) {
     </div>
     <p class="lp-calc-cm">Y si lo tercerizás: un community manager que lo haga por vos cuesta <b>desde $1.000.000 por mes</b>.</p>
   </div></div>
-  <div class="section lp-ctl" id="control"><div class="wrap" style="max-width:920px">
-    <h2>Tranqui: vos siempre tenés el freno de mano</h2>
-    <p class="lede">Posty trabaja solo, pero nada sale sin que puedas frenarlo. Así de simple:</p>
-    <div class="lp-ctl-grid">
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">🔔</div><b>Te avisa antes</b><p>30 minutos antes de publicar cada posteo te llega el aviso. Lo ves venir, siempre.</p></div>
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">⏸</div><b>Frenás con un toque</b><p>El botón Frenar lo vuelve a borrador al instante. Sin explicaciones, sin vueltas.</p></div>
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">🎨</div><b>¿No te cierra la imagen?</b><p>Tenés 1 rehacer con otro estilo por posteo, gratis. Posty la arma de nuevo.</p></div>
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">↩️</div><b>Volvés a la anterior</b><p>Si el rehacer no te gusta, volvés a la imagen anterior cuando quieras.</p></div>
-    </div>
-    <p class="lp-ctl-close">Posty trabaja solo. <b>Vos mandás.</b></p>
-  </div></div>
   <div class="lp-stats"><div class="wrap">
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
       <div class="lp-stat"><div class="lp-stat-n">7 posteos + 1 reel</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
       <div class="lp-stat"><div class="lp-stat-n">$6.667<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta desde $1.000.000 por mes</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
-    </div>
-  </div></div>
-  ${lpAtencionHTML()}
-  ${lpRecapHTML()}
-  <div class="section" id="planes"><div class="wrap">
-    <h2>Elegí tu plan</h2>
-    <p class="lede">Primero probá gratis 3 días. Si te gusta tu semana, elegís tu plan acá.</p>
-    <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar un peso y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
-    <div class="country-toggle">
-      <button class="${country === 'AR' ? 'on' : ''}" data-country="AR" onclick="switchPlansCountry('AR')">🇦🇷 Argentina</button>
-      <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
-    </div>
-    <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
-    <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
-    <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
-    <p class="lp-plans-note">Precios en pesos · Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
-    <p class="lp-plans-note">Si tu primera semana no te convence, te la rehacemos entera, gratis.</p>
-    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque los planes suban.</p>
-
-    <!-- (v344) Mini-bloque del fundador en Planes: foto entera,
-         textos aprobados del módulo (el mismo de /prueba v341). -->
-    <div class="founder-card mini" id="homeFounderCard" aria-label="El fundador de Posty">
-      <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
-      <p class="fc-eye">FUNDADOR DE POSTY</p>
-      <h3>Soy Valentino, creé Posty.</h3>
-      <p class="fc-body">Analizamos tu Instagram y tu website para crear posteos de tu negocio de verdad: tus productos, tus colores, tu forma de hablar. Quiero ser tu community manager: vos solo monitoreás, y si algo no te gusta, lo ajustamos juntos.</p>
     </div>
   </div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
@@ -2711,15 +2663,6 @@ function landingView(cfg) {
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
     </div>
-  </div></div>
-  <div class="section lp-audit" id="auditoria"><div class="wrap" style="max-width:760px">
-    <h2>¿Tu Instagram está vendiendo?</h2>
-    <p class="lede">Posty analiza tu perfil <b>gratis</b> y te dice qué está frenando tus ventas: qué publicar, qué responder, qué mejorar.</p>
-    <form class="lp-igform lp-audit-form" onsubmit="return lpGoAudit(event)">
-      <input id="lpAuditIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
-      <button class="btn btn-primary" type="submit">Auditar mi Instagram gratis</button>
-    </form>
-    <p class="lp-audit-note">Sin registrarte · El resultado llega en menos de un minuto</p>
   </div></div>
   <div class="lp-final"><div class="wrap">
     <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
