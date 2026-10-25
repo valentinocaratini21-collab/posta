@@ -278,6 +278,7 @@ for (const tok of ['${igLine}', '${prodashHTML}', '${kitHTML}', '${whyHTML}', 'm
 ok(!appJs.includes('class="mz-igbar"'), 'bundle (v440): el markup de la barra ancha de IG salió; el estado IG vive en el chip del encabezado');
 ok(idxOf(iniRet, 'hfProfileActionsHTML(enHome)') > -1 && idxOf(iniRet, 'hfProfileActionsHTML(enHome)') < idxOf(iniRet, '${gridHTML}') && appJs.includes('data-hf-visitor="1"') && appJs.includes('Ver como visitante'), 'inicioView (v440+v462): «ver como visitante» es acción chica en texto dentro de la cabecera, no un bloque bajo la grilla');
 ok(!iniRet.includes('mzIdeasSlot'), 'inicioView (v442): el slot del botón de Ideas salió de la pantalla principal (corrección 02:15)');
+ok(idxOf(iniRet, 'setupMainHTML()') < idxOf(iniRet, '${nivelStripHTML}') && idxOf(iniRet, '${nivelStripHTML}') < idxOf(iniRet, 'splitHead: true') && idxOf(iniRet, 'splitHead: true') < idxOf(iniRet, 'hfProfileActionsHTML(enHome)') && idxOf(iniRet, 'hfProfileActionsHTML(enHome)') < idxOf(iniRet, 'hfHighlightsTrayHTML(prof') && idxOf(iniRet, 'hfHighlightsTrayHTML(prof') < idxOf(iniRet, '${storiesHTML}') && idxOf(iniRet, '${storiesHTML}') < idxOf(iniRet, 'hfTabsHTML(HF_TAB') && idxOf(iniRet, 'hfTabsHTML(HF_TAB') < idxOf(iniRet, '${gridHTML}'), 'inicioView (v468 · orden Instagram): tira -> bio -> acciones -> destacadas -> historias -> pestañas -> grilla');
 ok(!appJs.includes('id="mzIdeasGo"'), 'bundle (v442): el botón-anuncio «💡 Tenés N ideas nuevas» (mzIdeasGo) ya no se renderiza');
 ok(appJs.includes('IDEAS_PENDING_COUNT = (r.ideas || []).length'), 'bundle (v442): el conteo de ideas se sigue computando (badge del chip y panel intactos)');
 const refreshSrc = extractFn(appJs, 'refreshSetupChecklist') || '';
@@ -296,6 +297,8 @@ ok(chipSrc.includes('!PROFILE.ig_connected') && chipSrc.includes('SETTINGS.ig_to
 const feedHeadSrc = extractFn(appJs, 'feedProfileHeadHTML') || '';
 ok(feedHeadSrc.includes('igHeadChipHTML('), 'feedProfileHeadHTML (Feed de la agenda) pinta el chip');
 const homeHeadSrc = extractFnByReturn(appJs, 'function homeHeadHTML(', 'return `<div class="hf-head">') || '';
+const headHelpersSrc = appJs.slice(appJs.indexOf('function hfHighlightsTrayHTML('), appJs.indexOf('function homeHeadHTML('));
+ok(!!headHelpersSrc && headHelpersSrc.includes('function hfTabsHTML(') && headHelpersSrc.includes('function hfHighlightsTrayHTML('), 'homeHeadHTML (v468): helpers de slots (destacadas + pestañas) extraíbles antes de homeHeadHTML');
 ok(homeHeadSrc.includes('igHeadChipHTML(en)'), 'homeHeadHTML (Inicio) pinta el chip');
 
 console.log('— A: la caja f3 desapareció (un solo chat)');
@@ -338,8 +341,8 @@ ok(!appJs.includes('Estás hablando de este posteo') && !appJs.includes("You're 
 ok(appJs.includes('anchor_post_id') && appJs.includes('HF_CHAT_ANCHOR.id'), 'chat principal intacto: el envío sigue mandando anchor_post_id desde HF_CHAT_ANCHOR');
 
 console.log('— A: index.html y CHUNK_V');
-ok(indexHtml.includes('/app.js?v=298'), 'index.html: app.js bumpeado a ?v=292 (v462)');
-ok(!indexHtml.includes('/app.js?v=297'), 'index.html: sin ?v=293 residual');
+ok(indexHtml.includes('/app.js?v=299'), 'index.html: app.js bumpeado a ?v=292 (v462)');
+ok(!indexHtml.includes('/app.js?v=298'), 'index.html: sin ?v=293 residual');
 ok(indexHtml.includes('/styles.css?v=20261035'), 'index.html: styles.css bumpeado a ?v=20261031 (v462)');
 ok(appJs.includes("const CHUNK_V = '20261025-v465';"), 'app.js: CHUNK_V bumpeado al build v436');
 
@@ -368,7 +371,7 @@ console.log('— B: el chip vive en el HTML de los encabezados');
   const feedHeadEn = new Function('esc', 'ME', 'PROFILE', 'SETTINGS', chipSrc + '\n' + feedHeadSrc + '\nreturn feedProfileHeadHTML;')(
     escStub, { lang: 'en' }, { ig_connected: true }, { ig_token_warning: 1 });
   ok(feedHeadEn({ username: 'cafe.sur', name: 'Café Sur' }, 'Café Sur', {}).includes('Reconnect Instagram'), 'feedProfileHeadHTML EN: chip «Reconnect Instagram»');
-  const homeHead = new Function('esc', 'ME', 'PROFILE', 'SETTINGS', 'assetLogo', chipSrc + '\n' + homeHeadSrc + '\nreturn homeHeadHTML;')(
+  const homeHead = new Function('esc', 'ME', 'PROFILE', 'SETTINGS', 'assetLogo', chipSrc + '\n' + headHelpersSrc + '\n' + homeHeadSrc + '\nreturn homeHeadHTML;')(
     escStub, { lang: 'en' }, { ig_connected: false }, {}, () => null);
   const hh = homeHead({ username: 'cafe.sur', name: 'Café Sur', pic: 'https://x.example/p.jpg', posts_count: 3, followers: 10, following: 5 }, 'Café Sur', { en: true });
   ok(hh.includes('hf-head') && hh.includes('Connect Instagram') && hh.includes('ig-head-chip'), 'homeHeadHTML EN: el encabezado de Inicio pinta «Connect Instagram»');

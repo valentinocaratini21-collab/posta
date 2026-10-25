@@ -14074,9 +14074,38 @@ function homeTileHTML(t, i) {
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
   return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}</span>`;
 }
+// (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
+// en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
+// -> pestañas -> grilla), igual que en Instagram. homeHeadHTML la sigue
+// usando en su salida completa (preview de edición).
+function hfHighlightsTrayHTML(prof, opts) {
+  const P = prof || {};
+  const en = !!(opts && opts.en);
+  const hls = (Array.isArray(P.highlights) ? P.highlights : []).filter((h) => h && h.title);
+  // (v461 · cabecera) «Crear mis cubiertas» vive acá: primer tile «+»
+  // de la tira de destacadas, donde están las cubiertas. Solo en la
+  // vista del dueño (opts.coversPlus): jamás en visitante ni en el
+  // preview de edición (que no pasa el flag). Se ata con data-hf-pact
+  // al bind de siempre (hfProfileBind sobre inicioView).
+  const plusTile = (opts && opts.coversPlus)
+    ? `<button type="button" class="hf-hl hf-hl-plus" data-hf-pact="covers" aria-label="${en ? 'Create highlight covers' : 'Crear cubiertas de destacadas'}"><div class="hf-hl-ring hf-hl-ring-plus">+</div><div class="hf-hl-t">${en ? 'Covers' : 'Cubiertas'}</div></button>` : '';
+  return (hls.length || plusTile) ? `<div class="hf-hls">${plusTile}${hls.map((h) => `<div class="hf-hl"><div class="hf-hl-ring">${h.cover ? `<img src="${esc(h.cover)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="hf-hl-letter">${esc(String(h.title).charAt(0).toUpperCase())}</span>`}</div><div class="hf-hl-t">${esc(h.title)}</div></div>`).join('')}</div>` : '';
+}
+// (v468 · orden Instagram) Pestañas del perfil, extraídas de homeHeadHTML:
+// en Inicio van como slot propio justo antes de la grilla (la filtran).
+// homeHeadHTML las sigue usando en su salida completa (preview de edición).
+function hfTabsHTML(tab, en) {
+  const tabA = (tab === 'reels' || tab === 'tagged') ? tab : 'posts';
+  return `<div class="hf-tabs" role="tablist" aria-label="${en ? 'Profile sections' : 'Secciones del perfil'}"><button type="button" role="tab" aria-selected="${tabA === 'posts'}" class="hf-tab${tabA === 'posts' ? ' on' : ''}" data-hf-tab="posts" aria-label="${en ? 'Posts' : 'Publicaciones'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></button><button type="button" role="tab" aria-selected="${tabA === 'reels'}" class="hf-tab${tabA === 'reels' ? ' on' : ''}" data-hf-tab="reels" aria-label="Reels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3.2 9.4h17.6M8.2 3.4l2.1 5.8M13.9 3.4l2.1 5.8" stroke-linecap="round"/><path d="M10.4 12.7v4.6c0 .55.62.9 1.1.64l3.9-2.3c.46-.28.46-1 0-1.28l-3.9-2.3c-.48-.26-1.1.09-1.1.63z" fill="currentColor" stroke="none"/></svg></button><button type="button" role="tab" aria-selected="${tabA === 'tagged'}" class="hf-tab${tabA === 'tagged' ? ' on' : ''}" data-hf-tab="tagged" aria-label="${en ? 'Tagged' : 'Etiquetados'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 19.4c1-2.8 3.2-4.2 5.8-4.2s4.8 1.4 5.8 4.2"/></svg></button></div>`;
+}
 function homeHeadHTML(prof, bizName, opts) {
   const P = prof || {};
   const en = !!(opts && opts.en);
+  // (v468 · orden Instagram) splitHead: Inicio compone la cabecera por
+  // slots (bio -> acciones -> destacadas -> pestañas -> grilla); con el
+  // flag, homeHeadHTML devuelve solo la bio y los slots salen aparte.
+  // Sin el flag (preview de edición), la salida completa no cambia.
+  const split = !!(opts && opts.splitHead);
   const user = String(P.username || '').replace(/^@/, '');
   const name = String(P.name || bizName || '').trim();
   const letter = esc((name || user || 'P').charAt(0).toUpperCase());
@@ -14136,15 +14165,6 @@ function homeHeadHTML(prof, bizName, opts) {
   const avaHTML = (opts && opts.storyRing)
     ? `<button type="button" class="hf-ava-btn" data-hf-ava="1" aria-label="${en ? "See this week's stories" : 'Ver las historias de esta semana'}">${avaInner}</button>`
     : avaInner;
-  const hls = (Array.isArray(P.highlights) ? P.highlights : []).filter((h) => h && h.title);
-  // (v461 · cabecera) «Crear mis cubiertas» vive acá: primer tile «+»
-  // de la tira de destacadas, donde están las cubiertas. Solo en la
-  // vista del dueño (opts.coversPlus): jamás en visitante ni en el
-  // preview de edición (que no pasa el flag). Se ata con data-hf-pact
-  // al bind de siempre (hfProfileBind sobre inicioView).
-  const plusTile = (opts && opts.coversPlus)
-    ? `<button type="button" class="hf-hl hf-hl-plus" data-hf-pact="covers" aria-label="${en ? 'Create highlight covers' : 'Crear cubiertas de destacadas'}"><div class="hf-hl-ring hf-hl-ring-plus">+</div><div class="hf-hl-t">${en ? 'Covers' : 'Cubiertas'}</div></button>` : '';
-  const hlHTML = (hls.length || plusTile) ? `<div class="hf-hls">${plusTile}${hls.map((h) => `<div class="hf-hl"><div class="hf-hl-ring">${h.cover ? `<img src="${esc(h.cover)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="hf-hl-letter">${esc(String(h.title).charAt(0).toUpperCase())}</span>`}</div><div class="hf-hl-t">${esc(h.title)}</div></div>`).join('')}</div>` : '';
   return `<div class="hf-head">
     ${user ? `<div class="hf-user">${esc(user)}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
@@ -14156,8 +14176,8 @@ function homeHeadHTML(prof, bizName, opts) {
     ${bioHTML}
     ${linkHTML}
     ${(typeof igHeadChipHTML === 'function') ? igHeadChipHTML(en) : ''}
-    ${hlHTML}
-    <div class="hf-tabs" role="tablist" aria-label="${en ? 'Profile sections' : 'Secciones del perfil'}"><button type="button" role="tab" aria-selected="${tabA === 'posts'}" class="hf-tab${tabA === 'posts' ? ' on' : ''}" data-hf-tab="posts" aria-label="${en ? 'Posts' : 'Publicaciones'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></button><button type="button" role="tab" aria-selected="${tabA === 'reels'}" class="hf-tab${tabA === 'reels' ? ' on' : ''}" data-hf-tab="reels" aria-label="Reels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3.2 9.4h17.6M8.2 3.4l2.1 5.8M13.9 3.4l2.1 5.8" stroke-linecap="round"/><path d="M10.4 12.7v4.6c0 .55.62.9 1.1.64l3.9-2.3c.46-.28.46-1 0-1.28l-3.9-2.3c-.48-.26-1.1.09-1.1.63z" fill="currentColor" stroke="none"/></svg></button><button type="button" role="tab" aria-selected="${tabA === 'tagged'}" class="hf-tab${tabA === 'tagged' ? ' on' : ''}" data-hf-tab="tagged" aria-label="${en ? 'Tagged' : 'Etiquetados'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 19.4c1-2.8 3.2-4.2 5.8-4.2s4.8 1.4 5.8 4.2"/></svg></button></div>
+    ${split ? '' : hfHighlightsTrayHTML(prof, opts)}
+    ${split ? '' : hfTabsHTML(tabA, en)}
   </div>`;
 }
 /* ===== (Tanda 4 del feed) BANDEJA DE HISTORIAS + PORQUÉ DE LA GRILLA =====
@@ -14885,18 +14905,22 @@ async function inicioView() {
   // los feeds) Composición final de Inicio: 1) la PÍLDORA «Te faltan N
   // pasos» arriba a un costado (setupMainHTML, no se mueve); 2) la TIRA
   // de gamificación (avatar + nivel + barrita fina); 3) el perfil
-  // literal (encabezado con su chip IG + acciones + «ver como
-  // visitante» como acción chica + historias); 4) la grilla con la
-  // píldora flotante; 5) el chat único (barra + hoja, SIN prólogo). El
+  // literal (bio + chip IG); 4) las ACCIONES (Compartir + secundarias,
+  // orden Instagram 2026-10-25); 5) las DESTACADAS; 6) la bandeja de
+  // historias; 7) las PESTAÑAS justo antes de la grilla; 8) la grilla
+  // con la píldora flotante; 9) el chat único (barra + hoja, SIN
+  // prólogo). El
   // botón-anuncio de Ideas y la burbuja de relación salieron de la
   // pantalla principal (v442).
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${HF_VISITOR ? '' : setupMainHTML()}
   ${nivelStripHTML}
-  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, coversPlus: !HF_VISITOR })}
+  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, coversPlus: !HF_VISITOR, splitHead: true })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
+  ${hfHighlightsTrayHTML(prof, { en: enHome, coversPlus: !HF_VISITOR })}
   ${storiesHTML}
+  ${hfTabsHTML(HF_TAB, enHome)}
   ${gridHTML}
   ${stripHTML}
   ${visitorPillHTML}
