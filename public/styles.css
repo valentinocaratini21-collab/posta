@@ -3686,3 +3686,8 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .lp-view-arrow{background:transparent;border:none;color:var(--cel);font-size:26px;line-height:1;padding:8px 12px;cursor:pointer;font-family:inherit}
 [data-chatrm]{background:transparent;border:none;color:var(--dim);font-size:16px;line-height:1;padding:4px 8px;cursor:pointer}
 .flyerFiestaChip{background:rgba(39,147,200,.10);border:none;color:var(--cel)}
+
+/* Sello Bambooty plano (sin anillo) — mismo sistema que los demás sitios: cabecera 34px + footer 56px, mismo asset. */
+.sello-cabecera{width:34px;height:34px;border-radius:50%;flex:none;margin-right:9px}
+.sello-pie{width:56px;height:56px;border-radius:50%;flex:none;margin-right:10px}
+@media(max-width:760px){.sello-cabecera{width:28px;height:28px}}

@@ -376,6 +376,8 @@ html{scroll-behavior:smooth}
 .footer-posty{display:inline-flex;align-items:center;gap:8px;font-weight:800;color:var(--navy)}
 
 .footer-posty .pdot{color:#2793C8}
+.sello-cabecera{width:34px;height:34px;border-radius:50%;flex:none}
+.sello-pie{width:56px;height:56px;border-radius:50%;flex:none}
 @media(max-width:760px){.ej-page{grid-template-columns:repeat(2,1fr)}.ej-card img{aspect-ratio:4/3}}
 /* PRUEBA EN 1 CAMPO: tarjeta compacta del prefill */
 .pf-row{display:flex;gap:14px;align-items:flex-start}
@@ -867,7 +869,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 </head>
 <body>
 <div class="nav"><div class="wrap">
-  <a class="logo-posty" href="/">posty<span class="pdot">.</span></a>
+  <a class="logo-posty" href="/"><img class="sello-cabecera" src="/sello-bambooty.png" width="34" height="34" alt="Bambooty">posty<span class="pdot">.</span></a>
   <span class="nav-right"><a class="nav-lang" href="/en/prueba" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a><a class="nav-entrar" id="btnEntrar" href="/#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a></span>
 </div></div>
 <div id="campBanner" style="display:none;background:#EAF6FC;border-bottom:1px solid #E2EDF5;padding:10px 16px;text-align:center;font-weight:700;font-size:14.5px;color:#0A1E33"></div>
@@ -1540,7 +1542,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
   </div>
 </div></div>
 
-<div class="footer"><span class="footer-posty">posty<span class="pdot">.</span></span></div>
+<div class="footer"><span class="footer-posty"><img class="sello-pie" src="/sello-bambooty.png" width="56" height="56" alt="Sello de Bambooty">posty<span class="pdot">.</span></span></div>
 
 <script>
 const $ = (s) => document.querySelector(s);
