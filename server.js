@@ -16795,6 +16795,64 @@ app.post('/api/gesty/puente/escanear-vencimientos', ...gestyPuenteMW, express.js
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-14 AUTORESPUESTA PROPIA (reservas del website de Gesty)
+// Spec: gesty-cola-builds.md G-14. El módulo vive en
+// gesty-reservas.js (contrato completo en su cabecera); acá solo se
+// monta la API: (1) la ingesta PÚBLICA de la reserva — sin sesión,
+// con las guardas del módulo (origen solo gestyofficemanager.com,
+// rate-limit, honeypot) y CORS solo para esos orígenes, así el
+// recableo del sitio puede postear cross-origin; (2) la consulta y
+// el reintento detrás de requireAdminToken, el patrón de la casa
+// para lecturas de operaciones (la fuente limpia que contará el
+// cron de revisión de datos). NO depende de packs: es la
+// infraestructura del website de Gesty, no una capacidad de cliente.
+// El remitente sale por el canal (./email); con GESTY_EMAIL_FROM en
+// el entorno (dominio verificado en Resend) sale con la identidad
+// de Gesty, sin tocar código.
+// =====================================================================
+const gestyReservas = require('./gesty-reservas');
+try {
+  gestyReservas.configure({ sendEmail: (o) => sendEmail(o), from: process.env.GESTY_EMAIL_FROM || null });
+} catch (e) { console.error('[gesty] reservas configure:', e.message); }
+
+const gestyReservasCors = (req, res, next) => {
+  const origen = gestyReservas.origenDe(req.headers || {});
+  if (origen && gestyReservas.esOrigenPermitido(origen)) {
+    res.set('Access-Control-Allow-Origin', origen);
+    res.set('Vary', 'Origin');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+  }
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  next();
+};
+app.options('/api/gesty/reservas/ingresar', gestyReservasCors);
+app.post('/api/gesty/reservas/ingresar', gestyReservasCors, express.json(), express.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    const r = await gestyReservas.ingresarReserva(db, req.body || {}, {
+      origen: gestyReservas.origenDe(req.headers || {}),
+      ip: req.ip || (req.connection && req.connection.remoteAddress) || '',
+    });
+    if (r.descartada) return res.json({ ok: true });
+    res.json({ ok: true, duplicada: !!r.duplicada, reserva: r.reserva });
+  } catch (e) {
+    const status = e.code === 'ORIGEN' ? 403 : e.code === 'RATE_LIMIT' ? 429 : 400;
+    res.status(status).json({ ok: false, error: e.message });
+  }
+});
+app.get('/api/gesty/reservas', requireAdminToken, (req, res) => {
+  try {
+    res.json({ ok: true, resumen: gestyReservas.resumenReservas(db), ...gestyReservas.listReservas(db, { limit: (req.query || {}).limit, offset: (req.query || {}).offset }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/reservas/:id/reintentar', requireAdminToken, express.json(), async (req, res) => {
+  try {
+    const reserva = await gestyReservas.reintentarEnvio(db, Number(req.params.id), {});
+    res.json({ ok: true, reserva });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -20521,7 +20579,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v418';
+const BUILD_ID = '20261024-v419';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
