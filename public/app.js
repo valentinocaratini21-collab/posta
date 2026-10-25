@@ -1600,6 +1600,7 @@ function lpGoTrial(e) {
 }
 let LP_LIVE_TIMER = null, LP_LIVE_IO = null;
 function lpInitHero() {
+  pzPlansSocialMount();
   pzPaisPruebaLinks();
   lpInitCarousel();
   lpInitWall();
@@ -3172,6 +3173,7 @@ function landingView(cfg) {
     </div>
     <p class="lp-pais-nota" id="plansCountryNote">${(PZ_PAIS_META[country] && PZ_PAIS_META[country].nota) || ''}</p>
     <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
+    <div id="lpSocial"></div>
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
     <p class="lp-plans-note">Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
@@ -3347,6 +3349,10 @@ const AUTH_STR = {
     emailPh: 'vos@tunegocio.com', passLabel: 'Contraseña', passPh: 'Mínimo 6 caracteres',
     btnLogin: 'Entrar', btnReg: 'Crear cuenta',
     rememberLabel: 'Guardar contraseña en este dispositivo',
+    socialGoogle: 'Continuar con Google', socialApple: 'Continuar con Apple', socialOrEmail: 'o con tu email',
+    socialDenied: 'No diste permiso en Google o Apple. Podés entrar con tu email.',
+    socialError: 'No pudimos conectarte. Probá de nuevo o entrá con tu email.',
+
     footLogin: '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a> · <a href="#/forgot" style="color:var(--cel)">Olvidé mi contraseña</a>',
     footReg: '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>',
     forgotH2: 'Recuperá tu contraseña 🔑', forgotSub: 'Te mando un link a tu email para elegir una nueva.',
@@ -3366,6 +3372,10 @@ const AUTH_STR = {
     emailPh: 'you@yourbusiness.com', passLabel: 'Password', passPh: 'At least 6 characters',
     btnLogin: 'Log in', btnReg: 'Create account',
     rememberLabel: 'Save password on this device',
+    socialGoogle: 'Continue with Google', socialApple: 'Continue with Apple', socialOrEmail: 'or with your email',
+    socialDenied: 'You did not grant permission on Google or Apple. You can sign in with your email.',
+    socialError: 'We could not connect you. Try again or sign in with your email.',
+
     footLogin: 'No account yet? <a href="#/registro" style="color:var(--cel)">Sign up</a> · <a href="#/forgot" style="color:var(--cel)">Forgot my password</a>',
     footReg: 'Already have an account? <a href="#/login" style="color:var(--cel)">Log in</a>',
     forgotH2: 'Reset your password 🔑', forgotSub: 'I will send you a link to your email so you can choose a new one.',
@@ -3392,6 +3402,168 @@ function savedAccountsList() {
     return raw.filter((a) => a && a.email && a.token).map((a) => ({ email: String(a.email), token: String(a.token) }));
   } catch (e) { return []; }
 }
+// ---------- Login social: fragmento cliente (app.js) ----------
+// Se inserta en public/app.js (antes de savedAccountsSave). Los anchors de
+// patch.py: AUTH_STR (2 líneas rememberLabel), authView (línea savedAccounts),
+// rama auth (línea bindSavedAccounts), rama standalone (12551), antes de la
+// rama #/forgot, extracción del puente /prueba (bloque 12644-12668),
+// lpInitHero (apertura) y la línea plansRow del template de landing.
+//
+// Contrato (comunicado al tablero): la pantalla #/registro lee SOLO
+// ?proveedor=google|apple y PRESELECCIONA + DESTACA ese proveedor, SIN
+// auto-click. agente/nivel/pais/moneda/plan_sel NO se interpretan en el
+// registro (pertenecen al deep link de checkout #/app/ajustes?...).
+
+// Marcas oficiales en SVG (no emojis: las reglas de marca de los proveedores
+// exigen sus logos). Google "G" 4 colores 24x24; Apple silueta 24x24.
+// VERIFICACIÓN OBLIGATORIA pre-push: raster ASCII (check-brand-svgs.js)
+// + pase visual Playwright 390 px + pasada táctil de Valentino.
+function pzSocialBrandSVG(p) {
+  if (p === 'google') {
+    return '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47a5.53 5.53 0 0 1-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29A7.2 7.2 0 0 1 4.89 12c0-.8.14-1.57.38-2.29H1.29A11.98 11.98 0 0 0 0 12c0 1.93.46 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#000000" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.702"/></svg>';
+}
+
+function pzSocialHTML(S, prov, preselect) {
+  const btns = [];
+  if (prov.google) btns.push('<button type="button" class="btn btn-block btn-social' + (preselect === 'google' ? ' social-hl' : '') + '" data-social="google" aria-label="' + S.socialGoogle + '">' + pzSocialBrandSVG('google') + '<span>' + S.socialGoogle + '</span></button>');
+  if (prov.apple) btns.push('<button type="button" class="btn btn-block btn-social' + (preselect === 'apple' ? ' social-hl' : '') + '" data-social="apple" aria-label="' + S.socialApple + '">' + pzSocialBrandSVG('apple') + '<span>' + S.socialApple + '</span></button>');
+  if (!btns.length) return '';
+  return '<div class="social-block">' + btns.join('') + '<div class="social-div"><span>' + S.socialOrEmail + '</span></div></div>';
+}
+
+let PZ_SOCIAL_PROV = null;
+async function pzSocialProviders() {
+  if (PZ_SOCIAL_PROV) return PZ_SOCIAL_PROV;
+  try {
+    const d = await api.get('/api/auth/social/providers');
+    PZ_SOCIAL_PROV = { google: !!d.google, apple: !!d.apple };
+  } catch (e) { PZ_SOCIAL_PROV = { google: false, apple: false }; }
+  return PZ_SOCIAL_PROV;
+}
+
+// Lee SOLO ?proveedor= del hash. agente/nivel/pais/moneda/plan_sel se
+// ignoran acá por decisión del tablero (contratos separados).
+function pzParseProveedor() {
+  const q = (location.hash.split('?')[1] || '');
+  const v = new URLSearchParams(q).get('proveedor');
+  return (v === 'google' || v === 'apple') ? v : null;
+}
+
+async function pzSocialMount(preselect) {
+  const el = document.getElementById('socialBlock');
+  if (!el) return;
+  const prov = await pzSocialProviders();
+  const html = pzSocialHTML(authStr(), prov, preselect);
+  if (!html) return; // ningún proveedor habilitado: no cambia nada visible
+  el.innerHTML = html;
+  el.querySelectorAll('[data-social]').forEach((b) => {
+    b.addEventListener('click', () => pzSocialStart(b.getAttribute('data-social')));
+  });
+}
+
+function pzSocialStart(provider) {
+  if (provider !== 'google' && provider !== 'apple') return;
+  // Espejo del retorno en localStorage: el redirect de OAuth vuelve al mismo
+  // origen, pero sessionStorage puede no sobrevivir en todos los navegadores
+  // (p. ej. iOS al salir a la app del proveedor); el callback lo restaura.
+  try {
+    const ret = sessionStorage.getItem('posta_return_to');
+    if (ret) localStorage.setItem('posta_oauth_return', ret);
+  } catch (e) {}
+  const q = new URLSearchParams();
+  try {
+    const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
+    if (tp && tp.ig_username) q.set('trial_ig', tp.ig_username);
+    const rf = localStorage.getItem('posta_ref');
+    if (rf) q.set('ref', rf);
+    const u = JSON.parse(localStorage.getItem('posta_utm') || 'null');
+    if (u) { if (u.source) q.set('utm_source', u.source); if (u.campaign) q.set('utm_campaign', u.campaign); }
+  } catch (e) {}
+  q.set('lang', authLang());
+  location.href = '/api/auth/' + provider + '/start?' + q.toString();
+}
+
+function pzSocialErrorFromQuery() {
+  const q = (location.hash.split('?')[1] || '');
+  const v = new URLSearchParams(q).get('social');
+  if (v !== 'denied' && v !== 'error') return;
+  const el = document.getElementById('formErr');
+  if (el) { el.style.display = 'block'; el.textContent = v === 'denied' ? authStr().socialDenied : authStr().socialError; }
+}
+
+// Puente /prueba -> cuenta, extraído del handler de registro (sin cambios de
+// comportamiento): lo usan el registro con email y el callback social.
+async function pzTrialBridge() {
+  try {
+    const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
+    const fresh = tp && tp.saved_at && (Date.now() - tp.saved_at < 24 * 3600 * 1000);
+    if (fresh && tp.business_name) {
+      const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
+      await api.put('/api/profile', {
+        business_name: String(tp.business_name).slice(0, 80),
+        category: catMap[tp.category] || 'otro',
+        description: String(tp.description || '').slice(0, 600),
+        competitors: String(tp.competitors || '').slice(0, 200),
+        ig_username: String(tp.ig_username || '').slice(0, 40),
+        tone: tp.tone === 'tu' ? 'profesional' : 'canchero',
+        goal: 'vender',
+      });
+      const bc = (tp.brand_colors || []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
+      if (bc.length >= 2) await api.put('/api/settings', { brand_colors: bc.slice(0, 3) }).catch(() => {});
+      await refreshSession();
+    }
+  } catch (e) {}
+  localStorage.removeItem('posta_trial_profile');
+}
+
+async function pzSocialCallback() {
+  const q = (location.hash.split('?')[1] || '');
+  const params = new URLSearchParams(q);
+  const isNew = params.get('new') === '1';
+  await refreshSession();
+  if (!ME) { location.hash = '#/login?social=error'; return; }
+  try {
+    const ret = localStorage.getItem('posta_oauth_return');
+    if (ret) { sessionStorage.setItem('posta_return_to', ret); localStorage.removeItem('posta_oauth_return'); }
+  } catch (e) {}
+  try {
+    const d = await api.post('/api/auth/device-issue', {});
+    if (d && d.device_token) savedAccountsSave(ME.email, d.device_token);
+  } catch (e) {}
+  if (isNew) {
+    await pzTrialBridge();
+    // (pagos) Si el retorno trae un deep link de checkout con agente, guardar
+    // el intento para que obSaveProfile lo consuma al salir del onboarding.
+    // Idempotente: si postAuthLanding ya lo guarda, es la misma clave y valor.
+    try {
+      const ret = sessionStorage.getItem('posta_return_to') || '';
+      if (ret.indexOf('agente=') !== -1) localStorage.setItem('posta-checkout-intent', ret);
+    } catch (e) {}
+    try { localStorage.removeItem('posta_ref'); localStorage.removeItem('posta_utm'); } catch (e) {}
+  } else {
+    try { localStorage.removeItem('posta_trial_profile'); } catch (e) {}
+  }
+  postAuthLanding(isNew);
+}
+
+// Bloque social en la sección Planes de la landing (app): botones como LINKS
+// al registro de la app con el proveedor preseleccionado (la autenticación
+// vive en la app; los sitios NO implementan OAuth). Sin proveedor habilitado,
+// no cambia nada visible.
+async function pzPlansSocialMount() {
+  const el = document.getElementById('lpSocial');
+  if (!el) return;
+  const prov = await pzSocialProviders();
+  const btns = [];
+  const langStamp = "onclick=\"try{localStorage.setItem('posty-lang','es')}catch(e){}\"";
+  if (prov.google) btns.push('<a class="btn btn-social" href="/#/registro?proveedor=google" ' + langStamp + '>' + pzSocialBrandSVG('google') + '<span>Continuar con Google</span></a>');
+  if (prov.apple) btns.push('<a class="btn btn-social" href="/#/registro?proveedor=apple" ' + langStamp + '>' + pzSocialBrandSVG('apple') + '<span>Continuar con Apple</span></a>');
+  if (!btns.length) return;
+  el.innerHTML = '<div class="lp-social"><p class="lp-social-tit">Creá tu cuenta gratis</p>' + btns.join('') + '<p class="lp-social-alt">o <a href="/#/registro" ' + langStamp + '>con tu email</a></p></div>';
+}
+
 function savedAccountsSave(email, token) {
   const em = String(email || '').trim().toLowerCase();
   if (!em || !token) return;
@@ -3496,6 +3668,7 @@ function authView(mode) {
   <div class="wrap"><div class="form-card">
     <h2>${isLogin ? S.loginH2 : S.regH2}</h2>
     <p class="sub">${isLogin ? S.loginSub : S.regSub}</p>
+    <div id="socialBlock"></div>
     ${isLogin ? '<div id="savedAccounts"></div>' : ''}
     <div id="authFormFields">
     <div id="formErr"></div>
@@ -12570,7 +12743,7 @@ async function render() {
   // vista). Va directo a la home de la app; sin sesión, la ruta /app rebota
   // sola al login. Auth y reset quedan afuera: son destinos válidos.
   try {
-    if (pwaIsStandalone() && !path.startsWith('#/app') && path !== '#/login' && path !== '#/registro' && !path.startsWith('#/reset')) {
+    if (pwaIsStandalone() && !path.startsWith('#/app') && path !== '#/login' && path !== '#/registro' && !path.startsWith('#/reset') && path !== '#/auth/callback') {
       // (v469) Click en el logo de auth con sesión cerrada: el usuario pidió
       // VER el website. La intención es one-shot (sessionStorage, la consume
       // esta rama): esta carga NO redirige a la app; la próxima apertura de
@@ -12614,6 +12787,8 @@ async function render() {
     if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = authView(path.slice(2));
     if (path === '#/login') bindSavedAccounts(); // (Frente 5) cuentas guardadas en este dispositivo
+    pzSocialMount(pzParseProveedor());
+    pzSocialErrorFromQuery();
     const btnAuthEl = $('#btnAuth');
     const remEl = $('#f_remember');
     if (remEl) remEl.addEventListener('change', () => { try { localStorage.setItem(REMEMBER_PREF_KEY, remEl.checked ? '1' : '0'); } catch (e) {} });
@@ -12663,31 +12838,7 @@ async function render() {
         await refreshSession();
         if (isReg) localStorage.removeItem('posta_ref');
         if (isReg) { try { localStorage.removeItem('posta_utm'); } catch (e) {} }
-        // Puente /prueba → cuenta: si viene de la prueba, pre-cargamos el perfil con los
-        // datos que ya nos dio (negocio, rubro, etc.) y se saltea el onboarding.
-        // Solo si la prueba es fresca (24h): datos viejos de tests no deben volverse marca permanente.
-        if (isReg) {
-          try {
-            const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
-            const fresh = tp && tp.saved_at && (Date.now() - tp.saved_at < 24 * 3600 * 1000);
-            if (fresh && tp.business_name) {
-              const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
-              await api.put('/api/profile', {
-                business_name: String(tp.business_name).slice(0, 80),
-                category: catMap[tp.category] || 'otro',
-                description: String(tp.description || '').slice(0, 600),
-                competitors: String(tp.competitors || '').slice(0, 200),
-                ig_username: String(tp.ig_username || '').slice(0, 40),
-                tone: tp.tone === 'tu' ? 'profesional' : 'canchero',
-                goal: 'vender',
-              });
-              const bc = (tp.brand_colors || []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
-              if (bc.length >= 2) await api.put('/api/settings', { brand_colors: bc.slice(0, 3) }).catch(() => {});
-              await refreshSession();
-            }
-          } catch (e) {}
-          localStorage.removeItem('posta_trial_profile');
-        }
+        if (isReg) { await pzTrialBridge(); }
         // Primer ingreso: el popup de conectar Instagram aparece solo (una vez por cuenta)
         postAuthLanding(isReg);
       } catch (e) {
@@ -12696,6 +12847,11 @@ async function render() {
         btnAuthEl.disabled = false;
       }
     };
+    return;
+  }
+  if (path === '#/auth/callback') {
+    LANDING_ON = false;
+    await pzSocialCallback();
     return;
   }
   if (path === '#/forgot') {

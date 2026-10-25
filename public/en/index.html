@@ -80,7 +80,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261042">
+<link rel="stylesheet" href="/styles.css?v=20261043">
 <link rel="stylesheet" href="/gj.css?v=3">
 <script type="application/ld+json">
 {
@@ -1032,7 +1032,8 @@ window.addEventListener('scroll',ask,{passive:true});window.addEventListener('re
     </div>
     <p class="lp-pais-nota" id="plansCountryNote">Prices in USD.</p>
     <div class="anchor-line" id="anchorLine">A community manager costs <b>$1,500–$3,000+ a month</b>. Posty from <b>$199</b>.</div>
-    <div class="plans-row" id="plansRow">
+    <div id="lpSocialEn"></div>
+<div class="plans-row" id="plansRow">
     <div class="price-card" data-plan-card="esencial">
       <h3>Essential</h3>
       <div class="price">$199<small>/mo</small></div>
@@ -2024,5 +2025,27 @@ function switchPlansCountry(c) {
 </script>
 <script src="/showcase-lp.js?v=1" defer></script>
 <script src="/gj.js?v=3" defer></script>
+<script>
+// login-social: bloque social en la paywall EN estática (en/index.html).
+// Se inserta antes de </body>. Rellena #lpSocialEn solo si hay al menos un
+// proveedor habilitado; si no, no cambia nada visible. Los links van al
+// registro de la app con el proveedor preseleccionado (la autenticación vive
+// en la app; los sitios NO implementan OAuth).
+(function () {
+  var el = document.getElementById('lpSocialEn');
+  if (!el) return;
+  var G = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47a5.53 5.53 0 0 1-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29A7.2 7.2 0 0 1 4.89 12c0-.8.14-1.57.38-2.29H1.29A11.98 11.98 0 0 0 0 12c0 1.93.46 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>';
+  var A = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#000000" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.702"/></svg>';
+  var stamp = "onclick=\"try{localStorage.setItem('posty-lang','en')}catch(e){}\"";
+  fetch('/api/auth/social/providers').then(function (r) { return r.json(); }).then(function (d) {
+    if (!d.google && !d.apple) return;
+    var btns = '';
+    if (d.google) btns += '<a class="btn-social" href="/#/registro?proveedor=google" ' + stamp + '>' + G + '<span>Continue with Google</span></a>';
+    if (d.apple) btns += '<a class="btn-social" href="/#/registro?proveedor=apple" ' + stamp + '>' + A + '<span>Continue with Apple</span></a>';
+    el.innerHTML = '<div class="lp-social"><p class="lp-social-tit">Create your free account</p>' + btns + '<p class="lp-social-alt">or <a href="/#/registro" ' + stamp + '>with your email</a></p></div>';
+  }).catch(function () {});
+})();
+
+</script>
 </body>
 </html>

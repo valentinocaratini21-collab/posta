@@ -2942,6 +2942,11 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
   used INTEGER DEFAULT 0
 )`); } catch (e) {}
 
+try {
+  db.prepare('CREATE TABLE IF NOT EXISTS oauth_identities (provider TEXT NOT NULL, sub TEXT NOT NULL, email TEXT, user_id INTEGER NOT NULL, created_at INTEGER, PRIMARY KEY (provider, sub))').run();
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_oauth_identities_user ON oauth_identities (user_id)').run();
+} catch (e) {}
+
 // Siempre responde OK para no revelar si el email existe.
 app.post('/api/auth/forgot', async (req, res) => {
   const email = String((req.body && req.body.email) || '').trim().toLowerCase();
@@ -3314,6 +3319,126 @@ app.get('/.well-known/apple-app-site-association', (req, res) => {
 
 app.post('/api/auth/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
+});
+
+// ---------- Login social: bloque de rutas (server.js) ----------
+// Se inserta ANTES de app.get('/api/auth/me'. Requiere en el mismo archivo:
+// app, db, bcrypt, authHitCount, authHitRecord, requireAuth, deviceTokens,
+// newReferralCode, normalizeSrc, importTrialWeek, applyTrialLang,
+// seedFromTrialDigest, recordTrialImport, streakFromTrialImport,
+// autoWeekEnabled, autoArmWeek, track, evTrack, TRIAL_DAYS (todas existen
+// en server.js y solo se usan dentro de handlers, nunca en tiempo de carga).
+// La tabla oauth_identities se crea en su propio bloque (ver patch.py),
+// junto al patrón de password_resets.
+
+// ---------- Login social (Google + Apple) ----------
+// Diseño y límites en server/social-auth.js. Sin secretos hardcodeados:
+// las credenciales llegan solo por variables de entorno.
+const socialAuth = require('./social-auth');
+const SOCIAL_FNS = {
+  newReferralCode,
+  hashPassword: (s) => bcrypt.hashSync(s, 10),
+  normalizeSrc,
+  importTrialWeek, applyTrialLang, seedFromTrialDigest,
+  recordTrialImport, streakFromTrialImport, autoWeekEnabled, autoArmWeek,
+  track, evTrack,
+  trialDays: TRIAL_DAYS,
+};
+
+app.get('/api/auth/social/providers', (req, res) => {
+  res.json(socialAuth.socialProviders(process.env));
+});
+
+function socialStart(provider) {
+  return (req, res) => {
+    const prov = socialAuth.socialProviders(process.env);
+    if (!prov[provider] || !process.env.SESSION_SECRET) {
+      return res.status(503).send(`<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;padding:32px;text-align:center"><h2>⭐ El inicio con ${provider === 'google' ? 'Google' : 'Apple'} llega en poquito</h2><p>Todavía no está configurado. Mientras tanto, podés crear tu cuenta con tu email.</p><p><a href="/#/registro">← Crear cuenta con email</a></p></body></html>`);
+    }
+    const ip = req.ip || 'unknown';
+    if (authHitCount('social-start|' + ip, 15 * 60 * 1000) >= 30) return res.status(429).json({ error: 'rate_limited' });
+    authHitRecord('social-start|' + ip);
+    const state = socialAuth.signState(process.env, {
+      p: provider,
+      t: String(req.query.trial_ig || '').slice(0, 40),
+      r: String(req.query.ref || '').slice(0, 16),
+      us: String(req.query.utm_source || '').slice(0, 40),
+      uc: String(req.query.utm_campaign || '').slice(0, 80),
+      l: req.query.lang === 'en' ? 'en' : 'es',
+    });
+    const uri = socialAuth.redirectUri(req, provider);
+    const url = provider === 'google'
+      ? socialAuth.googleAuthUrl(socialAuth.googleCreds(process.env).id, uri, state)
+      : socialAuth.appleAuthUrl(socialAuth.appleCreds(process.env).serviceId, uri, state);
+    res.redirect(url);
+  };
+}
+app.get('/api/auth/google/start', socialStart('google'));
+app.get('/api/auth/apple/start', socialStart('apple'));
+
+async function socialCallback(provider, req, res) {
+  const ip = req.ip || 'unknown';
+  if (authHitCount('social-cb|' + ip, 15 * 60 * 1000) >= 10) return res.redirect('/#/login?social=error');
+  authHitRecord('social-cb|' + ip);
+  try {
+    const errParam = req.query.error || req.body.error;
+    if (errParam) {
+      return res.redirect(errParam === 'access_denied' ? '/#/login?social=denied' : '/#/login?social=error');
+    }
+    const st = socialAuth.verifyState(process.env, req.query.state || req.body.state);
+    if (!st || st.p !== provider) return res.redirect('/#/login?social=error');
+    const code = req.query.code || req.body.code;
+    if (!code) return res.redirect('/#/login?social=error');
+    const uri = socialAuth.redirectUri(req, provider);
+    let identity;
+    if (provider === 'google') {
+      const g = socialAuth.googleCreds(process.env);
+      const tok = await socialAuth.fetchJson('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ code, client_id: g.id, client_secret: g.secret, redirect_uri: uri, grant_type: 'authorization_code' }),
+      });
+      if (!tok.access_token) return res.redirect('/#/login?social=error');
+      identity = await socialAuth.googleUserinfo(tok.access_token);
+      identity.verified = true;
+    } else {
+      const a = socialAuth.appleCreds(process.env);
+      const tok = await socialAuth.fetchJson('https://appleid.apple.com/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: a.serviceId, client_secret: socialAuth.appleClientSecret(a), code, grant_type: 'authorization_code' }),
+      });
+      if (!tok.id_token) return res.redirect('/#/login?social=error');
+      identity = await socialAuth.appleIdClaims(tok.id_token, a.serviceId);
+    }
+    const { user, created } = socialAuth.linkOrCreateUser(db, SOCIAL_FNS, {
+      provider, sub: identity.sub, email: identity.email,
+      emailVerified: identity.verified === true,
+      trial_ig: st.t, ref: st.r, utm: { source: st.us, campaign: st.uc }, lang: st.l,
+    });
+    req.session.regenerate((err) => {
+      if (err) return res.redirect('/#/login?social=error');
+      req.session.userId = user.id;
+      res.redirect('/#/auth/callback?provider=' + provider + '&new=' + (created ? '1' : '0'));
+    });
+  } catch (e) {
+    console.error('[posta] social callback (' + provider + '):', e.message);
+    return res.redirect('/#/login?social=error');
+  }
+}
+app.get('/api/auth/google/callback', (req, res) => socialCallback('google', req, res));
+app.get('/api/auth/apple/callback', (req, res) => socialCallback('apple', req, res));
+app.post('/api/auth/apple/callback', express.urlencoded({ extended: false }), (req, res) => socialCallback('apple', req, res));
+
+// Token "Continuar como" para el callback social (el cliente lo guarda en
+// la lista de cuentas del dispositivo; best-effort, no bloquea el login).
+app.post('/api/auth/device-issue', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const ip = req.ip || 'unknown';
+  if (authHitCount('device-issue|' + ip, 15 * 60 * 1000) >= 10) return res.status(429).json({ error: 'rate_limited' });
+  authHitRecord('device-issue|' + ip);
+  const issued = deviceTokens.issue(db, uid);
+  res.json({ ok: true, device_token: issued.token, expires_at: issued.expiresAt });
 });
 
 app.get('/api/auth/me', (req, res) => {
@@ -22817,7 +22942,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v480';
+const BUILD_ID = '20261025-v481';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

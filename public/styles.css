@@ -3703,3 +3703,20 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .q-opt .qe .wb-ic{width:22px;height:22px;color:#2793C8}
 .pm-chev .wb-ic,.bt-arrow .wb-ic{width:1em;height:1em;vertical-align:-0.15em}
 .lp-wall-nav .wb-ic,.lp-view-nav .wb-ic,.ej-nav .wb-ic,.lb-nav .wb-ic,.x .wb-ic{width:1.1em;height:1.1em;vertical-align:-0.15em}
+/* login-social: botones de marca Google/Apple (un toque, sin emojis).
+   Se agrega al final de styles.css y antes del último </style> de
+   prueba.html, en-prueba.html y en/index.html. Colores neutros + dorado
+   de preselección #DFA856 (portable entre hojas). */
+.social-block{display:flex;flex-direction:column;gap:10px;margin:16px 0 4px}
+.btn-social{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:#fff;color:#0A1E33;border:1.5px solid #D8E2EA;border-radius:999px;padding:12px 16px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;box-sizing:border-box}
+.btn-social:hover{border-color:#2793C8}
+.btn-social svg{width:20px;height:20px;flex:none}
+.btn-social.social-hl{border:2px solid #DFA856;box-shadow:0 0 0 3px rgba(223,168,86,.28)}
+.social-div{display:flex;align-items:center;gap:12px;color:#5A7186;font-size:13px;margin:6px 0 2px}
+.social-div::before,.social-div::after{content:'';flex:1;height:1px;background:#D8E2EA}
+.lp-social{max-width:460px;margin:0 auto 22px;text-align:center}
+.lp-social .btn-social{max-width:420px;margin:0 auto}
+.lp-social-tit{font-size:15px;font-weight:700;color:#0A1E33;margin:0 0 12px}
+.lp-social-alt{font-size:13.5px;color:#5A7186;margin:12px 0 0}
+.lp-social-alt a{color:#2793C8;font-weight:700}
+.trial-social{display:none;flex-direction:column;gap:10px;margin:0 0 16px}
