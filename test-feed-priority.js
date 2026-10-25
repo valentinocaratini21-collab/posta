@@ -3,7 +3,7 @@
  *
  * Corrección 1 · AL ENTRAR, EL FEED MANDA:
  *   - scheduleView: el contenido de la vista (homeWeekBlock: encabezado de
- *     perfil + pestañas Día/Semana/Mes/Feed + grilla/calendario) se concatena
+ *     perfil + grilla del feed) se concatena
  *     ANTES que todos los bloques secundarios; la tarjeta «Lo que vi de tu
  *     cuenta» (analysisSummaryBlock) ya NO existe en la función — eliminada
  *     el 2026-10-25 por Valentino: su contenido (week_summary) encabeza la
@@ -16,6 +16,32 @@
  *   - appShell ya NO antepone la tira de activación en inicio/schedule;
  *     cada vista la incluye tras su contenido (schedule: junto a los
  *     bloques secundarios; inicio: tras la grilla, antes del chat).
+ *
+ * TANDA v436 · LA PANTALLA ES SOLAMENTE EL FEED (decisión de Valentino,
+ * 25/10: «que sea solamente el feed»):
+ *   - Fuera de scheduleView: el encabezado de marca «Posty. / Tu semana,
+ *     lista sola» (hs-brand-head).
+ *   - schedFilterBlockHTML compone SOLO el feed: perfil literal +
+ *     grilla (feedPreviewHTML) + píldora flotante «Aceptar todo (N)»
+ *     (acceptPillHTML, id hsAcceptAll) visible únicamente con borradores
+ *     pendientes + #revMsg + hs-report + línea de generación +
+ *     schedStaleHTML. Sin llamada a schedQuotaHTML (la cuota vive en Mi
+ *     plan), sin barra de pestañas (data-scf-mode), sin navegación por
+ *     período (scfNav), sin «Tu agenda».
+ *   - Las vistas Día/Semana/Mes murieron: sus 12 funciones
+ *     (schedDiaBodyHTML, schedSemanaBodyHTML, schedMesBodyHTML,
+ *     schedMiniHTML, schedNavInfo, schedRangeLabel, schedMonthName,
+ *     schedCap, schedDiffDays, schedSetMode, schedNavStep, schedJumpDay)
+ *     salieron del bundle con CERO referencias; SCHED_MODE = 'feed'
+ *     constante; la capa de ampliación ya no ofrece «Ver el día
+ *     completo» (scf-pop-day); tocar un tile que se viene abre su
+ *     detalle #/app/post/:id (bindSchedule y el espejo vivo).
+ *   - Inicio: la franja de revisión (hf-review) salió; la píldora es la
+ *     misma pieza (acceptPillHTML, id hfAcceptAll) y el #revMsg queda.
+ *   - El aviso «la semana que viene ya está armada» vive en el saludo
+ *     del chat: CHAT_NEXT_WEEK (lo cargan schedFilterBlockHTML e
+ *     inicioView desde schedWeekCounts) y chatNextWeekHTML lo pinta
+ *     dentro de chatCardHTML, ES/EN.
  *
  * Corrección 2 · UN SOLO CHAT:
  *   - La caja f3 desapareció: cero data-f3-form / data-f3-input en todo el
@@ -132,6 +158,41 @@ ok(!appJs.includes('const igBanner'), 'bundle: igBanner no existe en ninguna fun
 ok(!schedSlice.includes('analysisSummaryBlock'), 'scheduleView: la tarjeta «Lo que vi de tu cuenta» ya no se computa (2026-10-25)');
 ok(!appJs.includes('analysisSummaryBlock'), 'bundle: analysisSummaryBlock no existe en ninguna función');
 ok(!schedSlice.includes("api.get('/api/analysis?peek=1')"), 'scheduleView: sin el fetch de peek que alimentaba la tarjeta');
+ok(!schedSlice.includes('hs-brand-head'), 'scheduleView (v436): el encabezado «Posty. / Tu semana, lista sola» salió');
+ok(!appJs.includes('hs-brand-head'), 'bundle (v436): hs-brand-head no existe en ninguna función');
+
+console.log('— A: (v436) la pantalla es solamente el feed');
+const scfSrc = extractFn(appJs, 'schedFilterBlockHTML') || '';
+ok(!!scfSrc, 'schedFilterBlockHTML se pudo extraer');
+ok(scfSrc.includes('feedPreviewHTML(posts, tz'), 'schedFilterBlockHTML: el cuerpo es el feed literal (feedPreviewHTML)');
+ok(scfSrc.includes("acceptPillHTML(drafts.length, 'hsAcceptAll')"), 'schedFilterBlockHTML: píldora flotante de aceptación total (id hsAcceptAll)');
+ok(scfSrc.includes('drafts.length ?'), 'schedFilterBlockHTML: la píldora solo aparece con borradores pendientes');
+ok(scfSrc.includes('id="revMsg"') && scfSrc.includes('id="hs-report"'), 'schedFilterBlockHTML: revMsg y hs-report se quedan');
+ok(scfSrc.includes('schedStaleHTML(posts, tz)'), 'schedFilterBlockHTML: el aviso de semana vieja se queda');
+ok(!scfSrc.includes('schedQuotaHTML('), 'schedFilterBlockHTML: sin línea de cupo (vive en Mi plan)');
+ok(!scfSrc.includes('Tu agenda'), 'schedFilterBlockHTML: sin el título «Tu agenda»');
+ok(!scfSrc.includes('scf-bar') && !scfSrc.includes('data-scf-mode') && !scfSrc.includes('scfNav'), 'schedFilterBlockHTML: sin barra de pestañas ni navegación por período');
+ok(scfSrc.includes('CHAT_NEXT_WEEK =') && scfSrc.includes('schedWeekCounts(posts, tz, pl.proposals)'), 'schedFilterBlockHTML: carga CHAT_NEXT_WEEK con la cuenta de siempre (schedWeekCounts)');
+ok(appJs.includes("const SCHED_MODE = 'feed'"), 'bundle: SCHED_MODE es constante «feed» (un modo viejo guardado no resucita vistas muertas)');
+for (const fn of ['schedDiaBodyHTML', 'schedSemanaBodyHTML', 'schedMesBodyHTML', 'schedMiniHTML', 'schedNavInfo', 'schedRangeLabel', 'schedMonthName', 'schedCap', 'schedDiffDays', 'schedSetMode', 'schedNavStep', 'schedJumpDay']) {
+  ok(!appJs.includes('function ' + fn), `bundle (v436): ${fn} retirada`);
+  ok(!(new RegExp(fn + '\\s*\\(').test(appJs)), `bundle (v436): cero referencias a ${fn}`);
+}
+ok(!appJs.includes('data-scf-mode') && !appJs.includes('data-scf-day'), 'bundle (v436): sin markup de pestañas ni de saltos de día');
+ok(!appJs.includes('scf-pop-day'), 'bundle (v436): la capa ya no ofrece «Ver el día completo»');
+ok(appJs.includes('scf-pop-x'), 'bundle (v436): la capa conserva su ✕');
+const pillSites = (appJs.match(/const id = b\.dataset\.postId; if \(id\) location\.hash = '#\/app\/post\/' \+ encodeURIComponent\(id\)/g) || []).length;
+ok(pillSites === 2, 'tiles del feed → detalle #/app/post/:id cableado en bindSchedule y en el espejo vivo (2 sitios)');
+const iniSrc436 = (() => { const i = appJs.indexOf('async function inicioView()'); return i > -1 ? appJs.slice(i, i + 26000) : ''; })();
+ok(iniSrc436.includes("acceptPillHTML(drafts.length, 'hfAcceptAll')"), 'inicioView (v436): la píldora es la misma pieza (id hfAcceptAll)');
+ok(!appJs.includes('hf-review') && !appJs.includes('hf-accept'), 'bundle (v436): la franja de revisión (hf-review/hf-accept) salió del markup');
+ok(iniSrc436.includes('CHAT_NEXT_WEEK =') && iniSrc436.includes('id="revMsg"'), 'inicioView (v436): carga CHAT_NEXT_WEEK y conserva el #revMsg junto a la píldora');
+ok(appJs.includes('let CHAT_NEXT_WEEK = null'), 'bundle (v436): el global CHAT_NEXT_WEEK existe');
+const cardSrc = extractFn(appJs, 'chatCardHTML') || '';
+ok(cardSrc.includes('chatNextWeekHTML()'), 'chatCardHTML (v436): el saludo incluye la línea de la semana que viene');
+const nwSrc = extractFn(appJs, 'chatNextWeekHTML') || '';
+ok(nwSrc.includes('ya están armados') && nwSrc.includes('de la semana que viene'), 'chatNextWeekHTML ES: «ya están armados X de Y de la semana que viene»');
+ok(nwSrc.includes('already lined up'), 'chatNextWeekHTML EN: «posts for next week are already lined up»');
 
 const retStart = schedSlice.indexOf('return `<div id="schedView"');
 ok(retStart > -1, 'scheduleView: se encontró su return');
@@ -213,9 +274,10 @@ ok(!appJs.includes('Estás hablando de este posteo') && !appJs.includes("You're 
 ok(appJs.includes('anchor_post_id') && appJs.includes('HF_CHAT_ANCHOR.id'), 'chat principal intacto: el envío sigue mandando anchor_post_id desde HF_CHAT_ANCHOR');
 
 console.log('— A: index.html y CHUNK_V');
-ok(indexHtml.includes('/app.js?v=273'), 'index.html: app.js bumpeado a ?v=273');
-ok(!indexHtml.includes('/app.js?v=272'), 'index.html: sin ?v=272 residual');
-ok(appJs.includes("const CHUNK_V = '20261025-v434';"), 'app.js: CHUNK_V bumpeado al build (esta tanda SÍ cambia chunk-analisis: la apertura por week_summary)');
+ok(indexHtml.includes('/app.js?v=274'), 'index.html: app.js bumpeado a ?v=274 (v436)');
+ok(!indexHtml.includes('/app.js?v=273'), 'index.html: sin ?v=273 residual');
+ok(indexHtml.includes('/styles.css?v=20261025'), 'index.html: styles.css bumpeado a ?v=20261025 (v436: regla .accept-pill)');
+ok(appJs.includes("const CHUNK_V = '20261025-v436';"), 'app.js: CHUNK_V bumpeado al build v436');
 
 /* ================= Parte B: comportamiento ================= */
 console.log('— B: chip IG (extraído, 2 estados × 2 idiomas)');
@@ -275,6 +337,59 @@ console.log('— B: botón «Pedir un cambio» (extraído)');
   ok(built.f({ id: 9, status: 'draft' }) === '', 'borrador sin imagen: sin botón (misma elegibilidad que la caja)');
   const builtEn = new Function('esc', 'ME', 'var HF_ASK_POSTS = {};\nvar HF_CHAT_OPEN_PENDING = false;\n' + askBtnSrc + '\nreturn { f: hfAskChangeBtnHTML };')(escStub, { lang: 'en' });
   ok(builtEn.f(draft).includes('💬 Ask for a change'), 'botón EN: «💬 Ask for a change»');
+}
+
+console.log('— B: (v436) píldora de aceptación total (extraída)');
+{
+  const pillSrc = extractFn(appJs, 'acceptPillHTML') || '';
+  const pill = new Function('ME', pillSrc + '\nreturn acceptPillHTML;')({ lang: 'es' });
+  const es = pill(3, 'hsAcceptAll');
+  ok(es.includes('✅ Aceptar todo (3)') && es.includes('id="hsAcceptAll"') && es.includes('accept-pill'), 'píldora ES: «✅ Aceptar todo (3)» con su id y clase flotante');
+  const pillEn = new Function('ME', pillSrc + '\nreturn acceptPillHTML;')({ lang: 'en' });
+  ok(pillEn(2, 'hfAcceptAll').includes('✅ Accept all (2)') && pillEn(2, 'hfAcceptAll').includes('id="hfAcceptAll"'), 'píldora EN: «✅ Accept all (2)»');
+}
+
+console.log('— B: (v436) línea de la semana que viene en el saludo (extraída)');
+{
+  const nwSrc2 = extractFn(appJs, 'chatNextWeekHTML') || '';
+  const mk = (ME, CHAT_NEXT_WEEK) => new Function('ME', 'CHAT_NEXT_WEEK', nwSrc2 + '\nreturn chatNextWeekHTML;')(ME, CHAT_NEXT_WEEK);
+  const es7 = mk({ lang: 'es' }, { n: 7, total: 7 })();
+  ok(es7.includes('ya están armados <b>7 de 7</b> de la semana que viene'), 'saludo ES 7/7: la línea de la semana que viene, tal cual la decía la Agenda');
+  const es9 = mk({ lang: 'es' }, { n: 9, total: 7 })();
+  ok(es9.includes('<b>7 de 7</b>') && es9.includes('y <b>2 más</b> en espera'), 'saludo ES con excedente: «7 de 7» + «2 más en espera»');
+  const en7 = mk({ lang: 'en' }, { n: 7, total: 7 })();
+  ok(en7.includes('<b>7 of 7</b>') && en7.includes('already lined up') && !en7.includes('semana'), 'saludo EN 7/7: «7 of 7 … already lined up», sin español');
+  ok(mk({ lang: 'es' }, null)() === '' && mk({ lang: 'es' }, { n: 0, total: 7 })() === '', 'sin armados de la que viene: no hay línea (nada se inventa)');
+}
+
+console.log('— B: (v436) schedFilterBlockHTML compone solo el feed (extraída, con stubs)');
+{
+  const scfSrc2 = extractFn(appJs, 'schedFilterBlockHTML') || '';
+  const pillSrc2 = extractFn(appJs, 'acceptPillHTML') || '';
+  let quotaCalled = false;
+  const scope = `
+    var CHAT_NEXT_WEEK = 'unset';
+    function homeWeekHTML() { return 'EMPTYSTATE'; }
+    function prefetchMedia() {}
+    function schedPlacements() { return { proposals: [], list: [] }; }
+    function schedWeekCounts() { return { nextDrafts: 5 }; }
+    function schedQuotaHTML() { quotaFlag = true; return 'QUOTA'; }
+    function feedPreviewHTML() { return 'FEEDBODY'; }
+    function schedStaleHTML() { return ''; }
+    var quotaFlag = false;
+    ${pillSrc2}
+    ${scfSrc2}
+    return { f: schedFilterBlockHTML, nw: () => CHAT_NEXT_WEEK, quota: () => quotaFlag };`;
+  const built = new Function('ME', scope)({ lang: 'es' });
+  const posts = [{ id: 1, status: 'draft' }, { id: 2, status: 'draft' }, { id: 3, status: 'published' }];
+  const html = built.f(posts, { limit: 7 }, false, false);
+  ok(html.includes('FEEDBODY'), 'con posteos: el cuerpo es el feed');
+  ok(html.includes('✅ Aceptar todo (2)') && html.includes('id="hsAcceptAll"'), 'con 2 borradores: píldora «Aceptar todo (2)»');
+  ok(!html.includes('QUOTA') && built.quota() === false, 'sin la línea de cupo (schedQuotaHTML no se llama)');
+  ok(built.nw() && built.nw().n === 5 && built.nw().total === 7, 'CHAT_NEXT_WEEK queda cargado (5 de 7) para el saludo del chat');
+  const htmlPub = built.f([{ id: 3, status: 'published' }], { limit: 7 }, false, false);
+  ok(!htmlPub.includes('Aceptar todo'), 'autopiloto (sin borradores): la píldora no aparece nunca');
+  ok(built.f([], { limit: 7 }, false, false) === 'EMPTYSTATE', 'sin posteos: delega en los estados de siempre (homeWeekHTML)');
 }
 
 console.log(`\ntest-feed-priority: ${okN} ok, ${failN} fallas`);

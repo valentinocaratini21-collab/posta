@@ -238,7 +238,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261025-v434'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261025-v436'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -2976,6 +2976,7 @@ function resetView() {
 /* ---------- Shell ---------- */
 let IDEAS = [];
 let CHAT = [];       // [{role:'user'|'assistant', text}]
+let CHAT_NEXT_WEEK = null; // (v436) {n, total} de borradores ya armados de la semana que viene: lo cargan Inicio/Agenda (schedWeekCounts) y el saludo del chat lo hereda como línea — antes vivía en la línea de cupo de la Agenda.
 let CHAT_IDEA = null; // propuesta cerrada por el consultor {titulo, angulo, caption?, photo_index?, colors?}
 let CUSTOM_PAL = null; // paleta pedida por el cliente en el chat ("en rojo") — manda sobre la marca
 // Paleta a partir de los colores que pidió el cliente (1-3 hex)
@@ -5873,6 +5874,28 @@ async function draftFromPreview(idea, prev) {
   }
 }
 
+// (v436) La píldora flotante de aceptación total: UNA sola pieza para
+// Inicio y Agenda, flotando sobre la grilla, visible solo cuando hay
+// borradores pendientes (en autopiloto los posteos nacen programados:
+// sin pendientes, no hay píldora). El toque dispara el doAcceptAll de
+// siempre vía los binders existentes (#hfAcceptAll / #hsAcceptAll):
+// cambia el lugar, no la semántica. ES/EN por ME.lang.
+function acceptPillHTML(n, id) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  return `<button type="button" class="accept-pill" id="${id}">✅ ${en ? 'Accept all' : 'Aceptar todo'} (${n})</button>`;
+}
+// (v436) La línea del saludo con la semana que viene: es la MISMA
+// cuenta que pintaba la línea de cupo de la Agenda (schedWeekCounts →
+// CHAT_NEXT_WEEK). Sin armados de la que viene, no hay línea — nada
+// se inventa.
+function chatNextWeekHTML() {
+  const w = (typeof CHAT_NEXT_WEEK !== 'undefined') ? CHAT_NEXT_WEEK : null;
+  if (!w || !(w.total > 0) || !(w.n > 0)) return '';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const shown = Math.min(w.n, w.total);
+  const more = w.n > w.total ? (en ? ` · and <b>${w.n - w.total} more</b> on hold` : ` · y <b>${w.n - w.total} más</b> en espera`) : '';
+  return `<div class="chat-msg ai">${en ? `✨ <b>${shown} of ${w.total}</b> posts for next week are already lined up` : `✨ ya están armados <b>${shown} de ${w.total}</b> de la semana que viene`}${more}</div>`;
+}
 function chatCardHTML(compact, noEditChip, bareWrap, schedMode) {
   const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
@@ -5912,7 +5935,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode) {
   ${wrap}
     ${title}${desc}
     <div class="chat-box" id="chatBox">
-      ${msgs || `<div class="chat-msg ai">hola! 👋 qué hacemos hoy?</div>`}
+      ${msgs ? chatNextWeekHTML() + msgs : `<div class="chat-msg ai">hola! 👋 qué hacemos hoy?</div>` + chatNextWeekHTML()}
     </div><div id="chatAnchor"></div>${upRow}${chips}
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
@@ -7263,11 +7286,12 @@ function homeWhenLabel(iso) {
    estado nuevo (📮 Programado / ✅ Publicado) en las tres vistas.
    Todo se pinta desde scheduled_at / día propuesto / estado — el
    mismo dato de siempre, sin estado paralelo. */
-let SCHED_MODE = 'feed'; // (v334) la agenda abre en el Feed literal; Día/Semana/Mes quedan a un toque en el mismo filtro (decisión de Valentino 23/10)
+// (v436) La pantalla principal ES el feed: los modos Día/Semana/Mes
+// murieron como vistas (decisión de Valentino, 25/10) y SCHED_MODE
+// queda fijo en 'feed' — un modo viejo guardado en localStorage ya no
+// puede resucitar una vista muerta: todo aterriza en el feed.
+const SCHED_MODE = 'feed';
 let FEED_PROFILE = null; // encabezado de la vista Feed: SOLO datos reales del IG (avatar público + seguidores)
-try { const m0 = localStorage.getItem('posty_sched_mode'); if (m0 === 'dia' || m0 === 'semana' || m0 === 'mes' || m0 === 'feed') SCHED_MODE = m0; } catch (e) {}
-let SCHED_WEEK_OFFSET = 0; // semanas desde la actual (vista Semana)
-let SCHED_MONTH_OFFSET = 0; // meses desde el actual (vista Mes)
 // (SCHED_DAY_OFFSET — días desde hoy — vive junto a scheduleView.)
 
 // --- Fechas ancladas a mediodía UTC: aritmética de días sin sorpresas
@@ -7277,17 +7301,7 @@ function schedYmdToDate(ymd) { const d = new Date(String(ymd || '').slice(0, 10)
 function schedDateToYmd(d) { return d.toISOString().slice(0, 10); }
 function schedAddDays(ymd, n) { const d = schedYmdToDate(ymd); if (!d) return ymd; d.setUTCDate(d.getUTCDate() + n); return schedDateToYmd(d); }
 function schedMondayOf(ymd) { const d = schedYmdToDate(ymd); if (!d) return ymd; const back = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - back); return schedDateToYmd(d); }
-function schedDiffDays(fromYmd, toYmd) { const a = schedYmdToDate(fromYmd), b = schedYmdToDate(toYmd); if (!a || !b) return 0; return Math.round((b - a) / 86400000); }
 function schedDayKeyOf(dt, tz) { try { return dt.toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } }
-function schedCap(s) { s = String(s || ''); return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
-function schedMonthName(ymd) { const d = schedYmdToDate(ymd); try { return d ? d.toLocaleDateString('es-AR', { month: 'long', timeZone: 'UTC' }) : ''; } catch (e) { return ''; } }
-function schedRangeLabel(a, b) {
-  const da = schedYmdToDate(a), db = schedYmdToDate(b);
-  if (!da || !db) return '';
-  const ma = schedMonthName(a), mb = schedMonthName(b);
-  if (ma === mb) return `del ${da.getUTCDate()} al ${db.getUTCDate()} de ${ma}`;
-  return `del ${da.getUTCDate()} de ${ma} al ${db.getUTCDate()} de ${mb}`;
-}
 // Estado visual de un posteo en las vistas de calendario.
 function schedPostState(p) {
   if (!p) return 'draft';
@@ -7409,118 +7423,10 @@ function schedStaleHTML(all, tz) {
   if (!stale.length) return '';
   return `<div class="ag-stale"><div class="ag-stale-t">⏳ Programados de semanas anteriores</div>${stale.map(p => postCardHTML(p, { layout: 'row' })).join('')}</div>`;
 }
-// Miniatura de calendario (Semana/Mes): la imagen MAESTRA o su variante
-// @640 que SÍ existe (la @240 de v214 no existe: prohibida), con punto
-// de estado y badge de reel/story. Videos: el propio archivo de portada.
-function schedMiniHTML(p, timeLabel) {
-  const st = schedPostState(p);
-  const isV = String(p.media_type || '') === 'video';
-  const isS = String(p.media_type || '') === 'story';
-  const media = !p.image_path
-    ? '<span class="scf-mini ph">✨</span>'
-    : isV
-      ? `<span class="scf-mini"><video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video><i class="scf-dot st-${st}"></i><em class="scf-mini-badge">🎬</em></span>`
-      : `<span class="scf-mini"><img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt=""><i class="scf-dot st-${st}"></i>${isS ? '<em class="scf-mini-badge">📸</em>' : ''}</span>`;
-  return media + (timeLabel ? `<span class="scf-mini-t">${esc(timeLabel)}</span>` : '');
-}
 function schedMiniTime(p) {
   const dt = pcParseDate(p.scheduled_at || p.published_at);
   if (dt) { try { return dt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: pcTz() }); } catch (e) {} }
   return String((typeof slotHour === 'function') ? slotHour() : 19).padStart(2, '0') + ':00'; // borrador sin fecha: su propuesta sale a la mejor hora
-}
-// --- Vista DÍA: tarjetas grandes de un solo día, en riel horizontal ---
-function schedDiaBodyHTML(ctx) {
-  const { pl, tz, bizName } = ctx;
-  const today = schedTodayYmd(tz);
-  const ymd = schedAddDays(today, SCHED_DAY_OFFSET);
-  const items = pl.byDay.get(ymd) || [];
-  if (!items.length) {
-    const d = schedYmdToDate(ymd);
-    const dl = d ? pcFmtDayLong(d, 'UTC') : ymd;
-    // v221 (corrección de Valentino: "cuando paso de semana aparece una
-    // pantalla que no tiene nada que ver"): el día vacío se muestra
-    // DENTRO del mismo riel de Día (mismo marco, flechas fantasma en su
-    // lugar), vacío y honesto — nunca como otro componente a pantalla
-    // completa que rompe la naturaleza de la vista al navegar.
-    const phE = '<span class="scf-arrow scf-arrow-ph" aria-hidden="true">‹</span>';
-    return `<div class="scf-railwrap">
-    ${phE}
-    <div class="hs-week-list scf-rail" id="hsWeekList"><div class="scf-dayempty"><b>🕊️ Nada para este día</b><span>Este día está libre en tu agenda.</span><button type="button" class="sched-ghost scf-ghost" data-sched-day="${esc(dl)}"><span class="sg-plus">+</span><span class="sg-txt">Pedirle a Posty un posteo para este día</span></button></div></div>
-    ${phE.replace('‹', '›')}
-  </div>`;
-  }
-  const cards = items.map(({ p }) => {
-    const prop = p.status === 'published'
-      ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
-      : proposedLabelFor(p, pl.proposals, tz);
-    return weekCardHTML(p, { bizName, tz, prop, dia: true });
-  }).join('');
-  const arrows = items.length > 1;
-  // El espacio de las flechas se reserva SIEMPRE (fantasma invisible en
-  // días de un solo posteo): si el riel cambiara de ancho según el día,
-  // las tarjetas — que miden % del riel — cambiarían de alto entre días
-  // y volvería el "no están iguales" que Valentino marcó.
-  const ph = '<span class="scf-arrow scf-arrow-ph" aria-hidden="true">‹</span>';
-  return `<div class="scf-railwrap">
-    ${arrows ? '<button type="button" class="scf-arrow" id="scfRailPrev" aria-label="Posteo anterior">‹</button>' : ph}
-    <div class="hs-week-list scf-rail" id="hsWeekList">${cards}</div>
-    ${arrows ? '<button type="button" class="scf-arrow" id="scfRailNext" aria-label="Posteo siguiente">›</button>' : ph}
-  </div>`;
-}
-// --- Vista SEMANA: lunes a domingo de una, sin deslizar de costado ---
-// Cada posteo va COMPACTO en su columna (solo imagen, hora y estado —
-// SIN pie de foto). Al pasar el mouse por encima (o al primer toque en
-// táctil) se AGRANDA con todo: la tarjeta completa en una capa por
-// encima de la grilla, sin que la grilla se reacomode (amendment de
-// Valentino). Las tarjetas completas viven en el cofre #scfVault — el
-// patrón de v214 — y se MUEVEN a la capa al abrir: conservan todos
-// sus bindings ([data-pc-act] delegado, [data-revaccept], lightbox).
-// El encabezado de cada día (día + número) salta a la vista Día.
-function schedSemanaBodyHTML(ctx) {
-  const { pl, tz, bizName } = ctx;
-  const today = schedTodayYmd(tz);
-  const monday = schedMondayOf(schedAddDays(today, SCHED_WEEK_OFFSET * 7));
-  const sunday = schedAddDays(monday, 6);
-  const cols = [];
-  const vaultCards = [];
-  for (let i = 0; i < 7; i++) {
-    const ymd = schedAddDays(monday, i);
-    const items = pl.byDay.get(ymd) || [];
-    const dObj = schedYmdToDate(ymd) || new Date();
-    const num = dObj.getUTCDate();
-    let dow = '';
-    try { dow = dObj.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }).replace('.', '').slice(0, 3).toUpperCase(); } catch (e) {}
-    // (v218) La ampliación ya no se ancla a la celda: va centrada en la
-    // pantalla para cualquier columna. popCls queda solo como marca.
-    const popCls = i <= 1 ? 'pl' : i >= 5 ? 'pr' : 'pc';
-    const shown = items.slice(0, 3);
-    const minis = shown.map(({ p }) => `<span class="scf-mini-x" data-post-id="${esc(String(p.id))}" data-day="${ymd}" data-pop-cls="${popCls}">${schedMiniHTML(p, schedMiniTime(p))}</span>`).join('');
-    const more = items.length > shown.length ? `<button type="button" class="scf-more" data-scf-day="${ymd}">+${items.length - shown.length}</button>` : '';
-    // Día vacío: hoy/futuro → "+" accionable que salta a Día (donde vive el
-    // pedido de posteo); pasado → guion tenue con su motivo (ese día ya fue:
-    // no hay acción posible, pero tampoco un punto mudo).
-    const free = !items.length
-      ? (ymd < today
-        ? '<span class="scf-cell-free past" title="Este día no tuvo posteo">–</span>'
-        : `<button type="button" class="scf-cell-free add" data-scf-day="${ymd}" aria-label="Pedirle a Posty un posteo para este día">+</button>`)
-      : '';
-    for (const { p } of shown) {
-      const prop = p.status === 'published'
-        ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
-        : proposedLabelFor(p, pl.proposals, tz);
-      vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null }));
-    }
-    cols.push(`<div class="scf-col${ymd === today ? ' today' : ''}">
-      <button type="button" class="scf-colhead" data-scf-day="${ymd}" aria-label="Ver el día ${ymd}"><span class="scf-col-dow">${esc(dow)}</span><span class="scf-col-n">${num}</span>${ymd === today ? '<span class="scf-hoy">hoy</span>' : ''}</button>
-      <div class="scf-colbody">${minis}${more}${free}</div>
-    </div>`);
-  }
-  // Borradores que caen fuera de la semana visible: no se esconden —
-  // la línea lo dice y el filtro Día/Semana los alcanza navegando.
-  const drafts = (ctx.all || []).filter(p => p && p.status === 'draft');
-  const outside = drafts.filter(d => { const k = pl.dayOf.get(d.id); return k && (k < monday || k > sunday); }).length;
-  const outsideHTML = outside ? `<div class="scf-outside">📝 ${outside === 1 ? 'Hay 1 borrador que cae' : `Hay ${outside} borradores que caen`} fuera de esta semana — están en su día, navegando con las flechas.</div>` : '';
-  return `<div class="scf-weekwrap" id="hsWeekList"><div class="scf-week">${cols.join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div></div>${outsideHTML}`;
 }
 // --- La capa de ampliación de Semana ---
 let SCF_POP = null; // { wrap, card, vault, pop } — la tarjeta abierta, si hay
@@ -7546,7 +7452,7 @@ function scfOpenPop(wrap, pinned) {
   if (!card) return;
   const pop = document.createElement('div');
   pop.className = 'scf-pop ' + (wrap.dataset.popCls || 'pc') + (pinned ? ' pinned' : '');
-  pop.innerHTML = `<div class="scf-pop-bar"><button type="button" class="scf-pop-day">Ver el día completo →</button><button type="button" class="scf-pop-x" aria-label="Cerrar">✕</button></div>`;
+  pop.innerHTML = `<div class="scf-pop-bar"><button type="button" class="scf-pop-x" aria-label="Cerrar">✕</button></div>`;
   pop.appendChild(card);
   wrap.appendChild(pop);
   wrap.classList.add('pop-open');
@@ -7559,109 +7465,41 @@ function scfOpenPop(wrap, pinned) {
   // capas fixed transformadas. Con click queda FIJADA (SCF_PINNED).
   const x = pop.querySelector('.scf-pop-x');
   if (x) x.onclick = (e) => { e.stopPropagation(); scfClosePop(); };
-  const db = pop.querySelector('.scf-pop-day');
-  if (db) db.onclick = (e) => { e.stopPropagation(); const d = wrap.dataset.day; scfClosePop(); if (d) schedJumpDay(d); };
+  // (v436) El botón «Ver el día completo» de la capa murió con la
+  // vista Día: la capa ES el detalle del posteo (Aceptar/Editar/💬).
 }
-// --- Vista MES: el almanaque, semanas apiladas con su rótulo ---
-function schedMesBodyHTML(ctx) {
-  const { pl, tz } = ctx;
-  const today = schedTodayYmd(tz);
-  const base = schedYmdToDate(today);
-  base.setUTCDate(1);
-  base.setUTCMonth(base.getUTCMonth() + SCHED_MONTH_OFFSET);
-  const firstYmd = schedDateToYmd(base);
-  const lastD = new Date(base.getTime());
-  lastD.setUTCMonth(lastD.getUTCMonth() + 1);
-  lastD.setUTCDate(0);
-  const lastYmd = schedDateToYmd(lastD);
-  let cursor = schedMondayOf(firstYmd);
-  const rows = [];
-  while (cursor <= lastYmd) {
-    const wkEnd = schedAddDays(cursor, 6);
-    const cells = [];
-    for (let i = 0; i < 7; i++) {
-      const ymd = schedAddDays(cursor, i);
-      const out = ymd < firstYmd || ymd > lastYmd;
-      const items = pl.byDay.get(ymd) || [];
-      const num = (schedYmdToDate(ymd) || new Date()).getUTCDate();
-      let inner = '';
-      if (items.length) {
-        const first = items[0].p;
-        if (first.image_path) inner = schedMiniHTML(first, '');
-        else inner = `<span class="scf-mdots">${items.slice(0, 3).map(({ p }) => `<i class="scf-dot st-${schedPostState(p)}"></i>`).join('')}</span>`;
-        if (items.length > 1) inner += `<span class="scf-mmore">+${items.length - 1}</span>`;
-      }
-      cells.push(`<button type="button" class="scf-mcell${out ? ' out' : ''}${ymd === today ? ' today' : ''}" data-scf-day="${ymd}" aria-label="Ver el ${ymd}"><span class="scf-cell-n">${num}</span>${inner}</button>`);
-    }
-    rows.push(`<div class="scf-mweek"><div class="scf-mweek-t">Semana ${esc(schedRangeLabel(cursor, wkEnd))}</div><div class="scf-mgrid">${cells.join('')}</div></div>`);
-    cursor = schedAddDays(cursor, 7);
-  }
-  return `<div class="scf-mes" id="hsWeekList">${rows.join('')}</div>`;
-}
-// Rótulo + offset de la barra de navegación según el modo activo.
-function schedNavInfo(tz) {
-  const today = schedTodayYmd(tz);
-  if (SCHED_MODE === 'dia') {
-    const ymd = schedAddDays(today, SCHED_DAY_OFFSET);
-    const d = schedYmdToDate(ymd);
-    let lbl = ymd;
-    try { lbl = d ? d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }) : ymd; } catch (e) {}
-    return { label: schedCap(lbl) + (SCHED_DAY_OFFSET === 0 ? ' · hoy' : ''), offset: SCHED_DAY_OFFSET };
-  }
-  if (SCHED_MODE === 'mes') {
-    const base = schedYmdToDate(today);
-    base.setUTCDate(1);
-    base.setUTCMonth(base.getUTCMonth() + SCHED_MONTH_OFFSET);
-    const ymd = schedDateToYmd(base);
-    return { label: schedCap(schedMonthName(ymd)) + ' de ' + String(ymd).slice(0, 4), offset: SCHED_MONTH_OFFSET };
-  }
-  if (SCHED_MODE === 'feed') {
-    // Feed (v223): vista rodante — los que se vienen + los publicados —
-    // sin navegación por período: la barra no muestra flechas ni rótulo.
-    return { label: '', offset: 0 };
-  }
-  const monday = schedMondayOf(schedAddDays(today, SCHED_WEEK_OFFSET * 7));
-  return { label: 'Semana ' + schedRangeLabel(monday, schedAddDays(monday, 6)), offset: SCHED_WEEK_OFFSET };
-}
-// El bloque completo del filtro (cabecera + cupo + barra + vista activa).
-// Sin ningún posteo, delega en homeWeekHTML: los estados de siempre
-// (armando / sin ADN / semana completa) quedan intactos.
+// (v436) La pantalla principal ES el feed (decisión de Valentino,
+// 25/10: «que sea solamente el feed»): el bloque compone el perfil
+// literal + la grilla (feedPreviewHTML) y nada de cromo arriba. La
+// píldora flotante «Aceptar todo (N)» flota sobre la grilla y solo
+// aparece con borradores pendientes (en autopiloto los posteos nacen
+// programados: sin pendientes, no hay píldora). El cupo y el detalle
+// del plan viven en Mi plan/Ajustes; el aviso de la semana que viene
+// se mudó al saludo del chat (CHAT_NEXT_WEEK). Sin ningún posteo,
+// delega en homeWeekHTML: los estados de siempre (armando / sin ADN /
+// semana completa) quedan intactos.
 function schedFilterBlockHTML(all, quota, generating, noDna) {
   const posts = Array.isArray(all) ? all : [];
   if (!posts.length) return homeWeekHTML(posts, quota, generating, noDna);
   const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
-  const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
   prefetchMedia(posts);
   const pl = schedPlacements(posts, tz);
   const drafts = posts.filter(p => p && p.status === 'draft');
-  const ctx = { pl, tz, bizName, all: posts };
-  const info = schedNavInfo(tz);
-  const body = SCHED_MODE === 'dia' ? schedDiaBodyHTML(ctx) : SCHED_MODE === 'mes' ? schedMesBodyHTML(ctx) : SCHED_MODE === 'feed' ? feedPreviewHTML(posts, tz, (typeof FEED_PROFILE !== 'undefined' ? FEED_PROFILE : null)) : schedSemanaBodyHTML(ctx);
-  // En Feed la barra no lleva navegación por período (vista rodante).
-  const navHTML = SCHED_MODE === 'feed' ? '' : `<div class="scf-nav">
-        <button type="button" class="scf-navbtn" id="scfNavPrev" aria-label="Anterior">‹</button>
-        <span class="scf-nav-label">${esc(info.label)}</span>
-        <button type="button" class="scf-navbtn" id="scfNavNext" aria-label="Siguiente">›</button>
-        ${info.offset !== 0 ? '<button type="button" class="scf-todaybtn" id="scfNavToday">hoy</button>' : ''}
-      </div>`;
+  // El saludo del chat de esta pantalla hereda el aviso de la semana
+  // que viene (la misma cuenta que antes pintaba la línea de cupo).
+  try {
+    const wk = schedWeekCounts(posts, tz, pl.proposals);
+    const qT = Number(quota && quota.limit) || 0;
+    CHAT_NEXT_WEEK = (wk.nextDrafts > 0 && qT > 0) ? { n: wk.nextDrafts, total: qT } : null;
+  } catch (e) { CHAT_NEXT_WEEK = null; }
+  const body = feedPreviewHTML(posts, tz, (typeof FEED_PROFILE !== 'undefined' ? FEED_PROFILE : null));
   return `<div class="hs-week scf">
-    <div class="hs-week-head"><b>📅 Tu agenda</b>${drafts.length ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo (${drafts.length})</button>` : ''}</div>
+    ${body}
+    ${drafts.length ? acceptPillHTML(drafts.length, 'hsAcceptAll') : ''}
     <div id="revMsg"></div>
-    ${schedQuotaHTML(pl.list, quota, schedWeekCounts(posts, tz, pl.proposals))}
     <div id="hs-report"></div>
     ${generating ? '<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>' : ''}
     ${schedStaleHTML(posts, tz)}
-    <div class="scf-bar">
-      <div class="scf-seg" role="tablist" aria-label="Ver la agenda por">
-        <button type="button" role="tab" data-scf-mode="dia" class="${SCHED_MODE === 'dia' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'dia'}">Día</button>
-        <button type="button" role="tab" data-scf-mode="semana" class="${SCHED_MODE === 'semana' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'semana'}">Semana</button>
-        <button type="button" role="tab" data-scf-mode="mes" class="${SCHED_MODE === 'mes' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'mes'}">Mes</button>
-        <button type="button" role="tab" data-scf-mode="feed" class="scf-seg-feed ${SCHED_MODE === 'feed' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'feed'}"><svg class="scf-ig-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><defs><linearGradient id="scfIgGrad" x1="0" y1="24" x2="24" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".6" stop-color="#D62976"/><stop offset=".8" stop-color="#962FBF"/><stop offset="1" stop-color="#4F5BD5"/></linearGradient></defs><rect x="3" y="3" width="18" height="18" rx="5.2" stroke="url(#scfIgGrad)" stroke-width="2.1"/><circle cx="12" cy="12" r="4.1" stroke="url(#scfIgGrad)" stroke-width="2.1"/><circle cx="17.3" cy="6.7" r="1.35" fill="url(#scfIgGrad)"/></svg>Feed</button>
-      </div>
-      ${navHTML}
-    </div>
-    ${''/* (v326) un solo contador: los "por aceptar" ya viven en la línea de cupo (schedQuotaHTML) y en el botón Aceptar todo — esta tercera copia decía lo mismo y contradecía el festejo de arriba. */}
-    ${body}
   </div>`;
 }
 // --- ✨ El feed del negocio, como CUARTO MODO del filtro (v223) ---
@@ -7804,27 +7642,6 @@ function feedPreviewHTML(all, tz, prof) {
     ${anyUp ? '<div class="fp-line">Los que llevan pastillita todavía no salieron 😉</div>' : ''}${moreBtn}
   </section>`;
 }
-// --- Wiring del filtro (lo llama bindSchedule) ---
-function schedSetMode(m) {
-  SCHED_MODE = m;
-  try { localStorage.setItem('posty_sched_mode', m); } catch (e) {}
-  try { render(); } catch (e) {}
-}
-function schedNavStep(dir) {
-  if (SCHED_MODE === 'feed') return; // el Feed no navega por período
-  if (SCHED_MODE === 'dia') SCHED_DAY_OFFSET += dir;
-  else if (SCHED_MODE === 'mes') SCHED_MONTH_OFFSET += dir;
-  else SCHED_WEEK_OFFSET += dir;
-  try { render(); } catch (e) {}
-}
-function schedJumpDay(ymd) {
-  const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
-  SCHED_DAY_OFFSET = schedDiffDays(schedTodayYmd(tz), ymd);
-  SCHED_MODE = 'dia';
-  try { localStorage.setItem('posty_sched_mode', 'dia'); } catch (e) {}
-  try { render(); } catch (e) {}
-  setTimeout(() => { const el = document.getElementById('schedView'); if (el) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} } }, 60);
-}
 // (v331) El cableado de las minis .scf-mini-x (hover que agranda / click
 // que fija) y los cierres globales de la capa viven en funciones propias:
 // la Agenda (Semana) y la HOME nueva (el feed literal) comparten LA
@@ -7901,35 +7718,11 @@ function scfWireGlobals() {
 function bindSchedFilter() {
   SCF_POP = null; // el DOM se reconstruyó: ninguna capa queda abierta
   SCF_PINNED = false;
-  $$('#schedView [data-scf-mode]').forEach(b => b.onclick = () => { if (b.dataset.scfMode !== SCHED_MODE) schedSetMode(b.dataset.scfMode); });
-  const pv = $('#scfNavPrev'), nx = $('#scfNavNext'), td = $('#scfNavToday');
-  if (pv) pv.onclick = () => schedNavStep(-1);
-  if (nx) nx.onclick = () => schedNavStep(1);
-  if (td) td.onclick = () => { SCHED_DAY_OFFSET = 0; SCHED_WEEK_OFFSET = 0; SCHED_MONTH_OFFSET = 0; try { render(); } catch (e) {} };
-  $$('#schedView [data-scf-day]').forEach(b => b.onclick = () => schedJumpDay(b.dataset.scfDay));
-  // Semana: el posteo compacto se agranda al pasar el mouse (con una
-  // mini-espera para no parpadear al barrer la grilla) o al primer
-  // toque en pantallas táctiles. La ampliación va CENTRADA en la
-  // pantalla. v221 (corrección de Valentino): HOVER = vista previa que
-  // se cierra EN EL ACTO al sacar el mouse de la foto (sin esperas, sin
-  // depender de salir de la tarjeta grande); CLICK = capa FIJADA para
-  // poder usar Editar/Aceptar/Frenar, hasta ✕ o click afuera. En
-  // táctil el toque ya la fijaba: sin cambios.
-  // (v331) El cableado vive en bindScfMinis/scfWireGlobals: la home
-  // (feed literal) comparte la misma interacción.
+  // (v436) Sin pestañas ni navegación por período: la pantalla es el
+  // feed. Queda el cableado de la capa de ampliación (bindScfMinis /
+  // scfWireGlobals), compartida con Inicio: la interacción de las
+  // tarjetas del feed literal vive ahí.
   bindScfMinis(document.getElementById('schedView'));
-  const rail = $('#hsWeekList');
-  const rp = $('#scfRailPrev'), rn = $('#scfRailNext');
-  if (rail && (rp || rn)) {
-    const step = () => {
-      try {
-        const c = rail.querySelector('.igmock-fixed');
-        return c ? c.offsetWidth + 12 : rail.clientWidth * 0.8;
-      } catch (e) { return 300; }
-    };
-    if (rp) rp.onclick = () => rail.scrollBy({ left: -step(), behavior: 'smooth' });
-    if (rn) rn.onclick = () => rail.scrollBy({ left: step(), behavior: 'smooth' });
-  }
 }
 /* ===== /v217 ===== */
 
@@ -12717,10 +12510,6 @@ async function scheduleView() {
   // la pinta schedFilterBlockHTML adentro de homeWeekBlock.
   const homeChatBlock = `<div class="hs-chat-label" style="margin-top:18px"><b>💬 ¿Cambiamos algo?</b></div>${chatCardHTML(true, true, true, true)}`;
   return `<div id="schedView" class="sched-wrap">
-    <div class="hs-brand-head">
-      <img src="ai-avatar.png" alt="Posty" class="hs-brand-ava">
-      <div class="hs-brand-txt"><b>Posty<span style="color:var(--cel)">.</span></b><span>Tu semana, lista sola</span></div>
-    </div>
     ${homeWeekBlock}
     ${trialBanner}
     ${firstRedoBlock}
@@ -14031,11 +13820,13 @@ async function inicioView() {
     : '';
   // Franja de revisión (mock aprobado): contador de piezas nuevas +
   // Aceptar todo. Sin borradores pendientes, la franja no aparece.
+  // (v436) La franja de revisión se jubiló: aceptar la semana es la
+  // píldora flotante sobre la grilla (acceptPillHTML, la misma pieza
+  // de la Agenda), visible solo con borradores pendientes. El #revMsg
+  // queda: es donde el gate de Instagram y los errores de aceptación
+  // dan su feedback en esta vista.
   const stripHTML = (!HF_VISITOR && drafts.length)
-    ? `<div class="hf-review">
-        <div class="hf-review-tx"><b>Tu semana nueva está lista</b><span>${drafts.length} pieza${drafts.length > 1 ? 's' : ''} para revisar · si las aceptás, Posty las programa y las publica por vos</span></div>
-        <button type="button" class="hf-accept" id="hfAcceptAll">Aceptar todo</button>
-      </div><div id="revMsg"></div>`
+    ? `${acceptPillHTML(drafts.length, 'hfAcceptAll')}<div id="revMsg"></div>`
     : '';
   const kitHTML = (!HF_VISITOR && prof && prof.source === 'kit')
     ? `<div class="hf-kitnote">🌱 <span><b>Así va a nacer tu perfil</b> — es la propuesta de Posty desde tu negocio y tu rubro. Cuando salga tu primera semana, esta misma pantalla pasa a ser tu Instagram de verdad.</span></div>`
@@ -14054,6 +13845,13 @@ async function inicioView() {
   const visitorHTML = HF_VISITOR
     ? `<button type="button" class="hf-vpill" data-hf-visitor="0">👁 ${enHome ? 'You are seeing your profile as a visitor' : 'Estás viendo tu perfil como visitante'} · <b>${enHome ? 'Back to your view' : 'Volver a tu vista'}</b></button>`
     : `<div class="hf-vrow"><button type="button" class="hf-vtoggle" data-hf-visitor="1">👁 ${enHome ? 'View as visitor' : 'Ver como visitante'}</button></div>`;
+  // (v436) El saludo del chat de Inicio hereda el aviso de la semana
+  // que viene (la misma cuenta que antes pintaba la línea de cupo).
+  try {
+    const wk = schedWeekCounts(allPosts, tz, pl.proposals);
+    const qT = Number(quota && quota.limit) || 0;
+    CHAT_NEXT_WEEK = (wk.nextDrafts > 0 && qT > 0) ? { n: wk.nextDrafts, total: qT } : null;
+  } catch (e) { CHAT_NEXT_WEEK = null; }
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${igLine}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB })}
@@ -16212,11 +16010,13 @@ function bindSchedule() {
   try { paintIdeasChrome(); } catch (e) {}
   const ideasChipBtn = $('#ideasChip');
   if (ideasChipBtn) ideasChipBtn.onclick = () => { try { toggleIdeasPanel(); } catch (e) {} };
-  // v221: ✨ Así va quedando tu feed — tocar un tile que se viene salta
-  // a su día en la agenda; "Ver más posteos" despliega el historial.
-  // (Los tiles publicados se abren con el wiring de [data-lightbox] de
-  // más arriba, el de siempre.)
-  $$('#schedView [data-feed-day]').forEach(b => b.onclick = () => schedJumpDay(b.dataset.feedDay));
+  // (v436) ✨ Así va quedando tu feed — tocar un tile que se viene abre
+  // SU detalle (#/app/post/:id: Aceptar / Editar / 💬 Pedir un cambio):
+  // la vista Día a la que antes saltaba ya no existe, la pantalla ES
+  // el feed. "Ver más posteos" despliega el historial. (Los tiles
+  // publicados se abren con el wiring de [data-lightbox] de más
+  // arriba, el de siempre.)
+  $$('#schedView [data-feed-day]').forEach(b => b.onclick = () => { const id = b.dataset.postId; if (id) location.hash = '#/app/post/' + encodeURIComponent(id); });
   const fpMore = $('#fpMore');
   if (fpMore) fpMore.onclick = () => {
     const sec = document.getElementById('hsFeed');
@@ -16975,7 +16775,7 @@ async function f3RevealCheck() {
   newGrid.querySelectorAll('[data-post-id]').forEach(el => {
     if (freshIdsF.has(el.dataset.postId)) { el.classList.add('hf-tile-enter'); el.style.animationDelay = (k2++ * 160) + 'ms'; }
   });
-  try { newGrid.querySelectorAll('[data-feed-day]').forEach(b => { b.onclick = () => schedJumpDay(b.dataset.feedDay); }); } catch (e) {}
+  try { newGrid.querySelectorAll('[data-feed-day]').forEach(b => { b.onclick = () => { const id = b.dataset.postId; if (id) location.hash = '#/app/post/' + encodeURIComponent(id); }; }); } catch (e) {}
   try { newGrid.querySelectorAll('[data-lightbox]').forEach(el => { el.onclick = () => lbOpenFrom(el); }); } catch (e) {}
   try { track('f3_live_reveal', { n: freshIdsF.size, surface: 'feed' }); } catch (e) {}
   return true;
