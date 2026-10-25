@@ -156,6 +156,28 @@ for (const [k, v] of Object.entries(ESPECIALISTAS)) IDENTIDADES[k] = { nombre: v
 const ORDEN_PODERES = ['posty', 'venty', 'atenty', 'gesty'];
 const ORDEN_ESPECIALISTAS = ['desy', 'talenty', 'growty', 'bossty'];
 
+// Poderes CONTRATADOS por la cuenta (celebración «La oficina festeja»,
+// 2026-10-25: la celebración refleja la oficina REAL, no la aspiracional).
+// Posty es el poder de la cuenta por construcción: toda cuenta nace como
+// cuenta Posty (trial o plan activo) y la celebración es su subida de
+// nivel; por eso siempre está. Venty/Gesty/Atenty SOLO si hay un registro
+// real en poderes_contratados: esa tabla solo la escribe un evento real
+// de contratación (el checkout del poder cuando lance). Sin registro no
+// hay mensaje: ni supuesto, ni fixture, ni nivel. Lista cerrada y SIN
+// pliegue: 'talenty' NO es 'gesty' acá y los especialistas jamás entran.
+// Falla cerrada: ante cualquier error, solo Posty (el poder que celebra).
+function poderesContratados(db, uid) {
+  const out = ['posty'];
+  try {
+    const rows = db.prepare('SELECT poder FROM poderes_contratados WHERE user_id = ?').all(uid);
+    for (const r of rows || []) {
+      const p = String((r && r.poder) || '').trim().toLowerCase();
+      if ((p === 'venty' || p === 'gesty' || p === 'atenty') && !out.includes(p)) out.push(p);
+    }
+  } catch (e) { /* tabla aún no creada: solo Posty */ }
+  return ORDEN_PODERES.filter((p) => out.includes(p));
+}
+
 function clavesQueCuentan(poder) {
   const destino = resolverPoder(poder);
   const claves = [destino];
@@ -311,4 +333,4 @@ function pruebaPara(niv, datos) {
   return { es: `${s} semanas publicadas con constancia${p ? ` y ${p} preguntas respondidas` : ''}: tu socio ya trabaja solo.`, en: `${s} weeks published steadily${p ? ` and ${p} questions answered` : ''}: your partner already works on its own.` };
 }
 
-module.exports = { PODERES, ESPECIALISTAS, ORDEN_PODERES, ORDEN_ESPECIALISTAS, PLIEGUE, resolverPoder, IDENTIDADES, DORADO, computarNivel, registrarEvento, conteoEventos, DESAFIO_MAP, desafioPara, pruebaPara, semanaISO };
+module.exports = { PODERES, ESPECIALISTAS, ORDEN_PODERES, ORDEN_ESPECIALISTAS, PLIEGUE, resolverPoder, IDENTIDADES, DORADO, computarNivel, registrarEvento, conteoEventos, DESAFIO_MAP, desafioPara, pruebaPara, semanaISO, poderesContratados };

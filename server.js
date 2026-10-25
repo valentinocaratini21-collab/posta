@@ -3434,6 +3434,13 @@ function nivelTablasEnsure() {
     db.exec(`CREATE TABLE IF NOT EXISTS nivel_visitas (user_id INTEGER PRIMARY KEY, last_ts INTEGER NOT NULL, last_nivel INTEGER NOT NULL)`);
     db.exec(`CREATE TABLE IF NOT EXISTS nivel_brotes_vistos (user_id INTEGER NOT NULL, fundamento_id INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (user_id, fundamento_id))`);
     db.exec(`CREATE TABLE IF NOT EXISTS nivel_digest_snapshot (user_id INTEGER PRIMARY KEY, items_json TEXT NOT NULL DEFAULT '[]', ts INTEGER NOT NULL)`);
+    // (2026-10-25 · celebración real) Poderes contratados por la cuenta:
+    // SOLO la escribe un evento real de contratación (el checkout del
+    // poder cuando lance). Hoy ningún checkout de Venty/Gesty/Atenty
+    // existe, así que hoy solo Posty festeja + Bambooty cierra. La
+    // lectura vive en niveles.poderesContratados (lista cerrada, sin
+    // pliegue, sin especialistas).
+    db.exec(`CREATE TABLE IF NOT EXISTS poderes_contratados (user_id INTEGER NOT NULL, poder TEXT NOT NULL, ts INTEGER NOT NULL, fuente TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, poder))`);
   } catch (e) {}
 }
 // Nombres de oferta/temas del digest, menos lo que el dueño respondió o
@@ -3565,6 +3572,10 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
       celebrar: niv.nivel > 1 && !celebrado,
       avance,
       socio_desde_ts,
+      // (2026-10-25 · celebración real) Poderes contratados de la cuenta:
+      // la celebración muestra solo estos + Bambooty. Cliente solo-Posty
+      // => ['posty'] (sin Venty/Gesty/Atenty inventados).
+      poderes: oficina.niveles.poderesContratados(db, uid),
       desafio: niv.nivel < 5 ? oficina.niveles.desafioPara(niv) : null,
       prueba: nivelPrueba(db, uid, niv),
       brote: nivelBrote(db, uid),
@@ -22501,7 +22512,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v466';
+const BUILD_ID = '20261025-v467';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -15001,16 +15001,21 @@ function pzNivelExtraHTML(nv, en) {
   }
   return h;
 }
-// La familia festeja (v459): SOLO los 4 poderes + Bambooty. Los
-// especialistas por proyecto no festejan: no son poderes. Copy de
-// felicitación, sin afirmaciones de resultados: cada poder habla en su voz.
-function pzNivelFamiliaHTML(en) {
+// La familia festeja (2026-10-25 · celebración REAL): solo los poderes
+// CONTRATADOS por la cuenta (nv.poderes, del servidor) + Bambooty
+// siempre como cierre. Cliente solo-Posty => ninguna fila de poder, solo
+// el cierre dorado. Los especialistas por proyecto no festejan: no son
+// poderes. Sin poderes válidos en nv, falla cerrada a solo Posty (el poder
+// que celebra): jamás se inventa un poder. Copy de felicitación, sin
+// afirmaciones de resultados: cada poder habla en su voz.
+function pzNivelFamiliaHTML(nv, en) {
+  const poderes = (nv && Array.isArray(nv.poderes) && nv.poderes.length) ? nv.poderes : ['posty'];
   const rows = [
-    ['#FF7A59', 'Venty', en ? 'Sales' : 'Ventas', en ? 'That sells itself! Whenever you want, I’ll build something to sell more.' : '¡Eso se vende solo! Cuando quieras, te armo algo para vender más.'],
-    ['#5B8C5A', 'Gesty', en ? 'Admin' : 'Administración', en ? 'Already logged in your office: new level, everything in order.' : 'Ya lo dejé registrado en tu oficina: nivel nuevo, todo en orden.'],
-    ['#2E8C83', 'Atenty', en ? 'Customer care' : 'Cuidar al cliente', en ? 'Your clients will notice the difference. I’ll make sure they feel at home.' : 'Tus clientes van a notar la diferencia. Yo me encargo de que se sientan en casa.'],
+    ['venty', '#FF7A59', 'Venty', en ? 'Sales' : 'Ventas', en ? 'That sells itself! Whenever you want, I’ll build something to sell more.' : '¡Eso se vende solo! Cuando quieras, te armo algo para vender más.'],
+    ['gesty', '#5B8C5A', 'Gesty', en ? 'Admin' : 'Administración', en ? 'Already logged in your office: new level, everything in order.' : 'Ya lo dejé registrado en tu oficina: nivel nuevo, todo en orden.'],
+    ['atenty', '#2E8C83', 'Atenty', en ? 'Customer care' : 'Cuidar al cliente', en ? 'Your clients will notice the difference. I’ll make sure they feel at home.' : 'Tus clientes van a notar la diferencia. Yo me encargo de que se sientan en casa.'],
   ];
-  const h = rows.map((r) => `<div class="pz-fam-row"><span class="pz-fam-dot" style="background:${r[0]}"></span><span class="pz-fam-tx"><strong>${esc(r[1])}</strong><span>${esc(r[2])}</span><span>${esc(r[3])}</span></span></div>`).join('');
+  const h = rows.filter((r) => poderes.includes(r[0])).map((r) => `<div class="pz-fam-row"><span class="pz-fam-dot" style="background:${r[1]}"></span><span class="pz-fam-tx"><strong>${esc(r[2])}</strong><span>${esc(r[3])}</span><span>${esc(r[4])}</span></span></div>`).join('');
   return `<div class="pz-fam"><div class="pz-fam-tit">${esc(en ? 'THE OFFICE CELEBRATES' : 'LA OFICINA FESTEJA')}</div>${h}<div class="pz-fam-bam">${esc(en ? 'Your whole office celebrates with you. We keep growing together.' : 'Toda tu oficina festeja con vos. Seguimos creciendo juntos.')}</div></div>`;
 }
 function pzNivelBroteVisto(el) {
@@ -15029,7 +15034,7 @@ function pzNivelCelebShow(nv, en) {
     <span class="pz-celeb-evo"><img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;object-fit:cover"></span>
     <h3>${esc(en ? `You leveled up to ${nv.nombre_nivel}!` : `¡Subiste a ${nv.nombre_nivel}!`)} 🎉</h3>
     <p class="pz-celeb-unlock">${esc(unlock)}</p>
-    ${pzNivelFamiliaHTML(en)}
+    ${pzNivelFamiliaHTML(nv, en)}
     <p class="pz-celeb-sub">${esc(en ? 'You will see it in your next week.' : 'Esto ya cambia tu próxima semana.')}</p>
     <button type="button" class="pz-celeb-share" data-pz-celeb-share>${esc(en ? 'Share as story' : 'Compartir como historia')}</button>
     <button type="button" class="pz-celeb-ok" data-pz-celeb-x>${esc(en ? 'Keep going' : 'Seguir')}</button>

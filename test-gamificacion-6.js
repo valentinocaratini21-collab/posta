@@ -66,11 +66,15 @@ console.log('— cliente: tira extra + familia festeja —');
 for (const f of ['pzNivelExtraHTML', 'pzNivelFamiliaHTML', 'pzNivelBroteVisto']) {
   t(app.includes('function ' + f + '('), 'definida ' + f);
 }
-t(app.includes('pzNivelExtraHTML(nv, en)') && app.includes('pzNivelFamiliaHTML(en)'), 'tira y celebración llaman a las funciones nuevas');
-t(app.includes('LA OFICINA FESTEJA') && app.includes('Venty') && app.includes('Gesty') && app.includes('Atenty'), 'familia: Venty + Gesty + Atenty festejan');
+t(app.includes('pzNivelExtraHTML(nv, en)') && app.includes('pzNivelFamiliaHTML(nv, en)'), 'tira y celebración llaman a las funciones nuevas (familia recibe nv)');
+t(app.includes('LA OFICINA FESTEJA') && app.includes('Venty') && app.includes('Gesty') && app.includes('Atenty'), 'familia: filas Venty + Gesty + Atenty existen como datos (se filtran por poderes)');
 t(app.includes('Toda tu oficina festeja con vos'), 'familia: cierre dorado de Bambooty');
 const famRaw = app.slice(app.indexOf('function pzNivelFamiliaHTML'), app.indexOf('function pzNivelBroteVisto'));
 t(!/Desy|Growty|Talenty|Bossty/.test(famRaw), 'familia: jamás especialistas por proyecto');
+t(famRaw.includes('poderes.includes(r[0])'), 'familia: filas filtradas por poderes contratados (no se renderiza lo no contratado)');
+t(famRaw.includes("['posty']"), 'familia: falla cerrada a solo Posty sin poderes válidos');
+t(srv.includes('poderes: oficina.niveles.poderesContratados(db, uid)'), 'GET /api/oficina/nivel sirve poderes contratados');
+t(srv.includes('CREATE TABLE IF NOT EXISTS poderes_contratados'), 'tabla poderes_contratados creada en nivelTablasEnsure');
 t(app.includes('Desafío de esta semana') && app.includes('La prueba de tu nivel:') && app.includes('Brote sorpresa:') && app.includes('Mientras no estabas'), 'tira: desafio + prueba + brote + ausencia renderizados');
 for (const c of ['.pz-desafio', '.pz-prueba', '.pz-brote', '.pz-ausencia', '.pz-fam']) t(css.includes(c), 'estilo ' + c);
 const blockRaw = app.slice(app.indexOf('TIRA DE NIVEL POSTY'), app.indexOf('function mzOpenSheet'));
