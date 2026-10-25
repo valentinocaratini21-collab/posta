@@ -7505,14 +7505,32 @@ function weekCardHTML(d, o) {
   // solo si hay pieza lista y el estado lo permite (programado o borrador,
   // nunca en revisión). El mount .pcard-pubnowm recibe el progreso del flujo.
   const canPubNow = !isPending && !!d.image_path && (d.status === 'scheduled' || d.status === 'draft') && !d.needs_review;
-  const acts = isPub ? (o.dia ? '<div class="pcard-actions hs-acts"></div>' : '')
-    : `<div class="pcard-actions hs-acts">
-        ${canPubNow ? '<button type="button" data-pc-act="pubnow" class="pcard-approve">⚡ Publicar ahora</button>' : ''}
-        ${d.status === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
-        <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
-        ${isV || isPending ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
-        <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
-      </div><div class="pubnow-mount pcard-pubnowm"></div>`;
+  // Rediseño botones de la tarjeta (aprobado por Valentino 2026-10-25):
+  // UNA acción principal llena por estado + UNA secundaria en texto
+  // («Pedir un cambio» → el chat único con el posteo anclado).
+  // Mueren «Editar» (editar es decirlo en el chat) e «Imagen» (la imagen
+  // ya se abre en grande tocándola: igmock-media lleva data-lightbox).
+  // Si el estado no admite una acción, no se renderiza (no se grisacea).
+  const L = (es, en) => ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? en : es);
+  const igLink = (d.ig_permalink && /^https:\/\//.test(String(d.ig_permalink)) && !String(d.ig_permalink).includes('/demo_')) ? String(d.ig_permalink) : '';
+  const askBtn = `<button type="button" class="pcard-ask" data-pc-act="ask-change">💬 ${L('Pedir un cambio', 'Request a change')}</button>`;
+  let actsInner = '';
+  if (isPub) {
+    if (igLink) actsInner += `<a class="pcard-main" href="${esc(igLink)}" target="_blank" rel="noopener">${L('Ver en Instagram ↗', 'See it on Instagram ↗')}</a>`;
+    actsInner += askBtn;
+  } else if (d.status === 'scheduled') {
+    actsInner += `<button type="button" class="pcard-main" data-pc-act="hold">⏸ ${L('Frenar', 'Hold')}</button>`;
+    actsInner += askBtn;
+  } else if (d.status === 'draft' && !isPending) {
+    if (canPubNow) actsInner += `<button type="button" class="pcard-main" data-pc-act="pubnow">⚡ ${L('Publicar ahora', 'Publish now')}</button>`;
+    actsInner += askBtn;
+    actsInner += `<button type="button" class="pcard-del" data-pc-act="del-draft" data-del-confirm="${esc(L('¿Eliminar este borrador para siempre?', 'Delete this draft forever?'))}">${L('Eliminar', 'Delete')}</button>`;
+  }
+  // Registro para «Pedir un cambio»: el handler recupera el posteo completo
+  // sin importar en qué superficie vive la tarjeta (mismo patrón que el
+  // mini-chat hfAskChangeBtnHTML, que reescribe esta entrada al final).
+  try { if (d && d.id != null && typeof HF_ASK_POSTS !== 'undefined' && HF_ASK_POSTS) HF_ASK_POSTS[String(d.id)] = { id: d.id, image_path: d.image_path || '', caption: d.caption || '', redo_left: (d.redo_left === null || d.redo_left === undefined) ? 3 : d.redo_left, status: d.status || '', media_type: d.media_type || '' }; } catch (e) {}
+  const acts = `<div class="pcard-actions hs-acts">${actsInner}</div><div class="pubnow-mount pcard-pubnowm"></div>`;
   // data-sched-at / data-day-label: los usa pcSkip para deshacer y para
   // "Armar otro" (la igmock del carrusel original no los traía).
   let dayLabel = '';
@@ -9350,6 +9368,24 @@ async function pcSkip(id, card) {
     ],
   });
 }
+// --- «Pedir un cambio» desde la tarjeta: abre el chat ÚNICO con el posteo
+// anclado (mismo flujo que el mini-chat del detalle; no es un segundo chat).
+async function pcAskChange(id) {
+  let post = null;
+  try { post = (typeof HF_ASK_POSTS !== 'undefined' && HF_ASK_POSTS) ? HF_ASK_POSTS[String(id)] : null; } catch (e) {}
+  if (!post) {
+    try { const posts = await api.get('/api/posts'); post = (Array.isArray(posts) ? posts : []).find(p => String(p.id) === String(id)) || null; } catch (e) {}
+  }
+  if (post) { hfOpenChatForPost(post); return; }
+  location.hash = '#/app/chat';
+}
+// --- Eliminar borrador: confirmación explícita + el mismo camino reversible
+// de pcSkip (Deshacer 5s). Solo borradores; nunca una pastilla principal.
+function pcDelDraft(id, root, el) {
+  const msg = (el && el.dataset && el.dataset.delConfirm) || '¿Eliminar este borrador para siempre?';
+  if (!window.confirm(msg)) return;
+  pcSkip(id, root);
+}
 // --- Aprobar ---
 async function pcApprove(id, card, btn) {
   if (btn) btn.disabled = true;
@@ -9407,6 +9443,8 @@ function pcOnClick(e) {
   if (act === 'skip') { pcSkip(id, root); return; }
   if (act === 'approve') { pcApprove(id, root, el); return; }
   if (act === 'pubnow') { pcPublishNow(id, root, el); return; }
+  if (act === 'ask-change') { pcAskChange(id); return; }
+  if (act === 'del-draft') { pcDelDraft(id, root, el); return; }
   if (act === 'tiktok') { pcShareTikTok(id, el); return; }
   if (act === 'tiktok-inbox') { pcShareTikTokInbox(id, el); return; }
   if (act === 'img-style') {
