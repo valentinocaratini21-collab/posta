@@ -3279,6 +3279,11 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
       const r = db.prepare(`SELECT MIN(ts) AS ts FROM oficina_registros WHERE user_id = ? AND poder = ? AND tipo = 'subida_nivel' AND resumen = ?`).get(req.session.userId, niv.poder, `${def.nombre} subió a ${def.niveles[4]}`);
       if (r && r.ts) socio_desde_ts = r.ts;
     } catch (e) {}
+    // (v461 · tira simple) Avance del gate en curso, en requisitos
+    // completados vs. total — el cliente pinta la barrita con esto, sin
+    // mostrar ningún número. L5: sin gate en curso, avance null (llena).
+    const gateHitos = (niv.hitos || []).filter((h) => h.nivel_objetivo === niv.nivel + 1);
+    const avance = niv.nivel >= 5 || !gateHitos.length ? null : { hechos: gateHitos.filter((h) => h.cumplido).length, total: gateHitos.length };
     res.json({
       ok: true, poder: niv.poder, nivel: niv.nivel,
       nombre_nivel: niv.nombre_nivel,
@@ -3286,6 +3291,7 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
       color: niv.color, proximo_paso: niv.proximo_paso,
       faltantes: niv.gate.pendientes,
       celebrar: niv.nivel > 1 && !celebrado,
+      avance,
       socio_desde_ts,
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -22178,7 +22184,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v460';
+const BUILD_ID = '20261025-v461';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

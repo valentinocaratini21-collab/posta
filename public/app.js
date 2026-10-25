@@ -14625,21 +14625,24 @@ async function inicioView() {
     CHAT_NEXT_WEEK = (wk.nextDrafts > 0 && qT > 0) ? { n: wk.nextDrafts, total: qT } : null;
   } catch (e) { CHAT_NEXT_WEEK = null; }
   // (v440 · SOLO FEED, corrección de Valentino 01:48 — refinada en v442
-  // por sus correcciones 02:13–02:20) Composición final de Inicio: 1) la
-  // PÍLDORA «Te faltan N pasos» arriba a un costado (setupMainHTML);
-  // 2) el perfil literal (encabezado con su chip IG + acciones + «ver
-  // como visitante» como acción chica + historias); 3) la grilla con la
-  // píldora flotante; 4) el chat único (barra + hoja, SIN prólogo). El
+  // por sus correcciones 02:13–02:20; orden 2026-10-25 por Valentino con
+  // captura: la tira de gamificación va ARRIBA del perfil, no arriba de
+  // los feeds) Composición final de Inicio: 1) la PÍLDORA «Te faltan N
+  // pasos» arriba a un costado (setupMainHTML, no se mueve); 2) la TIRA
+  // de gamificación (avatar + nivel + barrita fina); 3) el perfil
+  // literal (encabezado con su chip IG + acciones + «ver como
+  // visitante» como acción chica + historias); 4) la grilla con la
+  // píldora flotante; 5) el chat único (barra + hoja, SIN prólogo). El
   // botón-anuncio de Ideas y la burbuja de relación salieron de la
   // pantalla principal (v442).
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${HF_VISITOR ? '' : setupMainHTML()}
+  ${nivelStripHTML}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
   ${visitorToggleHTML}
   ${storiesHTML}
-  ${nivelStripHTML}
   ${gridHTML}
   ${stripHTML}
   ${visitorPillHTML}
@@ -14697,81 +14700,37 @@ function pzNivelStemHTML(nivel, color, celeb) {
   }
   return `<span class="pz-tallo" style="--pz-cel:${esc(color || '#2793C8')}">${h}</span>`;
 }
-/* ===== EVOLUCIÓN DE POSTY (v459) — «La evolución de Posty» ===== */
-// REGLA DURA DEL AVATAR: la cara es la canónica y queda CONGELADA. La tira
-// usa SIEMPRE el mismo archivo ai-avatar.png (el máster servido); la
-// evolución es solo escala CSS + decor local (brote, brillo, anillo, kit,
-// aura) posicionado FUERA de la cara. Nada se regenera ni se redibuja.
-// El website lee el mismo endpoint y debe mostrar la misma evolución.
-function pzEvoDecor(nivel) {
-  if (nivel <= 1) return '<span class="pz-evo-brote" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22V10M12 10C12 5 9 2 3 2c0 6 3 8 9 8zm0 0c0-5 3-8 9-8 0 6-3 8-9 8z"/></svg></span>';
-  if (nivel === 2) return '<span class="pz-evo-brillo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4z"/></svg></span>';
-  if (nivel === 3) return '<span class="pz-evo-anillo" aria-hidden="true"></span>';
-  if (nivel === 4) return '<span class="pz-evo-aura" aria-hidden="true"></span><span class="pz-evo-kit" aria-hidden="true"><svg viewBox="0 0 32 20"><rect x="1" y="2" width="18" height="13" rx="2"/><rect x="13" y="6" width="18" height="13" rx="2"/><path d="M23 1l4 4"/></svg></span>';
-  return '<span class="pz-evo-aura pz-evo-aura-oro" aria-hidden="true"></span><span class="pz-evo-anillo pz-evo-anillo-oro" aria-hidden="true"></span>';
-}
-function pzEvoFigure(nivel, cls) {
-  return `<span class="pz-evo evo-L${nivel}${cls ? ' ' + cls : ''}"><img class="pz-evo-av" src="ai-avatar.png" alt="Posty">${pzEvoDecor(nivel)}</span>`;
-}
-function pzEvoMes(ts, en) {
-  if (!ts) return '';
-  try {
-    const d = new Date(Number(ts));
-    const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    return en ? `${MONTHS[d.getMonth()]} ${d.getFullYear()}` : `${MESES[d.getMonth()]} de ${d.getFullYear()}`;
-  } catch (e) { return ''; }
-}
-function pzEvoGhost(nv, en) {
-  if (nv.nivel >= 5) {
-    const mes = pzEvoMes(nv.socio_desde_ts, en);
-    return `<span class="pz-evo-next pz-evo-max" title="${esc(en ? 'Max evolution' : 'Evolución máxima')}"><span class="pz-evo-max-estrella" aria-hidden="true">✦</span><span class="pz-evo-next-tx">${esc(mes ? (en ? `Partner since ${mes}` : `Socio desde ${mes}`) : (en ? 'Max evolution' : 'Evolución máxima'))}</span></span>`;
-  }
-  const sig = nv.nivel + 1;
-  return `<span class="pz-evo-next" title="${esc(en ? 'This is how Posty will grow' : 'Así va a crecer Posty')}"><span class="pz-evo-fantasma">${pzEvoFigure(sig, '')}</span><span class="pz-evo-next-tx">${esc(en ? 'how Posty grows' : 'así crece Posty')}</span></span>`;
-}
-function pzEvoLine(nivel, en) {
-  const M = {
-    1: ['hola, ¡recién empiezo a conocerte!', "hi! i'm just getting to know you!"],
-    2: ['ya estoy leyendo tu mundo, ¡se viene algo lindo!', "i'm reading your world — something good is coming!"],
-    3: ['¡ya soy de la casa! tu semana sale con tu gusto', "i'm one of the house now! your week comes out with your taste"],
-    4: ['¡soy tu mano derecha! dejame los detalles a mí', "i'm your right hand! leave the details to me"],
-    5: ['¡somos socios! propongo con tu gusto afinado', "we're partners! i propose with your taste dialed in"],
-  };
-  const d = M[nivel] || M[1];
-  return en ? d[1] : d[0];
-}
-function pzEvoReact(nivel, en) {
-  const strip = document.getElementById('pzNivelStrip');
-  if (!strip) return;
-  const fig = strip.querySelector('.pz-evo');
-  if (fig) { fig.classList.remove('pz-evo-rebota'); void fig.offsetWidth; fig.classList.add('pz-evo-rebota'); }
-  let b = strip.querySelector('.pz-evo-burbuja');
-  if (!b) { b = document.createElement('span'); b.className = 'pz-evo-burbuja'; strip.appendChild(b); }
-  b.textContent = pzEvoLine(nivel, en);
-  b.classList.add('on');
-  clearTimeout(pzEvoReact._t);
-  pzEvoReact._t = setTimeout(() => { try { b.classList.remove('on'); } catch (e) {} }, 3500);
+/* ===== TIRA SIMPLE DE NIVEL (v461 — redirección de Valentino) ===== */
+// Solo 3 elementos: el avatar canónico de Posty (chico, 52 px), el nombre
+// del nivel y una barrita fina que se llena con lo que falta para el próximo
+// nivel. Nada más: sin fantasma, sin decor, sin pills sueltas. Todo el
+// layout crítico va INLINE: si styles.css llega viejo, la tira no puede
+// inflarse (esa fue la rotura de v459: figuras a ancho completo y decor
+// gigantes). El avance viene del endpoint (avance.hechos/total del gate en
+// curso); el llenado es visual, NUNCA se muestra un número ni un %.
+function pzNivelAvance(nv) {
+  const a = nv && nv.avance;
+  if (!a || !a.total || a.total <= 0) return 100;
+  return Math.max(0, Math.min(100, Math.round(100 * a.hechos / a.total)));
 }
 function pzNivelStripHTML(nv, en) {
   const falt = Array.isArray(nv.faltantes) ? nv.faltantes : [];
   const n = falt.length;
-  const chip = (nv.nivel >= 5) ? { hash: '#/app/negocio', label: en ? 'See your garden' : 'Ver tu jardín' } : pzNivelChip(falt[0] ? falt[0].clave : '', en);
-  const sub = nv.nivel >= 5
-    ? (en ? 'We keep growing together' : 'Seguimos creciendo juntos')
-    : (n === 1
-      ? (en ? `1 thing left to be ${nv.nombre_siguiente}` : `te falta 1 cosa para ser ${nv.nombre_siguiente}`)
-      : (en ? `${n} things left to be ${nv.nombre_siguiente}` : `te faltan ${n} cosas para ser ${nv.nombre_siguiente}`));
-  return `<div class="pz-nivel" id="pzNivelStrip" role="button" tabindex="0" aria-label="${esc(en ? `Your level with Posty: ${nv.nombre_nivel}` : `Tu nivel con Posty: ${nv.nombre_nivel}`)}">
-    <span class="pz-evo-wrap" data-pz-evo role="button" tabindex="0" aria-label="${esc(en ? 'Say hi to Posty' : 'Saludar a Posty')}">
-      ${pzEvoFigure(nv.nivel, '')}
-      ${pzNivelStemHTML(nv.nivel, nv.color, false)}
+  const pct = pzNivelAvance(nv);
+  const paso = (nv.nivel >= 5)
+    ? { hash: '#/app/negocio', label: en ? 'See your garden' : 'Ver tu jardín' }
+    : { hash: pzNivelChip(falt[0] ? falt[0].clave : '', en).hash,
+        label: n === 1 ? (en ? '1 thing left' : 'te falta 1 cosa') : (en ? `${n} things left` : `te faltan ${n} cosas`) };
+  return `<div id="pzNivelStrip" role="button" tabindex="0" aria-label="${esc(en ? `Your level with Posty: ${nv.nombre_nivel}` : `Tu nivel con Posty: ${nv.nombre_nivel}`)}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:16px;cursor:pointer;box-sizing:border-box">
+    <img src="ai-avatar.png" alt="Posty" style="width:52px;height:52px;flex:none;border-radius:50%;object-fit:cover">
+    <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
+      <strong style="font-size:15px;line-height:1.25">${esc(nv.nombre_nivel)}</strong>
+      <span style="display:block;height:7px;border-radius:999px;background:#DCEFFA;overflow:hidden"><span data-pz-fill="${pct}" style="display:block;height:100%;width:${pct}%;background:${esc(nv.color || '#2793C8')};border-radius:999px"></span></span>
+      <button type="button" data-pz-nivel-accion="${esc(paso.hash)}" style="align-self:flex-start;background:none;border:0;padding:0;font-size:12px;line-height:1.3;color:#47617A;cursor:pointer;text-align:left">${esc(paso.label)}</button>
     </span>
-    <span class="pz-nivel-tx"><span class="pz-nivel-evolabel">${esc(en ? "POSTY'S EVOLUTION" : 'LA EVOLUCIÓN DE POSTY')}</span><strong>${esc(nv.nombre_nivel)}</strong><span>${esc(sub)}</span></span>
-    ${pzEvoGhost(nv, en)}
-    <button type="button" class="pz-nivel-chip" data-pz-nivel-accion="${esc(chip.hash)}">${esc(chip.label)}</button>
   </div>`;
 }
+
 function pzNivelCelebShow(nv, en) {
   const prev = document.getElementById('pzCelebFondo');
   if (prev) { try { prev.remove(); } catch (e) {} }
@@ -14782,7 +14741,7 @@ function pzNivelCelebShow(nv, en) {
   div.innerHTML = `<div class="pz-celeb" role="dialog" aria-modal="true" aria-label="${esc(en ? 'Level up' : 'Subiste de nivel')}">
     <button type="button" class="pz-celeb-x" data-pz-celeb-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button>
     ${pzNivelStemHTML(nv.nivel, nv.color, true)}
-    <span class="pz-celeb-evo">${pzEvoFigure(nv.nivel, '')}</span>
+    <span class="pz-celeb-evo"><img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;object-fit:cover"></span>
     <h3>${esc(en ? `You leveled up to ${nv.nombre_nivel}!` : `¡Subiste a ${nv.nombre_nivel}!`)} 🎉</h3>
     <p class="pz-celeb-unlock">${esc(unlock)}</p>
     <p class="pz-celeb-sub">${esc(en ? 'You will see it in your next week.' : 'Esto ya cambia tu próxima semana.')}</p>
@@ -14833,19 +14792,25 @@ function pzNivelMount() {
   if (strip && !strip.dataset.pzBound) {
     strip.dataset.pzBound = '1';
     strip.addEventListener('click', (e) => {
-      const evo = (e.target && e.target.closest) ? e.target.closest('[data-pz-evo]') : null;
-      if (evo) { const nvE = (typeof HF_NIVEL !== 'undefined') ? HF_NIVEL : null; if (nvE) pzEvoReact(nvE.nivel, (typeof ME !== 'undefined' && ME && ME.lang === 'en')); return; }
       const chip = (e.target && e.target.closest) ? e.target.closest('[data-pz-nivel-accion]') : null;
       if (chip) { location.hash = chip.dataset.pzNivelAccion; return; }
       location.hash = '#/app/negocio';
     });
     strip.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (e.target && e.target.closest && e.target.closest('[data-pz-nivel-accion]')) return; // el botón nativo dispara el click
       e.preventDefault();
-      const evo = (e.target && e.target.closest) ? e.target.closest('[data-pz-evo]') : null;
-      if (evo) { const nvE = (typeof HF_NIVEL !== 'undefined') ? HF_NIVEL : null; if (nvE) pzEvoReact(nvE.nivel, (typeof ME !== 'undefined' && ME && ME.lang === 'en')); return; }
       location.hash = '#/app/negocio';
     });
+  }
+  // Llenado suave de la barrita (v461): de 0 al avance real. Reduced-motion:
+  // aparece llena, sin animar. Sin tira no hay nada que animar.
+  const reduced = (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const fill = strip ? strip.querySelector('[data-pz-fill]') : null;
+  if (fill && !reduced) {
+    const target = fill.getAttribute('data-pz-fill');
+    fill.style.width = '0%';
+    requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.transition = 'width .8s ease'; fill.style.width = target + '%'; }));
   }
   const nv = (typeof HF_NIVEL !== 'undefined') ? HF_NIVEL : null;
   if (!nv || !nv.celebrar || !(nv.nivel > 1)) return;
@@ -14855,15 +14820,8 @@ function pzNivelMount() {
   try { if (localStorage.getItem(key) === '1') return; } catch (e) {}
   try { localStorage.setItem(key, '1'); } catch (e) {}
   try { api.post('/api/oficina/nivel/celebrar', { poder: nv.poder, nivel: nv.nivel }).catch(() => {}); } catch (e) {}
-  // (v459) La evolución ES la celebración: Posty crece en la tira 900 ms y
-  // después abre el modal con su forma nueva. Sin tira, o con reduced-motion,
-  // el modal abre directo (la forma nueva aparece igual, estática).
-  const reduced = (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const fig = strip ? strip.querySelector('.pz-evo') : null;
-  if (fig && !reduced) {
-    fig.classList.add('pz-evo-crece');
-    setTimeout(() => pzNivelCelebShow(nv, en), 900);
-  } else { pzNivelCelebShow(nv, en); }
+  // (v461) La celebración abre directo: la tira ya no anima evoluciones.
+  pzNivelCelebShow(nv, en);
 }
 
 function mzOpenSheet(focus) {
