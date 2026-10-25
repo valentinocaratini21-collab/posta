@@ -35,8 +35,17 @@ const H = 1920;
 const FPS = 30;
 const MUSIC_DIR = path.join(__dirname, 'assets', 'music');
 
-// mood → archivo dentro de assets/music (licencias en REELS-MUSIC.md)
-const MUSIC_TRACKS = { upbeat: 'upbeat.mp3', chill: 'chill.mp3', groove: 'groove.mp3' };
+// mood → archivos dentro de assets/music (licencias en REELS-MUSIC.md)
+// (Gap 8, 2026-10-25) El catálogo pasó de 3 pistas únicas a 15 (5 por
+// mood): con UNA pista por mood, todos los reels de un rubro sonaban
+// igual. La primera de cada lista es la histórica (compatibilidad).
+const MUSIC_CATALOG = {
+  upbeat: ['upbeat.mp3', 'upbeat-hop.mp3', 'upbeat-lalalatown.mp3', 'upbeat-challenge.mp3', 'upbeat-bicycle.mp3'],
+  chill: ['chill.mp3', 'chill-beach.mp3', 'chill-the-beach.mp3', 'chill-chocolate-valley.mp3', 'chill-childhood.mp3'],
+  groove: ['groove.mp3', 'groove-cat-city.mp3', 'groove-space-mtv.mp3', 'groove-fruitcore.mp3', 'groove-strawberry.mp3'],
+};
+// Compatibilidad: MUSIC_TRACKS sigue siendo mood → pista principal.
+const MUSIC_TRACKS = Object.fromEntries(Object.entries(MUSIC_CATALOG).map(([m, l]) => [m, l[0]]));
 const RUBRO_MOOD = {
   cafeteria: 'chill', panaderia: 'chill', belleza: 'chill', deco: 'chill', floreria: 'chill',
   barberia: 'groove', moda: 'groove', mascotas: 'groove', heladeria: 'groove',
@@ -87,6 +96,106 @@ async function mediaInfo(file) {
     width: v ? v.width : 0,
     height: v ? v.height : 0,
   };
+}
+
+// ---------- (Gap 4 + Gap 11, 2026-10-25) FOCO Y MEJOR FRAME ----------
+// El crop 9:16 era central y ciego: un sujeto a un costado de un video
+// horizontal quedaba afuera. detectFocus mide el FOCO real del material
+// (centroide de la energía de bordes sobre un frame chico en grises,
+// determinístico, sin IA) y el crop lo sigue. bestFrameTimeIn elige el
+// mejor instante de un video con el medidor de fotos de la casa
+// (photo-quality.py): mayor nitidez entre frames con luz sana.
+async function frameGray(file, { isVideo = false, tSec = 0, width = 96 } = {}) {
+  const args = [];
+  if (isVideo) args.push('-ss', String(Math.max(0, tSec)));
+  args.push('-i', file, '-vf', `scale=${width}:-2`, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'gray', 'pipe:1');
+  const buf = await new Promise((resolve, reject) => {
+    execFile('ffmpeg', ['-v', 'error', ...args], { timeout: 30000, maxBuffer: 4 * 1024 * 1024, encoding: 'buffer' },
+      (err, stdout) => err ? reject(err) : resolve(stdout));
+  });
+  if (!buf || buf.length < width * 4) return null;
+  return { buf, w: width, h: Math.floor(buf.length / width) };
+}
+function focusFromGray({ buf, w, h }) {
+  const colE = new Float64Array(w);
+  const rowE = new Float64Array(h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const e = Math.abs(buf[i + 1] - buf[i - 1]) + Math.abs(buf[i + w] - buf[i - w]);
+      if (e) { colE[x] += e; rowE[y] += e; }
+    }
+  }
+  const centroid = (arr) => {
+    let max = 0, tot = 0, sum = 0;
+    for (let i = 0; i < arr.length; i++) if (arr[i] > max) max = arr[i];
+    if (!max) return null;
+    const thr = max * 0.25;
+    for (let i = 0; i < arr.length; i++) {
+      const v = Math.max(0, arr[i] - thr);
+      tot += v; sum += v * i;
+    }
+    return tot > 0 ? (sum / tot) / Math.max(1, arr.length - 1) : null;
+  };
+  const cx = centroid(colE);
+  const cy = centroid(rowE);
+  if (cx === null && cy === null) return null;
+  const clamp = (v) => Math.min(0.8, Math.max(0.2, v));
+  return { x: cx === null ? 0.5 : clamp(cx), y: cy === null ? 0.5 : clamp(cy), energy: colE.reduce((a, b) => a + b, 0) };
+}
+async function detectFocus(file, { isVideo = false, duration = 0 } = {}) {
+  try {
+    const times = isVideo && duration > 2 ? [0.25, 0.5, 0.75].map(f => duration * f) : [isVideo ? duration / 2 : 0];
+    let wx = 0, wy = 0, we = 0;
+    for (const t of times) {
+      const g = await frameGray(file, { isVideo, tSec: t });
+      if (!g) continue;
+      const f = focusFromGray(g);
+      if (!f || !f.energy) continue;
+      wx += f.x * f.energy; wy += f.y * f.energy; we += f.energy;
+    }
+    if (!we) return { x: 0.5, y: 0.5 };
+    return { x: Math.round((wx / we) * 100) / 100, y: Math.round((wy / we) * 100) / 100 };
+  } catch (e) { return { x: 0.5, y: 0.5 }; }
+}
+function cropFocusExpr(fx, fy) {
+  const x = typeof fx === 'number' ? fx : 0.5;
+  const y = typeof fy === 'number' ? fy : 0.5;
+  return `crop=${W}:${H}:x='(iw-ow)*${x}':y='(ih-oh)*${y}'`;
+}
+function measureFrameQuality(absJpg) {
+  return new Promise((resolve) => {
+    execFile('python3', [path.join(__dirname, 'photo-quality.py'), absJpg], { timeout: 20000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      try { const j = JSON.parse(String(stdout || '').trim()); resolve(j && !j.error ? j : null); }
+      catch (e) { resolve(null); }
+    });
+  });
+}
+// Mejor instante de un video: muestrea N frames, los mide y elige el de
+// mayor nitidez entre los de luz sana (lum ≥ 38, el umbral de la casa);
+// si ninguno tiene luz sana, el de mayor nitidez y listo.
+async function bestFrameTimeIn(file, duration, { samples = 5, tmpDir } = {}) {
+  if (!tmpDir || !duration) return null;
+  const fracs = samples <= 3 ? [0.25, 0.5, 0.75] : [0.1, 0.3, 0.5, 0.7, 0.9];
+  const frames = [];
+  for (let i = 0; i < fracs.length; i++) {
+    const t = Math.max(0.1, duration * fracs[i]);
+    const fAbs = path.join(tmpDir, `bf-${i}.jpg`);
+    const okF = await new Promise((resolve) => {
+      execFile('ffmpeg', ['-y', '-v', 'error', '-ss', String(t), '-i', file, '-frames:v', '1', '-q:v', '4', fAbs],
+        { timeout: 30000 }, (err) => resolve(!err && fs.existsSync(fAbs)));
+    });
+    if (okF) frames.push({ t, metrics: await measureFrameQuality(fAbs) });
+  }
+  if (!frames.length) return null;
+  const lit = frames.filter(f => f.metrics && typeof f.metrics.lum === 'number' && f.metrics.lum >= 38);
+  const pool = lit.length ? lit : frames;
+  let best = pool[0];
+  for (const f of pool) {
+    if ((f.metrics && f.metrics.edge || 0) > (best.metrics && best.metrics.edge || 0)) best = f;
+  }
+  return best;
 }
 
 // Luminancia media (0–255) de una banda de la imagen/fotograma: decide el
@@ -167,15 +276,30 @@ function photoMovement(idx, frames) {
   }
 }
 
-function pickMusicFile(mood) {
-  const name = MUSIC_TRACKS[mood] || MUSIC_TRACKS.upbeat;
-  const f = path.join(MUSIC_DIR, name);
-  if (fs.existsSync(f)) return f;
-  for (const n of Object.values(MUSIC_TRACKS)) {
-    const alt = path.join(MUSIC_DIR, n);
-    if (fs.existsSync(alt)) return alt;
+// (Gap 8, 2026-10-25) Rotación DETERMINÍSTICA por seed: el llamador
+// pasa `${uid}:${weekKey}` (+ salt) y la pista sale del hash — dos
+// reels del mismo negocio en semanas seguidas no repiten pista, y el
+// resultado es reproducible (auditable). SIN seed no hay azar: sale la
+// pista histórica del mood (la primera del catálogo), para que todo
+// render sin contexto de negocio sea reproducible tal cual.
+function moodTracksFor(mood) {
+  const list = MUSIC_CATALOG[mood] || MUSIC_CATALOG.upbeat;
+  return list.map((f) => path.join(MUSIC_DIR, f)).filter((p) => fs.existsSync(p));
+}
+function pickMusicFile(mood, seed) {
+  let tracks = moodTracksFor(mood);
+  if (!tracks.length) {
+    for (const m of Object.keys(MUSIC_CATALOG)) {
+      tracks = moodTracksFor(m);
+      if (tracks.length) break;
+    }
   }
-  return null;
+  if (!tracks.length) return null;
+  if (seed === undefined || seed === null || seed === '') return tracks[0];
+  const s = String(seed);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return tracks[h % tracks.length];
 }
 
 function moodForCategory(category, rubro) {
@@ -457,7 +581,7 @@ async function buildReelV3(opts) {
   const handleLine = String(opts.handle || '').trim();
 
   // ---------- Música + grilla de beats (para el snap) ----------
-  const musicFile = pickMusicFile(opts.mood);
+  const musicFile = pickMusicFile(opts.mood, opts.musicSeed);
   const mb = musicBeatsMod();
   const beatEntry = (mb && musicFile) ? mb.beatsForFile(musicFile) : null;
 
@@ -474,6 +598,9 @@ async function buildReelV3(opts) {
       if (info && info.duration >= 1.0) {
         const dur = Math.max(1.0, Math.min(want, info.duration));
         seg = { kind: 'video', file: v, dur, start: Math.max(0, (info.duration - dur) / 2), hasAudio: !!info.hasAudio, srcDur: info.duration, sceneIdx: i };
+        // (Gap 4) El crop sigue al sujeto medido, no al centro ciego.
+        const foc = await detectFocus(v, { isVideo: true, duration: info.duration });
+        seg.fx = foc.x; seg.fy = foc.y;
       }
     }
     if (!seg && photos.length) {
@@ -723,7 +850,7 @@ async function buildReelV3(opts) {
       const frames = Math.max(2, Math.round(s.dur * FPS));
       let cur;
       if (s.kind === 'video') {
-        fc.push(`[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=increase:flags=lanczos,crop=${W}:${H},fps=${FPS},setsar=1,format=yuv420p[s${i}raw]`);
+        fc.push(`[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=increase:flags=lanczos,${cropFocusExpr(s.fx, s.fy)},fps=${FPS},setsar=1,format=yuv420p[s${i}raw]`);
         cur = `s${i}raw`;
       } else if (appliedMoves[i] === 'parallax') {
         // PARALLAX simple (dos capas de la MISMA foto): fondo con más
@@ -897,7 +1024,9 @@ async function buildReelPro(opts) {
     if (!info || !info.duration) continue;
     const dur = Math.min(3.4, info.duration);
     if (dur < 1.2) continue;
-    vids.push({ kind: 'video', file: v, dur, start: Math.max(0, (info.duration - dur) / 2), hasAudio: !!info.hasAudio, srcDur: info.duration });
+    // (Gap 4) El crop sigue al sujeto medido, no al centro ciego.
+    const foc = await detectFocus(v, { isVideo: true, duration: info.duration });
+    vids.push({ kind: 'video', file: v, dur, start: Math.max(0, (info.duration - dur) / 2), hasAudio: !!info.hasAudio, srcDur: info.duration, fx: foc.x, fy: foc.y });
   }
   let total = vids.reduce((a, s) => a + s.dur, 0);
   segs.push(...vids);
@@ -1023,7 +1152,7 @@ async function buildReelPro(opts) {
       if (s.kind === 'video' && s.hasAudio) args.push('-ss', String(s.start.toFixed(2)), '-t', String(s.dur.toFixed(2)), '-i', s.file);
       else args.push('-f', 'lavfi', '-t', String(s.dur.toFixed(2)), '-i', 'anullsrc=r=48000:cl=stereo');
     });
-    const musicFile = pickMusicFile(opts.mood);
+    const musicFile = pickMusicFile(opts.mood, opts.musicSeed);
     let musicIdx = -1;
     if (musicFile) { args.push('-stream_loop', '-1', '-i', musicFile); musicIdx = 2 * N; }
 
@@ -1031,7 +1160,7 @@ async function buildReelPro(opts) {
     const fc = [];
     segs.forEach((s, i) => {
       if (s.kind === 'video') {
-        fc.push(`[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=increase:flags=lanczos,crop=${W}:${H},fps=${FPS},setsar=1,format=yuv420p[v${i}]`);
+        fc.push(`[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=increase:flags=lanczos,${cropFocusExpr(s.fx, s.fy)},fps=${FPS},setsar=1,format=yuv420p[v${i}]`);
       } else {
         const frames = Math.max(2, Math.round(s.dur * FPS));
         const mv = photoMovement(i, frames);
@@ -1082,4 +1211,134 @@ async function buildReelPro(opts) {
   }
 }
 
-module.exports = { buildReelPro, buildReelV3, moodForCategory, wrapLines, MUSIC_TRACKS, MOTION_TEMPLATES, templateFor, movementPlanFor, measureAdvance, findKeyword };
+// ---------- (Gap 2, 2026-10-25) EL VIDEO DEL CLIENTE COMO PROTAGONISTA ----------
+// buildSingleClipReel({ mediaDir, file, hook, cta, handle, brandHex,
+//   mood, musicSeed }) → { file, url, duration, coverPath, music,
+//   singleClip: true, segmentStart, segmentDur }
+// EL camino «posteá ESTE video»: el video del cliente ES el reel — no un
+// ingrediente trozado de un montaje. Si dura ≤90 s sale ENTERO; si dura
+// más, sale la mejor ventana de 60 s (la de mejor luz/nitidez medida).
+// Su audio, si lo trae, es el audio principal (sin música encima: su
+// voz/ambiente manda); sin audio propio, entra la música de la casa.
+// Gancho por código en la zona segura superior y cierre con CTA + @,
+// como en todo reel de Posty. La portada es el MEJOR frame medido del
+// reel terminado (Gap 11) — y con cover_url en la publicación (Gap 1),
+// esa portada es la que ve Instagram.
+async function buildSingleClipReel(opts) {
+  const { mediaDir } = opts || {};
+  if (!mediaDir) throw new Error('falta mediaDir');
+  const file = opts.file;
+  if (!file || !fs.existsSync(file)) throw new Error('ese video no está en el servidor');
+  const info = await mediaInfo(file);
+  if (!info || !info.duration || info.duration < 1) throw new Error('no pude leer ese video');
+  const srcDur = info.duration;
+
+  // ---------- Tramo: entero si es corto; mejor ventana si es largo ----------
+  let segStart = 0;
+  let segDur = srcDur;
+  const MAX_FULL = 90;
+  const LONG_WIN = 60;
+  const tag = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+  const tmpDir = path.join(mediaDir, '.tmp-single-' + tag);
+  fs.mkdirSync(tmpDir, { recursive: true });
+  try {
+    if (srcDur > MAX_FULL) {
+      const best = await bestFrameTimeIn(file, srcDur, { samples: 10, tmpDir });
+      const anchor = best ? best.t : srcDur / 2;
+      segDur = LONG_WIN;
+      segStart = Math.max(0, Math.min(srcDur - LONG_WIN, anchor - 15));
+    }
+    const total = Math.round(segDur * 100) / 100;
+    const foc = await detectFocus(file, { isVideo: true, duration: srcDur });
+    const brand = validHex(opts.brandHex) || '#2793C8';
+
+    // ---------- Textos por código (gancho + cierre, como el motor) ----------
+    const hookFit = fitText(opts.hook, [{ size: 88, ch: 17, lh: 106 }, { size: 74, ch: 20, lh: 92 }, { size: 64, ch: 23, lh: 80 }], 3);
+    const ctaFit = fitText(opts.cta, [{ size: 62, ch: 22, lh: 78 }, { size: 54, ch: 25, lh: 68 }], 2);
+    const hookLines = hookFit ? hookFit.lines : [];
+    const ctaLines = ctaFit ? ctaFit.lines : [];
+    const handleLine = String(opts.handle || '').trim();
+    const lumHook = await zoneLuminance(file, { isVideo: true, tSec: segStart + 0.3, yFrac: 0.08, hFrac: 0.40 });
+    const lumClose = await zoneLuminance(file, { isVideo: true, tSec: segStart + Math.max(0.3, segDur - 1), yFrac: 0.36, hFrac: 0.28 });
+    let dtN = 0;
+    const dt = (lines, { size, y0, lineH, alpha, enable, color = 'white' }) => lines.map((ln) => {
+      const f = path.join(tmpDir, `t${dtN++}.txt`);
+      fs.writeFileSync(f, ln, 'utf8');
+      return `drawtext=fontfile='${FONT}':textfile='${f}':fontsize=${size}:fontcolor=${color}:` +
+        `box=1:boxcolor=black@${alpha}:boxborderw=22:shadowcolor=black@0.4:shadowx=3:shadowy=3:` +
+        `x=(w-text_w)/2:y=${Math.round(y0)}:enable='${enable}'`;
+    }).join(',');
+    const textFilters = [];
+    const hookEnd = Math.min(2.6, total * 0.3);
+    if (hookLines.length) {
+      const y0 = 240;
+      textFilters.push(dt(hookLines, { size: hookFit.size, y0, lineH: hookFit.lh, alpha: boxAlphaFor(lumHook), enable: `between(t,0,${hookEnd})` }));
+      const barY = Math.round(y0 + hookLines.length * hookFit.lh + 28);
+      textFilters.push(`drawbox=x=465:y=${barY}:w=150:h=10:color=${brand}@0.95:t=fill:enable='between(t,0,${hookEnd})'`);
+    }
+    const closeStart = Math.round((total - 2.0) * 10) / 10;
+    if (ctaLines.length || handleLine) {
+      const parts = [];
+      if (ctaLines.length) parts.push(dt(ctaLines, { size: ctaFit.size, y0: 800, lineH: ctaFit.lh, alpha: boxAlphaFor(lumClose), enable: `between(t,${closeStart},${total})` }));
+      if (handleLine) {
+        const f = path.join(tmpDir, `t${dtN++}.txt`);
+        fs.writeFileSync(f, handleLine, 'utf8');
+        parts.push(`drawtext=fontfile='${FONT}':textfile='${f}':fontsize=82:fontcolor=white:` +
+          `box=1:boxcolor=${brand}@0.92:boxborderw=24:shadowcolor=black@0.4:shadowx=3:shadowy=3:` +
+          `x=(w-text_w)/2:y=${ctaLines.length ? 800 + ctaLines.length * ctaFit.lh + 36 : 880}:enable='between(t,${closeStart},${total})'`);
+      }
+      textFilters.push(parts.join(','));
+    }
+
+    // ---------- Audio: el suyo manda; música solo si el video es mudo ----------
+    const musicFile = info.hasAudio ? null : pickMusicFile(opts.mood, opts.musicSeed);
+    const args = ['-ss', String(segStart.toFixed(2)), '-t', String(segDur.toFixed(2)), '-i', file];
+    let musicIdx = -1;
+    if (musicFile) { args.push('-stream_loop', '-1', '-i', musicFile); musicIdx = 1; }
+    else if (!info.hasAudio) { args.push('-f', 'lavfi', '-t', String(segDur.toFixed(2)), '-i', 'anullsrc=r=48000:cl=stereo'); musicIdx = -2; }
+
+    const fc = [];
+    const vf = [`scale=${W}:${H}:force_original_aspect_ratio=increase:flags=lanczos`, cropFocusExpr(foc.x, foc.y), `fps=${FPS}`, 'setsar=1', 'format=yuv420p',
+      'fade=t=in:st=0:d=0.25', `fade=t=out:st=${(total - 0.45).toFixed(2)}:d=0.45`, ...textFilters].filter(Boolean).join(',');
+    fc.push(`[0:v]${vf}[vout]`);
+    if (info.hasAudio) {
+      fc.push(`[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur=${segDur.toFixed(2)},atrim=0:${segDur.toFixed(2)},volume=1.0,afade=t=in:st=0:d=0.3,afade=t=out:st=${(total - 0.8).toFixed(2)}:d=0.8[aout]`);
+    } else if (musicIdx === 1) {
+      fc.push(`[1:a]atrim=0:${total},asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=0.9,afade=t=in:st=0:d=0.4,afade=t=out:st=${(total - 1.2).toFixed(2)}:d=1.2[aout]`);
+    } else {
+      fc.push(`[1:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[aout]`);
+    }
+    const outName = `reel-single-${tag}.mp4`;
+    const outPath = path.join(mediaDir, outName);
+    args.push(
+      '-filter_complex', fc.join(';'),
+      '-map', '[vout]', '-map', '[aout]',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '128k', '-ar', '48000',
+      '-movflags', '+faststart', '-video_track_timescale', '30000',
+      '-t', String(total), outPath,
+    );
+    await runFfmpeg(args);
+
+    // ---------- Portada: el mejor frame medido del reel terminado ----------
+    let coverPath = null;
+    const bestOut = await bestFrameTimeIn(outPath, total, { samples: 5, tmpDir });
+    const coverName = `reel-single-${tag}-cover.jpg`;
+    const coverAbs = path.join(mediaDir, coverName);
+    try {
+      await runFfmpeg(['-ss', String(bestOut ? bestOut.t : Math.min(0.5, total / 2)), '-i', outPath, '-frames:v', '1', '-q:v', '3', coverAbs]);
+      if (fs.existsSync(coverAbs)) coverPath = coverAbs;
+    } catch (e) { /* la portada es un plus; el reel manda */ }
+
+    return {
+      file: outPath, url: `/media/${outName}`, duration: total,
+      coverPath, music: !!musicFile, singleClip: true,
+      segmentStart: Math.round(segStart * 100) / 100, segmentDur: total,
+      focus: foc, clientAudio: !!info.hasAudio,
+    };
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+module.exports = { buildReelPro, buildReelV3, buildSingleClipReel, detectFocus, bestFrameTimeIn, measureFrameQuality, moodForCategory, wrapLines, MUSIC_TRACKS, MUSIC_CATALOG, pickMusicFile, moodTracksFor, MOTION_TEMPLATES, templateFor, movementPlanFor, measureAdvance, findKeyword };

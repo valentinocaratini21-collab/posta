@@ -6323,10 +6323,6 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
   if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
   const ct = req.get('Content-Type') || '';
   const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
-  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-  fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
-  const filePath = `/media/${name}`;
-  if (kind !== 'video') makeVariantsAsync(path.join(MEDIA_DIR, name));
   // La foto subida en el chat también queda en su librería: así el servidor
   // puede resolverla cuando Posty la elige (photo_index) en un ```edit.
   // FIX-FANTASMA: ?kind=design para diseños generados (renderDesignImage), que
@@ -6335,6 +6331,16 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
   // Cualquier valor distinto de 'design' cae a 'photo'.
   const qk = req.query.kind;
   const kind = qk === 'design' ? 'design' : 'photo';
+  // (Gap 10, 2026-10-25) La foto real del cliente se normaliza al entrar
+  // (EXIF + JPEG, HEIC incluido); los diseños generados por la app quedan
+  // con el guardado histórico. (La declaración de `kind` subió sobre su
+  // primer uso: estaba debajo y el handler moría por TDZ antes de
+  // guardar — la foto del chat nunca llegaba a la librería.)
+  const savedMedia = kind === 'photo' ? saveIngestedPhoto(req.body, ext) : null;
+  const name = savedMedia ? savedMedia.name : `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+  if (!savedMedia) fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
+  const filePath = `/media/${name}`;
+  if (kind !== 'video') makeVariantsAsync(path.join(MEDIA_DIR, name));
   try {
     db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(req.session.userId, filePath, kind);
   } catch (e) { console.error('[media] assets insert:', e.message); }
@@ -6347,7 +6353,7 @@ app.get('/api/assets', requireAuth, (req, res) => {
   res.json(rows);
 });
 
-app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'], limit: '100mb' }), (req, res) => {
+app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'], limit: '100mb' }), async (req, res) => {
   if (!req.body || !req.body.length) return res.status(400).json({ error: 'Archivo vacío' });
   const qk = req.query.kind;
   const kind = qk === 'logo' ? 'logo' : qk === 'video' ? 'video' : 'photo';
@@ -6361,11 +6367,23 @@ app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'],
   if (kind === 'video') {
     const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind = 'video'`).get(req.session.userId).c;
     if (n >= 10) return res.status(400).json({ error: 'Llegaste al máximo de 10 videos' });
+    // (Gap 9, 2026-10-25) UNA SOLA PUERTA: el video entra por el MISMO
+    // pipeline del álbum (ingestClientVideo) — probe, tope de duración
+    // y de peso con los mismos mensajes, miniatura del mejor frame,
+    // calidad medida y clasificación. Antes esta puerta guardaba el
+    // video crudo sin ninguna de esas reglas.
+    const ing = await ingestClientVideo(req.session.userId, req.body, ct);
+    if (ing.error) return res.status(400).json({ error: ing.error });
+    return res.json({ ok: true, id: ing.id, path: ing.path, kind, thumb: ing.thumb, quality_issues: ing.qualityIssues || [] });
   }
   const ext = ct.includes('quicktime') ? 'mov' : ct.includes('mp4') ? 'mp4' : ct.includes('webm') ? 'webm'
     : ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
-  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-  fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
+  // (Gap 10, 2026-10-25) La FOTO también se normaliza por esta puerta
+  // (EXIF + JPEG); el logo conserva el guardado histórico (su alfa y su
+  // formato son del diseño, no de una foto).
+  const savedAsset = kind === 'photo' ? saveIngestedPhoto(req.body, ext) : null;
+  const name = savedAsset ? savedAsset.name : `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+  if (!savedAsset) fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
   const filePath = `/media/${name}`;
   if (kind === 'logo') {
     // Un solo logo: reemplaza el anterior
@@ -6376,6 +6394,10 @@ app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'],
     db.prepare(`DELETE FROM assets WHERE user_id = ? AND kind = 'logo'`).run(req.session.userId);
   }
   const r = db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(req.session.userId, filePath, kind);
+  // (Gap 9, 2026-10-25) La foto de esta puerta corre la MISMA
+  // clasificación + medición de calidad que la del álbum, en segundo
+  // plano: el registro queda poblado igual entre por donde entre.
+  if (kind === 'photo') { try { tagAlbumPhoto(req.session.userId, r.lastInsertRowid, filePath); } catch (e) {} }
   res.json({ ok: true, id: r.lastInsertRowid, path: filePath, kind });
 });
 
@@ -6521,7 +6543,13 @@ async function tagAlbumVideo(uid, assetId, thumbPath, dims) {
   try {
     const orient = dims && dims.w && dims.h ? (dims.h > dims.w ? 'vertical' : dims.w > dims.h ? 'horizontal' : 'cuadrado') : '';
     if (orient) {
-      try { db.prepare('UPDATE assets SET album_quality = ? WHERE id = ?').run('orientacion=' + orient, assetId); } catch (e) {}
+      // (Gap 5, 2026-10-25) La orientación se FUSIONA con la calidad
+      // medida al subir (issues), no la pisa: album_quality del video es
+      // 'orientacion=…,oscura,…' y cada parte conserva la suya.
+      try {
+        const cur = db.prepare('SELECT album_quality FROM assets WHERE id = ?').get(assetId);
+        db.prepare('UPDATE assets SET album_quality = ? WHERE id = ?').run(videoQualityString(cur && cur.album_quality, orient, []), assetId);
+      } catch (e) {}
     }
     const key = openaiKeyFor(uid);
     if (!key || !thumbPath) return;
@@ -6707,6 +6735,108 @@ async function celebratePhotoPost(uid, assetId, filePath) {
     try { push.sendPush(uid, { title: 'Tu foto ya es un posteo ✨', body: 'Posty la convirtió en un posteo listo para publicar. Miralo en tu semana 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
   } catch (e) { console.error('[album] festejo:', e.message); }
 }
+// ---------- (Gap 2, 2026-10-25) «POSTEÁ ESTE VIDEO» ----------
+// El video del cliente puede SER el posteo: buildSingleClipReel lo
+// convierte en un reel protagonista (entero si dura ≤90 s; su audio
+// manda; portada = mejor frame medido). El caption nace del MISMO
+// pipeline de contenido que el resto de la semana (generateContent con
+// dedup contra los captions de la semana). Gate de calidad de video
+// (Gap 5): un video con issues NO se postea — se avisa amable y queda
+// en el álbum como referencia. Lock en memoria por usuario: un doble
+// toque (o el festejo + el toque a la vez) no duplica el reel.
+const videoReelLocks = new Set();
+async function buildClientVideoReelPost(uid, asset, source) {
+  if (videoReelLocks.has(uid)) return { busy: true };
+  videoReelLocks.add(uid);
+  try {
+    costs.assertAiOk(uid);
+    const key = openaiKeyFor(uid);
+    if (!key) return { error: 'no-key' };
+    const issues = albumQualityIssues(asset.album_quality);
+    if (issues.length) return { gated: issues };
+    const profile = getProfile(uid) || {};
+    const titulo = 'Mi negocio, en video real';
+    const input = contentInputFor(uid, titulo, 'reel', 0);
+    try { input.prevCaptions = weekPrevCaptions(uid, mondayKeyOf(tzToday(userTz(uid))), 0); } catch (e) {}
+    const content = await generateContent(input, key);
+    const caption = String((content && content.caption) || '').trim();
+    if (!caption) return { error: 'sin-caption' };
+    const hashtags = String((content && content.hashtags) || '');
+    const headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+    const igUser = String(profile.instagram || '').trim().replace(/^@+/, '');
+    const settings = getSettings(uid) || {};
+    const brandHex = (parseBrandHexes(settings.brand_colors)[0]) || '#2793C8';
+    const reelEngine = require('./reel-engine');
+    const mood = reelEngine.moodForCategory(profile.category);
+    const weekKey = mondayKeyOf(tzToday(userTz(uid)));
+    const built = await reelEngine.buildSingleClipReel({
+      mediaDir: MEDIA_DIR,
+      file: path.join(MEDIA_DIR, path.basename(String(asset.file_path))),
+      hook: headline || 'Mirá esto 👀',
+      cta: 'Escribinos y te contamos más 👇',
+      handle: igUser ? '@' + igUser : '',
+      brandHex, mood, musicSeed: `${uid}:${weekKey}`,
+    });
+    const coverPath = built.coverPath ? `/media/${path.basename(built.coverPath)}` : (asset.thumb_path || '');
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why, cover_path)
+      VALUES (?,?,?,?, 'draft', 'video', ?, ?, 1, ?, 'reel', 'Reel creado desde el video real que subió el cliente', ?)`)
+      .run(uid, built.url, caption, hashtags, trainingWheelsActive(uid) ? 1 : 0, source, weekKey, coverPath);
+    console.log(`[album-video] usuario ${uid}: video ${asset.id} → reel protagonista ${ins.lastInsertRowid} (${built.duration}s${built.clientAudio ? ', audio del cliente' : built.music ? ', con música' : ''}) 🎬`);
+    return { postId: ins.lastInsertRowid, url: built.url, cover: coverPath, duration: built.duration };
+  } finally {
+    videoReelLocks.delete(uid);
+  }
+}
+// FESTEJO DE VIDEO (Gap 11): el primer video BUENO de la semana se
+// convierte solo en un reel, el espejo del festejo de la foto — un solo
+// festejo de video por semana (post source='album-video-festejo').
+async function celebrateVideoPost(uid, assetId, filePath) {
+  try {
+    const weekKey = mondayKeyOf(tzToday(userTz(uid)));
+    const ya = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND week_key = ? AND source = 'album-video-festejo' LIMIT 1`).get(uid, weekKey);
+    if (ya) return;
+    const asset = db.prepare('SELECT id, file_path, album_quality, thumb_path FROM assets WHERE id = ? AND user_id = ?').get(assetId, uid);
+    if (!asset) return;
+    if (albumQualityIssues(asset.album_quality).length) {
+      console.log(`[album] usuario ${uid}: video ${assetId} NO se festeja — calidad: ${asset.album_quality} (queda en el álbum)`);
+      return;
+    }
+    const out = await buildClientVideoReelPost(uid, asset, 'album-video-festejo');
+    if (out && out.postId) {
+      console.log(`[album] usuario ${uid}: video ${assetId} convertido en el reel ${out.postId} 🎬`);
+      try { push.sendPush(uid, { title: 'Tu video ya es un reel 🎬', body: 'Posty lo convirtió en un reel listo para publicar. Miralo en tu semana 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+    } else if (out && out.gated) {
+      console.log(`[album] usuario ${uid}: video ${assetId} no festejado tras el gate: ${out.gated.join(', ')}`);
+    }
+  } catch (e) { console.error('[album] festejo de video:', e.message); }
+}
+// El botón del álbum: «🎬 Usar en un reel». Sin IA generativa de imagen
+// (el video ES el material); el costo de IA es solo el caption, por eso
+// el mismo guard de costos que el festejo.
+app.post('/api/album/video-reel', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const assetId = parseInt((req.body || {}).asset_id, 10);
+    if (!assetId) return res.status(400).json({ error: 'Contame qué video 📹' });
+    const asset = db.prepare(`SELECT id, file_path, album_quality, thumb_path FROM assets WHERE id = ? AND user_id = ? AND kind = 'video'`).get(assetId, uid);
+    if (!asset) return res.status(404).json({ error: 'Ese video no está en tu álbum 😅' });
+    const out = await buildClientVideoReelPost(uid, asset, 'album-video');
+    if (out.busy) return res.status(409).json({ error: 'Ya estoy armando ese reel 🎬 Dame un toque más…' });
+    if (out.gated) {
+      const tips = { oscura: 'se ve oscuro', movida: 'salió movido', 'baja-res': 'tiene poca definición', cortada: 'quedó cortado' };
+      const why = out.gated.map((g) => tips[g] || g).join(' y ');
+      return res.status(400).json({ error: `Ese video ${why} 😅 Si podés, grabalo de nuevo con buena luz y el celu quieto — y lo convertimos en reel al toque. Queda guardado en tu álbum igual.` });
+    }
+    if (out.error === 'no-key') return res.status(400).json({ error: 'Todavía no puedo armar reels en tu cuenta 😅 Probá de nuevo en un rato.' });
+    if (!out.postId) return res.status(500).json({ error: 'No pude armar el reel 😅 Probá de nuevo en un rato.' });
+    res.json({ ok: true, post_id: out.postId, url: out.url, cover: out.cover });
+    try { push.sendPush(uid, { title: 'Tu reel está listo 🎬', body: 'Tu video ya es un reel en tu semana, listo para publicar 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+  } catch (e) {
+    if (e && e.code === 'AI_BUDGET') return res.status(402).json({ error: e.message });
+    console.error('[album-video] reel:', e.message);
+    res.status(500).json({ error: 'No pude armar el reel 😅 Probá de nuevo en un rato.' });
+  }
+});
 app.get('/api/album', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
@@ -6802,6 +6932,105 @@ function albumVideoThumb(absFile, dur, thumbAbs) {
       { timeout: 30000 }, (err) => resolve(!err));
   });
 }
+// ---------- (Gap 5 + Gap 11, 2026-10-25) MUESTREO DEL VIDEO ----------
+// La miniatura ya no es «el frame del medio» y el video ya no entra sin
+// medición: se extraen 5 frames repartidos y se miden con el MISMO
+// medidor determinístico de las fotos (photo-quality.py vía
+// measurePhotoQuality). De ahí salen las dos cosas:
+//   · MINIATURA = el mejor frame (mayor nitidez entre los de luz sana;
+//     si ninguno tiene luz sana, el de mayor nitidez y listo).
+//   · CALIDAD = issues por mayoría de frames (≥3 de 5 oscuros → 'oscura';
+//     ≥3 de 5 sin detalle → 'movida') + 'baja-res' si el lado menor del
+//     stream es <720. Los issues viven en assets.album_quality junto a
+//     la orientación ('orientacion=vertical,oscura'): la selección de
+//     videos para reels los lee con albumQualityIssues(), igual que las
+//     fotos, y la subida puede avisar amable.
+function extractVideoFrame(absFile, tSec, outAbs) {
+  const { execFile } = require('child_process');
+  return new Promise((resolve) => {
+    execFile('ffmpeg', ['-y', '-v', 'error', '-ss', String(Math.max(0.1, tSec)), '-i', absFile, '-frames:v', '1', '-q:v', '4', outAbs],
+      { timeout: 30000 }, (err) => resolve(!err && fs.existsSync(outAbs)));
+  });
+}
+async function sampleVideoFrames(absFile, dur, stamp) {
+  const fracs = [0.1, 0.3, 0.5, 0.7, 0.9];
+  const frames = [];
+  for (let i = 0; i < fracs.length; i++) {
+    const fAbs = path.join(MEDIA_DIR, `${stamp}.frame-${i}.jpg`);
+    const okF = await extractVideoFrame(absFile, dur * fracs[i], fAbs);
+    if (okF) {
+      const m = await measurePhotoQuality(fAbs).catch(() => null);
+      frames.push({ t: dur * fracs[i], abs: fAbs, metrics: m });
+    }
+  }
+  return frames;
+}
+function videoIssuesFromFrames(frames, probe) {
+  const issues = [];
+  if (probe && probe.w && probe.h && Math.min(probe.w, probe.h) < 720) issues.push('baja-res');
+  const ms = frames.map((f) => f.metrics).filter(Boolean);
+  if (ms.length >= 3) {
+    if (ms.filter((m) => typeof m.lum === 'number' && m.lum < 38).length >= 3) issues.push('oscura');
+    if (ms.filter((m) => typeof m.edge === 'number' && m.edge < 5.0).length >= 3) issues.push('movida');
+  }
+  return issues;
+}
+function bestFrameOf(frames) {
+  if (!frames.length) return null;
+  const lit = frames.filter((f) => f.metrics && typeof f.metrics.lum === 'number' && f.metrics.lum >= 38);
+  const pool = lit.length ? lit : frames;
+  let best = pool[0];
+  for (const f of pool) {
+    if ((f.metrics && f.metrics.edge || 0) > (best.metrics && best.metrics.edge || 0)) best = f;
+  }
+  return best;
+}
+function videoQualityString(existing, orient, issues) {
+  const toks = String(existing || '').split(',').map((s) => s.trim()).filter(Boolean)
+    .filter((t) => !t.startsWith('orientacion='));
+  const out = [];
+  if (orient) out.push('orientacion=' + orient);
+  for (const t of [...(issues || []), ...toks]) if (!out.includes(t)) out.push(t);
+  return out.join(',');
+}
+function videoOrientOf(probe) {
+  return probe && probe.w && probe.h ? (probe.h > probe.w ? 'vertical' : probe.w > probe.h ? 'horizontal' : 'cuadrado') : '';
+}
+// Ingesta ÚNICA de video del cliente (Gap 9, 2026-10-25): el álbum y la
+// tira de medios guardan con LAS MISMAS reglas — formato, probe, tope
+// de 90 s con el mismo mensaje, miniatura del mejor frame, calidad
+// medida y clasificación en segundo plano. Devuelve { id, path, thumb,
+// qualityIssues, dur } o { error } con el mensaje exacto de la casa.
+async function ingestClientVideo(uid, buf, ct) {
+  if (!/mp4|quicktime/i.test(ct || '')) return { error: 'Ese formato de video no lo puedo usar 😅 Probá con un MP4 o MOV (el que sale del celular anda perfecto).' };
+  if (buf.length > 60 * 1024 * 1024) return { error: 'Ese archivo es muy pesado 😅 Fotos hasta 15 MB y videos hasta 60 MB.' };
+  const ext = (ct || '').includes('quicktime') ? 'mov' : 'mp4';
+  const stamp = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
+  const name = `${stamp}.${ext}`;
+  const abs = path.join(MEDIA_DIR, name);
+  fs.writeFileSync(abs, buf);
+  const probe = await albumVideoProbe(abs);
+  const dur = probe.dur;
+  if (!dur) { try { fs.unlinkSync(abs); } catch (e) {} return { error: 'No pude leer ese video 😅 Probá con otro.' }; }
+  if (dur > 90) { try { fs.unlinkSync(abs); } catch (e) {} return { error: 'Ese video dura más de 90 segundos 🎬 Subí uno más corto y Posty lo usa en tus reels.' }; }
+  const frames = await sampleVideoFrames(abs, dur, stamp);
+  const issues = videoIssuesFromFrames(frames, probe);
+  const best = bestFrameOf(frames);
+  const thumbName = `${name}.thumb.jpg`;
+  const thumbAbs = path.join(MEDIA_DIR, thumbName);
+  let thumbPath = '';
+  if (best) {
+    try { fs.copyFileSync(best.abs, thumbAbs); thumbPath = `/media/${thumbName}`; } catch (e) {}
+  }
+  for (const f of frames) { try { fs.unlinkSync(f.abs); } catch (e) {} }
+  const quality = videoQualityString('', videoOrientOf(probe), issues);
+  const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind, album_tag, thumb_path, album_quality) VALUES (?,?,?,?,?,?)')
+    .run(uid, `/media/${name}`, 'video', 'video', thumbPath, quality);
+  const assetId = ins.lastInsertRowid;
+  console.log(`[album] usuario ${uid}: video ${name} (${Math.round(dur)}s) guardado 🎬${issues.length ? ' calidad: ' + issues.join(', ') : ''}`);
+  tagAlbumVideo(uid, assetId, thumbPath, probe);
+  return { id: assetId, path: `/media/${name}`, thumb: thumbPath, qualityIssues: issues, dur };
+}
 app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -6811,31 +7040,21 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
     const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind IN ('photo','video')`).get(uid).c;
     if (n >= 20) return res.status(400).json({ error: 'tu álbum llegó a 20 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
     if (isVideo) {
-      if (!/mp4|quicktime/i.test(ct)) return res.status(400).json({ error: 'Ese formato de video no lo puedo usar 😅 Probá con un MP4 o MOV (el que sale del celular anda perfecto).' });
-      const ext = ct.includes('quicktime') ? 'mov' : 'mp4';
-      const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-      const abs = path.join(MEDIA_DIR, name);
-      fs.writeFileSync(abs, req.body);
-      const probe = await albumVideoProbe(abs);
-      const dur = probe.dur;
-      if (!dur) { try { fs.unlinkSync(abs); } catch (e) {} return res.status(400).json({ error: 'No pude leer ese video 😅 Probá con otro.' }); }
-      if (dur > 90) { try { fs.unlinkSync(abs); } catch (e) {} return res.status(400).json({ error: 'Ese video dura más de 90 segundos 🎬 Subí uno más corto y Posty lo usa en tus reels.' }); }
-      const thumbName = `${name}.thumb.jpg`;
-      const thumbAbs = path.join(MEDIA_DIR, thumbName);
-      const thumbOk = await albumVideoThumb(abs, dur, thumbAbs);
-      const thumbPath = thumbOk && fs.existsSync(thumbAbs) ? `/media/${thumbName}` : '';
-      const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind, album_tag, thumb_path) VALUES (?,?,?,?,?)')
-        .run(uid, `/media/${name}`, 'video', 'video', thumbPath);
-      console.log(`[album] usuario ${uid}: video ${name} (${Math.round(dur)}s) guardado 🎬`);
-      // (v237) Clasificación del video en segundo plano: tag por
-      // visión sobre la miniatura + orientación desde el probe. La
-      // selección de videos para reels queda en el motor (MOTION).
-      tagAlbumVideo(uid, ins.lastInsertRowid, thumbPath, probe);
-      return res.json({ ok: true, id: ins.lastInsertRowid, path: `/media/${name}`, kind: 'video', thumb: thumbPath, mission_done: false });
+      // (Gap 9, 2026-10-25) Ingesta ÚNICA de video (ingestClientVideo):
+      // las mismas reglas que la tira de medios — probe, tope de 90 s,
+      // miniatura del mejor frame (Gap 11) y calidad medida (Gap 5).
+      const ing = await ingestClientVideo(uid, req.body, ct);
+      if (ing.error) return res.status(400).json({ error: ing.error });
+      // (Gap 11, 2026-10-25) FESTEJO DE VIDEO: el primer video bueno de
+      // la semana se convierte en un reel solo, como la foto (Gap 2).
+      celebrateVideoPost(uid, ing.id, ing.path);
+      return res.json({ ok: true, id: ing.id, path: ing.path, kind: 'video', thumb: ing.thumb, mission_done: false, quality_issues: ing.qualityIssues || [] });
     }
+    // (Gap 10, 2026-10-25) La foto se normaliza al entrar: EXIF aplicado
+    // y JPEG siempre (un HEIC de iPhone ya no queda guardado como .png).
     const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
-    const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-    fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
+    const savedAlbumPhoto = saveIngestedPhoto(req.body, ext);
+    const name = savedAlbumPhoto.name;
     const filePath = `/media/${name}`;
     makeVariantsAsync(path.join(MEDIA_DIR, name));
     const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(uid, filePath, 'photo');
@@ -12976,6 +13195,19 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
       catch (e) { fidelity = 'unverified'; }
     }
     const name = saveImageB64(b64);
+    // (Gap 3, 2026-10-25) Si la fidelidad cayó al fallback, lo que se
+    // entrega ES la foto cruda del cliente: encuadre 4:5 con foco +
+    // grade del feed SIEMPRE (este endpoint no compone titular después).
+    if (fidelity === 'fallback') {
+      try {
+        const { execFileSync } = require('child_process');
+        const pAbs = path.join(MEDIA_DIR, name);
+        const nArgs = [path.join(__dirname, 'normalize-photo.py'), '--in', pAbs, '--out', pAbs];
+        if (hexes && hexes[0]) nArgs.push('--grade', String(hexes[0]));
+        execFileSync('python3', nArgs, { timeout: 30000 });
+        console.log('[product-shot] fallback de fidelidad normalizado a 4:5 con foco + grade');
+      } catch (e) { console.error('[product-shot] normalize del fallback falló, sigue la foto como estaba:', e.message); }
+    }
     console.log(`[product-shot] generado para usuario ${uid} (fidelidad: ${fidelity}${styleObj ? `, estilo ${styleObj.code}` : ''})`);
     res.json({ ok: true, path: `/media/${name}`, fidelity, style: styleObj ? styleObj.code : '', reason: manualStyle ? 'manual' : ((pick && pick.reason) || '') });
   } catch (e) {
@@ -13011,6 +13243,31 @@ function makeVariantsAsync(absPath) {
     const { execFile } = require('child_process');
     execFile('python3', [path.join(__dirname, 'media-variants.py'), '--in', absPath], { timeout: 25000 }, () => {});
   } catch (e) {}
+}
+// (Gap 10, 2026-10-25) INGESTA SANA: toda foto que entra (álbum, tira de
+// medios, chat) se normaliza UNA vez al subir — orientación EXIF
+// aplicada y transcodificación a JPEG vía ingest-normalize.py (PIL, con
+// ffmpeg de respaldo para HEIC de iPhone). Devuelve el nombre final en
+// MEDIA_DIR. Si la normalización no puede (formato ilegible para ambas
+// vías), se guardan los bytes originales con la extensión histórica:
+// la subida jamás se pierde por este paso.
+function saveIngestedPhoto(buf, legacyExt) {
+  const stamp = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
+  const tmpAbs = path.join(MEDIA_DIR, `${stamp}.ingest`);
+  try {
+    fs.writeFileSync(tmpAbs, buf);
+    const { execFileSync } = require('child_process');
+    const outAbs = path.join(MEDIA_DIR, `${stamp}.jpg`);
+    execFileSync('python3', [path.join(__dirname, 'ingest-normalize.py'), '--in', tmpAbs, '--out', outAbs], { timeout: 45000 });
+    if (fs.existsSync(outAbs) && fs.statSync(outAbs).size > 0) {
+      try { fs.unlinkSync(tmpAbs); } catch (e) {}
+      return { name: `${stamp}.jpg`, normalized: true };
+    }
+  } catch (e) { /* cae al guardado histórico */ }
+  const legacyName = `${stamp}.${legacyExt || 'png'}`;
+  try { fs.renameSync(tmpAbs, path.join(MEDIA_DIR, legacyName)); }
+  catch (e) { fs.writeFileSync(path.join(MEDIA_DIR, legacyName), buf); }
+  return { name: legacyName, normalized: false };
 }
 function saveImageB64(b64) {
   // Peso (2026-10-16, pedido de Valentino: "imágenes cada vez más
@@ -14390,6 +14647,39 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   }
   */
   const imgName = saveImageB64(b64);
+  const imgPathAbs = path.join(MEDIA_DIR, imgName);
+  // (Gap 7, 2026-10-25) BASE LIMPIA DE LA PIEZA: antes de componer el
+  // titular, la imagen SIN texto queda guardada como hermana
+  // `<nombre>-clean.<ext>` y registrada en image_meta (el mediaJanitor
+  // trata como referenciado todo path guardado en una tabla: la base
+  // limpia no se borra como huérfana). «Mejorar foto» trabaja sobre
+  // esta base — nunca sobre el titular ya quemado — y recompone el
+  // titular por código al terminar.
+  if (cleanHeadline || (resultOut && resultOut.fidelity === 'fallback')) {
+    try {
+      const cleanName = imgName.replace(/(\.[a-z0-9]+)$/i, '-clean$1');
+      fs.copyFileSync(imgPathAbs, path.join(MEDIA_DIR, cleanName));
+      try { db.prepare('INSERT OR IGNORE INTO image_meta (media_path) VALUES (?)').run(`/media/${cleanName}`); } catch (e) {}
+      if (resultOut) resultOut.cleanPath = `/media/${cleanName}`;
+    } catch (e) { console.error('[concept-shot] base limpia:', e.message); }
+  }
+  // (Gap 3, 2026-10-25) FALLBACK DE FIDELIDAD = LA FOTO CRUDA DEL
+  // CLIENTE: si la fidelidad cayó al fallback, la imagen final es su
+  // foto original y sale SIEMPRE con encuadre 4:5 con foco (+ el grade
+  // del feed cuando la pieza no lleva titular; con titular, el grade
+  // lo aplica el composite de abajo — graduar dos veces, no).
+  if (resultOut && resultOut.fidelity === 'fallback') {
+    try {
+      const { execFileSync } = require('child_process');
+      const nArgs = [path.join(__dirname, 'normalize-photo.py'), '--in', imgPathAbs, '--out', imgPathAbs];
+      if (!cleanHeadline && hexes && hexes[0]) nArgs.push('--grade', String(hexes[0]));
+      execFileSync('python3', nArgs, { timeout: 30000 });
+      if (resultOut) resultOut.normalized = true;
+      console.log('[concept-shot] fallback de fidelidad: foto del cliente normalizada a 4:5 con foco' + (cleanHeadline ? '' : ' + grade'));
+    } catch (e) {
+      console.error('[concept-shot] normalize del fallback falló, sigue la foto como estaba:', e.message);
+    }
+  }
   // Componer el titular con código (si hay): la imagen sale limpia de la IA
   // y el texto se renderiza perfecto — siempre entra, nunca se recorta.
   if (cleanHeadline) {
@@ -14405,6 +14695,31 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       if (hexes && hexes[0]) compArgs.push('--grade', String(hexes[0])); // look de color del feed
       execFileSync('python3', compArgs, { timeout: 30000 });
       console.log(`[concept-shot] titular compuesto: "${cleanHeadline.slice(0, 40)}"`);
+      // (Gap 6, 2026-10-25) ZONA MEDIDA, como ya hace la PRUEBA: el QA
+      // de texto compuesto mira la pieza terminada y, si el titular de
+      // arriba tapa al sujeto, se recompone UNA vez desde la base
+      // limpia con la zona inferior. Fail-open: sin veredicto del QA
+      // (null) queda la de arriba, como siempre.
+      try {
+        const composedBuf = fs.readFileSync(imgPath);
+        const zoneQa = await demoAi.qaComposedText({ b64: composedBuf.toString('base64'), zone: 'top', apiKey: key });
+        if (zoneQa && zoneQa.passed === false) {
+          const cleanSibling = path.join(MEDIA_DIR, imgName.replace(/(\.[a-z0-9]+)$/i, '-clean$1'));
+          if (fs.existsSync(cleanSibling)) {
+            fs.copyFileSync(cleanSibling, imgPath);
+            const compArgs2 = [
+              path.join(__dirname, 'composite-headline.py'),
+              '--in', imgPath,
+              '--headline', cleanHeadline,
+              '--out', imgPath,
+              '--zone', 'bottom',
+            ];
+            if (hexes && hexes[0]) compArgs2.push('--grade', String(hexes[0]));
+            execFileSync('python3', compArgs2, { timeout: 30000 });
+            console.log(`[concept-shot] titular RECOMPUESTO abajo: el QA marcó que arriba tapaba al sujeto ("${cleanHeadline.slice(0, 40)}")`);
+          }
+        }
+      } catch (e) { console.error('[concept-shot] QA de zona:', e.message); }
     } catch (e) {
       console.error('[concept-shot] composite titular falló, sigo con imagen limpia:', e.message);
     }
@@ -14465,6 +14780,12 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
                 try {
                   const { execFileSync } = require('child_process');
                   const nPath = path.join(MEDIA_DIR, nName);
+                  // (Gap 7) base limpia también para la imagen corregida.
+                  try {
+                    const nClean = nName.replace(/(\.[a-z0-9]+)$/i, '-clean$1');
+                    fs.copyFileSync(nPath, path.join(MEDIA_DIR, nClean));
+                    try { db.prepare('INSERT OR IGNORE INTO image_meta (media_path) VALUES (?)').run(`/media/${nClean}`); } catch (e) {}
+                  } catch (e) {}
                   const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nPath, '--headline', cleanHeadline, '--out', nPath];
                   if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
                   execFileSync('python3', cArgs, { timeout: 30000 });
@@ -15371,9 +15692,19 @@ app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, expres
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
     if (redoLeftOf(post) !== null && redoLeftOf(post) <= 0) return redoExhausted(res);
     const basePath = String(post.image_path || '');
-    const absBase = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
-    if (!absBase || !fs.existsSync(absBase))
+    const absShown = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
+    if (!absShown || !fs.existsSync(absShown))
       return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para mejorar' });
+    // (Gap 7, 2026-10-25) LA MEJORA TRABAJA SOBRE LA BASE LIMPIA: si la
+    // pieza lleva el titular compuesto por código, post.image_path ya lo
+    // trae QUEMADO — editar eso con IA deforma el texto (justo lo que el
+    // composite por código existe para evitar). La base limpia vive como
+    // hermana `<nombre>-clean.<ext>`; se edita ESA y al final el titular
+    // se recompone por código, como hace photo-restyle.
+    const cleanName = path.basename(basePath).replace(/(\.[a-z0-9]+)$/i, '-clean$1');
+    const absClean = path.join(MEDIA_DIR, cleanName);
+    const hadComposite = fs.existsSync(absClean) && cleanName !== path.basename(basePath);
+    const absBase = hadComposite ? absClean : absShown;
     const settings = getSettings(uid);
     const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
     if (!apiKey) return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
@@ -15382,7 +15713,31 @@ app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, expres
       // (v237) La nota de rol viaja con la foto: el transporte manda
       // esta única referencia y la nota dice exactamente eso.
       [absBase], refRoles.buildRefNote(['restyle']), uid);
-    const newPath = `/media/${saveImageB64(b64)}`;
+    const newName = saveImageB64(b64);
+    const newPath = `/media/${newName}`;
+    // La imagen mejorada pasa a ser la nueva base limpia de la pieza…
+    try {
+      const newClean = newName.replace(/(\.[a-z0-9]+)$/i, '-clean$1');
+      fs.copyFileSync(path.join(MEDIA_DIR, newName), path.join(MEDIA_DIR, newClean));
+      try { db.prepare('INSERT OR IGNORE INTO image_meta (media_path) VALUES (?)').run(`/media/${newClean}`); } catch (e) {}
+    } catch (e) {}
+    // …y si la pieza llevaba titular, se recompone POR CÓDIGO sobre la
+    // foto mejorada (el titular sale del caption, como en photo-restyle:
+    // makeHeadline de la primera línea — nunca texto editado por la IA).
+    if (hadComposite) {
+      try {
+        const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
+        if (headline) {
+          const { execFileSync } = require('child_process');
+          const nPath = path.join(MEDIA_DIR, newName);
+          const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nPath, '--headline', headline, '--out', nPath];
+          const hexes = parseBrandHexes(settings.brand_colors);
+          if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
+          execFileSync('python3', cArgs, { timeout: 30000 });
+          console.log(`[photo-enhance] titular recompuesto por código: "${headline.slice(0, 40)}"`);
+        }
+      } catch (e) { console.error('[photo-enhance] recomponer titular falló, entrego la foto mejorada limpia:', e.message); }
+    }
     // Punto de compromiso (6A): mejora generada y lista para entregar.
     if (redoLeftOf(post) !== null && !consumeRedo(uid, postId)) return redoExhausted(res);
     db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?').run(String(newPath), String(post.image_path || ''), postId);
@@ -21650,7 +22005,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v448';
+const BUILD_ID = '20261025-v449';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

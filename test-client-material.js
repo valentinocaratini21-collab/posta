@@ -346,7 +346,11 @@ async function waitFor(fn, timeoutMs = 15000, step = 250) {
     assert.strictEqual(celebPost.client_photo, 1, 'client_photo=' + celebPost.client_photo);
   });
   ok('(e) el festejo viaja con rol RESTYLE (la nota y la idea ya no se contradicen)', () => {
-    const celebEdit = state.edits.slice(editsBeforeE).find((e) => e.imageBytes && e.imageBytes.equals(goodBuf));
+    // (Gap 10, 2026-10-25) La referencia del festejo es la foto del cliente
+    // NORMALIZADA al entrar (EXIF aplicado + JPEG): los bytes esperados son
+    // los del archivo guardado por el álbum, no los crudos de la subida.
+    const storedBytes = fs.readFileSync(path.join(MEDIA_DIR, path.basename(String(upGood.json.path || ''))));
+    const celebEdit = state.edits.slice(editsBeforeE).find((e) => e.imageBytes && e.imageBytes.equals(storedBytes));
     assert.ok(celebEdit, 'no se capturó la generación del festejo con la foto buena como referencia');
     assert.ok(celebEdit.prompt.includes('the base photo — keep the EXACT same product/subject'), 'la nota no es la de restyle: …' + celebEdit.prompt.slice(-300));
     assert.ok(!celebEdit.prompt.includes('NEW scene'), 'la nota pide escena nueva (la contradicción de v236)');

@@ -143,7 +143,7 @@ function beatFromCaption(caption, hook) {
 // Reel v2 (reel-engine): videos del álbum primero; fotos del posteo +
 // álbum (+ stock del rubro si falta material). Devuelve null si no hay
 // material suficiente (el llamador decide el fallback).
-async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0 }) {
+async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0, weekKey = '' }) {
   const { buildReelPro, moodForCategory } = require('./reel-engine');
   const { pickStockPhoto, stockRubroFor } = require('./stock');
   const profile = (() => { try { return db.prepare('SELECT business_name, category, ig_username FROM profiles WHERE user_id = ?').get(uid) || {}; } catch (e) { return {}; } })();
@@ -159,7 +159,37 @@ async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0 }) {
         .all(uid, kind, limit).map(r => localFile(mediaDir, r.file_path)).filter(Boolean);
     } catch (e) { return []; }
   };
-  const videos = albumFiles('video', 3);
+  // (Gap 4, 2026-10-25) SELECCIÓN DE VIDEOS CON LA CLASIFICACIÓN QUE YA
+  // SE GUARDA: antes se tomaban los 3 videos más recientes a ciegas.
+  // Ahora cada video puntúa — el tag que la pieza necesita (tipo/tema/
+  // ángulo del primer posteo del feed que ilustra este reel) manda,
+  // cada issue de calidad medido resta, y la recencia desempata. El
+  // orden de aparición lo sigue marcando la rotación por `salt`.
+  const pickAlbumVideos = (limit) => {
+    let rows = [];
+    try {
+      rows = db.prepare('SELECT file_path, album_tag, album_quality FROM assets WHERE user_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 12')
+        .all(uid, 'video');
+    } catch (e) { rows = []; }
+    const post0ref = (feedPosts || [])[0] || {};
+    const blob = `${post0ref.tipo || ''} ${post0ref.source_topic || ''} ${post0ref.source_angle || ''}`.toLowerCase();
+    const wants = [];
+    if (/equip|team|staff|trabaj/.test(blob)) wants.push('equipo');
+    if (/local|negocio|tienda|shop|store|vidriera|fachada/.test(blob)) wants.push('local');
+    if (/product|plato|prenda|oferta|promo/.test(blob)) wants.push('producto');
+    const ISSUES = ['oscura', 'movida', 'baja-res', 'cortada'];
+    const scored = rows.map((r, idx) => {
+      let score = 0;
+      const wi = wants.indexOf(String(r.album_tag || ''));
+      if (wi === 0) score += 100; else if (wi > 0) score += 40;
+      score -= String(r.album_quality || '').split(',').map((s) => s.trim()).filter((t) => ISSUES.includes(t)).length * 30;
+      score -= idx; // las filas ya vienen por recencia DESC: desempate suave
+      return { f: localFile(mediaDir, r.file_path), score };
+    }).filter((x) => x.f);
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, limit).map((x) => x.f);
+  };
+  const videos = pickAlbumVideos(3);
   const albumPhotos = albumFiles('photo', 6);
   const feedPhotos = (feedPosts || []).map(p => localFile(mediaDir, p.image_path)).filter(Boolean);
   const photos = [...new Set([...feedPhotos, ...albumPhotos])];
@@ -209,6 +239,7 @@ async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0 }) {
             script, captionPlan, template: script.intent,
             hook: script.hook, mid: `${script.problem} ${script.solution}`.trim(), cta: script.cta,
             handle, brandHex, mood,
+            musicSeed: `${uid}:${weekKey}:${salt}`,
             // Pulido v3 (2026-10-20): el rubro elige el prompt de
             // efecto y los nombres reales del fundamento marcan la
             // palabra clave del gancho (énfasis en color de marca).
@@ -237,6 +268,7 @@ async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0 }) {
     handle,
     brandHex,
     mood,
+    musicSeed: `${uid}:${weekKey}:${salt}`,
   });
 }
 
@@ -310,7 +342,7 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
       }
       let out = null;
       if (process.env.POSTY_REELS_V2 !== '0') {
-        try { out = await makeReelVideoPro({ db, uid, feedPosts: feed, mediaDir, salt: i }); }
+        try { out = await makeReelVideoPro({ db, uid, feedPosts: feed, mediaDir, salt: i, weekKey }); }
         catch (e) { console.error(`[extras:${tag}] reel v2 falló (sigo con el legado):`, e.message); }
       }
       if (!out) {
