@@ -354,7 +354,7 @@ console.log('— wiring: rutas montadas y sin atajos');
     !serverSrc.includes('/api/gesty/presupuestos/:id/enviar-directo') && !modSrc.includes('app.post'));
   ok('wiring: el ejecutor de la matriz está registrado en el módulo',
     modSrc.includes("registerExecutor('presupuesto'"));
-  ok('wiring: BUILD_ID presente con la convención vigente (el módulo no lo gestiona)', /const BUILD_ID = '20261024-v[0-9]+';/.test(serverSrc));
+  ok('wiring: BUILD_ID presente con la convención vigente (el módulo no lo gestiona)', /const BUILD_ID = '[0-9]{8}-v[0-9]+';/.test(serverSrc));
 }
 
 // ---------------- HTTP: flujo completo ----------------

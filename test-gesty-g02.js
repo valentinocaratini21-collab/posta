@@ -243,7 +243,7 @@ console.log('— wiring estático');
   ok('server: las rutas del módulo van detrás de requireAuth + gating', srv.includes("gesty.gestyMiddleware(db)"));
   ok('server: NO existe ruta de aprobación masiva para Gesty (R3)', !/gesty[^\n]*(aprobar-todo|approve-all|aprobar_todo)/i.test(srv) && !srv.includes('/api/gesty/bandeja/aprobar'));
   ok('server: la ruta de aprobación es por tarjeta (:id/aprobar)', srv.includes("app.post('/api/gesty/bandeja/:id/aprobar'"));
-  ok('server: BUILD_ID presente y con la convención vigente (el módulo no lo gestiona)', /const BUILD_ID = '20261024-v[0-9]+'/.test(srv));
+  ok('server: BUILD_ID presente y con la convención vigente (el módulo no lo gestiona)', /const BUILD_ID = '[0-9]{8}-v[0-9]+';/.test(srv));
 }
 
 // ---------------- HTTP: flujo completo ----------------

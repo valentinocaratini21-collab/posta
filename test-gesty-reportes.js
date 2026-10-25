@@ -410,7 +410,7 @@ console.log('— wiring estático');
     modSrc.includes("require('./gesty-proveedores')") && modSrc.includes('proveedores.pagosDelPeriodo'));
   ok('wiring G-06b: ya no queda lectura de la columna que nadie escribía (el descuento sale de los asientos de G-07)',
     !modSrc.includes('asiento_vinculado'));
-  ok('wiring: BUILD_ID presente con la convención vigente (el módulo no lo gestiona)', /const BUILD_ID = '20261024-v[0-9]+';/.test(serverSrc));
+  ok('wiring: BUILD_ID presente con la convención vigente (el módulo no lo gestiona)', /const BUILD_ID = '[0-9]{8}-v[0-9]+';/.test(serverSrc));
 }
 
 // ---------------------------------------------------------------------------

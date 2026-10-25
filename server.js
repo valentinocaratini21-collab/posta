@@ -15943,6 +15943,7 @@ app.post('/api/gesty/facturas/:id/anular', ...gestyFactMW, express.json(), (req,
 // inyectado en el módulo, como en G-04.
 // =====================================================================
 const gestyCobranzas = require('./gesty-cobranzas');
+const gestyCobranzasPago = require('./gesty-cobranzas-pago'); // G-27: el dato del medio de pago y su render (la costura vive en gesty-cobranzas.js)
 try {
   gestyCobranzas.configure({ sendEmail: (o) => sendEmail(o) });
 } catch (e) { console.error('[gesty] cobranzas configure:', e.message); }
@@ -15978,6 +15979,15 @@ app.get('/api/gesty/cobranzas', ...gestyCobMW, (req, res) => {
     });
     res.json({ ok: true, ...r });
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+// G-27 · el medio de pago del negocio (fundamento cuentas-medios): ANTES de /:id, como manda el build
+app.get('/api/gesty/cobranzas/medio-pago', ...gestyCobMW, (req, res) => {
+  try { res.json({ ok: true, medio: gestyCobranzasPago.getMedioPago(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/cobranzas/medio-pago', ...gestyCobMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyCobranzasPago.setMedioPago(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 app.get('/api/gesty/cobranzas/:id', ...gestyCobMW, (req, res) => {
   try {
@@ -21655,7 +21665,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v434';
+const BUILD_ID = '20261025-v435';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

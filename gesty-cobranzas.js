@@ -41,12 +41,24 @@
 // plantilla la menciona y el fundamento no la define, el mensaje
 // sale sin esa mención y la tarjeta lleva el aviso para que el
 // dueño lo vea ANTES de aprobar.
+//
+// G-27 (cobranza con medio de pago, gesty-cobranzas-pago.js): la
+// integración con este módulo es SOLO el render del mensaje — al
+// armar el detalle de la tarjeta, el medio de pago del fundamento
+// (cuentas-medios · medio-pago-cobranzas) suma su línea al mensaje
+// congelado y la tarjeta registra qué medio viajó; sin el dato, la
+// tarjeta declara que el mensaje sale sin medio. La máquina de
+// estados y el sello de aprobación NO se tocan: lo que la tarjeta
+// congela es lo que el ejecutor sella y el despacho envía. Si el
+// medio cambia con la tarjeta esperando, el escaneo la regenera
+// como hace con un cambio de escalón o de saldo.
 // =====================================================================
 'use strict';
 
 const gesty = require('./gesty');
 const facturacion = require('./gesty-facturacion');
 const comprobantes = require('./gesty-comprobantes');
+const cobranzasPago = require('./gesty-cobranzas-pago');
 
 // ---------------------------------------------------------------------------
 // Constantes
@@ -376,14 +388,20 @@ function sincronizarCierre(db, userId, cobranzaId) { return sincronizarCierres(d
 
 function detalleTarjeta(db, userId, fila, f, escalon, politica, diasMora) {
   const { mensaje, avisos } = armarMensaje(db, userId, f, escalon, politica, diasMora);
+  // G-27: el medio de pago del fundamento viaja DENTRO del mensaje
+  // congelado (así el sello y el envío no cambian: sale lo aprobado)
+  // y la tarjeta registra qué medio viajó. Sin el dato cargado, el
+  // mensaje sale como siempre y la tarjeta lo declara en sus avisos.
+  const conMedio = cobranzasPago.aplicarAlMensaje(db, userId, mensaje);
+  const todosLosAvisos = conMedio.aviso ? [...avisos, conMedio.aviso] : avisos;
   const detalle = {
     cobranza_id: fila.id, factura_id: f.id, factura_numero: f.numero,
     cliente: { nombre: f.cliente.nombre, cuit: f.cliente.cuit, email: f.cliente.email },
     escalon: escalon.clave, dias_mora: diasMora,
     vencimiento: f.vencimiento || f.fecha, total: f.total, saldo: f.saldo, moneda: f.moneda,
-    canal: politica.canal, mensaje,
+    canal: politica.canal, mensaje: conMedio.mensaje, medio_pago: conMedio.medio_pago,
   };
-  if (avisos.length) detalle.avisos = avisos;
+  if (todosLosAvisos.length) detalle.avisos = todosLosAvisos;
   return detalle;
 }
 function tituloTarjeta(f, escalon) {
@@ -392,6 +410,12 @@ function tituloTarjeta(f, escalon) {
 
 function crearTarjetaEscalon(db, userId, fila, f, escalon, politica, diasMora) {
   const detalle = detalleTarjeta(db, userId, fila, f, escalon, politica, diasMora);
+  // G-27: si el medio de pago existe en el fundamento, la tarjeta
+  // declara que lo usa — si el dueño lo corrige, la fundación marca
+  // la tarjeta «actualizada», como con todo dato que la alimenta.
+  const usaDatos = politica.usa_datos.slice();
+  const medioId = cobranzasPago.idDatoMedio(db, userId);
+  if (medioId && !usaDatos.includes(medioId)) usaDatos.push(medioId);
   const tarjeta = gesty.createCard(db, userId, {
     tipo: 'cobranza',
     titulo: tituloTarjeta(f, escalon),
@@ -400,7 +424,7 @@ function crearTarjetaEscalon(db, userId, fila, f, escalon, politica, diasMora) {
     // factura — una factura vencida es justamente la que hay que
     // cobrar; si la tarjeta naciera vencida, nunca se podría aprobar.
     monto: f.saldo, moneda: f.moneda, vence: '',
-    usa_datos: politica.usa_datos, creado_por: 'gesty',
+    usa_datos: usaDatos, creado_por: 'gesty',
   });
   db.prepare(`UPDATE gesty_cobranzas SET tarjeta_id = ?, tarjeta_escalon = ?, updated_at = datetime('now') WHERE id = ?`)
     .run(tarjeta.id, escalon.clave, fila.id);
@@ -490,7 +514,14 @@ function escanearVencimientos(db, userId, opts) {
     if (tarjetaVigenteDe(db, userId, fila)) {
       const card = gesty.getCard(db, userId, fila.tarjeta_id);
       const saldoCongelado = card && card.detalle ? Number(card.detalle.saldo) : null;
-      if (fila.tarjeta_escalon !== escalon.clave || saldoCongelado !== f.saldo) {
+      // G-27: el medio de pago también es parte del documento — si
+      // cambió desde que la tarjeta se preparó, el mensaje congelado
+      // quedó viejo y la tarjeta se regenera declarando el cambio,
+      // con el mismo criterio que un cambio de escalón o de saldo.
+      const medioCambio = !cobranzasPago.snapshotsIguales(
+        card && card.detalle ? card.detalle.medio_pago : null,
+        cobranzasPago.snapshotActual(db, userId));
+      if (fila.tarjeta_escalon !== escalon.clave || saldoCongelado !== f.saldo || medioCambio) {
         regenerarTarjetaEscalon(db, userId, fila, f, escalon, politica, diasMora);
         resultado.tarjetas_regeneradas++;
       }

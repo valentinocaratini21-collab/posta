@@ -105,7 +105,7 @@ console.log('— wiring en server.js');
 {
   const src = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   ok('server.js requiere gesty-buzon y monta la ingesta pública + las consultas', src.includes("require('./gesty-buzon')") && src.includes("app.post('/api/gesty/buzon/ingresar'") && src.includes("app.get('/api/gesty/buzon/resumen'"));
-  ok('server.js conserva un BUILD_ID con formato de build (la aserción de base fija se relajó en v428: cada push de la casa lo bumpea)', /const BUILD_ID = '20261024-v\d+';/.test(src));
+  ok('server.js conserva un BUILD_ID con formato de build (la aserción de base fija se relajó en v428: cada push de la casa lo bumpea)', /const BUILD_ID = '[0-9]{8}-v[0-9]+';/.test(src));
 }
 
 // ---------------- La dirección: generación, huella y regeneración ----------------

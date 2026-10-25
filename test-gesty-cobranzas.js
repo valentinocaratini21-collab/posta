@@ -414,7 +414,7 @@ console.log('— wiring: rutas, ejecutor y BUILD_ID');
   ok('wiring: el ejecutor de la matriz está registrado en el módulo',
     modSrc.includes("registerExecutor('cobranza'"));
   ok('wiring: el módulo no monta rutas propias (las monta server.js)', !modSrc.includes('app.post') && !modSrc.includes('app.get'));
-  ok('wiring: BUILD_ID presente con la convención vigente (el módulo no lo gestiona)', /const BUILD_ID = '20261024-v[0-9]+';/.test(serverSrc));
+  ok('wiring: BUILD_ID presente con la convención vigente (el módulo no lo gestiona)', /const BUILD_ID = '[0-9]{8}-v[0-9]+';/.test(serverSrc));
 }
 
 // ---------------- HTTP: flujo completo ----------------
