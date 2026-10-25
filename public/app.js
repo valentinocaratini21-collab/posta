@@ -672,7 +672,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261025-v473'; // (pais-selector) bump: chunk-ajustes cambia; el ?v= viejo congelaba el chunk
+const CHUNK_V = '20261025-v474'; // (pais-selector) bump: chunk-ajustes cambia; el ?v= viejo congelaba el chunk
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -2589,7 +2589,7 @@ function lpAnalisisHTML() {
       <div class="lp-letter-sign"><img src="ai-avatar.png" alt="Posty"><p><i>Posty<b>.</b></i><span>Tu community manager</span></p></div>
     </div>
     <p class="lp-cm-close">💡 Y cada posteo te dice su <b>porqué</b>: qué vi, qué decidí y para qué sale. Así de simple.</p>
-    <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Ver el análisis de mi cuenta →</a></div>
+    <div style="text-align:center"><a class="btn btn-primary btn-lg" href="/prueba">Ver el análisis de mi cuenta →</a></div>
   </div></div>`;
 }
 function lpAtencionHTML() {
@@ -2604,7 +2604,7 @@ function lpAtencionHTML() {
       <div class="lp-cm-card"><div class="lp-cm-i">🎯</div><h3>Sigo cada consulta hasta el cierre</h3><p class="lp-cm-tag">Ningún interesado se enfría</p><p>Si alguien preguntó y no cerró, te preparo el seguimiento a tiempo para que salga con tu toque. Cuando está listo para comprar, el cierre va con link de pago o seña — y después de la venta, la reseña de Google también te queda lista para aprobar.</p></div>
     </div>
     <p class="lp-cm-close">🤝 Vos ves todo: cada conversación queda en tu cuenta, nada sale sin tu OK, y lo sensible — quejas, descuentos, plata — te lo derivo a vos. <b>Posty atiende; vos mandás.</b></p>
-    <div style="text-align:center"><a class="btn btn-primary" href="#planes" style="font-size:16px;padding:16px 36px">Ver el plan Total →</a></div>
+    <div style="text-align:center"><a class="btn btn-primary btn-lg" href="#planes">Ver el plan Total →</a></div>
   </div></div>`;
 }
 /* 🧩 Secciones por capacidad (2026-10-20): cada utilidad de Posty con su
@@ -3054,7 +3054,7 @@ function landingView(cfg) {
       <button type="button" class="lp-view-x" onclick="lpWeekClose()" aria-label="Cerrar">✕</button>
       <div class="lp-view-head"><span class="lp-view-av" id="lpViewAv"></span><div><b id="lpViewU"></b><span id="lpViewDay"></span></div></div>
       <img class="lp-view-img" id="lpViewImg" alt="">
-      <div class="lp-view-nav"><button type="button" id="lpViewPrev" onclick="lpWeekNav(-1)" aria-label="Posteo anterior">‹</button><span class="lp-view-count" id="lpViewCount"></span><button type="button" id="lpViewNext" onclick="lpWeekNav(1)" aria-label="Posteo siguiente">›</button></div>
+      <div class="lp-view-nav"><button type="button" class="lp-view-arrow" id="lpViewPrev" onclick="lpWeekNav(-1)" aria-label="Posteo anterior">‹</button><span class="lp-view-count" id="lpViewCount"></span><button type="button" class="lp-view-arrow" id="lpViewNext" onclick="lpWeekNav(1)" aria-label="Posteo siguiente">›</button></div>
       <div class="lp-view-body"><span class="lp-view-tag" id="lpViewTag"></span><div class="lp-view-cap" id="lpViewCap"></div><div class="lp-view-why" id="lpViewWhy"></div></div>
     </div>
   </div>
@@ -3120,7 +3120,7 @@ function landingView(cfg) {
       <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>Desde $1.000.000 por mes</div><div class="win">Desde $6.667 por día</div></div>
     </div>
     <p class="lp-cm-close">El mismo trabajo. Sin sueldos, sin cargas sociales, sin vacaciones.</p>
-    <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Quiero mi community manager →</a></div>
+    <div style="text-align:center"><a class="btn btn-primary btn-lg" href="/prueba">Quiero mi community manager →</a></div>
   </div></div>
   ${lpCapSectionsHTML()}
   <div class="section" id="fotos"><div class="wrap">
@@ -3141,7 +3141,7 @@ function landingView(cfg) {
       </div>
     </div>
     <p class="lp-foto-cta"><a href="/prueba">En la prueba gratuita podés subir una foto tuya y ver la diferencia →</a></p>
-    <div style="text-align:center;margin-top:26px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Probá gratis 3 días</a></div>
+    <div style="text-align:center;margin-top:26px"><a class="btn btn-primary btn-lg" href="/prueba">Probá gratis 3 días</a></div>
   </div></div>
   <div class="section lp-ctl" id="control"><div class="wrap" style="max-width:920px">
     <h2>Tranqui: vos siempre tenés el freno de mano</h2>
@@ -4802,11 +4802,11 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
         ${d.needs_review ? '' : `<button class="igmock-now" data-pubnow="${d.id}" style="margin-top:8px">${pzIc('bolt', 18)} Publicar ahora</button>`}
         <div class="igmock-whenrow"><label class="igmock-when2"><span>${pzIc('calendar', 15)}</span><span data-revwhentxt="${d.id}">${fmtWhenPill(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
         <div class="igmock-icos" style="margin-top:8px">
-          <button data-revedit="${d.id}">${pzIc('pencil', 18)} Editar</button>
-          ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}" title="Generar otro diseño para este posteo">${pzIc('sparkle', 18)} Otro diseño</button>`}
-          ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">${pzIc('refresh', 18)} Otras 3</button>`}
-          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">${pzIc('reel', 18)} Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">${pzIc('image', 18)} Otra foto</button><button data-revphotopick=\"${d.id}\" title=\"Elegir una foto de tu librería o subir una nueva\">${pzIc('camera', 18)} Foto</button>${d.media_type !== 'carousel' ? `<button data-revrestyle=\"${d.id}\" title=\"Restylear TU foto con el estilo elegido arriba (mismo producto, otro estilo)\">${pzIc('palette', 18)} Restylear</button><button data-revenhance=\"${d.id}\" title=\"Mejorar la foto: luz, nitidez y color en un tap\">${pzIc('sparkle', 18)} Mejorar</button><button data-revcarousel=\"${d.id}\" title=\"Convertir en carousel: portada que frena + 3 placas\">${pzIc('layers', 18)} Carousel</button><button data-revreel=\\\"${d.id}\\\" title=\\\"Armar reel: Ken Burns + headline, 1080×1920 (máx 2/semana)\\\">${pzIc('reel', 18)} Reel</button>` : ''}`}
-          <button class="danger" data-revdel="${d.id}">${pzIc('trash', 18)}</button>
+          <button class="rv-mini" data-revedit="${d.id}">${pzIc('pencil', 18)} Editar</button>
+          ${d.media_type === 'video' ? '' : `<button class="rv-mini" data-revregen="${d.id}" title="Generar otro diseño para este posteo">${pzIc('sparkle', 18)} Otro diseño</button>`}
+          ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button class="rv-mini" data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">${pzIc('refresh', 18)} Otras 3</button>`}
+          ${d.media_type === 'video' ? `<button class="rv-mini" data-revvideo="${d.id}" title="Cambiar el video de este posteo">${pzIc('reel', 18)} Otro video</button>` : `<button class="rv-mini" data-revphoto="${d.id}" title="Cambiar la foto de este posteo">${pzIc('image', 18)} Otra foto</button><button class="rv-mini" data-revphotopick=\"${d.id}\" title=\"Elegir una foto de tu librería o subir una nueva\">${pzIc('camera', 18)} Foto</button>${d.media_type !== 'carousel' ? `<button class="rv-mini" data-revrestyle=\"${d.id}\" title=\"Restylear TU foto con el estilo elegido arriba (mismo producto, otro estilo)\">${pzIc('palette', 18)} Restylear</button><button class="rv-mini" data-revenhance=\"${d.id}\" title=\"Mejorar la foto: luz, nitidez y color en un tap\">${pzIc('sparkle', 18)} Mejorar</button><button class="rv-mini" data-revcarousel=\"${d.id}\" title=\"Convertir en carousel: portada que frena + 3 placas\">${pzIc('layers', 18)} Carousel</button><button class="rv-mini" data-revreel=\\\"${d.id}\\\" title=\\\"Armar reel: Ken Burns + headline, 1080×1920 (máx 2/semana)\\\">${pzIc('reel', 18)} Reel</button>` : ''}`}
+          <button class="pcard-del" data-revdel="${d.id}">${pzIc('trash', 18)}</button>
         </div>
         ${d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">${pzIc('idea', 15)} <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
         ${d.media_type === 'video' && d.script ? `<div style="font-size:11px;color:var(--dim);line-height:1.6;margin-top:8px;overflow-wrap:anywhere">🎬 <b>Guion:</b><br>${(() => { try { return JSON.parse(d.script).map((sc, k) => `${k + 1}. <b>${esc(sc.seg || '')}</b> ${esc(sc.texto || sc.visual || '')}`).join('<br>'); } catch (e) { return ''; } })()}</div>` : ''}
@@ -6312,8 +6312,8 @@ function chatMsgHtml(role, text) {
   return `<div class="chat-msg ai lc-banner" data-lc="${esc(imgPath)}" style="touch-action:manipulation">`
     + `<div>${esc(chatStripLcMarker(text))}</div>${img}`
     + `<div style="display:flex;gap:8px;margin-top:8px">`
-    + `<button class="lc-yes" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:12px;background:#1F9D55;color:#fff;font-size:15px;font-weight:700">Sí, ese es ${pzIc('checkCircle', 18)}</button>`
-    + `<button class="lc-no" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:12px;background:#EEF0F2;color:#333;font-size:15px;font-weight:700">No ${pzIc('reject', 18)}</button>`
+    + `<button class="lc-yes" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:999px;background:#2793C8;color:#fff;font-size:15px;font-weight:700">Sí, ese es ${pzIc('checkCircle', 18)}</button>`
+    + `<button class="lc-no" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:999px;background:transparent;color:#2793C8;font-size:15px;font-weight:700">No ${pzIc('reject', 18)}</button>`
     + `</div></div>`;
 }
 

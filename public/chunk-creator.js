@@ -60,7 +60,7 @@ function creatorView(embed) {
         <div id="c_prodPhotoBox"></div>
         <input type="file" id="c_prodPhotoFile" accept="image/*" style="display:none">
         <div class="hint">Si la subís, las 6 opciones usan TU foto. Ideal para vender tu producto exacto. Si no, usamos fotos del banco.</div></div>
-      <button class="btn btn-soft" id="btnGen">${pzIc('sparkle', 18)} Armar mi posteo</button>
+      <button class="btn btn-primary" id="btnGen">${pzIc('sparkle', 18)} Armar mi posteo</button>
       <div id="genErr"></div>
       <div id="genOut" style="margin-top:24px;${c.caption ? '' : 'display:none'}">
         <div class="field"><label>Caption</label><textarea id="c_caption" style="min-height:150px">${esc(c.caption)}</textarea></div>
@@ -155,7 +155,7 @@ function creatorView(embed) {
       <div class="mp-title">📷 Tus fotos</div>
       <p class="mp-text">Para vender tu producto exacto (como tu buzo), subí sus fotos una vez y el creador las usa siempre.</p>
       <div class="mp-row" id="mpRow"><span class="mut">Todavía no subiste fotos.</span></div>
-      <button class="btn btn-soft" id="btnUploadPhotos">${pzIc('share', 18)} Subir fotos de tus productos</button>
+      <button class="btn btn-primary" id="btnUploadPhotos">${pzIc('share', 18)} Subir fotos de tus productos</button>
       <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
       <div id="mpMsg"></div>
     </div>`}
@@ -213,7 +213,7 @@ function creatorView(embed) {
     <div id="photoPickModal" class="modal-ov" style="display:none">
       <div class="modal-card">
         <h3>📷 Foto para este diseño</h3>
-        <button class="btn btn-soft btn-block" id="btnPickUpload" style="margin:12px 0">${pzIc('share', 18)} Subir nueva foto</button>
+        <button class="btn btn-primary btn-block" id="btnPickUpload" style="margin:12px 0">${pzIc('share', 18)} Subir nueva foto</button>
         <input type="file" id="pickFile" accept="image/*" style="display:none">
         <p class="mut" style="margin:6px 0 8px"><b>De tu librería</b></p>
         <div class="mp-row" id="pickLib"></div>

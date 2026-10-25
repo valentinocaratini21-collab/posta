@@ -2733,7 +2733,7 @@ function htmlLinkPage(title, msg, lang) {
     + '<img src="/ai-avatar.png" alt="Posty" width="72" height="72" style="border-radius:50%">'
     + '<h1 style="font-size:21px;margin:16px 0 8px">' + title + '</h1>'
     + '<p style="font-size:15px;line-height:1.55;color:#47617A;margin:0 0 22px">' + msg + '</p>'
-    + '<a href="/#/login" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:15px;padding:13px 30px;border-radius:999px;text-decoration:none">' + (en ? 'Back to Posty' : 'Volver a Posty') + '</a>'
+    + '<a href="/#/login" style="display:inline-block;background:#2793C8;color:#FFFFFF;font-weight:800;font-size:15px;padding:13px 30px;border-radius:999px;text-decoration:none">' + (en ? 'Back to Posty' : 'Volver a Posty') + '</a>'
     + '</div></body></html>';
 }
 
@@ -2958,7 +2958,7 @@ app.post('/api/auth/forgot', async (req, res) => {
           ${emailFaceHeader(fen ? 'en' : 'es')}
           <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
             <p style="font-size:16px;line-height:1.6">${fen ? "Hi! I'm Posty 🤖 You asked to reset your password. Tap the button and choose a new one:" : '¡Hola! Soy Posty 🤖 Me pediste cambiar tu contraseña. Tocá el botón y elegí una nueva:'}</p>
-            <p style="text-align:center;margin:26px 0"><a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 34px;border-radius:999px;text-decoration:none">${fen ? 'Reset my password' : 'Cambiar mi contraseña'}</a></p>
+            <p style="text-align:center;margin:26px 0"><a href="${link}" style="display:inline-block;background:#2793C8;color:#FFFFFF;font-weight:800;font-size:16px;padding:14px 34px;border-radius:999px;text-decoration:none">${fen ? 'Reset my password' : 'Cambiar mi contraseña'}</a></p>
             <p style="font-size:13px;line-height:1.6;color:#47617A">${fen ? "The link expires in 1 hour. If it wasn't you, just ignore this email 😊" : 'El link vence en 1 hora. Si no fuiste vos, ignorá este mail 😊'}</p>
           </div></div>`,
       });
@@ -21662,7 +21662,7 @@ function cartaPageHTML(data, token) {
   const hero = data.heroImg ? `<img src="${esc(data.heroImg)}" alt="" style="width:100%;height:auto;border-radius:12px;display:block;margin:0 0 18px">` : '';
   // (v426 · ítem 5) El botón de aprobación va SOLO cuando cartaResolve
   // encontró semana aprobable (data.approveUrl vacío = no sale nada).
-  const approve = data.approveUrl ? `<p style="text-align:center;margin:4px 0 8px"><a href="${esc(data.approveUrl)}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16.5px;padding:15px 38px;border-radius:999px;text-decoration:none">${en ? '✅ Approve my week' : '✅ Aprobar mi semana'}</a></p>
+  const approve = data.approveUrl ? `<p style="text-align:center;margin:4px 0 8px"><a href="${esc(data.approveUrl)}" style="display:inline-block;background:#2793C8;color:#FFFFFF;font-weight:800;font-size:16.5px;padding:15px 38px;border-radius:999px;text-decoration:none">${en ? '✅ Approve my week' : '✅ Aprobar mi semana'}</a></p>
   <p style="text-align:center;font-size:13.5px;color:#47617A;margin:0 0 18px">${en ? 'The week this letter presents is ready: one tap shows it and approves it.' : 'La semana que presenta esta carta ya está lista: un toque la muestra y la aprueba.'}</p>` : '';
   return `<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(data.title)} — Posty</title></head>
 <body style="margin:0;background:#F6F9FB;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0A1E33">
@@ -22553,7 +22553,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v473';
+const BUILD_ID = '20261025-v474';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

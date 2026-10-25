@@ -80,18 +80,18 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .filewrap input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0}
 .cchips{display:none}
 .country-row{display:flex;gap:10px}
-.country-btn{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-family:inherit;font-weight:700;font-size:15px;color:var(--navy);cursor:pointer}
-.country-btn.on{border-color:var(--cel);background:var(--bg2)}
+.country-btn{flex:1;border:none;background:rgba(39,147,200,.06);border-radius:999px;padding:12px;font-family:inherit;font-weight:700;font-size:15px;color:var(--navy);cursor:pointer}
+.country-btn.on{border:none;background:var(--cel);color:#fff}
 /* (pais-selector) Country selector on the trial: 10 flags + note with currency and rail */
 .pz-pais-toggle{display:flex;justify-content:center;gap:8px;margin:0 0 10px}
 .pz-pais-toggle button{width:40px;height:40px;padding:0;font-size:20px;line-height:1;border-radius:50%;border:1.5px solid var(--line);background:#fff;cursor:pointer;font-family:inherit}
-.pz-pais-toggle button.on{border-color:var(--yl,#FEC14D);box-shadow:0 0 0 3px var(--yl,#FEC14D)}
+.pz-pais-toggle button.on{border-color:var(--cel);box-shadow:0 0 0 3px var(--cel)}
 .pz-pais-nota{text-align:center;color:#47617A;font-size:13px;margin:0 0 16px}
-.btn{display:inline-block;border:none;cursor:pointer;font-family:inherit;font-weight:800;border-radius:14px;padding:16px 34px;font-size:17px;text-decoration:none;transition:transform .12s,box-shadow .12s}
-.btn-primary{background:var(--yl);color:var(--navy);box-shadow:0 8px 24px rgba(254,193,77,.45)}
-.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(254,193,77,.55)}
+.btn{display:inline-block;border:none;cursor:pointer;font-family:inherit;font-weight:800;border-radius:999px;padding:16px 34px;font-size:17px;text-decoration:none;transition:transform .12s,box-shadow .12s}
+.btn-primary{background:var(--cel);color:#fff;box-shadow:0 8px 24px rgba(39,147,200,.45)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(39,147,200,.55)}
 .btn-block{width:100%}
-.btn-ghost{background:#fff;color:var(--cel);border:2px solid var(--cel)}
+.btn-ghost{background:transparent;color:var(--cel);border:none}
 .btn-sm{padding:10px 20px;font-size:14px}
 .err{background:#FDE8E8;color:#B42323;border-radius:12px;padding:13px 16px;font-weight:600;font-size:14px;margin-bottom:16px;display:none}
 .tiny{font-size:13px;color:var(--mut);text-align:center;margin-top:14px}
@@ -201,8 +201,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .wk-arrow{align-self:center;color:var(--cel);font-weight:800;flex-shrink:0}
 /* Compartir */
 .share-row{text-align:center;margin:14px 0 4px}
-.share-btn{border:2px solid var(--cel);background:#fff;color:var(--cel);border-radius:999px;padding:11px 26px;font-size:15px;font-weight:800;cursor:pointer}
-.share-btn.wa{background:#25D366;border-color:#25D366;color:#fff;margin-left:8px}
+.share-btn{border:none;background:transparent;color:var(--cel);border-radius:999px;padding:11px 26px;font-size:15px;font-weight:800;cursor:pointer}
+.share-btn.wa{background:transparent;border:none;color:var(--cel);margin-left:8px}
 /* (v379 · item 5) Express diagnosis of their line */
 #diagBox{max-width:480px;margin:26px auto 0}
 .diag-card{background:#fff;border:2px solid #E3EDF4;border-radius:18px;padding:18px;text-align:left}
@@ -223,15 +223,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .msg.user{background:var(--cel);color:#fff;border-bottom-right-radius:6px;align-self:flex-end}
 .msg.typing{color:var(--mut)}
 .chat-chips{display:flex;gap:8px;padding:12px 16px;flex-wrap:wrap;background:#fff;border-top:1px solid var(--line)}
-.chat-chips button{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;transition:all .15s}
-.chat-chips button:hover{border-color:var(--cel);background:var(--bg2)}
+.chat-chips button{border:none;background:rgba(39,147,200,.10);border-radius:999px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:700;color:var(--cel);cursor:pointer;transition:all .15s}
+.chat-chips button:hover{border:none;background:rgba(39,147,200,.18)}
 #chipColors{background:var(--yl);border-color:var(--yl);color:var(--navy)}
 .chat-input{display:flex;gap:8px;padding:12px 16px;background:#fff;border-top:1px solid var(--line)}
 .chat-input input{flex:1;border:2px solid var(--line);border-radius:12px;padding:12px 14px;font-family:inherit;font-size:16px;color:var(--navy);outline:none}
 .chat-input input:focus{border-color:var(--cel)}
-.chat-input button{border:none;background:var(--yl);color:var(--navy);font-weight:900;font-size:18px;width:48px;border-radius:12px;cursor:pointer;flex-shrink:0}
+.chat-input button{border:none;background:var(--cel);color:#fff;font-weight:900;font-size:18px;width:48px;border-radius:999px;cursor:pointer;flex-shrink:0}
 .chat-input button:disabled{opacity:.5}
-.msg .mini-cta{display:block;margin-top:10px;background:var(--yl);color:var(--navy);font-weight:800;text-align:center;padding:10px;border-radius:10px;cursor:pointer;font-size:13px}
+.msg .mini-cta{display:block;margin-top:10px;background:var(--cel);color:#fff;font-weight:800;text-align:center;padding:10px;border-radius:999px;cursor:pointer;font-size:13px}
 /* Panel de colores */
 .colorpanel{background:#fff;border-top:1px solid var(--line);padding:16px;display:none}
 .colorpanel.open{display:block;animation:pop .2s ease}
@@ -281,7 +281,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .overlay.open{display:flex}
 .modal{background:#fff;border-radius:24px;max-width:880px;width:100%;max-height:92vh;overflow-y:auto;padding:34px;position:relative;animation:pop .25s ease}
 @keyframes pop{from{transform:scale(.96) translateY(10px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
-.modal .x{position:absolute;top:16px;right:18px;border:none;background:var(--bg2);width:38px;height:38px;border-radius:50%;font-size:18px;cursor:pointer;color:var(--navy)}
+.modal .x{position:absolute;top:16px;right:18px;border:none;background:transparent;width:38px;height:38px;border-radius:50%;font-size:18px;cursor:pointer;color:var(--navy)}
 .modal h2{font-size:clamp(24px,4vw,34px);font-weight:900;text-align:center}
 .modal h2 .hl{color:var(--cel)}
 .modal .msub{text-align:center;color:var(--mut);margin:10px 0 24px;font-size:15px}
@@ -314,14 +314,14 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .lb-cap .tags{color:var(--cel);font-size:13px;margin-top:10px;line-height:1.6}
 .lb .x{position:absolute;top:12px;right:12px;border:none;background:rgba(255,255,255,.9);width:36px;height:36px;border-radius:50%;font-size:17px;cursor:pointer;z-index:2}
 .lb-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
-.lb-btn{flex:1;min-width:150px;border:none;border-radius:12px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff}
-.lb-btn.ghost{background:var(--bg2);color:var(--navy)}
+.lb-btn{flex:1;min-width:150px;border:none;border-radius:999px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;background:var(--cel);color:#fff}
+.lb-btn.ghost{background:transparent;color:var(--cel)}
 /* Sheet cambiar foto */
 .sheet{position:fixed;inset:0;background:rgba(10,30,51,.55);display:none;align-items:flex-end;justify-content:center;z-index:60}
 .sheet.open{display:flex}
 .sheet-box{background:#fff;width:100%;max-width:520px;max-height:88vh;border-radius:20px 20px 0 0;overflow:hidden;display:flex;flex-direction:column}
 .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e6eef5;font-size:17px}
-.sheet-head .x{border:none;background:var(--bg2);width:36px;height:36px;border-radius:50%;font-size:16px;cursor:pointer;color:var(--navy)}
+.sheet-head .x{border:none;background:transparent;width:36px;height:36px;border-radius:50%;font-size:16px;cursor:pointer;color:var(--navy)}
 .sheet-body{padding:18px;overflow-y:auto}
 .ph-opt{width:100%;border:2px dashed var(--blue);background:var(--bg2);border-radius:14px;padding:16px;font-size:16px;font-weight:700;color:var(--navy);cursor:pointer}
 .ph-sep{text-align:center;color:var(--mut);font-size:13px;margin:14px 0 10px}
@@ -412,7 +412,7 @@ html{scroll-behavior:smooth}
 .pfp-head{display:flex;align-items:center;gap:8px;padding:14px 16px 8px}
 .pfp-head b{font-size:16px;color:var(--navy)}
 .pfp-tag{margin-left:auto;background:var(--bg2);color:var(--cel);font-weight:800;font-size:11px;letter-spacing:.4px;padding:5px 11px;border-radius:99px;white-space:nowrap}
-.pfp-btn{border:none;background:var(--bg2);width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer;color:var(--navy);flex-shrink:0;font-family:inherit}
+.pfp-btn{border:none;background:transparent;width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer;color:var(--navy);flex-shrink:0;font-family:inherit}
 .pfp-label{padding:0 16px 12px;color:var(--mut);font-size:13px;line-height:1.5;margin:0}
 .pfp-stage{--pos:50%;position:relative;margin:0 16px;border:1px solid var(--line);border-radius:16px;overflow:hidden;touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none;background:#fff}
 .pfp-stage:focus-within{outline:2px solid var(--cel);outline-offset:3px}
@@ -532,7 +532,7 @@ html{scroll-behavior:smooth}
 .hero h1{font-size:clamp(34px,8.6vw,54px);letter-spacing:-.02em;margin:20px 0 14px}
 .hero .sub{font-size:16.5px}
 .hero .cta-row{margin-top:24px}
-.hero .cta-row .btn{font-size:18px;padding:17px 38px;border-radius:16px}
+.hero .cta-row .btn{font-size:18px;padding:17px 38px;border-radius:999px}
 .pres-video-wrap{width:min(320px,84vw);margin:2px auto 0}.pres-video{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:24px;border:3px solid #fff;box-shadow:0 16px 38px rgba(10,30,51,.18);background:#EAF4FA}
 /* Tira de producto en el hero: posteos REALES antes del formulario */
 .hero-strip{display:flex;gap:10px;justify-content:center;align-items:flex-start;max-width:500px;margin:28px auto 0;padding:0 2px}
@@ -550,8 +550,8 @@ html{scroll-behavior:smooth}
 .field input[type=text],.field input[type=email],.field select,.field textarea{border:1.5px solid #CFE0EC;border-radius:14px;padding:15px 16px;transition:border-color .15s,box-shadow .15s}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cel);box-shadow:0 0 0 4px rgba(39,147,200,.14)}
 .field label{font-size:14.5px}
-#stepIg .btn-block,#prefillCard .btn-block,#webCard .btn-block,#detailForm .btn-block{padding:18px;font-size:18px;border-radius:16px}
-.btn{border-radius:16px}
+#stepIg .btn-block,#prefillCard .btn-block,#webCard .btn-block,#detailForm .btn-block{padding:18px;font-size:18px;border-radius:999px}
+.btn{border-radius:999px}
 .btn:active{transform:scale(.98)}
 .btn-primary:hover{transform:translateY(-2px)}
 .trust-line{display:flex;flex-wrap:wrap;gap:5px 14px;justify-content:center;margin-top:12px}
@@ -1131,7 +1131,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
     <details class="faq-item"><summary>Do I have to give my password?</summary><p>No: you connect with Meta, no password sharing.</p></details>
     <details class="faq-item"><summary>How long does my week take?</summary><p>It's ready in ~1 minute.</p></details>
     <details class="faq-item"><summary>Can I cancel anytime?</summary><p>Yes, anytime.</p></details>
-    <div style="text-align:center;margin-top:20px"><button type="button" class="btn btn-ghost" data-posty-chat style="padding:12px 26px;font-size:15.5px;border-radius:999px">Need help? Talk to Posty</button></div>
+    <div style="text-align:center;margin-top:20px"><button type="button" class="btn btn-ghost" data-posty-chat>Need help? Talk to Posty</button></div>
   </div>
 
   </div>
@@ -1345,7 +1345,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
       </div>
       <!-- (v323 · piece 7) Sample reel behind a gate: only on request -->
       <div id="reelRow" style="display:none;text-align:center;margin:18px auto 4px;max-width:440px">
-        <button class="btn btn-ghost" id="reelGo" style="padding:13px 26px;font-size:15.5px;border-radius:999px">🎬 Want to see what your reel would look like?</button>
+        <button class="btn btn-ghost" id="reelGo">🎬 Want to see what your reel would look like?</button>
         <p class="tiny" style="margin:8px 0 0">A sample reel with your material, scripted for your business. It takes a little while.</p>
         <div id="reelBox" style="margin-top:10px"></div>
       </div>

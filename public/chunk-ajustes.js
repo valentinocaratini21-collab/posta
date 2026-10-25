@@ -85,7 +85,7 @@ function ajustesView() {
       <p style="color:var(--mut);font-size:12.5px;margin:4px 0 10px">Escribí tu @ y te analizo igual — tu estilo, tus horarios y tu competencia — sin conectar nada.</p>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div class="field" style="flex:1;min-width:170px;margin:0"><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="tu_usuario" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-        <button class="btn btn-soft btn-sm" id="btnIgUserSave" style="flex:none">Guardar @</button>
+        <button class="btn btn-primary btn-sm" id="btnIgUserSave" style="flex:none">Guardar @</button>
         <span id="igUserMsg"></span>
       </div>
     </div>`}
@@ -489,7 +489,7 @@ async function gustosZoneLoad() {
     </div>`).join('');
   zone.querySelectorAll('[data-gusto-del]').forEach(b => {
     b.onclick = async () => {
-      b.disabled = true;
+      if (!confirm(en ? 'Delete this taste?' : '¿Borrar este gusto?')) return;       b.disabled = true;
       try { await api.delete('/api/gustos/' + encodeURIComponent(b.dataset.gustoDel)); } catch (e) {}
       gustosZoneLoad();
     };

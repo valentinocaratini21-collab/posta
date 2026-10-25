@@ -165,7 +165,7 @@
           vids.slice(0, 4).map(v => `
             <div style="display:flex;align-items:center;gap:10px;margin:6px 0">
               <span style="width:46px;height:46px;border-radius:10px;background:#0A1E33;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;flex:none">${v.thumb ? `<img src="${escF(v.thumb)}" alt="" style="width:100%;height:100%;object-fit:cover">` : '<span style="color:#fff;font-size:18px">🎬</span>'}</span>
-              <button type="button" class="btn btn-soft btn-sm" data-talk-asset="${v.id}">${t.useThis}</button>
+              <button type="button" class="btn btn-primary btn-sm" data-talk-asset="${v.id}">${t.useThis}</button>
             </div>`).join('');
         box.querySelectorAll('[data-talk-asset]').forEach(b => { b.onclick = () => useAsset(parseInt(b.getAttribute('data-talk-asset'), 10), b); });
       }
