@@ -55,6 +55,7 @@ const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleado
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
 const { reconcileUser } = require('./billing-sync');
 const weekRedo = require('./week-redo'); // (ARMA TODO · ítem 3) garantía de primera semana: registro durable del rehacer
+const { SHOWCASE_PAGES } = require('./showcase-pages'); // páginas públicas permanentes de la vidriera: los /p/<slug> de ejemplo que imprimen las homes
 const { startTokenRefresh } = require('./tokenrefresh');
 const { analyzeWebsite } = require('./website-study');
 const meliApi = require('./meli'); // MercadoLibre: API pública sin key (Track 4)
@@ -21665,7 +21666,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v436';
+const BUILD_ID = '20261025-v437';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -21748,6 +21749,30 @@ app.get('/p/:slug', (req, res) => {
     const slug = String(req.params.slug || '').toLowerCase().trim();
     const prof = db.prepare('SELECT * FROM profiles WHERE page_slug = ? AND page_enabled = 1').get(slug);
     if (!prof) {
+      // (Vidriera permanente) Los perfiles de ejemplo que imprimen las homes
+      // (postycommunitymanager.com/p/<slug> en la bio de cada tarjeta) NO son
+      // perfiles de clientes: resuelven SIEMPRE desde showcase-pages.js.
+      // Un slug que no es cliente ni vidriera sí es 404.
+      const sc = SHOWCASE_PAGES[slug];
+      if (sc) {
+        const host = req.get('host') || 'postycommunitymanager.com';
+        const desc = (sc.bio && sc.bio.length ? sc.bio.join('\n') : `Seguí el día a día de ${sc.name} y no te pierdas ninguna novedad.`);
+        const ogImage = sc.imgs && sc.imgs.length ? `https://${host}${sc.imgs[0]}` : '';
+        const cells = (sc.imgs || []).map((m) => `<span class="cell"><img src="${escPub(m)}" alt="${escPub(sc.name)}" loading="lazy"></span>`).join('');
+        const body = `
+    <div class="band">
+      <h1>${escPub(sc.name)}</h1>
+      ${sc.user ? `<span class="ig">@${escPub(sc.user)}</span>` : ''}
+      ${sc.cat ? `<div><span class="chip">${escPub(sc.cat)}</span></div>` : ''}
+    </div>
+    <div class="wrap">
+      <p class="desc">${escPub(desc)}</p>
+      ${cells ? `<div class="grid">${cells}</div>` : ''}
+    </div>
+    <div class="foot">Hecho con <b>Posty</b> 🐾<br>¿Querés lo mismo para tu negocio? <a href="/prueba">Probalo gratis →</a></div>`;
+        res.set('Cache-Control', 'public, max-age=120');
+        return res.send(pubPageShell({ title: `${sc.name} · Posty`, desc, ogImage, brand: '#2793C8', accent: '#FEC14D', body }));
+      }
       res.status(404);
       return res.send(pubPageShell({
         title: 'Página no disponible · Posty', desc: 'Esta página no está disponible.', ogImage: '', brand: '#2793C8', accent: '#FEC14D',
