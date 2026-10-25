@@ -238,7 +238,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261024-v426'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261024-v427'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -2677,6 +2677,7 @@ function landingView(cfg) {
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
     <p class="lp-plans-note">Precios en pesos · Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
+    <p class="lp-plans-note">Si tu primera semana no te convence, te la rehacemos entera, gratis.</p>
     <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque los planes suban.</p>
 
     <!-- (v344) Mini-bloque del fundador en Planes: foto entera,
@@ -12450,6 +12451,50 @@ function salioCardHTML(publishedList) {
   </div>`;
 }
 
+// (ARMA TODO · ítem 3) Garantía de primera semana: la tarjeta SOLO se
+// pinta si GET /api/week/first-redo dice 'available' (la arma
+// scheduleView). Confirmación inline de UN paso (patrón de la casa):
+// nada de modales ni pantallas nuevas. Textos ES/EN por ME.lang, como
+// el resto de la app.
+function firstWeekRedoCardHTML() {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  return `<div class="card" style="margin:0 0 12px;padding:14px 16px;border-radius:14px" id="firstWeekRedoCard">
+    <div style="font-weight:800;font-size:14px;margin-bottom:6px">${en ? 'Your first-week guarantee' : 'Tu garantía de primera semana'}</div>
+    <div style="font-size:13px;line-height:1.6;color:var(--mut)">${en ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</div>
+    <button type="button" class="btn btn-primary btn-sm" id="firstWeekRedoBtn" style="margin-top:10px">${en ? '↻ Redo my week' : '↻ Rehacer mi semana'}</button>
+    <div id="firstWeekRedoConfirm" style="display:none;margin-top:12px">
+      <div style="font-size:13px;line-height:1.6">${en ? "Shall I redo your whole week? I'll build a complete new week for you. Posts already published won't be touched." : '¿Rehago toda tu semana? Armo una semana nueva completa para vos. Los posteos ya publicados no se tocan.'}</div>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <button type="button" class="btn btn-primary btn-sm" id="firstWeekRedoYes">${en ? 'Yes, redo it' : 'Sí, rehacerla'}</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="firstWeekRedoNo">${en ? 'Not now' : 'Ahora no'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function bindFirstWeekRedo() {
+  const btn = $('#firstWeekRedoBtn');
+  if (!btn) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const conf = $('#firstWeekRedoConfirm');
+  btn.onclick = () => { if (conf) conf.style.display = ''; btn.style.display = 'none'; };
+  const no = $('#firstWeekRedoNo');
+  if (no) no.onclick = () => { if (conf) conf.style.display = 'none'; btn.style.display = ''; };
+  const yes = $('#firstWeekRedoYes');
+  if (yes) yes.onclick = async () => {
+    yes.disabled = true; if (no) no.disabled = true;
+    try {
+      await api.post('/api/week/first-redo', {});
+      toast(en ? "Done — I'm building your new week 🎉" : 'Listo — estoy armando tu semana nueva 🎉');
+      // La vista entra en su estado de generación de siempre: el
+      // re-render llama a /api/week/ensure y muestra «armando…» con su
+      // refresco automático hasta que la semana nueva aparece.
+      try { render(); } catch (e) {}
+    } catch (e) {
+      yes.disabled = false; if (no) no.disabled = false;
+      toast('😅 ' + esc((e && e.message) || (en ? "I couldn't redo it now, try again" : 'No pude rehacerla ahora, probá de nuevo')));
+    }
+  };
+}
 async function scheduleView() {
   const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
   // Datos para la barra XP + revisión (antes en Mi semana).
@@ -12480,6 +12525,13 @@ async function scheduleView() {
   } catch (e) {}
   let quota = null;
   try { quota = await api.get('/api/quota').catch(() => null); } catch (e) {}
+  // (ítem 3) Garantía de primera semana: el botón vive SOLO si el
+  // servidor dice que la garantía está disponible para ESTA semana.
+  let firstRedoBlock = '';
+  try {
+    const fr = await api.get('/api/week/first-redo').catch(() => null);
+    if (fr && fr.state === 'available') firstRedoBlock = firstWeekRedoCardHTML();
+  } catch (e) {}
   const slots = suggestSlots(drafts.length, schedPosts);
   const { expBanner } = xpStripHTML(sk, st, drafts.length); // (el xpStrip del nivel se eliminó: vive en el avatar del chat)
   const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
@@ -12625,6 +12677,7 @@ async function scheduleView() {
     </div>
     ${igBanner}
     ${trialBanner}
+    ${firstRedoBlock}
     ${dogfoodBlock}
     ${analysisSummaryBlock}
     ${expBanner}
@@ -16077,6 +16130,8 @@ function bindSchedule() {
   try { if (typeof bindFirstPublish === 'function') bindFirstPublish(); } catch (e) {}
   // 🤖 Posty dogfood: ✅ Publicar / ⏭️ Saltar.
   try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {}
+  // (ítem 3) Garantía de primera semana: ↻ Rehacer mi semana + confirmación.
+  try { bindFirstWeekRedo(); } catch (e) {}
   // Reintento de fallidos: publica de nuevo vía publish-now.
   $$('#schedView [data-failed-retry]').forEach(b => b.onclick = async () => {
     const id = b.dataset.failedRetry;

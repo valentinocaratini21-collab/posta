@@ -14,6 +14,7 @@
 
 const mp = require('./mercadopago');
 const { PLANS } = require('./config/plans');
+const weekRedo = require('./week-redo'); // (ítem 3) garantía de primera semana: grant al activar
 
 // Mantener sincronizado con server.js
 const REFERRALS_NEEDED = 2;
@@ -97,6 +98,11 @@ async function reconcilePending(db) {
       const planId = Object.keys(PLANS || {}).find((k) => PLANS[k] && Number(PLANS[k].price) === Number(r.mp_base_amount));
       if (!planId) { console.error(`[billing-sync] pendiente user ${r.id}: no identifico el plan (base=${r.mp_base_amount})`); continue; }
       db.prepare(`UPDATE users SET plan = ?, plan_status = 'active' WHERE id = ?`).run(planId, r.id);
+      // (ítem 3) Activación = nace la garantía de primera semana (registro
+      // durable en first_week_redo; INSERT OR IGNORE: idempotente). Acá no
+      // hay server.js que calcule la weekKey: week-redo la deriva de la
+      // zona horaria del usuario. Nunca bloquea la activación.
+      try { weekRedo.grantFirstWeekRedo(db, r.id); } catch (e) { console.error(`[billing-sync] first-week-redo user ${r.id}: ${e.message}`); }
       console.log(`[billing-sync] ✅ pendiente activado: user ${r.id} plan ${planId} (el webhook de MP nunca llegó)`);
     } catch (e) {
       console.error(`[billing-sync] pendiente user ${r.id}: ${e.message}`);
