@@ -11,13 +11,16 @@
  *
  * EL ANÁLISIS COMPLETO (pantalla "Tu análisis", diseño cerrado de Valentino):
  * la carta mínima es la superficie; su radiografía entera vive a un toque en
- * "Ver mi análisis completo →" (y el link homónimo de Schedule la abre ya
- * desplegada vía sessionStorage 'posty_ana_full'). El orden de la radiografía
- * es EL de la spec: foto de hoy (números grandes) → las tres tarjetas
- * (a mejorar / a incrementar / a reducir, cada hallazgo cerrando con qué hace
- * Posty) → competencia en BARRAS (posteos/semana, solo con el mercado
- * completo del payload gateado) → "Así nace tu semana" (hallazgo → decisión
- * de la semana, desde el week_summary y las decisions del payload) → plan de
+ * "Ver mi análisis completo →" (el botón propio de esta ventana; la tarjeta
+ * homónima de Schedule y su link con sessionStorage 'posty_ana_full' se
+ * eliminaron el 2026-10-25 por decisión de Valentino). La ventana ABRE con
+ * la explicación de cómo se armó el plan (el week_summary del motor, en
+ * anaCartaHTML): es su línea de apertura, no una sección más. El orden de
+ * la radiografía es EL de la spec: foto de hoy (números grandes) → las tres
+ * tarjetas (a mejorar / a incrementar / a reducir, cada hallazgo cerrando
+ * con qué hace Posty) → competencia en BARRAS (posteos/semana, solo con el
+ * mercado completo del payload gateado) → "Así nace tu semana" (hallazgo →
+ * decisión de la semana, desde las decisions del payload) → plan de
  * ejecución → (loop medido, cartas anteriores, notas de datos) → banner →
  * firma. Cuenta de nacimiento: misma estructura con su plan (lo que Posty ya
  * sabe + kit + vidriera + así nace + plan de nacimiento), jamás números de
@@ -97,19 +100,6 @@ async function anaLoad(useRefresh) {
   anaLastPayload = d;
   rootEl.innerHTML = anaCartaHTML(d);
   try { window.scrollTo(0, 0); } catch (e) {}
-  // Entrada desde Schedule ("Ver mi análisis completo →"): la radiografía
-  // llega ya desplegada, sin un segundo toque.
-  try {
-    if (window.sessionStorage && sessionStorage.getItem('posty_ana_full') === '1') {
-      sessionStorage.removeItem('posty_ana_full');
-      const btn = document.getElementById('anaFullBtn');
-      const box = document.getElementById('anaFull');
-      if (btn && box) {
-        anaToggleFull(btn);
-        setTimeout(() => { try { box.scrollIntoView({ block: 'start' }); } catch (e) {} }, 60);
-      }
-    }
-  } catch (e) {}
 }
 
 function anaRefresh(btn) {
@@ -578,13 +568,14 @@ function anaLetterMinimalHTML(a) {
 }
 
 /* ---------- Así nace tu semana: hallazgo → decisión de la semana ----------
- * La sección que convierte el diagnóstico en la semana concreta: abre con
- * el week_summary del motor (dos líneas verdaderas: qué vi → por eso tu
- * semana es así) y lista las decisiones que la semana tomó, cada una con su
- * hallazgo de origen. Todo sale del payload (findings con decision, de la
- * cuenta y — con el mercado completo — de la competencia): si no hay
- * decisiones registradas, la sección no existe. Nada se redacta acá que el
- * motor no haya decidido ya. */
+ * La sección que convierte el diagnóstico en la semana concreta: lista las
+ * decisiones que la semana tomó, cada una con su hallazgo de origen. Todo
+ * sale del payload (findings con decision, de la cuenta y — con el mercado
+ * completo — de la competencia): si no hay decisiones registradas, la
+ * sección no existe. Nada se redacta acá que el motor no haya decidido ya.
+ * (El week_summary del motor — qué vi → por eso tu semana es así — ya NO
+ * se repite en esta sección: desde el 2026-10-25 encabeza la ventana
+ * entera como su línea de apertura, en anaCartaHTML.) */
 function anaWeekBirthHTML(d, a) {
   const seen = new Set();
   const rows = [];
@@ -597,10 +588,8 @@ function anaWeekBirthHTML(d, a) {
   };
   (a.findings || []).forEach(push);
   if (a.market_full && a.market && Array.isArray(a.market.findings)) a.market.findings.forEach(push);
-  const ws = d && typeof d.week_summary === 'string' ? d.week_summary.trim() : '';
-  if (!rows.length && !ws) return '';
+  if (!rows.length) return '';
   let h = `<p class="ana-sec-t">${anaT('🧭 Así nace tu semana', '🧭 How your week is born')}</p>`;
-  if (ws) h += ws.split('\n').filter(Boolean).map((l) => `<p class="ana-t">${esc(l)}</p>`).join('');
   h += rows.slice(0, 4).map((f) => `<div class="ana-f"><p class="ana-act" style="margin-top:0">→ ${anaT('En tu semana: ', 'In your week: ')}<b>${esc(f.decision)}</b></p><p class="ana-fmeta"><span class="ana-now">${anaT('Porque vi: ', 'Because I saw: ')}${esc(f.text || '')}${f.now ? ' (' + esc(f.now) + ')' : ''}</span></p></div>`).join('');
   h += `<p style="margin-top:10px"><a href="#/app/schedule" style="font-weight:700;color:var(--cel)">${anaT('Verla en tu agenda →', 'See it in your Schedule →')}</a></p>`;
   return h;
@@ -843,6 +832,16 @@ function anaCartaHTML(d) {
       ${dateLine ? `<p class="ana-date">${esc(dateLine)}</p>` : ''}
       ${carta ? '' : `<p class="ana-intro">${intro}</p>`}
     </div>`;
+  // (2026-10-25) APERTURA: la explicación de cómo se armó el plan — el
+  // week_summary del motor («qué vi → por eso tu semana es así») — encabeza
+  // la ventana como su línea de apertura. Es el contenido que vivía en la
+  // tarjeta «Lo que vi de tu cuenta» de la Agenda, eliminada por Valentino
+  // (la pantalla principal no lleva resúmenes de Análisis). El texto viene
+  // del motor en el idioma de la cuenta (paridad ES/EN sin croma nueva) y
+  // «Así nace tu semana» ya no lo repite. Sin week_summary no se inventa
+  // apertura: la ventana abre como siempre.
+  const wsOpen = d && typeof d.week_summary === 'string' ? d.week_summary.trim() : '';
+  if (wsOpen) h += wsOpen.split('\n').filter(Boolean).map((l) => `<p class="ana-intro">${esc(l)}</p>`).join('');
   if (carta) {
     // FORMA CARTA (domingo a la noche): narración primero, datos como apoyo.
     // CARTA MÍNIMA (v2): la carta ES la superficie — kit/mercado/historial

@@ -4,8 +4,10 @@
  * Corrección 1 · AL ENTRAR, EL FEED MANDA:
  *   - scheduleView: el contenido de la vista (homeWeekBlock: encabezado de
  *     perfil + pestañas Día/Semana/Mes/Feed + grilla/calendario) se concatena
- *     ANTES que todos los bloques secundarios; analysisSummaryBlock va
- *     después del contenido; igBanner (tarjeta grande, 2 variantes) ya no
+ *     ANTES que todos los bloques secundarios; la tarjeta «Lo que vi de tu
+ *     cuenta» (analysisSummaryBlock) ya NO existe en la función — eliminada
+ *     el 2026-10-25 por Valentino: su contenido (week_summary) encabeza la
+ *     ventana de Análisis; igBanner (tarjeta grande, 2 variantes) ya no
  *     existe en la función y su orden relativo entre bloques se conserva.
  *   - El estado IG vive como chip compacto en el encabezado del perfil
  *     (igHeadChipHTML): «Conectar Instagram» si !PROFILE.ig_connected y
@@ -127,17 +129,20 @@ const schedSlice = schedStart > -1 ? appJs.slice(schedStart, schedStart + 26000)
 ok(!schedSlice.includes('const igBanner'), 'scheduleView: igBanner ya no se computa');
 ok(!schedSlice.includes('card card-hi-yl'), 'scheduleView: sin la tarjeta grande de IG (card-hi-yl)');
 ok(!appJs.includes('const igBanner'), 'bundle: igBanner no existe en ninguna función');
+ok(!schedSlice.includes('analysisSummaryBlock'), 'scheduleView: la tarjeta «Lo que vi de tu cuenta» ya no se computa (2026-10-25)');
+ok(!appJs.includes('analysisSummaryBlock'), 'bundle: analysisSummaryBlock no existe en ninguna función');
+ok(!schedSlice.includes("api.get('/api/analysis?peek=1')"), 'scheduleView: sin el fetch de peek que alimentaba la tarjeta');
 
 const retStart = schedSlice.indexOf('return `<div id="schedView"');
 ok(retStart > -1, 'scheduleView: se encontró su return');
 const retSeg = retStart > -1 ? schedSlice.slice(retStart, retStart + 2200) : '';
 const idxOf = (seg, tok) => seg.indexOf(tok);
 ok(idxOf(retSeg, '${homeWeekBlock}') > -1, 'return: homeWeekBlock (contenido de la vista) está');
-for (const tok of ['${trialBanner}', '${firstRedoBlock}', '${dogfoodBlock}', '${analysisSummaryBlock}', '${expBanner}', '${fpBlock}', '${ftBlock}', '${failedBlock}']) {
+for (const tok of ['${trialBanner}', '${firstRedoBlock}', '${dogfoodBlock}', '${expBanner}', '${fpBlock}', '${ftBlock}', '${failedBlock}']) {
   ok(idxOf(retSeg, tok) > idxOf(retSeg, '${homeWeekBlock}'), `return: ${tok} va DESPUÉS del contenido de la vista`);
 }
 // Orden relativo original entre bloques secundarios (el de la base v431):
-const relOrder = ['${trialBanner}', '${firstRedoBlock}', '${dogfoodBlock}', '${analysisSummaryBlock}', '${expBanner}', '${fpBlock}', '${ftBlock}', '${failedBlock}'];
+const relOrder = ['${trialBanner}', '${firstRedoBlock}', '${dogfoodBlock}', '${expBanner}', '${fpBlock}', '${ftBlock}', '${failedBlock}'];
 ok(relOrder.every((tok, i) => i === 0 || idxOf(retSeg, tok) > idxOf(retSeg, relOrder[i - 1])), 'return: orden relativo entre bloques secundarios conservado');
 ok(idxOf(retSeg, '${homeChatBlock}') > idxOf(retSeg, '${failedBlock}'), 'return: el chat sigue debajo de los bloques (como en la base)');
 ok(idxOf(retSeg, '${setupChecklistHtml(undefined, { omitIg: true })}') > idxOf(retSeg, '${homeWeekBlock}'), 'scheduleView: la tira de activación va tras el contenido, junto a los bloques secundarios');
@@ -208,9 +213,9 @@ ok(!appJs.includes('Estás hablando de este posteo') && !appJs.includes("You're 
 ok(appJs.includes('anchor_post_id') && appJs.includes('HF_CHAT_ANCHOR.id'), 'chat principal intacto: el envío sigue mandando anchor_post_id desde HF_CHAT_ANCHOR');
 
 console.log('— A: index.html y CHUNK_V');
-ok(indexHtml.includes('/app.js?v=272'), 'index.html: app.js bumpeado a ?v=272');
-ok(!indexHtml.includes('/app.js?v=271'), 'index.html: sin ?v=271 residual');
-ok(appJs.includes("const CHUNK_V = '20261024-v427';"), 'app.js: CHUNK_V intacto (no cambian chunks; el coordinador lo reemplaza al armar el zip)');
+ok(indexHtml.includes('/app.js?v=273'), 'index.html: app.js bumpeado a ?v=273');
+ok(!indexHtml.includes('/app.js?v=272'), 'index.html: sin ?v=272 residual');
+ok(appJs.includes("const CHUNK_V = '20261025-v434';"), 'app.js: CHUNK_V bumpeado al build (esta tanda SÍ cambia chunk-analisis: la apertura por week_summary)');
 
 /* ================= Parte B: comportamiento ================= */
 console.log('— B: chip IG (extraído, 2 estados × 2 idiomas)');

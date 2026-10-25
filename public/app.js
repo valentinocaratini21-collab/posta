@@ -238,7 +238,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261024-v427'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261025-v434'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -12608,19 +12608,12 @@ async function scheduleView() {
   let dogfoodPost = null;
   try { const r = await api.get('/api/dogfood/pending'); dogfoodPost = (r && r.post) || null; } catch (e) {}
   const dogfoodBlock = dogfoodPost ? dogfoodCardHTML(dogfoodPost) : '';
-  // 🧠 Análisis (2026-10-19): la semana abre con "lo que vi → por qué tu
-  // semana es así" (solo lectura: peek no dispara construcciones).
-  let analysisSummaryBlock = '';
-  try {
-    const an = await api.get('/api/analysis?peek=1').catch(() => null);
-    if (an && an.week_summary) {
-      analysisSummaryBlock = `<div class="card" style="margin:0 0 12px;padding:14px 16px;background:var(--bg2);border:1px solid var(--line);border-radius:14px">
-        <div style="font-weight:800;font-size:14px;margin-bottom:6px">🧠 Lo que vi de tu cuenta</div>
-        <div style="font-size:13px;line-height:1.6;color:var(--mut)">${esc(an.week_summary).replace(/\n/g, '<br>')}</div>
-        <a href="#/app/analisis" onclick="try{sessionStorage.setItem('posty_ana_full','1')}catch(e){}" style="display:inline-block;margin-top:8px;font-size:13px;font-weight:700;color:var(--cel)">Ver mi análisis completo →</a>
-      </div>`;
-    }
-  } catch (e) {}
+  // (2026-10-25) La tarjeta «🧠 Lo que vi de tu cuenta» SALIÓ de la Agenda
+  // por decisión de Valentino («esto hace falta? ya tenemos la ventana de
+  // analisis?»): era el resumen de Análisis ocupando la pantalla principal.
+  // La explicación de cómo se armó el plan (el week_summary del motor) ahora
+  // ENCABEZA la ventana de Análisis (chunk-analisis, anaCartaHTML) — acá no
+  // queda ni la tarjeta, ni su link, ni el fetch de peek que la alimentaba.
   const reviewBlock = drafts.length ? reviewCardHTML(drafts, slots, '📋 Revisá tu semana') : '';
   // Fast-track "Tu primer posteo": solo cuentas que NUNCA publicaron, con borradores con foto.
   const ftCandidates = drafts.filter(d => d.image_path).slice(0, 3);
@@ -12732,7 +12725,6 @@ async function scheduleView() {
     ${trialBanner}
     ${firstRedoBlock}
     ${dogfoodBlock}
-    ${analysisSummaryBlock}
     ${expBanner}
     ${fpBlock}
     ${ftBlock}
