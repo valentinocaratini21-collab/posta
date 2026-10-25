@@ -1,4 +1,4 @@
-// test-gamificacion-mas.js — 6 mejoras de gamificación + copy humano (v469).
+// test-gamificacion-mas.js — 6 mejoras de gamificación + copy humano (v470).
 // 1) Llenado en vivo: el mount recuerda el avance previo y anima desde ahí.
 // 2) Una sola fila: desafio + prueba viven en el detalle desplegable de la
 //    tira; la tira colapsada sigue fina (sin filas hermanas permanentes).
@@ -120,9 +120,9 @@ console.log('— pines v469 —');
 const idx = fs.readFileSync(path.join(__dirname, 'public/index.html'), 'utf8');
 const idxEn = fs.readFileSync(path.join(__dirname, 'public/en/index.html'), 'utf8');
 t(idx.includes('app.js?v=301'), 'index ES: app.js?v=301');
-t(idx.includes('styles.css?v=20261037'), 'index ES: styles.css?v=20261037');
-t(idxEn.includes('styles.css?v=20261037'), 'index EN: styles.css?v=20261037');
-t(srv0.includes("BUILD_ID = '20261025-v470'"), 'server: BUILD_ID 20261025-v469');
+t(idx.includes('styles.css?v=20261036'), 'index ES: styles.css?v=20261036');
+t(idxEn.includes('styles.css?v=20261036'), 'index EN: styles.css?v=20261036');
+t(srv0.includes("BUILD_ID = '20261025-v470'"), 'server: BUILD_ID 20261025-v470');
 
 console.log(`\n${ok} ok, ${fail} fallos`);
 process.exit(fail ? 1 : 0);
