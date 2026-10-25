@@ -731,21 +731,21 @@ body.sfb-on{padding-bottom:88px}
     {
       "@type": "Offer",
       "name": "Essential",
-      "price": "199.99",
+      "price": "199",
       "priceCurrency": "USD",
       "url": "https://postycommunitymanager.com/en/prueba"
     },
     {
       "@type": "Offer",
       "name": "Pro",
-      "price": "299.99",
+      "price": "299",
       "priceCurrency": "USD",
       "url": "https://postycommunitymanager.com/en/prueba"
     },
     {
       "@type": "Offer",
       "name": "Total",
-      "price": "399.99",
+      "price": "399",
       "priceCurrency": "USD",
       "url": "https://postycommunitymanager.com/en/prueba"
     }
@@ -1067,7 +1067,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
     </div>
   </div>
 
-    <p class="price-contrast" id="priceContrast">A community manager charges ~$2,000 a month. <b>Posty, from $199.99.</b></p>
+    <p class="price-contrast" id="priceContrast">A community manager charges ~$2,000 a month. <b>Posty, from $199.</b></p>
 
   <!-- (v341) Mini-bloque de fundador junto al formulario: foto entera,
        textos aprobados del módulo (pieza 20). -->
@@ -1490,7 +1490,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
     <div class="sec">
       <h3>What happens next? 👇</h3>
       <p class="lede">This was a sample. Now picture this <b>every week</b> — you just watch and approve.</p>
-        <p class="lede" style="font-weight:800;color:var(--navy)">Plans from $199.99/mo — Pro works out to $10.00 a day. And your first 3 days are free.</p>
+        <p class="lede" style="font-weight:800;color:var(--navy)">Plans from $199/mo — Pro works out to $9.97 a day. And your first 3 days are free.</p>
       <div class="wkstrip">
         <div class="wk now"><b>This week</b><span>✓ Ready</span></div>
         <div class="wk-arrow">→</div>
@@ -1522,7 +1522,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
   <div class="field"><label>Email</label><input type="email" id="rg_email" placeholder="your@email.com" autocomplete="email"></div>
   <div class="err" id="rgErr"></div>
   <button class="btn btn-primary btn-block" id="btnReg">Send me my access link <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-mail"/></svg></button>
-  <p class="tiny">No card · From $199.99/mo when it ends · Cancel anytime</p>
+  <p class="tiny">No card · From $199/mo when it ends · Cancel anytime</p>
   <p class="tiny" style="margin-top:6px">🔒 Your Instagram connects with Meta — no password sharing</p>
   <p class="tiny" style="margin-top:8px">Already have an account? <a href="/#/login" style="color:var(--cel);font-weight:700" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">Log in</a></p>
 </div></div>
@@ -1604,7 +1604,8 @@ let PAIS_PRECIO = (() => {
 })();
 function pzFmtPruebaEN(pp) {
   const sym = { ARS: '$', UYU: '$U ', USD: '$', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[pp.currency] || '$';
-  const dec = (pp.currency === 'ARS' || pp.currency === 'UYU') ? 0 : 2;
+  // (Tabla nueva, 2026-10-25) Precio entero → 0 decimales.
+  const dec = Number.isInteger(Number(pp.price)) ? 0 : 2;
   return sym + Number(pp.price).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 function pzRenderSelectorPrueba() {
@@ -3651,19 +3652,19 @@ async function renderPriceCard() {
     let perTxt, anchor;
     if (j.country === 'US') {
       perTxt = 'USD ' + fmt(per, 2) + ' <small>per day</small>';
-      anchor = 'A community manager costs $1,500–$3,000+ a month. Posty from $' + fmt(base.price, 2) + '/month.';
+      anchor = 'A community manager costs $1,500–$3,000+ a month. Posty from $' + fmt(base.price, 0) + '/month.';
     } else if (j.country === 'UY') {
       perTxt = '$U ' + fmt(Math.round(per), 0) + ' <small>per day</small>';
       anchor = 'A community manager costs more than $U 25,000 a month. Posty from $U ' + fmt(base.price, 0) + '/month.';
     } else if (j.country === 'GB') {
       perTxt = '\u00a3' + fmt(per, 2) + ' <small>per day</small>';
-      anchor = 'Posty from \u00a3' + fmt(base.price, 2) + '/month.';
+      anchor = 'Posty from \u00a3' + fmt(base.price, 0) + '/month.';
     } else if (j.country === 'EU') {
       perTxt = '\u20ac' + fmt(per, 2) + ' <small>per day</small>';
-      anchor = 'Posty from \u20ac' + fmt(base.price, 2) + '/month.';
+      anchor = 'Posty from \u20ac' + fmt(base.price, 0) + '/month.';
     } else if (['BR', 'MX', 'CL', 'CO', 'PE'].includes(j.country)) {
       perTxt = 'USD ' + fmt(per, 2) + ' <small>per day</small>';
-      anchor = 'Posty from USD ' + fmt(base.price, 2) + '/month.';
+      anchor = 'Posty from USD ' + fmt(base.price, 0) + '/month.';
     } else {
       perTxt = '$' + fmt(Math.round(per), 0) + ' <small>per day</small>';
       anchor = 'A community manager costs from $1,000,000 a month. Posty from $' + fmt(base.price, 0) + '/month.';
@@ -3675,7 +3676,7 @@ async function renderPriceCard() {
     const pc = $('#priceContrast');
     if (pc) {
       pc.innerHTML = j.country === 'US'
-        ? 'A community manager charges ~$2,000 a month. <b>Posty, from $199.99.</b>'
+        ? 'A community manager charges ~$2,000 a month. <b>Posty, from $199.</b>'
         : j.country === 'UY'
         ? 'A community manager charges more than $U 25,000 a month. <b>Posty, from $U 4,990.</b>'
         : j.country === 'AR'
@@ -4035,14 +4036,14 @@ function closeReg() {
       <h2 style="margin-top:18px">You are in! 🎉</h2>
       <p class="msub">Your week is saved in your account and <b>posts by itself</b>. We also sent a link to your email so you can sign in from other devices.</p>
       <a class="btn btn-primary btn-block" href="/en" style="margin-top:14px">Go to my account <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a>
-      <p class="tiny">No card · From $199.99/mo when it ends · Cancel anytime</p>`;
+      <p class="tiny">No card · From $199/mo when it ends · Cancel anytime</p>`;
       $('#xReg').onclick = closeReg;
       return;
     }
     m.innerHTML = `<button class="x" id="xReg"><svg class="wb-ic" aria-hidden="true"><use href="#wb-close"/></svg></button>
       <h2 style="margin-top:18px">Check your email 👀</h2>
       <p class="msub">📧 <b>We sent a link to your email</b><br>Tap it and you are in, no password. It is valid for 15 minutes.</p>
-      <p class="tiny">No card · From $199.99/mo when it ends · Cancel anytime</p>`;
+      <p class="tiny">No card · From $199/mo when it ends · Cancel anytime</p>`;
     $('#xReg').onclick = closeReg;
   } catch (e) {
     fail(e.message);

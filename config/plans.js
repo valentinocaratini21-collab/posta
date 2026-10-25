@@ -115,8 +115,9 @@ const AI_LIMITS = {
 // puestos activos y cesa desde el ciclo siguiente si la cuenta vuelve a 1.
 // La base de cada puesto es SU precio contratado (el fundador congelado
 // de users.founder_price incluido; nada se recalcula a lista) y NO se
-// acumula con Bambooty completo (USD 799,99 / 1.199,99 / 1.599,99,
-// precio fundador), que ya es el mejor precio por agente. Aplica solo a cargos recurrentes, nunca a pagos únicos.
+// acumula con Bambooty completo (USD 597 / 897 / 1.197,
+// precio fundador = 3x el poder: «pagás 3 poderes, te llevás los 4»),
+// que ya es el mejor precio por agente. Aplica solo a cargos recurrentes, nunca a pagos únicos.
 // HOY Posty es el ÚNICO puesto vivo: sin segundo puesto no hay descuento
 // aplicable todavía.
 // ─────────────────────────────────────────────────────────────────────────
@@ -125,8 +126,9 @@ const AI_LIMITS = {
 // workspace/bambooty-supremo/BAMBOOTY-SUPREMO.md): el nivel máximo de la
 // familia se denomina «Bambooty» (en la app: «Bambooty completo»); el
 // nombre comercial «Pack Oficina Completa» quedó RETIRADO de las
-// vidrieras. PRECIO FUNDADOR: USD 799,99 / 1.199,99 / 1.599,99
-// (reemplaza a 1.499,99 / 1.999,99 / 2.499,99; nadie pagó el precio
+// vidrieras. PRECIO FUNDADOR: USD 597 / 897 / 1.197
+// (HISTÓRICO: reemplazó a 799,99 / 1.199,99 / 1.599,99, que a su vez
+// reemplazaron a 1.499,99 / 1.999,99 / 2.499,99; nadie pagó el precio
 // anterior — la reserva nunca cobró — así que no hay conflicto con
 // «lo vendido no se retira»).
 // El 1/4/2027 la app se renombra a Bambooty: la app ES Bambooty y su
@@ -141,14 +143,17 @@ const AI_LIMITS = {
 // configuraciones precargadas de Bambooty; «Armá el tuyo» es la
 // configuración libre. La pantalla «Sumar un puesto» se diseña: paquetes
 // primero, poderes prender/apagar después, total en vivo.
-// ESCALERA ÚNICA (Valentino, 2026-10-24): TODOS los poderes cuestan
-// USD 199,99 / 299,99 / 399,99 — el precio de Posty ya no es «el más
-// barato»: es EL precio de todo poder. Con esa escalera: la suma de los
-// ocho Esencial = USD 1.599,92 y Bambooty completo fundador (799,99) es
-// exactamente la mitad (ahorro 799,93); los paquetes quedan en
-// USD 359,98 («Para que te vean» y «Para que todo ande solo») y
-// USD 509,97 («Para vender más»), suma de sus poderes con el descuento
-// por equipo aplicado.
+// ESCALERA ÚNICA (Valentino, 2026-10-24; tabla nueva sin centavos,
+// 2026-10-25): TODOS los poderes cuestan USD 199 / 299 / 399 — el precio
+// de Posty ya no es «el más barato»: es EL precio de todo poder.
+// Bambooty completo fundador = 3x el poder (USD 597 / 897 / 1.197):
+// «pagás 3 poderes, te llevás los 4». Motivo del cambio (decisión de
+// Valentino): con la mitad de la suma el completo quedaba entre 2 y 3
+// poderes y 3 poderes salían más caros que los 4. Con la escalera nueva:
+// 2 poderes con equipo = USD 358 / 538 / 718; 3 poderes = USD 507 / 762 /
+// 1.017; 4 poderes = USD 637 / 957 / 1.277 (teamPrice, half-up).
+// users.founder_price congelado NO se toca: lo vendido no se retira;
+// la tabla nueva es lista para ventas nuevas.
 // ─────────────────────────────────────────────────────────────────────────
 const PLANS_AR = {
   esencial: {
@@ -329,7 +334,7 @@ const PLAN_ANCHOR = {
 };
 
 // (v274 · MODO EN) Planes US — escalera definida por Valentino el
-// 2026-10-20: USD 199.99 / 299.99 / 399.99 (escalera de familia Bambooty, 2026-10-24 — Posty es el piso de la familia; anteriores: 99.99 / 189.99 / 289.99 (tercera escalera, 2026-10-22), 59 / 119 / 179 el 2026-10-21 y 49 / 99 / 149 el 2026-10-20), mismos roles que AR (Plan 1 = Community
+// 2026-10-20: USD 199 / 299 / 399 (escalera de familia Bambooty, 2026-10-24 — Posty es el piso de la familia; tabla nueva sin centavos 2026-10-25; HISTÓRICO: 199.99 / 299.99 / 399.99 hasta 2026-10-25, anteriores: 99.99 / 189.99 / 289.99 (tercera escalera, 2026-10-22), 59 / 119 / 179 el 2026-10-21 y 49 / 99 / 149 el 2026-10-20), mismos roles que AR (Plan 1 = Community
 // Manager, Plan 2 = + Growth, Plan 3 = + Customer care).
 // ✅ COBRO US CONECTADO (v285, 2026-10-21): el checkout vive en
 // stripe-billing.js (Checkout Sessions + suscripciones, cuenta PERSONAL de
@@ -341,7 +346,7 @@ const PLANS_US = {
   esencial: {
     id: 'esencial',
     name: 'Essential',
-    price: 199.99,
+    price: 199,
     currency: 'USD',
     postsPerWeek: 7,
     carouselsPerWeek: 2,
@@ -362,7 +367,7 @@ const PLANS_US = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 299.99,
+    price: 299,
     currency: 'USD',
     postsPerWeek: 7,
     carouselsPerWeek: 2,
@@ -385,7 +390,7 @@ const PLANS_US = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 399.99,
+    price: 399,
     currency: 'USD',
     postsPerWeek: 7,
     carouselsPerWeek: 2,
@@ -408,20 +413,22 @@ const PLANS_US = {
 };
 
 // (Tablero Bambooty 2026-10-25, «dale a todo») UK y Eurozona — cobro SOLO Stripe.
-// GBP £149,99/£224,99/£299,99 y EUR €179,99/€269,99/€359,99: espejos APROBADOS
+// GBP £149/£224/£299 y EUR €179/€269/€359: espejos APROBADOS (tabla nueva
+// sin centavos, 2026-10-25; HISTÓRICO: £149,99/£224,99/£299,99 y
+// €179,99/€269,99/€359,99 hasta 2026-10-25)
 // por el tablero. El espejo GB anterior MUERE: este espejo lo reemplaza
 // en todas las superficies. CA no se toca (sigue C$279/409/549, solo API).
 const PLANS_GB = {
-  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 149.99, currency: 'GBP' },
-  pro: { ...PLANS_US.pro, id: 'pro', price: 224.99, currency: 'GBP' },
-  total: { ...PLANS_US.total, id: 'total', price: 299.99, currency: 'GBP' },
+  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 149, currency: 'GBP' },
+  pro: { ...PLANS_US.pro, id: 'pro', price: 224, currency: 'GBP' },
+  total: { ...PLANS_US.total, id: 'total', price: 299, currency: 'GBP' },
 };
 
 // Eurozona — espejo aprobado, riel Stripe. Misma escalera de roles que US.
 const PLANS_EU = {
-  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 179.99, currency: 'EUR' },
-  pro: { ...PLANS_US.pro, id: 'pro', price: 269.99, currency: 'EUR' },
-  total: { ...PLANS_US.total, id: 'total', price: 359.99, currency: 'EUR' },
+  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 179, currency: 'EUR' },
+  pro: { ...PLANS_US.pro, id: 'pro', price: 269, currency: 'EUR' },
+  total: { ...PLANS_US.total, id: 'total', price: 359, currency: 'EUR' },
 };
 
 const PLANS_CA = {
@@ -442,10 +449,10 @@ function getPlans(country) {
   if (country === 'GB') return PLANS_GB;
   if (country === 'EU') return PLANS_EU;
   if (country === 'CA') return PLANS_CA;
-  // Latam MP sin precio local publicado (tablero 2026-10-25): la escalera que
-  // se MUESTRA es la USD base real, rotulada USD, sin cifra local inventada.
-  // El riel es Mercado Pago (ver COUNTRY_META.rail). Cuando el tablero pase
-  // la tabla de anclas, estos países ganan su PLANS propio.
+  // Latam sin precio local publicado (tablero 2026-10-25; riel Stripe
+  // desde la tanda de pagos 2026-10-25): la escalera que se MUESTRA es la
+  // USD base real, rotulada USD, sin cifra local inventada. Cuando el
+  // tablero pase la tabla de anclas, estos países ganan su PLANS propio.
   if (['BR', 'MX', 'CL', 'CO', 'PE'].includes(country)) return PLANS_US;
   return PLANS_AR;
 }
@@ -461,16 +468,16 @@ const COUNTRY_META = {
         note_es: 'Precios en USD.', note_en: 'Prices in USD.' },
   AR: { flag: '\u{1F1E6}\u{1F1F7}', name_es: 'Argentina', name_en: 'Argentina', currency: 'ARS', rail: 'mercadopago', pending: false,
         note_es: 'Precios en pesos argentinos. Pagás con Mercado Pago.', note_en: 'Prices in Argentine pesos. Pay with Mercado Pago.' },
-  BR: { flag: '\u{1F1E7}\u{1F1F7}', name_es: 'Brasil', name_en: 'Brazil', currency: 'BRL', rail: 'mercadopago', pending: true,
-        note_es: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.', note_en: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
-  MX: { flag: '\u{1F1F2}\u{1F1FD}', name_es: 'México', name_en: 'Mexico', currency: 'MXN', rail: 'mercadopago', pending: true,
-        note_es: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.', note_en: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
-  CL: { flag: '\u{1F1E8}\u{1F1F1}', name_es: 'Chile', name_en: 'Chile', currency: 'CLP', rail: 'mercadopago', pending: true,
-        note_es: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.', note_en: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
-  CO: { flag: '\u{1F1E8}\u{1F1F4}', name_es: 'Colombia', name_en: 'Colombia', currency: 'COP', rail: 'mercadopago', pending: true,
-        note_es: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.', note_en: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
-  PE: { flag: '\u{1F1F5}\u{1F1EA}', name_es: 'Perú', name_en: 'Peru', currency: 'PEN', rail: 'mercadopago', pending: true,
-        note_es: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.', note_en: 'Pay with Mercado Pago. The local price for your country is not published yet: you see prices in USD.' },
+  BR: { flag: '\u{1F1E7}\u{1F1F7}', name_es: 'Brasil', name_en: 'Brazil', currency: 'BRL', rail: 'stripe', pending: true,
+        note_es: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.', note_en: 'Pay by card in USD with Stripe. The local price for your country is not published yet.' },
+  MX: { flag: '\u{1F1F2}\u{1F1FD}', name_es: 'México', name_en: 'Mexico', currency: 'MXN', rail: 'stripe', pending: true,
+        note_es: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.', note_en: 'Pay by card in USD with Stripe. The local price for your country is not published yet.' },
+  CL: { flag: '\u{1F1E8}\u{1F1F1}', name_es: 'Chile', name_en: 'Chile', currency: 'CLP', rail: 'stripe', pending: true,
+        note_es: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.', note_en: 'Pay by card in USD with Stripe. The local price for your country is not published yet.' },
+  CO: { flag: '\u{1F1E8}\u{1F1F4}', name_es: 'Colombia', name_en: 'Colombia', currency: 'COP', rail: 'stripe', pending: true,
+        note_es: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.', note_en: 'Pay by card in USD with Stripe. The local price for your country is not published yet.' },
+  PE: { flag: '\u{1F1F5}\u{1F1EA}', name_es: 'Perú', name_en: 'Peru', currency: 'PEN', rail: 'stripe', pending: true,
+        note_es: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.', note_en: 'Pay by card in USD with Stripe. The local price for your country is not published yet.' },
   UY: { flag: '\u{1F1FA}\u{1F1FE}', name_es: 'Uruguay', name_en: 'Uruguay', currency: 'UYU', rail: 'mercadopago', pending: false,
         note_es: 'Precios en pesos uruguayos. Pagás con Mercado Pago.', note_en: 'Prices in Uruguayan pesos. Pay with Mercado Pago.' },
   GB: { flag: '\u{1F1EC}\u{1F1E7}', name_es: 'Reino Unido', name_en: 'United Kingdom', currency: 'GBP', rail: 'stripe', pending: false,
@@ -496,6 +503,56 @@ function getPlan(id, country) {
   return plans[id] || plans[TRIAL_PLAN];
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// PAGOS LADO APP (tanda 2026-10-25): poderes, completo fundador y equipo.
+// PODERES: los 4 poderes cuestan lo mismo (la escalera del plan). El
+// completo fundador = 3x el poder («pagás 3 poderes, te llevás los 4»)
+// en las 5 monedas con precio propio. CA NO tiene completo acá: no se
+// toca (solo API) y el checkout Stripe no acepta CA.
+// users.founder_price congelado NO se toca: lo vendido no se retira.
+const PODERES = ['posty', 'venty', 'gesty', 'atenty'];
+const PODER_NOMBRE = {
+  posty: { es: 'Posty', en: 'Posty' },
+  venty: { es: 'Venty', en: 'Venty' },
+  gesty: { es: 'Gesty', en: 'Gesty' },
+  atenty: { es: 'Atenty', en: 'Atenty' },
+  completo: { es: 'Bambooty completo', en: 'Bambooty complete' },
+};
+// Completo fundador por moneda y tier (= 3x el precio del poder).
+const COMPLETO_FUNDADOR = {
+  USD: { esencial: 597, pro: 897, total: 1197 },
+  GBP: { esencial: 447, pro: 672, total: 897 },
+  EUR: { esencial: 537, pro: 807, total: 1077 },
+  ARS: { esencial: 599997, pro: 899700, total: 1199700 },
+  UYU: { esencial: 14970, pro: 22470, total: 29970 },
+};
+function completoPrice(currency, tier) {
+  const t = COMPLETO_FUNDADOR[currency];
+  if (!t) return null;
+  const v = t[tier];
+  return (typeof v === 'number') ? v : null;
+}
+// Descuento por equipo: 2 puestos −10% · 3 −15% · 4+ −20%, sobre la SUMA
+// de los puestos, redondeo half-up a unidad entera. teamPrice(n, precio)
+// = precio TOTAL del equipo (no por puesto): 2x199x0.9 = 358,2 → 358.
+function teamPrice(n, tierPrice) {
+  const count = Number(n) || 0;
+  if (count < 2) return Math.round(Number(tierPrice) || 0);
+  const pct = count >= 4 ? 0.20 : count === 3 ? 0.15 : 0.10;
+  return Math.round(count * (Number(tierPrice) || 0) * (1 - pct));
+}
+// Nivel que mandan los sitios (nombre del nivel medio: «Completa») →
+// tier interno. Inválido → default 'esencial' (TRIAL_PLAN).
+function contratoTier(nivel) {
+  const n = String(nivel || '').trim().toLowerCase();
+  if (n === 'completa') return 'pro';
+  if (n === 'esencial' || n === 'pro' || n === 'total') return n;
+  return 'esencial';
+}
+
+// Precios sin centavos (tabla nueva 2026-10-25): un precio entero NO
+// imprime decimales en ninguna moneda (USD 199, no 199.00). Los precios
+// con decimales (ninguno en la tabla vigente) seguirían su formato local.
 function formatPrice(plan) {
   if ((plan.currency || 'ARS') === 'UYU') {
     return '$U ' + Number(plan.price).toLocaleString('es-UY');
@@ -515,4 +572,4 @@ function formatPrice(plan) {
   return '$' + Number(plan.price).toLocaleString('es-AR');
 }
 
-module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLANS_GB, PLANS_EU, PLANS_CA, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice, SELECTOR_COUNTRIES, COUNTRY_META, getRail };
+module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLANS_GB, PLANS_EU, PLANS_CA, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice, SELECTOR_COUNTRIES, COUNTRY_META, getRail, PODERES, PODER_NOMBRE, COMPLETO_FUNDADOR, completoPrice, teamPrice, contratoTier };

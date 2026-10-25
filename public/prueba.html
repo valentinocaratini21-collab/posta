@@ -1606,7 +1606,8 @@ let PAIS_PRECIO = (() => {
 })();
 function pzFmtPruebaES(pp) {
   const sym = { ARS: '$', UYU: '$U ', USD: 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[pp.currency] || '$';
-  const dec = (pp.currency === 'ARS' || pp.currency === 'UYU') ? 0 : 2;
+  // (Tabla nueva, 2026-10-25) Precio entero → 0 decimales.
+  const dec = Number.isInteger(Number(pp.price)) ? 0 : 2;
   return sym + Number(pp.price).toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 function pzRenderSelectorPrueba() {
@@ -3652,19 +3653,19 @@ async function renderPriceCard() {
     let perTxt, anchor;
     if (j.country === 'US') {
       perTxt = 'USD ' + fmt(per, 2) + ' <small>por día</small>';
-      anchor = 'Un community manager cuesta USD 1.500–3.000 o más por mes. Posty arranca en USD ' + fmt(base.price, 2) + '/mes.';
+      anchor = 'Un community manager cuesta USD 1.500–3.000 o más por mes. Posty arranca en USD ' + fmt(base.price, 0) + '/mes.';
     } else if (j.country === 'UY') {
       perTxt = '$U ' + fmt(Math.round(per), 0) + ' <small>por día</small>';
       anchor = 'Un community manager cuesta más de $U 25.000 por mes. Posty arranca en $U ' + fmt(base.price, 0) + '/mes.';
     } else if (j.country === 'GB') {
       perTxt = '\u00a3' + fmt(per, 2) + ' <small>por día</small>';
-      anchor = 'Posty arranca en \u00a3' + fmt(base.price, 2) + '/mes.';
+      anchor = 'Posty arranca en \u00a3' + fmt(base.price, 0) + '/mes.';
     } else if (j.country === 'EU') {
       perTxt = '\u20ac' + fmt(per, 2) + ' <small>por día</small>';
-      anchor = 'Posty arranca en \u20ac' + fmt(base.price, 2) + '/mes.';
+      anchor = 'Posty arranca en \u20ac' + fmt(base.price, 0) + '/mes.';
     } else if (['BR', 'MX', 'CL', 'CO', 'PE'].includes(j.country)) {
       perTxt = 'USD ' + fmt(per, 2) + ' <small>por día</small>';
-      anchor = 'Posty arranca en USD ' + fmt(base.price, 2) + '/mes.';
+      anchor = 'Posty arranca en USD ' + fmt(base.price, 0) + '/mes.';
     } else {
       perTxt = '$' + fmt(Math.round(per), 0) + ' <small>por día</small>';
       anchor = 'Un community manager cuesta desde $1.000.000 por mes. Posty arranca en $' + fmt(base.price, 0) + '/mes.';
@@ -3680,7 +3681,7 @@ async function renderPriceCard() {
         : j.country === 'UY'
         ? 'Un community manager cobra más de $U 25.000 por mes. <b>Posty, desde $U 4.990.</b>'
         : j.country === 'US'
-        ? 'Un community manager cuesta USD 1.500–3.000 o más por mes. <b>Posty, desde USD 199,99.</b>'
+        ? 'Un community manager cuesta USD 1.500–3.000 o más por mes. <b>Posty, desde USD 199.</b>'
         : 'Posty, desde <b>' + pzFmtPruebaES(base) + '.</b>';
     }
     // (v390) Detalle «por vos» de los 3 planes: la tarjeta se toca y se

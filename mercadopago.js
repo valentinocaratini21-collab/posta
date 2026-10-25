@@ -42,9 +42,15 @@ async function mpFetch(path, { method = 'GET', body } = {}) {
 // Crea una suscripción (preapproval) y devuelve el init_point para redirigir al pagador.
 // payer_email es REQUERIDO por MercadoPago y debe ser el email de la cuenta de MP
 // con la que el usuario va a pagar (no necesariamente el email de Posta).
-// La suscripción se identifica por external_reference (userId:planId), que es lo
-// que usa el webhook para activar el plan correcto.
-async function createSubscription({ plan, userId, baseUrl, payerEmail }) {
+// La suscripción se identifica por external_reference
+// (userId:planId:agente), que es lo que usa el webhook para activar el
+// plan/poder correcto. Sin agente explícito, agente = 'posty' (el
+// comportamiento viejo). El webhook sigue aceptando refs viejas de 2
+// segmentos (sin agente → posty).
+async function createSubscription({ plan, userId, baseUrl, payerEmail, agente }) {
+  const ag = ['posty', 'venty', 'gesty', 'atenty', 'completo'].includes(String(agente || '').toLowerCase())
+    ? String(agente).toLowerCase() : 'posty';
+  const agLabel = { posty: 'Posty', venty: 'Venty', gesty: 'Gesty', atenty: 'Atenty', completo: 'Bambooty completo' }[ag];
   if (!mpConfigured()) throw new Error('Pagos no configurados todavía');
   if (!payerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail)) {
     throw new Error('Falta el email de MercadoPago.');
@@ -60,8 +66,8 @@ async function createSubscription({ plan, userId, baseUrl, payerEmail }) {
   const preapproval = await mpFetch('/preapproval', {
     method: 'POST',
     body: {
-      reason: `Posta — Plan ${plan.name}`,
-      external_reference: `${userId}:${plan.id}`,
+      reason: ag === 'posty' ? `Posta — Plan ${plan.name}` : `Posta — ${agLabel} ${plan.name}`,
+      external_reference: `${userId}:${plan.id}:${ag}`,
       payer_email: payerEmail,
       auto_recurring: {
         frequency: 1,

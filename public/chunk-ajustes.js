@@ -1473,6 +1473,41 @@ function bindSettings() {
       } catch (e) { cb.checked = !cb.checked; if (msg) msg.textContent = en ? 'Could not save — try again.' : 'No se pudo guardar — probá de nuevo.'; }
     };
   })();
+  /* PZ_CHECKOUT_DEEP_LINK:START — parser puro del deep link de checkout
+   * (#/app/ajustes?plan_sel=1&agente=<poder|completo>&nivel=<esencial|
+   * completa|total>&pais=<10>&moneda=<hint>). plan_sel numérico (el "1"
+   * que mandan los sitios) es solo una marca: el tier lo da nivel, y si
+   * nivel falta, un plan_sel con id de tier válido (legacy). Sin agente:
+   * agente=null (modo legacy, auto-click intacto). Con agente presente
+   * pero inválido: default posty/esencial/AR, sin romper. pais inválido
+   * → AR. moneda es HINT de display: el servidor decide precio/riel por
+   * país, así que nunca se usa para el precio. Puro: sin DOM ni storage,
+   * para poder testearlo aislado. */
+  function pzParseCheckoutDeepLink(hash) {
+    const PZ_DL_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
+    const PZ_DL_AGENTES = ['posty', 'venty', 'gesty', 'atenty', 'completo'];
+    const PZ_DL_NIVELES = { esencial: 'esencial', completa: 'pro', pro: 'pro', total: 'total' };
+    let qs = null;
+    try { qs = new URLSearchParams(String(hash || '').split('?')[1] || ''); } catch (e) { return { agente: null, tier: null, pais: null, moneda: null }; }
+    const hasAgente = qs.has('agente');
+    if (!hasAgente) {
+      const legacy = (qs.get('plan_sel') || '').replace(/[^a-z]/g, '');
+      return { agente: null, tier: PZ_DL_NIVELES[legacy] || null, pais: null, moneda: null };
+    }
+    const agRaw = (qs.get('agente') || '').toLowerCase();
+    const agente = PZ_DL_AGENTES.includes(agRaw) ? agRaw : 'posty';
+    const nivRaw = (qs.get('nivel') || '').toLowerCase();
+    let tier = PZ_DL_NIVELES[nivRaw] || null;
+    if (!tier) {
+      const sel = (qs.get('plan_sel') || '').replace(/[^a-z]/g, '');
+      tier = PZ_DL_NIVELES[sel] || 'esencial';
+    }
+    const paisRaw = (qs.get('pais') || '').toUpperCase();
+    const pais = PZ_DL_PAISES.includes(paisRaw) ? paisRaw : 'AR';
+    const moneda = (qs.get('moneda') || '').toUpperCase() || null;
+    return { agente, tier, pais, moneda };
+  }
+  /* PZ_CHECKOUT_DEEP_LINK:END */
   // Mi plan
   (async () => {
     const z = $('#planZone');
@@ -1481,13 +1516,21 @@ function bindSettings() {
     // ('posta-pais'); si no hay, lang en→US, si no AR. El RIEL lo decide el
     // país, no el idioma: GB/EU pagan por Stripe aunque el usuario hable ES.
     const PZ_PAY_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
-    const PZ_PAY_STRIPE = ['US', 'GB', 'EU'];
+    const PZ_PAY_STRIPE = ['US', 'GB', 'EU', 'BR', 'MX', 'CL', 'CO', 'PE'];
+    // (Pagos lado app) Deep link: pais manda y también setea
+    // localStorage 'posta-pais' (el servidor decide precio/riel por país;
+    // moneda del link es solo hint y NO se usa para el precio).
+    const pzDl = pzParseCheckoutDeepLink(location.hash);
     let pzPayCountry = 'AR';
     try {
       const g = localStorage.getItem('posta-pais');
       if (g && PZ_PAY_PAISES.includes(g)) pzPayCountry = g;
       else if (typeof ME !== 'undefined' && ME && ME.lang === 'en') pzPayCountry = 'US';
     } catch (e) { if (typeof ME !== 'undefined' && ME && ME.lang === 'en') pzPayCountry = 'US'; }
+    if (pzDl.agente && pzDl.pais) {
+      pzPayCountry = pzDl.pais;
+      try { localStorage.setItem('posta-pais', pzDl.pais); } catch (e) {}
+    }
     // Carga de planes con reintento: es la pantalla de pago, no puede fallar en silencio.
     const loadPlans = async () => {
       let lastErr = null;
@@ -1529,12 +1572,15 @@ function bindSettings() {
         </div>`;
         return;
       }
-      const { plans, mp_configured, stripe_configured } = await loadPlans();
+      const billingData = await loadPlans();
+      const { plans, mp_configured, stripe_configured } = billingData;
       const isUS = !!(ME && ME.lang === 'en');
       const isStripe = PZ_PAY_STRIPE.includes(pzPayCountry);
       (plans || []).forEach((pp) => {
         const sym = { ARS: '$', UYU: '$U ', USD: isUS ? '$' : 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[pp.currency] || '$';
-        const dec = (pp.currency === 'ARS' || pp.currency === 'UYU') ? 0 : 2;
+        // (Tabla nueva, 2026-10-25) Precio entero → 0 decimales (USD 199,
+        // no 199.00). El por-día de planCard sigue con decimales aparte.
+        const dec = Number.isInteger(Number(pp.price)) ? 0 : 2;
         pp.price_label = sym + Number(pp.price).toLocaleString(isUS ? 'en-US' : 'es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
       });
       const cur = (ME && ME.plan) || 'esencial';
@@ -1594,7 +1640,7 @@ function bindSettings() {
           </div>`;
       };
       const bindSub = () => {
-        $$('#planList [data-sub]').forEach(b => b.onclick = async () => {
+        $$('#planList [data-sub], #planListDl [data-sub]').forEach(b => b.onclick = async () => {
           track('plan_select', { plan: b.dataset.sub });
           // (v285, pais-selector) Países Stripe (US/GB/EU): el cobro va por
           // Stripe Checkout — sin paso de email de MP; Stripe pide los datos
@@ -1604,7 +1650,7 @@ function bindSettings() {
             b.disabled = true;
             $('#planMsg').innerHTML = `<div style="font-size:12.5px;color:var(--mut)">${isUS ? '⏳ Taking you to secure checkout…' : '⏳ Llevándote al pago seguro…'}</div>`;
             try {
-              const { url } = await api.post('/api/billing/stripe/checkout', { plan: b.dataset.sub, country: pzPayCountry });
+              const { url } = await api.post('/api/billing/stripe/checkout', { plan: b.dataset.sub, country: pzPayCountry, agente: (pzDl.agente || 'posty') });
               track('checkout_start', { plan: b.dataset.sub, kind: 'plan' }); trackBeacon();
               location.href = url;
             } catch (e) {
@@ -1643,7 +1689,7 @@ function bindSettings() {
             const btn = $('#btnGoMP');
             btn.disabled = true; btn.textContent = '⏳ Redirigiendo a MercadoPago...';
             try {
-              const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em, country: pzPayCountry });
+              const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em, country: pzPayCountry, agente: (pzDl.agente || 'posty') });
               track('checkout_start', { plan: b.dataset.sub, kind: 'plan' }); trackBeacon();
               location.href = init_point;
             } catch (e) {
@@ -1762,8 +1808,39 @@ function bindSettings() {
           z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎉 <b>Tenés 20% off de invitado</b>: se aplica automáticamente al suscribirte, todos los meses.</div>`);
         }
       } catch (e) {}
+      // (Pagos lado app) Deep link con agente: PRESELECCIÓN sin
+      // auto-click a pago. Abre los planes, destaca la tarjeta del tier,
+      // y muestra el banner «Estás contratando <Agente> — <Tier>» (para
+      // completo, el precio completo fundador del servidor). Sin agente,
+      // el auto-click legacy de abajo sigue intacto.
+      if (pzDl.agente && !hasActive) {
+        const paDl = document.getElementById('planAll');
+        if (paDl) paDl.style.display = '';
+        const bspDl = document.getElementById('btnShowPlans');
+        if (bspDl) bspDl.textContent = 'Ocultar planes';
+        const tierNameDl = (plans.find(p => p.id === pzDl.tier) || {}).name || pzDl.tier;
+        const agNameDl = pzDl.agente === 'completo'
+          ? (isUS ? 'Bambooty complete' : 'Bambooty completo')
+          : (pzDl.agente.charAt(0).toUpperCase() + pzDl.agente.slice(1));
+        let priceDl = (plans.find(p => p.id === pzDl.tier) || {}).price_label || '';
+        if (pzDl.agente === 'completo' && billingData && billingData.completo && billingData.completo.price_labels) {
+          const cl = billingData.completo.price_labels[pzDl.tier];
+          if (cl) priceDl = cl;
+        }
+        const bannerDl = document.createElement('div');
+        bannerDl.className = 'pz-dl-banner';
+        bannerDl.style.cssText = 'background:#FFF7E6;border:1px solid #FEC14D;border-radius:12px;padding:12px 14px;margin:0 0 12px;font-size:13.5px;line-height:1.5';
+        bannerDl.innerHTML = isUS
+          ? `You are hiring <b>${esc(agNameDl)} — ${esc(tierNameDl)}</b>${priceDl ? ` · <b>${esc(priceDl)}/mo</b>` : ''}. Pick your plan below — nothing is charged until you confirm.`
+          : `Estás contratando <b>${esc(agNameDl)} — ${esc(tierNameDl)}</b>${priceDl ? ` · <b>${esc(priceDl)}/mes</b>` : ''}. Elegí tu plan abajo — no se cobra nada hasta que confirmes.`;
+        if (paDl) paDl.insertBefore(bannerDl, paDl.firstChild);
+        document.querySelectorAll('#planList .plan-mini').forEach((card) => {
+          const btnDl = card.querySelector('[data-sub]');
+          if (btnDl && btnDl.dataset.sub === pzDl.tier) card.style.outline = '2px solid var(--cel, #2793C8)';
+        });
+      }
       // Plan preseleccionado desde /prueba (?plan_sel=): click programático UNA vez
-      if (!PZ_AUTO_PLAN && !hasActive) {
+      if (!PZ_AUTO_PLAN && !hasActive && !pzDl.agente) {
         const pq = new URLSearchParams(location.hash.split('?')[1] || '');
         const sel = (pq.get('plan_sel') || '').replace(/[^a-z]/g, '');
         if (sel) {
@@ -1779,6 +1856,51 @@ function bindSettings() {
           const btn = document.querySelector(`#planList [data-sub="${sel}"]`);
           if (btn && !btn.disabled) btn.click();
         }
+      }
+      // (Pagos lado app) Cuenta con plan activo + deep link de otro poder:
+      // la rama activa no muestra planes; se agrega la sección de compra
+      // del poder (mismas tarjetas, banner y preselección, sin auto-click).
+      // Posty activo + agente posty no hace nada (la guardia lo bloquearía).
+      if (pzDl.agente && pzDl.agente !== 'posty' && hasActive) {
+        const tierNameA = (plans.find(p => p.id === pzDl.tier) || {}).name || pzDl.tier;
+        const agNameA = pzDl.agente === 'completo' ? (isUS ? 'Bambooty complete' : 'Bambooty completo') : (pzDl.agente.charAt(0).toUpperCase() + pzDl.agente.slice(1));
+        let priceA = (plans.find(p => p.id === pzDl.tier) || {}).price_label || '';
+        if (pzDl.agente === 'completo' && billingData && billingData.completo && billingData.completo.price_labels) {
+          const clA = billingData.completo.price_labels[pzDl.tier];
+          if (clA) priceA = clA;
+        }
+        const secA = document.createElement('div');
+        secA.innerHTML = `
+        <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
+          <div style="background:#FFF7E6;border:1px solid #FEC14D;border-radius:12px;padding:12px 14px;margin:0 0 12px;font-size:13.5px;line-height:1.5">${isUS ? `You are hiring <b>${esc(agNameA)} — ${esc(tierNameA)}</b>${priceA ? ` · <b>${esc(priceA)}/mo</b>` : ''}.` : `Estás contratando <b>${esc(agNameA)} — ${esc(tierNameA)}</b>${priceA ? ` · <b>${esc(priceA)}/mes</b>` : ''}.`}</div>
+          <div style="font-size:14px;font-weight:800;margin:0 0 12px">${isUS ? 'Choose your plan' : 'Elegí tu plan'} 🚀</div>
+          <div id="planListDl" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
+        </div>`;
+        z.appendChild(secA);
+        bindSub();
+        const plA = secA.querySelector('#planListDl');
+        if (plA) plA.addEventListener('click', (e) => {
+          if (e.target.closest('[data-sub]')) return;
+          const card = e.target.closest('.plan-mini');
+          if (!card) return;
+          const det = card.querySelector('.pm-detail');
+          if (!det) return;
+          const more = card.querySelector('[data-plan-more]');
+          const open = det.hidden;
+          plA.querySelectorAll('.plan-mini').forEach(c => {
+            if (c === card) return;
+            const d = c.querySelector('.pm-detail');
+            const m = c.querySelector('[data-plan-more]');
+            if (d && !d.hidden) { d.hidden = true; c.classList.remove('open'); if (m) m.setAttribute('aria-expanded', 'false'); }
+          });
+          det.hidden = !open;
+          card.classList.toggle('open', open);
+          if (more) more.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+        secA.querySelectorAll('.plan-mini').forEach((card) => {
+          const btnA = card.querySelector('[data-sub]');
+          if (btnA && btnA.dataset.sub === pzDl.tier) card.style.outline = '2px solid var(--cel, #2793C8)';
+        });
       }
     } catch (e) {
       console.error('[planes] error final:', e);

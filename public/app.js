@@ -677,7 +677,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261025-v474'; // (pais-selector) bump: chunk-ajustes cambia; el ?v= viejo congelaba el chunk
+const CHUNK_V = '20261025-v478'; // (pais-selector) bump: chunk-ajustes cambia; el ?v= viejo congelaba el chunk
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -907,11 +907,11 @@ const PZ_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
 const PZ_PAIS_META = {
   US: { flag: '\u{1F1FA}\u{1F1F8}', nombre: 'Estados Unidos', nota: 'Precios en USD.' },
   AR: { flag: '\u{1F1E6}\u{1F1F7}', nombre: 'Argentina', nota: 'Precios en pesos argentinos. Pagás con Mercado Pago.' },
-  BR: { flag: '\u{1F1E7}\u{1F1F7}', nombre: 'Brasil', nota: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.' },
-  MX: { flag: '\u{1F1F2}\u{1F1FD}', nombre: 'México', nota: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.' },
-  CL: { flag: '\u{1F1E8}\u{1F1F1}', nombre: 'Chile', nota: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.' },
-  CO: { flag: '\u{1F1E8}\u{1F1F4}', nombre: 'Colombia', nota: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.' },
-  PE: { flag: '\u{1F1F5}\u{1F1EA}', nombre: 'Perú', nota: 'Pagás con Mercado Pago. El precio local para tu país todavía no está publicado: ves los precios en USD.' },
+  BR: { flag: '\u{1F1E7}\u{1F1F7}', nombre: 'Brasil', nota: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.' },
+  MX: { flag: '\u{1F1F2}\u{1F1FD}', nombre: 'México', nota: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.' },
+  CL: { flag: '\u{1F1E8}\u{1F1F1}', nombre: 'Chile', nota: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.' },
+  CO: { flag: '\u{1F1E8}\u{1F1F4}', nombre: 'Colombia', nota: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.' },
+  PE: { flag: '\u{1F1F5}\u{1F1EA}', nombre: 'Perú', nota: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.' },
   UY: { flag: '\u{1F1FA}\u{1F1FE}', nombre: 'Uruguay', nota: 'Precios en pesos uruguayos. Pagás con Mercado Pago.' },
   GB: { flag: '\u{1F1EC}\u{1F1E7}', nombre: 'Reino Unido', nota: 'Precios en libras. Pagás con Stripe.' },
   EU: { flag: '\u{1F1EA}\u{1F1FA}', nombre: 'Eurozona', nota: 'Precios en euros. Pagás con Stripe.' },
@@ -927,10 +927,13 @@ function pzPaisGuardar(c) {
   try { localStorage.setItem('posta-pais', c); } catch (e) {}
 }
 // Precio con convención española (como la familia): $199.999 · $U 4.990 ·
-// USD 199,99 · £149,99 · €179,99. El label del servidor queda como respaldo.
+// USD 199 · £149 · €179 (tabla nueva sin centavos, 2026-10-25). Un precio
+// entero NO imprime decimales; el label del servidor queda como respaldo.
 function pzFmtPrecioES(p) {
   const sym = { ARS: '$', UYU: '$U ', USD: 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[p.currency] || '$';
-  const dec = (p.currency === 'ARS' || p.currency === 'UYU') ? 0 : 2;
+  // (Tabla nueva, 2026-10-25) Precio entero → 0 decimales (USD 199, no
+  // 199,00). El por-día (pzPerDayHTML) sigue con decimales: es fraccionario.
+  const dec = Number.isInteger(Number(p.price)) ? 0 : 2;
   return sym + Number(p.price).toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 function pzSimbolo(p) {
@@ -12051,8 +12054,16 @@ function postAuthLanding(isReg) {
   let ret = null;
   try { ret = sessionStorage.getItem('posta_return_to'); sessionStorage.removeItem('posta_return_to'); } catch (e) {}
   const retOk = !isReg && ret && ret.startsWith('#/app/') && ret.split('?')[0] !== '#/app/onboarding';
+  // (Pagos lado app, 2026-10-25) Deep link de checkout (con agente=):
+  // manda sobre posta_chosen_plan (que es solo un tier de /prueba) y, en
+  // un registro fresco, sobrevive al onboarding en localStorage
+  // ('posta-checkout-intent'): el router ya guardaba el hash completo en
+  // posta_return_to (verificado), pero el register lo descartaba al mandar
+  // a onboarding. Sin agente, todo sigue igual.
+  const retHasAgente = !!(ret && /[?&]agente=(posty|venty|gesty|atenty|completo)(&|$)/.test(ret));
+  if (isReg && retHasAgente) { try { localStorage.setItem('posta-checkout-intent', ret); } catch (e) {} }
   if (PROFILE && PROFILE.business_name) {
-    location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : (retOk ? ret : homeTab);
+    location.hash = (retOk && retHasAgente) ? ret : chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : (retOk ? ret : homeTab);
   } else if (retOk) {
     location.hash = ret;
   } else {
@@ -12281,8 +12292,13 @@ async function obSaveProfile(p, colors) {
   SETTINGS = await api.get('/api/settings');
   await refreshSession();
   clearOB(); // onboarding confirmado: ya no hay nada que retomar
+  // (Pagos lado app, 2026-10-25) Al terminar el onboarding, el intento de
+  // checkout guardado en el registro (deep link con agente=) manda sobre
+  // posta_chosen_plan y se consume (one-shot). Sin intento, legacy intacto.
+  let checkoutIntent = null;
+  try { checkoutIntent = localStorage.getItem('posta-checkout-intent'); localStorage.removeItem('posta-checkout-intent'); } catch (e) {}
   const chosenPlan = localStorage.getItem('posta_chosen_plan');
-  location.hash = chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/schedule';
+  location.hash = checkoutIntent ? checkoutIntent : chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/schedule';
 }
 async function obConfirmSave() {
   const o = OB; if (!o) return;

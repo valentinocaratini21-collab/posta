@@ -167,14 +167,25 @@ const ORDEN_ESPECIALISTAS = ['desy', 'talenty', 'growty', 'bossty'];
 // pliegue: 'talenty' NO es 'gesty' acá y los especialistas jamás entran.
 // Falla cerrada: ante cualquier error, solo Posty (el poder que celebra).
 function poderesContratados(db, uid) {
+  // (Pagos lado app, 2026-10-25) Solo filas con estado='active' cuentan.
+  // Si la columna estado todavía no existe (DB anterior a la migración),
+  // el fallback lee sin filtro: una DB vieja solo tiene filas reales de
+  // contratación, así que el resultado es el mismo. Regla intacta: solo
+  // poderes contratados + Bambooty; especialistas jamás.
   const out = ['posty'];
-  try {
-    const rows = db.prepare('SELECT poder FROM poderes_contratados WHERE user_id = ?').all(uid);
+  const take = (rows) => {
     for (const r of rows || []) {
       const p = String((r && r.poder) || '').trim().toLowerCase();
       if ((p === 'venty' || p === 'gesty' || p === 'atenty') && !out.includes(p)) out.push(p);
     }
-  } catch (e) { /* tabla aún no creada: solo Posty */ }
+  };
+  try {
+    take(db.prepare("SELECT poder FROM poderes_contratados WHERE user_id = ? AND estado = 'active'").all(uid));
+  } catch (e) {
+    try {
+      take(db.prepare('SELECT poder FROM poderes_contratados WHERE user_id = ?').all(uid));
+    } catch (e2) { /* tabla aún no creada: solo Posty */ }
+  }
   return ORDEN_PODERES.filter((p) => out.includes(p));
 }
 

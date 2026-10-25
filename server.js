@@ -69,7 +69,7 @@ const { mineComments, buildDnaPatch, fetchCommentsForMedia } = require('./ig-com
 const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { postyLevel, LEVEL_UP_MSGS } = require('./posty-level'); // 🧠 Niveles de conocimiento de Posty
-const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR, SELECTOR_COUNTRIES, COUNTRY_META, getRail } = require('./config/plans');
+const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR, SELECTOR_COUNTRIES, COUNTRY_META, getRail, PODERES, PODER_NOMBRE, completoPrice, teamPrice, contratoTier } = require('./config/plans');
 const LA = require('./launch-analytics'); // (v322) analytics de lanzamiento: época, tablero, termómetro, alertas, carta
 const metaDeauth = require('./meta-deauthorize'); // (Frente 4b) Deauthorize callback de Meta: baja lógica IG + evento durable
 const holaInbox = require('./hola-inbox'); // (Frente 4b) Lector SOLO LECTURA de respuestas a hola@ (Carta/toque), clasificador por reglas
@@ -612,6 +612,26 @@ if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
 function stripeHooks() {
   return {
     onActivated: (uid, planId) => {
+      // (Pagos lado app) El intento one-shot dice qué poder se compró;
+      // sin intento, agente = posty (checkout viejo). Posty: activación
+      // actual completa. Otro poder: solo su fila + track (sin week-redo
+      // ni magia, que son de Posty). Completo: las 4 filas (users.plan ya
+      // lo escribió el módulo con el tier). El intento se borra siempre.
+      const intentStripe = consumirCheckoutIntent(db, uid);
+      const agenteHook = (intentStripe && intentStripe.agente) || 'posty';
+      if (agenteHook === 'completo') {
+        for (const p of PODERES) {
+          try { registrarPoder(db, uid, p, { nivel: planId, rail: 'stripe', ref: '', fuente: 'stripe' }); } catch (e) {}
+        }
+      } else {
+        try { registrarPoder(db, uid, agenteHook, { nivel: planId, rail: 'stripe', ref: '', fuente: 'stripe' }); } catch (e) {}
+      }
+      if (agenteHook !== 'posty') {
+        track(uid, 'subscribed', planId);
+        evTrack(uid, 'payment_ok', { plan: planId, provider: 'stripe', agente: agenteHook });
+        console.log(`[stripe] ✅ ${agenteHook} ${planId} activado para el usuario ${uid}`);
+        return;
+      }
       try { stampFounder(uid); } catch (e) {}
       // (ítem 3) Activación = nace la garantía de primera semana (weekKey
       // calculada acá, el dueño del cálculo; INSERT OR IGNORE idempotente).
@@ -3442,6 +3462,13 @@ function nivelTablasEnsure() {
     // lectura vive en niveles.poderesContratados (lista cerrada, sin
     // pliegue, sin especialistas).
     db.exec(`CREATE TABLE IF NOT EXISTS poderes_contratados (user_id INTEGER NOT NULL, poder TEXT NOT NULL, ts INTEGER NOT NULL, fuente TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, poder))`);
+    // (Pagos lado app, 2026-10-25) Columnas nuevas, patrón try/catch como
+    // el ALTER de qa_audit: si ya existen, el ALTER falla y se ignora.
+    // Las filas viejas quedan con estado='active' por el DEFAULT.
+    try { db.exec(`ALTER TABLE poderes_contratados ADD COLUMN nivel TEXT`); } catch (e) {}
+    try { db.exec(`ALTER TABLE poderes_contratados ADD COLUMN rail TEXT`); } catch (e) {}
+    try { db.exec(`ALTER TABLE poderes_contratados ADD COLUMN ref TEXT`); } catch (e) {}
+    try { db.exec(`ALTER TABLE poderes_contratados ADD COLUMN estado TEXT DEFAULT 'active'`); } catch (e) {}
   } catch (e) {}
 }
 // Nombres de oferta/temas del digest, menos lo que el dueño respondió o
@@ -12730,6 +12757,100 @@ async function maybeReferralNudge(referrerId, baseUrl) {
 }
 
 // ---------- Facturación (Mercado Pago) ----------
+/* PAGOS_APP_HELPERS:START — helpers puros de pagos (sin otros globales
+ * del servidor salvo stripeBilling en ensureCompletoPriceId). Los tests
+ * extraen este bloque y lo evalúan con stubs de db/cliente. */
+const PAGOS_TIERS = ['esencial', 'pro', 'total'];
+const PAGOS_AGENTES = ['posty', 'venty', 'gesty', 'atenty', 'completo'];
+// Parsea external_reference de MP: "uid:tier" (viejo → posty) o
+// "uid:tier:agente". Tier inválido, agente inválido o formato raro → null
+// (el webhook lo ignora, no activa nada a ciegas).
+function parseMpRef(ref) {
+  const parts = String(ref || '').split(':');
+  if (parts.length < 2 || parts.length > 3) return null;
+  const userId = Number(parts[0]);
+  const planId = parts[1];
+  if (!userId || !PAGOS_TIERS.includes(planId)) return null;
+  let agente = 'posty';
+  if (parts.length === 3) {
+    if (!PAGOS_AGENTES.includes(parts[2])) return null;
+    agente = parts[2];
+  }
+  return { userId, planId, agente };
+}
+function poderActivo(db, uid, poder) {
+  try {
+    const row = db.prepare(`SELECT 1 AS x FROM poderes_contratados WHERE user_id = ? AND poder = ? AND estado = 'active' LIMIT 1`).get(Number(uid), poder);
+    return !!row;
+  } catch (e) { return false; }
+}
+function completoActivo(db, uid) {
+  return ['posty', 'venty', 'gesty', 'atenty'].every((p) => poderActivo(db, uid, p));
+}
+// Escribe una fila de poder contratado. Solo poderes (nunca especialistas:
+// desy/talenty/growty/bossty → false). ON CONFLICT: re-contratar reactiva
+// la fila con los datos nuevos. estado default 'active'; el subscribe
+// guarda 'pending' hasta que el webhook confirma el pago. Si la DB aún no
+// tiene las columnas nuevas, cae al INSERT viejo (user_id/poder/ts/fuente).
+function registrarPoder(db, uid, poder, opts) {
+  const o = opts || {};
+  const p = String(poder || '').toLowerCase();
+  if (!['posty', 'venty', 'gesty', 'atenty'].includes(p)) return false;
+  const estado = o.estado || 'active';
+  const ts = Date.now();
+  try {
+    db.prepare(`INSERT INTO poderes_contratados (user_id, poder, ts, fuente, nivel, rail, ref, estado) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(user_id, poder) DO UPDATE SET ts=excluded.ts, fuente=excluded.fuente, nivel=excluded.nivel, rail=excluded.rail, ref=excluded.ref, estado=excluded.estado`).run(Number(uid), p, ts, String(o.fuente || ''), String(o.nivel || ''), String(o.rail || ''), String(o.ref || ''), estado);
+    return true;
+  } catch (e) {
+    try {
+      db.prepare(`INSERT INTO poderes_contratados (user_id, poder, ts, fuente) VALUES (?,?,?,?) ON CONFLICT(user_id, poder) DO UPDATE SET ts=excluded.ts, fuente=excluded.fuente`).run(Number(uid), p, ts, String(o.fuente || ''));
+      return true;
+    } catch (e2) { return false; }
+  }
+}
+function ensureCheckoutIntentsTable(db) {
+  try { db.exec(`CREATE TABLE IF NOT EXISTS checkout_intents (user_id INTEGER PRIMARY KEY, agente TEXT NOT NULL DEFAULT 'posty', nivel TEXT NOT NULL DEFAULT 'esencial', ts INTEGER NOT NULL)`); } catch (e) {}
+}
+// Intento de checkout Stripe, one-shot: se guarda ANTES de crear el
+// checkout y el hook onActivated lo consume (y lo borra) para saber qué
+// poder activar. Sin intento, el hook asume posty (checkout viejo).
+function guardarCheckoutIntent(db, uid, agente, nivel) {
+  try {
+    ensureCheckoutIntentsTable(db);
+    db.prepare(`INSERT OR REPLACE INTO checkout_intents (user_id, agente, nivel, ts) VALUES (?,?,?,?)`).run(Number(uid), agente, nivel, Date.now());
+  } catch (e) {}
+}
+function consumirCheckoutIntent(db, uid) {
+  try {
+    ensureCheckoutIntentsTable(db);
+    const row = db.prepare(`SELECT agente, nivel FROM checkout_intents WHERE user_id = ?`).get(Number(uid));
+    try { db.prepare(`DELETE FROM checkout_intents WHERE user_id = ?`).run(Number(uid)); } catch (e) {}
+    return row || null;
+  } catch (e) { return null; }
+}
+// Precio completo en Stripe SIN tocar stripe-billing.js: mismo patrón
+// idempotente del módulo (list por lookup_key → crear producto+precio si
+// falta). lookup_key: posty_<moneda>_<tier>_completo_monthly.
+// metadata: { plan_id: tier, completo: '1' }. client null → se usa el
+// cliente del módulo (igual que ensureFounderPrice(null, ...)).
+async function ensureCompletoPriceId(client, plan, amount) {
+  const c = client || stripeBilling.stripeClient();
+  const currency = String(plan.currency || 'USD').toLowerCase();
+  const tier = plan.id;
+  const lookupKey = `posty_${currency}_${tier}_completo_monthly`;
+  const found = await c.prices.list({ lookup_keys: [lookupKey], limit: 1 });
+  if (found && found.data && found.data.length) return found.data[0].id;
+  const product = await c.products.create({ name: `Posta — Bambooty completo ${plan.name}`, metadata: { plan_id: tier, completo: '1' } });
+  const price = await c.prices.create({ currency, unit_amount: Math.round(Number(amount) * 100), recurring: { interval: 'month' }, lookup_key: lookupKey, product: product.id, metadata: { plan_id: tier, completo: '1' } });
+  return price.id;
+}
+/* PAGOS_APP_HELPERS:END */
+
+// ---------- Facturación (billing) ----------
+// Dominio canónico único: postyhacetodo.com — es el que usan los botones
+// de los sitios y el baseUrl de los checkouts (en v468 no existe una
+// constante server.url: baseUrl se arma del host de cada request; el
+// redirect 301 ya manda www.postyhacetodo.com → postyhacetodo.com).
 app.get('/api/billing/plans', (req, res) => {
   // (Tablero 2026-10-25) 10 países del selector + CA solo-API (no se toca).
   // Default intacto: sin código válido, AR. EC/VE no existen acá: no se publican.
@@ -12738,6 +12859,14 @@ app.get('/api/billing/plans', (req, res) => {
   const plans = getPlans(country);
   const anchor = PLAN_ANCHOR[country];
   const meta = COUNTRY_META[country] || COUNTRY_META.AR;
+  // (Pagos lado app, 2026-10-25) Campos AGREGADOS, ninguno quitado: el
+  // shape viejo sigue intacto y el cliente nuevo usa estos para el banner
+  // del deep link (completo) y el total con equipo. CA → completo null
+  // (CA no se toca, solo API).
+  const compPrices = {};
+  for (const t of ['esencial', 'pro', 'total']) compPrices[t] = completoPrice(plans.esencial.currency, t);
+  const compLabels = {};
+  for (const t of ['esencial', 'pro', 'total']) compLabels[t] = compPrices[t] == null ? null : formatPrice({ price: compPrices[t], currency: plans.esencial.currency });
   res.json({
     country,
     currency: plans.esencial.currency,
@@ -12749,6 +12878,12 @@ app.get('/api/billing/plans', (req, res) => {
     trial_plan: TRIAL_PLAN,
     mp_configured: mp.mpConfigured(),
     stripe_configured: stripeBilling.stripeConfigured(),
+    poderes: PODERES,
+    completo: { prices: compPrices, price_labels: compLabels },
+    equipo: {
+      descuentos: { 2: 10, 3: 15, 4: 20 },
+      precios: Object.fromEntries([2, 3, 4].map((n) => [n, Object.fromEntries(Object.values(plans).map((p) => [p.id, teamPrice(n, p.price)]))])),
+    },
   });
 });
 
@@ -12785,12 +12920,14 @@ app.all('/api/admin/grant-free', (req, res) => {
 });
 
 app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
-  const { plan: planId, country, payer_email } = req.body || {};
-  // (Tablero 2026-10-25) Riel MP: AR + UY + BR/MX/CL/CO/PE (estos últimos con
-  // escalera USD base; la verificación de pago humano real por MP en esos
-  // países sigue pendiente por separado y NO se declara hecha acá).
+  const { plan: planIdRaw, country, payer_email, agente: agenteRaw } = req.body || {};
+  // (Pagos lado app, 2026-10-25) Riel MP: SOLO AR + UY. BR/MX/CL/CO/PE
+  // pasaron a Stripe (tarjeta en USD); si llegan acá, caen a AR como
+  // antes, pero el cliente ya no los manda a MP.
   const mpCountry = String(country || '').toUpperCase();
-  const plans = getPlans(['AR', 'UY', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(mpCountry) ? mpCountry : 'AR');
+  const plans = getPlans(['AR', 'UY'].includes(mpCountry) ? mpCountry : 'AR');
+  const planId = contratoTier(planIdRaw);
+  const agente = ['posty', 'venty', 'gesty', 'atenty', 'completo'].includes(String(agenteRaw || '').toLowerCase()) ? String(agenteRaw).toLowerCase() : 'posty';
   const plan = plans[planId];
   if (!plan) return res.status(400).json({ error: 'Plan inválido' });
   if (!mp.mpConfigured()) {
@@ -12802,8 +12939,20 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
   }
   try {
     const user = db.prepare('SELECT id, email, plan_status, mp_preapproval_id, referred_by, email_verified, founder_number, founder_price, founder_currency, founder_plan, founder_price_at FROM users WHERE id = ?').get(req.session.userId);
-    if (user.plan_status === 'active' && user.mp_preapproval_id) {
-      return res.status(400).json({ error: 'Ya tenés una suscripción activa. Si querés cambiar de plan, primero cancelá la actual desde Mi plan.' });
+    // (Pagos lado app) Guardia por poder: posty → la actual; otro poder
+    // → bloquear solo si ESE poder ya está activo; completo → bloquear
+    // solo si ya están los 4 poderes activos (un posty activo solo no
+    // bloquea el salto a completo).
+    if (agente === 'posty') {
+      if (user.plan_status === 'active' && user.mp_preapproval_id) {
+        return res.status(400).json({ error: 'Ya tenés una suscripción activa. Si querés cambiar de plan, primero cancelá la actual desde Mi plan.' });
+      }
+    } else if (agente === 'completo') {
+      if (completoActivo(db, user.id)) {
+        return res.status(400).json({ error: 'Ya tenés Bambooty completo activo.' });
+      }
+    } else if (poderActivo(db, user.id, agente)) {
+      return res.status(400).json({ error: `Ya tenés ${PODER_NOMBRE[agente].es} activo.` });
     }
     // Sin bloqueo por email sin verificar: si quiere pagar, que pague.
     // MercadoPago ya valida al comprador en su checkout.
@@ -12834,20 +12983,44 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
       mult = FRIEND_DISCOUNT;
       finalPlan = { ...basePlan, price: Math.round(basePlan.price * FRIEND_DISCOUNT), name: `${plan.name} (20% off invitado)` };
     }
+    // (Pagos lado app) Precio fundador y descuentos por referido son de
+    // Posty: para otro poder/completo no se aplican. Completo cobra su
+    // precio fundador de lista para ese tier/moneda.
+    if (agente !== 'posty') {
+      const comp = agente === 'completo' ? completoPrice(plan.currency, plan.id) : null;
+      finalPlan = comp != null ? { ...plan, price: comp } : plan;
+      discount = false; mult = 1;
+    }
     const { init_point, preapproval_id } = await mp.createSubscription({
       plan: finalPlan,
       userId: user.id,
       baseUrl,
       payerEmail,
+      agente,
     });
     // Persistir el id YA: si el webhook de MP nunca llega, billing-sync
     // (reconcilePending) encuentra la suscripción y activa el plan. Sin
     // esto, el usuario pagaba y el plan jamás se activaba.
     if (preapproval_id) {
-      try { db.prepare(`UPDATE users SET mp_preapproval_id = ? WHERE id = ?`).run(String(preapproval_id), user.id); } catch (e) {}
+      if (agente === 'posty') {
+        try { db.prepare(`UPDATE users SET mp_preapproval_id = ? WHERE id = ?`).run(String(preapproval_id), user.id); } catch (e) {}
+      } else if (agente === 'completo') {
+        // Una sola preapproval para el completo: su ref queda en las 4
+        // filas (estado 'pending' hasta que el webhook la active).
+        for (const p of PODERES) {
+          try { registrarPoder(db, user.id, p, { nivel: plan.id, rail: 'mercadopago', ref: String(preapproval_id), fuente: 'mp-subscribe', estado: 'pending' }); } catch (e) {}
+        }
+      } else {
+        // Otro poder NO pisa mp_preapproval_id (es de Posty): su ref vive
+        // en su fila de poderes_contratados, 'pending' hasta el webhook.
+        try { registrarPoder(db, user.id, agente, { nivel: plan.id, rail: 'mercadopago', ref: String(preapproval_id), fuente: 'mp-subscribe', estado: 'pending' }); } catch (e) {}
+      }
     }
     // Guardar base y multiplicador para la conciliación automática con MP
-    try { db.prepare(`UPDATE users SET mp_base_amount = ?, mp_mult = ? WHERE id = ?`).run(basePlan.price, mult, user.id); } catch (e) {}
+    // (solo Posty: billing-sync concilia la suscripción Posty de users).
+    if (agente === 'posty') {
+      try { db.prepare(`UPDATE users SET mp_base_amount = ?, mp_mult = ? WHERE id = ?`).run(basePlan.price, mult, user.id); } catch (e) {}
+    }
     res.json({ init_point, discount_applied: discount });
   } catch (e) {
     console.error('[posta] Error creando suscripción MP:', e.message);
@@ -12869,12 +13042,32 @@ app.post('/api/billing/webhook', async (req, res) => {
   }
   try {
     const sub = await mp.getSubscription(mpId);
-    const [userId, planId] = String(sub.external_reference || '').split(':');
-    if (!userId || !PLANS[planId]) {
+    const parsed = parseMpRef(sub.external_reference);
+    if (!parsed) {
       console.log(`[posta] Webhook MP: external_reference inválido (${sub.external_reference})`);
       return res.status(200).json({ ok: true, ignored: true });
     }
+    const { userId, planId, agente: agenteMp } = parsed;
     if (sub.status === 'authorized') {
+      // (Pagos lado app) Otro poder: solo su fila + track. Sin week-redo
+      // ni magia (son de Posty) y sin tocar users.plan. Completo: plan
+      // activo + las 4 filas (sin pisar mp_preapproval_id: la ref vive en
+      // las filas). Posty: activación actual completa, abajo.
+      if (agenteMp !== 'posty') {
+        if (agenteMp === 'completo') {
+          db.prepare(`UPDATE users SET plan=?, plan_status='active' WHERE id=?`).run(planId, Number(userId));
+          for (const p of PODERES) {
+            try { registrarPoder(db, Number(userId), p, { nivel: planId, rail: 'mercadopago', ref: String(mpId), fuente: 'mp-webhook' }); } catch (e) {}
+          }
+        } else {
+          try { registrarPoder(db, Number(userId), agenteMp, { nivel: planId, rail: 'mercadopago', ref: String(mpId), fuente: 'mp-webhook' }); } catch (e) {}
+        }
+        track(Number(userId), 'subscribed', planId);
+        evTrack(Number(userId), 'payment_ok', { plan: planId, agente: agenteMp });
+        console.log(`[posta] ✅ ${agenteMp} ${planId} activado para el usuario ${userId} (MP ${mpId})`);
+        res.status(200).json({ ok: true });
+        return;
+      }
       db.prepare(`UPDATE users SET plan=?, plan_status='active', mp_preapproval_id=? WHERE id=?`)
         .run(planId, String(mpId), Number(userId));
       try { stampFounder(Number(userId)); } catch (e) {}
@@ -12899,8 +13092,22 @@ app.post('/api/billing/webhook', async (req, res) => {
         }
       } catch (e) { console.error('[referral-discount] hook webhook authorized:', e.message); }
     } else if (['cancelled', 'paused'].includes(sub.status)) {
-      db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=? AND mp_preapproval_id=?`)
-        .run(Number(userId), String(mpId));
+      // (Pagos lado app) Cancelación por poder: posty → actual; otro →
+      // solo su fila; completo → las 4 filas + plan_status.
+      if (agenteMp === 'posty') {
+        db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=? AND mp_preapproval_id=?`)
+          .run(Number(userId), String(mpId));
+      } else if (agenteMp === 'completo') {
+        try { db.prepare(`UPDATE poderes_contratados SET estado='cancelled' WHERE user_id=?`).run(Number(userId)); } catch (e) {}
+        db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=?`).run(Number(userId));
+      } else {
+        try { db.prepare(`UPDATE poderes_contratados SET estado='cancelled' WHERE user_id=? AND poder=?`).run(Number(userId), agenteMp); } catch (e) {}
+      }
+      if (agenteMp !== 'posty') {
+        console.log(`[posta] ${agenteMp} cancelado para el usuario ${userId} (MP ${mpId}, estado ${sub.status})`);
+        res.status(200).json({ ok: true });
+        return;
+      }
       // (Jugadas rojo→verde) Pregunta de salida de un toque + 30 días.
       try { require('./health-plays').handleCancellation(db, Number(userId)); } catch (e) {}
       console.log(`[posta] Plan cancelado para el usuario ${userId} (MP ${mpId}, estado ${sub.status})`);
@@ -12923,6 +13130,36 @@ app.post('/api/billing/webhook', async (req, res) => {
 app.post('/api/billing/cancel', requireAuth, async (req, res) => {
   const user = db.prepare('SELECT plan, mp_preapproval_id, referred_by FROM users WHERE id = ?').get(req.session.userId);
   if (user && user.plan === 'free') return res.status(400).json({ error: 'Esta cuenta es de cortesía y no necesita cancelación.' });
+  // (Pagos lado app) Cancelar OTRO poder: cancela su preapproval (la ref
+  // vive en su fila de poderes_contratados) y marca la fila 'cancelled'.
+  // NO toca users.mp_preapproval_id ni users.plan_status (son de Posty).
+  // Completo: cancela su ref (la misma en las 4 filas) y marca las 4 +
+  // plan_status. Un poder pagado por Stripe NO se cancela acá: se gestiona
+  // desde el portal de Stripe (Mi plan), igual que Posty-Stripe.
+  const agenteCancel = ['venty', 'gesty', 'atenty', 'completo'].includes(String((req.body && req.body.agente) || '').toLowerCase()) ? String(req.body.agente).toLowerCase() : null;
+  if (agenteCancel) {
+    let rowCancel = null;
+    try {
+      rowCancel = db.prepare(`SELECT ref, rail FROM poderes_contratados WHERE user_id = ? AND poder = ? AND estado = 'active' LIMIT 1`).get(req.session.userId, agenteCancel === 'completo' ? 'posty' : agenteCancel);
+    } catch (e) {}
+    if (rowCancel && rowCancel.rail === 'stripe') {
+      return res.status(400).json({ error: 'Esa suscripción se gestiona desde el portal de Stripe (Mi plan).' });
+    }
+    const refCancel = rowCancel && rowCancel.ref;
+    if (refCancel && mp.mpConfigured()) {
+      try { await mp.cancelSubscription(refCancel); }
+      catch (e) { console.error('[posta] No se pudo cancelar en MP:', e.message); return res.status(500).json({ error: 'No pude cancelar en Mercado Pago 😅 Probá de nuevo en unos minutos — si sigue fallando, escribinos' }); }
+    }
+    try {
+      if (agenteCancel === 'completo') {
+        db.prepare(`UPDATE poderes_contratados SET estado='cancelled' WHERE user_id=?`).run(req.session.userId);
+        db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=?`).run(req.session.userId);
+      } else {
+        db.prepare(`UPDATE poderes_contratados SET estado='cancelled' WHERE user_id=? AND poder=?`).run(req.session.userId, agenteCancel);
+      }
+    } catch (e) {}
+    return res.json({ ok: true });
+  }
   if (user && user.mp_preapproval_id && mp.mpConfigured()) {
     try {
       await mp.cancelSubscription(user.mp_preapproval_id);
@@ -12945,9 +13182,13 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
 // Fail-closed y silencioso: sin STRIPE_SECRET_KEY los endpoints responden un
 // error limpio y nada más cambia (el sitio y la app quedan como siempre).
 app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
-  const { plan: planId } = req.body || {};
-  // (Tablero 2026-10-25) Riel Stripe: US + GB (GBP) + EU (EUR). Sin país válido, US.
-  const stripeCountry = ['US', 'GB', 'EU'].includes(String((req.body && req.body.country) || '').toUpperCase()) ? String(req.body.country).toUpperCase() : 'US';
+  const { plan: planIdRaw } = req.body || {};
+  // (Pagos lado app, 2026-10-25) Riel Stripe: US + GB + EU + BR/MX/CL/CO/PE
+  // (estos últimos con planes USD). Sin país válido, US. CA no entra acá
+  // (solo API): un country CA cae a US como antes.
+  const stripeCountry = ['US', 'GB', 'EU', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(String((req.body && req.body.country) || '').toUpperCase()) ? String(req.body.country).toUpperCase() : 'US';
+  const planId = contratoTier(planIdRaw);
+  const agenteStripe = ['posty', 'venty', 'gesty', 'atenty', 'completo'].includes(String((req.body && req.body.agente) || '').toLowerCase()) ? String(req.body.agente).toLowerCase() : 'posty';
   const plan = getPlans(stripeCountry)[planId];
   if (!plan) return res.status(400).json({ error: 'Invalid plan' });
   if (!stripeBilling.stripeConfigured()) {
@@ -12958,8 +13199,17 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
     if (!user) {
       return res.status(400).json({ error: 'Stripe checkout is only available for US, UK and Eurozone accounts.' });
     }
-    if (user.plan_status === 'active' && user.stripe_subscription_id) {
-      return res.status(400).json({ error: 'You already have an active subscription. To change plans, manage your current one first from My plan.' });
+    // (Pagos lado app) Guardia por poder, espejo de MP.
+    if (agenteStripe === 'posty') {
+      if (user.plan_status === 'active' && user.stripe_subscription_id) {
+        return res.status(400).json({ error: 'You already have an active subscription. To change plans, manage your current one first from My plan.' });
+      }
+    } else if (agenteStripe === 'completo') {
+      if (completoActivo(db, user.id)) {
+        return res.status(400).json({ error: 'You already have Bambooty complete active.' });
+      }
+    } else if (poderActivo(db, user.id, agenteStripe)) {
+      return res.status(400).json({ error: `You already have ${PODER_NOMBRE[agenteStripe].en} active.` });
     }
     const host = req.get('host') || ''; const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
     // El cobro arranca cuando termina SU prueba de la app (trial_end de Stripe),
@@ -12974,14 +13224,28 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
     // del catálogo vigente, el checkout cobra con un precio de Stripe a su
     // monto de alta (las suscripciones vivas ya conservan su precio solas).
     let founderPriceId = null;
-    if (user.founder_number && Number(user.founder_price) > 0 && user.founder_plan === plan.id
+    // (Pagos lado app) Precio fundador: solo Posty (es precio de su plan).
+    if (agenteStripe === 'posty' && user.founder_number && Number(user.founder_price) > 0 && user.founder_plan === plan.id
         && String(user.founder_currency || '') === 'USD' && String(plan.currency || '') === 'USD'
         && Number(user.founder_price_at) > 0 && (Date.now() - Number(user.founder_price_at)) < 365 * 24 * 3600 * 1000
         && Number(user.founder_price) !== Number(plan.price)) {
       try { founderPriceId = await stripeBilling.ensureFounderPrice(null, plan, Number(user.founder_price)); }
       catch (e) { console.error('[stripe] precio fundador:', e.message); }
     }
-    const out = await stripeBilling.createCheckout(db, null, { user, plan, baseUrl, trialEndSec, ...(founderPriceId ? { priceId: founderPriceId } : {}) });
+    // (Pagos lado app) Completo: el checkout cobra el precio completo
+    // (priceId propio, sin tocar stripe-billing.js); el plan que viaja es
+    // el tier, para que la activación del módulo escriba users.plan=tier.
+    // El intento se guarda ANTES de crear el checkout: es one-shot y el
+    // hook lo consume para saber qué poder activar.
+    let completoPriceId = null;
+    if (agenteStripe === 'completo') {
+      const compAmount = completoPrice(plan.currency, plan.id);
+      if (compAmount == null) return res.status(400).json({ error: 'Bambooty complete is not available for this currency.' });
+      try { completoPriceId = await ensureCompletoPriceId(null, plan, compAmount); }
+      catch (e) { console.error('[stripe] precio completo:', e.message); return res.status(500).json({ error: 'Could not start the payment: ' + e.message }); }
+    }
+    guardarCheckoutIntent(db, user.id, agenteStripe, plan.id);
+    const out = await stripeBilling.createCheckout(db, null, { user, plan, baseUrl, trialEndSec, ...(completoPriceId ? { priceId: completoPriceId } : founderPriceId ? { priceId: founderPriceId } : {}) });
     track(user.id, 'checkout_start', plan.id);
     res.json({ url: out.url });
   } catch (e) {
@@ -20924,9 +21188,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Reply ONLY with a JSON: {"edits": [{"post": <index>, "caption": "...", "hashtags": "..."}], "reply": "<short reply the user sees>"}. ' +
     'If the request applies to several posts, include all of them. If it is unclear, edits: [] and ask for clarification in reply. ' +
     'SALES (once per conversation): this visitor does NOT have an account yet. You know the service: Posty runs a business Instagram (ideas, designs, texts and scheduling for them; nothing goes out without their OK). ' +
-    'Free 3-day trial, no card. Plans: Essential $199.99/month (community manager: 7 posts + 1 reel per week), Pro $299.99/month (adds Growth: 3 reels per week, stories 3x per week — the recommended one, $10.00 a day), Total $399.99/month (adds customer care: daily stories, comment and message replies). ' +
+    'Free 3-day trial, no card. Plans: Essential $199/month (community manager: 7 posts + 1 reel per week), Pro $299/month (adds Growth: 3 reels per week, stories 3x per week — the recommended one, $9.97 a day), Total $399/month (adds customer care: daily stories, comment and message replies). ' +
     'If they ask what Posty is, how much it costs, how to continue or how to save their posts: answer shortly with these facts in "reply" and offer ONCE to create their free account to save everything and build their first week. ' +
-    'If they say no, do not insist. Objections: "too expensive" → the recommended Pro works out to $10.00 a day, and Essential starts at $199.99; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
+    'If they say no, do not insist. Objections: "too expensive" → the recommended Pro works out to $9.97 a day, and Essential starts at $199; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
     '\n\nCAPTION RULES: one idea per post; specific beats generic (name the real product/service); one concrete CTA per caption; at most 5 hashtags; no stock openers ("Welcome to our page", "We are excited to announce"); never invent prices, promos or results.';
   const sysEs =
     'Sos el editor de contenidos de Posta, un servicio argentino que arma los posteos de Instagram de los negocios. ' +
@@ -21035,12 +21299,12 @@ const POSTY_CHAT_SYS_EN = [
   '',
   'TONE: warm, direct, confident US English, with light humor. SHORT answers: 1 to 4 sentences, unless they ask for detail. Never return an empty question: always propose a concrete next step. The free 3-day trial (no card) is offered when it fits the conversation — NOT in every message.',
   'FORMAT: plain text, NO markdown: no asterisks, hashtags or bold. If you list plans or points, write them as running sentences or as simple lines starting with "• ".',
-  'WRITING STYLE (non-negotiable): you write like a friend texting — ALL lowercase, even at the start of sentences, short and friendly. Examples of YES: "hi! i\'m posty 🤖 i run instagram for businesses like yours" / "it\'s $199.99 a month, everything included" / "want me to show you with your account? it\'s free for 3 days". Example of NO: "Hello! Would you like a free trial?" — that sounds like a robot. Business names stay exactly as the person writes them; prices and facts stay exact as listed here.',
+  'WRITING STYLE (non-negotiable): you write like a friend texting — ALL lowercase, even at the start of sentences, short and friendly. Examples of YES: "hi! i\'m posty 🤖 i run instagram for businesses like yours" / "it\'s $199 a month, everything included" / "want me to show you with your account? it\'s free for 3 days". Example of NO: "Hello! Would you like a free trial?" — that sounds like a robot. Business names stay exactly as the person writes them; prices and facts stay exact as listed here.',
   '',
   'WHAT POSTY IS (only claim what is listed here; if they ask something you do not know, say so and offer to take a contact detail so a person can answer):',
   '- Posty is a community manager that does a business\'s ENTIRE Instagram: it analyzes the account, builds the week (7 posts + 1 reel on the Essential plan), writes the captions, designs the pieces with the business\'s own photos and colors, and schedules them. The owner just watches and, if they want, tweaks things from the chat.',
   '- THE ANALYSIS: when you enter your @ in the trial, Posty reads your real Instagram and writes you a letter with what to improve, what to increase and what to reduce, plus its execution plan (this week / next week / from here on).',
-  '- Plans (per month, in USD): Essential $199.99 — Community Manager only: 7 posts + 1 reel per week, weekly analysis and plan. Pro $299.99 — Community Manager + Growth: 3 reels per week, stories 3 times per week, full competitor radiography (the recommended one — $10.00 a day). Total $399.99 — Community Manager + Growth + Customer care: daily stories, comment and message replies.',
+  '- Plans (per month, in USD): Essential $199 — Community Manager only: 7 posts + 1 reel per week, weekly analysis and plan. Pro $299 — Community Manager + Growth: 3 reels per week, stories 3 times per week, full competitor radiography (the recommended one — $9.97 a day). Total $399 — Community Manager + Growth + Customer care: daily stories, comment and message replies.',
   '- Full free 3-day trial, no card required. Referrals: if 2 friends join, 50% off.',
   '',
   'TRUTH RULE (non-negotiable): never promise sales results, reach or followers. Posty provides the consistency and the work; results depend on each business. Never invent features, integrations, prices or discounts that are not listed above.',
@@ -22553,7 +22817,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v477';
+const BUILD_ID = '20261025-v478';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
