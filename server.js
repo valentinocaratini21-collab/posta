@@ -16682,6 +16682,119 @@ app.post('/api/gesty/stock/ordenes/:id/anular', ...gestyStockMW, express.json(),
   catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-16 PUENTE POSTY → GESTY (la oficina trabaja junta)
+// Spec: gesty-cola-builds.md G-16 + gesty-build-spec.md §13.4 +
+// gesty-g02-build-spec.md §11 (interfaz nombrada de la oficina).
+// El módulo vive en gesty-puente.js; acá solo se monta la API
+// detrás de requireAuth + gating de pack + capacidad «stock»
+// (la dependencia declarada de la cola G-16 es G-10) EN EL
+// SERVIDOR. Cuando Posty programe una acción comercial, su
+// chequeo vive acá: stock (G-10), agenda (G-09) y caja (G-06)
+// con el número concreto; si algo no cierra, el aviso de
+// oficina nace ANTES de la salida y la salida se registra por
+// el contrato del puente (sin chequeo no sale). El aviso NO es
+// una tarjeta de la matriz (lista cerrada de 10 tipos; ningún
+// tipo lo cubre — precedente G-15, asentado en el módulo).
+// El cableado del lado Posty (llamar a la ingesta al programar
+// y consultar la salida antes de publicar) queda pendiente:
+// en el repo no existe hoy el vínculo posteo↔producto como
+// dato (product_ref es la ruta de la foto del producto).
+// =====================================================================
+const gestyPuente = require('./gesty-puente');
+
+const gestyPuenteMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'stock')];
+
+app.get('/api/gesty/puente/resumen', ...gestyPuenteMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyPuente.resumenPuente(db, req.session.userId, { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/puente/config', ...gestyPuenteMW, (req, res) => {
+  try { res.json({ ok: true, config: gestyPuente.getConfig(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/puente/config', ...gestyPuenteMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...gestyPuente.setConfig(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/puente/acciones', ...gestyPuenteMW, express.json(), (req, res) => {
+  // LA INGESTA del evento de oficina: Posty declara la acción
+  // comercial y Gesty la evalúa en el acto (queda registrada;
+  // si no cierra, el aviso nace acá, antes de cualquier salida).
+  try {
+    const b = req.body || {};
+    const r = gestyPuente.ingresarAccionComercial(db, req.session.userId, b.accion || b, {
+      origen_ref: b.origen_ref, hoy: b.hoy,
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/puente/acciones', ...gestyPuenteMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyPuente.listEvaluaciones(db, req.session.userId, {
+      origen: q.origen, veredicto_global: q.veredicto, limit: q.limit, offset: q.offset,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/puente/acciones/:id', ...gestyPuenteMW, (req, res) => {
+  try {
+    const ev = gestyPuente.getEvaluacion(db, req.session.userId, Number(req.params.id));
+    if (!ev) return res.status(400).json({ ok: false, error: 'Esa evaluación no es de esta cuenta.' });
+    res.json({ ok: true, evaluacion: ev, historial: gesty.listEvents(db, req.session.userId, { entidad_tipo: 'puente-evaluacion', entidad_id: String(ev.id) }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/puente/acciones/:id/salida', ...gestyPuenteMW, express.json(), (req, res) => {
+  // EL CONTRATO DE SALIDA: lo que el publicador consulta antes
+  // de que la acción salga. Sin chequeo no sale; con aviso sin
+  // enterar tampoco; el bloqueo también queda registrado.
+  try {
+    const r = gestyPuente.registrarSalidaAccion(db, req.session.userId,
+      { evaluacion_id: Number(req.params.id), referencia: (req.body || {}).referencia || '' });
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, motivo: r.motivo });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/puente/avisos', ...gestyPuenteMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyPuente.listAvisos(db, req.session.userId, {
+      solo_pendientes: q.solo_pendientes !== '0', tipo: q.tipo, limit: q.limit, offset: q.offset,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/puente/avisos/:id', ...gestyPuenteMW, (req, res) => {
+  try {
+    const aviso = gestyPuente.getAviso(db, req.session.userId, Number(req.params.id));
+    if (!aviso) return res.status(400).json({ ok: false, error: 'Ese aviso no es de esta cuenta.' });
+    res.json({ ok: true, aviso, historial: gesty.listEvents(db, req.session.userId, { entidad_tipo: 'puente-aviso', entidad_id: String(aviso.id) }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/puente/avisos/:id/enterado', ...gestyPuenteMW, express.json(), (req, res) => {
+  // El reconocimiento del dueño (disciplina G-15): registra que
+  // vio el aviso; NO aprueba la acción (eso es de Posty).
+  try {
+    const r = gestyPuente.reconocerAviso(db, req.session.userId, Number(req.params.id), { motivo: (req.body || {}).motivo || '' });
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, motivo: r.motivo });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/puente/avisos/:id/frenar', ...gestyPuenteMW, express.json(), (req, res) => {
+  try {
+    const r = gestyPuente.frenarAviso(db, req.session.userId, Number(req.params.id), { motivo: (req.body || {}).motivo || '' });
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, motivo: r.motivo });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/puente/escanear-vencimientos', ...gestyPuenteMW, express.json(), (req, res) => {
+  // EL INVERSO: semanas con vencimiento grande → un aviso de
+  // oficina por semana y moneda (dedupe por registro).
+  try {
+    const b = req.body || {};
+    res.json({ ok: true, ...gestyPuente.escanearVencimientosGrandes(db, req.session.userId, { hoy: b.hoy, semanas: b.semanas }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -20408,7 +20521,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v417';
+const BUILD_ID = '20261024-v418';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
