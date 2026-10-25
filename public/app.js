@@ -8135,7 +8135,6 @@ function bindScfMinis(root) {
       // El CIERRE al salir lo maneja el rastreador geométrico global.
     });
     w.addEventListener('click', (e) => {
-      if (e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 es target propio
       if (e.target.closest('.scf-pop')) {
         // Click sobre la propia capa: queda FIJADA.
         SCF_PINNED = true;
@@ -13762,7 +13761,14 @@ function homeTileHTML(t, i) {
     : isV && covT.has
       ? `<img src="${esc(covT.path)}" data-hf-cover="1" style="object-position:50% ${covT.pos}%" onerror="__imgFb(this)" loading="lazy" alt="">`
     : isV
-      ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="${t.reelTab ? 'metadata' : 'none'}" data-hf-reel="1"${t.reelTab ? ' data-hf-dur="1"' : ''}></video>`
+      // (Corrección grilla 2026-10-25, Valentino — «el reel aparece
+      // vacío»): la tile de reel SIEMPRE tiene portada. Con portada
+      // elegida es la imagen quieta de arriba; sin ella, preload
+      // metadata hace que el navegador pinte el primer frame real
+      // del reel como poster. preload="none" está PROHIBIDO en tiles:
+      // era la causa raíz del cuadro gris vacío (el video nunca
+      // cargaba nada y la tile quedaba vacía sobre #eef1f4).
+      ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="metadata" data-hf-reel="1"${t.reelTab ? ' data-hf-dur="1"' : ''}></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
   const glyph = p.pinned ? HOME_PIN_SVG : isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
   // (Tanda feed 6A · ítem 1) La píldora «NUEVO» se eliminó: la ÚNICA
@@ -13772,12 +13778,23 @@ function homeTileHTML(t, i) {
   // con scheduled_at real; sin fecha, sin chapita. Publicados: ninguna.
   const chipTxt = (p.status === 'draft' || p.status === 'scheduled') ? hfWhenChip(p) : '';
   const chip = chipTxt ? `<span class="hf-chip">🕐 ${esc(chipTxt)}</span>` : '';
-  // (Tanda feed 6A · ítem 2) Botoncito de chat por posteo propio: abajo
-  // a la derecha, target propio (data-hf-chat) — no abre el detalle ni
-  // cuenta para el doble toque ni para el long-press (su handler vive
-  // desacoplado en hfChatBtnBind). Nunca en tiles leídas (kind 'ig',
-  // que retornan antes) ni en modo visitante.
-  const chatBtn = t.visitor ? '' : `<button type="button" class="hf-tile-chat" data-hf-chat="${esc(String(p.id))}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Talk to Posty about this post' : 'Hablar con Posty de este posteo'}">💬</button>`;
+  // (Corrección grilla 2026-10-25, Valentino — «sacar el icono del
+  // chat»): la grilla NO lleva botón de chat. El chat vive DENTRO del
+  // post abierto en grande: el detalle trae el mini-chat «Pedir un
+  // cambio» (hfAskChangeBtnHTML), que abre el chat ÚNICO con el posteo
+  // anclado. Tocar una tile abre siempre el detalle; ningún botón
+  // flotante tapa la imagen.
+  // REGLA DURA DE TILES (misma corrección — «los captions enormes en
+  // el medio»): ninguna tile pinta texto sobre la imagen. homeTileHTML
+  // no renderiza ningún caption: solo media, chapita chica abajo a la
+  // izquierda, glifo arriba a la derecha y nada más. Los captions
+  // viven DEBAJO de la media, en tamaño normal, solo en el detalle
+  // (.hf-d-cap 14px), el visor (.lb-cap 14px) y la tarjeta del cofre
+  // (.igmock-cap 13px) — nunca centrados, nunca gigantes, nunca sobre
+  // el sujeto. Los textos gigantes centrados de la captura estaban
+  // QUEMADOS en las imágenes de esas piezas de marca (no los pintaba
+  // la grilla); esas imágenes se regeneran bajo las reglas de banda
+  // vigentes, fuera de esta tanda (no se tocan los posteos mismos).
   // (Frente 3 · suma 2) La semana «cae» en la grilla: inicioView marca
   // t.fall/t.fallDelay una única vez por generación (ver hfFallMark).
   const fallCls = t.fall ? ' hf-fall' : '';
@@ -13788,7 +13805,11 @@ function homeTileHTML(t, i) {
   // vivo (t.justPub), jamás un render común.
   const justCls = t.justPub ? ' hf-justpub' : '';
   const justChip = t.justPub ? `<span class="hf-just-chip">✨ ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Just published' : 'Recién publicado'}</span>` : '';
-  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}${chatBtn}</span>`;
+  // (Corrección grilla 2026-10-25): la tile de reel sin portada elegida
+  // lleva fondo de respaldo de marca (no gris) mientras carga el
+  // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
+  const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
+  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}</span>`;
 }
 function homeHeadHTML(prof, bizName, opts) {
   const P = prof || {};
@@ -14832,7 +14853,6 @@ function hfFeedGesturesBind(root) {
   if (!root._hfCapBound) {
     root._hfCapBound = true;
     root.addEventListener('click', (e) => {
-      if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 no es toque de la tile
       const t = e.target && e.target.closest ? e.target.closest('.hf-tile') : null;
       if (t && t._hfHoldAt && Date.now() - t._hfHoldAt < 800) { e.stopPropagation(); e.preventDefault(); }
     }, true);
@@ -14875,7 +14895,6 @@ function hfFeedGesturesBind(root) {
       if (tPeek) { clearTimeout(tPeek); tPeek = null; }
     };
     tile.addEventListener('pointerdown', (e) => {
-      if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 tiene su target propio
       sx = e.clientX || 0; sy = e.clientY || 0;
       pDown = true; holdFired = false; dragArmed = false; dragging = false;
       HF_GESTURE_ACTIVE = true;
@@ -15671,9 +15690,8 @@ function hfLiveApply(job) {
     }
   }
   HF_TILES = tiles;
-  // Las tiles nuevas/reemplazadas necesitan sus gestos y su 💬.
+  // Las tiles nuevas/reemplazadas necesitan sus gestos.
   try { hfFeedGesturesBind(root); } catch (e) {}
-  try { hfChatBtnBind(root); } catch (e) {}
   try { bindScfMinis(root); } catch (e) {}
   try { hfDurBind(root); } catch (e) {}
 }
@@ -16008,7 +16026,6 @@ function hfDetailBind(root) {
   if (!root || root._hfDetailBound) return;
   root._hfDetailBound = true;
   root.addEventListener('click', (e) => {
-    if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 no abre el detalle
     const tile = e.target && e.target.closest ? e.target.closest('.hf-tile[data-post-id]') : null;
     if (!tile) return;
     // Solo táctil: en escritorio manda el flujo vigente (hover que
@@ -16215,7 +16232,6 @@ function hfMoveBind(root) {
   // Captura: corre ANTES que el click de siempre de las tiles
   // (bindScfMinis) y lo suprime solo mientras el modo Mover está activo.
   root.addEventListener('click', (e) => {
-    if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 no participa del modo Mover
     if (!HF_MOVE) return;
     const t = e.target && e.target.closest ? e.target.closest('.hf-tile') : null;
     if (!t) return; // toques fuera de las tiles no cancelan ni disparan
@@ -16486,21 +16502,8 @@ function hfAskChangeBind() {
     try { hfDeliverAskText(); } catch (e2) {}
   }, true);
 }
-// Delegado en captura sobre el root de la home: corre ANTES que el
-// detalle táctil, el hover del cofre y el supresor post-hold.
-function hfChatBtnBind(root) {
-  if (!root || root._hfChatBound) return;
-  root._hfChatBound = true;
-  root.addEventListener('click', (e) => {
-    const b = e.target && e.target.closest ? e.target.closest('[data-hf-chat]') : null;
-    if (!b) return;
-    e.stopPropagation();
-    e.preventDefault();
-    const id = b.dataset.hfChat;
-    const t = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES.find((x) => x && x.kind === 'post' && String(x.post.id) === String(id)) : null;
-    if (t && t.post) hfOpenChatForPost(t.post);
-  }, true);
-}
+// (Corrección grilla 2026-10-25) El binding del botón de chat murió
+// con el botón: el chat vive solo dentro del detalle.
 
 function bindInicio() {
   try { pzNivelMount(); } catch (e) {}
@@ -16510,7 +16513,6 @@ function bindInicio() {
   // Semana sobre las minis de la grilla (hover agranda centrado, click
   // fija; el detalle es la tarjeta existente del cofre #scfVault).
   bindScfMinis(document.getElementById('inicioView'));
-  try { hfChatBtnBind(document.getElementById('inicioView')); } catch (e) {}
   // (ARMA TODO · Corrección 2) «Pedir un cambio» desde el detalle
   // standalone (apv): el ancla ya quedó fijada; se abre la hoja del
   // chat único ni bien Inicio pinta.

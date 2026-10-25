@@ -2062,8 +2062,6 @@ body.hf-d-open{overflow:hidden}
    derecha (la chapita vive abajo a la izquierda y el glyph arriba a la
    derecha: no se pisan), fondo semitransparente como el cromo IG,
    target táctil de 34px. */
-.hf-tile-chat{position:absolute;right:6px;bottom:6px;z-index:3;width:34px;height:34px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent}
-.hf-tile-chat:active{background:rgba(0,0,0,.75)}
 /* (Tanda feed 6A) Barra de anclaje del chat: miniatura + texto +
    contador + chips rápidos + ✕. Vive dentro de #chatAnchor, sobre el
    input del chat del home. */
@@ -2089,6 +2087,7 @@ body.hf-d-open{overflow:hidden}
    (pan-y: el navegador toma el gesto y dispara pointercancel, que
    detiene la preview / cancela la hoja). */
 .hf-tile{touch-action:pan-y}
+.hf-tile.hf-tile-vid{background:linear-gradient(160deg,#EAF4FA,#FDF3D8)}
 .hf-tile.hf-previewing video{filter:none}
 /* (Frente 3 · suma 2) La semana «cae» en la grilla: entrada breve y
    ÚNICA por generación (la marca vive en localStorage, ver hfFallMark
