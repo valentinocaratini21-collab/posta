@@ -54,6 +54,8 @@ const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispos
 const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleados, gating por pack, registro durable, fundamento-vista y bandeja con la matriz forzada en el servidor
 const oficina = require('./oficina'); // ESPINA BAMBOOTY (programa TestFlight): fundamento único, río de la oficina, Bandeja «Para vos», partes (contrato Bossty) y chat que rutea. La presentación Bambooty vive SOLO en el shell (la web pública sigue siendo Posty).
 try { oficina.init(db); } catch (e) { console.error('[oficina] init:', e.message); }
+const postyOficina = require('./posty-oficina'); // POSTY en la oficina: su semana real entra al río y a la Bandeja.
+try { postyOficina.init(db); } catch (e) { console.error('[posty-oficina] init:', e.message); }
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
 const { reconcileUser } = require('./billing-sync');
 const weekRedo = require('./week-redo'); // (ARMA TODO · ítem 3) garantía de primera semana: registro durable del rehacer
@@ -3177,8 +3179,17 @@ app.get('/api/auth/me', (req, res) => {
 // Superficies de la oficina: SOLO datos del propio usuario; la presentación
 // Bambooty vive en el shell (app nativa / cuenta con bambooty_shell).
 const pushOficinaMod = require('./push-oficina');
-app.get('/api/oficina/estado', requireAuth, (req, res) => {
-  try { res.json({ ok: true, ...oficina.estadoOficina(db, req.session.userId) }); }
+app.get('/api/oficina/estado', requireAuth, async (req, res) => {
+  try {
+    // Posty primero: si su motor ya generó la semana, la oficina la
+    // registra al abrir (salida + Bandeja) antes de mostrar el estado.
+    await postyOficina.sincronizarSemana(db, req.session.userId).catch(() => {});
+    res.json({ ok: true, ...oficina.estadoOficina(db, req.session.userId) });
+  }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/oficina/posty/sincronizar', requireAuth, async (req, res) => {
+  try { res.json(await postyOficina.sincronizarSemana(db, req.session.userId)); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 app.get('/api/oficina/fundamento', requireAuth, (req, res) => {
@@ -22086,7 +22097,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v450';
+const BUILD_ID = '20261025-v451';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

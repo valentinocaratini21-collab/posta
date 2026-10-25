@@ -197,9 +197,23 @@ function accionarBandeja(db, uid, id, accion, nota) {
     poder: 'oficina', evento: 'decision_dueno', hecho: 'Primera decisión del dueño en la Bandeja', registro_ref: item.registro_ref || '',
   }, metricas(db, uid));
   const r = { ok: true, item: { ...item, estado: nuevoEstado }, subida: ev.subida || evOf.subida || null };
+  // Hook del poder dueño del ítem: su flujo reacciona a la decisión
+  // (ej. Posty registra la semana aceptada). Nunca rompe la decisión.
+  const hook = HOOKS_BANDEJA[item.poder];
+  if (hook) {
+    try {
+      const extra = hook(db, uid, { ...item, estado: nuevoEstado, nota_dueno: String(nota || ''), contexto: item.contexto_json ? JSON.parse(item.contexto_json) : null }, accion);
+      if (extra && extra.subida && !r.subida) r.subida = extra.subida;
+      if (extra && extra.detalle) r.detalle = extra.detalle;
+    } catch (e) { /* la decisión ya quedó durable */ }
+  }
   festejarSubida(db, uid, r.subida);
   return r;
 }
+
+// Cada poder registra su reacción a las decisiones de SU Bandeja.
+const HOOKS_BANDEJA = {};
+function registrarHookBandeja(poder, fn) { HOOKS_BANDEJA[poder] = fn; }
 
 // ————————————————— Partes (forma del contrato §1.1) —————————————————
 
@@ -409,7 +423,7 @@ async function seedCafeAroma(db, { password } = {}) {
 
 module.exports = {
   init, registrarRegistro, registrarSalida, registrarFundamento, metricas, festejarSubida,
-  crearBandejaItem, listarBandeja, accionarBandeja,
+  crearBandejaItem, listarBandeja, accionarBandeja, registrarHookBandeja,
   parteDePoder, partesDeLaSemana, resolverRegistro,
   registrarDireccion, listarDireccion,
   estadoOficina, estadoPoder, fundamentoCompleto,
