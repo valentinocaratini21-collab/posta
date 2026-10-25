@@ -142,11 +142,16 @@ const makeHeadline = (text, maxWords = 6, maxChars = 70) => {
 // sin contexto de sesión, un 401 en una ruta pública es un error común —
 // jamás un rebote al login (v371).
 function hasSessionContext() {
+  // (v474) Una cuenta guardada NO es una sesión viva: jamás autoriza un
+  // rebote fuera de una ruta pública. Antes, la cláusula de cuentas
+  // guardadas hacía que un 401 de fondo (ttEnhance → /api/tiktok/status
+  // a los 80 ms de cada render) rebotara al login a un visitante anónimo
+  // con "Continuar como" guardado — ese era el rebote del logo (2º
+  // reclamo 25/10): la landing pintaba y a los ~80 ms volvía al login.
+  // Solo sesión viva o ruta #/app dan contexto de sesión.
   try {
     if ((location.hash || '').startsWith('#/app')) return true;
     if (typeof ME !== 'undefined' && ME) return true;
-    const sa = JSON.parse(localStorage.getItem('posty_saved_accounts') || '[]');
-    if (Array.isArray(sa) && sa.some((a) => a && a.token)) return true;
   } catch (e) {}
   return false;
 }
