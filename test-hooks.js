@@ -164,6 +164,26 @@ t('v5: «después de probar» + pronombre NO es empalme',
 t('v5: imperativo en minúscula tras punto no es esta firma',
   captionOpenIsGarbled('Salió el menú nuevo de la casa. Después de probarlo, unite no tiene sentido acá', 'Posty') === false);
 
+// 13. captionOpenIsGarbled LINT v6 (Juli, 2026-10-25) — regla (h):
+// fórmula + imperativo tras preposición, sin puntuación entre medio
+// (id 454 real, cuenta 80, semana 2026-10-19, generado 24/10).
+t('v6: id 454 real — «cometen con Organizá…» es empalme',
+  captionOpenIsGarbled('El error que casi todos cometen con Organizá tu agenda como un pro (y cómo lo evitamos en Gesty)', 'Gesty') === true);
+t('v6: variante «de» + imperativo — «El ingrediente de Armá tu…» es empalme',
+  captionOpenIsGarbled('El ingrediente de Armá tu semana en un día que casi nadie usa', 'Posty') === true);
+t('v6: variante «por» + imperativo — respaldo del 488 (ya lo cazaba otra firma)',
+  captionOpenIsGarbled('Vino por Formá parte de la comunidad Posty y se quedó por el trato', 'Posty') === true);
+t('v6: tema sustantivo tras «con» NO es empalme',
+  captionOpenIsGarbled('El error que casi todos cometen con el café frío de la mañana', 'Café Aroma') === false);
+t('v6: imperativo que ABRE la línea NO es esta firma (es estilo del dueño)',
+  captionOpenIsGarbled('Organizá tu agenda hoy y dejá de perder horas', 'Gesty') === false);
+t('v6: «por tu» / pronombre tras preposición NO es empalme',
+  captionOpenIsGarbled('Vení por tu café de siempre y quedate un rato', 'Café Aroma') === false);
+t('v6: imperativo en minúscula tras preposición NO es esta firma',
+  captionOpenIsGarbled('El error que casi todos cometen con organizá tu agenda', 'Gesty') === false);
+t('v6: nombre propio tras «para» NO es empalme (dale fuera del banco)',
+  captionOpenIsGarbled('Un regalo para Dale, nuestro cliente de siempre', 'Posty') === false);
+
 // 10. node --check hooks.js
 let checkOk = false;
 try {

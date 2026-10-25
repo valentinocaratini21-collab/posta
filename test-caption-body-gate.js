@@ -204,5 +204,13 @@ ok('id 448 real pasa por la puerta vía lint (g): empalme h11 sin puntuación', 
   assert.ok(/empalm/i.test(chk.reason), chk.reason);
 });
 
+console.log('== (i) Empalme fórmula + imperativo tras preposición (LINT v6 — id 454 real, 2026-10-25) ==');
+ok('id 454 real pasa por la puerta vía lint (h): «cometen con Organizá…» se rechaza', () => {
+  const cap = 'El error que casi todos cometen con Organizá tu agenda como un pro (y cómo lo evitamos en Gesty)\n\n¿Cuántas veces te pasó que te perdés entre reuniones y tareas pendientes? 😅\nTener una agenda organizada es clave. Escribime por DM y empezamos.';
+  const chk = gen.captionPasses(cap, { business: 'Gesty', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/empalm/i.test(chk.reason), chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

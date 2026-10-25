@@ -315,6 +315,26 @@ function captionOpenIsGarbled(caption, negocio) {
     const mg = masked.match(new RegExp('\\b[Dd]espu[eé]s de prob(?:ar|arlo|arla|arlos|arlas|ando)\\b((?:\\s+\\S+){0,3}?)\\s+([A-ZÁÉÍÓÚÑ][a-záéíóúüñ]*)'));
     if (mg && new RegExp('^(?:' + IMP_G + ')$', 'i').test(mg[2])) return true;
   }
+  // (h) LINT v6 (Juli, 2026-10-25) — fórmula + imperativo tras preposición:
+  // id 454 real (cuenta 80, semana 2026-10-19, generado 24/10): «El error
+  // que casi todos cometen con Organizá tu agenda como un pro (…)» — la
+  // fórmula cose como tema una FRASE IMPERATIVA tras la preposición.
+  // Las firmas (d)/(d') no la cazan («Organizá» no está en su lista) y
+  // la (e) exige puntuación débil antes del imperativo: acá la costura
+  // es un espacio tras «con». Firma angosta: tras «con / de / por /
+  // para / sobre», un imperativo del banco CON MAYÚSCULA inicial. Un
+  // tema sano tras preposición va en minúscula («con el café», «de la
+  // casa») o es el negocio (ya enmascarado a «negocio»): ningún
+  // sustantivo sano arranca con imperativo capitalizado. Se evalúa
+  // sobre `masked` para que un negocio llamado como un verbo no dispare.
+  // «dale» queda fuera del banco: como nombre propio tras «para» es más
+  // probable que como imperativo cosido.
+  {
+    const IMP_H = 'unite|sumate|reservá|reserva|descubrí|descubri|conocé|conoce|probá|proba|mirá|mira|vení|veni|hacé|hace|pedí|pedi|escribí|escribi|escribinos|aprovechá|aprovecha|animate|fijate|regalá|regala|pasá|pasa|entrá|entra|comprá|compra|llamá|llama|elegí|elegi|armá|arma|mostrá|mostra|buscá|busca|contanos|organizá|organiza|formá';
+    for (const mm of masked.matchAll(/\b(?:con|de|por|para|sobre)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúüñ]*)/g)) {
+      if (new RegExp('^(?:' + IMP_H + ')$', 'i').test(mm[1])) return true;
+    }
+  }
   const biz = String(negocio || '').trim().toLowerCase();
   // (e) LINT v4: la FÓRMULA cosida tras el tema. Las costuras de
   // producción (v142 y familia) no siempre traen la firma del título: a
