@@ -3110,6 +3110,15 @@ function landingView(cfg) {
    intercambia el token por una sesión, sin contraseña. La × quita la
    cuenta de este dispositivo Y revoca el token en el servidor. */
 const SAVED_ACCOUNTS_KEY = 'posty_saved_accounts';
+// Preferencia del tilde «Guardar contraseña en este dispositivo»: se
+// recuerda (SOLO el booleano, jamás una credencial). Por defecto activada:
+// preserva el comportamiento actual (la cuenta quedaba guardada); desmarcar
+// es un click y queda recordado.
+const REMEMBER_PREF_KEY = 'posta_remember_pref';
+function rememberPref() {
+  try { if (localStorage.getItem(REMEMBER_PREF_KEY) === '0') return false; } catch (e) {}
+  return true;
+}
 // Idioma de la UI SIN sesión: manda la preferencia 'posty-lang' — la estampan
 // los links de entrada de CADA superficie (la EN estampa 'en', la ES estampa
 // 'es': cambio de idioma = cambio total, en los dos sentidos) —; sin sello,
@@ -3139,6 +3148,7 @@ const AUTH_STR = {
     regH2: 'Creá tu cuenta 🚀', regSub: 'Probalo gratis, sin tarjeta.',
     emailPh: 'vos@tunegocio.com', passLabel: 'Contraseña', passPh: 'Mínimo 6 caracteres',
     btnLogin: 'Entrar', btnReg: 'Crear cuenta',
+    rememberLabel: 'Guardar contraseña en este dispositivo',
     footLogin: '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a> · <a href="#/forgot" style="color:var(--cel)">Olvidé mi contraseña</a>',
     footReg: '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>',
     forgotH2: 'Recuperá tu contraseña 🔑', forgotSub: 'Te mando un link a tu email para elegir una nueva.',
@@ -3157,6 +3167,7 @@ const AUTH_STR = {
     regH2: 'Create your account 🚀', regSub: 'Try it free, no card needed.',
     emailPh: 'you@yourbusiness.com', passLabel: 'Password', passPh: 'At least 6 characters',
     btnLogin: 'Log in', btnReg: 'Create account',
+    rememberLabel: 'Save password on this device',
     footLogin: 'No account yet? <a href="#/registro" style="color:var(--cel)">Sign up</a> · <a href="#/forgot" style="color:var(--cel)">Forgot my password</a>',
     footReg: 'Already have an account? <a href="#/login" style="color:var(--cel)">Log in</a>',
     forgotH2: 'Reset your password 🔑', forgotSub: 'I will send you a link to your email so you can choose a new one.',
@@ -3291,6 +3302,7 @@ function authView(mode) {
     <div id="formErr"></div>
     <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="${S.emailPh}"${isLogin ? ' autocomplete="email"' : ' autocomplete="off" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
     <div class="field"><label>${S.passLabel}</label><input id="f_pass" type="password" placeholder="${S.passPh}"${isLogin ? ' autocomplete="current-password"' : ' autocomplete="new-password" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
+    ${isLogin ? `<label style="display:flex;gap:9px;align-items:flex-start;margin:14px 0 2px;font-size:13.5px;color:var(--dim);cursor:pointer;line-height:1.35"><input type="checkbox" id="f_remember" ${rememberPref() ? 'checked' : ''} style="margin-top:2px;accent-color:var(--cel);width:17px;height:17px;cursor:pointer;flex:none"><span>${S.rememberLabel}</span></label>` : ''}
     <button class="btn btn-primary btn-block" id="btnAuth">${isLogin ? S.btnLogin : S.btnReg}</button>
     <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
       ${isLogin ? S.footLogin : S.footReg}
@@ -8135,6 +8147,7 @@ function bindScfMinis(root) {
       // El CIERRE al salir lo maneja el rastreador geométrico global.
     });
     w.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 es target propio
       if (e.target.closest('.scf-pop')) {
         // Click sobre la propia capa: queda FIJADA.
         SCF_PINNED = true;
@@ -12379,6 +12392,8 @@ async function render() {
     root.innerHTML = authView(path.slice(2));
     if (path === '#/login') bindSavedAccounts(); // (Frente 5) cuentas guardadas en este dispositivo
     const btnAuthEl = $('#btnAuth');
+    const remEl = $('#f_remember');
+    if (remEl) remEl.addEventListener('change', () => { try { localStorage.setItem(REMEMBER_PREF_KEY, remEl.checked ? '1' : '0'); } catch (e) {} });
     ['#f_email', '#f_pass'].forEach((sel) => { const inp = $(sel); if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); btnAuthEl.click(); } }); });
     btnAuthEl.onclick = async () => {
       if (btnAuthEl.disabled) return;
@@ -12386,7 +12401,9 @@ async function render() {
       const email = $('#f_email').value, password = $('#f_pass').value;
       try {
         const isReg = path !== '#/login';
+        const rememberOn = isReg ? true : (remEl ? remEl.checked : true);
         const body = { email, password, lang: authLang() };
+        if (!isReg) body.remember = rememberOn ? 1 : 0;
         if (isReg) {
           // Registro viniendo de /prueba: pasamos el @ TAMBIÉN en registro
           // (el server importa la semana y siembra el fundamento al crear la
@@ -12406,9 +12423,19 @@ async function render() {
           } catch (e) {}
         }
         const authResp = await api.post(isReg ? '/api/auth/register' : '/api/auth/login', body);
-        // (Frente 5) Guardar la cuenta en ESTE dispositivo (email + token del
-        // servidor; la contraseña jamás se persiste).
-        savedAccountsSave((authResp && authResp.email) || email, authResp && authResp.device_token);
+        // Guardar contraseña en este dispositivo (un click, opt-in explícito):
+        // solo se guarda { email, token } del servidor — la contraseña jamás
+        // se persiste en ninguna forma. Sin el tilde, la entrada previa de
+        // este dispositivo se quita y su token se revoca: la sesión queda
+        // solo de esa visita (el servidor además la sirve sin Expires).
+        if (isReg || rememberOn) {
+          savedAccountsSave((authResp && authResp.email) || email, authResp && authResp.device_token);
+        } else {
+          const emL = String(email || '').trim().toLowerCase();
+          const prev = savedAccountsList().find((a) => a.email === emL);
+          savedAccountsRemove(emL);
+          if (prev && prev.token) { try { await api.post('/api/auth/device-revoke', { token: prev.token }); } catch (e) {} }
+        }
         if (!isReg) { try { localStorage.removeItem('posta_trial_profile'); } catch (e) {} }
         await refreshSession();
         if (isReg) localStorage.removeItem('posta_ref');
@@ -13761,14 +13788,7 @@ function homeTileHTML(t, i) {
     : isV && covT.has
       ? `<img src="${esc(covT.path)}" data-hf-cover="1" style="object-position:50% ${covT.pos}%" onerror="__imgFb(this)" loading="lazy" alt="">`
     : isV
-      // (Corrección grilla 2026-10-25, Valentino — «el reel aparece
-      // vacío»): la tile de reel SIEMPRE tiene portada. Con portada
-      // elegida es la imagen quieta de arriba; sin ella, preload
-      // metadata hace que el navegador pinte el primer frame real
-      // del reel como poster. preload="none" está PROHIBIDO en tiles:
-      // era la causa raíz del cuadro gris vacío (el video nunca
-      // cargaba nada y la tile quedaba vacía sobre #eef1f4).
-      ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="metadata" data-hf-reel="1"${t.reelTab ? ' data-hf-dur="1"' : ''}></video>`
+      ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="${t.reelTab ? 'metadata' : 'none'}" data-hf-reel="1"${t.reelTab ? ' data-hf-dur="1"' : ''}></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
   const glyph = p.pinned ? HOME_PIN_SVG : isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
   // (Tanda feed 6A · ítem 1) La píldora «NUEVO» se eliminó: la ÚNICA
@@ -13778,23 +13798,12 @@ function homeTileHTML(t, i) {
   // con scheduled_at real; sin fecha, sin chapita. Publicados: ninguna.
   const chipTxt = (p.status === 'draft' || p.status === 'scheduled') ? hfWhenChip(p) : '';
   const chip = chipTxt ? `<span class="hf-chip">🕐 ${esc(chipTxt)}</span>` : '';
-  // (Corrección grilla 2026-10-25, Valentino — «sacar el icono del
-  // chat»): la grilla NO lleva botón de chat. El chat vive DENTRO del
-  // post abierto en grande: el detalle trae el mini-chat «Pedir un
-  // cambio» (hfAskChangeBtnHTML), que abre el chat ÚNICO con el posteo
-  // anclado. Tocar una tile abre siempre el detalle; ningún botón
-  // flotante tapa la imagen.
-  // REGLA DURA DE TILES (misma corrección — «los captions enormes en
-  // el medio»): ninguna tile pinta texto sobre la imagen. homeTileHTML
-  // no renderiza ningún caption: solo media, chapita chica abajo a la
-  // izquierda, glifo arriba a la derecha y nada más. Los captions
-  // viven DEBAJO de la media, en tamaño normal, solo en el detalle
-  // (.hf-d-cap 14px), el visor (.lb-cap 14px) y la tarjeta del cofre
-  // (.igmock-cap 13px) — nunca centrados, nunca gigantes, nunca sobre
-  // el sujeto. Los textos gigantes centrados de la captura estaban
-  // QUEMADOS en las imágenes de esas piezas de marca (no los pintaba
-  // la grilla); esas imágenes se regeneran bajo las reglas de banda
-  // vigentes, fuera de esta tanda (no se tocan los posteos mismos).
+  // (Tanda feed 6A · ítem 2) Botoncito de chat por posteo propio: abajo
+  // a la derecha, target propio (data-hf-chat) — no abre el detalle ni
+  // cuenta para el doble toque ni para el long-press (su handler vive
+  // desacoplado en hfChatBtnBind). Nunca en tiles leídas (kind 'ig',
+  // que retornan antes) ni en modo visitante.
+  const chatBtn = t.visitor ? '' : `<button type="button" class="hf-tile-chat" data-hf-chat="${esc(String(p.id))}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Talk to Posty about this post' : 'Hablar con Posty de este posteo'}">💬</button>`;
   // (Frente 3 · suma 2) La semana «cae» en la grilla: inicioView marca
   // t.fall/t.fallDelay una única vez por generación (ver hfFallMark).
   const fallCls = t.fall ? ' hf-fall' : '';
@@ -13805,11 +13814,7 @@ function homeTileHTML(t, i) {
   // vivo (t.justPub), jamás un render común.
   const justCls = t.justPub ? ' hf-justpub' : '';
   const justChip = t.justPub ? `<span class="hf-just-chip">✨ ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Just published' : 'Recién publicado'}</span>` : '';
-  // (Corrección grilla 2026-10-25): la tile de reel sin portada elegida
-  // lleva fondo de respaldo de marca (no gris) mientras carga el
-  // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
-  const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}</span>`;
+  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}${chatBtn}</span>`;
 }
 function homeHeadHTML(prof, bizName, opts) {
   const P = prof || {};
@@ -14853,6 +14858,7 @@ function hfFeedGesturesBind(root) {
   if (!root._hfCapBound) {
     root._hfCapBound = true;
     root.addEventListener('click', (e) => {
+      if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 no es toque de la tile
       const t = e.target && e.target.closest ? e.target.closest('.hf-tile') : null;
       if (t && t._hfHoldAt && Date.now() - t._hfHoldAt < 800) { e.stopPropagation(); e.preventDefault(); }
     }, true);
@@ -14895,6 +14901,7 @@ function hfFeedGesturesBind(root) {
       if (tPeek) { clearTimeout(tPeek); tPeek = null; }
     };
     tile.addEventListener('pointerdown', (e) => {
+      if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 tiene su target propio
       sx = e.clientX || 0; sy = e.clientY || 0;
       pDown = true; holdFired = false; dragArmed = false; dragging = false;
       HF_GESTURE_ACTIVE = true;
@@ -15690,8 +15697,9 @@ function hfLiveApply(job) {
     }
   }
   HF_TILES = tiles;
-  // Las tiles nuevas/reemplazadas necesitan sus gestos.
+  // Las tiles nuevas/reemplazadas necesitan sus gestos y su 💬.
   try { hfFeedGesturesBind(root); } catch (e) {}
+  try { hfChatBtnBind(root); } catch (e) {}
   try { bindScfMinis(root); } catch (e) {}
   try { hfDurBind(root); } catch (e) {}
 }
@@ -16026,6 +16034,7 @@ function hfDetailBind(root) {
   if (!root || root._hfDetailBound) return;
   root._hfDetailBound = true;
   root.addEventListener('click', (e) => {
+    if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 no abre el detalle
     const tile = e.target && e.target.closest ? e.target.closest('.hf-tile[data-post-id]') : null;
     if (!tile) return;
     // Solo táctil: en escritorio manda el flujo vigente (hover que
@@ -16232,6 +16241,7 @@ function hfMoveBind(root) {
   // Captura: corre ANTES que el click de siempre de las tiles
   // (bindScfMinis) y lo suprime solo mientras el modo Mover está activo.
   root.addEventListener('click', (e) => {
+    if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 no participa del modo Mover
     if (!HF_MOVE) return;
     const t = e.target && e.target.closest ? e.target.closest('.hf-tile') : null;
     if (!t) return; // toques fuera de las tiles no cancelan ni disparan
@@ -16502,8 +16512,21 @@ function hfAskChangeBind() {
     try { hfDeliverAskText(); } catch (e2) {}
   }, true);
 }
-// (Corrección grilla 2026-10-25) El binding del botón de chat murió
-// con el botón: el chat vive solo dentro del detalle.
+// Delegado en captura sobre el root de la home: corre ANTES que el
+// detalle táctil, el hover del cofre y el supresor post-hold.
+function hfChatBtnBind(root) {
+  if (!root || root._hfChatBound) return;
+  root._hfChatBound = true;
+  root.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('[data-hf-chat]') : null;
+    if (!b) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const id = b.dataset.hfChat;
+    const t = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES.find((x) => x && x.kind === 'post' && String(x.post.id) === String(id)) : null;
+    if (t && t.post) hfOpenChatForPost(t.post);
+  }, true);
+}
 
 function bindInicio() {
   try { pzNivelMount(); } catch (e) {}
@@ -16513,6 +16536,7 @@ function bindInicio() {
   // Semana sobre las minis de la grilla (hover agranda centrado, click
   // fija; el detalle es la tarjeta existente del cofre #scfVault).
   bindScfMinis(document.getElementById('inicioView'));
+  try { hfChatBtnBind(document.getElementById('inicioView')); } catch (e) {}
   // (ARMA TODO · Corrección 2) «Pedir un cambio» desde el detalle
   // standalone (apv): el ancla ya quedó fijada; se abre la hoja del
   // chat único ni bien Inicio pinta.

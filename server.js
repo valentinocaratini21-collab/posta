@@ -1711,7 +1711,7 @@ app.post('/api/auth/register', (req, res) => {
 });
 
 app.post('/api/auth/login', (req, res) => {
-  const { email, password, trial_ig, lang } = req.body || {};
+  const { email, password, trial_ig, lang, remember } = req.body || {};
   const liEn = lang === 'en'; // (v399) errores en el idioma de la superficie
   const emL = (email || '').trim().toLowerCase();
   const rlKey = 'login|' + emL + '|' + (req.ip || '');
@@ -1725,8 +1725,14 @@ app.post('/api/auth/login', (req, res) => {
   authHitClear(rlKey);
   // Sesión regenerada al autenticar (anti fijación): la respuesta viaja en
   // el callback, cuando la sesión nueva ya existe.
+  // «Guardar contraseña en este dispositivo»: sin el tilde, la sesión es
+  // solo de esa visita (cookie de navegador, sin Expires/Max-Age) y NO se
+  // emite token por dispositivo. Clientes viejos sin el campo siguen como
+  // antes (se emite), para no romper bundles cacheados.
+  const wantRemember = remember !== 0 && remember !== false && remember !== '0';
   req.session.regenerate(() => {
     req.session.userId = user.id;
+    if (!wantRemember) { req.session.cookie.maxAge = null; req.session.cookie.expires = false; }
     // Si viene de /prueba y ya tenía cuenta, su semana también lo espera adentro
     try {
       const uidL = user.id;
@@ -1742,9 +1748,10 @@ app.post('/api/auth/login', (req, res) => {
         setTimeout(() => { autoArmWeek(uidL, 'login').catch(() => {}); }, 5000);
       }
     } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
-    // (Frente 5) Token por dispositivo (mismo patrón que en register).
+    // (Frente 5) Token por dispositivo (mismo patrón que en register),
+    // solo si el cliente lo pidió con el tilde.
     let dt = null;
-    try { dt = deviceTokens.issue(db, user.id); } catch (e) { console.error('[posta] device token (login):', e.message); }
+    try { dt = wantRemember ? deviceTokens.issue(db, user.id) : null; } catch (e) { console.error('[posta] device token (login):', e.message); }
     res.json({ ok: true, email: user.email, device_token: dt ? dt.token : null, device_token_expires_at: dt ? dt.expiresAt : null });
   });
 });
