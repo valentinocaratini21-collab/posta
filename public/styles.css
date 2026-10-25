@@ -3359,3 +3359,41 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-ar-meta{font-size:12px;color:#8e8e8e;margin-top:3px;line-height:1.45}
 .hf-ar-btn{margin-top:6px;background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:6px 12px;font-weight:700;font-size:12.5px;cursor:pointer;color:var(--txt);font-family:inherit}
 .hf-ar-link{font-size:12.5px;font-weight:700;color:#2793C8}
+
+/* ===== v442 · Correcciones de Valentino 02:13–02:20 (2026-10-25) =====
+   1) Píldora de activación: compacta, arriba a la derecha en Inicio y
+   Semana; la tarjeta completa se despliega debajo, sin empujar el
+   feed ni tapar el perfil/grilla en reposo. */
+.setup-pillwrap{position:relative;display:flex;justify-content:flex-end;margin:10px 16px 0;z-index:40}
+.setup-pill{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--cel);background:#EAF4FA;color:var(--cel);font-family:inherit;font-size:12.5px;font-weight:800;border-radius:999px;padding:7px 13px;cursor:pointer;box-shadow:0 2px 10px rgba(10,30,51,.10);touch-action:manipulation;white-space:nowrap}
+.setup-pill:active{transform:scale(.97)}
+.setup-pill-chev{font-size:10px;transition:transform .15s}
+.setup-pill[aria-expanded="true"] .setup-pill-chev{transform:rotate(180deg)}
+.setup-pill-pop{position:absolute;top:calc(100% + 8px);right:0;width:min(440px,94vw);z-index:60}
+.setup-pill-pop .setup-card{margin:0;box-shadow:0 16px 44px rgba(10,30,51,.20)}
+@media(max-width:760px){.setup-pillwrap{margin:8px 12px 0}}
+/* 6) Bandeja «Para vos»: los bloques relegados de la Semana como filas
+   de una línea; el bloque original se despliega adentro intacto. Las
+   filas de slot se ocultan mientras el slot está vacío. */
+.pv-tray{margin:18px 16px 0;background:#fff;border:1px solid var(--line);border-radius:16px;padding:6px 6px 8px;box-shadow:0 2px 12px rgba(10,30,51,.05)}
+.pv-tray-t{font-weight:800;font-size:12.5px;color:var(--mut);padding:8px 10px 4px}
+.pv-row{border-top:1px solid var(--line)}
+.pv-tray .pv-row:first-of-type{border-top:none}
+.pv-head{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:700;color:var(--txt);text-align:left;padding:11px 10px;cursor:pointer;touch-action:manipulation}
+.pv-chev{font-size:10px;color:var(--mut);transition:transform .15s;flex:none}
+.pv-head[aria-expanded="true"] .pv-chev{transform:rotate(180deg)}
+.pv-body{padding:2px 4px 8px}
+.pv-body>.card{margin-left:0;margin-right:0}
+.pv-plain{padding:6px 4px 2px}
+.pv-plain .pz-trial-banner{margin:0}
+.pv-slotrow:has(.pv-slot:empty){display:none}
+@media(max-width:760px){.pv-tray{margin:14px 12px 0}}
+/* 3) Mini-chat del detalle del posteo: una línea de Posty + el input
+   del cliente, bien simple. */
+.hf-ask-mini{margin-top:10px;background:#F4FAFD;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px}
+.hf-ask-posty{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--txt);margin-bottom:8px;line-height:1.4}
+.hf-ask-ava{width:24px;height:24px;border-radius:50%;object-fit:cover;flex:none}
+.hf-ask-form{display:flex;gap:8px;align-items:center}
+.hf-ask-input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:999px;padding:9px 13px;font-family:inherit;font-size:13.5px;background:#fff;color:var(--txt)}
+.hf-ask-send{flex:none;width:38px;height:38px;border-radius:50%;border:none;background:var(--cel);color:#fff;font-size:15px;cursor:pointer;font-family:inherit;touch-action:manipulation;line-height:1}
+.hf-ask-send:active{transform:scale(.94)}

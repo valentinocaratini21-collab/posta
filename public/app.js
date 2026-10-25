@@ -311,7 +311,11 @@ async function pzFillRefPeak(surface, root) {
 }
 
 // ---------- Toques de relación (2026-10-21): bienvenida inteligente + mitad de semana ----------
-// El slot #relacionSlot vive arriba de Inicio/Agenda. El servidor decide:
+// (v442 · Corrección de Valentino 02:20) La burbuja de relación SALE de
+// la pantalla principal: el slot #relacionSlot ya no se renderiza en
+// Inicio/Semana. El endpoint y el sistema de relación no se tocan —
+// pzFillRelacion queda como no-op sin slot, por si otra superficie lo
+// monta. El servidor decide:
 // bienvenida SOLO con novedad real desde la última visita (primer ingreso
 // del día) y/o el toque de mitad de semana pendiente. Sin novedad ni dato,
 // el slot se borra y no se ve nada: el silencio es parte del diseño.
@@ -2731,7 +2735,7 @@ function landingView(cfg) {
     <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
     <h2>Tu primera semana ya puede estar armada</h2>
     <p>Contanos de tu negocio y mirala en 1 minuto. Gratis, sin tarjeta.</p>
-    <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Sumate a mi equipo</a>
+    <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
     <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
   </div></div>
   <div class="footer"><div class="wrap">
@@ -3370,6 +3374,55 @@ function setupChecklistHtml(title, opts) {
     : `🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}`);
   return `<div class="setup-card"><div class="setup-title">${t}</div>${rows.join('')}${infoRows.join('')}</div>`;
 }
+// (v442 · Corrección de Valentino 02:13: «este boton ponerlo a un
+// costadito · ahora este en el medio del feed. no puede suceder eso»)
+// En Inicio y Semana la tira ya NO es la tarjeta grande a todo ancho en
+// el medio del feed: es una PÍLDORA compacta arriba, a un costado. Al
+// tocarla se despliega LA MISMA tarjeta de siempre (mismas filas,
+// mismos binds — bindSetupRows/refreshSetupChecklist operan sobre la
+// tarjeta desplegada). El rótulo de la píldora sale del título real de
+// la tarjeta: el número es el de toda la app por construcción (v326).
+// Sin pasos pendientes: ni píldora ni tarjeta, como siempre.
+function setupMainHTML() {
+  const card = setupChecklistHtml(undefined, { omitIg: true });
+  if (!card) return '';
+  const m = card.match(/<div class="setup-title">([\s\S]*?)<\/div>/);
+  const label = m ? m[1] : '🚀';
+  return `<div class="setup-pillwrap"><button type="button" class="setup-pill" data-setup-pill aria-expanded="false"><span data-setup-pill-label>${label}</span><span class="setup-pill-chev" aria-hidden="true">▾</span></button><div class="setup-pill-pop" hidden>${card}</div></div>`;
+}
+// Cablea la píldora dentro de una vista (Inicio/Semana): toggle del
+// despliegue y cierre al tocar fuera de ella. Idempotente por root.
+function bindSetupPill(root) {
+  if (!root || root._setupPillBound) return;
+  root._setupPillBound = true;
+  root.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const pill = t.closest('[data-setup-pill]');
+    const wrap = t.closest('.setup-pillwrap');
+    root.querySelectorAll('.setup-pillwrap').forEach(w => {
+      const p = w.querySelector('[data-setup-pill]');
+      const pop = w.querySelector('.setup-pill-pop');
+      if (!p || !pop) return;
+      if (pill && w.contains(pill)) {
+        const open = pop.hidden;
+        pop.hidden = !open;
+        p.setAttribute('aria-expanded', open ? 'true' : 'false');
+      } else if (!wrap) {
+        pop.hidden = true;
+        p.setAttribute('aria-expanded', 'false');
+      }
+    });
+  });
+  if (!window.__setupPillEsc) {
+    window.__setupPillEsc = true;
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      document.querySelectorAll('.setup-pill-pop').forEach(pop => { pop.hidden = true; });
+      document.querySelectorAll('[data-setup-pill]').forEach(p => p.setAttribute('aria-expanded', 'false'));
+    });
+  }
+}
 // Checklist como sección secundaria al final del chat: mismas filas y mismos
 // binds (sigue funcional), solo baja de protagonismo con título propio.
 function setupSecondaryHtml() {
@@ -3414,14 +3467,26 @@ function bindSetupRows() {
 function refreshSetupChecklist() {
   document.querySelectorAll('.setup-card').forEach(card => {
     const sec = card.closest('.setup-secondary');
+    // (v442) Si la tarjeta vive dentro de la píldora de Inicio/Semana,
+    // el refresh la acompaña: al llegar a 0 pasos se va la píldora
+    // entera, y si la tarjeta se re-pinta, el rótulo hereda el título
+    // nuevo (el número de pasos siempre al día).
+    const pillwrap = card.closest ? card.closest('.setup-pillwrap') : null;
     // (v326) El refresh conserva el omitIg de Inicio: si no, la fila de IG
     // (y el conteo) cambiaban solos a mitad de sesión.
     const h = setupChecklistHtml(sec ? 'Para que la magia siga ✨' : undefined, (card.closest && (card.closest('#inicioView') || card.closest('#schedView'))) ? { omitIg: true } : undefined);
-    if (!h) { (sec || card).remove(); return; }
+    if (!h) { (sec || card).remove(); if (pillwrap) pillwrap.remove(); return; }
     const t = document.createElement('template');
     t.innerHTML = h.trim();
     const fresh = t.content.firstElementChild;
-    if (fresh) card.replaceWith(fresh);
+    if (fresh) {
+      card.replaceWith(fresh);
+      if (pillwrap) {
+        const lbl = pillwrap.querySelector('[data-setup-pill-label]');
+        const tt = fresh.querySelector('.setup-title');
+        if (lbl && tt) lbl.innerHTML = tt.innerHTML;
+      }
+    }
   });
   bindSetupRows();
 }
@@ -3470,7 +3535,7 @@ function appShell(tab, content) {
   </aside>
   ${(tab === 'chat' || tab === 'inicio' || tab === 'schedule') ? '' : setupChecklistHtml(undefined)}
   <div class="app-shell">
-    <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${(tab === 'inicio' || tab === 'schedule') ? '<div id="relacionSlot"></div>' : ''}${content}</div>
+    <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>
   ${mzTabsHTML(tab)}`;
 }
@@ -5903,7 +5968,14 @@ function chatNextWeekHTML() {
   const more = w.n > w.total ? (en ? ` · and <b>${w.n - w.total} more</b> on hold` : ` · y <b>${w.n - w.total} más</b> en espera`) : '';
   return `<div class="chat-msg ai">${en ? `✨ <b>${shown} of ${w.total}</b> posts for next week are already lined up` : `✨ ya están armados <b>${shown} de ${w.total}</b> de la semana que viene`}${more}</div>`;
 }
-function chatCardHTML(compact, noEditChip, bareWrap, schedMode) {
+function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
+  // (v442 · Corrección de Valentino 02:20) En la pantalla principal
+  // (mainScr: Inicio y Semana) el chat va SIN prólogo: sin saludo
+  // («hola! qué hacemos hoy?»), sin la línea de estado de la semana
+  // (chatNextWeekHTML — esa data ya vive en la grilla) y sin el título
+  // «¿Cambiamos algo?» (los call sites ya no lo pintan). Abre directo
+  // en el chat: historial + input. Las demás superficies conservan su
+  // saludo de siempre.
   const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
@@ -5942,7 +6014,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode) {
   ${wrap}
     ${title}${desc}
     <div class="chat-box" id="chatBox">
-      ${msgs ? chatNextWeekHTML() + msgs : `<div class="chat-msg ai">hola! 👋 qué hacemos hoy?</div>` + chatNextWeekHTML()}
+      ${mainScr ? msgs : (msgs ? chatNextWeekHTML() + msgs : `<div class="chat-msg ai">hola! 👋 qué hacemos hoy?</div>` + chatNextWeekHTML())}
     </div><div id="chatAnchor"></div>${upRow}${chips}
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
@@ -7446,7 +7518,7 @@ function scfClosePop() {
   const cur = SCF_POP;
   SCF_POP = null;
   try { if (cur.vault && cur.card) cur.vault.appendChild(cur.card); } catch (e) {}
-  try { const pop = cur.wrap.querySelector('.scf-pop'); if (pop) pop.remove(); } catch (e) {}
+  try { const pop = cur.pop || cur.wrap.querySelector('.scf-pop'); if (pop) pop.remove(); } catch (e) {}
   try { cur.wrap.classList.remove('pop-open'); } catch (e) {}
 }
 function scfOpenPop(wrap, pinned) {
@@ -7461,10 +7533,28 @@ function scfOpenPop(wrap, pinned) {
   pop.className = 'scf-pop ' + (wrap.dataset.popCls || 'pc') + (pinned ? ' pinned' : '');
   pop.innerHTML = `<div class="scf-pop-bar"><button type="button" class="scf-pop-x" aria-label="Cerrar">✕</button></div>`;
   pop.appendChild(card);
-  wrap.appendChild(pop);
+  // (v442 · Corrección de Valentino 02:18: «que este en el medio de la
+  // pantalla el post. a veces queda a un costado») La capa va AL BODY
+  // (portal): montada dentro de la tile, cualquier transform de un
+  // ancestro (los FLIP del espejo vivo, el arrastre, animaciones de la
+  // grilla) movía el origen del position:fixed y el centrado del CSS
+  // (50%/50%) caía sobre la tile, no sobre el viewport — por eso a
+  // veces quedaba a un costado o cortada contra un borde. Como hija
+  // del body, el centrado es SIEMPRE el del viewport y entra completa
+  // (max-height del CSS + scroll DENTRO de la tarjeta: los botones de
+  // abajo quedan alcanzables sin pelear con el scroll de la página).
+  document.body.appendChild(pop);
   wrap.classList.add('pop-open');
   SCF_POP = { wrap, card, vault, pop };
   SCF_PINNED = !!pinned;
+  // Click dentro de la capa = queda fijada: la misma semántica que
+  // daba el listener de la tile cuando la capa vivía adentro (el ✕
+  // cierra por su propio handler, con stopPropagation).
+  pop.addEventListener('click', (e) => {
+    if (e.target && e.target.closest && e.target.closest('.scf-pop-x')) return;
+    SCF_PINNED = true;
+    pop.classList.add('pinned');
+  });
   // v221 (corrección de Valentino): la capa es vista previa de HOVER —
   // muere en el acto al salir el mouse (de la foto o de la tarjeta
   // grande), sin esperas. El cierre lo decide el rastreador geométrico
@@ -7700,7 +7790,7 @@ function scfWireGlobals() {
   // Cerrar la capa tocando afuera o con Escape (una sola vez global).
   if (!window.__scfPopDocWired) {
     window.__scfPopDocWired = true;
-    document.addEventListener('click', (e) => { if (SCF_POP && !e.target.closest('.scf-mini-x')) scfClosePop(); });
+    document.addEventListener('click', (e) => { if (SCF_POP && !e.target.closest('.scf-mini-x') && !e.target.closest('.scf-pop')) scfClosePop(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') scfClosePop(); });
   }
   // v221 — Rastreador geométrico de salida (corrección de Valentino:
@@ -7716,8 +7806,16 @@ function scfWireGlobals() {
       const wrap = SCF_POP.wrap, pop = SCF_POP.pop;
       if (!wrap || !pop || !document.contains(wrap)) return;
       const inR = (r) => r && e.clientX >= r.left - 2 && e.clientX <= r.right + 2 && e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2;
-      if (inR(wrap.getBoundingClientRect())) return; // sigue sobre la foto
-      if (inR(pop.getBoundingClientRect())) return; // sigue sobre la tarjeta grande
+      const wr = wrap.getBoundingClientRect();
+      const pr = pop.getBoundingClientRect();
+      if (inR(wr)) return; // sigue sobre la foto
+      if (inR(pr)) return; // sigue sobre la tarjeta grande
+      // (v442) La capa vive CENTRADA en el viewport y puede quedar
+      // lejos de la miniatura: el viaje en línea recta entre ambas
+      // queda cubierto por la caja envolvente de los dos rectángulos.
+      // Salir de esa caja sigue cerrando EN EL ACTO, sin timers: el
+      // cierre al sacar el mouse es el de siempre.
+      if (inR({ left: Math.min(wr.left, pr.left), right: Math.max(wr.right, pr.right), top: Math.min(wr.top, pr.top), bottom: Math.max(wr.bottom, pr.bottom) })) return;
       scfClosePop();
     });
   }
@@ -12334,6 +12432,45 @@ function firstWeekRedoCardHTML() {
     </div>
   </div>`;
 }
+// (v442 · Corrección de Valentino 02:20) BANDEJA «Para vos»: los
+// bloques relegados de la Semana ya no son tarjetas gigantes apiladas
+// debajo del feed — viven en UNA sola bandeja compacta, cada uno como
+// fila de UNA línea; al tocar la fila se despliega el bloque ORIGINAL
+// intacto (mismo HTML, mismos ids, mismos binds y handlers). Lo que su
+// condición no renderiza, tampoco aparece como fila. Las filas de slot
+// (adsBoostSlot / hs-question / hs-showcase) se ocultan solas por CSS
+// mientras el slot está vacío y aparecen cuando su cargador lo llena.
+// El banner de prueba vencida ya es una línea por diseño: entra como
+// fila-enlace directa (plain), sin despliegue.
+function pvTrayHTML(items, en) {
+  const rows = [];
+  for (const it of (items || [])) {
+    if (!it) continue;
+    if (it.plain) { rows.push(`<div class="pv-row pv-plain">${it.plain}</div>`); continue; }
+    if (it.slot) {
+      rows.push(`<div class="pv-row pv-slotrow"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${esc(it.label)}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden><div id="${it.slot}" class="pv-slot"></div></div></div>`);
+      continue;
+    }
+    if (it.html) rows.push(`<div class="pv-row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${esc(it.label)}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden>${it.html}</div></div>`);
+  }
+  if (!rows.length) return '';
+  return `<section class="pv-tray" id="pvTray"><div class="pv-tray-t">📥 ${en ? 'For you' : 'Para vos'}</div>${rows.join('')}</section>`;
+}
+// Toggle de las filas de la bandeja (delegado en la vista; idempotente).
+function bindPvTray(root) {
+  if (!root || root._pvBound) return;
+  root._pvBound = true;
+  root.addEventListener('click', (e) => {
+    const h = e.target && e.target.closest ? e.target.closest('[data-pv-toggle]') : null;
+    if (!h) return;
+    const row = h.closest('.pv-row');
+    const body = row && row.querySelector('.pv-body');
+    if (!body) return;
+    const open = body.hidden;
+    body.hidden = !open;
+    h.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+}
 function bindFirstWeekRedo() {
   const btn = $('#firstWeekRedoBtn');
   if (!btn) return;
@@ -12515,28 +12652,37 @@ async function scheduleView() {
   // v223: la grilla del feed ya NO es una sección debajo de los posteos:
   // es el cuarto modo del filtro de la agenda (Día·Semana·Mes·Feed) y
   // la pinta schedFilterBlockHTML adentro de homeWeekBlock.
-  const homeChatBlock = `<div class="hs-chat-label" style="margin-top:18px"><b>💬 ¿Cambiamos algo?</b></div>${chatCardHTML(true, true, true, true)}`;
-  // (v440 · SOLO FEED, corrección de Valentino 01:48) Composición final de
-  // la pantalla: 1) la tira «Te faltan N pasos» ARRIBA DE TODO («esto hay
-  // que ponerlo arriba de todo. no abajo»); 2) el feed (perfil literal +
-  // grilla + píldora flotante dentro de homeWeekBlock); 3) el chat único;
-  // 4) Ideas y, relegados debajo de todo, los bloques secundarios en su
-  // orden relativo de siempre — nada compite encima del feed.
+  const homeChatBlock = `<div style="margin-top:18px">${chatCardHTML(true, true, true, true, true)}</div>`;
+  // (v442 · Corrección 02:20) La zona relegada pasa a la bandeja «Para
+  // vos» (pvTrayHTML): filas de una línea con el bloque original
+  // adentro. Orden relativo histórico conservado: trial, garantía,
+  // dogfood, racha, primer posteo, fallidos + los tres slots.
+  const enV = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const pvTray = pvTrayHTML([
+    trialBanner ? { plain: trialBanner } : null,
+    firstRedoBlock ? { label: enV ? '🛡️ Your first-week guarantee' : '🛡️ Tu garantía de primera semana', html: firstRedoBlock } : null,
+    dogfoodBlock ? { label: '🤖 Posty para @posty.communitymanager', html: dogfoodBlock } : null,
+    expBanner ? { label: enV ? '⏳ Your streak is about to end' : '⏳ Tu racha se apaga pronto', html: expBanner } : null,
+    fpBlock ? { label: enV ? '🚀 Your first post' : '🚀 Tu primer posteo', html: fpBlock } : null,
+    ftBlock ? { label: enV ? '🚀 Your first post' : '🚀 Tu primer posteo', html: ftBlock } : null,
+    failedBlock ? { label: enV ? '⚠️ Posts that could not go out' : '⚠️ Posteos que no pudieron salir', html: failedBlock } : null,
+    { label: enV ? '📣 Boost a post' : '📣 Impulsá un posteo', slot: 'adsBoostSlot' },
+    { label: enV ? '🤔 Posty asks you' : '🤔 Posty te pregunta', slot: 'hs-question' },
+    { label: enV ? '✨ Your story for Posty' : '✨ Tu historia para Posty', slot: 'hs-showcase' },
+  ], enV);
+  // (v440 · SOLO FEED, corrección de Valentino 01:48 — refinada en v442
+  // por sus correcciones 02:13–02:20) Composición final de la pantalla:
+  // 1) la PÍLDORA «Te faltan N pasos» arriba a un costado (setupMainHTML
+  // — ya no la tarjeta en el medio del feed); 2) el feed (perfil literal
+  // + grilla + píldora flotante dentro de homeWeekBlock); 3) el chat
+  // único, SIN prólogo; 4) Ideas y la bandeja «Para vos» con los bloques
+  // secundarios como filas de una línea — nada compite con el feed.
   return `<div id="schedView" class="sched-wrap">
-    ${setupChecklistHtml(undefined, { omitIg: true })}
+    ${setupMainHTML()}
     ${homeWeekBlock}
     ${homeChatBlock}
     <div id="hs-ideas"${IDEAS_PANEL_OPEN ? '' : ' class="ideas-closed"'}></div>
-    ${trialBanner}
-    ${firstRedoBlock}
-    ${dogfoodBlock}
-    ${expBanner}
-    ${fpBlock}
-    ${ftBlock}
-    ${failedBlock}
-    <div id="adsBoostSlot"></div>
-    <div id="hs-question"></div>
-    <div id="hs-showcase"></div>
+    ${pvTray}
     ${armBlock}
   </div>`;
 }
@@ -13874,13 +14020,16 @@ async function inicioView() {
     const qT = Number(quota && quota.limit) || 0;
     CHAT_NEXT_WEEK = (wk.nextDrafts > 0 && qT > 0) ? { n: wk.nextDrafts, total: qT } : null;
   } catch (e) { CHAT_NEXT_WEEK = null; }
-  // (v440 · SOLO FEED, corrección de Valentino 01:48) Composición final de
-  // Inicio: 1) la tira «Te faltan N pasos» ARRIBA DE TODO; 2) el perfil
-  // literal (encabezado con su chip IG + acciones + «ver como visitante»
-  // como acción chica + historias); 3) la grilla con la píldora flotante;
-  // 4) el chat único (barra + hoja); 5) Ideas relegado debajo de todo.
+  // (v440 · SOLO FEED, corrección de Valentino 01:48 — refinada en v442
+  // por sus correcciones 02:13–02:20) Composición final de Inicio: 1) la
+  // PÍLDORA «Te faltan N pasos» arriba a un costado (setupMainHTML);
+  // 2) el perfil literal (encabezado con su chip IG + acciones + «ver
+  // como visitante» como acción chica + historias); 3) la grilla con la
+  // píldora flotante; 4) el chat único (barra + hoja, SIN prólogo). El
+  // botón-anuncio de Ideas y la burbuja de relación salieron de la
+  // pantalla principal (v442).
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
-  ${HF_VISITOR ? '' : setupChecklistHtml(undefined, { omitIg: true })}
+  ${HF_VISITOR ? '' : setupMainHTML()}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
   ${visitorToggleHTML}
@@ -13895,11 +14044,11 @@ async function inicioView() {
   </div>
   <div class="mz-sheet" id="mzSheet" hidden>
     <div class="mz-sheet-card">
-      <div class="mz-sheet-head"><b>💬 ¿Cambiamos algo?</b><button type="button" class="mz-sheet-x" id="mzSheetX" aria-label="Cerrar">✕</button></div>
-      <div class="mz-sheet-body">${chatCardHTML(true, true, true, true)}</div>
+      <div class="mz-sheet-head"><span></span><button type="button" class="mz-sheet-x" id="mzSheetX" aria-label="Cerrar">✕</button></div>
+      <div class="mz-sheet-body">${chatCardHTML(true, true, true, true, true)}</div>
     </div>
   </div>
-  ${HF_VISITOR ? '' : `<div id="mzIdeasSlot"></div>`}
+
 </div>`;
 }
 function mzOpenSheet(focus) {
@@ -15547,15 +15696,26 @@ function hfOpenChatForPost(post) {
   if (inp) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) {} }, 350);
 }
 
-/* (ARMA TODO · Corrección 2 · UN SOLO CHAT) El botón que reemplaza a la
-   caja f3 en el detalle del posteo (weekCardHTML y approvalPostView):
-   misma elegibilidad que tenía la caja (borrador/programado con imagen;
-   un publicado no se edita pidiendo un cambio). El objeto del posteo
-   queda registrado por id para que el handler delegado recupere el
-   posteo completo (miniatura y contador de rehaces del ancla) sin
-   importar en qué superficie vive la tarjeta. */
+/* (ARMA TODO · Corrección 2 · UN SOLO CHAT — forma nueva en v442 ·
+   Corrección de Valentino 02:16: «cambiar este boton por poner
+   directamente el chat de posty ahi, bien simple, y que puedan
+   escribir ahi, y se abre un chat con posty. una linea de posty, y una
+   del cliente. tiene que ser muy simple») En el detalle del posteo
+   (weekCardHTML y approvalPostView) ya no hay un botón «Pedir un
+   cambio»: hay un MINI-CHAT inline — una línea de Posty (su voz del
+   chat: minúscula, corta) + un input de una línea del cliente. Al
+   enviar, se abre EL chat único de siempre con el posteo anclado
+   (hfAskChange → hfOpenChatForPost/hfSetAnchor) y el mensaje ya
+   entregado en ese chat (hfDeliverAskText → chatSend, el camino de
+   envío de siempre). NO es un segundo chat: es el único asomando en
+   el detalle. Misma elegibilidad de siempre (borrador/programado con
+   imagen; un publicado no se edita pidiendo un cambio). El objeto del
+   posteo queda registrado por id para que el handler delegado
+   recupere el posteo completo (miniatura y contador de rehaces del
+   ancla) sin importar en qué superficie vive la tarjeta. */
 var HF_ASK_POSTS = {};
 var HF_CHAT_OPEN_PENDING = false;
+var HF_ASK_TEXT_PENDING = '';
 function hfAskChangeBtnHTML(p) {
   if (!p || p.id == null) return '';
   const stA = String(p.status || '');
@@ -15569,7 +15729,29 @@ function hfAskChangeBtnHTML(p) {
     };
   } catch (e) {}
   const enA = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  return `<button type="button" class="hf-ask-change btn btn-soft btn-block" data-hf-ask-change="${esc(String(p.id))}" style="margin-top:10px">💬 ${enA ? 'Ask for a change' : 'Pedir un cambio'}</button>`;
+  return `<div class="hf-ask-mini" data-hf-ask-mini="${esc(String(p.id))}">
+    <div class="hf-ask-posty"><img src="ai-avatar.png" alt="Posty" class="hf-ask-ava"><span>${enA ? 'what do we change on this post?' : 'qué le cambiamos a este posteo?'}</span></div>
+    <form class="hf-ask-form" data-hf-ask-form="${esc(String(p.id))}">
+      <input type="text" class="hf-ask-input" data-hf-ask-input maxlength="2000" autocomplete="off" placeholder="${enA ? 'message Posty…' : 'escribile a Posty…'}">
+      <button type="submit" class="hf-ask-send" aria-label="${enA ? 'Send' : 'Enviar'}">➤</button>
+    </form>
+  </div>`;
+}
+// Entrega el mensaje escrito en el mini-chat DENTRO del chat único:
+// lo deja en #chatInput y lo manda por chatSend — el camino de envío
+// de siempre (mismo estado CHAT, mismo hilo del servidor con
+// anchor_post_id). Si el chat todavía no existe en el DOM (detalle
+// standalone → navegación a Inicio), el texto queda pendiente y lo
+// entrega bindInicio al abrir la hoja (HF_CHAT_OPEN_PENDING).
+function hfDeliverAskText() {
+  if (!HF_ASK_TEXT_PENDING) return;
+  const inp = document.getElementById('chatInput');
+  const box = document.getElementById('chatBox');
+  if (!inp || !box || typeof chatSend !== 'function') return;
+  const text = HF_ASK_TEXT_PENDING;
+  HF_ASK_TEXT_PENDING = '';
+  inp.value = text;
+  try { chatSend(); } catch (e) { HF_ASK_TEXT_PENDING = text; }
 }
 // Cierra el detalle que contenga al botón por su mecanismo propio
 // (la ampliación scf-pop de Semana/Inicio, el detalle IG o una hoja
@@ -15591,19 +15773,26 @@ function hfAskChange(post) {
     else { try { render(); } catch (e) {} }
   }
 }
-// Delegado global en captura (una sola vez): corre antes que los
-// gestos de la tile/tarjeta, igual que el botón 💬 (hfChatBtnBind).
+// Delegado global en captura (una sola vez): el submit del mini-chat
+// del detalle. Guarda el texto como pendiente, abre el chat único con
+// el posteo anclado (hfAskChange, el flujo de siempre) y lo entrega
+// ahí mismo (hfDeliverAskText). Sin texto, el envío solo abre el chat
+// anclado — la affordance que tenía el botón.
 function hfAskChangeBind() {
   if (window.__hfAskBound) return;
   window.__hfAskBound = true;
-  document.addEventListener('click', (e) => {
-    const b = e.target && e.target.closest ? e.target.closest('[data-hf-ask-change]') : null;
-    if (!b) return;
+  document.addEventListener('submit', (e) => {
+    const f = e.target;
+    if (!f || !f.dataset || !f.dataset.hfAskForm) return;
     e.preventDefault();
     e.stopPropagation();
-    const id = b.dataset.hfAskChange;
+    const id = f.dataset.hfAskForm;
+    const inp = f.querySelector('[data-hf-ask-input]');
+    const text = inp ? String(inp.value || '').trim() : '';
     const post = (typeof HF_ASK_POSTS !== 'undefined' && HF_ASK_POSTS[String(id)]) || { id };
+    if (text) HF_ASK_TEXT_PENDING = text;
     hfAskChange(post);
+    try { hfDeliverAskText(); } catch (e2) {}
   }, true);
 }
 // Delegado en captura sobre el root de la home: corre ANTES que el
@@ -15623,6 +15812,8 @@ function hfChatBtnBind(root) {
 }
 
 function bindInicio() {
+  // (v442) Píldora de activación a un costado: su toggle vive en la vista.
+  try { bindSetupPill(document.getElementById('inicioView')); } catch (e) {}
   // (v331) La home es el feed literal: se cablea la MISMA ampliación de
   // Semana sobre las minis de la grilla (hover agranda centrado, click
   // fija; el detalle es la tarjeta existente del cofre #scfVault).
@@ -15635,6 +15826,9 @@ function bindInicio() {
     HF_CHAT_OPEN_PENDING = false;
     try { mzOpenSheet(true); } catch (e) {}
     try { hfPaintAnchor(); } catch (e) {}
+    // (v442) Si el cliente escribió en el mini-chat del detalle
+    // standalone, su mensaje se entrega ahora en el chat único.
+    try { hfDeliverAskText(); } catch (e) {}
   }
   // (Frente 3 · suma 2) Gestos del feed vivo (preview de reels con
   // press-and-hold + hoja de acciones en futuros): capa extra sobre el
@@ -15720,24 +15914,15 @@ function bindInicio() {
   if (x) x.onclick = mzCloseSheet;
   const sh = $('#mzSheet');
   if (sh) sh.addEventListener('click', (e) => { if (e.target === sh) mzCloseSheet(); });
-  // 💡 Ideas: UNA línea si hay pendientes (la misma fuente que el panel:
-  // GET /api/ideas → IDEAS_PENDING_COUNT). Lleva a la Semana con el
-  // panel abierto, que es donde vive el flujo de ideas.
-  const paintIdeasLine = () => {
-    const slot = $('#mzIdeasSlot');
-    if (!slot) return;
-    const n = (typeof IDEAS_PENDING_COUNT === 'number') ? IDEAS_PENDING_COUNT : 0;
-    slot.innerHTML = n > 0
-      ? `<button type="button" class="mz-idea" id="mzIdeasGo">💡 Tenés ${n} idea${n > 1 ? 's' : ''} nueva${n > 1 ? 's' : ''} de Posty →</button>`
-      : '';
-    const g = $('#mzIdeasGo');
-    if (g) g.onclick = () => { IDEAS_PANEL_OPEN = true; location.hash = '#/app/schedule'; };
-  };
-  if (typeof IDEAS_PENDING_COUNT === 'number') paintIdeasLine();
-  else {
+  // (v442 · Corrección de Valentino 02:15: «eliminar esto.
+  // innecesario.») El botón-anuncio de Ideas («💡 Tenés N ideas nuevas
+  // de Posty →», mzIdeasGo) SALIÓ de la pantalla principal: ni su
+  // render ni su slot existen. El CONTEO se sigue computando igual
+  // (IDEAS_PENDING_COUNT alimenta el badge del chip de Ideas dentro
+  // del chat y el panel de Ideas de la Semana, que no se tocan).
+  if (typeof IDEAS_PENDING_COUNT !== 'number') {
     api.get('/api/ideas').then(r => {
       if (r && r.ok) IDEAS_PENDING_COUNT = (r.ideas || []).length;
-      paintIdeasLine();
     }).catch(() => {});
   }
 }
@@ -15925,6 +16110,10 @@ function bindStats() {
   paint();
 }
 function bindSchedule() {
+  // (v442) Píldora de activación a un costado y bandeja «Para vos»:
+  // sus toggles viven en la vista.
+  try { bindSetupPill(document.getElementById('schedView')); } catch (e) {}
+  try { bindPvTray(document.getElementById('schedView')); } catch (e) {}
   const pv = $('#schedPrev'), nx = $('#schedNext'), td = $('#schedToday');
   if (pv) pv.onclick = () => { if (SCHED_DAY_OFFSET > 0) { SCHED_DAY_OFFSET--; render(); } };
   if (nx) nx.onclick = () => { SCHED_DAY_OFFSET++; render(); };
@@ -16518,7 +16707,7 @@ function f3En() { try { return typeof ME !== 'undefined' && ME && ME.lang === 'e
    (f3ThreadHTML + su hilo en localStorage + f3ThreadSend +
    f3PaintThreads + f3ApplyEditedPost) se eliminó por completo: el
    formulario no existe en ninguna vista y editar un posteo se pide
-   desde el botón «💬 Pedir un cambio» (hfAskChangeBtnHTML), que fija
+   desde el mini-chat del detalle (hfAskChangeBtnHTML, v442), que fija
    el ancla y lleva al chat principal único (anchor_post_id). */
 
 /* ---------- Ítem 2: doble toque para aprobar ---------- */
@@ -16828,7 +17017,7 @@ function f3Init(tab) {
   // (ARMA TODO · Corrección 2) El hilo f3 quedó retirado por
   // completo: ni pintado de hilos ni submit delegado de su
   // formulario (ya no existe en ninguna vista). En su lugar se
-  // cablea el botón único «Pedir un cambio» (hfAskChangeBind).
+  // cablea el mini-chat único del detalle (hfAskChangeBind, v442).
   try { hfAskChangeBind(); } catch (e) {}
   try { f3MaybeWatchLive(); } catch (e) {}
   if (window.__f3Bound) return;

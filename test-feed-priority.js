@@ -29,6 +29,31 @@
  *     debajo de todo. Fuera del flujo: igLine (mz-igbar; el estado IG
  *     vive en el chip del encabezado), prodash, kit, why.
  *
+ * TANDA v442 · SIETE CORRECCIONES DE VALENTINO (25/10 02:13–02:20,
+ * sobre la composición solo-feed de v441, que NO se desarma):
+ *   1. La tira SALE del medio: en Inicio/Semana es la PÍLDORA compacta
+ *      de setupMainHTML (arriba a un costado); tocarla despliega la
+ *      tarjeta de siempre (setupChecklistHtml/bindSetupRows/
+ *      refreshSetupChecklist intactos; al llegar a 0 se va la píldora).
+ *   2. ELIMINADO el botón-anuncio de Ideas (mzIdeasGo + su slot); el
+ *      conteo IDEAS_PENDING_COUNT se sigue computando.
+ *   3. «Pedir un cambio» → MINI-CHAT inline en el detalle (línea de
+ *      Posty + input del cliente); el submit abre el chat ÚNICO con el
+ *      posteo anclado y el mensaje entregado (hfDeliverAskText →
+ *      chatSend). Nada de hilos paralelos.
+ *   4. La ampliación scf-pop va AL BODY (portal): el centrado fixed
+ *      (50%/50%) es siempre el del viewport — dentro de la tile, los
+ *      transforms de la grilla la corrían «a un costado». El rastreador
+ *      geométrico cubre el viaje tile→centro con la caja envolvente.
+ *   5. La burbuja de relación (#relacionSlot) ya no se monta en
+ *      Inicio/Semana; el sistema de relación queda intacto.
+ *   6. La zona relegada de Semana es UNA bandeja «Para vos»
+ *      (pvTrayHTML): filas de una línea con el bloque original adentro
+ *      (trial como fila-enlace; slots como filas auto-ocultas).
+ *   7. El chat de la pantalla principal va SIN prólogo (mainScr en
+ *      chatCardHTML): sin saludo, sin línea de la semana, sin el
+ *      título «¿Cambiamos algo?» — historial + input.
+ *
  * TANDA v436 · LA PANTALLA ES SOLAMENTE EL FEED (decisión de Valentino,
  * 25/10: «que sea solamente el feed»):
  *   - Fuera de scheduleView: el encabezado de marca «Posty. / Tu semana,
@@ -211,16 +236,27 @@ ok(retStart > -1, 'scheduleView: se encontró su return');
 const retSeg = retStart > -1 ? schedSlice.slice(retStart, retStart + 2200) : '';
 const idxOf = (seg, tok) => seg.indexOf(tok);
 ok(idxOf(retSeg, '${homeWeekBlock}') > -1, 'return: homeWeekBlock (contenido de la vista) está');
+// (v442) Los bloques relegados ya NO se interpolan sueltos en el
+// return: componen la bandeja «Para vos» (${pvTray}) DESPUÉS de Ideas.
 for (const tok of ['${trialBanner}', '${firstRedoBlock}', '${dogfoodBlock}', '${expBanner}', '${fpBlock}', '${ftBlock}', '${failedBlock}']) {
-  ok(idxOf(retSeg, tok) > idxOf(retSeg, '${homeWeekBlock}'), `return: ${tok} va DESPUÉS del contenido de la vista`);
+  ok(idxOf(retSeg, tok) === -1, `return (v442): ${tok} ya no va suelto — vive en la bandeja «Para vos»`);
 }
-// Orden relativo original entre bloques secundarios (el de la base v431):
-const relOrder = ['${trialBanner}', '${firstRedoBlock}', '${dogfoodBlock}', '${expBanner}', '${fpBlock}', '${ftBlock}', '${failedBlock}'];
-ok(relOrder.every((tok, i) => i === 0 || idxOf(retSeg, tok) > idxOf(retSeg, relOrder[i - 1])), 'return: orden relativo entre bloques secundarios conservado');
-ok(idxOf(retSeg, '${homeChatBlock}') > idxOf(retSeg, '${homeWeekBlock}') && idxOf(retSeg, '${homeChatBlock}') < idxOf(retSeg, '${trialBanner}') && idxOf(retSeg, '${homeChatBlock}') < idxOf(retSeg, '${failedBlock}'), 'return (v440): el chat único va tras el feed y ANTES de los bloques relegados');
-ok(idxOf(retSeg, 'id="hs-ideas"') > idxOf(retSeg, '${homeChatBlock}'), 'return (v440): Ideas va debajo del chat, relegado con el resto');
-ok(idxOf(retSeg, '${setupChecklistHtml(undefined, { omitIg: true })}') > -1 && idxOf(retSeg, '${setupChecklistHtml(undefined, { omitIg: true })}') < idxOf(retSeg, '${homeWeekBlock}'), 'scheduleView (v440): la tira de activación va PRIMERO, arriba de todo (corrección 01:48)');
-ok(retSeg.indexOf('${') === idxOf(retSeg, '${setupChecklistHtml(undefined, { omitIg: true })}'), 'scheduleView (v440): la tira es la PRIMERA interpolación del return');
+// Orden relativo original entre bloques secundarios (el de la base
+// v431), ahora dentro de la construcción de la bandeja:
+const trayStart = schedSlice.indexOf('const pvTray = pvTrayHTML([');
+const traySeg = trayStart > -1 ? schedSlice.slice(trayStart, schedSlice.indexOf('], enV)', trayStart)) : '';
+ok(trayStart > -1, 'scheduleView (v442): la bandeja se construye con pvTrayHTML([...])');
+const relOrder = ['trialBanner', 'firstRedoBlock', 'dogfoodBlock', 'expBanner', 'fpBlock', 'ftBlock', 'failedBlock'];
+ok(relOrder.every((tok, i) => i === 0 || traySeg.indexOf(tok) > traySeg.indexOf(relOrder[i - 1])), 'bandeja (v442): orden relativo entre bloques secundarios conservado');
+for (const slot of ['adsBoostSlot', 'hs-question', 'hs-showcase']) {
+  ok(traySeg.includes(`slot: '${slot}'`), `bandeja (v442): el slot ${slot} entra como fila`);
+}
+ok(idxOf(retSeg, '${homeChatBlock}') > idxOf(retSeg, '${homeWeekBlock}') && idxOf(retSeg, '${homeChatBlock}') < idxOf(retSeg, '${pvTray}'), 'return (v442): el chat único va tras el feed y ANTES de la bandeja relegada');
+ok(idxOf(retSeg, 'id="hs-ideas"') > idxOf(retSeg, '${homeChatBlock}') && idxOf(retSeg, 'id="hs-ideas"') < idxOf(retSeg, '${pvTray}'), 'return (v442): Ideas va debajo del chat y ANTES de la bandeja');
+ok(idxOf(retSeg, '${armBlock}') > idxOf(retSeg, '${pvTray}'), 'return (v442): la tarjeta para armar la semana sigue tras la bandeja');
+ok(idxOf(retSeg, '${setupMainHTML()}') > -1 && idxOf(retSeg, '${setupMainHTML()}') < idxOf(retSeg, '${homeWeekBlock}'), 'scheduleView (v442): la PÍLDORA de activación va PRIMERO, arriba a un costado (corrección 02:13)');
+ok(retSeg.indexOf('${') === idxOf(retSeg, '${setupMainHTML()}'), 'scheduleView (v442): la píldora es la PRIMERA interpolación del return');
+ok(!retSeg.includes('${setupChecklistHtml'), 'scheduleView (v442): la tarjeta de activación ya no se interpola como bloque en el return');
 
 console.log('— A: appShell ya no antepone la tira en inicio/schedule');
 const shellSrc = extractFn(appJs, 'appShell') || '';
@@ -232,15 +268,18 @@ console.log('— A: (v440) inicio: la tira va PRIMERO; prodash/kit/why/igLine fu
 const iniStart = appJs.indexOf('async function inicioView()');
 ok(iniStart > -1, 'inicioView existe');
 const iniRet = iniStart > -1 ? appJs.slice(appJs.indexOf('return `<div id="inicioView"', iniStart), appJs.indexOf('return `<div id="inicioView"', iniStart) + 3200) : '';
-ok(idxOf(iniRet, '${gridHTML}') > -1 && idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') > -1 && idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') < idxOf(iniRet, '${gridHTML}'), 'inicioView (v440): la tira va PRIMERO, antes de la grilla (corrección 01:48)');
-ok(idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') < idxOf(iniRet, '${homeHeadHTML'), 'inicioView (v440): la tira va antes del encabezado del perfil');
-ok(idxOf(iniRet, 'setupChecklistHtml(undefined, { omitIg: true })') < idxOf(iniRet, 'id="mzChatBar"'), 'inicioView (v440): la tira va antes de la barra del chat');
+ok(idxOf(iniRet, '${gridHTML}') > -1 && idxOf(iniRet, 'setupMainHTML()') > -1 && idxOf(iniRet, 'setupMainHTML()') < idxOf(iniRet, '${gridHTML}'), 'inicioView (v442): la PÍLDORA va PRIMERO, antes de la grilla (corrección 02:13)');
+ok(idxOf(iniRet, 'setupMainHTML()') < idxOf(iniRet, '${homeHeadHTML'), 'inicioView (v442): la píldora va antes del encabezado del perfil');
+ok(idxOf(iniRet, 'setupMainHTML()') < idxOf(iniRet, 'id="mzChatBar"'), 'inicioView (v442): la píldora va antes de la barra del chat');
+ok(!iniRet.includes('${setupChecklistHtml'), 'inicioView (v442): la tarjeta de activación ya no se interpola como bloque en el return');
 for (const tok of ['${igLine}', '${prodashHTML}', '${kitHTML}', '${whyHTML}', 'mz-igbar', 'hf-prodash', 'hf-kitnote', 'class="hf-why"']) {
   ok(!iniRet.includes(tok), `inicioView (v440): fuera del flujo principal — ${tok}`);
 }
 ok(!appJs.includes('class="mz-igbar"'), 'bundle (v440): el markup de la barra ancha de IG salió; el estado IG vive en el chip del encabezado');
 ok(idxOf(iniRet, '${visitorToggleHTML}') > -1 && idxOf(iniRet, '${visitorToggleHTML}') < idxOf(iniRet, '${gridHTML}'), 'inicioView (v440): «ver como visitante» es acción chica en la zona del encabezado, no un bloque bajo la grilla');
-ok(idxOf(iniRet, 'id="mzIdeasSlot"') > idxOf(iniRet, 'id="mzSheet"'), 'inicioView (v440): el slot de Ideas va debajo de todo (tras la hoja del chat)');
+ok(!iniRet.includes('mzIdeasSlot'), 'inicioView (v442): el slot del botón de Ideas salió de la pantalla principal (corrección 02:15)');
+ok(!appJs.includes('id="mzIdeasGo"'), 'bundle (v442): el botón-anuncio «💡 Tenés N ideas nuevas» (mzIdeasGo) ya no se renderiza');
+ok(appJs.includes('IDEAS_PENDING_COUNT = (r.ideas || []).length'), 'bundle (v442): el conteo de ideas se sigue computando (badge del chip y panel intactos)');
 const refreshSrc = extractFn(appJs, 'refreshSetupChecklist') || '';
 ok(refreshSrc.includes("card.closest('#schedView')"), 'refreshSetupChecklist: el refresh conserva omitIg también dentro de #schedView');
 
@@ -267,18 +306,19 @@ for (const fn of ['f3ThreadHTML', 'f3PaintThreads', 'f3ThreadSend', 'f3ThreadLoa
   ok(!(new RegExp(fn + '\\s*\\(').test(appJs.replace('function ' + fn, ''))), `bundle: sin llamadas a ${fn}`);
 }
 ok(!appJs.includes('data-f3-thread'), 'bundle: sin markup del hilo f3 (data-f3-thread)');
-ok(appJs.includes('${hfAskChangeBtnHTML(d)}'), 'weekCardHTML: el botón reemplaza a la caja en la tarjeta/detalle');
-ok(appJs.includes('${hfAskChangeBtnHTML(p)}'), 'approvalPostView: el botón reemplaza a la caja en el detalle');
-ok((appJs.match(/\$\{hfAskChangeBtnHTML\(/g) || []).length === 2, 'exactamente 2 call sites del botón (weekCard + apv), los mismos que tenía la caja');
+ok(appJs.includes('${hfAskChangeBtnHTML(d)}'), 'weekCardHTML: el mini-chat reemplaza a la caja en la tarjeta/detalle');
+ok(appJs.includes('${hfAskChangeBtnHTML(p)}'), 'approvalPostView: el mini-chat reemplaza a la caja en el detalle');
+ok((appJs.match(/\$\{hfAskChangeBtnHTML\(/g) || []).length === 2, 'exactamente 2 call sites del mini-chat (weekCard + apv), los mismos que tenía la caja');
 const f3InitSrc = extractFn(appJs, 'f3Init') || '';
-ok(f3InitSrc.includes('hfAskChangeBind()'), 'f3Init cablea el botón único (hfAskChangeBind)');
-ok(!f3InitSrc.includes("addEventListener('submit'"), 'f3Init: el submit delegado del formulario f3 ya no existe');
+ok(f3InitSrc.includes('hfAskChangeBind()'), 'f3Init cablea el mini-chat único (hfAskChangeBind)');
 ok(!f3InitSrc.includes('f3PaintThreads'), 'f3Init: sin llamada a f3PaintThreads');
 
-console.log('— A: botón «Pedir un cambio» y chapita del ancla');
+console.log('— A: mini-chat del detalle (v442) y chapita del ancla');
 const askBtnSrc = extractFn(appJs, 'hfAskChangeBtnHTML') || '';
-ok(askBtnSrc.includes('Pedir un cambio') && askBtnSrc.includes('Ask for a change'), 'botón: textos ES/EN «💬 Pedir un cambio» / «💬 Ask for a change»');
-ok(askBtnSrc.includes('data-hf-ask-change'), 'botón: lleva data-hf-ask-change con el id');
+ok(askBtnSrc.includes('qué le cambiamos a este posteo?') && askBtnSrc.includes('what do we change on this post?'), 'mini-chat: la línea de Posty ES/EN, en su voz (minúscula, corta)');
+ok(askBtnSrc.includes('hf-ask-posty') && askBtnSrc.includes('ai-avatar.png'), 'mini-chat: la línea es DE Posty (su avatar)');
+ok(askBtnSrc.includes('data-hf-ask-form') && askBtnSrc.includes('data-hf-ask-input'), 'mini-chat: form + input de una línea del cliente');
+ok(!appJs.includes('data-hf-ask-change'), 'bundle (v442): el botón «Pedir un cambio» (data-hf-ask-change) ya no existe');
 const askSrc = extractFnSig(appJs, 'function hfAskChange(post)') || '';
 ok(askSrc.includes('scfClosePop()') && askSrc.includes('hfDetailClose()') && askSrc.includes('pcCloseSheet()'), 'hfAskChange: cierra el detalle por sus mecanismos existentes');
 ok(askSrc.includes('hfOpenChatForPost(post)'), 'hfAskChange: reutiliza hfOpenChatForPost');
@@ -286,7 +326,10 @@ ok(askSrc.includes('HF_CHAT_OPEN_PENDING = true') && askSrc.includes('mzHomeHash
 const openChatSrc = extractFn(appJs, 'hfOpenChatForPost') || '';
 ok(openChatSrc.includes('hfSetAnchor(post)'), 'hfOpenChatForPost intacto: fija el ancla (hfSetAnchor)');
 const askBindSrc = extractFn(appJs, 'hfAskChangeBind') || '';
-ok(askBindSrc.includes('[data-hf-ask-change]') && askBindSrc.includes('hfAskChange(post)'), 'hfAskChangeBind: delegado global que resuelve el posteo y llama a hfAskChange');
+ok(askBindSrc.includes("addEventListener('submit'") && askBindSrc.includes('hfAskForm') && askBindSrc.includes('hfAskChange(post)'), 'hfAskChangeBind: delegado global de submit que resuelve el posteo y abre el chat único (hfAskChange)');
+ok(askBindSrc.includes('HF_ASK_TEXT_PENDING = text') && askBindSrc.includes('hfDeliverAskText()'), 'hfAskChangeBind: el mensaje del cliente queda pendiente y se entrega en el chat único');
+const deliverSrc = extractFn(appJs, 'hfDeliverAskText') || '';
+ok(deliverSrc.includes("getElementById('chatInput')") && deliverSrc.includes('chatSend()'), 'hfDeliverAskText: entrega por el camino de envío de siempre (chatSend sobre #chatInput)');
 const bindIniSrc = (() => { const i = appJs.indexOf('function bindInicio()'); return i > -1 ? appJs.slice(i, i + 5000) : ''; })();
 ok(bindIniSrc.includes('HF_CHAT_OPEN_PENDING') && bindIniSrc.includes('mzOpenSheet(true)'), 'bindInicio: abre la hoja del chat único cuando el pedido vino del detalle standalone');
 const anchorSrc = extractFn(appJs, 'hfAnchorBarHTML') || '';
@@ -295,9 +338,9 @@ ok(!appJs.includes('Estás hablando de este posteo') && !appJs.includes("You're 
 ok(appJs.includes('anchor_post_id') && appJs.includes('HF_CHAT_ANCHOR.id'), 'chat principal intacto: el envío sigue mandando anchor_post_id desde HF_CHAT_ANCHOR');
 
 console.log('— A: index.html y CHUNK_V');
-ok(indexHtml.includes('/app.js?v=277'), 'index.html: app.js bumpeado a ?v=277 (vidriera deslizable)');
-ok(!indexHtml.includes('/app.js?v=276'), 'index.html: sin ?v=276 residual');
-ok(indexHtml.includes('/styles.css?v=20261025v'), 'index.html: styles.css bumpeado a ?v=20261025v (vidriera deslizable)');
+ok(indexHtml.includes('/app.js?v=279'), 'index.html: app.js bumpeado a ?v=279 (v444)');
+ok(!indexHtml.includes('/app.js?v=278'), 'index.html: sin ?v=278 residual');
+ok(indexHtml.includes('/styles.css?v=20261025w'), 'index.html: styles.css bumpeado a ?v=20261025w (v444)');
 ok(appJs.includes("const CHUNK_V = '20261025-v436';"), 'app.js: CHUNK_V bumpeado al build v436');
 
 /* ================= Parte B: comportamiento ================= */
@@ -346,19 +389,47 @@ console.log('— B: chapita del ancla (extraída)');
   ok(en.includes('Editing this post') && !en.includes('Editando'), 'chapita EN: «Editing this post», sin español');
 }
 
-console.log('— B: botón «Pedir un cambio» (extraído)');
+console.log('— B: mini-chat del detalle (extraído)');
 {
-  const built = new Function('esc', 'ME', 'var HF_ASK_POSTS = {};\nvar HF_CHAT_OPEN_PENDING = false;\n' + askBtnSrc + '\nreturn { f: hfAskChangeBtnHTML, reg: HF_ASK_POSTS };')(escStub, { lang: 'es' });
+  const built = new Function('esc', 'ME', 'var HF_ASK_POSTS = {};\nvar HF_CHAT_OPEN_PENDING = false;\nvar HF_ASK_TEXT_PENDING = \'\';\n' + askBtnSrc + '\nreturn { f: hfAskChangeBtnHTML, reg: HF_ASK_POSTS };')(escStub, { lang: 'es' });
   const draft = { id: 7, image_path: '/img/7.jpg', status: 'draft', caption: 'hola', redo_left: 2, media_type: 'image' };
   const html = built.f(draft);
-  ok(html.includes('💬 Pedir un cambio') && html.includes('data-hf-ask-change="7"'), 'botón ES en borrador con imagen');
+  ok(html.includes('qué le cambiamos a este posteo?') && html.includes('data-hf-ask-form="7"') && html.includes('data-hf-ask-input'), 'mini-chat ES en borrador con imagen: línea de Posty + form con el id + input');
+  ok(html.includes('hf-ask-posty') && html.includes('escribile a Posty…'), 'mini-chat ES: línea de Posty con su avatar y placeholder en su voz');
   ok(!html.includes('data-f3-'), 'el HTML que produce el detalle no contiene ningún data-f3-* del hilo');
   ok(built.reg['7'] && built.reg['7'].image_path === '/img/7.jpg' && built.reg['7'].redo_left === 2, 'el posteo queda registrado por id para el handler delegado');
-  ok(built.f({ id: 8, image_path: '/img/8.jpg', status: 'published' }) === '', 'publicado: sin botón (la caja tampoco existía)');
-  ok(built.f({ id: 9, status: 'draft' }) === '', 'borrador sin imagen: sin botón (misma elegibilidad que la caja)');
-  const builtEn = new Function('esc', 'ME', 'var HF_ASK_POSTS = {};\nvar HF_CHAT_OPEN_PENDING = false;\n' + askBtnSrc + '\nreturn { f: hfAskChangeBtnHTML };')(escStub, { lang: 'en' });
-  ok(builtEn.f(draft).includes('💬 Ask for a change'), 'botón EN: «💬 Ask for a change»');
+  ok(built.f({ id: 8, image_path: '/img/8.jpg', status: 'published' }) === '', 'publicado: sin mini-chat (la caja tampoco existía)');
+  ok(built.f({ id: 9, status: 'draft' }) === '', 'borrador sin imagen: sin mini-chat (misma elegibilidad que la caja)');
+  const builtEn = new Function('esc', 'ME', 'var HF_ASK_POSTS = {};\nvar HF_CHAT_OPEN_PENDING = false;\nvar HF_ASK_TEXT_PENDING = \'\';\n' + askBtnSrc + '\nreturn { f: hfAskChangeBtnHTML };')(escStub, { lang: 'en' });
+  ok(builtEn.f(draft).includes('what do we change on this post?') && builtEn.f(draft).includes('message Posty…'), 'mini-chat EN: «what do we change on this post?» + placeholder EN');
 }
+
+console.log('— A: (v442) píldora, bandeja, peek centrado, chat sin prólogo, relación fuera');
+const pillSrc = extractFn(appJs, 'setupMainHTML') || '';
+ok(!!pillSrc, 'setupMainHTML existe (la forma principal de la tira)');
+ok(pillSrc.includes('setupChecklistHtml(undefined, { omitIg: true })'), 'setupMainHTML compone LA tarjeta de siempre (mismas filas y binds)');
+ok(pillSrc.includes('setup-pill') && pillSrc.includes('data-setup-pill') && pillSrc.includes('setup-pill-pop'), 'setupMainHTML: píldora compacta + despliegue de la tarjeta');
+ok(pillSrc.includes('setup-title'), 'setupMainHTML: el rótulo sale del título real de la tarjeta (el número de toda la app)');
+const refreshSrc2 = extractFn(appJs, 'refreshSetupChecklist') || '';
+ok(refreshSrc2.includes('setup-pillwrap') && refreshSrc2.includes('pillwrap.remove()'), 'refreshSetupChecklist (v442): al llegar a 0 pasos se va la píldora entera');
+ok(refreshSrc2.includes('data-setup-pill-label'), 'refreshSetupChecklist (v442): el rótulo de la píldora hereda el título refrescado');
+ok(bindIniSrc.includes('bindSetupPill('), 'bindInicio cablea la píldora');
+const bindSchedSrc = (() => { const i = appJs.indexOf('function bindSchedule()'); return i > -1 ? appJs.slice(i, i + 1500) : ''; })();
+ok(bindSchedSrc.includes('bindSetupPill(') && bindSchedSrc.includes('bindPvTray('), 'bindSchedule cablea la píldora y la bandeja «Para vos»');
+const traySrc = extractFn(appJs, 'pvTrayHTML') || '';
+ok(!!traySrc && traySrc.includes('pv-tray') && traySrc.includes('Para vos') && traySrc.includes('For you'), 'pvTrayHTML: UNA bandeja «Para vos» / «For you»');
+ok(traySrc.includes('pv-plain') && traySrc.includes('pv-slotrow') && traySrc.includes('data-pv-toggle'), 'pvTrayHTML: fila-enlace directa, filas de slot y filas desplegables');
+ok(!shellSrc.includes('relacionSlot'), 'appShell (v442): la burbuja de relación ya no se monta en Inicio/Semana');
+ok(appJs.includes('pzFillRelacion') && appJs.includes('/api/relacion/entry'), 'bundle (v442): el sistema de relación sigue intacto (endpoint y loader; solo murió su superficie)');
+const scfOpenSrc = extractFn(appJs, 'scfOpenPop') || '';
+ok(scfOpenSrc.includes('document.body.appendChild(pop)'), 'scfOpenPop (v442): la capa se monta en el BODY (portal) — el centrado fixed es el del viewport, no el de la tile');
+ok(!scfOpenSrc.includes('wrap.appendChild(pop)'), 'scfOpenPop (v442): la capa ya no vive dentro de la tile (los transforms de la grilla la corrían a un costado)');
+const scfWireSrc = extractFn(appJs, 'scfWireGlobals') || '';
+ok(scfWireSrc.includes("!e.target.closest('.scf-pop')"), 'scfWireGlobals (v442): el click afuera no cierra cuando el click es DENTRO de la capa portal');
+ok(scfWireSrc.includes('Math.min(wr.left, pr.left)'), 'scfWireGlobals (v442): el rastreador cubre el viaje tile→centro con la caja envolvente; salir de ella cierra en el acto');
+ok(cardSrc.includes('mainScr') && cardSrc.includes('mainScr ? msgs'), 'chatCardHTML (v442): con mainScr el chat abre directo — historial + input, sin saludo ni línea de la semana');
+ok((appJs.match(/chatCardHTML\(true, true, true, true, true\)/g) || []).length === 2, 'chatCardHTML (v442): las dos superficies de la pantalla principal (Semana y hoja de Inicio) piden mainScr');
+ok(!schedSlice.includes('¿Cambiamos algo?') && !iniSrc436.includes('¿Cambiamos algo?'), 'pantalla principal (v442): el título «¿Cambiamos algo?» salió de Semana y de la hoja de Inicio');
 
 console.log('— B: (v436) píldora de aceptación total (extraída)');
 {
