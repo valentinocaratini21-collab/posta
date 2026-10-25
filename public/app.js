@@ -13903,7 +13903,14 @@ function homeHeadHTML(prof, bizName, opts) {
     ? `<button type="button" class="hf-ava-btn" data-hf-ava="1" aria-label="${en ? "See this week's stories" : 'Ver las historias de esta semana'}">${avaInner}</button>`
     : avaInner;
   const hls = (Array.isArray(P.highlights) ? P.highlights : []).filter((h) => h && h.title);
-  const hlHTML = hls.length ? `<div class="hf-hls">${hls.map((h) => `<div class="hf-hl"><div class="hf-hl-ring">${h.cover ? `<img src="${esc(h.cover)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="hf-hl-letter">${esc(String(h.title).charAt(0).toUpperCase())}</span>`}</div><div class="hf-hl-t">${esc(h.title)}</div></div>`).join('')}</div>` : '';
+  // (v461 · cabecera) «Crear mis cubiertas» vive acá: primer tile «+»
+  // de la tira de destacadas, donde están las cubiertas. Solo en la
+  // vista del dueño (opts.coversPlus): jamás en visitante ni en el
+  // preview de edición (que no pasa el flag). Se ata con data-hf-pact
+  // al bind de siempre (hfProfileBind sobre inicioView).
+  const plusTile = (opts && opts.coversPlus)
+    ? `<button type="button" class="hf-hl hf-hl-plus" data-hf-pact="covers" aria-label="${en ? 'Create highlight covers' : 'Crear cubiertas de destacadas'}"><div class="hf-hl-ring hf-hl-ring-plus">+</div><div class="hf-hl-t">${en ? 'Covers' : 'Cubiertas'}</div></button>` : '';
+  const hlHTML = (hls.length || plusTile) ? `<div class="hf-hls">${plusTile}${hls.map((h) => `<div class="hf-hl"><div class="hf-hl-ring">${h.cover ? `<img src="${esc(h.cover)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="hf-hl-letter">${esc(String(h.title).charAt(0).toUpperCase())}</span>`}</div><div class="hf-hl-t">${esc(h.title)}</div></div>`).join('')}</div>` : '';
   return `<div class="hf-head">
     ${user ? `<div class="hf-user">${esc(user)}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
@@ -14264,13 +14271,28 @@ function hfShareSheetHTML(prof, en) {
     + '</div><div class="hf-ps-msg" data-hf-ps-msg></div></div>';
 }
 function hfProfileActionsHTML(en) {
-  const b = (act, ic, es, enT) => '<button type="button" class="hf-pact" data-hf-pact="' + act + '">' + ic + ' ' + (en ? enT : es) + '</button>';
+  // (v461 · cabecera, orden de Valentino: LO MÁS SIMPLE POSIBLE) UNA
+  // sola pastilla en toda la cabecera: el botón lleno «Compartir mi
+  // perfil». El resto es TEXTO PLANO CHICO GRIS, sin borde ni fondo,
+  // debajo del botón principal (clase hf-psec). REGLA DURA: nada se
+  // corta en el borde ni queda huérfano en una línea sola — la
+  // primaria va a ancho completo y las secundarias son celdas flex
+  // iguales en UNA sola fila (el texto envuelve dentro de su celda,
+  // el botón nunca salta a otra línea). CENSO DE LA FILA (todo
+  // cubierto): Compartir = la única pastilla · Editar + Ver como
+  // visitante + Tu archivo (la pastilla cortada que no se nombró) =
+  // texto plano · «Crear mis cubiertas» se mudó a la tira de
+  // destacadas como primer tile «+» (homeHeadHTML, opts.coversPlus).
+  // Ninguna función se elimina. «Ver en el inicio» y «Ver cómo se
+  // recorta» NO son de esta fila (son del detalle del posteo) y no se tocan.
+  const sec = (attrs, txt) => '<button type="button" class="hf-psec" ' + attrs + '>' + txt + '</button>';
   return '<div class="hf-pacts">'
-    + b('share', '📤', 'Compartir mi perfil', 'Share my profile')
-    + b('edit', '✏️', 'Editar perfil', 'Edit profile')
-    + b('covers', '🎨', 'Crear mis cubiertas', 'Create my highlight covers')
-    + b('archive', '🗂️', 'Tu archivo', 'Archive')
-    + '</div>';
+    + '<button type="button" class="hf-pmain" data-hf-pact="share">📤 ' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</button>'
+    + '<div class="hf-psecs">'
+    + sec('data-hf-pact="edit"', '✏️ ' + (en ? 'Edit profile' : 'Editar perfil'))
+    + sec('data-hf-visitor="1"', '👁 ' + (en ? 'View as visitor' : 'Ver como visitante'))
+    + sec('data-hf-pact="archive"', '🗂️ ' + (en ? 'Archive' : 'Tu archivo'))
+    + '</div></div>';
 }
 /* — Ítem 12: cubiertas de destacadas (render determinístico, $0 de IA) — */
 const HF_COVER_ICONS = {
@@ -14614,9 +14636,8 @@ async function inicioView() {
   const visitorPillHTML = HF_VISITOR
     ? `<button type="button" class="hf-vpill" data-hf-visitor="0">👁 ${enHome ? 'You are seeing your profile as a visitor' : 'Estás viendo tu perfil como visitante'} · <b>${enHome ? 'Back to your view' : 'Volver a tu vista'}</b></button>`
     : '';
-  const visitorToggleHTML = HF_VISITOR
-    ? ''
-    : `<div class="hf-vrow"><button type="button" class="hf-vtoggle" data-hf-visitor="1">👁 ${enHome ? 'View as visitor' : 'Ver como visitante'}</button></div>`;
+  // (v461 · cabecera) «Ver como visitante» ya no tiene fila propia:
+  // es una de las secundarias en texto de hfProfileActionsHTML.
   // (v436) El saludo del chat de Inicio hereda el aviso de la semana
   // que viene (la misma cuenta que antes pintaba la línea de cupo).
   try {
@@ -14639,9 +14660,8 @@ async function inicioView() {
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${HF_VISITOR ? '' : setupMainHTML()}
   ${nivelStripHTML}
-  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB })}
+  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, coversPlus: !HF_VISITOR })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
-  ${visitorToggleHTML}
   ${storiesHTML}
   ${gridHTML}
   ${stripHTML}

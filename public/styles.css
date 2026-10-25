@@ -1977,8 +1977,6 @@ textarea.in{resize:vertical;min-height:96px}
 /* (Tanda feed 5 · Push B) Pestañas funcionales, visitante, duración de
    reels y el detalle IG de pantalla completa. */
 .hf-tab{background:none;border:0;border-top:1px solid transparent;cursor:pointer;font:inherit}
-.hf-vrow{display:flex;justify-content:flex-end;padding:0 16px 4px}
-.hf-vtoggle{background:#fff;border:1px solid #dbdbdb;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600;color:#262626;cursor:pointer}
 .hf-vpill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom));z-index:60;background:#0a1e33;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-size:13.5px;cursor:pointer;box-shadow:0 8px 24px rgba(10,30,51,.35);max-width:92vw}
 .accept-pill{position:fixed;right:16px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:60;background:var(--cel);color:#fff;border:0;border-radius:999px;padding:12px 20px;font-size:14.5px;font-weight:800;font-family:inherit;cursor:pointer;box-shadow:0 10px 26px rgba(10,30,51,.30)}
 .accept-pill:disabled{opacity:.65;cursor:default}
@@ -2038,6 +2036,10 @@ body.hf-d-open{overflow:hidden}
 .hf-hl-ring img{width:100%;height:100%;object-fit:cover}
 .hf-hl-letter{font-weight:800;color:#2793c8;font-size:20px}
 .hf-hl-t{font-size:12px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#0a1e33}
+/* (v461 · cabecera) Tile «+» de cubiertas: primer tile de la tira, con
+   la misma geometría que las destacadas (anillo 60px, etiqueta 12px). */
+.hf-hl-plus{background:none;border:0;padding:0;font:inherit;cursor:pointer}
+.hf-hl-ring-plus{font-size:26px;font-weight:800;color:#2793c8;border-style:dashed}
 .hf-tabs{display:flex;border-top:1px solid #e5e5e5;margin-top:18px}
 .hf-tab{flex:1;display:flex;justify-content:center;padding:9px 0 7px;color:#8e8e8e;border-top:1px solid transparent;margin-top:-1px}
 .hf-tab.on{color:#0a1e33;border-top-color:#0a1e33}
@@ -3317,9 +3319,15 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    Láminas del perfil sobre el patrón hf-cover (overlay + tarjeta
    min(94vw,…)): a 360px la tarjeta mide 338px y a 390px, 366px — sin
    overflow horizontal; las filas internas envuelven. */
-.hf-pacts{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 2px;scrollbar-width:none}
-.hf-pacts::-webkit-scrollbar{display:none}
-.hf-pact{flex:none;border:1.5px solid var(--line);background:#fff;color:var(--txt);border-radius:999px;padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+/* (v461 · cabecera, LO MÁS SIMPLE POSIBLE) UNA sola pastilla: el botón
+   lleno Compartir. Las secundarias son TEXTO PLANO CHICO GRIS, sin
+   borde ni fondo, en una sola fila de celdas flex iguales — el texto
+   envuelve dentro de su celda, así nada se corta en el borde ni queda
+   huérfano en una línea sola, a cualquier ancho. */
+.hf-pacts{padding:12px 16px 2px}
+.hf-pmain{display:block;width:100%;border:0;background:#2793c8;color:#fff;border-radius:999px;padding:11px 14px;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit}
+.hf-psecs{display:flex;gap:4px;margin-top:8px}
+.hf-psec{flex:1 1 0;min-width:0;background:none;border:0;color:#737373;font-weight:600;font-size:12.5px;line-height:1.3;padding:6px 2px;cursor:pointer;font-family:inherit;text-align:center}
 .hf-ps-back{position:fixed;inset:0;z-index:1500;background:rgba(10,30,51,.55);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:18px 12px}
 .hf-ps-card{background:#fff;border-radius:18px;width:min(94vw,430px);box-shadow:0 22px 60px rgba(10,30,51,.4);padding:18px 16px 14px}
 .hf-ps-title{font-weight:800;font-size:17px;color:var(--txt);margin-bottom:10px}

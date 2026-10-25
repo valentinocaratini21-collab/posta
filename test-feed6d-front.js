@@ -139,9 +139,24 @@ const archEmpty = sb.hfArchiveHTML({ versions: [], recycled: [], cancelled: [], 
 ok(archEmpty.includes('Tu archivo está vacío por ahora') && archEmpty.includes('Todavía no hay versiones anteriores'),
   'archivo vacío: estados honestos por sección');
 ok(sb.hfArchiveHTML(archData, true).includes('Back to this version'), 'archivo EN: gemelo «Back to this version»');
-ok(sb.hfProfileActionsHTML(false).includes('Compartir mi perfil') && sb.hfProfileActionsHTML(false).includes('Tu archivo')
-  && sb.hfProfileActionsHTML(true).includes('Create my highlight covers'),
-  'fila de acciones del perfil: los 4 accesos ES/EN');
+ok(sb.hfProfileActionsHTML(false).includes('Compartir mi perfil') && sb.hfProfileActionsHTML(false).includes('Editar perfil')
+  && sb.hfProfileActionsHTML(false).includes('Ver como visitante') && sb.hfProfileActionsHTML(false).includes('Tu archivo')
+  && !sb.hfProfileActionsHTML(false).includes('Crear mis cubiertas')
+  && sb.hfProfileActionsHTML(true).includes('Share my profile') && sb.hfProfileActionsHTML(true).includes('Edit profile')
+  && sb.hfProfileActionsHTML(true).includes('View as visitor') && sb.hfProfileActionsHTML(true).includes('Archive'),
+  'cabecera v462: UNA sola pastilla (Compartir) + resto en texto plano; cubiertas ya no vive en la fila');
+ok(sb.hfProfileActionsHTML(false).includes('class="hf-pmain"') && sb.hfProfileActionsHTML(false).includes('class="hf-psec"')
+  && !sb.hfProfileActionsHTML(false).includes('class="hf-pact"'),
+  'cabecera v462: una clase de pastilla principal + secundarias en texto, sin pastillas viejas');
+const headPlus = sb.homeHeadHTML({ username: 'u', name: 'N', bio: '', bio_unread: false, link: '', pic: null, followers: null, posts_count: null, following: null, highlights: [{ title: 'Menú', cover: '' }] }, 'X', { en: false, coversPlus: true });
+ok(headPlus.includes('data-hf-pact="covers"') && headPlus.includes('Cubiertas') && headPlus.indexOf('hf-hl-plus') < headPlus.indexOf('Menú'),
+  'cabecera v462: cubiertas como primer tile «+» de la tira (vista del dueño)');
+const headNoPlus = sb.homeHeadHTML({ username: 'u', name: 'N', bio: '', bio_unread: false, link: '', pic: null, followers: null, posts_count: null, following: null, highlights: [{ title: 'Menú', cover: '' }] }, 'X', { en: false });
+ok(!headNoPlus.includes('hf-hl-plus') && headNoPlus.includes('Menú'),
+  'cabecera v462: sin coversPlus no hay tile «+» (preview de edición intacto)');
+const headPlusEmpty = sb.homeHeadHTML({ username: 'u', name: 'N', bio: '', bio_unread: false, link: '', pic: null, followers: null, posts_count: null, following: null, highlights: [] }, 'X', { en: true, coversPlus: true });
+ok(headPlusEmpty.includes('data-hf-pact="covers"') && headPlusEmpty.includes('Covers'),
+  'cabecera v462: con coversPlus la tira existe aunque no haya destacadas');
 
 console.log(`\nfeed6d-front: ${total - fails}/${total}`);
 process.exit(fails ? 1 : 0);

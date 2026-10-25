@@ -276,7 +276,7 @@ for (const tok of ['${igLine}', '${prodashHTML}', '${kitHTML}', '${whyHTML}', 'm
   ok(!iniRet.includes(tok), `inicioView (v440): fuera del flujo principal — ${tok}`);
 }
 ok(!appJs.includes('class="mz-igbar"'), 'bundle (v440): el markup de la barra ancha de IG salió; el estado IG vive en el chip del encabezado');
-ok(idxOf(iniRet, '${visitorToggleHTML}') > -1 && idxOf(iniRet, '${visitorToggleHTML}') < idxOf(iniRet, '${gridHTML}'), 'inicioView (v440): «ver como visitante» es acción chica en la zona del encabezado, no un bloque bajo la grilla');
+ok(idxOf(iniRet, 'hfProfileActionsHTML(enHome)') > -1 && idxOf(iniRet, 'hfProfileActionsHTML(enHome)') < idxOf(iniRet, '${gridHTML}') && appJs.includes('data-hf-visitor="1"') && appJs.includes('Ver como visitante'), 'inicioView (v440+v462): «ver como visitante» es acción chica en texto dentro de la cabecera, no un bloque bajo la grilla');
 ok(!iniRet.includes('mzIdeasSlot'), 'inicioView (v442): el slot del botón de Ideas salió de la pantalla principal (corrección 02:15)');
 ok(!appJs.includes('id="mzIdeasGo"'), 'bundle (v442): el botón-anuncio «💡 Tenés N ideas nuevas» (mzIdeasGo) ya no se renderiza');
 ok(appJs.includes('IDEAS_PENDING_COUNT = (r.ideas || []).length'), 'bundle (v442): el conteo de ideas se sigue computando (badge del chip y panel intactos)');
@@ -338,9 +338,9 @@ ok(!appJs.includes('Estás hablando de este posteo') && !appJs.includes("You're 
 ok(appJs.includes('anchor_post_id') && appJs.includes('HF_CHAT_ANCHOR.id'), 'chat principal intacto: el envío sigue mandando anchor_post_id desde HF_CHAT_ANCHOR');
 
 console.log('— A: index.html y CHUNK_V');
-ok(indexHtml.includes('/app.js?v=292'), 'index.html: app.js bumpeado a ?v=286 (v455)');
-ok(!indexHtml.includes('/app.js?v=285'), 'index.html: sin ?v=285 residual');
-ok(indexHtml.includes('/styles.css?v=20261030'), 'index.html: styles.css bumpeado a ?v=20261027 (v452)');
+ok(indexHtml.includes('/app.js?v=293'), 'index.html: app.js bumpeado a ?v=292 (v462)');
+ok(!indexHtml.includes('/app.js?v=292'), 'index.html: sin ?v=291 residual');
+ok(indexHtml.includes('/styles.css?v=20261031'), 'index.html: styles.css bumpeado a ?v=20261031 (v462)');
 ok(appJs.includes("const CHUNK_V = '20261025-v436';"), 'app.js: CHUNK_V bumpeado al build v436');
 
 /* ================= Parte B: comportamiento ================= */
