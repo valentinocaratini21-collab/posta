@@ -3691,3 +3691,15 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .sello-cabecera{width:34px;height:34px;border-radius:50%;flex:none;margin-right:9px}
 .sello-pie{width:56px;height:56px;border-radius:50%;flex:none;margin-right:10px}
 @media(max-width:760px){.sello-cabecera{width:28px;height:28px}}
+
+/* ===== BOTONES DISEÑADOS DEL WEBSITE — sistema wb (2026-10-25) =====
+   Trazo celeste Posty + nudo/brote dorado de la placa. Solo website. */
+.wb-ic{width:1.12em;height:1.12em;vertical-align:-0.2em;flex:none}
+.btn .wb-ic{width:1.15em;height:1.15em}
+.wb-ic-t{margin-left:.5em}
+.wb-ic-l{margin-right:.45em}
+.lp-wchip .wb-ic,.ej-chip .wb-ic{width:17px;height:17px;vertical-align:-3px;color:#2793C8}
+.lp-wchip.on .wb-ic,.ej-chip.on .wb-ic{color:#fff}
+.q-opt .qe .wb-ic{width:22px;height:22px;color:#2793C8}
+.pm-chev .wb-ic,.bt-arrow .wb-ic{width:1em;height:1em;vertical-align:-0.15em}
+.lp-wall-nav .wb-ic,.lp-view-nav .wb-ic,.ej-nav .wb-ic,.lb-nav .wb-ic,.x .wb-ic{width:1.1em;height:1.1em;vertical-align:-0.15em}
