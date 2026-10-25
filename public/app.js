@@ -3244,7 +3244,7 @@ function landingView(cfg) {
       <label class="lp-calc-lab" for="lpCalcH">Horas que le dedicás por semana: <b id="lpCalcHVal">6 h</b></label>
       <input type="range" id="lpCalcH" min="1" max="20" step="1" value="6" oninput="lpCalcUpdate()" aria-label="Horas por semana que le dedicás a tu Instagram">
       <label class="lp-calc-lab" for="lpCalcR" style="margin-top:16px">¿Cuánto vale tu hora? <b id="lpCalcRVal">${lpFmt(lpDefRate)}</b></label>
-      <input type="range" id="lpCalcR" min="${lpUy ? 100 : 1000}" max="${lpUy ? 2500 : 30000}" step="${lpUy ? 50 : 250}" value="${lpDefRate}" oninput="lpCalcRateSlider()" aria-label="Cuánto vale tu hora">
+      <input type="range" id="lpCalcR" min="${(lpCur === 'UYU') ? 100 : 1000}" max="${(lpCur === 'UYU') ? 2500 : 30000}" step="${(lpCur === 'UYU') ? 50 : 250}" value="${lpDefRate}" oninput="lpCalcRateSlider()" aria-label="Cuánto vale tu hora">
       <div class="lp-calc-rates">
         ${lpChips.map((v) => `<button type="button" class="lp-crate${v === lpDefRate ? ' on' : ''}" data-rate="${v}" onclick="lpCalcRate(this)">${lpFmt(v)}</button>`).join('')}
       </div>
