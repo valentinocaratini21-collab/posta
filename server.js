@@ -43,7 +43,7 @@ const bookingMod = require('./booking');
 const followupsMod = require('./followups');
 const paymentCloseMod = require('./payment-close');
 const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
-const { upcomingEphemeris, catsMatch } = require('./ephemeris');
+const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
@@ -54,7 +54,6 @@ const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispos
 const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleados, gating por pack, registro durable, fundamento-vista y bandeja con la matriz forzada en el servidor
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
 const { reconcileUser } = require('./billing-sync');
-const weekRedo = require('./week-redo'); // (ARMA TODO · ítem 3) garantía de primera semana: registro durable del rehacer
 const { startTokenRefresh } = require('./tokenrefresh');
 const { analyzeWebsite } = require('./website-study');
 const meliApi = require('./meli'); // MercadoLibre: API pública sin key (Track 4)
@@ -388,10 +387,8 @@ function ephemerisFor(profile) {
   if (!eph) return null;
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
-  const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return null;
-  const m = catsMatch(eph, cat + ' ' + biz + ' ' + desc);
-  return (m !== null ? m : EPHEMERIS_GIFT_OK.test(cat)) ? eph : null;
+  return EPHEMERIS_GIFT_OK.test(cat) ? eph : null;
 }
 // C1 + paquete de titulares (2026-10-16, aprobado por Valentino "arma
 // todo"; paquete makeheadline-decision-v113 de Mora + spec M53 de Uma):
@@ -606,9 +603,6 @@ function stripeHooks() {
   return {
     onActivated: (uid, planId) => {
       try { stampFounder(uid); } catch (e) {}
-      // (ítem 3) Activación = nace la garantía de primera semana (weekKey
-      // calculada acá, el dueño del cálculo; INSERT OR IGNORE idempotente).
-      try { weekRedo.grantFirstWeekRedo(db, uid, mondayKeyOf(tzToday(userTz(uid)))); } catch (e) { console.error('[first-week-redo] grant stripe:', e.message); }
       reactivatePausedPosts(uid);
       track(uid, 'subscribed', planId);
       evTrack(uid, 'payment_ok', { plan: planId, provider: 'stripe' });
@@ -1881,9 +1875,9 @@ function ephemerisWindowFor(profile, days) {
   if (!list.length) return [];
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
-  const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return [];
-  return list.filter(e => { const m = catsMatch(e, cat + ' ' + biz + ' ' + desc); return m !== null ? m : EPHEMERIS_GIFT_OK.test(cat); });
+  if (!EPHEMERIS_GIFT_OK.test(cat)) return [];
+  return list;
 }
 
 // Lectura pública de un competidor, con caché de 6 días en competitor_snapshots.
@@ -3184,16 +3178,7 @@ app.get('/api/profile', requireAuth, (req, res) => {
     const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(req.session.userId);
     if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
   } catch (e) {}
-  // (v426 · ÍTEM 4 «ARMA TODO») Primera semana en marcha: true si existe
-  // AL MENOS un posteo del usuario con status 'scheduled' o 'published'
-  // (en autopiloto nacen programados; en manual, aceptar = programar).
-  // Única fuente de verdad del paso «primera semana» del checklist de
-  // activación: el front lo consume como PROFILE.first_week_live.
-  let firstWeekLive = false;
-  try {
-    firstWeekLive = !!db.prepare(`SELECT 1 FROM posts WHERE user_id = ? AND status IN ('scheduled', 'published') LIMIT 1`).get(req.session.userId);
-  } catch (e) { /* si la lectura falla, el paso queda pendiente: nunca rompe el perfil */ }
-  res.json({ ...p, ig_pending: pending, best_hour: bestHour, first_week_live: firstWeekLive });
+  res.json({ ...p, ig_pending: pending, best_hour: bestHour });
 });
 
 app.put('/api/profile', requireAuth, (req, res) => {
@@ -7766,99 +7751,6 @@ app.get('/api/week/last-result', requireAuth, (req, res) => {
   return res.json({ ok: true, has: true, result: r });
 });
 
-// ---------- (ARMA TODO · ítem 3) GARANTÍA DE PRIMERA SEMANA ----------
-// «Si tu primera semana no te convence, te la rehacemos entera, gratis.»
-// El registro durable vive en week-redo.js (tabla first_week_redo, creada
-// en la activación del plan). Alcance REAL del rehacer (verificado sobre
-// generateWeekDrafts): la corrida repone el déficit COMPLETO de la semana
-// — posteos de feed (image/carousel, vía weekOccupancyRows) Y los extras
-// del plan (generateWeekExtras: historias + reels, por su propio déficit
-// sobre week_key) — por eso el descarte incluye story/video: al quedar
-// en 'cancelled' salen de TODAS las cuentas de ocupación y el pipeline
-// los regenera. Los publicados ('published'/'publishing') JAMÁS se tocan.
-app.get('/api/week/first-redo', requireAuth, (req, res) => {
-  const uid = req.session.userId;
-  try {
-    const wk = mondayKeyOf(tzToday(userTz(uid)));
-    const st = weekRedo.firstRedoStatus(db, uid, wk);
-    return res.json({ ok: true, state: st.state, grant_week_key: st.grant_week_key, week_key: wk });
-  } catch (e) {
-    console.error('[first-week-redo] status:', e.message);
-    return res.json({ ok: true, state: 'none', grant_week_key: null });
-  }
-});
-
-app.post('/api/week/first-redo', requireAuth, requireTrialValid, (req, res) => {
-  const uid = req.session.userId;
-  try {
-    const wk = mondayKeyOf(tzToday(userTz(uid)));
-    const st = weekRedo.firstRedoStatus(db, uid, wk);
-    if (st.state !== 'available') {
-      return res.status(409).json({ ok: false, error: 'first_redo_unavailable', state: st.state,
-        message: 'La garantía de tu primera semana ya no está disponible.' });
-    }
-    if (!planOrTrialOk(uid)) {
-      return res.status(409).json({ ok: false, error: 'no_plan', message: 'Necesitás un plan activo para rehacer tu semana.' });
-    }
-    // El cap de IA se chequea ANTES de tocar nada: si frena, no se consume
-    // la garantía ni se descarta un solo posteo (la garantía queda intacta).
-    try { costs.assertAiOk(uid); }
-    catch (e) { return res.status(429).json({ ok: false, error: 'ai_cap', message: String((e && e.message) || 'Tope de IA alcanzado').slice(0, 200) }); }
-    const grantWk = st.grant_week_key;
-    // Consumo ATÓMICO primero (actúa de candado): si un doble toque ya la
-    // consumió, este pedido sale sin descartar nada — descartar antes de
-    // consumir podría tirar la semana NUEVA que el otro pedido ya está
-    // generando. El UPDATE condicional de week-redo garantiza un solo uso.
-    if (!weekRedo.consumeFirstWeekRedo(db, uid, wk)) {
-      return res.status(409).json({ ok: false, error: 'first_redo_unavailable', state: 'used',
-        message: 'La garantía de tu primera semana ya se usó.' });
-    }
-    // Descarte con el mecanismo de la casa: status='cancelled' (el mismo
-    // de /api/posts/:id/dismiss-failed y del rechazo) — los posteos salen
-    // de weekOccupancyRows y de la cuenta de extras, NO se borran: quedan
-    // visibles en «Tu archivo» (/api/archive) y se pueden restaurar.
-    // Semana = week_key del grant O fecha programada dentro de esa
-    // semana (el mismo criterio de ocupación de weekOccupancyRows).
-    const disc = db.prepare(`UPDATE posts SET status = 'cancelled', error = ''
-      WHERE user_id = ? AND status IN ('draft','scheduled','paused','failed')
-        AND (week_key = ? OR (scheduled_at IS NOT NULL AND date(scheduled_at) >= date(?) AND date(scheduled_at) < date(?, '+7 days')))`
-    ).run(uid, grantWk, grantWk, grantWk);
-    console.log(`[first-week-redo] usuario ${uid} semana ${grantWk}: ${disc.changes} posteos no publicados descartados → regenerando entera`);
-    // Regeneración en segundo plano (patrón /api/week/ensure): la
-    // respuesta vuelve al toque y el progreso se ve por last-result.
-    generateWeekDrafts(uid, { weekKey: grantWk, tag: 'first-week-redo' })
-      .then(async r => {
-        console.log(`[first-week-redo] usuario ${uid} semana ${grantWk}:`, r && r.ok ? `${r.created} creados` : `falló (${r && r.reason})`);
-        try { LAST_WEEK_RESULT.set(uid, { ...r, at: Date.now(), weekKey: grantWk }); } catch (e) {}
-        // Borde de verdad: si el feed de la semana ya estaba COMPLETO y
-        // publicado, generateWeekDrafts corta en 'already_complete' ANTES
-        // del bloque de extras — las historias/reels descartados arriba
-        // no se repondrían y la semana no quedaría entera. Solo en ese
-        // caso, los extras se reponen acá con las imágenes publicadas de
-        // la semana como fuente (generateWeekExtras es idempotente por
-        // déficit: si el pipeline ya los hizo, esto no crea nada).
-        if (r && r.reason === 'already_complete') {
-          try {
-            const { generateWeekExtras } = require('./story-reel');
-            const feedPub = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND week_key = ? AND status = 'published' AND media_type = 'image' ORDER BY created_at ASC`).all(uid, grantWk);
-            let isFounderX = false;
-            try { isFounderX = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
-            const xr = await generateWeekExtras({ db, uid, weekKey: grantWk, tag: 'first-week-redo', mediaDir: MEDIA_DIR, feedDrafts: feedPub, needsReview: (!isFounderX && autopilot.trustLevel(db, uid) === 0) });
-            console.log(`[first-week-redo] usuario ${uid}: extras repuestos tras already_complete:`, JSON.stringify(xr && { stories: xr.stories, reels: xr.reels }));
-          } catch (e) { console.error('[first-week-redo] extras tras already_complete:', e.message); }
-        }
-      })
-      .catch(e => {
-        console.error('[first-week-redo] pipeline:', e.message);
-        try { LAST_WEEK_RESULT.set(uid, { ok: false, reason: 'exception', error: String(e.message || e).slice(0, 300), at: Date.now(), weekKey: grantWk }); } catch (e2) {}
-      });
-    return res.json({ ok: true, started: true, discarded: disc.changes, week_key: grantWk });
-  } catch (e) {
-    console.error('[first-week-redo]:', e.message);
-    return res.status(500).json({ ok: false, error: 'No se pudo rehacer tu semana. Probá de nuevo.' });
-  }
-});
-
 // Fix auditoría #2 (2026-09-30): "⚡ Rearmar mi semana" del welcome honesto.
 // La importación de /prueba trajo 0 (cache vencido / payload roto, marcado en
 // users.trial_import_n): se genera la semana de nuevo en segundo plano con el
@@ -12131,9 +12023,6 @@ app.post('/api/billing/webhook', async (req, res) => {
       db.prepare(`UPDATE users SET plan=?, plan_status='active', mp_preapproval_id=? WHERE id=?`)
         .run(planId, String(mpId), Number(userId));
       try { stampFounder(Number(userId)); } catch (e) {}
-      // (ítem 3) Activación = nace la garantía de primera semana (weekKey
-      // calculada acá, el dueño del cálculo; INSERT OR IGNORE idempotente).
-      try { weekRedo.grantFirstWeekRedo(db, Number(userId), mondayKeyOf(tzToday(userTz(Number(userId))))); } catch (e) { console.error('[first-week-redo] grant MP:', e.message); }
       reactivatePausedPosts(Number(userId));
       track(Number(userId), 'subscribed', planId);
       evTrack(Number(userId), 'payment_ok', { plan: planId });
@@ -17520,6 +17409,67 @@ app.get('/api/gesty/buzon/resumen', ...gestyBuzonMW, (req, res) => {
   catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-24 — SALUD ADMINISTRATIVA («La oficina», gesty-salud.js)
+// El tablero que el dueño mira para saber si Gesty está
+// funcionando: papeles al día %, cobranzas al día, huecos
+// abiertos, datos cargados a mano contra la vara de la primera
+// semana (<5), lo que espera su OK, alertas de precio,
+// conciliación, reservas del canal y buzón — cada indicador
+// calculado AL LEER desde los registros vivos de su área, con
+// su fuente, su período y su tendencia contra el período
+// anterior comparable. NADA de base paralela de indicadores.
+// Degradación honesta: capacidad que la cuenta no tiene o
+// fuente que no responde → el indicador sale NO DISPONIBLE con
+// su motivo y la respuesta declara su cobertura — nunca un
+// cero disfrazado. El módulo SOLO LEE las fuentes; su única
+// escritura es la foto durable versionada del panel (patrón
+// G-21: foto nueva = versión nueva, la anterior queda). Todo
+// detrás de requireAuth + gating de pack + capacidad
+// «reportes».
+// =====================================================================
+const gestySalud = require('./gesty-salud');
+
+const gestySaludMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'reportes')];
+
+app.get('/api/gesty/salud/panel', ...gestySaludMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, panel: gestySalud.componerPanel(db, req.session.userId, {
+      hoy: q.hoy || undefined, dias: q.dias ? Number(q.dias) : undefined,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/salud/resumen', ...gestySaludMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestySalud.resumenSalud(db, req.session.userId, { hoy: req.query.hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/salud/fotos', ...gestySaludMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestySalud.listFotos(db, req.session.userId, {
+      desde: q.desde || undefined, hasta: q.hasta || undefined,
+      limit: q.limit ? Number(q.limit) : undefined,
+      todas_las_versiones: q.versiones === '1',
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/salud/fotos/:fecha', ...gestySaludMW, (req, res) => {
+  try {
+    const foto = gestySalud.getFoto(db, req.session.userId, String(req.params.fecha));
+    if (!foto) return res.status(404).json({ ok: false, error: 'Ese día todavía no tiene foto de salud generada.' });
+    res.json({ ok: true, foto });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/salud/fotos', ...gestySaludMW, express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json({ ok: true, foto: gestySalud.generarFoto(db, req.session.userId, {
+      hoy: b.hoy || undefined, dias: b.dias ? Number(b.dias) : undefined,
+    }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -21246,7 +21196,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v429';
+const BUILD_ID = '20261024-v428';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
