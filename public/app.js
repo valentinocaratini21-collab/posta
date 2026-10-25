@@ -2731,7 +2731,7 @@ function landingView(cfg) {
     <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
     <h2>Tu primera semana ya puede estar armada</h2>
     <p>Contanos de tu negocio y mirala en 1 minuto. Gratis, sin tarjeta.</p>
-    <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
+    <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Sumate a mi equipo</a>
     <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
   </div></div>
   <div class="footer"><div class="wrap">
