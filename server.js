@@ -3262,22 +3262,138 @@ app.put('/api/oficina/push-prefs', requireAuth, (req, res) => {
 function nivelCelebracionesEnsure() {
   try { db.exec(`CREATE TABLE IF NOT EXISTS nivel_celebraciones (user_id INTEGER NOT NULL, poder TEXT NOT NULL, nivel INTEGER NOT NULL, ts INTEGER NOT NULL, UNIQUE(user_id, poder, nivel))`); } catch (e) {}
 }
+// ---------- GAMIFICACIÓN v459: los 6 agregados ----------
+// Emisor con dedupe por registro_ref: un mismo hecho real emite UNA vez.
+// El nivel nunca bloquea el flujo que lo produce (todo va en try/catch).
+function nivelEmitir(db, uid, evento, hecho, ref) {
+  try {
+    const ya = db.prepare(`SELECT 1 FROM oficina_nivel_eventos WHERE user_id = ? AND poder = 'posty' AND evento = ? AND registro_ref = ? LIMIT 1`).get(uid, evento, ref);
+    if (ya) return false;
+    oficina.niveles.registrarEvento(db, uid, { poder: 'posty', evento, hecho, registro_ref: ref }, oficina.metricas(db, uid));
+    return true;
+  } catch (e) { return false; }
+}
+function nivelTablasEnsure() {
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS nivel_visitas (user_id INTEGER PRIMARY KEY, last_ts INTEGER NOT NULL, last_nivel INTEGER NOT NULL)`);
+    db.exec(`CREATE TABLE IF NOT EXISTS nivel_brotes_vistos (user_id INTEGER NOT NULL, fundamento_id INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (user_id, fundamento_id))`);
+    db.exec(`CREATE TABLE IF NOT EXISTS nivel_digest_snapshot (user_id INTEGER PRIMARY KEY, items_json TEXT NOT NULL DEFAULT '[]', ts INTEGER NOT NULL)`);
+  } catch (e) {}
+}
+// Nombres de oferta/temas del digest, menos lo que el dueño respondió o
+// corrigió (eso lo enseñó él, no lo aprendió Posty solo).
+function nivelDigestItems(db, uid, dg) {
+  const out = [];
+  try {
+    const dueno = new Set();
+    if (dg && dg.dueno && typeof dg.dueno === 'object') for (const v of Object.values(dg.dueno)) if (typeof v === 'string' && v) dueno.add(v.trim().toLowerCase());
+    try { for (const r of db.prepare('SELECT valor FROM onboarding_facts WHERE user_id = ?').all(uid)) if (r.valor) dueno.add(String(r.valor).trim().toLowerCase()); } catch (e) {}
+    const push = (x) => { const s = String((x && (x.nombre || x)) || '').trim(); if (s && !dueno.has(s.toLowerCase()) && !out.includes(s)) out.push(s); };
+    for (const x of ((dg && dg.productos) || [])) push(x);
+    for (const x of ((dg && dg.servicios) || [])) push(x);
+    for (const x of ((dg && dg.temas_feed) || [])) push(x);
+  } catch (e) {}
+  return out;
+}
+// Brote sorpresa: un hecho real nuevo que Posty aprendió solo. Fuente 1:
+// fundamento de la oficina reciente y todavía no mostrado. Fuente 2: un ítem
+// nuevo en el digest frente a la foto anterior (el refresco semanal lo lee
+// solo; lo del dueño está excluido en nivelDigestItems). Sin nada real
+// nuevo, no hay brote: nunca se inventa uno.
+function nivelBrote(db, uid) {
+  try {
+    const hace30d = Date.now() - 30 * 24 * 3600 * 1000;
+    const f = db.prepare(`SELECT id, hecho FROM oficina_fundamento WHERE user_id = ? AND ts >= ? AND COALESCE(fuente,'') != 'dueno' AND id NOT IN (SELECT fundamento_id FROM nivel_brotes_vistos WHERE user_id = ?) ORDER BY ts DESC LIMIT 1`).get(uid, hace30d, uid);
+    if (f && f.hecho) return { fuente: 'fundamento', id: f.id, texto: String(f.hecho) };
+    const dg = digestForUser(uid);
+    const items = nivelDigestItems(db, uid, dg);
+    const snap = db.prepare('SELECT items_json FROM nivel_digest_snapshot WHERE user_id = ?').get(uid);
+    if (!snap) {
+      db.prepare('INSERT INTO nivel_digest_snapshot (user_id, items_json, ts) VALUES (?,?,?)').run(uid, JSON.stringify(items), Date.now());
+      return null;
+    }
+    let prev = [];
+    try { prev = JSON.parse(snap.items_json || '[]'); } catch (e) {}
+    const nuevos = items.filter((x) => !prev.includes(x));
+    if (!nuevos.length) return null;
+    return { fuente: 'digest', id: 0, texto: `Nuevo en tu oferta: ${nuevos[0]}` };
+  } catch (e) { return null; }
+}
+// Prueba del nivel: UN ejemplo real por nivel (datos del digest, del último
+// evento semana_generada y de los conteos de eventos del propio nivel).
+function nivelPrueba(db, uid, niv) {
+  try {
+    const dg = digestForUser(uid);
+    const datos = {};
+    if (dg) {
+      if (dg.business) datos.business = String(dg.business).trim();
+      const items = nivelDigestItems(db, uid, dg);
+      if (items.length) datos.item = items[0];
+      const temas = Array.isArray(dg.temas_feed) ? dg.temas_feed.map((x) => String((x && (x.nombre || x)) || '').trim()).filter(Boolean) : [];
+      if (temas.length) datos.tema = temas[0];
+    }
+    const ev = db.prepare(`SELECT hecho, ts FROM oficina_nivel_eventos WHERE user_id = ? AND poder = 'posty' AND evento = 'semana_generada' ORDER BY ts DESC LIMIT 1`).get(uid);
+    if (ev) {
+      const d = new Date(ev.ts);
+      datos.ultimaSemana = { fecha: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}` };
+    }
+    return oficina.niveles.pruebaPara(niv, datos);
+  } catch (e) { return null; }
+}
 app.get('/api/oficina/nivel', requireAuth, (req, res) => {
   try {
     nivelCelebracionesEnsure();
+    nivelTablasEnsure();
     const poder = String(req.query.poder || 'posty');
     const def = oficina.niveles.PODERES[oficina.niveles.resolverPoder(poder)];
     if (!def) return res.status(400).json({ ok: false, error: 'poder_desconocido' });
-    const niv = oficina.niveles.computarNivel(db, req.session.userId, poder, oficina.metricas(db, req.session.userId));
+    const uid = req.session.userId;
+    // Nivel ANTES del puente: la subida durante una ausencia no cuenta el
+    // puente (es un backfill, no progreso de esos días).
+    let nivelPre = null;
+    try { nivelPre = oficina.niveles.computarNivel(db, uid, poder, oficina.metricas(db, uid)); } catch (e) {}
+    // (1) PRIMERA SUBIDA EN LA PRIMERA SEMANA: si el digest ya tiene
+    // fundamento real (la prueba leyó su mundo) y todavía no existe el
+    // evento, Posty ya terminó de leer: el primer nudo se completa solo.
+    // Una sola vez por cuenta (dedupe por evento existente).
+    if (oficina.niveles.resolverPoder(poder) === 'posty') {
+      try {
+        const ya = db.prepare(`SELECT 1 FROM oficina_nivel_eventos WHERE user_id = ? AND poder = 'posty' AND evento = 'fundamento_leido' LIMIT 1`).get(uid);
+        if (!ya) {
+          const dg = digestForUser(uid);
+          if (dg && clientDigest.hasFoundation(dg)) {
+            const biz = String(dg.business || '').trim();
+            nivelEmitir(db, uid, 'fundamento_leido', biz ? `Posty leyó el mundo de ${biz} en la prueba` : 'Posty leyó tu mundo en la prueba', 'puente:prueba');
+          }
+        }
+      } catch (e) {}
+    }
+    const niv = oficina.niveles.computarNivel(db, uid, poder, oficina.metricas(db, uid));
     let celebrado = false;
-    try { celebrado = db.prepare('SELECT COUNT(*) AS n FROM nivel_celebraciones WHERE user_id = ? AND poder = ? AND nivel = ?').get(req.session.userId, niv.poder, niv.nivel).n > 0; } catch (e) {}
-    // (v459 · evolución) Socio desde: mes REAL de la subida a L5, leído del
-    // río (oficina_registros tipo subida_nivel, resumen exacto). Sin registro
-    // no hay fecha: nunca se inventa. El cliente formatea el mes en su idioma.
+    try { celebrado = db.prepare('SELECT COUNT(*) AS n FROM nivel_celebraciones WHERE user_id = ? AND poder = ? AND nivel = ?').get(uid, niv.poder, niv.nivel).n > 0; } catch (e) {}
+    // (v459 · evolución, preservado en el re-base) Socio desde: mes REAL
+    // de la subida a L5, leído del río. Sin registro no hay fecha.
     let socio_desde_ts = null;
     try {
-      const r = db.prepare(`SELECT MIN(ts) AS ts FROM oficina_registros WHERE user_id = ? AND poder = ? AND tipo = 'subida_nivel' AND resumen = ?`).get(req.session.userId, niv.poder, `${def.nombre} subió a ${def.niveles[4]}`);
+      const r = db.prepare(`SELECT MIN(ts) AS ts FROM oficina_registros WHERE user_id = ? AND poder = ? AND tipo = 'subida_nivel' AND resumen = ?`).get(uid, niv.poder, `${def.nombre} subió a ${def.niveles[4]}`);
       if (r && r.ts) socio_desde_ts = r.ts;
+    } catch (e) {}
+    // (6) MIENTRAS NO ESTABAS: vuelta tras 3+ días con progreso real desde
+    // la visita anterior (eventos nuevos o subida). Sin progreso, no hay
+    // resumen. La visita se registra en este mismo GET: el resumen se
+    // muestra una sola vez por vuelta.
+    let ausencia = null;
+    try {
+      const prev = db.prepare('SELECT last_ts, last_nivel FROM nivel_visitas WHERE user_id = ?').get(uid);
+      const ahora = Date.now();
+      if (prev && prev.last_ts && ahora - prev.last_ts >= 3 * 24 * 3600 * 1000) {
+        const evs = db.prepare(`SELECT hecho FROM oficina_nivel_eventos WHERE user_id = ? AND poder = 'posty' AND ts > ? AND registro_ref NOT LIKE 'puente:%' ORDER BY ts DESC LIMIT 3`).all(uid, prev.last_ts);
+        const base = nivelPre ? nivelPre.nivel : niv.nivel;
+        const subio = base > (prev.last_nivel || 1);
+        const aprendido = evs.map((x) => x.hecho).filter(Boolean);
+        if (aprendido.length || subio) ausencia = { dias: Math.floor((ahora - prev.last_ts) / (24 * 3600 * 1000)), aprendido, subio: !!subio, nivel_anterior: prev.last_nivel || 1 };
+      }
+      db.prepare('INSERT INTO nivel_visitas (user_id, last_ts, last_nivel) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET last_ts = excluded.last_ts, last_nivel = excluded.last_nivel').run(uid, ahora, niv.nivel);
     } catch (e) {}
     // (v461 · tira simple) Avance del gate en curso, en requisitos
     // completados vs. total — el cliente pinta la barrita con esto, sin
@@ -3293,7 +3409,25 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
       celebrar: niv.nivel > 1 && !celebrado,
       avance,
       socio_desde_ts,
+      desafio: niv.nivel < 5 ? oficina.niveles.desafioPara(niv) : null,
+      prueba: nivelPrueba(db, uid, niv),
+      brote: nivelBrote(db, uid),
+      ausencia,
     });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/oficina/nivel/brote-visto', requireAuth, (req, res) => {
+  try {
+    nivelTablasEnsure();
+    const uid = req.session.userId;
+    const b = req.body || {};
+    if (b.fuente === 'fundamento' && Number(b.id) > 0) {
+      db.prepare('INSERT OR IGNORE INTO nivel_brotes_vistos (user_id, fundamento_id, ts) VALUES (?,?,?)').run(uid, Number(b.id), Date.now());
+    } else if (b.fuente === 'digest') {
+      const dg = digestForUser(uid);
+      db.prepare('INSERT INTO nivel_digest_snapshot (user_id, items_json, ts) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET items_json = excluded.items_json, ts = excluded.ts').run(uid, JSON.stringify(nivelDigestItems(db, uid, dg)), Date.now());
+    }
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 app.post('/api/oficina/nivel/celebrar', requireAuth, (req, res) => {
@@ -3326,6 +3460,7 @@ app.get('/api/onboarding', requireAuth, (req, res) => {
 app.post('/api/onboarding/responder', requireAuth, (req, res) => {
   const r = onboarding.responder(db, req.session.userId, String((req.body && req.body.pregunta) || ''), String((req.body && req.body.valor) || ''));
   if (!r.ok) return res.status(400).json(r);
+  nivelEmitir(db, req.session.userId, 'pregunta_respondida', 'El dueño respondió una pregunta de Posty', 'pregunta:' + String((req.body && req.body.pregunta) || ''));
   res.json(r);
 });
 app.post('/api/onboarding/saltear', requireAuth, (req, res) => {
@@ -8616,6 +8751,7 @@ function acceptAllDrafts(uid, items, opts) {
   };
   const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, needs_review=0, error='', user_stopped=0 WHERE id=?`);
   const acceptedItems = [];
+  const piezasPrimera = []; // ids aceptados sin retoque previo (señal != edited)
   let blockedQuota = null; // primer bloqueo por cupo: { monday, poolKey }
   let n = 0;
   for (const d of pending) {
@@ -8635,8 +8771,11 @@ function acceptAllDrafts(uid, items, opts) {
       continue; // su semana está llena: queda borrador (el modal es para ESTE caso)
     }
     weekLeftCache.set(monday + '|' + poolKey, leftFor(monday, poolKey) - 1);
+    let sinEditar = true;
+    try { const s = db.prepare('SELECT client_signal FROM post_signals WHERE user_id = ? AND post_id = ?').get(uid, d.id); if (s && s.client_signal === 'edited') sinEditar = false; } catch (e) {}
     upd.run(when, d.id);
     try { recordSignal(uid, d, 'approved'); } catch (e) {}
+    if (sinEditar) piezasPrimera.push(d.id);
     acceptedItems.push({ id: d.id, scheduled_at: when });
     n++;
   }
@@ -8653,6 +8792,7 @@ function acceptAllDrafts(uid, items, opts) {
     const curMonday = mondayKeyOf(tzToday(userTz(uid)));
     nextWeek = acceptedItems.filter((it) => mondayKeyOf(String(it.scheduled_at).slice(0, 10)) > curMonday).length;
   } catch (e) {}
+  for (const pid of piezasPrimera) nivelEmitir(db, uid, 'pieza_aceptada_primera', 'Pieza aceptada sin cambios: acierto de primera', 'pieza:' + pid);
   return { ok: true, accepted: n, partial: n < pending.length, total: pending.length, items: acceptedItems, next_week: nextWeek };
 }
 
@@ -8670,6 +8810,9 @@ app.post('/api/posts/accept-all', requireAuth, (req, res) => {
     const qf = r.quota;
     return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: qf.limit, used: qf.used, plan_name: qf.plan_name, week_key: qf.week_key || null,
       message: `Llegaste al límite de tu plan ${qf.plan_name}. Mejorá tu paquete para seguir posteando esa semana.` });
+  }
+  if (!r.partial && r.items && r.items.length) {
+    try { const m = mondayKeyOf(String(r.items[0].scheduled_at || '').slice(0, 10)); if (m) nivelEmitir(db, uid, 'semana_aceptada', 'Semana entera aceptada por el dueño', 'semana-aceptada:' + m); } catch (e) {}
   }
   res.json({ ok: true, accepted: r.accepted, partial: !!r.partial, total: r.total || 0, items: r.items || [], next_week: r.next_week || 0 });
 });
@@ -9653,7 +9796,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       // programados para esta semana aunque se hayan creado en otra.
       existing = weekOccupancyRows(uid, weekKey).length;
     } catch (e) { /* sin datos: existing=0, generación completa */ }
-    if (existing >= ppw) return { ok: true, reason: 'already_complete', created: 0, existing };
+    if (existing >= ppw) { if (weekKey) nivelEmitir(db, uid, 'semana_generada', 'Semana armada desde el fundamento', 'semana:' + weekKey); return { ok: true, reason: 'already_complete', created: 0, existing }; }
     deficit = ppw - existing;
     if (existing === 0) {
       // Limpiar posteos fallidos de esta semana para empezar de cero. (Solo
@@ -10298,8 +10441,10 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     if (created < deficit) {
       try { recordSweepFailure(uid, weekKey, 'partial_week'); } catch (e) {}
       console.error(`[pipeline:${tag}] usuario ${uid}: semana parcial ${created}/${deficit} — slotFails: ${JSON.stringify(slotFails)} errs: ${JSON.stringify(slotErrs)}`);
+      if (created > 0 && weekKey) nivelEmitir(db, uid, 'semana_generada', 'Semana armada desde el fundamento', 'semana:' + weekKey);
       return { ok: true, created, existing, deficit, incomplete: true, slotFails, slotErrs, cleanStats };
     }
+    if (created > 0 && weekKey) nivelEmitir(db, uid, 'semana_generada', 'Semana armada desde el fundamento', 'semana:' + weekKey);
     return { ok: true, created, existing, deficit, slotFails, cleanStats };
   } finally {
     NEXTWEEK_RUNNING.delete(uid);
@@ -21532,6 +21677,7 @@ app.post('/aprobar/:token', (req, res) => {
     return res.status(403).send(aprobarResultPage(en, 'limit', { plan: qf.plan_name || '' }));
   }
   if (!r.ok || !r.accepted) return res.send(aprobarResultPage(en, 'nothing'));
+  if (!r.partial && v.weekKey) nivelEmitir(db, u.id, 'semana_aceptada', 'Semana entera aceptada por el dueño', 'semana-aceptada:' + v.weekKey);
   return res.send(aprobarResultPage(en, 'done', { n: r.accepted }));
 });
 
@@ -22184,7 +22330,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v462';
+const BUILD_ID = '20261025-v463';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

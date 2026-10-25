@@ -259,4 +259,56 @@ function registrarEvento(db, uid, { poder, evento, hecho, registro_ref }, metric
   return { nivel: despues, subida };
 }
 
-module.exports = { PODERES, ESPECIALISTAS, ORDEN_PODERES, ORDEN_ESPECIALISTAS, PLIEGUE, resolverPoder, IDENTIDADES, DORADO, computarNivel, registrarEvento, conteoEventos };
+// ---------- LOS 6 AGREGADOS (v459): desafio semanal + prueba del nivel ----------
+// Copy ES/EN en un solo lugar: el servidor la sirve y la tira la muestra tal
+// cual. Sin puntajes, sin rachas, sin lenguaje de fracaso: el desafio es el
+// proximo nudo con su accion de un toque; la prueba es UN hecho real.
+const DESAFIO_MAP = {
+  fundamento_leido: { accion: '#/app/negocio', titulo: { es: 'Que Posty termine de leer tu mundo', en: 'Let Posty finish reading your world' }, texto: { es: 'Tu fundamento todavía está incompleto: Posty lee lo legible y te pregunta solo el hueco.', en: 'Your fundamento is still incomplete: Posty reads what is readable and only asks you for the gap.' } },
+  semana_generada: { accion: '#/app/schedule', titulo: { es: 'Armá tu primera semana', en: 'Build your first week' }, texto: { es: 'Posty ya conoce tu mundo: tu semana nace de ahí.', en: 'Posty already knows your world: your week is born from it.' } },
+  decision_bandeja: { accion: '#/app/bandeja', titulo: { es: 'Decidí tu semana con un toque', en: 'Decide your week in one tap' }, texto: { es: 'Tu semana espera tu OK en la Bandeja.', en: 'Your week is waiting for your OK in the Bandeja.' } },
+  semana_aceptada: { accion: '#/app/schedule', titulo: { es: 'Aceptá tu semana entera', en: 'Accept your whole week' }, texto: { es: 'Una semana entera aceptada: así Posty confirma tu gusto.', en: 'A whole week accepted: that is how Posty confirms your taste.' } },
+  pieza_aceptada_primera: { accion: '#/app/schedule', titulo: { es: 'Aceptá piezas sin cambios', en: 'Accept pieces as-is' }, texto: { es: 'Cuando una pieza te gusta tal cual, aceptala: así Posty aprende tu gusto.', en: 'When you like a piece as-is, accept it: that is how Posty learns your taste.' } },
+  semana_publicada: { accion: '#/app/schedule', titulo: { es: 'Dejá que tu semana se publique sola', en: 'Let your week publish on its own' }, texto: { es: 'El autopiloto publica solo: cada semana completa publicada te acerca.', en: 'Autopilot publishes on its own: each fully published week brings you closer.' } },
+  pregunta_respondida: { accion: '#/app/chat', titulo: { es: 'Respondé la pregunta de Posty', en: 'Answer Posty’s question' }, texto: { es: 'Cada respuesta cierra un hueco para siempre.', en: 'Every answer closes a gap for good.' } },
+};
+function semanaISO(d) {
+  const x = new Date(d.getTime());
+  x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7));
+  return x.toISOString().slice(0, 10);
+}
+function desafioPara(niv) {
+  if (!niv || niv.nivel >= 5) return null;
+  const falt = (niv.gate && niv.gate.pendientes) || [];
+  if (!falt.length) return null;
+  const d = DESAFIO_MAP[falt[0].clave];
+  if (!d) return null;
+  return { clave: falt[0].clave, accion: d.accion, titulo: d.titulo, texto: d.texto, semana: semanaISO(new Date()) };
+}
+// datos: { business, item, tema, ultimaSemana: { fecha } } — todo real, todo
+// opcional: sin dato real para el nivel, la prueba es null (nunca inventada).
+function pruebaPara(niv, datos) {
+  if (!niv || niv.nivel < 2) return null;
+  const ev = niv.eventos || {};
+  const d = datos || {};
+  if (niv.nivel === 2) {
+    if (d.item) return { es: `Posty ya sabe que ${d.business ? d.business + ' ofrece' : 'tu negocio ofrece'} ${d.item}.`, en: `Posty already knows that ${d.business ? d.business + ' offers' : 'your business offers'} ${d.item}.` };
+    if (d.tema) return { es: `Posty ya conoce de tu feed el tema ${d.tema}.`, en: `Posty already knows the theme ${d.tema} from your feed.` };
+    return null;
+  }
+  if (niv.nivel === 3) {
+    if (!d.ultimaSemana) return null;
+    return { es: `Tu semana del ${d.ultimaSemana.fecha} nació de tu fundamento.`, en: `Your week of ${d.ultimaSemana.fecha} was born from your fundamento.` };
+  }
+  if (niv.nivel === 4) {
+    const n = ev.pieza_aceptada_primera || 0;
+    if (!n) return null;
+    return { es: `Aceptaste ${n} piezas sin cambios: Posty ya acierta de primera.`, en: `You accepted ${n} pieces as-is: Posty already gets it right the first time.` };
+  }
+  const s = ev.semana_publicada || 0;
+  const p = ev.pregunta_respondida || 0;
+  if (!s) return null;
+  return { es: `${s} semanas publicadas con constancia${p ? ` y ${p} preguntas respondidas` : ''}: tu socio ya trabaja solo.`, en: `${s} weeks published steadily${p ? ` and ${p} questions answered` : ''}: your partner already works on its own.` };
+}
+
+module.exports = { PODERES, ESPECIALISTAS, ORDEN_PODERES, ORDEN_ESPECIALISTAS, PLIEGUE, resolverPoder, IDENTIDADES, DORADO, computarNivel, registrarEvento, conteoEventos, DESAFIO_MAP, desafioPara, pruebaPara, semanaISO };

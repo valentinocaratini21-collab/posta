@@ -171,6 +171,21 @@ async function publishSinglePost(db, post, opts = {}) {
     db.prepare(
       `UPDATE posts SET status = 'published', ig_permalink = ?, ig_media_id = ?, published_at = datetime('now') WHERE id = ?`
     ).run(result.permalink || '', result.mediaId || '', post.id);
+    // (GAMIFICACIÓN v459) Semana publicada: cuando la semana de este posteo
+    // ya no tiene nada pendiente de publicar, cuenta UNA semana (ref por
+    // semana, no por pieza). Solo publicación real: nunca demo ni house.
+    try {
+      if (!result.demo && !opts.house) {
+        const wk = post.week_key || (function () { try { const d = new Date(post.scheduled_at || post.published_at || Date.now()); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); } catch (e) { return ''; } })();
+        if (wk) {
+          const pend = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status IN ('scheduled','publishing') AND (week_key = ? OR (week_key IS NULL AND date(scheduled_at) BETWEEN date(?) AND date(?, '+6 days')))`) .get(post.user_id, wk, wk, wk);
+          if (pend && pend.n === 0) {
+            const ya = db.prepare(`SELECT 1 FROM oficina_nivel_eventos WHERE user_id = ? AND poder = 'posty' AND evento = 'semana_publicada' AND registro_ref = ?`).get(post.user_id, 'semana-publicada:' + wk);
+            if (!ya) require('./niveles').registrarEvento(db, post.user_id, { poder: 'posty', evento: 'semana_publicada', hecho: 'Semana publicada completa en Instagram', registro_ref: 'semana-publicada:' + wk }, {});
+          }
+        }
+      }
+    } catch (e) { /* el nivel nunca bloquea una publicación lograda */ }
     // Ledger: la publicación real queda asentada (fuente del presupuesto).
     if (post.__guardAttempt) {
       try {

@@ -14748,9 +14748,40 @@ function pzNivelStripHTML(nv, en) {
       <span style="display:block;height:7px;border-radius:999px;background:#DCEFFA;overflow:hidden"><span data-pz-fill="${pct}" style="display:block;height:100%;width:${pct}%;background:${esc(nv.color || '#2793C8')};border-radius:999px"></span></span>
       <button type="button" data-pz-nivel-accion="${esc(paso.hash)}" style="align-self:flex-start;background:none;border:0;padding:0;font-size:12px;line-height:1.3;color:#47617A;cursor:pointer;text-align:left">${esc(paso.label)}</button>
     </span>
-  </div>`;
+  </div>${pzNivelExtraHTML(nv, en)}`;
 }
 
+// Filas extra de la tira (v459): desafio de la semana, prueba del nivel,
+// brote sorpresa y resumen de ausencia. Todo viene del servidor; sin dato
+// real, la fila no existe. La tira misma no se toca.
+function pzNivelExtraHTML(nv, en) {
+  let h = '';
+  if (nv.desafio && nv.nivel < 5) {
+    h += `<div class="pz-desafio"><span class="pz-desafio-tx"><strong>${esc(en ? 'This week’s challenge' : 'Desafío de esta semana')}</strong> ${esc(en ? nv.desafio.titulo.en : nv.desafio.titulo.es)} · ${esc(en ? nv.desafio.texto.en : nv.desafio.texto.es)}</span><button type="button" class="pz-nivel-chip" data-pz-desafio-accion="${esc(nv.desafio.accion)}">${esc(en ? 'Do it' : 'Hacerlo')}</button></div>`;
+  }
+  if (nv.prueba) h += `<div class="pz-prueba">${esc(en ? 'Proof of your level: ' : 'La prueba de tu nivel: ')}${esc(en ? nv.prueba.en : nv.prueba.es)}</div>`;
+  if (nv.brote) h += `<div class="pz-brote" id="pzNivelBrote"><span>🌱 ${esc(en ? 'Surprise sprout: ' : 'Brote sorpresa: ')}${esc(nv.brote.texto)}</span><button type="button" class="pz-brote-x" data-pz-brote-x data-pz-brote-fuente="${esc(nv.brote.fuente)}" data-pz-brote-id="${esc(String(nv.brote.id || 0))}" aria-label="${en ? 'Close' : 'Cerrar'}">✕</button></div>`;
+  if (nv.ausencia) {
+    const lines = (nv.ausencia.aprendido || []).map((x) => `<div>· ${esc(x)}</div>`).join('');
+    h += `<div class="pz-ausencia" id="pzNivelAusencia"><button type="button" class="pz-brote-x" data-pz-ausencia-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button><strong>${esc(en ? `While you were away (${nv.ausencia.dias} days)` : `Mientras no estabas (${nv.ausencia.dias} días)`)}</strong>${nv.ausencia.subio ? `<div>${esc(en ? 'Posty leveled up while you were gone.' : 'Posty subió de nivel mientras no mirabas.')}</div>` : ''}${lines}</div>`;
+  }
+  return h;
+}
+// La familia festeja (v459): SOLO los 4 poderes + Bambooty. Los
+// especialistas por proyecto no festejan: no son poderes. Copy de
+// felicitación, sin afirmaciones de resultados: cada poder habla en su voz.
+function pzNivelFamiliaHTML(en) {
+  const rows = [
+    ['#FF7A59', 'Venty', en ? 'Sales' : 'Ventas', en ? 'That sells itself! Whenever you want, I’ll build something to sell more.' : '¡Eso se vende solo! Cuando quieras, te armo algo para vender más.'],
+    ['#5B8C5A', 'Gesty', en ? 'Admin' : 'Administración', en ? 'Already logged in your office: new level, everything in order.' : 'Ya lo dejé registrado en tu oficina: nivel nuevo, todo en orden.'],
+    ['#2E8C83', 'Atenty', en ? 'Customer care' : 'Cuidar al cliente', en ? 'Your clients will notice the difference. I’ll make sure they feel at home.' : 'Tus clientes van a notar la diferencia. Yo me encargo de que se sientan en casa.'],
+  ];
+  const h = rows.map((r) => `<div class="pz-fam-row"><span class="pz-fam-dot" style="background:${r[0]}"></span><span class="pz-fam-tx"><strong>${esc(r[1])}</strong><span>${esc(r[2])}</span><span>${esc(r[3])}</span></span></div>`).join('');
+  return `<div class="pz-fam"><div class="pz-fam-tit">${esc(en ? 'THE OFFICE CELEBRATES' : 'LA OFICINA FESTEJA')}</div>${h}<div class="pz-fam-bam">${esc(en ? 'Your whole office celebrates with you. We keep growing together.' : 'Toda tu oficina festeja con vos. Seguimos creciendo juntos.')}</div></div>`;
+}
+function pzNivelBroteVisto(el) {
+  try { api.post('/api/oficina/nivel/brote-visto', { fuente: el.dataset.pzBroteFuente, id: Number(el.dataset.pzBroteId || 0) }).catch(() => {}); } catch (e) {}
+}
 function pzNivelCelebShow(nv, en) {
   const prev = document.getElementById('pzCelebFondo');
   if (prev) { try { prev.remove(); } catch (e) {} }
@@ -14764,6 +14795,7 @@ function pzNivelCelebShow(nv, en) {
     <span class="pz-celeb-evo"><img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;object-fit:cover"></span>
     <h3>${esc(en ? `You leveled up to ${nv.nombre_nivel}!` : `¡Subiste a ${nv.nombre_nivel}!`)} 🎉</h3>
     <p class="pz-celeb-unlock">${esc(unlock)}</p>
+    ${pzNivelFamiliaHTML(en)}
     <p class="pz-celeb-sub">${esc(en ? 'You will see it in your next week.' : 'Esto ya cambia tu próxima semana.')}</p>
     <button type="button" class="pz-celeb-share" data-pz-celeb-share>${esc(en ? 'Share as story' : 'Compartir como historia')}</button>
     <button type="button" class="pz-celeb-ok" data-pz-celeb-x>${esc(en ? 'Keep going' : 'Seguir')}</button>
@@ -14831,6 +14863,21 @@ function pzNivelMount() {
     const target = fill.getAttribute('data-pz-fill');
     fill.style.width = '0%';
     requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.transition = 'width .8s ease'; fill.style.width = target + '%'; }));
+  }
+  const desBtn = document.querySelector('[data-pz-desafio-accion]');
+  if (desBtn && !desBtn.dataset.pzBound) {
+    desBtn.dataset.pzBound = '1';
+    desBtn.addEventListener('click', () => { location.hash = desBtn.dataset.pzDesafioAccion; });
+  }
+  const broteX = document.querySelector('[data-pz-brote-x]');
+  if (broteX && !broteX.dataset.pzBound) {
+    broteX.dataset.pzBound = '1';
+    broteX.addEventListener('click', () => { pzNivelBroteVisto(broteX); const row = document.getElementById('pzNivelBrote'); if (row) row.remove(); });
+  }
+  const ausX = document.querySelector('[data-pz-ausencia-x]');
+  if (ausX && !ausX.dataset.pzBound) {
+    ausX.dataset.pzBound = '1';
+    ausX.addEventListener('click', () => { const row = document.getElementById('pzNivelAusencia'); if (row) row.remove(); });
   }
   const nv = (typeof HF_NIVEL !== 'undefined') ? HF_NIVEL : null;
   if (!nv || !nv.celebrar || !(nv.nivel > 1)) return;
