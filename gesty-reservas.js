@@ -111,7 +111,6 @@ const COPIA_ES = {
   saludo: '¡Hola!',
   llego: (negocio) => `Tu reserva llegó. Guardamos el lugar de ${negocio} para el lanzamiento de Gesty, el ${LANZAMIENTO.es}.`,
   plan: (nombre, precio) => `Tu elección: Gesty ${nombre} — USD ${precio}/mes.`,
-  que_es: 'Gesty es tu office manager: factura, cobra y ordena la administración de tu negocio para que los papeles estén siempre al día. Trabaja completa por sí sola, sin que tengas que contratar nada más.',
   primeros_50: 'Las primeras 50 cuentas de Gesty congelan su precio de lanzamiento por 12 meses.',
   aviso: 'El día del lanzamiento te avisamos a este email para que actives tu cuenta.',
   respuesta: 'Si querés contarnos algo más de tu negocio, respondé este correo: nos llega directo.',
@@ -125,7 +124,6 @@ const COPIA_EN = {
   saludo: 'Hello!',
   llego: (negocio) => `Your reservation is in. We saved ${negocio}'s spot for Gesty's launch on ${LANZAMIENTO.en}.`,
   plan: (nombre, precio) => `Your choice: Gesty ${nombre} — USD ${precio}/month.`,
-  que_es: 'Gesty is your office manager: she invoices, collects and keeps your whole administration in order, so your paperwork is always up to date. She works completely on her own — nothing else required.',
   primeros_50: 'The first 50 Gesty accounts lock in their launch price for 12 months.',
   aviso: 'On launch day we will email you at this address so you can activate your account.',
   respuesta: 'Want to tell us more about your business? Just reply to this email — it reaches us directly.',
@@ -142,13 +140,13 @@ function armarEmail(r) {
   const c = copiaDe(r.idioma);
   const parrafos = [c.saludo, c.llego(r.negocio)];
   if (r.plan && PLANES[r.plan]) parrafos.push(c.plan(PLANES[r.plan].nombre, PLANES[r.plan].precio));
-  parrafos.push(c.que_es, c.primeros_50, c.aviso, c.respuesta, c.firma_linea);
+  parrafos.push(c.primeros_50, c.aviso, c.respuesta, c.firma_linea);
   const text = parrafos.join('\n\n') + `\n\n${c.firma}\n${c.sitio}\n`;
   const htmlParrafos = parrafos
     .map((p) => `<p style="margin:0 0 14px;line-height:1.55;color:#29173F;">${escHtml(p)}</p>`)
     .join('\n      ');
   const html = `<div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;padding:28px 24px;">
-      <p style="margin:0 0 18px;font-size:22px;color:#472B5E;"><strong>Gesty</strong> <span style="color:#A175CA;">· Office Manager</span></p>
+      <div style="margin:0 0 18px;"><img src="https://gestyofficemanager.com/gesty-cara.webp" alt="Gesty" width="54" height="54" style="border-radius:50%;vertical-align:middle;"> <span style="font-size:19px;color:#472B5E;"><strong>Gesty</strong></span> <span style="color:#A175CA;">· Office Manager</span></div>
       ${htmlParrafos}
       <p style="margin:22px 0 0;line-height:1.55;color:#472B5E;">${escHtml(c.firma)}<br><span style="color:#A175CA;">${escHtml(c.sitio)}</span></p>
     </div>`;

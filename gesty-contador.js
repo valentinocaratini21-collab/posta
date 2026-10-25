@@ -751,6 +751,7 @@ function cuerpoEmail(db, userId, paquete) {
     ...(c.indice || []).map(filaIndice),
   ].join('\n');
   const html = [
+    `<div style="margin:0 0 18px;"><img src="https://gestyofficemanager.com/gesty-cara.webp" alt="Gesty" width="54" height="54" style="border-radius:50%;vertical-align:middle;"> <span style="font-size:19px;color:#472B5E;"><strong>Gesty</strong></span> <span style="color:#A175CA;">· Office Manager</span></div>`,
     `<h2>Carpeta del mes ${escHtml(paquete.periodo)}${negocio ? ` — ${escHtml(negocio)}` : ''}</h2>`,
     `<p>Preparada por Gesty (versión ${paquete.version}) · Formato: ${escHtml(paquete.formato)}${paquete.formato_origen === 'generico-sin-definir' ? ' (genérico de la casa)' : ''} · Comprobantes indexados: ${(c.indice || []).length}.</p>`,
     ...lineasTotales.map((l) => `<p>${escHtml(l)}</p>`),

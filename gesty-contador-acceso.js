@@ -417,6 +417,7 @@ async function enviarInvitacion(db, userId, accesoId, opts) {
     'Si no esperabas esta invitación, ignorá este email.',
   ].join('\n');
   const html = [
+    `<div style="margin:0 0 18px;"><img src="https://gestyofficemanager.com/gesty-cara.webp" alt="Gesty" width="54" height="54" style="border-radius:50%;vertical-align:middle;"> <span style="font-size:19px;color:#472B5E;"><strong>Gesty</strong></span> <span style="color:#A175CA;">· Office Manager</span></div>`,
     `<h2>Tu carpeta en Gesty${negocio ? ` — ${negocio}` : ''}</h2>`,
     `<p>${negocio || 'Tu cliente'} te da acceso de <strong>solo lectura</strong> a los paquetes de su carpeta mensual: comprobantes clasificados y el cierre del mes en tu formato, listos para descargar.</p>`,
     `<p style="text-align:center;margin:24px 0"><a href="${enlace}" style="display:inline-block;background:#472B5E;color:#fff;font-weight:700;padding:12px 28px;border-radius:999px;text-decoration:none">Ver la carpeta</a></p>`,
