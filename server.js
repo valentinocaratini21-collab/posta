@@ -59,6 +59,7 @@ try { postyOficina.init(db); } catch (e) { console.error('[posty-oficina] init:'
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
 const { reconcileUser } = require('./billing-sync');
 const weekRedo = require('./week-redo'); // (ARMA TODO · ítem 3) garantía de primera semana: registro durable del rehacer
+const magiaMod = require('./magia-postpago'); // (2026-10-25 · MAGIA POST-PAGO) hitos post-pago: primer posteo, idea 24 h, historia de estreno, mes 30
 const { SHOWCASE_PAGES } = require('./showcase-pages'); // páginas públicas permanentes de la vidriera: los /p/<slug> de ejemplo que imprimen las homes
 const { startTokenRefresh } = require('./tokenrefresh');
 const { analyzeWebsite } = require('./website-study');
@@ -615,6 +616,9 @@ function stripeHooks() {
       // (ítem 3) Activación = nace la garantía de primera semana (weekKey
       // calculada acá, el dueño del cálculo; INSERT OR IGNORE idempotente).
       try { weekRedo.grantFirstWeekRedo(db, uid, mondayKeyOf(tzToday(userTz(uid)))); } catch (e) { console.error('[first-week-redo] grant stripe:', e.message); }
+      // (MAGIA POST-PAGO) Activación = nace el hito post-pago (idea 24 h,
+      // historia de estreno, mes 30). Idempotente: un reintento no reescribe.
+      try { magiaMod.markPaid(db, uid, 'activation'); } catch (e) {}
       reactivatePausedPosts(uid);
       track(uid, 'subscribed', planId);
       evTrack(uid, 'payment_ok', { plan: planId, provider: 'stripe' });
@@ -1316,6 +1320,10 @@ app.get('/api/posty/level', requireAuth, (req, res) => {
       ok: true,
       level: computed.level,
       level_name: computed.level_name,
+      // (MAGIA POST-PAGO · tallo vivo) El color viaja con el nivel: el
+      // mismo componente en website y app pinta con el color del agente
+      // (Posty celeste; la oficina completa usa el dorado en su tallo).
+      color: '#2793C8',
       progress_pct: computed.progress_pct,
       next_missing: computed.next_missing,
       leveled_up,
@@ -1324,6 +1332,154 @@ app.get('/api/posty/level', requireAuth, (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message || 'No se pudo calcular el nivel' });
   }
+});
+
+// ---------- ✨ MAGIA POST-PAGO (2026-10-25 · «ARMA TODO» + addendum) ----------
+// Un solo lenguaje de magia: la bienvenida, la semana, el feed y la
+// Bandeja del cliente que pagó llevan los mismos componentes que la
+// landing (tallo, dorado, celebración). Todo lo que acá se sirve es
+// REAL: snapshot leído de su Instagram, su semana, su derecho de
+// garantía, su idea del loop, su historia con su material, su ledger.
+// Sin dato real, el bloque no existe (nunca material inventado).
+async function ensurePremiereStory(uid) {
+  try {
+    const m = magiaMod.ensureMilestoneForActive(db, uid);
+    if (!m || m.story_dismissed) return null;
+    if (m.story_post_id) {
+      const p = db.prepare('SELECT id, image_path, status, ig_permalink FROM posts WHERE id = ? AND user_id = ?').get(m.story_post_id, uid);
+      if (p) return { post_id: p.id, image_path: p.image_path, status: p.status, permalink: p.ig_permalink || '' };
+    }
+    // Material REAL, en este orden: su posteo más reciente con imagen
+    // local (nunca una gemela) o su foto más reciente del álbum. Sin
+    // material local, no hay historia (jamás foto de stock ni ejemplo).
+    let photoAbs = null;
+    try {
+      const cands = db.prepare(`SELECT image_path FROM posts WHERE user_id = ? AND media_type IN ('image','carousel')
+        AND image_path LIKE '/media/%' AND COALESCE(source,'') != 'twin' ORDER BY id DESC LIMIT 5`).all(uid);
+      for (const c of cands) {
+        const abs = path.join(MEDIA_DIR, path.basename(String(c.image_path || '')));
+        if (fs.existsSync(abs)) { photoAbs = abs; break; }
+      }
+    } catch (e) {}
+    if (!photoAbs) {
+      try {
+        const assets = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY id DESC LIMIT 5`).all(uid);
+        for (const a of assets) {
+          const fp = String(a.file_path || '');
+          const abs = fp.startsWith('/') ? fp : path.join(MEDIA_DIR, path.basename(fp));
+          if (fp && fs.existsSync(abs)) { photoAbs = abs; break; }
+        }
+      } catch (e) {}
+    }
+    if (!photoAbs) return null;
+    const profile = getProfile(uid) || {};
+    const user = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid) || {};
+    const lang = user.lang === 'en' ? 'en' : 'es';
+    const S = require('./stories');
+    const brand = {
+      business: profile.business_name || '',
+      bgHex: (typeof primaryBrandHex === 'function' ? primaryBrandHex(uid) : null) || '#0A1E33',
+      textHex: '#FFFFFF',
+      logoAbs: (() => { try { return logoAbsPath(uid); } catch (e) { return null; } })(),
+    };
+    // Render LOCAL (brand-card.py, sin IA): titular de 5 palabras en
+    // banda, sobre SU foto. El borrador queda en 'draft': el scheduler
+    // jamás lo publica solo; solo el cliente lo publica, de un toque.
+    const mediaPath = S.renderStoryPng({
+      headline: lang === 'en' ? 'Now Posty runs my Instagram' : 'Ahora Posty maneja mi Instagram',
+      sub: profile.business_name || '', business: profile.business_name || '',
+      bgHex: brand.bgHex, textHex: '#FFFFFF', logoAbs: brand.logoAbs,
+      photoAbs, outDir: MEDIA_DIR, band: 'auto',
+    });
+    const caption = lang === 'en' ? 'Posty runs my Instagram now 💙' : 'Ahora mi Instagram lo maneja Posty 💙';
+    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, tipo, source)
+      VALUES (?,?,?,'',NULL,'draft','story','story','estreno')`).run(uid, mediaPath, caption);
+    const id = Number(r.lastInsertRowid);
+    magiaMod.setStoryPost(db, uid, id);
+    return { post_id: id, image_path: mediaPath, status: 'draft', permalink: '' };
+  } catch (e) {
+    console.error('[magia-postpago] historia estreno:', e.message);
+    return null;
+  }
+}
+
+// (3) Sweep de la idea 24 h — lo corre el scheduler cada hora (patrón
+// lazy-require como el loop semanal). Regla: si el cliente ya tiene una
+// idea pendiente del loop, SE ADOPTA (sin regenerar ni expirar nada);
+// solo si no tiene ninguna se corre el loop para él. Sin señales, se
+// reintenta la próxima hora hasta que cierra la ventana de 24 h.
+async function runPostpayIdea24Sweep() {
+  const out = { adopted: 0, generated: 0, skipped: 0, expired: 0 };
+  try {
+    const now = Date.now();
+    for (const row of magiaMod.dueIdea24(db, now)) {
+      try {
+        const pending = magiaMod.newestPendingIdea(db, row.user_id);
+        if (pending) { magiaMod.markIdea24(db, row.user_id, pending.id, 1); out.adopted++; continue; }
+        const r = await runIdeasForUser(row.user_id);
+        if (r && r.ok && r.ideas && r.ideas.length) { magiaMod.markIdea24(db, row.user_id, r.ideas[0].id, 1); out.generated++; }
+        else out.skipped++;
+      } catch (e) { console.error('[magia-postpago] idea24 usuario', row.user_id, e.message); out.skipped++; }
+    }
+    // Ventana cerrada sin idea: se marca omitida para no reintentar
+    // para siempre. Jamás se inventa una idea para tapar el hueco.
+    try {
+      const stale = db.prepare(`SELECT user_id FROM postpay_milestones
+        WHERE COALESCE(idea24_done, 0) = 0 AND paid_at_ms > 0 AND paid_at_ms <= ?`).all(now - magiaMod.DAY_MS);
+      for (const s of stale) { magiaMod.markIdea24(db, s.user_id, null, 2); out.expired++; }
+    } catch (e) {}
+  } catch (e) { console.error('[magia-postpago] sweep idea24:', e.message); }
+  return out;
+}
+
+// Estado post-pago para la bienvenida y la Bandeja: antes/después real,
+// garantía real, historia de estreno, idea 24 h y resumen del mes 30.
+// Cada campo puede ser null: el frontend omite el bloque, no lo inventa.
+app.get('/api/postpay/status', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const m = magiaMod.ensureMilestoneForActive(db, uid);
+    let before = null;
+    try {
+      const snap = homeSnapshotGet(uid);
+      if (snap && snap.payload && snap.payload.source === 'read' && Array.isArray(snap.payload.recents) && snap.payload.recents.length) {
+        const recents = snap.payload.recents.filter((r) => r && r.img).slice(0, 9).map((r) => ({ img: r.img, type: r.type || 'image' }));
+        if (recents.length) before = { username: snap.payload.username || '', recents };
+      }
+    } catch (e) {}
+    let after = null;
+    try {
+      const rows = db.prepare(`SELECT id, image_path, caption, media_type FROM posts WHERE user_id = ?
+        AND status IN ('scheduled','published','draft') AND media_type IN ('image','carousel','video') AND image_path != ''
+        ORDER BY COALESCE(scheduled_at, created_at) ASC LIMIT 9`).all(uid);
+      if (rows.length) after = rows.map((r) => ({ id: r.id, image_path: r.image_path, caption_first: String(r.caption || '').split('\n')[0].slice(0, 60), media_type: r.media_type }));
+    } catch (e) {}
+    let guarantee = { available: false };
+    try {
+      const wk = mondayKeyOf(tzToday(userTz(uid)));
+      const st = weekRedo.firstRedoStatus(db, uid, wk);
+      guarantee = { available: st.state === 'available' };
+    } catch (e) {}
+    let story = null;
+    try { if (m && !m.story_dismissed) story = await ensurePremiereStory(uid); } catch (e) {}
+    let idea24 = null;
+    try { if (m && m.idea24_idea_id) idea24 = magiaMod.ideaById(db, uid, m.idea24_idea_id); } catch (e) {}
+    let month30 = null;
+    try {
+      if (m && !m.month30_dismissed) {
+        const s = magiaMod.month30Summary(db, uid, m);
+        if (s && s.published_count > 0) month30 = s;
+      }
+    } catch (e) {}
+    res.json({ ok: true, paid: !!(m && m.paid_at_ms), before, after, guarantee, story, idea24, month30 });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'postpay_status' });
+  }
+});
+app.post('/api/postpay/dismiss', requireAuth, express.json(), (req, res) => {
+  const kind = (req.body && req.body.kind) || '';
+  if (kind !== 'month30' && kind !== 'story') return res.status(400).json({ ok: false, error: 'kind' });
+  res.json({ ok: magiaMod.dismiss(db, req.session.userId, kind) });
 });
 
 app.put('/api/dna', requireAuth, (req, res) => {
@@ -12662,6 +12818,8 @@ app.post('/api/billing/webhook', async (req, res) => {
       // (ítem 3) Activación = nace la garantía de primera semana (weekKey
       // calculada acá, el dueño del cálculo; INSERT OR IGNORE idempotente).
       try { weekRedo.grantFirstWeekRedo(db, Number(userId), mondayKeyOf(tzToday(userTz(Number(userId))))); } catch (e) { console.error('[first-week-redo] grant MP:', e.message); }
+      // (MAGIA POST-PAGO) Igual que Stripe: nace el hito post-pago.
+      try { magiaMod.markPaid(db, Number(userId), 'activation'); } catch (e) {}
       reactivatePausedPosts(Number(userId));
       track(Number(userId), 'subscribed', planId);
       evTrack(Number(userId), 'payment_ok', { plan: planId });
@@ -22330,7 +22488,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v463';
+const BUILD_ID = '20261025-v464';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -22984,4 +23142,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep };

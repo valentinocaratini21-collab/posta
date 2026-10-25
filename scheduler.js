@@ -9,6 +9,7 @@ const publishGuard = require('./publish-guard');
 const publishWatchdog = require('./publish-watchdog');
 const { activationNudge } = require('./activation-nudge');
 const { firstPublishNudge } = require('./first-publish-nudge');
+const magiaMod = require('./magia-postpago'); // (2026-10-25 · MAGIA POST-PAGO) celebración del primer posteo pago + mes 30
 
 // (v198-A) INSTRUMENTO post_failed: todo posteo que no sale queda registrado
 // como EVENTO persistente en la tabla events (la misma que usa evTrack en
@@ -253,6 +254,14 @@ async function publishSinglePost(db, post, opts = {}) {
       }
     } catch (e) { console.error('[posta] signal auto:', e.message); }
     console.log(`[posta] Post #${post.id} publicado${result.demo ? ' (demo)' : ''}`);
+    // (MAGIA POST-PAGO · ítem 2) Primer posteo de la semana paga: se
+    // celebra UNA sola vez por cuenta, por un solo canal (push si lo
+    // habilitó, si no mensaje en el chat). La marca durable va ANTES
+    // de avisar (adentro de celebrateFirstPaidPost). No toca el
+    // autopiloto ni el aviso «ya salió» existente.
+    try {
+      if (!result.demo) magiaMod.celebrateFirstPaidPost(db, { ...post, ig_permalink: result.permalink || post.ig_permalink || '' });
+    } catch (e) { console.error('[magia-postpago] celebración:', e.message); }
     // Aviso "ya salió": solo cuando importa — primer posteo (hito) o publicación
     // automática (el usuario no respondió al aviso de aprobación). Si lo aprobó
     // él hace 3 horas, ya lo sabe: no molestar. (respeta opt-out, no en demo)
@@ -685,6 +694,24 @@ function startScheduler(db) {
     console.log('[posta] Aviso de cierre de prueba: cada hora (Buenos Aires)');
   } catch (e) {
     console.error('[cierre-prueba] no se pudo programar:', e.message);
+  }
+  // ✨ MAGIA POST-PAGO (2026-10-25): cada hora — (a) la idea proactiva
+  // 24 h: el sweep vive en server.js (tiene runIdeasForUser) y se llama
+  // por lazy-require como el loop semanal; (b) el resumen del mes 30
+  // (magia pura de ledger, corre acá). Sin IA nueva fuera del loop.
+  try {
+    cron.schedule('45 * * * *', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.runPostpayIdea24Sweep === 'function') {
+          srv.runPostpayIdea24Sweep().catch((e) => console.error('[magia-postpago] idea24:', e.message));
+        }
+      } catch (e) { console.error('[magia-postpago] idea24 no se pudo cargar:', e.message); }
+      try { magiaMod.sweepMonth30(db, Date.now()); } catch (e) { console.error('[magia-postpago] mes30:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Magia post-pago: idea 24 h + mes 30 cada hora (Buenos Aires)');
+  } catch (e) {
+    console.error('[magia-postpago] no se pudo programar:', e.message);
   }
   // Nudge "ya tenemos tus posteos listos": todos los días 10:30 (Buenos Aires).
   // Solo a usuarios con borradores sin revisar o semana vacía, con topes anti-spam.

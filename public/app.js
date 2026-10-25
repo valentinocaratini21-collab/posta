@@ -12707,6 +12707,10 @@ async function paintPostPayCard() {
   // nada: la semana ya está abajo, programada. Si no hay fichas ni huecos,
   // el contenedor queda vacío (sin secciones inventadas).
   try { pzPostPayMagicMount(el, en); } catch (e) {}
+  // (2026-10-25 · MAGIA POST-PAGO) Antes/después real, garantía y
+  // historia de estreno, enmarcados en su sector (misma escenografía
+  // que la landing). Nunca bloquea la semana: todo es un agregado.
+  try { pzPostPayStatusMount(el, en); } catch (e) {}
 }
 
 /* ---------- Momento mágico post-pago (2026-10-25): fichas + huecos ----------
@@ -12845,6 +12849,162 @@ function maybePostPayWelcome() {
       paintPostPayCard();
     }, 5000);
   }
+}
+
+/* ---------- Magia post-pago en la bienvenida + Bandeja (2026-10-25) ----------
+   Lo sirve GET /api/postpay/status (todo real, todo puede ser null):
+   antes/después del feed, garantía real, historia de estreno, idea 24 h
+   y resumen del mes 30. Cada bloque ausente se OMITE, nunca se inventa.
+   Enmarcado en su sector: la misma pared y placa que la landing
+   (.pz-magic-wall / .gj-plaque en gj.css). La historia NUNCA se publica
+   sola: el botón usa el publish-now de siempre. */
+function pzIsImgPath(p) { return /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(String(p || '')); }
+function pzPostPayStatusMount(cardEl, en) {
+  if (!cardEl || !PZ_POSTPAY) return;
+  let box = cardEl.querySelector('#pzPostPayStatus');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'pzPostPayStatus';
+    cardEl.firstElementChild.appendChild(box);
+  }
+  if (box.dataset.loading === '1' || box.dataset.loaded === '1') return;
+  box.dataset.loading = '1';
+  api.get('/api/postpay/status').then((d) => {
+    delete box.dataset.loading;
+    if (!PZ_POSTPAY || !document.body.contains(box)) return;
+    box.dataset.loaded = '1';
+    if (!d || !d.ok) { box.innerHTML = ''; return; }
+    const esc2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    let html = '';
+    const hasBA = d.before && d.after;
+    const hasGuar = d.guarantee && d.guarantee.available;
+    const hasStory = !!d.story;
+    if (!hasBA && !hasGuar && !hasStory) { box.innerHTML = ''; return; }
+    html += `<div class="pz-magic-wall" style="margin-top:12px">
+      <div class="pz-magic-head"><img src="/bambooty-placa.webp" alt="Bambooty"><b>${en ? '✨ In Posty’s corner of the office' : '✨ En el sector de Posty en la oficina'}</b></div>`;
+    if (hasBA) {
+      const grid = (items, imgKey) => `<div class="pz-ba-grid">${items.map((it) => {
+        const src = it[imgKey];
+        return pzIsImgPath(src) ? `<img src="${esc2(src)}" alt="" loading="lazy">` : `<span class="pz-ba-empty"></span>`;
+      }).join('')}</div>`;
+      html += `<div id="pzBAHead" style="font-size:13.5px;font-weight:800;margin:2px 0 10px">${en ? 'How your Instagram looked / how it will look this week' : 'Así estaba tu Instagram / así va a verse esta semana'}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><div style="font-size:12px;color:var(--dim);margin-bottom:6px">${en ? 'Before · your Instagram' : 'Antes · tu Instagram'}</div>${grid(d.before.recents, 'img')}</div>
+        <div><div style="font-size:12px;color:var(--dim);margin-bottom:6px">${en ? 'With Posty · this week' : 'Con Posty · esta semana'}</div>${grid(d.after, 'image_path')}</div>
+      </div>`;
+    }
+    if (hasGuar) {
+      html += `<div style="margin-top:14px;background:linear-gradient(90deg,#DFA856,#DBA453,#D6A463);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.55;color:#0A1E33">
+        <b>🛡️ ${en ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</b>
+        <div style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" id="pzGuarBtn">${en ? 'See my guarantee in For you' : 'Ver mi garantía en la Bandeja'}</button></div></div>`;
+    }
+    if (hasStory) {
+      const st = d.story;
+      html += `<div id="pzStoryRow" style="margin-top:14px;display:flex;gap:12px;align-items:center">
+        ${pzIsImgPath(st.image_path) ? `<img src="${esc2(st.image_path)}" alt="" style="width:64px;height:112px;object-fit:cover;border-radius:10px;flex:none">` : ''}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13.5px;line-height:1.5"><b>${en ? 'Tell your clients Posty runs your Instagram now' : 'Contale a tus clientes que tu Instagram ahora lo maneja Posty'}</b></div>
+          <div style="font-size:12.5px;color:var(--dim);line-height:1.5;margin-top:2px">${en ? 'Your premiere story is ready — it only goes out when you tap.' : 'Tu historia de estreno ya está lista — solo sale cuando vos la publiques.'}</div>
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn btn-primary btn-sm" id="pzStoryPub" data-story="${st.post_id}">${st.status === 'published' ? (en ? '✓ Published' : '✓ Publicada') : (en ? 'Publish my story' : 'Publicar mi historia')}</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="pzStoryX">✕</button>
+          </div>
+        </div></div>`;
+    }
+    html += `</div>`;
+    box.innerHTML = html;
+    try { if (window.__gjKt && window.__gjKt.cascade) { const h = box.querySelector('#pzBAHead'); if (h) window.__gjKt.cascade(h); } } catch (e) {}
+    const gb = box.querySelector('#pzGuarBtn');
+    if (gb) gb.onclick = () => {
+      const card = document.querySelector('#firstWeekRedoCard');
+      if (card) {
+        const row = card.closest('.pv-row');
+        const body = row && row.querySelector('.pv-body');
+        if (body && body.hidden) { body.hidden = false; const head = row.querySelector('[data-pv-toggle]'); if (head) head.setAttribute('aria-expanded', 'true'); }
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+    const sp = box.querySelector('#pzStoryPub');
+    if (sp) sp.onclick = async () => {
+      if (sp.disabled) return; sp.disabled = true; sp.textContent = en ? 'Publishing…' : 'Publicando…';
+      try {
+        const r = await api.post('/api/posts/' + sp.dataset.story + '/publish-now', {});
+        if (r && r.status === 'published') sp.textContent = en ? '✓ Published' : '✓ Publicada';
+        else sp.textContent = en ? 'Publishing… check your Instagram in a bit' : 'Publicándose… en un rato está en tu Instagram';
+      } catch (e) { sp.disabled = false; sp.textContent = en ? 'Publish my story' : 'Publicar mi historia'; }
+    };
+    const sx = box.querySelector('#pzStoryX');
+    if (sx) sx.onclick = async () => {
+      try { await api.post('/api/postpay/dismiss', { kind: 'story' }); } catch (e) {}
+      const row = box.querySelector('#pzStoryRow'); if (row) row.remove();
+    };
+  }).catch(() => { delete box.dataset.loading; });
+}
+// Filas post-pago en la Bandeja «Para vos»: la idea 24 h (con su Hacelo
+// del loop) y el resumen del mes 30 (con datos reales del ledger). Se
+// agregan a la bandeja existente; si no hay bandeja, se crea una.
+async function pzPostpayTray() {
+  try {
+    const en = !!(typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const d = await api.get('/api/postpay/status');
+    if (!d || !d.ok) return;
+    let rows = '';
+    if (d.idea24) {
+      const it = d.idea24;
+      rows += `<div class="pv-row" id="pzIdea24Row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${en ? '💡 Your first idea as a client' : '💡 Tu primera idea como cliente'}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden>
+        <div style="font-size:13.5px;line-height:1.55"><b>${esc(it.title)}</b><div style="color:var(--mut);margin-top:4px">${esc(it.why || '')}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn-primary btn-sm" id="pzIdea24Make" data-idea="${it.id}">💪 ${en ? 'Make it' : 'Hacelo'}</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="pzIdea24X">${en ? 'Dismiss' : 'Descartar'}</button>
+        </div><div id="pzIdea24Msg" style="font-size:12.5px;margin-top:8px"></div></div></div></div>`;
+    }
+    if (d.month30) {
+      const m = d.month30;
+      let body = `<div style="font-size:13.5px;line-height:1.6">${en ? `🎉 Your first month with Posty! In these 30 days I published <b>${m.published_count}</b> post${m.published_count === 1 ? '' : 's'} for you.` : `🎉 ¡Tu primer mes con Posty! En estos 30 días publiqué <b>${m.published_count}</b> posteo${m.published_count === 1 ? '' : 's'} para vos.`}</div>`;
+      if (m.best) {
+        body += `<div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+          ${pzIsImgPath(m.best.image_path) ? `<img src="${esc(m.best.image_path)}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:10px;flex:none">` : ''}
+          <div style="font-size:13px;line-height:1.5"><div style="color:var(--dim)">${en ? 'Your best one' : 'El que mejor rindió'}</div><b>${esc(m.best.caption_first)}</b><div>${m.best.likes} likes · ${m.best.comments} ${en ? 'comments' : 'comentarios'}</div>
+          ${m.best.permalink ? `<a href="${esc(m.best.permalink)}" target="_blank" rel="noopener">${en ? 'See it on Instagram →' : 'Verlo en Instagram →'}</a>` : ''}</div></div>`;
+      }
+      if (m.level) body += `<div style="font-size:13px;line-height:1.5;margin-top:10px">${en ? 'What I already learned about you: ' : 'Esto es lo que ya aprendí de vos: '}<b>${esc(m.level.level_name)}</b></div>`;
+      rows += `<div class="pv-row" id="pzMonth30Row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${en ? '🎉 Your first month with Posty' : '🎉 Tu primer mes con Posty'}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden>${body}
+        <div style="margin-top:10px"><button type="button" class="btn btn-ghost btn-sm" id="pzMonth30X">✕ ${en ? 'Got it' : 'Entendido'}</button></div></div></div>`;
+    }
+    if (!rows) return;
+    let tray = document.getElementById('pvTray');
+    if (!tray) {
+      tray = document.createElement('section');
+      tray.className = 'pv-tray'; tray.id = 'pvTray';
+      tray.innerHTML = `<div class="pv-tray-t">📥 ${en ? 'For you' : 'Para vos'}</div>`;
+      const ideasEl = document.getElementById('hs-ideas');
+      if (ideasEl && ideasEl.parentNode) ideasEl.parentNode.insertBefore(tray, ideasEl.nextSibling);
+      else { const sv = document.getElementById('schedView'); if (sv) sv.appendChild(tray); else return; }
+    }
+    tray.insertAdjacentHTML('beforeend', rows);
+    const mk = document.getElementById('pzIdea24Make');
+    if (mk) mk.onclick = async () => {
+      if (mk.disabled) return; mk.disabled = true; mk.textContent = en ? 'Making it…' : 'Armándola…';
+      try {
+        const r = await api.post('/api/ideas/' + mk.dataset.idea + '/make', {});
+        const msg = document.getElementById('pzIdea24Msg');
+        if (msg) msg.textContent = (r && r.ok) ? (en ? '✓ Done! Your draft is in your week.' : '✓ ¡Lista! Tu borrador está en tu semana.') : (en ? 'I could not make it right now 😅' : 'No la pude armar ahora 😅');
+        if (r && r.ok) { const row = document.getElementById('pzIdea24Row'); if (row) setTimeout(() => row.remove(), 4000); }
+        else mk.disabled = false;
+      } catch (e) { mk.disabled = false; mk.textContent = '💪 ' + (en ? 'Make it' : 'Hacelo'); }
+    };
+    const dx = document.getElementById('pzIdea24X');
+    if (dx) dx.onclick = async () => {
+      const id = (document.getElementById('pzIdea24Make') || {}).dataset || {};
+      try { if (id.idea) await api.post('/api/ideas/' + id.idea + '/dismiss', {}); } catch (e) {}
+      const row = document.getElementById('pzIdea24Row'); if (row) row.remove();
+    };
+    const m30x = document.getElementById('pzMonth30X');
+    if (m30x) m30x.onclick = async () => {
+      try { await api.post('/api/postpay/dismiss', { kind: 'month30' }); } catch (e) {}
+      const row = document.getElementById('pzMonth30Row'); if (row) row.remove();
+    };
+  } catch (e) {}
 }
 
 /* ---------- Modal agresivo: trial vencido ---------- */
@@ -16936,6 +17096,12 @@ function bindSchedule() {
   // sus toggles viven en la vista.
   try { bindSetupPill(document.getElementById('schedView')); } catch (e) {}
   try { bindPvTray(document.getElementById('schedView')); } catch (e) {}
+  // (2026-10-25 · MAGIA POST-PAGO) El cliente que pagó ve el fondo
+  // ambiental de la landing también dentro del producto (la guarda vieja
+  // de v447 queda supersedeada solo para estas superficies) + las filas
+  // post-pago de la Bandeja (idea 24 h, mes 30).
+  try { document.body.classList.toggle('pz-paid', !!(typeof ME !== 'undefined' && ME && ME.plan_status === 'active')); } catch (e) {}
+  try { pzPostpayTray(); } catch (e) {}
   const pv = $('#schedPrev'), nx = $('#schedNext'), td = $('#schedToday');
   if (pv) pv.onclick = () => { if (SCHED_DAY_OFFSET > 0) { SCHED_DAY_OFFSET--; render(); } };
   if (nx) nx.onclick = () => { SCHED_DAY_OFFSET++; render(); };

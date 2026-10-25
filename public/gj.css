@@ -203,3 +203,50 @@ html.gj-armed .kt-scrub.kt-in .kt-l{opacity:1!important;transform:none!important
 @media (prefers-reduced-motion: reduce){
   html.gj-armed .kt-cascade .kt-l,html.gj-armed .kt-scrub .kt-l{opacity:1!important;transform:none!important;transition:none!important}
 }
+
+/* ===== MAGIA POST-PAGO (2026-10-25 · «ARMA TODO» + addendum un solo lenguaje) =====
+   El cliente que pagó ve la magia TAMBIÉN dentro del producto: el mismo
+   dorado, el mismo movimiento, la misma celebración. Guardas v447 intactas:
+   solo transform/opacity, reduced-motion = página estática y completa. */
+/* Tallo vivo: estado por nudo (sin el dorado total del modo visitante). */
+.gj-levels.gj-live .gj-node.gj-done .gj-dot,.gj-levels.gj-live .gj-node.gj-cur .gj-dot{border-color:var(--gj-gold2);color:var(--gj-navy);
+  background:linear-gradient(180deg,#FDF3D8,#F9E3AC);box-shadow:0 6px 18px rgba(219,164,83,.35)}
+.gj-levels.gj-live.gj-in .gj-node .gj-dot{border-color:#D7E6F2;color:#8AA5BB;background:#fff;box-shadow:0 4px 12px rgba(10,30,51,.06)}
+.gj-levels.gj-live.gj-in .gj-node.gj-done .gj-dot,.gj-levels.gj-live.gj-in .gj-node.gj-cur .gj-dot{border-color:var(--gj-gold2);color:var(--gj-navy);
+  background:linear-gradient(180deg,#FDF3D8,#F9E3AC);box-shadow:0 6px 18px rgba(219,164,83,.35)}
+.gj-levels.gj-live .gj-node.gj-cur .gj-dot{outline:3px solid rgba(219,164,83,.45);outline-offset:2px}
+.gj-live-cele{text-align:center;font-size:14px;font-weight:700;line-height:1.5;color:#0A1E33;
+  background:linear-gradient(90deg,#DFA856,#DBA453,#D6A463);border-radius:12px;padding:10px 14px;max-width:640px;margin:18px auto 0}
+/* Fondo ambiental dentro del producto, SOLO para el cliente que pagó
+   (body.pz-paid, puesto por la app cuando plan_status = 'active'): la
+   misma pared sugerida, la misma luz celeste, el mismo calor dorado y
+   la misma placa lejana que la landing. En la app no existía: la guarda
+   vieja de v447 queda supersedeada solo para estas superficies. */
+body.pz-paid::before{content:"";position:fixed;inset:-34px 0;z-index:-1;pointer-events:none;
+  transform:translateY(var(--gjbg,0px));
+  background:
+    radial-gradient(760px 400px at 88% -60px, rgba(39,147,200,.13), rgba(39,147,200,0) 70%),
+    radial-gradient(920px 500px at -12% 106%, rgba(219,164,83,.13), rgba(219,164,83,0) 70%),
+    repeating-linear-gradient(90deg, rgba(10,30,51,.030) 0 76px, rgba(10,30,51,0) 76px 92px),
+    repeating-linear-gradient(0deg, rgba(10,30,51,.030) 0 98px, rgba(10,30,51,0) 98px 114px),
+    linear-gradient(180deg, rgba(242,249,253,0) 22%, rgba(242,249,253,.5) 55%, rgba(255,246,227,.55) 88%, rgba(253,241,220,.6))}
+body.pz-paid::after{content:"";position:fixed;z-index:-1;pointer-events:none;
+  width:min(400px,58vw);aspect-ratio:1;right:-110px;top:5%;
+  background:url(/bambooty-placa.webp) center/contain no-repeat;
+  opacity:.05;filter:blur(1px) saturate(.92);
+  transform:translateY(calc(var(--gjbg,0px) * -.6))}
+/* La bienvenida y la Bandeja post-pago, enmarcadas en su sector: la misma
+   pared (gj-wallp) y la misma placa que la oficina de la landing. */
+.pz-magic-wall{position:relative;background:rgba(255,255,255,.86);border:1.5px solid #EFE3C2;border-radius:20px;
+  padding:14px 16px;box-shadow:0 10px 26px rgba(10,30,51,.07)}
+.pz-magic-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.pz-magic-head img{width:34px;height:34px;border-radius:50%;box-shadow:0 6px 16px rgba(185,126,28,.35);flex:0 0 auto}
+.pz-magic-head b{font-size:13.5px;color:#0A1E33}
+.pz-ba-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.pz-ba-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block;background:#E8EDF2}
+.pz-ba-grid .pz-ba-empty{aspect-ratio:1;border-radius:10px;background:#EEF4F9}
+@media (prefers-reduced-motion: reduce){
+  body.pz-paid::before{transform:none;background:linear-gradient(180deg,#fff,#FFFBF2)}
+  body.pz-paid::after{display:none}
+  .gj-levels.gj-live .gj-node.gj-cur .gj-dot{outline:none}
+}

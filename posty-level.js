@@ -3,39 +3,45 @@
 // nunca volumen de chat. Progresión secuencial: no se sube de nivel
 // sin haber completado los requisitos de los niveles anteriores.
 //
-// N1 "Te conozco"   (base): profiles.business_name + profiles.category (rubro) no vacíos.
-//                       NOTA: el brief original decía users.business_name/users.rubro,
-//                       pero esas columnas NO existen en users — los datos reales del
-//                       negocio viven en profiles (ver getProfile en server.js).
-// N2 "Veo tu marca": brand_logo + brand_colors + ≥3 assets kind='photo'.
-// N3 "Sé tu gusto":  ≥5 post_signals (approved/rejected) O ≥1 style_rules activa.
-// N4 "Sé tu ritmo":  IG conectado (getCreds no null) + ≥3 posts published.
-// N5 "Te anticipo":  N4 + ≥2 fuentes activas de la tarjeta "Lo que Posty sabe"
-//                    (web, historias, Facebook, comentarios, reseñas — los mismos
-//                    checks que las filas del frontend: *_analyzed_at en business_dna).
+// N1 "Nuevo en tu feed" (base): profiles.business_name + profiles.category
+//                       (rubro) no vacíos. NOTA: el brief original decía
+//                       users.business_name/users.rubro, pero esas columnas
+//                       NO existen en users — los datos reales del negocio
+//                       viven en profiles (ver getProfile en server.js).
+// N2 "Leyendo tu mundo": brand_logo + brand_colors + ≥3 assets kind='photo'.
+// N3 "De la casa":  ≥5 post_signals (approved/rejected) O ≥1 style_rules activa.
+// N4 "Mano derecha de tu Instagram": IG conectado (getCreds no null) + ≥3 posts published.
+// N5 "Tu socio de contenido": N4 + ≥2 fuentes activas de la tarjeta
+//                    "Lo que Posty sabe" (web, historias, Facebook,
+//                    comentarios, reseñas — los mismos checks que las filas
+//                    del frontend: *_analyzed_at en business_dna).
 //
-// Desbloqueos (documentados en LEEME-posty-level.md):
-//   N2 = propone posteos con tu marca (colores + fotos)
-//   N3 = escribe en tu tono (taste: reglas de estilo aprendidas)
-//   N4 = sugiere tus mejores horarios
-//   N5 = ideas proactivas anticipadas
+// Desbloqueos (documentados en LEEME-posty-level.md y niveles-posty.md):
+//   N2 = postea tu oferta real, con tu léxico
+//   N3 = tu gusto se aplica antes de mostrar la pieza
+//   N4 = anticipa ideas desde competidores, ganadores y calendario
+//   N5 = la semana entera con tu OK de Bandeja como único toque habitual
 const { getCreds } = require('./insights');
 
+// (2026-10-25 · MAGIA POST-PAGO) Nombres CANÓNICOS de niveles-posty.md —
+// los mismos de la sección «Así aprende Posty» de la landing y de la
+// espina niveles.js: UN solo tallo en website, app y oficina. Los nombres
+// viejos («Te conozco»…) no los referencia ningún test y no se usan más.
 const LEVELS = {
-  1: { name: 'Te conozco', unlock: 'Sabe quién sos y de qué es tu negocio' },
-  2: { name: 'Veo tu marca', unlock: 'Propone posteos con tus colores y tus fotos' },
-  3: { name: 'Sé tu gusto', unlock: 'Escribe en tu tono (taste aprendido)' },
-  4: { name: 'Sé tu ritmo', unlock: 'Sugiere tus mejores horarios' },
-  5: { name: 'Te anticipo', unlock: 'Ideas proactivas anticipadas' },
+  1: { name: 'Nuevo en tu feed', unlock: 'Trabaja con lo público y lo declarado, pregunta lo justo' },
+  2: { name: 'Leyendo tu mundo', unlock: 'Postea tu oferta real, con tu léxico' },
+  3: { name: 'De la casa', unlock: 'Acierta de primera casi siempre: tu gusto se aplica antes de mostrar' },
+  4: { name: 'Mano derecha de tu Instagram', unlock: 'Anticipa: ideas desde competidores, ganadores y calendario' },
+  5: { name: 'Tu socio de contenido', unlock: 'Autonomía plena dentro de tus límites: la semana entera con tu OK' },
 };
 
 // Mensajes de level-up en VOZ POSTY (voseo, cálido, concreto:
 // qué sabe ahora + qué desbloquea). Se insertan UNA sola vez en chat_messages.
 const LEVEL_UP_MSGS = {
-  2: '🧠 nivel 2! ya veo tu marca: a partir de ahora te propongo posteos con tus colores y tus fotos 🎉',
-  3: '🧠 nivel 3! ya sé tu gusto: escribo los captions en tu tono, como a vos te salen ✨',
-  4: '🧠 nivel 4! ya sé tu ritmo: te sugiero los mejores horarios según tu instagram ⏰',
-  5: '🧠 nivel 5! te anticipo: de ahora en más te traigo ideas proactivas antes de que me las pidas 🚀',
+  2: '🧠 ¡subí a Leyendo tu mundo! a partir de ahora posteo tu oferta real, con tus colores y tus fotos 🎉',
+  3: '🧠 ¡subí a De la casa! ya conozco tu paleta, tu tono y tus días fuertes: acierto de primera casi siempre ✨',
+  4: '🧠 ¡subí a Mano derecha de tu Instagram! de ahora en más te anticipo ideas desde tu competencia, tus ganadores y tu calendario ⏰',
+  5: '🧠 ¡subí a Tu socio de contenido! tu semana entera sale sola, en tu línea: vos solo aceptás 🚀',
 };
 
 const nonEmpty = (v) => String(v == null ? '' : v).trim().length > 0;

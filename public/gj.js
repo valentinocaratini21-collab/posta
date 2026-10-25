@@ -292,6 +292,76 @@
     if (fin) ktCascade(fin);
   }
 
+  /* ---------- TALLO VIVO (2026-10-25 · MAGIA POST-PAGO, paquete 2) ----------
+     Un solo componente, dos modos — y vive ACÁ (gj.js corre en la home ES
+     renderizada por app.js y en la home EN estática, así que el mismo
+     código sirve a las dos). Sin sesión (401) no pasa nada: la sección
+     queda como está, el camino como promesa. Con sesión, EL MISMO
+     endpoint que la app (/api/posty/level, misma sesión) devuelve su
+     tallo real y la sección se vuelve SU tallo: nudos llenos por orden,
+     segmento siguiente lleno según progress_pct, nota con el próximo
+     paso real («te faltan N cosas para ser…»), CTA a su semana y, si
+     acaba de subir, la MISMA celebración que el chat de la app
+     (level_message). Sin nivel computable, camino genérico: nunca un
+     nivel inventado. Los nombres vienen por ORDEN de nudo, no por texto:
+     ES y EN comparten la estructura. */
+  var LIVE_NAMES = EN
+    ? ['New to your feed', 'Reading your world', 'One of the house', "Your Instagram's right hand", 'Your content partner']
+    : ['Nuevo en tu feed', 'Leyendo tu mundo', 'De la casa', 'Mano derecha de tu Instagram', 'Tu socio de contenido'];
+  var liveFetch = null; /* null = sin intentar · Promise = en curso/resuelto · false = sin sesión */
+  function applyLive(sec, d) {
+    var nodes = sec.querySelectorAll('.gj-node');
+    var segs = sec.querySelectorAll('.gj-seg i');
+    if (nodes.length !== 5 || !d || typeof d.level !== 'number') return false;
+    sec.classList.add('gj-live');
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].classList.toggle('gj-done', i < d.level - 1);
+      nodes[i].classList.toggle('gj-cur', i === d.level - 1);
+    }
+    for (var j = 0; j < segs.length; j++) {
+      var pct = 0;
+      if (j < d.level - 1) pct = 100;
+      else if (j === d.level - 1) pct = Math.max(0, Math.min(100, d.progress_pct || 0));
+      segs[j].style.width = pct + '%';
+      segs[j].style.height = pct + '%';
+    }
+    var note = sec.querySelector('.gj-note');
+    if (note) {
+      if (d.level >= 5) {
+        note.textContent = EN
+          ? 'Your live stem: you made it — your content partner. Your whole week goes out on its own.'
+          : 'Tu tallo en vivo: llegaste — tu socio de contenido. Tu semana entera sale sola.';
+      } else {
+        var miss = (d.next_missing || []).length;
+        var nextName = LIVE_NAMES[d.level] || '';
+        note.textContent = EN
+          ? 'Your live stem: ' + (miss ? ('you are ' + miss + ' step' + (miss === 1 ? '' : 's') + ' away from ' + nextName + '.') : ('almost ' + nextName + '.'))
+          : 'Tu tallo en vivo: ' + (miss ? ('te faltan ' + miss + ' ' + (miss === 1 ? 'cosa' : 'cosas') + ' para ser ' + nextName + '.') : ('casi ' + nextName + '.'));
+      }
+    }
+    var eye = sec.querySelector('.gj-eyebrow');
+    if (eye) eye.textContent = EN ? '🌱 YOUR LIVE STEM' : '🌱 TU TALLO EN VIVO';
+    var cta = sec.querySelector('.gj-cta-row a');
+    if (cta) { cta.setAttribute('href', '#/app/schedule'); cta.textContent = EN ? 'See my week →' : 'Ver mi semana →'; }
+    if (d.leveled_up && d.level_message && !sec.querySelector('.gj-live-cele')) {
+      var cel = document.createElement('p');
+      cel.className = 'gj-live-cele';
+      cel.textContent = d.level_message;
+      var row = sec.querySelector('.gj-cta-row');
+      if (row) row.parentNode.insertBefore(cel, row); else sec.appendChild(cel);
+    }
+    return true;
+  }
+  function tryLive(sec) {
+    if (liveFetch === false) return;
+    if (liveFetch && liveFetch.then) { liveFetch.then(function (d) { if (d) applyLive(sec, d); }); return; }
+    liveFetch = fetch('/api/posty/level', { credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error('no-session'); return r.json(); })
+      .then(function (d) { if (!d || !d.ok) throw new Error('no-level'); return d; })
+      .catch(function () { liveFetch = false; return null; });
+    liveFetch.then(function (d) { if (d) applyLive(sec, d); });
+  }
+
   /* ---------- 1) + 3) niveles y secciones ---------- */
   function arm(root) {
     var doc = root || document;
@@ -301,10 +371,11 @@
       var sec = secs[i];
       if (armed.has(sec)) continue;
       armed.add(sec);
+      tryLive(sec);
       if (RM || !HAS_IO) { sec.classList.add('gj-in'); continue; }
       (function (s) {
         var io = new IntersectionObserver(function (es) {
-          es.forEach(function (e) { if (e.isIntersecting) { s.classList.add('gj-in'); io.disconnect(); } });
+          es.forEach(function (e) { if (e.isIntersecting) { if (!s.classList.contains('gj-live')) s.classList.add('gj-in'); io.disconnect(); } });
         }, { threshold: 0.3 });
         io.observe(s);
       })(sec);
@@ -332,6 +403,10 @@
     armOffice(doc);
     armKt(doc);
   }
+  /* Primitivas de magia para la app (mismo lenguaje, sin duplicar):
+     la bienvenida y los encabezados post-pago juegan con la misma
+     cascada que los titulares de la landing. */
+  try { window.__gjKt = { cascade: ktCascade, scrub: ktScrub }; } catch (e) {}
   arm(document);
   if ('MutationObserver' in window) {
     var queued = false;
