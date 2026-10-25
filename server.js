@@ -289,6 +289,7 @@ const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1
 const showcase = require('./showcase'); // 📣 PRUEBA SOCIAL REAL (v370): la primera historia de un cliente pago, con su consentimiento
 const rubroId = require('./rubro-id'); // (v235) IDENTIFICACIÓN ESPECIALISTA DE RUBRO: voto multi-señal + confianza
 const tasteMemory = require('./taste-memory'); // 🧠 MEMORIA DE GUSTOS (v392): el cliente enseña, Posty anota (registro en el fundamento)
+const onboarding = require('./onboarding'); // ✨ BIENVENIDA MÁGICA POST-PAGO (2026-10-25): fichas del fundamento + huecos de un toque, nunca un cuestionario
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
 const webExtract = require('./web-extract');
@@ -3251,6 +3252,30 @@ setInterval(() => {
     for (const r of rows) pushOficinaMod.procesarEsperas(db, r.user_id).catch(() => {});
   } catch (e) { /* tabla aún no creada en este proceso */ }
 }, 15 * 60 * 1000);
+
+// ---------- Bienvenida mágica post-pago (2026-10-25): fichas + huecos ----------
+// El momento vive en la tarjeta ?plan=ok de la Agenda. GET sirve las fichas
+// del fundamento (solo hechos reales) y los huecos reales (máx. 3, un toque).
+// POST valida contra los huecos/fichas recomputados: nunca acepta «lo sabido».
+app.get('/api/onboarding', requireAuth, (req, res) => {
+  try { res.json({ ok: true, ...onboarding.momentoFor(db, req.session.userId) }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'onboarding_failed' }); }
+});
+app.post('/api/onboarding/responder', requireAuth, (req, res) => {
+  const r = onboarding.responder(db, req.session.userId, String((req.body && req.body.pregunta) || ''), String((req.body && req.body.valor) || ''));
+  if (!r.ok) return res.status(400).json(r);
+  res.json(r);
+});
+app.post('/api/onboarding/saltear', requireAuth, (req, res) => {
+  const r = onboarding.saltear(db, req.session.userId, String((req.body && req.body.pregunta) || ''));
+  if (!r.ok) return res.status(400).json(r);
+  res.json(r);
+});
+app.post('/api/onboarding/corregir', requireAuth, (req, res) => {
+  const r = onboarding.corregir(db, req.session.userId, String((req.body && req.body.ficha) || ''), String((req.body && req.body.valor) || ''));
+  if (!r.ok) return res.status(400).json(r);
+  res.json(r);
+});
 
 // ---------- Perfil del negocio ----------
 app.get('/api/profile', requireAuth, (req, res) => {
@@ -22097,7 +22122,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v453';
+const BUILD_ID = '20261025-v454';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

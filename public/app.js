@@ -12639,6 +12639,125 @@ async function paintPostPayCard() {
       ? `🎉 You're in! We're activating your plan — in a few seconds your week will be running on your new plan. Your current week is already scheduled and posting.`
       : `🎉 ¡Ya sos parte! Estamos activando tu plan — en unos segundos tu semana queda en marcha con tu plan nuevo. Tu semana actual ya está programada y publicándose.`;
   }
+  // (2026-10-25 · BIENVENIDA MÁGICA) El momento post-pago: debajo del texto
+  // vive la colección de lo aprendido + los huecos de un toque. No bloquea
+  // nada: la semana ya está abajo, programada. Si no hay fichas ni huecos,
+  // el contenedor queda vacío (sin secciones inventadas).
+  try { pzPostPayMagicMount(el, en); } catch (e) {}
+}
+
+/* ---------- Momento mágico post-pago (2026-10-25): fichas + huecos ----------
+   Doctrina del fundamento: Posty ya leyó todo lo legible; solo pregunta el
+   hueco, de un toque, y nunca lo que ya sabe (el servidor recomputa los
+   huecos y rechaza «lo sabido»). Al responder la última pregunta, la vista
+   de la semana se re-arms: se re-renderiza con la nota dorada + los chips
+   de lo aplicado. Saltear nunca traba: la semana sigue viva igual. */
+let PZ_MAGIC_BUSY = false;
+function pzMagicLabel(obj, en) { return (obj && (en ? obj.en : obj.es)) || ''; }
+function pzPostPayMagicMount(cardEl, en) {
+  if (!cardEl || !PZ_POSTPAY) return;
+  let box = cardEl.querySelector('#pzPostPayMagic');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'pzPostPayMagic';
+    box.style.cssText = 'margin-top:10px;border-top:1px solid var(--line);padding-top:10px';
+    cardEl.firstElementChild.appendChild(box);
+  }
+  if (box.dataset.loading === '1' || box.dataset.loaded === '1' || PZ_MAGIC_BUSY) return;
+  box.dataset.loading = '1';
+  api.get('/api/onboarding').then((d) => {
+    delete box.dataset.loading;
+    if (!PZ_POSTPAY || !document.body.contains(box)) return;
+    box.dataset.loaded = '1';
+    pzPostPayMagicRender(box, d || {}, en);
+  }).catch(() => { delete box.dataset.loading; });
+}
+function pzPostPayMagicRender(box, d, en) {
+  const fichas = (d && d.fichas) || [];
+  const preguntas = (d && d.preguntas) || [];
+  const respondidas = (d && d.respondidas) || [];
+  if (!fichas.length && !preguntas.length && !respondidas.length) { box.innerHTML = ''; return; }
+  const esc2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let html = '';
+  if (fichas.length) {
+    html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <img src="ai-avatar.png" alt="Posty" style="width:30px;height:30px;border-radius:50%">
+      <b style="font-size:13.5px">${en ? 'This is what I already know about you' : 'Esto es lo que ya sé de vos'}</b></div>`;
+    html += fichas.map((f) => {
+      const val = f.id === 'paleta' && Array.isArray(f.colores)
+        ? f.colores.map((c) => `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${esc2(c)};border:1px solid var(--line);vertical-align:middle;margin-right:4px" title="${esc2(c)}"></span>`).join('')
+        : esc2(en ? f.valor_en : f.valor);
+      const picker = (f.opciones && f.opciones.length)
+        ? `<button class="pz-magic-edit" data-ficha="${esc2(f.id)}" style="background:none;border:0;cursor:pointer;font-size:14px" title="${en ? 'Correct' : 'Corregir'}">✏️</button>
+           <span class="pz-magic-picker" data-picker="${esc2(f.id)}" hidden style="display:block;margin-top:6px"></span>`
+        : '';
+      return `<div style="font-size:13px;line-height:1.5;margin-bottom:6px"><span style="color:var(--dim)">${esc2(en ? f.en : f.es)}:</span> <b>${val}</b>${f.corregida ? ` <span style="font-size:11px;color:var(--dim)">(${en ? 'corrected by you' : 'corregido por vos'})</span>` : ''} ${picker}</div>`;
+    }).join('');
+    // Opciones de corrección (guardadas en el nodo para el handler delegado).
+    box.__fichas = fichas;
+  }
+  if (preguntas.length) {
+    html += `<div style="margin-top:10px"><b style="font-size:13.5px">${en ? 'Just a couple of things I still need to know' : 'Solo un par de cosas que todavía no sé'}</b></div>`;
+    html += preguntas.map((p) => {
+      const opts = (p.opciones || []).map((o) =>
+        `<button class="pz-magic-opt" data-pregunta="${esc2(p.id)}" data-valor="${esc2(o.valor)}" style="background:var(--bg2);border:1px solid var(--cel);border-radius:20px;padding:6px 12px;margin:4px 4px 0 0;cursor:pointer;font-size:13px">${esc2(en ? o.en : o.es)}</button>`).join('');
+      return `<div style="margin-top:8px"><div style="font-size:13px">${esc2(en ? p.en : p.es)}</div><div>${opts}</div>
+        <button class="pz-magic-skip" data-pregunta="${esc2(p.id)}" style="background:none;border:0;cursor:pointer;font-size:12px;color:var(--dim);padding:4px 0">${en ? 'Skip' : 'Saltear'}</button></div>`;
+    }).join('');
+  }
+  if (!preguntas.length && respondidas.length) {
+    const chips = respondidas.map((r) =>
+      `<span style="display:inline-block;background:var(--bg2);border:1px solid var(--cel);border-radius:20px;padding:4px 10px;margin:4px 4px 0 0;font-size:12.5px">✓ ${esc2(pzMagicLabel(r.etiqueta, en))}</span>`).join('');
+    html += `<div style="margin-top:10px;background:linear-gradient(90deg,#DFA856,#DBA453,#D6A463);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.5;color:#0A1E33">
+      <b>${en ? 'With what you told me, your week is set like this' : 'Con lo que me contaste, tu semana quedó así'}</b>
+      <div style="margin-top:4px">${chips}</div>
+      <div style="font-size:12.5px;margin-top:4px">${en ? 'Your next week already applies this.' : 'Tu próxima semana ya aplica esto.'}</div></div>`;
+  }
+  box.innerHTML = html;
+  // Handlers delegados (un solo bind por render; los botones se re-crean cada vez).
+  box.querySelectorAll('.pz-magic-opt').forEach((b) => b.onclick = async () => {
+    if (PZ_MAGIC_BUSY) return; PZ_MAGIC_BUSY = true;
+    try {
+      const r = await api.post('/api/onboarding/responder', { pregunta: b.dataset.pregunta, valor: b.dataset.valor });
+      PZ_MAGIC_BUSY = false;
+      if (r && r.ok && r.momento) {
+        const wasOpen = preguntas.length > 0;
+        pzPostPayMagicRender(box, r.momento, en);
+        // La semana visible se re-arma: una sola re-renderización al cerrar
+        // el último hueco (la vista vuelve con la nota dorada arriba).
+        if (wasOpen && !(r.momento.preguntas || []).length && PZ_POSTPAY && !PZ_POSTPAY.rearmed) {
+          PZ_POSTPAY.rearmed = true;
+          try { render(); } catch (e) {}
+        }
+      }
+    } catch (e) { PZ_MAGIC_BUSY = false; }
+  });
+  box.querySelectorAll('.pz-magic-skip').forEach((b) => b.onclick = async () => {
+    if (PZ_MAGIC_BUSY) return; PZ_MAGIC_BUSY = true;
+    try {
+      const r = await api.post('/api/onboarding/saltear', { pregunta: b.dataset.pregunta });
+      PZ_MAGIC_BUSY = false;
+      if (r && r.ok && r.momento) pzPostPayMagicRender(box, r.momento, en);
+    } catch (e) { PZ_MAGIC_BUSY = false; }
+  });
+  box.querySelectorAll('.pz-magic-edit').forEach((b) => b.onclick = () => {
+    const f = (box.__fichas || []).find((x) => x.id === b.dataset.ficha);
+    const pk = box.querySelector(`[data-picker="${b.dataset.ficha}"]`);
+    if (!f || !pk) return;
+    const show = pk.hidden;
+    pk.hidden = !show;
+    if (!show) return;
+    pk.innerHTML = (f.opciones || []).map((o) =>
+      `<button class="pz-magic-fix" data-ficha="${esc2(f.id)}" data-valor="${esc2(o.valor)}" style="background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:4px 10px;margin:2px 4px 0 0;cursor:pointer;font-size:12.5px">${esc2(en ? o.en : o.es)}${o.actual ? ' ✓' : ''}</button>`).join('');
+    pk.querySelectorAll('.pz-magic-fix').forEach((x) => x.onclick = async () => {
+      if (PZ_MAGIC_BUSY) return; PZ_MAGIC_BUSY = true;
+      try {
+        const r = await api.post('/api/onboarding/corregir', { ficha: x.dataset.ficha, valor: x.dataset.valor });
+        PZ_MAGIC_BUSY = false;
+        if (r && r.ok && r.momento) pzPostPayMagicRender(box, r.momento, en);
+      } catch (e) { PZ_MAGIC_BUSY = false; }
+    });
+  });
 }
 function maybePostPayWelcome() {
   let planParam = null;
