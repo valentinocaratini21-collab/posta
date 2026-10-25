@@ -14,9 +14,6 @@
     if (!standalone) return;
     var h = location.hash || '';
     if (h.indexOf('#/app') === 0 || h === '#/login' || h === '#/registro' || h.indexOf('#/reset') === 0) return;
-    // (v469) Click en el logo de auth EN: no redirigir a la app en esta carga.
-    // Se consume aquí porque esta página es estática y no carga app.js.
-    try { if (sessionStorage.getItem('posta_ver_web') === '1') { sessionStorage.removeItem('posta_ver_web'); return; } } catch (e) {}
     var w = Math.min(window.innerWidth || 999, (window.screen && screen.width) || 999);
     location.replace('/' + (w <= 820 ? '#/app/inicio' : '#/app/schedule'));
   } catch (e) {}
@@ -80,7 +77,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261035">
+<link rel="stylesheet" href="/styles.css?v=20261036">
 <link rel="stylesheet" href="/gj.css?v=3">
 <script type="application/ld+json">
 {

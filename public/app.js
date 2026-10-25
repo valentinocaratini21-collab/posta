@@ -369,6 +369,8 @@ const BB_CAPAS = { negocio: 'Tu negocio', identidad: 'Tu identidad', operacion: 
 async function bbNegocioContent() {
   let f, prefs;
   try { f = await api.get('/api/oficina/fundamento'); } catch (e) { f = null; }
+  let jardin = null, nivJ = null;
+  try { const r = await Promise.all([api.get('/api/oficina/jardin').catch(() => null), api.get('/api/oficina/nivel?poder=posty').catch(() => null)]); jardin = r[0]; nivJ = r[1]; } catch (e) {}
   try { const pr = await api.get('/api/oficina/push-prefs'); if (pr && pr.ok) { BB.prefs = pr.prefs; prefs = pr.prefs; } } catch (e) {}
   if (!f || !f.ok) return '<div class="bb-error"><p>No pude leer tu fundamento.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>';
   const ordenCapas = Object.keys(BB_CAPAS).concat(Object.keys(f.capas || {}).filter((c) => !BB_CAPAS[c]));
@@ -386,6 +388,7 @@ async function bbNegocioContent() {
   return `
     <section class="bb-bloque bb-bloque-top"><h1>Mi negocio</h1><p class="bb-sub">Esto es lo que tu oficina sabe de tu negocio — su fundamento. Tus cuatro poderes trabajan sobre estas mismas fichas: ninguno inventa lo que no está acá.</p></section>
     ${capas}
+    ${(jardin && jardin.ok && Array.isArray(jardin.antes) && jardin.antes.length && Array.isArray(jardin.hoy) && jardin.hoy.length) ? pzJardinHTML(jardin, (typeof ME !== 'undefined' && ME && ME.lang === 'en')) : ''}${(nivJ && nivJ.ok && Array.isArray(nivJ.historial) && nivJ.historial.length) ? pzVitrinaHTML(nivJ.historial, (typeof ME !== 'undefined' && ME && ME.lang === 'en')) : ''}
     ${avisos}
     <button class="bb-btn bb-btn-ghost bb-ancho" onclick="bbGo('#/app/chat')">¿Falta algo o algo cambió? Contale a Bambooty</button>
   `;
@@ -435,6 +438,9 @@ function bbChatBind() {
     ta.focus();
     ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); bbChatSend(); } });
   }
+  // Desafio en el chat (v469): si hay reto sin aceptar, Posty lo propone
+  // conversando. No bloquea el chat si el endpoint falla.
+  try { pzDesafioChatMaybe(document.getElementById('bbChatBox'), true); } catch (e) {}
 }
 // El despachante de la espina: render() lo llama para sus cuatro vistas.
 async function bbContentFor(tab) {
@@ -3363,7 +3369,7 @@ function authView(mode) {
   const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}">posty<span class="pdot">.</span></a>
     <div class="nav-links"><a href="#/${isLogin ? 'registro' : 'login'}">${isLogin ? S.navCreate : S.navLogin}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
@@ -3388,7 +3394,7 @@ function forgotView() {
   const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}">posty<span class="pdot">.</span></a>
     <div class="nav-links"><a href="#/login">${S.navLogin}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
@@ -3408,7 +3414,7 @@ function resetView() {
   const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}">posty<span class="pdot">.</span></a>
   </div></div>
   <div class="wrap"><div class="form-card">
     <h2>${S.resetH2}</h2>
@@ -8678,6 +8684,9 @@ async function bindChatView() {
   // si ya cargó antes, no hay nada que esperar.
   try { await (window.__chatHistP || Promise.resolve()); } catch (e) {}
   try { await chatGreet(); } catch (e) {}
+  // Desafio en el chat (v469): si hay reto sin aceptar, Posty lo propone
+  // conversando. No bloquea el chat si el endpoint falla.
+  try { pzDesafioChatMaybe(document.getElementById('chatBox'), false); } catch (e) {}
   // Tarjeta "¿Arrancamos por este? 👀" (solo primera apertura con borradores).
   try { renderFirstPick(CHAT_FIRST_PICK); } catch (e) {}
   // Un solo próximo paso: debajo de los borradores, solo si hay borradores.
@@ -12363,7 +12372,6 @@ const GOALS = [
 function bootSplashOff() {
   try { const b = document.getElementById('posty-boot'); if (b) b.remove(); } catch (e) {}
 }
-let PZ_VER_WEB_ONCE = false; // (v469) click en el logo de auth: ver la landing UNA vez en PWA
 let RENDER_SEQ = 0;
 async function render() {
   const mySeq = ++RENDER_SEQ;
@@ -12428,14 +12436,8 @@ async function render() {
   // sola al login. Auth y reset quedan afuera: son destinos válidos.
   try {
     if (pwaIsStandalone() && !path.startsWith('#/app') && path !== '#/login' && path !== '#/registro' && !path.startsWith('#/reset')) {
-      // (v469) Click en el logo de auth con sesión cerrada: el usuario pidió
-      // VER el website. La intención es one-shot (sessionStorage, la consume
-      // esta rama): esta carga NO redirige a la app; la próxima apertura de
-      // la PWA vuelve a comportarse como app (regla 2026-10-20 intacta).
-      let _vw = false;
-      try { _vw = sessionStorage.getItem('posta_ver_web') === '1'; if (_vw) sessionStorage.removeItem('posta_ver_web'); } catch (e) {}
-      if (_vw) { PZ_VER_WEB_ONCE = true; }
-      else { location.hash = mzHomeHash(); return; }
+      location.hash = mzHomeHash();
+      return;
     }
   } catch (e) {}
 
@@ -12605,7 +12607,7 @@ async function render() {
   if (path === '#/' || path === '') {
     // App instalada: se comporta como app, no como web. Va directo a la semana
     // (o al login si no hay sesión) en vez de la landing de marketing.
-    if (pwaIsStandalone()) { if (PZ_VER_WEB_ONCE) { PZ_VER_WEB_ONCE = false; } else { location.hash = mzHomeHash(); return; } }
+    if (pwaIsStandalone()) { location.hash = mzHomeHash(); return; }
     // Logueado en la web (v292): rebota a SU pantalla con la MISMA regla que
     // tras el login — postAuthLanding es la única fuente de verdad del
     // destino (onboarding si falta el negocio, plan elegido, return-to, o la
@@ -15006,25 +15008,37 @@ function pzNivelStripHTML(nv, en) {
     ? { hash: '#/app/negocio', label: en ? 'See your garden' : 'Ver tu jardín' }
     : { hash: pzNivelChip(falt[0] ? falt[0].clave : '', en).hash,
         label: n === 1 ? (en ? '1 thing left' : 'te falta 1 cosa') : (en ? `${n} things left` : `te faltan ${n} cosas`) };
-  return `<div id="pzNivelStrip" role="button" tabindex="0" aria-label="${esc(en ? `Your level with Posty: ${nv.nombre_nivel}` : `Tu nivel con Posty: ${nv.nombre_nivel}`)}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:16px;cursor:pointer;box-sizing:border-box">
+  return `<div id="pzNivelStrip" role="button" tabindex="0" aria-expanded="false" aria-label="${esc(en ? `Your level with Posty: ${nv.nombre_nivel}` : `Tu nivel con Posty: ${nv.nombre_nivel}`)}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:16px;cursor:pointer;box-sizing:border-box">
     <img src="ai-avatar.png" alt="Posty" style="width:52px;height:52px;flex:none;border-radius:50%;object-fit:cover">
-    <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
+    <span data-pz-col style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
       <strong style="font-size:15px;line-height:1.25">${esc(nv.nombre_nivel)}</strong>
       <span style="display:block;height:7px;border-radius:999px;background:#DCEFFA;overflow:hidden"><span data-pz-fill="${pct}" style="display:block;height:100%;width:${pct}%;background:${esc(nv.color || '#2793C8')};border-radius:999px"></span></span>
       <button type="button" data-pz-nivel-accion="${esc(paso.hash)}" style="align-self:flex-start;background:none;border:0;padding:0;font-size:12px;line-height:1.3;color:#47617A;cursor:pointer;text-align:left">${esc(paso.label)}</button>
     </span>
-  </div>${pzNivelExtraHTML(nv, en)}`;
+    <span class="pz-strip-chev" aria-hidden="true">▾</span>
+  </div>
+  <div id="pzNivelDetalle" class="pz-nivel-detalle" hidden>${pzNivelDetalleHTML(nv, en)}</div>${pzNivelExtraHTML(nv, en)}`;
 }
-
-// Filas extra de la tira (v459): desafio de la semana, prueba del nivel,
-// brote sorpresa y resumen de ausencia. Todo viene del servidor; sin dato
-// real, la fila no existe. La tira misma no se toca.
-function pzNivelExtraHTML(nv, en) {
+// Detalle de la tira (v469): desafio + prueba viven DENTRO de la tira y se
+// despliegan al tocarla. La tira colapsada sigue fina (una sola fila).
+function pzNivelDetalleHTML(nv, en) {
   let h = '';
   if (nv.desafio && nv.nivel < 5) {
     h += `<div class="pz-desafio"><span class="pz-desafio-tx"><strong>${esc(en ? 'This week’s challenge' : 'Desafío de esta semana')}</strong> ${esc(en ? nv.desafio.titulo.en : nv.desafio.titulo.es)} · ${esc(en ? nv.desafio.texto.en : nv.desafio.texto.es)}</span><button type="button" class="pz-nivel-chip" data-pz-desafio-accion="${esc(nv.desafio.accion)}">${esc(en ? 'Do it' : 'Hacerlo')}</button></div>`;
   }
   if (nv.prueba) h += `<div class="pz-prueba">${esc(en ? 'Proof of your level: ' : 'La prueba de tu nivel: ')}${esc(en ? nv.prueba.en : nv.prueba.es)}</div>`;
+  h += `<button type="button" class="pz-detalle-negocio" data-pz-nivel-accion="#/app/negocio">${esc(en ? 'See what Posty knows about you' : 'Ver lo que Posty sabe de vos')}</button>`;
+  return h;
+}
+
+// Filas extra de la tira (v459): desafio de la semana, prueba del nivel,
+// brote sorpresa y resumen de ausencia. Todo viene del servidor; sin dato
+// real, la fila no existe. La tira misma no se toca.
+// Filas de aviso de la tira (v469): brote sorpresa y resumen de ausencia
+// siguen como hermanas debajo de la tira (son avisos ocasionales, no
+// contenido permanente). Desafio + prueba viven en el detalle desplegable.
+function pzNivelExtraHTML(nv, en) {
+  let h = '';
   if (nv.brote) h += `<div class="pz-brote" id="pzNivelBrote"><span>🌱 ${esc(en ? 'Surprise sprout: ' : 'Brote sorpresa: ')}${esc(nv.brote.texto)}</span><button type="button" class="pz-brote-x" data-pz-brote-x data-pz-brote-fuente="${esc(nv.brote.fuente)}" data-pz-brote-id="${esc(String(nv.brote.id || 0))}" aria-label="${en ? 'Close' : 'Cerrar'}">✕</button></div>`;
   if (nv.ausencia) {
     const lines = (nv.ausencia.aprendido || []).map((x) => `<div>· ${esc(x)}</div>`).join('');
@@ -15051,6 +15065,63 @@ function pzNivelFamiliaHTML(nv, en) {
 }
 function pzNivelBroteVisto(el) {
   try { api.post('/api/oficina/nivel/brote-visto', { fuente: el.dataset.pzBroteFuente, id: Number(el.dataset.pzBroteId || 0) }).catch(() => {}); } catch (e) {}
+}
+// Desafio en el chat (v469): Posty propone el reto conversando. Una sola
+// burbuja por semana sin aceptar: al tocar «¡Dale!» queda aceptado en el
+// servidor y el juego sigue en la acción del reto. No se agrega al
+// historial: es DOM de la vista, no un mensaje persistido.
+async function pzDesafioChatMaybe(box, shell) {
+  try {
+    if (!box || box.querySelector('[data-pz-desafio-chat]')) return;
+    const nv = await api.get('/api/oficina/nivel?poder=posty').catch(() => null);
+    if (!nv || !nv.ok || !nv.desafio || nv.desafio_aceptado || nv.nivel >= 5) return;
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const d = nv.desafio;
+    const tit = en ? d.titulo.en : d.titulo.es;
+    const txt = en ? d.texto.en : d.texto.es;
+    const head = en ? 'This week’s challenge' : 'Reto de la semana';
+    const dale = en ? 'Let’s go!' : '¡Dale!';
+    let html = '';
+    if (shell) {
+      const meta = (typeof BB_META !== 'undefined' && BB_META.posty) || { n: 'Posty', c: '#2793C8' };
+      html = `<div class="bb-msg ai" data-pz-desafio-chat>${bbAvatarHTML('posty', null, meta.n, meta.c, 'bb-av bb-av-sm')}<div><span class="bb-msg-quien">Posty</span><p><strong>${esc(head)}:</strong> ${esc(tit)} — ${esc(txt)}</p><button type="button" class="bb-btn bb-btn-gold" data-pz-desafio-chat-dale>${esc(dale)}</button></div></div>`;
+    } else {
+      html = `<div class="chat-msg ai" data-pz-desafio-chat><strong>Posty:</strong> <strong>${esc(head)}:</strong> ${esc(tit)} — ${esc(txt)} <button type="button" class="btn btn-primary btn-sm" data-pz-desafio-chat-dale>${esc(dale)}</button></div>`;
+    }
+    box.insertAdjacentHTML('beforeend', html);
+    if (shell) box.scrollTop = box.scrollHeight;
+    const btn = box.querySelector('[data-pz-desafio-chat-dale]');
+    if (btn) btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      let r = null;
+      try { r = await api.post('/api/oficina/nivel/desafio-aceptado', { clave: d.clave }); } catch (e) { r = null; }
+      if (r && r.ok) { location.hash = d.accion; return; }
+      btn.disabled = false;
+      try { bbToast(en ? 'Could not save it. Try again.' : 'No quedó guardado. Probá de nuevo.'); } catch (e) {}
+    });
+  } catch (e) {}
+}
+// Jardín antes/hoy (v469): feed publicado real, viejo vs actual. Sin fotos
+// reales en ambos lados, la sección no existe.
+function pzJardinHTML(j, en) {
+  const img = (src) => `<img src="${esc(mv(src, 640))}" loading="lazy" alt="" onerror="this.remove()">`;
+  return `<section class="bb-bloque"><h2>${en ? 'Your garden, before and today' : 'Tu jardín, antes y hoy'}</h2>
+    <p class="bb-sub">${en ? 'Your published feed, then and now. Real posts, no mockups.' : 'Tu feed publicado, antes y hoy. Posteos reales, nada de muestra.'}</p>
+    <div class="pz-jardin"><div><h3>${en ? 'Before' : 'Antes'}</h3><div class="pz-jardin-fotos">${j.antes.map(img).join('')}</div></div>
+    <div><h3>${en ? 'Today' : 'Hoy'}</h3><div class="pz-jardin-fotos">${j.hoy.map(img).join('')}</div></div></div>
+  </section>`;
+}
+// Vitrina de niveles (v469): insignias con fecha REAL del río. Sin registro,
+// sin insignia.
+function pzVitrinaHTML(hist, en) {
+  const MES_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const MES_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mes = (ts) => { const d = new Date(Number(ts)); if (isNaN(d)) return ''; return `${(en ? MES_EN : MES_ES)[d.getMonth()]} ${d.getFullYear()}`; };
+  const badges = hist.map((h) => `<span class="pz-vit-badge"><strong>${esc(h.nombre_nivel)}</strong><span>${esc(mes(h.ts))}</span></span>`).join('');
+  return `<section class="bb-bloque"><h2>${en ? 'Your level showcase' : 'La vitrina de tus niveles'}</h2>
+    <p class="bb-sub">${en ? 'Every level you reached, with its real date.' : 'Cada nivel que alcanzaste, con su fecha real.'}</p>
+    <div class="pz-vitrina">${badges}</div>
+  </section>`;
 }
 function pzNivelCelebShow(nv, en) {
   const prev = document.getElementById('pzCelebFondo');
@@ -15109,6 +15180,30 @@ function pzNivelStoryShow(nv, en) {
     }
   });
 }
+let PZ_NIVEL_PREV = null; // {pct, desafioClave, nivel} de la última tira pintada
+function pzNivelToggleDetalle() {
+  const strip = document.getElementById('pzNivelStrip');
+  const det = document.getElementById('pzNivelDetalle');
+  if (!strip || !det) return;
+  const open = det.hasAttribute('hidden');
+  if (open) det.removeAttribute('hidden'); else det.setAttribute('hidden', '');
+  strip.setAttribute('aria-expanded', open ? 'true' : 'false');
+  const chev = strip.querySelector('.pz-strip-chev');
+  if (chev) chev.textContent = open ? '▴' : '▾';
+}
+function pzMiniFestejoShow(en) {
+  try {
+    const strip = document.getElementById('pzNivelStrip');
+    const col = strip ? strip.querySelector('[data-pz-col]') : null;
+    if (!strip || !col || document.getElementById('pzMiniFestejo')) return;
+    const div = document.createElement('div');
+    div.id = 'pzMiniFestejo';
+    div.className = 'pz-mini-festejo';
+    div.textContent = en ? '✦ Challenge done! Posty already learned that.' : '✦ ¡Desafío cumplido! Posty ya aprendió eso.';
+    col.appendChild(div);
+    setTimeout(() => { try { div.remove(); } catch (e) {} }, 4500);
+  } catch (e) {}
+}
 function pzNivelMount() {
   const strip = document.getElementById('pzNivelStrip');
   if (strip && !strip.dataset.pzBound) {
@@ -15116,24 +15211,43 @@ function pzNivelMount() {
     strip.addEventListener('click', (e) => {
       const chip = (e.target && e.target.closest) ? e.target.closest('[data-pz-nivel-accion]') : null;
       if (chip) { location.hash = chip.dataset.pzNivelAccion; return; }
-      location.hash = '#/app/negocio';
+      pzNivelToggleDetalle();
     });
     strip.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
       if (e.target && e.target.closest && e.target.closest('[data-pz-nivel-accion]')) return; // el botón nativo dispara el click
       e.preventDefault();
-      location.hash = '#/app/negocio';
+      pzNivelToggleDetalle();
     });
   }
-  // Llenado suave de la barrita (v461): de 0 al avance real. Reduced-motion:
+  // Botones del detalle desplegable (negocio + desafio usan data-accion).
+  const det = document.getElementById('pzNivelDetalle');
+  if (det && !det.dataset.pzBound) {
+    det.dataset.pzBound = '1';
+    det.addEventListener('click', (e) => {
+      const b = (e.target && e.target.closest) ? e.target.closest('[data-pz-nivel-accion]') : null;
+      if (b) { location.hash = b.dataset.pzNivelAccion; return; }
+    });
+  }
+  // Llenado en vivo (v469): la barrita arranca donde quedó la última vez y
+  // se llena frente al cliente hasta el avance real. Reduced-motion:
   // aparece llena, sin animar. Sin tira no hay nada que animar.
   const reduced = (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const fill = strip ? strip.querySelector('[data-pz-fill]') : null;
-  if (fill && !reduced) {
-    const target = fill.getAttribute('data-pz-fill');
-    fill.style.width = '0%';
+  const nv0 = (typeof HF_NIVEL !== 'undefined') ? HF_NIVEL : null;
+  const target = fill ? Number(fill.getAttribute('data-pz-fill') || 0) : 0;
+  const prev = PZ_NIVEL_PREV;
+  const from = (prev && prev.pct != null && prev.pct <= target) ? prev.pct : 0;
+  if (fill && !reduced && target > from) {
+    fill.style.width = from + '%';
     requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.transition = 'width .8s ease'; fill.style.width = target + '%'; }));
   }
+  // Mini-festejo por desafío (v469): la clave del desafio cambió sin que el
+  // nivel subiera = el reto anterior se completó. Chispa + línea, sin modal.
+  if (nv0 && prev && prev.nivel === nv0.nivel && prev.desafioClave && nv0.desafio && nv0.desafio.clave && nv0.desafio.clave !== prev.desafioClave) {
+    pzMiniFestejoShow((typeof ME !== 'undefined' && ME && ME.lang === 'en'));
+  }
+  if (nv0) PZ_NIVEL_PREV = { pct: target, desafioClave: (nv0.desafio && nv0.desafio.clave) || null, nivel: nv0.nivel };
   const desBtn = document.querySelector('[data-pz-desafio-accion]');
   if (desBtn && !desBtn.dataset.pzBound) {
     desBtn.dataset.pzBound = '1';

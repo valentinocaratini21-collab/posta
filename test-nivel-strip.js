@@ -63,7 +63,7 @@ for (const f of ['pzNivelStripHTML', 'pzNivelMount', 'pzNivelCelebShow', 'pzNive
 for (const clave of ['fundamento_leido', 'semana_generada', 'decision_bandeja', 'semana_aceptada', 'pieza_aceptada_primera', 'semana_publicada', 'pregunta_respondida']) {
   t(app.includes(clave), 'chip para ' + clave);
 }
-t(app.includes("location.hash = '#/app/negocio'"), 'un toque en la tira abre Mi negocio');
+t(app.includes('pzNivelToggleDetalle()') && app.includes('data-pz-nivel-accion="#/app/negocio"'), 'v469: un toque en la tira despliega el detalle, y desde ahí un toque abre Mi negocio');
 t(app.includes('/api/oficina/nivel?poder=posty') && app.includes('/api/oficina/nivel/celebrar'), 'tira y celebración usan el endpoint compartido');
 t(srv.includes("app.get('/api/oficina/nivel'") && srv.includes("app.post('/api/oficina/nivel/celebrar'"), 'rutas del endpoint en server.js');
 t(srv.includes('nivel_celebraciones'), 'marca durable de celebración única por nivel');

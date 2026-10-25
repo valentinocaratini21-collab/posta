@@ -314,7 +314,7 @@ function pruebaPara(niv, datos) {
   const ev = niv.eventos || {};
   const d = datos || {};
   if (niv.nivel === 2) {
-    if (d.item) return { es: `Posty ya sabe que ${d.business ? d.business + ' ofrece' : 'tu negocio ofrece'} ${d.item}.`, en: `Posty already knows that ${d.business ? d.business + ' offers' : 'your business offers'} ${d.item}.` };
+    if (d.item) return { es: `Posty ya conoce tu oferta: ${d.item}.`, en: `Posty already knows your offer: ${d.item}.` };
     if (d.tema) return { es: `Posty ya conoce de tu feed el tema ${d.tema}.`, en: `Posty already knows the theme ${d.tema} from your feed.` };
     return null;
   }
@@ -333,4 +333,19 @@ function pruebaPara(niv, datos) {
   return { es: `${s} semanas publicadas con constancia${p ? ` y ${p} preguntas respondidas` : ''}: tu socio ya trabaja solo.`, en: `${s} weeks published steadily${p ? ` and ${p} questions answered` : ''}: your partner already works on its own.` };
 }
 
-module.exports = { PODERES, ESPECIALISTAS, ORDEN_PODERES, ORDEN_ESPECIALISTAS, PLIEGUE, resolverPoder, IDENTIDADES, DORADO, computarNivel, registrarEvento, conteoEventos, DESAFIO_MAP, desafioPara, pruebaPara, semanaISO, poderesContratados };
+// Vitrina de niveles (v469): insignias con fecha REAL. rows: registros
+// subida_nivel [{registro_ref, ts}] ordenados; firstTs: ts del primer evento
+// de nivel (L1) o null. Sin registro no hay insignia, nunca inventada.
+function historialNiveles(rows, firstTs, nombres) {
+  const porNivel = new Map();
+  for (const r of (rows || [])) {
+    const m = String((r && r.registro_ref) || '').match(/^nivel:posty:(\d+):/);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (n >= 2 && n <= 5 && !porNivel.has(n)) porNivel.set(n, r.ts);
+  }
+  if (firstTs && !porNivel.has(1)) porNivel.set(1, firstTs);
+  return [...porNivel.entries()].sort((a, b) => a[0] - b[0])
+    .map(([nivel, ts]) => ({ nivel, nombre_nivel: (nombres || [])[nivel - 1] || '', ts }));
+}
+module.exports = { PODERES, ESPECIALISTAS, ORDEN_PODERES, ORDEN_ESPECIALISTAS, PLIEGUE, resolverPoder, IDENTIDADES, DORADO, computarNivel, registrarEvento, conteoEventos, DESAFIO_MAP, desafioPara, pruebaPara, semanaISO, poderesContratados, historialNiveles };

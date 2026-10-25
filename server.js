@@ -3434,6 +3434,7 @@ function nivelTablasEnsure() {
     db.exec(`CREATE TABLE IF NOT EXISTS nivel_visitas (user_id INTEGER PRIMARY KEY, last_ts INTEGER NOT NULL, last_nivel INTEGER NOT NULL)`);
     db.exec(`CREATE TABLE IF NOT EXISTS nivel_brotes_vistos (user_id INTEGER NOT NULL, fundamento_id INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (user_id, fundamento_id))`);
     db.exec(`CREATE TABLE IF NOT EXISTS nivel_digest_snapshot (user_id INTEGER PRIMARY KEY, items_json TEXT NOT NULL DEFAULT '[]', ts INTEGER NOT NULL)`);
+    db.exec(`CREATE TABLE IF NOT EXISTS nivel_desafios_aceptados (user_id INTEGER NOT NULL, clave TEXT NOT NULL, semana TEXT NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (user_id, semana))`);
     // (2026-10-25 · celebración real) Poderes contratados por la cuenta:
     // SOLO la escribe un evento real de contratación (el checkout del
     // poder cuando lance). Hoy ningún checkout de Venty/Gesty/Atenty
@@ -3502,6 +3503,23 @@ function nivelPrueba(db, uid, niv) {
     }
     return oficina.niveles.pruebaPara(niv, datos);
   } catch (e) { return null; }
+}
+// Vitrina + desafio-aceptado (v469): historial real desde el río y flag
+// semanal de aceptación del reto (una sola aceptación por semana).
+function nivelHistorial(db, uid, def) {
+  try {
+    const rows = db.prepare(`SELECT registro_ref, ts FROM oficina_registros WHERE user_id = ? AND poder = 'posty' AND tipo = 'subida_nivel' ORDER BY ts ASC`).all(uid);
+    let firstTs = null;
+    try { const f = db.prepare(`SELECT MIN(ts) AS ts FROM oficina_nivel_eventos WHERE user_id = ? AND poder = 'posty'`).get(uid); if (f && f.ts) firstTs = f.ts; } catch (e) {}
+    return oficina.niveles.historialNiveles(rows, firstTs, def.niveles);
+  } catch (e) { return []; }
+}
+function nivelDesafioAceptado(db, uid) {
+  try {
+    const semana = oficina.niveles.semanaISO(new Date());
+    const r = db.prepare('SELECT 1 FROM nivel_desafios_aceptados WHERE user_id = ? AND semana = ? LIMIT 1').get(uid, semana);
+    return !!r;
+  } catch (e) { return false; }
 }
 app.get('/api/oficina/nivel', requireAuth, (req, res) => {
   try {
@@ -3580,6 +3598,8 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
       prueba: nivelPrueba(db, uid, niv),
       brote: nivelBrote(db, uid),
       ausencia,
+      historial: nivelHistorial(db, uid, def),
+      desafio_aceptado: nivelDesafioAceptado(db, uid),
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -3607,6 +3627,27 @@ app.post('/api/oficina/nivel/celebrar', requireAuth, (req, res) => {
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+app.post('/api/oficina/nivel/desafio-aceptado', requireAuth, (req, res) => {
+  try {
+    nivelTablasEnsure();
+    const uid = req.session.userId;
+    const clave = String((req.body && req.body.clave) || '');
+    const claves = (oficina.niveles.DESAFIO_MAP && Object.keys(oficina.niveles.DESAFIO_MAP)) || [];
+    if (!claves.includes(clave)) return res.status(400).json({ ok: false, error: 'clave_invalida' });
+    const semana = oficina.niveles.semanaISO(new Date());
+    db.prepare('INSERT OR REPLACE INTO nivel_desafios_aceptados (user_id, clave, semana, ts) VALUES (?,?,?,?)').run(uid, clave, semana, Date.now());
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/oficina/jardin', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const rows = db.prepare(`SELECT image_path FROM posts WHERE user_id = ? AND status = 'published' AND media_type IN ('image','carousel') AND image_path IS NOT NULL AND image_path != '' ORDER BY id ASC`).all(uid);
+    const imgs = rows.map((r) => r.image_path).filter(Boolean);
+    res.json({ ok: true, antes: imgs.slice(0, 3), hoy: imgs.slice(-3).reverse() });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // Vaciado periódico de la cola agrupable de push (buenas noticias): Bambooty
 // las resume; jamás despierta de noche (la política vive en push-oficina).
 setInterval(() => {
