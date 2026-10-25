@@ -14104,7 +14104,7 @@ function hfHighlightsTrayHTML(prof, opts) {
   // preview de edición (que no pasa el flag). Se ata con data-hf-pact
   // al bind de siempre (hfProfileBind sobre inicioView).
   const plusTile = (opts && opts.coversPlus)
-    ? `<button type="button" class="hf-hl hf-hl-plus" data-hf-pact="covers" aria-label="${en ? 'Create highlight covers' : 'Crear cubiertas de destacadas'}"><div class="hf-hl-ring hf-hl-ring-plus">+</div><div class="hf-hl-t">${en ? 'Covers' : 'Cubiertas'}</div></button>` : '';
+    ? `<button type="button" class="hf-hl hf-hl-plus" data-hf-pact="covers" aria-label="${en ? 'Create cover' : 'Crear cubierta'}"><div class="hf-hl-ring hf-hl-ring-plus">+</div><div class="hf-hl-t">${en ? 'Create cover' : 'Crear cubierta'}</div></button>` : '';
   return (hls.length || plusTile) ? `<div class="hf-hls">${plusTile}${hls.map((h) => `<div class="hf-hl"><div class="hf-hl-ring">${h.cover ? `<img src="${esc(h.cover)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="hf-hl-letter">${esc(String(h.title).charAt(0).toUpperCase())}</span>`}</div><div class="hf-hl-t">${esc(h.title)}</div></div>`).join('')}</div>` : '';
 }
 // (v468 · orden Instagram) Pestañas del perfil, extraídas de homeHeadHTML:
