@@ -78,12 +78,37 @@ function rutaChat(db, uid) {
   };
 }
 
+// El DISEÑO es una capacidad de Posty (4+4): lo responde él, desde las
+// piezas reales de la cuenta — no hay un poder de diseño separado.
+function rutaDiseno(db, uid) {
+  const c = conteoSemana(db, uid);
+  if (!c.total) {
+    return { reply: 'El diseño de tus piezas es mío: trabajo con tu paleta, tu estrella y tu fundamento. Todavía no hay piezas esta semana; cuando el motor las arme, las ves en tu Agenda y en el río.' };
+  }
+  return {
+    reply: `El diseño de tus piezas es mío: salen de tu paleta y tu fundamento, nunca de una plantilla genérica. Esta semana hay ${c.total} posteos armados (${c.borradores} en borrador · ${c.programados} programados · ${c.publicados} publicados).`,
+  };
+}
+
+// El CRECIMIENTO es una capacidad de Posty (4+4): las campañas se arman
+// en MODO SOMBRA declarado — propuestas sin gastar un peso, con número
+// medido antes de hablar de resultados (la medición real llega con la
+// Marketing API). El rótulo queda intacto.
+function rutaCrecimiento(db, uid) {
+  return {
+    reply: 'El crecimiento de tu Instagram también es mío. Las campañas se arman en MODO SOMBRA: la propuesta llega a tu Bandeja con su número esperado antes de gastar un peso — sin medición, no hay promesa. Cuando una campaña esté lista para tu OK, aparece ahí.',
+  };
+}
+
 let iniciado = false;
 function init() {
   if (iniciado) return;
   iniciado = true;
   oficina.registrarHookBandeja('posty', hookBandeja);
+  // Las rutas específicas (sus capacidades) van ANTES que la de la semana.
+  oficina.registrarRutaChat('posty', [/crec|seguidor|campañ|anuncio|pauta/i], async (db, uid) => rutaCrecimiento(db, uid));
+  oficina.registrarRutaChat('posty', [/diseñ|pieza|flyer|marca/i], async (db, uid) => rutaDiseno(db, uid));
   oficina.registrarRutaChat('posty', [/semana|posteos|instagram|public|feed/i], async (db, uid) => rutaChat(db, uid));
 }
 
-module.exports = { init, sincronizarSemana, conteoSemana, hookBandeja };
+module.exports = { init, sincronizarSemana, conteoSemana, hookBandeja, rutaDiseno, rutaCrecimiento };

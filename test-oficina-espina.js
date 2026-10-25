@@ -2,8 +2,8 @@
 /* test-oficina-espina.js — ESPINA BAMBOOTY (programa TestFlight, Día 1).
  * Parte A: unidades con DB en memoria — niveles (solo hechos, nunca baja),
  *   fundamento Café Aroma (seed idempotente), Bandeja durable, partes con
- *   la forma del contrato de Bossty (ausencia NOMBRADA), política de push
- *   (motivos cerrados, guardas Talenty/Growty, topes, agrupado, prefs) y
+ *   la forma del contrato de la oficina (ausencia NOMBRADA), política de push
+ *   (motivos cerrados, guardas de personas/medición, topes, agrupado, prefs) y
  *   el chat que rutea desde los registros.
  * Parte B: E2E — bootea el servidor real con DATA_DIR temporal: seed por
  *   la puerta admin, login de la cuenta fixture, /api/auth/me con
@@ -53,11 +53,19 @@ function dbMemoria() {
   section('A2 · Niveles tras la carga: solo hechos reales');
   const nv = (p) => niveles.computarNivel(db, uid, p, oficina.metricas(db, uid));
   ok(nv('oficina').nivel === 2 && nv('oficina').nombre_nivel === 'Conociendo tu mundo', 'oficina L2 por el fundamento cargado');
-  for (const p of ['posty', 'gesty', 'venty', 'atenty', 'desy', 'bossty']) {
+  for (const p of ['posty', 'gesty', 'venty', 'atenty']) {
     ok(nv(p).nivel === 2, `${p} L2: su lista de lectura quedó cubierta`);
   }
-  ok(nv('talenty').nivel === 1, 'talenty L1: su compartimento sellado NO se siembra en la capa compartida');
-  ok(nv('growty').nivel === 1, 'growty L1: todavía sin fuente leída (su flujo es del viernes)');
+  ok(nv('desy').nivel === nv('posty').nivel && nv('growty').nivel === nv('posty').nivel, 'pliegue: diseño y crecimiento cuentan para Posty (sin poder separado)');
+  ok(nv('talenty').nivel === nv('gesty').nivel, 'pliegue: las personas cuentan para Gesty (sin poder separado)');
+  ok(nv('bossty').nivel === nv('oficina').nivel, 'la dirección ES Bambooty: Bossty se computa como la oficina');
+  const filasTalenty = db.prepare("SELECT COUNT(*) AS n FROM oficina_nivel_eventos WHERE user_id = ? AND poder = 'talenty'").get(uid).n;
+  ok(filasTalenty === 0, 'el compartimento sellado de Talenty NO se siembra en la capa compartida');
+  const filasViejas = db.prepare("SELECT COUNT(*) AS n FROM oficina_nivel_eventos WHERE user_id = ? AND poder IN ('desy','growty','bossty')").get(uid).n;
+  ok(filasViejas === 0, 'la semilla nueva no registra eventos bajo claves que ya no son poderes');
+  const est0 = oficina.estadoOficina(db, uid);
+  ok(est0.poderes.length === 4 && est0.especialistas.length === 4, 'la oficina presenta 4 poderes + la línea de especialistas');
+  ok(est0.especialistas.every((e) => e.por_proyecto === true && !('nivel' in e)), 'los especialistas van rotulados POR PROYECTO, sin nivel ni tallo');
   ok(nv('posty').proximo_paso && nv('posty').proximo_paso.length > 4, 'el próximo paso siempre visible (Posty)');
   const antes = nv('posty').nivel;
   niveles.registrarEvento(db, uid, { poder: 'posty', evento: 'fundamento_leido', hecho: 'relectura' }, oficina.metricas(db, uid));
@@ -92,8 +100,11 @@ function dbMemoria() {
   ok(parte && Array.isArray(parte.salidas) && parte.salidas.length === 1 && parte.salidas[0].registro_ref === sal.registro_ref, 'el parte de Posty trae su salida con recibo resoluble');
   ok(parte.nivel.nivel_actual === 3 && Array.isArray(parte.fundamento_nuevo) && Array.isArray(parte.bandeja_pendientes) && Array.isArray(parte.incidentes_atrasos), 'el parte cumple la forma del contrato §1.1');
   const semana = oficina.partesDeLaSemana(db, uid);
-  ok(semana.partes.talenty.parte_no_recibido === true, 'la ausencia de Talenty se NOMBRA (parte_no_recibido), jamás silencio');
-  ok(semana.faltantes.includes('talenty'), 'los faltantes se listan');
+  ok(!('talenty' in semana.partes) && !('growty' in semana.partes) && !('desy' in semana.partes) && !('bossty' in semana.partes), 'el contrato de partes cubre los 4 poderes: sin partes separados de especialistas ni de Bossty');
+  ok(semana.partes.gesty && semana.partes.gesty.modulo_personas && semana.partes.gesty.modulo_personas.sellado === true && Array.isArray(semana.partes.gesty.modulo_personas.registros), 'el contenido sellado de Talenty viaja DENTRO del parte de Gesty');
+  ok(!semana.faltantes.includes('talenty') && !semana.faltantes.includes('bossty'), 'los faltantes nombran solo poderes');
+  const parteG = oficina.parteDePoder(db, uid, 'gesty');
+  ok(parteG && parteG.nivel.nivel_actual === 2, 'el parte de Gesty computa con el pliegue (su nivel es el suyo)');
 
   section('A5 · Push de la oficina: motivos, guardas, topes, agrupado, control del dueño');
   const db2 = dbMemoria();
@@ -101,12 +112,18 @@ function dbMemoria() {
   const uid2 = seedB.user_id;
   let r = await pushOf.emitir(db2, uid2, { agente: 'posty', motivo: 'cumpleanos', titulo: 'x', cuerpo: 'y' });
   ok(r.estado === 'bloqueada' && r.causa === 'motivo_invalido', 'motivo fuera de la lista cerrada: bloqueado y registrado');
-  r = await pushOf.emitir(db2, uid2, { agente: 'talenty', motivo: 'decision', titulo: 'Legajo de Ana: sueldo $ 500.000', cuerpo: 'x', datos_personas: true });
-  ok(r.estado === 'bloqueada' && r.causa === 'guarda_talenty', 'Talenty jamás empuja datos de personas');
-  r = await pushOf.emitir(db2, uid2, { agente: 'talenty', motivo: 'decision', titulo: 'Hay una liquidación lista para tu OK', cuerpo: 'Sin nombres ni montos.' });
+  r = await pushOf.emitir(db2, uid2, { agente: 'talenty', motivo: 'decision', titulo: 'Hay una liquidación lista', cuerpo: 'x' });
+  ok(r.estado === 'bloqueada' && r.causa === 'especialista_sin_proyecto', 'un especialista sin proyecto activo NO empuja');
+  r = await pushOf.emitir(db2, uid2, { agente: 'talenty', motivo: 'decision', titulo: 'Legajo de Ana: sueldo $ 500.000', cuerpo: 'x', datos_personas: true, proyecto_activo: true });
+  ok(r.estado === 'bloqueada' && r.causa === 'guarda_talenty', 'Talenty jamás empuja datos de personas (ni con proyecto)');
+  r = await pushOf.emitir(db2, uid2, { agente: 'talenty', motivo: 'decision', titulo: 'Hay una liquidación lista para tu OK', cuerpo: 'Sin nombres ni montos.', proyecto_activo: true });
   ok(r.estado !== 'bloqueada' || r.causa !== 'guarda_talenty', 'Talenty SÍ puede avisar de su trabajo, sin datos');
-  r = await pushOf.emitir(db2, uid2, { agente: 'growty', motivo: 'buena_noticia', titulo: 'Tu campaña anda bien', cuerpo: 'sin número' });
+  r = await pushOf.emitir(db2, uid2, { agente: 'growty', motivo: 'buena_noticia', titulo: 'Tu campaña anda bien', cuerpo: 'sin número', proyecto_activo: true });
   ok(r.estado === 'bloqueada' && r.causa === 'guarda_growty_sin_medicion', 'Growty sin número medido: no habla');
+  r = await pushOf.emitir(db2, uid2, { agente: 'posty', motivo: 'buena_noticia', titulo: 'Tu alcance creció', cuerpo: 'sin número', contenido: 'crecimiento' });
+  ok(r.estado === 'bloqueada' && r.causa === 'guarda_sin_medicion', 'el crecimiento empuja como Posty y sin número medido tampoco habla');
+  r = await pushOf.emitir(db2, uid2, { agente: 'posty', motivo: 'buena_noticia', titulo: 'Tu alcance creció', cuerpo: 'con número', contenido: 'crecimiento', numero_medido: 128 });
+  ok(r.estado !== 'bloqueada', 'con número medido, el crecimiento de Posty SÍ puede hablar');
   r = await pushOf.emitir(db2, uid2, { agente: 'posty', motivo: 'decision', titulo: 'Decisión', cuerpo: 'x', url: '/#/app/bandeja' });
   ok(r.estado === 'sin_suscripcion' || r.estado === 'en_espera', 'sin suscripción el intento queda registrado, jamás fingido como enviado');
   const logCount = db2.prepare('SELECT COUNT(*) AS n FROM push_oficina_log WHERE user_id = ?').get(uid2).n;
@@ -117,15 +134,15 @@ function dbMemoria() {
   if (pushOf.esSilencioNocturno(Date.now())) { ok(r.estado === 'en_espera', 'de noche, hasta la urgencia del tope espera'); }
   else ok(r.estado === 'en_espera' && r.causa === 'tope_agente', 'tope por agente (3/día): la siguiente espera');
   // Agrupado de buenas noticias.
-  for (let i = 0; i < 3; i++) await pushOf.emitir(db2, uid2, { agente: 'desy', motivo: 'buena_noticia', titulo: 'Pieza ' + (i + 1) + ' lista', cuerpo: 'x' });
+  for (let i = 0; i < 3; i++) await pushOf.emitir(db2, uid2, { agente: 'desy', motivo: 'buena_noticia', titulo: 'Pieza ' + (i + 1) + ' lista', cuerpo: 'x', proyecto_activo: true });
   const flush = await pushOf.procesarEsperas(db2, uid2, { forzar: true });
-  const resumen = db2.prepare("SELECT COUNT(*) AS n FROM push_oficina_log WHERE user_id = ? AND agente = 'bossty' AND causa = 'resumen_agrupado'").get(uid2).n;
-  ok(resumen === 1, '3+ buenas noticias se agrupan en UNA de Bossty');
-  const agrupadas = db2.prepare("SELECT COUNT(*) AS n FROM push_oficina_log WHERE user_id = ? AND estado = 'agrupada'").get(uid2).n;
+  const resumen = db2.prepare("SELECT COUNT(*) AS n FROM push_oficina_log WHERE user_id = ? AND agente = 'oficina' AND causa = 'resumen_agrupado'").get(uid2).n;
+  ok(resumen === 1, '3+ buenas noticias se agrupan en UNA de Bambooty');
+  const agrupadas = db2.prepare("SELECT COUNT(*) AS n FROM push_oficina_log WHERE user_id = ? AND estado = 'agrupada' AND agente = 'desy'").get(uid2).n;
   ok(agrupadas === 3, 'las originales quedan marcadas como agrupadas');
   // Control del dueño.
   pushOf.setPrefAgente(db2, uid2, 'desy', false);
-  r = await pushOf.emitir(db2, uid2, { agente: 'desy', motivo: 'decision', titulo: 'x', cuerpo: 'y' });
+  r = await pushOf.emitir(db2, uid2, { agente: 'desy', motivo: 'decision', titulo: 'x', cuerpo: 'y', proyecto_activo: true });
   ok(r.estado === 'bloqueada' && r.causa === 'apagada_por_el_dueno', 'el toggle del dueño manda: agente apagado no empuja');
   pushOf.setSilencioGlobal(db2, uid2, true);
   r = await pushOf.emitir(db2, uid2, { agente: 'posty', motivo: 'urgencia', titulo: 'x', cuerpo: 'y' });
@@ -134,7 +151,7 @@ function dbMemoria() {
   section('A6 · Chat con Bambooty: responde desde los registros');
   const c1 = await oficina.responderChat(db, uid, '¿qué hay en mi bandeja?');
   ok(typeof c1.reply === 'string' && c1.reply.length > 10, 'el chat responde');
-  ok(c1.poder === 'bossty', 'lo no ruteado lo responde Bambooty (Bossty dirige)');
+  ok(c1.poder === 'oficina', 'lo no ruteado lo responde Bambooty (la dirección es suya)');
   const cReg = db.prepare("SELECT COUNT(*) AS n FROM oficina_registros WHERE user_id = ? AND tipo = 'chat'").get(uid).n;
   ok(cReg >= 1, 'el turno de chat quedó registrado en el río');
 
@@ -163,7 +180,7 @@ function dbMemoria() {
       const me = await (await fetch(base + '/api/auth/me', { headers: { Cookie: cookie } })).json();
       ok(!!(me.user && me.user.bambooty_shell === true), '/api/auth/me expone bambooty_shell SOLO en la cuenta del shell');
       const est = await (await fetch(base + '/api/oficina/estado', { headers: { Cookie: cookie } })).json();
-      ok(est.ok && est.poderes.length === 8 && est.negocio === 'Café Aroma', 'estado de la oficina por HTTP: 8 poderes, Café Aroma');
+      ok(est.ok && est.poderes.length === 4 && est.especialistas.length === 4 && est.negocio === 'Café Aroma', 'estado de la oficina por HTTP: 4 poderes + 4 especialistas, Café Aroma');
       ok(est.bandeja_count === 1, 'la Bandeja trae su ítem genuino');
       const itemId = est.bandeja_pendientes && est.bandeja_pendientes[0] && est.bandeja_pendientes[0].id;
       ok(!!itemId, 'el ítem de la Bandeja trae su id');
@@ -171,7 +188,7 @@ function dbMemoria() {
       const accJson = await accRes.json().catch(() => ({}));
       ok(accRes.ok && accJson.ok === true, 'aceptar desde la app (HTTP) funciona y queda durable');
       const partes = await (await fetch(base + '/api/oficina/partes', { headers: { Cookie: cookie } })).json();
-      ok(partes.ok && partes.partes.talenty.parte_no_recibido === true, 'partes por HTTP con la ausencia nombrada');
+      ok(partes.ok && !('talenty' in partes.partes) && partes.partes.gesty.modulo_personas && partes.partes.gesty.modulo_personas.sellado === true, 'partes por HTTP: 4 poderes, con el módulo sellado dentro de Gesty');
       const reg = await fetch(base + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'comun@test.local', password: 'ClaveSegura123' }) });
       const cookie2 = (reg.headers.get('set-cookie') || '').split(';')[0];
       const me2 = await (await fetch(base + '/api/auth/me', { headers: { Cookie: cookie2 } })).json().catch(() => ({}));

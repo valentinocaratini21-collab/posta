@@ -52,7 +52,7 @@ let cartaAudio = null;
 try { cartaAudio = require('./carta-audio'); } catch (e) { console.error('[carta-audio] módulo no disponible:', e.message); }
 const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispositivo: cuentas guardadas en la entrada, hash + rotación + revocación
 const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleados, gating por pack, registro durable, fundamento-vista y bandeja con la matriz forzada en el servidor
-const oficina = require('./oficina'); // ESPINA BAMBOOTY (programa TestFlight): fundamento único, río de la oficina, Bandeja «Para vos», partes (contrato Bossty) y chat que rutea. La presentación Bambooty vive SOLO en el shell (la web pública sigue siendo Posty).
+const oficina = require('./oficina'); // ESPINA BAMBOOTY (programa TestFlight): fundamento único, río de la oficina, Bandeja «Para vos», partes (contrato de la oficina) y chat que rutea. La presentación Bambooty vive SOLO en el shell (la web pública sigue siendo Posty).
 try { oficina.init(db); } catch (e) { console.error('[oficina] init:', e.message); }
 const postyOficina = require('./posty-oficina'); // POSTY en la oficina: su semana real entra al río y a la Bandeja.
 try { postyOficina.init(db); } catch (e) { console.error('[posty-oficina] init:', e.message); }
@@ -3243,7 +3243,7 @@ app.put('/api/oficina/push-prefs', requireAuth, (req, res) => {
     res.json({ ok: true, prefs: pushOficinaMod.getPrefs(db, req.session.userId) });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-// Vaciado periódico de la cola agrupable de push (buenas noticias): Bossty
+// Vaciado periódico de la cola agrupable de push (buenas noticias): Bambooty
 // las resume; jamás despierta de noche (la política vive en push-oficina).
 setInterval(() => {
   try {
@@ -22097,7 +22097,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v451';
+const BUILD_ID = '20261025-v452';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

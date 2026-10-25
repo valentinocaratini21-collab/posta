@@ -10,7 +10,7 @@ const FIXTURE_EMAIL = 'cafe.aroma@bambooty.test';
 const NEGOCIO = 'Café Aroma';
 
 // Capas del fundamento (doctrina FUNDAMENTO.md): negocio · identidad ·
-// operación · dueño · historia (+ gerencia, la capa de dirección de Bossty).
+// operación · dueño · historia (+ gerencia, la capa de dirección de Bambooty).
 // Cada hecho: { capa, clave, hecho, detalle, alcance: 'raiz'|'tallo', poder }
 // alcance 'raiz' = compartido por toda la oficina; 'tallo' = de un poder.
 const FUNDAMENTO = [
@@ -23,7 +23,7 @@ const FUNDAMENTO = [
   { capa: 'negocio', clave: 'lista_precios', hecho: 'Lista de precios cargada y vigente (10 ítems)', detalle: 'Café con leche $4.800 · Cappuccino $5.200 · Flat white $5.500 · Medialuna $1.900 · Tostado de jamón y queso $7.500 · Brunch Aroma para dos $24.000 · Torta del día (porción) $6.800 · Limonada con menta y jengibre 1L $8.900 · Almuerzo del día (plato + bebida) $12.500 · Café en grano 250 g $15.000. Venty cotiza SOLO desde esta lista.', alcance: 'raiz' },
   { capa: 'negocio', clave: 'dias_fuertes', hecho: 'Días fuertes: sábado a la mañana (brunch) y mañanas de semana (para llevar a oficinas)', detalle: 'El pico de reclamos también es la mañana: desayuno para llevar.', alcance: 'raiz' },
   // ——— Su identidad ———
-  { capa: 'identidad', clave: 'paleta', hecho: 'Paleta de la marca: Café #6F4A2F · Dorado #C9A24B · Crema #FAF3E7 · Verde bosque #2E4B3F', detalle: 'La paleta que Desy bloquea en cada pieza (deriva 0) y que Posty hereda del feed.', alcance: 'raiz' },
+  { capa: 'identidad', clave: 'paleta', hecho: 'Paleta de la marca: Café #6F4A2F · Dorado #C9A24B · Crema #FAF3E7 · Verde bosque #2E4B3F', detalle: 'La paleta que el diseño de Posty bloquea en cada pieza (deriva 0), heredada del feed.', alcance: 'raiz' },
   { capa: 'identidad', clave: 'tono', hecho: 'Tono: cercano, rioplatense, sin humo y sin fórmulas de call center', detalle: '«Lamentamos los inconvenientes» está VETADO. Se habla como el equipo del café.', alcance: 'raiz' },
   { capa: 'identidad', clave: 'lexico', hecho: 'Léxico de la casa: medialuna, flat white, «para llevar», «de la casa»', detalle: 'Las palabras que el negocio usa con sus clientes, en todos los puestos.', alcance: 'raiz' },
   { capa: 'identidad', clave: 'protagonista', hecho: 'Protagonista: el mostrador y su equipo (no un dueño en cámara)', detalle: 'Las piezas muestran el café, las manos y el producto.', alcance: 'raiz' },
@@ -40,15 +40,16 @@ const FUNDAMENTO = [
   { capa: 'dueño', clave: 'prioridades', hecho: 'Prioridad declarada: que el brunch del sábado se llene sin bajar el precio', detalle: 'La estrella se defiende con valor, no con descuento (descuento máx. 10%).', alcance: 'raiz' },
   // ——— Su historia con Bambooty ———
   { capa: 'historia', clave: 'arranque', hecho: 'Fundamento cargado por el programa TestFlight (semana del 26/10 al 1/11)', detalle: 'Negocio de prueba único del programa; ningún cliente real se toca. La oficina corre sus flujos reales sobre este mundo.', alcance: 'raiz' },
-  // ——— Gerencia (capa de dirección, la lee Bossty) ———
-  { capa: 'gerencia', clave: 'objetivo_periodo', hecho: 'Objetivo del período de prueba: los 8 poderes corren su flujo central real sobre Café Aroma', detalle: 'Cada poder se marca ✅ solo con su flujo corrido en el build, con recibos. Lo que no exista, se declara.', alcance: 'raiz', poder: 'bossty' },
-  { capa: 'gerencia', clave: 'linea_base', hecho: 'Línea de base: oficina recién creada — todo conteo nace de los registros de esta semana', detalle: 'Sin historia previa: la línea de base se construye con la primera semana dirigida.', alcance: 'raiz', poder: 'bossty' },
+  // ——— Gerencia (capa de dirección, la lee Bambooty) ———
+  { capa: 'gerencia', clave: 'objetivo_periodo', hecho: 'Objetivo del período de prueba: los 4 poderes corren su flujo central real sobre Café Aroma', detalle: 'Diseño y crecimiento corren como capacidades de Posty; personas, dentro de Gesty. Cada poder se marca ✅ solo con su flujo corrido en el build, con recibos. Lo que no exista, se declara.', alcance: 'raiz', poder: 'oficina' },
+  { capa: 'gerencia', clave: 'linea_base', hecho: 'Línea de base: oficina recién creada — todo conteo nace de los registros de esta semana', detalle: 'Sin historia previa: la línea de base se construye con la primera semana dirigida.', alcance: 'raiz', poder: 'oficina' },
 ];
 
 // Qué poderes leyeron su fundamento al cargar (su lista de lectura quedó
-// cubierta por el fixture). Talenty NO: su compartimento sellado se carga
-// con su propio módulo y jamás en la capa compartida.
-const LECTORES_INICIALES = ['posty', 'gesty', 'venty', 'atenty', 'desy', 'bossty'];
+// cubierta por el fixture): los CUATRO poderes. El módulo de personas NO:
+// su compartimento sellado se carga dentro de Gesty con su propio módulo
+// y jamás en la capa compartida.
+const LECTORES_INICIALES = ['posty', 'gesty', 'venty', 'atenty'];
 
 // Perfil para las tablas clásicas (profiles/settings/business_dna) — lo que
 // el motor de Posty ya sabe leer el martes cuando genere la semana.

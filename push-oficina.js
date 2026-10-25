@@ -10,10 +10,13 @@
 //  · Silencio 22–8 salvo urgencia real del negocio.
 //  · Topes: 3 por agente/día y 6 totales/día; el excedente espera y se agrupa.
 //  · Agrupado: 3+ buenas noticias/celebraciones en espera → UNA push de
-//    Bossty («Tu oficina mientras dormías» / resumen del día).
-//  · Guarda de Talenty: jamás un dato de personas (bloqueo por bandera y,
-//    en profundidad, por patrón de monto/legajo en el texto).
-//  · Guarda de Growty: sin un número MEDIDO detrás, no hay push suya.
+//    Bambooty («Tu oficina mientras dormías» / resumen del día).
+//  · Guarda del módulo de personas (Talenty): jamás un dato de personas
+//    (bloqueo por bandera y, en profundidad, por patrón en el texto).
+//  · Guarda de medición: el crecimiento empuja como Posty y, sin un
+//    número MEDIDO detrás, ese contenido no habla (la guarda histórica
+//    de Growty sigue aplicando a sus push de especialista).
+//  · Especialistas (4+4): solo empujan con un proyecto activo.
 //  · Control del dueño: toggles por agente + silencio global (push_prefs).
 //  · Aviso de cierre de prueba: UN solo aviso, personal, un toque a SU
 //    resultado, canal único por disponibilidad — push si lo tiene; email
@@ -22,7 +25,7 @@
 'use strict';
 
 const push = require('./push');
-const { PODERES } = require('./niveles');
+const { IDENTIDADES, ESPECIALISTAS } = require('./niveles');
 
 const MOTIVOS = ['decision', 'buena_noticia', 'urgencia', 'celebracion', 'cierre_prueba'];
 const CAP_AGENTE_DIA = 3;
@@ -112,7 +115,7 @@ function log(db, uid, o) {
 
 async function despachar(db, uid, o) {
   // Identidad: nombre del agente + su avatar como imagen (si tiene asset).
-  const def = PODERES[o.agente] || {};
+  const def = IDENTIDADES[o.agente] || {};
   const titulo = o.titulo || '';
   const image = def.avatar ? (BASE + def.avatar) : undefined;
   const actions = [];
@@ -141,18 +144,29 @@ async function emitir(db, uid, o) {
     return { estado, causa: causa || '', id, ...(extra || {}) };
   };
   if (!MOTIVOS.includes(o.motivo)) return fin('bloqueada', 'motivo_invalido');
-  if (!PODERES[o.agente]) return fin('bloqueada', 'agente_invalido');
-  // Guarda de Talenty: jamás datos de personas. Bandera explícita + patrón
-  // (montos largos o palabras de legajo) como defensa en profundidad.
-  if (o.agente === 'talenty') {
+  if (!IDENTIDADES[o.agente]) return fin('bloqueada', 'agente_invalido');
+  // Especialistas: su push existe SOLO con un proyecto activo (el flujo
+  // del proyecto lo declara; sin proyecto, la línea no habla).
+  if (ESPECIALISTAS[o.agente] && o.proyecto_activo !== true) {
+    return fin('bloqueada', 'especialista_sin_proyecto');
+  }
+  // Guarda de personas: jamás datos de personas. Bandera explícita +
+  // patrón (montos largos o palabras de legajo) como defensa en
+  // profundidad; para Talenty el patrón aplica siempre.
+  if (o.agente === 'talenty' || o.datos_personas) {
     const texto = `${o.titulo || ''} ${o.cuerpo || ''}`;
-    if (o.datos_personas || /\$\s?\d{2,}|\blegajo\b|\bsueldo\b|\bdni\b/i.test(texto)) {
+    if (o.datos_personas || (o.agente === 'talenty' && /\$\s?\d{2,}|\blegajo\b|\bsueldo\b|\bdni\b/i.test(texto))) {
       return fin('bloqueada', 'guarda_talenty');
     }
   }
-  // Guarda de Growty: solo habla con un número medido detrás.
+  // Guarda de medición: el crecimiento es contenido de Posty y solo
+  // habla con un número medido detrás; la misma guarda cubre los push
+  // de Growty como especialista (alianzas medidas por campaña).
   if (o.agente === 'growty' && (o.numero_medido === undefined || o.numero_medido === null)) {
     return fin('bloqueada', 'guarda_growty_sin_medicion');
+  }
+  if (o.agente === 'posty' && o.contenido === 'crecimiento' && (o.numero_medido === undefined || o.numero_medido === null)) {
+    return fin('bloqueada', 'guarda_sin_medicion');
   }
   // Control del dueño.
   if (!agenteActivo(db, uid, o.agente)) return fin('bloqueada', 'apagada_por_el_dueno');
@@ -185,15 +199,15 @@ async function procesarEsperas(db, uid, { forzar = false, esperaMinMs = 10 * 60 
   if (!pend.length) return { enviadas: 0 };
   const marcar = (id, estado, causa) => db.prepare('UPDATE push_oficina_log SET estado = ?, causa = ? WHERE id = ?').run(estado, causa || '', id);
   if (pend.length >= 3) {
-    if (!agenteActivo(db, uid, 'bossty')) { pend.forEach((p) => marcar(p.id, 'bloqueada', 'apagada_por_el_dueno')); return { enviadas: 0, causa: 'apagada_por_el_dueno' }; }
+    if (!agenteActivo(db, uid, 'oficina')) { pend.forEach((p) => marcar(p.id, 'bloqueada', 'apagada_por_el_dueno')); return { enviadas: 0, causa: 'apagada_por_el_dueno' }; }
     const lineas = pend.slice(0, 5).map((p) => `• ${p.titulo}`).join(' ');
     const r = await despachar(db, uid, {
-      agente: 'bossty', motivo: 'buena_noticia',
+      agente: 'oficina', motivo: 'buena_noticia',
       titulo: 'Tu oficina mientras dormías ✨',
       cuerpo: lineas.slice(0, 170),
       url: '/#/app/oficina',
     });
-    const idRes = log(db, uid, { agente: 'bossty', motivo: 'buena_noticia', titulo: 'Tu oficina mientras dormías ✨', cuerpo: lineas.slice(0, 170), url: '/#/app/oficina', estado: r && r.ok ? 'enviada' : 'sin_suscripcion', causa: 'resumen_agrupado' });
+    const idRes = log(db, uid, { agente: 'oficina', motivo: 'buena_noticia', titulo: 'Tu oficina mientras dormías ✨', cuerpo: lineas.slice(0, 170), url: '/#/app/oficina', estado: r && r.ok ? 'enviada' : 'sin_suscripcion', causa: 'resumen_agrupado' });
     pend.forEach((p) => marcar(p.id, 'agrupada', `resumen:${idRes}`));
     return { enviadas: r && r.ok ? 1 : 0, resumen: idRes };
   }

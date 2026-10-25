@@ -7,17 +7,22 @@
 //   3. Cada poder tiene sus 5 nombres (de sus propios documentos de sistema)
 //      y sus compuertas (gates) de hitos por nivel.
 //   4. La barra/tallo es del color del agente; la de la oficina, DORADA.
-//   5. Lo sensible no se gamifica: los eventos de Talenty son de TRABAJO
-//      (detección, preparación, aprobación) — jamás datos de personas.
+//   5. Lo sensible no se gamifica: los eventos del módulo de personas son
+//      de TRABAJO (detección, preparación, aprobación) — jamás datos.
+//   6. Estructura 4+4 (decisión de Valentino, 2026-10-25): el motor computa
+//      CUATRO poderes + la oficina. Diseño y crecimiento cuentan para
+//      Posty; personas cuenta para Gesty; dirección cuenta para la
+//      oficina (Bambooty). Los especialistas NO tienen nivel propio.
 'use strict';
 
 // Dorado de la website (DETALLE-TOTAL §2): degradé metálico real.
 const DORADO = { a: '#DFA856', b: '#DBA453', c: '#D6A463' };
 
-// Registro de poderes. color/firma: los documentados en cada sistema
-// (Posty celeste; Venty luz coral; Desy fucsia; Growty lima; Talenty durazno;
-// Bossty dorado de capitán). Gesty y Atenty: acento provisional declarado en
-// el informe del programa (sus documentos no fijan color de tallo).
+// Registro de poderes (los CUATRO + la oficina). color/firma: los
+// documentados en cada sistema (Posty celeste; Venty luz coral). Gesty y
+// Atenty: acento provisional declarado en el informe del programa (sus
+// documentos no fijan color de tallo). Los especialistas viven en su
+// propio registro (ESPECIALISTAS), sin nivel ni tallo de poder.
 const PODERES = {
   posty: {
     nombre: 'Posty', rol: 'Community Manager', color: '#2793C8', firma: 'lapiz', avatar: '/ai-avatar.png',
@@ -78,22 +83,6 @@ const PODERES = {
       ],
     },
   },
-  growty: {
-    nombre: 'Growty', rol: 'Crecimiento', color: '#8BC34A', firma: 'gota', avatar: null,
-    niveles: ['Semilla', 'Echando raíces', 'Primer brote', 'Despegue', 'Bosque'],
-    gates: {
-      2: [
-        { evento: 'fundamento_leido', min: 1, falta: 'Cuando Growty leyó tu mundo público.' },
-        { evento: 'fuente_leida', min: 1, falta: 'Su primera fuente real leída y registrada.' },
-      ],
-      3: [{ evento: 'campana_armada', min: 1, falta: 'Su primera campaña armada (en sombra, declarada).' }],
-      4: [
-        { evento: 'campana_armada', min: 3, falta: 'Campañas armadas con constancia.' },
-        { evento: 'medicion_real', min: 1, falta: 'La medición real llega con la Marketing API (enero 2027).' },
-      ],
-      5: [{ evento: 'medicion_real', min: 4, falta: 'Mediciones reales que sostienen su criterio.' }],
-    },
-  },
   atenty: {
     nombre: 'Atenty', rol: 'Atención al Cliente', color: '#2E8C83', firma: 'escudo', avatar: null,
     niveles: ['Nueva en el mostrador', 'Conoce a los de siempre', 'De la casa', 'La que avisa antes', 'Cuida como vos'],
@@ -105,51 +94,6 @@ const PODERES = {
         { evento: 'resena_registrada', min: 2, falta: 'Reseñas que nacen de casos bien cerrados.' },
       ],
       5: [{ evento: 'caso_cerrado_confirmado', min: 20, falta: 'Cuidar como vos, semana a semana.' }],
-    },
-  },
-  desy: {
-    nombre: 'Desy', rol: 'Diseño Gráfico', color: '#E0218A', firma: 'poster', avatar: null,
-    niveles: ['Recién llegada', 'Conociendo tu marca', 'Diseñadora de la casa', 'Mano derecha de tu marca', 'Socia de tu marca'],
-    gates: {
-      2: [{ evento: 'fundamento_leido', min: 1, falta: 'Cuando Desy conoce tu paleta y tu estrella.' }],
-      3: [
-        { evento: 'pieza_entregada', min: 1, falta: 'Su primera pieza entregada en tu biblioteca.' },
-        { evento: 'pieza_aceptada_primera', min: 1, falta: 'Una pieza aceptada sin cambios.' },
-      ],
-      4: [
-        { evento: 'pieza_entregada', min: 5, falta: 'Piezas entregadas con constancia.' },
-        { evento: 'decision_bandeja', min: 3, falta: 'Tus decisiones le enseñan tu gusto.' },
-      ],
-      5: [{ evento: 'pieza_entregada', min: 20, falta: 'Diseñar tu marca como socia.' }],
-    },
-  },
-  talenty: {
-    nombre: 'Talenty', rol: 'Recursos Humanos', color: '#F0A868', firma: 'calendario', avatar: null,
-    niveles: ['Recién llegada', 'Conociendo a tu gente', 'De la casa', 'Mano derecha', 'Socia'],
-    gates: {
-      2: [{ evento: 'fundamento_leido', min: 1, falta: 'Cuando Talenty conoce a tu equipo (en su compartimento, sin exhibirlo).' }],
-      3: [
-        { evento: 'vencimiento_detectado', min: 1, falta: 'Su primera detección antes de que venza.' },
-        { evento: 'liquidacion_preparada', min: 1, falta: 'Su primera liquidación preparada para tu OK.' },
-      ],
-      4: [{ evento: 'liquidacion_aprobada', min: 2, falta: 'Liquidaciones aprobadas por vos, listas para ejecutar.' }],
-      5: [{ evento: 'liquidacion_aprobada', min: 8, falta: 'Tu año de personas, planificado con ella.' }],
-    },
-  },
-  bossty: {
-    nombre: 'Bossty', rol: 'Gerente General', color: '#C9962E', firma: 'estrella', avatar: null,
-    niveles: ['Recién a bordo', 'Mapa leído', 'Semana dominada', 'Mano que anticipa', 'Socio de puente'],
-    gates: {
-      2: [{ evento: 'fundamento_leido', min: 1, falta: 'Cuando Bossty leyó el mapa completo de tu negocio.' }],
-      3: [
-        { evento: 'parte_emitido', min: 1, falta: 'Su primer parte semanal armado desde los registros.' },
-        { evento: 'orden_cumplida', min: 1, falta: 'Su primera orden cumplida por un poder.' },
-      ],
-      4: [
-        { evento: 'parte_emitido', min: 4, falta: 'Partes semanales con constancia.' },
-        { evento: 'decision_direccion', min: 2, falta: 'Decisiones de dirección con resultado observable.' },
-      ],
-      5: [{ evento: 'parte_emitido', min: 16, falta: 'Un ciclo mensual completo dirigido por él.' }],
     },
   },
   oficina: {
@@ -166,19 +110,65 @@ const PODERES = {
         { evento: 'parte_oficina', min: 1, falta: 'El primer parte de tu oficina, desde los registros.' },
       ],
       5: [
-        { metrica: 'poderes_con_salida', min: 7, falta: 'Los siete poderes entregando: la oficina entera.' },
+        { metrica: 'poderes_con_salida', min: 4, falta: 'Los cuatro poderes entregando: la oficina entera.' },
         { evento: 'semanas_creciendo', min: 4, falta: 'Semanas creciendo juntos, sin cortar.' },
       ],
     },
   },
 };
 
-const ORDEN_PODERES = ['posty', 'gesty', 'venty', 'growty', 'atenty', 'desy', 'talenty', 'bossty'];
+// ——— LA SEGUNDA LÍNEA: ESPECIALISTAS POR PROYECTO (BAMBOOTY-SUPREMO §0 bis).
+// Sin nivel propio ni tallo de poder: su presencia en la oficina es su
+// misión. Cuando un proyecto suyo está activo, su trabajo aparece en la
+// Bandeja como proyecto (y su push solo sale con proyecto activo).
+const ESPECIALISTAS = {
+  desy: {
+    nombre: 'Desy', mision: 'Proyectos de marca y web: identidad, logo, tienda online, packaging',
+    color: '#E0218A', firma: 'poster', avatar: null, anfitrion: 'posty',
+  },
+  talenty: {
+    nombre: 'Talenty', mision: 'Contrataciones: busca, filtra y te trae la terna lista',
+    color: '#F0A868', firma: 'calendario', avatar: null, anfitrion: 'gesty',
+  },
+  growty: {
+    nombre: 'Growty', mision: 'Alianzas y embajadores: colaboraciones y socios que traen clientes, por campaña',
+    color: '#8BC34A', firma: 'gota', avatar: null, anfitrion: 'posty',
+  },
+  bossty: {
+    nombre: 'Bossty', mision: 'Proyectos de dirección: la auditoría con veredicto y la expansión',
+    color: '#C9962E', firma: 'estrella', avatar: null, anfitrion: 'oficina',
+  },
+};
+
+// EL PLIEGUE: a qué poder cuenta el trabajo de cada clave que ya no es un
+// poder separado. Los eventos YA registrados bajo estas claves (el río es
+// append-only: nada se borra) cuentan para su anfitrión, y todo evento
+// nuevo se registra directamente bajo el anfitrión.
+const PLIEGUE = { desy: 'posty', growty: 'posty', talenty: 'gesty', bossty: 'oficina' };
+function resolverPoder(poder) { return PLIEGUE[poder] || poder; }
+
+// Identidad presentable de CUALQUIER clave (poder, especialista u
+// oficina): nombre/color/avatar para Bandeja, río, push y chat.
+const IDENTIDADES = {};
+for (const [k, v] of Object.entries(PODERES)) IDENTIDADES[k] = { nombre: v.nombre, rol: v.rol, color: v.color, firma: v.firma, avatar: v.avatar };
+for (const [k, v] of Object.entries(ESPECIALISTAS)) IDENTIDADES[k] = { nombre: v.nombre, rol: v.mision, color: v.color, firma: v.firma, avatar: v.avatar };
+
+const ORDEN_PODERES = ['posty', 'venty', 'atenty', 'gesty'];
+const ORDEN_ESPECIALISTAS = ['desy', 'talenty', 'growty', 'bossty'];
+
+function clavesQueCuentan(poder) {
+  const destino = resolverPoder(poder);
+  const claves = [destino];
+  for (const k of Object.keys(PLIEGUE)) if (PLIEGUE[k] === destino && !claves.includes(k)) claves.push(k);
+  return claves;
+}
 
 function conteoEventos(db, uid, poder) {
+  const claves = clavesQueCuentan(poder);
   const out = {};
   try {
-    const rows = db.prepare('SELECT evento, COUNT(*) AS n FROM oficina_nivel_eventos WHERE user_id = ? AND poder = ? GROUP BY evento').all(uid, poder);
+    const qs = claves.map(() => '?').join(',');
+    const rows = db.prepare(`SELECT evento, COUNT(*) AS n FROM oficina_nivel_eventos WHERE user_id = ? AND poder IN (${qs}) GROUP BY evento`).all(uid, ...claves);
     for (const r of rows) out[r.evento] = r.n;
   } catch (e) { /* tabla aún no creada: nivel base */ }
   return out;
@@ -187,6 +177,7 @@ function conteoEventos(db, uid, poder) {
 // metrics: { poderes_con_salida: n } — lo provee oficina.js (conteo real de
 // poderes con al menos una salida registrada). Sin provider, vale 0.
 function computarNivel(db, uid, poder, metrics) {
+  poder = resolverPoder(poder);
   const def = PODERES[poder];
   if (!def) return null;
   const conteos = conteoEventos(db, uid, poder);
@@ -244,6 +235,7 @@ function computarNivel(db, uid, poder, metrics) {
 // Registra un evento real y devuelve el resultado con detección de subida.
 // `hecho` es la frase humana del evento (para el río y el parte).
 function registrarEvento(db, uid, { poder, evento, hecho, registro_ref }, metrics) {
+  poder = resolverPoder(poder); // el pliegue: el evento nace bajo su anfitrión
   const antes = computarNivel(db, uid, poder, metrics);
   db.prepare('INSERT INTO oficina_nivel_eventos (user_id, poder, evento, hecho, registro_ref, ts) VALUES (?, ?, ?, ?, ?, ?)')
     .run(uid, poder, evento, hecho || '', registro_ref || '', Date.now());
@@ -267,4 +259,4 @@ function registrarEvento(db, uid, { poder, evento, hecho, registro_ref }, metric
   return { nivel: despues, subida };
 }
 
-module.exports = { PODERES, ORDEN_PODERES, DORADO, computarNivel, registrarEvento, conteoEventos };
+module.exports = { PODERES, ESPECIALISTAS, ORDEN_PODERES, ORDEN_ESPECIALISTAS, PLIEGUE, resolverPoder, IDENTIDADES, DORADO, computarNivel, registrarEvento, conteoEventos };

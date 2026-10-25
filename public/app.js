@@ -236,7 +236,6 @@ async function bbOficinaContent() {
     const pend = (est.bandeja_pendientes || []).filter((i) => i.poder === p.poder).length;
     const estadoTxt = p.estado === 'activo'
       ? (p.ultima_actividad ? esc(p.ultima_actividad.resumen) : 'Trabajando')
-      : p.estado === 'sombra_declarado' ? 'Modo sombra declarado: arma sin gastar un peso'
       : p.estado === 'leyendo_tu_mundo' ? 'Ya leyó tu fundamento'
       : 'Todavía no corre su flujo' + (p.dia_plan ? ' — entra el ' + p.dia_plan + ' del programa' : '');
     const sig = p.nivel && p.nivel.proximo_paso
@@ -252,10 +251,12 @@ async function bbOficinaContent() {
       </div>
     </article>`;
   };
+  const espRow = (e) => `<div class="bb-esp">${bbAvatarHTML(e.clave, e.avatar, e.nombre, e.color, 'bb-av bb-av-sm')}<div class="bb-esp-tx"><strong>${esc(e.nombre)}</strong><span>${esc(e.mision)}</span></div><span class="bb-esp-chip">Por proyecto</span>${e.pendientes ? `<button class="bb-mini" onclick="bbGo('#/app/bandeja')">${e.pendientes} en tu Bandeja</button>` : ''}</div>`;
   const rio = (est.rio || []).map((r) => {
-    const p = (est.poderes || []).find((x) => x.poder === r.poder);
-    const nom = p ? p.nombre : (BB_META[r.poder] || {}).n || r.poder;
-    return `<div class="bb-rio-row">${bbAvatarHTML(r.poder, p ? p.avatar : null, nom, p ? p.color : null, 'bb-av bb-av-sm')}<div class="bb-rio-tx"><p><strong>${esc(nom)}</strong> · ${esc(r.resumen)}</p><span>${bbHace(r.ts)}</span></div><button class="bb-mini" onclick="bbVerRegistro('${esc(r.registro_ref)}')">Recibo</button></div>`;
+    const claveRio = r.poder === 'bossty' ? 'oficina' : r.poder;
+    const p = (est.poderes || []).find((x) => x.poder === claveRio);
+    const nom = p ? p.nombre : (BB_META[claveRio] || {}).n || r.poder;
+    return `<div class="bb-rio-row">${bbAvatarHTML(claveRio, p ? p.avatar : null, nom, p ? p.color : null, 'bb-av bb-av-sm')}<div class="bb-rio-tx"><p><strong>${esc(nom)}</strong> · ${esc(r.resumen)}</p><span>${bbHace(r.ts)}</span></div><button class="bb-mini" onclick="bbVerRegistro('${esc(r.registro_ref)}')">Recibo</button></div>`;
   }).join('');
   return `
     <section class="bb-hero">
@@ -269,6 +270,7 @@ async function bbOficinaContent() {
       </div>
     </section>
     <section class="bb-poderes">${(est.poderes || []).map(poderCard).join('')}</section>
+    <section class="bb-bloque"><h2>Bambooty también tiene especialistas</h2><p class="bb-sub">No son poderes de todos los días: se los llama para una misión puntual, por proyecto. Cuando un proyecto está activo, su trabajo aparece en tu Bandeja.</p>${(est.especialistas || []).map(espRow).join('')}</section>
     <section class="bb-bloque"><h2>El río de tu oficina</h2>${rio || '<p class="bb-vacio">El río corre con trabajo real: cada cosa que tu oficina haga aparece acá con su recibo.</p>'}</section>
     <section class="bb-bloque"><h2>Lo que tu oficina ya sabe</h2><div class="bb-chips">${(est.aprendido || []).map((f) => `<span class="bb-chip">✓ ${esc(f.hecho)}</span>`).join('') || '<p class="bb-vacio">Todavía nada — el fundamento se está cargando.</p>'}</div></section>
   `;
@@ -363,7 +365,7 @@ function bbFestejo(subida, alCerrar) {
 }
 
 // ————— Vista: MI NEGOCIO (el fundamento, en fichas) —————
-const BB_CAPAS = { negocio: 'Tu negocio', identidad: 'Tu identidad', operacion: 'Tu operación — precios, políticas y límites', 'dueño': 'Vos, el dueño', historia: 'Su historia con Bambooty', gerencia: 'Gerencia' };
+const BB_CAPAS = { negocio: 'Tu negocio', identidad: 'Tu identidad', operacion: 'Tu operación — precios, políticas y límites', 'dueño': 'Vos, el dueño', historia: 'Su historia con Bambooty', gerencia: 'Dirección' };
 async function bbNegocioContent() {
   let f, prefs;
   try { f = await api.get('/api/oficina/fundamento'); } catch (e) { f = null; }
@@ -374,14 +376,15 @@ async function bbNegocioContent() {
     <section class="bb-bloque"><h2>${BB_CAPAS[c] || esc(c)}</h2>
       ${(f.capas[c] || []).map((h) => `<div class="bb-hecho"><div><strong>${esc(h.hecho)}</strong>${h.detalle ? `<p>${esc(h.detalle)}</p>` : ''}</div><span class="bb-hecho-ok" title="Verificado">${h.verificado ? '✓' : ''}</span></div>`).join('')}
     </section>`).join('');
-  const agentes = ['posty', 'gesty', 'venty', 'growty', 'atenty', 'desy', 'talenty', 'bossty'];
+  const agentes = ['posty', 'venty', 'atenty', 'gesty', 'oficina'];
   const avisos = prefs ? `<section class="bb-bloque"><h2>Cómo te avisa tu oficina</h2>
     <p class="bb-sub">Cada agente te escribe solo por tres motivos: una decisión que espera tu toque, una buena noticia que ya pasó, o una urgencia real. De noche, silencio (22 a 8) salvo urgencia.</p>
     ${agentes.map((a) => { const m = BB_META[a]; const on = !prefs.agentes || prefs.agentes[a] !== false; return `<div class="bb-pref"><span>${bbAvatarHTML(a, null, m.n, m.c, 'bb-av bb-av-sm')} ${m.n}</span><button class="bb-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" onclick="bbTogglePref('${a}', this)"><span></span></button></div>`; }).join('')}
     <div class="bb-pref bb-pref-total"><span>🔕 Silencio total de la oficina</span><button class="bb-switch${prefs.silencio ? ' on' : ''}" role="switch" aria-checked="${!!prefs.silencio}" onclick="bbToggleSilencio(this)"><span></span></button></div>
+    <p class="bb-sub">Los especialistas — Desy, Talenty, Growty y Bossty — no son de todos los días: solo te escriben cuando tienen un proyecto activo con vos.</p>
   </section>` : '';
   return `
-    <section class="bb-bloque bb-bloque-top"><h1>Mi negocio</h1><p class="bb-sub">Esto es lo que tu oficina sabe de tu negocio — su fundamento. Los ocho poderes trabajan sobre estas mismas fichas: ninguno inventa lo que no está acá.</p></section>
+    <section class="bb-bloque bb-bloque-top"><h1>Mi negocio</h1><p class="bb-sub">Esto es lo que tu oficina sabe de tu negocio — su fundamento. Tus cuatro poderes trabajan sobre estas mismas fichas: ninguno inventa lo que no está acá.</p></section>
     ${capas}
     ${avisos}
     <button class="bb-btn bb-btn-ghost bb-ancho" onclick="bbGo('#/app/chat')">¿Falta algo o algo cambió? Contale a Bambooty</button>
@@ -407,8 +410,8 @@ async function bbToggleSilencio(el) {
 // ————— Vista: CHAT CON BAMBOOTY (rutea y se ve) —————
 function bbChatMsgHtml(m) {
   if (m.role === 'user') return `<div class="bb-msg user"><p>${esc(m.text)}</p></div>`;
-  const poder = m.poder || 'bossty';
-  const meta = BB_META[poder] || BB_META.bossty;
+  const poder = m.poder || 'oficina';
+  const meta = BB_META[poder] || BB_META.oficina;
   return `<div class="bb-msg ai">${bbAvatarHTML(poder, null, meta.n, meta.c, 'bb-av bb-av-sm')}<div><span class="bb-msg-quien">${esc(meta.n)}</span><p>${esc(m.text)}</p></div></div>`;
 }
 async function bbChatContent() {
@@ -457,7 +460,7 @@ async function bbChatSend() {
   try { r = await api.post('/api/oficina/chat', { text }); } catch (e) { r = null; }
   if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; }
   if (!r || !r.ok) { bbToast('No llegó. Probá de nuevo.'); return; }
-  const m = { role: 'assistant', text: r.reply || '', poder: r.poder || 'bossty' };
+  const m = { role: 'assistant', text: r.reply || '', poder: r.poder || 'oficina' };
   CHAT.push(m);
   box.insertAdjacentHTML('beforeend', bbChatMsgHtml(m));
   box.scrollTop = box.scrollHeight;
@@ -476,7 +479,7 @@ async function bbAvisosEnAjustes() {
     try { const pr = await api.get('/api/oficina/push-prefs'); if (pr && pr.ok) { BB.prefs = pr.prefs; prefs = pr.prefs; } } catch (e) {}
   }
   if (!prefs || document.getElementById('bbAvisosCard')) return;
-  const agentes = ['posty', 'gesty', 'venty', 'growty', 'atenty', 'desy', 'talenty', 'bossty'];
+  const agentes = ['posty', 'venty', 'atenty', 'gesty', 'oficina'];
   const div = document.createElement('section');
   div.id = 'bbAvisosCard'; div.className = 'bb-bloque'; div.style.marginTop = '14px';
   div.innerHTML = `<h2>Cómo te avisa tu oficina</h2>

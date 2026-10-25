@@ -66,6 +66,12 @@ function dbMemoria() {
   ok(nv.nivel === 3, 'Posty queda L3 (L4 pide además piezas aceptadas de primera: la vara no se regala)');
   ok(nv.proximo_paso && nv.proximo_paso.length > 4, 'el próximo paso de Posty sigue visible');
 
+  section('P4 · Diseño y crecimiento: capacidades de Posty, con su sombra declarada');
+  const chatD = await oficina.responderChat(db, uid, '¿quién hace el diseño de mis piezas?');
+  ok(chatD.poder === 'posty', 'el diseño lo responde Posty (su capacidad, no un poder separado)');
+  const chatG = await oficina.responderChat(db, uid, '¿y el crecimiento con campañas?');
+  ok(chatG.poder === 'posty' && /MODO SOMBRA/.test(chatG.reply), 'el crecimiento lo responde Posty con su rótulo MODO SOMBRA intacto');
+
   console.log(fails ? `\n✗ ${fails} fallas` : '\n✓ TODO VERDE');
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error('ERROR FATAL', e); process.exit(1); });

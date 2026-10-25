@@ -3441,6 +3441,11 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .bb-cta-bandeja{display:flex;justify-content:space-between;align-items:center;width:100%;border:0;border-radius:16px;padding:15px 16px;background:linear-gradient(100deg,#FDF3DC,#FBEED3);color:#7A5510;font-weight:800;font-size:15px;cursor:pointer;box-shadow:inset 0 0 0 1.5px #EBD9AC}
 .bb-poderes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:380px){.bb-poderes{grid-template-columns:1fr}}
+.bb-esp{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #F0E7D3}
+.bb-esp-tx{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.bb-esp-tx strong{font-size:14.5px}
+.bb-esp-tx span{font-size:12.5px;color:var(--bb-soft)}
+.bb-esp-chip{font-size:11px;font-weight:800;color:#8A6420;background:#F7ECD2;border-radius:999px;padding:4px 9px;white-space:nowrap}
 .bb-card{background:var(--bb-card);border-radius:18px;padding:14px;box-shadow:0 5px 18px rgba(90,70,20,.06);display:flex;flex-direction:column;gap:8px}
 .bb-card-head{display:flex;gap:9px;align-items:center}
 .bb-card-head img{width:40px;height:40px;border-radius:50%;object-fit:cover}

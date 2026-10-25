@@ -1,7 +1,7 @@
 // oficina.js — LA ESPINA DE BAMBOOTY (programa TestFlight).
 // Una sola fuente para la oficina: fundamento único, registro de trabajos
-// (el río), Bandeja «Para vos», partes de poder con la forma del contrato de
-// Bossty y el chat que rutea. Nada hardcodeado en la superficie: todo lo que
+// (el río), Bandeja «Para vos», partes de poder con la forma del contrato
+// de partes de la oficina y el chat que rutea. Nada hardcodeado en la superficie: todo lo que
 // la app muestra de la oficina sale de estas tablas (ley 10: sin registro
 // no hay promesa; contrato §1.1: la ausencia se NOMBRA, jamás silencio).
 'use strict';
@@ -62,7 +62,7 @@ function init(db) {
     ts INTEGER NOT NULL
   )`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_oficina_niv_user ON oficina_nivel_eventos(user_id, poder)`);
-  // El registro de dirección de Bossty (sistema §8): órdenes, decisiones y
+  // El registro de dirección de Bambooty (sistema §8): órdenes, decisiones y
   // pedidos de datos. Única fuente operativa de la dirección.
   db.exec(`CREATE TABLE IF NOT EXISTS direccion_registros (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,8 +130,8 @@ function registrarFundamento(db, uid, { capa, clave, hecho, detalle, alcance, po
 function metricas(db, uid) {
   let poderes_con_salida = 0;
   try {
-    const r = db.prepare('SELECT COUNT(DISTINCT poder) AS n FROM oficina_registros WHERE user_id = ? AND salida = 1').get(uid);
-    poderes_con_salida = (r && r.n) || 0;
+    const rows = db.prepare('SELECT DISTINCT poder FROM oficina_registros WHERE user_id = ? AND salida = 1').all(uid);
+    poderes_con_salida = new Set(rows.map((r) => niveles.resolverPoder(r.poder))).size;
   } catch (e) {}
   return { poderes_con_salida };
 }
@@ -148,7 +148,7 @@ async function crearBandejaItem(db, uid, { poder, que, propuesta, contexto, regi
     // decisión en la misma push y el toque en LA tarjeta exacta.
     await pushOficina.emitir(db, uid, {
       agente: poder, motivo: 'decision',
-      titulo: `${(niveles.PODERES[poder] || {}).nombre || 'Tu oficina'} te trajo algo para tu OK`,
+      titulo: `${(niveles.IDENTIDADES[poder] || {}).nombre || 'Tu oficina'} te trajo algo para tu OK`,
       cuerpo: String(que).slice(0, 120),
       url: `/#/app/bandeja?item=${id}`,
       bandeja_id: id,
@@ -162,7 +162,7 @@ function listarBandeja(db, uid, { soloPendientes } = {}) {
     ? db.prepare("SELECT * FROM oficina_bandeja WHERE user_id = ? AND estado = 'pendiente' ORDER BY espera_desde ASC").all(uid)
     : db.prepare('SELECT * FROM oficina_bandeja WHERE user_id = ? ORDER BY espera_desde DESC LIMIT 60').all(uid);
   return rows.map((r) => {
-    const def = niveles.PODERES[r.poder] || {};
+    const def = niveles.IDENTIDADES[r.poder] || {};
     return {
       ...r,
       contexto: r.contexto_json ? JSON.parse(r.contexto_json) : null,
@@ -217,11 +217,28 @@ function registrarHookBandeja(poder, fn) { HOOKS_BANDEJA[poder] = fn; }
 
 // ————————————————— Partes (forma del contrato §1.1) —————————————————
 
-const DIA_PLAN = { posty: 'martes', gesty: 'martes', venty: 'miércoles', desy: 'miércoles', atenty: 'jueves', talenty: 'jueves', growty: 'viernes', bossty: 'viernes' };
+const DIA_PLAN = { posty: 'martes', gesty: 'martes', venty: 'miércoles', atenty: 'jueves' };
+
+// El contenido sellado del módulo de personas (Talenty) que viaja DENTRO
+// del parte de Gesty: SOLO tipo / fecha de vencimiento / monto total /
+// estado — jamás un dato de personas (guarda dura, no se fuerza).
+function talentySellado(db, uid) {
+  let rows = [];
+  try { rows = db.prepare("SELECT * FROM oficina_registros WHERE user_id = ? AND poder = 'talenty' ORDER BY ts ASC").all(uid); } catch (e) {}
+  return rows.map((r) => {
+    const rec = r.recibo_json ? JSON.parse(r.recibo_json) : {};
+    return {
+      tipo: rec.tipo || r.tipo || '',
+      fecha_vencimiento: rec.fecha_vencimiento || null,
+      monto_total: rec.monto_total !== undefined ? rec.monto_total : null,
+      estado: r.estado,
+    };
+  });
+}
 
 function parteDePoder(db, uid, poder, periodo) {
   const salidasRows = db.prepare("SELECT * FROM oficina_registros WHERE user_id = ? AND poder = ? AND salida = 1 ORDER BY ts ASC").all(uid, poder);
-  const fundRows = db.prepare('SELECT * FROM oficina_fundamento WHERE user_id = ? AND (poder = ? OR (alcance = \'raiz\' AND ? = \'bossty\')) ORDER BY ts ASC').all(uid, poder, poder);
+  const fundRows = db.prepare('SELECT * FROM oficina_fundamento WHERE user_id = ? AND poder = ? ORDER BY ts ASC').all(uid, poder);
   const nivel = niveles.computarNivel(db, uid, poder, metricas(db, uid));
   const pendientes = listarBandeja(db, uid, { soloPendientes: true }).filter((i) => i.poder === poder);
   const incidentes = salidasRows.filter((r) => r.estado === 'con_problema')
@@ -233,7 +250,7 @@ function parteDePoder(db, uid, poder, periodo) {
     cliente: 'Café Aroma',
     periodo: periodo || 'semana del programa',
     generado_en: new Date().toISOString(),
-    modo: poder === 'growty' ? 'sombra_declarado' : 'real',
+    modo: 'real',
     salidas: salidasRows.map((r) => ({
       tipo: r.tipo, resumen: r.resumen, registro_ref: r.registro_ref,
       recibo: r.recibo_json ? JSON.parse(r.recibo_json) : null,
@@ -245,6 +262,9 @@ function parteDePoder(db, uid, poder, periodo) {
     nivel: { nivel_actual: nivel.nivel, nombre_nivel: nivel.nombre_nivel, evento_subida: null },
     bandeja_pendientes: pendientes.map((i) => ({ que: i.que, propuesta_armada: i.propuesta, espera_desde: i.espera_desde })),
     incidentes_atrasos: incidentes,
+    // El módulo de personas sellado corre dentro de Gesty: su único
+    // contenido permitido viaja acá, no como parte separado.
+    ...(poder === 'gesty' ? { modulo_personas: { especialista: 'talenty', sellado: true, registros: talentySellado(db, uid) } } : {}),
   };
 }
 
@@ -284,15 +304,29 @@ function estadoPoder(db, uid, poder) {
   const ultima = db.prepare('SELECT * FROM oficina_registros WHERE user_id = ? AND poder = ? ORDER BY ts DESC LIMIT 1').get(uid, poder);
   const salidas = db.prepare('SELECT COUNT(*) AS n FROM oficina_registros WHERE user_id = ? AND poder = ? AND salida = 1').get(uid, poder);
   let estado = 'todavia_no_corre';
-  if (poder === 'growty') estado = 'sombra_declarado';
-  else if ((salidas && salidas.n) > 0) estado = 'activo';
+  if ((salidas && salidas.n) > 0) estado = 'activo';
   else if (nivel.hitos_cumplidos > 0) estado = 'leyendo_tu_mundo';
   return {
     poder, nombre: def.nombre, rol: def.rol, color: def.color, firma: def.firma, avatar: def.avatar,
     estado, dia_plan: DIA_PLAN[poder] || '',
     nivel,
-    ultima_actividad: ultima ? { resumen: poder === 'talenty' ? 'Actividad registrada (sellada)' : ultima.resumen, ts: ultima.ts, tipo: ultima.tipo } : null,
+    ultima_actividad: ultima ? { resumen: ultima.resumen, ts: ultima.ts, tipo: ultima.tipo } : null,
     salidas: (salidas && salidas.n) || 0,
+  };
+}
+
+// La línea de especialistas: sin nivel ni tallo — su presencia es su
+// misión y, cuando hay un proyecto activo, su trabajo en la Bandeja.
+function estadoEspecialista(db, uid, clave) {
+  const def = niveles.ESPECIALISTAS[clave];
+  const pendientes = listarBandeja(db, uid, { soloPendientes: true }).filter((i) => i.poder === clave).length;
+  const ultima = db.prepare('SELECT * FROM oficina_registros WHERE user_id = ? AND poder = ? ORDER BY ts DESC LIMIT 1').get(uid, clave);
+  return {
+    clave, nombre: def.nombre, mision: def.mision, color: def.color, firma: def.firma, avatar: def.avatar,
+    anfitrion: def.anfitrion, por_proyecto: true,
+    proyecto_activo: pendientes > 0,
+    pendientes,
+    ultima_actividad: ultima ? { resumen: clave === 'talenty' ? 'Actividad registrada (sellada)' : ultima.resumen, ts: ultima.ts, tipo: ultima.tipo } : null,
   };
 }
 
@@ -309,6 +343,7 @@ function estadoOficina(db, uid) {
     dueno: nombreDe('dueno'),
     nivel_oficina: nivelOficina,
     poderes: niveles.ORDEN_PODERES.map((p) => estadoPoder(db, uid, p)),
+    especialistas: niveles.ORDEN_ESPECIALISTAS.map((c) => estadoEspecialista(db, uid, c)),
     rio,
     bandeja_pendientes: pendientes,
     bandeja_count: pendientes.length,
@@ -348,7 +383,7 @@ async function responderChat(db, uid, texto) {
       }
     }
   }
-  // Bambooty responde desde los registros (dirección: Bossty rutea).
+  // Bambooty responde desde los registros (la dirección es Bambooty).
   const est = estadoOficina(db, uid);
   const pend = est.bandeja_count;
   const negocio = (() => { try { const f = db.prepare("SELECT hecho FROM oficina_fundamento WHERE user_id = ? AND clave = 'nombre'").get(uid); return f ? f.hecho : 'tu negocio'; } catch (e) { return 'tu negocio'; } })();
@@ -363,8 +398,8 @@ async function responderChat(db, uid, texto) {
   } else {
     reply = `Acá estoy, dirigiendo tu oficina de ${negocio}. ${pend ? `Hay ${pend} ${pend === 1 ? 'decisión esperándote' : 'decisiones esperándote'} en la Bandeja. ` : ''}Pedime lo que necesites y lo derivo al poder que corresponde: el que lo hace, lo hace con tu fundamento.`;
   }
-  registrarRegistro(db, uid, { poder: 'bossty', tipo: 'chat', resumen: `Chat con Bambooty: ${t.slice(0, 80)}` });
-  return { reply, poder: 'bossty' };
+  registrarRegistro(db, uid, { poder: 'oficina', tipo: 'chat', resumen: `Chat con Bambooty: ${t.slice(0, 80)}` });
+  return { reply, poder: 'oficina' };
 }
 
 // ————————————————— Seed: Café Aroma —————————————————
@@ -406,7 +441,7 @@ async function seedCafeAroma(db, { password } = {}) {
     for (const poder of fixture.LECTORES_INICIALES) {
       niveles.registrarEvento(db, uid, { poder, evento: 'fundamento_leido', hecho: `${niveles.PODERES[poder].nombre} leyó el fundamento de Café Aroma`, registro_ref: 'fundamento:cafe-aroma:v1' }, metricas(db, uid));
     }
-    registrarRegistro(db, uid, { poder: 'bossty', tipo: 'fundamento', resumen: 'Fundamento de Café Aroma cargado — la oficina tiene su mundo', estado: 'registrado' });
+    registrarRegistro(db, uid, { poder: 'oficina', tipo: 'fundamento', resumen: 'Fundamento de Café Aroma cargado — la oficina tiene su mundo', estado: 'registrado' });
     registrarDireccion(db, uid, { tipo: 'decision', que: 'Fundamento v1 de Café Aroma confirmado como base de la semana de prueba', poder_destino: 'oficina', estado: 'cumplida', resultado: 'cargado por el programa', fundamento_ref: 'fundamento:cafe-aroma:v1' });
     // La primera decisión real del dueño: confirmar el fundamento. Propuesta
     // armada, dos botones, un registro detrás — el patrón de toda la Bandeja.
@@ -426,7 +461,7 @@ module.exports = {
   crearBandejaItem, listarBandeja, accionarBandeja, registrarHookBandeja,
   parteDePoder, partesDeLaSemana, resolverRegistro,
   registrarDireccion, listarDireccion,
-  estadoOficina, estadoPoder, fundamentoCompleto,
+  estadoOficina, estadoPoder, estadoEspecialista, talentySellado, fundamentoCompleto,
   registrarRutaChat, responderChat, seedCafeAroma,
   push: pushOficina, niveles,
 };
