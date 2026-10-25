@@ -2986,7 +2986,7 @@ function landingView(cfg) {
       <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
       <h3 style="margin-top:18px">Valentino Caratini</h3>
       <p class="fc-eye" style="margin-top:2px">Founder de Posty</p>
-      <p class="fc-body">Creé Posty porque identifiqué un problema en cada negocio que conozco: gente talentosa ocupándose de Instagram en vez de ocuparse de su negocio. Y pensé: esto no lo tiene que hacer el dueño. Lo tiene que hacer alguien por él. Ese alguien es Posty. Quiero ser tu community manager: vos solo monitoreás, y si algo no te gusta, lo ajustamos juntos.</p>
+      <p class="fc-body">Creé Posty porque identifiqué un problema en cada negocio que conozco: gente talentosa ocupándose de Instagram en vez de ocuparse de su negocio. Y pensé: esto no lo tiene que hacer el dueño. Lo tiene que hacer alguien por él. Ese alguien es Posty. Vos solo monitoreás, y si algo no te gusta, lo ajustamos juntos.</p>
     </div>
   </div></div>
   ${lpAtencionHTML()}
