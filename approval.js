@@ -241,12 +241,45 @@ function verifyWeekShareLink(token) {
   } catch (e) { return null; }
 }
 
+// (v426 · ARMA TODO ítem 5) Token para la landing pública /aprobar/:token
+// («Aprobar mi semana» desde la Carta dominical): NO es un firmante nuevo —
+// empaqueta el MISMO par signWeekAction/verifyWeekAction de arriba (la firma
+// ata (userId, weekKey, exp) con la primitiva HMAC compartida) en un token
+// de ruta, con el mismo formato base64url de carta/semana y prefijo propio
+// para que ningún token sirva en la ruta de otro. Alcance mínimo: el token
+// SOLO habilita ver y aprobar ESA semana de ESA cuenta (la landing confirma
+// con POST: el GET nunca muta, porque los escáneres de email pre-cargan los
+// links). TTL 72h, el mismo de signWeekAction y del preview semanal: la
+// Carta sale el domingo ~21:00 y la ventana de aprobación cubre hasta el
+// miércoles a la noche.
+function signApproveWeekLink(userId, weekKey, expHours = 72) {
+  const { sig, exp } = signWeekAction(userId, weekKey, expHours);
+  return Buffer.from(`aprobar.${userId}.${weekKey}.${exp}.${sig}`).toString('base64url');
+}
+
+function verifyApproveWeekLink(token) {
+  try {
+    const raw = Buffer.from(String(token || ''), 'base64url').toString('utf8');
+    const parts = raw.split('.');
+    if (parts.length !== 5 || parts[0] !== 'aprobar') return null;
+    const userId = Number(parts[1]);
+    const weekKey = parts[2];
+    const exp = Number(parts[3]);
+    const sig = parts[4];
+    if (!Number.isInteger(userId) || userId <= 0) return null;
+    if (!verifyWeekAction(userId, weekKey, sig, exp)) return null;
+    return { userId, weekKey };
+  } catch (e) { return null; }
+}
+
 module.exports = {
   approvalSecret,
   signAction,
   verifyAction,
   signWeekAction,
   verifyWeekAction,
+  signApproveWeekLink,
+  verifyApproveWeekLink,
   signCartaLink,
   verifyCartaLink,
   signWeekShareLink,
