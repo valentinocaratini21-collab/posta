@@ -3296,12 +3296,28 @@ function igConnectHere() {
   igConnect(cur);
 }
 function setupChecklistHtml(title, opts) {
+  // (v426 · ÍTEM 4) Idioma de la cuenta, el patrón de toda la app
+  // (ME.lang): las filas NUEVAS nacen bilingües; las históricas quedan
+  // exactamente como están.
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   let rows = [];
+  // Filas INFORMATIVAS cumplidas (setup-done): se pintan dentro de la
+  // tarjeta pero NO son pasos pendientes — no suman al título, no frenan
+  // la desaparición de la tarjeta ni la celebración (eso mira `rows`).
+  let infoRows = [];
   if (!(PROFILE && (PROFILE.business_name || '').trim())) {
     rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">🏪</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
   }
   if (!(PROFILE && PROFILE.ig_connected)) {
     rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">📸</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar →</span></button>`);
+  }
+  // (v426 · ÍTEM 4) Paso «primera semana»: pendiente solo si la semana
+  // todavía no está en marcha (PROFILE.first_week_live, del server).
+  // Va DESPUÉS de la fila de Instagram, como pide la spec de activación.
+  if (!(PROFILE && PROFILE.first_week_live)) {
+    rows.push(en
+      ? `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">📅</span><span class="setup-txt"><b>Review your first week</b><small>Take a look at the posts I made for you and get them ready.</small></span><span class="setup-go">See my week →</span></button>`
+      : `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">📅</span><span class="setup-txt"><b>Revisá tu primera semana</b><small>Mirá los posteos que armé para vos y dejalos listos.</small></span><span class="setup-go">Ver mi semana →</span></button>`);
   }
   if (pwaIsMobile() && !pwaIsInstalled() && !pwaDismissed()) {
     rows.push(`<button class="setup-row" id="pwaInstallBtn"><span class="setup-ico">📲</span><span class="setup-txt"><b>Instalá la app</b><small>Acceso directo en tu teléfono.</small></span><span class="setup-go">Instalar →</span></button>`);
@@ -3315,6 +3331,21 @@ function setupChecklistHtml(title, opts) {
       rows.push(`<button class="setup-row" id="setupPushRow"><span class="setup-ico">🔔</span><span class="setup-txt"><b>Activá las notificaciones</b><small>Te aviso antes de publicar cada posteo.</small></span><span class="setup-go">Activar →</span></button>`);
     }
   }
+  // (v426 · ÍTEM 4) Paso «plan», según el estado REAL de la cuenta (ME):
+  // plan_status 'active' → cumplido, sin fila. Trial vigente → fila
+  // informativa cumplida en infoRows (visible con la tarjeta, jamás
+  // cuenta como pendiente). Trial vencido o plan cancelado → pendiente.
+  const planStatus = (typeof ME !== 'undefined' && ME && ME.plan_status) || '';
+  if (planStatus === 'trial' && !(ME && ME.trial_expired)) {
+    const dLeft = (ME && typeof ME.trial_days_left === 'number') ? ME.trial_days_left : 0;
+    infoRows.push(en
+      ? `<div class="setup-row setup-done"><span class="setup-ico">⏳</span><span class="setup-txt"><b>Your trial is in progress</b><small>${dLeft === 1 ? 'You have 1 day of trial left' : `You have ${dLeft} days of trial left`} — your plan starts whenever you want.</small></span><span class="setup-go">✓</span></div>`
+      : `<div class="setup-row setup-done"><span class="setup-ico">⏳</span><span class="setup-txt"><b>Tu prueba está en curso</b><small>${dLeft === 1 ? 'Te queda 1 día de prueba' : `Te quedan ${dLeft} días de prueba`} — tu plan se activa cuando quieras.</small></span><span class="setup-go">✓</span></div>`);
+  } else if (planStatus === 'cancelled' || (planStatus === 'trial' && ME && ME.trial_expired)) {
+    rows.push(en
+      ? `<button class="setup-row" id="setupPlanRow"><span class="setup-ico">💳</span><span class="setup-txt"><b>Activate your plan</b><small>Your trial is over: pick a plan and I'll keep working for you.</small></span><span class="setup-go">See plans →</span></button>`
+      : `<button class="setup-row" id="setupPlanRow"><span class="setup-ico">💳</span><span class="setup-txt"><b>Activá tu plan</b><small>Tu prueba terminó: elegí un plan y sigo trabajando para vos.</small></span><span class="setup-go">Ver planes →</span></button>`);
+  }
   // La detección de transición vive acá: cubre TODAS las rutas que pintan el checklist
   // (refreshSetupChecklist, appShell, chatView), porque todas pasan por esta función.
   setupChecklistCelebrate(rows.length);
@@ -3327,8 +3358,10 @@ function setupChecklistHtml(title, opts) {
   if (opts && opts.omitIg) rows = rows.filter((r) => !r.includes('setupIgRow'));
   if (!rows.length) return '';
   const n = (opts && opts.omitIg) ? totalSteps : rows.length;
-  const t = title || `🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}`;
-  return `<div class="setup-card"><div class="setup-title">${t}</div>${rows.join('')}</div>`;
+  const t = title || (en
+    ? `🚀 ${n === 1 ? '1 step to go' : `${n} steps to go`}`
+    : `🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}`);
+  return `<div class="setup-card"><div class="setup-title">${t}</div>${rows.join('')}${infoRows.join('')}</div>`;
 }
 // Checklist como sección secundaria al final del chat: mismas filas y mismos
 // binds (sigue funcional), solo baja de protagonismo con título propio.
@@ -3345,6 +3378,10 @@ function bindSetupRows() {
   if (sb) sb.onclick = () => location.hash = '#/app/ajustes';
   const pi = $('#pwaInstallBtn');
   if (pi) pi.onclick = pwaDoInstall;
+  const swk = $('#setupWeekRow');
+  if (swk) swk.onclick = () => location.hash = '#/app/schedule';
+  const spl = $('#setupPlanRow');
+  if (spl) spl.onclick = () => location.hash = '#/app/ajustes';
   const sp = $('#setupPushRow');
   if (sp) sp.onclick = async () => {
     sp.disabled = true;

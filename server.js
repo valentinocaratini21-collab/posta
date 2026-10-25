@@ -3184,7 +3184,16 @@ app.get('/api/profile', requireAuth, (req, res) => {
     const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(req.session.userId);
     if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
   } catch (e) {}
-  res.json({ ...p, ig_pending: pending, best_hour: bestHour });
+  // (v426 · ÍTEM 4 «ARMA TODO») Primera semana en marcha: true si existe
+  // AL MENOS un posteo del usuario con status 'scheduled' o 'published'
+  // (en autopiloto nacen programados; en manual, aceptar = programar).
+  // Única fuente de verdad del paso «primera semana» del checklist de
+  // activación: el front lo consume como PROFILE.first_week_live.
+  let firstWeekLive = false;
+  try {
+    firstWeekLive = !!db.prepare(`SELECT 1 FROM posts WHERE user_id = ? AND status IN ('scheduled', 'published') LIMIT 1`).get(req.session.userId);
+  } catch (e) { /* si la lectura falla, el paso queda pendiente: nunca rompe el perfil */ }
+  res.json({ ...p, ig_pending: pending, best_hour: bestHour, first_week_live: firstWeekLive });
 });
 
 app.put('/api/profile', requireAuth, (req, res) => {
@@ -21237,7 +21246,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v428';
+const BUILD_ID = '20261024-v429';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
