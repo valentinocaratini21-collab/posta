@@ -180,6 +180,118 @@
     officeDrive();
   }
 
+  /* ---------- tipografía cinética + fondo vivo (capa de cierre) ----------
+     Las letras de los titulares principales juegan al llegar: cascada por
+     letra en el hero, la oficina y el cierre; y UNA frase que se arma con
+     la bajada (scrub atado al scroll): la de niveles. El fondo ambiental
+     es CSS (body::before/::after en gj.css); acá solo recibe su parallax
+     mínimo vía --gjbg. Sin JS el texto queda nativo y completo; con
+     reduced-motion no se arma nada: texto estático, fondo plano. */
+  var ktDone = new WeakSet(), scrubbers = [], ktTk = false;
+  function ktSplit(el) {
+    if (!el || ktDone.has(el) || el.getAttribute('data-gj-kt')) return null;
+    var text = '';
+    (function walk(n) {
+      Array.prototype.slice.call(n.childNodes).forEach(function (c) {
+        if (c.nodeType === 3) text += c.nodeValue;
+        else if (c.tagName === 'BR') text += ' ';
+        else walk(c);
+      });
+    })(el);
+    text = text.replace(/\s+/g, ' ').trim();
+    if (!text) return null;
+    el.setAttribute('data-gj-kt', '1'); ktDone.add(el);
+    el.setAttribute('aria-label', text);
+    var wrap = document.createElement('span');
+    wrap.className = 'kt-src'; wrap.setAttribute('aria-hidden', 'true');
+    var letters = [];
+    (function build(node, parent) {
+      Array.prototype.slice.call(node.childNodes).forEach(function (ch) {
+        if (ch.nodeType === 3) {
+          ch.nodeValue.split(/(\s+)/).forEach(function (part) {
+            if (!part) return;
+            if (/^\s+$/.test(part)) { parent.appendChild(document.createTextNode(' ')); return; }
+            var w = document.createElement('span'); w.className = 'kt-w';
+            Array.from(part).forEach(function (chr) {
+              var l = document.createElement('span'); l.className = 'kt-l'; l.textContent = chr;
+              w.appendChild(l); letters.push(l);
+            });
+            parent.appendChild(w);
+          });
+        } else if (ch.nodeType === 1 && ch.tagName !== 'BR') {
+          var clone = ch.cloneNode(false); parent.appendChild(clone); build(ch, clone);
+        } else { parent.appendChild(ch.cloneNode(true)); }
+      });
+    })(el, wrap);
+    el.innerHTML = ''; el.appendChild(wrap);
+    return letters;
+  }
+  function ktPlay(el) {
+    el.classList.add('kt-in');
+  }
+  function ktCascade(el) {
+    if (RM || !HAS_IO) return;
+    var letters = ktSplit(el); if (!letters) return;
+    el.classList.add('kt-cascade');
+    letters.forEach(function (l, i) { l.style.transitionDelay = Math.min(i * 22, 800) + 'ms'; });
+    var hidden = el.offsetParent === null;
+    if (!hidden && !belowFold(el)) {
+      requestAnimationFrame(function () { requestAnimationFrame(function () { ktPlay(el); }); });
+      return;
+    }
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { ktPlay(el); io.disconnect(); } });
+    }, { threshold: 0.35 });
+    io.observe(el);
+  }
+  function ktScrub(el) {
+    if (RM || !HAS_IO) return;
+    var letters = ktSplit(el); if (!letters) return;
+    el.classList.add('kt-scrub');
+    scrubbers.push({ el: el, letters: letters, done: false });
+    scrubDrive();
+  }
+  function scrubDrive() {
+    var vh = window.innerHeight || 700;
+    scrubbers.forEach(function (s) {
+      if (s.done) return;
+      var r = s.el.getBoundingClientRect();
+      if (r.bottom < -60 || r.top > vh + 60) return;
+      var p = Math.min(1, Math.max(0, (vh * 0.96 - r.top) / (vh * 0.52)));
+      var n = s.letters.length;
+      s.letters.forEach(function (l, i) {
+        var lp = Math.min(1, Math.max(0, p * (n + 4) - i));
+        l.style.opacity = lp.toFixed(3);
+        l.style.transform = 'translateY(' + ((1 - lp) * 0.34).toFixed(3) + 'em) scale(' + (0.9 + 0.1 * lp).toFixed(3) + ')';
+      });
+      if (p >= 1) {
+        s.done = true; s.el.classList.add('kt-in');
+        s.letters.forEach(function (l) { l.style.opacity = ''; l.style.transform = ''; });
+      }
+    });
+    /* parallax mínimo del fondo: sube 14px en todo el recorrido */
+    var h = document.documentElement, max = h.scrollHeight - h.clientHeight;
+    var p2 = max > 0 ? Math.min(1, (window.scrollY || h.scrollTop) / max) : 0;
+    h.style.setProperty('--gjbg', (p2 * -14).toFixed(1) + 'px');
+  }
+  if (!RM && HAS_IO) {
+    addEventListener('scroll', function () {
+      if (ktTk) return; ktTk = true;
+      requestAnimationFrame(function () { ktTk = false; scrubDrive(); });
+    }, { passive: true });
+    addEventListener('resize', scrubDrive, { passive: true });
+  }
+  function armKt(doc) {
+    var hero = doc.querySelector('.hero h1');
+    if (hero) ktCascade(hero);
+    var lv = doc.querySelector('[data-gj-levels] h2');
+    if (lv) ktScrub(lv);
+    var off = doc.querySelector('[data-gj-office] h2');
+    if (off) ktCascade(off);
+    var fin = doc.querySelector('.lp-final h2');
+    if (fin) ktCascade(fin);
+  }
+
   /* ---------- 1) + 3) niveles y secciones ---------- */
   function arm(root) {
     var doc = root || document;
@@ -218,6 +330,7 @@
     if (wall) armGrid(wall, !week);
     if (week) armGrid(week, true);
     armOffice(doc);
+    armKt(doc);
   }
   arm(document);
   if ('MutationObserver' in window) {

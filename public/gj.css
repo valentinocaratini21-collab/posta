@@ -157,3 +157,49 @@ html.gj-armed .gj-cin.on,html.gj-armed .gj-cout.on{opacity:1;transform:none}
   .gj-levels .gj-node{animation:none!important}
   .gj-levels .gj-node .gj-dot{border-color:var(--gj-gold2);color:var(--gj-navy);background:linear-gradient(180deg,#FDF3D8,#F9E3AC)}
 }
+
+/* ===== CAPA DE CIERRE DE MAGIA — homes · 2026-10-25 =====
+   1) El mundo de Posty como FONDO de la página: su pared de posteos
+      apenas sugerida (grilla de tarjetas al 3%), su luz celeste de sector
+      arriba a la derecha, el calor de su escritorio abajo y la placa de
+      Bambooty como presencia lejana. Escenografía en contraste muy bajo:
+      el texto se lee AA sobre el fondo real (medido). Vive SOLO en la
+      landing (marcas .nav-landing / [data-gj-office]): en la app no existe.
+      Es CSS puro: sin JS se ve igual; el JS solo le suma un parallax
+      mínimo (--gjbg). Con reduced-motion: fondo plano y lindo. */
+body:has(.nav-landing)::before,body:has([data-gj-office])::before{
+  content:"";position:fixed;inset:-34px 0;z-index:-1;pointer-events:none;
+  transform:translateY(var(--gjbg,0px));
+  background:
+    radial-gradient(760px 400px at 88% -60px, rgba(39,147,200,.13), rgba(39,147,200,0) 70%),
+    radial-gradient(920px 500px at -12% 106%, rgba(219,164,83,.13), rgba(219,164,83,0) 70%),
+    repeating-linear-gradient(90deg, rgba(10,30,51,.030) 0 76px, rgba(10,30,51,0) 76px 92px),
+    repeating-linear-gradient(0deg, rgba(10,30,51,.030) 0 98px, rgba(10,30,51,0) 98px 114px),
+    linear-gradient(180deg, rgba(242,249,253,0) 22%, rgba(242,249,253,.5) 55%, rgba(255,246,227,.55) 88%, rgba(253,241,220,.6));
+}
+body:has(.nav-landing)::after,body:has([data-gj-office])::after{
+  content:"";position:fixed;z-index:-1;pointer-events:none;
+  width:min(400px,58vw);aspect-ratio:1;right:-110px;top:5%;
+  background:url(/bambooty-placa.webp) center/contain no-repeat;
+  opacity:.05;filter:blur(1px) saturate(.92);
+  transform:translateY(calc(var(--gjbg,0px) * -.6));
+}
+@media (prefers-reduced-motion: reduce){
+  body:has(.nav-landing)::before,body:has([data-gj-office])::before{transform:none;background:linear-gradient(180deg,#fff,#FFFBF2)}
+  body:has(.nav-landing)::after,body:has([data-gj-office])::after{display:none}
+}
+
+/* ---------- tipografía cinética: las letras juegan al llegar ----------
+   El armado lo hace gj.js (sin JS el texto queda nativo, completo).
+   Solo transform/opacity: el espacio del titular nunca cambia (CLS 0).
+   Al final del juego el texto queda completo y quieto, como siempre. */
+.kt-w{display:inline-block;white-space:nowrap}
+.kt-l{display:inline-block}
+html.gj-armed .kt-cascade .kt-l{opacity:0;transform:translateY(.38em) scale(.92)}
+html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
+  transition:opacity .45s ease,transform .55s cubic-bezier(.34,1.45,.64,1)}
+html.gj-armed .kt-scrub .kt-l{opacity:0}
+html.gj-armed .kt-scrub.kt-in .kt-l{opacity:1!important;transform:none!important}
+@media (prefers-reduced-motion: reduce){
+  html.gj-armed .kt-cascade .kt-l,html.gj-armed .kt-scrub .kt-l{opacity:1!important;transform:none!important;transition:none!important}
+}

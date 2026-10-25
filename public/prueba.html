@@ -825,6 +825,39 @@ html.gj-armed [data-gj-rv].gj-in{opacity:1;transform:none;transition:opacity .7s
  .gj-pub.on{opacity:1;transform:scale(1) rotate(-3deg)}
  .gj-pub-l.on{transform:translateX(-100%) scale(1) rotate(-3deg)}
 }
+/* ===== CAPA DE CIERRE DE MAGIA — /prueba · 2026-10-25 =====
+   El mundo de Posty como FONDO de la prueba (extiende su banda-escritorio):
+   su pared de posteos apenas sugerida (grilla al 3%), su luz celeste de
+   sector, el calor del escritorio y la placa como presencia lejana.
+   Escenografía en contraste muy bajo: el texto se lee AA sobre el fondo
+   real (medido). CSS puro; el JS solo suma un parallax mínimo (--gjbg).
+   Con reduced-motion: fondo plano y lindo. */
+body::before{content:"";position:fixed;inset:-34px 0;z-index:-1;pointer-events:none;
+  transform:translateY(var(--gjbg,0px));
+  background:
+    radial-gradient(760px 400px at 88% -60px, rgba(39,147,200,.13), rgba(39,147,200,0) 70%),
+    radial-gradient(920px 500px at -12% 106%, rgba(219,164,83,.13), rgba(219,164,83,0) 70%),
+    repeating-linear-gradient(90deg, rgba(10,30,51,.030) 0 76px, rgba(10,30,51,0) 76px 92px),
+    repeating-linear-gradient(0deg, rgba(10,30,51,.030) 0 98px, rgba(10,30,51,0) 98px 114px),
+    linear-gradient(180deg, rgba(242,249,253,0) 22%, rgba(242,249,253,.5) 55%, rgba(255,246,227,.55) 88%, rgba(253,241,220,.6))}
+body::after{content:"";position:fixed;z-index:-1;pointer-events:none;
+  width:min(400px,58vw);aspect-ratio:1;right:-110px;top:5%;
+  background:url(/bambooty-placa.webp) center/contain no-repeat;
+  opacity:.05;filter:blur(1px) saturate(.92);
+  transform:translateY(calc(var(--gjbg,0px) * -.6))}
+/* tipografía cinética: las letras juegan al llegar y quedan quietas.
+   Solo transform/opacity: el espacio del titular nunca cambia (CLS 0).
+   Sin JS el texto queda nativo, completo. */
+.kt-w{display:inline-block;white-space:nowrap}
+.kt-l{display:inline-block}
+html.gj-armed .kt-cascade .kt-l{opacity:0;transform:translateY(.38em) scale(.92)}
+html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
+  transition:opacity .45s ease,transform .55s cubic-bezier(.34,1.45,.64,1)}
+@media (prefers-reduced-motion: reduce){
+ body::before{transform:none;background:linear-gradient(180deg,#fff,#FFFBF2)}
+ body::after{display:none}
+ html.gj-armed .kt-cascade .kt-l{opacity:1!important;transform:none!important;transition:none!important}
+}
 </style>
 </head>
 <body>
@@ -4110,6 +4143,107 @@ fetch('/api/campaign/current?lang=es').then(function(r){return r.json()}).then(f
       }, { threshold: 0.35 });
       pio.observe(ejCards[0]);
     }
+  }
+})();
+</script>
+<script>
+/* ===== CAPA DE CIERRE DE MAGIA — /prueba (2026-10-25) =====
+   Tipografía cinética: las letras del saludo, del ejemplo y del momento
+   de la semana juegan al llegar — y quedan quietas, completas. El fondo
+   ambiental (CSS) recibe su parallax mínimo. Sin JS o con reduced-motion:
+   texto nativo, completo y estático. */
+(function () {
+  var RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var HAS_IO = 'IntersectionObserver' in window;
+  if (!RM) {
+    var tk = false;
+    var drive = function () {
+      var h = document.documentElement, max = h.scrollHeight - h.clientHeight;
+      var p = max > 0 ? Math.min(1, (window.scrollY || h.scrollTop) / max) : 0;
+      h.style.setProperty('--gjbg', (p * -12).toFixed(1) + 'px');
+    };
+    addEventListener('scroll', function () {
+      if (tk) return; tk = true;
+      requestAnimationFrame(function () { tk = false; drive(); });
+    }, { passive: true });
+    drive();
+  }
+  if (RM || !HAS_IO) return;
+  function ktSplit(el) {
+    if (!el || el.getAttribute('data-gj-kt')) return null;
+    var text = '';
+    (function walk(n) {
+      Array.prototype.slice.call(n.childNodes).forEach(function (c) {
+        if (c.nodeType === 3) text += c.nodeValue;
+        else if (c.tagName === 'BR') text += ' ';
+        else walk(c);
+      });
+    })(el);
+    text = text.replace(/\s+/g, ' ').trim();
+    if (!text) return null;
+    el.setAttribute('data-gj-kt', '1');
+    el.setAttribute('aria-label', text);
+    var wrap = document.createElement('span');
+    wrap.className = 'kt-src'; wrap.setAttribute('aria-hidden', 'true');
+    var letters = [];
+    (function build(node, parent) {
+      Array.prototype.slice.call(node.childNodes).forEach(function (ch) {
+        if (ch.nodeType === 3) {
+          ch.nodeValue.split(/(\s+)/).forEach(function (part) {
+            if (!part) return;
+            if (/^\s+$/.test(part)) { parent.appendChild(document.createTextNode(' ')); return; }
+            var w = document.createElement('span'); w.className = 'kt-w';
+            Array.from(part).forEach(function (chr) {
+              var l = document.createElement('span'); l.className = 'kt-l'; l.textContent = chr;
+              w.appendChild(l); letters.push(l);
+            });
+            parent.appendChild(w);
+          });
+        } else if (ch.nodeType === 1 && ch.tagName !== 'BR') {
+          var clone = ch.cloneNode(false); parent.appendChild(clone); build(ch, clone);
+        } else { parent.appendChild(ch.cloneNode(true)); }
+      });
+    })(el, wrap);
+    el.innerHTML = ''; el.appendChild(wrap);
+    return letters;
+  }
+  function belowFold(el) {
+    var r = el.getBoundingClientRect();
+    return r.top > (window.innerHeight || 700) * 0.92;
+  }
+  function ktCascade(el, force) {
+    if (!el) return;
+    var letters = ktSplit(el); if (!letters) return;
+    el.classList.add('kt-cascade');
+    letters.forEach(function (l, i) { l.style.transitionDelay = Math.min(i * 22, 800) + 'ms'; });
+    var play = function () { el.classList.add('kt-in'); };
+    var hidden = el.offsetParent === null;
+    if (force || (!hidden && !belowFold(el))) {
+      requestAnimationFrame(function () { requestAnimationFrame(play); });
+      return;
+    }
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { play(); io.disconnect(); } });
+    }, { threshold: 0.35 });
+    io.observe(el);
+  }
+  ktCascade(document.querySelector('.hero h1'));
+  ktCascade(document.querySelector('#v-example .res-hero h2'));
+  /* el momento de la semana: cuando el resultado se muestra, su título juega */
+  var rt = document.getElementById('rTitle');
+  var res = document.getElementById('v-results');
+  if (rt && res && 'MutationObserver' in window) {
+    var lastText = '';
+    var tryPlay = function () {
+      if (res.style.display === 'none' || res.offsetParent === null) return;
+      if (rt.getAttribute('data-gj-kt') && rt.textContent === lastText) return;
+      lastText = rt.textContent;
+      rt.removeAttribute('data-gj-kt');
+      ktCascade(rt, true);
+    };
+    new MutationObserver(tryPlay).observe(rt, { childList: true, characterData: true, subtree: true });
+    new MutationObserver(tryPlay).observe(res, { attributes: true, attributeFilter: ['style', 'class'] });
+    tryPlay();
   }
 })();
 </script>
