@@ -14,6 +14,11 @@
     if (!standalone) return;
     var h = location.hash || '';
     if (h.indexOf('#/app') === 0 || h === '#/login' || h === '#/registro' || h.indexOf('#/reset') === 0) return;
+    // (v469) Click en el logo de auth: no redirigir a la app en esta carga.
+    // NO se consume aquí: la consume la primera rama standalone de app.js
+    // (que es la que decide la vista); si app.js está cacheado viejo, la
+    // intención queda puesta y se honra en cuanto app.js se actualiza.
+    try { if (sessionStorage.getItem('posta_ver_web') === '1') return; } catch (e) {}
     var w = Math.min(window.innerWidth || 999, (window.screen && screen.width) || 999);
     location.replace('/' + (w <= 820 ? '#/app/inicio' : '#/app/schedule'));
   } catch (e) {}
@@ -306,7 +311,7 @@
 /* v210: splash calmo — Posty estatico, sin malabares. */
 </style>
 <script>setTimeout(function(){var b=document.getElementById('posty-boot');if(b)b.remove();},6000);</script>
-<script src="/app.js?v=299"></script>
+<script src="/app.js?v=300"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
 fetch('/api/campaign/current?lang=es').then(function(r){return r.json()}).then(function(d){

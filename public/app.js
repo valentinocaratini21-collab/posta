@@ -3363,7 +3363,7 @@ function authView(mode) {
   const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="${homeHref}">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}">posty<span class="pdot">.</span></a>
     <div class="nav-links"><a href="#/${isLogin ? 'registro' : 'login'}">${isLogin ? S.navCreate : S.navLogin}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
@@ -3388,7 +3388,7 @@ function forgotView() {
   const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="${homeHref}">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}">posty<span class="pdot">.</span></a>
     <div class="nav-links"><a href="#/login">${S.navLogin}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
@@ -3408,7 +3408,7 @@ function resetView() {
   const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="${homeHref}">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}">posty<span class="pdot">.</span></a>
   </div></div>
   <div class="wrap"><div class="form-card">
     <h2>${S.resetH2}</h2>
@@ -12363,6 +12363,7 @@ const GOALS = [
 function bootSplashOff() {
   try { const b = document.getElementById('posty-boot'); if (b) b.remove(); } catch (e) {}
 }
+let PZ_VER_WEB_ONCE = false; // (v469) click en el logo de auth: ver la landing UNA vez en PWA
 let RENDER_SEQ = 0;
 async function render() {
   const mySeq = ++RENDER_SEQ;
@@ -12427,8 +12428,14 @@ async function render() {
   // sola al login. Auth y reset quedan afuera: son destinos válidos.
   try {
     if (pwaIsStandalone() && !path.startsWith('#/app') && path !== '#/login' && path !== '#/registro' && !path.startsWith('#/reset')) {
-      location.hash = mzHomeHash();
-      return;
+      // (v469) Click en el logo de auth con sesión cerrada: el usuario pidió
+      // VER el website. La intención es one-shot (sessionStorage, la consume
+      // esta rama): esta carga NO redirige a la app; la próxima apertura de
+      // la PWA vuelve a comportarse como app (regla 2026-10-20 intacta).
+      let _vw = false;
+      try { _vw = sessionStorage.getItem('posta_ver_web') === '1'; if (_vw) sessionStorage.removeItem('posta_ver_web'); } catch (e) {}
+      if (_vw) { PZ_VER_WEB_ONCE = true; }
+      else { location.hash = mzHomeHash(); return; }
     }
   } catch (e) {}
 
@@ -12598,7 +12605,7 @@ async function render() {
   if (path === '#/' || path === '') {
     // App instalada: se comporta como app, no como web. Va directo a la semana
     // (o al login si no hay sesión) en vez de la landing de marketing.
-    if (pwaIsStandalone()) { location.hash = mzHomeHash(); return; }
+    if (pwaIsStandalone()) { if (PZ_VER_WEB_ONCE) { PZ_VER_WEB_ONCE = false; } else { location.hash = mzHomeHash(); return; } }
     // Logueado en la web (v292): rebota a SU pantalla con la MISMA regla que
     // tras el login — postAuthLanding es la única fuente de verdad del
     // destino (onboarding si falta el negocio, plan elegido, return-to, o la
