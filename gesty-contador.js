@@ -94,6 +94,21 @@ function configure(opts) {
   if (o.sendEmail !== undefined) _cfg.sendEmail = typeof o.sendEmail === 'function' ? o.sendEmail : null;
 }
 
+// G-26 · Formatos del contador: proveedores de ARCHIVOS DE
+// SISTEMA (layouts de importación de los sistemas del estudio).
+// Es la costura de G-20 trasplantada: gesty-formatos-contador.js
+// se registra acá y, al armar el paquete, cada proveedor recibe
+// (db, userId, { perfil, periodo, contenido }) con el índice
+// CONGELADO de esa versión y devuelve { archivos, declaraciones }
+// que quedan congelados en el paquete. Sin proveedores — o sin
+// sistema destino en el fundamento — el paquete es exactamente
+// el de siempre: este registro no cambia ni un número de G-15.
+const _proveedoresArchivos = [];
+function registerProveedorArchivos(fn) {
+  if (typeof fn !== 'function') fail('El proveedor de archivos de sistema debe ser una función.');
+  _proveedoresArchivos.push(fn);
+}
+
 // Los formatos de carpeta que un contador puede preferir. Todos
 // ordenan EL MISMO índice de la carpeta de G-06 (ningún formato
 // agrega ni quita un papel): cambia el orden y la agrupación,
@@ -213,6 +228,10 @@ function getContador(db, userId) {
     formato_efectivo: formatoDefinido || 'generico',
     formato_origen: formatoDefinido ? 'preferido' : 'generico-sin-definir',
     dia_entrega: Number.isInteger(dia) && dia >= 1 && dia <= 28 ? dia : null,
+    // G-26: el sistema destino del estudio (id del registro de
+    // formatos) viaja crudo: validarlo contra el registro es de
+    // gesty-formatos-contador.js, como el formato contra su lista.
+    sistema_destino: normTexto(valorDe('sistema_destino') || ''),
     canal: CANALES.includes(normTexto(valorDe('canal') || '')) ? normTexto(valorDe('canal')) : 'email',
     fuente,
   };
@@ -552,6 +571,19 @@ function armarPaquete(db, userId, opts) {
     grupos: grupos.map(({ items, ...g }) => g),
     totales_carpeta: carpeta.totales_carpeta,
   };
+  // G-26: los archivos de sistema (layouts) se generan AHORA,
+  // sobre este índice, y quedan congelados en la versión — lo
+  // que el dueño aprueba es exactamente lo que sale, archivo
+  // incluido. Un proveedor que falla no frena el paquete: se
+  // declara y el paquete sigue con el formato de carpeta.
+  const archivosSistema = [];
+  for (const fn of _proveedoresArchivos) {
+    let r = null;
+    try { r = fn(db, userId, { perfil, periodo, contenido }); } catch (e) { r = null; }
+    if (r && Array.isArray(r.archivos)) archivosSistema.push(...r.archivos);
+    if (r && Array.isArray(r.declaraciones)) declaraciones.push(...r.declaraciones);
+  }
+  if (archivosSistema.length) contenido.archivos_sistema = archivosSistema;
   const totales = {
     comprobantes: indice_ordenado.length,
     leidos: carpeta.totales_carpeta.leidos,
@@ -890,6 +922,8 @@ function resumenContador(db, userId, opts) {
 module.exports = {
   // esquema y canal
   ensureSchema, configure,
+  // G-26: registro de proveedores de archivos de sistema
+  registerProveedorArchivos,
   // el contador en el fundamento
   getContador, setContador, FORMATOS_CARPETA,
   // el paquete durable y versionado

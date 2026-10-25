@@ -91,9 +91,9 @@ const IDIOMAS = ['es', 'en'];
 // escalera familiar 2026-10-24). Si el sitio cambia un precio, se
 // cambia acá: el email cita SOLO el precio publicado.
 const PLANES = {
-  esencial: { nombre: 'Esencial', precio: '229.99' },
-  completa: { nombre: 'Completa', precio: '329.99' },
-  total: { nombre: 'Total', precio: '429.99' },
+  esencial: { nombre: 'Esencial', precio: '199.99' },
+  completa: { nombre: 'Completa', precio: '299.99' },
+  total: { nombre: 'Total', precio: '399.99' },
 };
 
 const REPLY_TO = 'hola@gestyofficemanager.com';

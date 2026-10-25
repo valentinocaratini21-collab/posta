@@ -50,7 +50,7 @@ console.log('— unidad: reserva válida, confirmación en su idioma');
   ok('el asunto es el decidido (ES)', llamadas[0].subject === 'Reserva recibida · Gesty', llamadas[0].subject);
   ok('la copia confirma la llegada y dice el lanzamiento', /Tu reserva llegó/.test(llamadas[0].text) && llamadas[0].text.includes('1 de abril de 2027'));
   ok('con plan: cita su elección con el precio publicado y el programa Primeros 50',
-    llamadas[0].text.includes('Gesty Completa') && llamadas[0].text.includes('329.99') && /primeras 50 cuentas/.test(llamadas[0].text));
+    llamadas[0].text.includes('Gesty Completa') && llamadas[0].text.includes('299.99') && /primeras 50 cuentas/.test(llamadas[0].text));
   ok('la copia NO promete contacto con fecha (ni 24 h ni nada parecido)', !/24\s?h|24 horas|mañana te|te escribimos el/.test(llamadas[0].text), llamadas[0].text.slice(0, 200));
   ok('las respuestas van al inbox de Gesty (reply-to)', llamadas[0].replyTo === 'hola@gestyofficemanager.com');
   const hist = reservas.historialEnvios(db, r.reserva.id);
