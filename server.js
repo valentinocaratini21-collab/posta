@@ -3338,7 +3338,7 @@ const socialAuth = require('./server/social-auth');
 const SOCIAL_FNS = {
   newReferralCode,
   hashPassword: (s) => bcrypt.hashSync(s, 10),
-  normalizeSrc,
+  normalizeSrc: LA.normalizeSrc,
   importTrialWeek, applyTrialLang, seedFromTrialDigest,
   recordTrialImport, streakFromTrialImport, autoWeekEnabled, autoArmWeek,
   track, evTrack,
@@ -18991,6 +18991,173 @@ app.get('/api/gesty/contador/paquetes/:id/archivos/:clave', ...gestyFormContMW, 
 });
 
 
+// =====================================================================
+// PASE DE APP — vistas Gesty (recepción primero).
+// Solo lectura agregada sobre los motores que ya existen (gesty-vistas):
+// ninguna ruta nueva escribe fuera de las funciones de los módulos.
+// Llegada y llamada-devuelta son acción base de recepción: NO se
+// cuelgan de la capacidad 'llamadas' (esa es el canal de voz de G-13,
+// otro árbol). Cobro exige 'cobranzas', bloqueos exigen 'agenda'.
+// Buscar-ahora es fail-closed sin vault (gate del deploy, ver auto-fetch).
+// =====================================================================
+const gestyVistas = require('./gesty-vistas');
+const gestyLlegadas = require('./gesty-llegadas');
+const gestyLlamadasPerdidas = require('./gesty-llamadas-perdidas');
+const gestySinPagar = require('./gesty-atendidos-sin-pagar');
+const gestyBloqueos = require('./gesty-bloqueos');
+const gestyAutofetch = require('./gesty-autofetch');
+const gestyVistasMW = [requireAuth, gesty.gestyMiddleware(db)];
+const gestyVistasCobranzasMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'cobranzas')];
+const gestyVistasAgendaMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'agenda')];
+
+app.get('/api/gesty/vistas/recepcion', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyVistas.vistaRecepcion(db, req.session.userId, { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/vistas/hoy', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyVistas.gestyHoy(db, req.session.userId, { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/vistas/papeles', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyVistas.vistaPapeles(db, req.session.userId, { limit: req.query.limit || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/vistas/clientes', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyVistas.vistaClientes(db, req.session.userId, { q: req.query.q || '' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/vistas/ficha-cliente', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyVistas.fichaCliente(db, req.session.userId, { contacto: req.query.contacto || '', nombre: req.query.nombre || '' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/vistas/conexiones', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyVistas.vistaConexiones(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/vistas/bloqueos', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyVistas.vistaBloqueos(db, req.session.userId, { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/vistas/probar', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyVistas.probarSuperficie(db, req.session.userId, req.query.superficie || '', { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/llegada', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, llegada: gestyLlegadas.marcarLlegada(db, req.session.userId, Number(req.body.evento_id), { medio: req.body.medio || 'recepcion' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/sala/llamar', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, llamado: require('./gesty-sala-espera').llamar(db, req.session.userId, Number(req.body.llegada_id), { profesional: req.body.profesional || '', hora_llamado: req.body.hora_llamado || '' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/llamada-devuelta', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, perdida: gestyLlamadasPerdidas.devolver(db, req.session.userId, Number(req.body.id), { por: req.body.por || 'recepcion' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/cobro-turno', ...gestyVistasCobranzasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, cobro: gestySinPagar.registrarCobro(db, req.session.userId, Number(req.body.evento_id), { medio: req.body.medio || '', monto: Number(req.body.monto) }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/bloqueos', ...gestyVistasAgendaMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, bloqueo: gestyBloqueos.crearBloqueo(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/bloqueos/:id/desactivar', ...gestyVistasAgendaMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, bloqueo: gestyBloqueos.desactivarBloqueo(db, req.session.userId, Number(req.params.id)) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/conexiones/buscar-ahora', ...gestyVistasMW, express.json(), async (req, res) => {
+  try { res.json({ ok: true, ...(await gestyAutofetch.buscarAhora(db, req.session.userId)) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/confirmar', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, confirmacion: require('./gesty-confirmacion-turnos').confirmar(db, req.session.userId, Number(req.body.evento_id), { canal: req.body.canal || 'recepcion' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/atendido', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, evento: gestyAgenda.cumplirEvento(db, req.session.userId, Number(req.body.evento_id), {}).evento }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/vistas/negocio-tipo', ...gestyVistasMW, (req, res) => {
+  try { const v = require('./gesty-variantes'); const rubro = v.getTipo(db, req.session.userId); res.json({ ok: true, rubro, llamar: v.llamarPara(rubro), llamar_en: v.llamarPara(rubro, 'en'), variantes: v.lista() }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/negocio-tipo', ...gestyVistasMW, express.json(), (req, res) => {
+  try { const v = require('./gesty-variantes'); res.json({ ok: true, rubro: v.setTipo(db, req.session.userId, req.body.rubro) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/cola-manana/:id/resolver', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, pendiente: require('./gesty-fuera-horario').resolverManana(db, req.session.userId, Number(req.params.id), { por: (req.body || {}).por || 'recepcion', nota: (req.body || {}).nota || '' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/vistas/propuestas/responder', ...gestyVistasMW, express.json(), (req, res) => {
+  // 'aceptada' solo inicia el permiso: la conexión la crea conectar()
+  // cuando el flujo de credenciales (vault, gate del deploy) esté
+  // cableado. Nunca se finge una conexión creada por responder.
+  try { res.json({ ok: true, propuesta: require('./gesty-propuestas-conexion').responderPropuesta(db, req.session.userId, req.body.plataforma, req.body.respuesta, { proveedor: req.body.proveedor || '' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
+
+// =====================================================================
+// PRUEBA DE GESTY (diseño aprobado 29/10, build local sin push).
+// Rutas de la prueba en orden: inicio en un clic → espejo de ayer →
+// semana en vivo (Bandeja, un toque) → frase diaria → cierre con
+// paywall SOLO de prueba. El require registra el ejecutor
+// 'prueba-accion' (flujo estándar approveCard, sin segunda Bandeja).
+// Las llamadas en vivo NO son ruta: están gated por la vara de voz.
+// =====================================================================
+const gestyPrueba = require('./gesty-prueba');
+app.get('/api/gesty/prueba/estado', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, prueba: gestyPrueba.getPrueba(db, req.session.userId), llamadas: gestyPrueba.estadoLlamadas() }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/prueba/iniciar', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, prueba: gestyPrueba.iniciar(db, req.session.userId, { contacto: (req.body || {}).contacto || '' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/prueba/espejo', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyPrueba.espejoAyer(db, req.session.userId, { fecha: req.query.fecha || undefined, hoy: req.query.hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/prueba/activar-semana', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, prueba: gestyPrueba.activarSemana(db, req.session.userId, { hoy: (req.body || {}).hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/prueba/acciones', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, acciones: gestyPrueba.listAcciones(db, req.session.userId, { estado: req.query.estado || undefined, tipo: req.query.tipo || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/prueba/acciones', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, accion: gestyPrueba.proponerAccion(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/prueba/acciones/:id/aprobar', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, accion: gestyPrueba.aprobarAccion(db, req.session.userId, Number(req.params.id)) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/prueba/acciones/:id/rechazar', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, accion: gestyPrueba.rechazarAccion(db, req.session.userId, Number(req.params.id), { motivo: (req.body || {}).motivo || '' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/prueba/graduar', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, prueba: gestyPrueba.graduarAprobacion(db, req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/prueba/frase', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, ...gestyPrueba.fraseDiaria(db, req.session.userId, { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/prueba/numeros', ...gestyVistasMW, (req, res) => {
+  try { res.json({ ok: true, numeros: gestyPrueba.numerosSemana(db, req.session.userId, { hoy: req.query.fecha || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/prueba/cierre', ...gestyVistasMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, paywall: gestyPrueba.cierreSemana(db, req.session.userId, { hoy: (req.body || {}).hoy || undefined }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -22942,7 +23109,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261025-v482';
+const BUILD_ID = '20261030-v483';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

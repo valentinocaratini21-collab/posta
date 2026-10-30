@@ -352,6 +352,7 @@ async function bbOficinaContent() {
     <section class="bb-bloque"><h2>Bambooty también tiene especialistas</h2><p class="bb-sub">No son poderes de todos los días: se los llama para una misión puntual, por proyecto. Cuando un proyecto está activo, su trabajo aparece en tu Bandeja.</p>${(est.especialistas || []).map(espRow).join('')}</section>
     <section class="bb-bloque"><h2>El río de tu oficina</h2>${rio || '<p class="bb-vacio">El río corre con trabajo real: cada cosa que tu oficina haga aparece acá con su recibo.</p>'}</section>
     <section class="bb-bloque"><h2>Lo que tu oficina ya sabe</h2><div class="bb-chips">${(est.aprendido || []).map((f) => `<span class="bb-chip">✓ ${esc(f.hecho)}</span>`).join('') || '<p class="bb-vacio">Todavía nada — el fundamento se está cargando.</p>'}</div></section>
+    ${await gzOficinaGesty()}
   `;
 }
 function bbPreguntar(nombre) {
@@ -401,9 +402,16 @@ async function bbBandejaContent() {
       </div>
     </article>`;
   const res = (i) => `<div class="bb-res-row"><span class="bb-res-est ${i.estado === 'aceptada' ? 'ok' : ''}">${i.estado === 'aceptada' ? '✓ Aceptada' : '↩ Cambio pedido'}</span><p>${esc(i.que)}</p><span class="bb-res-hora">${bbHace(i.resuelta_en || i.espera_desde)}</span></div>`;
+  // PASE DE APP — Gesty en la misma Bandeja (no una segunda bandeja):
+  // sus tarjetas pendientes se suman acá; la aprobación corre por el
+  // camino de Gesty (versión vigente, matriz, ejecutor). Si Gesty no
+  // está habilitado, no aparece nada y la Bandeja queda intacta.
+  let gzHtml = '';
+  try { const gr = await api.get('/api/gesty/bandeja'); if (gr && gr.ok && (gr.tarjetas || []).length) gzHtml = gzBandejaGestyHTML(gr.tarjetas); } catch (e) {}
   const html = `
     <section class="bb-bloque bb-bloque-top"><h1>Para vos</h1><p class="bb-sub">Solo llega acá lo que necesita TU decisión. Todo lo demás, tu oficina lo resuelve sola.</p></section>
     ${pend.length ? pend.map(card).join('') : '<div class="bb-libre"><p class="bb-libre-big">🎉 Nada esperando tu OK</p><p>Tu oficina sigue trabajando. Cuando algo necesite tu toque, aparece acá — y te avisa su agente, con su voz.</p></div>'}
+    ${gzHtml}
     ${resueltas.length ? `<section class="bb-bloque"><h2>Resueltas</h2>${resueltas.map(res).join('')}</section>` : ''}
   `;
   BB.estado = null;
@@ -469,6 +477,7 @@ async function bbNegocioContent() {
     ${capas}
     ${(jardin && jardin.ok && Array.isArray(jardin.antes) && jardin.antes.length && Array.isArray(jardin.hoy) && jardin.hoy.length) ? pzJardinHTML(jardin, (typeof ME !== 'undefined' && ME && ME.lang === 'en')) : ''}${(nivJ && nivJ.ok && Array.isArray(nivJ.historial) && nivJ.historial.length) ? pzVitrinaHTML(nivJ.historial, (typeof ME !== 'undefined' && ME && ME.lang === 'en')) : ''}
     ${avisos}
+    ${await gzNegocioGesty()}
     <button class="bb-btn bb-btn-ghost bb-ancho" onclick="bbGo('#/app/chat')">¿Falta algo o algo cambió? Contale a Bambooty</button>
   `;
 }
@@ -527,6 +536,281 @@ async function bbContentFor(tab) {
   if (tab === 'negocio') return bbNegocioContent();
   if (tab === 'chat') return bbChatContent();
   return bbOficinaContent();
+}
+
+// ————— GESTY: vistas del pase de app (recepción primero) —————
+// Todo ADITIVO (prefijo gz): ningún renderer existente se reescribe,
+// solo se insertan estos bloques. Si Gesty no está habilitado (403) o
+// un fetch falla, cada función devuelve '' y la vista existente queda
+// intacta. Color canónico de Gesty: amatista #A175CA (el verde #5B8C5A
+// está muerto: colisionaba con Venty y no es el color de familia).
+// G-12/G-13 y gamificación NO viven acá: su unificación es del push.
+const GZ_AMATISTA = '#A175CA';
+function gzAvatar() { try { return bbAvatarHTML('gesty', null, 'Gesty', GZ_AMATISTA); } catch (e) { return ''; } }
+function gzT(es, en) { return (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? en : es; }
+function gzProbarBtn(sup) { return `<button class="bb-mini" onclick="gzProbar('${sup}', this)">${gzT('Probar', 'Try')}</button><p class="bb-sub gz-probar" style="margin:6px 0 0"></p>`; }
+async function gzProbar(sup, btn) {
+  const box = btn && btn.parentElement ? btn.parentElement.querySelector('.gz-probar') : null;
+  if (box) box.textContent = gzT('Probando…', 'Trying…');
+  let r; try { r = await api.get('/api/gesty/vistas/probar?superficie=' + encodeURIComponent(sup)); } catch (e) { r = null; }
+  if (box) box.textContent = (r && r.ok) ? (r.tiene_datos ? '✓ ' + gzT(r.mensaje, r.mensaje_en || r.mensaje) : gzT(r.mensaje, r.mensaje_en || r.mensaje)) : gzT('No se pudo probar ahora.', "Couldn't try right now.");
+}
+async function gzOficinaGesty() {
+  let hoy, rec;
+  try { const r = await Promise.all([api.get('/api/gesty/vistas/hoy').catch(() => null), api.get('/api/gesty/vistas/recepcion').catch(() => null)]); hoy = r[0]; rec = r[1]; } catch (e) { return ''; }
+  if (!hoy || !hoy.ok || !rec || !rec.ok) return '';
+  if (hoy.gesty_contratado === false) return await gzPruebaBox();
+  const s = rec.secciones || {};
+  const turnos = s.turnos || {}, tel = s.telefono || {}, pagos = s.pagos || {}, avisos = s.avisos || {}, bandeja = s.bandeja || {};
+  const fundNota = (rec.fundamento && rec.fundamento.total === 0)
+    ? gzT('<p class="bb-sub">Gesty todavía no conoce tu negocio: contale en Mi negocio y trabaja con lo que ya sabe.</p>', '<p class="bb-sub">Gesty doesn\'t know your business yet: tell it in My business and it will work with what it already knows.</p>') : '';
+  const turnoRow = (t) => `<div class="bb-hecho"><div><strong>${esc(t.titulo)}</strong><p>${esc(t.hora || '')} · ${esc(t.cliente_nombre || '')}${t.estado === 'cumplido' ? gzT(' · atendido', ' · served') : ''}${t.llegada ? gzT(' · ✓ llegó', ' · ✓ arrived') : ''}${t.llamado && t.estado === 'activo' ? gzT(' · avisado', ' · notified') : ''}${t.confirmacion === 'confirmada' ? gzT(' · ✓ confirmado', ' · ✓ confirmed') : ''}</p></div><div style="display:flex;gap:6px;flex-wrap:wrap">${(t.estado === 'activo' && !t.llegada && t.confirmacion !== 'confirmada') ? `<button class="bb-mini" onclick="gzConfirmar(${t.id}, this)">${gzT('Confirmar', 'Confirm')}</button>` : ''}${(t.estado === 'activo' && !t.llegada && t.confirmacion === 'confirmada') ? `<button class="bb-mini" onclick="gzLlegada(${t.id}, this)">${gzT('El cliente llegó', 'Client arrived')}</button>` : ''}${(t.estado === 'activo' && t.llamado) ? `<button class="bb-mini" onclick="gzAtendido(${t.id}, this)">${gzT('Atendido', 'Served')}</button>` : ''}</div></div>`;
+  const salaRow = (l) => `<div class="bb-hecho"><div><strong>${esc(l.cliente_nombre || '')}</strong><p>${esc(l.titulo || '')}${l.titulo ? ' · ' : ''}${gzT('Esperando desde las ', 'Waiting since ')}${esc(l.llego_hora || l.hora || '')}${l.hora_turno ? gzT(' · turno ', ' · appointment ') + esc(l.hora_turno) : ''}</p></div><button class="bb-mini" onclick="gzLlamar(${l.llegada_id}, this)">${esc(gzT(turnos.llamar_texto || 'Ya puede pasar', turnos.llamar_texto_en || turnos.llamar_texto || 'Ya puede pasar'))}</button></div>`;
+  const perdRow = (p) => `<div class="bb-hecho"><div><strong>${esc(p.nombre || p.contacto || '')}</strong><p>${esc(p.fecha || '')} ${esc(p.hora || '')} · ${esc(p.motivo || '')}${p.veces > 1 ? ' · ×' + p.veces : ''}</p></div><button class="bb-mini" onclick="gzDevolver(${p.id}, this)">${gzT('Devolver', 'Call back')}</button></div>`;
+  const colaRow = (c) => `<div class="bb-hecho"><div><strong>${esc(c.nombre || c.contacto || '')}</strong><p>${esc(c.pedido || '')} · ${esc(c.canal || '')}</p></div><button class="bb-mini" onclick="gzResolverManana(${c.id}, this)">${gzT('Resuelto', 'Resolved')}</button></div>`;
+  const pagoRow = (p) => { const e = p.evento || {}; return `<div class="bb-hecho"><div><strong>${esc(e.titulo || '')}</strong><p>${esc(e.cliente_nombre || '')} · ${esc(e.hora || '')}</p></div><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="gz-cobro-medio-${e.id}"><option value="efectivo">${gzT('Efectivo', 'Cash')}</option><option value="transferencia">${gzT('Transferencia', 'Bank transfer')}</option><option value="tarjeta">${gzT('Tarjeta', 'Card')}</option><option value="mercado-pago">Mercado Pago</option><option value="otro">${gzT('Otro', 'Other')}</option></select><input id="gz-cobro-monto-${e.id}" type="number" min="1" step="any" placeholder="${gzT('Monto', 'Amount')}" style="width:110px"><button class="bb-mini" onclick="gzCobroTurno(${e.id}, this)">${gzT('Registrar cobro', 'Record payment')}</button></div></div>`; };
+  const avisoLineas = [];
+  if ((avisos.pagar_hoy || []).length) avisoLineas.push(gzT(`Hoy hay ${(avisos.pagar_hoy || []).length} por pagar.`, `Today there are ${(avisos.pagar_hoy || []).length} to pay.`));
+  if (avisos.vence_manana) { const v = avisos.vence_manana; const n = (v.fiscal || 0) + (v.facturas || 0) + (v.ordenes || 0) + (v.compromisos || 0); if (n) avisoLineas.push(gzT(`Mañana vencen ${n} (fiscal ${v.fiscal || 0}, facturas ${v.facturas || 0}, órdenes ${v.ordenes || 0}, compromisos ${v.compromisos || 0}).`, `Tomorrow ${n} expire (tax ${v.fiscal || 0}, invoices ${v.facturas || 0}, orders ${v.ordenes || 0}, commitments ${v.compromisos || 0}).`)); }
+  (avisos.demoras || []).forEach((d) => avisoLineas.push(gzT(`Demora: ${d.minutos} min${d.motivo ? ' — ' + d.motivo : ''}${d.profesional ? ' (' + d.profesional + ')' : ''}.`, `Delay: ${d.minutos} min${d.motivo ? ' — ' + d.motivo : ''}${d.profesional ? ' (' + d.profesional + ')' : ''}.`)));
+  if ((avisos.contratos_por_vencer || []).length) avisoLineas.push(gzT(`${avisos.contratos_por_vencer.length} contratos por vencer.`, `${avisos.contratos_por_vencer.length} contracts about to expire.`));
+  return `
+    <section class="bb-bloque"><h2>${gzT('Gesty hoy', 'Gesty today')}</h2><p>${esc(gzT(hoy.frase, hoy.frase_en || hoy.frase))}</p>${fundNota}</section>
+    ${turnos.no_incluida ? '' : `<section class="bb-bloque"><h2>${gzT('Recepción de hoy', "Today's reception")}</h2>${(turnos.turnos_hoy || []).length ? (turnos.turnos_hoy || []).map(turnoRow).join('') : gzT('<p class="bb-vacio">Sin turnos hoy.</p>', '<p class="bb-vacio">No appointments today.</p>')}${(turnos.pendientes_confirmar || []).length ? `<p class="bb-sub">${gzT('Faltan confirmar: ', 'Still to confirm: ')}${(turnos.pendientes_confirmar || []).length}.</p>` : ''}<h3 style="margin-top:14px">${gzT('Esperando ahora', 'Waiting now')}</h3>${(turnos.sala || []).length ? (turnos.sala || []).map(salaRow).join('') : gzT('<p class="bb-vacio">Nadie esperando por ahora.</p>', '<p class="bb-vacio">Nobody waiting right now.</p>')}${gzProbarBtn('turnos')}</section>`}
+    <section class="bb-bloque"><h2>${gzT('Teléfono', 'Phone')}</h2>${(tel.perdidas || []).length ? (tel.perdidas || []).map(perdRow).join('') : gzT('<p class="bb-vacio">Ninguna llamada por devolver.</p>', '<p class="bb-vacio">No calls to return.</p>')}${(tel.cola_manana || []).length ? `<h3 style="margin-top:14px">${gzT('Cola de la mañana', 'Morning queue')}</h3>${(tel.cola_manana || []).map(colaRow).join('')}` : ''}${gzProbarBtn('telefono')}</section>
+    ${pagos.no_incluida ? '' : `<section class="bb-bloque"><h2>${gzT('Pagos del día', "Today's payments")}</h2>${(pagos.sin_pagar || []).length ? (pagos.sin_pagar || []).map(pagoRow).join('') : gzT('<p class="bb-vacio">Nadie atendido sin pagar hoy.</p>', '<p class="bb-vacio">Nobody served and unpaid today.</p>')}${gzProbarBtn('pagos')}</section>`}
+    <section class="bb-bloque"><h2>${gzT('Antes de que se venza', 'Before it expires')}</h2>${avisoLineas.length ? avisoLineas.map((l) => `<p>${esc(l)}</p>`).join('') : gzT('<p class="bb-vacio">Nada por vencer a la vista.</p>', '<p class="bb-vacio">Nothing due in sight.</p>')}${bandeja.pendientes ? `<button class="bb-btn bb-btn-gold" onclick="bbGo('#/app/bandeja')">${bandeja.pendientes} ${gzT('esperando tu OK', 'waiting for your OK')}</button>` : ''}</section>
+    ${await gzPruebaBox()}
+  `;
+}
+async function gzLlegada(id, btn) { if (btn) btn.disabled = true; let r; try { r = await api.post('/api/gesty/vistas/llegada', { evento_id: id, medio: 'recepcion' }); } catch (e) { r = null; } if (!r || !r.ok) { bbToast(gzT('No se marcó la llegada. Probá de nuevo.', 'Arrival not marked. Try again.')); if (btn) btn.disabled = false; return; } bbToast(gzT('Llegada marcada ✓', 'Arrival marked ✓')); render(); }
+async function gzConfirmar(id, btn) { if (btn) btn.disabled = true; let r; try { r = await api.post('/api/gesty/vistas/confirmar', { evento_id: id, canal: 'recepcion' }); } catch (e) { r = null; } if (!r || !r.ok) { bbToast(gzT('No se confirmó. Probá de nuevo.', 'Not confirmed. Try again.')); if (btn) btn.disabled = false; return; } bbToast(gzT('Turno confirmado ✓', 'Appointment confirmed ✓')); render(); }
+async function gzLlamar(llegadaId, btn) { if (btn) btn.disabled = true; let r; try { r = await api.post('/api/gesty/vistas/sala/llamar', { llegada_id: llegadaId }); } catch (e) { r = null; } if (!r || !r.ok) { bbToast(gzT('No se pudo llamar. Probá de nuevo.', "Couldn't call. Try again.")); if (btn) btn.disabled = false; return; } bbToast(gzT('Avisado ✓', 'Notified ✓')); render(); }
+async function gzAtendido(id, btn) { if (btn) btn.disabled = true; let r; try { r = await api.post('/api/gesty/vistas/atendido', { evento_id: id }); } catch (e) { r = null; } if (!r || !r.ok) { bbToast(gzT('No se marcó atendido. Probá de nuevo.', 'Not marked as served. Try again.')); if (btn) btn.disabled = false; return; } bbToast(gzT('Atendido ✓ Quedó en Pagos del día.', "Served ✓ Added to today's payments.")); render(); }
+async function gzDevolver(id, btn) { if (btn) btn.disabled = true; let r; try { r = await api.post('/api/gesty/vistas/llamada-devuelta', { id, por: 'recepcion' }); } catch (e) { r = null; } if (!r || !r.ok) { bbToast(gzT('No se marcó devuelta. Probá de nuevo.', 'Not marked as returned. Try again.')); if (btn) btn.disabled = false; return; } bbToast(gzT('Llamada devuelta ✓', 'Call returned ✓')); render(); }
+async function gzResolverManana(id, btn) { if (btn) btn.disabled = true; let r; try { r = await api.post('/api/gesty/vistas/cola-manana/' + id + '/resolver', { por: 'recepcion' }); } catch (e) { r = null; } if (!r || !r.ok) { bbToast(gzT('No se resolvió. Probá de nuevo.', 'Not resolved. Try again.')); if (btn) btn.disabled = false; return; } bbToast(gzT('Resuelto ✓', 'Resolved ✓')); render(); }
+async function gzCobroTurno(id, btn) {
+  const medioEl = document.getElementById('gz-cobro-medio-' + id), montoEl = document.getElementById('gz-cobro-monto-' + id);
+  const monto = montoEl ? Number(montoEl.value) : NaN;
+  if (!Number.isFinite(monto) || monto <= 0) { bbToast(gzT('Escribí el monto cobrado (más de 0).', 'Write the amount charged (more than 0).')); return; }
+  if (btn) btn.disabled = true;
+  let r; try { r = await api.post('/api/gesty/vistas/cobro-turno', { evento_id: id, medio: medioEl ? medioEl.value : '', monto }); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se registró el cobro. Probá de nuevo.', 'Payment not recorded. Try again.')); if (btn) btn.disabled = false; return; }
+  bbToast(gzT('Cobro registrado ✓', 'Payment recorded ✓')); render();
+}
+// ————— Gesty en Bandeja: las tarjetas de Gesty viven en la misma Bandeja —————
+function gzTarjetaTexto(t) {
+  const d = t.detalle;
+  if (typeof d === 'string') return d;
+  if (d && typeof d === 'object') return d.texto || d.que || d.mensaje || '';
+  return '';
+}
+function gzBandejaGestyHTML(tarjetas) {
+  const card = (t) => `<article class="bb-bcard" id="gz-bcard-${t.id}">
+      <div class="bb-card-head">${gzAvatar()}<div><strong>Gesty</strong><span class="bb-card-rol">${gzT('espera tu OK · ', 'waits for your OK · ')}${esc(t.tipo || '')}</span></div></div>
+      <h3>${esc(t.titulo || t.tipo || '')}</h3>
+      ${gzTarjetaTexto(t) ? `<p class="bb-bcard-prop">${esc(gzTarjetaTexto(t))}</p>` : ''}
+      ${t.monto !== null && t.monto !== undefined ? `<p class="bb-sub">${gzT('Monto: ', 'Amount: ')}${esc(String(t.monto))}${t.moneda ? ' ' + esc(t.moneda) : ''}</p>` : ''}
+      <div class="bb-bcard-btns" id="gz-btns-${t.id}">
+        <button class="bb-btn bb-btn-gold" onclick="gzBandejaGestyAccion(${t.id}, 'aprobar', this, ${Number(t.version_documento) || 0})">${gzT('Aceptar', 'Accept')}</button>
+        <button class="bb-btn bb-btn-ghost" onclick="gzBandejaGestyEditar(${t.id})">${gzT('Pedir un cambio', 'Request a change')}</button>
+        <button class="bb-btn bb-btn-ghost" onclick="gzBandejaGestyAccion(${t.id}, 'frenar', this)">${gzT('Frenar', 'Stop')}</button>
+      </div>
+      <div class="bb-cambio" id="gz-cambio-${t.id}" hidden>
+        <textarea id="gz-nota-${t.id}" rows="2">${esc(gzTarjetaTexto(t))}</textarea>
+        <div class="bb-bcard-btns"><button class="bb-btn bb-btn-gold" onclick="gzBandejaGestyAccion(${t.id}, 'editar', this)">${gzT('Enviar el cambio', 'Send the change')}</button><button class="bb-btn bb-btn-ghost" onclick="document.getElementById('gz-cambio-${t.id}').hidden = true">${gzT('Cancelar', 'Cancel')}</button></div>
+      </div>
+    </article>`;
+  return `<section class="bb-bloque"><h2>${gzT('De Gesty', 'From Gesty')}</h2>${tarjetas.map(card).join('')}</section>`;
+}
+function gzBandejaGestyEditar(id) {
+  const box = document.getElementById('gz-cambio-' + id);
+  if (box) { box.hidden = false; const ta = document.getElementById('gz-nota-' + id); if (ta) ta.focus(); }
+}
+async function gzBandejaGestyAccion(id, accion, btn, version) {
+  if (btn) { btn.disabled = true; btn.textContent = gzT('Guardando…', 'Saving…'); }
+  let r, url, body = {};
+  if (accion === 'aprobar') { url = '/api/gesty/bandeja/' + id + '/aprobar'; body = { version_documento: version }; }
+  else if (accion === 'editar') { url = '/api/gesty/bandeja/' + id + '/editar'; const ta = document.getElementById('gz-nota-' + id); body = { detalle: ta ? ta.value : '' }; }
+  else { url = '/api/gesty/bandeja/' + id + '/frenar'; body = {}; }
+  try { r = await api.post(url, body); } catch (e) { r = null; }
+  if (!r || !r.ok) {
+    bbToast(r && r.devuelta ? (gzT('Devuelta: ', 'Returned: ') + (r.motivo || r.error || '')) : gzT('No se guardó. Probá de nuevo en un toque.', 'Not saved. Try again in a moment.'));
+    if (btn) { btn.disabled = false; btn.textContent = accion === 'aprobar' ? gzT('Aceptar', 'Accept') : accion === 'editar' ? gzT('Enviar el cambio', 'Send the change') : gzT('Frenar', 'Stop'); }
+    return;
+  }
+  bbToast(accion === 'aprobar' ? gzT('Aceptado ✓ Quedó registrado.', 'Accepted ✓ Recorded.') : accion === 'editar' ? gzT('Cambio pedido ✓ Quedó registrado.', 'Change requested ✓ Recorded.') : gzT('Frenado ✓ Quedó registrado.', 'Stopped ✓ Recorded.'));
+  render();
+}
+// ————— Gesty en Mi negocio: Papeles + Clientes —————
+async function gzNegocioGesty() {
+  let pap, cli, hoyG;
+  try { const r = await Promise.all([api.get('/api/gesty/vistas/papeles?limit=5').catch(() => null), api.get('/api/gesty/vistas/clientes').catch(() => null), api.get('/api/gesty/vistas/hoy').catch(() => null)]); pap = r[0]; cli = r[1]; hoyG = r[2]; } catch (e) { return ''; }
+  if (hoyG && hoyG.gesty_contratado === false) return '';
+  if ((!pap || !pap.ok) && (!cli || !cli.ok)) return '';
+  const papHtml = (pap && pap.ok) ? `<section class="bb-bloque"><h2>${gzT('Papeles', 'Papers')}</h2>
+    ${(pap.recientes || []).length ? (pap.recientes || []).map((c) => `<div class="bb-hecho"><div><strong>${esc(c.emisor || '')}</strong><p>${esc(c.numero || '')} · ${esc(c.fecha || '')} · ${esc(c.monto_total !== undefined && c.monto_total !== null ? String(c.monto_total) : '')} ${esc(c.moneda || '')} · ${esc(c.estado_lectura || '')}</p></div></div>`).join('') : gzT('<p class="bb-vacio">Sin papeles todavía.</p>', '<p class="bb-vacio">No papers yet.</p>')}
+    ${(pap.dudosos_total || 0) ? `<p class="bb-sub">${pap.dudosos_total} ${(pap.dudosos_total === 1 ? gzT('pide', 'needs') : gzT('piden', 'need'))} ${gzT('un dato', 'one detail')}: ${(pap.dudosos || []).map((c) => esc(c.emisor || '') + ' (' + (c.campos_dudosos || []).join(', ') + ')').join(' · ')}</p>` : ''}
+    <p class="bb-sub">${pap.total || 0} ${gzT('en total', 'in total')}${(pap.extractos || []).length ? ' · ' + pap.extractos.length + gzT(' extractos declarados', ' statements declared') : ''}.</p>
+    ${gzProbarBtn('papeles')}</section>` : '';
+  const cliHtml = (cli && cli.ok) ? `<section class="bb-bloque"><h2>${gzT('Clientes', 'Clients')}</h2>
+    <div style="display:flex;gap:8px"><input id="gz-cli-q" placeholder="${gzT('Buscar cliente…', 'Search client…')}" style="flex:1"><button class="bb-btn bb-btn-ghost" onclick="gzClientesBuscar()">${gzT('Buscar', 'Search')}</button></div>
+    <div id="gz-cli-lista">${(cli.clientes || []).slice(0, 10).map((c) => `<div class="bb-hecho"><div><strong>${esc(c.nombre || '')}</strong><p>${esc(c.contacto || '')}</p></div><button class="bb-mini" data-c="${esc(c.contacto || '')}" data-n="${esc(c.nombre || '')}" onclick="gzFichaCliente(this)">${gzT('Ver ficha', 'View file')}</button></div>`).join('') || gzT('<p class="bb-vacio">Sin clientes todavía.</p>', '<p class="bb-vacio">No clients yet.</p>')}</div>
+    <div id="gz-ficha-box"></div>
+    ${gzProbarBtn('clientes')}</section>` : '';
+  return papHtml + cliHtml;
+}
+async function gzClientesBuscar() {
+  const qEl = document.getElementById('gz-cli-q'), lista = document.getElementById('gz-cli-lista');
+  if (!lista) return;
+  let r; try { r = await api.get('/api/gesty/vistas/clientes?q=' + encodeURIComponent(qEl ? qEl.value : '')); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se pudo buscar.', "Couldn't search.")); return; }
+  lista.innerHTML = (r.clientes || []).slice(0, 10).map((c) => `<div class="bb-hecho"><div><strong>${esc(c.nombre || '')}</strong><p>${esc(c.contacto || '')}</p></div><button class="bb-mini" data-c="${esc(c.contacto || '')}" data-n="${esc(c.nombre || '')}" onclick="gzFichaCliente(this)">${gzT('Ver ficha', 'View file')}</button></div>`).join('') || gzT('<p class="bb-vacio">Nadie con ese nombre o contacto.</p>', '<p class="bb-vacio">Nobody with that name or contact.</p>');
+}
+async function gzFichaCliente(btn) {
+  const box = document.getElementById('gz-ficha-box'); if (!box) return;
+  const contacto = btn.dataset.c || '', nombre = btn.dataset.n || '';
+  box.innerHTML = gzT('<p class="bb-sub">Cargando ficha…</p>', '<p class="bb-sub">Loading file…</p>');
+  let r; try { r = await api.get('/api/gesty/vistas/ficha-cliente?contacto=' + encodeURIComponent(contacto) + '&nombre=' + encodeURIComponent(nombre)); } catch (e) { r = null; }
+  if (!r || !r.ok) { box.innerHTML = gzT('<p class="bb-vacio">No se pudo abrir la ficha.</p>', '<p class="bb-vacio">Couldn\'t open the file.</p>'); return; }
+  const debeLinea = r.debe_estado === 'sin-datos' ? gzT('Sin facturas todavía: no hay debe que mostrar.', 'No invoices yet: nothing due to show.') : `${gzT('Debe: ', 'Due: ')}${esc(String(r.debe))}`;
+  box.innerHTML = `<div class="bb-hecho"><div><strong>${esc(r.cliente.nombre || r.cliente.contacto || '')}</strong>
+    <p>${debeLinea}</p>
+    <p>${r.ultima_visita ? gzT('Última visita: ', 'Last visit: ') + esc(r.ultima_visita.fecha) : gzT('Sin visitas registradas.', 'No visits recorded.')} · ${gzT('Faltas: ', 'No-shows: ')}${r.faltas || 0}${r.puntos !== null && r.puntos !== undefined ? gzT(' · Puntos: ', ' · Points: ') + esc(String(r.puntos)) : ''}</p>
+    ${(r.notas || []).length ? (r.notas || []).map((n) => `<p>📝 ${esc(n.nota || '')}</p>`).join('') : gzT('<p>Sin notas de recepción.</p>', '<p>No reception notes.</p>')}
+    ${(r.turnos_proximos || []).length ? `<p>${gzT('Próximos: ', 'Next: ')}${(r.turnos_proximos || []).map((t) => esc(t.fecha) + ' ' + esc(t.hora || '')).join(' · ')}</p>` : ''}</div></div>`;
+}
+// ————— Gesty en Ajustes: Conexiones + Agenda y bloqueos —————
+async function gzAjustesFill() {
+  const box = document.getElementById('gzAjustesBox'); if (!box) return;
+  let con, blo, hoyG, tipo, pr;
+  try { const r = await Promise.all([api.get('/api/gesty/vistas/conexiones').catch(() => null), api.get('/api/gesty/vistas/bloqueos').catch(() => null), api.get('/api/gesty/vistas/hoy').catch(() => null), api.get('/api/gesty/vistas/negocio-tipo').catch(() => null), api.get('/api/gesty/prueba/estado').catch(() => null)]); con = r[0]; blo = r[1]; hoyG = r[2]; tipo = r[3]; pr = r[4]; } catch (e) { return; }
+  const contratado = !(hoyG && hoyG.gesty_contratado === false);
+  const pruebaActiva = !!(pr && pr.ok && pr.prueba);
+  if (!contratado && !pruebaActiva) { box.innerHTML = `<div class="card ajsec open"><div class="ajsec-h"><h3>➕ ${gzT('Sumar un agente', 'Add an agent')}</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b"><p><strong>${gzT('Gesty · Recepción', 'Gesty · Reception')}</strong> — ${gzT('La encargada de recepción: agenda, atiende, cobra y ordena tus papeles.', 'The reception manager: schedules, attends, charges and organizes your papers.')}</p><p>${gzT('USD 250 / mes · Juntos: USD 400 / mes (ahorrás USD 50)', 'USD 250 / month · Together: USD 400 / month (you save USD 50)')}</p><div style="display:flex;gap:6px;flex-wrap:wrap"><input id="gz-upsell-contacto" placeholder="${gzT('email o @tu-negocio', 'email or @your-business')}" style="flex:1;min-width:180px"><button class="btn btn-primary" onclick="gzUpsellGestyProbar(this)">${gzT('Probar Gesty gratis', 'Try Gesty free')}</button></div><p style="font-size:12px">${gzT('La prueba arranca con el espejo de ayer: lo que perdiste, con la respuesta que Gesty les hubiera dado.', "The trial starts with yesterday's mirror: what you lost, with the answer Gesty would have given.")}</p></div></div>`; return; }
+  const tipoHtml = (tipo && tipo.ok) ? `<div class="card ajsec open"><div class="ajsec-h"><h3>🏪 ${gzT('Tipo de negocio', 'Business type')}</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b"><p style="font-size:13px">${gzT('Gesty habla con las palabras de tu negocio.', "Gesty speaks your business's words.")}</p><div class="row2"><div class="field"><label>${gzT('Tu negocio es', 'Your business is')}</label><select id="gz-tipo-select">${(tipo.variantes || []).map((v) => `<option value="${v.id}"${v.id === tipo.rubro ? ' selected' : ''}>${esc(gzT(v.nombre, v.nombre_en || v.nombre))}</option>`).join('')}</select></div></div><p style="font-size:12px">${gzT('Así va a decir Gesty cuando te toque avisar: ', "This is what Gesty will say when it's time to call: ")}<strong>«${esc(gzT(tipo.llamar || 'Ya puede pasar', tipo.llamar_en || tipo.llamar || 'Ya puede pasar'))}»</strong></p><button class="btn btn-primary" style="margin-top:10px" onclick="gzTipoGuardar(this)">${gzT('Guardar tipo', 'Save type')}</button></div></div>` : '';
+  if (!contratado) { box.innerHTML = tipoHtml; return; }
+  if ((!con || !con.ok) && (!blo || !blo.ok)) { box.innerHTML = tipoHtml; return; }
+  const conHtml = (con && con.ok) ? `<div class="card ajsec open"><div class="ajsec-h"><h3>🔌 ${gzT('Conexiones de Gesty', 'Gesty connections')}</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    ${(con.conexiones || []).length ? (con.conexiones || []).map((c) => `<div class="set-row"><div><div class="t">${esc(c.plataforma)}${c.proveedor ? ' · ' + esc(c.proveedor) : ''}</div><div class="d">${esc(c.modo || '')} · ${esc(c.estado || '')}</div></div></div>`).join('') : gzT('<p class="hint">Sin conexiones todavía. Las propuestas aparecen en el momento justo, y quedan acá.</p>', '<p class="hint">No connections yet. Suggestions appear at the right moment, and stay here.</p>')}
+    ${(con.propuestas_pendientes || []).length ? `<p style="font-weight:700;margin-top:12px">${gzT('Propuestas', 'Suggestions')}</p>` + (con.propuestas_pendientes || []).map((p) => `<div class="set-row"><div><div class="t">${esc(p.texto || '')}</div><div class="d">${gzT('Aceptar guarda tu permiso; la conexión se completa cuando esté el paso seguro de credenciales.', 'Accepting saves your permission; the connection completes when the secure credential step is ready.')}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-primary btn-sm" onclick="gzPropuestaResponder('${esc(p.plataforma)}', 'aceptada', this)">${gzT('Sí, conectalo', 'Yes, connect it')}</button><button class="btn btn-ghost btn-sm" onclick="gzPropuestaResponder('${esc(p.plataforma)}', 'despues', this)">${gzT('Después', 'Later')}</button>${p.plataforma === 'banco' ? `<input id="gz-prop-prov-${esc(p.plataforma)}" placeholder="${gzT('Tu banco', 'Your bank')}" style="width:130px"><button class="btn btn-ghost btn-sm" onclick="gzPropuestaResponder('banco', 'extractos', this)">${gzT('Seguimos por extractos', 'Continue with statements')}</button>` : ''}</div></div>`).join('') : ''}
+    <div style="margin-top:12px"><button class="btn btn-ghost" onclick="gzBuscarAhora(this)">${gzT('Buscar papeles ahora', 'Search papers now')}</button> <span id="gz-buscar-msg" style="font-size:12px"></span></div>
+    ${gzProbarBtn('conexiones')}</div></div>` : '';
+  const bloHtml = (blo && blo.ok) ? `<div class="card ajsec open"><div class="ajsec-h"><h3>📅 ${gzT('Agenda de Gesty y bloqueos', 'Gesty schedule and blocks')}</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    ${(blo.activos || []).length ? (blo.activos || []).map((b) => `<div class="set-row"><div><div class="t">${esc(b.motivo || '')}</div><div class="d">${esc(b.tipo || '')} · ${esc(b.desde_fecha || '')}${b.hasta_fecha ? ' → ' + esc(b.hasta_fecha) : ''}${b.hora_desde ? ' · ' + esc(b.hora_desde) + '–' + esc(b.hora_hasta) : ''}</div></div><button class="btn btn-ghost btn-sm" onclick="gzBloqueoDesactivar(${b.id}, this)">${gzT('Desactivar', 'Deactivate')}</button></div>`).join('') : gzT('<p class="hint">Sin bloqueos: la agenda está abierta.</p>', '<p class="hint">No blocks: the schedule is open.</p>')}
+    <div class="row2" style="margin-top:12px">
+      <div class="field"><label>${gzT('Tipo', 'Type')}</label><select id="gz-bloq-tipo"><option value="fecha">${gzT('Un día', 'One day')}</option><option value="franja">${gzT('Franja (almuerzo)', 'Slot (lunch)')}</option><option value="rango">${gzT('Vacaciones (rango)', 'Vacation (range)')}</option></select></div>
+      <div class="field"><label>${gzT('Fecha', 'Date')}</label><input id="gz-bloq-fecha" type="date"></div>
+      <div class="field"><label>${gzT('Hasta (solo rango)', 'Until (range only)')}</label><input id="gz-bloq-hasta" type="date"></div>
+      <div class="field"><label>${gzT('Desde (solo franja)', 'From (slot only)')}</label><input id="gz-bloq-hdesde" type="time"></div>
+      <div class="field"><label>${gzT('Hasta (solo franja)', 'Until (slot only)')}</label><input id="gz-bloq-hhasta" type="time"></div>
+      <div class="field"><label>${gzT('Motivo', 'Reason')}</label><input id="gz-bloq-motivo" placeholder="${gzT('Vacaciones, almuerzo…', 'Vacation, lunch…')}"></div>
+    </div>
+    <button class="btn btn-primary" style="margin-top:10px" onclick="gzBloqueoCrear(this)">${gzT('Crear bloqueo', 'Create block')}</button>
+    ${gzProbarBtn('agenda')}</div></div>` : '';
+  box.innerHTML = tipoHtml + conHtml + bloHtml;
+}
+async function gzTipoGuardar(btn) {
+  const el = document.getElementById('gz-tipo-select'); const rubro = el ? el.value : '';
+  if (!rubro) { bbToast(gzT('Elegí el tipo de negocio.', 'Choose your business type.')); return; }
+  if (btn) btn.disabled = true;
+  let r; try { r = await api.post('/api/gesty/vistas/negocio-tipo', { rubro }); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se guardó el tipo.', 'Type not saved.')); if (btn) btn.disabled = false; return; }
+  bbToast(gzT('Tipo guardado ✓', 'Type saved ✓')); gzAjustesFill();
+}
+async function gzBuscarAhora(btn) {
+  const msg = document.getElementById('gz-buscar-msg'); if (msg) msg.textContent = gzT('Buscando…', 'Searching…');
+  let r; try { r = await api.post('/api/gesty/vistas/conexiones/buscar-ahora', {}); } catch (e) { r = null; }
+  if (msg) msg.textContent = (r && r.ok) ? (gzT('Resultado: ', 'Result: ') + esc(r.estado || 'listo') + ((r.plataformas || []).length ? ' · ' + r.plataformas.length + gzT(' plataformas', ' platforms') : '')) : gzT('No se pudo buscar ahora.', "Couldn't search right now.");
+}
+async function gzPropuestaResponder(plataforma, respuesta, btn) {
+  if (btn) btn.disabled = true;
+  let body = { plataforma, respuesta };
+  if (respuesta === 'extractos') { const pEl = document.getElementById('gz-prop-prov-' + plataforma); body.proveedor = pEl ? pEl.value : ''; }
+  let r; try { r = await api.post('/api/gesty/vistas/propuestas/responder', body); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se guardó la respuesta.', 'Answer not saved.')); if (btn) btn.disabled = false; return; }
+  bbToast(respuesta === 'despues' ? gzT('Listo: no vuelve a aparecer.', "Done: it won't appear again.") : gzT('Guardado ✓', 'Saved ✓'));
+  gzAjustesFill();
+}
+async function gzBloqueoCrear(btn) {
+  const v = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const tipo = v('gz-bloq-tipo') || 'fecha', motivo = v('gz-bloq-motivo');
+  if (!motivo) { bbToast(gzT('Escribí el motivo del bloqueo.', 'Write the block reason.')); return; }
+  const body = { tipo, motivo };
+  if (tipo === 'fecha') { body.fecha = v('gz-bloq-fecha'); if (!body.fecha) { bbToast(gzT('Elegí la fecha.', 'Choose the date.')); return; } }
+  if (tipo === 'rango') { body.desde_fecha = v('gz-bloq-fecha'); body.hasta_fecha = v('gz-bloq-hasta'); if (!body.desde_fecha) { bbToast(gzT('Elegí desde cuándo.', 'Choose from when.')); return; } }
+  if (tipo === 'franja') { body.desde_fecha = v('gz-bloq-fecha'); body.hora_desde = v('gz-bloq-hdesde'); body.hora_hasta = v('gz-bloq-hhasta'); if (!body.desde_fecha || !body.hora_desde || !body.hora_hasta) { bbToast(gzT('Completá fecha y horas de la franja.', 'Complete the slot date and hours.')); return; } }
+  if (btn) btn.disabled = true;
+  let r; try { r = await api.post('/api/gesty/vistas/bloqueos', body); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se creó el bloqueo.', 'Block not created.')); if (btn) btn.disabled = false; return; }
+  bbToast(gzT('Bloqueo creado ✓', 'Block created ✓')); gzAjustesFill();
+}
+async function gzBloqueoDesactivar(id, btn) {
+  if (btn) btn.disabled = true;
+  let r; try { r = await api.post('/api/gesty/vistas/bloqueos/' + id + '/desactivar', {}); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se desactivó.', 'Not deactivated.')); if (btn) btn.disabled = false; return; }
+  bbToast(gzT('Bloqueo desactivado ✓', 'Block deactivated ✓')); gzAjustesFill();
+}
+// ---------- Prueba de Gesty (un clic → espejo → semana → cierre) ----------
+// Amatista #A175CA en la caja nueva. Un toque por acción. La frase diaria
+// es la misma fuente que La oficina (gestyHoy); el cierre muestra el
+// paywall SOLO de prueba (nunca un cobro real). Las llamadas en vivo no
+// tienen botón: están gated por la vara de voz (G-13).
+async function gzPruebaBox() {
+  let est, hoy;
+  try { const r = await Promise.all([api.get('/api/gesty/prueba/estado').catch(() => null), api.get('/api/gesty/vistas/hoy').catch(() => null)]); est = r[0]; hoy = r[1]; } catch (e) { return ''; }
+  if (!est || !est.ok) return '';
+  const p = est.prueba;
+  if (hoy && hoy.gesty_contratado === false && !p) return '';
+  const frase = (hoy && hoy.ok) ? hoy.frase : '';
+  const box = (inner) => `<section class="bb-bloque" style="border-left:4px solid #A175CA"><h2>${gzT('Prueba de Gesty', 'Gesty trial')}</h2>${frase ? `<p>${esc(frase)}</p>` : ''}${inner}</section>`;
+  if (!p) return box(`<p class="bb-sub">${gzT('Un clic para empezar: email o @, sin formulario largo.', 'One click to start: email or @, no long form.')}</p><div style="display:flex;gap:6px;flex-wrap:wrap"><input id="gz-prueba-contacto" placeholder="${gzT('email o @tu-negocio', 'email or @your-business')}" style="flex:1;min-width:180px"><button class="bb-mini" onclick="gzPruebaIniciar(this)">${gzT('Empezar prueba', 'Start trial')}</button></div>`);
+  if (p.estado === 'espejo') return box(`<p class="bb-sub">${gzT('Prueba iniciada con ', 'Trial started with ')}${esc(p.contacto)}${gzT('. Primero el espejo de ayer: lo que perdiste, con la respuesta que Gesty les hubiera dado.', ". First, yesterday's mirror: what you lost, with the answer Gesty would have given.")}</p><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="bb-mini" onclick="gzPruebaEspejo(this)">${gzT('Ver espejo de ayer', "See yesterday's mirror")}</button><button class="bb-mini" onclick="gzPruebaActivar(this)">${gzT('Activar semana en vivo', 'Activate live week')}</button></div><p class="bb-sub gz-prueba-salida" style="margin:6px 0 0"></p>`);
+  if (p.estado === 'viva') return box(`<p class="bb-sub">${gzT('Semana en vivo: del ', 'Live week: from ')}${esc(p.fecha_inicio || '')} ${gzT('al ', 'to ')}${esc(p.fecha_fin_semana || '')}. ${gzT('Modo: ', 'Mode: ')}${p.modo_aprobacion === 'todo' ? gzT('todo pasa por Bandeja', 'everything goes through the Tray') : gzT('lo rutinario corre solo, solo lo sensible espera tu OK', 'routine runs on its own, only sensitive items wait for your OK')}.</p><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="bb-mini" onclick="gzPruebaEspejo(this)">${gzT('Ver espejo de ayer', "See yesterday's mirror")}</button>${p.modo_aprobacion === 'todo' ? `<button class="bb-mini" onclick="gzPruebaGraduar(this)">${gzT('Ya confío: que lo rutinario corra solo', 'I trust it: let routine run on its own')}</button>` : ''}<button class="bb-mini" onclick="gzPruebaCierre(this)">${gzT('Cerrar semana y ver números', 'Close week and see numbers')}</button></div><p class="bb-sub gz-prueba-salida" style="margin:6px 0 0"></p>`);
+  const c = p.cierre || {};
+  const n = (c && c.numeros) || {};
+  return box(`<p class="bb-sub">${gzT('Prueba cerrada. Tu semana: ', 'Trial closed. Your week: ')}${n.turnos_agendados || 0}${gzT(' turnos agendados, ', ' appointments booked, ')}${n.llamados_devueltos || 0}${gzT(' llamados devueltos, ', ' calls returned, ')}${n.respuestas_preparadas || 0}${gzT(' respuestas preparadas.', ' answers prepared.')}</p><p><strong>${gzT('Gesty único: USD 250/mes', 'Gesty alone: USD 250/month')}</strong> — ${gzT('checkout de prueba, sin cobro real.', 'trial checkout, no real charge.')}</p>`);
+}
+async function gzPruebaIniciar(btn) {
+  const el = document.getElementById('gz-prueba-contacto'); const contacto = el ? el.value.trim() : '';
+  if (!contacto) { bbToast(gzT('Escribí tu email o tu @.', 'Write your email or @.')); return; }
+  if (btn) btn.disabled = true;
+  let r; try { r = await api.post('/api/gesty/prueba/iniciar', { contacto }); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se pudo iniciar la prueba.', "Couldn't start the trial.")); if (btn) btn.disabled = false; return; }
+  bbToast(gzT('Prueba iniciada ✓', 'Trial started ✓')); render();
+}
+async function gzUpsellGestyProbar(btn) {
+  const el = document.getElementById('gz-upsell-contacto'); const contacto = el ? el.value.trim() : '';
+  if (!contacto) { bbToast(gzT('Escribí tu email o tu @.', 'Write your email or @.')); return; }
+  if (btn) btn.disabled = true;
+  let r; try { r = await api.post('/api/gesty/prueba/iniciar', { contacto }); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se pudo iniciar la prueba.', "Couldn't start the trial.")); if (btn) btn.disabled = false; return; }
+  bbToast(gzT('Prueba iniciada ✓', 'Trial started ✓')); bbGo('#/app/oficina');
+}
+async function gzPruebaEspejo(btn) {
+  const box = document.querySelector('.gz-prueba-salida'); if (box) box.textContent = gzT('Buscando lo de ayer…', 'Looking up yesterday…');
+  let r; try { r = await api.get('/api/gesty/prueba/espejo'); } catch (e) { r = null; }
+  if (!r || !r.ok) { if (box) box.textContent = gzT('No se pudo ver el espejo ahora.', "Couldn't see the mirror right now."); return; }
+  if (box) box.textContent = r.tiene_datos ? `${gzT('Ayer se perdieron ', 'Yesterday you lost ')}${r.resumen.total_perdidos} (${r.resumen.llamadas}${gzT(' llamados, ', ' calls, ')}${r.resumen.mensajes}${gzT(' mensajes). Las respuestas y los turnos propuestos están listos para tu OK.', ' messages). The answers and proposed appointments are ready for your OK.')}` : gzT(r.mensaje_vacio, r.mensaje_vacio_en || r.mensaje_vacio);
+}
+async function gzPruebaActivar(btn) {
+  if (btn) btn.disabled = true;
+  let r; try { r = await api.post('/api/gesty/prueba/activar-semana', {}); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se pudo activar la semana.', "Couldn't activate the week.")); if (btn) btn.disabled = false; return; }
+  bbToast(gzT('Semana en vivo ✓', 'Live week ✓')); render();
+}
+async function gzPruebaGraduar(btn) {
+  if (btn) btn.disabled = true;
+  let r; try { r = await api.post('/api/gesty/prueba/graduar', {}); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se pudo graduar.', "Couldn't graduate.")); if (btn) btn.disabled = false; return; }
+  bbToast(gzT('Listo: lo rutinario corre solo ✓', 'Done: routine runs on its own ✓')); render();
+}
+async function gzPruebaCierre(btn) {
+  const box = document.querySelector('.gz-prueba-salida');
+  if (btn) btn.disabled = true;
+  let r; try { r = await api.post('/api/gesty/prueba/cierre', {}); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se pudo cerrar la semana.', "Couldn't close the week.")); if (btn) btn.disabled = false; return; }
+  bbToast(gzT('Semana cerrada ✓', 'Week closed ✓')); render();
 }
 async function bbChatSend() {
   const ta = document.getElementById('bbChatText');
@@ -677,7 +961,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261025-v478'; // (pais-selector) bump: chunk-ajustes cambia; el ?v= viejo congelaba el chunk
+const CHUNK_V = '20261029-v479'; // (pase-app-gesty) bump: chunk-ajustes cambia (placeholder gzAjustesBox); el ?v= viejo congelaba el chunk
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -17870,6 +18154,7 @@ function bindApp(tab) {
   if (dlo) dlo.onclick = () => { closeDrawer(); doLogout(); };
 
   if (tab === 'ajustes' && typeof bindSettings === 'function') bindSettings(); // el chunk ya lo cargó render()
+  if (tab === 'ajustes' && typeof gzAjustesFill === 'function') gzAjustesFill(); // PASE DE APP: bloques Gesty en Ajustes
   try { f3Init(tab); } catch (e) {}
 }
 

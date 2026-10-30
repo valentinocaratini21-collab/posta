@@ -219,6 +219,17 @@ function crearEvento(db, userId, datos, opts) {
   const tocaCliente = d.toca_cliente === true || d.toca_cliente === 1
     || !!(normTexto(d.cliente_nombre) || normTexto(cliente.nombre));
   const creadoPor = normTexto(o.creado_por || d.creado_por) === 'gesty' ? 'gesty' : 'dueno';
+  // PASE DE APP — cableado de bloqueos: un turno o una cita no se
+  // crean sobre un bloqueo del dueño («no atiendo» es un error de
+  // dato, no un juicio: a diferencia de un conflicto con otro evento,
+  // que nace igual y el dueño decide, acá el evento NO nace).
+  // Solo turno/cita se gobiernan por bloqueos: visita, entrega,
+  // tarea, compromiso y vencimiento-interno no son reservables.
+  if (tipo === 'turno' || tipo === 'cita') {
+    const bloq = require('./gesty-bloqueos.js')
+      .puedeReservar(db, userId, { fecha, hora, duracion_min: d.duracion_min });
+    if (!bloq.ok) fail(bloq.detalle);
+  }
   const info = db.prepare(`INSERT INTO gesty_agenda_eventos
     (user_id, titulo, tipo, fecha, hora, duracion_min, detalle, cliente_nombre, cliente_contacto, toca_cliente, creado_por)
     VALUES (?,?,?,?,?,?,?,?,?,?,?)`)

@@ -46,6 +46,34 @@ const MATRIX_TIPOS = [
   'compromiso-cancelar',
   'hueco-ofrecer',
   'caso-sensible',
+  // Mejoras producto 28/10 (build local, sin push): tarjetas nuevas
+  // de la matriz — cada una con su ejecutor registrado en su módulo.
+  'recurrente',          // generar la cobranza de un período dudoso
+  'anomalia',            // revisar un aviso de lo que no cuadra
+  'precio-venta',        // aplicar un cambio de precio de venta
+  'cadena-presupuesto',  // confirmar reserva + stock de un presupuesto aceptado
+  'mensaje-proveedor',   // aprobar el envío de un mensaje a un proveedor
+  'migracion-revision',  // importar las filas revisadas de una migración
+  'legal-vencimiento', 'deuda-vencimiento', 'aviso-precio', 'facturacion-lote', 'lote-por-vencer', 'alerta-dolar', 'suscripcion-olvidada', 'activo-service',   // aviso de vencimiento de un documento legal
+  // Mejoras producto 28/10, tanda 7 (build local, sin push).
+  'pago-programado',  // aprobar hoy un pago que se ejecuta en fecha
+  'abono-periodo',    // revisar el período de un abono mensual
+  'saldo-favor',      // aplicar un saldo a favor del cliente
+  // Mejoras producto 28/10, tanda 8 (build local, sin push).
+  'alquiler-devolucion', // avisar devolución próxima o vencida
+  // Mejoras producto 28/10, tanda 9 (build local, sin push).
+  'bajo-costo', // confirmar una venta por debajo del costo real
+  // Mejoras producto 28/10, tanda 11 (build local, sin push).
+  'rendicion', // aprobar una rendición de gasto del equipo
+  'canje-puntos', // aprobar un canje de puntos de un cliente
+  // Auto-fetch de papeles (build local, sin push).
+  'papel-dudoso', // completar el único dato dudoso de un papel buscado solo
+  // Brechas de recepción (build local, sin push).
+  'cliente-nuevo', // confirmar la ficha de un cliente nuevo creada desde una llamada o mensaje
+  // Prueba de Gesty (build local, sin push): aprobar una acción de la
+  // semana en vivo. El ejecutor vive en gesty-prueba.js y corre por el
+  // flujo estándar (approveCard): no hay una segunda Bandeja.
+  'prueba-accion',
 ];
 
 // Registro de empleados (build-spec §2 / G-02 §2.1). Posty se declara

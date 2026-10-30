@@ -570,6 +570,17 @@ function ingresarPedido(db, userId, pedido, opts) {
     return { ok: true, duplicada: true, derivado: false, reserva: parseReservaRow(db, userId, previa), booking: previa.booking_id ? booking.getBooking(db, previa.booking_id, userId) : null };
   }
 
+  // PASE DE APP — cableado de bloqueos: una reserva no nace sobre un
+  // bloqueo del dueño. Misma forma que 'hueco-ocupado' (motivo +
+  // mensaje), antes de crear la reserva atómica. La idempotencia por
+  // clave queda antes: un reenvío devuelve la original, que es un
+  // hecho anterior al bloqueo.
+  const bloq = require('./gesty-bloqueos.js')
+    .puedeReservar(db, userId, { fecha, hora, duracion_min: dur });
+  if (!bloq.ok) {
+    return { ok: false, motivo: 'bloqueado', mensaje: bloq.detalle };
+  }
+
   const sena = computarSena(db, userId, servicio);
   const hoy = hoyDe(o);
   const recFecha = addDias(fecha, -1);
