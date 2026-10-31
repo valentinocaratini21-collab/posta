@@ -605,7 +605,7 @@ function bindSettings() {
   try { gustosZoneLoad(); } catch (e) {}
   // (fix chunk-ajustes v487) La caja Gesty vive en #gzAjustesBox (arriba, en ajustesView):
   // gzAjustesFill la llena con Tipo/Conexiones/Bloqueos o el upsell "Sumar un agente".
-  try { if (typeof gzAjustesFill === 'function') gzAjustesFill(); } catch (e) {}
+  // POSTY SOLO (TestFlight build 4): sin caja Gesty ni upsell en Ajustes.
   // --- Página pública del negocio (v169) ---
   const btnCopyPage = $('#btnCopyPage');
   if (btnCopyPage) btnCopyPage.onclick = async () => {

@@ -3801,3 +3801,13 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .mx-jardin-posty .mx-dato{color:#0A1E33}
 .mx-vista{display:flex;flex-direction:column;gap:12px}
 .mx-vista[hidden]{display:none}
+
+/* POSTY SOLO (TestFlight build 4 · mock v24 + perfil un poco más de lejos) */
+#inicioView .hf-pacts{display:flex;gap:8px;padding:10px 16px 2px}
+#inicioView .hf-pacts .hf-pmain{flex:1;width:auto;background:#f1f1f1;color:#0a1e33;border-radius:8px;padding:10px 8px}
+#inicioView .hf-nota{font-size:13px;color:#737373;line-height:1.5;padding:10px 16px 2px;margin:0}
+#inicioView .hf-ava-in{width:72px;height:72px}
+#inicioView .hf-stat b{font-size:16px}
+#inicioView .hf-bio{line-height:1.4}
+#inicioView .hf-tabs{margin-top:14px}
+#inicioView.hf-wrap{padding:4px 0 96px}
