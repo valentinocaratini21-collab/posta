@@ -162,6 +162,13 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN ig_state_at TEXT DEFAULT ''`); } cat
 try { db.exec(`ALTER TABLE api_costs ADD COLUMN cached_tokens INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Abrir y listo (2026-10-03): 1 = Posty arma y programa la semana solo.
 try { db.exec(`ALTER TABLE users ADD COLUMN auto_week INTEGER NOT NULL DEFAULT 1`); } catch (e) { /* ya existe */ }
+// SEMANA-DOS-IDIOMAS:START (2026-10-30, opt-in por cliente, APAGADO por defecto: 0).
+// La versión EN vive en posts.caption_en/headline_en; nunca toca users.lang.
+try { db.exec(`ALTER TABLE users ADD COLUMN bilingual_week INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN caption_en TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN headline_en TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN bilingual_status TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// SEMANA-DOS-IDIOMAS:END
 db.exec(`CREATE TABLE IF NOT EXISTS hook_usage (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,

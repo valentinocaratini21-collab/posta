@@ -47,7 +47,10 @@ const { upcomingEphemeris, catsMatch } = require('./ephemeris');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
-const approval = require('./approval'); // "Posty te avisa": firmas y avisos de aprobación
+const modoEvento = require('./modo-evento'); // MODO EVENTO (2026-10-30): mini-campaña anticipación + día + cierre.
+const approval = require('./approval');
+// RECICLAR-GANADORES:require
+const reciclar = require('./reciclar'); // RECICLAR GANADORES (2026-10-30, mejora 4/5) // "Posty te avisa": firmas y avisos de aprobación
 let cartaAudio = null;
 try { cartaAudio = require('./carta-audio'); } catch (e) { console.error('[carta-audio] módulo no disponible:', e.message); }
 const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispositivo: cuentas guardadas en la entrada, hash + rotación + revocación
@@ -58,7 +61,8 @@ const postyOficina = require('./posty-oficina'); // POSTY en la oficina: su sema
 try { postyOficina.init(db); } catch (e) { console.error('[posty-oficina] init:', e.message); }
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
 const { reconcileUser } = require('./billing-sync');
-const weekRedo = require('./week-redo'); // (ARMA TODO · ítem 3) garantía de primera semana: registro durable del rehacer
+const weekRedo = require('./week-redo');
+const weekBilingual = require('./week-bilingual'); // SEMANA-DOS-IDIOMAS:START — opt-in dos idiomas, default 0 (ver week-bilingual.js) // SEMANA-DOS-IDIOMAS:END // (ARMA TODO · ítem 3) garantía de primera semana: registro durable del rehacer
 const magiaMod = require('./magia-postpago'); // (2026-10-25 · MAGIA POST-PAGO) hitos post-pago: primer posteo, idea 24 h, historia de estreno, mes 30
 const { SHOWCASE_PAGES } = require('./showcase-pages'); // páginas públicas permanentes de la vidriera: los /p/<slug> de ejemplo que imprimen las homes
 const { startTokenRefresh } = require('./tokenrefresh');
@@ -66,6 +70,7 @@ const { analyzeWebsite } = require('./website-study');
 const meliApi = require('./meli'); // MercadoLibre: API pública sin key (Track 4)
 const { analyzeFbPage, extractPageId } = require('./fb-page');
 const { mineComments, buildDnaPatch, fetchCommentsForMedia } = require('./ig-comments');
+const preguntasPosteos = require('./preguntas-posteos'); // PP-PREGUNTAS-POSTEOS-SERVER
 const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { postyLevel, LEVEL_UP_MSGS } = require('./posty-level'); // 🧠 Niveles de conocimiento de Posty
@@ -3513,6 +3518,16 @@ app.get('/api/oficina/bandeja', requireAuth, (req, res) => {
   try { res.json({ ok: true, items: oficina.listarBandeja(db, req.session.userId, { soloPendientes: req.query.pendientes === '1' }) }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// PP-PREGUNTAS-POSTEOS-SERVER: cola de propuestas pendientes (Bandeja,
+// poder posty, tipo pregunta_posteo), ordenadas por veces desc.
+app.get('/api/preguntas-posteos/propuestas', requireAuth, (req, res) => {
+  try {
+    const items = oficina.listarBandeja(db, req.session.userId, { soloPendientes: true })
+      .filter(i => i.contexto && i.contexto.tipo === 'pregunta_posteo')
+      .sort((a, b) => (b.contexto.veces || 0) - (a.contexto.veces || 0));
+    res.json({ ok: true, propuestas: items });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 app.post('/api/oficina/bandeja/:id/accion', requireAuth, (req, res) => {
   try {
     const r = oficina.accionarBandeja(db, req.session.userId, Number(req.params.id), (req.body || {}).accion, (req.body || {}).nota);
@@ -3986,6 +4001,24 @@ app.post('/api/settings/auto-week', requireAuth, express.json(), (req, res) => {
   console.log(`[auto-week] usuario ${req.session.userId} ${on ? 'ACTIVÓ' : 'apagó'} el armado automático`);
   res.json({ ok: true, enabled: on });
 });
+
+// SEMANA-DOS-IDIOMAS:START — Toggle "semana en dos idiomas" (opt-in, default 0).
+// Espejo del bloque auto-week: GET estado, POST toggle. NO toca users.lang:
+// el idioma de la app y de la cuenta quedan exactamente como estaban; esto
+// solo decide si la semana sale también en inglés (misma idea, traducida).
+function bilingualWeekEnabled(uid) {
+  try { return !!weekBilingual.isBilingualWeekEnabled(db, uid); } catch (e) { return false; }
+}
+app.get('/api/settings/bilingual-week', requireAuth, (req, res) => {
+  res.json({ ok: true, enabled: bilingualWeekEnabled(req.session.userId) });
+});
+app.post('/api/settings/bilingual-week', requireAuth, express.json(), (req, res) => {
+  const on = !!((req.body || {}).enabled);
+  const r = weekBilingual.setBilingualWeek(db, req.session.userId, on);
+  console.log(`[bilingual-week] usuario ${req.session.userId} ${on ? 'ACTIVÓ' : 'apagó'} la semana en dos idiomas`);
+  res.json({ ok: true, enabled: !!(r && r.ok) ? on : bilingualWeekEnabled(req.session.userId) });
+});
+// SEMANA-DOS-IDIOMAS:END
 
 app.post('/api/autopilot', requireAuth, express.json(), (req, res) => {
   try {
@@ -8301,6 +8334,117 @@ app.get('/api/analysis/:id', requireAuth, (req, res) => {
   res.json({ ok: true, plan: plan.id, past: true, analysis: analysisEngine.gateForPlan(analysis, plan.id) });
 });
 
+// MODO EVENTO (2026-10-30, mejora 3/5) — el dueño anuncia un evento y Posty
+// arma sola la mini-campaña (anticipación + día + cierre). Reglas:
+// fecha real dada por el dueño (nunca inventada); 3 momentos en huecos
+// libres (sin pisar días tomados ni cierres, salvo el día del evento que
+// va anclado a su fecha); plan NO crea posteos; aprobar (un toque) crea
+// los 3 posteos como borradores ya aprobados (draft + approved: nunca
+// publican solos, el pase a programado usa el flujo normal de borradores).
+// Lo no dado se omite y se devuelve como pregunta, jamás se inventa.
+try { db.exec(`CREATE TABLE IF NOT EXISTS evento_campaigns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  nombre TEXT NOT NULL DEFAULT '',
+  fecha_evento TEXT NOT NULL DEFAULT '',
+  lugar TEXT NOT NULL DEFAULT '',
+  horario TEXT NOT NULL DEFAULT '',
+  detalle TEXT NOT NULL DEFAULT '',
+  negocio TEXT NOT NULL DEFAULT '',
+  estado TEXT NOT NULL DEFAULT 'borrador',
+  momentos_json TEXT NOT NULL DEFAULT '[]',
+  preguntas_json TEXT NOT NULL DEFAULT '[]',
+  post_ids_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`); } catch (e) { /* la tabla vieja nunca frena el arranque */ }
+function eventoTakenDates(uid) {
+  try {
+    return db.prepare(`SELECT DISTINCT substr(scheduled_at, 1, 10) AS d FROM posts
+      WHERE user_id = ? AND status IN ('scheduled', 'published') AND scheduled_at IS NOT NULL AND scheduled_at != ''`).all(uid).map((r) => r.d).filter(Boolean);
+  } catch (e) { return []; }
+}
+function eventoClosedDays(uid) {
+  try {
+    const p = db.prepare('SELECT closed_days FROM profiles WHERE user_id = ?').get(uid);
+    if (!p || !p.closed_days) return [];
+    return JSON.parse(p.closed_days).map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 1 && d <= 7);
+  } catch (e) { return []; }
+}
+function eventoPublic(c) {
+  return { id: c.id, estado: c.estado, nombre: c.nombre, fecha_evento: c.fecha_evento,
+    lugar: c.lugar, horario: c.horario, detalle: c.detalle,
+    momentos: JSON.parse(c.momentos_json || '[]'), preguntas: JSON.parse(c.preguntas_json || '[]'),
+    post_ids: JSON.parse(c.post_ids_json || '[]'), created_at: c.created_at };
+}
+function eventoRebuild(row) {
+  return { nombre: row.nombre, fecha: row.fecha_evento, lugar: row.lugar,
+    horario: row.horario, detalle: row.detalle, negocio: row.negocio };
+}
+app.post('/api/evento/plan', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const body = req.body || {};
+    let negocio = '';
+    try { const p = db.prepare('SELECT business_name FROM profiles WHERE user_id = ?').get(uid); negocio = (p && p.business_name) || ''; } catch (e) {}
+    const built = modoEvento.buildCampaign({ nombre: body.nombre, fecha: body.fecha, lugar: body.lugar, horario: body.horario, detalle: body.detalle, negocio });
+    if (!built.ok) return res.status(400).json({ error: built.error });
+    const slot = modoEvento.slotCampaign(built.campaign, { takenDates: eventoTakenDates(uid), closedDays: eventoClosedDays(uid) });
+    if (!slot.ok) return res.status(409).json({ error: slot.error, fecha: slot.fecha || null });
+    const r = db.prepare(`INSERT INTO evento_campaigns
+      (user_id, nombre, fecha_evento, lugar, horario, detalle, negocio, estado, momentos_json, preguntas_json)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`).run(uid, built.campaign.nombre, built.campaign.fecha_evento,
+      built.campaign.lugar, built.campaign.horario, built.campaign.detalle, built.campaign.negocio,
+      'borrador', JSON.stringify(slot.slots), JSON.stringify(built.campaign.preguntas));
+    const row = db.prepare('SELECT * FROM evento_campaigns WHERE id = ?').get(r.lastInsertRowid);
+    return res.json({ ok: true, campana: { ...eventoPublic(row), anticipacion_hoy: built.campaign.anticipacion_hoy, dia_en_cierre: !!slot.dia_en_cierre } });
+  } catch (e) { console.error('[evento] plan:', e.message); return res.status(500).json({ error: 'evento_plan_fallo' }); }
+});
+app.get('/api/evento', requireAuth, (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM evento_campaigns WHERE user_id = ? ORDER BY id DESC LIMIT 50').all(req.session.userId);
+    return res.json({ ok: true, campanas: rows.map(eventoPublic) });
+  } catch (e) { return res.json({ ok: true, campanas: [] }); }
+});
+app.get('/api/evento/:id', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT * FROM evento_campaigns WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!row) return res.status(404).json({ error: 'campana_no_encontrada' });
+  return res.json({ ok: true, campana: eventoPublic(row) });
+});
+app.post('/api/evento/:id/aprobar', requireAuth, express.json(), (req, res) => {
+  const row = db.prepare('SELECT * FROM evento_campaigns WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!row) return res.status(404).json({ error: 'campana_no_encontrada' });
+  if (row.estado === 'aprobada') return res.json({ ok: true, yaEstaba: true, post_ids: JSON.parse(row.post_ids_json || '[]') });
+  if (row.estado === 'cancelada') return res.status(409).json({ error: 'campana_cancelada' });
+  // Re-validar: la fecha puede haber quedado en el pasado y la agenda
+  // puede haber cambiado desde el plan. Conflicto = sin posteos, sin medias.
+  const built = modoEvento.buildCampaign(eventoRebuild(row));
+  if (!built.ok) return res.status(409).json({ error: built.error });
+  const slot = modoEvento.slotCampaign(built.campaign, { takenDates: eventoTakenDates(req.session.userId), closedDays: eventoClosedDays(req.session.userId) });
+  if (!slot.ok) return res.status(409).json({ error: slot.error, fecha: slot.fecha || null });
+  const ids = [];
+  try {
+    for (const s of slot.slots) {
+      const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, tipo, approval)
+        VALUES (?,?,?,?,?,?,?,?,?)`).run(req.session.userId, '', s.caption, '', s.fecha + ' 10:00:00', 'draft', 'image', 'evento', 'approved');
+      ids.push(r.lastInsertRowid);
+    }
+    db.prepare(`UPDATE evento_campaigns SET estado='aprobada', momentos_json=?, post_ids_json=? WHERE id=?`).run(JSON.stringify(slot.slots), JSON.stringify(ids), row.id);
+  } catch (e) {
+    for (const id of ids) { try { db.prepare('DELETE FROM posts WHERE id = ?').run(id); } catch (e2) {} }
+    console.error('[evento] aprobar:', e.message);
+    return res.status(500).json({ error: 'evento_aprobar_fallo' });
+  }
+  return res.json({ ok: true, post_ids: ids, momentos: slot.slots });
+});
+app.post('/api/evento/:id/cancelar', requireAuth, express.json(), (req, res) => {
+  const row = db.prepare('SELECT * FROM evento_campaigns WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!row) return res.status(404).json({ error: 'campana_no_encontrada' });
+  if (row.estado === 'aprobada') return res.status(409).json({ error: 'campana_aprobada', message: 'Ya aprobada: cancelá cada posteo desde su control normal.' });
+  if (row.estado === 'cancelada') return res.json({ ok: true, yaEstaba: true });
+  db.prepare(`UPDATE evento_campaigns SET estado='cancelada' WHERE id=?`).run(row.id);
+  return res.json({ ok: true });
+});
+// FIN MODO EVENTO
 app.get('/api/posts', requireAuth, (req, res) => {
   const { status } = req.query;
   const join = 'LEFT JOIN post_signals s ON s.user_id = p.user_id AND s.post_id = p.id LEFT JOIN post_metrics pm ON pm.post_id = p.id';
@@ -9139,6 +9283,28 @@ app.post('/api/posts/:id/publish-now', requireAuth, requireTrialValid, (req, res
   // La publicación corre en segundo plano; el frontend consulta GET /api/posts/:id
   publishSinglePost(db, { ...post, status: 'publishing' }).catch((e) => console.error('[posta] publish-now:', e.message));
   res.json({ ok: true, status: 'publishing' });
+});
+
+// RECICLAR-GANADORES:api
+// ---------- RECICLAR GANADORES (2026-10-30, mejora 4/5) ----------
+// El ganador vuelve SOLO como borrador: approval='pending', sin fecha.
+// La aprobación de un toque es la existente (POST /api/posts/:id/approve);
+// este módulo jamás programa ni publica.
+app.get('/api/recicla/candidate', requireAuth, (req, res) => {
+  try { const c = reciclar.candidate(db, req.session.userId, Date.now()); res.json({ ok: true, ...c }); }
+  catch (e) { console.error('[recicla] candidate:', e.message); res.status(500).json({ ok: false, error: 'recicla_failed' }); }
+});
+app.post('/api/recicla/propose', requireAuth, requireTrialValid, (req, res) => {
+  try { res.json(reciclar.propose(db, req.session.userId, Date.now())); }
+  catch (e) { console.error('[recicla] propose:', e.message); res.status(500).json({ ok: false, error: 'recicla_failed' }); }
+});
+app.post('/api/recicla/:id/foto-lista', requireAuth, (req, res) => {
+  try { res.json(reciclar.fotoLista(db, req.session.userId, Number(req.params.id))); }
+  catch (e) { console.error('[recicla] foto-lista:', e.message); res.status(500).json({ ok: false, error: 'recicla_failed' }); }
+});
+app.post('/api/recicla/:id/dismiss', requireAuth, (req, res) => {
+  try { res.json(reciclar.dismiss(db, req.session.userId, Number(req.params.id))); }
+  catch (e) { console.error('[recicla] dismiss:', e.message); res.status(500).json({ ok: false, error: 'recicla_failed' }); }
 });
 
 // ---------- "Posty te avisa": aprobación de posteos por notificación ----------
@@ -23130,7 +23296,24 @@ app.post('/api/ig/mine-comments', requireAuth, async (req, res) => {
     if (r.error) return res.status(400).json({ error: r.error });
     const cur = readDna(uid);
     writeDna(uid, { ...cur, ...buildDnaPatch(cur, r) });
-    res.json({ ok: true, counts: r.counts || {} });
+    // PP-PREGUNTAS-POSTEOS-SERVER: preguntas repetidas reales -> cola
+    // de propuestas en la Bandeja (pendientes de un toque del dueño).
+    // Nunca publica nada; si la cola falla, el minado igual responde.
+    let ppCreadas = 0; let ppYa = 0;
+    try {
+      const pendientesPP = oficina.listarBandeja(db, uid, { soloPendientes: true });
+      const clavesYa = new Set(pendientesPP
+        .filter(i => i.contexto && i.contexto.tipo === 'pregunta_posteo')
+        .map(i => i.contexto.clave).filter(Boolean));
+      const gruposPP = r.grupos_preguntas || [];
+      ppYa = gruposPP.filter(g => clavesYa.has(g.clave)).length;
+      const propsPP = preguntasPosteos.buildPropuestas(gruposPP, [...clavesYa]);
+      for (const p of propsPP) {
+        await oficina.crearBandejaItem(db, uid, preguntasPosteos.itemBandejaPara(p));
+        ppCreadas += 1;
+      }
+    } catch (e) { /* la cola nunca rompe el minado */ }
+    res.json({ ok: true, counts: r.counts || {}, preguntas_posteos: { grupos: (r.grupos_preguntas || []).length, propuestas_creadas: ppCreadas, ya_en_cola: ppYa } }); // PP-PREGUNTAS-POSTEOS-SERVER
   } catch (e) {
     console.error('[ig/mine-comments]:', e.message);
     res.status(400).json({ error: e.message || 'No pudimos analizar tus comentarios, probá de nuevo en un rato' });
@@ -23280,7 +23463,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v491';
+const BUILD_ID = '20261031-v492';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -23934,4 +24117,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep };

@@ -1159,7 +1159,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261031-v491'; // (pase-app-gesty) bump: chunk-ajustes cambia (placeholder gzAjustesBox); el ?v= viejo congelaba el chunk
+const CHUNK_V = '20261031-v492'; // SEMANA-DOS-IDIOMAS:START — chunk-ajustes cambia (toggle dos idiomas); el ?v= viejo congelaba el chunk // SEMANA-DOS-IDIOMAS:END // (pase-app-gesty) bump: chunk-ajustes cambia (placeholder gzAjustesBox); el ?v= viejo congelaba el chunk
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -1700,9 +1700,75 @@ async function enhanceIdeas(force) {
   // El slot pudo ser reemplazado por un re-render mientras la respuesta
   // viajaba: se pinta el slot ACTUAL, en su lugar definitivo, una vez.
   const cur = document.getElementById('hs-ideas');
-  if (cur) { cur.dataset.done = '1'; cur.innerHTML = h; wireIdeasBlock(cur); }
+  if (cur) { cur.dataset.done = '1'; cur.innerHTML = h; wireIdeasBlock(cur); } // RECICLAR-GANADORES:call try { pzReciclaPaint(cur); } catch (e) {}
   paintIdeasChrome();
 }
+// RECICLAR-GANADORES:fn
+// ♻️ RECICLAR GANADORES (2026-10-30): tarjeta al pie del panel de ideas.
+// No toca la caché de ideas: pinta/sustituye solo su tarjeta (#pz-recicla-card).
+// Un toque crea el borrador (queda pendiente de aprobación, nunca se publica
+// solo); si falta foto nueva, el dueño la sube y avisa con otro toque.
+async function pzReciclaPaint(slot) {
+  if (!slot) return;
+  const old = slot.querySelector('#pz-recicla-card');
+  if (old) old.remove();
+  let r = null;
+  try { r = await api.get('/api/recicla/candidate'); } catch (e) { return; }
+  if (!r || !r.ok || !r.winner) return;
+  const w = r.winner;
+  const days = Math.max(90, Math.floor((Date.now() - new Date(w.published_at).getTime()) / 86400000));
+  const core = esc(String(w.caption || '').replace(/#[^\s#]+/g, ' ').replace(/\s+/g, ' ').trim());
+  const idea = (core.match(/^[^.!?…]+[.!?…]?/) || [''])[0].trim();
+  const host = slot.querySelector('.hs-ideas') || slot;
+  let note = '', actions = '';
+  if (r.state === 'ready') {
+    note = 'Hace ' + days + ' días este posteo llegó a ' + w.reach + ' personas. La misma idea, con una foto real nueva y texto fresco.';
+    actions = '<button type="button" class="btn btn-primary btn-sm" data-pz-recicla-make>♻️ Crear versión fresca</button>';
+  } else {
+    note = 'Hace ' + days + ' días este posteo llegó a ' + w.reach + ' personas, pero no tenés una foto real nueva de ese producto para reciclarlo. Subila y avisame con un toque — nunca reutilizo la foto vieja.';
+    actions = '<button type="button" class="btn btn-primary btn-sm" data-pz-recicla-foto>Ya subí una foto nueva</button>'
+      + '<button type="button" class="btn btn-ghost btn-sm" data-pz-recicla-dismiss>Ahora no</button>';
+  }
+  const card = document.createElement('div');
+  card.id = 'pz-recicla-card';
+  card.className = 'idea-card';
+  card.innerHTML = '<div class="idea-top"><span class="idea-fmt">♻️ Reciclar ganador</span></div>'
+    + '<div class="idea-title">' + esc(idea) + '</div>'
+    + '<div class="idea-why">' + esc(note) + '</div>'
+    + '<div class="idea-actions">' + actions + '</div>'
+    + '<div class="idea-why" data-pz-recicla-msg hidden></div>';
+  host.appendChild(card);
+  const msg = card.querySelector('[data-pz-recicla-msg]');
+  const say = (t) => { if (msg) { msg.textContent = t; msg.hidden = false; } };
+  const makeBtn = card.querySelector('[data-pz-recicla-make]');
+  if (makeBtn) makeBtn.onclick = async () => {
+    makeBtn.disabled = true;
+    try {
+      const p = await api.post('/api/recicla/propose', {});
+      if (p && p.ok) { say('✅ listo! quedó como borrador en tu semana — revisalo y aprobalo cuando quieras, no se publica solo.'); try { render(); } catch (e) {} }
+      else if (p && p.reason === 'no_fresh_photo') { say('😅 todavía no tenés una foto nueva de ese producto: subila al álbum y tocá “Ya subí una foto nueva”.'); makeBtn.disabled = false; }
+      else { say('😅 no pude armarlo ahora, probá de nuevo en un rato.'); makeBtn.disabled = false; }
+    } catch (e) { say('😅 ' + (e.message || 'No pude armarlo ahora')); makeBtn.disabled = false; }
+  };
+  const fotoBtn = card.querySelector('[data-pz-recicla-foto]');
+  if (fotoBtn) fotoBtn.onclick = async () => {
+    fotoBtn.disabled = true;
+    try {
+      const p = r.recicla_id
+        ? await api.post('/api/recicla/' + r.recicla_id + '/foto-lista', {})
+        : await api.post('/api/recicla/propose', {});
+      if (p && p.ok) { say('✅ listo! quedó como borrador en tu semana — revisalo y aprobalo cuando quieras, no se publica solo.'); try { render(); } catch (e) {} }
+      else { say('😅 todavía no veo una foto nueva sin usar de ese producto: fijate que esté subida al álbum.'); fotoBtn.disabled = false; }
+    } catch (e) { say('😅 ' + (e.message || 'No pude revisarlo ahora')); fotoBtn.disabled = false; }
+  };
+  const disBtn = card.querySelector('[data-pz-recicla-dismiss]');
+  if (disBtn) disBtn.onclick = async () => {
+    disBtn.disabled = true;
+    try { if (r.recicla_id) await api.post('/api/recicla/' + r.recicla_id + '/dismiss', {}); } catch (e) {}
+    card.remove();
+  };
+}
+
 function wireIdeasBlock(slot) {
   const compList = () => [...slot.querySelectorAll('[data-comp-remove]')].map((x) => x.getAttribute('data-comp-remove'));
   const saveComps = async (list) => {
@@ -13164,6 +13230,54 @@ function bootSplashOff() {
 }
 let PZ_VER_WEB_ONCE = false; // (v469) click en el logo de auth: ver la landing UNA vez en PWA
 let RENDER_SEQ = 0;
+// PZ-PLACEHOLDER-ROTATIVO:START
+// Placeholders rotativos del campo del chat (aprobado Valentino 30/10).
+// Solo placeholder: nunca escribe en el campo, nunca envía nada solo.
+// Rota cada 4 s; pausa con foco o al escribir; reanuda vacío y sin foco;
+// con prefers-reduced-motion queda fija la primera frase.
+const PZ_CHAT_PLACEHOLDERS = {
+  es: ['contame qué tenés para vender hoy', 'pedime una idea para esta semana', 'mandame una foto de tu producto', '¿tenés promo esta semana?', '¿qué querés que postee mañana?', 'mantené el micrófono y hablame', '¿cómo viene tu semana?', 'contame qué querés cambiar', 'contame qué vendiste hoy', '¿frenamos esta semana?', '¿qué idea tenés vos?', 'mandame tu promo en audio', 'contame de tu negocio'],
+  en: ["tell me what you've got to sell today", 'ask me for an idea for this week', 'send me a photo of your product', 'got a promo this week?', 'what do you want me to post tomorrow?', 'hold the mic and talk to me', "how's your week going?", 'tell me what you want to change', 'tell me what you sold today', 'should we pause this week?', "what's your idea?", 'send me your promo as audio', 'tell me about your business'],
+};
+let pzPhTimer = null;
+let pzPhInput = null;
+function pzChatLang() {
+  try { return (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'en' : 'es'; } catch (e) { return 'es'; }
+}
+function pzRotarPlaceholderChat() {
+  const inp = (typeof document !== 'undefined' && document.getElementById)
+    ? document.getElementById('chatInput') : null;
+  if (!inp) return;
+  if (inp === pzPhInput && pzPhTimer) return;
+  if (pzPhTimer) { clearInterval(pzPhTimer); pzPhTimer = null; }
+  pzPhInput = inp;
+  let idx = 0;
+  let lastLang = pzChatLang();
+  const list = () => PZ_CHAT_PLACEHOLDERS[pzChatLang()];
+  const setPh = () => { inp.placeholder = list()[idx]; };
+  const reduced = (typeof window !== 'undefined' && window.matchMedia)
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
+  setPh();
+  if (reduced) return;
+  pzPhTimer = setInterval(() => {
+    if (inp !== pzPhInput) return;
+    const lang = pzChatLang();
+    if (lang !== lastLang) { lastLang = lang; idx = 0; setPh(); return; }
+    if (typeof document !== 'undefined' && document.activeElement === inp) return;
+    if (inp.value && inp.value.trim() !== '') return;
+    idx = (idx + 1) % list().length;
+    setPh();
+  }, 4000);
+}
+try { pzRotarPlaceholderChat(); } catch (e) {}
+try {
+  if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && document.body) {
+    new MutationObserver(() => { try { pzRotarPlaceholderChat(); } catch (e) {} })
+      .observe(document.body, { childList: true, subtree: true });
+  }
+} catch (e) {}
+// PZ-PLACEHOLDER-ROTATIVO:END
+
 async function render() {
   const mySeq = ++RENDER_SEQ;
   // Splash de carga (index.html): en rutas #/app/* NO se saca al entrar.

@@ -8,6 +8,7 @@
 //
 // Exporta: { mineComments, fetchCommentsBundle, buildDnaPatch }
 'use strict';
+const pp = require('./preguntas-posteos'); // PP-PREGUNTAS-POSTEOS-IG
 
 const IG_HOST = 'https://graph.instagram.com';
 const API_VERSION = 'v26.0';
@@ -162,6 +163,15 @@ async function mineComments(igUserId, accessToken, apiKey) {
     if (!apiKey) return { error: 'Todavía no podemos usar la IA, probá de nuevo en un rato' };
     const bundle = await fetchCommentsBundle(igUserId, accessToken);
     if (!bundle.comments) return { error: 'No encontramos comentarios recientes en tus posteos. Cuando tus seguidores comenten más, los analizamos.' };
+    // PP-PREGUNTAS-POSTEOS-IG: agrupación determinística de las
+    // preguntas reales del mismo bundle (sin llamada extra a IG ni a GPT).
+    const gruposPreguntas = (() => {
+      try {
+        const todos = [];
+        for (const it of (bundle.items || [])) for (const c of (it.comments || [])) todos.push(c);
+        return pp.groupQuestions(todos);
+      } catch (e) { return []; }
+    })();
     let mined;
     try {
       mined = await mineWithGpt(bundle.items, apiKey);
@@ -170,6 +180,7 @@ async function mineComments(igUserId, accessToken, apiKey) {
     }
     return {
       preguntas_frecuentes: mined.preguntas_frecuentes,
+      grupos_preguntas: gruposPreguntas, // PP-PREGUNTAS-POSTEOS-IG
       objeciones: mined.objeciones,
       deseos: mined.deseos,
       counts: { posts: bundle.posts, comments: bundle.comments },

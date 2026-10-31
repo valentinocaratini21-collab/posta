@@ -816,6 +816,24 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[wins-chat] no se pudo programar:', e.message);
   }
+  // 🚀 ALERTA DESPEGUE (mejora 1/5, 30/10): cada 30 minutos — si un posteo
+  // publicado en las últimas 12 h rinde >= 2x la MEDIANA real de alcance de
+  // la cuenta (mínimo 5 posteos previos medidos), Posty avisa EN EL MOMENTO
+  // en el chat (in-app) + push, para aprovecharlo (responder, historias).
+  // Una sola alerta por posteo (alerta_despegue, UNIQUE por post_id); sin
+  // alcance real > 0 no hay alerta; nunca publica nada sola. Reutiliza
+  // push.js (webpush + FCM + APNs) sin pasar por la puerta agrupada de la
+  // oficina: una buena noticia agrupada llegaría tarde, y esto es acción
+  // del momento, no festejo (wins.js 11:00 sigue siendo el festejo).
+  try {
+    const { sweepDespegue } = require('./alerta-despegue');
+    cron.schedule('*/30 * * * *', () => {
+      sweepDespegue(db).catch((e) => console.error('[despegue]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Alerta despegue: cada 30 minutos (Buenos Aires)');
+  } catch (e) {
+    console.error('[despegue] no se pudo programar:', e.message);
+  }
   // Comentarios de Instagram: 9:00 y 17:00 (Buenos Aires).
   // Baja comentarios nuevos y deja la respuesta sugerida lista en la cola.
   try {

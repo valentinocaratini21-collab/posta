@@ -214,6 +214,12 @@ function ajustesView() {
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
       <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
+    <div style="font-weight:800;margin:18px 0 8px">🌍 Tu semana en dos idiomas</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Para negocios con turistas o clientes en inglés: la misma semana sale también en inglés. La versión en inglés es la traducción de tu semana en español — misma idea, mismos datos, nada nuevo. No cambia el idioma de la app.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnBilingualWeekToggle">Cargando...</button>
+      <span id="bilingualWeekStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
     </div>
   </div></div>
   <div class="card ajsec${openSec==='avisos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('bell', 20)} Avisos</h3><span class="ajsec-st" id="ajStAvisos"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
@@ -820,6 +826,33 @@ function bindSettings() {
     };
     loadAw();
   }
+  // --- SEMANA-DOS-IDIOMAS:START — Semana en dos idiomas (opt-in, apagado por defecto, 2026-10-30) ---
+  const btnBw = $('#btnBilingualWeekToggle');
+  if (btnBw) {
+    const loadBw = async () => {
+      try {
+        const r = await api.get('/api/settings/bilingual-week');
+        const on = !!(r && r.enabled);
+        btnBw.innerHTML = on ? (pzIc('checkCircle', 15) + ' Activado') : (pzIc('circleEmpty', 15) + ' Activar');
+        btnBw.classList.toggle('btn-primary', !on);
+        $('#bilingualWeekStatus').textContent = on
+          ? 'Tu semana sale en espa\u00f1ol y en ingl\u00e9s, con la misma idea en los dos idiomas.'
+          : 'Solo en espa\u00f1ol. Activ\u00e1 para sumar la versi\u00f3n en ingl\u00e9s de la misma semana.';
+      } catch (e) { btnBw.textContent = 'Error'; }
+    };
+    btnBw.onclick = async () => {
+      btnBw.disabled = true;
+      try {
+        const r = await api.get('/api/settings/bilingual-week');
+        const r2 = await api.post('/api/settings/bilingual-week', { enabled: !(r && r.enabled) });
+        if (r2 && r2.ok) await loadBw();
+        else alert('No pude cambiarlo \ud83d\ude05');
+      } catch (e) { alert('No pude cambiarlo \ud83d\ude05'); }
+      btnBw.disabled = false;
+    };
+    loadBw();
+  }
+  // --- SEMANA-DOS-IDIOMAS:END ---
   const sCat = $('#s_cat');
   if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };
   const sDesc = $('#s_desc');

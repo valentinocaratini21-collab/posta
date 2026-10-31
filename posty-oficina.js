@@ -9,6 +9,7 @@
 
 const oficina = require('./oficina');
 const niveles = require('./niveles');
+const preguntasPosteos = require('./preguntas-posteos'); // PP-PREGUNTAS-POSTEOS-OFICINA
 
 function conteoSemana(db, uid) {
   let rows = [];
@@ -45,6 +46,18 @@ async function sincronizarSemana(db, uid) {
 
 // La decisión del dueño sobre la semana: Posty aprende de ella.
 function hookBandeja(db, uid, item, accion) {
+  // PP-PREGUNTAS-POSTEOS-OFICINA: propuesta pregunta->posteo. SOLO se
+  // registra la decisión en el río. Nunca crea posteos ni publica: la
+  // conversión a borrador la hace el generador semanal (pendiente del
+  // turno del push) con imagen del fundamento, no acá.
+  if (item.contexto && item.contexto.tipo === 'pregunta_posteo') {
+    const ef = preguntasPosteos.efectoDecisionPregunta(
+      { contexto: item.contexto, nota_dueno: item.nota_dueno }, accion);
+    oficina.registrarRegistro(db, uid, {
+      poder: 'posty', tipo: ef.tipo, resumen: ef.resumen, estado: ef.estado,
+    });
+    return { detalle: ef.tipo };
+  }
   if (!item.contexto || item.contexto.tipo !== 'semana_posty') return null;
   if (accion === 'aceptar') {
     niveles.registrarEvento(db, uid, {
