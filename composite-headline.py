@@ -14,11 +14,26 @@ import sys
 FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
 
 
-def load_font(bold, size):
+# Tipografías elegibles de titulares (2026-10-26, decisión Valentino: el
+# cliente elige la tipografía de sus titulares; Montserrat = default, el
+# look actual). Cada familia vive en fonts/ con licencia OFL (ver
+# MANIFIESTO). Familia desconocida → Montserrat: nunca rompe una generación.
+BRAND_FONTS = {
+    'montserrat': {'label': 'Montserrat', 'files': {600: 'Montserrat-600.ttf', 700: 'Montserrat-700.ttf', 800: 'Montserrat-800.ttf'}},
+    'nunito': {'label': 'Nunito', 'files': {700: 'Nunito-700.ttf', 800: 'Nunito-800.ttf'}},
+    'playfair': {'label': 'Playfair Display', 'files': {700: 'PlayfairDisplay-700.ttf', 800: 'PlayfairDisplay-800.ttf'}},
+    'oswald': {'label': 'Oswald', 'files': {600: 'Oswald-600.ttf', 700: 'Oswald-700.ttf'}},
+    'fredoka': {'label': 'Fredoka', 'files': {600: 'Fredoka-600.ttf', 700: 'Fredoka-700.ttf'}},
+    'poppins': {'label': 'Poppins', 'files': {600: 'Poppins-600.ttf', 700: 'Poppins-700.ttf', 800: 'Poppins-800.ttf'}},
+}
+
+
+def load_font(bold, size, font='montserrat'):
     from PIL import ImageFont
-    names = (['Montserrat-800.ttf', 'Montserrat-700.ttf', 'DejaVuSans-Bold.ttf', 'DejaVuSans.ttf']
-             if bold else
-             ['Montserrat-700.ttf', 'Montserrat-600.ttf', 'DejaVuSans.ttf'])
+    fam = BRAND_FONTS.get(str(font or '').strip().lower()) or BRAND_FONTS['montserrat']
+    order = (800, 700, 600) if bold else (700, 600, 800)
+    names = [fam['files'][w] for w in order if w in fam['files']]
+    names += ['DejaVuSans-Bold.ttf', 'DejaVuSans.ttf'] if bold else ['DejaVuSans.ttf']
     for name in names:
         for cand in (os.path.join(FONT_DIR, name), name):
             try:
@@ -77,6 +92,7 @@ def main():
     # arriba tapa una cara, un ojo o el producto/personaje: el titular se
     # recompone abajo en vez de pelear con la foto.
     ap.add_argument('--zone', default='top', choices=('top', 'bottom'))
+    ap.add_argument('--font', default='montserrat', help='id de tipografia del titular (montserrat, nunito, playfair, oswald, fredoka, poppins; desconocido = montserrat)')
     a = ap.parse_args()
 
     headline = str(a.headline or '').strip()
@@ -116,7 +132,7 @@ def main():
     size = int(W * 0.085 * max(0.5, min(2.0, a.scale or 1.0)))
     font, lines = None, []
     while size >= int(W * 0.04):
-        font = load_font(True, size)
+        font = load_font(True, size, a.font)
         lines = wrap(draw, headline, font, max_w, 3)
         # Verificar que la última línea no esté truncada (el wrap ya corta a 3).
         # Si hay más palabras que las que entraron, seguir bajando.
@@ -139,7 +155,7 @@ def main():
 
     while size > int(W * 0.04) and _block_area_pct(len(lines), size) > 20.0:
         size -= 4
-        font = load_font(True, size)
+        font = load_font(True, size, a.font)
         lines = wrap(draw, headline, font, max_w, 3)
     area_pct = _block_area_pct(len(lines), size)
 

@@ -9,6 +9,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const PZ_IC_CEL = '#2793C8', PZ_IC_GOLD = '#FEC14D';
 const PZ_IC = {
   posty: '<circle cx="12" cy="14" r="7"/><path d="M12 7V4.5"/><circle cx="12" cy="3" r="1.4" fill="' + PZ_IC_GOLD + '" stroke="none"/><circle cx="9.5" cy="13.5" r="1.2" fill="' + PZ_IC_CEL + '" stroke="none"/><circle cx="14.5" cy="13.5" r="1.2" fill="' + PZ_IC_CEL + '" stroke="none"/><path d="M9.5 17.2Q12 18.6 14.5 17.2"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v3M16 3v3M3 10h18"/><circle cx="12" cy="15.5" r="2.2" stroke="' + PZ_IC_GOLD + '"/>',
   stems: '<path d="M6 20V12M12 20V8M18 20V5"/><path d="M4.5 15h3M10.5 12h3M16.5 9h3"/><path d="M18 5Q18 2 21 2Q21 5 18 5Z" stroke="' + PZ_IC_GOLD + '"/><path d="M18 5Q18 2 15 2Q15 5 18 5Z" stroke="' + PZ_IC_GOLD + '"/>',
   gear: '<circle cx="12" cy="12" r="3.5"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.2 5.2l1.8 1.8M16.9 16.9l1.8 1.8M18.8 5.2l-1.8 1.8M7.1 16.9l-1.8 1.8"/><circle cx="12" cy="12" r="1.1" fill="' + PZ_IC_GOLD + '" stroke="none"/>',
@@ -69,6 +70,100 @@ const PZ_IC = {
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
   headphones: '<path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/>'
 };
+Object.assign(PZ_IC, {
+  check: '<path d="M4 12.5l5 5L20 6.5"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  arrowRight: '<path d="M4 12h15M13 6l6 6-6 6"/>',
+  arrowLeft: '<path d="M20 12H5M11 6l-6 6 6 6"/>',
+  arrowDown: '<path d="M12 4v15M6 13l6 6 6-6"/>',
+  arrowUpRight: '<path d="M7 17L17 7M9 7h8v8"/>',
+  send: '<path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9 22 2"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
+  lock: '<rect x="4" y="10.5" width="16" height="10.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+  key: '<circle cx="8" cy="16" r="4.5"/><path d="M11.5 12.5 20 4"/><path d="M16 8l2.5 2.5"/>',
+  door: '<path d="M5 3h13v18H5z"/><path d="M14.5 12h.01"/>',
+  dna: '<path d="M7 3v18M17 3v18"/><path d="M7 7c3.3 1.5 6.7 1.5 10 0M7 12h10M7 17c3.3-1.5 6.7-1.5 10 0"/>',
+  flame: '<path d="M12 22c4 0 7-2.9 7-6.8 0-3.4-2.2-5.6-3.5-7.2C14.2 6.4 13 5 13 3c-2.5 1.5-3 4-2 6-.8-.3-1.5-1-2-2C7.5 8.5 5 10.5 5 15.2 5 19.1 8 22 12 22z"/>',
+  crown: '<path d="M4 18h16M5 18L3.5 7l5 4 3.5-6 3.5 6 5-4L19 18"/>',
+  coin: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M15 9.5c-.8-1-1.8-1.4-3-1.4-1.7 0-3 .9-3 2.2 0 3 6 1.3 6 4.2 0 1.3-1.3 2.2-3 2.2-1.2 0-2.2-.4-3-1.4"/>',
+  chartUp: '<path d="M4 20h16"/><path d="M7 20v-4M12 20V9M17 20v-7"/><path d="M6 11l4-3 3 2 5-4"/>',
+  chartDown: '<path d="M4 20h16"/><path d="M7 20v-4M12 20V9M17 20v-7"/><path d="M6 8l4 3 3-2 5 4"/>',
+  wrench: '<path d="M21 6.5a4.5 4.5 0 0 1-6.4 4L7 18l-3-3 7.5-7.5A4.5 4.5 0 0 1 21 6.5z"/>',
+  shirt: '<path d="M8 4 4.5 6.5 6 10l2.5-1.5V20h7V8.5L18 10l1.5-3.5L16 4a3 3 0 0 1-8 0z"/>',
+  utensils: '<path d="M6 3v7a2 2 0 0 0 4 0V3M7 3v4M9 3v4M8 12v9"/><path d="M17 3c-1.5 2-1.5 4 0 6v12"/>',
+  cup: '<path d="M5 8h12v6a5 5 0 0 1-5 5H10a5 5 0 0 1-5-5V8z"/><path d="M17 9h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 5.5c0-1 1-1 1-2M12 5.5c0-1 1-1 1-2"/>',
+  barber: '<rect x="8" y="3" width="8" height="18" rx="4"/><path d="M8.5 8l7-3M8.5 13l7-3M8.5 18l7-3"/>',
+  dumbbell: '<path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/>',
+  stethoscope: '<path d="M5 3v5a5 5 0 0 0 10 0V3"/><path d="M15 8h2a3 3 0 0 1 0 6"/><circle cx="18" cy="17.5" r="2.5"/>',
+  paw: '<circle cx="12" cy="14.5" r="3.5"/><circle cx="7" cy="10" r="1.6"/><circle cx="17" cy="10" r="1.6"/><circle cx="9" cy="6.5" r="1.6"/><circle cx="15" cy="6.5" r="1.6"/>',
+  laptop: '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 20h20"/>',
+  home: '<path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
+  building: '<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h.01M15 7h.01M9 11h.01M15 11h.01M9 15h.01M15 15h.01M10 21v-3h4v3"/>',
+  ticket: '<path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2.5a2.5 2.5 0 0 0 0 5V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2.5a2.5 2.5 0 0 0 0-5V8z"/><path d="M13 6v12"/>',
+  glasses: '<circle cx="7" cy="12" r="3.5"/><circle cx="17" cy="12" r="3.5"/><path d="M10.5 12h3M3.5 10.5 2 8M20.5 10.5 22 8"/>',
+  briefcase: '<rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M4 12.5h16"/>',
+  target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01"/>',
+  tag: '<path d="M4 4h9l7 7-9 9-7-7V4z"/><path d="M8.5 8.5h.01"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M3.5 19c.5-3 2.8-4.5 5.5-4.5S14 16 14.5 19"/><circle cx="16.5" cy="9" r="2.8"/><path d="M15.5 14.7c2.5.3 4.3 1.7 4.8 4.3"/>',
+  grad: '<path d="M12 4 2.5 9 12 14l9.5-5L12 4z"/><path d="M6.5 11.5V16c0 1.5 2.5 3 5.5 3s5.5-1.5 5.5-3v-4.5"/><path d="M21.5 9v5"/>',
+  rocket: '<path d="M12 3c3.5 2 5 6 4.5 10.5L12 18l-4.5-4.5C7 9 8.5 5 12 3z"/><circle cx="12" cy="10" r="1.8"/><path d="M7.5 13.5C6 15 5 17 5 19c2 0 4-1 5.5-2.5M16.5 13.5C18 15 19 17 19 19c-2 0-4-1-5.5-2.5"/>',
+  stop: '<path d="M8 3h8l5 5v8l-5 5H8l-5-5V8l5-5z"/>',
+  square: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+  thumbUp: '<path d="M7 11v9H4.5A1.5 1.5 0 0 1 3 18.5v-6A1.5 1.5 0 0 1 4.5 11H7z"/><path d="M7 11l1-6c.3-1.5 2.5-1.8 3 0l.5 3h5a2 2 0 0 1 2 2.5l-1.5 6A2 2 0 0 1 15 20H7"/>',
+  thumbDown: '<g transform="translate(0 24) scale(1 -1)"><path d="M7 11v9H4.5A1.5 1.5 0 0 1 3 18.5v-6A1.5 1.5 0 0 1 4.5 11H7z"/><path d="M7 11l1-6c.3-1.5 2.5-1.8 3 0l.5 3h5a2 2 0 0 1 2 2.5l-1.5 6A2 2 0 0 1 15 20H7"/></g>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8"/>',
+  calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 7.5h7"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 15.5h.01M12 15.5h.01M15.5 15.5h.01"/>',
+  phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M10.5 18.5h3"/>',
+  bag: '<path d="M5 8h14l-1 12.5A1.5 1.5 0 0 1 16.5 22h-9A1.5 1.5 0 0 1 6 20.5L5 8z"/><path d="M8.5 10V6.5a3.5 3.5 0 0 1 7 0V10"/>',
+  bot: '<rect x="5" y="9" width="14" height="11" rx="2.5"/><path d="M12 3.5V9"/><path d="M9 13.5h.01M15 13.5h.01"/><path d="M9.5 17h5"/>',
+  lipstick: '<path d="M9 20h6l-1-8H10L9 20z"/><path d="M10.5 12V7l1.5-3 1.5 3v5"/><path d="M9 12h6"/>',
+  smile: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 10h.01M15.5 10h.01"/><path d="M8.5 14.5c1 1.5 2.2 2 3.5 2s2.5-.5 3.5-2"/>',
+  megaphone: '<path d="M4 11v3a1 1 0 0 0 1 1h1.5v-5H5a1 1 0 0 0-1 1z"/><path d="M6.5 10 20 5.5v13L6.5 14"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/>',
+  thermo: '<path d="M10 4a2 2 0 1 1 4 0v9.5a4.5 4.5 0 1 1-4 0V4z"/><path d="M12 9v5"/>',
+  chevDown: '<path d="M6 9l6 6 6-6"/>',
+  arrowUp: '<path d="M12 19V5"/><path d="M5 12l7-7 7 7"/>',
+  bars: '<path d="M5 20V11M12 20V4M19 20v-7"/><path d="M3 20h18"/>',
+  shield: '<path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3z"/>',
+  chevUp: '<path d="M6 15l6-6 6 6"/>',
+  clapper: '<path d="M3 10h18M3 10l2-5h14l2 5M3 10v10h18V10M8 15l2.5 2.5L14 14"/>',
+  box: '<path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  volume: '<path d="M4 10v4h4l5 4V6l-5 4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>',
+});
+
+/* ---------- iconos-final (v475): punto de estado, emoji del servidor, norma de toasts, picker ---------- */
+function pzDot(color, px) {
+  const s = px || 12;
+  return '<span style="display:inline-block;width:' + s + 'px;height:' + s + 'px;border-radius:50%;background:' + color + ';flex:none;vertical-align:-1px"></span>';
+}
+function pzEmojiGlyph(e) {
+  const m = { '🔥': 'flame', '👑': 'crown', '🌱': 'sprout', '⭐': 'star', '🌟': 'star', '🥇': 'crown', '🥈': 'crown', '🥉': 'crown', '💎': 'sparkle' };
+  return (e && m[e]) ? pzIc(m[e], 16) : (e || '');
+}
+function pzToastNorm(html) {
+  if (typeof html !== 'string') return html;
+  const LEAD = { '✅': 'checkCircle', '❌': 'reject', '😅': 'alert', '📌': 'pin', '🔔': 'bell', '🎉': 'gift', '📸': 'camera', '↩': 'back', '⚠': 'alert', '🔀': 'swap', '🖼': 'image', '🎬': 'reel', '🗓': 'calendar', '🔗': 'link', '📋': 'copy' };
+  const m = html.match(/^\s*(✅|❌|😅|📌|🔔|🎉|📸|↩|⚠|🔀|🖼|🎬|🗓|🔗|📋)\uFE0F?/u);
+  if (m) html = pzIc(LEAD[m[1]], 16) + ' ' + html.slice(m[0].length);
+  html = html.replace(/🧬/g, pzIc('dna', 16)).replace(/✓/g, pzIc('check', 15));
+  html = html.replace(/\s*(🎉|🙌|👌|✨|💪|😅)\s*$/u, '');
+  return html;
+}
+function pzToastHead(text) {
+  const LEAD = { '✅': 'checkCircle', '❌': 'reject', '😅': 'alert', '📌': 'pin', '🔔': 'bell', '🎉': 'gift', '📸': 'camera', '↩': 'back', '⚠': 'alert', '🔀': 'swap', '🖼': 'image', '🎬': 'reel', '🗓': 'calendar', '🔗': 'link', '📋': 'copy', '🎵': 'music', '📥': 'download' };
+  const m = String(text || '').match(/^\s*(✅|❌|😅|📌|🔔|🎉|📸|↩|⚠|🔀|🖼|🎬|🗓|🔗|📋|🎵|📥)\uFE0F?\s*/u);
+  if (!m) return null;
+  return [pzIc(LEAD[m[1]], 16) + ' ', String(text || '').slice(m[0].length)];
+}
+function pzPick(btn, inputId) {
+  const wrap = btn.closest('.pz-pick'); if (!wrap) return;
+  const inp = document.getElementById(inputId); if (!inp) return;
+  inp.value = btn.dataset.pzPick || '';
+  wrap.querySelectorAll('.pz-pick-btn').forEach(b => b.classList.toggle('sel', b === btn));
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  inp.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function pzIc(name, px) {
   const p = PZ_IC[name];
   if (!p) return '';
@@ -202,7 +297,7 @@ const api = {
         signal: AbortSignal.timeout(opts.timeout || 30000),
       });
     } catch (e) {
-      const err = new Error('¡Uh! Me desconecté un segundo 😅 Revisá tu conexión y probá de nuevo.');
+      const err = new Error('¡Uh! Me desconecté un segundo. Revisá tu conexión y probá de nuevo.');
       err.networkError = true; // error de red: NO es "sesión cerrada"
       throw err;
     }
@@ -222,7 +317,7 @@ const api = {
           if (typeof ME !== 'undefined') ME = null;
           try { if ((location.hash || '').startsWith('#/app')) sessionStorage.setItem('posta_return_to', location.hash); } catch (e) {}
           try { location.hash = '#/login'; } catch (e) {}
-          const err401 = new Error('Tu sesión se cerró, entrá de nuevo 🔑');
+          const err401 = new Error('Tu sesión se cerró, entrá de nuevo');
           err401.status = 401;
           throw err401;
         }
@@ -294,15 +389,15 @@ function pzGoBack() {
 }
 function pzBackHTML(tab) {
   if (tab === 'inicio') return '';
-  return `<button type="button" class="pz-back pz-back-fixed" onclick="pzGoBack()" aria-label="Volver">←</button>`;
+  return `<button type="button" class="pz-back pz-back-fixed" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function pzBackMtopHTML(tab) {
   if (tab === 'inicio') return '';
-  return `<button type="button" class="pz-back pz-back-mtop" onclick="pzGoBack()" aria-label="Volver">←</button>`;
+  return `<button type="button" class="pz-back pz-back-mtop" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function pzBackDesktopHTML(tab) {
   if (tab === 'inicio') return '';
-  return `<button type="button" class="pz-back pz-back-fixed pz-back-desktop" onclick="pzGoBack()" aria-label="Volver">←</button>`;
+  return `<button type="button" class="pz-back pz-back-fixed pz-back-desktop" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function bbHace(ts) {
   const s = Math.max(0, (Date.now() - ts) / 1000);
@@ -313,9 +408,10 @@ function bbHace(ts) {
   try { return new Date(ts).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }); } catch (e) { return ''; }
 }
 function bbToast(msg) {
+  msg = pzToastNorm(msg);
   let t = document.getElementById('bbToast');
   if (!t) { t = document.createElement('div'); t.id = 'bbToast'; t.className = 'bb-toast'; document.body.appendChild(t); }
-  t.textContent = msg; t.classList.add('on');
+  t.innerHTML = msg; t.classList.add('on');
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2600);
 }
 // Identidad visual de un poder: su cara si el repo la tiene; si no, su
@@ -392,7 +488,7 @@ async function bbOficinaContent() {
       : p.estado === 'leyendo_tu_mundo' ? 'Ya leyó tu fundamento'
       : 'Todavía no corre su flujo' + (p.dia_plan ? ' — entra el ' + p.dia_plan + ' del programa' : '');
     const sig = p.nivel && p.nivel.proximo_paso
-      ? `<p class="bb-card-sig">Qué sigue: ${esc(p.nivel.proximo_paso)}</p>` : '<p class="bb-card-sig">Copa completa 🌳</p>';
+      ? `<p class="bb-card-sig">Qué sigue: ${esc(p.nivel.proximo_paso)}</p>` : `<p class="bb-card-sig">Copa completa ${pzIc('sprout', 16)}</p>`;
     return `<article class="bb-card">
       <div class="bb-card-head">${bbAvatarHTML(p.poder, p.avatar, p.nombre, p.color)}<div><strong>${esc(p.nombre)}</strong><span class="bb-card-rol">${esc(p.rol)}</span></div></div>
       <p class="bb-card-estado">${estadoTxt}</p>
@@ -418,7 +514,7 @@ async function bbOficinaContent() {
         <h1>Tu oficina</h1>
         <p class="bb-hero-neg">${esc(est.negocio || 'Tu negocio')}${est.dueno ? ' · con ' + esc(est.dueno) : ''}</p>
         <p class="bb-nivel-nom">${esc(no.nombre_nivel || '')} <span>nivel ${no.nivel || 1} de 5</span></p>
-        ${no.proximo_paso ? `<p class="bb-sig">Qué sigue: ${esc(no.proximo_paso)}</p>` : '<p class="bb-sig">La copa entera: tu oficina trabaja sola y vos solo aceptás. 🌳</p>'}
+        ${no.proximo_paso ? `<p class="bb-sig">Qué sigue: ${esc(no.proximo_paso)}</p>` : `<p class="bb-sig">La copa entera: tu oficina trabaja sola y vos solo aceptás. ${pzIc('sprout', 16)}</p>`}
         ${est.bandeja_count ? `<button class="bb-btn bb-btn-gold" onclick="bbGo('#/app/bandeja')">Tenés ${est.bandeja_count} esperando tu OK</button>` : ''}
       </div>
     </section>
@@ -426,7 +522,7 @@ async function bbOficinaContent() {
     <section class="bb-poderes">${(est.poderes || []).map(poderCard).join('')}</section>
     <section class="bb-bloque"><h2>Bambooty también tiene especialistas</h2><p class="bb-sub">No son poderes de todos los días: se los llama para una misión puntual, por proyecto. Cuando un proyecto está activo, su trabajo aparece en tu Bandeja.</p>${(est.especialistas || []).map(espRow).join('')}</section>
     <section class="bb-bloque"><h2>El río de tu oficina</h2>${rio || '<p class="bb-vacio">El río corre con trabajo real: cada cosa que tu oficina haga aparece acá con su recibo.</p>'}</section>
-    <section class="bb-bloque"><h2>Lo que tu oficina ya sabe</h2><div class="bb-chips">${(est.aprendido || []).map((f) => `<span class="bb-chip">✓ ${esc(f.hecho)}</span>`).join('') || '<p class="bb-vacio">Todavía nada — el fundamento se está cargando.</p>'}</div></section>
+    <section class="bb-bloque"><h2>Lo que tu oficina ya sabe</h2><div class="bb-chips">${(est.aprendido || []).map((f) => `<span class="bb-chip">${pzIc('check', 13)} ${esc(f.hecho)}</span>`).join('') || '<p class="bb-vacio">Todavía nada — el fundamento se está cargando.</p>'}</div></section>
     ${await gzOficinaGesty()}
   `;
 }
@@ -444,7 +540,7 @@ async function bbVerRegistro(ref) {
     div.innerHTML = '<div class="bb-sheet"><p>No encontré ese registro.</p><button class="bb-btn" onclick="document.getElementById(\'bbSheet\').remove()">Cerrar</button></div>';
   } else {
     const rec = r.registro;
-    div.innerHTML = `<div class="bb-sheet"><div class="bb-sheet-head"><strong>Recibo del río</strong><button class="bb-x" onclick="document.getElementById('bbSheet').remove()">✕</button></div>
+    div.innerHTML = `<div class="bb-sheet"><div class="bb-sheet-head"><strong>Recibo del río</strong><button class="bb-x" onclick="document.getElementById('bbSheet').remove()">${pzIc('x', 16)}</button></div>
       <p class="bb-sheet-res">${esc(rec.resumen)}</p>
       <p class="bb-sheet-meta">${esc(rec.registro_ref)} · ${bbHace(rec.ts)} · estado: ${esc(rec.estado)}</p>
       ${rec.recibo ? `<pre class="bb-sheet-pre">${esc(JSON.stringify(rec.recibo, null, 2))}</pre>` : '<p class="bb-vacio">Este registro no trae recibo adjunto.</p>'}
@@ -476,7 +572,7 @@ async function bbBandejaContent() {
         <div class="bb-bcard-btns"><button class="bb-btn bb-btn-gold" onclick="bbAccion(${i.id}, 'cambio', this)">Enviar el cambio</button><button class="bb-btn bb-btn-ghost" onclick="document.getElementById('bb-cambio-${i.id}').hidden = true">Cancelar</button></div>
       </div>
     </article>`;
-  const res = (i) => `<div class="bb-res-row"><span class="bb-res-est ${i.estado === 'aceptada' ? 'ok' : ''}">${i.estado === 'aceptada' ? '✓ Aceptada' : '↩ Cambio pedido'}</span><p>${esc(i.que)}</p><span class="bb-res-hora">${bbHace(i.resuelta_en || i.espera_desde)}</span></div>`;
+  const res = (i) => `<div class="bb-res-row"><span class="bb-res-est ${i.estado === 'aceptada' ? 'ok' : ''}">${i.estado === 'aceptada' ? `${pzIc('check', 14)} Aceptada` : `${pzIc('back', 14)} Cambio pedido`}</span><p>${esc(i.que)}</p><span class="bb-res-hora">${bbHace(i.resuelta_en || i.espera_desde)}</span></div>`;
   // PASE DE APP — Gesty en la misma Bandeja (no una segunda bandeja):
   // sus tarjetas pendientes se suman acá; la aprobación corre por el
   // camino de Gesty (versión vigente, matriz, ejecutor). Si Gesty no
@@ -485,7 +581,7 @@ async function bbBandejaContent() {
   try { const gr = await api.get('/api/gesty/bandeja'); if (gr && gr.ok && (gr.tarjetas || []).length) gzHtml = gzBandejaGestyHTML(gr.tarjetas); } catch (e) {}
   const html = `
     <section class="bb-bloque bb-bloque-top"><h1>Para vos</h1><p class="bb-sub">Solo llega acá lo que necesita TU decisión. Todo lo demás, tu oficina lo resuelve sola.</p></section>
-    ${pend.length ? pend.map(card).join('') : '<div class="bb-libre"><p class="bb-libre-big">🎉 Nada esperando tu OK</p><p>Tu oficina sigue trabajando. Cuando algo necesite tu toque, aparece acá — y te avisa su agente, con su voz.</p></div>'}
+    ${pend.length ? pend.map(card).join('') : '<div class="bb-libre"><p class="bb-libre-big">' + pzIc('gift', 18) + ' Nada esperando tu OK</p><p>Tu oficina sigue trabajando. Cuando algo necesite tu toque, aparece acá — y te avisa su agente, con su voz.</p></div>'}
     ${gzHtml}
     ${resueltas.length ? `<section class="bb-bloque"><h2>Resueltas</h2>${resueltas.map(res).join('')}</section>` : ''}
   `;
@@ -538,7 +634,7 @@ async function bbNegocioContent() {
   const ordenCapas = Object.keys(BB_CAPAS).concat(Object.keys(f.capas || {}).filter((c) => !BB_CAPAS[c]));
   const capas = ordenCapas.filter((c) => (f.capas || {})[c]).map((c) => `
     <section class="bb-bloque"><h2>${BB_CAPAS[c] || esc(c)}</h2>
-      ${(f.capas[c] || []).map((h) => `<div class="bb-hecho"><div><strong>${esc(h.hecho)}</strong>${h.detalle ? `<p>${esc(h.detalle)}</p>` : ''}</div><span class="bb-hecho-ok" title="Verificado">${h.verificado ? '✓' : ''}</span></div>`).join('')}
+      ${(f.capas[c] || []).map((h) => `<div class="bb-hecho"><div><strong>${esc(h.hecho)}</strong>${h.detalle ? `<p>${esc(h.detalle)}</p>` : ''}</div><span class="bb-hecho-ok" title="Verificado">${h.verificado ? pzIc('check', 13) : ''}</span></div>`).join('')}
     </section>`).join('');
   const agentes = ['posty', 'venty', 'atenty', 'gesty', 'oficina'];
   const avisos = prefs ? `<section class="bb-bloque"><h2>Cómo te avisa tu oficina</h2>
@@ -1087,7 +1183,7 @@ function mxVistasUnAgenteHTML(nv, premioHTML) {
   return `<div class="mx-pasos-nivel">${botones.join('')}</div>${vistas.join('')}`;
 }
 function mxJardinHTML(tipo, nvP, nvG, jardin, post50) {
-  const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">← ${gzT('Volver', 'Back')}</button>`;
+  const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">${pzIc('arrowLeft', 16)} ${gzT('Volver', 'Back')}</button>`;
   if (tipo === 'posty') {
     const head = `<h1>${gzT('Mi jardín', 'My garden')}</h1><p>${gzT('Crece solo con semanas publicadas de verdad.', 'Grows only with truly published weeks.')}</p>`;
     const fotoUrl = mxFotoJardin(jardin);
@@ -1231,10 +1327,10 @@ async function uploadAssetFile(file, kind) {
       signal: AbortSignal.timeout(120000),
     });
   } catch (e) {
-    throw new Error('¡Uh! Me desconecté un segundo 😅 Revisá tu conexión y probá de nuevo.');
+    throw new Error('¡Uh! Me desconecté un segundo. Revisá tu conexión y probá de nuevo.');
   }
   const data = await r.json().catch(() => ({}));
-  if (!r.ok || !data.ok) throw new Error((data && (data.error || data.message)) || 'No pude subir el archivo 😅 Probá de nuevo');
+  if (!r.ok || !data.ok) throw new Error((data && (data.error || data.message)) || 'No pude subir el archivo. Probá de nuevo');
   try { if (typeof ASSETS !== 'undefined') ASSETS = await api.get('/api/assets').catch(() => ASSETS); } catch (e) {}
   return data;
 }
@@ -1244,7 +1340,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261031-v499'; // (lote1-ajustes) bump: chunk-ajustes cambia (sin Meta keys + reorden secciones)
+const CHUNK_V = '20261031-v506'; // (lote1-ajustes) bump: chunk-ajustes cambia (sin Meta keys + reorden secciones)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -1260,7 +1356,7 @@ function loadChunk(name) {
 // Tarjeta amable si un chunk no pudo descargarse (p. ej. sin conexión).
 function chunkFailHTML() {
   return '<div class="apv-wrap"><div class="card" style="text-align:center">'
-    + '<h3 style="margin:0 0 6px">\U0001f605 Uh, no pude cargar esta secci\u00f3n</h3>'
+    + '<h3 style="margin:0 0 6px">Uh, no pude cargar esta sección</h3>'
     + '<p class="hint">Revis\u00e1 tu conexi\u00f3n y prob\u00e1 de nuevo.</p>'
     + '<button class="btn btn-soft" onclick="render()">Reintentar</button>'
     + '</div></div>';
@@ -1290,7 +1386,7 @@ function pzVisibility() {
 }
 function pzRefThanksHTML(en) {
   return `<div class="celeb-ref">
-    <p class="celeb-ref-t">${en ? '💙 You already brought 2 businesses to Posty' : '💙 Ya trajiste a 2 negocios a Posty'}</p>
+    <p class="celeb-ref-t">${en ? '' + pzIc('heart', 14) + ' You already brought 2 businesses to Posty' : '' + pzIc('heart', 14) + ' Ya trajiste a 2 negocios a Posty'}</p>
     <p class="d">${en ? 'Your 50% off is active — thank you for sharing!' : 'Tu 50% off está activo — ¡gracias por compartir!'}</p>
   </div>`;
 }
@@ -1395,7 +1491,7 @@ async function refreshSession(force) {
 // Pantalla cuando hay sesión pero no hay internet: reintentar, nunca pedir login.
 function offlineView() {
   return `<div class="pz-offline">
-    <div style="font-size:46px">📡</div>
+    <div style="font-size:46px">${pzIc('plug', 46)}</div>
     <h2>Sin conexión</h2>
     <p>No pudimos hablar con el servidor.<br>Tu sesión sigue abierta, solo te falta internet.</p>
     <button class="btn btn-primary" id="btnRetryConn" style="margin-top:14px">Reintentar</button>
@@ -1465,16 +1561,16 @@ const TIMEZONES = [
   ['Europe/Madrid', 'Madrid, España'],
 ];
 const CATS = [
-  ['ropa', '👕', 'Ropa'], ['gastronomia', '🍔', 'Gastronomía'], ['cafeteria', '☕', 'Cafetería'],
-  ['belleza', '💄', 'Belleza'], ['barberia', '💈', 'Barbería'], ['fitness', '💪', 'Fitness'],
-  ['salud', '🩺', 'Salud'], ['mascotas', '🐾', 'Mascotas'], ['servicios', '🛠️', 'Servicios'],
-  ['educacion', '📚', 'Educación'], ['tecnologia', '💻', 'Tecnología'], ['hogar', '🏠', 'Hogar y deco'],
-  ['inmobiliaria', '🏢', 'Inmobiliaria'], ['eventos', '🎉', 'Eventos'], ['viajes', '✈️', 'Viajes'],
-  ['arte', '🎨', 'Arte y diseño'], ['otro', '➕', 'Otro'],
+  ['ropa', 'shirt', 'Ropa'], ['gastronomia', 'utensils', 'Gastronomía'], ['cafeteria', 'cup', 'Cafetería'],
+  ['belleza', 'lipstick', 'Belleza'], ['barberia', 'barber', 'Barbería'], ['fitness', 'dumbbell', 'Fitness'],
+  ['salud', 'stethoscope', 'Salud'], ['mascotas', 'paw', 'Mascotas'], ['servicios', 'wrench', 'Servicios'],
+  ['educacion', 'book', 'Educación'], ['tecnologia', 'laptop', 'Tecnología'], ['hogar', 'home', 'Hogar y deco'],
+  ['inmobiliaria', 'building', 'Inmobiliaria'], ['eventos', 'gift', 'Eventos'], ['viajes', 'send', 'Viajes'],
+  ['arte', 'palette', 'Arte y diseño'], ['otro', 'plus', 'Otro'],
 ];
 const TONES = [
-  ['canchero', '😎', 'Canchero'], ['profesional', '💼', 'Profesional'], ['divertido', '😂', 'Divertido'],
-  ['cercano', '🤝', 'Cercano'], ['elegante', '✨', 'Elegante'], ['motivador', '🔥', 'Motivador'],
+  ['canchero', 'glasses', 'Canchero'], ['profesional', 'briefcase', 'Profesional'], ['divertido', 'smile', 'Divertido'],
+  ['cercano', 'heart', 'Cercano'], ['elegante', 'sparkle', 'Elegante'], ['motivador', 'flame', 'Motivador'],
 ];
 const catKnown = v => CATS.some(([x]) => x === v);
 const catSel = v => catKnown(v) ? v : 'otro';
@@ -1655,7 +1751,7 @@ async function switchPlansCountry(c) {
 // Banda fina si llegó con link de referido (?ref= guardado en localStorage)
 function pzRefBandHTML() {
   try {
-    if (localStorage.getItem('posta_ref')) return `<div class="pz-refband">🎉 Llegaste con un link de invitado: tenés <b>20% off</b> en tu plan, todos los meses</div>`;
+    if (localStorage.getItem('posta_ref')) return `<div class="pz-refband">${pzIc('gift', 16)} Llegaste con un link de invitado: tenés <b>20% off</b> en tu plan, todos los meses</div>`;
   } catch (e) {}
   return '';
 }
@@ -1683,27 +1779,27 @@ async function enhanceWeekReport() {
     if (!showFull && !opp && !r.question) return;
     let h = '<div class="hs-report">';
     if (showFull) {
-      h += `<div class="hs-report-title">🎉 Tu semana pasada en Posty</div>`;
-      let line = `📸 <b>${r.n}</b> posteo${r.n === 1 ? '' : 's'} publicado${r.n === 1 ? '' : 's'}`;
-      if (r.stories) line += ` · 📱 <b>${r.stories}</b> historia${r.stories === 1 ? '' : 's'}`;
+      h += `<div class="hs-report-title">${pzIc('gift', 16)} Tu semana pasada en Posty</div>`;
+      let line = `${pzIc('camera', 16)} <b>${r.n}</b> posteo${r.n === 1 ? '' : 's'} publicado${r.n === 1 ? '' : 's'}`;
+      if (r.stories) line += ` · ${pzIc('phone', 16)} <b>${r.stories}</b> historia${r.stories === 1 ? '' : 's'}`;
       h += `<div class="hs-report-line">${line}</div>`;
       const eng = [];
-      if (r.likes) eng.push(`❤️ ${r.likes} likes`);
-      if (r.comments) eng.push(`💬 ${r.comments} comentarios`);
-      if (r.reach) eng.push(`👁️ ${Number(r.reach).toLocaleString('es-AR')} alcance`);
+      if (r.likes) eng.push(`${pzIc('heart', 16)} ${r.likes} likes`);
+      if (r.comments) eng.push(`${pzIc('chat', 16)} ${r.comments} comentarios`);
+      if (r.reach) eng.push(`${pzIc('eye', 16)} ${Number(r.reach).toLocaleString('es-AR')} alcance`);
       if (eng.length) h += `<div class="hs-report-line">${eng.join(' · ')}</div>`;
-      if (r.best) h += `<div class="hs-report-line">🏆 Tu mejor posteo: “${esc(r.best.caption)}…” (${r.best.likes} ❤️ · ${r.best.comments} 💬)</div>`;
-      if (r.nextCount) h += `<div class="hs-report-line">✨ Y ya hay <b>${r.nextCount}</b> posteos en camino para esta semana</div>`;
+      if (r.best) h += `<div class="hs-report-line">${pzIc('trophy', 16)} Tu mejor posteo: “${esc(r.best.caption)}…” (${r.best.likes} ${pzIc('heart', 14)} · ${r.best.comments} ${pzIc('chat', 14)})</div>`;
+      if (r.nextCount) h += `<div class="hs-report-line">${pzIc('sparkle', 16)} Y ya hay <b>${r.nextCount}</b> posteos en camino para esta semana</div>`;
       if (r.gridNote) h += `<div class="hs-report-line">${esc(r.gridNote)}</div>`;
     }
     if (opp) {
-      h += `<div class="hs-report-line">📅 <b>Se viene ${esc(opp.name)}</b> ${opp.daysLeft === 0 ? '¡hoy!' : opp.daysLeft === 1 ? '¡mañana!' : `en ${opp.daysLeft} días`} — tu semana va a tener un posteo especial ✨</div>`;
+      h += `<div class="hs-report-line">${pzIc('calendar', 16)} <b>Se viene ${esc(opp.name)}</b> ${opp.daysLeft === 0 ? '¡hoy!' : opp.daysLeft === 1 ? '¡mañana!' : `en ${opp.daysLeft} días`} — tu semana va a tener un posteo especial</div>`;
     }
     // (v238) POSTY PREGUNTA: el reporte semanal anuncia la pregunta de
     // la semana; la respuesta se da en SU tarjeta de Schedule (una sola
     // pregunta entre las dos superficies, un solo lugar para tocar).
     if (r.question && r.question.texto) {
-      h += `<div class="hs-report-line">🤔 <b>Posty te pregunta:</b> ${esc(r.question.texto)} <span style="color:var(--mut)">Respondela en la tarjeta de tu semana 👇</span></div>`;
+      h += `<div class="hs-report-line">${pzIc('help', 16)} <b>Posty te pregunta:</b> ${esc(r.question.texto)} <span style="color:var(--mut)">Respondela en la tarjeta de tu semana ${pzIc('arrowDown', 14)}</span></div>`;
     }
     h += '</div>';
     slot.innerHTML = h;
@@ -1790,7 +1886,7 @@ async function enhanceIdeas(force) {
   } else {
     h += '<div class="hs-ideas-sub">Cada lunes te traigo ideas nuevas desde tu competencia, tus posteos que mejor anduvieron y las fechas que se vienen. Sin humo: si no hay nada concreto, no te molesto.</div>';
   }
-  h += '<div class="idea-comps"><span class="idea-comps-label">👀 Tu competencia:</span>';
+  h += '<div class="idea-comps"><span class="idea-comps-label">' + pzIc('eye', 14) + ' Tu competencia:</span>';
   for (const c of comps) h += `<span class="idea-comp-chip">@${esc(c)}<button type="button" class="idea-comp-x" data-comp-remove="${esc(c)}" aria-label="Quitar @${esc(c)}">×</button></span>`;
   if (comps.length < 5) h += '<span class="idea-comp-add"><input type="text" id="ideaCompInput" placeholder="@competidor" maxlength="42" autocomplete="off" autocapitalize="none"><button type="button" class="btn btn-ghost btn-sm" id="ideaCompAdd">Agregar</button></span>';
   h += '<div class="idea-comp-warn" id="ideaCompWarn" role="alert" hidden></div>';
@@ -1824,7 +1920,7 @@ async function pzReciclaPaint(slot) {
   let note = '', actions = '';
   if (r.state === 'ready') {
     note = 'Hace ' + days + ' días este posteo llegó a ' + w.reach + ' personas. La misma idea, con una foto real nueva y texto fresco.';
-    actions = '<button type="button" class="btn btn-primary btn-sm" data-pz-recicla-make>♻️ Crear versión fresca</button>';
+    actions = '<button type="button" class="btn btn-primary btn-sm" data-pz-recicla-make>' + pzIc('refresh', 16) + ' Crear versión fresca</button>';
   } else {
     note = 'Hace ' + days + ' días este posteo llegó a ' + w.reach + ' personas, pero no tenés una foto real nueva de ese producto para reciclarlo. Subila y avisame con un toque — nunca reutilizo la foto vieja.';
     actions = '<button type="button" class="btn btn-primary btn-sm" data-pz-recicla-foto>Ya subí una foto nueva</button>'
@@ -1898,12 +1994,12 @@ function wireIdeasBlock(slot) {
       const id = b.getAttribute('data-idea-make');
       const card = slot.querySelector(`[data-idea-card="${id}"]`);
       b.disabled = true;
-      b.textContent = '⏳ Armando tu posteo…';
+      b.innerHTML = `${pzIc('clock', 16)} Armando tu posteo…`;
       try {
         await api.post('/api/ideas/' + id + '/make', {}, { timeout: 240000 });
         if (typeof IDEAS_PENDING_COUNT === 'number') IDEAS_PENDING_COUNT = Math.max(0, IDEAS_PENDING_COUNT - 1);
         paintIdeasChrome();
-        if (card) card.innerHTML = '<div class="idea-done">✅ listo! tu posteo quedó como borrador en tu semana — revisalo cuando quieras.</div>';
+        if (card) card.innerHTML = '<div class="idea-done">' + pzIc('checkCircle', 16) + ' listo! tu posteo quedó como borrador en tu semana — revisalo cuando quieras.</div>';
         try { toast('✅ Posteo creado desde tu idea'); } catch (e) {}
         setTimeout(() => { refreshIdeas(); try { render(); } catch (e) {} }, 900);
       } catch (e) {
@@ -1934,7 +2030,7 @@ function wireIdeasBlock(slot) {
       const toks = v.split(/[\s,;|]+/).filter(Boolean).map((t) => t.replace(/^@+/, '').toLowerCase());
       const bad = !toks.length || toks.some((h) => !/^[a-z0-9._]{2,40}$/.test(h) || h.startsWith('.') || h.endsWith('.') || cur.includes(h));
       if (bad || cur.length + toks.length > 5) {
-        showWarn(bad ? 'Ese @ no parece válido 😅 Revisá el nombre e intentá de nuevo.' : 'Ya tenés 5 competidores — quitá uno para agregar otro.');
+        showWarn(bad ? 'Ese @ no parece válido. Revisá el nombre e intentá de nuevo.' : 'Ya tenés 5 competidores — quitá uno para agregar otro.');
         return;
       }
       hideWarn();
@@ -2030,7 +2126,7 @@ function wireQuestionCard(slot) {
       try { const ov = JSON.parse(v); if (ov && ov.tipo) optTipo = String(ov.tipo); } catch (e) {}
       if (optTipo === 'descuento') {
         pqPendingTipo = 'descuento';
-        if (inp) { inp.focus(); inp.placeholder = (typeof ME !== 'undefined' && ME.lang === 'en') ? 'tell me the discount and until when 😊' : 'contame el descuento y hasta cuándo 😊'; }
+        if (inp) { inp.focus(); inp.placeholder = (typeof ME !== 'undefined' && ME.lang === 'en') ? 'tell me the discount and until when' : 'contame el descuento y hasta cuándo'; }
         return;
       }
       b.disabled = true;
@@ -2040,7 +2136,7 @@ function wireQuestionCard(slot) {
   const send = card.querySelector('#pqSend');
   const doSend = () => {
     const t = String((inp && inp.value) || '').trim();
-    if (!t) { if (inp) { inp.focus(); inp.placeholder = 'escribí tu respuesta 😊'; } return; }
+    if (!t) { if (inp) { inp.focus(); inp.placeholder = 'escribí tu respuesta'; } return; }
     answer(pqPendingTipo ? { value: JSON.stringify({ radar: 1, tipo: pqPendingTipo }), text: t } : { text: t });
   };
   if (send) send.onclick = doSend;
@@ -2065,14 +2161,14 @@ function showcaseCardHTML(s) {
   const who = `${esc(s.business_name)}${s.rubro_label ? ' · ' + esc(s.rubro_label) : ''}${s.city ? ' · ' + esc(s.city) : ''}`;
   let h = '<div class="hs-question sc-card">';
   if (s.state === 'draft') {
-    h += `<div class="hs-question-title">${en ? '📣 Your story for Posty\'s page' : '📣 Tu historia para la página de Posty'}</div>`;
+    h += `<div class="hs-question-title">${en ? '' + pzIc('megaphone', 16) + ' Your story for Posty\'s page' : '' + pzIc('megaphone', 16) + ' Tu historia para la página de Posty'}</div>`;
     h += `<div class="hs-question-text">${en ? 'I drafted it with your real stuff — your best post, your words, your numbers. edit it however you like: what you approve is exactly what goes live.' : 'te la armé con tus cosas reales: tu mejor posteo, tus palabras y un dato de tu cuenta. editala como quieras: lo que aprobás es exactamente lo que sale.'}</div>`;
     if (s.image) h += `<div class="sc-prev"><img src="${esc(s.image)}" alt=""><div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">${pzIc('stems', 15)} ${esc(s.metric_label || '')}</span></div></div>`;
     else h += `<div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">${pzIc('stems', 15)} ${esc(s.metric_label || '')}</span></div>`;
     h += `<textarea class="in sc-quote" id="scQuote" rows="3" maxlength="280">${esc(s.quote_text || '')}</textarea>`;
     h += `<div class="pq-foot"><button type="button" class="btn btn-primary btn-sm" id="scApprove">${en ? 'Publish it ' : 'Publicarla '}${pzIc('sparkle', 18)}</button><button type="button" class="btn btn-ghost btn-sm" id="scRevoke">${en ? 'Never mind' : 'Mejor no'}</button></div>`;
   } else { // active
-    h += `<div class="hs-question-title">${en ? '✨ Your story is live on Posty\'s page' : '✨ Tu historia está en la página de Posty'}</div>`;
+    h += `<div class="hs-question-title">${en ? '' + pzIc('sparkle', 16) + ' Your story is live on Posty\'s page' : '' + pzIc('sparkle', 16) + ' Tu historia está en la página de Posty'}</div>`;
     h += `<div class="hs-question-text">«${esc(s.quote_text || '')}»</div>`;
     h += `<div class="sc-prev-meta"><b>${who}</b><span class="sc-chip">${pzIc('stems', 15)} ${esc(s.metric_label || '')}</span></div>`;
     h += `<div class="pq-foot"><button type="button" class="btn btn-ghost btn-sm" id="scRevoke">${en ? 'Take it down' : 'Sacar mi historia'}</button><span class="pq-hint">${en ? 'one tap and it\'s gone — no questions asked.' : 'un toque y desaparece — sin preguntas.'}</span></div>`;
@@ -3236,7 +3332,7 @@ function lpAnalisisHTML() {
     <div class="lp-letter">
       <div class="lp-letter-head"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span><div><b>Tu análisis</b><span>Cafetería de barrio · ejemplo</span></div></div>
       <div class="lp-letter-verdict"><span>Mi veredicto</span><p>“Tenés buen café y buena gente. Hoy tu ritmo es de 2 posteos por semana — y la constancia no depende de tu tiempo: la pongo yo.”</p></div>
-      <p class="lp-letter-f">📈 <b>Tu ritmo de publicación tiene mucho para crecer</b> — hoy: 2 posteos por semana.<br><span>→ Con Posty: tu semana completa, armada y programada.</span></p>
+      <p class="lp-letter-f">📈 <b>Tu ritmo de publicación tiene mucho para crecer</b> — hoy: 2 posteos por semana.<br><span>${pzIc('arrowRight', 13)} Con Posty: tu semana completa, armada y programada.</span></p>
       <div class="lp-letter-plan">
         <p class="lp-lp-t">🚀 Mi plan para mejorar todo esto</p>
         <p><b>① Esta semana:</b> tu semana completa, sin un solo hueco — cada posteo programado en tu franja.</p>
@@ -3993,8 +4089,8 @@ function authLang() {
 const AUTH_STR = {
   es: {
     navCreate: 'Crear cuenta', navLogin: 'Entrar',
-    loginH2: 'Bienvenido de vuelta 👋', loginSub: 'Entrá para seguir automatizando.',
-    regH2: 'Creá tu cuenta 🚀', regSub: 'Probalo gratis, sin tarjeta.',
+    loginH2: 'Bienvenido de vuelta', loginSub: 'Entrá para seguir automatizando.',
+    regH2: 'Creá tu cuenta', regSub: 'Probalo gratis, sin tarjeta.',
     emailPh: 'vos@tunegocio.com', passLabel: 'Contraseña', passPh: 'Mínimo 6 caracteres',
     btnLogin: 'Entrar', btnReg: 'Crear cuenta',
     rememberLabel: 'Guardar contraseña en este dispositivo',
@@ -4004,20 +4100,20 @@ const AUTH_STR = {
 
     footLogin: '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a> · <a href="#/forgot" style="color:var(--cel)">Olvidé mi contraseña</a>',
     footReg: '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>',
-    forgotH2: 'Recuperá tu contraseña 🔑', forgotSub: 'Te mando un link a tu email para elegir una nueva.',
+    forgotH2: 'Recuperá tu contraseña', forgotSub: 'Te mando un link a tu email para elegir una nueva.',
     forgotBtn: 'Mandame el link', backLogin: 'Volver a entrar',
-    forgotEmpty: 'Escribí tu email 📧',
-    forgotOk: '¡Listo! 📬 Si ese email tiene cuenta, ya te mandé el link para cambiar tu contraseña. Revisá tu casilla (y el spam).',
-    resetH2: 'Elegí tu nueva contraseña 🔑', resetSub: 'Que sea de 6 caracteres como mínimo.',
+    forgotEmpty: 'Escribí tu email',
+    forgotOk: '¡Listo! Si ese email tiene cuenta, ya te mandé el link para cambiar tu contraseña. Revisá tu casilla (y el spam).',
+    resetH2: 'Elegí tu nueva contraseña', resetSub: 'Que sea de 6 caracteres como mínimo.',
     resetLabel: 'Nueva contraseña', resetBtn: 'Guardar y entrar',
     resetFoot: '<a href="#/forgot" style="color:var(--cel)">¿El link venció? Pedí uno nuevo</a> · <a href="#/login" style="color:var(--cel)">Volver a entrar</a>',
-    resetBadLink: 'Este link no sirve 😅 <a href="#/forgot" style="color:var(--cel);font-weight:700">Pedí uno nuevo</a>',
+    resetBadLink: 'Este link no sirve. <a href="#/forgot" style="color:var(--cel);font-weight:700">Pedí uno nuevo</a>',
     resetNewLink: 'Pedí un link nuevo',
   },
   en: {
     navCreate: 'Create account', navLogin: 'Log in',
-    loginH2: 'Welcome back 👋', loginSub: 'Log in to keep automating.',
-    regH2: 'Create your account 🚀', regSub: 'Try it free, no card needed.',
+    loginH2: 'Welcome back', loginSub: 'Log in to keep automating.',
+    regH2: 'Create your account', regSub: 'Try it free, no card needed.',
     emailPh: 'you@yourbusiness.com', passLabel: 'Password', passPh: 'At least 6 characters',
     btnLogin: 'Log in', btnReg: 'Create account',
     rememberLabel: 'Save password on this device',
@@ -4027,21 +4123,21 @@ const AUTH_STR = {
 
     footLogin: 'No account yet? <a href="#/registro" style="color:var(--cel)">Sign up</a> · <a href="#/forgot" style="color:var(--cel)">Forgot my password</a>',
     footReg: 'Already have an account? <a href="#/login" style="color:var(--cel)">Log in</a>',
-    forgotH2: 'Reset your password 🔑', forgotSub: 'I will send you a link to your email so you can choose a new one.',
+    forgotH2: 'Reset your password', forgotSub: 'I will send you a link to your email so you can choose a new one.',
     forgotBtn: 'Send me the link', backLogin: 'Back to log in',
-    forgotEmpty: 'Enter your email 📧',
-    forgotOk: 'Done! 📬 If that email has an account, I just sent you the link to reset your password. Check your inbox (and spam).',
-    resetH2: 'Choose your new password 🔑', resetSub: 'Make it at least 6 characters.',
+    forgotEmpty: 'Enter your email',
+    forgotOk: 'Done! If that email has an account, I just sent you the link to reset your password. Check your inbox (and spam).',
+    resetH2: 'Choose your new password', resetSub: 'Make it at least 6 characters.',
     resetLabel: 'New password', resetBtn: 'Save and log in',
     resetFoot: '<a href="#/forgot" style="color:var(--cel)">Link expired? Request a new one</a> · <a href="#/login" style="color:var(--cel)">Back to log in</a>',
-    resetBadLink: 'This link is no good 😅 <a href="#/forgot" style="color:var(--cel);font-weight:700">Request a new one</a>',
+    resetBadLink: 'This link is no good <a href="#/forgot" style="color:var(--cel);font-weight:700">Request a new one</a>',
     resetNewLink: 'Request a new link',
   },
 };
 function authStr() { return AUTH_STR[authLang()] || AUTH_STR.es; }
 const SAVED_STR = {
-  es: { cont: 'Continuar como', other: 'Usar otra cuenta', remove: 'Quitar', savedTitle: 'Tus cuentas en este dispositivo', soft: 'Esa entrada ya no sirve en este dispositivo 😅 Entrá con tu contraseña y queda guardada de nuevo.', net: 'Sin conexión justo ahora 😅 Probá de nuevo en un toque.' },
-  en: { cont: 'Continue as', other: 'Use another account', remove: 'Remove', savedTitle: 'Your accounts on this device', soft: 'That sign-in no longer works on this device 😅 Log in with your password and it will be saved again.', net: 'No connection right now 😅 Try again in a sec.' },
+  es: { cont: 'Continuar como', other: 'Usar otra cuenta', remove: 'Quitar', savedTitle: 'Tus cuentas en este dispositivo', soft: 'Esa entrada ya no sirve en este dispositivo Entrá con tu contraseña y queda guardada de nuevo.', net: 'Sin conexión justo ahora Probá de nuevo en un toque.' },
+  en: { cont: 'Continue as', other: 'Use another account', remove: 'Remove', savedTitle: 'Your accounts on this device', soft: 'That sign-in no longer works on this device Log in with your password and it will be saved again.', net: 'No connection right now Try again in a sec.' },
 };
 function savedStr() { return SAVED_STR[savedAccountsLang()] || SAVED_STR.es; }
 function savedAccountsList() {
@@ -4499,19 +4595,19 @@ function pwaInstallModal() {
     <div class="pz-pwa-step"><span class="pz-pwa-n">1</span><div><b>Tocá los tres puntitos •••</b><small>Abajo a la derecha, junto a la dirección.</small></div></div>
     <div class="pz-pwa-step"><span class="pz-pwa-n">2</span><div><b>Tocá Compartir</b><small>El cuadradito con la flecha hacia arriba.</small></div></div>
     <div class="pz-pwa-step"><span class="pz-pwa-n">3</span><div><b>Elegí "Agregar a pantalla de inicio"</b><small>Deslizá un poco hacia abajo para encontrarla.</small></div></div>
-    <div class="pz-pwa-step"><span class="pz-pwa-n">4</span><div><b>Tocá "Agregar"</b><small>Arriba a la derecha. ¡Listo! Posty queda como una app en tu teléfono 🎉</small></div></div>
+    <div class="pz-pwa-step"><span class="pz-pwa-n">4</span><div><b>Tocá "Agregar"</b><small>Arriba a la derecha. ¡Listo! Posty queda como una app en tu teléfono</small></div></div>
   ` : `
     <div class="pz-pwa-step"><span class="pz-pwa-n">1</span><div><b>Tocá el menú ⋮</b><small>Arriba a la derecha en Chrome.</small></div></div>
     <div class="pz-pwa-step"><span class="pz-pwa-n">2</span><div><b>Elegí "Instalar app"</b><small>O "Agregar a pantalla de inicio".</small></div></div>
-    <div class="pz-pwa-step"><span class="pz-pwa-n">3</span><div><b>Confirmá</b><small>¡Listo! Posty queda como una app en tu teléfono 🎉</small></div></div>
+    <div class="pz-pwa-step"><span class="pz-pwa-n">3</span><div><b>Confirmá</b><small>¡Listo! Posty queda como una app en tu teléfono</small></div></div>
   `;
   const ov = document.createElement('div');
   ov.id = 'pzPwaOverlay';
   ov.className = 'pz-exp-overlay';
   ov.innerHTML = `
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
-      <button class="pz-exp-x" id="pzPwaClose" aria-label="Cerrar">✕</button>
-      <div style="font-size:37px">📲</div>
+      <button class="pz-exp-x" id="pzPwaClose" aria-label="Cerrar">${pzIc("x", 16)}</button>
+      <div style="font-size:37px">${pzIc('install', 37)}</div>
       <h2>Guardá Posty en tu celu</h2>
       <p class="pz-exp-sub">Queda como una app, con su ícono en la pantalla de inicio.</p>
       <div class="pz-pwa-steps">${steps}</div>
@@ -4581,9 +4677,9 @@ function pushAskCard() {
     ov.className = 'pz-exp-overlay';
     ov.innerHTML = `
       <div class="pz-exp-modal" role="dialog" aria-modal="true">
-        <div style="font-size:37px">🔔</div>
+        <div style="font-size:37px">${pzIc('bell', 37)}</div>
         <h2>¿Te aviso cuando pase algo?</h2>
-        <p class="pz-exp-sub">Te mando un avisito cuando tu posteo salga publicado y cuando tu semana esté lista para revisar. Nada de spam, lo prometo 🤙</p>
+        <p class="pz-exp-sub">Te mando un avisito cuando tu posteo salga publicado y cuando tu semana esté lista para revisar. Nada de spam, lo prometo</p>
         <button class="btn btn-primary btn-block" id="pzPushYes">Sí, avisame ${pzIc('checkCircle', 18)}</button>
         <button class="btn btn-soft btn-block" id="pzPushNo" style="margin-top:8px">Ahora no</button>
       </div>`;
@@ -4714,29 +4810,29 @@ function setupChecklistHtml(title, opts) {
   // la desaparición de la tarjeta ni la celebración (eso mira `rows`).
   let infoRows = [];
   if (!(PROFILE && (PROFILE.business_name || '').trim())) {
-    rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">${pzIc('store', 20)}</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
+    rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">${pzIc('store', 20)}</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar ${pzIc("arrowRight", 14)}</span></button>`);
   }
   if (!(PROFILE && PROFILE.ig_connected)) {
-    rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">${pzIc('camera', 20)}</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar →</span></button>`);
+    rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">${pzIc('camera', 20)}</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar ${pzIc("arrowRight", 14)}</span></button>`);
   }
   // (v426 · ÍTEM 4) Paso «primera semana»: pendiente solo si la semana
   // todavía no está en marcha (PROFILE.first_week_live, del server).
   // Va DESPUÉS de la fila de Instagram, como pide la spec de activación.
   if (!(PROFILE && PROFILE.first_week_live)) {
     rows.push(en
-      ? `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">${pzIc('calendar', 20)}</span><span class="setup-txt"><b>Review your first week</b><small>Take a look at the posts I made for you and get them ready.</small></span><span class="setup-go">See my week →</span></button>`
-      : `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">${pzIc('calendar', 20)}</span><span class="setup-txt"><b>Revisá tu primera semana</b><small>Mirá los posteos que armé para vos y dejalos listos.</small></span><span class="setup-go">Ver mi semana →</span></button>`);
+      ? `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">${pzIc('calendar', 20)}</span><span class="setup-txt"><b>Review your first week</b><small>Take a look at the posts I made for you and get them ready.</small></span><span class="setup-go">See my week ${pzIc("arrowRight", 14)}</span></button>`
+      : `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">${pzIc('calendar', 20)}</span><span class="setup-txt"><b>Revisá tu primera semana</b><small>Mirá los posteos que armé para vos y dejalos listos.</small></span><span class="setup-go">Ver mi semana ${pzIc("arrowRight", 14)}</span></button>`);
   }
   if (pwaIsMobile() && !pwaIsInstalled() && !pwaDismissed()) {
-    rows.push(`<button class="setup-row" id="pwaInstallBtn"><span class="setup-ico">${pzIc('install', 20)}</span><span class="setup-txt"><b>Instalá la app</b><small>Acceso directo en tu teléfono.</small></span><span class="setup-go">Instalar →</span></button>`);
+    rows.push(`<button class="setup-row" id="pwaInstallBtn"><span class="setup-ico">${pzIc('install', 20)}</span><span class="setup-txt"><b>Instalá la app</b><small>Acceso directo en tu teléfono.</small></span><span class="setup-go">Instalar ${pzIc("arrowRight", 14)}</span></button>`);
   }
   // 🔔 Notificaciones: obligatorias. Sin botón de descartar: el paso se cumple
   // activando push, o por email si el OS lo bloquea (el email siempre llega).
   if (pushSupported() && pushPerm() !== 'granted') {
     if (pushPerm() === 'denied') {
-      rows.push(`<div class="setup-row setup-done"><span class="setup-ico">📧</span><span class="setup-txt"><b>Te aviso por email</b><small>Bloqueaste las notificaciones: los avisos llegan a tu email.</small></span><span class="setup-go">✓</span></div>`);
+      rows.push(`<div class="setup-row setup-done"><span class="setup-ico">${pzIc('mail', 20)}</span><span class="setup-txt"><b>Te aviso por email</b><small>Bloqueaste las notificaciones: los avisos llegan a tu email.</small></span><span class="setup-go">${pzIc('check', 14)}</span></div>`);
     } else {
-      rows.push(`<button class="setup-row" id="setupPushRow"><span class="setup-ico">${pzIc('bell', 20)}</span><span class="setup-txt"><b>Activá las notificaciones</b><small>Te aviso antes de publicar cada posteo.</small></span><span class="setup-go">Activar →</span></button>`);
+      rows.push(`<button class="setup-row" id="setupPushRow"><span class="setup-ico">${pzIc('bell', 20)}</span><span class="setup-txt"><b>Activá las notificaciones</b><small>Te aviso antes de publicar cada posteo.</small></span><span class="setup-go">Activar ${pzIc("arrowRight", 14)}</span></button>`);
     }
   }
   // (v426 · ÍTEM 4) Paso «plan», según el estado REAL de la cuenta (ME):
@@ -4747,12 +4843,12 @@ function setupChecklistHtml(title, opts) {
   if (planStatus === 'trial' && !(ME && ME.trial_expired)) {
     const dLeft = (ME && typeof ME.trial_days_left === 'number') ? ME.trial_days_left : 0;
     infoRows.push(en
-      ? `<div class="setup-row setup-done"><span class="setup-ico">⏳</span><span class="setup-txt"><b>Your trial is in progress</b><small>${dLeft === 1 ? 'You have 1 day of trial left' : `You have ${dLeft} days of trial left`} — your plan starts whenever you want.</small></span><span class="setup-go">✓</span></div>`
-      : `<div class="setup-row setup-done"><span class="setup-ico">⏳</span><span class="setup-txt"><b>Tu prueba está en curso</b><small>${dLeft === 1 ? 'Te queda 1 día de prueba' : `Te quedan ${dLeft} días de prueba`} — tu plan se activa cuando quieras.</small></span><span class="setup-go">✓</span></div>`);
+      ? `<div class="setup-row setup-done"><span class="setup-ico">${pzIc('clock', 20)}</span><span class="setup-txt"><b>Your trial is in progress</b><small>${dLeft === 1 ? 'You have 1 day of trial left' : `You have ${dLeft} days of trial left`} — your plan starts whenever you want.</small></span><span class="setup-go">${pzIc('check', 14)}</span></div>`
+      : `<div class="setup-row setup-done"><span class="setup-ico">${pzIc('clock', 20)}</span><span class="setup-txt"><b>Tu prueba está en curso</b><small>${dLeft === 1 ? 'Te queda 1 día de prueba' : `Te quedan ${dLeft} días de prueba`} — tu plan se activa cuando quieras.</small></span><span class="setup-go">${pzIc('check', 14)}</span></div>`);
   } else if (planStatus === 'cancelled' || (planStatus === 'trial' && ME && ME.trial_expired)) {
     rows.push(en
-      ? `<button class="setup-row" id="setupPlanRow"><span class="setup-ico">${pzIc('card', 20)}</span><span class="setup-txt"><b>Activate your plan</b><small>Your trial is over: pick a plan and I'll keep working for you.</small></span><span class="setup-go">See plans →</span></button>`
-      : `<button class="setup-row" id="setupPlanRow"><span class="setup-ico">${pzIc('card', 20)}</span><span class="setup-txt"><b>Activá tu plan</b><small>Tu prueba terminó: elegí un plan y sigo trabajando para vos.</small></span><span class="setup-go">Ver planes →</span></button>`);
+      ? `<button class="setup-row" id="setupPlanRow"><span class="setup-ico">${pzIc('card', 20)}</span><span class="setup-txt"><b>Activate your plan</b><small>Your trial is over: pick a plan and I'll keep working for you.</small></span><span class="setup-go">See plans ${pzIc("arrowRight", 14)}</span></button>`
+      : `<button class="setup-row" id="setupPlanRow"><span class="setup-ico">${pzIc('card', 20)}</span><span class="setup-txt"><b>Activá tu plan</b><small>Tu prueba terminó: elegí un plan y sigo trabajando para vos.</small></span><span class="setup-go">Ver planes ${pzIc("arrowRight", 14)}</span></button>`);
   }
   // La detección de transición vive acá: cubre TODAS las rutas que pintan el checklist
   // (refreshSetupChecklist, appShell, chatView), porque todas pasan por esta función.
@@ -4785,7 +4881,7 @@ function setupMainHTML() {
   if (!card) return '';
   const m = card.match(/<div class="setup-title">([\s\S]*?)<\/div>/);
   const label = m ? m[1] : pzIc('sprout', 18);
-  return `<div class="setup-pillwrap"><button type="button" class="setup-pill" data-setup-pill aria-expanded="false"><span data-setup-pill-label>${label}</span><span class="setup-pill-chev" aria-hidden="true">▾</span></button><div class="setup-pill-pop" hidden>${card}</div></div>`;
+  return `<div class="setup-pillwrap"><button type="button" class="setup-pill" data-setup-pill aria-expanded="false"><span data-setup-pill-label>${label}</span><span class="setup-pill-chev" aria-hidden="true">${pzIc('chevDown', 14)}</span></button><div class="setup-pill-pop" hidden>${card}</div></div>`;
 }
 // Cablea la píldora dentro de una vista (Inicio/Semana): toggle del
 // despliegue y cierre al tocar fuera de ella. Idempotente por root.
@@ -4823,7 +4919,7 @@ function bindSetupPill(root) {
 // Checklist como sección secundaria al final del chat: mismas filas y mismos
 // binds (sigue funcional), solo baja de protagonismo con título propio.
 function setupSecondaryHtml() {
-  const h = setupChecklistHtml('Para que la magia siga ✨');
+  const h = setupChecklistHtml('Para que la magia siga');
   if (!h) return '';
   return `<section class="setup-secondary" aria-label="Para que la magia siga">${h}</section>`;
 }
@@ -4851,7 +4947,7 @@ function bindSetupRows() {
       } else if (r && r.reason !== 'declined') {
         toast(r && r.reason === 'no_vapid'
           ? '🔔 Todavía no están listas del lado del servidor. Probá en un rato.'
-          : '🔔 No se pudo activar 😅 Probá de nuevo.');
+          : '🔔 No se pudo activar. Probá de nuevo.');
       }
     } catch (e) {}
     // Siempre refrescar: la fila se deriva del permiso real, así converge a la verdad.
@@ -4860,7 +4956,7 @@ function bindSetupRows() {
   };
 }
 // Re-render del checklist en el lugar (tras activar notificaciones, etc.).
-// Conserva el título de la sección secundaria del chat ("Para que la magia siga ✨").
+// Conserva el título de la sección secundaria del chat ("Para que la magia siga").
 function refreshSetupChecklist() {
   document.querySelectorAll('.setup-card').forEach(card => {
     const sec = card.closest('.setup-secondary');
@@ -4871,7 +4967,7 @@ function refreshSetupChecklist() {
     const pillwrap = card.closest ? card.closest('.setup-pillwrap') : null;
     // (v326) El refresh conserva el omitIg de Inicio: si no, la fila de IG
     // (y el conteo) cambiaban solos a mitad de sesión.
-    const h = setupChecklistHtml(sec ? 'Para que la magia siga ✨' : undefined, (card.closest && (card.closest('#inicioView') || card.closest('#schedView'))) ? { omitIg: true } : undefined);
+    const h = setupChecklistHtml(sec ? 'Para que la magia siga' : undefined, (card.closest && (card.closest('#inicioView') || card.closest('#schedView'))) ? { omitIg: true } : undefined);
     if (!h) { (sec || card).remove(); if (pillwrap) pillwrap.remove(); return; }
     const t = document.createElement('template');
     t.innerHTML = h.trim();
@@ -5442,12 +5538,12 @@ function checklistHTML(postsCount){
   if (done === 3) return '';
   const step = (ok, num, title, desc, action) => `
     <div class="check-step ${ok ? 'done' : ''}">
-      <span class="ck-ico">${ok ? '✅' : num}</span>
+      <span class="ck-ico">${ok ? pzIc('checkCircle', 14) : num}</span>
       <span class="ck-txt"><b>${title}</b><span>${desc}</span></span>
       <span class="ck-act">${ok ? '<span class="ck-done">Listo</span>' : action}</span>
     </div>`;
   return `<div class="card check-card">
-    <div class="check-head"><h3>🚀 Tus primeros pasos</h3><span class="badge b-scheduled">${done}/3</span></div>
+    <div class="check-head"><h3>${pzIc('rocket', 15)} Tus primeros pasos</h3><span class="badge b-scheduled">${done}/3</span></div>
     <div class="pz-refbar check-bar"><div style="width:${Math.round(done / 3 * 100)}%"></div></div>
     <div class="check-steps">
       ${step(s1, 1, 'Contanos tu negocio', 'Unos 2 minutos, una sola vez.', '<a class="btn btn-soft btn-sm" href="#/app/ajustes">Completar</a>')}
@@ -5462,7 +5558,7 @@ function checklistHTML(postsCount){
 function weekDoneCardHTML() {
   return `
   <div class="card" style="border:2px solid rgba(34,197,94,.45);background:#F2FAF4">
-    <h3 style="margin:0 0 6px">✅ Tu semana está armada</h3>
+    <h3 style="margin:0 0 6px">${pzIc('checkCircle', 16)} Tu semana está armada</h3>
     <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 14px">Los posteos salen solos en sus horarios. Nada que hacer — solo vendé.</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <a class="btn btn-soft btn-sm" data-opencreator style="cursor:pointer">${pzIc('sparkle', 18)} Sumar otro posteo</a>
@@ -5486,7 +5582,7 @@ function autopilotCardHTML(tag) {
   <div class="card card-hi-yl" id="autopilotCard-${t}">
     <h3>${pzIc('bolt', 20)} Armemos tu semana</h3>
     <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y reels con tus fotos. Salen solos — y si algo no te gusta, lo frenás o lo cambiás en un toque.</p>
-    <p style="font-size:11.5px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos${(ME && ME.reels_per_week) ? ` + ${ME.reels_per_week} reel${ME.reels_per_week > 1 ? 'es' : ''} 🎬` : ''} por semana${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
+    <p style="font-size:11.5px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos${(ME && ME.reels_per_week) ? ` + ${ME.reels_per_week} reel${ME.reels_per_week > 1 ? 'es' : ''} ${pzIc('reel', 13)}` : ''} por semana${assetPhotos().length || assetVideos().length ? ` · ${pzIc('image', 13)} usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:16px;padding:12px 14px;font-family:inherit;font-weight:600">
         ${opts}
@@ -5495,7 +5591,7 @@ function autopilotCardHTML(tag) {
     </div>
     <div id="apProg-${t}" style="margin-top:16px"></div>
     <div style="margin-top:4px">
-      <p style="color:var(--mut);font-size:12.5px;margin:14px 0 10px;padding-top:14px;border-top:1.5px solid var(--line)">¿O algo puntual? <a href="#/app/chat" style="color:var(--cel);font-weight:700">Preguntale a Posty 💬</a></p>
+      <p style="color:var(--mut);font-size:12.5px;margin:14px 0 10px;padding-top:14px;border-top:1.5px solid var(--line)">¿O algo puntual? <a href="#/app/chat" style="color:var(--cel);font-weight:700">Preguntale a Posty ${pzIc('chat', 13)}</a></p>
     </div>
   </div>`;
 }
@@ -5506,18 +5602,18 @@ function mediaCardHTML() {
   const items = [...assetPhotos().map(a => ({ ...a, isVid: false })), ...assetVideos().map(a => ({ ...a, isVid: true }))].reverse(); // más nuevos primero
   return `
   <div id="mediaCard" class="media-stripbar" title="Mis fotos y videos — las usamos en tus posteos">
-    <span class="media-strip-ico">📷</span>
+    <span class="media-strip-ico">${pzIc('camera', 14)}</span>
     <div class="media-strip">${items.map(a => `
       <div class="media-thumb sm" data-assetthumb="${a.id}" style="position:relative">
         ${a.isVid
           ? `<video src="${esc(a.file_path)}" muted playsinline preload="metadata"></video><span class="media-play">▶</span>`
           : `<img src="${esc(a.file_path)}" alt="Foto del negocio">`}
         <button class="media-del" data-mediadel="${a.id}" title="Borrar" aria-label="Borrar archivo">×</button>
-        <button class="media-fav" data-mcfav="${a.id}" title="Favorita: Posty la usa primero">${a.favorito ? '★' : '☆'}</button>
-        ${a.isVid ? `<button class="media-perm" data-mcperm="${a.id}" title="Permiso para testimonios: solo videos con permiso se usan">${a.permiso_testimonio ? '✅' : '👥'}</button>` : ''}
+        <button class="media-fav" data-mcfav="${a.id}" title="Favorita: Posty la usa primero">${a.favorito ? pzIc('starFill', 20) : pzIc('star', 20)}</button>
+        ${a.isVid ? `<button class="media-perm" data-mcperm="${a.id}" title="Permiso para testimonios: solo videos con permiso se usan">${a.permiso_testimonio ? pzIc('check', 18) : pzIc('users', 18)}</button>` : ''}
         <span data-mcbest="${a.id}" style="display:none;position:absolute;top:2px;left:2px;font-size:14px" title="La mejor de su producto">⭐</span>
       </div>`).join('')}</div>
-    <button class="btn btn-soft btn-sm" id="btnMediaAdd" title="Agregar fotos o videos">＋</button>
+    <button class="btn btn-soft btn-sm" id="btnMediaAdd" title="Agregar fotos o videos">${pzIc('plus', 18)}</button>
     <input type="file" id="mediaFiles" accept="image/*,video/*" multiple style="display:none">
   </div>
   <div id="mediaMsg" style="margin:-8px 0 12px"></div>
@@ -5538,19 +5634,19 @@ function bindMediaCard() {
       let warns = [];
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
-        msg.innerHTML = `<div class="hint">⏳ Subiendo ${i + 1} de ${files.length}…</div>`;
+        msg.innerHTML = `<div class="hint">${pzIc('clock', 14)} Subiendo ${i + 1} de ${files.length}…</div>`;
         const r = await fetch('/api/assets?kind=' + (f.type.startsWith('video/') ? 'video' : 'photo'), { signal: AbortSignal.timeout(120000),
           method: 'POST', headers: { 'Content-Type': f.type || 'application/octet-stream' }, body: f });
         const data = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
+        if (!r.ok) throw new Error(data.error || 'No pude subirlo. Probá de nuevo');
         ok++;
         if (data.quality_issues && data.quality_issues.length) {
           const lbl = data.quality_issues.map(q => (MC_ISSUE_ES[q] || q)).join(' y ');
           warns.push(`la foto ${i + 1} ${lbl}: mandá otra si querés — la semana sigue igual`);
         }
       }
-      msg.innerHTML = `<div class="okmsg">✅ ${ok === 1 ? 'Agregado' : ok + ' agregados'} — ya los usamos en tus posteos.</div>`;
-      if (warns.length) msg.innerHTML += `<div class="hint">⚠️ ${warns.join('<br>')}</div>`;
+      msg.innerHTML = `<div class="okmsg">${pzIc('checkCircle', 14)} ${ok === 1 ? 'Agregado' : ok + ' agregados'} — ya los usamos en tus posteos.</div>`;
+      if (warns.length) msg.innerHTML += `<div class="hint">${pzIc('alert', 14)} ${warns.join('<br>')}</div>`;
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       render();
     } catch (e) { msg.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`; }
@@ -5571,7 +5667,7 @@ function bindMediaCard() {
       if (r && r.ok) {
         const a = (typeof ASSETS !== 'undefined' ? ASSETS : []).find(x => String(x.id) === String(b.dataset.mcfav));
         if (a) a.favorito = r.favorito;
-        b.textContent = r.favorito ? '★' : '☆';
+        b.innerHTML = r.favorito ? pzIc('starFill', 20) : pzIc('star', 20);
       }
     } catch (err) {}
   });
@@ -5586,7 +5682,7 @@ function bindMediaCard() {
       if (r && r.ok) {
         const a = (typeof ASSETS !== 'undefined' ? ASSETS : []).find(x => String(x.id) === String(b.dataset.mcperm));
         if (a) a.permiso_testimonio = r.permiso_testimonio;
-        b.textContent = r.permiso_testimonio ? '✅' : '👥';
+        b.innerHTML = r.permiso_testimonio ? pzIc('check', 18) : pzIc('users', 18);
       }
     } catch (err) {}
   });
@@ -5599,12 +5695,12 @@ function mcAlbumToolsBind() {
   row.dataset.done = '1';
   const en = mcEn();
   const tools = [
-    ['testimonios', '🎤 ' + (en ? 'Testimonials' : 'Testimonios')],
-    ['estilo', '🎬 ' + (en ? 'My edit style' : 'Mi estilo')],
-    ['serie', '📚 ' + (en ? 'Story series' : 'Serie')],
+    ['testimonios', pzIc('mic', 18) + ' ' + (en ? 'Testimonials' : 'Testimonios')],
+    ['estilo', pzIc('clapper', 18) + ' ' + (en ? 'My edit style' : 'Mi estilo')],
+    ['serie', pzIc('book', 18) + ' ' + (en ? 'Story series' : 'Serie')],
     ['ultimo', '⏰ ' + (en ? 'Last day' : 'Último día')],
-    ['stock', '📦 ' + (en ? 'Stock' : 'Stock')],
-    ['mitos', '💡 ' + (en ? 'Niche myth' : 'Mito del rubro')],
+    ['stock', pzIc('box', 18) + ' ' + (en ? 'Stock' : 'Stock')],
+    ['mitos', pzIc('idea', 18) + ' ' + (en ? 'Niche myth' : 'Mito del rubro')],
   ];
   row.innerHTML = tools.map(t => `<button class="rv-mini" data-mctool="${t[0]}">${t[1]}</button>`).join('');
   row.querySelectorAll('[data-mctool]').forEach(b => b.onclick = () => {
@@ -5625,8 +5721,8 @@ async function mcTestimoniosUI() {
     const r = await api.get('/api/testimonios/videos').catch(() => null);
     const vids = (r && r.videos) || [];
     const all = (typeof ASSETS !== 'undefined' ? ASSETS : []).filter(a => a.kind === 'video');
-    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">🎤 ${en ? 'Testimonial reel — only videos with explicit permission' : 'Reel de testimonios: solo videos con permiso explícito'}</div>`;
-    if (!vids.length) html += `<div style="font-size:11.5px;margin-bottom:8px">${en ? 'No videos with permission yet. Tap 👥 on a video in your strip to grant it.' : 'Todavía no hay videos con permiso. Tocá 👥 en un video de la tira para darlo.'}</div>`;
+    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${pzIc('mic', 18)} ${en ? 'Testimonial reel — only videos with explicit permission' : 'Reel de testimonios: solo videos con permiso explícito'}</div>`;
+    if (!vids.length) html += `<div style="font-size:11.5px;margin-bottom:8px">${en ? 'No videos with permission yet. Tap the people button on a video in your strip to grant it.' : 'Todavía no hay videos con permiso. Tocá el botón de personas en un video de la tira para darlo.'}</div>`;
     html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><select data-mckind style="font-size:14px"><option value="testimonio">${en ? 'Testimonials' : 'Testimonios'}</option><option value="unboxing">Unboxing</option><option value="dia">${en ? 'A day in your business' : 'Un día en tu negocio'}</option></select></div>`;
     vids.forEach(v => { html += `<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-bottom:4px"><input type="checkbox" data-mctclip="${v.id}"> ${esc(v.file_path.split('/').pop())}</label>`; });
     if (!all.length) html += `<div style="font-size:11.5px">${en ? 'Add videos to your library first.' : 'Primero sumá videos a tu librería.'}</div>`;
@@ -5656,7 +5752,7 @@ async function mcEstiloUI() {
     const [est, lib] = await Promise.all([api.get('/api/estilo-edicion').catch(() => null), api.get('/api/musica').catch(() => null)]);
     const cur = (est && est.estilo) || {};
     const temas = (lib && lib.temas) || [];
-    panel.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">🎬 ${en ? 'Your edit style — next reels come out like this' : 'Tu estilo de edición: los próximos reels salen así'}</div>
+    panel.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${pzIc('clapper', 18)} ${en ? 'Your edit style — next reels come out like this' : 'Tu estilo de edición: los próximos reels salen así'}</div>
     <div style="display:grid;gap:8px;font-size:12.5px">
     <label>${en ? 'Transitions' : 'Transiciones'} <select data-mctrans style="font-size:14px"><option value="suave" ${cur.transicion !== 'ninguna' ? 'selected' : ''}>${en ? 'Smooth' : 'Suave'}</option><option value="ninguna" ${cur.transicion === 'ninguna' ? 'selected' : ''}>${en ? 'None' : 'Ninguna'}</option></select></label>
     <label>${en ? 'Music' : 'Música'} <select data-mcmus style="font-size:14px"><option value="">${en ? 'No default' : 'Sin preferencia'}</option>${temas.map(t => `<option value="${esc(t.file)}" ${cur.musica_track === t.file ? 'selected' : ''}>${esc(t.titulo)}</option>`).join('')}</select></label>
@@ -5676,7 +5772,7 @@ async function mcSerieUI() {
   const all = (typeof ASSETS !== 'undefined' ? ASSETS : []).filter(a => a.kind === 'photo' || a.kind === 'video');
   if (!all.length) { panel.innerHTML = `<span style="font-size:11.5px">${en ? 'Add photos or clips to your library first.' : 'Primero sumá fotos o clips a tu librería.'}</span>`; return; }
   const opt = all.map(a => `<option value="${a.id}">${esc(a.file_path.split('/').pop())}</option>`).join('');
-  panel.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">📚 ${en ? 'Story series: problem → process → result' : 'Historias en serie: problema → proceso → resultado'}</div>
+  panel.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${pzIc('book', 18)} ${en ? 'Story series: problem → process → result' : 'Historias en serie: problema → proceso → resultado'}</div>
   <div style="display:grid;gap:6px;font-size:12px"><label>${en ? 'Problem' : 'Problema'} <select data-mcslot0 style="font-size:14px;width:100%">${opt}</select></label><label>${en ? 'Process' : 'Proceso'} <select data-mcslot1 style="font-size:14px;width:100%">${opt}</select></label><label>${en ? 'Result' : 'Resultado'} <select data-mcslot2 style="font-size:14px;width:100%">${opt}</select></label></div>
   <button class="pcsheet-opt" data-mcarmar="1" style="margin-top:8px">${en ? 'Build series' : 'Armar serie'}</button><div data-mcprev style="margin-top:8px"></div>`;
   panel.querySelector('[data-mcarmar]').onclick = async () => {
@@ -5700,14 +5796,14 @@ async function mcUltimoDiaUI() {
     const r = await api.get('/api/ofertas/vencen-hoy').catch(() => null);
     const vencen = (r && r.vencen) || [];
     if (!vencen.length) {
-      panel.innerHTML = `<div style="font-size:12px">📅 ${en ? 'No offers expire today — no story, no invented urgency.' : 'Ninguna oferta vence hoy: no hay historia, nunca urgencia inventada.'}</div><div style="font-size:11px;opacity:.7;margin-top:6px">${en ? 'Tip: an offer needs a real expiry date in your profile (or set one below in a future version).' : 'Para que haya historia, la oferta necesita una fecha real de vencimiento en tu fundamento.'}</div>`;
+      panel.innerHTML = `<div style="font-size:12px">${pzIc('calendar', 14)} ${en ? 'No offers expire today — no story, no invented urgency.' : 'Ninguna oferta vence hoy: no hay historia, nunca urgencia inventada.'}</div><div style="font-size:11px;opacity:.7;margin-top:6px">${en ? 'Tip: an offer needs a real expiry date in your profile (or set one below in a future version).' : 'Para que haya historia, la oferta necesita una fecha real de vencimiento en tu fundamento.'}</div>`;
       return;
     }
     panel.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">⏰ ${en ? 'Offers expiring today' : 'Ofertas que vencen hoy'}</div>` + vencen.map(v => `<div style="font-size:12px;margin-bottom:4px">• ${esc(v.titulo)}</div>`).join('') + `<button class="pcsheet-opt" data-mcgen="1" style="margin-top:6px">${en ? 'Generate last-day stories' : 'Generar historias de último día'}</button><div data-mcres style="margin-top:8px"></div>`;
     panel.querySelector('[data-mcgen]').onclick = async () => {
       const u = await api.post('/api/ofertas/ultimo-dia/generar', {}).catch(() => null);
       const res = panel.querySelector('[data-mcres]');
-      if (u && u.ok) res.innerHTML = `<span style="font-size:12px">✅ ${u.historias.length} ${en ? 'draft stories created — they follow your account approval flow.' : 'historias en borrador creadas: siguen el flujo de aprobación de tu cuenta.'}</span>`;
+      if (u && u.ok) res.innerHTML = `<span style="font-size:12px">${pzIc('check', 14)} ${u.historias.length} ${en ? 'draft stories created — they follow your account approval flow.' : 'historias en borrador creadas: siguen el flujo de aprobación de tu cuenta.'}</span>`;
       else res.innerHTML = `<span style="font-size:11.5px">${esc((u && u.error) || 'Error')}</span>`;
     };
   } catch (e) { panel.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
@@ -5721,7 +5817,7 @@ async function mcStockUI() {
       const rows = (st && st.stock) || [];
       const names = (prods && (prods.productos || prods)) || [];
       const prodNames = Array.isArray(names) ? names.map(n => String((n && n.nombre) || n)).filter(Boolean) : [];
-      let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">📦 ${en ? 'Real stock — “Only X left” only with a real number' : 'Stock real: «Quedan X» solo con número real'}</div>`;
+      let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${pzIc('box', 18)} ${en ? 'Real stock — “Only X left” only with a real number' : 'Stock real: «Quedan X» solo con número real'}</div>`;
       if (!rows.length) html += `<div style="font-size:11.5px;margin-bottom:8px">${en ? 'No stock saved yet.' : 'Todavía no hay stock guardado.'}</div>`;
       rows.forEach(s => { html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:12px;flex:1">${esc(s.producto)}: <b>${s.cantidad}</b></span><button class="pcsheet-opt" data-mchist="${esc(s.producto)}" ${s.cantidad > 0 ? '' : 'disabled'}>${en ? '“Only X left” story' : 'Historia «Quedan X»'}</button></div>`; });
       html += `<div style="display:flex;gap:6px;margin-top:8px"><select data-mcprod style="font-size:14px;flex:1">${prodNames.map(n => `<option>${esc(n)}</option>`).join('') || `<option value="">${en ? 'No products in profile' : 'Sin productos en el fundamento'}</option>`}</select><input data-mccant type="number" min="0" placeholder="${en ? 'Qty' : 'Cant.'}" style="width:80px;font-size:14px"><button class="pcsheet-opt" data-mcguardar="1">${en ? 'Save' : 'Guardar'}</button></div><div data-mcres style="margin-top:8px"></div>`;
@@ -5733,7 +5829,7 @@ async function mcStockUI() {
       panel.querySelectorAll('[data-mchist]').forEach(b => b.onclick = async () => {
         const u = await api.post('/api/historias/stock', { producto: b.dataset.mchist }).catch(() => null);
         const res = panel.querySelector('[data-mcres]');
-        if (u && u.ok) res.innerHTML = `<span style="font-size:12px">✅ ${en ? 'Draft story created — it follows your account approval flow.' : 'Historia en borrador creada: sigue el flujo de aprobación de tu cuenta.'}</span>`;
+        if (u && u.ok) res.innerHTML = `<span style="font-size:12px">${pzIc('check', 14)} ${en ? 'Draft story created — it follows your account approval flow.' : 'Historia en borrador creada: sigue el flujo de aprobación de tu cuenta.'}</span>`;
         else res.innerHTML = `<span style="font-size:11.5px">${esc((u && u.error) || (u && u.razon) || 'Error')}</span>`;
       });
     } catch (e) { panel.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
@@ -5747,7 +5843,7 @@ async function mcMitosUI() {
     const [cands, mitos] = await Promise.all([api.get('/api/mitos/candidatos').catch(() => null), api.get('/api/mitos').catch(() => null)]);
     const candList = (cands && cands.candidatos) || [];
     const mitoList = (mitos && mitos.mitos) || [];
-    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">💡 ${en ? 'Your niche myth — Posty proposes, you accept' : 'El mito de tu rubro: Posty propone, vos aceptás'}</div>`;
+    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${pzIc('idea', 18)} ${en ? 'Your niche myth — Posty proposes, you accept' : 'El mito de tu rubro: Posty propone, vos aceptás'}</div>`;
     html += `<div style="font-size:11.5px;margin-bottom:6px">${en ? 'Candidates come from your real FAQs — never an invented myth. If you don’t recognize it, there is no reel.' : 'Los candidatos salen de tus preguntas reales: nunca un mito inventado. Si no lo reconocés, no hay reel.'}</div>`;
     if (candList.length) {
       html += `<div style="font-size:12px;font-weight:700;margin-bottom:4px">${en ? 'From your FAQs' : 'Desde tus preguntas'}</div>`;
@@ -5757,7 +5853,7 @@ async function mcMitosUI() {
     if (mitoList.length) {
       html += `<div style="font-size:12px;font-weight:700;margin:10px 0 4px">${en ? 'Saved myths' : 'Mitos guardados'}</div>`;
       mitoList.forEach(m => {
-        html += `<div style="font-size:12px;margin-bottom:6px">• <b>${esc(m.mito)}</b> — ${esc(m.desmentido)} ${m.aceptado ? '✅' : `<button class="pcsheet-opt" data-mcacep="${m.id}">${en ? 'I recognize it' : 'Lo reconozco'}</button>`} <button class="pcsheet-opt" data-mcreel="${m.id}" ${m.aceptado ? '' : 'disabled'}>${en ? 'Build reel' : 'Armar reel'}</button></div>`;
+        html += `<div style="font-size:12px;margin-bottom:6px">• <b>${esc(m.mito)}</b> — ${esc(m.desmentido)} ${m.aceptado ? pzIc('check', 14) : `<button class="pcsheet-opt" data-mcacep="${m.id}">${en ? 'I recognize it' : 'Lo reconozco'}</button>`} <button class="pcsheet-opt" data-mcreel="${m.id}" ${m.aceptado ? '' : 'disabled'}>${en ? 'Build reel' : 'Armar reel'}</button></div>`;
       });
     }
     html += `<div data-mcreelbox style="margin-top:8px"></div>`;
@@ -5811,7 +5907,7 @@ function fmtWhenPill(v) {
 }
 // Badge de estrategia (tipo de contenido) junto al pill de fecha
 function tipoBadge(t) {
-  const map = { promo: ['🎯', 'Promo'], tip: ['📚', 'Tip'], social: ['💬', 'Prueba social'], detras: ['🎬', 'Detrás de escena'], novedad: ['✨', 'Novedad'] };
+  const map = { promo: [pzIc('target', 13), 'Promo'], tip: [pzIc('book', 13), 'Tip'], social: [pzIc('chat', 13), 'Prueba social'], detras: [pzIc('reel', 13), 'Detrás de escena'], novedad: [pzIc('sparkle', 13), 'Novedad'] };
   if (!map[t]) return '';
   return `<span class="tipo-badge">${map[t][0]} ${map[t][1]}</span>`;
 }
@@ -5827,7 +5923,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
     : `<span class="igmock-ava" style="background:${esc(bizColor)}">${esc((bizName || 'M')[0].toUpperCase())}</span>`;
   return `
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
-    <h3 style="margin:0 0 6px">${title || '📋 Tus posteos de la semana'}</h3>
+    <h3 style="margin:0 0 6px">${title || pzIc('copy', 14) + ' Tus posteos de la semana'}</h3>
     <p style="color:var(--mut);font-size:12.5px;margin:0 0 4px">Revisalos y aceptalos — al aceptar, salen solos a la hora indicada.</p>
     ${n ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:6px 0 10px">${pzIc('bolt', 18)} Activar mi semana</button>` : ''}
     <div class="igmock-carousel">
@@ -5861,22 +5957,22 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
               <button class="car-arrow sm right" data-csnext aria-label="Foto siguiente">›</button>
               <div class="carslide-dots">${cpaths.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>
             </div>
-            <span class="igmock-badge">🎞️ Carrusel</span>`;
+            <span class="igmock-badge">${pzIc('layers', 12)} Carrusel</span>`;
           }
           if (!d.image_path && d.media_type !== 'video') {
-            return `<div class="igmock-nodesign"><span>♻️ Republicado con texto fresco</span><button class="btn btn-primary" data-revregen="${d.id}">${pzIc('sparkle', 18)} Generar diseño</button></div>`;
+            return `<div class="igmock-nodesign"><span>${pzIc('refresh', 12)} Republicado con texto fresco</span><button class="btn btn-primary" data-revregen="${d.id}">${pzIc('sparkle', 18)} Generar diseño</button></div>`;
           }
           return `${d.media_type === 'video'
             ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" data-lightbox="${esc(d.image_path)}" data-video="1"></video>`
             : `<img class="vimg" src="${esc(mv(d.image_path, 640))}" style="background-image:url('${esc(mv(d.image_path, 24))}')" data-full="${esc(d.image_path)}" data-lightbox="${esc(d.image_path)}" onerror="__imgFb(this)" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} alt="Diseño del borrador ${i + 1}">`}
           ${d.media_type === 'video' ? `<span class="igmock-badge">${pzIc('reel', 15)} Reel</span>` : ''}
-          ${d.media_type === 'story' ? `<span class="igmock-badge">📱 Historia</span>` : ''}`;
+          ${d.media_type === 'story' ? `<span class="igmock-badge">${pzIc('story', 12)} Historia</span>` : ''}`;
         })()}
       </div>
       <div class="igmock-body">
         <div class="rev-preview" data-revpreview="${d.id}">${esc((d.caption || '').trim() || 'Sin texto todavía')}</div>
         ${d.hashtags ? `<div class="rev-hashprev" data-revhashprev="${d.id}">${esc(d.hashtags)}</div>` : `<div class="rev-hashprev" data-revhashprev="${d.id}" style="display:none"></div>`}
-        ${((d.caption || '').length > 120 || (d.hashtags || '').length > 80) ? `<button class="rev-more" data-revmore="${d.id}">ver más ▾</button>` : ''}
+        ${((d.caption || '').length > 120 || (d.hashtags || '').length > 80) ? `<button class="rev-more" data-revmore="${d.id}">ver más ${pzIc('chevDown', 12)}</button>` : ''}
         <div data-revfields="${d.id}" hidden>
           <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
           <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="margin-top:6px;padding:8px 10px">
@@ -5886,15 +5982,15 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
         <div class="igmock-whenrow"><label class="igmock-when2"><span>${pzIc('calendar', 15)}</span><span data-revwhentxt="${d.id}">${fmtWhenPill(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
         <div class="igmock-icos" style="margin-top:8px">
           <button class="rv-mini" data-revedit="${d.id}">${pzIc('pencil', 18)} Editar</button>
-          ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button class="rv-mini" data-revdislike="${d.id}" onclick="pcDislikeOpen(${d.id}, this)" title="Esta idea no va: 3 ideas distintas, una sola vez">👎 No me gusta</button>`}
+          ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button class="rv-mini" data-revdislike="${d.id}" onclick="pcDislikeOpen(${d.id}, this)" title="Esta idea no va: 3 ideas distintas, una sola vez">${pzIc('thumbDown', 16)} No me gusta</button>`}
           ${d.media_type === 'video' ? '' : `<button class="rv-mini" data-revregen="${d.id}" title="Generar otro diseño para este posteo">${pzIc('sparkle', 18)} Otro diseño</button>`}
           ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button class="rv-mini" data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">${pzIc('refresh', 18)} Otras 3</button>`}
           ${d.media_type === 'video' ? `<button class="rv-mini" data-revvideo="${d.id}" title="Cambiar el video de este posteo">${pzIc('reel', 18)} Otro video</button>` : `<button class="rv-mini" data-revphoto="${d.id}" title="Cambiar la foto de este posteo">${pzIc('image', 18)} Otra foto</button><button class="rv-mini" data-revphotopick=\"${d.id}\" title=\"Elegir una foto de tu librería o subir una nueva\">${pzIc('camera', 18)} Foto</button>${d.media_type !== 'carousel' ? `<button class="rv-mini" data-revrestyle=\"${d.id}\" title=\"Restylear TU foto con el estilo elegido arriba (mismo producto, otro estilo)\">${pzIc('palette', 18)} Restylear</button><button class="rv-mini" data-revenhance=\"${d.id}\" title=\"Mejorar la foto: luz, nitidez y color en un tap\">${pzIc('sparkle', 18)} Mejorar</button><button class=\"rv-mini\" data-revcaption=\"${d.id}\" title=\"Titular corto sobre la foto, en un toque\">${pzIc('pencil', 18)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? (d.caption_on ? 'Remove caption' : 'Add caption') : (d.caption_on ? 'Quitar caption' : 'Agregar caption')}</button><button class="rv-mini" data-revcarousel=\"${d.id}\" title=\"Convertir en carousel: portada que frena + 3 placas\">${pzIc('layers', 18)} Carousel</button><button class="rv-mini" data-revreel=\\\"${d.id}\\\" title=\\\"Armar reel: Ken Burns + headline, 1080×1920 (máx 2/semana)\\\">${pzIc('reel', 18)} Reel</button>` : ''}`}
           <button class="pcard-del" data-revdel="${d.id}">${pzIc('trash', 18)}</button>
         </div>
         ${d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">${pzIc('idea', 15)} <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
-        ${d.media_type === 'video' && d.script ? `<div style="font-size:11px;color:var(--dim);line-height:1.6;margin-top:8px;overflow-wrap:anywhere">🎬 <b>Guion:</b><br>${(() => { try { return JSON.parse(d.script).map((sc, k) => `${k + 1}. <b>${esc(sc.seg || '')}</b> ${esc(sc.texto || sc.visual || '')}`).join('<br>'); } catch (e) { return ''; } })()}</div>` : ''}
-        <button class="rev-nowsub" data-revnow="${d.id}">o publicalo ahora →</button>
+        ${d.media_type === 'video' && d.script ? `<div style="font-size:11px;color:var(--dim);line-height:1.6;margin-top:8px;overflow-wrap:anywhere">${pzIc('reel', 12)} <b>Guion:</b><br>${(() => { try { return JSON.parse(d.script).map((sc, k) => `${k + 1}. <b>${esc(sc.seg || '')}</b> ${esc(sc.texto || sc.visual || '')}`).join('<br>'); } catch (e) { return ''; } })()}</div>` : ''}
+        <button class="rev-nowsub" data-revnow="${d.id}">o publicalo ahora ${pzIc('arrowRight', 14)}</button>
         <div class="aiedit" id="aiedit-${d.id}" hidden>
           <div class="aiedit-row">
             <input class="in" id="aiedit-inp-${d.id}" placeholder="¿Qué le cambio? Ej: más corto, sin emojis…" maxlength="200" autocomplete="off">
@@ -5910,7 +6006,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           </div>
           <div class="aiedit-row" style="margin-top:8px">
             <select class="in" id="aistyle-sel-${d.id}" title="Elegí un estilo para regenerar la foto">
-              <option value="">✨ Estilo: automático</option>
+              <option value="">Estilo: automático</option>
             </select>
           </div>
           <button class="rev-nowsub" id="aiphoto-manual-${d.id}">o elegí la foto vos</button>
@@ -5972,7 +6068,7 @@ function renderMcProposal(id, kindKey, original, proposal) {
   box.innerHTML = `<div style="margin:8px 0"><div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'Compare: original vs. improved' : 'Compará: original vs. mejorada'}</div>` +
     `<div style="display:flex;gap:8px;margin-bottom:8px"><button class="pcsheet-opt" data-mcshow="orig">${en ? 'Original' : 'Original'}</button><button class="pcsheet-opt" data-mcshow="prop">${k.titulo}</button></div>` +
     `<div data-mcview="orig">${mcMediaTag(original, k.ov)}</div><div data-mcview="prop" style="display:none">${mcMediaTag(proposal, k.pv)}</div>` +
-    `<div style="display:flex;gap:8px;margin-top:8px"><button class="pcsheet-opt" data-mcaccept="1">✅ ${en ? 'Use the improved one' : 'Usar la mejorada'}</button><button class="pcsheet-opt" data-mcreject="1">${en ? 'Keep the original' : 'Quedarme con la original'}</button></div></div>`;
+    `<div style="display:flex;gap:8px;margin-top:8px"><button class="pcsheet-opt" data-mcaccept="1">${pzIc('check', 14)} ${en ? 'Use the improved one' : 'Usar la mejorada'}</button><button class="pcsheet-opt" data-mcreject="1">${en ? 'Keep the original' : 'Quedarme con la original'}</button></div></div>`;
   const show = (w) => {
     const o = box.querySelector('[data-mcview="orig"]'), p = box.querySelector('[data-mcview="prop"]');
     if (o) o.style.display = w === 'orig' ? '' : 'none';
@@ -6014,9 +6110,9 @@ async function mcPropose(id, kindKey, body) {
       if (d) { d[k.cols[0]] = r.proposal_path; d[k.cols[1]] = r.proposal_base; }
       renderMcProposal(id, kindKey, orig, r.proposal_path);
     } else if (r && r.derecha) {
-      box.innerHTML = `<span style="font-size:11.5px">✅ ${en ? 'This photo is already straight' : 'Esta foto ya está derecha'}</span>`;
+      box.innerHTML = `<span style="font-size:11.5px">${pzIc('check', 14)} ${en ? 'This photo is already straight' : 'Esta foto ya está derecha'}</span>`;
     } else if (r && r.mejorable === false) {
-      box.innerHTML = `<span style="font-size:11.5px">✅ ${en ? 'This video already looks good' : 'Este video ya está bien'}</span>`;
+      box.innerHTML = `<span style="font-size:11.5px">${pzIc('check', 14)} ${en ? 'This video already looks good' : 'Este video ya está bien'}</span>`;
     } else {
       box.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || (en ? 'Could not do it, try again' : 'No se pudo, probá de nuevo'))}</span>`;
     }
@@ -6036,10 +6132,10 @@ function mcBindCards() {
       ['video-audioclean', en ? 'Clean audio' : 'Limpiar audio'],
       ['video-subtitles', en ? 'Subtitles' : 'Subtítulos'],
       ['video-trim', en ? 'Trim' : 'Recortar'],
-      ['music-ui', '🎵 ' + (en ? 'Music' : 'Música')],
+      ['music-ui', pzIc('music', 18) + ' ' + (en ? 'Music' : 'Música')],
       ['split-ui', en ? 'Cut into pieces' : 'Cortar en piezas'],
       ['transitions-ui', en ? 'Transitions' : 'Transiciones'],
-      ['voice-ui', '🎤 ' + (en ? 'My voice' : 'Mi voz')],
+      ['voice-ui', pzIc('mic', 18) + ' ' + (en ? 'My voice' : 'Mi voz')],
       ['timelapse-ui', en ? 'Timelapse' : 'Timelapse'],
       ['video-loop', en ? 'Story loop' : 'Loop historia'],
       ['video-asmr', en ? 'Product sound' : 'Sonido protagonista'],
@@ -6097,10 +6193,10 @@ async function mcChipsCheck(id, div) {
       api.get('/api/drafts/' + id + '/photo-reuse').catch(() => null),
     ]);
     let html = '';
-    if (pal && pal.aviso) html += `<div style="font-size:11.5px;margin-top:6px">🎨 ${en ? 'This photo clashes with your feed palette (just a heads-up — nothing is blocked)' : 'Esta foto desentona con la paleta de tu feed (solo aviso, no bloquea nada)'}</div>`;
+    if (pal && pal.aviso) html += `<div style="font-size:11.5px;margin-top:6px">${pzIc('palette', 14)} ${en ? 'This photo clashes with your feed palette (just a heads-up — nothing is blocked)' : 'Esta foto desentona con la paleta de tu feed (solo aviso, no bloquea nada)'}</div>`;
     if (reu && reu.reusos && reu.reusos.length) {
       const f = reu.reusos[0].scheduled_at ? String(reu.reusos[0].scheduled_at).slice(0, 10) : '';
-      html += `<div style="font-size:11.5px;margin-top:6px">♻️ ${en ? 'This photo was already used' : 'Esta foto ya se usó'}${f ? ' (' + f + ')' : ''} — ${en ? 'just a heads-up' : 'solo aviso'}</div>`;
+      html += `<div style="font-size:11.5px;margin-top:6px">${pzIc('refresh', 14)} ${en ? 'This photo was already used' : 'Esta foto ya se usó'}${f ? ' (' + f + ')' : ''} — ${en ? 'just a heads-up' : 'solo aviso'}</div>`;
     }
     div.innerHTML = html;
   } catch (e) {}
@@ -6144,8 +6240,8 @@ async function mcPriceBandUI(id) {
 async function mcVoiceUI(id) {
   const box = mcBox(id); if (!box) return; const en = mcEn();
   let rec = null, chunks = [];
-  box.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">🎤 ${en ? 'Your voice over the reel' : 'Tu voz sobre el reel'}</div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="pcsheet-opt" data-mcrec="1">🔴 ${en ? 'Record' : 'Grabar'}</button><button class="pcsheet-opt" data-mcstop="1" disabled>${en ? 'Stop' : 'Parar'}</button><button class="pcsheet-opt" data-mcmix="1" disabled>${en ? 'Mix my voice' : 'Mezclar mi voz'}</button></div>
+  box.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${pzIc('mic', 18)} ${en ? 'Your voice over the reel' : 'Tu voz sobre el reel'}</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="pcsheet-opt" data-mcrec="1">${pzDot('#E5484D', 12)} ${en ? 'Record' : 'Grabar'}</button><button class="pcsheet-opt" data-mcstop="1" disabled>${en ? 'Stop' : 'Parar'}</button><button class="pcsheet-opt" data-mcmix="1" disabled>${en ? 'Mix my voice' : 'Mezclar mi voz'}</button></div>
   <div data-mcprev style="margin-top:8px"></div>
   <div style="font-size:11px;opacity:.7;margin-top:6px">${en ? 'Your voice on top, original audio underneath. The mix needs your accept before use.' : 'Tu voz arriba, el audio original abajo. La mezcla se acepta antes de usarse.'}</div>`;
   const recB = box.querySelector('[data-mcrec]'), stopB = box.querySelector('[data-mcstop]'), mixB = box.querySelector('[data-mcmix]'), prev = box.querySelector('[data-mcprev]');
@@ -6183,7 +6279,7 @@ async function mcHookUI(id) {
   try {
     const r = await api.get('/api/drafts/' + id + '/video-hook-check').catch(() => null);
     if (r && r.tiene_producto === true) {
-      box.innerHTML = `<span style="font-size:12px">✅ ${en ? 'The product is already in the first 3 seconds — no hook needed.' : 'El producto ya aparece en los primeros 3 segundos: no hace falta gancho.'}</span>`;
+      box.innerHTML = `<span style="font-size:12px">${pzIc('check', 14)} ${en ? 'The product is already in the first 3 seconds — no hook needed.' : 'El producto ya aparece en los primeros 3 segundos: no hace falta gancho.'}</span>`;
       return;
     }
     const vids = (typeof ASSETS !== 'undefined' ? ASSETS : []).filter(a => a.kind === 'video');
@@ -6203,12 +6299,12 @@ async function mcChecklistUI(id) {
     try {
       const r = await api.get('/api/drafts/' + id + '/checklist').catch(() => null);
       if (!r || !r.ok) { box.innerHTML = `<span style="font-size:11.5px">${en ? 'Could not check.' : 'No se pudo revisar.'}</span>`; return; }
-      if (!r.items.length) { box.innerHTML = `<span style="font-size:12px">✅ ${en ? 'All clear — ready to publish.' : 'Todo en orden, listo para publicar.'}</span>`; return; }
+      if (!r.items.length) { box.innerHTML = `<span style="font-size:12px">${pzIc('check', 14)} ${en ? 'All clear — ready to publish.' : 'Todo en orden, listo para publicar.'}</span>`; return; }
       let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'Final check before publishing' : 'Revisión final antes de publicar'}</div>`;
-      if (r.bloqueado) html += `<div style="font-size:11.5px;color:#B3402E;margin-bottom:6px">⛔ ${en ? 'Hard issues block publishing until you fix or accept them knowingly.' : 'Hay problemas duros: no se publica hasta resolverlos o aceptarlos conociéndolos.'}</div>`;
+      if (r.bloqueado) html += `<div style="font-size:11.5px;color:#B3402E;margin-bottom:6px">${pzIc('ban', 14)} ${en ? 'Hard issues block publishing until you fix or accept them knowingly.' : 'Hay problemas duros: no se publica hasta resolverlos o aceptarlos conociéndolos.'}</div>`;
       r.items.forEach(it => {
         const color = it.confirmado ? '#2E7D32' : (it.duro ? '#B3402E' : '#8A6D00');
-        html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:12px;flex:1;color:${color}">${it.duro ? '🔴' : '🟡'} ${esc(it.texto)}${it.confirmado ? ' ✅' : ''}</span>${(!it.confirmado && it.duro) ? `<button class="pcsheet-opt" data-mcconf="${esc(it.item)}">${en ? 'I accept knowingly' : 'Lo acepto conociéndolo'}</button>` : ''}</div>`;
+        html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:12px;flex:1;color:${color}">${it.duro ? pzDot('#E5484D', 12) : pzDot('#E8A100', 12)} ${esc(it.texto)}${it.confirmado ? ' ' + pzIc('check', 12) : ''}</span>${(!it.confirmado && it.duro) ? `<button class="pcsheet-opt" data-mcconf="${esc(it.item)}">${en ? 'I accept knowingly' : 'Lo acepto conociéndolo'}</button>` : ''}</div>`;
       });
       box.innerHTML = html;
       box.querySelectorAll('[data-mcconf]').forEach(b => b.onclick = async () => {
@@ -6252,24 +6348,24 @@ async function mcMusicUI(id) {
       api.get('/api/drafts/' + id + '/music-suggest').catch(() => null),
     ]);
     if (!lib || !lib.temas || !lib.temas.length) {
-      box.innerHTML = `<div style="font-size:12.5px;line-height:1.6">🎵 ${en ? 'No Meta Sound Collection tracks loaded yet.' : 'Todavía no hay temas de la colección de Meta cargados.'}<br><span style="font-size:11.5px;opacity:.8">${en ? 'Load them like this: Meta Business Suite → Sound Collection → download the MP3s → copy them to assets/music-meta/ → run node music-meta-catalog.js --write. Only real Meta tracks appear here — nothing is invented.' : 'Se cargan así: Meta Business Suite → Sound Collection → descargar los MP3 → copiarlos a assets/music-meta/ → correr node music-meta-catalog.js --write. Acá solo aparecen temas reales de Meta: nada inventado.'}</span></div>`;
+      box.innerHTML = `<div style="font-size:12.5px;line-height:1.6">${pzIc('music', 18)} ${en ? 'No Meta Sound Collection tracks loaded yet.' : 'Todavía no hay temas de la colección de Meta cargados.'}<br><span style="font-size:11.5px;opacity:.8">${en ? 'Load them like this: Meta Business Suite → Sound Collection → download the MP3s → copy them to assets/music-meta/ → run node music-meta-catalog.js --write. Only real Meta tracks appear here — nothing is invented.' : 'Se cargan así: Meta Business Suite → Sound Collection → descargar los MP3 → copiarlos a assets/music-meta/ → correr node music-meta-catalog.js --write. Acá solo aparecen temas reales de Meta: nada inventado.'}</span></div>`;
       return;
     }
     const moods = ['alegre', 'tranquilo', 'enérgico', 'sin-clasificar'];
     const moodName = { alegre: en ? 'Cheerful' : 'Alegre', tranquilo: en ? 'Calm' : 'Tranquilo', 'enérgico': en ? 'Energetic' : 'Enérgico', 'sin-clasificar': en ? 'Unsorted' : 'Sin clasificar' };
-    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">🎵 ${en ? 'Meta Sound Collection — free, licensed for commercial use on Meta' : 'Colección de Meta — gratis, con licencia comercial en Meta'}</div>`;
+    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${pzIc('music', 18)} ${en ? 'Meta Sound Collection — free, licensed for commercial use on Meta' : 'Colección de Meta — gratis, con licencia comercial en Meta'}</div>`;
     if (lib.tendencia && lib.tendencia.length) {
-      html += `<div style="margin-bottom:10px">🔥 ${en ? 'Trending in your niche (real usage)' : 'Sonando en tu rubro (uso real)'}: ${lib.tendencia.map(t => `<button class="pcsheet-opt" data-mcmusic="${esc(t.file)}">${esc(t.titulo)} (${t.usos})</button>`).join(' ')}</div>`;
+      html += `<div style="margin-bottom:10px">${pzIc('flame', 14)} ${en ? 'Trending in your niche (real usage)' : 'Sonando en tu rubro (uso real)'}: ${lib.tendencia.map(t => `<button class="pcsheet-opt" data-mcmusic="${esc(t.file)}">${esc(t.titulo)} (${t.usos})</button>`).join(' ')}</div>`;
     }
     if (sug && sug.sugerido) {
-      html += `<div style="margin-bottom:10px">✨ ${en ? 'Posty suggests' : 'Posty sugiere'}: <b>${esc(sug.sugerido.titulo)}</b> <button class="pcsheet-opt" data-mcmusic="${esc(sug.sugerido.file)}">${en ? 'Use it' : 'Usarlo'}</button> <button class="pcsheet-opt" data-mcduck="${esc(sug.sugerido.file)}">${en ? 'Use with ducking' : 'Usar con ducking'}</button></div>`;
+      html += `<div style="margin-bottom:10px">${pzIc('sparkle', 14)} ${en ? 'Posty suggests' : 'Posty sugiere'}: <b>${esc(sug.sugerido.titulo)}</b> <button class="pcsheet-opt" data-mcmusic="${esc(sug.sugerido.file)}">${en ? 'Use it' : 'Usarlo'}</button> <button class="pcsheet-opt" data-mcduck="${esc(sug.sugerido.file)}">${en ? 'Use with ducking' : 'Usar con ducking'}</button></div>`;
     }
     moods.forEach(m => {
       const ts = lib.temas.filter(t => (t.mood || 'sin-clasificar') === m);
       if (!ts.length) return;
       html += `<div style="font-size:12px;font-weight:700;margin:10px 0 4px">${moodName[m]}</div>`;
       ts.forEach(t => {
-        html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:12px;flex:1">${esc(t.titulo)}${t.artista ? ' — ' + esc(t.artista) : ''}</span><audio controls preload="none" src="${esc(t.url)}" style="width:120px;height:28px"></audio><button class="pcsheet-opt" data-mcmusic="${esc(t.file)}">${en ? 'Use' : 'Usar'}</button><button class="pcsheet-opt" data-mcduck="${esc(t.file)}">🔉 Ducking</button></div>`;
+        html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:12px;flex:1">${esc(t.titulo)}${t.artista ? ' — ' + esc(t.artista) : ''}</span><audio controls preload="none" src="${esc(t.url)}" style="width:120px;height:28px"></audio><button class="pcsheet-opt" data-mcmusic="${esc(t.file)}">${en ? 'Use' : 'Usar'}</button><button class="pcsheet-opt" data-mcduck="${esc(t.file)}">${pzIc('volume', 16)} Ducking</button></div>`;
       });
     });
     html += `<div style="font-size:11px;opacity:.7;margin-top:8px">${en ? 'Every track: Meta Sound Collection · commercial use on Meta products only (Facebook, Instagram, Messenger, Audience Network). Never Spotify, never the Instagram catalog.' : 'Cada tema: Meta Sound Collection · uso comercial solo en productos Meta (Facebook, Instagram, Messenger, Audience Network). Nunca Spotify ni catálogo de Instagram.'}</div>`;
@@ -6417,13 +6513,13 @@ async function runAiEdit(id, kind) {
   const go = document.getElementById(kind === 'text' ? `aiedit-go-${id}` : `aiphoto-go-${id}`);
   if (!inp || !msg || idx < 0) return;
   const instruction = (inp.value || '').trim();
-  if (!instruction) { msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">Contame qué le cambio 👆</span>`; inp.focus(); return; }
+  if (!instruction) { msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">Contame qué le cambio ${pzIc('arrowUp', 13)}</span>`; inp.focus(); return; }
   const n = idx + 1, total = REVIEW_DRAFTS.length;
   const text = kind === 'text'
     ? `El posteo ${n} de ${total}: ${instruction}`
     : `El posteo ${n} de ${total}: cambiá la foto — ${instruction}`;
   if (go) go.disabled = true;
-  msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ La IA lo está aplicando…</span>`;
+  msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">${pzIc('clock', 14)} La IA lo está aplicando…</span>`;
   try {
     const body = {
       messages: [{ role: 'user', text }],
@@ -6433,7 +6529,7 @@ async function runAiEdit(id, kind) {
       const lib = assetPhotos().slice().reverse().slice(0, 6);
       if (!lib.length) {
         // Sin fotos no hay nada que la IA pueda elegir: llevar al picker manual
-        msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">Primero subí una foto 📸 Elegila vos:</span>`;
+        msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">Primero subí una foto. Elegila vos:</span>`;
         setTimeout(() => {
           const panel = document.getElementById(`aiphoto-${id}`);
           if (panel) panel.hidden = true;
@@ -6447,7 +6543,7 @@ async function runAiEdit(id, kind) {
     }
     const r = await api.post('/api/ideas/chat', body, { timeout: 60000 });
     if (r.edit && r.edit.ok) {
-      msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ ${esc(r.reply || 'Listo, aplicado')}</span>`;
+      msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">${pzIc('checkCircle', 14)} ${esc(r.reply || 'Listo, aplicado')}</span>`;
       inp.value = '';
       setTimeout(() => { try { render(); } catch (e) {} }, 900);
     } else {
@@ -6468,18 +6564,18 @@ async function restyleDraftPhoto(id, btn) {
   if (!code) {
     const panel = document.getElementById(`aiphoto-${id}`);
     if (panel) panel.hidden = false;
-    if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">Elegí un estilo arriba 👆 y tocá 🎨 Restylear</span>`;
+    if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">Elegí un estilo arriba ${pzIc('arrowUp', 13)} y tocá ${pzIc('palette', 13)} Restylear</span>`;
     if (sel) sel.focus();
     return;
   }
   const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
   if (btn) btn.disabled = true;
-  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Restyleando tu foto con ${esc(code)}…</span>`;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">${pzIc('clock', 14)} Restyleando tu foto con ${esc(code)}…</span>`;
   try {
     const r = await api.post(`/api/drafts/${id}/photo-restyle`, { style: code }, { timeout: 180000 });
     if (r && r.ok && r.path) {
       if (draft) { draft.image_path = r.path; draft.style_code = r.style; }
-      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Tu foto, versión ${esc(code)}</span>`;
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">${pzIc('checkCircle', 14)} Tu foto, versión ${esc(code)}</span>`;
       setTimeout(() => { try { render(); } catch (e) {} }, 900);
     } else {
       if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
@@ -6497,12 +6593,12 @@ async function enhanceDraftPhoto(id, btn) {
   if (panel) panel.hidden = false;
   const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
   if (btn) btn.disabled = true;
-  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Mejorando la foto…</span>`;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">' + pzIc('clock', 14) + ' Mejorando la foto…</span>`;
   try {
     const r = await api.post(`/api/drafts/${id}/photo-enhance`, {}, { timeout: 180000 });
     if (r && r.ok && r.proposal_path) {
       if (draft) { draft.enhance_proposal_path = r.proposal_path; draft.enhance_proposal_base = r.proposal_base; }
-      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Mejora propuesta lista: comparala abajo</span>`;
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">${pzIc('checkCircle', 14)} Mejora propuesta lista: comparala abajo</span>`;
       renderEnhanceProposal(id, (draft && draft.image_path) || '', r.proposal_path);
     } else {
       if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
@@ -6519,12 +6615,12 @@ async function carouselDraft(id, btn) {
   if (panel) panel.hidden = false;
   const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
   if (btn) btn.disabled = true;
-  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Armándo el carousel (portada + 3 placas)…</span>`;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">${pzIc('clock', 14)} Armándo el carousel (portada + 3 placas)…</span>`;
   try {
     const r = await api.post('/api/carousel-generate', { postId: id }, { timeout: 300000 });
     if (r && r.ok) {
       if (draft) { draft.media_type = 'carousel'; draft.carousel_paths = r.paths; draft.image_path = r.cover; }
-      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Carousel listo 🎠</span>`;
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">${pzIc('checkCircle', 14)} Carousel listo</span>`;
       setTimeout(() => { try { render(); } catch (e) {} }, 900);
     } else {
       if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
@@ -6544,7 +6640,7 @@ async function reelDraft(id, btn) {
   try {
     const r = await api.post('/api/reel-generate', { postId: id }, { timeout: 300000 });
     if (r && r.ok) {
-      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Reel listo 🎬</span><br><span style="font-size:11px;color:var(--mut)">${esc(r.audioNote || '')}</span>`;
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">${pzIc('checkCircle', 14)} Reel listo</span><br><span style="font-size:11px;color:var(--mut)">${esc(r.audioNote || '')}</span>`;
       setTimeout(() => { try { render(); } catch (e) {} }, 2600);
     } else {
       if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
@@ -6571,7 +6667,7 @@ async function fillStyleSelects() {
     for (const s of styles) {
       const o = document.createElement('option');
       o.value = s.code;
-      o.textContent = `${s.code} · ${s.name}${s.brandSafe ? '' : ' 🎲'}`;
+      o.textContent = `${s.code} · ${s.name}${s.brandSafe ? '' : ''}`;
       sel.appendChild(o);
     }
     sel.onchange = async () => {
@@ -6585,7 +6681,7 @@ async function fillStyleSelects() {
         const r = await api.post(`/api/drafts/${id}/photo-style`, { style: code }, { timeout: 180000 });
         if (r && r.ok && r.path) {
           if (draft) { draft.image_path = r.path; draft.style_code = r.style; }
-          if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Foto nueva con ${esc(code)}</span>`;
+          if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">${pzIc('checkCircle', 14)} Foto nueva con ${esc(code)}</span>`;
           setTimeout(() => { try { render(); } catch (e) {} }, 900);
         } else {
           if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
@@ -6859,13 +6955,13 @@ function pickRejectReason() {
       if (remaining === 0) {
         // Festejo: aceptar se siente como un logro, no como un trámite
         streakModalShell(`
-          <div class="big-emoji">🎉</div>
+          <div class="big-emoji">${pzIc('gift', 64)}</div>
           <h3 style="margin:12px 0 4px">¡Listo! Tu semana se publica sola</h3>
-          <p style="font-size:14px;margin:0 0 6px">Todos tus posteos quedaron programados ✅</p>
-          ${whenTxt ? `<p style="font-size:14px;margin:0 0 6px">📮 ${whenNextWeek ? 'Este queda para la semana que viene: sale el ' : 'Este sale el '}${esc(whenTxt)}</p>` : ''}
-          <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
+          <p style="font-size:14px;margin:0 0 6px">Todos tus posteos quedaron programados ${pzIc('checkCircle', 14)}</p>
+          ${whenTxt ? `<p style="font-size:14px;margin:0 0 6px">${pzIc('mail', 13)} ${whenNextWeek ? 'Este queda para la semana que viene: sale el ' : 'Este sale el '}${esc(whenTxt)}</p>` : ''}
+          <p class="d">Te avisamos por email cuando salga cada uno.</p>
           <div class="pz-refpeak-slot"></div>
-          <button class="btn btn-primary btn-block" id="celebGo" style="margin-top:10px">Ver mi semana →</button>`);
+          <button class="btn btn-primary btn-block" id="celebGo" style="margin-top:10px">Ver mi semana ${pzIc("arrowRight", 14)}</button>`);
         const cmo = document.getElementById('streakModal');
         if (cmo) pzFillRefPeak('ref_schedule', cmo);
         const cg = $('#celebGo');
@@ -6873,8 +6969,8 @@ function pickRejectReason() {
         else render();
       } else {
         if (whenTxt) toast(whenNextWeek
-          ? `✅ <b>¡Listo!</b> Queda programado para la semana que viene: sale el ${esc(whenTxt)}`
-          : `✅ <b>¡Listo!</b> Sale el ${esc(whenTxt)}`);
+          ? `${pzIc('checkCircle', 16)} <b>¡Listo!</b> Queda programado para la semana que viene: sale el ${esc(whenTxt)}`
+          : `${pzIc('checkCircle', 16)} <b>¡Listo!</b> Sale el ${esc(whenTxt)}`);
         render();
       }
     } catch (e) {
@@ -6911,13 +7007,13 @@ async function doScheduleAll(btn) {
       try { paintWeekPill(); } catch (e) {}
       try { renderQuickChips([], r.scheduled || [], false); } catch (e) {}
       streakModalShell(`
-        <div class="big-emoji">📅</div>
-        <h3 style="margin:12px 0 4px">✅ Tu semana está programada</h3>
-        <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
+        <div class="big-emoji">${pzIc('calendar', 64)}</div>
+        <h3 style="margin:12px 0 4px">${pzIc('checkCircle', 16)} Tu semana está programada</h3>
+        <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario</p>
         ${w ? `<p style="font-size:14px;margin:0 0 6px">⏳ ${w} ${w === 1 ? 'quedó' : 'quedaron'} en espera: la semana a la que ${w === 1 ? 'pertenece' : 'pertenecen'} ya completó su cupo — ${w === 1 ? 'sigue' : 'siguen'} como borrador${w === 1 ? '' : 'es'} para la próxima.</p>` : ''}
-        <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
+        <p class="d">Te avisamos por email cuando salga cada uno.</p>
         <div class="pz-refpeak-slot"></div>
-        <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
+        <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana ${pzIc('arrowRight', 14)}</button>`);
       const cmo = document.getElementById('streakModal');
       if (cmo) pzFillRefPeak('ref_schedule', cmo);
       const cg = $('#celebGoSa');
@@ -6951,7 +7047,7 @@ async function doActivateWeek(btn) {
     igGateFeedback(b);
     return;
   }
-  if (b) { b.disabled = true; b.innerHTML = '🚀 Activando tu semana…'; }
+  if (b) { b.disabled = true; b.innerHTML = pzIc('rocket', 14) + ' Activando tu semana…'; }
   try {
     // 1) Acepta con las horas de las tarjetas (respeta horas personalizadas).
     const items = $$('#reviewCard [data-revwhen]')
@@ -6978,12 +7074,12 @@ async function doActivateWeek(btn) {
     try { renderQuickChips([], [], false); } catch (e) {}
     postyCelebrate();
     streakModalShell(`
-      <div class="big-emoji">🚀</div>
+      <div class="big-emoji">${pzIc('rocket', 64)}</div>
       <h3 style="margin:12px 0 4px">Tu semana está activa</h3>
-      <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
-      <p class="d">Vos a lo tuyo — Posty se ocupa del resto 💪</p>
+      <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario</p>
+      <p class="d">Vos a lo tuyo — Posty se ocupa del resto</p>
       <div class="pz-refpeak-slot"></div>
-      <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
+      <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana ${pzIc('arrowRight', 14)}</button>`);
     const cmo = document.getElementById('streakModal');
     if (cmo) pzFillRefPeak('ref_schedule', cmo);
     const cg = $('#celebGoSa');
@@ -6997,8 +7093,8 @@ async function doActivateWeek(btn) {
     else render();
   } catch (e) {
     if (isPlanLimitErr(e)) { planLimitModal(e); }
-    else if (m) { m.innerHTML = `<div class="err">😅 ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-    if (b) { b.disabled = false; b.innerHTML = '🚀 Activar mi semana'; }
+    else if (m) { m.innerHTML = `<div class="err">${pzIc('alert', 14)} ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (b) { b.disabled = false; b.innerHTML = pzIc('rocket', 14) + ' Activar mi semana'; }
   }
 }
 function bindActivateWeek() {
@@ -7015,7 +7111,7 @@ function bindActivateWeek() {
 // Orden: 1) dentro del pop si el toque fue ahí; 2) el #revMsg DE ESTA VISTA;
 // 3) toast como último recurso. El tono es de paso amable, no de error.
 function igGateFeedback(anchorBtn) {
-  const html = `<div class="ig-gate-note">${pzIc('camera', 18)} <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm ig-gate-go" type="button">Conectar Instagram →</button></div>`;
+  const html = `<div class="ig-gate-note">${pzIc('camera', 18)} <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm ig-gate-go" type="button">Conectar Instagram ${pzIc('arrowRight', 14)}</button></div>`;
   const wire = (root) => { const g = root && root.querySelector ? root.querySelector('.ig-gate-go') : null; if (g) g.onclick = () => igConnectHere(); };
   try {
     const pop = anchorBtn && anchorBtn.closest ? anchorBtn.closest('.scf-pop') : null;
@@ -7102,16 +7198,16 @@ async function doAcceptAll(btn) {
     // llena era la actual y estos van a la que viene).
     const nw = (r && r.next_week) || 0;
     toast(n === 1
-      ? `✅ <b>Listo, acepté el posteo.</b><br>Sale solo a la hora indicada 👌`
+      ? `${pzIc('checkCircle', 14)} <b>Listo, acepté el posteo.</b><br>Sale solo a la hora indicada`
       : (r && r.partial)
-      ? `✅ <b>Acepté ${n}.</b><br>Los otros ${r.total - n} quedan en borrador por ahora 👌`
+      ? `${pzIc('checkCircle', 14)} <b>Acepté ${n}.</b><br>Los otros ${r.total - n} quedan en borrador por ahora`
       : nw > 0
-      ? `✅ <b>Listo, acepté los ${n}.</b><br>${nw === n ? 'Quedan programados para la semana que viene 📮' : `${nw} de ellos quedan para la semana que viene 📮`}`
-      : `✅ <b>Listo, acepté los ${n}.</b><br>Salen solos a la hora indicada 👌`);
+      ? `${pzIc('checkCircle', 14)} <b>Listo, acepté los ${n}.</b><br>${nw === n ? 'Quedan programados para la semana que viene' : `${nw} de ellos quedan para la semana que viene`}`
+      : `${pzIc('checkCircle', 14)} <b>Listo, acepté los ${n}.</b><br>Salen solos a la hora indicada`);
     render();
   } catch (e) {
     if (isPlanLimitErr(e)) { planLimitModal(e); }
-    else if (m) { m.innerHTML = `<div class="err">😅 ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    else if (m) { m.innerHTML = `<div class="err">${pzIc('alert', 14)} ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     if (b) { b.disabled = false; b.innerHTML = pzIc('checkCircle', 18) + ' Aceptar todo'; }
   }
 }
@@ -7207,7 +7303,7 @@ async function regenDraft(id, btn) {
     });
     render();
   } catch (e) {
-    alert('No pude regenerarlo 😅 Probá de nuevo.');
+    alert('No pude regenerarlo. Probá de nuevo.');
     if (isBtn) { btn.disabled = false; btn.innerHTML = old; }
   }
 }
@@ -7231,8 +7327,8 @@ async function draftVariants(id, btn) {
     if (!variants.length) throw new Error('no_variants');
     mount.innerHTML = `<div style="margin-top:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <b style="font-size:13px">🔄 Elegí tu favorita</b>
-        <button class="btn btn-ghost btn-sm" data-varclose="${id}">✕</button>
+        <b style="font-size:13px">${pzIc('refresh', 14)} Elegí tu favorita</b>
+        <button class="btn btn-ghost btn-sm" data-varclose="${id}">${pzIc("x", 16)}</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
         ${variants.map((v, i) => `
@@ -7255,14 +7351,14 @@ async function draftVariants(id, btn) {
         render();
       } catch (e) {
         p.disabled = false; p.style.opacity = '';
-        alert('No pude aplicar la variante 😅 Probá de nuevo.');
+        alert('No pude aplicar la variante. Probá de nuevo.');
       }
     });
   } catch (e) {
     const msg = e.message === 'no_variants'
       ? 'No se pudieron generar las variantes. Probá de nuevo en un minuto.'
-      : (e.message || 'No pude generarlo 😅 Probá de nuevo.');
-    mount.innerHTML = `<div class="err" style="margin-top:10px">⚠️ ${esc(msg)}</div>`;
+      : (e.message || 'No pude generarlo. Probá de nuevo.');
+    mount.innerHTML = `<div class="err" style="margin-top:10px">${pzIc("alert", 14)} ${esc(msg)}</div>`;
     mount.dataset.open = ''; // el error no deja el picker trabado: se puede reintentar
   }
   if (btn) { btn.disabled = false; btn.innerHTML = old; }
@@ -7290,7 +7386,7 @@ async function changeDraftPhoto(id, el, photoPath) {
     await api.patch('/api/posts/' + id, { action: 'save-draft', image_path: imagePath });
     render();
   } catch (e) {
-    alert('No pude cambiar la foto 😅 Probá de nuevo.');
+    alert('No pude cambiar la foto. Probá de nuevo.');
     el.style.opacity = ''; el.style.pointerEvents = '';
   }
 }
@@ -7304,7 +7400,7 @@ function togglePhotoPicker(id, btn) {
   const photos = assetPhotos().slice().reverse(); // más nuevas primero
   mount.innerHTML = `<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;align-items:center">
     ${photos.map(p => `<img src="${esc(p.file_path)}" data-pickphoto="${esc(p.file_path)}" alt="Foto del negocio" style="width:64px;height:64px;flex-shrink:0;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid var(--line)">`).join('')}
-    <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nueva foto">＋<input type="file" accept="image/*" data-uploadphoto style="display:none"></label>
+    <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nueva foto">${pzIc('plus', 20)}<input type="file" accept="image/*" data-uploadphoto style="display:none"></label>
   </div>`;
   mount.querySelectorAll('[data-pickphoto]').forEach(img => img.onclick = () => changeDraftPhoto(id, img, img.dataset.pickphoto));
   const up = mount.querySelector('[data-uploadphoto]');
@@ -7314,7 +7410,7 @@ function togglePhotoPicker(id, btn) {
     try {
       const r = await fetch('/api/assets?kind=photo', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
+      if (!r.ok) throw new Error(data.error || 'No pude subirlo. Probá de nuevo');
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       await changeDraftPhoto(id, up, data.path);
       track('photo_upload', { kind: 'draft' });
@@ -7335,9 +7431,9 @@ function toggleDraftPhotoPicker(id) {
   mount.dataset.open = '1'; mount.dataset.which = 'foto';
   const photos = assetPhotos().slice().reverse(); // más nuevas primero
   mount.innerHTML = `<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;align-items:center">
-    <button type="button" data-rmphoto style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px solid var(--line);background:var(--bg2);cursor:pointer;font-size:10.5px;font-weight:700;color:var(--mut);line-height:1.25;font-family:inherit" title="Quitar la foto: diseño plano con tus colores">🚫<br>Sin<br>foto</button>
+    <button type="button" data-rmphoto style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px solid var(--line);background:var(--bg2);cursor:pointer;font-size:10.5px;font-weight:700;color:var(--mut);line-height:1.25;font-family:inherit" title="Quitar la foto: diseño plano con tus colores">${pzIc('ban', 20)}<br>Sin<br>foto</button>
     ${photos.map(p => `<img src="${esc(p.file_path)}" data-pickphoto="${esc(p.file_path)}" alt="Foto del negocio" style="width:64px;height:64px;flex-shrink:0;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid var(--line)">`).join('')}
-    <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nueva foto">＋<input type="file" accept="image/*" data-uploadphoto style="display:none"></label>
+    <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nueva foto">${pzIc('plus', 20)}<input type="file" accept="image/*" data-uploadphoto style="display:none"></label>
   </div>`;
   mount.querySelectorAll('[data-pickphoto]').forEach(img => img.onclick = () => changeDraftPhoto(id, img, img.dataset.pickphoto));
   try { mcMejoresFetch().then(() => mcPaintPickerBest(mount)); } catch (e) {}
@@ -7350,7 +7446,7 @@ function toggleDraftPhotoPicker(id) {
     try {
       const r = await fetch('/api/media', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'No pude subirla 😅 Probá de nuevo');
+      if (!r.ok) throw new Error(data.error || 'No pude subirla. Probá de nuevo');
       ASSETS = await api.get('/api/assets').catch(() => ASSETS); // /api/media ya la dejó en la librería
       await changeDraftPhoto(id, up, data.path);
       track('photo_upload', { kind: 'draft' });
@@ -7384,7 +7480,7 @@ async function removeDraftPhoto(id, el) {
     track('photo_remove', { kind: 'draft' });
     render();
   } catch (e) {
-    alert('No pude quitar la foto 😅 Probá de nuevo.');
+    alert('No pude quitar la foto. Probá de nuevo.');
     el.style.opacity = ''; el.style.pointerEvents = '';
   }
 }
@@ -7398,7 +7494,7 @@ async function changeDraftVideo(id, el, videoPath) {
     await api.patch('/api/posts/' + id, { action: 'save-draft', image_path: videoPath });
     render();
   } catch (e) {
-    alert('No pude cambiar el video 😅 Probá de nuevo.');
+    alert('No pude cambiar el video. Probá de nuevo.');
     el.style.opacity = ''; el.style.pointerEvents = '';
   }
 }
@@ -7411,7 +7507,7 @@ function toggleVideoPicker(id, btn) {
   const vids = assetVideos();
   mount.innerHTML = `<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;align-items:center">
     ${vids.map(v => `<div style="position:relative;flex-shrink:0"><video src="${esc(v.file_path)}" data-pickvideo="${esc(v.file_path)}" muted playsinline preload="metadata" style="width:64px;height:64px;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid var(--line);background:#0A1E33"></video><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;pointer-events:none">▶</span></div>`).join('')}
-    <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nuevo video">＋<input type="file" accept="video/*" data-uploadvideo style="display:none"></label>
+    <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nuevo video">${pzIc('plus', 20)}<input type="file" accept="video/*" data-uploadvideo style="display:none"></label>
   </div>`;
   mount.querySelectorAll('[data-pickvideo]').forEach(v => v.onclick = () => changeDraftVideo(id, v, v.dataset.pickvideo));
   const up = mount.querySelector('[data-uploadvideo]');
@@ -7421,7 +7517,7 @@ function toggleVideoPicker(id, btn) {
     try {
       const r = await fetch('/api/assets?kind=video', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type }, body: f });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
+      if (!r.ok) throw new Error(data.error || 'No pude subirlo. Probá de nuevo');
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       await changeDraftVideo(id, up, data.path);
     } catch (e) { alert('No se pudo subir el video: ' + e.message); }
@@ -7450,11 +7546,11 @@ function proposalHTML() {
   if (CHAT_IDEA.colors && CHAT_IDEA.colors.length) bits.push('🎨 en tus colores');
   return `
     <div class="chat-proposal">
-      <button class="cp-close" id="chatDismiss" type="button" aria-label="Cerrar">✕</button>
+      <button class="cp-close" id="chatDismiss" type="button" aria-label="Cerrar">${pzIc("x", 16)}</button>
       <div class="cp-head">
         <span class="pz-mg pz-mg--sm"><img class="cp-avatar" src="ai-avatar.png" alt="Posty"></span>
         <div class="cp-head-tx">
-          <div class="cp-overline">${isOrder ? 'Tu pedido' : 'Idea lista'} ✨</div>
+          <div class="cp-overline">${isOrder ? 'Tu pedido' : 'Idea lista'}</div>
           <div class="cp-title">${esc(CHAT_IDEA.titulo)}</div>
         </div>
       </div>
@@ -7465,7 +7561,7 @@ function proposalHTML() {
         <span class="cp-dot">·</span>
         <button class="cp-link" id="chatMoreCaps" type="button">↻ Otros textos</button>
         <span class="cp-dot">·</span>
-        <button class="cp-link" id="chatEditTx" type="button">✎ Editar</button>
+        <button class="cp-link" id="chatEditTx" type="button">${pzIc('pencil', 13)} Editar</button>
       </div>
       <div id="chatEditBox" hidden>
         <textarea class="in" id="chatCaption" rows="3" placeholder="Tu texto…" oninput="this.dataset.touched='1'">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
@@ -7538,7 +7634,7 @@ function chatMoreImage() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   const b = $('#chatMoreImg');
-  if (b) { b.disabled = true; b.textContent = '🎨 Generando…'; }
+  if (b) { b.disabled = true; b.innerHTML = pzIc('palette', 14) + ' Generando…'; }
   // NO borrar el preview anterior: queda visible mientras se genera la nueva.
   // El "generando" se muestra en el botón, no pisando la imagen.
   const box = $('#chatPreviews');
@@ -7610,7 +7706,7 @@ async function renderChatStoryboard() {
     }
     if (CHAT_IDEA !== idea) return;
     if (!ph) {
-      box.innerHTML = '<div style="font-size:11.5px;color:var(--mut)">🎨 Generando…</div>';
+      box.innerHTML = '<div style="font-size:11.5px;color:var(--mut)">' + pzIc('palette', 14) + ' Generando…</div>';
       return;
     }
     box.innerHTML = '';
@@ -7712,7 +7808,7 @@ async function renderChatPreviews_OLD(force) {
       d.appendChild(img);
       const tag = document.createElement('span');
       tag.className = 'pv-tag';
-      tag.textContent = '📷 Tu foto';
+      tag.innerHTML = `${pzIc('camera', 16)} Tu foto`;
       d.appendChild(tag);
       box.appendChild(d);
       renderChatStoryboard();
@@ -7724,7 +7820,7 @@ async function renderChatPreviews_OLD(force) {
   const hadPreview = box.querySelector('img');
   if (!hadPreview) {
     box.innerHTML = '<div class="chat-prev-loading" id="chatPrevThinking"></div>';
-    postyThinking($('#chatPrevThinking'), ['Generando tu imagen 🎨…', 'Aplicando tu estilo ✨…']);
+    postyThinking($('#chatPrevThinking'), ['Generando tu imagen ' + pzIc('palette', 14) + '…', 'Aplicando tu estilo ' + pzIc('sparkle', 14) + '…']);
   }
   // Pinta una imagen ya lista en la tarjeta (la usa la pre-generada y la on-demand).
   const paintPreview = (gen) => {
@@ -7786,7 +7882,7 @@ async function renderChatPreviews_OLD(force) {
       stopPrevThinking();
       // No borrar el preview anterior si había uno: solo avisar del fallo.
       if (!box.querySelector('img')) {
-        box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅 Probá tocando ↻ Otra imagen.</div>';
+        box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen. Probá tocando ↻ Otra imagen.</div>';
         CHAT_PREVIEWS = [];
       }
       return;
@@ -7800,10 +7896,10 @@ async function renderChatPreviews_OLD(force) {
     // Si había un preview anterior, lo conservamos y solo avisamos.
     if (box.querySelector('img')) return;
     if (isAiCapErr(e)) {
-      const capMsg = (e.message || '').trim() || 'Llegamos al tope de IA 😅 Probá de nuevo en un rato.';
+      const capMsg = (e.message || '').trim() || 'Llegamos al tope de IA. Probá de nuevo en un rato.';
       box.innerHTML = '<div style="font-size:12px;color:var(--mut)">' + esc(capMsg) + '</div>';
     } else {
-      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅' +
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen' +
         (detail ? `<br><small style="opacity:.7">Detalle: ${esc(detail)}</small>` : '') +
         '<br>Probá tocando ↻ Otra imagen.</div>';
     }
@@ -7896,7 +7992,7 @@ async function logoCandidateRespond(ok, bannerEl) {
   try {
     const r = await api.post(ok ? '/api/brand/logo-confirm' : '/api/brand/logo-reject', {});
     if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
-    if (bannerEl) bannerEl.outerHTML = `<div style="font-size:12px;color:var(--mut);margin:6px 0">${ok ? '✅ ¡Listo! Lo uso en todos tus diseños' : '👌 Dale, cuando quieras subí tu logo desde Mi marca'}</div>`;
+    if (bannerEl) bannerEl.outerHTML = `<div style="font-size:12px;color:var(--mut);margin:6px 0">${ok ? '' + pzIc('checkCircle', 16) + ' ¡Listo! Lo uso en todos tus diseños' : 'Dale, cuando quieras subí tu logo desde Mi marca'}</div>`;
   } catch (e) { if (bannerEl) bannerEl.remove(); }
 }
 document.addEventListener('click', (e) => {
@@ -7947,11 +8043,11 @@ async function trialRebuildWeek() {
       say('✅ Ya tenés borradores ✨', true);
     } else {
       say('⚡ Rearmar mi semana', false);
-      alert('No pude arrancar la regeneración 😅 Probá de nuevo en un toque.');
+      alert('No pude arrancar la regeneración. Probá de nuevo en un toque.');
     }
   } catch (e) {
     say('⚡ Rearmar mi semana', false);
-    alert((e && e.message) || 'No pude arrancar la regeneración 😅 Probá de nuevo.');
+    alert((e && e.message) || 'No pude arrancar la regeneración. Probá de nuevo.');
   }
 }
 
@@ -8063,7 +8159,7 @@ async function draftFromPreview(idea, prev) {
     const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
     const res = await fetch('/api/media', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'No pude subir la imagen 😅 Probá de nuevo');
+    if (!res.ok) throw new Error(data.error || 'No pude subir la imagen. Probá de nuevo');
     imagePath = data.path;
   }
   try {
@@ -8086,7 +8182,7 @@ async function draftFromPreview(idea, prev) {
 // cambia el lugar, no la semántica. ES/EN por ME.lang.
 function acceptPillHTML(n, id) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  return `<button type="button" class="accept-pill" id="${id}">${pzIc('checkCircle', 18)} ${en ? 'Accept all' : 'Aceptar todo'} (${n})</button>`;
+  return `<button type="button" class="accept-pill" id="${id}">${pzIc('checkCircle', 18)} ${en ? 'Accept all' : 'Aceptar todo'} <span class="accept-count">${n}</span></button>`;
 }
 // (v436) La línea del saludo con la semana que viene: es la MISMA
 // cuenta que pintaba la línea de cupo de la Agenda (schedWeekCounts →
@@ -8113,7 +8209,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
   // En la revisión va integrado: sin título (el saludo ya presenta el chat).
-  const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 Posty</h3>`;
+  const title = compact ? '' : `<h3 style="margin:0 0 6px">${pzIc('chat', 16)} Posty</h3>`;
   const wrap = compact
     ? `<div id="chatCard" style="${bareWrap ? 'margin:0 0 4px' : 'margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)'}">`
     : `<div class="card" id="chatCard">`;
@@ -8126,7 +8222,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
   const chips = (!msgs && !schedMode) ? `
     <div class="chat-chips" id="chatChips">
       <button data-chip="Haceme un posteo de promo para esta semana">${pzIc('sparkle', 18)} Haceme un posteo</button>
-      ${noEditChip ? '' : `<button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">✏️ Editá un borrador</button>`}
+      ${noEditChip ? '' : `<button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">${pzIc('pencil', 13)} Editá un borrador</button>`}
       <button data-chip="Dame una idea para vender más esta semana">${pzIc('idea', 18)} Dame una idea</button>
     </div>` : '';
   // (v236) A la derecha de la subida, el chip de ideas: nace en el
@@ -8151,7 +8247,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
-      ${schedMode ? '' : `<button class="btn btn-soft" id="chatPlus" title="Agregar foto o video">＋</button>`}
+      ${schedMode ? '' : `<button class="btn btn-soft" id="chatPlus" title="Agregar foto o video">${pzIc('plus', 18)}</button>`}
       <input id="chatInput" class="in" placeholder="Escribile a Posty…" maxlength="2000" autocomplete="off">
       <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">${pzIc('mic', 18)}</button>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
@@ -8190,13 +8286,13 @@ function renderVozPostCard(vo) {
   const estado = vo.estado || '';
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   let html = '<div class="voz-post-card" data-voz-id="' + vo.id + '">';
-  html += '<div class="voz-post-head">🎙 tu posteo de hoy</div>';
+  html += '<div class="voz-post-head">' + pzIc('mic', 16) + ' tu posteo de hoy</div>';
   html += '<div class="voz-post-quote">“' + esc(vo.transcripcion || '') + '”</div>';
   if (foto) {
     html += '<img class="voz-post-foto" src="' + esc(foto) + '" alt="">';
     html += '<div class="voz-post-foto-nota">' + (fotoOrigen === 'nueva' ? 'usé la foto que mandaste con el audio' : fotoOrigen === 'conocida' ? 'usé tu foto real de este producto' : 'foto elegida por vos') + '</div>';
   } else {
-    html += '<div class="voz-post-sin-foto">sin foto todavía — elegí una de tu local 👇</div>';
+    html += '<div class="voz-post-sin-foto">sin foto todavía — elegí una de tu local</div>';
   }
   if (vo.caption) html += '<div class="voz-post-caption">' + esc(vo.caption) + '</div>';
   if (dudas.length && opciones.length) {
@@ -8217,7 +8313,7 @@ function renderVozPostCard(vo) {
   }
   html += '<div class="voz-post-acciones">';
   if (estado === 'aclarar') {
-    html += '<span class="voz-post-hint">elegí arriba y se arma solo 👆</span>';
+    html += '<span class="voz-post-hint">elegí arriba y se arma solo</span>';
   } else {
     html += '<button class="btn btn-primary" data-voz-id="' + vo.id + '" data-voz-accion="aprobar">Aprobar</button>';
     html += '<button class="btn btn-soft" data-voz-id="' + vo.id + '" data-voz-accion="cambiar-foto">Cambiar foto</button>';
@@ -8304,14 +8400,14 @@ function renderChatShowDrafts(drafts) {
   wrap.style.whiteSpace = 'normal';
   const head = document.createElement('div');
   head.style.cssText = 'font-weight:800;margin-bottom:8px';
-  head.textContent = '🖼️ Tus posteos 👇';
+  head.innerHTML = pzIc('image', 14) + ' Tus posteos ' + pzIc('arrowDown', 14);
   wrap.appendChild(head);
   drafts.forEach((d, i) => {
     const card = document.createElement('div');
     card.className = 'chat-idea-card';
     card.style.cursor = 'default';
     const badge = d.media_type === 'video' ? (pzIc('reel', 15) + ' Reel') : d.media_type === 'story' ? (pzIc('camera', 15) + ' Historia') : d.media_type === 'carousel' ? (pzIc('image', 15) + ' Carrusel') : (pzIc('post', 15) + ' Post');
-    const st = d.status === 'scheduled' && d.when ? ` · ⏰ ${esc(String(d.when).slice(0, 16).replace('T', ' '))}` : ' · 📝 borrador';
+    const st = d.status === 'scheduled' && d.when ? ` · ⏰ ${esc(String(d.when).slice(0, 16).replace('T', ' '))}` : ' · ' + pzIc('post', 12) + ' borrador';
     card.innerHTML = `
       ${d.image_url ? `<img src="${esc(String(d.image_url))}" style="width:100%;border-radius:10px;margin-bottom:6px;display:block" loading="lazy" alt="">` : ''}
       <div style="font-size:12.5px;color:var(--mut)">${badge}${st}</div>
@@ -8322,7 +8418,7 @@ function renderChatShowDrafts(drafts) {
   foot.type = 'button';
   foot.className = 'btn btn-soft btn-sm';
   foot.style.marginTop = '8px';
-  foot.textContent = '📅 Ver en Schedule';
+  foot.innerHTML = pzIc('calendar', 13) + ' Ver en Schedule';
   foot.onclick = () => { location.hash = '#/app/schedule'; };
   wrap.appendChild(foot);
   box.appendChild(wrap);
@@ -8334,8 +8430,8 @@ function renderChatPhotos() {
   if (!box) return;
   box.innerHTML = CHAT_PHOTOS.map((p, i) => `
     <div class="chat-photo">
-      ${p.aiUrl ? `<img src="${esc(p.aiUrl)}">${p.kind === 'video' ? `<span class="vid-badge">▶</span>` : ''}` : (p.kind === 'video' ? `<span class="vid-badge" style="left:50%;top:50%;transform:translate(-50%,-50%);bottom:auto;font-size:17.5px">🎬</span>` : `<img src="${esc(p.file_path)}">`)}
-      <button data-chatrm="${i}" title="Quitar">✕</button>
+      ${p.aiUrl ? `<img src="${esc(p.aiUrl)}">${p.kind === 'video' ? `<span class="vid-badge">▶</span>` : ''}` : (p.kind === 'video' ? `<span class="vid-badge" style="left:50%;top:50%;transform:translate(-50%,-50%);bottom:auto;font-size:17.5px">${pzIc('reel', 17)}</span>` : `<img src="${esc(p.file_path)}">`)}
+      <button data-chatrm="${i}" title="Quitar">${pzIc("x", 16)}</button>
     </div>`).join('');
   box.querySelectorAll('[data-chatrm]').forEach(b => b.onclick = () => {
     CHAT_PHOTOS.splice(+b.dataset.chatrm, 1);
@@ -8422,7 +8518,7 @@ async function chatUploadPhotos(files) {
       chatSay('📸 agregado! la IA también lo puede ver 👇');
     }
   } catch (e) {
-    if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo 😅 Probá de nuevo')}</div>`;
+    if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo. Probá de nuevo')}</div>`;
   }
 }
 
@@ -8609,15 +8705,15 @@ async function chatSend() {
         box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(sendText)}</div>`);
         inp.value = ''; chatUpdateSendBtn(); chatScroll();
         const sayId = 'diagSay' + Date.now();
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a" id="${sayId}">Probando la generación de imagen… 🔍</div>`);
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a" id="${sayId}">Probando la generación de imagen…</div>`);
         chatScroll();
         const r = await api.post('/api/diag/image-test', {}, { timeout: 90000 });
         const el = document.getElementById(sayId);
         if (r && r.ok) {
-          if (el) el.innerHTML = '✅ La generación de imagen funciona. El problema está en otro lado.';
+          if (el) el.innerHTML = pzIc('checkCircle', 14) + ' La generación de imagen funciona. El problema está en otro lado.';
         } else {
           const d = r && r.diag ? r.diag : {};
-          let msg = '❌ Encontré el problema:<br><br>';
+          let msg = pzIc('reject', 13) + ' Encontré el problema:<br><br>';
           msg += `<b>Error:</b> ${esc(r.error || 'desconocido')}<br>`;
           if (d.httpStatus) msg += `<b>HTTP:</b> ${d.httpStatus}<br>`;
           if (d.hasKey === false) msg += '<b>Key:</b> no hay API key en el servidor<br>';
@@ -8637,28 +8733,28 @@ async function chatSend() {
     (async () => {
       try {
         const sayId = 'diagWeekSay' + Date.now();
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a" id="${sayId}">Revisando por qué no se genera tu semana… 🔍</div>`);
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a" id="${sayId}">Revisando por qué no se genera tu semana…</div>`);
         chatScroll();
         const r = await api.post('/api/diag/week-test', {}, { timeout: 90000 });
         const el = document.getElementById(sayId);
         if (r && r.ok && r.diag) {
           const d = r.diag;
-          let msg = '📋 <b>Diagnóstico de tu semana:</b><br><br>';
-          msg += `Plan activo: ${d.planOk ? '✅' : '❌'}<br>`;
-          msg += `Créditos IA: ${d.aiOk ? '✅' : '❌ ' + esc(d.aiErr || '')}<br>`;
-          msg += `Datos del negocio: ${d.dnaOk ? '✅' : '❌ (falta descripción)'}<br>`;
+          let msg = pzIc('copy', 13) + ' <b>Diagnóstico de tu semana:</b><br><br>';
+          msg += `Plan activo: ${d.planOk ? pzIc('checkCircle', 13) : pzIc('reject', 13)}<br>`;
+          msg += `Créditos IA: ${d.aiOk ? pzIc('checkCircle', 13) : pzIc('reject', 13) + ' ' + esc(d.aiErr || '')}<br>`;
+          msg += `Datos del negocio: ${d.dnaOk ? pzIc('checkCircle', 13) : pzIc('reject', 13) + ' (falta descripción)'}<br>`;
           msg += `Posteos existentes: ${d.existing}<br>`;
-          msg += `Generación en curso: ${d.running ? '⚠️ sí (trabada?)' : 'no'}<br>`;
-          if (d.ideasOk === true) msg += `Ideas: ✅ (${d.ideasCount})<br>`;
-          else if (d.ideasOk === false) msg += `Ideas: ❌ ${esc(d.ideasErr || '')}<br>`;
-          if (!d.planOk) msg += '<br>❌ Tu plan no está activo.';
-          else if (!d.aiOk) msg += '<br>❌ Se acabaron los créditos de IA.';
-          else if (!d.dnaOk) msg += '<br>❌ Falta la descripción de tu negocio en Ajustes.';
-          else if (d.ideasOk === false) msg += '<br>❌ La IA no está respondiendo.';
-          else msg += '<br>✅ Todo ok — la generación debería estar corriendo.';
+          msg += `Generación en curso: ${d.running ? pzIc('alert', 13) + ' sí (trabada?)' : 'no'}<br>`;
+          if (d.ideasOk === true) msg += `Ideas: ${pzIc('checkCircle', 13)} (${d.ideasCount})<br>`;
+          else if (d.ideasOk === false) msg += `Ideas: ${pzIc('reject', 13)} ${esc(d.ideasErr || '')}<br>`;
+          if (!d.planOk) msg += '<br>' + pzIc('reject', 13) + ' Tu plan no está activo.';
+          else if (!d.aiOk) msg += '<br>' + pzIc('reject', 13) + ' Se acabaron los créditos de IA.';
+          else if (!d.dnaOk) msg += '<br>' + pzIc('reject', 13) + ' Falta la descripción de tu negocio en Ajustes.';
+          else if (d.ideasOk === false) msg += '<br>' + pzIc('reject', 13) + ' La IA no está respondiendo.';
+          else msg += '<br>' + pzIc('checkCircle', 13) + ' Todo ok — la generación debería estar corriendo.';
           if (el) el.innerHTML = msg;
         } else {
-          if (el) el.innerHTML = `❌ No se pudo diagnosticar: ${esc((r && r.error) || 'error desconocido')}`;
+          if (el) el.innerHTML = `${pzIc('reject', 13)} No se pudo diagnosticar: ${esc((r && r.error) || 'error desconocido')}`;
         }
         chatScroll();
       } catch (e) {
@@ -8681,10 +8777,10 @@ async function chatSend() {
         const el = document.getElementById(sayId);
         if (r && r.ok) {
           const res = r.result || {};
-          if (el) el.innerHTML = `✅ Listo: ${res.generated || 0} semanas generadas. Recargá para verla 👆`;
+          if (el) el.innerHTML = `${pzIc('checkCircle', 14)} Listo: ${res.generated || 0} semanas generadas. Recargá para verla ${pzIc('arrowUp', 13)}`;
           try { if (typeof refreshWeekPill === 'function') refreshWeekPill(); } catch (e) {}
         } else {
-          if (el) el.innerHTML = `❌ No se pudo: ${esc(r.error || 'error desconocido')}`;
+          if (el) el.innerHTML = `${pzIc('reject', 13)} No se pudo: ${esc(r.error || 'error desconocido')}`;
         }
         chatScroll();
       } catch (e) {
@@ -8788,14 +8884,14 @@ function bindChatComments() {
           if (!message) throw new Error('La respuesta está vacía');
           b.textContent = '⏳ Enviando...';
           await api.post(`/api/comments/${id}/reply`, { message });
-          if (msg) msg.innerHTML = '<span style="color:#1E7E34">✅ Respondido en Instagram</span>';
+          if (msg) msg.innerHTML = '<span style="color:#1E7E34">' + pzIc('checkCircle', 14) + ' Respondido en Instagram</span>';
         } else {
           await api.post(`/api/comments/${id}/dismiss`, {});
           if (msg) msg.innerHTML = '<span style="color:var(--mut)">Descartado</span>';
         }
         setTimeout(() => { const item = document.querySelector(`#chatBox [data-chatcm="${id}"]`); if (item) item.style.opacity = '.45'; }, 1200);
       } catch (e) {
-        b.disabled = false; b.textContent = act === 'reply' ? '💬 Responder' : 'Descartar';
+        b.disabled = false; b.innerHTML = act === 'reply' ? pzIc('chat', 14) + ' Responder' : 'Descartar';
         if (msg) msg.innerHTML = `<span style="color:#C0392B">${esc(e.message || 'No se pudo')}</span>`;
       }
     };
@@ -8851,14 +8947,14 @@ function bindChatDMs() {
           if (!message) throw new Error('La respuesta está vacía');
           b.textContent = '⏳ Enviando...';
           await api.post(`/api/dms/${id}/reply`, { message });
-          if (msg) msg.innerHTML = '<span style="color:#1E7E34">✅ Respondido en Instagram</span>';
+          if (msg) msg.innerHTML = '<span style="color:#1E7E34">' + pzIc('checkCircle', 14) + ' Respondido en Instagram</span>';
         } else {
           await api.post(`/api/dms/${id}/dismiss`, {});
           if (msg) msg.innerHTML = '<span style="color:var(--mut)">Descartado</span>';
         }
         setTimeout(() => { const item = document.querySelector(`#chatBox [data-chatdm="${id}"]`); if (item) item.style.opacity = '.45'; }, 1200);
       } catch (e) {
-        b.disabled = false; b.textContent = act === 'reply' ? '📩 Responder' : 'Descartar';
+        b.disabled = false; b.innerHTML = act === 'reply' ? pzIc('mail', 14) + ' Responder' : 'Descartar';
         if (msg) msg.innerHTML = `<span style="color:#C0392B">${esc(e.message || 'No se pudo')}</span>`;
       }
     };
@@ -8916,7 +9012,7 @@ function bindChatReviews() {
           if (!message) throw new Error('La respuesta está vacía');
           b.textContent = '⏳ Enviando...';
           await api.post(`/api/reviews/${id}/reply`, { message });
-          if (msg) msg.innerHTML = '<span style="color:#1E7E34">✅ Respondida en Google</span>';
+          if (msg) msg.innerHTML = '<span style="color:#1E7E34">' + pzIc('checkCircle', 13) + ' Respondida en Google</span>';
         } else {
           await api.post(`/api/reviews/${id}/dismiss`, {});
           if (msg) msg.innerHTML = '<span style="color:var(--mut)">Descartada</span>';
@@ -8954,7 +9050,7 @@ function renderChatIdeaOptions(ideas) {
   wrap.style.whiteSpace = 'normal';
   const head = document.createElement('div');
   head.style.cssText = 'font-weight:800;margin-bottom:8px';
-  head.textContent = '✨ Elegí la idea que más te guste 👇';
+  head.innerHTML = pzIc('sparkle', 14) + ' Elegí la idea que más te guste ' + pzIc('arrowDown', 14);
   wrap.appendChild(head);
   ideas.slice(0, 3).forEach((idea, i) => {
     const card = document.createElement('button');
@@ -8962,7 +9058,7 @@ function renderChatIdeaOptions(ideas) {
     card.className = 'chat-idea-card';
     card.innerHTML = `
       ${idea.image_url ? `<img src="${esc(String(idea.image_url))}" style="width:100%;border-radius:10px;margin-bottom:6px;display:block" loading="lazy" alt="">` : ''}
-      <div style="font-weight:800;font-size:13px;margin-bottom:4px">✨ ${esc(String(idea.titulo || ('Idea ' + (i + 1))))}</div>
+      <div style="font-weight:800;font-size:13px;margin-bottom:4px">${pzIc('sparkle', 14)} ${esc(String(idea.titulo || ('Idea ' + (i + 1))))}</div>
       ${idea.angulo ? `<div style="font-size:11.5px;color:var(--mut)">${esc(String(idea.angulo))}</div>` : ''}`;
     card.onclick = () => {
       // La elegida queda marcada como elegida; las otras se descartan visualmente
@@ -8971,7 +9067,7 @@ function renderChatIdeaOptions(ideas) {
       card.classList.add('chat-idea-picked');
       const badge = document.createElement('div');
       badge.className = 'chat-idea-pick';
-      badge.textContent = '✅ La elegiste';
+      badge.innerHTML = pzIc('checkCircle', 13) + ' La elegiste';
       card.appendChild(badge);
       chatAcceptIdea(idea);
     };
@@ -9113,7 +9209,7 @@ async function chatMakePost(asVideo) {
       await draftFromIdea(idea, asVideo, 0, true);
     }
     stopPostyThinking(document.getElementById('chatMkThinking'));
-    if (m) m.innerHTML = '<div class="okmsg">listo! ✅</div>';
+    if (m) m.innerHTML = '<div class="okmsg">listo! ' + pzIc('checkCircle', 14) + '</div>';
     CHAT_IDEA = null;
     CUSTOM_PAL = null;
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
@@ -9130,7 +9226,7 @@ async function chatMakePost(asVideo) {
       if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 150);
   } catch (e) {
-    const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana 💪') : null;
+    const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy. Seguimos mañana.') : null;
     stopPostyThinking(document.getElementById('chatMkThinking'));
     if (m) m.innerHTML = capMsg ? `<div class="okmsg">${esc(capMsg)}</div>` : `<div class="err">Error: ${esc(e.message)}</div>`;
     if (mkP) mkP.disabled = false;
@@ -9146,8 +9242,8 @@ function voiceTick() {
   const msg = document.getElementById('chatMsg');
   const s = Math.floor((Date.now() - VOICE_START) / 1000);
   const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  if (b) b.textContent = `🔴 ${t}`;
-  if (msg) msg.innerHTML = `<div class="okmsg">🔴 grabando ${t} — tocá de nuevo para enviar</div>`;
+  if (b) b.innerHTML = pzDot('#E5484D', 11) + ' ' + t;
+  if (msg) msg.innerHTML = `<div class="okmsg">${pzDot('#E5484D', 12)} grabando ${t} — tocá de nuevo para enviar</div>`;
 }
 async function voiceToggle() {
   if (VOICE_REC) { voiceStop(); return; }
@@ -9210,8 +9306,8 @@ function chatUpdateSendBtn() {
   const unsent = (typeof CHAT_PHOTOS !== 'undefined' && CHAT_PHOTOS.some(p => !p.sent));
   const ready = (inp && inp.value.trim().length > 0) || unsent;
   if (VOICE_REC) return; // grabando: no tocar
-  if (ready) { b.textContent = '➤'; b.className = 'btn btn-primary'; b.title = 'Enviar'; b.onclick = () => chatSend(); b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null; }
-  else { b.textContent = '🎙'; b.className = 'btn btn-soft'; b.title = 'Mantener para hablar'; b.onclick = null;
+  if (ready) { b.innerHTML = pzIc('send', 16); b.className = 'btn btn-primary'; b.title = 'Enviar'; b.onclick = () => chatSend(); b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null; }
+  else { b.innerHTML = pzIc('mic', 18); b.className = 'btn btn-soft'; b.title = 'Mantener para hablar'; b.onclick = null;
     b.onpointerdown = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} voiceToggle(); };
     b.onpointerup = () => { if (VOICE_REC) voiceStop(); else setTimeout(() => { if (VOICE_REC) voiceStop(); }, 800); };
     b.onpointercancel = () => { if (VOICE_REC) voiceStop(); }; }
@@ -9319,13 +9415,15 @@ function computeProposedIsos(all, list, tz) {
 // Etiqueta de día/hora de un posteo para la cabecera de su tarjeta:
 // programado → su fecha; borrador → el día propuesto (o "Borrador").
 function proposedLabelFor(d, proposedIsos, tz) {
-  if (d.scheduled_at) return { label: '📮 ' + homeWhenLabel(d.scheduled_at), iso: null };
+  if (d.scheduled_at) return { label: pzIc('mail', 13) + ' ' + homeWhenLabel(d.scheduled_at), iso: null };
   try {
     const iso = (proposedIsos.get(d.id) || {}).iso || null;
-    if (!iso) return { label: '📝 Borrador', iso: null };
-    const lbl = new Date(iso.slice(0, 10) + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
-    return { label: `📅 ${lbl} · ${iso.slice(11, 16)}`, iso };
-  } catch (e) { return { label: '📝 Borrador', iso: null }; }
+    if (!iso) return { label: `${pzIc('pencil', 13)} Borrador`, iso: null };
+    const enL = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const dtL = new Date(iso.slice(0, 10) + 'T12:00:00');
+    const lbl = enL ? (dtL.toLocaleDateString('en-US', { weekday: 'short', timeZone: tz }).replace(/\./g, '') + ' ' + dtL.getDate()) : dtL.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', timeZone: tz }).replace(/\./g, '');
+    return { label: `${lbl} · ${iso.slice(11, 16)}`, iso };
+  } catch (e) { return { label: `${pzIc('pencil', 13)} Borrador`, iso: null }; }
 }
 // LA tarjeta grande réplica de Instagram (la del carrusel de v215).
 // o = { bizName, tz, prop: {label, iso}, count: 'N de M' | null, dia: bool }
@@ -9349,7 +9447,7 @@ function weekCardHTML(d, o) {
   o = o || {};
   const tz = o.tz || 'America/Argentina/Buenos_Aires';
   const bizName = o.bizName || 'Mi negocio';
-  const prop = o.prop || { label: '📝 Borrador', iso: null };
+  const prop = o.prop || { label: `${pzIc('pencil', 13)} Borrador`, iso: null };
   const isV = String(d.media_type || '') === 'video';
   const isS = String(d.media_type || '') === 'story';
   const isPub = String(d.status) === 'published';
@@ -9366,7 +9464,7 @@ function weekCardHTML(d, o) {
     : `<span class="igmock-ava" style="background:${esc(bizColorW)}">${esc((headName || 'P').charAt(0).toUpperCase())}</span>`;
   // Tarjeta inmediata: borrador nacido sin imagen, creándose ahora mismo.
   const isPending = !d.image_path && d.status === 'draft';
-  const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">✨</span><b>Creando imagen…</b></span>'
+  const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">' + pzIc('sparkle', 16) + '</span><b>Creando imagen…</b></span>'
     : !d.image_path ? '<span class="pcard-nothumb">' + pzIc('post', 20) + '</span>'
     : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
     : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
@@ -9386,7 +9484,7 @@ function weekCardHTML(d, o) {
   const askBtn = `<button type="button" class="pcard-ask" data-pc-act="ask-change">${pzIc('chat', 15)} ${L('Pedir un cambio', 'Request a change')}</button>`;
   let actsInner = '';
   if (isPub) {
-    if (igLink) actsInner += `<a class="pcard-main" href="${esc(igLink)}" target="_blank" rel="noopener">${L('Ver en Instagram ↗', 'See it on Instagram ↗')}</a>`;
+    if (igLink) actsInner += `<a class="pcard-main" href="${esc(igLink)}" target="_blank" rel="noopener">${L('Ver en Instagram', 'See it on Instagram')} ${pzIc('arrowUpRight', 14)}</a>`;
     actsInner += askBtn;
   } else if (d.status === 'scheduled') {
     actsInner += `<button type="button" class="pcard-main" data-pc-act="hold">${pzIc('pause', 18)} ${L('Frenar', 'Hold')}</button>`;
@@ -9417,7 +9515,7 @@ function weekCardHTML(d, o) {
   const lkN = (d.likes === null || d.likes === undefined || !Number.isFinite(Number(d.likes))) ? null : Number(d.likes);
   const likesLine = (lkN !== null && lkN > 0)
     ? `<div class="igmock-likes">${lkN.toLocaleString(enW ? 'en-US' : 'es-AR')} ${enW ? (lkN === 1 ? 'like' : 'likes') : 'Me gusta'}</div>`
-    : `<div class="igmock-likes">${enW ? 'Be the first to like this' : 'Sé el primero en indicar que te gusta'}</div>`;
+    : '';
   const ccN = (d.comments_count === null || d.comments_count === undefined || !Number.isFinite(Number(d.comments_count))) ? null : Number(d.comments_count);
   const commentsLine = (!o.dia && ccN !== null && ccN > 0)
     ? `<div class="igmock-comments">${enW ? (ccN === 1 ? 'View 1 comment' : `View all ${ccN.toLocaleString('en-US')} comments`) : (ccN === 1 ? 'Ver el comentario' : `Ver los ${ccN.toLocaleString('es-AR')} comentarios`)}</div>`
@@ -9428,8 +9526,8 @@ function weekCardHTML(d, o) {
     : isPub
       ? `<span class="pcard-published">${pzIc('checkCircle', 15)} Publicado</span>`
       : isPending
-        ? `<span class="pcard-creating">⏳ Creando…</span>`
-        : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">${pzIc('checkCircle', 18)} Aceptar</button>`;
+        ? `<span class="pcard-creating">' + pzIc('clock', 14) + ' Creando…</span>`
+        : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">${pzIc('checkCircle', 16)} Aceptar</button>`;
   const capHTML = capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}"${igUser ? ` data-capuser="${esc(igUser)}"` : ''} title="Tocá para editar">${igUser ? `<b class="igmock-cap-user">${esc(igUser)}</b> ` : ''}${esc(capFull)}</div>` : '';
   // (Frente 3b) Tiempo relativo estilo IG bajo el pie, solo en posteos ya
   // publicados y fuera del esqueleto fijo de Día: «hace 2 h».
@@ -9462,8 +9560,8 @@ function weekCardHTML(d, o) {
   return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}${d.status === 'draft' && !isPending ? ' igmock-draft' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}" data-f3-status="${esc(String(d.status || ''))}" data-f3-appr="${esc(String(d.approval || ''))}">
       <div class="igmock-head">${avaHTML}<span class="igmock-name">${esc(headName)}</span>${o.count ? `
         <span class="igmock-count">${esc(o.count)}</span>` : ''}<span class="igmock-dots" aria-hidden="true">•••</span></div>
-      <div class="igmock-when-top"><span>${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
-        ${statusHTML}${d.image_path ? `<button type="button" class="hf-crop-tog hf-crop-mini" data-hf-crop aria-pressed="false" aria-label="${enW ? 'See how it crops' : 'Ver cómo se recorta'}">▦</button>` : ''}</div>
+      <div class="igmock-when-top"><span>${prop.iso ? pzIc('calendar', 15) + ' ' : ''}${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
+        ${statusHTML}${d.image_path ? `<button type="button" class="hf-crop-tog hf-crop-mini" data-hf-crop aria-pressed="false" aria-label="${enW ? 'See how it crops' : 'Ver cómo se recorta'}" title="${enW ? 'See how it crops' : 'Ver cómo se recorta'}">${pzIc('grid', 16)}</button>` : ''}</div>
       ${isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
         : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</button>`}
@@ -9495,16 +9593,16 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // no corra en este caso.
     if (noDna) return `<div class="hs-nodna" id="hsNoDna">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-    <b>Para armar tu semana necesito conocer tu negocio 👇</b>
-    <p>Contame de qué se trata en 2 minutos y la armo sola ✨</p>
+    <b>Para armar tu semana necesito conocer tu negocio ${pzIc('arrowDown', 13)}</b>
+    <p>Contame de qué se trata en 2 minutos y la armo sola</p>
     <a class="btn btn-primary btn-block" href="#/app/ajustes" style="margin-top:4px">Contar de mi negocio</a>
   </div>`;
     // Si estamos generando (ensure disparado), mostrar "armando" aunque
     // haya tenido posteos antes — la semana actual está vacía.
     if (generating) return `<div class="hs-generating" id="hsGenerating">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-    <b>Posty está armando tu semana ✨</b>
-    <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
+    <b>Posty está armando tu semana ${pzIc('sparkle', 16)}</b>
+    <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá ${pzIc('arrowDown', 14)}</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
     <button type="button" class="btn btn-ghost btn-sm" id="hsDiagBtn" style="margin-top:12px">${pzIc('search', 18)} ¿Por qué tarda tanto?</button>
     <div id="hsDiagOut" style="margin-top:10px;text-align:left"></div>
@@ -9514,13 +9612,13 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     const everHad = all.length > 0;
     if (everHad) return `<div class="hs-done">
       <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-      <b>Tu semana está completa 🎉</b>
-      <p>Todo publicado. La próxima se arma sola ✨</p>
+      <b>Tu semana está completa ${pzIc('gift', 16)}</b>
+      <p>Todo publicado. La próxima se arma sola</p>
     </div>`;
     return `<div class="hs-generating" id="hsGenerating">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-    <b>Posty está armando tu semana ✨</b>
-    <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
+    <b>Posty está armando tu semana ${pzIc('sparkle', 16)}</b>
+    <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá ${pzIc('arrowDown', 14)}</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
   </div>`;
   }
@@ -9569,10 +9667,10 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   const quotaLine = schedQuotaHTML(list, quota, schedWeekCounts(all, tz, proposedIsos));
   // 2026-10-09: flechas laterales del carrusel (pedido de Valentino) — sin números.
   return `<div class="hs-week">
-    <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">${pzIc('checkCircle', 18)} Aceptar todo (${list.filter(p => p.status === 'draft').length})</button>` : ''}</div>
+    <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">${pzIc('checkCircle', 18)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Accept all' : 'Aceptar todo'} <span class="accept-count">${list.filter(p => p.status === 'draft').length}</span></button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
-    ${generating ? `<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>` : ''}
+    ${generating ? `<div class="hs-completing">${pzIc('sparkle', 14)} Estoy armando los posteos que faltan…</div>` : ''}
     ${staleHTML}
     <div class="hs-carousel">
       <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
@@ -9719,7 +9817,7 @@ function schedQuotaHTML(list, quota, wk) {
   const qPct = Math.min(100, Math.round((shown / qTotal) * 100));
   const nd = wk ? (wk.nextDrafts || 0) : 0;
   const nextLine = nd > 0
-    ? `<div class="hs-quota-next">✨ Ya están armados <b>${Math.min(nd, qTotal)} de ${qTotal}</b> de la semana que viene${nd > qTotal ? ` · y <b>${nd - qTotal} más</b> en espera` : ''}</div>`
+    ? `<div class="hs-quota-next">${pzIc('sparkle', 14)} Ya están armados <b>${Math.min(nd, qTotal)} de ${qTotal}</b> de la semana que viene${nd > qTotal ? ` · y <b>${nd - qTotal} más</b> en espera` : ''}</div>`
     : '';
   // (v326) Nada de festejar "semana completa" con borradores esperando: si
   // quedan por aceptar, la línea lo dice (es EL contador de la Agenda) y el
@@ -9727,9 +9825,9 @@ function schedQuotaHTML(list, quota, wk) {
   const drafts = wk ? (wk.thisDrafts || 0) : 0;
   const quotaTxt = shown >= qTotal
     ? (drafts > 0
-      ? `📋 <b>${shown} de ${qTotal}</b> posteos esta semana · te ${drafts === 1 ? 'queda' : 'quedan'} <b>${drafts}</b> por aceptar`
-      : `🎉 <b>¡Semana completa!</b> ${shown} de ${qTotal} posteos esta semana`)
-    : `📊 <b>${shown} de ${qTotal}</b> posteos esta semana · te ${qLeft === 1 ? 'queda' : 'quedan'} <b>${qLeft}</b>`;
+      ? `${pzIc('copy', 13)} <b>${shown} de ${qTotal}</b> posteos esta semana · te ${drafts === 1 ? 'queda' : 'quedan'} <b>${drafts}</b> por aceptar`
+      : `${pzIc('gift', 16)} <b>¡Semana completa!</b> ${shown} de ${qTotal} posteos esta semana`)
+    : `${pzIc('bars', 13)} <b>${shown} de ${qTotal}</b> posteos esta semana · te ${qLeft === 1 ? 'queda' : 'quedan'} <b>${qLeft}</b>`;
   return `<div class="hs-quota">
       <div class="hs-quota-txt">${quotaTxt}</div>
       <div class="hs-quota-bar"><span style="width:${qPct}%"></span></div>
@@ -9777,7 +9875,7 @@ function scfOpenPop(wrap, pinned) {
   if (!card) return;
   const pop = document.createElement('div');
   pop.className = 'scf-pop ' + (wrap.dataset.popCls || 'pc') + (pinned ? ' pinned' : '');
-  pop.innerHTML = `<div class="scf-pop-bar"><button type="button" class="scf-pop-x" aria-label="Cerrar">✕</button></div>`;
+  pop.innerHTML = `<div class="scf-pop-bar"><button type="button" class="scf-pop-x" aria-label="Cerrar">${pzIc("x", 16)}</button></div>`;
   pop.appendChild(card);
   // (v442 · Corrección de Valentino 02:18: «que este en el medio de la
   // pantalla el post. a veces queda a un costado») La capa va AL BODY
@@ -9841,7 +9939,7 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
     ${drafts.length ? acceptPillHTML(drafts.length, 'hsAcceptAll') : ''}
     <div id="revMsg"></div>
     <div id="hs-report"></div>
-    ${generating ? '<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>' : ''}
+    ${generating ? '<div class="hs-completing">' + pzIc('sparkle', 14) + ' Estoy armando los posteos que faltan…</div>' : ''}
     ${schedStaleHTML(posts, tz)}
   </div>`;
 }
@@ -9881,7 +9979,7 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
    la agenda) y homeHeadHTML (Inicio), cada uno en su render. */
 function igHeadChipHTML(en) {
   try {
-    const style = 'display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 12px;border-radius:999px;background:var(--cel);color:#fff;font-size:12px;font-weight:700;text-decoration:none';
+    const style = 'display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 12px;border-radius:999px;background:#fff;color:var(--cel);border:1.5px solid var(--cel);font-size:12px;font-weight:700;text-decoration:none';
     if (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected) {
       return `<a class="ig-head-chip" href="#/app/ajustes?ig=1" style="${style}">${pzIc('camera', 15)} ${en ? 'Connect Instagram' : 'Conectar Instagram'}</a>`;
     }
@@ -9929,7 +10027,7 @@ function feedPreviewHTML(all, tz, prof) {
   for (const p of published) parts.push({ kind: 'pub', p });
   if (!parts.length) return '';
   const tileMedia = (p, isV) => !p.image_path
-    ? '<span class="fp-tile-ph">✨</span>'
+    ? '<span class="fp-tile-ph">' + pzIc('sparkle', 18) + '</span>'
     : isV
       ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
@@ -9982,7 +10080,7 @@ function feedPreviewHTML(all, tz, prof) {
   return `<section class="hs-feed" id="hsFeed">
     ${feedProfileHeadHTML(prof, bizNameF, { storyToday: storyTodayF })}
     <div class="fp-grid">${grid}</div>
-    ${anyUp ? '<div class="fp-line">Los que llevan pastillita todavía no salieron 😉</div>' : ''}${moreBtn}
+    ${anyUp ? '<div class="fp-line">Los que llevan pastillita todavía no salieron</div>' : ''}${moreBtn}
   </section>`;
 }
 // (v331) El cableado de las minis .scf-mini-x (hover que agranda / click
@@ -10107,13 +10205,13 @@ async function chatView() {
   <div class="chat-home hs-home">
     <div class="hs-top">
       <span class="pz-mg"><img src="ai-avatar.png" class="hs-ava" alt="Posty"></span>
-      <div><b>Posty<span class="pdot">.</span></b><div class="hs-sub">Tu semana, lista. Si querés cambiar algo, decime 👇</div></div>
+      <div><b>Posty<span class="pdot">.</span></b><div class="hs-sub">Tu semana, lista. Si querés cambiar algo, decime ${pzIc('arrowDown', 13)}</div></div>
     </div>
     <div id="revMsg"></div>
     ${homeWeekHTML(posts, quota, weekGenerating, weekNoDna)}
     <div id="albumCard"></div>
     ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">${pzIc('bolt', 18)} Activar mi semana (${nDrafts})</button>` : ''}
-    <div class="hs-chat-label"><b>💬 ¿Cambiamos algo?</b></div>
+    <div class="hs-chat-label"><b>${pzIc('chat', 14)} ¿Cambiamos algo?</b></div>
     ${chatCardHTML(true, true, true)}
   </div>`;
 }
@@ -10148,11 +10246,11 @@ function wireAlbumUpload(inp, onDone) {
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       const isVid = (f.type || '').startsWith('video/');
-      if (msg) msg.textContent = files.length > 1 ? `Subiendo ${i + 1} de ${files.length}… 📤` : 'Subiendo… 📤';
+      if (msg) msg.textContent = files.length > 1 ? `Subiendo ${i + 1} de ${files.length}…` : 'Subiendo…';
       try {
         const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f, signal: AbortSignal.timeout(isVid ? 300000 : 120000) });
         const d = await r.json().catch(() => ({}));
-        if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No pude subirla 😅');
+        if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No pude subirla');
         okCount++;
         if (isVid || d.kind === 'video') okVideos++;
         if (d.kind === 'video' && Array.isArray(d.quality_issues) && d.quality_issues.length) videoIssues = d.quality_issues;
@@ -10162,11 +10260,11 @@ function wireAlbumUpload(inp, onDone) {
       }
     }
     if (msg) {
-      if (okCount && files.length > 1) msg.innerHTML = `✅ <b>¡${okCount} archivos nuevos!</b> Posty ya los tiene para tus posteos y reels ✨${lastErr ? `<br>😅 ${esc(lastErr)}` : ''}`;
-      else if (okCount && okVideos && videoIssues.length) { const ISSUE_ES = { oscura: 'se ve oscuro', movida: 'salió movido', 'baja-res': 'tiene poca definición', cortada: 'quedó cortado' }; const itx = videoIssues.map(x => ISSUE_ES[x] || x).join(' y '); msg.innerHTML = `✅ <b>¡Video guardado!</b> Ojo: ${itx} 😅 Queda guardado igual, pero si lo grabás con buena luz y el celu quieto, el reel sale mucho mejor 🎬`; }
-      else if (okCount && okVideos) msg.innerHTML = '✅ <b>¡Video guardado!</b> Posty lo va a usar en tus reels 🎬';
-      else if (okCount) msg.innerHTML = '✅ <b>¡Hermosa!</b> Posty la está convirtiendo en un posteo — te aviso cuando esté listo ✨';
-      else msg.textContent = '😅 ' + (lastErr || 'No pude subirla. Probá de nuevo.');
+      if (okCount && files.length > 1) msg.innerHTML = `${pzIc('checkCircle', 14)} <b>¡${okCount} archivos nuevos!</b> Posty ya los tiene para tus posteos y reels ${lastErr ? `<br>${pzIc('alert', 13)} ${esc(lastErr)}` : ''}`;
+      else if (okCount && okVideos && videoIssues.length) { const ISSUE_ES = { oscura: 'se ve oscuro', movida: 'salió movido', 'baja-res': 'tiene poca definición', cortada: 'quedó cortado' }; const itx = videoIssues.map(x => ISSUE_ES[x] || x).join(' y '); msg.innerHTML = `${pzIc('checkCircle', 14)} <b>¡Video guardado!</b> Ojo: ${itx} Queda guardado igual, pero si lo grabás con buena luz y el celu quieto, el reel sale mucho mejor`; }
+      else if (okCount && okVideos) msg.innerHTML = pzIc('checkCircle', 14) + ' <b>¡Video guardado!</b> Posty lo va a usar en tus reels';
+      else if (okCount) msg.innerHTML = '' + pzIc('checkCircle', 14) + ' <b>¡Hermosa!</b> Posty la está convirtiendo en un posteo — te aviso cuando esté listo';
+      else msg.textContent = '' + (lastErr || 'No pude subirla. Probá de nuevo.');
     }
     if (okCount) setTimeout(() => { try { onDone(); } catch (e) {} }, 2500);
   };
@@ -10186,10 +10284,10 @@ function wireVideoReelButtons(refresh) {
       btn.textContent = '⏳…';
       try {
         await api.post('/api/album/video-reel', { asset_id: Number(btn.getAttribute('data-videoreel')) });
-        if (msg) msg.innerHTML = EN ? '✅ <b>Your video is now a reel!</b> Find it in your week 🎬' : '✅ <b>¡Tu video ya es un reel!</b> Miralo en tu semana 🎬';
+        if (msg) msg.innerHTML = EN ? '' + pzIc('checkCircle', 14) + ' <b>Your video is now a reel!</b> Find it in your week' : '' + pzIc('checkCircle', 14) + ' <b>¡Tu video ya es un reel!</b> Miralo en tu semana';
         setTimeout(() => { try { (refresh || bindAlbumCard)(); } catch (e) {} }, 1200);
       } catch (e) {
-        if (msg) msg.textContent = '😅 ' + ((e && e.message) || (EN ? 'I could not build the reel. Try again in a bit.' : 'No pude armar el reel. Probá de nuevo en un rato.'));
+        if (msg) msg.textContent = '' + ((e && e.message) || (EN ? 'I could not build the reel. Try again in a bit.' : 'No pude armar el reel. Probá de nuevo en un rato.'));
         btn.disabled = false;
         btn.textContent = old;
       }
@@ -10205,7 +10303,7 @@ async function bindAlbumCard() {
   const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'tu negocio';
   const t = data.targets || { producto: 3, local: 2, equipo: 2 };
   const n = data.counts || {};
-  const chip = (label, have, goal) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:${have >= goal ? '#E7F6EC' : '#F1F5F9'};font-size:12.5px;margin:2px 4px 2px 0">${have >= goal ? '✅' : '📷'} ${label}: <b>${Math.min(have, goal)}/${goal}</b></span>`;
+  const chip = (label, have, goal) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:${have >= goal ? '#E7F6EC' : '#F1F5F9'};font-size:12.5px;margin:2px 4px 2px 0">${have >= goal ? pzIc('checkCircle', 13) : pzIc('camera', 13)} ${label}: <b>${Math.min(have, goal)}/${goal}</b></span>`;
   const complete = (n.producto || 0) >= t.producto && (n.local || 0) >= t.local && (n.equipo || 0) >= t.equipo;
   const mission = data.mission || {};
   // v183 — Bloque "esta semana" A LA VISTA: el ritual semanal pide 3–5 fotos
@@ -10216,31 +10314,31 @@ async function bindAlbumCard() {
   const wst = albumWeekState(wk.photos || 0);
   const weekDone = wst.key === 'full';
   const missionLine = mission.done
-    ? `<div style="font-size:13.5px;margin-top:8px">✅ <b>¡Misión cumplida!</b> Tu foto ya está trabajando por ${esc(biz)}.${mission.post_id ? ' Posty la convirtió en un posteo de tu semana ✨' : ''}</div>`
-    : `<div style="font-size:13.5px;margin-top:8px">💡 <b>Idea de la semana:</b> ${esc(mission.text || 'Sacale una foto a tu negocio 📸')}<br><span style="font-size:12.5px;opacity:.75">Mandala como salga — Posty la arregla y la convierte en posteo.</span></div>`;
+    ? `<div style="font-size:13.5px;margin-top:8px">${pzIc('checkCircle', 16)} <b>¡Misión cumplida!</b> Tu foto ya está trabajando por ${esc(biz)}.${mission.post_id ? ' Posty la convirtió en un posteo de tu semana' : ''}</div>`
+    : `<div style="font-size:13.5px;margin-top:8px">${pzIc('idea', 14)} <b>Idea de la semana:</b> ${esc(mission.text || 'Sacale una foto a tu negocio')}<br><span style="font-size:12.5px;opacity:.75">Mandala como salga — Posty la arregla y la convierte en posteo.</span></div>`;
   const weekBlockHTML = `
     <div id="albumWeekBlock" style="background:${weekDone ? '#E7F6EC' : '#FFF7E0'};border:1.5px ${weekDone ? 'solid #BFE6CC' : 'dashed #FEC14D'};border-radius:12px;padding:12px;margin:10px 0">
-      <div style="font-size:15px"><b>📸 Fotos de esta semana</b></div>
+      <div style="font-size:15px"><b>${pzIc('camera', 14)} Fotos de esta semana</b></div>
       <div style="font-size:14px;margin-top:4px">${esc(wst.text)}</div>
-      <div style="font-size:12.5px;opacity:.8;margin-top:4px">📷 <b>${wk.photos || 0}</b> de ${wk.goal_min || 3}–${wk.goal_max || 5} esta semana${wk.videos ? ` · 🎬 <b>${wk.videos}</b> video${wk.videos === 1 ? '' : 's'} esta semana` : ''}</div>
+      <div style="font-size:12.5px;opacity:.8;margin-top:4px">${pzIc('camera', 13)} <b>${wk.photos || 0}</b> de ${wk.goal_min || 3}–${wk.goal_max || 5} esta semana${wk.videos ? ` · ${pzIc('reel', 13)} <b>${wk.videos}</b> video${wk.videos === 1 ? '' : 's'} esta semana` : ''}</div>
       ${missionLine}
       <label class="btn btn-primary btn-block" style="margin:10px 0 0;cursor:pointer">
-        📸 Subir fotos o videos
+        ${pzIc('camera', 14)} Subir fotos o videos
         <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
       </label>
-      <div style="font-size:12px;opacity:.65;margin-top:5px">Videos de hasta 90 segundos: Posty los usa en tus reels 🎬</div>
+      <div style="font-size:12px;opacity:.65;margin-top:5px">Videos de hasta 90 segundos: Posty los usa en tus reels</div>
       <button type="button" class="btn btn-soft btn-block" id="talkReelBtn" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? (pzIc('reel', 18) + ' Talking reel: record yourself presenting your product') : (pzIc('reel', 18) + ' Reel hablado: grabate contando tu producto')}</button>
       ${(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.category === 'boliche') ? `<button type="button" class="btn btn-soft btn-block" id="flyerBtn" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? (pzIc('sparkle', 18) + ' Party flyer: build the one for your next night') : (pzIc('sparkle', 18) + ' Flyer de fiesta: armá el de tu próxima fecha')}</button><div style="font-size:12px;opacity:.65;margin-top:5px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'The feed flyer, the story and the countdown, with your party’s real details.' : 'El flyer de feed, la historia y la cuenta regresiva, con los datos reales de tu fiesta.'}</div>` : ''}
       <div style="font-size:12px;opacity:.65;margin-top:5px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You talk for 20–40 seconds and Posty edits it: subtitles in your own words and cuts to your product.' : 'Hablás 20–40 segundos y Posty lo edita: subtítulos con tus palabras y cortes a tu producto.'}</div>
     </div>`;
   const perfHTML = data.perf
-    ? `<div style="font-size:13.5px;margin:8px 0">📈 Tus posteos con <b>fotos propias</b> llegan en promedio a <b>${data.perf.foto}</b> personas${data.perf.sin ? ` (los de IA, a <b>${data.perf.sin}</b>)` : ''}. Por eso te pido fotos 😉</div>`
+    ? `<div style="font-size:13.5px;margin:8px 0">${pzIc('chartUp', 14)} Tus posteos con <b>fotos propias</b> llegan en promedio a <b>${data.perf.foto}</b> personas${data.perf.sin ? ` (los de IA, a <b>${data.perf.sin}</b>)` : ''}. Por eso te pido fotos</div>`
     : '';
   const items = data.photos || [];
   const nFotos = items.filter(ph => ph.kind !== 'video').length;
   const nVideos = items.filter(ph => ph.kind === 'video').length;
   const countHTML = items.length > 0
-    ? `<div style="font-size:13.5px;margin-top:4px">📷 Ya tenés <b>${nFotos}</b> foto${nFotos === 1 ? '' : 's'}${nVideos ? ` y <b>${nVideos}</b> video${nVideos === 1 ? '' : 's'}` : ''} en tu álbum — Posty los usa en tus posteos y reels.</div>`
+    ? `<div style="font-size:13.5px;margin-top:4px">${pzIc('camera', 13)} Ya tenés <b>${nFotos}</b> foto${nFotos === 1 ? '' : 's'}${nVideos ? ` y <b>${nVideos}</b> video${nVideos === 1 ? '' : 's'}` : ''} en tu álbum — Posty los usa en tus posteos y reels.</div>`
     : '';
   // v208 (pedido de Valentino): la grilla de imágenes viejas NO se renderiza
   // en la tarjeta — el álbum completo queda accesible con un toggle y
@@ -10255,11 +10353,11 @@ async function bindAlbumCard() {
     : `<div style="font-size:14px;background:#F1F8FD;border-radius:12px;padding:10px 12px;margin:8px 0">Todavía no nos pasaste fotos: Posty crea las imágenes por vos, pero con las tuyas los posteos salen con tu negocio real.</div>`;
   box.innerHTML = `
   <div class="card" style="margin-top:14px">
-    <div style="font-size:17px"><b>📸 Las fotos de tu negocio</b></div>
+    <div style="font-size:17px"><b>${pzIc('camera', 16)} Las fotos de tu negocio</b></div>
     <div style="font-size:13.5px;opacity:.8">Cuantas más fotos y videos nos pasás, mejores y más tuyos salen tus posteos.</div>
     ${countHTML}
     ${weekBlockHTML}
-    <div>${chip('Productos', n.producto || 0, t.producto)}${chip('Tu local', n.local || 0, t.local)}${chip('Tu equipo', n.equipo || 0, t.equipo)}${complete ? '<div style="font-size:14px;margin-top:6px">🎉 <b>¡Álbum completo!</b> Posty tiene todo para que tus posteos sean 100% tuyos.</div>' : ''}</div>
+    <div>${chip('Productos', n.producto || 0, t.producto)}${chip('Tu local', n.local || 0, t.local)}${chip('Tu equipo', n.equipo || 0, t.equipo)}${complete ? '<div style="font-size:14px;margin-top:6px">' + pzIc('gift', 16) + ' <b>¡Álbum completo!</b> Posty tiene todo para que tus posteos sean 100% tuyos.</div>' : ''}</div>
     ${perfHTML}
     ${grid}
     <div id="albumMsg" style="font-size:13px;margin-top:6px"></div>
@@ -10274,7 +10372,7 @@ async function bindAlbumCard() {
     if (!g) return;
     const open = g.style.display !== 'none';
     g.style.display = open ? 'none' : '';
-    aTgl.textContent = open ? `🖼️ Ver mi álbum (${items.length})` : '🖼️ Ocultar mi álbum';
+    aTgl.innerHTML = open ? pzIc('image', 14) + ` Ver mi álbum (${items.length})` : pzIc('image', 14) + ' Ocultar mi álbum';
   };
   // v183: deep link del ritual (push/email → ?fotos=semana): enfocar el
   // bloque de fotos de la semana UNA sola vez por carga de la app.
@@ -10313,7 +10411,7 @@ async function bindAlbumRow() {
   const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'tu negocio';
   const t = data.targets || { producto: 3, local: 2, equipo: 2 };
   const n = data.counts || {};
-  const chip = (label, have, goal) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:${have >= goal ? '#E7F6EC' : '#F1F5F9'};font-size:12.5px;margin:2px 4px 2px 0">${have >= goal ? '✅' : '📷'} ${label}: <b>${Math.min(have, goal)}/${goal}</b></span>`;
+  const chip = (label, have, goal) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:${have >= goal ? '#E7F6EC' : '#F1F5F9'};font-size:12.5px;margin:2px 4px 2px 0">${have >= goal ? pzIc('checkCircle', 13) : pzIc('camera', 13)} ${label}: <b>${Math.min(have, goal)}/${goal}</b></span>`;
   const items = data.photos || [];
   const gridInner = items.length
     ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${items.map(ph => `<div style="position:relative">${ph.kind === 'video'
@@ -10323,7 +10421,7 @@ async function bindAlbumRow() {
   box.innerHTML = `
   <div class="album-row">
     <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
-    <button type="button" class="album-row-btn" id="albumRowToggle" aria-expanded="false"><span>${pzIc('image', 18)} Ver mi álbum (${items.length})</span><span aria-hidden="true">▾</span></button>
+    <button type="button" class="album-row-btn" id="albumRowToggle" aria-expanded="false"><span>${pzIc('image', 18)} Ver mi álbum (${items.length})</span><span aria-hidden="true">${pzIc('chevDown', 14)}</span></button>
     <div class="album-row-panel" id="albumRowPanel" hidden>
       <div>${chip('Productos', n.producto || 0, t.producto)}${chip('Tu local', n.local || 0, t.local)}${chip('Tu equipo', n.equipo || 0, t.equipo)}</div>
       ${gridInner}
@@ -10337,7 +10435,7 @@ async function bindAlbumRow() {
     panel.hidden = !open;
     tgl.setAttribute('aria-expanded', open ? 'true' : 'false');
     const arrow = tgl.querySelector('span:last-child');
-    if (arrow) arrow.textContent = open ? '▴' : '▾';
+    if (arrow) arrow.innerHTML = open ? pzIc('chevUp', 14) : pzIc('chevDown', 14);
   };
   if (tgl && panel) tgl.onclick = () => setOpen(panel.hidden);
   // Borrar fotos del álbum (mismo endpoint que la biblioteca de medios).
@@ -10532,17 +10630,17 @@ async function maybePostyNudge(forceKind) {
     photo: {
       head: '📷 ¿Me pasás una foto de tu producto?',
       text: 'Con fotos reales tus posteos venden más — son 30 segundos con tu celular y la usamos esta misma semana.',
-      btn: '📷 Subir foto', upload: '/api/assets?kind=photo', inspo: false,
+      btn: pzIc('camera', 14) + ' Subir foto', upload: '/api/assets?kind=photo', inspo: false,
     },
     inspo: {
       head: '🎨 ¿Te gusta algún estilo?',
       text: 'Pasame un posteo de Instagram que te encante y lo uso de referencia para tus diseños.',
-      btn: '🎨 Subir referencia', upload: '/api/dna/inspo', inspo: true,
+      btn: pzIc('palette', 14) + ' Subir referencia', upload: '/api/dna/inspo', inspo: true,
     },
     voice: {
-      head: '🎙️ Contame de tu negocio',
+      head: pzIc('mic', 18) + ' Contame de tu negocio',
       text: 'Hablame 2 minutos en un audio y aprendo cómo se ve lo que hacés.',
-      btn: '🎙️ Grabar nota de voz', upload: null, inspo: false,
+      btn: pzIc('mic', 18) + ' Grabar nota de voz', upload: null, inspo: false,
     },
   };
   const k = kinds[kind];
@@ -10576,11 +10674,11 @@ async function maybePostyNudge(forceKind) {
         const j = await r.json().catch(() => ({}));
         if (!r.ok || j.ok === false) throw new Error(j.error || 'No se pudo subir');
         await done();
-        if (msg) msg.innerHTML = `<div class="hint">✅ ¡Genial! Ya lo estoy usando 😍</div>`;
+        if (msg) msg.innerHTML = `<div class="hint">${pzIc('checkCircle', 14)} ¡Genial! Ya lo estoy usando</div>`;
         btn.style.display = 'none';
       } catch (e) {
         btn.disabled = false;
-        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo 😅 Probá de nuevo')}</div>`;
+        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo. Probá de nuevo')}</div>`;
       }
       inp.value = '';
     };
@@ -10594,12 +10692,12 @@ function pnVoiceTick(id) {
   if (!PN_REC) return;
   const b = document.getElementById(id + 'Btn');
   const s = Math.floor((Date.now() - PN_START) / 1000);
-  if (b) b.innerHTML = `🔴 ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} — tocá para enviar`;
+  if (b) b.innerHTML = `${pzDot('#E5484D', 11)} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} — tocá para enviar`;
 }
 async function pnVoiceToggle(id, done) {
   if (PN_REC) { pnVoiceStop(id, done); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">🎙 Tu navegador no soporta notas de voz.</span>');
+    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">' + pzIc('mic', 14) + ' Tu navegador no soporta notas de voz.</span>');
     return;
   }
   try {
@@ -10617,10 +10715,10 @@ async function pnVoiceToggle(id, done) {
     clearInterval(PN_TIMER);
     PN_TIMER = setInterval(() => pnVoiceTick(id), 500);
     pnVoiceTick(id);
-    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">🔴 Grabando… contame qué vendés, tus precios y tus promos</span>');
+    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">' + pzDot('#E5484D', 11) + ' Grabando… contame qué vendés, tus precios y tus promos</span>');
     setTimeout(() => { if (PN_REC) pnVoiceStop(id, done); }, 180000);
   } catch (e) {
-    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">🎙 No pudimos usar el micrófono. Revisá el permiso y probá de nuevo.</span>');
+    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">' + pzIc('mic', 14) + ' No pudimos usar el micrófono. Revisá el permiso y probá de nuevo.</span>');
   }
 }
 function pnVoiceStop(id, done) {
@@ -10628,7 +10726,7 @@ function pnVoiceStop(id, done) {
   PN_REC = null;
   clearInterval(PN_TIMER);
   const b = document.getElementById(id + 'Btn');
-  if (b) b.innerHTML = '🎙️ Grabar nota de voz';
+  if (b) b.innerHTML = pzIc('mic', 14) + ' Grabar nota de voz';
   if (rec) { try { rec.stop(); } catch (e) { pnVoiceSend(id, done); } }
 }
 async function pnVoiceSend(id, done) {
@@ -10649,7 +10747,7 @@ async function pnVoiceSend(id, done) {
   try {
     await api.post('/api/dna/from-audio', { audioDataUrl: dataUrl }, { timeout: 120000 });
     await done();
-    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">✅ ¡Ya te conozco mejor! Lo guardé en tu negocio 😍</span>');
+    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">' + pzIc('checkCircle', 14) + ' ¡Ya te conozco mejor! Lo guardé en tu negocio</span>');
     const b = document.getElementById(id + 'Btn');
     if (b) b.style.display = 'none';
   } catch (e) {
@@ -10712,10 +10810,10 @@ function renderFirstPick(fp) {
   const excerpt = cap.length > 140 ? cap.slice(0, 140).trimEnd() + '…' : cap;
   slot.innerHTML = `
   <div class="card first-pick" id="firstPickCard">
-    <div class="fp-title">¿Arrancamos por este? 👀</div>
+    <div class="fp-title">¿Arrancamos por este? ${pzIc('eye', 14)}</div>
     ${fp.image_url ? `<img class="fp-img" src="${esc(String(fp.image_url))}" alt="Posteo sugerido" loading="lazy">` : ''}
     ${excerpt ? `<div class="fp-cap">${esc(excerpt)}</div>` : ''}
-    ${fp.reason ? `<div class="fp-reason">📸 ${esc(String(fp.reason))}</div>` : ''}
+    ${fp.reason ? `<div class="fp-reason">${pzIc('camera', 13)} ${esc(String(fp.reason))}</div>` : ''}
     <div class="fp-btns">
       <button type="button" class="btn btn-primary btn-sm" data-fpchoice="picked">Dale, ese ${pzIc('checkCircle', 18)}</button>
       <button type="button" class="btn btn-soft btn-sm" data-fpchoice="other">Prefiero otro</button>
@@ -10797,7 +10895,7 @@ async function chatGreet() {
     text = 'Tu primera semana está en el horno ✨ La estamos dejando perfecta — te aviso acá cuando puedas revisarla.';
   } else if (drafts.length > 0) {
     const n = drafts.length;
-    text = `Dejé ${n} ${n === 1 ? 'borrador listo' : 'borradores listos'} en Schedule 👇`;
+    text = `Dejé ${n} ${n === 1 ? 'borrador listo' : 'borradores listos'} en Schedule ${pzIc('arrowDown', 13)}`;
   } else if (scheduled.length > 0) {
     // Resumen proactivo (hoy / mañana a la noche): reemplaza el saludo
     // genérico, no se suma — una sola burbuja por apertura.
@@ -10866,7 +10964,7 @@ async function paintChatQuota(mount, q0) {
   if (!mount.isConnected) return;
   const old = mount.querySelector('.chat-quota');
   if (old) old.remove();
-  mount.insertAdjacentHTML('afterbegin', `<div class="chat-quota">📊 ${esc(t)}</div>`);
+  mount.insertAdjacentHTML('afterbegin', `<div class="chat-quota">${pzIc('bars', 13)} ${esc(t)}</div>`);
   try { mount.classList.toggle('quota-row', mount.querySelectorAll(':scope > button').length === 1); } catch (e) {}
 }
 /* ============================================================
@@ -10893,12 +10991,12 @@ function pcFmtDay(d, tz) { try { return d.toLocaleDateString('es-AR', { weekday:
 function pcFmtDayLong(d, tz) { try { return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } }
 function pcFmtHour(d, tz) { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } }
 function pcBadge(p) {
-  if (String(p.status) === 'published') return '<span class="pcard-badge pcard-badge-done">✅ Salió</span>';
+  if (String(p.status) === 'published') return '<span class="pcard-badge pcard-badge-done">' + pzIc('checkCircle', 12) + ' Salió</span>';
   const mt = String(p.media_type || '');
   if (mt === 'video') return '<span class="pcard-badge">' + pzIc('reel', 15) + ' Reel</span>';
-  if (mt === 'story') return '<span class="pcard-badge">📸 Story</span>';
-  if (mt === 'carousel') return '<span class="pcard-badge">🖼️ Carrusel</span>';
-  return '<span class="pcard-badge">📝 Post</span>';
+  if (mt === 'story') return '<span class="pcard-badge">' + pzIc('story', 12) + ' Story</span>';
+  if (mt === 'carousel') return '<span class="pcard-badge">' + pzIc('layers', 12) + ' Carrusel</span>';
+  return '<span class="pcard-badge">' + pzIc('post', 12) + ' Post</span>';
 }
 // layout: 'row' (chat, horizontal compacto) | 'col' (schedule, vertical)
 function postCardHTML(p, opts) {
@@ -10924,7 +11022,7 @@ function postCardHTML(p, opts) {
   // TikTok (v166): solo posteos publicados y solo si el usuario conectó su
   // cuenta — el botón nace oculto y ttEnhance() lo muestra según /api/tiktok/status.
   const ttActs = !isPub ? '' : (p.tiktok_publish_id
-    ? `<div class="pcard-actions"><span style="font-size:11.5px;font-weight:700;color:var(--dim)">${pzIc('music', 15)} Ya está en TikTok ✓</span></div>`
+    ? `<div class="pcard-actions"><span style="font-size:11.5px;font-weight:700;color:var(--dim)">${pzIc('music', 15)} Ya está en TikTok ${pzIc('check', 12)}</span></div>`
     : `<div class="pcard-actions"><button type="button" data-pc-act="tiktok" hidden>${pzIc('music', 18)} Compartir en TikTok</button>${isV ? '<button type="button" data-pc-act="tiktok-inbox" hidden>' + pzIc('download', 18) + ' Borrador TikTok</button>' : ''}</div>`);
   return `<div class="pcard pcard-${layout}" data-post-id="${esc(String(p.id))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
     <button type="button" class="pcard-media" data-pc-act="open" aria-label="Ver posteo">${media}</button>
@@ -10954,25 +11052,25 @@ async function ttEnhance() {
   } catch (e) {}
 }
 async function pcShareTikTok(id, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = '🎵 Publicando…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = pzIc('music', 14) + ' Publicando…'; }
   try {
     const r = await api.post('/api/tiktok/publish/' + encodeURIComponent(id), {});
     postToast({ text: (r && r.message) || '🎵 ¡Compartido en TikTok!', ms: 6000 });
     try { render(); } catch (e) {}
   } catch (e) {
     postToast({ text: '😅 ' + ((e && e.message) || 'No se pudo compartir en TikTok'), ms: 6000 });
-    if (btn) { btn.disabled = false; btn.textContent = '🎵 Compartir en TikTok'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = pzIc('music', 14) + ' Compartir en TikTok'; }
   }
 }
 async function pcShareTikTokInbox(id, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = '📥 Enviando…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = pzIc('download', 14) + ' Enviando…'; }
   try {
     const r = await api.post('/api/tiktok/inbox/' + encodeURIComponent(id), {});
     postToast({ text: (r && r.message) || '📥 ¡Reel enviado a tu TikTok!', ms: 7000 });
-    if (btn) { btn.disabled = false; btn.textContent = '📥 Borrador TikTok'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = pzIc('download', 14) + ' Borrador TikTok'; }
   } catch (e) {
     postToast({ text: '😅 ' + ((e && e.message) || 'No se pudo enviar el borrador'), ms: 6000 });
-    if (btn) { btn.disabled = false; btn.textContent = '📥 Borrador TikTok'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = pzIc('download', 14) + ' Borrador TikTok'; }
   }
 }
 // Toast con acciones (fijo abajo, sobre el input). actions: [{label, fn}]
@@ -10982,7 +11080,7 @@ function postToast(o) {
     document.querySelectorAll('.ptoast').forEach(t => t.remove());
     const t = document.createElement('div');
     t.className = 'ptoast';
-    t.innerHTML = `<span class="ptoast-txt">${esc(o.text || '')}</span><span class="ptoast-acts"></span>`;
+    const ph = pzToastHead(o.text || ''); t.innerHTML = `<span class="ptoast-txt">${ph ? ph[0] + esc(ph[1]) : esc(o.text || '')}</span><span class="ptoast-acts"></span>`;
     const acts = t.querySelector('.ptoast-acts');
     (o.actions || []).forEach(a => {
       const b = document.createElement('button');
@@ -11092,7 +11190,7 @@ async function pcLoadStyleUI(id, root) {
   if (recBox) {
     recBox.innerHTML = rec.length
       ? rec.map(s => '<button type="button" class="pcsheet-opt pcsheet-rec" data-pc-act="img-pick" data-code="' + esc(String(s.code)) + '"><img class="pcsheet-thumb" src="/api/style-sample?style=' + encodeURIComponent(String(s.code)) + '" alt="" loading="lazy" onerror="this.remove()"><span>' + esc(String(s.name)) + '</span></button>').join('')
-      : '<div class="pcsheet-loading">Sin recomendaciones por ahora — probá Sorprendeme 🎲</div>';
+      : '<div class="pcsheet-loading">Sin recomendaciones por ahora — probá Sorprendeme</div>';
   }
   if (allBox) {
     allBox.innerHTML = styles.map(s => '<button type="button" class="pcsheet-chip" data-pc-act="img-pick" data-code="' + esc(String(s.code)) + '">' + esc(String(s.name)) + '</button>').join('');
@@ -11108,7 +11206,7 @@ function pcOpenImageSheet(id) {
     <div class="pcsheet-title">Cambiar imagen</div>
     <button type="button" class="pcsheet-opt" data-pc-act="img-style">${pzIc('palette', 20)} Otro estilo<small>La rehago con otro look — se ve al momento</small></button>
     <div class="pcsheet-stylewrap" hidden>
-      <div class="pcsheet-reclabel">✨ Para este posteo, te recomiendo:</div>
+      <div class="pcsheet-reclabel">${pzIc('sparkle', 14)} Para este posteo, te recomiendo:</div>
       <div class="pcsheet-recbtns"><div class="pcsheet-loading">Cargando…</div></div>
       <button type="button" class="pcsheet-opt" data-pc-act="img-surprise">${pzIc('dice', 20)} Sorprendeme<small>Posty elige un look de tu rubro por vos</small></button>
       <button type="button" class="pcsheet-opt" data-pc-act="img-all">${pzIc('book', 20)} Ver todos los de mi rubro<small> class="pcsheet-allcount"></small></button>
@@ -11183,7 +11281,7 @@ async function pcRestyle(id, style) {
 }
 async function pcEnhance(id) {
   pcCloseSheet();
-  pcSetLoading(id, true, '⏳ Mejorando la foto…');
+  pcSetLoading(id, true, '' + pzIc('clock', 14) + ' Mejorando la foto…');
   try {
     const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance', {}, { timeout: 180000 });
     if (r && r.ok && r.proposal_path) {
@@ -11205,7 +11303,7 @@ function renderEnhanceProposal(id, original, proposal) {
     '<figure style="flex:1;margin:0"><img src="' + esc(mv(original, 640)) + '" data-full="' + esc(original) + '" onerror="__imgFb(this)" style="width:100%;border-radius:12px;display:block"><figcaption style="font-size:12px;opacity:.7;text-align:center">Original</figcaption></figure>' +
     '<figure style="flex:1;margin:0"><img src="' + esc(mv(proposal, 640)) + '" data-full="' + esc(proposal) + '" onerror="__imgFb(this)" style="width:100%;border-radius:12px;display:block"><figcaption style="font-size:12px;opacity:.7;text-align:center">' + (en ? 'Improved' : 'Mejorada') + '</figcaption></figure>' +
     '</div><div style="display:flex;gap:8px">' +
-    '<button class="rv-mini" data-propaccept="' + id + '">' + (en ? '✅ Use improved' : '✅ Usar la mejorada') + '</button>' +
+    '<button class="rv-mini" data-propaccept="' + id + '">' + (en ? pzIc('check', 14) + ' Use improved' : pzIc('check', 14) + ' Usar la mejorada') + '</button>' +
     '<button class="rv-mini" data-propreject="' + id + '">' + (en ? 'Keep original' : 'Quedarme con la original') + '</button></div>';
   const a = box.querySelector('[data-propaccept]');
   const rj = box.querySelector('[data-propreject]');
@@ -11255,7 +11353,7 @@ function renderSheetProposal(id, proposal) {
     '<figure style="flex:1;margin:0"><img src="' + esc(mv(orig, 640)) + '" data-full="' + esc(orig) + '" onerror="__imgFb(this)" style="width:100%;border-radius:12px;display:block"><figcaption style="font-size:12px;opacity:.7;text-align:center">Original</figcaption></figure>' +
     '<figure style="flex:1;margin:0"><img src="' + esc(mv(proposal, 640)) + '" data-full="' + esc(proposal) + '" onerror="__imgFb(this)" style="width:100%;border-radius:12px;display:block"><figcaption style="font-size:12px;opacity:.7;text-align:center">Mejorada</figcaption></figure>' +
     '</div><div style="display:flex;gap:8px">' +
-    '<button class="pcsheet-opt" data-sheetpropaccept="' + id + '">✅ Usar la mejorada</button>' +
+    '<button class="pcsheet-opt" data-sheetpropaccept="' + id + '">' + pzIc('check', 14) + ' Usar la mejorada</button>' +
     '<button class="pcsheet-opt" data-sheetpropreject="' + id + '">Quedarme con la original</button></div>';
   const a = msg.querySelector('[data-sheetpropaccept]');
   const rj = msg.querySelector('[data-sheetpropreject]');
@@ -11340,7 +11438,7 @@ async function pcUploadPhoto(id, file) {
     // borrador. Propuesta automática best-effort: si falla, no hay
     // redos o no hay clave, el attach ya quedó y se avisa normal.
     try {
-      pcSetLoading(id, true, '✨ Preparando una mejora propuesta…');
+      pcSetLoading(id, true, pzIc('sparkle', 14) + ' Preparando una mejora propuesta…');
       const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance', {}, { timeout: 180000 });
       if (r && r.ok && r.proposal_path) toast('✅ Foto actualizada · mejora propuesta lista en la revisión');
       else toast('✅ Foto actualizada');
@@ -11422,7 +11520,7 @@ async function pcApprove(id, card, btn) {
   }
   document.querySelectorAll('[data-post-id="' + id + '"]').forEach(c => {
     const b = c.querySelector('.pcard-badge');
-    if (b) b.outerHTML = '<span class="pcard-badge pcard-badge-ok">✅ Aprobado</span>';
+    if (b) b.outerHTML = '<span class="pcard-badge pcard-badge-ok">' + pzIc('checkCircle', 12) + ' Aprobado</span>';
     const ab = c.querySelector('[data-pc-act="approve"]');
     if (ab) ab.remove();
   });
@@ -11491,7 +11589,7 @@ function pcOnClick(e) {
       const pick = list[Math.floor(Math.random() * list.length)];
       if (pick && pick.code) pcRestyle(id, pick.code);
     } else {
-      pcSheetMsg(id, 'Esperá un segundo y probá de nuevo 🎲');
+      pcSheetMsg(id, 'Esperá un segundo y probá de nuevo');
     }
     return;
   }
@@ -11528,7 +11626,7 @@ async function paintUpcoming(mount) {
   if (!up.length || !mount.isConnected) return;
   const items = up.map(({ p }) => postCardHTML(p, { layout: 'row' })).join('');
   mount.insertAdjacentHTML('afterbegin', `<div class="chat-upcoming">
-    <button type="button" class="cu-head" data-cu-go="schedule">${pzIc('calendar', 18)} Se viene <span class="cu-go">Ver todo →</span></button>
+    <button type="button" class="cu-head" data-cu-go="schedule">${pzIc('calendar', 18)} Se viene <span class="cu-go">Ver todo ${pzIc('arrowRight', 13)}</span></button>
     <div class="cu-list">${items}</div>
   </div>`);
   // Debajo de la tira de cupo si ya está (orden estable sin importar el timing).
@@ -11562,19 +11660,19 @@ function renderQuickChips(drafts, scheduled, running) {
     // Solo el botón que importa: el tap de aprobación. "Ver Schedule" duplica el
     // sidebar y "¿Qué sale esta semana?" la puede tipear (menos es más).
     chips = [
-      { t: '📅 Programar mi semana', do: 'schedule' },
+      { ico: 'calendar', t: 'Programar mi semana', do: 'schedule' },
     ];
   } else if (sN > 0) {
-    chips = ['¿Qué sale esta semana? 📅', '¿Qué preguntan en mis comentarios? 💬', '💡 Dame una idea para vender'];
+    chips = [{ ico: 'calendar', t: '¿Qué sale esta semana?', send: '¿Qué sale esta semana? 📅' }, { ico: 'chat', t: '¿Qué preguntan en mis comentarios?', send: '¿Qué preguntan en mis comentarios? 💬' }, { ico: 'idea', t: 'Dame una idea para vender', send: '💡 Dame una idea para vender' }];
   } else {
-    chips = ['⚡ Armame la semana', '💡 Dame una idea para vender'];
+    chips = [{ ico: 'bolt', t: 'Armame la semana', send: '⚡ Armame la semana' }, { ico: 'idea', t: 'Dame una idea para vender', send: '💡 Dame una idea para vender' }];
   }
-  mount.innerHTML = chips.map((c, i) => `<button type="button" data-qchip="${i}">${esc(typeof c === 'string' ? c : c.t)}</button>`).join('');
+  mount.innerHTML = chips.map((c, i) => `<button type="button" data-qchip="${i}">${typeof c === 'string' ? esc(c) : ((c.ico ? pzIc(c.ico, 16) + ' ' : '') + esc(c.t))}</button>`).join('');
   mount.querySelectorAll('[data-qchip]').forEach(b => b.onclick = () => {
     const c = chips[+b.dataset.qchip];
     if (c && typeof c !== 'string' && c.go) { location.hash = c.go; return; }
     if (c && typeof c !== 'string' && c.do === 'schedule') { doScheduleAll(b); return; }
-    const t = typeof c === 'string' ? c : (c && c.t);
+    const t = typeof c === 'string' ? c : (c && (c.send || c.t));
     const i = document.getElementById('chatInput');
     if (!i || !t) return;
     i.value = t;
@@ -11806,7 +11904,7 @@ async function renderDesignImage(o) {
   // para que el próximo "✨ Otro diseño" no lo tome como foto de fondo.
   const res = await fetch('/api/media?kind=design', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'No pude subir la imagen 😅 Probá de nuevo');
+  if (!res.ok) throw new Error(data.error || 'No pude subir la imagen. Probá de nuevo');
   return data.path;
 }
 function slotDate(i) {
@@ -12095,8 +12193,8 @@ async function runAutopilot(n, tag) {
     if (dnaGate && !dnaGate.complete) {
       const postsNow = await api.get('/api/posts').catch(() => []);
       const hasDrafts = postsNow.some(p => p.status === 'draft');
-      prog.innerHTML = `<div class="okmsg">👋 para que tu semana salga buena de verdad, charlemos 2 minutos de tu negocio 👇` +
-        (hasDrafts ? `<br><button class="btn btn-ghost btn-sm" id="dnaGateLater-${t}" style="margin-top:10px">Hacerlo después →</button>` : '') +
+      prog.innerHTML = `<div class="okmsg">para que tu semana salga buena de verdad, charlemos 2 minutos de tu negocio ${pzIc('arrowDown', 13)}` +
+        (hasDrafts ? `<br><button class="btn btn-ghost btn-sm" id="dnaGateLater-${t}" style="margin-top:10px">Hacerlo después ${pzIc('arrowRight', 14)}</button>` : '') +
         `</div>`;
       const laterBtn = document.getElementById('dnaGateLater-' + t);
       if (laterBtn) laterBtn.onclick = () => { prog.innerHTML = ''; };
@@ -12121,7 +12219,7 @@ async function runAutopilot(n, tag) {
       // Verificar que el borrado funcionó: si quedaron borradores, abortar y no crear nada encima
       const afterDelete = await api.get('/api/posts').catch(() => []);
       if (afterDelete.some(p => p.status === 'draft')) {
-        prog.innerHTML = `<div class="err">⚠️ No se pudieron borrar los borradores anteriores. Probá de nuevo o usá 🗑️ Vaciar.</div>`;
+        prog.innerHTML = `<div class="err">${pzIc("alert", 14)} No se pudieron borrar los borradores anteriores. Probá de nuevo o usá ${pzIc('trash', 13)} Vaciar.</div>`;
         return;
       }
     } else {
@@ -12134,12 +12232,12 @@ async function runAutopilot(n, tag) {
     }
     let ideas = IDEAS;
     if (!ideas.length) {
-      prog.innerHTML = `<div class="okmsg">💡 generando ideas para tu negocio...</div>`;
+      prog.innerHTML = `<div class="okmsg">${pzIc('idea', 14)} generando ideas para tu negocio...</div>`;
       const r = await api.post('/api/ideas', {});
       // Sin datos del negocio no generamos nada: primero el onboarding conversacional.
       // (Generar a ciegas es lo que produce posteos inventados que no son el negocio.)
       if (r.need_profile) {
-        prog.innerHTML = `<div class="okmsg">👋 para armar tu semana primero tengo que conocer tu negocio: <a href="#/app/onboarding" style="color:var(--cel);font-weight:700">charlamos 2 minutos</a> o <a href="#/app/schedule" style="color:var(--cel);font-weight:700">hacelo después →</a></div>`;
+        prog.innerHTML = `<div class="okmsg">para armar tu semana primero tengo que conocer tu negocio: <a href="#/app/onboarding" style="color:var(--cel);font-weight:700">charlamos 2 minutos</a> o <a href="#/app/schedule" style="color:var(--cel);font-weight:700">hacelo después ${pzIc('arrowRight', 14)}</a></div>`;
         return;
       }
       ideas = r.ideas || [];
@@ -12152,9 +12250,9 @@ async function runAutopilot(n, tag) {
     const live = [];
     const liveHTML = () => live.length ? `<div class="live-strip">${live.map(d => `
       <div class="live-thumb">${d.mediaType === 'video'
-        ? `<video src="${esc(d.imagePath)}" muted playsinline preload="metadata"></video><span class="live-badge">🎬</span>`
-        : `<img src="${esc(d.imagePath)}" alt="Borrador listo">${d.mediaType === 'story' ? '<span class="live-badge">📱</span>' : ''}`}<span class="live-ok">✓</span></div>`).join('')}</div>
-      <div class="hint" style="margin:4px 0 0">${live.length} ${live.length === 1 ? 'listo' : 'listos'} — en un toque los revisás 👇</div>` : '';
+        ? `<video src="${esc(d.imagePath)}" muted playsinline preload="metadata"></video><span class="live-badge">${pzIc('reel', 13)}</span>`
+        : `<img src="${esc(d.imagePath)}" alt="Borrador listo">${d.mediaType === 'story' ? '<span class="live-badge">' + pzIc('story', 13) + '</span>' : ''}`}<span class="live-ok">${pzIc('check', 12)}</span></div>`).join('')}</div>
+      <div class="hint" style="margin:4px 0 0">${live.length} ${live.length === 1 ? 'listo' : 'listos'} — en un toque los revisás ${pzIc('arrowDown', 13)}</div>` : '';
     // Brand kit del cliente: fotos rotadas + logo + paleta de marca
     // Generación en paralelo: pool de hasta 3 borradores a la vez (el reel entra
     // al mismo pool, no al final en serie). La semana sale en ~90s en vez de 5-10 min.
@@ -12174,10 +12272,10 @@ async function runAutopilot(n, tag) {
         const idea = picks[i];
         const isReel = i === picks.length - 1; // el último post de la semana es un reel 🎬
         try {
-          // onProgress: estado amable mientras el motor de imágenes trabaja ("🎨 Creando la imagen…")
+          // onProgress: estado amable mientras el motor de imágenes trabaja ("' + pzIc('palette', 14) + ' Creando la imagen…")
           const created = await draftFromIdea(idea, isReel, i, false, (phase) => {
             const el = prog.querySelector('.okmsg');
-            if (el) el.innerHTML = phase === 'image' ? '🎨 Creando la imagen…' : phase === 'reel' ? '🎬 Creando las escenas del reel…' : '⏳ Creando…';
+            if (el) el.innerHTML = phase === 'image' ? '' + pzIc('palette', 14) + ' Creando la imagen…' : phase === 'reel' ? '' + pzIc('reel', 14) + ' Creando las escenas del reel…' : '' + pzIc('clock', 14) + ' Creando…';
           }); // borrador: el cliente revisa antes de programar
           if (created && created.imagePath) live.push(created);
         } catch (e) {
@@ -12189,7 +12287,7 @@ async function runAutopilot(n, tag) {
             return;
           }
           if (isAiCapErr(e)) {
-            const msg = e.message || 'Llegamos al tope de IA de hoy \uD83D\uDD0B Seguimos ma\u00F1ana \uD83D\uDCAA';
+            const msg = e.message || 'Llegamos al tope de IA de hoy. Seguimos mañana.';
             try { prog.innerHTML = `<div class="okmsg">${esc(msg)}</div>`; } catch (_) {}
             try { if (typeof chatSayLocal === 'function') chatSayLocal(msg); } catch (_) {}
             quotaStopped = true;
@@ -12207,7 +12305,7 @@ async function runAutopilot(n, tag) {
     await Promise.all(Array.from({ length: Math.min(POOL_SIZE, picks.length) }, apWorker));
     // Si no salió NINGÚN borrador, algo está roto: mostrar el error en vez de un festejo vacío
     if (firstErr && !live.length) throw firstErr;
-    prog.innerHTML = `<div class="okmsg">🎉 tu semana está lista! la armé con tu marca y tu estilo 💪</div>${liveHTML()}`;
+    prog.innerHTML = `<div class="okmsg">${pzIc('gift', 16)} tu semana está lista! la armé con tu marca y tu estilo</div>${liveHTML()}`;
     // Chat-first: si el usuario está en el chat, la promesa "te aviso acá mismo"
     // se cumple acá — el aviso cae como mensaje de la IA (sin tarjetas: la
     // gestión vive en Mi semana) y se refrescan píldora + chips.
@@ -12224,9 +12322,9 @@ async function runAutopilot(n, tag) {
     // más presencia, cero trabajo extra. Caen en "Revisá tu semana" al refrescar.
     // (Las historias no consumen cupo; si el cupo frenó la corrida, tampoco se crean.)
     if (!quotaStopped) try {
-      prog.innerHTML = `<div class="okmsg">⏳ creando tus historias y reels ✨...</div>${liveHTML()}`;
+      prog.innerHTML = `<div class="okmsg">${pzIc('clock', 14)} creando tus historias y reels ${pzIc('sparkle', 14)}...</div>${liveHTML()}`;
       api.post('/api/posts/generate-extras', {}).catch((e) => console.error('[extras]', e.message));
-      prog.innerHTML = `<div class="okmsg">🎉 tu semana está lista! la armé con tu marca y tu estilo 💪</div>${liveHTML()}`;
+      prog.innerHTML = `<div class="okmsg">${pzIc('gift', 16)} tu semana está lista! la armé con tu marca y tu estilo</div>${liveHTML()}`;
     } catch (e) { console.error('[extras]', e.message); }
     track('week_generate_done', { count: live.length, ms: Date.now() - apT0, tag: t });
     // Racha: registrar la semana armada (idempotente por semana)
@@ -12270,7 +12368,7 @@ function bindVaciarDrafts() {
         ? REVIEW_DRAFTS[0].week_key : null;
       r = await api.post('/api/posts/rebuild-week', shownWk ? { week_key: shownWk } : {});
     }
-    catch (e) { alert('⚠️ ' + (e.message || 'No se pudo vaciar. Probá de nuevo.')); render(); return; }
+    catch (e) { alert((e.message || 'No se pudo vaciar. Probá de nuevo.')); render(); return; }
     track('drafts_emptied', { count: (typeof REVIEW_DRAFTS !== 'undefined' ? REVIEW_DRAFTS.length : 0) });
     await render(); // el DOM se escribe tras los awaits: la barrita va después
     if (r && r.rebuilding) rebuildWatchStart();
@@ -12290,8 +12388,8 @@ function rebuildWatchStart() {
   bar.id = 'rebuildBar';
   bar.setAttribute('role', 'status');
   bar.setAttribute('style', 'display:flex;align-items:center;gap:10px;background:#ffffff;border:1.5px solid rgba(39,147,200,.4);border-radius:14px;padding:10px 12px;margin:0 0 12px;font-size:12.5px;line-height:1.4;box-shadow:0 2px 12px rgba(39,147,200,.10)');
-  bar.innerHTML = '<span style="font-size:16px">🔄</span>' +
-    '<span style="flex:1;min-width:0"><b>Armando de nuevo con otro enfoque…</b><br><span style="color:var(--mut);font-size:11.5px">Tus borradores aparecen acá abajo cuando estén listos 👇</span></span>';
+  bar.innerHTML = '<span style="font-size:16px">${pzIc("refresh", 16)}</span>' +
+    '<span style="flex:1;min-width:0"><b>Armando de nuevo con otro enfoque…</b><br><span style="color:var(--mut);font-size:11.5px">Tus borradores aparecen acá abajo cuando estén listos ' + pzIc('arrowDown', 13) + '</span></span>';
   main.prepend(bar);
   if (__rebuildPoll) clearInterval(__rebuildPoll);
   let waited = 0;
@@ -12308,7 +12406,7 @@ function rebuildWatchStart() {
     if (waited >= 6 * 60 * 1000) {
       clearInterval(__rebuildPoll); __rebuildPoll = null;
       const b3 = document.getElementById('rebuildBar');
-      if (b3) b3.innerHTML = '<span style="font-size:16px">⏳</span><span style="flex:1;min-width:0">Está tardando más de lo normal — si en unos minutos no aparecen, contame en el chat 👇</span>';
+      if (b3) b3.innerHTML = '<span style="font-size:16px">⏳</span><span style="flex:1;min-width:0">Está tardando más de lo normal — si en unos minutos no aparecen, contame en el chat ' + pzIc('arrowDown', 13) + '</span>';
     }
   }, 5000);
 }
@@ -12323,7 +12421,7 @@ function rebuildFrustrated() {
     d.id = 'rebuildFrust';
     d.className = 'card';
     d.setAttribute('style', 'border:1.5px solid #FEC14D;background:#FFF9EC;margin:0 0 12px');
-    d.innerHTML = '<h3 style="margin:0 0 4px">🛑 Frenemos un toque</h3>' +
+    d.innerHTML = '<h3 style="margin:0 0 4px">' + pzIc('stop', 15) + ' Frenemos un toque</h3>' +
       '<p style="margin:0 0 12px;color:var(--mut);font-size:12.5px">Ya armamos tu semana 2 veces y la vaciaste de nuevo — regenerar a ciegas sería quemar tu tiempo y tu plata.</p>' +
       '<a class="btn btn-primary btn-sm" href="#/app/chat">' + pzIc('chat', 18) + ' Contame en el chat qué no te cierra</a>';
     main.prepend(d);
@@ -12519,7 +12617,7 @@ function openLightbox(src, isVideo, cap, tags, postId, postLabel) {
   if (!lb) {
     lb = document.createElement('div');
     lb.id = 'lightbox';
-    lb.innerHTML = `<div class="lb-backdrop"></div><div class="lb-content"></div><button class="lb-close" aria-label="Cerrar">✕</button>`;
+    lb.innerHTML = `<div class="lb-backdrop"></div><div class="lb-content"></div><button class="lb-close" aria-label="Cerrar">${pzIc("x", 16)}</button>`;
     document.body.appendChild(lb);
     lb.querySelector('.lb-backdrop').onclick = closeLightbox;
     lb.querySelector('.lb-close').onclick = closeLightbox;
@@ -12562,19 +12660,19 @@ function postItem(p, actions) {
   const thumb = p.media_type === 'video'
     ? `<video class="thumb" src="${esc(p.image_path)}" muted preload="metadata" style="object-fit:cover" data-lightbox="${esc(p.image_path)}" data-video="1"></video>`
     : `<img class="thumb" src="${esc(p.image_path)}" data-lightbox="${esc(p.image_path)}">`;
-  const vtag = p.media_type === 'video' ? `<span class="badge b-scheduled">🎬 video</span>` : p.media_type === 'story' ? `<span class="badge b-scheduled">📱 historia</span>` : '';
+  const vtag = p.media_type === 'video' ? `<span class="badge b-scheduled">${pzIc('reel', 12)} video</span>` : p.media_type === 'story' ? `<span class="badge b-scheduled">${pzIc('story', 12)} historia</span>` : '';
   const capFull = (p.caption || '').trim();
   const capFirst = esc(capFull.split('\n')[0] || '(sin texto)');
   const hasMore = capFull.includes('\n') || (p.hashtags || '').trim();
   return `<div class="post-item">
     ${thumb}
     <div class="info">
-      <div class="cap" ${hasMore ? 'data-cap' : ''}>${capFirst}${hasMore ? ' <span class="more-hint">ver más ▾</span>' : ''}</div>
+      <div class="cap" ${hasMore ? 'data-cap' : ''}>${capFirst}${hasMore ? ' <span class="more-hint">ver más ' + pzIc('chevDown', 12) + '</span>' : ''}</div>
       ${hasMore ? `<div class="full-cap" style="display:none">${esc(capFull)}${p.hashtags ? `<div class="full-tags">${esc(p.hashtags)}</div>` : ''}</div>` : ''}
       <div class="meta">${vtag}${badge(p.status)}
-        ${p.scheduled_at && p.status === 'scheduled' ? `<span>📅 ${fmtDate(p.scheduled_at)}</span>` : ''}
-        ${p.published_at ? `<span>✅ ${fmtDate(p.published_at)}</span>` : ''}
-        ${p.ig_permalink && !p.ig_permalink.includes('/demo_') ? `<a href="${esc(p.ig_permalink)}" target="_blank" style="color:var(--cel)">Ver en IG ↗</a>` : ''}
+        ${p.scheduled_at && p.status === 'scheduled' ? `<span>${pzIc('calendar', 12)} ${fmtDate(p.scheduled_at)}</span>` : ''}
+        ${p.published_at ? `<span>${pzIc('checkCircle', 12)} ${fmtDate(p.published_at)}</span>` : ''}
+        ${p.ig_permalink && !p.ig_permalink.includes('/demo_') ? `<a href="${esc(p.ig_permalink)}" target="_blank" style="color:var(--cel)">Ver en IG ${pzIc('arrowUpRight', 13)}</a>` : ''}
         ${p.error ? `<span style="color:#D64545" title="${esc(p.error)}">${esc(humanError(p.error))}</span>` : ''}
       </div>
     </div>
@@ -12632,7 +12730,7 @@ async function publishNowFlow(postId, mount) {
     mount.innerHTML = `<div class="pubnow">` +
       steps.map((s, i) => {
         const cls = doneAll || i < activeIdx ? 'done' : (i === activeIdx ? 'active' : '');
-        const icon = doneAll || i < activeIdx ? '✅' : (i === activeIdx ? '⏳' : '○');
+        const icon = doneAll || i < activeIdx ? pzIc('checkCircle', 14) : (i === activeIdx ? pzIc('clock', 14) : pzIc('circleEmpty', 14));
         return `<div class="pubnow-step ${cls}"><span>${icon}</span><span>${s}…</span></div>`;
       }).join('') +
       (err ? `<div class="err">${esc(humanError(err))}</div><button class="btn btn-soft btn-sm" data-pnretry="${postId}">Reintentar</button>` : '') +
@@ -12644,6 +12742,22 @@ async function publishNowFlow(postId, mount) {
   try {
     await api.post(`/api/posts/${postId}/publish-now`, {});
   } catch (e) {
+    // Lote 6 — gate de checklist: el servidor frenó la salida por un
+    // problema duro sin confirmar. Se muestran los puntos (no un error
+    // genérico): el dueño los resuelve o los acepta conociéndolos
+    // desde la revisión del borrador, y reintenta.
+    if (e && e.data && e.data.error === 'checklist_bloqueado') {
+      const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+      const items = Array.isArray(e.data.items) ? e.data.items : [];
+      mount.innerHTML = `<div class="pubnow">` +
+        `<div class="pubnow-step"><span>${pzIc('ban', 18)}</span><span>${en ? 'Check before publishing' : 'Revisá antes de publicar'}</span></div>` +
+        items.map((it) => `<div class="err" style="margin-top:6px">• ${esc(it.texto || it.item || '')}</div>`).join('') +
+        `<div class="hint" style="margin-top:8px">${en ? 'Fix them or accept them knowingly from the draft review, then retry.' : 'Resolvelos o aceptalos conociéndolos desde la revisión del borrador, y reintentá.'}</div>` +
+        `<button class="btn btn-soft btn-sm" data-pnretry="${postId}">Reintentar</button></div>`;
+      const rb = mount.querySelector('[data-pnretry]');
+      if (rb) rb.onclick = () => publishNowFlow(postId, mount);
+      return { ok: false };
+    }
     paint(0, false, e.message);
     return { ok: false };
   }
@@ -12655,7 +12769,7 @@ async function publishNowFlow(postId, mount) {
     catch (e) { continue; }
     if (st.status === 'published') {
       track('post_publish', { id: postId });
-      mount.innerHTML = `<div class="okmsg">✅ publicado en instagram! ${st.ig_permalink ? `<a href="${esc(st.ig_permalink)}" target="_blank" style="color:#2793C8">Ver en IG ↗</a>` : ''}</div>`;
+      mount.innerHTML = `<div class="okmsg">${pzIc('checkCircle', 14)} publicado en instagram! ${st.ig_permalink ? `<a href="${esc(st.ig_permalink)}" target="_blank" style="color:#2793C8">Ver en IG ${pzIc('arrowUpRight', 13)}</a>` : ''}</div>`;
       return { ok: true, permalink: st.ig_permalink };
     }
     if (st.status === 'failed' || st.status === 'cancelled') {
@@ -12693,7 +12807,7 @@ function fastTrackCardHTML(candidates) {
   return `
   <div class="card ft-card" id="fastTrackCard">
     <div class="ft-head">
-      <div class="ft-title">🚀 Tu primer posteo</div>
+      <div class="ft-title">' + pzIc('rocket', 13) + ' Tu primer posteo</div>
       <div class="ft-sub">Elegí uno, publicalo, y listo — sale en tu Instagram.</div>
     </div>
     <div class="ft-step"><div class="ft-stepn">1</div><div class="ft-stepbody">
@@ -12701,7 +12815,7 @@ function fastTrackCardHTML(candidates) {
       <div class="ft-cands">
         ${cands.map(c => `
         <button type="button" class="ft-cand${c.id === FT.sel ? ' sel' : ''}" data-ftpick="${c.id}" aria-pressed="${c.id === FT.sel}">
-          <span class="ft-thumb">${c.image_path ? `<img src="${esc(c.image_path)}" data-ftthumb="${c.id}" alt="">` : `<span class="ft-nothumb">🖼️</span>`}<span class="ft-check">✓</span></span>
+          <span class="ft-thumb">${c.image_path ? `<img src="${esc(c.image_path)}" data-ftthumb="${c.id}" alt="">` : `<span class="ft-nothumb">${pzIc('image', 20)}</span>`}<span class="ft-check">${pzIc('check', 14)}</span></span>
           <span class="ft-candt">${esc(ftCandTitle(c))}</span>
         </button>`).join('')}
       </div>
@@ -12711,7 +12825,7 @@ function fastTrackCardHTML(candidates) {
       <button type="button" class="btn btn-soft ft-upload" id="ftPhotoBtn">${pzIc('camera', 18)} Subí una foto de lo que vendés</button>
       <input type="file" id="ftPhotoInput" accept="image/*" style="display:none">
       <div class="ft-photo-st" id="ftPhotoSt">Si subís una foto tuya, la usamos en el posteo.</div>
-      <button type="button" class="ft-skip" id="ftPhotoSkip">saltear →</button>
+      <button type="button" class="ft-skip" id="ftPhotoSkip">saltear ${pzIc('arrowRight', 13)}</button>
     </div></div>
     <div class="ft-step"><div class="ft-stepn">3</div><div class="ft-stepbody">
       <div class="ft-stept">Publicar</div>
@@ -12750,13 +12864,13 @@ function bindFastTrack() {
   if (photoBtn && fileInput) photoBtn.onclick = () => fileInput.click();
   if (photoSkip) photoSkip.onclick = () => {
     FT.photoDone = true;
-    setSt('✅ Listo — sale con la imagen que armó la IA.');
+    setSt(pzIc('checkCircle', 14) + ' Listo — sale con la imagen que armó la IA.');
     photoSkip.style.display = 'none';
     if (photoBtn) photoBtn.style.display = 'none';
   };
   if (fileInput) fileInput.onchange = async () => {
     const f = fileInput.files[0]; if (!f) return;
-    if (!f.type.startsWith('image/')) { setSt('❌ Elegí un archivo de imagen.'); return; }
+    if (!f.type.startsWith('image/')) { setSt(pzIc('reject', 13) + ' Elegí un archivo de imagen.'); return; }
     const sel = FT.candidates.find(c => c.id === FT.sel) || FT.candidates[0];
     if (photoBtn) photoBtn.style.display = 'none';
     if (photoSkip) photoSkip.style.display = 'none';
@@ -12764,9 +12878,9 @@ function bindFastTrack() {
       setSt('⏳ Subiendo…');
       const r = await fetch('/api/assets?kind=photo', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
+      if (!r.ok) throw new Error(data.error || 'No pude subirlo. Probá de nuevo');
       const newPath = data.path;
-      setSt('🎨 Mejorando la imagen…');
+      setSt(pzIc('palette', 14) + ' Mejorando la imagen…');
       const improved = await aiConceptShot({
         idea: { titulo: sel.source_topic || '', porque: sel.strategy_why || '', angulo: sel.source_angle || '' },
         tipo: sel.tipo || '',
@@ -12781,10 +12895,10 @@ function bindFastTrack() {
       const thumb = card.querySelector(`[data-ftthumb="${sel.id}"]`);
       if (thumb && thumb.tagName === 'IMG') thumb.src = finalPath;
       FT.photoDone = true; FT.photoPath = finalPath;
-      setSt('✅ Listo — tu foto ya está en el posteo.');
+      setSt(pzIc('checkCircle', 14) + ' Listo — tu foto ya está en el posteo.');
     } catch (e) {
       // Nunca bloquear: se sigue con la imagen original.
-      setSt(isAiCapErr(e) ? '🔋 ' + (e.message || 'Llegamos al tope de IA de hoy — seguimos mañana 💪') : '😅 No pudimos mejorar la foto esta vez — sale con la imagen original, igual va a quedar bien.');
+      setSt(isAiCapErr(e) ? '' + (e.message || 'Llegamos al tope de IA de hoy — seguimos mañana') : `${pzIc('alert', 16)} No pudimos mejorar la foto esta vez — sale con la imagen original, igual va a quedar bien.`);
       FT.photoDone = true;
     }
   };
@@ -12808,9 +12922,9 @@ function bindFastTrack() {
       // Magia lograda: refrescamos la pantalla y festejamos.
       try { render(); } catch (e) { /* sigue el modal igual */ }
       streakModalShell(`
-        <div class="big-emoji">🎉</div>
+        <div class="big-emoji">${pzIc('gift', 64)}</div>
         <h3 style="margin:12px 0 4px">¡Tu primer posteo está saliendo!</h3>
-        <p class="d" style="font-size:14px">Ya está publicado (o publicándose) en tu Instagram.<br>Mientras sale, <b>contame de tu negocio 🎙️</b> — así los próximos posteos salen todavía mejor.</p>
+        <p class="d" style="font-size:14px">Ya está publicado (o publicándose) en tu Instagram.<br>Mientras sale, <b>contame de tu negocio ${pzIc('mic', 13)}</b> — así los próximos posteos salen todavía mejor.</p>
         <button class="btn btn-primary btn-block" id="ftCelebVoice" style="margin-top:10px;font-size:14px">${pzIc('mic', 18)} Contame de tu negocio</button>
         <button class="btn btn-ghost btn-block" id="ftCelebClose" style="margin-top:8px">Ahora no</button>`);
       const vb = document.getElementById('ftCelebVoice');
@@ -12823,7 +12937,7 @@ function bindFastTrack() {
     } else {
       FT.publishing = false;
       pub.disabled = false;
-      pub.textContent = '🚀 Publicar ahora';
+      pub.innerHTML = pzIc('rocket', 14) + ' Publicar ahora';
     }
   };
 }
@@ -12839,12 +12953,12 @@ function firstPublishCardHTML(drafts) {
   const n = list.length;
   const sub = n
     ? (n === 1
-        ? 'Ya tenés 1 borrador listo ✨ — publicalo y miralo vivo en tu Instagram.'
-        : `Ya tenés ${n} borradores listos ✨ — publicá el primero y miralo vivo en tu Instagram.`)
-    : 'Todavía no hay borradores — tocá el botón, armo el primero al toque y lo publicamos 🚀';
+        ? 'Ya tenés 1 borrador listo — publicalo y miralo vivo en tu Instagram.'
+        : `Ya tenés ${n} borradores listos — publicá el primero y miralo vivo en tu Instagram.`)
+    : 'Todavía no hay borradores — tocá el botón, armo el primero al toque y lo publicamos';
   return `
   <div class="card" id="firstPublishCard" style="border:2px solid var(--yel);background:#FFF9EC">
-    <h3 style="margin:0 0 4px">🚀 Tu primer posteo</h3>
+    <h3 style="margin:0 0 4px">' + pzIc('rocket', 13) + ' Tu primer posteo</h3>
     <p class="hint" style="margin:0 0 10px">${sub}</p>
     <button type="button" class="btn btn-primary btn-block" id="btnFirstPublish" style="min-height:52px;font-size:16px;touch-action:manipulation">${pzIc('bolt', 18)} Publicar mi primero</button>
     <div id="fpPubMount" style="margin-top:10px"></div>
@@ -12889,7 +13003,7 @@ async function firstPublishFlow() {
         if (m0) m0.innerHTML = '<div id="apProg-schedule"></div>';
         prog = document.getElementById('apProg-schedule');
       }
-      if (prog) prog.innerHTML = '<div class="okmsg">🎨 armando tu primer posteo…</div>';
+      if (prog) prog.innerHTML = '<div class="okmsg">' + pzIc('palette', 14) + ' armando tu primer posteo…</div>';
       const alreadyRunning = (typeof AUTOPILOT_RUNNING !== 'undefined') && !!AUTOPILOT_RUNNING;
       await runAutopilotSmart(1, 'schedule');
       drafts = await fpWaitDrafts(alreadyRunning ? 90000 : 8000);
@@ -12897,7 +13011,7 @@ async function firstPublishFlow() {
         // El autopilot no generó (gate de ADN → chat, o cupo): decirlo de frente.
         say('🚀 Publicar mi primero', false);
         const m1 = mount();
-        if (m1) m1.innerHTML = '<div class="hint">😅 No lo pude armar solo — <a href="#/app/chat" style="color:var(--cel);font-weight:700">contame de tu negocio en el chat</a> y lo hacemos juntos 👇</div>';
+        if (m1) m1.innerHTML = '<div class="hint">No lo pude armar solo — <a href="#/app/chat" style="color:var(--cel);font-weight:700">contame de tu negocio en el chat</a> y lo hacemos juntos ' + pzIc('arrowDown', 13) + '</div>';
         return;
       }
       // runAutopilot re-renderiza la vista a los ~900ms: esperar al DOM nuevo
@@ -13031,7 +13145,7 @@ function quotaModal(q, opts = {}) {
   track('paywall_view', { plan: (q && q.plan_name) || '', limit: (q && q.limit) || 0 });
   const headTitle = hasPartial
     ? `Te quedan ${left} ${left === 1 ? 'posteo' : 'posteos'} esta semana`
-    : `¡Llegamos al tope de la semana! 🚀`;
+    : `¡Llegamos al tope de la semana!`;
   const headHtml = hasPartial
     ? `<p style="font-size:14px;margin:0 0 6px">¿Los armamos ahora mismo? O mejorá tu paquete y seguimos sin freno — se activa al instante.</p>`
     : `<p style="font-size:14px;margin:0 0 6px">Tu plan <b>${esc(q.plan_name || '')}</b> incluye <b>${q.limit} posteos por semana</b> — y los usamos todos, ¡bien ahí!</p>
@@ -13040,9 +13154,9 @@ function quotaModal(q, opts = {}) {
     <img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
     <h3 style="margin:12px 0 4px">${headTitle}</h3>
     ${headHtml}
-    ${hasPartial ? `<button class="btn btn-primary btn-block" id="qPartial" style="margin-top:10px">⚡ Armar ${left === 1 ? 'el que me queda' : `los ${left} que me quedan`} →</button>` : ''}
+    ${hasPartial ? `<button class="btn btn-primary btn-block" id="qPartial" style="margin-top:10px">${pzIc('bolt', 16)} Armar ${left === 1 ? 'el que me queda' : `los ${left} que me quedan`} ${pzIc('arrowRight', 16)}</button>` : ''}
     ${!(typeof IS_NATIVE !== 'undefined' && IS_NATIVE) ? `<button class="btn ${hasPartial ? 'btn-soft' : 'btn-primary'} btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>` : ''}
-    ${opts.showWeek ? `<button class="btn btn-soft btn-block" id="qShowWeek" style="margin-top:10px">📅 Ver los posteos de esta semana</button>` : ''}
+    ${opts.showWeek ? `<button class="btn btn-soft btn-block" id="qShowWeek" style="margin-top:10px">${pzIc('calendar', 14)} Ver los posteos de esta semana</button>` : ''}
     <button class="btn btn-ghost btn-block" id="qClose" style="margin-top:8px">Entendido</button>`);
   const up = document.getElementById('qUpgrade');
   if (up) up.onclick = () => { closeStreakModal(); location.hash = '#/app/ajustes?plan=1'; };
@@ -13070,9 +13184,9 @@ function streakModalShell(inner) {
   document.body.appendChild(ov);
 }
 function streakNextTxt(sk) {
-  if (!sk.nextLevel) return `<p class="d">Nivel máximo 👑</p>`;
+  if (!sk.nextLevel) return `<p class="d">Nivel máximo ${pzIc('crown', 16)}</p>`;
   const falta = sk.nextLevel.at - sk.current;
-  return `<p class="d">Te ${falta === 1 ? 'falta 1 semana' : `faltan ${falta} semanas`} para ${esc(sk.nextLevel.emoji)} ${esc(sk.nextLevel.name)}</p>`;
+  return `<p class="d">Te ${falta === 1 ? 'falta 1 semana' : `faltan ${falta} semanas`} para ${pzEmojiGlyph(sk.nextLevel.emoji)} ${esc(sk.nextLevel.name)}</p>`;
 }
 // "38h" / "2d" / "menos de 1h" — cuánto le queda de vida a la racha (72h desde la última publicación)
 function fmtStreakLeft(ms) {
@@ -13096,7 +13210,7 @@ function celebRefHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   return `
   <div class="celeb-ref">
-    <p class="celeb-ref-t">${en ? '🎁 Who else could use this?' : '🎁 ¿A quién más le vendría bien esto?'}</p>
+    <p class="celeb-ref-t">${en ? '' + pzIc('gift', 16) + ' Who else could use this?' : '' + pzIc('gift', 16) + ' ¿A quién más le vendría bien esto?'}</p>
     <p class="d">${en ? 'Share your link: they save 20% every month, and with 2 referrals you pay half.' : 'Compartí tu link: ellos ahorran 20% todos los meses, y con 2 referidos vos pagás la mitad.'}</p>
     <div class="celeb-ref-btns">
       <button class="btn btn-wa btn-sm" data-cref="wa">WhatsApp</button>
@@ -13119,7 +13233,7 @@ async function wireCelebRef(root) {
       if (b.dataset.cref === 'wa') {
         location.href = 'https://wa.me/?text=' + encodeURIComponent(shareMsg);
       } else {
-        try { await navigator.clipboard.writeText(link); if (msg) msg.textContent = en ? '✅ Link copied' : '✅ Link copiado'; }
+        try { await navigator.clipboard.writeText(link); if (msg) msg.textContent = en ? 'Link copied' : 'Link copiado'; }
         catch (e) { if (msg) msg.textContent = link; }
       }
     };
@@ -13137,12 +13251,12 @@ async function maybeFirstPublishCelebration() {
   const p = r.post;
   const isVideo = p.media_type === 'video';
   streakModalShell(`
-    <div class="big-emoji">🎉</div>
+    <div class="big-emoji">${pzIc('gift', 64)}</div>
     <h3 style="margin:12px 0 4px">¿Viste? Salió solo</h3>
     <p style="font-size:14px;margin:0 0 6px">Tu primer ${isVideo ? 'reel' : 'posteo'} ya está en Instagram — <b>vos no hiciste nada</b>.</p>
-    ${p.ig_permalink ? `<a class="btn btn-primary btn-block" href="${esc(p.ig_permalink)}" target="_blank" rel="noopener" style="margin:8px 0">Ver en Instagram →</a>` : ''}
+    ${p.ig_permalink ? `<a class="btn btn-primary btn-block" href="${esc(p.ig_permalink)}" target="_blank" rel="noopener" style="margin:8px 0">Ver en Instagram ${pzIc('arrowRight', 16)}</a>` : ''}
     ${celebRefHTML()}
-    <button class="btn btn-ghost btn-block" id="pubCelebClose" style="margin-top:6px">Seguir →</button>`);
+    <button class="btn btn-ghost btn-block" id="pubCelebClose" style="margin-top:6px">Seguir ${pzIc("arrowRight", 14)}</button>`);
   const ov = document.getElementById('streakModal');
   if (ov) wireCelebRef(ov);
   try { await api.post('/api/publish-celebration/seen', {}); } catch (e) {}
@@ -13159,10 +13273,10 @@ async function maybeMilestoneCelebration() {
   try { r = await api.get('/api/milestones'); } catch (e) { return; }
   if (!r || !r.show || !r.milestone) return;
   streakModalShell(`
-    <div class="big-emoji">🏆</div>
+    <div class="big-emoji">${pzIc('crown', 64)}</div>
     <h3 style="margin:12px 0 4px">¡${r.milestone} posteos publicados!</h3>
-    <p style="font-size:14px;margin:0 0 6px">Tu constancia está dando frutos — y esto recién empieza. 🚀</p>
-    <button class="btn btn-primary btn-block" id="msCelebClose" style="margin-top:8px">Seguir →</button>`);
+    <p style="font-size:14px;margin:0 0 6px">Tu constancia está dando frutos — y esto recién empieza.</p>
+    <button class="btn btn-primary btn-block" id="msCelebClose" style="margin-top:8px">Seguir ${pzIc("arrowRight", 14)}</button>`);
   try { await api.post('/api/milestones/seen', { milestone: r.milestone }); } catch (e) {}
   const mc = document.getElementById('msCelebClose');
   if (mc) mc.onclick = () => closeStreakModal();
@@ -13181,12 +13295,12 @@ async function loadProactiveTips() {
   el.innerHTML = `
   <div class="card" id="cmTipsCard" style="border:1.5px solid #FEC14D;background:#FFFDF6">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-      <h3 style="margin:0 0 8px">💡 Sugerencias de tu CM</h3>
-      <button id="cmTipsX" aria-label="Ocultar sugerencias" style="background:none;border:0;font-size:14px;cursor:pointer;color:var(--mut);padding:0">✕</button>
+      <h3 style="margin:0 0 8px">${pzIc('idea', 16)} Sugerencias de tu CM</h3>
+      <button id="cmTipsX" aria-label="Ocultar sugerencias" style="background:none;border:0;font-size:14px;cursor:pointer;color:var(--mut);padding:0">${pzIc("x", 16)}</button>
     </div>
     ${tips.map(t => t && t.kind === 'pause-tipo'
-      ? `<div class="cm-tip pause-tip"><span>🚫</span><span style="flex:1">${esc(t.texto || '')}</span><span class="pause-btns"><button class="btn btn-soft btn-sm" data-pause-yes="${esc(t.tipo || '')}">Sí, pausalas</button><button class="btn btn-ghost btn-sm" data-pause-no>No</button></span></div>`
-      : `<div class="cm-tip"><span>${t.icon || '💡'}</span><span>${esc(t.text)}</span></div>`).join('')}
+      ? `<div class="cm-tip pause-tip"><span>${pzIc('ban', 14)}</span><span style="flex:1">${esc(t.texto || '')}</span><span class="pause-btns"><button class="btn btn-soft btn-sm" data-pause-yes="${esc(t.tipo || '')}">Sí, pausalas</button><button class="btn btn-ghost btn-sm" data-pause-no>No</button></span></div>`
+      : `<div class="cm-tip"><span>${t.icon || pzIc('idea', 14)}</span><span>${esc(t.text)}</span></div>`).join('')}
   </div>`;
   const x = document.getElementById('cmTipsX');
   if (x) x.onclick = () => { _tipsDismissed = true; const c = document.getElementById('cmTipsCard'); if (c) c.remove(); };
@@ -13204,7 +13318,7 @@ async function loadProactiveTips() {
   });
 }
 /* ---------- Plan semanal sugerido ---------- */
-const TIPO_META = { promo: ['🎯', 'Promo'], tip: ['📚', 'Tip'], social: ['💬', 'Prueba social'], detras: ['🎬', 'Detrás de escena'], novedad: ['✨', 'Novedad'] };
+const TIPO_META = { promo: [pzIc('target', 13), 'Promo'], tip: [pzIc('book', 13), 'Tip'], social: [pzIc('chat', 13), 'Prueba social'], detras: [pzIc('reel', 13), 'Detrás de escena'], novedad: [pzIc('sparkle', 13), 'Novedad'] };
 async function loadWeeklyPlan() {
   const el = document.getElementById('weeklyPlan');
   if (!el) return;
@@ -13216,7 +13330,7 @@ async function loadWeeklyPlan() {
   if (!sug) { el.innerHTML = ''; return; }
   el.innerHTML = `
   <div class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:12px">
-    <span style="font-size:26.5px">📺</span>
+    <span style="font-size:26.5px">${pzIc('reel', 26)}</span>
     <div style="flex:1"><b>${esc(sug.nombre_sugerido || 'Tu serie')}</b><div class="d" style="margin-top:2px">Tu serie fija de cada semana.</div></div>
     <button class="btn btn-primary" data-serie-nombre="${esc(sug.nombre_sugerido || '')}" data-serie-weekday="${esc(sug.weekday ?? '')}" data-serie-tipo="${esc(sug.tipo || '')}">Crear</button>
   </div>`;
@@ -13265,7 +13379,7 @@ function adsRecCardHTML(r, budgets) {
       <img src="${esc(r.image_path)}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;flex-shrink:0" alt="">
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.caption || 'Posteo')}</div>
-        <div style="color:var(--mut);font-size:10.5px">👁️ ${Number(r.reach || 0).toLocaleString('es-AR')} alcance · ⚡ ${r.er_pct}% interacción</div>
+        <div style="color:var(--mut);font-size:10.5px">${pzIc('eye', 16)} ${Number(r.reach || 0).toLocaleString('es-AR')} alcance · ${pzIc('bolt', 16)} ${r.er_pct}% interacción</div>
       </div>
     </div>
     <p class="d" style="margin:0 0 2px">Rindió por encima de tu promedio — la plata va a un ganador probado.</p>
@@ -13286,11 +13400,11 @@ function paintAdsBtn(card, balanceCents, minTopupCents) {
   if (!b) { btn.style.display = 'none'; return; }
   btn.style.display = '';
   if ((balanceCents || 0) >= b) {
-    btn.innerHTML = '🚀 Potenciar';
+    btn.innerHTML = pzIc('rocket', 14) + ' Potenciar';
     btn.dataset.mode = 'boost';
   } else {
     const load = Math.max(minTopupCents || 0, b);
-    btn.innerHTML = `💰 Cargar ${fmtARSc(load)} y potenciar`;
+    btn.innerHTML = `${pzIc('coin', 15)} Cargar ${fmtARSc(load)} y potenciar`;
     btn.dataset.mode = 'topup';
     btn.dataset.load = String(load);
   }
@@ -13344,7 +13458,7 @@ async function adsRecAction(card, opts) {
     const okb = ev.currentTarget; okb.disabled = true;
     try {
       const r = await api.post('/api/ads/boost', { post_id: Number(card.dataset.rec), budget_cents: budget });
-      box.innerHTML = `<div class="okmsg">🚀 ${esc((r && r.message) || '¡Pauta creada!')}</div>`;
+      box.innerHTML = `<div class="okmsg">${pzIc('rocket', 14)} ${esc((r && r.message) || '¡Pauta creada!')}</div>`;
       try {
         const cfg = await api.get('/api/ads/config');
         opts.balance = cfg.balance_cents || 0;
@@ -13373,10 +13487,10 @@ function adsBoostCardHTML(cfg, recs) {
   return `
   <div class="card" id="adsBoostCard" style="border:2px solid var(--cel)">
     <div id="adsBoostMsg"></div>
-    <h3 style="margin:0 0 4px">🚀 Te recomendamos potenciar</h3>
+    <h3 style="margin:0 0 4px">${pzIc('rocket', 15)} Te recomendamos potenciar</h3>
     <p class="d" style="margin:0 0 10px">Rindieron más que tu promedio — un toque y llegan a más gente.</p>
     ${list.slice(0, 2).map(r => adsRecCardHTML(r, budgets)).join('')}
-    <a href="#/app/ads" style="font-size:11.5px;color:var(--cel);font-weight:700">Ver mi crédito e historial →</a>
+    <a href="#/app/ads" style="font-size:11.5px;color:var(--cel);font-weight:700">Ver mi crédito e historial ${pzIc('arrowRight', 13)}</a>
   </div>`;
 }
 
@@ -13405,7 +13519,7 @@ async function handlePendingBoost() {
   };
   const done = async (res) => {
     if (res.ok) {
-      say(`<div class="okmsg">🚀 ${esc(res.msg)}</div>`);
+      say(`<div class="okmsg">${pzIc('rocket', 14)} ${esc(res.msg)}</div>`);
       try {
         const cfg = await api.get('/api/ads/config');
         if (ADS_CTX) ADS_CTX.balance = cfg.balance_cents || 0;
@@ -13477,7 +13591,7 @@ async function adsView() {
   const bal = ADS_CTX.balance;
 
   const topupBanner = topupState === 'ok'
-    ? `<div class="okmsg" style="margin-bottom:12px">💰 ¡Crédito acreditado! Ya podés potenciar tus posteos.</div>`
+    ? `<div class="okmsg" style="margin-bottom:12px">${pzIc('coin', 15)} ¡Crédito acreditado! Ya podés potenciar tus posteos.</div>`
     : topupState === 'pending'
       ? `<div class="okmsg" style="margin-bottom:12px">⏳ Tu pago está en proceso. El crédito aparece acá cuando se acredite.</div>`
       : topupState === 'error'
@@ -13491,30 +13605,30 @@ async function adsView() {
   const list = (recs && recs.recommendations) || [];
   const budgets = (cfg && cfg.budget_options) || [];
   const recCards = recs === null
-    ? `<div class="st-empty"><div class="st-empty-ico">⭐</div><b>No pude cargar tus recomendaciones ahora 😅</b><p>Probá de nuevo en un ratito.</p><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="render()">Reintentar</button></div>`
+    ? `<div class="st-empty"><div class="st-empty-ico">${pzIc('star', 26)}</div><b>No pude cargar tus recomendaciones ahora</b><p>Probá de nuevo en un ratito.</p><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="render()">Reintentar</button></div>`
     : list.length && budgets.length
     ? `<div id="adsRecsCard">${list.map(r => adsRecCardHTML(r, budgets)).join('')}</div>`
     : `<div class="st-empty">
-         <div class="st-empty-ico">⭐</div>
+         <div class="st-empty-ico">${pzIc('star', 26)}</div>
          <b>Las recomendaciones van a vivir acá</b>
          <p>Cuando tus posteos junten alcance, te marcamos acá cuáles conviene potenciar.</p>
          <a class="btn btn-primary btn-sm" href="#/app/schedule" style="margin-top:12px">${pzIc('calendar', 18)} Ir a mi semana</a>
        </div>`;
 
   const bl = (boosts && boosts.boosts) || [];
-  const statusTxt = (b) => b.status === 'active' ? '🟢 Activa'
-    : b.status === 'pending' ? '⏳ Activándose' : b.status === 'finished' ? '✅ Finalizada' : esc(b.status || '');
+  const statusTxt = (b) => b.status === 'active' ? pzDot('#22A06B', 11) + ' Activa'
+    : b.status === 'pending' ? pzIc('clock', 12) + ' Activándose' : b.status === 'finished' ? pzIc('checkCircle', 12) + ' Finalizada' : esc(b.status || '');
   const boostRows = boosts === null
-    ? `<div class="st-empty"><div class="st-empty-ico">📣</div><b>No pude cargar tus pautas ahora 😅</b><p>Probá de nuevo en un ratito.</p><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="render()">Reintentar</button></div>`
+    ? `<div class="st-empty"><div class="st-empty-ico">${pzIc('megaphone', 26)}</div><b>No pude cargar tus pautas ahora</b><p>Probá de nuevo en un ratito.</p><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="render()">Reintentar</button></div>`
     : bl.length ? bl.map(b => `
     <div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #EDF1F5">
       <div style="flex:1;min-width:0;font-size:11.5px">
         <div style="font-weight:700">${statusTxt(b)} · ${fmtARSc(b.budget_cents)}</div>
-        <div style="color:var(--mut);font-size:10.5px">${b.last_reach ? `👁️ ${Number(b.last_reach).toLocaleString('es-AR')} alcance · 💸 ${fmtARSc(b.last_spend_cents)} gastados` : 'Ya la estamos poniendo en marcha'}</div>
+        <div style="color:var(--mut);font-size:10.5px">${b.last_reach ? `${pzIc('eye', 13)} ${Number(b.last_reach)}.toLocaleString('es-AR')} alcance · ${pzIc('coin', 13)} ${fmtARSc(b.last_spend_cents)} gastados` : 'Ya la estamos poniendo en marcha'}</div>
       </div>
     </div>`).join('')
     : `<div class="st-empty">
-         <div class="st-empty-ico">📣</div>
+         <div class="st-empty-ico">${pzIc('megaphone', 26)}</div>
          <b>Tus pautas van a vivir acá</b>
          <p>Cuando potencies tu primer posteo, lo ves acá con su alcance y lo gastado, sin misterio.</p>
          <button class="btn btn-soft btn-sm" id="adsBoostGoRecs" style="margin-top:12px">⭐ Ver recomendaciones</button>
@@ -13522,16 +13636,16 @@ async function adsView() {
 
   return `
   <div class="card" style="text-align:center">
-    <h2 style="margin:0 0 4px">🚀 Potenciar</h2>
+    <h2 style="margin:0 0 4px">${pzIc('rocket', 15)} Potenciar</h2>
     <p class="d" style="margin:0">Llevá tus mejores posteos a más gente, sin tocar el administrador de anuncios. Nosotros nos ocupamos.</p>
   </div>
   ${topupBanner}
   ${!cfg ? `<div class="card" style="border:2px solid var(--yel)">
-    <h3 style="margin:0 0 4px">💰 Tu crédito</h3>
-    <p class="d" style="margin:0 0 10px">No pude cargar tu crédito ahora 😅 No es tu cuenta: es un tropiezo de conexión de mi lado.</p>
+    <h3 style="margin:0 0 4px">${pzIc('coin', 16)} Tu crédito</h3>
+    <p class="d" style="margin:0 0 10px">No pude cargar tu crédito ahora No es tu cuenta: es un tropiezo de conexión de mi lado.</p>
     <button class="btn btn-primary btn-sm" onclick="render()">Reintentar</button>
   </div>` : `<div class="card" style="border:2px solid var(--yel)">
-    <h3 style="margin:0 0 4px">💰 Tu crédito</h3>
+    <h3 style="margin:0 0 4px">${pzIc('coin', 16)} Tu crédito</h3>
     <div style="font-size:30px;font-weight:800;margin:2px 0 6px">${fmtARSc(bal)}</div>
     <p class="d" style="margin:0 0 10px">Un solo precio por potenciar tu posteo durante 7 días en Instagram y Facebook. Sin letra chica.</p>
     ${cfg && cfg.mp_ready ? `
@@ -13546,7 +13660,7 @@ async function adsView() {
     ${recCards}
   </div>
   <div class="card">
-    <h3 style="margin:0 0 6px">📣 Tus pautas</h3>
+    <h3 style="margin:0 0 6px">${pzIc('megaphone', 15)} Tus pautas</h3>
     ${boostRows}
   </div>`;
 }
@@ -13593,9 +13707,9 @@ function showStreakCelebration(sk) {
   const isFirst = sk.newWeek && sk.current === 1;
   streakModalShell(`
     ${isFirst ? '<span class="pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)"></span>' : `<div class="big-emoji">${lv.emoji}</div>`}
-    <h3 style="margin:12px 0 4px">${isFirst ? '¡Tu primera semana! 🎉' : (sk.leveledUp ? (biz ? `¡${esc(biz)} subió a ${esc(lv.name)}!` : '¡Subiste de nivel!') : '¡Racha en marcha!')}</h3>
-    ${isFirst ? '<p style="font-size:15px;margin:0 0 6px;color:var(--mut)">La primera de muchas. Yo armo, yo publico — vos a mirar cómo crece 💪</p>' : ''}
-    <p style="font-size:16px;margin:0 0 6px"><b>⚡ +100 pts</b> · ${pts} pts en total</p>
+    <h3 style="margin:12px 0 4px">${isFirst ? '¡Tu primera semana! ' + pzIc('gift', 16) + '' : (sk.leveledUp ? (biz ? `¡${esc(biz)} subió a ${esc(lv.name)}!` : '¡Subiste de nivel!') : '¡Racha en marcha!')}</h3>
+    ${isFirst ? '<p style="font-size:15px;margin:0 0 6px;color:var(--mut)">La primera de muchas. Yo armo, yo publico — vos a mirar cómo crece</p>' : ''}
+    <p style="font-size:16px;margin:0 0 6px"><b>${pzIc('bolt', 16)} +100 pts</b> · ${pts} pts en total</p>
     <p style="font-size:15px;margin:0 0 6px"><b>${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</b>${lv.name ? ` · ${esc(lv.name)}` : ''}</p>
     ${streakNextTxt(sk)}
     ${streakShareBtns()}`);
@@ -13614,34 +13728,34 @@ function streakPillModal(sk) {
   const pct = nl ? Math.min(100, Math.round(sk.current / nl.at * 100)) : 100;
   const falta = nl ? nl.at - sk.current : 0;
   const nextTxt = nl
-    ? `${sk.current} de ${nl.at} semanas · te ${falta === 1 ? 'falta 1 semana' : `faltan ${falta} semanas`} para ${nl.emoji} ${esc(nl.name)}`
-    : `Nivel máximo alcanzado 👑`;
+    ? `${sk.current} de ${nl.at} semanas · te ${falta === 1 ? 'falta 1 semana' : `faltan ${falta} semanas`} para ${pzEmojiGlyph(nl.emoji)} ${esc(nl.name)}`
+    : `Nivel máximo alcanzado ${pzIc('crown', 16)}`;
   // Anillo de progreso animado alrededor del badge (en vez de barrita plana)
   const R = 56, C = 2 * Math.PI * R;
   const ring = `<div class="stk-ring"><svg viewBox="0 0 128 128" width="128" height="128"><circle cx="64" cy="64" r="${R}" class="stk-ring-bg"/><circle cx="64" cy="64" r="${R}" class="stk-ring-fg" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - pct / 100)).toFixed(1)}" transform="rotate(-90 64 64)"/></svg><div class="stk-badge">${lv.emoji}</div></div>`;
   // Urgencia = retención: el countdown es LO PRIMERO que se ve.
   const left = fmtStreakLeft(sk.expiresInMs);
   const countdown = sk.expiringSoon
-    ? `<div class="stk-count danger">⏳ Tu racha se apaga en <b>${left}</b></div>`
-    : `<div class="stk-count">🔥 Racha viva · le quedan <b>${left}</b></div>`;
+    ? `<div class="stk-count danger">${pzIc('clock', 16)} Tu racha se apaga en <b>${left}</b></div>`
+    : `<div class="stk-count">${pzIc('flame', 16)} Racha viva · le quedan <b>${left}</b></div>`;
   // Acción concreta: exacto qué hacer + botón que lo lleva ahí.
   const cta = `<div class="stk-cta"><p>Programá 1 posteo y la racha sigue viva.</p><button class="btn btn-primary btn-block" id="stkGoSched">${pzIc('calendar', 18)} Programar mi semana</button></div>`;
   const journey = levels.map((l, i) => {
     const isCur = i === curIdx;
     const done = !isCur && sk.current >= l.min;
     const isNext = !!(nl && l.name === nl.name);
-    const node = `<div class="stk-node${isCur ? ' cur' : ''}${done ? ' done' : ''}${isNext ? ' next' : ''}${!isCur && !done && !isNext ? ' lock' : ''}"><div class="stk-dot">${l.emoji}</div><small>${esc(l.name)}</small></div>`;
+    const node = `<div class="stk-node${isCur ? ' cur' : ''}${done ? ' done' : ''}${isNext ? ' next' : ''}${!isCur && !done && !isNext ? ' lock' : ''}"><div class="stk-dot">${pzEmojiGlyph(l.emoji)}</div><small>${esc(l.name)}</small></div>`;
     const link = i < levels.length - 1 ? `<div class="stk-link${done || isCur ? ' on' : ''}"></div>` : '';
     return node + link;
   }).join('');
   // Récord a batir (solo si el best supera la racha actual)
-  const beatTxt = sk.best > sk.current ? `<p class="stk-beat">🏆 Tu récord: ${sk.best} — te faltan ${sk.best - sk.current}</p>` : '';
+  const beatTxt = sk.best > sk.current ? `<p class="stk-beat">${pzIc('trophy', 16)} Tu récord: ${sk.best} — te faltan ${sk.best - sk.current}</p>` : '';
   streakModalShell(`
     ${countdown}
     <div class="stk-hero">
       ${ring}
       <p class="stk-eyebrow">Nivel ${esc(lv.name)}</p>
-      <p class="stk-pts"><b>⚡ ${pts}</b> pts</p>
+      <p class="stk-pts"><b>${pzIc('bolt', 16)} ${pts}</b> pts</p>
       <p class="stk-next">${nextTxt}</p>
       ${beatTxt}
     </div>
@@ -13710,8 +13824,8 @@ function xpStripHTML(sk, st, draftN) {
     : '';
   const expBanner = sk && sk.expiringSoon ? `
   <div class="card" style="border:1.5px solid #FEC14D;background:#FFF9EC">
-    <div class="nudge-top"><span class="nudge-ico">⏳</span><div><h3>Tu racha ${esc(sk.level.emoji)} se apaga en ${fmtStreakLeft(sk.expiresInMs)}</h3>
-    <p>${draftN > 0 ? 'Programá tus borradores acá abajo 👇 y la racha sigue viva.' : 'Si no sale ningún posteo en ese tiempo, la racha vuelve a cero.'}</p></div></div>
+    <div class="nudge-top"><span class="nudge-ico">${pzIc('clock', 16)}</span><div><h3>Tu racha ${pzEmojiGlyph(sk.level.emoji)} se apaga en ${fmtStreakLeft(sk.expiresInMs)}</h3>
+    <p>${draftN > 0 ? 'Programá tus borradores acá abajo ' + pzIc('arrowDown', 16) + ' y la racha sigue viva.' : 'Si no sale ningún posteo en ese tiempo, la racha vuelve a cero.'}</p></div></div>
   </div>` : '';
   // Barra superior unificada: racha + tu progreso en un solo vistazo.
   const hasStreak = sk && sk.current > 0 && sk.level;
@@ -13756,7 +13870,7 @@ function autoWeekShowBar() {
   bar.id = 'autoWeekBar';
   bar.setAttribute('role', 'status');
   bar.setAttribute('style', 'display:flex;align-items:center;gap:10px;background:#ffffff;border:1.5px solid rgba(39,147,200,.4);border-radius:14px;padding:10px 12px;margin:0 0 12px;font-size:12.5px;line-height:1.4;box-shadow:0 2px 12px rgba(39,147,200,.10)');
-  bar.innerHTML = '<span style="font-size:16px">✨</span>' +
+  bar.innerHTML = '<span style="font-size:16px">${pzIc("sparkle", 16)}</span>' +
     '<span style="flex:1;min-width:0">Armando tu semana en segundo plano…</span>' +
     '<button class="btn btn-ghost btn-sm" id="autoWeekCancelBtn" type="button">Cancelar</button>';
   main.prepend(bar);
@@ -13899,13 +14013,13 @@ function maybeShowIgPopup(tab) {
     ov.className = 'pz-exp-overlay';
     ov.innerHTML = `
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
-      <div style="font-size:46px;line-height:1">📸</div>
+      <div style="font-size:46px;line-height:1">${pzIc('camera', 46)}</div>
       <h2>Conectá tu Instagram</h2>
       <p class="pz-exp-sub">Así Posty deja tu semana lista para publicar.</p>
       <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:15px">Conectar Instagram</button>
       <div id="igFirstMsg" style="margin-top:8px;text-align:left"></div>
-      <div class="hint" style="margin-top:10px">🔒 Nunca vemos ni guardamos tu contraseña.</div>
-      <div class="hint" id="igPrivTip" style="margin-top:8px;display:none">💡 Parece que estás en navegación privada: ahí Instagram suele pedirte un código de verificación extra. En una ventana normal son 2 toques.</div>
+      <div class="hint" style="margin-top:10px">${pzIc('lock', 13)} Nunca vemos ni guardamos tu contraseña.</div>
+      <div class="hint" id="igPrivTip" style="margin-top:8px;display:none">${pzIc('idea', 14)} Parece que estás en navegación privada: ahí Instagram suele pedirte un código de verificación extra. En una ventana normal son 2 toques.</div>
       <details style="margin:12px 0 4px;text-align:left">
         <summary style="font-weight:700;cursor:pointer;font-size:12.5px;color:var(--mut)">¿Cómo hago mi cuenta profesional?</summary>
         <ol style="margin:10px 0 0 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
@@ -13916,7 +14030,7 @@ function maybeShowIgPopup(tab) {
         </ol>
         <div class="hint" style="margin-top:6px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram.</div>
       </details>
-      <div style="margin-top:8px"><a href="#" id="igFirstSkip" style="color:var(--dim);font-size:12.5px">Lo hago después →</a></div>
+      <div style="margin-top:8px"><a href="#" id="igFirstSkip" style="color:var(--dim);font-size:12.5px">Lo hago después ${pzIc('arrowRight', 13)}</a></div>
     </div>`;
     document.body.appendChild(ov);
     try {
@@ -13943,6 +14057,7 @@ function maybeShowIgPopup(tab) {
 /* ---------- toast global ---------- */
 function toast(html) {
   try {
+    html = pzToastNorm(html);
     const t = document.createElement('div');
     t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0A1E33;color:#fff;padding:14px 20px;border-radius:14px;font-size:13px;line-height:1.5;z-index:10001;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.35);text-align:center';
     t.innerHTML = html;
@@ -14117,7 +14232,7 @@ async function obConfirmSave() {
     await obSaveProfile(o.profile || {}, o.colors || []);
   } catch (e) {
     const m = $('#obMsg'); if (m) m.innerHTML = `<div class="err">${esc(e.message)}</div>`;
-    if (btn) { btn.disabled = false; btn.textContent = '✅ Todo bien, arranquemos'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = pzIc('checkCircle', 14) + ' Todo bien, arranquemos'; }
   }
 }
 // FASE 4: submit del formulario directo — valida, arma el perfil y guarda.
@@ -14126,8 +14241,8 @@ async function obFormSubmit() {
   const gv = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
   const msg = $('#obFormMsg');
   const biz = gv('obfBiz'), cat = gv('obfCat');
-  if (!biz) { if (msg) msg.innerHTML = '<div class="err">Contanos el nombre de tu negocio 🙂</div>'; return; }
-  if (!cat) { if (msg) msg.innerHTML = '<div class="err">Elegí tu rubro 🙂</div>'; return; }
+  if (!biz) { if (msg) msg.innerHTML = '<div class="err">Contanos el nombre de tu negocio</div>'; return; }
+  if (!cat) { if (msg) msg.innerHTML = '<div class="err">Elegí tu rubro</div>'; return; }
   const btn = $('#obFormGo');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
   try {
@@ -14139,30 +14254,30 @@ async function obFormSubmit() {
     if (msg) msg.innerHTML = '';
   } catch (e) {
     if (msg) msg.innerHTML = `<div class="err">${esc((e && e.message) || 'No se pudo guardar')}</div>`;
-    if (btn) { btn.disabled = false; btn.textContent = 'Armar mi semana →'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Armar mi semana ' + pzIc('arrowRight', 14); }
   }
 }
 function obSummaryHTML() {
   const o = OB, p = o.profile || {};
   const rows = [
-    ['🏪', 'Negocio', p.business_name],
-    ['👕', 'Rubro', p.category && p.category !== 'otro' ? p.category : ''],
-    ['🎯', 'Cliente ideal', p.audience],
-    ['✨', 'Diferencial', p.differentiator],
-    ['📸', 'Instagram', p.instagram ? '@' + String(p.instagram).replace(/^@/, '') : ''],
-    ['🚀', 'Objetivo', ({ vender: 'Vender más', seguidores: 'Conseguir seguidores', local: 'Llenar mi local', novedades: 'Contar novedades' })[p.goal] || ''],
+    [pzIc('store', 14), 'Negocio', p.business_name],
+    [pzIc('shirt', 14), 'Rubro', p.category && p.category !== 'otro' ? p.category : ''],
+    [pzIc('target', 14), 'Cliente ideal', p.audience],
+    [pzIc('sparkle', 14), 'Diferencial', p.differentiator],
+    [pzIc('camera', 14), 'Instagram', p.instagram ? '@' + String(p.instagram).replace(/^@/, '') : ''],
+    [pzIc('rocket', 14), 'Objetivo', ({ vender: 'Vender más', seguidores: 'Conseguir seguidores', local: 'Llenar mi local', novedades: 'Contar novedades' })[p.goal] || ''],
   ].filter(([, , v]) => v);
-  return `<div class="page-head"><div class="ph-ico">🧠</div><div class="ph-txt"><h1>Esto entendí</h1><p class="sub">Revisalo — con esto armo tu contenido.</p></div></div>
+  return `<div class="page-head"><div class="ph-ico">${pzIc('idea', 20)}</div><div class="ph-txt"><h1>Esto entendí</h1><p class="sub">Revisalo — con esto armo tu contenido.</p></div></div>
   <div class="card" style="max-width:640px">
     <p style="font-size:14px;line-height:1.65;margin:0 0 14px">${esc(o.summary || '')}</p>
     ${rows.map(([ico, k, v]) => `<div class="cm-tip"><span>${ico}</span><span><b>${esc(k)}:</b> ${esc(v)}</span></div>`).join('')}
-    ${o.colors.length >= 2 ? `<div class="cm-tip"><span>🎨</span><span><b>Colores:</b> ${o.colors.map(c => `<span style="display:inline-block;width:18px;height:18px;border-radius:6px;background:${esc(c)};border:1px solid var(--line);vertical-align:-3px;margin-right:4px"></span>`).join('')} <span style="color:var(--mut);font-size:11.5px">de tu logo</span></span></div>` : ''}
+    ${o.colors.length >= 2 ? `<div class="cm-tip"><span>${pzIc('palette', 14)}</span><span><b>Colores:</b> ${o.colors.map(c => `<span style="display:inline-block;width:18px;height:18px;border-radius:6px;background:${esc(c)};border:1px solid var(--line);vertical-align:-3px;margin-right:4px"></span>`).join('')} <span style="color:var(--mut);font-size:11.5px">de tu logo</span></span></div>` : ''}
     <div id="obMsg" style="margin-top:8px"></div>
     <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
       <button class="btn btn-ghost" id="obFix">${pzIc('pencil', 18)} Corregir</button>
       <button class="btn btn-primary" id="obConfirm" style="flex:1">${pzIc('checkCircle', 18)} Todo bien, arranquemos</button>
     </div>
-    <div style="text-align:center;margin-top:14px"><a href="#/app/schedule" style="color:var(--dim);font-size:12.5px">Hacerlo después →</a></div>
+    <div style="text-align:center;margin-top:14px"><a href="#/app/schedule" style="color:var(--dim);font-size:12.5px">Hacerlo después ${pzIc('arrowRight', 14)}</a></div>
   </div>`;
 }
 function onboardingView() {
@@ -14177,20 +14292,20 @@ function onboardingView() {
 // FASE 4 — formulario directo de onboarding (default): 5 datos y listo, sin
 // charla. Guarda con el mismo mapeo que la entrevista (obSaveProfile).
 function obFormHTML() {
-  const cats = [['ropa','👕 Ropa'],['gastronomia','🍔 Gastronomía'],['cafeteria','☕ Cafetería'],['belleza','💅 Belleza'],['barberia','💈 Barbería'],['fitness','🏋️ Fitness'],['salud','🩺 Salud'],['mascotas','🐾 Mascotas'],['servicios','🔧 Servicios'],['educacion','🎓 Educación'],['tecnologia','💻 Tecnología'],['hogar','🏠 Hogar'],['inmobiliaria','🏘️ Inmobiliaria'],['eventos','🎉 Eventos'],['viajes','✈️ Viajes'],['arte','🎨 Arte']];
+  const cats = [['ropa','shirt','Ropa'],['gastronomia','utensils','Gastronomía'],['cafeteria','cup','Cafetería'],['belleza','lipstick','Belleza'],['barberia','barber','Barbería'],['fitness','dumbbell','Fitness'],['salud','stethoscope','Salud'],['mascotas','paw','Mascotas'],['servicios','wrench','Servicios'],['educacion','book','Educación'],['tecnologia','laptop','Tecnología'],['hogar','home','Hogar y deco'],['inmobiliaria','building','Inmobiliaria'],['eventos','gift','Eventos'],['viajes','send','Viajes'],['arte','palette','Arte y diseño'],['otro','plus','Otro']];
   const goals = [['vender','Vender más'],['seguidores','Conseguir seguidores'],['local','Llenar mi local'],['novedades','Contar novedades']];
-  return `<div class="page-head"><div class="ph-ico">🚀</div><div class="ph-txt"><h1>Contame de tu negocio</h1><p class="sub">5 datos y armo todo por vos — sin charlas.</p></div></div>
+  return `<div class="page-head"><div class="ph-ico">${pzIc('rocket', 20)}</div><div class="ph-txt"><h1>Contame de tu negocio</h1><p class="sub">5 datos y armo todo por vos — sin charlas.</p></div></div>
   <div class="card" style="max-width:640px">
     <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-      <a href="#/app/schedule" style="color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap">Hacerlo después →</a>
+      <a href="#/app/schedule" style="color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap">Hacerlo después ${pzIc('arrowRight', 14)}</a>
     </div>
     <div class="field"><label>Nombre de tu negocio *</label><input id="obfBiz" placeholder="Ej: Café Martínez" maxlength="60" autocomplete="off"></div>
-    <div class="field"><label>Rubro *</label><select id="obfCat"><option value="">Elegí tu rubro…</option>${cats.map(c => `<option value="${c[0]}">${c[1]}</option>`).join('')}</select></div>
+    <div class="field"><label>Rubro *</label><input type="hidden" id="obfCat" value=""><div class="pz-pick">${cats.map(c => `<button type="button" class="pz-pick-btn" data-pz-pick="${c[0]}" onclick="pzPick(this,'obfCat')">${pzIc(c[1], 20)}<span>${c[2]}</span></button>`).join('')}</div></div>
     <div class="field"><label>Instagram</label><input id="obfIg" placeholder="@tu_negocio" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
     <div class="field"><label>¿Qué buscás con tu Instagram?</label><select id="obfGoal">${goals.map(g => `<option value="${g[0]}">${g[1]}</option>`).join('')}</select></div>
     <div class="field" style="margin-bottom:6px"><label>¿Qué vendés?</label><textarea id="obfDesc" rows="3" maxlength="600" placeholder="En 1-2 líneas: qué ofrecés y qué te hace diferente"></textarea></div>
     <div id="obFormMsg" style="margin-top:8px"></div>
-    <button class="btn btn-primary btn-block" id="obFormGo" style="margin-top:14px">Armar mi semana →</button>
+    <button class="btn btn-primary btn-block" id="obFormGo" style="margin-top:14px">Armar mi semana ${pzIc("arrowRight", 14)}</button>
     <p style="text-align:center;margin:12px 0 0"><button type="button" id="obChatAlt" style="background:none;border:0;color:var(--cel);font-size:12.5px;font-weight:700;cursor:pointer">¿Preferís contármelo charlando? ${pzIc('chat', 15)}</button></p>
   </div>`;
 }
@@ -14201,14 +14316,14 @@ function obChatHTML(o) {
   if (!o.started || o._resumePending) { o.started = true; o._resumePending = false; setTimeout(() => { if (OB === o && !o.loading && !o.done && o.phase === 'chat') obNext(); }, 60); }
   const msgs = o.chat.map(m => `<div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.role === 'user' && !m.text ? '⏭️ Salteado' : m.text)}</div>`).join('');
   const pct = Math.round((o.step / o.total) * 100);
-  return `<div class="page-head"><div class="ph-ico">🚀</div><div class="ph-txt"><h1>Te conozco primero</h1><p class="sub">Una charla rápida — con esto armo todo por vos.</p></div></div>
+  return `<div class="page-head"><div class="ph-ico">${pzIc('rocket', 20)}</div><div class="ph-txt"><h1>Te conozco primero</h1><p class="sub">Una charla rápida — con esto armo todo por vos.</p></div></div>
   <div class="card" style="max-width:640px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <span style="font-size:11.5px;color:var(--mut);font-weight:700">Pregunta ${Math.min(o.step + 1, o.total)} de ${o.total}</span>
       <span style="display:flex;gap:10px;align-items:center;flex:none">
         ${o.phase === 'chat' && !o.loading ? `<button class="btn btn-ghost btn-sm" id="obSkip">Saltear ⏭️</button>` : ''}
-        <button type="button" id="obFormAlt" style="background:none;border:0;color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap;cursor:pointer">Completarlo directo →</button>
-        <a href="#/app/schedule" style="color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap">Hacerlo después →</a>
+        <button type="button" id="obFormAlt" style="background:none;border:0;color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap;cursor:pointer">Completarlo directo ${pzIc('arrowRight', 14)}</button>
+        <a href="#/app/schedule" style="color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap">Hacerlo después ${pzIc('arrowRight', 14)}</a>
       </span>
     </div>
     <div style="height:6px;border-radius:99px;background:var(--line);margin:0 0 14px;overflow:hidden"><div style="height:100%;width:${pct}%;border-radius:99px;background:linear-gradient(90deg,var(--cel),var(--yel));transition:width .4s"></div></div>
@@ -14218,7 +14333,7 @@ function obChatHTML(o) {
       ${o.awaitLogo && !o.loading ? `<button class="btn btn-soft" id="obLogoBtn" title="Subir logo">${pzIc('share', 18)}</button><input type="file" id="obLogoFile" accept="image/*,.pdf,.docx" hidden>` : ''}
       ${o.awaitPhotos && !o.loading ? `<button class="btn btn-soft" id="obPhotosBtn" title="Subir fotos">${pzIc('camera', 18)}</button><input type="file" id="obPhotosFile" accept="image/*" multiple hidden>` : ''}
       <input id="obInput" class="in" placeholder="${o.awaitPhotos ? 'O escribí "saltear"' : 'Escribí tu respuesta…'}" maxlength="600" autocomplete="off" ${o.loading ? 'disabled' : ''}>
-      <button class="btn btn-primary" id="obSend" title="Enviar" ${o.loading ? 'disabled' : ''}>➤</button>
+      <button class="btn btn-primary" id="obSend" title="Enviar" ${o.loading ? 'disabled' : ''}>${pzIc('send', 16)}</button>
     </div>
     ${o.awaitPhotos && !o.loading ? `<div id="obPhotosPrev" class="ob-photos-prev"></div>` : ''}
     <div id="obMsg" style="margin-top:8px"></div>
@@ -14282,7 +14397,7 @@ function bindOnboarding() {
         for (let i = 0; i < files.length; i++) {
           const f = files[i];
           if (pv) pv.insertAdjacentHTML('beforeend', `<span class="ob-ph-thumb"><img src="${URL.createObjectURL(f)}" alt=""></span>`);
-          if (msg) msg.innerHTML = `<div class="hint">⏳ Subiendo ${i + 1} de ${files.length}…</div>`;
+          if (msg) msg.innerHTML = `<div class="hint">${pzIc('clock', 14)} Subiendo ${i + 1} de ${files.length}…</div>`;
           await uploadAssetFile(f, 'photo');
           ok++;
           if (pv && pv.lastElementChild) pv.lastElementChild.classList.add('done');
@@ -14305,11 +14420,11 @@ function bindOnboarding() {
   obScroll();
 }
 const GOALS = [
-  ['vender', '💰', 'Vender más', 'Que cada post traiga clientes y ventas'],
-  ['seguidores', '📈', 'Más seguidores', 'Crecer la comunidad y el alcance'],
-  ['lanzamiento', '🚀', 'Lanzamientos', 'Anunciar novedades y promos con fuerza'],
-  ['fidelizar', '🤝', 'Fidelizar clientes', 'Que te vuelvan a elegir, siempre'],
-  ['referente', '🎓', 'Ser referente', 'Posicionarte como experto en tu rubro'],
+  ['vender', 'coin', 'Vender más', 'Que cada post traiga clientes y ventas'],
+  ['seguidores', 'chartUp', 'Más seguidores', 'Crecer la comunidad y el alcance'],
+  ['lanzamiento', 'rocket', 'Lanzamientos', 'Anunciar novedades y promos con fuerza'],
+  ['fidelizar', 'heart', 'Fidelizar clientes', 'Que te vuelvan a elegir, siempre'],
+  ['referente', 'grad', 'Ser referente', 'Posicionarte como experto en tu rubro'],
 ];
 
 /* ---------- ROUTER ---------- */
@@ -14759,7 +14874,7 @@ function showExpiredNoticeNative() {
   n.innerHTML = `
     <div style="margin:10px 14px 0;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;justify-content:space-between">
       <div style="font-size:13px;color:var(--mut)">Tu prueba terminó.</div>
-      <button id="pzExpNativeX" aria-label="Cerrar" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--dim)">✕</button>
+      <button id="pzExpNativeX" aria-label="Cerrar" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--dim)">${pzIc("x", 16)}</button>
     </div>`;
   main.prepend(n);
   const x = document.getElementById('pzExpNativeX');
@@ -14801,7 +14916,7 @@ async function paintPostPayCard() {
     el.innerHTML = `
     <div style="margin:10px 14px 0;background:var(--bg2);border:1px solid var(--cel);border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between">
       <div id="pzPostPayTxt" style="font-size:13.5px;line-height:1.55"></div>
-      <button id="pzPostPayX" aria-label="Cerrar" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--dim);flex:none">✕</button>
+      <button id="pzPostPayX" aria-label="Cerrar" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--dim);flex:none">${pzIc("x", 16)}</button>
     </div>`;
     main.prepend(el);
     const x = el.querySelector('#pzPostPayX');
@@ -14904,7 +15019,7 @@ function pzPostPayMagicRender(box, d, en) {
   }
   if (!preguntas.length && respondidas.length) {
     const chips = respondidas.map((r) =>
-      `<span style="display:inline-block;background:var(--bg2);border:1px solid var(--cel);border-radius:20px;padding:4px 10px;margin:4px 4px 0 0;font-size:12.5px">✓ ${esc2(pzMagicLabel(r.etiqueta, en))}</span>`).join('');
+      `<span style="display:inline-block;background:var(--bg2);border:1px solid var(--cel);border-radius:20px;padding:4px 10px;margin:4px 4px 0 0;font-size:12.5px">${pzIc('check', 13)} ${esc2(pzMagicLabel(r.etiqueta, en))}</span>`).join('');
     html += `<div style="margin-top:10px;background:linear-gradient(90deg,#DFA856,#DBA453,#D6A463);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.5;color:#0A1E33">
       <b>${en ? 'With what you told me, your week is set like this' : 'Con lo que me contaste, tu semana quedó así'}</b>
       <div style="margin-top:4px">${chips}</div>
@@ -14945,7 +15060,7 @@ function pzPostPayMagicRender(box, d, en) {
     pk.hidden = !show;
     if (!show) return;
     pk.innerHTML = (f.opciones || []).map((o) =>
-      `<button class="pz-magic-fix" data-ficha="${esc2(f.id)}" data-valor="${esc2(o.valor)}" style="background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:4px 10px;margin:2px 4px 0 0;cursor:pointer;font-size:12.5px">${esc2(en ? o.en : o.es)}${o.actual ? ' ✓' : ''}</button>`).join('');
+      `<button class="pz-magic-fix" data-ficha="${esc2(f.id)}" data-valor="${esc2(o.valor)}" style="background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:4px 10px;margin:2px 4px 0 0;cursor:pointer;font-size:12.5px">${esc2(en ? o.en : o.es)}${o.actual ? ' ' + pzIc('check', 13) : ''}</button>`).join('');
     pk.querySelectorAll('.pz-magic-fix').forEach((x) => x.onclick = async () => {
       if (PZ_MAGIC_BUSY) return; PZ_MAGIC_BUSY = true;
       try {
@@ -15011,7 +15126,7 @@ function pzPostPayStatusMount(cardEl, en) {
     const hasStory = !!d.story;
     if (!hasBA && !hasGuar && !hasStory) { box.innerHTML = ''; return; }
     html += `<div class="pz-magic-wall" style="margin-top:12px">
-      <div class="pz-magic-head"><img src="/bambooty-placa.webp" alt="Bambooty"><b>${en ? '✨ In Posty’s corner of the office' : '✨ En el sector de Posty en la oficina'}</b></div>`;
+      <div class="pz-magic-head"><img src="/bambooty-placa.webp" alt="Bambooty"><b>${en ? '' + pzIc('sparkle', 14) + ' In Posty’s corner of the office' : '' + pzIc('sparkle', 14) + ' En el sector de Posty en la oficina'}</b></div>`;
     if (hasBA) {
       const grid = (items, imgKey) => `<div class="pz-ba-grid">${items.map((it) => {
         const src = it[imgKey];
@@ -15025,7 +15140,7 @@ function pzPostPayStatusMount(cardEl, en) {
     }
     if (hasGuar) {
       html += `<div style="margin-top:14px;background:linear-gradient(90deg,#DFA856,#DBA453,#D6A463);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.55;color:#0A1E33">
-        <b>🛡️ ${en ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</b>
+        <b>${pzIc('shield', 14)} ${en ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</b>
         <div style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" id="pzGuarBtn">${en ? 'See my guarantee in For you' : 'Ver mi garantía en la Bandeja'}</button></div></div>`;
     }
     if (hasStory) {
@@ -15036,8 +15151,8 @@ function pzPostPayStatusMount(cardEl, en) {
           <div style="font-size:13.5px;line-height:1.5"><b>${en ? 'Tell your clients Posty runs your Instagram now' : 'Contale a tus clientes que tu Instagram ahora lo maneja Posty'}</b></div>
           <div style="font-size:12.5px;color:var(--dim);line-height:1.5;margin-top:2px">${en ? 'Your premiere story is ready — it only goes out when you tap.' : 'Tu historia de estreno ya está lista — solo sale cuando vos la publiques.'}</div>
           <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-            <button type="button" class="btn btn-primary btn-sm" id="pzStoryPub" data-story="${st.post_id}">${st.status === 'published' ? (en ? '✓ Published' : '✓ Publicada') : (en ? 'Publish my story' : 'Publicar mi historia')}</button>
-            <button type="button" class="btn btn-ghost btn-sm" id="pzStoryX">✕</button>
+            <button type="button" class="btn btn-primary btn-sm" id="pzStoryPub" data-story="${st.post_id}">${st.status === 'published' ? (en ? `${pzIc('check', 14)} Published` : `${pzIc('check', 14)} Publicada`) : (en ? 'Publish my story' : 'Publicar mi historia')}</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="pzStoryX">${pzIc('x', 16)}</button>
           </div>
         </div></div>`;
     }
@@ -15059,7 +15174,7 @@ function pzPostPayStatusMount(cardEl, en) {
       if (sp.disabled) return; sp.disabled = true; sp.textContent = en ? 'Publishing…' : 'Publicando…';
       try {
         const r = await api.post('/api/posts/' + sp.dataset.story + '/publish-now', {});
-        if (r && r.status === 'published') sp.textContent = en ? '✓ Published' : '✓ Publicada';
+        if (r && r.status === 'published') sp.textContent = en ? 'Published' : 'Publicada';
         else sp.textContent = en ? 'Publishing… check your Instagram in a bit' : 'Publicándose… en un rato está en tu Instagram';
       } catch (e) { sp.disabled = false; sp.textContent = en ? 'Publish my story' : 'Publicar mi historia'; }
     };
@@ -15081,7 +15196,7 @@ async function pzPostpayTray() {
     let rows = '';
     if (d.idea24) {
       const it = d.idea24;
-      rows += `<div class="pv-row" id="pzIdea24Row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${pzIc('idea', 18)} ${en ? 'Your first idea as a client' : 'Tu primera idea como cliente'}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden>
+      rows += `<div class="pv-row" id="pzIdea24Row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${pzIc('idea', 18)} ${en ? 'Your first idea as a client' : 'Tu primera idea como cliente'}</span><span class="pv-chev" aria-hidden="true">${pzIc('chevDown', 14)}</span></button><div class="pv-body" hidden>
         <div style="font-size:13.5px;line-height:1.55"><b>${esc(it.title)}</b><div style="color:var(--mut);margin-top:4px">${esc(it.why || '')}</div>
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <button type="button" class="btn btn-primary btn-sm" id="pzIdea24Make" data-idea="${it.id}">${pzIc('bolt', 18)} ${en ? 'Make it' : 'Hacelo'}</button>
@@ -15090,23 +15205,23 @@ async function pzPostpayTray() {
     }
     if (d.month30) {
       const m = d.month30;
-      let body = `<div style="font-size:13.5px;line-height:1.6">${en ? `🎉 Your first month with Posty! In these 30 days I published <b>${m.published_count}</b> post${m.published_count === 1 ? '' : 's'} for you.` : `🎉 ¡Tu primer mes con Posty! En estos 30 días publiqué <b>${m.published_count}</b> posteo${m.published_count === 1 ? '' : 's'} para vos.`}</div>`;
+      let body = `<div style="font-size:13.5px;line-height:1.6">${en ? `${pzIc('gift', 16)} Your first month with Posty! In these 30 days I published <b>${m.published_count}</b> post${m.published_count === 1 ? '' : 's'} for you.` : `${pzIc('gift', 16)} ¡Tu primer mes con Posty! En estos 30 días publiqué <b>${m.published_count}</b> posteo${m.published_count === 1 ? '' : 's'} para vos.`}</div>`;
       if (m.best) {
         body += `<div style="display:flex;gap:10px;align-items:center;margin-top:10px">
           ${pzIsImgPath(m.best.image_path) ? `<img src="${esc(m.best.image_path)}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:10px;flex:none">` : ''}
           <div style="font-size:13px;line-height:1.5"><div style="color:var(--dim)">${en ? 'Your best one' : 'El que mejor rindió'}</div><b>${esc(m.best.caption_first)}</b><div>${m.best.likes} likes · ${m.best.comments} ${en ? 'comments' : 'comentarios'}</div>
-          ${m.best.permalink ? `<a href="${esc(m.best.permalink)}" target="_blank" rel="noopener">${en ? 'See it on Instagram →' : 'Verlo en Instagram →'}</a>` : ''}</div></div>`;
+          ${m.best.permalink ? `<a href="${esc(m.best.permalink)}" target="_blank" rel="noopener">${en ? 'See it on Instagram ' + pzIc('arrowRight', 13) : 'Verlo en Instagram ' + pzIc('arrowRight', 13)}</a>` : ''}</div></div>`;
       }
       if (m.level) body += `<div style="font-size:13px;line-height:1.5;margin-top:10px">${en ? 'What I already learned about you: ' : 'Esto es lo que ya aprendí de vos: '}<b>${esc(m.level.level_name)}</b></div>`;
-      rows += `<div class="pv-row" id="pzMonth30Row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${pzIc('sparkle', 18)} ${en ? 'Your first month with Posty' : 'Tu primer mes con Posty'}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden>${body}
-        <div style="margin-top:10px"><button type="button" class="btn btn-ghost btn-sm" id="pzMonth30X">✕ ${en ? 'Got it' : 'Entendido'}</button></div></div></div>`;
+      rows += `<div class="pv-row" id="pzMonth30Row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${pzIc('sparkle', 18)} ${en ? 'Your first month with Posty' : 'Tu primer mes con Posty'}</span><span class="pv-chev" aria-hidden="true">${pzIc('chevDown', 14)}</span></button><div class="pv-body" hidden>${body}
+        <div style="margin-top:10px"><button type="button" class="btn btn-ghost btn-sm" id="pzMonth30X">${pzIc('x', 14)} ${en ? 'Got it' : 'Entendido'}</button></div></div></div>`;
     }
     if (!rows) return;
     let tray = document.getElementById('pvTray');
     if (!tray) {
       tray = document.createElement('section');
       tray.className = 'pv-tray'; tray.id = 'pvTray';
-      tray.innerHTML = `<div class="pv-tray-t">📥 ${en ? 'For you' : 'Para vos'}</div>`;
+      tray.innerHTML = `<div class="pv-tray-t">${pzIc('download', 13)} ${en ? 'For you' : 'Para vos'}</div>`;
       const ideasEl = document.getElementById('hs-ideas');
       if (ideasEl && ideasEl.parentNode) ideasEl.parentNode.insertBefore(tray, ideasEl.nextSibling);
       else { const sv = document.getElementById('schedView'); if (sv) sv.appendChild(tray); else return; }
@@ -15118,7 +15233,7 @@ async function pzPostpayTray() {
       try {
         const r = await api.post('/api/ideas/' + mk.dataset.idea + '/make', {});
         const msg = document.getElementById('pzIdea24Msg');
-        if (msg) msg.textContent = (r && r.ok) ? (en ? '✓ Done! Your draft is in your week.' : '✓ ¡Lista! Tu borrador está en tu semana.') : (en ? 'I could not make it right now 😅' : 'No la pude armar ahora 😅');
+        if (msg) msg.textContent = (r && r.ok) ? (en ? 'Done! Your draft is in your week.' : '¡Lista! Tu borrador está en tu semana.') : (en ? 'I could not make it right now' : 'No la pude armar ahora');
         if (r && r.ok) { const row = document.getElementById('pzIdea24Row'); if (row) setTimeout(() => row.remove(), 4000); }
         else mk.disabled = false;
       } catch (e) { mk.disabled = false; mk.innerHTML = pzIc('bolt', 18) + ' ' + (en ? 'Make it' : 'Hacelo'); }
@@ -15157,7 +15272,7 @@ async function showExpiredModal() {
         <span>${p.highlighted ? '<span class="pz-exp-tag">EL M\u00c1S ELEGIDO</span>' : ''}<b>${esc(p.name)}</b><small>${esc(p.price_label)}/mes \u00b7 ${perDay(p)}</small>${expMix(p)}</span>
         <span class="pz-exp-go">Elegir \u2192</span>
       </button>
-      ${(p.detail && p.detail.length) ? `<button type="button" class="pz-exp-more" data-exp-more="${p.id}" aria-expanded="false">Ver todo lo que hace por vos <span class="pm-chev">\u25be</span></button>
+      ${(p.detail && p.detail.length) ? `<button type="button" class="pz-exp-more" data-exp-more="${p.id}" aria-expanded="false">Ver todo lo que hace por vos <span class="pm-chev">${pzIc('chevDown', 14)}</span></button>
       <div class="pz-exp-detail" hidden>
         <ul>${p.detail.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
         <button class="btn btn-primary btn-block" data-exp-plan="${p.id}">Elegir el plan ${esc(p.name)}</button>
@@ -15170,10 +15285,10 @@ async function showExpiredModal() {
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <button class="pz-exp-x" id="pzExpClose" aria-label="Cerrar">\u2715</button>
       <img src="ai-avatar.png" alt="Posty" style="width:74px;height:74px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
-      <h2>Se termin\u00f3 tu prueba 🥹</h2>
+      <h2>Se termin\u00f3 tu prueba</h2>
       <p class="pz-exp-sub">Tus posteos no tienen por qu\u00e9 frenar: eleg\u00ed tu plan y el lunes tu semana est\u00e1 lista como siempre.</p>
       <div class="pz-exp-plans">${rows}</div>
-      ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">Ver planes 🚀</button>'}
+      ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">Ver planes ' + pzIc('rocket', 14) + '</button>'}
       <button class="pz-exp-later" id="pzExpLater">Pausar mis posteos</button>
     </div>`;
   document.body.appendChild(ov);
@@ -15225,7 +15340,7 @@ function failedCardHTML(failed) {
   if (!list.length) return '';
   return `
   <div class="card" id="failedCard" style="border:2px solid #E2574C">
-    <h3 style="margin:0 0 4px">⚠️ ${list.length === 1 ? 'Un posteo no pudo salir' : list.length + ' posteos no pudieron salir'}</h3>
+    <h3 style="margin:0 0 4px">${pzIc('alert', 14)} ${list.length === 1 ? 'Un posteo no pudo salir' : list.length + ' posteos no pudieron salir'}</h3>
     <p class="hint" style="margin:0 0 10px">Tocá reintentar y lo publicamos de nuevo.</p>
     ${list.map(p => `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -15235,7 +15350,7 @@ function failedCardHTML(failed) {
         ${p.error ? `<div style="font-size:11.5px;color:var(--mut)">${esc(humanError(p.error))}</div>` : ''}
       </div>
       <button class="btn btn-soft btn-sm" data-failed-retry="${p.id}">${pzIc('refresh', 18)} Reintentar</button>
-      <button class="btn btn-soft btn-sm" data-failed-dismiss="${p.id}" title="Descartar este posteo">✕</button>
+      <button class="btn btn-soft btn-sm" data-failed-dismiss="${p.id}" title="Descartar este posteo">${pzIc("x", 16)}</button>
     </div>`).join('')}
     <div class="hint" data-failed-msg style="margin-top:4px"></div>
   </div>`;
@@ -15257,15 +15372,15 @@ function salioCardHTML(publishedList) {
   if (!list.length) return '';
   return `
   <div class="card" id="salioCard">
-    <h3 style="margin:0 0 4px">📮 Ya salió</h3>
-    <p class="hint" style="margin:0 0 12px">¿Del 1 al 5 qué tanto te gustaron estos posteos?<br>Con tus respuestas entiendo cada vez más tus gustos 🙂</p>
+    <h3 style="margin:0 0 4px">${pzIc('mail', 14)} Ya salió</h3>
+    <p class="hint" style="margin:0 0 12px">¿Del 1 al 5 qué tanto te gustaron estos posteos?<br>Con tus respuestas entiendo cada vez más tus gustos</p>
     ${list.map(p => `
     <div class="st-rate-row">
       ${p.image_path ? `<img class="st-rate-thumb" src="${esc(p.image_path)}" alt="" loading="lazy">` : ''}
       <div class="st-rate-body">
         <div class="st-rate-cap">${esc(String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 90))}</div>
         <div class="st-rate-stars">
-          ${[1, 2, 3, 4, 5].map(n => `<button class="btn btn-soft btn-sm star-btn" data-sig="rating_${n}" data-id="${p.id}" aria-label="${n} de 5">★</button>`).join('')}
+          ${[1, 2, 3, 4, 5].map(n => `<button class="btn btn-soft btn-sm star-btn" data-sig="rating_${n}" data-id="${p.id}" aria-label="${n} de 5">${pzIc('star', 18)}</button>`).join('')}
         </div>
       </div>
     </div>`).join('')}
@@ -15308,13 +15423,13 @@ function pvTrayHTML(items, en) {
     if (!it) continue;
     if (it.plain) { rows.push(`<div class="pv-row pv-plain">${it.plain}</div>`); continue; }
     if (it.slot) {
-      rows.push(`<div class="pv-row pv-slotrow"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${esc(it.label)}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden><div id="${it.slot}" class="pv-slot"></div></div></div>`);
+      rows.push(`<div class="pv-row pv-slotrow"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${esc(it.label)}</span><span class="pv-chev" aria-hidden="true">${pzIc('chevDown', 14)}</span></button><div class="pv-body" hidden><div id="${it.slot}" class="pv-slot"></div></div></div>`);
       continue;
     }
-    if (it.html) rows.push(`<div class="pv-row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${esc(it.label)}</span><span class="pv-chev" aria-hidden="true">▾</span></button><div class="pv-body" hidden>${it.html}</div></div>`);
+    if (it.html) rows.push(`<div class="pv-row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${esc(it.label)}</span><span class="pv-chev" aria-hidden="true">${pzIc('chevDown', 14)}</span></button><div class="pv-body" hidden>${it.html}</div></div>`);
   }
   if (!rows.length) return '';
-  return `<section class="pv-tray" id="pvTray"><div class="pv-tray-t">📥 ${en ? 'For you' : 'Para vos'}</div>${rows.join('')}</section>`;
+  return `<section class="pv-tray" id="pvTray"><div class="pv-tray-t">${pzIc('download', 13)} ${en ? 'For you' : 'Para vos'}</div>${rows.join('')}</section>`;
 }
 // Toggle de las filas de la bandeja (delegado en la vista; idempotente).
 function bindPvTray(root) {
@@ -15423,7 +15538,7 @@ async function scheduleView() {
   // La explicación de cómo se armó el plan (el week_summary del motor) ahora
   // ENCABEZA la ventana de Análisis (chunk-analisis, anaCartaHTML) — acá no
   // queda ni la tarjeta, ni su link, ni el fetch de peek que la alimentaba.
-  const reviewBlock = drafts.length ? reviewCardHTML(drafts, slots, '📋 Revisá tu semana') : '';
+  const reviewBlock = drafts.length ? reviewCardHTML(drafts, slots, `${pzIc('copy', 14)} Revisá tu semana`) : '';
   // Fast-track "Tu primer posteo": solo cuentas que NUNCA publicaron, con borradores con foto.
   const ftCandidates = drafts.filter(d => d.image_path).slice(0, 3);
   const ftBlock = (!published.length && ftCandidates.length) ? fastTrackCardHTML(ftCandidates) : '';
@@ -15472,10 +15587,10 @@ async function scheduleView() {
   let pulseHTML = '';
   {
     const parts = [];
-    if (daySchedCount) parts.push(`📮 ${daySchedCount} programado${daySchedCount > 1 ? 's' : ''}`);
-    if (dayPubCount) parts.push(`✅ ${dayPubCount} publicado${dayPubCount > 1 ? 's' : ''}`);
-    if (SCHED_DAY_OFFSET === 0 && drafts.length) parts.push(`📝 ${drafts.length} borrador${drafts.length > 1 ? 'es' : ''}`);
-    pulseHTML = parts.length ? parts.join(' <span class="sched-pulse-sep">·</span> ') : '🕊️ Nada este día';
+    if (daySchedCount) parts.push(`${pzIc('mail', 13)} ${daySchedCount} programado${daySchedCount > 1 ? 's' : ''}`);
+    if (dayPubCount) parts.push(`${pzIc('checkCircle', 13)} ${dayPubCount} publicado${dayPubCount > 1 ? 's' : ''}`);
+    if (SCHED_DAY_OFFSET === 0 && drafts.length) parts.push(`${pzIc('pencil', 13)} ${drafts.length} borrador${drafts.length > 1 ? 'es' : ''}`);
+    pulseHTML = parts.length ? parts.join(' <span class="sched-pulse-sep">·</span> ') : 'Nada este día';
   }
   // Banner del próximo posteo (día y hora), debajo del día visible.
   let nextPostHTML = '';
@@ -15485,7 +15600,7 @@ async function scheduleView() {
       const nx = upcoming[0];
       const nd = nx.d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
       const nh = nx.d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: tz });
-      nextPostHTML = `<div class="sched-nextpost">📮 <b>Próximo posteo:</b> ${esc(nd)} a las ${esc(nh)}</div>`;
+      nextPostHTML = `<div class="sched-nextpost">${pzIc('mail', 13)} <b>Próximo posteo:</b> ${esc(nd)} a las ${esc(nh)}</div>`;
     }
   }
   const cells = days.map(d => {
@@ -15532,14 +15647,14 @@ async function scheduleView() {
   const enV = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const pvTray = pvTrayHTML([
     trialBanner ? { plain: trialBanner } : null,
-    firstRedoBlock ? { label: enV ? '🛡️ Your first-week guarantee' : '🛡️ Tu garantía de primera semana', html: firstRedoBlock } : null,
-    dogfoodBlock ? { label: '🤖 Posty para @posty.communitymanager', html: dogfoodBlock } : null,
+    firstRedoBlock ? { label: enV ? '' + pzIc('shield', 13) + ' Your first-week guarantee' : '' + pzIc('shield', 13) + ' Tu garantía de primera semana', html: firstRedoBlock } : null,
+    dogfoodBlock ? { label: '' + pzIc('bot', 13) + ' Posty para @posty.communitymanager', html: dogfoodBlock } : null,
     expBanner ? { label: enV ? '⏳ Your streak is about to end' : '⏳ Tu racha se apaga pronto', html: expBanner } : null,
-    fpBlock ? { label: enV ? '🚀 Your first post' : '🚀 Tu primer posteo', html: fpBlock } : null,
-    ftBlock ? { label: enV ? '🚀 Your first post' : '🚀 Tu primer posteo', html: ftBlock } : null,
-    failedBlock ? { label: enV ? '⚠️ Posts that could not go out' : '⚠️ Posteos que no pudieron salir', html: failedBlock } : null,
-    { label: enV ? '📣 Boost a post' : '📣 Impulsá un posteo', slot: 'adsBoostSlot' },
-    { label: enV ? '🤔 Posty asks you' : '🤔 Posty te pregunta', slot: 'hs-question' },
+    fpBlock ? { label: enV ? '' + pzIc('rocket', 13) + ' Your first post' : '' + pzIc('rocket', 13) + ' Tu primer posteo', html: fpBlock } : null,
+    ftBlock ? { label: enV ? '' + pzIc('rocket', 13) + ' Your first post' : '' + pzIc('rocket', 13) + ' Tu primer posteo', html: ftBlock } : null,
+    failedBlock ? { label: enV ? '' + pzIc('alert', 14) + ' Posts that could not go out' : '' + pzIc('alert', 14) + ' Posteos que no pudieron salir', html: failedBlock } : null,
+    { label: enV ? '' + pzIc('megaphone', 13) + ' Boost a post' : '' + pzIc('megaphone', 13) + ' Impulsá un posteo', slot: 'adsBoostSlot' },
+    { label: enV ? '' + pzIc('help', 13) + ' Posty asks you' : '' + pzIc('help', 13) + ' Posty te pregunta', slot: 'hs-question' },
     { label: enV ? '✨ Your story for Posty' : '✨ Tu historia para Posty', slot: 'hs-showcase' },
   ], enV);
   // (v440 · SOLO FEED, corrección de Valentino 01:48 — refinada en v442
@@ -15621,13 +15736,13 @@ function mzRowChip(p) {
 }
 function mzHeroChip(p) {
   const st = schedPostState(p);
-  if (st === 'published') return '<span class="mz-chip ok">✓ Publicado</span>';
-  if (st === 'scheduled') return '<span class="mz-chip ok">✓ Programado</span>';
-  if (st === 'creating') return '<span class="mz-chip dra">⏳ Creando…</span>';
+  if (st === 'published') return '<span class="mz-chip ok">' + pzIc('check', 12) + ' Publicado</span>';
+  if (st === 'scheduled') return '<span class="mz-chip ok">' + pzIc('check', 12) + ' Programado</span>';
+  if (st === 'creating') return '<span class="mz-chip dra">' + pzIc('clock', 14) + ' Creando…</span>';
   return '<span class="mz-chip dra">Borrador</span>';
 }
 function mzMediaHTML(p, cls) {
-  if (!p.image_path) return `<div class="${cls} mz-nomedia"><span>✨</span></div>`;
+  if (!p.image_path) return `<div class="${cls} mz-nomedia"><span>${pzIc('sparkle', 18)}</span></div>`;
   if (String(p.media_type || '') === 'video') return `<video class="${cls}" src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`;
   return `<img class="${cls}" src="${esc(p.image_path)}" alt="" loading="lazy">`;
 }
@@ -15821,7 +15936,7 @@ function hfRedoLineHTML(p, en) {
 // rápidos (foto · texto · día y hora · rehacer) + la línea del contador.
 function hfAnchorBarHTML(p, en) {
   if (!p || p.id === null || p.id === undefined) return '';
-  const thumb = p.image_path ? `<img class="hf-anchor-thumb" src="${esc(mv(p.image_path, 240))}" alt="" onerror="__imgFb(this)">` : '<span class="hf-anchor-thumb hf-anchor-ph">✨</span>';
+  const thumb = p.image_path ? `<img class="hf-anchor-thumb" src="${esc(mv(p.image_path, 240))}" alt="" onerror="__imgFb(this)">` : '<span class="hf-anchor-thumb hf-anchor-ph">' + pzIc('sparkle', 18) + '</span>';
   const redo = hfRedoLineHTML(p, en);
   const redoBtn = (hfRedoLeft(p) === 0)
     ? `<button type="button" class="hf-chipq" data-hf-chipq="redo" disabled>${en ? 'Redo' : 'Rehacer'}</button>`
@@ -15838,7 +15953,7 @@ function hfAnchorBarHTML(p, en) {
         ${redoBtn}
       </div>
     </div>
-    <button type="button" class="hf-anchor-x" data-hf-anchor-x aria-label="${en ? 'Remove anchor' : 'Quitar el anclaje'}">✕</button>
+    <button type="button" class="hf-anchor-x" data-hf-anchor-x aria-label="${en ? 'Remove anchor' : 'Quitar el anclaje'}">${pzIc("x", 16)}</button>
   </div>`;
 }
 // ===== (Tanda feed 6B) Piezas puras de los ítems 4, 5, 7 y 8 =====
@@ -15923,7 +16038,7 @@ function hfPeekHTML(p, en, opts) {
   const isV = String(p.media_type || '') === 'video';
   const covP = isV ? hfCoverState(p) : null;
   const media = !p.image_path
-    ? '<span class="hf-tile-ph">✨</span>'
+    ? '<span class="hf-tile-ph">' + pzIc('sparkle', 18) + '</span>'
     : isV
       ? `<video src="${esc(p.image_path)}"${covP.has ? ` poster="${esc(covP.path)}"` : ''} autoplay muted loop playsinline></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" alt="" onerror="__imgFb(this)">`;
@@ -15935,12 +16050,12 @@ function hfPeekHTML(p, en, opts) {
     const mets = [];
     if (lk !== null) mets.push(`${lk.toLocaleString(en ? 'en-US' : 'es-AR')} ${en ? (lk === 1 ? 'like' : 'likes') : 'Me gusta'}`);
     if (cc !== null && cc > 0) mets.push(`${cc.toLocaleString(en ? 'en-US' : 'es-AR')} ${en ? (cc === 1 ? 'comment' : 'comments') : (cc === 1 ? 'comentario' : 'comentarios')}`);
-    stateLine = `<div class="hf-peek-state">✅ ${en ? 'Published' : 'Publicado'}${rel ? ' · ' + esc(rel) : ''}${mets.length ? ' · ' + esc(mets.join(' · ')) : ''}</div>`;
+    stateLine = `<div class="hf-peek-state">${pzIc('checkCircle', 13)} ${en ? 'Published' : 'Publicado'}${rel ? ' · ' + esc(rel) : ''}${mets.length ? ' · ' + esc(mets.join(' · ')) : ''}</div>`;
   } else if (p.status === 'scheduled') {
     const chip = hfWhenChip(p) || hfChipText(p.scheduled_at);
-    stateLine = `<div class="hf-peek-state">🕐 ${chip ? esc((en ? 'Goes out ' : 'Sale el ') + chip) : (en ? 'Scheduled' : 'Programado')}</div>`;
+    stateLine = `<div class="hf-peek-state">${pzIc('clock', 13)} ${chip ? esc((en ? 'Goes out ' : 'Sale el ') + chip) : (en ? 'Scheduled' : 'Programado')}</div>`;
   } else {
-    stateLine = `<div class="hf-peek-state">📝 ${en ? 'Draft' : 'Borrador'}</div>`;
+    stateLine = `<div class="hf-peek-state">${pzIc('pencil', 13)} ${en ? 'Draft' : 'Borrador'}</div>`;
   }
   const capFull = (String(p.caption || '') + (String(p.hashtags || '').trim() ? ' ' + String(p.hashtags || '').trim() : '')).trim();
   const capEx = capFull.length > 140 ? capFull.slice(0, 140).trimEnd() + '…' : capFull;
@@ -15979,7 +16094,7 @@ function hfFollowerHTML(p, opts) {
   const isV = String(p.media_type || '') === 'video';
   const covF = isV ? hfCoverState(p) : null;
   const media = !p.image_path
-    ? '<span class="hf-tile-ph">✨</span>'
+    ? '<span class="hf-tile-ph">' + pzIc('sparkle', 18) + '</span>'
     : isV
       ? `<video src="${esc(p.image_path)}"${covF.has ? ` poster="${esc(covF.path)}"` : ''} autoplay muted loop playsinline></video>`
       : `<img src="${esc(p.image_path)}" alt="" onerror="__imgFb(this)">`;
@@ -15987,7 +16102,7 @@ function hfFollowerHTML(p, opts) {
   const cc = (p.comments_count === null || p.comments_count === undefined || !Number.isFinite(Number(p.comments_count))) ? null : Number(p.comments_count);
   const likesLine = lk === null ? ''
     : lk > 0 ? `<div class="hf-fv-likes">${lk.toLocaleString(en ? 'en-US' : 'es-AR')} ${en ? (lk === 1 ? 'like' : 'likes') : 'Me gusta'}</div>`
-    : `<div class="hf-fv-likes">${en ? 'Be the first to like this' : 'Sé el primero en indicar que te gusta'}</div>`;
+    : '';
   const commentsLine = (cc !== null && cc > 0)
     ? `<div class="hf-fv-comments">${en ? (cc === 1 ? 'View 1 comment' : `View all ${cc.toLocaleString('en-US')} comments`) : (cc === 1 ? 'Ver el comentario' : `Ver los ${cc.toLocaleString('es-AR')} comentarios`)}</div>` : '';
   const capFull = (String(p.caption || '') + (String(p.hashtags || '').trim() ? (String(p.caption || '') ? '\n' : '') + String(p.hashtags || '').trim() : '')).trim();
@@ -15997,7 +16112,7 @@ function hfFollowerHTML(p, opts) {
   const rel = p.status === 'published' ? hfRelShort(p.published_at || p.scheduled_at, en) : '';
   const dateLine = rel ? `<div class="hf-fv-date">${esc(rel)}</div>` : '';
   return `<div class="hf-fv" data-post-id="${esc(String(p.id))}">
-    <div class="hf-fv-label">👁 ${en ? 'How your followers see it' : 'Así lo ven tus seguidores'}</div>
+    <div class="hf-fv-label">${pzIc('eye', 13)} ${en ? 'How your followers see it' : 'Así lo ven tus seguidores'}</div>
     <div class="hf-fv-card">
       <div class="hf-fv-head">${ava}<span class="hf-fv-user">${esc(headName)}</span><span class="hf-fv-dots" aria-hidden="true">•••</span></div>
       <div class="hf-fv-media">${media}</div>
@@ -16221,7 +16336,7 @@ function homeTileHTML(t, i) {
   // pelado: el glyph de reel de abajo sigue marcando que es un reel.
   const covT = isV ? hfCoverState(p) : null;
   const media = !p.image_path
-    ? '<span class="hf-tile-ph">✨</span>'
+    ? '<span class="hf-tile-ph">' + pzIc('sparkle', 18) + '</span>'
     : isV && covT.has
       ? `<img src="${esc(covT.path)}" data-hf-cover="1" style="object-position:50% ${covT.pos}%" onerror="__imgFb(this)" loading="lazy" alt="">`
     : isV
@@ -16251,11 +16366,11 @@ function homeTileHTML(t, i) {
   // La chapita sigue la familia de chapitas (como la de borrador);
   // el justPub transitorio comparte la esquina, pero se limpia en
   // el render siguiente y no hay colisión en estado estable.
-  const despChip = t.pzDespegue ? `<span class="pz-despegue-chip">🔥 ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Breakout' : 'despegando'}</span>` : '';
+  const despChip = t.pzDespegue ? `<span class="pz-despegue-chip">${pzIc('flame', 14)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Breakout' : 'despegando'}</span>` : '';
   const despCls = t.pzDespegue ? ' hf-tile-despegue' : '';
   const nextCls = t.pzNext ? ' hf-tile-next' : '';
   const chipTxt = (p.status === 'draft' || p.status === 'scheduled') ? hfWhenChip(p) : '';
-  const chip = chipTxt ? `<span class="hf-chip">🕐 ${esc(chipTxt)}</span>` : '';
+  const chip = chipTxt ? `<span class="hf-chip">${pzIc('clock', 12)} ${esc(chipTxt)}</span>` : '';
   // (Corrección grilla 2026-10-25, Valentino — «sacar el icono del
   // chat»): la grilla NO lleva botón de chat. El chat vive DENTRO del
   // post abierto en grande: el detalle trae el mini-chat «Pedir un
@@ -16283,7 +16398,7 @@ function homeTileHTML(t, i) {
   // chapita «recién publicado» — la marca la pone SOLO el parcheo en
   // vivo (t.justPub), jamás un render común.
   const justCls = t.justPub ? ' hf-justpub' : '';
-  const justChip = t.justPub ? `<span class="hf-just-chip">✨ ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Just published' : 'Recién publicado'}</span>` : '';
+  const justChip = t.justPub ? `<span class="hf-just-chip">${pzIc('sparkle', 12)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Just published' : 'Recién publicado'}</span>` : '';
   // (Corrección grilla 2026-10-25): la tile de reel sin portada elegida
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
@@ -16298,14 +16413,12 @@ function hfHighlightsTrayHTML(prof, opts) {
   const P = prof || {};
   const en = !!(opts && opts.en);
   const hls = (Array.isArray(P.highlights) ? P.highlights : []).filter((h) => h && h.title);
-  // (v461 · cabecera) «Crear mis cubiertas» vive acá: primer tile «+»
-  // de la tira de destacadas, donde están las cubiertas. Solo en la
-  // vista del dueño (opts.coversPlus): jamás en visitante ni en el
-  // preview de edición (que no pasa el flag). Se ata con data-hf-pact
-  // al bind de siempre (hfProfileBind sobre inicioView).
-  const plusTile = (opts && opts.coversPlus)
-    ? `<button type="button" class="hf-hl hf-hl-plus" data-hf-pact="covers" aria-label="${en ? 'Create cover' : 'Crear cubierta'}"><div class="hf-hl-ring hf-hl-ring-plus">+</div><div class="hf-hl-t">${en ? 'Create cover' : 'Crear cubierta'}</div></button>` : '';
-  return (hls.length || plusTile) ? `<div class="hf-hls">${plusTile}${hls.map((h) => `<div class="hf-hl"><div class="hf-hl-ring">${h.cover ? `<img src="${esc(h.cover)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="hf-hl-letter">${esc(String(h.title).charAt(0).toUpperCase())}</span>`}</div><div class="hf-hl-t">${esc(h.title)}</div></div>`).join('')}</div>` : '';
+  // (2026-10-25 · pulido ítem 1g, orden de Valentino) El primer tile
+  // «+ Crear cubierta» SE SACÓ de la tira: la tira es para mostrar
+  // destacadas, no para herramientas permanentes. La entrada vive en
+  // Ajustes → Tu negocio → «Crear cubiertas» (chunk-ajustes). El bind
+  // data-hf-pact="covers" queda como respaldo, sin emisor en la tira.
+  return hls.length ? `<div class="hf-hls">${hls.map((h) => `<div class="hf-hl"><div class="hf-hl-ring">${h.cover ? `<img src="${esc(h.cover)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="hf-hl-letter">${esc(String(h.title).charAt(0).toUpperCase())}</span>`}</div><div class="hf-hl-t">${esc(h.title)}</div></div>`).join('')}</div>` : '';
 }
 // (v468 · orden Instagram) Pestañas del perfil, extraídas de homeHeadHTML:
 // en Inicio van como slot propio justo antes de la grilla (la filtran).
@@ -16362,7 +16475,7 @@ function homeHeadHTML(prof, bizName, opts) {
     ? `<span class="hf-links">${linksArr.map(linkOne).join('')}</span>`
     : rawLink
       ? linkOne(rawLink)
-      : user ? `<a class="hf-link" href="https://www.instagram.com/${esc(user)}/" target="_blank" rel="noopener">instagram.com/${esc(user)}</a>` : '';
+      : user ? `<a class="hf-link" href="https://www.instagram.com/${esc(user)}/" target="_blank" rel="noopener">@${esc(user)}</a>` : '';
   // (Tanda feed 5 · ítem 8) Chip de Threads junto al @: SOLO si el
   // payload trae la cuenta de Threads (hoy ninguna fuente la expone).
   const threadsHTML = (typeof P.threads === 'string' && P.threads.trim())
@@ -16384,7 +16497,7 @@ function homeHeadHTML(prof, bizName, opts) {
   // (Ítem 17 · ítem 3) Racha de constancia debajo del perfil:
   // solo si opts.racha trae un número real >= 2 (lo calcula
   // inicioView con pzRachaSemanas); sin racha, nada.
-  const rachaHTML = (opts && Number(opts.racha) >= 2) ? `<div class="hf-racha">🔥 ${en ? `${Math.floor(opts.racha)} weeks in a row posting` : `${Math.floor(opts.racha)} semanas seguidas publicando`}</div>` : '';
+  const rachaHTML = (opts && Number(opts.racha) >= 2) ? `<div class="hf-racha">${pzIc('flame', 14)} ${en ? `${Math.floor(opts.racha)} weeks in a row posting` : `${Math.floor(opts.racha)} semanas seguidas publicando`}</div>` : '';
   return `<div class="hf-head">
     ${user ? `<div class="hf-user">${esc(user)}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
@@ -16506,7 +16619,7 @@ function hfGridWhyLine(tiles, opts) {
     if (tipos.length >= 3) {
       const names = { promo: en ? 'offers' : 'ofertas', tip: en ? 'tips' : 'consejos', social: en ? 'community' : 'comunidad', detras: en ? 'behind the scenes' : 'detrás de escena', novedad: en ? 'new arrivals' : 'novedades' };
       const list = tipos.slice(0, 3).map((t) => names[t] || t).join(' · ');
-      return en ? `💡 Every post attacks a different angle this week: ${list}.` : `💡 Cada posteo ataca un ángulo distinto esta semana: ${list}.`;
+      return en ? `${pzIc('idea', 14)} Every post attacks a different angle this week: ${list}.` : `${pzIc('idea', 14)} Cada posteo ataca un ángulo distinto esta semana: ${list}.`;
     }
     return '';
   } catch (e) { return ''; }
@@ -16593,14 +16706,14 @@ function hfDetailHTML(p, opts) {
   const user = String(o.user || '').replace(/^@/, '');
   const headName = user || String(o.name || '');
   const locLine = isV
-    ? `<div class="hf-d-sub">🎵 ${en ? 'Original audio' : 'Audio original'}</div>`
+    ? `<div class="hf-d-sub">${pzIc('music', 12)} ${en ? 'Original audio' : 'Audio original'}</div>`
     : (o.location ? `<div class="hf-d-sub">${esc(o.location)}</div>` : '');
   const ava = o.pic
     ? `<img class="hf-d-ava" src="${esc(o.pic)}" alt="" onerror="this.remove()">`
     : `<span class="hf-d-ava hf-d-ava-l">${esc((headName || 'P').charAt(0).toUpperCase())}</span>`;
   const covD = isV ? hfCoverState(p) : null;
   const mediaInner = !slides.length
-    ? '<span class="hf-tile-ph">✨</span>'
+    ? '<span class="hf-tile-ph">' + pzIc('sparkle', 18) + '</span>'
     : isV
       ? `<video src="${esc(slides[0])}"${covD.has ? ` poster="${esc(covD.path)}"` : ''} autoplay muted loop playsinline></video>`
       : isCar
@@ -16611,7 +16724,7 @@ function hfDetailHTML(p, opts) {
   // data-hf-crop) lo muestra/oculta y, en el detalle, afina el marco a
   // píxeles con hfCrop34Rect según la foto real exhibida.
   const cropOv = slides.length ? hfCropOverlayHTML(4, 5, en) : '';
-  const cropTog = slides.length ? `<button type="button" class="hf-crop-tog" data-hf-crop aria-pressed="false">▦ ${en ? 'See how it crops' : 'Ver cómo se recorta'}</button>` : '';
+  const cropTog = slides.length ? `<button type="button" class="hf-crop-tog" data-hf-crop aria-pressed="false">${pzIc('grid', 16)} ${en ? 'See how it crops' : 'Ver cómo se recorta'}</button>` : '';
   const media = `<div class="igmock-media hf-d-media${isV ? ' is-v' : ''}">${mediaInner}${cropOv}</div>${isCar ? `<div class="hf-d-dots">${slides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}${cropTog}`;
   // Números SOLO reales: likes/comments llegan de post_metrics (vía
   // /api/posts) — null sin fuente: la línea no se dibuja. Un 0 real
@@ -16620,7 +16733,7 @@ function hfDetailHTML(p, opts) {
   const cc = (p.comments_count === null || p.comments_count === undefined || !Number.isFinite(Number(p.comments_count))) ? null : Number(p.comments_count);
   const likesLine = lk === null ? ''
     : lk > 0 ? `<div class="hf-d-likes">${lk.toLocaleString(en ? 'en-US' : 'es-AR')} ${en ? (lk === 1 ? 'like' : 'likes') : 'Me gusta'}</div>`
-    : `<div class="hf-d-likes">${en ? 'Be the first to like this' : 'Sé el primero en indicar que te gusta'}</div>`;
+    : '';
   const commentsLine = (cc !== null && cc > 0)
     ? `<div class="hf-d-comments">${en ? (cc === 1 ? 'View 1 comment' : `View all ${cc.toLocaleString('en-US')} comments`) : (cc === 1 ? 'Ver el comentario' : `Ver los ${cc.toLocaleString('es-AR')} comentarios`)}</div>` : '';
   const capFull = String(p.caption || '');
@@ -16633,10 +16746,10 @@ function hfDetailHTML(p, opts) {
     whenLine = rel ? `<div class="hf-d-when">${esc(rel)}</div>` : '';
   } else if (p.status === 'scheduled') {
     const chip = hfChipText(p.scheduled_at);
-    whenLine = chip ? `<div class="hf-d-when">🕐 ${en ? 'Goes out' : 'Sale el'} ${esc(chip)}</div>` : '';
+    whenLine = chip ? `<div class="hf-d-when">${pzIc('clock', 13)} ${en ? 'Goes out' : 'Sale el'} ${esc(chip)}</div>` : '';
   } else if (p.status === 'draft') {
     const chip = o.propIso ? hfChipText(o.propIso) : '';
-    whenLine = `<div class="hf-d-when">📝 ${en ? 'Draft' : 'Borrador'}${chip ? (en ? ' · planned for ' : ' · pensado para el ') + esc(chip) : ''}</div>`;
+    whenLine = `<div class="hf-d-when">${pzIc('pencil', 13)} ${en ? 'Draft' : 'Borrador'}${chip ? (en ? ' · planned for ' : ' · pensado para el ') + esc(chip) : ''}</div>`;
   }
   const bar = o.visitor ? '' : `<div class="hf-d-bar">
       <button type="button" class="hf-d-act${p.owner_liked ? ' on' : ''}" data-hfd-act="like" aria-label="${en ? 'Like' : 'Me gusta'}">${p.owner_liked ? HF_D_HEART_FULL : HF_D_HEART}</button>
@@ -16655,7 +16768,7 @@ function hfDetailHTML(p, opts) {
   const redoLeftD = o.visitor ? null : hfRedoLeft(p);
   const redoHTML = redoLeftD === null ? '' : (redoLeftD > 0
     ? `<div class="hf-redo">${hfRedoLineHTML(p, en)}<button type="button" class="hf-redo-btn" data-hfd-act="redo">${pzIc('refresh', 18)} ${en ? 'Redo' : 'Rehacer'}</button></div>`
-    : `<div class="hf-redo hf-redo-0">${hfRedoLineHTML(p, en)}<div class="hf-redo-alt"><button type="button" class="hf-redo-altb" data-hfd-act="myphoto">${pzIc('camera', 18)} ${en ? 'My photo' : 'Mi foto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="retext">${pzIc('pencil', 18)} ${en ? 'Touch up the text' : 'Retocar el texto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="keep">✓ ${en ? 'Leave it as is' : 'Dejarlo así'}</button></div></div>`);
+    : `<div class="hf-redo hf-redo-0">${hfRedoLineHTML(p, en)}<div class="hf-redo-alt"><button type="button" class="hf-redo-altb" data-hfd-act="myphoto">${pzIc('camera', 18)} ${en ? 'My photo' : 'Mi foto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="retext">${pzIc('pencil', 18)} ${en ? 'Touch up the text' : 'Retocar el texto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="keep">${pzIc('check', 14)} ${en ? 'Leave it as is' : 'Dejarlo así'}</button></div></div>`);
   // (Tanda feed 6C · ítem 6) Portada a elección del reel todavía no
   // publicado: la acción vive en el detalle (y en su menú •••). Con
   // portada del dueño, «Volver al video» la quita. La del director
@@ -16756,8 +16869,10 @@ function hfProfileActionsHTML(en) {
   // el botón nunca salta a otra línea). CENSO DE LA FILA (todo
   // cubierto): Compartir = la única pastilla · Editar + Ver como
   // visitante + Tu archivo (la pastilla cortada que no se nombró) =
-  // texto plano · «Crear mis cubiertas» se mudó a la tira de
-  // destacadas como primer tile «+» (homeHeadHTML, opts.coversPlus).
+  // texto plano · «Crear mis cubiertas» vivió como primer tile «+» de la tira
+  // (v471) y se sacó de la tira el 2026-10-25 (orden de Valentino:
+  // la tira es para mostrar destacadas, no herramientas): la entrada
+  // vive en Ajustes → Tu negocio → «Crear cubiertas».
   // Ninguna función se elimina. «Ver en el inicio» y «Ver cómo se
   // recorta» NO son de esta fila (son del detalle del posteo) y no se tocan.
   const sec = (attrs, txt) => '<button type="button" class="hf-psec" ' + attrs + '>' + txt + '</button>';
@@ -17043,7 +17158,7 @@ async function inicioView() {
     seenIds.add(t.post.id);
     const p = t.post;
     const prop = p.status === 'published'
-      ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
+      ? { label: pzIc('checkCircle', 14) + ' ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
       : proposedLabelFor(p, pl.proposals, tz);
     HF_PROPS[p.id] = prop;
     vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null, user: (prof && prof.username) || '', pic: (prof && prof.pic) || '' }));
@@ -17167,11 +17282,11 @@ async function inicioView() {
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${portTopInicio}
-  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, coversPlus: !HF_VISITOR, splitHead: true, racha: pzRacha })}
+  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
   ${hfTabsHTML(HF_TAB, enHome)}
   ${gridHTML}
-  ${tiles.length ? `<p class="hf-nota">${enHome ? '🤍 Tap the heart to approve each post. They all go out on their date, unless you ask for a change.' : '🤍 Tocá el corazón para aprobar el posteo. Todos salen en su fecha, salvo que pidas un cambio.'}</p>` : ''}
+  ${tiles.length ? `<p class="hf-nota">${enHome ? pzIc('heart', 14) + ' Tap the heart to approve each post. They all go out on their date, unless you ask for a change.' : pzIc('heart', 14) + ' Tocá el corazón para aprobar el posteo. Todos salen en su fecha, salvo que pidas un cambio.'}</p>` : ''}
   ${visitorPillHTML}
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
@@ -17180,7 +17295,7 @@ async function inicioView() {
   </div>
   <div class="mz-sheet" id="mzSheet" hidden>
     <div class="mz-sheet-card">
-      <div class="mz-sheet-head"><span></span><button type="button" class="mz-sheet-x" id="mzSheetX" aria-label="Cerrar">✕</button></div>
+      <div class="mz-sheet-head"><span></span><button type="button" class="mz-sheet-x" id="mzSheetX" aria-label="Cerrar">${pzIc("x", 16)}</button></div>
       <div class="mz-sheet-body">${chatCardHTML(true, true, true, true, true)}</div>
     </div>
   </div>
@@ -17252,11 +17367,11 @@ function pzNivelStripHTML(nv, en) {
   return `<div id="pzNivelStrip" role="button" tabindex="0" aria-expanded="false" aria-label="${esc(en ? `Your level with Posty: ${etiqueta}` : `Tu nivel con Posty: ${etiqueta}`)}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:16px;cursor:pointer;box-sizing:border-box">
     <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:52px;height:52px;flex:none;border-radius:50%;object-fit:cover"></span>
     <span data-pz-col style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
-      <strong style="font-size:15px;line-height:1.25">${esc(etiqueta)}</strong>
-      <span style="display:block;height:7px;border-radius:999px;background:#DCEFFA;overflow:hidden"><span data-pz-fill="${pct}" style="display:block;height:100%;width:${pct}%;background:${esc(nv.color || '#2793C8')};border-radius:999px"></span></span>
+      <strong style="font-size:16px;line-height:1.25;font-weight:600">${esc(etiqueta)}</strong>
+      <span style="display:block;height:7px;border-radius:999px;background:#C2E3F8;overflow:hidden"><span data-pz-fill="${pct}" style="display:block;height:100%;width:${pct}%;background:${esc(nv.color || '#2793C8')};border-radius:999px"></span></span>
       <button type="button" data-pz-nivel-accion="${esc(paso.hash)}" style="align-self:flex-start;background:none;border:0;padding:0;font-size:12px;line-height:1.3;color:#47617A;cursor:pointer;text-align:left">${esc(paso.label)}</button>
     </span>
-    <span class="pz-strip-chev" aria-hidden="true">▾</span>
+    <span class="pz-strip-chev" aria-hidden="true">${pzIc('chevDown', 14)}</span>
   </div>
   <div id="pzNivelDetalle" class="pz-nivel-detalle" hidden>${pzNivelDetalleHTML(nv, en)}</div>${pzNivelExtraHTML(nv, en)}`;
 }
@@ -17269,6 +17384,14 @@ function pzNivelDetalleHTML(nv, en) {
   }
   if (nv.prueba) h += `<div class="pz-prueba">${esc(en ? 'Proof of your level: ' : 'La prueba de tu nivel: ')}${esc(en ? nv.prueba.en : nv.prueba.es)}</div>`;
   h += `<button type="button" class="pz-detalle-negocio" data-pz-nivel-accion="#/app/negocio">${esc(en ? 'See what Posty knows about you' : 'Ver lo que Posty sabe de vos')}</button>`;
+  // (2026-10-25 · pulido ítem 7) La píldora «Te faltan N pasos» duplicaba
+  // a la tira en Inicio: su contenido (la tarjeta de siempre, mismas
+  // filas y binds, omitIg como en la píldora) vive ahora acá, en el
+  // detalle de la tira — una sola fuente de «qué falta».
+  // refreshSetupChecklist la acompaña igual que a la píldora (a 0 pasos
+  // la tarjeta se va y el detalle queda con desafío/prueba).
+  const setupCard = setupChecklistHtml(undefined, { omitIg: true });
+  if (setupCard) h += `<div class="pz-detalle-setup">${setupCard}</div>`;
   return h;
 }
 
@@ -17280,10 +17403,10 @@ function pzNivelDetalleHTML(nv, en) {
 // contenido permanente). Desafio + prueba viven en el detalle desplegable.
 function pzNivelExtraHTML(nv, en) {
   let h = '';
-  if (nv.brote) h += `<div class="pz-brote" id="pzNivelBrote"><span>${pzIc('sprout', 18)} ${esc(en ? 'Surprise sprout: ' : 'Brote sorpresa: ')}${esc(nv.brote.texto)}</span><button type="button" class="pz-brote-x" data-pz-brote-x data-pz-brote-fuente="${esc(nv.brote.fuente)}" data-pz-brote-id="${esc(String(nv.brote.id || 0))}" aria-label="${en ? 'Close' : 'Cerrar'}">✕</button></div>`;
+  if (nv.brote) h += `<div class="pz-brote" id="pzNivelBrote"><span>${pzIc('sprout', 18)} ${esc(en ? 'Surprise sprout: ' : 'Brote sorpresa: ')}${esc(nv.brote.texto)}</span><button type="button" class="pz-brote-x" data-pz-brote-x data-pz-brote-fuente="${esc(nv.brote.fuente)}" data-pz-brote-id="${esc(String(nv.brote.id || 0))}" aria-label="${en ? 'Close' : 'Cerrar'}">${pzIc("x", 16)}</button></div>`;
   if (nv.ausencia) {
     const lines = (nv.ausencia.aprendido || []).map((x) => `<div>· ${esc(x)}</div>`).join('');
-    h += `<div class="pz-ausencia" id="pzNivelAusencia"><button type="button" class="pz-brote-x" data-pz-ausencia-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button><strong>${esc(en ? `While you were away (${nv.ausencia.dias} days)` : `Mientras no estabas (${nv.ausencia.dias} días)`)}</strong>${nv.ausencia.subio ? `<div>${esc(en ? 'Posty leveled up while you were gone.' : 'Posty subió de nivel mientras no mirabas.')}</div>` : ''}${lines}</div>`;
+    h += `<div class="pz-ausencia" id="pzNivelAusencia"><button type="button" class="pz-brote-x" data-pz-ausencia-x aria-label="${en ? 'Close' : 'Cerrar'}">${pzIc("x", 16)}</button><strong>${esc(en ? `While you were away (${nv.ausencia.dias} days)` : `Mientras no estabas (${nv.ausencia.dias} días)`)}</strong>${nv.ausencia.subio ? `<div>${esc(en ? 'Posty leveled up while you were gone.' : 'Posty subió de nivel mientras no mirabas.')}</div>` : ''}${lines}</div>`;
   }
   return h;
 }
@@ -17405,7 +17528,7 @@ function pzMomentoAvanceShow(o) {
   const antesTxt = o.antes ? ((en ? 'Level ' : 'Nivel ') + o.antes.nivel + ' — ' + (o.antes.premio || o.antes.desbloqueo || '')) : null;
   const ahoraTxt = (en ? 'Level ' : 'Nivel ') + o.nivel + ' — ' + o.unlock;
   div.innerHTML = `<div class="pz-momento" role="dialog" aria-modal="true" aria-label="${esc(en ? 'Your garden grows' : 'Tu jardín avanza')}">
-    <button type="button" class="pz-celeb-x" data-pz-momento-x aria-label="${en ? 'Continue' : 'Seguir'}">✕</button>
+    <button type="button" class="pz-celeb-x" data-pz-momento-x aria-label="${en ? 'Continue' : 'Seguir'}">${pzIc("x", 16)}</button>
     <span class="pz-momento-magia" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
     <span class="pz-momento-posty pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;object-fit:cover"></span>
     <div class="pz-momento-candado" data-pz-momento-candado>🔒</div>
@@ -17456,10 +17579,10 @@ function pzMomentoAvanceShow(o) {
 // mismo contenido, mismos botones, mismo cierre).
 function pzCelebTarjetaShow(div, nv, en, unlock) {
   div.innerHTML = `<div class="pz-celeb" role="dialog" aria-modal="true" aria-label="${esc(en ? 'Level up' : 'Subiste de nivel')}">
-    <button type="button" class="pz-celeb-x" data-pz-celeb-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button>
+    <button type="button" class="pz-celeb-x" data-pz-celeb-x aria-label="${en ? 'Close' : 'Cerrar'}">${pzIc("x", 16)}</button>
     ${pzNivelStemHTML(nv.nivel, nv.color, true)}
     <span class="pz-celeb-evo pz-mg pz-mg--big"><img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;object-fit:cover"></span>
-    <h3>${esc(en ? `You leveled up to ${nv.nombre_nivel}!` : `¡Subiste a ${nv.nombre_nivel}!`)} 🎉</h3>
+    <h3>${esc(en ? `You leveled up to ${nv.nombre_nivel}!` : `¡Subiste a ${nv.nombre_nivel}!`)} ${pzIc('gift', 18)}</h3>
     <p class="pz-celeb-unlock">${esc(unlock)}</p>
     ${pzNivelFamiliaHTML(nv, en)}
     <p class="pz-celeb-sub">${esc(en ? 'You will see it in your next week.' : 'Esto ya cambia tu próxima semana.')}</p>
@@ -17512,7 +17635,7 @@ function mxJardinPost50HTML(post50) {
         if (z.desbloqueada) html += `<div class="pz-post50-zona ok">✦ ${esc(z.nombre)} — ${esc(z.descripcion)}</div>`;
         else {
           const faltan = Math.max(1, z.umbral - (post50.semanas_post50 || 0));
-          html += `<div class="pz-post50-zona lock">🔒 ${esc(z.nombre)} — ${gzT('Se abre en ', 'Opens in ')}${faltan}${gzT(' semanas publicadas más', ' more published weeks')}</div>`;
+          html += `<div class="pz-post50-zona lock">${pzIc('lock', 16)} ${esc(z.nombre)} — ${gzT('Se abre en ', 'Opens in ')}${faltan}${gzT(' semanas publicadas más', ' more published weeks')}</div>`;
         }
       }
       html += `</div>`;
@@ -17538,7 +17661,7 @@ function mxJardinPost50HTML(post50) {
       html += `<div class="pz-post50-mes"><b>${esc(nombreMes)}</b> — ${m.semanas_publicadas} ${gzT('semanas publicadas', 'published weeks')}${m.regalos ? ' · ' + m.regalos + ' ' + gzT('semillas regaladas', 'seeds gifted') : ''}`;
       for (const s of (m.subidas || [])) {
         PZ_MOMENTO_REPLAY[s.nivel] = { premio: s.premio || '', desbloqueo: s.desbloqueo || '' };
-        html += `<div class="pz-post50-subida">↑ ${gzT('Nivel ', 'Level ')}${s.nivel}${s.premio ? ' — ' + esc(s.premio) : ''}${(s.desbloqueo && s.desbloqueo !== s.premio) ? ' · ' + esc(s.desbloqueo) : ''} <button type="button" class="pz-post50-replay" onclick="pzMomentoReplayShow(${s.nivel})">${gzT('Volver a ver la magia', 'See the magic again')}</button></div>`;
+        html += `<div class="pz-post50-subida">${pzIc('arrowUp', 14)} ${gzT('Nivel ', 'Level ')}${s.nivel}${s.premio ? ' — ' + esc(s.premio) : ''}${(s.desbloqueo && s.desbloqueo !== s.premio) ? ' · ' + esc(s.desbloqueo) : ''} <button type="button" class="pz-post50-replay" onclick="pzMomentoReplayShow(${s.nivel})">${gzT('Volver a ver la magia', 'See the magic again')}</button></div>`;
       }
       html += `</div>`;
     }
@@ -17558,7 +17681,7 @@ async function pzSemillaRegalar() {
     if (navigator.share) await navigator.share({ text: texto });
     else if (navigator.clipboard) { await navigator.clipboard.writeText(texto); bbToast(gzT('Texto copiado ✓', 'Text copied ✓')); }
   } catch (e) {}
-  bbToast(gzT('Semilla regalada 🌱', 'Seed gifted 🌱'));
+  bbToast(gzT('Semilla regalada', 'Seed gifted'));
   try { render(); } catch (e) {}
 }
 function pzNivelCelebShow(nv, en) {
@@ -17590,10 +17713,10 @@ function pzNivelStoryShow(nv, en) {
   div.id = 'pzStoryFondo';
   div.className = 'pz-celeb-fondo';
   div.innerHTML = `<div class="pz-story" role="dialog" aria-modal="true">
-    <button type="button" class="pz-celeb-x" data-pz-story-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button>
+    <button type="button" class="pz-celeb-x" data-pz-story-x aria-label="${en ? 'Close' : 'Cerrar'}">${pzIc("x", 16)}</button>
     <div class="pz-story-card">
       <span class="pz-mg"><img class="pz-story-av" src="ai-avatar.png" alt="Posty"></span>
-      <div class="pz-story-big">${esc(en ? `I leveled up to ${nv.nombre_nivel}!` : `¡Subí a ${nv.nombre_nivel}!`)} 🎉</div>
+      <div class="pz-story-big">${esc(en ? `I leveled up to ${nv.nombre_nivel}!` : `¡Subí a ${nv.nombre_nivel}!`)} ${pzIc('gift', 18)}</div>
       <div class="pz-story-unlock">${esc(unlock)}</div>
       <div class="pz-story-firma">posty.</div>
     </div>
@@ -17609,7 +17732,7 @@ function pzNivelStoryShow(nv, en) {
       try { await navigator.clipboard.writeText(texto); } catch (e) {
         try { const ta = document.createElement('textarea'); ta.value = texto; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } catch (e2) {}
       }
-      cp.textContent = en ? 'Copied ✓' : 'Copiado ✓';
+      cp.textContent = en ? 'Copied' : 'Copiado';
     }
   });
 }
@@ -17622,7 +17745,7 @@ function pzNivelToggleDetalle() {
   if (open) det.removeAttribute('hidden'); else det.setAttribute('hidden', '');
   strip.setAttribute('aria-expanded', open ? 'true' : 'false');
   const chev = strip.querySelector('.pz-strip-chev');
-  if (chev) chev.textContent = open ? '▴' : '▾';
+  if (chev) chev.innerHTML = open ? pzIc('chevUp', 14) : pzIc('chevDown', 14);
 }
 function pzMiniFestejoShow(en) {
   try {
@@ -17632,7 +17755,7 @@ function pzMiniFestejoShow(en) {
     const div = document.createElement('div');
     div.id = 'pzMiniFestejo';
     div.className = 'pz-mini-festejo';
-    div.textContent = en ? '✦ Challenge done! Posty already learned that.' : '✦ ¡Desafío cumplido! Posty ya aprendió eso.';
+    div.textContent = en ? 'Challenge done! Posty already learned that.' : '¡Desafío cumplido! Posty ya aprendió eso.';
     col.appendChild(div);
     setTimeout(() => { try { div.remove(); } catch (e) {} }, 4500);
   } catch (e) {}
@@ -18191,7 +18314,7 @@ function hfEditOpen() {
   ov.querySelectorAll('[data-hf-ed-copy]').forEach((b) => b.addEventListener('click', async () => {
     const v = read();
     const okCopy = await hfClipboard(v[b.dataset.hfEdCopy] || '');
-    if (msg) msg.textContent = okCopy ? '✅ ' + (en ? 'Copied' : 'Copiado') : (en ? 'Could not copy' : 'No se pudo copiar');
+    if (msg) msg.innerHTML = okCopy ? pzIc('checkCircle', 13) + ' ' + (en ? 'Copied' : 'Copiado') : (en ? 'Could not copy' : 'No se pudo copiar');
   }));
   const save = ov.querySelector('[data-hf-ed-save]');
   if (save) save.addEventListener('click', async () => {
@@ -18272,7 +18395,7 @@ function hfCoverOpen(post) {
   const ov = document.createElement('div');
   ov.className = 'hf-cover-back';
   ov.innerHTML = `<div class="hf-cover-card" role="dialog" aria-modal="true">
-    <div class="hf-cover-title">🖼 ${en ? 'Choose the reel cover' : 'Elegí la portada del reel'}</div>
+    <div class="hf-cover-title">${pzIc('image', 14)} ${en ? 'Choose the reel cover' : 'Elegí la portada del reel'}</div>
     <div class="hf-cover-stage"><video src="${esc(post.image_path)}" muted playsinline preload="auto"></video></div>
     <input type="range" class="hf-cover-seek" min="0" max="10" value="0" step="1" aria-label="${en ? 'Video moment' : 'Momento del video'}">
     <div class="hf-cover-lab"><span data-hf-cover-time>0.0s</span><span>${en ? 'Shown cropped 3:4, like the grid' : 'Se muestra recortado 3:4, como en la grilla'}</span></div>
@@ -18505,7 +18628,7 @@ function hfLiveCompose(allPosts, prof) {
     if (t.kind !== 'post' || !t.post) continue;
     if (!t.day) { const dt = pcParseDate(t.post.published_at || t.post.scheduled_at); if (dt) t.day = schedDayKeyOf(dt, tz); }
     props[t.post.id] = t.post.status === 'published'
-      ? { label: '✅ ' + homeWhenLabel(t.post.published_at || t.post.scheduled_at), iso: null }
+      ? { label: pzIc('checkCircle', 14) + ' ' + homeWhenLabel(t.post.published_at || t.post.scheduled_at), iso: null }
       : proposedLabelFor(t.post, pl.proposals, tz);
   }
   return { tiles, props };
@@ -18654,7 +18777,7 @@ function hfOpenActionsSheet(tile) {
   bd.className = 'pcsheet-backdrop';
   bd.innerHTML = `<div class="pcsheet hf-actions" data-post-id="${esc(String(id))}" role="dialog" aria-modal="true">
     <div class="pcsheet-handle"></div>
-    <div class="pcsheet-title">${chipTxt ? '🕐 ' + esc(chipTxt) : (en ? 'Scheduled' : 'Programado')}</div>
+    <div class="pcsheet-title">${chipTxt ? pzIc('clock', 13) + ' ' + esc(chipTxt) : (en ? 'Scheduled' : 'Programado')}</div>
     <button type="button" class="pcsheet-opt" data-hf-act="edit">${pzIc('pencil', 20)} ${en ? 'Edit' : 'Editar'}<small>${en ? 'Opens this post right here in your feed' : 'Se abre este posteo acá mismo, en tu feed'}</small></button>
     <button type="button" class="pcsheet-opt" data-hf-act="hold">⏸ ${en ? 'Stop' : 'Frenar'}<small>${en ? 'Back to draft — it will not go out' : 'Vuelve a borrador — no va a salir'}</small></button>
     <button type="button" class="pcsheet-opt" data-hf-act="resched">${pzIc('calendar', 20)} ${en ? 'Reschedule' : 'Reprogramar'}<small>${en ? 'Pick a new day and time' : 'Elegí un día y una hora nuevos'}</small></button>
@@ -18662,7 +18785,7 @@ function hfOpenActionsSheet(tile) {
     <button type="button" class="pcsheet-opt" data-hf-act="${tile.dataset.pinned === '1' ? 'unpin' : 'pin'}">${pzIc('pin', 20)} ${tile.dataset.pinned === '1' ? (en ? 'Unpin from your profile' : 'Desfijar de tu perfil') : (en ? 'Pin to your profile' : 'Fijar en tu perfil')}<small>${en ? 'Pinned posts show first in your grid' : 'Los fijados se ven primeros en tu grilla'}</small></button>
     <div class="hf-resched" hidden>
       <input type="datetime-local" class="pcsheet-select hf-resched-inp" value="${esc(isoToLocalInput(tile.dataset.schedAt || ''))}" aria-label="${en ? 'New day and time' : 'Nuevo día y hora'}">
-      <button type="button" class="pcsheet-opt" data-hf-act="resched-save" style="margin-top:8px">✓ ${en ? 'Save new time' : 'Guardar nueva fecha'}</button>
+      <button type="button" class="pcsheet-opt" data-hf-act="resched-save" style="margin-top:8px">${pzIc("check", 14)} ${en ? 'Save new time' : 'Guardar nueva fecha'}</button>
       <div class="pcsheet-msg hf-resched-msg"></div>
     </div>
     <button type="button" class="pcsheet-close" data-hf-act="close">${en ? 'Close' : 'Cerrar'}</button>
@@ -18831,7 +18954,7 @@ function hfDetailWire(ov, post, tile) {
   if (acc && typeof acc.onclick !== 'function') {
     acc.onclick = async () => {
       if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
-        try { igGateFeedback(acc); } catch (e) { toast(hfIsEn() ? 'Connect your Instagram first 📸' : 'Conectá tu Instagram primero 📸'); }
+        try { igGateFeedback(acc); } catch (e) { toast(hfIsEn() ? 'Connect your Instagram first' : 'Conectá tu Instagram primero'); }
         return;
       }
       acc.disabled = true;
@@ -18999,7 +19122,7 @@ async function hfTileApprove(tile, post) {
       return;
     }
     if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
-      toast(f3En() ? 'Connect your Instagram first 📸' : 'Conectá tu Instagram primero 📸');
+      toast(f3En() ? 'Connect your Instagram first' : 'Conectá tu Instagram primero');
       return;
     }
     const when = (tile && tile.dataset && tile.dataset.schedAt) || (post && post.scheduled_at) || undefined;
@@ -19153,7 +19276,7 @@ function hfStoryShow(i) {
   list.forEach((_, k) => hfSvBar(k, k < i ? 1 : 0, 0));
   const en = hfIsEn();
   const when = ov.querySelector('.hf-sv-when');
-  if (when) when.textContent = (hfStoryDayLabel(s.day, en) || '') + (s.status === 'scheduled' ? ' · 🕐 ' + (hfChipText(s.iso) || '') : '');
+  if (when) when.textContent = (hfStoryDayLabel(s.day, en) || '') + (s.status === 'scheduled' ? ' · ' + pzIc('clock', 12) + ' ' + (hfChipText(s.iso) || '') : '');
   const box = ov.querySelector('.hf-sv-media');
   if (!box) return;
   if (s.isVideo) {
@@ -19182,7 +19305,7 @@ function hfStoryOpen(i) {
   ov.id = 'hfSv';
   ov.innerHTML = `<div class="hf-sv-stage">
       <div class="hf-sv-bars">${HOME_STORIES.map((s, k) => `<span class="hf-sv-bar"><i data-b="${k}"></i></span>`).join('')}</div>
-      <div class="hf-sv-head"><span class="hf-sv-when"></span><button type="button" class="hf-sv-x" aria-label="${en ? 'Close' : 'Cerrar'}">✕</button></div>
+      <div class="hf-sv-head"><span class="hf-sv-when"></span><button type="button" class="hf-sv-x" aria-label="${en ? 'Close' : 'Cerrar'}">${pzIc("x", 16)}</button></div>
       <div class="hf-sv-media"></div>
       <button type="button" class="hf-sv-zone prev" aria-label="${en ? 'Previous' : 'Anterior'}"></button>
       <button type="button" class="hf-sv-zone next" aria-label="${en ? 'Next' : 'Siguiente'}"></button>
@@ -19446,7 +19569,7 @@ function hfAskChangeBtnHTML(p) {
     <div class="hf-ask-posty"><img src="ai-avatar.png" alt="Posty" class="hf-ask-ava"><span>${enA ? 'what do we change on this post?' : 'qué le cambiamos a este posteo?'}</span></div>
     <form class="hf-ask-form" data-hf-ask-form="${esc(String(p.id))}">
       <input type="text" class="hf-ask-input" data-hf-ask-input maxlength="2000" autocomplete="off" placeholder="${enA ? 'message Posty…' : 'escribile a Posty…'}">
-      <button type="submit" class="hf-ask-send" aria-label="${enA ? 'Send' : 'Enviar'}">➤</button>
+      <button type="submit" class="hf-ask-send" aria-label="${enA ? 'Send' : 'Enviar'}">${pzIc('send', 16)}</button>
     </form>
   </div>`;
 }
@@ -19637,7 +19760,7 @@ async function pzAnalysisRefresh(btn) {
 }
 function pzFindingHTML(f) {
   const nums = f.with_posty
-    ? `<div style="font-size:12.5px;margin-top:4px"><span style="color:var(--mut)">Hoy: ${esc(f.now || '')}</span> <span style="color:var(--cel);font-weight:700">→ Con Posty: ${esc(f.with_posty)}</span></div>`
+    ? `<div style="font-size:12.5px;margin-top:4px"><span style="color:var(--mut)">Hoy: ${esc(f.now || '')}</span> <span style="color:var(--cel);font-weight:700">${pzIc('arrowRight', 13)} Con Posty: ${esc(f.with_posty)}</span></div>`
     : (f.now ? `<div style="font-size:12.5px;margin-top:4px;color:var(--mut)">Hoy: ${esc(f.now)}</div>` : '');
   return `<div style="padding:10px 0;border-bottom:1px solid var(--line)"><div style="font-size:14px;font-weight:600;line-height:1.5">${esc(f.text || '')}</div>${nums}</div>`;
 }
@@ -19646,22 +19769,22 @@ async function analysisView() {
   try { d = await api.get('/api/analysis'); } catch (e) {}
   const head = `<div class="card" style="padding:18px">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-      <div style="font-size:20px;font-weight:800">🧠 Tu análisis</div>
+      <div style="font-size:20px;font-weight:800">${pzIc('idea', 15)} Tu análisis</div>
       <button class="btn btn-ghost btn-sm" onclick="pzAnalysisRefresh(this)">↻ Actualizar</button>
     </div>
     <p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:6px">Esto es lo que Posty ve de tu cuenta y de tu mercado — y las decisiones que toma con eso. Cada posteo de tu semana nace de acá.</p>
   </div>`;
   if (!d || !d.analysis) {
-    return `${head}<div class="card" style="padding:18px;margin-top:12px"><p style="font-size:14px;line-height:1.6">Todavía no armé tu primer análisis. Lo armo ahora con los datos reales de tu cuenta y tu rubro 👇</p><button class="btn btn-primary" style="margin-top:10px" onclick="pzAnalysisRefresh(this)">Armar mi análisis</button></div>`;
+    return `${head}<div class="card" style="padding:18px;margin-top:12px"><p style="font-size:14px;line-height:1.6">Todavía no armé tu primer análisis. Lo armo ahora con los datos reales de tu cuenta y tu rubro ${pzIc('arrowDown', 13)}</p><button class="btn btn-primary" style="margin-top:10px" onclick="pzAnalysisRefresh(this)">Armar mi análisis</button></div>`;
   }
   const a = d.analysis;
-  const groups = [['mejorar', '🛠️ A mejorar'], ['incrementar', '📈 A incrementar'], ['reducir', '📉 A reducir']];
+  const groups = [['mejorar', pzIc('wrench', 14) + ' A mejorar'], ['incrementar', pzIc('chartUp', 14) + ' A incrementar'], ['reducir', pzIc('chartDown', 14) + ' A reducir']];
   let body = '';
   if (a.kind === 'nacimiento') {
     const kit = a.profile_kit || {};
     const roles = (a.starter_grid || []).map((s) => `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><b style="font-size:13.5px">${esc(String(s.slot))}. ${esc(s.role || '')}</b> <span style="color:var(--mut);font-size:12px">${esc(s.format || '')}</span><div style="font-size:12.5px;color:var(--mut);line-height:1.5">${esc(s.why || '')}</div></div>`).join('');
     body += `<div class="card" style="padding:18px;margin-top:12px">
-      <div style="font-size:16px;font-weight:800">🌱 Tu plan de nacimiento</div>
+      <div style="font-size:16px;font-weight:800">${pzIc('sprout', 16)} Tu plan de nacimiento</div>
       <p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:4px">Tu cuenta recién arranca: nace con estrategia — posicionamiento desde tu rubro y tu zona, kit de perfil completo y tu primera vidriera de 9 piezas.</p>
       ${(a.findings || []).map(pzFindingHTML).join('')}
       ${kit.bio ? `<div style="background:var(--bg2);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.7;margin-top:12px;white-space:pre-line"><b>Tu bio, lista para pegar:</b>\n${esc(kit.bio)}</div>` : ''}
@@ -19673,33 +19796,33 @@ async function analysisView() {
       const fs = (a.findings || []).filter((f) => f && f.group === k);
       return fs.length ? `<div style="margin-top:14px"><div style="font-weight:800;font-size:14px">${t}</div>${fs.map(pzFindingHTML).join('')}</div>` : '';
     }).join('');
-    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">🔍 Tu cuenta</div>${ghtml || '<p style="color:var(--mut);font-size:13.5px;margin-top:8px">Tu cuenta viene prolija: la semana sostiene lo que ya funciona y empuja los formatos que más rinden.</p>'}</div>`;
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">${pzIc('search', 15)} Tu cuenta</div>${ghtml || '<p style="color:var(--mut);font-size:13.5px;margin-top:8px">Tu cuenta viene prolija: la semana sostiene lo que ya funciona y empuja los formatos que más rinden.</p>'}</div>`;
   }
   // --- Tu mercado: completo (Growth) o probada (Esencial) ---
   if (a.market_full && a.market) {
     const peers = (a.market.peers || []).map((p) => `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px"><span>@${esc(p.handle)}</span><span style="color:var(--mut)">${p.posts_per_week != null ? esc(String(p.posts_per_week)) + ' posteos/sem' : 'sin datos'}${p.followers != null ? ' · ' + esc(String(p.followers)) + ' seguidores' : ''}</span></div>`).join('');
     const mf = (a.market.findings || []).map(pzFindingHTML).join('');
-    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">🗺️ Tu mercado</div>
-      ${a.market.available ? `${peers}${mf}${a.market.position ? `<p style="font-size:13.5px;line-height:1.6;margin-top:10px">📍 ${esc(a.market.position.text)}</p>` : ''}` : `<p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:6px">Todavía no hay datos públicos suficientes de cuentas de tu rubro y tu zona. Apenas aparezcan, este mapa se completa solo — no estimamos nada.</p>`}
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">${pzIc('map', 15)} Tu mercado</div>
+      ${a.market.available ? `${peers}${mf}${a.market.position ? `<p style="font-size:13.5px;line-height:1.6;margin-top:10px">${pzIc('pin', 13)} ${esc(a.market.position.text)}</p>` : ''}` : `<p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:6px">Todavía no hay datos públicos suficientes de cuentas de tu rubro y tu zona. Apenas aparezcan, este mapa se completa solo — no estimamos nada.</p>`}
     </div>`;
   } else {
     const teaser = a.market_teaser;
-    const items = teaser && teaser.items ? teaser.items.map((it) => `<p style="font-size:13.5px;line-height:1.6;margin:6px 0">📌 ${esc(it.text || '')}${it.now ? ` — <span style="color:var(--mut);font-weight:600">${esc(it.now)}</span>` : ''}</p>`).join('') : '';
-    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">🗺️ Tu mercado <span style="font-size:12px;color:var(--cel);font-weight:700">PROBADA</span></div>
+    const items = teaser && teaser.items ? teaser.items.map((it) => `<p style="font-size:13.5px;line-height:1.6;margin:6px 0">${pzIc('pin', 13)} ${esc(it.text || '')}${it.now ? ` — <span style="color:var(--mut);font-weight:600">${esc(it.now)}</span>` : ''}</p>`).join('') : '';
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">${pzIc('map', 15)} Tu mercado <span style="font-size:12px;color:var(--cel);font-weight:700">PROBADA</span></div>
       ${items || '<p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:6px">Posty ya está mirando las cuentas de tu rubro y tu zona.</p>'}
       <p style="font-size:13px;color:var(--mut);line-height:1.6;margin-top:8px">El mapa completo — tu competencia una por una, tu posición en el rubro y las decisiones que tomamos con eso — es parte de <b>Growth</b> (planes Pro y Total).</p>
-      <a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?plan=1">Ver planes →</a>
+      <a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?plan=1">Ver planes ${pzIc('arrowRight', 13)}</a>
     </div>`;
   }
   // --- El loop: predicciones anteriores vs resultados ---
   if (a.loop && Array.isArray(a.loop.checks) && a.loop.checks.length) {
-    const ico = { 'cumplida': '✅', 'en-curso': '🔄', 'sin-datos': '⏳' };
+    const ico = { 'cumplida': pzIc('checkCircle', 13), 'en-curso': pzIc('refresh', 13), 'sin-datos': pzIc('clock', 13) };
     const checks = a.loop.checks.map((c) => `<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;line-height:1.6">${ico[c.status] || '•'} ${esc(c.text || '')}</div>`).join('');
-    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">🔁 Así viene el plan</div><p style="color:var(--mut);font-size:12.5px;margin-top:2px">Lo que el análisis anterior se propuso, medido contra tu cuenta hoy.</p>${checks}</div>`;
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">${pzIc('refresh', 15)} Así viene el plan</div><p style="color:var(--mut);font-size:12.5px;margin-top:2px">Lo que el análisis anterior se propuso, medido contra tu cuenta hoy.</p>${checks}</div>`;
   }
   if (Array.isArray(d.history) && d.history.length > 1) {
     const hist = d.history.map((h) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span>Análisis #${esc(String(h.n || ''))}</span><span style="color:var(--mut)">${esc(String(h.created_at || '').slice(0, 10))} · ${esc(String(h.findings))} hallazgos</span></div>`).join('');
-    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">🗂️ Historial</div>${hist}<p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin-top:8px">Cada análisis aprende del anterior: el #10 de tu cuenta es mucho mejor que el #1.</p></div>`;
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">${pzIc('layers', 15)} Historial</div>${hist}<p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin-top:8px">Cada análisis aprende del anterior: el #10 de tu cuenta es mucho mejor que el #1.</p></div>`;
   }
   const notes = (a.data_notes || []).map((n) => `<p style="color:var(--dim);font-size:12px;margin-top:10px">${esc(n)}</p>`).join('');
   return `${head}${body}${notes}`;
@@ -19715,7 +19838,7 @@ function statsView() {
   return `
   <div class="st-wrap">
     <div class="page-head">
-      <div class="ph-ico">📊</div>
+      <div class="ph-ico">${pzIc('bars', 20)}</div>
       <div class="ph-txt"><h1>Tus números</h1><p class="sub">Cómo viene rindiendo tu Instagram.</p></div>
     </div>
     <div class="st-grid" id="stGrid">${cards}</div>
@@ -19747,8 +19870,8 @@ function bindStats() {
         // no hay posteos publicados todavía para analizar.
         if (grid) grid.style.display = 'none';
         if (box) box.innerHTML = `<div class="card st-empty">
-          <div class="st-empty-ico">📊</div>
-          ${pubCount > 0 ? '<b>Tus posteos ya salieron 🎉</b>' : '<b>Todavía no hay posteos para analizar</b>'}
+          <div class="st-empty-ico">${pzIc('chartUp', 26)}</div>
+          ${pubCount > 0 ? '<b>Tus posteos ya salieron</b>' : '<b>Todavía no hay posteos para analizar</b>'}
           ${pubCount > 0 ? '<p>Todavía no tengo las métricas de tu Instagram (alcance e interacciones) para mostrarte. Cuando estén, aparecen acá solitas.</p>' : '<p>Cuando publiquemos tu primera semana, vas a ver acá tu alcance, tus interacciones y tu mejor posteo, todo juntito.</p>'}
           <div class="st-empty-tags">
             <span>Personas alcanzadas</span>
@@ -19758,7 +19881,7 @@ function bindStats() {
           </div>
           <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
             <a class="btn btn-primary btn-sm" href="#/app/schedule">${pzIc('calendar', 18)} Ir a mi semana</a>
-            ${(typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected) ? '<a class="btn btn-soft btn-sm" href="#/app/ajustes?ig=1">📸 Conectar Instagram</a>' : ''}
+            ${(typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected) ? '<a class="btn btn-soft btn-sm" href="#/app/ajustes?ig=1">' + pzIc('camera', 14) + ' Conectar Instagram</a>' : ''}
           </div>
         </div>`;
         return;
@@ -19792,14 +19915,14 @@ function bindStats() {
               <p>${esc(d.best_post.metric)}</p></div>
             </div>
           </div>`
-        : `<div class="card st-empty"><b>Todavía no hay suficientes datos para elegir un mejor posteo 🙂</b>
+        : `<div class="card st-empty"><b>Todavía no hay suficientes datos para elegir un mejor posteo</b>
            <p>Publicá un poco más y aparece acá solito.</p></div>`;
     } catch (e) {
       const gridEl = document.getElementById('stGrid');
       if (gridEl) gridEl.style.display = 'none';
       const box = document.getElementById('stBest');
       if (box) box.innerHTML = `<div class="card st-empty">
-        <b>Ups, no pude traer tus números ahora 😅</b>
+        <b>Ups, no pude traer tus números ahora</b>
         <p>Probá de nuevo en un ratito.</p>
         <button class="btn btn-primary btn-sm" id="stRetry" style="margin-top:10px">Reintentar</button>
       </div>`;
@@ -19830,30 +19953,30 @@ function bindSchedule() {
   const diagBtn = $('#hsDiagBtn');
   if (diagBtn) diagBtn.onclick = async () => {
     const out = $('#hsDiagOut');
-    if (out) out.innerHTML = '<p style="font-size:13px">Revisando… 🔍</p>';
+    if (out) out.innerHTML = '<p style="font-size:13px">Revisando… ' + pzIc('search', 13) + '</p>';
     diagBtn.disabled = true;
     try {
       const r = await api.post('/api/diag/week-test', {}, { timeout: 90000 });
       const d = r && r.diag ? r.diag : {};
       let msg = '<div style="font-size:13px;line-height:1.7;background:#fff;border-radius:12px;padding:12px">';
       msg += `<b>Diagnóstico:</b><br>`;
-      msg += `Plan: ${d.planOk ? '✅' : '❌'}<br>`;
-      msg += `Créditos IA: ${d.aiOk ? '✅' : '❌ ' + esc(d.aiErr || '')}<br>`;
-      msg += `Datos negocio: ${d.dnaOk ? '✅' : '❌'}<br>`;
+      msg += `Plan: ${d.planOk ? pzIc('checkCircle', 13) : pzIc('reject', 13)}<br>`;
+      msg += `Créditos IA: ${d.aiOk ? pzIc('checkCircle', 13) : pzIc('reject', 13) + ' ' + esc(d.aiErr || '')}<br>`;
+      msg += `Datos negocio: ${d.dnaOk ? pzIc('checkCircle', 13) : pzIc('reject', 13)}<br>`;
       msg += `Posteos: ${d.existing || 0}<br>`;
       if (d.posts && d.posts.length) {
         const noImg = d.posts.filter(p => !p.hasImage).length;
-        msg += `Sin imagen: ${noImg > 0 ? '❌ ' + noImg : '✅ 0'}<br>`;
+        msg += `Sin imagen: ${noImg > 0 ? pzIc('reject', 13) + ' ' + noImg : pzIc('checkCircle', 13) + ' 0'}<br>`;
         d.posts.slice(0, 3).forEach(p => {
-          msg += `<small>#${p.id}: ${p.hasImage ? '🖼️ ' + esc(p.imagePath.slice(0, 40)) : '❌ sin imagen'}</small><br>`;
+          msg += `<small>#${p.id}: ${p.hasImage ? pzIc('image', 12) + ' ' + esc(p.imagePath.slice(0, 40)) : '' + pzIc('reject', 12) + ' sin imagen'}</small><br>`;
         });
       }
-      msg += `En curso: ${d.running ? '⚠️' : 'no'}<br>`;
-      if (d.ideasOk === true) msg += `Ideas IA: ✅ (${d.ideasCount || 0})<br>`;
-      else if (d.ideasOk === false) msg += `Ideas IA: ❌ ${esc((d.ideasErr || '').slice(0, 120))}<br>`;
-      if (d.imageOk === true) msg += `Imagen IA: ✅<br>`;
-      else if (d.imageOk === false) msg += `Imagen IA: ❌ ${esc((d.imageErr || '').slice(0, 150))}<br>`;
-      if (d.lastFailure) msg += `Último fallo: ⚠️ ${esc(d.lastFailure.reason.slice(0, 120))}<br>`;
+      msg += `En curso: ${d.running ? pzIc('alert', 13) : 'no'}<br>`;
+      if (d.ideasOk === true) msg += `Ideas IA: ${pzIc('checkCircle', 13)} (${d.ideasCount || 0})<br>`;
+      else if (d.ideasOk === false) msg += `Ideas IA: ${pzIc('reject', 13)} ${esc((d.ideasErr || '').slice(0, 120))}<br>`;
+      if (d.imageOk === true) msg += `Imagen IA: ${pzIc('checkCircle', 13)}<br>`;
+      else if (d.imageOk === false) msg += `Imagen IA: ${pzIc('reject', 13)} ${esc((d.imageErr || '').slice(0, 150))}<br>`;
+      if (d.lastFailure) msg += `Último fallo: ${pzIc('alert', 13)} ${esc(d.lastFailure.reason.slice(0, 120))}<br>`;
       msg += '</div>';
       if (out) out.innerHTML = msg;
     } catch (e) {
@@ -19892,7 +20015,7 @@ function bindSchedule() {
         if (out) {
           const r = lr.result;
           out.innerHTML = `<div style="font-size:13px;line-height:1.7;background:#fff3f3;border:1px solid #fcc;border-radius:12px;padding:12px">` +
-            `<b>❌ La generación falló:</b><br>` +
+            `<b>${pzIc('reject', 13)} La generación falló:</b><br>` +
             `Motivo: <b>${esc(r.reason || 'desconocido')}</b><br>` +
             (r.error ? `<small>${esc(String(r.error).slice(0, 200))}</small><br>` : '') +
             (r.imgFailCount ? `Imágenes fallidas: ${r.imgFailCount}<br>` : '') +
@@ -19958,7 +20081,7 @@ function bindSchedule() {
   bindAcceptAll(); // legacy (ya no se pinta en la tarjeta)
   bindActivateWeek(); // "🚀 Activar mi semana" dentro de la tarjeta de revisión
   bindAutopilot(); // tarjeta "Armemos tu semana" (estado vacío)
-  // Fast-track "🚀 Tu primer posteo" (solo cuentas que nunca publicaron).
+  // Fast-track "' + pzIc('rocket', 13) + ' Tu primer posteo" (solo cuentas que nunca publicaron).
   try { if (typeof bindFastTrack === 'function') bindFastTrack(); } catch (e) {}
   // "🚀 Publicar mi primero" (mejora 2026-09-30: 1 tap, solo 0 publicados).
   try { if (typeof bindFirstPublish === 'function') bindFirstPublish(); } catch (e) {}
@@ -20045,7 +20168,7 @@ function bindApp(tab) {
         const tag = document.querySelector(`[data-revhashprev="${id}"]`);
         const open = !!(cap && cap.classList.toggle('expanded'));
         if (tag) tag.classList.toggle('expanded', open);
-        m.textContent = open ? 'ver menos ▴' : 'ver más ▾';
+        m.innerHTML = open ? 'ver menos ' + pzIc('chevUp', 13) : 'ver más ' + pzIc('chevDown', 13);
         return;
       }
       const t = e.target.closest('.rev-preview,.opt-caption');
@@ -20094,7 +20217,7 @@ function renderIgResume() {
   b.innerHTML = `
   <div style="position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;justify-content:center;padding:10px 12px;pointer-events:none">
     <div style="pointer-events:auto;background:#0A1E33;color:#fff;border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 12px 32px rgba(0,0,0,.35);max-width:560px;width:100%">
-      <div style="font-size:26.5px;line-height:1">📸</div>
+      <div style="font-size:26.5px;line-height:1">${pzIc('camera', 26)}</div>
       <div style="flex:1;font-size:12.5px;line-height:1.45"><b>¡Casi terminás!</b><br>Se interrumpió la conexión (a veces Instagram pide un código y se corta). Tu sesión ya quedó iniciada: es un toque más.</div>
       <button class="btn btn-primary" id="igResumeGo" style="white-space:nowrap;padding:12px 16px">Terminar de conectar</button>
     </div>
@@ -20146,11 +20269,11 @@ function apvPill(p, d, dOk) {
   const tz = apvTz();
   if (st === 'published') {
     const link = p.permalink || p.ig_permalink || p.url || '';
-    return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Publicado</span>${link ? ` <a class="apv-link" href="${esc(link)}" target="_blank" rel="noopener">Ver en Instagram ↗</a>` : ''}`;
+    return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Publicado</span>${link ? ` <a class="apv-link" href="${esc(link)}" target="_blank" rel="noopener">Ver en Instagram ${pzIc('arrowUpRight', 14)}</a>` : ''}`;
   }
-  if (st === 'failed') return '<span class="apv-pill apv-pill-warn">⚠️ No salió: ' + esc(humanError(p.error) || 'sin aprobación a tiempo') + '</span>';
+  if (st === 'failed') return '<span class="apv-pill apv-pill-warn">' + pzIc('alert', 12) + ' No salió: ' + esc(humanError(p.error) || 'sin aprobación a tiempo') + '</span>';
   if (ap === 'rejected' || st === 'cancelled') return '<span class="apv-pill apv-pill-bad">' + pzIc('reject', 15) + ' Rechazado — no se publica</span>';
-  if (ap === 'auto') return '<span class="apv-pill apv-pill-auto">🤖 Salió solo (no lo viste a tiempo)</span>';
+  if (ap === 'auto') return '<span class="apv-pill apv-pill-auto">' + pzIc('bot', 12) + ' Salió solo (no lo viste a tiempo)</span>';
   if (ap === 'approved' && st === 'scheduled') return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Aprobado — sale a las ${esc(dOk ? apvHM(d, tz) : '')}</span>`;
   if (ap === 'pending' && st === 'scheduled' && dOk && d.getTime() > Date.now()) return `<span class="apv-pill apv-pill-pend">⏳ Pendiente — sale ${esc(apvCountdown(d))} (o antes si lo aprobás)</span>`;
   return '<span class="apv-pill apv-pill-pend">⏳ Pendiente</span>';
@@ -20158,7 +20281,7 @@ function apvPill(p, d, dOk) {
 function apvNotFound() {
   return `<div class="apv-wrap"><div class="card" style="text-align:center">
     <img src="ai-avatar.png" alt="Posty" style="width:72px;height:72px;border-radius:50%">
-    <h3 style="margin:12px 0 6px">Ese posteo no existe 😅</h3>
+    <h3 style="margin:12px 0 6px">Ese posteo no existe</h3>
     <p class="hint">Capaz se borró o el link está mal.</p>
     <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Volver a Schedule</a>
   </div></div>`;
@@ -20179,7 +20302,7 @@ function dogfoodCardHTML(p) {
   const cap = esc(String(p.caption || '')).slice(0, 220);
   return `<div class="card dogfood-card" id="dogfoodCard" style="border:2px solid #FEC14D;background:linear-gradient(135deg,#fffdf5,#fff)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <span style="font-size:20px">🤖</span>
+      <span style="font-size:20px">${pzIc("bot", 20)}</span>
       <div><b>Posty para @posty.communitymanager</b>
       <div class="hint">⏳ Pendiente de tu aprobación — propuesta de hoy</div></div>
     </div>
@@ -20215,12 +20338,12 @@ async function dogfoodView(id) {
   let p = null;
   try { const r = await api.get('/api/dogfood/pending'); p = (r && r.post) || null; } catch (e) {}
   if (!p || (id && String(p.id) !== String(id))) {
-    return `<div class="card" style="text-align:center"><h3 style="margin:0 0 6px">🤖 Sin propuesta pendiente</h3>
-      <p class="hint">Cada mañana te propongo un posteo para @posty.communitymanager. Volvé mañana ☀️</p>
+    return `<div class="card" style="text-align:center"><h3 style="margin:0 0 6px">${pzIc('bot', 15)} Sin propuesta pendiente</h3>
+      <p class="hint">Cada mañana te propongo un posteo para @posty.communitymanager. Volvé mañana</p>
       <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Ir a mi semana</a></div>`;
   }
   return `<div class="apv-wrap">
-    <a class="apv-back" href="#/app/schedule">← Semana</a>
+    <a class="apv-back" href="#/app/schedule">${pzIc('arrowLeft', 14)} Semana</a>
     ${dogfoodCardHTML(p)}
   </div>`;
 }
@@ -20238,7 +20361,7 @@ async function approvalPostView(id) {
   }
   if (is404 || (!loadErr && (!p || p.id == null))) return apvNotFound();
   if (loadErr) return `<div class="apv-wrap"><div class="card" style="text-align:center">
-    <h3 style="margin:0 0 6px">😅 Uh, no pude cargar el posteo</h3>
+    <h3 style="margin:0 0 6px">Uh, no pude cargar el posteo</h3>
     <p class="hint">Revisá tu conexión y probá de nuevo.</p>
     <button class="btn btn-soft" id="apvRetry" style="margin-top:10px">Reintentar</button>
   </div></div>`;
@@ -20256,7 +20379,7 @@ async function approvalPostView(id) {
   const media = p.image_path
     ? `<div class="apv-media">${isVideo
       ? `<video src="${esc(p.image_path)}" controls playsinline preload="metadata"></video>`
-      : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager" data-lightbox="${esc(p.image_path)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="✏️ Editar este posteo"` : ''}>`}</div>`
+      : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager" data-lightbox="${esc(p.image_path)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''}>`}</div>`
     : '';
   const cap = esc(String(p.caption || 'Sin texto todavía')).replace(/\n/g, '<br>');
   const tags = String(p.hashtags || '').trim();
@@ -20293,7 +20416,7 @@ async function approvalPostView(id) {
     </div>` : '';
   const whenTxt = dOk ? (isDraft ? apvWhenText(d, tz).replace(/^Sale /, 'Saldría ') + ' · si lo aceptás' : apvWhenText(d, tz)) : '';
   return `<div class="apv-wrap">
-    <a class="apv-back" href="#/app/schedule">← Semana</a>
+    <a class="apv-back" href="#/app/schedule">${pzIc('arrowLeft', 14)} Semana</a>
     ${media}
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
@@ -20316,9 +20439,9 @@ function apvMoreHTML(p, st, canAct, isDraft) {
   const id = esc(String(p.id));
   let b = '';
   if (st === 'scheduled') b += `<button class="btn btn-soft" id="apvHold" data-apvid="${id}">⏸ ${en ? 'Hold' : 'Frenar'}</button>`;
-  b += `<button class="btn btn-soft" id="apvDelete" data-apvid="${id}">🗑️ ${en ? 'Delete' : 'Eliminar'}</button>`;
+  b += `<button class="btn btn-soft" id="apvDelete" data-apvid="${id}">${pzIc('trash', 16)} ${en ? 'Delete' : 'Eliminar'}</button>`;
   b += `<button class="btn btn-soft" id="apvRedo" data-apvid="${id}">↻ ${en ? 'Redo' : 'Rehacer'}</button>`;
-  b += `<button class="btn btn-soft" id="apvDislike" data-apvid="${id}">👎 ${en ? "I don't like it" : 'No me gusta'}</button>`;
+  b += `<button class="btn btn-soft" id="apvDislike" data-apvid="${id}">${pzIc('thumbDown', 16)} ${en ? "I don't like it" : 'No me gusta'}</button>`;
   return `<div class="apv-actions apv-more" id="apvMore">${b}</div>`;
 }
 function bindApprovalPost() {
@@ -20384,7 +20507,7 @@ function bindApprovalPost() {
     if (!(PROFILE && PROFILE.ig_connected)) {
       const g = document.getElementById('apvGate');
       if (g) {
-        g.innerHTML = `<div class="ig-gate-note">${pzIc('camera', 18)} <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm ig-gate-go" type="button">Conectar Instagram →</button></div>`;
+        g.innerHTML = `<div class="ig-gate-note">${pzIc('camera', 18)} <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm ig-gate-go" type="button">Conectar Instagram ${pzIc('arrowRight', 14)}</button></div>`;
         const go = g.querySelector('.ig-gate-go');
         if (go) go.onclick = () => igConnectHere();
         try { g.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
@@ -20434,7 +20557,7 @@ function bindApprovalPost() {
     apvDl.disabled = true;
     try {
       await api.del('/api/posts/' + encodeURIComponent(apvDl.dataset.apvid));
-      toast(en ? '🗑️ Deleted' : '🗑️ Eliminado');
+      toast(en ? pzIc('trash', 14) + ' Deleted' : pzIc('trash', 14) + ' Eliminado');
       location.hash = '#/app/inicio';
     } catch (e) { toast('😅 ' + esc((e && e.message) || (en ? 'Could not delete' : 'No se pudo eliminar'))); apvDl.disabled = false; }
   };
@@ -20524,7 +20647,7 @@ async function f3GestureApprove(media) {
     if (typeof rev.onclick === 'function') { rev.click(); return; }
     // Superficie sin bindReview: núcleo vigente del Aceptar.
     if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
-      try { igGateFeedback(rev); } catch (e) { toast(f3En() ? 'Connect your Instagram first 📸' : 'Conectá tu Instagram primero 📸'); }
+      try { igGateFeedback(rev); } catch (e) { toast(f3En() ? 'Connect your Instagram first' : 'Conectá tu Instagram primero'); }
       return;
     }
     rev.disabled = true;
@@ -20711,7 +20834,7 @@ async function f3RevealCheck() {
         seen.add(t.post.id);
         const p = t.post;
         const prop = p.status === 'published'
-          ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
+          ? { label: pzIc('checkCircle', 14) + ' ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
           : proposedLabelFor(p, pl.proposals, tz);
         cards.push(weekCardHTML(p, { bizName, tz, prop, count: null }));
       }
@@ -20805,7 +20928,7 @@ function maybeAskPushPostIg() {
     ov.innerHTML = `
       <div class="pz-exp-modal" role="dialog" aria-modal="true">
         <img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
-        <h2>¿Te aviso antes de cada posteo? 👀</h2>
+        <h2>¿Te aviso antes de cada posteo? ${pzIc('eye', 14)}</h2>
         <p class="pz-exp-sub">Te lo muestro 3 horas antes — y si no te cierra, lo frenás con un toque.</p>
         <button class="btn btn-primary btn-block" id="apvPushYes">Sí, avisame</button>
         <button class="btn btn-soft btn-block" id="apvPushNo" style="margin-top:8px">Ahora no</button>

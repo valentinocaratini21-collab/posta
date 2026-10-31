@@ -10,7 +10,7 @@
   'use strict';
   const en = () => (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const T = () => en() ? {
-    title: '🎉 Party flyer',
+    title: pzIc('gift', 18) + ' Party flyer',
     intro: 'Load your party’s real details and Posty builds the full package as drafts in your Schedule: the feed flyer, the story version and the countdown stories. Whatever you don’t fill in simply doesn’t appear — nothing is made up.',
     fiesta: 'Party name', fiestaPh: 'e.g. Halloween',
     fromDigest: 'Your parties from your profile — tap one:',
@@ -22,15 +22,15 @@
     promo: 'Bar deal (only if it’s real)', promoPh: 'e.g. 2-for-1 at the bar until 1 AM',
     edad: 'This is an 18+ event',
     estilo: 'Flyer style',
-    make: '🎉 Build the flyer package',
+    make: pzIc('gift', 16) + ' Build the flyer package',
     need: 'The party name and its date are the minimum — everything else can stay empty.',
-    working: 'Posty is building your flyer package 🎨 It can take a minute or two — you can close this: the drafts will show up in your Schedule on their own.',
-    done: '✅ Done! The flyer package is in your Schedule as drafts: feed flyer, story and countdown — ready for your OK.',
+    working: 'Posty is building your flyer package. It can take a minute or two — you can close this: the drafts will show up in your Schedule on their own.',
+    done: pzIc('checkCircle', 16) + ' Done! The flyer package is in your Schedule as drafts: feed flyer, story and countdown — ready for your OK.',
     seeSchedule: 'See it in my Schedule',
-    failed: '😅 The package couldn’t be built.',
+    failed: pzIc('alert', 16) + ' The package couldn’t be built.',
     retry: 'Try again', close: 'Close',
   } : {
-    title: '🎉 Flyer de fiesta',
+    title: pzIc('gift', 18) + ' Flyer de fiesta',
     intro: 'Cargá los datos reales de tu fiesta y Posty arma el paquete completo como borradores en tu Agenda: el flyer de feed, la versión historia y la cuenta regresiva. Lo que no completes, no sale — nada se inventa.',
     fiesta: 'Nombre de la fiesta', fiestaPh: 'ej: Halloween',
     fromDigest: 'Tus fiestas según tu perfil — tocá una:',
@@ -42,12 +42,12 @@
     promo: 'Promo de barra (solo si es real)', promoPh: 'ej: 2x1 en barra hasta la 1',
     edad: 'Es un evento +18',
     estilo: 'Estilo del flyer',
-    make: '🎉 Armar el paquete de flyers',
+    make: pzIc('gift', 16) + ' Armar el paquete de flyers',
     need: 'El nombre de la fiesta y su fecha son el mínimo — todo lo demás puede quedar vacío.',
-    working: 'Posty está armando tu paquete de flyers 🎨 Puede tardar un par de minutos — podés cerrar esto: los borradores aparecen solos en tu Agenda.',
-    done: '✅ ¡Listo! El paquete quedó en tu Agenda como borradores: flyer de feed, historia y cuenta regresiva — listos para tu OK.',
+    working: 'Posty está armando tu paquete de flyers. Puede tardar un par de minutos — podés cerrar esto: los borradores aparecen solos en tu Agenda.',
+    done: pzIc('checkCircle', 16) + ' ¡Listo! El paquete quedó en tu Agenda como borradores: flyer de feed, historia y cuenta regresiva — listos para tu OK.',
     seeSchedule: 'Verlo en mi Agenda',
-    failed: '😅 El paquete no se pudo armar.',
+    failed: pzIc('alert', 16) + ' El paquete no se pudo armar.',
     retry: 'Probar de nuevo', close: 'Cerrar',
   };
   const escF = (s) => (typeof esc === 'function' ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));

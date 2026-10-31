@@ -72,7 +72,7 @@ check('CSS desktop solo >760px', css.includes('.pz-back-desktop{display:none}') 
 console.log('== ÍTEM 6: ajustes organizados/simples ==');
 check('bloque Meta App ID/Secret fuera', !aju.includes('metaAppId') || !/Meta App ID/.test(aju));
 check('botón Probar conexión fuera', !/Probar conexi/.test(aju));
-check('CHUNK_V bump v499', /const CHUNK_V = '20261031-v499'/.test(app));
+check('CHUNK_V bump v506', /const CHUNK_V = '20261031-v506'/.test(app));
 check('sección Tu negocio primero', aju.indexOf('Tu negocio') < aju.indexOf('Mi plan') || aju.indexOf('Tu negocio') >= 0);
 
 console.log('== ÍTEM 7 + pill Borrador ==');
@@ -83,8 +83,8 @@ check('fp-tile sin pill borrador', !app.includes(": 'borrador'") && !app.include
 check('fp-tile draft con borde', app.includes('fp-tile-draft'));
 check('CSS fp-tile-draft', css.includes('.fp-tile.fp-tile-draft'));
 check('CSS .pz-draft-chip conservada (tarjeta revisión)', css.includes('.pz-draft-chip'));
-check('bumps index', idx.includes('app.js?v=329') && idx.includes('styles.css?v=20261050'));
-check('BUILD v504', srv.includes("BUILD_ID = '20261031-v505'"));
+check('bumps index', idx.includes('app.js?v=330') && idx.includes('styles.css?v=20261051'));
+check('BUILD v504', srv.includes("BUILD_ID = '20261031-v506'"));
 check('sin expandArtBrief tocado', !/expandArtBrief/.test(app.split('apvMoreHTML')[0].slice(-2000)) || true);
 check('sin archivos gesty-* tocados (diff lo confirma)', true);
 
@@ -167,6 +167,7 @@ try {
     }
     throw new Error('sin cierre');
   };
+  sandbox.pzIc = (name, px) => '<svg data-ic="' + name + '" width="' + px + '"></svg>'; // Lote 6: pzBackHTML dibuja arrowLeft
   vm.runInContext(extractFn(app, 'pzGoBack').replace('function pzGoBack', 'globalThis.pzGoBack = function'), sandbox);
   vm.runInContext(extractFn(app, 'pzBackHTML').replace('function pzBackHTML', 'globalThis.pzBackHTML = function'), sandbox);
   vm.runInContext(extractFn(app, 'apvMoreHTML').replace('function apvMoreHTML', 'globalThis.apvMoreHTML = function'), sandbox);

@@ -113,7 +113,7 @@ function anaErrorHTML() {
   const en = anaUiLang() === 'en';
   return `<div class="ana-card ana-letter"><div class="ana-loading">
     <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
-    <p class="ana-load-t">${en ? 'Oops, I could not build your analysis just now 😅' : 'Uy, no pude armar tu análisis ahora 😅'}</p>
+    <p class="ana-load-t">${en ? 'Oops, I could not build your analysis just now' : 'Uy, no pude armar tu análisis ahora'}</p>
     <p class="ana-load-s">${en ? 'It is not your account: it is a connection hiccup on my side. Let us try again.' : 'No es tu cuenta: es un tropiezo de conexión de mi lado. Probamos de nuevo.'}</p>
     <button class="btn btn-primary" style="margin-top:14px" onclick="anaRetry()">${en ? 'Try again' : 'Reintentar'}</button>
   </div></div>`;
@@ -236,7 +236,7 @@ function anaStatsHTML(a, d) {
   if (a && a.n && a.n >= 2) traj = `<p class="ana-traj">${anaT('Ya es tu análisis #', 'This is already your analysis #')}${a.n}${anaT(': cada semana comparo contra el anterior y ajusto tu semana con lo nuevo que aprendo de tu cuenta.', ': every week I compare against the previous one and adjust your week with what I newly learn from your account.')}</p>`;
   else if (hist.length > 1) traj = `<p class="ana-traj">${anaT('Ya tenés ', 'You already have ')}${hist.length}${anaT(' análisis: cada uno aprende del anterior.', ' analyses: each one learns from the previous.')}</p>`;
   if (tiles.length < 2) return traj ? `<div class="ana-block">${traj}</div>` : '';
-  return `<p class="ana-sec-t">${anaT('📸 Tu foto de hoy', '📸 Your snapshot today')}</p><div class="ana-stats">${tiles.slice(0, 4).map((t) => `<div class="ana-stat"><p class="ana-sn">${esc(t.n)}</p><p class="ana-sl">${esc(t.l)}</p></div>`).join('')}</div>${traj}`;
+  return `<p class="ana-sec-t">${anaT(`${pzIc('camera', 16)} Tu foto de hoy`, `${pzIc('camera', 16)} Your snapshot today`)}</p><div class="ana-stats">${tiles.slice(0, 4).map((t) => `<div class="ana-stat"><p class="ana-sn">${esc(t.n)}</p><p class="ana-sl">${esc(t.l)}</p></div>`).join('')}</div>${traj}`;
 }
 
 /* ---------- Hallazgos ---------- */
@@ -246,12 +246,12 @@ function anaFindingHTML(f) {
   const act = f.decision || f.with_posty || '';
   return `<div class="ana-f"><p class="ana-t">${esc(f.text || '')}</p>`
     + (f.now ? `<p class="ana-fmeta"><span class="ana-now">${anaT('Hoy: ', 'Today: ')}${esc(f.now)}</span></p>` : '')
-    + (act ? `<p class="ana-act">→ ${anaT('Con Posty: ', 'With Posty: ')}<b>${esc(act)}</b></p>` : '')
+    + (act ? `<p class="ana-act">${pzIc("arrowRight", 13)} ${anaT('Con Posty: ', 'With Posty: ')}<b>${esc(act)}</b></p>` : '')
     + `</div>`;
 }
 
 function anaGroupsHTML(a) {
-  const groups = [['mejorar', anaT('🛠️ A mejorar', '🛠️ To improve')], ['incrementar', anaT('📈 A incrementar', '📈 To grow')], ['reducir', anaT('📉 A reducir', '📉 To reduce')]];
+  const groups = [['mejorar', anaT(`${pzIc('wrench', 16)} A mejorar`, `${pzIc('wrench', 16)} To improve`)], ['incrementar', anaT(`${pzIc('chartUp', 16)} A incrementar`, `${pzIc('chartUp', 16)} To grow`)], ['reducir', anaT(`${pzIc('chartDown', 16)} A reducir`, `${pzIc('chartDown', 16)} To reduce`)]];
   const html = groups.map(([key, title]) => {
     const fs = (a.findings || []).filter((f) => f && f.group === key);
     if (!fs.length) return '';
@@ -353,7 +353,7 @@ function anaPlanHTML(a, birth) {
     const lis = steps.map((st) => `<li>${esc(st.step)}${st.fx ? `<span class="ana-fx">${anaT('El efecto: ', 'The effect: ')}${esc(st.fx)}</span>` : ''}</li>`).join('');
     return `<div class="ana-phase"><p class="ana-ph">${nums[i]} ${names[i]}</p><ul>${lis}</ul></div>`;
   }).join('');
-  const title = birth ? anaT('🚀 Mi plan para que nazcas con todo', '🚀 My plan so you launch with everything') : anaT('🚀 Mi plan para mejorar todo esto', '🚀 My plan to improve all of this');
+  const title = birth ? anaT(`${pzIc('rocket', 16)} Mi plan para que nazcas con todo`, `${pzIc('rocket', 16)} My plan so you launch with everything`) : anaT(`${pzIc('rocket', 16)} Mi plan para mejorar todo esto`, `${pzIc('rocket', 16)} My plan to improve all of this`);
   return `<div class="ana-plan"><p class="ana-plan-t">${title}</p><p class="ana-plan-s">${anaT('En este orden — y ya arranca', 'In this order — and it starts now')}</p>${body}<p class="ana-need">${anaNeedLine(a, birth)}</p></div>`;
 }
 
@@ -390,7 +390,7 @@ function anaMarketHTML(a) {
   if (a.market_full && a.market) {
     const m = a.market;
     if (!m.available) {
-      return `<p class="ana-sec-t">${anaT('🗺️ Tu competencia', '🗺️ Your competition')}</p><p class="ana-t">${esc(m.unavailable_reason || anaT('Todavía no hay datos públicos suficientes de cuentas de tu rubro y tu zona. Apenas aparezcan, este mapa se completa solo — no estimamos nada.', 'There is not enough public data yet from accounts in your category and your area. As soon as it appears, this map completes itself — we estimate nothing.'))}</p>`;
+      return `<p class="ana-sec-t">${anaT(`${pzIc('map', 16)} Tu competencia`, `${pzIc('map', 16)} Your competition`)}</p><p class="ana-t">${esc(m.unavailable_reason || anaT('Todavía no hay datos públicos suficientes de cuentas de tu rubro y tu zona. Apenas aparezcan, este mapa se completa solo — no estimamos nada.', 'There is not enough public data yet from accounts in your category and your area. As soon as it appears, this map completes itself — we estimate nothing.'))}</p>`;
     }
     const bars = anaBarsHTML(a);
     const peers = bars ? '' : (m.peers || []).map((p) => {
@@ -399,15 +399,15 @@ function anaMarketHTML(a) {
       return `<div class="ana-peer"><span>@${esc(p.handle || '')}</span><span>${esc(rate + fol)}</span></div>`;
     }).join('');
     const mf = (m.findings || []).map(anaFindingHTML).join('');
-    const pos = m.position && m.position.text ? `<p class="ana-pos">📍 ${esc(m.position.text)}</p>` : '';
-    return `<p class="ana-sec-t">${anaT('🗺️ Tu competencia, de tu rubro y tu zona', '🗺️ Your competition, in your category and your area')}</p>${bars}${peers}${mf}${pos}`;
+    const pos = m.position && m.position.text ? `<p class="ana-pos">${pzIc('pin', 14)} ${esc(m.position.text)}</p>` : '';
+    return `<p class="ana-sec-t">${anaT(`${pzIc('map', 16)} Tu competencia, de tu rubro y tu zona`, `${pzIc('map', 16)} Your competition, in your category and your area`)}</p>${bars}${peers}${mf}${pos}`;
   }
   const teaser = a.market_teaser;
   if (teaser && Array.isArray(teaser.items) && teaser.items.length) {
     const items = teaser.items.map((it) => `<p class="ana-t" style="margin-top:8px">${pzIc('pin', 15)} ${esc(it.text || '')}${it.now ? ` — <span style="color:var(--mut);font-weight:600">${esc(it.now)}</span>` : ''}</p>`).join('');
     return `<p class="ana-sec-t">${anaT(pzIc('map', 20) + ' Tu mercado', pzIc('map', 20) + ' Your market')} <span class="ana-badge">${anaT('MUESTRA', 'TASTE')}</span></p>${items}`
       + `<p class="ana-upsell">${anaT('El mapa completo — tu competencia una por una, tu posición en el rubro y las decisiones que tomamos con eso — es parte de <b>Growth</b> (planes Pro y Total).', 'The full map — your competition one by one, your position in the category and the decisions we make with it — is part of <b>Growth</b> (Pro and Total plans).')}</p>`
-      + `<a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?plan=1">${anaT('Ver planes →', 'See plans →')}</a>`;
+      + `<a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?plan=1">${anaT('Ver planes', 'See plans') + ' ' + pzIc('arrowRight', 13)}</a>`;
   }
   return '';
 }
@@ -416,9 +416,9 @@ function anaMarketHTML(a) {
 
 function anaLoopHTML(a) {
   if (!a.loop || !Array.isArray(a.loop.checks) || !a.loop.checks.length) return '';
-  const ico = { 'cumplida': '✅', 'en-curso': '🔄', 'sin-datos': '⏳' };
+  const ico = { 'cumplida': pzIc('checkCircle', 16), 'en-curso': pzIc('refresh', 16), 'sin-datos': pzIc('clock', 16) };
   const checks = a.loop.checks.map((c) => `<div class="ana-check">${ico[c.status] || '•'} ${esc(c.text || '')}</div>`).join('');
-  return `<div class="ana-block"><p class="ana-sec-t" style="margin-top:0">${anaT('🔁 Así viene el plan', '🔁 How the plan is going')}</p><p class="ana-traj" style="margin:0 0 4px">${anaT('Lo que el análisis anterior se propuso, medido contra tu cuenta hoy.', 'What the previous analysis set out to do, measured against your account today.')}</p>${checks}</div>`;
+  return `<div class="ana-block"><p class="ana-sec-t" style="margin-top:0">${anaT(`${pzIc('refresh', 16)} Así viene el plan`, `${pzIc('refresh', 16)} How the plan is going`)}</p><p class="ana-traj" style="margin:0 0 4px">${anaT('Lo que el análisis anterior se propuso, medido contra tu cuenta hoy.', 'What the previous analysis set out to do, measured against your account today.')}</p>${checks}</div>`;
 }
 
 /* La línea de progreso contra la carta anterior, desde el loop medido:
@@ -433,7 +433,7 @@ function anaProgressHTML(a) {
   if (done === measured.length) txt = anaT('cumplimos todos los objetivos que nos propusimos. Este plan sigue desde ahí.', 'we met every goal we set. This plan continues from there.');
   else if (done > 0) txt = done + anaT(' de ', ' of ') + measured.length + anaT(' objetivos del plan ya están cumplidos — el resto viene en camino y queda empujando en este plan.', ' plan goals are already met — the rest is on its way and keeps pushing in this plan.');
   else txt = anaT('el plan viene en camino, todavía sin objetivos cerrados — por eso esta carta refuerza justo esos puntos.', 'the plan is on its way, with no goals closed yet — that is why this letter reinforces exactly those points.');
-  return `<p class="ana-prog">📈 <b>${anaT('Desde tu carta anterior:', 'Since your last letter:')}</b> ${esc(txt)}</p>`;
+  return `<p class="ana-prog">${pzIc('chartUp', 16)} <b>${anaT('Desde tu carta anterior:', 'Since your last letter:')}</b> ${esc(txt)}</p>`;
 }
 
 /* Cartas anteriores: el historial del payload trae el RESUMEN (n, fecha,
@@ -461,9 +461,9 @@ function anaHistoryHTML(d, a) {
     const right = fecha + ' · ' + (h.findings != null ? h.findings : '') + anaT(' hallazgos', ' findings') + loopTxt;
     const open = h.id ? ` onclick="anaOpenPast(${Number(h.id)})" style="cursor:pointer" title="${anaT('Leer esta carta completa', 'Read this letter in full')}"` : '';
     const read = h.id ? anaT(' · <u>leer completa</u>', ' · <u>read in full</u>') : '';
-    return `<div class="ana-peer"${open}><span>📩 ${anaT('Carta #', 'Letter #')}${esc(String(h.n || ''))}${esc(kindTxt)}${read}</span><span>${esc(right)}</span></div>`;
+    return `<div class="ana-peer"${open}><span>${pzIc('mail', 14)} ${anaT('Carta #', 'Letter #')}${esc(String(h.n || ''))}${esc(kindTxt)}${read}</span><span>${esc(right)}</span></div>`;
   }).join('');
-  return `<div class="ana-block"><p class="ana-sec-t" style="margin-top:0">${anaT('📩 Cartas anteriores', '📩 Past letters')}</p>${rows}<p class="ana-traj">${anaT('Una carta nueva cada semana: cada una se apoya en la anterior — diagnóstico → plan → medición → ajuste. Por eso tu carta #10 va a ser mucho mejor que la #1.', 'A new letter every week: each one builds on the previous — diagnosis → plan → measurement → adjustment. That is why your letter #10 will be much better than your #1.')}</p></div>`;
+  return `<div class="ana-block"><p class="ana-sec-t" style="margin-top:0">${anaT(`${pzIc('mail', 16)} Cartas anteriores`, `${pzIc('mail', 16)} Past letters`)}</p>${rows}<p class="ana-traj">${anaT('Una carta nueva cada semana: cada una se apoya en la anterior — diagnóstico → plan → medición → ajuste. Por eso tu carta #10 va a ser mucho mejor que la #1.', 'A new letter every week: each one builds on the previous — diagnosis → plan → measurement → adjustment. That is why your letter #10 will be much better than your #1.')}</p></div>`;
 }
 
 /* ---------- Carta anterior completa: abrir → leer → volver ---------- */
@@ -481,18 +481,18 @@ async function anaOpenPast(id) {
   try { d = await api.get('/api/analysis/' + Number(id)); } catch (e) { d = null; }
   if (!document.getElementById('anaRoot')) return; // ya navegó a otra vista
   if (!d || d.ok === false || !d.analysis) {
-    const msg = (d && d.message) ? String(d.message) : (en0 ? 'I could not open that letter just now 😅 Let us try again in a bit.' : 'Esta carta no se pudo abrir ahora 😅 Probamos de nuevo en un ratito.');
+    const msg = (d && d.message) ? String(d.message) : (en0 ? 'I could not open that letter just now. Let us try again in a bit.' : 'Esta carta no se pudo abrir ahora. Probamos de nuevo en un ratito.');
     rootEl.innerHTML = `<div class="ana-card ana-letter"><div class="ana-loading">
       <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
       <p class="ana-load-t">${en0 ? 'I could not open that letter' : 'No pude abrir esa carta'}</p>
       <p class="ana-load-s">${esc(msg)}</p>
-      <button class="btn btn-primary" style="margin-top:14px" onclick="anaBackCurrent()">${en0 ? '← Back to your current letter' : '← Volver a tu carta actual'}</button>
+      <button class="btn btn-primary" style="margin-top:14px" onclick="anaBackCurrent()">${en0 ? pzIc('arrowLeft', 14) + ' Back to your current letter' : pzIc('arrowLeft', 14) + ' Volver a tu carta actual'}</button>
     </div></div>`;
     return;
   }
   anaPastMode = true;
   anaSetLang(d.analysis);
-  const bar = `<div style="margin-bottom:10px"><button class="btn btn-ghost btn-sm" onclick="anaBackCurrent()">${anaT('← Volver a tu carta actual', '← Back to your current letter')}</button>
+  const bar = `<div style="margin-bottom:10px"><button class="btn btn-ghost btn-sm" onclick="anaBackCurrent()">${pzIc('arrowLeft', 14) + ' ' + anaT('Volver a tu carta actual', 'Back to your current letter')}</button>
     <span style="margin-left:8px;font-size:12.5px;color:var(--mut);font-weight:600">${anaT('Carta anterior — así se veía tu análisis esa semana', 'Past letter — this is what your analysis looked like that week')}</span></div>`;
   rootEl.innerHTML = bar + anaCartaHTML({ ok: true, plan: d.plan, analysis: d.analysis, history: [] });
   try { window.scrollTo(0, 0); } catch (e) {}
@@ -516,7 +516,7 @@ function anaKitHTML(a) {
   let h = '';
   const fs = (a.findings || []).filter((f) => f && f.text);
   if (fs.length) {
-    h += `<p class="ana-sec-t">${anaT('✨ Lo que ya sé de tu negocio', '✨ What I already know about your business')}</p>${fs.map(anaFindingHTML).join('')}`;
+    h += `<p class="ana-sec-t">${anaT(`${pzIc('sparkle', 16)} Lo que ya sé de tu negocio`, `${pzIc('sparkle', 16)} What I already know about your business`)}</p>${fs.map(anaFindingHTML).join('')}`;
   }
   const kit = a.profile_kit || {};
   if (kit.highlights && kit.highlights.length) {
@@ -525,7 +525,7 @@ function anaKitHTML(a) {
   const grid = Array.isArray(a.starter_grid) ? a.starter_grid : [];
   if (grid.length) {
     const roles = grid.map((s) => `<div class="ana-role"><b>${esc(String(s.slot))}. ${esc(s.role || '')}</b> <span class="ana-role-f">${esc(s.format || '')}</span><div class="ana-role-w">${esc(s.why || '')}</div></div>`).join('');
-    h += `<p class="ana-sec-t">${anaT('🪟 Tu primera vidriera (9 piezas)', '🪟 Your first storefront (9 posts)')}</p>${roles}`;
+    h += `<p class="ana-sec-t">${anaT(`${pzIc('store', 16)} Tu primera vidriera (9 piezas)`, `${pzIc('store', 16)} Your first storefront (9 posts)`)}</p>${roles}`;
     if (grid.market_note) h += `<p class="ana-note">${esc(grid.market_note)}</p>`;
   }
   return h;
@@ -552,8 +552,8 @@ function anaBanner(stage, ctx) {
 
 function anaSignHTML(birth) {
   const fline = birth
-    ? anaT('Tu cuenta nace con plan. Nos vemos en tu agenda 📅', 'Your account is born with a plan. See you in your Schedule 📅')
-    : anaT('El plan ya está en marcha: tu semana está armada con todo esto. Nos vemos en tu agenda 📅', 'The plan is already in motion: your week is built with all of this. See you in your Schedule 📅');
+    ? anaT('Tu cuenta nace con plan. Nos vemos en tu agenda', 'Your account is born with a plan. See you in your Schedule')
+    : anaT('El plan ya está en marcha: tu semana está armada con todo esto. Nos vemos en tu agenda', 'The plan is already in motion: your week is built with all of this. See you in your Schedule');
   return `<div class="ana-sign">
     <img src="ai-avatar.png" alt="Posty">
     <p class="ana-fname">Posty<span>.</span></p>
@@ -623,9 +623,9 @@ function anaWeekBirthHTML(d, a) {
   (a.findings || []).forEach(push);
   if (a.market_full && a.market && Array.isArray(a.market.findings)) a.market.findings.forEach(push);
   if (!rows.length) return '';
-  let h = `<p class="ana-sec-t">${anaT('🧭 Así nace tu semana', '🧭 How your week is born')}</p>`;
-  h += rows.slice(0, 4).map((f) => `<div class="ana-f"><p class="ana-act" style="margin-top:0">→ ${anaT('En tu semana: ', 'In your week: ')}<b>${esc(f.decision)}</b></p><p class="ana-fmeta"><span class="ana-now">${anaT('Porque vi: ', 'Because I saw: ')}${esc(f.text || '')}${f.now ? ' (' + esc(f.now) + ')' : ''}</span></p></div>`).join('');
-  h += `<p style="margin-top:10px"><a href="#/app/schedule" style="font-weight:700;color:var(--cel)">${anaT('Verla en tu agenda →', 'See it in your Schedule →')}</a></p>`;
+  let h = `<p class="ana-sec-t">${anaT(`${pzIc('compass', 16)} Así nace tu semana`, `${pzIc('compass', 16)} How your week is born`)}</p>`;
+  h += rows.slice(0, 4).map((f) => `<div class="ana-f"><p class="ana-act" style="margin-top:0">${pzIc("arrowRight", 13)} ${anaT('En tu semana: ', 'In your week: ')}<b>${esc(f.decision)}</b></p><p class="ana-fmeta"><span class="ana-now">${anaT('Porque vi: ', 'Because I saw: ')}${esc(f.text || '')}${f.now ? ' (' + esc(f.now) + ')' : ''}</span></p></div>`).join('');
+  h += `<p style="margin-top:10px"><a href="#/app/schedule" style="font-weight:700;color:var(--cel)">${anaT('Verla en tu agenda', 'See it in your Schedule') + ' ' + pzIc('arrowRight', 13)}</a></p>`;
   return h;
 }
 
@@ -660,7 +660,7 @@ function anaToggleFull(btn) {
   if (!box) return;
   const open = box.style.display !== 'none';
   box.style.display = open ? 'none' : 'block';
-  if (btn) btn.textContent = open ? anaT('Ver mi análisis completo →', 'See my full analysis →') : anaT('Ver menos ↑', 'See less ↑');
+  if (btn) btn.innerHTML = open ? anaT('Ver mi análisis completo', 'See my full analysis') + ' ' + pzIc('arrowRight', 13) : anaT('Ver menos', 'See less') + ' ' + pzIc('chevUp', 13);
 }
 
 function anaLetterBodyHTML(a) {
@@ -777,7 +777,7 @@ async function anaShareWeek(btn) {
   const prideIt = items.find((it) => it && it.t === 'p' && it.text);
   const photoIt = items.find((it) => it && it.t === 'photo' && it.src);
   const handle = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_username) ? String(PROFILE.ig_username).replace(/^@/, '') : '';
-  if (!prideIt || !handle) { if (typeof toast === 'function') toast(en ? 'There is no week to share yet 😅' : 'Todavía no hay una semana para compartir 😅'); return; }
+  if (!prideIt || !handle) { if (typeof toast === 'function') toast(en ? 'There is no week to share yet' : 'Todavía no hay una semana para compartir'); return; }
   if (btn) btn.disabled = true;
   try {
     const W = 1080, H = 1920;
@@ -837,7 +837,7 @@ async function anaShareWeek(btn) {
     }
   } catch (e) {
     if (e && e.name === 'AbortError') return;
-    if (typeof toast === 'function') toast(en ? 'I could not build the card — try again in a bit 😅' : 'No pude armar la tarjeta — probá en un ratito 😅');
+    if (typeof toast === 'function') toast(en ? 'I could not build the card — try again in a bit' : 'No pude armar la tarjeta — probá en un ratito');
   } finally { if (btn) btn.disabled = false; }
 }
 
@@ -855,10 +855,10 @@ function anaCartaHTML(d) {
   const carta = anaHasLetter(a);
   const title = carta && a.letter.title ? a.letter.title : anaT('Tu análisis', 'Your analysis');
   const intro = !a
-    ? anaT('Todavía no tengo tu radiografía — y no te voy a inventar una. Esto es lo que armo para tu cuenta desde tu rubro, tu zona y tu negocio 👇', 'I do not have your full picture yet — and I will not make one up. This is what I build for your account from your category, your area and your business 👇')
+    ? anaT('Todavía no tengo tu radiografía — y no te voy a inventar una. Esto es lo que armo para tu cuenta desde tu rubro, tu zona y tu negocio' + pzIc('arrowDown', 13) + '', 'I do not have your full picture yet — and I will not make one up. This is what I build for your account from your category, your area and your business' + pzIc('arrowDown', 13) + '')
     : (birth
-      ? anaT('Tu cuenta está por nacer — y va a nacer con estrategia. Estudié tu rubro y tu zona, y esto es lo que armé para vos 👇', 'Your account is about to be born — and it will be born with a strategy. I studied your category and your area, and this is what I built for you 👇')
-      : anaT('Estudié tu cuenta dato por dato — tu ritmo, tus formatos, tus textos — y armé el plan con el que lo mejoro. Esto es lo que vi 👇', 'I studied your account data point by data point — your rhythm, your formats, your texts — and built the plan I improve it with. This is what I saw 👇'));
+      ? anaT('Tu cuenta está por nacer — y va a nacer con estrategia. Estudié tu rubro y tu zona, y esto es lo que armé para vos' + pzIc('arrowDown', 13) + '', 'Your account is about to be born — and it will be born with a strategy. I studied your category and your area, and this is what I built for you' + pzIc('arrowDown', 13) + '')
+      : anaT('Estudié tu cuenta dato por dato — tu ritmo, tus formatos, tus textos — y armé el plan con el que lo mejoro. Esto es lo que vi' + pzIc('arrowDown', 13) + '', 'I studied your account data point by data point — your rhythm, your formats, your texts — and built the plan I improve it with. This is what I saw' + pzIc('arrowDown', 13) + ''));
   let h = `<div class="ana-card ana-letter">
     <div class="ana-lhead">
       <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
@@ -886,7 +886,7 @@ function anaCartaHTML(d) {
     const minimal = !!(a.letter && (a.letter.v >= 2 || a.letter.minimal));
     h += anaLetterBodyHTML(a);
     if (minimal) {
-      h += `<div style="text-align:center;margin:14px 0 4px"><button class="btn btn-ghost" id="anaFullBtn" onclick="anaToggleFull(this)">${anaT('Ver mi análisis completo →', 'See my full analysis →')}</button></div><div id="anaFull" style="display:none">${anaFullHTML(d, a, birth)}</div>`;
+      h += `<div style="text-align:center;margin:14px 0 4px"><button class="btn btn-ghost" id="anaFullBtn" onclick="anaToggleFull(this)">${anaT('Ver mi análisis completo', 'See my full analysis') + ' ' + pzIc('arrowRight', 13)}</button></div><div id="anaFull" style="display:none">${anaFullHTML(d, a, birth)}</div>`;
     }
     if (!minimal && birth) h += anaKitHTML(a);
     if (!minimal && !birth) h += anaMarketHTML(a);

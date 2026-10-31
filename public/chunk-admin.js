@@ -29,7 +29,7 @@ async function adminApi(path, method, data) {
   }
 }
 async function adminView() {
-  return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Analytics</h1><p class="sub">Cómo se usa Posty — solo equipo</p></div></div>
+  return `<div class="page-head"><div class="ph-ico">${pzIc('chartUp', 26)}</div><div class="ph-txt"><h1>Analytics</h1><p class="sub">Cómo se usa Posty — solo equipo</p></div></div>
   <div class="card" id="adminCard"><div class="d">⏳ Cargando…</div></div>`;
 }
 async function bindAdmin() {
@@ -37,7 +37,7 @@ async function bindAdmin() {
   if (!adminToken()) {
     let gateMsg = '';
     try { gateMsg = sessionStorage.getItem('posta_admin_msg') || ''; sessionStorage.removeItem('posta_admin_msg'); } catch (e) {}
-    card.innerHTML = `<h3 style="margin:0 0 8px">🔒 Acceso restringido</h3>
+    card.innerHTML = `<h3 style="margin:0 0 8px">${pzIc('lock', 16)} Acceso restringido</h3>
       ${gateMsg ? `<div class="err" style="margin-bottom:10px">${gateMsg}</div>` : ''}
       <p class="d">Pegá el token de admin del servidor (ADMIN_TOKEN).</p>
       <div class="field"><input id="adTok" type="password" placeholder="token" style="width:100%;font-size:16px"></div>
@@ -58,20 +58,20 @@ async function bindAdmin() {
   }
   card.innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn btn-soft btn-sm" data-atab="launch">🚀 Lanzamiento</button>
-      <button class="btn btn-soft btn-sm" data-atab="home">🏠 Panel</button>
+      <button class="btn btn-soft btn-sm" data-atab="launch">${pzIc('rocket', 15)} Lanzamiento</button>
+      <button class="btn btn-soft btn-sm" data-atab="home">${pzIc('home', 15)} Panel</button>
       <button class="btn btn-soft btn-sm" data-atab="funnel">Funnel /prueba</button>
       <button class="btn btn-soft btn-sm" data-atab="activity">Actividad</button>
       <button class="btn btn-soft btn-sm" data-atab="users">Por usuario</button>
-      <button class="btn btn-soft btn-sm" data-atab="review">✨ Revisión</button>
-      <button class="btn btn-soft btn-sm" data-atab="money">💰 Plata</button>
-      <button class="btn btn-soft btn-sm" data-atab="referrals">🔗 Referidos</button>
-      <button class="btn btn-soft btn-sm" data-atab="content">📊 Contenido</button>
-      <button class="btn btn-soft btn-sm" data-atab="cohorts">🔁 Cohorts</button>
-      <button class="btn btn-soft btn-sm" data-atab="churn">⚠️ En riesgo</button>
-      <button class="btn btn-soft btn-sm" data-atab="health">🩺 Salud</button>
-      <button class="btn btn-soft btn-sm" id="adExport">📥 Planilla</button>
-      <button class="btn btn-soft btn-sm" id="adLogout">🔑 Cambiar token</button>
+      <button class="btn btn-soft btn-sm" data-atab="review">${pzIc('sparkle', 15)} Revisión</button>
+      <button class="btn btn-soft btn-sm" data-atab="money">${pzIc('coin', 15)} Plata</button>
+      <button class="btn btn-soft btn-sm" data-atab="referrals">${pzIc('link', 15)} Referidos</button>
+      <button class="btn btn-soft btn-sm" data-atab="content">${pzIc('chartUp', 15)} Contenido</button>
+      <button class="btn btn-soft btn-sm" data-atab="cohorts">${pzIc('refresh', 15)} Cohorts</button>
+      <button class="btn btn-soft btn-sm" data-atab="churn">${pzIc('alert', 15)} En riesgo</button>
+      <button class="btn btn-soft btn-sm" data-atab="health">${pzIc('stethoscope', 15)} Salud</button>
+      <button class="btn btn-soft btn-sm" id="adExport">${pzIc('download', 15)} Planilla</button>
+      <button class="btn btn-soft btn-sm" id="adLogout">${pzIc('key', 15)} Cambiar token</button>
       <select id="adDays" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px">
         <option value="7">7 días</option><option value="30" selected>30 días</option>
       </select>
@@ -112,7 +112,7 @@ async function bindAdmin() {
       </div>`;
     const planChips = (P.active_by_plan || []).map(p => `<span style="background:var(--bg2);border:1px solid var(--line);border-radius:99px;padding:3px 10px;font-size:12px"><b>${esc(p.plan)}</b> · ${p.n}</span>`).join(' ') || '<span class="d">Sin suscripciones activas</span>';
     body.innerHTML = `
-      <h4 style="margin:0 0 8px">💰 Plata</h4>
+      <h4 style="margin:0 0 8px">${pzIc('coin', 16)} Plata</h4>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px">
         ${moneyBlock(M.current || {}, 'Este mes', true)}
         ${moneyBlock(M.previous || {}, 'Mes pasado', false)}
@@ -120,7 +120,7 @@ async function bindAdmin() {
       <p class="d" style="margin:0 0 14px">Suscripciones: estimado por suscripciones activas (MercadoPago no registra cada cobro en nuestra base). Comisiones de pauta: cobradas, se reconocen cuando el cliente carga crédito. IA convertida a ${adm$(M.rate || 1425)}/US$.</p>
       <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:16px">
         <b style="font-size:13px">Gastos fijos del mes</b>
-        ${(M.fixed_expenses || []).map(f => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(f.label)}</span><span><b>${adm$(f.amount_ars)}</b> <button class="btn btn-soft btn-sm" data-fxdel="${f.id}" style="margin-left:6px">✕</button></span></div>`).join('') || '<div class="d" style="margin-top:6px">Sin gastos fijos cargados: el neto todavía no los descuenta. Cargá Railway, dominio y lo que pagues todos los meses.</div>'}
+        ${(M.fixed_expenses || []).map(f => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(f.label)}</span><span><b>${adm$(f.amount_ars)}</b> <button class="btn btn-soft btn-sm" data-fxdel="${f.id}" style="margin-left:6px">${pzIc('x', 14)}</button></span></div>`).join('') || '<div class="d" style="margin-top:6px">Sin gastos fijos cargados: el neto todavía no los descuenta. Cargá Railway, dominio y lo que pagues todos los meses.</div>'}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           <input id="fxLabel" type="text" placeholder="Ej: Railway" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;flex:1;min-width:130px">
           <input id="fxAmt" type="number" min="0" step="any" placeholder="$ /mes" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:120px">
@@ -128,7 +128,7 @@ async function bindAdmin() {
         </div>
         <div id="fxMsg" style="font-size:12px;margin-top:6px"></div>
       </div>
-      <h4 style="margin:0 0 8px">📈 Pulso</h4>
+      <h4 style="margin:0 0 8px">${pzIc('chartUp', 16)} Pulso</h4>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:10px">
         <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Clientes</div><div style="font-size:19px;font-weight:800">${P.total_users || 0}</div></div>
         <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Trials activos</div><div style="font-size:19px;font-weight:800">${P.trials_active || 0}</div></div>
@@ -140,7 +140,7 @@ async function bindAdmin() {
       <div style="margin-bottom:6px;font-size:12.5px;color:var(--mut)">Suscripciones activas por plan</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:${(P.next_trial_expiries || []).length ? '10' : '16'}px">${planChips}</div>
       ${(P.next_trial_expiries || []).length ? `<div style="font-size:12.5px;margin-bottom:16px;color:var(--mut)">⏳ Próximos vencimientos de prueba: ${P.next_trial_expiries.map(t => `${esc(t.email)} (${esc(t.ends_at)})`).join(' · ')}</div>` : ''}
-      <h4 style="margin:0 0 8px">👥 Clientes</h4>
+      <h4 style="margin:0 0 8px">${pzIc('users', 16)} Clientes</h4>
       <div class="field"><input id="adCliQ" placeholder="Buscar por negocio, email o @IG…" style="width:100%;font-size:16px"></div>
       <div id="adCliList"></div>`;
     const fxAdd = $('#fxAdd');
@@ -162,12 +162,12 @@ async function bindAdmin() {
       const qq = (q || '').trim().toLowerCase();
       const rows = clients.filter(u => !qq || [u.business_name || '', u.email || '', u.ig_username || ''].join(' ').toLowerCase().includes(qq));
       listEl.innerHTML = rows.map(u => {
-        const st = u.plan_status === 'trial' ? '🟡 trial' + (u.trial_ends_at ? ' · vence ' + new Date(Number(u.trial_ends_at)).toISOString().slice(0, 10) : '')
-          : u.plan_status === 'active' ? '🟢 activo' : esc(u.plan_status || '');
+        const st = u.plan_status === 'trial' ? pzDot('#E8A100', 11) + ' trial' + (u.trial_ends_at ? ' · vence ' + new Date(Number(u.trial_ends_at)).toISOString().slice(0, 10) : '')
+          : u.plan_status === 'active' ? pzDot('#22A06B', 11) + ' activo' : esc(u.plan_status || '');
         return `
         <button class="btn btn-ghost btn-block" data-cli="${u.id}" style="text-align:left;margin-bottom:6px">
           <b>${esc(u.business_name || u.email)}</b>${u.ig_username ? ' <span style="color:var(--mut)">@' + esc(String(u.ig_username).replace(/^@/, '')) + '</span>' : ''}<br>
-          <span style="font-size:11px;color:var(--mut)">${esc(u.plan || '')} · ${st} · ${u.ig_connected ? '📷 IG conectado' : 'sin IG'} · ${u.posts_published || 0} publicados · últ. act. ${esc((u.last_activity || u.created_at || '').slice(0, 10))}</span>
+          <span style="font-size:11px;color:var(--mut)">${esc(u.plan || '')} · ${st} · ${u.ig_connected ? pzIc('camera', 14) + ' IG conectado' : 'sin IG'} · ${u.posts_published || 0} publicados · últ. act. ${esc((u.last_activity || u.created_at || '').slice(0, 10))}</span>
         </button>`;
       }).join('') || '<div class="d">Sin clientes para ese criterio.</div>';
       listEl.querySelectorAll('[data-cli]').forEach(b => b.onclick = () => showClient(Number(b.dataset.cli)));
@@ -183,54 +183,54 @@ async function bindAdmin() {
     catch (e) { body.innerHTML = `<div class="err">No se pudo cargar la ficha.</div>`; return; }
     const u = r.user || {}, pr = r.profile || {};
     const cents$ = (c) => adm$((Number(c) || 0) / 100);
-    const stIco = { published: '🟢', scheduled: '🗓', draft: '📝', failed: '🔴', publishing: '⏳' };
+    const stIco = { published: pzDot('#22A06B', 11), scheduled: pzIc('calendar', 14), draft: pzIc('post', 14), failed: pzDot('#E5484D', 11), publishing: pzIc('clock', 14) };
     body.innerHTML = `
-      <button class="btn btn-soft btn-sm" id="cliBack" style="margin-bottom:12px">← Volver al panel</button>
+      <button class="btn btn-soft btn-sm" id="cliBack" style="margin-bottom:12px">${pzIc('arrowLeft', 14)} Volver al panel</button>
       <div style="margin-bottom:14px">
         <div style="font-size:19px;font-weight:800">${esc(pr.business_name || u.email)}</div>
         <div style="font-size:12.5px;color:var(--mut)">${esc(u.email)}${pr.ig_username ? ' · @' + esc(String(pr.ig_username).replace(/^@/, '')) : ''}${pr.category ? ' · ' + esc(pr.category) : ''} · cliente desde ${esc((u.created_at || '').slice(0, 10))}</div>
         ${pr.description ? `<div style="font-size:12.5px;margin-top:6px">${esc(pr.description)}</div>` : ''}
-        ${pr.monthly_goal ? `<div style="font-size:12.5px;margin-top:4px">🎯 Foco del mes: ${esc(pr.monthly_goal)}</div>` : ''}
+        ${pr.monthly_goal ? `<div style="font-size:12.5px;margin-top:4px">${pzIc('target', 14)} Foco del mes: ${esc(pr.monthly_goal)}</div>` : ''}
       </div>
-      <h4 style="margin:0 0 8px">💳 Suscripción</h4>
+      <h4 style="margin:0 0 8px">${pzIc('card', 16)} Suscripción</h4>
       <div style="font-size:13px;margin-bottom:16px;line-height:1.9">
         Plan <b>${esc(u.plan_name || u.plan || '')}</b> (${adm$(u.plan_price)}/mes) · Estado <b>${esc(u.plan_status || '')}</b><br>
         ${u.plan_status === 'trial' ? `Trial vence: <b>${u.trial_ends_at ? esc(new Date(Number(u.trial_ends_at)).toISOString().slice(0, 10)) : '—'}</b><br>` : ''}
         ${r.referrer_email ? `Referido por: ${esc(r.referrer_email)}<br>` : ''}
         Piloto automático: ${u.autopilot_enabled ? 'ON' : 'off'} · Seguidores IG: ${u.ig_followers || 0}
       </div>
-      <h4 style="margin:0 0 8px">📸 Posteos (${(r.posts || []).length} recientes)</h4>
+      <h4 style="margin:0 0 8px">${pzIc('camera', 16)} Posteos (${(r.posts || []).length} recientes)</h4>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
         ${(r.posts || []).map(p => `
           <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden">
             ${p.image_url ? `<img src="${esc(p.image_url)}" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block" loading="lazy">` : '<div style="aspect-ratio:4/5;background:var(--bg2)"></div>'}
             <div style="padding:6px;font-size:10.5px;line-height:1.5">
-              <div>${stIco[p.status] || '•'} ${esc(p.status)}${p.media_type === 'video' ? ' 🎬' : ''}</div>
+              <div>${stIco[p.status] || '•'} ${esc(p.status)}${p.media_type === 'video' ? ' ' + pzIc('reel', 13) + '' : ''}</div>
               <div style="color:var(--mut)">${esc((p.published_at || p.scheduled_at || p.created_at || '').slice(0, 10))}</div>
-              <div>❤️ ${p.m_likes != null ? p.m_likes : (p.ig_likes || 0)} · 💬 ${p.m_comments != null ? p.m_comments : (p.ig_comments || 0)}${p.reach ? ' · 👁 ' + p.reach : ''}</div>
+              <div>${pzIc('heart', 13)} ${p.m_likes != null ? p.m_likes : (p.ig_likes || 0)} · ${pzIc('chat', 13)} ${p.m_comments != null ? p.m_comments : (p.ig_comments || 0)}${p.reach ? ' · ' + pzIc('eye', 13) + ' ' + p.reach : ''}</div>
               <div style="color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((p.caption || '').split('\n')[0])}</div>
             </div>
           </div>`).join('') || '<div class="d">Sin posteos todavía.</div>'}
       </div>
-      <h4 style="margin:0 0 8px">💸 Su plata con Posty</h4>
+      <h4 style="margin:0 0 8px">${pzIc('coin', 16)} Su plata con Posty</h4>
       <div style="font-size:13px;line-height:1.9;margin-bottom:6px">
         Gasto IA total: <b>US$ ${r.ai ? r.ai.total_usd : 0}</b> · este mes: <b>US$ ${r.ai ? r.ai.month_usd : 0}</b> (${r.ai ? r.ai.calls : 0} llamadas)<br>
         ${r.ai && r.ai.by_feature && r.ai.by_feature.length ? r.ai.by_feature.map(f => `<span style="font-size:11.5px;color:var(--mut)">${esc(f.feature)}: US$ ${f.usd}</span>`).join(' · ') + '<br>' : ''}
         Billetera de pauta: <b>${r.ads && r.ads.wallet ? cents$(r.ads.wallet.balance_cents) : '$0'}</b>
       </div>
-      ${((r.ads && r.ads.boosts) || []).map(b => `<div style="font-size:12px;padding:5px 0;border-bottom:1px solid var(--line)">🚀 Boost #${b.id} · ${esc(b.status)} · presupuesto ${cents$(b.budget_cents)} · fee ${cents$(b.fee_cents)} · gastado ${cents$(b.last_spend_cents)} · alcance ${b.last_reach || 0}${b.error ? ' · <span style="color:var(--red-d)">' + esc(String(b.error).slice(0, 80)) + '</span>' : ''}</div>`).join('')}
-      <h4 style="margin:16px 0 8px">📥 Bandejas pendientes</h4>
-      <div style="font-size:13px;margin-bottom:16px">💬 Comentarios: <b>${r.queues ? r.queues.comments : 0}</b> · 📩 DMs: <b>${r.queues ? r.queues.dms : 0}</b> · ⭐ Reseñas: <b>${r.queues ? r.queues.reviews : 0}</b></div>
-      <h4 style="margin:0 0 8px">🕐 Actividad reciente</h4>
+      ${((r.ads && r.ads.boosts) || []).map(b => `<div style="font-size:12px;padding:5px 0;border-bottom:1px solid var(--line)">${pzIc('rocket', 14)} Boost #${b.id} · ${esc(b.status)} · presupuesto ${cents$(b.budget_cents)} · fee ${cents$(b.fee_cents)} · gastado ${cents$(b.last_spend_cents)} · alcance ${b.last_reach || 0}${b.error ? ' · <span style="color:var(--red-d)">' + esc(String(b.error).slice(0, 80)) + '</span>' : ''}</div>`).join('')}
+      <h4 style="margin:16px 0 8px">${pzIc('download', 16)} Bandejas pendientes</h4>
+      <div style="font-size:13px;margin-bottom:16px">${pzIc('chat', 14)} Comentarios: <b>${r.queues ? r.queues.comments : 0}</b> · ${pzIc('mail', 14)} DMs: <b>${r.queues ? r.queues.dms : 0}</b> · ${pzIc('star', 14)} Reseñas: <b>${r.queues ? r.queues.reviews : 0}</b></div>
+      <h4 style="margin:0 0 8px">${pzIc('clock', 16)} Actividad reciente</h4>
       ${(r.activity || []).map(e => `<div style="padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px"><span style="color:var(--mut);font-size:10.5px">${esc((e.created_at || '').slice(5, 16).replace(' ', ' · '))}</span> <b style="font-family:monospace;font-size:11.5px">${esc(e.name)}</b></div>`).join('') || '<div class="d">Sin actividad registrada.</div>'}
       <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
-        <button class="btn btn-soft btn-sm" id="cliStop">🛑 Frenar publicación de este cliente</button>
+        <button class="btn btn-soft btn-sm" id="cliStop">${pzIc('stop', 15)} Frenar publicación de este cliente</button>
         <span id="cliStopMsg" style="font-size:12px;margin-left:8px"></span>
       </div>
       <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
-        <h4 style="margin:0 0 8px">🧱 Fundamento</h4>
-        <button class="btn btn-soft btn-sm" id="cliRebuild">♻️ Rehacer fundamento</button>
-        <button class="btn btn-soft btn-sm" id="cliPurge" style="margin-left:6px">🧹 Purgar prueba y fundamento</button>
+        <h4 style="margin:0 0 8px">${pzIc('dna', 16)} Fundamento</h4>
+        <button class="btn btn-soft btn-sm" id="cliRebuild">${pzIc('refresh', 15)} Rehacer fundamento</button>
+        <button class="btn btn-soft btn-sm" id="cliPurge" style="margin-left:6px">${pzIc('trash', 15)} Purgar prueba y fundamento</button>
         <div id="cliDigestMsg" style="font-size:12px;margin-top:8px"></div>
         <div style="font-size:11.5px;color:var(--mut);margin-top:4px">Rehacer = vacía los borradores de la semana y reconstruye con el fundamento vigente. Purgar = borra candado de prueba (90 días), caché de prueba y digest guardado, y depura el ADN: la próxima prueba nace limpia.</div>
       </div>`;
@@ -241,7 +241,7 @@ async function bindAdmin() {
       if (!confirm('¿Frenar la publicación? Lo programado vuelve a borrador y se apaga el piloto automático.')) return;
       try {
         const rr = await adminApi('stop-publishing', 'POST', { user_id: uid });
-        $('#cliStopMsg').innerHTML = `<span style="color:var(--green-d)">Frenado ✅ (${rr.unscheduled || 0} desprogramados)</span>`;
+        $('#cliStopMsg').innerHTML = `<span style="color:var(--green-d)">Frenado ${pzIc('checkCircle', 14)} (${rr.unscheduled || 0} desprogramados)</span>`;
       } catch (e) { $('#cliStopMsg').innerHTML = `<span style="color:var(--red-d)">No se pudo frenar.</span>`; }
     };
     const rebuild = $('#cliRebuild');
@@ -249,7 +249,7 @@ async function bindAdmin() {
       if (!confirm('¿Rehacer el fundamento? Se vacían los borradores de esta semana y Posty reconstruye la semana con el fundamento vigente.')) return;
       try {
         const rr = await adminApi('digest/rebuild', 'POST', { user_id: uid, mode: 'vaciar' });
-        $('#cliDigestMsg').innerHTML = `<span style="color:var(--green-d)">Semana vaciada ✅ (${rr.emptied || 0} borradores) — reconstruyendo: ${rr.rebuilding ? 'sí' : 'no (' + esc(rr.reason || 'tope') + ')'}</span>`;
+        $('#cliDigestMsg').innerHTML = `<span style="color:var(--green-d)">Semana vaciada ${pzIc('checkCircle', 14)} (${rr.emptied || 0} borradores) — reconstruyendo: ${rr.rebuilding ? 'sí' : 'no (' + esc(rr.reason || 'tope') + ')'}</span>`;
       } catch (e) { $('#cliDigestMsg').innerHTML = `<span style="color:var(--red-d)">No se pudo rehacer.</span>`; }
     };
     const purge = $('#cliPurge');
@@ -257,7 +257,7 @@ async function bindAdmin() {
       if (!confirm('¿PURGAR la prueba y el fundamento? Se borra el candado de 90 días, el caché de la prueba y el digest guardado, y se depura el ADN. La cuenta queda como si nunca hubiera hecho la prueba.')) return;
       try {
         const rr = await adminApi('digest/rebuild', 'POST', { user_id: uid, mode: 'purge' });
-        $('#cliDigestMsg').innerHTML = `<span style="color:var(--green-d)">Purgado ✅ candados: ${rr.locks_deleted || 0} · caché: ${rr.trial_cache_deleted || 0} · digest: ${rr.digest_deleted ? 'borrado' : 'no había'} · ADN ${rr.dna_items_before}→${rr.dna_items_after} ítems</span>`;
+        $('#cliDigestMsg').innerHTML = `<span style="color:var(--green-d)">Purgado ${pzIc('checkCircle', 14)} candados: ${rr.locks_deleted || 0} · caché: ${rr.trial_cache_deleted || 0} · digest: ${rr.digest_deleted ? 'borrado' : 'no había'} · ADN ${rr.dna_items_before}→${rr.dna_items_after} ítems</span>`;
       } catch (e) { $('#cliDigestMsg').innerHTML = `<span style="color:var(--red-d)">No se pudo purgar.</span>`; }
     };
   }
@@ -283,13 +283,13 @@ async function bindAdmin() {
     body.innerHTML = `
       <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:16px">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-          <b>🎯 Meta: ${g.subscribers || 0}/${g.target || 200} suscriptores</b>
+          <b>${pzIc('target', 14)} Meta: ${g.subscribers || 0}/${g.target || 200} suscriptores</b>
           <span style="font-size:17.5px;font-weight:800">${gpct}%</span>
         </div>
         ${bar(gpct)}
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--mut)">
-          <span>💰 MRR <b style="color:var(--txt)">${mrrFmt}</b></span>
-          <span>📈 Trial→pago <b style="color:var(--txt)">${g.trial_to_paid || 0}%</b></span>
+          <span>${pzIc('coin', 14)} MRR <b style="color:var(--txt)">${mrrFmt}</b></span>
+          <span>${pzIc('chartUp', 14)} Trial→pago <b style="color:var(--txt)">${g.trial_to_paid || 0}%</b></span>
           <span>🆕 Nuevos (30d) <b style="color:var(--txt)">${g.new_30d || 0}</b></span>
         </div>
       </div>
@@ -352,7 +352,7 @@ async function bindAdmin() {
       <h4 style="margin:0 0 8px">Por qué se van</h4>
       ${cr.map(x => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(x.reason)}</span><b>${x.n}</b></div>`).join('') || '<div class="d">Sin cancelaciones con motivo todavía.</div>'}
       ${rd ? (() => {
-        const chk = (ok, label, detail) => `<div style="display:flex;gap:8px;align-items:baseline;padding:5px 0;font-size:12.5px"><span>${ok ? '✅' : '⬜'}</span><span>${label}${detail ? ` <span style="color:var(--mut)">(${detail})</span>` : ''}</span></div>`;
+        const chk = (ok, label, detail) => `<div style="display:flex;gap:8px;align-items:baseline;padding:5px 0;font-size:12.5px"><span>${ok ? pzIc('checkCircle', 14) : pzIc('square', 14)}</span><span>${label}${detail ? ` <span style="color:var(--mut)">(${detail})</span>` : ''}</span></div>`;
         const checks = [
           chk(rd.trials_30d >= 30, 'Suficientes trials para medir', `${rd.trials_30d}/30 en 30d`),
           chk(rd.trial_paid_pct >= 15, 'Conversión trial → pago sana', `${rd.trial_paid_pct}% (meta 15%)`),
@@ -361,15 +361,15 @@ async function bindAdmin() {
           chk(rd.cac_measured, 'CAC medido con test chico', rd.cac_measured ? 'sí' : 'cargá gasto en ads'),
         ];
         const autoOk = rd.trials_30d >= 30 && rd.trial_paid_pct >= 15 && rd.retention_n >= 5 && rd.retention_old_pct >= 50 && rd.gen_rate >= 95 && !rd.failed_30d && !rd.stuck && rd.cac_measured;
-        return `<h4 style="margin:16px 0 8px">🚀 ¿Listo para los $5000/mes?</h4>
+        return `<h4 style="margin:16px 0 8px">${pzIc('rocket', 16)} ¿Listo para los $5000/mes?</h4>
         <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px">
           ${checks.join('')}
           ${chk(false, 'Meta App Review aprobado', 'lo confirmás vos')}
           ${chk(false, 'Pago real de MercadoPago verificado', 'lo confirmás vos')}
-          <div style="margin-top:10px;font-size:13.5px;font-weight:800">${autoOk ? '🟢 Los números dicen que SÍ. Avisame y lo hablamos.' : '🔴 Todavía no — los números mandan.'}</div>
+          <div style="margin-top:10px;font-size:13.5px;font-weight:800">${autoOk ? pzDot('#22A06B', 12) + ' Los números dicen que SÍ. Avisame y lo hablamos.' : pzDot('#E5484D', 12) + ' Todavía no — los números mandan.'}</div>
         </div>`;
       })() : ''}
-      <h4 style="margin:16px 0 8px">💵 CAC — costo de adquisición</h4>
+      <h4 style="margin:16px 0 8px">${pzIc('coin', 16)} CAC — costo de adquisición</h4>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
         <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Gasto ads 30d</div><div style="font-size:19px;font-weight:800">US$ ${cac ? cac.spend_30d : 0}</div></div>
         <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Pagos 30d</div><div style="font-size:19px;font-weight:800">${cac ? cac.paid_30d : 0}</div></div>
@@ -389,7 +389,7 @@ async function bindAdmin() {
         ${spendRecent.length ? `<div class="d" style="margin:10px 0 4px">Últimos gastos</div>` + spendRecent.map(s => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(s.date)}${s.campaign ? ' · ' + esc(s.campaign) : ''}</span><b>US$ ${s.amount_usd}</b></div>`).join('') : ''}
       </div>
       <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px">
-        <b style="font-size:13px">🧮 Simulador de CAC</b>
+        <b style="font-size:13px">${pzIc('calc', 14)} Simulador de CAC</b>
         <p class="d" style="margin:4px 0 10px">Jugá con los números antes de gastar en diciembre.</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">
           <label style="font-size:11.5px;color:var(--mut)">CPC (US$)<input id="simCpc" type="number" min="0" step="0.1" value="2" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
@@ -407,7 +407,7 @@ async function bindAdmin() {
       if (!d || !(a > 0)) { msg.innerHTML = `<span style="color:var(--red-d)">Fecha y monto válido.</span>`; return; }
       try {
         await adminApi('ad-spend', 'POST', { date: d, campaign: c, amount_usd: a });
-        msg.innerHTML = `<span style="color:var(--green-d)">Guardado ✅</span>`;
+        msg.innerHTML = `<span style="color:var(--green-d)">Guardado ${pzIc('checkCircle', 14)}</span>`;
         setTimeout(showMoney, 900);
       } catch (e) { msg.innerHTML = `<span style="color:var(--red-d)">No se pudo guardar.</span>`; }
     };
@@ -422,9 +422,9 @@ async function bindAdmin() {
       const ratio = ltv / cac;
       const payback = cac / arpu;
       const clients = Math.floor(5000 / cac);
-      const verdict = ratio >= 3 ? ['🟢', 'Negocio sano: cada dólar en ads vuelve x' + ratio.toFixed(1) + '.']
-        : ratio >= 1 ? ['🟡', 'Ajustado: ganás, pero hay poco margen para errores.']
-        : ['🔴', 'Perdés plata con cada cliente. No escales así.'];
+      const verdict = ratio >= 3 ? [pzDot('#22A06B', 12), 'Negocio sano: cada dólar en ads vuelve x' + ratio.toFixed(1) + '.']
+        : ratio >= 1 ? [pzDot('#E8A100', 12), 'Ajustado: ganás, pero hay poco margen para errores.']
+        : [pzDot('#E5484D', 12), 'Perdés plata con cada cliente. No escales así.'];
       out.innerHTML = `
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
           <div><div style="font-size:11px;color:var(--mut)">CAC</div><div style="font-size:19px;font-weight:800">US$ ${cac.toFixed(0)}</div></div>
@@ -477,8 +477,8 @@ async function bindAdmin() {
       </div>
       <h4 style="margin:0 0 8px">Qué le piden a Posty (temas del chat)</h4>
       ${th.map(t => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:110px;font-size:12.5px">${esc(t.word)}</span><div style="flex:1;height:8px;background:var(--bg2);border-radius:99px;overflow:hidden"><div style="height:100%;width:${Math.round(t.n / maxT * 100)}%;background:var(--cel);border-radius:99px"></div></div><b style="font-size:12px">${t.n}</b></div>`).join('') || '<div class="d">Sin mensajes todavía.</div>'}
-      <h4 style="margin:16px 0 8px">👍/👎 Qué rechazan (90 días)</h4>
-      ${ts.map(t => `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:12.5px">${esc(t.template)}</span><span style="font-size:12px;color:${t.reject_pct >= 30 ? 'var(--red-d)' : 'var(--mut)'}"><b>${t.reject_pct}%</b> rechazo · ${t.ok}👍 ${t.no}👎</span></div>`).join('') || '<div class="d">Sin señales todavía.</div>'}`;
+      <h4 style="margin:16px 0 8px">${pzIc('thumbUp', 15)}/${pzIc('thumbDown', 15)} Qué rechazan (90 días)</h4>
+      ${ts.map(t => `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:12.5px">${esc(t.template)}</span><span style="font-size:12px;color:${t.reject_pct >= 30 ? 'var(--red-d)' : 'var(--mut)'}"><b>${t.reject_pct}%</b> rechazo · ${t.ok}${pzIc('thumbUp', 13)} ${t.no}${pzIc('thumbDown', 13)}</span></div>`).join('') || '<div class="d">Sin señales todavía.</div>'}`;
   }
   async function showHealth() {
     body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
@@ -488,7 +488,7 @@ async function bindAdmin() {
     const h = (r.growth && r.growth.health) || {};
     const ok = (v, good, warn) => v >= good ? 'var(--green-d)' : v >= warn ? 'var(--txt)' : 'var(--red-d)';
     body.innerHTML = `
-      <h4 style="margin:0 0 4px">🩺 Salud del sistema (30 días)</h4>
+      <h4 style="margin:0 0 4px">${pzIc('stethoscope', 16)} Salud del sistema (30 días)</h4>
       <p class="d" style="margin:0 0 12px">Fallos que ningún usuario te reporta.</p>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
         <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Generación exitosa</div><div style="font-size:19px;font-weight:800;color:${ok(h.gen_rate || 0, 95, 80)}">${h.gen_rate || 0}%</div><div style="font-size:11px;color:var(--mut)">${h.gen_done_30d || 0}/${h.gen_start_30d || 0}</div></div>
@@ -497,7 +497,7 @@ async function bindAdmin() {
       </div>
       ${(h.stuck_recent && h.stuck_recent.length) ? `<h4 style="margin:0 0 8px">Atascados</h4>` + h.stuck_recent.map(p => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(p.email)} · post #${p.id}</span><span style="color:var(--mut)">desde ${esc(p.at || '')}</span></div>`).join('') : ''}
       ${(h.failed_recent && h.failed_recent.length) ? `<h4 style="margin:16px 0 8px">Últimos fallidos</h4>` + h.failed_recent.map(p => `<div style="font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line)"><b>${esc(p.email)}</b> · post #${p.id}<div style="color:var(--mut);font-size:11.5px">${esc(p.error || 'sin detalle')}</div></div>`).join('') : ''}
-      ${!(h.stuck_count || h.failed_posts_30d) ? '<div class="d">🎉 Todo sano: nada falló ni se atascó.</div>' : ''}`;
+      ${!(h.stuck_count || h.failed_posts_30d) ? '<div class="d">' + pzIc('gift', 14) + ' Todo sano: nada falló ni se atascó.</div>' : ''}`;
   }
   async function showChurn() {
     body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
@@ -506,7 +506,7 @@ async function bindAdmin() {
     catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
     const ch = (r.growth && r.growth.churn) || [];
     body.innerHTML = `
-      <h4 style="margin:0 0 4px">⚠️ En riesgo de irse</h4>
+      <h4 style="margin:0 0 4px">${pzIc('alert', 16)} En riesgo de irse</h4>
       <p class="d" style="margin:0 0 12px">Clientes activos o en trial sin publicar hace 7+ días. Escribiles antes de que cancelen.</p>
       ${ch.map(c => `
       <div style="padding:10px 0;border-bottom:1px solid var(--line)">
@@ -517,7 +517,7 @@ async function bindAdmin() {
         <div style="font-size:11.5px;color:var(--mut);margin-top:3px">
           ${c.last_pub ? `Última publicación: hace ${Math.max(0, Math.round((Date.now() - new Date(c.last_pub.replace(' ', 'T') + 'Z').getTime()) / 864e5))} días` : 'Nunca publicó'} · registrado hace ${c.days_since_signup} días
         </div>
-      </div>`).join('') || '<div class="d">🎉 Nadie en riesgo. Todos publicando.</div>'}`;
+      </div>`).join('') || '<div class="d">' + pzIc('gift', 14) + ' Nadie en riesgo. Todos publicando.</div>'}`;
   }
   async function showCohorts() {
     body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
@@ -577,7 +577,7 @@ async function bindAdmin() {
     try { r = await adminApi('review-queue'); }
     catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
     const q = r.queue || [];
-    if (!q.length) { body.innerHTML = `<div class="d">✨ Nada pendiente. La cola está vacía.</div>`; return; }
+    if (!q.length) { body.innerHTML = `<div class="d">${pzIc('sparkle', 14)} Nada pendiente. La cola está vacía.</div>`; return; }
     body.innerHTML = `<div style="margin-bottom:10px;font-size:13px;color:var(--mut)">${q.length} borrador${q.length > 1 ? 'es' : ''} esperando revisión</div>` +
       q.map(p => `
       <div data-rev="${p.id}" style="border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:14px">
@@ -590,9 +590,9 @@ async function bindAdmin() {
         <div style="font-size:12px;color:var(--mut);margin-bottom:10px">${esc(p.hashtags || '')}</div>
         <textarea data-rev-note rows="2" placeholder="Nota para el rechazo (¿qué hay que cambiar?)" style="font-size:16px;width:100%;border:2px solid var(--line);border-radius:10px;padding:8px;margin-bottom:8px"></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" data-rev-approve="${p.id}">✅ Aprobar</button>
-          <button class="btn btn-soft btn-sm" data-rev-edit="${p.id}">✏️ Aprobar con edición</button>
-          <button class="btn btn-soft btn-sm" data-rev-reject="${p.id}">🔄 Rechazar y regenerar</button>
+          <button class="btn btn-primary btn-sm" data-rev-approve="${p.id}">${pzIc('checkCircle', 15)} Aprobar</button>
+          <button class="btn btn-soft btn-sm" data-rev-edit="${p.id}">${pzIc('pencil', 15)} Aprobar con edición</button>
+          <button class="btn btn-soft btn-sm" data-rev-reject="${p.id}">${pzIc('refresh', 15)} Rechazar y regenerar</button>
         </div>
       </div>`).join('');
     body.querySelectorAll('[data-rev-approve]').forEach(b => b.onclick = async () => {
@@ -620,10 +620,10 @@ async function bindAdmin() {
   // ---------- (v322) LANZAMIENTO: Portada · Semana · Negocio · Posteos ----------
   let launchEra = 'launch';
   const seenAlerts = () => { try { return JSON.parse(localStorage.getItem('posta_admin_alerts_seen') || '[]'); } catch (e) { return []; } };
-  const healthChip = (lv) => lv === 'rojo' ? '<span style="background:#fee2e2;border:1px solid #fca5a5;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700">🔴 rojo</span>'
-    : lv === 'amarillo' ? '<span style="background:#fef9c3;border:1px solid #fde047;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700">🟡 amarillo</span>'
-    : lv === 'nuevo' ? '<span style="background:var(--bg2);border:1px solid var(--line);border-radius:99px;padding:2px 9px;font-size:11.5px">⚪ nuevo</span>'
-    : '<span style="background:#dcfce7;border:1px solid #86efac;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700">🟢 verde</span>';
+  const healthChip = (lv) => lv === 'rojo' ? '<span style="background:#fee2e2;border:1px solid #fca5a5;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700">rojo</span>'
+    : lv === 'amarillo' ? '<span style="background:#fef9c3;border:1px solid #fde047;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700">amarillo</span>'
+    : lv === 'nuevo' ? '<span style="background:var(--bg2);border:1px solid var(--line);border-radius:99px;padding:2px 9px;font-size:11.5px">nuevo</span>'
+    : '<span style="background:#dcfce7;border:1px solid #86efac;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700">verde</span>';
   const deltaTxt = (d) => { if (!d) return ''; if (!d.has_prev) return '<span style="color:var(--mut)">· sin período anterior</span>';
     const up = d.delta_pct >= 0; return `<span style="color:${up ? '#16a34a' : '#dc2626'};font-weight:700">${up ? '▲' : '▼'} ${Math.abs(d.delta_pct)}%</span> <span style="color:var(--mut)">vs período anterior (${d.prev})</span>`; };
   const usd = (v) => v == null ? '—' : 'US$ ' + (Math.round(v * 100) / 100).toLocaleString('es-AR');
@@ -634,10 +634,10 @@ async function bindAdmin() {
     const tok = adminToken();
     const eraSel = `
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-        <button class="btn btn-soft btn-sm" data-lsub="portada">☀️ Portada</button>
-        <button class="btn btn-soft btn-sm" data-lsub="semana">📬 Semana</button>
-        <button class="btn btn-soft btn-sm" data-lsub="negocio">📈 Negocio</button>
-        <button class="btn btn-soft btn-sm" data-lsub="posteos">🖼️ Posteos por cuenta</button>
+        <button class="btn btn-soft btn-sm" data-lsub="portada">${pzIc('sun', 15)} Portada</button>
+        <button class="btn btn-soft btn-sm" data-lsub="semana">${pzIc('mail', 15)} Semana</button>
+        <button class="btn btn-soft btn-sm" data-lsub="negocio">${pzIc('chartUp', 15)} Negocio</button>
+        <button class="btn btn-soft btn-sm" data-lsub="posteos">${pzIc('image', 15)} Posteos por cuenta</button>
         <span style="flex:1"></span>
         <label style="font-size:12px;color:var(--mut)">Medición:
           <select id="laEra" style="font-size:14px;border:2px solid var(--line);border-radius:8px;padding:4px">
@@ -654,30 +654,30 @@ async function bindAdmin() {
       let r; try { r = await adminApi('morning?' + q); } catch (e) { lb.innerHTML = '<div class="err">No se pudo cargar la portada.</div>'; return; }
       const M = r.morning || {}; const A = M.attention || {}; const Y = M.yesterday || {}; const T = M.today || {}; const P = M.pulse || {};
       const seen = seenAlerts();
-      const alertsHtml = (A.alerts || []).map(a => `<div style="font-size:13px;padding:7px 0;border-bottom:1px solid var(--line)">${seen.includes(a.key) ? '' : '<b style="color:#dc2626">NUEVA</b> '}${esc(a.title)}<div style="font-size:12px;color:var(--mut)">${esc(a.detail || '')}</div></div>`).join('') || '<div class="d">Sin alertas activas. 🎉</div>';
+      const alertsHtml = (A.alerts || []).map(a => `<div style="font-size:13px;padding:7px 0;border-bottom:1px solid var(--line)">${seen.includes(a.key) ? '' : '<b style="color:#dc2626">NUEVA</b> '}${esc(a.title)}<div style="font-size:12px;color:var(--mut)">${esc(a.detail || '')}</div></div>`).join('') || '<div class="d">Sin alertas activas. ' + pzIc('gift', 14) + '</div>';
       const riskHtml = (A.risk_accounts || []).map(a => `<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)">${healthChip(a.level)}<b>${esc(a.business_name || '')}</b><span style="color:var(--mut)">${esc(a.cause_why || '')}</span>${a.founder_decision ? '<b style="color:#dc2626">⭐ decisión del fundador</b>' : ''}${a.play ? `<span style="font-size:11.5px;color:var(--mut)">jugada: ${esc(a.play)}</span>` : ''}</div>`).join('') || '<div class="d">Ninguna cuenta en amarillo o rojo.</div>';
       const cnt = Y.counts || {}, dl = Y.deltas || {};
       const cntRow = (label, key) => `<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">${label}</div><div style="font-size:20px;font-weight:800">${cnt[key] || 0}</div><div style="font-size:11.5px">${deltaTxt(dl[key])}</div></div>`;
       const byAcct = {};
       (Y.published || []).forEach(p => { (byAcct[p.business_name || ('cuenta ' + p.user_id)] = byAcct[p.business_name || ('cuenta ' + p.user_id)] || []).push(p); });
       lb.innerHTML = `
-      <h4 style="margin:2px 0 8px">🚨 Atención primero</h4>
+      <h4 style="margin:2px 0 8px">${pzIc('alert', 16)} Atención primero</h4>
       <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:6px">${alertsHtml}
       <button class="btn btn-soft btn-sm" id="laSeen" style="margin-top:8px">Marcar alertas como vistas</button></div>
       <div style="margin-bottom:16px">${riskHtml}</div>
-      <h4 style="margin:0 0 8px">🌙 Lo que pasó desde ayer <span style="font-size:11px;color:var(--mut)">(${esc(M.day_basis || '')})</span></h4>
+      <h4 style="margin:0 0 8px">${pzIc('moon', 16)} Lo que pasó desde ayer <span style="font-size:11px;color:var(--mut)">(${esc(M.day_basis || '')})</span></h4>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin-bottom:10px">
         ${cntRow('Pagos', 'payments')}${cntRow('Pruebas iniciadas', 'trials_started')}${cntRow('Pruebas completadas', 'trials_completed')}${cntRow('Registros', 'registers')}${cntRow('Publicados', 'published')}${cntRow('Fallidos', 'failed')}${cntRow('Semanas generadas', 'weeks_generated')}
       </div>
-      ${(Y.payments || []).length ? `<div style="font-size:13px;margin-bottom:8px">🎉 Pagos: ${(Y.payments || []).map(p => '<b>' + esc(p.business_name || 'cuenta ' + p.user_id) + '</b>').join(' · ')}</div>` : ''}
+      ${(Y.payments || []).length ? `<div style="font-size:13px;margin-bottom:8px">${pzIc('gift', 14)} Pagos: ${(Y.payments || []).map(p => '<b>' + esc(p.business_name || 'cuenta ' + p.user_id) + '</b>').join(' · ')}</div>` : ''}
       ${(Y.registers || []).length ? `<div style="font-size:13px;margin-bottom:8px">🆕 Registros: ${(Y.registers || []).map(p => esc(p.business_name || p.email)).join(' · ')}</div>` : ''}
       ${Object.entries(byAcct).map(([name, ps]) => `<div style="margin-bottom:8px"><div style="font-size:12.5px;color:var(--mut);margin-bottom:4px">${esc(name)}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${ps.map(p => imgTag(p.image_url, tok)).join('')}</div></div>`).join('')}
-      ${(Y.failed || []).length ? `<div style="font-size:13px;color:#dc2626;margin-bottom:12px">❌ Fallos: ${(Y.failed || []).map(f => esc(f.business_name || '') + ' — ' + esc(f.cause || '')).join(' · ')}</div>` : '<div style="font-size:13px;margin-bottom:12px">Sin posteos fallidos ayer. ✅</div>'}
-      <h4 style="margin:0 0 8px">📅 Lo que pasa hoy</h4>
+      ${(Y.failed || []).length ? `<div style="font-size:13px;color:#dc2626;margin-bottom:12px">${pzIc('reject', 14)} Fallos: ${(Y.failed || []).map(f => esc(f.business_name || '') + ' — ' + esc(f.cause || '')).join(' · ')}</div>` : '<div style="font-size:13px;margin-bottom:12px">Sin posteos fallidos ayer. ' + pzIc('checkCircle', 14) + '</div>'}
+      <h4 style="margin:0 0 8px">${pzIc('calendar', 16)} Lo que pasa hoy</h4>
       ${(T.posts || []).length ? (T.posts || []).map(p => `<div style="display:flex;gap:10px;align-items:center;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)">${imgTag(p.image_url, tok)}<span><b>${esc(p.time_art || '')}</b> · ${esc(p.business_name || '')} · ${esc(p.tipo || p.media_type || '')}</span></div>`).join('') : '<div class="d">Hoy no sale ningún posteo programado.</div>'}
       ${(T.pending_approval_weeks || []).length ? `<div style="font-size:13px;margin-top:8px">⏳ Semanas esperando aprobación del cliente: ${(T.pending_approval_weeks || []).map(w => esc(w.business_name || '') + ' (' + w.pending + ')').join(' · ')}</div>` : ''}
       <div style="font-size:12px;color:var(--mut);margin-top:6px">Preguntas radar sin responder: ${T.radar_pending == null ? 'sin fuente consultable todavía (se declara, no se inventa)' : T.radar_pending}</div>
-      <h4 style="margin:14px 0 8px">💓 El pulso</h4>
+      <h4 style="margin:14px 0 8px">${pzIc('heart', 16)} El pulso</h4>
       <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px">
         <div style="font-size:13px">Suscriptores pagos: <b style="font-size:19px">${(P.subscribers || {}).payers || 0}</b> / 200 (${(P.subscribers || {}).pct || 0}%)</div>
         ${bar((P.subscribers || {}).pct || 0)}
@@ -694,7 +694,7 @@ async function bindAdmin() {
     if (sub === 'semana') {
       let r; try { r = await adminApi('founder-letter?' + q); } catch (e) { lb.innerHTML = '<div class="err">No se pudo cargar la carta.</div>'; return; }
       const L = r.letter || {};
-      lb.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><b>📬 Carta del lunes — semana del ${esc(L.week_key || '')}</b><span style="font-size:11.5px;color:var(--mut)">${L.cached ? 'guardada' : 'recién generada'} ${esc((L.generated_at || '').slice(0, 16))}</span><button class="btn btn-soft btn-sm" id="laRegen">↻ Regenerar</button></div>
+      lb.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><b>${pzIc('mail', 14)} Carta del lunes — semana del ${esc(L.week_key || '')}</b><span style="font-size:11.5px;color:var(--mut)">${L.cached ? 'guardada' : 'recién generada'} ${esc((L.generated_at || '').slice(0, 16))}</span><button class="btn btn-soft btn-sm" id="laRegen">↻ Regenerar</button></div>
       <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;white-space:pre-wrap;font-size:14px;line-height:1.55">${esc(L.text || '')}</div>`;
       const rb = $('#laRegen'); if (rb) rb.onclick = async () => { try { await adminApi('founder-letter?' + q + '&regen=1'); showLaunch('semana'); } catch (e) { alert('No se pudo regenerar'); } };
       return;
@@ -705,36 +705,36 @@ async function bindAdmin() {
       const stepRows = (F.steps || []).map(st => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(st.label)}</span><span><b>${st.users}</b> ${deltaTxt(st.delta)}</span></div>`).join('');
       const dimTable = (title, obj) => { const keys = Object.keys(obj || {}); if (!keys.length) return ''; return `<div style="font-size:12.5px;color:var(--mut);margin:10px 0 4px">${title}</div>` + keys.map(k => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line)"><span>${esc(k)}</span><span>${(F.steps || []).map(st => (obj[k][st.key] || 0)).join(' → ')}</span></div>`).join(''); };
       lb.innerHTML = `
-      ${B.window && B.window.prev_note ? `<div style="font-size:12px;color:#b45309;margin-bottom:8px">⚠️ ${esc(B.window.prev_note)}</div>` : ''}
+      ${B.window && B.window.prev_note ? `<div style="font-size:12px;color:#b45309;margin-bottom:8px">${pzIc('alert', 14)} ${esc(B.window.prev_note)}</div>` : ''}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
         <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">⏱️ Time-to-value</div><div style="font-size:19px;font-weight:800">${B.ttv && B.ttv.n ? (B.ttv.med_h + ' h') : '—'}</div><div style="font-size:11.5px;color:var(--mut)">${B.ttv && B.ttv.n ? ('mediana registro → primer posteo publicado · promedio ' + B.ttv.avg_h + ' h · ' + B.ttv.d1_pct + '% en 24 h · n=' + B.ttv.n) : 'sin publicaciones medidas en la ventana'}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">🎯 Rumbo a los 200</div><div style="font-size:19px;font-weight:800">${(B.projection || {}).payers || 0} / 200</div><div style="font-size:11.5px;color:var(--mut)">${esc((B.projection || {}).basis || (B.projection || {}).reason || '')}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">💰 Margen del período</div><div style="font-size:19px;font-weight:800">${usd((Mo.totals || {}).margin_period_usd)}</div><div style="font-size:11.5px;color:var(--mut)">ingresos ${usd((Mo.totals || {}).revenue_period_usd)} − IA ${usd((Mo.totals || {}).cost_period_usd)} · acumulado IA histórico ${usd((Mo.totals || {}).cost_all_time_usd)} (nunca reseteado)</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">✨ Calidad a la primera</div><div style="font-size:19px;font-weight:800">${Q.first_pass_pct == null ? '—' : Q.first_pass_pct + '%'}</div><div style="font-size:11.5px;color:var(--mut)">${Q.first_pass || 0}/${Q.total || 0} piezas sin toques · tendencia ${Q.trend ? (Q.trend.first_half_pct + '% → ' + Q.trend.second_half_pct + '%') : '—'} · ediciones/cuenta/semana: ${Q.edits_per_account_week == null ? '—' : Q.edits_per_account_week}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">${pzIc('target', 14)} Rumbo a los 200</div><div style="font-size:19px;font-weight:800">${(B.projection || {}).payers || 0} / 200</div><div style="font-size:11.5px;color:var(--mut)">${esc((B.projection || {}).basis || (B.projection || {}).reason || '')}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">${pzIc('coin', 14)} Margen del período</div><div style="font-size:19px;font-weight:800">${usd((Mo.totals || {}).margin_period_usd)}</div><div style="font-size:11.5px;color:var(--mut)">ingresos ${usd((Mo.totals || {}).revenue_period_usd)} − IA ${usd((Mo.totals || {}).cost_period_usd)} · acumulado IA histórico ${usd((Mo.totals || {}).cost_all_time_usd)} (nunca reseteado)</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">${pzIc('sparkle', 14)} Calidad a la primera</div><div style="font-size:19px;font-weight:800">${Q.first_pass_pct == null ? '—' : Q.first_pass_pct + '%'}</div><div style="font-size:11.5px;color:var(--mut)">${Q.first_pass || 0}/${Q.total || 0} piezas sin toques · tendencia ${Q.trend ? (Q.trend.first_half_pct + '% → ' + Q.trend.second_half_pct + '%') : '—'} · ediciones/cuenta/semana: ${Q.edits_per_account_week == null ? '—' : Q.edits_per_account_week}</div></div>
       </div>
-      <h4 style="margin:0 0 6px">🧭 Funnel (${esc((B.window || {}).days || '')} días)</h4>${stepRows}
+      <h4 style="margin:0 0 6px">${pzIc('compass', 16)} Funnel (${esc((B.window || {}).days || '')} días)</h4>${stepRows}
       ${dimTable('Por canal (src)', F.by_src)}${dimTable('Por idioma', F.by_lang)}
-      <h4 style="margin:14px 0 6px">🏷️ Qué mejorar primero (taxonomía de rechazos)</h4>
+      <h4 style="margin:14px 0 6px">${pzIc('tag', 16)} Qué mejorar primero (taxonomía de rechazos)</h4>
       ${(Tx.improve_first || []).length ? (Tx.improve_first || []).map(t => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(t.cause)}</span><b>${t.n}</b></div>`).join('') : '<div class="d">Sin ediciones/rechazos clasificados en la ventana.</div>'}
       <div style="font-size:11.5px;color:var(--mut)">${esc(((Tx.rules || []).join(' · ')))}</div>
-      <h4 style="margin:14px 0 6px">💸 Costo de IA por cuenta y margen por plan</h4>
+      <h4 style="margin:14px 0 6px">${pzIc('coin', 16)} Costo de IA por cuenta y margen por plan</h4>
       ${(Mo.accounts || []).slice(0, 15).map(a => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(a.email)} · ${esc(a.plan || '')}</span><span>IA ${usd(a.cost_period_usd)} · histórico ${usd(a.cost_all_time_usd)} · margen ${usd(a.margin_period_usd)}</span></div>`).join('') || '<div class="d">Sin costos en la ventana.</div>'}
       ${(Mo.by_plan || []).map(p => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>plan ${esc(p.plan)} · ${p.subs} subs</span><span>ingresos ${p.revenue_known ? usd(p.revenue_usd) : '—'} · margen ${usd(p.margin_usd)}</span></div>`).join('')}
       ${(Mo.by_rubro || []).length ? '<div style="font-size:12.5px;color:var(--mut);margin:8px 0 2px">Por rubro</div>' + (Mo.by_rubro || []).map(p => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(p.rubro)} · ${p.subs} subs</span><span>margen ${usd(p.margin_usd)}</span></div>`).join('') : ''}
       <div style="font-size:12.5px;margin-top:8px">LTV: ${Mo.ltv ? (usd(Mo.ltv.ltv_usd) + ' (precio prom. ' + usd(Mo.ltv.avg_price_usd) + ' × ' + Mo.ltv.avg_months_retained + ' meses retenidos, n=' + Mo.ltv.payers + ')') : 'sin dato todavía'} · CAC: ${Mo.cac && Mo.cac.cac_usd != null ? usd(Mo.cac.cac_usd) : 'sin dato'} <span style="color:var(--mut)">${esc((Mo.cac || {}).by_channel_note || '')}</span></div>
-      <h4 style="margin:14px 0 6px">🔁 Cohortes semanales</h4>
+      <h4 style="margin:14px 0 6px">${pzIc('refresh', 16)} Cohortes semanales</h4>
       ${(B.cohorts || []).map(c => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>semana ${esc(c.week)}</span><span>${c.signups} altas · conv. ${c.conversion_pct}% · retención ${c.retention_pct == null ? 'todavía no medible' : c.retention_pct + '%'} · IA ${usd(c.ai_cost_usd)}</span></div>`).join('') || '<div class="d">Sin altas en la ventana.</div>'}
-      <h4 style="margin:14px 0 6px">🌡️ Rescate por causa (rojo → verde)</h4>
+      <h4 style="margin:14px 0 6px">${pzIc('thermo', 16)} Rescate por causa (rojo → verde)</h4>
       ${((B.health || {}).rescue_by_cause || []).map(x => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(x.cause)} · ${esc(x.play)}</span><span>${x.resueltas}/${x.total} rescatadas (${x.rescate_pct}%)${x.avg_days != null ? ' · ' + x.avg_days + ' días prom.' : ''} · abiertas ${x.abiertas}</span></div>`).join('') || '<div class="d">Todavía no hubo intervenciones registradas.</div>'}
       <div style="font-size:12.5px;margin-top:6px">Autopsia de bajas: ${(B.churn || {}).n ? ((B.churn || {}).n + ' foto(s) finales guardadas · con intervención previa: ' + (B.churn || {}).with_prior_intervention) : esc((B.churn || {}).note || '')}</div>
       <div style="font-size:12.5px;margin-top:6px">Loop de aprendizaje: ${esc(((B.learning || {}).note || ''))}</div>
-      ${((B.dictionary || {}).unregistered || []).length ? `<div style="font-size:12.5px;color:#b45309;margin-top:6px">📖 Eventos sin registrar en el diccionario (legado): ${esc(((B.dictionary || {}).unregistered || []).join(', '))}</div>` : ''}`;
+      ${((B.dictionary || {}).unregistered || []).length ? `<div style="font-size:12.5px;color:#b45309;margin-top:6px">${pzIc('book', 14)} Eventos sin registrar en el diccionario (legado): ${esc(((B.dictionary || {}).unregistered || []).join(', '))}</div>` : ''}`;
       return;
     }
     // posteos por cuenta
     let r; try { r = await adminApi('accounts-posts'); } catch (e) { lb.innerHTML = '<div class="err">No se pudo cargar la vista de posteos.</div>'; return; }
     const accs = r.accounts || [];
-    lb.innerHTML = `<div style="font-size:12.5px;color:var(--mut);margin-bottom:8px">Orden: primero las cuentas que necesitan ojos. 🔴 ${(r.by_level || {}).rojo || 0} · 🟡 ${(r.by_level || {}).amarillo || 0} · 🟢 ${(r.by_level || {}).verde || 0} · ⚪ ${(r.by_level || {}).nuevo || 0}</div>
+    lb.innerHTML = `<div style="font-size:12.5px;color:var(--mut);margin-bottom:8px">Orden: primero las cuentas que necesitan ojos. ${pzDot('#E5484D', 11)} ${(r.by_level || {}).rojo || 0} · ${pzDot('#E8A100', 11)} ${(r.by_level || {}).amarillo || 0} · ${pzDot('#22A06B', 11)} ${(r.by_level || {}).verde || 0} · ${pzDot('#9AA0A6', 11)} ${(r.by_level || {}).nuevo || 0}</div>
     <div style="font-size:11.5px;color:var(--mut);margin-bottom:10px">${(r.rules || []).map(esc).join(' · ')}</div>
     <div id="laAccList">${accs.map(a => `<button class="btn btn-ghost btn-block" data-acc="${a.user_id}" style="text-align:left;margin-bottom:6px">${healthChip(a.health)} <b>${esc(a.business_name || a.email)}</b> <span style="color:var(--mut)">@${esc(a.ig_username || '—')} · ${esc(a.plan || '')}/${esc(a.plan_status || '')} · aprueba ${a.signals.approved} · edita ${a.signals.edited} · rechaza ${a.signals.rejected}${a.signals.approval_rate != null ? ' · aprobación ' + a.signals.approval_rate + '%' : ''}${a.founder_decision ? ' · ⭐ decisión del fundador' : ''}<br><span style="font-size:11.5px">${esc((a.reasons || []).join(' · '))}</span></span></button>`).join('') || '<div class="d">Sin cuentas.</div>'}</div>
     <div id="laAccDetail"></div>`;
@@ -744,14 +744,14 @@ async function bindAdmin() {
       const D = dr.detail || {}; const S = D.signals || {};
       det.innerHTML = `<div style="border:1.5px solid var(--line);border-radius:14px;padding:14px;margin-top:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>${esc((D.user || {}).business_name || (D.user || {}).email || '')}</b>
-        <button class="btn btn-soft btn-sm" id="laGoReview">✨ Ir a la cola de Revisión</button></div>
+        <button class="btn btn-soft btn-sm" id="laGoReview">${pzIc('sparkle', 15)} Ir a la cola de Revisión</button></div>
         <div style="font-size:12.5px;color:var(--mut);margin:6px 0">Señales 30 días — aprueba ${S.approved || 0} · edita ${S.edits || 0} · rechaza ${(S.rejected || 0) + (S.rating_low || 0)} · aprobación ${S.approval_rate == null ? '—' : S.approval_rate + '%'} · regeneraciones ${(S.posts || {}).img_redos || 0} · sin ancla ${(S.posts || {}).sin_ancla || 0}</div>
         ${(D.interventions || []).length ? `<div style="font-size:12.5px;margin-bottom:8px">Intervenciones: ${(D.interventions || []).map(i => esc(i.cause) + ' → ' + esc(i.play) + ' (' + esc(i.status) + ', ' + esc(String(i.created_at).slice(0, 10)) + ')').join(' · ')}</div>` : ''}
         ${(D.posts || []).map(p => `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
           ${imgTag(p.image_url, tok)}
           <div style="flex:1;font-size:12.5px">
             <b>${esc(p.tipo || p.media_type || '')}</b> · ${esc(p.status)}${p.approval ? ' · ' + esc(p.approval) : ''} · ${esc((p.scheduled_at || p.published_at || p.created_at || '').slice(0, 16))}
-            ${(p.flags || []).map(f => `<span style="background:#fee2e2;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:700;margin-left:4px">⚠️ ${esc(f)}</span>`).join('')}
+            ${(p.flags || []).map(f => `<span style="background:#fee2e2;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:700;margin-left:4px">${pzIc('alert', 13)} ${esc(f)}</span>`).join('')}
             <div style="white-space:pre-wrap;margin-top:3px">${esc((p.caption || '').slice(0, 220))}</div>
             ${p.why ? `<div style="color:var(--mut);margin-top:3px">Por qué: ${esc(p.why)}</div>` : ''}
             ${p.error ? `<div style="color:#dc2626;margin-top:3px">${esc(p.error)}</div>` : ''}
@@ -773,7 +773,7 @@ async function bindAdmin() {
     if (al.length) {
       const bar = document.createElement('div');
       bar.style.cssText = 'margin-bottom:12px;border-radius:12px;padding:12px 14px;background:#fff7ed;border:1.5px solid #fdba74';
-      bar.innerHTML = '<b style="font-size:13px">🔔 Alertas</b>' + al.map(a =>
+      bar.innerHTML = '<b style="font-size:13px">' + pzIc('bell', 14) + ' Alertas</b>' + al.map(a =>
         `<div style="font-size:12.5px;margin-top:6px;${a.sev === 'high' ? 'color:var(--red-d);font-weight:700' : ''}">• ${esc(a.text)}</div>`).join('');
       card.insertBefore(bar, card.firstChild);
     }

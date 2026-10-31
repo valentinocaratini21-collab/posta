@@ -80,7 +80,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261050">
+<link rel="stylesheet" href="/styles.css?v=20261051">
 <link rel="stylesheet" href="/gj.css?v=3">
 <script type="application/ld+json">
 {
@@ -1954,17 +1954,20 @@ var PZ_META_EN = {
   GB: { nota: 'Prices in pounds. Pay with Stripe.' },
   EU: { nota: 'Prices in euros. Pay with Stripe.' }
 };
+var PZ_PAIS_EN = 'US';
 var LP_CALC_BASE = '$199';
 var LP_CALC_PERDAY = '$6.63';
 function pzFmtEN(p) {
-  var sym = { ARS: '$', UYU: '$U ', USD: '$', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[p.currency] || '$';
+  var usd5 = ['BR', 'MX', 'CL', 'CO', 'PE'].indexOf(PZ_PAIS_EN) >= 0;
+  var sym = { ARS: '$', UYU: '$U ', USD: usd5 ? 'USD ' : '$', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[p.currency] || '$';
   // (Tabla nueva, 2026-10-25) Precio entero → 0 decimales. pzDiaEN (por
   // día) no se toca: el por-día es fraccionario y sigue con decimales.
   var dec = Number.isInteger(Number(p.price)) ? 0 : 2;
   return sym + Number(p.price).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 function pzDiaEN(p) {
-  var sym = { ARS: '$', UYU: '$U ', USD: '$', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[p.currency] || '$';
+  var usd5 = ['BR', 'MX', 'CL', 'CO', 'PE'].indexOf(PZ_PAIS_EN) >= 0;
+  var sym = { ARS: '$', UYU: '$U ', USD: usd5 ? 'USD ' : '$', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[p.currency] || '$';
   var dec = (p.currency === 'ARS' || p.currency === 'UYU') ? 0 : 2;
   return sym + (Number(p.price) / 30).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
@@ -2009,6 +2012,7 @@ function pzApplyEN(c, cfg) {
 }
 function switchPlansCountry(c) {
   if (PZ_PAISES_EN.indexOf(c) < 0) c = 'US';
+  PZ_PAIS_EN = c;
   try { localStorage.setItem('posta-pais', c); } catch (e) {}
   fetch('/api/billing/plans?country=' + c).then(function (r) { return r.json(); }).then(function (cfg) {
     pzApplyEN(c, cfg);

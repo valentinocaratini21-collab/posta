@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const costs = require('./costs');
 const autopilot = require('./autopilot');
+const checklist = require('./checklist');
 costs.initCosts(db, {
   // Techo mensual de IA por usuario (10% del plan, 2026-10-04): costs.js lo usa
   // en assertAiOk para que ningún usuario supere su techo, pase lo que pase.
@@ -748,6 +749,12 @@ app.use('/media', express.static(MEDIA_DIR, {
   // Los nombres de archivo son únicos por generación (el contenido bajo
   // un nombre nunca cambia): caché larga e inmutable → el Schedule y las
   // vistas repintan al instante sin re-descargar las imágenes.
+  maxAge: '30d', immutable: true,
+}));
+// Tipografías de titulares (2026-10-26): las fuentes OFL de fonts/ se
+// sirven para la vista previa en vivo de Ajustes (el render del titular
+// las lee del mismo directorio en disco). Nombres inmutables por contenido.
+app.use('/fonts', express.static(path.join(__dirname, 'fonts'), {
   maxAge: '30d', immutable: true,
 }));
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -4271,7 +4278,7 @@ app.get('/api/posts/:id/quality', requireAuth, (req, res) => {
 });
 
 app.put('/api/settings', requireAuth, (req, res) => {
-  const { openai_key, demo_mode, meta_app_id, meta_app_secret, ig_embed_url, image_base_url, timezone, preferred_palette, brand_colors, pexels_key } = req.body || {};
+  const { openai_key, demo_mode, meta_app_id, meta_app_secret, ig_embed_url, image_base_url, timezone, preferred_palette, brand_colors, brand_font, pexels_key } = req.body || {};
   const cur = getSettings(req.session.userId);
   let bc = cur.brand_colors || '';
   if (brand_colors !== undefined) {
@@ -4279,8 +4286,15 @@ app.put('/api/settings', requireAuth, (req, res) => {
     const clean = arr.filter((c) => /^#[0-9a-fA-F]{6}$/.test(c)).slice(0, 3);
     bc = clean.length >= 2 ? JSON.stringify(clean) : '';
   }
+  // Tipografía de titulares (2026-10-26): mismo patrón que brand_colors.
+  // Id válido → se guarda; '' → default (Montserrat); inválido → se conserva el actual.
+  let bf = cur.brand_font || '';
+  if (brand_font !== undefined) {
+    const f = String(brand_font || '').trim().toLowerCase();
+    if (BRAND_FONTS.includes(f) || f === '') bf = f;
+  }
   db.prepare(
-    `UPDATE settings SET openai_key=?, demo_mode=?, meta_app_id=?, meta_app_secret=?, ig_embed_url=?, image_base_url=?, timezone=?, preferred_palette=?, brand_colors=?, pexels_key=?, updated_at=datetime('now') WHERE user_id=?`
+    `UPDATE settings SET openai_key=?, demo_mode=?, meta_app_id=?, meta_app_secret=?, ig_embed_url=?, image_base_url=?, timezone=?, preferred_palette=?, brand_colors=?, brand_font=?, pexels_key=?, updated_at=datetime('now') WHERE user_id=?`
   ).run(
     openai_key && !openai_key.startsWith('••••') ? openai_key : cur.openai_key,
     demo_mode === undefined ? cur.demo_mode : (demo_mode ? 1 : 0),
@@ -4291,6 +4305,7 @@ app.put('/api/settings', requireAuth, (req, res) => {
     validTimezone(timezone) ? timezone : (cur.timezone || DEFAULT_TZ),
     Number.isInteger(preferred_palette) ? preferred_palette : (cur.preferred_palette ?? 0),
     bc,
+    bf,
     pexels_key && !pexels_key.startsWith('••••') ? pexels_key : (cur.pexels_key || ''),
     req.session.userId
   );
@@ -9683,6 +9698,14 @@ app.post('/api/posts/:id/publish-now', requireAuth, requireTrialValid, (req, res
     return res.status(400).json({ error: 'Este posteo no se puede publicar ahora' });
   }
   if (post.needs_review) return res.status(403).json({ error: 'in_review', message: 'Este posteo está en revisión ✨ Te aviso cuando esté listo.' });
+  // Lote 6 — gate de checklist (fail-closed, igual que el autopilot):
+  // un problema duro sin confirmar no sale ni por publicar-ahora; el
+  // dueño lo resuelve o lo acepta conociéndolo desde la revisión.
+  try {
+    const clPub = checklist.computeChecklist(db, MEDIA_DIR, req.session.userId, post);
+    if (clPub.bloqueado) return res.status(409).json({ error: 'checklist_bloqueado', items: clPub.duros,
+      message: 'Antes de publicar, revisá estos puntos del borrador: ' + clPub.duros.map((d) => d.texto).join(' · ') + '. Podés resolverlos o aceptarlos conociéndolos desde la revisión del borrador.' });
+  } catch (e) { return res.status(409).json({ error: 'checklist_bloqueado', items: [], message: 'No se pudo revisar el borrador antes de publicar. Revisá la checklist del borrador e intentá de nuevo.' }); }
   // Publicar ahora SÍ consume cupo (salvo que ya estuviera programado: ya se descontó).
   if (!['scheduled', 'publishing', 'published'].includes(post.status)) {
     const q = quotaFor(req.session.userId, post.media_type);
@@ -11351,8 +11374,10 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
                     const { execFileSync } = require('child_process');
                     const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', sPath, '--headline', headline, '--out', sPath];
                     try {
-                      const bc = JSON.parse((db.prepare('SELECT brand_colors FROM settings WHERE user_id = ?').get(uid) || {}).brand_colors || '[]');
+                      const st10619 = db.prepare('SELECT brand_colors, brand_font FROM settings WHERE user_id = ?').get(uid) || {};
+                      const bc = JSON.parse(st10619.brand_colors || '[]');
                       if (Array.isArray(bc) && /^#[0-9a-fA-F]{6}$/.test(bc[0] || '')) cArgs.push('--grade', String(bc[0]));
+                      cArgs.push('--font', brandFontOf(st10619));
                     } catch (e) {}
                     execFileSync('python3', cArgs, { timeout: 30000 });
                   } catch (e) { console.error(`[pipeline:${tag}] composite stock falló:`, e.message); }
@@ -14916,6 +14941,15 @@ function parseBrandHexes(brandColorsRaw) {
   } catch (e) {}
   return [];
 }
+// Tipografías elegibles de titulares (2026-10-26): mismo patrón que
+// brand_colors. brand_font guarda el id ('montserrat' = default, el look
+// actual); un id desconocido o vacío vuelve a Montserrat, nunca rompe
+// una generación.
+const BRAND_FONTS = ['montserrat', 'nunito', 'playfair', 'oswald', 'fredoka', 'poppins'];
+function brandFontOf(settings) {
+  const f = String((settings && settings.brand_font) || '').trim().toLowerCase();
+  return BRAND_FONTS.includes(f) ? f : 'montserrat';
+}
 // Guarda un b64 de imagen en MEDIA_DIR y devuelve el nombre del archivo.
 // Ante ENOSPC (disco lleno — causa raíz del img_fail del 2026-10-15: el
 // volumen se llenó de media huérfana y TODA escritura de imagen explotaba),
@@ -16387,6 +16421,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
         '--out', imgPath,
       ];
       if (hexes && hexes[0]) compArgs.push('--grade', String(hexes[0])); // look de color del feed
+      compArgs.push('--font', brandFontOf(settings));
       execFileSync('python3', compArgs, { timeout: 30000 });
       console.log(`[concept-shot] titular compuesto: "${cleanHeadline.slice(0, 40)}"`);
       // (Gap 6, 2026-10-25) ZONA MEDIDA, como ya hace la PRUEBA: el QA
@@ -16409,6 +16444,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
               '--zone', 'bottom',
             ];
             if (hexes && hexes[0]) compArgs2.push('--grade', String(hexes[0]));
+            compArgs2.push('--font', brandFontOf(settings));
             execFileSync('python3', compArgs2, { timeout: 30000 });
             console.log(`[concept-shot] titular RECOMPUESTO abajo: el QA marcó que arriba tapaba al sujeto ("${cleanHeadline.slice(0, 40)}")`);
           }
@@ -16482,6 +16518,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
                   } catch (e) {}
                   const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nPath, '--headline', cleanHeadline, '--out', nPath];
                   if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
+                  cArgs.push('--font', brandFontOf(settings));
                   execFileSync('python3', cArgs, { timeout: 30000 });
                 } catch (e) { console.error('[qa-correct] composite:', e.message); }
               }
@@ -17422,6 +17459,7 @@ async function enhancePhotoGenerate(uid, post, promptOverride) {
         const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nPath, '--headline', headline, '--out', nPath];
         const hexes = parseBrandHexes(settings.brand_colors);
         if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
+        cArgs.push('--font', brandFontOf(settings));
         execFileSync('python3', cArgs, { timeout: 30000 });
         console.log(`[photo-enhance] titular recompuesto por código: "${headline.slice(0, 40)}"`);
       }
@@ -17959,8 +17997,11 @@ app.post('/api/drafts/:id/photo-straighten', requireAuth, express.json(), async 
 app.post('/api/drafts/:id/photo-straighten-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'straighten_proposal_path', 'straighten_proposal_base'));
 app.post('/api/drafts/:id/photo-straighten-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'straighten_proposal_path', 'straighten_proposal_base'));
 // (media-cliente-2) FONDO DIFUMINADO: producto nítido, fondo borroso.
-// La caja del sujeto la pasa el dueño (0–1000) o la estima la visión;
-// sin caja válida NO hay bokeh (el producto nunca se difumina).
+// Automático (Lote 6): primero segmentación local por máscara de
+// píxeles (media-autobokeh.py, sin IA ni costo); si rehúsa, la visión
+// estima la caja como siempre; a mano, la caja la pasa el dueño.
+// Sin segmentación ni caja válida NO hay bokeh (el producto nunca
+// se difumina a ciegas).
 app.post('/api/drafts/:id/photo-bokeh', requireAuth, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -17971,13 +18012,32 @@ app.post('/api/drafts/:id/photo-bokeh', requireAuth, express.json(), async (req,
     const abs = photoCliente.mediaAbs(MEDIA_DIR, String(post.image_path || ''));
     if (!abs || !fs.existsSync(abs) || !/\.(jpe?g|png|webp)$/i.test(String(post.image_path || ''))) return res.status(400).json({ ok: false, error: 'El borrador no tiene foto' });
     let box = (req.body && req.body.caja) || null;
+    let modo = 'caja';
     if (box && !mediaCliente.validBokehBox(box)) return res.status(400).json({ ok: false, error: 'Caja del sujeto inválida' });
     if (!box && req.body && req.body.auto) {
+      // Lote 6 — segmentación automática local primero (máscara de
+      // píxeles, sin IA ni costo). Si rehúsa, se sigue a la visión.
+      const { execFile: execFileAuto } = require('child_process');
+      const outNameAuto = mediaCliente.proposalName(path.basename(abs), 'bokeh');
+      const outAbsAuto = path.join(MEDIA_DIR, outNameAuto);
+      const maskOk = await new Promise((resolve) => {
+        execFileAuto('python3', [path.join(__dirname, 'media-autobokeh.py'), abs, outAbsAuto], { timeout: 60000 }, (err, stdout, stderr) => {
+          if (!err && fs.existsSync(outAbsAuto)) { console.log('[photo-bokeh-auto] ' + String(stdout || '').trim()); resolve(true); }
+          else { console.log('[photo-bokeh-auto] rehúsa: ' + String(stderr || (err && err.message) || '').trim().slice(0, 200)); resolve(false); }
+        });
+      });
+      if (maskOk) {
+        const oldProposalAuto = post.bokeh_proposal_path || '';
+        db.prepare(`UPDATE posts SET bokeh_proposal_path = ?, bokeh_proposal_base = ? WHERE id = ?`).run('/media/' + outNameAuto, String(post.image_path || ''), postId);
+        if (oldProposalAuto) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposalAuto);
+        return res.json({ ok: true, proposal: true, proposal_path: '/media/' + outNameAuto, proposal_base: String(post.image_path || ''), modo: 'mascara' });
+      }
       const key = openaiKeyFor(uid);
-      if (!key) return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
+      if (!key) return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI y sin segmentación local confiable: pasá la caja a mano' });
       const raw = await mcVisionCall(abs, key, 'Ubicá el producto principal de esta foto. Respondé SOLO con JSON: {"x":..,"y":..,"w":..,"h":..} en coordenadas 0–1000 (x,y = esquina superior izquierda, w,h = tamaño del rectángulo que encierra al producto completo).');
       box = mediaCliente.parseVisionBox(raw);
       if (!box) return res.status(400).json({ ok: false, error: 'No se pudo ubicar el producto: pasá la caja a mano' });
+      modo = 'caja-vision';
     }
     if (!box) return res.status(400).json({ ok: false, error: 'Falta la caja del sujeto' });
     const { execFile } = require('child_process');
@@ -17990,7 +18050,7 @@ app.post('/api/drafts/:id/photo-bokeh', requireAuth, express.json(), async (req,
     const oldProposal = post.bokeh_proposal_path || '';
     db.prepare(`UPDATE posts SET bokeh_proposal_path = ?, bokeh_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
     if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
-    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || ''), modo });
   } catch (e) { console.error('[photo-bokeh]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo difuminar').slice(0, 200) }); }
 });
 app.post('/api/drafts/:id/photo-bokeh-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'bokeh_proposal_path', 'bokeh_proposal_base'));
@@ -19084,10 +19144,10 @@ app.post('/api/historias/serie-aceptar', requireAuth, express.json(), (req, res)
 // (media-cliente-3) REVISIÓN FINAL ANTES DE PUBLICAR: checklist con
 // problemas duros (cara sin permiso, producto cortado) y avisos. Un
 // problema duro no se publica hasta que el dueño lo resuelva o lo
-// acepte conociéndolo (confirmación durable). PARCIAL honesto: el
-// gate dentro del autopilot (publicación automática) queda pendiente
-// nombrado — el flujo manual queda cubierto porque el dueño ve los
-// chips antes de pulsar Publicar.
+// acepte conociéndolo (confirmación durable). Lote 6: el gate vive en
+// checklist.js y frena el autopilot y el publicar-ahora (fail-closed);
+// el flujo manual sigue cubierto porque el dueño ve los chips antes
+// de pulsar Publicar.
 app.get('/api/drafts/:id/checklist', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
@@ -19095,41 +19155,8 @@ app.get('/api/drafts/:id/checklist', requireAuth, (req, res) => {
     if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
     const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
-    const confirmados = new Set(db.prepare(`SELECT item FROM checklist_confirm WHERE user_id = ? AND post_id = ?`).all(uid, postId).map((r) => r.item));
-    const items = [];
-    const add = (item, duro, texto) => items.push({ item, duro, texto, confirmado: confirmados.has(item) });
-    const isVideo = post.media_type === 'video';
-    if (!post.image_path) add('sin-medio', true, 'El borrador no tiene foto ni video');
-    if (isVideo) {
-      const abs = post.image_path ? photoCliente.mediaAbs(MEDIA_DIR, post.image_path) : null;
-      if (!abs || !fs.existsSync(abs)) add('sin-medio', true, 'El video no tiene archivo');
-      else {
-        const { execFileSync } = require('child_process');
-        try {
-          const out = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', abs], { timeout: 15000, encoding: 'utf8' });
-          if (!String(out || '').trim()) add('sin-audio', false, 'El video no tiene audio');
-        } catch (e) {}
-      }
-    }
-    // Producto cortado / caras sin permiso: desde el asset de la foto.
-    try {
-      const a = post.image_path ? db.prepare(`SELECT album_quality, album_tag FROM assets WHERE user_id = ? AND file_path = ?`).get(uid, String(post.image_path)) : null;
-      if (a && a.album_quality) {
-        const q = JSON.parse(a.album_quality);
-        const issues = Array.isArray(q) ? q : (q.issues || []);
-        if (issues.includes('cortada')) add('producto-cortado', true, 'La foto parece cortada: el producto puede estar cortado');
-        if (q.lum !== undefined && q.lum < 38) add('foto-oscura', false, 'La foto está oscura');
-      }
-      if (a && a.album_tag === 'equipo' && !confirmados.has('caras-permiso')) add('caras-permiso', true, 'La foto muestra personas del equipo: confirmá que tienen permiso para salir');
-    } catch (e) {}
-    // Reuso y paleta: avisos (nunca duros). Sin foto no hay reuso
-    // que avisar: image_path vacío matchearía prev_image_path ''.
-    if (post.image_path) try {
-      const reu = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND id != ? AND status IN ('published','scheduled') AND (image_path = ? OR prev_image_path = ?)`).get(uid, postId, String(post.image_path || ''), String(post.image_path || ''));
-      if (reu && reu.n > 0) add('reuso', false, 'Esta foto ya se usó en una semana anterior');
-    } catch (e) {}
-    const duros = items.filter((i) => i.duro && !i.confirmado);
-    res.json({ ok: true, items, bloqueado: duros.length > 0 });
+    const cl = checklist.computeChecklist(db, MEDIA_DIR, uid, post);
+    res.json({ ok: true, items: cl.items, bloqueado: cl.bloqueado });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo revisar' }); }
 });
 app.post('/api/drafts/:id/checklist-confirm', requireAuth, express.json(), (req, res) => {
@@ -19413,11 +19440,18 @@ app.post('/api/mitos/:id/reel', requireAuth, express.json(), async (req, res) =>
       if (!aabs || !fs.existsSync(aabs)) return res.status(400).json({ ok: false, error: 'Un clip no tiene archivo' });
       clips.push({ id: a.id, abs: aabs });
     }
-    const prev = await mcReelPreview(uid, clips, clips.length > 1 ? 0.5 : 0);
+    // Lote 6 — el builder legacy ahora lee el estilo guardado (igual
+    // que los caminos nuevos): una elección explícita puntual manda
+    // sobre el estilo guardado, como en video-transitions.
+    let fade;
+    if (req.body && req.body.fade !== undefined && req.body.fade !== '') fade = Number(req.body.fade);
+    else fade = (mcEstilo(uid).transicion === 'ninguna') ? 0 : 0.5;
+    if (!(fade >= 0) || fade > 2) return res.status(400).json({ ok: false, error: 'Transición inválida' });
+    const prev = await mcReelPreview(uid, clips, clips.length > 1 ? fade : 0);
     if (!prev) return res.status(502).json({ ok: false, error: 'No se pudo armar la vista previa' });
     const sidecar = prev.preview.replace(/\.mp4$/i, '.json');
     fs.writeFileSync(photoCliente.mediaAbs(MEDIA_DIR, sidecar), JSON.stringify({ kind: 'mito', sources: clips.map((c) => c.id), preview: prev.preview, mito_id: id }));
-    res.json({ ok: true, preview: prev.preview, sidecar, mito: mito.mito, desmentido: mito.desmentido });
+    res.json({ ok: true, preview: prev.preview, sidecar, mito: mito.mito, desmentido: mito.desmentido, fade });
   } catch (e) { console.error('[mitos-reel]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar').slice(0, 200) }); }
 });
 // (media-cliente-3) STOCK REAL: el dueño pone el número (desde su
@@ -26044,7 +26078,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v505';
+const BUILD_ID = '20261031-v506';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

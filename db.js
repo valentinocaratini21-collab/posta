@@ -539,6 +539,7 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN source_topic TEXT DEFAULT ''`); } ca
 try { db.exec(`ALTER TABLE posts ADD COLUMN source_angle TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN brand_logo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN brand_colors TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE settings ADD COLUMN brand_font TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN favorite_styles TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN last_ig_user_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (Frente 4b) Marca de revocación IG por desautorización de Meta (timestamp + motivo).

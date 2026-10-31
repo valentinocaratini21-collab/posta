@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const checklist = require('./checklist');
 
 // Umbral mínimo para auto-publicar (0-100).
 const QUALITY_THRESHOLD = 70;
@@ -238,6 +239,8 @@ function maybeGraduateLevel2(db, uid) {
  * puede salir solo. Requiere:
  * 1. Usuario con autopilot_enabled = 1
  * 2. Quality gate con score >= umbral
+ * 3. Checklist sin problemas duros sin confirmar (Lote 6, fail-closed:
+ *    un duro sin confirmar NO sale solo, nunca contenido sin chequear)
  * Si pasa, devuelve { ok: true, score }. Si no, { ok: false, reason }.
  */
 function shouldAutopublish(userId, postId, db, mediaDir) {  try {
@@ -261,6 +264,15 @@ function shouldAutopublish(userId, postId, db, mediaDir) {  try {
         .join(', ');
       console.log(`[autopilot] post ${postId} NO pasa (score ${result.score}): ${failed}`);
       return { ok: false, reason: 'quality_fail', score: result.score, failed };
+    }
+    // Lote 6 — gate de checklist (fail-closed): un problema duro sin
+    // confirmar frena la salida automática. El dueño lo resuelve o lo
+    // acepta conociéndolo desde la revisión del borrador.
+    const cl = checklist.computeChecklist(db, mediaDir, userId, post);
+    if (cl.bloqueado) {
+      const items = cl.duros.map((d) => d.item).join(', ');
+      console.log(`[autopilot] post ${postId} NO sale solo: checklist bloqueada (${items})`);
+      return { ok: false, reason: 'checklist_bloqueado', score: result.score, items: cl.duros };
     }
     console.log(`[autopilot] post ${postId} PASA (score ${result.score}), sale solo 🚀`);
     return { ok: true, score: result.score };

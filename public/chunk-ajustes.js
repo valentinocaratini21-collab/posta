@@ -26,11 +26,11 @@ function ajustesView() {
     : 'negocio';
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
-  const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡TikTok conectado! Ya podés compartir tus posteos 🎵</div>`
+  const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡TikTok conectado! Ya podés compartir tus posteos</div>`
     : q.get('tiktok') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar TikTok')}</div>` : '';
   const ggMsg = q.get('google') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡Google conectado! Ya podés responder tus reseñas ⭐</div>`
     : q.get('google') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar Google')}</div>` : '';
-  const tnMsg = q.get('tn') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡Tiendanube conectada! Posty ya lee tu catálogo, tu stock y tus ventas 🛍️</div>`
+  const tnMsg = q.get('tn') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡Tiendanube conectada! Posty ya lee tu catálogo, tu stock y tus ventas</div>`
     : q.get('tn') === 'error' ? `<div class="err">${pzIc('reject', 15)} No pudimos conectar tu Tiendanube. Probá de nuevo desde Conexiones.</div>` : '';
   const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">${pzIc('clock', 15)} Confirmando tu pago…</div>`
     : q.get('plan') === 'pending' ? `<div class="okmsg">${pzIc('clock', 15)} Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
@@ -55,9 +55,9 @@ function ajustesView() {
   const igHealthy = !!(p.ig_connected && p.ig_username && !s.ig_token_warning);
   const igCuentaRow = `
     <div class="set-row"><div><div class="t">Cuenta conectada</div>
-      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
-      <div class="hint" style="margin-top:6px">🔒 Posty puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>🔑 Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
-      ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">🔍 Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
+      <div class="d">${p.ig_connected ? `${pzIc('checkCircle', 15)} @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
+      <div class="hint" style="margin-top:6px">${pzIc('lock', 15)} Posty puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>' + pzIc('key', 15) + ' Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
+      ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">${pzIc('search', 15)} Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
     </div>
     <div id="igVerifyMsg" style="margin-top:10px"></div>`;
   const igKnowRow = `
@@ -74,11 +74,11 @@ function ajustesView() {
       <div class="ig-check ${!s.demo_mode ? 'ok' : ''}">${!s.demo_mode ? pzIc('checkCircle', 15) : pzIc('circleEmpty', 15)} Modo demo apagado</div>
       <div class="ig-check ${IG_VERIFIED_AT ? 'ok' : ''}">${IG_VERIFIED_AT ? pzIc('checkCircle', 15) : pzIc('circleEmpty', 15)} Conexión verificada${IG_VERIFIED_AT ? ` <span style="color:var(--dim);font-weight:400">(${IG_VERIFIED_AT})</span>` : ''}</div>
     </div>
-    <div class="set-row"><div><div class="t">${s.demo_mode ? '🧪 Modo Demo' : '🚀 Modo Real'}</div>
+    <div class="set-row"><div><div class="t">${s.demo_mode ? `${pzIc('flask', 16)} Modo Demo` : `${pzIc('rocket', 16)} Modo Real`}</div>
       <div class="d">${s.demo_mode ? 'Posty <b>simula</b> las publicaciones: probás el flujo completo sin que salga nada real.' : 'Al conectar tu Instagram, Posty publica <b>de verdad</b>.'}</div></div>
-      <button class="btn btn-soft btn-sm" id="${s.demo_mode ? 'igModeToReal' : 'igModeToDemo'}" style="flex:none">${s.demo_mode ? 'Pasar a Real 🚀' : 'Volver a Demo 🧪'}</button>
+      <button class="btn btn-soft btn-sm" id="${s.demo_mode ? 'igModeToReal' : 'igModeToDemo'}" style="flex:none">${s.demo_mode ? `Pasar a Real ${pzIc('rocket', 16)}` : `Volver a Demo ${pzIc('flask', 16)}`}</button>
     </div>
-    ${IG_MODE_WARN ? `<div class="ig-warn" style="margin-bottom:14px">⚠️ Elegiste el modo <b>Real</b> pero todavía no conectaste tu Instagram. Conectalo abajo para publicar de verdad.</div>` : ''}
+    ${IG_MODE_WARN ? `<div class="ig-warn" style="margin-bottom:14px">${pzIc('alert', 16)} Elegiste el modo <b>Real</b> pero todavía no conectaste tu Instagram. Conectalo abajo para publicar de verdad.</div>` : ''}
     ${igCuentaRow}
     ${p.ig_connected ? '' : `<div style="margin-top:14px">
       <div style="font-weight:700;font-size:13px">¿Todavía no conectás?</div>
@@ -91,7 +91,7 @@ function ajustesView() {
     </div>`}
     ${igKnowRow}
     <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
-      <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
+      <div style="font-weight:800;margin-bottom:10px">${pzIc('phone', 16)} Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
       <ol style="margin:0 0 12px 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
         <li>Abrí Instagram y andá a tu perfil</li>
         <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
@@ -105,38 +105,32 @@ function ajustesView() {
       <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
     </div>
     <div id="igMsg"></div>`;
-  return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu Instagram, tu plan y tu marca.</p></div></div>
+  return `<div class="page-head"><div class="ph-ico">${pzIc('gear', 26)}</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu Instagram, tu plan y tu marca.</p></div></div>
   ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
   <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('store', 20)} Tu negocio</h3>${stBiz}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-  <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">🤖 Uso estos datos para crear tus posteos.</p>
+  <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">${pzIc('bot', 16)} Uso estos datos para crear tus posteos.</p>
     <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
     <div class="row2">
-      <div class="field"><label>Rubro</label><select id="s_cat">
-        ${CATS.map(([v, ico, t]) => `<option ${catSel(p.category) === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
-      </select></div>
+      <div class="field"><label>Rubro</label><input type="hidden" id="s_cat" value="${esc(catSel(p.category))}"><div class="pz-pick">${CATS.map(([v, ico, t]) => `<button type="button" class="pz-pick-btn${catSel(p.category) === v ? ' sel' : ''}" data-pz-pick="${v}" onclick="pzPick(this,'s_cat')">${pzIc(ico, 20)}<span>${t}</span></button>`).join('')}</div></div>
       <div class="field" id="s_catother_w" style="${catSel(p.category) === 'otro' ? '' : 'display:none'}"><label>¿Cuál?</label><input id="s_catother" value="${esc(catCustom(p.category))}" placeholder="Ej: veterinaria, librería..." maxlength="40"></div>
-      <div class="field"><label>Tono de la IA</label><select id="s_tone">
-        ${TONES.map(([v, ico, t]) => `<option ${p.tone === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
-      </select></div>
+      <div class="field"><label>Tono de la IA</label><input type="hidden" id="s_tone" value="${esc(p.tone || '')}"><div class="pz-pick">${TONES.map(([v, ico, t]) => `<button type="button" class="pz-pick-btn${p.tone === v ? ' sel' : ''}" data-pz-pick="${v}" onclick="pzPick(this,'s_tone')">${pzIc(ico, 20)}<span>${t}</span></button>`).join('')}</div></div>
     </div>
     <div class="row2">
       <div class="field"><label>Zona horaria <span style="color:var(--dim);font-weight:400">(para programar a la hora de tu país)</span></label><select id="s_tz">
         ${TIMEZONES.map(([v, l]) => `<option ${s.timezone === v ? 'selected' : ''} value="${v}">${l}</option>`).join('')}
       </select></div>
-      <div class="field"><label>Objetivo</label><select id="s_goal">
-        ${GOALS.map(([v, ico, t]) => `<option ${p.goal === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
-      </select></div>
-      <div class="field"><label>🎯 Foco de este mes</label><input id="s_mgoal" value="${esc(p.monthly_goal || '')}" placeholder="Ej.: vender más los viernes" maxlength="120"><div class="hint">Lo que querés empujar ESTE mes. Posty inclina todos los posteos a esto — cambialo cuando quieras.</div></div>
+      <div class="field"><label>Objetivo</label><input type="hidden" id="s_goal" value="${esc(p.goal || '')}"><div class="pz-pick">${GOALS.map(([v, ico, t]) => `<button type="button" class="pz-pick-btn${p.goal === v ? ' sel' : ''}" data-pz-pick="${v}" onclick="pzPick(this,'s_goal')">${pzIc(ico, 20)}<span>${t}</span></button>`).join('')}</div></div>
+      <div class="field"><label>${pzIc('target', 16)} Foco de este mes</label><input id="s_mgoal" value="${esc(p.monthly_goal || '')}" placeholder="Ej.: vender más los viernes" maxlength="120"><div class="hint">Lo que querés empujar ESTE mes. Posty inclina todos los posteos a esto — cambialo cuando quieras.</div></div>
     </div>
     <div class="field"><label>Descripción (para que la IA te conozca)</label><textarea id="s_desc" maxlength="600" placeholder="Contanos qué vendés, para quién y qué te hace distinto...">${esc(p.description)}</textarea>
       <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600 · Mientras más nos cuentes, mejores ideas creamos por vos.</div>
       </div>
     <div class="field"><label>Tus competidores</label>
-      <div class="comp-box" id="s_compbox"><div class="comp-chips" id="s_chips"></div><input id="s_compin" name="compinput" placeholder="＋ Agregar competidor…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')"></div>
+      <div class="comp-box" id="s_compbox"><div class="comp-chips" id="s_chips"></div><input id="s_compin" name="compinput" placeholder="Agregar competidor…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')"></div>
       <div class="hint" id="compHint" style="display:none;color:#e5484d"></div>
       <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
     <div class="field" style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px">
-      <label style="font-size:13px">🧬 Lo que la IA sabe de tu negocio</label>
+      <label style="font-size:13px">${pzIc('dna', 16)} Lo que la IA sabe de tu negocio</label>
       <div class="hint" style="margin:-6px 0 12px">Completá lo que quieras: la IA lo usa para crear posteos que venden de verdad.</div>
       <div class="field"><label>Productos <span id="dnaChip_productos"></span> <span style="color:var(--dim);font-weight:400">(uno por línea: nombre — precio)</span></label>
         <textarea id="s_dna_productos" rows="3" placeholder="Nombre del producto — precio (uno por línea)"></textarea></div>
@@ -146,7 +140,7 @@ function ajustesView() {
         <div class="field"><label>Horarios <span id="dnaChip_horarios"></span></label><input id="s_dna_horarios" placeholder="Lun a Sáb 10 a 20 hs" autocomplete="off"></div>
         <div class="field"><label>Ubicación <span id="dnaChip_ubicacion"></span></label><input id="s_dna_ubicacion" placeholder="Barrio y ciudad" autocomplete="off"></div>
       </div>
-      <div class="field"><label>🚪 Días que cerrás</label>
+      <div class="field"><label>${pzIc('door', 16)} Días que cerrás</label>
         <div id="closedDaysRow" style="display:flex;gap:6px;flex-wrap:wrap"></div>
         <div class="hint" id="closedDaysHint">Tocá los días en que tu negocio no abre: Posty no programa posteos esos días.</div>
       </div>
@@ -162,7 +156,7 @@ function ajustesView() {
       <button class="btn btn-ghost btn-sm" id="btnPreview">${pzIc('eye', 18)} Vista previa</button>
     </div>
     <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
-      <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;margin-bottom:10px">🧠 Lo que Posty sabe de tu negocio <span class="lvl-pill" id="lvlPill" style="display:none"><span class="lvl-num" id="lvlPillNum">Nivel 1</span><span class="lvl-name" id="lvlPillName"></span></span></div>
+      <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;margin-bottom:10px">${pzIc('book', 16)} Lo que Posty sabe de tu negocio <span class="lvl-pill" id="lvlPill" style="display:none"><span class="lvl-num" id="lvlPillNum">Nivel 1</span><span class="lvl-name" id="lvlPillName"></span></span></div>
     <div class="lvl-block" id="lvlBlock"><p class="hint">Calculando tu nivel…</p></div>
     <p class="src-intro">Lo estudio solo para crear posteos que venden.</p>
     <div class="src-row" id="webZone"><p class="hint">Cargando…</p></div>
@@ -172,9 +166,13 @@ function ajustesView() {
     <div class="src-row" id="placesZone"><p class="hint">Cargando…</p></div>
     </div>
     <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
-      <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;margin-bottom:10px">📝 ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "What I've learned from you" : 'Lo que aprendí de vos'}</div>
+      <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;margin-bottom:10px">${pzIc('post', 16)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "What I've learned from you" : 'Lo que aprendí de vos'}</div>
     <p class="src-intro">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Your standing tastes: what you taught me in the chat or by correcting me. They shape every new week — delete one and it stops applying from the next generation.' : 'Tus gustos fijos: lo que me enseñaste en el chat o corrigiéndome. Dan forma a cada semana nueva — borrás uno y deja de aplicar desde la próxima generación.'}</p>
     <div id="gustosZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
+    </div>
+    <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
+      <button type="button" class="btn btn-soft btn-sm" style="justify-content:flex-start;padding-left:4px" onclick="hfCoversOpen()">${pzIc('image', 18)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Create covers' : 'Crear cubiertas'}</button>
+      <p class="hint" style="margin:6px 0 0 4px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'For your Instagram highlights — download each cover and set it in Instagram.' : 'Para tus destacadas de Instagram: descargá cada cubierta y ponela en Instagram.'}</p>
     </div>
   </div></div>
   <div class="card ajsec${openSec==='auto' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('bolt', 20)} Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
@@ -197,7 +195,7 @@ function ajustesView() {
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
       <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
-    <div style="font-weight:800;margin:18px 0 8px">🌍 Tu semana en dos idiomas</div>
+    <div style="font-weight:800;margin:18px 0 8px">${pzIc('globe', 16)} Tu semana en dos idiomas</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Para negocios con turistas o clientes en inglés: la misma semana sale también en inglés. La versión en inglés es la traducción de tu semana en español — misma idea, mismos datos, nada nuevo. No cambia el idioma de la app.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnBilingualWeekToggle">Cargando...</button>
@@ -211,18 +209,18 @@ function ajustesView() {
     <div id="founderZone"></div>
   </div></div>
   <div class="card ajsec${openSec==='conex' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('plug', 20)} Conexiones</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div style="font-weight:800;margin-bottom:8px">📸 Instagram</div>
+    <div style="font-weight:800;margin-bottom:8px">${pzIc('camera', 16)} Instagram</div>
     ${igBody}
     <div id="pzBioSealSlot"></div>
-    <div style="font-weight:800;margin:18px 0 8px">🎵 TikTok</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>🎵 Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
+    <div style="font-weight:800;margin:18px 0 8px">${pzIc('music', 16)} TikTok</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>${pzIc('music', 16)} Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
     <div id="ttZone"><p class="hint">Cargando…</p></div>
     <div id="ttMsg"></div>
     <div style="font-weight:800;margin:18px 0 8px">⭐ Google · Reseñas</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
     <div id="ggZone"><p class="hint">Cargando…</p></div>
     <div id="ggMsg"></div>
-    <div style="font-weight:800;margin:18px 0 8px">🛍️ Tiendanube</div>
+    <div style="font-weight:800;margin:18px 0 8px">${pzIc('bag', 16)} Tiendanube</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu tienda, conectada: Posty lee tu catálogo, tu stock y tus ventas para postear solo lo que tenés, con tu producto más vendido al frente. Solo lee: nunca toca precios ni stock.</p>
     <div id="tnZone"><p class="hint">Cargando…</p></div>
     <div id="tnMsg"></div>
@@ -235,19 +233,19 @@ function ajustesView() {
       <button class="btn btn-ghost" id="btnPreNotifyToggle">Cargando...</button>
       <span id="preNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div style="font-weight:800;margin:18px 0 8px">📩 Tu carta del domingo</div>
+    <div style="font-weight:800;margin:18px 0 8px">${pzIc('mail', 16)} Tu carta del domingo</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cada domingo a la noche te escribo tu carta: cómo viene tu Instagram y qué ya estoy haciendo por tu negocio. Te aviso apenas llega.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnLetterToggle">Cargando...</button>
       <span id="letterNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div style="font-weight:800;margin:18px 0 8px">😕 Si un posteo no pudo salir</div>
+    <div style="font-weight:800;margin:18px 0 8px">${pzIc('alert', 16)} Si un posteo no pudo salir</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Si un posteo falla al publicar, te aviso en el momento. Nunca sale a medias: queda en borrador para que lo mires.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnFailToggle">Cargando...</button>
       <span id="failNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div class="hint" id="avisosPushHint" style="display:none;margin-top:14px">📱 Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar. Cuando Posty te pida permiso para mandar notificaciones, tocá <b>Permitir</b>.</div>
+    <div class="hint" id="avisosPushHint" style="display:none;margin-top:14px">${pzIc('phone', 16)} Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar. Cuando Posty te pida permiso para mandar notificaciones, tocá <b>Permitir</b>.</div>
   </div></div>
   <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('palette', 20)} Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
@@ -279,6 +277,11 @@ function ajustesView() {
       </div>
       <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano tocando el color o escribiendo su código. Con el menú de cada color elegís si es Principal, Secundario o Acento: se reordenan solos. El principal domina los diseños, el secundario lo acompaña y el acento va en botones y detalles.</div>
     </div>
+    <div class="field"><label>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Headline font' : 'Tipografía de tus titulares'}</label>
+      <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'The font of the headline inside your post images. It changes only the headline — not captions, colors or web/app text.' : 'La letra del titular dentro de tus posteos. Cambia solo el titular — no cambia captions, colores ni texto de web/app.'}</div>
+      <div id="fontRow" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px"></div>
+      <div class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Applies to new weeks and regenerations. Published posts keep their look.' : 'Aplica a semanas nuevas y regeneraciones. Los posteos ya publicados conservan su look.'}</div>
+    </div>
     <div class="field"><label>Vista previa</label>
       <div id="brandPrev"></div>
       <div class="hint">Así se ve tu marca en tus posteos. Se actualiza sola cuando cambiás los colores.</div>
@@ -295,15 +298,15 @@ function ajustesView() {
     </div>
     <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:11.5px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
     <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
-      <div style="font-weight:800;font-size:15px;margin-bottom:10px">🎨 Estilos de tus posteos</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:6px">Elegí los que te gusten. Si no elegís, elijo yo por vos ✨</p>
+      <div style="font-weight:800;font-size:15px;margin-bottom:10px">${pzIc('palette', 16)} Estilos de tus posteos</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:6px">Elegí los que te gusten. Si no elegís, elijo yo por vos</p>
     <p style="color:var(--dim);font-size:11.5px;margin-bottom:14px">Muestras de estilo: así se compone un posteo con cada uno — con una foto de tu rubro, tu nombre y tus colores. Marcá hasta 3 favoritos y tus posteos nuevos van a salir con esos looks primero.</p>
     <div id="styleGallery"><div style="color:var(--mut);font-size:12.5px">Cargando estilos…</div></div>
     <div class="hint" id="styleFavMsg" style="margin-top:10px"></div>
     </div>
   </div></div>
   <div class="card ajsec${openSec==='pagina' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('globe', 20)} Tu página</h3>${stPage}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: una página linda con tu negocio y tus posteos ya publicados, con botón directo a tu WhatsApp. Cada persona que la visita conoce Posty 🐾</p>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: una página linda con tu negocio y tus posteos ya publicados, con botón directo a tu WhatsApp. Cada persona que la visita conoce Posty</p>
     <div class="field"><label>Tu dirección</label>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-size:13.5px;color:var(--mut)">postycommunitymanager.com/p/</span>
@@ -311,12 +314,12 @@ function ajustesView() {
         <button class="btn btn-ghost btn-sm" id="btnCopyPage" type="button" style="flex:none">${pzIc('copy', 18)} Copiar link</button>
       </div>
       <div class="hint">Solo letras minúsculas, números y guiones. Si la dirección está libre, queda para vos.</div></div>
-    <div class="field"><label>💬 WhatsApp de tu negocio</label><input id="s_whats" value="${esc(p.whatsapp || '')}" placeholder="Ej.: 5491123456789" inputmode="tel" maxlength="20" autocomplete="off"><div class="hint">El número al que te escriben tus clientes, con código de país (Argentina: 54 9 + tu número). Aparece como botón grande en tu página.</div></div>
+    <div class="field"><label>${pzIc('chat', 16)} WhatsApp de tu negocio</label><input id="s_whats" value="${esc(p.whatsapp || '')}" placeholder="Ej.: 5491123456789" inputmode="tel" maxlength="20" autocomplete="off"><div class="hint">El número al que te escriben tus clientes, con código de país (Argentina: 54 9 + tu número). Aparece como botón grande en tu página.</div></div>
     <div class="field"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="s_pageon" ${p.page_enabled === 0 ? '' : 'checked'}> Página visible para todos</label><div class="hint">Si la apagás, tu link muestra "página no disponible". Solo se ven posteos ya publicados — nunca borradores.</div></div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary btn-sm" id="btnSavePage" type="button">Guardar página</button>
       <span id="pageMsg"></span>
-      <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página →</a>
+      <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página ${pzIc('arrowRight', 13)}</a>
     </div>
   </div></div>
   <div class="card ajsec${openSec==='semana' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('link', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'}</h3><span class="ajsec-st" id="ajStSemana"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
@@ -326,7 +329,7 @@ function ajustesView() {
   ${IS_NATIVE ? '' : `<div class="card ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>`}
-  <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
+  <details class="card int-advanced"><summary>${pzIc('gear', 16)} Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás pegar la dirección de embed que Meta genera para tu Instagram. La mayoría no tiene que tocar nada acá.</p>
     <div class="int-block"><h4>Instagram Embed URL</h4>
       <div class="field"><label>Instagram Embed URL</label>
@@ -347,22 +350,22 @@ async function ttZoneLoad() {
   try { st = await api.get('/api/tiktok/status'); } catch (e) { /* queda el fallback */ }
   if (!st) { zone.innerHTML = '<p class="hint">No se pudo cargar el estado de TikTok.</p>'; return; }
   if (!st.configured) {
-    zone.innerHTML = `<div class="set-row"><div><div class="t">🎵 TikTok — Próximamente</div>
+    zone.innerHTML = `<div class="set-row"><div><div class="t">${pzIc('music', 16)} TikTok — Próximamente</div>
       <div class="d">Estamos terminando la conexión con TikTok. Cuando esté lista, vas a poder compartir tus posteos ahí con un toque, sin salir de Posty.</div></div></div>`;
     return;
   }
   if (!st.connected) {
     zone.innerHTML = `<div class="set-row"><div><div class="t">Cuenta de TikTok</div>
       <div class="d">Todavía no conectaste tu TikTok. Al conectar, Posty puede compartir tus posteos ahí cuando vos lo pidas — nunca publica solo.</div>
-      <div class="hint" style="margin-top:6px">🔒 Entrás con el login oficial de TikTok. Nunca vemos ni guardamos tu contraseña.</div></div>
+      <div class="hint" style="margin-top:6px">${pzIc('lock', 15)} Entrás con el login oficial de TikTok. Nunca vemos ni guardamos tu contraseña.</div></div>
       <button class="btn btn-primary btn-sm" id="btnTtConn" style="flex:none">Conectar TikTok</button></div>`;
     const bc = $('#btnTtConn');
     if (bc) bc.onclick = () => { location.href = '/api/tiktok/connect'; };
     return;
   }
   zone.innerHTML = `<div class="set-row"><div><div class="t">Cuenta conectada</div>
-    <div class="d">✅ ${st.username ? '@' + esc(st.username) : 'Tu TikTok'} — lista para compartir tus posteos 🎵</div>
-    <div class="hint" style="margin-top:6px">En cada posteo publicado de tu Schedule vas a ver el botón <b>🎵 Compartir en TikTok</b>.</div></div>
+    <div class="d">${pzIc('checkCircle', 15)} ${st.username ? '@' + esc(st.username) : 'Tu TikTok'} — lista para compartir tus posteos</div>
+    <div class="hint" style="margin-top:6px">En cada posteo publicado de tu Schedule vas a ver el botón <b>${pzIc('music', 16)} Compartir en TikTok</b>.</div></div>
     <button class="btn btn-danger btn-sm" id="btnTtDisc" style="flex:none">Desconectar</button></div>`;
   const bd = $('#btnTtDisc');
   if (bd) bd.onclick = async () => {
@@ -387,14 +390,14 @@ async function ggZoneLoad() {
   if (!st.connected) {
     zone.innerHTML = `<div class="set-row"><div><div class="t">Cuenta de Google</div>
       <div class="d">Todavía no conectaste tu Google. Al conectar, Posty trae las reseñas de tu ficha y te deja cada respuesta lista — nunca responde solo.</div>
-      <div class="hint" style="margin-top:6px">🔒 Entrás con el login oficial de Google. Nunca vemos ni guardamos tu contraseña.</div></div>
+      <div class="hint" style="margin-top:6px">${pzIc('lock', 15)} Entrás con el login oficial de Google. Nunca vemos ni guardamos tu contraseña.</div></div>
       <button class="btn btn-primary btn-sm" id="btnGgConn" style="flex:none">Conectar Google</button></div>`;
     const bc = $('#btnGgConn');
     if (bc) bc.onclick = () => { location.href = '/api/google/connect'; };
     return;
   }
   zone.innerHTML = `<div class="set-row"><div><div class="t">Cuenta conectada</div>
-    <div class="d">✅ ${st.businessName ? esc(st.businessName) : 'Tu ficha de Google'} — lista para responder reseñas ⭐</div>
+    <div class="d">${pzIc('checkCircle', 15)} ${st.businessName ? esc(st.businessName) : 'Tu ficha de Google'} — lista para responder reseñas</div>
     <div class="hint" style="margin-top:6px">Escribí <b>reseñas</b> en el chat y Posty te muestra las que faltan responder, con la respuesta lista.</div></div>
     <button class="btn btn-danger btn-sm" id="btnGgDisc" style="flex:none">Desconectar</button></div>`;
   const bd = $('#btnGgDisc');
@@ -414,21 +417,21 @@ async function tnZoneLoad() {
   try { st = await api.get('/api/connections/tiendanube/status'); } catch (e) { /* queda el fallback */ }
   if (!st) { zone.innerHTML = '<p class="hint">No se pudo cargar el estado de Tiendanube.</p>'; return; }
   if (!st.configured) {
-    zone.innerHTML = `<div class="set-row"><div><div class="t">🛍️ Tiendanube — Muy pronto</div>
+    zone.innerHTML = `<div class="set-row"><div><div class="t">${pzIc('bag', 16)} Tiendanube — Muy pronto</div>
       <div class="d">Estamos terminando la conexión con Tiendanube. Cuando esté lista, vas a poder conectar tu tienda con un toque y Posty va a postear solo lo que tenés en stock.</div></div></div>`;
     return;
   }
   if (!st.connected) {
     zone.innerHTML = `<div class="set-row"><div><div class="t">Tu tienda de Tiendanube</div>
       <div class="d">Conectá tu tienda y Posty postea solo lo que tenés en stock, con tu producto más vendido al frente.</div>
-      <div class="hint" style="margin-top:6px">🔒 Entrás con el login oficial de Tiendanube. Nunca vemos ni guardamos tu contraseña, y Posty solo lee: nunca toca precios ni stock.</div></div>
+      <div class="hint" style="margin-top:6px">${pzIc('lock', 15)} Entrás con el login oficial de Tiendanube. Nunca vemos ni guardamos tu contraseña, y Posty solo lee: nunca toca precios ni stock.</div></div>
       <button class="btn btn-primary btn-sm" id="btnTnConn" style="flex:none">Conectar Tiendanube</button></div>`;
     const bc = $('#btnTnConn');
     if (bc) bc.onclick = () => { location.href = '/api/connections/tiendanube/start'; };
     return;
   }
   if (st.broken) {
-    zone.innerHTML = `<div class="set-row"><div><div class="t">🛍️ Tiendanube</div>
+    zone.innerHTML = `<div class="set-row"><div><div class="t">${pzIc('bag', 16)} Tiendanube</div>
       <div class="d">${pzIc('alert', 15)} La conexión con ${st.store_name ? esc(st.store_name) : 'tu tienda'} se cortó. Volvé a conectarla para que Posty siga leyendo tu stock y tus ventas.</div></div>
       <button class="btn btn-primary btn-sm" id="btnTnConn" style="flex:none">Reconectar</button></div>`;
     const bc = $('#btnTnConn');
@@ -444,7 +447,7 @@ async function tnZoneLoad() {
     if (!isNaN(d)) syncTxt = ` · Actualizado ${d.toLocaleDateString('es-AR')} ${d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`;
   }
   zone.innerHTML = `<div class="set-row"><div><div class="t">Tienda conectada</div>
-    <div class="d">✅ ${st.store_name ? esc(st.store_name) : 'Tu Tiendanube'} — Posty lee tu catálogo, tu stock y tus ventas 🛍️</div>
+    <div class="d">${pzIc('checkCircle', 15)} ${st.store_name ? esc(st.store_name) : 'Tu Tiendanube'} — Posty lee tu catálogo, tu stock y tus ventas</div>
     ${datos.length ? `<div class="hint" style="margin-top:6px">${datos.join(' · ')}${syncTxt}</div>` : ''}</div>
     <div style="display:flex;gap:8px;flex:none">
       <button class="btn btn-ghost btn-sm" id="btnTnSync">Actualizar ahora</button>
@@ -464,7 +467,7 @@ async function tnZoneLoad() {
   };
 }
 
-// v186: galería "🎨 Estilos de tus posteos" — muestras fieles (mismo motor
+// v186: galería "${pzIc('palette', 16)} Estilos de tus posteos" — muestras fieles (mismo motor
 // de composición que los posteos) y hasta 3 favoritos persistidos. Todo
 // opcional: sin favoritos, Posty elige como siempre.
 // --- 📝 MEMORIA DE GUSTOS: «Lo que aprendí de vos» (GET /api/gustos) ---
@@ -476,7 +479,7 @@ async function gustosZoneLoad() {
   try { data = await api.get('/api/gustos'); } catch (e) { /* queda el fallback */ }
   const list = (data && Array.isArray(data.gustos)) ? data.gustos : [];
   if (!list.length) {
-    zone.innerHTML = `<p class="hint">${en ? "I haven't learned any of your tastes yet 📝 Correct me twice the same way and I'll offer to note it in the chat — or just tell me («no hashtags», «short texts») and I note it right away." : 'Todavía no aprendí ningún gusto tuyo 📝 Cuando me corrijas dos veces lo mismo, te propongo anotarlo en el chat — y si me lo pedís directo («sin hashtags», «textos cortos»), lo anoto al instante.'}</p>`;
+    zone.innerHTML = `<p class="hint">${en ? "I haven't learned any of your tastes yet. Correct me twice the same way and I'll offer to note it in the chat — or just tell me («no hashtags», «short texts») and I note it right away." : 'Todavía no aprendí ningún gusto tuyo. Cuando me corrijas dos veces lo mismo, te propongo anotarlo en el chat — y si me lo pedís directo («sin hashtags», «textos cortos»), lo anoto al instante.'}</p>`;
     return;
   }
   zone.innerHTML = list.map(g => `
@@ -504,7 +507,7 @@ async function styleGalleryLoad() {
   const rec = (data && data.recommended) || [];
   let favs = ((data && data.favorites) || []).slice();
   if (!rec.length) {
-    box.innerHTML = '<div style="color:var(--mut);font-size:12.5px">Por ahora no hay estilos para mostrarte — Posty sigue eligiendo por vos ✨</div>';
+    box.innerHTML = '<div style="color:var(--mut);font-size:12.5px">Por ahora no hay estilos para mostrarte — Posty sigue eligiendo por vos</div>';
     return;
   }
   const paint = () => {
@@ -529,7 +532,7 @@ async function styleGalleryLoad() {
       const r = await api.put('/api/style-favorites', { favorites: next });
       if (r && r.ok) {
         favs = r.favorites || next;
-        if (msg) msg.textContent = favs.length ? '⭐ Guardado: tus posteos nuevos van a preferir estos estilos.' : 'Listo: sin favoritos, Posty elige por vos ✨';
+        if (msg) msg.innerHTML = favs.length ? `${pzIc('star', 15)} Guardado: tus posteos nuevos van a preferir estos estilos.` : 'Listo: sin favoritos, Posty elige por vos';
         paint();
       } else if (msg) msg.textContent = 'No se pudo guardar — probá de nuevo.';
     } catch (e) { if (msg) msg.textContent = 'No se pudo guardar — probá de nuevo.'; }
@@ -561,7 +564,7 @@ async function weekShareLoad() {
       </div>`;
     const cp = document.getElementById('wsCopy');
     if (cp) cp.onclick = async () => {
-      try { await navigator.clipboard.writeText(url); cp.textContent = en ? '✅ Copied!' : '✅ ¡Copiado!'; }
+      try { await navigator.clipboard.writeText(url); cp.innerHTML = en ? `${pzIc('checkCircle', 15)} Copied!` : `${pzIc('checkCircle', 15)} ¡Copiado!`; }
       catch (e) { window.prompt(en ? 'Copy your link:' : 'Copiá tu link:', url); }
     };
     const rg = document.getElementById('wsRegen');
@@ -625,9 +628,9 @@ function bindSettings() {
       PROFILE = await api.get('/api/profile');
       if ($('#s_slug') && PROFILE.page_slug) $('#s_slug').value = PROFILE.page_slug;
       const pv = $('#pagePreviewLink'); if (pv && PROFILE.page_slug) pv.href = '/p/' + PROFILE.page_slug;
-      if (msg) msg.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ ¡Página guardada!</span>';
+      if (msg) msg.innerHTML = '<span style="color:var(--cel);font-size:12.5px">' + pzIc('checkCircle', 15) + ' ¡Página guardada!</span>';
     } catch (e) {
-      if (msg) msg.innerHTML = '<span style="color:#c0392b;font-size:12.5px">' + esc((e && e.message) || 'No se pudo guardar 😅') + '</span>';
+      if (msg) msg.innerHTML = '<span style="color:#c0392b;font-size:12.5px">' + esc((e && e.message) || 'No se pudo guardar') + '</span>';
     }
     btnSavePage.disabled = false;
   };
@@ -653,7 +656,7 @@ function bindSettings() {
         const demoOn = !!((typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.demo_mode));
         $('#autopilotStatus').textContent = on
           ? (demoOn
-            ? 'Tus posteos salen solos — pero estás en 🧪 modo Demo: por ahora se simulan, no sale nada real hasta que conectes tu Instagram.'
+            ? 'Tus posteos salen solos — pero estás en modo Demo: por ahora se simulan, no sale nada real hasta que conectes tu Instagram.'
             : 'Tus posteos salen solos. Te aviso 30 min antes de cada uno, por si querés frenarlo.')
           : 'Modo manual: nada se publica sin tu aprobación.';
         $('#autopilotInfo').textContent = on
@@ -676,13 +679,13 @@ function bindSettings() {
               btnPn.disabled = true;
               try {
                 const rr = await api.post('/api/autopilot/pre-notify', { enabled: !pnOn });
-                if (rr && rr.ok) await loadAp(); else alert('No pude cambiarlo 😅');
-              } catch (e) { alert('No pude cambiarlo 😅'); }
+                if (rr && rr.ok) await loadAp(); else alert('No pude cambiarlo');
+              } catch (e) { alert('No pude cambiarlo'); }
               btnPn.disabled = false;
             };
           } else {
             btnPn.disabled = true;
-            btnPn.textContent = '🟢 Activado';
+            btnPn.innerHTML = pzDot('#22A06B', 12) + ' Activado';
             if (pnSt) pnSt.textContent = 'En tu nivel el aviso es obligatorio: es tu freno de emergencia antes de cada publicación.';
           }
         }
@@ -706,7 +709,7 @@ function bindSettings() {
         if (r.paused) {
           const apSt = $('#autopilotStatus');
           if (apSt) apSt.textContent = '⏸ Todo está pausado: nada va a salir hasta que reanudes.';
-          const aws = $('#autoWeekStatus'); if (aws && __awOn) aws.textContent = '⏸ En pausa: tu semana no se arma mientras esté todo pausado.';
+          const aws = $('#autoWeekStatus'); if (aws && __awOn) aws.textContent = `${pzIc('pause', 15)} En pausa: tu semana no se arma mientras esté todo pausado.`;
         }
       } catch (e) {
         btnAp.textContent = 'Error';
@@ -719,8 +722,8 @@ function bindSettings() {
         btnAp.disabled = true;
         const r2 = await api.post('/api/autopilot', { enabled: next });
         if (r2 && r2.ok) await loadAp();
-        else alert('No pude cambiarlo 😅');
-      } catch (e) { alert('No pude cambiarlo 😅'); }
+        else alert('No pude cambiarlo');
+      } catch (e) { alert('No pude cambiarlo'); }
       btnAp.disabled = false;
     };
     const btnPauseAll = $('#btnPauseAll');
@@ -732,8 +735,8 @@ function bindSettings() {
             ? await api.post('/api/autopilot/resume-all', {})
             : await api.post('/api/autopilot/pause-all', {});
           if (r2 && r2.ok) await loadAp();
-          else alert('No pude cambiarlo 😅');
-        } catch (e) { alert('No pude cambiarlo 😅'); }
+          else alert('No pude cambiarlo');
+        } catch (e) { alert('No pude cambiarlo'); }
         btnPauseAll.disabled = false;
       };
     }
@@ -773,8 +776,8 @@ function bindSettings() {
         try {
           const r2 = await api.post('/api/settings/notify-prefs', { notify_letter: !letterOn });
           if (r2 && r2.ok) { letterOn = !!r2.notify_letter; paintT(btnL, $('#letterNotifyStatus'), letterOn, 'Te aviso el domingo apenas tu carta esté lista.', 'Sin aviso: la carta llega igual — la leés en Tu análisis.'); paintSum(); }
-          else alert('No pude cambiarlo 😅');
-        } catch (e) { alert('No pude cambiarlo 😅'); }
+          else alert('No pude cambiarlo');
+        } catch (e) { alert('No pude cambiarlo'); }
         btnL.disabled = false;
       };
       if (btnF) btnF.onclick = async () => {
@@ -782,8 +785,8 @@ function bindSettings() {
         try {
           const r2 = await api.post('/api/settings/notify-prefs', { notify_failed: !failOn });
           if (r2 && r2.ok) { failOn = !!r2.notify_failed; paintT(btnF, $('#failNotifyStatus'), failOn, 'Te aviso apenas un posteo no pueda salir.', 'Sin aviso: los fallos los ves al entrar a tu semana.'); paintSum(); }
-          else alert('No pude cambiarlo 😅');
-        } catch (e) { alert('No pude cambiarlo 😅'); }
+          else alert('No pude cambiarlo');
+        } catch (e) { alert('No pude cambiarlo'); }
         btnF.disabled = false;
       };
     } catch (e) { /* sin prefs: los botones quedan en "Cargando..." solo si el GET falla */ }
@@ -799,10 +802,10 @@ function bindSettings() {
         __awOn = on; paintAjStAuto();
         btnAw.innerHTML = on ? (pzIc('checkCircle', 15) + ' Activado') : (pzIc('circleEmpty', 15) + ' Activar');
         btnAw.classList.toggle('btn-primary', !on);
-        $('#autoWeekStatus').textContent = (__pausedAll && on)
-          ? '⏸ En pausa: tu semana no se arma mientras esté todo pausado.'
+        $('#autoWeekStatus').innerHTML = (__pausedAll && on)
+          ? `${pzIc('pause', 15)} En pausa: tu semana no se arma mientras esté todo pausado.`
           : on
-          ? 'Tu semana se arma y programa sola ✨'
+          ? 'Tu semana se arma y programa sola'
           : 'Vos armás tu semana a mano.';
       } catch (e) { btnAw.textContent = 'Error'; }
     };
@@ -812,8 +815,8 @@ function bindSettings() {
         const r = await api.get('/api/settings/auto-week');
         const r2 = await api.post('/api/settings/auto-week', { enabled: !(r && r.enabled) });
         if (r2 && r2.ok) await loadAw();
-        else alert('No pude cambiarlo 😅');
-      } catch (e) { alert('No pude cambiarlo 😅'); }
+        else alert('No pude cambiarlo');
+      } catch (e) { alert('No pude cambiarlo'); }
       btnAw.disabled = false;
     };
     loadAw();
@@ -856,7 +859,7 @@ function bindSettings() {
   const renderChips = () => {
     compBox.innerHTML = compChips.map((c, i) => {
       const pic = compPics[c.toLowerCase()];
-      const av = pic ? `<img src="${esc(pic)}" class="comp-av" onerror="this.remove()">` : `<span class="comp-av comp-av-fb">📷</span>`;
+      const av = pic ? `<img src="${esc(pic)}" class="comp-av" onerror="this.remove()">` : `<span class="comp-av comp-av-fb">${pzIc('camera', 20)}</span>`;
       return `<span class="comp-chip">${av}${esc(c)}<b data-ci="${i}" style="cursor:pointer;margin-left:6px">×</b></span>`;
     }).join('');
     compBox.querySelectorAll('[data-ci]').forEach(x => x.onclick = () => { compChips.splice(+x.dataset.ci, 1); renderChips(); markDirty(); });
@@ -922,7 +925,7 @@ function bindSettings() {
       if (hint) hint.textContent = closedSel.size === 0
         ? 'Tocá los días en que tu negocio no abre: Posty no programa posteos esos días.'
         : closedSel.size >= 7
-          ? '⚠️ Marcaste todos los días: no se va a programar ningún posteo hasta que desmarques alguno.'
+          ? '' + pzIc('alert', 16) + ' Marcaste todos los días: no se va a programar ningún posteo hasta que desmarques alguno.'
           : 'Los días marcados quedan libres de posteos. Si una semana no tiene días abiertos suficientes, sale con menos posteos.';
     };
     paintClosed();
@@ -945,7 +948,7 @@ function bindSettings() {
       // Guardado único (v282): el ADN se guarda en la misma pasada — ya no
       // hay un segundo botón "Guardar datos del negocio".
       await saveDnaNow();
-      $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado — negocio y datos de la IA</span>';
+      $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">' + pzIc('checkCircle', 15) + ' Guardado — negocio y datos de la IA</span>';
       profDirty = false; if (dirtyEl) dirtyEl.style.display = 'none';
       PROFILE = await api.get('/api/profile');
       SETTINGS = await api.get('/api/settings');
@@ -1004,32 +1007,32 @@ function bindSettings() {
     const prods = webArrOf(w.productos || d.website_productos || d.web_productos);
     const precios = webArrOf(w.precios || d.website_precios || d.web_precios);
     const promos = webArrOf(w.promos || d.website_promos || d.web_promos);
-    const groups = [['🛍️ Productos', prods], ['💲 Precios', precios], ['🎉 Promos', promos]].filter(([, a]) => a.length);
+    const groups = [[pzIc('bag', 15) + ' Productos', prods], [pzIc('coin', 15) + ' Precios', precios], [pzIc('gift', 15) + ' Promos', promos]].filter(([, a]) => a.length);
     if (!groups.length) { webDnaZone.innerHTML = ''; return; }
-    const tag = '<span style="font-size:10px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap">🌐 de tu web</span>';
+    const tag = '<span style="font-size:10px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap">' + pzIc('globe', 14) + ' de tu web</span>';
     webDnaZone.innerHTML = `
       <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:16px">
-        <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">🌐 Lo que encontramos en tu web</div>
+        <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">${pzIc('globe', 16)} Lo que encontramos en tu web</div>
         ${groups.map(([t, arr]) => `
           <div class="field" style="margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${t} ${tag}</label>
             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${arr.map(it => `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`).join('')}</div>
           </div>`).join('')}
-        <div class="hint">Se actualiza solo cuando volvés a analizar tu web en "🧠 Lo que Posty sabe de tu negocio".</div>
+        <div class="hint">Se actualiza solo cuando volvés a analizar tu web en "${pzIc('book', 16)} Lo que Posty sabe de tu negocio".</div>
       </div>`;
   };
   const refreshWebDna = () => { api.get('/api/dna').then(r => paintWebDna(r && r.dna)).catch(() => {}); };
-  // --- 📚 Datos de otras fuentes: bloques de solo lectura con su chip de fuente ---
+  // --- ${pzIc('book', 16)} Datos de otras fuentes: bloques de solo lectura con su chip de fuente ---
   // Cada track (comentarios IG, Facebook, Google, MercadoLibre, historias) guarda sus campos
   // en el ADN con su etiqueta en dna.fuentes. Campos nuevos de otros tracks que todavía no
   // existan se cablean defensivo (título generado desde el nombre del campo).
   const DNA_INFO_BLOCKS = [
-    ['producto_estrella', '⭐ Producto estrella'], ['cliente_ideal', '🎯 Cliente ideal'],
-    ['diferencial', '✨ Diferencial'], ['servicios', '🛠️ Servicios'], ['promos', '🎉 Promos'],
-    ['precio_rango', '💲 Rango de precios'], ['preguntas_frecuentes', '❓ Preguntas frecuentes'],
-    ['objeciones', '🚧 Objeciones'], ['deseos', '💭 Deseos de tus clientes'],
-    ['testimonios', '💬 Testimonios'], ['puntos_fuertes', '💪 Puntos fuertes'],
-    ['descripcion_fb', '📘 Descripción de Facebook'], ['reviews_fb', '📘 Reviews de Facebook'],
-    ['anuncios', '📣 Anuncios'], ['tono_ejemplos', '🗣️ Frases del dueño'],
+    ['producto_estrella', pzIc('star', 15) + ' Producto estrella'], ['cliente_ideal', pzIc('target', 15) + ' Cliente ideal'],
+    ['diferencial', pzIc('sparkle', 15) + ' Diferencial'], ['servicios', pzIc('wrench', 15) + ' Servicios'], ['promos', pzIc('gift', 15) + ' Promos'],
+    ['precio_rango', pzIc('coin', 15) + ' Rango de precios'], ['preguntas_frecuentes', pzIc('help', 15) + ' Preguntas frecuentes'],
+    ['objeciones', pzIc('alert', 15) + ' Objeciones'], ['deseos', pzIc('chat', 15) + ' Deseos de tus clientes'],
+    ['testimonios', pzIc('chat', 15) + ' Testimonios'], ['puntos_fuertes', pzIc('bolt', 15) + ' Puntos fuertes'],
+    ['descripcion_fb', pzIc('book', 15) + ' Descripción de Facebook'], ['reviews_fb', pzIc('book', 15) + ' Reviews de Facebook'],
+    ['anuncios', pzIc('megaphone', 15) + ' Anuncios'], ['tono_ejemplos', pzIc('mic', 15) + ' Frases del dueño'],
   ];
   // Campos que ya tienen UI propia en esta tarjeta o no son mostrables.
   const DNA_INFO_SKIP = new Set(['fuentes', 'productos', 'promos_activas', 'horarios', 'ubicacion',
@@ -1045,7 +1048,7 @@ function bindSettings() {
     if (it && typeof it === 'object') {
       const q = String(it.pregunta || '').trim();
       const a = String(it.respuesta || '').trim();
-      if (q) return `<div style="margin:6px 0"><div style="font-weight:700;font-size:12.5px">❓ ${esc(q)}</div>${a ? `<div style="color:var(--mut);font-size:11.5px">💬 ${esc(a)}</div>` : ''}</div>`;
+      if (q) return `<div style="margin:6px 0"><div style="font-weight:700;font-size:12.5px">${pzIc('help', 15)} ${esc(q)}</div>${a ? `<div style="color:var(--mut);font-size:11.5px">${pzIc('chat', 15)} ${esc(a)}</div>` : ''}</div>`;
     }
     return `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`;
   };
@@ -1062,13 +1065,13 @@ function bindSettings() {
     }
     for (const field of Object.keys(fuentes)) {
       if (known.has(field) || DNA_INFO_SKIP.has(field) || !dnaHas(d[field])) continue;
-      const title = '🧩 ' + field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const title = pzIc('tag', 15) + ' ' + field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       blocks.push([field, title, d[field]]);
     }
     if (!blocks.length) { zone.innerHTML = ''; return; }
     zone.innerHTML = `
       <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:16px">
-        <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">📚 Datos de otras fuentes</div>
+        <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">${pzIc('book', 16)} Datos de otras fuentes</div>
         ${blocks.map(([field, title, v]) => `
           <div class="field" style="margin-bottom:10px">
             <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${esc(title)} ${dnaSrcChip(fuentes, field)}</label>
@@ -1118,7 +1121,7 @@ function bindSettings() {
     if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
     return s;
   };
-  // --- 🧠 Lo que Posty sabe de tu negocio: 5 fuentes en filas compactas ---
+  // --- ${pzIc('book', 16)} Lo que Posty sabe de tu negocio: 5 fuentes en filas compactas ---
   // Fila compacta: icono + nombre/estado + acción. El input va a full-width (src-full).
   const srcRow = (ico, name, state, actHtml, fullHtml) => `
     <div class="src-ico">${ico}</div>
@@ -1147,7 +1150,7 @@ function bindSettings() {
       if (b) b.onclick = () => runWebAnalyze({ force: true });
     } else {
       const det = String(webStatus.url || '').trim();
-      webZone.innerHTML = srcRow(pzIc('globe', 20), 'Tu web', det ? (pzIc('circleEmpty', 15) + ' la detecté en tu bio 👇') : (pzIc('circleEmpty', 15) + ' pegá tu link y la estudio'), '',
+      webZone.innerHTML = srcRow(pzIc('globe', 20), 'Tu web', det ? (pzIc('circleEmpty', 15) + ' la detecté en tu bio' + pzIc('arrowDown', 14) + '') : (pzIc('circleEmpty', 15) + ' pegá tu link y la estudio'), '',
         `<input id="s_weburl" value="${esc(det)}" placeholder="https://tuweb.com" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn btn-primary btn-sm" id="btnWebGo">Analizar</button>`);
       const b = $('#btnWebGo');
       if (b) b.onclick = () => {
@@ -1305,7 +1308,7 @@ function bindSettings() {
       return;
     }
     if (placesStatus.ok) {
-      const rating = placesStatus.rating ? ` · ★ ${esc(String(placesStatus.rating))}` : '';
+      const rating = placesStatus.rating ? ` · ${pzIc('star', 13)} ${esc(String(placesStatus.rating))}` : '';
       placesZone.innerHTML = srcRow(pzIc('star', 20), 'Reseñas', `${pzIc('checkCircle', 15)} al día · ${esc(fmtWebAt(placesStatus.analyzed_at))}${rating}`, srcRetryBtn('btnPlacesRe', 'Buscar de nuevo'));
       const b = $('#btnPlacesRe');
       if (b) b.onclick = () => runPlacesAnalyze({ force: true });
@@ -1399,10 +1402,10 @@ function bindSettings() {
       const quests = Array.isArray(lv.next_missing) ? lv.next_missing : [];
       let html = `<div class="lvl-top"><span class="lvl-pct">${pct}%</span><div class="lvl-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div></div>`;
       if (!quests.length) {
-        html += `<div class="lvl-done">Posty te conoce al 100% 🧠✨</div>`;
+        html += `<div class="lvl-done">Posty te conoce al 100%</div>`;
       } else {
         html += `<div class="lvl-qh">Para ${n < 5 ? 'el nivel ' + (n + 1) : 'completar el nivel máximo'} te falta:</div><div class="lvl-quests">` +
-          quests.map(q => `<a class="lvl-quest" href="${esc(String(q.action || '#/app/ajustes'))}"><span>${esc(String(q.label || 'Completar'))}</span><b>→</b></a>`).join('') +
+          quests.map(q => `<a class="lvl-quest" href="${esc(String(q.action || '#/app/ajustes'))}"><span>${esc(String(q.label || 'Completar'))}</span><b>${pzIc('arrowRight', 13)}</b></a>`).join('') +
           `</div>`;
       }
       lvlBlock.innerHTML = html;
@@ -1423,10 +1426,10 @@ function bindSettings() {
   if (bPrev) bPrev.onclick = openPreview;
   function openPreview() {
     const catV = $('#s_cat').value;
-    const catE = CATS.find(c => c[0] === catV) || ['otro', '🏷️', 'Otro'];
+    const catE = CATS.find(c => c[0] === catV) || ['otro', 'tag', 'Otro'];
     const catTxt = catV === 'otro' ? ($('#s_catother').value.trim() || 'Otro') : catE[2];
-    const toneE = TONES.find(t => t[0] === $('#s_tone').value) || ['', '🎭', '—'];
-    const goalE = GOALS.find(g => g[0] === $('#s_goal').value) || ['', '🎯', '—', ''];
+    const toneE = TONES.find(t => t[0] === $('#s_tone').value) || ['', 'chat', '—'];
+    const goalE = GOALS.find(g => g[0] === $('#s_goal').value) || ['', 'target', '—', ''];
     const tzE = TIMEZONES.find(z => z[0] === $('#s_tz').value) || [];
     const biz = $('#s_biz').value.trim();
     const igu = (((($('#s_iguser') || {}).value) || (PROFILE && PROFILE.ig_username) || '')).trim().replace(/^@+/, '');
@@ -1447,19 +1450,19 @@ function bindSettings() {
     ov.innerHTML = `
       <div class="modal-card" style="max-width:440px" role="dialog" aria-modal="true">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-          <h3 style="margin:0">🤖 Cómo me ve la IA</h3>
-          <button class="btn btn-ghost btn-sm" id="pvX">✕</button>
+          <h3 style="margin:0">${pzIc('bot', 16)} Cómo me ve la IA</h3>
+          <button class="btn btn-ghost btn-sm" id="pvX">${pzIc('x', 16)}</button>
         </div>
         <p style="color:var(--mut);font-size:11.5px;margin:0 0 8px">Con estos datos creamos tus ideas y posteos:</p>
-        ${row('🏪', 'Negocio', esc(biz) || '<span class="pv-warn">Falta el nombre</span>')}
-        ${row('📸', 'Instagram', igu ? '@' + esc(igu) : '<span class="pv-warn">Sin usuario</span>')}
-        ${row(catE[1], 'Rubro', esc(catTxt))}
-        ${row(toneE[1], 'Tono de la IA', esc(toneE[2]))}
-        ${row(goalE[1], 'Objetivo', esc(goalE[2]) + (goalE[3] ? `<br><span style="font-weight:400;color:var(--mut);font-size:11.5px">${esc(goalE[3])}</span>` : ''))}
-        ${row('🕐', 'Zona horaria', esc(tzE[1] || '—'))}
-        ${row('📝', 'Descripción', desc ? esc(desc.length > 160 ? desc.slice(0, 160) + '…' : desc) : '<span class="pv-warn">Sin descripción.</span>')}
-        ${row('⚔️', 'Competidores', chips)}
-        ${tips.length ? `<div class="pv-tip">💡 <b>Tip:</b> sumá ${tips.join(' y ')} para ideas mucho mejores.</div>` : `<div class="pv-tip">✅ <b>Perfil completo:</b> la IA tiene todo lo que necesita.</div>`}
+        ${row(pzIc('store', 20), 'Negocio', esc(biz) || '<span class="pv-warn">Falta el nombre</span>')}
+        ${row(pzIc('camera', 20), 'Instagram', igu ? '@' + esc(igu) : '<span class="pv-warn">Sin usuario</span>')}
+        ${row(pzIc(catE[1], 20), 'Rubro', esc(catTxt))}
+        ${row(pzIc(toneE[1], 20), 'Tono de la IA', esc(toneE[2]))}
+        ${row(pzIc(goalE[1], 20), 'Objetivo', esc(goalE[2]) + (goalE[3] ? `<br><span style="font-weight:400;color:var(--mut);font-size:11.5px">${esc(goalE[3])}</span>` : ''))}
+        ${row(pzIc('clock', 20), 'Zona horaria', esc(tzE[1] || '—'))}
+        ${row(pzIc('post', 20), 'Descripción', desc ? esc(desc.length > 160 ? desc.slice(0, 160) + '…' : desc) : '<span class="pv-warn">Sin descripción.</span>')}
+        ${row(pzIc('users', 20), 'Competidores', chips)}
+        ${tips.length ? `<div class="pv-tip">${pzIc('idea', 15)} <b>Tip:</b> sumá ${tips.join(' y ')} para ideas mucho mejores.</div>` : `<div class="pv-tip">${pzIc('checkCircle', 15)} <b>Perfil completo:</b> la IA tiene todo lo que necesita.</div>`}
         <button class="btn btn-primary btn-block" id="pvOk" style="margin-top:12px">Entendido</button>
       </div>`;
     document.body.appendChild(ov);
@@ -1483,14 +1486,14 @@ function bindSettings() {
     const fpN = Number((ME && ME.founder_price) || 0);
     const fpCur = (ME && ME.founder_currency) || '';
     const fpLbl = fpN ? ((fpCur === 'UYU' ? '$U ' : '$') + fpN.toLocaleString('es-AR') + (fpCur === 'USD' ? ' USD' : '')) : '';
-    const fpLine = fpN ? (en ? `💙 Your founder price (${fpLbl}/mo) stays fixed for 12 months from your signup.` : `💙 Tu precio de fundador (${fpLbl}/mes) queda fijo por 12 meses desde tu alta.`) : '';
+    const fpLine = fpN ? (en ? `${pzIc('heart', 14)} Your founder price (${fpLbl}/mo) stays fixed for 12 months from your signup.` : `${pzIc('heart', 14)} Tu precio de fundador (${fpLbl}/mes) queda fijo por 12 meses desde tu alta.`) : '';
     z.innerHTML = `<div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
       <div style="font-size:15px;font-weight:800">⭐ ${en ? 'Founder' : 'Fundador'} #${n} ${en ? 'of The First 200' : 'de Los Primeros 200'}</div>
       <p style="color:var(--mut);font-size:13px;line-height:1.55;margin:6px 0 10px">${en ? 'Your spot in the founding cohort is yours. Do you want your business on the public founders page, with its name, trade and city?' : 'Tu lugar en la cohorte fundadora ya es tuyo. ¿Te sumás a la página de fundadores con el nombre de tu negocio, su rubro y su ciudad?'}</p>
       ${fpLine ? `<p style="color:var(--mut);font-size:13px;line-height:1.55;margin:0 0 10px">${fpLine}</p>` : ''}
       <label style="display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:700;cursor:pointer"><input type="checkbox" id="founderPub" ${pub ? 'checked' : ''} style="width:18px;height:18px"> ${en ? 'Yes, list my business' : 'Sí, sumame a la página'}</label>
       <div id="founderPubMsg" style="font-size:12px;color:var(--dim);margin-top:6px"></div>
-      <a href="${en ? '/en/founders' : '/fundadores'}" target="_blank" rel="noopener" style="font-size:12.5px;font-weight:700;color:var(--cel)">${en ? 'See the founders page →' : 'Ver la página de fundadores →'}</a>
+      <a href="${en ? '/en/founders' : '/fundadores'}" target="_blank" rel="noopener" style="font-size:12.5px;font-weight:700;color:var(--cel)">${en ? 'See the founders page ' + pzIc('arrowRight', 13) : 'Ver la página de fundadores ' + pzIc('arrowRight', 13)}</a>
     </div>`;
     const cb = document.getElementById('founderPub');
     if (cb) cb.onchange = async () => {
@@ -1498,7 +1501,7 @@ function bindSettings() {
       try {
         const r = await api.put('/api/founders/consent', { public: cb.checked });
         if (typeof ME !== 'undefined' && ME) ME.founder_public = !!(r && r.founder_public);
-        if (msg) msg.textContent = cb.checked ? (en ? 'Done! You are on the page 💙' : '¡Listo! Ya estás en la página 💙') : (en ? 'Removed from the public page.' : 'Te saqué de la página pública.');
+        if (msg) msg.textContent = cb.checked ? (en ? 'Done! You are on the page' : '¡Listo! Ya estás en la página') : (en ? 'Removed from the public page.' : 'Te saqué de la página pública.');
       } catch (e) { cb.checked = !cb.checked; if (msg) msg.textContent = en ? 'Could not save — try again.' : 'No se pudo guardar — probá de nuevo.'; }
     };
   })();
@@ -1605,8 +1608,13 @@ function bindSettings() {
       const { plans, mp_configured, stripe_configured } = billingData;
       const isUS = !!(ME && ME.lang === 'en');
       const isStripe = PZ_PAY_STRIPE.includes(pzPayCountry);
+      // (2026-10-25 · pulido ítem 5) Los 5 países que pagan en USD sin
+      // precio local todavía (BR/MX/CL/CO/PE) llevan «USD » en AMBOS
+      // idiomas: en EN, «$199» se podía leer como moneda local.
+      const pzUsd5 = ['BR', 'MX', 'CL', 'CO', 'PE'].includes(pzPayCountry);
+      const symFor = (cur) => ({ ARS: '$', UYU: '$U ', USD: pzUsd5 ? 'USD ' : (isUS ? '$' : 'USD '), GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[cur] || '$');
       (plans || []).forEach((pp) => {
-        const sym = { ARS: '$', UYU: '$U ', USD: isUS ? '$' : 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[pp.currency] || '$';
+        const sym = symFor(pp.currency);
         // (Tabla nueva, 2026-10-25) Precio entero → 0 decimales (USD 199,
         // no 199.00). El por-día de planCard sigue con decimales aparte.
         const dec = Number.isInteger(Number(pp.price)) ? 0 : 2;
@@ -1616,10 +1624,10 @@ function bindSettings() {
       const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
       const pcm = document.getElementById('planConfirmMsg');
       if (pcm) pcm.innerHTML = hasActive
-        ? (isUS ? '✅ Payment received! Your plan is now active.' : '✅ ¡Pago recibido! Tu plan ya está activo.')
+        ? (isUS ? pzIc('checkCircle', 14) + ' Payment received! Your plan is now active.' : pzIc('checkCircle', 14) + ' ¡Pago recibido! Tu plan ya está activo.')
         : isStripe
-        ? (isUS ? '⏳ Your payment is being confirmed with Stripe. In a few seconds your plan will activate on its own — nothing else to do.' : '⏳ Tu pago está confirmándose con Stripe. En unos segundos tu plan se activa solo — no hace falta que hagas nada.')
-        : (isUS ? '⏳ Your payment is being confirmed with MercadoPago. In a few seconds your plan will activate on its own — nothing else to do.' : '⏳ Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.');
+        ? (isUS ? pzIc('clock', 14) + ' Your payment is being confirmed with Stripe. In a few seconds your plan will activate on its own — nothing else to do.' : pzIc('clock', 14) + ' Tu pago está confirmándose con Stripe. En unos segundos tu plan se activa solo — no hace falta que hagas nada.')
+        : (isUS ? pzIc('clock', 14) + ' Your payment is being confirmed with MercadoPago. In a few seconds your plan will activate on its own — nothing else to do.' : pzIc('clock', 14) + ' Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.');
       const statusTag = !hasActive ? `<span style="font-size:11.5px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
       const trialLeft = (ME && ME.trial_days_left) || 0;
       // refInfo se obtiene una sola vez acá: lo usan bindSub (clic Suscribirse) y los banners
@@ -1627,10 +1635,10 @@ function bindSettings() {
       try { refInfo = await pzReferral(); } catch (e) {}
       let trialBanner = '';
       if (!hasActive && ME && ME.plan_status === 'trial') {
-        if (ME.trial_expired) trialBanner = `<div class="pz-trial-exp">🔒 <b>Se terminó la prueba.</b> Elegí tu plan y seguimos publicando juntos 🥹</div>`;
+        if (ME.trial_expired) trialBanner = `<div class="pz-trial-exp">${pzIc('lock', 14)} <b>Se terminó la prueba.</b> Elegí tu plan y seguimos publicando juntos</div>`;
         else if (trialLeft > 0) trialBanner = trialLeft <= 3
           ? `<div class="pz-trial-warn">⏰ <b>¡Te ${trialLeft === 1 ? 'queda 1 día' : `quedan ${trialLeft} días`} de prueba!</b> Suscribite para no frenar tus posteos.</div>`
-          : `<div class="pz-trial-ok">🎁 Estás en tu prueba gratis: te quedan <b>${trialLeft} días</b>.</div>`;
+          : `<div class="pz-trial-ok">${pzIc('gift', 14)} Estás en tu prueba gratis: te quedan <b>${trialLeft} días</b>.</div>`;
       }
       const pmMixTxt = (pl) => [pl.postsPerWeek > 0 && `${pl.postsPerWeek} posteos`, pl.reelsPerWeek > 0 && `${pl.reelsPerWeek} reels`, pl.storiesPerWeek > 0 && `${pl.storiesPerWeek} historias`].filter(Boolean).join(' + ');
       const curPlan = plans.find(p => p.id === cur) || plans[0];
@@ -1638,9 +1646,9 @@ function bindSettings() {
       const pmMixItem = (icon, n, label) => n > 0 ? `<span>${icon} <b>${n}</b> ${label}</span>` : '';
       const pmMixHTML = (p) => {
         const items = [
-          pmMixItem('📝', p.postsPerWeek, p.postsPerWeek === 1 ? 'posteo' : 'posteos'),
-          pmMixItem('🎬', p.reelsPerWeek, p.reelsPerWeek === 1 ? 'reel' : 'reels'),
-          pmMixItem('📸', p.storiesPerWeek, p.storiesPerWeek === 1 ? 'historia' : 'historias'),
+          pmMixItem(pzIc('post', 14), p.postsPerWeek, p.postsPerWeek === 1 ? 'posteo' : 'posteos'),
+          pmMixItem(pzIc('reel', 14), p.reelsPerWeek, p.reelsPerWeek === 1 ? 'reel' : 'reels'),
+          pmMixItem(pzIc('story', 14), p.storiesPerWeek, p.storiesPerWeek === 1 ? 'historia' : 'historias'),
         ].filter(Boolean).join('');
         return items ? `<div class="pm-mix">${items}</div>` : '';
       };
@@ -1658,12 +1666,12 @@ function bindSettings() {
             <div class="pm-price">${esc(p.price_label)}<small>/mes</small></div>
             <div class="pm-perday">≈ ${pmSym}${pmPer} por día</div>
             ${pmMixHTML(p)}
-            <ul class="pm-feats">${feats.map(f => `<li><span class="tick">✓</span><span>${esc(f)}</span></li>`).join('')}</ul>
+            <ul class="pm-feats">${feats.map(f => `<li><span class="tick">${pzIc('check', 13)}</span><span>${esc(f)}</span></li>`).join('')}</ul>
             <button class="btn ${p.id === cur && hasActive ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && hasActive ? 'disabled' : ''}>${p.id === cur && hasActive ? 'Plan actual' : 'Suscribirse'}</button>
             ${(p.detail && p.detail.length) ? `<button type="button" class="pm-more" data-plan-more aria-expanded="false">${isUS ? 'See everything it does for you' : 'Ver todo lo que hace por vos'} <span class="pm-chev">▾</span></button>
             <div class="pm-detail" hidden>
               <div class="pm-detail-title">${isUS ? `Everything the ${esc(p.name)} plan does for you` : `Todo lo que el plan ${esc(p.name)} hace por vos`}</div>
-              <ul class="pm-feats">${p.detail.map(f => `<li><span class="tick">✓</span><span>${esc(f)}</span></li>`).join('')}</ul>
+              <ul class="pm-feats">${p.detail.map(f => `<li><span class="tick">${pzIc('check', 13)}</span><span>${esc(f)}</span></li>`).join('')}</ul>
               ${(p.id === cur && hasActive) ? '' : `<button class="btn btn-primary btn-sm btn-block" data-sub="${p.id}">${isUS ? 'Subscribe' : 'Suscribirse'}</button>`}
             </div>` : ''}
           </div>`;
@@ -1694,14 +1702,14 @@ function bindSettings() {
           const subPlan = plans.find(p => p.id === b.dataset.sub) || curPlan;
           const discSym = ({ ARS: '$', UYU: '$U ', USD: isUS ? '$' : 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' })[subPlan.currency] || '$';
           const discLine = (refInfo && refInfo.discount_active)
-            ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>50% off</b> por referidos: este plan te queda en <b>${discSym}${Math.round(subPlan.price / 2).toLocaleString(isUS ? 'en-US' : 'es-AR')}/mes</b>.</div>`
+            ? `<div class="pz-disc" style="margin:0 0 10px">${pzIc('gift', 14)} Tenés <b>50% off</b> por referidos: este plan te queda en <b>${discSym}${Math.round(subPlan.price / 2).toLocaleString(isUS ? 'en-US' : 'es-AR')}/mes</b>.</div>`
             : (refInfo && refInfo.invited)
-              ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>20% off</b> de invitado: este plan te queda en <b>${discSym}${Math.round(subPlan.price * 0.8).toLocaleString(isUS ? 'en-US' : 'es-AR')}/mes</b>.</div>`
+              ? `<div class="pz-disc" style="margin:0 0 10px">${pzIc('gift', 14)} Tenés <b>20% off</b> de invitado: este plan te queda en <b>${discSym}${Math.round(subPlan.price * 0.8).toLocaleString(isUS ? 'en-US' : 'es-AR')}/mes</b>.</div>`
               : '';
           $('#planMsg').innerHTML = `
             <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px">
               ${discLine}
-              <div style="font-weight:800;margin-bottom:6px">Un paso más 💳</div>
+              <div style="font-weight:800;margin-bottom:6px">Un paso más ${pzIc('card', 14)}</div>
               <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">Ingresá el <b>email de tu cuenta de MercadoPago</b>.</div>
               <div style="font-size:11.5px;background:#FFF7E6;border:1px solid #FEC14D;border-radius:10px;padding:10px 12px;margin-bottom:10px">El comprobante de pago te va a llegar a <b>ese email</b>: fijate que sea el de tu cuenta de MercadoPago.</div>
               <div class="field"><input id="mpEmail" type="email" placeholder="tu@email.com" value="${preset}" autocomplete="email"></div>
@@ -1742,7 +1750,7 @@ function bindSettings() {
           <span style="font-size:12.5px;color:var(--dim)">${(ME && ME.trial_expired) ? 'Elegí tu plan y seguimos publicando juntos.' : 'Mirá los planes cuando quieras suscribirte.'}</span>
         </div>
         <div id="planAll" style="display:none">
-          <div style="font-size:14px;font-weight:800;margin:14px 0 12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'} 🚀</div>
+          <div style="font-size:14px;font-weight:800;margin:14px 0 12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'}</div>
           <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
           <p style="font-size:11.5px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>
         </div>
@@ -1782,7 +1790,7 @@ function bindSettings() {
         <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
           <div class="plan-cur">
             <div class="pc-label">Plan actual</div>
-            <div class="pc-name">Founder 🚀</div>
+            <div class="pc-name">Founder</div>
             <div class="pc-det">Gratis para siempre · 7 posteos + 5 reels + 7 historias/semana</div>
           </div>
         </div>
@@ -1832,9 +1840,9 @@ function bindSettings() {
       // 🎁 50% off por referidos: se aplica automáticamente al suscribirte
       try {
         if (refInfo && refInfo.discount_active) {
-          z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎁 <b>50% off por referidos</b>: se aplica automáticamente al suscribirte.</div>`);
+          z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">${pzIc('gift', 14)} <b>50% off por referidos</b>: se aplica automáticamente al suscribirte.</div>`);
         } else if (refInfo && refInfo.invited && !hasActive) {
-          z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎉 <b>Tenés 20% off de invitado</b>: se aplica automáticamente al suscribirte, todos los meses.</div>`);
+          z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">${pzIc('gift', 14)} <b>Tenés 20% off de invitado</b>: se aplica automáticamente al suscribirte, todos los meses.</div>`);
         }
       } catch (e) {}
       // (Pagos lado app) Deep link con agente: PRESELECCIÓN sin
@@ -1852,9 +1860,10 @@ function bindSettings() {
           ? (isUS ? 'Bambooty complete' : 'Bambooty completo')
           : (pzDl.agente.charAt(0).toUpperCase() + pzDl.agente.slice(1));
         let priceDl = (plans.find(p => p.id === pzDl.tier) || {}).price_label || '';
-        if (pzDl.agente === 'completo' && billingData && billingData.completo && billingData.completo.price_labels) {
-          const cl = billingData.completo.price_labels[pzDl.tier];
-          if (cl) priceDl = cl;
+        if (pzDl.agente === 'completo' && billingData && billingData.completo) {
+          const cl = billingData.completo.price_labels ? billingData.completo.price_labels[pzDl.tier] : null;
+          if (billingData.completo.prices && billingData.completo.prices[pzDl.tier] != null) { const cpDl = Number(billingData.completo.prices[pzDl.tier]); priceDl = symFor(billingData.currency || 'USD') + cpDl.toLocaleString(isUS ? 'en-US' : 'es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
+          else if (cl) priceDl = (pzUsd5 && cl.charAt(0) === '$') ? ('USD ' + cl.slice(1)) : cl;
         }
         const bannerDl = document.createElement('div');
         bannerDl.className = 'pz-dl-banner';
@@ -1894,15 +1903,16 @@ function bindSettings() {
         const tierNameA = (plans.find(p => p.id === pzDl.tier) || {}).name || pzDl.tier;
         const agNameA = pzDl.agente === 'completo' ? (isUS ? 'Bambooty complete' : 'Bambooty completo') : (pzDl.agente.charAt(0).toUpperCase() + pzDl.agente.slice(1));
         let priceA = (plans.find(p => p.id === pzDl.tier) || {}).price_label || '';
-        if (pzDl.agente === 'completo' && billingData && billingData.completo && billingData.completo.price_labels) {
-          const clA = billingData.completo.price_labels[pzDl.tier];
-          if (clA) priceA = clA;
+        if (pzDl.agente === 'completo' && billingData && billingData.completo) {
+          const clA = billingData.completo.price_labels ? billingData.completo.price_labels[pzDl.tier] : null;
+          if (billingData.completo.prices && billingData.completo.prices[pzDl.tier] != null) { const cpA = Number(billingData.completo.prices[pzDl.tier]); priceA = symFor(billingData.currency || 'USD') + cpA.toLocaleString(isUS ? 'en-US' : 'es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
+          else if (clA) priceA = (pzUsd5 && clA.charAt(0) === '$') ? ('USD ' + clA.slice(1)) : clA;
         }
         const secA = document.createElement('div');
         secA.innerHTML = `
         <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
           <div style="background:#FFF7E6;border:1px solid #FEC14D;border-radius:12px;padding:12px 14px;margin:0 0 12px;font-size:13.5px;line-height:1.5">${isUS ? `You are hiring <b>${esc(agNameA)} — ${esc(tierNameA)}</b>${priceA ? ` · <b>${esc(priceA)}/mo</b>` : ''}.` : `Estás contratando <b>${esc(agNameA)} — ${esc(tierNameA)}</b>${priceA ? ` · <b>${esc(priceA)}/mes</b>` : ''}.`}</div>
-          <div style="font-size:14px;font-weight:800;margin:0 0 12px">${isUS ? 'Choose your plan' : 'Elegí tu plan'} 🚀</div>
+          <div style="font-size:14px;font-weight:800;margin:0 0 12px">${isUS ? 'Choose your plan' : 'Elegí tu plan'}</div>
           <div id="planListDl" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
         </div>`;
         z.appendChild(secA);
@@ -1961,7 +1971,7 @@ function bindSettings() {
       `<span class="pz-slot${i < n ? ' on' : ''}">${i < n ? '\u2713' : (i + 1)}</span>`).join('');
     z.innerHTML = `
       <div class="pz-ref-hero">
-        <div class="pz-ref-hero-t">🎁 Pagás la mitad, todos los meses</div>
+        <div class="pz-ref-hero-t">${pzIc('gift', 16)} Pagás la mitad, todos los meses</div>
         ${half$ ? `<div class="pz-ref-hero-p">Pasás de <s>${fmt$(planPrice)}</s> a <b>${half$}</b>/mes con ${need} referidos suscriptos.</div>`
           : `<div class="pz-ref-hero-p">Con <b>${need} referidos</b> suscriptos, tu plan te sale <b>la mitad</b>.</div>`}
       </div>
@@ -1974,23 +1984,23 @@ function bindSettings() {
         <button class="btn btn-wa btn-sm" data-share="wa">WhatsApp</button>
         <button class="btn btn-ig btn-sm" data-share="ig">Instagram</button>
         <button class="btn btn-x btn-sm" data-share="x">X</button>
-        <button class="btn btn-primary btn-sm" id="pzRefNative" style="display:none">📤 Compartir</button>
+        <button class="btn btn-primary btn-sm" id="pzRefNative" style="display:none">${pzIc('send', 14)} Compartir</button>
         <button class="btn btn-ghost btn-sm" id="pzRefCopy">Copiar link</button>
         <button class="btn btn-ghost btn-sm" id="pzRefCopyMsg">Copiar mensaje</button>
       </div>
       <div class="pz-refrow">
         <input id="pzRefLink" readonly value="${esc(info.link)}" onclick="this.select()">
       </div>
-      <details style="font-size:11.5px;color:var(--mut);margin:0 0 12px"><summary style="cursor:pointer;font-weight:700">👀 Vista previa del mensaje</summary><p style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0 0">${esc(shareMsg)}</p></details>
+      <details style="font-size:11.5px;color:var(--mut);margin:0 0 12px"><summary style="cursor:pointer;font-weight:700">${pzIc('eye', 14)} Vista previa del mensaje</summary><p style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0 0">${esc(shareMsg)}</p></details>
       <div class="pz-ref-slots">${slots}</div>
       <div class="pz-refbar"><div style="width:${pct}%"></div></div>
       <p style="font-size:12.5px;color:var(--mut)"><b>${n}/${need}</b> referidos</p>
-      ${(info.joined && info.joined.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">Se unieron con tu link 🎉</div>${info.joined.map(nm => `<div class="pz-ref-join">✓ ${esc(nm)}</div>`).join('')}</div>` : ''}
-      ${(info.pending && info.pending.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">En camino 🚶</div><div class="pz-ref-pending-sub">Se registraron con tu link y están en prueba. Un mensaje tuyo los convierte 👇</div>${info.pending.map((p, i) => `<div class="pz-ref-join">${pzIc('clock', 15)} ${esc(p.name)}${p.days_left > 0 ? `<span class="pz-ref-days"> · le quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba</span>` : ''} <button class="btn btn-ghost btn-sm" data-nudge="${i}" style="margin-left:6px">${pzIc('copy', 18)} Copiar mensaje</button></div>`).join('')}</div>` : ''}
+      ${(info.joined && info.joined.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">Se unieron con tu link ${pzIc('gift', 14)}</div>${info.joined.map(nm => `<div class="pz-ref-join">${pzIc('check', 13)} ${esc(nm)}</div>`).join('')}</div>` : ''}
+      ${(info.pending && info.pending.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">En camino</div><div class="pz-ref-pending-sub">Se registraron con tu link y están en prueba. Un mensaje tuyo los convierte ${pzIc('arrowDown', 13)}</div>${info.pending.map((p, i) => `<div class="pz-ref-join">${pzIc('clock', 15)} ${esc(p.name)}${p.days_left > 0 ? `<span class="pz-ref-days"> · le quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba</span>` : ''} <button class="btn btn-ghost btn-sm" data-nudge="${i}" style="margin-left:6px">${pzIc('copy', 18)} Copiar mensaje</button></div>`).join('')}</div>` : ''}
       ${info.discount_active
-        ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b>${half$ ? ` en tu suscripción: pagás <b>${half$}/mes</b>` : ' en tu suscripción'}.</div>`
+        ? `<div class="pz-disc">${pzIc('checkCircle', 14)} Tenés <b>50% off activo</b>${half$ ? ` en tu suscripción: pagás <b>${half$}/mes</b>` : ' en tu suscripción'}.</div>`
         : `<p style="font-size:12.5px">${missing === 1 ? 'Nos falta <b>1</b> referido' : `Nos faltan <b>${missing}</b> referidos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
-      <p class="pz-ref-auto">⚡ El descuento se aplica solo a tu suscripción, sin hacer nada.</p>
+      <p class="pz-ref-auto">${pzIc('bolt', 13)} El descuento se aplica solo a tu suscripción, sin hacer nada.</p>
       <span id="pzRefMsg" style="font-size:11.5px"></span>`;
     const say = (t) => { const m = $('#pzRefMsg'); if (m) m.innerHTML = `<span style="color:var(--cel)">${t}</span>`; };
     const copyLink = async (okMsg) => {
@@ -2042,7 +2052,7 @@ function bindSettings() {
     try {
       const cc = (typeof CREATOR !== 'undefined' && CREATOR) || null;
       if (!cc || !Array.isArray(cc.options) || cc.options.length !== 6 || !cc.topic) return false;
-      if (msgEl) msgEl.innerHTML = '<span style="font-size:12.5px;color:var(--cel)">🎨 Actualizando tus diseños…</span>';
+      if (msgEl) msgEl.innerHTML = '<span style="font-size:12.5px;color:var(--cel)">' + pzIc('palette', 13) + ' Actualizando tus diseños…</span>';
       const out = await api.post('/api/creator/options', { topic: cc.topic, productPhoto: cc.productPhoto || undefined });
       if (out && Array.isArray(out.options) && out.options.length === 6) {
         cc.options = out.options; cc.detected = out.detected || null;
@@ -2070,7 +2080,7 @@ function bindSettings() {
       } catch (e) { /* el logo quedó; los colores se eligen a mano */ }
       SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
       const refreshed = await refreshCreatorWithNewColors($('#brandMsg'));
-      if (refreshed) $('#brandMsg').innerHTML = '<span style="font-size:12.5px;color:var(--cel)">✅ Colores actualizados en tus diseños</span>';
+      if (refreshed) $('#brandMsg').innerHTML = '<span style="font-size:12.5px;color:var(--cel)">' + pzIc('checkCircle', 13) + ' Colores actualizados en tus diseños</span>';
       render();
     }
     catch (e) { $('#brandMsg').innerHTML = (e && e.cancelled) ? '' : `<span style="color:var(--red);font-size:12.5px">${esc(e.message)}</span>`; }
@@ -2094,8 +2104,8 @@ function bindSettings() {
     box.innerHTML = `
       <div class="bp-card" style="background:linear-gradient(135deg,${c[0]},${c[1] || c[0]})">
         <div class="bp-head">${logo ? `<img src="${logo.file_path}">` : ''}<span style="color:${ink}">${esc(biz)}</span></div>
-        <div class="bp-title" style="color:${ink}">¡NUEVA<br>COLECCIÓN!</div>
-        <div><span class="bp-cta" style="background:${c[2] || c[1] || c[0]};color:${lumInk(c[2] || c[1] || c[0])}">Ver más →</span></div>
+        <div class="bp-title" style="color:${ink};font-family:${(BRAND_FONT_OPTS.find(o => o.id === selFont) || BRAND_FONT_OPTS[0]).fam},sans-serif">¡NUEVA<br>COLECCIÓN!</div>
+        <div><span class="bp-cta" style="background:${c[2] || c[1] || c[0]};color:${lumInk(c[2] || c[1] || c[0])}">Ver más ${pzIc('arrowRight', 13)}</span></div>
       </div>`;
   }
   let brandDirty = false;
@@ -2141,7 +2151,37 @@ function bindSettings() {
       if (Number.isInteger(to) && to >= 0 && to <= 2 && to !== i) swapBrandColors(i, to);
     });
   });
-  renderBrandPrev();
+  // --- tipografía de titulares (2026-10-26, decisión Valentino) ---
+  // 6 opciones, un toque cada una; la vista previa de marca re-renderiza
+  // con la fuente elegida. selFont vive en bindSettings como brandDirty:
+  // si se re-renderiza sin guardar, vuelve a lo guardado (igual que colores).
+  const BRAND_FONT_OPTS = [
+    { id: 'montserrat', name: 'Montserrat', fam: 'pz-montserrat', file: 'Montserrat-700.ttf', desc: (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'The current one' : 'La actual' },
+    { id: 'nunito', name: 'Nunito', fam: 'pz-nunito', file: 'Nunito-700.ttf', desc: (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Round and friendly' : 'Redonda y amable' },
+    { id: 'playfair', name: 'Playfair Display', fam: 'pz-playfair', file: 'PlayfairDisplay-700.ttf', desc: (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Elegant serif' : 'Elegante con serif' },
+    { id: 'oswald', name: 'Oswald', fam: 'pz-oswald', file: 'Oswald-700.ttf', desc: (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Strong and condensed' : 'Fuerte y condensada' },
+    { id: 'fredoka', name: 'Fredoka', fam: 'pz-fredoka', file: 'Fredoka-700.ttf', desc: (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Playful' : 'Divertida' },
+    { id: 'poppins', name: 'Poppins', fam: 'pz-poppins', file: 'Poppins-700.ttf', desc: (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Geometric' : 'Geométrica' },
+  ];
+  const brandFontValid = (f) => BRAND_FONT_OPTS.some(o => o.id === f) ? f : 'montserrat';
+  let selFont = brandFontValid(SETTINGS && SETTINGS.brand_font);
+  function ensureFontFaces() {
+    if (document.getElementById('pzFontFaces')) return;
+    const st = document.createElement('style');
+    st.id = 'pzFontFaces';
+    st.textContent = BRAND_FONT_OPTS.map(o => '@font-face{font-family:' + o.fam + ';src:url(/fonts/' + o.file + ') format("truetype");font-display:swap}').join('\n');
+    document.head.appendChild(st);
+  }
+  function renderFontRow() {
+    const row = $('#fontRow'); if (!row) return;
+    ensureFontFaces();
+    row.innerHTML = BRAND_FONT_OPTS.map(o => '<button type="button" data-font="' + o.id + '" style="border:2px solid ' + (o.id === selFont ? 'var(--cel)' : 'var(--line)') + ';border-radius:12px;padding:10px 8px;background:#fff;cursor:pointer;text-align:center;min-width:0">' +
+      '<span style="display:block;font-family:' + o.fam + ',sans-serif;font-size:21px;font-weight:700;line-height:1.25;overflow-wrap:break-word">¡Nueva colección!</span>' +
+      '<span style="display:block;font-size:12px;font-weight:700;margin-top:5px">' + (o.id === selFont ? pzIc('check', 14) + ' ' : '') + o.name + '</span>' +
+      '<span style="display:block;font-size:11px;color:var(--dim)">' + o.desc + '</span></button>').join('');
+    row.querySelectorAll('[data-font]').forEach(b => b.addEventListener('click', () => { selFont = b.dataset.font; markBrandDirty(); renderFontRow(); renderBrandPrev(); }));
+  }
+  renderBrandPrev(); renderFontRow();
   const bBlogDel = $('#btnBrandLogoDel');
   if (bBlogDel) bBlogDel.onclick = async () => {
     if (!confirm('¿Quitar el logo de tu marca?')) return;
@@ -2160,20 +2200,20 @@ function bindSettings() {
       const cols = extractTopColors(img, 3);
       let filled = 0;
       cols.forEach((c, i) => { const inp = $('#s_c' + i); if (inp && c) { inp.value = c; syncHexFromPicker(i); filled++; } });
-      if (filled >= 2) $('#brandMsg').innerHTML = '<span style="color:var(--mut);font-size:12.5px">🎨 Detectamos tus colores del logo — tocá Guardar marca para confirmar.</span>';
+      if (filled >= 2) $('#brandMsg').innerHTML = '<span style="color:var(--mut);font-size:12.5px">' + pzIc('palette', 13) + ' Detectamos tus colores del logo — tocá Guardar marca para confirmar.</span>';
     } catch (e) { /* quedan los valores actuales */ }
   })();
   $('#btnSaveBrand').onclick = async () => {
     const colors = [$('#s_c0').value, $('#s_c1').value, $('#s_c2').value].filter((c, i, a) => a.indexOf(c) === i);
     const untouched = NEUTRAL_TRIO.every((d, i) => (colors[i] || '').toUpperCase() === d);
-    if (untouched && !assetLogo()) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:12.5px">Subí tu logo o elegí tus colores 🙂</span>`; return; }
-    await api.put('/api/settings', { brand_colors: colors });
+    if (untouched && !assetLogo()) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:12.5px">Subí tu logo o elegí tus colores</span>`; return; }
+    await api.put('/api/settings', { brand_colors: colors, brand_font: selFont });
     const brandMsgEl = $('#brandMsg');
-    brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Marca guardada</span>';
+    brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:12.5px">' + pzIc('checkCircle', 13) + ' Marca guardada</span>';
     brandDirty = false; if (bDirtyEl) bDirtyEl.style.display = 'none';
     SETTINGS = await api.get('/api/settings');
     if (await refreshCreatorWithNewColors(brandMsgEl))
-      brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Marca guardada — diseños actualizados</span>';
+      brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:12.5px">' + pzIc('checkCircle', 13) + ' Marca guardada — diseños actualizados</span>';
   };
   // Reiniciar todo: marca (logo, colores, nombre) + posteos pendientes (borradores y
   // programados). Para cuando se cambió de negocio/cuenta. El historial publicado no se toca.
@@ -2197,7 +2237,7 @@ function bindSettings() {
     await api.put('/api/settings', {
       ig_embed_url: $('#s_igembed').value,
     });
-    $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
+    $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">' + pzIc('checkCircle', 13) + ' Guardado</span>';
   };
   const setDemoMode = async (v) => {
     await api.put('/api/settings', { demo_mode: v });
@@ -2225,7 +2265,7 @@ function bindSettings() {
   const bv = $('#btnIgVerify');
   if (bv) bv.onclick = async () => {
     const vm = $('#igVerifyMsg');
-    if (vm) vm.innerHTML = '<div class="hint">🔍 Verificando tu conexión con Instagram…</div>';
+    if (vm) vm.innerHTML = '<div class="hint">' + pzIc('search', 13) + ' Verificando tu conexión con Instagram…</div>';
     try {
       const r = await api.get('/api/ig/sync');
       if (r && r.username) {
@@ -2233,10 +2273,10 @@ function bindSettings() {
         stampVerified();
         render();
       } else if (vm) {
-        vm.innerHTML = `<div class="err">❌ No se pudo verificar: ${esc((r && r.error) || 'respuesta vacía')}</div>`;
+        vm.innerHTML = `<div class="err">${pzIc('reject', 13)} No se pudo verificar: ${esc((r && r.error) || 'respuesta vacía')}</div>`;
       }
     } catch (e) {
-      if (vm) vm.innerHTML = `<div class="err">❌ La verificación falló: ${esc(e.message)}</div>`;
+      if (vm) vm.innerHTML = `<div class="err">${pzIc('reject', 13)} La verificación falló: ${esc(e.message)}</div>`;
     }
   };
   const igProLink = $('#igProLink');
@@ -2270,7 +2310,7 @@ function bindSettings() {
         return;
       }
     }
-    if (m) m.textContent = 'Listo ✅ Posty ya sabe quién sos: qué vendés, cómo hablás y cómo te ves.';
+    if (m) m.textContent = 'Listo Posty ya sabe quién sos: qué vendés, cómo hablás y cómo te ves.';
     bKnow.disabled = false;
   };
   // Carga manual del @ sin conectar (v282): el campo vive en Conexiones y
@@ -2296,7 +2336,7 @@ function bindSettings() {
         monthly_goal: (PROFILE && PROFILE.monthly_goal) || '',
       });
       PROFILE = await api.get('/api/profile');
-      if (m) m.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado — Posty te analiza con ese @.</span>';
+      if (m) m.innerHTML = '<span style="color:var(--cel);font-size:12.5px">' + pzIc('checkCircle', 13) + ' Guardado — Posty te analiza con ese @.</span>';
     } catch (e) {
       if (m) m.innerHTML = `<span style="color:#B3402E;font-size:12.5px">${esc((e && e.message) || 'No se pudo guardar')}</span>`;
     }
@@ -2318,10 +2358,10 @@ function bindSettings() {
         throw new Error((r && r.error) || 'respuesta vacía');
       } catch (e) {
         if (!isRetry) {
-          if (m) m.innerHTML = `<div class="hint">🔄 Sincronizando tu cuenta de Instagram…</div>`;
+          if (m) m.innerHTML = `<div class="hint">${pzIc('refresh', 13)} Sincronizando tu cuenta de Instagram…</div>`;
           setTimeout(() => doIgSync(true), 10000);
         } else {
-          if (m) m.innerHTML = `<div class="err">⚠️ No se pudo leer tu @ de Instagram: ${esc(e.message)} <a href="#" id="igSyncRetry" style="color:var(--cel);font-weight:700">Reintentar</a></div>`;
+          if (m) m.innerHTML = `<div class="err">${pzIc('alert', 13)} No se pudo leer tu @ de Instagram: ${esc(e.message)} <a href="#" id="igSyncRetry" style="color:var(--cel);font-weight:700">Reintentar</a></div>`;
           bindRetry();
         }
       }
@@ -2356,11 +2396,11 @@ async function pzFillBioSeal() {
       ? ['📲 Content: @postycommunitymanager', '✨ My content is made by @postycommunitymanager']
       : ['📲 Contenido: @posty.communitymanager', '✨ Mi contenido lo hace @posty.communitymanager'];
     slot.innerHTML = `<div style="border:1px dashed var(--line);border-radius:14px;padding:14px;background:#F8FBFD;margin-top:18px">
-      <div style="font-weight:800;margin-bottom:4px">${en ? '🏷️ Your Posty seal (optional)' : '🏷️ Tu sello Posty (opcional)'}</div>
+      <div style="font-weight:800;margin-bottom:4px">${en ? pzIc('tag', 14) + ' Your Posty seal (optional)' : pzIc('tag', 14) + ' Tu sello Posty (opcional)'}</div>
       <p style="color:var(--mut);font-size:12.5px;margin:0 0 10px">${en ? 'Some businesses add a line like this to their Instagram bio so followers know their content is cared for. It is your profile: you paste it by hand, only if you like it.' : 'Algunos negocios suman una línea así a su bio de Instagram para que sus seguidores sepan que su contenido está cuidado. Es tu perfil: la pegás vos a mano, solo si te gusta.'}</p>
       ${seals.map((s, i) => `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><code style="flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px">${esc(s)}</code><button class="btn btn-soft btn-sm" data-seal-copy="${i}">${en ? 'Copy' : 'Copiar'}</button></div>`).join('')}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px;align-items:center">
-        <button class="btn btn-primary btn-sm" id="pzSealOk">${en ? 'I added it 💙' : 'Ya lo sumé 💙'}</button>
+        <button class="btn btn-primary btn-sm" id="pzSealOk">${en ? pzIc('heart', 13) + ' I added it' : pzIc('heart', 13) + ' Ya lo sumé'}</button>
         <button class="btn btn-ghost btn-sm" id="pzSealNo">${en ? 'Not now' : 'Ahora no'}</button>
         <span id="pzSealMsg" style="font-size:12px"></span>
       </div></div>`;
@@ -2374,7 +2414,7 @@ async function pzFillBioSeal() {
           ta.remove();
         }
         const m = document.getElementById('pzSealMsg');
-        if (m) m.textContent = copied ? (en ? '✅ Copied — paste it in your bio' : '✅ Copiado — pegalo en tu bio') : t;
+        if (m) m.textContent = copied ? (en ? 'Copied — paste it in your bio' : 'Copiado — pegalo en tu bio') : t;
       };
     });
     const done = async (state, msg) => {
@@ -2383,7 +2423,7 @@ async function pzFillBioSeal() {
       slot.innerHTML = msg ? `<p class="hint" style="margin-top:14px">${msg}</p>` : '';
     };
     const okB = document.getElementById('pzSealOk');
-    if (okB) okB.onclick = () => done('accepted', en ? '💙 Seal on — thanks for showing it!' : '💙 ¡Sello puesto! Gracias por mostrarlo.');
+    if (okB) okB.onclick = () => done('accepted', en ? pzIc('heart', 14) + ' Seal on — thanks for showing it!' : pzIc('heart', 14) + ' ¡Sello puesto! Gracias por mostrarlo.');
     const noB = document.getElementById('pzSealNo');
     if (noB) noB.onclick = () => done('dismissed', '');
   } catch (e) {}

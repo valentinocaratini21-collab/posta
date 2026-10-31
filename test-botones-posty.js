@@ -59,7 +59,7 @@ t('btn-rec grabando intacto', /\.btn-rec \{ background:#D63A2F/.test(css));
 // --- app.js ---
 t('hero CTA sin padding inline', !/class="btn btn-primary"[^>]*style="font-size:(16px;padding:16px 36px|18px;padding:18px 44px)"/.test(app));
 t('hero CTA btn-lg', (app.match(/btn btn-primary btn-lg/g) || []).length >= 4);
-t('rev rv-mini x10', (app.match(/class="rv-mini" data-rev/g) || []).length === 10);
+t('rev rv-mini x10', (app.match(/class="rv-mini" data-rev/g) || []).length === 11);
 t('revdel pcard-del', /class="pcard-del" data-revdel/.test(app));
 t('lc-yes celeste', /lc-yes" style="[^"]*background:#2793C8/.test(app));
 t('lc-no transparente', /lc-no" style="[^"]*background:transparent;color:#2793C8/.test(app));

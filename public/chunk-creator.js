@@ -40,10 +40,10 @@ function creatorChips() {
 
 function creatorView(embed) {
   const c = CREATOR;
-  const head1 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 1 de 3 — Nosotros pensamos la estrategia. Vos solo aprobás.</p></div></div>`;
-  const head2 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 2 de 3 — El diseño ya está listo. Retocalo si querés.</p></div></div>`;
-  const head3 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 3 de 3 — Programalo y olvidate.</p></div></div>`;
-  const headO = embed ? '' : `<div class="page-head"><div class="ph-ico">🎨</div><div class="ph-txt"><h1>Tus 6 diseños</h1><p class="sub">Te recomendamos la marcada con ⭐. Si preferís otra, elegila y programala.</p></div></div>`;
+  const head1 = embed ? '' : `<div class="page-head"><div class="ph-ico">${pzIc('sparkle', 26)}</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 1 de 3 — Nosotros pensamos la estrategia. Vos solo aprobás.</p></div></div>`;
+  const head2 = embed ? '' : `<div class="page-head"><div class="ph-ico">${pzIc('sparkle', 26)}</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 2 de 3 — El diseño ya está listo. Retocalo si querés.</p></div></div>`;
+  const head3 = embed ? '' : `<div class="page-head"><div class="ph-ico">${pzIc('sparkle', 26)}</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 3 de 3 — Programalo y olvidate.</p></div></div>`;
+  const headO = embed ? '' : `<div class="page-head"><div class="ph-ico">${pzIc('palette', 20)}</div><div class="ph-txt"><h1>Tus 6 diseños</h1><p class="sub">Te recomendamos la marcada con ⭐. Si preferís otra, elegila y programala.</p></div></div>`;
   const stepsBar = `<div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= c.step ? 'on' : ''}"></div>`).join('')}</div>`;
   if (c.step === 1) {
     return `
@@ -56,7 +56,7 @@ function creatorView(embed) {
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${creatorChips().map(t => `<button class="btn btn-ghost btn-sm" data-chip="${esc(t)}" type="button">${esc(t)}</button>`).join('')}
         </div></div>
-      <div class="field"><label>📷 Foto de tu producto <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
+      <div class="field"><label>${pzIc('camera', 14)} Foto de tu producto <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
         <div id="c_prodPhotoBox"></div>
         <input type="file" id="c_prodPhotoFile" accept="image/*" style="display:none">
         <div class="hint">Si la subís, las 6 opciones usan TU foto. Ideal para vender tu producto exacto. Si no, usamos fotos del banco.</div></div>
@@ -65,7 +65,7 @@ function creatorView(embed) {
       <div id="genOut" style="margin-top:24px;${c.caption ? '' : 'display:none'}">
         <div class="field"><label>Caption</label><textarea id="c_caption" style="min-height:150px">${esc(c.caption)}</textarea></div>
         <div class="field"><label>Hashtags</label><textarea id="c_tags" style="min-height:70px">${esc(c.hashtags)}</textarea></div>
-        <button class="btn btn-primary" id="btnToDesign">Siguiente: diseñar imagen →</button>
+        <button class="btn btn-primary" id="btnToDesign">Siguiente: diseñar imagen ${pzIc('arrowRight', 16)}</button>
       </div>
     </div>`;
   }
@@ -96,7 +96,7 @@ function creatorView(embed) {
               }).join('')}
             </div>
             <div class="hint">Elegí de 2 a 10 fotos para el carrusel — la primera es la portada. Tocá de nuevo para sacar.</div>
-            <div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="btnCarouselOff" type="button">← Volver a foto única</button></div>
+            <div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="btnCarouselOff" type="button">${pzIc('arrowLeft', 14)} Volver a foto única</button></div>
             <div id="carErr"></div>` : (c.photo ? `
             <div style="display:flex;gap:10px;align-items:center">
               <img src="${c.photo}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">
@@ -118,8 +118,8 @@ function creatorView(embed) {
           </div>
         </div>
         <div style="display:flex;gap:10px">
-          <button class="btn btn-ghost" id="btnBack1">← Atrás</button>
-          <button class="btn btn-primary" id="btnSaveDesign" style="flex:1">${c.carouselMode ? 'Continuar →' : 'Guardar diseño →'}</button>
+          <button class="btn btn-ghost" id="btnBack1">${pzIc("arrowLeft", 14)} Atrás</button>
+          <button class="btn btn-primary" id="btnSaveDesign" style="flex:1">${c.carouselMode ? 'Continuar ' + pzIc('arrowRight', 14) : 'Guardar diseño ' + pzIc('arrowRight', 14)}</button>
         </div>
       </div>
       <div><div class="preview-box"><canvas id="postCanvas"></canvas></div>
@@ -138,13 +138,13 @@ function creatorView(embed) {
     return `
     ${headO}
     <div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= 1 ? 'on' : ''}"></div>`).join('')}</div>
-    ${colors.length ? `<div class="colors-note">🎨 Tus colores: ${esc(colorNames)}${hexes.map(h => `<span class="swatch" style="background:${esc(h)}" title="${esc(h)}"></span>`).join('')}</div>` : ''}
-    ${det.productPhoto ? `<div class="prodphoto-note">📷 Usando la foto de tu producto en las 6 opciones</div>` : ''}
-    ${det.photoQuery && !det.productPhoto ? `<div class="photoq-note">📸 Fotos de: <b>${esc(det.photoQuery)}</b>${det.userPhotos ? ` · usando tus fotos primero ✨` : ''}</div>` : ''}
+    ${colors.length ? `<div class="colors-note">${pzIc('palette', 14)} Tus colores: ${esc(colorNames)}${hexes.map(h => `<span class="swatch" style="background:${esc(h)}" title="${esc(h)}"></span>`).join('')}</div>` : ''}
+    ${det.productPhoto ? `<div class="prodphoto-note">${pzIc('camera', 13)} Usando la foto de tu producto en las 6 opciones</div>` : ''}
+    ${det.photoQuery && !det.productPhoto ? `<div class="photoq-note">${pzIc('camera', 13)} Fotos de: <b>${esc(det.photoQuery)}</b>${det.userPhotos ? ` · usando tus fotos primero` : ''}</div>` : ''}
     ${libPhotos.length ? `
     <div class="myphotos-card" style="padding:14px 18px">
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-        <span style="font-weight:700">📷 Tus fotos</span>
+        <span style="font-weight:700">${pzIc('camera', 13)} Tus fotos</span>
         <div class="mp-row" id="mpRow" style="margin:0">${libPhotos.map(a => `<span style="position:relative;display:inline-block"><img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto"><button data-mpdel="${a.id}" title="Borrar foto" aria-label="Borrar foto" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:1.5px solid #fff;background:#0A1E33;color:#fff;font-size:12.5px;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3)">×</button></span>`).join('')}</div>
         <button class="btn btn-ghost btn-sm" id="btnUploadPhotos">${pzIc('share', 18)} Subir más</button>
         <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
@@ -152,7 +152,7 @@ function creatorView(embed) {
       <div id="mpMsg"></div>
     </div>` : `
     <div class="myphotos-card">
-      <div class="mp-title">📷 Tus fotos</div>
+      <div class="mp-title">${pzIc('camera', 13)} Tus fotos</div>
       <p class="mp-text">Para vender tu producto exacto (como tu buzo), subí sus fotos una vez y el creador las usa siempre.</p>
       <div class="mp-row" id="mpRow"><span class="mut">Todavía no subiste fotos.</span></div>
       <button class="btn btn-primary" id="btnUploadPhotos">${pzIc('share', 18)} Subir fotos de tus productos</button>
@@ -170,14 +170,14 @@ function creatorView(embed) {
         ${o.title ? `<p class="opt-title">${esc(o.title)}</p>` : ''}
         ${o.caption ? `<p class="opt-caption">${esc(o.caption)}</p>` : ''}
         <div class="opt-actions">
-          <button class="btn btn-primary btn-sm opt-use" data-use="${i}">Usar este diseño →</button>
+          <button class="btn btn-primary btn-sm opt-use" data-use="${i}">Usar este diseño ${pzIc('arrowRight', 14)}</button>
           <button class="btn btn-ghost btn-sm opt-myphoto" data-mp="${i}">${pzIc('camera', 18)} Mi foto</button>
         </div>
         <button class="opt-customlink" data-custom="${i}">${pzIc('pencil', 18)} Personalizar a mano</button>
       </div>`).join('')}
     </div>
     <div id="multiBar" style="display:none">
-      <span id="multiCount">✅ 0 elegidos</span>
+      <span id="multiCount">${pzIc('checkCircle', 13)} 0 elegidos</span>
       <button class="btn btn-primary" id="btnMultiSched">Programar (0)</button>
     </div>
     <div style="display:flex;justify-content:center;margin:4px 0 26px">
@@ -193,7 +193,7 @@ function creatorView(embed) {
     </div>
     <div id="schedModal" class="modal-ov" style="display:none">
       <div class="modal-card">
-        <h3>📅 Programar diseños</h3>
+        <h3>${pzIc('calendar', 16)} Programar diseños</h3>
         <p class="mut" style="margin-bottom:12px">Elegí día y hora para cada uno.</p>
         <div id="schedRows"></div>
         <div id="schedMsg"></div>
@@ -212,7 +212,7 @@ function creatorView(embed) {
     </div>
     <div id="photoPickModal" class="modal-ov" style="display:none">
       <div class="modal-card">
-        <h3>📷 Foto para este diseño</h3>
+        <h3>${pzIc('camera', 16)} Foto para este diseño</h3>
         <button class="btn btn-primary btn-block" id="btnPickUpload" style="margin:12px 0">${pzIc('share', 18)} Subir nueva foto</button>
         <input type="file" id="pickFile" accept="image/*" style="display:none">
         <p class="mut" style="margin:6px 0 8px"><b>De tu librería</b></p>
@@ -223,7 +223,7 @@ function creatorView(embed) {
         <button class="btn btn-ghost btn-block" id="btnPickClose" style="margin-top:14px">Cancelar</button>
       </div>
     </div>
-    <button class="btn btn-ghost btn-sm" id="btnBackOptions" style="margin-top:16px">← Volver</button>`;
+    <button class="btn btn-ghost btn-sm" id="btnBackOptions" style="margin-top:16px">${pzIc("arrowLeft", 14)} Volver</button>`;
   }
   // step 3
   const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -248,7 +248,7 @@ function creatorView(embed) {
       </div></div>
     </div>
     <div id="pubMsg"></div>
-    <button class="btn btn-ghost btn-sm" id="btnBack2" style="margin-top:8px">← Atrás</button>
+    <button class="btn btn-ghost btn-sm" id="btnBack2" style="margin-top:8px">${pzIc("arrowLeft", 14)} Atrás</button>
   </div>`;
 }
 
@@ -291,7 +291,7 @@ function bindCreator() {
       try {
         const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
         const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
+        if (!r.ok) throw new Error(data.error || 'No pude subirlo. Probá de nuevo');
         c.productPhoto = data.path;
         ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       } catch (e) {
@@ -402,7 +402,7 @@ function bindCreator() {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error);
         c.imagePath = data.path; c.fromOptions = false; c.step = 3; render();
-      } catch (e) { alert('Error: ' + e.message); $('#btnSaveDesign').disabled = false; $('#btnSaveDesign').textContent = 'Guardar diseño →'; }
+      } catch (e) { alert('Error: ' + e.message); $('#btnSaveDesign').disabled = false; $('#btnSaveDesign').innerHTML = 'Guardar diseño ' + pzIc('arrowRight', 14); }
     };
   }
   if (c.step === 'options') {
@@ -432,7 +432,7 @@ function bindCreator() {
       const bar = $('#multiBar');
       if (!bar) return;
       bar.style.display = n ? 'flex' : 'none';
-      $('#multiCount').textContent = `✅ ${n} elegido${n === 1 ? '' : 's'}`;
+      $('#multiCount').innerHTML = pzIc('checkCircle', 13) + ` ${n} elegido${n === 1 ? '' : 's'}`;
       $('#btnMultiSched').textContent = `Programar (${n})`;
     }
     $$('.opt-selbox').forEach(ch => ch.onchange = () => {
@@ -503,7 +503,7 @@ function bindCreator() {
       try {
         const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
         const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
+        if (!r.ok) throw new Error(data.error || 'No pude subirlo. Probá de nuevo');
         ASSETS = await api.get('/api/assets').catch(() => ASSETS);
         await applyCardPhoto(pickIdx, data.path);
       } catch (e) {
@@ -540,12 +540,12 @@ function bindCreator() {
       $('#mpFiles').value = '';
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       if (ok) {
-        msg.innerHTML = `<div class="hint">✅ ¡Listo! Regenerando con tus fotos...</div>`;
+        msg.innerHTML = `<div class="hint">${pzIc('checkCircle', 14)} ¡Listo! Regenerando con tus fotos...</div>`;
         try {
           const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
           if (out && Array.isArray(out.options) && out.options.length) { applyOptions(out); return; }
         } catch (e) { /* queda el mensaje de abajo */ }
-        msg.innerHTML = `<div class="hint">✅ ¡Listo! Tocá "🔄 Regenerar opciones" para usarlas.</div>`;
+        msg.innerHTML = `<div class="hint">${pzIc('checkCircle', 13)} ¡Listo! Tocá "${pzIc('refresh', 13)} Regenerar opciones" para usarlas.</div>`;
       }
     };
     // ---- Programar N ----
@@ -660,7 +660,7 @@ function bindCreator() {
         }));
         applyOptions(out);
       } catch (e) {
-        const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana 💪') : null;
+        const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy. Seguimos mañana') : null;
         $('#optErr').innerHTML = `<div class="${capMsg ? 'okmsg' : 'err'}">${esc(capMsg || e.message)}</div>`;
         btn.disabled = false; btn.innerHTML = pzIc('refresh', 18) + ' Regenerar opciones';
       }
@@ -669,7 +669,7 @@ function bindCreator() {
       const inp = $('#fb_input');
       const fb = inp.value.trim();
       const msg = $('#feedbackMsg');
-      if (!fb) { msg.innerHTML = `<div class="hint" style="margin:10px 0 0">Contame qué querés cambiar 👇</div>`; return; }
+      if (!fb) { msg.innerHTML = `<div class="hint" style="margin:10px 0 0">Contame qué querés cambiar ${pzIc('arrowDown', 16)}</div>`; return; }
       const btn = $('#btnFeedback');
       btn.disabled = true; btn.innerHTML = pzIc('gear', 18) + ' Arreglándolo...';
       try {
@@ -705,7 +705,7 @@ function bindCreator() {
       c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
       try {
         await api.post('/api/posts', { ...carPayload(), scheduled_at: new Date(when).toISOString() });
-        done('✅ Post programado. Se publica solo a la hora indicada.');
+        done(pzIc('checkCircle', 14) + ' Post programado. Se publica solo a la hora indicada.');
       } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
     };
     $('#btnNow').onclick = async () => {
@@ -737,7 +737,7 @@ function bindCreator() {
       c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
       try {
         await api.post('/api/posts', carPayload());
-        done('💾 Guardado como borrador. Lo revisás en Schedule.', '#/app/schedule');
+        done(pzIc('save', 14) + ' Guardado como borrador. Lo revisás en Schedule.', '#/app/schedule');
       } catch (e) {
         if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); btn.disabled = false; return; }
         $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false;

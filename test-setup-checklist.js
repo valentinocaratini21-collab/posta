@@ -71,21 +71,21 @@ ok(fnSrc.includes("ME.lang === 'en'"), 'las filas nuevas siguen el patrón de id
 ok(fnSrc.includes('id="setupWeekRow"'), 'fila de semana con id setupWeekRow');
 ok(fnSrc.includes('Revisá tu primera semana'), 'semana ES: título «Revisá tu primera semana»');
 ok(fnSrc.includes('Mirá los posteos que armé para vos y dejalos listos.'), 'semana ES: small exacto de la spec');
-ok(fnSrc.includes('Ver mi semana →'), 'semana ES: botón «Ver mi semana →»');
+ok(fnSrc.includes('Ver mi semana ') && fnSrc.includes('pzIc("arrowRight"'), 'semana ES: botón «Ver mi semana» + flecha dibujada (íconos Lote 6)');
 // Paso «primera semana» — EN espejo
 ok(fnSrc.includes('Review your first week'), 'semana EN: «Review your first week»');
 ok(fnSrc.includes('Take a look at the posts I made for you and get them ready.'), 'semana EN: small espejo');
-ok(fnSrc.includes('See my week →'), 'semana EN: «See my week →»');
+ok(fnSrc.includes('See my week ') && fnSrc.includes('pzIc("arrowRight"'), 'semana EN: «See my week» + flecha dibujada (íconos Lote 6)');
 
 // Paso «plan» pendiente — ES
 ok(fnSrc.includes('id="setupPlanRow"'), 'fila de plan con id setupPlanRow');
 ok(fnSrc.includes('Activá tu plan'), 'plan ES: «Activá tu plan»');
 ok(fnSrc.includes('Tu prueba terminó: elegí un plan y sigo trabajando para vos.'), 'plan ES: small exacto de la spec');
-ok(fnSrc.includes('Ver planes →'), 'plan ES: botón «Ver planes →»');
+ok(fnSrc.includes('Ver planes ') && fnSrc.includes('pzIc("arrowRight"'), 'plan ES: botón «Ver planes» + flecha dibujada (íconos Lote 6)');
 // Paso «plan» pendiente — EN espejo
 ok(fnSrc.includes('Activate your plan'), 'plan EN: «Activate your plan»');
 ok(fnSrc.includes("Your trial is over: pick a plan and I'll keep working for you."), 'plan EN: small espejo');
-ok(fnSrc.includes('See plans →'), 'plan EN: «See plans →»');
+ok(fnSrc.includes('See plans ') && fnSrc.includes('pzIc("arrowRight"'), 'plan EN: «See plans» + flecha dibujada (íconos Lote 6)');
 
 // Trial vigente informativo — ES y EN
 ok(fnSrc.includes('Tu prueba está en curso'), 'trial ES: «Tu prueba está en curso»');
@@ -224,7 +224,7 @@ ok(profSlice.includes('first_week_live: firstWeekLive'), '/api/profile expone fi
 ok(profSlice.includes("status IN ('scheduled', 'published')"), 'la query es la definida: status scheduled/published');
 ok(profSlice.includes('FROM posts WHERE user_id = ?'), 'la query está acotada al usuario de la sesión');
 ok(profSlice.includes('LIMIT 1'), 'la query es existencia (LIMIT 1), costo mínimo');
-ok(serverJs.includes("const BUILD_ID = '20261025-v473';"), 'BUILD_ID bumpeado a 20261025-v473');
+ok(serverJs.includes("const BUILD_ID = '20261031-v506';"), 'BUILD_ID bumpeado a 20261031-v506');
 ok((serverJs.match(/HEADLINE_INFINITIVES/g) || []).length === 3, 'canario HEADLINE_INFINITIVES = 3 ocurrencias, intacto');
 const setMatch = serverJs.match(/const HEADLINE_INFINITIVES = new Set\(\[([^\]]*)\]\)/);
 ok(!!setMatch && setMatch[1].split(',').length === 26, 'el set HEADLINE_INFINITIVES conserva sus 26 infinitivos');
