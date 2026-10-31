@@ -19005,7 +19005,6 @@ const gestyLlegadas = require('./gesty-llegadas');
 const gestyLlamadasPerdidas = require('./gesty-llamadas-perdidas');
 const gestySinPagar = require('./gesty-atendidos-sin-pagar');
 const gestyBloqueos = require('./gesty-bloqueos');
-const gestyAutofetch = require('./gesty-autofetch');
 const gestyVistasMW = [requireAuth, gesty.gestyMiddleware(db)];
 const gestyVistasCobranzasMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'cobranzas')];
 const gestyVistasAgendaMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'agenda')];
@@ -19064,10 +19063,6 @@ app.post('/api/gesty/vistas/bloqueos', ...gestyVistasAgendaMW, express.json(), (
 });
 app.post('/api/gesty/vistas/bloqueos/:id/desactivar', ...gestyVistasAgendaMW, express.json(), (req, res) => {
   try { res.json({ ok: true, bloqueo: gestyBloqueos.desactivarBloqueo(db, req.session.userId, Number(req.params.id)) }); }
-  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
-});
-app.post('/api/gesty/vistas/conexiones/buscar-ahora', ...gestyVistasMW, express.json(), async (req, res) => {
-  try { res.json({ ok: true, ...(await gestyAutofetch.buscarAhora(db, req.session.userId)) }); }
   catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 app.post('/api/gesty/vistas/confirmar', ...gestyVistasMW, express.json(), (req, res) => {
@@ -23109,7 +23104,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261030-v483';
+const BUILD_ID = '20261031-v484';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
