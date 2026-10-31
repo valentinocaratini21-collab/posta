@@ -18759,6 +18759,52 @@ async function hfDetailShare(post) {
     } catch (e2) { toast(en ? 'Could not share this post' : 'No se pudo compartir este posteo'); }
   }
 }
+
+// (LOTE 2 · doble toque en tiles + corazón) La grilla promete «Tocá el
+// corazón para aprobar» (nota bajo la grilla) pero el gesto f3 solo cubre
+// .igmock-media/.apv-media: en tiles no existía. Acá va, SOLO táctil
+// (como hfDetailBind): el primer toque espera 300ms (ventana corta, con
+// feedback :active inmediato del Lote velocidad — no es la demora vieja
+// de esperar al servidor); el segundo toque en la misma tile aprueba con
+// el burst de corazón y NO navega al detalle. Un toque distinto cancela
+// el pendiente anterior sin navegar (y solo navega si el hash no cambió
+// en la ventana, para no abrir el detalle tras un cambio de pantalla).
+// Hold/peek/arrastre/mover ya suprimen su click antes de llegar acá.
+// Publicado o IG: no se aprueba nada. En autopilot, corazón afectivo
+// sin cambio de estado (igual que f3GestureApprove).
+let HF_DBL = { key: '', t: 0, timer: null, tile: null, post: null, hash: '' };
+function hfDblReset() {
+  try { if (HF_DBL.timer) clearTimeout(HF_DBL.timer); } catch (e) {}
+  HF_DBL = { key: '', t: 0, timer: null, tile: null, post: null, hash: '' };
+}
+async function hfTileApprove(tile, post) {
+  try {
+    const st = String((tile && tile.dataset && tile.dataset.status) || (post && post.status) || '');
+    if (st !== 'draft' && st !== 'scheduled') return;
+    const id = String((tile && tile.dataset && tile.dataset.postId) || (post && post.id) || '');
+    if (!id) return;
+    const mode = await f3ApprovalMode();
+    if (!mode.manual) { try { track('lote2_dbltap_like', { autopilot: true }); } catch (e) {} return; }
+    if (st === 'scheduled') {
+      await pcApprove(id, tile, null);
+      try { render(); } catch (e) {}
+      return;
+    }
+    if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
+      toast(f3En() ? 'Connect your Instagram first 📸' : 'Conectá tu Instagram primero 📸');
+      return;
+    }
+    const when = (tile && tile.dataset && tile.dataset.schedAt) || (post && post.scheduled_at) || undefined;
+    await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: when || undefined });
+    try { await api.post('/api/posts/' + encodeURIComponent(id) + '/signal', { signal: 'approved' }); } catch (e) {}
+    try { track('lote2_dbltap_approve', { id, draft: true }); } catch (e) {}
+    toast('✅ <b>¡Listo!</b> Quedó programado 🙌');
+    try { render(); } catch (e) {}
+  } catch (e) {
+    try { toast('😅 ' + esc((e && e.message) || 'No se pudo programar')); } catch (e2) {}
+  }
+}
+
 function hfDetailBind(root) {
   if (!root || root._hfDetailBound) return;
   root._hfDetailBound = true;
@@ -18773,7 +18819,22 @@ function hfDetailBind(root) {
     if (!t) return;
     e.stopPropagation();
     e.preventDefault();
-    hfDetailOpen(t.post, tile);
+    // (LOTE 2 · doble toque en tiles) Ver comentario en HF_DBL.
+    const dblKey = String(tile.dataset.postId);
+    const dblNow = Date.now();
+    if (HF_DBL.key === dblKey && HF_DBL.tile && document.contains(HF_DBL.tile) && dblNow - HF_DBL.t < 300) {
+      hfDblReset();
+      try { f3HeartBurst(tile); } catch (e2) {}
+      hfTileApprove(tile, t.post);
+      return;
+    }
+    hfDblReset();
+    HF_DBL = { key: dblKey, t: dblNow, timer: null, tile, post: t.post, hash: location.hash };
+    HF_DBL.timer = setTimeout(() => {
+      const pend = HF_DBL;
+      hfDblReset();
+      if (pend.tile && document.contains(pend.tile) && location.hash === pend.hash) { try { hfDetailOpen(pend.post, pend.tile); } catch (e2) {} }
+    }, 300);
   }, true);
 }
 function hfDurBind(root) {
@@ -19994,7 +20055,7 @@ async function approvalPostView(id) {
   const editPrompt = dOk ? apvEditPrompt(d, tz) : 'Quiero editar ese posteo';
   const actions = canAct ? `
     <div class="apv-actions" id="apvActions">
-      <button class="btn btn-primary" id="apvAccept" data-apvid="${esc(String(p.id))}">Aceptar ${pzIc('checkCircle', 18)}</button>
+      <button class="btn btn-primary" id="apvAccept" data-apvid="${esc(String(p.id))}">Aceptar ${pzIc('checkCircle', 18)}</button> <button class="btn btn-soft apv-like" data-apvid="${esc(String(p.id))}" aria-label="Aprobar">${pzIc('heart', 18)}</button>
       <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ${pzIc('pencil', 18)}</button>
       <button class="btn btn-danger" id="apvReject">Rechazar ${pzIc('reject', 18)}</button>
     </div>
@@ -20010,7 +20071,7 @@ async function approvalPostView(id) {
   // prefill de siempre y Rechazar lo cancela con confirmación.
   const draftActions = isDraft ? `
     <div class="apv-actions" id="apvActions">
-      <button class="btn btn-primary" id="apvAcceptDraft" data-apvid="${esc(String(p.id))}" data-apvwhen="${esc(String(p.scheduled_at || ''))}">Aceptar ${pzIc('checkCircle', 18)}</button>
+      <button class="btn btn-primary" id="apvAcceptDraft" data-apvid="${esc(String(p.id))}" data-apvwhen="${esc(String(p.scheduled_at || ''))}">Aceptar ${pzIc('checkCircle', 18)}</button> <button class="btn btn-soft apv-like" data-apvid="${esc(String(p.id))}" aria-label="Aprobar">${pzIc('heart', 18)}</button>
       <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ${pzIc('pencil', 18)}</button>
       <button class="btn btn-danger" id="apvReject">Rechazar ${pzIc('reject', 18)}</button>
     </div>
@@ -20095,6 +20156,20 @@ function bindApprovalPost() {
   };
   // (v326) Aceptar un BORRADOR desde el detalle: mismo gate de Instagram y
   // mismo flujo PATCH (programar en su horario) que el Aceptar de la Agenda.
+
+  // (LOTE 2 · corazón en detalle) Tocar el corazón aprueba con la acción
+  // vigente (el mismo botón Aceptar) + burst sobre la media. Las dos
+  // filas (programado y borrador) nunca coexisten, pero el binding por
+  // clase cubre ambas sin depender de ids únicos.
+  document.querySelectorAll('.apv-like').forEach((b) => {
+    b.onclick = () => {
+      try { const m = document.querySelector('.apv-media'); if (m) f3HeartBurst(m); } catch (e) {}
+      const a1 = document.getElementById('apvAccept');
+      if (a1 && !a1.disabled) { a1.click(); return; }
+      const a2 = document.getElementById('apvAcceptDraft');
+      if (a2 && !a2.disabled) a2.click();
+    };
+  });
   const acd = document.getElementById('apvAcceptDraft');
   if (acd) acd.onclick = async () => {
     const id = acd.dataset.apvid;

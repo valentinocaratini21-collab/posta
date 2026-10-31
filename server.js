@@ -4024,6 +4024,40 @@ app.post('/api/settings/auto-week', requireAuth, express.json(), (req, res) => {
 // Espejo del bloque auto-week: GET estado, POST toggle. NO toca users.lang:
 // el idioma de la app y de la cuenta quedan exactamente como estaban; esto
 // solo decide si la semana sale también en inglés (misma idea, traducida).
+
+// SEMANA DOS IDIOMAS (LOTE 2): traductor de producción para
+// bilingualizeWeek — gpt-4o-mini con FAITHFUL_TRANSLATION_PROMPT, mismo
+// patrón que el resto del servidor (fetch + timeout 45s + trackUsage).
+// Sin clave, devuelve null y el llamador omite el paso (las piezas
+// quedan con bilingual_status NULL para otra corrida, nunca marcadas
+// como bloqueadas por falta de traductor).
+function bilingualTranslateFnFor(uid) {
+  let key = '';
+  try { key = openaiKeyFor(uid) || ''; } catch (e) { key = ''; }
+  if (!key) return null;
+  return async ({ caption, headline, idea }) => {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 1200,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: weekBilingual.FAITHFUL_TRANSLATION_PROMPT },
+          { role: 'user', content: JSON.stringify({ caption: String(caption || ''), headline: String(headline || ''), idea: String(idea || '') }) },
+        ],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!res.ok) throw new Error('openai_' + res.status);
+    const data = await res.json();
+    try { costs.trackUsage({ feature: 'bilingual-week', userId: uid, model: 'gpt-4o-mini', json: data }); } catch (e) {}
+    const raw = String((data.choices && data.choices[0] && data.choices[0].message.content) || '').trim();
+    const j = parseLooseJson(raw) || {};
+    return { caption: String(j.caption || ''), headline: String(j.headline || '') };
+  };
+}
+
 function bilingualWeekEnabled(uid) {
   try { return !!weekBilingual.isBilingualWeekEnabled(db, uid); } catch (e) { return false; }
 }
@@ -11423,6 +11457,24 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         }
       }
     } catch (e) { console.error(`[pipeline:${tag}] piloto automático:`, e.message); }
+    // SEMANA DOS IDIOMAS (LOTE 2): con el opt-in prendido, la semana
+    // recién generada se traduce fiel vía week-bilingual (misma idea,
+    // caption traducida, paridad verificada; sin paridad, la pieza queda
+    // solo ES). Sin opt-in, bilingualizeWeek no llama al traductor ni
+    // escribe nada (garantía del módulo). Solo se intentan piezas sin
+    // EN previo (bilingual_status NULL): las listas ('ready') y las
+    // bloqueadas no se re-traducen (cero gasto repetido). Nunca bloquea
+    // ni rompe la generación: adentro captura todo.
+    try {
+      const bFn = bilingualTranslateFnFor(uid);
+      if (bFn && weekKey) {
+        const bRows = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND media_type IN ('image','carousel') AND (bilingual_status IS NULL OR bilingual_status = '') ORDER BY created_at ASC`).all(uid, weekKey);
+        if (bRows.length) {
+          const bRes = await weekBilingual.bilingualizeWeek(db, uid, bRows, bFn);
+          console.log(`[pipeline:${tag}] dos idiomas: ${bRes.done || 0} listas, ${bRes.blocked || 0} bloqueadas (${bRes.skipped || 'ok'})`);
+        }
+      }
+    } catch (e) { console.error(`[pipeline:${tag}] dos idiomas falló:`, e.message); }
     // 2026-10-15: semana PARCIAL (created < déficit) ya no es un éxito
     // silencioso: queda registrada para el loop de reintentos (el sweep la
     // completa) y el resultado lo dice con sus motivos por slot.
@@ -15088,6 +15140,7 @@ function learningsLineOf(learnings) {
 // es imposible de omitir. Si el JSON falla, se usa el texto crudo como
 // núcleo y los bloques garantizados se agregan igual: nunca peor que antes.
 // (v231) ESTÁNDAR POSITIVO DE ESCENA — reemplaza a PROMPT_AVOID_BASE.
+// (MORA-7, 2026-10-25, id real 547) La línea de pantallas al final del estándar es el fix: pantalla en blanco o bloques abstractos, nunca un símbolo solo.
 // La lista de ~10 negaciones con la que cerraba cada prompt ("AVOID:
 // generic stock…; deformed hands…; any readable text…") salió: las
 // guías oficiales de Google (Nano Banana) y OpenAI (gpt-image) piden
@@ -15096,7 +15149,7 @@ function learningsLineOf(learnings) {
 // superficies en blanco/apagadas/vacías/borrosas, atmósfera real,
 // producto como centro visual). Las exclusiones puntuales del rubro
 // (rubroAvoidFor) quedan: son datos del negocio, no la lista base.
-const PROMPT_SCENE_STANDARD = 'SCENE STANDARD (this is what the image IS): a bespoke, art-directed photograph made for this exact business — crafted on location, with a real place and real atmosphere, never a stock or image-bank look. Anatomy is natural and realistic (hands, fingers, faces and proportions true to life). Every surface that could carry writing — screens, signs, price tags, labels, storefronts, printed clothing — is blank, dark, empty or softly blurred, so the whole frame stays clean and completely text-free. The background is a living part of the scene with depth and texture, in the palette tones — never a flat gray or empty studio void. The product is the visual center of the frame: fully visible, beautifully lit, the unmistakable hero.';
+const PROMPT_SCENE_STANDARD = 'SCENE STANDARD (this is what the image IS): a bespoke, art-directed photograph made for this exact business — crafted on location, with a real place and real atmosphere, never a stock or image-bank look. Anatomy is natural and realistic (hands, fingers, faces and proportions true to life). Every surface that could carry writing — screens, signs, price tags, labels, storefronts, printed clothing — is blank, dark, empty or softly blurred, so the whole frame stays clean and completely text-free. The background is a living part of the scene with depth and texture, in the palette tones — never a flat gray or empty studio void. The product is the visual center of the frame: fully visible, beautifully lit, the unmistakable hero. Screens, tablets and phones in the scene show a BLANK screen or abstract color blocks — never a lone symbol, letter or glyph (#, @, stray letters) as screen content.';
 function rubroAvoidFor(category) {
   const r = String(category || '').toLowerCase();
   if (/gastronom|cafeter|panader|pizzer|rotiser|helader|pasteler|carnicer/.test(r)) return ' Also avoid: dishes from cuisines other than this business\'s own; readable menus, chalkboards or price tags; raw meat on display (unless the business is a butcher shop).';
@@ -25906,7 +25959,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v500';
+const BUILD_ID = '20261031-v501';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
