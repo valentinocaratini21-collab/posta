@@ -329,7 +329,7 @@ async function bbOficinaContent() {
     return `<article class="bb-card">
       <div class="bb-card-head">${bbAvatarHTML(p.poder, p.avatar, p.nombre, p.color)}<div><strong>${esc(p.nombre)}</strong><span class="bb-card-rol">${esc(p.rol)}</span></div></div>
       <p class="bb-card-estado">${estadoTxt}</p>
-      <div class="bb-card-nivel"><span class="bb-nivel-chip">${esc(p.nivel.nombre_nivel)} · ${p.nivel.nivel}/5</span>${bbBarraHTML(p.nivel, p.color)}</div>
+      <div class="bb-card-nivel"><span class="bb-nivel-chip">${p.nivel.etiqueta_tirita ? esc(p.nivel.etiqueta_tirita) : (esc(p.nivel.nombre_nivel) + ' · ' + p.nivel.nivel + '/5')}</span>${bbBarraHTML(p.nivel, p.color)}</div>
       ${sig}
       <div class="bb-card-btns">
         ${pend ? `<button class="bb-btn bb-btn-gold" onclick="bbGo('#/app/bandeja')">${pend} para tu OK</button>` : ''}
@@ -483,7 +483,7 @@ async function bbNegocioContent() {
   return `
     <section class="bb-bloque bb-bloque-top"><h1>Mi negocio</h1><p class="bb-sub">Esto es lo que tu oficina sabe de tu negocio — su fundamento. Tus cuatro poderes trabajan sobre estas mismas fichas: ninguno inventa lo que no está acá.</p></section>
     ${capas}
-    ${(jardin && jardin.ok && Array.isArray(jardin.antes) && jardin.antes.length && Array.isArray(jardin.hoy) && jardin.hoy.length) ? pzJardinHTML(jardin, (typeof ME !== 'undefined' && ME && ME.lang === 'en')) : ''}${(nivJ && nivJ.ok && Array.isArray(nivJ.historial) && nivJ.historial.length) ? pzVitrinaHTML(nivJ.historial, (typeof ME !== 'undefined' && ME && ME.lang === 'en')) : ''}
+    ${(jardin && jardin.ok && Array.isArray(jardin.antes) && jardin.antes.length && Array.isArray(jardin.hoy) && jardin.hoy.length) ? pzJardinHTML(jardin, (typeof ME !== 'undefined' && ME && ME.lang === 'en')) : ''}${(nivJ && nivJ.ok && Array.isArray(nivJ.historial) && nivJ.historial.length) ? pzVitrinaHTML(nivJ.historial, (typeof ME !== 'undefined' && ME && ME.lang === 'en'), (nivJ.etiqueta_tirita || (nivJ.nivel ? ('Nivel ' + nivJ.nivel + ' · ' + nivJ.nombre_nivel) : null))) : ''}
     ${avisos}
     ${await gzNegocioGesty()}
     <button class="bb-btn bb-btn-ghost bb-ancho" onclick="bbGo('#/app/chat')">¿Falta algo o algo cambió? Contale a Bambooty</button>
@@ -17048,6 +17048,7 @@ function pzNivelAvance(nv) {
   return Math.max(0, Math.min(100, Math.round(100 * a.hechos / a.total)));
 }
 function pzNivelStripHTML(nv, en) {
+  const etiqueta = (nv && nv.etiqueta_tirita) ? nv.etiqueta_tirita : (nv ? nv.nombre_nivel : '');
   const falt = Array.isArray(nv.faltantes) ? nv.faltantes : [];
   const n = falt.length;
   const pct = pzNivelAvance(nv);
@@ -17055,10 +17056,10 @@ function pzNivelStripHTML(nv, en) {
     ? { hash: '#/app/negocio', label: en ? 'See your garden' : 'Ver tu jardín' }
     : { hash: pzNivelChip(falt[0] ? falt[0].clave : '', en).hash,
         label: n === 1 ? (en ? '1 thing left' : 'te falta 1 cosa') : (en ? `${n} things left` : `te faltan ${n} cosas`) };
-  return `<div id="pzNivelStrip" role="button" tabindex="0" aria-expanded="false" aria-label="${esc(en ? `Your level with Posty: ${nv.nombre_nivel}` : `Tu nivel con Posty: ${nv.nombre_nivel}`)}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:16px;cursor:pointer;box-sizing:border-box">
+  return `<div id="pzNivelStrip" role="button" tabindex="0" aria-expanded="false" aria-label="${esc(en ? `Your level with Posty: ${etiqueta}` : `Tu nivel con Posty: ${etiqueta}`)}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:16px;cursor:pointer;box-sizing:border-box">
     <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:52px;height:52px;flex:none;border-radius:50%;object-fit:cover"></span>
     <span data-pz-col style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
-      <strong style="font-size:15px;line-height:1.25">${esc(nv.nombre_nivel)}</strong>
+      <strong style="font-size:15px;line-height:1.25">${esc(etiqueta)}</strong>
       <span style="display:block;height:7px;border-radius:999px;background:#DCEFFA;overflow:hidden"><span data-pz-fill="${pct}" style="display:block;height:100%;width:${pct}%;background:${esc(nv.color || '#2793C8')};border-radius:999px"></span></span>
       <button type="button" data-pz-nivel-accion="${esc(paso.hash)}" style="align-self:flex-start;background:none;border:0;padding:0;font-size:12px;line-height:1.3;color:#47617A;cursor:pointer;text-align:left">${esc(paso.label)}</button>
     </span>
@@ -17160,20 +17161,21 @@ function pzJardinHTML(j, en) {
 }
 // Vitrina de niveles (v469): insignias con fecha REAL del río. Sin registro,
 // sin insignia.
-function pzVitrinaHTML(hist, en) {
+function pzVitrinaHTML(hist, en, etiqueta) {
   const MES_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const MES_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const mes = (ts) => { const d = new Date(Number(ts)); if (isNaN(d)) return ''; return `${(en ? MES_EN : MES_ES)[d.getMonth()]} ${d.getFullYear()}`; };
   const badges = hist.map((h) => `<span class="pz-vit-badge"><strong>${esc(h.nombre_nivel)}</strong><span>${esc(mes(h.ts))}</span></span>`).join('');
   return `<section class="bb-bloque"><h2>${en ? 'Your level showcase' : 'La vitrina de tus niveles'}</h2>
     <p class="bb-sub">${en ? 'Every level you reached, with its real date.' : 'Cada nivel que alcanzaste, con su fecha real.'}</p>
+    ${etiqueta ? `<p class="bb-sub"><strong>${esc(en ? 'Current level: ' : 'Nivel actual: ')}${esc(etiqueta)}</strong></p>` : ''}
     <div class="pz-vitrina">${badges}</div>
   </section>`;
 }
 function pzNivelCelebShow(nv, en) {
   const prev = document.getElementById('pzCelebFondo');
   if (prev) { try { prev.remove(); } catch (e) {} }
-  const unlock = pzNivelUnlock(nv.nivel, en);
+  const unlock = (nv.premio_actual || nv.desbloqueo_actual || pzNivelUnlock(nv.nivel, en));
   const div = document.createElement('div');
   div.id = 'pzCelebFondo';
   div.className = 'pz-celeb-fondo';
@@ -17198,7 +17200,7 @@ function pzNivelCelebShow(nv, en) {
 function pzNivelStoryShow(nv, en) {
   const prev = document.getElementById('pzStoryFondo');
   if (prev) { try { prev.remove(); } catch (e) {} }
-  const unlock = pzNivelUnlock(nv.nivel, en);
+  const unlock = (nv.premio_actual || nv.desbloqueo_actual || pzNivelUnlock(nv.nivel, en));
   const texto = en ? `I leveled up to ${nv.nombre_nivel} with Posty! ${unlock}` : `¡Subí a ${nv.nombre_nivel} con Posty! ${unlock}`;
   const div = document.createElement('div');
   div.id = 'pzStoryFondo';

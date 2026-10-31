@@ -300,7 +300,11 @@ function listarDireccion(db, uid, limit = 50) {
 
 function estadoPoder(db, uid, poder) {
   const def = niveles.PODERES[poder];
-  const nivel = niveles.computarNivel(db, uid, poder, metricas(db, uid));
+  const m = metricas(db, uid);
+  let nivel = niveles.computarNivel(db, uid, poder, m);
+  // Prestigio (v498): la tarjeta de Posty en LA OFICINA usa el mismo nivel
+  // extendido que la tirita; si no, ambas vistas discreparían en 6+.
+  if (poder === 'posty') { try { nivel = require('./posty-nivel50').nivelPosty(db, uid, m); } catch (e) {} }
   const ultima = db.prepare('SELECT * FROM oficina_registros WHERE user_id = ? AND poder = ? ORDER BY ts DESC LIMIT 1').get(uid, poder);
   const salidas = db.prepare('SELECT COUNT(*) AS n FROM oficina_registros WHERE user_id = ? AND poder = ? AND salida = 1').get(uid, poder);
   let estado = 'todavia_no_corre';

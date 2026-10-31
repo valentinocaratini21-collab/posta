@@ -3707,6 +3707,11 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
     // puente (es un backfill, no progreso de esos días).
     let nivelPre = null;
     try { nivelPre = oficina.niveles.computarNivel(db, uid, poder, oficina.metricas(db, uid)); } catch (e) {}
+    // Prestigio (v498): Posty se resuelve en extendido (6–50 + premios);
+    // ante cualquier error queda el cómputo base intacto.
+    if (oficina.niveles.resolverPoder(poder) === 'posty') {
+      try { const np = require('./posty-nivel50'); const npe = np.nivelPosty(db, uid, oficina.metricas(db, uid)); if (npe) nivelPre = npe; } catch (e) {}
+    }
     // (1) PRIMERA SUBIDA EN LA PRIMERA SEMANA: si el digest ya tiene
     // fundamento real (la prueba leyó su mundo) y todavía no existe el
     // evento, Posty ya terminó de leer: el primer nudo se completa solo.
@@ -3723,7 +3728,10 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
         }
       } catch (e) {}
     }
-    const niv = oficina.niveles.computarNivel(db, uid, poder, oficina.metricas(db, uid));
+    let niv = oficina.niveles.computarNivel(db, uid, poder, oficina.metricas(db, uid));
+    if (oficina.niveles.resolverPoder(poder) === 'posty') {
+      try { const np = require('./posty-nivel50'); niv = np.nivelPosty(db, uid, oficina.metricas(db, uid)); } catch (e) {}
+    }
     let celebrado = false;
     try { celebrado = db.prepare('SELECT COUNT(*) AS n FROM nivel_celebraciones WHERE user_id = ? AND poder = ? AND nivel = ?').get(uid, niv.poder, niv.nivel).n > 0; } catch (e) {}
     // (v459 · evolución, preservado en el re-base) Socio desde: mes REAL
@@ -3758,7 +3766,13 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
     res.json({
       ok: true, poder: niv.poder, nivel: niv.nivel,
       nombre_nivel: niv.nombre_nivel,
-      nombre_siguiente: niv.nivel < 5 ? def.niveles[niv.nivel] : null,
+      etiqueta_tirita: niv.etiqueta_tirita || null,
+      prestigio: niv.prestigio || 0,
+      nombre_prestigio: niv.nombre_prestigio || null,
+      insignia: niv.insignia || null,
+      premio_actual: niv.premio_actual || null,
+      desbloqueo_actual: niv.desbloqueo_actual || null,
+      nombre_siguiente: niv.nombre_siguiente !== undefined ? niv.nombre_siguiente : (niv.nivel < 5 ? def.niveles[niv.nivel] : null),
       color: niv.color, proximo_paso: niv.proximo_paso,
       faltantes: niv.gate.pendientes,
       celebrar: niv.nivel > 1 && !celebrado,
@@ -3796,7 +3810,8 @@ app.post('/api/oficina/nivel/celebrar', requireAuth, (req, res) => {
     nivelCelebracionesEnsure();
     const poder = String((req.body || {}).poder || 'posty');
     const nivel = Number((req.body || {}).nivel || 0);
-    if (!Number.isInteger(nivel) || nivel < 2 || nivel > 5) return res.status(400).json({ ok: false, error: 'nivel_invalido' });
+    const tope = oficina.niveles.resolverPoder(poder) === 'posty' ? 50 : 5;
+    if (!Number.isInteger(nivel) || nivel < 2 || nivel > tope) return res.status(400).json({ ok: false, error: 'nivel_invalido' });
     db.prepare('INSERT OR IGNORE INTO nivel_celebraciones (user_id, poder, nivel, ts) VALUES (?,?,?,?)').run(req.session.userId, poder, nivel, Date.now());
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -25891,7 +25906,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v497';
+const BUILD_ID = '20261031-v498';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
