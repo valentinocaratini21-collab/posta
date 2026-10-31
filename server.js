@@ -45,6 +45,8 @@ const paymentCloseMod = require('./payment-close');
 const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
 const { upcomingEphemeris, catsMatch } = require('./ephemeris');
 const creator = require('./creator.js');
+const photoCliente = require('./photo-cliente.js');
+const mediaCliente = require('./media-cliente.js');
 const vozDueno = require('./voz-dueno.js'); // VOZ DEL DUENO -> POSTEO (29/10/2026, local)
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
@@ -1393,7 +1395,7 @@ async function ensurePremiereStory(uid) {
     } catch (e) {}
     if (!photoAbs) {
       try {
-        const assets = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY id DESC LIMIT 5`).all(uid);
+        const assets = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY favorito DESC, id DESC LIMIT 5`).all(uid);
         for (const a of assets) {
           const fp = String(a.file_path || '');
           const abs = fp.startsWith('/') ? fp : path.join(MEDIA_DIR, path.basename(fp));
@@ -3088,7 +3090,7 @@ function nudgeMissing(uid) {
   // Kind más prioritario que le falta al usuario (foto > voz > estilo), o null.
   try {
     const done = new Set(db.prepare(`SELECT kind FROM posty_nudges WHERE user_id = ? AND done_at > 0`).all(uid).map(r => r.kind));
-    const photo = db.prepare(`SELECT id FROM assets WHERE user_id = ? AND kind = 'photo' LIMIT 1`).get(uid);
+    const photo = db.prepare(`SELECT id FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY favorito DESC, id DESC LIMIT 1`).get(uid);
     if (!photo && !done.has('photo')) return 'photo';
     let j = {};
     try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); j = JSON.parse((r && r.dna_json) || '{}'); } catch (e) {}
@@ -7378,8 +7380,66 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
 
 // ---------- Librería de medios del cliente (fotos + logo) ----------
 app.get('/api/assets', requireAuth, (req, res) => {
-  const rows = db.prepare('SELECT id, file_path, kind, created_at FROM assets WHERE user_id = ? ORDER BY created_at ASC').all(req.session.userId);
+  const pq = String(req.query.producto || '');
+  let rows;
+  const cols = `SELECT id, file_path, kind, created_at, COALESCE(producto,'') AS producto, COALESCE(album_quality,'') AS album_quality, COALESCE(favorito,0) AS favorito, COALESCE(permiso_testimonio,0) AS permiso_testimonio FROM assets`;
+  if (pq === 'sin-clasificar') {
+    rows = db.prepare(cols + ` WHERE user_id = ? AND (producto IS NULL OR producto = '') ORDER BY created_at ASC`).all(req.session.userId);
+  } else if (pq) {
+    rows = db.prepare(cols + ` WHERE user_id = ? AND producto = ? ORDER BY created_at ASC`).all(req.session.userId, pq);
+  } else {
+    rows = db.prepare(cols + ` WHERE user_id = ? ORDER BY created_at ASC`).all(req.session.userId);
+  }
   res.json(rows);
+});
+
+// (media-cliente-2) Productos reales del negocio (dna) para clasificar
+// fotos: nombres exactos, nunca inventados.
+app.get('/api/productos', requireAuth, (req, res) => {
+  try {
+    let dna = {};
+    try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(req.session.userId); if (r && r.dna_json) dna = JSON.parse(r.dna_json) || {}; } catch (e) {}
+    const names = [];
+    const push = (n) => { const s = String(n || '').trim(); if (s && !names.includes(s)) names.push(s); };
+    if (Array.isArray(dna.productos)) dna.productos.forEach((p) => push(p && p.nombre));
+    push(dna.producto_estrella);
+    res.json({ productos: names, estrella: String(dna.producto_estrella || '') });
+  } catch (e) { res.json({ productos: [], estrella: '' }); }
+});
+
+// (media-cliente-2) Nombres reales de productos del fundamento.
+function mcProductosDna(uid) {
+  try {
+    const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid);
+    const dna = (r && r.dna_json) ? (JSON.parse(r.dna_json) || {}) : {};
+    const names = [];
+    if (Array.isArray(dna.productos)) dna.productos.forEach((p) => { const s = String((p && p.nombre) || '').trim(); if (s && !names.includes(s)) names.push(s); });
+    if (dna.producto_estrella) { const s = String(dna.producto_estrella).trim(); if (s && !names.includes(s)) names.push(s); }
+    return names;
+  } catch (e) { return []; }
+}
+
+// (media-cliente-2) Clasificar una foto/video por producto: solo un
+// nombre real del dna del negocio, o '' para dejarla sin clasificar.
+// Cualquier otro valor se rechaza: el producto nunca se adivina.
+app.post('/api/assets/:id/producto', requireAuth, express.json(), (req, res) => {
+  try {
+    const assetId = parseInt(req.params.id, 10);
+    if (!assetId) return res.status(400).json({ ok: false, error: 'Asset inválido' });
+    const row = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ?').get(assetId, req.session.userId);
+    if (!row) return res.status(404).json({ ok: false, error: 'No encontrado' });
+    const want = String((req.body && req.body.producto) || '').trim();
+    if (want) {
+      let dna = {};
+      try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(req.session.userId); if (r && r.dna_json) dna = JSON.parse(r.dna_json) || {}; } catch (e) {}
+      const names = [];
+      if (Array.isArray(dna.productos)) dna.productos.forEach((p) => { const s = String((p && p.nombre) || '').trim(); if (s) names.push(s); });
+      if (dna.producto_estrella) names.push(String(dna.producto_estrella).trim());
+      if (!names.includes(want)) return res.status(400).json({ ok: false, error: 'Ese producto no está en tu negocio' });
+    }
+    db.prepare('UPDATE assets SET producto = ? WHERE id = ?').run(want, assetId);
+    res.json({ ok: true, producto: want });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo clasificar' }); }
 });
 
 app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'], limit: '100mb' }), async (req, res) => {
@@ -7762,6 +7822,10 @@ async function celebratePhotoPost(uid, assetId, filePath) {
     try { db.prepare('UPDATE album_missions SET post_id = ? WHERE user_id = ? AND week_key = ?').run(ins.lastInsertRowid, uid, weekKey); } catch (e) {}
     console.log(`[album] usuario ${uid}: foto ${assetId} convertida en el posteo ${ins.lastInsertRowid} ✨`);
     try { push.sendPush(uid, { title: 'Tu foto ya es un posteo ✨', body: 'Posty la convirtió en un posteo listo para publicar. Miralo en tu semana 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+    // (foto-cliente-experto) Gatillo (b): la foto derivó en borrador.
+    // Best-effort: nunca rompe el festejo; si no hay redos o no hay
+    // clave, el borrador queda y el dueño usa «Mejorar» manual.
+    try { await maybeAutoEnhanceProposal(uid, ins.lastInsertRowid); } catch (e) { console.error('[photo-mission] propuesta automática:', e.message); }
   } catch (e) { console.error('[album] festejo:', e.message); }
 }
 // ---------- (Gap 2, 2026-10-25) «POSTEÁ ESTE VIDEO» ----------
@@ -8060,6 +8124,32 @@ async function ingestClientVideo(uid, buf, ct) {
   tagAlbumVideo(uid, assetId, thumbPath, probe);
   return { id: assetId, path: `/media/${name}`, thumb: thumbPath, qualityIssues: issues, dur };
 }
+// (media-cliente-2) Formatos de una foto del álbum: feed 4:5,
+ // historia 9:16 y portada 1:1. El 'pad' nunca corta nada; el 'crop'
+ // solo existe con caja de sujeto que quepa entera (si no, se reporta
+ // como no hecho, nunca se corta a ciegas).
+app.post('/api/assets/:id/formatos', requireAuth, express.json(), async (req, res) => {
+  try {
+    const assetId = parseInt(req.params.id, 10);
+    if (!assetId) return res.status(400).json({ ok: false, error: 'Asset inválido' });
+    const row = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ?').get(assetId, req.session.userId);
+    if (!row || row.kind !== 'photo') return res.status(404).json({ ok: false, error: 'Solo fotos' });
+    const abs = photoCliente.mediaAbs(MEDIA_DIR, row.file_path);
+    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ ok: false, error: 'Archivo no encontrado' });
+    const box = (req.body && req.body.caja) || null;
+    const { execFile } = require('child_process');
+    const out = await new Promise((resolve) => {
+      execFile('python3', [path.join(__dirname, 'media-crops.py'), abs, MEDIA_DIR, box ? JSON.stringify(box) : ''], { timeout: 60000 }, (err, stdout) => {
+        if (err) return resolve(null);
+        try { resolve(JSON.parse(String(stdout || '').trim())); } catch (e) { resolve(null); }
+      });
+    });
+    if (!out || out.error || !Array.isArray(out.formats)) return res.status(502).json({ ok: false, error: 'No se pudieron generar los formatos' });
+    const variants = out.formats.map((f) => ({ format: f.format, w: f.w, h: f.h, pad: f.pad ? ('/media/' + f.pad) : null, crop: f.crop ? ('/media/' + f.crop) : null, crop_reason: f.crop_reason || null }));
+    res.json({ ok: true, variants });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron generar los formatos' }); }
+});
+
 app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -8094,7 +8184,12 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
     if (!missionDone) {
       try { db.prepare(`UPDATE album_missions SET done_at = datetime('now'), photo_id = ? WHERE user_id = ? AND week_key = ?`).run(assetId, uid, mission.week_key); missionDone = true; } catch (e) {}
     }
-    res.json({ ok: true, id: assetId, path: filePath, kind: 'photo', mission_done: missionDone });
+    // (media-cliente-2) Calidad determinística ANTES de responder: la
+    // foto avisa en el momento (oscura/movida/baja-res). La 'cortada'
+    // de visión llega después por tagAlbumPhoto y se ve en la librería.
+    let detIssues = [];
+    try { const m = await measurePhotoQuality(path.join(MEDIA_DIR, name)).catch(() => null); detIssues = qualityIssuesFromMetrics(m); } catch (e) {}
+    res.json({ ok: true, id: assetId, path: filePath, kind: 'photo', mission_done: missionDone, quality_issues: detIssues });
     // Segundo plano: clasificar + festejo (un posteo por semana).
     tagAlbumPhoto(uid, assetId, filePath);
     celebratePhotoPost(uid, assetId, filePath);
@@ -8643,6 +8738,13 @@ app.get('/api/posts', requireAuth, (req, res) => {
       }
     }
   } catch (e) { /* el porqué nunca frena la agenda */ }
+  // (foto-cliente-experto) caption_on: 1 si la pieza mostrada lleva
+  // titular quemado por código (hay base limpia y difiere), 0 si no.
+  // Se calcula sobre los archivos, no sobre una columna: la verdad
+  // está en disco. Solo para piezas con foto (image_path /media/).
+  for (const p of rows) {
+    try { if (p.image_path && String(p.image_path).startsWith('/media/') && p.media_type !== 'video') p.caption_on = photoCliente.captionState(MEDIA_DIR, p.image_path) === 'on' ? 1 : 0; } catch (e) {}
+  }
   res.json(rows);
 });
 
@@ -8851,6 +8953,28 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       try { tasteMemory.noteCaptionEdit(db, req.session.userId, { oldCaption: post.caption, newCaption: caption, oldHashtags: post.hashtags, newHashtags: hashtags !== undefined ? hashtags : post.hashtags }); } catch (e) {}
     }
     db.prepare(`UPDATE posts SET caption=?, hashtags=?, image_path=?, prev_image_path=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, image_path || post.image_path, (image_path && image_path !== post.image_path) ? (post.image_path || '') : (post.prev_image_path || ''), post.id);
+    // (media-cliente-2) Herencia por evidencia: foto nueva en un
+    // borrador cuyo caption nombra exactamente un producto real.
+    if (image_path && image_path !== post.image_path) {
+      try {
+        const asset = db.prepare('SELECT * FROM assets WHERE user_id = ? AND file_path = ?').get(req.session.userId, image_path);
+        if (asset && !asset.producto) {
+          let dna = {};
+          try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(req.session.userId); if (r && r.dna_json) dna = JSON.parse(r.dna_json) || {}; } catch (e) {}
+          const names = [];
+          if (Array.isArray(dna.productos)) dna.productos.forEach((p) => { const s = String((p && p.nombre) || '').trim(); if (s) names.push(s); });
+          if (dna.producto_estrella) names.push(String(dna.producto_estrella).trim());
+          const hit = mediaCliente.productoDeEvidencia(caption ?? post.caption, names);
+          if (hit) db.prepare('UPDATE assets SET producto = ? WHERE id = ?').run(hit, asset.id);
+        }
+      } catch (e) {}
+    }
+    // (media-cliente-2) Video nuevo en el borrador: si se puede
+    // mejorar (oscuro o movido), la propuesta se genera sola en
+    // segundo plano y aparece en la tarjeta. Sin acepto, nada cambia.
+    if (image_path && image_path !== post.image_path && /\.(mp4|mov|webm)$/i.test(String(image_path))) {
+      try { setImmediate(() => mcAutoStabilize(req.session.userId, post.id, image_path)); } catch (e) {}
+    }
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto en revisión
     return res.json({ ok: true });
   } else {
@@ -9237,6 +9361,7 @@ app.get('/api/posts/:id', requireAuth, (req, res) => {
     "SELECT * FROM posts WHERE id = ? AND user_id = ? AND COALESCE(needs_review,0)=0"
   ).get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  try { if (post.image_path && String(post.image_path).startsWith('/media/') && post.media_type !== 'video') post.caption_on = photoCliente.captionState(MEDIA_DIR, post.image_path) === 'on' ? 1 : 0; } catch (e) {}
   res.json({ ok: true, post });
 });
 
@@ -17105,6 +17230,106 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
   }
 });
 
+// (foto-cliente-experto, 2026-10-26) «Mejorar» genera una PROPUESTA.
+// La mejora ya NO aplica in situ: el endpoint guarda la mejorada como
+// propuesta (enhance_proposal_path/base) y el dueño la acepta o la
+// rechaza en la revisión. Generar consume el redo (ahí está el gasto de
+// IA y el punto 6A); aceptar NO consume redo; rechazar NO lo devuelve.
+// Semántica de redo (decisión documentada en el MANIFIESTO):
+//   generar propuesta -> consume 1 redo (img_redos+1, redo_left-1)
+//   aceptar propuesta -> 0 redo (swap local, prev = imagen anterior)
+//   rechazar propuesta -> 0 redo, sin reembolso
+//   propuesta vencida  -> se borra y se limpian las columnas, 0 redo
+// «Nunca regeneración» (tablero): el resultado sigue siendo
+// reconociblemente LA MISMA foto — la IA edita (luz, nitidez, color)
+// sobre la base limpia y el titular, si lo lleva, se recompone POR
+// CÓDIGO (composite-headline.py, bandas, sin mayúsculas forzadas).
+async function enhancePhotoGenerate(uid, post, promptOverride) {
+  const shown = String(post.image_path || '');
+  const absShown = photoCliente.mediaAbs(MEDIA_DIR, shown);
+  if (!absShown || !fs.existsSync(absShown)) throw new Error('NO_PHOTO');
+  // (Gap 7) Si la pieza lleva titular compuesto por código, post.image_path
+  // lo trae QUEMADO: se edita la base limpia hermana y al final el titular
+  // se recompone por código, como hacía el endpoint antes de este cambio.
+  const cleanName = photoCliente.cleanSisterName(path.basename(shown));
+  const absClean = path.join(MEDIA_DIR, cleanName);
+  const hadComposite = fs.existsSync(absClean) && cleanName !== path.basename(shown);
+  const absBase = hadComposite ? absClean : absShown;
+  const settings = getSettings(uid);
+  const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
+  if (!apiKey) throw new Error('NO_KEY');
+  const b64 = await genConceptImage(apiKey,
+    promptOverride || 'Enhance this photo professionally: fix lighting, white balance, exposure, sharpness and contrast. Keep the EXACT same composition, subjects, framing and colors — it must remain recognizably the SAME photo, just professionally finished. Do not add, remove or move anything.',
+    // (v237) La nota de rol viaja con la foto: el transporte manda
+    // esta única referencia y la nota dice exactamente eso.
+    [absBase], refRoles.buildRefNote(['restyle']), uid);
+  const newName = saveImageB64(b64);
+  const newPath = `/media/${newName}`;
+  // La imagen mejorada pasa a ser la nueva base limpia de la pieza…
+  try {
+    const newClean = photoCliente.cleanSisterName(newName);
+    fs.copyFileSync(path.join(MEDIA_DIR, newName), path.join(MEDIA_DIR, newClean));
+    try { db.prepare('INSERT OR IGNORE INTO image_meta (media_path) VALUES (?)').run(`/media/${newClean}`); } catch (e) {}
+  } catch (e) {}
+  // …y si la pieza llevaba titular, se recompone POR CÓDIGO sobre la
+  // foto mejorada (el titular sale del caption, como en photo-restyle:
+  // makeHeadline de la primera línea — nunca texto editado por la IA).
+  if (hadComposite) {
+    try {
+      const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
+      if (headline) {
+        const { execFileSync } = require('child_process');
+        const nPath = path.join(MEDIA_DIR, newName);
+        const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nPath, '--headline', headline, '--out', nPath];
+        const hexes = parseBrandHexes(settings.brand_colors);
+        if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
+        execFileSync('python3', cArgs, { timeout: 30000 });
+        console.log(`[photo-enhance] titular recompuesto por código: "${headline.slice(0, 40)}"`);
+      }
+    } catch (e) { console.error('[photo-enhance] recomponer titular falló, entrego la foto mejorada limpia:', e.message); }
+  }
+  return { proposalPath: newPath, proposalBase: shown };
+}
+
+// Disparo automático con límite (solo los 2 gatillos autorizados):
+//  (a) la foto se adjunta a un borrador desde el sheet (lo llama el
+//      cliente, no el servidor: pcUploadPhoto pide photo-enhance);
+//  (b) la foto del álbum derivó en un borrador (misión: celebratePhotoPost).
+// Las subidas a chat/librería NO llaman aquí: sin gasto de IA ni spam.
+// Nunca lanza: cualquier fallo devuelve null y el borrador queda intacto
+// (el dueño usa «Mejorar» manual). Aplica los mismos gates del endpoint
+// manual (cap global de IA + rate 'regen', que consume 1 unidad), y
+// además está acotado por el redo por posteo (máx. 3) y un disparo por
+// attach/misión.
+async function maybeAutoEnhanceProposal(uid, postId) {
+  try {
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) return null;
+    if (post.media_type === 'video' || post.media_type === 'carousel') return null;
+    if (!photoCliente.isMediaPath(post.image_path)) return null;
+    if (redoLeftOf(post) !== null && redoLeftOf(post) <= 0) return null;
+    // Gates reales del endpoint manual (cap global + rate 'regen'):
+    // aiAllowedNow no existe en esta base; se usan los mismos que
+    // photo-enhance (el rate consume 1 unidad al pasar, como ahí).
+    try { costs.assertAiOk(uid); } catch (e) { return null; }
+    if (!costs.checkRate(uid, 'regen', aiLimitsFor(uid).regensPerDay).ok) return null;
+    let gen;
+    try { gen = await enhancePhotoGenerate(uid, post); }
+    catch (e) { console.error('[photo-enhance-auto] no se pudo generar la propuesta:', e.message); return null; }
+    const oldProposal = post.enhance_proposal_path || '';
+    if (redoLeftOf(post) !== null && !consumeRedo(uid, postId)) {
+      photoCliente.deleteProposalFiles(MEDIA_DIR, gen.proposalPath);
+      return null;
+    }
+    db.prepare("UPDATE posts SET enhance_proposal_path = ?, enhance_proposal_base = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?").run(gen.proposalPath, gen.proposalBase, postId);
+    if (oldProposal) photoCliente.deleteProposalFiles(MEDIA_DIR, oldProposal);
+    return gen;
+  } catch (e) {
+    console.error('[photo-enhance-auto]', e.message);
+    return null;
+  }
+}
+
 // "✨ Mejorar foto": rescate de fotos mediocres. Un tap → gpt-image-2 EDITS
 // arregla luz, balance de blancos, exposición y nitidez MANTENIENDO la misma
 // foto (misma composición, mismos sujetos). Sin brief, sin vueltas.
@@ -17125,57 +17350,2091 @@ app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, expres
     const absShown = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
     if (!absShown || !fs.existsSync(absShown))
       return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para mejorar' });
-    // (Gap 7, 2026-10-25) LA MEJORA TRABAJA SOBRE LA BASE LIMPIA: si la
-    // pieza lleva el titular compuesto por código, post.image_path ya lo
-    // trae QUEMADO — editar eso con IA deforma el texto (justo lo que el
-    // composite por código existe para evitar). La base limpia vive como
-    // hermana `<nombre>-clean.<ext>`; se edita ESA y al final el titular
-    // se recompone por código, como hace photo-restyle.
-    const cleanName = path.basename(basePath).replace(/(\.[a-z0-9]+)$/i, '-clean$1');
-    const absClean = path.join(MEDIA_DIR, cleanName);
-    const hadComposite = fs.existsSync(absClean) && cleanName !== path.basename(basePath);
-    const absBase = hadComposite ? absClean : absShown;
-    const settings = getSettings(uid);
-    const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
-    if (!apiKey) return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
-    const b64 = await genConceptImage(apiKey,
-      'Enhance this photo professionally: fix lighting, white balance, exposure, sharpness and contrast. Keep the EXACT same composition, subjects, framing and colors — it must remain recognizably the SAME photo, just professionally finished. Do not add, remove or move anything.',
-      // (v237) La nota de rol viaja con la foto: el transporte manda
-      // esta única referencia y la nota dice exactamente eso.
-      [absBase], refRoles.buildRefNote(['restyle']), uid);
-    const newName = saveImageB64(b64);
-    const newPath = `/media/${newName}`;
-    // La imagen mejorada pasa a ser la nueva base limpia de la pieza…
-    try {
-      const newClean = newName.replace(/(\.[a-z0-9]+)$/i, '-clean$1');
-      fs.copyFileSync(path.join(MEDIA_DIR, newName), path.join(MEDIA_DIR, newClean));
-      try { db.prepare('INSERT OR IGNORE INTO image_meta (media_path) VALUES (?)').run(`/media/${newClean}`); } catch (e) {}
-    } catch (e) {}
-    // …y si la pieza llevaba titular, se recompone POR CÓDIGO sobre la
-    // foto mejorada (el titular sale del caption, como en photo-restyle:
-    // makeHeadline de la primera línea — nunca texto editado por la IA).
-    if (hadComposite) {
-      try {
-        const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
-        if (headline) {
-          const { execFileSync } = require('child_process');
-          const nPath = path.join(MEDIA_DIR, newName);
-          const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nPath, '--headline', headline, '--out', nPath];
-          const hexes = parseBrandHexes(settings.brand_colors);
-          if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
-          execFileSync('python3', cArgs, { timeout: 30000 });
-          console.log(`[photo-enhance] titular recompuesto por código: "${headline.slice(0, 40)}"`);
-        }
-      } catch (e) { console.error('[photo-enhance] recomponer titular falló, entrego la foto mejorada limpia:', e.message); }
+    // (foto-cliente-experto) La generación vive en enhancePhotoGenerate
+    // (misma IA, misma base limpia, mismo titular recompuesto por código).
+    // El endpoint ya NO aplica in situ: guarda la propuesta y el dueño la
+    // acepta o la rechaza en la revisión. El redo se consume AQUÍ (al
+    // generar: ahí está el gasto de IA), no al aceptar.
+    let gen;
+    try { gen = await enhancePhotoGenerate(uid, post); }
+    catch (e) {
+      if (e && e.message === 'NO_PHOTO') return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para mejorar' });
+      if (e && e.message === 'NO_KEY') return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
+      throw e;
     }
-    // Punto de compromiso (6A): mejora generada y lista para entregar.
+    const newPath = gen.proposalPath;
+    // Punto de compromiso (6A): propuesta generada y lista para guardar.
+    // El redo se consume al generar (gasto de IA ya hecho); la imagen del
+    // borrador NO cambia. Una propuesta anterior se supersede: sus
+    // archivos se borran DESPUÉS del UPDATE exitoso.
+    const oldProposal = post.enhance_proposal_path || '';
     if (redoLeftOf(post) !== null && !consumeRedo(uid, postId)) return redoExhausted(res);
-    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?').run(String(newPath), String(post.image_path || ''), postId);
-    res.json({ ok: true, path: newPath });
+    db.prepare("UPDATE posts SET enhance_proposal_path = ?, enhance_proposal_base = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?").run(String(newPath), String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteProposalFiles(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: newPath, proposal_base: String(post.image_path || '') });
   } catch (e) {
     console.error('[photo-enhance]', e.message);
     if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
     res.status(502).json({ ok: false, error: String(e.message || 'No se pudo mejorar la foto').slice(0, 200) });
+  }
+});
+
+// (foto-cliente-experto) Aceptar la propuesta: la mejorada pasa a ser la
+// imagen del borrador y la anterior queda en prev (reversible con
+// photo-revert). NO consume redo (ya se consumió al generar). Si la base
+// cambió desde que se generó (la imagen ya no es la que se mejoró), la
+// propuesta está vencida: se borra, se limpian las columnas y se avisa.
+app.post('/api/drafts/:id/photo-enhance-accept', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
+      return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const proposal = String(post.enhance_proposal_path || '');
+    const base = String(post.enhance_proposal_base || '');
+    const absProposal = photoCliente.mediaAbs(MEDIA_DIR, proposal);
+    if (!proposal || !base || base !== String(post.image_path || '') || !absProposal || !fs.existsSync(absProposal)) {
+      photoCliente.deleteProposalFiles(MEDIA_DIR, proposal);
+      db.prepare("UPDATE posts SET enhance_proposal_path = '', enhance_proposal_base = '' WHERE id = ?").run(postId);
+      return res.json({ ok: false, error: 'propuesta_vencida' });
+    }
+    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, enhance_proposal_path = ?, enhance_proposal_base = ? WHERE id = ?').run(proposal, String(post.image_path || ''), '', '', postId);
+    const captionOn = photoCliente.captionState(MEDIA_DIR, proposal) === 'on' ? 1 : 0;
+    return res.json({ ok: true, path: proposal, caption_on: captionOn });
+  } catch (e) {
+    console.error('[photo-enhance-accept]', e.message);
+    return res.status(500).json({ ok: false, error: 'No se pudo aceptar la mejora' });
+  }
+});
+
+// (foto-cliente-experto) Rechazar la propuesta: la original queda intacta
+// y la propuesta (con su base limpia y variantes) se borra. NO devuelve
+// el redo: el gasto de IA ya se hizo al generar.
+app.post('/api/drafts/:id/photo-enhance-reject', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
+      return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    photoCliente.deleteProposalFiles(MEDIA_DIR, post.enhance_proposal_path);
+    db.prepare("UPDATE posts SET enhance_proposal_path = '', enhance_proposal_base = '' WHERE id = ?").run(postId);
+    return res.json({ ok: true, path: String(post.image_path || '') });
+  } catch (e) {
+    console.error('[photo-enhance-reject]', e.message);
+    return res.status(500).json({ ok: false, error: 'No se pudo rechazar la mejora' });
+  }
+});
+
+// (foto-cliente-experto) Caption opt-in en un toque, compuesto POR CÓDIGO
+// (composite-headline.py, bandas superior/inferior, ≤6 palabras, sin
+// mayúsculas forzadas, sin botones). Nunca renderDesignImage con texto
+// impuesto. Agregar compone sobre la base limpia; quitar vuelve a la
+// base limpia. Sin gate de trial (como photo-revert). Una propuesta
+// pendiente queda obsoleta al cambiar la imagen y se borra.
+// (media-cliente-2) Helpers de propuestas de video/foto. Ninguna
+// propuesta se aplica sin acepto: la original queda intacta hasta que
+// el dueño toca Aceptar, y Rechazar borra solo la propuesta.
+function mcFfprobeDur(abs) {
+  const { execFile } = require('child_process');
+  return new Promise((resolve) => {
+    execFile('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'json', abs], { timeout: 30000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      try { const j = JSON.parse(String(stdout || '').trim()); const d = parseFloat(j && j.format && j.format.duration); resolve(isNaN(d) ? null : d); } catch (e) { resolve(null); }
+    });
+  });
+}
+function mcEscFilter(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "'\\''").replace(/:/g, '\\:');
+}
+function mcFfmpeg(args, timeout) {
+  const { execFile } = require('child_process');
+  return new Promise((resolve) => {
+    execFile('ffmpeg', ['-y', '-v', 'error', ...args], { timeout: timeout || 120000 }, (err) => resolve(!err));
+  });
+}
+function mcVideoPost(uid, postId) {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+  if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) return null;
+  const abs = photoCliente.mediaAbs(MEDIA_DIR, String(post.image_path || ''));
+  if (!abs || !fs.existsSync(abs)) return null;
+  return { post, abs };
+}
+async function mcAcceptProposal(req, res, pathCol, baseCol, extraSet) {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const proposal = String(post[pathCol] || '');
+    const base = String(post[baseCol] || '');
+    const absProposal = photoCliente.mediaAbs(MEDIA_DIR, proposal);
+    if (!proposal || !base || base !== String(post.image_path || '') || !absProposal || !fs.existsSync(absProposal)) {
+      photoCliente.deleteMediaFile(MEDIA_DIR, proposal);
+      db.prepare(`UPDATE posts SET ${pathCol} = '', ${baseCol} = '' WHERE id = ?`).run(postId);
+      return res.json({ ok: false, error: 'propuesta_vencida' });
+    }
+    db.prepare(`UPDATE posts SET image_path = ?, prev_image_path = ?, ${pathCol} = '', ${baseCol} = ''${extraSet || ''} WHERE id = ?`).run(proposal, String(post.image_path || ''), postId);
+    // Proyecto re-editable: cada acepto guarda la versión (la original
+    // nunca se borra: queda en prev_image_path y en disco; las
+    // propuestas sin aceptar se descartan porque nunca fueron usadas).
+    try { db.prepare(`INSERT INTO edicion_proyectos (user_id, post_id, kind, base_path, result_path) VALUES (?,?,?,?,?)`).run(uid, postId, String(pathCol || '').replace(/_proposal_path$/, ''), String(post.image_path || ''), proposal); } catch (e) {}
+    return res.json({ ok: true, path: proposal });
+  } catch (e) { console.error('[mc-accept]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo aceptar' }); }
+}
+async function mcRejectProposal(req, res, pathCol, baseCol) {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (post) {
+      photoCliente.deleteMediaFile(MEDIA_DIR, String(post[pathCol] || ''));
+      db.prepare(`UPDATE posts SET ${pathCol} = '', ${baseCol} = '' WHERE id = ?`).run(postId);
+    }
+    return res.json({ ok: true });
+  } catch (e) { return res.status(500).json({ ok: false, error: 'No se pudo rechazar' }); }
+}
+
+// (media-cliente-2) Subtítulos en un video: texto REAL — transcripción
+// Whisper del audio cuando hay clave, si no el caption del borrador.
+// Nunca texto inventado. El resultado es una propuesta con acepto.
+// (media-cliente-3) Estilo de subtítulos del negocio: guardado +
+// paleta del feed como respaldo. Fuente: nombre guardado o ''.
+function mcSubStyle(uid) {
+  try {
+    const est = mcEstilo(uid);
+    let color = (est && est.sub_color) || '';
+    let fuente = (est && est.sub_fuente) || '';
+    if (!color) {
+      try { const dg = clientDigest.getDigest(db, uid); if (dg && dg.paleta && dg.paleta[0] && dg.paleta[0].hex) color = String(dg.paleta[0].hex); } catch (e) {}
+    }
+    return { fuente, color, fondo: (est && est.sub_fondo) || '' };
+  } catch (e) { return { fuente: '', color: '', fondo: '' }; }
+}
+app.post('/api/drafts/:id/video-subtitles', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const dur = await mcFfprobeDur(abs);
+    if (!dur) return res.status(400).json({ ok: false, error: 'No se pudo leer el video' });
+    let text = String((req.body && req.body.text) || '').trim();
+    let fuente = 'texto';
+    if (!text) {
+      try {
+        const settings = getSettings(uid);
+        const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
+        if (apiKey) {
+          const tmpAud = path.join(MEDIA_DIR, `sub-${postId}-${Date.now()}.m4a`);
+          const okAud = await mcFfmpeg(['-i', abs, '-vn', '-c:a', 'aac', '-b:a', '128k', tmpAud], 60000);
+          if (okAud && fs.existsSync(tmpAud)) {
+            const dataUrl = 'data:audio/mp4;base64,' + fs.readFileSync(tmpAud).toString('base64');
+            const tr = await transcribeAudio(dataUrl, apiKey).catch(() => '');
+            if (tr && String(tr).trim()) { text = String(tr).trim(); fuente = 'transcripcion'; }
+          }
+          try { fs.unlinkSync(tmpAud); } catch (e) {}
+        }
+      } catch (e) {}
+    }
+    if (!text) text = String(post.caption || '').trim();
+    if (!text) return res.status(400).json({ ok: false, error: 'Sin texto para subtitular: el video no tiene audio claro ni caption' });
+    const estilo = mcSubStyle(uid);
+    const palabras = Array.isArray(req.body && req.body.palabras) ? req.body.palabras.map((w) => String(w || '').trim()).filter(Boolean).slice(0, 20) : [];
+    const colorAss = estilo.color ? mediaCliente.assColor(estilo.color) : null;
+    const stem = path.basename(abs).replace(/(\.[a-z0-9]+)$/i, '');
+    const outName = mediaCliente.proposalName(path.basename(abs), 'sub');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    let ok = false;
+    // Con palabras clave: ASS con el color del negocio (solo palabras
+    // reales del texto, nunca agregadas). Sin palabras: SRT con el
+    // color del negocio cuando hay uno guardado o en la paleta.
+    if (palabras.length && colorAss) {
+      const ass = mediaCliente.assFromText(text, dur, palabras, colorAss, estilo.fuente || undefined);
+      if (!ass) return res.status(400).json({ ok: false, error: 'Sin texto para subtitular' });
+      const assAbs = path.join(MEDIA_DIR, stem + '-sub.ass');
+      fs.writeFileSync(assAbs, ass);
+      ok = await mcFfmpeg(['-i', abs, '-vf', `ass='${mcEscFilter(assAbs)}'`, '-c:a', 'copy', outAbs], 180000);
+      try { fs.unlinkSync(assAbs); } catch (e) {}
+    } else {
+      const srt = mediaCliente.srtFromText(text, dur);
+      if (!srt) return res.status(400).json({ ok: false, error: 'Sin texto para subtitular' });
+      const srtAbs = path.join(MEDIA_DIR, stem + '-sub.srt');
+      fs.writeFileSync(srtAbs, srt);
+      const pc = colorAss || '&HFFFFFF&';
+      ok = await mcFfmpeg(['-i', abs, '-vf', `subtitles='${mcEscFilter(srtAbs)}':force_style='FontSize=26,PrimaryColour=${pc},OutlineColour=&H80000000&,BorderStyle=1,Outline=2'`, '-c:a', 'copy', outAbs], 180000);
+      try { fs.unlinkSync(srtAbs); } catch (e) {}
+    }
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudieron quemar los subtítulos' });
+    const oldProposal = post.subtitle_proposal_path || '';
+    db.prepare(`UPDATE posts SET subtitle_proposal_path = ?, subtitle_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || ''), fuente });
+  } catch (e) { console.error('[video-subtitles]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo subtitular').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-subtitles-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'subtitle_proposal_path', 'subtitle_proposal_base'));
+app.post('/api/drafts/:id/video-subtitles-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'subtitle_proposal_path', 'subtitle_proposal_base'));
+
+// (media-cliente-2) Limpiar una foto: quita SOLO distracciones del
+// fondo y los bordes, sin tocar el producto. Misma maquinaria de
+// propuesta que Mejorar (gates, redo, acepto), con prompt propio y
+// columnas propias. La intactez del producto la garantiza el acepto
+// del dueño viendo original vs. limpia lado a lado (la IA edita, el
+// código no puede verificar intactez: por eso es propuesta, no auto).
+app.post('/api/drafts/:id/photo-cleanup', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    if (redoLeftOf(post) !== null && redoLeftOf(post) <= 0) return redoExhausted(res);
+    const basePath = String(post.image_path || '');
+    const absShown = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
+    if (!absShown || !fs.existsSync(absShown)) return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para limpiar' });
+    let gen;
+    try {
+      gen = await enhancePhotoGenerate(uid, post, 'Clean up this photo: remove ONLY distracting elements from the background and edges (trash, cables, strangers passing by, clutter). Keep the EXACT same composition, product, subjects, framing and colors — it must remain recognizably the SAME photo. Do not move, resize, recolor or replace the main product or subject. Do not add text.');
+    } catch (e) {
+      if (e && e.message === 'NO_PHOTO') return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para limpiar' });
+      if (e && e.message === 'NO_KEY') return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
+      throw e;
+    }
+    const newPath = gen.proposalPath;
+    const oldProposal = post.cleanup_proposal_path || '';
+    if (redoLeftOf(post) !== null && !consumeRedo(uid, postId)) return redoExhausted(res);
+    db.prepare(`UPDATE posts SET cleanup_proposal_path = ?, cleanup_proposal_base = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?`).run(String(newPath), String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteProposalFiles(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: newPath, proposal_base: String(post.image_path || '') });
+  } catch (e) {
+    console.error('[photo-cleanup]', e.message);
+    if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
+    res.status(502).json({ ok: false, error: String(e.message || 'No se pudo limpiar la foto').slice(0, 200) });
+  }
+});
+app.post('/api/drafts/:id/photo-cleanup-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'cleanup_proposal_path', 'cleanup_proposal_base'));
+app.post('/api/drafts/:id/photo-cleanup-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'cleanup_proposal_path', 'cleanup_proposal_base'));
+
+// (media-cliente-2) Recortar un video al mejor momento: ventana
+// sugerida alrededor del frame más nítido y con luz sana (muestreo
+// Gap 11), o la que pase el dueño. Propuesta con acepto, nunca auto.
+app.post('/api/drafts/:id/video-trim', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const dur = await mcFfprobeDur(abs);
+    if (!dur) return res.status(400).json({ ok: false, error: 'No se pudo leer el video' });
+    if (dur <= 30) return res.status(400).json({ ok: false, error: 'El video ya es corto: no necesita recorte' });
+    let start = (req.body && req.body.start !== undefined) ? Number(req.body.start) : NaN;
+    let end = (req.body && req.body.end !== undefined) ? Number(req.body.end) : NaN;
+    if (isNaN(start) || isNaN(end)) {
+      const stamp = `trim-${postId}-${Date.now()}`;
+      const frames = await sampleVideoFrames(abs, dur, stamp).catch(() => []);
+      const best = bestFrameOf(frames);
+      const win = mediaCliente.trimWindow(dur, best ? best.t : null, 30);
+      if (!win) return res.status(400).json({ ok: false, error: 'No se pudo sugerir un recorte' });
+      start = win.start; end = win.end;
+    }
+    if (!(start >= 0) || !(end > start) || end > dur || (end - start) < 1) return res.status(400).json({ ok: false, error: 'Ventana de recorte inválida' });
+    const outName = mediaCliente.proposalName(path.basename(abs), 'trim');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const ok = await mcFfmpeg(['-ss', String(start), '-i', abs, '-t', String(end - start), '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'aac', outAbs], 180000);
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo recortar el video' });
+    const oldProposal = post.trim_proposal_path || '';
+    db.prepare(`UPDATE posts SET trim_proposal_path = ?, trim_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || ''), start, end });
+  } catch (e) { console.error('[video-trim]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo recortar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-trim-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'trim_proposal_path', 'trim_proposal_base'));
+app.post('/api/drafts/:id/video-trim-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'trim_proposal_path', 'trim_proposal_base'));
+
+// (media-cliente-2) Estabilizar + iluminar: detección y generación.
+async function mcVideoLumMedian(abs) {
+  try {
+    const dur = await mcFfprobeDur(abs);
+    if (!dur) return null;
+    const { execFile } = require('child_process');
+    const lums = [];
+    for (const f of [0.25, 0.5, 0.75]) {
+      const tmp = path.join(MEDIA_DIR, `lum-${Date.now()}-${Math.floor(Math.random() * 1000)}.jpg`);
+      const ok = await new Promise((resolve) => {
+        execFile('ffmpeg', ['-y', '-v', 'error', '-ss', String(dur * f), '-i', abs, '-frames:v', '1', tmp], { timeout: 30000 }, (err) => resolve(!err));
+      });
+      if (ok && fs.existsSync(tmp)) {
+        try { const m = await measurePhotoQuality(tmp).catch(() => null); if (m && typeof m.lum === 'number') lums.push(m.lum); } catch (e) {}
+        try { fs.unlinkSync(tmp); } catch (e) {}
+      }
+    }
+    if (!lums.length) return null;
+    lums.sort((a, b) => a - b);
+    return lums[Math.floor(lums.length / 2)];
+  } catch (e) { return null; }
+}
+async function mcVideoShake(abs) {
+  try {
+    const { execFile } = require('child_process');
+    const trf = path.join(MEDIA_DIR, `shake-${Date.now()}-${Math.floor(Math.random() * 1000)}.trf`);
+    await new Promise((resolve) => {
+      execFile('ffmpeg', ['-y', '-v', 'error', '-i', abs, '-t', '12', '-vf', 'scale=640:-2,vidstabdetect=stepsize=6:shakiness=10:accuracy=15:result=' + trf, '-f', 'null', '-'], { timeout: 90000 }, () => resolve());
+    });
+    if (!fs.existsSync(trf)) return null;
+    const txt = fs.readFileSync(trf, 'utf8');
+    try { fs.unlinkSync(trf); } catch (e) {}
+    return mediaCliente.parseVidstabShake(txt);
+  } catch (e) { return null; }
+}
+async function mcStabilizeGenerate(abs, needStab, needBright) {
+  const { execFile } = require('child_process');
+  const outName = mediaCliente.proposalName(path.basename(abs), 'stab');
+  const outAbs = path.join(MEDIA_DIR, outName);
+  const eq = needBright ? ',eq=brightness=0.12:contrast=1.05:saturation=1.1' : '';
+  const run = (args, timeout) => new Promise((resolve) => {
+    execFile('ffmpeg', ['-y', '-v', 'error', ...args], { timeout: timeout || 180000 }, (err) => resolve(!err));
+  });
+  if (needStab) {
+    const trf = path.join(MEDIA_DIR, `stab-${Date.now()}-${Math.floor(Math.random() * 1000)}.trf`);
+    const ok1 = await run(['-i', abs, '-vf', 'vidstabdetect=stepsize=6:shakiness=10:accuracy=15:result=' + trf, '-f', 'null', '-'], 180000);
+    if (!ok1 || !fs.existsSync(trf)) return null;
+    const ok2 = await run(['-i', abs, '-vf', 'vidstabtransform=input=' + trf + ':optzoom=1:smoothing=10' + eq, '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'copy', outAbs], 300000);
+    try { fs.unlinkSync(trf); } catch (e) {}
+    if (!ok2 || !fs.existsSync(outAbs)) return null;
+  } else {
+    const ok = await run(['-i', abs, '-vf', 'eq=brightness=0.12:contrast=1.05:saturation=1.1', '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'copy', outAbs], 300000);
+    if (!ok || !fs.existsSync(outAbs)) return null;
+  }
+  return '/media/' + outName;
+}
+// Auto al adjuntar: si el video se puede mejorar, la propuesta queda
+// lista en la tarjeta (sin aplicar). Nunca bloquea la respuesta.
+async function mcAutoStabilize(uid, postId, basePath) {
+  try {
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) return;
+    if (String(post.image_path || '') !== String(basePath || '')) return;
+    if (post.stabilize_proposal_path) return;
+    const abs = photoCliente.mediaAbs(MEDIA_DIR, String(post.image_path || ''));
+    if (!abs || !fs.existsSync(abs)) return;
+    if (!/\.(mp4|mov|webm)$/i.test(String(post.image_path || ''))) return;
+    const lum = await mcVideoLumMedian(abs);
+    const shake = await mcVideoShake(abs);
+    const chk = mediaCliente.videoMejorable(lum, shake);
+    if (!chk.mejorable) return;
+    const proposal = await mcStabilizeGenerate(abs, chk.razones.includes('movido'), chk.razones.includes('oscuro'));
+    if (!proposal) return;
+    const fresh = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!fresh || String(fresh.image_path || '') !== String(basePath || '') || fresh.stabilize_proposal_path) {
+      photoCliente.deleteMediaFile(MEDIA_DIR, proposal);
+      return;
+    }
+    db.prepare(`UPDATE posts SET stabilize_proposal_path = ?, stabilize_proposal_base = ? WHERE id = ?`).run(proposal, String(basePath || ''), postId);
+  } catch (e) { /* auto nunca bloquea */ }
+}
+app.post('/api/drafts/:id/video-stabilize', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const lum = await mcVideoLumMedian(abs);
+    const shake = await mcVideoShake(abs);
+    const chk = mediaCliente.videoMejorable(lum, shake);
+    if (!chk.mejorable) return res.json({ ok: false, mejorable: false, razones: chk.razones });
+    const proposal = await mcStabilizeGenerate(abs, chk.razones.includes('movido'), chk.razones.includes('oscuro'));
+    if (!proposal) return res.status(502).json({ ok: false, error: 'No se pudo mejorar el video' });
+    const oldProposal = post.stabilize_proposal_path || '';
+    db.prepare(`UPDATE posts SET stabilize_proposal_path = ?, stabilize_proposal_base = ? WHERE id = ?`).run(proposal, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: proposal, proposal_base: String(post.image_path || ''), razones: chk.razones });
+  } catch (e) { console.error('[video-stabilize]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo mejorar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-stabilize-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'stabilize_proposal_path', 'stabilize_proposal_base'));
+app.post('/api/drafts/:id/video-stabilize-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'stabilize_proposal_path', 'stabilize_proposal_base'));
+
+// (media-cliente-2) Llamada de visión chica (gpt-4o-mini, mismo patrón
+// que tagAlbumPhoto): devuelve el texto crudo del modelo o null.
+async function mcVisionCall(abs, key, promptText) {
+  try {
+    const b64 = fs.readFileSync(abs).toString('base64');
+    const mime = /\.png$/i.test(abs) ? 'image/png' : /\.webp$/i.test(abs) ? 'image/webp' : 'image/jpeg';
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', max_tokens: 120,
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: promptText },
+          { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}` } },
+        ] }],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const j = await r.json().catch(() => null);
+    return String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
+  } catch (e) { return null; }
+}
+// (media-cliente-2) ENDEREZAR: ángulo por visión; si |ángulo| < 1.5°
+// la foto ya está derecha y no hay propuesta. El enderezado expande
+// el lienzo (media-straighten.py): NO recorta nada, así que la regla
+// "si recortaría el producto, no se hace" se cumple por construcción.
+app.post('/api/drafts/:id/photo-straighten', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const abs = photoCliente.mediaAbs(MEDIA_DIR, String(post.image_path || ''));
+    if (!abs || !fs.existsSync(abs) || !/\.(jpe?g|png|webp)$/i.test(String(post.image_path || ''))) return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para enderezar' });
+    const key = openaiKeyFor(uid);
+    if (!key) return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
+    const raw = await mcVisionCall(abs, key, 'Esta foto puede estar torcida. Respondé SOLO con JSON: {"angulo": <grados de inclinación en sentido horario, positivo si la foto cae hacia la derecha>, "confianza": "alta"|"media"|"baja"}. Si está derecha, angulo 0.');
+    const parsed = mediaCliente.parseVisionAngle(raw);
+    if (!parsed || Math.abs(parsed.angulo) < 1.5) return res.json({ ok: false, derecha: true, angulo: parsed ? parsed.angulo : 0 });
+    const { execFile } = require('child_process');
+    const outName = mediaCliente.proposalName(path.basename(abs), 'recta');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const ok = await new Promise((resolve) => {
+      execFile('python3', [path.join(__dirname, 'media-straighten.py'), abs, outAbs, String(parsed.angulo)], { timeout: 60000 }, (err) => resolve(!err));
+    });
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo enderezar' });
+    const oldProposal = post.straighten_proposal_path || '';
+    db.prepare(`UPDATE posts SET straighten_proposal_path = ?, straighten_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || ''), angulo: parsed.angulo });
+  } catch (e) { console.error('[photo-straighten]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo enderezar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/photo-straighten-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'straighten_proposal_path', 'straighten_proposal_base'));
+app.post('/api/drafts/:id/photo-straighten-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'straighten_proposal_path', 'straighten_proposal_base'));
+// (media-cliente-2) FONDO DIFUMINADO: producto nítido, fondo borroso.
+// La caja del sujeto la pasa el dueño (0–1000) o la estima la visión;
+// sin caja válida NO hay bokeh (el producto nunca se difumina).
+app.post('/api/drafts/:id/photo-bokeh', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const abs = photoCliente.mediaAbs(MEDIA_DIR, String(post.image_path || ''));
+    if (!abs || !fs.existsSync(abs) || !/\.(jpe?g|png|webp)$/i.test(String(post.image_path || ''))) return res.status(400).json({ ok: false, error: 'El borrador no tiene foto' });
+    let box = (req.body && req.body.caja) || null;
+    if (box && !mediaCliente.validBokehBox(box)) return res.status(400).json({ ok: false, error: 'Caja del sujeto inválida' });
+    if (!box && req.body && req.body.auto) {
+      const key = openaiKeyFor(uid);
+      if (!key) return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
+      const raw = await mcVisionCall(abs, key, 'Ubicá el producto principal de esta foto. Respondé SOLO con JSON: {"x":..,"y":..,"w":..,"h":..} en coordenadas 0–1000 (x,y = esquina superior izquierda, w,h = tamaño del rectángulo que encierra al producto completo).');
+      box = mediaCliente.parseVisionBox(raw);
+      if (!box) return res.status(400).json({ ok: false, error: 'No se pudo ubicar el producto: pasá la caja a mano' });
+    }
+    if (!box) return res.status(400).json({ ok: false, error: 'Falta la caja del sujeto' });
+    const { execFile } = require('child_process');
+    const outName = mediaCliente.proposalName(path.basename(abs), 'bokeh');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const ok = await new Promise((resolve) => {
+      execFile('python3', [path.join(__dirname, 'media-bokeh.py'), abs, outAbs, JSON.stringify(box)], { timeout: 60000 }, (err) => resolve(!err));
+    });
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo difuminar el fondo' });
+    const oldProposal = post.bokeh_proposal_path || '';
+    db.prepare(`UPDATE posts SET bokeh_proposal_path = ?, bokeh_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[photo-bokeh]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo difuminar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/photo-bokeh-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'bokeh_proposal_path', 'bokeh_proposal_base'));
+app.post('/api/drafts/:id/photo-bokeh-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'bokeh_proposal_path', 'bokeh_proposal_base'));
+// (media-cliente-2) LIMPIAR AUDIO: voz arriba, ruido abajo (afftdn +
+// dynaudnorm). La imagen va con -c:v copy: NO se toca un píxel.
+app.post('/api/drafts/:id/video-audioclean', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const outName = mediaCliente.proposalName(path.basename(abs), 'audio');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const ok = await mcFfmpeg(['-i', abs, '-af', 'afftdn,dynaudnorm=f=150:g=15', '-c:v', 'copy', '-c:a', 'aac', outAbs], 180000);
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo limpiar el audio' });
+    const oldProposal = post.audioclean_proposal_path || '';
+    db.prepare(`UPDATE posts SET audioclean_proposal_path = ?, audioclean_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[video-audioclean]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo limpiar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-audioclean-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'audioclean_proposal_path', 'audioclean_proposal_base'));
+app.post('/api/drafts/:id/video-audioclean-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'audioclean_proposal_path', 'audioclean_proposal_base'));
+// (media-cliente-2) QUITAR REFLEJOS Y SOMBRAS DURAS: misma maquinaria
+// de propuesta que Limpiar, con prompt propio. El producto intacto lo
+// verifica el dueño viendo original vs. limpia (la IA edita; por eso
+// es propuesta con acepto, nunca auto).
+app.post('/api/drafts/:id/photo-glare', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    if (redoLeftOf(post) !== null && redoLeftOf(post) <= 0) return redoExhausted(res);
+    const basePath = String(post.image_path || '');
+    const absShown = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
+    if (!absShown || !fs.existsSync(absShown)) return res.status(400).json({ ok: false, error: 'El borrador no tiene foto' });
+    let gen;
+    try {
+      gen = await enhancePhotoGenerate(uid, post, 'Remove harsh reflections, glare and hard shadows from this photo, and even out the lighting on the product. Keep the EXACT same composition, product, subjects, framing and colors — it must remain recognizably the SAME photo. Do not move, resize, recolor or replace the main product or subject. Do not add text.');
+    } catch (e) {
+      if (e && e.message === 'NO_PHOTO') return res.status(400).json({ ok: false, error: 'El borrador no tiene foto' });
+      if (e && e.message === 'NO_KEY') return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
+      throw e;
+    }
+    const newPath = gen.proposalPath;
+    const oldProposal = post.glare_proposal_path || '';
+    if (redoLeftOf(post) !== null && !consumeRedo(uid, postId)) return redoExhausted(res);
+    db.prepare(`UPDATE posts SET glare_proposal_path = ?, glare_proposal_base = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?`).run(String(newPath), String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteProposalFiles(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: newPath, proposal_base: String(post.image_path || '') });
+  } catch (e) {
+    console.error('[photo-glare]', e.message);
+    if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
+    res.status(502).json({ ok: false, error: String(e.message || 'No se pudo limpiar').slice(0, 200) });
+  }
+});
+app.post('/api/drafts/:id/photo-glare-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'glare_proposal_path', 'glare_proposal_base'));
+app.post('/api/drafts/:id/photo-glare-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'glare_proposal_path', 'glare_proposal_base'));
+// (media-cliente-2) AVISO DE PALETA: compara los colores dominantes
+// de la foto con la paleta del feed (digest). SOLO aviso: nunca
+// bloquea, nunca recolorea, nunca rechaza la foto real.
+app.get('/api/drafts/:id/palette-check', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const abs = photoCliente.mediaAbs(MEDIA_DIR, String(post.image_path || ''));
+    if (!abs || !fs.existsSync(abs) || !/\.(jpe?g|png|webp)$/i.test(String(post.image_path || ''))) return res.json({ aviso: false, razon: 'sin-foto' });
+    let pal = [];
+    try { const dg = clientDigest.getDigest(db, uid); if (dg && Array.isArray(dg.paleta)) pal = dg.paleta.map((x) => x && x.hex).filter((h) => /^#[0-9a-fA-F]{6}$/.test(h || '')); } catch (e) {}
+    if (!pal.length) return res.json({ aviso: false, razon: 'sin-paleta' });
+    const { execFile } = require('child_process');
+    const out = await new Promise((resolve) => {
+      execFile('python3', [path.join(__dirname, 'media-palette.py'), abs], { timeout: 30000 }, (err, stdout) => {
+        if (err) return resolve(null);
+        try { resolve(JSON.parse(String(stdout || '').trim())); } catch (e) { resolve(null); }
+      });
+    });
+    if (!out || !Array.isArray(out.colors)) return res.json({ aviso: false, razon: 'sin-colores' });
+    const r = mediaCliente.paletteAviso(out.colors, pal);
+    res.json({ aviso: r.aviso, colores_foto: out.colors, paleta: pal, distMedia: r.distMedia, razon: r.razon });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo comparar la paleta' }); }
+});
+// (media-cliente-2) AVISO DE REUSO: si esta foto ya se usó en una
+// semana anterior (publicada o programada), avisa con fecha. Solo
+// aviso: nunca bloquea ni borra.
+app.get('/api/drafts/:id/photo-reuse', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const paths = [String(post.image_path || ''), String(post.prev_image_path || '')].filter(Boolean);
+    if (!paths.length) return res.json({ reusos: [] });
+    const q = `SELECT scheduled_at, status FROM posts WHERE user_id = ? AND id != ? AND status IN ('published','scheduled') AND (image_path = ? OR prev_image_path = ? OR image_path = ? OR prev_image_path = ?) ORDER BY scheduled_at ASC`;
+    const rows = db.prepare(q).all(uid, postId, paths[0], paths[0], paths[1] || '', paths[1] || '');
+    res.json({ reusos: rows });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo revisar el reuso' }); }
+});
+// (media-cliente-2) FOTOS QUE FALTAN: productos del fundamento sin
+// ninguna foto real clasificada. Nunca se inventa un producto ni se
+// pide lo que ya tiene foto. El pedido se registra 7 días por
+// producto: no se repite todos los días.
+app.get('/api/faltan-fotos', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const names = mcProductosDna(uid);
+    const faltan = [];
+    names.forEach((n) => {
+      const c = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND producto = ?`).get(uid, n);
+      if (c && c.c === 0) {
+        const ped = db.prepare(`SELECT requested_at FROM foto_pedidos WHERE user_id = ? AND producto = ? AND requested_at > datetime('now', '-7 days')`).get(uid, n);
+        faltan.push({ producto: n, pedido_reciente: !!ped });
+      }
+    });
+    res.json({ faltan });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo revisar' }); }
+});
+app.post('/api/faltan-fotos/pedir', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const names = mcProductosDna(uid);
+    const pedir = [];
+    names.forEach((n) => {
+      const c = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND producto = ?`).get(uid, n);
+      const ped = db.prepare(`SELECT requested_at FROM foto_pedidos WHERE user_id = ? AND producto = ? AND requested_at > datetime('now', '-7 days')`).get(uid, n);
+      if (c && c.c === 0 && !ped) pedir.push(n);
+    });
+    if (!pedir.length) return res.json({ ok: true, pedidos: [] });
+    const lista = pedir.slice(0, 5).join(', ');
+    const msg = `📸 Te faltan fotos reales de: ${lista}. Tocá ＋ y mandame una foto de cada uno acá mismo: la archivo en su producto y tus posteos salen con tu producto real 👌`;
+    db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', msg);
+    pedir.forEach((n) => {
+      db.prepare(`INSERT INTO foto_pedidos (user_id, producto, requested_at) VALUES (?,?,datetime('now')) ON CONFLICT(user_id, producto) DO UPDATE SET requested_at = datetime('now')`).run(uid, n);
+    });
+    res.json({ ok: true, pedidos: pedir, mensaje: msg });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo pedir' }); }
+});
+// (media-cliente-2) MEJORES FOTOS: por producto con 2+ fotos, la mejor
+// por criterios medibles. La respuesta trae PALABRAS, nunca puntajes.
+app.get('/api/mejores-fotos', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const rows = db.prepare(`SELECT id, file_path, producto FROM assets WHERE user_id = ? AND kind = 'photo' AND producto IS NOT NULL AND producto != '' ORDER BY created_at ASC`).all(uid);
+    const groups = {};
+    rows.forEach((r) => { (groups[r.producto] = groups[r.producto] || []).push(r); });
+    const out = [];
+    for (const producto of Object.keys(groups)) {
+      const list = groups[producto];
+      if (list.length < 2) continue;
+      const measured = [];
+      for (const a of list) {
+        const abs = photoCliente.mediaAbs(MEDIA_DIR, a.file_path);
+        if (!abs || !fs.existsSync(abs)) continue;
+        const m = await measurePhotoQuality(abs).catch(() => null);
+        if (m) measured.push({ id: a.id, edge: m.edge, lum: m.lum, minSide: Math.min(m.w || 0, m.h || 0) });
+      }
+      const rank = mediaCliente.rankFotos(measured);
+      if (rank) out.push({ producto, asset_id: rank.bestId, motivosES: rank.motivosES, motivosEN: rank.motivosEN });
+    }
+    res.json({ mejores: out });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo rankear' }); }
+});
+// (media-cliente-2) FAVORITAS: marca durable por negocio, reversible.
+// Las favoritas se usan primero: los dos picks de foto del servidor
+// ordenan favorito DESC (ver ediciones de ORDER BY más abajo).
+app.post('/api/assets/:id/favorito', requireAuth, express.json(), (req, res) => {
+  try {
+    const assetId = parseInt(req.params.id, 10);
+    if (!assetId) return res.status(400).json({ ok: false, error: 'Asset inválido' });
+    const row = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ?').get(assetId, req.session.userId);
+    if (!row) return res.status(404).json({ ok: false, error: 'No encontrado' });
+    const fav = (req.body && req.body.favorito) ? 1 : 0;
+    db.prepare('UPDATE assets SET favorito = ? WHERE id = ?').run(fav, assetId);
+    res.json({ ok: true, favorito: fav });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo marcar' }); }
+});
+// (media-cliente-2) MÚSICA — COLECCIÓN DE META (decisión Valentino
+// 27/10 22:39: arrancar con la colección de Meta, gratis). La biblioteca
+// del reel se alimenta EXCLUSIVAMENTE de la colección de sonidos de
+// Meta (Meta Sound Collection): gratis, licencia no exclusiva y libre
+// de regalías para uso comercial o no comercial en contenido creado,
+// subido y distribuido EN productos Meta (Facebook, Instagram,
+// Messenger, Audience Network). NO se usa fuera de Meta (nada de
+// TikTok, YouTube ni web con estos temas). Cada tema lleva su origen
+// y su licencia en el catálogo (music-meta.json); un tema sin entrada
+// en el catálogo NO existe para el selector (nunca se inventan temas
+// ni se presentan como licenciados si no vienen de la colección real).
+// REGLA DURA: nunca Spotify (licencia solo escucha) ni catálogo de
+// Instagram (la API de publicación no lo permite: el audio va pegado
+// en el archivo). Los MP3 reales se descargan desde la colección con
+// sesión del negocio (Business Suite → Sound Collection) y se cargan
+// con `node music-meta-catalog.js --write` (ver MANIFIESTO). Sin temas
+// cargados, el selector muestra el estado vacío con los pasos — nunca
+// temas inventados ni la biblioteca local vieja como si fuera Meta.
+const MC_META_DIR = path.join(__dirname, 'assets', 'music-meta');
+const MC_META_CATALOG = path.join(__dirname, 'music-meta.json');
+const MC_META_LICENCIA = 'Meta Sound Collection — uso comercial en productos Meta (Facebook, Instagram, Messenger, Audience Network); no usar fuera de Meta';
+function mcMetaCatalog() {
+  try {
+    const j = JSON.parse(fs.readFileSync(MC_META_CATALOG, 'utf8'));
+    if (j && Array.isArray(j.tracks)) return j.tracks;
+  } catch (e) {}
+  return [];
+}
+function mcMetaPresentes() {
+  const out = [];
+  mcMetaCatalog().forEach((t) => {
+    if (!t || !t.file) return;
+    const file = path.basename(String(t.file));
+    if (!file.toLowerCase().endsWith('.mp3')) return;
+    const abs = path.join(MC_META_DIR, file);
+    if (!fs.existsSync(abs)) return;
+    out.push({ file, titulo: String(t.titulo || file.replace(/\.mp3$/i, '')), artista: String(t.artista || ''), mood: String(t.mood || ''), origen: 'Meta Sound Collection', licencia: String(t.licencia || MC_META_LICENCIA) });
+  });
+  return out;
+}
+app.get('/api/musica', requireAuth, (req, res) => {
+  const presentes = mcMetaPresentes();
+  let tendencia = [];
+  try {
+    const rubro = mcRubro(req.session.userId);
+    if (rubro) {
+      const counts = db.prepare(`SELECT track, COUNT(*) AS c FROM music_uses WHERE rubro = ? GROUP BY track ORDER BY c DESC`).all(rubro);
+      tendencia = counts.filter((c) => presentes.some((p) => p.file === c.track)).map((c) => ({ file: c.track, usos: c.c, url: '/api/musica/' + encodeURIComponent(c.track) }));
+    }
+  } catch (e) {}
+  res.json({ tendencia });
+  const faltantes = mcMetaCatalog().filter((t) => t && t.file && !presentes.some((p) => p.file === path.basename(String(t.file)))).map((t) => path.basename(String(t.file)));
+  const temas = presentes.map((t) => ({ ...t, url: '/api/musica/' + encodeURIComponent(t.file) }));
+  res.json({ temas, tendencia, faltantes, moods: mediaCliente.MUSIC_MOODS, licencia: MC_META_LICENCIA, origen: 'Meta Sound Collection' });
+});
+app.get('/api/musica/:file', requireAuth, (req, res) => {
+  const file = path.basename(String(req.params.file || ''));
+  if (!mcMetaPresentes().some((t) => t.file === file)) return res.status(404).json({ ok: false, error: 'Tema no disponible' });
+  res.setHeader('Content-Type', 'audio/mpeg');
+  fs.createReadStream(path.join(MC_META_DIR, file)).pipe(res);
+});
+app.get('/api/drafts/:id/music-suggest', requireAuth, (req, res) => {
+  const list = mcMetaPresentes();
+  const sug = list.find((t) => t.mood === 'alegre') || list[0] || null;
+  if (!sug) return res.json({ sugerido: null });
+  res.json({ sugerido: { ...sug, url: '/api/musica/' + encodeURIComponent(sug.file) } });
+});
+// (media-cliente-2) Música de fondo: mezcla la voz original (1.0) con
+// el tema de Meta (0.25), video con -c:v copy, misma duración. Sin
+// audio original, solo el tema. Propuesta con acepto, como todo.
+app.post('/api/drafts/:id/music', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const track = path.basename(String((req.body && req.body.track) || ''));
+    if (!mcMetaPresentes().some((t) => t.file === track)) return res.status(400).json({ ok: false, error: 'Ese tema no está en la colección de Meta cargada' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const { execFile } = require('child_process');
+    const hasAudio = await new Promise((resolve) => {
+      execFile('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', abs], { timeout: 30000 }, (err, stdout) => resolve(!err && String(stdout || '').trim().length > 0));
+    });
+    const outName = mediaCliente.proposalName(path.basename(abs), 'musica');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const musicAbs = path.join(MC_META_DIR, track);
+    const videoDur = await mcFfprobeDur(abs);
+    const fadeStV = videoDur ? Math.max(0, videoDur - 2).toFixed(2) : '0';
+    let args;
+    if (hasAudio) {
+      args = ['-i', abs, '-stream_loop', '-1', '-i', musicAbs, '-filter_complex', '[0:a]volume=1[a0];[1:a]volume=0.25[a1];[a0][a1]amix=inputs=2:duration=first[am];[am]afade=t=out:st=' + fadeStV + ':d=2[a]', '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', outAbs];
+    } else {
+      args = ['-i', abs, '-stream_loop', '-1', '-i', musicAbs, '-filter_complex', '[1:a]afade=t=out:st=' + fadeStV + ':d=2[a]', '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', outAbs];
+    }
+    const ok = await mcFfmpeg(args, 180000);
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo mezclar la música' });
+    const oldProposal = post.music_proposal_path || '';
+    db.prepare(`UPDATE posts SET music_proposal_path = ?, music_proposal_base = ?, music_track = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), track, postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[draft-music]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo mezclar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/music-accept', requireAuth, express.json(), async (req, res) => mcMusicAccept(req, res, 'music_proposal_path', 'music_proposal_base'));
+app.post('/api/drafts/:id/music-reject', requireAuth, express.json(), async (req, res) => mcMusicReject(req, res, 'music_proposal_path', 'music_proposal_base'));
+// (media-cliente-2) UN VIDEO LARGO, VARIAS PIEZAS: detección de escenas
+// (ffmpeg, umbral 0.4) → piezas de una idea cada una (una escena = un
+// momento). La pieza solo se crea cuando el dueño la acepta: pasa a
+// la librería como video nuevo, lista para usar en un posteo. Nunca
+// se inventan captions: la pieza nace sin texto, el dueño la titula.
+app.post('/api/drafts/:id/video-split', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { abs } = found;
+    const dur = await mcFfprobeDur(abs);
+    if (!dur) return res.status(400).json({ ok: false, error: 'No se pudo leer el video' });
+    const { execFile } = require('child_process');
+    const log = await new Promise((resolve) => {
+      execFile('ffmpeg', ['-i', abs, '-vf', "select='gt(scene,0.4)',showinfo", '-f', 'null', '-'], { timeout: 120000 }, (err, stdout, stderr) => resolve(String(stderr || '') + String(stdout || '')));
+    });
+    const cuts = [];
+    const re = /pts_time:([\d.]+)/g;
+    let m;
+    while ((m = re.exec(log))) { const t = parseFloat(m[1]); if (t > 0.5 && t < dur - 0.5) cuts.push(t); }
+    const piezas = mediaCliente.sceneSegments(cuts, dur, 3).slice(0, 20);
+    res.json({ ok: true, dur, piezas });
+  } catch (e) { console.error('[video-split]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo cortar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-split-use', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { abs } = found;
+    const dur = await mcFfprobeDur(abs);
+    const start = Number((req.body && req.body.start) || 0);
+    const end = Number((req.body && req.body.end) || 0);
+    if (!dur || !(start >= 0) || !(end > start) || end > dur || (end - start) < 1) return res.status(400).json({ ok: false, error: 'Pieza inválida' });
+    const outName = mediaCliente.proposalName(path.basename(abs), 'pieza');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const ok = await mcFfmpeg(['-ss', String(start), '-i', abs, '-t', String(end - start), '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'aac', outAbs], 180000);
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo cortar la pieza' });
+    const row = db.prepare(`INSERT INTO assets (user_id, file_path, kind) VALUES (?,?, 'video')`).run(uid, '/media/' + outName);
+    res.json({ ok: true, asset_id: row.lastInsertRowid, path: '/media/' + outName, start, end });
+  } catch (e) { console.error('[video-split-use]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo cortar').slice(0, 200) }); }
+});
+
+// (media-cliente-2) Estilo de edición guardado por negocio.
+function mcEstilo(uid) {
+  try {
+    const r = db.prepare('SELECT * FROM estilo_edicion WHERE user_id = ?').get(uid);
+    if (r) return r;
+  } catch (e) {}
+  return { transicion: 'suave', musica_track: '', subtitulos: 1, sub_fuente: '', sub_color: '', sub_fondo: '' };
+}
+function mcRubro(uid) {
+  try {
+    const dg = clientDigest.getDigest(db, uid);
+    if (dg && dg.rubro) return String(dg.rubro);
+  } catch (e) {}
+  try {
+    const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid);
+    const dna = (r && r.dna_json) ? (JSON.parse(r.dna_json) || {}) : {};
+    if (dna.rubro) return String(dna.rubro);
+  } catch (e) {}
+  return null;
+}
+// Vista previa de un reel armado con clips reales: concatena en el
+// orden dado (nunca reordena) con o sin transiciones suaves. Devuelve
+// {preview, dur} o null. El sidecar JSON guarda kind + fuentes para
+// que el acepto valide antes de crear el asset.
+async function mcReelPreview(uid, clips, fade) {
+  // Vista previa de un reel armado con clips reales, en el orden dado
+  // (nunca reordena), con o sin transiciones suaves. Devuelve
+  // {preview, dur} o null. El sidecar JSON guarda kind + fuentes para
+  // que el acepto valide antes de crear el asset. AUDIO: cada clip se
+  // sondea (duración + pista de audio); un clip sin audio recibe un
+  // anullsrc finito de su misma duración, así concat y acrossfade
+  // nunca fallan por audio mixto/ausente.
+  try {
+    const { execFile } = require('child_process');
+    const run = (args, timeout) => new Promise((resolve) => {
+      execFile('ffmpeg', ['-y', '-v', 'error', ...args], { timeout: timeout || 180000 }, (err) => resolve(!err));
+    });
+    const probe = (args) => new Promise((resolve) => {
+      execFile('ffprobe', ['-v', 'error', ...args], (err, out) => resolve(err ? '' : out));
+    });
+    const infos = [];
+    for (const c of clips) {
+      const d = await mcFfprobeDur(c.abs);
+      if (!d) return null;
+      const streams = await probe(['-show_entries', 'stream=codec_type', '-of', 'csv=p=0', c.abs]);
+      const hasAudio = streams.split('\n').some((l) => l.trim() === 'audio');
+      infos.push({ abs: c.abs, dur: d, hasAudio });
+    }
+    const durs = infos.map((i) => i.dur);
+    const inputs = [];
+    const vIn = [];
+    const aIn = [];
+    let inCount = 0;
+    infos.forEach((inf) => {
+      inputs.push('-i', inf.abs);
+      vIn.push(inCount); inCount++;
+      if (inf.hasAudio) { aIn.push(inCount - 1); }
+      else {
+        inputs.push('-f', 'lavfi', '-t', String(inf.dur), '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100');
+        aIn.push(inCount); inCount++;
+      }
+    });
+    const vprep = infos.map((inf, i) => `[${vIn[i]}:v]scale=1280:-2,fps=30,format=yuv420p,setpts=PTS-STARTPTS[v${i}]`).join(';');
+    const aprep = infos.map((inf, i) => `[${aIn[i]}:a]aresample=44100,asetpts=PTS-STARTPTS[a${i}]`).join(';');
+    const outName = `reel-${Date.now()}-${Math.floor(Math.random() * 1000)}.mp4`;
+    const outAbs = path.join(MEDIA_DIR, outName);
+    let total = 0;
+    let full = '';
+    let vout = '';
+    let aout = '';
+    if (fade > 0 && clips.length >= 2) {
+      const chain = mediaCliente.xfadeChain(durs, fade);
+      if (!chain) return null;
+      total = chain.total;
+      let cur = '[v0]';
+      const vparts = [];
+      for (let i = 1; i < clips.length; i++) {
+        const offset = durs.slice(0, i).reduce((a, b) => a + b, 0) - i * fade;
+        vparts.push(`${cur}[v${i}]xfade=transition=fade:duration=${fade}:offset=${offset.toFixed(2)}[vx${i}]`);
+        cur = `[vx${i}]`;
+      }
+      vout = cur;
+      let acur = '[a0]';
+      const aparts = [];
+      for (let i = 1; i < clips.length; i++) {
+        aparts.push(`${acur}[a${i}]acrossfade=d=${fade}[ax${i}]`);
+        acur = `[ax${i}]`;
+      }
+      aout = acur;
+      full = vprep + ';' + aprep + ';' + vparts.join(';') + ';' + aparts.join(';');
+    } else {
+      total = Math.round(durs.reduce((a, b) => a + b, 0) * 10) / 10;
+      const parts = [];
+      for (let i = 0; i < clips.length; i++) parts.push(`[v${i}][a${i}]`);
+      full = vprep + ';' + aprep + ';' + parts.join('') + `concat=n=${clips.length}:v=1:a=1[vout][aout]`;
+      vout = '[vout]';
+      aout = '[aout]';
+    }
+    const ok = await run([...inputs, '-filter_complex', full, '-map', vout, '-map', aout, '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'aac', outAbs], 300000);
+    if (!ok || !fs.existsSync(outAbs)) return null;
+    return { preview: '/media/' + outName, dur: total };
+  } catch (e) { return null; }
+}
+async function mcReelPreviewAccept(req, res, kind, extraCheck) {
+  try {
+    const uid = req.session.userId;
+    const preview = path.basename(String((req.body && req.body.preview) || ''));
+    if (!preview || !/\.mp4$/i.test(preview)) return res.status(400).json({ ok: false, error: 'Vista previa inválida' });
+    const abs = photoCliente.mediaAbs(MEDIA_DIR, '/media/' + preview);
+    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ ok: false, error: 'Vista previa no encontrada' });
+    const sidecar = abs.replace(/\.mp4$/i, '.json');
+    let meta = null;
+    try { meta = JSON.parse(fs.readFileSync(sidecar, 'utf8')); } catch (e) {}
+    if (!meta || meta.kind !== kind || meta.preview !== '/media/' + preview) return res.status(400).json({ ok: false, error: 'Vista previa vencida' });
+    if (extraCheck) {
+      const bad = await extraCheck(uid, meta);
+      if (bad) return res.status(400).json({ ok: false, error: bad });
+    }
+    const row = db.prepare(`INSERT INTO assets (user_id, file_path, kind) VALUES (?,?, 'video')`).run(uid, '/media/' + preview);
+    try { fs.unlinkSync(sidecar); } catch (e) {}
+    res.json({ ok: true, asset_id: row.lastInsertRowid, path: '/media/' + preview });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo aceptar el reel' }); }
+}
+// Estilo de edición: leer y guardar (el dueño lo cambia cuando quiera).
+app.get('/api/estilo-edicion', requireAuth, (req, res) => {
+  res.json({ estilo: mcEstilo(req.session.userId) });
+});
+app.post('/api/estilo-edicion', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const transicion = (b.transicion === 'ninguna') ? 'ninguna' : 'suave';
+    const musica_track = String(b.musica_track || '');
+    if (musica_track && !mcMetaPresentes().some((t) => t.file === musica_track)) return res.status(400).json({ ok: false, error: 'Ese tema no está en la colección de Meta cargada' });
+    const subtitulos = b.subtitulos ? 1 : 0;
+    const sub_fuente = String(b.sub_fuente || '').slice(0, 60);
+    const hexOk = (h) => h === '' || /^#[0-9a-fA-F]{6}$/.test(h);
+    const sub_color = String(b.sub_color || '');
+    const sub_fondo = String(b.sub_fondo || '');
+    if (!hexOk(sub_color) || !hexOk(sub_fondo)) return res.status(400).json({ ok: false, error: 'Color inválido' });
+    db.prepare(`INSERT INTO estilo_edicion (user_id, transicion, musica_track, subtitulos, sub_fuente, sub_color, sub_fondo, updated_at) VALUES (?,?,?,?,?,?,?,datetime('now')) ON CONFLICT(user_id) DO UPDATE SET transicion = excluded.transicion, musica_track = excluded.musica_track, subtitulos = excluded.subtitulos, sub_fuente = excluded.sub_fuente, sub_color = excluded.sub_color, sub_fondo = excluded.sub_fondo, updated_at = datetime('now')`).run(uid, transicion, musica_track, subtitulos, sub_fuente, sub_color, sub_fondo);
+    res.json({ ok: true, estilo: mcEstilo(uid) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo guardar el estilo' }); }
+});
+// (media-cliente-2) TRANSICIONES: el borrador primero, luego los
+// clips extra en el orden dado (nunca cambia el orden ni el contenido
+// de los clips). Fade por defecto = estilo guardado.
+app.post('/api/drafts/:id/video-transitions', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const extraIds = Array.isArray(req.body && req.body.extra) ? req.body.extra.map((x) => parseInt(x, 10)).filter(Boolean) : [];
+    if (!extraIds.length) return res.status(400).json({ ok: false, error: 'Elegí al menos otro clip' });
+    const clips = [{ abs: found.abs }];
+    for (const aid of extraIds) {
+      const a = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ? AND kind = ?').get(aid, uid, 'video');
+      if (!a) return res.status(400).json({ ok: false, error: 'Un clip no existe en tu librería' });
+      const aabs = photoCliente.mediaAbs(MEDIA_DIR, a.file_path);
+      if (!aabs || !fs.existsSync(aabs)) return res.status(400).json({ ok: false, error: 'Un clip no tiene archivo' });
+      clips.push({ abs: aabs });
+    }
+    let fade;
+    if (req.body && req.body.fade !== undefined && req.body.fade !== '') fade = Number(req.body.fade);
+    else fade = (mcEstilo(uid).transicion === 'ninguna') ? 0 : 0.5;
+    if (!(fade >= 0) || fade > 2) return res.status(400).json({ ok: false, error: 'Transición inválida' });
+    const prev = await mcReelPreview(uid, clips, fade);
+    if (!prev) return res.status(502).json({ ok: false, error: 'No se pudo armar el reel con transiciones' });
+    const oldProposal = found.post.transition_proposal_path || '';
+    db.prepare(`UPDATE posts SET transition_proposal_path = ?, transition_proposal_base = ? WHERE id = ?`).run(prev.preview, String(found.post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: prev.preview, proposal_base: String(found.post.image_path || ''), dur: prev.dur, fade });
+  } catch (e) { console.error('[video-transitions]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-transitions-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'transition_proposal_path', 'transition_proposal_base'));
+app.post('/api/drafts/:id/video-transitions-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'transition_proposal_path', 'transition_proposal_base'));
+// (media-cliente-2) FOTO → REEL CON ZOOM LENTO: la foto va en un
+// lienzo con margen (media-kenburns-pad.py) y el zoom nunca la corta
+// (kenburnsZoom verifica la caja; sin caja, el margen lo garantiza).
+app.post('/api/drafts/:id/photo-kenburns', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const abs = photoCliente.mediaAbs(MEDIA_DIR, String(post.image_path || ''));
+    if (!abs || !fs.existsSync(abs) || !/\.(jpe?g|png|webp)$/i.test(String(post.image_path || ''))) return res.status(400).json({ ok: false, error: 'El borrador no tiene foto' });
+    let caja = (req.body && req.body.caja) || null;
+    if (caja && !mediaCliente.validBokehBox(caja)) return res.status(400).json({ ok: false, error: 'Caja del sujeto inválida' });
+    const kz = mediaCliente.kenburnsZoom(caja);
+    if (!kz) return res.status(400).json({ ok: false, error: 'El producto está al borde: el zoom lo cortaría y no se hace' });
+    const dur = Math.min(15, Math.max(3, Number((req.body && req.body.duracion) || 6)));
+    const frames = Math.round(dur * 25);
+    const { execFile } = require('child_process');
+    const canvas = path.join(MEDIA_DIR, `kb-${postId}-${Date.now()}.jpg`);
+    const okPad = await new Promise((resolve) => {
+      execFile('python3', [path.join(__dirname, 'media-kenburns-pad.py'), abs, canvas], { timeout: 60000 }, (err) => resolve(!err));
+    });
+    if (!okPad || !fs.existsSync(canvas)) return res.status(502).json({ ok: false, error: 'No se pudo preparar la foto' });
+    const outName = mediaCliente.proposalName(path.basename(abs), 'kenburns').replace(/\.[a-z0-9]+$/i, '.mp4');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const zExpr = `min(1+(${(kz.z - 1).toFixed(3)})*on/${frames},${kz.z})`;
+    const ok = await new Promise((resolve) => {
+      execFile('ffmpeg', ['-y', '-v', 'error', '-loop', '1', '-framerate', '25', '-i', canvas, '-vf', `zoompan=z='${zExpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=25`, '-frames:v', String(frames), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', outAbs], { timeout: 180000 }, (err) => resolve(!err));
+    });
+    try { fs.unlinkSync(canvas); } catch (e) {}
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo armar el reel' });
+    const oldProposal = post.kenburns_proposal_path || '';
+    db.prepare(`UPDATE posts SET kenburns_proposal_path = ?, kenburns_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || ''), zoom: kz.z, dur });
+  } catch (e) { console.error('[photo-kenburns]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/photo-kenburns-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'kenburns_proposal_path', 'kenburns_proposal_base', ", media_type='video'"));
+app.post('/api/drafts/:id/photo-kenburns-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'kenburns_proposal_path', 'kenburns_proposal_base'));
+// (media-cliente-2) DUCKING: la música baja sola cuando hay voz.
+// Solo audio (-c:v copy): la voz original manda, la música se
+// comprime con sidechain y cierra con fade (últimos 2 s).
+app.post('/api/drafts/:id/music-ducking', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const track = path.basename(String((req.body && req.body.track) || ''));
+    if (!mcMetaPresentes().some((t) => t.file === track)) return res.status(400).json({ ok: false, error: 'Ese tema no está en la colección de Meta cargada' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const dur = await mcFfprobeDur(abs);
+    if (!dur) return res.status(400).json({ ok: false, error: 'No se pudo leer el video' });
+    const { execFile } = require('child_process');
+    const hasAudio = await new Promise((resolve) => {
+      execFile('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', abs], { timeout: 30000 }, (err, stdout) => resolve(!err && String(stdout || '').trim().length > 0));
+    });
+    const outName = mediaCliente.proposalName(path.basename(abs), 'ducking');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const musicAbs = path.join(MC_META_DIR, track);
+    const fadeSt = Math.max(0, dur - 2).toFixed(1);
+    let args;
+    if (hasAudio) {
+      args = ['-i', abs, '-stream_loop', '-1', '-i', musicAbs, '-filter_complex', `[1:a]volume=0.25,afade=t=out:st=${fadeSt}:d=2[m0];[m0][0:a]sidechaincompress=threshold=0.03:ratio=6:attack=200:release=500[m];[0:a][m]amix=inputs=2:duration=first[a]`, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', outAbs];
+    } else {
+      args = ['-i', abs, '-stream_loop', '-1', '-i', musicAbs, '-filter_complex', `[1:a]volume=0.25,afade=t=out:st=${fadeSt}:d=2[a]`, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', outAbs];
+    }
+    const ok = await mcFfmpeg(args, 180000);
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo mezclar con ducking' });
+    const oldProposal = post.ducking_proposal_path || '';
+    db.prepare(`UPDATE posts SET ducking_proposal_path = ?, ducking_proposal_base = ?, music_track = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), track, postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[music-ducking]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo mezclar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/music-ducking-accept', requireAuth, express.json(), async (req, res) => mcMusicAccept(req, res, 'ducking_proposal_path', 'ducking_proposal_base'));
+app.post('/api/drafts/:id/music-ducking-reject', requireAuth, express.json(), async (req, res) => mcMusicReject(req, res, 'ducking_proposal_path', 'ducking_proposal_base'));
+// Uso real de música: se registra SOLO al aceptar (no al proponer).
+async function mcMusicAccept(req, res, pathCol, baseCol) {
+  const r = await mcAcceptProposal(req, res, pathCol, baseCol);
+  try {
+    const postId = parseInt(req.params.id, 10);
+    const row = db.prepare('SELECT music_track FROM posts WHERE id = ? AND user_id = ?').get(postId, req.session.userId);
+    if (row && row.music_track && mcMetaPresentes().some((t) => t.file === row.music_track)) {
+      db.prepare(`INSERT INTO music_uses (user_id, rubro, track) VALUES (?,?,?)`).run(req.session.userId, mcRubro(req.session.userId) || '', row.music_track);
+    }
+    db.prepare(`UPDATE posts SET music_track = '' WHERE id = ?`).run(postId);
+  } catch (e) {}
+  return r;
+}
+async function mcMusicReject(req, res, pathCol, baseCol) {
+  const r = await mcRejectProposal(req, res, pathCol, baseCol);
+  try { db.prepare(`UPDATE posts SET music_track = '' WHERE id = ?`).run(parseInt(req.params.id, 10)); } catch (e) {}
+  return r;
+}
+
+// (media-cliente-2) RESPUESTA EN VIDEO A UN COMENTARIO: IG no permite
+// adjuntar video al hilo del comentario, así que la respuesta se crea
+// como borrador de reel propio linkeado al comentario (nunca se finge
+// que quedó adjunta). Avisar en el comentario es otro toque explícito.
+app.post('/api/video-respuestas', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const commentId = String((req.body && req.body.comment_id) || '');
+    const commentText = String((req.body && req.body.comment_text) || '').slice(0, 500);
+    const assetId = parseInt((req.body && req.body.video_asset_id) || 0, 10);
+    if (!commentId || !assetId) return res.status(400).json({ ok: false, error: 'Faltan comentario y video' });
+    const a = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ? AND kind = ?').get(assetId, uid, 'video');
+    if (!a) return res.status(400).json({ ok: false, error: 'El video no está en tu librería' });
+    const texto = String((req.body && req.body.texto) || '').slice(0, 2000);
+    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_image) VALUES (?,?,?, '', 'draft', 'video', 0)`).run(uid, String(a.file_path), texto);
+    db.prepare(`INSERT INTO video_respuestas (user_id, comment_id, comment_text, draft_id) VALUES (?,?,?,?)`).run(uid, commentId, commentText, r.lastInsertRowid);
+    res.json({ ok: true, draft_id: r.lastInsertRowid, limite: 'IG no permite adjuntar video al hilo del comentario: esta respuesta se publica como reel propio' });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo crear la respuesta' }); }
+});
+app.post('/api/video-respuestas/:id/avisar', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const linkId = parseInt(req.params.id, 10);
+    const link = db.prepare('SELECT * FROM video_respuestas WHERE id = ? AND user_id = ?').get(linkId, uid);
+    if (!link) return res.status(404).json({ ok: false, error: 'Respuesta no encontrada' });
+    const mensaje = String((req.body && req.body.mensaje) || '').slice(1, 1000);
+    if (!mensaje) return res.status(400).json({ ok: false, error: 'Escribí el aviso' });
+    const { replyComment } = require('./insights');
+    await replyComment(db, uid, link.comment_id, mensaje);
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ ok: false, error: String(e.message || 'No se pudo avisar').slice(0, 200) }); }
+});
+
+app.post('/api/assets/:id/permiso-testimonio', requireAuth, express.json(), (req, res) => {
+  try {
+    const assetId = parseInt(req.params.id, 10);
+    if (!assetId) return res.status(400).json({ ok: false, error: 'Asset inválido' });
+    const row = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ? AND kind = ?').get(assetId, req.session.userId, 'video');
+    if (!row) return res.status(404).json({ ok: false, error: 'Solo videos' });
+    const perm = (req.body && req.body.permiso) ? 1 : 0;
+    const nota = String((req.body && req.body.nota) || '').slice(0, 200);
+    db.prepare('UPDATE assets SET permiso_testimonio = ?, permiso_nota = ? WHERE id = ?').run(perm, nota, assetId);
+    res.json({ ok: true, permiso_testimonio: perm });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo marcar el permiso' }); }
+});
+app.get('/api/testimonios/videos', requireAuth, (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT id, file_path, permiso_nota, created_at FROM assets WHERE user_id = ? AND kind = 'video' AND permiso_testimonio = 1 ORDER BY created_at ASC`).all(req.session.userId);
+    res.json({ videos: rows });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo listar' }); }
+});
+app.post('/api/reels/armar', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const kind = String((req.body && req.body.kind) || '');
+    if (!['testimonio', 'unboxing', 'dia', 'mito'].includes(kind)) return res.status(400).json({ ok: false, error: 'Tipo de reel inválido' });
+    const ids = Array.isArray(req.body && req.body.clips) ? req.body.clips.map((x) => parseInt(x, 10)).filter(Boolean) : [];
+    if (ids.length < 1) return res.status(400).json({ ok: false, error: 'Elegí al menos un clip' });
+    if (ids.length > 20) return res.status(400).json({ ok: false, error: 'Máximo 20 clips' });
+    const rows = [];
+    for (const aid of ids) {
+      const a = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ? AND kind = ?').get(aid, uid, 'video');
+      if (!a) return res.status(400).json({ ok: false, error: 'Un clip no existe en tu librería' });
+      if (kind === 'testimonio' && !a.permiso_testimonio) return res.status(400).json({ ok: false, error: 'Un clip no tiene permiso explícito para testimonios y no se usa' });
+      const aabs = photoCliente.mediaAbs(MEDIA_DIR, a.file_path);
+      if (!aabs || !fs.existsSync(aabs)) return res.status(400).json({ ok: false, error: 'Un clip no tiene archivo' });
+      rows.push({ id: a.id, abs: aabs, created_at: a.created_at });
+    }
+    // Orden propuesto: cronológico (el orden en que llegaron los clips),
+    // salvo orden explícito del dueño con los mismos clips.
+    let ordered = rows.slice().sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    if (Array.isArray(req.body.orden)) {
+      const ord = req.body.orden.map((x) => parseInt(x, 10)).filter(Boolean);
+      if (ord.length === rows.length && ord.every((x) => rows.some((r) => r.id === x))) {
+        ordered = ord.map((x) => rows.find((r) => r.id === x));
+      }
+    }
+    const fade = (mcEstilo(uid).transicion === 'ninguna') ? 0 : 0.5;
+    const prev = await mcReelPreview(uid, ordered, ordered.length > 1 ? fade : 0);
+    if (!prev) return res.status(502).json({ ok: false, error: 'No se pudo armar el reel' });
+    const sidecar = prev.preview.replace(/\.mp4$/i, '.json');
+    fs.writeFileSync(photoCliente.mediaAbs(MEDIA_DIR, sidecar), JSON.stringify({ kind, sources: ordered.map((o) => o.id), preview: prev.preview }));
+    res.json({ ok: true, preview: prev.preview, dur: prev.dur, orden: ordered.map((o) => o.id) });
+  } catch (e) { console.error('[reels-armar]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar').slice(0, 200) }); }
+});
+app.post('/api/reels/aceptar', requireAuth, express.json(), async (req, res) => {
+  const kind = String((req.body && req.body.kind) || '');
+  if (!['testimonio', 'unboxing', 'dia', 'mito'].includes(kind)) return res.status(400).json({ ok: false, error: 'Tipo de reel inválido' });
+  return mcReelPreviewAccept(req, res, kind, kind === 'testimonio' ? async (uid, meta) => {
+    for (const sid of (meta.sources || [])) {
+      const a = db.prepare('SELECT permiso_testimonio FROM assets WHERE id = ? AND user_id = ?').get(sid, uid);
+      if (!a || !a.permiso_testimonio) return 'Un clip perdió su permiso y no se usa';
+    }
+    return null;
+  } : null);
+});
+// (media-cliente-2) CIERRE CON LOGO ANIMADO: solo con logo real
+// archivado (assets kind='logo'). Sin logo, no hay cierre — nunca un
+// logo inventado. El logo entra con zoom + fade sobre fondo de marca.
+app.post('/api/drafts/:id/video-logo-outro', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const logo = db.prepare(`SELECT * FROM assets WHERE user_id = ? AND kind = 'logo' ORDER BY id DESC LIMIT 1`).get(uid);
+    if (!logo) return res.json({ ok: false, razon: 'sin-logo' });
+    const logoAbs = photoCliente.mediaAbs(MEDIA_DIR, logo.file_path);
+    if (!logoAbs || !fs.existsSync(logoAbs)) return res.json({ ok: false, razon: 'sin-logo' });
+    let bg = '111111';
+    try { const dg = clientDigest.getDigest(db, uid); if (dg && Array.isArray(dg.paleta) && dg.paleta[0] && dg.paleta[0].hex) bg = String(dg.paleta[0].hex).replace('#', ''); } catch (e) {}
+    const { execFile } = require('child_process');
+    const run = (args, timeout) => new Promise((resolve) => {
+      execFile('ffmpeg', ['-y', '-v', 'error', ...args], { timeout: timeout || 180000 }, (err) => resolve(!err));
+    });
+    const outroName = `outro-${postId}-${Date.now()}.mp4`;
+    const outroAbs = path.join(MEDIA_DIR, outroName);
+    const okOutro = await run(['-loop', '1', '-i', logoAbs, '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-vf', `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=0x${bg},zoompan=z='min(1+0.1*on/50,1.1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=25,fade=t=in:st=0:d=0.3,fade=t=out:st=1.7:d=0.3`, '-frames:v', '50', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', outroAbs], 120000);
+    if (!okOutro || !fs.existsSync(outroAbs)) return res.status(502).json({ ok: false, error: 'No se pudo animar el logo' });
+    const { abs } = found;
+    const hasAudio = await new Promise((resolve) => {
+      execFile('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', abs], { timeout: 30000 }, (err, stdout) => resolve(!err && String(stdout || '').trim().length > 0));
+    });
+    const outName = mediaCliente.proposalName(path.basename(abs), 'logo');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const inputs = hasAudio ? ['-i', abs, '-i', outroAbs] : ['-i', abs, '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-i', outroAbs];
+    const filter = hasAudio
+      ? '[0:v]scale=1280:-2,fps=30,format=yuv420p,setpts=PTS-STARTPTS[v0];[1:v]scale=1280:-2,fps=30,format=yuv420p,setpts=PTS-STARTPTS[v1];[v0][0:a][v1][1:a]concat=n=2:v=1:a=1[v][a]'
+      : '[0:v]scale=1280:-2,fps=30,format=yuv420p,setpts=PTS-STARTPTS[v0];[2:v]scale=1280:-2,fps=30,format=yuv420p,setpts=PTS-STARTPTS[v1];[v0][1:a][v1][2:a]concat=n=2:v=1:a=1[v][a]';
+    const ok = await run([...inputs, '-filter_complex', filter, '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'aac', outAbs], 300000);
+    try { fs.unlinkSync(outroAbs); } catch (e) {}
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo armar el cierre' });
+    const oldProposal = found.post.logooutro_proposal_path || '';
+    db.prepare(`UPDATE posts SET logooutro_proposal_path = ?, logooutro_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(found.post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(found.post.image_path || '') });
+  } catch (e) { console.error('[video-logo-outro]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-logo-outro-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'logooutro_proposal_path', 'logooutro_proposal_base'));
+app.post('/api/drafts/:id/video-logo-outro-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'logooutro_proposal_path', 'logooutro_proposal_base'));
+// (media-cliente-2) A/B: dos versiones publicadas, ganador por alcance
+// REAL (fila en post_metrics = ya midió, aunque sea 0). Sin medición
+// en ambas, no se declara ganadora. La perdedora se archiva SOLO con
+// acepto explícito del dueño.
+app.post('/api/drafts/:id/ab-test', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const captionB = String((req.body && req.body.caption_b) || '').slice(0, 2000);
+    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_image, product_ref) VALUES (?,?,?,?, 'draft', ?, 0, ?)`).run(uid, String(post.image_path || ''), captionB || String(post.caption || ''), String(post.hashtags || ''), String(post.media_type || 'image'), String(post.product_ref || ''));
+    const ab = db.prepare(`INSERT INTO ab_tests (user_id, a_id, b_id) VALUES (?,?,?)`).run(uid, postId, r.lastInsertRowid);
+    res.json({ ok: true, ab_id: ab.lastInsertRowid, a_id: postId, b_id: r.lastInsertRowid });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo crear la versión B' }); }
+});
+app.get('/api/ab/:id/resultado', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const abId = parseInt(req.params.id, 10);
+    const ab = db.prepare('SELECT * FROM ab_tests WHERE id = ? AND user_id = ?').get(abId, uid);
+    if (!ab) return res.status(404).json({ ok: false, error: 'Prueba no encontrada' });
+    const ma = db.prepare('SELECT reach FROM post_metrics WHERE post_id = ?').get(ab.a_id);
+    const mb = db.prepare('SELECT reach FROM post_metrics WHERE post_id = ?').get(ab.b_id);
+    if (!ma || !mb) return res.json({ medido: false, razon: 'sin-medicion', a_reach: ma ? ma.reach : null, b_reach: mb ? mb.reach : null });
+    if (ma.reach === mb.reach) return res.json({ medido: true, empate: true, a_reach: ma.reach, b_reach: mb.reach });
+    const winner = ma.reach > mb.reach ? ab.a_id : ab.b_id;
+    res.json({ medido: true, empate: false, winner_id: winner, a_reach: ma.reach, b_reach: mb.reach });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo medir' }); }
+});
+app.post('/api/ab/:id/archivar-perdedor', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const abId = parseInt(req.params.id, 10);
+    if (!req.body || !req.body.acepto) return res.status(400).json({ ok: false, error: 'Falta tu acepto explícito' });
+    const ab = db.prepare('SELECT * FROM ab_tests WHERE id = ? AND user_id = ?').get(abId, uid);
+    if (!ab) return res.status(404).json({ ok: false, error: 'Prueba no encontrada' });
+    const ma = db.prepare('SELECT reach FROM post_metrics WHERE post_id = ?').get(ab.a_id);
+    const mb = db.prepare('SELECT reach FROM post_metrics WHERE post_id = ?').get(ab.b_id);
+    if (!ma || !mb) return res.status(400).json({ ok: false, error: 'Sin medición real en ambas: no se archiva nada' });
+    if (ma.reach === mb.reach) return res.status(400).json({ ok: false, error: 'Empate: no hay perdedora para archivar' });
+    const winner = ma.reach > mb.reach ? ab.a_id : ab.b_id;
+    const loser = winner === ab.a_id ? ab.b_id : ab.a_id;
+    db.prepare(`UPDATE posts SET status = 'archived' WHERE id = ? AND user_id = ?`).run(loser, uid);
+    db.prepare(`UPDATE ab_tests SET winner_id = ?, archived_loser = 1 WHERE id = ?`).run(winner, abId);
+    res.json({ ok: true, winner_id: winner, loser_id: loser });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo archivar' }); }
+});
+
+// (media-cliente-3) VOZ DEL DUEÑO: narración grabada de un toque,
+// mezclada voz 1.0 + original 0.3, sin tocar la imagen. Sin acepto
+// queda el video original.
+app.post('/api/drafts/:id/video-voiceover', requireAuth, express.raw({ type: ['audio/*'], limit: '15mb' }), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId || !req.body || !req.body.length) return res.status(400).json({ ok: false, error: 'Sin audio' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const tmpIn = path.join(MEDIA_DIR, `voz-${postId}-${Date.now()}.webm`);
+    fs.writeFileSync(tmpIn, req.body);
+    const tmpAac = path.join(MEDIA_DIR, `voz-${postId}-${Date.now()}.m4a`);
+    const okConv = await mcFfmpeg(['-i', tmpIn, '-c:a', 'aac', '-b:a', '128k', tmpAac], 120000);
+    try { fs.unlinkSync(tmpIn); } catch (e) {}
+    if (!okConv || !fs.existsSync(tmpAac)) return res.status(502).json({ ok: false, error: 'No se pudo convertir tu voz' });
+    const outName = mediaCliente.proposalName(path.basename(abs), 'voz');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const { execFile } = require('child_process');
+    const hasAudio = await new Promise((resolve) => {
+      execFile('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', abs], { timeout: 30000 }, (err, stdout) => resolve(!err && String(stdout || '').trim().length > 0));
+    });
+    let ok = false;
+    if (hasAudio) {
+      ok = await mcFfmpeg(['-i', abs, '-i', tmpAac, '-filter_complex', '[1:a]volume=1.0[v];[0:a]volume=0.3[o];[v][o]amix=inputs=2:duration=first[a]', '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', outAbs], 180000);
+    } else {
+      ok = await mcFfmpeg(['-i', abs, '-i', tmpAac, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-shortest', outAbs], 180000);
+    }
+    try { fs.unlinkSync(tmpAac); } catch (e) {}
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo mezclar tu voz' });
+    const oldProposal = post.voiceover_proposal_path || '';
+    db.prepare(`UPDATE posts SET voiceover_proposal_path = ?, voiceover_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[video-voiceover]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo mezclar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-voiceover-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'voiceover_proposal_path', 'voiceover_proposal_base'));
+app.post('/api/drafts/:id/video-voiceover-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'voiceover_proposal_path', 'voiceover_proposal_base'));
+// (media-cliente-3) TIMELAPSE: solo cambia la velocidad (2–16x,
+// default 4), nunca el contenido. Con acepto.
+app.post('/api/drafts/:id/video-timelapse', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    let v = Number((req.body && req.body.velocidad) || 4);
+    if (!(v >= 2) || v > 16) return res.status(400).json({ ok: false, error: 'Velocidad entre 2 y 16' });
+    const outName = mediaCliente.proposalName(path.basename(abs), 'timelapse');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const ok = await mcFfmpeg(['-i', abs, '-vf', `setpts=PTS/${v}`, '-af', mediaCliente.atempoChain(v), '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'aac', outAbs], 300000);
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo acelerar' });
+    const oldProposal = post.timelapse_proposal_path || '';
+    db.prepare(`UPDATE posts SET timelapse_proposal_path = ?, timelapse_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[video-timelapse]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo acelerar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-timelapse-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'timelapse_proposal_path', 'timelapse_proposal_base'));
+app.post('/api/drafts/:id/video-timelapse-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'timelapse_proposal_path', 'timelapse_proposal_base'));
+// (media-cliente-3) LOOP PARA HISTORIAS: formato historia 1080x1920 y
+// bucle perfecto — los primeros D−F segundos intactos + F=0,5 s de
+// fundido hacia el primer cuadro, así el final empalma con el inicio
+// al repetir. Duración resultante D. Con acepto.
+app.post('/api/drafts/:id/video-loop', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const dur = await mcFfprobeDur(abs);
+    if (!dur || dur <= 1) return res.status(400).json({ ok: false, error: 'El video es muy corto para un loop' });
+    const F = 0.5;
+    const outName = mediaCliente.proposalName(path.basename(abs), 'loop');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const { execFile } = require('child_process');
+    const hasAudio = await new Promise((resolve) => {
+      execFile('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', abs], { timeout: 30000 }, (err, stdout) => resolve(!err && String(stdout || '').trim().length > 0));
+    });
+    const base = `[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p,split[a][b];[b]trim=start=0:end=${F},setpts=PTS-STARTPTS[head];[a][head]xfade=transition=fade:duration=${F}:offset=${(dur - F).toFixed(2)}[v]`;
+    let ok = false;
+    if (hasAudio) {
+      const af = base + `;[0:a]aresample=44100,asplit[a0][a1];[a1]atrim=start=0:end=${F},asetpts=PTS-STARTPTS[ahead];[a0][ahead]acrossfade=d=${F}[a]`;
+      ok = await mcFfmpeg(['-i', abs, '-filter_complex', af, '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'aac', outAbs], 300000);
+    } else {
+      ok = await mcFfmpeg(['-i', abs, '-filter_complex', base, '-map', '[v]', '-c:v', 'libx264', '-preset', 'fast', '-an', outAbs], 300000);
+    }
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo armar el loop' });
+    const oldProposal = post.loop_proposal_path || '';
+    db.prepare(`UPDATE posts SET loop_proposal_path = ?, loop_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[video-loop]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar el loop').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-loop-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'loop_proposal_path', 'loop_proposal_base'));
+app.post('/api/drafts/:id/video-loop-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'loop_proposal_path', 'loop_proposal_base'));
+// (media-cliente-3) ASMR: solo EQ y dinámica sobre el audio REAL
+// (realce de presencia 2–6 kHz + limpieza + normalización). Ningún
+// sonido agregado, nunca. Con acepto, imagen intacta (-c:v copy).
+app.post('/api/drafts/:id/video-asmr', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const outName = mediaCliente.proposalName(path.basename(abs), 'asmr');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const ok = await mcFfmpeg(['-i', abs, '-af', 'afftdn,equalizer=f=4000:width_type=o:width=2:g=6,dynaudnorm', '-c:v', 'copy', outAbs], 180000);
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo realzar el sonido' });
+    const oldProposal = post.asmr_proposal_path || '';
+    db.prepare(`UPDATE posts SET asmr_proposal_path = ?, asmr_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[video-asmr]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo realzar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-asmr-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'asmr_proposal_path', 'asmr_proposal_base'));
+app.post('/api/drafts/:id/video-asmr-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'asmr_proposal_path', 'asmr_proposal_base'));
+// (media-cliente-3) SILENCIO ANTES DEL MOMENTO CLAVE: 1 s de silencio
+// justo antes del momento que el dueño marca (requerido, en segundos,
+// dentro del video). Solo audio, imagen intacta. Con acepto.
+app.post('/api/drafts/:id/video-silencio', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const dur = await mcFfprobeDur(abs);
+    const momento = Number((req.body && req.body.momento) || NaN);
+    if (!dur || isNaN(momento) || momento <= 1 || momento > dur) return res.status(400).json({ ok: false, error: 'Marcá el momento clave en segundos (después del primer segundo y dentro del video)' });
+    const outName = mediaCliente.proposalName(path.basename(abs), 'silencio');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const m1 = (momento - 1).toFixed(2), m2 = momento.toFixed(2);
+    const ok = await mcFfmpeg(['-i', abs, '-af', `volume='if(between(t,${m1},${m2}),0,1)'`, '-c:v', 'copy', outAbs], 180000);
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo aplicar el silencio' });
+    const oldProposal = post.silencio_proposal_path || '';
+    db.prepare(`UPDATE posts SET silencio_proposal_path = ?, silencio_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[video-silencio]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo aplicar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-silencio-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'silencio_proposal_path', 'silencio_proposal_base'));
+app.post('/api/drafts/:id/video-silencio-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'silencio_proposal_path', 'silencio_proposal_base'));
+// (media-cliente-3) PLANTILLAS: la estructura de un posteo que
+// anduvo bien, reutilizada para otro producto. Estructura, NUNCA
+// copia: el borrador nuevo usa producto nuevo, sin foto, sin caption
+// del original (solo el esqueleto: emoji inicial si lo tenía, hueco
+// para la frase y [Precio] solo si el origen tenía precio). El dueño
+// acepta al completar el borrador como siempre.
+app.get('/api/plantillas/fuentes', requireAuth, (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT p.id, p.caption, p.media_type, p.product_ref, COALESCE(m.reach, -1) AS reach FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id WHERE p.user_id = ? AND p.status = 'published' ORDER BY COALESCE(m.reach, 0) DESC, p.id DESC LIMIT 20`).all(req.session.userId);
+    res.json({ fuentes: rows });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron listar' }); }
+});
+app.post('/api/plantillas', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const origenId = parseInt((req.body && req.body.origen_post_id) || 0, 10);
+    const producto = String((req.body && req.body.producto) || '').trim();
+    if (!origenId || !producto) return res.status(400).json({ ok: false, error: 'Faltan posteo origen y producto nuevo' });
+    const origen = db.prepare(`SELECT * FROM posts WHERE id = ? AND user_id = ? AND status = 'published'`).get(origenId, uid);
+    if (!origen) return res.status(404).json({ ok: false, error: 'El posteo origen no es un publicado tuyo' });
+    if (String(origen.product_ref || '') === producto) return res.status(400).json({ ok: false, error: 'El producto nuevo tiene que ser distinto al del posteo origen' });
+    const capOrig = String(origen.caption || '');
+    const conEmoji = /^(\p{Extended_Pictographic}|\p{Emoji})/u.test(capOrig);
+    const emojiIni = conEmoji ? capOrig.match(/^(\p{Extended_Pictographic}|\p{Emoji})\s*/u)[0] : '';
+    const conPrecio = /\$\s?[\d.,]+/.test(capOrig);
+    const nHash = (String(origen.hashtags || '').match(/#/g) || []).length;
+    const caption = `${emojiIni}${producto}: [Completá la frase de este producto]${conPrecio ? ' [Precio]' : ''}`;
+    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_image, product_ref) VALUES (?, '', ?, '', 'draft', ?, 1, ?)`).run(uid, caption, String(origen.media_type || 'image'), producto);
+    res.json({ ok: true, draft_id: r.lastInsertRowid, estructura: { formato: String(origen.media_type || 'image'), con_emoji: conEmoji, con_precio: conPrecio, n_hashtags: nHash } });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo crear desde la plantilla' }); }
+});
+// (media-cliente-3) PRECIO EN LA BANDA PARA OFERTAS: la foto de oferta
+// lleva el precio en banda superior o inferior (nunca sobre el
+// producto). El precio debe aparecer como subcadena en el texto de
+// una oferta real del fundamento con ese título; si no, 400 (nunca
+// un precio inventado). Solo piezas de oferta, con acepto.
+app.post('/api/drafts/:id/photo-price-band', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const titulo = String((req.body && req.body.oferta_titulo) || '').trim();
+    const precio = String((req.body && req.body.precio) || '').trim();
+    const posicion = (req.body && req.body.posicion) === 'sup' ? 'sup' : 'inf';
+    if (!titulo || !precio) return res.status(400).json({ ok: false, error: 'Faltan oferta y precio' });
+    let dna = {};
+    try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); if (r && r.dna_json) dna = JSON.parse(r.dna_json) || {}; } catch (e) {}
+    const promos = Array.isArray(dna.promos_activas) ? dna.promos_activas : [];
+    const oferta = promos.find((p) => String((p && p.titulo) || '').trim() === titulo);
+    if (!oferta) return res.status(400).json({ ok: false, error: 'Esa oferta no está en tu fundamento' });
+    const textoOferta = `${String(oferta.titulo || '')} ${String(oferta.detalle || '')}`;
+    if (!textoOferta.includes(precio)) return res.status(400).json({ ok: false, error: 'Ese precio no aparece en la oferta del fundamento' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || !post.image_path) return res.status(404).json({ ok: false, error: 'El borrador no tiene foto' });
+    const abs = photoCliente.mediaAbs(MEDIA_DIR, post.image_path);
+    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ ok: false, error: 'La foto no tiene archivo' });
+    let color = '#2793C8';
+    try { const dg = clientDigest.getDigest(db, uid); if (dg && dg.paleta && dg.paleta[0] && dg.paleta[0].hex) color = String(dg.paleta[0].hex); } catch (e) {}
+    const outName = mediaCliente.proposalName(path.basename(abs), 'precio');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const { execFile } = require('child_process');
+    const okPy = await new Promise((resolve) => {
+      execFile('python3', [path.join(__dirname, 'media-price-band.py'), abs, outAbs, precio, posicion, color], { timeout: 60000 }, (err) => resolve(!err));
+    });
+    if (!okPy || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo poner el precio en banda' });
+    const oldProposal = post.priceband_proposal_path || '';
+    db.prepare(`UPDATE posts SET priceband_proposal_path = ?, priceband_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[photo-price-band]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo poner el precio').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/photo-price-band-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'priceband_proposal_path', 'priceband_proposal_base'));
+app.post('/api/drafts/:id/photo-price-band-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'priceband_proposal_path', 'priceband_proposal_base'));
+// (media-cliente-3) HISTORIAS EN SERIE: problema, proceso, resultado
+// con fotos y clips reales del negocio. El acepto crea 3 assets
+// listos (la publicación como historia sigue el flujo vigente).
+app.post('/api/historias/serie', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const slots = Array.isArray(req.body && req.body.slots) ? req.body.slots : [];
+    if (slots.length !== 3) return res.status(400).json({ ok: false, error: 'La serie lleva 3 historias: problema, proceso y resultado' });
+    const tipos = ['problema', 'proceso', 'resultado'];
+    const built = [];
+    for (let i = 0; i < 3; i++) {
+      const s = slots[i] || {};
+      if (s.tipo !== tipos[i]) return res.status(400).json({ ok: false, error: `La historia ${i + 1} debe ser ${tipos[i]}` });
+      const a = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ?').get(parseInt(s.asset_id, 10), uid);
+      if (!a) return res.status(400).json({ ok: false, error: 'Un material no está en tu librería' });
+      const aabs = photoCliente.mediaAbs(MEDIA_DIR, a.file_path);
+      if (!aabs || !fs.existsSync(aabs)) return res.status(400).json({ ok: false, error: 'Un material no tiene archivo' });
+      const outName = `serie-${uid}-${Date.now()}-${i}.${a.kind === 'video' ? 'mp4' : 'jpg'}`;
+      const outAbs = path.join(MEDIA_DIR, outName);
+      let ok = false;
+      if (a.kind === 'video') {
+        ok = await mcFfmpeg(['-i', aabs, '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p', '-c:a', 'copy', outAbs], 180000);
+      } else {
+        // Foto en formato historia: pad 1080x1920 (foto entera, fondo
+        // difuminado, cero corte) vía media-crops.py en MEDIA_DIR.
+        const { execFile } = require('child_process');
+        await new Promise((resolve) => {
+          execFile('python3', [path.join(__dirname, 'media-crops.py'), aabs, MEDIA_DIR], { timeout: 60000 }, () => resolve(true));
+        });
+        try {
+          const base = path.basename(aabs).replace(/\.[a-z0-9]+$/i, '');
+          const cand = path.join(MEDIA_DIR, `${base}-historia-pad.jpg`);
+          if (fs.existsSync(cand)) { fs.copyFileSync(cand, outAbs); ok = true; }
+        } catch (e) {}
+        if (!ok) { try { fs.copyFileSync(aabs, outAbs); ok = true; } catch (e) {} }
+      }
+      if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo formatear una historia' });
+      built.push({ tipo: tipos[i], path: '/media/' + outName, kind: a.kind });
+    }
+    const sidecar = `serie-${uid}-${Date.now()}.json`;
+    fs.writeFileSync(path.join(MEDIA_DIR, sidecar), JSON.stringify({ slots: built }));
+    res.json({ ok: true, sidecar: '/media/' + sidecar, slots: built });
+  } catch (e) { console.error('[historias-serie]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar la serie').slice(0, 200) }); }
+});
+app.post('/api/historias/serie-aceptar', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const sidecar = path.basename(String((req.body && req.body.sidecar) || ''));
+    if (!sidecar.startsWith('serie-')) return res.status(400).json({ ok: false, error: 'Serie inválida' });
+    const abs = path.join(MEDIA_DIR, sidecar);
+    if (!fs.existsSync(abs)) return res.status(404).json({ ok: false, error: 'La serie venció: armala de nuevo' });
+    const meta = JSON.parse(fs.readFileSync(abs, 'utf8'));
+    const ids = [];
+    for (const s of (meta.slots || [])) {
+      const r = db.prepare(`INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)`).run(uid, s.path, s.kind);
+      ids.push(r.lastInsertRowid);
+    }
+    try { fs.unlinkSync(abs); } catch (e) {}
+    res.json({ ok: true, asset_ids: ids });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo aceptar la serie' }); }
+});
+// (media-cliente-3) REVISIÓN FINAL ANTES DE PUBLICAR: checklist con
+// problemas duros (cara sin permiso, producto cortado) y avisos. Un
+// problema duro no se publica hasta que el dueño lo resuelva o lo
+// acepte conociéndolo (confirmación durable). PARCIAL honesto: el
+// gate dentro del autopilot (publicación automática) queda pendiente
+// nombrado — el flujo manual queda cubierto porque el dueño ve los
+// chips antes de pulsar Publicar.
+app.get('/api/drafts/:id/checklist', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const confirmados = new Set(db.prepare(`SELECT item FROM checklist_confirm WHERE user_id = ? AND post_id = ?`).all(uid, postId).map((r) => r.item));
+    const items = [];
+    const add = (item, duro, texto) => items.push({ item, duro, texto, confirmado: confirmados.has(item) });
+    const isVideo = post.media_type === 'video';
+    if (!post.image_path) add('sin-medio', true, 'El borrador no tiene foto ni video');
+    if (isVideo) {
+      const abs = post.image_path ? photoCliente.mediaAbs(MEDIA_DIR, post.image_path) : null;
+      if (!abs || !fs.existsSync(abs)) add('sin-medio', true, 'El video no tiene archivo');
+      else {
+        const { execFileSync } = require('child_process');
+        try {
+          const out = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', abs], { timeout: 15000, encoding: 'utf8' });
+          if (!String(out || '').trim()) add('sin-audio', false, 'El video no tiene audio');
+        } catch (e) {}
+      }
+    }
+    // Producto cortado / caras sin permiso: desde el asset de la foto.
+    try {
+      const a = post.image_path ? db.prepare(`SELECT album_quality, album_tag FROM assets WHERE user_id = ? AND file_path = ?`).get(uid, String(post.image_path)) : null;
+      if (a && a.album_quality) {
+        const q = JSON.parse(a.album_quality);
+        const issues = Array.isArray(q) ? q : (q.issues || []);
+        if (issues.includes('cortada')) add('producto-cortado', true, 'La foto parece cortada: el producto puede estar cortado');
+        if (q.lum !== undefined && q.lum < 38) add('foto-oscura', false, 'La foto está oscura');
+      }
+      if (a && a.album_tag === 'equipo' && !confirmados.has('caras-permiso')) add('caras-permiso', true, 'La foto muestra personas del equipo: confirmá que tienen permiso para salir');
+    } catch (e) {}
+    // Reuso y paleta: avisos (nunca duros). Sin foto no hay reuso
+    // que avisar: image_path vacío matchearía prev_image_path ''.
+    if (post.image_path) try {
+      const reu = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND id != ? AND status IN ('published','scheduled') AND (image_path = ? OR prev_image_path = ?)`).get(uid, postId, String(post.image_path || ''), String(post.image_path || ''));
+      if (reu && reu.n > 0) add('reuso', false, 'Esta foto ya se usó en una semana anterior');
+    } catch (e) {}
+    const duros = items.filter((i) => i.duro && !i.confirmado);
+    res.json({ ok: true, items, bloqueado: duros.length > 0 });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo revisar' }); }
+});
+app.post('/api/drafts/:id/checklist-confirm', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    const item = String((req.body && req.body.item) || '').trim();
+    if (!postId || !item) return res.status(400).json({ ok: false, error: 'Falta el ítem' });
+    db.prepare(`INSERT OR IGNORE INTO checklist_confirm (user_id, post_id, item) VALUES (?,?,?)`).run(uid, postId, item);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo confirmar' }); }
+});
+// (media-cliente-3) AVISO DE MEJOR LUZ: solo consejo de horario
+// orientativo (luz suave de mañana y tarde). Sin clima inventado ni
+// cálculo solar sin lat/lon reales; si hay ubicación en el fundamento
+// se la menciona sin fingir precisión.
+app.get('/api/consejo-luz', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    let ubicacion = '';
+    try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); const dna = r && r.dna_json ? JSON.parse(r.dna_json) : {}; ubicacion = String(dna.ubicacion || ''); } catch (e) {}
+    res.json({ ok: true, consejo: 'Sacala con luz natural suave: de mañana entre las 9 y las 11, o de tarde entre las 16 y las 18. Evitá el sol fuerte del mediodía, que deja sombras duras.', ubicacion: ubicacion || null, orientativo: true });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo aconsejar' }); }
+});
+// (media-cliente-3) PROYECTOS RE-EDITABLES: versiones = original +
+// cada resultado ACEPTADO + propuestas vigentes. Restaurar
+// intercambia mostrada/anterior (nunca borra la original).
+app.get('/api/drafts/:id/proyectos', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const pasos = db.prepare(`SELECT kind, base_path, result_path, created_at FROM edicion_proyectos WHERE user_id = ? AND post_id = ? ORDER BY created_at ASC`).all(uid, postId);
+    const versiones = [];
+    const seen = new Set();
+    const push = (path, etiqueta) => { if (path && !seen.has(path)) { seen.add(path); versiones.push({ path, etiqueta }); } };
+    push(String(post.prev_image_path || ''), 'original');
+    pasos.forEach((p) => push(p.result_path, `aceptado: ${p.kind}`));
+    push(String(post.image_path || ''), 'actual');
+    // Propuestas vigentes (sin aceptar todavía).
+    const cols = ['subtitle_proposal_path', 'trim_proposal_path', 'cleanup_proposal_path', 'stabilize_proposal_path', 'straighten_proposal_path', 'bokeh_proposal_path', 'audioclean_proposal_path', 'glare_proposal_path', 'transition_proposal_path', 'kenburns_proposal_path', 'ducking_proposal_path', 'logooutro_proposal_path', 'music_proposal_path', 'voiceover_proposal_path', 'timelapse_proposal_path', 'loop_proposal_path', 'priceband_proposal_path', 'asmr_proposal_path', 'silencio_proposal_path', 'tachado_proposal_path', 'hook_proposal_path'];
+    cols.forEach((c) => { if (post[c]) push(String(post[c]), `propuesta: ${c.replace(/_proposal_path$/, '')}`); });
+    res.json({ ok: true, versiones, pasos });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron listar las versiones' }); }
+});
+app.post('/api/drafts/:id/proyectos/restaurar', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    const pathWanted = String((req.body && req.body.path) || '');
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || !pathWanted) return res.status(400).json({ ok: false, error: 'Faltan borrador y versión' });
+    const pasos = db.prepare(`SELECT result_path FROM edicion_proyectos WHERE user_id = ? AND post_id = ?`).all(uid, postId);
+    const validos = new Set([String(post.image_path || ''), String(post.prev_image_path || ''), ...pasos.map((p) => p.result_path)]);
+    const cols = ['subtitle_proposal_path', 'trim_proposal_path', 'cleanup_proposal_path', 'stabilize_proposal_path', 'straighten_proposal_path', 'bokeh_proposal_path', 'audioclean_proposal_path', 'glare_proposal_path', 'transition_proposal_path', 'kenburns_proposal_path', 'ducking_proposal_path', 'logooutro_proposal_path', 'music_proposal_path', 'voiceover_proposal_path', 'timelapse_proposal_path', 'loop_proposal_path', 'priceband_proposal_path', 'asmr_proposal_path', 'silencio_proposal_path', 'tachado_proposal_path', 'hook_proposal_path'];
+    cols.forEach((c) => { if (post[c]) validos.add(String(post[c])); });
+    if (!validos.has(pathWanted)) return res.status(400).json({ ok: false, error: 'Esa versión no pertenece a este borrador' });
+    db.prepare(`UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?`).run(pathWanted, String(post.image_path || ''), postId);
+    res.json({ ok: true, path: pathWanted });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo restaurar' }); }
+});
+// (media-cliente-3) PARECIDOS: si la foto nueva se parece a las que
+// más anduvieron, Posty lo dice con atributos reales (producto,
+// encuadre, luz). Solo aviso, nunca puntaje, nunca elige solo.
+app.get('/api/assets/:id/parecidos', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const assetId = parseInt(req.params.id, 10);
+    const a = db.prepare(`SELECT * FROM assets WHERE id = ? AND user_id = ?`).get(assetId, uid);
+    if (!a) return res.status(404).json({ ok: false, error: 'Asset no encontrado' });
+    let q = null;
+    try { q = a.album_quality ? JSON.parse(a.album_quality) : null; } catch (e) {}
+    const attrs = {
+      producto: String(a.producto || ''),
+      encuadre: (q && typeof q.w === 'number' && typeof q.h === 'number') ? mediaCliente.aspectLabel(q.w, q.h) : null,
+      luz: (q && typeof q.lum === 'number') ? mediaCliente.lumBucket(q.lum) : null,
+      tag: String(a.album_tag || ''),
+    };
+    const tops = db.prepare(`SELECT p.id, p.image_path, p.product_ref, COALESCE(m.reach, 0) AS reach FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id WHERE p.user_id = ? AND p.status = 'published' ORDER BY COALESCE(m.reach, 0) DESC, p.id DESC LIMIT 20`).all(uid);
+    const parecidos = [];
+    for (const t of tops) {
+      const ta = db.prepare(`SELECT * FROM assets WHERE user_id = ? AND file_path = ?`).get(uid, String(t.image_path || ''));
+      let tq = null;
+      try { tq = ta && ta.album_quality ? JSON.parse(ta.album_quality) : null; } catch (e) {}
+      const tAttrs = {
+        producto: String((ta && ta.producto) || t.product_ref || ''),
+        encuadre: (tq && typeof tq.w === 'number' && typeof tq.h === 'number') ? mediaCliente.aspectLabel(tq.w, tq.h) : null,
+        luz: (tq && typeof tq.lum === 'number') ? mediaCliente.lumBucket(tq.lum) : null,
+        tag: String((ta && ta.album_tag) || ''),
+      };
+      const compartidos = [];
+      if (attrs.producto && attrs.producto === tAttrs.producto) compartidos.push('mismo producto');
+      if (attrs.encuadre && attrs.encuadre === tAttrs.encuadre) compartidos.push(`mismo encuadre (${attrs.encuadre})`);
+      if (attrs.luz && attrs.luz === tAttrs.luz) compartidos.push(`misma luz (${attrs.luz})`);
+      if (compartidos.length >= 2) parecidos.push({ post_id: t.id, reach: t.reach, compartidos });
+    }
+    res.json({ ok: true, atributos: attrs, parecidos: parecidos.slice(0, 5) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo comparar' }); }
+});
+// (media-cliente-3) PRECIO TACHADO ANIMADO: en el reel de oferta,
+ // el precio viejo se tacha y aparece el nuevo. Ambos precios reales
+// de la oferta (subcadenas de su texto en el fundamento); nunca
+// sobre el producto (la animación vive en la banda inferior). Con
+// acepto. Los cuadros los dibuja media-tachado.py (PIL); acá solo se
+// codifican a MP4.
+app.post('/api/drafts/:id/video-tachado', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const titulo = String((req.body && req.body.oferta_titulo) || '').trim();
+    const viejo = String((req.body && req.body.precio_viejo) || '').trim();
+    const nuevo = String((req.body && req.body.precio_nuevo) || '').trim();
+    if (!titulo || !viejo || !nuevo) return res.status(400).json({ ok: false, error: 'Faltan oferta, precio viejo y precio nuevo' });
+    let dna = {};
+    try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); if (r && r.dna_json) dna = JSON.parse(r.dna_json) || {}; } catch (e) {}
+    const promos = Array.isArray(dna.promos_activas) ? dna.promos_activas : [];
+    const oferta = promos.find((p) => String((p && p.titulo) || '').trim() === titulo);
+    if (!oferta) return res.status(400).json({ ok: false, error: 'Esa oferta no está en tu fundamento' });
+    const textoOferta = `${String(oferta.titulo || '')} ${String(oferta.detalle || '')}`;
+    if (!textoOferta.includes(viejo) || !textoOferta.includes(nuevo)) return res.status(400).json({ ok: false, error: 'Ambos precios tienen que aparecer en la oferta del fundamento' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || !post.image_path) return res.status(404).json({ ok: false, error: 'El borrador no tiene foto para el reel' });
+    const abs = photoCliente.mediaAbs(MEDIA_DIR, post.image_path);
+    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ ok: false, error: 'La foto no tiene archivo' });
+    const framesDir = path.join(MEDIA_DIR, `tachado-${postId}-${Date.now()}`);
+    fs.mkdirSync(framesDir, { recursive: true });
+    const { execFile } = require('child_process');
+    const okPy = await new Promise((resolve) => {
+      execFile('python3', [path.join(__dirname, 'media-tachado.py'), abs, framesDir, viejo, nuevo], { timeout: 120000 }, (err) => resolve(!err));
+    });
+    if (!okPy) return res.status(502).json({ ok: false, error: 'No se pudo dibujar la animación' });
+    const outName = mediaCliente.proposalName(path.basename(abs).replace(/\.[a-z0-9]+$/i, ''), 'tachado') + '.mp4';
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const ok = await mcFfmpeg(['-y', '-framerate', '15', '-i', path.join(framesDir, 'f%03d.jpg'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', outAbs], 180000);
+    try { fs.rmSync(framesDir, { recursive: true, force: true }); } catch (e) {}
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo codificar el reel' });
+    const oldProposal = post.tachado_proposal_path || '';
+    db.prepare(`UPDATE posts SET tachado_proposal_path = ?, tachado_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[video-tachado]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo animar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-tachado-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'tachado_proposal_path', 'tachado_proposal_base'));
+app.post('/api/drafts/:id/video-tachado-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'tachado_proposal_path', 'tachado_proposal_base'));
+// (media-cliente-3) GANCHO DE 3 SEGUNDOS: verificar si el producto ya
+// aparece en los primeros 3 s (visión sobre el cuadro del segundo 1;
+// si la visión no lo confirma, null: nunca se finge presencia) y, si
+// no, anteponer un clip real del producto (primeros 3 s) al video.
+app.get('/api/drafts/:id/video-hook-check', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { abs } = found;
+    const frame = path.join(MEDIA_DIR, `hook-${postId}-${Date.now()}.jpg`);
+    const okF = await mcFfmpeg(['-ss', '1', '-i', abs, '-frames:v', '1', frame], 60000);
+    if (!okF || !fs.existsSync(frame)) return res.json({ ok: true, tiene_producto: null, razon: 'sin-cuadro' });
+    let tiene = null;
+    try {
+      const settings = getSettings(uid);
+      const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
+      if (apiKey) {
+        const raw = await mcVisionCall(frame, apiKey, '¿Aparece un producto del negocio en primer plano en esta imagen? Respondé solo JSON: {"producto": true} o {"producto": false}. Si no estás seguro, respondé {"producto": null}.');
+        if (raw) {
+          const m = /"producto"\s*:\s*(true|false|null)/.exec(String(raw));
+          if (m) tiene = m[1] === 'true' ? true : (m[1] === 'false' ? false : null);
+        }
+      }
+    } catch (e) {}
+    try { fs.unlinkSync(frame); } catch (e) {}
+    res.json({ ok: true, tiene_producto: tiene });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo verificar' }); }
+});
+app.post('/api/drafts/:id/video-hook', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const clipId = parseInt((req.body && req.body.clip_id) || 0, 10);
+    const found = mcVideoPost(uid, postId);
+    if (!found) return res.status(404).json({ ok: false, error: 'Borrador no encontrado o sin video' });
+    const { post, abs } = found;
+    const clip = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ? AND kind = ?').get(clipId, uid, 'video');
+    if (!clip) return res.status(400).json({ ok: false, error: 'El clip del producto no está en tu librería' });
+    const clipAbs = photoCliente.mediaAbs(MEDIA_DIR, clip.file_path);
+    if (!clipAbs || !fs.existsSync(clipAbs)) return res.status(400).json({ ok: false, error: 'El clip no tiene archivo' });
+    const clipDur = await mcFfprobeDur(clipAbs);
+    const gancho = Math.min(3, clipDur || 3);
+    const tmpGancho = path.join(MEDIA_DIR, `gancho-${postId}-${Date.now()}.mp4`);
+    const okTrim = await mcFfmpeg(['-i', clipAbs, '-t', String(gancho), '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'aac', tmpGancho], 120000);
+    if (!okTrim || !fs.existsSync(tmpGancho)) return res.status(502).json({ ok: false, error: 'No se pudo cortar el gancho' });
+    const outName = mediaCliente.proposalName(path.basename(abs), 'gancho');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    // Audio: igual que mcReelPreview — un clip sin pista recibe
+    // anullsrc finito, así el concat nunca falla por audio mixto.
+    const { execFile: ef2 } = require('child_process');
+    const probeAud = (f) => new Promise((resolve) => {
+      ef2('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0', f], { timeout: 30000 }, (err, stdout) => resolve(!err && String(stdout || '').trim().length > 0));
+    });
+    const hookHasAud = await probeAud(tmpGancho);
+    const draftHasAud = await probeAud(abs);
+    const draftDur = await mcFfprobeDur(abs);
+    // Orden de inputs: 0 = gancho (video), 1 = anullsrc del gancho si
+    // no tiene audio, N = borrador (video), N+1 = anullsrc si no hay.
+    const hookAIn = hookHasAud ? 0 : 1;
+    const draftVIn = hookHasAud ? 1 : 2;
+    const draftAIn = draftHasAud ? draftVIn : draftVIn + 1;
+    const hookInputs = ['-i', tmpGancho];
+    if (!hookHasAud) hookInputs.push('-f', 'lavfi', '-t', String(gancho), '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100');
+    const draftInputs = ['-i', abs];
+    if (!draftHasAud) draftInputs.push('-f', 'lavfi', '-t', String(draftDur || 0), '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100');
+    const hookFilter = `[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p,fps=30,setpts=PTS-STARTPTS[v0];[${draftVIn}:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p,fps=30,setpts=PTS-STARTPTS[v1];[${hookAIn}:a]aresample=44100,asetpts=PTS-STARTPTS[a0];[${draftAIn}:a]aresample=44100,asetpts=PTS-STARTPTS[a1];[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]`;
+    const ok = await mcFfmpeg([...hookInputs, ...draftInputs, '-filter_complex', hookFilter, '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'aac', outAbs], 300000);
+    try { fs.unlinkSync(tmpGancho); } catch (e) {}
+    if (!ok || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo anteponer el gancho' });
+    const oldProposal = post.hook_proposal_path || '';
+    db.prepare(`UPDATE posts SET hook_proposal_path = ?, hook_proposal_base = ? WHERE id = ?`).run('/media/' + outName, String(post.image_path || ''), postId);
+    if (oldProposal) photoCliente.deleteMediaFile(MEDIA_DIR, oldProposal);
+    res.json({ ok: true, proposal: true, proposal_path: '/media/' + outName, proposal_base: String(post.image_path || '') });
+  } catch (e) { console.error('[video-hook]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo anteponer').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/video-hook-accept', requireAuth, express.json(), async (req, res) => mcAcceptProposal(req, res, 'hook_proposal_path', 'hook_proposal_base'));
+app.post('/api/drafts/:id/video-hook-reject', requireAuth, express.json(), async (req, res) => mcRejectProposal(req, res, 'hook_proposal_path', 'hook_proposal_base'));
+// (media-cliente-3) EL MITO DE TU RUBRO: candidatos desde preguntas
+// reales del negocio (nunca un mito inventado sobre el rubro). El
+// dueño reconoce el mito y lo acepta; sin acepto no hay reel. El reel
+// usa clips reales y el flujo de vista previa/acepto de reels.
+app.get('/api/mitos/candidatos', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    let dna = {};
+    try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); if (r && r.dna_json) dna = JSON.parse(r.dna_json) || {}; } catch (e) {}
+    const faqs = Array.isArray(dna.preguntas_frecuentes) ? dna.preguntas_frecuentes : [];
+    const candidatos = faqs.map((f) => String((f && (f.pregunta || f.q)) || '')).filter(Boolean).slice(0, 10);
+    res.json({ ok: true, candidatos });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron listar' }); }
+});
+app.get('/api/mitos', requireAuth, (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT * FROM mitos WHERE user_id = ? ORDER BY created_at DESC`).all(req.session.userId);
+    res.json({ ok: true, mitos: rows });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron listar' }); }
+});
+app.post('/api/mitos', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const mito = String((req.body && req.body.mito) || '').trim().slice(0, 500);
+    const desmentido = String((req.body && req.body.desmentido) || '').trim().slice(0, 1000);
+    if (!mito || !desmentido) return res.status(400).json({ ok: false, error: 'Faltan el mito y su desmentido' });
+    const r = db.prepare(`INSERT INTO mitos (user_id, mito, desmentido) VALUES (?,?,?)`).run(uid, mito, desmentido);
+    res.json({ ok: true, id: r.lastInsertRowid });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo guardar el mito' }); }
+});
+app.post('/api/mitos/:id/aceptar', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const id = parseInt(req.params.id, 10);
+    const row = db.prepare('SELECT * FROM mitos WHERE id = ? AND user_id = ?').get(id, uid);
+    if (!row) return res.status(404).json({ ok: false, error: 'Mito no encontrado' });
+    db.prepare(`UPDATE mitos SET aceptado = 1 WHERE id = ?`).run(id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo aceptar' }); }
+});
+app.post('/api/mitos/:id/reel', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const id = parseInt(req.params.id, 10);
+    const mito = db.prepare('SELECT * FROM mitos WHERE id = ? AND user_id = ?').get(id, uid);
+    if (!mito) return res.status(404).json({ ok: false, error: 'Mito no encontrado' });
+    if (!mito.aceptado) return res.status(400).json({ ok: false, error: 'Aceptá el mito primero: si no lo reconocés, no hay reel' });
+    const ids = Array.isArray(req.body && req.body.clips) ? req.body.clips.map((x) => parseInt(x, 10)).filter(Boolean) : [];
+    if (!ids.length || ids.length > 20) return res.status(400).json({ ok: false, error: 'Elegí entre 1 y 20 clips reales' });
+    const clips = [];
+    for (const aid of ids) {
+      const a = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ? AND kind = ?').get(aid, uid, 'video');
+      if (!a) return res.status(400).json({ ok: false, error: 'Un clip no está en tu librería' });
+      const aabs = photoCliente.mediaAbs(MEDIA_DIR, a.file_path);
+      if (!aabs || !fs.existsSync(aabs)) return res.status(400).json({ ok: false, error: 'Un clip no tiene archivo' });
+      clips.push({ id: a.id, abs: aabs });
+    }
+    const prev = await mcReelPreview(uid, clips, clips.length > 1 ? 0.5 : 0);
+    if (!prev) return res.status(502).json({ ok: false, error: 'No se pudo armar la vista previa' });
+    const sidecar = prev.preview.replace(/\.mp4$/i, '.json');
+    fs.writeFileSync(photoCliente.mediaAbs(MEDIA_DIR, sidecar), JSON.stringify({ kind: 'mito', sources: clips.map((c) => c.id), preview: prev.preview, mito_id: id }));
+    res.json({ ok: true, preview: prev.preview, sidecar, mito: mito.mito, desmentido: mito.desmentido });
+  } catch (e) { console.error('[mitos-reel]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar').slice(0, 200) }); }
+});
+// (media-cliente-3) STOCK REAL: el dueño pone el número (desde su
+// control real). Sin dato no hay historia, nunca un stock inventado;
+// con 0 tampoco hay «Quedan» (no queda nada).
+app.post('/api/stock', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const producto = String((req.body && req.body.producto) || '').trim();
+    const cantidad = parseInt((req.body && req.body.cantidad) || NaN, 10);
+    if (!producto || isNaN(cantidad) || cantidad < 0) return res.status(400).json({ ok: false, error: 'Faltan producto y cantidad real' });
+    if (!mcProductosDna(uid).includes(producto)) return res.status(400).json({ ok: false, error: 'Ese producto no está en tu negocio' });
+    db.prepare(`INSERT INTO stock_negocio (user_id, producto, cantidad, updated_at) VALUES (?,?,?,datetime('now')) ON CONFLICT(user_id, producto) DO UPDATE SET cantidad = excluded.cantidad, updated_at = datetime('now')`).run(uid, producto, cantidad);
+    res.json({ ok: true, producto, cantidad });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo guardar el stock' }); }
+});
+app.get('/api/stock', requireAuth, (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT producto, cantidad, updated_at FROM stock_negocio WHERE user_id = ? ORDER BY producto ASC`).all(req.session.userId);
+    res.json({ ok: true, stock: rows });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo listar' }); }
+});
+app.post('/api/historias/stock', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const producto = String((req.body && req.body.producto) || '').trim();
+    const row = producto ? db.prepare(`SELECT * FROM stock_negocio WHERE user_id = ? AND producto = ?`).get(uid, producto) : null;
+    if (!row) return res.json({ ok: false, razon: 'sin-stock' });
+    if (!(row.cantidad > 0)) return res.json({ ok: false, razon: 'sin-stock' });
+    const outName = `stock-${uid}-${Date.now()}.jpg`;
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const { execFile } = require('child_process');
+    const okPy = await new Promise((resolve) => {
+      execFile('python3', [path.join(__dirname, 'media-story-text.py'), outAbs, `Quedan ${row.cantidad}`, producto], { timeout: 60000 }, (err) => resolve(!err));
+    });
+    if (!okPy || !fs.existsSync(outAbs)) return res.status(502).json({ ok: false, error: 'No se pudo armar la historia' });
+    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_image) VALUES (?,?,'', '', 'draft', 'story', 0)`).run(uid, '/media/' + outName);
+    res.json({ ok: true, draft_id: r.lastInsertRowid, path: '/media/' + outName, cantidad: row.cantidad });
+  } catch (e) { console.error('[historias-stock]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar').slice(0, 200) }); }
+});
+// (media-cliente-3) ÚLTIMO DÍA DE OFERTA: solo con fecha REAL de
+// vencimiento — puesta por el dueño o parseada de la vigencia del
+// fundamento. Sin fecha real no hay historia, nunca urgencia
+// inventada. Se genera el día del vencimiento y sigue el flujo de
+// aprobación vigente (borrador: autopiloto o acepto).
+app.post('/api/ofertas/vencimiento', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const titulo = String((req.body && req.body.titulo) || '').trim();
+    const fecha = mediaCliente.vigenciaParse(String((req.body && req.body.fecha_fin) || ''));
+    if (!titulo || !fecha) return res.status(400).json({ ok: false, error: 'Faltan título y fecha real de vencimiento (AAAA-MM-DD o DD/MM/AAAA)' });
+    db.prepare(`INSERT INTO oferta_vencimientos (user_id, titulo, fecha_fin) VALUES (?,?,?) ON CONFLICT(user_id, titulo) DO UPDATE SET fecha_fin = excluded.fecha_fin`).run(uid, titulo, fecha);
+    res.json({ ok: true, titulo, fecha_fin: fecha });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo guardar el vencimiento' }); }
+});
+app.get('/api/ofertas/vencen-hoy', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const hoy = new Date().toISOString().slice(0, 10);
+    let dna = {};
+    try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); if (r && r.dna_json) dna = JSON.parse(r.dna_json) || {}; } catch (e) {}
+    const promos = Array.isArray(dna.promos_activas) ? dna.promos_activas : [];
+    const puestas = new Map(db.prepare(`SELECT titulo, fecha_fin FROM oferta_vencimientos WHERE user_id = ?`).all(uid).map((r) => [String(r.titulo), String(r.fecha_fin)]));
+    const vencen = [];
+    for (const p of promos) {
+      const titulo = String((p && p.titulo) || '').trim();
+      if (!titulo) continue;
+      const fecha = puestas.get(titulo) || mediaCliente.vigenciaParse(String((p && p.vigencia) || ''));
+      if (fecha === hoy) vencen.push({ titulo, fecha_fin: fecha, detalle: String(p.detalle || '') });
+    }
+    res.json({ ok: true, hoy, vencen });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron listar' }); }
+});
+app.post('/api/ofertas/ultimo-dia/generar', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const hoy = new Date().toISOString().slice(0, 10);
+    let dna = {};
+    try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); if (r && r.dna_json) dna = JSON.parse(r.dna_json) || {}; } catch (e) {}
+    const promos = Array.isArray(dna.promos_activas) ? dna.promos_activas : [];
+    const puestas = new Map(db.prepare(`SELECT titulo, fecha_fin FROM oferta_vencimientos WHERE user_id = ?`).all(uid).map((r) => [String(r.titulo), String(r.fecha_fin)]));
+    const hechas = [];
+    for (const p of promos) {
+      const titulo = String((p && p.titulo) || '').trim();
+      if (!titulo) continue;
+      const fecha = puestas.get(titulo) || mediaCliente.vigenciaParse(String((p && p.vigencia) || ''));
+      if (fecha !== hoy) continue;
+      const outName = `ultimo-dia-${uid}-${Date.now()}.jpg`;
+      const outAbs = path.join(MEDIA_DIR, outName);
+      const { execFile } = require('child_process');
+      const okPy = await new Promise((resolve) => {
+        execFile('python3', [path.join(__dirname, 'media-story-text.py'), outAbs, 'ÚLTIMO DÍA', titulo], { timeout: 60000 }, (err) => resolve(!err));
+      });
+      if (!okPy || !fs.existsSync(outAbs)) continue;
+      const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_image) VALUES (?,?,'', '', 'draft', 'story', 0)`).run(uid, '/media/' + outName);
+      hechas.push({ titulo, draft_id: r.lastInsertRowid, path: '/media/' + outName });
+    }
+    res.json({ ok: true, hoy, historias: hechas });
+  } catch (e) { console.error('[ultimo-dia]', e.message); res.status(502).json({ ok: false, error: String(e.message || 'No se pudo generar').slice(0, 200) }); }
+});
+app.post('/api/drafts/:id/photo-caption', requireAuth, express.json(), async (req, res) => {
+
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt(req.params.id, 10);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
+      return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    if (post.media_type === 'video' || post.media_type === 'carousel')
+      return res.status(400).json({ ok: false, error: 'El caption solo aplica a fotos' });
+    const shown = String(post.image_path || '');
+    const absShown = photoCliente.mediaAbs(MEDIA_DIR, shown);
+    if (!absShown || !fs.existsSync(absShown))
+      return res.status(400).json({ ok: false, error: 'El borrador no tiene foto' });
+    const on = req.body && req.body.on !== false && req.body.on !== 0 && req.body.on !== '0';
+    if (on) {
+      if (photoCliente.captionState(MEDIA_DIR, shown) === 'on')
+        return res.json({ ok: true, already: true, path: shown, caption_on: 1 });
+      const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
+      if (!headline) return res.status(400).json({ ok: false, error: 'sin_titular' });
+      // Base limpia: si la mostrada ya es limpia, se congela como hermana
+      // para que la convención base-limpia se mantenga (un Mejorar
+      // posterior edita la base y recompone el titular).
+      const cleanPath = photoCliente.cleanSisterPath(MEDIA_DIR, shown);
+      if (cleanPath && !fs.existsSync(cleanPath)) {
+        try { fs.copyFileSync(absShown, cleanPath); } catch (e) {}
+      }
+      const baseForCompose = (cleanPath && fs.existsSync(cleanPath)) ? cleanPath : absShown;
+      const outName = photoCliente.captionOutName(path.basename(shown));
+      const outAbs = path.join(MEDIA_DIR, outName);
+      const { execFileSync } = require('child_process');
+      const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', baseForCompose, '--headline', headline, '--out', outAbs];
+      const settings = getSettings(uid);
+      const hexes = parseBrandHexes(settings.brand_colors);
+      if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
+      execFileSync('python3', cArgs, { timeout: 30000 });
+      const outPath = `/media/${outName}`;
+      // La salida compuesta pasa a tener su propia base limpia hermana
+      // (copia de la base), así un Mejorar posterior la edita y recompone.
+      try { fs.copyFileSync(baseForCompose, path.join(MEDIA_DIR, photoCliente.cleanSisterName(outName))); } catch (e) {}
+      try { db.prepare('INSERT OR IGNORE INTO image_meta (media_path) VALUES (?)').run(`/media/${photoCliente.cleanSisterName(outName)}`); } catch (e) {}
+      photoCliente.deleteProposalFiles(MEDIA_DIR, post.enhance_proposal_path);
+      db.prepare("UPDATE posts SET image_path = ?, prev_image_path = ?, enhance_proposal_path = '', enhance_proposal_base = '' WHERE id = ?").run(outPath, shown, postId);
+      return res.json({ ok: true, path: outPath, caption_on: 1 });
+    }
+    // Quitar: volver a la base limpia de la mostrada.
+    const cleanAbs = photoCliente.cleanSisterPath(MEDIA_DIR, shown);
+    if (!cleanAbs || !fs.existsSync(cleanAbs)) return res.json({ ok: true, already: true, path: shown, caption_on: 0 });
+    const cleanOut = `/media/${path.basename(cleanAbs)}`;
+    photoCliente.deleteProposalFiles(MEDIA_DIR, post.enhance_proposal_path);
+    db.prepare("UPDATE posts SET image_path = ?, prev_image_path = ?, enhance_proposal_path = '', enhance_proposal_base = '' WHERE id = ?").run(cleanOut, shown, postId);
+    return res.json({ ok: true, path: cleanOut, caption_on: 0 });
+  } catch (e) {
+    console.error('[photo-caption]', e.message);
+    return res.status(500).json({ ok: false, error: 'No se pudo cambiar el caption' });
   }
 });
 
@@ -17192,8 +19451,9 @@ app.post('/api/drafts/:id/photo-revert', requireAuth, express.json(), async (req
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
     const prev = String(post.prev_image_path || '');
     if (!prev) return res.json({ ok: false, error: 'Este posteo no tiene una imagen anterior para recuperar' });
-    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?')
-      .run(prev, String(post.image_path || ''), postId);
+    photoCliente.deleteProposalFiles(MEDIA_DIR, post.enhance_proposal_path);
+    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, enhance_proposal_path = ?, enhance_proposal_base = ? WHERE id = ?')
+      .run(prev, String(post.image_path || ''), '', '', postId);
     res.json({ ok: true, path: prev });
   } catch (e) {
     console.error('[photo-revert]', e.message);
@@ -23631,7 +25891,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v493';
+const BUILD_ID = '20261031-v494';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

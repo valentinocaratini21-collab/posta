@@ -5396,16 +5396,21 @@ function mediaCardHTML() {
   <div id="mediaCard" class="media-stripbar" title="Mis fotos y videos — las usamos en tus posteos">
     <span class="media-strip-ico">📷</span>
     <div class="media-strip">${items.map(a => `
-      <div class="media-thumb sm">
+      <div class="media-thumb sm" data-assetthumb="${a.id}" style="position:relative">
         ${a.isVid
           ? `<video src="${esc(a.file_path)}" muted playsinline preload="metadata"></video><span class="media-play">▶</span>`
           : `<img src="${esc(a.file_path)}" alt="Foto del negocio">`}
         <button class="media-del" data-mediadel="${a.id}" title="Borrar" aria-label="Borrar archivo">×</button>
+        <button class="media-fav" data-mcfav="${a.id}" title="Favorita: Posty la usa primero">${a.favorito ? '★' : '☆'}</button>
+        ${a.isVid ? `<button class="media-perm" data-mcperm="${a.id}" title="Permiso para testimonios: solo videos con permiso se usan">${a.permiso_testimonio ? '✅' : '👥'}</button>` : ''}
+        <span data-mcbest="${a.id}" style="display:none;position:absolute;top:2px;left:2px;font-size:14px" title="La mejor de su producto">⭐</span>
       </div>`).join('')}</div>
     <button class="btn btn-soft btn-sm" id="btnMediaAdd" title="Agregar fotos o videos">＋</button>
     <input type="file" id="mediaFiles" accept="image/*,video/*" multiple style="display:none">
   </div>
-  <div id="mediaMsg" style="margin:-8px 0 12px"></div>`;
+  <div id="mediaMsg" style="margin:-8px 0 12px"></div>
+  <div id="mcAlbumTools" style="display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 12px"></div>
+  <div id="mcAlbumPanel"></div>`;
 }
 function bindMediaCard() {
   const add = $('#btnMediaAdd'), inp = $('#mediaFiles');
@@ -5418,6 +5423,7 @@ function bindMediaCard() {
     add.disabled = true;
     try {
       let ok = 0;
+      let warns = [];
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         msg.innerHTML = `<div class="hint">⏳ Subiendo ${i + 1} de ${files.length}…</div>`;
@@ -5426,8 +5432,13 @@ function bindMediaCard() {
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
         ok++;
+        if (data.quality_issues && data.quality_issues.length) {
+          const lbl = data.quality_issues.map(q => (MC_ISSUE_ES[q] || q)).join(' y ');
+          warns.push(`la foto ${i + 1} ${lbl}: mandá otra si querés — la semana sigue igual`);
+        }
       }
       msg.innerHTML = `<div class="okmsg">✅ ${ok === 1 ? 'Agregado' : ok + ' agregados'} — ya los usamos en tus posteos.</div>`;
+      if (warns.length) msg.innerHTML += `<div class="hint">⚠️ ${warns.join('<br>')}</div>`;
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       render();
     } catch (e) { msg.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`; }
@@ -5439,7 +5450,237 @@ function bindMediaCard() {
     ASSETS = await api.get('/api/assets').catch(() => ASSETS);
     render();
   });
+  // (media-cliente-2) Favoritas: un toque marca/desmarca, durable.
+  $$('#mediaCard [data-mcfav]').forEach(b => b.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      const cur = ((typeof ASSETS !== 'undefined' ? ASSETS : []).find(a => String(a.id) === String(b.dataset.mcfav)) || {}).favorito;
+      const r = await api.post('/api/assets/' + b.dataset.mcfav + '/favorito', { favorito: cur ? 0 : 1 });
+      if (r && r.ok) {
+        const a = (typeof ASSETS !== 'undefined' ? ASSETS : []).find(x => String(x.id) === String(b.dataset.mcfav));
+        if (a) a.favorito = r.favorito;
+        b.textContent = r.favorito ? '★' : '☆';
+      }
+    } catch (err) {}
+  });
+  // (media-cliente-3) Permiso de testimonios: un toque lo marca o
+  // lo quita; sin permiso el video nunca se usa en testimonios.
+  $$('#mediaCard [data-mcperm]').forEach(b => b.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      const cur = ((typeof ASSETS !== 'undefined' ? ASSETS : []).find(a => String(a.id) === String(b.dataset.mcperm)) || {}).permiso_testimonio;
+      const nota = cur ? '' : (prompt('¿Quién te mandó este video? (opcional, queda como nota)') || '');
+      const r = await api.post('/api/assets/' + b.dataset.mcperm + '/permiso-testimonio', { permiso: cur ? 0 : 1, nota });
+      if (r && r.ok) {
+        const a = (typeof ASSETS !== 'undefined' ? ASSETS : []).find(x => String(x.id) === String(b.dataset.mcperm));
+        if (a) a.permiso_testimonio = r.permiso_testimonio;
+        b.textContent = r.permiso_testimonio ? '✅' : '👥';
+      }
+    } catch (err) {}
+  });
+  try { mcAlbumToolsBind(); } catch (e) {}
+  try { mcPaintBadges(); } catch (e) {}
 }
+function mcAlbumToolsBind() {
+  const row = document.getElementById('mcAlbumTools');
+  if (!row || row.dataset.done === '1') return;
+  row.dataset.done = '1';
+  const en = mcEn();
+  const tools = [
+    ['testimonios', '🎤 ' + (en ? 'Testimonials' : 'Testimonios')],
+    ['estilo', '🎬 ' + (en ? 'My edit style' : 'Mi estilo')],
+    ['serie', '📚 ' + (en ? 'Story series' : 'Serie')],
+    ['ultimo', '⏰ ' + (en ? 'Last day' : 'Último día')],
+    ['stock', '📦 ' + (en ? 'Stock' : 'Stock')],
+    ['mitos', '💡 ' + (en ? 'Niche myth' : 'Mito del rubro')],
+  ];
+  row.innerHTML = tools.map(t => `<button class="rv-mini" data-mctool="${t[0]}">${t[1]}</button>`).join('');
+  row.querySelectorAll('[data-mctool]').forEach(b => b.onclick = () => {
+    const k = b.dataset.mctool;
+    if (k === 'testimonios') return mcTestimoniosUI();
+    if (k === 'estilo') return mcEstiloUI();
+    if (k === 'serie') return mcSerieUI();
+    if (k === 'ultimo') return mcUltimoDiaUI();
+    if (k === 'stock') return mcStockUI();
+    if (k === 'mitos') return mcMitosUI();
+  });
+}
+function mcAlbumPanel() { return document.getElementById('mcAlbumPanel'); }
+async function mcTestimoniosUI() {
+  const panel = mcAlbumPanel(); if (!panel) return; const en = mcEn();
+  panel.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Loading videos with permission…' : 'Cargando videos con permiso…'}</span>`;
+  try {
+    const r = await api.get('/api/testimonios/videos').catch(() => null);
+    const vids = (r && r.videos) || [];
+    const all = (typeof ASSETS !== 'undefined' ? ASSETS : []).filter(a => a.kind === 'video');
+    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">🎤 ${en ? 'Testimonial reel — only videos with explicit permission' : 'Reel de testimonios: solo videos con permiso explícito'}</div>`;
+    if (!vids.length) html += `<div style="font-size:11.5px;margin-bottom:8px">${en ? 'No videos with permission yet. Tap 👥 on a video in your strip to grant it.' : 'Todavía no hay videos con permiso. Tocá 👥 en un video de la tira para darlo.'}</div>`;
+    html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><select data-mckind style="font-size:14px"><option value="testimonio">${en ? 'Testimonials' : 'Testimonios'}</option><option value="unboxing">Unboxing</option><option value="dia">${en ? 'A day in your business' : 'Un día en tu negocio'}</option></select></div>`;
+    vids.forEach(v => { html += `<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-bottom:4px"><input type="checkbox" data-mctclip="${v.id}"> ${esc(v.file_path.split('/').pop())}</label>`; });
+    if (!all.length) html += `<div style="font-size:11.5px">${en ? 'Add videos to your library first.' : 'Primero sumá videos a tu librería.'}</div>`;
+    html += `<button class="pcsheet-opt" data-mcarmar="1" style="margin-top:6px">${en ? 'Build preview' : 'Armar vista previa'}</button><div data-mcprev style="margin-top:8px"></div>`;
+    panel.innerHTML = html;
+    panel.querySelector('[data-mcarmar]').onclick = async () => {
+      const kind = panel.querySelector('[data-mckind]').value;
+      const ids = [...panel.querySelectorAll('[data-mctclip]:checked')].map(c => +c.dataset.mctclip);
+      const prev = panel.querySelector('[data-mcprev]');
+      if (!ids.length) { prev.innerHTML = `<span style="font-size:11.5px">${en ? 'Pick at least one clip.' : 'Elegí al menos un clip.'}</span>`; return; }
+      prev.innerHTML = `<span style="font-size:11.5px">⏳ ${en ? 'Building…' : 'Armando…'}</span>`;
+      const rr = await api.post('/api/reels/armar', { kind, clips: ids }).catch(() => null);
+      if (!rr || !rr.ok) { prev.innerHTML = `<span style="font-size:11.5px">${esc((rr && rr.error) || 'Error')}</span>`; return; }
+      prev.innerHTML = `<video src="${esc(rr.preview)}" controls playsinline style="width:100%;border-radius:12px"></video><button class="pcsheet-opt" data-mcacep="1" style="margin-top:6px">${en ? 'Use this reel' : 'Usar este reel'}</button>`;
+      prev.querySelector('[data-mcacep]').onclick = async () => {
+        const u = await api.post('/api/reels/aceptar', { sidecar: rr.sidecar }).catch(() => null);
+        if (u && u.ok) { toast(en ? '✅ Reel saved to your library' : '✅ Reel guardado en tu librería'); try { ASSETS = await api.get('/api/assets').catch(() => ASSETS); render(); } catch (e) {} }
+        else toast(esc((u && u.error) || 'Error'));
+      };
+    };
+  } catch (e) { panel.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
+}
+async function mcEstiloUI() {
+  const panel = mcAlbumPanel(); if (!panel) return; const en = mcEn();
+  panel.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Loading your style…' : 'Cargando tu estilo…'}</span>`;
+  try {
+    const [est, lib] = await Promise.all([api.get('/api/estilo-edicion').catch(() => null), api.get('/api/musica').catch(() => null)]);
+    const cur = (est && est.estilo) || {};
+    const temas = (lib && lib.temas) || [];
+    panel.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">🎬 ${en ? 'Your edit style — next reels come out like this' : 'Tu estilo de edición: los próximos reels salen así'}</div>
+    <div style="display:grid;gap:8px;font-size:12.5px">
+    <label>${en ? 'Transitions' : 'Transiciones'} <select data-mctrans style="font-size:14px"><option value="suave" ${cur.transicion !== 'ninguna' ? 'selected' : ''}>${en ? 'Smooth' : 'Suave'}</option><option value="ninguna" ${cur.transicion === 'ninguna' ? 'selected' : ''}>${en ? 'None' : 'Ninguna'}</option></select></label>
+    <label>${en ? 'Music' : 'Música'} <select data-mcmus style="font-size:14px"><option value="">${en ? 'No default' : 'Sin preferencia'}</option>${temas.map(t => `<option value="${esc(t.file)}" ${cur.musica_track === t.file ? 'selected' : ''}>${esc(t.titulo)}</option>`).join('')}</select></label>
+    <label><input type="checkbox" data-mcsub ${cur.subtitulos ? 'checked' : ''}> ${en ? 'Subtitles by default' : 'Subtítulos por defecto'}</label>
+    <label>${en ? 'Subtitle font' : 'Fuente de subtítulos'} <input data-mcfuente value="${esc(cur.sub_fuente || '')}" placeholder="Montserrat" style="font-size:14px"></label>
+    <label>${en ? 'Subtitle color' : 'Color de subtítulos'} <input data-mccolor value="${esc(cur.sub_color || '')}" placeholder="#2793C8" style="font-size:14px"></label>
+    </div><button class="pcsheet-opt" data-mcguardar="1" style="margin-top:8px">${en ? 'Save style' : 'Guardar estilo'}</button>
+    <div style="font-size:11px;opacity:.7;margin-top:6px">${en ? 'An explicit choice on one reel always beats the saved style.' : 'Una elección explícita en un reel puntual siempre manda sobre el estilo guardado.'}</div>`;
+    panel.querySelector('[data-mcguardar]').onclick = async () => {
+      const r = await api.post('/api/estilo-edicion', { transicion: panel.querySelector('[data-mctrans]').value, musica_track: panel.querySelector('[data-mcmus]').value, subtitulos: panel.querySelector('[data-mcsub]').checked ? 1 : 0, sub_fuente: panel.querySelector('[data-mcfuente]').value, sub_color: panel.querySelector('[data-mccolor]').value }).catch(() => null);
+      toast(r && r.ok ? (en ? '✅ Style saved' : '✅ Estilo guardado') : esc((r && r.error) || 'Error'));
+    };
+  } catch (e) { panel.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
+}
+async function mcSerieUI() {
+  const panel = mcAlbumPanel(); if (!panel) return; const en = mcEn();
+  const all = (typeof ASSETS !== 'undefined' ? ASSETS : []).filter(a => a.kind === 'photo' || a.kind === 'video');
+  if (!all.length) { panel.innerHTML = `<span style="font-size:11.5px">${en ? 'Add photos or clips to your library first.' : 'Primero sumá fotos o clips a tu librería.'}</span>`; return; }
+  const opt = all.map(a => `<option value="${a.id}">${esc(a.file_path.split('/').pop())}</option>`).join('');
+  panel.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">📚 ${en ? 'Story series: problem → process → result' : 'Historias en serie: problema → proceso → resultado'}</div>
+  <div style="display:grid;gap:6px;font-size:12px"><label>${en ? 'Problem' : 'Problema'} <select data-mcslot0 style="font-size:14px;width:100%">${opt}</select></label><label>${en ? 'Process' : 'Proceso'} <select data-mcslot1 style="font-size:14px;width:100%">${opt}</select></label><label>${en ? 'Result' : 'Resultado'} <select data-mcslot2 style="font-size:14px;width:100%">${opt}</select></label></div>
+  <button class="pcsheet-opt" data-mcarmar="1" style="margin-top:8px">${en ? 'Build series' : 'Armar serie'}</button><div data-mcprev style="margin-top:8px"></div>`;
+  panel.querySelector('[data-mcarmar]').onclick = async () => {
+    const slots = ['problema', 'proceso', 'resultado'].map((tipo, i) => ({ tipo, asset_id: +panel.querySelector(`[data-mcslot${i}]`).value }));
+    const prev = panel.querySelector('[data-mcprev]');
+    prev.innerHTML = `<span style="font-size:11.5px">⏳ ${en ? 'Building…' : 'Armando…'}</span>`;
+    const r = await api.post('/api/historias/serie', { slots }).catch(() => null);
+    if (!r || !r.ok) { prev.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'Error')}</span>`; return; }
+    prev.innerHTML = r.slots.map(s => `<div style="font-size:12px;margin-bottom:4px">${esc(s.tipo)}: ${s.kind === 'video' ? `<video src="${esc(s.path)}" muted playsinline style="width:90px;height:160px;object-fit:cover;border-radius:8px"></video>` : `<img src="${esc(s.path)}" style="width:90px;height:160px;object-fit:cover;border-radius:8px">`}</div>`).join('') + `<button class="pcsheet-opt" data-mcacep="1">${en ? 'Use this series' : 'Usar esta serie'}</button>`;
+    prev.querySelector('[data-mcacep]').onclick = async () => {
+      const u = await api.post('/api/historias/serie-aceptar', { sidecar: r.sidecar }).catch(() => null);
+      if (u && u.ok) { toast(en ? '✅ Series saved to your library' : '✅ Serie guardada en tu librería'); try { ASSETS = await api.get('/api/assets').catch(() => ASSETS); render(); } catch (e) {} }
+      else toast(esc((u && u.error) || 'Error'));
+    };
+  };
+}
+async function mcUltimoDiaUI() {
+  const panel = mcAlbumPanel(); if (!panel) return; const en = mcEn();
+  panel.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Checking offers expiring today…' : 'Revisando ofertas que vencen hoy…'}</span>`;
+  try {
+    const r = await api.get('/api/ofertas/vencen-hoy').catch(() => null);
+    const vencen = (r && r.vencen) || [];
+    if (!vencen.length) {
+      panel.innerHTML = `<div style="font-size:12px">📅 ${en ? 'No offers expire today — no story, no invented urgency.' : 'Ninguna oferta vence hoy: no hay historia, nunca urgencia inventada.'}</div><div style="font-size:11px;opacity:.7;margin-top:6px">${en ? 'Tip: an offer needs a real expiry date in your profile (or set one below in a future version).' : 'Para que haya historia, la oferta necesita una fecha real de vencimiento en tu fundamento.'}</div>`;
+      return;
+    }
+    panel.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">⏰ ${en ? 'Offers expiring today' : 'Ofertas que vencen hoy'}</div>` + vencen.map(v => `<div style="font-size:12px;margin-bottom:4px">• ${esc(v.titulo)}</div>`).join('') + `<button class="pcsheet-opt" data-mcgen="1" style="margin-top:6px">${en ? 'Generate last-day stories' : 'Generar historias de último día'}</button><div data-mcres style="margin-top:8px"></div>`;
+    panel.querySelector('[data-mcgen]').onclick = async () => {
+      const u = await api.post('/api/ofertas/ultimo-dia/generar', {}).catch(() => null);
+      const res = panel.querySelector('[data-mcres]');
+      if (u && u.ok) res.innerHTML = `<span style="font-size:12px">✅ ${u.historias.length} ${en ? 'draft stories created — they follow your account approval flow.' : 'historias en borrador creadas: siguen el flujo de aprobación de tu cuenta.'}</span>`;
+      else res.innerHTML = `<span style="font-size:11.5px">${esc((u && u.error) || 'Error')}</span>`;
+    };
+  } catch (e) { panel.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
+}
+async function mcStockUI() {
+  const panel = mcAlbumPanel(); if (!panel) return; const en = mcEn();
+  const load = async () => {
+    panel.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Loading stock…' : 'Cargando stock…'}</span>`;
+    try {
+      const [st, prods] = await Promise.all([api.get('/api/stock').catch(() => null), api.get('/api/productos').catch(() => null)]);
+      const rows = (st && st.stock) || [];
+      const names = (prods && (prods.productos || prods)) || [];
+      const prodNames = Array.isArray(names) ? names.map(n => String((n && n.nombre) || n)).filter(Boolean) : [];
+      let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">📦 ${en ? 'Real stock — “Only X left” only with a real number' : 'Stock real: «Quedan X» solo con número real'}</div>`;
+      if (!rows.length) html += `<div style="font-size:11.5px;margin-bottom:8px">${en ? 'No stock saved yet.' : 'Todavía no hay stock guardado.'}</div>`;
+      rows.forEach(s => { html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:12px;flex:1">${esc(s.producto)}: <b>${s.cantidad}</b></span><button class="pcsheet-opt" data-mchist="${esc(s.producto)}" ${s.cantidad > 0 ? '' : 'disabled'}>${en ? '“Only X left” story' : 'Historia «Quedan X»'}</button></div>`; });
+      html += `<div style="display:flex;gap:6px;margin-top:8px"><select data-mcprod style="font-size:14px;flex:1">${prodNames.map(n => `<option>${esc(n)}</option>`).join('') || `<option value="">${en ? 'No products in profile' : 'Sin productos en el fundamento'}</option>`}</select><input data-mccant type="number" min="0" placeholder="${en ? 'Qty' : 'Cant.'}" style="width:80px;font-size:14px"><button class="pcsheet-opt" data-mcguardar="1">${en ? 'Save' : 'Guardar'}</button></div><div data-mcres style="margin-top:8px"></div>`;
+      panel.innerHTML = html;
+      panel.querySelector('[data-mcguardar]').onclick = async () => {
+        const u = await api.post('/api/stock', { producto: panel.querySelector('[data-mcprod]').value, cantidad: +panel.querySelector('[data-mccant]').value }).catch(() => null);
+        if (u && u.ok) load(); else toast(esc((u && u.error) || 'Error'));
+      };
+      panel.querySelectorAll('[data-mchist]').forEach(b => b.onclick = async () => {
+        const u = await api.post('/api/historias/stock', { producto: b.dataset.mchist }).catch(() => null);
+        const res = panel.querySelector('[data-mcres]');
+        if (u && u.ok) res.innerHTML = `<span style="font-size:12px">✅ ${en ? 'Draft story created — it follows your account approval flow.' : 'Historia en borrador creada: sigue el flujo de aprobación de tu cuenta.'}</span>`;
+        else res.innerHTML = `<span style="font-size:11.5px">${esc((u && u.error) || (u && u.razon) || 'Error')}</span>`;
+      });
+    } catch (e) { panel.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
+  };
+  load();
+}
+async function mcMitosUI() {
+  const panel = mcAlbumPanel(); if (!panel) return; const en = mcEn();
+  panel.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Loading myths…' : 'Cargando mitos…'}</span>`;
+  try {
+    const [cands, mitos] = await Promise.all([api.get('/api/mitos/candidatos').catch(() => null), api.get('/api/mitos').catch(() => null)]);
+    const candList = (cands && cands.candidatos) || [];
+    const mitoList = (mitos && mitos.mitos) || [];
+    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">💡 ${en ? 'Your niche myth — Posty proposes, you accept' : 'El mito de tu rubro: Posty propone, vos aceptás'}</div>`;
+    html += `<div style="font-size:11.5px;margin-bottom:6px">${en ? 'Candidates come from your real FAQs — never an invented myth. If you don’t recognize it, there is no reel.' : 'Los candidatos salen de tus preguntas reales: nunca un mito inventado. Si no lo reconocés, no hay reel.'}</div>`;
+    if (candList.length) {
+      html += `<div style="font-size:12px;font-weight:700;margin-bottom:4px">${en ? 'From your FAQs' : 'Desde tus preguntas'}</div>`;
+      candList.forEach(c => { html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:12px;flex:1">${esc(c)}</span><button class="pcsheet-opt" data-mcusar="${esc(c)}">${en ? 'Use it' : 'Usarlo'}</button></div>`; });
+    }
+    html += `<div style="display:grid;gap:6px;margin-top:8px"><input data-mcmito placeholder="${en ? 'Myth (e.g. “Gluten-free means dry”)' : 'Mito (ej. “Sin gluten es seco”)'}" style="font-size:14px"><input data-mcdes placeholder="${en ? 'The truth that debunks it' : 'La verdad que lo desmiente'}" style="font-size:14px"><button class="pcsheet-opt" data-mcguardar="1">${en ? 'Save myth' : 'Guardar mito'}</button></div>`;
+    if (mitoList.length) {
+      html += `<div style="font-size:12px;font-weight:700;margin:10px 0 4px">${en ? 'Saved myths' : 'Mitos guardados'}</div>`;
+      mitoList.forEach(m => {
+        html += `<div style="font-size:12px;margin-bottom:6px">• <b>${esc(m.mito)}</b> — ${esc(m.desmentido)} ${m.aceptado ? '✅' : `<button class="pcsheet-opt" data-mcacep="${m.id}">${en ? 'I recognize it' : 'Lo reconozco'}</button>`} <button class="pcsheet-opt" data-mcreel="${m.id}" ${m.aceptado ? '' : 'disabled'}>${en ? 'Build reel' : 'Armar reel'}</button></div>`;
+      });
+    }
+    html += `<div data-mcreelbox style="margin-top:8px"></div>`;
+    panel.innerHTML = html;
+    panel.querySelectorAll('[data-mcusar]').forEach(b => b.onclick = () => { panel.querySelector('[data-mcmito]').value = b.dataset.mcusar; });
+    panel.querySelector('[data-mcguardar]').onclick = async () => {
+      const u = await api.post('/api/mitos', { mito: panel.querySelector('[data-mcmito]').value, desmentido: panel.querySelector('[data-mcdes]').value }).catch(() => null);
+      if (u && u.ok) mcMitosUI(); else toast(esc((u && u.error) || 'Error'));
+    };
+    panel.querySelectorAll('[data-mcacep]').forEach(b => b.onclick = async () => {
+      const u = await api.post('/api/mitos/' + b.dataset.mcacep + '/aceptar', {}).catch(() => null);
+      if (u && u.ok) mcMitosUI(); else toast(esc((u && u.error) || 'Error'));
+    });
+    panel.querySelectorAll('[data-mcreel]').forEach(b => b.onclick = async () => {
+      const vids = (typeof ASSETS !== 'undefined' ? ASSETS : []).filter(a => a.kind === 'video');
+      const box = panel.querySelector('[data-mcreelbox]');
+      if (!vids.length) { box.innerHTML = `<span style="font-size:11.5px">${en ? 'Add video clips to your library first.' : 'Primero sumá clips a tu librería.'}</span>`; return; }
+      box.innerHTML = vids.map(v => `<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-bottom:4px"><input type="checkbox" data-mcmclip="${v.id}"> ${esc(v.file_path.split('/').pop())}</label>`).join('') + `<button class="pcsheet-opt" data-mcarmar="1" style="margin-top:6px">${en ? 'Build myth reel' : 'Armar reel del mito'}</button><div data-mcprev style="margin-top:8px"></div>`;
+      box.querySelector('[data-mcarmar]').onclick = async () => {
+        const ids = [...box.querySelectorAll('[data-mcmclip]:checked')].map(c => +c.dataset.mcmclip);
+        const prev = box.querySelector('[data-mcprev]');
+        if (!ids.length) { prev.innerHTML = `<span style="font-size:11.5px">${en ? 'Pick at least one clip.' : 'Elegí al menos un clip.'}</span>`; return; }
+        const r = await api.post('/api/mitos/' + b.dataset.mcreel + '/reel', { clips: ids }).catch(() => null);
+        if (!r || !r.ok) { prev.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'Error')}</span>`; return; }
+        prev.innerHTML = `<video src="${esc(r.preview)}" controls playsinline style="width:100%;border-radius:12px"></video><button class="pcsheet-opt" data-mcacep2="1" style="margin-top:6px">${en ? 'Use this reel' : 'Usar este reel'}</button>`;
+        prev.querySelector('[data-mcacep2]').onclick = async () => {
+          const u = await api.post('/api/reels/aceptar', { sidecar: r.sidecar }).catch(() => null);
+          if (u && u.ok) { toast(en ? '✅ Reel saved to your library' : '✅ Reel guardado en tu librería'); try { ASSETS = await api.get('/api/assets').catch(() => ASSETS); render(); } catch (e) {} }
+          else toast(esc((u && u.error) || 'Error'));
+        };
+      };
+    });
+  } catch (e) { panel.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
+}
+
 
 // Fecha linda en español para la tarjeta de revisión ("mié 30 sep · 18:00")
 function fmtWhenTxt(v) {
@@ -5536,7 +5777,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button class="rv-mini" data-revdislike="${d.id}" onclick="pcDislikeOpen(${d.id}, this)" title="Esta idea no va: 3 ideas distintas, una sola vez">👎 No me gusta</button>`}
           ${d.media_type === 'video' ? '' : `<button class="rv-mini" data-revregen="${d.id}" title="Generar otro diseño para este posteo">${pzIc('sparkle', 18)} Otro diseño</button>`}
           ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button class="rv-mini" data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">${pzIc('refresh', 18)} Otras 3</button>`}
-          ${d.media_type === 'video' ? `<button class="rv-mini" data-revvideo="${d.id}" title="Cambiar el video de este posteo">${pzIc('reel', 18)} Otro video</button>` : `<button class="rv-mini" data-revphoto="${d.id}" title="Cambiar la foto de este posteo">${pzIc('image', 18)} Otra foto</button><button class="rv-mini" data-revphotopick=\"${d.id}\" title=\"Elegir una foto de tu librería o subir una nueva\">${pzIc('camera', 18)} Foto</button>${d.media_type !== 'carousel' ? `<button class="rv-mini" data-revrestyle=\"${d.id}\" title=\"Restylear TU foto con el estilo elegido arriba (mismo producto, otro estilo)\">${pzIc('palette', 18)} Restylear</button><button class="rv-mini" data-revenhance=\"${d.id}\" title=\"Mejorar la foto: luz, nitidez y color en un tap\">${pzIc('sparkle', 18)} Mejorar</button><button class="rv-mini" data-revcarousel=\"${d.id}\" title=\"Convertir en carousel: portada que frena + 3 placas\">${pzIc('layers', 18)} Carousel</button><button class="rv-mini" data-revreel=\\\"${d.id}\\\" title=\\\"Armar reel: Ken Burns + headline, 1080×1920 (máx 2/semana)\\\">${pzIc('reel', 18)} Reel</button>` : ''}`}
+          ${d.media_type === 'video' ? `<button class="rv-mini" data-revvideo="${d.id}" title="Cambiar el video de este posteo">${pzIc('reel', 18)} Otro video</button>` : `<button class="rv-mini" data-revphoto="${d.id}" title="Cambiar la foto de este posteo">${pzIc('image', 18)} Otra foto</button><button class="rv-mini" data-revphotopick=\"${d.id}\" title=\"Elegir una foto de tu librería o subir una nueva\">${pzIc('camera', 18)} Foto</button>${d.media_type !== 'carousel' ? `<button class="rv-mini" data-revrestyle=\"${d.id}\" title=\"Restylear TU foto con el estilo elegido arriba (mismo producto, otro estilo)\">${pzIc('palette', 18)} Restylear</button><button class="rv-mini" data-revenhance=\"${d.id}\" title=\"Mejorar la foto: luz, nitidez y color en un tap\">${pzIc('sparkle', 18)} Mejorar</button><button class=\"rv-mini\" data-revcaption=\"${d.id}\" title=\"Titular corto sobre la foto, en un toque\">${pzIc('pencil', 18)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? (d.caption_on ? 'Remove caption' : 'Add caption') : (d.caption_on ? 'Quitar caption' : 'Agregar caption')}</button><button class="rv-mini" data-revcarousel=\"${d.id}\" title=\"Convertir en carousel: portada que frena + 3 placas\">${pzIc('layers', 18)} Carousel</button><button class="rv-mini" data-revreel=\\\"${d.id}\\\" title=\\\"Armar reel: Ken Burns + headline, 1080×1920 (máx 2/semana)\\\">${pzIc('reel', 18)} Reel</button>` : ''}`}
           <button class="pcard-del" data-revdel="${d.id}">${pzIc('trash', 18)}</button>
         </div>
         ${d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">${pzIc('idea', 15)} <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
@@ -5564,6 +5805,9 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           <div class="aiedit-msg" id="aiphoto-msg-${d.id}"></div>
         </div>
         <div id="revph-${d.id}"></div>
+        <div class="igmock-icos" id="mcbtns-${d.id}" data-mcbtns="${d.id}" data-mcvideo="${d.media_type === 'video' ? 1 : 0}" style="margin-top:8px"></div>
+        <div id="mcchips-${d.id}" data-mcchips="${d.id}"></div>
+        <div id="revproposal-${d.id}"></div>
         <div id="revvar-${d.id}"></div>
         <div id="revnowm-${d.id}"></div>
       </div>
@@ -5574,6 +5818,482 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
     </div>
     <div id="revMsg"></div>
   </div>`;
+}
+
+// (media-cliente-2) Cliente de mejoras de foto/video — 2ª tanda.
+const MC_ISSUE_ES = { oscura: 'se ve oscura', movida: 'salió movida', 'baja-res': 'tiene poca definición', cortada: 'quedó cortada' };
+const MC_KINDS = {
+  'photo-straighten': { ep: 'photo-straighten', cols: ['straighten_proposal_path', 'straighten_proposal_base'], ov: false, pv: false, titulo: 'Enderezada' },
+  'photo-cleanup': { ep: 'photo-cleanup', cols: ['cleanup_proposal_path', 'cleanup_proposal_base'], ov: false, pv: false, titulo: 'Limpia' },
+  'photo-glare': { ep: 'photo-glare', cols: ['glare_proposal_path', 'glare_proposal_base'], ov: false, pv: false, titulo: 'Sin reflejos' },
+  'photo-bokeh': { ep: 'photo-bokeh', cols: ['bokeh_proposal_path', 'bokeh_proposal_base'], ov: false, pv: false, titulo: 'Fondo difuminado' },
+  'photo-kenburns': { ep: 'photo-kenburns', cols: ['kenburns_proposal_path', 'kenburns_proposal_base'], ov: false, pv: true, titulo: 'Reel con zoom' },
+  'video-stabilize': { ep: 'video-stabilize', cols: ['stabilize_proposal_path', 'stabilize_proposal_base'], ov: true, pv: true, titulo: 'Mejorado' },
+  'video-audioclean': { ep: 'video-audioclean', cols: ['audioclean_proposal_path', 'audioclean_proposal_base'], ov: true, pv: true, titulo: 'Audio limpio' },
+  'video-subtitles': { ep: 'video-subtitles', cols: ['subtitle_proposal_path', 'subtitle_proposal_base'], ov: true, pv: true, titulo: 'Con subtítulos' },
+  'video-trim': { ep: 'video-trim', cols: ['trim_proposal_path', 'trim_proposal_base'], ov: true, pv: true, titulo: 'Recortado' },
+  'music': { ep: 'music', cols: ['music_proposal_path', 'music_proposal_base'], ov: true, pv: true, titulo: 'Con música' },
+  'music-ducking': { ep: 'music-ducking', cols: ['ducking_proposal_path', 'ducking_proposal_base'], ov: true, pv: true, titulo: 'Con música y ducking' },
+  'video-transitions': { ep: 'video-transitions', cols: ['transition_proposal_path', 'transition_proposal_base'], ov: true, pv: true, titulo: 'Con transiciones' },
+  'video-voiceover': { ep: 'video-voiceover', cols: ['voiceover_proposal_path', 'voiceover_proposal_base'], ov: true, pv: true, titulo: 'Con mi voz' },
+  'video-timelapse': { ep: 'video-timelapse', cols: ['timelapse_proposal_path', 'timelapse_proposal_base'], ov: true, pv: true, titulo: 'Timelapse' },
+  'video-loop': { ep: 'video-loop', cols: ['loop_proposal_path', 'loop_proposal_base'], ov: true, pv: true, titulo: 'Loop' },
+  'video-asmr': { ep: 'video-asmr', cols: ['asmr_proposal_path', 'asmr_proposal_base'], ov: true, pv: true, titulo: 'Sonido protagonista' },
+  'video-silencio': { ep: 'video-silencio', cols: ['silencio_proposal_path', 'silencio_proposal_base'], ov: true, pv: true, titulo: 'Con silencio' },
+  'video-tachado': { ep: 'video-tachado', cols: ['tachado_proposal_path', 'tachado_proposal_base'], ov: true, pv: true, titulo: 'Precio tachado' },
+  'video-hook': { ep: 'video-hook', cols: ['hook_proposal_path', 'hook_proposal_base'], ov: true, pv: true, titulo: 'Con gancho' },
+  'photo-priceband': { ep: 'photo-price-band', cols: ['priceband_proposal_path', 'priceband_proposal_base'], ov: false, pv: false, titulo: 'Precio en banda' },
+};
+function mcEn() { try { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); } catch (e) { return false; } }
+function mcBox(id) { return document.getElementById('revproposal-' + id); }
+function mcMediaTag(src, isVideo) {
+  return isVideo
+    ? `<video src="${esc(src)}" controls playsinline style="width:100%;border-radius:12px;display:block"></video>`
+    : `<img src="${esc(mv(src, 640))}" data-full="${esc(src)}" onerror="__imgFb(this)" style="width:100%;border-radius:12px;display:block">`;
+}
+function renderMcProposal(id, kindKey, original, proposal) {
+  const box = mcBox(id);
+  if (!box) return;
+  const k = MC_KINDS[kindKey];
+  if (!k) return;
+  const en = mcEn();
+  box.innerHTML = `<div style="margin:8px 0"><div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'Compare: original vs. improved' : 'Compará: original vs. mejorada'}</div>` +
+    `<div style="display:flex;gap:8px;margin-bottom:8px"><button class="pcsheet-opt" data-mcshow="orig">${en ? 'Original' : 'Original'}</button><button class="pcsheet-opt" data-mcshow="prop">${k.titulo}</button></div>` +
+    `<div data-mcview="orig">${mcMediaTag(original, k.ov)}</div><div data-mcview="prop" style="display:none">${mcMediaTag(proposal, k.pv)}</div>` +
+    `<div style="display:flex;gap:8px;margin-top:8px"><button class="pcsheet-opt" data-mcaccept="1">✅ ${en ? 'Use the improved one' : 'Usar la mejorada'}</button><button class="pcsheet-opt" data-mcreject="1">${en ? 'Keep the original' : 'Quedarme con la original'}</button></div></div>`;
+  const show = (w) => {
+    const o = box.querySelector('[data-mcview="orig"]'), p = box.querySelector('[data-mcview="prop"]');
+    if (o) o.style.display = w === 'orig' ? '' : 'none';
+    if (p) p.style.display = w === 'prop' ? '' : 'none';
+  };
+  box.querySelectorAll('[data-mcshow]').forEach(b => b.onclick = () => show(b.dataset.mcshow));
+  box.querySelectorAll('[data-mcaccept]').forEach(b => b.onclick = async () => {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/' + k.ep + '-accept', {}, {});
+    const d = (typeof REVIEW_DRAFTS !== 'undefined' ? REVIEW_DRAFTS.find(x => String(x.id) === String(id)) : null);
+    if (r && r.ok && r.path) {
+      if (d) { d.image_path = r.path; k.cols.forEach(c => d[c] = ''); if (kindKey === 'photo-kenburns') d.media_type = 'video'; }
+      box.innerHTML = '';
+      try { render(); } catch (e) {}
+      toast(en ? '✅ Improved version applied' : '✅ Mejorada aplicada');
+    } else {
+      if (d) k.cols.forEach(c => d[c] = '');
+      box.innerHTML = '';
+      toast(en ? 'That proposal expired' : 'Esa propuesta venció');
+    }
+  });
+  box.querySelectorAll('[data-mcreject]').forEach(b => b.onclick = async () => {
+    await api.post('/api/drafts/' + encodeURIComponent(id) + '/' + k.ep + '-reject', {}, {});
+    const d = (typeof REVIEW_DRAFTS !== 'undefined' ? REVIEW_DRAFTS.find(x => String(x.id) === String(id)) : null);
+    if (d) k.cols.forEach(c => d[c] = '');
+    box.innerHTML = '';
+  });
+}
+async function mcPropose(id, kindKey, body) {
+  const box = mcBox(id);
+  const k = MC_KINDS[kindKey];
+  if (!box || !k) return;
+  const en = mcEn();
+  box.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Working on it…' : 'Trabajando en eso…'}</span>`;
+  try {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/' + k.ep, body || {}, { timeout: 300000 });
+    const d = (typeof REVIEW_DRAFTS !== 'undefined' ? REVIEW_DRAFTS.find(x => String(x.id) === String(id)) : null);
+    const orig = (d && d.image_path) || '';
+    if (r && r.ok && r.proposal_path) {
+      if (d) { d[k.cols[0]] = r.proposal_path; d[k.cols[1]] = r.proposal_base; }
+      renderMcProposal(id, kindKey, orig, r.proposal_path);
+    } else if (r && r.derecha) {
+      box.innerHTML = `<span style="font-size:11.5px">✅ ${en ? 'This photo is already straight' : 'Esta foto ya está derecha'}</span>`;
+    } else if (r && r.mejorable === false) {
+      box.innerHTML = `<span style="font-size:11.5px">✅ ${en ? 'This video already looks good' : 'Este video ya está bien'}</span>`;
+    } else {
+      box.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || (en ? 'Could not do it, try again' : 'No se pudo, probá de nuevo'))}</span>`;
+    }
+  } catch (e) {
+    box.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+}
+function mcBindCards() {
+  document.querySelectorAll('[data-mcbtns]').forEach(row => {
+    if (row.dataset.done === '1') return;
+    row.dataset.done = '1';
+    const id = row.dataset.mcbtns;
+    const isVid = row.dataset.mcvideo === '1';
+    const en = mcEn();
+    const btns = isVid ? [
+      ['video-stabilize', en ? 'Improve video' : 'Mejorar video'],
+      ['video-audioclean', en ? 'Clean audio' : 'Limpiar audio'],
+      ['video-subtitles', en ? 'Subtitles' : 'Subtítulos'],
+      ['video-trim', en ? 'Trim' : 'Recortar'],
+      ['music-ui', '🎵 ' + (en ? 'Music' : 'Música')],
+      ['split-ui', en ? 'Cut into pieces' : 'Cortar en piezas'],
+      ['transitions-ui', en ? 'Transitions' : 'Transiciones'],
+      ['voice-ui', '🎤 ' + (en ? 'My voice' : 'Mi voz')],
+      ['timelapse-ui', en ? 'Timelapse' : 'Timelapse'],
+      ['video-loop', en ? 'Story loop' : 'Loop historia'],
+      ['video-asmr', en ? 'Product sound' : 'Sonido protagonista'],
+      ['silencio-ui', en ? 'Silence before the moment' : 'Silencio antes'],
+      ['tachado-ui', en ? 'Strike price' : 'Precio tachado'],
+      ['hook-ui', en ? '3-second hook' : 'Gancho 3 s'],
+      ['checklist-ui', en ? 'Final check' : 'Revisión final'],
+      ['proyectos-ui', en ? 'Versions' : 'Versiones'],
+    ] : [
+      ['photo-straighten', en ? 'Straighten' : 'Enderezar'],
+      ['photo-cleanup', en ? 'Clean up' : 'Limpiar'],
+      ['photo-glare', en ? 'No glare' : 'Reflejos'],
+      ['photo-bokeh', en ? 'Blur background' : 'Fondo difuminado'],
+      ['photo-kenburns', en ? 'Zoom reel' : 'Reel con zoom'],
+      ['priceband-ui', en ? 'Offer price' : 'Precio oferta'],
+    ];
+    row.innerHTML = btns.map(b => `<button class="rv-mini" data-mcgo="${b[0]}" data-mcid="${id}">${b[1]}</button>`).join('');
+    row.querySelectorAll('[data-mcgo]').forEach(b => b.onclick = () => {
+      const kind = b.dataset.mcgo, did = +b.dataset.mcid;
+      if (kind === 'music-ui') return mcMusicUI(did);
+      if (kind === 'split-ui') return mcSplitUI(did);
+      if (kind === 'transitions-ui') return mcTransitionsUI(did);
+      if (kind === 'voice-ui') return mcVoiceUI(did);
+      if (kind === 'timelapse-ui') return mcTimelapseUI(did);
+      if (kind === 'silencio-ui') return mcSilencioUI(did);
+      if (kind === 'tachado-ui') return mcTachadoUI(did);
+      if (kind === 'hook-ui') return mcHookUI(did);
+      if (kind === 'checklist-ui') return mcChecklistUI(did);
+      if (kind === 'proyectos-ui') return mcProyectosUI(did);
+      if (kind === 'priceband-ui') return mcPriceBandUI(did);
+      if (kind === 'photo-bokeh') return mcPropose(did, kind, { auto: true });
+      return mcPropose(did, kind, {});
+    });
+  });
+  document.querySelectorAll('[data-mcchips]').forEach(div => {
+    if (div.dataset.done === '1') return;
+    div.dataset.done = '1';
+    mcChipsCheck(+div.dataset.mcchips, div);
+  });
+}
+function mcRestoreProposals() {
+  if (typeof REVIEW_DRAFTS === 'undefined') return;
+  for (const d of REVIEW_DRAFTS) {
+    for (const key of Object.keys(MC_KINDS)) {
+      const k = MC_KINDS[key];
+      if (d[k.cols[0]] && d[k.cols[1]] && d[k.cols[1]] === d.image_path) renderMcProposal(d.id, key, d.image_path, d[k.cols[0]]);
+    }
+  }
+}
+async function mcChipsCheck(id, div) {
+  try {
+    const en = mcEn();
+    const [pal, reu] = await Promise.all([
+      api.get('/api/drafts/' + id + '/palette-check').catch(() => null),
+      api.get('/api/drafts/' + id + '/photo-reuse').catch(() => null),
+    ]);
+    let html = '';
+    if (pal && pal.aviso) html += `<div style="font-size:11.5px;margin-top:6px">🎨 ${en ? 'This photo clashes with your feed palette (just a heads-up — nothing is blocked)' : 'Esta foto desentona con la paleta de tu feed (solo aviso, no bloquea nada)'}</div>`;
+    if (reu && reu.reusos && reu.reusos.length) {
+      const f = reu.reusos[0].scheduled_at ? String(reu.reusos[0].scheduled_at).slice(0, 10) : '';
+      html += `<div style="font-size:11.5px;margin-top:6px">♻️ ${en ? 'This photo was already used' : 'Esta foto ya se usó'}${f ? ' (' + f + ')' : ''} — ${en ? 'just a heads-up' : 'solo aviso'}</div>`;
+    }
+    div.innerHTML = html;
+  } catch (e) {}
+}
+// (media-cliente-3) UIs de tarjeta: formularios chicos que terminan
+// en mcPropose (propuesta con acepto) o en endpoints propios.
+async function mcTimelapseUI(id) {
+  const box = mcBox(id); if (!box) return; const en = mcEn();
+  box.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'Timelapse: how fast?' : 'Timelapse: ¿qué tan rápido?'}</div>
+  <div style="display:flex;gap:6px;align-items:center"><select data-mcvel style="font-size:14px"><option value="2">2x</option><option value="4" selected>4x</option><option value="8">8x</option><option value="16">16x</option></select>
+  <button class="pcsheet-opt" data-mcgo2="1">${en ? 'Make timelapse' : 'Hacer timelapse'}</button></div>
+  <div style="font-size:11px;opacity:.7;margin-top:6px">${en ? 'Only speed changes — never the content.' : 'Solo cambia la velocidad, nunca el contenido.'}</div>`;
+  box.querySelector('[data-mcgo2]').onclick = () => mcPropose(id, 'video-timelapse', { velocidad: +box.querySelector('[data-mcvel]').value });
+}
+async function mcSilencioUI(id) {
+  const box = mcBox(id); if (!box) return; const en = mcEn();
+  box.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'Silence before the key moment' : 'Silencio antes del momento clave'}</div>
+  <div style="display:flex;gap:6px;align-items:center"><input data-mcmom type="number" min="1" step="0.5" placeholder="${en ? 'Second (e.g. 8)' : 'Segundo (ej. 8)'}" style="width:110px;font-size:14px">
+  <button class="pcsheet-opt" data-mcgo2="1">${en ? 'Apply silence' : 'Aplicar silencio'}</button></div>
+  <div style="font-size:11px;opacity:.7;margin-top:6px">${en ? 'One second of silence right before that second. Audio only.' : 'Un segundo de silencio justo antes de ese segundo. Solo audio.'}</div>`;
+  box.querySelector('[data-mcgo2]').onclick = () => mcPropose(id, 'video-silencio', { momento: +box.querySelector('[data-mcmom]').value });
+}
+async function mcTachadoUI(id) {
+  const box = mcBox(id); if (!box) return; const en = mcEn();
+  box.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'Animated strike price (offer reel)' : 'Precio tachado animado (reel de oferta)'}</div>
+  <input data-mctit placeholder="${en ? 'Offer title (as in your profile)' : 'Título de la oferta (como en tu fundamento)'}" style="width:100%;font-size:14px;margin-bottom:6px">
+  <div style="display:flex;gap:6px"><input data-mcviejo placeholder="${en ? 'Old price' : 'Precio viejo'}" style="flex:1;font-size:14px"><input data-mcnuevo placeholder="${en ? 'New price' : 'Precio nuevo'}" style="flex:1;font-size:14px"></div>
+  <button class="pcsheet-opt" data-mcgo2="1" style="margin-top:6px">${en ? 'Animate' : 'Animar'}</button>
+  <div style="font-size:11px;opacity:.7;margin-top:6px">${en ? 'Both prices must appear in the real offer — never invented, never over the product.' : 'Ambos precios tienen que estar en la oferta real: nunca inventados, nunca sobre el producto.'}</div>`;
+  box.querySelector('[data-mcgo2]').onclick = () => mcPropose(id, 'video-tachado', { oferta_titulo: box.querySelector('[data-mctit]').value, precio_viejo: box.querySelector('[data-mcviejo]').value, precio_nuevo: box.querySelector('[data-mcnuevo]').value });
+}
+async function mcPriceBandUI(id) {
+  const box = mcBox(id); if (!box) return; const en = mcEn();
+  box.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'Offer price in the band' : 'Precio en la banda para ofertas'}</div>
+  <input data-mctit placeholder="${en ? 'Offer title (as in your profile)' : 'Título de la oferta (como en tu fundamento)'}" style="width:100%;font-size:14px;margin-bottom:6px">
+  <div style="display:flex;gap:6px"><input data-mcpre placeholder="${en ? 'Price' : 'Precio'}" style="flex:1;font-size:14px"><select data-mcpos style="font-size:14px"><option value="inf">${en ? 'Bottom band' : 'Banda inferior'}</option><option value="sup">${en ? 'Top band' : 'Banda superior'}</option></select></div>
+  <button class="pcsheet-opt" data-mcgo2="1" style="margin-top:6px">${en ? 'Put price in band' : 'Poner precio en banda'}</button>
+  <div style="font-size:11px;opacity:.7;margin-top:6px">${en ? 'Real price from the offer only — the band grows, it never covers the product.' : 'Solo el precio real de la oferta: la banda agranda el lienzo, nunca tapa el producto.'}</div>`;
+  box.querySelector('[data-mcgo2]').onclick = () => mcPropose(id, 'photo-priceband', { oferta_titulo: box.querySelector('[data-mctit]').value, precio: box.querySelector('[data-mcpre]').value, posicion: box.querySelector('[data-mcpos]').value });
+}
+async function mcVoiceUI(id) {
+  const box = mcBox(id); if (!box) return; const en = mcEn();
+  let rec = null, chunks = [];
+  box.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">🎤 ${en ? 'Your voice over the reel' : 'Tu voz sobre el reel'}</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="pcsheet-opt" data-mcrec="1">🔴 ${en ? 'Record' : 'Grabar'}</button><button class="pcsheet-opt" data-mcstop="1" disabled>${en ? 'Stop' : 'Parar'}</button><button class="pcsheet-opt" data-mcmix="1" disabled>${en ? 'Mix my voice' : 'Mezclar mi voz'}</button></div>
+  <div data-mcprev style="margin-top:8px"></div>
+  <div style="font-size:11px;opacity:.7;margin-top:6px">${en ? 'Your voice on top, original audio underneath. The mix needs your accept before use.' : 'Tu voz arriba, el audio original abajo. La mezcla se acepta antes de usarse.'}</div>`;
+  const recB = box.querySelector('[data-mcrec]'), stopB = box.querySelector('[data-mcstop]'), mixB = box.querySelector('[data-mcmix]'), prev = box.querySelector('[data-mcprev]');
+  recB.onclick = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunks = [];
+      rec = new MediaRecorder(stream);
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      rec.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        prev.innerHTML = `<audio controls src="${URL.createObjectURL(blob)}" style="width:100%"></audio>`;
+        mixB.disabled = false;
+        mixB.onclick = async () => {
+          mixB.disabled = true;
+          box.querySelector('[data-mcprev]').insertAdjacentHTML('beforeend', `<div style="font-size:11.5px">⏳ ${en ? 'Mixing…' : 'Mezclando…'}</div>`);
+          try {
+            const r = await fetch('/api/drafts/' + encodeURIComponent(id) + '/video-voiceover', { method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm' }, body: blob });
+            const d = await r.json();
+            const orig = (typeof REVIEW_DRAFTS !== 'undefined' ? (REVIEW_DRAFTS.find(x => String(x.id) === String(id)) || {}) : {}).image_path || '';
+            if (d && d.ok && d.proposal_path) renderMcProposal(id, 'video-voiceover', orig, d.proposal_path);
+            else box.innerHTML = `<span style="font-size:11.5px">${esc((d && d.error) || 'Error')}</span>`;
+          } catch (e) { box.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
+        };
+      };
+      rec.start(); recB.disabled = true; stopB.disabled = false;
+    } catch (e) { box.innerHTML = `<span style="font-size:11.5px">${en ? 'Microphone permission is needed to record.' : 'Hace falta permiso del micrófono para grabar.'}</span>`; }
+  };
+  stopB.onclick = () => { if (rec && rec.state !== 'inactive') rec.stop(); recB.disabled = false; stopB.disabled = true; };
+}
+async function mcHookUI(id) {
+  const box = mcBox(id); if (!box) return; const en = mcEn();
+  box.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Checking the first 3 seconds…' : 'Revisando los primeros 3 segundos…'}</span>`;
+  try {
+    const r = await api.get('/api/drafts/' + id + '/video-hook-check').catch(() => null);
+    if (r && r.tiene_producto === true) {
+      box.innerHTML = `<span style="font-size:12px">✅ ${en ? 'The product is already in the first 3 seconds — no hook needed.' : 'El producto ya aparece en los primeros 3 segundos: no hace falta gancho.'}</span>`;
+      return;
+    }
+    const vids = (typeof ASSETS !== 'undefined' ? ASSETS : []).filter(a => a.kind === 'video');
+    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? '3-second hook: product first' : 'Gancho de 3 segundos: el producto primero'}</div>`;
+    html += `<div style="font-size:11.5px;margin-bottom:6px">${r && r.tiene_producto === false ? (en ? 'The product is not in the first seconds.' : 'El producto no está en los primeros segundos.') : (en ? 'Could not confirm from the frame — pick a product clip to be sure.' : 'No se pudo confirmar con el cuadro: elegí un clip del producto para asegurarlo.')}</div>`;
+    if (!vids.length) { box.innerHTML = html + `<span style="font-size:11.5px">${en ? 'Add a product video to your library first.' : 'Primero sumá un video del producto a tu librería.'}</span>`; return; }
+    html += `<select data-mcclip style="font-size:14px;width:100%;margin-bottom:6px">${vids.map(v => `<option value="${v.id}">${esc(v.file_path.split('/').pop())}</option>`).join('')}</select>`;
+    html += `<button class="pcsheet-opt" data-mcgo2="1">${en ? 'Put product first (3 s)' : 'Poner el producto primero (3 s)'}</button>`;
+    box.innerHTML = html;
+    box.querySelector('[data-mcgo2]').onclick = () => mcPropose(id, 'video-hook', { clip_id: +box.querySelector('[data-mcclip]').value });
+  } catch (e) { box.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
+}
+async function mcChecklistUI(id) {
+  const box = mcBox(id); if (!box) return; const en = mcEn();
+  const load = async () => {
+    box.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Checking…' : 'Revisando…'}</span>`;
+    try {
+      const r = await api.get('/api/drafts/' + id + '/checklist').catch(() => null);
+      if (!r || !r.ok) { box.innerHTML = `<span style="font-size:11.5px">${en ? 'Could not check.' : 'No se pudo revisar.'}</span>`; return; }
+      if (!r.items.length) { box.innerHTML = `<span style="font-size:12px">✅ ${en ? 'All clear — ready to publish.' : 'Todo en orden, listo para publicar.'}</span>`; return; }
+      let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'Final check before publishing' : 'Revisión final antes de publicar'}</div>`;
+      if (r.bloqueado) html += `<div style="font-size:11.5px;color:#B3402E;margin-bottom:6px">⛔ ${en ? 'Hard issues block publishing until you fix or accept them knowingly.' : 'Hay problemas duros: no se publica hasta resolverlos o aceptarlos conociéndolos.'}</div>`;
+      r.items.forEach(it => {
+        const color = it.confirmado ? '#2E7D32' : (it.duro ? '#B3402E' : '#8A6D00');
+        html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:12px;flex:1;color:${color}">${it.duro ? '🔴' : '🟡'} ${esc(it.texto)}${it.confirmado ? ' ✅' : ''}</span>${(!it.confirmado && it.duro) ? `<button class="pcsheet-opt" data-mcconf="${esc(it.item)}">${en ? 'I accept knowingly' : 'Lo acepto conociéndolo'}</button>` : ''}</div>`;
+      });
+      box.innerHTML = html;
+      box.querySelectorAll('[data-mcconf]').forEach(b => b.onclick = async () => {
+        b.disabled = true;
+        await api.post('/api/drafts/' + id + '/checklist-confirm', { item: b.dataset.mcconf }).catch(() => null);
+        load();
+      });
+    } catch (e) { box.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
+  };
+  load();
+}
+async function mcProyectosUI(id) {
+  const box = mcBox(id); if (!box) return; const en = mcEn();
+  box.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Loading versions…' : 'Cargando versiones…'}</span>`;
+  try {
+    const r = await api.get('/api/drafts/' + id + '/proyectos').catch(() => null);
+    if (!r || !r.ok || !r.versiones.length) { box.innerHTML = `<span style="font-size:11.5px">${en ? 'No versions yet.' : 'Todavía no hay versiones.'}</span>`; return; }
+    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'Re-editable project: every accepted version is kept' : 'Proyecto re-editable: cada versión aceptada queda guardada'}</div>`;
+    r.versiones.forEach(v => {
+      const isVid = /\.mp4$/i.test(v.path);
+      html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:12px;flex:1">${esc(v.etiqueta)}</span>${isVid ? `<video src="${esc(v.path)}" muted playsinline style="width:64px;height:64px;object-fit:cover;border-radius:8px"></video>` : `<img src="${esc(v.path)}" style="width:64px;height:64px;object-fit:cover;border-radius:8px">`}<button class="pcsheet-opt" data-mcrest="${esc(v.path)}">${en ? 'Restore' : 'Restaurar'}</button></div>`;
+    });
+    box.innerHTML = html;
+    box.querySelectorAll('[data-mcrest]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      const u = await api.post('/api/drafts/' + id + '/proyectos/restaurar', { path: b.dataset.mcrest }).catch(() => null);
+      if (u && u.ok) { toast(en ? '✅ Version restored' : '✅ Versión restaurada'); try { render(); } catch (e) {} }
+      else toast(esc((u && u.error) || 'Error'));
+      b.disabled = false;
+    });
+  } catch (e) { box.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message)}</span>`; }
+}
+async function mcMusicUI(id) {
+  const box = mcBox(id);
+  if (!box) return;
+  const en = mcEn();
+  box.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Loading the Meta library…' : 'Cargando la biblioteca de Meta…'}</span>`;
+  try {
+    const [lib, sug] = await Promise.all([
+      api.get('/api/musica').catch(() => null),
+      api.get('/api/drafts/' + id + '/music-suggest').catch(() => null),
+    ]);
+    if (!lib || !lib.temas || !lib.temas.length) {
+      box.innerHTML = `<div style="font-size:12.5px;line-height:1.6">🎵 ${en ? 'No Meta Sound Collection tracks loaded yet.' : 'Todavía no hay temas de la colección de Meta cargados.'}<br><span style="font-size:11.5px;opacity:.8">${en ? 'Load them like this: Meta Business Suite → Sound Collection → download the MP3s → copy them to assets/music-meta/ → run node music-meta-catalog.js --write. Only real Meta tracks appear here — nothing is invented.' : 'Se cargan así: Meta Business Suite → Sound Collection → descargar los MP3 → copiarlos a assets/music-meta/ → correr node music-meta-catalog.js --write. Acá solo aparecen temas reales de Meta: nada inventado.'}</span></div>`;
+      return;
+    }
+    const moods = ['alegre', 'tranquilo', 'enérgico', 'sin-clasificar'];
+    const moodName = { alegre: en ? 'Cheerful' : 'Alegre', tranquilo: en ? 'Calm' : 'Tranquilo', 'enérgico': en ? 'Energetic' : 'Enérgico', 'sin-clasificar': en ? 'Unsorted' : 'Sin clasificar' };
+    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">🎵 ${en ? 'Meta Sound Collection — free, licensed for commercial use on Meta' : 'Colección de Meta — gratis, con licencia comercial en Meta'}</div>`;
+    if (lib.tendencia && lib.tendencia.length) {
+      html += `<div style="margin-bottom:10px">🔥 ${en ? 'Trending in your niche (real usage)' : 'Sonando en tu rubro (uso real)'}: ${lib.tendencia.map(t => `<button class="pcsheet-opt" data-mcmusic="${esc(t.file)}">${esc(t.titulo)} (${t.usos})</button>`).join(' ')}</div>`;
+    }
+    if (sug && sug.sugerido) {
+      html += `<div style="margin-bottom:10px">✨ ${en ? 'Posty suggests' : 'Posty sugiere'}: <b>${esc(sug.sugerido.titulo)}</b> <button class="pcsheet-opt" data-mcmusic="${esc(sug.sugerido.file)}">${en ? 'Use it' : 'Usarlo'}</button> <button class="pcsheet-opt" data-mcduck="${esc(sug.sugerido.file)}">${en ? 'Use with ducking' : 'Usar con ducking'}</button></div>`;
+    }
+    moods.forEach(m => {
+      const ts = lib.temas.filter(t => (t.mood || 'sin-clasificar') === m);
+      if (!ts.length) return;
+      html += `<div style="font-size:12px;font-weight:700;margin:10px 0 4px">${moodName[m]}</div>`;
+      ts.forEach(t => {
+        html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:12px;flex:1">${esc(t.titulo)}${t.artista ? ' — ' + esc(t.artista) : ''}</span><audio controls preload="none" src="${esc(t.url)}" style="width:120px;height:28px"></audio><button class="pcsheet-opt" data-mcmusic="${esc(t.file)}">${en ? 'Use' : 'Usar'}</button><button class="pcsheet-opt" data-mcduck="${esc(t.file)}">🔉 Ducking</button></div>`;
+      });
+    });
+    html += `<div style="font-size:11px;opacity:.7;margin-top:8px">${en ? 'Every track: Meta Sound Collection · commercial use on Meta products only (Facebook, Instagram, Messenger, Audience Network). Never Spotify, never the Instagram catalog.' : 'Cada tema: Meta Sound Collection · uso comercial solo en productos Meta (Facebook, Instagram, Messenger, Audience Network). Nunca Spotify ni catálogo de Instagram.'}</div>`;
+    box.innerHTML = html;
+    box.querySelectorAll('[data-mcmusic]').forEach(b => b.onclick = () => mcPropose(id, 'music', { track: b.dataset.mcmusic }));
+    box.querySelectorAll('[data-mcduck]').forEach(b => b.onclick = () => mcPropose(id, 'music-ducking', { track: b.dataset.mcduck }));
+  } catch (e) {
+    box.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+}
+async function mcSplitUI(id) {
+  const box = mcBox(id);
+  if (!box) return;
+  const en = mcEn();
+  box.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Finding the scenes…' : 'Buscando las escenas…'}</span>`;
+  try {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/video-split', {}, { timeout: 180000 });
+    if (!r || !r.ok || !r.piezas || !r.piezas.length) {
+      box.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || (en ? 'No scenes found' : 'No se encontraron escenas'))}</span>`;
+      return;
+    }
+    const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'One idea per piece — tap to use a piece' : 'Una idea por pieza — tocá para usar una'}</div>`;
+    r.piezas.forEach((p, i) => {
+      html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:12px;flex:1">${en ? 'Piece' : 'Pieza'} ${i + 1}: ${fmt(p.start)}–${fmt(p.end)}</span><button class="pcsheet-opt" data-mcpiece="${p.start}|${p.end}">${en ? 'Use this piece' : 'Usar esta pieza'}</button></div>`;
+    });
+    html += `<button class="pcsheet-opt" data-mcallpieces="1">${en ? 'Use all pieces' : 'Usar todas'}</button>`;
+    box.innerHTML = html;
+    const useOne = async (start, end, btn) => {
+      btn.disabled = true;
+      try {
+        const u = await api.post('/api/drafts/' + encodeURIComponent(id) + '/video-split-use', { start: +start, end: +end }, {});
+        if (u && u.ok) { toast(en ? '✅ Piece saved to your library' : '✅ Pieza guardada en tu librería'); try { ASSETS = await api.get('/api/assets').catch(() => ASSETS); } catch (e) {} }
+        else toast(esc((u && u.error) || 'Error'));
+      } catch (e) { toast(esc(e.message)); }
+      btn.disabled = false;
+    };
+    box.querySelectorAll('[data-mcpiece]').forEach(b => b.onclick = () => { const [s, e] = b.dataset.mcpiece.split('|'); useOne(s, e, b); });
+    const all = box.querySelector('[data-mcallpieces]');
+    if (all) all.onclick = async () => {
+      all.disabled = true;
+      for (const p of r.piezas) { try { await api.post('/api/drafts/' + encodeURIComponent(id) + '/video-split-use', { start: p.start, end: p.end }, {}); } catch (e) {} }
+      all.disabled = false;
+      toast(en ? '✅ Pieces saved to your library' : '✅ Piezas guardadas en tu librería');
+      try { ASSETS = await api.get('/api/assets').catch(() => ASSETS); } catch (e) {}
+    };
+  } catch (e) {
+    box.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+}
+async function mcTransitionsUI(id) {
+  const box = mcBox(id);
+  if (!box) return;
+  const en = mcEn();
+  const vids = (typeof ASSETS !== 'undefined' ? ASSETS : []).filter(a => a.kind === 'video');
+  if (!vids.length) {
+    box.innerHTML = `<span style="font-size:11.5px">${en ? 'Add more videos to your library to join clips with transitions.' : 'Sumá más videos a tu librería para unir clips con transiciones.'}</span>`;
+    return;
+  }
+  let html = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${en ? 'Join clips with smooth transitions (order never changes)' : 'Uní clips con transiciones suaves (el orden no cambia)'}</div>`;
+  html += `<div style="font-size:11.5px;margin-bottom:6px">${en ? 'This video first, then the ones you tick, in order:' : 'Este video primero, después los que marques, en orden:'}</div>`;
+  vids.forEach(v => {
+    html += `<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-bottom:4px"><input type="checkbox" data-mctransclip="${v.id}"> ${esc(v.file_path.split('/').pop())}</label>`;
+  });
+  html += `<div style="margin:8px 0"><label style="font-size:12px">${en ? 'Transition' : 'Transición'}: <select class="in" data-mctransfade style="width:auto"><option value="">${en ? 'My saved style' : 'Mi estilo guardado'}</option><option value="0.5">${en ? 'Smooth (0.5s)' : 'Suave (0,5 s)'}</option><option value="0">${en ? 'Hard cut' : 'Corte seco'}</option></select></label></div>`;
+  html += `<button class="pcsheet-opt" data-mctransgo="1">${en ? 'Build with transitions' : 'Armar con transiciones'}</button>`;
+  box.innerHTML = html;
+  const go = box.querySelector('[data-mctransgo]');
+  if (go) go.onclick = async () => {
+    const extra = [...box.querySelectorAll('[data-mctransclip]:checked')].map(c => +c.dataset.mctransclip);
+    if (!extra.length) { toast(en ? 'Tick at least one more clip' : 'Marcá al menos otro clip'); return; }
+    const fadeSel = box.querySelector('[data-mctransfade]');
+    const body = { extra };
+    if (fadeSel && fadeSel.value !== '') body.fade = +fadeSel.value;
+    await mcPropose(id, 'video-transitions', body);
+  };
+}
+let MC_MEJORES = null, MC_MEJORES_TS = 0;
+async function mcMejoresFetch() {
+  try {
+    if (MC_MEJORES && Date.now() - MC_MEJORES_TS < 60000) return MC_MEJORES;
+    const r = await api.get('/api/mejores-fotos').catch(() => null);
+    if (r && r.mejores) { MC_MEJORES = r.mejores; MC_MEJORES_TS = Date.now(); }
+    return MC_MEJORES || [];
+  } catch (e) { return MC_MEJORES || []; }
+}
+async function mcPaintBadges() {
+  try {
+    const mejores = await mcMejoresFetch();
+    if (!mejores.length) return;
+    const byId = {};
+    mejores.forEach(m => byId[String(m.asset_id)] = m);
+    document.querySelectorAll('[data-mcbest]').forEach(s => {
+      const m = byId[String(s.dataset.mcbest)];
+      if (m) { s.style.display = ''; s.title = (mcEn() ? 'Best of ' : 'La mejor de ') + m.producto + (m.motivosES && m.motivosES.length ? ': ' + (mcEn() ? m.motivosEN.join(', ') : m.motivosES.join(', ')) : ''); }
+    });
+  } catch (e) {}
+}
+function mcPaintPickerBest(mount) {
+  try {
+    if (!mount || !Array.isArray(MC_MEJORES) || !MC_MEJORES.length) return;
+    const row = mount.querySelector('div');
+    if (!row) return;
+    const bestIds = new Set(MC_MEJORES.map(m => String(m.asset_id)));
+    const imgs = [...row.querySelectorAll('[data-pickphoto]')].reverse();
+    imgs.forEach(img => {
+      const a = (typeof ASSETS !== 'undefined' ? ASSETS : []).find(x => x.file_path === img.dataset.pickphoto);
+      if (!a || !bestIds.has(String(a.id))) return;
+      let wrap = img.parentElement;
+      if (wrap === row) { wrap = document.createElement('span'); wrap.style.cssText = 'position:relative;display:inline-block;flex-shrink:0'; img.before(wrap); wrap.appendChild(img); }
+      if (!wrap.querySelector('.mc-best')) { const s = document.createElement('span'); s.className = 'mc-best'; s.textContent = '⭐'; s.style.cssText = 'position:absolute;top:2px;left:2px;font-size:14px'; wrap.appendChild(s); }
+      row.prepend(wrap);
+    });
+  } catch (e) {}
+}
+async function mcFaltanCheck() {
+  try {
+    const mount = document.getElementById('mcFaltan');
+    if (!mount) return;
+    const r = await api.get('/api/faltan-fotos').catch(() => null);
+    if (!r || !r.faltan) return;
+    const pendientes = r.faltan.filter(f => !f.pedido_reciente);
+    if (!pendientes.length) { mount.innerHTML = ''; return; }
+    const en = mcEn();
+    const names = pendientes.map(f => esc(f.producto)).join(', ');
+    mount.innerHTML = `<div class="chat-msg ai">📸 ${en ? 'You still need real photos of' : 'Te faltan fotos reales de'}: <b>${names}</b> — <button class="pcsheet-opt" data-mcfaltanpedir="1">${en ? 'Ask me in chat' : 'Pedir en el chat'}</button></div>`;
+    const b = mount.querySelector('[data-mcfaltanpedir]');
+    if (b) b.onclick = async () => {
+      b.disabled = true;
+      try {
+        const p = await api.post('/api/faltan-fotos/pedir', {}, {});
+        if (p && p.mensaje) { try { chatSay(p.mensaje); } catch (e) {} mount.innerHTML = `<div class="chat-msg ai">✅ ${en ? 'Asked — send the photos right here with ＋' : 'Pedido — mandame las fotos acá mismo con ＋'}</div>`; }
+        else mount.innerHTML = '';
+      } catch (e) { mount.innerHTML = ''; }
+    };
+  } catch (e) {}
 }
 
 // Edición de un borrador por IA (texto o foto): el cliente lo pide en lenguaje
@@ -5668,10 +6388,10 @@ async function enhanceDraftPhoto(id, btn) {
   if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Mejorando la foto…</span>`;
   try {
     const r = await api.post(`/api/drafts/${id}/photo-enhance`, {}, { timeout: 180000 });
-    if (r && r.ok && r.path) {
-      if (draft) draft.image_path = r.path;
-      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Foto mejorada</span>`;
-      setTimeout(() => { try { render(); } catch (e) {} }, 900);
+    if (r && r.ok && r.proposal_path) {
+      if (draft) { draft.enhance_proposal_path = r.proposal_path; draft.enhance_proposal_base = r.proposal_base; }
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Mejora propuesta lista: comparala abajo</span>`;
+      renderEnhanceProposal(id, (draft && draft.image_path) || '', r.proposal_path);
     } else {
       if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
     }
@@ -5885,6 +6605,15 @@ function bindReview() {
   $$('[data-revrestyle]').forEach(b => b.onclick = () => restyleDraftPhoto(+b.dataset.revrestyle, b));
   // "✨ Mejorar": un tap rescata la foto (luz, nitidez, color)
   $$('[data-revenhance]').forEach(b => b.onclick = () => enhanceDraftPhoto(+b.dataset.revenhance, b));
+  $$('[data-revcaption]').forEach(b => b.onclick = () => toggleDraftCaption(+b.dataset.revcaption, b));
+  // (foto-cliente-experto) Paneles de propuesta pendientes: solo se
+  // muestran si siguen vigentes (su base es la imagen actual).
+  for (const d of REVIEW_DRAFTS) {
+    if (d.enhance_proposal_path && d.enhance_proposal_base && d.enhance_proposal_base === d.image_path) renderEnhanceProposal(d.id, d.image_path, d.enhance_proposal_path);
+  }
+  // (media-cliente-2) Botones, chips y propuestas pendientes de la 2ª tanda.
+  try { mcBindCards(); } catch (e) {}
+  try { mcRestoreProposals(); } catch (e) {}
   // "🎠 Carousel": convierte el borrador en carousel automático
   $$('[data-revcarousel]').forEach(b => b.onclick = () => carouselDraft(+b.dataset.revcarousel, b));   // "🎬 Reel": arma un reel automático desde el borrador
    $$('[data-revreel]').forEach(b => b.onclick = () => reelDraft(+b.dataset.revreel, b));
@@ -6436,7 +7165,7 @@ async function changeDraftPhoto(id, el, photoPath) {
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
     const idx = Math.max(0, REVIEW_DRAFTS.indexOf(d));
     const topic = d.source_topic || (d.caption || '').split('\n')[0].slice(0, 80) || 'novedad';
-    const title = makeHeadline(topic, 5).toUpperCase() || 'NOVEDAD';
+    const title = makeHeadline(topic, 5) || 'Novedad';
     const imagePath = await renderDesignImage({
       tpl: pickTpl(idx + 1, false),
       pal: defaultPal(),
@@ -6499,6 +7228,7 @@ function toggleDraftPhotoPicker(id) {
     <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nueva foto">＋<input type="file" accept="image/*" data-uploadphoto style="display:none"></label>
   </div>`;
   mount.querySelectorAll('[data-pickphoto]').forEach(img => img.onclick = () => changeDraftPhoto(id, img, img.dataset.pickphoto));
+  try { mcMejoresFetch().then(() => mcPaintPickerBest(mount)); } catch (e) {}
   const rm = mount.querySelector('[data-rmphoto]');
   if (rm) rm.onclick = () => removeDraftPhoto(id, rm);
   const up = mount.querySelector('[data-uploadphoto]');
@@ -6528,7 +7258,7 @@ async function removeDraftPhoto(id, el) {
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
     const idx = Math.max(0, REVIEW_DRAFTS.indexOf(d));
     const topic = d.source_topic || (d.caption || '').split('\n')[0].slice(0, 80) || 'novedad';
-    const title = makeHeadline(topic, 5).toUpperCase() || 'NOVEDAD';
+    const title = makeHeadline(topic, 5) || 'Novedad';
     const imagePath = await renderDesignImage({
       tpl: pickTpl(idx + 1, false),
       pal: defaultPal(),
@@ -7319,6 +8049,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
       </div>`}
     </div>
     <div id="chatMsg"></div>
+    <div id="mcFaltan"></div>
   </div>`;
 }
 
@@ -9642,6 +10373,9 @@ async function bindChatView() {
   let forced = null;
   try { forced = sessionStorage.getItem('posty-force-nudge'); sessionStorage.removeItem('posty-force-nudge'); } catch (e) {}
   try { await maybePostyNudge(forced || undefined); } catch (e) {}
+  // (media-cliente-2) Aviso de fotos que faltan, solo si hay alguna
+  // sin pedir en los últimos 7 días.
+  try { mcFaltanCheck(); } catch (e) {}
   // Home: si está "armando tu semana", refrescar solo hasta que aparezcan (máx 2 min).
   try {
     if (document.querySelector('.hs-generating, .hs-completing, .igmock-pending') && (location.hash || '').startsWith('#/app/chat')) {
@@ -10268,6 +11002,7 @@ function pcOpenImageSheet(id) {
     <button type="button" class="pcsheet-opt" data-pc-act="img-upload">${pzIc('camera', 20)} Usar una foto tuya<small>Subila y la uso en este posteo: sale tu negocio real</small></button>
     <input type="file" accept="image/*" class="pcsheet-file" hidden>
     <button type="button" class="pcsheet-opt" data-pc-act="img-enhance">${pzIc('sparkle', 20)} Mejorar esta<small>Retoco la actual: luz, color y nitidez</small></button>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-caption">${pzIc('pencil', 20)} <span class="pcsheet-caption-label">Agregar caption</span><small>Titular corto sobre la foto</small></button>
     <button type="button" class="pcsheet-opt" data-pc-act="img-revert" hidden>${pzIc('back', 20)} Volver a la anterior<small>Recuperás la imagen que tenía antes del cambio — gratis</small></button>
     <div class="pcsheet-note"></div>
     <button type="button" class="pcsheet-close" data-pc-act="img-close">Cerrar</button>
@@ -10301,6 +11036,18 @@ function pcOpenImageSheet(id) {
         const rb = sheet.querySelector('[data-pc-act="img-revert"]');
         if (rb) rb.hidden = false;
       }
+      // (foto-cliente-experto) Caption: etiqueta según el estado actual,
+      // visible solo para fotos con imagen. La hoja guarda la imagen
+      // original para el lado a lado de la propuesta.
+      sheet.dataset.origImage = (post && post.image_path) || '';
+      const cb = sheet.querySelector('[data-pc-act="img-caption"]');
+      if (cb) {
+        cb.hidden = !(post && post.image_path && post.media_type !== 'video' && post.media_type !== 'carousel');
+        const cl = cb.querySelector('.pcsheet-caption-label');
+        if (cl) cl.textContent = (post && post.caption_on) ? 'Quitar caption' : 'Agregar caption';
+        cb.dataset.on = (post && post.caption_on) ? '1' : '0';
+      }
+      if (post && post.enhance_proposal_path && post.enhance_proposal_base && post.enhance_proposal_base === post.image_path) renderSheetProposal(id, post.enhance_proposal_path);
     } catch (e) {}
   })();
 }
@@ -10324,11 +11071,135 @@ async function pcEnhance(id) {
   pcSetLoading(id, true, '⏳ Mejorando la foto…');
   try {
     const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance', {}, { timeout: 180000 });
-    if (r && r.ok && r.path) { pcSetImage(id, r.path); toast('✅ Foto mejorada'); }
+    if (r && r.ok && r.proposal_path) {
+      renderSheetProposal(id, r.proposal_path);
+      toast('✅ Mejora propuesta lista: comparala en esta hoja');
+    }
     else if (r && (r.error === 'redo_exhausted' || r.redo_exhausted)) toast((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You already used the 3 redos for this post' : 'Ya usaste los 3 rehaces de este posteo');
     else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
   } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
   pcSetLoading(id, false);
+}
+// (foto-cliente-experto) Lado a lado original vs. propuesta en la
+// tarjeta de revisión. Los botones aceptan o rechazan en un toque.
+function renderEnhanceProposal(id, original, proposal) {
+  const box = document.getElementById('revproposal-' + id);
+  if (!box || !original || !proposal) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  box.innerHTML = '<div style="display:flex;gap:8px;margin:8px 0">' +
+    '<figure style="flex:1;margin:0"><img src="' + esc(mv(original, 640)) + '" data-full="' + esc(original) + '" onerror="__imgFb(this)" style="width:100%;border-radius:12px;display:block"><figcaption style="font-size:12px;opacity:.7;text-align:center">Original</figcaption></figure>' +
+    '<figure style="flex:1;margin:0"><img src="' + esc(mv(proposal, 640)) + '" data-full="' + esc(proposal) + '" onerror="__imgFb(this)" style="width:100%;border-radius:12px;display:block"><figcaption style="font-size:12px;opacity:.7;text-align:center">' + (en ? 'Improved' : 'Mejorada') + '</figcaption></figure>' +
+    '</div><div style="display:flex;gap:8px">' +
+    '<button class="rv-mini" data-propaccept="' + id + '">' + (en ? '✅ Use improved' : '✅ Usar la mejorada') + '</button>' +
+    '<button class="rv-mini" data-propreject="' + id + '">' + (en ? 'Keep original' : 'Quedarme con la original') + '</button></div>';
+  const a = box.querySelector('[data-propaccept]');
+  const rj = box.querySelector('[data-propreject]');
+  if (a) a.onclick = () => acceptEnhanceProposal(id);
+  if (rj) rj.onclick = () => rejectEnhanceProposal(id);
+}
+async function acceptEnhanceProposal(id) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance-accept', {}, {});
+  const d = REVIEW_DRAFTS.find(x => x.id === id);
+  const box = document.getElementById('revproposal-' + id);
+  if (box) box.innerHTML = '';
+  if (r && r.ok && r.path) {
+    pcSetImage(id, r.path);
+    if (d) { d.image_path = r.path; d.enhance_proposal_path = ''; d.enhance_proposal_base = ''; if (typeof r.caption_on !== 'undefined') d.caption_on = r.caption_on; }
+    const cb = document.querySelector('[data-revcaption="' + id + '"]');
+    if (cb && typeof r.caption_on !== 'undefined') cb.innerHTML = pzIc('pencil', 18) + ' ' + (en ? (r.caption_on ? 'Remove caption' : 'Add caption') : (r.caption_on ? 'Quitar caption' : 'Agregar caption'));
+    toast(en ? '✅ Improved photo applied' : '✅ Foto mejorada aplicada');
+  } else {
+    if (d) { d.enhance_proposal_path = ''; d.enhance_proposal_base = ''; }
+    toast(en ? 'That proposal expired — generate a new one' : 'Esa propuesta venció: generala de nuevo');
+  }
+}
+async function rejectEnhanceProposal(id) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance-reject', {}, {});
+  const d = REVIEW_DRAFTS.find(x => x.id === id);
+  if (d) { d.enhance_proposal_path = ''; d.enhance_proposal_base = ''; }
+  const box = document.getElementById('revproposal-' + id);
+  if (box) box.innerHTML = '';
+  toast(en ? 'Kept the original' : 'Quedaste con la original');
+}
+// (foto-cliente-experto) Lado a lado en la hoja de la foto. La hoja NO
+// se cierra: la comparación queda visible y el dueño decide ahí mismo.
+function renderSheetProposal(id, proposal) {
+  const sheet = document.querySelector('.pcsheet[data-post-id="' + id + '"]');
+  if (!sheet) return;
+  const msg = sheet.querySelector('.pcsheet-msg');
+  if (!msg) return;
+  let orig = sheet.dataset.origImage || '';
+  if (!orig && typeof REVIEW_DRAFTS !== 'undefined') {
+    const d = REVIEW_DRAFTS.find(x => x.id === id);
+    if (d) orig = d.image_path || '';
+  }
+  if (!orig) return;
+  msg.innerHTML = '<div style="display:flex;gap:8px;margin:8px 0">' +
+    '<figure style="flex:1;margin:0"><img src="' + esc(mv(orig, 640)) + '" data-full="' + esc(orig) + '" onerror="__imgFb(this)" style="width:100%;border-radius:12px;display:block"><figcaption style="font-size:12px;opacity:.7;text-align:center">Original</figcaption></figure>' +
+    '<figure style="flex:1;margin:0"><img src="' + esc(mv(proposal, 640)) + '" data-full="' + esc(proposal) + '" onerror="__imgFb(this)" style="width:100%;border-radius:12px;display:block"><figcaption style="font-size:12px;opacity:.7;text-align:center">Mejorada</figcaption></figure>' +
+    '</div><div style="display:flex;gap:8px">' +
+    '<button class="pcsheet-opt" data-sheetpropaccept="' + id + '">✅ Usar la mejorada</button>' +
+    '<button class="pcsheet-opt" data-sheetpropreject="' + id + '">Quedarme con la original</button></div>';
+  const a = msg.querySelector('[data-sheetpropaccept]');
+  const rj = msg.querySelector('[data-sheetpropreject]');
+  if (a) a.onclick = async () => {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance-accept', {}, {});
+    if (r && r.ok && r.path) {
+      const d = (typeof REVIEW_DRAFTS !== 'undefined' ? REVIEW_DRAFTS.find(x => x.id === id) : null);
+      if (d) { d.image_path = r.path; d.enhance_proposal_path = ''; d.enhance_proposal_base = ''; }
+      pcSetImage(id, r.path); pcCloseSheet(); toast('✅ Foto mejorada aplicada');
+    } else { msg.innerHTML = ''; toast('Esa propuesta venció: generala de nuevo'); }
+  };
+  if (rj) rj.onclick = async () => {
+    await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance-reject', {}, {});
+    const d = (typeof REVIEW_DRAFTS !== 'undefined' ? REVIEW_DRAFTS.find(x => x.id === id) : null);
+    if (d) { d.enhance_proposal_path = ''; d.enhance_proposal_base = ''; }
+    msg.innerHTML = '';
+  };
+}
+// (foto-cliente-experto) Caption opt-in desde la tarjeta. El botón no
+// cierra nada: es un toggle, se puede volver atrás en el mismo toque.
+async function toggleDraftCaption(id, btn) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const d = REVIEW_DRAFTS.find(x => x.id === id);
+  const wantOn = !(d && d.caption_on);
+  if (btn) btn.disabled = true;
+  try {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-caption', { on: wantOn }, {});
+    if (r && r.ok && r.path) {
+      pcSetImage(id, r.path);
+      if (d) { d.image_path = r.path; d.caption_on = r.caption_on; d.enhance_proposal_path = ''; d.enhance_proposal_base = ''; }
+      const box = document.getElementById('revproposal-' + id);
+      if (box) box.innerHTML = '';
+      if (btn) btn.innerHTML = pzIc('pencil', 18) + ' ' + (en ? (r.caption_on ? 'Remove caption' : 'Add caption') : (r.caption_on ? 'Quitar caption' : 'Agregar caption'));
+      toast(r.caption_on ? (en ? '✅ Caption added' : '✅ Caption agregado') : (en ? '✅ Caption removed' : '✅ Caption quitado'));
+    } else if (r && r.error === 'sin_titular') toast(en ? 'This post has no headline to use as caption' : 'Este posteo no tiene titular para usar como caption');
+    else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
+  } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
+  if (btn) btn.disabled = false;
+}
+// (foto-cliente-experto) Caption opt-in desde la hoja de la foto. La
+// hoja NO se cierra: es un toggle reversible en un toque.
+async function pcCaption(id, root) {
+  const btn = root ? root.querySelector('[data-pc-act="img-caption"]') : null;
+  const wantOn = !(btn && btn.dataset.on === '1');
+  try {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-caption', { on: wantOn }, {});
+    if (r && r.ok && r.path) {
+      pcSetImage(id, r.path);
+      if (btn) {
+        btn.dataset.on = r.caption_on ? '1' : '0';
+        const lb = btn.querySelector('.pcsheet-caption-label');
+        if (lb) lb.textContent = r.caption_on ? 'Quitar caption' : 'Agregar caption';
+      }
+      const msg = root ? root.querySelector('.pcsheet-msg') : null;
+      if (msg) msg.innerHTML = '';
+      toast(r.caption_on ? '✅ Caption agregado' : '✅ Caption quitado');
+    } else if (r && r.error === 'sin_titular') toast('Este posteo no tiene titular para usar como caption');
+    else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
+  } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
 }
 async function pcRevert(id) {
   pcCloseSheet();
@@ -10350,7 +11221,16 @@ async function pcUploadPhoto(id, file) {
     if (!r.ok) throw new Error(data.error || 'No pude subirla');
     await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'save-draft', image_path: data.path });
     pcSetImage(id, data.path);
-    toast('✅ Foto actualizada');
+    // (foto-cliente-experto) Gatillo (a): la foto se adjuntó a un
+    // borrador. Propuesta automática best-effort: si falla, no hay
+    // redos o no hay clave, el attach ya quedó y se avisa normal.
+    try {
+      pcSetLoading(id, true, '✨ Preparando una mejora propuesta…');
+      const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance', {}, { timeout: 180000 });
+      if (r && r.ok && r.proposal_path) toast('✅ Foto actualizada · mejora propuesta lista en la revisión');
+      else toast('✅ Foto actualizada');
+    } catch (e) { toast('✅ Foto actualizada'); }
+    finally { pcSetLoading(id, false); }
   } catch (e) { toast('No se pudo subir: ' + esc((e && e.message) || 'probá de nuevo')); }
   pcSetLoading(id, false);
 }
@@ -10508,6 +11388,7 @@ function pcOnClick(e) {
   if (act === 'img-upload') { const f = root.querySelector('.pcsheet-file'); if (f) f.click(); return; }
   if (act === 'img-enhance') { pcEnhance(id); return; }
   if (act === 'img-revert') { pcRevert(id); return; }
+  if (act === 'img-caption') { pcCaption(id, root); return; }
   if (act === 'img-close') { pcCloseSheet(); return; }
 }
 if (!window.__pcardBound) {

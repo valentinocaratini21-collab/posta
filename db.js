@@ -139,6 +139,156 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN img_redos INTEGER DEFAULT 0`); } cat
 // nace con 3 (las filas existentes también, por el DEFAULT de la migración).
 try { db.exec(`ALTER TABLE posts ADD COLUMN redo_left INTEGER NOT NULL DEFAULT 3`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN prev_image_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN enhance_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN enhance_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (media-cliente-2) Propuestas de la 2ª tanda: cada una vive aparte de
+// la mostrada y solo se aplica con acepto del dueño.
+try { db.exec(`ALTER TABLE posts ADD COLUMN subtitle_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN subtitle_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN trim_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN trim_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN cleanup_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN cleanup_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN stabilize_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN stabilize_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN straighten_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN straighten_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN bokeh_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN bokeh_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN audioclean_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN audioclean_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN glare_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN glare_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN music_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN music_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (media-cliente-2) Assets: producto real (clasificación) y favorito
+// durable por negocio (reversible). Pedidos de foto que falta (para
+// no repetir el pedido todos los días: 7 días por producto).
+try { db.exec(`ALTER TABLE assets ADD COLUMN producto TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE assets ADD COLUMN favorito INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+db.exec(`CREATE TABLE IF NOT EXISTS foto_pedidos (
+  user_id INTEGER NOT NULL,
+  producto TEXT NOT NULL,
+  requested_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, producto)
+)`);
+try { db.exec(`ALTER TABLE posts ADD COLUMN transition_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN transition_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN kenburns_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN kenburns_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN ducking_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN ducking_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN logooutro_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN logooutro_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN music_track TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE assets ADD COLUMN permiso_testimonio INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE assets ADD COLUMN permiso_nota TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (media-cliente-3) Propuestas tanda 7/8: voz, timelapse, loop, precio
+// en banda, ASMR, silencio, precio tachado y gancho.
+try { db.exec(`ALTER TABLE posts ADD COLUMN voiceover_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN voiceover_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN timelapse_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN timelapse_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN loop_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN loop_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN priceband_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN priceband_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN asmr_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN asmr_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN silencio_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN silencio_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN tachado_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN tachado_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN hook_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN hook_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Confirmaciones del checklist final (un problema duro aceptado con
+// conocimiento no se vuelve a mostrar como pendiente).
+db.exec(`CREATE TABLE IF NOT EXISTS checklist_confirm (
+  user_id INTEGER NOT NULL,
+  post_id INTEGER NOT NULL,
+  item TEXT NOT NULL,
+  confirmed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, post_id, item)
+)`);
+// Proyectos re-editables: cada acepto guarda su versión (la original
+// nunca se borra: queda en prev_image_path y en disco).
+db.exec(`CREATE TABLE IF NOT EXISTS edicion_proyectos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  post_id INTEGER NOT NULL,
+  kind TEXT NOT NULL DEFAULT '',
+  base_path TEXT NOT NULL DEFAULT '',
+  result_path TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+// Stock REAL del negocio (lo pone el dueño; sin dato no hay historia
+// de stock, nunca un número inventado).
+db.exec(`CREATE TABLE IF NOT EXISTS stock_negocio (
+  user_id INTEGER NOT NULL,
+  producto TEXT NOT NULL,
+  cantidad INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, producto)
+)`);
+// Vencimientos de oferta puestos por el dueño (fecha real; si la
+// vigencia del fundamento ya parsea, no hace falta fila).
+db.exec(`CREATE TABLE IF NOT EXISTS oferta_vencimientos (
+  user_id INTEGER NOT NULL,
+  titulo TEXT NOT NULL,
+  fecha_fin TEXT NOT NULL,
+  PRIMARY KEY (user_id, titulo)
+)`);
+// Mitos del rubro: los propone Posty desde preguntas reales o los
+// escribe el dueño; sin acepto del dueño no hay reel.
+db.exec(`CREATE TABLE IF NOT EXISTS mitos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  mito TEXT NOT NULL DEFAULT '',
+  desmentido TEXT NOT NULL DEFAULT '',
+  aceptado INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+// Estilo de edición guardado por negocio (durable, cambiable cuando
+// quiera el dueño; una elección explícita en un reel puntual manda).
+db.exec(`CREATE TABLE IF NOT EXISTS estilo_edicion (
+  user_id INTEGER PRIMARY KEY,
+  transicion TEXT DEFAULT 'suave',
+  musica_track TEXT DEFAULT '',
+  subtitulos INTEGER DEFAULT 1,
+  sub_fuente TEXT DEFAULT '',
+  sub_color TEXT DEFAULT '',
+  sub_fondo TEXT DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+// Usos reales de música (para sugerir lo que suena en el rubro: solo
+// con dato real; sin dato, no hay insignia de tendencia).
+db.exec(`CREATE TABLE IF NOT EXISTS music_uses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  rubro TEXT DEFAULT '',
+  track TEXT NOT NULL,
+  used_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+// Pares A/B: dos borradores publicados, ganador por alcance real.
+db.exec(`CREATE TABLE IF NOT EXISTS ab_tests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  a_id INTEGER NOT NULL,
+  b_id INTEGER NOT NULL,
+  winner_id INTEGER DEFAULT 0,
+  archived_loser INTEGER DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+// Respuestas en video a comentarios: el reel es propio (IG no permite
+// video adjunto al hilo del comentario) y queda linkeado al comentario.
+db.exec(`CREATE TABLE IF NOT EXISTS video_respuestas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  comment_id TEXT NOT NULL DEFAULT '',
+  comment_text TEXT NOT NULL DEFAULT '',
+  draft_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
 try { db.exec(`ALTER TABLE posts ADD COLUMN product_ref TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Hook engine (hooks.js): hook usado en cada borrador + rotación 8 semanas.
 try { db.exec(`ALTER TABLE posts ADD COLUMN hook_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
@@ -408,7 +558,13 @@ CREATE INDEX IF NOT EXISTS idx_assets_user ON assets(user_id, kind);
 `);
 try { db.exec(`ALTER TABLE assets ADD COLUMN album_tag TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE assets ADD COLUMN thumb_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
-try { db.exec(`ALTER TABLE assets ADD COLUMN album_quality TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (v237) gate de calidad del material del cliente: issues separados por coma ('oscura,movida,baja-res,cortada'), 'ok', u 'orientacion=…' en videos
+try { db.exec(`ALTER TABLE assets ADD COLUMN album_quality TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (media-cliente-3, reparación DB fresca: estos ALTERs también viven
+// antes del CREATE TABLE assets; acá sí corren siempre.)
+try { db.exec(`ALTER TABLE assets ADD COLUMN producto TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE assets ADD COLUMN favorito INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE assets ADD COLUMN permiso_testimonio INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE assets ADD COLUMN permiso_nota TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (v237) gate de calidad del material del cliente: issues separados por coma ('oscura,movida,baja-res,cortada'), 'ok', u 'orientacion=…' en videos
 
 // Demo pública: rate limit de generaciones por IP por día (5/día)
 db.exec(`
