@@ -3749,3 +3749,55 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 @keyframes pzMgFlota{0%,100%{transform:translateY(0);opacity:.85}50%{transform:translateY(-3px);opacity:1}}
 @keyframes pzMgBrilla{0%,100%{transform:scale(.85) rotate(0deg);opacity:.7}50%{transform:scale(1.15) rotate(20deg);opacity:1}}
 @media (prefers-reduced-motion: reduce){.pz-mg::before,.pz-mg::after,.bb-hero .bb-tallo::after{animation:none}}
+
+/* ===== PORT MOCK v24 (Posty+Gesty juntos) — switcher, tiras, jardín ===== */
+/* Layout del mock gesty-app-diseno-v24.html adaptado a la columna .bb-main (560px) /
+   #inicioView: sin márgenes laterales extra (el contenedor ya da el aire). */
+.mx-port-top{display:flex;flex-direction:column;gap:12px}
+.mx-switcher{display:flex;gap:8px}
+.mx-chip-agente{flex:1;display:flex;align-items:center;gap:10px;border:1.5px solid #E9DFEF;background:#FDFDFD;border-radius:999px;padding:8px 14px 8px 8px;font-size:14px;font-weight:700;color:#6E5A85;cursor:pointer;font-family:inherit;text-align:left}
+.mx-chip-cara{width:32px;height:32px;flex:none;display:flex;align-items:center;justify-content:center}
+.mx-chip-cara img{width:32px;height:32px;border-radius:50%;object-fit:cover;display:block}
+.mx-chip-cara .bb-av{width:32px;height:32px;font-size:15px}
+.mx-activo-gesty{border-color:#A175CA;background:#EFE6F7;color:#472B5E}
+.mx-activo-posty{border-color:#2793C8;background:#E4F3FB;color:#0A1E33}
+.mx-tira-jardin{display:flex;align-items:center;gap:12px;background:#FDFDFD;border:1.5px solid #E9DFEF;border-radius:18px;padding:10px 12px;cursor:pointer;text-align:left;font-family:inherit;width:100%;box-sizing:border-box}
+.mx-tira-jardin b{font-size:14px;color:#2E2140;display:block}
+.mx-tira-jardin span{font-size:12px;color:#6E5A85}
+.mx-tira-posty{border-color:#DCEEF7;background:#FFFFFF}
+.mx-tira-posty b{color:#0A1E33}
+.mx-tira-posty span{color:#5A7A8C}
+.mx-tira-foto{width:52px;height:52px;border-radius:12px;object-fit:cover;flex:none}
+.mx-tira-foto-gesty{width:52px;height:52px;border-radius:12px;flex:none;background:#EFE6F7;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.mx-chev{margin-left:auto;font-size:22px;color:#6E5A85;flex:none}
+.mx-tira-posty .mx-chev{color:#5A7A8C}
+.mx-tira-mini{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:#737373}
+.mx-tira-barra{display:block;height:6px;background:#EDEDED;border-radius:99px;overflow:hidden;margin-top:6px}
+.mx-tira-mini .mx-tira-barra{flex:1;margin-top:0}
+.mx-tira-barra i{display:block;height:100%}
+.mx-jardin{display:flex;flex-direction:column;gap:14px}
+.mx-chat-cabecera{display:flex;gap:12px;align-items:center}
+.mx-volver{background:none;border:0;font-size:15px;font-weight:700;color:#472B5E;cursor:pointer;font-family:inherit;padding:6px 0}
+.mx-jardin-head h1{font-size:20px;color:#472B5E;margin:0 0 4px}
+.mx-jardin-head p{font-size:14px;color:#6E5A85;margin:0}
+.mx-jardin-posty .mx-jardin-head h1{color:#0A1E33}
+.mx-jardin-posty .mx-jardin-head p{color:#5A7A8C}
+.mx-jardin-posty .mx-volver{color:#0A1E33}
+.mx-bloque{display:flex;flex-direction:column;gap:14px}
+.mx-foto-nivel{width:100%;display:block;border-radius:24px;object-fit:cover}
+.mx-tallo-marco{border:1.5px solid #E9DFEF;background:#FDFDFD;border-radius:24px;padding:18px 12px;display:flex;justify-content:center}
+.mx-pasos-nivel{display:flex;gap:8px}
+.mx-paso-nivel{flex:1;border:1.5px solid #E9DFEF;background:#FDFDFD;border-radius:999px;padding:10px 4px;font-size:12px;font-weight:800;color:#6E5A85;cursor:pointer;font-family:inherit}
+.mx-paso-nivel.activo{background:#A175CA;border-color:#A175CA;color:#fff}
+.mx-jardin-posty .mx-paso-nivel.activo{background:#2793C8;border-color:#2793C8}
+.mx-jardin-combinado .mx-paso-nivel.activo[data-mx-vista="posty"]{background:#2793C8;border-color:#2793C8}
+.mx-jardin-combinado .mx-paso-nivel.activo[data-mx-vista="gesty"]{background:#A175CA;border-color:#A175CA}
+.mx-jardin-combinado .mx-paso-nivel.activo[data-mx-vista="juntos"]{background:#D6A463;border-color:#D6A463}
+.mx-tarjeta{background:#FDFDFD;border:1.5px solid #E9DFEF;border-radius:18px;padding:14px 16px}
+.mx-jardin-posty .mx-tarjeta{border-color:#DCEEF7;background:#FFFFFF}
+.mx-tarjeta h3{font-size:16px;color:#472B5E;margin:0 0 8px}
+.mx-jardin-posty .mx-tarjeta h3{color:#0A1E33}
+.mx-dato{font-size:14px;color:#2E2140;margin:6px 0;line-height:1.45}
+.mx-jardin-posty .mx-dato{color:#0A1E33}
+.mx-vista{display:flex;flex-direction:column;gap:12px}
+.mx-vista[hidden]{display:none}

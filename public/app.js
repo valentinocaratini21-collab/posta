@@ -285,24 +285,26 @@ function bbBarraHTML(nivel, color) {
   return `<div class="bb-barra" style="--bbc:${color}"><span style="width:${pct}%"></span></div>`;
 }
 function bbShell(tab, content) {
-  const act = tab === 'inicio' ? 'oficina' : tab;
+  const key = mxTabKey(tab);
+  const modo = mxModoActual(tab);
   const n = (BB.estado && BB.estado.bandeja_count) || 0;
   const ic = {
     oficina: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
     bandeja: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-5l2-7z"/></svg>',
     negocio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M2.5 6.5 4 3h16l1.5 3.5a3.2 3.2 0 0 1-6.1 1.4 3.4 3.4 0 0 1-6.8 0 3.2 3.2 0 0 1-6.1-1.4z"/><path d="M9.5 20v-6h5v6"/></svg>',
     ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></svg>',
+    inicio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 3l9 8.5"/><path d="M5.5 10v10h13V10"/></svg>',
+    semana: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
+    analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
-  const tabBtn = (key, hash, label) => `<button class="bb-tab${act === key ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[key] || ''}</span><span>${label}</span>${key === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
+  const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
   return `<div class="bb-app">
-    <header class="bb-top"><span class="pz-mg pz-mg--sm" style="--mg-c:#DBA453"><img class="bb-top-av" src="/bambooty-avatar.webp" alt="Bambooty"></span><div class="bb-top-tx"><strong class="bb-gold-tx">Bambooty</strong><span>${BB.estado && BB.estado.negocio ? esc(BB.estado.negocio) + ' · tu oficina' : 'Tu oficina'}</span></div></header>
+    <header class="bb-top"><span class="pz-mg pz-mg--sm" style="--mg-c:#DBA453"><img class="bb-top-av" src="/bambooty-avatar.webp" alt="Bambooty"></span><div class="bb-top-tx"><strong class="bb-gold-tx">Bambooty</strong><span>${BB.estado && BB.estado.negocio ? esc(BB.estado.negocio) + gzT(' · tu oficina', ' · your office') : gzT('Tu oficina', 'Your office')}</span></div></header>
     <main class="bb-main">${content}</main>
     <nav class="bb-bar">
-      ${tabBtn('oficina', '#/app/oficina', 'Oficina')}
-      ${tabBtn('bandeja', '#/app/bandeja', 'Para vos')}
-      <button class="bb-medal${act === 'chat' ? ' on' : ''} pz-mg-medal" onclick="bbGo('#/app/chat')" aria-label="Hablar con Bambooty"><img src="/bambooty-avatar.webp" alt="Bambooty"></button>
-      ${tabBtn('negocio', '#/app/negocio', 'Mi negocio')}
-      ${tabBtn('ajustes', '#/app/ajustes', 'Ajustes')}
+      ${modo === 'posty'
+        ? `${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('semana', '#/app/schedule', gzT('Semana', 'Week'))}${tabBtn('analisis', '#/app/analisis', gzT('Análisis', 'Analysis'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}`
+        : `${tabBtn('oficina', '#/app/oficina', gzT('Oficina', 'Office'))}${tabBtn('bandeja', '#/app/bandeja', gzT('Bandeja', 'Inbox'))}<button class="bb-medal${key === 'chat' ? ' on' : ''} pz-mg-medal" onclick="bbGo('#/app/chat')" aria-label="${gzT('Hablar con Bambooty', 'Talk to Bambooty')}"><img src="/bambooty-avatar.webp" alt="Bambooty"></button>${tabBtn('negocio', '#/app/negocio', gzT('Mi negocio', 'My business'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}`}
     </nav>
   </div>`;
 }
@@ -356,6 +358,7 @@ async function bbOficinaContent() {
         ${est.bandeja_count ? `<button class="bb-btn bb-btn-gold" onclick="bbGo('#/app/bandeja')">Tenés ${est.bandeja_count} esperando tu OK</button>` : ''}
       </div>
     </section>
+    ${await mxPortTop(est.poderes, null, 'gesty')}
     <section class="bb-poderes">${(est.poderes || []).map(poderCard).join('')}</section>
     <section class="bb-bloque"><h2>Bambooty también tiene especialistas</h2><p class="bb-sub">No son poderes de todos los días: se los llama para una misión puntual, por proyecto. Cuando un proyecto está activo, su trabajo aparece en tu Bandeja.</p>${(est.especialistas || []).map(espRow).join('')}</section>
     <section class="bb-bloque"><h2>El río de tu oficina</h2>${rio || '<p class="bb-vacio">El río corre con trabajo real: cada cosa que tu oficina haga aparece acá con su recibo.</p>'}</section>
@@ -843,6 +846,226 @@ async function bbChatSend() {
   box.scrollTop = box.scrollHeight;
   BB.estado = null;
 }
+// ————— PORT MOCK v24 (Posty+Gesty juntos): switcher / tiras / jardín / tabbars por agente —————
+// Layout del mock gesty-app-diseno-v24.html adaptado al router por hash de la app real.
+// Solo layout y navegación: todos los datos son reales (/api/oficina/nivel, /api/oficina/jardin,
+// /api/oficina/estado). Sin datos muestra, sin tocar server.js ni BUILD_ID.
+// i18n: gzT (ME.lang). Gesty usa el amatista canónico #A175CA (GZ_AMATISTA).
+// Alcance: solo Posty+Gesty. Web (mzTabs) no cambia: en web las rutas Gesty redirigen
+// a Inicio por el despacho actual, así que las tabbars por agente viven en el shell (TestFlight).
+const MX_POSTY_AZUL = '#2793C8';
+const MX_GESTY_LILA = '#A175CA';
+function mxModoGuardado() { try { const m = localStorage.getItem('bb-agent-mode'); return (m === 'posty' || m === 'gesty') ? m : null; } catch (e) { return null; } }
+function mxGuardarModo(m) { try { localStorage.setItem('bb-agent-mode', m); } catch (e) {} }
+function mxPoderesDe(p) {
+  const arr = Array.isArray(p) ? p : [];
+  const tiene = (k) => arr.some((x) => (x && x.poder) ? x.poder === k : x === k);
+  return { posty: tiene('posty'), gesty: tiene('gesty') };
+}
+function mxPoderesBB() {
+  try { return (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.poderes) ? mxPoderesDe(BB.estado.poderes) : null; } catch (e) { return null; }
+}
+function mxTabKey(tab) {
+  if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat') return tab;
+  if (tab === 'inicio') return 'inicio';
+  if (tab === 'schedule' || tab === 'post') return 'semana';
+  if (tab === 'analisis') return 'analisis';
+  return '';
+}
+function mxModoActual(tab) {
+  const pod = mxPoderesBB();
+  if (pod) {
+    if (pod.posty && !pod.gesty) return 'posty';
+    if (pod.gesty && !pod.posty) return 'gesty';
+  }
+  if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio') { mxGuardarModo('gesty'); return 'gesty'; }
+  if (tab === 'inicio' || tab === 'schedule' || tab === 'analisis' || tab === 'post') { mxGuardarModo('posty'); return 'posty'; }
+  if (tab === 'jardin-posty') return 'posty';
+  if (tab === 'jardin-gesty') return 'gesty';
+  if (tab === 'jardin-combinado') {
+    try { if (typeof BB !== 'undefined' && BB && BB.mxJardinOrigen) return BB.mxJardinOrigen; } catch (e) {}
+  }
+  return mxModoGuardado() || 'gesty';
+}
+function mxCambiarAgente(a) {
+  mxGuardarModo(a === 'posty' ? 'posty' : 'gesty');
+  bbGo(a === 'posty' ? '#/app/inicio' : '#/app/oficina');
+}
+function mxJardinIr(ruta, origen) {
+  try { BB.mxJardinVuelta = location.hash || '#/app/oficina'; BB.mxJardinOrigen = origen; } catch (e) {}
+  bbGo(ruta);
+}
+function mxJardinVolver() {
+  try { bbGo((typeof BB !== 'undefined' && BB && BB.mxJardinVuelta) || '#/app/oficina'); } catch (e) { bbGo('#/app/oficina'); }
+}
+function mxJardinHito(btn) {
+  try {
+    const root = btn.closest('.mx-jardin'); if (!root) return;
+    const vista = btn.getAttribute('data-mx-vista');
+    root.querySelectorAll('.mx-paso-nivel').forEach((b) => b.classList.toggle('activo', b === btn));
+    root.querySelectorAll('.mx-vista').forEach((v) => { v.hidden = (v.getAttribute('data-mx-vista') !== vista); });
+  } catch (e) {}
+}
+function mxFaltaTxt(nv) {
+  const falt = Array.isArray(nv.faltantes) ? nv.faltantes : [];
+  const n = falt.length;
+  if (!n) return '';
+  return n === 1 ? gzT('te falta 1 cosa', '1 thing left') : gzT('te faltan ' + n + ' cosas', n + ' things left');
+}
+async function mxNivel(poder) {
+  try { const r = await api.get('/api/oficina/nivel?poder=' + poder); return (r && r.ok) ? r : null; } catch (e) { return null; }
+}
+async function mxJardinFotos() {
+  try { const r = await api.get('/api/oficina/jardin'); return (r && r.ok) ? r : null; } catch (e) { return null; }
+}
+function mxFotoJardin(j) {
+  if (!j) return '';
+  const src = (j.hoy && j.hoy[0]) || (j.antes && j.antes[0]) || '';
+  if (!src) return '';
+  try { if (typeof mv === 'function') return mv(src, 640); } catch (e) {}
+  return src;
+}
+function mxNvNum(nv) { return (nv && typeof nv.nivel === 'number') ? nv.nivel : 1; }
+function mxBarra(pct, color) { return `<span class="mx-tira-barra"><i style="width:${pct}%;background:${color}"></i></span>`; }
+function mxSwitcherHTML(modo) {
+  return `<div class="mx-switcher">`
+    + `<button type="button" class="mx-chip-agente${modo === 'gesty' ? ' mx-activo-gesty' : ''}" onclick="mxCambiarAgente('gesty')"><span class="mx-chip-cara">${gzAvatar()}</span><span>Gesty · ${gzT('Recepción', 'Reception')}</span></button>`
+    + `<button type="button" class="mx-chip-agente${modo === 'posty' ? ' mx-activo-posty' : ''}" onclick="mxCambiarAgente('posty')"><span class="mx-chip-cara"><img src="ai-avatar.png" alt="Posty"></span><span>Posty · ${gzT('Contenido', 'Content')}</span></button>`
+    + `</div>`;
+}
+function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
+  const ambos = pod.posty && pod.gesty;
+  const foto = mxFotoJardin(jardin);
+  const imgPosty = `<img class="mx-tira-foto" src="${esc(foto || 'ai-avatar.png')}" alt="" onerror="this.onerror=null;this.src='ai-avatar.png'">`;
+  if (ambos && nvP && nvG) {
+    return `<button type="button" class="mx-tira-jardin" onclick="mxJardinIr('#/app/jardin-combinado', '${origen}')">`
+      + `${imgPosty}<span style="flex:1;min-width:0"><b>${gzT('Tu jardín', 'Your garden')} · Posty ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)} · Gesty ${gzT('Nv', 'Lv')} ${mxNvNum(nvG)}</b>`
+      + `<span>${gzT('Bambú y recepción en un solo lugar', 'Bamboo and reception in one place')}</span>`
+      + `<span class="mx-tira-mini"><span>Posty</span>${mxBarra(pzNivelAvance(nvP), MX_POSTY_AZUL)}</span>`
+      + `<span class="mx-tira-mini"><span>Gesty</span>${mxBarra(pzNivelAvance(nvG), MX_GESTY_LILA)}</span></span>`
+      + `<span class="mx-chev">›</span></button>`;
+  }
+  if (pod.posty && nvP) {
+    return `<button type="button" class="mx-tira-jardin mx-tira-posty" onclick="mxJardinIr('#/app/jardin-posty', '${origen}')">`
+      + `${imgPosty}<span style="flex:1;min-width:0"><b>${gzT('Mi jardín', 'My garden')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)}</b>`
+      + `<span>${gzT('El bambusal', 'The bamboo grove')}</span>${mxBarra(pzNivelAvance(nvP), MX_POSTY_AZUL)}</span>`
+      + `<span class="mx-chev">›</span></button>`;
+  }
+  if (pod.gesty && nvG) {
+    return `<button type="button" class="mx-tira-jardin" onclick="mxJardinIr('#/app/jardin-gesty', '${origen}')">`
+      + `<span class="mx-tira-foto-gesty">${gzAvatar()}</span><span style="flex:1;min-width:0"><b>${gzT('Mi oficina', 'My office')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvG)}</b>`
+      + `<span>${gzT('Recepción con bambú', 'Reception with bamboo')}</span>${mxBarra(pzNivelAvance(nvG), MX_GESTY_LILA)}</span>`
+      + `<span class="mx-chev">›</span></button>`;
+  }
+  return '';
+}
+async function mxPortTop(poderesRaw, nvPre, origen) {
+  const pod = mxPoderesDe(poderesRaw);
+  if (!pod.posty && !pod.gesty) return '';
+  const ambos = pod.posty && pod.gesty;
+  let nvP = (nvPre && nvPre.poder !== 'gesty') ? nvPre : null;
+  let nvG = null;
+  let jardin = null;
+  const jobs = [];
+  if (pod.posty && !nvP) jobs.push(mxNivel('posty').then((r) => { nvP = r; }));
+  if (pod.gesty) jobs.push(mxNivel('gesty').then((r) => { nvG = r; }));
+  if (pod.posty) jobs.push(mxJardinFotos().then((r) => { jardin = r; }));
+  await Promise.all(jobs);
+  const sw = ambos ? mxSwitcherHTML(origen) : '';
+  const tira = mxTiraHTML(pod, nvP, nvG, jardin, origen);
+  if (!sw && !tira) return '';
+  return `<div class="mx-port-top">${sw}${tira}</div>`;
+}
+function mxPremioPostyHTML(nv) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (nv.nivel >= 5 || !nv.nombre_siguiente) return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${gzT('Copa completa 🌳', 'Full canopy 🌳')}</span></p>`;
+  return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${esc(pzNivelUnlock(nv.nivel + 1, en))}</span></p>`;
+}
+function mxPremioGestyHTML(nv) {
+  if (nv.nivel >= 5 || !nv.nombre_siguiente) return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${gzT('Copa completa 🌳', 'Full canopy 🌳')}</span></p>`;
+  return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${esc(nv.nombre_siguiente)}</span></p>`;
+}
+function mxCardAgenteHTML(agente, nv, premioHTML) {
+  const titulo = agente ? esc(agente) + ' · ' + esc(nv.nombre_nivel || '') : esc(nv.nombre_nivel || '');
+  const falta = mxFaltaTxt(nv);
+  return `<div class="mx-tarjeta"><h3>${titulo}</h3>`
+    + (nv.proximo_paso ? `<p class="mx-dato">${esc(nv.proximo_paso)}</p>` : '')
+    + (falta ? `<p class="mx-dato">${esc(falta)}</p>` : '')
+    + premioHTML + `</div>`;
+}
+function mxVitrina(nv) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  return (nv && Array.isArray(nv.historial) && nv.historial.length) ? pzVitrinaHTML(nv.historial, en) : '';
+}
+function mxVistasUnAgenteHTML(nv, premioHTML) {
+  const hist = Array.isArray(nv.historial) ? nv.historial : [];
+  const cur = nv.nombre_nivel || '';
+  let pasado = null;
+  for (let i = hist.length - 1; i >= 0; i--) {
+    if (hist[i] && hist[i].nombre_nivel && hist[i].nombre_nivel !== cur) { pasado = hist[i]; break; }
+  }
+  const botones = [];
+  const vistas = [];
+  if (pasado) {
+    botones.push(`<button type="button" class="mx-paso-nivel" data-mx-vista="anterior" onclick="mxJardinHito(this)">${esc(pasado.nombre_nivel)}</button>`);
+    vistas.push(`<div class="mx-vista" data-mx-vista="anterior" hidden><div class="mx-tarjeta"><h3>${esc(pasado.nombre_nivel)}</h3><p class="mx-dato">${gzT('Nivel alcanzado.', 'Level reached.')}</p></div></div>`);
+  }
+  botones.push(`<button type="button" class="mx-paso-nivel activo" data-mx-vista="actual" onclick="mxJardinHito(this)">${gzT('Nv', 'Lv')} ${mxNvNum(nv)} · ${esc(cur)}</button>`);
+  vistas.push(`<div class="mx-vista" data-mx-vista="actual">${mxCardAgenteHTML('', nv, premioHTML)}</div>`);
+  if (nv.nivel < 5 && nv.nombre_siguiente) {
+    botones.push(`<button type="button" class="mx-paso-nivel" data-mx-vista="siguiente" onclick="mxJardinHito(this)">${gzT('Nv', 'Lv')} ${mxNvNum(nv) + 1} · ${esc(nv.nombre_siguiente)}</button>`);
+    vistas.push(`<div class="mx-vista" data-mx-vista="siguiente" hidden><div class="mx-tarjeta"><h3>${esc(nv.nombre_siguiente)}</h3>`
+      + (nv.proximo_paso ? `<p class="mx-dato">${esc(nv.proximo_paso)}</p>` : '') + `</div></div>`);
+  }
+  return `<div class="mx-pasos-nivel">${botones.join('')}</div>${vistas.join('')}`;
+}
+function mxJardinHTML(tipo, nvP, nvG, jardin) {
+  const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">← ${gzT('Volver', 'Back')}</button>`;
+  if (tipo === 'combinado') {
+    const head = `<h1>${gzT('Tu jardín', 'Your garden')}</h1><p>Posty ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)} · Gesty ${gzT('Nv', 'Lv')} ${mxNvNum(nvG)}, ${gzT('en el mismo lugar.', 'in the same place.')}</p>`;
+    const fotoUrl = mxFotoJardin(jardin);
+    const foto = fotoUrl ? `<img class="mx-foto-nivel" src="${esc(fotoUrl)}" alt="${gzT('Tu jardín combinado', 'Your combined garden')}" onerror="this.remove()">` : '';
+    const cardP = mxCardAgenteHTML('Posty', nvP, mxPremioPostyHTML(nvP));
+    const cardG = mxCardAgenteHTML('Gesty', nvG, mxPremioGestyHTML(nvG));
+    const cuerpo = `<div class="mx-pasos-nivel">`
+      + `<button type="button" class="mx-paso-nivel activo" data-mx-vista="juntos" onclick="mxJardinHito(this)">${gzT('Juntos', 'Together')}</button>`
+      + `<button type="button" class="mx-paso-nivel" data-mx-vista="posty" onclick="mxJardinHito(this)">Posty</button>`
+      + `<button type="button" class="mx-paso-nivel" data-mx-vista="gesty" onclick="mxJardinHito(this)">Gesty</button></div>`
+      + `<div class="mx-vista" data-mx-vista="juntos">${cardP}${cardG}${mxVitrina(nvP)}${mxVitrina(nvG)}</div>`
+      + `<div class="mx-vista" data-mx-vista="posty" hidden>${cardP}${mxVitrina(nvP)}</div>`
+      + `<div class="mx-vista" data-mx-vista="gesty" hidden>${cardG}${mxVitrina(nvG)}</div>`;
+    return `<div class="mx-jardin mx-jardin-combinado"><div class="mx-chat-cabecera">${volverBtn("mxJardinVolver()")}</div><header class="mx-jardin-head">${head}</header><div class="mx-bloque">${foto}${cuerpo}</div></div>`;
+  }
+  if (tipo === 'posty') {
+    const head = `<h1>${gzT('Mi jardín', 'My garden')}</h1><p>${gzT('Crece solo con semanas publicadas de verdad.', 'Grows only with truly published weeks.')}</p>`;
+    const fotoUrl = mxFotoJardin(jardin);
+    const foto = fotoUrl ? `<img class="mx-foto-nivel" src="${esc(fotoUrl)}" alt="${gzT('Tu jardín', 'Your garden')}" onerror="this.remove()">` : '';
+    const cuerpo = mxVistasUnAgenteHTML(nvP, mxPremioPostyHTML(nvP)) + mxVitrina(nvP);
+    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head">${head}</header><div class="mx-bloque">${foto}${cuerpo}</div></div>`;
+  }
+  const head = `<h1>${gzT('Mi oficina', 'My office')}</h1><p>${gzT('Crece con cada semana sin papeles sueltos.', 'Grows with every week without loose papers.')}</p>`;
+  const foto = `<div class="mx-tallo-marco">${bbTalloHTML({ nivel: mxNvNum(nvG), gate: { progreso_pct: pzNivelAvance(nvG) } }, MX_GESTY_LILA, 150)}</div>`;
+  const cuerpo = mxVistasUnAgenteHTML(nvG, mxPremioGestyHTML(nvG)) + mxVitrina(nvG);
+  return `<div class="mx-jardin mx-jardin-gesty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/oficina')")}</div><header class="mx-jardin-head">${head}</header><div class="mx-bloque">${foto}${cuerpo}</div></div>`;
+}
+function mxJardinErrorHTML() {
+  return `<div class="bb-error"><p>${gzT('No pude abrir tu jardín.', "I couldn't open your garden.")}</p><button class="bb-btn" onclick="render()">${gzT('Reintentar', 'Retry')}</button></div>`;
+}
+async function bbJardinCombinadoContent() {
+  const res = await Promise.all([mxNivel('posty'), mxNivel('gesty'), mxJardinFotos()]);
+  if (!res[0] || !res[1]) return mxJardinErrorHTML();
+  return mxJardinHTML('combinado', res[0], res[1], res[2]);
+}
+async function bbJardinPostyContent() {
+  const res = await Promise.all([mxNivel('posty'), mxJardinFotos()]);
+  if (!res[0]) return mxJardinErrorHTML();
+  return mxJardinHTML('posty', res[0], null, res[1]);
+}
+async function bbJardinGestyContent() {
+  const nvG = await mxNivel('gesty');
+  if (!nvG) return mxJardinErrorHTML();
+  return mxJardinHTML('gesty', null, nvG, null);
+}
 // ————— Los avisos también viven en AJUSTES (DETALLE-TOTAL §5) —————
 // La vista de Ajustes clásica se renderiza dentro del shell; al terminar,
 // se le suma la tarjeta de la oficina con los mismos controles que en
@@ -969,7 +1192,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261029-v479'; // (pase-app-gesty) bump: chunk-ajustes cambia (placeholder gzAjustesBox); el ?v= viejo congelaba el chunk
+const CHUNK_V = '20261031-v487'; // (pase-app-gesty) bump: chunk-ajustes cambia (placeholder gzAjustesBox); el ?v= viejo congelaba el chunk
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -13235,8 +13458,10 @@ async function render() {
   // toque (tab Semana) como vista de planificación. El chat sigue vivo
   // en #/app/chat como escape hatch para retoques puntuales.
   let tab = tabRaw || 'inicio';
+  // (PORT MOCK v24) Estado de oficina disponible para la tabbar por agente (cacheado; sin refetch si ya está).
+  try { await bbLoadEstado(false); } catch (e) {}
   let content = '';
-  if (BB_SHELL_ON() && (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'inicio' || tab === 'chat')) content = await bbContentFor(tab);
+  if (BB_SHELL_ON() && (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'chat')) content = await bbContentFor(tab);
   else if (tab === 'chat') content = await chatView();
   else if (tab === 'inicio') content = await inicioView(); // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
@@ -13255,6 +13480,9 @@ async function render() {
   else if (tab === 'post') content = await approvalPostView(postId); // 🔔 Posty te avisa: aprobar por notificación
   else if (tab === 'dogfood') content = await dogfoodView(postId); // 🤖 Posty dogfood: propuesta del día
   else if (tab === 'ajustes') { let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
+  else if (tab === 'jardin-combinado') content = await bbJardinCombinadoContent();
+  else if (tab === 'jardin-posty') content = await bbJardinPostyContent();
+  else if (tab === 'jardin-gesty') content = await bbJardinGestyContent();
   else { location.hash = mzHomeHash(); return; } // tab desconocida: a la home (antes caía en Ajustes sin avisar)
   bootSplashOff();
   if (mySeq !== RENDER_SEQ) return;
@@ -15510,8 +15738,12 @@ async function inicioView() {
   // prólogo). El
   // botón-anuncio de Ideas y la burbuja de relación salieron de la
   // pantalla principal (v442).
+  // (PORT MOCK v24) Switcher + tira de jardín arriba de Inicio (reusa nivelPosty).
+  let portTopInicio = '';
+  if (!HF_VISITOR && nivelPosty) { try { portTopInicio = await mxPortTop(nivelPosty.poderes, nivelPosty, 'posty'); } catch (e) { portTopInicio = ''; } }
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
+  ${portTopInicio}
   ${HF_VISITOR ? '' : setupMainHTML()}
   ${nivelStripHTML}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, coversPlus: !HF_VISITOR, splitHead: true })}

@@ -337,7 +337,8 @@ function ajustesView() {
     </div>
     <button class="btn btn-primary" id="btnSaveSettings">Guardar</button> <span id="setMsg"></span>
   </details>
-  <div class="card" style="margin-top:16px"><button class="btn btn-danger btn-block" id="btnLogoutAj">${pzIc('logout', 18)} Salir</button></div>`;
+  <div class="card" style="margin-top:16px"><button class="btn btn-danger btn-block" id="btnLogoutAj">${pzIc('logout', 18)} Salir</button></div>
+  <div id="gzAjustesBox"></div>`;
 }
 
 // Zona TikTok: estado desde /api/tiktok/status (configurado / conectado).
@@ -602,6 +603,9 @@ function bindSettings() {
   try { weekShareLoad(); } catch (e) {}
   try { styleGalleryLoad(); } catch (e) {}
   try { gustosZoneLoad(); } catch (e) {}
+  // (fix chunk-ajustes v487) La caja Gesty vive en #gzAjustesBox (arriba, en ajustesView):
+  // gzAjustesFill la llena con Tipo/Conexiones/Bloqueos o el upsell "Sumar un agente".
+  try { if (typeof gzAjustesFill === 'function') gzAjustesFill(); } catch (e) {}
   // --- Página pública del negocio (v169) ---
   const btnCopyPage = $('#btnCopyPage');
   if (btnCopyPage) btnCopyPage.onclick = async () => {
