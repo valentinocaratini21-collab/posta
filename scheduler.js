@@ -831,8 +831,11 @@ function startScheduler(db) {
   }
   // 🚀 ALERTA DESPEGUE (mejora 1/5, 30/10): cada 30 minutos — si un posteo
   // publicado en las últimas 12 h rinde >= 2x la MEDIANA real de alcance de
-  // la cuenta (mínimo 5 posteos previos medidos), Posty avisa EN EL MOMENTO
-  // en el chat (in-app) + push, para aprovecharlo (responder, historias).
+  // la cuenta (mínimo 5 posteos previos medidos), Posty avisa en el chat
+  // (in-app) + push, para aprovecharlo (responder, historias). De noche
+  // (22–8 en la zona de la cuenta) la alerta queda retenida y se entrega
+  // a las 08:00 en el primer barrido diurno: nunca se pierde en silencio
+  // (la retención y el flush viven en alerta-despegue.js).
   // Una sola alerta por posteo (alerta_despegue, UNIQUE por post_id); sin
   // alcance real > 0 no hay alerta; nunca publica nada sola. Reutiliza
   // push.js (webpush + FCM + APNs) sin pasar por la puerta agrupada de la

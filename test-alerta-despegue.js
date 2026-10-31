@@ -29,11 +29,40 @@ function freshDb() {
   db.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, lang TEXT DEFAULT 'es', plan_status TEXT DEFAULT 'active');
     CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, caption TEXT DEFAULT '', ig_media_id TEXT DEFAULT '', status TEXT DEFAULT 'published', published_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
     CREATE TABLE post_metrics (post_id INTEGER PRIMARY KEY, reach INTEGER DEFAULT 0, likes INTEGER DEFAULT 0, comments INTEGER DEFAULT 0, saved INTEGER DEFAULT 0, fetched_at TEXT DEFAULT (datetime('now')));
-    CREATE TABLE chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, role TEXT NOT NULL DEFAULT 'user', text TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
+    CREATE TABLE chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, role TEXT NOT NULL DEFAULT 'user', text TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')));
+    CREATE TABLE settings (user_id INTEGER PRIMARY KEY, timezone TEXT DEFAULT '')`);
   M.ensureSchema(db);
   return db;
 }
-function addUser(db, id, lang) { db.prepare('INSERT INTO users (id, lang) VALUES (?,?)').run(id, lang || 'es'); }
+// Zona cercana al mediodía (Lote 8, solo harness): los escenarios de alerta
+// inmediata no deben depender de la hora en que se corre la suite. Se elige
+// la zona cuya hora actual está entre las 10:00 y las 18:00 y más cerca del
+// mediodía, para que ni siquiera un nowMs +35 min cruce a la noche.
+function tzCercanaAlMediodia() {
+  const zonas = ['Pacific/Kiritimati', 'Pacific/Auckland', 'Australia/Sydney', 'Asia/Tokyo', 'Asia/Shanghai', 'Europe/Madrid', 'America/Argentina/Buenos_Aires', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Pacific/Honolulu'];
+  let mejor = 'America/Argentina/Buenos_Aires', mejorDist = 99;
+  for (const z of zonas) {
+    try {
+      const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: z, hour: 'numeric', hour12: false }).format(new Date())) % 24;
+      if (h < 10 || h > 18) continue;
+      const dist = Math.abs(h - 14);
+      if (dist < mejorDist) { mejorDist = dist; mejor = z; }
+    } catch (e) {}
+  }
+  if (mejorDist < 99) return mejor;
+  for (const z of zonas) {
+    try {
+      const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: z, hour: 'numeric', hour12: false }).format(new Date())) % 24;
+      const dist = Math.min(Math.abs(h - 14), 24 - Math.abs(h - 14));
+      if (dist < mejorDist) { mejorDist = dist; mejor = z; }
+    } catch (e) {}
+  }
+  return mejor;
+}
+function addUser(db, id, lang) {
+  db.prepare('INSERT INTO users (id, lang) VALUES (?,?)').run(id, lang || 'es');
+  try { db.prepare('INSERT INTO settings (user_id, timezone) VALUES (?,?)').run(id, tzCercanaAlMediodia()); } catch (e) {}
+}
 function addPost(db, id, uid, igId, publishedAt, reach, fetchedAt) {
   db.prepare('INSERT INTO posts (id, user_id, ig_media_id, status, published_at) VALUES (?,?,?,?,?)')
     .run(id, uid, igId, 'published', fmtSql(publishedAt));
