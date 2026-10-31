@@ -290,6 +290,7 @@ const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1
 const showcase = require('./showcase'); // 📣 PRUEBA SOCIAL REAL (v370): la primera historia de un cliente pago, con su consentimiento
 const rubroId = require('./rubro-id'); // (v235) IDENTIFICACIÓN ESPECIALISTA DE RUBRO: voto multi-señal + confianza
 const tasteMemory = require('./taste-memory'); // 🧠 MEMORIA DE GUSTOS (v392): el cliente enseña, Posty anota (registro en el fundamento)
+const postyDislike = require('./posty-dislike'); // 👎 NO ME GUSTA → 3 OPCIONES (30/10)
 const onboarding = require('./onboarding'); // ✨ BIENVENIDA MÁGICA POST-PAGO (2026-10-25): fichas del fundamento + huecos de un toque, nunca un cuestionario
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
@@ -5398,6 +5399,33 @@ app.post('/api/admin/stop-publishing', requireAdminToken, express.json(), (req, 
 // respuesta lo declara (unscheduled: true). Reemplazo 1-a-1: no consume
 // cupo neto. Pensada para operaciones puntuales (ej. anclar los borradores
 // de la cuenta propia al mapa canónico del sitio).
+// 👎 NO ME GUSTA → 3 OPCIONES (POSTY-DISLIKE, aprobado 30/10): un toque
+// en «No me gusta» ofrece 3 ideas distintas para el hueco; el cliente
+// elige UNA (reemplaza el borrador) o «Ninguna, frenar» (el hueco no
+// sale). UNA SOLA RONDA por hueco por semana (estado durable en
+// posty-dislike.js). Solo borradores: publicado → 409, resto → 409.
+app.post('/api/dislike/:id/opciones', requireAuth, express.json(), (req, res) => {
+  const postId = Number(req.params.id) || 0;
+  const uid = req.session.userId;
+  // El módulo decide todo: 404 no_encontrado, 403 no_tuyo, 409
+  // publicado/no_borrador/ya_elegido/frenado, 422 sin_fotos.
+  const r = postyDislike.offerRedo(db, { userId: uid, postId, productName: (req.body && req.body.producto) || '', lang: (req.body && req.body.lang) || 'es' });
+  if (!r.ok) return res.status(r.http || 400).json({ ok: false, code: r.code, disponibles: r.disponibles || 0 });
+  res.json({ ok: true, post_id: r.post_id, week_key: r.week_key, opciones: r.opciones, repetido: !!r.repetido });
+});
+app.post('/api/dislike/:id/elegir', requireAuth, express.json(), (req, res) => {
+  const postId = Number(req.params.id) || 0;
+  const idx = Number((req.body && req.body.idx));
+  const r = postyDislike.chooseOption(db, { userId: req.session.userId, postId, idx, lang: (req.body && req.body.lang) || 'es' });
+  if (!r.ok) return res.status(r.http || 400).json({ ok: false, code: r.code });
+  res.json({ ok: true, post_id: r.post_id, week_key: r.week_key, elegida: r.elegida, learnOk: r.learnOk, unscheduled: !!r.unscheduled });
+});
+app.post('/api/dislike/:id/ninguna', requireAuth, express.json(), (req, res) => {
+  const postId = Number(req.params.id) || 0;
+  const r = postyDislike.chooseNone(db, { userId: req.session.userId, postId });
+  if (!r.ok) return res.status(r.http || 400).json({ ok: false, code: r.code });
+  res.json({ ok: true, post_id: r.post_id, week_key: r.week_key, frenado: true });
+});
 app.post('/api/admin/regen-post', requireAdminToken, express.json(), async (req, res) => {
   const body = req.body || {};
   const postId = parseInt(body.post_id, 10);
@@ -23104,7 +23132,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v487';
+const BUILD_ID = '20261031-v488';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
