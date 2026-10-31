@@ -269,6 +269,88 @@ function badgeEmailHTML({ destacadoPorQue, boostHabilitado: on, urlSemana }) {
     + porQue + link + `</div>`;
 }
 
+// Flujo de impulso ASÍNCRONO (Lote 5): mismo orden de gates que
+// crearImpulso, pero con cobro real (Stripe off-session, inyectado) y
+// publicación real (Meta, inyectada). La conversión USD→ARS es una
+// función inyectada: si NO está definida, el flujo falla cerrado ANTES
+// de cobrar (cobrar un impulso que no puede pautarse sería cobrar por
+// nada). Si el cobro sale pero el anuncio falla, el fallo se registra
+// vía `registrar` para manejo manual: NUNCA hay reembolso automático
+// (política sin definir). `registrar` recibe { tipo: 'exito' |
+// 'anuncio_fallido', posteoId, montoUSD, cobroId, anuncioId?, error? }.
+async function procesarImpulso(input) {
+  const {
+    semana, monto, clienteId, zona, env,
+    adsConfigurado, paginaAutorizada, posteoPublicado,
+    conversionARS, cobrar, publicarAnuncio, registrar,
+  } = input || {};
+  const no = (motivo, extra) => ({ ok: false, motivo, ...(extra || {}) });
+  if (!boostHabilitado(env)) return no('boost_deshabilitado');
+  if (!validarMonto(monto)) return no('monto_invalido');
+  const posteoId = objetivoBoton(semana || {});
+  if (!posteoId) return no('sin_destacado');
+  if (posteoPublicado === false) return no('sin_publicar');
+  if (typeof zona !== 'string' || !zona.trim()) return no('sin_zona');
+  if (!adsConfigurado) return no('ads_no_configurado');
+  if (!paginaAutorizada) return no('sin_autorizacion_publicitaria');
+  if (!clienteId) return no('sin_cliente');
+  // Conversión USD→ARS sin definir: fail-closed ANTES de cualquier cobro.
+  let spendCents = 0;
+  if (typeof conversionARS === 'function') {
+    try { spendCents = conversionARS(monto); } catch (e) { spendCents = 0; }
+  }
+  if (!(typeof spendCents === 'number' && Number.isFinite(spendCents) && spendCents > 0)) {
+    return no('conversion_pendiente');
+  }
+  if (typeof cobrar !== 'function' || typeof publicarAnuncio !== 'function') {
+    return no('sin_proveedores');
+  }
+  const cobro = await cobrar({ clienteId, montoUSD: monto, posteoId });
+  if (!cobro || !cobro.ok) return no('cobro_fallido', { detalle: (cobro && cobro.motivo) || null });
+  let anuncio;
+  try {
+    anuncio = await publicarAnuncio({
+      posteoId, montoUSD: monto, spendCents,
+      zona: zona.trim(), objetivo: DESTACADO_OBJETIVO,
+    });
+  } catch (e) {
+    anuncio = { ok: false, error: String((e && e.message) || e).slice(0, 300) };
+  }
+  if (!anuncio || !anuncio.ok) {
+    if (typeof registrar === 'function') {
+      try {
+        await registrar({
+          tipo: 'anuncio_fallido', posteoId, montoUSD: monto,
+          cobroId: cobro.cobroId || null, error: (anuncio && (anuncio.error || anuncio.motivo)) || 'anuncio_fallido',
+        });
+      } catch (e) { /* el registro nunca tapa el motivo real */ }
+    }
+    return { ok: false, motivo: 'anuncio_fallido', cobroId: cobro.cobroId || null };
+  }
+  if (typeof registrar === 'function') {
+    try {
+      await registrar({
+        tipo: 'exito', posteoId, montoUSD: monto, cobroId: cobro.cobroId || null,
+        anuncioId: anuncio.anuncioId || null, campaignId: anuncio.campaignId || null,
+        adsetId: anuncio.adsetId || null, adId: anuncio.adId || null, spendCents,
+      });
+    } catch (e) { /* el registro nunca tapa un éxito real */ }
+  }
+  return {
+    ok: true, cobroId: cobro.cobroId || null, anuncioId: anuncio.anuncioId || null,
+    posteoId, montoUSD: monto, dias: DESTACADO_DIAS,
+  };
+}
+
+// Pill del badge para la página de aprobación de la semana (server-render):
+// solo el posteo destacado la lleva. Función pura para testear sin el
+// servidor. `en` = true → texto en inglés.
+function badgeAprobarHTML(destacadoId, posteoId, en) {
+  if (!destacadoId || String(posteoId) !== String(destacadoId)) return '';
+  const txt = en ? '⭐ FEATURED POST OF THE WEEK' : '⭐ DESTACADO DE LA SEMANA';
+  return `<p style="margin:0 0 10px"><span style="display:inline-block;border:2px solid #FEC14D;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:800;letter-spacing:0.5px;color:#2793C8">${txt}</span></p>`;
+}
+
 module.exports = {
   DESTACADO_FLAG_ENV,
   DESTACADO_BADGE,
@@ -289,6 +371,8 @@ module.exports = {
   validarMonto,
   boostHabilitado,
   crearImpulso,
+  procesarImpulso,
+  badgeAprobarHTML,
   metricaReal,
   reporteImpulso,
   formatoMetrica,

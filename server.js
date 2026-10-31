@@ -318,6 +318,7 @@ const streaks = require('./streaks');
 const metaAds = require('./meta_ads');
 // === DESTACADO-BOOST require (inicio) ===
 const destacadoSemana = require('./destacado-semana');
+const destacadoCobro = require('./destacado-cobro');
 // === DESTACADO-BOOST require (fin) ===
 const { AD_FEE_PCT, AD_MIN_TOPUP_CENTS, AD_TOPUP_OPTIONS, AD_BUDGET_OPTIONS, AD_MIN_BUDGET_CENTS, AD_DEFAULT_DAYS, adSplit, fmtARS } = require('./config/ads');
 
@@ -6563,13 +6564,12 @@ app.post('/api/destacado/mover', requireAuth, express.json(), (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo mover el destacado' }); }
 });
 
-// Punto de cableado PENDIENTE (turno del push): cobro único con la tarjeta
-// guardada del cliente (Stripe PaymentIntents off-session). Falla cerrado:
-// sin este cableado, impulsar NUNCA cobra (y por ende nunca pauta).
-function cobrarDestacadoPendiente() {
-  return { ok: false, motivo: 'cobro_no_cableado' };
-}
-
+// Cobro del destacado (Lote 5): Stripe off-session con la tarjeta
+// guardada + publicación Meta. La conversión USD (cobro) -> ARS (cuenta
+// Meta) SIGUE SIN DEFINIR por Valentino: conversionARS es null y el
+// flujo falla cerrado ANTES de cobrar (cobrar un impulso que no puede
+// pautarse sería cobrar por nada). Cuando se defina, solo cambia ese
+// punto: el cobro y la publicación ya están cableados y testeados.
 app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -6583,14 +6583,41 @@ app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res
     let gate = { ready: false };
     try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
     if (!gate.ready) return res.status(409).json({ ok: false, motivo: 'sin_autorizacion_publicitaria' });
-    const r = destacadoSemana.crearImpulso({
+    const post = db.prepare('SELECT ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(st.destacadoId, uid) || {};
+    if (!post.ig_media_id) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
+    const stripeCustomer = (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return (u && u.stripe_customer_id) || ''; } catch (e) { return ''; } })();
+    const r = await destacadoSemana.procesarImpulso({
       semana: { destacadoId: st.destacadoId }, monto, clienteId: uid,
       zona: adCountry(uid), env: process.env, adsConfigurado: true,
       paginaAutorizada: true, posteoPublicado: true,
-      cobrar: cobrarDestacadoPendiente,
-      publicarAnuncio: () => ({ ok: false, motivo: 'conversion_pendiente' }),
+      conversionARS: null,
+      cobrar: (a) => destacadoCobro.cobrarImpulso({
+        client: stripeBilling.stripeClient(), customerId: stripeCustomer,
+        montoUSD: a.montoUSD, posteoId: a.posteoId, weekKey: st.week_key, dias: 7,
+      }),
+      publicarAnuncio: async (a) => {
+        const cr = await metaAds.createBoost({
+          name: `Posty · Destacado u${uid} · p${a.posteoId}`,
+          pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
+          spendCents: a.spendCents, days: 7, country: adCountry(uid),
+        });
+        return { ok: true, anuncioId: cr.campaignId, campaignId: cr.campaignId, adsetId: cr.adsetId, adId: cr.adId };
+      },
+      registrar: async (rec) => {
+        if (rec.tipo === 'exito') {
+          db.prepare(`INSERT INTO ad_boosts
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
+            VALUES (?,?,?,?,?,?,'ARS','active',?,?,?,'engagement',7)`)
+            .run(uid, rec.posteoId, post.ig_media_id, rec.spendCents, 0, rec.spendCents, rec.campaignId || '', rec.adsetId || '', rec.adId || '');
+        } else {
+          db.prepare(`INSERT INTO ad_boosts
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error)
+            VALUES (?,?,?,0,0,0,'ARS','error','engagement',7,?)`)
+            .run(uid, rec.posteoId, post.ig_media_id, `cobro ${rec.cobroId || ''} sin anuncio: ${rec.error || ''}`);
+        }
+      },
     });
-    if (!r.ok) return res.status(409).json({ ok: false, motivo: r.motivo });
+    if (!r.ok) return res.status(409).json({ ok: false, motivo: r.motivo, ...(r.cobroId ? { cobroId: r.cobroId } : {}) });
     res.json({ ok: true, cobroId: r.cobroId, anuncioId: r.anuncioId, posteoId: r.posteoId, montoUSD: r.montoUSD, dias: r.dias });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo impulsar' }); }
 });
@@ -25208,7 +25235,9 @@ function aprobarPageHTML(data) {
     const when = p.shown_at ? semanaWhenLabel(fakeP, tz, en) : '';
     const capFull = String(p.caption || '').trim();
     const cap = capFull.length > 180 ? capFull.slice(0, 180).trimEnd() + '…' : capFull;
+    const badge = destacadoSemana.badgeAprobarHTML(data.destacadoId, p.id, en);
     return `<article style="border:1px solid #E3EDF3;border-radius:16px;padding:14px;margin:0 0 20px">${media}`
+      + badge
       + (when ? `<p style="font-size:13px;font-weight:700;color:#2793C8;margin:12px 0 6px">${semanaEsc(when)}</p>` : '')
       + (cap ? `<p style="font-size:15.5px;line-height:1.55;margin:0;white-space:pre-wrap">${semanaEsc(cap)}</p>` : '')
       + `</article>`;
@@ -25279,12 +25308,24 @@ app.get('/aprobar/:token', (req, res) => {
   else if (done.length) state = 'already';
   const shown = state === 'pending' ? aprobarShownPosts(u.id, drafts) : (drafts.length ? drafts.map((d) => ({ ...d, shown_at: d.scheduled_at || null })) : done.map((d) => ({ ...d, shown_at: d.scheduled_at || null })));
   const prof = getProfile(u.id) || {};
+  // Badge del destacado: fila guardada de la semana; si no hay, el pick
+  // determinista de Posty sobre lo mostrado, calculado en memoria (esta
+  // página es de solo lectura: nunca escribe).
+  let destacadoId = null;
+  try {
+    const saved = db.prepare('SELECT post_id FROM semana_destacado WHERE user_id = ? AND week_key = ?').get(u.id, v.weekKey);
+    if (saved && saved.post_id) destacadoId = saved.post_id;
+    else {
+      const pick = destacadoSemana.elegirDestacado(destacadoSemana.adaptarSemana(shown));
+      if (pick && pick.posteo) destacadoId = pick.posteo.id;
+    }
+  } catch (e) {}
   res.set('Cache-Control', 'private, no-store');
   res.send(aprobarPageHTML({
     lang: en ? 'en' : 'es', tz, token: req.params.token, state,
     business: String(prof.business_name || '').trim(),
     rangeLabel: aprobarWeekRangeLabel(v.weekKey, en),
-    posts: shown,
+    posts: shown, destacadoId,
   }));
 });
 // POST /aprobar/:token — el toque del botón ES la aprobación: ejecuta la
@@ -26003,7 +26044,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v504';
+const BUILD_ID = '20261031-v505';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
