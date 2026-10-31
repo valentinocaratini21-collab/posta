@@ -119,6 +119,17 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .tk-head{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:8px}
 .tk-head h2{margin:0;text-align:left;min-width:0}
 .tk-avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 4px 14px rgba(39,147,200,.25)}
+/* MAGIA-AGENTES (espejo de styles.css — mantener sincronizado) */
+.pz-mg{position:relative;line-height:0;flex:none;--mg-c:#2793C8;filter:drop-shadow(0 0 8px var(--mg-c))}
+.pz-mg img{display:block}
+.pz-mg::before{content:"";position:absolute;inset:-6px;pointer-events:none;background-image:radial-gradient(circle at 18% 12%,#F6DC96 0 2px,transparent 3px),radial-gradient(circle at 84% 18%,#FEC14D 0 1.6px,transparent 2.6px),radial-gradient(circle at 90% 82%,#F6DC96 0 2px,transparent 3px),radial-gradient(circle at 8% 78%,#fff 0 1.6px,transparent 2.6px);animation:pzMgFlota 5s ease-in-out infinite}
+.pz-mg::after{content:"";position:absolute;top:-4px;right:-2px;width:14px;height:14px;pointer-events:none;background:linear-gradient(180deg,#FDF3D8,#FEC14D);clip-path:polygon(50% 0%,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0% 50%,38% 38%);animation:pzMgBrilla 3.2s ease-in-out infinite}
+.pz-mg--sm::before,.pz-mg--sm::after{display:none}
+.pz-mg--sm{filter:drop-shadow(0 0 6px var(--mg-c))}
+@keyframes pzMgFlota{0%,100%{transform:translateY(0);opacity:.85}50%{transform:translateY(-3px);opacity:1}}
+@keyframes pzMgBrilla{0%,100%{transform:scale(.85) rotate(0deg);opacity:.7}50%{transform:scale(1.15) rotate(20deg);opacity:1}}
+@media (prefers-reduced-motion: reduce){.pz-mg::before,.pz-mg::after{animation:none}}
+
 /* (v212) Posty malabareando ELIMINADO del tracker (orden de Valentino
    2026-10-18: "sacar el posty haciendo malabares"): el tracker muestra
    el avatar estatico, sin pelotas ni animacion. */
@@ -1180,7 +1191,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
   <div class="wrap">
     <p style="margin:6px 0 14px"><button type="button" class="linklike" id="exBack"><svg class="wb-ic wb-ic-l" aria-hidden="true"><use href="#wb-back"/></svg> Back</button></p>
     <div class="res-hero">
-      <img src="ai-avatar.png" alt="Posty" style="width:46px;height:46px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.4)">
+      <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:46px;height:46px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.4)"></span>
       <h2>This is how <span class="hl">Patitas'</span> week looks 🐾</h2>
       <p class="sub">A neighborhood vet and pet shop. This is a <b>sample</b>: yours comes from your real business, with your exact product.</p>
     </div>
@@ -1232,7 +1243,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
     <div class="tracker">
       <span class="pill">WORKING FOR YOU ⚙️</span>
       <div class="tk-head">
-        <img src="ai-avatar.png" alt="Posty" class="tk-avatar">
+        <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" class="tk-avatar"></span>
         <h2 id="tkTitle">Building your week…</h2>
       </div>
       <p class="sub">This is what we would do for you every week, automatically.</p>
@@ -1255,7 +1266,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
       <button class="btn btn-primary btn-sm" id="btnMakeMine">I want my free week</button>
     </div>
     <div class="res-hero">
-      <img src="ai-avatar.png" alt="Posty" style="width:46px;height:46px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.4)">
+      <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:46px;height:46px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.4)"></span>
       <h2 id="rTitle">Your week is ready, <span class="hl" id="rBiz">your business</span>! 🎉</h2>
       <p class="sub" id="rSub"></p>
       <div id="rCached" style="display:none;background:#FFF6E0;border:1px solid #FEC14D;border-radius:12px;padding:12px 16px;margin-top:12px;font-size:14px"></div>
@@ -4083,7 +4094,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
 });
 </script>
-<script src="/posty-chat.js?v=4" defer></script>
+<script src="/posty-chat.js?v=5" defer></script>
 <script>
 /* Campaign frame (growth wave 2): when a commercial window is open, the
    trial presents itself for that date. No active campaign, nothing shows. */

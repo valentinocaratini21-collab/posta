@@ -3720,3 +3720,32 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .lp-social-alt{font-size:13.5px;color:#5A7186;margin:12px 0 0}
 .lp-social-alt a{color:#2793C8;font-weight:700}
 .trial-social{display:none;flex-direction:column;gap:10px;margin:0 0 16px}
+
+/* ===== MAGIA-AGENTES (tablero 2026-10-26: todos los agentes tienen magia) =====
+   Polvo dorado + destello + resplandor en el color del agente, solo CSS.
+   Ningún asset cambia: las caras quedan intactas por diff.
+   .pz-mg envuelve la figura (img/video); --mg-c = color del resplandor.
+   --sm = solo resplandor (chips <=46px y firmas). Reduced-motion: estático. */
+.pz-mg{position:relative;line-height:0;flex:none;--mg-c:#2793C8;filter:drop-shadow(0 0 8px var(--mg-c))}
+.pz-mg img,.pz-mg video{display:block}
+.pz-mg::before{content:"";position:absolute;inset:-6px;pointer-events:none;background-image:radial-gradient(circle at 18% 12%,#F6DC96 0 2px,transparent 3px),radial-gradient(circle at 84% 18%,#FEC14D 0 1.6px,transparent 2.6px),radial-gradient(circle at 90% 82%,#F6DC96 0 2px,transparent 3px),radial-gradient(circle at 8% 78%,#fff 0 1.6px,transparent 2.6px);animation:pzMgFlota 5s ease-in-out infinite}
+.pz-mg::after{content:"";position:absolute;top:-4px;right:-2px;width:14px;height:14px;pointer-events:none;background:linear-gradient(180deg,#FDF3D8,#FEC14D);clip-path:polygon(50% 0%,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0% 50%,38% 38%);animation:pzMgBrilla 3.2s ease-in-out infinite}
+.pz-mg--sm::before,.pz-mg--sm::after{display:none}
+.pz-mg--sm{filter:drop-shadow(0 0 6px var(--mg-c))}
+.pz-mg--big{filter:drop-shadow(0 0 16px var(--mg-c))}
+.pz-mg--big::after{width:20px;height:20px;top:-6px;right:-4px}
+.pz-mg--heroV{display:block;width:min(300px,76vw);margin:0 auto 22px}
+.pz-mg--heroV .hero-video{width:100%;margin:0}
+.pz-mg--heroI{display:block;width:fit-content;margin:0 auto 20px}
+.pz-mg--heroI .hero-posty{margin:0}
+.pz-mg--gj{display:block;width:100%}
+.pz-mg--feed{flex:0 0 auto;width:min(290px,32%);align-self:flex-end}
+.pz-mg--feed .lp-feed-posty{width:100%}
+.pz-mg-letra{box-shadow:0 0 10px var(--mg-c)}
+.pz-celeb .pz-nudo.on,.pz-celeb .pz-tramo.on{box-shadow:0 0 6px var(--pz-cel)}
+.bb-hero .bb-tallo-crece{box-shadow:0 0 8px var(--bbc)}
+.bb-hero .bb-tallo::after{content:"";position:absolute;left:50%;top:0;width:12px;height:12px;transform:translateX(-50%);background:linear-gradient(180deg,#FDF3D8,#FEC14D);clip-path:polygon(50% 0%,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0% 50%,38% 38%);animation:pzMgBrilla 3.2s ease-in-out infinite}
+.bb-medal.pz-mg-medal{filter:drop-shadow(0 0 10px #DBA453)}
+@keyframes pzMgFlota{0%,100%{transform:translateY(0);opacity:.85}50%{transform:translateY(-3px);opacity:1}}
+@keyframes pzMgBrilla{0%,100%{transform:scale(.85) rotate(0deg);opacity:.7}50%{transform:scale(1.15) rotate(20deg);opacity:1}}
+@media (prefers-reduced-motion: reduce){.pz-mg::before,.pz-mg::after,.bb-hero .bb-tallo::after{animation:none}}

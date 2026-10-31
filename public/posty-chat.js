@@ -62,6 +62,7 @@
     '@keyframes pcUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}',
     '.pc-head{background:#2793C8;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px}',
     '.pc-head img{width:40px;height:40px;border-radius:50%;background:#fff;display:block}',
+    '/* MAGIA-AGENTES (espejo de styles.css — mantener sincronizado) */\n.pz-mg{position:relative;line-height:0;flex:none;--mg-c:#2793C8;filter:drop-shadow(0 0 8px var(--mg-c))}\n.pz-mg img{display:block}\n.pz-mg::before{content:"";position:absolute;inset:-6px;pointer-events:none;background-image:radial-gradient(circle at 18% 12%,#F6DC96 0 2px,transparent 3px),radial-gradient(circle at 84% 18%,#FEC14D 0 1.6px,transparent 2.6px),radial-gradient(circle at 90% 82%,#F6DC96 0 2px,transparent 3px),radial-gradient(circle at 8% 78%,#fff 0 1.6px,transparent 2.6px);animation:pzMgFlota 5s ease-in-out infinite}\n.pz-mg::after{content:"";position:absolute;top:-4px;right:-2px;width:14px;height:14px;pointer-events:none;background:linear-gradient(180deg,#FDF3D8,#FEC14D);clip-path:polygon(50% 0%,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0% 50%,38% 38%);animation:pzMgBrilla 3.2s ease-in-out infinite}\n.pz-mg--sm::before,.pz-mg--sm::after{display:none}\n.pz-mg--sm{filter:drop-shadow(0 0 6px var(--mg-c))}\n@keyframes pzMgFlota{0%,100%{transform:translateY(0);opacity:.85}50%{transform:translateY(-3px);opacity:1}}\n@keyframes pzMgBrilla{0%,100%{transform:scale(.85) rotate(0deg);opacity:.7}50%{transform:scale(1.15) rotate(20deg);opacity:1}}\n@media (prefers-reduced-motion: reduce){.pz-mg::before,.pz-mg::after{animation:none}}',
     '.pc-head .pc-name{font-weight:800;font-size:16px;line-height:1.15}',
     '.pc-head .pc-sub{font-size:12px;opacity:.92;line-height:1.2}',
     '.pc-close{margin-left:auto;background:rgba(255,255,.18);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;line-height:1;flex:none}',
@@ -93,7 +94,7 @@
   root.innerHTML =
     '<div id="pcPanel" class="pc-hidden" role="dialog" aria-label="' + T.dialogLabel + '">' +
       '<div class="pc-head">' +
-        '<img src="/ai-avatar.png" alt="Posty">' +
+        '<span class="pz-mg pz-mg--sm"><img src="/ai-avatar.png" alt="Posty"></span>' +
         '<div><div class="pc-name">Posty</div>' +
         '<div class="pc-sub">' + T.sub + '</div></div>' +
         '<button class="pc-close" type="button" aria-label="' + T.closeLabel + '">✕</button>' +

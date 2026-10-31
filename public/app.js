@@ -231,6 +231,7 @@ const BB_META = {
   bossty: { n: 'Bossty', c: '#C9962E', a: null },
   oficina: { n: 'Bambooty', c: '#DBA453', a: '/bambooty-avatar.webp' },
 };
+const MG_CANON = { posty: '#2793C8', venty: '#E8836B', gesty: '#A175CA', atenty: '#3FA7A3', oficina: '#DBA453' };
 function BB_SHELL_ON() {
   try {
     if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
@@ -254,13 +255,20 @@ function bbToast(msg) {
 }
 // Identidad visual de un poder: su cara si el repo la tiene; si no, su
 // medallón con inicial en SU color (nada de imágenes rotas ni emoji suelto).
-function bbAvatarHTML(poder, avatar, nombre, color, cls) {
+function bbAvatarHTML(poder, avatar, nombre, color, cls, magia) {
   const m = BB_META[poder] || {};
   const av = avatar || m.a;
   const nom = nombre || m.n || poder;
   const col = color || m.c || '#D6A463';
-  if (av) return `<img class="${cls || 'bb-av'}" src="${esc(av)}" alt="${esc(nom)}">`;
-  return `<span class="${cls || 'bb-av'} bb-av-letra" style="background:${esc(col)}">${esc(String(nom).charAt(0))}</span>`;
+  const esPoder = ['posty', 'venty', 'gesty', 'atenty', 'oficina'].includes(poder);
+  const mg = (magia !== false && esPoder) ? (MG_CANON[poder] || col) : null;
+  const sm = (cls || '').includes('bb-av-xl') ? '' : ' pz-mg--sm';
+  if (av) {
+    if (!mg) return `<img class="${cls || 'bb-av'}" src="${esc(av)}" alt="${esc(nom)}">`;
+    return `<span class="pz-mg${sm}" style="--mg-c:${mg}"><img class="${cls || 'bb-av'}" src="${esc(av)}" alt="${esc(nom)}"></span>`;
+  }
+  if (!mg) return `<span class="${cls || 'bb-av'} bb-av-letra" style="background:${esc(col)}">${esc(String(nom).charAt(0))}</span>`;
+  return `<span class="${cls || 'bb-av'} bb-av-letra pz-mg-letra" style="background:${esc(col)};--mg-c:${mg}">${esc(String(nom).charAt(0))}</span>`;
 }
 // El tallo: crece de la raíz a la copa con un nudo por nivel (GAMIFICACIÓN).
 function bbTalloHTML(nivel, color, alto) {
@@ -287,12 +295,12 @@ function bbShell(tab, content) {
   };
   const tabBtn = (key, hash, label) => `<button class="bb-tab${act === key ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[key] || ''}</span><span>${label}</span>${key === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
   return `<div class="bb-app">
-    <header class="bb-top"><img class="bb-top-av" src="/bambooty-avatar.webp" alt="Bambooty"><div class="bb-top-tx"><strong class="bb-gold-tx">Bambooty</strong><span>${BB.estado && BB.estado.negocio ? esc(BB.estado.negocio) + ' · tu oficina' : 'Tu oficina'}</span></div></header>
+    <header class="bb-top"><span class="pz-mg pz-mg--sm" style="--mg-c:#DBA453"><img class="bb-top-av" src="/bambooty-avatar.webp" alt="Bambooty"></span><div class="bb-top-tx"><strong class="bb-gold-tx">Bambooty</strong><span>${BB.estado && BB.estado.negocio ? esc(BB.estado.negocio) + ' · tu oficina' : 'Tu oficina'}</span></div></header>
     <main class="bb-main">${content}</main>
     <nav class="bb-bar">
       ${tabBtn('oficina', '#/app/oficina', 'Oficina')}
       ${tabBtn('bandeja', '#/app/bandeja', 'Para vos')}
-      <button class="bb-medal${act === 'chat' ? ' on' : ''}" onclick="bbGo('#/app/chat')" aria-label="Hablar con Bambooty"><img src="/bambooty-avatar.webp" alt="Bambooty"></button>
+      <button class="bb-medal${act === 'chat' ? ' on' : ''} pz-mg-medal" onclick="bbGo('#/app/chat')" aria-label="Hablar con Bambooty"><img src="/bambooty-avatar.webp" alt="Bambooty"></button>
       ${tabBtn('negocio', '#/app/negocio', 'Mi negocio')}
       ${tabBtn('ajustes', '#/app/ajustes', 'Ajustes')}
     </nav>
@@ -335,7 +343,7 @@ async function bbOficinaContent() {
     const claveRio = r.poder === 'bossty' ? 'oficina' : r.poder;
     const p = (est.poderes || []).find((x) => x.poder === claveRio);
     const nom = p ? p.nombre : (BB_META[claveRio] || {}).n || r.poder;
-    return `<div class="bb-rio-row">${bbAvatarHTML(claveRio, p ? p.avatar : null, nom, p ? p.color : null, 'bb-av bb-av-sm')}<div class="bb-rio-tx"><p><strong>${esc(nom)}</strong> · ${esc(r.resumen)}</p><span>${bbHace(r.ts)}</span></div><button class="bb-mini" onclick="bbVerRegistro('${esc(r.registro_ref)}')">Recibo</button></div>`;
+    return `<div class="bb-rio-row">${bbAvatarHTML(claveRio, p ? p.avatar : null, nom, p ? p.color : null, 'bb-av bb-av-sm', false)}<div class="bb-rio-tx"><p><strong>${esc(nom)}</strong> · ${esc(r.resumen)}</p><span>${bbHace(r.ts)}</span></div><button class="bb-mini" onclick="bbVerRegistro('${esc(r.registro_ref)}')">Recibo</button></div>`;
   }).join('');
   return `
     <section class="bb-hero">
@@ -468,7 +476,7 @@ async function bbNegocioContent() {
   const agentes = ['posty', 'venty', 'atenty', 'gesty', 'oficina'];
   const avisos = prefs ? `<section class="bb-bloque"><h2>Cómo te avisa tu oficina</h2>
     <p class="bb-sub">Cada agente te escribe solo por tres motivos: una decisión que espera tu toque, una buena noticia que ya pasó, o una urgencia real. De noche, silencio (22 a 8) salvo urgencia.</p>
-    ${agentes.map((a) => { const m = BB_META[a]; const on = !prefs.agentes || prefs.agentes[a] !== false; return `<div class="bb-pref"><span>${bbAvatarHTML(a, null, m.n, m.c, 'bb-av bb-av-sm')} ${m.n}</span><button class="bb-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" onclick="bbTogglePref('${a}', this)"><span></span></button></div>`; }).join('')}
+    ${agentes.map((a) => { const m = BB_META[a]; const on = !prefs.agentes || prefs.agentes[a] !== false; return `<div class="bb-pref"><span>${bbAvatarHTML(a, null, m.n, m.c, 'bb-av bb-av-sm', false)} ${m.n}</span><button class="bb-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" onclick="bbTogglePref('${a}', this)"><span></span></button></div>`; }).join('')}
     <div class="bb-pref bb-pref-total"><span>${pzIc('bellOff', 18)} Silencio total de la oficina</span><button class="bb-switch${prefs.silencio ? ' on' : ''}" role="switch" aria-checked="${!!prefs.silencio}" onclick="bbToggleSilencio(this)"><span></span></button></div>
     <p class="bb-sub">Los especialistas — Desy, Talenty, Growty y Bossty — no son de todos los días: solo te escriben cuando tienen un proyecto activo con vos.</p>
   </section>` : '';
@@ -514,7 +522,7 @@ async function bbChatContent() {
   } catch (e) {}
   return `
     <div class="bb-chat">
-      <div class="bb-chat-box" id="bbChatBox">${CHAT.length ? CHAT.map(bbChatMsgHtml).join('') : '<div class="bb-chat-vacio"><img src="/bambooty-avatar.webp" alt="Bambooty"><p><strong>Tu oficina, en una conversación.</strong></p><p>Pedime lo que necesites: derivo tu pedido al poder que corresponde y trabaja con tu fundamento.</p></div>'}</div>
+      <div class="bb-chat-box" id="bbChatBox">${CHAT.length ? CHAT.map(bbChatMsgHtml).join('') : '<div class="bb-chat-vacio"><span class="pz-mg" style="--mg-c:#DBA453"><img src="/bambooty-avatar.webp" alt="Bambooty"></span><p><strong>Tu oficina, en una conversación.</strong></p><p>Pedime lo que necesites: derivo tu pedido al poder que corresponde y trabaja con tu fundamento.</p></div>'}</div>
       <div class="bb-chat-input"><textarea id="bbChatText" rows="1" placeholder="Escribile a tu oficina…"></textarea><button class="bb-btn bb-btn-gold" id="bbChatSend" onclick="bbChatSend()">Enviar</button></div>
     </div>`;
 }
@@ -853,7 +861,7 @@ async function bbAvisosEnAjustes() {
   div.id = 'bbAvisosCard'; div.className = 'bb-bloque'; div.style.marginTop = '14px';
   div.innerHTML = `<h2>Cómo te avisa tu oficina</h2>
     <p class="bb-sub">Cada agente te escribe solo por tres motivos: una decisión que espera tu toque, una buena noticia que ya pasó, o una urgencia real. De noche, silencio (22 a 8) salvo urgencia.</p>
-    ${agentes.map((a) => { const m = BB_META[a]; const on = !prefs.agentes || prefs.agentes[a] !== false; return `<div class="bb-pref"><span>${bbAvatarHTML(a, null, m.n, m.c, 'bb-av bb-av-sm')} ${m.n}</span><button class="bb-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" onclick="bbTogglePref('${a}', this)"><span></span></button></div>`; }).join('')}
+    ${agentes.map((a) => { const m = BB_META[a]; const on = !prefs.agentes || prefs.agentes[a] !== false; return `<div class="bb-pref"><span>${bbAvatarHTML(a, null, m.n, m.c, 'bb-av bb-av-sm', false)} ${m.n}</span><button class="bb-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" onclick="bbTogglePref('${a}', this)"><span></span></button></div>`; }).join('')}
     <div class="bb-pref bb-pref-total"><span>${pzIc('bellOff', 18)} Silencio total de la oficina</span><button class="bb-switch${prefs.silencio ? ' on' : ''}" role="switch" aria-checked="${!!prefs.silencio}" onclick="bbToggleSilencio(this)"><span></span></button></div>`;
   host.appendChild(div);
 }
@@ -1044,7 +1052,7 @@ async function pzFillRefPeak(surface, root) {
 // el slot se borra y no se ve nada: el silencio es parte del diseño.
 function relacionBubbleHTML(text) {
   const t = String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  return `<div class="relacion-bubble"><img src="ai-avatar.png" alt="Posty" class="relacion-ava"><p>${t}</p></div>`;
+  return `<div class="relacion-bubble"><span class="pz-mg pz-mg--sm"><img src="ai-avatar.png" alt="Posty" class="relacion-ava"></span><p>${t}</p></div>`;
 }
 async function pzFillRelacion() {
   const slot = document.getElementById('relacionSlot');
@@ -2869,7 +2877,7 @@ function lpAnalisisHTML() {
     .lp-letter-sign span{display:block;font-size:10px;font-weight:800;color:#2793C8;text-transform:uppercase;letter-spacing:1.1px;margin-top:1px}
     </style>
     <div class="lp-letter">
-      <div class="lp-letter-head"><img src="ai-avatar.png" alt="Posty"><div><b>Tu análisis</b><span>Cafetería de barrio · ejemplo</span></div></div>
+      <div class="lp-letter-head"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span><div><b>Tu análisis</b><span>Cafetería de barrio · ejemplo</span></div></div>
       <div class="lp-letter-verdict"><span>Mi veredicto</span><p>“Tenés buen café y buena gente. Hoy tu ritmo es de 2 posteos por semana — y la constancia no depende de tu tiempo: la pongo yo.”</p></div>
       <p class="lp-letter-f">📈 <b>Tu ritmo de publicación tiene mucho para crecer</b> — hoy: 2 posteos por semana.<br><span>→ Con Posty: tu semana completa, armada y programada.</span></p>
       <div class="lp-letter-plan">
@@ -2879,7 +2887,7 @@ function lpAnalisisHTML() {
         <p><b>③ De acá en más:</b> te re-mido cada semana y ajusto: lo que funciona, se repite.</p>
       </div>
       <p class="lp-letter-banner">Tenés el negocio. La constancia la pongo yo.</p>
-      <div class="lp-letter-sign"><img src="ai-avatar.png" alt="Posty"><p><i>Posty<b>.</b></i><span>Tu community manager</span></p></div>
+      <div class="lp-letter-sign"><span class="pz-mg pz-mg--sm"><img src="ai-avatar.png" alt="Posty"></span><p><i>Posty<b>.</b></i><span>Tu community manager</span></p></div>
     </div>
     <p class="lp-cm-close">💡 Y cada posteo te dice su <b>porqué</b>: qué vi, qué decidí y para qué sale. Así de simple.</p>
     <div style="text-align:center"><a class="btn btn-primary btn-lg" href="/prueba">Ver el análisis de mi cuenta →</a></div>
@@ -2927,7 +2935,7 @@ function lpCapSectionsHTML() {
     </div>
     <div class="cap-side">
       <div class="cap-sample">
-        <div class="cap-ig-head"><img src="ai-avatar.png" alt="Posty"><b>posty.communitymanager</b><span>•••</span></div>
+        <div class="cap-ig-head"><span class="pz-mg pz-mg--sm"><img src="ai-avatar.png" alt="Posty"></span><b>posty.communitymanager</b><span>•••</span></div>
         <img class="cap-ig-img" loading="lazy" src="lp-pieza.jpg" alt="Pieza real hecha por Posty: el robot celeste saludando, con el titular SOY POSTY.">
         <div class="cap-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><svg class="save" viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></div>
         <p class="cap-ig-cap"><b>posty.communitymanager</b> ¡Hola! Soy Posty. 👋 Soy tu community manager: analizo tu Instagram a fondo — tu ritmo, tus mejores posteos, tu vidriera y hasta tu competencia — y con ese análisis armo tu plan…</p>
@@ -3168,7 +3176,7 @@ function landingView(cfg) {
     <a class="btn btn-primary btn-block" href="/prueba">Probar gratis</a>
   </div></div>
   <div class="hero"><div class="wrap">
-    <video class="hero-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty, tu community manager, presentándose"></video>
+    <div class="pz-mg pz-mg--heroV"><video class="hero-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty, tu community manager, presentándose"></video></div>
     <div class="pill">🤖 Tu community manager</div>
     <h1>Tu Instagram trabajando<br><span class="hl">todos los días, con un solo clic</span></h1>
     <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b> — y los publica solo. Posteos, reels, historias, comentarios, mensajes y pauta — todo tu Instagram, hecho por Posty. Vos no hacés nada: solo frenás si algo no te cierra.</p>
@@ -3294,7 +3302,7 @@ function landingView(cfg) {
         </div>
       </div>
       <div class="gj-deskp">
-        <img class="gj-posty" src="posty-disenando-hero.jpg" alt="Posty, con su lápiz y sus posteos, trabajando en su escritorio" loading="lazy" decoding="async">
+        <span class="pz-mg pz-mg--gj"><img class="gj-posty" src="posty-disenando-hero.jpg" alt="Posty, con su lápiz y sus posteos, trabajando en su escritorio" loading="lazy" decoding="async"></span>
         <div class="gj-comment" aria-hidden="true">
           <div class="gj-cin">¿Siguen con la promo del jueves? 🙏</div>
           <div class="gj-cout"><img src="ai-avatar.png" alt="">¡Sí! Este jueves sigue 💛 ¿Te reservo?</div>
@@ -3372,7 +3380,7 @@ function landingView(cfg) {
         <div class="lp-feed-card"><img loading="lazy" decoding="async" src="g-latte.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"></div>
         <div class="lp-feed-card"><img loading="lazy" decoding="async" src="g-tazas.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"></div>
       </div>
-      <img class="lp-feed-posty" id="lpFeedPosty" loading="lazy" decoding="async" src="posty-disenando-hero.jpg" alt="Posty diseñando los posteos de tu semana">
+      <span class="pz-mg pz-mg--feed"><img class="lp-feed-posty" id="lpFeedPosty" loading="lazy" decoding="async" src="posty-disenando-hero.jpg" alt="Posty diseñando los posteos de tu semana"></span>
     </div>
     <p class="lp-feed-line" id="lpFeedLine">Primero pienso las ideas de tu semana.</p>
   </div></div>
@@ -4300,7 +4308,7 @@ function postyCelebrate() {
     ov.className = 'posty-celebrate';
     // v257 (orden de Valentino): SIN malabares. Posty en su forma de siempre
     // (avatar redondo) + UNA pelotita amarilla picando al lado. Nada más.
-    ov.innerHTML = '<div class="pc-wrap"><img class="pc-ava" src="ai-avatar.png" alt="Posty">'
+    ov.innerHTML = '<div class="pc-wrap"><span class="pz-mg"><img class="pc-ava" src="ai-avatar.png" alt="Posty"></span>'
       + '<span class="pc-one-sh"></span><span class="pc-one"></span></div>';
     document.body.appendChild(ov);
     setTimeout(() => {
@@ -4548,7 +4556,7 @@ function appShell(tab, content) {
   <aside class="drawer" id="drawer" aria-label="Menú">
     <div class="drawer-ident" id="drawerIdent" aria-label="Tu negocio"></div>
     <div class="side-posty" id="sidePosty" aria-label="Posty">
-      <img src="ai-avatar.png" alt="Posty" class="side-posty-ava">
+      <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" class="side-posty-ava"></span>
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('posty')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
@@ -6345,7 +6353,7 @@ function proposalHTML() {
     <div class="chat-proposal">
       <button class="cp-close" id="chatDismiss" type="button" aria-label="Cerrar">✕</button>
       <div class="cp-head">
-        <img class="cp-avatar" src="ai-avatar.png" alt="Posty">
+        <span class="pz-mg pz-mg--sm"><img class="cp-avatar" src="ai-avatar.png" alt="Posty"></span>
         <div class="cp-head-tx">
           <div class="cp-overline">${isOrder ? 'Tu pedido' : 'Idea lista'} ✨</div>
           <div class="cp-title">${esc(CHAT_IDEA.titulo)}</div>
@@ -8291,7 +8299,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // Usa clase propia (hs-nodna) para que el loop de refresh de .hs-generating
     // no corra en este caso.
     if (noDna) return `<div class="hs-nodna" id="hsNoDna">
-    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+    <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
     <b>Para armar tu semana necesito conocer tu negocio 👇</b>
     <p>Contame de qué se trata en 2 minutos y la armo sola ✨</p>
     <a class="btn btn-primary btn-block" href="#/app/ajustes" style="margin-top:4px">Contar de mi negocio</a>
@@ -8299,7 +8307,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // Si estamos generando (ensure disparado), mostrar "armando" aunque
     // haya tenido posteos antes — la semana actual está vacía.
     if (generating) return `<div class="hs-generating" id="hsGenerating">
-    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+    <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
     <b>Posty está armando tu semana ✨</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
@@ -8310,12 +8318,12 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // la semana está completa (no un spinner eterno).
     const everHad = all.length > 0;
     if (everHad) return `<div class="hs-done">
-      <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+      <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
       <b>Tu semana está completa 🎉</b>
       <p>Todo publicado. La próxima se arma sola ✨</p>
     </div>`;
     return `<div class="hs-generating" id="hsGenerating">
-    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+    <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
     <b>Posty está armando tu semana ✨</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
@@ -8903,7 +8911,7 @@ async function chatView() {
   return `
   <div class="chat-home hs-home">
     <div class="hs-top">
-      <img src="ai-avatar.png" class="hs-ava" alt="Posty">
+      <span class="pz-mg"><img src="ai-avatar.png" class="hs-ava" alt="Posty"></span>
       <div><b>Posty<span class="pdot">.</span></b><div class="hs-sub">Tu semana, lista. Si querés cambiar algo, decime 👇</div></div>
     </div>
     <div id="revMsg"></div>
@@ -12239,7 +12247,7 @@ function showStreakCelebration(sk) {
   const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
   const isFirst = sk.newWeek && sk.current === 1;
   streakModalShell(`
-    ${isFirst ? '<img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">' : `<div class="big-emoji">${lv.emoji}</div>`}
+    ${isFirst ? '<span class="pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)"></span>' : `<div class="big-emoji">${lv.emoji}</div>`}
     <h3 style="margin:12px 0 4px">${isFirst ? '¡Tu primera semana! 🎉' : (sk.leveledUp ? (biz ? `¡${esc(biz)} subió a ${esc(lv.name)}!` : '¡Subiste de nivel!') : '¡Racha en marcha!')}</h3>
     ${isFirst ? '<p style="font-size:15px;margin:0 0 6px;color:var(--mut)">La primera de muchas. Yo armo, yo publico — vos a mirar cómo crece 💪</p>' : ''}
     <p style="font-size:16px;margin:0 0 6px"><b>⚡ +100 pts</b> · ${pts} pts en total</p>
@@ -13412,7 +13420,7 @@ function pzPostPayMagicRender(box, d, en) {
   let html = '';
   if (fichas.length) {
     html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <img src="ai-avatar.png" alt="Posty" style="width:30px;height:30px;border-radius:50%">
+      <span class="pz-mg pz-mg--sm"><img src="ai-avatar.png" alt="Posty" style="width:30px;height:30px;border-radius:50%"></span>
       <b style="font-size:13.5px">${en ? 'This is what I already know about you' : 'Esto es lo que ya sé de vos'}</b></div>`;
     html += fichas.map((f) => {
       const val = f.id === 'paleta' && Array.isArray(f.colores)
@@ -15590,7 +15598,7 @@ function pzNivelStripHTML(nv, en) {
     : { hash: pzNivelChip(falt[0] ? falt[0].clave : '', en).hash,
         label: n === 1 ? (en ? '1 thing left' : 'te falta 1 cosa') : (en ? `${n} things left` : `te faltan ${n} cosas`) };
   return `<div id="pzNivelStrip" role="button" tabindex="0" aria-expanded="false" aria-label="${esc(en ? `Your level with Posty: ${nv.nombre_nivel}` : `Tu nivel con Posty: ${nv.nombre_nivel}`)}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:16px;cursor:pointer;box-sizing:border-box">
-    <img src="ai-avatar.png" alt="Posty" style="width:52px;height:52px;flex:none;border-radius:50%;object-fit:cover">
+    <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:52px;height:52px;flex:none;border-radius:50%;object-fit:cover"></span>
     <span data-pz-col style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
       <strong style="font-size:15px;line-height:1.25">${esc(nv.nombre_nivel)}</strong>
       <span style="display:block;height:7px;border-radius:999px;background:#DCEFFA;overflow:hidden"><span data-pz-fill="${pct}" style="display:block;height:100%;width:${pct}%;background:${esc(nv.color || '#2793C8')};border-radius:999px"></span></span>
@@ -15641,7 +15649,7 @@ function pzNivelFamiliaHTML(nv, en) {
     ['gesty', '#5B8C5A', 'Gesty', en ? 'Admin' : 'Administración', en ? 'Already logged in your office: new level, everything in order.' : 'Ya lo dejé registrado en tu oficina: nivel nuevo, todo en orden.'],
     ['atenty', '#2E8C83', 'Atenty', en ? 'Customer care' : 'Cuidar al cliente', en ? 'Your clients will notice the difference. I’ll make sure they feel at home.' : 'Tus clientes van a notar la diferencia. Yo me encargo de que se sientan en casa.'],
   ];
-  const h = rows.filter((r) => poderes.includes(r[0])).map((r) => `<div class="pz-fam-row"><span class="pz-fam-dot" style="background:${r[1]}"></span><span class="pz-fam-tx"><strong>${esc(r[2])}</strong><span>${esc(r[3])}</span><span>${esc(r[4])}</span></span></div>`).join('');
+  const h = rows.filter((r) => poderes.includes(r[0])).map((r) => `<div class="pz-fam-row"><span class="pz-fam-dot" style="background:${r[1]};box-shadow:0 0 8px ${MG_CANON[r[0]] || r[1]}"></span><span class="pz-fam-tx"><strong>${esc(r[2])}</strong><span>${esc(r[3])}</span><span>${esc(r[4])}</span></span></div>`).join('');
   return `<div class="pz-fam"><div class="pz-fam-tit">${esc(en ? 'THE OFFICE CELEBRATES' : 'LA OFICINA FESTEJA')}</div>${h}<div class="pz-fam-bam">${esc(en ? 'Your whole office celebrates with you. We keep growing together.' : 'Toda tu oficina festeja con vos. Seguimos creciendo juntos.')}</div></div>`;
 }
 function pzNivelBroteVisto(el) {
@@ -15714,7 +15722,7 @@ function pzNivelCelebShow(nv, en) {
   div.innerHTML = `<div class="pz-celeb" role="dialog" aria-modal="true" aria-label="${esc(en ? 'Level up' : 'Subiste de nivel')}">
     <button type="button" class="pz-celeb-x" data-pz-celeb-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button>
     ${pzNivelStemHTML(nv.nivel, nv.color, true)}
-    <span class="pz-celeb-evo"><img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;object-fit:cover"></span>
+    <span class="pz-celeb-evo pz-mg pz-mg--big"><img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;object-fit:cover"></span>
     <h3>${esc(en ? `You leveled up to ${nv.nombre_nivel}!` : `¡Subiste a ${nv.nombre_nivel}!`)} 🎉</h3>
     <p class="pz-celeb-unlock">${esc(unlock)}</p>
     ${pzNivelFamiliaHTML(nv, en)}
@@ -15740,7 +15748,7 @@ function pzNivelStoryShow(nv, en) {
   div.innerHTML = `<div class="pz-story" role="dialog" aria-modal="true">
     <button type="button" class="pz-celeb-x" data-pz-story-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button>
     <div class="pz-story-card">
-      <img class="pz-story-av" src="ai-avatar.png" alt="Posty">
+      <span class="pz-mg"><img class="pz-story-av" src="ai-avatar.png" alt="Posty"></span>
       <div class="pz-story-big">${esc(en ? `I leveled up to ${nv.nombre_nivel}!` : `¡Subí a ${nv.nombre_nivel}!`)} 🎉</div>
       <div class="pz-story-unlock">${esc(unlock)}</div>
       <div class="pz-story-firma">posty.</div>
