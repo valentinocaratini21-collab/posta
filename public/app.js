@@ -7323,6 +7323,94 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
 }
 
 // Agrega un mensaje del asistente al chat (para confirmaciones locales)
+// ---------- VOZ DEL DUENO -> POSTEO (tarjeta del borrador del dia) ----------
+// Botones por data-atributos + delegacion en document: evita comillas
+// anidadas en onclick con nombres de producto (acentos, apodos).
+(function vozDelegar() {
+  if (window.__vozDelegado) return;
+  window.__vozDelegado = true;
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('[data-voz-accion]') : null;
+    if (!b) return;
+    vozAccion(Number(b.dataset.vozId), b.dataset.vozAccion, b.dataset.vozValor || undefined);
+  });
+})();
+
+function renderVozPostCard(vo) {
+  if (!vo || !vo.id) return;
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  const dudas = vo.dudas || (vo.hechos && vo.hechos.dudas) || [];
+  const opciones = vo.opciones || (vo.hechos && vo.hechos.opciones) || [];
+  const fotoOrigen = vo.fotoOrigen || vo.foto_origen || '';
+  const foto = vo.foto || '';
+  const estado = vo.estado || '';
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let html = '<div class="voz-post-card" data-voz-id="' + vo.id + '">';
+  html += '<div class="voz-post-head">🎙 tu posteo de hoy</div>';
+  html += '<div class="voz-post-quote">“' + esc(vo.transcripcion || '') + '”</div>';
+  if (foto) {
+    html += '<img class="voz-post-foto" src="' + esc(foto) + '" alt="">';
+    html += '<div class="voz-post-foto-nota">' + (fotoOrigen === 'nueva' ? 'usé la foto que mandaste con el audio' : fotoOrigen === 'conocida' ? 'usé tu foto real de este producto' : 'foto elegida por vos') + '</div>';
+  } else {
+    html += '<div class="voz-post-sin-foto">sin foto todavía — elegí una de tu local 👇</div>';
+  }
+  if (vo.caption) html += '<div class="voz-post-caption">' + esc(vo.caption) + '</div>';
+  if (dudas.length && opciones.length) {
+    html += '<div class="voz-post-pregunta">¿de cuál hablamos?</div>';
+    html += '<div class="voz-post-opciones">';
+    opciones.forEach((op) => {
+      html += '<button class="btn btn-soft voz-opcion" data-voz-id="' + vo.id + '" data-voz-accion="aclarar" data-voz-valor="' + esc(op) + '">' + esc(op) + '</button>';
+    });
+    html += '</div>';
+  }
+  if (!foto && (vo.alternativas || []).length) {
+    html += '<div class="voz-post-pregunta">¿cuál foto uso?</div>';
+    html += '<div class="voz-post-opciones">';
+    vo.alternativas.forEach((f) => {
+      html += '<button class="btn btn-soft voz-opcion" data-voz-id="' + vo.id + '" data-voz-accion="cambiar-foto" data-voz-valor="' + esc(f) + '"><img src="' + esc(f) + '" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px"></button>';
+    });
+    html += '</div>';
+  }
+  html += '<div class="voz-post-acciones">';
+  if (estado === 'aclarar') {
+    html += '<span class="voz-post-hint">elegí arriba y se arma solo 👆</span>';
+  } else {
+    html += '<button class="btn btn-primary" data-voz-id="' + vo.id + '" data-voz-accion="aprobar">Aprobar</button>';
+    html += '<button class="btn btn-soft" data-voz-id="' + vo.id + '" data-voz-accion="cambiar-foto">Cambiar foto</button>';
+    html += '<button class="btn btn-soft" data-voz-id="' + vo.id + '" data-voz-accion="rehacer-texto">Rehacer texto</button>';
+    if (vo.audioPath) html += '<button class="btn btn-soft" data-voz-id="' + vo.id + '" data-voz-accion="reel">Armar reel con mi voz</button>';
+  }
+  html += '</div></div>';
+  box.insertAdjacentHTML('beforeend', html);
+}
+
+async function vozAccion(id, accion, valor) {
+  const card = document.querySelector('.voz-post-card[data-voz-id="' + id + '"]');
+  const body = { id };
+  if (accion === 'aclarar') body.producto = valor;
+  if (accion === 'cambiar-foto' && valor) body.foto = valor;
+  try {
+    const r = await fetch('/api/voz-dueno/' + accion, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (accion === 'aprobar' && j.ok) {
+      chatSay('listo ✅ tu posteo de hoy sale ' + (j.scheduled_at || 'en el horario del día'));
+      if (card) card.remove();
+      return;
+    }
+    if (accion === 'reel' && j.ok) {
+      chatSay('tu reel con tu voz quedó como borrador 🎬 lo revisás en tu semana');
+      return;
+    }
+    if ((accion === 'aclarar' || accion === 'cambiar-foto' || accion === 'rehacer-texto') && j.ok && j.voz_post) {
+      if (card) card.remove();
+      renderVozPostCard(j.voz_post);
+      return;
+    }
+    chatSay('no se pudo 😕 ' + (j.error || 'probá de nuevo'));
+  } catch (e) { chatSay('no se pudo 😕 probá de nuevo'); }
+}
+
 function chatSay(text) {
   CHAT.push({ role: 'assistant', text });
   const box = $('#chatBox');
@@ -8111,6 +8199,7 @@ async function chatExchange({ text, display, extra, pushed }) {
     // El cliente pidió VER sus posteos: mostrar los borradores reales con imagen.
     // Nunca texto sin imágenes.
     if (Array.isArray(r.showDrafts) && r.showDrafts.length) renderChatShowDrafts(r.showDrafts);
+    if (r.voz_post) renderVozPostCard(r.voz_post);
   } catch (e) {
     const t = $('#chatTyping'); if (t) { stopPostyThinking(t); t.remove(); }
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
@@ -8278,8 +8367,11 @@ function chatUpdateSendBtn() {
   const unsent = (typeof CHAT_PHOTOS !== 'undefined' && CHAT_PHOTOS.some(p => !p.sent));
   const ready = (inp && inp.value.trim().length > 0) || unsent;
   if (VOICE_REC) return; // grabando: no tocar
-  if (ready) { b.textContent = '➤'; b.className = 'btn btn-primary'; b.title = 'Enviar'; b.onclick = () => chatSend(); }
-  else { b.textContent = '🎙'; b.className = 'btn btn-soft'; b.title = 'Pedir con nota de voz'; b.onclick = () => voiceToggle(); }
+  if (ready) { b.textContent = '➤'; b.className = 'btn btn-primary'; b.title = 'Enviar'; b.onclick = () => chatSend(); b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null; }
+  else { b.textContent = '🎙'; b.className = 'btn btn-soft'; b.title = 'Mantener para hablar'; b.onclick = null;
+    b.onpointerdown = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} voiceToggle(); };
+    b.onpointerup = () => { if (VOICE_REC) voiceStop(); else setTimeout(() => { if (VOICE_REC) voiceStop(); }, 800); };
+    b.onpointercancel = () => { if (VOICE_REC) voiceStop(); }; }
 }
 
 function bindChat() {

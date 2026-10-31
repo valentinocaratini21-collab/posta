@@ -45,6 +45,7 @@ const paymentCloseMod = require('./payment-close');
 const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
 const { upcomingEphemeris, catsMatch } = require('./ephemeris');
 const creator = require('./creator.js');
+const vozDueno = require('./voz-dueno.js'); // VOZ DEL DUENO -> POSTEO (29/10/2026, local)
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
 const modoEvento = require('./modo-evento'); // MODO EVENTO (2026-10-30): mini-campaña anticipación + día + cierre.
@@ -4368,7 +4369,7 @@ function fixPublishReply(reply, publishApplied) {
   return String(reply || '') + (inR ? ' (uno quedó en revisión, te aviso cuando salga)' : ' (uno no pudo salir, lo reviso y te aviso)');
 }
 app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => {
-  const { messages, photos, library, drafts, audio, anchor_post_id } = req.body || {};
+  const { messages, photos, library, drafts, audio, anchor_post_id, photoPaths } = req.body || {};
   const uidChat = req.session.userId;
   // Kill-switch de gasto diario: mensaje amable de Posty, nunca un error robótico.
   try { costs.assertAiOk(uidChat); }
@@ -4384,6 +4385,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     .filter(m => m.text.trim());
   // Nota de voz: transcribir con Whisper y usar el texto como mensaje del usuario.
   let chatNote = '';
+  let vozPost = null; // VOZ DEL DUENO: borrador del dia (se adjunta al res.json final)
   if (typeof audio === 'string' && audio.startsWith('data:audio/')) {
     const akey = (getSettings(req.session.userId).openai_key || process.env.OPENAI_API_KEY || '');
     const noAudio = { reply: 'no pude escuchar tu audio 🙏 me lo escribís en una línea?', idea: null };
@@ -4395,6 +4397,9 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     if (lastUser) lastUser.text = heard.slice(0, 2000);
     else clean.push({ role: 'user', text: heard.slice(0, 2000) });
     chatNote = 'El cliente mandó una NOTA DE VOZ transcripta: convertí lo que pide en un posteo concreto, sin pedirle más datos salvo que sea imposible.';
+    // (voz-dueno) Si el audio es un reporte del dia, armar el borrador voz->posteo.
+    // Nunca rompe el flujo normal: cualquier error deja vozPost en null.
+    try { vozPost = await armarBorradorVozChat(uidChat, heard, audio, Array.isArray(photoPaths) ? photoPaths : []); } catch (e) { console.error('[voz-dueno] chat:', e.message); vozPost = null; }
   }
   if (!clean.length) return res.status(400).json({ error: 'Contanos tu idea' });
   // Saludo puro ("hola", "qué onda posty"): Posty responde al instante, sin gastar una llamada al modelo.
@@ -4910,7 +4915,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     // usuario (tope de 3 en paralelo) ya acota los 429s, y el preview reutiliza la imagen
     // (draftFromPreview) así que no hay doble gasto.
     if (out.idea && (out.idea.titulo || out.idea.title)) pregenIdeaImage(uidChat, out.idea);
-    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
+    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
   } catch (e) {
     console.error('[chat]', e.message);
     res.status(500).json({ error: 'Uh, me trabé un segundo 😅 Dame otro intento que esta sale' });
@@ -6901,6 +6906,169 @@ function firstPickFrom(drafts) {
 }
 
 // Historial del chat consultor (persiste entre sesiones) + idea cerrada pendiente
+// ---------- VOZ DEL DUENO -> POSTEO (aprobado 29/10/2026; local, pendiente del turno del push) ----------
+// Arma el borrador del dia desde una transcripcion (o audio ya transcripto).
+// Devuelve el objeto voz_post o null si no es un reporte del dia.
+// Nunca inventa: sin producto -> estado 'aclarar' con opciones de un toque;
+// caption con numero o producto no dicho -> texto_pendiente (no se muestra).
+async function armarBorradorVozChat(uid, transcript, audioDataUrl, photoPaths) {
+  if (!vozDueno.esReporteDelDia(transcript)) return null;
+  let dg = null;
+  try { dg = clientDigest.getDigest(db, uid); } catch (e) { dg = null; }
+  const digest = dg || (clientDigest.emptyDigest ? clientDigest.emptyDigest() : {});
+  const hechos = vozDueno.extraerHechos(transcript, digest);
+  let fotoNueva = null;
+  try {
+    for (const p of (photoPaths || [])) {
+      if (typeof p === 'string' && p.startsWith('/media/') && fs.existsSync(path.join(MEDIA_DIR, path.basename(p)))) { fotoNueva = p; break; }
+    }
+  } catch (e) {}
+  const fotoSel = fotoNueva
+    ? { foto: fotoNueva, origen: 'nueva', alternativas: [] }
+    : vozDueno.elegirFoto(db, uid, (hechos.productos || [])[0] || '');
+  let caption = null;
+  let hashtags = '';
+  if (!hechos.dudas.length) {
+    try {
+      const akey = (getSettings(uid).openai_key || process.env.OPENAI_API_KEY || '');
+      const styleExtras = (typeof captionPromptExtras === 'function' && captionPromptExtras(db, uid)) || '';
+      const prompt = vozDueno.armarPromptCaption({ transcript, hechos, styleExtras });
+      const cap = await vozDueno.generarCaptionVoz({ apiKey: akey, prompt });
+      if (cap && cap.text) {
+        const ver = vozDueno.verificarCaptionSinInvento(cap.text, hechos, transcript, digest);
+        if (ver.ok) { caption = cap.text; hashtags = (cap.hashtags || []).join(' '); }
+      }
+    } catch (e) { console.error('[voz-dueno] caption:', e.message); }
+  }
+  let audioPath = '';
+  try { if (typeof audioDataUrl === 'string' && audioDataUrl.startsWith('data:audio/')) audioPath = vozDueno.guardarAudioVoz(MEDIA_DIR, audioDataUrl, uid); } catch (e) {}
+  const borrador = vozDueno.crearBorradorVoz(db, { userId: uid, transcript, hechos, foto: fotoSel.foto, fotoOrigen: fotoSel.origen, audioPath, caption, hashtags });
+  return {
+    id: borrador.id, transcripcion: transcript, hechos,
+    foto: fotoSel.foto, fotoOrigen: fotoSel.origen, alternativas: fotoSel.alternativas || [],
+    audioPath, caption, hashtags, estado: borrador.estado,
+    dudas: borrador.dudas, opciones: borrador.opciones,
+  };
+}
+
+app.post('/api/voz-dueno/borrador', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  let transcript = String((req.body && req.body.transcript) || '').trim();
+  const audio = (req.body && req.body.audio) || '';
+  if (!transcript && typeof audio === 'string' && audio.startsWith('data:audio/')) {
+    const akey = (getSettings(uid).openai_key || process.env.OPENAI_API_KEY || '');
+    const tr = await vozDueno.transcribirVoz(audio, akey);
+    if (!tr.ok) return res.status(tr.codigo === 'stt_sin_llave' ? 503 : 400).json({ error: tr.codigo, pendiente: !!tr.pendiente });
+    transcript = tr.text;
+  }
+  if (!transcript) return res.status(400).json({ error: 'sin_audio_ni_texto' });
+  let vozPost = null;
+  try { vozPost = await armarBorradorVozChat(uid, transcript, audio, (req.body && req.body.photoPaths) || []); } catch (e) { console.error('[voz-dueno] borrador:', e.message); }
+  if (!vozPost) return res.json({ voz_post: null, no_es_reporte: true });
+  return res.json({ voz_post: vozPost });
+});
+
+app.post('/api/voz-dueno/aprobar', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const id = Number(req.body && req.body.id);
+  if (!id) return res.status(400).json({ error: 'sin_id' });
+  const row = vozDueno.leerBorradorVoz(db, id, uid);
+  if (!row) return res.status(404).json({ error: 'sin_borrador' });
+  let bestHour = 19;
+  try { const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid); if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour; } catch (e) {}
+  const taken = new Set();
+  try {
+    const rows = db.prepare("SELECT scheduled_at FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL").all(uid);
+    for (const r of rows || []) if (r.scheduled_at) taken.add(String(r.scheduled_at).slice(0, 10));
+  } catch (e) {}
+  const closedIso = (() => { try { return closedDaysOf(uid); } catch (e) { return new Set(); } })();
+  const closedJs = new Set([...closedIso].map(d => d % 7)); // closedDaysOf usa 1..7 (lun..dom); slotDelDia usa 0..6 (dom..sab)
+  const slot = vozDueno.slotDelDia({ tz: userTz(uid), bestHour, takenYmd: taken, closedWeekdays: closedJs, nowMs: Date.now() });
+  const ap = vozDueno.aprobarVoz(db, id, slot);
+  if (!ap.ok) return res.status(400).json({ error: ap.codigo, dudas: ap.dudas || undefined });
+  try { if (typeof scheduleLintForPost === 'function') scheduleLintForPost(uid, ap.postId); } catch (e) {}
+  return res.json({ ok: true, post_id: ap.postId, scheduled_at: ap.scheduled_at });
+});
+
+app.post('/api/voz-dueno/aclarar', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  const id = Number(req.body && req.body.id);
+  const producto = String((req.body && req.body.producto) || '').trim();
+  if (!id || !producto) return res.status(400).json({ error: 'falta_producto' });
+  const row = vozDueno.leerBorradorVoz(db, id, uid);
+  if (!row) return res.status(404).json({ error: 'sin_borrador' });
+  const ac = vozDueno.aclararVoz(db, id, producto);
+  if (!ac.ok) return res.status(400).json({ error: ac.codigo });
+  // Si quedo listo pero sin texto, generar el caption ahora (mismo gate).
+  const actual = vozDueno.leerBorradorVoz(db, id, uid);
+  if (actual && actual.estado === 'texto_pendiente') {
+    try {
+      const akey = (getSettings(uid).openai_key || process.env.OPENAI_API_KEY || '');
+      const styleExtras = (typeof captionPromptExtras === 'function' && captionPromptExtras(db, uid)) || '';
+      const prompt = vozDueno.armarPromptCaption({ transcript: actual.transcripcion, hechos: actual.hechos, styleExtras });
+      const cap = await vozDueno.generarCaptionVoz({ apiKey: akey, prompt });
+      if (cap && cap.text) {
+        const dg = (() => { try { return clientDigest.getDigest(db, uid); } catch (e) { return {}; } })();
+        vozDueno.rehacerTextoVoz(db, id, cap.text, actual.hechos, actual.transcripcion, dg);
+      }
+    } catch (e) { console.error('[voz-dueno] aclarar-caption:', e.message); }
+  }
+  return res.json({ ok: true, voz_post: vozDueno.leerBorradorVoz(db, id, uid) });
+});
+
+app.post('/api/voz-dueno/cambiar-foto', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const id = Number(req.body && req.body.id);
+  if (!id) return res.status(400).json({ error: 'sin_id' });
+  const row = vozDueno.leerBorradorVoz(db, id, uid);
+  if (!row) return res.status(404).json({ error: 'sin_borrador' });
+  const r = vozDueno.cambiarFotoVoz(db, id, req.body && req.body.foto);
+  if (!r.ok) return res.status(400).json({ error: r.codigo });
+  return res.json({ ok: true, foto: r.foto, foto_origen: r.foto_origen, alternativas: r.alternativas || [], voz_post: vozDueno.leerBorradorVoz(db, id, uid) });
+});
+
+app.post('/api/voz-dueno/rehacer-texto', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  const id = Number(req.body && req.body.id);
+  if (!id) return res.status(400).json({ error: 'sin_id' });
+  const row = vozDueno.leerBorradorVoz(db, id, uid);
+  if (!row) return res.status(404).json({ error: 'sin_borrador' });
+  try {
+    const akey = (getSettings(uid).openai_key || process.env.OPENAI_API_KEY || '');
+    const styleExtras = (typeof captionPromptExtras === 'function' && captionPromptExtras(db, uid)) || '';
+    const prompt = vozDueno.armarPromptCaption({ transcript: row.transcripcion, hechos: row.hechos, styleExtras });
+    const cap = await vozDueno.generarCaptionVoz({ apiKey: akey, prompt });
+    if (!cap || !cap.text) return res.status(502).json({ error: 'sin_caption' });
+    const dg = (() => { try { return clientDigest.getDigest(db, uid); } catch (e) { return {}; } })();
+    const r = vozDueno.rehacerTextoVoz(db, id, cap.text, row.hechos, row.transcripcion, dg);
+    if (!r.ok) return res.status(400).json({ error: r.codigo, problemas: r.problemas });
+    return res.json({ ok: true, caption: r.caption, hashtags: r.hashtags, voz_post: vozDueno.leerBorradorVoz(db, id, uid) });
+  } catch (e) { console.error('[voz-dueno] rehacer:', e.message); return res.status(502).json({ error: 'rehacer_fallo' }); }
+});
+
+app.post('/api/voz-dueno/reel', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  const id = Number(req.body && req.body.id);
+  if (!id) return res.status(400).json({ error: 'sin_id' });
+  const row = vozDueno.leerBorradorVoz(db, id, uid);
+  if (!row) return res.status(404).json({ error: 'sin_borrador' });
+  if (!row.foto || !row.audio_path) return res.status(400).json({ error: 'falta_foto_o_audio' });
+  const fotoAbs = path.join(MEDIA_DIR, path.basename(row.foto));
+  const audioAbs = path.join(MEDIA_DIR, path.basename(row.audio_path));
+  if (!fs.existsSync(fotoAbs) || !fs.existsSync(audioAbs)) return res.status(404).json({ error: 'archivo_falta' });
+  const outName = 'voz-reel-' + id + '-' + Date.now() + '.mp4';
+  const outAbs = path.join(MEDIA_DIR, outName);
+  try {
+    await vozDueno.mezclarVozEnReel(vozDueno.armarReelVozArgs({ fotoAbs, audioAbs, outAbs, durSeg: 16 }));
+  } catch (e) { console.error('[voz-dueno] reel:', e.message); return res.status(502).json({ error: 'reel_fallo' }); }
+  try {
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, tipo) VALUES (?,?,?,?,'draft','video','')`)
+      .run(uid, '/media/' + outName, row.caption || '', row.hashtags || '');
+    db.prepare(`UPDATE voice_posts SET reel_path=?, updated_at=datetime('now') WHERE id=?`).run('/media/' + outName, id);
+    return res.json({ ok: true, reel_path: '/media/' + outName, post_id: Number(ins.lastInsertRowid) });
+  } catch (e) { console.error('[voz-dueno] reel-insert:', e.message); return res.status(502).json({ error: 'reel_fallo' }); }
+});
+
 app.get('/api/ideas/chat', requireAuth, (req, res) => {
   const uid = req.session.userId;
   const msgs = db.prepare(`SELECT role, text FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-24 hours') ORDER BY id DESC LIMIT 30`).all(uid).reverse();
@@ -23463,7 +23631,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v492';
+const BUILD_ID = '20261031-v493';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
