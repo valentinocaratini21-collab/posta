@@ -3849,6 +3849,38 @@ app.get('/api/oficina/jardin', requireAuth, (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// LOTE 4 — Jardín Posty después del nivel 50 + historia real de meses.
+// Solo Posty. Las 4 post-jardín solo con nivel 50 (el módulo devuelve
+// null/[] si no); la historia sirve en cualquier nivel. Fail-closed:
+// ante cualquier error, ok:false y el cliente no pinta nada nuevo.
+// No es ruta de aprobación (censo intacto).
+app.get('/api/oficina/jardin-post50', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const pj = require('./postjardin');
+    const est = pj.estadoPost50(db, uid, oficina.metricas(db, uid), userTz(uid), Date.now());
+    if (!est) return res.status(500).json({ ok: false, error: 'jardin_post50_failed' });
+    res.json(Object.assign({ ok: true }, est));
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// LOTE 4 — Regalar una semilla de Maestro (solo nivel 50, solo Posty).
+// Registra el regalo real (fecha). La redención por un negocio nuevo
+// (que su jardín arranque de la semilla) es follow-up aparte: requiere
+// aceptar semilla en onboarding y NO viaja acá. Sin nivel 50 no hay
+// semilla: 403, nunca inventada.
+app.post('/api/oficina/jardin-semilla-regalo', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const pj = require('./postjardin');
+    const est = pj.estadoPost50(db, uid, oficina.metricas(db, uid), userTz(uid), Date.now());
+    if (!est || !est.completo) return res.status(403).json({ ok: false, error: 'jardin_no_completo' });
+    const ts = Date.now();
+    db.prepare('INSERT INTO jardin_semillas_regalo (user_id, ts) VALUES (?,?)').run(uid, ts);
+    res.json({ ok: true, ts });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // Vaciado periódico de la cola agrupable de push (buenas noticias): Bambooty
 // las resume; jamás despierta de noche (la política vive en push-oficina).
 setInterval(() => {
@@ -25971,7 +26003,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v503';
+const BUILD_ID = '20261031-v504';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

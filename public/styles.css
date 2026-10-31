@@ -3636,6 +3636,45 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-story-firma{font-weight:800;opacity:.8}
 .pz-story-note{font-size:13px;color:var(--mut);line-height:1.45;margin:0 0 14px}
 @media (prefers-reduced-motion: reduce){.pz-nudo.cur,.pz-celeb,.pz-story{animation:none}.pz-celeb .pz-nudo,.pz-celeb .pz-tramo{animation:none}}
+/* ===== LOTE 4: momento del avance + post-jardín (solo Posty; magia dorada/celeste, destellos estrella, nunca puntos ni polvo) ===== */
+.pz-momento{background:#FFFDF8;border-radius:24px;padding:22px;text-align:center;max-width:340px;width:100%;position:relative;animation:pzPop .45s cubic-bezier(.2,1.6,.4,1)}
+.pz-momento-magia{display:block;position:relative;height:22px;margin:2px 0 6px}
+.pz-momento-magia i{position:absolute;top:0;width:14px;height:14px;background:#FEC14D;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);animation:pzMagiaBrilla 1.6s ease-in-out infinite}
+.pz-momento-magia i:nth-child(2){left:28%;background:#2793C8;animation-delay:.3s}
+.pz-momento-magia i:nth-child(3){left:52%;animation-delay:.6s}
+.pz-momento-magia i:nth-child(4){left:74%;background:#2793C8;animation-delay:.9s}
+.pz-momento-magia i:first-child{left:6%}
+@keyframes pzMagiaBrilla{0%,100%{opacity:.25;transform:scale(.7) rotate(0deg)}50%{opacity:1;transform:scale(1.15) rotate(20deg)}}
+.pz-momento-posty{display:inline-block;margin-bottom:8px}
+.pz-momento-candado{font-size:34px;line-height:1;margin:6px 0;transition:opacity .5s,transform .5s}
+.pz-momento-candado.roto{opacity:0;transform:scale(1.4) rotate(-18deg)}
+.pz-momento-premio{font-size:16px;font-weight:800;line-height:1.4;color:#0A1E33;opacity:0;transform:scale(.85);transition:opacity .5s,transform .5s;margin:8px 0}
+.pz-momento-premio.visible{opacity:1;transform:scale(1)}
+.pz-momento-premio.brilla{color:#8a6400;text-shadow:0 0 14px rgba(254,193,77,.9)}
+.pz-momento-msg,.pz-momento-sigue,.pz-momento-ad{opacity:0;transition:opacity .6s}
+.pz-momento.final .pz-momento-msg,.pz-momento.final .pz-momento-sigue,.pz-momento.final .pz-momento-ad{opacity:1}
+.pz-momento-msg{font-size:15px;line-height:1.5;margin:12px 0 6px}
+.pz-momento-sigue{font-size:13px;color:var(--mut);line-height:1.45;margin:0 0 12px}
+.pz-momento-ad{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.pz-momento-antes,.pz-momento-ahora{border-radius:14px;padding:10px;font-size:12.5px;line-height:1.4;text-align:left}
+.pz-momento-antes{background:#F2F2F2;color:var(--mut)}
+.pz-momento-ahora{background:#FFF6DE;border:1px solid #FEC14D;color:#0A1E33}
+.pz-momento-antes span,.pz-momento-ahora span{display:block;font-weight:800;margin-bottom:4px}
+@media (prefers-reduced-motion: reduce){.pz-momento,.pz-momento-magia i{animation:none}.pz-momento-candado,.pz-momento-premio,.pz-momento-msg,.pz-momento-sigue,.pz-momento-ad{transition:none}}
+.pz-post50{margin:16px 0 0;padding:14px;background:#FFFBF0;border:1px solid #F0D9A8;border-radius:18px}
+.pz-post50 h3{margin:0 0 10px;font-size:17px}
+.pz-post50 h4{margin:14px 0 6px;font-size:14px}
+.pz-post50-est{display:flex;gap:10px;font-size:14px;line-height:1.45}
+.pz-post50-zona{padding:8px 10px;border-radius:12px;font-size:13px;line-height:1.4;margin:0 0 6px;background:#fff;border:1px solid #EAD9A8}
+.pz-post50-zona.lock{color:var(--mut)}
+.pz-post50-vive p,.pz-post50-semillas p{font-size:13px;line-height:1.5;margin:0 0 8px}
+.pz-post50-btn{border:0;border-radius:999px;padding:11px 16px;font-weight:800;background:#2793C8;color:#fff;cursor:pointer}
+.pz-post50-hist{margin:16px 0 0;padding:14px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:18px}
+.pz-post50-hist h3{margin:0 0 4px;font-size:17px}
+.pz-post50-hist-sub{font-size:13px;color:var(--mut);margin:0 0 10px}
+.pz-post50-mes{font-size:13px;line-height:1.5;margin:0 0 10px}
+.pz-post50-subida{margin:4px 0 0 12px;font-size:12.5px;line-height:1.5}
+.pz-post50-replay{border:0;background:none;color:#2793C8;font-weight:700;cursor:pointer;padding:2px 4px;text-decoration:underline}
 /* ===== GAMIFICACIÓN v459: desafio / prueba / brote / ausencia / familia ===== */
 .pz-desafio{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0 0 12px;background:#FFFBF0;border:1px solid #F0D9A8;border-radius:16px}
 .pz-desafio-tx{flex:1;min-width:0;font-size:13px;line-height:1.4}

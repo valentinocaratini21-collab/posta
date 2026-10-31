@@ -1086,13 +1086,13 @@ function mxVistasUnAgenteHTML(nv, premioHTML) {
   }
   return `<div class="mx-pasos-nivel">${botones.join('')}</div>${vistas.join('')}`;
 }
-function mxJardinHTML(tipo, nvP, nvG, jardin) {
+function mxJardinHTML(tipo, nvP, nvG, jardin, post50) {
   const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">← ${gzT('Volver', 'Back')}</button>`;
   if (tipo === 'posty') {
     const head = `<h1>${gzT('Mi jardín', 'My garden')}</h1><p>${gzT('Crece solo con semanas publicadas de verdad.', 'Grows only with truly published weeks.')}</p>`;
     const fotoUrl = mxFotoJardin(jardin);
     const foto = fotoUrl ? `<img class="mx-foto-nivel" src="${esc(fotoUrl)}" alt="${gzT('Tu jardín', 'Your garden')}" onerror="this.remove()">` : '';
-    const cuerpo = mxVistasUnAgenteHTML(nvP, mxPremioPostyHTML(nvP)) + mxVitrina(nvP);
+    const cuerpo = mxVistasUnAgenteHTML(nvP, mxPremioPostyHTML(nvP)) + mxVitrina(nvP) + mxJardinPost50HTML(post50);
     return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head">${head}</header><div class="mx-bloque">${foto}${cuerpo}</div></div>`;
   }
   return mxJardinErrorHTML(); // POSTY SOLO: sin jardín Gesty
@@ -1105,10 +1105,13 @@ async function bbJardinCombinadoContent() {
   if (!res[0] || !res[1]) return mxJardinErrorHTML();
   return mxJardinHTML('combinado', res[0], res[1], res[2]);
 }
+async function mxJardinPost50() {
+  try { const r = await api.get('/api/oficina/jardin-post50'); return (r && r.ok) ? r : null; } catch (e) { return null; }
+}
 async function bbJardinPostyContent() {
-  const res = await Promise.all([mxNivel('posty'), mxJardinFotos()]);
+  const res = await Promise.all([mxNivel('posty'), mxJardinFotos(), mxJardinPost50()]);
   if (!res[0]) return mxJardinErrorHTML();
-  return mxJardinHTML('posty', res[0], null, res[1]);
+  return mxJardinHTML('posty', res[0], null, res[1], res[2]);
 }
 async function bbJardinGestyContent() {
   const nvG = await mxNivel('gesty');
@@ -17367,13 +17370,91 @@ function pzVitrinaHTML(hist, en, etiqueta) {
     <div class="pz-vitrina">${badges}</div>
   </section>`;
 }
-function pzNivelCelebShow(nv, en) {
-  const prev = document.getElementById('pzCelebFondo');
-  if (prev) { try { prev.remove(); } catch (e) {} }
-  const unlock = (nv.premio_actual || nv.desbloqueo_actual || pzNivelUnlock(nv.nivel, en));
-  const div = document.createElement('div');
-  div.id = 'pzCelebFondo';
-  div.className = 'pz-celeb-fondo';
+// LOTE 4 — Momento del avance: sonido suave (WebAudio, best-effort) +
+// vibración con guarda. En web iOS no hay vibración: el momento funciona
+// igual sin ella, nunca fingida.
+function pzMomentoSonido() {
+  try {
+    const AC = (typeof AudioContext !== 'undefined') ? AudioContext : (typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : null);
+    if (!AC) return false;
+    const ctx = new AC();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.9);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + 1);
+    return true;
+  } catch (e) { return false; }
+}
+function pzMomentoVibrar(ms) {
+  try { if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') { navigator.vibrate(ms); return true; } } catch (e) {}
+  return false;
+}
+// LOTE 4 — Momento del avance (las 5): sorpresa sin botón (auto-play,
+// X = saltar a la tarjeta), sonido + vibración en el golpe dorado,
+// antes/después real, historia (replay desde la historia del jardín) y
+// compartir (botón de la tarjeta, vía existente). reduced-motion:
+// estado final directo, sin animación. onListo() muestra lo siguiente.
+function pzMomentoAvanceShow(o) {
+  const en = !!o.en;
+  const div = document.getElementById('pzCelebFondo');
+  if (!div) { if (o.onListo) o.onListo(); return; }
+  const reducido = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const antesTxt = o.antes ? ((en ? 'Level ' : 'Nivel ') + o.antes.nivel + ' — ' + (o.antes.premio || o.antes.desbloqueo || '')) : null;
+  const ahoraTxt = (en ? 'Level ' : 'Nivel ') + o.nivel + ' — ' + o.unlock;
+  div.innerHTML = `<div class="pz-momento" role="dialog" aria-modal="true" aria-label="${esc(en ? 'Your garden grows' : 'Tu jardín avanza')}">
+    <button type="button" class="pz-celeb-x" data-pz-momento-x aria-label="${en ? 'Continue' : 'Seguir'}">✕</button>
+    <span class="pz-momento-magia" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    <span class="pz-momento-posty pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;object-fit:cover"></span>
+    <div class="pz-momento-candado" data-pz-momento-candado>🔒</div>
+    <div class="pz-momento-premio" data-pz-momento-premio>✦ ${esc(o.unlock)}</div>
+    <p class="pz-momento-msg">${esc(en ? 'Posty brought your prize and placed it in the garden.' : 'Posty trajo tu premio y lo puso en el jardín.')}</p>
+    ${o.siguiente ? `<p class="pz-momento-sigue">${esc(o.siguiente)}${o.siguientePremio ? ' — ' + esc(o.siguientePremio) : ''}</p>` : ''}
+    <div class="pz-momento-ad">
+      ${antesTxt ? `<div class="pz-momento-antes"><span>${esc(en ? 'Before' : 'Antes')}</span>${esc(antesTxt)}</div>` : ''}
+      <div class="pz-momento-ahora"><span>${esc(en ? 'Now' : 'Ahora')}</span>${esc(ahoraTxt)}</div>
+    </div>
+  </div>`;
+  let timers = [];
+  let avanzado = false;
+  const avanzar = () => {
+    if (avanzado) return; avanzado = true;
+    timers.forEach((t) => { try { clearTimeout(t); } catch (e) {} });
+    div.removeEventListener('click', onClick);
+    div.removeEventListener('pointerdown', onPointer);
+    if (o.onListo) o.onListo();
+  };
+  const onClick = (ev) => {
+    if (ev.target.closest && ev.target.closest('[data-pz-momento-x]')) { avanzar(); return; }
+    if (ev.target === div) { avanzar(); return; }
+  };
+  const onPointer = () => { pzMomentoSonido(); };
+  div.addEventListener('click', onClick);
+  div.addEventListener('pointerdown', onPointer, { once: true });
+  const candado = div.querySelector('[data-pz-momento-candado]');
+  const premio = div.querySelector('[data-pz-momento-premio]');
+  const momento = div.querySelector('.pz-momento');
+  if (reducido) {
+    if (candado) candado.style.display = 'none';
+    if (premio) premio.classList.add('visible');
+    if (momento) momento.classList.add('final');
+  } else {
+    pzMomentoSonido();
+    timers.push(setTimeout(() => {
+      if (candado) candado.classList.add('roto');
+      if (premio) premio.classList.add('visible', 'brilla');
+      pzMomentoVibrar(60);
+      pzMomentoSonido();
+      timers.push(setTimeout(() => { if (momento) momento.classList.add('final'); }, 1200));
+    }, 900));
+  }
+  timers.push(setTimeout(avanzar, 6500));
+}
+// LOTE 4 — Tarjeta de celebración (extraída de pzNivelCelebShow, intacta:
+// mismo contenido, mismos botones, mismo cierre).
+function pzCelebTarjetaShow(div, nv, en, unlock) {
   div.innerHTML = `<div class="pz-celeb" role="dialog" aria-modal="true" aria-label="${esc(en ? 'Level up' : 'Subiste de nivel')}">
     <button type="button" class="pz-celeb-x" data-pz-celeb-x aria-label="${en ? 'Close' : 'Cerrar'}">✕</button>
     ${pzNivelStemHTML(nv.nivel, nv.color, true)}
@@ -17385,11 +17466,119 @@ function pzNivelCelebShow(nv, en) {
     <button type="button" class="pz-celeb-share" data-pz-celeb-share>${esc(en ? 'Share as story' : 'Compartir como historia')}</button>
     <button type="button" class="pz-celeb-ok" data-pz-celeb-x>${esc(en ? 'Keep going' : 'Seguir')}</button>
   </div>`;
-  document.body.appendChild(div);
   div.addEventListener('click', (ev) => {
     if (ev.target.closest && ev.target.closest('[data-pz-celeb-x]')) { try { div.remove(); } catch (e) {} return; }
     if (ev.target.closest && ev.target.closest('[data-pz-celeb-share]')) { pzNivelStoryShow(nv, en); return; }
     if (ev.target === div) { try { div.remove(); } catch (e) {} }
+  });
+}
+let PZ_MOMENTO_REPLAY = {}; // nivel → {premio, desbloqueo} (render de historia)
+// LOTE 4 — Revisitar un momento pasado desde la historia del jardín:
+// misma secuencia, sin POST celebrar y sin dedupe (es a pedido).
+function pzMomentoReplayShow(nivel) {
+  const datos = PZ_MOMENTO_REPLAY[nivel] || {};
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const prev = document.getElementById('pzCelebFondo');
+  if (prev) { try { prev.remove(); } catch (e) {} }
+  const div = document.createElement('div');
+  div.id = 'pzCelebFondo';
+  div.className = 'pz-celeb-fondo';
+  document.body.appendChild(div);
+  pzMomentoAvanceShow({
+    en: en, unlock: datos.premio || datos.desbloqueo || '',
+    nivel: nivel, siguiente: null, siguientePremio: null, antes: null,
+    onListo: () => { try { div.remove(); } catch (e) {} },
+  });
+}
+function pzMesNombre(mes) {
+  const ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const arr = gzT(ES, EN);
+  return arr[((mes - 1) % 12 + 12) % 12] || '';
+}
+// LOTE 4 — Secciones post-jardín + historia. Solo con nivel 50 se pintan
+// las 4; la historia se pinta en cualquier nivel con meses reales.
+// Sin datos, cadena vacía: nunca se inventa nada.
+function mxJardinPost50HTML(post50) {
+  if (!post50 || !post50.ok) return '';
+  let html = '';
+  if (post50.completo) {
+    const est = post50.estacion;
+    html += `<section class="pz-post50"><h3>${gzT('Después del jardín completo', 'After the full garden')}</h3>`;
+    if (est) html += `<div class="pz-post50-est"><span aria-hidden="true">🌿</span><div><b>${esc(est.estacion)}</b> — ${esc(est.estado)}<br><small>${gzT('Flor de la estación: ', 'Season flower: ')}${esc(est.flor)}</small></div></div>`;
+    if (Array.isArray(post50.zonas) && post50.zonas.length) {
+      html += `<div class="pz-post50-zonas"><h4>${gzT('Nuevas zonas', 'New areas')}</h4>`;
+      for (const z of post50.zonas) {
+        if (z.desbloqueada) html += `<div class="pz-post50-zona ok">✦ ${esc(z.nombre)} — ${esc(z.descripcion)}</div>`;
+        else {
+          const faltan = Math.max(1, z.umbral - (post50.semanas_post50 || 0));
+          html += `<div class="pz-post50-zona lock">🔒 ${esc(z.nombre)} — ${gzT('Se abre en ', 'Opens in ')}${faltan}${gzT(' semanas publicadas más', ' more published weeks')}</div>`;
+        }
+      }
+      html += `</div>`;
+    }
+    const pv = post50.postyVive;
+    const saludo = (post50.hora >= 6 && post50.hora < 12) ? gzT('¡Buenos días! Posty te espera en el jardín.', 'Good morning! Posty waits for you in the garden.') : gzT('Posty vive acá ahora, esperándote en el jardín.', 'Posty lives here now, waiting for you in the garden.');
+    html += `<div class="pz-post50-vive"><h4>${gzT('Posty vive ahí', 'Posty lives here')}</h4><p>${esc(saludo)}</p>`;
+    if (pv && pv.anios > 0) html += `<p>✦ ${pv.anios} ${gzT(pv.anios === 1 ? 'año con Posty: una flor especial en tu jardín' : 'años con Posty: una flor especial en tu jardín', pv.anios === 1 ? 'year with Posty: a special flower in your garden' : 'years with Posty: a special flower in your garden')}</p>`;
+    else html += `<p>${gzT('Tu primera flor especial llega cuando cumplas un año con Posty.', 'Your first special flower arrives when you complete a year with Posty.')}</p>`;
+    html += `</div>`;
+    const sems = Array.isArray(post50.semillas) ? post50.semillas : [];
+    html += `<div class="pz-post50-semillas"><h4>${gzT('Semillas de Maestro', 'Master seeds')}</h4><p>${gzT('Un Maestro del jardín puede regalar una semilla de su jardín a un negocio nuevo. Ese jardín arranca de tu jardín.', 'A garden Master can gift a seed of their garden to a new business. That garden starts from yours.')}</p>`;
+    if (sems.length) html += `<p>${gzT('Semillas regaladas: ', 'Seeds gifted: ')}${sems.length}</p>`;
+    html += `<button type="button" class="pz-post50-btn" onclick="pzSemillaRegalar()">${gzT('Regalar una semilla', 'Gift a seed')}</button></div>`;
+    html += `</section>`;
+  }
+  if (Array.isArray(post50.historia) && post50.historia.length) {
+    const meses = [...post50.historia].reverse();
+    html += `<section class="pz-post50-hist"><h3>${gzT('La historia de tu jardín', 'The story of your garden')}</h3><p class="pz-post50-hist-sub">${gzT('Posty te la cuenta, mes a mes.', 'Posty tells it to you, month by month.')}</p>`;
+    for (const m of meses) {
+      const partes = String(m.mes).split('-');
+      const nombreMes = pzMesNombre(Number(partes[1])) + ' ' + partes[0];
+      html += `<div class="pz-post50-mes"><b>${esc(nombreMes)}</b> — ${m.semanas_publicadas} ${gzT('semanas publicadas', 'published weeks')}${m.regalos ? ' · ' + m.regalos + ' ' + gzT('semillas regaladas', 'seeds gifted') : ''}`;
+      for (const s of (m.subidas || [])) {
+        PZ_MOMENTO_REPLAY[s.nivel] = { premio: s.premio || '', desbloqueo: s.desbloqueo || '' };
+        html += `<div class="pz-post50-subida">↑ ${gzT('Nivel ', 'Level ')}${s.nivel}${s.premio ? ' — ' + esc(s.premio) : ''}${(s.desbloqueo && s.desbloqueo !== s.premio) ? ' · ' + esc(s.desbloqueo) : ''} <button type="button" class="pz-post50-replay" onclick="pzMomentoReplayShow(${s.nivel})">${gzT('Volver a ver la magia', 'See the magic again')}</button></div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</section>`;
+  }
+  return html;
+}
+// LOTE 4 — Regalar una semilla de Maestro: registra el regalo real y
+// abre el share nativo (o copia el texto si no hay share). La redención
+// por un negocio nuevo es follow-up aparte, no viaja acá.
+async function pzSemillaRegalar() {
+  let r = null;
+  try { r = await api.post('/api/oficina/jardin-semilla-regalo', {}); } catch (e) { r = null; }
+  if (!r || !r.ok) { bbToast(gzT('No se pudo regalar la semilla. Probá de nuevo.', 'Could not gift the seed. Try again.')); return; }
+  const texto = gzT('Te regalo una semilla de mi jardín 🌱 — Posty', 'I gift you a seed from my garden 🌱 — Posty');
+  try {
+    if (navigator.share) await navigator.share({ text: texto });
+    else if (navigator.clipboard) { await navigator.clipboard.writeText(texto); bbToast(gzT('Texto copiado ✓', 'Text copied ✓')); }
+  } catch (e) {}
+  bbToast(gzT('Semilla regalada 🌱', 'Seed gifted 🌱'));
+  try { render(); } catch (e) {}
+}
+function pzNivelCelebShow(nv, en) {
+  const prev = document.getElementById('pzCelebFondo');
+  if (prev) { try { prev.remove(); } catch (e) {} }
+  const unlock = (nv.premio_actual || nv.desbloqueo_actual || pzNivelUnlock(nv.nivel, en));
+  const div = document.createElement('div');
+  div.id = 'pzCelebFondo';
+  div.className = 'pz-celeb-fondo';
+  document.body.appendChild(div);
+  // LOTE 4 — El momento del avance llega solo, sin botón previo; la
+  // tarjeta de celebración aparece al terminar (o al tocar X/fondo).
+  const hist = Array.isArray(nv.historial) ? nv.historial : [];
+  const antes = hist.length > 1 ? hist[hist.length - 2] : null;
+  pzMomentoAvanceShow({
+    en: en, unlock: unlock, nivel: nv.nivel,
+    siguiente: nv.nombre_siguiente ? (en ? 'Next: ' + nv.nombre_siguiente : 'Sigue: ' + nv.nombre_siguiente) : null,
+    siguientePremio: nv.siguiente_premio || nv.siguiente_desbloqueo || null,
+    antes: antes,
+    onListo: () => { pzCelebTarjetaShow(div, nv, en, unlock); },
   });
 }
 function pzNivelStoryShow(nv, en) {
