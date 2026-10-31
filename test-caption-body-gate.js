@@ -339,5 +339,18 @@ ok('control: «te complicás» sin el «sin» delante NO se rechaza por este gat
   assert.strictEqual(chk.ok, true, chk.reason);
 });
 
+console.log('== (o) Nombre con punto final en la ficha (LINT v8 — id 518 real, 2026-10-25) ==');
+ok('id 518 real: captionPasses con business "Posty." (ficha) lo rechaza por empalme', () => {
+  const cap = 'El ingrediente de Así trabajamos detrás de escena en Posty que casi nadie usa (y nosotros sí, en Posty.)\n\n¿Cómo es un día en Posty? 🤖\nDetrás de cada posteo hay un proceso: yo creo, diseño y publico todo por vos. ¡Sin preocupaciones! Escribime por DM y empecemos a transformar tu Instagram.';
+  const chk = gen.captionPasses(cap, { business: 'Posty.', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/empalmada/i.test(chk.reason), chk.reason);
+});
+ok('control: una sola mención del negocio con business "Posty." pasa', () => {
+  const cap = 'El ingrediente que casi nadie usa: mostrar el proceso real de tu negocio. Escribinos por DM y te lo mostramos esta semana.';
+  const chk = gen.captionPasses(cap, { business: 'Posty.', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

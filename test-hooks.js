@@ -201,6 +201,22 @@ t('v7: rótulo SIN frase detrás NO dispara (guarda de 2 palabras)',
 t('v7: «después de probar» + negocio enmascarado NO es empalme',
   captionOpenIsGarbled('Lo que nos dijo una clienta después de probar Gesty por una semana entera', 'Gesty') === false);
 
+// 15. captionOpenIsGarbled LINT v8 (Juli, 2026-10-31) — nombre guardado
+// con punto final («Posty. », así figura la cuenta 12 en la ficha):
+// el id 518 real pasaba limpio con biz='Posty.' porque el conteo de
+// duplicado partía por 'posty.' y la mención sin punto no contaba.
+// Con la normalización, las tres variantes de ficha lo cazan.
+t('v8: id 518 real con biz "Posty." (ficha con punto) es empalme',
+  captionOpenIsGarbled('El ingrediente de Así trabajamos detrás de escena en Posty que casi nadie usa (y nosotros sí, en Posty.)', 'Posty.') === true);
+t('v8: id 518 real con biz "Posty. " (punto + espacio) es empalme',
+  captionOpenIsGarbled('El ingrediente de Así trabajamos detrás de escena en Posty que casi nadie usa (y nosotros sí, en Posty.)', 'Posty. ') === true);
+t('v8: id 518 real con biz "Posty" sigue siendo empalme',
+  captionOpenIsGarbled('El ingrediente de Así trabajamos detrás de escena en Posty que casi nadie usa (y nosotros sí, en Posty.)', 'Posty') === true);
+t('v8: una sola mención con biz "Posty." NO es empalme',
+  captionOpenIsGarbled('El café de Posty sale siempre recién hecho', 'Posty.') === false);
+t('v8: una sola mención con biz "Posty" NO es empalme',
+  captionOpenIsGarbled('El café de Posty sale siempre recién hecho', 'Posty') === false);
+
 // 10. node --check hooks.js
 let checkOk = false;
 try {

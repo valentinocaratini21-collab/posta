@@ -230,7 +230,16 @@ function captionOpenIsGarbled(caption, negocio) {
   // reemplazado por un token neutro. El resto de las reglas
   // (puntuación, duplicación del nombre, largo) no dependen de esto y
   // corren sobre el texto real.
-  const bizRaw = String(negocio || '').trim();
+  // LINT v8 (Juli, 2026-10-31) — el nombre guardado con punto final
+  // («Posty. », así figura la cuenta 12 en la ficha) CEGABA la regla de
+  // duplicado de abajo: con biz='posty.', el id 518 real («…en Posty
+  // que… en Posty.») contaba UN solo hit y pasaba limpio, mientras que
+  // con biz='Posty' contaba dos y caía. El punto es puntuación de
+  // frase, no parte del nombre: se pela al final (puntos y espacios)
+  // antes de enmascarar y de contar. «S.A.» queda «S.A»: el conteo por
+  // substring sigue funcionando y la máscara deja el punto, que es
+  // puntuación legítima.
+  const bizRaw = String(negocio || '').trim().replace(/[. ]+$/, '');
   let masked = first;
   if (bizRaw.length >= 3) {
     // LINT v4 (Parte 62, mediodía 2026-10-19): la máscara cubre el nombre
@@ -354,7 +363,9 @@ function captionOpenIsGarbled(caption, negocio) {
     const mi = masked.match(/\b[Dd]espu[eé]s de prob(?:ar|arlo|arla|arlos|arlas|ando)\b\s+([A-ZÁÉÍÓÚÑ][a-záéíóúüñ]*)\s+\S+\s+\S+/);
     if (mi && new RegExp('^(?:' + ROT + ')$', 'i').test(mi[1])) return true;
   }
-  const biz = String(negocio || '').trim().toLowerCase();
+  // v8: el conteo de duplicado usa el nombre YA normalizado (sin punto
+  // final): con biz='posty.' el 518 real contaba un solo hit y pasaba.
+  const biz = bizRaw.toLowerCase();
   // (e) LINT v4: la FÓRMULA cosida tras el tema. Las costuras de
   // producción (v142 y familia) no siempre traen la firma del título: a
   // veces un tema-declarativo queda pegado a la fórmula imperativa del
