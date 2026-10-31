@@ -156,6 +156,41 @@ function hasSessionContext() {
   return false;
 }
 
+/* ---------- LOTE VELOCIDAD: caché GET en memoria ---------- */
+// Solo esta carga de página: nunca sobrevive a un deploy ni a un cambio
+// de cuenta. TTL 60 s: el feed cambia por autopilot en horario, no por
+// segundo. Se invalida entera ante CUALQUIER mutación exitosa vía api
+// (aprobar, frenar, eliminar, rehacer, week/ensure...): un dato mutado
+// nunca se sirve viejo. Sesión (/api/auth/*) y cobro nunca entran acá.
+// Los POST de analítica usan fetch directo, no api.req: no vacían la caché.
+const PZ_GET_TTL = 60000;
+const PZ_GET_CACHEABLE = ['/api/posts', '/api/quota', '/api/home/profile', '/api/stats/summary', '/api/streak', '/api/week/first-redo', '/api/dogfood/pending', '/api/oficina/nivel', '/api/week/report', '/api/relacion/entry'];
+let PZ_GET_CACHE = {};
+let PZ_CACHE_USER = null;
+function pzCacheKey(url) { try { return String(url).split('#')[0]; } catch (e) { return String(url); } }
+function pzCacheable(url) {
+  try {
+    const u = String(url);
+    if (u.indexOf('/api/auth/') === 0) return false;
+    return PZ_GET_CACHEABLE.some((p) => u === p || u.startsWith(p + '?') || u.startsWith(p + '/'));
+  } catch (e) { return false; }
+}
+function pzCacheClear() { PZ_GET_CACHE = {}; }
+function pzCacheGet(url) {
+  const k = pzCacheKey(url);
+  const e = PZ_GET_CACHE[k];
+  if (!e) return null;
+  if (Date.now() - e.at > PZ_GET_TTL) { delete PZ_GET_CACHE[k]; return null; }
+  return e.data;
+}
+function pzCachePut(url, data) {
+  try { PZ_GET_CACHE[pzCacheKey(url)] = { at: Date.now(), data }; } catch (e) {}
+}
+function pzCacheClone(data) {
+  // La vista recibe una copia: si muta el payload, la caché queda limpia.
+  try { return JSON.parse(JSON.stringify(data)); } catch (e) { return data; }
+}
+
 const api = {
   async req(method, url, body, opts = {}) {
     let r;
@@ -205,9 +240,18 @@ const api = {
       err.data = data; // el cuerpo (ej. plan_limit) viaja con el error
       throw err;
     }
+    // LOTE VELOCIDAD: una mutación exitosa invalida la caché GET entera.
+    if (method !== 'GET') { try { pzCacheClear(); } catch (e) {} }
     return data;
   },
-  get: (u) => api.req('GET', u),
+  get: (u) => {
+    if (pzCacheable(u)) {
+      const hit = pzCacheGet(u);
+      if (hit !== null && hit !== undefined) return Promise.resolve(pzCacheClone(hit));
+      return api.req('GET', u).then((d) => { pzCachePut(u, d); return d; });
+    }
+    return api.req('GET', u);
+  },
   post: (u, b, o) => api.req('POST', u, b, o),
   put: (u, b) => api.req('PUT', u, b),
   patch: (u, b) => api.req('PATCH', u, b),
@@ -1292,7 +1336,13 @@ let NET_OFFLINE = false;
 let PZ_WEB_REFRESH = null;
 // Callback que re-consulta GET /api/posty/level y repinta la tarjeta "🧠 Lo que Posty sabe de tu negocio"
 let PZ_LEVEL_REFRESH = null;
-async function refreshSession() {
+let PZ_SESS_AT = 0;
+async function refreshSession(force) {
+  // LOTE VELOCIDAD: cada toque re-pedía /me+profile+settings+assets EN
+  // SERIE (4 viajes). Con sesión resuelta hace menos de 45 s y usuario
+  // presente, no se vuelve a pedir. Los flujos que cambian la sesión
+  // (login, registro, reset, OAuth, post-pago) pasan force=true.
+  if (!force && typeof ME !== 'undefined' && ME && PZ_SESS_AT && (Date.now() - PZ_SESS_AT) < 45000) return;
   let lastErr = null;
   for (let i = 0; i < 3; i++) {
     try {
@@ -1300,20 +1350,30 @@ async function refreshSession() {
       ME = user || null;
       NET_OFFLINE = false;
       if (user) {
-        PROFILE = await api.get('/api/profile');
-        SETTINGS = await api.get('/api/settings');
-        ASSETS = await api.get('/api/assets').catch(() => []);
+        // Paralelo (antes 3 viajes en serie). Si perfil/ajustes/assets
+        // fallan, se conservan los anteriores: la validez de la sesión la
+        // da /me; un fallo transitorio ya no dispara el reintento entero.
+        const [prof, sett, ass] = await Promise.all([
+          api.get('/api/profile').catch(() => PROFILE),
+          api.get('/api/settings').catch(() => SETTINGS),
+          api.get('/api/assets').catch(() => []),
+        ]);
+        PROFILE = prof; SETTINGS = sett; ASSETS = ass;
       }
+      // Cambio de cuenta en la misma carga: la caché GET del anterior no sirve.
+      const ident = (ME && (ME.id || ME.email || ME.username)) || null;
+      if (ident !== PZ_CACHE_USER) { pzCacheClear(); PZ_CACHE_USER = ident; }
+      PZ_SESS_AT = Date.now();
       return;
     } catch (e) {
       lastErr = e;
-      if (e && e.status === 401) { ME = null; NET_OFFLINE = false; return; } // sesión realmente cerrada
+      if (e && e.status === 401) { ME = null; NET_OFFLINE = false; PZ_SESS_AT = 0; PZ_CACHE_USER = null; pzCacheClear(); return; } // sesión realmente cerrada
       if (e && e.networkError && i < 2) { await new Promise(r => setTimeout(r, 800 * (i + 1))); continue; }
       break;
     }
   }
   if (lastErr && lastErr.networkError) { NET_OFFLINE = true; return; } // mantenemos ME anterior
-  ME = null; NET_OFFLINE = false;
+  ME = null; NET_OFFLINE = false; PZ_SESS_AT = 0;
 }
 // Pantalla cuando hay sesión pero no hay internet: reintentar, nunca pedir login.
 function offlineView() {
@@ -4084,7 +4144,7 @@ async function pzTrialBridge() {
       });
       const bc = (tp.brand_colors || []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
       if (bc.length >= 2) await api.put('/api/settings', { brand_colors: bc.slice(0, 3) }).catch(() => {});
-      await refreshSession();
+      await refreshSession(true);
     }
   } catch (e) {}
   localStorage.removeItem('posta_trial_profile');
@@ -4094,7 +4154,7 @@ async function pzSocialCallback() {
   const q = (location.hash.split('?')[1] || '');
   const params = new URLSearchParams(q);
   const isNew = params.get('new') === '1';
-  await refreshSession();
+  await refreshSession(true);
   if (!ME) { location.hash = '#/login?social=error'; return; }
   try {
     const ret = localStorage.getItem('posta_oauth_return');
@@ -4209,7 +4269,7 @@ function bindSavedAccounts() {
     try {
       const r = await api.post('/api/auth/device-exchange', { token: acct.token });
       if (r && r.device_token) savedAccountsSave(email, r.device_token); // rotación: guardamos el token NUEVO
-      await refreshSession();
+      await refreshSession(true);
       if (ME) { postAuthLanding(); return; }
       throw new Error('no-session');
     } catch (e) {
@@ -14023,7 +14083,7 @@ async function obSaveProfile(p, colors) {
   const cols = (colors || []).filter((c, i, a) => c && a.indexOf(c) === i);
   if (cols.length >= 2) await api.put('/api/settings', { brand_colors: cols });
   SETTINGS = await api.get('/api/settings');
-  await refreshSession();
+  await refreshSession(true);
   clearOB(); // onboarding confirmado: ya no hay nada que retomar
   // (Pagos lado app, 2026-10-25) Al terminar el onboarding, el intento de
   // checkout guardado en el registro (deep link con agente=) manda sobre
@@ -14289,6 +14349,57 @@ try {
 } catch (e) {}
 // PZ-PLACEHOLDER-ROTATIVO:END
 
+/* ---------- LOTE VELOCIDAD: esqueleto instantáneo + precarga ---------- */
+// La pantalla cambia EN EL ACTO al tocar: en el shell de la app (bbShell,
+// cuya barra navega con onclick inline y NO necesita bindApp) se pinta el
+// shell con un esqueleto ANTES de esperar los datos; el contenido real
+// reemplaza al esqueleto en la pintura final. En web no se pre-pinta (sus
+// tabs atan en bindApp): igual gana por paralelización + caché + TTL.
+// El esqueleto no tiene botones: ninguna función nueva se llama desde
+// tarjetas/menús (M78 0/0). Si la vista falla, el catch del dispatch pinta
+// un error con Reintentar (render() existente): nunca queda un esqueleto
+// clavado.
+function pzSkeletonHTML(tab) {
+  const rows = tab === 'post' ? 2 : 4;
+  let blocks = '';
+  for (let i = 0; i < rows; i++) blocks += '<div class="pz-sk pz-sk-block"></div>';
+  return '<div class="pz-sk-wrap" aria-hidden="true">' + blocks + '</div>';
+}
+function pzPaintSkeleton(tab) {
+  // Solo con sesión conocida (ME): sin sesión la ruta rebota a login y el
+  // esqueleto sería un flash de app para un visitante. Solo shell bbShell.
+  try {
+    if (typeof ME === 'undefined' || !ME) return;
+    if (!BB_SHELL_ON()) return;
+    const root = document.getElementById('app');
+    if (!root) return;
+    root.innerHTML = appShell(tab, pzSkeletonHTML(tab));
+  } catch (e) {}
+}
+let PZ_PREFETCHED = false;
+function pzPrefetchKick() {
+  // Una vez por carga, en idle: datos de las pantallas principales + chunks
+  // de Análisis/Ajustes, para que el primer toque ya los tenga. Nunca
+  // POSTs (week/ensure genera semana: no se dispara desde acá), nunca sin
+  // sesión, nunca sin red. Los errores se tragan: precargar no puede romper.
+  if (PZ_PREFETCHED) return;
+  if (typeof ME === 'undefined' || !ME) return;
+  try { if (typeof navigator !== 'undefined' && navigator.onLine === false) return; } catch (e) {}
+  PZ_PREFETCHED = true;
+  const run = () => {
+    try {
+      const urls = ['/api/posts', '/api/quota', '/api/home/profile', '/api/stats/summary', '/api/streak', '/api/dogfood/pending', '/api/week/first-redo'];
+      try { if (typeof HF_VISITOR === 'undefined' || !HF_VISITOR) urls.push('/api/oficina/nivel?poder=posty'); } catch (e) {}
+      urls.forEach((u) => { try { api.get(u).catch(() => {}); } catch (e) {} });
+      ['analisis', 'ajustes'].forEach((c) => { try { loadChunk(c).catch(() => {}); } catch (e) {} });
+    } catch (e) {}
+  };
+  try {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 4000 });
+    else setTimeout(run, 2000);
+  } catch (e) { setTimeout(run, 2000); }
+}
+
 async function render() {
   const mySeq = ++RENDER_SEQ;
   // Splash de carga (index.html): en rutas #/app/* NO se saca al entrar.
@@ -14443,7 +14554,7 @@ async function render() {
           if (prev && prev.token) { try { await api.post('/api/auth/device-revoke', { token: prev.token }); } catch (e) {} }
         }
         if (!isReg) { try { localStorage.removeItem('posta_trial_profile'); } catch (e) {} }
-        await refreshSession();
+        await refreshSession(true);
         if (isReg) localStorage.removeItem('posta_ref');
         if (isReg) { try { localStorage.removeItem('posta_utm'); } catch (e) {} }
         if (isReg) { await pzTrialBridge(); }
@@ -14500,7 +14611,7 @@ async function render() {
         // (Frente 5) El reset revoca los tokens viejos y emite uno fresco:
         // este dispositivo guarda la cuenta con el token nuevo.
         savedAccountsSave(resetResp && resetResp.email, resetResp && resetResp.device_token);
-        await refreshSession();
+        await refreshSession(true);
         postAuthLanding();
       } catch (e) {
         $('#resetMsg').innerHTML = '<div class="err">' + esc(e.message) + ' <a href="#/forgot" style="color:var(--cel);font-weight:700">' + authStr().resetNewLink + '</a></div>';
@@ -14554,12 +14665,13 @@ async function render() {
   // (PORT MOCK v24) Estado de oficina disponible para la tabbar por agente (cacheado; sin refetch si ya está).
   try { await bbLoadEstado(false); } catch (e) {}
   let content = '';
+  try {
   if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'chat') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: sin pantallas Gesty
   else if (tab === 'chat') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: el chat vive debajo del feed
-  else if (tab === 'inicio') content = await inicioView(); // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
+  else if (tab === 'inicio') { pzPaintSkeleton(tab); content = await inicioView(); } // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
-  else if (tab === 'schedule') content = await scheduleView();
-  else if (tab === 'analisis') { let __okAn = true; try { await loadChunk('analisis'); } catch (e) { __okAn = false; } content = __okAn ? analisisView() : chunkFailHTML(); } // 🧠 Análisis: LA CARTA v3 (chunk-analisis.js)
+  else if (tab === 'schedule') { pzPaintSkeleton(tab); content = await scheduleView(); }
+  else if (tab === 'analisis') { pzPaintSkeleton(tab); let __okAn = true; try { await loadChunk('analisis'); } catch (e) { __okAn = false; } content = __okAn ? analisisView() : chunkFailHTML(); } // 🧠 Análisis: LA CARTA v3 (chunk-analisis.js)
   else if (tab === 'numeros') content = statsView(); // 📊 Tus números (stats de IG)
   else if (tab === 'crear') { location.hash = '#/app/schedule'; return; } // Creador manual fusionado en Schedule
   else if (tab === 'ideas') { location.hash = '#/app/schedule'; return; } // Ideas se fusionó en Schedule
@@ -14569,17 +14681,26 @@ async function render() {
   else if (tab === 'calendario') { location.hash = '#/app/schedule'; return; } // Calendario fusionado en Schedule
   else if (tab === 'historial') { location.hash = '#/app/schedule'; return; } // Historial fusionado en Schedule
   else if (tab === 'ads') { if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) { location.hash = '#/app/semana'; } else content = await adsView(); } // 🚀 Potenciar: billetera + boost (solo web)
-  else if (tab === 'admin') { let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
-  else if (tab === 'post') content = await approvalPostView(postId); // 🔔 Posty te avisa: aprobar por notificación
-  else if (tab === 'dogfood') content = await dogfoodView(postId); // 🤖 Posty dogfood: propuesta del día
-  else if (tab === 'ajustes') { let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
+  else if (tab === 'admin') { pzPaintSkeleton(tab); let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
+  else if (tab === 'post') { pzPaintSkeleton(tab); content = await approvalPostView(postId); } // 🔔 Posty te avisa: aprobar por notificación
+  else if (tab === 'dogfood') { pzPaintSkeleton(tab); content = await dogfoodView(postId); } // 🤖 Posty dogfood: propuesta del día
+  else if (tab === 'ajustes') { pzPaintSkeleton(tab); let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
   else if (tab === 'jardin-combinado' || tab === 'jardin-gesty') { location.hash = '#/app/jardin-posty'; return; } // POSTY SOLO: solo jardín Posty
-  else if (tab === 'jardin-posty') content = await bbJardinPostyContent();
+  else if (tab === 'jardin-posty') { pzPaintSkeleton(tab); content = await bbJardinPostyContent(); }
   else { location.hash = mzHomeHash(); return; } // tab desconocida: a la home (antes caía en Ajustes sin avisar)
+  } catch (e) { content = '<div class="bb-error"><p>No pude cargar esta pantalla.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>'; }
   bootSplashOff();
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  // LOTE VELOCIDAD: los fills que render() lanzaba a 60-90 ms (antes de la
+  // pintura final) se re-disparan tras pintar: con esqueleto, la primera
+  // pasada no encontraba los slots. Son idempotentes (dataset.done).
+  setTimeout(() => { try { enhanceWeekReport(); } catch (e) {} }, 0);
+  setTimeout(() => { try { pzFillRelacion(); } catch (e) {} }, 0);
+  setTimeout(() => { try { ttEnhance(); } catch (e) {} }, 0);
+  // LOTE VELOCIDAD: precarga en idle (una vez por carga).
+  try { pzPrefetchKick(); } catch (e) {}
   if (BB_SHELL_ON() && tab === 'ajustes') { try { bbAvisosEnAjustes(); } catch (e) {} }
   if (BB_SHELL_ON() && tab === 'chat') { try { bbChatBind(); } catch (e) {} }
   // El banner de trial vencido lleva id único: si algún re-render lo duplicara, queda solo uno.
@@ -14832,7 +14953,7 @@ function maybePostPayWelcome() {
     PZ_POSTPAY.timer = setInterval(async () => {
       if (!PZ_POSTPAY) return;
       PZ_POSTPAY.checks++;
-      try { await refreshSession(); } catch (e) {}
+      try { await refreshSession(true); } catch (e) {}
       if (!PZ_POSTPAY) return;
       if ((ME && ME.plan_status === 'active') || PZ_POSTPAY.checks >= 4) {
         try { clearInterval(PZ_POSTPAY.timer); } catch (e) {}
@@ -15220,11 +15341,20 @@ function bindFirstWeekRedo() {
 async function scheduleView() {
   const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
   // Datos para la barra XP + revisión (antes en Mi semana).
+  // LOTE VELOCIDAD: stats, streak, posts y ensure son independientes:
+  // un solo viaje en paralelo en vez de cuatro en serie.
   let st = null, sk = null;
-  try { st = await api.get('/api/stats/summary'); } catch (e) {}
-  try { sk = await api.get('/api/streak'); } catch (e) {}
   let allPosts = [];
-  try { allPosts = await api.get('/api/posts'); } catch (e) { allPosts = []; }
+  let schedEr = null;
+  try {
+    const [stRes, skRes, postsRes, erRes] = await Promise.all([
+      api.get('/api/stats/summary').catch(() => null),
+      api.get('/api/streak').catch(() => null),
+      api.get('/api/posts').catch(() => []),
+      api.post('/api/week/ensure', {}).catch(() => null),
+    ]);
+    st = stRes; sk = skRes; allPosts = postsRes; schedEr = erRes;
+  } catch (e) { allPosts = []; }
   // Borradores arriba ("Revisá tu semana"), programados en el calendario debajo.
   const drafts = allPosts.filter(p => p.status === 'draft').sort((a, b) => a.id - b.id);
   REVIEW_DRAFTS = drafts; // el chat los necesita para editar borradores por chat
@@ -15238,22 +15368,25 @@ async function scheduleView() {
   // 2026-10-14: ensure corre SIEMPRE, no solo con la semana vacía — si la
   // semana está parcial, el backend crea los posteos que faltan solo.
   try {
-    const er = await api.post('/api/week/ensure', {}).catch(() => null);
+    const er = schedEr;
     weekGenerating = !!(er && er.generating);
     weekNoDna = !!(er && er.reason === 'no_dna' && !drafts.length && !schedPosts.length);
     if ((er && er.generating) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
       setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/schedule')) render(); } catch (e) {} }, 8000);
     }
   } catch (e) {}
-  let quota = null;
-  try { quota = await api.get('/api/quota').catch(() => null); } catch (e) {}
+  // LOTE VELOCIDAD: cuota, first-redo y dogfood son independientes:
+  // un solo viaje en paralelo en vez de tres en serie.
+  const [quotaRes2, frRes, dgRes] = await Promise.all([
+    api.get('/api/quota').catch(() => null),
+    api.get('/api/week/first-redo').catch(() => null),
+    api.get('/api/dogfood/pending').catch(() => null),
+  ]);
+  let quota = quotaRes2;
   // (ítem 3) Garantía de primera semana: el botón vive SOLO si el
   // servidor dice que la garantía está disponible para ESTA semana.
   let firstRedoBlock = '';
-  try {
-    const fr = await api.get('/api/week/first-redo').catch(() => null);
-    if (fr && fr.state === 'available') firstRedoBlock = firstWeekRedoCardHTML();
-  } catch (e) {}
+  try { if (frRes && frRes.state === 'available') firstRedoBlock = firstWeekRedoCardHTML(); } catch (e) {}
   const slots = suggestSlots(drafts.length, schedPosts);
   const { expBanner } = xpStripHTML(sk, st, drafts.length); // (el xpStrip del nivel se eliminó: vive en el avatar del chat)
   const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
@@ -15265,7 +15398,7 @@ async function scheduleView() {
   // activación donde no está omitido y en Ajustes — sin duplicados.
   // Posty dogfood: la propuesta de hoy para @posty.communitymanager, primero que todo.
   let dogfoodPost = null;
-  try { const r = await api.get('/api/dogfood/pending'); dogfoodPost = (r && r.post) || null; } catch (e) {}
+  try { dogfoodPost = (dgRes && dgRes.post) || null; } catch (e) {}
   const dogfoodBlock = dogfoodPost ? dogfoodCardHTML(dogfoodPost) : '';
   // (2026-10-25) La tarjeta «🧠 Lo que vi de tu cuenta» SALIÓ de la Agenda
   // por decisión de Valentino («esto hace falta? ya tenemos la ventana de
@@ -16807,8 +16940,17 @@ let HF_CUR_PROF = null;
 let HF_PROPS = {};
 async function inicioView() {
   const tz = pcTz();
+  // LOTE VELOCIDAD: posts y ensure son independientes: un solo viaje en
+  // paralelo en vez de dos en serie (los flags se calculan abajo igual).
   let allPosts = [];
-  try { allPosts = await api.get('/api/posts'); } catch (e) { allPosts = []; }
+  let weekEr = null;
+  try {
+    const [postsRes, erRes] = await Promise.all([
+      api.get('/api/posts').catch(() => []),
+      api.post('/api/week/ensure', {}).catch(() => null),
+    ]);
+    allPosts = postsRes; weekEr = erRes;
+  } catch (e) { allPosts = []; }
   if (!Array.isArray(allPosts)) allPosts = [];
   const drafts = allPosts.filter(p => p.status === 'draft').sort((a, b) => a.id - b.id);
   REVIEW_DRAFTS = drafts; // el chat de la hoja edita borradores, igual que en Schedule
@@ -16818,30 +16960,33 @@ async function inicioView() {
   let weekGenerating = false;
   let weekNoDna = false;
   try {
-    const er = await api.post('/api/week/ensure', {}).catch(() => null);
+    const er = weekEr;
     weekGenerating = !!(er && er.generating);
     weekNoDna = !!(er && er.reason === 'no_dna' && !drafts.length && !schedPosts.length);
     if ((er && er.generating) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
       setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/inicio')) render(); } catch (e) {} }, 8000);
     }
   } catch (e) {}
-  let quota = null;
-  try { quota = await api.get('/api/quota').catch(() => null); } catch (e) {}
+  // LOTE VELOCIDAD: cuota, perfil y nivel son independientes: un solo
+  // viaje en paralelo en vez de tres en serie.
+  const [quotaRes, hpRes, nvRes] = await Promise.all([
+    api.get('/api/quota').catch(() => null),
+    api.get('/api/home/profile').catch(() => null),
+    (!HF_VISITOR ? api.get('/api/oficina/nivel?poder=posty').catch(() => null) : Promise.resolve(null)),
+  ]);
+  let quota = quotaRes;
   // 🏠 (v331) El perfil literal: réplica desde la lectura guardada de su
   // Instagram (o el kit de nacimiento si la cuenta es nueva/vacía). El
   // servidor nunca inventa: lo que no leyó, el encabezado lo omite.
   let prof = HOME_PROF;
-  try {
-    const hp = await api.get('/api/home/profile').catch(() => null);
-    if (hp && hp.ok) { prof = hp; HOME_PROF = hp; }
-  } catch (e) {}
+  try { if (hpRes && hpRes.ok) { prof = hpRes; HOME_PROF = hpRes; } } catch (e) {}
   // (v457 · TIRA DE NIVEL) El tallo vivo de Posty: mismo endpoint y mismo
   // modulo que el tallo del website (niveles.js via /api/oficina/nivel).
   // Si falla o es visitante, no hay tira: la pantalla sigue igual, y la
   // tira nace en la primera pintura (sin CLS: no se inyecta despues).
   let nivelPosty = null;
   if (!HF_VISITOR) {
-    try { const nv = await api.get('/api/oficina/nivel?poder=posty').catch(() => null); if (nv && nv.ok) nivelPosty = nv; } catch (e) {}
+    try { if (nvRes && nvRes.ok) nivelPosty = nvRes; } catch (e) {}
   }
   HF_NIVEL = nivelPosty;
   const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';

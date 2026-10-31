@@ -3870,3 +3870,16 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .fp-tile.fp-tile-draft{outline:2px dashed #2793C8;outline-offset:-2px}
 .ana-next{font-size:12px;font-weight:700;color:var(--cel);margin:2px 0 0}
 .apv-more{margin-top:10px}
+/* LOTE VELOCIDAD: feedback instantáneo al tocar (las tabs no tenían :active) */
+.bb-tab:active{transform:scale(.93);opacity:.7}
+.mz-tab:active{transform:scale(.94);opacity:.75}
+.drawer-link:active{transform:scale(.97);opacity:.8}
+.bb-btn:active{transform:scale(.97)}
+/* LOTE VELOCIDAD: esqueleto de carga (pantalla instantánea) */
+.pz-sk-wrap{padding:14px;display:flex;flex-direction:column;gap:12px}
+.pz-sk-block{height:110px;border-radius:14px;background:#E8EEF3;animation:pz-sk-pulse 1.1s ease-in-out infinite}
+.pz-sk-block:nth-child(2){height:180px}
+.pz-sk-block:nth-child(3){height:110px}
+.pz-sk-block:nth-child(4){height:180px}
+@keyframes pz-sk-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){.pz-sk-block{animation:none}}
