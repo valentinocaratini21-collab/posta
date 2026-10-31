@@ -125,6 +125,7 @@ function desbloqueoEn(nivel) {
 }
 
 // ---------- UMBRALES (solo hechos reales) ----------
+// Fórmulas originales (v495, escalera a ~94 semanas):
 // k = nivel - 5 (1..45).
 // Req A (siempre): semana_publicada ≥ 4 + 2k.
 // Req B: k impar → pieza_aceptada_primera ≥ 3 + k;
@@ -133,7 +134,25 @@ function desbloqueoEn(nivel) {
 // (semanas ISO consecutivas con semana_publicada, con gracia de una
 // semana: si la semana en curso aún no publicó, la racha se mide hasta la
 // semana anterior; si ni la actual ni la anterior tienen publicación, 0).
-function gatesPara(nivel) {
+//
+// REESCALADO 7 MESES (Lote 3, decisión vigente: el proceso completo tarda
+// 7 meses): 7 meses ≈ 30 semanas publicadas (1 por semana). Modelo PAREJO:
+// un solo factor F = 30/94 aplicado a TODOS los umbrales viejos, con
+// redondeo al entero más cercano y mínimo 1. La forma (fórmulas en k y p)
+// no cambia; solo la escala. Nivel 50: semana 94 → 30. Los premios, los
+// nombres y los desbloqueos NO cambian.
+// Consecuencia honesta del factor: 45 niveles en 30 semanas obligan a ~1,5
+// niveles por semana en un usuario plenamente activo, así que umbrales
+// consecutivos pueden coincidir y dos niveles pueden abrirse con la misma
+// tanda de hechos; el cómputo toma el mayor nivel cuyos gates se cumplen
+// todos, en orden, sin saltos.
+// El guard de no-baja está en computarNivelPosty50 (max con los umbrales
+// viejos): cada umbral nuevo ≤ su viejo (F < 1 y el redondeo nunca supera
+// el valor viejo para min ≥ 1, porque m·(1−F) ≥ 0,68 > 0,5), así que el
+// nivel nuevo nunca es menor que el viejo, pero el guard existe igual.
+const ESCALA_7M = 30 / 94;
+const esc7m = (m) => Math.max(1, Math.round(m * ESCALA_7M));
+function gatesParaOriginal(nivel) {
   if (nivel < 6 || nivel > 50) return [];
   const k = nivel - 5;
   const reqs = [{ evento: 'semana_publicada', min: 4 + 2 * k }];
@@ -142,6 +161,9 @@ function gatesPara(nivel) {
   const p = Math.floor((nivel - 1) / 5);
   if ((nivel - 1) % 5 === 0) reqs.push({ racha: true, min: 3 + p });
   return reqs;
+}
+function gatesPara(nivel) {
+  return gatesParaOriginal(nivel).map((r) => Object.assign({}, r, { min: esc7m(r.min) }));
 }
 
 // Racha de semanas ISO consecutivas con semana_publicada real.
@@ -220,6 +242,19 @@ function computarNivelPosty50(db, uid, metrics, ahoraMs) {
       else if (!todos && nivel === L - 1) break;
     }
   }
+  // GUARD DE NO-BAJA (Lote 3): el nivel con los umbrales viejos se calcula
+  // igual y se toma el mayor. En la práctica el nuevo nunca es menor (cada
+  // umbral nuevo ≤ su viejo), así que el guard no se dispara, pero existe:
+  // el reescalado nunca baja a nadie.
+  if (base.nivel >= 5) {
+    let nivelViejo = base.nivel;
+    for (let L = 6; L <= 50; L++) {
+      const gate = gatesParaOriginal(L);
+      if (gate.every(cumple) && nivelViejo === L - 1) nivelViejo = L;
+      else if (nivelViejo === L - 1) break;
+    }
+    if (nivelViejo > nivel) nivel = nivelViejo;
+  }
   const d = prestigioDe(nivel);
   const premios = [];
   for (const pr of PRESTIGIOS) {
@@ -262,7 +297,7 @@ function computarNivelPosty50(db, uid, metrics, ahoraMs) {
 }
 
 module.exports = {
-  NOMBRES_50, PRESTIGIOS, DESBLOQUEOS, META_FINAL,
+  NOMBRES_50, PRESTIGIOS, DESBLOQUEOS, META_FINAL, ESCALA_7M,
   prestigioDe, nombreNivel, etiquetaTirita, premioEn, desbloqueoEn,
-  gatesPara, rachaSemanas, computarNivelPosty50,
+  gatesPara, gatesParaOriginal, rachaSemanas, computarNivelPosty50,
 };

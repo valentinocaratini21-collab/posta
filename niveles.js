@@ -270,6 +270,13 @@ function computarNivel(db, uid, poder, metrics) {
 function registrarEvento(db, uid, { poder, evento, hecho, registro_ref }, metrics) {
   poder = resolverPoder(poder); // el pliegue: el evento nace bajo su anfitrión
   const antes = computarNivel(db, uid, poder, metrics);
+  // Posty extendido (Lote 3): el nivel 6–50 se mide ANTES del evento, porque
+  // el cómputo base se queda en 5. Require perezoso: posty-nivel50 requiere
+  // niveles solo dentro de nivelPosty, así que no hay ciclo.
+  let antesExt = null;
+  if (poder === 'posty') {
+    try { const np = require('./posty-nivel50'); antesExt = np.nivelPosty(db, uid, metrics); } catch (e) {}
+  }
   db.prepare('INSERT INTO oficina_nivel_eventos (user_id, poder, evento, hecho, registro_ref, ts) VALUES (?, ?, ?, ?, ?, ?)')
     .run(uid, poder, evento, hecho || '', registro_ref || '', Date.now());
   const despues = computarNivel(db, uid, poder, metrics);
@@ -288,6 +295,34 @@ function registrarEvento(db, uid, { poder, evento, hecho, registro_ref }, metric
       db.prepare('INSERT INTO oficina_registros (user_id, poder, tipo, resumen, registro_ref, recibo_json, estado, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         .run(uid, poder, 'subida_nivel', `${PODERES[poder].nombre} subió a ${despues.nombre_nivel}`, `nivel:${poder}:${despues.nivel}:${Date.now()}`, null, 'registrado', Date.now());
     } catch (e) { /* el río es derivado: si falla, la subida igual ocurrió */ }
+  }
+  // Posty extendido (Lote 3): si el nivel 6–50 subió, la subida queda en el
+  // río con la misma forma que 2–5 y se devuelve como subida principal
+  // (si el mismo evento subió base 4→5 y extendido 5→6, quedan ambos
+  // registros: el historial muestra los dos niveles, sin huecos).
+  // OJO: el salto 4→5 del base también se refleja en el extendido (fallback
+  // 4→5); por eso el registro extendido exige llegar a 6+: sin ese piso,
+  // un 4→5 escribiría dos registros del 5.
+  if (poder === 'posty') {
+    try {
+      const np = require('./posty-nivel50');
+      const despuesExt = np.nivelPosty(db, uid, metrics);
+      if (antesExt && despuesExt && despuesExt.nivel >= 6 && despuesExt.nivel > antesExt.nivel) {
+        const subExt = {
+          poder,
+          nombre: PODERES[poder].nombre,
+          nivel: despuesExt.nivel,
+          nombre_nivel: despuesExt.nombre_nivel,
+          color: PODERES[poder].color,
+          avatar: PODERES[poder].avatar,
+        };
+        try {
+          db.prepare('INSERT INTO oficina_registros (user_id, poder, tipo, resumen, registro_ref, recibo_json, estado, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(uid, poder, 'subida_nivel', `${PODERES[poder].nombre} subió a ${despuesExt.nombre_nivel}`, `nivel:${poder}:${despuesExt.nivel}:${Date.now()}`, null, 'registrado', Date.now());
+        } catch (e) { /* el río es derivado: si falla, la subida igual ocurrió */ }
+        subida = subExt;
+      }
+    } catch (e) {}
   }
   return { nivel: despues, subida };
 }
@@ -347,16 +382,24 @@ function pruebaPara(niv, datos) {
 // Vitrina de niveles (v469): insignias con fecha REAL. rows: registros
 // subida_nivel [{registro_ref, ts}] ordenados; firstTs: ts del primer evento
 // de nivel (L1) o null. Sin registro no hay insignia, nunca inventada.
-function historialNiveles(rows, firstTs, nombres) {
+function historialNiveles(rows, firstTs, nombres, extra) {
   const porNivel = new Map();
   for (const r of (rows || [])) {
     const m = String((r && r.registro_ref) || '').match(/^nivel:posty:(\d+):/);
     if (!m) continue;
     const n = Number(m[1]);
-    if (n >= 2 && n <= 5 && !porNivel.has(n)) porNivel.set(n, r.ts);
+    // Lote 3: 2–50 (antes 2–5). Para 2–5, premio/desbloqueo son null y la
+    // forma no cambia.
+    if (n >= 2 && n <= 50 && !porNivel.has(n)) porNivel.set(n, r.ts);
   }
   if (firstTs && !porNivel.has(1)) porNivel.set(1, firstTs);
   return [...porNivel.entries()].sort((a, b) => a[0] - b[0])
-    .map(([nivel, ts]) => ({ nivel, nombre_nivel: (nombres || [])[nivel - 1] || '', ts }));
+    .map(([nivel, ts]) => ({
+      nivel,
+      nombre_nivel: (nombres || [])[nivel - 1] || '',
+      ts,
+      premio: extra && extra.premioEn ? (extra.premioEn(nivel) || null) : null,
+      desbloqueo: extra && extra.desbloqueoEn ? (extra.desbloqueoEn(nivel) || null) : null,
+    }));
 }
 module.exports = { PODERES, ESPECIALISTAS, ORDEN_PODERES, ORDEN_ESPECIALISTAS, PLIEGUE, resolverPoder, IDENTIDADES, DORADO, computarNivel, registrarEvento, conteoEventos, DESAFIO_MAP, desafioPara, pruebaPara, semanaISO, poderesContratados, historialNiveles };

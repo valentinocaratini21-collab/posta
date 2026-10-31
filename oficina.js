@@ -100,7 +100,7 @@ function festejarSubida(db, uid, subida) {
     agente: subida.poder,
     motivo: 'celebracion',
     titulo: subida.poder === 'oficina' ? '¡Tu oficina subió de nivel! 🌿' : `¡${subida.nombre} subió de nivel!`,
-    cuerpo: `Ahora es ${subida.nombre_nivel} (nivel ${subida.nivel} de 5). El tallo crece con trabajo real.`,
+    cuerpo: `Ahora es ${subida.nombre_nivel} (nivel ${subida.nivel} de ${subida.poder === 'posty' && subida.nivel > 5 ? 50 : 5}). El tallo crece con trabajo real.`,
     url: '/#/app/oficina',
   }).catch(() => {});
 }

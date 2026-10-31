@@ -3685,7 +3685,16 @@ function nivelHistorial(db, uid, def) {
     const rows = db.prepare(`SELECT registro_ref, ts FROM oficina_registros WHERE user_id = ? AND poder = 'posty' AND tipo = 'subida_nivel' ORDER BY ts ASC`).all(uid);
     let firstTs = null;
     try { const f = db.prepare(`SELECT MIN(ts) AS ts FROM oficina_nivel_eventos WHERE user_id = ? AND poder = 'posty'`).get(uid); if (f && f.ts) firstTs = f.ts; } catch (e) {}
-    return oficina.niveles.historialNiveles(rows, firstTs, def.niveles);
+    // Lote 3: nombres 1–50 (base 1–5 + prestigio 6–50) y premio/desbloqueo
+    // por nivel. niveles.js no requiere prestigio (evita ciclo): se pasan
+    // como datos desde acá.
+    let nombres = def.niveles, extra = null;
+    try {
+      const pr = require('./prestigio');
+      nombres = def.niveles.concat(pr.NOMBRES_50.slice(5));
+      extra = { premioEn: (n) => pr.premioEn(n), desbloqueoEn: (n) => pr.desbloqueoEn(n) };
+    } catch (e) {}
+    return oficina.niveles.historialNiveles(rows, firstTs, nombres, extra);
   } catch (e) { return []; }
 }
 function nivelDesafioAceptado(db, uid) {
@@ -3773,6 +3782,9 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
       premio_actual: niv.premio_actual || null,
       desbloqueo_actual: niv.desbloqueo_actual || null,
       nombre_siguiente: niv.nombre_siguiente !== undefined ? niv.nombre_siguiente : (niv.nivel < 5 ? def.niveles[niv.nivel] : null),
+      siguiente_premio: niv.siguiente_premio || null,
+      siguiente_desbloqueo: niv.siguiente_desbloqueo || null,
+      meta_final: niv.meta_final || null,
       color: niv.color, proximo_paso: niv.proximo_paso,
       faltantes: niv.gate.pendientes,
       celebrar: niv.nivel > 1 && !celebrado,
@@ -25959,7 +25971,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v501';
+const BUILD_ID = '20261031-v502';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

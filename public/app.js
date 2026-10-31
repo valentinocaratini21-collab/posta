@@ -1031,7 +1031,17 @@ async function mxPortTop(poderesRaw, nvPre, origen) {
 }
 function mxPremioPostyHTML(nv) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  if (nv.nivel >= 5 || !nv.nombre_siguiente) return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${gzT('Copa completa 🌳', 'Full canopy 🌳')}</span></p>`;
+  // Lote 3 — vista previa del próximo nivel (datos reales del servidor, sin
+  // barras ni % dentro del jardín): premio si abre prestigio, si no el
+  // desbloqueo chico. En 50, la meta final. En 1–4, el camino viejo intacto.
+  if (nv.nivel >= 50) return `<p class="mx-dato"><b>${gzT('Meta final:', 'Final goal:')}</b> <span>${esc(nv.meta_final || gzT('Copa completa 🌳', 'Full canopy 🌳'))}</span></p>`;
+  if (nv.nivel >= 5) {
+    if (!nv.nombre_siguiente) return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${gzT('Copa completa 🌳', 'Full canopy 🌳')}</span></p>`;
+    const rec = nv.siguiente_premio || nv.siguiente_desbloqueo;
+    const lab = nv.siguiente_premio ? gzT('Próximo premio:', 'Next reward:') : gzT('Próximo desbloqueo:', 'Next unlock:');
+    return `<p class="mx-dato"><b>${lab}</b> <span>${esc(gzT('Nv ', 'Lv ') + (nv.nivel + 1) + ' · ' + nv.nombre_siguiente)}${rec ? ' — ' + esc(rec) : ''}</span></p>`;
+  }
+  if (!nv.nombre_siguiente) return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${gzT('Copa completa 🌳', 'Full canopy 🌳')}</span></p>`;
   return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${esc(pzNivelUnlock(nv.nivel + 1, en))}</span></p>`;
 }
 function mxPremioGestyHTML(nv) {
@@ -1065,9 +1075,13 @@ function mxVistasUnAgenteHTML(nv, premioHTML) {
   }
   botones.push(`<button type="button" class="mx-paso-nivel activo" data-mx-vista="actual" onclick="mxJardinHito(this)">${gzT('Nv', 'Lv')} ${mxNvNum(nv)} · ${esc(cur)}</button>`);
   vistas.push(`<div class="mx-vista" data-mx-vista="actual">${mxCardAgenteHTML('', nv, premioHTML)}</div>`);
-  if (nv.nivel < 5 && nv.nombre_siguiente) {
+  // Lote 3: el paso siguiente existe hasta el 49 (antes se ocultaba en 5+).
+  // Muestra la recompensa real del próximo nivel + qué falta, sin % ni barras.
+  if (nv.nivel < 50 && nv.nombre_siguiente) {
+    const recSig = nv.siguiente_premio || nv.siguiente_desbloqueo;
     botones.push(`<button type="button" class="mx-paso-nivel" data-mx-vista="siguiente" onclick="mxJardinHito(this)">${gzT('Nv', 'Lv')} ${mxNvNum(nv) + 1} · ${esc(nv.nombre_siguiente)}</button>`);
     vistas.push(`<div class="mx-vista" data-mx-vista="siguiente" hidden><div class="mx-tarjeta"><h3>${esc(nv.nombre_siguiente)}</h3>`
+      + (recSig ? `<p class="mx-dato">${esc(recSig)}</p>` : '')
       + (nv.proximo_paso ? `<p class="mx-dato">${esc(nv.proximo_paso)}</p>` : '') + `</div></div>`);
   }
   return `<div class="mx-pasos-nivel">${botones.join('')}</div>${vistas.join('')}`;
@@ -17341,7 +17355,12 @@ function pzVitrinaHTML(hist, en, etiqueta) {
   const MES_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const MES_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const mes = (ts) => { const d = new Date(Number(ts)); if (isNaN(d)) return ''; return `${(en ? MES_EN : MES_ES)[d.getMonth()]} ${d.getFullYear()}`; };
-  const badges = hist.map((h) => `<span class="pz-vit-badge"><strong>${esc(h.nombre_nivel)}</strong><span>${esc(mes(h.ts))}</span></span>`).join('');
+  // Lote 3: 6+ trae premio (entrada de prestigio) o desbloqueo; 2–5 no traen
+  // ninguno y el badge queda exactamente como antes.
+  const badges = hist.map((h) => {
+    const rec = h.premio || h.desbloqueo || '';
+    return `<span class="pz-vit-badge"><strong>${esc(h.nombre_nivel)}</strong><span>${esc(mes(h.ts))}</span>${rec ? `<span>${esc(rec)}</span>` : ''}</span>`;
+  }).join('');
   return `<section class="bb-bloque"><h2>${en ? 'Your level showcase' : 'La vitrina de tus niveles'}</h2>
     <p class="bb-sub">${en ? 'Every level you reached, with its real date.' : 'Cada nivel que alcanzaste, con su fecha real.'}</p>
     ${etiqueta ? `<p class="bb-sub"><strong>${esc(en ? 'Current level: ' : 'Nivel actual: ')}${esc(etiqueta)}</strong></p>` : ''}
