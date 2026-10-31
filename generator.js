@@ -2555,7 +2555,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, tasteBlock, styleLockExtras, lang }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, tasteBlock, styleLockExtras, lang }, apiKey) {
   const en = lang === 'en';
   // (growth ola 2) Capa de campaña comercial: sugiere SIN imponer — si el
   // negocio no vende en esa fecha, se ignora (test de pertenencia manda).
@@ -2605,7 +2605,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'user',
           content: businessContext({ business, category, description, dna, tone, learnings }) +
-            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\nGenerá las 7 ideas.`,
+            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\nGenerá las 7 ideas.`,
         },
       ],
       // 2600 (2026-10-15): con 1200 el modelo entra en presupuesto y

@@ -627,8 +627,8 @@ const BB_CAPAS = { negocio: 'Tu negocio', identidad: 'Tu identidad', operacion: 
 async function bbNegocioContent() {
   let f, prefs;
   try { f = await api.get('/api/oficina/fundamento'); } catch (e) { f = null; }
-  let jardin = null, nivJ = null;
-  try { const r = await Promise.all([api.get('/api/oficina/jardin').catch(() => null), api.get('/api/oficina/nivel?poder=posty').catch(() => null)]); jardin = r[0]; nivJ = r[1]; } catch (e) {}
+  let jardin = null, nivJ = null, informe = null;
+  try { const r = await Promise.all([api.get('/api/oficina/jardin').catch(() => null), api.get('/api/oficina/nivel?poder=posty').catch(() => null), api.get('/api/informe-mensual').catch(() => null)]); jardin = r[0]; nivJ = r[1]; informe = r[2]; } catch (e) {}
   try { const pr = await api.get('/api/oficina/push-prefs'); if (pr && pr.ok) { BB.prefs = pr.prefs; prefs = pr.prefs; } } catch (e) {}
   if (!f || !f.ok) return '<div class="bb-error"><p>No pude leer tu fundamento.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>';
   const ordenCapas = Object.keys(BB_CAPAS).concat(Object.keys(f.capas || {}).filter((c) => !BB_CAPAS[c]));
@@ -647,6 +647,7 @@ async function bbNegocioContent() {
     <section class="bb-bloque bb-bloque-top"><h1>Mi negocio</h1><p class="bb-sub">Esto es lo que tu oficina sabe de tu negocio — su fundamento. Tus cuatro poderes trabajan sobre estas mismas fichas: ninguno inventa lo que no está acá.</p></section>
     ${capas}
     ${(jardin && jardin.ok && Array.isArray(jardin.antes) && jardin.antes.length && Array.isArray(jardin.hoy) && jardin.hoy.length) ? pzJardinHTML(jardin, (typeof ME !== 'undefined' && ME && ME.lang === 'en')) : ''}${(nivJ && nivJ.ok && Array.isArray(nivJ.historial) && nivJ.historial.length) ? pzVitrinaHTML(nivJ.historial, (typeof ME !== 'undefined' && ME && ME.lang === 'en'), (nivJ.etiqueta_tirita || (nivJ.nivel ? ('Nivel ' + nivJ.nivel + ' · ' + nivJ.nombre_nivel) : null))) : ''}
+    ${(informe && informe.ok) ? pzInformeMensualHTML(informe, (typeof ME !== 'undefined' && ME && ME.lang === 'en'), false) : ''}
     ${avisos}
     ${await gzNegocioGesty()}
     <button class="bb-btn bb-btn-ghost bb-ancho" onclick="bbGo('#/app/chat')">¿Falta algo o algo cambió? Contale a Bambooty</button>
@@ -1340,7 +1341,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261031-v506'; // (lote1-ajustes) bump: chunk-ajustes cambia (sin Meta keys + reorden secciones)
+const CHUNK_V = '20261031-v507'; // (lote1-ajustes) bump: chunk-ajustes cambia (sin Meta keys + reorden secciones)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -4515,6 +4516,13 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
 }
+/* ---------- PUSH NATIVO (Capacitor): listeners al arrancar ---------- */
+// Solo shell nativo: el tap de un aviso abre su pantalla (deep link).
+// Sin plugin no hace nada. Nunca bloquea el arranque.
+window.addEventListener('load', () => {
+  try { if (pzNativePush()) { try { pzNativeBoot(); } catch (e) {} } } catch (e) {}
+});
+
 /* ---------- FASE 3: limpiar el badge de notificaciones al abrir la app ---------- */
 try {
   if (typeof navigator.clearAppBadge === 'function') {
@@ -4646,6 +4654,121 @@ function pushSupported() {
   catch (e) { return false; }
 }
 function pushPerm() { try { return Notification.permission; } catch (e) { return 'denied'; } }
+/* PZ-NATIVE-PUSH */
+/* Avisos en el telefono (item 6): push nativo Capacitor. */
+/* El servidor YA sabe enviar a APNs/FCM (push.js multi-transporte) y la */
+/* puerta de la oficina (push-oficina.js) YA rutea por transport: lo unico */
+/* que faltaba era el cliente nativo: permiso en el momento justo, registro */
+/* del token, tap -> deep link y baja al salir. Sin copy nuevo: la tarjeta */
+/* amable es la misma pushAskCard de siempre; sin precios, sin cascada, */
+/* sin niveles, sin selector. Sin plugin, todo esto es no-op. */
+let PZ_NATIVE_PERM = 'prompt';
+function pzNativePlugin() {
+  try {
+    if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) {
+      const P = window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
+      return P || null;
+    }
+  } catch (e) {}
+  return null;
+}
+function pzNativePush() { return !!pzNativePlugin(); }
+function pzNativeTransport() {
+  try {
+    const p = (window.Capacitor && typeof window.Capacitor.getPlatform === 'function') ? window.Capacitor.getPlatform() : '';
+    if (p === 'ios') return 'apns';
+    if (p === 'android') return 'fcm';
+  } catch (e) {}
+  return null;
+}
+function pzNativePermState() { return PZ_NATIVE_PERM; }
+function pzNativeTokenOk(transport, token) {
+  try {
+    const t = String(token || '').trim();
+    if (transport === 'apns') return /^[0-9a-fA-F]{64}$/.test(t);
+    if (transport === 'fcm') return /^[A-Za-z0-9:_-]{20,1000}$/.test(t);
+    return false;
+  } catch (e) { return false; }
+}
+function pzNativeRoute(url, isShell) {
+  const dflt = isShell ? '#/app/oficina' : '#/app/inicio';
+  try {
+    let u = String(url || '').trim();
+    if (u.indexOf('/#/') === 0) u = u.slice(1);
+    if (!/^#\/app\/[A-Za-z0-9/_-]*$/.test(u)) return dflt;
+    return u;
+  } catch (e) { return dflt; }
+}
+function pzPushRowPending() {
+  if (pzNativePush()) return pzNativePermState() !== 'granted';
+  try { return pushSupported() && pushPerm() !== 'granted'; } catch (e) { return false; }
+}
+function pzPushRowDenied() {
+  if (pzNativePush()) return pzNativePermState() === 'denied';
+  try { return pushPerm() === 'denied'; } catch (e) { return false; }
+}
+async function pzNativeSaveToken(token) {
+  const transport = pzNativeTransport();
+  if (!transport || !pzNativeTokenOk(transport, token)) return { ok: false, reason: 'token_invalido' };
+  try {
+    await api.post('/api/push/subscribe', { transport: transport, token: String(token).trim() });
+    try { localStorage.setItem('pz-native-token', String(token).trim()); } catch (e) {}
+    try { localStorage.setItem('pz-native-transport', transport); } catch (e) {}
+    return { ok: true };
+  } catch (e) { return { ok: false, reason: (e && e.message) || 'error' }; }
+}
+async function pzNativeSubscribe() {
+  const PN = pzNativePlugin();
+  if (!PN) return { ok: false, reason: 'unsupported' };
+  try {
+    let st = null;
+    try { st = await PN.checkPermissions(); } catch (e) {}
+    let perm = (st && st.receive) || 'prompt';
+    if (perm === 'denied') { PZ_NATIVE_PERM = 'denied'; return { ok: false, reason: 'denied' }; }
+    if (perm !== 'granted') {
+      try { const req = await PN.requestPermissions(); perm = (req && req.receive) || 'prompt'; } catch (e) { perm = 'prompt'; }
+    }
+    PZ_NATIVE_PERM = perm;
+    if (perm !== 'granted') return { ok: false, reason: 'denied' };
+    try { await PN.register(); } catch (e) { return { ok: false, reason: (e && e.message) || 'error' }; }
+    // El token llega por el evento 'registration' (no hay getToken): se
+    // espera a que el listener lo guarde. Si ya habia uno de una sesion
+    // anterior y register() anduvo, ese sigue siendo el ultimo bueno.
+    for (let i = 0; i < 10; i++) {
+      try { if (localStorage.getItem('pz-native-token')) return { ok: true }; } catch (e) {}
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return { ok: false, reason: 'no_token' };
+  } catch (e) { return { ok: false, reason: (e && e.message) || 'error' }; }
+}
+async function pzNativeEnableFlow() {
+  if (pzNativePermState() === 'denied') return { ok: false, reason: 'denied' };
+  const accepted = await pushAskCard();
+  if (!accepted) return { ok: false, reason: 'declined' };
+  return pzNativeSubscribe();
+}
+async function pzNativeBoot() {
+  if (window.__pzNativeWired) return;
+  window.__pzNativeWired = true;
+  const PN = pzNativePlugin();
+  if (!PN) return;
+  try {
+    PN.addListener('pushNotificationReceived', (n) => {
+      try { const t = (n && n.notification && n.notification.title) || 'Posty'; if (typeof toast === 'function') toast(t); } catch (e) {}
+    });
+    PN.addListener('pushNotificationActionPerformed', (a) => {
+      try { const d = (a && a.notification && a.notification.data) || {}; const h = pzNativeRoute(d.url, true); if (h) location.hash = h; } catch (e) {}
+    });
+    PN.addListener('registration', (reg) => { try { pzNativeSaveToken(reg && reg.value); } catch (e) {} });
+    PN.addListener('registrationError', () => {});
+  } catch (e) {}
+  try {
+    const st = await PN.checkPermissions();
+    PZ_NATIVE_PERM = (st && st.receive) || 'prompt';
+    if (PZ_NATIVE_PERM === 'granted') { try { await PN.register(); } catch (e) {} }
+  } catch (e) {}
+}
+
 // 🔔 Posty te habla y estás en otra pestaña: notificación local del navegador.
 // Usa el mismo permiso que el push (pushEnableFlow). Solo dispara si la pestaña está oculta.
 function postyNotify(title, body) {
@@ -4691,6 +4814,7 @@ function pushAskCard() {
   });
 }
 async function pushDoSubscribe() {
+  if (pzNativePush()) return pzNativeSubscribe();
   if (!pushSupported()) return { ok: false, reason: 'unsupported' };
   if (pushPerm() === 'denied') return { ok: false, reason: 'denied' };
   try {
@@ -4713,6 +4837,7 @@ async function pushDoSubscribe() {
 }
 // Flujo completo: tarjeta de Posty → permiso real → suscripción.
 async function pushEnableFlow() {
+  if (pzNativePush()) return pzNativeEnableFlow();
   if (!pushSupported()) return { ok: false, reason: 'unsupported' };
   if (pushPerm() === 'denied') return { ok: false, reason: 'denied' };
   const accepted = await pushAskCard();
@@ -4828,8 +4953,8 @@ function setupChecklistHtml(title, opts) {
   }
   // 🔔 Notificaciones: obligatorias. Sin botón de descartar: el paso se cumple
   // activando push, o por email si el OS lo bloquea (el email siempre llega).
-  if (pushSupported() && pushPerm() !== 'granted') {
-    if (pushPerm() === 'denied') {
+  if (pzPushRowPending()) {
+    if (pzPushRowDenied()) {
       rows.push(`<div class="setup-row setup-done"><span class="setup-ico">${pzIc('mail', 20)}</span><span class="setup-txt"><b>Te aviso por email</b><small>Bloqueaste las notificaciones: los avisos llegan a tu email.</small></span><span class="setup-go">${pzIc('check', 14)}</span></div>`);
     } else {
       rows.push(`<button class="setup-row" id="setupPushRow"><span class="setup-ico">${pzIc('bell', 20)}</span><span class="setup-txt"><b>Activá las notificaciones</b><small>Te aviso antes de publicar cada posteo.</small></span><span class="setup-go">Activar ${pzIc("arrowRight", 14)}</span></button>`);
@@ -17684,6 +17809,48 @@ async function pzSemillaRegalar() {
   bbToast(gzT('Semilla regalada', 'Seed gifted'));
   try { render(); } catch (e) {}
 }
+// Informe mensual real (2026-10-26, ítem 5): solo números reales del mes.
+// La tarjeta solo existe si el mes tiene al menos un hecho real; en navegación
+// a un mes pasado sin hechos se muestra la línea explícita "sin actividad".
+function pzInformeMensualHTML(inf, en, explicito) {
+  const MES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const MES_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const partes = String(inf.mes || '').split('-');
+  const nombre = ((en ? MES_EN : MES_ES)[Number(partes[1]) - 1] || '') + ' ' + (partes[0] || '');
+  const vacio = !inf.piezas_publicadas && !inf.dias_con_publicacion && !inf.mensajes_capturados && !inf.respuestas_con_ok;
+  if (vacio && !explicito) return '';
+  const sub = inf.es_mes_actual
+    ? (en ? 'Real numbers for ' + nombre + ' · so far' : 'Números reales de ' + nombre + ' · hasta hoy')
+    : (en ? 'Real numbers for ' + nombre : 'Números reales de ' + nombre);
+  const fila = (n, t, s) => `<div class="pz-informe-fila"><strong>${n}</strong><span>${t}</span>${s ? `<small>${s}</small>` : ''}</div>`;
+  const cuerpo = vacio
+    ? `<p class="bb-sub">${en ? 'No recorded activity this month.' : 'Sin actividad registrada este mes.'}</p>`
+    : `<div class="pz-informe-nums">${fila(inf.piezas_publicadas, en ? 'Posts published' : 'Piezas publicadas', '')}${fila(inf.dias_con_publicacion, en ? 'Days with posts' : 'Días con publicación', en ? 'distinct days with at least one post' : 'días distintos con al menos una pieza')}${fila(inf.mensajes_capturados, en ? 'Customer messages captured' : 'Mensajes de clientes capturados', en ? 'comments and DMs received' : 'comentarios y DMs recibidos')}${fila(inf.respuestas_con_ok, en ? 'Replies with your OK' : 'Respuestas con tu OK', en ? 'sent only after your approval' : 'enviadas solo con tu aprobación')}</div>`;
+  const nav = `<div class="pz-informe-nav"><button class="bb-btn bb-btn-ghost" onclick="bbInformeNav(-1)">‹ ${en ? 'Previous month' : 'Mes anterior'}</button>${inf.es_mes_actual ? '' : `<button class="bb-btn bb-btn-ghost" onclick="bbInformeNav(1)">${en ? 'Next month' : 'Mes siguiente'} ›</button>`}</div>`;
+  return `<section class="bb-bloque" id="pzInformeMes" data-mes="${esc(inf.mes)}"><h2>${en ? 'Your month with Posty' : 'Tu mes con Posty'}</h2>
+    <p class="bb-sub">${sub}</p>
+    ${cuerpo}
+    ${nav}</section>`;
+}
+async function bbInformeNav(dir) {
+  const sec = document.getElementById('pzInformeMes');
+  if (!sec) return;
+  const m = /^(\d{4})-(\d{2})$/.exec(sec.getAttribute('data-mes') || '');
+  if (!m) return;
+  let y = Number(m[1]), mo = Number(m[2]) + dir;
+  if (mo < 1) { y -= 1; mo = 12; }
+  if (mo > 12) { y += 1; mo = 1; }
+  const mes = y + '-' + String(mo).padStart(2, '0');
+  try {
+    const inf = await api.get('/api/informe-mensual?mes=' + mes);
+    if (inf && inf.ok) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = pzInformeMensualHTML(inf, (typeof ME !== 'undefined' && ME && ME.lang === 'en'), true);
+      if (tmp.firstElementChild) sec.replaceWith(tmp.firstElementChild);
+    }
+  } catch (e) {}
+}
+
 function pzNivelCelebShow(nv, en) {
   const prev = document.getElementById('pzCelebFondo');
   if (prev) { try { prev.remove(); } catch (e) {} }
@@ -20141,6 +20308,11 @@ async function doLogout() {
   try { PROFILE = null; } catch (e) {}
   try { await api.post('/api/auth/logout'); } catch (e) {}
   try { sessionStorage.removeItem('posta_return_to'); } catch (e) {}
+  // Nativo: el token de este dispositivo deja de ser de esta cuenta.
+  try {
+    const nt = localStorage.getItem('pz-native-token');
+    if (nt) { try { await api.post('/api/push/unsubscribe', { endpoint: nt }); } catch (e) {} try { localStorage.removeItem('pz-native-token'); } catch (e2) {} }
+  } catch (e) {}
   location.hash = '#/login';
   render();
 }
@@ -20919,7 +21091,8 @@ function maybeAskPushPostIg() {
     if (localStorage.getItem('push-ask-ig')) return;
     localStorage.setItem('push-ask-ig', '1'); // consumido aunque no se muestre (p.ej. sin soporte)
   } catch (e) { return; }
-  if (!pushSupported() || pushPerm() !== 'default') return; // sin soporte, bloqueado o ya dado: no molestar
+  if (pzNativePush()) { if (pzNativePermState() === 'denied') return; }
+  else if (!pushSupported() || pushPerm() !== 'default') return; // sin soporte, bloqueado o ya dado: no molestar
   setTimeout(() => {
     if (document.getElementById('apvPushOv')) return;
     const ov = document.createElement('div');

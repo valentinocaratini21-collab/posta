@@ -158,16 +158,16 @@ const fnPost50 = app.slice(app.indexOf('function mxJardinPost50HTML'), app.index
 check('sin barra de juego en post50', fnPost50.indexOf('pz-barra') < 0 && fnPost50.indexOf('progress') < 0 && fnPost50.indexOf('%') < 0);
 check('rutas nuevas en server', srv.indexOf("'/api/oficina/jardin-post50'") >= 0 && srv.indexOf("'/api/oficina/jardin-semilla-regalo'") >= 0);
 check('semilla solo con nivel 50 (403)', srv.indexOf('jardin_no_completo') >= 0);
-check('BUILD v504', srv.indexOf("BUILD_ID = '20261031-v506'") >= 0);
-check('bumps index', idx.indexOf('app.js?v=330') >= 0 && idx.indexOf('styles.css?v=20261051') >= 0);
-check('en index: styles 20261050, sin app.js', enIdx.indexOf('styles.css?v=20261051') >= 0 && enIdx.indexOf('app.js?v=') < 0);
+check('BUILD v507', srv.indexOf("BUILD_ID = '20261031-v507'") >= 0);
+check('bumps index', idx.indexOf('app.js?v=331') >= 0 && idx.indexOf('styles.css?v=20261052') >= 0);
+check('en index: styles 20261052, sin app.js', enIdx.indexOf('styles.css?v=20261052') >= 0 && enIdx.indexOf('app.js?v=') < 0);
 check('postjardin exporta puras', pjSrc.indexOf('zonasPara') >= 0 && pjSrc.indexOf('estacionPara') >= 0 && pjSrc.indexOf('historiaMesesPara') >= 0 && pjSrc.indexOf('estadoPost50') >= 0);
 
 console.log('== 4. Censo (pre = post; rutas nuevas no son /aprobar) ==');
 check('server catsMatch 3', count(srv, 'catsMatch') === 3, count(srv, 'catsMatch'));
 check('server week-redo 16', count(srv, 'week-redo') === 16, count(srv, 'week-redo'));
 check('server first_week 3', count(srv, 'first_week') === 3, count(srv, 'first_week'));
-check('server /aprobar 15', count(srv, '/aprobar') === 15, count(srv, '/aprobar'));
+check('server /aprobar 16 (lote 7: WhatsApp Sunday-letter reusa /aprobar/:token, sin ruta nueva)', count(srv, '/aprobar') === 16, count(srv, '/aprobar'));
 check('app catsMatch 0', count(app, 'catsMatch') === 0);
 check('app week-redo 0', count(app, 'week-redo') === 0);
 check('app first_week 4', count(app, 'first_week') === 4, count(app, 'first_week'));

@@ -3932,3 +3932,11 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-pick-btn svg{flex:none}
 .pz-pick-btn.sel{background:#2793C8;border-color:#2793C8;color:#fff}
 .pz-pick-btn.sel svg{stroke:#fff}
+
+/* INFORME MENSUAL REAL (2026-10-26, ítem 5) */
+.pz-informe-nums{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.pz-informe-fila{background:#F2F9FD;border-radius:12px;padding:12px}
+.pz-informe-fila strong{display:block;font-size:26px;line-height:1;color:#0A1E33}
+.pz-informe-fila span{display:block;font-size:13px;font-weight:700;margin-top:4px}
+.pz-informe-fila small{display:block;font-size:12px;color:#5B7285;margin-top:2px}
+.pz-informe-nav{display:flex;gap:8px;margin-top:12px}

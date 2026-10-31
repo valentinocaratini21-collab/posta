@@ -46,6 +46,7 @@ const paymentCloseMod = require('./payment-close');
 const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
 const { upcomingEphemeris, catsMatch } = require('./ephemeris');
 const creator = require('./creator.js');
+const qaGate = require('./qa-gate'); // (2026-10-26) QA gate síncrono: ninguna pieza que no pase la vara llega al dueño
 const photoCliente = require('./photo-cliente.js');
 const mediaCliente = require('./media-cliente.js');
 const vozDueno = require('./voz-dueno.js'); // VOZ DEL DUENO -> POSTEO (29/10/2026, local)
@@ -60,6 +61,7 @@ try { cartaAudio = require('./carta-audio'); } catch (e) { console.error('[carta
 const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispositivo: cuentas guardadas en la entrada, hash + rotación + revocación
 const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleados, gating por pack, registro durable, fundamento-vista y bandeja con la matriz forzada en el servidor
 const oficina = require('./oficina'); // ESPINA BAMBOOTY (programa TestFlight): fundamento único, río de la oficina, Bandeja «Para vos», partes (contrato de la oficina) y chat que rutea. La presentación Bambooty vive SOLO en el shell (la web pública sigue siendo Posty).
+const informeMensual = require('./informe-mensual'); // INFORME MENSUAL REAL (ítem 5, 2026-10-26): números reales del mes, sin ROI inventado.
 try { oficina.init(db); } catch (e) { console.error('[oficina] init:', e.message); }
 const postyOficina = require('./posty-oficina'); // POSTY en la oficina: su semana real entra al río y a la Bandeja.
 try { postyOficina.init(db); } catch (e) { console.error('[posty-oficina] init:', e.message); }
@@ -295,6 +297,7 @@ const gridPattern = require('./grid-pattern');
 const feedDirector = require('./feed-director');
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
 const analysisEngine = require('./analysis-engine'); // 🧠 Análisis (2026-10-19): radiografía + mercado + nacimiento + porqué + loop
+const semanaAprende = require('./semana-aprende'); // 🧠 Semana aprende (ítem 4): la semana anterior real ajusta la tanda y el porqué.
 const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
 const showcase = require('./showcase'); // 📣 PRUEBA SOCIAL REAL (v370): la primera historia de un cliente pago, con su consentimiento
 const rubroId = require('./rubro-id'); // (v235) IDENTIFICACIÓN ESPECIALISTA DE RUBRO: voto multi-señal + confianza
@@ -404,8 +407,8 @@ const rubroOf = (uid) => { try { const pr = getProfile(uid); return (pr && pr.ca
 // efeméride forzada en una barbería de hombres (Día de la Madre). Para los
 // demás rubros la fecha no entra: su semana habla de SU negocio.
 const EPHEMERIS_GIFT_OK = /flor|gastro|helad|pastel|panad|cafeter|cafe|joya|indument|ropa|moda|belleza|estetic|estétic|spa|deco|hogar|perfum|chocolat|regal|libro|juguete|tecno|electr|peluquer/i;
-function ephemerisFor(profile) {
-  const eph = upcomingEphemeris(12)[0] || null;
+function ephemerisFor(profile, pais) {
+  const eph = upcomingEphemeris(12, pais)[0] || null;
   if (!eph) return null;
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
@@ -2024,7 +2027,7 @@ app.get('/api/week/report', requireAuth, (req, res) => {
       AND media_type IN ('image', 'carousel', 'video')`).get(uid);
     let opportunity = null;
     try {
-      const eph = ephemerisFor(getProfile(uid));
+      const eph = ephemerisFor(getProfile(uid), adCountry(uid));
       if (eph && eph.date) {
         const daysLeft = Math.round((new Date(eph.date + 'T12:00:00Z') - Date.now()) / 86400000);
         if (daysLeft >= 0 && daysLeft <= 14) opportunity = { name: eph.name || eph.title || 'una fecha especial', daysLeft };
@@ -2085,8 +2088,8 @@ app.get('/api/week/report', requireAuth, (req, res) => {
 // Efemérides del rubro en una ventana de N días, con el mismo criterio de
 // ephemerisFor (la fecha comercial solo entra en rubros donde regalar o
 // festejar tiene sentido; barberías afuera).
-function ephemerisWindowFor(profile, days) {
-  const list = upcomingEphemeris(days || 21);
+function ephemerisWindowFor(profile, days, pais) {
+  const list = upcomingEphemeris(days || 21, pais);
   if (!list.length) return [];
   const cat = String((profile && profile.category) || '');
   const biz = String((profile && profile.business_name) || '');
@@ -2224,7 +2227,7 @@ async function runIdeasForUser(uid, opts = {}) {
     competitors: snapshots,
     ownFormats30: ownFormats30(uid),
     ownWinner: ownWinnerFor(uid),
-    ephemeris: ephemerisWindowFor(profile, 21),
+    ephemeris: ephemerisWindowFor(profile, 21, adCountry(uid)),
   });
   let hist = [];
   try { hist = db.prepare(`SELECT angle_key, status, created_at FROM posty_ideas WHERE user_id = ? AND created_at > datetime('now', '-45 days')`).all(uid); } catch (e) {}
@@ -2402,7 +2405,7 @@ async function makeIdeaDraft(uid, idea) {
   const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
     VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, String(idea.title || '').slice(0, 200), String('idea:' + (idea.angle_key || '')).slice(0, 120),
-      tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || genOut.character === 'failed') ? 1 : 0,
+      tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || genOut.character === 'failed' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja')) ? 1 : 0,
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
       String((content && content.hookId) || ''), promptForMedia(imagePath));
   stampPostDigest(r.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
@@ -2488,6 +2491,8 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
       String((content && content.hookId) || ''), promptForMedia(imagePath), post.id);
   // (v239) QA de personaje: identidad no garantizada ⇒ la pieza queda en revisión.
   if (genOut.character === 'failed') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id); console.log(`[admin-regen] post ${post.id}: protagonista no garantizado — needs_review`); } catch (e) {} }
+  // (QA gate 2026-10-26) Gate agotado ⇒ la pieza queda en revisión.
+  if (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id); console.log(`[admin-regen] post ${post.id}: QA gate agotado — bandeja (needs_review)`); } catch (e) {} }
   stampPostDigest(post.id, uid, content && content._anchored === false); // (v229) el reemplazo hereda el fundamento vigente
   try { track(uid, 'admin_regen_post', String(post.id)); } catch (e) {}
   return { ok: true, post_id: post.id, headline, textMode: mode };
@@ -3355,6 +3360,8 @@ app.post('/api/auth/logout', (req, res) => {
 // Diseño y límites en server/social-auth.js. Sin secretos hardcodeados:
 // las credenciales llegan solo por variables de entorno.
 const socialAuth = require('./server/social-auth');
+const whatsapp = require('./server/whatsapp'); // (whatsapp-aprobacion) carta por WhatsApp, gateado por env
+try { whatsapp.ensureSchema(db); } catch (e) { /* sin esquema no hay envío: fail-closed */ }
 const SOCIAL_FNS = {
   newReferralCode,
   hashPassword: (s) => bcrypt.hashSync(s, 10),
@@ -3367,6 +3374,22 @@ const SOCIAL_FNS = {
 
 app.get('/api/auth/social/providers', (req, res) => {
   res.json(socialAuth.socialProviders(process.env));
+});
+
+// ---------- WhatsApp Business: webhook (verificación + estados + baja) ----------
+// Gateado: sin WHATSAPP_VERIFY_TOKEN / WHATSAPP_APP_SECRET configurados, todo 403 fail-closed.
+// El POST verifica la firma X-Hub-Signature-256 con req.rawBody (el json global ya lo captura).
+app.get('/api/whatsapp/webhook', (req, res) => {
+  const challenge = whatsapp.verifyWebhook(req.query['hub.mode'], req.query['hub.verify_token'], req.query['hub.challenge'], process.env);
+  if (!challenge) return res.sendStatus(403);
+  return res.send(challenge);
+});
+app.post('/api/whatsapp/webhook', (req, res) => {
+  try {
+    if (!whatsapp.verifySignature(process.env.WHATSAPP_APP_SECRET, req.rawBody, req.headers['x-hub-signature-256'])) return res.sendStatus(403);
+    const out = whatsapp.handleIncoming(db, req.body || {});
+    return res.json({ ok: true, ...out });
+  } catch (e) { return res.sendStatus(200); } // un error interno no debe generar reintentos de Meta
 });
 
 function socialStart(provider) {
@@ -3856,6 +3879,16 @@ app.get('/api/oficina/jardin', requireAuth, (req, res) => {
     res.json({ ok: true, antes: imgs.slice(0, 3), hoy: imgs.slice(-3).reverse() });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+app.get('/api/informe-mensual', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const mes = String(req.query.mes || informeMensual.mesActualUTC());
+    res.json(informeMensual.informePara(db, uid, mes));
+  } catch (e) {
+    if (e.message === 'mes_invalido' || e.message === 'mes_futuro') return res.status(400).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
 // LOTE 4 — Jardín Posty después del nivel 50 + historia real de meses.
 // Solo Posty. Las 4 post-jardín solo con nivel 50 (el módulo devuelve
@@ -4237,8 +4270,12 @@ app.get('/api/settings/notify-prefs', requireAuth, (req, res) => {
     const tl = autopilot.trustLevel(db, uid);
     let subs = 0;
     try { subs = db.prepare('SELECT COUNT(*) AS c FROM push_subscriptions WHERE user_id = ?').get(uid).c; } catch (e) {}
+    const waStateGet = (() => { try { return whatsapp.notifyPrefsExtra(db, uid); } catch (e) { return { wa_available: false, wa_number_masked: '', wa_opted_in: false }; } })();
     res.json({
       ok: true,
+      wa_available: waStateGet.wa_available,
+      wa_number_masked: waStateGet.wa_number_masked,
+      wa_opted_in: waStateGet.wa_opted_in,
       pre_notify: tl >= 2 ? !!((u && u.autopilot_prenotify)) : true,
       pre_notify_locked: tl < 2,
       notify_letter: !u || u.notify_letter == null ? true : !!u.notify_letter,
@@ -4253,13 +4290,19 @@ app.post('/api/settings/notify-prefs', requireAuth, express.json(), (req, res) =
   try {
     const uid = req.session.userId;
     const b = req.body || {};
+    // (whatsapp-aprobacion) Opt-in WhatsApp: se valida ANTES de guardar nada (un número inválido devuelve 400 sin tocar el resto).
+    if (b.wa_notify_num !== undefined || b.wa_notify_optin !== undefined) {
+      const waRes = whatsapp.applyNotifyPrefs(db, uid, b);
+      if (!waRes.ok) return res.status(400).json({ ok: false, error: waRes.error === 'wa_number_invalid' || waRes.error === 'wa_number_required' ? 'Ese número de WhatsApp no vale 😅 Revisá que tenga código de país (Argentina: 54 9 + tu número).' : 'No pude guardarlo 😅' });
+    }
     const sets = [];
     const vals = [];
     if (b.notify_letter !== undefined) { sets.push('notify_letter = ?'); vals.push(b.notify_letter ? 1 : 0); }
     if (b.notify_failed !== undefined) { sets.push('notify_failed = ?'); vals.push(b.notify_failed ? 1 : 0); }
     if (sets.length) db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals, uid);
     const u = db.prepare('SELECT notify_letter, notify_failed FROM users WHERE id = ?').get(uid);
-    res.json({ ok: true, notify_letter: !!(u && u.notify_letter), notify_failed: !!(u && u.notify_failed) });
+    const waStatePost = (() => { try { return whatsapp.notifyPrefsExtra(db, uid); } catch (e) { return { wa_available: false, wa_number_masked: '', wa_opted_in: false }; } })();
+    res.json({ ok: true, notify_letter: !!(u && u.notify_letter), notify_failed: !!(u && u.notify_failed), wa_available: waStatePost.wa_available, wa_number_masked: waStatePost.wa_number_masked, wa_opted_in: waStatePost.wa_opted_in });
   } catch (e) {
     res.status(500).json({ ok: false, error: 'No pude guardarlo 😅' });
   }
@@ -4889,8 +4932,14 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
           regenJobs.push((async () => {
             try {
               const headline = makeHeadline(capForImg.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(capForImg, 5, 70, rubroOf(uid));
-              const newPath = await conceptShotGenerateQueued({ uid, idea: capForImg, tipo: tipoForImg, headline, refs: [] });
+              const redoGate = {};
+              const newPath = await conceptShotGenerateQueued({ uid, idea: capForImg, tipo: tipoForImg, headline, refs: [], resultOut: redoGate });
               if (newPath) {
+                // (QA gate 2026-10-26) En bandeja la imagen nueva NO reemplaza a la vigente: queda la vieja y el posteo va a revisión (sin consumir el redo).
+                if (redoGate.qaGate && redoGate.qaGate.outcome === 'bandeja') {
+                  try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postIdForRedo); console.log(`[chat-edit] post ${postIdForRedo}: QA gate agotado — se conserva la imagen vigente + needs_review`); } catch (e) {}
+                  return false;
+                }
                 // Punto de compromiso (6A): imagen nueva entregada.
                 const cur = db.prepare('SELECT redo_left, media_type FROM posts WHERE id = ? AND user_id = ?').get(postIdForRedo, uid);
                 if (redoLeftOf(cur) !== null && !consumeRedo(uid, postIdForRedo)) return false;
@@ -6445,7 +6494,7 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
   const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
     VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '',
-      String(idea.porque || '').slice(0, 500), weekKey || '', (trainingWheelsActive(uid) || genOut2.character === 'failed') ? 1 : 0,
+      String(idea.porque || '').slice(0, 500), weekKey || '', (trainingWheelsActive(uid) || genOut2.character === 'failed' || (genOut2.qaGate && genOut2.qaGate.outcome === 'bandeja')) ? 1 : 0,
       String(styleOut2.code || ''), String(styleOut2.reason || ''), String(styleOut2.intent || ''), String(regenProductRef || ''), String((content && content.hookId) || ''), promptForMedia(imagePath));
   stampPostDigest(r.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
   console.log(`[review] regenerado borrador ${r.lastInsertRowid} para usuario ${uid}`);
@@ -7360,7 +7409,7 @@ function campaignLineFor(profile, uid) {
     if (!CAMPAIGNS_MOD) return '';
     let lang = 'es';
     try { const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); if (u && u.lang === 'en') lang = 'en'; } catch (e) {}
-    return CAMPAIGNS_MOD.campaignThemeLine(new Date(), (profile && profile.category) || '', lang) || '';
+    return CAMPAIGNS_MOD.campaignThemeLine(new Date(), (profile && profile.category) || '', lang, adCountry(uid)) || '';
   } catch (e) { return ''; }
 }
 // (v306) RADAR DEL DUEÑO: la respuesta a la pregunta-radar de ESTA
@@ -7377,7 +7426,7 @@ function radarLineFor(uid) {
     return postyQuestions.radarWeekLine(digest && digest.radar, wk, lang, postyQuestions.rubroKeyOf(digest)) || '';
   } catch (e) { return ''; }
 }
-function ideasInputFor(uid) {
+function ideasInputFor(uid, weekKey) {
   const profile = getProfile(uid);
   const dna = readDna(uid);
   let recentTopics = '';
@@ -7388,6 +7437,14 @@ function ideasInputFor(uid) {
   let styleRules = [];
   try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
   // Niveles que se sienten: el nivel cambia REALMENTE el payload de ideas.
+  // 🧠 SEMANA APRENDE (ítem 4): el brief de ideas también lleva lo que
+  // rindió la semana anterior REAL de ESTA cuenta (preguntas, aces,
+  // fechas). Sin weekKey (llamadores viejos) queda vacío: sin cambio.
+  let aprendizajeTxt = '';
+  try {
+    const apPrev = semanaAprende.aprendizajeSemanaAnterior(db, uid, weekKey);
+    if (apPrev) aprendizajeTxt = semanaAprende.textoParaBrief(apPrev);
+  } catch (e) { /* el aprendizaje nunca frena la generación */ }
   return levelBoosted(uid, 'ideas', {
     business: profile.business_name,
     ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
@@ -7399,10 +7456,11 @@ function ideasInputFor(uid) {
     goal: profile.goal,
     taste: tasteProfile(uid),
     recentTopics,
-    ephemeris: ephemerisFor(profile),
+    ephemeris: ephemerisFor(profile, adCountry(uid)),
     campaign: campaignLineFor(profile, uid),
     radar: radarLineFor(uid),
     learnings: getContentLearnings(uid),
+    aprendizaje: aprendizajeTxt,
     styleRules,
     excluded: excludedTopicsLine(uid),
     approved: approvedTopicsLine(uid),
@@ -7634,8 +7692,8 @@ app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'],
 // convierte sola en un posteo terminado con SU foto de base; (4) el
 // reporte de rendimiento con SUS números cuando existen (post_metrics).
 const ALBUM_TARGETS = { producto: 3, local: 2, equipo: 2 };
-function albumMissionPick(profile, weekKey) {
-  const eph = ephemerisFor(profile);
+function albumMissionPick(profile, weekKey, pais) {
+  const eph = ephemerisFor(profile, pais);
   if (eph) return { tag: 'producto', text: `Se viene ${eph.name}: sacale una foto a lo que estás preparando ${eph.emoji || '📸'}` };
   const cat = String((profile && profile.category) || '').toLowerCase();
   let star = 'tu producto estrella';
@@ -7659,7 +7717,7 @@ function albumMission(uid) {
   let row = null;
   try { row = db.prepare('SELECT * FROM album_missions WHERE user_id = ? AND week_key = ?').get(uid, weekKey); } catch (e) {}
   if (!row) {
-    const pick = albumMissionPick(getProfile(uid) || {}, weekKey);
+    const pick = albumMissionPick(getProfile(uid) || {}, weekKey, adCountry(uid));
     try {
       db.prepare('INSERT OR IGNORE INTO album_missions (user_id, week_key, mission_tag, mission_text) VALUES (?,?,?,?)').run(uid, weekKey, pick.tag, pick.text);
       row = db.prepare('SELECT * FROM album_missions WHERE user_id = ? AND week_key = ?').get(uid, weekKey);
@@ -7950,7 +8008,7 @@ async function celebratePhotoPost(uid, assetId, filePath) {
     // no se afirma que sea su foto y también va a revisión.
     const fid = genOut.fidelity || 'n/a';
     const isClientPhoto = (fid === 'passed' || fid === 'fallback') ? 1 : 0;
-    const needRev = (trainingWheelsActive(uid) || fid === 'fallback' || fid === 'unverified') ? 1 : 0;
+    const needRev = (trainingWheelsActive(uid) || fid === 'fallback' || fid === 'unverified' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja')) ? 1 : 0;
     const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why)
       VALUES (?,?,?,?, 'draft', 'image', ?, 'album', ?, ?, 'foto', 'Posteo creado desde la foto real que subió el cliente')`)
       .run(uid, imagePath, caption, hashtags, needRev, isClientPhoto, weekKey);
@@ -10069,9 +10127,11 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
       if (!caption.trim()) throw new Error('La IA no devolvió texto');
       // Titular corto y COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
       const headline = makeHeadline(String(caption).split('\n')[0], 6, 70, (profile && profile.category) || null);
+      const variantGate = {};
       const imagePath = await conceptShotGenerateQueued({
-        uid, idea: { titulo: topic, porque: angles[i] }, tipo, headline, refs, apiKey: key,
+        uid, idea: { titulo: topic, porque: angles[i] }, tipo, headline, refs, apiKey: key, resultOut: variantGate,
       });
+      if (variantGate.qaGate && variantGate.qaGate.outcome === 'bandeja') throw new Error('variante en bandeja por QA gate');
       return { image_path: imagePath, caption, hashtags: out.hashtags || '' };
     }));
     const variants = results.filter(r => r.status === 'fulfilled').map(r => r.value);
@@ -10095,7 +10155,9 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
           const k2 = captionBodyKey(cap2);
           if (cap2.trim() && k2 && !seen.has(k2)) {
             const headline2 = makeHeadline(String(cap2).split('\n')[0], 6, 70, (profile && profile.category) || null);
-            const imagePath2 = await conceptShotGenerateQueued({ uid, idea: { titulo: topic, porque: angles[vi] }, tipo, headline: headline2, refs, apiKey: key });
+            const variantGate2 = {};
+            const imagePath2 = await conceptShotGenerateQueued({ uid, idea: { titulo: topic, porque: angles[vi] }, tipo, headline: headline2, refs, apiKey: key, resultOut: variantGate2 });
+            if (variantGate2.qaGate && variantGate2.qaGate.outcome === 'bandeja') throw new Error('reemplazo en bandeja por QA gate');
             variants[vi] = { image_path: imagePath2, caption: cap2, hashtags: out2.hashtags || '' };
             seen.set(k2, vi);
             replaced = true;
@@ -10936,7 +10998,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // saldo 0, input inesperado), NO propagar la excepción al sweep: devolver
     // fallo estructurado para que se registre y se reintente con backoff.
     let ideas;
-    try { ideas = await generateIdeas(ideasInputFor(uid), key, { strict: true }); }
+    try { ideas = await generateIdeas(ideasInputFor(uid, weekKey), key, { strict: true }); }
     catch (e) { console.error(`[pipeline:${tag}] ideas falló:`, e.message); return { ok: false, reason: 'ai_error', error: e.message }; }
     // 2026-10-14: en modo completar, no repetir temas que la semana ya
     // tiene y traer 2 ideas extra de buffer por si alguna imagen falla
@@ -10954,7 +11016,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // una respuesta corta de la IA dejaba la semana incompleta en silencio.
     if (pool.length < deficit + 2) {
       try {
-        const more = await generateIdeas(ideasInputFor(uid), key, { strict: true });
+        const more = await generateIdeas(ideasInputFor(uid, weekKey), key, { strict: true });
         const have = new Set(pool.map(i => String(i.titulo || '').trim().toLowerCase()));
         for (const m of more) { const t = String(m.titulo || '').trim().toLowerCase(); if (t && !have.has(t)) { pool.push(m); have.add(t); } }
         console.log(`[pipeline:${tag}] usuario ${uid}: pool de ideas reforzado → ${pool.length}`);
@@ -11064,6 +11126,24 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // lee al generar y lo alimenta en el bloque sincrónico posterior
     // al chequeo de duplicado, así los 5 workers del pool no se pisan.
     const runPrevCaptions = weekPrevCaptions(uid, weekKey, 0);
+    // 🧠 SEMANA APRENDE (ítem 4): la semana anterior real ajusta el porqué
+    // visible de las piezas que calzan con lo aprendido (preguntas y aces
+    // con cita y conteo, jamás ventas ni atribución inventada) y deja UNA
+    // hipótesis por semana en account_experiments. NO reordena picks: el
+    // equilibrio de grilla ya fijó posiciones y sus notas por pick.
+    try {
+      const apSem = semanaAprende.aprendizajeSemanaAnterior(db, uid, weekKey);
+      if (apSem && apSem.tiene) {
+        try { semanaAprende.medirHipotesisAnterior(db, uid, weekKey); } catch (e) {}
+        const aCrear = picks.slice(0, deficit);
+        const emp = semanaAprende.emparejarPicks(aCrear, apSem);
+        for (const m of emp) { const np = semanaAprende.porqueConAprendizaje(m.pick, apSem); if (np !== m.pick.porque) m.pick.porque = np; }
+        if (emp.length) {
+          try { semanaAprende.registrarHipotesis(db, uid, weekKey, apSem, emp); } catch (e) {}
+          console.log(`[pipeline:${tag}] usuario ${uid}: semana aprende — ${emp.length} porqués con aprendizaje real (semana ${apSem.prev})`);
+        }
+      }
+    } catch (e) { console.error(`[pipeline:${tag}] semana aprende falló:`, e.message); }
     const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, sales_intent, sales_angle) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
     // revisión humana; nivel ≥1 sale directo (el qualityGate de Fase 0 en
@@ -11419,8 +11499,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             }
             // (v239) QA de personaje: identidad no garantizada ⇒ revisión.
             if (genOut.character === 'failed') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: protagonista no garantizado — needs_review`); } catch (e) {} }
+            if (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: QA gate agotado — bandeja (needs_review)`); } catch (e) {} }
           } else {
-            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, (genOut.character === 'failed' ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle);
+            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, ((genOut.character === 'failed' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja')) ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle);
             if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); }
           }
           } else {
@@ -12930,6 +13011,7 @@ app.post('/api/ig/disconnect', requireAuth, (req, res) => {
 // un posteo existente; sin la auditoría de Direct Post de TikTok, lo que sale
 // queda en privado (SELF_ONLY) — el módulo respeta lo que creator_info ofrece.
 const tiktok = require('./tiktok');
+const tiktokSemanal = require('./tiktok-semanal'); // TikTok semanal opt-in (Lote 7)
 const google = require('./google');
 const tiendanube = require('./tiendanube');
 const tnWebhooks = require('./tiendanube-webhooks');
@@ -12937,11 +13019,33 @@ const tnInstall = require('./tn-install');
 
 app.get('/api/tiktok/status', requireAuth, (req, res) => {
   const acc = tiktok.getAccount(db, req.session.userId);
+  // Semanal (Lote 7): campos aditivos, no cambian la forma que ya lee la UI manual.
+  let sem = { optin: false, audited: false, today: 0, last: [] };
+  try {
+    tiktokSemanal.ensureTables(db);
+    sem = {
+      optin: tiktokSemanal.getOptin(db, req.session.userId),
+      audited: tiktokSemanal.isAudited(),
+      today: tiktokSemanal.todayCount(db, req.session.userId),
+      last: tiktokSemanal.lastPublishes(db, req.session.userId, 5),
+    };
+  } catch (e) { /* el status nunca bloquea por lo semanal */ }
   res.json({
     configured: tiktok.configured(),
     connected: !!acc,
     username: acc ? (acc.username || '') : '',
+    semanal: sem,
   });
+});
+
+// TikTok semanal opt-in (Lote 7): preferencia, sin conexión obligatoria.
+// Publicar exige, además, conexión + TIKTOK_AUDITED=1 (ver tiktok-semanal.js).
+app.post('/api/tiktok/optin', requireAuth, (req, res) => {
+  try {
+    const on = !!(req.body && (req.body.opt_in === true || req.body.opt_in === 1 || req.body.opt_in === '1'));
+    const v = tiktokSemanal.setOptin(db, req.session.userId, on);
+    res.json({ ok: true, optin: v });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 app.get('/api/tiktok/connect', requireAuth, (req, res) => {
@@ -12989,6 +13093,7 @@ app.get('/api/tiktok/callback', async (req, res) => {
 
 app.post('/api/tiktok/disconnect', requireAuth, (req, res) => {
   tiktok.deleteAccount(db, req.session.userId);
+  try { tiktokSemanal.setOptin(db, req.session.userId, false); } catch (e) {} // sin cuenta, sin semanal
   res.json({ ok: true });
 });
 
@@ -15976,6 +16081,7 @@ function pregenIdeaImage(uid, idea) {
     if (PREGEN.has(key)) return; // ya en curso o lista
     PREGEN.set(key, { status: 'pending', at: Date.now() });
     const styleOut = {};
+    const pregenGate = {};
      conceptShotGenerateQueued({
       uid,
       idea: { titulo: idea.titulo || idea.title, angulo: idea.angulo || '', porque: idea.porque || '', tipo: idea.tipo || 'novedad' },
@@ -15984,7 +16090,9 @@ function pregenIdeaImage(uid, idea) {
       refs: [],
       usedStyles: [],
       styleOut,
+      resultOut: pregenGate,
     }).then(path => {
+      if (pregenGate.qaGate && pregenGate.qaGate.outcome === 'bandeja') { PREGEN.set(key, { status: 'error', error: 'en revisión', at: Date.now() }); return; }
       PREGEN.set(key, { status: 'done', path, style: styleOut.code || null, styleName: styleOut.name || '', at: Date.now() });
     }).catch(err => {
       PREGEN.set(key, { status: 'error', error: String((err && err.message) || '').slice(0, 200), at: Date.now() });
@@ -16454,120 +16562,85 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       console.error('[concept-shot] composite titular falló, sigo con imagen limpia:', e.message);
     }
   }
-  // QA de auditoría DESACOPLADO (2026-10-14; reubicado 2026-10-16): corre
-  // en segundo plano (el posteo no lo espera) y audita el ARCHIVO FINAL —
-  // con el titular ya compuesto — que es lo que el cliente ve y lo que
-  // Mora revisa en qa_audit con su image_path. Antes auditaba la imagen
-  // cruda ANTES del composite: los defectos del titular compuesto (la
-  // clase de la antena tras la "o") eran invisibles para la auditoría.
-  // Si la visión no devuelve veredicto, la fila se escribe igual con
-  // passed NULL: el hueco de cobertura queda visible, no silencioso.
-  (async () => {
-    try {
-      let finalB64 = b64;
-      try { finalB64 = fs.readFileSync(path.join(MEDIA_DIR, imgName)).toString('base64'); } catch (e) {}
-      const qa = await qaImageB64(finalB64, {
-        headline: cleanHeadline,
-        paletteHex: hexes,
-        dnaFacts: qaFactsLine(dna, digestForUser(uid)),
-      }, key);
-      try {
-        db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
-        try { db.exec("ALTER TABLE qa_audit ADD COLUMN image_path TEXT"); } catch (e) { /* ya existe */ }
-        // (Frente 1, 2026-10-23) Copia estable de la imagen evaluada: el
-        // image_path de la fila apunta a media/qa-audit/ (ver
-        // retainQaAuditCopy); si la copia no se pudo hacer, cae al path
-        // suelto de siempre. Vale para las tres salidas (sin veredicto,
-        // aprobada y fallida): toda evaluación queda auditable con el ojo.
-        const auditPath = retainQaAuditCopy(imgName) || `/media/${imgName}`;
-        if (!qa) {
-          db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(null, JSON.stringify({ qa_unavailable: true }), auditPath);
-          return;
-        }
-        const qaPassed = !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok && qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false);
-        try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, contraste: qa.contraste_ok, elementos: qa.elementos_ok, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
-        db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000), auditPath);
-        // ===== Reintento CORRECTIVO (2026-10-16): si la auditoría encontró un
-        // defecto DURO, se regenera UNA vez con la corrección explícita en el
-        // prompt y se reemplaza la imagen del borrador. Corre en background
-        // (la entrega no espera: lección 2026-10-02, nada de reintentos en
-        // cadena bloqueando) y solo si el posteo sigue en 'draft'. =====
-        const hardFail = qa && (qa.texto_ok === false || qa.anatomia_ok === false || qa.claims_ok === false || qa.headline_clear === false);
-        if (hardFail) {
+  // QA GATE SÍNCRONO (2026-10-26, ítem 3 ARMA TODO — QA que rehace sola):
+  // reemplaza la auditoría desacoplada en background + el reintento
+  // correctivo viejo (2026-10-14/16, 1 intento, solo 4 checks) y el
+  // degrade a brand card por claims. La pieza NO se entrega antes de
+  // pasar la vara: se evalúa el archivo FINAL (con titular compuesto);
+  // si falla, el motor la regenera sola con la corrección explícita,
+  // hasta QA_GATE_MAX_ATTEMPTS generaciones en total. Si agota los
+  // intentos, la pieza va a la BANDEJA marcada (needs_review=1, puesto
+  // por el llamador vía resultOut.qaGate) y NUNCA se entrega como
+  // final. Fail-closed: sin veredicto del QA (null) el intento cuenta
+  // como fallido. La fila qa_audit sigue siendo UNA por llamada y
+  // guarda la PRIMERA evaluación (la estadística de Mora no cambia de
+  // significado); el gate viaja en el JSON de la fila (qa_gate_*) y en
+  // resultOut.qaGate.
+  let gateFinalPub = `/media/${imgName}`;
+  let gateFinalPrompt = withStyle(prompt);
+  try {
+    const gate = await qaGate.runQaGate({
+      basePrompt: withStyle(prompt),
+      initialAbs: imgPathAbs,
+      initialPub: `/media/${imgName}`,
+      maxAttempts: qaGate.QA_GATE_MAX_ATTEMPTS,
+      evaluate: async (abs) => {
+        let b64v = null;
+        try { b64v = fs.readFileSync(abs).toString('base64'); } catch (e) { return null; }
+        return qaImageB64(b64v, { headline: cleanHeadline, paletteHex: hexes, dnaFacts: qaFactsLine(dna, digestForUser(uid)) }, key);
+      },
+      generate: async (corrPrompt) => genConceptImage(key, corrPrompt, absRefs, refNote, uid),
+      save: async (b64n, corrPrompt) => {
+        const nName = saveImageB64(b64n);
+        const nAbs = path.join(MEDIA_DIR, nName);
+        if (cleanHeadline) {
           try {
-            const post = db.prepare("SELECT id FROM posts WHERE user_id = ? AND image_path = ? AND status = 'draft' ORDER BY id DESC LIMIT 1").get(uid, `/media/${imgName}`);
-            if (post) {
-              const fixes = [];
-              if (qa.texto_ok === false) fixes.push('the previous attempt had readable or garbled baked-in text — regenerate with absolutely NO text, letters or numbers anywhere: every sign, screen, label and storefront blank, off or blurred until illegible');
-              if (qa.anatomia_ok === false) fixes.push('the previous attempt had deformed anatomy — natural hands, fingers and faces only; show fewer hands if needed');
-              if (qa.claims_ok === false) fixes.push('the previous attempt showed an invented price, promotion or claim — show only the real product and scene, no prices, no offers, no claim-like elements');
-              if (qa.headline_clear === false) fixes.push('elements intruded into the top headline zone — keep the entire top zone clean, soft and completely empty');
-              if (qa.detalle) fixes.push(`specific defect to fix: ${String(qa.detalle).slice(0, 140)}`);
-              const corrPrompt = `${withStyle(prompt)}\nCORRECTION — the previous version of this image failed quality control: ${fixes.join('; ')}. Regenerate fixing exactly that, keeping the same subject, scene, palette and style.`;
-              const nb64 = await genConceptImage(key, corrPrompt, absRefs, refNote, uid);
-              const nName = saveImageB64(nb64);
-              if (cleanHeadline) {
-                try {
-                  const { execFileSync } = require('child_process');
-                  const nPath = path.join(MEDIA_DIR, nName);
-                  // (Gap 7) base limpia también para la imagen corregida.
-                  try {
-                    const nClean = nName.replace(/(\.[a-z0-9]+)$/i, '-clean$1');
-                    fs.copyFileSync(nPath, path.join(MEDIA_DIR, nClean));
-                    try { db.prepare('INSERT OR IGNORE INTO image_meta (media_path) VALUES (?)').run(`/media/${nClean}`); } catch (e) {}
-                  } catch (e) {}
-                  const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nPath, '--headline', cleanHeadline, '--out', nPath];
-                  if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
-                  cArgs.push('--font', brandFontOf(settings));
-                  execFileSync('python3', cArgs, { timeout: 30000 });
-                } catch (e) { console.error('[qa-correct] composite:', e.message); }
-              }
-              const upd = db.prepare("UPDATE posts SET image_path = ?, image_prompt = ? WHERE id = ? AND status = 'draft'").run(`/media/${nName}`, corrPrompt.slice(0, 4000), post.id);
-              if (upd.changes) {
-                rememberPrompt(`/media/${nName}`, corrPrompt);
-                // (v198-A) La imagen que la auditoría rechazó queda retenida
-                // (copia en media/qa-failed/ + fila con el motivo) en vez de
-                // perderse como huérfana: el rechazo se puede diagnosticar.
-                retainQaFailedFile({ uid, postId: post.id, gate: 'auditoria', reason: qa.detalle || 'falla dura de auditoría QA', absPath: path.join(MEDIA_DIR, imgName) });
-                console.log(`[qa-correct] post ${post.id}: imagen corregida tras QA duro (${fixes.length} correcciones)`);
-                // (v229) FUNDAMENTO — claims_ok BLOQUEANTE: si la imagen
-                // CORREGIDA también inventa datos comerciales, no se
-                // entrega como pieza normal: degrada a foto propia del
-                // cliente (o brand card) con el titular compuesto por
-                // código y queda marcada para revisión humana.
-                if (qa.claims_ok === false) {
-                  try {
-                    const nb64 = fs.readFileSync(path.join(MEDIA_DIR, nName)).toString('base64');
-                    const qa2 = await qaImageB64(nb64, { headline: cleanHeadline, paletteHex: hexes, dnaFacts: qaFactsLine(dna, digestForUser(uid)) }, key);
-                    if (qa2 && qa2.claims_ok === false) {
-                      let photoAbs = null;
-                      try {
-                        // (v237) La foto de la degradación se elige SIN
-                        // issues de calidad primero (una foto marcada
-                        // solo-referencia no va a una brand card).
-                        const a = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY (CASE WHEN album_quality IS NULL OR album_quality = '' OR album_quality = 'ok' THEN 0 ELSE 1 END), created_at DESC LIMIT 1`).get(uid);
-                        if (a && a.file_path) {
-                          const cand = path.join(MEDIA_DIR, path.basename(String(a.file_path)));
-                          if (fs.existsSync(cand)) photoAbs = cand;
-                        }
-                      } catch (e) {}
-                      const prof2 = getProfile(uid) || {};
-                      const cardAbs = brandCardPng({ headline: cleanHeadline || '', bgHex: (hexes && hexes[0]) || '#0A1E33', textHex: '#FFFFFF', business: prof2.business_name || '', logoAbs: null, photoAbs, outDir: MEDIA_DIR });
-                      // (v198-A) La corregida también falló claims: también se retiene.
-                      retainQaFailedFile({ uid, postId: post.id, gate: 'auditoria-claims', reason: (qa2 && qa2.detalle) || 'claims_ok=false tras la corrección', absPath: path.join(MEDIA_DIR, nName) });
-                      db.prepare("UPDATE posts SET image_path = ?, needs_review = 1 WHERE id = ? AND status = 'draft'").run(`/media/${path.basename(cardAbs)}`, post.id);
-                      console.log(`[qa-claims-block] post ${post.id}: claims_ok=false tras la corrección — degradado a ${photoAbs ? 'foto propia del cliente' : 'brand card'} con titular por código + revisión humana`);
-                    }
-                  } catch (e) { console.error('[qa-claims-block]', e.message); }
-                }
-              }
-            }
-          } catch (e) { console.error('[qa-correct]', e.message); }
+            const nClean = nName.replace(/(\.[a-z0-9]+)$/i, '-clean$1');
+            fs.copyFileSync(nAbs, path.join(MEDIA_DIR, nClean));
+            try { db.prepare('INSERT OR IGNORE INTO image_meta (media_path) VALUES (?)').run(`/media/${nClean}`); } catch (e) {}
+            if (resultOut) resultOut.cleanPath = `/media/${nClean}`;
+          } catch (e) { console.error('[qa-gate] base limpia:', e.message); }
         }
-      } catch (e) { console.error('[qa-audit] db:', e.message); }
-    } catch (e) { console.error('[concept-shot] qa:', e.message); }
-  })();
-  try { rememberPrompt(`/media/${imgName}`, withStyle(prompt)); } catch (e) {}
+        try { rememberPrompt(`/media/${nName}`, corrPrompt); } catch (e) {}
+        return { abs: nAbs, pub: `/media/${nName}` };
+      },
+      composite: async (nAbs) => {
+        if (!cleanHeadline) return;
+        try {
+          const { execFileSync } = require('child_process');
+          const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nAbs, '--headline', cleanHeadline, '--out', nAbs];
+          if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
+          // (Lote 7, re-base sobre tipografías v506) El gate es el reemplazo
+          // del reintento viejo: su composite lleva la fuente de la marca
+          // igual que los demás call sites, o el titular regenerado saldría
+          // con la fuente por defecto en vez de la del cliente.
+          try { cArgs.push('--font', brandFontOf(settings)); } catch (e) {}
+          execFileSync('python3', cArgs, { timeout: 30000 });
+        } catch (e) { console.error('[qa-gate] composite:', e.message); }
+      },
+      retain: async (abs, reason) => {
+        try { retainQaFailedFile({ uid, postId: null, gate: 'qa-gate', reason, absPath: abs }); } catch (e) {}
+      },
+    });
+    gateFinalPub = gate.path;
+    gateFinalPrompt = gate.finalPrompt;
+    if (resultOut) resultOut.qaGate = { passed: gate.outcome === 'delivered', attempts: gate.attempts, outcome: gate.outcome, failedChecks: gate.failedChecks, reason: gate.reason };
+    try {
+      db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
+      try { db.exec("ALTER TABLE qa_audit ADD COLUMN image_path TEXT"); } catch (e) { /* ya existe */ }
+      const auditPath = retainQaAuditCopy(imgName) || `/media/${imgName}`;
+      const fq = gate.firstQa;
+      if (!fq) {
+        db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(null, JSON.stringify({ qa_unavailable: true, qa_gate_attempts: gate.attempts, qa_gate_outcome: gate.outcome, qa_gate_final_path: gate.path }), auditPath);
+      } else {
+        const rowQa = { ...fq, qa_gate_attempts: gate.attempts, qa_gate_outcome: gate.outcome, qa_gate_failed_checks: gate.failedChecks, qa_gate_final_path: gate.path };
+        db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaGate.qaGatePassed(fq) ? 1 : 0, JSON.stringify(rowQa).slice(0, 4000), auditPath);
+      }
+      try { console.log(('[qa-gate] outcome=' + gate.outcome + ' attempts=' + gate.attempts + ' ' + JSON.stringify({ first: fq ? { texto: fq.texto_ok, colores: fq.colores_ok, claims: fq.claims_ok, mobile: fq.mobile_ok, marca: fq.brand_ok, anatomia: fq.anatomia_ok, headline_clear: fq.headline_clear } : null, failed: gate.failedChecks, reason: gate.reason })).slice(0, 600)); } catch (e) {}
+    } catch (e) { console.error('[qa-gate] db:', e.message); }
+    if (gate.outcome === 'bandeja') console.log(`[qa-gate] usuario ${uid}: pieza a bandeja tras ${gate.attempts} intentos (${gate.failedChecks.join(',')}) — needs_review en el llamador`);
+  } catch (e) { console.error('[qa-gate]', e.message); throw e; }
+  try { rememberPrompt(gateFinalPub, gateFinalPrompt); } catch (e) {}
   // (v330) POSTY NO SE REPITE: queda registrado si esta imagen nació con
   // el avatar/protagonista del negocio como sujeto (la referencia del
   // CHARACTER LOCK efectivamente viajó y el QA de personaje no la
@@ -16578,9 +16651,9 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   try {
     const avProta = (characterSent && !(resultOut && resultOut.character === 'failed')) ? 1 : 0;
     db.prepare('INSERT OR REPLACE INTO image_meta (media_path, avatar_protagonist) VALUES (?, ?)')
-      .run(`/media/${imgName}`, avProta);
+      .run(gateFinalPub, avProta);
   } catch (e) {}
-  return `/media/${imgName}`;
+  return gateFinalPub;
 }
 
 // generateCarouselSet — (v384 · MODO CARRUSEL aceptado) portada = la
@@ -16629,12 +16702,14 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles, 
   const coverRefs = realPool.slice(0, 2);
   for (let attempt = 0; attempt < 2 && !sceneAbs; attempt++) {
     try {
+      const coverGate = {};
       const p = await conceptShotGenerateQueued({
         uid, idea: { titulo: split.cover, porque: porque || titulo }, tipo,
-        headline: '', refs: coverRefs, apiKey, usedStyles, usedFamilies,
+        headline: '', refs: coverRefs, apiKey, usedStyles, usedFamilies, resultOut: coverGate,
         extraPrompt: attempt ? 'High-impact Instagram cover image: stop the scroll in half a second.' : undefined,
       });
       if (!p) continue;
+      if (coverGate.qaGate && coverGate.qaGate.outcome === 'bandeja') continue; // intento fallido: el 2º intento cambia el prompt; si ambos fallan, sceneAbs null → needsReview (degradación honesta de siempre)
       const abs = absOf(p);
       if (qaScrollStopB64) {
         let b64 = null;
@@ -17084,9 +17159,12 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
       return res.json({ ok: false, error: costs.MSG_REGEN_RATE, diag });
     const { idea = '', tipo = '', headline = '', refs = [], style = '', excludeStyles = [] } = req.body || {};
     const styleOut = {};
-    const imagePath = await conceptShotGenerateQueued({ uid, idea, tipo, headline, refs, style: String(style || '').trim() || null, usedStyles: Array.isArray(excludeStyles) ? excludeStyles.slice() : null, styleOut });
+    const csGate = {};
+    const imagePath = await conceptShotGenerateQueued({ uid, idea, tipo, headline, refs, style: String(style || '').trim() || null, usedStyles: Array.isArray(excludeStyles) ? excludeStyles.slice() : null, styleOut, resultOut: csGate });
+    // (QA gate 2026-10-26) Preview on-demand: en bandeja NO se entrega la imagen fallida ni como preview.
+    if (csGate.qaGate && csGate.qaGate.outcome === 'bandeja') { return res.json({ ok: false, qaGate: csGate.qaGate, error: 'La imagen no pasó la vara de calidad tras 3 intentos — quedó en revisión.' }); }
     console.log(`[concept-shot] generado para usuario ${uid} (tipo=${tipo || '-'}, refs=${(refs || []).length}, estilo=${styleOut.code || '-'})`);
-    res.json({ ok: true, path: imagePath, style: styleOut.code || null, styleName: styleOut.name || null });
+    res.json({ ok: true, path: imagePath, style: styleOut.code || null, styleName: styleOut.name || null, qaGate: csGate.qaGate || null });
   } catch (e) {
     console.error('[concept-shot]', e.message);
     try { logGenError('concept-shot', e); } catch (e2) {}
@@ -17391,7 +17469,7 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
     // (v237) Si la fidelidad cayó al fallback, la imagen final es la
     // foto original con composite: la pieza va a revisión humana.
     const fid = genOut.fidelity || 'n/a';
-    const needRev = fid === 'fallback' ? 1 : (post.needs_review ? 1 : 0);
+    const needRev = (fid === 'fallback' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja')) ? 1 : (post.needs_review ? 1 : 0);
     // Punto de compromiso (6A): el restyle ya se generó y se entrega
     // (incluido el fallback fiel, que reemplaza a la vigente) — descuento atómico.
     if (redoLeftOf(post) !== null && !consumeRedo(uid, postId)) return redoExhausted(res);
@@ -22442,7 +22520,9 @@ const CAMPAIGNS_MOD = (() => { try { return require('./campaigns'); } catch (e) 
 app.get('/api/campaign/current', (req, res) => {
   try {
     const lang = String(req.query.lang || 'es').slice(0, 2) === 'en' ? 'en' : 'es';
-    const c = CAMPAIGNS_MOD ? CAMPAIGNS_MOD.currentCampaign(new Date(), lang) : null;
+    const paisQ = String(req.query.pais || '').toUpperCase();
+    const paisCamp = ['AR', 'UY', 'US'].includes(paisQ) ? paisQ : undefined;
+    const c = CAMPAIGNS_MOD ? CAMPAIGNS_MOD.currentCampaign(new Date(), lang, paisCamp) : null;
     res.set('Cache-Control', 'no-store');
     res.json({ ok: true, campaign: c });
   } catch (e) { res.json({ ok: true, campaign: null }); }
@@ -22529,9 +22609,13 @@ app.get('/api/calendar/upcoming', requireAuth, (req, res) => {
     const p = db.prepare('SELECT category FROM profiles WHERE user_id = ?').get(req.session.userId);
     // (v274 · MODO EN) Una cuenta EN recibe el calendario US, nunca las
     // efemérides argentinas: el idioma guardado de la cuenta manda.
+    // (M108) Para cuentas ES manda el país del negocio (adCountry), no el idioma.
     const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(req.session.userId);
     const days = Math.min(Math.max(Number(req.query.days) || 14, 1), 60);
-    res.json({ ok: true, events: getRelevant(p && p.category, days, u && u.lang) });
+    // (M108) ?pais= explícito gana; si no, EN → US y ES → país del negocio.
+    const paisQ = String(req.query.pais || '').toUpperCase();
+    const paisCal = ['AR', 'UY', 'US'].includes(paisQ) ? paisQ : ((u && u.lang === 'en') ? 'US' : adCountry(req.session.userId));
+    res.json({ ok: true, events: getRelevant(p && p.category, days, u && u.lang, paisCal) });
   } catch (e) { res.json({ ok: false, error: e.message }); }
 });
 
@@ -26078,7 +26162,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v506';
+const BUILD_ID = '20261031-v507';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -26723,6 +26807,13 @@ async function refreshAnalysesSweep(opts = {}) {
         // que una carta nueva equivale a un único push, jamás dos.
         if (sundayWindow && fresh && fresh.letter) {
           try { await push.notifySundayLetter(uid); } catch (e) { /* el aviso nunca frena el barrido */ }
+          // (whatsapp-aprobacion) Carta por WhatsApp con botón «Aprobar mi semana»: solo opt-in, solo si hay
+          // semana aprobable (la misma lógica canónica de la página de la carta); el fallo nunca frena el barrido.
+          try {
+            const waRow = db.prepare(`SELECT created_at FROM account_analysis WHERE user_id = ? ORDER BY id DESC LIMIT 1`).get(uid);
+            const waInfo = waRow ? cartaApproveWeekInfo(uid, waRow.created_at) : null;
+            if (waInfo) await whatsapp.notifySundayLetter(db, uid, { approveUrl: '/aprobar/' + approval.signApproveWeekLink(waInfo.userId, waInfo.weekKey), weekKey: waInfo.weekKey });
+          } catch (e) { /* el aviso nunca frena el barrido */ }
         }
       } catch (e) { summary.errors++; console.error('[analysis-sweep] usuario ' + uid + ':', e.message); }
     }

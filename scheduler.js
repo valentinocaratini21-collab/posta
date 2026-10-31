@@ -172,6 +172,19 @@ async function publishSinglePost(db, post, opts = {}) {
     db.prepare(
       `UPDATE posts SET status = 'published', ig_permalink = ?, ig_media_id = ?, published_at = datetime('now') WHERE id = ?`
     ).run(result.permalink || '', result.mediaId || '', post.id);
+    // (TikTok semanal, Lote 7) El mismo video semanal sale en TikTok SOLO con
+    // opt-in + conexión + auditoría (TIKTOK_AUDITED=1). Best-effort: un fallo
+    // jamás cambia el estado del posteo de Instagram ni tira el scheduler.
+    // Solo videos: la API de publicación de TikTok es video.
+    try {
+      if (!result.demo && !opts.house && post.media_type === 'video') {
+        await require('./tiktok-semanal').publishWeeklyBestEffort(db, {
+          userId: post.user_id, postId: post.id,
+          videoUrl: mediaUrl,
+          title: (post.caption || '').split('\n')[0] || 'Posteo de mi negocio',
+        });
+      }
+    } catch (e) { /* TikTok nunca bloquea una publicación lograda */ }
     // (GAMIFICACIÓN v459) Semana publicada: cuando la semana de este posteo
     // ya no tiene nada pendiente de publicar, cuenta UNA semana (ref por
     // semana, no por pieza). Solo publicación real: nunca demo ni house.

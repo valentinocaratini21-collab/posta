@@ -172,7 +172,15 @@ function checkTriggers(db, userId) {
     const biz = String((prof && prof.business_name) || '');
     if (prof && !/barber/i.test(cat + ' ' + biz) && EPH_GIFT_OK.test(cat)) {
       const { upcomingEphemeris } = require('./ephemeris');
-      const list = upcomingEphemeris(9) || [];
+      // (M108) Espejo de adCountry (server.js): el país del negocio manda
+      // el calendario; sin país UY, el comportamiento es el histórico (AR).
+      let paisPro = 'AR';
+      try {
+        const uu = db.prepare('SELECT plan FROM users WHERE id = ?').get(userId);
+        if (uu && uu.plan && String(uu.plan).toUpperCase().includes('UY')) paisPro = 'UY';
+        else { const stt = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId) || {}; if (stt.country === 'UY' || stt.country === 'UYU') paisPro = 'UY'; }
+      } catch (e) {}
+      const list = upcomingEphemeris(9, paisPro) || [];
       for (const eph of list) {
         const daysLeft = Math.round((new Date(eph.date + 'T12:00:00Z') - Date.now()) / 86400000);
         if (daysLeft < 4 || daysLeft > 9) continue;

@@ -213,7 +213,7 @@ function ajustesView() {
     ${igBody}
     <div id="pzBioSealSlot"></div>
     <div style="font-weight:800;margin:18px 0 8px">${pzIc('music', 16)} TikTok</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>${pzIc('music', 16)} Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>${pzIc('music', 16)} Compartir en TikTok</b>. Y si activás TikTok semanal, tus videos semanales salen solos (cuando TikTok apruebe la auditoría); si no lo activás, Posty nunca publica ahí sin que lo pidas.</p>
     <div id="ttZone"><p class="hint">Cargando…</p></div>
     <div id="ttMsg"></div>
     <div style="font-weight:800;margin:18px 0 8px">⭐ Google · Reseñas</div>
@@ -245,6 +245,14 @@ function ajustesView() {
       <button class="btn btn-ghost" id="btnFailToggle">Cargando...</button>
       <span id="failNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
+    <div style="font-weight:800;margin:18px 0 8px">💬 Tu carta por WhatsApp</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cada domingo a la noche te mando tu carta por WhatsApp con el botón para aprobar tu semana en un toque, sin abrir la app.</p>
+    <div class="field"><label>Tu número de WhatsApp</label><input id="s_waNotify" placeholder="Ej.: 5491123456789" inputmode="tel" maxlength="20" autocomplete="off"><div class="hint">Con código de país (Argentina: 54 9 + tu número). Solo lo uso para mandarte tu carta y avisos de tu semana.</div></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+      <button class="btn btn-ghost" id="btnWaNotifyToggle">Cargando...</button>
+      <span id="waNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div class="hint" id="waNotifyGateHint" style="display:none;margin-top:10px">WhatsApp todavía no está encendido del lado de Posty: podés dejar tu número y tu permiso guardados, y te llega apenas se encienda. Mientras tanto, tu carta llega por notificación y en Tu análisis.</div>
     <div class="hint" id="avisosPushHint" style="display:none;margin-top:14px">${pzIc('phone', 16)} Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar. Cuando Posty te pida permiso para mandar notificaciones, tocá <b>Permitir</b>.</div>
   </div></div>
   <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('palette', 20)} Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
@@ -342,6 +350,41 @@ function ajustesView() {
   <div id="gzAjustesBox"></div>`;
 }
 
+
+// TikTok semanal (Lote 7): fila de opt-in dentro de la zona TikTok.
+// El toggle guarda solo la preferencia; publicar exige conexión +
+// auditoría (TIKTOK_AUDITED=1), y la UI lo dice sin prometer nada.
+function ttSemanalRow(sem, connected) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const on = !!(sem && sem.optin);
+  const aud = !!(sem && sem.audited);
+  const nota = !aud
+    ? (en ? 'Weekly TikTok is not live yet: TikTok\'s audit is still pending. Your preference is saved and videos will start going out on their own once it is approved.'
+           : 'TikTok semanal todavía no está activo: falta la auditoría de TikTok. Tu preferencia queda guardada y los videos empiezan a salir solos cuando se apruebe.')
+    : !connected
+    ? (en ? 'Connect your TikTok so your weekly videos can go out on their own.'
+           : 'Falta conectar tu TikTok para que tus videos semanales salgan solos.')
+    : on
+    ? (en ? 'Your weekly videos go out on TikTok on their own.'
+           : 'Tus videos semanales salen solos en TikTok.')
+    : (en ? 'Your weekly videos do NOT go to TikTok unless you ask.'
+           : 'Tus videos semanales NO salen en TikTok salvo que lo pidas.');
+  const last = (sem && Array.isArray(sem.last) && sem.last.length)
+    ? `<div class="hint" style="margin-top:6px">${(sem.last || []).map(r => `🎵 ${esc(r.status || '')}${r.privacy ? ' · ' + esc(r.privacy) : ''}${r.created_at ? ' · ' + esc(String(r.created_at).slice(0, 10)) : ''}`).join('<br>')}</div>`
+    : '';
+  return `<div class="set-row" style="margin-top:12px"><div><div class="t">🎵 TikTok semanal (opcional)</div>
+    <div class="d">${nota}</div>${last}</div>
+    <button class="btn ${on ? 'btn-danger' : 'btn-primary'} btn-sm" id="btnTtSemanal" style="flex:none">${on ? (en ? 'Turn off weekly TikTok' : 'Desactivar TikTok semanal') : (en ? 'Turn on weekly TikTok' : 'Activar TikTok semanal')}</button></div>`;
+}
+async function ttSemanalToggle() {
+  try {
+    const st = await api.get('/api/tiktok/status');
+    const cur = !!(st && st.semanal && st.semanal.optin);
+    await api.post('/api/tiktok/optin', { opt_in: !cur });
+  } catch (e) {}
+  ttZoneLoad();
+}
+
 // Zona TikTok: estado desde /api/tiktok/status (configurado / conectado).
 async function ttZoneLoad() {
   const zone = $('#ttZone');
@@ -361,6 +404,9 @@ async function ttZoneLoad() {
       <button class="btn btn-primary btn-sm" id="btnTtConn" style="flex:none">Conectar TikTok</button></div>`;
     const bc = $('#btnTtConn');
     if (bc) bc.onclick = () => { location.href = '/api/tiktok/connect'; };
+    zone.innerHTML += ttSemanalRow(st.semanal, false);
+    const bs = $('#btnTtSemanal');
+    if (bs) bs.onclick = ttSemanalToggle;
     return;
   }
   zone.innerHTML = `<div class="set-row"><div><div class="t">Cuenta conectada</div>
@@ -373,6 +419,9 @@ async function ttZoneLoad() {
     try { await api.post('/api/tiktok/disconnect'); } catch (e) {}
     ttZoneLoad();
   };
+  zone.innerHTML += ttSemanalRow(st.semanal, true);
+  const bs2 = $('#btnTtSemanal');
+  if (bs2) bs2.onclick = ttSemanalToggle;
 }
 
 // Zona Google: estado desde /api/google/status (configurado / conectado).
@@ -762,6 +811,31 @@ function bindSettings() {
       const btnL = $('#btnLetterToggle'), btnF = $('#btnFailToggle');
       paintT(btnL, $('#letterNotifyStatus'), letterOn, 'Te aviso el domingo apenas tu carta esté lista.', 'Sin aviso: la carta llega igual — la leés en Tu análisis.');
       paintT(btnF, $('#failNotifyStatus'), failOn, 'Te aviso apenas un posteo no pueda salir.', 'Sin aviso: los fallos los ves al entrar a tu semana.');
+      // --- 💬 WhatsApp: carta del domingo con botón de aprobar (whatsapp-aprobacion) ---
+      // La UI nunca promete envío: si el server no tiene WhatsApp encendido, se avisa y solo se guarda número + permiso.
+      let waOn = !!r.wa_opted_in;
+      const waMasked = r.wa_number_masked || '';
+      const btnWa = $('#btnWaNotifyToggle'), waSt = $('#waNotifyStatus'), waIn = $('#s_waNotify'), waGate = $('#waNotifyGateHint');
+      if (waGate) waGate.style.display = r.wa_available ? 'none' : '';
+      const paintWa = () => paintT(btnWa, waSt, waOn,
+        waMasked ? ('Activado: tu carta llega al ' + waMasked + ' con el botón para aprobar.') : 'Activado: tu carta llega por WhatsApp con el botón para aprobar.',
+        'Sin WhatsApp: tu carta llega por notificación y en Tu análisis.');
+      paintWa();
+      if (btnWa) btnWa.onclick = async () => {
+        btnWa.disabled = true;
+        try {
+          const body = waOn ? { wa_notify_optin: false } : { wa_notify_num: waIn ? waIn.value : '', wa_notify_optin: true };
+          const r2 = await api.post('/api/settings/notify-prefs', body);
+          if (r2 && r2.ok) {
+            waOn = !!r2.wa_opted_in;
+            paintT(btnWa, waSt, waOn,
+              (r2.wa_number_masked || waMasked) ? ('Activado: tu carta llega al ' + (r2.wa_number_masked || waMasked) + ' con el botón para aprobar.') : 'Activado: tu carta llega por WhatsApp con el botón para aprobar.',
+              'Sin WhatsApp: tu carta llega por notificación y en Tu análisis.');
+            if (waIn) waIn.value = '';
+          } else alert((r2 && r2.error) || 'No pude cambiarlo 😅');
+        } catch (e) { alert('No pude cambiarlo 😅'); }
+        btnWa.disabled = false;
+      };
       const paintSum = () => {
         try {
           const el = $('#ajStAvisos');

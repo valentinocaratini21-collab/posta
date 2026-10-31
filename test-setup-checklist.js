@@ -117,6 +117,7 @@ ok(fnSrc.includes('steps to go'), 'título EN: «N steps to go»');
 const factory = new Function(
   'PROFILE', 'ME', 'pwaIsMobile', 'pwaIsInstalled', 'pwaDismissed',
   'pushSupported', 'pushPerm', 'setupChecklistCelebrate',
+  'pzPushRowPending', 'pzPushRowDenied',
   fnSrc + '\nreturn setupChecklistHtml;'
 );
 function run(profile, me, opts) {
@@ -125,7 +126,11 @@ function run(profile, me, opts) {
     profile, me,
     () => false, () => true, () => true,      // PWA: sin fila
     () => false, () => 'granted',             // push: sin fila
-    (n) => counts.push(n)
+    (n) => counts.push(n),
+    // (Lote 7, avisos-telefono) La fila de push ahora pregunta a los
+    // helpers pzPushRowPending/Denied: con push sin fila, ambos false,
+    // igual que daría el helper real con pushSupported() === false.
+    () => false, () => false
   );
   return { html: fn(undefined, opts), counts };
 }
@@ -224,7 +229,7 @@ ok(profSlice.includes('first_week_live: firstWeekLive'), '/api/profile expone fi
 ok(profSlice.includes("status IN ('scheduled', 'published')"), 'la query es la definida: status scheduled/published');
 ok(profSlice.includes('FROM posts WHERE user_id = ?'), 'la query está acotada al usuario de la sesión');
 ok(profSlice.includes('LIMIT 1'), 'la query es existencia (LIMIT 1), costo mínimo');
-ok(serverJs.includes("const BUILD_ID = '20261031-v506';"), 'BUILD_ID bumpeado a 20261031-v506');
+ok(serverJs.includes("const BUILD_ID = '20261031-v507';"), 'BUILD_ID bumpeado a 20261031-v507');
 ok((serverJs.match(/HEADLINE_INFINITIVES/g) || []).length === 3, 'canario HEADLINE_INFINITIVES = 3 ocurrencias, intacto');
 const setMatch = serverJs.match(/const HEADLINE_INFINITIVES = new Set\(\[([^\]]*)\]\)/);
 ok(!!setMatch && setMatch[1].split(',').length === 26, 'el set HEADLINE_INFINITIVES conserva sus 26 infinitivos');

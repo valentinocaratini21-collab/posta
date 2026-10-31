@@ -867,6 +867,25 @@ CREATE TABLE IF NOT EXISTS tiktok_accounts (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`);
+// TikTok semanal opt-in (Lote 7): preferencia + registro de publicaciones
+// automáticas. Sin TIKTOK_AUDITED=1 el camino automático no escribe nada.
+db.exec(`
+CREATE TABLE IF NOT EXISTS tiktok_optin (
+  user_id INTEGER PRIMARY KEY,
+  optin INTEGER DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now'))
+);`);
+db.exec(`
+CREATE TABLE IF NOT EXISTS tiktok_publishes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  post_id INTEGER,
+  tiktok_publish_id TEXT DEFAULT '',
+  status TEXT,
+  privacy TEXT DEFAULT '',
+  error TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);`);
 // Cuentas de Google conectadas (Business Profile): tokens por usuario, espejo
 // de tiktok_accounts. location_title guarda el título de la ficha (nombre del
 // negocio en Google) para mostrarlo en Ajustes sin llamar a la API.
