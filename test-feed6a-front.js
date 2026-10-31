@@ -46,22 +46,22 @@ ok(typeof es.hfWhenChip === 'function' && typeof es.hfAnchorBarHTML === 'functio
 // — Ítem 1: hfWhenChip con now fijado (sábado 2026-10-24 12:00 en BA) —
 const NOW = new Date('2026-10-24T15:00:00.000Z');
 const P = (extra) => Object.assign({ id: 1, status: 'scheduled', media_type: 'image', image_path: '/media/p1.jpg', caption: 'c' }, extra || {});
-ok(es.hfWhenChip(P({ scheduled_at: '2026-10-24T21:30:00.000Z' }), NOW) === 'Hoy · 18:30', `ES hoy: «${es.hfWhenChip(P({ scheduled_at: '2026-10-24T21:30:00.000Z' }), NOW)}»`);
-ok(en.hfWhenChip(P({ scheduled_at: '2026-10-24T21:30:00.000Z' }), NOW) === 'Today · 6:30 PM', `EN today: «${en.hfWhenChip(P({ scheduled_at: '2026-10-24T21:30:00.000Z' }), NOW)}»`);
-ok(es.hfWhenChip(P({ scheduled_at: '2026-10-25T12:00:00.000Z' }), NOW) === 'Mañana · 9:00', `ES mañana: «${es.hfWhenChip(P({ scheduled_at: '2026-10-25T12:00:00.000Z' }), NOW)}»`);
-ok(en.hfWhenChip(P({ scheduled_at: '2026-10-25T12:00:00.000Z' }), NOW) === 'Tomorrow · 9:00 AM', `EN tomorrow: «${en.hfWhenChip(P({ scheduled_at: '2026-10-25T12:00:00.000Z' }), NOW)}»`);
-ok(es.hfWhenChip(P({ scheduled_at: '2026-10-27T21:30:00.000Z' }), NOW) === 'Mar · 18:30', `ES día corto: «${es.hfWhenChip(P({ scheduled_at: '2026-10-27T21:30:00.000Z' }), NOW)}»`);
-ok(en.hfWhenChip(P({ scheduled_at: '2026-10-27T21:30:00.000Z' }), NOW) === 'Tue · 6:30 PM', `EN weekday: «${en.hfWhenChip(P({ scheduled_at: '2026-10-27T21:30:00.000Z' }), NOW)}»`);
+ok(es.hfWhenChip(P({ scheduled_at: '2026-10-24T21:30:00.000Z' }), NOW) === 'Hoy 24/10 · 18:30', `ES hoy: «${es.hfWhenChip(P({ scheduled_at: '2026-10-24T21:30:00.000Z' }), NOW)}»`);
+ok(en.hfWhenChip(P({ scheduled_at: '2026-10-24T21:30:00.000Z' }), NOW) === 'Today 10/24 · 6:30 PM', `EN today: «${en.hfWhenChip(P({ scheduled_at: '2026-10-24T21:30:00.000Z' }), NOW)}»`);
+ok(es.hfWhenChip(P({ scheduled_at: '2026-10-25T12:00:00.000Z' }), NOW) === 'Mañana 25/10 · 9:00', `ES mañana: «${es.hfWhenChip(P({ scheduled_at: '2026-10-25T12:00:00.000Z' }), NOW)}»`);
+ok(en.hfWhenChip(P({ scheduled_at: '2026-10-25T12:00:00.000Z' }), NOW) === 'Tomorrow 10/25 · 9:00 AM', `EN tomorrow: «${en.hfWhenChip(P({ scheduled_at: '2026-10-25T12:00:00.000Z' }), NOW)}»`);
+ok(es.hfWhenChip(P({ scheduled_at: '2026-10-27T21:30:00.000Z' }), NOW) === 'Mar 27/10 · 18:30', `ES día corto: «${es.hfWhenChip(P({ scheduled_at: '2026-10-27T21:30:00.000Z' }), NOW)}»`);
+ok(en.hfWhenChip(P({ scheduled_at: '2026-10-27T21:30:00.000Z' }), NOW) === 'Tue 10/27 · 6:30 PM', `EN weekday: «${en.hfWhenChip(P({ scheduled_at: '2026-10-27T21:30:00.000Z' }), NOW)}»`);
 ok(es.hfWhenChip(P({ scheduled_at: '' }), NOW) === '' && es.hfWhenChip(P({ scheduled_at: null }), NOW) === '' && es.hfWhenChip(P({ scheduled_at: 'basura' }), NOW) === '', 'sin fecha real o inválida: sin chapita');
 
 // — Ítem 1: la tile (con el now real del sistema, fechas relativas a hoy en BA) —
 const todayBA = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const todayIso = todayBA + 'T21:30:00.000Z'; // 18:30 BA de hoy
 const tileToday = es.homeTileHTML({ kind: 'post', post: P({ id: 21, status: 'scheduled', scheduled_at: todayIso }), day: todayBA, isNew: false }, 0);
-ok(tileToday.includes('hf-chip') && tileToday.includes('🕐 Hoy · 18:30'), 'tile de hoy: chapita «Hoy · 18:30»');
+ok(tileToday.includes('hf-chip') && /🕐 Hoy \d{1,2}\/\d{1,2} · 18:30/.test(tileToday), 'tile de hoy: chapita día+fecha+hora');
 ok(!tileToday.includes('NUEVO') && !tileToday.includes('hf-new'), 'la píldora NUEVO ya no existe en la tile');
 const tileDraftFecha = es.homeTileHTML({ kind: 'post', post: P({ id: 22, status: 'draft', scheduled_at: todayIso }), day: todayBA, isNew: true }, 1);
-ok(tileDraftFecha.includes('🕐 Hoy · 18:30'), 'borrador CON fecha: también lleva su chapita');
+ok(/🕐 Hoy \d{1,2}\/\d{1,2} · 18:30/.test(tileDraftFecha), 'borrador CON fecha: también lleva su chapita día+fecha+hora');
 ok(!tileDraftFecha.includes('NUEVO'), 'borrador: sin NUEVO aunque venga marcado isNew');
 const tileDraftSin = es.homeTileHTML({ kind: 'post', post: P({ id: 23, status: 'draft', scheduled_at: null }), day: todayBA, isNew: true }, 2);
 ok(!tileDraftSin.includes('hf-chip'), 'borrador SIN fecha: sin chapita (declarado)');

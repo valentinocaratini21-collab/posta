@@ -3859,3 +3859,14 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
   .hf-racha{color:#FEC14D}
   .hf-tile.hf-tile-despegue{box-shadow:0 0 16px rgba(254,193,77,.6)}
 }
+
+/* LOTE 1 — flecha atrás + borde borrador en grilla fp + línea próximo análisis */
+.pz-back{width:44px;height:44px;border:none;border-radius:50%;background:rgba(255,255,255,.96);color:#0A1E33;font-size:22px;line-height:1;box-shadow:0 2px 10px rgba(10,30,51,.28);cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation;font-family:inherit}
+.pz-back:active{transform:scale(.96)}
+.pz-back-fixed{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:100}
+.pz-back-mtop{flex:none;margin-left:-8px}
+.pz-back-desktop{display:none}
+@media(min-width:761px){ .pz-back-desktop{display:flex} }
+.fp-tile.fp-tile-draft{outline:2px dashed #2793C8;outline-offset:-2px}
+.ana-next{font-size:12px;font-weight:700;color:var(--cel);margin:2px 0 0}
+.apv-more{margin-top:10px}

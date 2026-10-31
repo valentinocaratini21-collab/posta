@@ -11,7 +11,9 @@
 (function () {
   try {
     var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone;
-    if (!standalone) return;
+    var nativeApp = false;
+    try { nativeApp = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()); } catch (e) {}
+    if (!standalone && !nativeApp) return;
     var h = location.hash || '';
     if (h.indexOf('#/app') === 0 || h === '#/login' || h === '#/registro' || h.indexOf('#/reset') === 0 || h.indexOf('#/auth/callback') === 0) return;
     // (v469) Click en el logo de auth: no redirigir a la app en esta carga.
@@ -20,7 +22,7 @@
     // intención queda puesta y se honra en cuanto app.js se actualiza.
     try { if (sessionStorage.getItem('posta_ver_web') === '1') return; } catch (e) {}
     var w = Math.min(window.innerWidth || 999, (window.screen && screen.width) || 999);
-    location.replace('/' + (w <= 820 ? '#/app/inicio' : '#/app/schedule'));
+    location.replace('/' + (nativeApp ? '#/app/inicio' : (w <= 820 ? '#/app/inicio' : '#/app/schedule')));
   } catch (e) {}
 })();
 </script>
@@ -78,7 +80,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261047">
+<link rel="stylesheet" href="/styles.css?v=20261048">
 <link rel="stylesheet" href="/gj.css?v=3">
 <script type="application/ld+json">
 {
@@ -312,7 +314,7 @@
 </style>
 <script>setTimeout(function(){var b=document.getElementById('posty-boot');if(b)b.remove();},6000);</script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=324"></script>
+<script src="/app.js?v=325"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */

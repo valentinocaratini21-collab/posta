@@ -239,6 +239,27 @@ function BB_SHELL_ON() {
   return !!(typeof ME !== 'undefined' && ME && ME.bambooty_shell);
 }
 function bbGo(hash) { if (location.hash !== hash) location.hash = hash; else if (typeof render === 'function') render(); }
+// LOTE 1 · ítem 5: flecha atrás arriba a la izquierda en todas las pantallas.
+// Respeta el historial; sin historial, vuelve a Inicio. En la home no se
+// muestra: ahí no hay adónde volver.
+function pzGoBack() {
+  try {
+    if (window.history && window.history.length > 1) { window.history.back(); return; }
+  } catch (e) {}
+  bbGo('#/app/inicio');
+}
+function pzBackHTML(tab) {
+  if (tab === 'inicio') return '';
+  return `<button type="button" class="pz-back pz-back-fixed" onclick="pzGoBack()" aria-label="Volver">←</button>`;
+}
+function pzBackMtopHTML(tab) {
+  if (tab === 'inicio') return '';
+  return `<button type="button" class="pz-back pz-back-mtop" onclick="pzGoBack()" aria-label="Volver">←</button>`;
+}
+function pzBackDesktopHTML(tab) {
+  if (tab === 'inicio') return '';
+  return `<button type="button" class="pz-back pz-back-fixed pz-back-desktop" onclick="pzGoBack()" aria-label="Volver">←</button>`;
+}
 function bbHace(ts) {
   const s = Math.max(0, (Date.now() - ts) / 1000);
   if (s < 90) return 'recién';
@@ -290,6 +311,7 @@ function bbShell(tab, content) {
   const n = (BB.estado && BB.estado.bandeja_count) || 0;
   const ic = {
     oficina: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
+    jardin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
     bandeja: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-5l2-7z"/></svg>',
     negocio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M2.5 6.5 4 3h16l1.5 3.5a3.2 3.2 0 0 1-6.1 1.4 3.4 3.4 0 0 1-6.8 0 3.2 3.2 0 0 1-6.1-1.4z"/><path d="M9.5 20v-6h5v6"/></svg>',
     ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></svg>',
@@ -299,9 +321,10 @@ function bbShell(tab, content) {
   };
   const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
   return `<div class="bb-app">
+    ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
     <nav class="bb-bar">
-      ${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('semana', '#/app/schedule', gzT('Semana', 'Week'))}${tabBtn('analisis', '#/app/analisis', gzT('Análisis', 'Analysis'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}
+      ${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Jardín', 'Garden'))}${tabBtn('analisis', '#/app/analisis', gzT('Análisis', 'Analysis'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}
     </nav>
   </div>`;
 }
@@ -866,6 +889,7 @@ function mxTabKey(tab) {
   if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat') return tab;
   if (tab === 'inicio') return 'inicio';
   if (tab === 'schedule' || tab === 'post') return 'semana';
+  if (tab === 'jardin-posty') return 'jardin';
   if (tab === 'analisis') return 'analisis';
   return '';
 }
@@ -1159,7 +1183,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261031-v492'; // SEMANA-DOS-IDIOMAS:START — chunk-ajustes cambia (toggle dos idiomas); el ?v= viejo congelaba el chunk // SEMANA-DOS-IDIOMAS:END // (pase-app-gesty) bump: chunk-ajustes cambia (placeholder gzAjustesBox); el ?v= viejo congelaba el chunk
+const CHUNK_V = '20261031-v499'; // (lote1-ajustes) bump: chunk-ajustes cambia (sin Meta keys + reorden secciones)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -4353,6 +4377,14 @@ function pwaIsInstalled() {
 function pwaIsStandalone() {
   try { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone; } catch (e) { return false; }
 }
+// LOTE 1 · ítem 1: la app empaquetada (Capacitor) se comporta como la PWA
+// instalada: abrirla nunca muestra la landing de marketing. En Capacitor
+// pwaIsStandalone() da falso (no es display-mode standalone), por eso el
+// redirect vive acá y en el boot script de index.html. La web pública no
+// cambia: IS_NATIVE es falso en el navegador.
+function pzAppNativa() {
+  try { return pwaIsStandalone() || (typeof IS_NATIVE !== 'undefined' && IS_NATIVE); } catch (e) { return false; }
+}
 function pwaIsIos() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 }
@@ -4786,15 +4818,16 @@ function refreshSetupChecklist() {
 function mzIsMobile() {
   try { return !!(window.matchMedia && window.matchMedia('(max-width: 820px)').matches); } catch (e) { return false; }
 }
-function mzHomeHash() { return '#/app/inicio'; } // POSTY SOLO // (v331 addendum 22/10) decisión de Valentino: la home es el feed literal EN TODOS los tamaños — el aterrizaje por defecto es Inicio también en desktop; la Agenda queda a un toque (tab Semana).
+function mzHomeHash() { return '#/app/inicio'; } // POSTY SOLO // (v331 addendum 22/10) decisión de Valentino: la home es el feed literal EN TODOS los tamaños — el aterrizaje por defecto es Inicio también en desktop; la Agenda queda a un toque (tab Jardín).
 function mzTabsHTML(tab) {
   if (tab === 'chat') return ''; // el chat es pantalla completa con su input fijo: sin pestañas
   const on = tab === 'inicio' ? 'inicio'
     : (tab === 'schedule' || tab === 'post') ? 'semana'
+    : tab === 'jardin-posty' ? 'jardin'
     : tab === 'analisis' ? 'analisis'
     : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('posty'), 'Inicio')}${t('semana', 'schedule', pzIc('calendar'), 'Semana')}${t('analisis', 'analisis', pzIc('stems'), 'Análisis')}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('posty'), 'Inicio')}${t('jardin', 'jardin-posty', pzIc('sprout'), 'Jardín')}${t('analisis', 'analisis', pzIc('stems'), 'Análisis')}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>`;
 }
 
 function appShell(tab, content) {
@@ -4806,6 +4839,7 @@ function appShell(tab, content) {
   // demás tabs el comportamiento es el de siempre.
   return `
   <div class="mtop">
+    ${pzBackMtopHTML(tab)}
     <button class="mtop-burger" id="mtopBurger" aria-label="Abrir menú">≡</button>
   </div>
   <div class="drawer-ov" id="drawerOv" hidden></div>
@@ -4816,7 +4850,7 @@ function appShell(tab, content) {
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('posty')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
-    <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">${pzIc('calendar')}</span>Semana<span class="sched-count" id="schedCount" style="display:none"></span></button>
+    <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('sprout')}</span>Jardín</button>
     <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('stems')}</span>Análisis</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
@@ -4824,6 +4858,7 @@ function appShell(tab, content) {
   </aside>
   ${(tab === 'chat' || tab === 'inicio' || tab === 'schedule') ? '' : setupChecklistHtml(undefined)}
   <div class="app-shell">
+    ${pzBackDesktopHTML(tab)}
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>
   ${mzTabsHTML(tab)}`;
@@ -9827,7 +9862,6 @@ function feedPreviewHTML(all, tz, prof) {
   const REEL_SVG = '<svg class="fp-reel" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
   // (Frente 3b) Glifo de carrusel (capas), espejo del de la home (HOME_CAR_SVG).
   const CAR_SVG = '<svg class="fp-reel" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M8.5 3.5h10A2 2 0 0 1 20.5 5.5v10a2 2 0 0 1-2 2H17v-11a1.5 1.5 0 0 0-1.5-1.5H8.5v-1.5z" opacity=".92"/><rect x="3.5" y="6.5" width="13" height="13" rx="2"/></svg>';
-  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   const grid = parts.map((t, i) => {
     const p = t.p;
     const isV = String(p.media_type || '') === 'video';
@@ -9844,10 +9878,11 @@ function feedPreviewHTML(all, tz, prof) {
         try { dow = dObj.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }).replace('.', ''); } catch (e) {}
         when = `${dow} ${dObj.getUTCDate()} · ${schedMiniTime(p)}`;
       }
-      // Única marca permitida (v223): pastillita mínima abajo a la
-      // izquierda — fecha corta si ya está programado, "borrador" si no.
-      const pill = sched ? (dObj ? `${dObj.getUTCDate()} ${MESES[dObj.getUTCMonth()]}` : 'programado') : 'borrador';
-      return `<button type="button" class="fp-tile up${extra}" data-feed-day="${t.ymd}" data-post-id="${esc(String(p.id))}" title="${esc((sched ? 'Programado: ' : 'Borrador: ') + when)}">${media}<span class="fp-pill">${esc(pill)}</span>${reel}</button>`;
+      // (LOTE 1 · pill Borrador + día+fecha+hora) Sin palabra «borrador»:
+      // el borrador lleva solo el borde punteado; el programado muestra
+      // día+fecha+hora real (la misma chapita que la grilla de Inicio).
+      const pill = sched ? hfWhenChip(p) : '';
+      return `<button type="button" class="fp-tile up${extra}${sched ? '' : ' fp-tile-draft'}" data-feed-day="${t.ymd}" data-post-id="${esc(String(p.id))}" title="${esc((sched ? 'Programado: ' : 'Borrador: ') + when)}">${media}${pill ? `<span class="fp-pill">${esc(pill)}</span>` : ''}${reel}</button>`;
     }
     const lb = p.image_path ? ` data-lightbox="${esc(p.image_path)}" data-video="${isV ? '1' : '0'}" data-cap="${esc(p.caption || '')}" data-tags="${esc(p.hashtags || '')}"` : '';
     return `<button type="button" class="fp-tile pub${extra}" data-post-id="${esc(String(p.id))}"${lb}>${media}${reel}</button>`;
@@ -14309,14 +14344,14 @@ async function render() {
   const hash = location.hash || '#/';
   const [path] = hash.split('?');
 
-  // 📱 App instalada (standalone): NUNCA landing — el redirect va ANTES de la
+  // 📱 App instalada (standalone) o empaquetada (Capacitor): NUNCA landing — el redirect va ANTES de la
   // rama de anclas porque iOS suele relanzar la web app en la última URL
   // (ancla incluida) y la landing se comía el ingreso (reporte 2026-10-20:
   // Valentino abría su app y caía en marketing, sin sesión y sin login a la
   // vista). Va directo a la home de la app; sin sesión, la ruta /app rebota
   // sola al login. Auth y reset quedan afuera: son destinos válidos.
   try {
-    if (pwaIsStandalone() && !path.startsWith('#/app') && path !== '#/login' && path !== '#/registro' && !path.startsWith('#/reset') && path !== '#/auth/callback') {
+    if (pzAppNativa() && !path.startsWith('#/app') && path !== '#/login' && path !== '#/registro' && !path.startsWith('#/reset') && path !== '#/auth/callback') {
       // (v469) Click en el logo de auth con sesión cerrada: el usuario pidió
       // VER el website. La intención es one-shot (sessionStorage, la consume
       // esta rama): esta carga NO redirige a la app; la próxima apertura de
@@ -14475,9 +14510,9 @@ async function render() {
     return;
   }
   if (path === '#/' || path === '') {
-    // App instalada: se comporta como app, no como web. Va directo a la semana
+    // App instalada o empaquetada: se comporta como app, no como web. Va directo a la semana
     // (o al login si no hay sesión) en vez de la landing de marketing.
-    if (pwaIsStandalone()) { if (PZ_VER_WEB_ONCE) { PZ_VER_WEB_ONCE = false; } else { location.hash = mzHomeHash(); return; } }
+    if (pzAppNativa()) { if (PZ_VER_WEB_ONCE) { PZ_VER_WEB_ONCE = false; } else { location.hash = mzHomeHash(); return; } }
     // Logueado en la web (v292): rebota a SU pantalla con la MISMA regla que
     // tras el login — postAuthLanding es la única fuente de verdad del
     // destino (onboarding si falta el negocio, plan elegido, return-to, o la
@@ -14512,8 +14547,8 @@ async function render() {
   const postId = decodeURIComponent(path.split('/')[3] || '').trim();
   // (v334) Sin pestaña explícita se abre Inicio — el feed literal — en
   // TODOS los tamaños (decisión de Valentino 22/10, reafirmada 23/10:
-  // "no más calendario" como pantalla de entrada). La Agenda queda a un
-  // toque (tab Semana) como vista de planificación. El chat sigue vivo
+  // "no más calendario" como pantalla de entrada). La Agenda (schedule)
+  // sigue como vista sin tab propio. El chat sigue vivo
   // en #/app/chat como escape hatch para retoques puntuales.
   let tab = tabRaw || 'inicio';
   // (PORT MOCK v24) Estado de oficina disponible para la tabbar por agente (cacheado; sin refetch si ya está).
@@ -15597,20 +15632,17 @@ function hfWhenChip(post, now) {
       : d.toLocaleTimeString('es-AR', Object.assign({ hour: 'numeric', minute: '2-digit', hour12: false }, zo));
     if (!en) hh = hh.replace(/^0(\d:)/, '$1'); // es-AR rellena «09:00»: la chapita va «9:00», como el ejemplo del dueño
     if (!hh) return '';
-    if (tKey === todayKey) return `${en ? 'Today' : 'Hoy'} · ${hh}`;
-    if (tKey === tomKey) return `${en ? 'Tomorrow' : 'Mañana'} · ${hh}`;
-    // (6 mejoras · ítem 3, adaptado v496) Programado en 2-6 días: el día
-    // corto cede al relativo en la zona de la cuenta («en 2 días» /
-    // «in 2 days» + la hora real). Solo programados; borradores y
-    // fuera de rango siguen con el día corto de siempre.
-    if (String(post && post.status || '') === 'scheduled' && typeof pzWhenRelDay === 'function') {
-      const rel = pzWhenRelDay(d, tz, en);
-      if (rel) return `${rel} · ${hh}`;
-    }
+    // (LOTE 1 · ítem 7 + pill Borrador) Cada posteo muestra día + fecha +
+    // hora real: «Hoy 31/10 · 18:00» / «sáb 1/11 · 18:00». Sin scheduled_at
+    // no hay chapita (nunca se inventa una fecha). pzWhenRelDay queda sin
+    // uso acá (sigue definido y testeado).
+    const dt = d.toLocaleDateString(en ? 'en-US' : 'es-AR', Object.assign({ day: 'numeric', month: 'numeric' }, zo));
+    if (tKey === todayKey) return `${en ? 'Today' : 'Hoy'} ${dt} · ${hh}`;
+    if (tKey === tomKey) return `${en ? 'Tomorrow' : 'Mañana'} ${dt} · ${hh}`;
     let wd = d.toLocaleDateString(loc, Object.assign({ weekday: 'short' }, zo)).replace(/\./g, '');
     if (!wd) return '';
     wd = wd.charAt(0).toUpperCase() + wd.slice(1);
-    return `${wd} · ${hh}`;
+    return `${wd} ${dt} · ${hh}`;
   } catch (e) { return ''; }
 }
 // (Tanda feed 6A · ítem 3) Rehaces que le quedan a un posteo: null si el
@@ -16060,10 +16092,9 @@ function homeTileHTML(t, i) {
   // (Hoy/Mañana/día corto + hora), en la misma posición y familia
   // visual de la chapita 🕐 de siempre. Vale para draft Y scheduled
   // con scheduled_at real; sin fecha, sin chapita. Publicados: ninguna.
-  // (6 mejoras · ítem 2, adaptado v496) Borrador a simple vista: etiqueta
-  // «Borrador» (familia de chapitas, como la burbuja y «Recién
-  // publicado»); el programado conserva solo su burbuja de hora.
-  const draftChip = p.status === 'draft' ? `<span class="pz-draft-chip">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Draft' : 'Borrador'}</span>` : '';
+  // (LOTE 1 · pill Borrador) Sin palabra «Borrador»: el borrador se marca
+  // solo con el borde punteado (hf-tile-draft) y su chapita de día+fecha+
+  // hora; la palabra tapaba el título en la grilla.
   // (Ítem 17 · ítem 2 y 6) Marcas de la grilla (las pone inicioView
   // sobre la tile): despegue (alcance >= 2x mediana real) y próximo
   // programado (marco dorado). Sin marca, la tile queda intacta.
@@ -16107,7 +16138,7 @@ function homeTileHTML(t, i) {
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${draftChip}${glyph}${despChip}</span>`;
+  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}${despChip}</span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -19854,8 +19885,27 @@ async function approvalPostView(id) {
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
     ${actions}${draftActions}
+    ${apvMoreHTML(p, st, canAct, isDraft)}
     ${hfAskChangeBtnHTML(p)}
   </div>`;
+}
+// LOTE 1 · ítem 3: menú completo en el detalle. Reusa handlers vigentes:
+// Frenar = pcHold (vuelve a borrador), Eliminar = DELETE con confirmación,
+// Rehacer = hfRedoPost (vale draft y programado), No me gusta =
+// pcDislikeOpen (3 ideas). Pausar, en este producto, ES Frenar: el posteo
+// frenado no sale y se re-acepta cuando quieran; el servidor no tiene una
+// pausa distinta para un posteo. Solo en posteos con algo que decidir
+// (programado pendiente/aprobado o borrador); el publicado no se toca.
+function apvMoreHTML(p, st, canAct, isDraft) {
+  if (!canAct && !isDraft) return '';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const id = esc(String(p.id));
+  let b = '';
+  if (st === 'scheduled') b += `<button class="btn btn-soft" id="apvHold" data-apvid="${id}">⏸ ${en ? 'Hold' : 'Frenar'}</button>`;
+  b += `<button class="btn btn-soft" id="apvDelete" data-apvid="${id}">🗑️ ${en ? 'Delete' : 'Eliminar'}</button>`;
+  b += `<button class="btn btn-soft" id="apvRedo" data-apvid="${id}">↻ ${en ? 'Redo' : 'Rehacer'}</button>`;
+  b += `<button class="btn btn-soft" id="apvDislike" data-apvid="${id}">👎 ${en ? "I don't like it" : 'No me gusta'}</button>`;
+  return `<div class="apv-actions apv-more" id="apvMore">${b}</div>`;
 }
 function bindApprovalPost() {
   const rt = document.getElementById('apvRetry');
@@ -19946,6 +19996,24 @@ function bindApprovalPost() {
   // a la acción, como en la Agenda).
   const apm = document.querySelector('.apv-media [data-lightbox]');
   if (apm) apm.onclick = () => lbOpenFrom(apm);
+  // LOTE 1 · ítem 3: cableado del menú completo.
+  const apvHd = document.getElementById('apvHold');
+  if (apvHd) apvHd.onclick = () => { try { pcHold(apvHd.dataset.apvid); } catch (e) {} };
+  const apvDl = document.getElementById('apvDelete');
+  if (apvDl) apvDl.onclick = async () => {
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    if (!window.confirm(en ? 'Delete this post permanently?' : '¿Eliminar este posteo para siempre?')) return;
+    apvDl.disabled = true;
+    try {
+      await api.del('/api/posts/' + encodeURIComponent(apvDl.dataset.apvid));
+      toast(en ? '🗑️ Deleted' : '🗑️ Eliminado');
+      location.hash = '#/app/inicio';
+    } catch (e) { toast('😅 ' + esc((e && e.message) || (en ? 'Could not delete' : 'No se pudo eliminar'))); apvDl.disabled = false; }
+  };
+  const apvRd = document.getElementById('apvRedo');
+  if (apvRd) apvRd.onclick = () => { try { hfRedoPost(apvRd.dataset.apvid); } catch (e) {} };
+  const apvDk = document.getElementById('apvDislike');
+  if (apvDk) apvDk.onclick = () => { try { pcDislikeOpen(apvDk.dataset.apvid, apvDk); } catch (e) {} };
 }
 /* ============================================================
    FRENTE 3 · SUMA 3 (v357+): COMPORTAMIENTO DEL FEED

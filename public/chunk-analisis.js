@@ -176,6 +176,40 @@ function anaVerdict(a, stage, birth) {
   return parts.join(' ');
 }
 
+/* ---------- próximo análisis (LOTE 1 · ítem 4) ---------- */
+// El sweep real: domingo 20:00–22:59 en la zona de la cuenta (userTz,
+// default Buenos Aires); en la práctica, la carta de las 21:00. El próximo
+// es el domingo cuya ventana no pasó todavía; si la carta de este domingo
+// ya existe (anti-duplicado del sweep: creada en los últimos 3 días), el
+// siguiente. Nunca se inventa una fecha: sin análisis real no hay línea.
+// nowOpt solo para tests (fecha fija); en vivo usa la hora real.
+function anaProximoAnalisisHTML(a, nowOpt) {
+  try {
+    const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || undefined;
+    const zo = tz ? { timeZone: tz } : {};
+    const parts = (d) => {
+      const o = {};
+      new Intl.DateTimeFormat('en-US', Object.assign({ weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false }, zo)).formatToParts(d).forEach((p) => { o[p.type] = p.value; });
+      return o;
+    };
+    const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const now = nowOpt ? new Date(nowOpt) : new Date();
+    const np = parts(now);
+    let hh = Number(np.hour); if (hh === 24) hh = 0;
+    let off = (7 - WD.indexOf(np.weekday)) % 7;
+    if (WD.indexOf(np.weekday) === 0 && hh > 22) off = 7; // domingo pasada la ventana
+    let cand = new Date(now.getTime() + off * 86400000);
+    if (a && a.created_at) {
+      const cp = parts(cand);
+      const ap = parts(new Date(a.created_at));
+      if (ap.year === cp.year && ap.month === cp.month && ap.day === cp.day) cand = new Date(cand.getTime() + 7 * 86400000);
+    }
+    const en = anaLang === 'en';
+    const fecha = cand.toLocaleDateString(en ? 'en-US' : 'es-AR', Object.assign({ weekday: 'long', day: 'numeric', month: 'long' }, zo));
+    return en ? 'Next analysis: ' + fecha + ' at night' : 'Próximo análisis: ' + fecha + ' a la noche';
+  } catch (e) { return ''; }
+}
+
 function anaDateLine(a) {
   let fecha = '';
   try {
@@ -817,6 +851,7 @@ function anaCartaHTML(d) {
   const stage = birth ? 'starter' : anaStage(a);
   const bizLine = [ctx.biz, ctx.handle ? '@' + ctx.handle : ''].filter(Boolean).join(' · ');
   const dateLine = anaDateLine(a);
+  const nextLine = (!birth && a && !anaPastMode) ? anaProximoAnalisisHTML(a) : '';
   const carta = anaHasLetter(a);
   const title = carta && a.letter.title ? a.letter.title : anaT('Tu análisis', 'Your analysis');
   const intro = !a
@@ -830,6 +865,7 @@ function anaCartaHTML(d) {
       <h3 class="ana-title">${esc(title)}</h3>
       ${bizLine ? `<p class="ana-biz">${esc(bizLine)}</p>` : ''}
       ${dateLine ? `<p class="ana-date">${esc(dateLine)}</p>` : ''}
+      ${nextLine ? `<p class="ana-next">${esc(nextLine)}</p>` : ''}
       ${carta ? '' : `<p class="ana-intro">${intro}</p>`}
     </div>`;
   // (2026-10-25) APERTURA: la explicación de cómo se armó el plan — el

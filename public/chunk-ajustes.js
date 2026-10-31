@@ -177,23 +177,6 @@ function ajustesView() {
     <div id="gustosZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='conex' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('plug', 20)} Conexiones</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div style="font-weight:800;margin-bottom:8px">📸 Instagram</div>
-    ${igBody}
-    <div id="pzBioSealSlot"></div>
-    <div style="font-weight:800;margin:18px 0 8px">🎵 TikTok</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>🎵 Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
-    <div id="ttZone"><p class="hint">Cargando…</p></div>
-    <div id="ttMsg"></div>
-    <div style="font-weight:800;margin:18px 0 8px">⭐ Google · Reseñas</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
-    <div id="ggZone"><p class="hint">Cargando…</p></div>
-    <div id="ggMsg"></div>
-    <div style="font-weight:800;margin:18px 0 8px">🛍️ Tiendanube</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu tienda, conectada: Posty lee tu catálogo, tu stock y tus ventas para postear solo lo que tenés, con tu producto más vendido al frente. Solo lee: nunca toca precios ni stock.</p>
-    <div id="tnZone"><p class="hint">Cargando…</p></div>
-    <div id="tnMsg"></div>
-  </div></div>
   <div class="card ajsec${openSec==='auto' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('bolt', 20)} Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">⏸ Pausar todo</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">¿Vacaciones o una semana sin publicar? Frená todo con un toque: lo programado vuelve a borrador y nada sale hasta que reanudes. Tu semana y tus borradores quedan guardados, tal como están.</p>
@@ -222,6 +205,28 @@ function ajustesView() {
     </div>
     </div>
   </div></div>
+  <div class="card ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('card', 20)} Mi plan</h3>${stPlan}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
+    <p style="font-size:12.5px;color:var(--mut);margin-top:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</p>
+    <div id="founderZone"></div>
+  </div></div>
+  <div class="card ajsec${openSec==='conex' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('plug', 20)} Conexiones</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div style="font-weight:800;margin-bottom:8px">📸 Instagram</div>
+    ${igBody}
+    <div id="pzBioSealSlot"></div>
+    <div style="font-weight:800;margin:18px 0 8px">🎵 TikTok</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>🎵 Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
+    <div id="ttZone"><p class="hint">Cargando…</p></div>
+    <div id="ttMsg"></div>
+    <div style="font-weight:800;margin:18px 0 8px">⭐ Google · Reseñas</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
+    <div id="ggZone"><p class="hint">Cargando…</p></div>
+    <div id="ggMsg"></div>
+    <div style="font-weight:800;margin:18px 0 8px">🛍️ Tiendanube</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu tienda, conectada: Posty lee tu catálogo, tu stock y tus ventas para postear solo lo que tenés, con tu producto más vendido al frente. Solo lee: nunca toca precios ni stock.</p>
+    <div id="tnZone"><p class="hint">Cargando…</p></div>
+    <div id="tnMsg"></div>
+  </div></div>
   <div class="card ajsec${openSec==='avisos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('bell', 20)} Avisos</h3><span class="ajsec-st" id="ajStAvisos"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:14px">Posty te avisa por notificación en tu celu — solo cuando importa, nada de ruido.</p>
     <div style="font-weight:800;margin-bottom:8px">Aviso antes de publicar</div>
@@ -243,11 +248,6 @@ function ajustesView() {
       <span id="failNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     <div class="hint" id="avisosPushHint" style="display:none;margin-top:14px">📱 Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar. Cuando Posty te pida permiso para mandar notificaciones, tocá <b>Permitir</b>.</div>
-  </div></div>
-  <div class="card ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('card', 20)} Mi plan</h3>${stPlan}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
-    <p style="font-size:12.5px;color:var(--mut);margin-top:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</p>
-    <div id="founderZone"></div>
   </div></div>
   <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('palette', 20)} Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
@@ -327,16 +327,8 @@ function ajustesView() {
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>`}
   <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
-    <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
-    <div class="int-block"><h4>📸 App de Meta</h4>
-      <div class="row2">
-        <div class="field"><label>Meta App ID</label><input id="s_appid" value="${esc(s.meta_app_id)}" placeholder="123456789">
-          <p class="hint">El número identificador de tu app en Meta.</p></div>
-        <div class="field"><label>Meta App Secret</label><input id="s_appsecret" type="password" value="${esc(s.meta_app_secret)}" placeholder="••••••">
-          <p class="hint">La clave secreta de tu app. Nunca la compartas.</p></div>
-      </div>
-      <p class="hint">Los encontrás en <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com</a> → tu app → Configuración.</p>
-      <div class="field" style="margin-top:10px"><button class="btn btn-ghost" id="btnTestMeta" type="button">Probar conexión</button> <span id="metaTestMsg" style="font-size:11.5px"></span></div>
+    <p class="hint" style="margin:12px 0">Solo si necesitás pegar la dirección de embed que Meta genera para tu Instagram. La mayoría no tiene que tocar nada acá.</p>
+    <div class="int-block"><h4>Instagram Embed URL</h4>
       <div class="field"><label>Instagram Embed URL</label>
         <input id="s_igembed" value="${esc(s.ig_embed_url)}" placeholder="https://www.instagram.com/oauth/authorize?...">
         <p class="hint">La dirección que Meta genera para conectar tu Instagram. Se copia del dashboard de Meta: caso de uso Instagram → "API setup with Instagram login".</p></div>
@@ -2203,23 +2195,9 @@ function bindSettings() {
   };
   $('#btnSaveSettings').onclick = async () => {
     await api.put('/api/settings', {
-      meta_app_id: $('#s_appid').value,
-      meta_app_secret: $('#s_appsecret').value, ig_embed_url: $('#s_igembed').value,
+      ig_embed_url: $('#s_igembed').value,
     });
     $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
-  };
-  const btm = $('#btnTestMeta');
-  if (btm) btm.onclick = async () => {
-    const msg = $('#metaTestMsg');
-    const appId = $('#s_appid').value.trim(), appSecret = $('#s_appsecret').value.trim();
-    if (!appId || !appSecret) { msg.innerHTML = '<span style="color:var(--red)">Completá App ID y App Secret primero</span>'; return; }
-    msg.textContent = 'Probando…';
-    try {
-      const r = await api.post('/api/settings/test-meta', { app_id: appId, app_secret: appSecret });
-      msg.innerHTML = r.ok
-        ? `<span style="color:var(--green-d)">✅ App válida: <b>${esc(r.app_name)}</b></span>`
-        : `<span style="color:var(--red)">❌ ${esc(r.error)}</span>`;
-    } catch (e) { msg.innerHTML = `<span style="color:var(--red)">❌ ${esc(e.message)}</span>`; }
   };
   const setDemoMode = async (v) => {
     await api.put('/api/settings', { demo_mode: v });

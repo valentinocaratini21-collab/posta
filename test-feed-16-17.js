@@ -95,18 +95,18 @@ function mkChip(ME) {
 }
 const chipEs = mkChip(MEes), chipEn = mkChip(MEen);
 function schedPost(n) { return { status: 'scheduled', scheduled_at: nyDaysOut(n).toISOString() }; }
-ok('chip hoy ES', chipEs(schedPost(0)).indexOf('Hoy · ') === 0, chipEs(schedPost(0)));
-ok('chip mañana ES', chipEs(schedPost(1)).indexOf('Mañana · ') === 0, chipEs(schedPost(1)));
-ok('chip +3 ES relativo', chipEs(schedPost(3)).indexOf('en 3 días · ') === 0, chipEs(schedPost(3)));
-ok('chip +6 ES relativo', chipEs(schedPost(6)).indexOf('en 6 días · ') === 0, chipEs(schedPost(6)));
-ok('chip +3 EN relativo', chipEn(schedPost(3)).indexOf('in 3 days · ') === 0, chipEn(schedPost(3)));
+ok('chip hoy ES día+fecha+hora', /^Hoy \d{1,2}\/\d{1,2} · \d{1,2}:\d{2}$/.test(chipEs(schedPost(0))), chipEs(schedPost(0)));
+ok('chip mañana ES día+fecha+hora', /^Mañana \d{1,2}\/\d{1,2} · \d{1,2}:\d{2}$/.test(chipEs(schedPost(1))), chipEs(schedPost(1)));
+ok('chip +3 ES día+fecha+hora (sin relativo)', /^\S+ \d{1,2}\/\d{1,2} · \d{1,2}:\d{2}$/.test(chipEs(schedPost(3))) && chipEs(schedPost(3)).indexOf('en 3 días') < 0, chipEs(schedPost(3)));
+ok('chip +6 ES día+fecha+hora (sin relativo)', /^\S+ \d{1,2}\/\d{1,2} · \d{1,2}:\d{2}$/.test(chipEs(schedPost(6))) && chipEs(schedPost(6)).indexOf('en 6 días') < 0, chipEs(schedPost(6)));
+ok('chip +3 EN día+fecha+hora (sin relativo)', /^\S+ \d{1,2}\/\d{1,2} · \d{1,2}:\d{2} [AP]M$/.test(chipEn(schedPost(3))) && chipEn(schedPost(3)).indexOf('in 3 days') < 0, chipEn(schedPost(3)));
 ok('chip +7 ES día corto (no relativo)', chipEs(schedPost(7)) !== '' && chipEs(schedPost(7)).indexOf('en 7 días') < 0, chipEs(schedPost(7)));
 ok('chip borrador sin fecha vacío', chipEs({ status: 'draft' }) === '');
 ok('chip borrador con fecha NO usa relativo', chipEs({ status: 'draft', scheduled_at: nyDaysOut(3).toISOString() }).indexOf('en 3 días') < 0);
 
 /* ---------- §2. Ítem 2-16: borrador a simple vista (estático) ---------- */
-ok('tile define draftChip', app.indexOf("const draftChip = p.status === 'draft'") >= 0);
-ok('tile usa draftChip', app.indexOf('${draftChip}') >= 0);
+ok('tile SIN draftChip (LOTE 1: solo borde)', app.indexOf("const draftChip = p.status === 'draft'") < 0);
+ok('tile NO usa draftChip', app.indexOf('${draftChip}') < 0);
 ok('tile clase hf-tile-draft', app.indexOf("p.status === 'draft' ? ' hf-tile-draft' : ''") >= 0);
 ok('tarjeta define draftChipCard', app.indexOf("const draftChipCard = (d.status === 'draft' && !isPending)") >= 0);
 ok('tarjeta usa draftChipCard', app.indexOf('${draftChipCard}') >= 0);
