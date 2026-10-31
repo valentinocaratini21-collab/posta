@@ -889,6 +889,46 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 }
 </style>
 </head>
+<style id="oc-css">
+/* Onboarding un clic — capa de presentación (solo Posty, solo /prueba).
+   Una pregunta por pantalla, tarjetas grandes, tallo que crece con cada
+   toque, magia dorada al tocar. Sin puntajes, sin castigos, sin presión.
+   Respeta reduced-motion: sin animación, solo el brillo estático. */
+#v-ocq{max-width:520px;margin:0 auto;padding:8px 16px 32px;text-align:left}
+.oc-chat{font-size:15px;line-height:1.45;color:#3A5A73;text-transform:lowercase}
+.oc-q{font-size:22px;line-height:1.25;font-weight:800;color:#0A1E33;margin:10px 0 6px}
+.oc-sub{font-size:15px;color:#5A7488;margin:0 0 16px}
+/* Tallo: una hoja por respuesta. La hoja encendida es dorada con brillo;
+   al completar, el brote final (dos hojas) marca la semana lista. */
+.oc-stem{margin:6px 0 18px}
+.oc-stem-track{position:relative;height:4px;background:#DCEFFF;border-radius:4px}
+.oc-leaf{position:absolute;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;background:#fff;border:2px solid #C2E3F8;border-radius:50% 50% 50% 0;transform:rotate(-45deg);transition:background .3s,border-color .3s,box-shadow .3s}
+.oc-leaf.lit{background:#DFA856;border-color:#DFA856;box-shadow:0 0 10px rgba(223,168,86,.8)}
+.oc-leaf.sprout{width:26px;height:26px;margin:-13px 0 0 -13px;background:#DFA856;border-color:#DFA856;box-shadow:0 0 14px rgba(223,168,86,.9)}
+.oc-leaf.sprout::before,.oc-leaf.sprout::after{content:"";position:absolute;width:12px;height:12px;background:#DFA856;border-radius:50% 50% 50% 0}
+.oc-leaf.sprout::before{top:-10px;left:2px;transform:rotate(-30deg)}
+.oc-leaf.sprout::after{top:-10px;right:2px;transform:rotate(60deg)}
+.oc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.oc-grid.oc-one{grid-template-columns:1fr}
+.oc-card{position:relative;display:flex;flex-direction:column;justify-content:center;min-height:64px;padding:14px 16px;background:#fff;border:2px solid #DCEFFF;border-radius:16px;font-size:17px;font-weight:700;color:#0A1E33;cursor:pointer;text-align:left;transition:border-color .2s,box-shadow .2s,background .2s}
+.oc-card:hover{border-color:#2793C8}
+.oc-card.oc-picked{border-color:#DFA856;background:#FFF8E6;box-shadow:0 0 0 3px rgba(223,168,86,.35),0 8px 24px rgba(223,168,86,.25)}
+.oc-card small{display:block;font-size:13px;font-weight:500;color:#5A7488;margin-top:2px}
+.oc-photo{padding:0;overflow:hidden}
+.oc-photo img{width:100%;height:120px;object-fit:cover;display:block;background:#F2F9FD}
+.oc-photo span{display:block;padding:12px 14px}
+.oc-field{width:100%;font-size:18px;padding:15px 16px;border:2px solid #DCEFFF;border-radius:14px;box-sizing:border-box}
+.oc-field:focus{outline:none;border-color:#2793C8;box-shadow:0 0 0 3px rgba(39,147,200,.2)}
+.oc-btn{display:block;width:100%;margin-top:12px;padding:15px;border:0;border-radius:14px;background:#2793C8;color:#fff;font-size:18px;font-weight:800;cursor:pointer}
+.oc-btn:disabled{opacity:.6}
+.oc-link{background:none;border:0;color:#2793C8;font-size:14px;font-weight:700;cursor:pointer;padding:8px 0}
+.oc-back{background:none;border:0;color:#7A93A6;font-size:14px;cursor:pointer;padding:10px 0 0}
+.oc-err{display:none;margin-top:12px;padding:12px 14px;background:#FDF0F0;border:1px solid #F3C6C6;border-radius:12px;color:#8B2E2E;font-size:15px}
+.oc-burst{position:absolute;width:10px;height:10px;background:#FEC14D;transform:rotate(45deg);pointer-events:none;animation:oc-burst .6s ease-out forwards;box-shadow:0 0 8px rgba(254,193,77,.9)}
+@keyframes oc-burst{from{opacity:1;transform:rotate(45deg) translate(0,0) scale(1)}to{opacity:0;transform:rotate(45deg) translate(var(--bx,10px),var(--by,-14px)) scale(.3)}}
+@media (prefers-reduced-motion:reduce){.oc-burst{animation:none;opacity:0}.oc-leaf{transition:none}}
+
+</style>
 <body><svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="wb-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h16"/><path d="M14 5l7 7-7 7"/><path d="M9 9.5v5"/></symbol><symbol id="wb-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12H6"/><path d="M10 5l-7 7 7 7"/><path d="M15 9.5v5"/></symbol><symbol id="wb-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v16"/><path d="M5 14l7 7 7-7"/><path d="M9.5 9h5"/></symbol><symbol id="wb-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-7 8 7 8"/><circle cx="8" cy="12" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l7 8-7 8"/><circle cx="16" cy="12" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l8 7 8-7"/><circle cx="12" cy="16" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="wb-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3" fill="#DFA856" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="#0A1E33" stroke="none"/></symbol><symbol id="wb-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c-2.6 2.7-2.6 15.3 0 18"/><path d="M12 3c2.6 2.7 2.6 15.3 0 18"/></symbol><symbol id="wb-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h2.5L9 6h6l2.5 2.5H20a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/><circle cx="17.8" cy="9.8" r="1.1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="5.5" r="2.6"/><circle cx="18" cy="18.5" r="2.6"/><path d="M8.4 10.6l7.2-3.7M8.4 13.4l7.2 3.7"/></symbol><symbol id="wb-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v9H9l-5 4v-4H4Z"/><circle cx="12" cy="10.5" r="1.4" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-clapper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16v10H4Z"/><path d="M4 10l1.8-4h16L20 10"/><path d="M9 6l2 4M14 6l2 4"/></symbol><symbol id="wb-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-3.6 10.8c.9.8 1.6 1.5 1.6 2.7h4c0-1.2.7-1.9 1.6-2.7A6 6 0 0 0 12 3Z"/><path d="M10 18.5h4M10.5 21h3"/><circle cx="12" cy="10" r="1.4" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l1.2-4.2L16.5 4.5a2.1 2.1 0 0 1 3 3L8.7 18.3Z"/><path d="M14.5 6.5l3 3"/></symbol><symbol id="wb-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3.5 8l8.5 6 8.5-6"/></symbol><symbol id="wb-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7Z" fill="#DFA856" stroke="none"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a6.5 6.5 0 0 1-6.5-6.5c0-3.2 2.2-5.2 3.4-7.2.6 1.4 1.6 2 2.4 2-.4-2.8.8-5 2.7-6.8.5 2.6 3 4.3 3 7.5A6.5 6.5 0 0 1 12 21Z"/><path d="M12 21a3 3 0 0 1-3-3c0-1.6 1.2-2.6 1.8-3.6.3.8.8 1.1 1.2 1.1.4-1.4 1-2.3 1.8-3-.2 2.2 1.2 3.2 1.2 5.5a3 3 0 0 1-3 3Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-laugh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 10.5c.7-1 1.8-1 2.5 0M13.5 10.5c.7-1 1.8-1 2.5 0"/><path d="M8 14.5c1.2 1.8 2.6 2.5 4 2.5s2.8-.7 4-2.5"/><circle cx="4.5" cy="12.5" r="1" fill="#DFA856" stroke="none"/><circle cx="19.5" cy="12.5" r="1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h9.5L21 11.5a1.8 1.8 0 0 1 0 2.6l-6.9 6.9a1.8 1.8 0 0 1-2.6 0L4 13.5Z"/><circle cx="9.5" cy="9.5" r="1.6" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-brief" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="11" rx="2"/><path d="M9 8V6.5A2.5 2.5 0 0 1 11.5 4h1A2.5 2.5 0 0 1 15 6.5V8"/><path d="M3 13.5h18"/><circle cx="12" cy="13.5" r="1.3" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-scissors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6.5" r="2.6"/><circle cx="6" cy="17.5" r="2.6"/><path d="M8.2 8.2L20 19M8.2 15.8L20 5"/></symbol><symbol id="wb-mega" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5v2.5l12 5V6.5Z"/><path d="M20 9.5a4.5 4.5 0 0 1 0 5"/><path d="M8 19.5V21"/></symbol><symbol id="wb-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20S4.5 15.5 4.5 10a4.6 4.6 0 0 1 7.5-3.2A4.6 4.6 0 0 1 19.5 10C19.5 15.5 12 20 12 20Z"/></symbol><symbol id="wb-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.6 0 2.2-.9 2.2-2 0-1.6-1.7-1.5-1.7-3.1 0-1.5 1.3-2.4 2.9-2.4h1.4a4.7 4.7 0 0 0 4.7-4.7C21.5 5.4 17.5 3 12 3Z"/><circle cx="8" cy="10" r="1.4" fill="#2793C8" stroke="none"/><circle cx="12.5" cy="8" r="1.4" fill="#DFA856" stroke="none"/><circle cx="16.5" cy="11" r="1.4" fill="#0A1E33" stroke="none"/></symbol><symbol id="wb-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol><symbol id="wb-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></symbol><symbol id="wb-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 1.5 5.5 5 5 9l-2 2-3-3-3 3-2-2c-1-4 1-7.5 5-9Z"/><circle cx="12" cy="9" r="1.8" fill="#DFA856" stroke="none"/><path d="M8.5 13.5L5 19M15.5 13.5L19 19"/></symbol><symbol id="wb-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h2l2.5 11h10L21 8H7"/><circle cx="10" cy="20" r="1.6"/><circle cx="17.5" cy="20" r="1.6"/></symbol><symbol id="wb-glasses" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="7" height="5" rx="2"/><rect x="14" y="9" width="7" height="5" rx="2"/><path d="M10 11h4M3 10L1.5 8M21 10l1.5-2"/></symbol><symbol id="wb-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></symbol><symbol id="wb-cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h12v4.5A4.5 4.5 0 0 1 12.5 19h-3A4.5 4.5 0 0 1 5 14.5Z"/><path d="M17 11h1a2.5 2.5 0 0 1 0 5h-1"/><path d="M8 7c0-1.2 1-1.2 1-2.4M12 7c0-1.2 1-1.2 1-2.4"/></symbol><symbol id="wb-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 16.5 5 12a2 2 0 0 1 2-1.5h10a2 2 0 0 1 2 1.5l1.5 4.5"/><path d="M3.5 16.5H21"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/><path d="M12 3.5l.6 1.6 1.6.6-1.6.6L12 8l-.6-1.7-1.6-.6 1.6-.6Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v10h12V10"/><path d="M10.5 20v-5.5h3V20"/></symbol><symbol id="wb-tooth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3.5C9 3.5 10 4.5 12 4.5s3-1 4.5-1c1.8 0 2.6 1.6 2.2 4-.4 3-1.2 9-3.2 12.5-.7 1.2-2.3 1.2-3 0-.8-1.4-.5-4.5-1.5-4.5s-.7 3.1-1.5 4.5c-.7 1.2-2.3 1.2-3 0C4.5 16.5 3.7 10.5 3.3 7.5 2.9 5.1 5.7 3.5 7.5 3.5Z"/></symbol><symbol id="wb-pole" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="3" width="7" height="18" rx="3.5"/><path d="M8.5 8.5 15.5 6M8.5 13.5 15.5 11M8.5 18.5 15.5 16"/><path d="M8.5 3h7M8.5 21h7" stroke="#DFA856"/></symbol><symbol id="wb-shirt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 4 4 6.5 6 10l2-1v11h8V9l2 1 2-3.5L15.5 4a3.5 3.5 0 0 1-7 0Z"/></symbol><symbol id="wb-beauty" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.2" fill="#DFA856" stroke="none"/><path d="M12 3.5v3.5M12 17v3.5M3.5 12H7M17 12h3.5M6 6l2.4 2.4M15.6 15.6 18 18M18 6l-2.4 2.4M8.4 15.6 6 18"/></symbol><symbol id="wb-paw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="16" rx="3.6" ry="3" fill="#DFA856" stroke="none"/><circle cx="6.8" cy="11.5" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="9" r="1.9" fill="currentColor" stroke="none"/><circle cx="17.2" cy="11.5" r="1.9" fill="currentColor" stroke="none"/></symbol><symbol id="wb-steth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3v6.5a5.5 5.5 0 0 0 11 0V3"/><path d="M17.5 14.5c0 3 1.5 4 3.5 4"/><circle cx="21" cy="18.5" r="1.5"/></symbol><symbol id="wb-dumbbell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5v5M7 7v10M17 7v10M20.5 9.5v5M7 12h10"/></symbol><symbol id="wb-disco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7"/><path d="M9.5 6.5V4h5v2.5"/><path d="M5.5 13.5h13M7.5 10c1.8 1.2 3.6-1.2 4.5 0 .9 1.2 2.7-1.2 4.5 0M7.5 17c1.8-1.2 3.6 1.2 4.5 0 .9-1.2 2.7 1.2 4.5 0"/><circle cx="12" cy="4" r="1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-flower" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3.2"/><path d="M12 10.7V21"/><path d="M12 15c-3.2 0-4.5-1.8-4.5-4M12 17.5c3.2 0 4.5-1.8 4.5-4"/><circle cx="12" cy="7.5" r="1.2" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-lipstick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 21h4M10.5 21v-8h3v8"/><path d="M11 13V8l4-2.5V13" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-sushi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="9" rx="4.5"/><circle cx="12" cy="14.5" r="2.2" fill="#DFA856" stroke="none"/><path d="M4 6.5 20 4"/></symbol><symbol id="wb-croissant" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 13.5c2.5 4.5 5.5 6 8.5 4.5 3 1.5 6 0 8.5-4.5-.8 4.5-4 7-8.5 7s-7.7-2.5-8.5-7Z"/><path d="M8 13.5c.8 2 2 3 4 3s3.2-1 4-3"/></symbol><symbol id="wb-bean" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="6" ry="8.5" transform="rotate(18 12 12)"/><path d="M9 5.5c2.5 3 2.5 10 0 13"/></symbol></defs></svg>
 <div class="nav"><div class="wrap">
   <a class="logo-posty" href="/en"><img class="sello-cabecera" src="/logo-bambooty.png" width="34" height="34" alt="Bambooty">posty<span class="pdot">.</span></a>
@@ -1224,6 +1264,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 </div>
 
 <!-- VISTA: 3 preguntas rápidas antes de generar (para que los posteos salgan a medida) -->
+<div id="v-ocq" style="display:none"></div>
 <div id="v-questions" style="display:none">
   <div class="wrap">
     <div class="qcard">
@@ -1711,7 +1752,7 @@ function toast(msg) {
 }
 
 function show(id) {
-  ['v-onboarding','v-questions','v-loading','v-results'].forEach((v) => { $('#' + v).style.display = v === id ? 'block' : 'none'; });
+  ['v-onboarding','v-ocq','v-questions','v-loading','v-results'].forEach((v) => { $('#' + v).style.display = v === id ? 'block' : 'none'; });
   window.scrollTo({ top: 0 });
 }
 
@@ -1737,7 +1778,7 @@ function show(id) {
   const bShy = $('#btnShy');
   if (bShy) bShy.onclick = () => { trk('prueba_step', { step: 'ejemplo_primero' }); openExample(); };
   const exB = $('#exBack'); if (exB) exB.onclick = closeExample;
-  const exM = $('#exMine'); if (exM) exM.onclick = () => { closeExample(); try { $('#f_ig').focus(); } catch (e) {} window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const exM = $('#exMine'); if (exM) exM.onclick = () => { closeExample(); try { (document.getElementById('oc_field') || $('#f_ig')).focus(); } catch (e) {} window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const exS = $('#exChatSend'); if (exS) exS.onclick = exChatReply;
   const exI = $('#exChatIn'); if (exI) exI.addEventListener('keydown', (e) => { if (e.key === 'Enter') exChatReply(); });
   const lkC = $('#lockCta'); if (lkC) lkC.onclick = () => openRegTrial();
@@ -1826,17 +1867,15 @@ function show(id) {
   // INLINE (startTrialPrefill honors it) and the 90-day lock answers
   // server-side. trk captures the src (v322).
   if (DEEP_IG && !TEST_KEY_QS) {
-    try { onIgSubmit().then(() => { if (PREFILL) startTrialPrefill(); }); } catch (e) {}
+    try { ocDeepStart(); } catch (e) {}
   }
   // ¿Llegó desde la landing con el link de su web? (?web=...) La leemos y
   // le mostramos la tarjeta con todo precargado y editable.
+  // (onboarding un clic) El deep link con web entra por el campo único:
+  // estudio -> preguntas -> generar. Nunca directo a generar ni a la
+  // tarjeta vieja (el bypass vivía en onWebSubmit + la tarjeta).
   if (DEEP_WEB) {
-    try {
-      const fw = $('#f_web');
-      if (fw) fw.value = DEEP_WEB;
-      const wb = $('#webOptBox'); if (wb) wb.style.display = 'block';
-      onWebSubmit();
-    } catch (e) {}
+    try { ocDeepStart(); } catch (e) {}
   }
  } catch (e) { try { show('v-onboarding'); } catch (e2) {} }
 })();
@@ -2195,7 +2234,7 @@ function buildGenFormData() {
   const fd = new FormData();
   fd.append('business', TRIAL_BIZ);
   fd.append('ig', cleanIg($('#f_ig').value));
-  fd.append('category', GEN_WEB ? $('#wf_cat').value : (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value));
+  fd.append('category', (window.OC_CAT || (GEN_WEB ? $('#wf_cat').value : (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value))));
   // (v235) La respuesta a la pregunta de rubro viaja con su fuente:
   // 'pregunta' (un toque), 'form' (select tocado a mano) o 'skip'
   // (saltó: el server genera con el rubro padre seguro, sin inventar).
@@ -2221,6 +2260,18 @@ function buildGenFormData() {
   fd.append('competitors', '');
   // Respuestas de las 3 preguntas previas (pueden venir vacías si las omitió)
   fd.append('goal_key', TRIAL_ANS.goal_key || '');
+  // (onboarding un clic) Las 5 respuestas + condicionales viajan al server
+  // (gate sin atajo en generate/generate-stream). Los viejos goal_key/
+  // producto/diferencial se siguen mandando vacíos: no-op en servidor.
+  if (window.OC_ANS) {
+    fd.append('producto_estrella', OC_ANS.producto_estrella || '');
+    fd.append('producto_mix', OC_ANS.producto_mix || '');
+    fd.append('cta', OC_ANS.cta || '');
+    fd.append('promo', OC_ANS.promo || '');
+    fd.append('voz', OC_ANS.voz || '');
+    fd.append('precios', OC_ANS.precios || '');
+    fd.append('donde', OC_ANS.donde || '');
+  }
   fd.append('producto', TRIAL_ANS.producto || '');
   fd.append('diferencial', TRIAL_ANS.diferencial || '');
   // Foto opcional del negocio (campo 'photo' del multipart)
@@ -2997,6 +3048,7 @@ function finishGeneration(data, genSecs) {
       tone: TONE,
       country: COUNTRY,
       brand_colors: [data.accent || '#2793C8', data.btn || '#FEC14D'],
+      onboarding: window.OC_ANS || undefined,
     }));
   } catch (e) {}
   if (!TEST_KEY_QS) { try { idb.set(data); } catch (e) {} }
@@ -4001,6 +4053,9 @@ async function pzTrialSocialMount() {
 
 function openRegTrial() {
   regSeen = true;
+  // (onboarding un clic) El email de entrada pre-rellena el registro:
+  // fricción cero, sin volver a escribirlo.
+  try { if (window.OC_EMAIL && document.getElementById('rg_email') && !document.getElementById('rg_email').value) document.getElementById('rg_email').value = window.OC_EMAIL; } catch (e) {}
   trk('prueba_register');
   $('#rgSub').innerHTML = `Your 5 posts stay saved in your account, ready to review.`;
   $('#rgErr').style.display = 'none';
@@ -4048,7 +4103,7 @@ function closeReg() {
       const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
       if (tp && typeof tp === 'object') {
         const pf = {};
-        ['business_name', 'category', 'subcat', 'description', 'competitors', 'ig_username', 'tone', 'brand_colors']
+        ['business_name', 'category', 'subcat', 'description', 'competitors', 'ig_username', 'tone', 'brand_colors', 'onboarding']
           .forEach((k) => { if (tp[k] !== undefined) pf[k] = tp[k]; });
         if (Object.keys(pf).length) body.trial_profile = pf;
       }
@@ -4093,6 +4148,444 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
 ['rg_email'].forEach((id) => {
   document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
 });
+</script>
+<script>
+/* Onboarding un clic — flujo EN (solo /en-prueba).
+   Mirror of oc-es.js: same flow, same rules, faithful English strings.
+   One field (email or @) → Posty studies IG/web → one-tap questions,
+   one per screen, growing stem, golden magic on tap. MANDATORY, NO SKIP:
+   no skip button, no shortcut to the week. The week only appears after
+   answering what applies; the server enforces it with a gate (no answers
+   → 400, no AI spend). NOT asked: rhythm, times, quantity, hashtags.
+   The old #v-questions view and its buttons are left without an entry
+   point (old code stays in the file so shared helpers keep working;
+   deletion is later cleanup, documented in the manifiesto). */
+(function () {
+  'use strict';
+  var T = {
+    entryChat: 'give me your email or your @ and i will get to know you in a minute. no forms: just tap and done.',
+    entryPh: 'your email or your @',
+    entryBtn: 'start',
+    toWeb: 'prefer to enter with your website?',
+    toEmail: 'prefer to enter with your email?',
+    photoLink: 'add a photo (optional)',
+    photoBig: 'that photo is over 5 mb, try another one',
+    studyIg: 'looking at your instagram…',
+    studyWeb: 'reading your website…',
+    errIg: 'i could not find that @. check it or enter with your email.',
+    errWeb: 'i could not read that website. check the link or enter with your email.',
+    errEmail: 'that email does not look valid. check it and try again.',
+    errName: 'tell me your business name so i can build your week.',
+    chatRubro: 'let me place you right…',
+    chatDonde: 'and where can people find you?',
+    chatQ1: 'this is what i saw you sell. what is your strongest one?',
+    chatQ1Empty: 'i don\'t know yet what you sell. where do we start?',
+    chatQ2: 'what do you want to happen when people see your post?',
+    chatQ3: 'anything nice this week worth sharing?',
+    chatQ4: 'how do you talk to your customers?',
+    chatQ5: 'and prices? do we show them in the posts?',
+    chatName: 'what is your business called?',
+    chatIg2: 'give me your @ so i can look at it.',
+    chatWeb2: 'give me your website link so i can read it.',
+    qRubro: 'What is your business about?',
+    qDonde: 'Where can people find you?',
+    q1: 'What do you sell most?',
+    q2: 'What do you want people to do when they see the post?',
+    q3: 'Do you have a promo this week?',
+    q4: 'How do you talk to your customers?',
+    q5: 'Do we show prices in the posts?',
+    qName: 'What is your business called?',
+    qIg2: 'What is your @?',
+    qWeb2: 'What is your website?',
+    todo: 'A bit of everything',
+    todoSub: 'a bit of everything, no single strongest product',
+    otro: 'Other category',
+    otroSub: 'pick it from the full list',
+    back: 'back',
+    sproutChat: 'done, i know you now. your week is sprouting…',
+    sproutTitle: 'Your week is ready to sprout!',
+    namePh: 'your business name',
+    igPh: 'your @',
+    webPh: 'https://yourwebsite.com',
+    nextBtn: 'continue',
+    entryBtnBusy: 'starting…'
+  };
+  var Q2 = [{ v: 'reservar', l: 'Book' }, { v: 'escribirte', l: 'Message you' }, { v: 'local', l: 'Visit the store' }, { v: 'comprar', l: 'Buy' }];
+  var Q3 = [{ v: 'ninguna', l: 'No promo' }, { v: 'porcentaje', l: '% off' }, { v: '2x1', l: '2-for-1' }, { v: 'envio', l: 'Free shipping' }];
+  var Q4 = [{ v: 'cercano', l: 'Friendly' }, { v: 'profesional', l: 'Professional' }, { v: 'divertido', l: 'Fun' }, { v: 'elegante', l: 'Elegant' }];
+  var Q5 = [{ v: 'si', l: 'Yes' }, { v: 'ofertas', l: 'Only on offers' }, { v: 'no', l: 'No' }];
+  var DONDE = [{ v: 'whatsapp', l: 'WhatsApp' }, { v: 'instagram', l: 'Instagram' }, { v: 'local', l: 'At the store' }, { v: 'web', l: 'On my website' }];
+
+  // Session state. plan = questions in order; ans = answers.
+  var S = { source: null, email: null, ig: null, web: null, biz: null, cat: null, products: [], rubroOptions: null, plan: [], qi: 0, ans: {}, mode: 'auto', busy: false };
+  var reduced = false;
+  try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function ocq() { return document.getElementById('v-ocq'); }
+  function answeredCount() { return S.plan.filter(function (k) { return S.ans[k] !== undefined; }).length; }
+
+  function stemHTML() {
+    var total = Math.max(S.plan.length, 1);
+    var lit = answeredCount();
+    var leaves = '';
+    for (var i = 0; i < total; i++) {
+      var pct = ((i + 0.5) / total * 100).toFixed(1);
+      var cls = 'oc-leaf' + (i < lit ? ' lit' : '') + ((i === total - 1 && lit >= total) ? ' sprout' : '');
+      leaves += '<span class="' + cls + '" style="left:' + pct + '%"></span>';
+    }
+    return '<div class="oc-stem"><div class="oc-stem-track">' + leaves + '</div></div>';
+  }
+
+  function cardHTML(opt) {
+    if (opt.foto) {
+      return '<button type="button" class="oc-card oc-photo" data-v="' + esc(opt.v) + '">' +
+        '<img src="' + esc(opt.foto) + '" alt="" onerror="this.style.display=\'none\'">' +
+        '<span>' + esc(opt.l) + (opt.sub ? '<small>' + esc(opt.sub) + '</small>' : '') + '</span></button>';
+    }
+    return '<button type="button" class="oc-card" data-v="' + esc(opt.v) + '">' + esc(opt.l) +
+      (opt.sub ? '<small>' + esc(opt.sub) + '</small>' : '') + '</button>';
+  }
+
+  function burst(card) {
+    if (reduced) return;
+    var spots = [[-14, -18], [16, -12], [-18, 10], [14, 14]];
+    spots.forEach(function (sp) {
+      var b = document.createElement('span');
+      b.className = 'oc-burst';
+      b.style.left = '50%'; b.style.top = '50%';
+      b.style.setProperty('--bx', sp[0] + 'px'); b.style.setProperty('--by', sp[1] + 'px');
+      card.appendChild(b);
+      setTimeout(function () { try { b.remove(); } catch (e) {} }, 700);
+    });
+  }
+
+  function renderScreen(chat, title, options, opts) {
+    opts = opts || {};
+    var box = ocq();
+    var gridCls = options.length <= 2 ? 'oc-grid oc-one' : 'oc-grid';
+    var html = stemHTML() + '<p class="oc-chat">' + esc(chat) + '</p><h2 class="oc-q">' + esc(title) + '</h2>';
+    html += '<div class="' + gridCls + '">' + options.map(function (o) { return cardHTML(o); }).join('') + '</div>';
+    if (opts.back !== false) html += '<button type="button" class="oc-back" id="oc_back">' + esc(T.back) + '</button>';
+    html += '<div class="oc-err" id="oc_screen_err"></div>';
+    box.innerHTML = html;
+    var cards = box.querySelectorAll('.oc-card');
+    cards.forEach(function (c) {
+      c.addEventListener('click', function () {
+        if (c.classList.contains('oc-picked')) return;
+        c.classList.add('oc-picked'); burst(c);
+        var v = c.getAttribute('data-v');
+        setTimeout(function () { opts.onPick(v); }, reduced ? 0 : 450);
+      });
+    });
+    var bk = document.getElementById('oc_back');
+    if (bk) bk.addEventListener('click', function () { if (opts.onBack) opts.onBack(); });
+    show('v-ocq');
+    window.scrollTo({ top: 0 });
+  }
+
+  function renderStudy(text) {
+    var box = ocq();
+    box.innerHTML = stemHTML() + '<p class="oc-chat">' + esc(text) + '</p><h2 class="oc-q">…</h2>';
+    show('v-ocq');
+  }
+
+  function renderFieldScreen(chat, title, ph, btnLabel, onGo, onBack) {
+    var box = ocq();
+    box.innerHTML = stemHTML() + '<p class="oc-chat">' + esc(chat) + '</p><h2 class="oc-q">' + esc(title) + '</h2>' +
+      '<input id="oc_aux_field" class="oc-field" placeholder="' + esc(ph) + '">' +
+      '<button type="button" class="oc-btn" id="oc_aux_go">' + esc(btnLabel) + '</button>' +
+      '<button type="button" class="oc-back" id="oc_back">' + esc(T.back) + '</button>' +
+      '<div class="oc-err" id="oc_screen_err"></div>';
+    var f = document.getElementById('oc_aux_field');
+    var go = function () { onGo(f.value); };
+    document.getElementById('oc_aux_go').addEventListener('click', go);
+    f.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    document.getElementById('oc_back').addEventListener('click', function () { if (onBack) onBack(); });
+    show('v-ocq');
+    try { f.focus(); } catch (e) {}
+  }
+
+  function screenErr(msg) {
+    var e = document.getElementById('oc_screen_err');
+    if (e) { e.textContent = msg; e.style.display = 'block'; }
+  }
+
+  // ---- question screens ----
+  function screenFor(key) {
+    if (key === 'rubro') return screenRubro;
+    if (key === 'donde') return screenDonde;
+    if (key === 'q1') return screenQ1;
+    if (key === 'q2') return function () { renderScreen(T.chatQ2, T.q2, Q2, { onPick: function (v) { S.ans.q2 = v; advance(); }, onBack: goBack }); };
+    if (key === 'q3') return function () { renderScreen(T.chatQ3, T.q3, Q3, { onPick: function (v) { S.ans.q3 = v; advance(); }, onBack: goBack }); };
+    if (key === 'q4') return function () { renderScreen(T.chatQ4, T.q4, Q4, { onPick: function (v) { S.ans.q4 = v; advance(); }, onBack: goBack }); };
+    if (key === 'q5') return function () { renderScreen(T.chatQ5, T.q5, Q5, { onPick: function (v) { S.ans.q5 = v; advance(); }, onBack: goBack }); };
+    return null;
+  }
+
+  function screenRubro() {
+    var opts = (S.rubroOptions || []).map(function (o) { return { v: o.rubro, sub: o.subrubro || '', l: o.label }; });
+    if (!opts.length) { screenCatalog(); return; }
+    opts.push({ v: '__otro__', l: T.otro, sub: T.otroSub });
+    renderScreen(T.chatRubro, T.qRubro, opts, {
+      onPick: function (v) {
+        if (v === '__otro__') { screenCatalog(); return; }
+        var o = (S.rubroOptions || []).filter(function (x) { return x.rubro === v; })[0] || {};
+        pickRubro(v, o.subrubro || '');
+      },
+      onBack: goBack
+    });
+  }
+
+  function screenCatalog() {
+    var opts = Object.keys(CATS).map(function (k) { return { v: k, l: CATS[k] }; });
+    renderScreen(T.chatRubro, T.qRubro, opts, {
+      onPick: function (v) { pickRubro(v, ''); },
+      onBack: function () { if ((S.rubroOptions || []).length) screenRubro(); else goBack(); }
+    });
+  }
+
+  function pickRubro(rubro, subcat) {
+    S.ans.rubro = rubro;
+    S.cat = rubro;
+    window.OC_CAT = rubro;
+    try { RUBRO_ANS = { rubro: rubro, subcat: subcat || '', src: 'pregunta' }; } catch (e) {}
+    advance();
+  }
+
+  function screenDonde() {
+    renderScreen(T.chatDonde, T.qDonde, DONDE, {
+      onPick: function (v) {
+        S.ans.donde = v;
+        if (v === 'instagram') {
+          renderFieldScreen(T.chatIg2, T.qIg2, T.igPh, T.nextBtn, function (val) {
+            var ig = cleanIg(val || '');
+            if (!ig) { screenErr(T.errIg); return; }
+            studyIg(ig);
+          }, goEntry);
+        } else if (v === 'web') {
+          renderFieldScreen(T.chatWeb2, T.qWeb2, T.webPh, T.nextBtn, function (val) {
+            var w = (val || '').trim();
+            if (!w) { screenErr(T.errWeb); return; }
+            studyWeb(w);
+          }, goEntry);
+        } else {
+          renderFieldScreen(T.chatName, T.qName, T.namePh, T.nextBtn, function (val) {
+            var nm = (val || '').trim();
+            if (!nm) { screenErr(T.errName); return; }
+            S.biz = nm; TRIAL_BIZ = nm;
+            advance();
+          }, goEntry);
+        }
+      },
+      onBack: goBack
+    });
+  }
+
+  function screenQ1() {
+    var opts = (S.products || []).map(function (p) { return { v: p.nombre, l: p.nombre, foto: p.foto || null }; });
+    opts.push({ v: '__todo__', l: T.todo, sub: T.todoSub });
+    renderScreen((S.products || []).length ? T.chatQ1 : T.chatQ1Empty, T.q1, opts, {
+      onPick: function (v) {
+        if (v === '__todo__') { S.ans.q1 = ''; S.ans.q1mix = 'todo'; }
+        else { S.ans.q1 = v; S.ans.q1mix = 'uno'; }
+        advance();
+      },
+      onBack: goBack
+    });
+  }
+
+  function currentScreen() {
+    var fn = screenFor(S.plan[S.qi]);
+    if (fn) fn();
+  }
+
+  function advance() {
+    S.qi++;
+    while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++;
+    if (S.qi >= S.plan.length) { sprout(); return; }
+    currentScreen();
+  }
+
+  function goBack() {
+    if (S.qi > 0) { S.qi--; currentScreen(); return; }
+    goEntry();
+  }
+
+  function goEntry() {
+    show('v-onboarding');
+    try { var f = document.getElementById('oc_field'); if (f) f.focus(); } catch (e) {}
+    window.scrollTo({ top: 0 });
+  }
+
+  function buildPlan() {
+    var plan = [];
+    if (S.source === 'email') { plan.push('rubro', 'donde'); }
+    else if (S.rubroOptions !== null && S.rubroOptions !== undefined) { plan.push('rubro'); }
+    plan.push('q1', 'q2', 'q3', 'q4', 'q5');
+    S.plan = plan;
+    S.qi = 0;
+  }
+
+  function sprout() {
+    var box = ocq();
+    box.innerHTML = stemHTML() + '<p class="oc-chat">' + esc(T.sproutChat) + '</p><h2 class="oc-q">' + esc(T.sproutTitle) + '</h2>';
+    show('v-ocq');
+    window.OC_ANS = {
+      producto_estrella: S.ans.q1 || '',
+      producto_mix: S.ans.q1mix || 'uno',
+      cta: S.ans.q2 || '',
+      promo: S.ans.q3 || '',
+      voz: S.ans.q4 || '',
+      precios: S.ans.q5 || '',
+      donde: S.ans.donde || '',
+      promo_semana: true
+    };
+    window.OC_CAT = S.ans.rubro || S.cat || window.OC_CAT || null;
+    try { trk('prueba_step', { step: 'oc_sprout' }); } catch (e) {}
+    setTimeout(function () { runGeneration(); }, reduced ? 300 : 900);
+  }
+
+  // ---- study (IG / web) ----
+  async function studyIg(ig) {
+    renderStudy(T.studyIg);
+    try {
+      var r = await fetch('/api/trial/prefill' + TEST_KEY_QS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ig: ig }) });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok || !d.ok) throw new Error((d && d.error) || T.errIg);
+      PREFILL = d; GEN_PREFILL = true; GEN_WEB = false;
+      S.source = S.source || 'ig';
+      S.ig = ig;
+      S.biz = d.name || S.biz || '';
+      TRIAL_BIZ = S.biz;
+      try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + ig; } catch (e) {}
+      // El rubro confirmado por el dueño manda sobre lo detectado.
+      if (!S.ans.rubro) { S.cat = d.category || null; if (S.cat) window.OC_CAT = S.cat; }
+      S.products = d.productos || [];
+      if (d.rubro_check && d.rubro_check.needed) { S.rubroOptions = d.rubro_check.options || []; }
+      else { S.rubroOptions = undefined; }
+      if (S.source === 'email') { while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++; }
+      else { buildPlan(); }
+      currentScreen();
+    } catch (e) {
+      show('v-onboarding');
+      entryErr((e && e.message) || T.errIg);
+    }
+  }
+
+  async function studyWeb(url) {
+    renderStudy(T.studyWeb);
+    try {
+      var r = await fetch('/api/trial/web-prefill' + TEST_KEY_QS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web: url }) });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok || !d.ok) throw new Error((d && d.error) || T.errWeb);
+      WEB = d; GEN_WEB = true; GEN_PREFILL = false;
+      S.source = S.source || 'web';
+      S.web = url;
+      S.biz = d.name || S.biz || '';
+      TRIAL_BIZ = S.biz; TRIAL_DESC = d.description || '';
+      // El rubro confirmado por el dueño manda sobre lo detectado.
+      if (!S.ans.rubro) { S.cat = d.category || null; if (S.cat) window.OC_CAT = S.cat; }
+      S.products = d.productos || [];
+      if (d.rubro_check && d.rubro_check.needed) { S.rubroOptions = d.rubro_check.options || []; }
+      else { S.rubroOptions = undefined; }
+      if (S.source === 'email') { while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++; }
+      else { buildPlan(); }
+      currentScreen();
+    } catch (e) {
+      show('v-onboarding');
+      entryErr((e && e.message) || T.errWeb);
+    }
+  }
+
+  // ---- entry (single field) ----
+  function entryErr(msg) {
+    var e = document.getElementById('oc_err');
+    if (e) { e.textContent = msg; e.style.display = 'block'; }
+  }
+
+  function startFromField() {
+    if (S.busy) return;
+    var f = document.getElementById('oc_field');
+    var val = (f && f.value || '').trim();
+    if (!val) { entryErr(S.mode === 'web' ? T.errWeb : T.errEmail); return; }
+    if (S.mode === 'web') { studyWeb(val); return; }
+    var isEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val);
+    if (isEmail) {
+      S.source = 'email'; S.email = val; window.OC_EMAIL = val;
+      buildPlan();
+      // No source: the category question shows the full catalog.
+      S.rubroOptions = null;
+      try { trk('prueba_step', { step: 'oc_email' }); } catch (e) {}
+      currentScreen();
+      return;
+    }
+    var ig = cleanIg(val);
+    if (!ig) { entryErr(T.errIg); return; }
+    studyIg(ig);
+  }
+
+  function ocInit() {
+    var fc = document.getElementById('formCard');
+    if (!fc || document.getElementById('oc_entry')) return;
+    ['stepIg', 'webOptBox', 'photoOptBox', 'prefillCard', 'webCard', 'rubroCard', 'detailForm'].forEach(function (id) {
+      var n = document.getElementById(id);
+      if (n) n.style.display = 'none';
+    });
+    var noIg = document.getElementById('btnNoIg');
+    if (noIg && noIg.parentElement) noIg.parentElement.style.display = 'none';
+    var box = document.createElement('div');
+    box.id = 'oc_entry';
+    box.innerHTML = '<p class="oc-chat">' + esc(T.entryChat) + '</p>' +
+      '<input id="oc_field" class="oc-field" placeholder="' + esc(T.entryPh) + '" autocomplete="email" inputmode="email">' +
+      '<button type="button" class="oc-btn" id="oc_go">' + esc(T.entryBtn) + '</button>' +
+      '<div class="oc-err" id="oc_err"></div>' +
+      '<p style="margin:10px 0 0"><button type="button" class="oc-link" id="oc_mode">' + esc(T.toWeb) + '</button></p>' +
+      '<p style="margin:2px 0 0"><button type="button" class="oc-link" id="oc_photo_link">' + esc(T.photoLink) + '</button></p>' +
+      '<div id="oc_photo_box" style="display:none;margin-top:8px"><input type="file" id="oc_photo" accept="image/*"><span class="oc-chat" id="oc_photo_name" style="margin-left:8px"></span></div>';
+    fc.insertBefore(box, fc.firstChild);
+    document.getElementById('oc_go').addEventListener('click', startFromField);
+    document.getElementById('oc_field').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField(); } });
+    document.getElementById('oc_mode').addEventListener('click', function () {
+      var f = document.getElementById('oc_field');
+      if (S.mode === 'web') {
+        S.mode = 'auto'; f.placeholder = T.entryPh; f.setAttribute('inputmode', 'email');
+        document.getElementById('oc_mode').textContent = T.toWeb;
+      } else {
+        S.mode = 'web'; f.placeholder = T.webPh; f.setAttribute('inputmode', 'url');
+        document.getElementById('oc_mode').textContent = T.toEmail;
+      }
+      try { f.focus(); } catch (e) {}
+    });
+    document.getElementById('oc_photo_link').addEventListener('click', function () {
+      var pb = document.getElementById('oc_photo_box');
+      pb.style.display = pb.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('oc_photo').addEventListener('change', function (ev) {
+      var file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { entryErr(T.photoBig); ev.target.value = ''; return; }
+      try { OPT_PHOTO = file; } catch (e) {}
+      document.getElementById('oc_photo_name').textContent = file.name;
+    });
+    // Deep links: study starts on its own (generation does NOT: questions
+    // first). If the visitor already has a saved week, the main listener
+    // showed it before and this init does not interfere.
+    if (DEEP_IG && !TEST_KEY_QS) { /* ocDeepStart fires from the main listener */ }
+    else if (DEEP_WEB) { S.mode = 'web'; var f0 = document.getElementById('oc_field'); if (f0) f0.value = DEEP_WEB; }
+  }
+
+  // Deep link (?ig= / ?web=): study → questions → generate. Never
+  // straight to generate (the old bypass lived here).
+  window.ocDeepStart = function () {
+    if (DEEP_IG) { studyIg(cleanIg(DEEP_IG) || DEEP_IG); return; }
+    if (DEEP_WEB) { studyWeb(DEEP_WEB); return; }
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ocInit);
+  else ocInit();
+})();
+
 </script>
 <script src="/posty-chat.js?v=5" defer></script>
 <script>
@@ -4178,7 +4671,7 @@ fetch('/api/campaign/current?lang=en').then(function(r){return r.json()}).then(f
   function target() {
     if (vis($('#weekDone'))) return 4;
     if (vis($('#v-loading')) || (vis($('#v-results')) && vis($('#rStreamBar')))) return 2;
-    if (vis($('#prefillCard')) || vis($('#webCard')) || vis($('#detailForm')) || vis($('#rubroCard')) || vis($('#v-questions'))) return 1;
+    if (vis($('#prefillCard')) || vis($('#webCard')) || vis($('#detailForm')) || vis($('#rubroCard')) || vis($('#v-questions')) || vis($('#v-ocq'))) return 1;
     return 0;
   }
   function evaluate() {
@@ -4208,7 +4701,7 @@ fetch('/api/campaign/current?lang=en').then(function(r){return r.json()}).then(f
       setTimeout(restoreButtons, 25000);
     });
   });
-  var watch = ['#v-onboarding', '#v-questions', '#v-loading', '#v-results', '#prefillCard', '#webCard', '#detailForm', '#rubroCard', '#weekDone', '#rStreamBar', '#obErr'];
+  var watch = ['#v-onboarding', '#v-ocq', '#v-questions', '#v-loading', '#v-results', '#prefillCard', '#webCard', '#detailForm', '#rubroCard', '#weekDone', '#rStreamBar', '#obErr'];
   if ('MutationObserver' in window) {
     var mo = new MutationObserver(function () { evaluate(); });
     watch.forEach(function (s) { var el = $(s); if (el) mo.observe(el, { attributes: true, attributeFilter: ['style'] }); });

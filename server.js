@@ -295,7 +295,8 @@ const feedReconcile = require('./feed-reconcile');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
 const feedDirector = require('./feed-director');
-const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
+const clientDigest = require('./client-digest');
+const onboardingProducts = require('./onboarding-products'); // Onboarding un clic: productos detectados + foto por producto (determinístico, USD 0) // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
 const analysisEngine = require('./analysis-engine'); // 🧠 Análisis (2026-10-19): radiografía + mercado + nacimiento + porqué + loop
 const semanaAprende = require('./semana-aprende'); // 🧠 Semana aprende (ítem 4): la semana anterior real ajusta la tanda y el porqué.
 const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
@@ -1054,9 +1055,9 @@ async function classifyWithVision(signals, photoUrls, lang) {
 // recolectó (web + feed + formulario). Determinístico, USD 0. El digest
 // viaja en el payload de la prueba y en trial_cache: es el fundamento
 // que la conversión siembra en la cuenta.
-function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro }) {
+function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding }) {
   try {
-    return clientDigest.buildFromParts({
+    const _trialDigestBuilt = clientDigest.buildFromParts({
       business,
       category: rubro ? rubro.category : category,
       subcat: rubro ? (rubro.subcat || '') : undefined,
@@ -1074,6 +1075,8 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       photoEntries: (deep && deep.photoEntries) || null,
       webCopy: webData ? String(webData.description || '') : '',
     });
+    if (_trialDigestBuilt && onboarding) _trialDigestBuilt.onboarding = onboarding;
+    return _trialDigestBuilt;
   } catch (e) { console.error('[digest] build trial:', e.message); return null; }
 }
 // (v230) Lectura profunda de la prueba, cacheada por URL como el
@@ -2749,6 +2752,22 @@ function applyTrialProfile(userId, tp) {
       db.prepare(`UPDATE settings SET brand_colors=?, updated_at=datetime('now') WHERE user_id=?`)
         .run(JSON.stringify(bc.slice(0, 3)), userId);
     }
+    // (onboarding un clic) Las respuestas viajan al fundamento: se funden
+    // en el digest guardado solo donde falta (nunca pisan). En el camino
+    // con @, el seed posterior (trial_cache) trae las mismas respuestas.
+    if (tp.onboarding && typeof tp.onboarding === 'object') {
+      try {
+        const cur = clientDigest.getStoredDigest(db, userId) || clientDigest.emptyDigest();
+        const prev = (cur.onboarding && typeof cur.onboarding === 'object') ? cur.onboarding : {};
+        const next = Object.assign({}, prev);
+        let changed = false;
+        for (const k of Object.keys(tp.onboarding)) {
+          if (next[k] === undefined || next[k] === '') { next[k] = tp.onboarding[k]; changed = true; }
+        }
+        if (changed) { cur.onboarding = next; clientDigest.saveDigest(db, userId, cur); }
+      } catch (e) { console.error('[magic] trial onboarding:', e.message); }
+    }
+
   } catch (e) { console.error('[magic] trial_profile:', e.message); }
 }
 
@@ -22851,6 +22870,54 @@ try { trialLock = require('./trial-lock'); } catch (e) { console.error('[init] t
 
 // Identidad del negocio para el candado, desde los campos crudos del form
 // (la normalización robusta vive en el módulo: URL pegada, mayúsculas, @).
+// ---------- Onboarding un clic: respuestas obligatorias (sin atajo) ----------
+// La semana de prueba SOLO se genera con las 5 respuestas (+ donde cuando
+// no hay @ ni web). Sin ellas -> 400, sin gastar IA. El modo test queda
+// exento como el resto de los gates de la prueba. La promo se marca SOLO
+// para la semana de prueba: una promo de esta semana no es fundamento
+// permanente (promo_semana: true en el objeto guardado).
+const OC_CTA = ['reservar', 'escribirte', 'local', 'comprar'];
+const OC_PROMO = ['ninguna', 'porcentaje', '2x1', 'envio'];
+const OC_VOZ = ['cercano', 'profesional', 'divertido', 'elegante'];
+const OC_PRECIOS = ['si', 'ofertas', 'no'];
+const OC_DONDE = ['whatsapp', 'instagram', 'local', 'web'];
+function onboardingAnswersFrom(fields) {
+  const f = fields || {};
+  const clean = (v, n) => String(v || '').trim().slice(0, n);
+  return {
+    producto_estrella: clean(f.producto_estrella, 60),
+    producto_mix: clean(f.producto_mix, 10),
+    cta: clean(f.cta, 20),
+    promo: clean(f.promo, 20),
+    voz: clean(f.voz, 20),
+    precios: clean(f.precios, 20),
+    donde: clean(f.donde, 20),
+  };
+}
+function onboardingAnswersOk(a, opts) {
+  if (!a) return false;
+  if (a.producto_mix !== 'todo' && !(a.producto_mix === 'uno' && a.producto_estrella)) return false;
+  if (!OC_CTA.includes(a.cta)) return false;
+  if (!OC_PROMO.includes(a.promo)) return false;
+  if (!OC_VOZ.includes(a.voz)) return false;
+  if (!OC_PRECIOS.includes(a.precios)) return false;
+  if (!opts.ig && !opts.web && !OC_DONDE.includes(a.donde)) return false;
+  return true;
+}
+function onboardingGoalLines(a, lang) {
+  const en = lang === 'en';
+  if (!a) return [];
+  const lines = [];
+  if (a.producto_mix === 'todo') lines.push(en ? 'Mix: a bit of everything, no single star product' : 'Mix: de todo un poco, sin un único producto estrella');
+  else if (a.producto_estrella) lines.push((en ? 'Star product (chosen by the owner): ' : 'Producto estrella (elegido por el dueño): ') + a.producto_estrella);
+  if (a.cta) lines.push((en ? 'Post goal: ' : 'Objetivo del posteo: ') + ({ reservar: en ? 'bookings' : 'reservas', escribirte: en ? 'messages' : 'mensajes', local: en ? 'store visits' : 'visitas al local', comprar: en ? 'purchases' : 'compras' }[a.cta] || a.cta));
+  if (a.promo && a.promo !== 'ninguna') lines.push((en ? 'Real promo this week: ' : 'Promo real esta semana: ') + ({ porcentaje: en ? '% off' : '% de descuento', '2x1': '2x1', envio: en ? 'free shipping' : 'envío gratis' }[a.promo] || a.promo));
+  if (a.voz) lines.push((en ? 'Voice: ' : 'Voz: ') + a.voz);
+  if (a.precios) lines.push((en ? 'Prices in posts: ' : 'Precios en posteos: ') + ({ si: en ? 'yes' : 'sí', ofertas: en ? 'only on offers' : 'solo en ofertas', no: 'no' }[a.precios] || a.precios));
+  if (a.donde) lines.push((en ? 'Where to find them: ' : 'Dónde lo encuentran: ') + ({ whatsapp: 'WhatsApp', instagram: 'Instagram', local: en ? 'at the store' : 'en el local', web: en ? 'on their website' : 'en su web' }[a.donde] || a.donde));
+  return lines;
+}
+
 function trialLockGate(fields, webData, testMode) {
   try {
     if (!trialLock || testMode) return null;
@@ -23010,6 +23077,15 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       });
     }
   }
+
+  // (onboarding un clic) SIN ATAJO: la semana solo se genera con las 5
+  // respuestas (+ donde cuando no hay @ ni web). Sin ellas -> 400, sin
+  // gastar IA. El serve de semana existente (caché/candado) no genera y
+  // queda intacto: esto solo cierra la creación sin respuestas.
+  const ocAns = onboardingAnswersFrom(fields);
+  if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
+    return res.status(400).json({ error: lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio' });
+  }
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
   // Preguntas previas de /prueba (opcionales): objetivo + producto + diferencial.
@@ -23018,7 +23094,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang)].filter(Boolean).join('\n');
   // Colores: si el visitante mandó (ya no se pide en el form), se usan; si no,
   // intentamos los colores REALES de su perfil de Instagram (best-effort) y
   // si no se puede, cae a la paleta curada de su rubro.
@@ -23170,7 +23246,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     const effCategory = rubroRes.category;
     // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
-    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal, deep, rubro: rubroRes });
+    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal, deep, rubro: rubroRes, onboarding: ocAns });
     const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang });
     // 🧠 Análisis (2026-10-19): misma radiografía que la ruta stream. Si los
     // datos del @ no llegan, el análisis queda ausente — jamás se afirma un
@@ -23223,6 +23299,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       feed_register: spec.feedRegister || null,
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
+      onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
       ig_pic: igPic, ig_name: igName,
       analysis: trialAnalysisJson,
       competition_line: trialCompetition,
@@ -23309,6 +23386,26 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
   const resolved = rubroId.resolveRubro({ cls, lang: prefillLang });
   const legacyCat = demo.categoryFromText((bio ? bio + ' ' : '') + name);
   const hasVotes = (cls.candidatas || []).length > 0;
+  // (onboarding un clic) Productos reales para la pregunta 1: bio minada
+  // + fotos de los posts mapeadas por producto. Solo se localizan las
+  // fotos mapeadas (la CDN de IG no se deja hotlinkear: sin esto las
+  // tarjetas saldrían grises, lección v187). Nunca lanza: si una foto no
+  // se pudo bajar, la tarjeta queda con el nombre.
+  const ocProds = onboardingProducts.detectProducts({ bio: bio || '', captions });
+  const ocMapped = onboardingProducts.mapProductPhotos(ocProds, embedPosts.map((p) => ({ url: p.thumb, text: p.caption || '' })).filter((x) => x.url));
+  let ocProductos = ocMapped;
+  try {
+    const ocWithFoto = ocMapped.map((p, i) => ({ p, i })).filter((x) => x.p.foto);
+    if (ocWithFoto.length) {
+      const ocLoc = await feedAudit.localizeTrialPhotos({ handle: ig, photos: ocWithFoto.map((x) => x.p.foto) }, MEDIA_DIR);
+      const ocLocals = (ocLoc && ocLoc.photos) || [];
+      ocProductos = ocMapped.map((p, i) => {
+        const w = ocWithFoto.filter((x) => x.i === i)[0];
+        if (!w) return p;
+        return { nombre: p.nombre, foto: ocLocals[ocWithFoto.indexOf(w)] || null };
+      });
+    }
+  } catch (e) { /* tarjetas con nombre */ }
   res.json({
     ok: true,
     ig,
@@ -23319,6 +23416,7 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
     // generar (orden de Valentino) y reenvía la confirmación.
     rubro_check: hasVotes ? resolved.rubroCheck : { needed: false, options: [], detected: null },
     photo: (prof && prof.pic) || null, // dataURL de la foto de perfil
+    productos: ocProductos,
   });
 });
 
@@ -23412,6 +23510,14 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
   const wresolved = rubroId.resolveRubro({ cls: wcls, lang: webPrefillLang });
   const wLegacy = demo.categoryFromText([data.name, data.description, ...(data.services || [])].join(' '));
   const wHasVotes = (wcls.candidatas || []).length > 0;
+  // (onboarding un clic) Productos reales para la pregunta 1: servicios
+  // de la web + fotos del sitio mapeadas por producto (alt/nombre).
+  // Las fotos del sitio se hotlinkean directo (son del propio negocio);
+  // si alguna no carga, la tarjeta queda con el nombre (onerror).
+  const ocProductos = onboardingProducts.mapProductPhotos(
+    onboardingProducts.detectProducts({ services: data.services || [] }),
+    (data.photos || []).map((p) => ({ url: p.url, text: [p.alt || '', String(p.url || '').split('?')[0].split('/').pop() || ''].join(' ') })).filter((x) => x.url)
+  );
   res.json({
     ok: true,
     web: data.url,
@@ -23425,6 +23531,7 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
     palette: data.palette || [],
     photos: (data.photos || []).map((p) => p.url),
     photoCount: (data.photos || []).length,
+    productos: ocProductos,
   });
 });
 
@@ -23501,13 +23608,20 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       return finish();
     }
   }
+
+  // (onboarding un clic) SIN ATAJO, igual que en /api/trial/generate.
+  const ocAns = onboardingAnswersFrom(fields);
+  if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
+    fail(lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio');
+    return;
+  }
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
   const goal_key = ['vender', 'seguidores', 'lanzamiento', 'fidelizar'].includes(String(fields.goal_key || '').trim())
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang)].filter(Boolean).join('\n');
   const pal = demo.CATEGORY_COLORS[category] || demo.CATEGORY_COLORS.otro;
   const hexOk = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || '').trim());
   let accent = hexOk(fields.accent) ? String(fields.accent).trim().toUpperCase() : pal[0];
@@ -23839,7 +23953,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const trialDigest = buildTrialDigest({
       business, category, webData,
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
-      formText: richGoal, feedPalette, registro: feedRegister, deep, rubro: rubroRes,
+      formText: richGoal, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns,
     });
     // (v379 · ítem 5 — reaplicado en v382) DIAGNÓSTICO EXPRESS: la paleta
     // completa del feed, su registro lumínico y su línea YA se calculan
@@ -24363,6 +24477,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       feed_register: spec.feedRegister || null,
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
+      onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
       feed_kind: feedKind,
       feed_formula: feedFormula,
       feed_palette: feedPalette,
@@ -26162,7 +26277,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v508';
+const BUILD_ID = '20261031-v509';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

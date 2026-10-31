@@ -84,7 +84,7 @@ check('fp-tile draft con borde', app.includes('fp-tile-draft'));
 check('CSS fp-tile-draft', css.includes('.fp-tile.fp-tile-draft'));
 check('CSS .pz-draft-chip conservada (tarjeta revisión)', css.includes('.pz-draft-chip'));
 check('bumps index', idx.includes('app.js?v=331') && idx.includes('styles.css?v=20261052'));
-check('BUILD v507', srv.includes("BUILD_ID = '20261031-v507'"));
+check('BUILD v509', srv.includes("BUILD_ID = '20261031-v509'"));
 check('sin expandArtBrief tocado', !/expandArtBrief/.test(app.split('apvMoreHTML')[0].slice(-2000)) || true);
 check('sin archivos gesty-* tocados (diff lo confirma)', true);
 

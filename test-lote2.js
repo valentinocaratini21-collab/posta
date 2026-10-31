@@ -58,7 +58,7 @@ check('hook en generateWeekDrafts', srv.includes('bilingualizeWeek(db, uid, bRow
 check('hook tras piloto automático', srv.indexOf('piloto automático:') < srv.indexOf('bilingualizeWeek(db, uid, bRows, bFn)'));
 check('hook solo piezas sin EN previo', srv.includes('bilingual_status IS NULL'));
 check('módulo: sin opt-in no escribe', wb.includes("if (!isBilingualWeekEnabled(db, uid)) return { ok: true, skipped: 'disabled'"));
-check('BUILD v507', srv.includes("BUILD_ID = '20261031-v507'"));
+check('BUILD v509', srv.includes("BUILD_ID = '20261031-v509'"));
 check('index raíz app.js?v=331; en/index estática sin app.js', idx.includes('app.js?v=331') && !enidx.includes('app.js?v='));
 check('styles ?v= 20261052', idx.includes('styles.css?v=20261052') && enidx.includes('styles.css?v=20261052'));
 console.log('== Censo (sin cambios que explicar) ==');
