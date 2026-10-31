@@ -9,6 +9,7 @@
 
 const { sendEmail, emailConfigured, emailFaceHeader } = require('./email');
 const { signAction, signWeekAction, absoluteMediaUrl, userHourLabel } = require('./approval');
+const { buildWeekEmailV4 } = require('./email-semana-v4');
 
 const BASE_URL = () => process.env.APP_URL || 'https://postycommunitymanager.com';
 
@@ -178,6 +179,50 @@ async function sendMissedEmail(db, post) {
   }
 }
 
+// Email de la semana v4 (muestra aprobada 30/10): la semana recién programada
+// por el autopilot se muestra completa (posteos reales, plantilla v4).
+// Sin posteos programados a futuro, sendWeekReady mantiene el aviso viejo.
+function getWeekTimezone(db, userId) {
+  try {
+    const r = db.prepare('SELECT timezone FROM settings WHERE user_id = ?').get(userId);
+    if (r && r.timezone) return r.timezone;
+  } catch (e) { /* default */ }
+  return 'America/Argentina/Buenos_Aires';
+}
+
+function getWeekBusinessName(db, userId, fallback) {
+  try {
+    const r = db.prepare('SELECT business_name FROM profiles WHERE user_id = ?').get(userId);
+    if (r && String(r.business_name || '').trim()) return String(r.business_name).trim();
+  } catch (e) { /* fallback */ }
+  return fallback || '';
+}
+
+// 'YYYY-MM-DD HH:MM:SS' de SQLite = UTC (misma regla que approval.js parseUtc).
+function parseWeekUtc(s) {
+  const t = String(s || '').trim();
+  if (!t) return null;
+  const d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(t) ? t : t.replace(' ', 'T') + 'Z');
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Lunes (YYYY-MM-DD) de la semana del posteo, en el tz del usuario.
+// Solo se usa si los posteos no traen week_key (legado).
+function mondayKeyOfScheduled(iso, tz) {
+  const d = parseWeekUtc(iso);
+  if (!d) return '';
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short', timeZone: tz,
+    }).formatToParts(d);
+    const get = (t) => (parts.find((p) => p.type === t) || {}).value || '';
+    const y = Number(get('year')), m = Number(get('month')), day = Number(get('day'));
+    const off = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }[get('weekday')];
+    if (!y || !m || !day || off === undefined) return '';
+    return new Date(Date.UTC(y, m - 1, day - off)).toISOString().slice(0, 10);
+  } catch (e) { return ''; }
+}
+
 // Aviso "tu semana está lista 🎉": la semana se armó y programó sola.
 // Se manda tras el auto-arm (signup, regla 24h, semana semanal).
 async function sendWeekReady(db, userId, n) {
@@ -187,6 +232,35 @@ async function sendWeekReady(db, userId, n) {
     if (!user || !String(user.email || '').trim()) return { ok: false, reason: 'usuario sin email' };
     const base = BASE_URL();
     const en = user.lang === 'en';
+    // V4: si la semana recién programada está disponible, el email muestra
+    // sus posteos reales con la plantilla v4 (8 Lun–Lun en el caso normal).
+    // El botón "Aprobar semana" usa el publish firmado de la semana (el mismo
+    // del preview): idempotente, si ya no hay borradores confirma igual.
+    let weekRows = [];
+    try {
+      weekRows = db.prepare(`SELECT id, caption, tipo, scheduled_at, week_key FROM posts
+        WHERE user_id = ? AND status = 'scheduled'
+          AND media_type IN ('image','carousel','video')
+          AND scheduled_at >= datetime('now')
+        ORDER BY scheduled_at ASC LIMIT 8`).all(userId) || [];
+    } catch (e) { weekRows = []; }
+    if (weekRows.length) {
+      const tz = getWeekTimezone(db, userId);
+      const biz = getWeekBusinessName(db, userId, user.name);
+      let weekKey = weekRows.map((r) => String(r.week_key || '')).find(Boolean) || '';
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) weekKey = mondayKeyOfScheduled(weekRows[0].scheduled_at, tz);
+      let approveUrl = `${base}/#/app/schedule`;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) {
+        const { sig, exp } = signWeekAction(userId, weekKey, 72);
+        approveUrl = `${base}/api/week/${encodeURIComponent(weekKey)}/publish?uid=${encodeURIComponent(userId)}&sig=${sig}&exp=${exp}`;
+      }
+      const v4 = buildWeekEmailV4({
+        biz, lang: en ? 'en' : 'es',
+        posts: weekRows.map((r) => ({ id: r.id, caption: r.caption, tipo: r.tipo, scheduled_at: r.scheduled_at })),
+        approveUrl, baseUrl: base, tz,
+      });
+      return await sendEmail({ to: user.email, subject: v4.subject, html: v4.html });
+    }
     const subject = en ? 'Your week is ready 🎉' : 'Tu semana está lista 🎉';
     const html = emailShell(en ? `
     <p style="font-size:18px;font-weight:800;margin:0 0 12px">Hi${user.name ? ' ' + esc(user.name) : ''}! I'm Posty 🤖</p>
