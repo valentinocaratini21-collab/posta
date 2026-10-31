@@ -143,7 +143,7 @@ function beatFromCaption(caption, hook) {
 // Reel v2 (reel-engine): videos del álbum primero; fotos del posteo +
 // álbum (+ stock del rubro si falta material). Devuelve null si no hay
 // material suficiente (el llamador decide el fallback).
-async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0, weekKey = '' }) {
+async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0, weekKey = '', aiClip = null }) {
   const { buildReelPro, moodForCategory } = require('./reel-engine');
   const { pickStockPhoto, stockRubroFor } = require('./stock');
   const profile = (() => { try { return db.prepare('SELECT business_name, category, ig_username FROM profiles WHERE user_id = ?').get(uid) || {}; } catch (e) { return {}; } })();
@@ -209,7 +209,12 @@ async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0, weekKe
   const handle = profile.ig_username ? '@' + String(profile.ig_username).replace(/^@/, '') : (profile.business_name || '');
   const mood = moodForCategory(profile.category, stockRubroFor(profile.category));
   const reelPhotos = rot(photos, salt * 2).slice(0, 5);
-  const reelVideos = rot(videos, salt);
+  // v329 — VIDEO FIRMA IA (brief §7.5.2): el clip generado por ai-video.js
+  // abre SOLO el reel principal de la semana (salt === 0) como escena 1.
+  // buildReelV3 consume videos[] en orden, primero que las fotos, y el
+  // camino v2 también pone los videos primero: alcanza con anteponerlo.
+  // Los demás reels de la semana quedan byte a byte como hoy.
+  const reelVideos = (salt === 0 && aiClip) ? [aiClip, ...rot(videos, salt)] : rot(videos, salt);
 
   // MOTION v3 (Fase 2, 2026-10-20 — spec-motion-v3.md; ACTIVADO POR
   // DEFECTO el 2026-10-21 por mandato de Valentino): el guion NACE del
@@ -312,6 +317,39 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
     return { stories: 0, reels: 0, plan: plan.id, already: true, need: { stories: nStories, reels: nReels }, have: { stories: have.story, reels: have.video } };
   }
 
+  // v329 — VIDEO FIRMA IA (brief §7.5.1): antes del loop de reels, si el
+  // flag está prendido para este usuario y el reel principal de la semana
+  // todavía no existe (have.video === 0, o sea que se crea en esta pasada
+  // con salt 0), se genera el clip firma de la semana. La imagen héroe es
+  // la primera del feed (la del posteo principal = producto exacto) y el
+  // prompt sale del fundamento vía reel-script.buildVideoPrompt.
+  // ai-video.js es idempotente por (uid, weekKey) y NUNCA lanza: cualquier
+  // falla deja aiClip en null y la semana sale exactamente como hoy.
+  let aiClip = null;
+  if (nReels > 0 && have.video === 0) {
+    try {
+      const aiVideo = require('./ai-video');
+      if (aiVideo.aiVideoEnabledFor(uid)) {
+        const heroFile = localFile(mediaDir, feed[0].image_path);
+        if (heroFile) {
+          let videoPrompt = '';
+          try {
+            const clientDigest = require('./client-digest');
+            const { buildVideoPrompt } = require('./reel-script');
+            videoPrompt = buildVideoPrompt({ digest: clientDigest.getDigest(db, uid), post: feed[0] });
+          } catch (e) { /* sin prompt: ai-video usa su plantilla genérica segura */ }
+          const clip = await aiVideo.generateSignatureClip({
+            db, uid, planId: plan.id, imageFile: heroFile, prompt: videoPrompt, mediaDir, weekKey,
+          });
+          if (clip && clip.file) aiClip = clip.file;
+        }
+      }
+    } catch (e) {
+      console.error(`[extras:${tag}] video firma IA falló (la semana sigue sin firma):`, e.message);
+      aiClip = null;
+    }
+  }
+
   // Historias: round-robin sobre los posteos (cada historia usa otro posteo).
   for (let i = have.story; i < nStories; i++) {
     const post = feed[i % feed.length];
@@ -342,7 +380,7 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
       }
       let out = null;
       if (process.env.POSTY_REELS_V2 !== '0') {
-        try { out = await makeReelVideoPro({ db, uid, feedPosts: feed, mediaDir, salt: i, weekKey }); }
+        try { out = await makeReelVideoPro({ db, uid, feedPosts: feed, mediaDir, salt: i, weekKey, aiClip: i === 0 ? aiClip : null }); }
         catch (e) { console.error(`[extras:${tag}] reel v2 falló (sigo con el legado):`, e.message); }
       }
       if (!out) {

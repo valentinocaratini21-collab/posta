@@ -1341,4 +1341,4 @@ async function buildSingleClipReel(opts) {
   }
 }
 
-module.exports = { buildReelPro, buildReelV3, buildSingleClipReel, detectFocus, bestFrameTimeIn, measureFrameQuality, moodForCategory, wrapLines, MUSIC_TRACKS, MUSIC_CATALOG, pickMusicFile, moodTracksFor, MOTION_TEMPLATES, templateFor, movementPlanFor, measureAdvance, findKeyword };
+module.exports = { buildReelPro, buildReelV3, buildSingleClipReel, detectFocus, bestFrameTimeIn, measureFrameQuality, moodForCategory, wrapLines, MUSIC_TRACKS, MUSIC_CATALOG, pickMusicFile, moodTracksFor, MOTION_TEMPLATES, templateFor, movementPlanFor, measureAdvance, findKeyword, mediaInfo };

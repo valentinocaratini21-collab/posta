@@ -5685,6 +5685,26 @@ app.get('/api/admin/ai-costs', requireAdminToken, (req, res) => {
   });
 });
 
+// Biblioteca de vidriera de videos firma IA (v329, misión 2026-10-22):
+// registro persistente de cada clip firma generado — negocio, rubro,
+// plan/tier, semana, modelo y costo, con la URL del archivo. Las mejores
+// piezas se reusan como marketing en el IG de Posty (collab con el
+// negocio etiquetado). Los archivos NUNCA se borran: están referenciados
+// en ai_signature_clips y mediaJanitor tiene guarda por prefijo.
+// ?token=ADMIN_TOKEN&limit=100&user_id=
+app.get('/api/admin/ai-signatures', requireAdminToken, (req, res) => {
+  try {
+    const { listSignatureClips } = require('./ai-video');
+    const clips = listSignatureClips(db, {
+      limit: req.query.limit,
+      userId: req.query.user_id ? Number(req.query.user_id) : null,
+    });
+    res.json({ ok: true, count: clips.length, clips });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Extender mi propia prueba (2026-10-03): para el fundador/testing.
 // Solo el usuario logueado. Si ya tiene una extensión VIGENTE, no deja.
 // Si venció o nunca tuvo, extiende 30 días.
@@ -14523,6 +14543,12 @@ function mediaJanitor(aggressive = false) {
       // durante la turbulencia del deploy). Viven lo que vive el cache
       // (72 h); después son huérfanas normales.
       if (f.startsWith('igthumb-') && now - st.mtimeMs < 72 * 3600 * 1000) { kept++; continue; }
+      // v329: los clips firma IA (ai-signature-*) son la biblioteca de
+      // vidriera de Posty — material de marketing reutilizable para
+      // siempre (misión de Valentino 2026-10-22). NUNCA se borran: además
+      // de esta guarda, viven referenciados en la tabla ai_signature_clips
+      // (referencedMediaNames los cuenta como referencia viva).
+      if (f.startsWith('ai-signature-')) { kept++; continue; }
       if (now - st.mtimeMs < minAge) { kept++; continue; }
       try { fs.unlinkSync(full); deleted++; freed += st.size; } catch (e) {}
     }
@@ -23254,7 +23280,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v489';
+const BUILD_ID = '20261031-v490';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

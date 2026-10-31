@@ -320,7 +320,52 @@ function captionFallbackScript({ digest, post, intent, durationSec, degradeReaso
     scenes: timed, durationSec,
     totalWords: timed.reduce((a, s) => a + wordCount(s.line), 0),
     intent, source: 'caption', degraded: true, degradeReason: degradeReason || 'fallback',
+    videoPrompt: buildVideoPrompt({ digest, post }),
   };
+}
+
+// ---------- VideoPrompt de la escena firma (v329 — brief §5 y §7.5.3) ----------
+/* Plantillas de MOVIMIENTO por rubro para el clip IA semanal (Seedance
+ * image-to-video vía ai-video.js). Regla del brief: el prompt describe solo
+ * movimiento — la escena, el producto y la paleta los ancla el frame
+ * inicial, que es la foto EXACTA del cliente. Sin texto dentro del video:
+ * titulares y subtítulos siguen siendo capa de Posty. */
+const VIDEO_PROMPT_TEMPLATES = {
+  peluqueria: 'Image-to-video, vertical 9:16. The hair from the photo comes alive: a wave of glossy light travels from roots to ends, slow-motion hair flip with strands floating weightlessly, salon background softly blurred, warm cinematic light. Hair color and length stay exactly as in the photo, no face changes, gentle motion, photorealistic.',
+  unas: 'Image-to-video, vertical 9:16, top-down close-up of the hand from the photo resting on the studio table. Nail polish magically applies itself nail by nail, glossy gel finish appearing in sequence, subtle sparkle as each nail completes, hand stays perfectly still, skin and hand shape unchanged, soft beauty lighting, photorealistic.',
+  cafeteria: 'Image-to-video, vertical 9:16, overhead shot of the coffee cup from the photo. Steamed milk swirls in and a perfect heart latte art draws itself on the surface, gentle steam rising and curling into a soft heart shape, cozy café light, cup and saucer unchanged, slow hypnotic motion, photorealistic.',
+  indumentaria: 'Image-to-video, vertical 9:16. The garment from the photo is now worn and walking toward camera down a stylish city street at golden hour, fabric flowing naturally in a light breeze, garment design, color and print stay exactly identical to the photo, confident walk, cinematic fashion-film look, photorealistic.',
+  veterinaria: 'Image-to-video, vertical 9:16. The dog from the photo, freshly bathed and wet, shakes off water in extreme slow motion, droplets sparkling like diamonds in warm backlight, fur becoming fluffy and dry by the end, dog ends happy looking at camera, same dog, same markings, cozy grooming salon background, photorealistic.',
+  muebles: 'Image-to-video, vertical 9:16. An empty bright living room: the sofa from the photo slides smoothly into place, coffee table settles in front, a plant grows in gentle time-lapse beside it, warm afternoon sunlight sweeps across the floor, furniture design and fabric stay exactly as in the photo, calm architectural-film motion, photorealistic.',
+};
+/* Rubro del digest → plantilla. La barbería queda FUERA a propósito: su
+ * concepto ("la navaja que afeita sola") es banco extra de fase 2 en el
+ * brief; hasta entonces usa la genérica segura, no la de pelo. */
+function rubroForVideoPrompt(digest) {
+  const s = normText(`${(digest && digest.category) || ''} ${(digest && digest.subcat) || ''}`);
+  if (/barber/.test(s)) return null;
+  if (/peluquer|hair/.test(s)) return 'peluqueria';
+  if (/unas|nail|manicur/.test(s)) return 'unas';
+  if (/cafe|coffee/.test(s)) return 'cafeteria';
+  if (/indumentaria|ropa|moda|fashion|textil|calzado/.test(s)) return 'indumentaria';
+  if (/veterinar|mascota|petshop|pet shop/.test(s)) return 'veterinaria';
+  if (/mueble|decoracion|hogar|interiorismo/.test(s)) return 'muebles';
+  return null;
+}
+/* Plantilla genérica segura del brief (§7.5.3): movimiento mínimo, el
+ * producto quieto y exacto, el mundo se mueve apenas. */
+function genericVideoPrompt(item) {
+  const p = String(item || '').trim();
+  return `Slow cinematic push-in on the product from the photo, ${p || 'the product'} stays perfectly still and exactly as in the photo, soft light movement in the background, photorealistic, vertical 9:16.`;
+}
+/* Prompt del clip firma desde el fundamento: plantilla del rubro si el
+ * rubro es uno de los seis del brief; si no, la genérica con el producto
+ * estrella del digest. Nunca devuelve vacío: la semana no se bloquea
+ * jamás por el prompt. */
+function buildVideoPrompt({ digest, post } = {}) {
+  const rubro = rubroForVideoPrompt(digest || {});
+  if (rubro && VIDEO_PROMPT_TEMPLATES[rubro]) return VIDEO_PROMPT_TEMPLATES[rubro];
+  return genericVideoPrompt(firstItemName(digest || {}));
 }
 
 // ---------- API principal ----------
@@ -368,6 +413,7 @@ async function buildReelScript(opts = {}) {
         hook: byRole('hook'), problem: byRole('problem'), solution: byRole('solution'), cta: byRole('cta'),
         scenes: timed, durationSec, totalWords: v.totalWords,
         intent, source: 'ai', degraded: false, attempts: attempt + 1,
+        videoPrompt: buildVideoPrompt({ digest, post }),
       };
     }
     lastReason = 'validacion: ' + v.errors.join(',');
@@ -382,4 +428,5 @@ module.exports = {
   wordCount, wordBudget, sectionWindows,
   buildCtaForIntent, validateScript, withSceneTiming,
   buildScriptPrompt, captionFallbackScript, buildReelScript,
+  VIDEO_PROMPT_TEMPLATES, rubroForVideoPrompt, genericVideoPrompt, buildVideoPrompt,
 };

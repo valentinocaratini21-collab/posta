@@ -152,6 +152,51 @@ function monthSpendUsd(userId) {
 
 const MSG_MONTHLY_CAP = 'llegamos al tope de IA de tu plan por este mes 🔋 se renueva solo el mes que viene — tus borradores están a salvo 💪';
 
+// ---------- Línea de cap SEPARADA para el video firma IA (v329) ----------
+// El video IA premium semanal (Seedance vía fal, módulo ai-video.js) tiene su
+// PROPIA línea de techo mensual por plan, separada del cap genérico de IA de
+// arriba (10% del plan): el video solo ya representa ~9–14% del precio USD
+// del plan y si compartiera el cap genérico quedaría estrangulado (brief
+// posty-reels-video-ia §3, diseño confirmado por Valentino 2026-10-22).
+// Valores = costo terminado esperado del mes (4,33 videos/semana × tarifa ×
+// factor 1,3 de reintentos) con aire: Esencial ≈ USD 10,9 → 14 · Pro/Total
+// ≈ USD 26,6 → 32. El gasto de video se loguea en api_costs con feature
+// 'ai-video' (y por lo tanto también cuenta en monthSpendUsd/assertAiOk
+// como gasto real que es); esta línea es el freno específico que ai-video.js
+// consulta ANTES de gastar en un clip nuevo. Si el cap corta, la semana sale
+// sin firma (fallback), nunca rota.
+const AI_VIDEO_CAP_USD = { esencial: 14, pro: 32, total: 32 };
+function aiVideoCapUsd(plan) {
+  try {
+    const id = typeof plan === 'string' ? plan : (plan && plan.id);
+    if (id === 'free') return AI_CAP_FOUNDER_USD; // fundador: testeo sin techo
+    return AI_VIDEO_CAP_USD[id] || AI_VIDEO_CAP_USD.esencial;
+  } catch (e) { return AI_VIDEO_CAP_USD.esencial; }
+}
+function aiVideoMonthSpendUsd(userId) {
+  if (!DB) return 0;
+  try {
+    const r = DB.prepare(`SELECT COALESCE(SUM(est_cost_usd),0) AS s FROM api_costs
+      WHERE user_id = ? AND feature = 'ai-video' AND ts >= date('now','start of month')`).get(userId);
+    return (r && r.s) || 0;
+  } catch (e) {
+    // FAIL-CLOSED como monthSpendUsd: si no se puede leer, tope superado.
+    console.error('[aiVideoMonthSpendUsd] DB error, asumiendo tope superado:', e.message);
+    return Infinity;
+  }
+}
+// Inserta el costo ESTIMADO de un clip (tarifa × duración pedida; lo calcula
+// ai-video.js con su tabla de tarifas de fal). Medir nunca rompe.
+function logVideoCost({ userId, model, estUsd }) {
+  if (!DB) return;
+  try {
+    const cost = Math.round((Number(estUsd) || 0) * 1e6) / 1e6;
+    DB.prepare(`INSERT INTO api_costs (user_id, feature, model, in_tokens, out_tokens, cached_tokens, images, est_cost_usd)
+      VALUES (?,?,?,?,?,?,?,?)`).run(
+      userId == null ? null : userId, 'ai-video', String(model || ''), 0, 0, 0, 0, cost);
+  } catch (e) { /* medir nunca rompe */ }
+}
+
 // Llamar ANTES de gastar IA en endpoints user-facing. Tira AiCapExceeded si se superó el tope.
 function assertAiOk(userId) {
   if (daySpendUsd() >= DAILY_CAP_USD) {
@@ -275,4 +320,5 @@ module.exports = {
   checkRate, isFounderEmail, MSG_CHAT_RATE, MSG_WEEK_RATE, MSG_IDEAS_RATE, MSG_REGEN_RATE,
   photoHash, photoRecentlySent, markPhotoSent,
   costBreakdown,
+  AI_VIDEO_CAP_USD, aiVideoCapUsd, aiVideoMonthSpendUsd, logVideoCost,
 };
