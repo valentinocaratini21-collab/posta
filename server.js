@@ -308,6 +308,9 @@ try {
 const os = require('os');
 const streaks = require('./streaks');
 const metaAds = require('./meta_ads');
+// === DESTACADO-BOOST require (inicio) ===
+const destacadoSemana = require('./destacado-semana');
+// === DESTACADO-BOOST require (fin) ===
 const { AD_FEE_PCT, AD_MIN_TOPUP_CENTS, AD_TOPUP_OPTIONS, AD_BUDGET_OPTIONS, AD_MIN_BUDGET_CENTS, AD_DEFAULT_DAYS, adSplit, fmtARS } = require('./config/ads');
 
 // Funnel: eventos de conversión (prueba → registro → conexión → semana → pago).
@@ -6357,6 +6360,109 @@ function adCountry(userId) {
 }
 
 // Config + saldo para el frontend
+// === DESTACADO-BOOST endpoints (inicio) ===
+// Posteo de la semana destacado + botón Impulsar (gated).
+// Parte A viva: Posty elige 1 destacado; el cliente lo mueve con un toque.
+// Parte B gated por DESTACADO_BOOST_ENABLED=1 + Meta + vars + ads build:
+// sin flag no hay cobro ni llamada a ads (fail-closed). El cobro con tarjeta
+// guardada (Stripe PaymentIntents off-session) es el punto de cableado
+// PENDIENTE del turno del push: cobrarDestacadoPendiente falla cerrado hasta
+// entonces. La conversión USD (cobro) -> ARS (cuenta Meta) también queda
+// pendiente: no se inventa tasa ni fee.
+function destacadoSemanaEstado(uid) {
+  const tz = userTz(uid);
+  const wk = mondayKeyOf(tzToday(tz));
+  let rows = [];
+  try { rows = weekOccupancyRows(uid, wk).filter((p) => !p.needs_review); } catch (e) { rows = []; }
+  const adaptados = destacadoSemana.adaptarSemana(rows);
+  let guardado = null;
+  try { guardado = db.prepare('SELECT post_id, origen, por_que FROM semana_destacado WHERE user_id = ? AND week_key = ?').get(uid, wk) || null; } catch (e) { guardado = null; }
+  const ids = new Set(adaptados.map((p) => String(p.id)));
+  if (guardado && ids.has(String(guardado.post_id))) {
+    const pub = adaptados.find((p) => String(p.id) === String(guardado.post_id));
+    return { week_key: wk, posteos: adaptados, destacadoId: guardado.post_id, destacadoPorQue: guardado.por_que || null, destacadoOrigen: guardado.origen || 'posty', destacadoPublicado: !!(pub && pub.publicado) };
+  }
+  const semana = destacadoSemana.aplicarDestacado({ id: wk, posteos: adaptados });
+  if (semana.destacadoId) {
+    try { db.prepare("INSERT OR REPLACE INTO semana_destacado (user_id, week_key, post_id, origen, por_que, updated_at) VALUES (?,?,?,?,?,datetime('now'))").run(uid, wk, semana.destacadoId, 'posty', semana.destacadoPorQue || ''); } catch (e) {}
+  }
+  const pub = adaptados.find((p) => String(p.id) === String(semana.destacadoId));
+  return { week_key: wk, posteos: adaptados, destacadoId: semana.destacadoId || null, destacadoPorQue: semana.destacadoPorQue || null, destacadoOrigen: semana.destacadoOrigen || null, destacadoPublicado: !!(pub && pub.publicado) };
+}
+
+app.get('/api/destacado/semana', requireAuth, (req, res) => {
+  try {
+    const st = destacadoSemanaEstado(req.session.userId);
+    res.json({ ok: true, week_key: st.week_key, boostHabilitado: destacadoSemana.boostHabilitado(process.env), destacadoId: st.destacadoId, destacadoPorQue: st.destacadoPorQue, destacadoOrigen: st.destacadoOrigen, destacadoPublicado: st.destacadoPublicado, posteos: st.posteos.map((p) => ({ id: p.id, publicado: p.publicado })) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar el destacado' }); }
+});
+
+app.post('/api/destacado/mover', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const st = destacadoSemanaEstado(uid);
+    const match = st.posteos.find((p) => String(p.id) === String(req.body.posteoId));
+    if (!match) return res.status(400).json({ ok: false, motivo: 'posteo_fuera_de_semana' });
+    const r = destacadoSemana.moverDestacado({ id: st.week_key, posteos: st.posteos, destacadoId: st.destacadoId, destacadoPorQue: st.destacadoPorQue, destacadoOrigen: st.destacadoOrigen }, match.id);
+    if (!r.ok) return res.status(400).json({ ok: false, motivo: r.motivo });
+    try { db.prepare("INSERT OR REPLACE INTO semana_destacado (user_id, week_key, post_id, origen, por_que, updated_at) VALUES (?,?,?,?,?,datetime('now'))").run(uid, st.week_key, r.semana.destacadoId, 'cliente', r.semana.destacadoPorQue || ''); } catch (e) {}
+    res.json({ ok: true, destacadoId: r.semana.destacadoId, destacadoPorQue: r.semana.destacadoPorQue, destacadoOrigen: 'cliente' });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo mover el destacado' }); }
+});
+
+// Punto de cableado PENDIENTE (turno del push): cobro único con la tarjeta
+// guardada del cliente (Stripe PaymentIntents off-session). Falla cerrado:
+// sin este cableado, impulsar NUNCA cobra (y por ende nunca pauta).
+function cobrarDestacadoPendiente() {
+  return { ok: false, motivo: 'cobro_no_cableado' };
+}
+
+app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    if (!destacadoSemana.boostHabilitado(process.env)) return res.status(403).json({ ok: false, motivo: 'boost_deshabilitado' });
+    const monto = Number(req.body.montoUSD);
+    if (!destacadoSemana.validarMonto(monto)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
+    const st = destacadoSemanaEstado(uid);
+    if (!st.destacadoId) return res.status(400).json({ ok: false, motivo: 'sin_destacado' });
+    if (!st.destacadoPublicado) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
+    if (!metaAds.adsConfigured()) return res.status(503).json({ ok: false, motivo: 'ads_no_configurado' });
+    let gate = { ready: false };
+    try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
+    if (!gate.ready) return res.status(409).json({ ok: false, motivo: 'sin_autorizacion_publicitaria' });
+    const r = destacadoSemana.crearImpulso({
+      semana: { destacadoId: st.destacadoId }, monto, clienteId: uid,
+      zona: adCountry(uid), env: process.env, adsConfigurado: true,
+      paginaAutorizada: true, posteoPublicado: true,
+      cobrar: cobrarDestacadoPendiente,
+      publicarAnuncio: () => ({ ok: false, motivo: 'conversion_pendiente' }),
+    });
+    if (!r.ok) return res.status(409).json({ ok: false, motivo: r.motivo });
+    res.json({ ok: true, cobroId: r.cobroId, anuncioId: r.anuncioId, posteoId: r.posteoId, montoUSD: r.montoUSD, dias: r.dias });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo impulsar' }); }
+});
+
+app.get('/api/destacado/reporte', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const posteoId = Number(req.query.posteoId) || 0;
+    let medicion = null;
+    try {
+      const brow = posteoId ? db.prepare('SELECT meta_campaign_id FROM ad_boosts WHERE user_id = ? AND post_id = ? ORDER BY id DESC LIMIT 1').get(uid, posteoId) : null;
+      if (brow && brow.meta_campaign_id && metaAds.adsConfigured()) {
+        const stats = await metaAds.getBoostStats(brow.meta_campaign_id);
+        if (stats) medicion = { vistas: stats.impressions };
+      }
+    } catch (e) {}
+    // Mapeo honesto: vistas <- impressions de Meta (real). visitasPerfil y
+    // mensajes NO tienen fuente en getBoostStats (da spend/reach/impressions/
+    // clicks): quedan 'sin dato' hasta que el turno del push cablee sus
+    // fuentes reales. Nunca se reetiqueta clicks como visitas al perfil.
+    res.json({ ok: true, reporte: destacadoSemana.reporteImpulso(medicion) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar el reporte' }); }
+});
+// === DESTACADO-BOOST endpoints (fin) ===
+
 app.get('/api/ads/config', requireAuth, (req, res) => {
   const w = getAdWallet(req.session.userId);
   res.json({
@@ -22580,7 +22686,10 @@ function semanaPageHTML(data) {
       }
       const when = p.when ? `<p style="font-size:13px;font-weight:700;color:#2793C8;margin:12px 0 6px">${semanaEsc(p.when)}</p>` : '';
       const cap = p.caption ? `<p style="font-size:15.5px;line-height:1.55;margin:0;white-space:pre-wrap">${semanaEsc(p.caption)}</p>` : '';
-      return `<article style="border:1px solid #E3EDF3;border-radius:16px;padding:14px;margin:0 0 20px">${media}${when}${cap}</article>`;
+      // === DESTACADO-BOOST share (badge) ===
+      const esDestShare = data.destacado && String(p.id) === String(data.destacado.postId);
+      const badgeShare = esDestShare ? `<div style="border:2px solid #FEC14D;border-radius:12px;padding:8px 10px;margin:0 0 10px;text-align:center"><b style="display:block;font-size:12px;letter-spacing:1px;color:#2793C8">⭐ ${en ? 'FEATURED POST OF THE WEEK' : 'DESTACADO DE LA SEMANA'}</b>${data.destacado.porQue ? `<p style="margin:6px 0 0;font-size:13px;color:#0A1E33">${semanaEsc(data.destacado.porQue)}</p>` : ''}</div>` : '';
+      return `<article style="border:1px solid #E3EDF3;border-radius:16px;padding:14px;margin:0 0 20px">${badgeShare}${media}${when}${cap}</article>`;
     }).join('');
   }
   const foot = `<p style="text-align:center;font-size:13px;color:#8496A5;margin:26px 0 0">${en ? 'Made with' : 'Hecha con'} <a href="/" style="color:#2793C8;font-weight:700;text-decoration:none">Posty</a> · postycommunitymanager.com</p>`;
@@ -22609,11 +22718,24 @@ app.get('/semana/:token', (req, res) => {
     }
     if (!media.length && p.image_path) media = [semanaMediaUrl(p.image_path)];
     const cap = [String(p.caption || '').trim(), String(p.hashtags || '').trim()].filter(Boolean).join('\n');
-    return { media_type: String(p.media_type || 'image'), media, caption: cap, when: semanaWhenLabel(p, tz, en) };
+    return { id: p.id, media_type: String(p.media_type || 'image'), media, caption: cap, when: semanaWhenLabel(p, tz, en) };
   });
   const handle = String(prof.ig_username || '').replace(/^@+/, '').trim() || (en ? 'this business' : 'este negocio');
   res.set('Cache-Control', 'private, no-store');
-  res.send(semanaPageHTML({ lang: en ? 'en' : 'es', handle, business: String(prof.business_name || '').trim(), posts }));
+  // === DESTACADO-BOOST share (destacado) ===
+  let destacadoShare = null;
+  try {
+    const wkShare = mondayKeyOf(tzToday(tz));
+    const rowShare = db.prepare('SELECT post_id, por_que FROM semana_destacado WHERE user_id = ? AND week_key = ?').get(u.id, wkShare);
+    const idsShare = new Set(posts.map((pp) => String(pp.id)));
+    if (rowShare && idsShare.has(String(rowShare.post_id))) {
+      destacadoShare = { postId: rowShare.post_id, porQue: rowShare.por_que || null };
+    } else {
+      const pickShare = destacadoSemana.elegirDestacado(destacadoSemana.adaptarSemana(posts.map((pp) => ({ id: pp.id, caption: pp.caption }))));
+      if (pickShare) destacadoShare = { postId: pickShare.posteo.id, porQue: pickShare.porQue };
+    }
+  } catch (e) {}
+  res.send(semanaPageHTML({ lang: en ? 'en' : 'es', handle, business: String(prof.business_name || '').trim(), posts, destacado: destacadoShare }));
 });
 
 // ---------- (v323 · pieza 7) REEL DE MUESTRA CON COMPUERTA ----------
@@ -23132,7 +23254,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261031-v488';
+const BUILD_ID = '20261031-v489';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

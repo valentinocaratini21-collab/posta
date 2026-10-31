@@ -75,6 +75,17 @@ CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id, created_at);
 `);
 
 // Migraciones livianas para DBs existentes
+// === DESTACADO-BOOST tabla (inicio) ===
+try { db.exec(`CREATE TABLE IF NOT EXISTS semana_destacado (
+  user_id INTEGER NOT NULL,
+  week_key TEXT NOT NULL,
+  post_id INTEGER NOT NULL,
+  origen TEXT NOT NULL DEFAULT 'posty',
+  por_que TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, week_key)
+)`); } catch (e) { /* tabla destacado: ya existe o sin DB */ }
+// === DESTACADO-BOOST tabla (fin) ===
 try { db.exec(`ALTER TABLE profiles ADD COLUMN competitors TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN goal TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN monthly_goal TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
