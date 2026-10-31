@@ -3965,3 +3965,20 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    tercer bloque: test-feed-16-17 cuenta 2), al final para ganar por
    orden a las reglas navy; el resto del chrome — encabezado,
    pestañas, tirita del jardín — no se toca. */
+
+/* LOTE 10B · jardín: hero por nivel, faltas con botón, premio cerca,
+   historia y despeje inferior. Solo texto dentro del jardín: nada de
+   barras ni % en estas reglas. */
+.mx-jardin{padding-bottom:32px}
+.mx-hero-btn{background:none;border:0;padding:0;cursor:pointer;display:block;width:100%}
+.mx-hero-btn:active{opacity:.92}
+.mx-premio-cerca{margin:2px 0 6px}
+.mx-historia-btn{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #DCEEF7;color:#0A1E33;font-size:13px;font-weight:800;font-family:inherit;padding:8px 14px;border-radius:99px;cursor:pointer;margin:0 0 4px}
+.mx-historia-btn:active{transform:scale(.97)}
+.mx-faltas{margin:6px 0 0}
+.mx-falta-tit{font-weight:800;color:#0A1E33;margin:0 0 6px}
+.mx-falta-item{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:0 0 6px}
+.mx-falta-item>span{flex:1;min-width:0}
+.mx-falta-btn{flex:none;background:#2793C8;color:#fff;border:0;font-size:12px;font-weight:800;font-family:inherit;padding:8px 12px;border-radius:99px;cursor:pointer}
+.mx-falta-btn:active{transform:scale(.96)}
+.mx-semana-linea{margin-top:6px}

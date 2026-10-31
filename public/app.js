@@ -389,6 +389,9 @@ function pzGoBack() {
 }
 function pzBackHTML(tab) {
   if (tab === 'inicio') return '';
+  // (LOTE 10B · A) El jardín tiene su propio control atrás (flecha +
+  // «Volver» lado a lado): el círculo fijo lo tapaba. Sin segundo control.
+  if (tab === 'jardin-posty') return '';
   return `<button type="button" class="pz-back pz-back-fixed" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function pzBackMtopHTML(tab) {
@@ -397,6 +400,8 @@ function pzBackMtopHTML(tab) {
 }
 function pzBackDesktopHTML(tab) {
   if (tab === 'inicio') return '';
+  // (LOTE 10B · A) Igual que pzBackHTML: en el jardín manda su propio atrás.
+  if (tab === 'jardin-posty') return '';
   return `<button type="button" class="pz-back pz-back-fixed pz-back-desktop" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function bbHace(ts) {
@@ -1145,19 +1150,18 @@ function mxPremioGestyHTML(nv) {
   if (nv.nivel >= 5 || !nv.nombre_siguiente) return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${gzT('Copa completa 🌳', 'Full canopy 🌳')}</span></p>`;
   return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${esc(nv.nombre_siguiente)}</span></p>`;
 }
-function mxCardAgenteHTML(agente, nv, premioHTML) {
+function mxCardAgenteHTML(agente, nv, premioHTML, semanaHTML) {
   const titulo = agente ? esc(agente) + ' · ' + esc(nv.nombre_nivel || '') : esc(nv.nombre_nivel || '');
-  const falta = mxFaltaTxt(nv);
+  const faltas = mxFaltantesHTML(nv);
   return `<div class="mx-tarjeta"><h3>${titulo}</h3>`
-    + (nv.proximo_paso ? `<p class="mx-dato">${esc(nv.proximo_paso)}</p>` : '')
-    + (falta ? `<p class="mx-dato">${esc(falta)}</p>` : '')
-    + premioHTML + `</div>`;
+    + (faltas || (nv.proximo_paso ? `<p class="mx-dato">${esc(nv.proximo_paso)}</p>` : ''))
+    + premioHTML + (semanaHTML || '') + `</div>`;
 }
 function mxVitrina(nv) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   return (nv && Array.isArray(nv.historial) && nv.historial.length) ? pzVitrinaHTML(nv.historial, en) : '';
 }
-function mxVistasUnAgenteHTML(nv, premioHTML) {
+function mxVistasUnAgenteHTML(nv, premioHTML, semanaHTML) {
   const hist = Array.isArray(nv.historial) ? nv.historial : [];
   const cur = nv.nombre_nivel || '';
   let pasado = null;
@@ -1167,11 +1171,12 @@ function mxVistasUnAgenteHTML(nv, premioHTML) {
   const botones = [];
   const vistas = [];
   if (pasado) {
-    botones.push(`<button type="button" class="mx-paso-nivel" data-mx-vista="anterior" onclick="mxJardinHito(this)">${esc(pasado.nombre_nivel)}</button>`);
+    const pasadoTxt = (typeof pasado.nivel === 'number') ? (gzT('Nv', 'Lv') + ' ' + pasado.nivel + ' · ' + esc(pasado.nombre_nivel)) : esc(pasado.nombre_nivel);
+    botones.push(`<button type="button" class="mx-paso-nivel" data-mx-vista="anterior" onclick="mxJardinHito(this)">${pasadoTxt}</button>`);
     vistas.push(`<div class="mx-vista" data-mx-vista="anterior" hidden><div class="mx-tarjeta"><h3>${esc(pasado.nombre_nivel)}</h3><p class="mx-dato">${gzT('Nivel alcanzado.', 'Level reached.')}</p></div></div>`);
   }
   botones.push(`<button type="button" class="mx-paso-nivel activo" data-mx-vista="actual" onclick="mxJardinHito(this)">${gzT('Nv', 'Lv')} ${mxNvNum(nv)} · ${esc(cur)}</button>`);
-  vistas.push(`<div class="mx-vista" data-mx-vista="actual">${mxCardAgenteHTML('', nv, premioHTML)}</div>`);
+  vistas.push(`<div class="mx-vista" data-mx-vista="actual">${mxCardAgenteHTML('', nv, premioHTML, semanaHTML)}</div>`);
   // Lote 3: el paso siguiente existe hasta el 49 (antes se ocultaba en 5+).
   // Muestra la recompensa real del próximo nivel + qué falta, sin % ni barras.
   if (nv.nivel < 50 && nv.nombre_siguiente) {
@@ -1181,15 +1186,97 @@ function mxVistasUnAgenteHTML(nv, premioHTML) {
       + (recSig ? `<p class="mx-dato">${esc(recSig)}</p>` : '')
       + (nv.proximo_paso ? `<p class="mx-dato">${esc(nv.proximo_paso)}</p>` : '') + `</div></div>`);
   }
-  return `<div class="mx-pasos-nivel">${botones.join('')}</div>${vistas.join('')}`;
+  // (LOTE 10B · 2-2) El premio del próximo nivel, visible sin bajar:
+  // junto a su píldora, con los datos de vista previa del Lote 3
+  // (siguiente_premio / siguiente_desbloqueo); en 1–5 el servidor no
+  // los manda y vale la tabla de desbloqueos vigente (pzNivelUnlock).
+  let premioCerca = '';
+  if (nv.nivel < 50 && nv.nombre_siguiente) {
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const rec = nv.siguiente_premio || nv.siguiente_desbloqueo || ((nv.nivel < 5 && typeof pzNivelUnlock === 'function') ? pzNivelUnlock(nv.nivel + 1, en) : null);
+    const lab = nv.siguiente_premio ? gzT('Próximo premio:', 'Next reward:') : (nv.siguiente_desbloqueo ? gzT('Próximo desbloqueo:', 'Next unlock:') : '');
+    premioCerca = `<p class="mx-dato mx-premio-cerca"><b>${gzT('Nv', 'Lv')} ${mxNvNum(nv) + 1} · ${esc(nv.nombre_siguiente)}${lab ? ' — ' + lab : ''}</b>${rec ? ' ' + esc(rec) : ''}</p>`;
+  }
+  const histBtn = hist.length ? `<button type="button" class="mx-historia-btn" onclick="mxIrHistoria()">${gzT('Mi historia', 'My history')}</button>` : '';
+  return `<div class="mx-pasos-nivel">${botones.join('')}</div>${premioCerca}${histBtn}${vistas.join('')}`;
 }
-function mxJardinHTML(tipo, nvP, nvG, jardin, post50) {
+// (LOTE 10B · B + 2-3) El hero del jardín es EL JARDÍN EN SU NIVEL, no la
+// última foto publicada (ahí se colaba la promo con la cara de Posty).
+// Renders aprobados que ya existen (v7 «me encanta» + serie crece):
+// Nv 1–2 joven recién plantado, Nv 3–5 creciendo, Nv 6+ bambusal maduro.
+// Nunca la cara de Posty, nunca una imagen inventada, nunca texto horneado.
+function mxHeroJardin(nivel) {
+  const n = Number(nivel) || 1;
+  if (n <= 2) return 'jardin-joven.webp';
+  if (n === 3) return 'jardin-crece-1.webp';
+  if (n === 4) return 'jardin-crece-2.webp';
+  if (n === 5) return 'jardin-crece-3.webp';
+  return 'jardin-bambu.webp';
+}
+// (LOTE 10B · 2-1 + 2-4) Qué falta, con nombre y botón: cada pendiente del
+// gate (dato real de /api/oficina/nivel: {clave, falta}) + su destino real
+// (el mismo mapa que ya usa la tirita: pzNivelChip). Solo texto, sin
+// barras ni % dentro del jardín. Sin pendientes no hay bloque.
+function mxFaltantesHTML(nv) {
+  const falt = (nv && Array.isArray(nv.faltantes)) ? nv.faltantes : [];
+  if (!falt.length) return '';
+  const n = falt.length;
+  const obj = (nv && nv.gate && typeof nv.gate.nivel_objetivo === 'number') ? nv.gate.nivel_objetivo : ((typeof nv.nivel === 'number') ? nv.nivel + 1 : null);
+  const sigNom = (nv && nv.nombre_siguiente) ? esc(nv.nombre_siguiente) : '';
+  const sigTxt = obj ? (gzT('Nv', 'Lv') + ' ' + obj + (sigNom ? ' · ' + sigNom : '')) : sigNom;
+  const tit = (n === 1 ? gzT('Te falta 1 cosa', '1 thing left') : gzT('Te faltan ' + n + ' cosas', n + ' things left')) + (sigTxt ? gzT(' para ', ' for ') + sigTxt : '');
+  const items = falt.map((f) => {
+    const chip = (typeof pzNivelChip === 'function') ? pzNivelChip(f.clave, (typeof ME !== 'undefined' && ME && ME.lang === 'en')) : { hash: '#/app/negocio', label: gzT('Ver', 'See') };
+    return `<div class="mx-falta-item"><span>${esc(f.falta || '')}</span><button type="button" class="mx-falta-btn" onclick="bbGo('${chip.hash}')">${esc(chip.label)}</button></div>`;
+  }).join('');
+  return `<div class="mx-faltas"><p class="mx-falta-tit">${tit}:</p>${items}</div>`;
+}
+// (LOTE 10B · 3-4) Cómo va esta semana, en palabras: publicados vs.
+// planificados de la semana en curso (lun–dom en la zona de la cuenta),
+// con el mismo cómputo de días que el feed (schedPlacements). Sin plan
+// esta semana, o sin datos, no hay línea: nunca un número inventado.
+// Solo texto, nunca barra ni % dentro del jardín.
+function mxSemanaLinea(posts) {
+  try {
+    const all = Array.isArray(posts) ? posts : ((posts && Array.isArray(posts.posts)) ? posts.posts : []);
+    if (!all.length) return '';
+    const tz = (typeof pcTz === 'function') ? pcTz() : 'America/Argentina/Buenos_Aires';
+    const pl = (typeof schedPlacements === 'function') ? schedPlacements(all, tz) : null;
+    if (!pl || !pl.byDay) return '';
+    const hoyYmd = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+    const base = new Date(hoyYmd + 'T12:00:00Z');
+    const dow = (base.getUTCDay() + 6) % 7;
+    const lun = new Date(base.getTime() - dow * 86400000);
+    const sem = new Set();
+    for (let k = 0; k < 7; k++) sem.add(new Date(lun.getTime() + k * 86400000).toISOString().slice(0, 10));
+    let plan = 0, pub = 0;
+    for (const ymd of sem) {
+      const arr = pl.byDay.get(ymd) || [];
+      for (const it of arr) { plan++; if (it.p && it.p.status === 'published') pub++; }
+    }
+    if (!plan) return '';
+    if (pub > plan) pub = plan;
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    return `<p class="mx-dato mx-semana-linea">${en ? ('This week you published ' + pub + ' of ' + plan) : ('Esta semana publicaste ' + pub + ' de ' + plan)}</p>`;
+  } catch (e) { return ''; }
+}
+// (LOTE 10B · 3-2) «Mi historia»: punto de entrada a los niveles ya
+// pasados. No reconstruye nada: la vitrina del Lote 3 ya existe abajo;
+// el botón solo baja hasta ella. Sin historial no hay botón ni ancla.
+function mxHistoriaHTML(nv) {
+  if (!nv || !Array.isArray(nv.historial) || !nv.historial.length) return '';
+  return `<div id="mxHistoria">${mxVitrina(nv)}</div>`;
+}
+function mxIrHistoria() {
+  try { const el = document.getElementById('mxHistoria'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+}
+function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML) {
   const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">${pzIc('arrowLeft', 16)} ${gzT('Volver', 'Back')}</button>`;
   if (tipo === 'posty') {
-    const head = `<h1>${gzT('Mi jardín', 'My garden')}</h1><p>${gzT('Crece solo con semanas publicadas de verdad.', 'Grows only with truly published weeks.')}</p>`;
-    const fotoUrl = mxFotoJardin(jardin);
-    const foto = fotoUrl ? `<img class="mx-foto-nivel" src="${esc(fotoUrl)}" alt="${gzT('Tu jardín', 'Your garden')}" onerror="this.remove()">` : '';
-    const cuerpo = mxVistasUnAgenteHTML(nvP, mxPremioPostyHTML(nvP)) + mxVitrina(nvP) + mxJardinPost50HTML(post50);
+    const head = `<h1>${gzT('Mi jardín', 'My garden')}</h1><p>${gzT('Crece con tus semanas publicadas', 'Grows with your published weeks')}</p>`;
+    const heroUrl = mxHeroJardin(mxNvNum(nvP));
+    const foto = `<button type="button" class="mx-hero-btn" onclick="openLightbox('${esc(heroUrl)}', 0)" aria-label="${gzT('Ver tu jardín en grande', 'See your garden large')}"><img class="mx-foto-nivel" src="${esc(heroUrl)}" alt="${gzT('Tu jardín', 'Your garden')}" onerror="this.closest('.mx-hero-btn').remove()"></button>`;
+    const cuerpo = mxVistasUnAgenteHTML(nvP, mxPremioPostyHTML(nvP), semanaHTML) + mxHistoriaHTML(nvP) + mxJardinPost50HTML(post50);
     return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head">${head}</header><div class="mx-bloque">${foto}${cuerpo}</div></div>`;
   }
   return mxJardinErrorHTML(); // POSTY SOLO: sin jardín Gesty
@@ -1206,9 +1293,9 @@ async function mxJardinPost50() {
   try { const r = await api.get('/api/oficina/jardin-post50'); return (r && r.ok) ? r : null; } catch (e) { return null; }
 }
 async function bbJardinPostyContent() {
-  const res = await Promise.all([mxNivel('posty'), mxJardinFotos(), mxJardinPost50()]);
+  const res = await Promise.all([mxNivel('posty'), mxJardinFotos(), mxJardinPost50(), api.get('/api/posts').catch(() => null)]);
   if (!res[0]) return mxJardinErrorHTML();
-  return mxJardinHTML('posty', res[0], null, res[1], res[2]);
+  return mxJardinHTML('posty', res[0], null, res[1], res[2], mxSemanaLinea(res[3]));
 }
 async function bbJardinGestyContent() {
   const nvG = await mxNivel('gesty');
@@ -14923,7 +15010,7 @@ async function render() {
   try { await bbLoadEstado(false); } catch (e) {}
   let content = '';
   try {
-  if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'chat') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: sin pantallas Gesty
+  if (tab === 'oficina' || tab === 'negocio' || tab === 'chat') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: sin pantallas Gesty (la Bandeja vive: ahí se decide)
   else if (tab === 'chat') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: el chat vive debajo del feed
   else if (tab === 'inicio') { pzPaintSkeleton(tab); content = await inicioView(); } // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
@@ -14944,6 +15031,7 @@ async function render() {
   else if (tab === 'ajustes') { pzPaintSkeleton(tab); let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
   else if (tab === 'jardin-combinado' || tab === 'jardin-gesty') { location.hash = '#/app/jardin-posty'; return; } // POSTY SOLO: solo jardín Posty
   else if (tab === 'jardin-posty') { pzPaintSkeleton(tab); content = await bbJardinPostyContent(); }
+  else if (tab === 'bandeja') { pzPaintSkeleton(tab); content = await bbBandejaContent(); } // (LOTE 10B · 2-1) La Bandeja: decidir en un toque
   else { location.hash = mzHomeHash(); return; } // tab desconocida: a la home (antes caía en Ajustes sin avisar)
   } catch (e) { content = '<div class="bb-error"><p>No pude cargar esta pantalla.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>'; }
   bootSplashOff();
