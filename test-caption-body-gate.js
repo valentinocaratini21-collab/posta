@@ -212,5 +212,132 @@ ok('id 454 real pasa por la puerta vía lint (h): «cometen con Organizá…» s
   assert.ok(/empalm/i.test(chk.reason), chk.reason);
 });
 
+console.log('== (j) Tic frontado "A la mañana fuerte" (cuenta 84, ids 506/508/480, 2026-10-25) ==');
+ok('id 508 real: "A la mañana fuerte…" se rechaza por frase quemada', () => {
+  const cap = 'A la mañana fuerte, el café con leche sale con medialunas recién horneadas. Pasá por el local hoy y probalo.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/a la mañana fuerte|frase quemada/i.test(chk.reason), chk.reason);
+});
+ok('id 506 variante: "A la mañana fuerte elige…" se rechaza igual', () => {
+  const cap = 'A la mañana fuerte el café con leche es un clásico de la casa. Pasá por el local hoy y llevate el tuyo.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/a la mañana fuerte|frase quemada/i.test(chk.reason), chk.reason);
+});
+ok('control: "Para arrancar bien la mañana…" en orden natural pasa', () => {
+  const cap = 'Para arrancar bien la mañana, el café con leche sale con medialunas recién horneadas. Pasá por el local hoy y probalo.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
+console.log('== (k) Lista anunciada incompleta (LISTA-ANUNCIADA-INCOMPLETA — id 520 real, 2026-10-25) ==');
+ok('id 520 real: anuncia «3 tips» y entrega un solo «1️⃣» — se rechaza', () => {
+  const cap = 'Aquí te paso 3 tips para tus hashtags: 1️⃣ No abuses de los hashtags genéricos, usá los de tu rubro.\n\nEscribime por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/lista anunciada incompleta/i.test(chk.reason), chk.reason);
+});
+ok('variante: anuncia 3 tips y entrega 2 numerados — se rechaza', () => {
+  const cap = 'Acá van 3 tips para tus hashtags: 1. Usá 5 a 10 relevantes, no más. 2. Mezclá tu marca con tu rubro.\n\nEscribime por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/lista anunciada incompleta/i.test(chk.reason), chk.reason);
+});
+ok('control: la versión corregida del 520 con los 3 ítems pasa', () => {
+  // En bloques como un caption real: la primera línea del caption y la
+  // de cada bloque quedan bajo el tope de 26 palabras del lint.
+  const cap = 'Acá van 3 tips para tus hashtags:\n\n1. Usá 5 a 10 relevantes, no más. 2. Mezclá tu marca con tu rubro. 3. No repitas siempre los mismos.\n\nEscribime por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «3 tips» en prosa sin numerar no se castiga', () => {
+  const cap = 'Te paso 3 tips para tus hashtags:\n\nUsá pocos y relevantes, mezclá tu marca con tu rubro y no repitas siempre los mismos.\n\nEscribime por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: un único ítem numerado SIN anuncio numérico pasa', () => {
+  const cap = 'Una idea para tu semana: 1. Mostrá tu producto estrella en uso real. Escribime por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
+console.log('== (l) Peninsular: «elige» abriendo oración y «aquí te/les/va» (ids 505/520 reales, 2026-10-25) ==');
+ok('id 505 real: «Elige entre nuestras opciones…» se rechaza por peninsular', () => {
+  const cap = 'Elige entre nuestras opciones y llevate la que más te guste, hecha en el local. Pasá por el local hoy y elegí la tuya.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/peninsular/i.test(chk.reason), chk.reason);
+});
+ok('id 520 variante peninsular: «Aquí te paso un tip…» se rechaza por peninsular', () => {
+  const cap = 'Aquí te paso un tip para tus hashtags: usá pocos y relevantes, no más. Escribime por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/peninsular/i.test(chk.reason), chk.reason);
+});
+ok('id 520 real intacto: «Aquí te paso 3 tips…» sigue cayendo por lista anunciada primero', () => {
+  const cap = 'Aquí te paso 3 tips para tus hashtags: 1️⃣ No abuses de los hashtags genéricos, usá los de tu rubro.\n\nEscribime por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/lista anunciada incompleta/i.test(chk.reason), chk.reason);
+});
+ok('control: «se elige el grano» (pasiva) pasa', () => {
+  const cap = 'En la casa se elige el grano cada mañana y se tuesta en el local. Pasá por el local hoy y probalo.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «el cliente elige» (tercera persona con sujeto) pasa', () => {
+  const cap = 'El cliente elige su favorito y se lo lleva en el momento, recién hecho. Pasá por el local hoy y pedí el tuyo.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «Elegí entre…» (voseo) pasa', () => {
+  const cap = 'Elegí entre nuestras opciones y llevate la que más te guste, hecha en el local. Pasá por el local hoy y elegí la tuya.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «Acá te paso un tip…» pasa', () => {
+  const cap = 'Acá te paso un tip para tus hashtags: usá pocos y relevantes, no más. Escribime por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
+console.log('== (m) Tema-rótulo tras «después de probar» (LINT v7 — id 458 real, 2026-10-25) ==');
+ok('id 458 real: «después de probar Testimonio de nuestros usuarios…» se rechaza por empalme', () => {
+  const cap = 'Lo que nos dijo una clienta después de probar Testimonio de nuestros usuarios en Gesty. Escribinos por DM y lo armamos.';
+  const chk = gen.captionPasses(cap, { business: 'Gesty', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/empalmada/i.test(chk.reason), chk.reason);
+});
+ok('control: tema sustantivo en minúscula tras «después de probar» pasa', () => {
+  const cap = 'Lo que nos dijo una clienta después de probar el tratamiento capilar de siempre, y volvió por más. Escribinos por DM.';
+  const chk = gen.captionPasses(cap, { business: 'Pelu ADN', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
+console.log('== (n) Promesa vacía: «hacerte la vida más fácil» y «sin complicaciones» (ids 516/408/450 reales, 2026-10-25) ==');
+ok('id 516 real: «estamos para hacerte la vida más fácil» se rechaza', () => {
+  const cap = 'En Gesty, estamos para hacerte la vida más fácil: dejamos presupuestos, facturación y cobranzas al día. Escribinos por DM y empezamos hoy.';
+  const chk = gen.captionPasses(cap, { business: 'Gesty', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/frase quemada/i.test(chk.reason), chk.reason);
+});
+ok('id 408 variante: «contenido sin complicaciones» se rechaza', () => {
+  const cap = 'Crear contenido sin complicaciones es posible con Posty: tu semana armada con tus fotos y tus colores. Escribinos por DM y lo dejamos andando.';
+  const chk = gen.captionPasses(cap, { business: 'Posty', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/frase quemada/i.test(chk.reason), chk.reason);
+});
+ok('control: la reescritura concreta del 516 pasa', () => {
+  const cap = 'En Gesty dejamos presupuestos, facturación y cobranzas al día, sin que muevas un papel. Escribinos por DM y empezamos hoy.';
+  const chk = gen.captionPasses(cap, { business: 'Gesty', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «te complicás» sin el «sin» delante NO se rechaza por este gate', () => {
+  const cap = 'Si te complicás con la facturación, la dejamos al día por vos esta semana. Escribinos por DM y lo vemos.';
+  const chk = gen.captionPasses(cap, { business: 'Gesty', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

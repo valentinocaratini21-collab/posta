@@ -572,6 +572,7 @@ const BANNED_PHRASES = [
   'en el mundo de hoy',
   'al siguiente nivel',
   'a otro nivel',
+  'a la manana fuerte', // TIC REAL 2026-10-25 (cuenta 84, ids 506/508/480): fragmento frontado, no es español natural — la forma humana es "para arrancar fuerte la mañana". OJO: la lista se matchea SIN acentos (captionPasses normaliza el caption a NFD y pela diacríticos), así que la entrada va SIN ñ: con 'mañana' nunca matchearía.
   'no te lo podes perder',
   'no te lo pierdas',
   'sumergite',
@@ -597,6 +598,15 @@ const BANNED_PHRASES = [
   // producto) NO matchea: el ban es a "calidad premium" como muletilla.
   'calidad premium',
   'se nota en cada detalle',
+  // Promesa vacía sin dato (Juli 2026-10-30, 5ª mejora apilada): frases
+  // reales sin gate — id 516 (Gesty, 25/10) "estamos para hacerte la
+  // vida más fácil" e ids 408/450 "sin complicaciones" pasaban
+  // captionPasses limpios. Son humo de folleto: no dicen QUÉ hace el
+  // negocio. La forma humana es el hecho concreto ("dejamos
+  // presupuestos, facturación y cobranzas al día"). Entradas SIN
+  // acentos (la lista se matchea sobre el caption normalizado NFD).
+  'hacerte la vida mas facil',
+  'sin complicaciones',
   // Testimonios vagos y métricas inventadas (hallazgo revisión en vivo 2026-09-29):
   'un cliente',
   'nuestros clientes',
@@ -1158,6 +1168,55 @@ function captionPasses(caption, input) {
     const emptyItemSameLine = sinTags.split('\n').some((ln) => /\b\d{1,2}[.)]\s+\S/.test(ln) && /[\s:;.!?…]\d{1,2}[.)]\s*$/.test(ln));
     if (/(?:^|[\s:;,])\d{1,2}[.)]\s*$/.test(sinTags) || /(?:^|\n)\s*\d{1,2}[.)]\s*(?:\n|$)/.test(sinTags) || /:\s*\d{1,2}[.)]\s*\n/.test(sinTags) || emptyItemSameLine) {
       return { ok: false, reason: 'lista truncada (LISTA-TRUNCADA): el caption anuncia una enumeración y la deja cortada (un ítem numerado vacío: «…: 1.» o un «3.» final sin texto) — completá TODOS los ítems en la misma línea o sacá la enumeración y contá la idea en una frase' };
+    }
+  }
+  // LISTA-ANUNCIADA-INCOMPLETA (Juli, 2026-10-27 — id 520 real de
+  // producción, cuenta 80, 25/10): el caption anuncia «3 tips» y
+  // entrega UNO solo («1️⃣ No abuses…») — no es lista truncada (no hay
+  // ítem vacío) ni lista completa: es una promesa numérica incumplida,
+  // y un humano no la publica. Firma angosta: anuncio «N + sustantivo
+  // de lista» (tips/ideas/errores/pasos/razones/formas/claves/consejos/
+  // trucos, N ≥ 2) + al menos un ítem numerado («N.» / «N)» / «N️⃣»)
+  // pero menos ítems distintos que N. Sin ningún ítem numerado no se
+  // dispara: la lista puede venir en prosa («primero…, después…») y
+  // eso no es defecto. Los precios («$12.500») y las oraciones con
+  // número suelto («Nos quedan 3.») no matchean: el anuncio exige el
+  // sustantivo de lista y el ítem exige punto/paréntesis/keycap más
+  // texto.
+  {
+    const sinTags = c.replace(/(^|\n)\s*#[^\n]*$/gm, '').trim();
+    const anuncio = low.match(/\b(\d{1,2})\s+(tips?|ideas?|errores|pasos|razones|formas|claves|consejos|trucos)\b/);
+    if (anuncio) {
+      const n = parseInt(anuncio[1], 10);
+      if (n >= 2) {
+        const items = new Set();
+        for (const m of sinTags.matchAll(/(?:^|[\s:;])(\d{1,2})[.)]\s+\S/g)) {
+          const v = parseInt(m[1], 10);
+          if (v >= 1 && v <= n) items.add(v);
+        }
+        for (const m of sinTags.matchAll(/(\d)\uFE0F?\u20E3/g)) items.add(parseInt(m[1], 10));
+        if (items.size >= 1 && items.size < n) {
+          return { ok: false, reason: `lista anunciada incompleta (LISTA-ANUNCIADA-INCOMPLETA): el caption promete ${n} ${anuncio[2]} pero entrega ${items.size} ítem${items.size === 1 ? '' : 's'} numerado${items.size === 1 ? '' : 's'} — escribí los ${n} o sacá el número del anuncio` };
+        }
+      }
+    }
+  }
+  // PENINSULAR (Juli, 2026-10-28 — ids 505/520 reales, 25/10): el
+  // generador mezcló voseo con formas peninsulares («Elige entre
+  // nuestras opciones…», «Aquí te paso 3 tips…»). Firma angosta, a
+  // propósito FUERA de BANNED_PHRASES: un «elige» pelado por substring
+  // matchearía la pasiva legítima «se elige». Solo se rechaza: (a)
+  // «elige» abriendo oración (inicio — tras pelar emojis iniciales —
+  // o tras . ! ? ¡ ¿) = imperativo peninsular, en rioplatense es
+  // «elegí»; (b) «aqui te/les/va/van» = deíctico peninsular, en
+  // rioplatense es «acá». Pasan: «se elige el grano» (pasiva),
+  // «el cliente elige» (tercera persona con sujeto), «elegí»,
+  // «acá te paso», «pasá por acá». Va DESPUÉS del gate de lista
+  // anunciada para que el id 520 siga cayendo por su motivo primero.
+  {
+    const sinEmojiInicial = low.replace(/^[^\p{L}\p{N}]+/u, '');
+    if (/(?:^|[.!?¡¿]\s*)elige[\s,;:]/.test(sinEmojiInicial) || /\baqui\s+(te|les|va|van)\b/.test(low)) {
+      return { ok: false, reason: 'peninsular (PENINSULAR): «elige» abriendo oración o «aquí te/les/va/van» — en rioplatense es «elegí» / «acá»' };
     }
   }
   // ===== Verificación contra datos del negocio (tanda D, casos 92-100) =====

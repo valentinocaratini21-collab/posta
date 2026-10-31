@@ -335,6 +335,25 @@ function captionOpenIsGarbled(caption, negocio) {
       if (new RegExp('^(?:' + IMP_H + ')$', 'i').test(mm[1])) return true;
     }
   }
+  // (i) LINT v7 (Juli, 2026-10-29) — el empalme h11 con tema-RÓTULO:
+  // id 458 real (cuenta 80, semana 2026-10-19, generado 24/10): «Lo que
+  // nos dijo una clienta después de probar Testimonio de nuestros
+  // usuarios en Gesty» — el tema cosido en el slot de h11 no es un
+  // imperativo (la (g) no lo caza: «Testimonio» no está en su banco)
+  // ni un título de la lista (d)/(d') (no es Lo/La/Cómo/Consejos):
+  // es el RÓTULO genérico de otro posteo, capitalizado, seguido de
+  // frase. Firma angosta: tras «después de probar/probarlo/probarla/
+  // probando», la palabra inmediata es un sustantivo-rótulo del banco
+  // Y le siguen al menos 2 palabras más (la frase del rótulo). Un tema
+  // sano tras «probar» va en minúscula («el tratamiento capilar»),
+  // es el negocio (ya enmascarado a «negocio») o un nombre propio
+  // corto («Café Aroma»: no es rótulo del banco y no trae frase
+  // detrás) — ninguno cumple las tres condiciones a la vez.
+  {
+    const ROT = 'testimonio|novedades|beneficios|historia|gu[ií]a|tips|ideas|errores|secretos|datos|rese[ñn]as|opiniones|experiencias|ventajas|trucos|claves';
+    const mi = masked.match(/\b[Dd]espu[eé]s de prob(?:ar|arlo|arla|arlos|arlas|ando)\b\s+([A-ZÁÉÍÓÚÑ][a-záéíóúüñ]*)\s+\S+\s+\S+/);
+    if (mi && new RegExp('^(?:' + ROT + ')$', 'i').test(mi[1])) return true;
+  }
   const biz = String(negocio || '').trim().toLowerCase();
   // (e) LINT v4: la FÓRMULA cosida tras el tema. Las costuras de
   // producción (v142 y familia) no siempre traen la firma del título: a

@@ -184,6 +184,23 @@ t('v6: imperativo en minúscula tras preposición NO es esta firma',
 t('v6: nombre propio tras «para» NO es empalme (dale fuera del banco)',
   captionOpenIsGarbled('Un regalo para Dale, nuestro cliente de siempre', 'Posty') === false);
 
+// 14. captionOpenIsGarbled LINT v7 (Juli, 2026-10-29) — regla (i):
+// tema-RÓTULO tras «después de probar» (id 458 real, cuenta 80,
+// semana 2026-10-19, generado 24/10; la (g) no lo cazaba porque
+// «Testimonio» no es imperativo ni está en la lista (d)/(d')).
+t('v7: id 458 real — «después de probar Testimonio de nuestros usuarios…» es empalme',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probar Testimonio de nuestros usuarios en Gesty', 'Gesty') === true);
+t('v7: variante «Novedades de la casa» tras «después de probar» es empalme',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probar Novedades de la casa en Gesty', 'Gesty') === true);
+t('v7: tema sustantivo en minúscula tras «después de probar» NO es empalme',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probar el tratamiento capilar en Pelu ADN', 'Pelu ADN') === false);
+t('v7: nombre propio corto tras «después de probar» NO es empalme (Café Aroma)',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probar Café Aroma', 'Café Aroma') === false);
+t('v7: rótulo SIN frase detrás NO dispara (guarda de 2 palabras)',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probar Testimonio', 'Gesty') === false);
+t('v7: «después de probar» + negocio enmascarado NO es empalme',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probar Gesty por una semana entera', 'Gesty') === false);
+
 // 10. node --check hooks.js
 let checkOk = false;
 try {
