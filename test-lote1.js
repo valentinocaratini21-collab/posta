@@ -72,7 +72,7 @@ check('CSS desktop solo >760px', css.includes('.pz-back-desktop{display:none}') 
 console.log('== ÍTEM 6: ajustes organizados/simples ==');
 check('bloque Meta App ID/Secret fuera', !aju.includes('metaAppId') || !/Meta App ID/.test(aju));
 check('botón Probar conexión fuera', !/Probar conexi/.test(aju));
-check('CHUNK_V bump v507', /const CHUNK_V = '20261031-v507'/.test(app));
+check('CHUNK_V bump v510', /const CHUNK_V = '20261031-v510'/.test(app));
 check('sección Tu negocio primero', aju.indexOf('Tu negocio') < aju.indexOf('Mi plan') || aju.indexOf('Tu negocio') >= 0);
 
 console.log('== ÍTEM 7 + pill Borrador ==');
@@ -83,8 +83,8 @@ check('fp-tile sin pill borrador', !app.includes(": 'borrador'") && !app.include
 check('fp-tile draft con borde', app.includes('fp-tile-draft'));
 check('CSS fp-tile-draft', css.includes('.fp-tile.fp-tile-draft'));
 check('CSS .pz-draft-chip conservada (tarjeta revisión)', css.includes('.pz-draft-chip'));
-check('bumps index', idx.includes('app.js?v=331') && idx.includes('styles.css?v=20261052'));
-check('BUILD v509', srv.includes("BUILD_ID = '20261031-v509'"));
+check('bumps index', idx.includes('app.js?v=332') && idx.includes('styles.css?v=20261053'));
+check('BUILD v510', srv.includes("BUILD_ID = '20261031-v510'"));
 check('sin expandArtBrief tocado', !/expandArtBrief/.test(app.split('apvMoreHTML')[0].slice(-2000)) || true);
 check('sin archivos gesty-* tocados (diff lo confirma)', true);
 
@@ -153,7 +153,7 @@ try {
   check('próximo anti-duplicado -> 8/11', /8 de noviembre/.test(dup), dup);
   sandbox.anaLang = 'en';
   const enNext = prox({ created_at: '2026-10-24T23:00:00Z' }, '2026-10-31T12:00:00Z');
-  check('próximo EN', /Next analysis:/.test(enNext) && /November 1/.test(enNext), enNext);
+  check('próximo EN', /Next strategy:/.test(enNext) && /November 1/.test(enNext), enNext);
   sandbox.anaLang = 'es';
 } catch (e) { check('anaProximo vm', false, String(e && e.stack || e).slice(0, 200)); }
 try {

@@ -338,7 +338,7 @@ function marketTeaser(market) {
     const cad = median((market.peers || []).map((p) => p.posts_per_week));
     if (cad != null) items.push({ text: T('Así publica tu rubro en tu zona', 'This is how your category posts in your area'), now: T('la mediana es ' + fmtRate(cad) + ' posteos por semana', 'the median is ' + fmtRate(cad, 'en') + ' posts per week') });
   }
-  return items.length ? { items, locked: true, note: T('Esto es una probada: el mapa completo de tu competencia, tu posición y las decisiones que tomamos con eso viven en tu vista Análisis.', 'This is a taste: the full map of your competition, your position and the decisions we make with it live in your Analysis view.') } : null;
+  return items.length ? { items, locked: true, note: T('Esto es una probada: el mapa completo de tu competencia, tu posición y las decisiones que tomamos con eso viven en tu vista Estrategia.', 'This is a taste: the full map of your competition, your position and the decisions we make with it live in your Strategy view.') } : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -710,7 +710,7 @@ function letterPhases(a, ctx = {}) {
         { step: T('El ritmo queda instalado: tu semana completa sale sola, cada semana.', 'The rhythm gets installed: your full week goes out on its own, every week.'), fx: T('Nacés con la constancia que a la mayoría de las cuentas les falta.', 'You are born with the consistency most accounts lack.') },
       ],
       [
-        { step: T('Te mido desde el día uno: cada análisis nuevo compara contra el anterior y ajusta la semana.', 'I measure you from day one: every new analysis compares against the previous one and adjusts the week.'), fx: T('Tu cuenta mejora con datos, no con corazonadas.', 'Your account improves with data, not hunches.') },
+        { step: T('Te mido desde el día uno: cada estrategia nueva compara contra la anterior y ajusta la semana.', 'I measure you from day one: every new strategy compares against the previous one and adjusts the week.'), fx: T('Tu cuenta mejora con datos, no con corazonadas.', 'Your account improves with data, not hunches.') },
       ],
     ];
   }
@@ -919,7 +919,7 @@ function letterWeekActions(a, ctx = {}) {
     const base = [
       T('Tu cuenta nace completa: perfil armado con su kit (nombre, bio, foto y destacadas) y tu primera vidriera de 9 piezas pensada como un todo.', 'Your account is born complete: profile set up with its kit (name, bio, photo and highlights) and your first 9-piece storefront designed as a whole.'),
       T('El ritmo queda instalado desde la primera semana: tu semana completa sale sola, cada semana.', 'The rhythm is installed from the very first week: your full week goes out on its own, every week.'),
-      T('Te mido desde el día uno: cada análisis nuevo compara contra el anterior y ajusto la semana con lo que aprendo de tu cuenta.', 'I measure you from day one: every new analysis compares against the previous one and adjusts the week with what I learn from your account.'),
+      T('Te mido desde el día uno: cada estrategia nueva compara contra la anterior y ajusto la semana con lo que aprendo de tu cuenta.', 'I measure you from day one: every new strategy compares against the previous one and adjusts the week with what I learn from your account.'),
     ];
     // (v281) Si el fundamento ya conoce su estrella, SU decisión abre las
     // acciones (es lo más propio de este negocio); el kit y el ritmo la
@@ -1068,8 +1068,8 @@ function buildLetter(analysis, ctx = {}) {
     else core = letterStrong(s, lang) || (s.n_posts >= 1 ? T('ya tenés posteos publicados: hay material real para apoyarnos', 'you already have published posts: there is real material to build on') : '');
     if (core) {
       const tail = stage === 'fuerte'
-        ? T('. Sostenerlo y afinarlo es mi trabajo — para eso estoy.', '. Keeping it up and sharpening it is my job — that is what I am here for.')
-        : T('. Sobre eso construimos — no partimos de cero.', '. We build on that — we are not starting from zero.');
+        ? T('. Sostenerlo y afinarlo es mi trabajo.', '. Keeping it up and sharpening it is my job.')
+        : T('. Sobre eso construimos.', '. We build on that.');
       festejo = T('Primero festejemos lo bueno, que es mérito tuyo: ', 'First, let us celebrate the good stuff — you earned it: ') + core + tail;
     }
     // LA línea honesta: SU cuello de botella de esta semana — el que su
@@ -1095,13 +1095,13 @@ function buildLetter(analysis, ctx = {}) {
   const ask = birth
     ? (() => {
         const asks = [];
-        if (!ctx.hasIg) asks.push(T('conectá tu Instagram desde Ajustes — así publico por vos y tu análisis se afina con tus métricas reales', 'connect your Instagram from Settings — so I can post for you and your analysis sharpens with your real metrics'));
+        if (!ctx.hasIg) asks.push(T('conectá tu Instagram desde Ajustes — así publico por vos y tu estrategia se afina con tus métricas reales', 'connect your Instagram from Settings — so I can post for you and your strategy sharpens with your real metrics'));
         asks.push(T('mandame tus fotos favoritas (3 a 5) — tu vidriera sale con tu material real, no con fotos genéricas', 'send me your favorite photos (3 to 5) — your storefront goes out with your real material, not generic photos'));
         return T('De tu lado, cuando puedas: ' + asks.join('; ') + '. Con eso, tu cuenta nace completa.',
           'On your side, whenever you can: ' + asks.join('; ') + '. With that, your account is born complete.');
       })()
-    : T('De tu lado, esta semana: nada, de verdad. El plan lo corro yo — vos seguí haciendo lo que mejor sabés hacer: tu negocio.',
-        'On your side this week: nothing, really. I have the plan — you keep doing what you do best: your business.');
+    : T('De tu lado, esta semana: nada. El plan lo corro yo.',
+        'On your side this week: nothing. I have the plan.');
 
   const sun = sundays != null
     ? T(' Domingo ' + sundays + ' conmigo: vamos por más.', ' Sunday ' + sundays + ' with me: let us keep going.')
@@ -1185,7 +1185,7 @@ function analyzeExisting({ profile = {}, posts = [], ctx = {} } = {}) {
     a.data_notes.push(ctx.lang === 'en' ? 'Connected account: posting times are fine-tuned with your real metrics.' : 'Cuenta conectada: los horarios se afinan con tus métricas reales.');
     a.insights = { best_hour: ctx.insights.bestHour };
   } else {
-    a.data_notes.push(ctx.lang === 'en' ? 'Analysis from your public profile data; once you connect your account it gets more precise with your real metrics.' : 'Análisis con datos públicos de tu perfil; al conectar tu cuenta se vuelve más preciso con tus métricas reales.');
+    a.data_notes.push(ctx.lang === 'en' ? 'Strategy from your public profile data; once you connect your account it gets more precise with your real metrics.' : 'Estrategia con datos públicos de tu perfil; al conectar tu cuenta se vuelve más preciso con tus métricas reales.');
   }
   a.market = analyzeMarket(signals, ctx.peers || [], ctx);
   if (ctx.prior) a.loop = evaluateLoop(ctx.prior, signals);

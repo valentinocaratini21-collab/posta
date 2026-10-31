@@ -31,6 +31,10 @@ const dayKey = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'nu
 const mkSandbox = (lang) => {
   const sb = {
     esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+    // (LOTE 10) El sandbox no definía pzIc y homeTileHTML lo evalúa en
+    // la chapita (y ahora en el corazón de la fila): sin el stub el
+    // test moría antes de la primera tile — ya roto en HEAD v509.
+    pzIc: (name) => '<svg data-ic="' + name + '"></svg>',
     mv: (p) => p,
     pcTz: () => TZ,
     pcParseDate: (s0) => { const s = String(s0 || ''); if (!s) return null; let x = s.replace(' ', 'T'); if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(x)) x += 'Z'; const d = new Date(x); return isNaN(d) ? null : d; },

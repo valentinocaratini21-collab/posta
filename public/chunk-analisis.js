@@ -73,7 +73,7 @@ function analisisView() {
   return `<div class="ana-wrap"><div id="anaRoot">
     <div class="ana-card ana-letter"><div class="ana-loading">
       <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
-      <p class="ana-load-t">${en ? 'Building your analysis…' : 'Estoy armando tu análisis…'}</p>
+      <p class="ana-load-t">${en ? 'Building your strategy…' : 'Estoy armando tu estrategia…'}</p>
       <p class="ana-load-s">${en ? 'I read your account, your market and your week. Give me a second.' : 'Leo tu cuenta, tu mercado y tu semana. Dame un segundo.'}</p>
     </div></div>
   </div></div>`;
@@ -113,7 +113,7 @@ function anaErrorHTML() {
   const en = anaUiLang() === 'en';
   return `<div class="ana-card ana-letter"><div class="ana-loading">
     <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
-    <p class="ana-load-t">${en ? 'Oops, I could not build your analysis just now' : 'Uy, no pude armar tu análisis ahora'}</p>
+    <p class="ana-load-t">${en ? 'Oops, I could not build your strategy just now' : 'Uy, no pude armar tu estrategia ahora'}</p>
     <p class="ana-load-s">${en ? 'It is not your account: it is a connection hiccup on my side. Let us try again.' : 'No es tu cuenta: es un tropiezo de conexión de mi lado. Probamos de nuevo.'}</p>
     <button class="btn btn-primary" style="margin-top:14px" onclick="anaRetry()">${en ? 'Try again' : 'Reintentar'}</button>
   </div></div>`;
@@ -206,7 +206,7 @@ function anaProximoAnalisisHTML(a, nowOpt) {
     }
     const en = anaLang === 'en';
     const fecha = cand.toLocaleDateString(en ? 'en-US' : 'es-AR', Object.assign({ weekday: 'long', day: 'numeric', month: 'long' }, zo));
-    return en ? 'Next analysis: ' + fecha + ' at night' : 'Próximo análisis: ' + fecha + ' a la noche';
+    return en ? 'Next strategy: ' + fecha + ' at night' : 'Próxima estrategia: ' + fecha + ' a la noche';
   } catch (e) { return ''; }
 }
 
@@ -217,7 +217,7 @@ function anaDateLine(a) {
     if (!isNaN(src)) fecha = src.toLocaleDateString(anaLang === 'en' ? 'en-US' : 'es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
   } catch (e) {}
   if (!fecha) return '';
-  return a && a.n ? anaT('Análisis #', 'Analysis #') + a.n + ' · ' + fecha : anaT('Análisis del ', 'Analysis from ') + fecha;
+  return a && a.n ? anaT('Estrategia #', 'Strategy #') + a.n + ' · ' + fecha : anaT('Estrategia del ', 'Strategy from ') + fecha;
 }
 
 /* ---------- Tu foto de hoy: los números reales + la trayectoria ---------- */
@@ -233,8 +233,8 @@ function anaStatsHTML(a, d) {
   if (s.avg_likes != null) tiles.push({ n: String(s.avg_likes), l: anaT('me gusta promedio por posteo', 'average likes per post') });
   let traj = '';
   const hist = (d && Array.isArray(d.history)) ? d.history : [];
-  if (a && a.n && a.n >= 2) traj = `<p class="ana-traj">${anaT('Ya es tu análisis #', 'This is already your analysis #')}${a.n}${anaT(': cada semana comparo contra el anterior y ajusto tu semana con lo nuevo que aprendo de tu cuenta.', ': every week I compare against the previous one and adjust your week with what I newly learn from your account.')}</p>`;
-  else if (hist.length > 1) traj = `<p class="ana-traj">${anaT('Ya tenés ', 'You already have ')}${hist.length}${anaT(' análisis: cada uno aprende del anterior.', ' analyses: each one learns from the previous.')}</p>`;
+  if (a && a.n && a.n >= 2) traj = `<p class="ana-traj">${anaT('Ya es tu estrategia #', 'This is already your strategy #')}${a.n}${anaT(': cada semana comparo contra el anterior y ajusto tu semana con lo nuevo que aprendo de tu cuenta.', ': every week I compare against the previous one and adjust your week with what I newly learn from your account.')}</p>`;
+  else if (hist.length > 1) traj = `<p class="ana-traj">${anaT('Ya tenés ', 'You already have ')}${hist.length}${anaT(' estrategias: cada una aprende de la anterior.', ' strategies: each one learns from the previous.')}</p>`;
   if (tiles.length < 2) return traj ? `<div class="ana-block">${traj}</div>` : '';
   return `<p class="ana-sec-t">${anaT(`${pzIc('camera', 16)} Tu foto de hoy`, `${pzIc('camera', 16)} Your snapshot today`)}</p><div class="ana-stats">${tiles.slice(0, 4).map((t) => `<div class="ana-stat"><p class="ana-sn">${esc(t.n)}</p><p class="ana-sl">${esc(t.l)}</p></div>`).join('')}</div>${traj}`;
 }
@@ -325,7 +325,7 @@ function anaStarterPhases() {
       { step: anaT('El ritmo queda instalado: tu semana completa sale sola, cada semana.', 'The rhythm is installed: your full week goes out on its own, every week.'), fx: anaT('Nacés con la constancia que a la mayoría de las cuentas les falta.', 'You are born with the consistency most accounts lack.') },
     ],
     [
-      { step: anaT('Te mido desde el día uno: cada análisis nuevo compara contra el anterior y ajusta la semana.', 'I measure you from day one: every new analysis compares against the previous one and adjusts the week.'), fx: anaT('Tu cuenta mejora con datos, no con corazonadas.', 'Your account improves with data, not hunches.') },
+      { step: anaT('Te mido desde el día uno: cada estrategia nueva compara contra la anterior y ajusta la semana.', 'I measure you from day one: every new strategy compares against the previous one and adjusts the week.'), fx: anaT('Tu cuenta mejora con datos, no con corazonadas.', 'Your account improves with data, not hunches.') },
     ],
   ];
 }
@@ -337,7 +337,7 @@ function anaNeedLine(a, birth) {
   const parts = [];
   try {
     if (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected) {
-      parts.push(anaT('conectá tu Instagram desde Ajustes — así publico por vos y tu análisis se afina con tus métricas reales', 'connect your Instagram from Settings — that way I post for you and your analysis sharpens with your real metrics'));
+      parts.push(anaT('conectá tu Instagram desde Ajustes — así publico por vos y tu estrategia se afina con tus métricas reales', 'connect your Instagram from Settings — that way I post for you and your strategy sharpens with your real metrics'));
     }
   } catch (e) {}
   parts.push(anaT('mandame tus fotos favoritas (3 a 5) — tu vidriera sale con tu material real, no con fotos genéricas', 'send me your favorite photos (3 to 5) — your storefront goes out with your real material, not generic photos'));
@@ -418,7 +418,7 @@ function anaLoopHTML(a) {
   if (!a.loop || !Array.isArray(a.loop.checks) || !a.loop.checks.length) return '';
   const ico = { 'cumplida': pzIc('checkCircle', 16), 'en-curso': pzIc('refresh', 16), 'sin-datos': pzIc('clock', 16) };
   const checks = a.loop.checks.map((c) => `<div class="ana-check">${ico[c.status] || '•'} ${esc(c.text || '')}</div>`).join('');
-  return `<div class="ana-block"><p class="ana-sec-t" style="margin-top:0">${anaT(`${pzIc('refresh', 16)} Así viene el plan`, `${pzIc('refresh', 16)} How the plan is going`)}</p><p class="ana-traj" style="margin:0 0 4px">${anaT('Lo que el análisis anterior se propuso, medido contra tu cuenta hoy.', 'What the previous analysis set out to do, measured against your account today.')}</p>${checks}</div>`;
+  return `<div class="ana-block"><p class="ana-sec-t" style="margin-top:0">${anaT(`${pzIc('refresh', 16)} Así viene el plan`, `${pzIc('refresh', 16)} How the plan is going`)}</p><p class="ana-traj" style="margin:0 0 4px">${anaT('Lo que la estrategia anterior se propuso, medida contra tu cuenta hoy.', 'What the previous strategy set out to do, measured against your account today.')}</p>${checks}</div>`;
 }
 
 /* La línea de progreso contra la carta anterior, desde el loop medido:
@@ -493,7 +493,7 @@ async function anaOpenPast(id) {
   anaPastMode = true;
   anaSetLang(d.analysis);
   const bar = `<div style="margin-bottom:10px"><button class="btn btn-ghost btn-sm" onclick="anaBackCurrent()">${pzIc('arrowLeft', 14) + ' ' + anaT('Volver a tu carta actual', 'Back to your current letter')}</button>
-    <span style="margin-left:8px;font-size:12.5px;color:var(--mut);font-weight:600">${anaT('Carta anterior — así se veía tu análisis esa semana', 'Past letter — this is what your analysis looked like that week')}</span></div>`;
+    <span style="margin-left:8px;font-size:12.5px;color:var(--mut);font-weight:600">${anaT('Carta anterior — así se veía tu estrategia esa semana', 'Past letter — this is what your strategy looked like that week')}</span></div>`;
   rootEl.innerHTML = bar + anaCartaHTML({ ok: true, plan: d.plan, analysis: d.analysis, history: [] });
   try { window.scrollTo(0, 0); } catch (e) {}
 }
@@ -660,7 +660,7 @@ function anaToggleFull(btn) {
   if (!box) return;
   const open = box.style.display !== 'none';
   box.style.display = open ? 'none' : 'block';
-  if (btn) btn.innerHTML = open ? anaT('Ver mi análisis completo', 'See my full analysis') + ' ' + pzIc('arrowRight', 13) : anaT('Ver menos', 'See less') + ' ' + pzIc('chevUp', 13);
+  if (btn) btn.innerHTML = open ? anaT('Ver mi estrategia completa', 'See my full strategy') + ' ' + pzIc('arrowRight', 13) : anaT('Ver menos', 'See less') + ' ' + pzIc('chevUp', 13);
 }
 
 function anaLetterBodyHTML(a) {
@@ -853,7 +853,7 @@ function anaCartaHTML(d) {
   const dateLine = anaDateLine(a);
   const nextLine = (!birth && a && !anaPastMode) ? anaProximoAnalisisHTML(a) : '';
   const carta = anaHasLetter(a);
-  const title = carta && a.letter.title ? a.letter.title : anaT('Tu análisis', 'Your analysis');
+  const title = carta && a.letter.title ? a.letter.title : anaT('Tu estrategia', 'Your strategy');
   const intro = !a
     ? anaT('Todavía no tengo tu radiografía — y no te voy a inventar una. Esto es lo que armo para tu cuenta desde tu rubro, tu zona y tu negocio' + pzIc('arrowDown', 13) + '', 'I do not have your full picture yet — and I will not make one up. This is what I build for your account from your category, your area and your business' + pzIc('arrowDown', 13) + '')
     : (birth
@@ -868,6 +868,9 @@ function anaCartaHTML(d) {
       ${nextLine ? `<p class="ana-next">${esc(nextLine)}</p>` : ''}
       ${carta ? '' : `<p class="ana-intro">${intro}</p>`}
     </div>`;
+  // (LOTE 10 · carta Estrategia) Primera línea de la carta, sin nada
+  // antes: la frase exacta, en el idioma de la carta.
+  if (carta) h += `<p class="ana-ltr-first">${anaT('la estrategia para esta semana', 'the strategy for this week')}</p>`;
   // (2026-10-25) APERTURA: la explicación de cómo se armó el plan — el
   // week_summary del motor («qué vi → por eso tu semana es así») — encabeza
   // la ventana como su línea de apertura. Es el contenido que vivía en la
@@ -886,7 +889,7 @@ function anaCartaHTML(d) {
     const minimal = !!(a.letter && (a.letter.v >= 2 || a.letter.minimal));
     h += anaLetterBodyHTML(a);
     if (minimal) {
-      h += `<div style="text-align:center;margin:14px 0 4px"><button class="btn btn-ghost" id="anaFullBtn" onclick="anaToggleFull(this)">${anaT('Ver mi análisis completo', 'See my full analysis') + ' ' + pzIc('arrowRight', 13)}</button></div><div id="anaFull" style="display:none">${anaFullHTML(d, a, birth)}</div>`;
+      h += `<div style="text-align:center;margin:14px 0 4px"><button class="btn btn-ghost" id="anaFullBtn" onclick="anaToggleFull(this)">${anaT('Ver mi estrategia completa', 'See my full strategy') + ' ' + pzIc('arrowRight', 13)}</button></div><div id="anaFull" style="display:none">${anaFullHTML(d, a, birth)}</div>`;
     }
     if (!minimal && birth) h += anaKitHTML(a);
     if (!minimal && !birth) h += anaMarketHTML(a);
@@ -897,13 +900,13 @@ function anaCartaHTML(d) {
     h += `<div class="ana-banner">${esc(a.letter.closing || anaBanner(stage, ctx))}</div>`;
     h += anaSignHTML(birth);
     if (!anaPastMode) h += anaShareBlockHTML(a);
-    if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">${anaT('↻ Actualizar análisis', '↻ Refresh analysis')}</button></div>`;
+    if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">${anaT('↻ Actualizar estrategia', '↻ Refresh strategy')}</button></div>`;
     h += `</div>`;
     return h;
   }
   h += `<div class="ana-verdict"><p class="ana-vlabel">${anaT('Mi veredicto', 'My verdict')}</p><p class="ana-vq">${esc(anaVerdict(a, stage, birth))}</p></div>`;
   if (!a) {
-    h += `<div style="text-align:center;margin-top:16px"><button class="btn btn-primary" onclick="anaRefresh(this)">${anaT('Armar mi análisis', 'Build my analysis')}</button></div>`;
+    h += `<div style="text-align:center;margin-top:16px"><button class="btn btn-primary" onclick="anaRefresh(this)">${anaT('Armar mi estrategia', 'Build my strategy')}</button></div>`;
   }
   if (!birth) h += anaProgressHTML(a);
   if (!birth) h += anaStatsHTML(a, d);
@@ -919,7 +922,7 @@ function anaCartaHTML(d) {
   }
   h += `<div class="ana-banner">${esc(anaBanner(stage, ctx))}</div>`;
   h += anaSignHTML(birth);
-  if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">${anaT('↻ Actualizar análisis', '↻ Refresh analysis')}</button></div>`;
+  if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">${anaT('↻ Actualizar estrategia', '↻ Refresh strategy')}</button></div>`;
   h += `</div>`;
   return h;
 }

@@ -100,11 +100,11 @@ check('re-disparo pzFillRelacion', /setTimeout\(\(\) => \{ try \{ pzFillRelacion
 check('re-disparo ttEnhance', /setTimeout\(\(\) => \{ try \{ ttEnhance\(\); \} catch \(e\) \{\} \}, 0\);/.test(app));
 
 console.log('== 8. Bumps ==');
-check('index app.js?v=331', idx.includes('app.js?v=331'));
-check('index styles.css?v=20261052', idx.includes('styles.css?v=20261052'));
-check('en index styles.css?v=20261052', enIdx.includes('styles.css?v=20261052'));
-check('BUILD v509', srv.includes("BUILD_ID = '20261031-v509'"));
-check('CHUNK_V v507 (lote 7 cambia chunks)', app.includes("const CHUNK_V = '20261031-v507'"));
+check('index app.js?v=332', idx.includes('app.js?v=332'));
+check('index styles.css?v=20261053', idx.includes('styles.css?v=20261053'));
+check('en index styles.css?v=20261053', enIdx.includes('styles.css?v=20261053'));
+check('BUILD v510', srv.includes("BUILD_ID = '20261031-v510'"));
+check('CHUNK_V v510 (lote 10 cambia chunks)', app.includes("const CHUNK_V = '20261031-v510'"));
 check('sin expandArtBrief tocado', !/expandArtBrief/.test(app.split('LOTE VELOCIDAD')[0].slice(-3000)) || true);
 
 console.log('== 9. M78: funciones nuevas definidas ==');

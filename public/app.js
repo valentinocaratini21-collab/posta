@@ -464,7 +464,7 @@ function bbShell(tab, content) {
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
     <nav class="bb-bar">
-      ${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Jardín', 'Garden'))}${tabBtn('analisis', '#/app/analisis', gzT('Análisis', 'Analysis'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}
+      ${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Jardín', 'Garden'))}${tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}
     </nav>
   </div>`;
 }
@@ -1341,7 +1341,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261031-v507'; // (lote1-ajustes) bump: chunk-ajustes cambia (sin Meta keys + reorden secciones)
+const CHUNK_V = '20261031-v510'; // (LOTE 10) bump: chunk-analisis cambia (renombre Estrategia + primera línea de la carta)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -5125,7 +5125,7 @@ function mzTabsHTML(tab) {
     : tab === 'analisis' ? 'analisis'
     : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('posty'), 'Inicio')}${t('jardin', 'jardin-posty', pzIc('sprout'), 'Jardín')}${t('analisis', 'analisis', pzIc('stems'), 'Análisis')}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('posty'), 'Inicio')}${t('jardin', 'jardin-posty', pzIc('sprout'), 'Jardín')}${t('analisis', 'analisis', pzIc('stems'), 'Estrategia')}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>`;
 }
 
 function appShell(tab, content) {
@@ -5149,7 +5149,7 @@ function appShell(tab, content) {
     </div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('posty')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
     <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('sprout')}</span>Jardín</button>
-    <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('stems')}</span>Análisis</button>
+    <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('stems')}</span>Estrategia</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">${pzIc('logout')}</span>Salir</button>
@@ -16035,6 +16035,34 @@ function hfWhenChip(post, now) {
     return `${wd} ${dt} · ${hh}`;
   } catch (e) { return ''; }
 }
+// (LOTE 10 · ítem 2) Chapita del PLAN para borradores sin
+// scheduled_at: el día real del plan (t.day, ymd de schedPlacements)
+// a la hora real del plan (slotHour, la misma política que el
+// servidor usa al programar). Misma familia visual que hfWhenChip
+// («Hoy 2/11 · 19:00» / «sáb 7/11 · 19:00»). Sin día, sin chapita.
+function hfPlanChip(ymd) {
+  try {
+    if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(String(ymd))) return '';
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const tz = (typeof pcTz === 'function') ? pcTz() : undefined;
+    const zo = tz ? { timeZone: tz } : {};
+    const fmt = new Intl.DateTimeFormat('en-CA', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo));
+    const todayKey = fmt.format(new Date());
+    const tomKey = fmt.format(new Date(Date.now() + 86400000));
+    const [y, m, d] = String(ymd).split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d, 12));
+    if (isNaN(dt)) return '';
+    const hh = slotHour();
+    const hhTxt = en ? (((hh % 12) || 12) + ':00 ' + (hh < 12 ? 'AM' : 'PM')) : (hh + ':00');
+    const dTxt = dt.toLocaleDateString(en ? 'en-US' : 'es-AR', Object.assign({ day: 'numeric', month: 'numeric' }, zo));
+    if (ymd === todayKey) return `${en ? 'Today' : 'Hoy'} ${dTxt} · ${hhTxt}`;
+    if (ymd === tomKey) return `${en ? 'Tomorrow' : 'Mañana'} ${dTxt} · ${hhTxt}`;
+    let wd = dt.toLocaleDateString(en ? 'en-US' : 'es-AR', Object.assign({ weekday: 'short' }, zo)).replace(/\./g, '');
+    if (!wd) return '';
+    wd = wd.charAt(0).toUpperCase() + wd.slice(1);
+    return `${wd} ${dTxt} · ${hhTxt}`;
+  } catch (e) { return ''; }
+}
 // (Tanda feed 6A · ítem 3) Rehaces que le quedan a un posteo: null si el
 // contador no lo alcanza (publicado o reel — los reels van por su flujo
 // propio). Sin dato (payload viejo), el posteo nace con 3 por defecto.
@@ -16494,7 +16522,9 @@ function homeTileHTML(t, i) {
   const despChip = t.pzDespegue ? `<span class="pz-despegue-chip">${pzIc('flame', 14)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Breakout' : 'despegando'}</span>` : '';
   const despCls = t.pzDespegue ? ' hf-tile-despegue' : '';
   const nextCls = t.pzNext ? ' hf-tile-next' : '';
-  const chipTxt = (p.status === 'draft' || p.status === 'scheduled') ? hfWhenChip(p) : '';
+  const chipTxt = (p.status === 'draft' || p.status === 'scheduled')
+      ? (hfWhenChip(p) || (p.status === 'draft' ? hfPlanChip(t.day) : ''))
+      : '';
   const chip = chipTxt ? `<span class="hf-chip">${pzIc('clock', 12)} ${esc(chipTxt)}</span>` : '';
   // (Corrección grilla 2026-10-25, Valentino — «sacar el icono del
   // chat»): la grilla NO lleva botón de chat. El chat vive DENTRO del
@@ -16528,7 +16558,7 @@ function homeTileHTML(t, i) {
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}${despChip}</span>`;
+  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}${despChip}</span><div class="hf-cell-actions"><button type="button" class="hf-like" data-hf-like aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></div></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -18002,7 +18032,6 @@ function mzOpenSheet(focus) {
   const sh = $('#mzSheet');
   if (!sh) return;
   sh.hidden = false;
-  try { document.body.classList.add('mz-sheet-open'); } catch (e) {}
   // Prefill pendiente: el MISMO contrato que usa "Editar" de #/app/post/:id
   // (sessionStorage 'posty-chat-prefill'), consumido al abrir el chat.
   try {
@@ -18908,7 +18937,9 @@ function hfLiveApply(job) {
     const t2 = Object.assign({}, rec.t);
     if (diff.justPublished.includes(String(id))) { t2.justPub = true; HF_LIVE.justPub.add(String(id)); }
     if (HF_VISITOR) t2.visitor = true;
-    el.outerHTML = homeTileHTML(t2, rec.i);
+    const cell0 = el.closest('.hf-cell');
+    if (cell0) cell0.outerHTML = homeTileHTML(t2, rec.i);
+    else el.outerHTML = homeTileHTML(t2, rec.i);
   }
   // Tiles nuevas: entran en su sección (las que vienen, antes de la
   // primera publicada; las recién publicadas, al frente de las pub).
@@ -18920,7 +18951,7 @@ function hfLiveApply(job) {
       if (diff.justPublished.includes(String(id))) { t2.justPub = true; HF_LIVE.justPub.add(String(id)); }
       if (HF_VISITOR) t2.visitor = true;
       const firstPub = grid.querySelector('.hf-tile.pub');
-      if (firstPub) firstPub.insertAdjacentHTML('beforebegin', homeTileHTML(t2, rec.i));
+      if (firstPub) { const fc = firstPub.closest('.hf-cell'); if (fc) fc.insertAdjacentHTML('beforebegin', homeTileHTML(t2, rec.i)); else firstPub.insertAdjacentHTML('beforebegin', homeTileHTML(t2, rec.i)); }
       else grid.insertAdjacentHTML('beforeend', homeTileHTML(t2, rec.i));
     }
   }
@@ -19334,6 +19365,31 @@ function hfDetailBind(root) {
       if (pend.tile && document.contains(pend.tile) && location.hash === pend.hash) { try { hfDetailOpen(pend.post, pend.tile); } catch (e2) {} }
     }, 300);
   }, true);
+}
+// (LOTE 10 · ítem 1) Corazón visible debajo de cada tile: la fila
+// .hf-cell-actions vive FUERA de .hf-tile (el doble toque y los holds
+// solo cubren la tile), así que este listener delegado no compite con
+// el detalle. La acción es EXACTAMENTE la del corazón del detalle y
+// la del doble toque: burst + hfTileApprove (en autopilot, solo
+// afectivo; en publicado, solo burst). Sin data-post-id en el botón:
+// se resuelve la tile hermana en el click, así el parcheo en vivo
+// (que reemplaza la celda entera) nunca deja un id viejo.
+function hfLikeBind(root) {
+  if (!root || root._hfLikeBound) return;
+  root._hfLikeBound = true;
+  root.addEventListener('click', (e) => {
+    const btn = e.target && e.target.closest ? e.target.closest('[data-hf-like]') : null;
+    if (!btn) return;
+    const cell = btn.closest('.hf-cell');
+    const tile = cell ? cell.querySelector('.hf-tile[data-post-id]') : null;
+    if (!tile) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const t = HF_TILES.find((x) => x && x.kind === 'post' && String(x.post.id) === String(tile.dataset.postId));
+    if (!t) return;
+    try { f3HeartBurst(tile); } catch (e2) {}
+    hfTileApprove(tile, t.post);
+  });
 }
 function hfDurBind(root) {
   if (!root) return;
@@ -19852,6 +19908,7 @@ function bindInicio() {
   // (Tanda feed 5 · ítem 1) El detalle IG de las piezas + la duración
   // real en las tiles de la pestaña Reels.
   hfDetailBind(document.getElementById('inicioView'));
+  hfLikeBind(document.getElementById('inicioView'));
   try { hfProfileBind(document.getElementById('inicioView')); } catch (e) {}
   hfDurBind(document.getElementById('inicioView'));
   // Franja de revisión: "Aceptar todo" — el handler de siempre
@@ -19936,13 +19993,13 @@ async function analysisView() {
   try { d = await api.get('/api/analysis'); } catch (e) {}
   const head = `<div class="card" style="padding:18px">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-      <div style="font-size:20px;font-weight:800">${pzIc('idea', 15)} Tu análisis</div>
+      <div style="font-size:20px;font-weight:800">${pzIc('idea', 15)} Tu estrategia</div>
       <button class="btn btn-ghost btn-sm" onclick="pzAnalysisRefresh(this)">↻ Actualizar</button>
     </div>
     <p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:6px">Esto es lo que Posty ve de tu cuenta y de tu mercado — y las decisiones que toma con eso. Cada posteo de tu semana nace de acá.</p>
   </div>`;
   if (!d || !d.analysis) {
-    return `${head}<div class="card" style="padding:18px;margin-top:12px"><p style="font-size:14px;line-height:1.6">Todavía no armé tu primer análisis. Lo armo ahora con los datos reales de tu cuenta y tu rubro ${pzIc('arrowDown', 13)}</p><button class="btn btn-primary" style="margin-top:10px" onclick="pzAnalysisRefresh(this)">Armar mi análisis</button></div>`;
+    return `${head}<div class="card" style="padding:18px;margin-top:12px"><p style="font-size:14px;line-height:1.6">Todavía no armé tu primera estrategia. Lo armo ahora con los datos reales de tu cuenta y tu rubro ${pzIc('arrowDown', 13)}</p><button class="btn btn-primary" style="margin-top:10px" onclick="pzAnalysisRefresh(this)">Armar mi estrategia</button></div>`;
   }
   const a = d.analysis;
   const groups = [['mejorar', pzIc('wrench', 14) + ' A mejorar'], ['incrementar', pzIc('chartUp', 14) + ' A incrementar'], ['reducir', pzIc('chartDown', 14) + ' A reducir']];
@@ -19985,11 +20042,11 @@ async function analysisView() {
   if (a.loop && Array.isArray(a.loop.checks) && a.loop.checks.length) {
     const ico = { 'cumplida': pzIc('checkCircle', 13), 'en-curso': pzIc('refresh', 13), 'sin-datos': pzIc('clock', 13) };
     const checks = a.loop.checks.map((c) => `<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;line-height:1.6">${ico[c.status] || '•'} ${esc(c.text || '')}</div>`).join('');
-    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">${pzIc('refresh', 15)} Así viene el plan</div><p style="color:var(--mut);font-size:12.5px;margin-top:2px">Lo que el análisis anterior se propuso, medido contra tu cuenta hoy.</p>${checks}</div>`;
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">${pzIc('refresh', 15)} Así viene el plan</div><p style="color:var(--mut);font-size:12.5px;margin-top:2px">Lo que la estrategia anterior se propuso, medida contra tu cuenta hoy.</p>${checks}</div>`;
   }
   if (Array.isArray(d.history) && d.history.length > 1) {
-    const hist = d.history.map((h) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span>Análisis #${esc(String(h.n || ''))}</span><span style="color:var(--mut)">${esc(String(h.created_at || '').slice(0, 10))} · ${esc(String(h.findings))} hallazgos</span></div>`).join('');
-    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">${pzIc('layers', 15)} Historial</div>${hist}<p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin-top:8px">Cada análisis aprende del anterior: el #10 de tu cuenta es mucho mejor que el #1.</p></div>`;
+    const hist = d.history.map((h) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span>Estrategia #${esc(String(h.n || ''))}</span><span style="color:var(--mut)">${esc(String(h.created_at || '').slice(0, 10))} · ${esc(String(h.findings))} hallazgos</span></div>`).join('');
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">${pzIc('layers', 15)} Historial</div>${hist}<p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin-top:8px">Cada estrategia aprende de la anterior: la #10 de tu cuenta es mucho mejor que la #1.</p></div>`;
   }
   const notes = (a.data_notes || []).map((n) => `<p style="color:var(--dim);font-size:12px;margin-top:10px">${esc(n)}</p>`).join('');
   return `${head}${body}${notes}`;
