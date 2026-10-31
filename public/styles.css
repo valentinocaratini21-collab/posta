@@ -3811,3 +3811,51 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 #inicioView .hf-bio{line-height:1.4}
 #inicioView .hf-tabs{margin-top:14px}
 #inicioView.hf-wrap{padding:4px 0 96px}
+
+/* (6 mejoras del feed · ADAPTADO v496: ítems 2, 3, 6 — vetados 1, 4, 5 FUERA) */
+/* Ítem 2 — borrador a simple vista: borde punteado + etiqueta. El
+   outline no cambia el tamaño de la tile: la grilla de 3 columnas
+   y la navegación quedan intactas. */
+.hf-tile.hf-tile-draft{outline:2px dashed #2793C8;outline-offset:-2px}
+.igmock.igmock-draft{outline:2px dashed #2793C8;outline-offset:-2px}
+.pz-draft-chip{position:absolute;top:6px;left:6px;z-index:3;background:rgba(255,255,255,.94);color:#2793C8;border:1.5px dashed #2793C8;font-size:10px;font-weight:800;line-height:1;padding:3px 8px;border-radius:999px;pointer-events:none;white-space:nowrap}
+/* Ítem 6 — modo noche automático (según el sistema): superficies
+   del feed en navy #0A1E33, acentos EXACTOS #2793C8 y #FEC14D,
+   nunca negro ni variantes que lean negro. La tira de nivel
+   conserva su layout inline (v461) y solo cambia colores.
+   (Adaptado v496: SIN la regla de la tirita vetada — ese feature
+   no se renderiza y su regla sería código muerto.) */
+@media (prefers-color-scheme: dark){
+  .hf-wrap{background:#0A1E33}
+  .hf-head,.fp-head{background:#0A1E33;color:#fff}
+  .hf-user,.hf-name,.hf-bio,.hf-stat b,.fp-name{color:#fff}
+  .hf-stat span,.hf-cat,.hf-link{color:#DCEFFA}
+  .hf-tabs{border-top-color:#1E3A52}
+  .hf-tab{color:#93AEC0}
+  .hf-tab.on{color:#2793C8;border-top-color:#2793C8}
+  .hf-grid,.fp-grid{background:#0A1E33}
+  .hf-tile .hf-just-chip{background:#FEC14D;color:#0A1E33}
+  .hf-hls .hf-hl-t{color:#fff}
+  .hf-wrap .mz-chatbar{background:#0A1E33;box-shadow:0 8px 26px rgba(10,30,51,.45)}
+  .hf-wrap .mz-chatbar .mz-mic{color:#fff}
+  .hf-wrap .igmock{background:#0A1E33}
+  #pzNivelStrip{background:#0A1E33 !important;border-color:#1E3A52 !important}
+  #pzNivelStrip strong{color:#fff !important}
+  #pzNivelStrip button{color:#DCEFFA !important}
+  #pzNivelStrip .pz-strip-chev{color:#fff !important}
+}
+
+/* (2-3-6 del feed · ítem 17) */
+/* Ítem 2 — el que despega se ilumina: brillo dorado sutil + chapita
+   (familia de chapitas, como la de borrador). El outline no cambia
+   el tamaño de la tile: la grilla de 3 columnas queda intacta. */
+.hf-tile.hf-tile-despegue{outline:2px solid rgba(254,193,77,.9);outline-offset:-2px;box-shadow:0 0 14px rgba(254,193,77,.45)}
+.pz-despegue-chip{position:absolute;top:6px;left:6px;z-index:3;background:rgba(255,255,255,.94);color:#0A1E33;border:1.5px solid #FEC14D;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;pointer-events:none;white-space:nowrap}
+/* Ítem 6 — el próximo en salir: marco dorado exacto #FEC14D. */
+.hf-tile.hf-tile-next{outline:2px solid #FEC14D;outline-offset:-2px}
+/* Ítem 3 — racha de constancia debajo del perfil. */
+.hf-racha{font-size:13px;font-weight:700;color:#0A1E33;margin-top:8px}
+@media (prefers-color-scheme: dark){
+  .hf-racha{color:#FEC14D}
+  .hf-tile.hf-tile-despegue{box-shadow:0 0 16px rgba(254,193,77,.6)}
+}

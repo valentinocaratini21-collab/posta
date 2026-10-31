@@ -9344,14 +9344,17 @@ function weekCardHTML(d, o) {
   // la tarjeta va corta (solo la hora) para que no se peleé con el botón
   // Aceptar en pantallas chicas ("jue 22 · 12:0…" cortado).
   const whenTxt = o.dia ? String(prop.label || '').replace(/^(\S+)\s+[^·]*·\s*/, '$1 ') : prop.label;
-  return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}" data-f3-status="${esc(String(d.status || ''))}" data-f3-appr="${esc(String(d.approval || ''))}">
+  // (6 mejoras · ítem 2, adaptado v496) Borrador en la tarjeta: misma etiqueta que
+  // en la tile; el creando (isPending) no es borrador accionable.
+  const draftChipCard = (d.status === 'draft' && !isPending) ? `<span class="pz-draft-chip">${enW ? 'Draft' : 'Borrador'}</span>` : '';
+  return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}${d.status === 'draft' && !isPending ? ' igmock-draft' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}" data-f3-status="${esc(String(d.status || ''))}" data-f3-appr="${esc(String(d.approval || ''))}">
       <div class="igmock-head">${avaHTML}<span class="igmock-name">${esc(headName)}</span>${o.count ? `
         <span class="igmock-count">${esc(o.count)}</span>` : ''}<span class="igmock-dots" aria-hidden="true">•••</span></div>
       <div class="igmock-when-top"><span>${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
         ${statusHTML}${d.image_path ? `<button type="button" class="hf-crop-tog hf-crop-mini" data-hf-crop aria-pressed="false" aria-label="${enW ? 'See how it crops' : 'Ver cómo se recorta'}">▦</button>` : ''}</div>
       ${isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
-        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}</button>`}
+        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</button>`}
       ${foot}
       ${hfAskChangeBtnHTML(d)}
     </div>`;
@@ -15549,6 +15552,26 @@ function hfChipText(scheduledAt) {
 // (post, now): now se inyecta en los tests. Sin scheduled_at real o con
 // fecha inválida devuelve '' (sin chapita, jamás una fecha inventada).
 // Acepta el posteo o directamente el string de scheduled_at.
+/* (6 mejoras · ítem 3) Día relativo de un programado, en la zona
+   horaria de la cuenta: hoy / mañana / en N días, solo 0-6 días
+   hacia adelante. Fuera de ese rango (pasado o lejano) devuelve ''
+   y la burbuja usa el día absoluto de siempre. Solo compara días
+   de calendario en la zona dada, nunca inventa una hora. */
+function pzWhenRelDay(d, tz, en) {
+  try {
+    if (!d || isNaN(d)) return '';
+    const zo = tz ? { timeZone: tz } : {};
+    const key = (x) => { try { return x.toLocaleDateString('en-CA', zo); } catch (e) { return ''; } };
+    const today = key(new Date());
+    const day = key(d);
+    if (!today || !day) return '';
+    const diff = Math.round((Date.parse(day) - Date.parse(today)) / 86400000);
+    if (diff < 0 || diff > 6) return '';
+    if (diff === 0) return en ? 'today' : 'hoy';
+    if (diff === 1) return en ? 'tomorrow' : 'mañana';
+    return en ? 'in ' + diff + ' days' : 'en ' + diff + ' días';
+  } catch (e) { return ''; }
+}
 function hfWhenChip(post, now) {
   try {
     const schedAt = (post && typeof post === 'object') ? post.scheduled_at : post;
@@ -15576,6 +15599,14 @@ function hfWhenChip(post, now) {
     if (!hh) return '';
     if (tKey === todayKey) return `${en ? 'Today' : 'Hoy'} · ${hh}`;
     if (tKey === tomKey) return `${en ? 'Tomorrow' : 'Mañana'} · ${hh}`;
+    // (6 mejoras · ítem 3, adaptado v496) Programado en 2-6 días: el día
+    // corto cede al relativo en la zona de la cuenta («en 2 días» /
+    // «in 2 days» + la hora real). Solo programados; borradores y
+    // fuera de rango siguen con el día corto de siempre.
+    if (String(post && post.status || '') === 'scheduled' && typeof pzWhenRelDay === 'function') {
+      const rel = pzWhenRelDay(d, tz, en);
+      if (rel) return `${rel} · ${hh}`;
+    }
     let wd = d.toLocaleDateString(loc, Object.assign({ weekday: 'short' }, zo)).replace(/\./g, '');
     if (!wd) return '';
     wd = wd.charAt(0).toUpperCase() + wd.slice(1);
@@ -15883,6 +15914,117 @@ function hfCommentsListHTML(comments, en) {
   }).filter(Boolean);
   return rows.length ? `<div class="hf-cms">${rows.join('')}</div>` : '';
 }
+/* (Ítem 17 · 2-3-6) Funciones puras: despegue, racha y próximo
+   programado. Solo datos reales; sin dato, sin marca (nunca un
+   número inventado). */
+function pzMedian17(nums) {
+  const v = (Array.isArray(nums) ? nums : []).filter((n) => Number.isFinite(n));
+  if (!v.length) return null;
+  v.sort((a, b) => a - b);
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+function pzReachNum17(p) {
+  if (!p) return null;
+  const r = p.reach;
+  if (r === null || r === undefined || r === '') return null;
+  const n = Number(r);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function pzIsDemo17(p) {
+  const id = String((p && p.id) || '');
+  const ig = String((p && p.ig_media_id) || '');
+  return id.indexOf('demo_') === 0 || ig.indexOf('demo_') === 0;
+}
+/* Despegue (mismo umbral que alerta-despegue): publicado, alcance
+   real > 0, >= 2x la mediana de hasta los 20 publicados previos
+   más recientes con alcance real (excluyendo demos y al propio
+   candidato; solo previos con fecha anterior a la del candidato).
+   Menos de 5 previos medidos: nunca despega. */
+function pzDespegueIds(posts) {
+  const out = new Set();
+  try {
+    const list = (Array.isArray(posts) ? posts : []).filter((p) => p && p.status === 'published' && !pzIsDemo17(p));
+    for (const p of list) {
+      const r = pzReachNum17(p);
+      const pt = Date.parse(String(p.published_at || ''));
+      if (r === null || isNaN(pt)) continue;
+      const prev = list
+        .filter((x) => x !== p && pzReachNum17(x) !== null && !isNaN(Date.parse(String(x.published_at || ''))) && Date.parse(String(x.published_at)) < pt)
+        .sort((a, b) => Date.parse(String(b.published_at)) - Date.parse(String(a.published_at)))
+        .slice(0, 20)
+        .map((x) => pzReachNum17(x));
+      if (prev.length < 5) continue;
+      const med = pzMedian17(prev);
+      if (med !== null && med > 0 && r >= 2 * med) out.add(p.id);
+    }
+  } catch (e) {}
+  return out;
+}
+/* Lunes de la semana de una fecha, en la zona de la cuenta. */
+function pzWeekKey17(d, tz) {
+  try {
+    const zo = tz ? { timeZone: tz } : {};
+    const parts = new Intl.DateTimeFormat('en-US', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo)).formatToParts(d);
+    const get = (t) => Number(parts.find((x) => x.type === t).value);
+    const y = get('year'), m = get('month'), dd = get('day');
+    const dow = new Date(Date.UTC(y, m - 1, dd)).getUTCDay();
+    const back = dow === 0 ? 6 : dow - 1;
+    return new Date(Date.UTC(y, m - 1, dd - back)).toISOString().slice(0, 10);
+  } catch (e) { return ''; }
+}
+/* Racha de constancia: semanas consecutivas (lunes-domingo, zona
+   de la cuenta) con al menos un posteo publicado. Hacia atrás
+   desde la semana actual; si la actual todavía no tiene posteo,
+   se arranca desde la anterior. Futuros e inválidos no cuentan.
+   Devuelve N (0 = sin racha). */
+function pzRachaSemanas(posts, now, tz) {
+  try {
+    const list = Array.isArray(posts) ? posts : [];
+    const nowMs = now instanceof Date ? now.getTime() : Date.parse(String(now || ''));
+    if (isNaN(nowMs)) return 0;
+    const weeks = new Set();
+    for (const p of list) {
+      if (!p || p.status !== 'published') continue;
+      const t = Date.parse(String(p.published_at || ''));
+      if (isNaN(t) || t > nowMs) continue;
+      const k = pzWeekKey17(new Date(t), tz);
+      if (k) weeks.add(k);
+    }
+    if (!weeks.size) return 0;
+    let cur = pzWeekKey17(new Date(nowMs), tz);
+    if (!cur) return 0;
+    if (!weeks.has(cur)) {
+      const d = new Date(cur + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 7);
+      cur = d.toISOString().slice(0, 10);
+    }
+    let n = 0;
+    let w = cur;
+    while (weeks.has(w)) {
+      n++;
+      const d = new Date(w + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 7);
+      w = d.toISOString().slice(0, 10);
+    }
+    return n;
+  } catch (e) { return 0; }
+}
+/* Próximo programado: el scheduled con scheduled_at real más
+   cercano en el futuro. Sin futuro, null (nunca un marco
+   inventado). */
+function pzNextScheduledId(posts, now) {
+  try {
+    const nowMs = now instanceof Date ? now.getTime() : Date.parse(String(now || ''));
+    if (isNaN(nowMs)) return null;
+    let best = null, bestT = Infinity;
+    for (const p of (Array.isArray(posts) ? posts : [])) {
+      if (!p || p.status !== 'scheduled') continue;
+      const t = Date.parse(String(p.scheduled_at || ''));
+      if (isNaN(t) || t <= nowMs || t >= bestT) continue;
+      best = p.id; bestT = t;
+    }
+    return best;
+  } catch (e) { return null; }
+}
 function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
@@ -15918,6 +16060,19 @@ function homeTileHTML(t, i) {
   // (Hoy/Mañana/día corto + hora), en la misma posición y familia
   // visual de la chapita 🕐 de siempre. Vale para draft Y scheduled
   // con scheduled_at real; sin fecha, sin chapita. Publicados: ninguna.
+  // (6 mejoras · ítem 2, adaptado v496) Borrador a simple vista: etiqueta
+  // «Borrador» (familia de chapitas, como la burbuja y «Recién
+  // publicado»); el programado conserva solo su burbuja de hora.
+  const draftChip = p.status === 'draft' ? `<span class="pz-draft-chip">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Draft' : 'Borrador'}</span>` : '';
+  // (Ítem 17 · ítem 2 y 6) Marcas de la grilla (las pone inicioView
+  // sobre la tile): despegue (alcance >= 2x mediana real) y próximo
+  // programado (marco dorado). Sin marca, la tile queda intacta.
+  // La chapita sigue la familia de chapitas (como la de borrador);
+  // el justPub transitorio comparte la esquina, pero se limpia en
+  // el render siguiente y no hay colisión en estado estable.
+  const despChip = t.pzDespegue ? `<span class="pz-despegue-chip">🔥 ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Breakout' : 'despegando'}</span>` : '';
+  const despCls = t.pzDespegue ? ' hf-tile-despegue' : '';
+  const nextCls = t.pzNext ? ' hf-tile-next' : '';
   const chipTxt = (p.status === 'draft' || p.status === 'scheduled') ? hfWhenChip(p) : '';
   const chip = chipTxt ? `<span class="hf-chip">🕐 ${esc(chipTxt)}</span>` : '';
   // (Corrección grilla 2026-10-25, Valentino — «sacar el icono del
@@ -15952,7 +16107,7 @@ function homeTileHTML(t, i) {
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}</span>`;
+  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${draftChip}${glyph}${despChip}</span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -16045,6 +16200,10 @@ function homeHeadHTML(prof, bizName, opts) {
   const avaHTML = (opts && opts.storyRing)
     ? `<button type="button" class="hf-ava-btn" data-hf-ava="1" aria-label="${en ? "See this week's stories" : 'Ver las historias de esta semana'}">${avaInner}</button>`
     : avaInner;
+  // (Ítem 17 · ítem 3) Racha de constancia debajo del perfil:
+  // solo si opts.racha trae un número real >= 2 (lo calcula
+  // inicioView con pzRachaSemanas); sin racha, nada.
+  const rachaHTML = (opts && Number(opts.racha) >= 2) ? `<div class="hf-racha">🔥 ${en ? `${Math.floor(opts.racha)} weeks in a row posting` : `${Math.floor(opts.racha)} semanas seguidas publicando`}</div>` : '';
   return `<div class="hf-head">
     ${user ? `<div class="hf-user">${esc(user)}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
@@ -16055,6 +16214,7 @@ function homeHeadHTML(prof, bizName, opts) {
     ${catHTML}
     ${bioHTML}
     ${linkHTML}
+    ${rachaHTML}
     ${(typeof igHeadChipHTML === 'function') ? igHeadChipHTML(en) : ''}
     ${split ? '' : hfHighlightsTrayHTML(prof, opts)}
     ${split ? '' : hfTabsHTML(tabA, en)}
@@ -16699,6 +16859,25 @@ async function inicioView() {
   // detalle IG y las pestañas (que filtran sin recomponer).
   HF_TILES = tiles;
   HF_CUR_PROF = prof;
+  // (Ítem 17) Marcas de la grilla, calculadas una vez sobre las
+  // tiles cargadas (nunca inventadas): despegue y próximo
+  // programado. Solo fuera de modo visitante: al visitante no se
+  // le marcan señales de gestión. La racha sale de allPosts
+  // (historial completo), no solo de las tiles visibles.
+  let pzRacha = 0;
+  if (!HF_VISITOR) {
+    try {
+      const pzPosts17 = tiles.filter((t) => t.kind === 'post' && t.post).map((t) => t.post);
+      const pzDesp17 = pzDespegueIds(pzPosts17);
+      const pzNext17 = pzNextScheduledId(pzPosts17, new Date());
+      for (const t of tiles) {
+        if (t.kind !== 'post' || !t.post) continue;
+        if (pzDesp17.has(t.post.id)) t.pzDespegue = true;
+        if (pzNext17 !== null && String(t.post.id) === String(pzNext17)) t.pzNext = true;
+      }
+      pzRacha = pzRachaSemanas(Array.isArray(allPosts) ? allPosts : [], new Date(), tz);
+    } catch (e) { /* sin marcas: la grilla queda como siempre */ }
+  }
   // (Tanda feed 6B · ítem 4) El espejo vivo nace con esta foto del
   // payload: los sondeos siguientes difieren contra ella.
   try { HF_LIVE.snap = hfLiveSnapshot(tiles, prof); HF_LIVE.pending = null; } catch (e) {}
@@ -16795,7 +16974,7 @@ async function inicioView() {
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${portTopInicio}
-  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, coversPlus: !HF_VISITOR, splitHead: true })}
+  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, coversPlus: !HF_VISITOR, splitHead: true, racha: pzRacha })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
   ${hfTabsHTML(HF_TAB, enHome)}
   ${gridHTML}
