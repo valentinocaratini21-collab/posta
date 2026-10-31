@@ -20,11 +20,12 @@ function ok(c, msg) {
   else { failN++; console.log('FALLA:', msg); }
 }
 
-// ---------- 1) Corazón visible debajo de cada tile ----------
+// ---------- 1) Corazón visible adentro de la foto (LOTE 11: corrige
+// el criterio Lote 2 por orden explícita de Valentino 31/10) ----------
 ok(APP.includes('<span class="hf-cell"><span class="scf-mini-x hf-tile'),
   '1: la tile de posteo va envuelta en .hf-cell');
-ok(APP.includes('data-hf-like') && APP.includes('class="hf-like"'),
-  '1: fila de acciones con botón corazón data-hf-like (fuera de la tile)');
+ok(APP.includes('data-hf-like') && APP.includes('class="hf-like hf-like-in"'),
+  '1: botón corazón data-hf-like ADENTRO de la foto (LOTE 11)');
 ok(APP.includes('function hfLikeBind(root)') && APP.includes("hfLikeBind(document.getElementById('inicioView'))"),
   '1: hfLikeBind definido y cableado en Inicio');
 ok(APP.includes("closest('[data-hf-like]')") && APP.includes('f3HeartBurst(tile)') && APP.includes('hfTileApprove(tile, t.post)'),
@@ -33,8 +34,8 @@ ok(APP.includes("cell0.outerHTML = homeTileHTML(t2, rec.i)") && APP.includes("fc
   '1: el parcheo en vivo reemplaza/inserta la celda entera, no la tile suelta');
 ok(APP.includes('apv-like') && APP.includes('apvAccept'),
   '1: el corazón del detalle sigue presente (apv-like + apvAccept)');
-ok(APP.includes('</span><div class="hf-cell-actions"><button type="button" class="hf-like" data-hf-like'),
-  '1: la fila va DESPUÉS del cierre de la tile (fuera, nunca sobre la foto)');
+ok(!APP.includes('hf-cell-actions') && APP.includes('</button></span></span>`;'),
+  '1: sin fila abajo: el botón cierra DENTRO de la tile (sobre la foto)');
 
 // ---------- 2) Día + hora reales (programado o planificado) ----------
 ok(APP.includes('function hfPlanChip(ymd)'),
@@ -156,9 +157,9 @@ const cnt = (s, p) => (s.match(new RegExp(p, 'g')) || []).length;
 ok(cnt(SRV, 'catsMatch') === 3 && cnt(SRV, 'week-redo') === 16 && cnt(SRV, 'first_week') === 3 && cnt(SRV, '/aprobar') === 16,
   'censo server 3/16/3/16 intacto');
 ok(cnt(SRV, 'autofetch') === 0, 'censo autofetch 0');
-ok(SRV.includes("const BUILD_ID = '20261031-v511'"), 'BUILD v511');
-ok(IDX.includes('app.js?v=333') && IDX.includes('styles.css?v=20261054'), 'index ?v= app 333 + styles 20261054');
-ok(IDXEN.includes('styles.css?v=20261054'), 'en/index styles 20261054');
+ok(SRV.includes("const BUILD_ID = '20261031-v512'"), 'BUILD v512');
+ok(IDX.includes('app.js?v=334') && IDX.includes('styles.css?v=20261055'), 'index ?v= app 334 + styles 20261055');
+ok(IDXEN.includes('styles.css?v=20261055'), 'en/index styles 20261055');
 ok(APP.includes("const CHUNK_V = '20261031-v510'"), 'CHUNK_V v510 (chunk-analisis cache-busteado)');
 
 console.log(`\n== test-lote10: ${okN} ok · ${failN} fallas ==`);

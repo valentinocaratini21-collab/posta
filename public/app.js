@@ -10232,11 +10232,15 @@ function feedPreviewHTML(all, tz, prof) {
       if (it.p.status === 'draft' || it.p.status === 'scheduled') upcoming.push({ p: it.p, ymd });
     }
   }
-  const published = posts.filter(p => p.status === 'published')
-    .sort((a, b) => String(b.published_at || b.scheduled_at || '').localeCompare(String(a.published_at || a.scheduled_at || '')));
+  const published = posts.filter(p => p.status === 'published');
   const parts = [];
   for (const u of upcoming) parts.push({ kind: 'up', p: u.p, ymd: u.ymd });
   for (const p of published) parts.push({ kind: 'pub', p });
+  // (LOTE 11 · orden cronológico) Igual que la home: lunes arriba →
+  // domingo abajo, con la misma fecha efectiva (hfFeedSortKey). El
+  // sort es estable: a igual fecha queda el orden previo (día/hora
+  // de la agenda).
+  parts.sort((a, b) => hfFeedSortKey({ kind: 'post', post: a.p, ymd: a.ymd || null }) - hfFeedSortKey({ kind: 'post', post: b.p, ymd: b.ymd || null }));
   if (!parts.length) return '';
   const tileMedia = (p, isV) => !p.image_path
     ? '<span class="fp-tile-ph">' + pzIc('sparkle', 18) + '</span>'
@@ -10318,6 +10322,7 @@ function bindScfMinis(root) {
       // El CIERRE al salir lo maneja el rastreador geométrico global.
     });
     w.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('[data-hf-like]')) return; // (LOTE 11) el corazón lo maneja hfLikeBind, no la capa
       if (e.target.closest('.scf-pop')) {
         // Click sobre la propia capa: queda FIJADA.
         SCF_PINNED = true;
@@ -15980,6 +15985,24 @@ function mzMediaHTML(p, cls) {
      no se dibuja, bio no leída no se dibuja, destacadas solo si el
      payload las trae. Nada se completa ni se redondea. */
 const HOME_FEED_CAP = 24;
+// (LOTE 11 · orden cronológico) Fecha efectiva de un tile para
+// ordenar el feed: usa el mismo parser que la visualización
+// (pcParseDate), así orden y chapita nunca discrepan. Publicado →
+// published_at (nunca scheduled_at: la fecha real es cuando salió);
+// próximo con fecha → scheduled_at; borrador ubicado por día → ese
+// día a mediodía UTC (la misma base que schedPlacements usa para
+// ubicarlo). Sin fecha: al final, nunca inventada.
+function hfFeedSortKey(t) {
+  try {
+    if (!t) return Infinity;
+    if (t.kind === 'ig') return (typeof t.taken_at === 'number' ? t.taken_at * 1000 : Infinity);
+    const p = t.post || {};
+    if (p.status === 'published') { const d = pcParseDate(p.published_at || p.scheduled_at); return d ? d.getTime() : Infinity; }
+    if (p.scheduled_at) { const d = pcParseDate(p.scheduled_at); return d ? d.getTime() : Infinity; }
+    if (t.ymd) { const d = schedYmdToDate(t.ymd); return d ? d.getTime() : Infinity; }
+    const d = pcParseDate(p.created_at); return d ? d.getTime() : Infinity;
+  } catch (e) { return Infinity; }
+}
 function homeGridCompose(input) {
   const o = input || {};
   const upcoming = Array.isArray(o.upcoming) ? o.upcoming : [];
@@ -16020,11 +16043,19 @@ function homeGridCompose(input) {
     if (t && t.kind === 'post' && t.post && t.post.pinned) pinTiles.push(t);
     else restTiles.push(t);
   }
-  if (pinTiles.length) {
-    pinTiles.sort((x, y) => String(x.post.pinned_at || '').localeCompare(String(y.post.pinned_at || '')) || ((x.post.id || 0) - (y.post.id || 0)));
-    return pinTiles.concat(restTiles).slice(0, cap);
-  }
-  return tiles.slice(0, cap);
+  // (LOTE 11 · orden cronológico) El feed se lee como la semana:
+  // lunes arriba → domingo abajo. El CONJUNTO no cambia (el mismo
+  // corte de siempre: próximos + publicados más recientes hasta el
+  // tope); solo el ORDEN en pantalla pasa a ascendente por fecha
+  // efectiva (hfFeedSortKey). Los fijados siguen primeros: esa regla
+  // IG no la pidió cambiar Valentino. El sort es estable: a igual
+  // fecha, queda el orden previo (día/hora de la agenda).
+  pinTiles.sort((x, y) => String(x.post.pinned_at || '').localeCompare(String(y.post.pinned_at || '')) || ((x.post.id || 0) - (y.post.id || 0)));
+  const capped = pinTiles.concat(restTiles).slice(0, cap);
+  const head = capped.filter((t) => t && t.kind === 'post' && t.post && t.post.pinned);
+  const rest = capped.filter((t) => !(t && t.kind === 'post' && t.post && t.post.pinned));
+  rest.sort((a, b) => hfFeedSortKey(a) - hfFeedSortKey(b));
+  return head.concat(rest);
 }
 const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
 const HOME_PIN_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M15.6 3.5l4.9 4.9-2.1.7-2.3 2.3.02 3.4c0 .4-.42.62-.75.4l-3.35-2.26-2.94 2.94a1.06 1.06 0 0 1-1.5-1.5l2.94-2.94L8.56 8.03a.53.53 0 0 1 .4-.76l3.4.02 2.3-2.3.7-2.44a.5.5 0 0 1 .24-.05z"/></svg>';
@@ -16618,8 +16649,11 @@ function homeTileHTML(t, i) {
   // chat»): la grilla NO lleva botón de chat. El chat vive DENTRO del
   // post abierto en grande: el detalle trae el mini-chat «Pedir un
   // cambio» (hfAskChangeBtnHTML), que abre el chat ÚNICO con el posteo
-  // anclado. Tocar una tile abre siempre el detalle; ningún botón
-  // flotante tapa la imagen.
+  // anclado. Tocar una tile abre siempre el detalle.
+  // (LOTE 11 · corrección de Valentino 31/10: el corazón SÍ vive
+  // adentro de la foto, esquina superior izquierda, sin tapar centro
+  // ni titular. Es la ÚNICA excepción a «ningún botón flotante tapa
+  // la imagen»: los captions siguen sin pintarse sobre la imagen.)
   // REGLA DURA DE TILES (misma corrección — «los captions enormes en
   // el medio»): ninguna tile pinta texto sobre la imagen. homeTileHTML
   // no renderiza ningún caption: solo media, chapita chica abajo a la
@@ -16646,7 +16680,7 @@ function homeTileHTML(t, i) {
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}${despChip}</span><div class="hf-cell-actions"><button type="button" class="hf-like" data-hf-like aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></div></span>`;
+  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}${despChip}<button type="button" class="hf-like hf-like-in" data-hf-like aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -19428,6 +19462,11 @@ function hfDetailBind(root) {
   root.addEventListener('click', (e) => {
     const tile = e.target && e.target.closest ? e.target.closest('.hf-tile[data-post-id]') : null;
     if (!tile) return;
+    // (LOTE 11 · corazón adentro de la foto) El toque en el corazón
+    // NO es un toque en la tile: se deja pasar al handler del corazón
+    // (hfLikeBind). Sin este guard, el capture de este listener se
+    // comería el click antes de llegar al botón.
+    if (e.target && e.target.closest && e.target.closest('[data-hf-like]')) return;
     // Solo táctil: en escritorio manda el flujo vigente (hover que
     // agranda + click que fija la tarjeta del cofre). La supresión
     // del click tras un press-and-hold corre antes (captura previa).
@@ -19454,14 +19493,16 @@ function hfDetailBind(root) {
     }, 300);
   }, true);
 }
-// (LOTE 10 · ítem 1) Corazón visible debajo de cada tile: la fila
-// .hf-cell-actions vive FUERA de .hf-tile (el doble toque y los holds
-// solo cubren la tile), así que este listener delegado no compite con
-// el detalle. La acción es EXACTAMENTE la del corazón del detalle y
-// la del doble toque: burst + hfTileApprove (en autopilot, solo
-// afectivo; en publicado, solo burst). Sin data-post-id en el botón:
-// se resuelve la tile hermana en el click, así el parcheo en vivo
-// (que reemplaza la celda entera) nunca deja un id viejo.
+// (LOTE 10 · ítem 1, movido en LOTE 11) Corazón visible en cada tile,
+// ADENTRO de la foto (esquina superior izquierda, sobre la imagen).
+// Vive DENTRO de .hf-tile, así que el doble toque y la capa lo verían
+// como toque en la tile: los guards en hfDetailBind y bindScfMinis
+// dejan pasar el click hasta acá. La acción es EXACTAMENTE la del
+// corazón del detalle y la del doble toque: burst + hfTileApprove
+// (en autopilot, solo afectivo; en publicado, solo burst). Sin
+// data-post-id en el botón: se resuelve la tile que lo contiene en
+// el click, así el parcheo en vivo (que reemplaza la celda entera)
+// nunca deja un id viejo.
 function hfLikeBind(root) {
   if (!root || root._hfLikeBound) return;
   root._hfLikeBound = true;
