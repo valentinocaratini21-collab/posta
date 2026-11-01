@@ -32,9 +32,9 @@ const sliceFn = (src, from, to) => {
 };
 
 // ---------- Versiones + censo (referencia v527) ----------
-t(srv.includes("const BUILD_ID = '20261101-v529'"), 'BUILD v527 en server.js');
-t(idx.includes('app.js?v=350'), 'index ES: app.js?v=350 (bump al push v529)');
-t(idxEn.includes('styles.css?v=20261069') && !idxEn.includes('app.js?v='), 'en/index: styles 20261069, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v530'"), 'BUILD v527 en server.js');
+t(idx.includes('app.js?v=351'), 'index ES: app.js?v=351 (bump al push v529)');
+t(idxEn.includes('styles.css?v=20261070') && !idxEn.includes('app.js?v='), 'en/index: styles 20261070, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v523 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
@@ -59,7 +59,7 @@ t(!app.includes('PZ-PLACEHOLDER-ROTATIVO'), 'viejo: sin bloque ROTATIVO');
 t(!ROT.includes('activeElement'), 'rotador: sin ninguna guarda de foco');
 t(!ROT.includes("getElementById('chatInput')"), 'rotador: sin getElementById (first-only)');
 t(ROT.includes("pzPhEls('#chatInput')") && ROT.includes("pzPhEls('.hf-ask-input')"), 'rotador: consulta TODOS los campos');
-t(ROT.includes('setInterval(pzPhTick, 8000)') && cnt(ROT, 'setInterval(') === 1, 'rotador: un solo intervalo de 8000 ms');
+t(ROT.includes('setInterval(pzPhTick, 4000)') && cnt(ROT, 'setInterval(') === 1, 'rotador LOTE CHAT4S: un solo intervalo de 4000 ms (antes 8000 ms)');
 t(app.includes('try { pzPhStart(); } catch (e) {}') && sliceFn(app, 'function mzOpenSheet(', 'function mzCloseSheet()').includes('pzPhStart()'), 'hoja: mzOpenSheet arranca la rotación');
 t(ROT.includes("'(prefers-reduced-motion: reduce)'"), 'rotador: respeta reduced-motion');
 t(app.includes("es: ['escribile a posty…', 'preguntale por tu semana…', 'pedile una idea para hoy…', 'contale qué vendés…']"), 'contenido: mismas 4 frases ES');
@@ -135,7 +135,7 @@ const EN = ['write to posty…', 'ask about your week…', 'ask for an idea for 
   const b = s.mk({ id: 'chatInput', placeholder: ES[0] });
   const c = s.mk({ cls: ['hf-ask-input'], placeholder: ES[0] });
   s.sb.pzPhStart();
-  t(s.intervals.length === 1 && s.intervals[0].ms === 8000, 'intervalo: uno solo, 8000 ms');
+  t(s.intervals.length === 1 && s.intervals[0].ms === 4000, 'intervalo LOTE CHAT4S: uno solo, 4000 ms (antes 8000 ms)');
   t(a.placeholder === ES[1] && b.placeholder === ES[1] && c.placeholder === ES[1], 'arranque: los 3 campos avanzan a la frase 2');
   t(a.dataset.phI === '1' && b.dataset.phI === '1' && c.dataset.phI === '1', 'arranque: índice propio en cada campo');
   s.sb.pzPhStart(); s.sb.pzPhStart();
@@ -220,14 +220,14 @@ const EN = ['write to posty…', 'ask about your week…', 'ask for an idea for 
   t(a.placeholder === ES[3], 'idioma: al cambiar a ES sigue el ciclo en español');
 }
 
-// --- 8. reduced-motion: frase fija en la primera ---
+// --- 8. reduced-motion: cambio instantáneo (LOTE CHAT4S: antes frase fija en la primera) ---
 {
   const s = makeSandbox({ reduced: true });
   const a = s.mk({ id: 'chatInput', placeholder: ES[0] });
   s.sb.pzPhStart();
-  t(a.placeholder === ES[0], 'reduced-motion: arranque deja la primera frase');
+  t(a.placeholder === ES[1], 'reduced-motion LOTE CHAT4S: arranque avanza instantáneo a la frase 2 (antes fija en la primera)');
   s.tick(); s.tick();
-  t(a.placeholder === ES[0], 'reduced-motion: los ticks no avanzan');
+  t(a.placeholder === ES[3], 'reduced-motion LOTE CHAT4S: los ticks avanzan instantáneo, sin fundido (antes no avanzaban)');
 }
 
 // --- 9. Wrappers viejos siguen existiendo y delegan ---

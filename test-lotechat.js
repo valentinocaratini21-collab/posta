@@ -23,9 +23,9 @@ const sliceFn = (src, from, to) => {
 };
 
 // ---------- Versiones + censo (referencia v520) ----------
-t(srv.includes("const BUILD_ID = '20261101-v529'"), 'BUILD v522 en server.js');
-t(idx.includes('app.js?v=350') && idx.includes('styles.css?v=20261069'), 'index: app 343 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261069') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v530'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=351') && idx.includes('styles.css?v=20261070'), 'index: app 343 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261070') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
@@ -69,7 +69,10 @@ t(css.includes('.ag-upload-btn{pointer-events:auto;'), 'Schedule: botón grande 
 // ---------- 4) Sin animaciones nuevas (reduced-motion trivial) ----------
 {
   const blk = css.slice(css.indexOf('LOTE CHAT SIMPLE'));
-  t(!/animation|transition/.test(blk), 'hoja: el bloque nuevo no agrega animaciones ni transiciones');
+  // (LOTE CHAT4S) El fundido del placeholder (~360 ms, pzPhFade) es deliberado:
+  // solo anima #chatInput/.hf-ask-input con la clase pz-ph-fading, no la hoja.
+  t(!/transition/.test(blk), 'hoja LOTE CHAT4S: el bloque nuevo no agrega transiciones');
+  t((blk.match(/animation:[^;}]+/g) || []).every(a => a.includes('pzPhFade') || a.includes('none')), 'hoja LOTE CHAT4S: la única animación nueva es el fundido pzPhFade del placeholder (y su apagado none en reduced-motion)');
 }
 
 // ---------- 5) Render funcional (vm) ----------

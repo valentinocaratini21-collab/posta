@@ -11405,12 +11405,31 @@ function pzPhReduced() {
 function pzPhAdvanceOne(el, list) {
   try {
     if (!el || el.value) return false;
-    if (pzPhReduced()) { el.placeholder = list[0]; return false; }
     let i = parseInt((el.dataset && el.dataset.phI) || '0', 10);
     if (isNaN(i)) i = 0;
     i = (i + 1) % list.length;
     if (el.dataset) el.dataset.phI = String(i);
-    el.placeholder = list[i];
+    const next = list[i];
+    // (LOTE CHAT4S) Fundido ~360 ms: apaga, cambia en el medio
+    // (180 ms) y enciende (380 ms). El campo está vacío por la
+    // guarda de arriba, así que el fundido solo afecta al
+    // placeholder, nunca a texto escrito. Si el usuario escribe
+    // durante el fundido, el timeout quita la clase sin cambiar el
+    // placeholder (nunca pisar lo escrito). Con
+    // prefers-reduced-motion el cambio es instantáneo (sin
+    // fundido); sin setTimeout disponible (tests) también es
+    // instantáneo.
+    if (pzPhReduced() || typeof setTimeout !== 'function') { el.placeholder = next; return true; }
+    try {
+      if (el.classList) el.classList.add('pz-ph-fading');
+      setTimeout(() => {
+        try {
+          if (!el.value) el.placeholder = next;
+          else if (el.classList) el.classList.remove('pz-ph-fading');
+        } catch (e) {}
+      }, 180);
+      setTimeout(() => { try { if (el.classList) el.classList.remove('pz-ph-fading'); } catch (e) {} }, 380);
+    } catch (e) { el.placeholder = next; }
     return true;
   } catch (e) { return false; }
 }
@@ -11457,7 +11476,7 @@ function pzPhEnsure() {
       if (!pzPhKnown(el)) { pzPhMark(el); pzPhAdvanceOne(el, list); }
     });
     pzPhInstallObs();
-    if (!PZ_PH_T) PZ_PH_T = setInterval(pzPhTick, 8000);
+    if (!PZ_PH_T) PZ_PH_T = setInterval(pzPhTick, 4000); // (LOTE CHAT4S) 4 s, con fundido
   } catch (e) {}
 }
 function pzPhStart() { try { pzPhEnsure(); } catch (e) {} }

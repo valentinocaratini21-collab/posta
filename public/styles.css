@@ -1084,6 +1084,13 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 /* ---------- Inputs genéricos (.in) ---------- */
 .in{width:100%;background:#FBFDFF;border:1.5px solid var(--line);border-radius:16px;color:var(--txt);font-size:14px;padding:14px 18px;font-family:inherit;outline:none;transition:border-color .14s,box-shadow .14s,background .14s;line-height:1.5}
 .in::placeholder{color:#A9BDD1}
+/* (LOTE CHAT4S) Placeholder del chat más oscuro y legible: #47617A
+   es el tono apagado establecido (--mut), apenas más claro que el
+   texto escrito (#0A1E33) pero con contraste legible. El chat queda
+   blanco también en modo oscuro (Lote 10), así que el mismo color
+   sirve en ambos modos. Solo el chat: los demás .in conservan su
+   placeholder pálido. */
+#chatInput::placeholder,.hf-ask-input::placeholder{color:#47617A}
 .in:focus{border-color:var(--cel);box-shadow:0 0 0 4px rgba(39,147,200,.14);background:#FFFFFF}
 textarea.in{resize:vertical;min-height:96px}
 
@@ -3001,7 +3008,7 @@ body.hf-sv-open{overflow:hidden}
   .mz-wrap{padding-bottom:148px}
   .mz-chatbar{display:flex;align-items:center;gap:9px;position:fixed;left:12px;right:12px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:59;background:#fff;border-radius:999px;padding:7px 8px 7px 7px;box-shadow:0 8px 26px rgba(10,30,51,.13)}
   .mz-plus{width:38px;height:38px;border-radius:50%;background:var(--cel);color:#fff;font-size:22px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:0 0 38px;border:none;cursor:pointer;font-family:inherit;line-height:1}
-  .mz-ph{flex:1;color:#93AEC0;font-size:15px;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left;padding:6px 0}
+  .mz-ph{flex:1;color:#47617A;text-shadow:0 1px 8px rgba(255,255,255,.85);font-size:15px;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left;padding:6px 0}
   .mz-mic{font-size:19px;background:none;border:none;cursor:pointer;padding:4px 6px;font-family:inherit}
 }
 
@@ -4294,4 +4301,13 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .ana-boostrec-monto-t{font-size:13px;font-weight:800;color:#0A1E33;margin:0}
 .ana-boostrec-msg{font-size:13px;color:#0A1E33;margin:10px 0 0;line-height:1.5;font-weight:600}
 .ana-boostrec-nota{font-size:13.5px;color:#5A4A6B;margin:0;line-height:1.5}
-
+/* (LOTE CHAT4S) Fundido del placeholder que rota: 360 ms (apaga,
+   cambia en el medio, enciende). Solo actúa con la clase
+   pz-ph-fading, así no interfiere con las transiciones del input.
+   Con reduced-motion no hay animación (el cambio es instantáneo
+   por JS). */
+@keyframes pzPhFade{0%{opacity:1}50%{opacity:0}100%{opacity:1}}
+#chatInput.pz-ph-fading,.hf-ask-input.pz-ph-fading{animation:pzPhFade .36s ease}
+@media (prefers-reduced-motion: reduce){
+  #chatInput.pz-ph-fading,.hf-ask-input.pz-ph-fading{animation:none}
+}

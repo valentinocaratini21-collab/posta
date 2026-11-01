@@ -47,9 +47,9 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v517) ----------
-t(srv.includes("const BUILD_ID = '20261101-v529'"), 'BUILD v522 en server.js');
-t(idx.includes('app.js?v=350') && idx.includes('styles.css?v=20261069'), 'index: app 339 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261069') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v530'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=351') && idx.includes('styles.css?v=20261070'), 'index: app 339 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261070') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
@@ -145,10 +145,10 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(app.includes("es: ['escribile a posty…', 'preguntale por tu semana…', 'pedile una idea para hoy…', 'contale qué vendés…']"), 'C1: lista ES exacta (4, minúscula)');
   t(app.includes("en: ['write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…']"), 'C1: lista EN espejo');
   t(app.includes('function pzChatPhNext') && app.includes('function pzChatPhStart') && app.includes('function pzChatPhList'), 'C1: funciones de rotación existen');
-  t(app.includes('}, 8000);'), 'C1: intervalo ~8 s');
+  t(app.includes('setInterval(pzPhTick, 4000)'), 'C1 LOTE CHAT4S: intervalo 4 s (antes ~8 s)');
   const rot = sliceFn(app, 'const PZ_CHAT_PH', 'async function bindChatView');
   t(!rot.includes('activeElement'), 'C1 LOTE CHATTEXTO: el foco ya no bloquea la rotación (la guarda vieja dejaba el placeholder fijo en el celular)');
-  t(app.includes('if (!PZ_PH_T) PZ_PH_T = setInterval(pzPhTick, 8000)'), 'C1 LOTE CHATTEXTO: un solo intervalo reutilizado (reemplaza limpiar/recrear)');
+  t(app.includes('if (!PZ_PH_T) PZ_PH_T = setInterval(pzPhTick, 4000)'), 'C1 LOTE CHATTEXTO + CHAT4S: un solo intervalo, 4 s (antes 8 s)');
   const adv = sliceFn(app, 'function pzPhAdvanceOne', 'function pzPhKnown');
   t(adv.includes('el.value'), 'C1 LOTE CHATTEXTO: guarda de texto en el helper compartido');
   const bind = sliceFn(app, 'async function bindChatView', '// Nudge proactivo');
@@ -259,7 +259,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   vm.runInContext(code, sb);
   t(sb.PZ_CHAT_PH.es.length === 4 && sb.PZ_CHAT_PH.en.length === 4, 'chat: 4 sugerencias por idioma');
   sb.pzChatPhStart();
-  t(input.placeholder === 'preguntale por tu semana…' && timers.length === 1 && timers[0].ms === 8000, 'chat: al abrir avanza una y arma intervalo 8 s');
+  t(input.placeholder === 'preguntale por tu semana…' && timers.length === 1 && timers[0].ms === 4000, 'chat LOTE CHAT4S: al abrir avanza una y arma intervalo 4 s');
   timers[0].fn();
   t(input.placeholder === 'pedile una idea para hoy…', 'chat: tick en idle avanza');
   input.value = 'hola';

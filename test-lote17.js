@@ -50,9 +50,9 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v518) ----------
-t(srv.includes("const BUILD_ID = '20261101-v529'"), 'BUILD v522 en server.js');
-t(idx.includes('app.js?v=350') && idx.includes('styles.css?v=20261069'), 'index: app 340 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261069') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v530'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=351') && idx.includes('styles.css?v=20261070'), 'index: app 340 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261070') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
@@ -180,8 +180,8 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   const ask = sliceFn(app, 'function pzAskPhNext', 'async function bindChatView');
   t(ask.includes("pzPhEls('.hf-ask-input')"), 'ASK LOTE CHATTEXTO: rota TODOS los inputs de la vista (querySelectorAll, no solo el primero)');
   t(!ask.includes('activeElement'), 'ASK LOTE CHATTEXTO: el foco ya no bloquea (reversa de la guarda vieja)');
-  t(app.includes('if (!PZ_PH_T) PZ_PH_T = setInterval(pzPhTick, 8000)'), 'ASK LOTE CHATTEXTO: un solo intervalo reutilizado');
-  t(ask.includes('setInterval(pzPhTick, 8000)'), 'ASK LOTE CHATTEXTO: intervalo 8 s único');
+  t(app.includes('if (!PZ_PH_T) PZ_PH_T = setInterval(pzPhTick, 4000)'), 'ASK LOTE CHATTEXTO + CHAT4S: un solo intervalo, 4 s (antes 8 s)');
+  t(ask.includes('setInterval(pzPhTick, 4000)'), 'ASK LOTE CHATTEXTO + CHAT4S: intervalo 4 s único');
   const advA = sliceFn(app, 'function pzPhAdvanceOne', 'function pzPhKnown');
   t(advA.includes('el.value'), 'ASK LOTE CHATTEXTO: guarda de texto en el helper compartido');
   const bind = sliceFn(app, 'function bindApprovalPost', '/* ====');
@@ -216,7 +216,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
     .replace('function pzAskPhStart', 'globalThis.pzAskPhStart = function');
   vm.runInContext(code, sb);
   sb.pzAskPhStart();
-  t(input.placeholder === 'preguntale por tu semana…' && timers.length === 1 && timers[0].ms === 8000, 'ASKf: al abrir avanza una y arma intervalo 8 s');
+  t(input.placeholder === 'preguntale por tu semana…' && timers.length === 1 && timers[0].ms === 4000, 'ASKf LOTE CHAT4S: al abrir avanza una y arma intervalo 4 s');
   timers[0].fn();
   t(input.placeholder === 'pedile una idea para hoy…', 'ASKf: tick en idle avanza sin escribir');
   input.value = 'hola';
