@@ -104,10 +104,10 @@ t(app.includes('Ver mi semana'), 'SPA formulario Ver mi semana intacto');
 t(app.includes('Preguntas') || idx.includes('Preguntas'), 'FAQ presente');
 
 // 9. Versiones y censo (v515, M78 0/0 nuevas desde tarjetas/menús).
-t(srv.includes("const BUILD_ID = '20261101-v525';"), 'BUILD v522');
-t(idx.includes('/app.js?v=347'), 'index app.js?v=347');
-t(idx.includes('/styles.css?v=20261067'), 'index styles.css?v=20261067');
-t(idxEn.includes('/styles.css?v=20261067'), 'EN styles.css?v=20261067');
+t(srv.includes("const BUILD_ID = '20261101-v526';"), 'BUILD v522');
+t(idx.includes('/app.js?v=348'), 'index app.js?v=348');
+t(idx.includes('/styles.css?v=20261068'), 'index styles.css?v=20261068');
+t(idxEn.includes('/styles.css?v=20261068'), 'EN styles.css?v=20261068');
 t(!idxEn.includes('/app.js?v='), 'EN sin app.js (como siempre)');
 t(cnt(srv, 'catsMatch') === 3, 'censo catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo week-redo 16');

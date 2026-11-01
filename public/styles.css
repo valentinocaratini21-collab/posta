@@ -4229,6 +4229,11 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-pull.busy{border-color:rgba(39,147,200,.7)}
 .pz-pull.done{border-color:rgba(46,125,50,.6)}
 @media (prefers-reduced-motion: reduce){.pz-pull{transition:none}}
+/* (LOTE SLIDER FIX) Capas apiladas: la superior funde sin recargar la imagen */
+.mx-slider-fotos{position:relative;display:block;line-height:0}
+.mx-slider-foto-top{position:absolute;left:0;top:0;width:100%;height:150px;object-fit:cover;transition:opacity .15s linear}
+.mx-slider-lock,.mx-slider-txt{z-index:1}
+@media (prefers-reduced-motion:reduce){.mx-slider-foto-top{transition:none}}
 /* ============ LOTE CHAT SIMPLE (2026-11-01) ============ */
 /* La hoja de Inicio abraza su contenido (sin vacío blanco enorme):
    tarjeta a medida, mensajes con scroll interno, campo abajo siempre

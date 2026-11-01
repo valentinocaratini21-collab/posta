@@ -1492,7 +1492,20 @@ function mxSliderVistaHTML(sel, actual) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const s = Math.max(1, Math.min(50, Number(sel) || 1));
   const a = Math.max(1, Math.min(50, Number(actual) || 1));
-  const img = MX_ETAPAS_JARDIN[mxEtapaJardin(s)].img;
+  // (LOTE SLIDER FIX) Progresión visible por paso, sin renders inventados:
+  // dentro de una etapa, fundido hacia el visual de la etapa siguiente
+  // proporcional al avance; en la última etapa (6–50, sin siguiente), el
+  // visual futuro se aclara de oscuro a color a medida que sube el nivel.
+  const etapa = mxEtapaJardin(s);
+  const base = MX_ETAPAS_JARDIN[etapa].img;
+  let top = base, op = 0, filtro = '';
+  if (etapa < 4) {
+    top = MX_ETAPAS_JARDIN[etapa + 1].img;
+    op = (s - MX_ETAPAS_JARDIN[etapa].desde) / (MX_ETAPAS_JARDIN[etapa + 1].desde - MX_ETAPAS_JARDIN[etapa].desde);
+  } else {
+    const p = Math.min(1, Math.max(0, (s - 6) / 44));
+    filtro = 'grayscale(' + (0.35 * (1 - p)).toFixed(3) + ') brightness(' + (0.45 + 0.55 * p).toFixed(3) + ')';
+  }
   const futuro = s > a;
   const zona = mxZonaPremioEn(s);
   const nomZona = zona ? (en ? zona.en : zona.es) : '';
@@ -1502,7 +1515,7 @@ function mxSliderVistaHTML(sel, actual) {
   else if (s < a) lin2 = zona ? (en ? zona.detEn : zona.detEs) : gzT('Ya lo alcanzaste', 'You already reached it');
   else lin2 = gzT('Se desbloquea en el Nivel', 'Unlocks at Level') + ' ' + s;
   const det = gzT('Seguí publicando tus semanas para llegar', 'Keep publishing your weeks to get there');
-  const vista = `<img class="mx-slider-foto${futuro ? ' mx-slider-futuro' : ''}" src="${img}" alt="">${futuro ? '<span class="mx-slider-lock" aria-hidden="true">🔒</span>' : ''}<span class="mx-slider-txt"><b>${lin1}</b><span>${esc(lin2)}</span><span class="mx-slider-det" hidden>${esc(det)}</span></span>`;
+  const vista = `<span class="mx-slider-fotos"><img class="mx-slider-foto${futuro ? ' mx-slider-futuro' : ''}" src="${base}" alt=""${futuro && filtro ? ` style="filter:${filtro}"` : ''}><img class="mx-slider-foto mx-slider-foto-top${futuro ? ' mx-slider-futuro' : ''}" src="${top}" alt="" aria-hidden="true" style="opacity:${op.toFixed(3)}"></span>${futuro ? '<span class="mx-slider-lock" aria-hidden="true">🔒</span>' : ''}<span class="mx-slider-txt"><b>${lin1}</b><span>${esc(lin2)}</span><span class="mx-slider-det" hidden>${esc(det)}</span></span>`;
   return futuro ? `<button type="button" class="mx-slider-vista-btn" onclick="mxSliderToggle(this)" aria-label="${gzT('Qué lo desbloquea', 'What unlocks it')}">${vista}</button>` : `<div class="mx-slider-vista-div">${vista}</div>`;
 }
 function mxSliderToggle(btn) {
@@ -1514,12 +1527,75 @@ function mxSliderJardinHTML(nvNum) {
   const a = Math.max(1, Math.min(50, Number(nvNum) || 1));
   return `<div class="mx-slider" id="mxSlider"><p class="mx-slider-tit">${gzT('Deslizá para ver cómo crece tu jardín', 'Slide to see how your garden grows')}</p><div class="mx-slider-vista" id="mxSliderVista">${mxSliderVistaHTML(a, a)}</div><input class="mx-slider-rango" id="mxSliderRango" type="range" min="1" max="50" step="1" value="${a}" data-actual="${a}" oninput="mxSliderJardin(this)" aria-label="${gzT('Nivel del jardín', 'Garden level')}"><p class="mx-slider-nv" id="mxSliderNv">${gzT('Nv', 'Lv')} ${a}</p></div>`;
 }
+function mxSliderVistaPintar(wrap, sel, actual) {
+  // (LOTE SLIDER FIX) Actualización en sitio, sin reemplazar el DOM: al
+  // deslizar solo cambian src/opacidad/filtro/textos, así no hay flicker
+  // por recarga de la imagen. No toca el estado del detalle (.mx-slider-det):
+  // si el usuario lo abrió, queda abierto mientras desliza.
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const s = Math.max(1, Math.min(50, Number(sel) || 1));
+  const a = Math.max(1, Math.min(50, Number(actual) || 1));
+  const futuro = s > a;
+  const etapa = mxEtapaJardin(s);
+  const base = MX_ETAPAS_JARDIN[etapa].img;
+  let top = base, op = 0, filtro = '';
+  if (etapa < 4) {
+    top = MX_ETAPAS_JARDIN[etapa + 1].img;
+    op = (s - MX_ETAPAS_JARDIN[etapa].desde) / (MX_ETAPAS_JARDIN[etapa + 1].desde - MX_ETAPAS_JARDIN[etapa].desde);
+  } else {
+    const p = Math.min(1, Math.max(0, (s - 6) / 44));
+    filtro = 'grayscale(' + (0.35 * (1 - p)).toFixed(3) + ') brightness(' + (0.45 + 0.55 * p).toFixed(3) + ')';
+  }
+  const zona = mxZonaPremioEn(s);
+  const nomZona = zona ? (en ? zona.en : zona.es) : '';
+  const lin1 = gzT('Nv', 'Lv') + ' ' + s + (nomZona ? ' · ' + nomZona : '');
+  let lin2 = '';
+  if (s === a) lin2 = gzT('Estás acá', "You're here");
+  else if (s < a) lin2 = zona ? (en ? zona.detEn : zona.detEs) : gzT('Ya lo alcanzaste', 'You already reached it');
+  else lin2 = gzT('Se desbloquea en el Nivel', 'Unlocks at Level') + ' ' + s;
+  const fotos = wrap.querySelectorAll('.mx-slider-foto');
+  const imgBase = fotos[0], imgTop = fotos[1];
+  if (imgBase) {
+    if (imgBase.getAttribute('src') !== base) imgBase.setAttribute('src', base);
+    imgBase.style.filter = (futuro && filtro) ? filtro : '';
+    imgBase.classList.toggle('mx-slider-futuro', futuro);
+  }
+  if (imgTop) {
+    if (imgTop.getAttribute('src') !== top) imgTop.setAttribute('src', top);
+    imgTop.style.opacity = op.toFixed(3);
+    imgTop.classList.toggle('mx-slider-futuro', futuro);
+  }
+  const txt = wrap.querySelector('.mx-slider-txt');
+  if (txt) {
+    const b = txt.querySelector('b');
+    if (b) b.textContent = lin1;
+    const sp = txt.querySelector('span');
+    if (sp) sp.textContent = lin2;
+  }
+  const lock = wrap.querySelector('.mx-slider-lock');
+  if (futuro && !lock && typeof document !== 'undefined') {
+    const lk = document.createElement('span');
+    lk.className = 'mx-slider-lock';
+    lk.setAttribute('aria-hidden', 'true');
+    lk.textContent = '🔒';
+    const t2 = wrap.querySelector('.mx-slider-txt');
+    if (t2) wrap.insertBefore(lk, t2); else wrap.appendChild(lk);
+  } else if (!futuro && lock) {
+    lock.remove();
+  }
+}
 function mxSliderJardin(input) {
   if (!input) return;
   const a = Number(input.dataset.actual || 1);
   const s = Number(input.value || a);
   const vista = (typeof document !== 'undefined') ? document.getElementById('mxSliderVista') : null;
-  if (vista) vista.innerHTML = mxSliderVistaHTML(s, a);
+  if (vista) {
+    const cur = vista.firstElementChild;
+    const esDom = cur && typeof cur.querySelector === 'function' && cur.querySelector('.mx-slider-foto');
+    const quiereBtn = s > a;
+    if (esDom && ((cur.tagName === 'BUTTON') === quiereBtn)) mxSliderVistaPintar(cur, s, a);
+    else vista.innerHTML = mxSliderVistaHTML(s, a);
+  }
   const lab = (typeof document !== 'undefined') ? document.getElementById('mxSliderNv') : null;
   if (lab) lab.textContent = gzT('Nv', 'Lv') + ' ' + s;
 }
