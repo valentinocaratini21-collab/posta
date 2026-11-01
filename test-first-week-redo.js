@@ -159,7 +159,7 @@ function partB() {
   section('B5 · canarios');
   const nInf = (serverSrc.match(/HEADLINE_INFINITIVES/g) || []).length;
   ok(nInf === 3, `canario HEADLINE_INFINITIVES = 3 (hay ${nInf})`);
-  ok(/const BUILD_ID = '20261101-v524';/.test(serverSrc), 'BUILD_ID bumpeado a 20261024-v426');
+  ok(/const BUILD_ID = '20261101-v525';/.test(serverSrc), 'BUILD_ID bumpeado a 20261024-v426');
 }
 
 async function partC() {

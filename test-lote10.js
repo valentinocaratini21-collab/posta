@@ -54,7 +54,13 @@ ok(APP.includes('function slotHour()'),
   ok(start >= 0 && end > start, '2: hfPlanChip extraíble del bundle');
   if (start < 0 || end <= start) return;
   const src = APP.slice(start, end + endMark.length);
-  const fn = new Function('ME', 'pcTz', 'slotHour', src + '; return hfPlanChip;')(
+  // (LOTE FECHA/HORA) hfPlanChip ahora depende del helper pcDayKeyShift.
+  const hStart = APP.indexOf('function pcDayKeyShift(');
+  const hEndMark = "  } catch (e) { return ''; }\n}";
+  const hEnd = APP.indexOf(hEndMark, hStart);
+  ok(hStart >= 0 && hEnd > hStart, '2: pcDayKeyShift extraíble (LOTE FECHA/HORA)');
+  const helper = (hStart >= 0 && hEnd > hStart) ? APP.slice(hStart, hEnd + hEndMark.length) : '';
+  const fn = new Function('ME', 'pcTz', 'slotHour', helper + '\n' + src + '; return hfPlanChip;')(
     { lang: 'es' }, () => 'America/Argentina/Buenos_Aires', () => 19);
   const tz = { timeZone: 'America/Argentina/Buenos_Aires' };
   const fmt = new Intl.DateTimeFormat('en-CA', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, tz));
@@ -159,8 +165,8 @@ const cnt = (s, p) => (s.match(new RegExp(p, 'g')) || []).length;
 ok(cnt(SRV, 'catsMatch') === 3 && cnt(SRV, 'week-redo') === 16 && cnt(SRV, 'first_week') === 3 && cnt(SRV, '/aprobar') === 16,
   'censo server 3/16/3/16 intacto');
 ok(cnt(SRV, 'autofetch') === 0, 'censo autofetch 0');
-ok(SRV.includes("const BUILD_ID = '20261101-v524'"), 'BUILD v522');
-ok(IDX.includes('app.js?v=346') && IDX.includes('styles.css?v=20261067'), 'index ?v= app 336 + styles 20261064');
+ok(SRV.includes("const BUILD_ID = '20261101-v525'"), 'BUILD v522');
+ok(IDX.includes('app.js?v=347') && IDX.includes('styles.css?v=20261067'), 'index ?v= app 336 + styles 20261064');
 ok(IDXEN.includes('styles.css?v=20261067'), 'en/index styles 20261064');
 ok(APP.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V v510 (chunk-analisis cache-busteado)');
 

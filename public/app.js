@@ -12537,7 +12537,7 @@ function chatSchedSummary(scheduled) {
       .filter(x => !isNaN(x.d) && x.d.getTime() > Date.now() - 1800e3)
       .sort((a, b) => a.d - b.d);
     if (!items.length) return '';
-    const todayK = K.dayKey(new Date()), tomorrowK = K.dayKey(new Date(Date.now() + 864e5));
+    const todayK = K.dayKey(new Date()), tomorrowK = pcDayKeyShift(new Date(), K.tz, 1);
     const today = items.filter(x => K.dayKey(x.d) === todayK);
     if (today.length === 1) return `Hoy sale ${K.title(today[0].p)} a las ${K.hour(today[0].d)} 📅`;
     if (today.length > 1) return `Hoy salen ${today.length} posteos 📅 — ${today.map(x => K.hour(x.d)).join(' y ')}`;
@@ -12568,7 +12568,7 @@ async function showWeekInChat() {
     .map(p => ({ p, d: K.parse(p.scheduled_at) }))
     .filter(x => !isNaN(x.d)).sort((a, b) => a.d - b.d);
   if (!items.length) { chatSayLocal('Todavía no tenés nada programado. ¿Te armo la semana? 👇'); return; }
-  const todayK = K.dayKey(new Date()), tomorrowK = K.dayKey(new Date(Date.now() + 864e5));
+  const todayK = K.dayKey(new Date()), tomorrowK = pcDayKeyShift(new Date(), K.tz, 1);
   const lines = ['📅 Tu semana:'];
   items.slice(0, 10).forEach(x => lines.push(`• ${K.dayLabel(x.d, todayK, tomorrowK)} ${K.hour(x.d)} — ${K.title(x.p)}`));
   chatSayLocal(lines.join('\n'));
@@ -13389,12 +13389,17 @@ function badge(s) {
 }
 function fmtDate(iso) {
   if (!iso) return '—';
-  // Los datetimes de SQLite vienen en UTC sin zona ('2026-09-27 02:52:00'): marcarlos Z para que el navegador los pase a hora local.
+  // Los datetimes de SQLite vienen en UTC sin zona ('2026-09-27 02:52:00'): marcarlos Z para que se muestren en la hora de la cuenta (pcTz).
   // Los de 16 chars ('YYYY-MM-DDTHH:MM') vienen de un input datetime-local: ya son hora local, no tocar.
   let s = iso.length === 16 ? iso : iso.replace(' ', 'T');
   if (iso.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
   const d = new Date(s);
-  return d.toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  // (LOTE FECHA/HORA) La zona que manda es la de la cuenta (pcTz): antes el
+  // navegador pasaba a hora local del dispositivo y la badge disentía de la
+  // chapita cuando ambas zonas diferían. Los inputs datetime-local (16) ya
+  // son hora local del dispositivo y se dejan así.
+  const fz = (iso.length === 16 || typeof pcTz !== 'function') ? {} : { timeZone: pcTz() };
+  return d.toLocaleString('es-AR', Object.assign({ day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }, fz));
 }
 // "mañana a las 19:00" / "el miércoles 30 a las 19:00"
 function relDay(iso) {
@@ -16835,6 +16840,26 @@ function pzWhenRelDay(d, tz, en) {
     return en ? 'in ' + diff + ' days' : 'en ' + diff + ' días';
   } catch (e) { return ''; }
 }
+// (LOTE FECHA/HORA · 1/11) Día calendario en la zona de la cuenta, sin +24 h
+// absoluto: en días DST (25 h por atraso, 23 h por adelanto) sumar 86400000
+// cae en el mismo día o salta uno, y la chapita decía «Lun 2/11» en vez de
+// «Mañana 2/11» (reporte 1/11 00:00–01:00 EDT; en adelanto el espejo es
+// 23:00–24:00 EST del día previo). Se toman las partes y/m/d en la zona y
+// se avanza por fecha UTC (sin DST): el resultado es siempre el día
+// calendario siguiente en esa zona. Sin zona (tz indefinido) usa las partes
+// locales del dispositivo, igual que keyOf/dayKey antes.
+function pcDayKeyShift(date, tz, n) {
+  try {
+    const zo = tz ? { timeZone: tz } : {};
+    const parts = new Intl.DateTimeFormat('en-US', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo)).formatToParts(date);
+    const get = (t) => { const p = parts.find((x) => x.type === t); return p ? Number(p.value) : NaN; };
+    const y = get('year'), m = get('month'), d = get('day');
+    if (!y || !m || !d) return '';
+    const u = new Date(Date.UTC(y, m - 1, d, 12));
+    u.setUTCDate(u.getUTCDate() + (n || 0));
+    return u.toISOString().slice(0, 10);
+  } catch (e) { return ''; }
+}
 function hfWhenChip(post, now) {
   try {
     const schedAt = (post && typeof post === 'object') ? post.scheduled_at : post;
@@ -16854,7 +16879,7 @@ function hfWhenChip(post, now) {
     if (isNaN(nowD)) return '';
     const keyOf = (x) => x.toLocaleDateString('en-CA', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo));
     const tKey = keyOf(d), todayKey = keyOf(nowD);
-    const tomKey = keyOf(new Date(nowD.getTime() + 86400000));
+    const tomKey = pcDayKeyShift(nowD, tz, 1);
     let hh = en
       ? d.toLocaleTimeString('en-US', Object.assign({ hour: 'numeric', minute: '2-digit', hour12: true }, zo))
       : d.toLocaleTimeString('es-AR', Object.assign({ hour: 'numeric', minute: '2-digit', hour12: false }, zo));
@@ -16886,7 +16911,7 @@ function hfPlanChip(ymd) {
     const zo = tz ? { timeZone: tz } : {};
     const fmt = new Intl.DateTimeFormat('en-CA', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo));
     const todayKey = fmt.format(new Date());
-    const tomKey = fmt.format(new Date(Date.now() + 86400000));
+    const tomKey = pcDayKeyShift(new Date(), tz, 1);
     const [y, m, d] = String(ymd).split('-').map(Number);
     const dt = new Date(Date.UTC(y, m - 1, d, 12));
     if (isNaN(dt)) return '';
@@ -21453,7 +21478,7 @@ function apvHM(d, tz) { try { return d.toLocaleTimeString('es-AR', { hour: '2-di
 function apvWhenText(d, tz) {
   const hm = apvHM(d, tz), k = apvDayKey(d, tz);
   if (k === apvDayKey(new Date(), tz)) return `Sale hoy ${hm}`;
-  if (k === apvDayKey(new Date(Date.now() + 864e5), tz)) return `Sale mañana ${hm}`;
+  if (k === pcDayKeyShift(new Date(), tz, 1)) return `Sale mañana ${hm}`;
   let dl = '';
   try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }); } catch (e) {}
   return dl ? `Sale el ${dl} a las ${hm}` : 'Sale pronto';
@@ -21495,7 +21520,7 @@ function apvNotFound() {
 function apvEditPrompt(d, tz) {
   const hm = apvHM(d, tz), k = apvDayKey(d, tz);
   if (k === apvDayKey(new Date(), tz)) return `Quiero editar el posteo que sale hoy a las ${hm}`;
-  if (k === apvDayKey(new Date(Date.now() + 864e5), tz)) return `Quiero editar el posteo que sale mañana a las ${hm}`;
+  if (k === pcDayKeyShift(new Date(), tz, 1)) return `Quiero editar el posteo que sale mañana a las ${hm}`;
   let dl = '';
   try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) {}
   return dl ? `Quiero editar el posteo que sale el ${dl} a las ${hm}` : 'Quiero editar ese posteo';

@@ -63,6 +63,9 @@ for (const n of PURE) {
 }
 const hfSrc = extractFn(app, 'function hfWhenChip');
 ok('extrae hfWhenChip', !!hfSrc && hfSrc.indexOf('pzWhenRelDay') >= 0);
+// (LOTE FECHA/HORA) hfWhenChip ahora depende del helper pcDayKeyShift.
+const helperSrc = extractFn(app, 'function pcDayKeyShift');
+ok('extrae pcDayKeyShift', !!helperSrc);
 
 /* ---------- §1. Ítem 3-16: día relativo (unidades) ---------- */
 const relFn = new Function(pureSrc.pzWhenRelDay + '; return pzWhenRelDay;')();
@@ -91,7 +94,7 @@ ok('rel inválido', relFn(null, 'America/New_York', false) === '' && relFn(new D
 const MEes = { lang: 'es' }, MEen = { lang: 'en' };
 const pcTz = () => 'America/New_York';
 function mkChip(ME) {
-  return new Function('ME', 'pcTz', pureSrc.pzWhenRelDay + '\n' + hfSrc + '\n; return hfWhenChip;')(ME, pcTz);
+  return new Function('ME', 'pcTz', pureSrc.pzWhenRelDay + '\n' + helperSrc + '\n' + hfSrc + '\n; return hfWhenChip;')(ME, pcTz);
 }
 const chipEs = mkChip(MEes), chipEn = mkChip(MEen);
 function schedPost(n) { return { status: 'scheduled', scheduled_at: nyDaysOut(n).toISOString() }; }

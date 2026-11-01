@@ -158,8 +158,8 @@ const fnPost50 = app.slice(app.indexOf('function mxJardinPost50HTML'), app.index
 check('sin barra de juego en post50', fnPost50.indexOf('pz-barra') < 0 && fnPost50.indexOf('progress') < 0 && fnPost50.indexOf('%') < 0);
 check('rutas nuevas en server', srv.indexOf("'/api/oficina/jardin-post50'") >= 0 && srv.indexOf("'/api/oficina/jardin-semilla-regalo'") >= 0);
 check('semilla solo con nivel 50 (403)', srv.indexOf('jardin_no_completo') >= 0);
-check('BUILD v522', srv.indexOf("BUILD_ID = '20261101-v524'") >= 0);
-check('bumps index', idx.indexOf('app.js?v=346') >= 0 && idx.indexOf('styles.css?v=20261067') >= 0);
+check('BUILD v522', srv.indexOf("BUILD_ID = '20261101-v525'") >= 0);
+check('bumps index', idx.indexOf('app.js?v=347') >= 0 && idx.indexOf('styles.css?v=20261067') >= 0);
 check('en index: styles 20261064, sin app.js', enIdx.indexOf('styles.css?v=20261067') >= 0 && enIdx.indexOf('app.js?v=') < 0);
 check('postjardin exporta puras', pjSrc.indexOf('zonasPara') >= 0 && pjSrc.indexOf('estacionPara') >= 0 && pjSrc.indexOf('historiaMesesPara') >= 0 && pjSrc.indexOf('estadoPost50') >= 0);
 
