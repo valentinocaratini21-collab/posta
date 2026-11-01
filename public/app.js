@@ -3,6 +3,24 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// (LOTE GLASS) Decodifica entidades HTML UNA sola vez (• y @ de la
+ // lectura pública de IG llegan como &#x2022; / &#064;). Idempotente:
+ // el texto limpio no cambia; luego esc() lo vuelve a escapar seguro
+ // para insertar. Sin esto, esc() convertía & en &amp; y la bio
+ // mostraba el código literal.
+ function pzDecEnt(s) {
+   try {
+     let out = String(s ?? ''); let prev = null;
+     for (let i = 0; i < 3 && out !== prev; i++) {
+       prev = out;
+       out = out
+         .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch (e) { return ''; } })
+         .replace(/&#([0-9]+);/g, (_, d) => { try { return String.fromCodePoint(parseInt(d, 10)); } catch (e) { return ''; } })
+         .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+     }
+     return out;
+   } catch (e) { return String(s ?? ''); }
+ }
 /* ---------- Sistema de íconos Posty/Bambooty (2026-10-25) ----------
    Un solo sistema para todo el chrome: SVG inline 24x24, trazo 2px,
    celeste #2793C8 + dorado #FEC14D. Sin emojis en chrome. */
@@ -488,7 +506,7 @@ function bbShell(tab, content) {
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
   const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
-  return `<div class="bb-app">
+  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
     <nav class="bb-bar">
@@ -15023,8 +15041,43 @@ function pzPrefetchKick() {
   } catch (e) { setTimeout(run, 2000); }
 }
 
-async function render() {
+ // (LOTE GLASS · atrás con origen) La vista de aprobación (#/app/post/:id) y
+ // dogfood tenían el atrás FIJO a Schedule («← Semana»): abrir un posteo
+ // desde Inicio y volver caía en otra vista. Ahora el atrás vuelve a la
+ // pantalla que abrió el posteo (o a Inicio sin origen válido) y restaura
+ // su scroll. Solo se actualiza cuando cambia la vista, no en repintados.
+ let PZ_VIEW_KEY = ''; let PZ_PREV_VIEW = ''; const PZ_SCROLL_POS = {};
+ function pzApvBackHTML(en) {
+   const prev = (typeof PZ_PREV_VIEW === 'string') ? PZ_PREV_VIEW : '';
+   let href = '#/app/inicio';
+   if (prev && prev.startsWith('#/app/') && !prev.startsWith('#/app/post') && !prev.startsWith('#/app/dogfood')) href = prev.split('?')[0];
+   const key = href.split('?')[0];
+   const label = key === '#/app/inicio' ? (en ? 'Home' : 'Inicio')
+     : key === '#/app/schedule' ? (en ? 'Week' : 'Semana')
+     : key === '#/app/jardin-posty' ? (en ? 'Garden' : 'Jardín')
+     : key === '#/app/analisis' ? (en ? 'Strategy' : 'Estrategia')
+     : key === '#/app/ajustes' ? (en ? 'Settings' : 'Ajustes')
+     : (en ? 'Back' : 'Volver');
+   return `<a class="apv-back" href="${href}">${pzIc('arrowLeft', 14)} ${label}</a>`;
+ }
+ function pzRestoreScroll() {
+   try {
+     const prev = PZ_PREV_VIEW || '';
+     const cur = (location.hash || '#/').split('?')[0];
+     if (!prev.startsWith('#/app/post') && !prev.startsWith('#/app/dogfood')) return;
+     const y = PZ_SCROLL_POS[cur];
+     if (typeof y === 'number' && y > 0) window.scrollTo(0, y);
+   } catch (e) {}
+ }
+  async function render() {
   const mySeq = ++RENDER_SEQ;
+   try {
+     const _k = (location.hash || '#/').split('?')[0];
+     if (_k !== PZ_VIEW_KEY) {
+       if (PZ_VIEW_KEY) { try { PZ_SCROLL_POS[PZ_VIEW_KEY] = window.scrollY || 0; } catch (e) {} PZ_PREV_VIEW = PZ_VIEW_KEY; }
+       PZ_VIEW_KEY = _k;
+     }
+   } catch (e) {}
   // Splash de carga (index.html): en rutas #/app/* NO se saca al entrar.
   // Debajo del splash vive el shell publico y la app todavia esta resolviendo
   // sesion/vista: sacarlo antes de pintar era el flash a la landing en
@@ -15911,16 +15964,19 @@ function firstWeekRedoCardHTML() {
 // mientras el slot está vacío y aparecen cuando su cargador lo llena.
 // El banner de prueba vencida ya es una línea por diseño: entra como
 // fila-enlace directa (plain), sin despliegue.
-function pvTrayHTML(items, en) {
-  const rows = [];
+ // (LOTE GLASS) Los labels de la bandeja «Para vos» son markup interno
+ // confiable (pzIc + texto estático, un solo llamador, sin datos del
+ // usuario): escaparlos imprimía el <span class="pz-ic"><svg…> como
+ // texto. Por eso acá el label va SIN esc(); el resto no cambia.
+ function pvTrayHTML(items, en) {   const rows = [];
   for (const it of (items || [])) {
     if (!it) continue;
     if (it.plain) { rows.push(`<div class="pv-row pv-plain">${it.plain}</div>`); continue; }
     if (it.slot) {
-      rows.push(`<div class="pv-row pv-slotrow"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${esc(it.label)}</span><span class="pv-chev" aria-hidden="true">${pzIc('chevDown', 14)}</span></button><div class="pv-body" hidden><div id="${it.slot}" class="pv-slot"></div></div></div>`);
+      rows.push(`<div class="pv-row pv-slotrow"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${it.label}</span><span class="pv-chev" aria-hidden="true">${pzIc('chevDown', 14)}</span></button><div class="pv-body" hidden><div id="${it.slot}" class="pv-slot"></div></div></div>`);
       continue;
     }
-    if (it.html) rows.push(`<div class="pv-row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${esc(it.label)}</span><span class="pv-chev" aria-hidden="true">${pzIc('chevDown', 14)}</span></button><div class="pv-body" hidden>${it.html}</div></div>`);
+    if (it.html) rows.push(`<div class="pv-row"><button type="button" class="pv-head" data-pv-toggle aria-expanded="false"><span class="pv-label">${it.label}</span><span class="pv-chev" aria-hidden="true">${pzIc('chevDown', 14)}</span></button><div class="pv-body" hidden>${it.html}</div></div>`);
   }
   if (!rows.length) return '';
   return `<section class="pv-tray" id="pvTray"><div class="pv-tray-t">${pzIc('download', 13)} ${en ? 'For you' : 'Para vos'}</div>${rows.join('')}</section>`;
@@ -17071,7 +17127,7 @@ function homeHeadHTML(prof, bizName, opts) {
   const catTxt = en ? String(P.category_en || '') : String(P.category || '');
   const catHTML = catTxt ? `<div class="hf-cat">${esc(catTxt)}</div>` : '';
   const noteHTML = (typeof P.note === 'string' && P.note.trim()) ? `<span class="hf-note">${esc(P.note.trim())}</span>` : '';
-  const bio = String(P.bio || '').trim();
+  const bio = pzDecEnt(String(P.bio || '')).trim();
   const bioHTML = bio && !P.bio_unread ? `<div class="hf-bio">${esc(bio)}</div>` : '';
   const rawLink = String(P.link || '').trim();
   const linkOne = (x) => `<a class="hf-link" href="${esc(x)}" target="_blank" rel="noopener">${esc(x.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a>`;
@@ -20055,7 +20111,7 @@ function hfStoryShow(i) {
   list.forEach((_, k) => hfSvBar(k, k < i ? 1 : 0, 0));
   const en = hfIsEn();
   const when = ov.querySelector('.hf-sv-when');
-  if (when) when.textContent = (hfStoryDayLabel(s.day, en) || '') + (s.status === 'scheduled' ? ' · ' + pzIc('clock', 12) + ' ' + (hfChipText(s.iso) || '') : '');
+  if (when) when.innerHTML = esc(hfStoryDayLabel(s.day, en) || '') + (s.status === 'scheduled' ? ' · ' + pzIc('clock', 12) + ' ' + esc(hfChipText(s.iso) || '') : '');
   const box = ov.querySelector('.hf-sv-media');
   if (!box) return;
   if (s.isVideo) {
@@ -21128,8 +21184,9 @@ async function dogfoodView(id) {
       <p class="hint">Cada mañana te propongo un posteo para @posty.communitymanager. Volvé mañana</p>
       <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Ir a mi semana</a></div>`;
   }
+  const apvBackD = pzApvBackHTML(enD);
   return `<div class="apv-wrap">
-    <a class="apv-back" href="#/app/schedule">${pzIc('arrowLeft', 14)} ${enD ? 'Week' : 'Semana'}</a>
+    ${apvBackD}
     ${dogfoodCardHTML(p)}
   </div>`;
 }
@@ -21211,8 +21268,9 @@ async function approvalPostView(id) {
       </div>
     </div>` : '';
   const whenTxt = dOk ? (isDraft ? apvWhenText(d, tz).replace(/^Sale /, 'Saldría ') + ' · si lo aceptás' : apvWhenText(d, tz)) : '';
+  const apvBack = pzApvBackHTML(en);
   return `<div class="apv-wrap">
-    <a class="apv-back" href="#/app/schedule">${pzIc('arrowLeft', 14)} ${en ? 'Week' : 'Semana'}</a>
+    ${apvBack}
     ${media}
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
@@ -21769,6 +21827,6 @@ function maybeAskPushPostIg() {
   }, 2500);
 }
 
-window.addEventListener('hashchange', render);
+window.addEventListener('hashchange', () => { try { const _r = render(); if (_r && typeof _r.then === 'function') _r.then(() => { try { pzRestoreScroll(); } catch (e) {} }); } catch (e) {} });
 render();
 setTimeout(trackScreen, 800); // primer screen_view de la carga (hashchange no dispara al entrar)

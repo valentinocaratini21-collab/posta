@@ -2333,13 +2333,28 @@ function cutWords(text, max) {
 function extractIgBiography(html) {
   const m = String(html || '').match(/\\"biography\\":\\"((?:\\[nrt\\/]|\\u[0-9a-fA-F]{4}|[^"\\])*)\\"/);
   if (!m) return '';
-  const decoded = m[1]
+  let decoded = m[1]
     .replace(/\\([nrt])/g, ' ')
     .replace(/\\\//g, '/')
     .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => {
       try { return String.fromCharCode(parseInt(h, 16)); } catch (e) { return ''; }
     })
     .replace(/[\u0000-\u001F]/g, '');
+  // (LOTE GLASS) La bio del embed puede venir con entidades HTML
+  // (&#x2022; •, &#064; @): decodificarlas acá para que el snapshot
+  // nazca limpio; el render vuelve a decodificar por si el snapshot
+  // viejo todavía las trae (decodificar dos veces texto limpio no
+  // cambia nada).
+  try {
+    let _prev = null;
+    for (let _i = 0; _i < 3 && decoded !== _prev; _i++) {
+      _prev = decoded;
+      decoded = decoded
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch (e) { return ''; } })
+        .replace(/&#([0-9]+);/g, (_, d) => { try { return String.fromCodePoint(parseInt(d, 10)); } catch (e) { return ''; } })
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    }
+  } catch (e) {}
   return cutWords(decoded, 500);
 }
 

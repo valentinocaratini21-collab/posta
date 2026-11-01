@@ -40,6 +40,11 @@ const mkSandbox = (lang) => {
     ME: lang ? { lang } : undefined,
   };
   vm.createContext(sb);
+  // LOTE GLASS: homeHeadHTML decodifica la bio con pzDecEnt, que vive
+  // fuera del bloque HOME_FEED: se carga la función real en el sandbox.
+  const decA = APP.indexOf('function pzDecEnt');
+  const decB = APP.indexOf('/* ---------- Sistema de íconos', decA);
+  if (decA > 0 && decB > decA) vm.runInContext(APP.slice(decA, decB), sb);
   vm.runInContext(APP.slice(a, b), sb);
   return sb;
 };
