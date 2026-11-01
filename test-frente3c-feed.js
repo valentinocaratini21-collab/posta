@@ -64,7 +64,7 @@ ok(es.hfChipText('2026-07-31T12:30:00.000Z') === 'vie 31 · 09:30', 'la hora se 
 
 const P = (id, status, extra) => Object.assign({ id, status, media_type: 'image', image_path: '/media/p' + id + '.jpg' }, extra || {});
 const tileSched = es.homeTileHTML({ kind: 'post', post: P(7, 'scheduled', { scheduled_at: '2026-07-31T21:00:00.000Z' }), day: '2026-07-31', isNew: false }, 0);
-ok(tileSched.includes('hf-chip') && tileSched.includes('🕐 vie 31 · 18:00'), 'tile futura programada: chapita con su fecha real');
+ok(tileSched.includes('hf-chip') && tileSched.includes('hf-chip-day">Vie 31<') && tileSched.includes('hf-chip-hm"> · 18:00<'), 'tile futura programada: chapita día+hora, mes recortado primero (Lote 16)');
 ok(!tileSched.includes('hf-new'), 'tile programada: sin pill NUEVO (la chapita es la única señal)');
 ok(tileSched.includes('data-status="scheduled"') && tileSched.includes('data-sched-at="2026-07-31T21:00:00.000Z"'), 'tile programada: data-status/data-sched-at para los gestos');
 const tilePub = es.homeTileHTML({ kind: 'post', post: P(8, 'published', { published_at: '2026-07-20T15:00:00.000Z' }), day: null, isNew: false }, 1);
@@ -155,7 +155,7 @@ async function waitBoot(tries = 60) {
   try {
     ok(await waitBoot(), 'server booteó');
     const v = await (await fetch(`${BASE}/api/version`)).json();
-    ok(v.build === '20261023-v356', `BUILD_ID sigue en v356 (renumera el coordinador) — vino ${v.build}`);
+    ok(v.build === '20261101-v517', `BUILD_ID v517 — vino ${v.build}`);
     const js = await (await fetch(`${BASE}/app.js`)).text();
     ok(js.includes('hfOpenActionsSheet') && js.includes('hfChipText') && js.includes('hf-fall'), 'app.js servido trae la suma 2');
     const cssTxt = await (await fetch(`${BASE}/styles.css`)).text();

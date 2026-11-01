@@ -183,6 +183,21 @@ window.__imgFb = function (el) {
   el.dataset.fbk = '1';
   if (el.dataset.full) el.src = el.dataset.full;
 };
+// (LOTE 16 · reel sin cuadro) Si el video de una tile de reel falla,
+// la tile ya no queda vacía: se reemplaza por el mismo remedio del
+// Lote 13 (texto del posteo o «imagen en camino» sobre degradado).
+// Clase propia (hf-tile-under), nunca hf-tile-ph: el detector de
+// «generando» vigila .hf-tile-ph y un remedio con esa clase lo
+// dejaría en «generando» para siempre.
+window.__vidFb = function (v) {
+  try {
+    const t = v.getAttribute('data-ph') || '';
+    const w = document.createElement('span');
+    w.className = 'hf-tile-under';
+    w.innerHTML = '<span>' + pzIc('sparkle', 16) + '</span><span>' + esc(t) + '</span>';
+    v.replaceWith(w);
+  } catch (e) { try { v.remove(); } catch (e2) {} }
+};
 // Precarga silenciosa de las variantes de la semana: cuando el
 // cliente desliza o entra a mirar, las imágenes ya están en caché.
 function prefetchMedia(list) {
@@ -1107,7 +1122,12 @@ function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   // (LOTE 13 · tira Inicio) La miniatura es el visual del jardín según nivel (mismo mapeo que el hero de la pantalla Jardín), no la última foto publicada.
   const foto = mxHeroJardin(mxNvNum(nvP));
   const nvTira = mxNvNum(nvP);
-  const imgPosty = `<span class="mx-tira-thumb"><img class="mx-tira-foto" src="${esc(foto)}" alt="" onerror="this.closest('.mx-tira-thumb').remove()">${nvTira <= 2 ? `<span class="mx-tira-brote" aria-hidden="true">${MX_BROTE_SVG}<i>✦</i></span>` : ''}</span>`;
+  // (LOTE 16 · tira sin tierra) En Nv 1–2 la miniatura ya no es la foto
+  // de tierra (jardin-joven): es la composición brote grande del Lote 15
+  // sobre degradado de marca. La pantalla Jardín no se toca.
+  const imgPosty = nvTira <= 2
+    ? `<span class="mx-tira-thumb mx-tira-brote-grande" aria-hidden="true">${MX_BROTE_SVG}<i>✦</i></span>`
+    : `<span class="mx-tira-thumb"><img class="mx-tira-foto" src="${esc(foto)}" alt="" onerror="this.closest('.mx-tira-thumb').remove()"></span>`;
   if (pod.posty && nvP) {
     return `<button type="button" class="mx-tira-jardin mx-tira-posty" onclick="mxJardinIr('#/app/jardin-posty', '${origen}')">`
       + `${imgPosty}<span style="flex:1;min-width:0"><b>${gzT('Mi jardín', 'My garden')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)}</b>`
@@ -10924,6 +10944,48 @@ async function maybePhotoWeekReminder(data) {
   } catch (e) {}
 }
 
+// (LOTE 16 · placeholder que rota) El campo del chat rota entre 4
+// sugerencias en minúscula, solo con el campo vacío y sin interrumpir:
+// cambia al abrir la vista (avanza una) y cada ~8 s en idle. Nunca
+// mientras escribe ni con el campo enfocado (el tick del intervalo no
+// toca el campo enfocado). Lista por idioma según ME.lang en cada tick.
+// El intervalo se limpia al reabrir para no duplicar ticks.
+const PZ_CHAT_PH = {
+  es: ['escribile a posty…', 'preguntale por tu semana…', 'pedile una idea para hoy…', 'contale qué vendés…'],
+  en: ['write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…']
+};
+let PZ_CHAT_PH_I = 0;
+let PZ_CHAT_PH_T = null;
+function pzChatPhList() {
+  try { return PZ_CHAT_PH[ME.lang === 'en' ? 'en' : 'es']; } catch (e) { return PZ_CHAT_PH.es; }
+}
+function pzChatPhNext() {
+  try {
+    const inp = document.getElementById('chatInput');
+    if (!inp || inp.value) return;
+    const list = pzChatPhList();
+    PZ_CHAT_PH_I = (PZ_CHAT_PH_I + 1) % list.length;
+    inp.placeholder = list[PZ_CHAT_PH_I];
+  } catch (e) {}
+}
+function pzChatPhStart() {
+  try {
+    const inp = document.getElementById('chatInput');
+    if (!inp) return;
+    if (PZ_CHAT_PH_T) { try { clearInterval(PZ_CHAT_PH_T); } catch (e) {} PZ_CHAT_PH_T = null; }
+    const list = pzChatPhList();
+    PZ_CHAT_PH_I = (PZ_CHAT_PH_I + 1) % list.length;
+    inp.placeholder = list[PZ_CHAT_PH_I];
+    PZ_CHAT_PH_T = setInterval(() => {
+      try {
+        const el = document.getElementById('chatInput');
+        if (!el || el.value || document.activeElement === el) return;
+        pzChatPhNext();
+      } catch (e) {}
+    }, 8000);
+  } catch (e) {}
+}
+
 async function bindChatView() {
   bindChat();
   bindReview();
@@ -10995,6 +11057,7 @@ async function bindChatView() {
       if (ci) { ci.value = pre; ci.focus({ preventScroll: true }); }
     }
   } catch (e) {}
+  try { pzChatPhStart(); } catch (e) {}
 }
 
 // Nudge proactivo de Posty (~1/semana, en momentos distintos): pide por chat lo
@@ -16779,6 +16842,25 @@ function pzNextScheduledId(posts, now) {
     return best;
   } catch (e) { return null; }
 }
+// (LOTE 16 · chapita sin mes, hora intacta) Parte «Mar 17/11 · 19:00»
+// en día («Mar 17», sin mes) y hora («19:00»). EN el orden es mes/día
+// («Tue 11/17 · 7:00 PM» → día «Tue 17», hora «7:00 PM»). Sin « · »
+// o sin fecha, devuelve null y la chapita se pinta como siempre.
+function hfTileChipParts(txt, en) {
+  try {
+    const s = String(txt || '');
+    const i = s.lastIndexOf(' · ');
+    if (i < 0) return null;
+    let day = s.slice(0, i);
+    const hm = s.slice(i + 3);
+    if (!day || !hm) return null;
+    if (en) day = day.replace(/^(\S+\s+)\d{1,2}\//, '$1');
+    else day = day.replace(/\/\d{1,2}$/, '');
+    if (!day) return null;
+    return { day, hm };
+  } catch (e) { return null; }
+}
+
 function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
@@ -16810,7 +16892,9 @@ function homeTileHTML(t, i) {
       // cargaba nada y la tile quedaba vacía sobre #eef1f4).
       // (Restaurado v460: el push v458-remember lo había pisado con
       // un snapshot v457; remember y evolución quedan intactos.)
-      ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="metadata" data-hf-reel="1"${t.reelTab ? ' data-hf-dur="1"' : ''}></video>`
+      // (LOTE 16 · reel sin cuadro) Si el video falla, __vidFb pone el
+      // mismo remedio del Lote 13 (texto o «imagen en camino»).
+      ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="metadata" data-hf-reel="1"${t.reelTab ? ' data-hf-dur="1"' : ''} data-ph="${esc(phTxt || (phEn ? 'Image on its way' : 'imagen en camino'))}" onerror="__vidFb(this)"></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
   const glyph = p.pinned ? HOME_PIN_SVG : isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
   // (Tanda feed 6A · ítem 1) La píldora «NUEVO» se eliminó: la ÚNICA
@@ -16833,7 +16917,14 @@ function homeTileHTML(t, i) {
   const chipTxt = (p.status === 'draft' || p.status === 'scheduled')
       ? (hfWhenChip(p) || (p.status === 'draft' ? hfPlanChip(t.day) : ''))
       : '';
-  const chip = chipTxt ? `<span class="hf-chip">${pzIc('clock', 12)} ${esc(chipTxt)}</span>` : '';
+  // (LOTE 16 · la hora nunca se corta) La chapita recorta PRIMERO el
+  // mes y la hora va en un tramo que no se achica: el ellipsis solo
+  // puede comerse el día, jamás la hora. El gap fijo con el corazón
+  // del Lote 13 sigue intacto.
+  const chipParts = hfTileChipParts(chipTxt, phEn);
+  const chip = chipTxt ? (chipParts
+    ? `<span class="hf-chip"><span class="hf-chip-ico">${pzIc('clock', 12)}</span><span class="hf-chip-day">${esc(chipParts.day)}</span><span class="hf-chip-hm"> · ${esc(chipParts.hm)}</span></span>`
+    : `<span class="hf-chip">${pzIc('clock', 12)} ${esc(chipTxt)}</span>`) : '';
   // (Corrección grilla 2026-10-25, Valentino — «sacar el icono del
   // chat»): la grilla NO lleva botón de chat. El chat vive DENTRO del
   // post abierto en grande: el detalle trae el mini-chat «Pedir un
@@ -17223,12 +17314,11 @@ function hfDetailHTML(p, opts) {
     whenLine = `<div class="hf-d-when">${pzIc('pencil', 13)} ${en ? 'Draft' : 'Borrador'}${chip ? (en ? ' · planned for ' : ' · pensado para el ') + esc(chip) : ''}</div>`;
   }
   const bar = o.visitor ? '' : `<div class="hf-d-bar">
-      <button type="button" class="hf-d-act${p.owner_liked ? ' on' : ''}" data-hfd-act="like" aria-label="${en ? 'Like' : 'Me gusta'}">${p.owner_liked ? HF_D_HEART_FULL : HF_D_HEART}</button>
-      <button type="button" class="hf-d-act" data-hfd-act="comment" aria-label="${en ? 'Ask Posty for a change' : 'Pedirle un cambio a Posty'}">${HF_D_COMMENT}</button>
-      <button type="button" class="hf-d-act" data-hfd-act="share" aria-label="${en ? 'Share' : 'Compartir'}">${HF_D_SHARE}</button>
-      <button type="button" class="hf-d-act hf-d-eye" data-hfd-act="followers" aria-label="${en ? 'See it in the feed' : 'Ver en el inicio'}">${pzIc('eye', 18)}</button>
+      <button type="button" class="hf-d-act" data-hfd-act="comment" aria-label="${en ? 'Ask Posty for a change' : 'Pedirle un cambio a Posty'}">${HF_D_COMMENT}<span class="hf-d-lbl">${en ? 'Ask for change' : 'Pedir cambio'}</span></button>
+      <button type="button" class="hf-d-act" data-hfd-act="share" aria-label="${en ? 'Share' : 'Compartir'}">${HF_D_SHARE}<span class="hf-d-lbl">${en ? 'Share' : 'Compartir'}</span></button>
+      <button type="button" class="hf-d-act hf-d-eye" data-hfd-act="followers" aria-label="${en ? 'See it in the feed' : 'Ver en el inicio'}">${pzIc('eye', 18)}<span class="hf-d-lbl">${en ? 'See in feed' : 'Ver en el inicio'}</span></button>
       <span class="hf-d-sp"></span>
-      <button type="button" class="hf-d-act${p.owner_saved ? ' on' : ''}" data-hfd-act="save" aria-label="${en ? 'Save' : 'Guardar'}">${p.owner_saved ? HF_D_SAVE_FULL : HF_D_SAVE}</button>
+      <button type="button" class="hf-d-act${p.owner_saved ? ' on' : ''}" data-hfd-act="save" aria-label="${en ? 'Save' : 'Guardar'}">${p.owner_saved ? HF_D_SAVE_FULL : HF_D_SAVE}<span class="hf-d-lbl">${en ? 'Save' : 'Guardar'}</span></button>
     </div>`;
   const accept = (!o.visitor && p.status === 'draft')
     ? `<button type="button" class="hf-d-accept" data-revaccept="${esc(String(p.id))}"${o.propIso ? ` data-proposed="${esc(o.propIso)}"` : ''}>${pzIc('checkCircle', 18)} ${en ? 'Accept' : 'Aceptar'}</button>` : '';
@@ -19491,6 +19581,23 @@ function hfDetailOpts(post) {
     visitor: HF_VISITOR,
   };
 }
+// (LOTE 16 · encabezado con día y hora) El título del detalle es el día
+// y la hora reales del posteo (misma fuente que la chapita del detalle),
+// no «Publicación» genérico. Sin fecha real, vuelve al título viejo.
+function hfDetailTitleText(p, opts) {
+  const o = opts || {};
+  const en = !!o.en;
+  const st = String(p.status || '');
+  const iso = st === 'draft'
+    ? (o.propIso || p.scheduled_at)
+    : st === 'published'
+      ? (p.published_at || p.scheduled_at)
+      : (p.scheduled_at || o.propIso);
+  const chip = iso ? hfChipText(iso) : '';
+  if (!chip) return en ? 'Post' : 'Publicación';
+  return chip.charAt(0).toUpperCase() + chip.slice(1);
+}
+
 function hfDetailOpen(post, tile) {
   if (!post) return;
   hfDetailClose();
@@ -19498,7 +19605,7 @@ function hfDetailOpen(post, tile) {
   const ov = document.createElement('div');
   ov.className = 'hf-dback';
   ov.innerHTML = `<div class="hf-dcard" role="dialog" aria-modal="true">
-    <div class="hf-d-top"><button type="button" class="hf-d-back" data-hfd-close aria-label="${hfIsEn() ? 'Back' : 'Volver'}">‹</button><span class="hf-d-title">${hfIsEn() ? 'Post' : 'Publicación'}</span><span class="hf-d-topsp"></span></div>
+    <div class="hf-d-top"><button type="button" class="hf-d-back" data-hfd-close aria-label="${hfIsEn() ? 'Back' : 'Volver'}">‹</button><span class="hf-d-title">${esc(hfDetailTitleText(post, hfDetailOpts(post)))}</span><span class="hf-d-topsp"></span></div>
     ${hfDetailHTML(post, hfDetailOpts(post))}
   </div>`;
   document.body.appendChild(ov);

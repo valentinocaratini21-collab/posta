@@ -1,8 +1,9 @@
 // test-frente5b-feed.js — Tanda feed 5 · Push B (detalle IG + pestañas
 // + visitante). Sobre el bloque HOME_FEED extraído y el bundle:
-//  · Ítem 1: hfDetailHTML — forma IG completa, barra con los 4 botones
-//    que trabajan (data-hfd-act), media igmock-media (doble toque
-//    vigente), carrusel con puntitos + contador, ✅ Aceptar con
+//  · Ítem 1: hfDetailHTML — forma IG completa, barra sin corazón
+//    (Lote 16: el corazón salió del detalle; Aceptar es la única
+//    acción de aprobar), media igmock-media (doble toque vigente),
+//    carrusel con puntitos + contador, ✅ Aceptar con
 //    data-revaccept en borradores.
 //  · Ítem 5: Me gusta y comentarios SOLO con números reales; sin
 //    fuente, las líneas no existen; el 0 real usa la variante de IG.
@@ -32,6 +33,7 @@ const TZ = 'America/Argentina/Buenos_Aires';
 const mkSandbox = (lang) => {
   const sb = {
     esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+    pzIc: (name) => '<svg data-ic="' + name + '"></svg>',
     mv: (p) => p,
     pcTz: () => TZ,
     pcParseDate: (s0) => { const s = String(s0 || ''); if (!s) return null; let x = s.replace(' ', 'T'); if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(x)) x += 'Z'; const d = new Date(x); return isNaN(d) ? null : d; },
@@ -50,7 +52,7 @@ const O = { en: false, user: 'cafe.aurora', pic: '/p.jpg', name: 'Café Aurora',
 
 // — Ítem 1 + 5 + 6: publicado con números reales —
 const d1 = es.hfDetailHTML(BASE, O);
-ok(d1.includes('data-hfd-act="like"') && d1.includes('data-hfd-act="comment"') && d1.includes('data-hfd-act="share"') && d1.includes('data-hfd-act="save"'), 'la barra trae los 4 botones que trabajan');
+ok(!d1.includes('data-hfd-act="like"') && d1.includes('data-hfd-act="comment"') && d1.includes('data-hfd-act="share"') && d1.includes('data-hfd-act="save"'), 'la barra trae comentar/compartir/guardar; el corazón salió del detalle (Lote 16: Aceptar es la única acción de aprobar)');
 ok(d1.includes('igmock-media hf-d-media'), 'la media lleva igmock-media (doble toque vigente) + hf-d-media');
 ok(d1.includes('12 Me gusta'), 'con likes reales: «12 Me gusta»');
 ok(d1.includes('Ver los 3 comentarios'), 'con comentarios reales: «Ver los 3 comentarios»');

@@ -61,10 +61,10 @@ ok(es.hfWhenChip(P({ scheduled_at: '' }), NOW) === '' && es.hfWhenChip(P({ sched
 const todayBA = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const todayIso = todayBA + 'T21:30:00.000Z'; // 18:30 BA de hoy
 const tileToday = es.homeTileHTML({ kind: 'post', post: P({ id: 21, status: 'scheduled', scheduled_at: todayIso }), day: todayBA, isNew: false }, 0);
-ok(tileToday.includes('hf-chip') && /🕐 Hoy \d{1,2}\/\d{1,2} · 18:30/.test(tileToday), 'tile de hoy: chapita día+fecha+hora');
+ok(tileToday.includes('hf-chip') && /hf-chip-day">Hoy \d{1,2}</.test(tileToday) && tileToday.includes('hf-chip-hm"> · 18:30<') && !/Hoy \d{1,2}\//.test(tileToday), 'tile de hoy: chapita día+hora, mes recortado primero (Lote 16)');
 ok(!tileToday.includes('NUEVO') && !tileToday.includes('hf-new'), 'la píldora NUEVO ya no existe en la tile');
 const tileDraftFecha = es.homeTileHTML({ kind: 'post', post: P({ id: 22, status: 'draft', scheduled_at: todayIso }), day: todayBA, isNew: true }, 1);
-ok(/🕐 Hoy \d{1,2}\/\d{1,2} · 18:30/.test(tileDraftFecha), 'borrador CON fecha: también lleva su chapita día+fecha+hora');
+ok(/hf-chip-day">Hoy \d{1,2}</.test(tileDraftFecha) && tileDraftFecha.includes('hf-chip-hm"> · 18:30<'), 'borrador CON fecha: también lleva su chapita día+hora (Lote 16)');
 ok(!tileDraftFecha.includes('NUEVO'), 'borrador: sin NUEVO aunque venga marcado isNew');
 const tileDraftSin = es.homeTileHTML({ kind: 'post', post: P({ id: 23, status: 'draft', scheduled_at: null }), day: todayBA, isNew: true }, 2);
 ok(!tileDraftSin.includes('hf-chip'), 'borrador SIN fecha: sin chapita (declarado)');

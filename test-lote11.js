@@ -134,7 +134,7 @@ function loadFns(sb, names) {
     hfPlanChip: () => 'vie 31',
     HOME_PIN_SVG: '', HOME_REEL_SVG: '', HOME_CAR_SVG: '',
   });
-  loadFns(sb, ['homeTileHTML']);
+  loadFns(sb, ['hfTileChipParts', 'homeTileHTML']);
   const out = sb.homeTileHTML({ kind: 'post', post: { id: 7, status: 'draft', media_type: 'image', image_path: 'x.jpg' }, day: '2026-10-31' }, 0);
   t((out.match(/data-hf-like/g) || []).length === 1, 'corazón: uno solo por posteo, no duplicado');
   t(!/hf-cell-actions/.test(out), 'corazón: ya no hay fila abajo');

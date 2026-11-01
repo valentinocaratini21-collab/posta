@@ -4114,3 +4114,17 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 @media (prefers-reduced-motion: reduce){
   .mx-jardin-vivo .mx-foto-nivel,.mx-orb,.mx-spark,.mx-posty-live,.mx-zona-viva,.pz-sk-block,.pz-pub-spark{animation:none}
 }
+
+/* (LOTE 16 · detalle + Inicio + chat) */
+.hf-d-act{flex-direction:column;align-items:center;gap:2px}
+.hf-d-lbl{font-size:10px;font-weight:600;color:#737373;line-height:1;text-align:center}
+.mx-tira-brote-grande{width:52px;height:52px;border-radius:12px;background:linear-gradient(140deg,#eaf6fd,#fdf3d7);display:flex;align-items:center;justify-content:center}
+.mx-tira-brote-grande svg{width:34px;height:34px}
+.mx-tira-brote-grande i{position:absolute;top:0;right:3px;font-style:normal;color:#FEC14D;font-size:13px;line-height:1}
+.hf-strip .hf-chip{gap:3px}
+.hf-strip .hf-chip-ico{flex:0 1 auto;min-width:0;overflow:hidden;display:inline-flex;line-height:0}
+.hf-strip .hf-chip-day{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hf-strip .hf-chip-hm{flex:0 0 auto;white-space:nowrap}
+.hf-tile-under{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;height:100%;padding:10px;font-size:12px;font-weight:700;color:#0A1E33;text-align:center;line-height:1.35;background:linear-gradient(140deg,#eaf6fd,#fdf3d7);box-sizing:border-box}
+.hf-tile-under>span{display:block}
+.hf-strip .hf-like-in{background:#fff;border-color:var(--line);color:#0A1E33;box-shadow:0 1px 6px rgba(10,30,51,.25)}

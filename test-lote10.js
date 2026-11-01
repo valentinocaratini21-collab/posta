@@ -159,9 +159,9 @@ const cnt = (s, p) => (s.match(new RegExp(p, 'g')) || []).length;
 ok(cnt(SRV, 'catsMatch') === 3 && cnt(SRV, 'week-redo') === 16 && cnt(SRV, 'first_week') === 3 && cnt(SRV, '/aprobar') === 16,
   'censo server 3/16/3/16 intacto');
 ok(cnt(SRV, 'autofetch') === 0, 'censo autofetch 0');
-ok(SRV.includes("const BUILD_ID = '20261101-v516'"), 'BUILD v514');
-ok(IDX.includes('app.js?v=338') && IDX.includes('styles.css?v=20261059'), 'index ?v= app 336 + styles 20261058');
-ok(IDXEN.includes('styles.css?v=20261059'), 'en/index styles 20261058');
+ok(SRV.includes("const BUILD_ID = '20261101-v517'"), 'BUILD v514');
+ok(IDX.includes('app.js?v=339') && IDX.includes('styles.css?v=20261060'), 'index ?v= app 336 + styles 20261058');
+ok(IDXEN.includes('styles.css?v=20261060'), 'en/index styles 20261058');
 ok(APP.includes("const CHUNK_V = '20261101-v516'"), 'CHUNK_V v510 (chunk-analisis cache-busteado)');
 
 console.log(`\n== test-lote10: ${okN} ok · ${failN} fallas ==`);
