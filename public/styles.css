@@ -4222,6 +4222,13 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
   .pz-trail{display:none}
 }
 
+/* LOTE PULL-TO-REFRESH (Valentino 1/11): indicador del tirón para refrescar. */
+.pz-pull{position:fixed;top:10px;left:50%;z-index:400;display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.88);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid rgba(39,147,200,.45);box-shadow:0 6px 18px rgba(10,30,51,.18);color:#0A1E33;font-size:13px;font-weight:700;white-space:nowrap;pointer-events:none;opacity:0;transform:translate(-50%,-70px);transition:transform .12s ease-out,opacity .12s ease-out}
+.pz-pull.on{opacity:1}
+.pz-pull.armed{border-color:rgba(254,193,77,.9);background:linear-gradient(90deg,rgba(39,147,200,.16),rgba(254,193,77,.28))}
+.pz-pull.busy{border-color:rgba(39,147,200,.7)}
+.pz-pull.done{border-color:rgba(46,125,50,.6)}
+@media (prefers-reduced-motion: reduce){.pz-pull{transition:none}}
 /* ============ LOTE CHAT SIMPLE (2026-11-01) ============ */
 /* La hoja de Inicio abraza su contenido (sin vacío blanco enorme):
    tarjeta a medida, mensajes con scroll interno, campo abajo siempre
@@ -4280,3 +4287,4 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .ana-boostrec-monto-t{font-size:13px;font-weight:800;color:#0A1E33;margin:0}
 .ana-boostrec-msg{font-size:13px;color:#0A1E33;margin:10px 0 0;line-height:1.5;font-weight:600}
 .ana-boostrec-nota{font-size:13.5px;color:#5A4A6B;margin:0;line-height:1.5}
+

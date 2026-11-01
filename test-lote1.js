@@ -83,8 +83,8 @@ check('fp-tile sin pill borrador', !app.includes(": 'borrador'") && !app.include
 check('fp-tile draft con borde', app.includes('fp-tile-draft'));
 check('CSS fp-tile-draft', css.includes('.fp-tile.fp-tile-draft'));
 check('CSS .pz-draft-chip conservada (tarjeta revisión)', css.includes('.pz-draft-chip'));
-check('bumps index', idx.includes('app.js?v=345') && idx.includes('styles.css?v=20261066'));
-check('BUILD v522', srv.includes("BUILD_ID = '20261101-v523'"));
+check('bumps index', idx.includes('app.js?v=346') && idx.includes('styles.css?v=20261067'));
+check('BUILD v522', srv.includes("BUILD_ID = '20261101-v524'"));
 check('sin expandArtBrief tocado', !/expandArtBrief/.test(app.split('apvMoreHTML')[0].slice(-2000)) || true);
 check('sin archivos gesty-* tocados (diff lo confirma)', true);
 

@@ -456,6 +456,162 @@ function pzPlayEnter() {
     setTimeout(done, 360); // respaldo si animationend no llega
   } catch (e) {}
 }
+// (LOTE PULL-TO-REFRESH · Valentino 1/11 «dale»: deslizar para abajo refresca)
+// En todas las pantallas de la app, tirar hacia abajo con la vista arriba
+// del todo refresca: (1) el servidor re-lee Instagram en fresco
+// (snapshot + reconciliación del espejo: archivados marcados incluidos),
+// (2) la caché GET de 60 s se vacía, (3) la vista se re-renderiza.
+// Nunca dispara: escribiendo, con la hoja de chat / drawer / modal
+// abiertos, dentro de un scroller interno (mensajes del chat, hoja),
+// sobre un control de formulario o el slider del jardín, ni con gesto
+// horizontal (carrusel, slider). Sin preventDefault: el rebote nativo
+// queda y el indicador acompaña el tirón. Con reduced-motion, el
+// indicador aparece sin transición (CSS) pero el refresh funciona igual.
+// ===== PULL-TO-REFRESH =====
+const PZ_PULL_THRESHOLD = 72;
+const PZ_PULL_MAX = 96;
+let PZ_PULL_ON = false;
+let PZ_PULL_BUSY = false;
+let PZ_PULL_S = null;
+function pzPullEl() {
+  try {
+    let el = document.getElementById('pzPull');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'pzPull';
+    el.className = 'pz-pull';
+    el.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(el);
+    return el;
+  } catch (e) { return null; }
+}
+function pzPullIsFormControl(el) {
+  try {
+    const tag = (el.tagName || '').toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  } catch (e) { return false; }
+}
+function pzPullInInnerScroller(el) {
+  try {
+    let n = el;
+    while (n && n !== document.body && n !== document.documentElement) {
+      if (n.id === 'app') break;
+      try {
+        const cs = (window.getComputedStyle) ? window.getComputedStyle(n) : null;
+        const oy = cs ? cs.overflowY : '';
+        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return true;
+      } catch (e) {}
+      n = n.parentElement;
+    }
+    return false;
+  } catch (e) { return false; }
+}
+function pzPullCanStart(ev) {
+  try {
+    if (PZ_PULL_BUSY) return false;
+    const h = (typeof location !== 'undefined' && location.hash) || '';
+    if (!h.startsWith('#/app')) return false;
+    if ((window.scrollY || 0) > 1) return false;
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return false;
+    const b = document.body;
+    if (b) {
+      if (b.classList.contains('mz-sheet-open')) return false;
+      if (b.classList.contains('hf-d-open') || b.classList.contains('hf-sv-open')) return false;
+      if (b.style && b.style.overflow === 'hidden') return false;
+    }
+    const sh = document.getElementById('mzSheet');
+    if (sh && !sh.hidden) return false;
+    const dov = document.getElementById('drawerOv');
+    if (dov && !dov.hidden) return false;
+    if (document.querySelector('.pz-exp-overlay')) return false;
+    const t = ev && ev.target;
+    if (!t || t === document || t === document.body || t === document.documentElement) return true;
+    if (pzPullIsFormControl(t)) return false;
+    if (t.closest && (t.closest('.bb-bar') || t.closest('.mtop') || t.closest('.mx-slider'))) return false;
+    if (pzPullInInnerScroller(t)) return false;
+    return true;
+  } catch (e) { return false; }
+}
+function pzPullArmCheck(dy, dx) { return dy >= PZ_PULL_THRESHOLD && dy > Math.abs(dx); }
+function pzPullProgress(dy) { return Math.max(0, Math.min(PZ_PULL_MAX, dy)); }
+function pzPullShow(dy, armed) {
+  try {
+    const el = pzPullEl(); if (!el) return;
+    const p = pzPullProgress(dy);
+    el.classList.add('on');
+    el.classList.toggle('armed', !!armed);
+    el.classList.remove('busy', 'done');
+    el.style.transform = 'translate(-50%, ' + (-70 + Math.round(p * 80 / PZ_PULL_MAX)) + 'px)';
+    el.innerHTML = (armed ? '↻ ' : '↓ ') + (armed ? gzT('Soltá para actualizar', 'Release to refresh') : gzT('Deslizá para actualizar', 'Pull to refresh'));
+  } catch (e) {}
+}
+function pzPullHide() {
+  try {
+    const el = document.getElementById('pzPull'); if (!el) return;
+    el.classList.remove('on', 'armed', 'busy', 'done');
+    el.style.transform = '';
+  } catch (e) {}
+}
+function pzPullInit() {
+  try {
+    if (PZ_PULL_ON) return;
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    PZ_PULL_ON = true;
+    window.addEventListener('touchstart', (ev) => {
+      try {
+        if (!pzPullCanStart(ev)) { PZ_PULL_S = null; return; }
+        const t = ev.changedTouches && ev.changedTouches[0];
+        if (!t) { PZ_PULL_S = null; return; }
+        PZ_PULL_S = { x: t.clientX, y: t.clientY, dy: 0, armed: false };
+      } catch (e) { PZ_PULL_S = null; }
+    }, { passive: true });
+    window.addEventListener('touchmove', (ev) => {
+      try {
+        const s = PZ_PULL_S; if (!s) return;
+        const t = ev.changedTouches && ev.changedTouches[0]; if (!t) return;
+        const dy = t.clientY - s.y, dx = t.clientX - s.x;
+        if (dy < 0) { PZ_PULL_S = null; pzPullHide(); return; }
+        if (Math.abs(dx) > dy) { PZ_PULL_S = null; pzPullHide(); return; }
+        if ((window.scrollY || 0) > 1) { PZ_PULL_S = null; pzPullHide(); return; }
+        s.dy = dy;
+        s.armed = pzPullArmCheck(dy, dx);
+        pzPullShow(dy, s.armed);
+      } catch (e) {}
+    }, { passive: true });
+    const pzPullEnd = () => {
+      try {
+        const s = PZ_PULL_S; PZ_PULL_S = null;
+        if (!s) return;
+        if (s.armed && !PZ_PULL_BUSY) { pzPullRefresh(); return; }
+        pzPullHide();
+      } catch (e) {}
+    };
+    window.addEventListener('touchend', pzPullEnd, { passive: true });
+    window.addEventListener('touchcancel', () => { PZ_PULL_S = null; pzPullHide(); }, { passive: true });
+  } catch (e) {}
+}
+async function pzPullRefresh() {
+  if (PZ_PULL_BUSY) return;
+  PZ_PULL_BUSY = true;
+  try {
+    const el = pzPullEl();
+    if (el) { el.classList.add('on', 'busy'); el.classList.remove('armed', 'done'); el.style.transform = 'translate(-50%, 10px)'; el.innerHTML = '↻ ' + gzT('Actualizando…', 'Refreshing…'); }
+    try { await api.post('/api/home/profile/refresh', {}, { timeout: 12000 }); } catch (e) {}
+    try { pzCacheClear(); } catch (e) {}
+    try { if (typeof BB !== 'undefined' && BB) BB.estado = null; } catch (e) {}
+    try { await render(); } catch (e) {}
+    try { window.scrollTo(0, 0); } catch (e) {}
+    if (el) { el.classList.remove('busy'); el.classList.add('done'); el.innerHTML = '✓ ' + gzT('Actualizado', 'Updated'); }
+    setTimeout(() => { try { const e2 = document.getElementById('pzPull'); if (e2) { e2.classList.remove('on', 'done'); e2.style.transform = ''; } } catch (e) {} }, 750);
+  } catch (e) {
+    try { const el = document.getElementById('pzPull'); if (el) { el.classList.remove('on', 'busy', 'done'); el.style.transform = ''; } } catch (e2) {}
+  } finally { PZ_PULL_BUSY = false; }
+}
+// ===== /PULL-TO-REFRESH =====
+
 function pzBackHTML(tab) {
   if (tab === 'inicio') return '';
   // (LOTE 10B · A) El jardín tiene su propio control atrás (flecha +
@@ -22032,4 +22188,5 @@ function maybeAskPushPostIg() {
 
 window.addEventListener('hashchange', () => { try { const _r = render(); if (_r && typeof _r.then === 'function') _r.then(() => { try { pzRestoreScroll(); } catch (e) {} }); } catch (e) {} });
 render();
+try { pzPullInit(); } catch (e) {}
 setTimeout(trackScreen, 800); // primer screen_view de la carga (hashchange no dispara al entrar)

@@ -77,7 +77,7 @@ const pruebaEn = fs.readFileSync(path.join(__dirname, 'public', 'en-prueba.html'
   ok('server: register emite device_token', srv.includes('device token (register)'));
   ok('server: magic-request (sesión inmediata) emite device_token', srv.includes('deviceDt = deviceTokens.issue'));
   ok('server: reset revoca todos y emite fresco', srv.includes('deviceTokens.revokeAllForUser'));
-  ok('server: BUILD_ID provisorio del frente', srv.includes("const BUILD_ID = '20261101-v523'"));
+  ok('server: BUILD_ID provisorio del frente', srv.includes("const BUILD_ID = '20261101-v524'"));
 
   ok('app.js: clave localStorage de cuentas guardadas', appJs.includes("SAVED_ACCOUNTS_KEY = 'posty_saved_accounts'"));
   ok('app.js: strings ES (Continuar como / Usar otra cuenta / Quitar)', appJs.includes("cont: 'Continuar como'") && appJs.includes("other: 'Usar otra cuenta'") && appJs.includes("remove: 'Quitar'"));
@@ -89,7 +89,7 @@ const pruebaEn = fs.readFileSync(path.join(__dirname, 'public', 'en-prueba.html'
   ok('app.js: la contraseña NO se persiste (ningún guardado la incluye)', !/savedAccountsSave\([^)]*password/.test(appJs) && !appJs.includes("token: String(a.token), password"));
   ok('app.js: caída suave con email precargado (savedShowForm + status 401)', appJs.includes('savedShowForm(email, S.soft)') && appJs.includes('e.status === 401'));
   ok('styles.css: estilos de filas .saved-acct', css.includes('.saved-acct') && css.includes('.saved-acct-x') && css.includes('.saved-other'));
-  ok('index.html: app.js con ?v= bumpeado (238)', idxHtml.includes('/app.js?v=345'));
+  ok('index.html: app.js con ?v= bumpeado (238)', idxHtml.includes('/app.js?v=346'));
   ok('prueba ES: guarda la cuenta tras sesión inmediata', pruebaEs.includes("resp.device_token") && pruebaEs.includes("'posty_saved_accounts'"));
   ok('prueba EN: guarda la cuenta tras sesión inmediata', pruebaEn.includes("resp.device_token") && pruebaEn.includes("'posty_saved_accounts'"));
 }
@@ -129,7 +129,7 @@ async function call(method, p, body, cookie) {
     }
     ok('server bootea', up, bootLog.slice(-300));
     const ver = await call('GET', '/api/version');
-    ok('versión: BUILD_ID provisorio 20261023-v355', ver.data.build === '20261101-v523', ver.data.build);
+    ok('versión: BUILD_ID provisorio 20261023-v355', ver.data.build === '20261101-v524', ver.data.build);
 
     // Registro A: emite sesión + token
     const regA = await call('POST', '/api/auth/register', { email: 'ana@example.com', password: 'secreto1' });

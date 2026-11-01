@@ -47,9 +47,9 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v517) ----------
-t(srv.includes("const BUILD_ID = '20261101-v523'"), 'BUILD v522 en server.js');
-t(idx.includes('app.js?v=345') && idx.includes('styles.css?v=20261066'), 'index: app 339 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261066') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v524'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=346') && idx.includes('styles.css?v=20261067'), 'index: app 339 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261067') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');

@@ -12789,6 +12789,32 @@ app.get('/api/home/profile', requireAuth, async (req, res) => {
   }
 });
 
+// (LOTE PULL-TO-REFRESH · Valentino 1/11) El pull-to-refresh de la app
+// pide una re-lectura fresca de Instagram: snapshot nuevo + reconciliación
+// del espejo (archivados marcados). Deduplicado por usuario (el mismo
+// in-flight de la lectura normal); con presupuesto de 10 s: si IG no
+// responde a tiempo, la lectura sigue en segundo plano y el cliente
+// re-renderiza igual con los datos del servidor. Nunca inventa nada:
+// sin @ conectado, refreshed:false.
+app.post('/api/home/profile/refresh', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const prof = getProfile(uid) || {};
+    const handle = String(prof.ig_username || '').replace(/^@+/, '').trim().toLowerCase();
+    if (!handle) return res.json({ ok: true, refreshed: false, reason: 'no_handle' });
+    let payload = null;
+    try {
+      payload = await Promise.race([
+        homeProfileRefreshOnce(uid, handle),
+        new Promise((r) => setTimeout(() => r(null), 10000)),
+      ]);
+    } catch (e) { payload = null; }
+    return res.json({ ok: true, refreshed: !!payload });
+  } catch (e) {
+    return res.json({ ok: true, refreshed: false });
+  }
+});
+
 /* ---------- (Tanda feed 6D · ítem 14) TU ARCHIVO ----------
    Lectura de lo que la cuenta YA tiene guardado, en tres fuentes reales:
    · versiones anteriores de los rehaces/ediciones (post_versions),
@@ -26323,7 +26349,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v523';
+const BUILD_ID = '20261101-v524';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

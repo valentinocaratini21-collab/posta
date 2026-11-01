@@ -111,10 +111,10 @@ for (const fn of ['homeTileHTML', 'mxTiraHTML', 'mxHeroJardin', 'mxNvNum', 'pzIc
 t((app.match(/^const esc = /gm) || []).length === 1, 'M78 definida 1× nivel superior: esc');
 
 // 12. Pines de versión.
-t(srv.includes('20261101-v523'), 'BUILD v522');
-t(idx.includes('app.js?v=345'), 'index app.js?v=345');
-t(idx.includes('styles.css?v=20261066'), 'index styles.css?v=20261066');
-t(idxEn.includes('styles.css?v=20261066'), 'en/index styles.css?v=20261066');
+t(srv.includes('20261101-v524'), 'BUILD v522');
+t(idx.includes('app.js?v=346'), 'index app.js?v=346');
+t(idx.includes('styles.css?v=20261067'), 'index styles.css?v=20261067');
+t(idxEn.includes('styles.css?v=20261067'), 'en/index styles.css?v=20261067');
 t(!idxEn.includes('app.js?v='), 'en/index sin app.js (como siempre)');
 
 console.log(`test-lote13: ${ok} ok, ${bad} fallos`);
