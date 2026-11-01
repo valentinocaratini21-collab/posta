@@ -28,9 +28,9 @@ check('ventana 300ms en handler', app.includes('dblNow - HF_DBL.t < 300'));
 check('doble toque: burst + approve, sin navegar', app.includes('f3HeartBurst(tile)') && app.includes('hfTileApprove(tile, t.post)'));
 check('timer navega al detalle', app.includes('hfDetailOpen(pend.post, pend.tile)'));
 check('guardia hash sin cambio', app.includes('location.hash === pend.hash'));
-check('corazón en fila programado', app.includes('id="apvAccept"') && count(app, 'class="btn btn-soft apv-like"') === 2);
+check('corazón en fila secundaria (LOTE 17: una sola, compartida)', app.includes('id="apvAccept"') && count(app, 'class="apv-sec-btn apv-like"') === 1);
 check('binding corazón por clase', app.includes("querySelectorAll('.apv-like')"));
-check('icono corazón pzIc heart', app.includes("pzIc('heart', 18)"));
+check('icono corazón pzIc heart', app.includes("pzIc('heart', 20)"));
 check('M78: nuevas fns definidas 1 vez', count(app, 'async function hfTileApprove(') === 1 && count(app, 'function hfDblReset(') === 1);
 console.log('== Lote 1 intacto ==');
 check('tab jardin', app.includes("tabBtn('jardin', '#/app/jardin-posty'"));
@@ -58,9 +58,9 @@ check('hook en generateWeekDrafts', srv.includes('bilingualizeWeek(db, uid, bRow
 check('hook tras piloto automático', srv.indexOf('piloto automático:') < srv.indexOf('bilingualizeWeek(db, uid, bRows, bFn)'));
 check('hook solo piezas sin EN previo', srv.includes('bilingual_status IS NULL'));
 check('módulo: sin opt-in no escribe', wb.includes("if (!isBilingualWeekEnabled(db, uid)) return { ok: true, skipped: 'disabled'"));
-check('BUILD v514', srv.includes("BUILD_ID = '20261101-v517'"));
-check('index raíz app.js?v=339; en/index estática sin app.js', idx.includes('app.js?v=339') && !enidx.includes('app.js?v='));
-check('styles ?v= 20261058', idx.includes('styles.css?v=20261060') && enidx.includes('styles.css?v=20261060'));
+check('BUILD v514', srv.includes("BUILD_ID = '20261101-v518'"));
+check('index raíz app.js?v=340; en/index estática sin app.js', idx.includes('app.js?v=340') && !enidx.includes('app.js?v='));
+check('styles ?v= 20261058', idx.includes('styles.css?v=20261061') && enidx.includes('styles.css?v=20261061'));
 console.log('== Censo (sin cambios que explicar) ==');
 const c = (s, m) => (s.match(new RegExp(m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
 check('server.js 3/16/3/16 (lote 7: WhatsApp Sunday-letter reusa /aprobar/:token, sin ruta nueva)', c(srv, 'catsMatch') === 3 && c(srv, 'week-redo') === 16 && c(srv, 'first_week') === 3 && c(srv, '/aprobar') === 16,

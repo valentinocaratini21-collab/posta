@@ -199,9 +199,9 @@ function sandbox(extra) {
 
 // ---------- Versiones y censo ----------
 {
-  t(/20261101-v517/.test(srv), 'BUILD v514 en server.js');
-  t(/app\.js\?v=339/.test(idx), 'app.js?v=339 en index');
-  t(/styles\.css\?v=20261060/.test(idx) && /styles\.css\?v=20261060/.test(idxEn), 'styles.css?v=20261060 en ambos índices');
+  t(/20261101-v518/.test(srv), 'BUILD v514 en server.js');
+  t(/app\.js\?v=340/.test(idx), 'app.js?v=340 en index');
+  t(/styles\.css\?v=20261061/.test(idx) && /styles\.css\?v=20261061/.test(idxEn), 'styles.css?v=20261061 en ambos índices');
   t(/20261101-v516/.test(app), 'CHUNK_V v516 (LOTE 15 toca chunk-analisis: carta simple + kit filtrado)');
   const cnt = (re) => (srv.match(re) || []).length;
   t(cnt(/catsMatch/g) === 3 && cnt(/week-redo/g) === 16 && cnt(/first_week/g) === 3 && cnt(/\/aprobar/g) === 16 && cnt(/autofetch/g) === 0, 'censo server 3/16/3/16 autofetch 0');

@@ -3912,6 +3912,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
   .hf-head .hf-tab.on{color:#0a1e33;border-top-color:#0a1e33}
   /* (LOTE 13 · ítem 3) Banda de acciones + pestañas en blanco también en modo oscuro: con .hf-head y .hf-grid ya blancos, la banda era el único navy entre ambos. Botones ya claros con texto navy; pestañas con valores oscuros legibles. */
   #inicioView .hf-pacts,#inicioView .hf-tabs{background:#fff}
+  /* (LOTE 17) La banda navy entre Editar/Compartir y las pestañas era
+     el fondo navy del wrap asomando por el margen entre ambos bloques
+     blancos en modo oscuro: Inicio entero en blanco, como el perfil. */
+  #inicioView.hf-wrap{background:#fff}
   #inicioView .hf-tab{color:#737373}
   #inicioView .hf-tab.on{color:#0a1e33;border-top-color:#0a1e33}
 }
@@ -4128,3 +4132,28 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-tile-under{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;height:100%;padding:10px;font-size:12px;font-weight:700;color:#0A1E33;text-align:center;line-height:1.35;background:linear-gradient(140deg,#eaf6fd,#fdf3d7);box-sizing:border-box}
 .hf-tile-under>span{display:block}
 .hf-strip .hf-like-in{background:#fff;border-color:var(--line);color:#0A1E33;box-shadow:0 1px 6px rgba(10,30,51,.25)}
+
+/* ---------- LOTE 17 · vista de aprobación + tira ---------- */
+/* Aceptar único como acción principal: ancho completo, sin recorte. */
+.apv-primary{margin-top:18px}
+.apv-primary .btn{width:100%;white-space:normal;padding:12px 16px}
+.apv-accept .pz-ic svg{stroke:#fff}
+/* Fila secundaria pareja: icono arriba, etiqueta chica abajo. */
+.apv-sec{display:flex;gap:2px;margin-top:14px}
+.apv-sec-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;color:var(--cel);font-size:10.5px;font-weight:700;line-height:1.2;padding:8px 2px;cursor:pointer;font-family:inherit}
+.apv-sec-btn:active{opacity:.7}
+.apv-sec-btn .pz-ic svg{stroke:currentColor}
+/* Foto limpia: sin fondo navy detrás de la media. */
+.apv-media{background:#fff}
+/* Carrusel en la vista de aprobación: la foto se muestra entera, como
+   el img único de antes (el patrón del detalle usa contain + fondo
+   negro; acá no). */
+.apv-media .hf-d-slide img{height:auto;background:transparent}
+/* Flecha de enviar visible: pzIc dibuja en celeste fijo y sobre el
+   botón celeste era invisible (celeste sobre celeste). */
+.hf-ask-send .pz-ic svg{stroke:#fff}
+/* Barrita de la tira: degradado celeste → dorado + brillo suave.
+   El ancho ya es el avance del nivel, así que el tono visible cambia
+   con el nivel. Solo la tira: dentro del jardín no hay barras. */
+.mx-tira-barra i{background:linear-gradient(90deg,#2793C8,#FEC14D);position:relative}
+.mx-tira-barra i::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0) 55%)}

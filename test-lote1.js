@@ -42,8 +42,8 @@ check('ruta schedule sigue (sin tab)', /#\/app\/schedule/.test(app));
 
 console.log('== ÍTEM 3: menú completo en detalle ==');
 check('apvMoreHTML definida', /function apvMoreHTML/.test(app));
-check('apvMoreHTML invocada en detalle', app.includes('apvMoreHTML(p, st, canAct, isDraft)'));
-check('Frenar solo scheduled', /if \(st === 'scheduled'\) b \+= `<button class="btn btn-soft" id="apvHold"/.test(app));
+check('apvMoreHTML invocada en detalle', app.includes('apvMoreHTML(p, st, canAct, isDraft, editPrompt)'));
+check('Frenar solo scheduled', /if \(st === 'scheduled'\) b \+= `<button class="apv-sec-btn" id="apvHold"/.test(app));
 check('Eliminar con confirm', /window\.confirm\(en \? 'Delete this post permanently\?'/.test(app));
 check('Eliminar -> DELETE /api/posts/', app.includes("api.del('/api/posts/'"));
 check('Eliminar -> #/app/inicio', /location\.hash = '#\/app\/inicio'/.test(app));
@@ -83,8 +83,8 @@ check('fp-tile sin pill borrador', !app.includes(": 'borrador'") && !app.include
 check('fp-tile draft con borde', app.includes('fp-tile-draft'));
 check('CSS fp-tile-draft', css.includes('.fp-tile.fp-tile-draft'));
 check('CSS .pz-draft-chip conservada (tarjeta revisión)', css.includes('.pz-draft-chip'));
-check('bumps index', idx.includes('app.js?v=339') && idx.includes('styles.css?v=20261060'));
-check('BUILD v514', srv.includes("BUILD_ID = '20261101-v517'"));
+check('bumps index', idx.includes('app.js?v=340') && idx.includes('styles.css?v=20261061'));
+check('BUILD v514', srv.includes("BUILD_ID = '20261101-v518'"));
 check('sin expandArtBrief tocado', !/expandArtBrief/.test(app.split('apvMoreHTML')[0].slice(-2000)) || true);
 check('sin archivos gesty-* tocados (diff lo confirma)', true);
 

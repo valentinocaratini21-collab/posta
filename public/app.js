@@ -407,16 +407,24 @@ function pzBackHTML(tab) {
   // (LOTE 10B · A) El jardín tiene su propio control atrás (flecha +
   // «Volver» lado a lado): el círculo fijo lo tapaba. Sin segundo control.
   if (tab === 'jardin-posty') return '';
+  // (LOTE 17) La vista de aprobación (#/app/post/:id) y la propuesta
+  // dogfood tienen su propio atrás («← Semana»): el círculo fijo
+  // tapaba la palabra (se leía «...mana»). Sin segundo control.
+  if (tab === 'post' || tab === 'dogfood') return '';
   return `<button type="button" class="pz-back pz-back-fixed" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function pzBackMtopHTML(tab) {
   if (tab === 'inicio') return '';
+  // (LOTE 17) Igual que pzBackHTML: post y dogfood tienen su propio atrás.
+  if (tab === 'post' || tab === 'dogfood') return '';
   return `<button type="button" class="pz-back pz-back-mtop" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function pzBackDesktopHTML(tab) {
   if (tab === 'inicio') return '';
   // (LOTE 10B · A) Igual que pzBackHTML: en el jardín manda su propio atrás.
   if (tab === 'jardin-posty') return '';
+  // (LOTE 17) Igual que pzBackHTML: post y dogfood tienen su propio atrás.
+  if (tab === 'post' || tab === 'dogfood') return '';
   return `<button type="button" class="pz-back pz-back-fixed pz-back-desktop" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function bbHace(ts) {
@@ -1110,7 +1118,13 @@ function mxFotoJardin(j) {
   return src;
 }
 function mxNvNum(nv) { return (nv && typeof nv.nivel === 'number') ? nv.nivel : 1; }
-function mxBarra(pct, color) { return `<span class="mx-tira-barra"><i style="width:${pct}%;background:${color}"></i></span>`; }
+// (LOTE 17) La barrita de la tira pasa a degradado celeste → dorado: el
+// color ya no viene por parámetro, el degradado recorre el relleno y,
+// como el ancho es el avance del nivel, el tono visible cambia con el
+// nivel (poco avance, celeste; cerca del premio, dorado). El brillo
+// suave vive en CSS (.mx-tira-barra i::after). Solo la tira usa
+// mxBarra; dentro del jardín no hay barras (regla vigente).
+function mxBarra(pct) { return `<span class="mx-tira-barra"><i style="width:${pct}%"></i></span>`; }
 function mxSwitcherHTML(modo) {
   return `<div class="mx-switcher">`
     + `<button type="button" class="mx-chip-agente${modo === 'gesty' ? ' mx-activo-gesty' : ''}" onclick="mxCambiarAgente('gesty')"><span class="mx-chip-cara">${gzAvatar()}</span><span>Gesty · ${gzT('Recepción', 'Reception')}</span></button>`
@@ -1131,7 +1145,7 @@ function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   if (pod.posty && nvP) {
     return `<button type="button" class="mx-tira-jardin mx-tira-posty" onclick="mxJardinIr('#/app/jardin-posty', '${origen}')">`
       + `${imgPosty}<span style="flex:1;min-width:0"><b>${gzT('Mi jardín', 'My garden')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)}</b>`
-      + `<span>${gzT('El bambusal', 'The bamboo grove')}</span>${mxBarra(pzNivelAvance(nvP), MX_POSTY_AZUL)}</span>`
+      + `<span>${gzT('El bambusal', 'The bamboo grove')}</span>${mxBarra(pzNivelAvance(nvP))}</span>`
       + `<span class="mx-chev">›</span></button>`;
   }
   return '';
@@ -10986,6 +11000,38 @@ function pzChatPhStart() {
   } catch (e) {}
 }
 
+// (LOTE 17) La misma rotación para el mini-chat de la vista de
+// aprobación (.hf-ask-input): el Lote 16 la dejó solo en el chat
+// principal y este input seguía con el placeholder fijo viejo (con
+// «Posty» en mayúscula). Misma lista, mismo ritmo, mismas guardas;
+// índice propio para no acoplar los dos campos.
+let PZ_ASK_PH_I = 0;
+let PZ_ASK_PH_T = null;
+function pzAskPhNext() {
+  try {
+    const inp = document.querySelector('.hf-ask-input');
+    if (!inp || inp.value) return;
+    const list = pzChatPhList();
+    PZ_ASK_PH_I = (PZ_ASK_PH_I + 1) % list.length;
+    inp.placeholder = list[PZ_ASK_PH_I];
+  } catch (e) {}
+}
+function pzAskPhStart() {
+  try {
+    const inp = document.querySelector('.hf-ask-input');
+    if (!inp) return;
+    if (PZ_ASK_PH_T) { try { clearInterval(PZ_ASK_PH_T); } catch (e) {} PZ_ASK_PH_T = null; }
+    pzAskPhNext();
+    PZ_ASK_PH_T = setInterval(() => {
+      try {
+        const el = document.querySelector('.hf-ask-input');
+        if (!el || el.value || document.activeElement === el) return;
+        pzAskPhNext();
+      } catch (e) {}
+    }, 8000);
+  } catch (e) {}
+}
+
 async function bindChatView() {
   bindChat();
   bindReview();
@@ -20301,7 +20347,7 @@ function hfAskChangeBtnHTML(p) {
   return `<div class="hf-ask-mini" data-hf-ask-mini="${esc(String(p.id))}">
     <div class="hf-ask-posty"><img src="ai-avatar.png" alt="Posty" class="hf-ask-ava"><span>${enA ? 'what do we change on this post?' : 'qué le cambiamos a este posteo?'}</span></div>
     <form class="hf-ask-form" data-hf-ask-form="${esc(String(p.id))}">
-      <input type="text" class="hf-ask-input" data-hf-ask-input maxlength="2000" autocomplete="off" placeholder="${enA ? 'message Posty…' : 'escribile a Posty…'}">
+      <input type="text" class="hf-ask-input" data-hf-ask-input maxlength="2000" autocomplete="off" placeholder="${enA ? 'write to posty…' : 'escribile a posty…'}">
       <button type="submit" class="hf-ask-send" aria-label="${enA ? 'Send' : 'Enviar'}">${pzIc('send', 16)}</button>
     </form>
   </div>`;
@@ -21074,6 +21120,7 @@ function bindDogfood() {
   if (d) d.onclick = () => dogfoodAction(d.dataset.dfid, 'dismiss');
 }
 async function dogfoodView(id) {
+  const enD = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   let p = null;
   try { const r = await api.get('/api/dogfood/pending'); p = (r && r.post) || null; } catch (e) {}
   if (!p || (id && String(p.id) !== String(id))) {
@@ -21082,7 +21129,7 @@ async function dogfoodView(id) {
       <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Ir a mi semana</a></div>`;
   }
   return `<div class="apv-wrap">
-    <a class="apv-back" href="#/app/schedule">${pzIc('arrowLeft', 14)} Semana</a>
+    <a class="apv-back" href="#/app/schedule">${pzIc('arrowLeft', 14)} ${enD ? 'Week' : 'Semana'}</a>
     ${dogfoodCardHTML(p)}
   </div>`;
 }
@@ -21108,6 +21155,7 @@ async function approvalPostView(id) {
   const tz = apvTz();
   const d = apvParse(p.scheduled_at), dOk = !isNaN(d);
   const st = String(p.status || ''), ap = String(p.approval || '');
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   // Acciones solo mientras todavía hay algo que decidir.
   const canAct = st === 'scheduled' && (ap === 'pending' || ap === 'approved');
   // (v326) Los borradores también se deciden ACÁ: el detalle era un callejón
@@ -21115,19 +21163,30 @@ async function approvalPostView(id) {
   // "Ver posteo" y las filas de la semana de Inicio.
   const isDraft = st === 'draft';
   const isVideo = String(p.media_type || '') === 'video';
+  // (LOTE 17) Carrusel prolijo: la vista mostraba solo la portada y el
+  // «Deslizá» del caption no hacía nada; el borde claro de la foto al
+  // scrollear se leía como una línea dorada de error. Con más de un
+  // slide, track deslizable + puntitos + contador (patrón del detalle).
+  let apvSlides = [];
+  try { const cp = JSON.parse(p.carousel_paths || '[]'); if (Array.isArray(cp)) apvSlides = cp.map(String).filter(Boolean); } catch (e) { apvSlides = []; }
+  if (p.image_path) apvSlides = [String(p.image_path), ...apvSlides.filter((x) => x !== String(p.image_path))];
+  const apvIsCar = !isVideo && apvSlides.length > 1;
+  const apvMediaInner = isVideo
+    ? `<video src="${esc(p.image_path)}" controls playsinline preload="metadata"></video>`
+    : apvIsCar
+      ? `<div class="hf-d-track">${apvSlides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="Posteo" loading="lazy" data-lightbox="${esc(s)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''} onerror="__imgFb(this)"></span>`).join('')}</div><span class="hf-d-count">1/${apvSlides.length}</span>`
+      : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager" data-lightbox="${esc(p.image_path)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''}>`;
   const media = p.image_path
-    ? `<div class="apv-media">${isVideo
-      ? `<video src="${esc(p.image_path)}" controls playsinline preload="metadata"></video>`
-      : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager" data-lightbox="${esc(p.image_path)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''}>`}</div>`
+    ? `<div class="apv-media">${apvMediaInner}</div>${apvIsCar ? `<div class="hf-d-dots">${apvSlides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}`
     : '';
   const cap = esc(String(p.caption || 'Sin texto todavía')).replace(/\n/g, '<br>');
   const tags = String(p.hashtags || '').trim();
   const editPrompt = dOk ? apvEditPrompt(d, tz) : 'Quiero editar ese posteo';
+  // (LOTE 17) Aceptar único como acción principal: antes compartía la
+  // fila con otros tres botones y el texto desbordaba la píldora.
   const actions = canAct ? `
-    <div class="apv-actions" id="apvActions">
-      <button class="btn btn-primary" id="apvAccept" data-apvid="${esc(String(p.id))}">Aceptar ${pzIc('checkCircle', 18)}</button> <button class="btn btn-soft apv-like" data-apvid="${esc(String(p.id))}" aria-label="Aprobar">${pzIc('heart', 18)}</button>
-      <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ${pzIc('pencil', 18)}</button>
-      <button class="btn btn-danger" id="apvReject">Rechazar ${pzIc('reject', 18)}</button>
+    <div class="apv-actions apv-primary" id="apvActions">
+      <button class="btn btn-primary apv-accept" id="apvAccept" data-apvid="${esc(String(p.id))}">${pzIc('checkCircle', 18)} Aceptar</button>
     </div>
     <div class="apv-confirm" id="apvConfirm" hidden>
       <p><b>¿Seguro?</b> No se va a publicar.</p>
@@ -21140,10 +21199,8 @@ async function approvalPostView(id) {
   // (el mismo flujo PATCH que usa la Agenda), Editar va al chat con el
   // prefill de siempre y Rechazar lo cancela con confirmación.
   const draftActions = isDraft ? `
-    <div class="apv-actions" id="apvActions">
-      <button class="btn btn-primary" id="apvAcceptDraft" data-apvid="${esc(String(p.id))}" data-apvwhen="${esc(String(p.scheduled_at || ''))}">Aceptar ${pzIc('checkCircle', 18)}</button> <button class="btn btn-soft apv-like" data-apvid="${esc(String(p.id))}" aria-label="Aprobar">${pzIc('heart', 18)}</button>
-      <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ${pzIc('pencil', 18)}</button>
-      <button class="btn btn-danger" id="apvReject">Rechazar ${pzIc('reject', 18)}</button>
+    <div class="apv-actions apv-primary" id="apvActions">
+      <button class="btn btn-primary apv-accept" id="apvAcceptDraft" data-apvid="${esc(String(p.id))}" data-apvwhen="${esc(String(p.scheduled_at || ''))}">${pzIc('checkCircle', 18)} Aceptar</button>
     </div>
     <div id="apvGate"></div>
     <div class="apv-confirm" id="apvConfirm" hidden>
@@ -21155,13 +21212,13 @@ async function approvalPostView(id) {
     </div>` : '';
   const whenTxt = dOk ? (isDraft ? apvWhenText(d, tz).replace(/^Sale /, 'Saldría ') + ' · si lo aceptás' : apvWhenText(d, tz)) : '';
   return `<div class="apv-wrap">
-    <a class="apv-back" href="#/app/schedule">${pzIc('arrowLeft', 14)} Semana</a>
+    <a class="apv-back" href="#/app/schedule">${pzIc('arrowLeft', 14)} ${en ? 'Week' : 'Semana'}</a>
     ${media}
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
     ${actions}${draftActions}
-    ${apvMoreHTML(p, st, canAct, isDraft)}
+    ${apvMoreHTML(p, st, canAct, isDraft, editPrompt)}
     ${hfAskChangeBtnHTML(p)}
   </div>`;
 }
@@ -21172,16 +21229,24 @@ async function approvalPostView(id) {
 // frenado no sale y se re-acepta cuando quieran; el servidor no tiene una
 // pausa distinta para un posteo. Solo en posteos con algo que decidir
 // (programado pendiente/aprobado o borrador); el publicado no se toca.
-function apvMoreHTML(p, st, canAct, isDraft) {
+// (LOTE 17) UNA sola fila secundaria pareja: la primera fila (Aceptar,
+// corazón, Editar, Rechazar) y la segunda (Eliminar, Rehacer, No me
+// gusta) se juntan acá; Aceptar queda solo como acción principal
+// arriba. El corazón conserva su acción (aprobar + burst, Lote 2) y
+// Frenar sigue solo para programados. Etiqueta chica en ES/EN.
+function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
   if (!canAct && !isDraft) return '';
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const id = esc(String(p.id));
   let b = '';
-  if (st === 'scheduled') b += `<button class="btn btn-soft" id="apvHold" data-apvid="${id}">⏸ ${en ? 'Hold' : 'Frenar'}</button>`;
-  b += `<button class="btn btn-soft" id="apvDelete" data-apvid="${id}">${pzIc('trash', 16)} ${en ? 'Delete' : 'Eliminar'}</button>`;
-  b += `<button class="btn btn-soft" id="apvRedo" data-apvid="${id}">↻ ${en ? 'Redo' : 'Rehacer'}</button>`;
-  b += `<button class="btn btn-soft" id="apvDislike" data-apvid="${id}">${pzIc('thumbDown', 16)} ${en ? "I don't like it" : 'No me gusta'}</button>`;
-  return `<div class="apv-actions apv-more" id="apvMore">${b}</div>`;
+  b += `<button class="apv-sec-btn apv-like" data-apvid="${id}" aria-label="${en ? 'Approve' : 'Aprobar'}">${pzIc('heart', 20)}<span>${en ? 'Approve' : 'Aprobar'}</span></button>`;
+  b += `<button class="apv-sec-btn" id="apvEdit" data-apvedit="${esc(editPrompt || '')}">${pzIc('pencil', 20)}<span>${en ? 'Edit' : 'Editar'}</span></button>`;
+  b += `<button class="apv-sec-btn" id="apvReject">${pzIc('reject', 20)}<span>${en ? 'Reject' : 'Rechazar'}</span></button>`;
+  if (st === 'scheduled') b += `<button class="apv-sec-btn" id="apvHold" data-apvid="${id}">⏸<span>${en ? 'Hold' : 'Frenar'}</span></button>`;
+  b += `<button class="apv-sec-btn" id="apvDelete" data-apvid="${id}">${pzIc('trash', 20)}<span>${en ? 'Delete' : 'Eliminar'}</span></button>`;
+  b += `<button class="apv-sec-btn" id="apvRedo" data-apvid="${id}">↻<span>${en ? 'Redo' : 'Rehacer'}</span></button>`;
+  b += `<button class="apv-sec-btn" id="apvDislike" data-apvid="${id}">${pzIc('thumbDown', 20)}<span>${en ? 'Dislike' : 'No me gusta'}</span></button>`;
+  return `<div class="apv-actions apv-more apv-sec" id="apvMore">${b}</div>`;
 }
 function bindApprovalPost() {
   const rt = document.getElementById('apvRetry');
@@ -21198,15 +21263,17 @@ function bindApprovalPost() {
   };
   const rej = document.getElementById('apvReject');
   if (rej) rej.onclick = () => {
-    const c = document.getElementById('apvConfirm'), a = document.getElementById('apvActions');
+    const c = document.getElementById('apvConfirm'), a = document.getElementById('apvActions'), m = document.getElementById('apvMore');
     if (c) c.hidden = false;
     if (a) a.style.display = 'none';
+    if (m) m.style.display = 'none';
   };
   const rno = document.getElementById('apvRejectNo');
   if (rno) rno.onclick = () => {
-    const c = document.getElementById('apvConfirm'), a = document.getElementById('apvActions');
+    const c = document.getElementById('apvConfirm'), a = document.getElementById('apvActions'), m = document.getElementById('apvMore');
     if (c) c.hidden = true;
     if (a) a.style.display = '';
+    if (m) m.style.display = '';
   };
   const ryes = document.getElementById('apvRejectYes');
   if (ryes) ryes.onclick = async () => {
@@ -21283,9 +21350,22 @@ function bindApprovalPost() {
     render();
   };
   // (v326) La foto del detalle también abre el visor (con caption y salida
-  // a la acción, como en la Agenda).
-  const apm = document.querySelector('.apv-media [data-lightbox]');
-  if (apm) apm.onclick = () => lbOpenFrom(apm);
+  // a la acción, como en la Agenda). (LOTE 17) Todas las fotos: con
+  // carrusel hay una por slide.
+  document.querySelectorAll('.apv-media [data-lightbox]').forEach((apm) => { apm.onclick = () => lbOpenFrom(apm); });
+  // (LOTE 17) Carrusel: puntitos y contador siguen el scroll del track.
+  const apvTrack = document.querySelector('.apv-media .hf-d-track');
+  if (apvTrack) {
+    const apvDots = document.querySelector('.apv-wrap .hf-d-dots');
+    apvTrack.addEventListener('scroll', () => {
+      const i = Math.round(apvTrack.scrollLeft / Math.max(1, apvTrack.clientWidth));
+      if (apvDots) apvDots.querySelectorAll('i').forEach((d, k) => d.classList.toggle('on', k === i));
+      const cnt = document.querySelector('.apv-media .hf-d-count');
+      if (cnt) { const n = apvTrack.children.length; cnt.textContent = Math.min(n, Math.max(0, i) + 1) + '/' + n; }
+    }, { passive: true });
+  }
+  // (LOTE 17) El mini-chat de esta vista también rota su placeholder.
+  try { pzAskPhStart(); } catch (e) {}
   // LOTE 1 · ítem 3: cableado del menú completo.
   const apvHd = document.getElementById('apvHold');
   if (apvHd) apvHd.onclick = () => { try { pcHold(apvHd.dataset.apvid); } catch (e) {} };
