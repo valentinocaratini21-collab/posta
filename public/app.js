@@ -11457,8 +11457,37 @@ function pzAskPhNext() {
     pzPhEls('.hf-ask-input').forEach(el => pzPhAdvanceOne(el, list));
   } catch (e) {}
 }
+function pzDockPhNext() {
+  try {
+    const list = pzChatPhList();
+    pzPhEls('.mz-ph-tx').forEach(el => pzPhAdvanceDock(el, list));
+  } catch (e) {}
+}
+// (LOTE DOCKROTA) Avance del texto de la barra (.mz-ph-tx): espejo
+// de pzPhAdvanceOne pero sobre textContent (el botón no es un
+// campo: no hay value ni placeholder que guardar). Mismo fundido
+// ~360 ms (cambio a los 180 ms, limpieza a los 380 ms) y mismo
+// instantáneo con prefers-reduced-motion. No toca la cara, el +
+// ni el micrófono: solo el texto del span.
+function pzPhAdvanceDock(el, list) {
+  try {
+    if (!el) return false;
+    let i = parseInt((el.dataset && el.dataset.phI) || '0', 10);
+    if (isNaN(i)) i = 0;
+    i = (i + 1) % list.length;
+    if (el.dataset) el.dataset.phI = String(i);
+    const next = list[i];
+    if (pzPhReduced() || typeof setTimeout !== 'function') { el.textContent = next; return true; }
+    try {
+      if (el.classList) el.classList.add('pz-ph-fading');
+      setTimeout(() => { try { el.textContent = next; } catch (e) {} }, 180);
+      setTimeout(() => { try { if (el.classList) el.classList.remove('pz-ph-fading'); } catch (e) {} }, 380);
+    } catch (e) { el.textContent = next; }
+    return true;
+  } catch (e) { return false; }
+}
 function pzPhTick() {
-  try { pzChatPhNext(); pzAskPhNext(); } catch (e) {}
+  try { pzChatPhNext(); pzAskPhNext(); pzDockPhNext(); } catch (e) {}
 }
 function pzPhInstallObs() {
   try {
@@ -11474,6 +11503,9 @@ function pzPhEnsure() {
     const list = pzChatPhList();
     pzPhEls('#chatInput').concat(pzPhEls('.hf-ask-input')).forEach(el => {
       if (!pzPhKnown(el)) { pzPhMark(el); pzPhAdvanceOne(el, list); }
+    });
+    pzPhEls('.mz-ph-tx').forEach(el => {
+      if (!pzPhKnown(el)) { pzPhMark(el); pzPhAdvanceDock(el, list); }
     });
     pzPhInstallObs();
     if (!PZ_PH_T) PZ_PH_T = setInterval(pzPhTick, 4000); // (LOTE CHAT4S) 4 s, con fundido
@@ -18423,7 +18455,7 @@ async function inicioView() {
   ${visitorPillHTML}
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
-    <button type="button" class="mz-ph" id="mzChatOpen"><img class="chat-face" src="ai-avatar.png" alt="Posty">escribile a posty…</button>
+    <button type="button" class="mz-ph" id="mzChatOpen"><img class="chat-face" src="ai-avatar.png" alt="Posty"><span class="mz-ph-tx">escribile a posty…</span></button>
     <button type="button" class="mz-mic" id="mzMic" aria-label="Pedir con nota de voz">${pzIc('mic', 20)}</button>
   </div>
   <div class="mz-sheet" id="mzSheet" hidden>

@@ -4311,3 +4311,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 @media (prefers-reduced-motion: reduce){
   #chatInput.pz-ph-fading,.hf-ask-input.pz-ph-fading{animation:none}
 }
+/* (LOTE DOCKROTA) El texto de la barra usa el mismo fundido que
+   los placeholders (360 ms); con reduced-motion, cambio
+   instantáneo por JS. */
+.mz-ph-tx.pz-ph-fading{animation:pzPhFade .36s ease}
+@media (prefers-reduced-motion: reduce){
+  .mz-ph-tx.pz-ph-fading{animation:none}
+}

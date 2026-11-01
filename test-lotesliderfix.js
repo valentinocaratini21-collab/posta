@@ -48,9 +48,9 @@ function loadConst(sb, name) {
 }
 
 // ---------- Versiones + censo (base v525 + este lote = v526) ----------
-t(srv.includes("const BUILD_ID = '20261101-v530'"), 'BUILD v526 en server.js');
-t(idx.includes('app.js?v=351') && idx.includes('styles.css?v=20261070'), 'index: app 351 + styles 20261070');
-t(idxEn.includes('styles.css?v=20261070') && !idxEn.includes('app.js?v='), 'en/index: styles 20261070, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v531'"), 'BUILD v526 en server.js');
+t(idx.includes('app.js?v=352') && idx.includes('styles.css?v=20261071'), 'index: app 351 + styles 20261070');
+t(idxEn.includes('styles.css?v=20261071') && !idxEn.includes('app.js?v='), 'en/index: styles 20261070, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v523 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
