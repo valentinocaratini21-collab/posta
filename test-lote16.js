@@ -47,9 +47,9 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v517) ----------
-t(srv.includes("const BUILD_ID = '20261101-v521'"), 'BUILD v521 en server.js');
-t(idx.includes('app.js?v=343') && idx.includes('styles.css?v=20261064'), 'index: app 339 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261064') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v522'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=344') && idx.includes('styles.css?v=20261065'), 'index: app 339 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261065') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v516'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
@@ -101,16 +101,15 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(!open.includes("hf-d-title\">${hfIsEn() ? 'Post' : 'Publicación'}"), 'D5: título genérico fuera');
 }
 
-// ---------- I1: tira Nv 1-2 sin tierra ----------
+// ---------- I1: tira Nv 1-2 sin tierra (LOTE JARDÍN: SUPERSEDED — la
+// miniatura ya no es el brote: es el bambusal completo en chico) ----------
 {
-  const tira = sliceFn(app, 'function mxTiraHTML', 'function mxTiraPostyHTML');
-  t(tira.includes('mx-tira-brote-grande') && tira.includes('nvTira <= 2'), 'I1: tira Nv<=2 con brote grande');
-  const bi = tira.indexOf('mx-tira-brote-grande');
-  const brote = tira.slice(bi, tira.indexOf('\n', bi));
-  t(!brote.includes('<img'), 'I1: la rama brote no usa foto de tierra');
-  t(tira.includes('mx-tira-foto'), 'I1: Nv 3+ sigue con foto');
-  t(css.includes('.mx-tira-brote-grande{') && css.includes('.mx-tira-brote-grande svg{width:34px'), 'I1: CSS brote grande 34px sobre degradado');
-  t(app.includes('mx-jardin-vivo') && app.includes('mxJardinHTML'), 'I1: pantalla Jardín no tocada');
+  const tira = sliceFn(app, 'function mxTiraHTML', 'async function mxPortTop');
+  t(tira.includes('jardin-bambu.webp') && tira.includes('mx-tira-lock') && tira.includes('nvTira < 6'), 'I1 (LOTE JARDÍN): tira = bambusal completo en chico, candadito si Nv<6');
+  t(!tira.includes('mx-tira-brote-grande') && !tira.includes('MX_BROTE_SVG'), 'I1 (LOTE JARDÍN): brote dibujado fuera de la tira');
+  t(tira.includes('mx-tira-foto'), 'I1: la tira sigue con foto');
+  t(css.includes('.mx-tira-lock{'), 'I1 (LOTE JARDÍN): CSS candadito de la tira');
+  t(app.includes('mx-jardin-vivo') && app.includes('mxJardinHTML'), 'I1: pantalla Jardín existe (el LOTE JARDÍN la rediseña: hero mosaico + slider)');
 }
 
 // ---------- I2: chapita sin mes, hora intacta ----------

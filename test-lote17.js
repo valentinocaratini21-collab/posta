@@ -50,9 +50,9 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v518) ----------
-t(srv.includes("const BUILD_ID = '20261101-v521'"), 'BUILD v521 en server.js');
-t(idx.includes('app.js?v=343') && idx.includes('styles.css?v=20261064'), 'index: app 340 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261064') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v522'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=344') && idx.includes('styles.css?v=20261065'), 'index: app 340 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261065') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v516'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
@@ -167,7 +167,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'mxBarra(') === 2, 'B8: mxBarra solo en definición + tira (nada en el jardín)');
   t(css.includes('.mx-tira-barra i{background:linear-gradient(90deg,#2793C8,#FEC14D)'), 'B8: degradado celeste → dorado');
   t(css.includes('.mx-tira-barra i::after'), 'B8: brillo suave');
-  t(app.includes('mxJardinHTML') && app.includes('mx-jardin-vivo'), 'B8: pantalla Jardín no tocada');
+  t(app.includes('mxJardinHTML') && app.includes('mx-jardin-vivo'), 'B8: pantalla Jardín existe (el LOTE JARDÍN la rediseña)');
 }
 
 // ---------- Mini-chat: rotación en la vista de aprobación ----------

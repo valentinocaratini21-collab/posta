@@ -1187,15 +1187,11 @@ function mxSwitcherHTML(modo) {
 }
 function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   const ambos = pod.posty && pod.gesty;
-  // (LOTE 13 · tira Inicio) La miniatura es el visual del jardín según nivel (mismo mapeo que el hero de la pantalla Jardín), no la última foto publicada.
-  const foto = mxHeroJardin(mxNvNum(nvP));
+  // (LOTE JARDÍN · miniatura = jardín completo en chico) La miniatura ya
+  // no es el brote (Lote 15/16) ni el visual de la etapa: es el bambusal
+  // completo en chico; si todavía no llegaste al Nv 6 lleva candadito.
   const nvTira = mxNvNum(nvP);
-  // (LOTE 16 · tira sin tierra) En Nv 1–2 la miniatura ya no es la foto
-  // de tierra (jardin-joven): es la composición brote grande del Lote 15
-  // sobre degradado de marca. La pantalla Jardín no se toca.
-  const imgPosty = nvTira <= 2
-    ? `<span class="mx-tira-thumb mx-tira-brote-grande" aria-hidden="true">${MX_BROTE_SVG}<i>✦</i></span>`
-    : `<span class="mx-tira-thumb"><img class="mx-tira-foto" src="${esc(foto)}" alt="" onerror="this.closest('.mx-tira-thumb').remove()"></span>`;
+  const imgPosty = `<span class="mx-tira-thumb"><img class="mx-tira-foto" src="jardin-bambu.webp" alt="" onerror="this.closest('.mx-tira-thumb').remove()">${nvTira < 6 ? '<span class="mx-tira-lock" aria-hidden="true">🔒</span>' : ''}</span>`;
   if (pod.posty && nvP) {
     return `<button type="button" class="mx-tira-jardin mx-tira-posty" onclick="mxJardinIr('#/app/jardin-posty', '${origen}')">`
       + `${imgPosty}<span style="flex:1;min-width:0"><b>${gzT('Mi jardín', 'My garden')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)}</b>`
@@ -1310,6 +1306,89 @@ function mxJardinMapaHTML(nvP, post50) {
   return h + '</div></div>';
 }
 
+
+// (LOTE JARDÍN · slider + hero completo) Las 5 etapas reales del jardín
+// (mismo mapeo que mxHeroJardin): cada etapa es un render aprobado, nunca
+// uno inventado. El hero ya no es una sola foto (en Nv 1–2 era tierra):
+// es el mosaico completo — lo tuyo a todo color, lo que falta oscuro con
+// candado — y el slider recorre los 50 niveles con ese mismo material.
+// Sin barras ni % dentro del jardín: el slider es un control, no un
+// indicador de avance, y ningún texto muestra porcentajes.
+const MX_ETAPAS_JARDIN = [
+  { desde: 1, img: 'jardin-joven.webp', rango: '1–2' },
+  { desde: 3, img: 'jardin-crece-1.webp', rango: '3' },
+  { desde: 4, img: 'jardin-crece-2.webp', rango: '4' },
+  { desde: 5, img: 'jardin-crece-3.webp', rango: '5' },
+  { desde: 6, img: 'jardin-bambu.webp', rango: '6+' },
+];
+function mxEtapaJardin(nivel) {
+  const n = Math.max(1, Math.min(50, Number(nivel) || 1));
+  if (n <= 2) return 0;
+  if (n === 3) return 1;
+  if (n === 4) return 2;
+  if (n === 5) return 3;
+  return 4;
+}
+function mxZonaPremioEn(nivel) {
+  return MX_ZONAS_PREMIO.filter((z) => z.nv === nivel)[0] || null;
+}
+function mxSliderVistaHTML(sel, actual) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const s = Math.max(1, Math.min(50, Number(sel) || 1));
+  const a = Math.max(1, Math.min(50, Number(actual) || 1));
+  const img = MX_ETAPAS_JARDIN[mxEtapaJardin(s)].img;
+  const futuro = s > a;
+  const zona = mxZonaPremioEn(s);
+  const nomZona = zona ? (en ? zona.en : zona.es) : '';
+  const lin1 = gzT('Nv', 'Lv') + ' ' + s + (nomZona ? ' · ' + esc(nomZona) : '');
+  let lin2 = '';
+  if (s === a) lin2 = gzT('Estás acá', "You're here");
+  else if (s < a) lin2 = zona ? (en ? zona.detEn : zona.detEs) : gzT('Ya lo alcanzaste', 'You already reached it');
+  else lin2 = gzT('Se desbloquea en el Nivel', 'Unlocks at Level') + ' ' + s;
+  const det = gzT('Seguí publicando tus semanas para llegar', 'Keep publishing your weeks to get there');
+  const vista = `<img class="mx-slider-foto${futuro ? ' mx-slider-futuro' : ''}" src="${img}" alt="">${futuro ? '<span class="mx-slider-lock" aria-hidden="true">🔒</span>' : ''}<span class="mx-slider-txt"><b>${lin1}</b><span>${esc(lin2)}</span><span class="mx-slider-det" hidden>${esc(det)}</span></span>`;
+  return futuro ? `<button type="button" class="mx-slider-vista-btn" onclick="mxSliderToggle(this)" aria-label="${gzT('Qué lo desbloquea', 'What unlocks it')}">${vista}</button>` : `<div class="mx-slider-vista-div">${vista}</div>`;
+}
+function mxSliderToggle(btn) {
+  if (!btn) return;
+  const det = btn.querySelector('.mx-slider-det');
+  if (det) det.hidden = !det.hidden;
+}
+function mxSliderJardinHTML(nvNum) {
+  const a = Math.max(1, Math.min(50, Number(nvNum) || 1));
+  return `<div class="mx-slider" id="mxSlider"><p class="mx-slider-tit">${gzT('Deslizá para ver cómo crece tu jardín', 'Slide to see how your garden grows')}</p><div class="mx-slider-vista" id="mxSliderVista">${mxSliderVistaHTML(a, a)}</div><input class="mx-slider-rango" id="mxSliderRango" type="range" min="1" max="50" step="1" value="${a}" data-actual="${a}" oninput="mxSliderJardin(this)" aria-label="${gzT('Nivel del jardín', 'Garden level')}"><p class="mx-slider-nv" id="mxSliderNv">${gzT('Nv', 'Lv')} ${a}</p></div>`;
+}
+function mxSliderJardin(input) {
+  if (!input) return;
+  const a = Number(input.dataset.actual || 1);
+  const s = Number(input.value || a);
+  const vista = (typeof document !== 'undefined') ? document.getElementById('mxSliderVista') : null;
+  if (vista) vista.innerHTML = mxSliderVistaHTML(s, a);
+  const lab = (typeof document !== 'undefined') ? document.getElementById('mxSliderNv') : null;
+  if (lab) lab.textContent = gzT('Nv', 'Lv') + ' ' + s;
+}
+function mxHeroEtapaIr(nivel) {
+  if (typeof document === 'undefined') return;
+  const r = document.getElementById('mxSliderRango');
+  if (!r) return;
+  r.value = Math.max(1, Math.min(50, Number(nivel) || 1));
+  mxSliderJardin(r);
+}
+function mxHeroMosaicoHTML(nvNum, heroActual) {
+  const a = Math.max(1, Math.min(50, Number(nvNum) || 1));
+  const etapaActual = mxEtapaJardin(a);
+  const tiles = MX_ETAPAS_JARDIN.map((e, i) => {
+    const ok = i <= etapaActual;
+    const esActual = i === etapaActual;
+    const label = gzT('Nv', 'Lv') + ' ' + e.rango;
+    const imgTag = `<img class="mx-etapa-img" src="${e.img}" alt="" onerror="this.closest('.mx-etapa').remove()">`;
+    if (esActual) return `<div class="mx-etapa ok actual"><button type="button" class="mx-hero-btn" onclick="openLightbox('${esc(heroActual)}', 0)" aria-label="${gzT('Ver tu jardín en grande', 'See your garden large')}">${imgTag}</button><span class="mx-etapa-nv">${label}</span><span class="mx-etapa-aca">${gzT('Estás acá', "You're here")}</span></div>`;
+    if (ok) return `<div class="mx-etapa ok"><button type="button" class="mx-etapa-ir" onclick="mxHeroEtapaIr(${e.desde})" aria-label="${label}">${imgTag}</button><span class="mx-etapa-nv">${label}</span></div>`;
+    return `<div class="mx-etapa lock"><button type="button" class="mx-etapa-ir" onclick="mxHeroEtapaIr(${e.desde})" aria-label="${gzT('Se desbloquea en el Nivel', 'Unlocks at Level')} ${e.desde}">${imgTag}<span class="mx-etapa-lock" aria-hidden="true">🔒</span></button><span class="mx-etapa-nv">${label}</span></div>`;
+  }).join('');
+  return `<div class="mx-hero-mosaico">${tiles}</div>`;
+}
+
 function mxVistasUnAgenteHTML(nv, premioHTML, semanaHTML) {
   const hist = Array.isArray(nv.historial) ? nv.historial : [];
   const cur = nv.nombre_nivel || '';
@@ -1414,13 +1493,13 @@ function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML) {
   const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">${pzIc('arrowLeft', 16)} ${gzT('Volver', 'Back')}</button>`;
   if (tipo === 'posty') {
     const head = `<h1>${gzT('El jardín de Posty', "Posty's garden")}</h1>`;
-    const heroUrl = mxHeroJardin(mxNvNum(nvP));
+    const heroActual = mxHeroJardin(mxNvNum(nvP));
     const nvNum = mxNvNum(nvP);
-    const brote = nvNum <= 2 ? `<span class="mx-brote" aria-hidden="true">${MX_BROTE_SVG}</span>` : '';
-    const foto = `<div class="mx-jardin-vivo"><button type="button" class="mx-hero-btn" onclick="openLightbox('${esc(heroUrl)}', 0)" aria-label="${gzT('Ver tu jardín en grande', 'See your garden large')}"><img class="mx-foto-nivel" src="${esc(heroUrl)}" alt="${gzT('Tu jardín', 'Your garden')}" onerror="this.closest('.mx-jardin-vivo').remove()"></button>${brote}<span class="mx-orb mx-orb-a"></span><span class="mx-orb mx-orb-b"></span><span class="mx-spark" style="left:12%;top:18%">✦</span><span class="mx-spark" style="left:78%;top:26%;animation-delay:1.2s">✦</span><span class="mx-spark" style="left:62%;top:64%;animation-delay:2.1s">✦</span><span class="mx-spark" style="left:28%;top:72%;animation-delay:.6s">✦</span><img class="mx-posty-live" src="ai-avatar.png" alt="Posty"><span class="mx-posty-tag">${gzT('Posty está acá', 'Posty is here')}</span></div>`;
+    const foto = `<div class="mx-jardin-vivo">${mxHeroMosaicoHTML(nvNum, heroActual)}<span class="mx-orb mx-orb-a"></span><span class="mx-orb mx-orb-b"></span><span class="mx-spark" style="left:12%;top:18%">✦</span><span class="mx-spark" style="left:78%;top:26%;animation-delay:1.2s">✦</span><span class="mx-spark" style="left:62%;top:64%;animation-delay:2.1s">✦</span><span class="mx-spark" style="left:28%;top:72%;animation-delay:.6s">✦</span><div class="mx-hero-posty-row"><img class="mx-posty-live" src="ai-avatar.png" alt="Posty"><span class="mx-posty-tag">${gzT('Posty está acá', 'Posty is here')}</span></div></div>`;
+    const slider = mxSliderJardinHTML(nvNum);
     const sentido = `<p class="mx-jardin-sentido">${gzT('Crece con tus semanas publicadas', 'Grows with your published weeks')}</p>`;
     const cuerpo = mxPremioCercaHTML(nvP) + mxVistasUnAgenteHTML(nvP, mxPremioPostyHTML(nvP), semanaHTML) + mxJardinMapaHTML(nvP, post50) + mxHistoriaHTML(nvP) + mxJardinPost50HTML(post50);
-    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head">${head}</header><div class="mx-bloque">${foto}${sentido}${cuerpo}</div></div>`;
+    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head">${head}</header><div class="mx-bloque">${foto}${slider}${sentido}${cuerpo}</div></div>`;
   }
   return mxJardinErrorHTML(); // POSTY SOLO: sin jardín Gesty
 }

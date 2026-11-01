@@ -40,9 +40,9 @@ function loadSlice(sb, code, name) {
 }
 
 // ---------- Versiones + censo (referencia v519) ----------
-t(srv.includes("const BUILD_ID = '20261101-v521'"), 'BUILD v521 en server.js');
-t(idx.includes('app.js?v=343') && idx.includes('styles.css?v=20261064'), 'index: app 341 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261064') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v522'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=344') && idx.includes('styles.css?v=20261065'), 'index: app 341 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261065') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v516'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
@@ -158,9 +158,9 @@ t(cnt(app, 'let PZ_VIEW_KEY') === 1, 'sin duplicados: PZ_VIEW_KEY 1');
   t(!glass.includes('.hf-tile'), 'G: ningún backdrop-filter sobre tiles');
   t(css.includes('.mx-tira-barra i{background:linear-gradient(90deg,#2793C8,#FEC14D)'), 'G: barrita degradada del Lote 17 intacta');
   t(css.includes('.hf-tile.hf-tile-draft{outline:2px dashed #2793C8'), 'G: punteados de borradores QUEDAN');
-  t(app.includes('mx-tira-brote-grande'), 'G: miniatura brote grande del Lote 15/16 (sin render inventado)');
+  t(app.includes('jardin-bambu.webp'), 'G (LOTE JARDÍN): miniatura = bambusal completo en chico (sin render inventado)');
   t(!css.includes('#inicioView .hf-pacts,#inicioView .hf-tabs{background:#0A1E33'), 'G: sin banda navy reintroducida');
-  t(app.includes('mxTiraHTML') && app.includes('mx-jardin-vivo'), 'G: pantalla Jardín no tocada');
+  t(app.includes('mxTiraHTML') && app.includes('mx-jardin-vivo'), 'G: pantalla Jardín existe (el LOTE JARDÍN la rediseña)');
 }
 
 console.log(`LOTEGLASS: ${ok} ok, ${bad} fallos`);

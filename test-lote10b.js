@@ -77,13 +77,13 @@ function sandbox(extra) {
   t(/mxHeroJardin\(mxNvNum\(nvP\)\)/.test(postyBranch), 'B: el hero del jardín sale de mxHeroJardin');
   t(!/mxFotoJardin/.test(postyBranch), 'B: el hero ya NO es la última foto publicada (ahí se colaba la promo con la cara)');
   t(!/onerror="[^"]*ai-avatar/.test(postyBranch), 'B: el hero no tiene fallback al avatar (LOTE 15: la cara de Posty vive como overlay, no como fallback)');
-  t(/onerror="this\.closest\('.mx-jardin-vivo'\)\.remove\(\)"/.test(postyBranch), 'B: si el visual falla, se quita el bloque vivo entero sin fallback');
+  t(/onerror="this\.closest\('.mx-etapa'\)\.remove\(\)"/.test(app), 'B (LOTE JARDÍN): si un visual del mosaico falla, se quita esa etapa sin fallback');
 }
 
 // ---------- 3-1 · tocar el hero abre el visual en grande ----------
 {
   const postyBranch = app.slice(app.indexOf("if (tipo === 'posty') {"), app.indexOf('function mxJardinErrorHTML'));
-  t(/class="mx-hero-btn" onclick="openLightbox\('[^']+', 0\)"/.test(postyBranch), '3-1: el hero es botón que abre el visual con openLightbox (visor puro, 2 args)');
+  t(/class="mx-hero-btn" onclick="openLightbox\('[^']+', 0\)"/.test(app), '3-1 (LOTE JARDÍN): la etapa actual del mosaico es botón que abre el visual con openLightbox (visor puro, 2 args)');
   t(/function openLightbox\(/.test(app), '3-1: openLightbox existe (visor ya vigente, sin funciones nuevas)');
   t(/mx-jardin-vivo/.test(app) && /mx-slowzoom/.test(css), '3-1 (LOTE 15): el jardín vivo ya es real — animación CSS sobre renders aprobados, no mock');
 }
@@ -199,9 +199,9 @@ function sandbox(extra) {
 
 // ---------- Versiones y censo ----------
 {
-  t(/20261101-v521/.test(srv), 'BUILD v521 en server.js');
-  t(/app\.js\?v=343/.test(idx), 'app.js?v=343 en index');
-  t(/styles\.css\?v=20261064/.test(idx) && /styles\.css\?v=20261064/.test(idxEn), 'styles.css?v=20261064 en ambos índices');
+  t(/20261101-v522/.test(srv), 'BUILD v522 en server.js');
+  t(/app\.js\?v=344/.test(idx), 'app.js?v=344 en index');
+  t(/styles\.css\?v=20261065/.test(idx) && /styles\.css\?v=20261065/.test(idxEn), 'styles.css?v=20261065 en ambos índices');
   t(/20261101-v516/.test(app), 'CHUNK_V v516 (LOTE 15 toca chunk-analisis: carta simple + kit filtrado)');
   const cnt = (re) => (srv.match(re) || []).length;
   t(cnt(/catsMatch/g) === 3 && cnt(/week-redo/g) === 16 && cnt(/first_week/g) === 3 && cnt(/\/aprobar/g) === 16 && cnt(/autofetch/g) === 0, 'censo server 3/16/3/16 autofetch 0');

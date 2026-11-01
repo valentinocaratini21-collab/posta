@@ -100,10 +100,10 @@ check('re-disparo pzFillRelacion', /setTimeout\(\(\) => \{ try \{ pzFillRelacion
 check('re-disparo ttEnhance', /setTimeout\(\(\) => \{ try \{ ttEnhance\(\); \} catch \(e\) \{\} \}, 0\);/.test(app));
 
 console.log('== 8. Bumps ==');
-check('index app.js?v=343', idx.includes('app.js?v=343'));
-check('index styles.css?v=20261064', idx.includes('styles.css?v=20261064'));
-check('en index styles.css?v=20261064', enIdx.includes('styles.css?v=20261064'));
-check('BUILD v521', srv.includes("BUILD_ID = '20261101-v521'"));
+check('index app.js?v=344', idx.includes('app.js?v=344'));
+check('index styles.css?v=20261065', idx.includes('styles.css?v=20261065'));
+check('en index styles.css?v=20261065', enIdx.includes('styles.css?v=20261065'));
+check('BUILD v522', srv.includes("BUILD_ID = '20261101-v522'"));
 check('CHUNK_V v510 (lote 10 cambia chunks)', app.includes("const CHUNK_V = '20261101-v516'"));
 check('sin expandArtBrief tocado', !/expandArtBrief/.test(app.split('LOTE VELOCIDAD')[0].slice(-3000)) || true);
 

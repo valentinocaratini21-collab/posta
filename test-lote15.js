@@ -23,7 +23,7 @@ t(app.includes(`gzT('El jardín de Posty', "Posty's garden")`), 'jardín: títul
 t(!app.includes(`<h1>${'${'}gzT('Mi jardín', 'My garden')}</h1><p>`), 'jardín: título viejo fuera del header');
 t(app.includes('mx-jardin-vivo') && app.includes('mx-orb-a') && app.includes('mx-orb-b') && css.includes('mx-slowzoom'), 'jardín vivo: contenedor + orbes + zoom lento');
 t(app.includes('mx-posty-live') && app.includes('Posty está acá') && app.includes('Posty is here'), 'jardín vivo: Posty presente + etiqueta');
-t(app.includes('nvNum <= 2') && app.includes('mx-brote'), 'jardín: brote grande en Nv<=2 (nunca solo tierra)');
+t(app.includes('mx-hero-mosaico') && app.includes('mx-etapa lock') && app.includes('mx-etapa-aca'), 'jardín (LOTE JARDÍN): hero mosaico completo — futuras oscuras con candado, actual marcada (nunca solo tierra)');
 t(app.includes('mx-jardin-sentido') && app.includes('Crece con tus semanas publicadas') && app.includes('Grows with your published weeks'), 'jardín: sentido junto al visual');
 t(app.includes('function mxPremioCercaHTML') && app.includes('mxPremioCercaHTML(nvP)') && app.includes('Próximo premio') && app.includes('en el Nivel'), 'premio cerca junto al hero, en palabras');
 const vistas = bodyOf(app, 'function mxVistasUnAgenteHTML', 'function mxJardinHTML');
@@ -37,8 +37,8 @@ t(app.includes('tienePost50') && app.includes('post50.zonas'), 'mapa: con zonas 
 t(css.includes('.mx-zona.lock{filter:grayscale(1)'), 'mapa: silueta CSS para lo bloqueado');
 const jardinFn = bodyOf(app, 'function mxJardinHTML', 'function mxJardinErrorHTML');
 t(!jardinFn.includes('mxBarra('), 'jardín: sin barras dentro (la barrita vive solo en la tira)');
-t(app.includes('mx-tira-thumb') && app.includes('mx-tira-brote') && app.includes('nvTira <= 2'), 'tira: brote en Nv<=2');
-t(cnt(app, 'MX_BROTE_SVG') >= 3, 'brote: mismo glifo en hero y tira (const + 2 usos)');
+t(app.includes('mx-tira-thumb') && app.includes('jardin-bambu.webp') && app.includes('nvTira < 6'), 'tira (LOTE JARDÍN): bambusal completo en chico, candadito si Nv<6 (brote SUPERSEDED)');
+t(app.includes('const MX_BROTE_SVG'), 'brote (LOTE JARDÍN): el glifo queda definido pero sin usos — hero mosaico y tira bambusal lo reemplazan');
 
 // ---- 1+5 · Home pulida / pulido fino ----
 t(css.includes('.hf-grid .hf-tile{border-radius:10px'), 'home: tiles con radio del mock');
@@ -108,7 +108,7 @@ t(app.includes('M3 11.5 12 3l9 8.5') && app.includes('M4 20V11M10 20V4'), 'ícon
 // ---- Hero Lote 14 intacto + versiones + censo + M78 ----
 t(idx.includes('Mi feed queda a medias y no me trae clientes'), 'hero Lote 14 ES intacto');
 t(idxEn.includes('My feed is half-done and brings me no customers'), 'hero Lote 14 EN intacto');
-t(idx.includes('app.js?v=343') && idx.includes('styles.css?v=20261064') && idxEn.includes('styles.css?v=20261064'), 'versiones: bumps ?v= aplicados');
+t(idx.includes('app.js?v=344') && idx.includes('styles.css?v=20261065') && idxEn.includes('styles.css?v=20261065'), 'versiones: bumps ?v= aplicados');
 t(app.includes("const CHUNK_V = '20261101-v516'"), 'versiones: CHUNK_V v516 (chunk-analisis cache-busteado)');
 t(!idxEn.includes('app.js?v='), 'versiones: EN no carga app.js (sin bump fantasma)');
 const censo = (s, sub) => (s.match(new RegExp(sub.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
@@ -120,7 +120,7 @@ t(app.includes('const MX_BROTE_SVG'), 'M78: MX_BROTE_SVG definido');
 const srvBase = fs.readFileSync(path.join(__dirname, '..', 'work-base', 'server.js'), 'utf8');
 const normSrv = (s) => s.split('\n').filter((l) => !l.includes('const BUILD_ID =')).join('\n');
 t(normSrv(srv) === normSrv(srvBase), 'server.js: solo cambia el BUILD_ID (resto idéntico)');
-t(srv.includes("const BUILD_ID = '20261101-v521'"), 'server.js: BUILD_ID v521 para verificar el deploy');
+t(srv.includes("const BUILD_ID = '20261101-v522'"), 'server.js: BUILD_ID v521 para verificar el deploy');
 
 console.log(`test-lote15: ${ok} ok / ${bad} fallas`);
 process.exit(bad ? 1 : 0);

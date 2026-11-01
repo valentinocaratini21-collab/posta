@@ -155,7 +155,7 @@ async function waitBoot(tries = 60) {
   try {
     ok(await waitBoot(), 'server booteó');
     const v = await (await fetch(`${BASE}/api/version`)).json();
-    ok(v.build === '20261101-v521', `BUILD_ID v521 — vino ${v.build}`);
+    ok(v.build === '20261101-v522', `BUILD_ID v521 — vino ${v.build}`);
     const js = await (await fetch(`${BASE}/app.js`)).text();
     ok(js.includes('hfOpenActionsSheet') && js.includes('hfChipText') && js.includes('hf-fall'), 'app.js servido trae la suma 2');
     const cssTxt = await (await fetch(`${BASE}/styles.css`)).text();
