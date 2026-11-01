@@ -3987,8 +3987,7 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-like-in:active{transform:scale(.9)}
 /* (LOTE 13 · corazón y fecha no se tocan) La franja inferior de la tile es flex: chapita a la izquierda, corazón a la derecha, gap fijo 8px. La chapita recorta con puntos suspensivos antes de tocar el corazón; el corazón mantiene 34×34. */
 .hf-strip{position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;align-items:flex-end;gap:8px;padding:6px}
-.hf-strip .hf-chip{position:static;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
-.hf-strip .hf-like-in{position:static;flex:0 0 auto}
+.hf-strip .hf-chip{position:static;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:clip}
 /* Ítem 4 — chat fijo abajo como panel compacto, no como pantalla:
    sin velo oscuro, sin bloqueo de scroll; el feed queda visible y
    tocable por encima del panel. */
@@ -4127,11 +4126,14 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .mx-tira-brote-grande i{position:absolute;top:0;right:3px;font-style:normal;color:#FEC14D;font-size:13px;line-height:1}
 .hf-strip .hf-chip{gap:3px}
 .hf-strip .hf-chip-ico{flex:0 1 auto;min-width:0;overflow:hidden;display:inline-flex;line-height:0}
-.hf-strip .hf-chip-day{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hf-strip .hf-chip-day{flex:0 0 auto;overflow:visible;text-overflow:clip;white-space:nowrap}
 .hf-strip .hf-chip-hm{flex:0 0 auto;white-space:nowrap}
 .hf-tile-under{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;height:100%;padding:10px;font-size:12px;font-weight:700;color:#0A1E33;text-align:center;line-height:1.35;background:linear-gradient(140deg,#eaf6fd,#fdf3d7);box-sizing:border-box}
 .hf-tile-under>span{display:block}
-.hf-strip .hf-like-in{background:#fff;border-color:var(--line);color:#0A1E33;box-shadow:0 1px 6px rgba(10,30,51,.25)}
+/* (LOTE CORAZÓN · el corazón sale de la fila de la chapita y flota arriba a la derecha de la foto; la fila inferior queda 100% para día+hora) */
+.hf-tile > .hf-like-in{position:absolute;top:6px;right:6px;bottom:auto;z-index:5;background:#fff;border-color:var(--line);color:#0A1E33;box-shadow:0 1px 6px rgba(10,30,51,.25)}
+/* (LOTE CORAZÓN · choque real: el glifo pin/reel/carrusel vive arriba a la derecha (20px, top:6px); con glifo, el corazón baja lo mínimo para no taparlo; el glifo no se mueve) */
+.hf-tile.hf-has-glyph > .hf-like-in{top:32px}
 
 /* ---------- LOTE 17 · vista de aprobación + tira ---------- */
 /* Aceptar único como acción principal: ancho completo, sin recorte. */
@@ -4182,7 +4184,7 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 /* (LOTE FEED · nada se pierde en silencio) Marca de archivado en la
    grilla: chip en la franja + borde propio. La foto no se apaga. */
 .hf-archived-tile{outline:1.5px dashed rgba(10,30,51,.35);outline-offset:-1.5px}
-.hf-arch-chip{display:inline-flex;align-items:center;background:rgba(10,30,51,.55);color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700}
+.hf-arch-chip{display:inline-flex;align-items:center;background:rgba(10,30,51,.55);color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* (LOTE FEED · botones en vidrio de verdad) Causa del blanco opaco:
    en modo oscuro el contenedor .hf-pacts tenía fondo #fff (Lote 13)
    y el bloque glass no lo anulaba: vidrio sobre blanco = blanco.

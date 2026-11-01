@@ -47,9 +47,9 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v517) ----------
-t(srv.includes("const BUILD_ID = '20261101-v526'"), 'BUILD v522 en server.js');
-t(idx.includes('app.js?v=348') && idx.includes('styles.css?v=20261068'), 'index: app 339 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261068') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v528'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=349') && idx.includes('styles.css?v=20261069'), 'index: app 339 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261069') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
@@ -135,8 +135,8 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
 
 // ---------- I4: corazones idénticos ----------
 {
-  t(css.includes('.hf-strip .hf-like-in{background:#fff'), 'I4: corazón del strip con fondo opaco blanco');
-  t(css.includes('.hf-strip .hf-like-in{') && css.includes('box-shadow:0 1px 6px'), 'I4: mismo contenedor con sombra sutil');
+  t(css.includes('.hf-tile > .hf-like-in{') && css.includes('background:#fff'), 'I4: corazón de la tile con fondo opaco blanco (LOTE CORAZÓN: arriba a la derecha)');
+  t(css.includes('.hf-tile > .hf-like-in{') && css.includes('box-shadow:0 1px 6px'), 'I4: mismo contenedor con sombra sutil (LOTE CORAZÓN)');
   t(css.includes('.hf-like{') && app.includes("pzIc('heart', 20)"), 'I4: tamaño 34×34 e ícono intactos');
 }
 

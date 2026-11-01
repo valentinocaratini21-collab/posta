@@ -35,25 +35,25 @@ const stripChip = ruleBody(css, '.hf-strip .hf-chip{');
 t(stripChip.includes('position:static'), 'chip en strip estática (no absoluta)');
 t(stripChip.includes('min-width:0'), 'chip min-width 0');
 t(stripChip.includes('overflow:hidden'), 'chip overflow hidden');
-t(stripChip.includes('text-overflow:ellipsis'), 'chip ellipsis');
+t(stripChip.includes('text-overflow:clip'), 'chip clip, no ellipsis (LOTE CORAZÓN: el día se lee entero)');
 const stripLike = ruleBody(css, '.hf-strip .hf-like-in{');
-t(stripLike.includes('position:static'), 'corazón en strip estático');
-t(stripLike.includes('flex:0 0 auto'), 'corazón flex none (no se achica)');
+t(!css.includes('.hf-strip .hf-like-in'), 'sin regla corazón-en-franja (LOTE CORAZÓN: el corazón salió de la fila)');
+t(app.includes('${glyph}${despChip}<button type="button" class="hf-like hf-like-in"'), 'corazón hijo directo de la tile, arriba a la derecha (LOTE CORAZÓN)');
 const likeBase = ruleBody(css, '.hf-like{');
 t(likeBase.includes('width:34px') && likeBase.includes('height:34px'), 'corazón 34×34 usable');
 
 // 2. La tile emite chip + corazón DENTRO del strip, en ese orden; guards intactos.
-t(app.includes('<span class="hf-strip">${chip}${archChip}<button type="button" class="hf-like hf-like-in"'),
-  'tile: chip + corazón dentro de .hf-strip, chip primero');
+t(app.includes('<span class="hf-strip">${chip}${archChip}</span>${justChip}'),
+  'tile: franja sin corazón, chip primero (LOTE CORAZÓN)');
 t(app.includes('data-hf-like'), 'corazón conserva data-hf-like');
 t(app.includes("[data-hf-like]"), 'guards data-hf-like presentes');
 t(!app.includes('class="hf-cell-actions"'), 'sin fila abajo (no vuelve la fila del Lote 10)');
 
 // 3. Geometría con números: tile mínima 390pt, 3 cols, gap 2px.
 const tileW = Math.floor((390 - 2 * 2) / 3); // 128
-const chipAvail = tileW - 12 - 34 - 8;       // padding 6+6, corazón 34, gap 8
+const chipAvail = tileW - 12;                 // LOTE CORAZÓN: padding 6+6, sin corazón ni gap en la fila
 t(tileW === 128, 'tile mínima 128px');
-t(chipAvail === 74 && chipAvail > 0, 'chip dispone 74px antes de recortar (distancia mínima = gap 8 > 0)');
+t(chipAvail === 116 && chipAvail > 0, 'chip dispone 116px sin recortar (LOTE CORAZÓN: fila entera para la chapita)');
 
 // 4. Tile sin imagen: algo real, nunca hueco blanco.
 t(app.includes('hf-tile-ph-txt'), 'placeholder con texto existe');
@@ -111,10 +111,10 @@ for (const fn of ['homeTileHTML', 'mxTiraHTML', 'mxHeroJardin', 'mxNvNum', 'pzIc
 t((app.match(/^const esc = /gm) || []).length === 1, 'M78 definida 1× nivel superior: esc');
 
 // 12. Pines de versión.
-t(srv.includes('20261101-v526'), 'BUILD v522');
-t(idx.includes('app.js?v=348'), 'index app.js?v=348');
-t(idx.includes('styles.css?v=20261068'), 'index styles.css?v=20261068');
-t(idxEn.includes('styles.css?v=20261068'), 'en/index styles.css?v=20261068');
+t(srv.includes('20261101-v528'), 'BUILD v522');
+t(idx.includes('app.js?v=349'), 'index app.js?v=349');
+t(idx.includes('styles.css?v=20261069'), 'index styles.css?v=20261069');
+t(idxEn.includes('styles.css?v=20261069'), 'en/index styles.css?v=20261069');
 t(!idxEn.includes('app.js?v='), 'en/index sin app.js (como siempre)');
 
 console.log(`test-lote13: ${ok} ok, ${bad} fallos`);

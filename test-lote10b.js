@@ -199,9 +199,9 @@ function sandbox(extra) {
 
 // ---------- Versiones y censo ----------
 {
-  t(/20261101-v526/.test(srv), 'BUILD v522 en server.js');
-  t(/app\.js\?v=348/.test(idx), 'app.js?v=348 en index');
-  t(/styles\.css\?v=20261068/.test(idx) && /styles\.css\?v=20261068/.test(idxEn), 'styles.css?v=20261068 en ambos índices');
+  t(/20261101-v528/.test(srv), 'BUILD v522 en server.js');
+  t(/app\.js\?v=349/.test(idx), 'app.js?v=349 en index');
+  t(/styles\.css\?v=20261069/.test(idx) && /styles\.css\?v=20261069/.test(idxEn), 'styles.css?v=20261069 en ambos índices');
   t(/20261101-v523/.test(app), 'CHUNK_V v523 (LOTE IMPULSAR toca chunk-analisis: tarjeta mejor-posteo)');
   const cnt = (re) => (srv.match(re) || []).length;
   t(cnt(/catsMatch/g) === 3 && cnt(/week-redo/g) === 16 && cnt(/first_week/g) === 3 && cnt(/\/aprobar/g) === 16 && cnt(/autofetch/g) === 0, 'censo server 3/16/3/16 autofetch 0');

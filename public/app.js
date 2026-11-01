@@ -10916,12 +10916,12 @@ function bindScfMinis(root) {
       if (t) clearTimeout(t); // si se fue antes de los 130 ms, no abre
       // El CIERRE al salir lo maneja el rastreador geométrico global.
     });
-    // (LOTE 15 · tiles web) Sobre la franja (chapita + corazón) el pop
+    // (LOTE 15 · tiles web + LOTE CORAZÓN) Sobre la franja (chapita) y el corazón (arriba a la derecha) el pop
     // no se arma ni queda abierto: al bajar al corazón la vista previa
     // se disuelve para que el corazón quede clickeable. El pop fijado
     // explícitamente no se toca.
     w.addEventListener('mousemove', (e) => {
-      if (e.target && e.target.closest && e.target.closest('.hf-strip')) {
+      if (e.target && e.target.closest && e.target.closest('.hf-strip, [data-hf-like]')) {
         if (t) { clearTimeout(t); t = null; }
         if (SCF_POP && SCF_POP.wrap === w && !SCF_PINNED) scfClosePop();
       }
@@ -17493,10 +17493,9 @@ function homeTileHTML(t, i) {
   const chipTxt = (p.status === 'draft' || p.status === 'scheduled')
       ? (hfWhenChip(p) || (p.status === 'draft' ? hfPlanChip(t.day) : ''))
       : '';
-  // (LOTE 16 · la hora nunca se corta) La chapita recorta PRIMERO el
-  // mes y la hora va en un tramo que no se achica: el ellipsis solo
-  // puede comerse el día, jamás la hora. El gap fijo con el corazón
-  // del Lote 13 sigue intacto.
+  // (LOTE 16 · la hora nunca se corta + LOTE CORAZÓN: el día tampoco)
+  // La chapita ya no recorta nada: el corazón salió de la fila, el día
+  // va entero (flex-none, sin ellipsis) y la hora va en su tramo fijo.
   const chipParts = hfTileChipParts(chipTxt, phEn);
   const chip = chipTxt ? (chipParts
     ? `<span class="hf-chip"><span class="hf-chip-ico">${pzIc('clock', 12)}</span><span class="hf-chip-day">${esc(chipParts.day)}</span><span class="hf-chip-hm"> · ${esc(chipParts.hm)}</span></span>`
@@ -17507,17 +17506,17 @@ function homeTileHTML(t, i) {
   // cambio» (hfAskChangeBtnHTML), que abre el chat ÚNICO con el posteo
   // anclado. Tocar una tile abre siempre el detalle.
   // (LOTE 12 · corrección de Valentino 31/10: el corazón vive
-  // adentro de la foto, ABAJO A LA DERECHA, a la derecha de la
-  // chapita día+hora (chapita abajo a la izquierda, corazón abajo a
-  // la derecha, misma franja inferior). Reemplaza la esquina superior
-  // izquierda del Lote 11.
-  // (LOTE 13 · corazón y fecha no se tocan) La franja inferior es .hf-strip flex: chapita a la izquierda, corazón a la derecha, gap fijo 8px; la chapita recorta con puntos suspensivos antes de tocar el corazón; el corazón mantiene 34×34. Es la ÚNICA excepción a «ningún botón
+  // adentro de la foto, ARRIBA A LA DERECHA, fuera de la franja
+  // (LOTE CORAZÓN 1/11: la chapita abajo ocupa toda la fila y el día
+  // ya no colapsa a una letra. Con glifo arriba a la derecha, el
+  // corazón baja a top:32px, clase hf-has-glyph.)
+  // (LOTE 13 · corazón y fecha no se tocan) (LOTE CORAZÓN · 1/11) La franja inferior es .hf-strip flex: chapita a lo ancho; el día nunca lleva ellipsis y el corazón mantiene 34×34 arriba a la derecha. Es la ÚNICA excepción a «ningún botón
   // flotante tapa la imagen»: los captions siguen sin pintarse
   // sobre la imagen.)
   // REGLA DURA DE TILES (misma corrección — «los captions enormes en
   // el medio»): ninguna tile pinta texto sobre la imagen. homeTileHTML
   // no renderiza ningún caption: solo media, chapita chica abajo a la
-  // izquierda, corazón abajo a la derecha, glifo arriba a la derecha
+  // izquierda, corazón arriba a la derecha, glifo arriba a la derecha
   // y nada más. Los captions
   // viven DEBAJO de la media, en tamaño normal, solo en el detalle
   // (.hf-d-cap 14px), el visor (.lb-cap 14px) y la tarjeta del cofre
@@ -17541,7 +17540,7 @@ function homeTileHTML(t, i) {
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}<button type="button" class="hf-like hf-like-in" data-hf-like aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></span>${justChip}${glyph}${despChip}</span></span>`;
+  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}</span>${justChip}${glyph}${despChip}<button type="button" class="hf-like hf-like-in" data-hf-like aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -20436,7 +20435,7 @@ function hfDetailBind(root) {
   }, true);
 }
 // (LOTE 10 · ítem 1, movido en LOTE 11) Corazón visible en cada tile,
-// ADENTRO de la foto (abajo a la derecha, a la derecha de la chapita día+hora).
+// ADENTRO de la foto (arriba a la derecha, fuera de la fila de la chapita día+hora; LOTE CORAZÓN).
 // Vive DENTRO de .hf-tile, así que el doble toque y la capa lo verían
 // como toque en la tile: los guards en hfDetailBind y bindScfMinis
 // dejan pasar el click hasta acá. La acción es EXACTAMENTE la del
