@@ -11364,79 +11364,108 @@ async function maybePhotoWeekReminder(data) {
   } catch (e) {}
 }
 
-// (LOTE 16 · placeholder que rota) El campo del chat rota entre 4
-// sugerencias en minúscula, solo con el campo vacío y sin interrumpir:
-// cambia al abrir la vista (avanza una) y cada ~8 s en idle. Nunca
-// mientras escribe ni con el campo enfocado (el tick del intervalo no
-// toca el campo enfocado). Lista por idioma según ME.lang en cada tick.
-// El intervalo se limpia al reabrir para no duplicar ticks.
+// (LOTE CHATTEXTO · rotación unificada) Todos los campos de chat rotan
+// entre las mismas 4 sugerencias en minúscula: #chatInput (principal,
+// fijo de Inicio y hoja — chatCardHTML repite ese id) y .hf-ask-input
+// (mini-chat de aprobación). Un solo intervalo; cada campo rota con su
+// propio índice (dataset.phI), así ninguno queda fijo por ser «el
+// segundo». Guarda única: campo con texto no rota (nunca pisar lo que
+// escribe el usuario). El foco NO bloquea: la hoja abre con el campo
+// activo (v521) y con la guarda vieja la rotación quedaba bloqueada
+// para siempre en el celular. El intervalo consulta el DOM en cada
+// tick y un observador suma los campos nuevos: re-renders y abrir/
+// cerrar la hoja no matan la rotación, y al abrirla arranca de nuevo.
+// Con prefers-reduced-motion la frase queda fija en la primera. Lista
+// por idioma según ME.lang en cada tick.
 const PZ_CHAT_PH = {
   es: ['escribile a posty…', 'preguntale por tu semana…', 'pedile una idea para hoy…', 'contale qué vendés…'],
   en: ['write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…']
 };
-let PZ_CHAT_PH_I = 0;
-let PZ_CHAT_PH_T = null;
 function pzChatPhList() {
   try { return PZ_CHAT_PH[ME.lang === 'en' ? 'en' : 'es']; } catch (e) { return PZ_CHAT_PH.es; }
 }
+let PZ_PH_T = null;
+let PZ_PH_OBS = false;
+const PZ_PH_KNOWN = (typeof WeakSet !== 'undefined') ? new WeakSet() : null;
+const PZ_PH_SEEN = [];
+function pzPhEls(sel) {
+  try {
+    if (typeof document === 'undefined' || !document.querySelectorAll) return [];
+    const els = [];
+    document.querySelectorAll(sel).forEach(el => els.push(el));
+    return els;
+  } catch (e) { return []; }
+}
+function pzPhReduced() {
+  try {
+    return (typeof window !== 'undefined' && window.matchMedia)
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
+  } catch (e) { return false; }
+}
+function pzPhAdvanceOne(el, list) {
+  try {
+    if (!el || el.value) return false;
+    if (pzPhReduced()) { el.placeholder = list[0]; return false; }
+    let i = parseInt((el.dataset && el.dataset.phI) || '0', 10);
+    if (isNaN(i)) i = 0;
+    i = (i + 1) % list.length;
+    if (el.dataset) el.dataset.phI = String(i);
+    el.placeholder = list[i];
+    return true;
+  } catch (e) { return false; }
+}
+function pzPhKnown(el) {
+  try {
+    if (PZ_PH_KNOWN) return PZ_PH_KNOWN.has(el);
+    return PZ_PH_SEEN.indexOf(el) >= 0;
+  } catch (e) { return false; }
+}
+function pzPhMark(el) {
+  try {
+    if (PZ_PH_KNOWN) PZ_PH_KNOWN.add(el);
+    else if (PZ_PH_SEEN.indexOf(el) < 0) PZ_PH_SEEN.push(el);
+  } catch (e) {}
+}
 function pzChatPhNext() {
   try {
-    const inp = document.getElementById('chatInput');
-    if (!inp || inp.value) return;
     const list = pzChatPhList();
-    PZ_CHAT_PH_I = (PZ_CHAT_PH_I + 1) % list.length;
-    inp.placeholder = list[PZ_CHAT_PH_I];
+    pzPhEls('#chatInput').forEach(el => pzPhAdvanceOne(el, list));
   } catch (e) {}
 }
-function pzChatPhStart() {
-  try {
-    const inp = document.getElementById('chatInput');
-    if (!inp) return;
-    if (PZ_CHAT_PH_T) { try { clearInterval(PZ_CHAT_PH_T); } catch (e) {} PZ_CHAT_PH_T = null; }
-    const list = pzChatPhList();
-    PZ_CHAT_PH_I = (PZ_CHAT_PH_I + 1) % list.length;
-    inp.placeholder = list[PZ_CHAT_PH_I];
-    PZ_CHAT_PH_T = setInterval(() => {
-      try {
-        const el = document.getElementById('chatInput');
-        if (!el || el.value || document.activeElement === el) return;
-        pzChatPhNext();
-      } catch (e) {}
-    }, 8000);
-  } catch (e) {}
-}
-
-// (LOTE 17) La misma rotación para el mini-chat de la vista de
-// aprobación (.hf-ask-input): el Lote 16 la dejó solo en el chat
-// principal y este input seguía con el placeholder fijo viejo (con
-// «Posty» en mayúscula). Misma lista, mismo ritmo, mismas guardas;
-// índice propio para no acoplar los dos campos.
-let PZ_ASK_PH_I = 0;
-let PZ_ASK_PH_T = null;
 function pzAskPhNext() {
   try {
-    const inp = document.querySelector('.hf-ask-input');
-    if (!inp || inp.value) return;
     const list = pzChatPhList();
-    PZ_ASK_PH_I = (PZ_ASK_PH_I + 1) % list.length;
-    inp.placeholder = list[PZ_ASK_PH_I];
+    pzPhEls('.hf-ask-input').forEach(el => pzPhAdvanceOne(el, list));
   } catch (e) {}
 }
-function pzAskPhStart() {
+function pzPhTick() {
+  try { pzChatPhNext(); pzAskPhNext(); } catch (e) {}
+}
+function pzPhInstallObs() {
   try {
-    const inp = document.querySelector('.hf-ask-input');
-    if (!inp) return;
-    if (PZ_ASK_PH_T) { try { clearInterval(PZ_ASK_PH_T); } catch (e) {} PZ_ASK_PH_T = null; }
-    pzAskPhNext();
-    PZ_ASK_PH_T = setInterval(() => {
-      try {
-        const el = document.querySelector('.hf-ask-input');
-        if (!el || el.value || document.activeElement === el) return;
-        pzAskPhNext();
-      } catch (e) {}
-    }, 8000);
+    if (PZ_PH_OBS) return;
+    if (typeof MutationObserver === 'undefined' || typeof document === 'undefined' || !document.body) return;
+    PZ_PH_OBS = true;
+    new MutationObserver(() => { try { pzPhEnsure(); } catch (e) {} })
+      .observe(document.body, { childList: true, subtree: true });
   } catch (e) {}
 }
+function pzPhEnsure() {
+  try {
+    const list = pzChatPhList();
+    pzPhEls('#chatInput').concat(pzPhEls('.hf-ask-input')).forEach(el => {
+      if (!pzPhKnown(el)) { pzPhMark(el); pzPhAdvanceOne(el, list); }
+    });
+    pzPhInstallObs();
+    if (!PZ_PH_T) PZ_PH_T = setInterval(pzPhTick, 8000);
+  } catch (e) {}
+}
+function pzPhStart() { try { pzPhEnsure(); } catch (e) {} }
+function pzChatPhStart() { try { pzPhStart(); } catch (e) {} }
+function pzAskPhStart() { try { pzPhStart(); } catch (e) {} }
+// (LOTE CHATTEXTO) app.js carga al final de <body>: document.body ya
+// existe; instalar el observador en carga (no crea intervalo todavía).
+try { pzPhInstallObs(); } catch (e) {}
 
 async function bindChatView() {
   bindChat();
@@ -15335,53 +15364,6 @@ function bootSplashOff() {
 }
 let PZ_VER_WEB_ONCE = false; // (v469) click en el logo de auth: ver la landing UNA vez en PWA
 let RENDER_SEQ = 0;
-// PZ-PLACEHOLDER-ROTATIVO:START
-// Placeholders rotativos del campo del chat (aprobado Valentino 30/10).
-// Solo placeholder: nunca escribe en el campo, nunca envía nada solo.
-// Rota cada 4 s; pausa con foco o al escribir; reanuda vacío y sin foco;
-// con prefers-reduced-motion queda fija la primera frase.
-const PZ_CHAT_PLACEHOLDERS = {
-  es: ['contame qué tenés para vender hoy', 'pedime una idea para esta semana', 'mandame una foto de tu producto', '¿tenés promo esta semana?', '¿qué querés que postee mañana?', 'mantené el micrófono y hablame', '¿cómo viene tu semana?', 'contame qué querés cambiar', 'contame qué vendiste hoy', '¿frenamos esta semana?', '¿qué idea tenés vos?', 'mandame tu promo en audio', 'contame de tu negocio'],
-  en: ["tell me what you've got to sell today", 'ask me for an idea for this week', 'send me a photo of your product', 'got a promo this week?', 'what do you want me to post tomorrow?', 'hold the mic and talk to me', "how's your week going?", 'tell me what you want to change', 'tell me what you sold today', 'should we pause this week?', "what's your idea?", 'send me your promo as audio', 'tell me about your business'],
-};
-let pzPhTimer = null;
-let pzPhInput = null;
-function pzChatLang() {
-  try { return (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'en' : 'es'; } catch (e) { return 'es'; }
-}
-function pzRotarPlaceholderChat() {
-  const inp = (typeof document !== 'undefined' && document.getElementById)
-    ? document.getElementById('chatInput') : null;
-  if (!inp) return;
-  if (inp === pzPhInput && pzPhTimer) return;
-  if (pzPhTimer) { clearInterval(pzPhTimer); pzPhTimer = null; }
-  pzPhInput = inp;
-  let idx = 0;
-  let lastLang = pzChatLang();
-  const list = () => PZ_CHAT_PLACEHOLDERS[pzChatLang()];
-  const setPh = () => { inp.placeholder = list()[idx]; };
-  const reduced = (typeof window !== 'undefined' && window.matchMedia)
-    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
-  setPh();
-  if (reduced) return;
-  pzPhTimer = setInterval(() => {
-    if (inp !== pzPhInput) return;
-    const lang = pzChatLang();
-    if (lang !== lastLang) { lastLang = lang; idx = 0; setPh(); return; }
-    if (typeof document !== 'undefined' && document.activeElement === inp) return;
-    if (inp.value && inp.value.trim() !== '') return;
-    idx = (idx + 1) % list().length;
-    setPh();
-  }, 4000);
-}
-try { pzRotarPlaceholderChat(); } catch (e) {}
-try {
-  if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && document.body) {
-    new MutationObserver(() => { try { pzRotarPlaceholderChat(); } catch (e) {} })
-      .observe(document.body, { childList: true, subtree: true });
-  }
-} catch (e) {}
-// PZ-PLACEHOLDER-ROTATIVO:END
 
 /* ---------- LOTE VELOCIDAD: esqueleto instantáneo + precarga ---------- */
 // La pantalla cambia EN EL ACTO al tocar: en el shell de la app (bbShell,
@@ -19059,6 +19041,8 @@ function mzOpenSheet(focus) {
     const ci = document.getElementById('chatInput');
     if (ci) setTimeout(() => { try { ci.focus({ preventScroll: true }); } catch (e) { try { ci.focus(); } catch (e2) {} } }, 60);
   }
+  // (LOTE CHATTEXTO) Al abrir la hoja, la rotación arranca de nuevo.
+  try { pzPhStart(); } catch (e) {}
 }
 function mzCloseSheet() {
   const sh = $('#mzSheet');
@@ -21450,6 +21434,10 @@ async function doLogout() {
   render();
 }
 function bindApp(tab) {
+  // (LOTE CHATTEXTO) Cada render asegura la rotación del placeholder
+  // (cubre Inicio/Schedule, que no pasan por bindChatView): solo los
+  // campos nuevos avanzan; los conocidos no se re-avanzan.
+  try { pzPhStart(); } catch (e) {}
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
   if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
   if (tab === 'analisis' && typeof bindAnalisis === 'function') bindAnalisis(); // 🧠 la carta se pinta al cargar el chunk

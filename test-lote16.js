@@ -47,8 +47,8 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v517) ----------
-t(srv.includes("const BUILD_ID = '20261101-v528'"), 'BUILD v522 en server.js');
-t(idx.includes('app.js?v=349') && idx.includes('styles.css?v=20261069'), 'index: app 339 + styles 20261064');
+t(srv.includes("const BUILD_ID = '20261101-v529'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=350') && idx.includes('styles.css?v=20261069'), 'index: app 339 + styles 20261064');
 t(idxEn.includes('styles.css?v=20261069') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
@@ -146,11 +146,11 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(app.includes("en: ['write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…']"), 'C1: lista EN espejo');
   t(app.includes('function pzChatPhNext') && app.includes('function pzChatPhStart') && app.includes('function pzChatPhList'), 'C1: funciones de rotación existen');
   t(app.includes('}, 8000);'), 'C1: intervalo ~8 s');
-  const start = sliceFn(app, 'function pzChatPhStart', 'async function bindChatView');
-  t(start.includes('document.activeElement === el'), 'C1: tick no toca el campo enfocado');
-  t(start.includes('clearInterval(PZ_CHAT_PH_T)'), 'C1: reabrir limpia el intervalo viejo');
-  const next = sliceFn(app, 'function pzChatPhNext', 'function pzChatPhStart');
-  t(next.includes('inp.value'), 'C1: no rota con el campo con texto');
+  const rot = sliceFn(app, 'const PZ_CHAT_PH', 'async function bindChatView');
+  t(!rot.includes('activeElement'), 'C1 LOTE CHATTEXTO: el foco ya no bloquea la rotación (la guarda vieja dejaba el placeholder fijo en el celular)');
+  t(app.includes('if (!PZ_PH_T) PZ_PH_T = setInterval(pzPhTick, 8000)'), 'C1 LOTE CHATTEXTO: un solo intervalo reutilizado (reemplaza limpiar/recrear)');
+  const adv = sliceFn(app, 'function pzPhAdvanceOne', 'function pzPhKnown');
+  t(adv.includes('el.value'), 'C1 LOTE CHATTEXTO: guarda de texto en el helper compartido');
   const bind = sliceFn(app, 'async function bindChatView', '// Nudge proactivo');
   t(bind.includes('pzChatPhStart()'), 'C1: arranque al final de bindChatView');
   t(app.includes('placeholder="escribile a posty…"'), 'C1: base del template intacta');
@@ -243,6 +243,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   const sb = sandbox({
     document: {
       getElementById: (id) => (id === 'chatInput' ? input : null),
+      querySelectorAll: (sel) => (sel === '#chatInput' ? [input] : []),
       activeElement: null,
     },
     setInterval: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
@@ -267,7 +268,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   input.value = '';
   sb.document.activeElement = input;
   timers[0].fn();
-  t(input.placeholder === 'pedile una idea para hoy…', 'chat: con el campo enfocado el tick no toca');
+  t(input.placeholder === 'contale qué vendés…', 'chat LOTE CHATTEXTO: con el campo enfocado y vacío el tick SÍ avanza');
   sb.document.activeElement = null;
   sb.pzChatPhStart();
   t(timers.length === 1, 'chat: reabrir no duplica el intervalo');

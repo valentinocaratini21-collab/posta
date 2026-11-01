@@ -58,8 +58,8 @@ check('hook en generateWeekDrafts', srv.includes('bilingualizeWeek(db, uid, bRow
 check('hook tras piloto automático', srv.indexOf('piloto automático:') < srv.indexOf('bilingualizeWeek(db, uid, bRows, bFn)'));
 check('hook solo piezas sin EN previo', srv.includes('bilingual_status IS NULL'));
 check('módulo: sin opt-in no escribe', wb.includes("if (!isBilingualWeekEnabled(db, uid)) return { ok: true, skipped: 'disabled'"));
-check('BUILD v522', srv.includes("BUILD_ID = '20261101-v528'"));
-check('index raíz app.js?v=349; en/index estática sin app.js', idx.includes('app.js?v=349') && !enidx.includes('app.js?v='));
+check('BUILD v522', srv.includes("BUILD_ID = '20261101-v529'"));
+check('index raíz app.js?v=350; en/index estática sin app.js', idx.includes('app.js?v=350') && !enidx.includes('app.js?v='));
 check('styles ?v= 20261064', idx.includes('styles.css?v=20261069') && enidx.includes('styles.css?v=20261069'));
 console.log('== Censo (sin cambios que explicar) ==');
 const c = (s, m) => (s.match(new RegExp(m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;

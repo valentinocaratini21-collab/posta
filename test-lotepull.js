@@ -25,8 +25,8 @@ const sliceFn = (src, from, to) => {
 };
 
 // ---------- Versiones + censo (referencia v523) ----------
-t(srv.includes("const BUILD_ID = '20261101-v528'"), 'BUILD v524 en server.js');
-t(idx.includes('app.js?v=349') && idx.includes('styles.css?v=20261069'), 'index: app 346 + styles 20261067');
+t(srv.includes("const BUILD_ID = '20261101-v529'"), 'BUILD v524 en server.js');
+t(idx.includes('app.js?v=350') && idx.includes('styles.css?v=20261069'), 'index: app 346 + styles 20261067');
 t(idxEn.includes('styles.css?v=20261069') && !idxEn.includes('app.js?v='), 'en/index: styles 20261067, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v523 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');

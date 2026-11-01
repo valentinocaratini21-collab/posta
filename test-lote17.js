@@ -50,8 +50,8 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v518) ----------
-t(srv.includes("const BUILD_ID = '20261101-v528'"), 'BUILD v522 en server.js');
-t(idx.includes('app.js?v=349') && idx.includes('styles.css?v=20261069'), 'index: app 340 + styles 20261064');
+t(srv.includes("const BUILD_ID = '20261101-v529'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=350') && idx.includes('styles.css?v=20261069'), 'index: app 340 + styles 20261064');
 t(idxEn.includes('styles.css?v=20261069') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
@@ -178,10 +178,12 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(app.includes('function pzAskPhNext') && app.includes('function pzAskPhStart'), 'ASK: funciones de rotación existen');
   t(app.includes('placeholder="${enA ? \'write to posty…\' : \'escribile a posty…\'}"'), 'ASK: base en minúscula (sin la P mayúscula vieja)');
   const ask = sliceFn(app, 'function pzAskPhNext', 'async function bindChatView');
-  t(ask.includes("querySelector('.hf-ask-input')"), 'ASK: rota el input de esta vista');
-  t(ask.includes('inp.value') && ask.includes('document.activeElement === el'), 'ASK: guardas (con texto / enfocado no toca)');
-  t(ask.includes('clearInterval(PZ_ASK_PH_T)'), 'ASK: reabrir limpia el intervalo viejo');
-  t(ask.includes('}, 8000);'), 'ASK: intervalo 8 s');
+  t(ask.includes("pzPhEls('.hf-ask-input')"), 'ASK LOTE CHATTEXTO: rota TODOS los inputs de la vista (querySelectorAll, no solo el primero)');
+  t(!ask.includes('activeElement'), 'ASK LOTE CHATTEXTO: el foco ya no bloquea (reversa de la guarda vieja)');
+  t(app.includes('if (!PZ_PH_T) PZ_PH_T = setInterval(pzPhTick, 8000)'), 'ASK LOTE CHATTEXTO: un solo intervalo reutilizado');
+  t(ask.includes('setInterval(pzPhTick, 8000)'), 'ASK LOTE CHATTEXTO: intervalo 8 s único');
+  const advA = sliceFn(app, 'function pzPhAdvanceOne', 'function pzPhKnown');
+  t(advA.includes('el.value'), 'ASK LOTE CHATTEXTO: guarda de texto en el helper compartido');
   const bind = sliceFn(app, 'function bindApprovalPost', '/* ====');
   t(bind.includes('pzAskPhStart()'), 'ASK: arranque al cablear la vista de aprobación');
   t(cnt(app, 'function pzAskPhStart') === 1 && cnt(app, 'function pzAskPhNext') === 1, 'M78: 2/2 funciones nuevas auditadas');
@@ -189,13 +191,13 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
 
 // ---------- ASK funcional: cambia sin escribir ----------
 {
-  const input = { value: '', placeholder: 'escribile a posty…' };
+  const input = { value: '', placeholder: 'escribile a posty…', dataset: {} };
   let timers = [];
   const sb = sandbox({
     document: {
       getElementById: () => null,
       querySelector: (sel) => (sel === '.hf-ask-input' ? input : null),
-      querySelectorAll: () => [],
+      querySelectorAll: (sel) => (sel === '.hf-ask-input' ? [input] : []),
       activeElement: null,
     },
     setInterval: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
@@ -223,7 +225,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   input.value = '';
   sb.document.activeElement = input;
   timers[0].fn();
-  t(input.placeholder === 'pedile una idea para hoy…', 'ASKf: con el campo enfocado el tick no toca');
+  t(input.placeholder === 'contale qué vendés…', 'ASKf LOTE CHATTEXTO: con el campo enfocado y vacío el tick SÍ avanza');
   sb.document.activeElement = null;
   sb.pzAskPhStart();
   t(timers.length === 1 && input.placeholder === 'contale qué vendés…', 'ASKf: reabrir no duplica el intervalo y avanza');

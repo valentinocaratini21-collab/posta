@@ -165,8 +165,8 @@ const cnt = (s, p) => (s.match(new RegExp(p, 'g')) || []).length;
 ok(cnt(SRV, 'catsMatch') === 3 && cnt(SRV, 'week-redo') === 16 && cnt(SRV, 'first_week') === 3 && cnt(SRV, '/aprobar') === 16,
   'censo server 3/16/3/16 intacto');
 ok(cnt(SRV, 'autofetch') === 0, 'censo autofetch 0');
-ok(SRV.includes("const BUILD_ID = '20261101-v528'"), 'BUILD v522');
-ok(IDX.includes('app.js?v=349') && IDX.includes('styles.css?v=20261069'), 'index ?v= app 336 + styles 20261064');
+ok(SRV.includes("const BUILD_ID = '20261101-v529'"), 'BUILD v522');
+ok(IDX.includes('app.js?v=350') && IDX.includes('styles.css?v=20261069'), 'index ?v= app 336 + styles 20261064');
 ok(IDXEN.includes('styles.css?v=20261069'), 'en/index styles 20261064');
 ok(APP.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V v510 (chunk-analisis cache-busteado)');
 
