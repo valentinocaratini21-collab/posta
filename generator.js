@@ -1213,9 +1213,18 @@ function captionPasses(caption, input) {
   // «el cliente elige» (tercera persona con sujeto), «elegí»,
   // «acá te paso», «pasá por acá». Va DESPUÉS del gate de lista
   // anunciada para que el id 520 siga cayendo por su motivo primero.
+  // PENINSULAR-EMOJI (Juli, 2026-11-01 — variante del id 505 real):
+  // el regex viejo exigía [.!?¡¿]\s*elige, así que un emoji o salto
+  // entre el signo y la palabra («¿…? 🎂\nElige entre…») lo cegaba
+  // y el peninsular pasaba limpio. El emoji no es puntuación ni
+  // palabra: se colapsa con lo que haya entre signo y palabra a un
+  // solo espacio ANTES de matchear. Solo toca esta variable local:
+  // «3. 🎂 Elige» también cae (imperativo tras punto), mientras que
+  // «? 🎂 El cliente elige» sigue pasando (hay sujeto antes).
   {
     const sinEmojiInicial = low.replace(/^[^\p{L}\p{N}]+/u, '');
-    if (/(?:^|[.!?¡¿]\s*)elige[\s,;:]/.test(sinEmojiInicial) || /\baqui\s+(te|les|va|van)\b/.test(low)) {
+    const sinEmojiMedio = sinEmojiInicial.replace(/([.!?¡¿])[^\p{L}\p{N}]+/gu, '$1 ');
+    if (/(?:^|[.!?¡¿]\s*)elige[\s,;:]/.test(sinEmojiMedio) || /\baqui\s+(te|les|va|van)\b/.test(low)) {
       return { ok: false, reason: 'peninsular (PENINSULAR): «elige» abriendo oración o «aquí te/les/va/van» — en rioplatense es «elegí» / «acá»' };
     }
   }

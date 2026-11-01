@@ -352,5 +352,34 @@ ok('control: una sola mención del negocio con business "Posty." pasa', () => {
   assert.strictEqual(chk.ok, true, chk.reason);
 });
 
+console.log('== (p) Peninsular con emoji/salto entre signo y palabra (variante del id 505, 2026-11-01) ==');
+ok('505-variante: "¿…? 🎂\\nElige entre…" se rechaza por peninsular', () => {
+  const cap = '¿Qué torta del día te gustaría probar? 🎂\nElige entre nuestras opciones frescas y bien caseras.\nPasá por el local y probá tu favorita.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/peninsular/i.test(chk.reason), chk.reason);
+});
+ok('505-variante en línea: "¿…? 🎂 Elige entre…" se rechaza por peninsular', () => {
+  const cap = '¿Qué torta del día te gustaría probar? 🎂 Elige entre nuestras opciones frescas y bien caseras.\nPasá por el local y probá tu favorita.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/peninsular/i.test(chk.reason), chk.reason);
+});
+ok('control: "? 🎂 El cliente elige…" pasa (tercera persona con sujeto, emoji no inventa inicio)', () => {
+  const cap = '¿Qué blend te gusta más? 🎂\nEl cliente elige su favorito y nosotros lo preparamos en el momento.\nPasá por el local y probá el tuyo.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: "? 🎂 Elegí entre…" pasa (voseo, el emoji no cambia nada)', () => {
+  const cap = '¿Qué torta del día te gustaría probar? 🎂\nElegí entre nuestras opciones frescas y bien caseras.\nPasá por el local y probá tu favorita.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: pasiva "se elige" tras emoji pasa', () => {
+  const cap = '¿Cómo sale tan rico? 🎂\nEl grano se elige a mano cada mañana para que el café salga perfecto.\nPasá por el local y probalo.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
