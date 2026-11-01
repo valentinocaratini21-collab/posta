@@ -231,6 +231,9 @@ async function fetchAuditData(handle, fetchOverride, profOverride) {
   }
   // Seguidos: el embed lo trae como "following_count" o como edge_follow.
   const followingRaw = f(/"following_count":(\d+)/) || f(/"edge_follow":\{"count":(\d+)/);
+  // Verificado: el embed trae "is_verified" en el bloque del perfil
+  // (misma fuente que followers/posts). true/false real; si no viene, null.
+  const verRaw = f(/"is_verified":(true|false)/);
   // (v230) LECTURA PROFUNDA: el link de la bio (external_url del perfil)
   // — la puerta a su tienda/reserva real (bloque bio_link del digest).
   const linkRaw = f(/"external_url":"((?:[^"\\]|\\.){1,300})"/);
@@ -247,6 +250,7 @@ async function fetchAuditData(handle, fetchOverride, profOverride) {
       followers: f(/"followers_count":(\d+)/) ? parseInt(f(/"followers_count":(\d+)/), 10) : null,
       posts_count: postsCountRaw ? parseInt(postsCountRaw, 10) : null,
       following: followingRaw ? parseInt(followingRaw, 10) : null,
+      is_verified: verRaw === 'true' ? true : (verRaw === 'false' ? false : null),
       category: demo.categoryFromText(bio + ' ' + fullName),
       pic,
     },

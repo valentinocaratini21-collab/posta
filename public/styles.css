@@ -1965,7 +1965,7 @@ textarea.in{resize:vertical;min-height:96px}
    de una pieza reutiliza la capa .scf-pop existente (mismo vault). */
 .hf-wrap{max-width:560px;margin:0 auto;padding:6px 0 96px;background:#fff;min-height:70vh}
 .hf-head{padding:2px 16px 0;background:#fff}
-.hf-user{font-size:19px;font-weight:800;letter-spacing:-.2px;margin:2px 0 12px;color:#0a1e33}
+.hf-user{font-size:19px;font-weight:800;letter-spacing:-.2px;margin:2px 0 12px;color:#0a1e33}.hf-verified{display:inline-flex;vertical-align:-3px;margin-left:6px}.hf-verified svg{width:16px;height:16px;display:block}
 .hf-prow{display:flex;align-items:center;gap:18px}
 .hf-ava{flex:none;position:relative}
 /* (v360) Nota de IG sobre la foto y línea gris de categoría pública */

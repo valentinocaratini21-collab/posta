@@ -12651,6 +12651,7 @@ async function homeProfileFromRead(handle, data) {
     followers: num(data.profile.followers),
     posts_count: num(data.profile.posts_count),
     following: num(data.profile.following),
+    is_verified: (data.profile.is_verified === true ? true : (data.profile.is_verified === false ? false : null)),
     highlights: [], // la lectura pública no las expone: jamás inventadas
     recents: posts.map((x, i) => ({
       img: (loc.photos && loc.photos[i]) || null,
@@ -12717,7 +12718,7 @@ function homeProfileKit(uid, prof) {
     bio: kit ? (kit.bio_lines || []).join('\n') : '',
     bio_unread: false,
     link: '',
-    followers: null, posts_count: null, following: null,
+    followers: null, posts_count: null, following: null, is_verified: null,
     highlights: kit && Array.isArray(kit.highlights) ? kit.highlights.map((t) => ({ title: String(t), cover: null })) : [],
     recents: [],
     kit_note: kit ? (kit.note || '') : '',
@@ -26349,7 +26350,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v531';
+const BUILD_ID = '20261101-v532';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

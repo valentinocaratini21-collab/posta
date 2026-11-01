@@ -17669,7 +17669,7 @@ function homeHeadHTML(prof, bizName, opts) {
   // inicioView con pzRachaSemanas); sin racha, nada.
   const rachaHTML = (opts && Number(opts.racha) >= 2) ? `<div class="hf-racha">${pzIc('flame', 14)} ${en ? `${Math.floor(opts.racha)} weeks in a row posting` : `${Math.floor(opts.racha)} semanas seguidas publicando`}</div>` : '';
   return `<div class="hf-head">
-    ${user ? `<div class="hf-user">${esc(user)}${threadsHTML}</div>` : ''}
+    ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
       ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
