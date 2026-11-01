@@ -116,8 +116,10 @@ ok(CH.includes('domingo 20:00') || CH.includes('20:00–22:59'),
 // ---------- 6) Carta Estrategia: simple + primera línea exacta ----------
 ok(CH.includes("anaT('la estrategia para esta semana', 'the strategy for this week')") && CH.includes('ana-ltr-first'),
   '6: primera línea exacta ES/EN con clase ana-ltr-first');
-ok(CH.includes('if (carta) h += `<p class="ana-ltr-first"'),
-  '6: la frase se antepone al cuerpo de la carta');
+ok(CH.includes('if (a) h += `<p class="ana-ltr-first"'),
+  // (LOTE 15 · cambio intencional) La primera línea ya no exige carta
+  // guardada: va en ambos caminos cuando hay análisis.
+  '6b: primera línea en ambos caminos con análisis');
 ok(MOT.includes("'. Sostenerlo y afinarlo es mi trabajo.'") && !MOT.includes('para eso estoy.'),
   '6: festejo sin cola larga (fuerte)');
 ok(MOT.includes("'. Sobre eso construimos.'") && !MOT.includes('no partimos de cero.'),
@@ -157,10 +159,10 @@ const cnt = (s, p) => (s.match(new RegExp(p, 'g')) || []).length;
 ok(cnt(SRV, 'catsMatch') === 3 && cnt(SRV, 'week-redo') === 16 && cnt(SRV, 'first_week') === 3 && cnt(SRV, '/aprobar') === 16,
   'censo server 3/16/3/16 intacto');
 ok(cnt(SRV, 'autofetch') === 0, 'censo autofetch 0');
-ok(SRV.includes("const BUILD_ID = '20261031-v515'"), 'BUILD v514');
-ok(IDX.includes('app.js?v=337') && IDX.includes('styles.css?v=20261058'), 'index ?v= app 336 + styles 20261058');
-ok(IDXEN.includes('styles.css?v=20261058'), 'en/index styles 20261058');
-ok(APP.includes("const CHUNK_V = '20261031-v510'"), 'CHUNK_V v510 (chunk-analisis cache-busteado)');
+ok(SRV.includes("const BUILD_ID = '20261101-v516'"), 'BUILD v514');
+ok(IDX.includes('app.js?v=338') && IDX.includes('styles.css?v=20261059'), 'index ?v= app 336 + styles 20261058');
+ok(IDXEN.includes('styles.css?v=20261059'), 'en/index styles 20261058');
+ok(APP.includes("const CHUNK_V = '20261101-v516'"), 'CHUNK_V v510 (chunk-analisis cache-busteado)');
 
 console.log(`\n== test-lote10: ${okN} ok · ${failN} fallas ==`);
 process.exit(failN ? 1 : 0);

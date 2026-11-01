@@ -80,7 +80,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261058">
+<link rel="stylesheet" href="/styles.css?v=20261059">
 <link rel="stylesheet" href="/gj.css?v=3">
 <script type="application/ld+json">
 {
@@ -368,17 +368,19 @@
 <div id="posty-boot" aria-hidden="true">
   <img src="ai-avatar.png" alt="" width="92" height="92">
   <div class="pb-word">posty<span>.</span></div>
+  <span style="position:absolute;top:20%;left:24%;color:#FEC14D;font-size:22px;animation:pb-twinkle 2s ease-in-out infinite">✦</span><span style="position:absolute;top:28%;right:22%;color:#2793C8;font-size:18px;animation:pb-twinkle 2s ease-in-out infinite;animation-delay:.7s">✦</span><span style="position:absolute;bottom:26%;left:30%;color:#2793C8;font-size:16px;animation:pb-twinkle 2s ease-in-out infinite;animation-delay:1.3s">✦</span>
 </div>
 <style>
-#posty-boot{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999;pointer-events:none;font-family:Montserrat,system-ui,sans-serif}
+#posty-boot{position:fixed;inset:0;background:#F4FAFE;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999;pointer-events:none;font-family:Montserrat,system-ui,sans-serif}
 #posty-boot .pb-word{font-weight:800;font-size:30px;color:#0A1E33;letter-spacing:-.5px}
 #posty-boot .pb-word span{color:#FEC14D}
 #posty-boot img{border-radius:50%;box-shadow:0 10px 28px rgba(39,147,200,.4)}
+@keyframes pb-twinkle{0%,100%{opacity:.35}50%{opacity:1}}
 /* v210: splash calmo — Posty estatico, sin malabares. */
 </style>
 <script>setTimeout(function(){var b=document.getElementById('posty-boot');if(b)b.remove();},6000);</script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=337"></script>
+<script src="/app.js?v=338"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */

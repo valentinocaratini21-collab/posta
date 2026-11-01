@@ -241,12 +241,13 @@ function anaStatsHTML(a, d) {
 
 /* ---------- Hallazgos ---------- */
 
-function anaFindingHTML(f) {
+function anaFindingHTML(f, skipActs) {
   if (!f) return '';
   const act = f.decision || f.with_posty || '';
+  const dup = !!(act && Array.isArray(skipActs) && skipActs.length && anaNormTxt(skipActs.join(' ')).indexOf(anaNormTxt(act)) !== -1);
   return `<div class="ana-f"><p class="ana-t">${esc(f.text || '')}</p>`
     + (f.now ? `<p class="ana-fmeta"><span class="ana-now">${anaT('Hoy: ', 'Today: ')}${esc(f.now)}</span></p>` : '')
-    + (act ? `<p class="ana-act">${pzIc("arrowRight", 13)} ${anaT('Con Posty: ', 'With Posty: ')}<b>${esc(act)}</b></p>` : '')
+    + ((act && !dup) ? `<p class="ana-act">${pzIc("arrowRight", 13)} ${anaT('Con Posty: ', 'With Posty: ')}<b>${esc(act)}</b></p>` : '')
     + `</div>`;
 }
 
@@ -512,11 +513,14 @@ function anaBackCurrent() {
 
 /* ---------- Nacimiento: lo que Posty ya sabe + kit + vidriera ---------- */
 
-function anaKitHTML(a) {
+function anaNormTxt(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function anaKitHTML(a, skipActs) {
   let h = '';
   const fs = (a.findings || []).filter((f) => f && f.text);
   if (fs.length) {
-    h += `<p class="ana-sec-t">${anaT(`${pzIc('sparkle', 16)} Lo que ya sé de tu negocio`, `${pzIc('sparkle', 16)} What I already know about your business`)}</p>${fs.map(anaFindingHTML).join('')}`;
+    h += `<p class="ana-sec-t">${anaT(`${pzIc('sparkle', 16)} Lo que ya sé de tu negocio`, `${pzIc('sparkle', 16)} What I already know about your business`)}</p>${fs.map((f) => anaFindingHTML(f, skipActs)).join('')}`;
   }
   const kit = a.profile_kit || {};
   if (kit.highlights && kit.highlights.length) {
@@ -859,6 +863,7 @@ function anaCartaHTML(d) {
     : (birth
       ? anaT('Tu cuenta está por nacer — y va a nacer con estrategia. Estudié tu rubro y tu zona, y esto es lo que armé para vos' + pzIc('arrowDown', 13) + '', 'Your account is about to be born — and it will be born with a strategy. I studied your category and your area, and this is what I built for you' + pzIc('arrowDown', 13) + '')
       : anaT('Estudié tu cuenta dato por dato — tu ritmo, tus formatos, tus textos — y armé el plan con el que lo mejoro. Esto es lo que vi' + pzIc('arrowDown', 13) + '', 'I studied your account data point by data point — your rhythm, your formats, your texts — and built the plan I improve it with. This is what I saw' + pzIc('arrowDown', 13) + ''));
+  const wsOpen = d && typeof d.week_summary === 'string' ? d.week_summary.trim() : '';
   let h = `<div class="ana-card ana-letter">
     <div class="ana-lhead">
       <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
@@ -866,11 +871,12 @@ function anaCartaHTML(d) {
       ${bizLine ? `<p class="ana-biz">${esc(bizLine)}</p>` : ''}
       ${dateLine ? `<p class="ana-date">${esc(dateLine)}</p>` : ''}
       ${nextLine ? `<p class="ana-next">${esc(nextLine)}</p>` : ''}
-      ${carta ? '' : `<p class="ana-intro">${intro}</p>`}
+      ${carta ? '' : (wsOpen ? '' : `<p class="ana-intro">${intro}</p>`)}
     </div>`;
-  // (LOTE 10 · carta Estrategia) Primera línea de la carta, sin nada
-  // antes: la frase exacta, en el idioma de la carta.
-  if (carta) h += `<p class="ana-ltr-first">${anaT('la estrategia para esta semana', 'the strategy for this week')}</p>`;
+  // (LOTE 15 · carta Estrategia) Primera línea SIEMPRE que haya un
+  // análisis (con carta guardada y sin ella): la frase exacta, en el
+  // idioma de la carta, una sola vez. Sin análisis no hay línea.
+  if (a) h += `<p class="ana-ltr-first">${anaT('la estrategia para esta semana', 'the strategy for this week')}</p>`;
   // (2026-10-25) APERTURA: la explicación de cómo se armó el plan — el
   // week_summary del motor («qué vi → por eso tu semana es así») — encabeza
   // la ventana como su línea de apertura. Es el contenido que vivía en la
@@ -879,7 +885,6 @@ function anaCartaHTML(d) {
   // del motor en el idioma de la cuenta (paridad ES/EN sin croma nueva) y
   // «Así nace tu semana» ya no lo repite. Sin week_summary no se inventa
   // apertura: la ventana abre como siempre.
-  const wsOpen = d && typeof d.week_summary === 'string' ? d.week_summary.trim() : '';
   if (wsOpen) h += wsOpen.split('\n').filter(Boolean).map((l) => `<p class="ana-intro">${esc(l)}</p>`).join('');
   if (carta) {
     // FORMA CARTA (domingo a la noche): narración primero, datos como apoyo.
@@ -904,14 +909,17 @@ function anaCartaHTML(d) {
     h += `</div>`;
     return h;
   }
-  h += `<div class="ana-verdict"><p class="ana-vlabel">${anaT('Mi veredicto', 'My verdict')}</p><p class="ana-vq">${esc(anaVerdict(a, stage, birth))}</p></div>`;
+  if (!birth) h += `<div class="ana-verdict"><p class="ana-vlabel">${anaT('Mi veredicto', 'My verdict')}</p><p class="ana-vq">${esc(anaVerdict(a, stage, birth))}</p></div>`;
   if (!a) {
     h += `<div style="text-align:center;margin-top:16px"><button class="btn btn-primary" onclick="anaRefresh(this)">${anaT('Armar mi estrategia', 'Build my strategy')}</button></div>`;
   }
   if (!birth) h += anaProgressHTML(a);
   if (!birth) h += anaStatsHTML(a, d);
   if (!birth) h += anaGroupsHTML(a);
-  if (birth && a) h += anaKitHTML(a);
+  if (birth && a) {
+    const wsDecs = (a && Array.isArray(a.findings) ? a.findings.filter((f) => f && f.decision).slice(0, 2).map((f) => String(f.decision)) : []);
+    h += anaKitHTML(a, wsOpen ? [wsOpen].concat(wsDecs) : wsDecs);
+  }
   if (!birth) h += anaMarketHTML(a);
   if (a) h += anaWeekBirthHTML(d, a);
   h += anaPlanHTML(a, birth);

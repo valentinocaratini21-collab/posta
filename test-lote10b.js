@@ -76,8 +76,8 @@ function sandbox(extra) {
   const postyBranch = app.slice(app.indexOf("if (tipo === 'posty') {"), app.indexOf('function mxJardinErrorHTML'));
   t(/mxHeroJardin\(mxNvNum\(nvP\)\)/.test(postyBranch), 'B: el hero del jardín sale de mxHeroJardin');
   t(!/mxFotoJardin/.test(postyBranch), 'B: el hero ya NO es la última foto publicada (ahí se colaba la promo con la cara)');
-  t(!/ai-avatar/.test(postyBranch), 'B: el hero no tiene fallback al avatar');
-  t(/onerror="this\.closest\('.mx-hero-btn'\)\.remove\(\)"/.test(postyBranch), 'B: si el visual falla, se quita sin fallback');
+  t(!/onerror="[^"]*ai-avatar/.test(postyBranch), 'B: el hero no tiene fallback al avatar (LOTE 15: la cara de Posty vive como overlay, no como fallback)');
+  t(/onerror="this\.closest\('.mx-jardin-vivo'\)\.remove\(\)"/.test(postyBranch), 'B: si el visual falla, se quita el bloque vivo entero sin fallback');
 }
 
 // ---------- 3-1 · tocar el hero abre el visual en grande ----------
@@ -85,7 +85,7 @@ function sandbox(extra) {
   const postyBranch = app.slice(app.indexOf("if (tipo === 'posty') {"), app.indexOf('function mxJardinErrorHTML'));
   t(/class="mx-hero-btn" onclick="openLightbox\('[^']+', 0\)"/.test(postyBranch), '3-1: el hero es botón que abre el visual con openLightbox (visor puro, 2 args)');
   t(/function openLightbox\(/.test(app), '3-1: openLightbox existe (visor ya vigente, sin funciones nuevas)');
-  t(!/jardin-vivo/.test(app), '3-1: no se inventó una vista de jardín vivo (el v7 es un mock local, no una vista)');
+  t(/mx-jardin-vivo/.test(app) && /mx-slowzoom/.test(css), '3-1 (LOTE 15): el jardín vivo ya es real — animación CSS sobre renders aprobados, no mock');
 }
 
 // ---------- 2-1 + 2-4 · qué falta, con nombre y botón ----------
@@ -114,11 +114,12 @@ function sandbox(extra) {
 
 // ---------- 2-2 · premio de Nv 3 visible sin bajar ----------
 {
-  const vistasSrc = app.slice(app.indexOf('function mxVistasUnAgenteHTML'), app.indexOf('function mxJardinHTML'));
-  t(/mx-premio-cerca/.test(vistasSrc), '2-2: línea de premio junto a las píldoras');
-  t(/siguiente_premio/.test(vistasSrc) && /siguiente_desbloqueo/.test(vistasSrc), '2-2: usa los datos de vista previa del Lote 3');
-  t(/pzNivelUnlock\(nv\.nivel \+ 1/.test(vistasSrc), '2-2: en 1–5 vale la tabla de desbloqueos vigente');
-  t(/nv\.nivel < 50 && nv\.nombre_siguiente/.test(vistasSrc), '2-2: solo si hay próximo nivel');
+  const premioSrc = app.slice(app.indexOf('function mxPremioCercaHTML'), app.indexOf('const MX_ZONAS_PREMIO'));
+  t(/mx-premio-cerca/.test(premioSrc), '2-2 (LOTE 15): línea de premio junto al hero (se mudó de las píldoras)');
+  t(/siguiente_premio/.test(premioSrc) && /siguiente_desbloqueo/.test(premioSrc), '2-2: usa los datos de vista previa del Lote 3');
+  t(/pzNivelUnlock\(nv\.nivel \+ 1/.test(premioSrc), '2-2: en 1–5 vale la tabla de desbloqueos vigente');
+  t(/nv\.nivel >= 50/.test(premioSrc) && /nombre_siguiente/.test(premioSrc), '2-2: solo si hay próximo nivel');
+  t(/mxPremioCercaHTML\(nvP\)/.test(app), '2-2 (LOTE 15): el premio se rinde en el cuerpo del jardín');
 }
 
 // ---------- 2-5 · píldoras parejas ----------
@@ -198,10 +199,10 @@ function sandbox(extra) {
 
 // ---------- Versiones y censo ----------
 {
-  t(/20261031-v515/.test(srv), 'BUILD v514 en server.js');
-  t(/app\.js\?v=337/.test(idx), 'app.js?v=337 en index');
-  t(/styles\.css\?v=20261058/.test(idx) && /styles\.css\?v=20261058/.test(idxEn), 'styles.css?v=20261058 en ambos índices');
-  t(/20261031-v510/.test(app), 'CHUNK_V sigue v510 (ningún chunk tocado)');
+  t(/20261101-v516/.test(srv), 'BUILD v514 en server.js');
+  t(/app\.js\?v=338/.test(idx), 'app.js?v=338 en index');
+  t(/styles\.css\?v=20261059/.test(idx) && /styles\.css\?v=20261059/.test(idxEn), 'styles.css?v=20261059 en ambos índices');
+  t(/20261101-v516/.test(app), 'CHUNK_V v516 (LOTE 15 toca chunk-analisis: carta simple + kit filtrado)');
   const cnt = (re) => (srv.match(re) || []).length;
   t(cnt(/catsMatch/g) === 3 && cnt(/week-redo/g) === 16 && cnt(/first_week/g) === 3 && cnt(/\/aprobar/g) === 16 && cnt(/autofetch/g) === 0, 'censo server 3/16/3/16 autofetch 0');
   t((app.match(/pzGoBack/g) || []).length === 4 && (app.match(/pz-detalle-setup/g) || []).length === 1, 'censo app pzGoBack 4, pz-detalle-setup 1');

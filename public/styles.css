@@ -4041,3 +4041,76 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pp-echo{font-size:14px;color:#0A1E33;font-weight:600;text-align:center;margin:14px 0 0;line-height:1.5}
 .pp-demo{font-size:12.5px;color:#5A7186;text-align:center;margin:6px 0 0}
 @media(max-width:560px){.pp-mirror{padding:18px 14px 14px}.pp-panels{gap:8px}.pp-panel{padding:10px 8px}}
+
+/* ============ LOTE 15 · PASADA DE BELLEZA ============ */
+/* (1) Home pulida: tiles con radio del mock, sombra suave en tira y botones */
+.hf-grid .hf-tile{border-radius:10px;overflow:hidden}
+.mx-tira-jardin{box-shadow:0 4px 14px rgba(10,30,51,.06)}
+#inicioView .hf-pacts .hf-pmain{border-radius:12px;box-shadow:0 2px 8px rgba(10,30,51,.06)}
+/* (2) El jardín de Posty, en vivo: zoom lento, orbes, destellos, Posty, brote */
+.mx-jardin-vivo{position:relative;overflow:hidden;border-radius:26px;box-shadow:0 14px 30px rgba(10,30,51,.22)}
+.mx-jardin-vivo .mx-hero-btn{display:block;width:100%}
+.mx-jardin-vivo .mx-foto-nivel{animation:mx-slowzoom 26s ease-in-out infinite alternate}
+@keyframes mx-slowzoom{from{transform:scale(1)}to{transform:scale(1.12)}}
+.mx-orb{position:absolute;width:26px;height:26px;border-radius:50%;pointer-events:none;filter:blur(1px);opacity:.85;animation:mx-drift 11s ease-in-out infinite alternate}
+.mx-orb-a{left:14%;top:62%;background:radial-gradient(circle,#FEC14D 0%,rgba(254,193,77,0) 70%)}
+.mx-orb-b{left:70%;top:40%;background:radial-gradient(circle,#2793C8 0%,rgba(39,147,200,0) 70%);animation-delay:3s}
+@keyframes mx-drift{from{transform:translate(0,0)}to{transform:translate(14px,-18px)}}
+.mx-spark{position:absolute;color:#FEC14D;font-size:18px;pointer-events:none;text-shadow:0 0 8px rgba(254,193,77,.9);animation:mx-twinkle 2.8s ease-in-out infinite}
+@keyframes mx-twinkle{0%,100%{opacity:.25;transform:scale(.7)}50%{opacity:1;transform:scale(1.15)}}
+.mx-posty-live{position:absolute;left:12px;bottom:12px;width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid #FEC14D;background:#fff;box-shadow:0 6px 18px rgba(10,30,51,.35);pointer-events:none;animation:mx-float 5s ease-in-out infinite}
+@keyframes mx-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.mx-posty-tag{position:absolute;left:84px;bottom:30px;background:rgba(255,255,255,.92);color:#0A1E33;font-size:12px;font-weight:700;padding:4px 10px;border-radius:99px;box-shadow:0 2px 10px rgba(10,30,51,.2);pointer-events:none}
+.mx-brote{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);width:110px;height:110px;pointer-events:none;filter:drop-shadow(0 4px 12px rgba(62,155,79,.55))}
+.mx-brote svg{width:100%;height:100%}
+.mx-jardin-sentido{margin:12px 2px 2px;font-size:13.5px;color:#5A4A6B}
+.mx-premio-cerca{margin-top:2px}
+/* Mapa completo: desbloqueado a todo color, bloqueado en silueta con candado */
+.mx-mapa{margin-top:20px}
+.mx-mapa h3{font-size:17px;color:#0A1E33;margin:0 0 4px}
+.mx-mapa-sub{font-size:12.5px;color:#6E5A85;margin:0 0 12px}
+.mx-mapa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mx-zona{border:1.5px solid #E9DFEF;border-radius:16px;padding:12px 10px;background:#fff;text-align:left;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(10,30,51,.05)}
+.mx-zona b{display:block;font-size:13.5px;color:#0A1E33}
+.mx-zona-nv{display:block;font-size:11.5px;color:#6E5A85;margin-top:2px}
+.mx-zona-ic{display:block;font-size:20px;margin-bottom:4px}
+.mx-zona-det{display:block;font-size:12px;color:#5A4A6B;margin-top:6px;line-height:1.45}
+.mx-zona.lock{filter:grayscale(1) brightness(.78);background:#F4F1F7}
+.mx-zona.lock b,.mx-zona.lock .mx-zona-nv{color:#8A7A9E}
+.mx-zona-viva{box-shadow:0 0 0 2px rgba(254,193,77,.55),0 6px 16px rgba(10,30,51,.12);animation:mx-twinkle 3.4s ease-in-out infinite}
+/* Tira: brote sobre la miniatura en Nv 1–2 */
+.mx-tira-thumb{position:relative;flex:none;line-height:0}
+.mx-tira-brote{position:absolute;right:-4px;bottom:-4px;width:26px;height:26px;background:#fff;border-radius:50%;box-shadow:0 2px 8px rgba(10,30,51,.25);display:flex;align-items:center;justify-content:center}
+.mx-tira-brote svg{width:18px;height:18px}
+.mx-tira-brote i{position:absolute;top:-7px;right:-5px;font-style:normal;color:#FEC14D;font-size:13px;line-height:1}
+/* (4) Marca de borrador más suave: fina y clara, sin quitar la señal */
+.hf-tile.hf-tile-draft{outline:1.5px dashed rgba(39,147,200,.35);outline-offset:-2px}
+/* (6) Detalle pulido: sombra en el encabezado fijo */
+.hf-d-top{box-shadow:0 2px 12px rgba(10,30,51,.07)}
+/* (7) Chat con Posty: su cara junto al campo */
+.chat-face{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #FEC14D;flex:none;background:#fff}
+.mz-ph .chat-face{width:28px;height:28px;vertical-align:middle;margin-right:8px}
+/* (8) Esqueleto con marca: degradado celeste/dorado + cara de Posty */
+.pz-sk-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.pz-sk-head img{width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #FEC14D;background:#fff}
+.pz-sk-head i{flex:1;height:16px;border-radius:99px;background:#E8EEF3}
+.pz-sk-block{background:linear-gradient(100deg,#E8EEF3 30%,#D8ECF7 50%,#FDEEC2 70%,#E8EEF3);background-size:200% 100%;animation:pz-sk-shimmer 1.6s ease-in-out infinite}
+@keyframes pz-sk-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+/* (9) Bandeja tan linda como el resto */
+.bb-bcard{box-shadow:0 4px 14px rgba(10,30,51,.06)}
+.bb-bcard.foco{outline:2px solid #FEC14D;outline-offset:2px}
+/* (10) Celebración al publicar */
+.pz-pub-celeb{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:rgba(10,30,51,.45);padding:20px}
+.pz-pub-card{position:relative;background:#fff;border-radius:22px;padding:24px 20px 20px;max-width:320px;width:100%;text-align:center;box-shadow:0 24px 60px rgba(10,30,51,.3)}
+.pz-pub-face{width:76px;height:76px;border-radius:50%;object-fit:cover;border:3px solid #FEC14D;background:#fff;margin:0 auto 10px;display:block}
+.pz-pub-spark{position:absolute;top:14px;right:18px;color:#FEC14D;font-size:22px;animation:mx-twinkle 2.2s ease-in-out infinite}
+.pz-pub-card h3{font-size:19px;color:#0A1E33;margin:0 0 6px}
+.pz-pub-when{font-size:12.5px;color:#6E5A85;margin:0 0 6px}
+.pz-pub-cap{font-size:13.5px;color:#262626;line-height:1.5;margin:0 0 14px}
+.pz-pub-btn{background:#FEC14D;color:#0A1E33;border:0;border-radius:99px;padding:10px 26px;font-size:15px;font-weight:700;cursor:pointer}
+/* (11) Bienvenida mágica: destellos sobre la tarjeta (el contenedor ya es relative) */
+.pz-bienv-magia .mx-spark{font-size:15px}
+/* Reduced-motion: todo lo vivo queda estático */
+@media (prefers-reduced-motion: reduce){
+  .mx-jardin-vivo .mx-foto-nivel,.mx-orb,.mx-spark,.mx-posty-live,.mx-zona-viva,.pz-sk-block,.pz-pub-spark{animation:none}
+}

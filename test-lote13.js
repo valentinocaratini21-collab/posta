@@ -69,7 +69,7 @@ const tiraEnd = app.indexOf('async function mxPortTop', tiraStart);
 const tira = (tiraStart >= 0 && tiraEnd > tiraStart) ? app.slice(tiraStart, tiraEnd) : '';
 t(tira.includes('mxHeroJardin(mxNvNum(nvP))'), 'tira usa mxHeroJardin según nivel');
 t(!tira.includes('mxFotoJardin(jardin)'), 'tira ya no usa la última foto publicada');
-t(tira.includes('onerror="this.remove()"'), 'tira sin fallback a avatar');
+t(tira.includes(`onerror="this.closest('.mx-tira-thumb').remove()"`), 'tira sin fallback a avatar (LOTE 15: se quita el thumb entero)');
 t(!tira.includes('ai-avatar'), 'tira sin avatar en su código');
 
 // 6. Banda navy a blanco (modo oscuro) + pestañas legibles.
@@ -111,10 +111,10 @@ for (const fn of ['homeTileHTML', 'mxTiraHTML', 'mxHeroJardin', 'mxNvNum', 'pzIc
 t((app.match(/^const esc = /gm) || []).length === 1, 'M78 definida 1× nivel superior: esc');
 
 // 12. Pines de versión.
-t(srv.includes('20261031-v515'), 'BUILD v514');
-t(idx.includes('app.js?v=337'), 'index app.js?v=337');
-t(idx.includes('styles.css?v=20261058'), 'index styles.css?v=20261058');
-t(idxEn.includes('styles.css?v=20261058'), 'en/index styles.css?v=20261058');
+t(srv.includes('20261101-v516'), 'BUILD v514');
+t(idx.includes('app.js?v=338'), 'index app.js?v=338');
+t(idx.includes('styles.css?v=20261059'), 'index styles.css?v=20261059');
+t(idxEn.includes('styles.css?v=20261059'), 'en/index styles.css?v=20261059');
 t(!idxEn.includes('app.js?v='), 'en/index sin app.js (como siempre)');
 
 console.log(`test-lote13: ${ok} ok, ${bad} fallos`);

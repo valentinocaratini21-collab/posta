@@ -12,7 +12,7 @@ const PZ_IC = {
   grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v3M16 3v3M3 10h18"/><circle cx="12" cy="15.5" r="2.2" stroke="' + PZ_IC_GOLD + '"/>',
   stems: '<path d="M6 20V12M12 20V8M18 20V5"/><path d="M4.5 15h3M10.5 12h3M16.5 9h3"/><path d="M18 5Q18 2 21 2Q21 5 18 5Z" stroke="' + PZ_IC_GOLD + '"/><path d="M18 5Q18 2 15 2Q15 5 18 5Z" stroke="' + PZ_IC_GOLD + '"/>',
-  gear: '<circle cx="12" cy="12" r="3.5"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.2 5.2l1.8 1.8M16.9 16.9l1.8 1.8M18.8 5.2l-1.8 1.8M7.1 16.9l-1.8 1.8"/><circle cx="12" cy="12" r="1.1" fill="' + PZ_IC_GOLD + '" stroke="none"/>',
+  gear: '<path d="M21.9 10.4L21.9 13.6L18.5 16.7L20.1 17.9L17.9 20.1L13.3 19.9L13.6 21.9L10.4 21.9L7.3 18.5L6.1 20.1L3.9 17.9L4.1 13.3L2.1 13.6L2.1 10.4L5.5 7.3L3.9 6.1L6.1 3.9L10.7 4.1L10.4 2.1L13.6 2.1L16.7 5.5L17.9 3.9L20.1 6.1L19.9 10.7Z"/><circle cx="12" cy="12" r="3.2"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
   sprout: '<path d="M12 21V9"/><path d="M12 14Q8 14 5.5 10.5Q9 9.5 12 14Z"/><path d="M12 11Q16 11 18.5 7.5Q15 6.5 12 11Z"/>',
   share: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6.5" r="2.5"/><circle cx="18" cy="17.5" r="2.5"/><path d="M8.3 10.8 15.6 7.7M8.3 13.2 15.6 16.3"/>',
@@ -459,7 +459,7 @@ function bbShell(tab, content) {
     jardin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
     bandeja: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-5l2-7z"/></svg>',
     negocio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M2.5 6.5 4 3h16l1.5 3.5a3.2 3.2 0 0 1-6.1 1.4 3.4 3.4 0 0 1-6.8 0 3.2 3.2 0 0 1-6.1-1.4z"/><path d="M9.5 20v-6h5v6"/></svg>',
-    ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></svg>',
+    ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.9 10.4L21.9 13.6L18.5 16.7L20.1 17.9L17.9 20.1L13.3 19.9L13.6 21.9L10.4 21.9L7.3 18.5L6.1 20.1L3.9 17.9L4.1 13.3L2.1 13.6L2.1 10.4L5.5 7.3L3.9 6.1L6.1 3.9L10.7 4.1L10.4 2.1L13.6 2.1L16.7 5.5L17.9 3.9L20.1 6.1L19.9 10.7Z"/><circle cx="12" cy="12" r="3.2"/></svg>',
     inicio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 3l9 8.5"/><path d="M5.5 10v10h13V10"/></svg>',
     semana: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
@@ -1106,7 +1106,8 @@ function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   const ambos = pod.posty && pod.gesty;
   // (LOTE 13 · tira Inicio) La miniatura es el visual del jardín según nivel (mismo mapeo que el hero de la pantalla Jardín), no la última foto publicada.
   const foto = mxHeroJardin(mxNvNum(nvP));
-  const imgPosty = `<img class="mx-tira-foto" src="${esc(foto)}" alt="" onerror="this.remove()">`;
+  const nvTira = mxNvNum(nvP);
+  const imgPosty = `<span class="mx-tira-thumb"><img class="mx-tira-foto" src="${esc(foto)}" alt="" onerror="this.closest('.mx-tira-thumb').remove()">${nvTira <= 2 ? `<span class="mx-tira-brote" aria-hidden="true">${MX_BROTE_SVG}<i>✦</i></span>` : ''}</span>`;
   if (pod.posty && nvP) {
     return `<button type="button" class="mx-tira-jardin mx-tira-posty" onclick="mxJardinIr('#/app/jardin-posty', '${origen}')">`
       + `${imgPosty}<span style="flex:1;min-width:0"><b>${gzT('Mi jardín', 'My garden')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)}</b>`
@@ -1162,6 +1163,65 @@ function mxVitrina(nv) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   return (nv && Array.isArray(nv.historial) && nv.historial.length) ? pzVitrinaHTML(nv.historial, en) : '';
 }
+// (LOTE 15 · jardín completo con siluetas) El brote grande que evita
+// cualquier hero de solo tierra (Nv 1–2): glifo SVG compuesto, nunca
+// foto ni cara regenerada.
+const MX_BROTE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#3E9B4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="M12 14Q8 14 5.5 10.5Q9 9.5 12 14Z"/><path d="M12 11Q16 11 18.5 7.5Q15 6.5 12 11Z"/></svg>';
+// (LOTE 15 · premio cerca) Misma fuente que el Lote 10B (vista previa
+// del Lote 3 + tabla pzNivelUnlock en 1–5), pero junto al hero y en
+// palabras: «Próximo premio · Raíz firme en el Nivel 6».
+function mxPremioCercaHTML(nv) {
+  if (!nv || nv.nivel >= 50 || !nv.nombre_siguiente) return '';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const rec = nv.siguiente_premio || nv.siguiente_desbloqueo || ((nv.nivel < 5 && typeof pzNivelUnlock === 'function') ? pzNivelUnlock(nv.nivel + 1, en) : null);
+  const lab = nv.siguiente_premio ? gzT('Próximo premio', 'Next reward') : gzT('Próximo desbloqueo', 'Next unlock');
+  const que = rec || nv.nombre_siguiente;
+  return `<p class="mx-dato mx-premio-cerca"><b>${lab} · ${esc(que)}</b> ${gzT('en el Nivel', 'at Level')} ${mxNvNum(nv) + 1}</p>`;
+}
+// (LOTE 15 · mapa completo) Zonas premio P1–P9 de la tabla real
+// SPEC-PRESTIGIO (nombre = premio del nivel; detalle = sorpresa que
+// solo se muestra al desbloquear). Lo bloqueado va en silueta con
+// candado; al tocarla dice en palabras qué la desbloquea (nivel real).
+// No hay render único del jardín completo como asset: el tablero se
+// compone con estos datos reales + silueta CSS.
+const MX_ZONAS_PREMIO = [
+  { nv: 6, es: 'Brote dorado', en: 'Golden sprout', detEs: 'Tu primer brote dorado', detEn: 'Your first golden sprout' },
+  { nv: 11, es: 'Raíz firme', en: 'Strong root', detEs: 'El rincón de la raíz', detEn: 'The root corner' },
+  { nv: 16, es: 'Tallo alto', en: 'Tall stem', detEs: 'El tallo dorado', detEn: 'The golden stem' },
+  { nv: 21, es: 'Copa verde', en: 'Green canopy', detEs: 'El mirador de la copa', detEn: 'The canopy lookout' },
+  { nv: 26, es: 'Flor del local', en: 'Shop flower', detEs: 'El póster «Jardín en flor»', detEn: 'The “Garden in bloom” poster' },
+  { nv: 31, es: 'Fruto de la casa', en: 'House fruit', detEs: 'La canasta dorada', detEn: 'The golden basket' },
+  { nv: 36, es: 'Claro del bosque', en: 'Forest clearing', detEs: 'El claro y su farol', detEn: 'The clearing and its lantern' },
+  { nv: 41, es: 'Leyenda del barrio', en: 'Neighborhood legend', detEs: 'La placa dorada en la entrada', detEn: 'The golden plaque at the entrance' },
+  { nv: 46, es: 'Maestro del jardín', en: 'Garden master', detEs: 'El jardín maestro y su corona', detEn: 'The master garden and its crown' },
+];
+function mxZonaToggle(btn) {
+  if (!btn) return;
+  const det = btn.querySelector('.mx-zona-det');
+  if (!det) return;
+  det.hidden = !det.hidden;
+  btn.setAttribute('aria-expanded', det.hidden ? 'false' : 'true');
+}
+function mxJardinMapaHTML(nvP, post50) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const nvNum = mxNvNum(nvP);
+  let vivaIdx = -1;
+  MX_ZONAS_PREMIO.forEach((z, i) => { if (nvNum >= z.nv) vivaIdx = i; });
+  let h = `<div class="mx-mapa"><h3>${gzT('Todo tu jardín', 'Your whole garden')}</h3><p class="mx-mapa-sub">${gzT('Lo desbloqueado está a todo color; lo demás espera su nivel.', 'Unlocked areas are in full color; the rest await their level.')}</p><div class="mx-mapa-grid">`;
+  MX_ZONAS_PREMIO.forEach((z, i) => {
+    const ok = nvNum >= z.nv;
+    const nombre = en ? z.en : z.es;
+    const det = en ? z.detEn : z.detEs;
+    const desbloqueo = ok ? det : (en ? `Unlocks at Level ${z.nv}` : `Se desbloquea en el Nivel ${z.nv}`);
+    h += `<button type="button" class="mx-zona${ok ? ' ok' : ' lock'}${i === vivaIdx ? ' mx-zona-viva' : ''}" onclick="mxZonaToggle(this)" aria-expanded="${ok ? 'true' : 'false'}"><span class="mx-zona-ic" aria-hidden="true">${ok ? '✦' : '🔒'}</span><b>${esc(nombre)}</b><span class="mx-zona-nv">${gzT('Nivel', 'Level')} ${z.nv}</span><span class="mx-zona-det" ${ok ? '' : 'hidden'}>${esc(desbloqueo)}</span></button>`;
+  });
+  const tienePost50 = !!(post50 && Array.isArray(post50.zonas) && post50.zonas.length);
+  if (!tienePost50) {
+    h += `<button type="button" class="mx-zona lock" onclick="mxZonaToggle(this)" aria-expanded="false"><span class="mx-zona-ic" aria-hidden="true">🔒</span><b>${gzT('Después del Nivel 50', 'After Level 50')}</b><span class="mx-zona-nv">${gzT('Nivel 50', 'Level 50')}</span><span class="mx-zona-det" hidden>${gzT('Al llegar al Nivel 50 se abren nuevas zonas', 'When you reach Level 50, new areas open')}</span></button>`;
+  }
+  return h + '</div></div>';
+}
+
 function mxVistasUnAgenteHTML(nv, premioHTML, semanaHTML) {
   const hist = Array.isArray(nv.historial) ? nv.historial : [];
   const cur = nv.nombre_nivel || '';
@@ -1187,19 +1247,10 @@ function mxVistasUnAgenteHTML(nv, premioHTML, semanaHTML) {
       + (recSig ? `<p class="mx-dato">${esc(recSig)}</p>` : '')
       + (nv.proximo_paso ? `<p class="mx-dato">${esc(nv.proximo_paso)}</p>` : '') + `</div></div>`);
   }
-  // (LOTE 10B · 2-2) El premio del próximo nivel, visible sin bajar:
-  // junto a su píldora, con los datos de vista previa del Lote 3
-  // (siguiente_premio / siguiente_desbloqueo); en 1–5 el servidor no
-  // los manda y vale la tabla de desbloqueos vigente (pzNivelUnlock).
-  let premioCerca = '';
-  if (nv.nivel < 50 && nv.nombre_siguiente) {
-    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-    const rec = nv.siguiente_premio || nv.siguiente_desbloqueo || ((nv.nivel < 5 && typeof pzNivelUnlock === 'function') ? pzNivelUnlock(nv.nivel + 1, en) : null);
-    const lab = nv.siguiente_premio ? gzT('Próximo premio:', 'Next reward:') : (nv.siguiente_desbloqueo ? gzT('Próximo desbloqueo:', 'Next unlock:') : '');
-    premioCerca = `<p class="mx-dato mx-premio-cerca"><b>${gzT('Nv', 'Lv')} ${mxNvNum(nv) + 1} · ${esc(nv.nombre_siguiente)}${lab ? ' — ' + lab : ''}</b>${rec ? ' ' + esc(rec) : ''}</p>`;
-  }
+  // (LOTE 15) El premio del próximo nivel ya no vive acá: lo rinde
+  // mxPremioCercaHTML junto al hero (visible sin bajar, en palabras).
   const histBtn = hist.length ? `<button type="button" class="mx-historia-btn" onclick="mxIrHistoria()">${gzT('Mi historia', 'My history')}</button>` : '';
-  return `<div class="mx-pasos-nivel">${botones.join('')}</div>${premioCerca}${histBtn}${vistas.join('')}`;
+  return `<div class="mx-pasos-nivel">${botones.join('')}</div>${histBtn}${vistas.join('')}`;
 }
 // (LOTE 10B · B + 2-3) El hero del jardín es EL JARDÍN EN SU NIVEL, no la
 // última foto publicada (ahí se colaba la promo con la cara de Posty).
@@ -1274,11 +1325,14 @@ function mxIrHistoria() {
 function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML) {
   const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">${pzIc('arrowLeft', 16)} ${gzT('Volver', 'Back')}</button>`;
   if (tipo === 'posty') {
-    const head = `<h1>${gzT('Mi jardín', 'My garden')}</h1><p>${gzT('Crece con tus semanas publicadas', 'Grows with your published weeks')}</p>`;
+    const head = `<h1>${gzT('El jardín de Posty', "Posty's garden")}</h1>`;
     const heroUrl = mxHeroJardin(mxNvNum(nvP));
-    const foto = `<button type="button" class="mx-hero-btn" onclick="openLightbox('${esc(heroUrl)}', 0)" aria-label="${gzT('Ver tu jardín en grande', 'See your garden large')}"><img class="mx-foto-nivel" src="${esc(heroUrl)}" alt="${gzT('Tu jardín', 'Your garden')}" onerror="this.closest('.mx-hero-btn').remove()"></button>`;
-    const cuerpo = mxVistasUnAgenteHTML(nvP, mxPremioPostyHTML(nvP), semanaHTML) + mxHistoriaHTML(nvP) + mxJardinPost50HTML(post50);
-    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head">${head}</header><div class="mx-bloque">${foto}${cuerpo}</div></div>`;
+    const nvNum = mxNvNum(nvP);
+    const brote = nvNum <= 2 ? `<span class="mx-brote" aria-hidden="true">${MX_BROTE_SVG}</span>` : '';
+    const foto = `<div class="mx-jardin-vivo"><button type="button" class="mx-hero-btn" onclick="openLightbox('${esc(heroUrl)}', 0)" aria-label="${gzT('Ver tu jardín en grande', 'See your garden large')}"><img class="mx-foto-nivel" src="${esc(heroUrl)}" alt="${gzT('Tu jardín', 'Your garden')}" onerror="this.closest('.mx-jardin-vivo').remove()"></button>${brote}<span class="mx-orb mx-orb-a"></span><span class="mx-orb mx-orb-b"></span><span class="mx-spark" style="left:12%;top:18%">✦</span><span class="mx-spark" style="left:78%;top:26%;animation-delay:1.2s">✦</span><span class="mx-spark" style="left:62%;top:64%;animation-delay:2.1s">✦</span><span class="mx-spark" style="left:28%;top:72%;animation-delay:.6s">✦</span><img class="mx-posty-live" src="ai-avatar.png" alt="Posty"><span class="mx-posty-tag">${gzT('Posty está acá', 'Posty is here')}</span></div>`;
+    const sentido = `<p class="mx-jardin-sentido">${gzT('Crece con tus semanas publicadas', 'Grows with your published weeks')}</p>`;
+    const cuerpo = mxPremioCercaHTML(nvP) + mxVistasUnAgenteHTML(nvP, mxPremioPostyHTML(nvP), semanaHTML) + mxJardinMapaHTML(nvP, post50) + mxHistoriaHTML(nvP) + mxJardinPost50HTML(post50);
+    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head">${head}</header><div class="mx-bloque">${foto}${sentido}${cuerpo}</div></div>`;
   }
   return mxJardinErrorHTML(); // POSTY SOLO: sin jardín Gesty
 }
@@ -1429,7 +1483,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261031-v510'; // (LOTE 10) bump: chunk-analisis cambia (renombre Estrategia + primera línea de la carta)
+const CHUNK_V = '20261101-v516'; // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -8553,8 +8607,9 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
+      <img class="chat-face" src="ai-avatar.png" alt="Posty">
       ${schedMode ? '' : `<button class="btn btn-soft" id="chatPlus" title="Agregar foto o video">${pzIc('plus', 18)}</button>`}
-      <input id="chatInput" class="in" placeholder="Escribile a Posty…" maxlength="2000" autocomplete="off">
+      <input id="chatInput" class="in" placeholder="escribile a posty…" maxlength="2000" autocomplete="off">
       <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">${pzIc('mic', 18)}</button>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
       ${schedMode ? '' : `<div class="chat-plus-menu" id="chatPlusMenu" hidden>
@@ -10420,6 +10475,16 @@ function bindScfMinis(root) {
     w.addEventListener('mouseleave', () => {
       if (t) clearTimeout(t); // si se fue antes de los 130 ms, no abre
       // El CIERRE al salir lo maneja el rastreador geométrico global.
+    });
+    // (LOTE 15 · tiles web) Sobre la franja (chapita + corazón) el pop
+    // no se arma ni queda abierto: al bajar al corazón la vista previa
+    // se disuelve para que el corazón quede clickeable. El pop fijado
+    // explícitamente no se toca.
+    w.addEventListener('mousemove', (e) => {
+      if (e.target && e.target.closest && e.target.closest('.hf-strip')) {
+        if (t) { clearTimeout(t); t = null; }
+        if (SCF_POP && SCF_POP.wrap === w && !SCF_PINNED) scfClosePop();
+      }
     });
     w.addEventListener('click', (e) => {
       if (e.target.closest && e.target.closest('[data-hf-like]')) return; // (LOTE 11) el corazón lo maneja hfLikeBind, no la capa
@@ -14812,7 +14877,7 @@ function pzSkeletonHTML(tab) {
   const rows = tab === 'post' ? 2 : 4;
   let blocks = '';
   for (let i = 0; i < rows; i++) blocks += '<div class="pz-sk pz-sk-block"></div>';
-  return '<div class="pz-sk-wrap" aria-hidden="true">' + blocks + '</div>';
+  return '<div class="pz-sk-wrap" aria-hidden="true"><div class="pz-sk-head"><img src="ai-avatar.png" alt="Posty"><i></i></div>' + blocks + '</div>';
 }
 function pzPaintSkeleton(tab) {
   // Solo con sesión conocida (ME): sin sesión la ruta rebota a login y el
@@ -15232,7 +15297,9 @@ async function paintPostPayCard() {
     el = document.createElement('div');
     el.id = 'pzPostPayCard';
     el.innerHTML = `
-    <div style="margin:10px 14px 0;background:var(--bg2);border:1px solid var(--cel);border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between">
+    <div class="pz-bienv-magia" style="margin:10px 14px 0;background:var(--bg2);border:1px solid var(--cel);border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between;position:relative;overflow:hidden">
+      <img class="chat-face" src="ai-avatar.png" alt="Posty" style="width:32px;height:32px">
+      <span class="mx-spark" style="top:4px;right:26px">✦</span><span class="mx-spark" style="top:26px;right:8px;animation-delay:1.4s">✦</span>
       <div id="pzPostPayTxt" style="font-size:13.5px;line-height:1.55"></div>
       <button id="pzPostPayX" aria-label="Cerrar" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--dim);flex:none">${pzIc("x", 16)}</button>
     </div>`;
@@ -17694,7 +17761,7 @@ async function inicioView() {
   ${visitorPillHTML}
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
-    <button type="button" class="mz-ph" id="mzChatOpen">Escribile a Posty…</button>
+    <button type="button" class="mz-ph" id="mzChatOpen"><img class="chat-face" src="ai-avatar.png" alt="Posty">escribile a posty…</button>
     <button type="button" class="mz-mic" id="mzMic" aria-label="Pedir con nota de voz">${pzIc('mic', 20)}</button>
   </div>
   <div class="mz-sheet" id="mzSheet" hidden>
@@ -17900,18 +17967,52 @@ function pzVitrinaHTML(hist, en, etiqueta) {
 // LOTE 4 — Momento del avance: sonido suave (WebAudio, best-effort) +
 // vibración con guarda. En web iOS no hay vibración: el momento funciona
 // igual sin ella, nunca fingida.
+// (LOTE 15 · ítem 13) Sonidos chiquitos: aprobar (dos notas) y
+// publicar (tríada ascendente). WebAudio, best-effort, solo tras un
+// gesto real o una celebración real (nunca autoplay inesperado), con
+// gate de reduced-motion. Subir de nivel reusa pzMomentoSonido (el
+// sonido del momento del avance, Lote 4) para no duplicar. NUNCA
+// vibración: en web iOS no hay vibración y no se finge.
+function pzSonido(tipo) {
+  try {
+    const AC = (typeof AudioContext !== 'undefined') ? AudioContext : (typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : null);
+    if (!AC) return false;
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    const ctx = new AC();
+    if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+    const notas = tipo === 'publicar' ? [523, 659, 784] : [660, 880];
+    notas.forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      const t0 = ctx.currentTime + i * 0.13;
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.06, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0); o.stop(t0 + 0.14);
+    });
+    return true;
+  } catch (e) { return false; }
+}
+
 function pzMomentoSonido() {
   try {
     const AC = (typeof AudioContext !== 'undefined') ? AudioContext : (typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : null);
     if (!AC) return false;
     const ctx = new AC();
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = 'sine'; o.frequency.value = 880;
-    g.gain.setValueAtTime(0.0001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.08);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.9);
-    o.connect(g); g.connect(ctx.destination);
-    o.start(); o.stop(ctx.currentTime + 1);
+    // (LOTE 15 · ítem 13) El sonido de subir de nivel es una tríada
+    // ascendente suave (antes: un solo tono 880). Sigue siendo el
+    // único sonido del momento del avance: no se duplica.
+    [784, 988, 1175].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      const t0 = ctx.currentTime + i * 0.14;
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.07, t0 + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0); o.stop(t0 + 0.24);
+    });
     return true;
   } catch (e) { return false; }
 }
@@ -19135,10 +19236,48 @@ function hfLiveFlush() {
   HF_LIVE.pending = null;
   try { hfLiveApply(job); } catch (e) {}
 }
+// (LOTE 15 · ítem 10) Celebración al publicar con la magia de Posty:
+// se dispara SOLO cuando el diff vivo observa una transición real a
+// publicado (justPublished de hfLiveDiff). El primer render solo
+// inicializa el snapshot, así que nunca celebra posteos viejos. Si
+// hay varios, celebra el más reciente y marca todos como celebrados
+// en la sesión para no acumular spam.
+function pzPubCelebMaybe(job) {
+  if (!job || !job.diff || !Array.isArray(job.diff.justPublished) || !job.diff.justPublished.length) return;
+  if (typeof document === 'undefined' || document.hidden) return;
+  const ids = job.diff.justPublished.map(String);
+  let seen = [];
+  try { seen = JSON.parse(sessionStorage.getItem('pzPubCeleb') || '[]'); } catch (e) { seen = []; }
+  const fresh = ids.filter((id) => seen.indexOf(id) === -1);
+  if (!fresh.length) return;
+  try { sessionStorage.setItem('pzPubCeleb', JSON.stringify(seen.concat(ids))); } catch (e) {}
+  const hit = (job.tiles || []).find((t) => t && t.kind === 'post' && t.post && fresh.indexOf(String(t.post.id)) !== -1);
+  if (hit && hit.post) pzPubCelebShow(hit.post);
+}
+function pzPubCelebShow(post) {
+  if (!post || typeof document === 'undefined') return;
+  const prev = document.getElementById('pzPubCelebOv');
+  if (prev) { try { prev.remove(); } catch (e) {} }
+  const en = (typeof hfIsEn === 'function') ? hfIsEn() : false;
+  const cap = String(post.caption || '').replace(/#[^\s#]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const when = (typeof homeWhenLabel === 'function') ? homeWhenLabel(post.published_at || post.scheduled_at) : '';
+  const ov = document.createElement('div');
+  ov.id = 'pzPubCelebOv';
+  ov.className = 'pz-pub-celeb';
+  ov.innerHTML = `<div class="pz-pub-card" role="dialog" aria-live="polite"><span class="pz-pub-spark" aria-hidden="true">✦</span><img class="pz-pub-face" src="ai-avatar.png" alt="Posty"><h3>${en ? 'Your post is live!' : '¡Tu posteo salió!'}</h3>${when ? `<p class="pz-pub-when">${esc(when)}</p>` : ''}${cap ? `<p class="pz-pub-cap">${esc(cap.slice(0, 80))}</p>` : ''}<button type="button" class="pz-pub-btn">${en ? 'Great!' : '¡Genial!'}</button></div>`;
+  document.body.appendChild(ov);
+  try { pzSonido('publicar'); } catch (e) {}
+  const close = () => { try { ov.remove(); } catch (e) {} };
+  ov.querySelector('.pz-pub-btn').onclick = close;
+  ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+  setTimeout(close, 5000);
+}
+
 function hfLiveApply(job) {
   const root = document.getElementById('inicioView');
   if (!root) return;
   const { tiles, props, prof, diff } = job;
+  try { pzPubCelebMaybe(job); } catch (e) {}
   const grid = root.querySelector('.hf-grid');
   const nextById = {};
   tiles.forEach((t, i) => { if (t.kind === 'post' && t.post) nextById[String(t.post.id)] = { t, i }; });
@@ -19428,6 +19567,7 @@ function hfDetailWire(ov, post, tile) {
       btn.disabled = false;
       btn.classList.toggle('on', on);
       btn.innerHTML = name === 'like' ? (on ? HF_D_HEART_FULL : HF_D_HEART) : (on ? HF_D_SAVE_FULL : HF_D_SAVE);
+      if (name === 'like' && on) { try { pzSonido('aprobar'); } catch (e) {} }
       return;
     }
     if (name === 'comment') {
@@ -19609,6 +19749,7 @@ function hfDetailBind(root) {
       hfDblReset();
       try { f3HeartBurst(tile); } catch (e2) {}
       hfTileApprove(tile, t.post);
+      try { pzSonido('aprobar'); } catch (e2) {}
       return;
     }
     hfDblReset();
@@ -19633,6 +19774,11 @@ function hfDetailBind(root) {
 function hfLikeBind(root) {
   if (!root || root._hfLikeBound) return;
   root._hfLikeBound = true;
+  // (LOTE 15 · tiles web) Fase de CAPTURA: el click en el corazón
+  // aprueba y corta la propagación ANTES que cualquier handler de la
+  // tile o del pop, así en web con mouse el corazón ya no abre el
+  // detalle. En táctil no cambia nada (hfDetailBind captura, antes,
+  // ya retorna ante el corazón).
   root.addEventListener('click', (e) => {
     const btn = e.target && e.target.closest ? e.target.closest('[data-hf-like]') : null;
     if (!btn) return;
@@ -19645,7 +19791,8 @@ function hfLikeBind(root) {
     if (!t) return;
     try { f3HeartBurst(tile); } catch (e2) {}
     hfTileApprove(tile, t.post);
-  });
+    try { pzSonido('aprobar'); } catch (e2) {}
+  }, true);
 }
 function hfDurBind(root) {
   if (!root) return;
