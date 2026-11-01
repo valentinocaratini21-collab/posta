@@ -2059,6 +2059,9 @@ body.hf-d-open{overflow:hidden}
    este 100%x100% (así nació el banner gigante del encabezado). */
 .hf-tile>img,.hf-tile>video{width:100%;height:100%;object-fit:cover;object-position:center 30%;display:block}
 .hf-tile-ph{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:30px;background:linear-gradient(140deg,#eaf6fd,#fdf3d7)}
+/* (LOTE 13 · tile sin imagen) Texto real sobre el degradado de marca, nunca un hueco blanco. */
+.hf-tile-ph-txt{flex-direction:column;gap:6px;padding:10px;font-size:12px;font-weight:700;color:#0A1E33;text-align:center;line-height:1.35}
+.hf-tile-ph-txt>span{display:block}
 /* (v334) Publicados ATENUADOS en la home-feed: ya salieron — el ojo va a los que se vienen (brillo completo). Solo la media se oscurece; glifos y marcas quedan nítidos. */
 .hf-tile.pub img,.hf-tile.pub video{filter:brightness(.58) saturate(.85)}
 .hf-new{position:absolute;top:6px;left:6px;display:inline-flex;align-items:center;gap:5px;background:rgba(10,30,51,.82);color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.6px;padding:3px 7px;border-radius:999px}
@@ -3852,7 +3855,8 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 #inicioView .hf-stat b{font-size:16px}
 #inicioView .hf-bio{line-height:1.4}
 #inicioView .hf-tabs{margin-top:14px}
-#inicioView.hf-wrap{padding:4px 0 96px}
+/* (LOTE 13 · ítem 5) Despeje para que la última fila no quede tapada por la barra del chat (fija a 72px + safe, ~52px de alto → borde superior ~124px) ni por la barra de tabs. */
+#inicioView.hf-wrap{padding:4px 0 140px}
 
 /* (6 mejoras del feed · ADAPTADO v496: ítems 2, 3, 6 — vetados 1, 4, 5 FUERA) */
 /* Ítem 2 — borrador a simple vista: borde punteado + etiqueta. El
@@ -3906,6 +3910,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
   .hf-head .hf-tabs{border-top-color:#e5e5e5}
   .hf-head .hf-tab{color:#8e8e8e}
   .hf-head .hf-tab.on{color:#0a1e33;border-top-color:#0a1e33}
+  /* (LOTE 13 · ítem 3) Banda de acciones + pestañas en blanco también en modo oscuro: con .hf-head y .hf-grid ya blancos, la banda era el único navy entre ambos. Botones ya claros con texto navy; pestañas con valores oscuros legibles. */
+  #inicioView .hf-pacts,#inicioView .hf-tabs{background:#fff}
+  #inicioView .hf-tab{color:#737373}
+  #inicioView .hf-tab.on{color:#0a1e33;border-top-color:#0a1e33}
 }
 
 /* (2-3-6 del feed · ítem 17) */
@@ -3919,7 +3927,8 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 /* Ítem 3 — racha de constancia debajo del perfil. */
 .hf-racha{font-size:13px;font-weight:700;color:#0A1E33;margin-top:8px}
 @media (prefers-color-scheme: dark){
-  .hf-racha{color:#FEC14D}
+  /* (LOTE 13 · ítem 4) Racha legible sobre blanco también en modo oscuro. */
+  .hf-racha{color:#0A1E33}
   .hf-tile.hf-tile-despegue{box-shadow:0 0 16px rgba(254,193,77,.6)}
 }
 
@@ -3972,6 +3981,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-like:active{transform:scale(.9)}
 .hf-like-in{position:absolute;bottom:8px;right:8px;z-index:5;background:rgba(10,30,51,.45);border-color:transparent;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.35)}
 .hf-like-in:active{transform:scale(.9)}
+/* (LOTE 13 · corazón y fecha no se tocan) La franja inferior de la tile es flex: chapita a la izquierda, corazón a la derecha, gap fijo 8px. La chapita recorta con puntos suspensivos antes de tocar el corazón; el corazón mantiene 34×34. */
+.hf-strip{position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;align-items:flex-end;gap:8px;padding:6px}
+.hf-strip .hf-chip{position:static;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.hf-strip .hf-like-in{position:static;flex:0 0 auto}
 /* Ítem 4 — chat fijo abajo como panel compacto, no como pantalla:
    sin velo oscuro, sin bloqueo de scroll; el feed queda visible y
    tocable por encima del panel. */

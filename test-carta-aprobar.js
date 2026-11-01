@@ -110,7 +110,7 @@ ok(serverJs.includes('✅ Aprobar mi semana') && serverJs.includes('✅ Approve 
 ok(serverJs.includes('cartaApproveWeekInfo') && serverJs.includes('data.approveUrl ?'), 'la Carta solo muestra el botón con semana aprobable (gate en el builder)');
 ok(serverJs.includes("acceptAllDrafts(u.id, items, { includeNeedsReview: true })"), 'el POST ejecuta la aceptación canónica (acceptAllDrafts), no una reimplementación');
 ok((serverJs.match(/HEADLINE_INFINITIVES/g) || []).length === 3, 'canario HEADLINE_INFINITIVES intacto (3 menciones)');
-ok(serverJs.includes("const BUILD_ID = '20261031-v513'"), 'BUILD_ID v510');
+ok(serverJs.includes("const BUILD_ID = '20261031-v514'"), 'BUILD_ID v514');
 
 /* ---------- unidad: token ---------- */
 const approval = require('./approval.js');

@@ -34,8 +34,8 @@ ok(APP.includes("cell0.outerHTML = homeTileHTML(t2, rec.i)") && APP.includes("fc
   '1: el parcheo en vivo reemplaza/inserta la celda entera, no la tile suelta');
 ok(APP.includes('apv-like') && APP.includes('apvAccept'),
   '1: el corazón del detalle sigue presente (apv-like + apvAccept)');
-ok(!APP.includes('hf-cell-actions') && APP.includes('</button></span></span>`;'),
-  '1: sin fila abajo: el botón cierra DENTRO de la tile (sobre la foto)');
+ok(!APP.includes('hf-cell-actions') && APP.includes('</button></span>${justChip}${glyph}${despChip}</span></span>`;'),
+  '1: sin fila abajo: el botón cierra DENTRO de la tile (sobre la foto) — LOTE 13: dentro de .hf-strip, con chapita/iconos después');
 
 // ---------- 2) Día + hora reales (programado o planificado) ----------
 ok(APP.includes('function hfPlanChip(ymd)'),
@@ -157,9 +157,9 @@ const cnt = (s, p) => (s.match(new RegExp(p, 'g')) || []).length;
 ok(cnt(SRV, 'catsMatch') === 3 && cnt(SRV, 'week-redo') === 16 && cnt(SRV, 'first_week') === 3 && cnt(SRV, '/aprobar') === 16,
   'censo server 3/16/3/16 intacto');
 ok(cnt(SRV, 'autofetch') === 0, 'censo autofetch 0');
-ok(SRV.includes("const BUILD_ID = '20261031-v513'"), 'BUILD v512');
-ok(IDX.includes('app.js?v=335') && IDX.includes('styles.css?v=20261056'), 'index ?v= app 334 + styles 20261055');
-ok(IDXEN.includes('styles.css?v=20261056'), 'en/index styles 20261055');
+ok(SRV.includes("const BUILD_ID = '20261031-v514'"), 'BUILD v514');
+ok(IDX.includes('app.js?v=336') && IDX.includes('styles.css?v=20261057'), 'index ?v= app 336 + styles 20261057');
+ok(IDXEN.includes('styles.css?v=20261057'), 'en/index styles 20261057');
 ok(APP.includes("const CHUNK_V = '20261031-v510'"), 'CHUNK_V v510 (chunk-analisis cache-busteado)');
 
 console.log(`\n== test-lote10: ${okN} ok · ${failN} fallas ==`);

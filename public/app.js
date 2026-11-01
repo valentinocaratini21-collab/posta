@@ -1104,8 +1104,9 @@ function mxSwitcherHTML(modo) {
 }
 function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   const ambos = pod.posty && pod.gesty;
-  const foto = mxFotoJardin(jardin);
-  const imgPosty = `<img class="mx-tira-foto" src="${esc(foto || 'ai-avatar.png')}" alt="" onerror="this.onerror=null;this.src='ai-avatar.png'">`;
+  // (LOTE 13 · tira Inicio) La miniatura es el visual del jardín según nivel (mismo mapeo que el hero de la pantalla Jardín), no la última foto publicada.
+  const foto = mxHeroJardin(mxNvNum(nvP));
+  const imgPosty = `<img class="mx-tira-foto" src="${esc(foto)}" alt="" onerror="this.remove()">`;
   if (pod.posty && nvP) {
     return `<button type="button" class="mx-tira-jardin mx-tira-posty" onclick="mxJardinIr('#/app/jardin-posty', '${origen}')">`
       + `${imgPosty}<span style="flex:1;min-width:0"><b>${gzT('Mi jardín', 'My garden')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)}</b>`
@@ -16631,8 +16632,12 @@ function homeTileHTML(t, i) {
   // portada (imagen quieta con su encuadre guardado) y no el video
   // pelado: el glyph de reel de abajo sigue marcando que es un reel.
   const covT = isV ? hfCoverState(p) : null;
+  // (LOTE 13 · tile sin imagen) La tile sin imagen muestra algo real: el texto del posteo o «imagen en camino». Nunca un hueco blanco ni una imagen inventada.
+  const phCap = String(p.caption || '').replace(/\s+/g, ' ').trim();
+  const phTxt = phCap ? (phCap.length > 70 ? phCap.slice(0, 70).trimEnd() + '…' : phCap) : '';
+  const phEn = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const media = !p.image_path
-    ? '<span class="hf-tile-ph">' + pzIc('sparkle', 18) + '</span>'
+    ? '<span class="hf-tile-ph hf-tile-ph-txt"><span>' + pzIc('sparkle', 16) + '</span><span>' + esc(phTxt || (phEn ? 'Image on its way' : 'imagen en camino')) + '</span></span>'
     : isV && covT.has
       ? `<img src="${esc(covT.path)}" data-hf-cover="1" style="object-position:50% ${covT.pos}%" onerror="__imgFb(this)" loading="lazy" alt="">`
     : isV
@@ -16678,7 +16683,8 @@ function homeTileHTML(t, i) {
   // adentro de la foto, ABAJO A LA DERECHA, a la derecha de la
   // chapita día+hora (chapita abajo a la izquierda, corazón abajo a
   // la derecha, misma franja inferior). Reemplaza la esquina superior
-  // izquierda del Lote 11. Es la ÚNICA excepción a «ningún botón
+  // izquierda del Lote 11.
+  // (LOTE 13 · corazón y fecha no se tocan) La franja inferior es .hf-strip flex: chapita a la izquierda, corazón a la derecha, gap fijo 8px; la chapita recorta con puntos suspensivos antes de tocar el corazón; el corazón mantiene 34×34. Es la ÚNICA excepción a «ningún botón
   // flotante tapa la imagen»: los captions siguen sin pintarse
   // sobre la imagen.)
   // REGLA DURA DE TILES (misma corrección — «los captions enormes en
@@ -16708,7 +16714,7 @@ function homeTileHTML(t, i) {
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${justChip}${glyph}${despChip}<button type="button" class="hf-like hf-like-in" data-hf-like aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></span></span>`;
+  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}<button type="button" class="hf-like hf-like-in" data-hf-like aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></span>${justChip}${glyph}${despChip}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas

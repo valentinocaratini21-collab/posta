@@ -175,7 +175,7 @@ ok('perfil usa rachaHTML', app.indexOf('${rachaHTML}') >= 0);
 ok('inicioView pasa racha', app.indexOf('racha: pzRacha') >= 0);
 ok('inicioView calcula racha con historial', app.indexOf('pzRacha = pzRachaSemanas(Array.isArray(allPosts) ? allPosts : [], new Date(), tz)') >= 0);
 ok('css .hf-racha', css.indexOf('.hf-racha{font-size:13px;font-weight:700;color:#0A1E33') >= 0);
-ok('css oscuro .hf-racha dorado', css.indexOf('.hf-racha{color:#FEC14D}') >= 0);
+ok('css oscuro .hf-racha navy legible (LOTE 13 ítem 4: el dorado sobre blanco era ilegible)', css.indexOf('.hf-racha{color:#0A1E33}') >= 0);
 
 /* ---------- §6. Ítem 6-17: próximo en salir (puro + estático) ---------- */
 const nextFn = new Function(pureSrc.pzNextScheduledId + '; return pzNextScheduledId;')();
