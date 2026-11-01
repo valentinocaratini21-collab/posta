@@ -159,10 +159,10 @@ const cnt = (s, p) => (s.match(new RegExp(p, 'g')) || []).length;
 ok(cnt(SRV, 'catsMatch') === 3 && cnt(SRV, 'week-redo') === 16 && cnt(SRV, 'first_week') === 3 && cnt(SRV, '/aprobar') === 16,
   'censo server 3/16/3/16 intacto');
 ok(cnt(SRV, 'autofetch') === 0, 'censo autofetch 0');
-ok(SRV.includes("const BUILD_ID = '20261101-v522'"), 'BUILD v522');
-ok(IDX.includes('app.js?v=344') && IDX.includes('styles.css?v=20261065'), 'index ?v= app 336 + styles 20261064');
-ok(IDXEN.includes('styles.css?v=20261065'), 'en/index styles 20261064');
-ok(APP.includes("const CHUNK_V = '20261101-v516'"), 'CHUNK_V v510 (chunk-analisis cache-busteado)');
+ok(SRV.includes("const BUILD_ID = '20261101-v523'"), 'BUILD v522');
+ok(IDX.includes('app.js?v=345') && IDX.includes('styles.css?v=20261066'), 'index ?v= app 336 + styles 20261064');
+ok(IDXEN.includes('styles.css?v=20261066'), 'en/index styles 20261064');
+ok(APP.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V v510 (chunk-analisis cache-busteado)');
 
 console.log(`\n== test-lote10: ${okN} ok · ${failN} fallas ==`);
 process.exit(failN ? 1 : 0);

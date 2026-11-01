@@ -6660,17 +6660,28 @@ app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res
     const monto = Number(req.body.montoUSD);
     if (!destacadoSemana.validarMonto(monto)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
     const st = destacadoSemanaEstado(uid);
-    if (!st.destacadoId) return res.status(400).json({ ok: false, motivo: 'sin_destacado' });
-    if (!st.destacadoPublicado) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
+    // LOTE IMPULSAR EN ESTRATEGIA: la carta puede impulsar su mejor posteo
+    // (por dato real), no solo el destacado de la semana. Sin posteoId, el
+    // flujo viejo queda intacto (destacado + su check de publicado).
+    const posteoIdReq = Number(req.body.posteoId) || 0;
+    let targetId = st.destacadoId;
+    if (posteoIdReq) {
+      const cand = db.prepare('SELECT id, status, ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(posteoIdReq, uid);
+      if (!cand) return res.status(404).json({ ok: false, motivo: 'posteo_no_encontrado' });
+      if (cand.status !== 'published' || !cand.ig_media_id) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
+      targetId = cand.id;
+    }
+    if (!targetId) return res.status(400).json({ ok: false, motivo: 'sin_destacado' });
+    if (!posteoIdReq && !st.destacadoPublicado) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
     if (!metaAds.adsConfigured()) return res.status(503).json({ ok: false, motivo: 'ads_no_configurado' });
     let gate = { ready: false };
     try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
     if (!gate.ready) return res.status(409).json({ ok: false, motivo: 'sin_autorizacion_publicitaria' });
-    const post = db.prepare('SELECT ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(st.destacadoId, uid) || {};
+    const post = db.prepare('SELECT ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(targetId, uid) || {};
     if (!post.ig_media_id) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
     const stripeCustomer = (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return (u && u.stripe_customer_id) || ''; } catch (e) { return ''; } })();
     const r = await destacadoSemana.procesarImpulso({
-      semana: { destacadoId: st.destacadoId }, monto, clienteId: uid,
+      semana: { destacadoId: targetId }, monto, clienteId: uid,
       zona: adCountry(uid), env: process.env, adsConfigurado: true,
       paginaAutorizada: true, posteoPublicado: true,
       conversionARS: null,
@@ -6725,6 +6736,40 @@ app.get('/api/destacado/reporte', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar el reporte' }); }
 });
 // === DESTACADO-BOOST endpoints (fin) ===
+
+// LOTE IMPULSAR EN ESTRATEGIA — mejor posteo de la semana por dato real.
+// Semana = week_key del lunes actual en la zona de la cuenta, la misma
+// semana que la carta de Estrategia. Solo posteos publicados con fila en
+// post_metrics e interacción real > 0. Sin dato = sin recomendación, nunca
+// un «mejor» inventado. Función pura para testear sin servidor.
+function elegirMejorPosteoSemana(rows) {
+  const cands = (rows || []).filter((r) => r && (Number(r.likes || 0) + Number(r.comments || 0) + Number(r.saved || 0)) > 0);
+  if (!cands.length) return null;
+  const eng = (r) => Number(r.likes || 0) + Number(r.comments || 0) + Number(r.saved || 0);
+  cands.sort((a, b) => (eng(b) - eng(a)) || (Number(b.reach || 0) - Number(a.reach || 0)) || (Number(b.id || 0) - Number(a.id || 0)));
+  return cands[0];
+}
+
+app.get('/api/estrategia/mejor-posteo', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const wk = mondayKeyOf(tzToday(userTz(uid)));
+    const rows = db.prepare(`
+      SELECT p.id, p.image_path, p.caption, p.ig_media_id,
+             COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
+             COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
+      FROM posts p JOIN post_metrics m ON m.post_id = p.id
+      WHERE p.user_id = ? AND p.status = 'published'
+        AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
+        AND p.week_key = ?`).all(uid, wk);
+    const mejor = elegirMejorPosteoSemana(rows);
+    res.json({ ok: true, week_key: wk, boostHabilitado: destacadoSemana.boostHabilitado(process.env),
+      mejor: mejor ? { post_id: mejor.id, image_path: mejor.image_path, caption: (mejor.caption || '').slice(0, 90),
+        ig_media_id: mejor.ig_media_id, reach: mejor.reach, likes: mejor.likes,
+        comments: mejor.comments, saved: mejor.saved,
+        engagement: Number(mejor.likes || 0) + Number(mejor.comments || 0) + Number(mejor.saved || 0) } : null });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar tu mejor posteo' }); }
+});
 
 app.get('/api/ads/config', requireAuth, (req, res) => {
   const w = getAdWallet(req.session.userId);
@@ -26278,7 +26323,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v522';
+const BUILD_ID = '20261101-v523';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

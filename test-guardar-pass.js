@@ -47,8 +47,8 @@ ok(srv.includes('wantRemember ? deviceTokens.issue(db, user.id) : null'), 'login
 ok(srv.includes('req.session.cookie.maxAge = null') && srv.includes('req.session.cookie.expires = false'), 'sin tilde: cookie de navegador (sin Expires/Max-Age)');
 
 section('5 · Versiones');
-ok(srv.includes("const BUILD_ID = '20261101-v522';"), 'BUILD v458');
-ok(idx.includes('<script src="/app.js?v=344"></script>'), 'app.js ?v=289');
+ok(srv.includes("const BUILD_ID = '20261101-v523';"), 'BUILD v458');
+ok(idx.includes('<script src="/app.js?v=345"></script>'), 'app.js ?v=289');
 
 console.log(fails ? `\n${fails} FALLAS` : '\nTODO VERDE');
 process.exit(fails ? 1 : 0);

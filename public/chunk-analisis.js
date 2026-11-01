@@ -99,6 +99,7 @@ async function anaLoad(useRefresh) {
   }
   anaLastPayload = d;
   rootEl.innerHTML = anaCartaHTML(d);
+  anaBoostRecLoad();
   try { window.scrollTo(0, 0); } catch (e) {}
 }
 
@@ -505,6 +506,7 @@ function anaBackCurrent() {
   anaPastMode = false;
   if (anaLastPayload) {
     rootEl.innerHTML = anaCartaHTML(anaLastPayload);
+    anaBoostRecLoad();
     try { window.scrollTo(0, 0); } catch (e) {}
   } else {
     anaLoad(false);
@@ -902,6 +904,7 @@ function anaCartaHTML(d) {
     if (!minimal && Array.isArray(a.data_notes) && a.data_notes.length) {
       h += a.data_notes.map((n) => `<p class="ana-note">${esc(n)}</p>`).join('');
     }
+    h += `<div id="anaBoostRec"></div>`;
     h += `<div class="ana-banner">${esc(a.letter.closing || anaBanner(stage, ctx))}</div>`;
     h += anaSignHTML(birth);
     if (!anaPastMode) h += anaShareBlockHTML(a);
@@ -928,9 +931,116 @@ function anaCartaHTML(d) {
   if (a && Array.isArray(a.data_notes) && a.data_notes.length) {
     h += a.data_notes.map((n) => `<p class="ana-note">${esc(n)}</p>`).join('');
   }
+  h += `<div id="anaBoostRec"></div>`;
   h += `<div class="ana-banner">${esc(anaBanner(stage, ctx))}</div>`;
   h += anaSignHTML(birth);
   if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">${anaT('↻ Actualizar estrategia', '↻ Refresh strategy')}</button></div>`;
   h += `</div>`;
   return h;
+}
+
+/* ---------- LOTE IMPULSAR EN ESTRATEGIA: mejor posteo + impulso ---------- */
+/* La carta recomienda el mejor posteo de LA SEMANA por dato real de IG
+ * (GET /api/estrategia/mejor-posteo) y ofrece impulsarlo con los 3 montos
+ * fijos del Impulsar ($20/$50/$100, 7 días) por /api/destacado/impulsar.
+ * Reglas: sin dato = sin recomendación inventada; el cobro lo decide el
+ * servidor (gates intactos: flag, conversión pendiente, sin reembolso
+ * automático); solo se muestra éxito con ok:true. En cartas anteriores
+ * (anaPastMode) no se muestra: la recomendación es de la carta actual. */
+
+function anaBoostRecPartes(m) {
+  const p = [];
+  if (Number(m.likes || 0) > 0) p.push(anaT(Number(m.likes) + ' me gusta', Number(m.likes) + ' likes'));
+  if (Number(m.comments || 0) > 0) p.push(anaT(Number(m.comments) + ' comentarios', Number(m.comments) + ' comments'));
+  if (Number(m.saved || 0) > 0) p.push(anaT(Number(m.saved) + ' guardados', Number(m.saved) + ' saves'));
+  if (Number(m.reach || 0) > 0) p.push(anaT('alcance ' + Number(m.reach), 'reach ' + Number(m.reach)));
+  return p;
+}
+
+function anaBoostRecMotivo(motivo, monto, cobroId) {
+  const m = monto ? ('$' + monto) : '';
+  switch (motivo) {
+    case 'conversion_pendiente':
+      return anaT('Queda armado: ' + m + ' por 7 días para este posteo. Todavía no se puede cobrar porque falta definir la conversión USD→ARS. No se cobró nada.', "Armed and waiting: " + m + " for 7 days on this post. It can't be charged yet because the USD→ARS conversion isn't set. Nothing was charged.");
+    case 'boost_deshabilitado':
+      return anaT('El impulso todavía no está habilitado en tu cuenta.', "Boosting isn't enabled on your account yet.");
+    case 'sin_tarjeta_guardada':
+      return anaT('No tenés una tarjeta guardada para cobrar el impulso.', "You don't have a saved card to charge the boost.");
+    case 'cobro_requiere_accion':
+      return anaT('El cobro necesita una confirmación tuya y no se puede hacer solo. No se cobró nada.', "The charge needs your confirmation and can't run on its own. Nothing was charged.");
+    case 'cobro_fallido':
+      return anaT('No se pudo cobrar. No se cobró nada.', "The charge failed. Nothing was charged.");
+    case 'anuncio_fallido':
+      return anaT('El cobro se hizo pero el anuncio no se pudo lanzar. Quedó registrado' + (cobroId ? ' (cobro ' + cobroId + ')' : '') + ' y sin reembolso automático: se revisa aparte.', "The charge went through but the ad couldn't launch. It was recorded" + (cobroId ? ' (charge ' + cobroId + ')' : '') + " with no automatic refund: it will be reviewed separately.");
+    case 'sin_publicar':
+      return anaT('Este posteo todavía no está publicado en Instagram.', "This post isn't published on Instagram yet.");
+    case 'monto_invalido':
+      return anaT('Ese monto no es válido. Elegí $20, $50 o $100.', "That amount isn't valid. Choose $20, $50 or $100.");
+    default:
+      return anaT('No se pudo impulsar. No se cobró nada.', "It couldn't be boosted. Nothing was charged.");
+  }
+}
+
+function anaBoostRecHTML(d) {
+  const m = d.mejor;
+  const partes = anaBoostRecPartes(m);
+  const porque = partes.length
+    ? anaT('Fue tu posteo con más interacción esta semana: ', 'Your highest-engagement post this week: ') + partes.join(', ') + '.'
+    : anaT('Fue tu posteo con más interacción esta semana.', 'Your highest-engagement post this week.');
+  const img = m.image_path ? `<img src="${esc(m.image_path)}" alt="" class="ana-boostrec-img">` : '';
+  const cap = m.caption ? `<p class="ana-boostrec-cap">${esc(m.caption)}</p>` : '';
+  const boost = d.boostHabilitado
+    ? `<div class="ana-boostrec-montos" id="anaBoostRecMontos">
+        <p class="ana-boostrec-monto-t">${anaT('Impulsalo por 7 días:', 'Boost it for 7 days:')}</p>
+        ${[20, 50, 100].map((x) => `<button type="button" class="btn btn-primary btn-sm" onclick="anaBoostRecElegir(${x})">$${x}</button>`).join(' ')}
+      </div><div class="ana-boostrec-msg" id="anaBoostRecMsg"></div>`
+    : `<p class="ana-boostrec-nota">${anaT('Impulsar todavía no está habilitado en tu cuenta.', "Boosting isn't enabled on your account yet.")}</p>`;
+  return `<div class="ana-boostrec">
+    <p class="ana-boostrec-t">${anaT('Tu mejor posteo de la semana', 'Your best post this week')}</p>
+    <div class="ana-boostrec-post">${img}<div>${cap}<p class="ana-boostrec-why">${esc(porque)}</p></div></div>
+    ${boost}
+  </div>`;
+}
+
+function anaBoostRecElegir(monto) {
+  const caja = document.getElementById('anaBoostRecMontos');
+  const msg = document.getElementById('anaBoostRecMsg');
+  if (!caja) return;
+  caja.innerHTML = `<button type="button" class="btn btn-primary btn-sm" onclick="anaBoostRecConfirmar(${monto}, this)">${anaT('Confirmar $', 'Confirm $')}${monto}</button> <button type="button" class="btn btn-ghost btn-sm" onclick="anaBoostRecLoad()">${anaT('Cancelar', 'Cancel')}</button>`;
+  if (msg) msg.textContent = '';
+}
+
+async function anaBoostRecConfirmar(monto, btn) {
+  const box = document.getElementById('anaBoostRec');
+  const msg = document.getElementById('anaBoostRecMsg');
+  const postId = box ? Number(box.dataset.postId || 0) : 0;
+  if (!postId) return;
+  if (btn) btn.disabled = true;
+  let j = null;
+  try { j = await api.post('/api/destacado/impulsar', { montoUSD: monto, posteoId: postId }); } catch (e) { j = null; }
+  if (!msg) return;
+  if (j && j.ok) {
+    msg.textContent = anaT('Impulsado. Posty te va a reportar números reales cuando lleguen.', 'Boosted. Posty will report real numbers when they arrive.');
+    const caja = document.getElementById('anaBoostRecMontos');
+    if (caja) caja.innerHTML = '';
+  } else {
+    const motivo = (j && j.motivo) || '';
+    msg.textContent = anaBoostRecMotivo(motivo, monto, j && j.cobroId);
+  }
+  if (btn) btn.disabled = false;
+}
+
+async function anaBoostRecLoad() {
+  const box = document.getElementById('anaBoostRec');
+  if (!box || anaPastMode) return;
+  let d = null;
+  try { d = await api.get('/api/estrategia/mejor-posteo'); } catch (e) { d = null; }
+  if (document.getElementById('anaBoostRec') !== box) return;
+  if (!d || !d.ok) { box.innerHTML = ''; return; }
+  if (!d.mejor) {
+    box.innerHTML = `<div class="ana-boostrec"><p class="ana-boostrec-t">${anaT('Tu mejor posteo de la semana', 'Your best post this week')}</p><p class="ana-boostrec-nota">${anaT('Esta semana todavía no tenés un posteo publicado con datos para elegir el mejor. Cuando publiquen y lleguen los números, acá va a aparecer tu mejor posteo para impulsarlo.', "This week you don't have a published post with data to pick a best one yet. Once posts go out and numbers arrive, your best post to boost will appear here.")}</p></div>`;
+    return;
+  }
+  box.dataset.postId = String(d.mejor.post_id);
+  box.innerHTML = anaBoostRecHTML(d);
 }

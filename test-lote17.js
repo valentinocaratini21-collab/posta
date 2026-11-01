@@ -50,10 +50,10 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v518) ----------
-t(srv.includes("const BUILD_ID = '20261101-v522'"), 'BUILD v522 en server.js');
-t(idx.includes('app.js?v=344') && idx.includes('styles.css?v=20261065'), 'index: app 340 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261065') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v516'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
+t(srv.includes("const BUILD_ID = '20261101-v523'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=345') && idx.includes('styles.css?v=20261066'), 'index: app 340 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261066') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -147,9 +147,12 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(app.includes("if (tab === 'inicio') return ''"), 'A6: inicio sin círculo intacto');
   t(app.includes("if (tab === 'jardin-posty') return ''"), 'A6: jardín sin círculo intacto (Lote 10B)');
   const apv = sliceFn(app, 'async function approvalPostView', 'function apvMoreHTML');
-  t(apv.includes("${en ? 'Week' : 'Semana'}"), 'A6: atrás ES/EN en la vista de aprobación');
   const dg = sliceFn(app, 'async function dogfoodView', 'async function approvalPostView');
-  t(dg.includes("${enD ? 'Week' : 'Semana'}"), 'A6: atrás ES/EN también en dogfood (mismo bug)');
+  // A6 actualizado (Lote Glass refactorizó el atrás en el helper
+  // pzApvBackHTML): la etiqueta Semana/Week vive en el helper y ambas
+  // vistas lo usan; el intento (atrás sin tapar) queda cubierto igual.
+  t(app.includes("key === '#/app/schedule' ? (en ? 'Week' : 'Semana')"), 'A6: helper pzApvBackHTML mapea Schedule → Semana/Week ES/EN');
+  t(apv.includes('pzApvBackHTML') && dg.includes('pzApvBackHTML'), 'A6: aprobación y dogfood usan el helper (mismo atrás, sin tapar)');
 }
 
 // ---------- B7: banda navy fuera ----------

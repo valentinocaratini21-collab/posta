@@ -4268,3 +4268,15 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .mx-slider-rango{width:100%;margin:10px 0 2px;accent-color:#2793C8}
 .mx-slider-nv{font-size:12.5px;color:#5A4A6B;margin:0}
 .mx-tira-lock{position:absolute;right:-2px;bottom:-2px;font-size:12px;line-height:1;background:#fff;border-radius:50%;padding:1px}
+
+/* LOTE IMPULSAR EN ESTRATEGIA */
+.ana-boostrec{background:#fff;border:2px solid #FEC14D;border-radius:16px;padding:16px;margin-top:16px;text-align:left}
+.ana-boostrec-t{font-size:15px;font-weight:900;color:#0A1E33;margin:0 0 10px}
+.ana-boostrec-post{display:flex;gap:12px;align-items:flex-start}
+.ana-boostrec-img{width:72px;height:72px;object-fit:cover;border-radius:12px;flex:0 0 auto}
+.ana-boostrec-cap{font-size:13.5px;color:#0A1E33;margin:0 0 6px;line-height:1.45}
+.ana-boostrec-why{font-size:13.5px;color:#0A1E33;margin:0;line-height:1.5;font-weight:600}
+.ana-boostrec-montos{margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ana-boostrec-monto-t{font-size:13px;font-weight:800;color:#0A1E33;margin:0}
+.ana-boostrec-msg{font-size:13px;color:#0A1E33;margin:10px 0 0;line-height:1.5;font-weight:600}
+.ana-boostrec-nota{font-size:13.5px;color:#5A4A6B;margin:0;line-height:1.5}
