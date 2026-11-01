@@ -10236,11 +10236,17 @@ function feedPreviewHTML(all, tz, prof) {
   const parts = [];
   for (const u of upcoming) parts.push({ kind: 'up', p: u.p, ymd: u.ymd });
   for (const p of published) parts.push({ kind: 'pub', p });
-  // (LOTE 11 · orden cronológico) Igual que la home: lunes arriba →
-  // domingo abajo, con la misma fecha efectiva (hfFeedSortKey). El
-  // sort es estable: a igual fecha queda el orden previo (día/hora
-  // de la agenda).
-  parts.sort((a, b) => hfFeedSortKey({ kind: 'post', post: a.p, ymd: a.ymd || null }) - hfFeedSortKey({ kind: 'post', post: b.p, ymd: b.ymd || null }));
+  // (LOTE 12 · mismo orden que la home): primero los no publicados
+  // (up) por fecha DESCENDENTE y después los ya salidos (pub) por
+  // fecha DESCENDENTE; sin fecha, al final de su grupo, nunca
+  // inventada. El sort es estable: a igual fecha queda el orden
+  // previo (día/hora de la agenda).
+  parts.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === 'up' ? -1 : 1;
+    return hfCmpDescKey(
+      hfFeedSortKey({ kind: 'post', post: a.p, ymd: a.ymd || null }),
+      hfFeedSortKey({ kind: 'post', post: b.p, ymd: b.ymd || null }));
+  });
   if (!parts.length) return '';
   const tileMedia = (p, isV) => !p.image_path
     ? '<span class="fp-tile-ph">' + pzIc('sparkle', 18) + '</span>'
@@ -16003,6 +16009,15 @@ function hfFeedSortKey(t) {
     const d = pcParseDate(p.created_at); return d ? d.getTime() : Infinity;
   } catch (e) { return Infinity; }
 }
+// (LOTE 12) Comparador descendente con «sin fecha» siempre al final
+// de su grupo (al invertir el orden, Infinity NO debe subir primero).
+function hfCmpDescKey(ka, kb) {
+  const fa = Number.isFinite(ka), fb = Number.isFinite(kb);
+  if (fa && fb) return kb - ka;
+  if (fa) return -1;
+  if (fb) return 1;
+  return 0;
+}
 function homeGridCompose(input) {
   const o = input || {};
   const upcoming = Array.isArray(o.upcoming) ? o.upcoming : [];
@@ -16043,18 +16058,27 @@ function homeGridCompose(input) {
     if (t && t.kind === 'post' && t.post && t.post.pinned) pinTiles.push(t);
     else restTiles.push(t);
   }
-  // (LOTE 11 · orden cronológico) El feed se lee como la semana:
-  // lunes arriba → domingo abajo. El CONJUNTO no cambia (el mismo
-  // corte de siempre: próximos + publicados más recientes hasta el
-  // tope); solo el ORDEN en pantalla pasa a ascendente por fecha
-  // efectiva (hfFeedSortKey). Los fijados siguen primeros: esa regla
-  // IG no la pidió cambiar Valentino. El sort es estable: a igual
-  // fecha, queda el orden previo (día/hora de la agenda).
+  // (LOTE 12 · corrección de Valentino 31/10 — reemplaza el ascendente
+  // del Lote 11, que fue una mala lectura de su «al revés»): de arriba
+  // a abajo, fijados primero (regla IG intacta); después los NO
+  // publicados (programados + borradores) por fecha DESCENDENTE (el
+  // más lejano en el futuro arriba de todo); al final, abajo de todo,
+  // los YA SALIDOS (publicados + IG) por fecha DESCENDENTE (el más
+  // reciente primero). El grupo se decide por ESTADO, no por fecha:
+  // un borrador con día planificado ya pasado sigue siendo no
+  // publicado y va en el bloque de arriba. El CONJUNTO no cambia (el
+  // mismo corte de siempre); solo el orden en pantalla. El sort es
+  // estable: a igual fecha, queda el orden previo.
   pinTiles.sort((x, y) => String(x.post.pinned_at || '').localeCompare(String(y.post.pinned_at || '')) || ((x.post.id || 0) - (y.post.id || 0)));
   const capped = pinTiles.concat(restTiles).slice(0, cap);
   const head = capped.filter((t) => t && t.kind === 'post' && t.post && t.post.pinned);
   const rest = capped.filter((t) => !(t && t.kind === 'post' && t.post && t.post.pinned));
-  rest.sort((a, b) => hfFeedSortKey(a) - hfFeedSortKey(b));
+  const isPubTile12 = (t) => t && (t.kind === 'ig' || (t.post && t.post.status === 'published'));
+  rest.sort((a, b) => {
+    const pa = isPubTile12(a) ? 1 : 0, pb = isPubTile12(b) ? 1 : 0;
+    if (pa !== pb) return pa - pb;
+    return hfCmpDescKey(hfFeedSortKey(a), hfFeedSortKey(b));
+  });
   return head.concat(rest);
 }
 const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
@@ -16650,14 +16674,18 @@ function homeTileHTML(t, i) {
   // post abierto en grande: el detalle trae el mini-chat «Pedir un
   // cambio» (hfAskChangeBtnHTML), que abre el chat ÚNICO con el posteo
   // anclado. Tocar una tile abre siempre el detalle.
-  // (LOTE 11 · corrección de Valentino 31/10: el corazón SÍ vive
-  // adentro de la foto, esquina superior izquierda, sin tapar centro
-  // ni titular. Es la ÚNICA excepción a «ningún botón flotante tapa
-  // la imagen»: los captions siguen sin pintarse sobre la imagen.)
+  // (LOTE 12 · corrección de Valentino 31/10: el corazón vive
+  // adentro de la foto, ABAJO A LA DERECHA, a la derecha de la
+  // chapita día+hora (chapita abajo a la izquierda, corazón abajo a
+  // la derecha, misma franja inferior). Reemplaza la esquina superior
+  // izquierda del Lote 11. Es la ÚNICA excepción a «ningún botón
+  // flotante tapa la imagen»: los captions siguen sin pintarse
+  // sobre la imagen.)
   // REGLA DURA DE TILES (misma corrección — «los captions enormes en
   // el medio»): ninguna tile pinta texto sobre la imagen. homeTileHTML
   // no renderiza ningún caption: solo media, chapita chica abajo a la
-  // izquierda, glifo arriba a la derecha y nada más. Los captions
+  // izquierda, corazón abajo a la derecha, glifo arriba a la derecha
+  // y nada más. Los captions
   // viven DEBAJO de la media, en tamaño normal, solo en el detalle
   // (.hf-d-cap 14px), el visor (.lb-cap 14px) y la tarjeta del cofre
   // (.igmock-cap 13px) — nunca centrados, nunca gigantes, nunca sobre
@@ -19494,7 +19522,7 @@ function hfDetailBind(root) {
   }, true);
 }
 // (LOTE 10 · ítem 1, movido en LOTE 11) Corazón visible en cada tile,
-// ADENTRO de la foto (esquina superior izquierda, sobre la imagen).
+// ADENTRO de la foto (abajo a la derecha, a la derecha de la chapita día+hora).
 // Vive DENTRO de .hf-tile, así que el doble toque y la capa lo verían
 // como toque en la tile: los guards en hfDetailBind y bindScfMinis
 // dejan pasar el click hasta acá. La acción es EXACTAMENTE la del

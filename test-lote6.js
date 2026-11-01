@@ -11,7 +11,7 @@ const { DatabaseSync } = require('node:sqlite');
 
 const TREE = path.resolve(process.argv[2] || '.');
 const CHUNK_V = process.argv[3] || '20261031-v510';
-const BUILD_ID = process.argv[4] || '20261031-v512';
+const BUILD_ID = process.argv[4] || '20261031-v513';
 
 let pass = 0, fail = 0;
 const failures = [];

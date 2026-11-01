@@ -1,5 +1,7 @@
-// LOTE 11 — Feed en orden cronológico (lunes arriba → domingo abajo)
-// + corazón adentro de la foto (esquina superior izquierda).
+// LOTE 11 — Actualizado por LOTE 12: orden corregido (no-publicados
+// desc, publicados desc abajo) + corazón abajo a la derecha.
+// (El ascendente y la esquina superior izquierda originales quedaron
+// SUPERSEDED por el criterio aprobado del Lote 12.)
 // Referencia: Valentino 31/10, probando el build 3 (v511): «Los posteos
 // de mas arriba tienen fecha mas cercana a hoy, y tiene q ser al reves»
 // + «el corazón de aprobar va ADENTRO de la foto».
@@ -61,10 +63,10 @@ function loadFns(sb, names) {
   t(k({ kind: 'post', post: { status: 'draft' } }) === Infinity, 'key: sin fecha va al final, nunca inventada');
 }
 
-// ---------- homeGridCompose: orden ascendente ----------
+// ---------- homeGridCompose: orden Lote 12 ----------
 {
   const sb = sandbox({ HOME_FEED_CAP: 24 });
-  loadFns(sb, ['pcParseDate', 'schedYmdToDate', 'hfFeedSortKey', 'homeGridCompose']);
+  loadFns(sb, ['pcParseDate', 'schedYmdToDate', 'hfFeedSortKey', 'hfCmpDescKey', 'homeGridCompose']);
   const P = (id, st, pub, sch) => ({ id, status: st, published_at: pub, scheduled_at: sch, media_type: 'image', image_path: 'x.jpg' });
   // Caso reportado: solo publicados, entrada lo más nuevo primero.
   const onlyPub = sb.homeGridCompose({
@@ -72,8 +74,8 @@ function loadFns(sb, names) {
     published: [P(1, 'published', '2026-10-30T18:00:00Z'), P(2, 'published', '2026-10-28T18:00:00Z'), P(3, 'published', '2026-10-20T18:00:00Z')],
     recents: [],
   });
-  t(onlyPub.map((x) => x.post.id).join(',') === '3,2,1', 'orden: publicados solos salen viejo→nuevo (el bug reportado, invertido)');
-  // Caso mixto: fijado primero, resto ascendente cruzando bloques.
+  t(onlyPub.map((x) => x.post.id).join(',') === '1,2,3', 'orden: publicados solos salen nuevo→viejo (descendente, abajo de todo)');
+  // Caso mixto: fijado primero, resto = no-publicados desc + publicados desc.
   const mixed = sb.homeGridCompose({
     upcoming: [
       { p: P(10, 'draft', null, null), ymd: '2026-10-27' },
@@ -89,7 +91,7 @@ function loadFns(sb, names) {
   });
   const ids = mixed.map((x) => (x.kind === 'post' ? String(x.post.id) : 'ig'));
   t(ids[0] === '22', 'orden: fijado primero (regla IG, no pedida cambiar)');
-  t(ids.slice(1).join(',') === 'ig,21,10,20,11,12', 'orden: resto ascendente cruzando bloques (ig viejo, pub viejo, borrador lun, pub, prog, borrador)');
+  t(ids.slice(1).join(',') === '12,11,10,20,21,ig', 'orden: resto = no-pub desc (borrador 30, prog 29, borrador 27) + pub desc (pub 28, pub 20, ig)');
   // Tope: el conjunto NO cambia (mismo corte de siempre), solo el orden.
   const manyPub = [];
   for (let d = 1; d <= 30; d++) manyPub.push(P(100 + d, 'published', `2026-10-${String(d).padStart(2, '0')}T18:00:00Z`));
@@ -105,7 +107,7 @@ function loadFns(sb, names) {
   const capIds = capped.map((x) => String(x.post.id));
   t(capIds.includes('201') && capIds.includes('202'), 'tope: los próximos de la semana siguen dentro');
   t(!capIds.includes('101') && !capIds.includes('108'), 'tope: los publicados más viejos (1–8 oct) siguen fuera, como antes');
-  t(capIds[0] === '109' && capIds[capIds.length - 1] === '202', 'tope: primero el publicado más viejo del conjunto (9 oct), último el borrador más nuevo (2 nov)');
+  t(capIds[0] === '202' && capIds[capIds.length - 1] === '109', 'tope: primero el borrador más nuevo (2 nov), último el publicado más viejo del conjunto (9 oct)');
   // Los valores de fecha no se tocan.
   t(capped.every((x) => !x.post || typeof x.post.published_at === 'string' || x.post.published_at == null), 'valores: ninguna fecha mutada por el orden');
 }
@@ -113,8 +115,8 @@ function loadFns(sb, names) {
 // ---------- feedPreviewHTML: mismo orden ----------
 {
   const fp = app.slice(app.indexOf('function feedPreviewHTML'), app.indexOf('function bindScfMinis'));
-  t(!/String\(b\.published_at/.test(fp), 'feed agenda: ya no ordena publicados descendente');
-  t(/parts\.sort\([^;]*hfFeedSortKey/.test(fp), 'feed agenda: ordena con la misma clave que la home');
+  t(/a\.kind !== b\.kind/.test(fp), 'feed agenda: agrupa no-publicados antes que publicados');
+  t(/hfCmpDescKey/.test(fp), 'feed agenda: descendente con la misma clave que la home');
 }
 
 // ---------- Semana ya era ascendente (consistencia, sin tocarla) ----------
@@ -147,7 +149,8 @@ function loadFns(sb, names) {
   const scf = app.slice(app.indexOf('function bindScfMinis'), app.indexOf('function scfWireGlobals'));
   t(/closest\('\[data-hf-like\]'\)/.test(scf), 'guard: bindScfMinis no abre la capa con el toque del corazón');
   t(/\.hf-like-in\{[^}]*position:absolute/.test(css), 'css: hf-like-in absoluto');
-  t(/\.hf-like-in\{[^}]*top:8px;left:8px/.test(css), 'css: hf-like-in esquina superior izquierda (chip abajo-izquierda y glifo arriba-derecha libres)');
+  t(/\.hf-like-in\{[^}]*bottom:8px;right:8px/.test(css), 'css: hf-like-in abajo a la derecha (a la derecha de la chapita, misma franja inferior)');
+  t(/\.hf-chip\{[^}]*left:6px;bottom:6px/.test(css), 'css: chapita sigue abajo a la izquierda');
   t(/\.hf-like-in\{[^}]*z-index:5/.test(css), 'css: hf-like-in por encima de la foto');
   t(/\.hf-tile\{[^}]*position:relative/.test(css), 'css: la tile ya es relative, el absoluto ancla bien');
   const oldComment = /ningún botón\s*\n?\s*\/\/ flotante tapa la imagen/.test(app);
