@@ -8644,7 +8644,7 @@ function chatNextWeekHTML() {
   const more = w.n > w.total ? (en ? ` · and <b>${w.n - w.total} more</b> on hold` : ` · y <b>${w.n - w.total} más</b> en espera`) : '';
   return `<div class="chat-msg ai">${en ? `✨ <b>${shown} of ${w.total}</b> posts for next week are already lined up` : `✨ ya están armados <b>${shown} de ${w.total}</b> de la semana que viene`}${more}</div>`;
 }
-function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
+function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetChips) {
   // (v442 · Corrección de Valentino 02:20) En la pantalla principal
   // (mainScr: Inicio y Semana) el chat va SIN prólogo: sin saludo
   // («hola! qué hacemos hoy?»), sin la línea de estado de la semana
@@ -8680,7 +8680,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr) {
   // jamás empuja el layout al aparecer o cambiar.
   const ideasChip = schedMode ? `<button type="button" class="ideas-chip" id="ideasChip" aria-expanded="${IDEAS_PANEL_OPEN ? 'true' : 'false'}" aria-controls="hs-ideas">${pzIc('idea', 18)} Ideas <span class="ideas-badge${(typeof IDEAS_PENDING_COUNT === 'number' && IDEAS_PENDING_COUNT > 0) ? '' : ' off'}" id="ideasBadge">${typeof IDEAS_PENDING_COUNT === 'number' ? IDEAS_PENDING_COUNT : 0}</span></button>` : '';
   const upRow = schedMode ? `
-    <div class="sched-up-row">
+    <div class="${sheetChips ? 'sched-chips-row' : 'sched-up-row'}">
       <button type="button" class="ag-upload-btn" id="agUploadBtn">${pzIc('camera', 18)} Subir fotos o video</button>
       ${ideasChip}
       <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
@@ -18093,7 +18093,7 @@ async function inicioView() {
   <div class="mz-sheet" id="mzSheet" hidden>
     <div class="mz-sheet-card">
       <div class="mz-sheet-head"><span></span><button type="button" class="mz-sheet-x" id="mzSheetX" aria-label="Cerrar">${pzIc("x", 16)}</button></div>
-      <div class="mz-sheet-body">${chatCardHTML(true, true, true, true, true)}</div>
+      <div class="mz-sheet-body">${chatCardHTML(true, true, true, true, true, true)}</div>
     </div>
   </div>
 

@@ -4221,3 +4221,21 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
   .pz-enter-fwd,.pz-enter-back{animation:none}
   .pz-trail{display:none}
 }
+
+/* ============ LOTE CHAT SIMPLE (2026-11-01) ============ */
+/* La hoja de Inicio abraza su contenido (sin vacío blanco enorme):
+   tarjeta a medida, mensajes con scroll interno, campo abajo siempre
+   visible. Con el teclado abierto el viewport se achica
+   (interactive-widget=resizes-content en index.html) y la tarjeta
+   se achica con él: nada queda tapado por el teclado ni por la barra
+   accesoria del sistema. Sin animaciones (reduced-motion trivial). */
+.mz-sheet{bottom:calc(12px + env(safe-area-inset-bottom));}
+.mz-sheet-card{height:auto;max-height:calc(100dvh - 24px - env(safe-area-inset-bottom));}
+.mz-sheet-body{display:flex;flex-direction:column;overflow:hidden;}
+.mz-sheet #chatCard{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}
+.mz-sheet .chat-box{flex:1 1 auto;max-height:none;min-height:0;overflow-y:auto;}
+.mz-sheet .chat-input-row{flex:none;}
+/* Chips chicos SOLO en la hoja (Schedule conserva sus botones grandes). */
+.mz-sheet .sched-chips-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 2px;}
+.mz-sheet .sched-chips-row .ag-upload-btn{padding:8px 14px;font-size:13px;box-shadow:none;background:#fff;color:#0A1E33;border:1.5px solid var(--line);}
+.mz-sheet .sched-chips-row .ideas-chip{padding:8px 14px;font-size:13px;box-shadow:none;}
