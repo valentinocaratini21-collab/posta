@@ -138,6 +138,11 @@ async function api(cookie, method, p, body) {
   const sandbox = {
     esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
     mv: (p) => p,
+    pzDecEnt: (s) => String(s == null ? '' : s).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'"),
+    pzIc: () => '',
+    hfCoverState: () => ({ has: false }),
+    hfWhenChip: () => '',
+    hfTileChipParts: () => null,
   };
   vm.createContext(sandbox);
   vm.runInContext(src.slice(a, b), sandbox);
@@ -168,13 +173,16 @@ async function api(cookie, method, p, body) {
       { img: '/media/nodate.jpg', type: 'image', taken_at: null },
     ],
   });
-  ok(tiles2.length === 2 && tiles2[0].post && tiles2[0].post.id === 9 && tiles2[1].img === '/media/old.jpg',
-    `dedupe: publicado + solo el leído ANTERIOR (vinieron ${tiles2.length})`);
+  // (LOTE FEED 1/11): la puerta de fecha queda SUPERSEDED — el dedupe es por
+  // shortcode probado, no por fecha: el leído nuevo sin shortcode y el sin fecha
+  // ya NO se pierden en silencio (rinden junto al publicado y al viejo).
+  ok(tiles2.length === 4 && tiles2.map((t) => (t.post ? 'post:' + t.post.id : t.img)).sort().join(',') === '/media/dup.jpg,/media/nodate.jpg,/media/old.jpg,post:9',
+    `dedupe por shortcode: publicado + leídos viejo, nuevo y sin fecha (vinieron ${tiles2.length})`);
   const tiles3 = homeGridCompose({ upcoming: [], published: [], recents: [{ img: '/media/x.jpg', type: 'image', taken_at: null }, { img: '/media/y.jpg', type: 'carousel', taken_at: 123 }] });
   ok(tiles3.length === 2, 'sin publicados por Posty: los leídos entran todos (no hay duplicado posible)');
   const many = [];
   for (let i = 0; i < 30; i++) many.push({ img: '/media/m' + i + '.jpg', type: 'image', taken_at: i });
-  ok(homeGridCompose({ upcoming: [], published: [], recents: many }).length === 24, 'cap de grilla: 24 tiles');
+  ok(homeGridCompose({ upcoming: [], published: [], recents: many }).length === 30, 'sin tope (LOTE FEED): 30 leídos rinden 30');
 
   const headFull = homeHeadHTML({ username: 'cafesol', name: 'Café Sol', bio: 'Línea 1\nLínea 2', bio_unread: false, link: '', pic: null, followers: 340, posts_count: 128, following: 57, highlights: [{ title: 'Menú', cover: '/media/h.jpg' }] }, 'X');
   ok(headFull.includes('cafesol') && headFull.includes('340') && headFull.includes('seguidores') && headFull.includes('Menú') && headFull.includes('hf-hls'), 'encabezado completo: username, conteos, destacadas');

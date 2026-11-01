@@ -78,7 +78,7 @@ const NO_NOTIFY = { notify: false };
   const dbjs = fs.readFileSync(__dirname + '/db.js', 'utf8');
   check('scheduler requiere publish-watchdog', sched.includes("require('./publish-watchdog')"));
   check('scheduler programa el barrido del vigía', sched.includes('publishWatchdog.sweep'));
-  check('BUILD_ID v353', server.includes("20261023-v353"));
+  check('BUILD_ID v353', server.includes("20261101-v520"));
   check('db.js crea publish_ledger', dbjs.includes('CREATE TABLE IF NOT EXISTS publish_ledger'));
   check('db.js crea publish_watchdog_escalations', dbjs.includes('CREATE TABLE IF NOT EXISTS publish_watchdog_escalations'));
 

@@ -66,7 +66,7 @@ function loadFns(sb, names) {
 // ---------- homeGridCompose: orden Lote 12 ----------
 {
   const sb = sandbox({ HOME_FEED_CAP: 24 });
-  loadFns(sb, ['pcParseDate', 'schedYmdToDate', 'hfFeedSortKey', 'hfCmpDescKey', 'homeGridCompose']);
+  loadFns(sb, ['pcParseDate', 'schedYmdToDate', 'hfFeedSortKey', 'hfCmpDescKey', 'hfIgShortcode', 'homeGridCompose']);
   const P = (id, st, pub, sch) => ({ id, status: st, published_at: pub, scheduled_at: sch, media_type: 'image', image_path: 'x.jpg' });
   // Ejemplo del encargo: programado 29/10 + borrador 27/10 + publicado
   // 28/10 + publicado 20/10 → de arriba a abajo: 29, 27, 28, 20.

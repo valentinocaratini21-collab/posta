@@ -420,6 +420,42 @@ function pzGoBack() {
   } catch (e) {}
   bbGo('#/app/inicio');
 }
+// (LOTE FEED · transiciones mágicas — Valentino 1/11: «para que se
+// sienta una app impresionante») Rápidas (~300 ms), nunca lentas: la
+// navegación no espera a la animación (el contenido ya está pintado;
+// solo se desliza). Transform solo: no toca scroll ni layout. Con
+// reduced-motion: sin movimiento (ni slide, ni estela, ni zoom).
+function pzReducedMotion() {
+  try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; }
+}
+function pzMagicTrail() {
+  try {
+    if (pzReducedMotion()) return;
+    const d = document.createElement('div');
+    d.className = 'pz-trail';
+    d.setAttribute('aria-hidden', 'true');
+    d.innerHTML = '<span class="pz-trail-band"></span><span class="pz-trail-spark">✦</span><span class="pz-trail-spark s2">✦</span><span class="pz-trail-spark s3">✦</span>';
+    document.body.appendChild(d);
+    const anim = d.animate([{ transform: 'translateX(-30%)' }, { transform: 'translateX(130%)' }], { duration: 300, easing: 'ease-out' });
+    if (anim && anim.finished) anim.finished.then(() => { try { d.remove(); } catch (e) {} }).catch(() => {});
+    else setTimeout(() => { try { d.remove(); } catch (e) {} }, 340);
+  } catch (e) {}
+}
+function pzPlayEnter() {
+  try {
+    if (!PZ_NAV_DIR || pzReducedMotion()) return;
+    const el = document.querySelector('.bb-main') || document.querySelector('.app-shell .main');
+    if (!el) return;
+    const cls = PZ_NAV_DIR === 'back' ? 'pz-enter-back' : 'pz-enter-fwd';
+    el.classList.remove('pz-enter-fwd', 'pz-enter-back');
+    void el.offsetWidth; // reinicia la animación aunque la clase ya estaba
+    el.classList.add(cls);
+    pzMagicTrail();
+    const done = () => { try { el.classList.remove(cls); } catch (e) {} };
+    el.addEventListener('animationend', done, { once: true });
+    setTimeout(done, 360); // respaldo si animationend no llega
+  } catch (e) {}
+}
 function pzBackHTML(tab) {
   if (tab === 'inicio') return '';
   // (LOTE 10B · A) El jardín tiene su propio control atrás (flecha +
@@ -10268,15 +10304,41 @@ function schedMiniTime(p) {
 let SCF_POP = null; // { wrap, card, vault, pop } — la tarjeta abierta, si hay
 let SCF_POP_TIMER = null; // (legado) ya no hay cierre diferido por hover
 let SCF_PINNED = false; // v221: click = capa FIJADA (queda hasta ✕ o click afuera)
-function scfClosePop() {
+function scfClosePop(zoomBack) {
   if (SCF_POP_TIMER) { clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = null; }
+  const wasPinned = SCF_PINNED;
   SCF_PINNED = false;
   if (!SCF_POP) return;
   const cur = SCF_POP;
-  SCF_POP = null;
-  try { if (cur.vault && cur.card) cur.vault.appendChild(cur.card); } catch (e) {}
-  try { const pop = cur.pop || cur.wrap.querySelector('.scf-pop'); if (pop) pop.remove(); } catch (e) {}
-  try { cur.wrap.classList.remove('pop-open'); } catch (e) {}
+  let done = false;
+  const fin = () => {
+    if (done) return; done = true;
+    if (SCF_POP === cur) SCF_POP = null;
+    try { if (cur.vault && cur.card) cur.vault.appendChild(cur.card); } catch (e) {}
+    try { const pop = cur.pop || cur.wrap.querySelector('.scf-pop'); if (pop) pop.remove(); } catch (e) {}
+    try { cur.wrap.classList.remove('pop-open'); } catch (e) {}
+  };
+  // (LOTE FEED · vuelta por donde vino) Cierre explícito de una capa
+  // fijada: la tarjeta vuelve a su tile en ~300 ms si la tile sigue
+  // visible; si no, cierra en el acto. Los cierres internos (abrir
+  // otra capa, hover, repintado) nunca animan.
+  if (zoomBack && wasPinned && !pzReducedMotion()) {
+    try {
+      const pop = cur.pop;
+      const tr = cur.wrap.getBoundingClientRect();
+      const pr = pop ? pop.getBoundingClientRect() : null;
+      const vis = tr.width > 0 && tr.top > -tr.height && tr.top < (window.innerHeight || 0);
+      if (pop && pr && pr.width > 0 && vis) {
+        const s = Math.max(0.05, Math.min(1, tr.width / pr.width));
+        const dx = (tr.left + tr.width / 2) - (pr.left + pr.width / 2);
+        const dy = (tr.top + tr.height / 2) - (pr.top + pr.height / 2);
+        const anim = pop.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${s.toFixed(3)})`, opacity: 0.6 }], { duration: 300, easing: 'ease-in' });
+        if (anim && anim.finished) { anim.finished.then(fin).catch(fin); return; }
+        setTimeout(fin, 310); return;
+      }
+    } catch (e) {}
+  }
+  fin();
 }
 function scfOpenPop(wrap, pinned) {
   if (!wrap) return;
@@ -10301,6 +10363,21 @@ function scfOpenPop(wrap, pinned) {
   // (max-height del CSS + scroll DENTRO de la tarjeta: los botones de
   // abajo quedan alcanzables sin pelear con el scroll de la página).
   document.body.appendChild(pop);
+  // (LOTE FEED · zoom desde la tile) Al abrir con toque/click (capa
+  // fijada), la tarjeta crece desde la tile tocada en ~300 ms; el
+  // hover (sin fijar) sigue instantáneo. Transform solo (WAAPI).
+  try {
+    if (pinned && !pzReducedMotion()) {
+      const tr = wrap.getBoundingClientRect();
+      const pr = pop.getBoundingClientRect();
+      if (tr.width > 0 && pr.width > 0) {
+        const s = Math.max(0.05, Math.min(1, tr.width / pr.width));
+        const dx = (tr.left + tr.width / 2) - (pr.left + pr.width / 2);
+        const dy = (tr.top + tr.height / 2) - (pr.top + pr.height / 2);
+        pop.animate([{ transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${s.toFixed(3)})`, opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 300, easing: 'ease-out' });
+      }
+    }
+  } catch (e) {}
   wrap.classList.add('pop-open');
   SCF_POP = { wrap, card, vault, pop };
   SCF_PINNED = !!pinned;
@@ -10318,7 +10395,7 @@ function scfOpenPop(wrap, pinned) {
   // de mousemove (bindSchedFilter): mouseleave no es confiable con
   // capas fixed transformadas. Con click queda FIJADA (SCF_PINNED).
   const x = pop.querySelector('.scf-pop-x');
-  if (x) x.onclick = (e) => { e.stopPropagation(); scfClosePop(); };
+  if (x) x.onclick = (e) => { e.stopPropagation(); scfClosePop(true); };
   // (v436) El botón «Ver el día completo» de la capa murió con la
   // vista Día: la capa ES el detalle del posteo (Aceptar/Editar/💬).
 }
@@ -10567,8 +10644,8 @@ function scfWireGlobals() {
   // Cerrar la capa tocando afuera o con Escape (una sola vez global).
   if (!window.__scfPopDocWired) {
     window.__scfPopDocWired = true;
-    document.addEventListener('click', (e) => { if (SCF_POP && !e.target.closest('.scf-mini-x') && !e.target.closest('.scf-pop')) scfClosePop(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') scfClosePop(); });
+    document.addEventListener('click', (e) => { if (SCF_POP && !e.target.closest('.scf-mini-x') && !e.target.closest('.scf-pop')) scfClosePop(true); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') scfClosePop(true); });
   }
   // v221 — Rastreador geométrico de salida (corrección de Valentino:
   // "cuando saco el mouse de la foto directamente se tiene que cerrar
@@ -15047,6 +15124,7 @@ function pzPrefetchKick() {
  // pantalla que abrió el posteo (o a Inicio sin origen válido) y restaura
  // su scroll. Solo se actualiza cuando cambia la vista, no en repintados.
  let PZ_VIEW_KEY = ''; let PZ_PREV_VIEW = ''; const PZ_SCROLL_POS = {};
+ let PZ_NAV_STACK = []; let PZ_NAV_DIR = null; // (LOTE FEED · transiciones) pila para la dirección
  function pzApvBackHTML(en) {
    const prev = (typeof PZ_PREV_VIEW === 'string') ? PZ_PREV_VIEW : '';
    let href = '#/app/inicio';
@@ -15075,6 +15153,15 @@ function pzPrefetchKick() {
      const _k = (location.hash || '#/').split('?')[0];
      if (_k !== PZ_VIEW_KEY) {
        if (PZ_VIEW_KEY) { try { PZ_SCROLL_POS[PZ_VIEW_KEY] = window.scrollY || 0; } catch (e) {} PZ_PREV_VIEW = PZ_VIEW_KEY; }
+       // (LOTE FEED · transiciones) Dirección del cambio: volver = la
+       // nueva clave es la anterior de la pila; si no, avanzar. En
+       // la primera pintura no hay dirección (sin animación).
+       try {
+         if (PZ_VIEW_KEY && PZ_NAV_STACK.length >= 2 && PZ_NAV_STACK[PZ_NAV_STACK.length - 2] === _k) { PZ_NAV_DIR = 'back'; PZ_NAV_STACK.pop(); }
+         else if (PZ_VIEW_KEY) { PZ_NAV_DIR = 'fwd'; PZ_NAV_STACK.push(_k); }
+         else { PZ_NAV_DIR = null; PZ_NAV_STACK.push(_k); }
+         if (PZ_NAV_STACK.length > 24) PZ_NAV_STACK.splice(0, PZ_NAV_STACK.length - 24);
+       } catch (e) { PZ_NAV_DIR = null; }
        PZ_VIEW_KEY = _k;
      }
    } catch (e) {}
@@ -15370,6 +15457,11 @@ function pzPrefetchKick() {
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  // (LOTE FEED · transiciones) Entrada deslizada + estela mágica, solo
+  // al cambiar de pantalla (misma vista = sin animación: el chat no
+  // salta y el scroll restaurado no se toca). Transform solo: nunca
+  // retrasa la llegada ni toca el scroll.
+  try { pzPlayEnter(); } catch (e) {}
   // LOTE VELOCIDAD: los fills que render() lanzaba a 60-90 ms (antes de la
   // pintura final) se re-disparan tras pintar: con esqueleto, la primera
   // pasada no encontraba los slots. Son idempotentes (dataset.done).
@@ -16344,12 +16436,41 @@ function hfCmpDescKey(ka, kb) {
   if (fb) return 1;
   return 0;
 }
+// (LOTE FEED · shortcode de IG desde un permalink, misma regla que feed-reconcile.js)
+function hfIgShortcode(url) {
+  try {
+    const m = /\/(?:p|reel|reels)\/([A-Za-z0-9_-]{5,20})/.exec(String(url || ''));
+    return m ? m[1] : null;
+  } catch (e) { return null; }
+}
+// (LOTE FEED · upcoming completo) Borradores y programados con ubicación
+// (schedPlacements) + los que quedaron SIN ubicación (sin scheduled_at y
+// sin propuesta: el cursor de propuestas cubre 21 días) con ymd null: el
+// orden los ubica por created_at dentro del grupo no publicado. Sin
+// esto, un borrador sin fecha no aparecía en la grilla en silencio.
+function hfFeedUpcoming(all, tz) {
+  const out = [];
+  try {
+    const pl = schedPlacements(Array.isArray(all) ? all : [], tz);
+    const placed = new Set();
+    for (const ymd of [...pl.byDay.keys()].sort()) {
+      for (const it of (pl.byDay.get(ymd) || [])) {
+        if (it.p.status === 'draft' || it.p.status === 'scheduled') { out.push({ p: it.p, ymd }); placed.add(it.p.id); }
+      }
+    }
+    for (const p of (Array.isArray(all) ? all : [])) {
+      if (!p || (p.status !== 'draft' && p.status !== 'scheduled')) continue;
+      if (placed.has(p.id)) continue;
+      out.push({ p, ymd: null });
+    }
+  } catch (e) {}
+  return out;
+}
 function homeGridCompose(input) {
   const o = input || {};
   const upcoming = Array.isArray(o.upcoming) ? o.upcoming : [];
   const published = Array.isArray(o.published) ? o.published : [];
   const recents = Array.isArray(o.recents) ? o.recents : [];
-  const cap = Number(o.cap) > 0 ? Number(o.cap) : HOME_FEED_CAP;
   const tiles = [];
   const isStory = (p) => String((p && p.media_type) || '') === 'story';
   for (const it of upcoming) {
@@ -16358,20 +16479,29 @@ function homeGridCompose(input) {
     if (p.status !== 'draft' && p.status !== 'scheduled') continue;
     tiles.push({ kind: 'post', post: p, ymd: it.ymd || null, day: it.ymd || null, isNew: p.status === 'draft' });
   }
-  // (2026-10-24) Los archivados/borrados EN Instagram (ig_state =
-  // 'archived_ext', reconciliación del servidor) no rinden en la grilla
-  // ni anclan minPubMs: el espejo sigue a la grilla real de la cuenta.
-  const pubs = published.filter((p) => p && !isStory(p) && p.status === 'published' && p.ig_state !== 'archived_ext')
+  // (LOTE FEED · nada se pierde en silencio) Los publicados archivados
+  // EN Instagram (ig_state = 'archived_ext', reconciliación del
+  // servidor) RINDEN en la grilla MARCADOS (tile.archivedExt → chip
+  // «Archivado» en homeTileHTML), en el grupo de ya salidos: el
+  // registro existe y el dueño lo ve, no se esconde. Solo el
+  // visitante no los ve (hfVisitorTiles los excluye: ya no están
+  // en Instagram).
+  const pubs = published.filter((p) => p && !isStory(p) && p.status === 'published')
     .slice().sort((a, b) => String(b.published_at || b.scheduled_at || '').localeCompare(String(a.published_at || a.scheduled_at || '')));
-  let minPubMs = Infinity;
   for (const p of pubs) {
-    tiles.push({ kind: 'post', post: p, ymd: null, day: null, isNew: false });
-    const t = Date.parse(p.published_at || p.scheduled_at || '');
-    if (Number.isFinite(t) && t < minPubMs) minPubMs = t;
+    tiles.push({ kind: 'post', post: p, ymd: null, day: null, isNew: false, archivedExt: p.ig_state === 'archived_ext' });
   }
+  // (LOTE FEED · dedupe real por shortcode) Antes, los recientes de
+  // IG se cortaban por fecha (solo los más viejos que el publicado
+  // más viejo): un posteo subido A MANO después de esa fecha se
+  // perdía en silencio. Ahora el duplicado se decide por shortcode
+  // (el permalink del publicado): si el reciente YA es un publicado
+  // propio, se descarta una sola vez; si no, rinde aunque sea nuevo.
+  const pubShortcodes = new Set();
+  for (const p of pubs) { const sc = hfIgShortcode(p.ig_permalink); if (sc) pubShortcodes.add(sc); }
   for (const r of recents) {
     if (!r || !r.img) continue;
-    if (minPubMs !== Infinity && (typeof r.taken_at !== 'number' || !(r.taken_at * 1000 < minPubMs))) continue;
+    if (r.shortcode && pubShortcodes.has(String(r.shortcode))) continue;
     tiles.push({ kind: 'ig', img: r.img, type: r.type || 'image', taken_at: (typeof r.taken_at === 'number' ? r.taken_at : null), isNew: false, pinned: r.pinned === true, likes: (typeof r.likes === 'number' ? r.likes : null), comments: (typeof r.comments === 'number' ? r.comments : null) });
   }
   // (Tanda feed 5 · ítem 3) FIJADOS del dueño (📌): las piezas propias
@@ -16392,11 +16522,15 @@ function homeGridCompose(input) {
   // los YA SALIDOS (publicados + IG) por fecha DESCENDENTE (el más
   // reciente primero). El grupo se decide por ESTADO, no por fecha:
   // un borrador con día planificado ya pasado sigue siendo no
-  // publicado y va en el bloque de arriba. El CONJUNTO no cambia (el
-  // mismo corte de siempre); solo el orden en pantalla. El sort es
-  // estable: a igual fecha, queda el orden previo.
+  // publicado y va en el bloque de arriba. (LOTE FEED) El conjunto
+  // SÍ cambia: todo lo conocido rinde (sin tope, sin puerta de
+  // fecha, archivados marcados); el orden sigue siendo el del
+  // Lote 12. El sort es estable: a igual fecha, queda el orden previo.
   pinTiles.sort((x, y) => String(x.post.pinned_at || '').localeCompare(String(y.post.pinned_at || '')) || ((x.post.id || 0) - (y.post.id || 0)));
-  const capped = pinTiles.concat(restTiles).slice(0, cap);
+  // (LOTE FEED) Sin tope: el HOME_FEED_CAP de 24 cortaba la grilla en
+  // silencio (todo lo demás no se veía). La grilla rinde TODO lo
+  // compuesto; las imágenes ya cargan lazy.
+  const capped = pinTiles.concat(restTiles);
   const head = capped.filter((t) => t && t.kind === 'post' && t.post && t.post.pinned);
   const rest = capped.filter((t) => !(t && t.kind === 'post' && t.post && t.post.pinned));
   const isPubTile12 = (t) => t && (t.kind === 'ig' || (t.post && t.post.status === 'published'));
@@ -17014,6 +17148,10 @@ function homeTileHTML(t, i) {
   // el justPub transitorio comparte la esquina, pero se limpia en
   // el render siguiente y no hay colisión en estado estable.
   const despChip = t.pzDespegue ? `<span class="pz-despegue-chip">${pzIc('flame', 14)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Breakout' : 'despegando'}</span>` : '';
+  // (LOTE FEED · marca de archivado) El archivado se ve MARCADO, no
+  // se esconde: chip en la franja (la única excepción a «nada de
+  // texto sobre la imagen», igual que la chapita) + borde propio.
+  const archChip = t.archivedExt ? `<span class="hf-arch-chip">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Archived' : 'Archivado'}</span>` : '';
   const despCls = t.pzDespegue ? ' hf-tile-despegue' : '';
   const nextCls = t.pzNext ? ' hf-tile-next' : '';
   const chipTxt = (p.status === 'draft' || p.status === 'scheduled')
@@ -17067,7 +17205,7 @@ function homeTileHTML(t, i) {
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}<button type="button" class="hf-like hf-like-in" data-hf-like aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></span>${justChip}${glyph}${despChip}</span></span>`;
+  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}<button type="button" class="hf-like hf-like-in" data-hf-like aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></span>${justChip}${glyph}${despChip}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -17325,7 +17463,8 @@ function hfVisitorTiles(tiles) {
   // La vista del visitante: SOLO lo que ya está en Instagram
   // (publicados por Posty + leídos de su cuenta), en su orden de
   // grilla. Los borradores y programados no existen para un visitante.
-  return (Array.isArray(tiles) ? tiles : []).filter((t) => t && (t.kind === 'ig' || (t.kind === 'post' && t.post && t.post.status === 'published')));
+  // (LOTE FEED) Los archivados tampoco: ya no están en Instagram.
+  return (Array.isArray(tiles) ? tiles : []).filter((t) => t && (t.kind === 'ig' || (t.kind === 'post' && t.post && t.post.status === 'published' && t.post.ig_state !== 'archived_ext')));
 }
 function hfTaggedEmptyHTML(en) {
   return `<div class="hf-empty"><span class="hf-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 19.4c1-2.8 3.2-4.2 5.8-4.2s4.8 1.4 5.8 4.2"/></svg></span><b>${en ? 'No tagged posts yet' : 'Sin publicaciones etiquetadas todavía'}</b><span>${en ? "When people tag you in photos and videos, they'll appear here." : 'Cuando las personas te etiqueten en fotos y videos, aparecerán acá.'}</span></div>`;
@@ -17788,12 +17927,7 @@ async function inicioView() {
   // Composición de la grilla: la semana en su posición final (el orden
   // de schedPlacements), publicados y posteos reales leídos (HOME_FEED).
   const pl = schedPlacements(allPosts, tz);
-  const upcoming = [];
-  for (const ymd of [...pl.byDay.keys()].sort()) {
-    for (const it of (pl.byDay.get(ymd) || [])) {
-      if (it.p.status === 'draft' || it.p.status === 'scheduled') upcoming.push({ p: it.p, ymd });
-    }
-  }
+  const upcoming = hfFeedUpcoming(allPosts, tz);
   const published = allPosts.filter(p => p.status === 'published');
   const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [] });
   for (const t of tiles) {
@@ -19353,12 +19487,7 @@ const HF_LIVE = { started: false, busy: false, lastFetch: 0, snap: null, pending
 function hfLiveCompose(allPosts, prof) {
   const tz = pcTz();
   const pl = schedPlacements(allPosts, tz);
-  const upcoming = [];
-  for (const ymd of [...pl.byDay.keys()].sort()) {
-    for (const it of (pl.byDay.get(ymd) || [])) {
-      if (it.p.status === 'draft' || it.p.status === 'scheduled') upcoming.push({ p: it.p, ymd });
-    }
-  }
+  const upcoming = hfFeedUpcoming(allPosts, tz);
   const published = allPosts.filter((p) => p.status === 'published');
   const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [] });
   const props = {};
@@ -21669,12 +21798,7 @@ const F3_LIVE = { timer: null, polls: 0, pending: -1, idlePolls: 0 };
 function f3TileHasMedia(el) { return !!(el && el.querySelector('img, video')); }
 function f3HomeTilesFrom(all, tz) {
   const pl = schedPlacements(all, tz);
-  const upcoming = [];
-  for (const ymd of [...pl.byDay.keys()].sort()) {
-    for (const it of (pl.byDay.get(ymd) || [])) {
-      if (it.p.status === 'draft' || it.p.status === 'scheduled') upcoming.push({ p: it.p, ymd });
-    }
-  }
+  const upcoming = hfFeedUpcoming(all, tz);
   const published = all.filter(p => p.status === 'published');
   const tiles = homeGridCompose({ upcoming, published, recents: (typeof HOME_PROF !== 'undefined' && HOME_PROF && HOME_PROF.recents) || [] });
   for (const t of tiles) {

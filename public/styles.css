@@ -4178,3 +4178,46 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    píldora, chat y tabs en Inicio y en Schedule (que no tenía despeje). */
 #inicioView.hf-wrap{padding-bottom:calc(148px + env(safe-area-inset-bottom))}
 .sched-wrap{padding-bottom:calc(148px + env(safe-area-inset-bottom))}
+
+/* (LOTE FEED · nada se pierde en silencio) Marca de archivado en la
+   grilla: chip en la franja + borde propio. La foto no se apaga. */
+.hf-archived-tile{outline:1.5px dashed rgba(10,30,51,.35);outline-offset:-1.5px}
+.hf-arch-chip{display:inline-flex;align-items:center;background:rgba(10,30,51,.55);color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700}
+/* (LOTE FEED · botones en vidrio de verdad) Causa del blanco opaco:
+   en modo oscuro el contenedor .hf-pacts tenía fondo #fff (Lote 13)
+   y el bloque glass no lo anulaba: vidrio sobre blanco = blanco.
+   Contenedor transparente + misma receta de vidrio de los paneles +
+   una sola línea (sin partirse) y misma altura (stretch). */
+#inicioView .hf-pacts{background:transparent;align-items:stretch}
+#inicioView .hf-pacts .hf-pmain{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10);white-space:nowrap;font-size:13px;padding:10px 6px;display:flex;align-items:center;justify-content:center;gap:6px}
+/* (LOTE FEED · fondo cuadritos SOLO en desktop) El MISMO patrón de
+   la landing (gj.css: dos repeating-linear-gradient, contraste
+   .030, casi textura). Solo en los costados de la columna centrada:
+   el wrap con su degradado tapa el centro; en móvil no va nada
+   (media query en el breakpoint desktop que el código ya usa:
+   min-width:761px). Shell: .bb-app.bb-glass-inicio (solo Inicio);
+   web: body:has(#inicioView) (solo Inicio). Sin parallax: con
+   reduced-motion no cambia nada. */
+@media(min-width:761px){
+  .bb-app.bb-glass-inicio{background-image:repeating-linear-gradient(90deg, rgba(10,30,51,.030) 0 76px, rgba(10,30,51,0) 76px 92px),repeating-linear-gradient(0deg, rgba(10,30,51,.030) 0 98px, rgba(10,30,51,0) 98px 114px)}
+  body:has(#inicioView){background-image:repeating-linear-gradient(90deg, rgba(10,30,51,.030) 0 76px, rgba(10,30,51,0) 76px 92px),repeating-linear-gradient(0deg, rgba(10,30,51,.030) 0 98px, rgba(10,30,51,0) 98px 114px)}
+}
+/* (LOTE FEED · transiciones mágicas) Entrada deslizada ~300 ms
+   (derecha al avanzar, izquierda al volver) + estela dorada/celeste
+   con destellos + botón que responde al instante. Transform solo:
+   nunca retrasa la llegada. :where() no pisa los :active propios
+   de otros botones (solo suma brillo donde no hay transform). */
+@keyframes pzSlideFwd{from{transform:translateX(28px);opacity:0}to{transform:none;opacity:1}}
+@keyframes pzSlideBack{from{transform:translateX(-28px);opacity:0}to{transform:none;opacity:1}}
+.pz-enter-fwd{animation:pzSlideFwd .3s ease-out}
+.pz-enter-back{animation:pzSlideBack .3s ease-out}
+.pz-trail{position:fixed;inset:0;z-index:300;pointer-events:none;overflow:hidden}
+.pz-trail-band{position:absolute;top:0;bottom:0;left:0;width:120px;background:linear-gradient(90deg, rgba(39,147,200,0), rgba(39,147,200,.35) 40%, rgba(254,193,77,.55) 60%, rgba(254,193,77,0));filter:blur(2px)}
+.pz-trail-spark{position:absolute;left:24px;top:22%;color:#FEC14D;font-size:22px;text-shadow:0 0 12px rgba(254,193,77,.9)}
+.pz-trail-spark.s2{left:64px;top:55%;color:#2793C8;font-size:17px;text-shadow:0 0 12px rgba(39,147,200,.9)}
+.pz-trail-spark.s3{left:96px;top:78%;font-size:14px}
+:where(#app) button:active{transform:scale(.97);box-shadow:0 0 0 4px rgba(39,147,200,.18)}
+@media (prefers-reduced-motion: reduce){
+  .pz-enter-fwd,.pz-enter-back{animation:none}
+  .pz-trail{display:none}
+}

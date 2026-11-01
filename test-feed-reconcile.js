@@ -165,7 +165,9 @@ const P = (id, extra) => Object.assign({ id, status: 'published', media_type: 'i
 const arch = P(7, { ig_state: 'archived_ext', published_at: '2026-09-27T00:00:00Z', caption: 'Remera nike' });
 const live = P(8, { ig_state: 'live' });
 let tiles = sb.homeGridCompose({ upcoming: [], published: [arch, live], recents: [] });
-ok('la grilla excluye el archivado_ext y conserva el vivo', tiles.length === 1 && tiles[0].post.id === 8, JSON.stringify(tiles.map((t) => t.post && t.post.id)));
+// (LOTE FEED 1/11, orden Valentino «nada se pierde en silencio»): el archivado
+// ya NO se excluye: rinde MARCADO (archivedExt) junto al vivo.
+ok('la grilla incluye el archivado_ext MARCADO y conserva el vivo', tiles.length === 2 && tiles[0].post.id === 8 && tiles[1].post.id === 7 && tiles[1].archivedExt === true, JSON.stringify(tiles.map((t) => t.post && t.post.id)));
 // Caso cuenta 12: TODOS sus publicados están archivados en IG -> la
 // grilla muestra los posteos REALES leídos de su perfil (recents),
 // que antes quedaban tapados por el ancla de los publicados viejos.
@@ -173,7 +175,7 @@ tiles = sb.homeGridCompose({ upcoming: [], published: [arch], recents: [
   { img: '/media/pieza1.jpg', type: 'image', taken_at: 1792627352 },
   { img: '/media/pieza2.jpg', type: 'carousel', taken_at: 1792760598 },
 ] });
-ok('sin publicados vivos, los recents reales rinden (2)', tiles.filter((t) => t.kind === 'ig').length === 2 && tiles.filter((t) => t.kind === 'post').length === 0, JSON.stringify(tiles.map((t) => t.kind)));
+ok('sin publicados vivos, los recents reales rinden (2) + el archivado marcado', tiles.filter((t) => t.kind === 'ig').length === 2 && tiles.filter((t) => t.kind === 'post').length === 1 && tiles.find((t) => t.kind === 'post').archivedExt === true, JSON.stringify(tiles.map((t) => t.kind)));
 
 // ---------- Parte 4: cableado ----------
 console.log('— feed-reconcile: cableado');
@@ -185,7 +187,7 @@ ok('server.js exige feed-reconcile y reconcilia tras leer el perfil',
 ok('homeProfileFromRead filtra hijos de carrusel de los recents',
   SERVER.includes('feedReconcile.isTopLevelReadPost(x)'));
 ok('db.js crea ig_state / ig_state_at', DBJS.includes('ADD COLUMN ig_state') && DBJS.includes('ADD COLUMN ig_state_at'));
-ok('app.js compone excluyendo archived_ext', APP.includes("p.ig_state !== 'archived_ext'"));
+ok('app.js compone el archived_ext MARCADO (y el visitante lo excluye)', APP.includes("archivedExt: p.ig_state === 'archived_ext'") && APP.includes("t.post.ig_state !== 'archived_ext'"));
 ok('index.html bumpeó el ?v= de app.js', !INDEX.includes('/app.js?v=258'));
 
 console.log(`\nfeed-reconcile: ${passed}/${passed + failed}`);

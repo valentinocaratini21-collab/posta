@@ -66,7 +66,7 @@ function loadFns(sb, names) {
 // ---------- homeGridCompose: orden Lote 12 ----------
 {
   const sb = sandbox({ HOME_FEED_CAP: 24 });
-  loadFns(sb, ['pcParseDate', 'schedYmdToDate', 'hfFeedSortKey', 'hfCmpDescKey', 'homeGridCompose']);
+  loadFns(sb, ['pcParseDate', 'schedYmdToDate', 'hfFeedSortKey', 'hfCmpDescKey', 'hfIgShortcode', 'homeGridCompose']);
   const P = (id, st, pub, sch) => ({ id, status: st, published_at: pub, scheduled_at: sch, media_type: 'image', image_path: 'x.jpg' });
   // Caso reportado: solo publicados, entrada lo más nuevo primero.
   const onlyPub = sb.homeGridCompose({
@@ -92,7 +92,8 @@ function loadFns(sb, names) {
   const ids = mixed.map((x) => (x.kind === 'post' ? String(x.post.id) : 'ig'));
   t(ids[0] === '22', 'orden: fijado primero (regla IG, no pedida cambiar)');
   t(ids.slice(1).join(',') === '12,11,10,20,21,ig', 'orden: resto = no-pub desc (borrador 30, prog 29, borrador 27) + pub desc (pub 28, pub 20, ig)');
-  // Tope: el conjunto NO cambia (mismo corte de siempre), solo el orden.
+  // (LOTE FEED 1/11, orden Valentino «nada se pierde en silencio»): el tope de 24
+  // queda SUPERSEDED — la grilla rinde TODO lo compuesto, sin cortar en silencio.
   const manyPub = [];
   for (let d = 1; d <= 30; d++) manyPub.push(P(100 + d, 'published', `2026-10-${String(d).padStart(2, '0')}T18:00:00Z`));
   const capped = sb.homeGridCompose({
@@ -103,11 +104,11 @@ function loadFns(sb, names) {
     published: manyPub,
     recents: [],
   });
-  t(capped.length === 24, 'tope: siguen siendo 24 tiles');
+  t(capped.length === 32, 'sin tope: 2 próximos + 30 publicados rinden 32');
   const capIds = capped.map((x) => String(x.post.id));
-  t(capIds.includes('201') && capIds.includes('202'), 'tope: los próximos de la semana siguen dentro');
-  t(!capIds.includes('101') && !capIds.includes('108'), 'tope: los publicados más viejos (1–8 oct) siguen fuera, como antes');
-  t(capIds[0] === '202' && capIds[capIds.length - 1] === '109', 'tope: primero el borrador más nuevo (2 nov), último el publicado más viejo del conjunto (9 oct)');
+  t(capIds.includes('201') && capIds.includes('202'), 'sin tope: los próximos de la semana siguen dentro');
+  t(capIds.includes('101') && capIds.includes('108'), 'sin tope: los publicados más viejos (1–8 oct) ya NO quedan fuera');
+  t(capIds[0] === '202' && capIds[capIds.length - 1] === '101', 'sin tope: primero el borrador más nuevo (2 nov), último el publicado más viejo del conjunto (1 oct)');
   // Los valores de fecha no se tocan.
   t(capped.every((x) => !x.post || typeof x.post.published_at === 'string' || x.post.published_at == null), 'valores: ninguna fecha mutada por el orden');
 }

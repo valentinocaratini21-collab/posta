@@ -8921,6 +8921,7 @@ app.post('/api/evento/:id/cancelar', requireAuth, express.json(), (req, res) => 
 });
 // FIN MODO EVENTO
 app.get('/api/posts', requireAuth, (req, res) => {
+  // (LOTE FEED) Sin tope de 100: la grilla rinde TODO lo conocido; el tope cortaba posteos viejos en silencio.
   const { status } = req.query;
   const join = 'LEFT JOIN post_signals s ON s.user_id = p.user_id AND s.post_id = p.id LEFT JOIN post_metrics pm ON pm.post_id = p.id';
   const vis = `AND COALESCE(p.needs_review, 0) = 0`; // "rueditas": en revisión no se muestra
@@ -8928,7 +8929,7 @@ app.get('/api/posts', requireAuth, (req, res) => {
   if (status) {
     rows = db.prepare(`SELECT p.*, s.client_signal AS signal, pm.likes AS likes, pm.comments AS comments_count FROM posts p ${join} WHERE p.user_id = ? AND p.status = ? ${vis} ORDER BY p.scheduled_at ASC, p.created_at DESC`).all(req.session.userId, status);
   } else {
-    rows = db.prepare(`SELECT p.*, s.client_signal AS signal, pm.likes AS likes, pm.comments AS comments_count FROM posts p ${join} WHERE p.user_id = ? ${vis} ORDER BY p.created_at DESC LIMIT 100`).all(req.session.userId);
+    rows = db.prepare(`SELECT p.*, s.client_signal AS signal, pm.likes AS likes, pm.comments AS comments_count FROM posts p ${join} WHERE p.user_id = ? ${vis} ORDER BY p.created_at DESC LIMIT 500`).all(req.session.userId);
   }
   // 🧠 Porqué (2026-10-19): todo posteo visible lleva su porqué. Los caminos
   // de creación que no cargan strategy_why lo reciben acá, una sola vez,
@@ -26277,7 +26278,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v519';
+const BUILD_ID = '20261101-v520';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

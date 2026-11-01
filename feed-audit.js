@@ -26,7 +26,11 @@ const demo = require('./demo');
 const AUDIT_MODEL = 'gpt-4o-mini';
 const AUDIT_CACHE_HOURS = 72;
 const AUDIT_LIMIT_PER_DAY = 5; // auditorías por día por IP
-const MAX_POSTS = 12;
+// (LOTE FEED) El embed trae la grilla entera; el tope de 12 dejaba
+// fuera los posteos viejos subidos a mano (y la reconciliación los
+// marcaba parciales). 100 cubre grillas reales; capPostsToGrid sigue
+// recortando a posts_count. El snapshot es 24 h en segundo plano.
+const MAX_POSTS = 100;
 const MAX_THUMBS = 4;
 
 // ---------------------------------------------------------------------------
