@@ -198,9 +198,9 @@ function sandbox(extra) {
 
 // ---------- Versiones y censo ----------
 {
-  t(/20261031-v514/.test(srv), 'BUILD v514 en server.js');
-  t(/app\.js\?v=336/.test(idx), 'app.js?v=336 en index');
-  t(/styles\.css\?v=20261057/.test(idx) && /styles\.css\?v=20261057/.test(idxEn), 'styles.css?v=20261057 en ambos índices');
+  t(/20261031-v515/.test(srv), 'BUILD v514 en server.js');
+  t(/app\.js\?v=337/.test(idx), 'app.js?v=337 en index');
+  t(/styles\.css\?v=20261058/.test(idx) && /styles\.css\?v=20261058/.test(idxEn), 'styles.css?v=20261058 en ambos índices');
   t(/20261031-v510/.test(app), 'CHUNK_V sigue v510 (ningún chunk tocado)');
   const cnt = (re) => (srv.match(re) || []).length;
   t(cnt(/catsMatch/g) === 3 && cnt(/week-redo/g) === 16 && cnt(/first_week/g) === 3 && cnt(/\/aprobar/g) === 16 && cnt(/autofetch/g) === 0, 'censo server 3/16/3/16 autofetch 0');

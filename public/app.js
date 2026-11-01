@@ -2433,7 +2433,37 @@ function lpGoTrial(e) {
   return false;
 }
 let LP_LIVE_TIMER = null, LP_LIVE_IO = null;
+/* PROBLEMA PRIMERO - espejo del hero (Posty, lote 14). */
+function ppMirrorInit() {
+  document.querySelectorAll('.pp-mirror').forEach(function (m) {
+    if (m.dataset.ppBound) return;
+    m.dataset.ppBound = '1';
+    var ans = [null, null, null];
+    var pats = [[0, 7], [0, 3, 5, 8], [0, 1, 3, 4, 6, 8]];
+    var tpl = m.getAttribute('data-pp-echo') || '';
+    m.querySelectorAll('.pp-q').forEach(function (q, qi) {
+      var chips = q.querySelectorAll('.pp-chip');
+      chips.forEach(function (c) {
+        c.addEventListener('click', function () {
+          chips.forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+          c.setAttribute('aria-pressed', 'true');
+          ans[qi] = { k: parseInt(c.getAttribute('data-pp-k'), 10), v: c.getAttribute('data-pp-v') };
+          if (ans[0] && ans[1] && ans[2]) {
+            var res = m.querySelector('.pp-result');
+            res.hidden = false;
+            var slots = m.querySelector('[data-pp-grid="hoy"]').querySelectorAll('.pp-slot');
+            slots.forEach(function (s) { s.classList.remove('pp-on'); });
+            pats[ans[0].k].forEach(function (i) { if (slots[i]) slots[i].classList.add('pp-on'); });
+            m.querySelector('.pp-echo').textContent = tpl.split('{0}').join(ans[0].v).split('{1}').join(ans[1].v).split('{2}').join(ans[2].v);
+          }
+        });
+      });
+    });
+  });
+}
+
 function lpInitHero() {
+  ppMirrorInit();
   pzPlansSocialMount();
   pzPaisPruebaLinks();
   lpInitCarousel();
@@ -3720,8 +3750,71 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <div class="pz-mg pz-mg--heroV"><video class="hero-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty, tu community manager, presentándose"></video></div>
     <div class="pill">🤖 Tu community manager</div>
-    <h1>Tu Instagram trabajando<br><span class="hl">todos los días, con un solo clic</span></h1>
-    <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b> — y los publica solo. Posteos, reels, historias, comentarios, mensajes y pauta — todo tu Instagram, hecho por Posty. Vos no hacés nada: solo frenás si algo no te cierra.</p>
+    <h1>«Mi feed queda a medias y no me trae clientes», <span class="hl">Posty postea por vos todos los días con tu producto real.</span></h1>
+    <div class="pp-mirror" data-pp-lang="es" data-pp-echo="Hoy: {0} posteos por semana, {1} horas tuyas, último cliente: {2}.">
+      <p class="pp-q-title">¿Tu feed vende o solo existe?</p>
+      <p class="pp-q-sub">3 toques, 10 segundos: mirá tu feed hoy vs. con Posty.</p>
+      <div class="pp-q">
+        <p>¿Cuántos posteos por semana publicás?</p>
+        <div class="pp-chips">
+          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="0" aria-pressed="false">0</button>
+          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="1–2" aria-pressed="false">1–2</button>
+          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="3 o más" aria-pressed="false">3 o más</button>
+        </div>
+      </div>
+      <div class="pp-q">
+        <p>¿Cuántas horas por semana le dedicás a Instagram?</p>
+        <div class="pp-chips">
+          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="0" aria-pressed="false">0</button>
+          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="1–3" aria-pressed="false">1–3</button>
+          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="4 o más" aria-pressed="false">4 o más</button>
+        </div>
+      </div>
+      <div class="pp-q">
+        <p>¿Cuándo fue la última vez que un posteo te trajo un cliente?</p>
+        <div class="pp-chips">
+          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="Nunca" aria-pressed="false">Nunca</button>
+          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="Hace meses" aria-pressed="false">Hace meses</button>
+          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="Esta semana" aria-pressed="false">Esta semana</button>
+        </div>
+      </div>
+      <div class="pp-result" hidden>
+        <div class="pp-panels">
+          <div class="pp-panel pp-hoy">
+            <b>Tu feed hoy</b>
+            <div class="pp-grid" data-pp-grid="hoy">
+              <span class="pp-slot"><img src="/ig-cafe.jpg" alt=""></span>
+              <span class="pp-slot"><img src="/g-tazas.jpg" alt=""></span>
+              <span class="pp-slot"><img src="/g-pasta.jpg" alt=""></span>
+              <span class="pp-slot"><img src="/g-latte.jpg" alt=""></span>
+              <span class="pp-slot"><img src="/g-cappu.jpg" alt=""></span>
+              <span class="pp-slot"><img src="/g-platos.jpg" alt=""></span>
+              <span class="pp-slot"><img src="/g-vaso.jpg" alt=""></span>
+              <span class="pp-slot"><img src="/g-tres.jpg" alt=""></span>
+              <span class="pp-slot"><img src="/g-gourmet.jpg" alt=""></span>
+            </div>
+            <p class="pp-panel-note">A medias, irregular.</p>
+          </div>
+          <div class="pp-panel pp-posty">
+            <b>Con Posty</b>
+            <div class="pz-mg" style="--mg-c:#2793C8"><div class="pp-grid" data-pp-grid="posty">
+              <img src="/ig-cafe.jpg" alt="">
+              <img src="/g-tazas.jpg" alt="">
+              <img src="/g-pasta.jpg" alt="">
+              <img src="/g-latte.jpg" alt="">
+              <img src="/g-cappu.jpg" alt="">
+              <img src="/g-platos.jpg" alt="">
+              <img src="/g-vaso.jpg" alt="">
+              <img src="/g-tres.jpg" alt="">
+              <img src="/g-gourmet.jpg" alt="">
+            </div></div>
+            <p class="pp-panel-note">Completo, todos los días, con tu producto real.</p>
+          </div>
+        </div>
+        <p class="pp-echo"></p>
+        <p class="pp-demo">Demostración: así se vería tu feed, no es una promesa de ventas.</p>
+      </div>
+    </div>
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
       <button class="btn btn-primary" type="submit">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>

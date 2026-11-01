@@ -58,9 +58,9 @@ check('hook en generateWeekDrafts', srv.includes('bilingualizeWeek(db, uid, bRow
 check('hook tras piloto automático', srv.indexOf('piloto automático:') < srv.indexOf('bilingualizeWeek(db, uid, bRows, bFn)'));
 check('hook solo piezas sin EN previo', srv.includes('bilingual_status IS NULL'));
 check('módulo: sin opt-in no escribe', wb.includes("if (!isBilingualWeekEnabled(db, uid)) return { ok: true, skipped: 'disabled'"));
-check('BUILD v514', srv.includes("BUILD_ID = '20261031-v514'"));
-check('index raíz app.js?v=336; en/index estática sin app.js', idx.includes('app.js?v=336') && !enidx.includes('app.js?v='));
-check('styles ?v= 20261057', idx.includes('styles.css?v=20261057') && enidx.includes('styles.css?v=20261057'));
+check('BUILD v514', srv.includes("BUILD_ID = '20261031-v515'"));
+check('index raíz app.js?v=337; en/index estática sin app.js', idx.includes('app.js?v=337') && !enidx.includes('app.js?v='));
+check('styles ?v= 20261058', idx.includes('styles.css?v=20261058') && enidx.includes('styles.css?v=20261058'));
 console.log('== Censo (sin cambios que explicar) ==');
 const c = (s, m) => (s.match(new RegExp(m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
 check('server.js 3/16/3/16 (lote 7: WhatsApp Sunday-letter reusa /aprobar/:token, sin ruta nueva)', c(srv, 'catsMatch') === 3 && c(srv, 'week-redo') === 16 && c(srv, 'first_week') === 3 && c(srv, '/aprobar') === 16,

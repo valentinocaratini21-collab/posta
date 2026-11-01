@@ -4014,3 +4014,30 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .mx-falta-btn{flex:none;background:#2793C8;color:#fff;border:0;font-size:12px;font-weight:800;font-family:inherit;padding:8px 12px;border-radius:99px;cursor:pointer}
 .mx-falta-btn:active{transform:scale(.96)}
 .mx-semana-linea{margin-top:6px}
+
+/* PROBLEMA PRIMERO - espejo del hero (Posty, lote 14) */
+.pp-mirror{max-width:560px;margin:28px auto 0;background:#fff;border:1.5px solid #D7E5EE;border-radius:24px;padding:22px 22px 18px;text-align:left;box-shadow:0 10px 30px rgba(39,147,200,.10)}
+.pp-q-title{font-size:19px;font-weight:800;color:#0A1E33;margin:0 0 4px;text-align:center}
+.pp-q-sub{font-size:13.5px;color:#5A7186;margin:0 0 16px;text-align:center}
+.pp-q{margin:0 0 14px}
+.pp-q>p{font-size:15px;font-weight:700;color:#0A1E33;margin:0 0 8px}
+.pp-chips{display:flex;flex-wrap:wrap;gap:8px}
+.pp-chip{border:1.5px solid #D7E5EE;background:#fff;color:#0A1E33;border-radius:999px;padding:9px 16px;font-size:14.5px;font-weight:700;font-family:inherit;cursor:pointer}
+.pp-chip[aria-pressed="true"]{background:#2793C8;border-color:#2793C8;color:#fff}
+.pp-result{margin-top:16px}
+.pp-result[hidden]{display:none!important}
+.pp-panels{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pp-panel{border-radius:18px;padding:12px}
+.pp-panel>b{display:block;font-size:14px;color:#0A1E33;margin-bottom:8px;text-align:center}
+.pp-hoy{background:#F7FAFC;border:1.5px solid #E2E8F0}
+.pp-posty{background:#F2F9FD;border:1.5px solid #CFE7F5}
+.pp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.pp-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}
+.pp-slot{aspect-ratio:1;border-radius:8px;border:1.5px dashed #D7E5EE;background:#fff}
+.pp-slot img{display:none}
+.pp-slot.pp-on{border:0;background:none}
+.pp-slot.pp-on img{display:block}
+.pp-panel-note{font-size:12.5px;color:#5A7186;margin:8px 0 0;text-align:center;line-height:1.4}
+.pp-echo{font-size:14px;color:#0A1E33;font-weight:600;text-align:center;margin:14px 0 0;line-height:1.5}
+.pp-demo{font-size:12.5px;color:#5A7186;text-align:center;margin:6px 0 0}
+@media(max-width:560px){.pp-mirror{padding:18px 14px 14px}.pp-panels{gap:8px}.pp-panel{padding:10px 8px}}
