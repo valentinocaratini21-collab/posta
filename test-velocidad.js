@@ -41,8 +41,10 @@ check('dispatch con catch: error nunca deja esqueleto clavado',
 check('retry del error usa render() existente', /onclick="render\(\)">Reintentar<\/button><\/div>'/.test(app));
 check('esqueleto sin botones (M78: ninguna fn nueva desde HTML)',
   !/pzSkeletonHTML[\s\S]{0,400}onclick/.test(app.split('function pzSkeletonHTML')[1].split('function pzPaintSkeleton')[0]));
-check('CSS esqueleto + shimmer', css.includes('.pz-sk-block') && css.includes('@keyframes pz-sk-pulse'));
-check('CSS respeta reduced-motion', css.includes('@media (prefers-reduced-motion: reduce){.pz-sk-block{animation:none}}'));
+// SUPERSEDED 2/11 (decisión Valentino: solo 3 puntitos, nunca pantalla blanca).
+check('CSS carga: 3 puntitos (LOTE CARGA-PUNTITOS)', css.includes('.pz-load{') && css.includes('@keyframes pz-dot-bounce'));
+// SUPERSEDED 2/11 (decisión Valentino: solo 3 puntitos).
+check('CSS respeta reduced-motion: puntitos quietos', css.includes('@media (prefers-reduced-motion: reduce){.pz-dot{animation:none}}'));
 
 console.log('== 2. Caché GET ==');
 check('allowlist incluye posts/quota/perfil/stats/streak/dogfood/nivel',
@@ -170,9 +172,11 @@ try {
   }
   vm.runInContext(extractFn(app, 'pzSkeletonHTML').replace('function pzSkeletonHTML', 'globalThis.pzSkeletonHTML = function'), sandbox);
   const sk4 = sandbox.pzSkeletonHTML('inicio');
-  check('esqueleto inicio: 4 bloques', (sk4.match(/pz-sk-block/g) || []).length === 4);
+  // SUPERSEDED 2/11 (decisión Valentino: solo 3 puntitos).
+check('carga inicio: 3 puntitos', (sk4.match(/pz-dot pz-dot-/g) || []).length === 3);
   const sk2 = sandbox.pzSkeletonHTML('post');
-  check('esqueleto post: 2 bloques', (sk2.match(/pz-sk-block/g) || []).length === 2);
+  // SUPERSEDED 2/11 (decisión Valentino: solo 3 puntitos).
+check('carga post: 3 puntitos', (sk2.match(/pz-dot pz-dot-/g) || []).length === 3);
   check('esqueleto sin datos ni botones', !/onclick/.test(sk4) && !/undefined/.test(sk4));
   // Prefetch: stub de idle + api.get espía.
   const got = [];

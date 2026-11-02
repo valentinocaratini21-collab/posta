@@ -15459,10 +15459,12 @@ let RENDER_SEQ = 0;
 // un error con Reintentar (render() existente): nunca queda un esqueleto
 // clavado.
 function pzSkeletonHTML(tab) {
-  const rows = tab === 'post' ? 2 : 4;
-  let blocks = '';
-  for (let i = 0; i < rows; i++) blocks += '<div class="pz-sk pz-sk-block"></div>';
-  return '<div class="pz-sk-wrap" aria-hidden="true"><div class="pz-sk-head"><img src="ai-avatar.png" alt="Posty"><i></i></div>' + blocks + '</div>';
+  // (LOTE CARGA-PUNTITOS · decisión Valentino 2/11: solo 3 puntitos, nunca
+  // pantalla blanca) La pintura intermedia entre rutas es solo esto: 3
+  // puntitos animados sobre el degradado de la app, sin textos, sin
+  // ilustraciones, sin botones. No agrega espera: se pinta al entrar a la
+  // ruta y la pintura final la reemplaza.
+  return '<div class="pz-load" aria-hidden="true"><span class="pz-dot pz-dot-1"></span><span class="pz-dot pz-dot-2"></span><span class="pz-dot pz-dot-3"></span></div>';
 }
 function pzPaintSkeleton(tab) {
   // Solo con sesión conocida (ME): sin sesión la ruta rebota a login y el

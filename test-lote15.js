@@ -55,7 +55,8 @@ t(app.includes('mzChatOpen"><img class="chat-face"') && app.includes('mz-ph-tx">
 t(!app.includes('placeholder="Escribile a Posty'), 'chat: placeholder viejo en mayúscula fuera');
 
 // ---- 8 · Nunca hueco blanco ----
-t(app.includes('pz-sk-head') && css.includes('pz-sk-shimmer') && css.includes('#D8ECF7') && css.includes('#FDEEC2'), 'esqueleto: cara + degradado celeste/dorado');
+// SUPERSEDED 2/11 (decisión Valentino: solo 3 puntitos, nunca pantalla blanca): el esqueleto con cara + shimmer queda reemplazado por .pz-load.
+t(app.includes('pz-load') && app.includes('pz-dot-1') && app.includes('pz-dot-2') && app.includes('pz-dot-3') && css.includes('.pz-load{') && !app.includes('pz-sk-head'), 'carga entre rutas: solo 3 puntitos sobre degradado, sin cara ni shimmer (LOTE CARGA-PUNTITOS)');
 
 // ---- 10 · Celebración al publicar ----
 t(app.includes('function pzPubCelebShow') && app.includes('function pzPubCelebMaybe') && app.includes('justPublished'), 'celebración: solo transiciones reales a publicado');
