@@ -2,6 +2,7 @@
 // Usa OpenAI si hay API key configurada, si no usa el motor de plantillas local
 // con voz argentina (voseo).
 const { trackUsage, markPhotoSent, photoHash } = require('./costs');
+const { casaTemas } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: pool de temas de la casa (fallback local)
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): chequeo de pertenencia + anclas
 // Hook engine (hooks.js): 50 fórmulas por intención + rotación. Se aplica al
 // final de generateContent/generateCaptions: el caption SIEMPRE abre con hook.
@@ -1927,7 +1928,7 @@ function goldenLine(golden) {
   return `\nEjemplos de posteos APROBADOS para este cliente (este es el estilo correcto: escribí como estos, no copies el contenido):\n${ex}`;
 }
 
-async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock, salesIntent, salesAngle, salesProof }, apiKey) {
+async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock, salesIntent, salesAngle, salesProof, casaLinea }, apiKey) {
   // 🧠 (v232) CEREBRO COMERCIAL: si la pieza declara su intención de
   // venta, el brief la nombra con su ángulo y su prueba concreta: el
   // caption entero trabaja para esa intención y cierra acorde.
@@ -1967,6 +1968,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
             (voice ? `\n${voice}` : '') +
             (tasteBlock ? `\n${tasteBlock}` : (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '')) +
             goldenLine(golden) +
+            (casaLinea ? `\n${casaLinea}` : '') +
             salesLine +
             `\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
         },
@@ -2175,7 +2177,7 @@ async function generateContent(input, apiKey) {
 }
 
 // ---------- Creador v2: N captions distintos + hashtags ----------
-async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice, golden, captionExtras, tasteBlock }, n, apiKey) {
+async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice, golden, captionExtras, tasteBlock, casaLinea }, n, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     signal: AbortSignal.timeout(45000),
     method: 'POST',
@@ -2199,6 +2201,7 @@ async function openaiCaptions({ business, category, description, dna, tone, topi
             (voice ? `\n${voice}` : '') +
             (tasteBlock ? `\n${tasteBlock}` : (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '')) +
             goldenLine(golden) +
+            (casaLinea ? `\n${casaLinea}` : '') +
             `\nGenerá los ${n} captions y los hashtags.`,
         },
       ],
@@ -2471,7 +2474,24 @@ function templateIdeasEn({ business, category, competitors, goal, recentTopics, 
   return pool;
 }
 
-function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, lang, etapa }) {
+function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, lang, etapa, casaLinea }) {
+  // LOTE POSTY APRENDE: sin IA, la casa usa su pool de temas (no los 7
+  // esqueletos genéricos). Los filtros vigentes de excluidos/recientes se
+  // aplican igual, con el mismo piso de 4. Los clientes no pasan por acá.
+  if (casaLinea) {
+    let pool = casaTemas(lang).map(t => ({ ...t }));
+    if (excluded) {
+      const bw = new Set(sigWords(excluded));
+      const fresh = pool.filter(id => sigWords(id.titulo).filter(x => bw.has(x)).length < 2);
+      if (fresh.length >= 4) pool = fresh;
+    }
+    if (recentTopics) {
+      const rw = new Set(sigWords(recentTopics));
+      const fresh = pool.filter(id => sigWords(id.titulo).filter(x => rw.has(x)).length < 2);
+      if (fresh.length >= 4) pool = fresh;
+    }
+    return withEphemeris(pool.slice(0, 7));
+  }
   if (lang === 'en') return templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa });
   const w = CAT_WORDS[category] || CAT_WORDS.otro;
   const ga = GOAL_LINES[goal] ? ' ' + GOAL_LINES[goal].split('. ')[1] : '';
@@ -2564,7 +2584,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, tasteBlock, styleLockExtras, lang }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, tasteBlock, styleLockExtras, casaLinea, lang }, apiKey) {
   const en = lang === 'en';
   // (growth ola 2) Capa de campaña comercial: sugiere SIN imponer — si el
   // negocio no vende en esa fecha, se ignora (test de pertenencia manda).
@@ -2614,7 +2634,8 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'user',
           content: businessContext({ business, category, description, dna, tone, learnings }) +
-            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\nGenerá las 7 ideas.`,
+            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\n${casaLinea ? `\n${casaLinea}` : ''}
+Generá las 7 ideas.`,
         },
       ],
       // 2600 (2026-10-15): con 1200 el modelo entra en presupuesto y

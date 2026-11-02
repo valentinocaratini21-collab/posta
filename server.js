@@ -33,6 +33,7 @@ try {
   if (r.changes) console.log(`[migracion] kind=design: ${r.changes} diseños reclasificados`);
 } catch (e) { console.error('[migracion] kind=design:', e.message); }
 const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionBodyKey } = require('./generator');
+const { isCasaHandle, casaIdeasBlock, casaCaptionBlock } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: línea editorial solo para la casa
 // ---------- ATENCIÓN AL CLIENTE (plan Total) — cableado 2026-10-21 ----------
 // Los módulos se construyeron el 2026-10-20 (build-atencion-total) y
 // quedaron sin conectar: este es el cableado. Regla FIJA del producto:
@@ -7511,7 +7512,11 @@ function ideasInputFor(uid, weekKey) {
     const apPrev = semanaAprende.aprendizajeSemanaAnterior(db, uid, weekKey);
     if (apPrev) aprendizajeTxt = semanaAprende.textoParaBrief(apPrev);
   } catch (e) { /* el aprendizaje nunca frena la generación */ }
-  return levelBoosted(uid, 'ideas', {
+  // LOTE POSTY APRENDE: la línea viaja DESPUÉS del levelBoosted para no
+  // depender de que el wrapper preserve campos nuevos. Solo la casa
+  // (@posty.communitymanager, por handle, no por id): los clientes no
+  // llevan casaLinea y su generación no cambia.
+  const ideasInput = levelBoosted(uid, 'ideas', {
     business: profile.business_name,
     ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
     category: profile.category,
@@ -7535,6 +7540,8 @@ function ideasInputFor(uid, weekKey) {
     // cuenta (además de qué tipos): el cerebro comercial se realimenta.
     contentPerf: contentPerformanceLine(uid) + anglePerformanceFor(uid).line,
   });
+  if (isCasaHandle(profile.ig_username)) ideasInput.casaLinea = casaIdeasBlock();
+  return ideasInput;
 }
 // Hook engine: rotación de 8 semanas por cliente (hooks.js).
 // Nunca rompe: errores → sin rotación (el motor igual elige).
@@ -7554,7 +7561,9 @@ function contentInputFor(uid, topic, tipo, seed, sales) {
   let voice = '';
   try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
   // Niveles que se sienten: el nivel cambia REALMENTE el payload de captions.
-  return levelBoosted(uid, 'caption', {
+  // LOTE POSTY APRENDE: igual que en ideasInputFor — la línea viaja
+  // después del levelBoosted, solo para la casa.
+  const captionInput = levelBoosted(uid, 'caption', {
     userId: uid, // hook engine: rotación de hooks por cliente
     usedHookIds: recentHookIds(uid), // hooks usados en las últimas 8 semanas
     business: profile.business_name,
@@ -7582,6 +7591,8 @@ function contentInputFor(uid, topic, tipo, seed, sales) {
     salesAngle: (sales && sales.angle) || '',
     salesProof: (sales && sales.proof) || '',
   });
+  if (isCasaHandle(profile.ig_username)) captionInput.casaLinea = casaCaptionBlock();
+  return captionInput;
 }
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
   const uidIdeas = req.session.userId;
@@ -26370,7 +26381,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v539';
+const BUILD_ID = '20261101-v540';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
