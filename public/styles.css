@@ -4344,3 +4344,17 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 @media (prefers-reduced-motion: reduce){
   .mz-ph-tx.pz-ph-fading{animation:none}
 }
+
+/* (LOTE GLASS FONDOS · fondos de Jardín, Estrategia y Ajustes en vidrio — pedido Valentino 1/11)
+   Mismo lenguaje de la home (Lote Glass v519): degradado compartido celeste→dorado en el
+   shell + vidrio receta v519 solo en paneles. Fotos y visuales SIN vidrio: el jardín vivo,
+   el mosaico, el slider y el avatar quedan intactos (sus fondos propios no se tocan).
+   La clase vive en el shell (bbShell, como bb-glass-inicio): solo estas tres tabs.
+   Va al final del archivo, después de los bloques oscuros, así gana por orden como el
+   bloque glass de Inicio; no hay reglas oscuras para estas clases, y el navy sobre vidrio
+   claro sigue legible en ambos modos. */
+.bb-app.bb-glass-pantallas{background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.28),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(254,193,77,.35),rgba(254,193,77,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
+.bb-app.bb-glass-pantallas .bb-bar{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border-top:1px solid rgba(255,255,255,.75)}
+.bb-app.bb-glass-pantallas .mx-jardin-posty .mx-tarjeta{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.bb-app.bb-glass-pantallas .ana-card{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.bb-app.bb-glass-pantallas .card.ajsec{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
