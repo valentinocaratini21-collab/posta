@@ -5546,6 +5546,8 @@ app.post('/api/admin/home-profile/refresh', requireAdminToken, express.json(), a
       followers: payload.followers,
       posts_count: payload.posts_count,
       following: payload.following,
+      is_verified: payload.is_verified,
+      verified_source: payload.verified_source || 'embed',
       highlights: (payload.highlights || []).length,
       recents: (payload.recents || []).length,
       captured_at: payload.captured_at,
@@ -12670,8 +12672,26 @@ async function homeProfileFromRead(handle, data) {
 }
 async function homeProfileReadAndStore(uid, handle) {
   const data = await feedAudit.fetchAuditData(handle).catch(() => null);
+  // (LOTE TIC-FUENTE) El embed miente para is_verified (false para
+  // @posty.communitymanager aunque su página diga true, verificado 1/11):
+  // la página del perfil manda cuando se lee con identidad clara; si no,
+  // se conserva el embed. Solo en esta cadencia de refresh del snapshot
+  // (TTL 24 h + pull-to-refresh + refresh admin), nunca por render.
+  // Fail-safe total: cualquier fallo conserva el valor del embed y el
+  // home no se rompe por esto. Solo is_verified: ningún otro campo se
+  // toca, y ningún otro consumidor de fetchAuditData cambia.
+  let verifiedSource = 'embed';
+  try {
+    if (data && data.ok && data.profile) {
+      const pageHtml = await demo.fetchIgProfilePageHtml(handle).catch(() => null);
+      const r = feedAudit.resolveHomeVerified(data.profile.is_verified, pageHtml, handle);
+      data.profile.is_verified = r.is_verified;
+      verifiedSource = r.source;
+    }
+  } catch (e) { /* se queda el embed */ }
   const payload = await homeProfileFromRead(handle, data).catch(() => null);
   if (payload) {
+    payload.verified_source = verifiedSource;
     homeSnapshotPut(uid, handle, payload);
     // (2026-10-24) Reconciliación del espejo: con la lectura completa
     // recién hecha, los publicados propios que ya NO están en la grilla
@@ -26350,7 +26370,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v533';
+const BUILD_ID = '20261101-v534';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

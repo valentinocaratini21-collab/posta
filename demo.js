@@ -2229,18 +2229,18 @@ function feedLuminanceFromBuffers(buffers) {
   });
 }
 
-function httpsGet(url, timeoutMs) {
+function httpsGet(url, timeoutMs, extraHeaders) {
   return new Promise((resolve, reject) => {
     let u;
     try { u = new URL(url); } catch (e) { return reject(e); }
     const req = https.get({
       hostname: u.hostname,
       path: u.pathname + u.search,
-      headers: { 'User-Agent': IG_UA, 'Accept-Language': 'es-AR,es;q=0.9' },
+      headers: Object.assign({ 'User-Agent': IG_UA, 'Accept-Language': 'es-AR,es;q=0.9' }, extraHeaders || {}),
     }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
-        return httpsGet(res.headers.location, timeoutMs).then(resolve, reject);
+        return httpsGet(res.headers.location, timeoutMs, extraHeaders).then(resolve, reject);
       }
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('http ' + res.statusCode)); }
       const chunks = [];
@@ -2306,6 +2306,38 @@ async function fetchIgEmbedHtml(ig) {
   // Verificamos que la página sea realmente del usuario pedido (no un challenge)
   const who = '\\"username\\":\\"' + user.toLowerCase() + '\\"';
   if (!html.toLowerCase().includes(who)) return null;
+  return html;
+}
+
+// (LOTE TIC-FUENTE) HTML crudo de la PÁGINA del perfil, o null.
+// La página del perfil es la única fuente que refleja el verificado tal
+// como lo ve el usuario en Instagram: el embed dice is_verified:false
+// para @posty.communitymanager aunque su página diga true (verificado
+// 1/11 en vivo: página true 1 vez con identidad por username+bio; embed
+// false 7 veces; API oficial false). Mismo patrón que fetchIgEmbedHtml
+// (httpsGet con IG_UA, 8 s, chequeo de identidad), pero la página usa
+// comillas planas ("username":"x") además de escapadas: se aceptan ambas.
+// Solo la usa homeProfileReadAndStore, en cadencia de refresh del
+// snapshot — nunca por render ni por auditoría.
+async function fetchIgProfilePageHtml(ig) {
+  const user = String(ig || '').replace(/[^A-Za-z0-9._]/g, '').slice(0, 40);
+  if (!user) return null;
+  let page;
+  try {
+    // Los headers importan: sin Accept: text/html Instagram sirve una
+    // variante liviana SIN el bloque del perfil (708 KB, 0 is_verified);
+    // con el juego exacto probado en vivo sirve la página completa
+    // (838 KB, is_verified presente). No cambiar sin re-verificar.
+    page = await httpsGet('https://www.instagram.com/' + user + '/', 8000,
+      { 'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8' });
+  } catch (e) {
+    return null;
+  }
+  const html = page.body.toString('utf8');
+  const low = html.toLowerCase();
+  const whoPlain = '"username":"' + user.toLowerCase() + '"';
+  const whoEsc = '\\"username\\":\\"' + user.toLowerCase() + '\\"';
+  if (!low.includes(whoPlain) && !low.includes(whoEsc)) return null;
   return html;
 }
 
@@ -2496,6 +2528,7 @@ module.exports = {
   demoHashtags: captions.demoHashtags,
   // Prueba en 1 campo (prefill + streaming)
   fetchIgEmbedHtml,
+  fetchIgProfilePageHtml,
   extractIgBiography,
   cutWords,
   categoryFromText,

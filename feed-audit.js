@@ -194,6 +194,53 @@ function parseEmbedPosts(html) {
 // ---------------------------------------------------------------------------
 // Datos públicos del perfil + posteos (best-effort)
 // ---------------------------------------------------------------------------
+// (LOTE TIC-FUENTE) Verificado desde el HTML crudo de la PÁGINA del
+// perfil (no del embed): true/false solo con identidad clara, null si no
+// se puede afirmar. Regla: se recogen las ocurrencias de is_verified
+// (comillas planas o escapadas) cuyo username MÁS CERCANO ANTES, dentro
+// de una ventana de 4000 caracteres, sea el handle pedido (sin distinción
+// de mayúsculas). Si el conjunto es no vacío y unánime, ese valor; si no
+// hay ninguna, hay desacuerdo, o la página no trae el username pedido,
+// null — el llamador conserva el valor del embed. Nunca se inventa un
+// true: sin identidad clara, null. El modo de fallo es conservador: un
+// username extraño entre el username propio y el is_verified (p. ej. un
+// texto de bio que lo mencione) hace que la ocurrencia se descarte y se
+// conserve el embed, jamás que se afirme un verificado ajeno.
+function parseProfilePageVerified(html, handle) {
+  const h = String(handle || '').replace(/^@+/, '').trim().toLowerCase();
+  const s = String(html || '');
+  if (!h || !s) return null;
+  const rxUser = /"username\\?":\\?"([^"\\]+)\\?"/g;
+  const rxVer = /is_verified\\?":(true|false)/g;
+  const users = [];
+  let m;
+  while ((m = rxUser.exec(s)) !== null) users.push({ at: m.index, name: String(m[1]).toLowerCase() });
+  if (!users.some((u) => u.name === h)) return null;
+  const vals = [];
+  while ((m = rxVer.exec(s)) !== null) {
+    let near = null;
+    for (let i = users.length - 1; i >= 0; i--) {
+      if (users[i].at < m.index && m.index - users[i].at <= 4000) { near = users[i]; break; }
+    }
+    if (near && near.name === h) vals.push(m[1] === 'true');
+  }
+  if (!vals.length) return null;
+  if (vals.every((v) => v === true)) return true;
+  if (vals.every((v) => v === false)) return false;
+  return null;
+}
+// (LOTE TIC-FUENTE) Precedencia del verificado para la home: la página
+// del perfil manda cuando trae un valor con identidad clara (true o
+// false); si no, se conserva el valor del embed. source dice de dónde
+// salió ('page'/'embed') para observabilidad admin. Solo la usa
+// homeProfileReadAndStore; fetchAuditData y el resto de consumidores
+// siguen con el valor del embed, sin cambios.
+function resolveHomeVerified(embedVerified, pageHtml, handle) {
+  const pageVer = pageHtml ? parseProfilePageVerified(pageHtml, handle) : null;
+  if (pageVer === true || pageVer === false) return { is_verified: pageVer, source: 'page' };
+  const ev = (embedVerified === true ? true : (embedVerified === false ? false : null));
+  return { is_verified: ev, source: 'embed' };
+}
 async function fetchAuditData(handle, fetchOverride, profOverride) {
   const ig = sanitizeHandle(handle);
   if (!ig) return { ok: false, error: 'Pasame tu @ de Instagram' };
@@ -975,6 +1022,8 @@ module.exports = {
   parseEmbedPosts,
   cleanCaptionResidue,
   fetchAuditData,
+  parseProfilePageVerified,
+  resolveHomeVerified,
   trialProfileFromAudit,
   trialAuditFromData,
   analyzePalette,
