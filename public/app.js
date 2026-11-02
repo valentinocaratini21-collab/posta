@@ -17611,7 +17611,17 @@ function homeTileHTML(t, i) {
   // ('pending' vs 'approved'): programar desde el corazón YA deja
   // el posteo en la agenda, y esa es la marca que se espera ver.
   const hfLikeOn = String(p.status) === 'scheduled' || String(p.status) === 'published';
-  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}</span>${justChip}${glyph}${despChip}<button type="button" class="hf-like hf-like-in" data-hf-like${hfLikeOn ? ' data-hf-on="1"' : ''} aria-pressed="${hfLikeOn ? 'true' : 'false'}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></span></span>`;
+  // (LOTE CORAZÓN-GRIS-TIK) Aprobado con el corazón: queda visible
+  // en el feed, a todo color, con tik verde (corrección Valentino
+  // 2/11: SIN gris, no debe parecer archivado). Solo mientras sigue
+  // sin salir (draft/scheduled): al publicarse baja al grupo de ya
+  // salidos con su aspecto normal y el corazón lleno sigue marcando
+  // la aprobación. Guardia typeof: los harnesses viejos que extraen
+  // homeTileHTML sola no rompen si el helper no está cargado (en el
+  // bundle siempre está definido).
+  const hfAprobado = (String(p.status) === 'draft' || String(p.status) === 'scheduled') && (typeof pzAprobadoEs === 'function') && pzAprobadoEs(p.id);
+  const tikSpan = hfAprobado ? '<span class="hf-tik" aria-hidden="true">✓</span>' : '';
+  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}</span>${justChip}${glyph}${despChip}<button type="button" class="hf-like hf-like-in" data-hf-like${hfLikeOn ? ' data-hf-on="1"' : ''} aria-pressed="${hfLikeOn ? 'true' : 'false'}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button>${tikSpan}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -20676,6 +20686,95 @@ function hfDblReset() {
   try { if (HF_DBL.timer) clearTimeout(HF_DBL.timer); } catch (e) {}
   HF_DBL = { key: '', t: 0, timer: null, tile: null, post: null, hash: '' };
 }
+// (LOTE CORAZÓN-GRIS-TIK · Valentino 2/11: lo likeado NO desaparece)
+// Diagnóstico: hfTileApprove hacía render() completo y el orden v513
+// movía el posteo recién programado a su posición nueva; la vista no
+// lo seguía y parecía borrado (nunca se borra: sigue en el feed).
+// ENMIENDA Valentino 2/11 ~07:22 (SUPERSEDE render+scroll): al aprobar,
+// el tile se actualiza EN SU LUGAR, sin render() ni salto de scroll —
+// si refreshea, se pierde de vista el posteo. El re-orden v513 sigue
+// vigente pero ocurre en el próximo render natural (navegación,
+// pull-to-refresh), no en el toque de aprobar. La marca vive en
+// localStorage ('posta-aprobados', tope 200 ids, todo con try/catch) +
+// Set en memoria, así sobrevive a recargas en el mismo teléfono sin
+// tocar el servidor ni los datos.
+let PZ_APROBADOS = null;
+function pzAprobadosLeer() {
+  if (PZ_APROBADOS) return PZ_APROBADOS;
+  PZ_APROBADOS = new Set();
+  try {
+    const raw = (typeof localStorage !== 'undefined') ? localStorage.getItem('posta-aprobados') : null;
+    if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) for (const id of arr) PZ_APROBADOS.add(String(id)); }
+  } catch (e) {}
+  return PZ_APROBADOS;
+}
+function pzAprobadoEs(id) {
+  try { return pzAprobadosLeer().has(String(id)); } catch (e) { return false; }
+}
+function pzAprobadoMarcar(id) {
+  try {
+    const s = pzAprobadosLeer(); s.add(String(id));
+    const arr = Array.from(s).slice(-200);
+    PZ_APROBADOS = new Set(arr);
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('posta-aprobados', JSON.stringify(arr)); } catch (e) {}
+  } catch (e) {}
+}
+function pzAprobarEnSitio(tile, id, schedAt) {
+  // ENMIENDA SIN-REFRESH: actualiza SOLO el nodo del tile, en su
+  // lugar, sin render() ni scroll. Devuelve true si el nodo se
+  // actualizó, false si no está en el DOM (ahí el llamador hace
+  // render() como antes). No toca el orden v513 ni los datos: el
+  // próximo render natural reordena y pinta lo mismo (la marca
+  // persiste en localStorage, así que el tik sobrevive al render).
+  try {
+    let el = null;
+    try {
+      if (tile && typeof tile.querySelector === 'function') {
+        if (tile.classList && typeof tile.classList.contains === 'function' && tile.classList.contains('hf-tile')) el = tile;
+        else { try { el = tile.querySelector('.hf-tile[data-post-id="' + String(id) + '"]'); } catch (e) { el = null; } }
+      }
+    } catch (e) { el = null; }
+    if (!el) {
+      try { el = (typeof document !== 'undefined' && document) ? document.querySelector('.hf-tile[data-post-id="' + String(id) + '"]') : null; } catch (e) { el = null; }
+    }
+    if (!el) return false;
+    try { if (typeof pzAprobadoMarcar === 'function') pzAprobadoMarcar(id); } catch (e) {}
+    try {
+      const like = el.querySelector('.hf-like');
+      if (like) { like.setAttribute('data-hf-on', '1'); like.setAttribute('aria-pressed', 'true'); }
+      if (!el.querySelector('.hf-tik')) {
+        if (like && like.insertAdjacentHTML) like.insertAdjacentHTML('afterend', '<span class="hf-tik" aria-hidden="true">\u2713</span>');
+        else if (el.insertAdjacentHTML) el.insertAdjacentHTML('beforeend', '<span class="hf-tik" aria-hidden="true">\u2713</span>');
+      }
+    } catch (e) {}
+    try {
+      if (el.dataset) { el.dataset.status = 'scheduled'; if (schedAt) el.dataset.schedAt = String(schedAt); }
+      if (el.classList && el.classList.remove) el.classList.remove('hf-tile-draft');
+    } catch (e) {}
+    try {
+      if (schedAt && typeof hfWhenChip === 'function') {
+        const txt = hfWhenChip({ scheduled_at: schedAt });
+        if (txt) {
+          const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+          let chipHtml = '';
+          try {
+            const parts = (typeof hfTileChipParts === 'function') ? hfTileChipParts(txt, en) : null;
+            chipHtml = parts
+              ? '<span class="hf-chip"><span class="hf-chip-ico">' + pzIc('clock', 12) + '</span><span class="hf-chip-day">' + esc(parts.day) + '</span><span class="hf-chip-hm"> \u00b7 ' + esc(parts.hm) + '</span></span>'
+              : '<span class="hf-chip">' + pzIc('clock', 12) + ' ' + esc(txt) + '</span>';
+          } catch (e) { chipHtml = '<span class="hf-chip">' + esc(txt) + '</span>'; }
+          const strip = el.querySelector('.hf-strip');
+          if (strip) {
+            const old = strip.querySelector('.hf-chip');
+            if (old && old.outerHTML !== undefined) old.outerHTML = chipHtml;
+            else if (strip.insertAdjacentHTML) strip.insertAdjacentHTML('afterbegin', chipHtml);
+          }
+        }
+      }
+    } catch (e) {}
+    return true;
+  } catch (e) { return false; }
+}
 async function hfTileApprove(tile, post) {
   try {
     const st = String((tile && tile.dataset && tile.dataset.status) || (post && post.status) || '');
@@ -20710,7 +20809,11 @@ async function hfTileApprove(tile, post) {
     }
     if (st === 'scheduled') {
       await pcApprove(id, tile, null);
-      try { render(); } catch (e) {}
+      // (ENMIENDA SIN-REFRESH) Aprobado: el tile se actualiza EN SU
+      // LUGAR (corazón + tik + chapita), sin render() ni salto. Si
+      // el nodo no está en el DOM, ahí sí render(). Guardia: harness
+      // viejo sin el helper igual renderiza.
+      try { if (typeof pzAprobarEnSitio === 'function') { if (!pzAprobarEnSitio(tile, id, null) && typeof render === 'function') render(); } else if (typeof render === 'function') render(); } catch (e) {}
       return;
     }
     if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
@@ -20730,8 +20833,12 @@ async function hfTileApprove(tile, post) {
     }
     try { await api.post('/api/posts/' + encodeURIComponent(id) + '/signal', { signal: 'approved' }); } catch (e) {}
     try { track('lote2_dbltap_approve', { id, draft: true }); } catch (e) {}
+    // (ENMIENDA SIN-REFRESH) Solo con éxito real: el warning
+    // 'sin_dia_libre' retorna antes y NO marca (sigue borrador).
+    // Fecha real del PATCH (res.scheduled_at) o la pedida (when).
+    try { if (typeof pzAprobarEnSitio === 'function') { if (!pzAprobarEnSitio(tile, id, (res && res.scheduled_at) || when || undefined) && typeof render === 'function') render(); } else if (typeof render === 'function') render(); } catch (e) {}
     toast('✅ <b>¡Listo!</b> Quedó programado 🙌');
-    try { render(); } catch (e) {}
+
   } catch (e) {
     try { toast('😅 ' + esc((e && e.message) || 'No se pudo programar')); } catch (e2) {}
   }
