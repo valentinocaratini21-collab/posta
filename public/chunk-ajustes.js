@@ -253,7 +253,7 @@ function ajustesView() {
       <span id="waNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     <div class="hint" id="waNotifyGateHint" style="display:none;margin-top:10px">WhatsApp todavía no está encendido del lado de Posty: podés dejar tu número y tu permiso guardados, y te llega apenas se encienda. Mientras tanto, tu carta llega por notificación y en Tu análisis.</div>
-    <div class="hint" id="avisosPushHint" style="display:none;margin-top:14px">${pzIc('phone', 16)} Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar. Cuando Posty te pida permiso para mandar notificaciones, tocá <b>Permitir</b>.</div>
+    <div class="hint" id="avisosPushHint" style="display:none;margin-top:14px">${pzIc('phone', 16)} Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar. Cuando Posty te pida permiso para mandar notificaciones, tocá <b>Permitir</b>.<br><button class="btn btn-ghost btn-sm" id="btnPushEnable" style="margin-top:8px">🔔 Activar notificaciones</button></div>
   </div></div>
   <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('palette', 20)} Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
@@ -800,6 +800,17 @@ function bindSettings() {
       if (!r || !r.ok) return;
       const hint = $('#avisosPushHint');
       if (hint) hint.style.display = r.has_push_sub ? 'none' : '';
+      const btnPush = $('#btnPushEnable');
+      if (btnPush) btnPush.onclick = async () => {
+        btnPush.disabled = true;
+        try {
+          if (typeof pushEnableFlow === 'function') {
+            const pr = await pushEnableFlow();
+            if (pr && pr.ok) await loadNotifyPrefs();
+          }
+        } catch (e) {}
+        btnPush.disabled = false;
+      };
       const paintT = (btn, st, on, onText, offText) => {
         if (!btn) return;
         btn.disabled = false;

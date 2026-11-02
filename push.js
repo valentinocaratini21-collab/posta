@@ -184,7 +184,7 @@ async function sendFcmBatch(subs, msg) {
 
 // ---------- APNs (apps iOS nativas, HTTP/2) ----------
 // Envs: APNS_KEY_P8 (contenido .pem, admite \n literales), APNS_KEY_ID,
-// APNS_TEAM_ID. Opcionales: APNS_BUNDLE_ID (default com.postyhacetodo.app),
+// APNS_TEAM_ID. Opcionales: APNS_BUNDLE_ID (default com.postycommunitymanager.app),
 // APNS_SANDBOX=1 (dev).
 let apnsTokenCache = { token: '', exp: 0 };
 function apnsConfig() {
@@ -194,7 +194,7 @@ function apnsConfig() {
   if (!p8 || !keyId || !teamId) return null;
   return {
     p8, keyId, teamId,
-    bundleId: (process.env.APNS_BUNDLE_ID || 'com.postyhacetodo.app').trim(),
+    bundleId: (process.env.APNS_BUNDLE_ID || 'com.postycommunitymanager.app').trim(),
     host: (process.env.APNS_SANDBOX === '1') ? 'api.sandbox.push.apple.com' : 'api.push.apple.com',
   };
 }
@@ -449,4 +449,5 @@ module.exports = {
   notifySundayLetter,
   notifyPostFailed,
   TRANSPORTS: ['webpush', 'fcm', 'apns'],
+  _internal: { apnsConfig, apnsProviderToken, fcmServiceAccount },
 };
