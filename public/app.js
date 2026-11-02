@@ -8943,6 +8943,128 @@ function acceptPillHTML(n, id) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   return `<button type="button" class="accept-pill" id="${id}">${pzIc('checkCircle', 18)} ${en ? 'Accept all' : 'Aceptar todo'} <span class="accept-count">${n}</span></button>`;
 }
+
+// (LOTE ACEPTAR-TODO-SEMANA) Candidatos del «Aceptar todo» de la
+// semana nueva: SOLO programados pendientes de la semana corriente.
+// week_key = lunes actual en la zona de la cuenta (misma identidad
+// que usan los borradores de la semana). Sin week_key no se acepta
+// en bloque (fail-closed: el corazón sigue aprobando uno por uno).
+// Borradores sin fecha, semanas viejas, publicados y archivados
+// quedan FUERA siempre. isPilot=true (piloto) excluye además los
+// que ya dejaron constancia (owner_liked=1); en render se pasa
+// null (modo aún desconocido) y el handler corrige al tocar.
+function pzAcceptAllWeekCands(list, isPilot) {
+  const out = [];
+  try {
+    const wk = (typeof albumMondayKey === 'function') ? albumMondayKey() : '';
+    if (!wk) return out;
+    for (const t of (Array.isArray(list) ? list : [])) {
+      if (!t || t.kind !== 'post' || !t.post) continue;
+      const p = t.post;
+      if (t.archivedExt) continue;
+      if (String(p.status || '') !== 'scheduled') continue;
+      if (String(p.approval || 'pending') !== 'pending') continue;
+      if (String(p.week_key || '') !== wk) continue;
+      if (isPilot === true && Number(p.owner_liked || 0) === 1) continue;
+      out.push(t);
+    }
+  } catch (e) {}
+  return out;
+}
+// (LOTE ACEPTAR-TODO-SEMANA) Marca en su lugar tras aprobar uno por
+// el botón, sin render(). Si existe el helper de la enmienda
+// sin-refresh (pzAprobarEnSitio, lote gris-tik) manda él; si no,
+// marcado mínimo propio (corazón lleno + tik verde con estilos en
+// línea idénticos a la spec gris-tik, para que el visual coincida
+// con y sin ese lote). El próximo render completo lo reemplaza por
+// el marcado canónico, así que nunca se duplica el tik. Solo se
+// llama en modo manual: en piloto la constancia no se marca (por
+// diseño del lote gris-tik).
+function pzAcceptAllWeekMark(tile, post) {
+  try {
+    // (LIBERACIÓN v552: la firma real es (tile, id, schedAt) — en la
+    // base v546 del builder el helper no existía y la llamada pasaba
+    // el objeto post entero, lo que habría guardado la clave basura
+    // "[object Object]" en 'posta-aprobados'. Se pasa id + fecha.)
+    if (typeof pzAprobarEnSitio === 'function') { try { pzAprobarEnSitio(tile, String(post.id), post.scheduled_at); return; } catch (e) {} }
+    if (!tile) return;
+    const like = tile.querySelector ? tile.querySelector('[data-hf-like]') : null;
+    if (like) { like.setAttribute('data-hf-on', '1'); like.setAttribute('aria-pressed', 'true'); }
+    if (tile.querySelector && !tile.querySelector('.hf-tik')) {
+      const s = document.createElement('span');
+      s.className = 'hf-tik';
+      s.textContent = '✓';
+      s.style.cssText = 'position:absolute;top:6px;left:6px;width:26px;height:26px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;';
+      tile.style.position = 'relative';
+      tile.insertBefore(s, tile.firstChild);
+    }
+  } catch (e) {}
+}
+// (LOTE ACEPTAR-TODO-SEMANA) Un toque acepta TODA la semana nueva
+// pendiente (solo programados, ver pzAcceptAllWeekCands). Reutiliza
+// el camino por posteo del corazón: en manual POST /approve, en
+// piloto PATCH like (constancia). Sin pantalla de confirmación.
+// Sin render(): cada éxito se marca en su lugar; al final, toast
+// honesto (nunca «todo aprobado» si algo falló) y el botón se va
+// solo cuando ya no quedan pendientes.
+async function pzAcceptAllWeek(btn) {
+  if (!btn || btn._pzBusy) return;
+  btn._pzBusy = true;
+  try { btn.disabled = true; } catch (e) {}
+  const en = f3En();
+  try {
+    if (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) return;
+    const mode = await f3ApprovalMode();
+    if (!mode || mode.known === false) {
+      toast('😅 ' + (en ? 'Could not check the mode — try again' : 'No pude verificar el modo — probá de nuevo'));
+      return;
+    }
+    const cands = pzAcceptAllWeekCands(HF_TILES, !mode.manual);
+    if (!cands.length) { try { btn.remove(); } catch (e) {} return; }
+    let ok = 0, fail = 0;
+    for (const t of cands) {
+      const id = String(t.post.id);
+      let good = false;
+      try {
+        if (mode.manual) {
+          const r = await api.post('/api/posts/' + encodeURIComponent(id) + '/approve', {});
+          good = !!(r && r.ok);
+        } else {
+          const r = await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'like' });
+          good = !!(r && r.ok);
+        }
+      } catch (e) { good = false; }
+      if (good) {
+        ok++;
+        try {
+          if (mode.manual) {
+            t.post.approval = 'approved';
+            if (typeof pzAprobadoMarcar === 'function') pzAprobadoMarcar(id);
+            document.querySelectorAll('.hf-tile[data-post-id="' + id + '"]').forEach((node) => {
+              try { pzAcceptAllWeekMark(node, t.post); } catch (e) {}
+            });
+          } else {
+            t.post.owner_liked = 1;
+          }
+        } catch (e) {}
+      } else { fail++; }
+    }
+    const rest = pzAcceptAllWeekCands(HF_TILES, !mode.manual);
+    if (!rest.length) { try { btn.remove(); } catch (e) {} }
+    else { try { const c = btn.querySelector('.accept-count'); if (c) c.textContent = String(rest.length); } catch (e) {} }
+    if (ok && !fail) {
+      if (mode.manual) toast('✅ ' + (en ? 'Week accepted · ' + ok + ' posts' : 'Semana aceptada · ' + ok + ' posteos'));
+      else toast('❤️ ' + (en ? 'Seen · ' + ok + ' posts' : 'Vistos · ' + ok + ' posteos'));
+    }
+    else if (ok && fail) toast('✅ ' + (en ? ok + ' accepted · ' + fail + ' failed — try again' : ok + ' aceptados · ' + fail + ' fallaron — probá de nuevo'));
+    else toast('😅 ' + (en ? 'Could not accept the week — try again' : 'No pude aceptar la semana — probá de nuevo'));
+  } catch (e) {
+    try { toast('😅 ' + esc((e && e.message) || 'No se pudo aceptar la semana')); } catch (e2) {}
+  } finally {
+    try { btn._pzBusy = false; btn.disabled = false; } catch (e) {}
+  }
+}
+
 // (v436) La línea del saludo con la semana que viene: es la MISMA
 // cuenta que pintaba la línea de cupo de la Agenda (schedWeekCounts →
 // CHAT_NEXT_WEEK). Sin armados de la que viene, no hay línea — nada
@@ -18501,6 +18623,16 @@ async function inicioView() {
   const stripHTML = (!HF_VISITOR && drafts.length)
     ? `${acceptPillHTML(drafts.length, 'hfAcceptAll')}<div id="revMsg"></div>`
     : '';
+  // (LOTE ACEPTAR-TODO-SEMANA) Píldora «Aceptar todo» de la semana
+  // nueva: SOLO programados pendientes de la semana corriente.
+  // Sin pendientes no se dibuja. La píldora vieja #hfAcceptAll de
+  // borradores se calcula arriba pero nunca se inserta en la
+  // plantilla: queda muerta a propósito, este botón NO la revive
+  // (el alcance aprobado excluye borradores sin fecha).
+  const pzAcceptWeekCands = (!HF_VISITOR) ? pzAcceptAllWeekCands(tiles, null) : [];
+  const pzAcceptWeekHTML = pzAcceptWeekCands.length
+    ? acceptPillHTML(pzAcceptWeekCands.length, 'hfAcceptAllWeek')
+    : '';
   // (v440 · SOLO FEED) La nota del kit de nacimiento (hf-kitnote) SALIÓ
   // del flujo principal de Inicio: con perfil kit, el encabezado y la
   // grilla ya muestran la propuesta; la nota competía con el feed.
@@ -18554,6 +18686,7 @@ async function inicioView() {
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
   ${hfTabsHTML(HF_TAB, enHome)}
   ${gridHTML}
+  ${pzAcceptWeekHTML}
   ${tiles.length ? `<p class="hf-nota">${enHome ? pzIc('heart', 14) + ' Tap the heart to approve each post. They all go out on their date, unless you ask for a change.' : pzIc('heart', 14) + ' Tocá el corazón para aprobar el posteo. Todos salen en su fecha, salvo que pidas un cambio.'}</p>` : ''}
   ${visitorPillHTML}
   <div class="mz-chatbar" id="mzChatBar">
@@ -21461,6 +21594,8 @@ function bindInicio() {
   if (ha) ha.onclick = () => doAcceptAll(ha);
   const hsA = $('#hsAcceptAll');
   if (hsA) hsA.onclick = () => doAcceptAll(hsA);
+  const haw = $('#hfAcceptAllWeek');
+  if (haw) haw.onclick = () => pzAcceptAllWeek(haw);
   // Bloque de respaldo (sin piezas todavía): flechas del carrusel, el
   // mismo cableado que hace bindSchedule en su vista.
   const wl = document.querySelector('#inicioView #hsWeekList');
