@@ -3289,9 +3289,17 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    general .igmock-media img trae pan-y del pinch-zoom, que bloquearía
    el scroll horizontal del track). La foto se ve igual que la simple:
    4:5 cover, arriba (la regla .hf-d-slide img del detalle trae
-   contain + fondo negro y NO vale acá). */
-.igmock-media-car .hf-d-track{touch-action:pan-x pan-y;overscroll-behavior-x:contain}
-.igmock-media-car .hf-d-slide img{touch-action:pan-x pan-y;aspect-ratio:4/5;object-fit:cover;object-position:top;height:auto;background:#fff}
+   contain + fondo negro y NO vale acá).
+   (LOTE CARRUSEL-DETALLE · Valentino 2/11: en la capa no se desliza)
+   En la capa .scf-pop el track vive DENTRO de la tarjeta que scrollea
+   en vertical: con pan-x pan-y el navegador tiene que adivinar la
+   dirección del gesto y en iOS el vertical de la tarjeta se lo queda.
+   Con pan-x SOLO no hay que adivinar: el horizontal va al track y el
+   vertical sigue a la tarjeta. Solo la tarjeta (.igmock-media-car);
+   detalle y aprobación no se tocan. */
+.igmock-media-car .hf-d-track{touch-action:pan-x;overscroll-behavior-x:contain}
+.igmock-media-car .hf-d-slide img{touch-action:pan-x;aspect-ratio:4/5;object-fit:cover;object-position:top;height:auto;background:#fff}
+.igmock .hf-d-dots i{cursor:pointer}
 /* Ítem 8: ver en el inicio (vista de seguidor) */
 .hf-d-eye{font-size:19px;line-height:1;align-items:center}
 .hf-fv-back{position:fixed;inset:0;z-index:1300;background:rgba(10,30,51,.5);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:22px 12px}

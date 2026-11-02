@@ -19935,6 +19935,27 @@ document.addEventListener('scroll', (e) => {
     if (cnt) { const n = t.children.length; cnt.textContent = Math.min(n, Math.max(0, i) + 1) + '/' + n; }
   } catch (err) {}
 }, true);
+// (LOTE CARRUSEL-DETALLE · Valentino 2/11: en la capa no se desliza)
+// Tocar un puntito avanza a ese slide: mismo track, sin duplicar slides.
+// Delegado global (los puntitos no tenían ningún handler: solo el sync
+// de arriba los movía al scrollear). Solo dentro de .igmock (la
+// tarjeta); detalle (.hf-dcard) y aprobación (.apv-wrap) conservan su
+// cableado propio y sus puntitos no se tocan. El scroll suave dispara
+// el sync de arriba, así que puntitos y contador acompañan solos.
+document.addEventListener('click', (e) => {
+  try {
+    const dot = e.target && e.target.closest ? e.target.closest('.hf-d-dots i') : null;
+    if (!dot) return;
+    const card = dot.closest ? dot.closest('.igmock') : null;
+    const track = card ? card.querySelector('.hf-d-track') : null;
+    if (!track) return;
+    const dots = card.querySelectorAll('.hf-d-dots i');
+    let k = -1;
+    for (let j = 0; j < dots.length; j++) { if (dots[j] === dot) { k = j; break; } }
+    if (k < 0) return;
+    track.scrollTo({ left: k * Math.max(1, track.clientWidth), behavior: 'smooth' });
+  } catch (err) {}
+});
 /* ===== (Tanda feed 6B · ítem 4) ESPEJO VIVO =====
    Con el home abierto y visible, cada ~50 s (y al volver la pestaña
    a visible/foco) se re-lee el MISMO payload que compone la grilla

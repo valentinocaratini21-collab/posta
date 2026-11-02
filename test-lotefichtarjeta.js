@@ -52,7 +52,12 @@ ok(app.includes("t.closest('.igmock')") && app.includes("classList.contains('hf-
 ok(css.includes('env(safe-area-inset-top'), 'la capa .scf-pop usa safe areas');
 ok(css.includes('.scf-pop .igmock{') && css.includes('flex:1 1 auto'), 'la tarjeta de la capa scrollea dentro (flex:1 1 auto)');
 ok(css.includes('.hf-crop-mini{') && css.includes('flex:none'), 'el botón de recorte nunca se aprieta (flex:none)');
-ok(css.includes('.igmock-media-car .hf-d-track{touch-action:pan-x pan-y;overscroll-behavior-x:contain}'), 'el track no encadena al riel y admite pan en ambos ejes');
+// (LOTE CARRUSEL-DETALLE 2/11 · SUPERSEDE CON CAUSA: el pan-x pan-y
+// obligaba a iOS a adivinar la dirección dentro de la tarjeta que
+// scrollea en vertical y el horizontal se perdía; ahora es pan-x
+// solo: el horizontal va al track sin ambigüedad y el vertical sigue
+// a la tarjeta. El overscroll contain intacto.)
+ok(css.includes('.igmock-media-car .hf-d-track{touch-action:pan-x;overscroll-behavior-x:contain}'), 'el track no encadena al riel y admite solo pan-x (carrusel-detalle)');
 ok(css.includes('.igmock-media-car .hf-d-slide img{') && css.includes('aspect-ratio:4/5;object-fit:cover'), 'el slide se ve igual que la foto simple (4:5 cover)');
 
 /* ---------- 2. Render real en vm ---------- */
