@@ -78,10 +78,10 @@ function ruleBody(re) {
   return m ? m[0] : '';
 }
 
-// ---------- Versiones + censo (base v544, este lote solo toca styles.css; pines actualizados a la liberación v545) ----------
-t(srv.includes("const BUILD_ID = '20261101-v545'"), 'BUILD v532 en server.js');
-t(idx.includes('app.js?v=361') && idx.includes('styles.css?v=20261080'), 'index: app 361 + styles 20261080 (con bump de liberación)');
-t(idxEn.includes('styles.css?v=20261080') && !idxEn.includes('app.js?v='), 'en/index: styles 20261080, sin app.js');
+// ---------- Versiones + censo (pines rotados a la liberación v546 con causa: bump v545→v546 de glass-todas; este lote solo toca styles.css) ----------
+t(srv.includes("const BUILD_ID = '20261101-v546'"), 'BUILD v532 en server.js');
+t(idx.includes('app.js?v=362') && idx.includes('styles.css?v=20261081'), 'index: app 362 + styles 20261081 (bump v546 de glass-todas)');
+t(idxEn.includes('styles.css?v=20261081') && !idxEn.includes('app.js?v='), 'en/index: styles 20261081, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v524'"), 'CHUNK_V sigue v524 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');

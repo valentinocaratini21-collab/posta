@@ -698,7 +698,7 @@ function bbShell(tab, content) {
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
   const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
-  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes') ? ' bb-glass-pantallas' : ''}">
+  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
     <nav class="bb-bar">
@@ -14644,7 +14644,7 @@ async function adsView() {
          <button class="btn btn-soft btn-sm" id="adsBoostGoRecs" style="margin-top:12px">⭐ Ver recomendaciones</button>
        </div>`;
 
-  return `
+  return `<div class="ads-wrap">
   <div class="card" style="text-align:center">
     <h2 style="margin:0 0 4px">${pzIc('rocket', 15)} Potenciar</h2>
     <p class="d" style="margin:0">Llevá tus mejores posteos a más gente, sin tocar el administrador de anuncios. Nosotros nos ocupamos.</p>
@@ -14672,7 +14672,8 @@ async function adsView() {
   <div class="card">
     <h3 style="margin:0 0 6px">${pzIc('megaphone', 15)} Tus pautas</h3>
     ${boostRows}
-  </div>`;
+  </div>
+</div>`;
 }
 
 function bindAds() {
@@ -15292,11 +15293,13 @@ function obSummaryHTML() {
 }
 function onboardingView() {
   const o = OB;
-  if (o.phase === 'summary' && o.profile) return obSummaryHTML();
+  // (LOTE GLASS TODAS) Envoltorio para vidrio: las tres variantes usan .card
+  // y sin envoltorio no hay cómo vidriarlas sin tocar .card global.
+  if (o.phase === 'summary' && o.profile) return '<div class="ob-wrap">' + obSummaryHTML() + '</div>';
   // FASE 4 (autopilot): el default es el formulario directo; la entrevista
   // conversacional queda como alternativa explícita (modo 'chat').
-  if (o.mode === 'chat') return obChatHTML(o);
-  return obFormHTML();
+  if (o.mode === 'chat') return '<div class="ob-wrap">' + obChatHTML(o) + '</div>';
+  return '<div class="ob-wrap">' + obFormHTML() + '</div>';
 }
 
 // FASE 4 — formulario directo de onboarding (default): 5 datos y listo, sin

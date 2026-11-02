@@ -4360,3 +4360,18 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .bb-app.bb-glass-pantallas .mx-jardin-posty .mx-tarjeta{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
 .bb-app.bb-glass-pantallas .ana-card{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
 .bb-app.bb-glass-pantallas .card.ajsec{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+
+/* (LOTE GLASS TODAS · todas las pantallas de la app en vidrio — decisión Valentino 2/11)
+   Receta v519 exacta en paneles: blanco .55 + blur 16px saturate 1.4 + borde blanco .75
+   + sombra; degradado de Inicio detrás. Fotos y visuales SIN vidrio: el blur actúa
+   sobre lo que hay DETRÁS del panel, nunca sobre la foto; las fotos quedan intactas
+   dentro de sus tarjetas. Bloque al final del archivo para ganar por orden (como v539);
+   sin reglas oscuras propias: el navy sobre vidrio claro sigue legible en ambos modos
+   (precedente v539). NO tocado: Inicio (v519) + perfil .40 (v537, excepción deliberada),
+   Jardín/Estrategia/Ajustes (v539), chat principal (lote chat-pantalla), web pública,
+   /prueba, /aprobar, /fundadores, lista-espera, pop de semana .scf-pop (preview
+   transitorio, no pantalla), .bb-card de la oficina (pantalla redirigida en POSTY SOLO). */
+.app-shell, .hf-dback, body:has(.form-card){background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.28),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(254,193,77,.35),rgba(254,193,77,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
+.sched-col, .bb-bcard, .bb-bloque:not(.bb-bloque-top), .bb-libre, .apv-wrap .card, .hf-dcard, .form-card, .st-card, .st-wrap .card, .ob-wrap .card, .ads-wrap .card, .ads-wrap .ads-rec, #adminCard{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.sched-col.today{border:2px solid var(--cel);box-shadow:0 8px 24px rgba(39,147,200,.20)}
+.mz-tabs{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border-top:1px solid rgba(255,255,255,.75)}
