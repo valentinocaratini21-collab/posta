@@ -43,9 +43,9 @@ ok(app.includes("toast('✅ ' + (en ? 'Already published on Instagram' : 'Ya sal
 
 console.log('— 2. Intacto: un solo botón, literales viejos, censo —');
 ok(cnt(app, '<button type="button" class="hf-like hf-like-in"') === 1, 'un único botón corazón (detalle NO lo recupera)');
-ok(app.includes('${glyph}${despChip}<button type="button" class="hf-like hf-like-in"'), 'prefijo botón intacto (lote13/lote10)');
+ok(app.includes('${chip}${archChip}${likeInStrip ? likeBtn : \'\'}') && app.includes('${despChip}${likeInStrip ? \'\' : likeBtn}'), 'botón: en franja con chapita, hijo directo sin chapita (CORAZÓN-EN-LÍNEA 2/11)');
 ok(app.includes('class="hf-like hf-like-in"'), 'clase literal intacta (lote10)');
-ok(!css.includes('.hf-strip .hf-like-in'), 'corazón sigue fuera de la franja');
+ok(css.includes('.hf-tile.hf-has-chip > .hf-strip .hf-like-in{position:static'), 'corazón EN franja solo con chapita (CORAZÓN-EN-LÍNEA 2/11, Valentino)');
 ok(/\.hf-tile\s*>\s*\.hf-like-in\{[^}]*bottom:38px/.test(css), 'posición bottom:38px (CORAZÓN-ABAJO 1/11, supersede con causa: decisión Valentino mueve el corazón abajo a la derecha)');
 ok(app.includes("closest('[data-hf-like]')") && /HF_DBL/.test(app) && /300/.test(app), 'doble toque 300 ms intacto');
 ok(cnt(srv, 'catsMatch') === 3 && cnt(srv, 'week-redo') === 16 && cnt(srv, 'first_week') === 3 && cnt(srv, '/' + 'aprobar') === 16, 'censo server 3/16/3/16');

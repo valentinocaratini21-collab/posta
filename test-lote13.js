@@ -37,14 +37,14 @@ t(stripChip.includes('min-width:0'), 'chip min-width 0');
 t(stripChip.includes('overflow:hidden'), 'chip overflow hidden');
 t(stripChip.includes('text-overflow:clip'), 'chip clip, no ellipsis (LOTE CORAZÓN: el día se lee entero)');
 const stripLike = ruleBody(css, '.hf-strip .hf-like-in{');
-t(!css.includes('.hf-strip .hf-like-in'), 'sin regla corazón-en-franja (LOTE CORAZÓN: el corazón salió de la fila)');
-t(app.includes('${glyph}${despChip}<button type="button" class="hf-like hf-like-in"'), 'corazón hijo directo de la tile (posición en CSS; CORAZÓN-ABAJO 1/11 lo baja a la derecha)');
+t(css.includes('.hf-tile.hf-has-chip > .hf-strip .hf-like-in{position:static'), 'corazón EN franja solo con chapita (CORAZÓN-EN-LÍNEA 2/11, Valentino: en la misma línea que día+hora)');
+t(app.includes('${despChip}${likeInStrip ? \'\' : likeBtn}'), 'corazón hijo directo SOLO sin chapita (CORAZÓN-EN-LÍNEA 2/11; con chapita va en la franja)');
 const likeBase = ruleBody(css, '.hf-like{');
 t(likeBase.includes('width:34px') && likeBase.includes('height:34px'), 'corazón 34×34 usable');
 
 // 2. La tile emite chip + corazón DENTRO del strip, en ese orden; guards intactos.
-t(app.includes('<span class="hf-strip">${chip}${archChip}</span>${justChip}'),
-  'tile: franja sin corazón, chip primero (LOTE CORAZÓN)');
+t(app.includes('<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : \'\'}</span>${justChip}'),
+  'tile: corazón en franja con chapita, chip primero (CORAZÓN-EN-LÍNEA 2/11, Valentino: en la misma línea que día+hora)');
 t(app.includes('data-hf-like'), 'corazón conserva data-hf-like');
 t(app.includes("[data-hf-like]"), 'guards data-hf-like presentes');
 t(!app.includes('class="hf-cell-actions"'), 'sin fila abajo (no vuelve la fila del Lote 10)');

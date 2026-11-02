@@ -17613,6 +17613,13 @@ function homeTileHTML(t, i) {
   // ('pending' vs 'approved'): programar desde el corazón YA deja
   // el posteo en la agenda, y esa es la marca que se espera ver.
   const hfLikeOn = String(p.status) === 'scheduled' || String(p.status) === 'published';
+  // (LOTE CORAZÓN-EN-LÍNEA · decisión Valentino 2/11: el corazón va MÁS
+  // CHIQUITO y EN LA MISMA LÍNEA del día y la hora. Con chapita vive
+  // DENTRO de la franja (.hf-strip), en la misma fila que día+hora; sin
+  // chapita (borrador sin fecha) queda hijo directo, posición
+  // abajo-sobre-foto del lote corazón-abajo — este lote no la toca.)
+  const likeBtn = `<button type="button" class="hf-like hf-like-in" data-hf-like${hfLikeOn ? ' data-hf-on="1"' : ''} aria-pressed="${hfLikeOn ? 'true' : 'false'}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button>`;
+  const likeInStrip = !!chipTxt;
   // (LOTE CORAZÓN-GRIS-TIK) Aprobado con el corazón: queda visible
   // en el feed, a todo color, con tik verde (corrección Valentino
   // 2/11: SIN gris, no debe parecer archivado). Solo mientras sigue
@@ -17623,7 +17630,7 @@ function homeTileHTML(t, i) {
   // bundle siempre está definido).
   const hfAprobado = (String(p.status) === 'draft' || String(p.status) === 'scheduled') && (typeof pzAprobadoEs === 'function') && pzAprobadoEs(p.id);
   const tikSpan = hfAprobado ? '<span class="hf-tik" aria-hidden="true">✓</span>' : '';
-  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}</span>${justChip}${glyph}${despChip}<button type="button" class="hf-like hf-like-in" data-hf-like${hfLikeOn ? ' data-hf-on="1"' : ''} aria-pressed="${hfLikeOn ? 'true' : 'false'}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button>${tikSpan}</span></span>`;
+  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${likeInStrip ? '' : likeBtn}${tikSpan}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -20745,8 +20752,11 @@ function pzAprobarEnSitio(tile, id, schedAt) {
       const like = el.querySelector('.hf-like');
       if (like) { like.setAttribute('data-hf-on', '1'); like.setAttribute('aria-pressed', 'true'); }
       if (!el.querySelector('.hf-tik')) {
-        if (like && like.insertAdjacentHTML) like.insertAdjacentHTML('afterend', '<span class="hf-tik" aria-hidden="true">\u2713</span>');
-        else if (el.insertAdjacentHTML) el.insertAdjacentHTML('beforeend', '<span class="hf-tik" aria-hidden="true">\u2713</span>');
+        // (CORAZÓN-EN-LÍNEA x GRIS-TIK v548: el botón puede vivir DENTRO
+        // de la franja (.hf-strip, absoluta); insertar el tik tras el botón
+        // lo dejaría dentro de la franja y se posicionaría contra ella, no
+        // contra la tile. El tik va SIEMPRE como hijo de la tile: arriba-izquierda.)
+        if (el.insertAdjacentHTML) el.insertAdjacentHTML('beforeend', '<span class="hf-tik" aria-hidden="true">\u2713</span>');
       }
     } catch (e) {}
     try {

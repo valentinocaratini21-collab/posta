@@ -107,7 +107,7 @@ const man = new Date(); man.setDate(man.getDate() + 1); man.setHours(19, 0, 0, 0
 const tileProg = render({ kind: 'post', post: { id: 101, status: 'scheduled', scheduled_at: man.toISOString(), media_type: 'image', caption: 'promo' } });
 const stripProg = stripInner(tileProg);
 t(stripProg !== null, 'franja .hf-strip presente en tile programada');
-t(stripProg.indexOf('data-hf-like') < 0, 'corazón FUERA de la franja (tile programada)');
+t(stripProg.indexOf('data-hf-like') >= 0, 'corazón EN la franja (tile programada con chapita, CORAZÓN-EN-LÍNEA 2/11)');
 t(stripProg.indexOf('hf-chip') >= 0, 'chapita dentro de la franja');
 t(stripProg.indexOf('…') < 0, 'sin ningún «…» en la franja (día entero)');
 t(tileProg.indexOf('data-hf-like') >= 0, 'corazón presente en la tile');
@@ -116,13 +116,13 @@ t(tileProg.indexOf('hf-has-glyph') < 0, 'tile foto sin glifo: sin clase hf-has-g
 t(tileProg.indexOf('Aprobar con corazón') >= 0, 'aria-label corazón ES');
 t(tileProg.indexOf('hf-chip-day') >= 0 && tileProg.indexOf('hf-chip-hm') >= 0, 'chapita con día + hora separados');
 // El corazón es hijo directo de la tile: aparece después del cierre de la franja.
-t(tileProg.indexOf('data-hf-like') > tileProg.indexOf(stripProg) + stripProg.length, 'corazón después de la franja (hijo de la tile)');
+t(tileProg.indexOf('data-hf-like') < tileProg.indexOf(stripProg) + stripProg.length, 'corazón dentro de la franja (CORAZÓN-EN-LÍNEA 2/11)');
 
 // Tile video (glifo reel): glifo arriba, corazón abajo — ya no se cruzan (CORAZÓN-ABAJO 1/11, sin drop).
 const tileVid = render({ kind: 'post', post: { id: 102, status: 'scheduled', scheduled_at: man.toISOString(), media_type: 'video', image_path: 'x.mp4', caption: 'reel' } });
 t(tileVid.indexOf('hf-has-glyph') >= 0, 'tile video: clase hf-has-glyph');
 t(tileVid.indexOf('hf-glyph') >= 0, 'tile video: glifo presente');
-t(stripInner(tileVid).indexOf('data-hf-like') < 0, 'corazón FUERA de la franja (tile video)');
+t(stripInner(tileVid).indexOf('data-hf-like') >= 0, 'corazón EN la franja (tile video con chapita, CORAZÓN-EN-LÍNEA 2/11)');
 
 // Tile archivada (publicada, sin chapita): archChip en la franja, corazón abajo a la derecha.
 const tileArch = render({ kind: 'post', archivedExt: true, post: { id: 103, status: 'published', media_type: 'image', caption: 'viejo' } });
@@ -154,7 +154,7 @@ const ruleChip = /\.hf-strip\s+\.hf-chip\{[^}]*\}/.exec(css);
 t(ruleChip && !/ellipsis/.test(ruleChip[0]), 'chapita SIN text-overflow:ellipsis');
 const ruleArch = /\.hf-arch-chip\{[^}]*\}/.exec(css);
 t(ruleArch && /min-width:0/.test(ruleArch[0]), 'archChip min-width:0 (cede primero si coincide)');
-t(!/\.hf-strip\s+\.hf-like-in\{position:static/.test(css), 'regla vieja corazón-en-franja retirada');
+t(/\.hf-has-chip[^\{]*\.hf-strip\s+\.hf-like-in\{[^}]*position:static/.test(css), 'corazón-en-franja SOLO con chapita y en flujo (CORAZÓN-EN-LÍNEA 2/11, Valentino)');
 
 // ---------- Handlers intactos: corazón aprueba sin abrir detalle; detalle sin corazón ----------
 t(app.indexOf("closest('[data-hf-like]')") >= 0, 'guards data-hf-like en hfDetailBind/hfLikeBind');

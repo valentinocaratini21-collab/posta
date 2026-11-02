@@ -34,8 +34,8 @@ ok(APP.includes("cell0.outerHTML = homeTileHTML(t2, rec.i)") && APP.includes("fc
   '1: el parcheo en vivo reemplaza/inserta la celda entera, no la tile suelta');
 ok(APP.includes('apv-like') && APP.includes('apvAccept'),
   '1: el corazón del detalle sigue presente (apv-like + apvAccept)');
-ok(!APP.includes('hf-cell-actions') && APP.includes('${glyph}${despChip}<button type="button" class="hf-like hf-like-in"'),
-  '1: sin fila abajo: el botón cierra DENTRO de la tile (sobre la foto) — LOTE CORAZÓN: fuera de la franja, arriba a la derecha');
+ok(!APP.includes('hf-cell-actions') && APP.includes('hf-has-chip') && APP.includes('${chip}${archChip}${likeInStrip ? likeBtn : \'\'}'),
+  '1: con chapita el botón vive DENTRO de la franja (CORAZÓN-EN-LÍNEA 2/11, Valentino: chiquito en la misma línea que día+hora; sin chapita queda hijo directo)');
 
 // ---------- 2) Día + hora reales (programado o planificado) ----------
 ok(APP.includes('function hfPlanChip(ymd)'),

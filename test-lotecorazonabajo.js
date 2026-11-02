@@ -79,9 +79,9 @@ function ruleBody(re) {
 }
 
 // ---------- Versiones + censo (pines rotados a la liberación v548 con causa: bump v547→v548 de gris-tik (antes v547 de carrusel-flechas); este lote solo toca styles.css; + rotación v549 con causa: bump v548→v549 de puntitos) ----------
-t(srv.includes("const BUILD_ID = '20261101-v549'"), 'BUILD v532 en server.js');
-t(idx.includes('app.js?v=365') && idx.includes('styles.css?v=20261084'), 'index: app 363 + styles 20261082 (bump v547 de carrusel-flechas)');
-t(idxEn.includes('styles.css?v=20261084') && !idxEn.includes('app.js?v='), 'en/index: styles 20261082, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v550'"), 'BUILD v532 en server.js');
+t(idx.includes('app.js?v=366') && idx.includes('styles.css?v=20261085'), 'index: app 363 + styles 20261082 (bump v547 de carrusel-flechas)');
+t(idxEn.includes('styles.css?v=20261085') && !idxEn.includes('app.js?v='), 'en/index: styles 20261082, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v524'"), 'CHUNK_V sigue v524 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
@@ -150,17 +150,17 @@ const man = new Date(); man.setDate(man.getDate() + 1); man.setHours(19, 0, 0, 0
 const tileProg = render({ kind: 'post', post: { id: 101, status: 'scheduled', scheduled_at: man.toISOString(), media_type: 'image', caption: 'promo' } });
 const stripProg = stripInner(tileProg);
 t(stripProg !== null, 'franja .hf-strip presente en tile programada');
-t(stripProg.indexOf('data-hf-like') < 0, 'corazón FUERA de la franja (tile programada)');
+t(stripProg.indexOf('data-hf-like') >= 0, 'corazón EN la franja (tile programada con chapita, CORAZÓN-EN-LÍNEA 2/11: SUPERSEDE la posición abajo-sobre-foto)');
 t(tileProg.indexOf('data-hf-like') >= 0, 'corazón presente en la tile');
 t(tileProg.indexOf('hf-like hf-like-in') >= 0, 'corazón con clases hf-like hf-like-in');
-t(tileProg.indexOf('data-hf-like') > tileProg.indexOf(stripProg) + stripProg.length, 'corazón después de la franja (hijo de la tile)');
+t(tileProg.indexOf('data-hf-like') < tileProg.indexOf(stripProg) + stripProg.length, 'corazón dentro de la franja (CORAZÓN-EN-LÍNEA 2/11)');
 t(tileProg.indexOf('hf-has-glyph') < 0, 'tile foto sin glifo: sin clase hf-has-glyph');
 t(tileProg.indexOf('Aprobar con corazón') >= 0, 'aria-label corazón ES');
 t(tileProg.indexOf('hf-chip-day') >= 0 && tileProg.indexOf('hf-chip-hm') >= 0, 'chapita con día + hora separados');
 const tileVid = render({ kind: 'post', post: { id: 102, status: 'scheduled', scheduled_at: man.toISOString(), media_type: 'video', image_path: 'x.mp4', caption: 'reel' } });
 t(tileVid.indexOf('hf-has-glyph') >= 0, 'tile video: clase hf-has-glyph (marca, sin regla de drop)');
 t(tileVid.indexOf('hf-glyph') >= 0, 'tile video: glifo presente arriba');
-t(stripInner(tileVid).indexOf('data-hf-like') < 0, 'corazón FUERA de la franja (tile video)');
+t(stripInner(tileVid).indexOf('data-hf-like') >= 0, 'corazón EN la franja (tile video con chapita, CORAZÓN-EN-LÍNEA 2/11)');
 sb.ME.lang = 'en';
 const tileEn = render({ kind: 'post', post: { id: 104, status: 'scheduled', scheduled_at: man.toISOString(), media_type: 'image', caption: 'promo' } });
 t(tileEn.indexOf('Approve with heart') >= 0, 'aria-label corazón EN');
