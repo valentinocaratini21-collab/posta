@@ -10224,6 +10224,16 @@ function weekCardHTML(d, o) {
     : `<span class="igmock-ava" style="background:${esc(bizColorW)}">${esc((headName || 'P').charAt(0).toUpperCase())}</span>`;
   // Tarjeta inmediata: borrador nacido sin imagen, creándose ahora mismo.
   const isPending = !d.image_path && d.status === 'draft';
+  // (FIX tarjeta rota 1/11 · carrusel) weekCardHTML nunca leía
+  // carousel_paths: la tarjeta mostraba solo image_path y no había nada
+  // que deslizar. Mismo patrón del detalle/aprobación: image_path
+  // primero + carousel_paths (sin duplicar); >1 slide = carrusel.
+  let carPaths = [];
+  try { const cp = JSON.parse(d.carousel_paths || '[]'); if (Array.isArray(cp)) carPaths = cp.map(String).filter(Boolean); } catch (e) { carPaths = []; }
+  const carSlides = [];
+  if (d.image_path) carSlides.push(String(d.image_path));
+  for (const x of carPaths) { if (!carSlides.includes(x)) carSlides.push(x); }
+  const isCar = !isV && !isPending && carSlides.length > 1;
   const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">' + pzIc('sparkle', 16) + '</span><b>Creando imagen…</b></span>'
     : !d.image_path ? '<span class="pcard-nothumb">' + pzIc('post', 20) + '</span>'
     : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
@@ -10313,18 +10323,36 @@ function weekCardHTML(d, o) {
   // (v326) En Día el encabezado de la pantalla ya dice el día: la etiqueta de
   // la tarjeta va corta (solo la hora) para que no se peleé con el botón
   // Aceptar en pantallas chicas ("jue 22 · 12:0…" cortado).
-  const whenTxt = o.dia ? String(prop.label || '').replace(/^(\S+)\s+[^·]*·\s*/, '$1 ') : prop.label;
+  // (FIX tarjeta rota 1/11) La etiqueta trae el ícono como HTML (pzIc) +
+  // texto: se separa el ícono (HTML de código, nunca texto del usuario)
+  // y el texto se escapa siempre. Antes se escapaba TODO (esc(whenTxt))
+  // y el ícono salía como texto literal «<span class="pz-ic" st…».
+  // Todas las fuentes de prop.label son de código (pzIc + fechas
+  // formateadas + literales): auditadas fuente por fuente.
+  const labelRaw = String(prop.label || '');
+  let labelIcon = '', labelText = labelRaw;
+  if (prop.iso) labelIcon = pzIc('calendar', 15) + ' ';
+  else if (labelRaw.startsWith('<span class="pz-ic"')) {
+    const icEnd = labelRaw.indexOf('</span>');
+    if (icEnd > 0) { labelIcon = labelRaw.slice(0, icEnd + 7) + ' '; labelText = labelRaw.slice(icEnd + 7).replace(/^\s+/, ''); }
+  }
+  const whenTxt = o.dia ? labelText.replace(/^(\S+)\s+[^·]*·\s*/, '$1 ') : labelText;
   // (6 mejoras · ítem 2, adaptado v496) Borrador en la tarjeta: misma etiqueta que
   // en la tile; el creando (isPending) no es borrador accionable.
   const draftChipCard = (d.status === 'draft' && !isPending) ? `<span class="pz-draft-chip">${enW ? 'Draft' : 'Borrador'}</span>` : '';
+  const carTrackHTML = isCar ? `<div class="hf-d-track">${carSlides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="" loading="lazy" data-lightbox="${esc(s)}" data-video="0" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}"></span>`).join('')}</div>` : '';
+  const carCountHTML = isCar ? `<span class="hf-d-count">1/${carSlides.length}</span>` : '';
+  const carDotsHTML = isCar ? `<div class="hf-d-dots">${carSlides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : '';
   return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}${d.status === 'draft' && !isPending ? ' igmock-draft' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}" data-f3-status="${esc(String(d.status || ''))}" data-f3-appr="${esc(String(d.approval || ''))}">
       <div class="igmock-head">${avaHTML}<span class="igmock-name">${esc(headName)}</span>${o.count ? `
         <span class="igmock-count">${esc(o.count)}</span>` : ''}<span class="igmock-dots" aria-hidden="true">•••</span></div>
-      <div class="igmock-when-top"><span>${prop.iso ? pzIc('calendar', 15) + ' ' : ''}${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
+      <div class="igmock-when-top"><span>${labelIcon}${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
         ${statusHTML}${d.image_path ? `<button type="button" class="hf-crop-tog hf-crop-mini" data-hf-crop aria-pressed="false" aria-label="${enW ? 'See how it crops' : 'Ver cómo se recorta'}" title="${enW ? 'See how it crops' : 'Ver cómo se recorta'}">${pzIc('grid', 16)}</button>` : ''}</div>
       ${isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
-        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</button>`}
+        : isCar
+          ? `<div class="igmock-media igmock-media-car">${carTrackHTML}${carCountHTML}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</div>${carDotsHTML}`
+          : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</button>`}
       ${foot}
       ${hfAskChangeBtnHTML(d)}
     </div>`;
@@ -19891,6 +19919,22 @@ document.addEventListener('click', (e) => {
     }
   }
 });
+// (FIX tarjeta rota 1/11 · carrusel) Puntitos y contador de la tarjeta
+// siguen el scroll del track. Delegado global (captura: el scroll no
+// burbujea): solo tracks dentro de .igmock (la tarjeta); el detalle
+// (.hf-dcard) y la aprobación (.apv-wrap) conservan su cableado propio.
+document.addEventListener('scroll', (e) => {
+  try {
+    const t = e.target;
+    if (!t || !t.classList || !t.classList.contains('hf-d-track')) return;
+    const card = t.closest ? t.closest('.igmock') : null;
+    if (!card) return;
+    const i = Math.round(t.scrollLeft / Math.max(1, t.clientWidth));
+    card.querySelectorAll('.hf-d-dots i').forEach((dd, k) => dd.classList.toggle('on', k === i));
+    const cnt = card.querySelector('.hf-d-count');
+    if (cnt) { const n = t.children.length; cnt.textContent = Math.min(n, Math.max(0, i) + 1) + '/' + n; }
+  } catch (err) {}
+}, true);
 /* ===== (Tanda feed 6B · ítem 4) ESPEJO VIVO =====
    Con el home abierto y visible, cada ~50 s (y al volver la pestaña
    a visible/foco) se re-lee el MISMO payload que compone la grilla
