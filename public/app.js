@@ -10509,8 +10509,124 @@ function igRelTime(iso, en) {
   if (en) return m < 60 ? Math.max(1, m) + 'm' : h < 24 ? h + 'h' : dd < 7 ? dd + 'd' : w + 'w';
   return m < 60 ? 'hace ' + Math.max(1, m) + ' min' : h < 24 ? 'hace ' + h + ' h' : dd < 7 ? 'hace ' + dd + (dd === 1 ? ' día' : ' días') : 'hace ' + w + ' sem';
 }
+/* ===== (LOTE DETALLE-SIMPLE · Decisión Valentino 2/11 ~08:53: «Esto hay que
+   mejorarlo muchisimo. Esta todo muy grande. Tiene que ser mucho mas simple
+   todo.») FORMA SIMPLE DEL DETALLE (pop .scf-pop desde el cofre #scfVault):
+   foto limpia NUNCA cortada (object-fit:contain, sin overlay de recorte),
+   caption en texto plano (sin caja de edición por defecto, sin tap para
+   editar), día+hora reales en una línea chica + estado en texto chico,
+   UN solo primario fijo abajo (Aceptar, solo borradores, mismos attrs
+   data-revaccept/data-proposed de hoy) y TODO lo demás en un solo menú •••
+   (Frenar, Pedir un cambio, Editar, Eliminar, No me gusta). FUERA: la fila
+   de 5 íconos tipo IG (decorado de IG, no acciones del producto: el corazón
+   ya vive en los tiles), la caja de edición por defecto (Editar abre solo
+   el campo + UN Guardar; ✕/atrás descarta, no hay Cancelar grande) y el
+   mini-chat propio del detalle. SUPERSESIÓN CON CAUSA: el mini-chat del
+   lote simplificar-detalle (aprobado 1/11) queda SUPERSEDED SOLO para el
+   detalle — «Pedir un cambio» abre EL flujo simple del lote cambio-simple
+   (chat único con el posteo anclado, posteo + campo + 4 atajos, vía
+   pcAskChange → hfOpenChatForPost → hfSetAnchor); los placeholders en voz
+   de Posty de ese lote se mantienen en el chat. Se mantiene del lote
+   detalle-3: Aceptar fijo, foto limpia por interruptor si existe hermana
+   -clean (en el pop simple la foto ya va completa por defecto), línea
+   «Por qué» solo con dato real, día/hora reales. La vista standalone de
+   aprobación (approvalPostView) y hfDetailHTML NO se tocan: la captura es
+   el pop weekCardHTML. El rail de agenda (weekCardHTML sin simple) NO se
+   toca: la forma simple va detrás de o.simple, puesto SOLO en los dos
+   constructores del cofre (homeGridCompose y f3RevealCheck). Composición
+   en la liberación: simplificar-detalle ya manda Eliminar/No me gusta al
+   menú ••• de la vista de aprobación — este menú es el del POP, superficie
+   distinta, no se duplica nada; detalle-3 conserva su primario y su
+   porqué. ===== */
+function detSimpleMenuHTML(d, o) {
+  o = o || {};
+  const en = !!o.en;
+  const items = [];
+  if (d.status === 'scheduled') items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="hold">${pzIc('pause', 16)} ${en ? 'Hold' : 'Frenar'}</button>`);
+  if (d.status === 'draft' && o.canPubNow) items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="pubnow">${pzIc('bolt', 16)} ${en ? 'Publish now' : 'Publicar ahora'}</button>`);
+  items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="ask-change">${pzIc('chat', 15)} ${en ? 'Request a change' : 'Pedir un cambio'}</button>`);
+  if (d.status === 'draft' || d.status === 'scheduled') {
+    items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="det-edit">${pzIc('pencil', 16)} ${en ? 'Edit' : 'Editar'}</button>`);
+    if (d.status === 'draft') items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="del-draft" data-del-confirm="${esc(en ? 'Delete this draft permanently?' : '¿Eliminar este borrador para siempre?')}">${pzIc('trash', 16)} ${en ? 'Delete' : 'Eliminar'}</button>`);
+    else items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="det-del">${pzIc('trash', 16)} ${en ? 'Delete' : 'Eliminar'}</button>`);
+    items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="det-dislike">${pzIc('thumbDown', 16)} ${en ? 'Dislike' : 'No me gusta'}</button>`);
+  }
+  if (d.status === 'published' && d.ig_permalink) items.push(`<a class="igmock-menu-btn" href="${esc(d.ig_permalink)}" target="_blank" rel="noopener">${pzIc('instagram', 16)} ${en ? 'View on Instagram' : 'Ver en Instagram'}</a>`);
+  return `<div class="igmock-menu" hidden>${items.join('')}</div>`;
+}
+function pzDetMenuToggle(card, btn) {
+  if (!card) return;
+  const panel = card.querySelector('.igmock-menu');
+  if (!panel) return;
+  const open = panel.hidden;
+  panel.hidden = !open;
+  try { if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false'); } catch (e) {}
+}
+function pzDetSimpleEdit(card) {
+  if (!card || card.querySelector('.igmock-edit')) return;
+  const capEl = card.querySelector('.igmock-cap');
+  if (!capEl) return;
+  const current = (capEl.dataset && capEl.dataset.capfull) || capEl.textContent || '';
+  capEl.style.display = 'none';
+  const wrap = document.createElement('div');
+  wrap.className = 'igmock-edit';
+  const ta = document.createElement('textarea');
+  ta.className = 'igmock-edit-ta';
+  ta.rows = 3;
+  ta.maxLength = 2200;
+  ta.value = current;
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'igmock-edit-save';
+  save.setAttribute('data-pc-act', 'det-save');
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  save.textContent = en ? 'Save' : 'Guardar';
+  wrap.appendChild(ta);
+  wrap.appendChild(save);
+  capEl.after(wrap);
+  try { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {}
+}
+async function pzDetSimpleSave(card, id, btn) {
+  const wrap = card ? card.querySelector('.igmock-edit') : null;
+  const ta = wrap ? wrap.querySelector('textarea') : null;
+  if (!ta) return;
+  const v = ta.value.trim();
+  if (btn) btn.disabled = true;
+  try {
+    await api.patch('/api/posts/' + encodeURIComponent(id), { caption: v });
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    try { toast('😅 ' + esc((e && e.message) || 'No se pudo guardar')); } catch (e2) {}
+    return;
+  }
+  const capEl = card.querySelector('.igmock-cap');
+  if (capEl) {
+    const b = capEl.querySelector('b');
+    const userPart = b ? `<b class="igmock-cap-user">${esc(b.textContent)}</b> ` : '';
+    capEl.innerHTML = userPart + esc(v);
+    try { capEl.dataset.capfull = v; } catch (e) {}
+    capEl.style.display = '';
+  }
+  if (wrap) wrap.remove();
+}
+async function pzDetSimpleDel(id, btn) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (!confirm(en ? 'Delete this post permanently?' : '¿Eliminar este posteo para siempre?')) return;
+  if (btn) btn.disabled = true;
+  try {
+    await api.del('/api/posts/' + encodeURIComponent(id));
+    try { toast((en ? pzIc('trash', 14) + ' Deleted' : pzIc('trash', 14) + ' Eliminado')); } catch (e) {}
+    try { scfClosePop(); } catch (e) {}
+    try { render(); } catch (e) {}
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    try { toast('😅 ' + esc((e && e.message) || (en ? 'Could not delete' : 'No se pudo eliminar'))); } catch (e2) {}
+  }
+}
+/* ===== FIN LOTE DETALLE-SIMPLE ===== */
 function weekCardHTML(d, o) {
   o = o || {};
+  const simple = !!(o && o.simple);
   const tz = o.tz || 'America/Argentina/Buenos_Aires';
   const bizName = o.bizName || 'Mi negocio';
   const prop = o.prop || { label: `${pzIc('pencil', 13)} Borrador`, iso: null };
@@ -10574,7 +10690,7 @@ function weekCardHTML(d, o) {
   // sin importar en qué superficie vive la tarjeta (mismo patrón que el
   // mini-chat hfAskChangeBtnHTML, que reescribe esta entrada al final).
   try { if (d && d.id != null && typeof HF_ASK_POSTS !== 'undefined' && HF_ASK_POSTS) HF_ASK_POSTS[String(d.id)] = { id: d.id, image_path: d.image_path || '', caption: d.caption || '', redo_left: (d.redo_left === null || d.redo_left === undefined) ? 3 : d.redo_left, status: d.status || '', media_type: d.media_type || '' }; } catch (e) {}
-  const acts = `<div class="pcard-actions hs-acts">${actsInner}</div><div class="pubnow-mount pcard-pubnowm"></div>`;
+  const acts = simple ? '' : `<div class="pcard-actions hs-acts">${actsInner}</div><div class="pubnow-mount pcard-pubnowm"></div>`;
   // data-sched-at / data-day-label: los usa pcSkip para deshacer y para
   // "Armar otro" (la igmock del carrusel original no los traía).
   let dayLabel = '';
@@ -10596,7 +10712,7 @@ function weekCardHTML(d, o) {
   const commentsLine = (!o.dia && ccN !== null && ccN > 0)
     ? `<div class="igmock-comments">${enW ? (ccN === 1 ? 'View 1 comment' : `View all ${ccN.toLocaleString('en-US')} comments`) : (ccN === 1 ? 'Ver el comentario' : `Ver los ${ccN.toLocaleString('es-AR')} comentarios`)}</div>`
     : '';
-  const igChrome = (!isPending && d.image_path) ? `<div class="igmock-acts" aria-hidden="true">${LP_WEEK_ICONS}</div>${likesLine}` : '';
+  const igChrome = (!simple && !isPending && d.image_path) ? `<div class="igmock-acts" aria-hidden="true">${LP_WEEK_ICONS}</div>${likesLine}` : '';
   const statusHTML = d.status === 'scheduled'
     ? `<span class="pcard-scheduled">${pzIc('clock', 15)} Programado</span>`
     : isPub
@@ -10604,7 +10720,7 @@ function weekCardHTML(d, o) {
       : isPending
         ? `<span class="pcard-creating">' + pzIc('clock', 14) + ' Creando…</span>`
         : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">${pzIc('checkCircle', 16)} Aceptar</button>`;
-  const capHTML = capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}"${igUser ? ` data-capuser="${esc(igUser)}"` : ''} title="Tocá para editar">${igUser ? `<b class="igmock-cap-user">${esc(igUser)}</b> ` : ''}${esc(capFull)}</div>` : '';
+  const capHTML = capFull ? (simple ? `<div class="igmock-cap" data-capfull="${esc(capFull)}">${igUser ? `<b class="igmock-cap-user">${esc(igUser)}</b> ` : '' }${esc(capFull)}</div>` : `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}"${igUser ? ` data-capuser="${esc(igUser)}"` : ''} title="Tocá para editar">${igUser ? `<b class="igmock-cap-user">${esc(igUser)}</b> ` : ''}${esc(capFull)}</div>`) : '';
   // (Frente 3b) Tiempo relativo estilo IG bajo el pie, solo en posteos ya
   // publicados y fuera del esqueleto fijo de Día: «hace 2 h».
   const timeHTML = (isPub && !o.dia) ? (() => { const rt = igRelTime(d.published_at || d.scheduled_at, (typeof ME !== 'undefined' && ME && ME.lang === 'en')); return rt ? `<div class="igmock-time">${esc(rt)}</div>` : ''; })() : '';
@@ -10650,18 +10766,30 @@ function weekCardHTML(d, o) {
   const carArrowsHTML = isCar ? `<button type="button" class="hf-d-arrow hf-d-arrow-prev" data-hf-car-arrow="-1" aria-label="${enW ? 'Previous photo' : 'Foto anterior'}" hidden>‹</button><button type="button" class="hf-d-arrow hf-d-arrow-next" data-hf-car-arrow="1" aria-label="${enW ? 'Next photo' : 'Foto siguiente'}">›</button>` : '';
   const carCountHTML = isCar ? `<span class="hf-d-count">1/${carSlides.length}</span>` : '';
   const carDotsHTML = isCar ? `<div class="hf-d-dots">${carSlides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : '';
-  return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}${d.status === 'draft' && !isPending ? ' igmock-draft' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}" data-f3-status="${esc(String(d.status || ''))}" data-f3-appr="${esc(String(d.approval || ''))}">
+  // (LOTE DETALLE-SIMPLE) Piezas de la forma simple, calculadas acá para
+  // que el return no cambie ni un byte cuando o.simple es falso.
+  const simpleAccept = simple && d.status === 'draft' && !isPending;
+  const statusWord = isPub ? (enW ? 'Published' : 'Publicado') : d.status === 'scheduled' ? (enW ? 'Scheduled' : 'Programado') : isPending ? (enW ? 'Creating…' : 'Creando…') : (enW ? 'Draft' : 'Borrador');
+  let simpleWhen = isPending ? statusWord : (labelText || '');
+  if (!isPending && simpleWhen && statusWord && !simpleWhen.includes(statusWord)) simpleWhen += ' · ' + statusWord;
+  if (!simpleWhen) simpleWhen = statusWord;
+  const simpleWhenHTML = `<div class="igmock-when-simple">${esc(simpleWhen)}</div>`;
+  const menuBtnHTML = `<button type="button" class="igmock-dots-btn" data-pc-act="det-menu" aria-expanded="false" aria-label="${enW ? 'More options' : 'Más opciones'}">•••</button>`;
+  const simpleMenuHTML = simple ? detSimpleMenuHTML(d, { en: enW, canPubNow, igLink: d.ig_permalink }) : '';
+  const simpleAcceptHTML = simpleAccept ? `<button type="button" class="igmock-accept-fixed" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''}>${pzIc('checkCircle', 16)} Aceptar</button>` : '';
+  const whenTopHTML = `<div class="igmock-when-top"><span>${labelIcon}${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
+        ${statusHTML}${d.image_path ? `<button type="button" class="hf-crop-tog hf-crop-mini" data-hf-crop aria-pressed="false" aria-label="${enW ? 'See how it crops' : 'Ver cómo se recorta'}" title="${enW ? 'See how it crops' : 'Ver cómo se recorta'}">${pzIc('grid', 16)}</button>` : ''}</div>`;
+  return `<div class="igmock igmock-fixed${simple ? ' igmock-simple' : ''}${simpleAccept ? ' igmock-has-accept' : ''}${o.dia ? ' igmock-dia' : ''}${d.status === 'draft' && !isPending ? ' igmock-draft' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}" data-f3-status="${esc(String(d.status || ''))}" data-f3-appr="${esc(String(d.approval || ''))}">
       <div class="igmock-head">${avaHTML}<span class="igmock-name">${esc(headName)}</span>${o.count ? `
-        <span class="igmock-count">${esc(o.count)}</span>` : ''}<span class="igmock-dots" aria-hidden="true">•••</span></div>
-      <div class="igmock-when-top"><span>${labelIcon}${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
-        ${statusHTML}${d.image_path ? `<button type="button" class="hf-crop-tog hf-crop-mini" data-hf-crop aria-pressed="false" aria-label="${enW ? 'See how it crops' : 'Ver cómo se recorta'}" title="${enW ? 'See how it crops' : 'Ver cómo se recorta'}">${pzIc('grid', 16)}</button>` : ''}</div>
+        <span class="igmock-count">${esc(o.count)}</span>` : ''}${simple ? menuBtnHTML : '<span class="igmock-dots" aria-hidden="true">•••</span>'}${simpleMenuHTML}</div>
+      ${simple ? simpleWhenHTML : whenTopHTML}
       ${isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
         : isCar
-          ? `<div class="igmock-media igmock-media-car">${carTrackHTML}${carArrowsHTML}${carCountHTML}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</div>${carDotsHTML}`
-          : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</button>`}
-      ${foot}
-      ${hfAskChangeBtnHTML(d)}
+          ? `<div class="igmock-media igmock-media-car">${carTrackHTML}${carArrowsHTML}${carCountHTML}${(!simple && typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</div>${carDotsHTML}`
+          : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}" aria-label="Ver posteo">${media}${(!simple && typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</button>`}
+      ${foot}${simpleAcceptHTML}
+      ${simple ? '' : hfAskChangeBtnHTML(d)}
     </div>`;
 }
 
@@ -11235,6 +11363,16 @@ function feedPreviewHTML(all, tz, prof) {
 // MISMA interacción, sin duplicar la lógica. bindScfMinis(root) cablea
 // las minis dentro de root; scfWireGlobals() registra una sola vez los
 // listeners de documento (click afuera / Escape / rastreador geométrico).
+// (LOTE DETALLE-SIMPLE-DIRECTO A) ¿Tile ajustable DEL FEED DE INICIO? Solo las tiles
+// dentro de #inicioView redirigen: las minis de la Agenda (#schedView) conservan su pop
+// vigente, y las publicadas conservan su camino (pop en desktop, hf-dcard en táctil).
+// data-status lo pinta homeTileHTML en cada tile.
+function pzDetDirectoEsAjustable(w) {
+  if (!w || !w.closest) return false;
+  if (!w.closest('#inicioView')) return false;
+  const st = w.dataset ? String(w.dataset.status || '') : '';
+  return st === 'draft' || st === 'scheduled';
+}
 function bindScfMinis(root) {
   if (!root) return;
   root.querySelectorAll('.scf-mini-x').forEach(w => {
@@ -11243,6 +11381,7 @@ function bindScfMinis(root) {
     let t = null;
     w.addEventListener('mouseenter', () => {
       if (SCF_PINNED) return; // hay una capa fijada: el hover no la roba
+      if (pzDetDirectoEsAjustable(w)) return; // home ajustable: sin pop de hover, el click va directo
       if (t) clearTimeout(t);
       if (SCF_POP_TIMER) { clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = null; }
       t = setTimeout(() => scfOpenPop(w), 130);
@@ -11272,6 +11411,10 @@ function bindScfMinis(root) {
         return;
       }
       e.stopPropagation();
+      // (LOTE DETALLE-SIMPLE-DIRECTO A) Home ajustable: click directo a la aprobación,
+      // sin scfOpenPop intermedio. En táctil este listener no corre: hfDetailBind
+      // (captura, antes) ya se quedó con el toque y aplica la misma regla.
+      if (pzDetDirectoEsAjustable(w)) { location.hash = '#/app/post/' + encodeURIComponent(w.dataset.postId); return; }
       const touchLike = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
       if (touchLike) {
         if (SCF_POP && SCF_POP.wrap === w) scfClosePop();
@@ -12869,6 +13012,7 @@ function pcOnClick(e) {
   if (!root) return;
   const id = root.dataset.postId;
   const act = el.dataset.pcAct;
+  if (act !== 'det-menu') { try { root.querySelectorAll('.igmock-menu:not([hidden])').forEach(m => { m.hidden = true; }); const mb = root.querySelector('[data-pc-act="det-menu"]'); if (mb) mb.setAttribute('aria-expanded', 'false'); } catch (e) {} }
   if (act === 'open') { location.hash = '#/app/post/' + encodeURIComponent(id); return; }
   if (act === 'hold') { pcHold(id); return; }
   if (act === 'edit-cap') { pcStartEdit(root); return; }
@@ -12880,6 +13024,11 @@ function pcOnClick(e) {
   if (act === 'pubnow') { pcPublishNow(id, root, el); return; }
   if (act === 'ask-change') { pcAskChange(id); return; }
   if (act === 'del-draft') { pcDelDraft(id, root, el); return; }
+  if (act === 'det-menu') { pzDetMenuToggle(root, el); return; }
+  if (act === 'det-edit') { pzDetSimpleEdit(root); return; }
+  if (act === 'det-save') { pzDetSimpleSave(root, id, el); return; }
+  if (act === 'det-del') { pzDetSimpleDel(id, el); return; }
+  if (act === 'det-dislike') { try { if (typeof pcDislikeOpen === 'function') pcDislikeOpen(id, el); } catch (e) {} return; }
   if (act === 'tiktok') { pcShareTikTok(id, el); return; }
   if (act === 'tiktok-inbox') { pcShareTikTokInbox(id, el); return; }
   if (act === 'img-style') {
@@ -17414,7 +17563,7 @@ function hfAnchorBarHTML(p, en) {
   const redoBtn = (hfRedoLeft(p) === 0)
     ? `<button type="button" class="hf-chipq" data-hf-chipq="redo" disabled>${en ? 'Redo' : 'Rehacer'}</button>`
     : `<button type="button" class="hf-chipq" data-hf-chipq="redo">${en ? 'Redo' : 'Rehacer'}</button>`;
-  return `<div class="hf-anchor" data-anchor-id="${esc(String(p.id))}">
+  return `<div class="hf-anchor" data-anchor-id="${esc(String(p.id))}" data-anchor-open="1" title="${en ? 'Open this post' : 'Abrir este posteo'}">
     ${thumb}
     <div class="hf-anchor-main">
       <div class="hf-anchor-t">${en ? 'Editing this post' : 'Editando este posteo'}</div>
@@ -18758,7 +18907,7 @@ async function inicioView() {
       ? { label: pzIc('checkCircle', 14) + ' ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
       : proposedLabelFor(p, pl.proposals, tz);
     HF_PROPS[p.id] = prop;
-    vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null, user: (prof && prof.username) || '', pic: (prof && prof.pic) || '' }));
+    vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null, simple: true, user: (prof && prof.username) || '', pic: (prof && prof.pic) || '' }));
   }
   // (Tanda feed 5) La composición completa queda a mano para el
   // detalle IG y las pestañas (que filtran sin recomponer).
@@ -20782,14 +20931,12 @@ function hfActionsAct(act, id, tile, bd) {
   if (act === 'hold') { pcCloseSheet(); pcHold(id); return; }
   if (act === 'edit') {
     pcCloseSheet();
-    // El flujo vigente de edición SIN salir del feed: la tarjeta
-    // completa del cofre (#scfVault) fijada sobre la tile — la misma
-    // ampliación de siempre — con su editor de texto ya abierto.
-    try { scfOpenPop(tile, true); } catch (e) {}
-    const pop = tile.querySelector('.scf-pop');
-    const eb = pop ? pop.querySelector('[data-pc-act="edit-cap"]') : null;
-    if (eb) { eb.click(); return; }
-    if (!pop) location.hash = '#/app/post/' + encodeURIComponent(id); // respaldo: el detalle vigente
+    // (LOTE DETALLE-SIMPLE-DIRECTO A) Causa del bug viejo: la capa vive en document.body
+    // desde v442, nunca dentro de la tile, así que buscarla dentro de la tile era
+    // siempre null y la aprobación solo se alcanzaba por el respaldo, no por diseño.
+    // Ahora el destino es directo por diseño: la aprobación, donde Editar vive en el
+    // menú ••• y el mini-chat «qué le cambiamos a este posteo?» sigue al pie.
+    location.hash = '#/app/post/' + encodeURIComponent(id);
     return;
   }
   if (act === 'move') { pcCloseSheet(); hfMoveStart(tile); return; }
@@ -21318,7 +21465,17 @@ function hfDetailBind(root) {
     HF_DBL.timer = setTimeout(() => {
       const pend = HF_DBL;
       hfDblReset();
-      if (pend.tile && document.contains(pend.tile) && location.hash === pend.hash) { try { hfDetailOpen(pend.post, pend.tile); } catch (e2) {} }
+      if (pend.tile && document.contains(pend.tile) && location.hash === pend.hash) {
+        // (LOTE DETALLE-SIMPLE-DIRECTO A) Borrador/programado -> aprobación DIRECTA, sin
+        // overlay .hf-dcard intermedio y sin flicker (navegación por hash, no overlay).
+        // Publicado: camino vigente (hfDetailOpen; su foto abre el lightbox) — no va a
+        // aprobación. El doble toque de arriba (300 ms, aprobar en su lugar) NO cambia.
+        try {
+          const stD = (pend.post && String(pend.post.status || '')) || (pend.tile && pend.tile.dataset && String(pend.tile.dataset.status || ''));
+          if (stD === 'draft' || stD === 'scheduled') location.hash = '#/app/post/' + encodeURIComponent(pend.post.id);
+          else hfDetailOpen(pend.post, pend.tile);
+        } catch (e2) {}
+      }
     }, 300);
   }, true);
 }
@@ -21779,6 +21936,22 @@ async function pzHablarClick(id) {
     e.stopPropagation();
     e.preventDefault();
     pzHablarClick(b.dataset.hfChat);
+  });
+})();
+// (LOTE DETALLE-SIMPLE-DIRECTO A) Toque en la tarjeta de contexto del chat -> aprobación
+// directa de ese posteo (affordance nuevo: hoy era un div plano sin handler). Los botones
+// de la tarjeta (✕ y chips de cambio) quedan intactos: el guard los deja pasar a sus
+// handlers vigentes. Delegado global, una sola vez (la tarjeta se repinta).
+(function pzAnchorOpenBind() {
+  if (window.__pzAnchorOpenBound) return;
+  window.__pzAnchorOpenBound = true;
+  document.addEventListener('click', (e) => {
+    const card = e.target && e.target.closest ? e.target.closest('[data-anchor-open]') : null;
+    if (!card) return;
+    if (e.target.closest && e.target.closest('button')) return;
+    const id = card.dataset.anchorId;
+    if (!id) return;
+    location.hash = '#/app/post/' + encodeURIComponent(id);
   });
 })();
 function hfOpenChatForPost(post) {
@@ -22729,11 +22902,22 @@ async function approvalPostView(id) {
 // arriba. El corazón conserva su acción (aprobar + burst, Lote 2) y
 // Frenar sigue solo para programados. Etiqueta chica en ES/EN.
 function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
-  if (!canAct && !isDraft) return '';
+  // (LOTE DETALLE-SIMPLE-DIRECTO A) La pantalla de la captura (vista standalone de
+  // aprobación) se simplifica con el patrón detalle-simple: UN primario Aceptar (ya
+  // existe fuera de este menú: apvAccept / apvAcceptDraft, mismos handlers) y el resto
+  // en menú •••, en el orden del pedido. «Aprobar» NO va al menú: YA ES el Aceptar
+  // primario (el corazón duplicaba esa acción). El mini-chat al pie (hfAskChangeBtnHTML)
+  // y la página pública sin sesión (72 h) NO se tocan — sin literal de ruta acá para
+  // no mover el censo de app (pin: un solo marcador en app.js).
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const id = esc(String(p.id));
+  // Publicados: solo Ver en Instagram (ya vive en la píldora apvPill cuando hay link)
+  // + Pedir un cambio (abre el chat único anclado a este posteo, vía pzHablarClick).
+  if (st === 'published') {
+    return `<div class="apv-actions apv-more apv-pub" id="apvMore"><button class="btn btn-soft apv-change-pub" id="apvChangePub" data-apvid="${id}">${pzIc('chat', 18)} ${en ? 'Request a change' : 'Pedir un cambio'}</button></div>`;
+  }
+  if (!canAct && !isDraft) return '';
   let b = '';
-  b += `<button class="apv-sec-btn apv-like" data-apvid="${id}" aria-label="${en ? 'Approve' : 'Aprobar'}">${pzIc('heart', 20)}<span>${en ? 'Approve' : 'Aprobar'}</span></button>`;
   if ((st === 'draft' || st === 'scheduled') && p.image_path) b += `<button class="apv-sec-btn" id="apvTalk" data-apvid="${id}" aria-label="${en ? 'Talk about this post' : 'Hablar de este posteo'}">${pzIc('chat', 20)}<span>${en ? 'Talk about this post' : 'Hablar de este posteo'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvEdit" data-apvedit="${esc(editPrompt || '')}">${pzIc('pencil', 20)}<span>${en ? 'Edit' : 'Editar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvReject">${pzIc('reject', 20)}<span>${en ? 'Reject' : 'Rechazar'}</span></button>`;
@@ -22741,8 +22925,17 @@ function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
   b += `<button class="apv-sec-btn" id="apvDelete" data-apvid="${id}">${pzIc('trash', 20)}<span>${en ? 'Delete' : 'Eliminar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvRedo" data-apvid="${id}">↻<span>${en ? 'Redo' : 'Rehacer'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvDislike" data-apvid="${id}">${pzIc('thumbDown', 20)}<span>${en ? 'Dislike' : 'No me gusta'}</span></button>`;
-  return `<div class="apv-actions apv-more apv-sec" id="apvMore">${b}</div>`;
+  return `<div class="apv-actions apv-more" id="apvMore"><button type="button" class="apv-menu-btn" id="apvMenuBtn" aria-expanded="false" aria-controls="apvMenu" aria-label="${en ? 'More actions' : 'Más acciones'}">•••</button><div class="apv-menu" id="apvMenu" hidden>${b}</div></div>`;
 }
+function pzApvMenuToggle() {
+  const m = document.getElementById('apvMenu');
+  const b = document.getElementById('apvMenuBtn');
+  if (!m) return;
+  const open = m.hasAttribute('hidden');
+  if (open) m.removeAttribute('hidden'); else m.setAttribute('hidden', '');
+  if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
 function bindApprovalPost() {
   const rt = document.getElementById('apvRetry');
   if (rt) rt.onclick = () => render();
@@ -22790,6 +22983,13 @@ function bindApprovalPost() {
   // aprobación: un toque abre el chat principal con el posteo anclado.
   const tk = document.getElementById('apvTalk');
   if (tk) tk.onclick = () => pzHablarClick(tk.dataset.apvid);
+  // (LOTE DETALLE-SIMPLE-DIRECTO A) Menú ••• de la aprobación + Pedir un cambio en publicados.
+  // Los ítems del menú conservan sus ids (apvTalk/apvEdit/apvReject/apvHold/apvDelete/
+  // apvRedo/apvDislike): sus handlers vigentes de abajo no cambian.
+  const apvMenuBtn = document.getElementById('apvMenuBtn');
+  if (apvMenuBtn) apvMenuBtn.onclick = () => pzApvMenuToggle();
+  const apvChangePub = document.getElementById('apvChangePub');
+  if (apvChangePub) apvChangePub.onclick = () => pzHablarClick(apvChangePub.dataset.apvid);
   // (v326) Aceptar un BORRADOR desde el detalle: mismo gate de Instagram y
   // mismo flujo PATCH (programar en su horario) que el Aceptar de la Agenda.
 
@@ -23150,7 +23350,7 @@ async function f3RevealCheck() {
         const prop = p.status === 'published'
           ? { label: pzIc('checkCircle', 14) + ' ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
           : proposedLabelFor(p, pl.proposals, tz);
-        cards.push(weekCardHTML(p, { bizName, tz, prop, count: null }));
+        cards.push(weekCardHTML(p, { bizName, tz, prop, count: null, simple: true }));
       }
       vault.innerHTML = cards.join('');
     }

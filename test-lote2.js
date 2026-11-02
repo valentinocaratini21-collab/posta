@@ -28,7 +28,7 @@ check('ventana 300ms en handler', app.includes('dblNow - HF_DBL.t < 300'));
 check('doble toque: burst + approve, sin navegar', app.includes('f3HeartBurst(tile)') && app.includes('hfTileApprove(tile, t.post)'));
 check('timer navega al detalle', app.includes('hfDetailOpen(pend.post, pend.tile)'));
 check('guardia hash sin cambio', app.includes('location.hash === pend.hash'));
-check('corazón en fila secundaria (LOTE 17: una sola, compartida)', app.includes('id="apvAccept"') && count(app, 'class="apv-sec-btn apv-like"') === 1);
+check('OPCION A 2/11: corazon apv-like eliminado (Aprobar ya es el Aceptar primario, sin duplicado)', app.includes('id="apvAccept"') && count(app, 'class="apv-sec-btn apv-like"') === 0);
 check('binding corazón por clase', app.includes("querySelectorAll('.apv-like')"));
 check('icono corazón pzIc heart', app.includes("pzIc('heart', 20)"));
 check('M78: nuevas fns definidas 1 vez', count(app, 'async function hfTileApprove(') === 1 && count(app, 'function hfDblReset(') === 1);

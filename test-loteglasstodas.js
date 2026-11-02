@@ -17,7 +17,9 @@ const blockStart = css.indexOf('/* (LOTE GLASS TODAS');
 const block = blockStart >= 0 ? css.slice(blockStart) : '';
 // Solo las reglas (después del comentario del encabezado), para que el comentario
 // que documenta lo NO tocado no contamine los asserts de "no tocado".
-const blockRules = blockStart >= 0 ? css.slice(css.indexOf('*/', blockStart) + 2) : '';
+// OPCION A 2/11 (precedente detalle-simple): blockRules acotado al bloque glass-todas (hasta el siguiente /* (LOTE); sin acotar, cualquier CSS posterior que mencione scf-pop tripea el assert aunque el pop de semana no se toco — aqui: el Aceptar fijo del pop simple, Parte 1).
+const blockRulesEnd = blockStart >= 0 ? css.indexOf('/* (LOTE', css.indexOf('*/', blockStart) + 2) : -1;
+const blockRules = blockStart >= 0 ? css.slice(css.indexOf('*/', blockStart) + 2, blockRulesEnd >= 0 ? blockRulesEnd : undefined) : '';
 
 console.log('— 1. Shell: bb-glass-pantallas en TODAS las tabs de la app —');
 const shellLine = (app.match(/bb-glass-pantallas' : ''\}\)">/) || [])[0];

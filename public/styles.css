@@ -4475,3 +4475,29 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
   .mz-bottomstack .hf-accept-bar{position:static;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px}
   #inicioView.hf-wrap.hf-acceptbar-on{padding-bottom:calc(196px + env(safe-area-inset-bottom))}
 }
+
+/* (LOTE DETALLE-SIMPLE) Forma simple del pop: foto completa, menú •••, primario fijo. */
+.igmock-simple .igmock-media img,.igmock-simple .igmock-media video,.igmock-simple .hf-d-slide img{object-fit:contain!important;aspect-ratio:auto!important;background:#0A1E33}
+.igmock-simple .igmock-when-simple{font-size:13px;line-height:1.35;color:#737373;padding:2px 14px 0}
+.igmock-simple .igmock-dots-btn{margin-left:auto;flex:none;background:none;border:0;color:#262626;font-weight:800;font-size:13px;letter-spacing:1.5px;padding:8px 6px;cursor:pointer}
+.igmock-simple .igmock-menu{display:flex;flex-direction:column;gap:6px;padding:10px 14px 4px;border-top:1px solid #eee}
+.igmock-simple .igmock-menu[hidden]{display:none}
+.igmock-simple .igmock-menu-btn{display:block;width:100%;text-align:left;background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:11px 12px;font-size:15px;font-weight:600;color:#0A1E33;text-decoration:none;cursor:pointer}
+.igmock-simple .igmock-cap{cursor:default}
+.igmock-simple .igmock-edit{padding:8px 14px 0}
+.igmock-simple .igmock-edit-ta{display:block;width:100%;min-height:96px;font-size:16px;line-height:1.4;border:1px solid #d5dbe3;border-radius:12px;padding:10px 12px;box-sizing:border-box;resize:vertical}
+.igmock-simple .igmock-edit-save{display:block;width:100%;margin-top:8px;padding:12px 16px;border:0;border-radius:999px;background:#2793C8;color:#fff;font-size:16px;font-weight:700;cursor:pointer}
+.scf-pop .igmock-simple .igmock-accept-fixed{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);z-index:5;width:min(320px, calc(100% - 32px));padding:13px 16px;border:0;border-radius:999px;background:#2793C8;color:#fff;font-size:16px;font-weight:700;box-shadow:0 8px 24px rgba(10,30,51,.25);cursor:pointer}
+.scf-pop .igmock-simple.igmock-has-accept{padding-bottom:96px}
+
+/* ===== LOTE DETALLE-SIMPLE-DIRECTO A: aprobación simple ===== */
+.apv-media img{object-fit:contain}
+.apv-when{font-size:13px;font-weight:600}
+.apv-pill{font-size:13px}
+.apv-wrap .apv-primary{position:sticky;bottom:12px;z-index:5}
+.apv-wrap .apv-more{display:block}
+.apv-menu-btn{display:block;width:100%;padding:12px;border:1.5px solid var(--line);border-radius:999px;background:#fff;font-size:15px;font-weight:800;letter-spacing:2px;color:var(--txt);cursor:pointer}
+.apv-menu{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.apv-menu[hidden]{display:none}
+.apv-menu .apv-sec-btn{flex-direction:row;justify-content:flex-start;gap:10px;font-size:15px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;color:var(--txt)}
+.hf-anchor{cursor:pointer}

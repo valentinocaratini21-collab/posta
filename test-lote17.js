@@ -77,13 +77,15 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(css.includes('.apv-primary .btn{width:100%;white-space:normal'), 'A1: CSS principal ancho completo sin nowrap');
   const more = sliceFn(app, 'function apvMoreHTML', 'function bindApprovalPost');
   t(more.includes('apv-sec') && more.includes('id="apvMore"'), 'A2: fila secundaria única con id apvMore');
-  for (const b of ['apv-like', 'id="apvEdit"', 'id="apvReject"', 'id="apvDelete"', 'id="apvRedo"', 'id="apvDislike"'])
+  t(!more.includes('apv-like'), 'A2: OPCION A: menu sin apv-like (corazon duplicaba Aceptar)');
+  for (const b of ['id="apvEdit"', 'id="apvReject"', 'id="apvDelete"', 'id="apvRedo"', 'id="apvDislike"'])
     t(more.includes(b), 'A2: secundaria trae ' + b);
   t(more.includes("st === 'scheduled'") && more.includes('id="apvHold"'), 'A2: Frenar solo para programados');
   for (const l of ['Aprobar', 'Editar', 'Rechazar', 'Frenar', 'Eliminar', 'Rehacer', 'No me gusta'])
     t(more.includes(l), 'A2: etiqueta ES ' + l);
-  for (const l of ['Approve', 'Edit', 'Reject', 'Hold', 'Delete', 'Redo', 'Dislike'])
+  for (const l of ['Edit', 'Reject', 'Hold', 'Delete', 'Redo', 'Dislike'])
     t(more.includes(l), 'A2: etiqueta EN ' + l);
+  t(!more.includes("'Approve'"), 'A2: OPCION A EN: sin etiqueta Approve en el menu (Aprobar ya es el Aceptar primario)');
   t(more.includes('apv-sec-btn') && css.includes('.apv-sec-btn{flex:1;display:flex;flex-direction:column'), 'A2: CSS secundaria pareja (icono arriba, etiqueta abajo)');
   t(apv.includes('apvMoreHTML(p, st, canAct, isDraft, editPrompt)'), 'A2: Editar recibe su prefill en la secundaria');
   const bind = sliceFn(app, 'function bindApprovalPost', '/* ====');
@@ -103,10 +105,10 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(esD.includes('data-apvedit="Quiero editar ese posteo"'), 'A2f: Editar lleva el prefill');
   const esS = M({ id: 7 }, 'scheduled', true, false, 'x');
   t(esS.includes('apvHold') && esS.includes('Frenar'), 'A2f: programado con Frenar (7 acciones)');
-  t(!M({ id: 7 }, 'published', false, false, 'x'), 'A2f: publicado sin fila (nada que decidir)');
+  t(M({ id: 7 }, 'published', false, false, 'x').includes('Pedir un cambio'), 'A2f: OPCION A: publicado rinde solo Pedir un cambio (no vacio)');
   sb.ME.lang = 'en';
   const enS = M({ id: 7 }, 'scheduled', true, false, 'x');
-  t(enS.includes('Approve') && enS.includes('Hold') && enS.includes('Dislike'), 'A2f: EN con etiquetas cortas');
+  t(!enS.includes('Approve') && enS.includes('Hold') && enS.includes('Dislike'), 'A2f: OPCION A EN: sin Approve (es Aceptar primario), resto de etiquetas cortas intactas');
 }
 
 // ---------- A4: carrusel prolijo ----------

@@ -183,7 +183,7 @@ try {
   const moreDraft = sandbox.apvMoreHTML({ id: 'p2' }, 'draft', false, true);
   check('apvMore borrador: sin Frenar', !/Frenar/.test(moreDraft) && /Eliminar/.test(moreDraft));
   const morePub = sandbox.apvMoreHTML({ id: 'p3' }, 'published', false, false);
-  check('apvMore publicado vacío', morePub === '');
+  check('apvMore publicado: solo Pedir un cambio (OPCION A 2/11, decision Valentino: publicado en aprobacion ya no rinde vacio)', morePub.includes('Pedir un cambio') && !morePub.includes('apvHold'));
 } catch (e) { check('pzGoBack/apvMore vm', false, String(e && e.stack || e).slice(0, 200)); }
 
 /* M78: funciones llamadas desde tarjetas/menús existen definidas */

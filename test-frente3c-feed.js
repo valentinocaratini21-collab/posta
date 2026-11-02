@@ -107,7 +107,7 @@ ok(sheet.includes('data-hf-act="edit"') && sheet.includes('data-hf-act="hold"') 
 ok(sheet.includes('type="datetime-local"') && sheet.includes('isoToLocalInput'), 'reprogramar: datetime-local precargado con la fecha actual (isoToLocalInput vigente)');
 const acts = APP.slice(APP.indexOf('function hfActionsAct'), APP.indexOf('async function hfReschedQuotaOk'));
 ok(acts.includes("pcHold(id)"), 'Frenar: el pcHold vigente (PATCH unschedule)');
-ok(acts.includes('scfOpenPop(tile, true)') && acts.includes('edit-cap'), 'Editar: tarjeta vigente del cofre fijada en el feed + su editor (sin salir del feed)');
+ok(acts.includes("location.hash = '#/app/post/'") && !acts.includes('scfOpenPop'), 'Editar OPCION A 2/11 (fix hoja triple-punto): destino directo a aprobacion, sin editor pop en el feed');
 const resc = APP.slice(APP.indexOf('async function hfReschedule'), APP.indexOf('/* ===== /(Frente 3 · suma 2) FEED VIVO ===== */'));
 ok(resc.includes("api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: iso })"), 'Reprogramar: PATCH scheduled_at vigente');
 ok(resc.includes('new Date(v)') && resc.includes('d.toISOString()'), 'Reprogramar: conversión del input como el flujo vigente (data-revwhen)');
