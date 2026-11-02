@@ -4401,3 +4401,11 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-tile.hf-has-chip > .hf-strip .hf-chip-hm{flex:0 0 auto;white-space:nowrap}
 .hf-tile.hf-has-chip > .hf-strip .hf-like-in{position:static;flex:none;width:24px;height:24px;margin:0;background:#fff;border-color:var(--line);color:#0A1E33;box-shadow:0 1px 6px rgba(10,30,51,.25);z-index:5}
 .hf-tile.hf-has-chip > .hf-strip .hf-like-in svg{width:16px;height:16px}
+
+/* LOTE AJUSTES-SIMPLE (2/11): Ajustes plano, sin acordeones. Las tarjetas
+   nacen visibles (ajflat) y las filas de Más navegan a su sección. */
+.card.ajsec.ajflat>.ajsec-b{display:block}
+.card.ajsec.ajflat>.ajsec-h{cursor:default;margin-bottom:14px}
+.ajmas-row{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:12px 2px;font-size:15px;font-weight:600;cursor:pointer}
+.ajmas-row:last-child{border-bottom:0}
+.ajmas-row span{color:var(--mut);font-size:18px}

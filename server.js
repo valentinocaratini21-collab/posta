@@ -4284,13 +4284,18 @@ app.post('/api/autopilot/resume-all', requireAuth, express.json(), (req, res) =>
 // (pre-notify) y acá solo se LEE para pintar el bloque completo. has_push_sub
 // le dice a la UI si este dueño tiene algún dispositivo suscripto (si no,
 // los avisos están prendidos pero no tienen dónde llegar — la UI lo explica).
+// (LOTE AJUSTES-SIMPLE) has_native_push_sub distingue apns/fcm de webpush:
+// la UI muestra el botón nativo salvo suscripción nativa real.
 app.get('/api/settings/notify-prefs', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
     const u = db.prepare('SELECT notify_letter, notify_failed, autopilot_prenotify FROM users WHERE id = ?').get(uid);
     const tl = autopilot.trustLevel(db, uid);
-    let subs = 0;
+    let subs = 0, nativeSubs = 0;
     try { subs = db.prepare('SELECT COUNT(*) AS c FROM push_subscriptions WHERE user_id = ?').get(uid).c; } catch (e) {}
+    // (LOTE AJUSTES-SIMPLE) Nativa = apns/fcm: una suscripción web no debe
+    // esconder el botón nativo de Ajustes.
+    try { nativeSubs = db.prepare(`SELECT COUNT(*) AS c FROM push_subscriptions WHERE user_id = ? AND transport IN ('apns', 'fcm')`).get(uid).c; } catch (e) {}
     const waStateGet = (() => { try { return whatsapp.notifyPrefsExtra(db, uid); } catch (e) { return { wa_available: false, wa_number_masked: '', wa_opted_in: false }; } })();
     res.json({
       ok: true,
@@ -4302,6 +4307,7 @@ app.get('/api/settings/notify-prefs', requireAuth, (req, res) => {
       notify_letter: !u || u.notify_letter == null ? true : !!u.notify_letter,
       notify_failed: !u || u.notify_failed == null ? true : !!u.notify_failed,
       has_push_sub: subs > 0,
+      has_native_push_sub: nativeSubs > 0,
     });
   } catch (e) {
     res.status(500).json({ ok: false, error: 'No pude leer tus avisos 😅' });
@@ -26408,7 +26414,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v550';
+const BUILD_ID = '20261101-v551';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

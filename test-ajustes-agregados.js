@@ -195,11 +195,14 @@ async function partA() {
     ok(evHook > 0, 'evTrack (server) también dispara el aviso de fallo');
     const sweepBlock = serverSrc.slice(serverSrc.indexOf('async function refreshAnalysesSweep'), serverSrc.indexOf('async function refreshAnalysesSweep') + 4000);
     ok(sweepBlock.includes('notifySundayLetter') && sweepBlock.includes('sundayWindow && fresh'), 'el barrido avisa solo en ventana y con carta nueva');
-    const iAvisos = chunkSrc.indexOf("pzIc('bell', 20)} Avisos"); // ícono dibujado (sin emoji desde v473)
+    // (LOTE AJUSTES-SIMPLE, aprobado por Valentino 2/11 ~07:11: Ajustes plano,
+    // Notificaciones primera y siempre visible — SUPERSEDE el orden viejo
+    // "Avisos tras Automático": la tarjeta se llama Notificaciones y va arriba.)
+    const iNotif = chunkSrc.indexOf('id="ajsec-notif"');
     const iAuto = chunkSrc.indexOf("pzIc('bolt', 20)} Posty en automático");
     const iPre = chunkSrc.indexOf('id="btnPreNotifyToggle"');
-    ok(iAuto > 0 && iAvisos > iAuto && iPre > iAvisos, 'chunk: Avisos va tras Automático y el aviso pre-publicación vive SOLO ahí');
-    const autoSeg = chunkSrc.slice(iAuto, iAvisos);
+    ok(iNotif > 0 && iNotif < iAuto && iPre > iNotif, 'chunk: Notificaciones va primera y el aviso pre-publicación vive SOLO ahí');
+    const autoSeg = chunkSrc.slice(iAuto, chunkSrc.indexOf('id="ajsec-plan"'));
     ok(autoSeg.includes('id="btnPauseAll"') && !autoSeg.includes('Aviso antes de publicar'), 'chunk: Pausar todo arriba de Automático; el aviso ya no está en Automático');
     ok(chunkSrc.includes('id="closedDaysRow"') && chunkSrc.includes('closed_days:'), 'chunk: selector de días de cierre presente y en el guardado');
     ok(chunkSrc.includes('/api/settings/notify-prefs') && chunkSrc.includes('/api/autopilot/pause-all') && chunkSrc.includes('/api/autopilot/resume-all'), 'chunk: llama a los tres endpoints nuevos');

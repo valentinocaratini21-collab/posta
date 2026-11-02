@@ -79,10 +79,10 @@ function ruleBody(re) {
 }
 
 // ---------- Versiones + censo (pines rotados a la liberación v548 con causa: bump v547→v548 de gris-tik (antes v547 de carrusel-flechas); este lote solo toca styles.css; + rotación v549 con causa: bump v548→v549 de puntitos) ----------
-t(srv.includes("const BUILD_ID = '20261101-v550'"), 'BUILD v532 en server.js');
-t(idx.includes('app.js?v=366') && idx.includes('styles.css?v=20261085'), 'index: app 363 + styles 20261082 (bump v547 de carrusel-flechas)');
-t(idxEn.includes('styles.css?v=20261085') && !idxEn.includes('app.js?v='), 'en/index: styles 20261082, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v524'"), 'CHUNK_V sigue v524 (ningún chunk tocado)');
+t(srv.includes("const BUILD_ID = '20261101-v551'"), 'BUILD v532 en server.js');
+t(idx.includes('app.js?v=367') && idx.includes('styles.css?v=20261086'), 'index: app 363 + styles 20261082 (bump v547 de carrusel-flechas)');
+t(idxEn.includes('styles.css?v=20261086') && !idxEn.includes('app.js?v='), 'en/index: styles 20261082, sin app.js');
+t(app.includes("const CHUNK_V = '20261101-v551'"), 'CHUNK_V sube a v551 (ajustes-simple TOCA chunk-ajustes.js: el chunk nuevo debe servirse fresco, con ?v= viejo la caché HTTP de iOS seguiría sirviendo el chunk viejo sin el botón; SUPERSEDE con causa el pin v524 «ningún chunk tocado»)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');

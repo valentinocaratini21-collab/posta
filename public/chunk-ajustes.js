@@ -12,18 +12,9 @@
 function ajustesView() {
   const p = PROFILE, s = SETTINGS;
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  // Orden nuevo (v282): Tu negocio primero y abierto por defecto; Instagram +
-  // TikTok + Google + Tiendanube viven juntos en "Conexiones" (deep-links
-  // ?ig/?tiktok/?google/?tn abren esa tarjeta).
-  const openSec = q.get('plan') ? 'plan'
-    : (q.get('ig') || q.get('tiktok') || q.get('google') || q.get('tn')) ? 'conex'
-    : q.get('auto') ? 'auto'
-    : q.get('avisos') ? 'avisos'
-    : q.get('pagina') ? 'pagina'
-    : q.get('semana') ? 'semana'
-    : (q.get('estilos') || q.get('marca')) ? 'marca'
-    : q.get('referidos') ? 'referidos'
-    : 'negocio';
+  // (LOTE AJUSTES-SIMPLE) Ajustes plano, sin acordeones: todas las tarjetas
+  // nacen visibles; los deep-links (?plan, ?ig, ...) scrollean a su tarjeta
+  // en bindSettings (ajDeepSec), no abren nada.
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡TikTok conectado! Ya podés compartir tus posteos</div>`
@@ -107,7 +98,44 @@ function ajustesView() {
     <div id="igMsg"></div>`;
   return `<div class="page-head"><div class="ph-ico">${pzIc('gear', 26)}</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu Instagram, tu plan y tu marca.</p></div></div>
   ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
-  <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('store', 20)} Tu negocio</h3>${stBiz}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec ajflat" id="ajsec-notif"><div class="ajsec-h"><h3>${pzIc('bell', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications' : 'Notificaciones'}</h3><span class="ajsec-st" id="ajStAvisos"></span></div><div class="ajsec-b">
+    <div id="avisosPushHint" style="margin-bottom:16px">
+      <div id="ajPushOff">
+        <p style="color:var(--mut);font-size:12.5px;margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You have not turned on notifications on your phone yet: your alerts are on, but they have nowhere to go.' : 'Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar.'}</p>
+        <button class="btn btn-primary" id="btnPushEnable">🔔 ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Activate notifications' : 'Activar notificaciones'}</button>
+        <div class="hint" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'When Posty asks permission to send notifications, tap Allow.' : 'Cuando Posty te pida permiso para mandar notificaciones, tocá Permitir.'}</div>
+      </div>
+      <div id="ajPushOn" style="display:none">${pzIc('checkCircle', 15)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications on in your phone.' : 'Notificaciones activadas en tu celu.'}</div>
+    </div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:14px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Posty notifies you on your phone — only when it matters, no noise.' : 'Posty te avisa por notificación en tu celu — solo cuando importa, nada de ruido.'}</p>
+    <div style="font-weight:800;margin-bottom:8px">Aviso antes de publicar</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Te aviso 30 minutos antes de que salga cada posteo automático, para que puedas frenarlo desde Schedule si querés.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnPreNotifyToggle">Cargando...</button>
+      <span id="preNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div style="font-weight:800;margin:18px 0 8px">${pzIc('mail', 16)} Tu carta del domingo</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cada domingo a la noche te escribo tu carta: cómo viene tu Instagram y qué ya estoy haciendo por tu negocio. Te aviso apenas llega.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnLetterToggle">Cargando...</button>
+      <span id="letterNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div style="font-weight:800;margin:18px 0 8px">${pzIc('alert', 16)} Si un posteo no pudo salir</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Si un posteo falla al publicar, te aviso en el momento. Nunca sale a medias: queda en borrador para que lo mires.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnFailToggle">Cargando...</button>
+      <span id="failNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div style="font-weight:800;margin:18px 0 8px">💬 Tu carta por WhatsApp</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cada domingo a la noche te mando tu carta por WhatsApp con el botón para aprobar tu semana en un toque, sin abrir la app.</p>
+    <div class="field"><label>Tu número de WhatsApp</label><input id="s_waNotify" placeholder="Ej.: 5491123456789" inputmode="tel" maxlength="20" autocomplete="off"><div class="hint">Con código de país (Argentina: 54 9 + tu número). Solo lo uso para mandarte tu carta y avisos de tu semana.</div></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+      <button class="btn btn-ghost" id="btnWaNotifyToggle">Cargando...</button>
+      <span id="waNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div class="hint" id="waNotifyGateHint" style="display:none;margin-top:10px">WhatsApp todavía no está encendido del lado de Posty: podés dejar tu número y tu permiso guardados, y te llega apenas se encienda. Mientras tanto, tu carta llega por notificación y en Tu análisis.</div>
+  </div></div>
+  <div class="card ajsec ajflat" id="ajsec-negocio"><div class="ajsec-h"><h3>${pzIc('store', 20)} Tu negocio</h3>${stBiz}</div><div class="ajsec-b">
   <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">${pzIc('bot', 16)} Uso estos datos para crear tus posteos.</p>
     <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
     <div class="row2">
@@ -175,7 +203,7 @@ function ajustesView() {
       <p class="hint" style="margin:6px 0 0 4px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'For your Instagram highlights — download each cover and set it in Instagram.' : 'Para tus destacadas de Instagram: descargá cada cubierta y ponela en Instagram.'}</p>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='auto' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('bolt', 20)} Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec ajflat" id="ajsec-auto"><div class="ajsec-h"><h3>${pzIc('bolt', 20)} Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">⏸ Pausar todo</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">¿Vacaciones o una semana sin publicar? Frená todo con un toque: lo programado vuelve a borrador y nada sale hasta que reanudes. Tu semana y tus borradores quedan guardados, tal como están.</p>
     <div style="display:flex;align-items:center;gap:12px">
@@ -203,12 +231,20 @@ function ajustesView() {
     </div>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('card', 20)} Mi plan</h3>${stPlan}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec ajflat" id="ajsec-plan"><div class="ajsec-h"><h3>${pzIc('card', 20)} Mi plan</h3>${stPlan}</div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
     <p style="font-size:12.5px;color:var(--mut);margin-top:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</p>
     <div id="founderZone"></div>
   </div></div>
-  <div class="card ajsec${openSec==='conex' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('plug', 20)} Conexiones</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div class="card ajsec ajflat" id="ajsec-mas"><div class="ajsec-h"><h3>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'More' : 'Más'}</h3></div><div class="ajsec-b">
+    <button type="button" class="ajmas-row" data-ajmas="conex">${pzIc('plug', 16)} Conexiones <span>›</span></button>
+    <button type="button" class="ajmas-row" data-ajmas="pagina">${pzIc('globe', 16)} Tu página <span>›</span></button>
+    <button type="button" class="ajmas-row" data-ajmas="semana">${pzIc('link', 16)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'} <span>›</span></button>
+    <button type="button" class="ajmas-row" data-ajmas="marca">${pzIc('palette', 16)} Tu marca y estilos <span>›</span></button>
+    ${IS_NATIVE ? '' : `<button type="button" class="ajmas-row" data-ajmas="referidos">${pzIc('gift', 16)} Referidos · 50% off <span>›</span></button>`}
+    <button type="button" class="ajmas-row" data-ajmas="preview">${pzIc('bot', 16)} Cómo me ve la IA <span>›</span></button>
+  </div></div>
+<div class="card ajsec ajflat" id="ajsec-conex"><div class="ajsec-h"><h3>${pzIc('plug', 20)} Conexiones</h3>${stIg}</div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">${pzIc('camera', 16)} Instagram</div>
     ${igBody}
     <div id="pzBioSealSlot"></div>
@@ -225,37 +261,7 @@ function ajustesView() {
     <div id="tnZone"><p class="hint">Cargando…</p></div>
     <div id="tnMsg"></div>
   </div></div>
-  <div class="card ajsec${openSec==='avisos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('bell', 20)} Avisos</h3><span class="ajsec-st" id="ajStAvisos"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:14px">Posty te avisa por notificación en tu celu — solo cuando importa, nada de ruido.</p>
-    <div style="font-weight:800;margin-bottom:8px">Aviso antes de publicar</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Te aviso 30 minutos antes de que salga cada posteo automático, para que puedas frenarlo desde Schedule si querés.</p>
-    <div style="display:flex;align-items:center;gap:12px">
-      <button class="btn btn-ghost" id="btnPreNotifyToggle">Cargando...</button>
-      <span id="preNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
-    </div>
-    <div style="font-weight:800;margin:18px 0 8px">${pzIc('mail', 16)} Tu carta del domingo</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cada domingo a la noche te escribo tu carta: cómo viene tu Instagram y qué ya estoy haciendo por tu negocio. Te aviso apenas llega.</p>
-    <div style="display:flex;align-items:center;gap:12px">
-      <button class="btn btn-ghost" id="btnLetterToggle">Cargando...</button>
-      <span id="letterNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
-    </div>
-    <div style="font-weight:800;margin:18px 0 8px">${pzIc('alert', 16)} Si un posteo no pudo salir</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Si un posteo falla al publicar, te aviso en el momento. Nunca sale a medias: queda en borrador para que lo mires.</p>
-    <div style="display:flex;align-items:center;gap:12px">
-      <button class="btn btn-ghost" id="btnFailToggle">Cargando...</button>
-      <span id="failNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
-    </div>
-    <div style="font-weight:800;margin:18px 0 8px">💬 Tu carta por WhatsApp</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cada domingo a la noche te mando tu carta por WhatsApp con el botón para aprobar tu semana en un toque, sin abrir la app.</p>
-    <div class="field"><label>Tu número de WhatsApp</label><input id="s_waNotify" placeholder="Ej.: 5491123456789" inputmode="tel" maxlength="20" autocomplete="off"><div class="hint">Con código de país (Argentina: 54 9 + tu número). Solo lo uso para mandarte tu carta y avisos de tu semana.</div></div>
-    <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
-      <button class="btn btn-ghost" id="btnWaNotifyToggle">Cargando...</button>
-      <span id="waNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
-    </div>
-    <div class="hint" id="waNotifyGateHint" style="display:none;margin-top:10px">WhatsApp todavía no está encendido del lado de Posty: podés dejar tu número y tu permiso guardados, y te llega apenas se encienda. Mientras tanto, tu carta llega por notificación y en Tu análisis.</div>
-    <div class="hint" id="avisosPushHint" style="display:none;margin-top:14px">${pzIc('phone', 16)} Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar. Cuando Posty te pida permiso para mandar notificaciones, tocá <b>Permitir</b>.<br><button class="btn btn-ghost btn-sm" id="btnPushEnable" style="margin-top:8px">🔔 Activar notificaciones</button></div>
-  </div></div>
-  <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('palette', 20)} Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec ajflat" id="ajsec-marca"><div class="ajsec-h"><h3>${pzIc('palette', 20)} Tu marca y estilos</h3>${stBrand}</div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
     <div class="row2">
       <div class="field"><label>Logo</label>
@@ -313,7 +319,7 @@ function ajustesView() {
     <div class="hint" id="styleFavMsg" style="margin-top:10px"></div>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='pagina' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('globe', 20)} Tu página</h3>${stPage}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec ajflat" id="ajsec-pagina"><div class="ajsec-h"><h3>${pzIc('globe', 20)} Tu página</h3>${stPage}</div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: una página linda con tu negocio y tus posteos ya publicados, con botón directo a tu WhatsApp. Cada persona que la visita conoce Posty</p>
     <div class="field"><label>Tu dirección</label>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -330,11 +336,11 @@ function ajustesView() {
       <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página ${pzIc('arrowRight', 13)}</a>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='semana' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('link', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'}</h3><span class="ajsec-st" id="ajStSemana"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec ajflat" id="ajsec-semana"><div class="ajsec-h"><h3>${pzIc('link', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'}</h3><span class="ajsec-st" id="ajStSemana"></span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Show your week to your partner or your family before it goes out: a read-only link with your posts just as they are on your home. No password, no access to your account — they only see the week.' : 'Mostrale tu semana a tu socio o a tu familia antes de que salga: un link de solo lectura con tus posteos tal cual están en tu home. Sin tu contraseña y sin entrar a tu cuenta: solo ven la semana.'}</p>
     <div id="weekShareZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
   </div></div>
-  ${IS_NATIVE ? '' : `<div class="card ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  ${IS_NATIVE ? '' : `<div class="card ajsec ajflat" id="ajsec-referidos"><div class="ajsec-h"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>`}
   <details class="card int-advanced"><summary>${pzIc('gear', 16)} Configuración avanzada</summary>
@@ -632,6 +638,16 @@ async function weekShareLoad() {
   }
 }
 
+// (LOTE AJUSTES-SIMPLE) ¿El celu tiene suscripción NATIVA (apns/fcm)?
+// Una suscripción web NO cuenta: no debe esconder el botón nativo.
+// Sin campo (servidor viejo) o sin prefs: false -> fail-open, botón visible.
+function ajPushNativeOn(r) {
+  try {
+    if (r && typeof r.has_native_push_sub === 'boolean') return r.has_native_push_sub;
+  } catch (e) {}
+  return false;
+}
+
 function bindSettings() {
   // (ARMA TODO ítem 1) plan=error ya se mostró en ajustesView: limpiamos el
   // parámetro para que un refresh no resucite el aviso. Diferido a propósito:
@@ -641,11 +657,32 @@ function bindSettings() {
     const _pqErr = new URLSearchParams(location.hash.split('?')[1] || '');
     if (_pqErr.get('plan') === 'error') setTimeout(() => { try { if ((location.hash || '').indexOf('plan=error') > -1) history.replaceState(null, '', location.pathname + '#/app/ajustes'); } catch (e) {} }, 400);
   } catch (e) {}
-  // Acordeón de secciones en móvil
-  $$('.ajsec-h').forEach(h => {
-    const tg = () => h.parentElement.classList.toggle('open');
-    h.onclick = tg;
-    h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg(); } };
+  // (LOTE AJUSTES-SIMPLE) Ajustes plano, sin acordeones: las tarjetas ya
+  // nacen visibles (clase ajflat). Los deep-links scrollean a su tarjeta y
+  // las filas de Más navegan a su sección o abren su vista.
+  const ajDeepSec = () => {
+    try {
+      const pq = new URLSearchParams(location.hash.split('?')[1] || '');
+      if (pq.get('plan')) return 'plan';
+      if (pq.get('ig') || pq.get('tiktok') || pq.get('google') || pq.get('tn')) return 'conex';
+      if (pq.get('auto')) return 'auto';
+      if (pq.get('avisos')) return 'notif';
+      if (pq.get('pagina')) return 'pagina';
+      if (pq.get('semana')) return 'semana';
+      if (pq.get('estilos') || pq.get('marca')) return 'marca';
+      if (pq.get('referidos')) return 'referidos';
+    } catch (e) {}
+    return '';
+  };
+  const ajDeep = ajDeepSec();
+  if (ajDeep) setTimeout(() => { try { const el = document.getElementById('ajsec-' + ajDeep); if (el) el.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' }); } catch (e) {} }, 120);
+  $$('.ajmas-row').forEach(btn => {
+    btn.onclick = () => {
+      const t = btn.getAttribute('data-ajmas');
+      if (t === 'preview') { const pv = document.getElementById('btnPreview'); if (pv) pv.click(); return; }
+      const el = document.getElementById('ajsec-' + t);
+      if (el) el.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' });
+    };
   });
   try { ttZoneLoad(); } catch (e) {}
   try { ggZoneLoad(); } catch (e) {}
@@ -797,9 +834,15 @@ function bindSettings() {
   const loadNotifyPrefs = async () => {
     try {
       const r = await api.get('/api/settings/notify-prefs');
-      if (!r || !r.ok) return;
-      const hint = $('#avisosPushHint');
-      if (hint) hint.style.display = r.has_push_sub ? 'none' : '';
+      if (!r || !r.ok) { const off0 = $('#ajPushOff'), on0 = $('#ajPushOn'); if (off0) off0.style.display = ''; if (on0) on0.style.display = 'none'; return; }
+      // (LOTE AJUSTES-SIMPLE) La caja de push vive SIEMPRE visible arriba de
+      // Notificaciones; solo cambia su interior: sin suscripción NATIVA
+      // (apns/fcm) muestra el botón — una suscripción web NO lo esconde —;
+      // con suscripción nativa muestra el estado Activado.
+      const off = $('#ajPushOff'), on = $('#ajPushOn');
+      const nativeOn = ajPushNativeOn(r);
+      if (off) off.style.display = nativeOn ? 'none' : '';
+      if (on) on.style.display = nativeOn ? '' : 'none';
       const btnPush = $('#btnPushEnable');
       if (btnPush) btnPush.onclick = async () => {
         btnPush.disabled = true;
