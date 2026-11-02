@@ -9108,6 +9108,26 @@ function acceptPillHTML(n, id) {
   return `<button type="button" class="accept-pill" id="${id}">${pzIc('checkCircle', 18)} ${en ? 'Accept all' : 'Aceptar todo'} <span class="accept-count">${n}</span></button>`;
 }
 
+// (LOTE ACEPTAR-TODO-POSICIÓN) La «Aceptar todo» de la semana nueva
+// como BARRA fina a todo el ancho, fila propia del bloque inferior
+// fijo de Inicio: pestañas abajo, chat encima, barra encima del chat.
+// Misma semántica que la píldora (mismo id hfAcceptAllWeek, mismo
+// handler pzAcceptAllWeek, mismo conteo); cambia solo el lugar: la
+// píldora flotante (.accept-pill, fixed bottom-right) tapaba la mitad
+// derecha del chat. La píldora de Agenda (hsAcceptAll) sigue usando
+// acceptPillHTML y NO se toca.
+function acceptBarHTML(n) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  return `<button type="button" class="hf-accept-bar" id="hfAcceptAllWeek">${pzIc('checkCircle', 18)} ${en ? 'Accept all' : 'Aceptar todo'} <span class="accept-count">${n}</span></button>`;
+}
+
+// (LOTE ACEPTAR-TODO-POSICIÓN) Al quitarse la barra, el despeje
+// inferior de Inicio vuelve al de siempre: sin clase no hay hueco
+// fantasma donde estaba la barra.
+function pzAcceptBarOff() {
+  try { const v = document.getElementById('inicioView'); if (v) v.classList.remove('hf-acceptbar-on'); } catch (e) {}
+}
+
 // (LOTE ACEPTAR-TODO-SEMANA) Candidatos del «Aceptar todo» de la
 // semana nueva: SOLO programados pendientes de la semana corriente.
 // week_key = lunes actual en la zona de la cuenta (misma identidad
@@ -9184,7 +9204,7 @@ async function pzAcceptAllWeek(btn) {
       return;
     }
     const cands = pzAcceptAllWeekCands(HF_TILES, !mode.manual);
-    if (!cands.length) { try { btn.remove(); } catch (e) {} return; }
+    if (!cands.length) { try { btn.remove(); } catch (e) {} try { pzAcceptBarOff(); } catch (e) {} return; }
     let ok = 0, fail = 0;
     for (const t of cands) {
       const id = String(t.post.id);
@@ -9214,7 +9234,7 @@ async function pzAcceptAllWeek(btn) {
       } else { fail++; }
     }
     const rest = pzAcceptAllWeekCands(HF_TILES, !mode.manual);
-    if (!rest.length) { try { btn.remove(); } catch (e) {} }
+    if (!rest.length) { try { btn.remove(); } catch (e) {} try { pzAcceptBarOff(); } catch (e) {} }
     else { try { const c = btn.querySelector('.accept-count'); if (c) c.textContent = String(rest.length); } catch (e) {} }
     if (ok && !fail) {
       if (mode.manual) toast('✅ ' + (en ? 'Week accepted · ' + ok + ' posts' : 'Semana aceptada · ' + ok + ' posteos'));
@@ -18810,15 +18830,18 @@ async function inicioView() {
   const stripHTML = (!HF_VISITOR && drafts.length)
     ? `${acceptPillHTML(drafts.length, 'hfAcceptAll')}<div id="revMsg"></div>`
     : '';
-  // (LOTE ACEPTAR-TODO-SEMANA) Píldora «Aceptar todo» de la semana
+  // (LOTE ACEPTAR-TODO-SEMANA) Botón «Aceptar todo» de la semana
   // nueva: SOLO programados pendientes de la semana corriente.
   // Sin pendientes no se dibuja. La píldora vieja #hfAcceptAll de
   // borradores se calcula arriba pero nunca se inserta en la
   // plantilla: queda muerta a propósito, este botón NO la revive
   // (el alcance aprobado excluye borradores sin fecha).
+  // (LOTE ACEPTAR-TODO-POSICIÓN) Barra fina a todo el ancho, fila
+  // propia del bloque inferior fijo: vive dentro de .mz-bottomstack
+  // justo encima del chat, no flotando sobre él.
   const pzAcceptWeekCands = (!HF_VISITOR) ? pzAcceptAllWeekCands(tiles, null) : [];
   const pzAcceptWeekHTML = pzAcceptWeekCands.length
-    ? acceptPillHTML(pzAcceptWeekCands.length, 'hfAcceptAllWeek')
+    ? acceptBarHTML(pzAcceptWeekCands.length)
     : '';
   // (v440 · SOLO FEED) La nota del kit de nacimiento (hf-kitnote) SALIÓ
   // del flujo principal de Inicio: con perfil kit, el encabezado y la
@@ -18867,19 +18890,21 @@ async function inicioView() {
   let portTopInicio = '';
   if (!HF_VISITOR && nivelPosty) { try { portTopInicio = await mxPortTop(nivelPosty.poderes, nivelPosty, 'posty'); } catch (e) { portTopInicio = ''; } }
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
-  return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
+  return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}${pzAcceptWeekCands.length ? ' hf-acceptbar-on' : ''}">
   ${portTopInicio}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
   ${hfTabsHTML(HF_TAB, enHome)}
   ${gridHTML}
-  ${pzAcceptWeekHTML}
   ${tiles.length ? `<p class="hf-nota">${enHome ? pzIc('heart', 14) + ' Tap the heart to approve each post. They all go out on their date, unless you ask for a change.' : pzIc('heart', 14) + ' Tocá el corazón para aprobar el posteo. Todos salen en su fecha, salvo que pidas un cambio.'}</p>` : ''}
   ${visitorPillHTML}
+  <div class="mz-bottomstack" id="mzBottomStack">
+  ${pzAcceptWeekHTML}
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
     <button type="button" class="mz-ph" id="mzChatOpen"><img class="chat-face" src="ai-avatar.png" alt="Posty"><span class="mz-ph-tx">escribile a posty…</span></button>
     <button type="button" class="mz-mic" id="mzMic" aria-label="Pedir con nota de voz">${pzIc('mic', 20)}</button>
+  </div>
   </div>
   <div class="mz-sheet" id="mzSheet" hidden>
     <div class="mz-sheet-card">

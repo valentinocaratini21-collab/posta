@@ -43,7 +43,7 @@ ok(!!SRC_HANDLER, 'handler presente');
 ok(!!SRC_PILL, 'acceptPillHTML presente');
 
 // ---------- estáticos ----------
-ok(APP.includes("acceptPillHTML(pzAcceptWeekCands.length, 'hfAcceptAllWeek')"), 'render calcula píldora semana nueva');
+ok(APP.includes("acceptBarHTML(pzAcceptWeekCands.length)"), 'render calcula barra semana nueva (SUPERSEDE 2/11: la píldora flotante tapaba el chat; la semana nueva es barra encima del chat, mismo id/handler)');
 ok(APP.includes("$('#hfAcceptAllWeek')"), 'binder del botón nuevo presente');
 ok(APP.includes('pzAcceptAllWeek(haw)'), 'binder llama al handler nuevo');
 {
