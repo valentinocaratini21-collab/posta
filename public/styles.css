@@ -4446,3 +4446,14 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-ropa-btn.puesto{background:#FEC14D;color:#0A1E33}
 .pz-ropa-fila.lock{opacity:.82}
 @media (prefers-reduced-motion: reduce){.pz-ropa-spark{animation:none}}
+
+/* (LOTE CHAT-WEBSITE) Dock del chat en la home pública: el mismo dock de la app
+   (cara + texto), fijo abajo a la derecha en todos los tamaños. La hoja reusa
+   .mz-sheet tal cual (no se toca). */
+.pz-lp-dock{position:fixed;right:20px;bottom:20px;z-index:250;background:#fff;border-radius:999px;padding:7px 14px 7px 7px;box-shadow:0 8px 26px rgba(10,30,51,.20);display:flex;align-items:center;max-width:calc(100vw - 24px)}
+.pz-lp-dock .mz-ph{display:flex;align-items:center;gap:8px;color:#47617A;font-size:15px;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left;padding:0}
+.pz-lp-dock .chat-face{width:34px;height:34px;border-radius:50%;flex:none}
+.pz-lp-dock .mz-ph-tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pz-lp-cta{display:flex;gap:8px;margin:12px 0 4px}
+.pz-lp-cta .btn{flex:1;text-align:center;text-decoration:none}
+@media(max-width:480px){.pz-lp-dock{right:12px;bottom:12px}}

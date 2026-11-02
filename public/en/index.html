@@ -80,7 +80,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261088">
+<link rel="stylesheet" href="/styles.css?v=20261089">
 <link rel="stylesheet" href="/gj.css?v=3">
 <script type="application/ld+json">
 {
@@ -1936,7 +1936,7 @@ function lpCalcRateSlider() {
 })();
 
 </script>
-<script src="/posty-chat.js?v=5" defer></script>
+
 <script>
 /* Campaign frame (growth wave 2): top band only when a commercial window is open. */
 fetch('/api/campaign/current?lang=en').then(function(r){return r.json()}).then(function(d){
@@ -2113,6 +2113,127 @@ function switchPlansCountry(c) {
     el.innerHTML = '<div class="lp-social"><p class="lp-social-tit">Create your free account</p>' + btns + '<p class="lp-social-alt">or <a href="/#/registro" ' + stamp + '>with your email</a></p></div>';
   }).catch(function () {});
 })();
+
+
+<style>
+/* (LOTE CHAT-WEBSITE) Dock + hoja del chat en la home EN. La página es estática y no
+   carga app.js, así que el enlace es fino y propio; el endpoint y la conversación son
+   los mismos que el chat de la app (/api/ideas/chat). Con sesión, el script de <head>
+   ya redirige a la app, así que este panel solo corre sin sesión. */
+#pzLpDock{position:fixed;right:20px;bottom:20px;z-index:250;background:#fff;border-radius:999px;padding:7px 14px 7px 7px;box-shadow:0 8px 26px rgba(10,30,51,.20);display:flex;align-items:center;gap:8px;border:none;cursor:pointer;font-family:Montserrat,system-ui,sans-serif;color:#47617A;font-size:15px;max-width:calc(100vw - 24px)}
+#pzLpDock img{width:34px;height:34px;border-radius:50%;flex:none}
+#pzLpDock span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pzLpSheet{position:fixed;inset:0;z-index:300;background:rgba(10,30,51,.45);display:flex;align-items:flex-end;justify-content:center}
+#pzLpSheet[hidden]{display:none}
+#pzLpSheetCard{background:#fff;width:100%;max-width:640px;height:92dvh;border-radius:22px 22px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -12px 40px rgba(10,30,51,.25)}
+#pzLpSheetHead{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;font-size:16px;font-weight:700;color:#0A1E33}
+#pzLpSheetX{width:36px;height:36px;border-radius:50%;border:none;background:#fff;color:#0A1E33;font-size:15px;cursor:pointer;box-shadow:0 2px 8px rgba(10,30,51,.10);flex:none}
+#pzLpSheetBody{flex:1;overflow-y:auto;padding:2px 16px calc(14px + env(safe-area-inset-bottom));font-family:Montserrat,system-ui,sans-serif;color:#0A1E33}
+#pzLpMsgs{display:flex;flex-direction:column;gap:8px}
+.pzLpMsg{max-width:84%;padding:10px 13px;font-size:14.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word;border-radius:16px}
+.pzLpMsg.ai{align-self:flex-start;background:#F4FAFD;border:1px solid #E3EDF4;border-bottom-left-radius:6px}
+.pzLpMsg.u{align-self:flex-end;background:#2793C8;color:#fff;border-bottom-right-radius:6px}
+.pzLpTyping{align-self:flex-start;color:#5A7186;font-size:13.5px;font-style:italic}
+#pzLpCta{display:flex;gap:8px;margin:12px 0 4px}
+#pzLpCta a{flex:1;text-align:center;text-decoration:none;border-radius:999px;padding:11px 10px;font-weight:700;font-size:14px}
+#pzLpCta .a{background:#F1F6FA;color:#0A1E33}
+#pzLpCta .b{background:#FEC14D;color:#0A1E33}
+#pzLpChips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
+#pzLpChips button{border:1.5px solid #FEC14D;background:#fff;color:#0A1E33;border-radius:999px;padding:7px 12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+#pzLpRow{display:flex;gap:8px;margin:10px 0 4px}
+#pzLpInput{flex:1;min-width:0;border:1.5px solid #D7E5EE;border-radius:999px;padding:10px 14px;font-family:inherit;font-size:16px;color:#0A1E33;outline:none}
+#pzLpSend{background:#FEC14D;color:#0A1E33;border:none;border-radius:999px;padding:10px 16px;font-family:inherit;font-weight:800;font-size:14px;cursor:pointer}
+#pzLpSend:disabled{opacity:.55}
+@media(max-width:480px){#pzLpDock{right:12px;bottom:12px}}
+</style>
+<script>
+/* (LOTE CHAT-WEBSITE) Chat de la home EN: el MISMO chat de la app (mismo endpoint
+   /api/ideas/chat, misma conversación). Sin sesión: responde dudas del producto e
+   invita a entrar o a la prueba de 3 días. */
+(function () {
+  var PH = ['Chat with Posty', 'write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…'];
+  var dock = document.createElement('button');
+  dock.type = 'button'; dock.id = 'pzLpDock'; dock.setAttribute('aria-label', 'Chat with Posty');
+  dock.innerHTML = '<img src="/ai-avatar.png" alt="Posty"><span id="pzLpDockTx">Chat with Posty</span>';
+  document.body.appendChild(dock);
+  var pi = 0;
+  setInterval(function () { pi = (pi + 1) % PH.length; var t = document.getElementById('pzLpDockTx'); if (t) t.textContent = PH[pi]; }, 4000);
+  var sheet = document.createElement('div');
+  sheet.id = 'pzLpSheet'; sheet.hidden = true;
+  sheet.innerHTML = '<div id="pzLpSheetCard"><div id="pzLpSheetHead"><span>Posty</span><button type="button" id="pzLpSheetX" aria-label="Close chat">✕</button></div>'
+    + '<div id="pzLpSheetBody"><div id="pzLpMsgs"></div>'
+    + '<div id="pzLpCta"><a class="a" href="#/login">Log in</a><a class="b" href="/en/prueba">Try 3 days free</a></div>'
+    + '<div id="pzLpChips"><button type="button" data-send="How much is it?">How much is it?</button><button type="button" data-send="What exactly does Posty do?">What exactly does Posty do?</button><button type="button" data-send="How does the free trial work?">How does the free trial work?</button></div>'
+    + '<div id="pzLpRow"><input id="pzLpInput" type="text" maxlength="2000" autocomplete="off" placeholder="Write to Posty…"><button type="button" id="pzLpSend">Send</button></div>'
+    + '</div></div>';
+  document.body.appendChild(sheet);
+  var bodyEl = sheet.querySelector('#pzLpSheetBody');
+  var msgs = sheet.querySelector('#pzLpMsgs');
+  var input = sheet.querySelector('#pzLpInput');
+  var sendBtn = sheet.querySelector('#pzLpSend');
+  var thread = [];
+  var greeted = false;
+  var busy = false;
+  function scrollBody() { bodyEl.scrollTop = bodyEl.scrollHeight; }
+  function bubble(role, text) {
+    var d = document.createElement('div');
+    d.className = 'pzLpMsg ' + (role === 'user' ? 'u' : 'ai');
+    d.textContent = String(text == null ? '' : text).replace(/\*\*|__/g, '');
+    msgs.appendChild(d); scrollBody(); return d;
+  }
+  function open() {
+    sheet.hidden = false;
+    if (!greeted) {
+      greeted = true;
+      fetch('/api/ideas/chat?lang=en').then(function (r) { return r.json(); }).then(function (d) {
+        if (d && d.welcome) bubble('assistant', d.welcome);
+      }).catch(function () {});
+    }
+    setTimeout(function () { try { input.focus(); } catch (e) {} }, 60);
+  }
+  function close() { sheet.hidden = true; }
+  dock.addEventListener('click', open);
+  sheet.querySelector('#pzLpSheetX').addEventListener('click', close);
+  sheet.addEventListener('click', function (e) { if (e.target === sheet) close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !sheet.hidden) close(); });
+  document.addEventListener('click', function (e) {
+    var t = (e.target && e.target.closest) ? e.target.closest('[data-posty-chat]') : null;
+    if (!t) return;
+    e.preventDefault(); open();
+  });
+  sheet.querySelector('#pzLpChips').addEventListener('click', function (e) {
+    var t = (e.target && e.target.closest) ? e.target.closest('button') : null;
+    if (!t) return;
+    send(t.getAttribute('data-send'));
+  });
+  function send(text) {
+    var clean = String(text || '').trim().slice(0, 2000);
+    if (!clean || busy) return;
+    busy = true; sendBtn.disabled = true;
+    thread.push({ role: 'user', text: clean });
+    bubble('user', clean);
+    input.value = '';
+    var typing = document.createElement('div');
+    typing.className = 'pzLpTyping'; typing.textContent = 'Posty is typing…';
+    msgs.appendChild(typing); scrollBody();
+    fetch('/api/ideas/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: thread.slice(-10), lang: 'en' }) })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        typing.remove();
+        var reply = (data && data.reply) || 'oops, i glitched for a second 🤖 try again in a moment.';
+        thread.push({ role: 'assistant', text: reply });
+        bubble('assistant', reply);
+      })
+      .catch(function () {
+        typing.remove();
+        bubble('assistant', 'my connection dropped 🤖 try again in a moment.');
+      })
+      .then(function () { busy = false; sendBtn.disabled = false; try { input.focus(); } catch (e) {} });
+  }
+  sendBtn.addEventListener('click', function () { send(input.value); });
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); send(input.value); } });
+})();
+</script>
 
 </script>
 </body>

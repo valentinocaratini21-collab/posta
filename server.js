@@ -4549,7 +4549,107 @@ function fixPublishReply(reply, publishApplied) {
   }
   return String(reply || '') + (inR ? ' (uno quedó en revisión, te aviso cuando salga)' : ' (uno no pudo salir, lo reviso y te aviso)');
 }
-app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => {
+
+// (LOTE CHAT-WEBSITE) Rama pública del MISMO chat de la app: la home pública sin sesión.
+// Restringida por diseño: sin usuario, sin fundamento, sin semana, sin Bandeja, sin
+// historial, sin gustos, sin fotos ni borradores, sin voz. La rama lee SOLO messages
+// y lang del body. Solo responde dudas del producto con hechos reales e invita a
+// entrar o a la prueba. Fail-closed: sin llave de IA o ante cualquier error, responde
+// el texto amable, nunca un 500.
+const PZ_CHAT_PUBLIC_SYS = [
+  'Sos Posty 🤖, el community manager robot de Posty (postycommunitymanager.com). Hablás con un visitante de la web pública, sin cuenta, en el MISMO chat de la app. Tu trabajo: resolver dudas del producto y acercar a la persona a entrar a su cuenta o a probar Posty gratis por 3 días, sin ser pesado.',
+  '',
+  'TONO: español rioplatense suave (voseo amable), cálido, directo, seguro, con humor leve. Respuestas CORTAS: 1 a 4 frases, salvo que te pidan detalle. Escribís como un amigo por WhatsApp — TODO en minúscula, también al arrancar cada frase, y SIN signos de apertura: jamás "¡" ni "¿" (los de cierre van normal: ., ?, !).',
+  'FORMATO: texto plano, SIN markdown: nada de asteriscos, almohadillas ni negritas.',
+  '',
+  'HECHOS REALES (solo afirmás lo que está acá; si te preguntan algo que no sabés, decilo y ofrecé que te dejen un contacto para que lo responda una persona):',
+  '- Posty es un community manager que hace TODO el Instagram de un negocio: analiza la cuenta, arma la semana, escribe los captions, diseña las piezas con las fotos y los colores del negocio, y las programa. El dueño solo mira y, si quiere, retoca desde el chat.',
+  '- Precio: USD 200 por mes. Prueba gratis completa de 3 días, sin tarjeta. Lanzamiento: 1 de febrero de 2027.',
+  '- Entrar a una cuenta existente: desde el botón Entrar. Probar gratis: desde el botón de prueba de 3 días.',
+  '',
+  'REGLA DE VERDAD (innegociable): jamás prometas resultados de ventas, alcance ni seguidores. Nunca inventes funciones, integraciones, precios ni descuentos que no estén acá arriba. Nunca digas que conocés la cuenta, el negocio o los datos del visitante: no los tenés y no los inventás.',
+  '',
+  'IDENTIDAD: sos una inteligencia artificial, el robot Posty. Si preguntan si sos una persona, un robot o una IA, respondé con orgullo: "soy posty 🤖, una inteligencia artificial — el mismo que te va a manejar el instagram. detrás mío hay un equipo humano que revisa todo."',
+  '',
+  'ESCALACIÓN: si la persona quiere contratar algo a medida, tiene un problema con una cuenta o un pago, pide hablar con una persona, o no podés resolver lo que pide, pedile UN dato de contacto (WhatsApp o email) así: "eso te lo resuelve una persona de mi equipo. me dejás tu whatsapp o tu email y te contactan hoy?" Cuando la persona deje su contacto (o acepte dejarlo), terminá tu respuesta con el token interno [[ESCALAR]] al final del texto: ese token es invisible para la persona y marca que un humano toma el caso. No uses ese token en ningún otro momento ni lo menciones jamás.',
+].join('\n');
+const PZ_CHAT_PUBLIC_SYS_EN = [
+  'You are Posty 🤖, the robot community manager of Posty (postycommunitymanager.com). You are talking with a visitor of the public website, without an account, in the SAME chat as the app. Your job: answer product questions and move the person toward logging into their account or trying Posty free for 3 days, without being pushy.',
+  '',
+  'TONE: warm, direct, confident US English, with light humor. SHORT answers: 1 to 4 sentences, unless they ask for detail. You write like a friend texting — ALL lowercase, even at the start of sentences, short and friendly.',
+  'FORMAT: plain text, NO markdown: no asterisks, hashtags or bold.',
+  '',
+  'REAL FACTS (only claim what is listed here; if they ask something you do not know, say so and offer to take a contact detail so a person can answer):',
+  '- Posty is a community manager that does a business\'s ENTIRE Instagram: it analyzes the account, builds the week, writes the captions, designs the pieces with the business\'s own photos and colors, and schedules them. The owner just watches and, if they want, tweaks things from the chat.',
+  '- Price: USD 200 per month. Full free 3-day trial, no card required. Launch: February 1, 2027.',
+  '- Logging into an existing account: from the Log in button. Trying free: from the 3-day trial button.',
+  '',
+  'TRUTH RULE (non-negotiable): never promise sales results, reach or followers. Never invent features, integrations, prices or discounts that are not listed above. Never say you know the visitor\'s account, business or data: you do not have them and you never invent them.',
+  '',
+  'IDENTITY: you are an artificial intelligence, the robot Posty. If they ask whether you are a person, a robot or an AI, answer proudly: "i\'m posty 🤖, an artificial intelligence — the same one that will run your instagram. behind me there is a human team that reviews everything."',
+  '',
+  'ESCALATION: if the person wants something custom, has a problem with an account or a payment, asks to talk to a person, or you cannot solve what they are asking, ask for ONE contact detail (WhatsApp or email) like this: "that is something a person on my team will solve for you. can you leave me your whatsapp or your email and they will contact you today?" When the person leaves their contact (or agrees to leave it), end your reply with the internal token [[ESCALAR]] at the very end of the text: that token is invisible to the person and marks that a human takes the case. Never use that token at any other time and never mention it.',
+].join('\n');
+async function pzChatPublic(req, res) {
+  const body = req.body || {};
+  const lang = body.lang === 'en' ? 'en' : 'es';
+  const FALLBACK = lang === 'en'
+    ? 'oops, i glitched for a second 🤖 try again in a moment — and if you like, leave me your whatsapp or email and someone from my team will write to you.'
+    : 'uy, se me cortó un segundo 🤖 probá de nuevo en un ratito — y si querés, dejame tu whatsapp o tu email y te escribe una persona de mi equipo.';
+  const PAUSE = lang === 'en'
+    ? 'we chatted a lot today 🤖 let me rest a bit and we will pick this up in a few hours. meanwhile, your free week is waiting: 3 days, no card required.'
+    : 'hoy charlamos un montón 🤖 dejame descansar un rato y seguimos en unas horas. mientras tanto, tu semana gratis te espera: son 3 días, sin tarjeta.';
+  const thread = (Array.isArray(body.messages) ? body.messages : [])
+    .slice(-10)
+    .map((m) => ({ role: m && m.role === 'assistant' ? 'assistant' : 'user', text: String((m && m.text) || '').slice(0, 2000) }))
+    .filter((m) => m.text.trim());
+  if (!thread.length || thread[thread.length - 1].role !== 'user') {
+    return res.json({ reply: lang === 'en'
+      ? "hi! i'm posty 🤖 how can i help? you can ask me what i do, how much it costs or how the free trial works."
+      : 'hola! soy posty 🤖 en qué te ayudo? podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.', idea: null });
+  }
+  const ip = demo.clientIp(req);
+  if (!postyChatAllowed('lp|' + ip)) return res.json({ reply: PAUSE, idea: null });
+  // Saludo puro: respuesta instantánea sin gastar una llamada al modelo (mismo contrato que el chat con sesión).
+  const lastUserText = thread.filter((m) => m.role === 'user').pop().text || '';
+  const greetRe = /^(hola+|buenas|buen d[ií]a|buenas tardes|buenas noches|qu[ée] tal|qu[ée] onda|c[óo]mo (va|and[aá]s)|saludos|holis?|hi+|hello|hey|good (morning|afternoon|evening)|how are you|whats up)[ ,!.…?]*((posty|genio|capo|master|che|querido)[ ,!.…?]*)*$/i;
+  if (greetRe.test(lastUserText.trim())) {
+    const reply = lang === 'en' ? 'hi! 😄 how can i help today?' : 'hola! 😄 con qué te ayudo hoy?';
+    try { postyChatSave('srv-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10), 'landing', thread, reply, false); } catch (e) {}
+    return res.json({ reply, idea: null });
+  }
+  try {
+    const apiKey = process.env.OPENAI_API_KEY || '';
+    if (!apiKey) throw new Error('sin OPENAI_API_KEY');
+    const ai = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'system', content: lang === 'en' ? PZ_CHAT_PUBLIC_SYS_EN : PZ_CHAT_PUBLIC_SYS }].concat(
+          thread.map((m) => ({ role: m.role, content: m.text }))
+        ),
+        max_tokens: 500,
+        temperature: 0.7,
+      }),
+    });
+    if (!ai.ok) throw new Error('OpenAI ' + ai.status);
+    const data = await ai.json();
+    try { costs.trackUsage({ feature: 'posty-chat', model: 'gpt-4o-mini', json: data }); } catch (e) {}
+    const raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    const parsed = postyChatParse(raw);
+    try { postyChatSave('srv-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10), 'landing', thread, parsed.text, parsed.escalate); } catch (e) {}
+    return res.json({ reply: parsed.text, idea: null });
+  } catch (e) {
+    console.error('[posta] chat-public:', e.message);
+    return res.json({ reply: FALLBACK, idea: null });
+  }
+}
+
+app.post('/api/ideas/chat', async (req, res) => {
+  if (!req.session.userId) return pzChatPublic(req, res);
+  let _lpNx = false; requireTrialValid(req, res, () => { _lpNx = true; });
+  if (!_lpNx) return;
   const { messages, photos, library, drafts, audio, anchor_post_id, photoPaths } = req.body || {};
   const uidChat = req.session.userId;
   // Kill-switch de gasto diario: mensaje amable de Posty, nunca un error robótico.
@@ -7329,7 +7429,8 @@ app.post('/api/voz-dueno/reel', requireAuth, async (req, res) => {
   } catch (e) { console.error('[voz-dueno] reel-insert:', e.message); return res.status(502).json({ error: 'reel_fallo' }); }
 });
 
-app.get('/api/ideas/chat', requireAuth, (req, res) => {
+app.get('/api/ideas/chat', (req, res) => {
+  if (!req.session.userId) return res.json({ messages: [], welcome: req.query.lang === 'en' ? "hi! i'm posty 🤖 how can i help? you can ask me what i do, how much it costs or how the free trial works." : 'hola! soy posty 🤖 en qué te ayudo? podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
   const uid = req.session.userId;
   const msgs = db.prepare(`SELECT role, text FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-24 hours') ORDER BY id DESC LIMIT 30`).all(uid).reverse();
   const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid);
@@ -26414,7 +26515,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v554';
+const BUILD_ID = '20261101-v555';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

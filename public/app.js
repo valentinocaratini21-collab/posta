@@ -15907,6 +15907,7 @@ function pzPrefetchKick() {
       LANDING_ON = true;
       lpInitHero();
       // Puntitos del carrusel de planes
+      try { pzLpChatBind(); } catch (e) {}
       const pr = document.getElementById('plansRow'), pd = document.getElementById('planDots');
       if (pr && pd) {
         const updDots = () => {
@@ -16065,6 +16066,7 @@ function pzPrefetchKick() {
     LANDING_ON = true;
     lpInitHero();
     return;
+    try { pzLpChatBind(); } catch (e) {}
   }
 
   // App (requiere login)
@@ -19512,6 +19514,73 @@ function mzCloseSheet() {
   if (sh) sh.hidden = true;
   try { document.body.classList.remove('mz-sheet-open'); } catch (e) {}
 }
+/* ===== (LOTE CHAT-WEBSITE) El MISMO chat de la app en la home pública ===== */
+// El dock de entrada es el mismo dock de la app (cara + texto que rota);
+// la hoja es la misma hoja (mzSheet + chatCardHTML + chatSend + /api/ideas/chat).
+// Con sesión: el mismo chat y la misma historia que en la app. Sin sesión: el
+// mismo chat responde dudas del producto e invita a entrar o a la prueba.
+// NO usa bindChat(): el historial se carga directo con chatLoadHistory() para
+// no marcar CHAT_LOADED (la app carga su historia real cuando se abre allá).
+function pzLpChatHTML() {
+  return '<div class="pz-lp-dock" id="pzLpDock">'
+    + '<button type="button" class="mz-ph" id="mzChatOpen" aria-label="Hablar con Posty"><img class="chat-face" src="/ai-avatar.png" alt="Posty"><span class="mz-ph-tx">escribile a posty…</span></button>'
+    + '</div>'
+    + '<div class="mz-sheet" id="mzSheet" hidden>'
+    + '<div class="mz-sheet-card">'
+    + '<div class="mz-sheet-head"><span>Posty</span><button type="button" class="mz-sheet-x" id="mzSheetX" aria-label="Cerrar">✕</button></div>'
+    + '<div class="mz-sheet-body" id="pzLpSheetBody"></div>'
+    + '</div></div>';
+}
+function pzLpChatBind() {
+  if (document.getElementById('pzLpDock')) return;
+  const root = document.getElementById('app');
+  if (!root) return;
+  const hasSess = (typeof ME !== 'undefined' && !!ME);
+  root.insertAdjacentHTML('beforeend', pzLpChatHTML());
+  const bodyEl = document.getElementById('pzLpSheetBody');
+  if (bodyEl) bodyEl.innerHTML = chatCardHTML(true, true, true, false, true, false);
+  if (!hasSess) {
+    // Sin sesión: sin subida de fotos, sin nota de voz, sin chips de cuenta.
+    // En su lugar: botón Enviar simple + invitaciones a entrar y a la prueba.
+    const plus = document.getElementById('chatPlus'); if (plus) plus.remove();
+    const mic = document.getElementById('chatMicSend');
+    if (mic) {
+      const send = document.createElement('button');
+      send.type = 'button'; send.className = 'btn btn-primary'; send.id = 'pzLpSend'; send.textContent = 'Enviar';
+      send.onclick = () => { try { chatSend(); } catch (e) {} };
+      mic.replaceWith(send);
+    }
+    const chips = document.getElementById('chatChips'); if (chips) chips.remove();
+    const card = document.getElementById('chatCard');
+    if (card) card.insertAdjacentHTML('afterend', '<div class="pz-lp-cta"><a class="btn btn-soft" href="#/login">Entrar</a><a class="btn btn-primary" href="/prueba">Probar 3 días gratis</a></div>');
+  }
+  const open = document.getElementById('mzChatOpen');
+  if (open) open.onclick = () => { try { mzOpenSheet(true); } catch (e) {} };
+  const x = document.getElementById('mzSheetX');
+  if (x) x.onclick = () => { try { mzCloseSheet(); } catch (e) {} };
+  const sh = document.getElementById('mzSheet');
+  if (sh) sh.addEventListener('click', (e) => { if (e.target === sh) { try { mzCloseSheet(); } catch (e2) {} } });
+  const inp = document.getElementById('chatInput');
+  if (inp) {
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); try { chatSend(); } catch (err) {} } });
+    inp.addEventListener('input', () => { try { chatUpdateSendBtn(); } catch (err) {} });
+  }
+  // Puertas de la landing (Ayuda / Hablá con Posty / Soporte): abren este mismo chat.
+  // Con guarda de dock: fuera de la landing no hacen nada (en la app no hay puertas).
+  if (!window.__pzLpDoor) {
+    window.__pzLpDoor = true;
+    document.addEventListener('click', (e) => {
+      if (!document.getElementById('pzLpDock')) return;
+      const t = (e.target && e.target.closest) ? e.target.closest('[data-posty-chat]') : null;
+      if (!t) return;
+      e.preventDefault();
+      try { mzOpenSheet(true); } catch (err) {}
+    });
+  }
+  try { pzPhStart(); } catch (e) {}
+  try { chatLoadHistory(); } catch (e) {}
+}
+
 
 /* ===== (Frente 3 · suma 2) FEED VIVO: gestos sobre las tiles =====
    REGLA DE PRECEDENCIA (única, simple):
