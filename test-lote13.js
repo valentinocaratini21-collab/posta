@@ -38,7 +38,7 @@ t(stripChip.includes('overflow:hidden'), 'chip overflow hidden');
 t(stripChip.includes('text-overflow:clip'), 'chip clip, no ellipsis (LOTE CORAZÓN: el día se lee entero)');
 const stripLike = ruleBody(css, '.hf-strip .hf-like-in{');
 t(!css.includes('.hf-strip .hf-like-in'), 'sin regla corazón-en-franja (LOTE CORAZÓN: el corazón salió de la fila)');
-t(app.includes('${glyph}${despChip}<button type="button" class="hf-like hf-like-in"'), 'corazón hijo directo de la tile, arriba a la derecha (LOTE CORAZÓN)');
+t(app.includes('${glyph}${despChip}<button type="button" class="hf-like hf-like-in"'), 'corazón hijo directo de la tile (posición en CSS; CORAZÓN-ABAJO 1/11 lo baja a la derecha)');
 const likeBase = ruleBody(css, '.hf-like{');
 t(likeBase.includes('width:34px') && likeBase.includes('height:34px'), 'corazón 34×34 usable');
 

@@ -135,8 +135,8 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
 
 // ---------- I4: corazones idénticos ----------
 {
-  t(css.includes('.hf-tile > .hf-like-in{') && css.includes('background:#fff'), 'I4: corazón de la tile con fondo opaco blanco (LOTE CORAZÓN: arriba a la derecha)');
-  t(css.includes('.hf-tile > .hf-like-in{') && css.includes('box-shadow:0 1px 6px'), 'I4: mismo contenedor con sombra sutil (LOTE CORAZÓN)');
+  t(css.includes('.hf-tile > .hf-like-in{') && css.includes('background:transparent'), 'I4: corazón de la tile en vidrio, botón transparente (CORAZÓN-ABAJO 1/11: abajo a la derecha, 26px en ::before)');
+  t(css.includes('.hf-tile > .hf-like-in::before{') && css.includes('box-shadow:0 1px 6px'), 'I4: sombra sutil en el ::before de vidrio (CORAZÓN-ABAJO 1/11)');
   t(css.includes('.hf-like{') && app.includes("pzIc('heart', 20)"), 'I4: tamaño 34×34 e ícono intactos');
 }
 

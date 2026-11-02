@@ -4,9 +4,15 @@
 // flex:0 0 auto (34px + gap 8px) y la chapita flex:1 con ellipsis en
 // el día; la hora (flex-none) sobrevivía y el día colapsaba a una
 // letra («Mañana» -> «M…»). Fix: el corazón sale de la fila y flota
-// arriba a la derecha de la foto; la fila inferior queda 100% para
-// la chapita y el día nunca lleva ellipsis. Con glifo arriba a la
-// derecha (pin/reel/carrusel), el corazón baja a top:32px.
+// en la foto; la fila inferior queda 100% para la chapita y el día
+// nunca lleva ellipsis.
+// SUPERSEDED 1/11 (decisión Valentino, LOTE CORAZÓN-ABAJO): el corazón
+// ya NO vive arriba a la derecha ni baja a top:32px con glifo — vive
+// abajo a la derecha de la foto (bottom:38px, sobre la foto y por
+// encima de la franja), visible 26px en vidrio v519 con caja de toque
+// intacta 34px; glifo arriba y corazón abajo ya no se cruzan, así que
+// la regla de drop se elimina. Los asserts de posición/tamaño/fondo
+// de este archivo se actualizan con esa causa; el resto sigue vigente.
 // Node puro, lee el árbol. Uso: node test-lotecorazon.js
 'use strict';
 const fs = require('fs');
@@ -112,13 +118,13 @@ t(tileProg.indexOf('hf-chip-day') >= 0 && tileProg.indexOf('hf-chip-hm') >= 0, '
 // El corazón es hijo directo de la tile: aparece después del cierre de la franja.
 t(tileProg.indexOf('data-hf-like') > tileProg.indexOf(stripProg) + stripProg.length, 'corazón después de la franja (hijo de la tile)');
 
-// Tile video (glifo reel): el corazón baja para no tapar el glifo.
+// Tile video (glifo reel): glifo arriba, corazón abajo — ya no se cruzan (CORAZÓN-ABAJO 1/11, sin drop).
 const tileVid = render({ kind: 'post', post: { id: 102, status: 'scheduled', scheduled_at: man.toISOString(), media_type: 'video', image_path: 'x.mp4', caption: 'reel' } });
 t(tileVid.indexOf('hf-has-glyph') >= 0, 'tile video: clase hf-has-glyph');
 t(tileVid.indexOf('hf-glyph') >= 0, 'tile video: glifo presente');
 t(stripInner(tileVid).indexOf('data-hf-like') < 0, 'corazón FUERA de la franja (tile video)');
 
-// Tile archivada (publicada, sin chapita): archChip en la franja, corazón arriba.
+// Tile archivada (publicada, sin chapita): archChip en la franja, corazón abajo a la derecha.
 const tileArch = render({ kind: 'post', archivedExt: true, post: { id: 103, status: 'published', media_type: 'image', caption: 'viejo' } });
 const stripArch = stripInner(tileArch);
 t(stripArch.indexOf('Archivado') >= 0, 'archChip Archivado en la franja');
@@ -133,13 +139,13 @@ const chipEn = vm.runInContext(`hfWhenChip({scheduled_at:'2026-11-03T19:00:00Z'}
 t(chipEn.indexOf('Tomorrow') === 0, 'hfWhenChip tomorrow EN: ' + chipEn);
 sb.ME.lang = 'es';
 
-// ---------- CSS: corazón top-right, día sin ellipsis, archivado cede ----------
+// ---------- CSS: corazón bottom-right en vidrio (CORAZÓN-ABAJO 1/11, supersede con causa), día sin ellipsis, archivado cede ----------
 const ruleTileHeart = /\.hf-tile\s*>\s*\.hf-like-in\{[^}]*\}/.exec(css);
 t(!!ruleTileHeart, 'CSS: regla .hf-tile > .hf-like-in');
-t(ruleTileHeart && /top:6px/.test(ruleTileHeart[0]) && /right:6px/.test(ruleTileHeart[0]), 'corazón top:6px right:6px');
-t(ruleTileHeart && /background:#fff/.test(ruleTileHeart[0]), 'corazón fondo blanco opaco');
+t(ruleTileHeart && /bottom:38px/.test(ruleTileHeart[0]) && /right:6px/.test(ruleTileHeart[0]), 'corazón bottom:38px right:6px (abajo a la derecha, CORAZÓN-ABAJO 1/11)');
+t(ruleTileHeart && /background:transparent/.test(ruleTileHeart[0]), 'corazón botón transparente (vidrio en ::before, CORAZÓN-ABAJO 1/11)');
 const ruleGlyph = /\.hf-tile\.hf-has-glyph\s*>\s*\.hf-like-in\{[^}]*\}/.exec(css);
-t(!!ruleGlyph && /top:32px/.test(ruleGlyph[0]), 'con glifo: corazón top:32px (no tapa el glifo)');
+t(!ruleGlyph, 'SIN regla de drop con glifo (glifo arriba + corazón abajo no se cruzan, CORAZÓN-ABAJO 1/11)');
 const ruleDay = /\.hf-strip\s+\.hf-chip-day\{[^}]*\}/.exec(css);
 t(!!ruleDay, 'CSS: regla .hf-strip .hf-chip-day');
 t(ruleDay && /flex:0 0 auto/.test(ruleDay[0]), 'día flex:0 0 auto (nunca se achica)');

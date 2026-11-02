@@ -4154,10 +4154,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-strip .hf-chip-hm{flex:0 0 auto;white-space:nowrap}
 .hf-tile-under{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;height:100%;padding:10px;font-size:12px;font-weight:700;color:#0A1E33;text-align:center;line-height:1.35;background:linear-gradient(140deg,#eaf6fd,#fdf3d7);box-sizing:border-box}
 .hf-tile-under>span{display:block}
-/* (LOTE CORAZÓN · el corazón sale de la fila de la chapita y flota arriba a la derecha de la foto; la fila inferior queda 100% para día+hora) */
-.hf-tile > .hf-like-in{position:absolute;top:6px;right:6px;bottom:auto;z-index:5;background:#fff;border-color:var(--line);color:#0A1E33;box-shadow:0 1px 6px rgba(10,30,51,.25)}
-/* (LOTE CORAZÓN · choque real: el glifo pin/reel/carrusel vive arriba a la derecha (20px, top:6px); con glifo, el corazón baja lo mínimo para no taparlo; el glifo no se mueve) */
-.hf-tile.hf-has-glyph > .hf-like-in{top:32px}
+/* (LOTE CORAZÓN-ABAJO 1/11 · decisión Valentino: el corazón flota abajo a la derecha de la foto, sobre la foto y por encima de la franja (nunca sobre la chapita: bottom:38px despeja la franja de ~31px con ~7px de aire; día+hora enteros, decisión v528 intacta); visible 26px en vidrio v519 con caja de toque intacta 34px; el glifo queda arriba a la derecha y ya no hace falta el drop a top:32px — la regla se elimina y la clase hf-has-glyph queda solo como marca en el HTML y en los tests) */
+.hf-tile > .hf-like-in{position:absolute;bottom:38px;right:6px;z-index:5;background:transparent;border-color:transparent;color:#0A1E33;box-shadow:none}
+.hf-tile > .hf-like-in::before{content:"";position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);z-index:-1;border-radius:50%;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 1px 6px rgba(10,30,51,.25)}
+.hf-tile > .hf-like-in .pz-ic svg{filter:drop-shadow(0 0 2px rgba(255,255,255,.9)) drop-shadow(0 1px 2px rgba(10,30,51,.35))}
 /* (LOTE CORAZÓN-MARCA) Corazón lleno persistente en posteos programados/publicados: relleno celeste Posty, como Instagram. */
 .hf-like[data-hf-on="1"] svg{fill:#2793C8;stroke:#2793C8}
 
