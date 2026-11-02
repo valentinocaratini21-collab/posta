@@ -17601,7 +17601,13 @@ function homeTileHTML(t, i) {
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}</span>${justChip}${glyph}${despChip}<button type="button" class="hf-like hf-like-in" data-hf-like aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></span></span>`;
+  // (LOTE CORAZÓN-MARCA) Corazón lleno persistente: el posteo ya
+  // está en la agenda (programado) o ya salió (publicado). Los
+  // borradores pendientes quedan vacíos. No es la aprobación fina
+  // ('pending' vs 'approved'): programar desde el corazón YA deja
+  // el posteo en la agenda, y esa es la marca que se espera ver.
+  const hfLikeOn = String(p.status) === 'scheduled' || String(p.status) === 'published';
+  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}</span>${justChip}${glyph}${despChip}<button type="button" class="hf-like hf-like-in" data-hf-like${hfLikeOn ? ' data-hf-on="1"' : ''} aria-pressed="${hfLikeOn ? 'true' : 'false'}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button></span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -20611,10 +20617,21 @@ function hfDblReset() {
 async function hfTileApprove(tile, post) {
   try {
     const st = String((tile && tile.dataset && tile.dataset.status) || (post && post.status) || '');
-    if (st !== 'draft' && st !== 'scheduled') return;
+    const en = f3En();
+    if (st !== 'draft' && st !== 'scheduled') {
+      // (LOTE CORAZÓN-MARCA) Ningún toque mudo: ya salió o ya no se puede.
+      if (st === 'published') toast('✅ ' + (en ? 'Already published on Instagram' : 'Ya salió en Instagram'));
+      else toast('😅 ' + (en ? 'This post can no longer be approved' : 'Este posteo ya no se puede aprobar'));
+      return;
+    }
     const id = String((tile && tile.dataset && tile.dataset.postId) || (post && post.id) || '');
-    if (!id) return;
+    if (!id) { toast('😅 ' + (en ? 'Could not find this post' : 'No pude encontrar este posteo')); return; }
     const mode = await f3ApprovalMode();
+    if (mode.known === false) {
+      // (LOTE CORAZÓN-MARCA) Modo desconocido: no se adivina, se avisa.
+      toast('😅 ' + (en ? 'Could not check the mode — try again' : 'No pude verificar el modo — probá de nuevo'));
+      return;
+    }
     if (!mode.manual) {
       try { track('lote2_dbltap_like', { autopilot: true }); } catch (e) {}
       // (LOTE AVISO) En piloto automático el corazón es afectivo, no
@@ -20623,6 +20640,9 @@ async function hfTileApprove(tile, post) {
       // aviso, nunca aprueba ni reprograma. Solo en programados.
       if (st === 'scheduled') {
         try { await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'like' }); } catch (e2) {}
+        toast('❤️ ' + (en ? 'Seen' : 'Visto'));
+      } else {
+        toast('❤️ ' + (en ? 'On autopilot, Posty publishes on its own' : 'En piloto automático, Posty publica solo'));
       }
       return;
     }
@@ -20632,11 +20652,20 @@ async function hfTileApprove(tile, post) {
       return;
     }
     if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
-      toast(f3En() ? 'Connect your Instagram first' : 'Conectá tu Instagram primero');
+      toast(en ? 'Connect your Instagram first' : 'Conectá tu Instagram primero');
       return;
     }
     const when = (tile && tile.dataset && tile.dataset.schedAt) || (post && post.scheduled_at) || undefined;
-    await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: when || undefined });
+    const res = await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: when || undefined });
+    // (LOTE CORAZÓN-MARCA) El servidor puede devolver ok con warning
+    // ('sin_dia_libre'): el posteo QUEDA en borrador. Decirlo con
+    // honestidad y NUNCA mostrar "¡Listo! Quedó programado" en ese caso.
+    if (res && res.warning) {
+      if (res.warning === 'sin_dia_libre') toast('😅 ' + (en ? 'Not scheduled: no free day this week' : 'No quedó programado: no hay día libre en la semana'));
+      else toast('😅 ' + (en ? 'Not scheduled — try again' : 'No quedó programado — probá de nuevo'));
+      try { render(); } catch (e) {}
+      return;
+    }
     try { await api.post('/api/posts/' + encodeURIComponent(id) + '/signal', { signal: 'approved' }); } catch (e) {}
     try { track('lote2_dbltap_approve', { id, draft: true }); } catch (e) {}
     toast('✅ <b>¡Listo!</b> Quedó programado 🙌');
@@ -20707,11 +20736,18 @@ function hfLikeBind(root) {
     if (!btn) return;
     const cell = btn.closest('.hf-cell');
     const tile = cell ? cell.querySelector('.hf-tile[data-post-id]') : null;
-    if (!tile) return;
+    if (!tile) { try { toast('😅 ' + (f3En() ? 'Could not find this post' : 'No pude encontrar este posteo')); } catch (e2) {} return; }
     e.preventDefault();
     e.stopPropagation();
     const t = HF_TILES.find((x) => x && x.kind === 'post' && String(x.post.id) === String(tile.dataset.postId));
-    if (!t) return;
+    if (!t) {
+      // (LOTE CORAZÓN-MARCA) La tile existe pero no está en HF_TILES:
+      // igual se responde usando los datos de la tile, nunca en mudo.
+      try { f3HeartBurst(tile); } catch (e2) {}
+      hfTileApprove(tile, { id: tile.dataset.postId, status: tile.dataset.status, scheduled_at: tile.dataset.schedAt || undefined });
+      try { pzSonido('aprobar'); } catch (e2) {}
+      return;
+    }
     try { f3HeartBurst(tile); } catch (e2) {}
     hfTileApprove(tile, t.post);
     try { pzSonido('aprobar'); } catch (e2) {}
@@ -22202,8 +22238,8 @@ function f3ApprovalMode() {
   F3_APPR_MODE = (async () => {
     try {
       const r = await api.get('/api/autopilot');
-      return { manual: !(r && r.enabled) };
-    } catch (e) { return { manual: false }; } // sin dato: corazón solo (nada invisible)
+      return { manual: !(r && r.enabled), known: true };
+    } catch (e) { F3_APPR_MODE = null; return { manual: false, known: false }; } // (LOTE CORAZÓN-MARCA) sin dato NO se adivina el modo: el toque avisa y el próximo reintenta
   })();
   return F3_APPR_MODE;
 }

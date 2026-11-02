@@ -4158,6 +4158,8 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-tile > .hf-like-in{position:absolute;top:6px;right:6px;bottom:auto;z-index:5;background:#fff;border-color:var(--line);color:#0A1E33;box-shadow:0 1px 6px rgba(10,30,51,.25)}
 /* (LOTE CORAZÓN · choque real: el glifo pin/reel/carrusel vive arriba a la derecha (20px, top:6px); con glifo, el corazón baja lo mínimo para no taparlo; el glifo no se mueve) */
 .hf-tile.hf-has-glyph > .hf-like-in{top:32px}
+/* (LOTE CORAZÓN-MARCA) Corazón lleno persistente en posteos programados/publicados: relleno celeste Posty, como Instagram. */
+.hf-like[data-hf-on="1"] svg{fill:#2793C8;stroke:#2793C8}
 
 /* ---------- LOTE 17 · vista de aprobación + tira ---------- */
 /* Aceptar único como acción principal: ancho completo, sin recorte. */
