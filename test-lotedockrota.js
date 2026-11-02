@@ -61,9 +61,9 @@ t(app.includes("en: ['write to posty…', 'ask about your week…', 'ask for an 
 t(app.includes('function pzChatPhList()'), 'la lista se resuelve por idioma en cada tick');
 
 // ---------- 5. Versiones + censo (base v530 (chat-texto + chat-4s), sin bumps todavía) ----------
-t(srv.includes("const BUILD_ID = '20261101-v532'"), 'BUILD v530 (sin bump hasta el push)');
-t(idx.includes('app.js?v=353') && idx.includes('styles.css?v=20261072'), 'index: ?v= de v530 (bump al pushear)');
-t(idxEn.includes('styles.css?v=20261072') && !idxEn.includes('app.js?v='), 'en/index: styles v530, sin app.js');
+t(srv.includes("const BUILD_ID = '20261101-v533'"), 'BUILD v530 (sin bump hasta el push)');
+t(idx.includes('app.js?v=354') && idx.includes('styles.css?v=20261073'), 'index: ?v= de v530 (bump al pushear)');
+t(idxEn.includes('styles.css?v=20261073') && !idxEn.includes('app.js?v='), 'en/index: styles v530, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V intacto');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');

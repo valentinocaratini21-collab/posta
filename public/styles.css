@@ -4243,6 +4243,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .mx-slider-foto-top{position:absolute;left:0;top:0;width:100%;height:150px;object-fit:cover;transition:opacity .15s linear}
 .mx-slider-lock,.mx-slider-txt{z-index:1}
 @media (prefers-reduced-motion:reduce){.mx-slider-foto-top{transition:none}}
+/* (LOTE AVISO) Botón «i» de la cabecera: chiquito, en vidrio. */
+.hf-info-btn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;margin-left:8px;border-radius:50%;border:1px solid rgba(10,30,51,.16);background:rgba(255,255,255,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 2px 8px rgba(10,30,51,.14);color:#0a1e33;font-size:14px;font-weight:800;line-height:1;vertical-align:middle;cursor:pointer}
+.hf-info-btn:active{transform:scale(.92)}
+.hf-pubinfo-line{margin:8px 0;color:#0a1e33;font-size:15px;line-height:1.5}
 /* ============ LOTE CHAT SIMPLE (2026-11-01) ============ */
 /* La hoja de Inicio abraza su contenido (sin vacío blanco enorme):
    tarjeta a medida, mensajes con scroll interno, campo abajo siempre

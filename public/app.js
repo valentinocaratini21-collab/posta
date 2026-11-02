@@ -17669,7 +17669,7 @@ function homeHeadHTML(prof, bizName, opts) {
   // inicioView con pzRachaSemanas); sin racha, nada.
   const rachaHTML = (opts && Number(opts.racha) >= 2) ? `<div class="hf-racha">${pzIc('flame', 14)} ${en ? `${Math.floor(opts.racha)} weeks in a row posting` : `${Math.floor(opts.racha)} semanas seguidas publicando`}</div>` : '';
   return `<div class="hf-head">
-    ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}
+    ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}<button type="button" class="hf-info-btn" onclick="pzPubInfoOpen()" aria-label="${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}">i</button></div>` : ''}
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
       ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
@@ -17683,6 +17683,38 @@ function homeHeadHTML(prof, bizName, opts) {
     ${split ? '' : hfHighlightsTrayHTML(prof, opts)}
     ${split ? '' : hfTabsHTML(tabA, en)}
   </div>`;
+}
+// (LOTE AVISO) Botón «i» de la cabecera: explica cómo publica Posty.
+// El texto describe el comportamiento final (aviso solo si falta
+// confirmación): botón y comportamiento salen juntos en este lote.
+function pzPubInfoHTML(en) {
+  const t = en ? {
+    title: 'How does Posty publish?',
+    lines: [
+      'Posty publishes your scheduled posts on its own (autopilot).',
+      "If you haven't confirmed a post, it warns you 30 minutes before, in case you want to stop it.",
+      'If you confirmed it earlier, it goes out without notice.',
+      "If you don't confirm it, it still goes out on time.",
+      'In manual mode, nothing goes out without your OK.',
+    ],
+  } : {
+    title: '¿Cómo publica Posty?',
+    lines: [
+      'Posty publica solo tus posteos programados (piloto automático).',
+      'Si no confirmaste un posteo, te avisa 30 minutos antes, por si querés frenarlo.',
+      'Si lo confirmaste antes, sale sin aviso.',
+      'Si no lo confirmás, igual sale a su hora.',
+      'En modo manual, nada sale sin tu OK.',
+    ],
+  };
+  const lis = t.lines.map((l) => `<p class="hf-pubinfo-line">• ${esc(l)}</p>`).join('');
+  return `<div class="hf-ps-card"><div class="hf-ps-title">${esc(t.title)}</div>${lis}<div class="hf-ps-acts"><button type="button" class="hf-ps-btn" data-hf-ps-close>${en ? 'Got it' : 'Entendido'}</button></div></div>`;
+}
+function pzPubInfoOpen() {
+  try {
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    if (typeof hfSheetShow === 'function') hfSheetShow(pzPubInfoHTML(en));
+  } catch (e) {}
 }
 /* ===== (Tanda 4 del feed) BANDEJA DE HISTORIAS + PORQUÉ DE LA GRILLA =====
    Funciones puras del bloque (se extraen en test-frente4-feed): solo usan
@@ -20410,7 +20442,17 @@ async function hfTileApprove(tile, post) {
     const id = String((tile && tile.dataset && tile.dataset.postId) || (post && post.id) || '');
     if (!id) return;
     const mode = await f3ApprovalMode();
-    if (!mode.manual) { try { track('lote2_dbltap_like', { autopilot: true }); } catch (e) {} return; }
+    if (!mode.manual) {
+      try { track('lote2_dbltap_like', { autopilot: true }); } catch (e) {}
+      // (LOTE AVISO) En piloto automático el corazón es afectivo, no
+      // aprueba — pero deja constancia (owner_liked) para que el aviso
+      // de 30 minutos no moleste a quien ya lo vio: solo suprime el
+      // aviso, nunca aprueba ni reprograma. Solo en programados.
+      if (st === 'scheduled') {
+        try { await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'like' }); } catch (e2) {}
+      }
+      return;
+    }
     if (st === 'scheduled') {
       await pcApprove(id, tile, null);
       try { render(); } catch (e) {}

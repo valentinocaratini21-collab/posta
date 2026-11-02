@@ -72,8 +72,15 @@ function modeFor(db, post, user) {
 // ¿Corresponde avisar de este posteo? (paridad con el aviso histórico:
 // nivel 1 siempre; nivel ≥2 solo si el usuario prendió el aviso previo;
 // manual pending siempre — es su última llamada para aprobar.)
+// LOTE AVISO: aprobado/auto u owner_liked → nunca se avisa.
 function eligible(db, post, user) {
   const trust = user ? Number(user.trust_level || 0) : 0;
+  // (LOTE AVISO) Confirmado = sin aviso: un posteo ya aprobado (o auto)
+  // sale a su hora sin avisar, y un corazón tocado (owner_liked) es la
+  // confirmación del cliente para no avisar — SOLO suprime el aviso,
+  // nunca aprueba el posteo.
+  if (post.approval === 'approved' || post.approval === 'auto') return false;
+  if (post.owner_liked) return false;
   const mode = modeFor(db, post, user);
   if (mode === 'manual') return post.approval === 'pending';
   if (post.approval === 'pending' && trust === 0) return false; // no sale solo: no es autopilot
