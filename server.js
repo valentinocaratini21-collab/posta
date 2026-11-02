@@ -34,6 +34,7 @@ try {
 } catch (e) { console.error('[migracion] kind=design:', e.message); }
 const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionBodyKey } = require('./generator');
 const { isCasaHandle, casaIdeasBlock, casaCaptionBlock } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: línea editorial solo para la casa
+const { propiaLineaForClient } = require('./posty-cliente-linea'); // LOTE POSTY APRENDE CLIENTES: referencia propia por cliente, sin cruces
 // ---------- ATENCIÓN AL CLIENTE (plan Total) — cableado 2026-10-21 ----------
 // Los módulos se construyeron el 2026-10-20 (build-atencion-total) y
 // quedaron sin conectar: este es el cableado. Regla FIJA del producto:
@@ -7541,6 +7542,20 @@ function ideasInputFor(uid, weekKey) {
     contentPerf: contentPerformanceLine(uid) + anglePerformanceFor(uid).line,
   });
   if (isCasaHandle(profile.ig_username)) ideasInput.casaLinea = casaIdeasBlock();
+  else {
+    // LOTE POSTY APRENDE CLIENTES: la casa conserva su línea del equipo;
+    // cada cliente aprende SOLO de su propio Instagram (publicados +
+    // aprobados + bio del snapshot + fundamento). Sin historia propia no
+    // hay bloque: la generación sigue exactamente como hoy. Errores →
+    // sin bloque, nunca frena la generación.
+    try {
+      const pl = propiaLineaForClient(db, uid, {
+        business: profile.business_name, category: profile.category,
+        products: dna.productos, servicios: dna.servicios, star: dna.producto_estrella,
+      });
+      if (pl) ideasInput.propiaLinea = pl;
+    } catch (e) {}
+  }
   return ideasInput;
 }
 // Hook engine: rotación de 8 semanas por cliente (hooks.js).
@@ -7592,6 +7607,18 @@ function contentInputFor(uid, topic, tipo, seed, sales) {
     salesProof: (sales && sales.proof) || '',
   });
   if (isCasaHandle(profile.ig_username)) captionInput.casaLinea = casaCaptionBlock();
+  else {
+    // LOTE POSTY APRENDE CLIENTES: igual que en ideasInputFor — solo
+    // el propio Instagram de esta cuenta; la casa sigue con su línea.
+    try {
+      const dnaC = readDna(uid);
+      const pl = propiaLineaForClient(db, uid, {
+        business: profile.business_name, category: profile.category,
+        products: dnaC.productos, servicios: dnaC.servicios, star: dnaC.producto_estrella,
+      });
+      if (pl) captionInput.propiaLinea = pl;
+    } catch (e) {}
+  }
   return captionInput;
 }
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
@@ -26381,7 +26408,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v540';
+const BUILD_ID = '20261101-v541';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
