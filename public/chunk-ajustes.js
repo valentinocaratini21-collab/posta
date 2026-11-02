@@ -1721,7 +1721,7 @@ function bindSettings() {
         let estado = 'Activo';
         if (!hasActive) {
           if (ME && ME.plan_status === 'cancelled') estado = 'Cancelado';
-          else if (ME && ME.trial_expired) estado = 'Tu prueba terminó.';
+          else if (ME && ME.trial_expired) estado = (ME && ME.lang === 'en') ? 'Your trial ended.' : 'Tu prueba terminó.';
           else estado = trialLeft > 0 ? `Estás en tu prueba gratis: te quedan ${trialLeft} día${trialLeft === 1 ? '' : 's'}.` : 'En prueba';
         }
         z.innerHTML = `
@@ -1756,14 +1756,14 @@ function bindSettings() {
         : isStripe
         ? (isUS ? pzIc('clock', 14) + ' Your payment is being confirmed with Stripe. In a few seconds your plan will activate on its own — nothing else to do.' : pzIc('clock', 14) + ' Tu pago está confirmándose con Stripe. En unos segundos tu plan se activa solo — no hace falta que hagas nada.')
         : (isUS ? pzIc('clock', 14) + ' Your payment is being confirmed with MercadoPago. In a few seconds your plan will activate on its own — nothing else to do.' : pzIc('clock', 14) + ' Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.');
-      const statusTag = !hasActive ? `<span style="font-size:11.5px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
+      const statusTag = !hasActive ? `<span style="font-size:11.5px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? (isUS ? 'trial ended' : 'prueba terminada') : 'trial'})</span>` : '';
       const trialLeft = (ME && ME.trial_days_left) || 0;
       // refInfo se obtiene una sola vez acá: lo usan bindSub (clic Suscribirse) y los banners
       let refInfo = null;
       try { refInfo = await pzReferral(); } catch (e) {}
       let trialBanner = '';
       if (!hasActive && ME && ME.plan_status === 'trial') {
-        if (ME.trial_expired) trialBanner = `<div class="pz-trial-exp">${pzIc('lock', 14)} <b>Se terminó la prueba.</b> Elegí tu plan y seguimos publicando juntos</div>`;
+        if (ME.trial_expired) trialBanner = isUS ? `<div class="pz-trial-exp">${pzIc('lock', 14)} <b>Your trial ended.</b> Pick your plan and let's keep posting together</div>` : `<div class="pz-trial-exp">${pzIc('lock', 14)} <b>Se terminó la prueba.</b> Elegí tu plan y seguimos publicando juntos</div>`;
         else if (trialLeft > 0) trialBanner = trialLeft <= 3
           ? `<div class="pz-trial-warn">⏰ <b>¡Te ${trialLeft === 1 ? 'queda 1 día' : `quedan ${trialLeft} días`} de prueba!</b> Suscribite para no frenar tus posteos.</div>`
           : `<div class="pz-trial-ok">${pzIc('gift', 14)} Estás en tu prueba gratis: te quedan <b>${trialLeft} días</b>.</div>`;
@@ -1875,10 +1875,10 @@ function bindSettings() {
         ${trialBanner}
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" id="btnShowPlans">Ver planes</button>
-          <span style="font-size:12.5px;color:var(--dim)">${(ME && ME.trial_expired) ? 'Elegí tu plan y seguimos publicando juntos.' : 'Mirá los planes cuando quieras suscribirte.'}</span>
+          <span style="font-size:12.5px;color:var(--dim)">${(ME && ME.trial_expired) ? (isUS ? "Pick your plan and let's keep posting together." : 'Elegí tu plan y seguimos publicando juntos.') : 'Mirá los planes cuando quieras suscribirte.'}</span>
         </div>
         <div id="planAll" style="display:none">
-          <div style="font-size:14px;font-weight:800;margin:14px 0 12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'}</div>
+          <div style="font-size:14px;font-weight:800;margin:14px 0 12px">${ME && ME.trial_expired ? (isUS ? 'Pick your plan to keep going' : 'Elegí tu plan para seguir') : (isUS ? 'Pick your plan to start' : 'Elegí tu plan para empezar')}</div>
           <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
           <p style="font-size:11.5px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>
         </div>

@@ -361,7 +361,16 @@ const api = {
       }
       if (r.status === 402 && data.error === 'trial_expired') {
         if (typeof ME !== 'undefined' && ME) ME.trial_expired = true;
-        try { location.hash = '#/app/ajustes'; } catch (e) {}
+        // (LOTE SALTO-MI-PLAN) Nada de rebote silencioso arriba de Ajustes:
+        // la prueba vencida cae en Mi plan (?plan=1 → bindApp desplaza la
+        // tarjeta planZone a la vista), donde el banner de prueba terminada
+        // ya explica la situación. Si ya está en Ajustes con plan/plan_sel,
+        // no se toca nada (se preserva la preselección del flujo de plan).
+        try {
+          const _h = location.hash || '';
+          const _pq = new URLSearchParams((_h.split('?')[1] || ''));
+          if (!_h.startsWith('#/app/ajustes') || (!_pq.get('plan') && !_pq.get('plan_sel'))) location.hash = '#/app/ajustes?plan=1';
+        } catch (e) {}
       }
       const err = new Error(data.message || data.error || 'Error');
       err.status = r.status;
@@ -2037,7 +2046,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v551'; // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
+const CHUNK_V = '20261101-v556'; // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -6490,7 +6499,7 @@ function autopilotCardHTML(tag) {
   const t = tag || 'semana';
   const ppw = (ME && ME.posts_per_week) || 3;
   const planName = (ME && ME.plan ? ME.plan[0].toUpperCase() + ME.plan.slice(1) : 'Esencial');
-  const planTag = ME && ME.is_trial ? `${planName} (${ME.trial_expired ? 'prueba terminada' : 'trial'})` : planName;
+  const planTag = ME && ME.is_trial ? `${planName} (${ME.trial_expired ? (ME.lang === 'en' ? 'trial ended' : 'prueba terminada') : 'trial'})` : planName;
   const opts = [3, 5, 7].filter(v => v <= ppw).map(v => `<option value="${v}" ${v === ppw ? 'selected' : ''}>${v} posteos por semana</option>`).join('');
   return `
   <div class="card card-hi-yl" id="autopilotCard-${t}">

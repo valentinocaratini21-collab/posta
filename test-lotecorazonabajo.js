@@ -82,7 +82,7 @@ function ruleBody(re) {
 t(srv.includes("const BUILD_ID = '20261101-v553'"), 'BUILD v532 en server.js');
 t(idx.includes('app.js?v=369') && idx.includes('styles.css?v=20261087'), 'index: app 363 + styles 20261082 (bump v547 de carrusel-flechas)');
 t(idxEn.includes('styles.css?v=20261087') && !idxEn.includes('app.js?v='), 'en/index: styles 20261082, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v551'"), 'CHUNK_V sube a v551 (ajustes-simple TOCA chunk-ajustes.js: el chunk nuevo debe servirse fresco, con ?v= viejo la caché HTTP de iOS seguiría sirviendo el chunk viejo sin el botón; SUPERSEDE con causa el pin v524 «ningún chunk tocado»)');
+t(app.includes("const CHUNK_V = '20261101-v556'"), 'CHUNK_V sube a v556 (salto-mi-plan TOCA chunk-ajustes.js: el chunk nuevo debe servirse fresco, con ?v= viejo la caché HTTP de iOS seguiría sirviendo el chunk viejo sin el aviso; SUPERSEDE con causa el pin v551 «ajustes-simple»)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
