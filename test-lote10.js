@@ -166,8 +166,8 @@ ok(cnt(SRV, 'catsMatch') === 3 && cnt(SRV, 'week-redo') === 16 && cnt(SRV, 'firs
   'censo server 3/16/3/16 intacto');
 ok(cnt(SRV, 'autofetch') === 0, 'censo autofetch 0');
 ok(SRV.includes("const BUILD_ID = '20261101-v533'"), 'BUILD v522');
-ok(IDX.includes('app.js?v=354') && IDX.includes('styles.css?v=20261073'), 'index ?v= app 336 + styles 20261064');
-ok(IDXEN.includes('styles.css?v=20261073'), 'en/index styles 20261064');
+ok(IDX.includes('app.js?v=355') && IDX.includes('styles.css?v=20261074'), 'index ?v= app 336 + styles 20261064');
+ok(IDXEN.includes('styles.css?v=20261074'), 'en/index styles 20261064');
 ok(APP.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V v510 (chunk-analisis cache-busteado)');
 
 console.log(`\n== test-lote10: ${okN} ok · ${failN} fallas ==`);

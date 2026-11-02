@@ -72,8 +72,8 @@ function stripInner(html) {
 
 // ---------- Versiones + censo (base v527 + este lote = v528) ----------
 t(srv.includes("const BUILD_ID = '20261101-v533'"), 'BUILD v528 en server.js');
-t(idx.includes('app.js?v=354') && idx.includes('styles.css?v=20261073'), 'index: app 351 + styles 20261070');
-t(idxEn.includes('styles.css?v=20261073') && !idxEn.includes('app.js?v='), 'en/index: styles 20261070, sin app.js');
+t(idx.includes('app.js?v=355') && idx.includes('styles.css?v=20261074'), 'index: app 351 + styles 20261070');
+t(idxEn.includes('styles.css?v=20261074') && !idxEn.includes('app.js?v='), 'en/index: styles 20261070, sin app.js');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v523 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');

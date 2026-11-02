@@ -81,11 +81,17 @@ insS.run(3, 'America/New_York');
   const css = fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8');
   ok(appJs.includes('hf-info-btn') && appJs.includes('pzPubInfoOpen'), 'botón «i» presente en app.js');
   ok(appJs.includes('pzPubInfoHTML'), 'constructor del modal presente');
-  // El botón vive en la fila del usuario de homeHeadHTML (no en stats).
+  // El botón vive en la fila de la racha de homeHeadHTML (no en stats
+  // ni en la fila del usuario): LOTE «i»-RACHA 1/11, decisión de
+  // Valentino — la «i» pasa a la fila de «N semanas seguidas
+  // publicando»; la hoja y el handler no cambian.
   const hh = appJs.indexOf('function homeHeadHTML');
   const hhEnd = appJs.indexOf('function ', hh + 100);
   const hhSrc = appJs.slice(hh, hhEnd);
-  ok(hhSrc.includes('hf-info-btn') && hhSrc.includes('hf-user'), 'botón «i» dentro de la cabecera homeHeadHTML (fila usuario)');
+  const userDivA = hhSrc.indexOf('<div class="hf-user">');
+  const userDiv = userDivA < 0 ? '' : hhSrc.slice(userDivA, hhSrc.indexOf('</div>', userDivA) + 6);
+  ok(!userDiv.includes('hf-info-btn'), 'botón «i» FUERA de la fila hf-user (lote «i»-racha)');
+  ok(hhSrc.includes('hf-racha') && hhSrc.includes('hf-info-btn'), 'botón «i» dentro de la cabecera homeHeadHTML (fila racha)');
   ok(hhSrc.includes('hf-stats'), 'bloque de stats (seguidos) intacto en homeHeadHTML');
   // Textos exactos ES/EN dentro del constructor del modal.
   const esLines = [

@@ -17664,12 +17664,24 @@ function homeHeadHTML(prof, bizName, opts) {
   const avaHTML = (opts && opts.storyRing)
     ? `<button type="button" class="hf-ava-btn" data-hf-ava="1" aria-label="${en ? "See this week's stories" : 'Ver las historias de esta semana'}">${avaInner}</button>`
     : avaInner;
-  // (Ítem 17 · ítem 3) Racha de constancia debajo del perfil:
-  // solo si opts.racha trae un número real >= 2 (lo calcula
-  // inicioView con pzRachaSemanas); sin racha, nada.
-  const rachaHTML = (opts && Number(opts.racha) >= 2) ? `<div class="hf-racha">${pzIc('flame', 14)} ${en ? `${Math.floor(opts.racha)} weeks in a row posting` : `${Math.floor(opts.racha)} semanas seguidas publicando`}</div>` : '';
+  // (Ítem 17 · ítem 3 + LOTE «i»-RACHA) Racha de constancia debajo del
+  // perfil + botón «i»: la fila existe siempre que hay usuario (la
+  // misma audiencia que la fila hf-user de antes); el texto de la
+  // racha sale SOLO si opts.racha trae un número real >= 2 (lo
+  // calcula inicioView con pzRachaSemanas; sin racha, nunca se
+  // inventa), y el botón «i» va siempre al final de la fila
+  // (después del texto cuando hay racha; solo cuando no la hay).
+  // Refinamiento: sin racha, la fila no queda con el botón solo
+  // (parecería que falta algo): botón «i» + la etiqueta, que es el
+  // título de la hoja (sin inventar copy), todo tocable como un
+  // solo botón. Con racha, la racha ya da el contexto y no lleva
+  // etiqueta. La fila siempre se explica sola.
+  const infoBtnHTML = `<button type="button" class="hf-info-btn" onclick="pzPubInfoOpen()" aria-label="${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}">i</button>`;
+  const infoRowHTML = `<button type="button" class="hf-info-row" onclick="pzPubInfoOpen()" aria-label="${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}"><span class="hf-info-btn" aria-hidden="true">i</span><span class="hf-info-row-txt">${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}</span></button>`;
+  const rachaTxt = (opts && Number(opts.racha) >= 2) ? `<span class="hf-racha-txt">${pzIc('flame', 14)} ${en ? `${Math.floor(opts.racha)} weeks in a row posting` : `${Math.floor(opts.racha)} semanas seguidas publicando`}</span>` : '';
+  const rachaHTML = user ? `<div class="hf-racha">${rachaTxt ? rachaTxt + infoBtnHTML : infoRowHTML}</div>` : '';
   return `<div class="hf-head">
-    ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}<button type="button" class="hf-info-btn" onclick="pzPubInfoOpen()" aria-label="${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}">i</button></div>` : ''}
+    ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
       ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
@@ -17684,7 +17696,9 @@ function homeHeadHTML(prof, bizName, opts) {
     ${split ? '' : hfTabsHTML(tabA, en)}
   </div>`;
 }
-// (LOTE AVISO) Botón «i» de la cabecera: explica cómo publica Posty.
+// (LOTE AVISO + LOTE «i»-RACHA) Botón «i» de la cabecera: explica cómo
+// publica Posty. Desde el lote «i»-racha vive en la fila hf-racha
+// (antes en hf-user); la hoja y el handler no cambiaron.
 // El texto describe el comportamiento final (aviso solo si falta
 // confirmación): botón y comportamiento salen juntos en este lote.
 function pzPubInfoHTML(en) {

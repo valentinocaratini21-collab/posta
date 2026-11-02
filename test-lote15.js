@@ -108,7 +108,7 @@ t(app.includes('M3 11.5 12 3l9 8.5') && app.includes('M4 20V11M10 20V4'), 'ícon
 // ---- Hero Lote 14 intacto + versiones + censo + M78 ----
 t(idx.includes('Mi feed queda a medias y no me trae clientes'), 'hero Lote 14 ES intacto');
 t(idxEn.includes('My feed is half-done and brings me no customers'), 'hero Lote 14 EN intacto');
-t(idx.includes('app.js?v=354') && idx.includes('styles.css?v=20261073') && idxEn.includes('styles.css?v=20261073'), 'versiones: bumps ?v= aplicados');
+t(idx.includes('app.js?v=355') && idx.includes('styles.css?v=20261074') && idxEn.includes('styles.css?v=20261074'), 'versiones: bumps ?v= aplicados');
 t(app.includes("const CHUNK_V = '20261101-v523'"), 'versiones: CHUNK_V v516 (chunk-analisis cache-busteado)');
 t(!idxEn.includes('app.js?v='), 'versiones: EN no carga app.js (sin bump fantasma)');
 const censo = (s, sub) => (s.match(new RegExp(sub.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;

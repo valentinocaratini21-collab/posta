@@ -112,9 +112,9 @@ t((app.match(/^const esc = /gm) || []).length === 1, 'M78 definida 1× nivel sup
 
 // 12. Pines de versión.
 t(srv.includes('20261101-v533'), 'BUILD v522');
-t(idx.includes('app.js?v=354'), 'index app.js?v=354');
-t(idx.includes('styles.css?v=20261073'), 'index styles.css?v=20261073');
-t(idxEn.includes('styles.css?v=20261073'), 'en/index styles.css?v=20261073');
+t(idx.includes('app.js?v=355'), 'index app.js?v=355');
+t(idx.includes('styles.css?v=20261074'), 'index styles.css?v=20261074');
+t(idxEn.includes('styles.css?v=20261074'), 'en/index styles.css?v=20261074');
 t(!idxEn.includes('app.js?v='), 'en/index sin app.js (como siempre)');
 
 console.log(`test-lote13: ${ok} ok, ${bad} fallos`);

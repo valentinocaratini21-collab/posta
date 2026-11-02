@@ -173,7 +173,10 @@ function pubOn(iso) { return { status: 'published', published_at: iso }; }
   ok('racha vacía 0', rachaFn([], now, 'America/New_York') === 0);
   ok('racha 1 semana no muestra (N<2 es nada en UI)', rachaFn([pubOn('2026-10-28T15:00:00Z')], now, 'America/New_York') === 1);
 })();
-ok('perfil rachaHTML solo N>=2', app.indexOf("const rachaHTML = (opts && Number(opts.racha) >= 2)") >= 0);
+// (LOTE «i»-RACHA 1/11, decisión de Valentino: la fila hf-racha existe
+// siempre que hay usuario porque ahí vive el botón «i»; el TEXTO de
+// la racha sigue siendo solo N>=2 — lo cubren test-lotei-racha R2/R4.)
+ok('perfil rachaHTML: texto solo N>=2, fila siempre con usuario', app.indexOf('Number(opts.racha) >= 2') >= 0 && app.indexOf('const rachaHTML = user ?') >= 0);
 ok('perfil usa rachaHTML', app.indexOf('${rachaHTML}') >= 0);
 ok('inicioView pasa racha', app.indexOf('racha: pzRacha') >= 0);
 ok('inicioView calcula racha con historial', app.indexOf('pzRacha = pzRachaSemanas(Array.isArray(allPosts) ? allPosts : [], new Date(), tz)') >= 0);

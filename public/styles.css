@@ -3936,7 +3936,7 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 /* Ítem 6 — el próximo en salir: marco dorado exacto #FEC14D. */
 .hf-tile.hf-tile-next{outline:2px solid #FEC14D;outline-offset:-2px}
 /* Ítem 3 — racha de constancia debajo del perfil. */
-.hf-racha{font-size:13px;font-weight:700;color:#0A1E33;margin-top:8px}
+.hf-racha{font-size:13px;font-weight:700;color:#0A1E33;margin-top:8px;display:flex;align-items:center;gap:8px}
 @media (prefers-color-scheme: dark){
   /* (LOTE 13 · ítem 4) Racha legible sobre blanco también en modo oscuro. */
   .hf-racha{color:#0A1E33}
@@ -4246,6 +4246,11 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 /* (LOTE AVISO) Botón «i» de la cabecera: chiquito, en vidrio. */
 .hf-info-btn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;margin-left:8px;border-radius:50%;border:1px solid rgba(10,30,51,.16);background:rgba(255,255,255,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 2px 8px rgba(10,30,51,.14);color:#0a1e33;font-size:14px;font-weight:800;line-height:1;vertical-align:middle;cursor:pointer}
 .hf-info-btn:active{transform:scale(.92)}
+/* (LOTE «i»-RACHA) En la fila de la racha el gap flex ya separa texto y botón. */
+.hf-racha .hf-info-btn{margin-left:0}
+/* (LOTE «i»-RACHA · refinamiento) Sin racha, la fila es un solo botón: círculo «i» + etiqueta. */
+.hf-info-row{display:inline-flex;align-items:center;gap:8px;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
+.hf-info-row:active{transform:scale(.97)}
 .hf-pubinfo-line{margin:8px 0;color:#0a1e33;font-size:15px;line-height:1.5}
 /* ============ LOTE CHAT SIMPLE (2026-11-01) ============ */
 /* La hoja de Inicio abraza su contenido (sin vacío blanco enorme):
