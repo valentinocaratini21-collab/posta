@@ -50,7 +50,7 @@ ok(css.includes('.ana-verdict{background:#2793C8'), 'banner ana-verdict sigue s�
 ok(!/\.card\{[^}]*backdrop-filter/.test(block), 'ninguna regla .card global con vidrio (solo .card con ámbito: apv/ob/ads/st)');
 ok(!/(hf-d-media|apv-media|igmock-media|\.pcard|img)/.test(panelLine), 'ninguna foto ni mini-tarjeta en la lista de vidrio');
 ok(!blockRules.includes('scf-pop'), 'pop de semana .scf-pop NO tocado (preview transitorio, no pantalla)');
-ok(server.includes("const BUILD_ID = '20261101-v546'"), 'server.js sin tocar (BUILD v546 tras el bump de liberación (pin rotado desde v542 con causa: re-base a v545 + bump v546; el parche no toca server.js))');
+ok(server.includes("const BUILD_ID = '20261101-v547'"), 'server.js sin tocar (BUILD v546 tras el bump de liberación (pin rotado desde v546 con causa: re-base a v546 + bump v547; el parche no toca server.js))');
 
 console.log('— 6. Contraste re-medido (misma receta aprobada en Inicio) —');
 // Composición: panel .55 blanco sobre cada parada del degradado y sobre los glows.

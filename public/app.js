@@ -10341,6 +10341,7 @@ function weekCardHTML(d, o) {
   // en la tile; el creando (isPending) no es borrador accionable.
   const draftChipCard = (d.status === 'draft' && !isPending) ? `<span class="pz-draft-chip">${enW ? 'Draft' : 'Borrador'}</span>` : '';
   const carTrackHTML = isCar ? `<div class="hf-d-track">${carSlides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="" loading="lazy" data-lightbox="${esc(s)}" data-video="0" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}"></span>`).join('')}</div>` : '';
+  const carArrowsHTML = isCar ? `<button type="button" class="hf-d-arrow hf-d-arrow-prev" data-hf-car-arrow="-1" aria-label="${enW ? 'Previous photo' : 'Foto anterior'}" hidden>‹</button><button type="button" class="hf-d-arrow hf-d-arrow-next" data-hf-car-arrow="1" aria-label="${enW ? 'Next photo' : 'Foto siguiente'}">›</button>` : '';
   const carCountHTML = isCar ? `<span class="hf-d-count">1/${carSlides.length}</span>` : '';
   const carDotsHTML = isCar ? `<div class="hf-d-dots">${carSlides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : '';
   return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}${d.status === 'draft' && !isPending ? ' igmock-draft' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}" data-f3-status="${esc(String(d.status || ''))}" data-f3-appr="${esc(String(d.approval || ''))}">
@@ -10351,7 +10352,7 @@ function weekCardHTML(d, o) {
       ${isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
         : isCar
-          ? `<div class="igmock-media igmock-media-car">${carTrackHTML}${carCountHTML}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</div>${carDotsHTML}`
+          ? `<div class="igmock-media igmock-media-car">${carTrackHTML}${carArrowsHTML}${carCountHTML}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</div>${carDotsHTML}`
           : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}" aria-label="Ver posteo">${media}${(typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</button>`}
       ${foot}
       ${hfAskChangeBtnHTML(d)}
@@ -17971,7 +17972,7 @@ function hfDetailHTML(p, opts) {
     : isV
       ? `<video src="${esc(slides[0])}"${covD.has ? ` poster="${esc(covD.path)}"` : ''} autoplay muted loop playsinline></video>`
       : isCar
-        ? `<div class="hf-d-track">${slides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="" loading="lazy" onerror="__imgFb(this)"></span>`).join('')}</div><span class="hf-d-count">1/${slides.length}</span>`
+        ? `<div class="hf-d-track">${slides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="" loading="lazy" onerror="__imgFb(this)"></span>`).join('')}</div><button type="button" class="hf-d-arrow hf-d-arrow-prev" data-hf-car-arrow="-1" aria-label="${en ? 'Previous photo' : 'Foto anterior'}" hidden>‹</button><button type="button" class="hf-d-arrow hf-d-arrow-next" data-hf-car-arrow="1" aria-label="${en ? 'Next photo' : 'Foto siguiente'}">›</button><span class="hf-d-count">1/${slides.length}</span>`
         : `<img src="${esc(slides[0])}" alt="" onerror="__imgFb(this)">`;
   // (Tanda feed 6B · ítem 7) Overlay del recorte 3:4 dentro de la
   // media + su interruptor junto a ella: el cableado (delegado global
@@ -19942,6 +19943,7 @@ document.addEventListener('scroll', (e) => {
     card.querySelectorAll('.hf-d-dots i').forEach((dd, k) => dd.classList.toggle('on', k === i));
     const cnt = card.querySelector('.hf-d-count');
     if (cnt) { const n = t.children.length; cnt.textContent = Math.min(n, Math.max(0, i) + 1) + '/' + n; }
+    pzCarArrowSync(t);
   } catch (err) {}
 }, true);
 // (LOTE CARRUSEL-DETALLE · Valentino 2/11: en la capa no se desliza)
@@ -19963,6 +19965,62 @@ document.addEventListener('click', (e) => {
     for (let j = 0; j < dots.length; j++) { if (dots[j] === dot) { k = j; break; } }
     if (k < 0) return;
     track.scrollTo({ left: k * Math.max(1, track.clientWidth), behavior: 'smooth' });
+  } catch (err) {}
+});
+
+// (LOTE CARRUSEL-FLECHAS · Valentino 2/11: el swipe a veces no agarra en iOS)
+// Flechas ‹ › sobre los carruseles .hf-d-track (capa, detalle, aprobación):
+// tap avanza/retrocede un slide; puntitos y contador se sincronizan solos
+// porque el salto dispara los syncs por scroll existentes. Sin loop: en el
+// primer slide no hay flecha izquierda y en el último no hay derecha.
+// El gesto propio v543, los puntitos y el swipe quedan intactos.
+function pzCarArrowIdx(scrollLeft, width) {
+  try { return Math.round((scrollLeft || 0) / Math.max(1, width || 1)); } catch (e) { return 0; }
+}
+function pzCarArrowTarget(idx, count, dir) {
+  try { return Math.min(Math.max(0, count - 1), Math.max(0, idx + dir)); } catch (e) { return 0; }
+}
+function pzCarArrowHidden(idx, count) {
+  try { return { prev: idx <= 0, next: idx >= count - 1 }; } catch (e) { return { prev: true, next: true }; }
+}
+function pzCarArrowSync(track) {
+  try {
+    if (!track || !track.parentElement || !track.parentElement.querySelectorAll) return;
+    const n = track.children ? track.children.length : 0;
+    if (n < 2) return;
+    const h = pzCarArrowHidden(pzCarArrowIdx(track.scrollLeft, track.clientWidth), n);
+    track.parentElement.querySelectorAll('[data-hf-car-arrow]').forEach((b) => {
+      const d = b.getAttribute ? Number(b.getAttribute('data-hf-car-arrow')) : 0;
+      if (d < 0) b.hidden = h.prev;
+      else if (d > 0) b.hidden = h.next;
+    });
+  } catch (e) {}
+}
+function pzCarArrowStep(track, dir) {
+  try {
+    if (!track || !track.children || track.children.length < 2) return -1;
+    const w = Math.max(1, track.clientWidth || 1);
+    const idx = pzCarArrowIdx(track.scrollLeft, w);
+    const tgt = pzCarArrowTarget(idx, track.children.length, dir);
+    const reduced = (typeof pzReducedMotion === 'function' && pzReducedMotion());
+    if (typeof track.scrollTo === 'function') track.scrollTo({ left: tgt * w, behavior: reduced ? 'auto' : 'smooth' });
+    else track.scrollLeft = tgt * w;
+    pzCarArrowSync(track);
+    return tgt;
+  } catch (e) { return -1; }
+}
+document.addEventListener('click', (e) => {
+  try {
+    const btn = e.target && e.target.closest ? e.target.closest('[data-hf-car-arrow]') : null;
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const media = btn.parentElement;
+    const track = media ? media.querySelector('.hf-d-track') : null;
+    if (!track) return;
+    const dir = Number(btn.getAttribute('data-hf-car-arrow')) || 0;
+    if (dir !== -1 && dir !== 1) return;
+    pzCarArrowStep(track, dir);
   } catch (err) {}
 });
 
@@ -20450,6 +20508,7 @@ function hfDetailWire(ov, post, tile) {
       ov.querySelectorAll('.hf-d-dots i').forEach((d, k) => d.classList.toggle('on', k === i));
       const cnt = q('.hf-d-count');
       if (cnt) { const n = track.children.length; cnt.textContent = Math.min(n, Math.max(0, i) + 1) + '/' + n; }
+      pzCarArrowSync(track);
     }, { passive: true });
   }
   // Reel: tocar el video lo pausa o lo sigue (como IG), sin cerrar.
@@ -21988,7 +22047,7 @@ async function approvalPostView(id) {
   const apvMediaInner = isVideo
     ? `<video src="${esc(p.image_path)}" controls playsinline preload="metadata"></video>`
     : apvIsCar
-      ? `<div class="hf-d-track">${apvSlides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="Posteo" loading="lazy" data-lightbox="${esc(s)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''} onerror="__imgFb(this)"></span>`).join('')}</div><span class="hf-d-count">1/${apvSlides.length}</span>`
+      ? `<div class="hf-d-track">${apvSlides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="Posteo" loading="lazy" data-lightbox="${esc(s)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''} onerror="__imgFb(this)"></span>`).join('')}</div><button type="button" class="hf-d-arrow hf-d-arrow-prev" data-hf-car-arrow="-1" aria-label="${en ? 'Previous photo' : 'Foto anterior'}" hidden>‹</button><button type="button" class="hf-d-arrow hf-d-arrow-next" data-hf-car-arrow="1" aria-label="${en ? 'Next photo' : 'Foto siguiente'}">›</button><span class="hf-d-count">1/${apvSlides.length}</span>`
       : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager" data-lightbox="${esc(p.image_path)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''}>`;
   const media = p.image_path
     ? `<div class="apv-media">${apvMediaInner}</div>${apvIsCar ? `<div class="hf-d-dots">${apvSlides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}`
@@ -22177,6 +22236,7 @@ function bindApprovalPost() {
       if (apvDots) apvDots.querySelectorAll('i').forEach((d, k) => d.classList.toggle('on', k === i));
       const cnt = document.querySelector('.apv-media .hf-d-count');
       if (cnt) { const n = apvTrack.children.length; cnt.textContent = Math.min(n, Math.max(0, i) + 1) + '/' + n; }
+      pzCarArrowSync(apvTrack);
     }, { passive: true });
   }
   // (LOTE 17) El mini-chat de esta vista también rota su placeholder.

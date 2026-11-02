@@ -4375,3 +4375,14 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .sched-col, .bb-bcard, .bb-bloque:not(.bb-bloque-top), .bb-libre, .apv-wrap .card, .hf-dcard, .form-card, .st-card, .st-wrap .card, .ob-wrap .card, .ads-wrap .card, .ads-wrap .ads-rec, #adminCard{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
 .sched-col.today{border:2px solid var(--cel);box-shadow:0 8px 24px rgba(39,147,200,.20)}
 .mz-tabs{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border-top:1px solid rgba(255,255,255,.75)}
+
+/* (LOTE CARRUSEL-FLECHAS · Valentino 2/11: el swipe a veces no agarra en iOS)
+   Flechas ‹ › sobre los carruseles .hf-d-track (capa, detalle, aprobación):
+   círculo blanco opaco para que se vea sobre fotos claras y oscuras, zona
+   de toque 36px, centradas verticalmente. Sin loop: la flecha del extremo
+   se esconde con hidden. Los 3 contenedores ya son position:relative
+   (.igmock-media, .hf-d-media, .apv-media), no se toca nada de ellos. */
+.hf-d-arrow{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.94);border:1px solid rgba(0,0,0,.12);box-shadow:0 2px 8px rgba(0,0,0,.28);color:#0A1E33;font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;padding:0}
+.hf-d-arrow-prev{left:8px}
+.hf-d-arrow-next{right:8px}
+.hf-d-arrow[hidden]{display:none}
