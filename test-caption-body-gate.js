@@ -381,5 +381,24 @@ ok('control: pasiva "se elige" tras emoji pasa', () => {
   assert.strictEqual(chk.ok, true, chk.reason);
 });
 
+console.log('== (q) Variante femenina del cliché: «no te la podés perder» (id 529 real, 2026-11-01) ==');
+ok('id 529 real: «No te la podés perder, ¡es nuestra última creación!» se rechaza por frase quemada', () => {
+  const cap = 'La torta del día ya está lista 🍰\nEn Café Aroma no solo servimos café de especialidad, también traemos una delicia distinta cada jornada. No te la podés perder, ¡es nuestra última creación!\nPasá por el local o escribime para saber qué increíble sabor tenemos hoy. Te espero en Palermo.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/frase quemada/i.test(chk.reason), chk.reason);
+});
+ok('variante: «no te la podés perder» en otra oración también se rechaza', () => {
+  const cap = 'El brunch del sábado ya está en la mesa.\nNo te la podés perder: medialunas de la casa y café de especialidad para dos.\nReservá tu mesa por DM y venite a probarlo.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/frase quemada/i.test(chk.reason), chk.reason);
+});
+ok('control: la reescritura concreta del 529 pasa (dato en vez de cliché)', () => {
+  const cap = 'La torta del día ya está lista 🍰\nEn Café Aroma cada día sale una torta distinta del horno, además del café de especialidad.\nPasá por el local y probá la de hoy antes de que se acabe. Te espero en Palermo.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

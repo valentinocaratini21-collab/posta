@@ -575,6 +575,7 @@ const BANNED_PHRASES = [
   'a otro nivel',
   'a la manana fuerte', // TIC REAL 2026-10-25 (cuenta 84, ids 506/508/480): fragmento frontado, no es español natural — la forma humana es "para arrancar fuerte la mañana". OJO: la lista se matchea SIN acentos (captionPasses normaliza el caption a NFD y pela diacríticos), así que la entrada va SIN ñ: con 'mañana' nunca matchearía.
   'no te lo podes perder',
+  'no te la podes perder', // VARIANTE FEMENINA (Juli, 2026-11-02 — id 529 real, cuenta 84, 2026-11-01: "No te la podés perder, ¡es nuestra última creación!" pasaba captionPasses limpio porque el banco solo tenía la forma masculina "lo"): cambiar el género no cambia el cliché — es el mismo CTA vacío. Entrada SIN acentos, como toda la lista (match NFD).
   'no te lo pierdas',
   'sumergite',
   'descubri el poder de',
