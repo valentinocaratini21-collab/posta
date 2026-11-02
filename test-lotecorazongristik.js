@@ -36,7 +36,7 @@ ok(!app.includes('pzScrollATile') && !app.includes('pzRenderYScroll') && !app.in
 ok(app.includes("const tikSpan = hfAprobado ? '<span class=\"hf-tik"), 'tikSpan en homeTileHTML');
 ok(app.includes("(typeof pzAprobadoEs === 'function')"), 'guardia typeof: harnesses viejos no rompen');
 ok(app.includes("${likeInStrip ? '' : likeBtn}${tikSpan}</span></span>`;"), 'tik DESPUÉS del botón/slot, hijo de la tile (CORAZÓN-EN-LÍNEA 2/11: con chapita el botón vive en la franja y el slot queda vacío; el tik sigue cerrando la tile, arriba-izquierda)');
-ok(app.includes("${glyph}${despChip}${likeInStrip ? '' : likeBtn}"), 'prefijo despChip+botón intacto (CORAZÓN-EN-LÍNEA 2/11: sin chapita el botón sigue hijo directo tras despChip; con chapita vive en la franja)');
+ok(app.includes("${glyph}${despChip}${talkBtn}${likeInStrip ? '' : likeBtn}"), 'prefijo despChip+botón intacto (CORAZÓN-EN-LÍNEA 2/11: sin chapita el botón sigue hijo directo tras despChip; con chapita vive en la franja; HABLAR 2/11: el botón 💬 precede al corazón, la regla no cambia)');
 ok(css.includes('.hf-tik{') && css.includes('background:#1FA855') && css.includes('top:6px') && css.includes('left:6px'), 'CSS tik verde arriba-izquierda');
 ok(cnt(app, '!pzAprobarEnSitio(tile, id') === 2, 'salida en-sitio 2 veces (scheduled + draft-ok)');
 ok(cnt(app, "typeof pzAprobarEnSitio === 'function'") === 2, 'guardia en las 2 salidas: sin helper, igual renderiza (fallback)');

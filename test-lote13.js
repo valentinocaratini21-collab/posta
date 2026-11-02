@@ -38,7 +38,7 @@ t(stripChip.includes('overflow:hidden'), 'chip overflow hidden');
 t(stripChip.includes('text-overflow:clip'), 'chip clip, no ellipsis (LOTE CORAZÓN: el día se lee entero)');
 const stripLike = ruleBody(css, '.hf-strip .hf-like-in{');
 t(css.includes('.hf-tile.hf-has-chip > .hf-strip .hf-like-in{position:static'), 'corazón EN franja solo con chapita (CORAZÓN-EN-LÍNEA 2/11, Valentino: en la misma línea que día+hora)');
-t(app.includes('${despChip}${likeInStrip ? \'\' : likeBtn}'), 'corazón hijo directo SOLO sin chapita (CORAZÓN-EN-LÍNEA 2/11; con chapita va en la franja)');
+t(app.includes('${despChip}${talkBtn}${likeInStrip ? \'\' : likeBtn}'), 'corazón hijo directo SOLO sin chapita (CORAZÓN-EN-LÍNEA 2/11; con chapita va en la franja; HABLAR 2/11: el botón 💬 precede al corazón, la regla no cambia)');
 const likeBase = ruleBody(css, '.hf-like{');
 t(likeBase.includes('width:34px') && likeBase.includes('height:34px'), 'corazón 34×34 usable');
 

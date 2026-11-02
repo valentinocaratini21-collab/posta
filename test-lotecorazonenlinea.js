@@ -25,7 +25,7 @@ ok(css.includes('LOTE CORAZÓN-EN-LÍNEA'), 'marca del lote en styles.css');
 ok(app.includes('const likeBtn = `<button type="button" class="hf-like hf-like-in"'), 'likeBtn: un único botón, misma clase literal');
 ok(app.includes('const likeInStrip = !!chipTxt;'), 'likeInStrip = hay chapita');
 ok(app.includes('<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : \'\'}</span>'), 'con chapita: botón DENTRO de la franja');
-ok(app.includes('${despChip}${likeInStrip ? \'\' : likeBtn}'), 'sin chapita: botón hijo directo (posición abajo intacta)');
+ok(app.includes('${despChip}${talkBtn}${likeInStrip ? \'\' : likeBtn}'), 'sin chapita: botón hijo directo (posición abajo intacta; HABLAR 2/11: el botón 💬 precede al corazón, la regla no cambia)');
 ok(app.includes("${chipTxt ? ' hf-has-chip' : ''}"), 'tile con chapita lleva hf-has-chip');
 ok(cnt(app, 'class="hf-like hf-like-in"') === 1, 'un único botón corazón (sin duplicados)');
 ok(!srv.includes('LOTE CORAZÓN-EN-LÍNEA'), 'server.js sin tocar por este lote');

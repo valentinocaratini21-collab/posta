@@ -11227,13 +11227,14 @@ function bindScfMinis(root) {
     // se disuelve para que el corazón quede clickeable. El pop fijado
     // explícitamente no se toca.
     w.addEventListener('mousemove', (e) => {
-      if (e.target && e.target.closest && e.target.closest('.hf-strip, [data-hf-like]')) {
+      if (e.target && e.target.closest && (e.target.closest('.hf-strip, [data-hf-like]') || e.target.closest('[data-hf-chat]'))) {
         if (t) { clearTimeout(t); t = null; }
         if (SCF_POP && SCF_POP.wrap === w && !SCF_PINNED) scfClosePop();
       }
     });
     w.addEventListener('click', (e) => {
       if (e.target.closest && e.target.closest('[data-hf-like]')) return; // (LOTE 11) el corazón lo maneja hfLikeBind, no la capa
+      if (e.target.closest && e.target.closest('[data-hf-chat]')) return; // (LOTE HABLAR-DE-ESTE-POSTEO) el botón 💬 lo maneja hfChatBtnBind, no la capa
       if (e.target.closest('.scf-pop')) {
         // Click sobre la propia capa: queda FIJADA.
         SCF_PINNED = true;
@@ -17374,6 +17375,11 @@ function hfAnchorBarHTML(p, en) {
   if (!p || p.id === null || p.id === undefined) return '';
   const thumb = p.image_path ? `<img class="hf-anchor-thumb" src="${esc(mv(p.image_path, 240))}" alt="" onerror="__imgFb(this)">` : '<span class="hf-anchor-thumb hf-anchor-ph">' + pzIc('sparkle', 18) + '</span>';
   const redo = hfRedoLineHTML(p, en);
+  // (LOTE HABLAR-DE-ESTE-POSTEO) La tarjeta de contexto lleva foto +
+  // TEXTO: el caption real del posteo, recortado, escapado. Sin
+  // caption no hay línea (la tarjeta queda como hoy).
+  const capT = String(p.caption || '').trim();
+  const capLine = capT ? `<div class="hf-anchor-cap">${esc(capT.slice(0, 140))}</div>` : '';
   const redoBtn = (hfRedoLeft(p) === 0)
     ? `<button type="button" class="hf-chipq" data-hf-chipq="redo" disabled>${en ? 'Redo' : 'Rehacer'}</button>`
     : `<button type="button" class="hf-chipq" data-hf-chipq="redo">${en ? 'Redo' : 'Rehacer'}</button>`;
@@ -17381,6 +17387,7 @@ function hfAnchorBarHTML(p, en) {
     ${thumb}
     <div class="hf-anchor-main">
       <div class="hf-anchor-t">${en ? 'Editing this post' : 'Editando este posteo'}</div>
+      ${capLine}
       ${redo}
       <div class="hf-anchor-chips">
         <button type="button" class="hf-chipq" data-hf-chipq="photo">${en ? 'Change the photo' : 'Cambiar la foto'}</button>
@@ -17845,7 +17852,8 @@ function homeTileHTML(t, i) {
     ? `<span class="hf-chip"><span class="hf-chip-ico">${pzIc('clock', 12)}</span><span class="hf-chip-day">${esc(chipParts.day)}</span><span class="hf-chip-hm"> · ${esc(chipParts.hm)}</span></span>`
     : `<span class="hf-chip">${pzIc('clock', 12)} ${esc(chipTxt)}</span>`) : '';
   // (Corrección grilla 2026-10-25, Valentino — «sacar el icono del
-  // chat»): la grilla NO lleva botón de chat. El chat vive DENTRO del
+  // chat»): la grilla NO lleva botón de chat.
+  // (LOTE HABLAR-DE-ESTE-POSTEO 2/11: decisión nueva de Valentino — el botón 💬 vuelve a la tile, ver talkBtn abajo.) El chat vive DENTRO del
   // post abierto en grande: el detalle trae el mini-chat «Pedir un
   // cambio» (hfAskChangeBtnHTML), que abre el chat ÚNICO con el posteo
   // anclado. Tocar una tile abre siempre el detalle.
@@ -17890,6 +17898,18 @@ function homeTileHTML(t, i) {
   // ('pending' vs 'approved'): programar desde el corazón YA deja
   // el posteo en la agenda, y esa es la marca que se espera ver.
   const hfLikeOn = String(p.status) === 'scheduled' || String(p.status) === 'published';
+  // (LOTE HABLAR-DE-ESTE-POSTEO · 2/11 · aprobado por Valentino) Botón
+  // 💬 en la tile: un toque abre el chat principal con este posteo
+  // anclado (foto + texto). Solo posteos ajustables del dueño
+  // (programado/borrador con imagen): nunca visitante, IG, publicado
+  // ni archivado. Abajo a la IZQUIERDA sobre la foto, espejo del
+  // corazón: arriba-derecha vive el glifo, abajo-derecha el corazón
+  // (v545) y el tik (gris-tik), y la chapita ocupa toda la fila
+  // inferior — la izquierda sobre la foto es el único rincón libre
+  // en todas las configuraciones (incluida corazón-en-línea, que
+  // mueve el corazón a la fila de la chapita).
+  const pzTalkOk = !t.visitor && !t.archivedExt && (p.status === 'draft' || p.status === 'scheduled') && !!p.image_path;
+  const talkBtn = pzTalkOk ? `<button type="button" class="hf-tile-chat" data-hf-chat="${esc(String(p.id))}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Talk about this post' : 'Hablar de este posteo'}" title="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Talk about this post' : 'Hablar de este posteo'}">${pzIc('chat', 18)}</button>` : '';
   // (LOTE CORAZÓN-EN-LÍNEA · decisión Valentino 2/11: el corazón va MÁS
   // CHIQUITO y EN LA MISMA LÍNEA del día y la hora. Con chapita vive
   // DENTRO de la franja (.hf-strip), en la misma fila que día+hora; sin
@@ -17907,7 +17927,7 @@ function homeTileHTML(t, i) {
   // bundle siempre está definido).
   const hfAprobado = (String(p.status) === 'draft' || String(p.status) === 'scheduled') && (typeof pzAprobadoEs === 'function') && pzAprobadoEs(p.id);
   const tikSpan = hfAprobado ? '<span class="hf-tik" aria-hidden="true">✓</span>' : '';
-  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${likeInStrip ? '' : likeBtn}${tikSpan}</span></span>`;
+  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : likeBtn}${tikSpan}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -18304,6 +18324,7 @@ function hfDetailHTML(p, opts) {
   }
   const bar = o.visitor ? '' : `<div class="hf-d-bar">
       <button type="button" class="hf-d-act" data-hfd-act="comment" aria-label="${en ? 'Ask Posty for a change' : 'Pedirle un cambio a Posty'}">${HF_D_COMMENT}<span class="hf-d-lbl">${en ? 'Ask for change' : 'Pedir cambio'}</span></button>
+      ${(String(p.status) === 'draft' || String(p.status) === 'scheduled') && p.image_path ? `<button type="button" class="hf-d-act" data-hfd-act="talk" aria-label="${en ? 'Talk about this post' : 'Hablar de este posteo'}">${pzIc('chat', 18)}<span class="hf-d-lbl">${en ? 'Talk about this post' : 'Hablar de este posteo'}</span></button>` : ''}
       <button type="button" class="hf-d-act" data-hfd-act="share" aria-label="${en ? 'Share' : 'Compartir'}">${HF_D_SHARE}<span class="hf-d-lbl">${en ? 'Share' : 'Compartir'}</span></button>
       <button type="button" class="hf-d-act hf-d-eye" data-hfd-act="followers" aria-label="${en ? 'See it in the feed' : 'Ver en el inicio'}">${pzIc('eye', 18)}<span class="hf-d-lbl">${en ? 'See in feed' : 'Ver en el inicio'}</span></button>
       <span class="hf-d-sp"></span>
@@ -19596,6 +19617,7 @@ function hfFeedGesturesBind(root) {
       if (tPeek) { clearTimeout(tPeek); tPeek = null; }
     };
     tile.addEventListener('pointerdown', (e) => {
+      if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (LOTE HABLAR-DE-ESTE-POSTEO) el botón 💬 no arma hold/peek/arrastre
       sx = e.clientX || 0; sy = e.clientY || 0;
       pDown = true; holdFired = false; dragArmed = false; dragging = false;
       HF_GESTURE_ACTIVE = true;
@@ -20858,6 +20880,16 @@ function hfDetailWire(ov, post, tile) {
       if (name === 'like' && on) { try { pzSonido('aprobar'); } catch (e) {} }
       return;
     }
+    if (name === 'talk') {
+      // (LOTE HABLAR-DE-ESTE-POSTEO) Hablar de este posteo: cierra
+      // el detalle y abre el chat principal con el posteo anclado
+      // (foto + texto en la tarjeta). No toca el mini-chat ni el
+      // «Pedir cambio» (que abre el editor de texto).
+      const postT = post;
+      hfDetailClose();
+      pzHablarDePosteo(postT);
+      return;
+    }
     if (name === 'comment') {
       // Editar comentando: el flujo vigente de edición en el feed.
       const t = tile; const id = post.id;
@@ -21155,6 +21187,11 @@ function hfDetailBind(root) {
     // (hfLikeBind). Sin este guard, el capture de este listener se
     // comería el click antes de llegar al botón.
     if (e.target && e.target.closest && e.target.closest('[data-hf-like]')) return;
+    // (LOTE HABLAR-DE-ESTE-POSTEO) El toque en el botón 💬 NO es un
+    // toque en la tile: se deja pasar al handler del botón
+    // (hfChatBtnBind). Sin este guard, el capture se comería el click
+    // antes de llegar al botón (igual que pasaba con el corazón).
+    if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return;
     // Solo táctil: en escritorio manda el flujo vigente (hover que
     // agranda + click que fija la tarjeta del cofre). La supresión
     // del click tras un press-and-hold corre antes (captura previa).
@@ -21570,6 +21607,77 @@ async function hfRedoPost(id) {
   }
   toast((en ? 'Could not redo it: ' : 'No se pudo rehacer: ') + ((r && r.error) || ''));
 }
+// (LOTE HABLAR-DE-ESTE-POSTEO · 2/11 · aprobado por Valentino)
+// «Hablar de este posteo»: un toque en cualquier posteo ajustable
+// abre el chat PRINCIPAL con ese posteo pegado arriba como contexto
+// (foto + texto de la tarjeta de anclaje). Sin copiar ni pegar.
+// El ajuste viaja por el camino vigente: hfSetAnchor → chatExchange
+// manda anchor_post_id → el servidor pone ese posteo primero en el
+// contexto y los edits del modelo caen sobre ÉL, nunca sobre la
+// semana entera. Quitar la tarjeta (✕) deja el chat exactamente
+// como hoy (hfSetAnchor(null) → sin anchor_post_id). La nota de voz
+// hereda el contexto: voiceSend → chatExchange con el mismo
+// anchor_post_id (el extra {audio} no lo pisa).
+function pzHablarAjustable(p) {
+  if (!p || p.id == null) return false;
+  const st = String(p.status || '');
+  return (st === 'draft' || st === 'scheduled') && !!p.image_path;
+}
+async function pzHablarResolver(id) {
+  if (id == null) return null;
+  try {
+    const t = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES.find((x) => x && x.kind === 'post' && x.post && String(x.post.id) === String(id)) : null;
+    if (t && t.post) return t.post;
+  } catch (e) {}
+  try {
+    const r = (typeof HF_ASK_POSTS !== 'undefined' && HF_ASK_POSTS) ? HF_ASK_POSTS[String(id)] : null;
+    if (r) return r;
+  } catch (e) {}
+  try {
+    const posts = await api.get('/api/posts');
+    const f = (Array.isArray(posts) ? posts : []).find((x) => String(x.id) === String(id));
+    if (f) return f;
+  } catch (e) {}
+  return null;
+}
+function pzHablarDePosteo(post) {
+  if (!post || post.id == null) return;
+  try { scfClosePop(); } catch (e) {}
+  try { hfDetailClose(); } catch (e) {}
+  try { pcCloseSheet(); } catch (e) {}
+  const hadChat = !!(document.getElementById('mzSheet') || document.getElementById('chatCard'));
+  hfOpenChatForPost(post);
+  if (!hadChat) {
+    HF_CHAT_OPEN_PENDING = true;
+    if ((location.hash || '').split('?')[0] !== mzHomeHash()) location.hash = mzHomeHash();
+    else { try { render(); } catch (e) {} }
+  }
+}
+async function pzHablarClick(id) {
+  const post = await pzHablarResolver(id);
+  if (!post) {
+    const en = (typeof hfIsEn === 'function') ? hfIsEn() : false;
+    try { toast(en ? "I couldn't find that post" : 'No encontré ese posteo'); } catch (e) {}
+    return;
+  }
+  pzHablarDePosteo(post);
+}
+// Binder del 💬 de la tile: delegado global, una sola vez (las tiles
+// se reemplazan con el parcheo en vivo; el id se resuelve en el
+// click, nunca queda viejo). El click NO abre el detalle: los guards
+// de bindScfMinis y hfDetailBind dejan pasar el botón, y acá se
+// corta la propagación.
+(function hfChatBtnBind() {
+  if (window.__pzHablarBound) return;
+  window.__pzHablarBound = true;
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('[data-hf-chat]') : null;
+    if (!b) return;
+    e.stopPropagation();
+    e.preventDefault();
+    pzHablarClick(b.dataset.hfChat);
+  });
+})();
 function hfOpenChatForPost(post) {
   if (!post) return;
   hfSetAnchor(post);
@@ -22523,6 +22631,7 @@ function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
   const id = esc(String(p.id));
   let b = '';
   b += `<button class="apv-sec-btn apv-like" data-apvid="${id}" aria-label="${en ? 'Approve' : 'Aprobar'}">${pzIc('heart', 20)}<span>${en ? 'Approve' : 'Aprobar'}</span></button>`;
+  if ((st === 'draft' || st === 'scheduled') && p.image_path) b += `<button class="apv-sec-btn" id="apvTalk" data-apvid="${id}" aria-label="${en ? 'Talk about this post' : 'Hablar de este posteo'}">${pzIc('chat', 20)}<span>${en ? 'Talk about this post' : 'Hablar de este posteo'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvEdit" data-apvedit="${esc(editPrompt || '')}">${pzIc('pencil', 20)}<span>${en ? 'Edit' : 'Editar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvReject">${pzIc('reject', 20)}<span>${en ? 'Reject' : 'Rechazar'}</span></button>`;
   if (st === 'scheduled') b += `<button class="apv-sec-btn" id="apvHold" data-apvid="${id}">⏸<span>${en ? 'Hold' : 'Frenar'}</span></button>`;
@@ -22574,6 +22683,10 @@ function bindApprovalPost() {
     try { sessionStorage.setItem('posty-chat-prefill', ed.dataset.apvedit || 'Quiero editar ese posteo'); } catch (e) {}
     location.hash = '#/app/chat';
   };
+  // (LOTE HABLAR-DE-ESTE-POSTEO) Hablar de este posteo desde la
+  // aprobación: un toque abre el chat principal con el posteo anclado.
+  const tk = document.getElementById('apvTalk');
+  if (tk) tk.onclick = () => pzHablarClick(tk.dataset.apvid);
   // (v326) Aceptar un BORRADOR desde el detalle: mismo gate de Instagram y
   // mismo flujo PATCH (programar en su horario) que el Aceptar de la Agenda.
 

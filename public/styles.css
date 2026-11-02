@@ -2091,6 +2091,8 @@ body.hf-d-open{overflow:hidden}
 .hf-anchor-ph{display:flex;align-items:center;justify-content:center;font-size:20px}
 .hf-anchor-main{flex:1;min-width:0}
 .hf-anchor-t{font-size:13.5px;font-weight:700}
+/* (LOTE HABLAR-DE-ESTE-POSTEO) Texto del posteo en la tarjeta de contexto: 2 líneas como máximo. */
+.hf-anchor-cap{font-size:12px;line-height:1.45;color:var(--mut);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .hf-anchor-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
 .hf-chipq{border:1.5px solid #BFDDF0;background:#fff;color:#0A1E33;border-radius:999px;padding:6px 10px;font-size:12.5px;font-weight:600;cursor:pointer}
 .hf-chipq:disabled{opacity:.45;cursor:default}
@@ -4153,6 +4155,13 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-tile > .hf-like-in{position:absolute;bottom:38px;right:6px;z-index:5;background:transparent;border-color:transparent;color:#0A1E33;box-shadow:none}
 .hf-tile > .hf-like-in::before{content:"";position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);z-index:-1;border-radius:50%;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 1px 6px rgba(10,30,51,.25)}
 .hf-tile > .hf-like-in .pz-ic svg{filter:drop-shadow(0 0 2px rgba(255,255,255,.9)) drop-shadow(0 1px 2px rgba(10,30,51,.35))}
+/* (LOTE HABLAR-DE-ESTE-POSTEO) Botón 💬 de la tile: espejo del corazón
+   en vidrio (círculo 26px visible, zona de toque 34px), abajo a la
+   izquierda sobre la foto. */
+.hf-tile-chat{position:absolute;left:6px;bottom:38px;z-index:5;width:34px;height:34px;border-radius:50%;border:1px solid transparent;background:transparent;color:#0A1E33;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.hf-tile-chat::before{content:"";position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);z-index:-1;border-radius:50%;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 1px 6px rgba(10,30,51,.25)}
+.hf-tile-chat:active{transform:scale(.9)}
+.hf-tile-chat .pz-ic svg{filter:drop-shadow(0 0 2px rgba(255,255,255,.9)) drop-shadow(0 1px 2px rgba(10,30,51,.35))}
 /* (LOTE CORAZÓN-MARCA) Corazón lleno persistente en posteos programados/publicados: relleno celeste Posty, como Instagram. */
 .hf-like[data-hf-on="1"] svg{fill:#2793C8;stroke:#2793C8}
 
