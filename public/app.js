@@ -19956,6 +19956,100 @@ document.addEventListener('click', (e) => {
     track.scrollTo({ left: k * Math.max(1, track.clientWidth), behavior: 'smooth' });
   } catch (err) {}
 });
+
+// (LOTE CARRUSEL GESTO PROPIO · Valentino 2/11: en iOS sigue sin deslizar)
+// v538 (pan-x + puntitos) no alcanzó en WKWebView: el track vive dentro
+// de una tarjeta que scrollea en vertical (.scf-pop .igmock en la capa,
+// .hf-dback en el detalle, scroll de página en la aprobación) y la
+// desambiguación del gesto la sigue ganando el vertical. Este handler
+// decide la dirección en los primeros píxeles: si el movimiento
+// horizontal domina, toma el gesto (preventDefault en touchmove,
+// scrollLeft manual, snap al soltar); si domina el vertical, NO
+// interviene y la tarjeta scrollea como siempre. Sin cambios de CSS:
+// el pan-x de v538 queda. Delegado global sobre .hf-d-track: cubre
+// tarjeta (.igmock), detalle (.hf-dcard) y aprobación (.apv-wrap) con
+// el mismo patrón y sin tocar sus cableados — sus syncs por scroll
+// siguen actualizando puntitos y contador solos. Tap sin arrastre =
+// click normal (abre el lightbox en tarjeta/aprobación); tras un
+// arrastre, el click que sigue se suprime para no abrir la foto por
+// accidente. Desktop intacto: solo eventos táctiles; rueda y puntitos
+// siguen como siempre.
+function pzCarGestDecide(dx, dy) {
+  try {
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    if (ax > 10 && ax > ay) return 1;
+    if (ay > 10 && ay >= ax) return 2;
+    return 0;
+  } catch (e) { return 0; }
+}
+function pzCarGestSnap(scrollLeft, width, count, reduced) {
+  try {
+    const w = Math.max(1, width || 1);
+    const n = Math.max(1, count || 1);
+    const i = Math.min(n - 1, Math.max(0, Math.round(scrollLeft / w)));
+    return { left: i * w, behavior: reduced ? 'auto' : 'smooth' };
+  } catch (e) { return { left: 0, behavior: 'auto' }; }
+}
+const PZ_CAR_GEST = { track: null, id: null, x0: 0, y0: 0, sl0: 0, dir: 0, sup: null };
+document.addEventListener('touchstart', (e) => {
+  try {
+    const t = e.target && e.target.closest ? e.target.closest('.hf-d-track') : null;
+    if (!t) return;
+    if (!e.touches || e.touches.length !== 1) return;
+    if (!t.children || t.children.length < 2) return;
+    if (t.scrollWidth <= t.clientWidth + 1) return;
+    const f = e.changedTouches && e.changedTouches[0];
+    if (!f) return;
+    PZ_CAR_GEST.track = t; PZ_CAR_GEST.id = f.identifier;
+    PZ_CAR_GEST.x0 = f.clientX; PZ_CAR_GEST.y0 = f.clientY;
+    PZ_CAR_GEST.sl0 = t.scrollLeft; PZ_CAR_GEST.dir = 0;
+  } catch (err) {}
+}, { passive: true });
+document.addEventListener('touchmove', (e) => {
+  try {
+    const g = PZ_CAR_GEST;
+    if (!g.track || g.dir === 2) return;
+    const f = e.changedTouches && e.changedTouches[0];
+    if (!f || (g.id !== null && f.identifier !== g.id)) return;
+    const dx = f.clientX - g.x0, dy = f.clientY - g.y0;
+    if (g.dir === 0) {
+      const d = pzCarGestDecide(dx, dy);
+      if (d === 2) { g.dir = 2; return; }
+      if (d !== 1) return;
+      g.dir = 1;
+    }
+    e.preventDefault();
+    g.track.scrollLeft = g.sl0 - dx;
+  } catch (err) {}
+}, { passive: false });
+function pzCarGestFinish(doSnap) {
+  try {
+    const g = PZ_CAR_GEST;
+    const t = g.track, wasDir = g.dir;
+    g.track = null; g.id = null; g.dir = 0;
+    if (!t || wasDir !== 1) return;
+    if (!doSnap) return;
+    const s = pzCarGestSnap(t.scrollLeft, t.clientWidth, t.children ? t.children.length : 1, (typeof pzReducedMotion === 'function' && pzReducedMotion()));
+    t.scrollTo(s);
+    g.sup = { track: t, until: Date.now() + 500 };
+  } catch (err) {}
+}
+document.addEventListener('touchend', () => { try { pzCarGestFinish(true); } catch (e) {} }, { passive: true });
+document.addEventListener('touchcancel', () => { try { pzCarGestFinish(false); } catch (e) {} }, { passive: true });
+document.addEventListener('click', (e) => {
+  try {
+    const g = PZ_CAR_GEST;
+    if (!g.sup) return;
+    if (Date.now() >= g.sup.until) { g.sup = null; return; }
+    const t = e.target;
+    if (t && g.sup.track.contains && g.sup.track.contains(t)) {
+      g.sup = null;
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  } catch (err) {}
+}, true);
+
 /* ===== (Tanda feed 6B · ítem 4) ESPEJO VIVO =====
    Con el home abierto y visible, cada ~50 s (y al volver la pestaña
    a visible/foco) se re-lee el MISMO payload que compone la grilla
