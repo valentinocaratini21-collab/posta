@@ -147,7 +147,7 @@ t(cnt(app, 'let PZ_VIEW_KEY') === 1, 'sin duplicados: PZ_VIEW_KEY 1');
   t(css.includes('linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)'), 'G: fondo degradado suave celeste → dorado');
   t(css.includes('#inicioView .mx-tira-jardin.mx-tira-posty{background:rgba(255,255,255,.55)'), 'G: tira de vidrio');
   t(css.includes('#inicioView .mx-port-top{margin:10px 12px 14px}'), 'G: tira flotante separada del feed');
-  t(css.includes('#inicioView .hf-head{background:rgba(255,255,255,.55)'), 'G: cabecera de vidrio');
+  t(css.includes('#inicioView .hf-head{background:rgba(255,255,255,.40)'), 'G: cabecera de vidrio .40 (decisión Valentino 1/11 21:52 opción ii: SOLO la tarjeta baja a .40; tira/botones/chat/tab-bar quedan en .55 — supersede la uniformidad v519 para la cabecera)');
   t(css.includes('#inicioView .hf-pacts .hf-pmain{background:rgba(255,255,255,.55)'), 'G: botones de vidrio');
   t(css.includes('#inicioView .mz-chatbar{background:rgba(255,255,255,.55)'), 'G: chat de vidrio');
   t(css.includes('.bb-app.bb-glass-inicio .bb-bar{background:rgba(255,255,255,.55)'), 'G: tab bar de vidrio solo en Inicio');

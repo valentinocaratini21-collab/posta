@@ -4185,7 +4185,7 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 #inicioView.hf-wrap{background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.28),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(254,193,77,.35),rgba(254,193,77,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
 #inicioView .mx-port-top{margin:10px 12px 14px}
 #inicioView .mx-tira-jardin.mx-tira-posty{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
-#inicioView .hf-head{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10);border-radius:22px;margin:0 12px;padding:16px}
+#inicioView .hf-head{background:rgba(255,255,255,.40);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10);border-radius:22px;margin:0 12px;padding:16px}
 #inicioView .hf-pacts .hf-pmain{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
 #inicioView .hf-tabs{background:transparent}
 #inicioView .hf-grid{background:transparent}
