@@ -74,7 +74,7 @@ function sandbox(extra) {
     t(fs.existsSync(path.join(__dirname, 'public', f)), 'B: asset en árbol ' + f);
   }
   const postyBranch = app.slice(app.indexOf("if (tipo === 'posty') {"), app.indexOf('function mxJardinErrorHTML'));
-  t(/mxHeroJardin\(mxNvNum\(nvP\)\)/.test(postyBranch), 'B: el hero del jardín sale de mxHeroJardin');
+  t(/pz-ropa-panel/.test(postyBranch) && /pzRopaAvatarHTML/.test(postyBranch), 'B: el jardín nuevo es avatar + guardarropa'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): hero de imagen fuera
   t(!/mxFotoJardin/.test(postyBranch), 'B: el hero ya NO es la última foto publicada (ahí se colaba la promo con la cara)');
   t(!/onerror="[^"]*ai-avatar/.test(postyBranch), 'B: el hero no tiene fallback al avatar (LOTE 15: la cara de Posty vive como overlay, no como fallback)');
   t(/onerror="this\.closest\('.mx-etapa'\)\.remove\(\)"/.test(app), 'B (LOTE JARDÍN): si un visual del mosaico falla, se quita esa etapa sin fallback');
@@ -85,7 +85,7 @@ function sandbox(extra) {
   const postyBranch = app.slice(app.indexOf("if (tipo === 'posty') {"), app.indexOf('function mxJardinErrorHTML'));
   t(/class="mx-hero-btn" onclick="openLightbox\('[^']+', 0\)"/.test(app), '3-1 (LOTE JARDÍN): la etapa actual del mosaico es botón que abre el visual con openLightbox (visor puro, 2 args)');
   t(/function openLightbox\(/.test(app), '3-1: openLightbox existe (visor ya vigente, sin funciones nuevas)');
-  t(/mx-jardin-vivo/.test(app) && /mx-slowzoom/.test(css), '3-1 (LOTE 15): el jardín vivo ya es real — animación CSS sobre renders aprobados, no mock');
+  t(/pz-ropa-panel/.test(app) && /mx-slowzoom/.test(css), '3-1 (LOTE JARDÍN-ROPA): el avatar con magia reemplaza al jardín vivo'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): vivo fuera de la pantalla
 }
 
 // ---------- 2-1 + 2-4 · qué falta, con nombre y botón ----------
@@ -119,7 +119,7 @@ function sandbox(extra) {
   t(/siguiente_premio/.test(premioSrc) && /siguiente_desbloqueo/.test(premioSrc), '2-2: usa los datos de vista previa del Lote 3');
   t(/pzNivelUnlock\(nv\.nivel \+ 1/.test(premioSrc), '2-2: en 1–5 vale la tabla de desbloqueos vigente');
   t(/nv\.nivel >= 50/.test(premioSrc) && /nombre_siguiente/.test(premioSrc), '2-2: solo si hay próximo nivel');
-  t(/mxPremioCercaHTML\(nvP\)/.test(app), '2-2 (LOTE 15): el premio se rinde en el cuerpo del jardín');
+  t(/Próximo: Nv /.test(app), '2-2 (LOTE JARDÍN-ROPA): el próximo nivel vive en la barrita'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): premio-cerca fuera del cuerpo
 }
 
 // ---------- 2-5 · píldoras parejas ----------
@@ -139,7 +139,7 @@ function sandbox(extra) {
 // ---------- 3-3 · subtítulo corto ----------
 {
   const jardinSrc = app.slice(app.indexOf('function mxJardinHTML'), app.indexOf('function mxJardinErrorHTML'));
-  t(/Crece con tus semanas publicadas/.test(jardinSrc) && /Grows with your published weeks/.test(jardinSrc), '3-3: subtítulo corto ES/EN');
+  t(/cuanto más subís de nivel, mejores posteos y más conozco lo que buscás/.test(jardinSrc) && /the higher your level, the better your posts/.test(jardinSrc), '3-3 (LOTE JARDÍN-ROPA): el mensaje nuevo ES/EN'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): el sentido viejo sale de la pantalla
   t(!/Crece solo con semanas publicadas de verdad/.test(jardinSrc), '3-3: fuera el subtítulo viejo (sonaba a advertencia)');
 }
 
@@ -179,7 +179,7 @@ function sandbox(extra) {
   t(sb.mxSemanaLinea(posts) === '<p class="mx-dato mx-semana-linea">This week you published 3 of 5</p>', '3-4: espejo EN fiel');
   t(sb.mxSemanaLinea([]) === '' && sb.mxSemanaLinea(null) === '', '3-4: sin plan no hay línea (nunca inventada)');
   t(!/%/.test(sb.mxSemanaLinea(posts)) && !/barra|width:/.test(extractFn(app, 'mxSemanaLinea')), '3-4: la línea no tiene % ni barras (el % del módulo es aritmética, no porcentaje en pantalla)');
-  t(/api\.get\('\/api\/posts'\)/.test(app) && /mxSemanaLinea\(res\[3\]\)/.test(app), '3-4: el jardín trae los posteos y pinta la línea');
+  t(/mxJardinHTML\('posty', nvP, null, null\)/.test(app) && !/mxSemanaLinea\(res\[3\]\)/.test(app), '3-4 (LOTE JARDÍN-ROPA): el jardín pide solo el nivel, sin línea semanal'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): la pantalla nueva no trae posteos
 }
 
 // ---------- C · contenido sin tapar por la barra ----------

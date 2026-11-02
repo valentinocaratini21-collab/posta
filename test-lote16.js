@@ -109,7 +109,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(!tira.includes('mx-tira-brote-grande') && !tira.includes('MX_BROTE_SVG'), 'I1 (LOTE JARDÍN): brote dibujado fuera de la tira');
   t(tira.includes('mx-tira-foto'), 'I1: la tira sigue con foto');
   t(css.includes('.mx-tira-lock{'), 'I1 (LOTE JARDÍN): CSS candadito de la tira');
-  t(app.includes('mx-jardin-vivo') && app.includes('mxJardinHTML'), 'I1: pantalla Jardín existe (el LOTE JARDÍN la rediseña: hero mosaico + slider)');
+  t(app.includes('pz-ropa-panel') && app.includes('mxJardinHTML'), 'I1: pantalla Jardín existe (el LOTE JARDÍN-ROPA la rediseña: avatar + guardarropa)'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11)
 }
 
 // ---------- I2: chapita sin mes, hora intacta ----------

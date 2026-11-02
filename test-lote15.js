@@ -22,21 +22,21 @@ const bodyOf = (src, from, to) => {
 t(app.includes(`gzT('El jardín de Posty', "Posty's garden")`), 'jardín: título exacto ES/EN');
 t(!app.includes(`<h1>${'${'}gzT('Mi jardín', 'My garden')}</h1><p>`), 'jardín: título viejo fuera del header');
 t(app.includes('mx-jardin-vivo') && app.includes('mx-orb-a') && app.includes('mx-orb-b') && css.includes('mx-slowzoom'), 'jardín vivo: contenedor + orbes + zoom lento');
-t(app.includes('mx-posty-live') && app.includes('Posty está acá') && app.includes('Posty is here'), 'jardín vivo: Posty presente + etiqueta');
+t(app.includes('pz-ropa-cara') && app.includes('ai-avatar.png') && app.includes('pz-ropa-capa'), 'jardín-ropa: Posty presente como avatar con ropa'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): vivo fuera
 t(app.includes('mx-hero-mosaico') && app.includes('mx-etapa lock') && app.includes('mx-etapa-aca'), 'jardín (LOTE JARDÍN): hero mosaico completo — futuras oscuras con candado, actual marcada (nunca solo tierra)');
-t(app.includes('mx-jardin-sentido') && app.includes('Crece con tus semanas publicadas') && app.includes('Grows with your published weeks'), 'jardín: sentido junto al visual');
-t(app.includes('function mxPremioCercaHTML') && app.includes('mxPremioCercaHTML(nvP)') && app.includes('Próximo premio') && app.includes('en el Nivel'), 'premio cerca junto al hero, en palabras');
+t(app.includes('cuanto más subís de nivel, mejores posteos y más conozco lo que buscás'), 'jardín-ropa: mensaje exacto en la pantalla'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): sentido viejo fuera
+t(app.includes('function mxPremioCercaHTML') && app.includes('Próximo premio') && app.includes('en el Nivel') && !app.includes('mxPremioCercaHTML(nvP)'), 'premio cerca: la función queda, su llamada en el jardín sale'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11)
 const vistas = bodyOf(app, 'function mxVistasUnAgenteHTML', 'function mxJardinHTML');
 t(!vistas.includes('mx-premio-cerca'), 'premio cerca: fuera de las vistas (sin duplicar)');
 t(app.includes('MX_ZONAS_PREMIO') && [6, 11, 16, 21, 26, 31, 36, 41, 46].every(n => app.includes(`nv: ${n},`)), 'mapa: 9 zonas premio con niveles reales');
 t(app.includes('Brote dorado') && app.includes('Raíz firme') && app.includes('Maestro del jardín') && app.includes('Golden sprout') && app.includes('Garden master'), 'mapa: nombres ES/EN de las zonas');
-t(app.includes('function mxJardinMapaHTML') && app.includes('mxJardinMapaHTML(nvP, post50)'), 'mapa: renderizado en el jardín');
+t(app.includes('function mxJardinMapaHTML') && !app.includes('mxJardinMapaHTML(nvP, post50)'), 'mapa: la función queda, su llamada en el jardín sale'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): siluetas fuera de la pantalla
 t(app.includes('function mxZonaToggle') && app.includes(`onclick="mxZonaToggle(this)"`), 'mapa: tocar zona bloqueada muestra el desbloqueo');
 t(app.includes('Después del Nivel 50') && app.includes('Al llegar al Nivel 50 se abren nuevas zonas'), 'mapa: teaser post-50 sin nombres inventados');
 t(app.includes('tienePost50') && app.includes('post50.zonas'), 'mapa: con zonas post-50 del servidor no duplica la sección');
 t(css.includes('.mx-zona.lock{filter:grayscale(1)'), 'mapa: silueta CSS para lo bloqueado');
 const jardinFn = bodyOf(app, 'function mxJardinHTML', 'function mxJardinErrorHTML');
-t(!jardinFn.includes('mxBarra('), 'jardín: sin barras dentro (la barrita vive solo en la tira)');
+t(jardinFn.includes('pz-ropa-barra') && !/\d+%/.test(jardinFn), 'jardín-ropa: barrita real sin % en texto'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): la barrita entra a esta pantalla por decisión expresa
 t(app.includes('mx-tira-thumb') && app.includes('jardin-bambu.webp') && app.includes('nvTira < 6'), 'tira (LOTE JARDÍN): bambusal completo en chico, candadito si Nv<6 (brote SUPERSEDED)');
 t(app.includes('const MX_BROTE_SVG'), 'brote (LOTE JARDÍN): el glifo queda definido pero sin usos — hero mosaico y tira bambusal lo reemplazan');
 

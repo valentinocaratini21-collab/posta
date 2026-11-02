@@ -160,7 +160,7 @@ t(cnt(app, 'let PZ_VIEW_KEY') === 1, 'sin duplicados: PZ_VIEW_KEY 1');
   t(css.includes('.hf-tile.hf-tile-draft{outline:2px dashed #2793C8'), 'G: punteados de borradores QUEDAN');
   t(app.includes('jardin-bambu.webp'), 'G (LOTE JARDÍN): miniatura = bambusal completo en chico (sin render inventado)');
   t(!css.includes('#inicioView .hf-pacts,#inicioView .hf-tabs{background:#0A1E33'), 'G: sin banda navy reintroducida');
-  t(app.includes('mxTiraHTML') && app.includes('mx-jardin-vivo'), 'G: pantalla Jardín existe (el LOTE JARDÍN la rediseña)');
+  t(app.includes('pz-ropa-panel') && app.includes('mxJardinHTML'), 'G: pantalla Jardín existe (el LOTE JARDÍN la rediseña)'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): vivo fuera de la pantalla; el jardín nuevo es avatar + guardarropa
 }
 
 console.log(`LOTEGLASS: ${ok} ok, ${bad} fallos`);

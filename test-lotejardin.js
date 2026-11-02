@@ -142,12 +142,12 @@ for (const f of ['jardin-joven.webp', 'jardin-crece-1.webp', 'jardin-crece-2.web
 // ---------- Pantalla Jardín: hero + slider cableados ----------
 {
   const rama = sliceFn(app, "if (tipo === 'posty') {", 'function mxJardinErrorHTML');
-  t(rama.includes('mxHeroMosaicoHTML(nvNum, heroActual)'), 'jardín: hero = mosaico completo');
-  t(rama.includes('mxHeroJardin(mxNvNum(nvP))'), 'jardín: el visual actual sigue saliendo de mxHeroJardin');
-  t(rama.includes('mxSliderJardinHTML(nvNum)'), 'jardín: slider cableado bajo el hero');
-  t(rama.includes('mx-jardin-vivo') && rama.includes('mx-orb-a') && rama.includes('mx-posty-live') && rama.includes("Posty está acá"), 'jardín: vivo + orbes + Posty presente intactos');
+  t(rama.includes('pz-ropa-panel') && rama.includes('pzRopaAvatarHTML') && rama.includes('pzRopaListaHTML'), 'jardín-ropa: avatar + guardarropa en la pantalla'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): mosaico fuera de la pantalla
+  t(rama.includes('pzRopaAvatarHTML()') && rama.includes('pz-ropa-avatar'), 'jardín-ropa: avatar canónico con capas en la pantalla'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): el visual ya no sale de mxHeroJardin
+  t(rama.includes('cuanto más subís de nivel, mejores posteos y más conozco lo que buscás'), 'jardín-ropa: mensaje exacto ES'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): slider fuera de la pantalla
+  t(rama.includes('pzRopaAvance(nvP)') && rama.includes('pz-ropa-barra'), 'jardín-ropa: barrita con avance real, sin % en texto'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): vivo + orbes fuera; la barrita entra por decisión expresa
   t(!rama.includes('const brote = nvNum <= 2'), 'jardín: fuera el brote que tapaba la tierra (el hero ya no es tierra sola)');
-  t(!rama.includes('mxBarra'), 'jardín: sin barras dentro (regla vigente)');
+  t(!rama.includes('mxHeroMosaicoHTML') && !rama.includes('mxSliderJardinHTML') && !rama.includes('mxJardinMapaHTML') && rama.includes("bbGo('#/app/inicio')") && rama.includes('mx-chat-cabecera'), 'jardín-ropa: fuera mosaico/slider/mapa, atrás propio intacto'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): la regla sin-barras queda SUPERSEDED solo en esta pantalla
 }
 
 // ---------- Tira: miniatura = bambusal completo en chico ----------

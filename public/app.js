@@ -1721,17 +1721,172 @@ function mxHistoriaHTML(nv) {
 function mxIrHistoria() {
   try { const el = document.getElementById('mxHistoria'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
 }
+
+// (LOTE JARDÍN-ROPA · decisión Valentino 2/11: pantalla limpia — nivel,
+// barrita real, mensaje y guardarropa de Posty. La cara es la canónica:
+// ai-avatar.png tiene los mismos bytes que posty-cara.png, nunca se
+// regenera; la ropa son capas SVG locales encima. Nada comprable, nada
+// que toque el precio: todo se gana publicando semanas.)
+const PZ_ROPA = [
+  { nv: 1, cat: 'sombrero', es: 'Gorra celeste', en: 'Light blue cap', svg: '<path d="M150 128Q150 52 256 52Q362 52 362 128Z" fill="#2793C8"/><ellipse cx="256" cy="128" rx="118" ry="16" fill="#0A1E33"/><circle cx="256" cy="52" r="10" fill="#FEC14D"/>' },
+  { nv: 2, cat: 'anteojos', es: 'Anteojos redondos', en: 'Round glasses', svg: '<circle cx="205" cy="250" r="50" fill="rgba(255,255,255,.18)" stroke="#0A1E33" stroke-width="8"/><circle cx="315" cy="250" r="50" fill="rgba(255,255,255,.18)" stroke="#0A1E33" stroke-width="8"/><path d="M255 240Q260 228 265 240" fill="none" stroke="#0A1E33" stroke-width="8"/><path d="M155 242L130 232M365 242L390 232" stroke="#0A1E33" stroke-width="8"/>' },
+  { nv: 3, cat: 'cuello', es: 'Bufanda celeste', en: 'Light blue scarf', svg: '<path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#2793C8"/><rect x="292" y="442" width="42" height="58" rx="10" fill="#2793C8"/><path d="M300 500v-12M312 500v-12M324 500v-12" stroke="#FEC14D" stroke-width="5"/>' },
+  { nv: 4, cat: 'extra', es: 'Flor en la oreja', en: 'Flower on the ear', svg: '<circle cx="388" cy="272" r="14" fill="#FF9EBB"/><circle cx="406" cy="292" r="14" fill="#FF9EBB"/><circle cx="388" cy="312" r="14" fill="#FF9EBB"/><circle cx="370" cy="292" r="14" fill="#FF9EBB"/><circle cx="388" cy="292" r="12" fill="#FEC14D"/>' },
+  { nv: 5, cat: 'extra', es: 'Hoja en el pelo', en: 'Leaf in the hair', svg: '<path d="M170 118Q140 88 168 62Q196 88 170 118Z" fill="#3E9B4F"/><path d="M170 112L168 70" stroke="#2E7D32" stroke-width="4"/>' },
+  { nv: 6, cat: 'conjunto', es: 'Conjunto Brote dorado', en: 'Golden sprout set', svg: '<path d="M256 118V78" stroke="#3E9B4F" stroke-width="8" stroke-linecap="round"/><path d="M256 96Q226 96 212 72Q244 66 256 96Z" fill="#FEC14D"/><path d="M256 88Q286 88 300 64Q268 58 256 88Z" fill="#FEC14D"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#FEC14D"/>' },
+  { nv: 7, cat: 'sombrero', es: 'Sombrero de paja', en: 'Straw hat', svg: '<ellipse cx="256" cy="122" rx="132" ry="20" fill="#E8C48A"/><path d="M196 122Q196 58 256 58Q316 58 316 122Z" fill="#E8C48A"/><rect x="196" y="96" width="120" height="14" fill="#B98A4E"/>' },
+  { nv: 8, cat: 'anteojos', es: 'Anteojos de sol', en: 'Sunglasses', svg: '<ellipse cx="205" cy="250" rx="54" ry="46" fill="#0A1E33"/><ellipse cx="315" cy="250" rx="54" ry="46" fill="#0A1E33"/><path d="M259 242Q264 232 269 242" fill="none" stroke="#FEC14D" stroke-width="7"/><path d="M151 242L130 232M369 242L390 232" stroke="#FEC14D" stroke-width="7"/>' },
+  { nv: 9, cat: 'cuello', es: 'Moño dorado', en: 'Golden bow tie', svg: '<path d="M256 428L206 406Q196 428 206 450Z" fill="#FEC14D"/><path d="M256 428L306 406Q316 428 306 450Z" fill="#FEC14D"/><circle cx="256" cy="428" r="14" fill="#DBA453"/>' },
+  { nv: 10, cat: 'extra', es: 'Audífonos', en: 'Headphones', svg: '<path d="M132 300Q132 138 256 138Q380 138 380 300" fill="none" stroke="#0A1E33" stroke-width="16"/><rect x="112" y="272" width="44" height="72" rx="18" fill="#0A1E33"/><rect x="356" y="272" width="44" height="72" rx="18" fill="#0A1E33"/><circle cx="134" cy="308" r="8" fill="#FEC14D"/><circle cx="378" cy="308" r="8" fill="#FEC14D"/>' },
+  { nv: 11, cat: 'conjunto', es: 'Conjunto Raíz firme', en: 'Strong root set', svg: '<path d="M150 128Q150 52 256 52Q362 52 362 128Z" fill="#8A5A3B"/><ellipse cx="256" cy="128" rx="118" ry="16" fill="#5B3A24"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#5B8C5A"/>' },
+  { nv: 12, cat: 'sombrero', es: 'Gorra dorada', en: 'Golden cap', svg: '<path d="M150 128Q150 52 256 52Q362 52 362 128Z" fill="#FEC14D"/><ellipse cx="256" cy="128" rx="118" ry="16" fill="#0A1E33"/><circle cx="256" cy="52" r="10" fill="#2793C8"/>' },
+  { nv: 13, cat: 'anteojos', es: 'Anteojos estrella', en: 'Star glasses', svg: '<polygon points="205,198 217.9,232.2 254.5,234 225.9,256.8 235.6,292 205,272 174.4,292 184.1,256.8 155.5,234 192.1,232.2" fill="#FEC14D" opacity=".92"/><polygon points="315,198 327.9,232.2 364.5,234 335.9,256.8 345.6,292 315,272 284.4,292 294.1,256.8 265.5,234 302.1,232.2" fill="#FEC14D" opacity=".92"/>' },
+  { nv: 14, cat: 'cuello', es: 'Pañuelo verde', en: 'Green bandana', svg: '<path d="M196 408h120l-60 66Z" fill="#5B8C5A"/><circle cx="256" cy="408" r="12" fill="#3E7A48"/>' },
+  { nv: 15, cat: 'extra', es: 'Vincha deportiva', en: 'Sport headband', svg: '<rect x="164" y="148" width="184" height="26" rx="13" fill="#2793C8"/><rect x="164" y="158" width="184" height="6" fill="#FEC14D"/>' },
+  { nv: 16, cat: 'conjunto', es: 'Conjunto Tallo alto', en: 'Tall stem set', svg: '<rect x="216" y="28" width="80" height="100" rx="12" fill="#3E9B4F"/><ellipse cx="256" cy="128" rx="110" ry="14" fill="#2E7D32"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#2793C8"/>' },
+  { nv: 17, cat: 'sombrero', es: 'Boina verde', en: 'Green beret', svg: '<ellipse cx="256" cy="98" rx="108" ry="30" fill="#5B8C5A"/><path d="M150 108Q256 128 362 108" fill="none" stroke="#3E7A48" stroke-width="6"/><circle cx="256" cy="66" r="8" fill="#2E7D32"/>' },
+  { nv: 18, cat: 'anteojos', es: 'Anteojos corazón', en: 'Heart glasses', svg: '<path d="M205 292C160 258 158 214 188 208C200 205 205 216 205 224C205 216 210 205 222 208C252 214 250 258 205 292Z" fill="#FF7A9E"/><path d="M315 292C270 258 268 214 298 208C310 205 315 216 315 224C315 216 320 205 332 208C362 214 360 258 315 292Z" fill="#FF7A9E"/>' },
+  { nv: 19, cat: 'cuello', es: 'Collar de flores', en: 'Flower necklace', svg: '<path d="M196 440Q256 470 316 440" fill="none" stroke="#3E9B4F" stroke-width="4"/><circle cx="196" cy="440" r="11" fill="#FF9EBB"/><circle cx="196" cy="440" r="5" fill="#FEC14D"/><circle cx="226" cy="452" r="11" fill="#FF9EBB"/><circle cx="226" cy="452" r="5" fill="#FEC14D"/><circle cx="256" cy="456" r="11" fill="#FF9EBB"/><circle cx="256" cy="456" r="5" fill="#FEC14D"/><circle cx="286" cy="452" r="11" fill="#FF9EBB"/><circle cx="286" cy="452" r="5" fill="#FEC14D"/><circle cx="316" cy="440" r="11" fill="#FF9EBB"/><circle cx="316" cy="440" r="5" fill="#FEC14D"/>' },
+  { nv: 20, cat: 'extra', es: 'Aros dorados', en: 'Golden earrings', svg: '<circle cx="134" cy="362" r="10" fill="#FEC14D"/><circle cx="134" cy="382" r="6" fill="#DBA453"/><circle cx="378" cy="362" r="10" fill="#FEC14D"/><circle cx="378" cy="382" r="6" fill="#DBA453"/>' },
+  { nv: 21, cat: 'conjunto', es: 'Conjunto Copa verde', en: 'Green canopy set', svg: '<path d="M170 118Q150 84 178 66Q196 92 170 118Z" fill="#3E9B4F"/><path d="M214 100Q202 66 230 50Q244 80 214 100Z" fill="#5B8C5A"/><path d="M256 94Q250 60 278 46Q288 78 256 94Z" fill="#3E9B4F"/><path d="M298 100Q312 66 340 50Q346 82 298 100Z" fill="#5B8C5A"/><path d="M342 118Q362 84 334 66Q316 92 342 118Z" fill="#3E9B4F"/><path d="M150 420Q256 400 362 420L350 470Q256 452 162 470Z" fill="#5B8C5A" opacity=".9"/>' },
+  { nv: 22, cat: 'sombrero', es: 'Galera celeste', en: 'Light blue top hat', svg: '<rect x="196" y="30" width="120" height="96" rx="10" fill="#2793C8"/><rect x="196" y="100" width="120" height="16" fill="#FEC14D"/><ellipse cx="256" cy="128" rx="136" ry="18" fill="#0A1E33"/>' },
+  { nv: 23, cat: 'anteojos', es: 'Monóculo dorado', en: 'Golden monocle', svg: '<circle cx="315" cy="250" r="52" fill="rgba(255,255,255,.15)" stroke="#DBA453" stroke-width="8"/><path d="M360 290Q390 340 372 400" fill="none" stroke="#DBA453" stroke-width="4"/>' },
+  { nv: 24, cat: 'cuello', es: 'Bufanda rayada', en: 'Striped scarf', svg: '<rect x="168" y="408" width="176" height="38" rx="17" fill="#2793C8"/><rect x="196" y="408" width="18" height="38" fill="#fff"/><rect x="240" y="408" width="18" height="38" fill="#fff"/><rect x="284" y="408" width="18" height="38" fill="#fff"/><rect x="292" y="442" width="42" height="56" rx="10" fill="#2793C8"/>' },
+  { nv: 25, cat: 'extra', es: 'Estrellita en la mejilla', en: 'Little star on the cheek', svg: '<text x="162" y="344" font-size="36" fill="#FEC14D">✦</text>' },
+  { nv: 26, cat: 'conjunto', es: 'Conjunto Flor del local', en: 'Shop flower set', svg: '<circle cx="180" cy="105" r="13" fill="#FF9EBB"/><circle cx="180" cy="105" r="5" fill="#FEC14D"/><circle cx="218" cy="88" r="13" fill="#FF9EBB"/><circle cx="218" cy="88" r="5" fill="#FEC14D"/><circle cx="256" cy="82" r="13" fill="#FF9EBB"/><circle cx="256" cy="82" r="5" fill="#FEC14D"/><circle cx="294" cy="88" r="13" fill="#FF9EBB"/><circle cx="294" cy="88" r="5" fill="#FEC14D"/><circle cx="332" cy="105" r="13" fill="#FF9EBB"/><circle cx="332" cy="105" r="5" fill="#FEC14D"/><path d="M196 440Q256 470 316 440" fill="none" stroke="#3E9B4F" stroke-width="4"/><circle cx="226" cy="452" r="11" fill="#FF9EBB"/><circle cx="226" cy="452" r="5" fill="#FEC14D"/><circle cx="256" cy="456" r="11" fill="#FF9EBB"/><circle cx="256" cy="456" r="5" fill="#FEC14D"/><circle cx="286" cy="452" r="11" fill="#FF9EBB"/><circle cx="286" cy="452" r="5" fill="#FEC14D"/>' },
+  { nv: 27, cat: 'sombrero', es: 'Gorro de lana', en: 'Wool beanie', svg: '<path d="M168 128Q168 52 256 52Q344 52 344 128Z" fill="#0A1E33"/><circle cx="256" cy="46" r="20" fill="#fff" stroke="#D8ECF7" stroke-width="3"/><rect x="168" y="104" width="176" height="16" fill="#2793C8"/>' },
+  { nv: 28, cat: 'anteojos', es: 'Anteojos de lectura', en: 'Reading glasses', svg: '<rect x="152" y="212" width="106" height="76" rx="14" fill="rgba(255,255,255,.18)" stroke="#0A1E33" stroke-width="7"/><rect x="262" y="212" width="106" height="76" rx="14" fill="rgba(255,255,255,.18)" stroke="#0A1E33" stroke-width="7"/><path d="M258 246H262" stroke="#0A1E33" stroke-width="7"/>' },
+  { nv: 29, cat: 'cuello', es: 'Corbata celeste', en: 'Light blue tie', svg: '<path d="M244 404h24l-12 14Z" fill="#0A1E33"/><path d="M244 418h24l10 52-22 22-22-22Z" fill="#2793C8"/>' },
+  { nv: 30, cat: 'extra', es: 'Mariposa', en: 'Butterfly', svg: '<ellipse cx="332" cy="132" rx="20" ry="13" fill="#C9A7EB" transform="rotate(-24 332 132)"/><ellipse cx="368" cy="132" rx="20" ry="13" fill="#FF9EBB" transform="rotate(24 368 132)"/><ellipse cx="350" cy="134" rx="5" ry="12" fill="#0A1E33"/>' },
+  { nv: 31, cat: 'conjunto', es: 'Conjunto Fruto de la casa', en: 'House fruit set', svg: '<circle cx="256" cy="86" r="42" fill="#FF8A3D"/><path d="M256 44Q256 28 272 22" stroke="#3E9B4F" stroke-width="7" fill="none"/><ellipse cx="282" cy="72" rx="18" ry="9" fill="#3E9B4F" transform="rotate(-20 282 72)"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#FEC14D"/>' },
+  { nv: 32, cat: 'sombrero', es: 'Sombrero explorador', en: 'Explorer hat', svg: '<ellipse cx="256" cy="122" rx="134" ry="20" fill="#C9B189"/><path d="M198 122Q198 62 256 62Q314 62 314 122Z" fill="#C9B189"/><rect x="198" y="96" width="116" height="12" fill="#8A7A5C"/>' },
+  { nv: 33, cat: 'anteojos', es: 'Antiparras', en: 'Goggles', svg: '<rect x="148" y="210" width="112" height="80" rx="24" fill="rgba(39,147,200,.35)" stroke="#2793C8" stroke-width="8"/><rect x="260" y="210" width="112" height="80" rx="24" fill="rgba(39,147,200,.35)" stroke="#2793C8" stroke-width="8"/><path d="M148 250L128 244M372 250L392 244" stroke="#2793C8" stroke-width="8"/>' },
+  { nv: 34, cat: 'cuello', es: 'Chal dorado', en: 'Golden shawl', svg: '<path d="M150 420Q256 398 362 420L348 472Q256 452 164 472Z" fill="#FEC14D" opacity=".92"/>' },
+  { nv: 35, cat: 'extra', es: 'Cintillo de bambú', en: 'Bamboo headband', svg: '<rect x="164" y="150" width="184" height="24" rx="12" fill="#3E9B4F"/><path d="M210 150v24M256 150v24M302 150v24" stroke="#2E7D32" stroke-width="4"/>' },
+  { nv: 36, cat: 'conjunto', es: 'Conjunto Claro del bosque', en: 'Forest clearing set', svg: '<rect x="170" y="146" width="172" height="22" rx="11" fill="#8A5A3B"/><rect x="244" y="136" width="24" height="30" rx="6" fill="#FEC14D"/><path d="M256 136v-10" stroke="#8A5A3B" stroke-width="4"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#5B8C5A"/>' },
+  { nv: 37, cat: 'sombrero', es: 'Sombrero de fiesta', en: 'Party hat', svg: '<path d="M256 18L200 126H312Z" fill="#2793C8"/><path d="M256 18L228 126H256Z" fill="#FEC14D"/><circle cx="256" cy="18" r="12" fill="#FEC14D"/>' },
+  { nv: 38, cat: 'anteojos', es: 'Anteojos de fiesta', en: 'Party glasses', svg: '<circle cx="205" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#FF7A9E" stroke-width="8"/><circle cx="315" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#FF7A9E" stroke-width="8"/><circle cx="205" cy="192" r="7" fill="#FEC14D"/><circle cx="315" cy="192" r="7" fill="#2793C8"/><circle cx="150" cy="250" r="7" fill="#3E9B4F"/><circle cx="370" cy="250" r="7" fill="#FEC14D"/>' },
+  { nv: 39, cat: 'cuello', es: 'Pañuelo de estrellas', en: 'Star bandana', svg: '<path d="M196 408h120l-60 66Z" fill="#0A1E33"/><text x="238" y="448" font-size="20" fill="#fff">✦</text><text x="262" y="436" font-size="14" fill="#FEC14D">✦</text>' },
+  { nv: 40, cat: 'extra', es: 'Abeja dorada', en: 'Golden bee', svg: '<ellipse cx="160" cy="182" rx="20" ry="14" fill="#FEC14D"/><path d="M152 170v24M168 170v24" stroke="#0A1E33" stroke-width="4"/><ellipse cx="144" cy="168" rx="12" ry="7" fill="#fff" opacity=".8" transform="rotate(-24 144 168)"/><ellipse cx="176" cy="168" rx="12" ry="7" fill="#fff" opacity=".8" transform="rotate(24 176 168)"/>' },
+  { nv: 41, cat: 'conjunto', es: 'Conjunto Leyenda del barrio', en: 'Neighborhood legend set', svg: '<path d="M150 128Q150 52 256 52Q362 52 362 128Z" fill="#0A1E33"/><rect x="232" y="66" width="48" height="34" rx="8" fill="#FEC14D"/><text x="256" y="90" font-size="20" text-anchor="middle" fill="#0A1E33">✦</text><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#0A1E33"/><rect x="168" y="420" width="176" height="6" fill="#FEC14D"/>' },
+  { nv: 42, cat: 'sombrero', es: 'Sombrero vaquero', en: 'Cowboy hat', svg: '<ellipse cx="256" cy="122" rx="132" ry="20" fill="#8A5A3B"/><path d="M200 122Q200 66 256 66Q312 66 312 122Z" fill="#8A5A3B"/><rect x="200" y="98" width="112" height="12" fill="#5B3A24"/>' },
+  { nv: 43, cat: 'anteojos', es: 'Anteojos con brillo', en: 'Sparkle glasses', svg: '<circle cx="205" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#0A1E33" stroke-width="8"/><circle cx="315" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#0A1E33" stroke-width="8"/><text x="150" y="200" font-size="26" fill="#FEC14D">✦</text><text x="352" y="200" font-size="26" fill="#FEC14D">✦</text><text x="256" y="180" font-size="20" fill="#2793C8">✦</text>' },
+  { nv: 44, cat: 'cuello', es: 'Collar de hojas', en: 'Leaf necklace', svg: '<path d="M196 440Q256 470 316 440" fill="none" stroke="#3E9B4F" stroke-width="4"/><ellipse cx="206" cy="442" rx="12" ry="7" fill="#5B8C5A" transform="rotate(-30 206 442)"/><ellipse cx="236" cy="454" rx="12" ry="7" fill="#3E9B4F" transform="rotate(-10 236 454)"/><ellipse cx="256" cy="458" rx="12" ry="7" fill="#5B8C5A"/><ellipse cx="276" cy="454" rx="12" ry="7" fill="#3E9B4F" transform="rotate(10 276 454)"/><ellipse cx="306" cy="442" rx="12" ry="7" fill="#5B8C5A" transform="rotate(30 306 442)"/>' },
+  { nv: 45, cat: 'extra', es: 'Broche de flor', en: 'Flower brooch', svg: '<circle cx="315" cy="432" r="10" fill="#FF9EBB"/><circle cx="328" cy="445" r="10" fill="#FF9EBB"/><circle cx="315" cy="458" r="10" fill="#FF9EBB"/><circle cx="302" cy="445" r="10" fill="#FF9EBB"/><circle cx="315" cy="445" r="8" fill="#FEC14D"/>' },
+  { nv: 46, cat: 'conjunto', es: 'Conjunto Maestro del jardín', en: 'Garden master set', svg: '<path d="M196 118L206 66L236 100L256 58L276 100L306 66L316 118Z" fill="#FEC14D"/><rect x="196" y="112" width="120" height="12" fill="#DBA453"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#FEC14D"/><rect x="168" y="436" width="176" height="6" fill="#0A1E33"/>' },
+  { nv: 47, cat: 'sombrero', es: 'Gorra marinera', en: 'Sailor cap', svg: '<path d="M158 128Q158 62 256 62Q354 62 354 128Z" fill="#fff" stroke="#D8ECF7" stroke-width="2"/><ellipse cx="256" cy="128" rx="118" ry="14" fill="#0A1E33"/><circle cx="256" cy="80" r="9" fill="#FEC14D"/>' },
+  { nv: 48, cat: 'anteojos', es: 'Anteojos de maestro', en: 'Master glasses', svg: '<circle cx="205" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#DBA453" stroke-width="5"/><circle cx="315" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#DBA453" stroke-width="5"/><path d="M360 290Q390 340 372 400" fill="none" stroke="#DBA453" stroke-width="3"/>' },
+  { nv: 49, cat: 'cuello', es: 'Bufanda del maestro', en: 'Master scarf', svg: '<path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#FEC14D"/><rect x="292" y="442" width="42" height="58" rx="10" fill="#0A1E33"/><text x="313" y="478" font-size="20" text-anchor="middle" fill="#FEC14D">✦</text>' },
+  { nv: 50, cat: 'corona', es: 'Corona del maestro', en: 'Master crown', svg: '<path d="M186 118L198 56L232 96L256 48L280 96L314 56L326 118Z" fill="#FEC14D"/><rect x="186" y="112" width="140" height="12" fill="#DBA453"/><text x="256" y="42" font-size="26" text-anchor="middle" fill="#FEC14D">✦</text><text x="206" y="52" font-size="18" text-anchor="middle" fill="#FEC14D">✦</text><text x="306" y="52" font-size="18" text-anchor="middle" fill="#FEC14D">✦</text>' },
+];
+let PZ_ROPA_NIVEL = 1;
+function pzRopaPorNivel(n) { for (let i = 0; i < PZ_ROPA.length; i++) if (PZ_ROPA[i].nv === n) return PZ_ROPA[i]; return null; }
+function pzRopaPorId(id) { return pzRopaPorNivel(Number(id) || 0); }
+function pzRopaNombre(nivel, en) { const e = pzRopaPorNivel(Math.max(1, Math.min(50, Number(nivel) || 1))); return e ? (en ? e.en : e.es) : ''; }
+function pzRopaClave() { try { const uid = (typeof ME !== 'undefined' && ME && ME.id) ? String(ME.id) : ''; return 'posta-guardarropa' + (uid ? '_' + uid : ''); } catch (err) { return 'posta-guardarropa'; } }
+function pzRopaSelVacio() { return { sombrero: null, anteojos: null, cuello: null, extra: null, conjunto: null, corona: null }; }
+function pzRopaSel() {
+  const v = pzRopaSelVacio();
+  try {
+    if (typeof localStorage === 'undefined') return v;
+    const raw = localStorage.getItem(pzRopaClave());
+    if (!raw) return v;
+    const p = JSON.parse(raw);
+    for (const k of Object.keys(v)) if (p && typeof p[k] === 'number') v[k] = p[k];
+  } catch (err) {}
+  return v;
+}
+function pzRopaGuardar(sel) { try { if (typeof localStorage !== 'undefined') localStorage.setItem(pzRopaClave(), JSON.stringify(sel)); } catch (err) {} }
+// Transición pura (sin DOM): un conjunto tapa las prendas; la corona y el
+// sombrero comparten la cabeza; cualquier prenda destapa el conjunto.
+function pzRopaSelToggle(sel, e) {
+  const s = { sombrero: sel.sombrero || null, anteojos: sel.anteojos || null, cuello: sel.cuello || null, extra: sel.extra || null, conjunto: sel.conjunto || null, corona: sel.corona || null };
+  if (e.cat === 'conjunto') { s.conjunto = (s.conjunto === e.nv ? null : e.nv); return s; }
+  if (s.conjunto) s.conjunto = null;
+  if (e.cat === 'corona') { if (s.corona === e.nv) s.corona = null; else { s.corona = e.nv; s.sombrero = null; } return s; }
+  if (e.cat === 'sombrero') s.corona = null;
+  s[e.cat] = (s[e.cat] === e.nv ? null : e.nv);
+  return s;
+}
+// Avance REAL al próximo nivel, sin número inventado: gate 1–4 del endpoint
+// (avance.hechos/total) o progreso del gate extendido 5–49 (gate.progreso_pct
+// del servidor, conteos reales + racha). Sin dato, null: la pantalla muestra
+// solo el nivel, nunca una barra falsa. En 50, llena (nivel máximo).
+function pzRopaAvance(nv) {
+  try {
+    if (!nv) return null;
+    const n = mxNvNum(nv);
+    if (n >= 50) return 100;
+    if (nv.avance && nv.avance.total > 0) return Math.max(0, Math.min(100, Math.round(100 * nv.avance.hechos / nv.avance.total)));
+    if (nv.gate && typeof nv.gate.progreso_pct === 'number' && isFinite(nv.gate.progreso_pct)) return Math.max(0, Math.min(100, Math.round(nv.gate.progreso_pct)));
+    return null;
+  } catch (err) { return null; }
+}
+// El momento del avance nombra la prenda desbloqueada; sin prenda (fuera de
+// 1–50), cae al premio/desbloqueo del servidor o al texto vigente.
+function pzRopaUnlock(nv, en) {
+  const n = (nv && typeof nv.nivel === 'number') ? nv.nivel : 0;
+  const nom = (n >= 1 && n <= 50) ? pzRopaNombre(n, en) : '';
+  if (nom) return (en ? 'Unlocked: ' : 'Desbloqueaste: ') + nom;
+  return (nv.premio_actual || nv.desbloqueo_actual || pzNivelUnlock(nv.nivel, en));
+}
+function pzRopaAvatarHTML() {
+  const sel = pzRopaSel();
+  let capas = '';
+  if (sel.conjunto) { const e = pzRopaPorId(sel.conjunto); if (e) capas = e.svg; }
+  else {
+    const orden = ['cuello', 'anteojos', 'sombrero', 'corona', 'extra'];
+    for (const k of orden) { if (sel[k]) { const e = pzRopaPorId(sel[k]); if (e) capas += e.svg; } }
+  }
+  return `<img class="pz-ropa-cara" src="ai-avatar.png" alt="Posty"><svg class="pz-ropa-capa" viewBox="0 0 512 512" aria-hidden="true">${capas}</svg><span class="pz-ropa-spark" style="left:6%;top:8%">✦</span><span class="pz-ropa-spark" style="left:86%;top:16%;animation-delay:1.1s">✦</span><span class="pz-ropa-spark" style="left:90%;top:64%;animation-delay:2s">✦</span><span class="pz-ropa-spark" style="left:4%;top:70%;animation-delay:.6s">✦</span>`;
+}
+function pzRopaListaHTML(nivel) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const nv = Math.max(1, Math.min(50, Number(nivel) || 1));
+  PZ_ROPA_NIVEL = nv;
+  const sel = pzRopaSel();
+  const puesto = (e) => (e.cat === 'conjunto' ? sel.conjunto === e.nv : sel[e.cat] === e.nv);
+  return PZ_ROPA.map((e) => {
+    const nom = en ? e.en : e.es;
+    if (e.nv > nv) return `<div class="pz-ropa-fila lock"><span class="pz-ropa-mini lock" aria-hidden="true">🔒</span><span class="pz-ropa-nom"><b>${esc(nom)}</b><span>${esc(en ? ('Unlocks at Level ' + e.nv) : ('Se desbloquea en el Nivel ' + e.nv))}</span></span></div>`;
+    const on = puesto(e);
+    const nuevo = (e.nv === nv) ? `<span class="pz-ropa-nuevo">✦ ${esc(en ? 'New!' : '¡Nuevo!')}</span>` : '';
+    const btn = on
+      ? `<button type="button" class="pz-ropa-btn puesto" onclick="pzRopaToggle(${e.nv})" aria-pressed="true">${esc(en ? 'Worn ✓' : 'Puesto ✓')}</button>`
+      : `<button type="button" class="pz-ropa-btn" onclick="pzRopaToggle(${e.nv})" aria-pressed="false">${esc(en ? 'Wear' : 'Ponerse')}</button>`;
+    return `<div class="pz-ropa-fila${on ? ' puesto' : ''}"><span class="pz-ropa-mini"><svg viewBox="0 0 512 512" aria-hidden="true">${e.svg}</svg></span><span class="pz-ropa-nom"><b>${esc(nom)}</b><span>${esc(en ? ('Level ' + e.nv) : ('Nivel ' + e.nv))}</span>${nuevo}</span>${btn}</div>`;
+  }).join('');
+}
+function pzRopaPintar() {
+  try {
+    if (typeof document === 'undefined') return;
+    const av = document.getElementById('pzRopaAvatar');
+    if (av) av.innerHTML = pzRopaAvatarHTML();
+    const li = document.getElementById('pzRopaLista');
+    if (li) { const nv = Number(li.getAttribute('data-nivel') || PZ_ROPA_NIVEL || 1); li.innerHTML = pzRopaListaHTML(nv); }
+  } catch (err) {}
+}
+function pzRopaToggle(id) {
+  try {
+    const e = pzRopaPorId(id);
+    if (!e) return;
+    const nv = (typeof PZ_ROPA_NIVEL === 'number') ? PZ_ROPA_NIVEL : 1;
+    if (e.nv > nv) return;
+    pzRopaGuardar(pzRopaSelToggle(pzRopaSel(), e));
+    pzRopaPintar();
+  } catch (err) {}
+}
+
 function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML) {
   const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">${pzIc('arrowLeft', 16)} ${gzT('Volver', 'Back')}</button>`;
   if (tipo === 'posty') {
-    const head = `<h1>${gzT('El jardín de Posty', "Posty's garden")}</h1>`;
-    const heroActual = mxHeroJardin(mxNvNum(nvP));
     const nvNum = mxNvNum(nvP);
-    const foto = `<div class="mx-jardin-vivo">${mxHeroMosaicoHTML(nvNum, heroActual)}<span class="mx-orb mx-orb-a"></span><span class="mx-orb mx-orb-b"></span><span class="mx-spark" style="left:12%;top:18%">✦</span><span class="mx-spark" style="left:78%;top:26%;animation-delay:1.2s">✦</span><span class="mx-spark" style="left:62%;top:64%;animation-delay:2.1s">✦</span><span class="mx-spark" style="left:28%;top:72%;animation-delay:.6s">✦</span><div class="mx-hero-posty-row"><img class="mx-posty-live" src="ai-avatar.png" alt="Posty"><span class="mx-posty-tag">${gzT('Posty está acá', 'Posty is here')}</span></div></div>`;
-    const slider = mxSliderJardinHTML(nvNum);
-    const sentido = `<p class="mx-jardin-sentido">${gzT('Crece con tus semanas publicadas', 'Grows with your published weeks')}</p>`;
-    const cuerpo = mxPremioCercaHTML(nvP) + mxVistasUnAgenteHTML(nvP, mxPremioPostyHTML(nvP), semanaHTML) + mxJardinMapaHTML(nvP, post50) + mxHistoriaHTML(nvP) + mxJardinPost50HTML(post50);
-    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head">${head}</header><div class="mx-bloque">${foto}${slider}${sentido}${cuerpo}</div></div>`;
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const pct = pzRopaAvance(nvP);
+    const sig = (nvP && nvP.nombre_siguiente) ? esc(nvP.nombre_siguiente) : '';
+    const barra = pct === null ? '' : `<div class="pz-ropa-barra-wrap"><div class="pz-ropa-barra"><i style="width:${pct}%"></i></div><p class="pz-ropa-barra-txt">${nvNum >= 50 ? gzT('Nivel máximo', 'Max level') : (gzT('Próximo: Nv ', 'Next: Lv ') + (nvNum + 1) + (sig ? ' · ' + sig : ''))}</p></div>`;
+    const msg = gzT('cuanto más subís de nivel, mejores posteos y más conozco lo que buscás', 'the higher your level, the better your posts and the more I know what you are looking for');
+    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head"><h1>${gzT('El jardín de Posty', "Posty's garden")}</h1></header><div class="mx-bloque"><div class="pz-ropa-panel"><div class="pz-ropa-avatar" id="pzRopaAvatar">${pzRopaAvatarHTML()}</div><h2 class="pz-ropa-nivel">${gzT('Nv', 'Lv')} ${nvNum}${(nvP && nvP.nombre_nivel) ? ' · ' + esc(nvP.nombre_nivel) : ''}</h2>${barra}<p class="pz-ropa-msg">${msg}</p><div class="pz-ropa-lista" id="pzRopaLista" data-nivel="${nvNum}">${pzRopaListaHTML(nvNum)}</div></div></div></div>`;
   }
   return mxJardinErrorHTML(); // POSTY SOLO: sin jardín Gesty
 }
@@ -1747,9 +1902,9 @@ async function mxJardinPost50() {
   try { const r = await api.get('/api/oficina/jardin-post50'); return (r && r.ok) ? r : null; } catch (e) { return null; }
 }
 async function bbJardinPostyContent() {
-  const res = await Promise.all([mxNivel('posty'), mxJardinFotos(), mxJardinPost50(), api.get('/api/posts').catch(() => null)]);
-  if (!res[0]) return mxJardinErrorHTML();
-  return mxJardinHTML('posty', res[0], null, res[1], res[2], mxSemanaLinea(res[3]));
+  const nvP = await mxNivel('posty');
+  if (!nvP) return mxJardinErrorHTML();
+  return mxJardinHTML('posty', nvP, null, null);
 }
 async function bbJardinGestyContent() {
   const nvG = await mxNivel('gesty');
@@ -19164,7 +19319,7 @@ async function bbInformeNav(dir) {
 function pzNivelCelebShow(nv, en) {
   const prev = document.getElementById('pzCelebFondo');
   if (prev) { try { prev.remove(); } catch (e) {} }
-  const unlock = (nv.premio_actual || nv.desbloqueo_actual || pzNivelUnlock(nv.nivel, en));
+  const unlock = pzRopaUnlock(nv, en);
   const div = document.createElement('div');
   div.id = 'pzCelebFondo';
   div.className = 'pz-celeb-fondo';
@@ -19184,7 +19339,7 @@ function pzNivelCelebShow(nv, en) {
 function pzNivelStoryShow(nv, en) {
   const prev = document.getElementById('pzStoryFondo');
   if (prev) { try { prev.remove(); } catch (e) {} }
-  const unlock = (nv.premio_actual || nv.desbloqueo_actual || pzNivelUnlock(nv.nivel, en));
+  const unlock = pzRopaUnlock(nv, en);
   const texto = en ? `I leveled up to ${nv.nombre_nivel} with Posty! ${unlock}` : `¡Subí a ${nv.nombre_nivel} con Posty! ${unlock}`;
   const div = document.createElement('div');
   div.id = 'pzStoryFondo';
