@@ -51,8 +51,8 @@ ok(app.includes('class="apv-caption"'), 'caption del detalle intacto');
 ok(app.includes('homeTileHTML'), 'feed: homeTileHTML presente (app.js idéntico, sin cambios)');
 
 // ---------- Censo + versiones (base v559) ----------
-ok(srv.includes("const BUILD_ID = '20261101-v578'"), 'BUILD v577 en server.js (pin rotado con causa: liberación v578 anteojos-nv2-fuerte)');
-ok(idx.includes('app.js?v=388') && idx.includes('styles.css?v=20261102'), 'index ES: ?v= 387 / 20261102 (pin rotado con causa: liberación v577)');
+ok(srv.includes("const BUILD_ID = '20261101-v580'"), 'BUILD v580 en server.js (pin rotado con causa: liberación v580 dock-letras, re-base sobre v579)');
+ok(idx.includes('app.js?v=388') && idx.includes('styles.css?v=20261103'), 'index ES: ?v= 388 / 20261103 (pin rotado con causa: liberación v580 dock-letras)');
 ok(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 ok(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 ok(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
