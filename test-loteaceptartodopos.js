@@ -2,9 +2,11 @@
 /* LOTE ACEPTAR-TODO-POSICIÓN — test nuevo.
 Corre con: node test-loteaceptartodopos.js (sin dependencias, sin red).
 Para el control negativo: PZ_TEST_ROOT=pristine-v555 node test-loteaceptartodopos.js
-Cubre: la «Aceptar todo» de la semana nueva es barra fina a todo el
-ancho, fila propia del bloque inferior fijo (pestañas abajo, chat
-encima, barra encima del chat); el chat queda 100% clickeable; sin
+Cubre: la «Aceptar todo» de la semana nueva es fila propia del bloque
+inferior fijo (pestañas abajo, chat encima, barra encima del chat);
+SUPERSEDED CON CAUSA 2/11 (decisión Valentino: la barra a todo el ancho
+se ve demasiado larga): desde aceptar-todo-compacto es PÍLDORA
+COMPACTA CENTRADA, no a todo el ancho. El chat queda 100% clickeable; sin
 pendientes no hay barra ni hueco fantasma; la grilla lleva el despeje
 correspondiente; mismos candidatos v552; un toque acepta en su lugar;
 la píldora de Agenda (.accept-pill, hsAcceptAll) NO se toca; la
@@ -120,15 +122,16 @@ if (SRC_CANDS) {
     const b = mob[0];
     ok(b.includes('.mz-bottomstack{position:fixed;left:12px;right:12px;bottom:calc(72px + env(safe-area-inset-bottom))'), 'CSS móvil: stack fijo a 72px+safe (misma base que el chat)');
     ok(b.includes('.mz-bottomstack .mz-chatbar{position:static'), 'CSS móvil: chat dentro del stack es estático (no flota)');
-    ok(b.includes('.mz-bottomstack .hf-accept-bar{position:static;width:100%'), 'CSS móvil: barra estática a todo el ancho (no tapa el chat)');
+    ok(b.includes('.mz-bottomstack .hf-accept-bar{position:static;width:fit-content'), 'CSS móvil: barra compacta (fit-content, no 100%) — decisión Valentino 2/11, supersede ancho completo');
+    ok(b.includes('margin-left:auto;margin-right:auto'), 'CSS móvil: barra centrada (márgenes auto)');
     ok(b.includes('#inicioView.hf-wrap.hf-acceptbar-on{padding-bottom:calc(196px + env(safe-area-inset-bottom))'), 'CSS móvil: despeje 196px solo con barra');
   }
   const stackFixedCount = (CSS.match(/\.mz-bottomstack\{position:fixed/g) || []).length;
   ok(stackFixedCount === 1, 'stack fijo una sola vez (solo móvil)');
   ok(stackFixedCount === 1 && CSS.indexOf('.mz-bottomstack{position:fixed') > CSS.indexOf('LOTE ACEPTAR-TODO-POSICIÓN'), 'stack fijo solo dentro del bloque del lote (móvil, sin cambio desktop)');
-  // Aritmética del despeje: chat 52 (38 + 7 + 7) + gap 8 + barra ≤42 (10+10+22 badge) = 174 ≤ 196.
+  // Aritmética del despeje: chat 52 (38 + 7 + 7) + gap 8 + barra 44 (min-height, piso de toque; antes ≤42) = 176 ≤ 196.
   const chatH = 38 + 7 + 7;
-  const barH = 10 + 10 + 22;
+  const barH = 44;
   const top = 72 + chatH + 8 + barH;
   ok(top <= 196, `despeje: tope del stack ${top}px ≤ padding 196px`);
   ok(CSS.includes('.mz-plus{width:38px;height:38px'), 'base: botón + 38px (altura del chat)');
