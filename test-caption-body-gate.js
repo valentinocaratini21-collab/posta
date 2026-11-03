@@ -400,5 +400,35 @@ ok('control: la reescritura concreta del 529 pasa (dato en vez de cliché)', () 
   assert.strictEqual(chk.ok, true, chk.reason);
 });
 
+console.log('== (r) Confesión prefabricada: «Te voy a ser honesto:» (11 reales en 3 cuentas, 2026-10-24/25) ==');
+ok('id 512 real: «Te voy a ser honesto: el secreto está en…» se rechaza por frase quemada', () => {
+  const cap = '¿Cómo se organiza nuestro stock? 🤔 \nTe voy a ser honesto: el secreto está en los presupuestos bien armados. Todo queda claro y ordenado, y así evitamos sorpresas. Escribinos y comenzá a disfrutar de la tranquilidad que merecés.';
+  const chk = gen.captionPasses(cap, { business: 'Gesty', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/frase quemada/i.test(chk.reason), chk.reason);
+});
+ok('id 475 real: «Te voy a ser honesto: en Café Aroma, cada taza…» se rechaza por frase quemada', () => {
+  const cap = '¿Cuál es tu café favorito? ☕\nTe voy a ser honesto: en Café Aroma, cada taza cuenta una historia. Desde el intenso café con leche a $4.800 hasta el suave cappuccino a $5.200, cada sorbo es una experiencia única.\nPasá por nuestro local y contanos cuál es tu elección. Siempre estamos listos para una buena charla de café.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/frase quemada/i.test(chk.reason), chk.reason);
+});
+ok('variante femenina: «Te voy a ser honesta:» también se rechaza', () => {
+  const cap = '¿Cómo se organiza nuestro stock? 🤔\nTe voy a ser honesta: el secreto está en los presupuestos bien armados. Todo queda claro y ordenado.\nEscribinos por DM y lo dejamos al día.';
+  const chk = gen.captionPasses(cap, { business: 'Gesty', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/frase quemada/i.test(chk.reason), chk.reason);
+});
+ok('control: la reescritura del 512 sin el preámbulo pasa', () => {
+  const cap = '¿Cómo se organiza nuestro stock? 🤔\nEl secreto está en los presupuestos bien armados. Todo queda claro y ordenado, y así evitamos sorpresas.\nEscribinos y empezá a disfrutar de la tranquilidad que merecés.';
+  const chk = gen.captionPasses(cap, { business: 'Gesty', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «honesto» fuera del dispositivo (precio honesto) NO se rechaza por este gate', () => {
+  const cap = 'El brunch del sábado ya está en la mesa.\nPrecios honestos, sin sorpresas: brunch para dos a $24.000.\nReservá tu mesa por DM y venite a probarlo.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
