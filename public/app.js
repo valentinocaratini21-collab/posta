@@ -2051,7 +2051,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v573'; // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
+const CHUNK_V = '20261101-v575'; // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -5466,6 +5466,8 @@ function pushPerm() { try { return Notification.permission; } catch (e) { return
 /* amable es la misma pushAskCard de siempre; sin precios, sin cascada, */
 /* sin niveles, sin selector. Sin plugin, todo esto es no-op. */
 let PZ_NATIVE_PERM = 'prompt';
+// (LOTE PUSH-ERROR-VISIBLE) Último error nativo de registro push, para mostrarlo.
+let PZ_NATIVE_LAST_ERROR = '';
 function pzNativePlugin() {
   try {
     if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) {
@@ -5563,7 +5565,7 @@ async function pzNativeBoot() {
       try { const d = (a && a.notification && a.notification.data) || {}; const h = pzNativeRoute(d.url, true); if (h) location.hash = h; } catch (e) {}
     });
     PN.addListener('registration', (reg) => { try { pzNativeSaveToken(reg && reg.value); } catch (e) {} });
-    PN.addListener('registrationError', () => {});
+    PN.addListener('registrationError', (e) => { try { const m = (e && e.error && (e.error.message || e.error.code)) || (e && e.message) || 'registration_error'; PZ_NATIVE_LAST_ERROR = String(m).slice(0, 120); } catch (_) {} }); // (LOTE PUSH-ERROR-VISIBLE)
   } catch (e) {}
   try {
     const st = await PN.checkPermissions();

@@ -103,6 +103,7 @@ function ajustesView() {
       <div id="ajPushOff">
         <p style="color:var(--mut);font-size:12.5px;margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You have not turned on notifications on your phone yet: your alerts are on, but they have nowhere to go.' : 'Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar.'}</p>
         <button class="btn btn-primary" id="btnPushEnable">🔔 ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Activate notifications' : 'Activar notificaciones'}</button>
+        <div class="err" id="pzPushErr" style="display:none;margin-top:8px"></div> <!-- (LOTE PUSH-ERROR-VISIBLE) -->
         <div class="hint" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'When Posty asks permission to send notifications, tap Allow.' : 'Cuando Posty te pida permiso para mandar notificaciones, tocá Permitir.'}</div>
       </div>
       <div id="ajPushOn" style="display:none">${pzIc('checkCircle', 15)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications on in your phone.' : 'Notificaciones activadas en tu celu.'}</div>
@@ -854,17 +855,38 @@ function bindSettings() {
       const nativeOn = ajPushNativeOn(r);
       if (off) off.style.display = nativeOn ? 'none' : '';
       if (on) on.style.display = nativeOn ? '' : 'none';
+      // (LOTE PUSH-ERROR-VISIBLE) Motivo legible cuando activar notificaciones falla.
+      function pzPushErrTexto(pr, en) {
+        if (!pr || pr.ok) return '';
+        const r = pr.reason;
+        if (r === 'denied') return en ? 'Notifications are off in your iPhone Settings' : 'Las notificaciones están apagadas en Ajustes del iPhone';
+        if (r === 'no_token') return en ? 'Your iPhone did not deliver the notifications token' : 'El iPhone no entregó el token de notificaciones';
+        let det = '';
+        try { det = (typeof PZ_NATIVE_LAST_ERROR !== 'undefined' && PZ_NATIVE_LAST_ERROR) || ''; } catch (e) {}
+        if (!det && r && r !== 'error') det = String(r);
+        if (det) return (en ? 'Could not enable: ' : 'No se pudo activar: ') + String(det).slice(0, 120);
+        return en ? 'Could not enable, try again' : 'No se pudo activar, probá de nuevo';
+      }
+      function pzPushErrMostrar(pr) {
+        const el = (typeof $ === 'function') ? $('#pzPushErr') : null;
+        const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+        const t = pzPushErrTexto(pr, en);
+        if (!el) return t;
+        if (t) { el.textContent = t; el.style.display = ''; } else { el.textContent = ''; el.style.display = 'none'; }
+        return t;
+      }
       const btnPush = $('#btnPushEnable');
       if (btnPush) btnPush.onclick = async () => {
         btnPush.disabled = true;
         try {
           if (typeof pushEnableFlow === 'function') {
             const pr = await pushEnableFlow();
-            if (pr && pr.ok) await loadNotifyPrefs();
+            if (pr && pr.ok) { pzPushErrMostrar(pr); await loadNotifyPrefs(); }
+            else pzPushErrMostrar(pr || { ok: false, reason: 'error' });
           }
-        } catch (e) {}
+        } catch (e) { pzPushErrMostrar({ ok: false, reason: 'error' }); }
         btnPush.disabled = false;
-      };
+      }; // (LOTE PUSH-ERROR-VISIBLE)
       const paintT = (btn, st, on, onText, offText) => {
         if (!btn) return;
         btn.disabled = false;

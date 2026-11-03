@@ -139,11 +139,11 @@ t('M78: Close llamado por backdrop y x', (sheet.match(/pzDockMasClose\(\)/g) || 
 t('M78: Foto y Voz llamados por las filas', sheet.includes('pzDockMasFoto()') && sheet.includes('pzDockMasVoz()'));
 
 // ---------- 11. versiones + censo (post-push: v574 (pines rotados con causa)) ----------
-t('BUILD v573 pre-push', srv.includes("const BUILD_ID = '20261101-v574'"));
-t('index: app.js?v=385', idx.includes('app.js?v=385'));
+t('BUILD v573 pre-push', srv.includes("const BUILD_ID = '20261101-v575'"));
+t('index: app.js?v=386', idx.includes('app.js?v=386'));
 t('index: styles?v=20261100', idx.includes('styles.css?v=20261101'));
 t('en/index: styles?v=20261100', idxEn.includes('styles.css?v=20261101'));
-t('CHUNK_V intacto v573 (no se toca chunk lazy)', app.includes("const CHUNK_V = '20261101-v573'"));
+t('CHUNK_V intacto v573 (no se toca chunk lazy)', app.includes("const CHUNK_V = '20261101-v575'"));
 t('censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 t('censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
 t('censo server: first_week 3', cnt(srv, 'first_week') === 3);
