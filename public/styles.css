@@ -4574,3 +4574,79 @@ body.pz-postchat-open{overflow:hidden}
   .main #inicioView .mz-bottomstack .hf-accept-bar{position:static;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px}
   .main #inicioView.hf-wrap.hf-acceptbar-on{padding-bottom:calc(196px + env(safe-area-inset-bottom))}
 }
+/* (LOTE BOTONES-GLASS · vidrio celeste futurista, opción 2) */
+/* Receta común: NO tocar layout (position/padding/width) ni texto/handlers. */
+.hf-pmain,
+.apv-accept,
+.apv-primary .btn,
+.pcard-accept,
+.pcard-actions .pcard-main,
+.igmock-accept,
+.hf-d-accept,
+.hf-redo-btn,
+#lightbox .lb-edit,
+.pz-ropa-btn:not(.puesto),
+#inicioView .btn-primary,
+#schedView .btn-primary,
+.ana-wrap .btn-primary,
+.ajsec .btn-primary,
+.apv-wrap .btn-primary,
+.scf-pop .btn-primary,
+.hf-dcard .btn-primary,
+.form-card .btn-primary,
+#talkSheetOv .btn-primary,
+#flyerSheetOv .btn-primary,
+.modal-ov .btn-primary,
+.pz-exp-overlay .btn-primary {
+  background: linear-gradient(135deg, rgba(39,147,200,.28), rgba(39,147,200,.12));
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  border: 1px solid rgba(255,255,255,.85);
+  box-shadow: 0 0 0 1px rgba(39,147,200,.35), 0 10px 30px rgba(39,147,200,.35);
+  color: #0A1E33;
+}
+/* El original usa !important: solo ahí se responde con !important. */
+.pcard-approve {
+  background: linear-gradient(135deg, rgba(39,147,200,.28), rgba(39,147,200,.12)) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  border: 1px solid rgba(255,255,255,.85) !important;
+  box-shadow: 0 0 0 1px rgba(39,147,200,.35), 0 10px 30px rgba(39,147,200,.35);
+  color: #0A1E33 !important;
+}
+.pcard-actions .pcard-main {
+  border-color: rgba(255,255,255,.85) !important;
+}
+/* Icono de Aceptar en aprobación: era stroke blanco, pasa a navy. */
+.apv-accept .pz-ic svg,
+.apv-primary .apv-accept .pz-ic svg {
+  stroke: #0A1E33;
+}
+/* Hover scoped: conserva el glow (el hover base ponía sombra sólida). */
+#inicioView .btn-primary:hover,
+#schedView .btn-primary:hover,
+.ana-wrap .btn-primary:hover,
+.ajsec .btn-primary:hover,
+.apv-wrap .btn-primary:hover,
+.scf-pop .btn-primary:hover,
+.hf-dcard .btn-primary:hover,
+.form-card .btn-primary:hover,
+#talkSheetOv .btn-primary:hover,
+#flyerSheetOv .btn-primary:hover,
+.modal-ov .btn-primary:hover,
+.pz-exp-overlay .btn-primary:hover {
+  box-shadow: 0 0 0 1px rgba(39,147,200,.45), 0 12px 32px rgba(39,147,200,.45);
+}
+/* Variante con velo claro: botones flotantes (el navy no llega a 4.5:1
+   sobre fondo oscuro con el degradado solo; el velo .82 lo garantiza en
+   cualquier fondo sin cambiar el look celeste). */
+.accept-pill,
+.hf-accept-bar,
+.ag-upload-btn {
+  background: linear-gradient(135deg, rgba(39,147,200,.28), rgba(39,147,200,.12)), linear-gradient(rgba(255,255,255,.82), rgba(255,255,255,.82));
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  border: 1px solid rgba(255,255,255,.85);
+  box-shadow: 0 0 0 1px rgba(39,147,200,.35), 0 10px 30px rgba(39,147,200,.35);
+  color: #0A1E33;
+}
