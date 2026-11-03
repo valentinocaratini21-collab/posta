@@ -9302,6 +9302,59 @@ function pzAcceptAllWeekCands(list, isPilot) {
   } catch (e) {}
   return out;
 }
+
+// (LOTE SEMANA-APROBADA) Estado «semana aprobada» de Inicio: se muestra
+// SOLO cuando la semana corriente (mismo week_key = lunes actual zona
+// cuenta que usa Aceptar todo) tiene CERO programados pendientes Y al
+// menos un posteo aprobado de esa semana. Programado pendiente =
+// scheduled + approval pendiente + sin constancia (owner_liked). Aprobado
+// = scheduled + approval 'approved' o constancia (owner_liked=1, piloto).
+// Publicados, borradores sin fecha, semanas viejas y archivados quedan
+// FUERA de ambos conteos: una semana vacia o con solo borradores nunca
+// muestra el mensaje. Visitante nunca lo ve (lo deciden los llamadores).
+function pzSemanaAprobadaState(list, wk) {
+  const st = { show: false, pending: 0, approved: 0, week: 0 };
+  try {
+    if (!wk) return st;
+    for (const t of (Array.isArray(list) ? list : [])) {
+      if (!t || t.kind !== 'post' || !t.post) continue;
+      if (t.archivedExt) continue;
+      const p = t.post;
+      if (String(p.status || '') !== 'scheduled') continue;
+      if (String(p.week_key || '') !== wk) continue;
+      st.week++;
+      if (String(p.approval || 'pending') === 'approved' || Number(p.owner_liked || 0) === 1) st.approved++;
+      else st.pending++;
+    }
+    st.show = st.week > 0 && st.pending === 0 && st.approved > 0;
+  } catch (e) {}
+  return st;
+}
+function pzSemanaAprobadaHTML(en) {
+  return `<p class="hf-semana-ok" id="hfSemanaOk">${pzIc('checkCircle', 14)} ${en ? 'Your week is approved. Posty will take care of publishing it.' : 'Tu semana está aprobada. Posty se ocupa de publicarla.'}</p>`;
+}
+// (LOTE SEMANA-APROBADA) Sync en su lugar, sin render(): crea el mensaje
+// si el estado lo pide y no esta, lo quita si ya no corresponde. Se llama
+// tras aprobar (corazon y Aceptar todo) y tras cada actualizacion viva
+// del feed; el render completo de inicioView lo calcula de nuevo.
+function pzSemanaAprobadaSync() {
+  try {
+    const root = (typeof document !== 'undefined' && document) ? document.getElementById('inicioView') : null;
+    if (!root) return;
+    if (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) { const o = document.getElementById('hfSemanaOk'); if (o) o.remove(); return; }
+    const grid = root.querySelector('.hf-grid');
+    const old = document.getElementById('hfSemanaOk');
+    let show = false;
+    try {
+      const wk = (typeof albumMondayKey === 'function') ? albumMondayKey() : '';
+      const list = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES : [];
+      show = pzSemanaAprobadaState(list, wk).show;
+    } catch (e) { show = false; }
+    if (show && !old && grid) grid.insertAdjacentHTML('beforebegin', pzSemanaAprobadaHTML((typeof f3En === 'function') ? f3En() : false));
+    else if (!show && old) old.remove();
+  } catch (e) {}
+}
+
 // (LOTE ACEPTAR-TODO-SEMANA) Marca en su lugar tras aprobar uno por
 // el botón, sin render(). Si existe el helper de la enmienda
 // sin-refresh (pzAprobarEnSitio, lote gris-tik) manda él; si no,
@@ -9351,7 +9404,7 @@ async function pzAcceptAllWeek(btn) {
       return;
     }
     const cands = pzAcceptAllWeekCands(HF_TILES, !mode.manual);
-    if (!cands.length) { try { btn.remove(); } catch (e) {} try { pzAcceptBarOff(); } catch (e) {} return; }
+    if (!cands.length) { try { btn.remove(); } catch (e) {} try { pzAcceptBarOff(); } catch (e) {} try { pzSemanaAprobadaSync(); } catch (e) {} return; }
     let ok = 0, fail = 0;
     for (const t of cands) {
       const id = String(t.post.id);
@@ -9383,6 +9436,7 @@ async function pzAcceptAllWeek(btn) {
     const rest = pzAcceptAllWeekCands(HF_TILES, !mode.manual);
     if (!rest.length) { try { btn.remove(); } catch (e) {} try { pzAcceptBarOff(); } catch (e) {} }
     else { try { const c = btn.querySelector('.accept-count'); if (c) c.textContent = String(rest.length); } catch (e) {} }
+    try { pzSemanaAprobadaSync(); } catch (e) {}
     if (ok && !fail) {
       if (mode.manual) toast('✅ ' + (en ? 'Week accepted · ' + ok + ' posts' : 'Semana aceptada · ' + ok + ' posteos'));
       else toast('❤️ ' + (en ? 'Seen · ' + ok + ' posts' : 'Vistos · ' + ok + ' posteos'));
@@ -17618,6 +17672,62 @@ function pcDayKeyShift(date, tz, n) {
     return u.toISOString().slice(0, 10);
   } catch (e) { return ''; }
 }
+// (LOTE ETIQUETA-SEMANA · 2/11) Lunes–domingo de la semana actual en la
+// zona de la cuenta, sin +24 h absoluto: se toman las partes y/m/d y el
+// día de semana en esa zona y se avanza por fecha UTC (misma técnica del
+// desplazamiento por fecha UTC, para no caer en días DST). Devuelve {lun, dom} en
+// 'YYYY-MM-DD' o null si no se puede calcular (nunca se inventa).
+function pzSemanaLunDom(now, tz) {
+  try {
+    const d = (now instanceof Date) ? now : new Date(now);
+    if (isNaN(d)) return null;
+    const zo = tz ? { timeZone: tz } : {};
+    const ymd = d.toLocaleDateString('en-CA', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo));
+    const wd = d.toLocaleDateString('en-US', Object.assign({ weekday: 'short' }, zo));
+    const back = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }[wd];
+    if (back === undefined) return null;
+    const parts = ymd.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return null;
+    const lun = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12));
+    lun.setUTCDate(lun.getUTCDate() - back);
+    const dom = new Date(lun); dom.setUTCDate(dom.getUTCDate() + 6);
+    const key = (x) => x.toISOString().slice(0, 10);
+    return { lun: key(lun), dom: key(dom) };
+  } catch (e) { return null; }
+}
+// (LOTE ETIQUETA-SEMANA · 2/11) Texto de la semana actual: ES «Semana del
+// 3 al 9 de noviembre», EN «Week of November 3 to 9». Si la semana cruza
+// de mes, se nombran los dos meses; si cruza de año, se agregan los años.
+// Sin semana calculable devuelve '' (no se dibuja nada inventado).
+function pzSemanaEtiqueta(now, tz, en) {
+  try {
+    const r = pzSemanaLunDom(now, tz);
+    if (!r) return '';
+    const parse = (k) => { const p = k.split('-').map(Number); return new Date(Date.UTC(p[0], p[1] - 1, p[2], 12)); };
+    const a = parse(r.lun), b = parse(r.dom);
+    const mes = (x) => x.toLocaleDateString(en ? 'en-US' : 'es-AR', { month: 'long', timeZone: 'UTC' });
+    const dia = (x) => x.getUTCDate();
+    const anio = (x) => x.getUTCFullYear();
+    const mismoMes = a.getUTCMonth() === b.getUTCMonth() && anio(a) === anio(b);
+    if (en) {
+      if (mismoMes) return `Week of ${mes(a)} ${dia(a)} to ${dia(b)}`;
+      if (anio(a) === anio(b)) return `Week of ${mes(a)} ${dia(a)} to ${mes(b)} ${dia(b)}`;
+      return `Week of ${mes(a)} ${dia(a)}, ${anio(a)} to ${mes(b)} ${dia(b)}, ${anio(b)}`;
+    }
+    if (mismoMes) return `Semana del ${dia(a)} al ${dia(b)} de ${mes(a)}`;
+    if (anio(a) === anio(b)) return `Semana del ${dia(a)} de ${mes(a)} al ${dia(b)} de ${mes(b)}`;
+    return `Semana del ${dia(a)} de ${mes(a)} de ${anio(a)} al ${dia(b)} de ${mes(b)} de ${anio(b)}`;
+  } catch (e) { return ''; }
+}
+// (LOTE ETIQUETA-SEMANA · 2/11) Etiqueta solo lectura, sin navegación ni
+// filtro. Sin texto, no rinde nada.
+function pzSemanaEtiquetaHTML(now, tz, en) {
+  try {
+    const t = pzSemanaEtiqueta(now, tz, en);
+    if (!t) return '';
+    return `<p class="hf-semana">${esc(t)}</p>`;
+  } catch (e) { return ''; }
+}
 function hfWhenChip(post, now) {
   try {
     const schedAt = (post && typeof post === 'object') ? post.scheduled_at : post;
@@ -18102,6 +18212,39 @@ function pzNextScheduledId(posts, now) {
     return best;
   } catch (e) { return null; }
 }
+
+// (LOTE PRÓXIMO-DESTACADO · 2/11 · decisión Valentino: arriba del feed,
+// una tarjeta con el próximo posteo programado real) El próximo es el
+// scheduled con scheduled_at real más cercano en el futuro, calculado
+// con el selector vigente pzNextScheduledId. Sin futuro, null: nunca
+// una tarjeta inventada.
+function pzProximoDestacadoPost(posts, now) {
+  try {
+    const id = (typeof pzNextScheduledId === 'function') ? pzNextScheduledId(posts, now) : null;
+    if (id === null || id === undefined) return null;
+    const list = Array.isArray(posts) ? posts : [];
+    for (const p of list) { if (p && String(p.id) === String(id)) return p; }
+    return null;
+  } catch (e) { return null; }
+}
+function pzProximoDestacadoHTML(posts, en) {
+  try {
+    const p = pzProximoDestacadoPost(posts, new Date());
+    if (!p || !p.scheduled_at) return '';
+    const chipTxt = (typeof hfWhenChip === 'function') ? hfWhenChip(p) : '';
+    if (!chipTxt) return '';
+    const isV = String(p.media_type || '') === 'video';
+    const phCap = String(p.caption || '').replace(/\s+/g, ' ').trim();
+    const phTxt = phCap ? (phCap.length > 90 ? phCap.slice(0, 90).trimEnd() + '…' : phCap) : '';
+    const media = !p.image_path
+      ? `<span class="hf-nextup-ph"><span>${(typeof pzIc === 'function') ? pzIc('sparkle', 16) : ''}</span><span>${esc(phTxt || (en ? 'Image on its way' : 'imagen en camino'))}</span></span>`
+      : isV
+        ? `<video class="hf-nextup-media" src="${esc(p.image_path)}" muted playsinline preload="metadata" data-ph="${esc(phTxt || (en ? 'Image on its way' : 'imagen en camino'))}" onerror="__vidFb(this)"></video>`
+        : `<img class="hf-nextup-media" src="${esc(mv(p.image_path, 900))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
+    return `<button type="button" class="hf-nextup" data-hf-nextup="${esc(String(p.id))}" aria-label="${en ? 'Open next post' : 'Abrir el próximo posteo'}"><span class="hf-nextup-head"><span class="hf-nextup-title">${en ? 'Next up' : 'El próximo en salir'}</span><span class="hf-nextup-when">${(typeof pzIc === 'function') ? pzIc('clock', 12) : ''} ${esc(chipTxt)}</span></span>${media}<span class="hf-nextup-foot"><span class="hf-nextup-status">${en ? 'Scheduled' : 'Programado'}</span>${phTxt ? `<span class="hf-nextup-cap">${esc(phTxt)}</span>` : ''}</span></button>`;
+  } catch (e) { return ''; }
+}
+
 // (LOTE 16 · chapita sin mes, hora intacta) Parte «Mar 17/11 · 19:00»
 // en día («Mar 17», sin mes) y hora («19:00»). EN el orden es mes/día
 // («Tue 11/17 · 7:00 PM» → día «Tue 17», hora «7:00 PM»). Sin « · »
@@ -18126,7 +18269,7 @@ function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
     const glyph = t.pinned ? HOME_PIN_SVG : t.type === 'video' ? HOME_REEL_SVG : t.type === 'carousel' ? HOME_CAR_SVG : '';
-    return `<button type="button" class="hf-tile pub" data-lightbox="${esc(t.img)}" data-video="0" data-cap="" data-tags="" aria-label="Posteo de tu Instagram"><img src="${esc(t.img)}" loading="lazy" alt="" onerror="__imgFb(this)">${glyph}</button>`;
+    return `<button type="button" class="hf-tile pub" data-hf-filtro="publicados" data-lightbox="${esc(t.img)}" data-video="0" data-cap="" data-tags="" aria-label="Posteo de tu Instagram"><img src="${esc(t.img)}" loading="lazy" alt="" onerror="__imgFb(this)">${glyph}</button>`;
   }
   const p = t.post;
   const isV = String(p.media_type || '') === 'video';
@@ -18265,7 +18408,8 @@ function homeTileHTML(t, i) {
   // bundle siempre está definido).
   const hfAprobado = (String(p.status) === 'draft' || String(p.status) === 'scheduled') && (typeof pzAprobadoEs === 'function') && pzAprobadoEs(p.id);
   const tikSpan = hfAprobado ? '<span class="hf-tik" aria-hidden="true">✓</span>' : '';
-  return `<span class="hf-cell"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : likeBtn}${tikSpan}</span></span>`;
+  const filtroGrupo = (p.status === 'draft' || p.status === 'scheduled') ? 'pendientes' : (p.status === 'published' ? 'publicados' : ''); // (LOTE FILTRO-FEED)
+  return `<span class="hf-cell" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : likeBtn}${tikSpan}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -18564,6 +18708,52 @@ function hfTabTiles(tiles, tab, prof) {
     }));
   }
   return list;
+}
+// (LOTE FILTRO-FEED) Filtro rápido de Inicio, SOLO vista: no borra,
+// no archiva, no cambia estados. 'pendientes' = borrador o programado;
+// 'publicados' = ya salido (post publicado o leído de Instagram).
+// Cualquier otro estado no califica: solo se ve en Todos.
+function hfFiltroGrupo(t) {
+  if (!t) return null;
+  if (t.kind === 'ig') return 'publicados';
+  if (t.kind === 'post' && t.post) {
+    if (t.post.status === 'draft' || t.post.status === 'scheduled') return 'pendientes';
+    if (t.post.status === 'published') return 'publicados';
+  }
+  return null;
+}
+function hfFiltroTiles(tiles, filtro) {
+  const list = Array.isArray(tiles) ? tiles : [];
+  if (filtro !== 'pendientes' && filtro !== 'publicados') return list;
+  return list.filter((t) => hfFiltroGrupo(t) === filtro);
+}
+function hfFiltroHTML(filtro, en, vacio) {
+  const f = (filtro === 'pendientes' || filtro === 'publicados') ? filtro : 'todos';
+  const L = en ? ['All', 'Pending', 'Published'] : ['Todos', 'Pendientes', 'Publicados'];
+  const btn = (v, i) => `<button type="button" class="hf-filtro-chip${f === v ? ' on' : ''}" data-hf-filtro-chip="${v}" aria-pressed="${f === v ? 'true' : 'false'}">${L[i]}</button>`;
+  return `<div class="hf-filtro" role="group" aria-label="${en ? 'Feed filter' : 'Filtro del feed'}">${btn('todos', 0)}${btn('pendientes', 1)}${btn('publicados', 2)}</div><p class="hf-filtro-vacio" id="hfFiltroVacio"${vacio ? '' : ' hidden'}>${en ? 'No posts in this filter.' : 'No hay posteos en este filtro.'}</p>`;
+}
+function hfFiltroAplicar() {
+  try {
+    const root = document.getElementById('inicioView'); if (!root) return;
+    root.classList.remove('hf-filtro-pendientes', 'hf-filtro-publicados');
+    if (HF_FILTRO === 'pendientes') root.classList.add('hf-filtro-pendientes');
+    if (HF_FILTRO === 'publicados') root.classList.add('hf-filtro-publicados');
+    root.querySelectorAll('[data-hf-filtro-chip]').forEach((el) => {
+      const on = el.dataset.hfFiltroChip === HF_FILTRO;
+      el.classList.toggle('on', on);
+      el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    const note = document.getElementById('hfFiltroVacio');
+    if (note) {
+      let vacio = false;
+      if (HF_FILTRO !== 'todos') {
+        const grid = root.querySelector('.hf-grid');
+        vacio = !grid || !root.querySelector('.hf-grid > [data-hf-filtro="' + HF_FILTRO + '"]');
+      }
+      note.hidden = !vacio;
+    }
+  } catch (e) {}
 }
 function hfVisitorTiles(tiles) {
   // La vista del visitante: SOLO lo que ya está en Instagram
@@ -18988,6 +19178,7 @@ let HOME_PROF = null; // v331: último payload de /api/home/profile (réplica de
 // (Publicaciones · Reels · Etiquetados), espejo «Ver como visitante»,
 // la composición vigente y las propuestas por posteo (para el detalle).
 let HF_TAB = 'posts';
+let HF_FILTRO = 'todos'; // (LOTE FILTRO-FEED) filtro rápido de Inicio; 'todos' por defecto
 let HF_VISITOR = false;
 let HF_TILES = [];
 let HF_CUR_PROF = null;
@@ -19147,6 +19338,10 @@ async function inicioView() {
   // de la Agenda), visible solo con borradores pendientes. El #revMsg
   // queda: es donde el gate de Instagram y los errores de aceptación
   // dan su feedback en esta vista.
+  // (LOTE FILTRO-FEED) Conteo solo para la nota de vacío del render;
+  // el ocultado en vivo lo hace CSS por clase en la raíz.
+  const filtroTiles = hfFiltroTiles(displayTiles, HF_FILTRO);
+  const filtroHTML = hfFiltroHTML(HF_FILTRO, enHome, HF_FILTRO !== 'todos' && !filtroTiles.length);
   const stripHTML = (!HF_VISITOR && drafts.length)
     ? `${acceptPillHTML(drafts.length, 'hfAcceptAll')}<div id="revMsg"></div>`
     : '';
@@ -19163,6 +19358,11 @@ async function inicioView() {
   const pzAcceptWeekHTML = pzAcceptWeekCands.length
     ? acceptBarHTML(pzAcceptWeekCands.length)
     : '';
+  // (LOTE SEMANA-APROBADA) Mensaje encima del feed, solo si la
+  // semana corriente esta toda aprobada (cero pendientes + al
+  // menos un aprobado). Visitante nunca lo ve.
+  const pzSemanaOk = (!HF_VISITOR) ? pzSemanaAprobadaState(tiles, (typeof albumMondayKey === 'function') ? albumMondayKey() : '').show : false;
+  const pzSemanaOkHTML = pzSemanaOk ? pzSemanaAprobadaHTML(enHome) : '';
   // (v440 · SOLO FEED) La nota del kit de nacimiento (hf-kitnote) SALIÓ
   // del flujo principal de Inicio: con perfil kit, el encabezado y la
   // grilla ya muestran la propuesta; la nota competía con el feed.
@@ -19210,11 +19410,15 @@ async function inicioView() {
   let portTopInicio = '';
   if (!HF_VISITOR && nivelPosty) { try { portTopInicio = await mxPortTop(nivelPosty.poderes, nivelPosty, 'posty'); } catch (e) { portTopInicio = ''; } }
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
-  return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}${pzAcceptWeekCands.length ? ' hf-acceptbar-on' : ''}">
+  return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}${pzAcceptWeekCands.length ? ' hf-acceptbar-on' : ''}${HF_FILTRO === 'pendientes' ? ' hf-filtro-pendientes' : HF_FILTRO === 'publicados' ? ' hf-filtro-publicados' : ''}">
   ${portTopInicio}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: !HF_VISITOR })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
   ${hfTabsHTML(HF_TAB, enHome)}
+  ${HF_VISITOR ? '' : pzSemanaEtiquetaHTML(new Date(), tz, enHome)}
+  ${pzSemanaOkHTML}
+  ${(!HF_VISITOR ? pzProximoDestacadoHTML(allPosts, enHome) : '')}
+  ${filtroHTML}
   ${gridHTML}
   ${tiles.length ? `<p class="hf-nota">${enHome ? pzIc('heart', 14) + ' Tap the heart to approve each post. They all go out on their date, unless you ask for a change.' : pzIc('heart', 14) + ' Tocá el corazón para aprobar el posteo. Todos salen en su fecha, salvo que pidas un cambio.'}</p>` : ''}
   ${visitorPillHTML}
@@ -21246,10 +21450,25 @@ function hfLiveApply(job) {
     }
   }
   HF_TILES = tiles;
+  try { pzSemanaAprobadaSync(); } catch (e) {}
   // Las tiles nuevas/reemplazadas necesitan sus gestos.
   try { hfFeedGesturesBind(root); } catch (e) {}
   try { bindScfMinis(root); } catch (e) {}
   try { hfDurBind(root); } catch (e) {}
+  // (LOTE PRÓXIMO-DESTACADO) La tarjeta sigue al próximo real: se
+  // re-compone con el payload vivo. Sin próximo futuro, se quita;
+  // si aparece uno, se inserta antes de la grilla.
+  try {
+    const livePosts = tiles.filter((t) => t && t.kind === 'post' && t.post).map((t) => t.post);
+    const fresh = (typeof pzProximoDestacadoHTML === 'function') ? pzProximoDestacadoHTML(livePosts, hfIsEn()) : '';
+    const cur = root.querySelector('[data-hf-nextup]');
+    const gridEl = root.querySelector('.hf-grid');
+    if (fresh) {
+      if (cur) cur.outerHTML = fresh;
+      else if (gridEl) gridEl.insertAdjacentHTML('beforebegin', fresh);
+    } else if (cur) cur.remove();
+  } catch (e) {}
+
 }
 // Hoja de acciones estilo Instagram para un posteo futuro (mismo sistema
 // de hojas que pcOpenImageSheet: .pcsheet-backdrop + .pcsheet, se cierra
@@ -21742,6 +21961,9 @@ async function hfTileApprove(tile, post) {
       // aviso, nunca aprueba ni reprograma. Solo en programados.
       if (st === 'scheduled') {
         try { await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'like' }); } catch (e2) {}
+        // (LOTE SEMANA-APROBADA) Constancia en la entrada + sync.
+        try { const _e = (typeof HF_TILES !== 'undefined' ? HF_TILES : []).find((x) => x && x.kind === 'post' && String(x.post.id) === String(id)); if (_e && _e.post) _e.post.owner_liked = 1; } catch (e) {}
+        try { pzSemanaAprobadaSync(); } catch (e) {}
         toast('❤️ ' + (en ? 'Seen' : 'Visto'));
       } else {
         toast('❤️ ' + (en ? 'On autopilot, Posty publishes on its own' : 'En piloto automático, Posty publica solo'));
@@ -21750,11 +21972,16 @@ async function hfTileApprove(tile, post) {
     }
     if (st === 'scheduled') {
       await pcApprove(id, tile, null);
+      // (LOTE SEMANA-APROBADA) El corazon simple no mutaba
+      // HF_TILES: se anota la aprobacion en la entrada para
+      // que el sync la cuente.
+      try { const _e = (typeof HF_TILES !== 'undefined' ? HF_TILES : []).find((x) => x && x.kind === 'post' && String(x.post.id) === String(id)); if (_e && _e.post) _e.post.approval = 'approved'; } catch (e) {}
       // (ENMIENDA SIN-REFRESH) Aprobado: el tile se actualiza EN SU
       // LUGAR (corazón + tik + chapita), sin render() ni salto. Si
       // el nodo no está en el DOM, ahí sí render(). Guardia: harness
       // viejo sin el helper igual renderiza.
       try { if (typeof pzAprobarEnSitio === 'function') { if (!pzAprobarEnSitio(tile, id, null) && typeof render === 'function') render(); } else if (typeof render === 'function') render(); } catch (e) {}
+      try { pzSemanaAprobadaSync(); } catch (e) {}
       return;
     }
     if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
@@ -21779,6 +22006,7 @@ async function hfTileApprove(tile, post) {
     // Fecha real del PATCH (res.scheduled_at) o la pedida (when).
     try { if (typeof pzAprobarEnSitio === 'function') { if (!pzAprobarEnSitio(tile, id, (res && res.scheduled_at) || when || undefined) && typeof render === 'function') render(); } else if (typeof render === 'function') render(); } catch (e) {}
     toast('✅ <b>¡Listo!</b> Quedó programado 🙌');
+    try { pzSemanaAprobadaSync(); } catch (e) {}
 
   } catch (e) {
     try { toast('😅 ' + esc((e && e.message) || 'No se pudo programar')); } catch (e2) {}
@@ -22757,6 +22985,29 @@ function bindInicio() {
   // (re-render de la vista, el patrón de la casa).
   $$('#inicioView [data-hf-tab]').forEach((el) => {
     el.onclick = () => { if (HF_TAB !== el.dataset.hfTab) { HF_TAB = el.dataset.hfTab; try { render(); } catch (e) {} } };
+  });
+
+  // (LOTE PRÓXIMO-DESTACADO) La tarjeta abre el detalle/aprobación del
+  // posteo, el mismo destino que tocar su tile. Delegado en la raíz:
+  // sobrevive al reemplazo de la tarjeta en el refresh vivo.
+  try {
+    const iv = document.getElementById('inicioView');
+    if (iv && !iv._pzNextupBound) {
+      iv._pzNextupBound = true;
+      iv.addEventListener('click', (e) => {
+        const card = (e.target && e.target.closest) ? e.target.closest('[data-hf-nextup]') : null;
+        if (!card || !iv.contains(card)) return;
+        const id = card.dataset ? card.dataset.hfNextup : '';
+        if (!id) return;
+        location.hash = '#/app/post/' + encodeURIComponent(id);
+      });
+    }
+  } catch (e) {}
+
+  // (LOTE FILTRO-FEED) Chips del filtro: solo vista, sin re-render
+  // (no se pierde scroll ni se rompen los binds de las tiles).
+  $$('#inicioView [data-hf-filtro-chip]').forEach((el) => {
+    el.onclick = () => { if (HF_FILTRO !== el.dataset.hfFiltroChip) { HF_FILTRO = el.dataset.hfFiltroChip; try { hfFiltroAplicar(); } catch (e) {} } };
   });
   // (Tanda feed 5 · ítem 7) «Ver como visitante» y su vuelta.
   $$('#inicioView [data-hf-visitor]').forEach((el) => {
@@ -24146,7 +24397,46 @@ function maybeAskPushPostIg() {
 window.addEventListener('hashchange', () => { try { const _r = render(); if (_r && typeof _r.then === 'function') _r.then(() => { try { pzRestoreScroll(); } catch (e) {} }); } catch (e) {} });
 render();
 try { pzPullInit(); } catch (e) {}
-setTimeout(trackScreen, 800); // primer screen_view de la carga (hashchange no dispara al entrar)
+setTimeout(trackScreen, 800);
+
+// (LOTE ENCABEZADO-COLAPSABLE · Valentino 2/11: el encabezado del
+// perfil en Inicio ocupa pantalla siempre; al bajar se compacta para
+// que el feed gane lugar. Decisión documentada: Editar/Compartir NO se
+// ocultan en el estado compacto — la ganancia de espacio sale de las
+// filas del encabezado (stats, bio, cat, link, racha, chip), no de los
+// botones, así que nunca quedan inalcanzables en ningún estado.
+// Vuelven solos al estado completo al subir (delta > 10px) o al llegar
+// cerca del tope (<= 40px). Sin desborde de página, nunca colapsa.)
+function pzHeadCollapseNext(scrollY, lastY, collapsed) {
+  const y = Math.max(0, Number(scrollY) || 0);
+  const last = Math.max(0, Number(lastY) || 0);
+  if (!collapsed && y > 120 && y >= last) return { collapsed: true, lastY: y };
+  if (collapsed && (y <= 40 || y < last - 10)) return { collapsed: false, lastY: y };
+  return { collapsed: !!collapsed, lastY: y };
+}
+let pzHeadCollapseState = { collapsed: false, lastY: 0 };
+function pzHeadCollapseSync() {
+  try {
+    const iv = document.getElementById('inicioView');
+    if (!iv) return;
+    const doc = document.documentElement;
+    const maxScroll = (doc ? doc.scrollHeight : 0) - (window.innerHeight || 0);
+    if (maxScroll <= 0) {
+      iv.classList.remove('hf-collapsed');
+      pzHeadCollapseState = { collapsed: false, lastY: 0 };
+      return;
+    }
+    const y = window.scrollY || (doc && doc.scrollTop) || 0;
+    const next = pzHeadCollapseNext(y, pzHeadCollapseState.lastY, pzHeadCollapseState.collapsed);
+    pzHeadCollapseState = next;
+    iv.classList.toggle('hf-collapsed', next.collapsed);
+  } catch (e) {}
+}
+if (typeof window !== 'undefined' && window.addEventListener && !window.__pzHeadCollapseBound) {
+  window.__pzHeadCollapseBound = true;
+  window.addEventListener('scroll', pzHeadCollapseSync, { passive: true });
+}
+ // primer screen_view de la carga (hashchange no dispara al entrar)
 /* LOTE SUBIR-FOTO-TODO — pantalla de subir fotos en la app real.
    Regla madre: subir nunca crea un posteo solo. Pantalla 1 = elegir qué
    hacer con cada foto; pantalla 2 = propuesta ANTES de crear el borrador.
