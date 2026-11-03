@@ -300,6 +300,7 @@ const feedDirector = require('./feed-director');
 const clientDigest = require('./client-digest');
 const onboardingProducts = require('./onboarding-products'); // Onboarding un clic: productos detectados + foto por producto (determinístico, USD 0) // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
 const fundamentoLiteral = require('./fundamento-literal'); // LOTE FUNDAMENTO-LITERAL ×5 (3/11): espejo, foto, link, confirmación semanal, vetos — nunca adivinar qué vende el cliente
+const rubroGarantias = require('./rubro-garantias'); // LOTE RUBRO-GARANTÍAS ×6 (3/11): puerta final de producto, rubro visible, 2 fuentes, feed propio
 const analysisEngine = require('./analysis-engine'); // 🧠 Análisis (2026-10-19): radiografía + mercado + nacimiento + porqué + loop
 const semanaAprende = require('./semana-aprende'); // 🧠 Semana aprende (ítem 4): la semana anterior real ajusta la tanda y el porqué.
 const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
@@ -1810,9 +1811,21 @@ function importTrialWeek(userId, igRaw, expectedBusiness) {
       // día uno, igual que un posteo generado adentro del producto).
       const dpost = (out.design && Array.isArray(out.design.posts) && out.design.posts[idx]) || {};
       const styleCode = String(dpost.style || p.style || '').slice(0, 60);
+      // (RUBRO-GARANTÍAS ×6 · pieza 1) La semana importada de la prueba
+      // también pasa la puerta: el posteo se compara con los productos
+      // del espejo aprobado; sin calce, nace en revisión (nunca se
+      // programa en silencio) y guarda su motivo en rg_*.
+      let rgP = ''; let rgProc = ''; let rgSin = 0;
+      try {
+        const espImp = (out && out.espejo && out.espejo.aprobado) ? (out.espejo.productos || []) : [];
+        if (espImp.length) {
+          const mm = rubroGarantias.productoDeIdea({ titulo: (dpost && dpost.headline) || '', angulo: p.caption || '' }, espImp);
+          if (mm) { rgP = String(mm.nombre || ''); rgProc = String(mm.procedencia || 'cliente'); } else rgSin = 1;
+        }
+      } catch (e) {}
       const ins = db.prepare(
-        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code) VALUES (?,?,?,?,?,?,?,?,?,?)'
-      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', trainingWheelsActive(userId) ? 1 : 0, 'trial', clientPhoto, styleCode);
+        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc);
       try {
         db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo)
           VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?)
@@ -2397,6 +2410,19 @@ async function makeIdeaDraft(uid, idea) {
   // modo de texto y el productRef también se miden contra la semana
   // destino real (la que el cliente está mirando).
   const wk = mondayKeyOf(tzToday(userTz(uid)));
+  // (RUBRO-GARANTÍAS ×6 · pieza 1) Puerta de producto en el loop de
+  // ideas: título + brief deben calzar con un producto del fundamento;
+  // si no, el borrador nace en revisión con motivo. Se recomputa acá
+  // porque posty_ideas no persiste la anotación de generateIdeas.
+  let rgMatch = null; let rgSinProducto = false;
+  try {
+    const dgP2 = clientDigest.getDigest(db, uid);
+    const prods2 = rubroGarantias.productosDesdeDigest(dgP2 && dgP2.productos, readDna(uid));
+    if (prods2.length) {
+      rgMatch = rubroGarantias.productoDeIdea({ titulo: idea.title, angulo: idea.brief }, prods2);
+      rgSinProducto = !rgMatch;
+    }
+  } catch (e) {}
   // 🖼️ (v236) FORMATO PROMETIDO = FORMATO ENTREGADO: una idea de
   // carrusel nace por el pipeline de carrusel (portada scroll-stop +
   // placas). Si ese pipeline falla, Hacelo devuelve error honesto —
@@ -2410,11 +2436,12 @@ async function makeIdeaDraft(uid, idea) {
       return { ok: false, reason: 'no_carousel' };
     }
     const paths = [gen.coverPath, ...gen.slidePaths].slice(0, 6);
-    const rc = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
-      VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    const rc = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, rg_producto, rg_procedencia)
+      VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(uid, gen.coverPath, gen.caption, hashtags, JSON.stringify(paths), String(idea.title || '').slice(0, 200), String('idea:' + (idea.angle_key || '')).slice(0, 120),
-        tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || gen.needsReview) ? 1 : 0,
-        'carousel', '', '', '', String((content && content.hookId) || ''), promptForMedia(gen.coverPath));
+        tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || gen.needsReview || rgSinProducto) ? 1 : 0,
+        'carousel', '', '', '', String((content && content.hookId) || ''), promptForMedia(gen.coverPath),
+        (rgMatch ? rgMatch.nombre : ''), (rgMatch ? (rgMatch.procedencia || '') : ''));
     stampPostDigest(rc.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
     try { db.prepare(`UPDATE posty_ideas SET status = 'made', post_id = ?, acted_at = datetime('now') WHERE id = ?`).run(rc.lastInsertRowid, idea.id); } catch (e) {}
     try { track(uid, 'idea_made', String(idea.id)); } catch (e) {}
@@ -2453,12 +2480,13 @@ async function makeIdeaDraft(uid, idea) {
     }
   }
   if (!imagePath) return { ok: false, reason: 'no_image' };
-  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
-    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`)
+  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, rg_producto, rg_procedencia)
+    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, String(idea.title || '').slice(0, 200), String('idea:' + (idea.angle_key || '')).slice(0, 120),
-      tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || genOut.character === 'failed' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja')) ? 1 : 0,
+      tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || genOut.character === 'failed' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || rgSinProducto) ? 1 : 0,
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
-      String((content && content.hookId) || ''), promptForMedia(imagePath));
+      String((content && content.hookId) || ''), promptForMedia(imagePath),
+      (rgMatch ? rgMatch.nombre : ''), (rgMatch ? (rgMatch.procedencia || '') : ''));
   stampPostDigest(r.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
   try { db.prepare(`UPDATE posty_ideas SET status = 'made', post_id = ?, acted_at = datetime('now') WHERE id = ?`).run(r.lastInsertRowid, idea.id); } catch (e) {}
   try { track(uid, 'idea_made', String(idea.id)); } catch (e) {}
@@ -2532,14 +2560,30 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
     db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path) VALUES (?,?,?,?)`)
       .run(post.id, post.caption || '', post.hashtags || '', post.image_path || '');
   } catch (e) {}
+  // (RUBRO-GARANTÍAS ×6 · pieza 1) El regenerado guarda su producto
+  // real: el tema dirigido se compara con el fundamento; sin calce,
+  // queda en revisión (nunca se programa en silencio). needs_review
+  // previo NO se baja acá: el regenerado vuelve a borrador y el
+  // cliente lo re-aprueba por el camino normal.
+  let rgP2 = ''; let rgProc2 = ''; let rgSin2 = 0;
+  try {
+    const dgP3 = clientDigest.getDigest(db, uid);
+    const prods3 = rubroGarantias.productosDesdeDigest(dgP3 && dgP3.productos, readDna(uid));
+    if (prods3.length) {
+      const mm3 = rubroGarantias.productoDeIdea({ titulo: title, angulo: brief }, prods3);
+      if (mm3) { rgP2 = String(mm3.nombre || ''); rgProc2 = String(mm3.procedencia || ''); } else rgSin2 = 1;
+    }
+  } catch (e) {}
   db.prepare(`UPDATE posts SET image_path = ?, prev_image_path = ?, caption = ?, hashtags = ?,
       status = 'draft', scheduled_at = NULL, source_topic = ?, source_angle = ?, strategy_why = ?,
-      style_code = ?, style_reason = ?, intent = ?, product_ref = ?, hook_id = ?, image_prompt = ?, error = ''
+      style_code = ?, style_reason = ?, intent = ?, product_ref = ?, hook_id = ?, image_prompt = ?, error = '',
+      rg_producto = ?, rg_procedencia = ?
     WHERE id = ?`)
     .run(imagePath, post.image_path || '', caption, hashtags,
       String(title || '').slice(0, 200), 'regen:mapa-sitio', String(brief || '').slice(0, 500),
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
-      String((content && content.hookId) || ''), promptForMedia(imagePath), post.id);
+      String((content && content.hookId) || ''), promptForMedia(imagePath), rgP2, rgProc2, post.id);
+  if (rgSin2) { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id); } catch (e) {} }
   // (v239) QA de personaje: identidad no garantizada ⇒ la pieza queda en revisión.
   if (genOut.character === 'failed') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id); console.log(`[admin-regen] post ${post.id}: protagonista no garantizado — needs_review`); } catch (e) {} }
   // (QA gate 2026-10-26) Gate agotado ⇒ la pieza queda en revisión.
@@ -4050,16 +4094,89 @@ function flProductos(d) {
   const list = (d && Array.isArray(d.productos)) ? d.productos : [];
   return list.map((p) => ({ nombre: String((p && p.nombre) || p || ''), precio: String((p && p.precio) || ''), procedencia: String((p && p.procedencia) || 'bio') })).filter((p) => p.nombre);
 }
+// (RUBRO-GARANTÍAS ×6 · pieza 4) Hipótesis: productos con UNA sola
+// fuente no-cliente, guardados en el digest como
+// [{nombre, fuentes:['bio'|'web'|'foto'|'link'|'feed']}]. Se muestran
+// para confirmar, nunca generan en silencio (ideasInputFor arma
+// productos solo desde d.productos + ADN, nunca desde hipótesis).
+function flHipotesis(d) {
+  const list = (d && Array.isArray(d.hipotesis)) ? d.hipotesis : [];
+  return list.map((h) => ({ nombre: String((h && h.nombre) || h || ''), fuentes: (Array.isArray(h && h.fuentes) ? h.fuentes : []).filter((s) => ['bio', 'web', 'foto', 'link', 'feed'].includes(s)) })).filter((h) => h.nombre && h.fuentes.length);
+}
+// Aplica UNA señal (fuente) para un producto candidato: si ya está
+// confirmado, nada; si la fuente es 'cliente', confirma directo; si ya
+// es hipótesis con otra fuente, la segunda fuente lo confirma y pasa a
+// productos; si no, queda como hipótesis. Devuelve 'confirmado' |
+// 'hipotesis' | 'ya'. Nunca escribe en silencio a productos un
+// candidato de una sola fuente no-cliente.
+function rgAplicarSenal(d, nombre, fuente) {
+  const nom = String(nombre || '').trim();
+  if (nom.length < 3) return 'ya';
+  const normN = fundamentoLiteral.norm(nom);
+  const cur = flProductos(d);
+  if (cur.some((p) => fundamentoLiteral.norm(p.nombre) === normN)) return 'ya';
+  if (fuente === 'cliente') { d.productos = [...cur, { nombre: nom, precio: '', procedencia: 'cliente' }].slice(0, 8); return 'confirmado'; }
+  const hips = flHipotesis(d);
+  const ex = hips.find((h) => fundamentoLiteral.norm(h.nombre) === normN);
+  if (ex) {
+    if (!ex.fuentes.includes(fuente)) ex.fuentes.push(fuente);
+    if (ex.fuentes.length >= 2) {
+      d.productos = [...cur, { nombre: ex.nombre, precio: '', procedencia: ex.fuentes[0] }].slice(0, 8);
+      d.hipotesis = hips.filter((h) => fundamentoLiteral.norm(h.nombre) !== normN);
+      return 'confirmado';
+    }
+    d.hipotesis = hips;
+    return 'hipotesis';
+  }
+  d.hipotesis = [...hips, { nombre: nom, fuentes: [fuente] }];
+  return 'hipotesis';
+}
+// Quita de hipótesis todo nombre que ya esté confirmado (evita que una
+// confirmación por otro camino deje una hipótesis fantasma).
+function rgLimpiarHipotesis(d) {
+  try {
+    const cur = new Set(flProductos(d).map((p) => fundamentoLiteral.norm(p.nombre)));
+    d.hipotesis = flHipotesis(d).filter((h) => !cur.has(fundamentoLiteral.norm(h.nombre)));
+  } catch (e) {}
+}
 app.get('/api/fundamento/espejo', requireAuth, (req, res) => {
   const d = flDigest(req.session.userId);
-  res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), espejo_aprobado: d.espejo_aprobado === 1 });
+  res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), espejo_aprobado: d.espejo_aprobado === 1 });
 });
 app.post('/api/fundamento/espejo/aprobar', requireAuth, express.json(), (req, res) => {
   const uid = req.session.userId;
   const d = flDigest(uid);
   d.espejo_aprobado = 1;
+  // (RUBRO-GARANTÍAS ×6 · pieza 4) La aprobación del espejo por el
+  // cliente CUENTA como palabra del cliente: toda hipótesis pendiente
+  // pasa a producto confirmado (procedencia de su primera fuente).
+  try {
+    const cur = flProductos(d);
+    for (const h of flHipotesis(d)) {
+      if (!cur.some((p) => fundamentoLiteral.norm(p.nombre) === fundamentoLiteral.norm(h.nombre))) cur.push({ nombre: h.nombre, precio: '', procedencia: h.fuentes[0] || 'bio' });
+    }
+    d.productos = cur.slice(0, 8);
+    d.hipotesis = [];
+  } catch (e) {}
   flGuardar(uid, d);
-  res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos) });
+  res.json({ ok: true, productos: flProductos(d), hipotesis: [], vetos: fundamentoLiteral.normalizarVetos(d.vetos) });
+});
+// (RUBRO-GARANTÍAS ×6 · pieza 4) Confirmar UNA hipótesis desde la tira
+// semanal: la palabra del cliente la convierte en producto confirmado.
+app.post('/api/fundamento/hipotesis/confirmar', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const nombre = String((req.body && req.body.nombre) || '').trim();
+  if (!nombre) return res.status(400).json({ ok: false, error: 'Falta el producto a confirmar' });
+  const d = flDigest(uid);
+  const hips = flHipotesis(d);
+  const ex = hips.find((h) => fundamentoLiteral.norm(h.nombre) === fundamentoLiteral.norm(nombre));
+  if (!ex) return res.status(404).json({ ok: false, error: 'Esa hipótesis ya no está pendiente' });
+  const cur = flProductos(d);
+  if (!cur.some((p) => fundamentoLiteral.norm(p.nombre) === fundamentoLiteral.norm(nombre))) cur.push({ nombre: ex.nombre, precio: '', procedencia: 'cliente' });
+  d.productos = cur.slice(0, 8);
+  d.hipotesis = hips.filter((h) => fundamentoLiteral.norm(h.nombre) !== fundamentoLiteral.norm(nombre));
+  flGuardar(uid, d);
+  res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d) });
 });
 app.post('/api/fundamento/espejo/corregir', requireAuth, express.json(), (req, res) => {
   const uid = req.session.userId;
@@ -4100,14 +4217,22 @@ app.post('/api/fundamento/link', requireAuth, express.json(), async (req, res) =
   const d = flDigest(uid);
   const cur = flProductos(d);
   const seen = new Set(cur.map((p) => fundamentoLiteral.norm(p.nombre)));
-  for (const p of prods) { if (!seen.has(fundamentoLiteral.norm(p.nombre))) { cur.push(p); seen.add(fundamentoLiteral.norm(p.nombre)); } }
-  d.productos = cur.slice(0, 8);
+  let agregados = 0; let enHipotesis = 0;
+  // (RUBRO-GARANTÍAS ×6 · pieza 4) Un link solo es UNA fuente: si el
+  // producto no está confirmado por otro camino, queda como hipótesis
+  // (se muestra para confirmar, no genera en silencio).
+  for (const p of prods) {
+    if (seen.has(fundamentoLiteral.norm(p.nombre))) continue;
+    const r = rgAplicarSenal(d, p.nombre, 'link');
+    if (r === 'confirmado') { agregados++; seen.add(fundamentoLiteral.norm(p.nombre)); }
+    else if (r === 'hipotesis') enHipotesis++;
+  }
   flGuardar(uid, d);
-  res.json({ ok: true, productos: flProductos(d), agregados: prods.length });
+  res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d), agregados, en_hipotesis: enHipotesis });
 });
 app.get('/api/fundamento/semana-confirm', requireAuth, (req, res) => {
   const d = flDigest(req.session.userId);
-  res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), semana_confirmada_at: d.semana_confirmada_at || null });
+  res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), semana_confirmada_at: d.semana_confirmada_at || null });
 });
 app.post('/api/fundamento/semana-confirm', requireAuth, express.json(), (req, res) => {
   const uid = req.session.userId;
@@ -4116,14 +4241,18 @@ app.post('/api/fundamento/semana-confirm', requireAuth, express.json(), (req, re
     // «Sigue igual»: no cambia nada, solo registra la confirmación.
     d.semana_confirmada_at = new Date().toISOString();
     flGuardar(uid, d);
-    return res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), cambiado: false });
+    return res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), cambiado: false });
   }
   const nuevos = fundamentoLiteral.aplicarEdicionSemanal(flProductos(d), String((req.body && req.body.texto) || ''));
   const antes = JSON.stringify(flProductos(d));
   d.productos = nuevos;
   d.semana_confirmada_at = new Date().toISOString();
+  // (RUBRO-GARANTÍAS ×6 · pieza 4) Lo que el cliente escribe acá es
+  // palabra del cliente: si nombra una hipótesis, queda confirmada y
+  // sale de pendientes.
+  rgLimpiarHipotesis(d);
   flGuardar(uid, d);
-  res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), cambiado: JSON.stringify(nuevos) !== antes });
+  res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), cambiado: JSON.stringify(nuevos) !== antes });
 });
 app.post('/api/fundamento/veto', requireAuth, express.json(), (req, res) => {
   const uid = req.session.userId;
@@ -4138,6 +4267,39 @@ app.delete('/api/fundamento/veto', requireAuth, express.json(), (req, res) => {
   d.vetos = fundamentoLiteral.quitarVeto(d.vetos, String((req.body && req.body.termino) || ''));
   flGuardar(uid, d);
   res.json({ ok: true, vetos: fundamentoLiteral.normalizarVetos(d.vetos) });
+});
+// (RUBRO-GARANTÍAS ×6 · pieza 2) «No es mi rubro» en un toque, desde el
+// detalle en revisión: (a) veta el tema con el mecanismo existente
+// (digest+ADN, revocable igual que los demás vetos) y (b) regenera el
+// hueco en el mismo posteo (misma week_key, vuelve a borrador para
+// re-aprobar) desde un producto real del fundamento. El veto se aplica
+// ANTES de generar, así ideasInputFor ya lo excluye vía el post-filtro
+// de vetos y la puerta (1) anota _rgProducto en la candidata. Si no hay
+// idea con producto real, el veto igual queda y se dice (nunca se
+// regenera con otro tema inventado).
+app.post('/api/posts/:id/no-es-mi-rubro', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(Number(req.params.id), uid);
+  if (!post) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
+  if (post.status === 'published') return res.status(409).json({ ok: false, error: 'Un posteo publicado no se regenera' });
+  if (post.status !== 'draft' && post.status !== 'scheduled') return res.status(409).json({ ok: false, error: 'Estado no regenerable' });
+  const termino = String((req.body && req.body.termino) || post.titulo || String(post.caption || '').split('\n')[0] || '').trim().slice(0, 120);
+  if (!termino) return res.status(400).json({ ok: false, error: 'Falta el tema a vetar' });
+  const d = flDigest(uid);
+  d.vetos = fundamentoLiteral.agregarVeto(d.vetos, termino);
+  flGuardar(uid, d);
+  let ideas = [];
+  try { ideas = await generateIdeas(ideasInputFor(uid), openaiKeyFor(uid)); } catch (e) { ideas = []; }
+  let semanaTemas = new Set();
+  try {
+    const rows = db.prepare(`SELECT titulo, source_topic FROM posts WHERE user_id = ? AND week_key = ? AND status != 'cancelled' AND id != ?`).all(uid, post.week_key || '', post.id);
+    for (const r of rows) { const t = String(r.titulo || r.source_topic || ''); if (t) semanaTemas.add(fundamentoLiteral.norm(t)); }
+  } catch (e) {}
+  const cand = (Array.isArray(ideas) ? ideas : []).find((id) => id && id._rgProducto && id.titulo && !semanaTemas.has(fundamentoLiteral.norm(id.titulo)));
+  if (!cand) return res.json({ ok: false, vetado: true, error: 'Vetado, pero no quedó una idea con producto real para regenerar el hueco. La próxima semana ya no trae este tema.' });
+  const r = await regenDirectedDraft(uid, post, { title: cand.titulo, brief: cand.angulo || '' });
+  if (!r.ok) return res.status(502).json({ ok: false, vetado: true, error: 'Vetado, pero no se pudo regenerar: ' + r.reason });
+  res.json({ ok: true, vetado: true, post_id: post.id, nuevo_tema: cand.titulo, producto: cand._rgProducto.nombre });
 });
 // (FUNDAMENTO-LITERAL · pieza 2) Visión que NOMBRA el producto concreto
 // de una foto, con la misma forma de llamada que tagAlbumPhoto
@@ -4179,10 +4341,11 @@ app.post('/api/fundamento/foto', requireAuth, express.json(), async (req, res) =
   if (v.pendiente) return res.json({ ok: true, pendiente: true, productos: flProductos(flDigest(uid)) });
   const d = flDigest(uid);
   const cur = flProductos(d);
-  if (!cur.some((p) => fundamentoLiteral.norm(p.nombre) === fundamentoLiteral.norm(v.producto.nombre))) cur.push(v.producto);
-  d.productos = cur.slice(0, 8);
+  // (RUBRO-GARANTÍAS ×6 · pieza 4) Una foto sola es UNA fuente: si el
+  // producto no está confirmado por otro camino, queda como hipótesis.
+  const r = rgAplicarSenal(d, v.producto.nombre, 'foto');
   flGuardar(uid, d);
-  res.json({ ok: true, pendiente: false, productos: flProductos(d), agregado: v.producto.nombre });
+  res.json({ ok: true, pendiente: false, productos: flProductos(d), hipotesis: flHipotesis(d), agregado: r === 'confirmado' ? v.producto.nombre : undefined, en_hipotesis: r === 'hipotesis' ? v.producto.nombre : undefined });
 });
 // (FUNDAMENTO-LITERAL · piezas 2 y 3, flujo /prueba sin sesión) Link
 // público y visión de foto para el espejo de la prueba. Solo datos
@@ -7892,6 +8055,26 @@ function ideasInputFor(uid, weekKey) {
     try { const dnV = readDna(uid) || {}; vs = fundamentoLiteral.normalizarVetos([...vs, ...(dnV.vetos || [])]); } catch (e) {}
     ideasInput.vetos = vs;
   } catch (e) { ideasInput.vetos = []; }
+  // (RUBRO-GARANTÍAS ×6 · piezas 1, 4 y 6) Los productos literales del
+  // fundamento viajan en el input para la puerta final de generateIdeas
+  // (anota _rgProducto/_rgSinProducto) y para filtrar los pools de
+  // plantillas. Se arman desde el digest + el ADN; el feed propio (sus
+  // posteos publicados con su respuesta) refuerza con procedencia
+  // 'feed' los productos que ya calzan con sus temas. Si el feed no
+  // trae engagement, temasFeedPropio usa frecuencia (documentado en el
+  // módulo). Nunca frena la generación.
+  try {
+    const dgP = clientDigest.getDigest(db, uid);
+    let prods = rubroGarantias.productosDesdeDigest(dgP && dgP.productos, dna);
+    try {
+      const feedRows = db.prepare(`SELECT p.caption, COALESCE(m.likes, p.ig_likes, 0) AS likes, COALESCE(m.comments, p.ig_comments, 0) AS comments FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id WHERE p.user_id = ? AND p.status = 'published' ORDER BY COALESCE(p.published_at, p.created_at) DESC LIMIT 60`).all(uid);
+      const temas = rubroGarantias.temasFeedPropio(feedRows);
+      const conFuentes = prods.map((p) => ({ ...p, fuentes: [p.procedencia] }));
+      const reforzados = rubroGarantias.reforzarConFeed(conFuentes, temas);
+      prods = reforzados.map((p) => ({ nombre: p.nombre, procedencia: (p.fuentes || []).includes('feed') ? 'feed' : p.procedencia }));
+    } catch (e) {}
+    ideasInput.productos = prods;
+  } catch (e) { ideasInput.productos = []; }
   if (isCasaHandle(profile.ig_username)) ideasInput.casaLinea = casaIdeasBlock();
   else {
     // LOTE POSTY APRENDE CLIENTES: la casa conserva su línea del equipo;
@@ -11884,7 +12067,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         }
       }
     } catch (e) { console.error(`[pipeline:${tag}] semana aprende falló:`, e.message); }
-    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, sales_intent, sales_angle) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, sales_intent, sales_angle, rg_producto, rg_procedencia) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
     // revisión humana; nivel ≥1 sale directo (el qualityGate de Fase 0 en
     // scheduleAllDrafts ya filtra lo que no está a la altura).
@@ -12083,7 +12266,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // imagen real (la invariante de siempre).
           if (!isCarousel) {
             try {
-              const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, '', '', '', '', String((content && content.hookId) || ''), '', salesIntent, salesAngle);
+              const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, (needRev || (idea._rgSinProducto ? 1 : 0)), '', '', '', '', String((content && content.hookId) || ''), '', salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
               pendingId = info && info.lastInsertRowid;
               if (pendingId) { runCreatedIds.add(pendingId); stampPostDigest(pendingId, uid, content && content._anchored === false); }
             } catch (e) { console.error(`[pipeline:${tag}] tarjeta inmediata falló:`, e.message); }
@@ -12241,7 +12424,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             if (genOut.character === 'failed') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: protagonista no garantizado — needs_review`); } catch (e) {} }
             if (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: QA gate agotado — bandeja (needs_review)`); } catch (e) {} }
           } else {
-            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, ((genOut.character === 'failed' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja')) ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle);
+            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, ((genOut.character === 'failed' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || idea._rgSinProducto) ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
             if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); }
           }
           } else {
@@ -12250,13 +12433,14 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             const paths = [carouselGen.coverPath, ...carouselGen.slidePaths].slice(0, 6);
             const carInfo = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type,
               carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review,
-              style_code, style_reason, intent, product_ref, hook_id, sales_intent, sales_angle)
-              VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+              style_code, style_reason, intent, product_ref, hook_id, sales_intent, sales_angle, rg_producto, rg_procedencia)
+              VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
               .run(uid, carouselGen.coverPath, carouselGen.caption, hashtags, JSON.stringify(paths),
                 idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500),
-                weekKey, (needRev || carouselGen.needsReview) ? 1 : 0,
+                weekKey, (needRev || carouselGen.needsReview || idea._rgSinProducto) ? 1 : 0,
                 'carousel', `carousel automático (${carouselReason[i] || 'estrategia'} · ${paths.length} placas)`,
-                finalIntent || 'tips', finalProductRef, finalHookId, salesIntent, salesAngle);
+                finalIntent || 'tips', finalProductRef, finalHookId, salesIntent, salesAngle,
+                (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
             if (carInfo && carInfo.lastInsertRowid) { runCreatedIds.add(carInfo.lastInsertRowid); stampPostDigest(carInfo.lastInsertRowid, uid, content && content._anchored === false); }
             // DEDUP-EXACTA: el caption del carousel (distinto del
             // chequeado arriba) también entra al acumulador.
@@ -24169,7 +24353,13 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // todavía no lanzó, las ideas de plantilla salen en clave de
     // presentación/lista de espera (nada de promos ni testimonios).
     const etapaTrial = (() => { try { return clientDigest.detectEtapa({ description: richGoal, diferencial: (webData && webData.description) || '' }).etapa; } catch (e) { return ''; } })();
-    const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors, lang, etapa: etapaTrial }, null)).catch(() => []);
+    // (RUBRO-GARANTÍAS ×6 · pieza 1) En la prueba, la puerta corre con
+    // los productos del espejo aprobado (espejoFromFields): una idea sin
+    // calce queda anotada _rgSinProducto y la semana de la prueba no la
+    // presenta como si fuera del rubro. Flujos viejos sin espejo: sin
+    // productos, la puerta no actúa (igual que en generateIdeas).
+    const espTrial = (() => { try { return fundamentoLiteral.espejoFromFields(fields); } catch (e) { return null; } })();
+    const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors, lang, etapa: etapaTrial, productos: (espTrial && espTrial.productos) || [] }, null)).catch(() => []);
     // (v212) Web del negocio (2/2): su paleta manda si no hay otra fuente de
     // color (con @, manda el feed) y sus fotos entran como material gateado.
     let webExtraPhotos = [];
@@ -24782,7 +24972,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     send('status', { step: 'ideas', text: lang === 'en' ? `I'm thinking up ideas for ${business}…` : `Estoy pensando ideas para ${business}…` });
     // (v348 · D2) Etapa vía el detector exportado (ver endpoint clásico).
     const etapaTrial = (() => { try { return clientDigest.detectEtapa({ description: richGoal, diferencial: (webData && webData.description) || '' }).etapa; } catch (e) { return ''; } })();
-    const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors, lang, etapa: etapaTrial }, null);
+    // (RUBRO-GARANTÍAS ×6 · pieza 1) Igual que en el endpoint clásico:
+    // la puerta corre con los productos del espejo aprobado.
+    const espTrialS = (() => { try { return fundamentoLiteral.espejoFromFields(fields); } catch (e) { return null; } })();
+    const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors, lang, etapa: etapaTrial, productos: (espTrialS && espTrialS.productos) || [] }, null);
 
     // (v192) HERENCIA VISUAL DEL PERFIL: la semana sale de SU línea, no de
     // una plantilla genérica del rubro. Con el perfil ya en vuelo (la misma
@@ -27261,7 +27454,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v582';
+const BUILD_ID = '20261101-v583';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -1070,8 +1070,13 @@ function anaFlConfirmRender(d) {
   // (FUNDAMENTO-LITERAL · pieza 5) Los vetos se ven y se pueden quitar
   // desde este mismo lugar (revocable, como pide el lote).
   const vetos = (d.vetos || []).map((v) => '<span style="display:inline-block;margin:2px 4px 2px 0;padding:6px 10px;background:#FDF0F0;border:1px solid #F3C6C6;border-radius:999px;font-size:14px;font-weight:700;color:#8B2E2E">' + esc(v) + ' <button type="button" onclick="anaFlQuitarVeto(this)" data-veto="' + esc(v) + '" style="border:0;background:none;color:#8B2E2E;font-weight:800;cursor:pointer">✕</button></span>').join('');
+  // (RUBRO-GARANTÍAS ×6 · pieza 4) Las hipótesis se ven y se confirman
+  // con un toque: una sola fuente no-cliente no genera en silencio;
+  // la palabra del cliente acá las convierte en productos.
+  const hips = (d.hipotesis || []).map((h) => '<span style="display:inline-block;margin:2px 4px 2px 0;padding:6px 10px;background:#FFF8E1;border:1px solid #F3D27A;border-radius:999px;font-size:14px;font-weight:700;color:#0A1E33">' + esc(h.nombre) + ' <span style="font-weight:400;color:#47617A">(' + esc((h.fuentes || []).join(' + ')) + ')</span> <button type="button" onclick="anaFlConfirmarHipotesis(this)" data-hip="' + esc(h.nombre) + '" style="border:0;background:none;color:#0A7A3D;font-weight:800;cursor:pointer">' + anaT('Confirmar', 'Confirm') + '</button></span>').join('');
   box.innerHTML = '<p class="ana-note">' + anaT('Esto es lo que tengo como lo que vendés. Si sigue igual, un toque y listo.', 'This is what I have as what you sell. If it is still the same, one tap and done.') + '</p>'
     + '<div>' + (list || anaT('Sin productos todavía.', 'No products yet.')) + '</div>'
+    + (hips ? '<p class="ana-note" style="margin-top:10px">' + anaT('¿Esto también lo vendés? Lo vi en una sola fuente, confirmalo para usarlo:', 'Do you also sell this? I saw it in one source only — confirm it to use it:') + '</p><div>' + hips + '</div>' : '')
     + (vetos ? '<p class="ana-note" style="margin-top:10px">' + anaT('Vetado (nunca se genera):', 'Banned (never generated):') + '</p><div>' + vetos + '</div>' : '')
     + '<div style="margin-top:10px"><button class="btn btn-primary btn-sm" onclick="anaFlSeguir(this)">' + anaT('Sigue igual', 'Still the same') + '</button></div>'
     + '<div style="margin-top:10px"><input id="anaFlEdit" class="oc-field" style="font-size:15px;padding:10px 12px" placeholder="' + anaT('Escribí un producto nuevo o uno corregido', 'Write a new or corrected product') + '"><button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="anaFlEditar(this)">' + anaT('Guardar cambio', 'Save change') + '</button></div>'
@@ -1094,6 +1099,13 @@ function anaFlQuitarVeto(btn) {
   const t = (btn && btn.getAttribute('data-veto')) || '';
   if (!t) return;
   fetch('/api/fundamento/veto', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ termino: t }) }).then((r) => r.json()).then((d) => {
+    if (d && d.ok) anaFlConfirmLoad();
+  });
+}
+function anaFlConfirmarHipotesis(btn) {
+  const t = (btn && btn.getAttribute('data-hip')) || '';
+  if (!t) return;
+  fetch('/api/fundamento/hipotesis/confirmar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: t }) }).then((r) => r.json()).then((d) => {
     if (d && d.ok) anaFlConfirmLoad();
   });
 }

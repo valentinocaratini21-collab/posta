@@ -131,6 +131,11 @@ db.exec(`CREATE TABLE IF NOT EXISTS album_missions (
 try { db.exec(`ALTER TABLE album_missions ADD COLUMN emailed_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Estilos de imagen (image-styles.js): estilo usado en cada borrador + motivo del pick.
 try { db.exec(`ALTER TABLE posts ADD COLUMN style_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (RUBRO-GARANTÍAS ×6 · piezas 1 y 3) Producto del fundamento que
+// respalda cada borrador + su procedencia, para la línea visible y la
+// puerta de revisión. Columnas nuevas, sin tocar datos viejos.
+try { db.exec(`ALTER TABLE posts ADD COLUMN rg_producto TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN rg_procedencia TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN style_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN intent TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN needs_image INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }

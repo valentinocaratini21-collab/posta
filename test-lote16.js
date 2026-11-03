@@ -50,7 +50,7 @@ function loadFns(sb, names) {
 t(srv.includes("const BUILD_ID = '20261101-v573'"), 'BUILD v522 en server.js');
 t(idx.includes('app.js?v=384') && idx.includes('styles.css?v=20261100'), 'index: app 339 + styles 20261064');
 t(idxEn.includes('styles.css?v=20261100') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v575'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
+t(app.includes("const CHUNK_V = '20261101-v583'"), 'CHUNK_V sigue v516 (ningún chunk tocado)'); // (RUBRO-GARANTÍAS ×6 · 3/11, con causa) pin v575→v583: el liberador bumpea CHUNK_V por chunk-analisis.js
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -195,7 +195,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
     HF_D_HEART: '<svg-heart>', HF_D_HEART_FULL: '<svg-heart-full>',
     HF_CUR_PROF: {}, HF_PROPS: {}, HF_VISITOR: false,
   });
-  loadFns(sb, ['hfChipText', 'hfRelShort', 'hfRedoLeft', 'hfRedoLineHTML', 'hfCoverState', 'hfCropPct', 'hfCropOverlayHTML', 'hfDetailOpts', 'hfDetailHTML']);
+  loadFns(sb, ['hfChipText', 'hfRelShort', 'hfRedoLeft', 'hfRedoLineHTML', 'hfCoverState', 'hfCropPct', 'hfCropOverlayHTML', 'hfDetailOpts', 'rgLineHTML', 'hfDetailHTML']); // (RUBRO-GARANTÍAS ×6 · 3/11, con causa) rgLineHTML es el helper nuevo que hfDetailHTML llama para la línea de rubro; el eval aislado lo necesita como a los demás helpers.
   const D = sb.hfDetailHTML;
   const opts = (o) => Object.assign({ en: false, visitor: false, propIso: '2026-11-17T19:00:00Z', user: '', pic: '', name: '', location: null }, o || {});
   const imgDraft = D({ id: 1, status: 'draft', media_type: 'image', image_path: 'foto.jpg', text: 'Hola mundo' }, opts());

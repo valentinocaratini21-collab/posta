@@ -5,6 +5,7 @@ const { trackUsage, markPhotoSent, photoHash } = require('./costs');
 const { casaTemas } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: pool de temas de la casa (fallback local)
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): chequeo de pertenencia + anclas
 const fundamentoLiteral = require('./fundamento-literal'); // LOTE FUNDAMENTO-LITERAL ×5 (3/11): vetos como puerta dura en generateIdeas
+const rubroGarantias = require('./rubro-garantias'); // LOTE RUBRO-GARANTÍAS ×6 (3/11): puerta final de producto + genéricos fuera con fundamento
 // Hook engine (hooks.js): 50 fórmulas por intención + rotación. Se aplica al
 // final de generateContent/generateCaptions: el caption SIEMPRE abre con hook.
 const { pickHook, renderHook, ensureCaptionOpensWithHook, hookFits, captionOpenIsGarbled, HOOKS: HOOK_BANK } = require('./hooks');
@@ -2406,7 +2407,7 @@ function sigWords(s) {
 /* (v274 · MODO EN) Gemela en inglés de templateIdeas: mismos esqueletos,
  * misma regla (sin datos reales no se fabrica: devuelve [] y el llamador
  * aplica su gate), títulos y ángulos en inglés US comercial. */
-function templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa }) {
+function templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa, productos }) {
   const biz = business || 'your business';
   const vs = competitors
     ? ` Stand out from ${competitors}: show what they don't have.`
@@ -2468,6 +2469,13 @@ function templateIdeasEn({ business, category, competitors, goal, recentTopics, 
     const fresh = pool.filter(id => sigWords(id.titulo).filter(x => rw.has(x)).length < 2);
     if (fresh.length >= 4) pool = fresh;
   }
+  // (RUBRO-GARANTÍAS ×6 · pieza 5, EN) Con fundamento, fuera los temas
+  // de relleno sin anclaje a un producto real. Piso 4 como los demás
+  // filtros: lo que sobreviva igual lo ataja la puerta (1) en revisión.
+  if (Array.isArray(productos) && productos.length) {
+    const f = rubroGarantias.filtrarGenericos(pool, productos);
+    if (f.length >= 4) pool = f;
+  }
   if (ephemeris && pool.length) {
     // (v348 · D2) Ephemeris + pre-launch: presentation, not a deal.
     const themed = etapa === 'pre-lanzamiento'
@@ -2478,7 +2486,7 @@ function templateIdeasEn({ business, category, competitors, goal, recentTopics, 
   return pool;
 }
 
-function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, lang, etapa, casaLinea }) {
+function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, lang, etapa, casaLinea, productos }) {
   // LOTE POSTY APRENDE: sin IA, la casa usa su pool de temas (no los 7
   // esqueletos genéricos). Los filtros vigentes de excluidos/recientes se
   // aplican igual, con el mismo piso de 4. Los clientes no pasan por acá.
@@ -2496,7 +2504,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
     }
     return withEphemeris(pool.slice(0, 7));
   }
-  if (lang === 'en') return templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa });
+  if (lang === 'en') return templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa, productos });
   const w = CAT_WORDS[category] || CAT_WORDS.otro;
   const ga = GOAL_LINES[goal] ? ' ' + GOAL_LINES[goal].split('. ')[1] : '';
   const biz = business || 'tu negocio';
@@ -2573,6 +2581,15 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
     const rw = new Set(sigWords(recentTopics));
     const fresh = pool.filter(id => sigWords(id.titulo).filter(x => rw.has(x)).length < 2);
     if (fresh.length >= 4) pool = fresh;
+  }
+  // (RUBRO-GARANTÍAS ×6 · pieza 5) Con fundamento, fuera los temas de
+  // relleno sin anclaje a un producto real. Piso 4 como los demás
+  // filtros: lo que sobreviva igual lo ataja la puerta (1) en revisión.
+  // Las efemérides sin anclaje NO se filtran acá: entran por
+  // withEphemeris y la puerta (1) las deja en revisión con motivo.
+  if (Array.isArray(productos) && productos.length) {
+    const f = rubroGarantias.filtrarGenericos(pool, productos);
+    if (f.length >= 4) pool = f;
   }
   return withEphemeris(pool);
   // La efeméride va primera y marcada, también en el fallback sin IA
@@ -2695,6 +2712,16 @@ async function generateIdeas(input, apiKey, opts = {}) {
   // cambia nada.
   if (input && Array.isArray(input.vetos) && input.vetos.length) {
     ideas = fundamentoLiteral.filtrarIdeasVetadas(ideas, input.vetos);
+  }
+  // (RUBRO-GARANTÍAS ×6 · pieza 1) Puerta FINAL de producto: cada idea
+  // queda anotada con su producto del fundamento (_rgProducto) o marcada
+  // _rgSinProducto. La anotación NO descarta: el llamador (pipeline,
+  // ideas-loop) la convierte en needs_review=1 con motivo. Distinta del
+  // post-filtro de vetos de arriba: ese filtra lo vetado, este verifica
+  // que la idea sea DE un producto real. Sin productos en el input (caminos
+  // viejos), no anota nada y nada cambia.
+  if (input && Array.isArray(input.productos) && input.productos.length) {
+    ideas = rubroGarantias.anotarIdeas(ideas, input.productos);
   }
   // Garantía de variedad: nunca dos ideas seguidas del mismo tipo.
   return fixTipos(ideas);

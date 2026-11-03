@@ -2068,7 +2068,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v582'; // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
+const CHUNK_V = '20261101-v583'; // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -18598,6 +18598,20 @@ function hfRelShort(iso, en) {
    opts = { en, user, pic, name, location, propIso, visitor }.
    La media lleva la clase igmock-media: el doble toque con corazón
    (aprobar en modo manual) del visor vigente funciona igual acá. */
+// (RUBRO-GARANTÍAS ×6 · pieza 3) Línea display-only con el producto del
+// fundamento que respalda el borrador + su procedencia. Solo borradores
+// y programados: el publicado ya salió. Sin producto → «Sin producto
+// asociado» (ese borrador queda en revisión por la puerta (1), nunca se
+// programa en silencio). Espejo ES/EN.
+function rgLineHTML(p, en) {
+  const st = String(p.status || '');
+  if (st !== 'draft' && st !== 'scheduled') return '';
+  const prod = String(p.rg_producto || '').trim();
+  const proc = String(p.rg_procedencia || '');
+  const procTxt = { bio: en ? 'your bio' : 'tu bio', web: en ? 'your website' : 'tu web', cliente: en ? 'what you wrote' : 'lo que escribiste', foto: en ? 'your photo' : 'tu foto', link: en ? 'your store link' : 'tu link de venta', feed: en ? 'your own feed' : 'tu feed', adn: en ? 'your business' : 'tu negocio', negocio: en ? 'your business' : 'tu negocio' }[proc] || (en ? 'your business' : 'tu negocio');
+  const txt = prod ? (en ? 'This post is about: ' : 'Este posteo es de: ') + esc(prod) + ' — ' + (en ? 'seen in ' : 'visto en ') + procTxt : (en ? 'No product linked' : 'Sin producto asociado');
+  return `<div class="hf-d-rubro" style="margin-top:8px;font-size:13px;color:#47617A">${txt}</div>`;
+}
 function hfDetailHTML(p, opts) {
   const o = opts || {};
   const en = !!o.en;
@@ -18692,6 +18706,7 @@ function hfDetailHTML(p, opts) {
     ${bar}
     ${likesLine}
     ${capHTML}
+    ${rgLineHTML(p, en)}
     ${commentsLine}
     ${commentsBox}
     ${whenLine}
@@ -23479,6 +23494,7 @@ async function approvalPostView(id) {
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
+    ${rgLineHTML(p, en)}
     ${actions}${draftActions}
     ${apvMoreHTML(p, st, canAct, isDraft, editPrompt)}
     ${hfAskChangeBtnHTML(p)}
@@ -23524,7 +23540,12 @@ function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
   // (FUNDAMENTO-LITERAL · pieza 5) Veto desde el posteo en revisión: el
   // cliente escribe el tema que NO vende y queda vetado para siempre en
   // su fundamento (puerta dura en todos los caminos de generación).
-  b += `<div class="apv-veto-row" style="display:flex;gap:6px;margin-top:8px"><input id="apvVetoInput" class="apv-veto-input" style="flex:1;min-width:0;font-size:14px;padding:8px 10px;border:1px solid #DCEFFF;border-radius:10px" placeholder="${en ? 'What do you NOT sell? e.g. flowers' : '¿Qué NO vendés? ej: flores'}"><button class="apv-veto-btn" id="apvVetoBtn" type="button" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;color:var(--cel);font-size:10.5px;font-weight:700;line-height:1.2;padding:8px 2px;cursor:pointer;font-family:inherit">🚫<span>${en ? 'I don\'t sell this' : 'Esto no lo vendo'}</span></button></div>`;
+  // (RUBRO-GARANTÍAS ×6 · pieza 2) «No es mi rubro» en un toque: veta el
+  // tema DEL posteo (sin escribir nada) y regenera el hueco. Va en la
+  // MISMA fila del veto, no es un sexto botón del menú: el menú sigue
+  // con sus 5 opciones.
+  const rgTopic = esc(String(p.titulo || String(p.caption || '').split('\n')[0] || '').slice(0, 60));
+  b += `<div class="apv-veto-row" style="display:flex;gap:6px;margin-top:8px"><input id="apvVetoInput" class="apv-veto-input" style="flex:1;min-width:0;font-size:14px;padding:8px 10px;border:1px solid #DCEFFF;border-radius:10px" placeholder="${en ? 'What do you NOT sell? e.g. flowers' : '¿Qué NO vendés? ej: flores'}"><button class="apv-veto-btn" id="apvVetoBtn" type="button" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;color:var(--cel);font-size:10.5px;font-weight:700;line-height:1.2;padding:8px 2px;cursor:pointer;font-family:inherit">🚫<span>${en ? 'I don\'t sell this' : 'Esto no lo vendo'}</span></button><button class="apv-veto-btn" id="apvNoRubroBtn" type="button" data-apvid="${id}" data-topic="${rgTopic}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;color:var(--cel);font-size:10.5px;font-weight:700;line-height:1.2;padding:8px 2px;cursor:pointer;font-family:inherit">🚫<span>${en ? 'Not my niche' : 'No es mi rubro'}</span></button></div>`;
   return `<div class="apv-actions apv-more" id="apvMore"><button type="button" class="apv-menu-btn" id="apvMenuBtn" aria-expanded="false" aria-controls="apvMenu" aria-label="${en ? 'More actions' : 'Más acciones'}">•••</button><div class="apv-menu" id="apvMenu" hidden>${b}</div></div>`;
 }
 function pzApvMenuToggle() {
@@ -23603,6 +23624,21 @@ function bindApprovalPost() {
       toast('✅ ' + (apvEn ? 'Vetoed: it will never generate again' : 'Vetado: nunca más se genera'));
       if (inp) inp.value = '';
     } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo vetar')); }
+  };
+  // (RUBRO-GARANTÍAS ×6 · pieza 2) «No es mi rubro» en un toque: un solo
+  // llamado veta el tema y regenera el hueco desde un producto real
+  // (el servidor aplica el veto antes de generar). Si no hay idea con
+  // producto real, el veto igual queda y se avisa con honestidad.
+  const nrb = document.getElementById('apvNoRubroBtn');
+  if (nrb) nrb.onclick = async () => {
+    const t = (nrb.dataset.topic || '').trim();
+    if (!t) { toast('✏️ ' + (apvEn ? 'Write the topic you do not sell' : 'Escribí el tema que no vendés')); return; }
+    try {
+      const r = await api.post('/api/posts/' + encodeURIComponent(nrb.dataset.apvid) + '/no-es-mi-rubro', { termino: t });
+      if (r && r.ok) toast('✅ ' + (apvEn ? 'Not your niche: vetoed and regenerated from ' : 'No es tu rubro: vetado y regenerado desde ') + esc(r.producto || '') + '. ' + (apvEn ? 'Review it and approve it again.' : 'Revisalo y volvé a aprobarlo.'));
+      else toast('ℹ️ ' + esc((r && r.error) || (apvEn ? 'Veto saved.' : 'Veto guardado.')));
+    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo vetar')); }
+    try { render(); } catch (e) {}
   };
   // (v326) Aceptar un BORRADOR desde el detalle: mismo gate de Instagram y
   // mismo flujo PATCH (programar en su horario) que el Aceptar de la Agenda.

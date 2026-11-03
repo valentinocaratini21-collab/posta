@@ -57,7 +57,7 @@ t('1 server: gate espejo en generate-stream', cnt(srv, 'Confirm the mirror first
 t('1 server: gate espejo NO anidado dentro del gate OC (bug real de insercion, corregido)', srv.includes("Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio' });\n  }\n  // (FUNDAMENTO-LITERAL") && srv.includes("Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio');\n    return;\n  }\n  // (FUNDAMENTO-LITERAL"));
 t('1 server: inyeccion espejo en ambas rutas', cnt(srv, 'espejoGoalLines(fields, lang)') === 2);
 t('1 server: inyeccion stream NO anidada en webData (bug real, corregido)', srv.includes("webExtraPhotos = await trialWebPhotos(webData);\n      }\n    }\n    // (FUNDAMENTO-LITERAL"));
-t('1 server: espejo en out (siembra al registrarse)', cnt(srv, 'fundamentoLiteral.espejoFromFields(fields)') === 2);
+t('1 server: espejo en out (siembra al registrarse)', cnt(srv, 'fundamentoLiteral.espejoFromFields(fields)') === 4); // (RUBRO-GARANTÍAS ×6 · 3/11, con causa) pin 2→4: el lote reusa espejoFromFields en las dos rutas de la prueba (clásica y stream) para la puerta de producto; la siembra original no cambia.
 t('1 server: siembra digest+ADN en importTrialWeek', srv.includes('espejo_aprobado: 1') && srv.includes('dna0.productos = esp.productos.map'));
 t('1 prueba ES: espejo con aprobar/corregir/foto/link', prueba.includes('screenEspejo') && prueba.includes('OC_ESPEJO') && prueba.includes('espejo_flujo') && prueba.includes('flFoto') && prueba.includes('flLink') && prueba.includes('armar mi semana'));
 t('1 prueba EN: espejo espejo en ingles', pruebaEn.includes('screenEspejo') && pruebaEn.includes('OC_ESPEJO') && pruebaEn.includes('Looks good, build my week'));
@@ -165,7 +165,7 @@ t('censo app: pz-detalle-setup 1', cnt(app, 'pz-detalle-setup') === 1);
 t('censo app: /aprobar 1', cnt(app, '/aprobar') === 1);
 t('censo app: autofetch 0', cnt(app, 'autofetch') === 0);
 t('censo app: pcDayKeyShift 7', cnt(app, 'pcDayKeyShift') === 7);
-t('CHUNK_V v575 intacto en el arbol (el liberador lo bumpea por chunk-analisis)', app.includes("const CHUNK_V = '20261101-v575'"));
+t('CHUNK_V v583 en el arbol (liberador lo bumpea por chunk-analisis)', app.includes("const CHUNK_V = '20261101-v583'"));
 
 console.log(`LOTEFUNDAMENTOLITERAL: ${ok} ok, ${bad} fallos`);
 process.exit(bad ? 1 : 0);
