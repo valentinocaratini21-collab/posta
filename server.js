@@ -301,6 +301,27 @@ const clientDigest = require('./client-digest');
 const onboardingProducts = require('./onboarding-products'); // Onboarding un clic: productos detectados + foto por producto (determinístico, USD 0) // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
 const fundamentoLiteral = require('./fundamento-literal'); // LOTE FUNDAMENTO-LITERAL ×5 (3/11): espejo, foto, link, confirmación semanal, vetos — nunca adivinar qué vende el cliente
 const rubroGarantias = require('./rubro-garantias'); // LOTE RUBRO-GARANTÍAS ×6 (3/11): puerta final de producto, rubro visible, 2 fuentes, feed propio
+// 🧠 CEREBRO-CM (3/11, SIN PUSH): Posty piensa como los mejores CMs —
+// biblioteca de formatos, tema semanal, números reales, gusto durable,
+// tendencias del día, objetivo comercial, mejor horario, UGC con permiso,
+// A/B de ganchos y calendario de temporada. Módulos puros + tablas cm_*;
+// cada enganche va en try/catch: el cerebro nunca frena la generación.
+const cmFormatos = require('./cm-formatos');
+const cmTema = require('./cm-tema-semana');
+const cmNumeros = require('./cm-numeros');
+const cmGusto = require('./cm-gusto');
+const cmTendencias = require('./cm-tendencias');
+const cmObjetivo = require('./cm-objetivo');
+const cmHorario = require('./cm-horario');
+const cmUgc = require('./cm-ugc');
+const cmAb = require('./cm-ab');
+const cmTemporada = require('./cm-temporada');
+// 🧠 CEREBRO-CM, piezas 11-14: filtro de calidad, gancho primero,
+// gente real con permiso, secciones fijas semanales.
+const cmCalidad = require('./cm-calidad');
+const cmGancho = require('./cm-gancho');
+const cmGente = require('./cm-gente');
+const cmSecciones = require('./cm-secciones');
 const analysisEngine = require('./analysis-engine'); // 🧠 Análisis (2026-10-19): radiografía + mercado + nacimiento + porqué + loop
 const semanaAprende = require('./semana-aprende'); // 🧠 Semana aprende (ítem 4): la semana anterior real ajusta la tanda y el porqué.
 const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
@@ -5416,6 +5437,8 @@ app.post('/api/ideas/chat', async (req, res) => {
         // también es evidencia para la vía por patrón.
         if (captionChanged || (ed.hashtags !== undefined && String(ed.hashtags) !== String(post.hashtags || ''))) {
           try { tasteMemory.noteCaptionEdit(db, uid, { oldCaption: post.caption, newCaption, oldHashtags: post.hashtags, newHashtags: ed.hashtags !== undefined ? ed.hashtags : post.hashtags }); } catch (e) {}
+          // 🧠 CEREBRO-CM: pedir un cambio en el chat = señal durable de gusto.
+          try { cmGusto.registrar(db, uid, post, 'cambio'); } catch (e) {}
         }
         // Cambio de foto: el índice refiere a sus fotos guardadas (0 = la más nueva)
         let pickedOwnPhoto = false;
@@ -7998,6 +8021,102 @@ function radarLineFor(uid) {
     return postyQuestions.radarWeekLine(digest && digest.radar, wk, lang, postyQuestions.rubroKeyOf(digest)) || '';
   } catch (e) { return ''; }
 }
+// 🧠 CEREBRO-CM: contexto de la semana para el brief y el pipeline.
+// Calcula (sin guardar nada: guardar lo hace solo el pipeline) el tema,
+// los formatos asignados, el gusto durable, el ganador por números, la
+// tendencia de hoy, las fechas de temporada y el objetivo comercial.
+// Ante cualquier error devuelve el contexto vacío: el cerebro nunca
+// frena la generación.
+function cmContextoSemana(uid, weekKey) {
+  const vacio = { tema: null, gusto: null, ganadorNum: null, tendencia: null,
+    fechas: [], objetivo: null, formatosAsignados: [], secciones: [null, null, null, null, null],
+    permisoGente: false, cmBloque: '' };
+  try {
+    const profile = getProfile(uid) || {};
+    const dna = readDna(uid) || {};
+    const rubro = profile.category || '';
+    const gusto = cmGusto.consultar(db, uid);
+    const ganadorNum = cmNumeros.ganador(db, uid);
+    let tendencia = null;
+    try { tendencia = cmTendencias.temaDeHoy(db, rubro, tzToday(userTz(uid))); } catch (e) {}
+    let eventos = [];
+    try {
+      const eph = require('./ephemeris');
+      if (eph && typeof eph.allForYear === 'function') {
+        const y = weekKey ? +String(weekKey).slice(0, 4) : new Date().getUTCFullYear();
+        eventos = eph.allForYear(y) || [];
+      }
+    } catch (e) {}
+    const fechas = cmTemporada.fechasParaSemana({ rubro, weekKey: weekKey || '', eventos });
+    const productos = [];
+    try {
+      if (dna.producto_estrella) productos.push(String(dna.producto_estrella));
+      if (Array.isArray(dna.productos)) for (const p of dna.productos) {
+        const n = String((p && p.nombre) || p || '').trim();
+        if (n && !productos.includes(n)) productos.push(n);
+      }
+    } catch (e) {}
+    const promos = [];
+    try {
+      const src = dna.promos || dna.promos_activas || profile.promos || [];
+      for (const p of (Array.isArray(src) ? src : [src])) {
+        const n = String((p && p.nombre) || p || '').trim();
+        if (n) promos.push(n);
+      }
+    } catch (e) {}
+    let temaAnterior = null;
+    let ultimoFormato = null;
+    try {
+      const ant = weekKey ? cmTema.leerAnterior(db, uid, weekKey) : null;
+      if (ant) {
+        temaAnterior = ant.tema || null;
+        if (Array.isArray(ant.formatos) && ant.formatos.length) ultimoFormato = ant.formatos[ant.formatos.length - 1];
+      }
+    } catch (e) {}
+    const tema = cmTema.elegirTema({ rubro, productos, promos, fechas,
+      temaAnterior, tendenciaHoy: tendencia, weekKey: weekKey || '' });
+    let objetivo = null;
+    try {
+      let campTxt = '';
+      try { campTxt = campaignLineFor(profile, uid) || ''; } catch (e) {}
+      objetivo = cmObjetivo.elegirObjetivo({ goal: profile.goal, campaign: campTxt, promos });
+    } catch (e) {}
+    // 🧠 CEREBRO-CM 13-14: permiso de gente y secciones fijas.
+    let permisoGente = false;
+    let secciones = [null, null, null, null, null];
+    try { permisoGente = cmGente.conPermisoDueno(db, uid); } catch (e) {}
+    try { secciones = cmSecciones.paraSemana(db, uid, dna); } catch (e) {}
+    const formatosAsignados = cmFormatos.elegirFormatos({
+      n: 5,
+      preferidos: ganadorNum ? [ganadorNum.formato] : [],
+      vetados: gusto ? gusto.formatosVetados : [],
+      ultimo: ultimoFormato,
+      semilla: cmFormatos.semillaDeSemana(weekKey || ''),
+    });
+    const partes = [];
+    partes.push(`TEMA DE ESTA SEMANA: ${tema.tema} (origen: ${tema.origen}). ${tema.siembra} ${tema.cierre}`);
+    partes.push(cmFormatos.bloqueParaBrief(formatosAsignados));
+    const gustoTxt = cmGusto.bloqueParaBrief(gusto);
+    if (gustoTxt) partes.push('GUSTO DEL DUEÑO (durable, solo de ESTA cuenta):\n' + gustoTxt);
+    if (ganadorNum) {
+      const f = cmFormatos.porId(ganadorNum.formato);
+      partes.push(`LO QUE RINDIÓ EN ESTA CUENTA: el formato ${f ? f.nombre : ganadorNum.formato} sumó ${ganadorNum.puntos} puntos reales (likes, comentarios, guardados de sus posteos medidos). Va primero en la asignación.`);
+    }
+    if (tendencia) partes.push(`TENDENCIA DE HOY (${rubro}): ${tendencia}. Solo si calza con el negocio; si no calza, se ignora.`);
+    if (fechas.length) partes.push('FECHAS DE TEMPORADA ESTA SEMANA: ' + fechas.map((f) => `${f.nombre} (${f.fecha})`).join(', ') + '.');
+    if (objetivo) partes.push(`OBJETIVO COMERCIAL DE ESTA SEMANA: ${objetivo.objetivo}. UNA pieza lo persigue con una sola acción; el resultado se mide después con datos reales, nunca se promete.`);
+    partes.push('CONTENIDO DE CLIENTES: solo se usa foto/video de un cliente con permiso registrado; sin permiso no se usa nada.');
+    partes.push('GANCHOS: cada pieza abre con su gancho (primera línea del caption). Nunca una presentación («somos…», «bienvenidos…», «te presentamos…») como apertura. Dos piezas del mismo tema con ganchos distintos se comparan por datos reales; sin datos de ambos lados no hay ganador.');
+    partes.push('FILTRO DE CALIDAD: todo caption pasa el filtro de calidad; si no pasa, va a revisión con marca y nunca se publica flojo.');
+    partes.push(permisoGente
+      ? 'GENTE REAL: el dueño dio permiso para mostrar caras, manos y el lugar real: priorizar gente real por sobre producto solo.'
+      : 'GENTE REAL: sin permiso del dueño no se muestra gente: solo producto y detalle.');
+    const secTxt = cmSecciones.bloqueParaBrief(secciones);
+    if (secTxt) partes.push(secTxt);
+    return { tema, gusto, ganadorNum, tendencia, fechas, objetivo, formatosAsignados, secciones, permisoGente, cmBloque: partes.join('\n') };
+  } catch (e) { return vacio; }
+}
+
 function ideasInputFor(uid, weekKey) {
   const profile = getProfile(uid);
   const dna = readDna(uid);
@@ -8021,6 +8140,12 @@ function ideasInputFor(uid, weekKey) {
   // depender de que el wrapper preserve campos nuevos. Solo la casa
   // (@posty.communitymanager, por handle, no por id): los clientes no
   // llevan casaLinea y su generación no cambia.
+  // 🧠 CEREBRO-CM: el brief de ideas también lleva el contexto de la
+  // semana (tema, formatos, gusto, números, tendencia, temporada,
+  // objetivo). Sin weekKey (llamadores viejos) el contexto sale igual
+  // salvo fechas y tema anterior: nunca frena la generación.
+  let cmBloque = '';
+  try { cmBloque = (cmContextoSemana(uid, weekKey || '') || {}).cmBloque || ''; } catch (e) {}
   const ideasInput = levelBoosted(uid, 'ideas', {
     business: profile.business_name,
     ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
@@ -8037,6 +8162,7 @@ function ideasInputFor(uid, weekKey) {
     radar: radarLineFor(uid),
     learnings: getContentLearnings(uid),
     aprendizaje: aprendizajeTxt,
+    cmBloque,
     styleRules,
     excluded: excludedTopicsLine(uid),
     approved: approvedTopicsLine(uid),
@@ -9657,6 +9783,14 @@ function analysisPayload(uid, analysis) {
     const aid = view && (view.id || (analysis && analysis.id));
     if (view && view.letter && aid && approval.signCartaLink) view.carta_url = '/carta/' + approval.signCartaLink('domingo', String(aid));
   } catch (e) {}
+  // 🧠 CEREBRO-CM: el tema de la semana actual para la carta de Estrategia.
+  // Solo lectura: si no hay semana guardada, la carta sale como siempre.
+  let temaSemana = null;
+  try {
+    const wk = mondayKeyOf(tzToday(userTz(uid)));
+    const row = cmTema.leer(db, uid, wk);
+    if (row && row.tema) temaSemana = row.tema;
+  } catch (e) {}
   return {
     ok: true,
     plan: plan.id,
@@ -9664,6 +9798,7 @@ function analysisPayload(uid, analysis) {
     week_summary: analysisEngine.weekSummary(analysis),
     history: analysisEngine.analysisHistory(db, uid, 6),
     aprendizaje,
+    temaSemana,
   };
 }
 app.get('/api/analysis', requireAuth, async (req, res) => {
@@ -10047,12 +10182,22 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       db.prepare(`INSERT INTO events (user_id, name, props) VALUES (?, ?, ?)`)
         .run(uid5, isLike5 ? (on5 ? 'post_liked' : 'post_unliked') : (on5 ? 'post_saved' : 'post_unsaved'), JSON.stringify({ post_id: post.id }));
     } catch (e) { /* el evento nunca frena la acción */ }
+    // 🧠 CEREBRO-CM (vara del dueño): el corazón es una aprobación durable;
+    // quitarlo retira la señal (el gusto cambió). Guardar no es aprobar.
+    try {
+      if (isLike5) {
+        if (on5) cmGusto.registrar(db, uid5, post, 'aprobada');
+        else cmGusto.retirar(db, uid5, post.id, 'aprobada');
+      }
+    } catch (e) {}
     return res.json(isLike5 ? { ok: true, owner_liked: on5 ? 1 : 0 } : { ok: true, owner_saved: on5 ? 1 : 0 });
   }
   let scheduledInfo = null; // la rama de programar lo completa: el cliente confirma la fecha al aceptar
   if (action === 'cancel') {
     db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
+    // 🧠 CEREBRO-CM: cancelar = veto durable de gusto.
+    try { cmGusto.registrar(db, req.session.userId, post, 'rechazada'); } catch (e) {}
   } else if (action === 'unschedule') {
     // Frenar el autopiloto (2026-10-02): vuelve a borrador, no se publica.
     db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0, approval='pending', user_stopped=1 WHERE id=?`).run(post.id);
@@ -10780,6 +10925,8 @@ app.post('/api/posts/:id/approve', approvalAuth('approve'), (req, res) => {
     return res.json({ ok: true, approval: post.approval }); // idempotente
   }
   db.prepare(`UPDATE posts SET approval = 'approved', approved_at = datetime('now') WHERE id = ?`).run(post.id);
+  // 🧠 CEREBRO-CM: aprobar de un toque = señal durable de gusto.
+  try { cmGusto.registrar(db, post.user_id, post, 'aprobada'); } catch (e) {}
   res.json({ ok: true, approval: 'approved' });
 });
 
@@ -10965,6 +11112,8 @@ app.post('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
     return res.status(409).json({ error: 'not_rejectable', message: 'Este posteo ya no se puede cancelar.' });
   }
   db.prepare(`UPDATE posts SET approval = 'rejected', status = 'cancelled', error = '' WHERE id = ?`).run(post.id);
+  // 🧠 CEREBRO-CM: el rechazo es veto durable de gusto.
+  try { cmGusto.registrar(db, post.user_id, post, 'rechazada'); } catch (e) {}
   try { recordSignal(post.user_id, post, 'rejected'); } catch (e) {} // FASE 5: el veto en el pre-aviso es señal fuerte
   console.log(`[posta] Post #${post.id} rechazado por el cliente → cancelado`);
   res.json({ ok: true, approval: 'rejected' });
@@ -10982,6 +11131,8 @@ app.get('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
     return res.status(409).send(approvalPage('No se puede cancelar', 'Este posteo ya no está programado.'));
   }
   db.prepare(`UPDATE posts SET approval = 'rejected', status = 'cancelled', error = '' WHERE id = ?`).run(post.id);
+  // 🧠 CEREBRO-CM: el rechazo es veto durable de gusto.
+  try { cmGusto.registrar(db, post.user_id, post, 'rechazada'); } catch (e) {}
   try { recordSignal(post.user_id, post, 'rejected'); } catch (e) {} // FASE 5: el veto en el pre-aviso es señal fuerte
   console.log(`[posta] Post #${post.id} rechazado por el cliente → cancelado`);
   res.send(approvalPage('Posteo cancelado', 'Listo: este posteo no se va a publicar.'));
@@ -11403,7 +11554,34 @@ app.post('/api/posts/:id/signal', requireAuth, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   recordSignal(req.session.userId, post, signal);
+  // 🧠 CEREBRO-CM: la señal manual también alimenta la vara durable.
+  try {
+    if (signal === 'approved') cmGusto.registrar(db, req.session.userId, post, 'aprobada');
+    else if (signal === 'rejected') cmGusto.registrar(db, req.session.userId, post, 'rechazada');
+    else if (signal === 'edited') cmGusto.registrar(db, req.session.userId, post, 'cambio');
+  } catch (e) {}
   res.json({ ok: true });
+});
+
+// 🧠 CEREBRO-CM 14: secciones fijas semanales del fundamento.
+// 🧠 CEREBRO-CM 13: permiso del dueño para mostrar gente real.
+app.post('/api/cm/secciones', requireAuth, express.json(), (req, res) => {
+  const { dia_idx, nombre, detalle } = req.body || {};
+  const r = cmSecciones.definir(db, req.session.userId, dia_idx, nombre, detalle);
+  if (!r) return res.status(400).json({ error: 'seccion_invalida' });
+  res.json({ ok: true, secciones: cmSecciones.listar(db, req.session.userId) });
+});
+app.get('/api/cm/secciones', requireAuth, (req, res) => {
+  res.json({ ok: true, secciones: cmSecciones.listar(db, req.session.userId) });
+});
+app.post('/api/cm/gente-permiso', requireAuth, express.json(), (req, res) => {
+  const { permiso, medio } = req.body || {};
+  const r = cmGente.registrarPermisoDueno(db, req.session.userId, permiso, medio);
+  if (!r) return res.status(400).json({ error: 'permiso_invalido' });
+  res.json({ ok: true, permiso: cmGente.conPermisoDueno(db, req.session.userId) });
+});
+app.get('/api/cm/gente-permiso', requireAuth, (req, res) => {
+  res.json({ ok: true, permiso: cmGente.conPermisoDueno(db, req.session.userId) });
 });
 
 // ===== Track 4 "Pipeline perpetuo" =====
@@ -12125,16 +12303,67 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     const usedStyles = [];
     // (v234) Sin patrón de grilla, el perfil de feed sale del digest solo.
     if (!weekFeedProfile) { try { weekFeedProfile = require('./image-styles').feedProfileFromDigest(weekDigest); } catch (e) { weekFeedProfile = null; } }
+    // 🧠 CEREBRO-CM: la semana nace con tema, arco, formatos asignados,
+    // objetivo y mejor horario real. Todo guardado en cm_semana; los
+    // picks llevan su formato (cmFormato), la primera pieza lleva el
+    // objetivo (cmObjetivo) y la marca A/B (cmAb). Nunca frena la corrida.
+    let cmCtx = null;
+    try {
+      cmCtx = cmContextoSemana(uid, weekKey) || null;
+      if (cmCtx && cmCtx.tema) {
+        let horaRec = null;
+        try { const hb = cmHorario.actualizarBestHour(db, uid); if (hb && hb.actualizada) horaRec = hb.hora; } catch (e) {}
+        try { cmTema.guardar(db, uid, weekKey, cmCtx.tema, { formatos: cmCtx.formatosAsignados, objetivo: (cmCtx.objetivo && cmCtx.objetivo.objetivo) || '', horaRecomendada: horaRec }); } catch (e) {}
+        try { cmTemporada.planificar(db, uid, weekKey, cmCtx.fechas, (getProfile(uid) || {}).category || ''); } catch (e) {}
+        if (Array.isArray(picks) && cmCtx.formatosAsignados.length) {
+          picks.forEach((pk, ix) => { if (pk && !pk.cmFormato) pk.cmFormato = cmCtx.formatosAsignados[ix % cmCtx.formatosAsignados.length]; });
+        }
+        // 🧠 CEREBRO-CM 14: cada pick lleva su sección fija si la hay
+        // (lunes = pick 0 … viernes = pick 4).
+        if (Array.isArray(picks) && Array.isArray(cmCtx.secciones)) {
+          picks.forEach((pk, ix) => { if (pk && cmCtx.secciones[ix]) pk.cmSeccion = cmCtx.secciones[ix]; });
+        }
+        if (Array.isArray(picks) && picks.length && cmCtx.objetivo) picks[0].cmObjetivo = cmCtx.objetivo.objetivo;
+        if (Array.isArray(picks) && picks.length) picks[0].cmAb = true;
+      }
+    } catch (e) { console.error(`[pipeline:${tag}] cerebro-cm falló:`, e.message); }
+    // 🧠 CEREBRO-CM: registro por posteo creado (formato, objetivo, A/B).
+    // Gancho A/B = primera línea del caption (el gancho real que se publica).
+    function cmRegistrarPosteo(postId, idea, caption, extra) {
+      try {
+        if (!postId || !idea) return;
+        if (idea.cmFormato) cmNumeros.registrarFormato(db, postId, uid, idea.cmFormato);
+        if (idea.cmObjetivo) cmObjetivo.registrarObjetivoPost(db, postId, uid, idea.cmObjetivo, weekKey);
+        if (idea.cmAb) {
+          const gancho = String(caption || '').split('\n')[0].trim() || String(idea.titulo || '').trim();
+          if (gancho) cmAb.registrarVariante(db, uid, { postId, tema: String(idea.titulo || ''), gancho });
+        }
+        // 🧠 CEREBRO-CM 12: el gancho queda registrado y se mide después.
+        try { const g = cmGancho.primerGancho(caption); if (g) cmGancho.registrar(db, postId, uid, g, (extra && extra.tipo) || 'texto'); } catch (e) {}
+        // 🧠 CEREBRO-CM 14: la sección fija de la pieza.
+        if (idea.cmSeccion) { try { cmSecciones.registrarPost(db, postId, uid, idea.cmSeccion, weekKey); } catch (e) {} }
+        // 🧠 CEREBRO-CM 11: caption flojo → revisión con marca, nunca
+        // se publica flojo (needs_review=1 aunque el nivel diga otra cosa).
+        if (extra && extra.motivoCalidad) {
+          try { cmCalidad.registrar(db, postId, uid, extra.motivoCalidad); db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postId); } catch (e) {}
+        }
+      } catch (e) { /* el registro nunca frena la creación */ }
+    }
     // Director de semana: cada posteo cumple un ROL DE ESCENA distinto para
     // que la semana se vea diseñada (variada), no generada en serie. La
     // rotación arranca en un punto distinto cada semana (hash de weekKey).
-    const SCENE_ROLES = [
+    // 🧠 CEREBRO-CM 13: roles de escena según permiso del dueño para
+    // mostrar gente. Con permiso: gente primero. Sin permiso: solo
+    // roles sin personas (producto, detalle). Sin fila, NO hay permiso.
+    let permisoGenteSemana = false;
+    try { permisoGenteSemana = cmGente.conPermisoDueno(db, uid); } catch (e) {}
+    const SCENE_ROLES = cmGente.rolesParaSemana([
       'la PERSONA en acción — el momento humano: manos trabajando, el oficio en vivo, alguien usando el producto',
       'el PRODUCTO protagonista — el héroe del negocio en primer plano, irresistible',
       'el LUGAR — el local con su ambiente y su vida, como invitando a entrar',
       'el DETALLE en primer plano — textura, material, cercanía que da ganas de tocar',
       'DETRÁS DE ESCENA — el equipo trabajando, el proceso, lo que el cliente nunca ve',
-    ];
+    ], permisoGenteSemana);
     let sceneRoleIdx = 0;
     for (const ch of String(weekKey || '')) sceneRoleIdx += ch.charCodeAt(0);
     sceneRoleIdx = sceneRoleIdx % SCENE_ROLES.length;
@@ -12254,6 +12483,19 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // DEDUP-EXACTA: este caption queda reservado para el resto de
           // la corrida — los workers vecinos lo ven como previo.
           runPrevCaptions.push(caption);
+          // 🧠 CEREBRO-CM 11-12: filtro de calidad EN la generación.
+          // Un caption que no pasa captionPasses (criterios intactos,
+          // sin aflojar nada) o que abre con presentación NO se
+          // descarta: queda en revisión con marca y nunca se publica
+          // flojo (el motivo viaja a cmRegistrarPosteo).
+          let motivoCalidad = null;
+          try {
+            const rCal = cmCalidad.evaluarCaption(caption, cinput, captionPasses);
+            if (rCal && !rCal.ok) motivoCalidad = rCal.reason || 'no pasa el filtro de calidad';
+          } catch (e) {}
+          try {
+            if (cmGancho.abreConPresentacion(caption)) motivoCalidad = (motivoCalidad ? motivoCalidad + ' | ' : '') + 'abre con presentación, no con gancho';
+          } catch (e) {}
           // Titular COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
           // Pieza limpia: headline vacío — la generación no reserva zona
           // de titular, no se compone titular y el salvavidas stock
@@ -12283,7 +12525,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             try {
               const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, (needRev || (idea._rgSinProducto ? 1 : 0)), '', '', '', '', String((content && content.hookId) || ''), '', salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
               pendingId = info && info.lastInsertRowid;
-              if (pendingId) { runCreatedIds.add(pendingId); stampPostDigest(pendingId, uid, content && content._anchored === false); }
+              if (pendingId) { runCreatedIds.add(pendingId); stampPostDigest(pendingId, uid, content && content._anchored === false); cmRegistrarPosteo(pendingId, idea, caption, { motivoCalidad }); }
             } catch (e) { console.error(`[pipeline:${tag}] tarjeta inmediata falló:`, e.message); }
           }
           // INVARIANTE: todo borrador sale con imagen real de IA, nunca solo
@@ -12440,7 +12682,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             if (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: QA gate agotado — bandeja (needs_review)`); } catch (e) {} }
           } else {
             const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, ((genOut.character === 'failed' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || idea._rgSinProducto) ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
-            if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); }
+            if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); cmRegistrarPosteo(insInfo.lastInsertRowid, idea, caption, { motivoCalidad }); }
           }
           } else {
             // El carousel se guarda como UN post con media_type='carousel'.
@@ -12456,7 +12698,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
                 'carousel', `carousel automático (${carouselReason[i] || 'estrategia'} · ${paths.length} placas)`,
                 finalIntent || 'tips', finalProductRef, finalHookId, salesIntent, salesAngle,
                 (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
-            if (carInfo && carInfo.lastInsertRowid) { runCreatedIds.add(carInfo.lastInsertRowid); stampPostDigest(carInfo.lastInsertRowid, uid, content && content._anchored === false); }
+            if (carInfo && carInfo.lastInsertRowid) { runCreatedIds.add(carInfo.lastInsertRowid); stampPostDigest(carInfo.lastInsertRowid, uid, content && content._anchored === false); cmRegistrarPosteo(carInfo.lastInsertRowid, idea, carouselGen && carouselGen.caption, { motivoCalidad, tipo: 'carousel' }); }
             // DEDUP-EXACTA: el caption del carousel (distinto del
             // chequeado arriba) también entra al acumulador.
             if (carouselGen && carouselGen.caption) runPrevCaptions.push(carouselGen.caption);
@@ -27465,7 +27707,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v591';
+const BUILD_ID = '20261101-v592';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -948,6 +948,10 @@ function anaCartaHTML(d) {
   // análisis (con carta guardada y sin ella): la frase exacta, en el
   // idioma de la carta, una sola vez. Sin análisis no hay línea.
   if (a) h += `<p class="ana-ltr-first">${anaT('la estrategia para esta semana', 'the strategy for this week')}</p>`;
+  // (LOTE CEREBRO-CM) Tema de la semana actual, solo en la carta actual
+  // (nunca en cartas viejas) y solo si hay semana guardada. Sin tema,
+  // la carta sale como siempre.
+  if (!anaPastMode && d && d.temaSemana) h += `<p class="ana-tema">${anaT('Esta semana: ', 'This week: ')}${esc(String(d.temaSemana))}</p>`;
   // (2026-10-25) APERTURA: la explicación de cómo se armó el plan — el
   // week_summary del motor («qué vi → por eso tu semana es así») — encabeza
   // la ventana como su línea de apertura. Es el contenido que vivía en la

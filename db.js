@@ -806,6 +806,85 @@ CREATE TABLE IF NOT EXISTS account_experiments (
   hypothesis TEXT NOT NULL DEFAULT '', result TEXT DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- (LOTE CEREBRO-CM 3/11) Tablas del cerebro: formato, tema, gusto,
+-- tendencias, objetivo, UGC, A/B y temporada. Todas IF NOT EXISTS; los
+-- módulos también las aseguran solos, así que un árbol viejo no rompe.
+CREATE TABLE IF NOT EXISTS cm_semana (
+  user_id INTEGER NOT NULL, week_key TEXT NOT NULL,
+  tema TEXT DEFAULT '', siembra TEXT DEFAULT '', cierre TEXT DEFAULT '',
+  origen TEXT DEFAULT '', formatos_json TEXT DEFAULT '[]',
+  objetivo TEXT DEFAULT '', hora_recomendada INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, week_key)
+);
+CREATE TABLE IF NOT EXISTS cm_post_formato (
+  post_id INTEGER PRIMARY KEY, user_id INTEGER, formato TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS cm_gusto (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+  post_id INTEGER NOT NULL, senal TEXT NOT NULL DEFAULT '',
+  tema TEXT DEFAULT '', angulo TEXT DEFAULT '', formato TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (user_id, post_id, senal)
+);
+CREATE TABLE IF NOT EXISTS cm_tendencias (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, rubro TEXT NOT NULL DEFAULT '',
+  fecha TEXT NOT NULL DEFAULT '', tema TEXT NOT NULL DEFAULT '',
+  fuente TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (rubro, fecha, tema)
+);
+CREATE TABLE IF NOT EXISTS cm_post_objetivo (
+  post_id INTEGER PRIMARY KEY, user_id INTEGER, objetivo TEXT DEFAULT '',
+  week_key TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS cm_ugc_permiso (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+  cliente_ref TEXT DEFAULT '', asset_ref TEXT DEFAULT '',
+  permiso TEXT NOT NULL DEFAULT 'no', medio TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS cm_ab (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+  tema TEXT DEFAULT '', gancho_a TEXT DEFAULT '', gancho_b TEXT DEFAULT '',
+  post_id_a INTEGER, post_id_b INTEGER, ganador TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS cm_temporada (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+  fecha TEXT NOT NULL DEFAULT '', nombre TEXT NOT NULL DEFAULT '',
+  rubro TEXT DEFAULT '', semana_planeada TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (user_id, fecha, nombre)
+);
+-- (LOTE CEREBRO-CM, piezas 11-14) Calidad, gancho, gente, secciones.
+CREATE TABLE IF NOT EXISTS cm_post_calidad (
+  post_id INTEGER PRIMARY KEY, user_id INTEGER, motivo TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS cm_post_gancho (
+  post_id INTEGER PRIMARY KEY, user_id INTEGER, gancho TEXT DEFAULT '',
+  tipo TEXT DEFAULT 'texto',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS cm_gente_permiso (
+  user_id INTEGER PRIMARY KEY, permiso TEXT NOT NULL DEFAULT 'no',
+  medio TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS cm_secciones (
+  user_id INTEGER NOT NULL, dia_idx INTEGER NOT NULL,
+  nombre TEXT NOT NULL DEFAULT '', detalle TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, dia_idx)
+);
+CREATE TABLE IF NOT EXISTS cm_post_seccion (
+  post_id INTEGER PRIMARY KEY, user_id INTEGER, seccion TEXT DEFAULT '',
+  week_key TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE INDEX IF NOT EXISTS idx_signals_signal ON post_signals(user_id, client_signal);
 CREATE TABLE IF NOT EXISTS milestones_seen (
   user_id INTEGER NOT NULL,
