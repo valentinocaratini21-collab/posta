@@ -137,7 +137,7 @@ t('M78: Close llamado por backdrop y x', (sheet.match(/pzDockMasClose\(\)/g) || 
 t('M78: Foto y Video llamados por las filas (CHATBAR-MAS)', sheet.includes('pzDockMasFoto()') && sheet.includes('pzDockMasVideo()'));
 
 // ---------- 11. versiones + censo (post-push: v574 (pines rotados con causa)) ----------
-t('BUILD v573 pre-push', srv.includes("const BUILD_ID = '20261101-v577'"));
+t('BUILD v577', srv.includes("const BUILD_ID = '20261101-v578'")); // pin rotado con causa: liberación v578 anteojos-nv2-fuerte (solo BUILD cambia)
 t('index: app.js?v=388', idx.includes('app.js?v=388'));
 t('index: styles?v=20261102', idx.includes('styles.css?v=20261102'));
 t('en/index: styles?v=20261102', idxEn.includes('styles.css?v=20261102'));
