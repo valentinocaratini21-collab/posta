@@ -4696,7 +4696,7 @@ body.pz-postchat-open{overflow:hidden}
 @keyframes pzSftMagiaIn{0%{opacity:0;transform:scale(.4) rotate(0deg)}25%{opacity:1;transform:scale(1.15) rotate(20deg)}100%{opacity:0;transform:scale(.9) rotate(40deg)}}
 @media (prefers-reduced-motion: reduce){.pz-sft-magia{animation:none;display:none}}
 /* (LOTE DOCK-MAS) Boton + central del dock + hoja crear. */
-.bb-tab-mas, .mz-tab-mas{flex:none !important;width:52px !important;height:52px !important;min-width:52px !important;border-radius:50% !important;background:rgba(255,255,255,.55) !important;-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75) !important;box-shadow:0 0 0 1px rgba(39,147,200,.35),0 10px 30px rgba(39,147,200,.35) !important;color:#0A1E33 !important;font-size:30px !important;font-weight:700 !important;line-height:1 !important;padding:0 !important;transform:translateY(-12px);display:flex !important;align-items:center !important;justify-content:center !important}
+.bb-tab-mas, .mz-tab-mas{flex:none !important;width:52px !important;height:52px !important;min-width:52px !important;border-radius:50% !important;background:rgba(255,255,255,.55) !important;-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75) !important;box-shadow:0 0 0 1px rgba(39,147,200,.35),0 10px 30px rgba(39,147,200,.35) !important;color:#0A1E33 !important;font-size:30px !important;font-weight:700 !important;line-height:1 !important;padding:0 !important;display:flex !important;align-items:center !important;justify-content:center !important}
 .mz-tab-mas{margin:0 2px}
 .pz-dockmas{position:fixed;inset:0;z-index:90}
 .pz-dockmas-back{position:absolute;inset:0;background:rgba(10,30,51,.35)}
@@ -4706,3 +4706,15 @@ body.pz-postchat-open{overflow:hidden}
 .pz-dockmas-row{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;text-align:left;background:rgba(39,147,200,.28);background:linear-gradient(135deg,rgba(39,147,200,.28),rgba(39,147,200,.12));border:1px solid rgba(255,255,255,.85);border-radius:14px;box-shadow:0 0 0 1px rgba(39,147,200,.35),0 10px 30px rgba(39,147,200,.35);color:#0A1E33;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;padding:0 16px;margin-bottom:10px}
 .pz-dockmas-row:last-child{margin-bottom:0}
 @media (prefers-reduced-motion: reduce){.bb-tab-mas,.mz-tab-mas{transform:none}}
+
+/* (LOTE INICIO-3 · 3/11) Íconos de encabezado a la derecha de los
+   contadores + Aceptar todo reubicado en el encabezado con su nota.
+   .hf-pacts-accept vence a las reglas .hf-accept-bar de ancho 100%
+   por especificidad: el botón queda compacto y la nota chiquita a
+   su lado, sin competir con él y sin agrandar el encabezado. */
+.hf-head-icons{display:flex;gap:6px;flex:none;align-items:center}
+.hf-head-ic{width:40px;height:40px;flex:none;border-radius:50%;border:1px solid rgba(255,255,255,.75);background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);color:#0A1E33;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(10,30,51,.06);padding:0}
+.hf-head-ic svg{width:20px;height:20px}
+.hf-pacts-accept{display:flex;align-items:center;gap:10px}
+.hf-pacts-accept .hf-accept-bar{width:auto;flex:none;margin:0}
+.hf-accept-note{font-size:12.5px;line-height:1.3;color:#47617A;min-width:0}

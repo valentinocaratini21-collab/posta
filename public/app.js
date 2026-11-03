@@ -1376,11 +1376,17 @@ function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   // (LOTE JARDÍN · miniatura = jardín completo en chico) La miniatura ya
   // no es el brote (Lote 15/16) ni el visual de la etapa: es el bambusal
   // completo en chico; si todavía no llegaste al Nv 6 lleva candadito.
-  const nvTira = mxNvNum(nvP);
-  const imgPosty = `<span class="mx-tira-thumb"><img class="mx-tira-foto" src="jardin-bambu.webp" alt="" onerror="this.closest('.mx-tira-thumb').remove()">${nvTira < 6 ? '<span class="mx-tira-lock" aria-hidden="true">🔒</span>' : ''}</span>`;
+  // (LOTE INICIO-3 · 3/11, decisión de Valentino) La tirita de Inicio
+  // ya NO dice el nombre viejo del jardín (dice «Premios», el
+  // renombre decidido el 3/11) y ya NO muestra la imagen vieja del
+  // jardín: la miniatura sale de la tirita (el archivo queda en el
+  // árbol porque las etapas viejas del jardín lo referencian en
+  // otras pantallas; acá simplemente no se usa). La tirita queda
+  // con nivel + barrita + próximo premio, mismo layout y mismo
+  // destino (hoy Premios).
   if (pod.posty && nvP) {
     return `<button type="button" class="mx-tira-jardin mx-tira-posty" onclick="mxJardinIr('#/app/jardin-posty', '${origen}')">`
-      + `${imgPosty}<span style="flex:1;min-width:0"><b>${gzT('Mi jardín', 'My garden')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)}</b>`
+      + `<span style="flex:1;min-width:0"><b>${gzT('Premios', 'Prizes')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)}</b>`
       + `<span>${gzT('El bambusal', 'The bamboo grove')}</span>${mxBarra(pzNivelAvance(nvP))}${pzProximoPremioTira(nvP, origen)}</span>`
       + `<span class="mx-chev">›</span></button>`;
   }
@@ -1917,7 +1923,7 @@ function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML) {
     const sig = (nvP && nvP.nombre_siguiente) ? esc(nvP.nombre_siguiente) : '';
     const barra = pct === null ? '' : `<div class="pz-ropa-barra-wrap"><div class="pz-ropa-barra"><i style="width:${pct}%"></i></div><p class="pz-ropa-barra-txt">${nvNum >= 50 ? gzT('Nivel máximo', 'Max level') : (gzT('Próximo: Nv ', 'Next: Lv ') + (nvNum + 1) + (sig ? ' · ' + sig : ''))}</p></div>`;
     const msg = gzT('cuanto más subís de nivel, mejores posteos y más conozco lo que buscás', 'the higher your level, the better your posts and the more I know what you are looking for');
-    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head"><h1>${gzT('El jardín de Posty', "Posty's garden")}</h1></header><div class="mx-bloque"><div class="pz-ropa-panel"><div class="pz-ropa-avatar" id="pzRopaAvatar">${pzRopaAvatarHTML()}</div><h2 class="pz-ropa-nivel">${gzT('Nv', 'Lv')} ${nvNum}${(nvP && nvP.nombre_nivel) ? ' · ' + esc(nvP.nombre_nivel) : ''}</h2>${barra}<p class="pz-ropa-msg">${msg}</p><div class="pz-ropa-lista" id="pzRopaLista" data-nivel="${nvNum}">${pzRopaListaHTML(nvNum)}</div></div></div></div>`;
+    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head"><h1>${gzT('Premios', 'Prizes')}</h1></header><div class="mx-bloque"><div class="pz-ropa-panel"><div class="pz-ropa-avatar" id="pzRopaAvatar">${pzRopaAvatarHTML()}</div><h2 class="pz-ropa-nivel">${gzT('Nv', 'Lv')} ${nvNum}${(nvP && nvP.nombre_nivel) ? ' · ' + esc(nvP.nombre_nivel) : ''}</h2>${barra}<p class="pz-ropa-msg">${msg}</p><div class="pz-ropa-lista" id="pzRopaLista" data-nivel="${nvNum}">${pzRopaListaHTML(nvNum)}</div></div></div></div>`;
   }
   return mxJardinErrorHTML(); // POSTY SOLO: sin jardín Gesty
 }
@@ -16122,7 +16128,7 @@ function pzPrefetchKick() {
    const key = href.split('?')[0];
    const label = key === '#/app/inicio' ? (en ? 'Home' : 'Inicio')
      : key === '#/app/schedule' ? (en ? 'Week' : 'Semana')
-     : key === '#/app/jardin-posty' ? (en ? 'Garden' : 'Jardín')
+     : key === '#/app/jardin-posty' ? (en ? 'Prizes' : 'Premios')
      : key === '#/app/analisis' ? (en ? 'Strategy' : 'Estrategia')
      : key === '#/app/ajustes' ? (en ? 'Settings' : 'Ajustes')
      : (en ? 'Back' : 'Volver');
@@ -18370,7 +18376,7 @@ function homeHeadHTML(prof, bizName, opts) {
     ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
-      ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
+      ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}${(opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="edit" aria-label="${en ? 'Edit profile' : 'Editar perfil'}">${pzIc('pencil', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Share my profile' : 'Compartir mi perfil'}">${pzIc('share', 20)}</button></span>` : ''}
     </div>
     ${name ? `<div class="hf-name">${esc(name)}</div>` : ''}
     ${catHTML}
@@ -18775,27 +18781,26 @@ function hfShareSheetHTML(prof, en) {
     + close
     + '</div><div class="hf-ps-msg" data-hf-ps-msg></div></div>';
 }
-function hfProfileActionsHTML(en) {
-  // (v461 · cabecera, orden de Valentino: LO MÁS SIMPLE POSIBLE) UNA
-  // sola pastilla en toda la cabecera: el botón lleno «Compartir mi
-  // perfil». El resto es TEXTO PLANO CHICO GRIS, sin borde ni fondo,
-  // debajo del botón principal (clase hf-psec). REGLA DURA: nada se
-  // corta en el borde ni queda huérfano en una línea sola — la
-  // primaria va a ancho completo y las secundarias son celdas flex
-  // iguales en UNA sola fila (el texto envuelve dentro de su celda,
-  // el botón nunca salta a otra línea). CENSO DE LA FILA (todo
-  // cubierto): Compartir = la única pastilla · Editar + Ver como
-  // visitante + Tu archivo (la pastilla cortada que no se nombró) =
-  // texto plano · «Crear mis cubiertas» vivió como primer tile «+» de la tira
-  // (v471) y se sacó de la tira el 2026-10-25 (orden de Valentino:
-  // la tira es para mostrar destacadas, no herramientas): la entrada
-  // vive en Ajustes → Tu negocio → «Crear cubiertas».
-  // Ninguna función se elimina. «Ver en el inicio» y «Ver cómo se
-  // recorta» NO son de esta fila (son del detalle del posteo) y no se tocan.
-  const sec = (attrs, txt) => '<button type="button" class="hf-psec" ' + attrs + '>' + txt + '</button>';
-  return '<div class="hf-pacts">'
-    + '<button type="button" class="hf-pmain" data-hf-pact="edit">' + pzIc('pencil', 15) + ' ' + (en ? 'Edit profile' : 'Editar perfil') + '</button>'
-    + '<button type="button" class="hf-pmain" data-hf-pact="share">' + pzIc('share', 18) + ' ' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</button>'
+function hfProfileActionsHTML(en, acceptHTML) {
+  // (LOTE INICIO-3 · 3/11, decisión de Valentino) La fila de acciones
+  // del encabezado ya NO lleva «Editar perfil» ni «Compartir mi
+  // perfil»: esos dos viven como SOLO ÍCONOS (lápiz y compartir, con
+  // los mismos data-hf-pact y handlers de siempre, vía hfProfileBind)
+  // a la derecha de los contadores (opts.headIcons en homeHeadHTML).
+  // El espacio libre lo ocupa «Aceptar todo» REUBICADO (mismo
+  // acceptBarHTML, mismo handler pzAcceptAllWeek, mismo alcance:
+  // solo programados de la semana nueva pendientes, un toque sin
+  // confirmación) + una línea chiquita «Tocá el corazón para
+  // aprobar.» JUNTO al botón, sin competir con él. La píldora
+  // compacta de encima del chat SALE de .mz-bottomstack: Aceptar
+  // todo existe UNA sola vez, en el encabezado. Sin candidatos, la
+  // fila muestra solo la nota (la enseñanza del corazón no depende
+  // de que haya pendientes). La ubicación separada de la nota del
+  // lote corazón-nota (arriba de la grilla, construido 1/11) queda
+  // SUPERSEDED por esta: no se pone la nota en dos lugares.
+  return '<div class="hf-pacts hf-pacts-accept">'
+    + (acceptHTML || '')
+    + '<span class="hf-accept-note">' + (en ? 'Tap the heart to approve.' : 'Tocá el corazón para aprobar.') + '</span>'
     + '</div>';
 }
 /* — Ítem 12: cubiertas de destacadas (render determinístico, $0 de IA) — */
@@ -19207,14 +19212,13 @@ async function inicioView() {
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}${pzAcceptWeekCands.length ? ' hf-acceptbar-on' : ''}">
   ${portTopInicio}
-  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha })}
-  ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome)}
+  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: !HF_VISITOR })}
+  ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
   ${hfTabsHTML(HF_TAB, enHome)}
   ${gridHTML}
   ${tiles.length ? `<p class="hf-nota">${enHome ? pzIc('heart', 14) + ' Tap the heart to approve each post. They all go out on their date, unless you ask for a change.' : pzIc('heart', 14) + ' Tocá el corazón para aprobar el posteo. Todos salen en su fecha, salvo que pidas un cambio.'}</p>` : ''}
   ${visitorPillHTML}
   <div class="mz-bottomstack" id="mzBottomStack">
-  ${pzAcceptWeekHTML}
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-ph" id="mzChatOpen"><img class="chat-face" src="ai-avatar.png" alt="Posty"><span class="mz-ph-tx">escribile a posty…</span></button>
     <button type="button" class="mz-mic" id="mzMic" aria-label="Pedir con nota de voz">${pzIc('mic', 20)}</button>
