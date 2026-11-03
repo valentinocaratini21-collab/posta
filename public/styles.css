@@ -4405,8 +4405,9 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    sin chapita no se toca nada: queda la posición abajo-sobre-foto del
    lote corazón-abajo. El día recorta con ellipsis; la hora NUNCA.) */
 .hf-tile.hf-has-chip > .hf-strip{padding:4px 6px}
-.hf-tile.hf-has-chip > .hf-strip .hf-chip{text-overflow:ellipsis}
-.hf-tile.hf-has-chip > .hf-strip .hf-chip-day{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.hf-tile.hf-has-chip > .hf-strip .hf-chip{text-overflow:clip}
+/* (LOTE FEED-TIRA-DÍA · 2/11 · decisión Valentino: el día NUNCA recorta; la chapita ya se estira hasta el corazón con flex:1 y el corazón queda flex:none 24x24.) */
+.hf-tile.hf-has-chip > .hf-strip .hf-chip-day{flex:0 0 auto;overflow:visible;text-overflow:clip;white-space:nowrap}
 .hf-tile.hf-has-chip > .hf-strip .hf-chip-hm{flex:0 0 auto;white-space:nowrap}
 .hf-tile.hf-has-chip > .hf-strip .hf-like-in{position:static;flex:none;width:24px;height:24px;margin:0;background:#fff;border-color:var(--line);color:#0A1E33;box-shadow:0 1px 6px rgba(10,30,51,.25);z-index:5}
 .hf-tile.hf-has-chip > .hf-strip .hf-like-in svg{width:16px;height:16px}

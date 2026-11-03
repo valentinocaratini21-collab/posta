@@ -128,13 +128,13 @@ const todayIso = todayBA + 'T21:30:00.000Z';
 const P = (extra) => Object.assign({ id: 1, status: 'scheduled', media_type: 'image', image_path: '/media/p1.jpg', caption: 'c' }, extra || {});
 {
   const t = es.homeTileHTML({ kind: 'post', post: P({ id: 21, scheduled_at: todayIso }), day: todayBA, isNew: false }, 0);
-  ok(t.includes('data-hf-chat="21"') && t.includes('hf-tile-chat'), 'tile programada del dueño: botón 💬 con data-hf-chat');
-  ok(t.includes('Hablar de este posteo'), 'tile: aria-label «Hablar de este posteo»');
+  ok(!t.includes('data-hf-chat') && !t.includes('hf-tile-chat'), 'tile programada del dueño: SIN botón 💬 (FEED-TIRA-DÍA 2/11: el globito sale del feed)');
+  ok(!t.includes('Hablar de este posteo'), 'tile: SIN aria-label «Hablar de este posteo» (FEED-TIRA-DÍA 2/11)');
   ok(t.includes('data-hf-like'), 'tile: corazón intacto junto al botón');
   const tEn = en.homeTileHTML({ kind: 'post', post: P({ id: 22, scheduled_at: todayIso }), day: todayBA, isNew: false }, 0);
-  ok(tEn.includes('Talk about this post'), 'tile EN: «Talk about this post»');
+  ok(!tEn.includes('Talk about this post'), 'tile EN: SIN «Talk about this post» (FEED-TIRA-DÍA 2/11)');
   const tDraft = es.homeTileHTML({ kind: 'post', post: P({ id: 23, status: 'draft', scheduled_at: todayIso }), day: todayBA, isNew: false }, 0);
-  ok(tDraft.includes('data-hf-chat="23"'), 'tile borrador con imagen: botón 💬');
+  ok(!tDraft.includes('data-hf-chat'), 'tile borrador con imagen: SIN botón 💬 (FEED-TIRA-DÍA 2/11)');
   const tDraftSin = es.homeTileHTML({ kind: 'post', post: P({ id: 24, status: 'draft', scheduled_at: null, image_path: '' }), day: todayBA, isNew: false }, 0);
   ok(!tDraftSin.includes('data-hf-chat'), 'tile borrador SIN imagen: sin botón');
   const tPub = es.homeTileHTML({ kind: 'post', post: P({ id: 25, status: 'published', published_at: '2026-10-20T15:00:00.000Z', scheduled_at: todayIso }), day: null, isNew: false }, 0);

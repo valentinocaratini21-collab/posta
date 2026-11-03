@@ -17960,6 +17960,7 @@ function hfTileChipParts(txt, en) {
     if (!day || !hm) return null;
     if (en) day = day.replace(/^(\S+\s+)\d{1,2}\//, '$1');
     else day = day.replace(/\/\d{1,2}$/, '');
+    day = day.trim().split(/\s+/)[0] || day; // (LOTE FEED-TIRA-DÍA) solo la palabra del día: Vie, Sáb, Hoy, Mañana (nunca el número de fecha).
     if (!day) return null;
     return { day, hm };
   } catch (e) { return null; }
@@ -18089,8 +18090,8 @@ function homeTileHTML(t, i) {
   // inferior — la izquierda sobre la foto es el único rincón libre
   // en todas las configuraciones (incluida corazón-en-línea, que
   // mueve el corazón a la fila de la chapita).
-  const pzTalkOk = !t.visitor && !t.archivedExt && (p.status === 'draft' || p.status === 'scheduled') && !!p.image_path;
-  const talkBtn = pzTalkOk ? `<button type="button" class="hf-tile-chat" data-hf-chat="${esc(String(p.id))}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Talk about this post' : 'Hablar de este posteo'}" title="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Talk about this post' : 'Hablar de este posteo'}">${pzIc('chat', 18)}</button>` : '';
+  // (LOTE FEED-TIRA-DÍA · 2/11 · decisión Valentino) El globito de comentario sale de las tiles del feed; hablar sigue por detalle/aprobación.
+  const talkBtn = '';
   // (LOTE CORAZÓN-EN-LÍNEA · decisión Valentino 2/11: el corazón va MÁS
   // CHIQUITO y EN LA MISMA LÍNEA del día y la hora. Con chapita vive
   // DENTRO de la franja (.hf-strip), en la misma fila que día+hora; sin

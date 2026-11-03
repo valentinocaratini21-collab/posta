@@ -34,7 +34,7 @@ console.log('— 2. CSS: chiquito en la fila, día recorta, hora nunca —');
 ok(css.includes('.hf-tile.hf-has-chip > .hf-strip .hf-like-in{position:static'), 'corazón en flujo dentro de la franja (no flota sobre la foto)');
 ok(css.includes('.hf-tile.hf-has-chip > .hf-strip .hf-like-in{position:static;flex:none;width:24px;height:24px'), 'corazón chiquito 24px en la fila');
 ok(css.includes('.hf-tile.hf-has-chip > .hf-strip .hf-like-in svg{width:16px;height:16px}'), 'icono 16px dentro del botón 24px');
-ok(css.includes('.hf-tile.hf-has-chip > .hf-strip .hf-chip-day{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}'), 'día recorta con ellipsis (la hora no se corta)');
+ok(css.includes('.hf-tile.hf-has-chip > .hf-strip .hf-chip-day{flex:0 0 auto;overflow:visible;text-overflow:clip;white-space:nowrap}'), 'día NUNCA recorta (FEED-TIRA-DÍA 2/11 supersede v550: día 3 letras + hora entera, sin ellipsis)');
 ok(css.includes('.hf-tile.hf-has-chip > .hf-strip .hf-chip-hm{flex:0 0 auto;white-space:nowrap}'), 'hora flex-none, nunca se corta');
 ok(css.includes('.hf-tile.hf-has-chip > .hf-strip{padding:4px 6px}'), 'franja con chapita: padding 4px para no romper la fila ~31px');
 
@@ -74,7 +74,7 @@ function extractFn(src, name) {
   const tProg = render({ kind: 'post', post: { id: 302, status: 'scheduled', scheduled_at: '2026-11-05T19:00:00Z', media_type: 'image', caption: 'prog' } });
   ok(tProg.includes('hf-has-chip'), 'programada: tile lleva hf-has-chip');
   ok(tProg.includes('</button></span></span></span>'), 'programada: botón DENTRO de la franja (cierra franja+tile+celda tras él)', tProg.slice(tProg.indexOf('hf-strip'), tProg.indexOf('hf-strip') + 420));
-  ok(tProg.includes('hf-chip-day">Jue 5</span>') && tProg.includes('hf-chip-hm"> · 19:00</span>'), 'programada: día y hora enteros en la misma fila');
+  ok(tProg.includes('hf-chip-day">Jue</span>') && tProg.includes('hf-chip-hm"> · 19:00</span>'), 'programada: día (3 letras, sin número) y hora enteros en la misma fila (FEED-TIRA-DÍA 2/11)');
   ok(cnt(tProg, 'class="hf-like hf-like-in"') === 1, 'programada: un solo botón corazón');
   ok(tProg.includes('data-hf-on="1"'), 'programada: corazón lleno intacto');
   const tDraft = render({ kind: 'post', post: { id: 301, status: 'draft', media_type: 'image', caption: 'sin fecha' } });

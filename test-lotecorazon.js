@@ -100,7 +100,7 @@ const render = (tileObj, i) => vm.runInContext(`homeTileHTML(${JSON.stringify(ti
 const chipManana = vm.runInContext(`hfWhenChip({scheduled_at:'2026-11-03T19:00:00Z'}, new Date('2026-11-02T12:00:00Z'))`, sb);
 t(chipManana.indexOf('Mañana') === 0, 'hfWhenChip mañana: ' + chipManana);
 const parts = vm.runInContext(`hfTileChipParts('Mañana 2/11 · 19:00', false)`, sb);
-t(parts && parts.day === 'Mañana 2' && parts.hm === '19:00', 'hfTileChipParts: día Mañana 2 entero + 19:00 (Lote 16: recorta el mes, no el día)');
+t(parts && parts.day === 'Mañana' && parts.hm === '19:00', 'hfTileChipParts: día Mañana sin número + 19:00 (FEED-TIRA-DÍA 2/11 supersede Lote 16)');
 
 // Tile programada para mañana (sin imagen -> rama placeholder, misma franja).
 const man = new Date(); man.setDate(man.getDate() + 1); man.setHours(19, 0, 0, 0);

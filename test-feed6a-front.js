@@ -61,10 +61,10 @@ ok(es.hfWhenChip(P({ scheduled_at: '' }), NOW) === '' && es.hfWhenChip(P({ sched
 const todayBA = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const todayIso = todayBA + 'T21:30:00.000Z'; // 18:30 BA de hoy
 const tileToday = es.homeTileHTML({ kind: 'post', post: P({ id: 21, status: 'scheduled', scheduled_at: todayIso }), day: todayBA, isNew: false }, 0);
-ok(tileToday.includes('hf-chip') && /hf-chip-day">Hoy \d{1,2}</.test(tileToday) && tileToday.includes('hf-chip-hm"> · 18:30<') && !/Hoy \d{1,2}\//.test(tileToday), 'tile de hoy: chapita día+hora, mes recortado primero (Lote 16)');
+ok(tileToday.includes('hf-chip') && /hf-chip-day">Hoy</.test(tileToday) && !/hf-chip-day">Hoy \d/.test(tileToday) && tileToday.includes('hf-chip-hm"> · 18:30<'), 'tile de hoy: chapita día+hora, día sin número (FEED-TIRA-DÍA 2/11 supersede Lote 16: ya no viaja ni mes ni número, solo Hoy + hora)');
 ok(!tileToday.includes('NUEVO') && !tileToday.includes('hf-new'), 'la píldora NUEVO ya no existe en la tile');
 const tileDraftFecha = es.homeTileHTML({ kind: 'post', post: P({ id: 22, status: 'draft', scheduled_at: todayIso }), day: todayBA, isNew: true }, 1);
-ok(/hf-chip-day">Hoy \d{1,2}</.test(tileDraftFecha) && tileDraftFecha.includes('hf-chip-hm"> · 18:30<'), 'borrador CON fecha: también lleva su chapita día+hora (Lote 16)');
+ok(/hf-chip-day">Hoy</.test(tileDraftFecha) && !/hf-chip-day">Hoy \d/.test(tileDraftFecha) && tileDraftFecha.includes('hf-chip-hm"> · 18:30<'), 'borrador CON fecha: también lleva su chapita día+hora, día sin número (FEED-TIRA-DÍA 2/11)');
 ok(!tileDraftFecha.includes('NUEVO'), 'borrador: sin NUEVO aunque venga marcado isNew');
 const tileDraftSin = es.homeTileHTML({ kind: 'post', post: P({ id: 23, status: 'draft', scheduled_at: null }), day: todayBA, isNew: true }, 2);
 ok(!tileDraftSin.includes('hf-chip'), 'borrador SIN fecha: sin chapita (declarado)');
@@ -72,7 +72,7 @@ const tilePub = es.homeTileHTML({ kind: 'post', post: P({ id: 24, status: 'publi
 ok(!tilePub.includes('hf-chip'), 'publicado: sin chapita, como siempre');
 
 // — Ítem 2: botón 💬 —
-ok(tileToday.includes('data-hf-chat="21"') && tileToday.includes('hf-tile-chat'), 'tile propia: botón 💬 con data-hf-chat="<id>"');
+ok(!tileToday.includes('data-hf-chat') && !tileToday.includes('hf-tile-chat'), 'tile propia: SIN botón 💬 (FEED-TIRA-DÍA 2/11: el globito sale del feed; hablar sigue por detalle/aprobación)');
 const tileVisitor = es.homeTileHTML({ kind: 'post', post: P({ id: 25, status: 'scheduled', scheduled_at: todayIso }), day: todayBA, isNew: false, visitor: true }, 0);
 ok(!tileVisitor.includes('data-hf-chat'), 'modo visitante: sin botón 💬');
 const tileIg = es.homeTileHTML({ kind: 'ig', img: '/r/1.jpg', type: 'image', taken_at: 1700000000, isNew: false }, 0);
