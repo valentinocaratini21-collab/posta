@@ -127,8 +127,16 @@ if (SRC_CANDS) {
     ok(b.includes('#inicioView.hf-wrap.hf-acceptbar-on{padding-bottom:calc(196px + env(safe-area-inset-bottom))'), 'CSS móvil: despeje 196px solo con barra');
   }
   const stackFixedCount = (CSS.match(/\.mz-bottomstack\{position:fixed/g) || []).length;
-  ok(stackFixedCount === 1, 'stack fijo una sola vez (solo móvil)');
-  ok(stackFixedCount === 1 && CSS.indexOf('.mz-bottomstack{position:fixed') > CSS.indexOf('LOTE ACEPTAR-TODO-POSICIÓN'), 'stack fijo solo dentro del bloque del lote (móvil, sin cambio desktop)');
+  // SUPERSEDED CON CAUSA (LOTE CHAT-ESCRITORIO-FIJO, decisión Valentino
+  // 2/11: chat fijo abajo también en escritorio): el stack fijo ya NO es
+  // solo móvil. Quedan 3 reglas: 1 móvil (≤820px) + 2 de escritorio web
+  // (821–1023 y ≥1024, con scoping .main). La regla móvil sigue intacta
+  // (asserts del bloque mob arriba). La barra compacta v564 (fit-content)
+  // sigue intacta en móvil: en escritorio la barra vive estática DENTRO
+  // del stack (contenido centrado), no como píldora flotante.
+  const stackFixedDesk = (CSS.match(/\.main #inicioView \.mz-bottomstack\{position:fixed/g) || []).length;
+  ok(stackFixedCount === 3, 'stack fijo 3 veces: 1 móvil + 2 escritorio web (decisión 2/11)');
+  ok(stackFixedDesk === 2 && CSS.indexOf('.mz-bottomstack{position:fixed') > CSS.indexOf('LOTE ACEPTAR-TODO-POSICIÓN'), 'stack fijo escritorio: 2 reglas con scoping .main, tras el bloque del lote');
   // Aritmética del despeje: chat 52 (38 + 7 + 7) + gap 8 + barra 44 (min-height, piso de toque; antes ≤42) = 176 ≤ 196.
   const chatH = 38 + 7 + 7;
   const barH = 44;

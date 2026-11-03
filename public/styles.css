@@ -4547,3 +4547,30 @@ body.pz-postchat-open{overflow:hidden}
 .apv-menu[hidden]{display:none}
 .apv-menu .apv-sec-btn{flex-direction:row;justify-content:flex-start;gap:10px;font-size:15px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;color:var(--txt)}
 .hf-anchor{cursor:pointer}
+
+/* ============================================================
+   LOTE CHAT-ESCRITORIO-FIJO (2/11): el chat de Inicio también
+   queda FIJO ABAJO en escritorio web, alineado con la columna
+   del feed (no a todo el ancho por encima del sidebar). En
+   escritorio la barra estaba oculta (display:none fuera de
+   ≤820px) y la barra de aceptar vivía como píldora flotante
+   abajo a la derecha. Solo shell web (.main): el shell nativo
+   (.bb-main) no se toca. Móvil (≤820px) intacto.
+   ============================================================ */
+@media(min-width:821px) and (max-width:1023px){
+  /* Sin sidebar: columna .main max 1060 centrada, padding lateral 32 */
+  .main #inicioView .mz-bottomstack{position:fixed;left:32px;right:32px;bottom:16px;z-index:59;display:flex;flex-direction:column;gap:8px;left:calc(max(32px,(100vw - 1060px)/2 + 32px));width:calc(min(1060px,100vw) - 64px)}
+  .main #inicioView .mz-bottomstack .mz-chatbar{display:flex;align-items:center;gap:9px;position:static;left:auto;right:auto;bottom:auto;z-index:auto;background:#fff;border-radius:999px;padding:7px 8px 7px 7px;box-shadow:0 8px 26px rgba(10,30,51,.13)}
+  .main #inicioView.hf-visitor .mz-bottomstack .mz-chatbar{display:none}
+  .main #inicioView .mz-bottomstack .hf-accept-bar{position:static;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px}
+  .main #inicioView.hf-wrap.hf-acceptbar-on{padding-bottom:calc(196px + env(safe-area-inset-bottom))}
+}
+@media(min-width:1024px){
+  /* Con sidebar fijo de 280px: .app-shell margin-left 280, .main
+     max 920 centrado en lo que queda, padding lateral 24 */
+  .main #inicioView .mz-bottomstack{position:fixed;left:304px;right:24px;bottom:16px;z-index:59;display:flex;flex-direction:column;gap:8px;left:calc(280px + max(24px,(100vw - 280px - 920px)/2 + 24px));width:calc(min(920px,100vw - 280px) - 48px)}
+  .main #inicioView .mz-bottomstack .mz-chatbar{display:flex;align-items:center;gap:9px;position:static;left:auto;right:auto;bottom:auto;z-index:auto;background:#fff;border-radius:999px;padding:7px 8px 7px 7px;box-shadow:0 8px 26px rgba(10,30,51,.13)}
+  .main #inicioView.hf-visitor .mz-bottomstack .mz-chatbar{display:none}
+  .main #inicioView .mz-bottomstack .hf-accept-bar{position:static;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px}
+  .main #inicioView.hf-wrap.hf-acceptbar-on{padding-bottom:calc(196px + env(safe-area-inset-bottom))}
+}

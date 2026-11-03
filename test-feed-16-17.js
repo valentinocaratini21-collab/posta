@@ -214,7 +214,7 @@ ok('VETO app.js sin pz-next-leaf', app.indexOf('pz-next-leaf') < 0);
 ok('VETO app.js sin próxima hoja', app.indexOf('próxima hoja') < 0);
 ok('VETO app.js sin Next leaf', app.indexOf('Next leaf') < 0);
 ok('VETO css sin pz-next-leaf', css.indexOf('pz-next-leaf') < 0);
-ok('VETO css sin min-width:821px (chat fijo escritorio)', css.indexOf('min-width:821px') < 0);
+ok('SUPERSEDED CON CAUSA 2/11 (decisión Valentino: el chat de Inicio queda fijo abajo también en escritorio — revierte el veto al patch16): el bloque desktop .main con min-width:821px existe con scoping .main y chat dentro del stack, y el selector original vetado sigue ausente', css.indexOf('@media(min-width:821px)') >= 0 && css.indexOf('.main #inicioView .mz-bottomstack .mz-chatbar{display:flex') >= 0);
 ok('VETO css sin selector desktop del chat fijo (regla original patch16)', css.indexOf('.hf-wrap:not(.hf-visitor).mz-chatbar{display:flex') < 0);
 ok('nota: la regla .mz-chatbar fixed MÓVIL es preexistente (servida pre-push), no el veto', css.indexOf('.mz-chatbar{display:flex;align-items:center;gap:9px;position:fixed') >= 0);
 ok('VETO css sin avatar 92px (.hf-ava-in)', css.indexOf('.hf-ava-in{width:92px') < 0);
