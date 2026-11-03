@@ -76,8 +76,8 @@ t(app.includes("if (tab === 'chat') return ''; // el chat es pantalla completa")
 // hoja del website (pzLpChatHTML) reutiliza legítimamente el mismo markup.
 // La hoja de Inicio sí está fuera: queda exactamente 1 ocurrencia y vive
 // en pzLpChatHTML, no en inicioView.
-t(cnt(app, '<div class="mz-sheet" id="mzSheet"') === 2, 'Inicio: hoja oculta CONSERVADA con causa (v566: fuente de #chatCard para pzPostChat; nunca se abre: mzOpenSheet navega a #/app/chat)');
-t(sliceFn(app, 'function pzLpChatHTML()', 'function pzLpChatBind').includes('<div class="mz-sheet" id="mzSheet"'), 'website: su hoja sigue (segunda de 2; la primera es la oculta de Inicio para pzPostChat)');
+t(cnt(app, 'id="mzSheet"') === 2, 'Inicio: hoja oculta CONSERVADA con causa (v566: fuente de #chatCard para pzPostChat; nunca se abre: mzOpenSheet navega a #/app/chat) + landing con clase pz-lp-sheet (CHAT-WEBSITE-LINDO)');
+t(sliceFn(app, 'function pzLpChatHTML()', 'function pzLpChatBind').includes('pz-lp-sheet') && sliceFn(app, 'function pzLpChatHTML()', 'function pzLpChatBind').includes('id="mzSheet"'), 'website: su hoja sigue (segunda de 2; la primera es la oculta de Inicio para pzPostChat)');
 t(app.includes("if (open) open.onclick = () => { location.hash = '#/app/chat'; };"), 'dock: campo abre la pantalla');
 t(app.includes("window.__pzChatVoice = true; location.hash = '#/app/chat';"), 'dock: mic abre la pantalla + voz pendiente');
 t(app.includes("if (plus) plus.onclick = clickUp;"), 'dock: + sigue subiendo al álbum (intacto)');

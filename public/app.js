@@ -20034,9 +20034,9 @@ function pzLpChatHTML() {
   return '<div class="pz-lp-dock" id="pzLpDock">'
     + '<button type="button" class="mz-ph" id="mzChatOpen" aria-label="Hablar con Posty"><img class="chat-face" src="/ai-avatar.png" alt="Posty"><span class="mz-ph-tx">escribile a posty…</span></button>'
     + '</div>'
-    + '<div class="mz-sheet" id="mzSheet" hidden>'
+    + '<div class="mz-sheet pz-lp-sheet" id="mzSheet" hidden>'
     + '<div class="mz-sheet-card">'
-    + '<div class="mz-sheet-head"><span>Posty</span><button type="button" class="mz-sheet-x" id="mzSheetX" aria-label="Cerrar">✕</button></div>'
+    + '<div class="mz-sheet-head"><img class="pz-lp-face" src="/ai-avatar.png" alt="Posty"><span class="pz-lp-nom">Posty</span><button type="button" class="mz-sheet-x" id="mzSheetX" aria-label="Cerrar">✕</button></div>'
     + '<div class="mz-sheet-body" id="pzLpSheetBody"></div>'
     + '</div></div>';
 }
@@ -20064,11 +20064,11 @@ function pzLpChatBind() {
     if (card) card.insertAdjacentHTML('afterend', '<div class="pz-lp-cta"><a class="btn btn-soft" href="#/login">Entrar</a><a class="btn btn-primary" href="/prueba">Probar 3 días gratis</a></div>');
   }
   const open = document.getElementById('mzChatOpen');
-  if (open) open.onclick = () => { try { mzOpenSheet(true); } catch (e) {} };
+  if (open) open.onclick = () => { try { pzLpOpen(); } catch (e) {} };
   const x = document.getElementById('mzSheetX');
-  if (x) x.onclick = () => { try { mzCloseSheet(); } catch (e) {} };
+  if (x) x.onclick = () => { try { pzLpClose(); } catch (e) {} };
   const sh = document.getElementById('mzSheet');
-  if (sh) sh.addEventListener('click', (e) => { if (e.target === sh) { try { mzCloseSheet(); } catch (e2) {} } });
+  if (sh) sh.addEventListener('click', (e) => { if (e.target === sh) { try { pzLpClose(); } catch (e2) {} } });
   const inp = document.getElementById('chatInput');
   if (inp) {
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); try { chatSend(); } catch (err) {} } });
@@ -20083,11 +20083,43 @@ function pzLpChatBind() {
       const t = (e.target && e.target.closest) ? e.target.closest('[data-posty-chat]') : null;
       if (!t) return;
       e.preventDefault();
-      try { mzOpenSheet(true); } catch (err) {}
+      try { pzLpOpen(); } catch (err) {}
     });
   }
   try { pzPhStart(); } catch (e) {}
   try { chatLoadHistory(); } catch (e) {}
+}
+// (LOTE CHAT-WEBSITE-LINDO · 3/11) Abrir/cerrar SOLO del chat de la landing.
+// Por qué existe: v566 retiró la hoja para la app (mzOpenSheet navega a #/app/chat),
+// pero la landing no tiene esa pantalla: su chat ES la hoja. El dock y las puertas
+// de la landing abren acá; la app no llama nunca a estas dos funciones.
+function pzLpOpen() {
+  const sh = document.getElementById('mzSheet');
+  if (!sh) return;
+  const desktop = window.innerWidth >= 1024;
+  sh.hidden = false;
+  if (desktop) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      try { sh.classList.add('pz-lp-open'); } catch (e) {}
+    }));
+  }
+  const ci = document.getElementById('chatInput');
+  if (ci) setTimeout(() => {
+    try { ci.focus({ preventScroll: true }); } catch (e) { try { ci.focus(); } catch (e2) {} }
+  }, desktop ? 320 : 60);
+  try { chatUpdateSendBtn(); } catch (e) {}
+  try { chatScroll(); } catch (e) {}
+}
+function pzLpClose() {
+  try { pzBlurActivo(); } catch (e) {}
+  const sh = document.getElementById('mzSheet');
+  if (!sh) return;
+  if (window.innerWidth >= 1024 && sh.classList.contains('pz-lp-open')) {
+    sh.classList.remove('pz-lp-open');
+    setTimeout(() => { try { sh.hidden = true; } catch (e) {} }, 320);
+  } else {
+    try { mzCloseSheet(); } catch (e) {}
+  }
 }
 
 

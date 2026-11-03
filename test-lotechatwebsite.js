@@ -91,7 +91,11 @@ if (bind) {
   ok('bind: sin sesión botón Enviar simple', bind.includes('pzLpSend'));
   ok('bind: sin sesión quita chips de cuenta', bind.includes("getElementById('chatChips')"));
   ok('bind: sin sesión CTA Entrar + prueba', bind.includes('#/login') && bind.includes('/prueba'));
-  ok('bind: abre con mzOpenSheet y cierra con mzCloseSheet', bind.includes('mzOpenSheet(true)') && bind.includes('mzCloseSheet()'));
+  // (LOTE CHAT-WEBSITE-LINDO · 3/11, con causa) La landing ya NO abre con mzOpenSheet:
+  // v566 lo cambió para la app (navega a #/app/chat) y eso dejó a la hoja de la
+  // landing sin apertura: el dock navegaba fuera de la landing. La landing abre y
+  // cierra con sus funciones propias (pzLpOpen/pzLpClose); la app no las llama.
+  ok('bind: abre/cierra con pzLpOpen/pzLpClose (landing)', bind.includes('pzLpOpen()') && bind.includes('pzLpClose()') && !bind.includes('mzOpenSheet'));
   ok('bind: Enter envía con chatSend', bind.includes('chatSend()'));
   ok('bind: input actualiza botón con chatUpdateSendBtn', bind.includes('chatUpdateSendBtn()'));
   ok('bind: delegación de puertas con guarda de dock', bind.includes('[data-posty-chat]') && bind.includes('__pzLpDoor'));
@@ -134,7 +138,7 @@ ok('censo server 3/16/3/16', count(srv, 'catsMatch') === 3 && count(srv, 'week-r
 ok('censo app 4/1/1/0/7', count(app, 'pzGoBack') === 4 && count(app, 'pz-detalle-setup') === 1 && count(app, '/aprobar') === 1 && count(app, 'autofetch') === 0 && count(app, 'pcDayKeyShift') === 7);
 const m78 = ['pzLpChatHTML', 'pzLpChatBind', 'mzOpenSheet', 'mzCloseSheet', 'chatSend', 'chatUpdateSendBtn', 'chatScroll', 'chatLoadHistory', 'pzPhStart', 'chatCardHTML'];
 ok('M78: las 10 funciones tienen exactamente 1 definición', m78.every((f) => count(app, 'function ' + f) === 1));
-ok('M78: el código nuevo llama a 9 de ellas (chatScroll vive dentro de chatSend)', ['pzLpChatHTML', 'pzLpChatBind', 'mzOpenSheet', 'mzCloseSheet', 'chatSend', 'chatUpdateSendBtn', 'chatLoadHistory', 'pzPhStart', 'chatCardHTML'].every((f) => bind ? bind.includes(f) : false));
+ok('M78: el código nuevo llama a 9 de ellas (chatScroll vive dentro de chatSend)', ['pzLpChatHTML', 'pzLpChatBind', 'pzLpOpen', 'pzLpClose', 'chatSend', 'chatUpdateSendBtn', 'chatLoadHistory', 'pzPhStart', 'chatCardHTML'].every((f) => bind ? bind.includes(f) : false));
 
 console.log(`\nRESULT ok=${passed} fail=${failed}`);
 process.exit(failed ? 1 : 0);

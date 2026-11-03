@@ -80,7 +80,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261106">
+<link rel="stylesheet" href="/styles.css?v=20261107">
 <link rel="stylesheet" href="/gj.css?v=3">
 <script type="application/ld+json">
 {
@@ -2145,6 +2145,28 @@ function switchPlansCountry(c) {
 #pzLpSend{background:#FEC14D;color:#0A1E33;border:none;border-radius:999px;padding:10px 16px;font-family:inherit;font-weight:800;font-size:14px;cursor:pointer}
 #pzLpSend:disabled{opacity:.55}
 @media(max-width:480px){#pzLpDock{right:12px;bottom:12px}}
+/* (LOTE CHAT-WEBSITE-LINDO · 3/11) Panel lateral del chat en la home EN, SOLO escritorio.
+   La página EN es estática y no carga app.js: su panel vive acá. Bajo 1024px no hay
+   reglas: el móvil sigue siendo la hoja de siempre. */
+/* (LOTE CHAT-WEBSITE-LINDO · 3/11) Base: la cara de la cabecera solo se muestra en el
+   panel de escritorio; en móvil la cabecera queda exactamente como hoy. */
+#pzLpSheetHead .pzLpFace{display:none}
+@media (min-width:1024px){
+  #pzLpSheet{top:0;right:0;bottom:0;left:auto;width:min(420px,94vw);height:100dvh;background:transparent;justify-content:flex-end;padding:0}
+  #pzLpSheetCard{width:100%;max-width:none;height:100dvh;max-height:none;border-radius:28px 0 0 28px;background:rgba(255,255,255,.88);box-shadow:-24px 0 60px rgba(10,30,51,.22);border:1px solid rgba(255,255,255,.75);border-right:none;transform:translateX(106%);transition:transform .3s ease}
+  #pzLpSheet.pz-lp-open #pzLpSheetCard{transform:translateX(0)}
+  #pzLpSheetHead{display:flex;align-items:center;gap:12px;padding:20px 22px 14px}
+  #pzLpSheetHead .pzLpFace{width:44px;height:44px;border-radius:50%;flex:none;box-shadow:0 4px 14px rgba(10,30,51,.18);background:#fff;display:block}
+  #pzLpSheetHead .pzLpNom{font-size:19px;font-weight:800;color:#0A1E33;letter-spacing:-.01em}
+  #pzLpSheetX{margin-left:auto}
+  #pzLpSheetBody{padding:6px 20px 20px;overflow:hidden;display:flex;flex-direction:column}
+  #pzLpMsgs{flex:1;overflow-y:auto;min-height:0}
+  #pzLpRow{background:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.85);box-shadow:0 8px 24px rgba(10,30,51,.12);border-radius:999px;padding:8px;margin:8px 0 4px;flex:none}
+  #pzLpInput{border:none;padding:12px 8px 12px 16px;font-size:16px}
+  #pzLpSend{height:48px;padding:0 22px;flex:none}
+}
+@media (min-width:1024px) and (prefers-reduced-motion:reduce){
+  #pzLpSheetCard{transition:none;transform:none}
 </style>
 <script>
 /* (LOTE CHAT-WEBSITE) Chat de la home EN: el MISMO chat de la app (mismo endpoint
@@ -2160,7 +2182,7 @@ function switchPlansCountry(c) {
   setInterval(function () { pi = (pi + 1) % PH.length; var t = document.getElementById('pzLpDockTx'); if (t) t.textContent = PH[pi]; }, 4000);
   var sheet = document.createElement('div');
   sheet.id = 'pzLpSheet'; sheet.hidden = true;
-  sheet.innerHTML = '<div id="pzLpSheetCard"><div id="pzLpSheetHead"><span>Posty</span><button type="button" id="pzLpSheetX" aria-label="Close chat">✕</button></div>'
+  sheet.innerHTML = '<div id="pzLpSheetCard"><div id="pzLpSheetHead"><img class="pzLpFace" src="/ai-avatar.png" alt="Posty"><span class="pzLpNom">Posty</span><button type="button" id="pzLpSheetX" aria-label="Close chat">✕</button></div>'
     + '<div id="pzLpSheetBody"><div id="pzLpMsgs"></div>'
     + '<div id="pzLpCta"><a class="a" href="#/login">Log in</a><a class="b" href="/en/prueba">Try 3 days free</a></div>'
     + '<div id="pzLpChips"><button type="button" data-send="How much is it?">How much is it?</button><button type="button" data-send="What exactly does Posty do?">What exactly does Posty do?</button><button type="button" data-send="How does the free trial work?">How does the free trial work?</button></div>'
@@ -2183,6 +2205,11 @@ function switchPlansCountry(c) {
   }
   function open() {
     sheet.hidden = false;
+    if (window.innerWidth >= 1024) {
+      requestAnimationFrame(function () { requestAnimationFrame(function () {
+        try { sheet.classList.add('pz-lp-open'); } catch (e) {}
+      }); });
+    }
     if (!greeted) {
       greeted = true;
       fetch('/api/ideas/chat?lang=en').then(function (r) { return r.json(); }).then(function (d) {
@@ -2191,7 +2218,12 @@ function switchPlansCountry(c) {
     }
     setTimeout(function () { try { input.focus(); } catch (e) {} }, 60);
   }
-  function close() { sheet.hidden = true; }
+  function close() {
+    if (window.innerWidth >= 1024 && sheet.classList.contains('pz-lp-open')) {
+      sheet.classList.remove('pz-lp-open');
+      setTimeout(function () { sheet.hidden = true; }, 320);
+    } else { sheet.hidden = true; }
+  }
   dock.addEventListener('click', open);
   sheet.querySelector('#pzLpSheetX').addEventListener('click', close);
   sheet.addEventListener('click', function (e) { if (e.target === sheet) close(); });

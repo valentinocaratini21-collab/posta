@@ -68,7 +68,11 @@ t(css.includes('.ag-upload-btn{pointer-events:auto;'), 'Schedule: botón grande 
 
 // ---------- 4) Sin animaciones nuevas (reduced-motion trivial) ----------
 {
-  const blk = css.slice(css.indexOf('LOTE CHAT SIMPLE'));
+  // (LOTE CHAT-WEBSITE-LINDO · 3/11, con causa) El tail desde LOTE CHAT SIMPLE incluye
+  // el bloque del panel de la landing: su transición de entrada (slide desde la
+  // derecha, solo escritorio, con reduced-motion sin transición) es deliberada y NO
+  // toca la hoja del chat de la app. Se exime solo ese bloque del pin.
+  const blk = css.slice(css.indexOf('LOTE CHAT SIMPLE')).replace(/\(LOTE CHAT-WEBSITE-LINDO[\s\S]*$/, '');
   // (LOTE CHAT4S) El fundido del placeholder (~360 ms, pzPhFade) es deliberado:
   // solo anima #chatInput/.hf-ask-input con la clase pz-ph-fading, no la hoja.
   t(!/transition/.test(blk), 'hoja LOTE CHAT4S: el bloque nuevo no agrega transiciones');
