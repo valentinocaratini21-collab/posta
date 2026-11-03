@@ -68,8 +68,11 @@ t(app.includes('pzPubCelebShow') && app.includes("pzSonido('publicar')"), 'celeb
 t(app.includes('pz-bienv-magia') && app.includes('pzPostPayCard'), 'bienvenida: magia en la tarjeta post-pago');
 
 // ---- 12 · Arranque con Posty ----
-t(idx.includes('#posty-boot{position:fixed;inset:0;background:#F4FAFE;'), 'splash: fondo celeste pálido, no blanco');
-t(idx.includes('pb-twinkle') && idx.includes('color:#FEC14D;font-size:22px'), 'splash: destellos dorado/celeste');
+// DOBLE-SPLASH (decisión Valentino 2/11, SUPERSEDE lo viejo): el boot web ya
+// no es cara + palabra + destellos sobre #F4FAFE; es solo los 3 puntitos
+// v549 sobre el degradado de la app (la cara única es el splash nativo).
+t(idx.includes('#posty-boot{position:fixed;inset:0;background:linear-gradient(165deg,#dff1fa'), 'splash: degradado de la app, sin segunda cara');
+t(!idx.includes('pb-twinkle'), 'splash: sin destellos en el boot (la segunda cara sale)');
 t(app.includes('bootSplashOff'), 'splash: retiro al pintar la app intacto');
 
 // ---- 13 · Sonidos chiquitos ----

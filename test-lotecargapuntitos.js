@@ -67,7 +67,7 @@ check('sin espera artificial: sin setTimeout en el loader', !skBody.includes('se
 console.log('== 4. Lo viejo fuera + splash de arranque intacto ==');
 check('sin pz-sk-wrap/pz-sk-block/pz-sk-head en app.js', !app.includes('pz-sk-wrap') && !app.includes('pz-sk-block') && !app.includes('pz-sk-head'));
 check('sin reglas .pz-sk ni shimmer en CSS', !css.includes('.pz-sk-') && !css.includes('pz-sk-shimmer'));
-check('splash de arranque intacto (no es esta pantalla)', idx.includes('#posty-boot{position:fixed;inset:0;background:#F4FAFE;') && app.includes('bootSplashOff'));
+check('splash de arranque intacto (no es esta pantalla)', idx.includes('#posty-boot{position:fixed;inset:0;background:linear-gradient(165deg,#dff1fa') && idx.includes('pz-dot pz-dot-1') && app.includes('bootSplashOff')); // DOBLE-SPLASH (decisión Valentino 2/11, SUPERSEDE el fondo #F4FAFE): el boot es solo puntitos v549 sobre el degradado; el retiro al pintar sigue intacto
 
 console.log('== 5. Censo + M78 + server intacto ==');
 const count = (s, re) => (s.match(re) || []).length;
