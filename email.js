@@ -838,7 +838,7 @@ function trialClosedEmailEn(user, baseUrl) {
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       Your trial just ended${biz ? ` — and everything we built for <strong style="color:#0A1E33">${biz}</strong> stays right here` : ''}: your week is ready and saved, with your posts, your colors and everything we learned about your business. If you join, it's all waiting for you exactly as you left it.
     </p>
-    <a href="${baseUrl}/#/app/schedule" style="display:inline-block;background:#2793C8;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 22px;border-radius:12px">See my saved week 👀</a>`;
+    <a href="${baseUrl}/#/app/ajustes?plan=1" style="display:inline-block;background:#2793C8;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 22px;border-radius:12px">Pay for my plan</a>`;
   return sendEmail({ to: user.email, subject, html: emailShell(inner, 'en') });
 }
 function trialClosedEmail(user, baseUrl) {
@@ -851,7 +851,7 @@ function trialClosedEmail(user, baseUrl) {
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       Tu prueba acaba de terminar${biz ? ` — y todo lo que armamos para <strong style="color:#0A1E33">${biz}</strong> queda acá` : ''}: tu semana quedó lista y guardada, con tus posteos, tus colores y todo lo que aprendimos de tu negocio. Si te sumás, te espera tal cual la dejaste.
     </p>
-    <a href="${baseUrl}/#/app/schedule" style="display:inline-block;background:#2793C8;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 22px;border-radius:12px">Ver mi semana guardada 👀</a>`;
+    <a href="${baseUrl}/#/app/ajustes?plan=1" style="display:inline-block;background:#2793C8;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 22px;border-radius:12px">Pagar mi plan</a>`;
   return sendEmail({ to: user.email, subject, html: emailShell(inner) });
 }
 

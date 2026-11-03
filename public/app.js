@@ -11274,7 +11274,7 @@ function feedProfileHeadHTML(prof, bizName, opts) {
       <div class="fp-ava${opts && opts.storyToday ? ' story' : ''}"><div class="fp-ava-in"><span class="fp-ava-letter">${letter}</span>${pic}</div></div>
       <div class="fp-head-right">${u ? `<div class="fp-user">${esc(u)}</div>` : ''}${statsHTML}</div>
     </div>
-    ${name ? `<div class="fp-name">${esc(name)}</div>` : ''}
+    ${name ? `<div class="fp-name">${esc(pzDecEnt(name))}</div>` : ''}
     ${u ? `<a class="fp-link" href="https://www.instagram.com/${esc(u)}/" target="_blank" rel="noopener">instagram.com/${esc(u)}</a>` : ''}
     ${chipF}
   </div>`;
