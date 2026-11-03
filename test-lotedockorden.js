@@ -1,0 +1,97 @@
+// LOTE DOCK-ORDEN — decisión Valentino 2/11 ~12:40 (botón):
+// barra inferior Inicio → Estrategia → Premios → Ajustes.
+// La pestaña Jardín pasa a llamarse Premios (ES) / Prizes (EN), misma ruta
+// #/app/jardin-posty, mismo icono sprout. El título interno de la pantalla
+// («El jardín de Posty») NO cambia en esta pasada.
+// Uso: node test-lotedockorden.js [dir] (dir = raíz del árbol; default: __dirname).
+'use strict';
+const fs = require('fs'), path = require('path'), vm = require('vm');
+const ROOT = process.argv[2] || __dirname;
+let ok = 0, fail = 0, fails = [];
+function check(name, cond) {
+  if (cond) { ok++; console.log('  OK  ' + name); }
+  else { fail++; fails.push(name); console.log('  FAIL ' + name); }
+}
+const app = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+const slice = (from, to) => {
+  const a = app.indexOf(from);
+  const b = to ? app.indexOf(to, a) : app.length;
+  return (a < 0 || b < 0) ? '' : app.slice(a, b);
+};
+const bb = slice('function bbShell(tab, content)', 'async function bbLoadEstado');
+const mz = slice('function mzTabsHTML(tab)', 'function appShell');
+const dr = slice('<aside class="drawer"', '</aside>');
+
+// ---------- 1. bb-bar (bbShell) ----------
+check('bb-bar: Inicio < Estrategia < Premios < Ajustes',
+  bb.indexOf("tabBtn('inicio'") < bb.indexOf("tabBtn('analisis'")
+  && bb.indexOf("tabBtn('analisis'") < bb.indexOf("tabBtn('jardin'")
+  && bb.indexOf("tabBtn('jardin'") < bb.indexOf("tabBtn('ajustes'"));
+check("bb-bar: etiqueta gzT('Premios', 'Prizes')",
+  bb.includes("gzT('Premios', 'Prizes')"));
+check('bb-bar: sin etiqueta Jardín en la barra',
+  !bb.includes("gzT('Jardín'"));
+check("bb-bar: clave y ruta intactas tabBtn('jardin', '#/app/jardin-posty')",
+  bb.includes("tabBtn('jardin', '#/app/jardin-posty'"));
+check('bb-bar: orden viejo ausente',
+  !bb.includes("tabBtn('jardin', '#/app/jardin-posty', gzT('Jardín', 'Garden'))}${tabBtn('analisis'"));
+
+// ---------- 2. mz-tabs (móvil) ----------
+check('mz-tabs: Inicio < Estrategia < Premios < Ajustes',
+  mz.indexOf("t('inicio'") < mz.indexOf("t('analisis'")
+  && mz.indexOf("t('analisis'") < mz.indexOf("t('jardin'")
+  && mz.indexOf("t('jardin'") < mz.indexOf("t('ajustes'"));
+check("mz-tabs: etiqueta gzT('Premios', 'Prizes')",
+  mz.includes("gzT('Premios', 'Prizes')"));
+check('mz-tabs: sin Jardín en la barra',
+  !mz.includes("'Jardín'"));
+check("mz-tabs: ruta y clave intactas t('jardin', 'jardin-posty', sprout)",
+  mz.includes("t('jardin', 'jardin-posty', pzIc('sprout')"));
+
+// VM: render real de mzTabsHTML en ES y EN.
+function renderMz(lang) {
+  const m = app.match(/function mzTabsHTML\(tab\) \{[\s\S]*?\n\}/);
+  if (!m) return '';
+  const sandbox = { ME: { lang }, pzIc: (k) => k, console };
+  sandbox.gzT = (es, en) => (sandbox.ME.lang === 'en' ? en : es);
+  vm.createContext(sandbox);
+  vm.runInContext(m[0] + '\nthis.__mz = mzTabsHTML;', sandbox);
+  return vm.runInContext('__mz("inicio")', sandbox);
+}
+const mzEs = renderMz('es'), mzEn = renderMz('en');
+check('mz-tabs VM ES: orden Inicio, Estrategia, Premios, Ajustes',
+  mzEs.indexOf('Inicio') < mzEs.indexOf('Estrategia')
+  && mzEs.indexOf('Estrategia') < mzEs.indexOf('Premios')
+  && mzEs.indexOf('Premios') < mzEs.indexOf('Ajustes'));
+check('mz-tabs VM EN: orden Inicio, Estrategia, Prizes, Ajustes',
+  mzEn.indexOf('Inicio') < mzEn.indexOf('Estrategia')
+  && mzEn.indexOf('Estrategia') < mzEn.indexOf('Prizes')
+  && mzEn.indexOf('Prizes') < mzEn.indexOf('Ajustes'));
+check('mz-tabs VM: Premios apunta a data-tab jardin-posty',
+  /data-tab="jardin-posty"[^>]*>.*Premios|Premios/.test(mzEs) && mzEs.includes('data-tab="jardin-posty"'));
+
+// ---------- 3. Drawer ----------
+check('drawer: Inicio < Estrategia < Premios < Ajustes',
+  dr.indexOf('data-tab="inicio"') < dr.indexOf('data-tab="analisis"')
+  && dr.indexOf('data-tab="analisis"') < dr.indexOf('data-tab="jardin-posty"')
+  && dr.indexOf('data-tab="jardin-posty"') < dr.indexOf('data-tab="ajustes"'));
+check('drawer: etiqueta Premios/Prizes con ternario EN',
+  dr.includes("? 'Prizes' : 'Premios'"));
+check('drawer: icono sprout sigue en el botón jardin-posty',
+  dr.includes('data-tab="jardin-posty"><span class="di">${pzIc(\'sprout\')}'));
+check('drawer: sin botón Jardín',
+  !dr.includes('>Jardín</button>'));
+
+// ---------- 4. Alcance: lo que NO cambia ----------
+check('título interno intacto: El jardín de Posty',
+  app.includes("gzT('El jardín de Posty'"));
+check('recuento jardin-posty intacto (15)',
+  (app.match(/jardin-posty/g) || []).length === 15);
+check('etiqueta atrás de aprobación intacta (Garden/Jardín)',
+  app.includes("(en ? 'Garden' : 'Jardín')"));
+check('tirita de Inicio sigue yendo a #/app/jardin-posty',
+  app.includes("mxJardinIr('#/app/jardin-posty'"));
+
+console.log(`\nRESULTADO: ${ok} ok, ${fail} fallos`);
+if (fails.length) console.log('FALLOS: ' + fails.join(' | '));
+process.exit(fail ? 1 : 0);

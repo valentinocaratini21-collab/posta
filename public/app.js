@@ -711,7 +711,7 @@ function bbShell(tab, content) {
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
     <nav class="bb-bar">
-      ${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Jardín', 'Garden'))}${tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}
+      ${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}
     </nav>
   </div>`;
 }
@@ -5923,7 +5923,7 @@ function mzTabsHTML(tab) {
     : tab === 'analisis' ? 'analisis'
     : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('posty'), 'Inicio')}${t('jardin', 'jardin-posty', pzIc('sprout'), 'Jardín')}${t('analisis', 'analisis', pzIc('stems'), 'Estrategia')}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('posty'), 'Inicio')}${t('analisis', 'analisis', pzIc('stems'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('sprout'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>`;
 }
 
 function appShell(tab, content) {
@@ -5946,8 +5946,8 @@ function appShell(tab, content) {
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('posty')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
-    <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('sprout')}</span>Jardín</button>
     <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('stems')}</span>Estrategia</button>
+    <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('sprout')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Prizes' : 'Premios'}</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">${pzIc('logout')}</span>Salir</button>
