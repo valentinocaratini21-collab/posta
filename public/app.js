@@ -1354,6 +1354,23 @@ function mxSwitcherHTML(modo) {
     + `<button type="button" class="mx-chip-agente${modo === 'posty' ? ' mx-activo-posty' : ''}" onclick="mxCambiarAgente('posty')"><span class="mx-chip-cara"><img src="ai-avatar.png" alt="Posty"></span><span>Posty · ${gzT('Contenido', 'Content')}</span></button>`
     + `</div>`;
 }
+// (LOTE PRÓXIMO-PREMIO · decisión Valentino 2/11) La tira de Inicio dice
+// en palabras el próximo premio: primer nivel NO desbloqueado por encima
+// del nivel real, con su nombre exacto de PZ_ROPA. Sin nivel real (no
+// número) no se dibuja nada inventado; en 50, todos desbloqueados.
+// Solo Inicio (origen 'posty'): la misma tira en la vista oficina no cambia.
+function pzProximoPremioTira(nvP, origen) {
+  if (origen !== 'posty') return '';
+  const n0 = (nvP && typeof nvP.nivel === 'number' && isFinite(nvP.nivel)) ? Math.floor(nvP.nivel) : null;
+  if (n0 === null) return '';
+  const n = Math.max(0, n0);
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (n >= 50) return `<span class="mx-tira-proximo">${esc(en ? 'all rewards unlocked' : 'todos los premios desbloqueados')}</span>`;
+  const sig = pzRopaPorNivel(n + 1);
+  if (!sig) return '';
+  const nom = en ? sig.en : sig.es;
+  return `<span class="mx-tira-proximo">${esc(en ? ('next: ' + nom + ' at level ' + (n + 1)) : ('próximo: ' + nom + ' en nivel ' + (n + 1)))}</span>`;
+}
 function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   const ambos = pod.posty && pod.gesty;
   // (LOTE JARDÍN · miniatura = jardín completo en chico) La miniatura ya
@@ -1364,7 +1381,7 @@ function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   if (pod.posty && nvP) {
     return `<button type="button" class="mx-tira-jardin mx-tira-posty" onclick="mxJardinIr('#/app/jardin-posty', '${origen}')">`
       + `${imgPosty}<span style="flex:1;min-width:0"><b>${gzT('Mi jardín', 'My garden')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)}</b>`
-      + `<span>${gzT('El bambusal', 'The bamboo grove')}</span>${mxBarra(pzNivelAvance(nvP))}</span>`
+      + `<span>${gzT('El bambusal', 'The bamboo grove')}</span>${mxBarra(pzNivelAvance(nvP))}${pzProximoPremioTira(nvP, origen)}</span>`
       + `<span class="mx-chev">›</span></button>`;
   }
   return '';
@@ -18633,10 +18650,9 @@ function hfDetailHTML(p, opts) {
     : '';
   const commentsLine = (cc !== null && cc > 0)
     ? `<div class="hf-d-comments">${en ? (cc === 1 ? 'View 1 comment' : `View all ${cc.toLocaleString('en-US')} comments`) : (cc === 1 ? 'Ver el comentario' : `Ver los ${cc.toLocaleString('es-AR')} comentarios`)}</div>` : '';
-  const capFull = String(p.caption || '');
+  const capFull = String(p.caption || '').trim();
   const tags = String(p.hashtags || '').trim();
-  const capText = (capFull + (tags ? (capFull ? '\n' : '') + tags : '')).trim();
-  const capHTML = capText ? `<div class="hf-d-cap">${user ? `<b>${esc(user)}</b> ` : ''}${esc(capText)}</div>` : '';
+  const capHTML = (capFull || tags) ? `<div class="hf-d-cap">${user ? `<b>${esc(user)}</b> ` : ''}${esc(capFull)}${tags ? `${capFull ? '\n' : ''}<span class="hf-d-tags">${esc(tags)}</span>` : ''}</div>` : '';
   let whenLine = '';
   if (p.status === 'published') {
     const rel = hfRelShort(p.published_at || p.scheduled_at, en);
