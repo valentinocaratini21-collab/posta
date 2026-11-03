@@ -1820,7 +1820,8 @@ textarea.in{resize:vertical;min-height:96px}
 .apv-wrap{max-width:620px;margin:0 auto;padding:6px 2px 44px}
 .apv-back{display:inline-block;font-size:14px;font-weight:700;color:var(--cel);margin:2px 0 12px;padding:8px 4px}
 .apv-media{border-radius:18px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);margin-top:14px;margin-bottom:14px;background:#0A1E33}
-.apv-media img{width:100%;height:auto;display:block}
+/* LOTE DETALLE-FOTO-CHICA: foto entera pero con tope, para que foto + caption + Aceptar entren en la primera pantalla */
+.apv-media img{width:100%;height:auto;display:block;max-height:55vh}
 .apv-media video{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}
 .apv-pillrow{margin:2px 0 10px}
 .apv-pill{display:inline-block;font-size:14px;font-weight:700;padding:9px 14px;border-radius:999px;border:1.5px solid var(--line);background:#fff;line-height:1.35}

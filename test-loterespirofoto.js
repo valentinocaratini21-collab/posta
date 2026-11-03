@@ -33,7 +33,11 @@ ok(!/apv-media/.test(fs.readFileSync(path.join(ROOT, 'public', 'chunk-ajustes.js
 ok(/\.apv-media img\{object-fit:contain\}/.test(css), 'foto: object-fit:contain intacto (nunca cortada)');
 ok(!!m && /border-radius:18px;overflow:hidden/.test(m[0]), 'contenedor intacto: radio 18px + overflow hidden');
 ok(!!m && !/max-height|max-width/.test(m[0]), 'sin tope nuevo de tamaño en .apv-media');
-ok(/\.apv-media img\{width:100%;height:auto;display:block\}/.test(css), 'img: width 100% + height auto (proporción intacta)');
+// ACTUALIZADO CON CAUSA (decisión Valentino 3/11, lote detalle-foto-chica):
+// la foto del detalle gana max-height:55vh para que foto + caption + Aceptar
+// entren en la primera pantalla; la proporción sigue intacta (width 100% +
+// height auto + contain, sin crop) y el contenedor no cambia.
+ok(/\.apv-media img\{width:100%;height:auto;display:block(;max-height:55vh)?\}/.test(css), 'img: width 100% + height auto (proporción intacta, con tope 55vh del lote detalle-foto-chica)');
 ok(/\.apv-media video\{width:100%;aspect-ratio:1\/1;object-fit:cover;display:block\}/.test(css), 'video: regla intacta');
 ok(app.includes('class="apv-media"') || app.includes('class=\\"apv-media\\"'), 'approvalPostView sigue emitiendo .apv-media');
 // app.js NO se tocó en este lote: byte-idéntico a v559 servido.
@@ -51,8 +55,8 @@ ok(app.includes('class="apv-caption"'), 'caption del detalle intacto');
 ok(app.includes('homeTileHTML'), 'feed: homeTileHTML presente (app.js idéntico, sin cambios)');
 
 // ---------- Censo + versiones (base v559) ----------
-ok(srv.includes("const BUILD_ID = '20261101-v580'"), 'BUILD v580 en server.js (pin rotado con causa: liberación v580 dock-letras, re-base sobre v579)');
-ok(idx.includes('app.js?v=388') && idx.includes('styles.css?v=20261103'), 'index ES: ?v= 388 / 20261103 (pin rotado con causa: liberación v580 dock-letras)');
+ok(srv.includes("const BUILD_ID = '20261101-v578'"), 'BUILD v577 en server.js (pin rotado con causa: liberación v578 anteojos-nv2-fuerte)');
+ok(idx.includes('app.js?v=388') && idx.includes('styles.css?v=20261102'), 'index ES: ?v= 387 / 20261102 (pin rotado con causa: liberación v577)');
 ok(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 ok(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 ok(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
