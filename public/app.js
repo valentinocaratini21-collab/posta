@@ -716,7 +716,7 @@ function bbShell(tab, content) {
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
-    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings')) + '</nav>'}
+    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + pzDockMasBtn('bb') + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings')) + '</nav>' + pzDockMasHTML()}
   </div>`;
 }
 async function bbLoadEstado(force) {
@@ -5928,7 +5928,52 @@ function mzTabsHTML(tab) {
     : tab === 'analisis' ? 'analisis'
     : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('posty'), 'Inicio')}${t('analisis', 'analisis', pzIc('stems'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('sprout'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('posty'), 'Inicio')}${t('analisis', 'analisis', pzIc('stems'), 'Estrategia')}${pzDockMasBtn('mz')}${t('jardin', 'jardin-posty', pzIc('sprout'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>${pzDockMasHTML()}`;
+}
+
+/* (LOTE DOCK-MAS) */
+/* (LOTE DOCK-MAS) Boton + central del dock: abre la hoja crear. No es
+   pestana ni cambia de ruta: solo abre la hoja (pzDockMasSheet). */
+function pzDockMasBtn(shell) {
+  const cls = shell === 'bb' ? 'bb-tab bb-tab-mas' : 'mz-tab mz-tab-mas';
+  return `<button type="button" class="${cls}" aria-label="${gzT('Crear', 'Create')}" onclick="pzDockMasToggle()">+</button>`;
+}
+function pzDockMasHTML() {
+  return `<div class="pz-dockmas" id="pzDockMasSheet" hidden>
+    <div class="pz-dockmas-back" onclick="pzDockMasClose()"></div>
+    <div class="pz-dockmas-card" role="dialog" aria-label="${gzT('Crear', 'Create')}">
+      <div class="pz-dockmas-head"><span>${gzT('¿Qué querés agregar?', 'What do you want to add?')}</span><button type="button" class="pz-dockmas-x" aria-label="${gzT('Cerrar', 'Close')}" onclick="pzDockMasClose()">×</button></div>
+      <button type="button" class="pz-dockmas-row" onclick="pzDockMasFoto()">${pzIc('camera', 20)} ${gzT('Agregar foto', 'Add photo')}</button>
+      <button type="button" class="pz-dockmas-row" onclick="pzDockMasVoz()">${pzIc('mic', 20)} ${gzT('Nota de voz', 'Voice note')}</button>
+    </div>
+  </div>`;
+}
+function pzDockMasToggle() {
+  const sh = document.getElementById('pzDockMasSheet');
+  if (sh) sh.hidden = !sh.hidden;
+}
+function pzDockMasClose() {
+  const sh = document.getElementById('pzDockMasSheet');
+  if (sh) sh.hidden = true;
+}
+function pzDockMasFoto() {
+  /* v573: foto DIRECTO al chat (mismo camino del + del dock de v573):
+     pzSftFotoAlChat abre el chat y dispara el picker DEL CHAT
+     (#chatFile). NUNCA #mzPlus/#albumFile (flujo del Álbum). */
+  pzDockMasClose();
+  try { pzSftFotoAlChat(); } catch (e) {}
+}
+function pzDockMasVoz() {
+  /* Espejo exacto del #mzMic de v573: flag + navegar a #/app/chat; la
+     vista del chat consume el flag y arranca la nota a los 80 ms. Si
+     ya estamos en el chat, la nota arranca directo a los 80 ms. */
+  pzDockMasClose();
+  if ((location.hash || '').split('?')[0] === '#/app/chat') {
+    setTimeout(() => { try { voiceToggle(); } catch (e) {} }, 80);
+    return;
+  }
+  try { window.__pzChatVoice = true; } catch (e) {}
+  location.hash = '#/app/chat';
 }
 
 function appShell(tab, content) {

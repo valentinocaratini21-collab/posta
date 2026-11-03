@@ -49,11 +49,16 @@ check("mz-tabs: ruta y clave intactas t('jardin', 'jardin-posty', sprout)",
   mz.includes("t('jardin', 'jardin-posty', pzIc('sprout')"));
 
 // VM: render real de mzTabsHTML en ES y EN.
+// (LOTE DOCK-MAS · adaptación con causa: mzTabsHTML ahora llama a
+// pzDockMasBtn/pzDockMasHTML — el + entre Estrategia y Premios — y el
+// sandbox necesita esos stubs; el orden de las 4 pestañas no cambia.)
 function renderMz(lang) {
   const m = app.match(/function mzTabsHTML\(tab\) \{[\s\S]*?\n\}/);
   if (!m) return '';
   const sandbox = { ME: { lang }, pzIc: (k) => k, console };
   sandbox.gzT = (es, en) => (sandbox.ME.lang === 'en' ? en : es);
+  sandbox.pzDockMasBtn = () => '<button class="mz-tab-mas">+</button>';
+  sandbox.pzDockMasHTML = () => '<div class="pz-dockmas"></div>';
   vm.createContext(sandbox);
   vm.runInContext(m[0] + '\nthis.__mz = mzTabsHTML;', sandbox);
   return vm.runInContext('__mz("inicio")', sandbox);
@@ -69,6 +74,10 @@ check('mz-tabs VM EN: orden Inicio, Estrategia, Prizes, Ajustes',
   && mzEn.indexOf('Prizes') < mzEn.indexOf('Ajustes'));
 check('mz-tabs VM: Premios apunta a data-tab jardin-posty',
   /data-tab="jardin-posty"[^>]*>.*Premios|Premios/.test(mzEs) && mzEs.includes('data-tab="jardin-posty"'));
+check('mz-tabs VM ES: + entre Estrategia y Premios (dock-mas)',
+  mzEs.indexOf('Estrategia') < mzEs.indexOf('mz-tab-mas') && mzEs.indexOf('mz-tab-mas') < mzEs.indexOf('Premios'));
+check('mz-tabs VM EN: + entre Estrategia y Prizes (dock-mas)',
+  mzEn.indexOf('Estrategia') < mzEn.indexOf('mz-tab-mas') && mzEn.indexOf('mz-tab-mas') < mzEn.indexOf('Prizes'));
 
 // ---------- 3. Drawer ----------
 check('drawer: Inicio < Estrategia < Premios < Ajustes',
