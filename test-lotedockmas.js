@@ -2,8 +2,11 @@
 // Ejecuta el codigo REAL del dock (funciones extraidas de public/app.js)
 // con stubs minimos + asserts estaticos sobre las dos superficies.
 // Conciliación v573: «Agregar foto» llama a pzSftFotoAlChat (foto
-// directa al chat), NUNCA a #mzPlus/#albumFile; «Nota de voz» espeja
-// el #mzMic de v573 (flag __pzChatVoice + #/app/chat).
+// directa al chat), NUNCA a #mzPlus/#albumFile.
+// (LOTE CHATBAR-MAS · decisión Valentino 3/11) La hoja pasa a
+// «Agregar foto / Agregar video»: «Nota de voz» SALE (las notas van
+// solo por el micrófono de la barra del chat) y pzDockMasVoz deja de
+// existir; pzDockMasVideo dispara #chatFile filtrado a video/*.
 // Uso: node test-lotedockmas.js [dir]
 const fs = require('fs');
 const dir = process.argv[2] || '.';
@@ -64,14 +67,16 @@ t('boton +: muestra +', btnBb.includes('>+<') && btnMz.includes('>+<'));
 ME.lang = 'es';
 let sheet = pzDockMasHTML();
 t('hoja ES: Agregar foto', sheet.includes('Agregar foto'));
-t('hoja ES: Nota de voz', sheet.includes('Nota de voz'));
+t('hoja ES: Agregar video (CHATBAR-MAS: sale Nota de voz)', sheet.includes('Agregar video'));
+t('hoja ES: SIN Nota de voz (CHATBAR-MAS)', !sheet.includes('Nota de voz'));
 t('hoja ES: pregunta en lenguaje cliente', sheet.includes('¿Qué querés agregar?'));
-t('hoja ES: filas llaman Foto y Voz', sheet.includes('pzDockMasFoto()') && sheet.includes('pzDockMasVoz()'));
+t('hoja ES: filas llaman Foto y Video (CHATBAR-MAS)', sheet.includes('pzDockMasFoto()') && sheet.includes('pzDockMasVideo()'));
 t('hoja ES: backdrop y x cierran', sheet.includes('pzDockMasClose()'));
 ME.lang = 'en';
 sheet = pzDockMasHTML();
 t('hoja EN: Add photo', sheet.includes('Add photo'));
-t('hoja EN: Voice note', sheet.includes('Voice note'));
+t('hoja EN: Add video (CHATBAR-MAS: sale Voice note)', sheet.includes('Add video'));
+t('hoja EN: SIN Voice note (CHATBAR-MAS)', !sheet.includes('Voice note'));
 t('hoja EN: What do you want to add?', sheet.includes('What do you want to add?'));
 ME.lang = 'es';
 
@@ -93,7 +98,7 @@ t('close: deja hidden', els.pzDockMasSheet.hidden === true);
 // (los comentarios del bloque nombran los caminos viejos para
 // documentar que NO se usan: se verifica codigo sin comentarios)
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\n)\s*\/\/.*$/gm, '$1');
-const fotoFn = stripComments(block.slice(block.indexOf('function pzDockMasFoto'), block.indexOf('function pzDockMasVoz')));
+const fotoFn = stripComments(block.slice(block.indexOf('function pzDockMasFoto'), block.indexOf('function pzDockMasVideo')));
 t('foto: llama a pzSftFotoAlChat', fotoFn.includes('pzSftFotoAlChat()'));
 t('foto: NUNCA #mzPlus', !fotoFn.includes('mzPlus'));
 t('foto: NUNCA #albumFile', !fotoFn.includes('albumFile'));
@@ -103,23 +108,16 @@ sftCalls = 0;
 pzDockMasFoto();
 t('foto funcional: cierra hoja y llama a pzSftFotoAlChat', els.pzDockMasSheet.hidden === true && sftCalls === 1);
 
-// ---------- 8. voz: espejo #mzMic de v573 ----------
-const vozFn = stripComments(block.slice(block.indexOf('function pzDockMasVoz')));
-t('voz: flag __pzChatVoice + #/app/chat cuando no esta en chat', vozFn.includes('__pzChatVoice') && vozFn.includes("location.hash = '#/app/chat'"));
-t('voz: directo voiceToggle a 80 ms si ya esta en chat', vozFn.includes('voiceToggle()') && vozFn.includes('}, 80)'));
-t('voz: NUNCA mzOpenSheet viejo ni #mzMic', !vozFn.includes('mzOpenSheet') && !vozFn.includes('mzMic'));
-location.hash = '#/app/analisis';
-windowStub.__pzChatVoice = false;
-timeouts = [];
-pzDockMasVoz();
-t('voz funcional: desde otra pestana pone flag y navega a #/app/chat', windowStub.__pzChatVoice === true && location.hash === '#/app/chat');
-location.hash = '#/app/chat';
-windowStub.__pzChatVoice = false;
-timeouts = []; voiceCalls = 0;
-pzDockMasVoz();
-t('voz funcional: en chat no pone flag, programa voiceToggle', windowStub.__pzChatVoice === false && timeouts.length === 1);
-timeouts.forEach((fn) => fn());
-t('voz funcional: el timeout llama a voiceToggle', voiceCalls === 1);
+// ---------- 8. video: mismo flujo directo de v573, picker filtrado ----------
+// (CHATBAR-MAS: pzDockMasVoz YA NO EXISTE; la voz va solo por el mic
+// de la barra del chat. El funcional de video vive en la suite nueva
+// test-lotechatbarmas.js; acá solo estático para no duplicar harness.)
+const videoFn = stripComments(block.slice(block.indexOf('function pzDockMasVideo')));
+t('video: abre el chat (pzSftChatAbrirYEnfocar)', videoFn.includes('pzSftChatAbrirYEnfocar()'));
+t('video: filtra el picker a video/* y lo dispara', videoFn.includes("cf.accept = 'video/*'") && videoFn.includes('cf.click()'));
+t('video: cierra la hoja antes', videoFn.indexOf('pzDockMasClose()') < videoFn.indexOf('pzSftChatAbrirYEnfocar()'));
+t('video: NUNCA #albumFile, voz ni flag', !videoFn.includes('albumFile') && !videoFn.includes('voiceToggle') && !videoFn.includes('__pzChatVoice'));
+t('CHATBAR-MAS: pzDockMasVoz YA NO EXISTE', !app.includes('function pzDockMasVoz'));
 
 // ---------- 9. CSS ----------
 t('CSS: boton 52 px circular elevado', css.includes('.bb-tab-mas, .mz-tab-mas{') && css.includes('width:52px') && css.includes('translateY(-12px)'));
@@ -129,20 +127,20 @@ t('CSS: hoja con backdrop y card', css.includes('.pz-dockmas-card') && css.inclu
 t('CSS: reduced-motion anula elevacion', css.includes('prefers-reduced-motion') && css.includes('.bb-tab-mas,.mz-tab-mas{transform:none}'));
 
 // ---------- 10. M78: las 6 funciones existen y se llaman ----------
-['pzDockMasBtn', 'pzDockMasHTML', 'pzDockMasToggle', 'pzDockMasClose', 'pzDockMasFoto', 'pzDockMasVoz'].forEach((f) => {
+['pzDockMasBtn', 'pzDockMasHTML', 'pzDockMasToggle', 'pzDockMasClose', 'pzDockMasFoto', 'pzDockMasVideo'].forEach((f) => {
   t('M78: definida ' + f, app.includes('function ' + f));
 });
 t('M78: Btn llamado en ambos docks', cnt(app, "pzDockMasBtn('bb')") >= 1 && cnt(app, "pzDockMasBtn('mz')") >= 1);
 t('M78: HTML llamado en ambos docks', cnt(app, 'pzDockMasHTML()') >= 3); // def + 2 inserciones
 t('M78: Toggle llamado por el boton +', btnBb.includes('pzDockMasToggle()'));
 t('M78: Close llamado por backdrop y x', (sheet.match(/pzDockMasClose\(\)/g) || []).length >= 2);
-t('M78: Foto y Voz llamados por las filas', sheet.includes('pzDockMasFoto()') && sheet.includes('pzDockMasVoz()'));
+t('M78: Foto y Video llamados por las filas (CHATBAR-MAS)', sheet.includes('pzDockMasFoto()') && sheet.includes('pzDockMasVideo()'));
 
 // ---------- 11. versiones + censo (post-push: v574 (pines rotados con causa)) ----------
-t('BUILD v576 (pin rotado con causa: liberación v576)', srv.includes("const BUILD_ID = '20261101-v576'"));
-t('index: app.js?v=387 (pin rotado con causa: liberación v576)', idx.includes('app.js?v=387'));
-t('index: styles?v=20261102 (pin rotado con causa: liberación v576)', idx.includes('styles.css?v=20261102'));
-t('en/index: styles?v=20261102 (pin rotado con causa: liberación v576)', idxEn.includes('styles.css?v=20261102'));
+t('BUILD v573 pre-push', srv.includes("const BUILD_ID = '20261101-v577'"));
+t('index: app.js?v=388', idx.includes('app.js?v=388'));
+t('index: styles?v=20261102', idx.includes('styles.css?v=20261102'));
+t('en/index: styles?v=20261102', idxEn.includes('styles.css?v=20261102'));
 t('CHUNK_V intacto v573 (no se toca chunk lazy)', app.includes("const CHUNK_V = '20261101-v575'"));
 t('censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 t('censo server: week-redo 16', cnt(srv, 'week-redo') === 16);

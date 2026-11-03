@@ -146,7 +146,7 @@ t(css.includes('@media(min-width:761px){.pz-chatfull{left:50%'), 'css: columna c
 // ---------- Contenido intacto: envío, mic, +, subida, rotación ----------
 t(app.includes("inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); chatSend(); } });"), 'bindChat intacto: Enter envía');
 t(app.includes("file.onchange = () => { chatUploadPhotos(file.files);"), 'bindChat intacto: #chatFile → chatUploadPhotos');
-t(app.includes("file.accept = b.dataset.k === 'video' ? 'video/*' : 'image/*';"), 'bindChat intacto: menú + foto/video');
+t(!app.includes("file.accept = b.dataset.k === 'video' ? 'video/*' : 'image/*';"), 'CHATBAR-MAS (Valentino 3/11): menú + foto/video SALIO de bindChat (el filtro video/* vive ahora en pzDockMasVideo)');
 t(app.includes('chatUpdateSendBtn'), 'bindChat intacto: botón mic/enviar');
 t(app.includes('pzPhTick'), 'rotación intacta: tick presente');
 t(app.includes("pzPhEls('#chatInput')"), 'rotación intacta: #chatInput rota');
@@ -156,8 +156,8 @@ const card = sliceFn(app, 'function chatCardHTML(', '\n}\n');
 t(card.includes('id="chatBox"'), 'chatCard intacto: #chatBox');
 t(card.includes('id="chatInput"'), 'chatCard intacto: #chatInput');
 t(card.includes('id="chatFile"'), 'chatCard intacto: #chatFile');
-t(card.includes('id="chatPlus"'), 'chatCard intacto: #chatPlus');
-t(card.includes('id="chatPlusMenu"'), 'chatCard intacto: #chatPlusMenu');
+t(!card.includes('id="chatPlus"'), 'CHATBAR-MAS (Valentino 3/11): #chatPlus SALIO de la barra del chat');
+t(!card.includes('id="chatPlusMenu"'), 'CHATBAR-MAS: #chatPlusMenu SALIO con el + (foto/video solo por el + del dock)');
 t(card.includes('id="chatPhotos"'), 'chatCard intacto: #chatPhotos');
 t(card.includes('id="chatProposal"'), 'chatCard intacto: #chatProposal');
 t(card.includes('id="chatMsg"'), 'chatCard intacto: #chatMsg');

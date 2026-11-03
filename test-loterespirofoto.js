@@ -37,7 +37,7 @@ ok(/\.apv-media img\{width:100%;height:auto;display:block\}/.test(css), 'img: wi
 ok(/\.apv-media video\{width:100%;aspect-ratio:1\/1;object-fit:cover;display:block\}/.test(css), 'video: regla intacta');
 ok(app.includes('class="apv-media"') || app.includes('class=\\"apv-media\\"'), 'approvalPostView sigue emitiendo .apv-media');
 // app.js NO se tocó en este lote: byte-idéntico a v559 servido.
-ok(md5(app) === '3c0a831bf11f49f501bac926816f4e73', 'app.js = árbol v576 tras los 5 parches (pin rotado con causa: el lote sigue siendo solo CSS; app cambió solo por los lotes hermanos hashtags R2 y próximo-premio, verificado por diff)');
+ok(md5(app) === '8d772cdcdd24c0a0102388a4f0dbf698', 'app.js = árbol v576 tras los 5 parches (pin rotado con causa: liberación v577 chatbar-mas; app cambia solo por el lote, styles intacto)');
 
 // ---------- (c) Aceptar fijo, menú, mini-chat y día/hora intactos ----------
 ok(app.includes('id="apvAccept"') && app.includes('id="apvAcceptDraft"'), 'Aceptar fijo: apvAccept + apvAcceptDraft presentes');
@@ -51,8 +51,8 @@ ok(app.includes('class="apv-caption"'), 'caption del detalle intacto');
 ok(app.includes('homeTileHTML'), 'feed: homeTileHTML presente (app.js idéntico, sin cambios)');
 
 // ---------- Censo + versiones (base v559) ----------
-ok(srv.includes("const BUILD_ID = '20261101-v576'"), 'BUILD v576 en server.js (pin rotado con causa: liberación v576)');
-ok(idx.includes('app.js?v=387') && idx.includes('styles.css?v=20261102'), 'index ES: ?v= 387 / 20261102 (pin rotado con causa: liberación v576)');
+ok(srv.includes("const BUILD_ID = '20261101-v577'"), 'BUILD v576 en server.js (pin rotado con causa: liberación v577)');
+ok(idx.includes('app.js?v=388') && idx.includes('styles.css?v=20261102'), 'index ES: ?v= 387 / 20261102 (pin rotado con causa: liberación v577)');
 ok(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 ok(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 ok(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');

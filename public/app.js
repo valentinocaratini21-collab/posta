@@ -5963,7 +5963,7 @@ function pzDockMasHTML() {
     <div class="pz-dockmas-card" role="dialog" aria-label="${gzT('Crear', 'Create')}">
       <div class="pz-dockmas-head"><span>${gzT('¿Qué querés agregar?', 'What do you want to add?')}</span><button type="button" class="pz-dockmas-x" aria-label="${gzT('Cerrar', 'Close')}" onclick="pzDockMasClose()">×</button></div>
       <button type="button" class="pz-dockmas-row" onclick="pzDockMasFoto()">${pzIc('camera', 20)} ${gzT('Agregar foto', 'Add photo')}</button>
-      <button type="button" class="pz-dockmas-row" onclick="pzDockMasVoz()">${pzIc('mic', 20)} ${gzT('Nota de voz', 'Voice note')}</button>
+      <button type="button" class="pz-dockmas-row" onclick="pzDockMasVideo()">${pzIc('reel', 20)} ${gzT('Agregar video', 'Add video')}</button>
     </div>
   </div>`;
 }
@@ -5982,17 +5982,25 @@ function pzDockMasFoto() {
   pzDockMasClose();
   try { pzSftFotoAlChat(); } catch (e) {}
 }
-function pzDockMasVoz() {
-  /* Espejo exacto del #mzMic de v573: flag + navegar a #/app/chat; la
-     vista del chat consume el flag y arranca la nota a los 80 ms. Si
-     ya estamos en el chat, la nota arranca directo a los 80 ms. */
+function pzDockMasVideo() {
+  /* (LOTE CHATBAR-MAS · decisión Valentino 3/11) El + del dock es
+     FOTO O VIDEO, no nota de voz: las notas van solo por el micrófono
+     de la barra del chat. El video cae directo al chat como la foto
+     de v573 (mismo flujo, misma propuesta sola): abre el chat y
+     dispara el picker DEL CHAT (#chatFile) filtrado a video/*.
+     #chatFile ya acepta video desde v573 y chatUploadPhotos ya maneja
+     video (hasta 4 archivos, /api/assets?kind=video). */
   pzDockMasClose();
-  if ((location.hash || '').split('?')[0] === '#/app/chat') {
-    setTimeout(() => { try { voiceToggle(); } catch (e) {} }, 80);
-    return;
-  }
-  try { window.__pzChatVoice = true; } catch (e) {}
-  location.hash = '#/app/chat';
+  pzSftChatAbrirYEnfocar();
+  let intentos = 0;
+  const t = setInterval(() => {
+    intentos++;
+    try {
+      const cf = document.getElementById("chatFile");
+      if (cf) { clearInterval(t); cf.accept = 'video/*'; cf.click(); }
+      else if (intentos >= 8) clearInterval(t);
+    } catch (e) { clearInterval(t); }
+  }, 150);
 }
 
 function appShell(tab, content) {
@@ -9446,14 +9454,9 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
       <img class="chat-face" src="ai-avatar.png" alt="Posty">
-      ${schedMode ? '' : `<button class="btn btn-soft" id="chatPlus" title="Agregar foto o video">${pzIc('plus', 18)}</button>`}
       <input id="chatInput" class="in" placeholder="escribile a posty…" maxlength="2000" autocomplete="off">
       <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">${pzIc('mic', 18)}</button>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
-      ${schedMode ? '' : `<div class="chat-plus-menu" id="chatPlusMenu" hidden>
-        <button data-k="photo">${pzIc('camera', 18)} Foto</button>
-        <button data-k="video">${pzIc('reel', 18)} Video</button>
-      </div>`}
     </div>
     <div id="chatMsg"></div>
     <div id="mcFaltan"></div>
@@ -10525,21 +10528,9 @@ function bindChat() {
   if (!window.__chatOpenT) { window.__chatOpenT = true; track('chat_open'); }
   inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); chatSend(); } });
   inp.addEventListener('input', chatUpdateSendBtn);
-  // Botón ＋ : menú para foto/video (estilo Muse)
-  const plus = $('#chatPlus'), menu = $('#chatPlusMenu');
-  if (plus && menu) {
-    plus.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; };
-    if (!window.__plusMenuDoc) {
-      window.__plusMenuDoc = true;
-      document.addEventListener('click', () => { const mm = $('#chatPlusMenu'); if (mm) mm.hidden = true; });
-    }
-    menu.querySelectorAll('button[data-k]').forEach(b => b.onclick = (e) => {
-      e.stopPropagation(); menu.hidden = true;
-      const file = $('#chatFile'); if (!file) return;
-      file.accept = b.dataset.k === 'video' ? 'video/*' : 'image/*';
-      file.click();
-    });
-  }
+  // (LOTE CHATBAR-MAS · decisión Valentino 3/11) El + de la barra del
+  // chat salió: foto/video entran solo por el + del dock (pzDockMas),
+  // que dispara el picker #chatFile de abajo. El menú viejo no existe.
   chatScroll();
   try { hfPaintAnchor(); } catch (e) {}
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
@@ -19212,7 +19203,6 @@ async function inicioView() {
   <div class="mz-bottomstack" id="mzBottomStack">
   ${pzAcceptWeekHTML}
   <div class="mz-chatbar" id="mzChatBar">
-    <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
     <button type="button" class="mz-ph" id="mzChatOpen"><img class="chat-face" src="ai-avatar.png" alt="Posty"><span class="mz-ph-tx">escribile a posty…</span></button>
     <button type="button" class="mz-mic" id="mzMic" aria-label="Pedir con nota de voz">${pzIc('mic', 20)}</button>
   </div>
@@ -22771,10 +22761,13 @@ function bindInicio() {
   if (agUp) agUp.onclick = clickUp;
   // (LOTE CHATPANTALLA) La hoja se retiró: el chip de Ideas de la hoja
   // ya no existe en Inicio; en la pantalla de chat lo cablea bindChatFull.
-  // Barra de chat fija: + sube (mismo flujo), el campo abre la pantalla
-  // de chat, el micrófono abre la pantalla y arranca la nota de voz.
+  // Barra de chat fija: el campo abre la pantalla de chat, el
+  // micrófono abre la pantalla y arranca la nota de voz.
+  // (LOTE CHATBAR-MAS · decisión Valentino 3/11) El + #mzPlus de esta
+  // barra SALIÓ del render: foto/video entran solo por el + del dock.
+  // El binding queda como no-op guardado (plus null sin render) para
+  // no romper el pin de subir-foto-todo; no cablea nada visible.
   const plus = $('#mzPlus');
-  // AJUSTE ENTRADA DIRECTA: el + del dock manda la foto al chat, no al Álbum.
   if (plus) plus.onclick = pzSftMzPlus;
   const open = $('#mzChatOpen');
   if (open) open.onclick = () => { location.hash = '#/app/chat'; };

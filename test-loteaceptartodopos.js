@@ -83,7 +83,7 @@ ok(!APP.includes("acceptPillHTML(pzAcceptWeekCands.length, 'hfAcceptAllWeek')"),
   const iStack = iv.indexOf('id="mzBottomStack"');
   ok(iBar > 0 && iChat > 0 && iStack > 0, 'plantilla: barra, stack y chat presentes');
   ok(iStack > 0 && iStack < iBar && iBar < iChat, 'plantilla: orden stack → barra → chat (barra ENCIMA del chat)');
-  ok(iv.includes('id="mzPlus"') && iv.includes('id="mzChatOpen"') && iv.includes('id="mzMic"'), 'chat: +, campo y mic intactos');
+  ok(!iv.includes('id="mzPlus"') && iv.includes('id="mzChatOpen"') && iv.includes('id="mzMic"'), 'CHATBAR-MAS (Valentino 3/11): + de la barra SALIO, campo y mic intactos');
   ok(iv.includes("hf-acceptbar-on") && iv.includes("pzAcceptWeekCands.length ? ' hf-acceptbar-on' : ''"), 'plantilla: clase de despeje solo con pendientes');
   ok(iv.indexOf('${pzAcceptWeekHTML}') > iv.indexOf('${gridHTML}'), 'barra va tras la grilla en la plantilla');
   ok(!iv.includes('${stripHTML}'), 'píldora vieja de borradores NO se inserta (sigue muerta)');
