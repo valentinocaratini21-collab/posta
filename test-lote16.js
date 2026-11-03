@@ -50,7 +50,7 @@ function loadFns(sb, names) {
 t(srv.includes("const BUILD_ID = '20261101-v573'"), 'BUILD v522 en server.js');
 t(idx.includes('app.js?v=384') && idx.includes('styles.css?v=20261100'), 'index: app 339 + styles 20261064');
 t(idxEn.includes('styles.css?v=20261100') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v583'"), 'CHUNK_V sigue v516 (ningún chunk tocado)'); // (RUBRO-GARANTÍAS ×6 · 3/11, con causa) pin v575→v583: el liberador bumpea CHUNK_V por chunk-analisis.js
+t(app.includes("const CHUNK_V = '20261101-v589'"), 'CHUNK_V sigue v589 (tanda Estrategia lo bumpea)'); // (ESTRATEGIA ×6 + CARTA-MANO + CARTA-PERSONALIZADA · 3/11, con causa) pin v583→v589: la tanda toca chunk-analisis.js (magia, números, próximo-paso, impulsar, aprende, saludo) y el bump a v589 es parte del push
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');

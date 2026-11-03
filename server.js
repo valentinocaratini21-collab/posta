@@ -9639,6 +9639,18 @@ async function buildAccountAnalysis(uid, opts = {}) {
 function analysisPayload(uid, analysis) {
   const plan = planForUid(uid);
   const view = analysisEngine.gateForPlan(analysis, plan.id);
+  // (LOTE ESTRATEGIA-APRENDE · 2026-11-02) UNA frase real de aprendizaje
+  // para la pantalla Estrategia, desde la semana anterior real de ESTA
+  // cuenta (el mismo registro que alimenta el plan: filtrado por user_id
+  // dentro de aprendizajeSemanaAnterior). Sin aprendizaje → null y el
+  // cliente no dibuja la línea. Fail-closed: jamás frena /api/analysis.
+  let aprendizaje = null;
+  try {
+    const wk = mondayKeyOf(tzToday(userTz(uid)));
+    const ap = semanaAprende.aprendizajeSemanaAnterior(db, uid, wk);
+    const lang = (view && view.lang) || (analysis && analysis.lang) || 'es';
+    aprendizaje = semanaAprende.fraseAprendizaje(ap, lang);
+  } catch (e) { aprendizaje = null; }
   // (v384 · ítem 8) La carta dominical suma su página con audio: el
   // cliente la abre desde Análisis con un link firmado (sin sesión).
   try {
@@ -9651,6 +9663,7 @@ function analysisPayload(uid, analysis) {
     analysis: view,
     week_summary: analysisEngine.weekSummary(analysis),
     history: analysisEngine.analysisHistory(db, uid, 6),
+    aprendizaje,
   };
 }
 app.get('/api/analysis', requireAuth, async (req, res) => {
@@ -27454,7 +27467,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v588';
+const BUILD_ID = '20261101-v589';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

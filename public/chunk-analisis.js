@@ -99,7 +99,10 @@ async function anaLoad(useRefresh) {
   }
   anaLastPayload = d;
   rootEl.innerHTML = anaCartaHTML(d);
+  anaNextStepMount();
   anaBoostRecLoad();
+  anaWeekNumsLoad();
+  anaMagiaEntrada();
   try { window.scrollTo(0, 0); } catch (e) {}
 }
 
@@ -506,7 +509,9 @@ function anaBackCurrent() {
   anaPastMode = false;
   if (anaLastPayload) {
     rootEl.innerHTML = anaCartaHTML(anaLastPayload);
+    anaNextStepMount();
     anaBoostRecLoad();
+    anaWeekNumsLoad();
     try { window.scrollTo(0, 0); } catch (e) {}
   } else {
     anaLoad(false);
@@ -578,31 +583,57 @@ function anaSignHTML(birth) {
  * cartas viejas (sin letter) se siguen
  * leyendo con la forma de bloques v3 de abajo: nada se rompe hacia atrás. */
 
-/* CARTA MÍNIMA (v2, 2026-10-21): la forma aprobada por Valentino — saludo →
- * foto de su mejor posteo (chica, solo si el servidor la localizó; si la
- * imagen falla, el figure se oculta solo) → festejo → línea honesta →
- * "Esta semana hago esto:" con 2–3 acciones (cada una en su tarjeta suave,
- * con el porqué adentro del texto) → "De tu lado: nada" → el cierre va en
- * el banner de siempre. ~10 líneas: nada más se renderiza en esta vista. */
-function anaLetterMinimalHTML(a) {
+/* CARTA MÍNIMA EN 3 BLOQUES (decisión Valentino 2/11, sobre la forma v2):
+ * saludo + foto + festejo/honesta → "Qué pasó" · acciones de la semana →
+ * "Qué viene" · "De tu lado" → "Qué hacer". Mismo contenido, mismo orden,
+ * solo agrupado con título; sin botón de audio en la carta (la página
+ * firmada y el email lo conservan). ~10 líneas: nada más se renderiza en
+ * esta vista. Las cartas v1 guardadas conservan su forma vieja. */
+function anaLetterMinimalHTML(a, opts) {
   const L = a.letter;
   const items = Array.isArray(L.body) ? L.body : [];
-  let h = '';
-  if (L.greeting) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
-  items.forEach((it) => {
-    if (!it) return;
+  const render = (it) => {
+    if (!it) return '';
     if (it.t === 'photo' && it.src) {
-      h += `<figure style="margin:2px 0 12px"><img src="${esc(it.src)}" alt="" loading="lazy" style="width:148px;height:148px;object-fit:cover;border-radius:14px;display:block" onerror="this.parentNode.style.display='none'"></figure>`;
+      return `<figure style="margin:2px 0 12px"><img src="${esc(it.src)}" alt="" loading="lazy" style="width:148px;height:148px;object-fit:cover;border-radius:14px;display:block" onerror="this.parentNode.style.display='none'"></figure>`;
     } else if (it.t === 'action') {
-      h += `<div class="ana-ltr-plan"><p>• ${esc(it.text || '')}</p></div>`;
+      return `<div class="ana-ltr-plan"><p>• ${esc(it.text || '')}</p></div>`;
     } else if (it.t === 'p') {
-      h += `<p class="ana-ltr-p">${esc(it.text || '')}</p>`;
+      return `<p class="ana-ltr-p">${esc(it.text || '')}</p>`;
     }
+    return '';
+  };
+  // CARTA CORTA EN 3 BLOQUES (decisión Valentino 2/11): la forma mínima v2
+  // ya venía ordenada saludo → foto → festejo/honesta → acciones →
+  // "De tu lado"; la partición es por posición, sin reescribir ni inventar
+  // contenido: antes de la primera acción / acciones / después de la última
+  // acción. Sin botón de audio (decisión estrategia-sin-audio 2/11, ya
+  // aplicada en v565: la carta en Estrategia no lo lleva; la página
+  // firmada /carta/:token y el botón del email quedan intactos en
+  // server.js). El saludo del cuerpo se suprime cuando opts.saludoTop
+  // (carta-personalizada: la carta actual ya lo rinde arriba).
+  const actionIdx = [];
+  items.forEach((it, i) => { if (it && it.t === 'action') actionIdx.push(i); });
+  if (!actionIdx.length) {
+    // Carta degenerada (sin acciones): forma plana de siempre, sin audio y
+    // sin bloques inventados; nunca se muestra una sección vacía.
+    let h = '';
+    if (L.greeting && !(opts && opts.saludoTop)) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
+    items.forEach((it) => { h += render(it); });
+    return h;
+  }
+  const first = actionIdx[0], last = actionIdx[actionIdx.length - 1];
+  let pre = '', mid = '', post = '';
+  if (L.greeting && !(opts && opts.saludoTop)) pre += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
+  items.forEach((it, i) => {
+    if (i < first) pre += render(it);
+    else if (i <= last) mid += render(it);
+    else post += render(it);
   });
-  // (ESTRATEGIA-SIN-AUDIO 2/11, pedido Valentino: sin botón de audio en la
-  // carta de Estrategia. carta_url, la página firmada y el botón del email
-  // siguen intactos; solo desaparece el botón de esta pantalla.)
-  return h;
+  const sec = (es, enS, inner) => `<section class="ana-ltr-sec"><p class="ana-sec-t">${anaT(es, enS)}</p>${inner}</section>`;
+  return sec('Qué pasó', 'What happened', pre)
+    + sec('Qué viene', "What's next", mid)
+    + sec('Qué hacer', 'What to do', post);
 }
 
 /* ---------- Así nace tu semana: hallazgo → decisión de la semana ----------
@@ -667,13 +698,13 @@ function anaToggleFull(btn) {
   if (btn) btn.innerHTML = open ? anaT('Ver mi estrategia completa', 'See my full strategy') + ' ' + pzIc('arrowRight', 13) : anaT('Ver menos', 'See less') + ' ' + pzIc('chevUp', 13);
 }
 
-function anaLetterBodyHTML(a) {
+function anaLetterBodyHTML(a, opts) {
   const L = a.letter;
-  if (L && (L.v >= 2 || L.minimal)) return anaLetterMinimalHTML(a);
+  if (L && (L.v >= 2 || L.minimal)) return anaLetterMinimalHTML(a, opts);
   const items = Array.isArray(L.body) ? L.body : [];
   const phaseNums = ['①', '②', '③'];
   let h = '';
-  if (L.greeting) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
+  if (L.greeting && !(opts && opts.saludoTop)) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
   let lastPhase = -1;
   items.forEach((it) => {
     if (!it) return;
@@ -845,7 +876,39 @@ async function anaShareWeek(btn) {
   } finally { if (btn) btn.disabled = false; }
 }
 
+/* ---------- LOTE ESTRATEGIA-APRENDE (2026-11-02): «Posty aprendió» ----------
+ * UNA frase real de aprendizaje debajo de la carta (fuera de su texto: el
+ * formato de la carta es cerrado, nada entra en ella). La frase viene del
+ * servidor en d.aprendizaje (registro real de semana-aprende, filtrado por
+ * user_id); sin frase no se dibuja nada, y en cartas anteriores tampoco
+ * (el aprendizaje es de la semana actual, no de la carta vieja). */
+function anaAprendeHTML(d) {
+  if (typeof anaPastMode !== 'undefined' && anaPastMode) return '';
+  const f = d && typeof d.aprendizaje === 'string' ? d.aprendizaje.trim() : '';
+  if (!f) return '';
+  return `<p class="ana-aprende"><b>${anaT('Posty aprendió', 'Posty learned')}</b>: ${esc(f)}</p>`;
+}
+
 /* ---------- La carta completa ---------- */
+
+// (CARTA-PERSONALIZADA 3/11) Saludo de apertura de la carta ACTUAL.
+// Devuelve el saludo con nombre ("Hola, {nombre}:" / "Hi, {name}:") o ''.
+// Orden de fuentes, todas reales, nunca inventadas:
+//   1) letter.greeting guardado, si ya trae nombre (formato del motor);
+//   2) PROFILE.business_name (anaCtx) si el saludo guardado es pelado
+//      ("Hola:") o falta — cubre cartas generadas sin nombre;
+//   3) '' si no hay nombre en ningún lado: la carta abre como hoy.
+// Cartas viejas: anaPastMode=true -> '' (su saludo queda en el cuerpo).
+function anaSaludoTop(a, carta) {
+  if (!carta) return '';
+  try { if (typeof anaPastMode !== 'undefined' && anaPastMode) return ''; } catch (e) { return ''; }
+  const g = String((a && a.letter && a.letter.greeting) || '').trim();
+  const m = g.match(/^(Hola|Hi), (.+):$/);
+  if (m && m[2]) return g;
+  const ctx = anaCtx();
+  if (ctx.biz) return anaT('Hola, ' + ctx.biz + ':', 'Hi, ' + ctx.biz + ':');
+  return '';
+}
 
 function anaCartaHTML(d) {
   const a = (d && d.analysis) || null;
@@ -857,6 +920,7 @@ function anaCartaHTML(d) {
   const dateLine = anaDateLine(a);
   const nextLine = (!birth && a && !anaPastMode) ? anaProximoAnalisisHTML(a) : '';
   const carta = anaHasLetter(a);
+  const saludoTop = anaSaludoTop(a, carta);
   const title = carta && a.letter.title ? a.letter.title : anaT('Tu estrategia', 'Your strategy');
   const intro = !a
     ? anaT('Todavía no tengo tu radiografía — y no te voy a inventar una. Esto es lo que armo para tu cuenta desde tu rubro, tu zona y tu negocio' + pzIc('arrowDown', 13) + '', 'I do not have your full picture yet — and I will not make one up. This is what I build for your account from your category, your area and your business' + pzIc('arrowDown', 13) + '')
@@ -864,7 +928,8 @@ function anaCartaHTML(d) {
       ? anaT('Tu cuenta está por nacer — y va a nacer con estrategia. Estudié tu rubro y tu zona, y esto es lo que armé para vos' + pzIc('arrowDown', 13) + '', 'Your account is about to be born — and it will be born with a strategy. I studied your category and your area, and this is what I built for you' + pzIc('arrowDown', 13) + '')
       : anaT('Estudié tu cuenta dato por dato — tu ritmo, tus formatos, tus textos — y armé el plan con el que lo mejoro. Esto es lo que vi' + pzIc('arrowDown', 13) + '', 'I studied your account data point by data point — your rhythm, your formats, your texts — and built the plan I improve it with. This is what I saw' + pzIc('arrowDown', 13) + ''));
   const wsOpen = d && typeof d.week_summary === 'string' ? d.week_summary.trim() : '';
-  let h = `<div class="ana-card ana-letter">
+  const manoCls = anaPastMode ? '' : ' ana-carta-mano';
+  let h = `<div class="ana-card ana-letter${manoCls}">
     <div class="ana-lhead">
       <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
       <h3 class="ana-title">${esc(title)}</h3>
@@ -872,7 +937,13 @@ function anaCartaHTML(d) {
       ${dateLine ? `<p class="ana-date">${esc(dateLine)}</p>` : ''}
       ${nextLine ? `<p class="ana-next">${esc(nextLine)}</p>` : ''}
       ${carta ? '' : (wsOpen ? '' : `<p class="ana-intro">${intro}</p>`)}
-    </div>`;
+    </div>
+    <div id="anaWeekNums"></div>`;
+  // (CARTA-PERSONALIZADA 3/11) Primera línea del cuerpo de la carta
+  // ACTUAL: el nombre del cliente, tras la tira de números y antes de
+  // ana-ltr-first, del week_summary y de los 3 bloques de carta-corta.
+  // Sin nombre, nada.
+  if (saludoTop) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(saludoTop)}</p>`;
   // (LOTE 15 · carta Estrategia) Primera línea SIEMPRE que haya un
   // análisis (con carta guardada y sin ella): la frase exacta, en el
   // idioma de la carta, una sola vez. Sin análisis no hay línea.
@@ -892,7 +963,7 @@ function anaCartaHTML(d) {
     // no se agregan debajo (el análisis completo sigue en el payload y en
     // las vistas sin carta; las cartas v1 conservan su forma con apoyo).
     const minimal = !!(a.letter && (a.letter.v >= 2 || a.letter.minimal));
-    h += anaLetterBodyHTML(a);
+    h += anaLetterBodyHTML(a, { saludoTop: !!saludoTop });
     if (minimal) {
       h += `<div style="text-align:center;margin:14px 0 4px"><button class="btn btn-ghost" id="anaFullBtn" onclick="anaToggleFull(this)">${anaT('Ver mi estrategia completa', 'See my full strategy') + ' ' + pzIc('arrowRight', 13)}</button></div><div id="anaFull" style="display:none">${anaFullHTML(d, a, birth)}</div>`;
     }
@@ -902,7 +973,6 @@ function anaCartaHTML(d) {
     if (!minimal && Array.isArray(a.data_notes) && a.data_notes.length) {
       h += a.data_notes.map((n) => `<p class="ana-note">${esc(n)}</p>`).join('');
     }
-    h += `<div id="anaBoostRec"></div>`;
     h += `<div class="ana-banner">${esc(a.letter.closing || anaBanner(stage, ctx))}</div>`;
     h += anaSignHTML(birth);
     if (!anaPastMode) h += anaShareBlockHTML(a);
@@ -912,7 +982,9 @@ function anaCartaHTML(d) {
     // un producto. No suma fricción a la aprobación: si no se toca, la
     // semana se arma con el fundamento vigente. Se carga bajo demanda.
     if (!anaPastMode) h += `<div class="ana-fl-confirm" style="margin-top:12px;text-align:center"><button class="btn btn-ghost btn-sm" onclick="anaFlConfirmLoad(this)">${anaT('¿Qué vendés esta semana?', 'What are you selling this week?')}</button><div id="anaFlBox" style="display:none;text-align:left;margin-top:10px"></div></div>`;
+    h += anaAprendeHTML(d);
     h += `</div>`;
+    h += `<div id="anaBoostRec"></div>`;
     return h;
   }
   if (!birth) h += `<div class="ana-verdict"><p class="ana-vlabel">${anaT('Mi veredicto', 'My verdict')}</p><p class="ana-vq">${esc(anaVerdict(a, stage, birth))}</p></div>`;
@@ -934,11 +1006,12 @@ function anaCartaHTML(d) {
   if (a && Array.isArray(a.data_notes) && a.data_notes.length) {
     h += a.data_notes.map((n) => `<p class="ana-note">${esc(n)}</p>`).join('');
   }
-  h += `<div id="anaBoostRec"></div>`;
   h += `<div class="ana-banner">${esc(anaBanner(stage, ctx))}</div>`;
   h += anaSignHTML(birth);
   if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">${anaT('↻ Actualizar estrategia', '↻ Refresh strategy')}</button></div>`;
+  h += anaAprendeHTML(d);
   h += `</div>`;
+  h += `<div id="anaBoostRec"></div>`;
   return h;
 }
 
@@ -999,9 +1072,12 @@ function anaBoostRecHTML(d) {
       </div><div class="ana-boostrec-msg" id="anaBoostRecMsg"></div>`
     : `<p class="ana-boostrec-nota">${anaT('Impulsar todavía no está habilitado en tu cuenta.', "Boosting isn't enabled on your account yet.")}</p>`;
   return `<div class="ana-boostrec">
+    <p class="ana-boostrec-sec">${anaT('Impulsar', 'Boost')}</p>
+    <p class="ana-boostrec-saludo">${anaT('¡Hola! Te traigo una idea cortita:', 'Hi! A quick idea for you:')}</p>
     <p class="ana-boostrec-t">${anaT('Tu mejor posteo de la semana', 'Your best post this week')}</p>
     <div class="ana-boostrec-post">${img}<div>${cap}<p class="ana-boostrec-why">${esc(porque)}</p></div></div>
     ${boost}
+    <p class="ana-boostrec-despedida">— Posty</p>
   </div>`;
 }
 
@@ -1041,7 +1117,7 @@ async function anaBoostRecLoad() {
   if (document.getElementById('anaBoostRec') !== box) return;
   if (!d || !d.ok) { box.innerHTML = ''; return; }
   if (!d.mejor) {
-    box.innerHTML = `<div class="ana-boostrec"><p class="ana-boostrec-t">${anaT('Tu mejor posteo de la semana', 'Your best post this week')}</p><p class="ana-boostrec-nota">${anaT('Esta semana todavía no tenés un posteo publicado con datos para elegir el mejor. Cuando publiquen y lleguen los números, acá va a aparecer tu mejor posteo para impulsarlo.', "This week you don't have a published post with data to pick a best one yet. Once posts go out and numbers arrive, your best post to boost will appear here.")}</p></div>`;
+    box.innerHTML = '';
     return;
   }
   box.dataset.postId = String(d.mejor.post_id);
@@ -1108,4 +1184,178 @@ function anaFlConfirmarHipotesis(btn) {
   fetch('/api/fundamento/hipotesis/confirmar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: t }) }).then((r) => r.json()).then((d) => {
     if (d && d.ok) anaFlConfirmLoad();
   });
+}
+
+/* ---------- ESTRATEGIA-MAGIA (2/11, decisión Valentino): destellos de entrada
+   en la carta de Estrategia. Regla permanente de magia: estrella de 4 puntas
+   dorada #FEC14D y celeste #2793C8, estelas suaves; nunca puntos ni polvo;
+   solo Posty tiene magia. Solo en la entrada: una animación que se desvanece
+   sola, sin bloquear toques ni tapar texto, sin repetirse mientras la carta
+   está abierta; prefers-reduced-motion la anula. Solo la carta actual
+   (anaLoad): las cartas anteriores (anaOpenPast) no la llevan. ---------- */
+function anaMagiaEntrada() {
+  try {
+    if (typeof document === 'undefined') return;
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var head = document.querySelector('.ana-lhead');
+    if (!head) return;
+    if (head.querySelector('.ana-magia-entrada')) return; /* ya está: no se repite */
+    var box = document.createElement('span');
+    box.className = 'ana-magia-entrada';
+    box.setAttribute('aria-hidden', 'true');
+    var cols = ['#FEC14D', '#2793C8', '#FEC14D', '#2793C8', '#FEC14D'];
+    var glow = ['rgba(254,193,77,.65)', 'rgba(39,147,200,.65)', 'rgba(254,193,77,.65)', 'rgba(39,147,200,.65)', 'rgba(254,193,77,.65)'];
+    for (var i = 0; i < 5; i++) {
+      var s = document.createElement('i');
+      s.className = 'ana-mg-' + (i + 1);
+      s.style.background = cols[i];
+      s.style.filter = 'drop-shadow(0 0 6px ' + glow[i] + ')';
+      s.style.animationDelay = (i * 0.18) + 's';
+      box.appendChild(s);
+    }
+    head.appendChild(box);
+    setTimeout(function () { try { box.remove(); } catch (e) {} }, 3000);
+  } catch (e) {}
+}
+
+/* ---------- LOTE ESTRATEGIA-NÚMEROS: la semana en números grandes ----------
+ * Fila encima de la carta con 3 números REALES de los últimos 7 días.
+ * Fuentes preexistentes, sin cambios de servidor:
+ *  - GET /api/stats/ig (stats.js buildSummary, desde post_metrics):
+ *      posts_7d = publicados CON métricas en los últimos 7 días,
+ *      reach_7d = alcance sumado de esa misma cohorte.
+ *  - GET /api/posts (filas con likes de post_metrics):
+ *      Likes = suma de likes de los publicados en los últimos 7 días
+ *      que TENGAN likes no nulo (sin métrica todavía = sin dato, no 0).
+ * REGLA DE VERDAD: un número sin dato real NO se dibuja (nunca un 0
+ * inventado). Por eso los números de /api/stats/ig solo se dibujan si son
+ * > 0 (un 0 ahí no distingue "sin posteos" de "posteos sin métricas") y
+ * Likes solo si al menos un posteo publicado en la ventana trae likes.
+ * Sin los 3 números, la fila no existe: Estrategia queda como hoy.
+ * En cartas anteriores (anaPastMode) no se muestra, igual que Impulsar. */
+function anaWeekNumsTiles(st, posts) {
+  const tiles = [];
+  const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('es-AR');
+  if (st && Number(st.posts_7d) > 0) tiles.push({ n: fmt(st.posts_7d), l: anaT('Posteos', 'Posts') });
+  if (st && Number(st.reach_7d) > 0) tiles.push({ n: fmt(st.reach_7d), l: anaT('Alcance', 'Reach') });
+  const list = Array.isArray(posts) ? posts : [];
+  const cut = Date.now() - 7 * 86400000;
+  let likesSum = 0, likesSeen = false;
+  list.forEach((p) => {
+    if (!p || p.status !== 'published') return;
+    const at = Date.parse(p.published_at || p.created_at || '');
+    if (!Number.isFinite(at) || at < cut) return;
+    if (p.likes == null || p.likes === '') return;
+    likesSeen = true;
+    likesSum += Number(p.likes) || 0;
+  });
+  if (likesSeen) tiles.push({ n: fmt(likesSum), l: anaT('Likes', 'Likes') });
+  // Orden del encargo: Posteos, Likes, Alcance.
+  const order = { Posteos: 0, Posts: 0, Likes: 1, Alcance: 2, Reach: 2 };
+  tiles.sort((a, b) => (order[a.l] ?? 9) - (order[b.l] ?? 9));
+  return tiles;
+}
+
+async function anaWeekNumsLoad() {
+  const box = document.getElementById('anaWeekNums');
+  if (!box || anaPastMode) return;
+  let st = null, posts = null;
+  try { st = await api.get('/api/stats/ig'); } catch (e) { st = null; }
+  try { posts = await api.get('/api/posts'); } catch (e) { posts = null; }
+  if (document.getElementById('anaWeekNums') !== box) return;
+  const tiles = anaWeekNumsTiles(st, posts);
+  box.innerHTML = tiles.length
+    ? `<div class="ana-weeknums">${tiles.map((t) => `<div class="ana-weeknum"><b>${esc(t.n)}</b><span>${esc(t.l)}</span></div>`).join('')}</div>`
+    : '';
+}
+
+/* ---------- LOTE ESTRATEGIA-PRÓXIMO-PASO: una sola tarjeta ---------- */
+/* Prioridad determinista sobre el estado real, nunca inventada:
+ * (1) pendientes de aprobar en la semana actual -> "Aprobá tu semana"
+ *     (lleva al feed, donde se aprueba); (2) sin pendientes pero con un
+ *     mejor posteo real -> "Impulsá tu mejor posteo" (hace scroll a la
+ *     tarjeta Impulsar que ya existe, NUNCA crea un segundo botón de
+ *     cobro); (3) sin pendientes ni mejor posteo -> sin tarjeta.
+ * Pendiente = programado pendiente de la semana actual (mismo criterio
+ * que pzAcceptAllWeekCands) + borrador de la semana actual (mismo
+ * criterio que el filtro de borradores en revisión). Sin mondayKey o
+ * sin lista de posteos: fail-closed, sin tarjeta. */
+
+function anaNextStepPendientes(posts, mondayKey) {
+  if (!Array.isArray(posts) || !mondayKey) return 0;
+  let n = 0;
+  for (const p of posts) {
+    if (!p) continue;
+    const st = String(p.status || '');
+    if (st === 'scheduled') {
+      if (String(p.approval || 'pending') !== 'pending') continue;
+      if (String(p.week_key || '') !== mondayKey) continue;
+      n++;
+    } else if (st === 'draft') {
+      const wk = String(p.week_key || '');
+      if (wk && wk !== mondayKey) continue;
+      if (String(p.approval || '') === 'approved') continue;
+      n++;
+    }
+  }
+  return n;
+}
+
+function anaNextStepElegir(pendientes, tieneMejor) {
+  if (Number(pendientes || 0) > 0) return 'aprobar';
+  if (tieneMejor) return 'impulsar';
+  return null;
+}
+
+function anaNextStepHTML(paso) {
+  const ap = paso === 'aprobar';
+  const titulo = anaT('Próximo paso', 'Next step');
+  const texto = ap
+    ? anaT('Tenés posteos de esta semana esperando tu aprobación.', 'You have posts from this week waiting for your approval.')
+    : anaT('Tu mejor posteo de la semana está listo para llegar a más gente.', 'Your best post this week is ready to reach more people.');
+  const btn = ap
+    ? anaT('Aprobá tu semana', 'Approve your week')
+    : anaT('Impulsá tu mejor posteo', 'Boost your best post');
+  const fn = ap ? 'anaNextStepIrInicio()' : 'anaNextStepIrImpulsar()';
+  return `<div class="ana-card ana-nextstep"><p class="ana-nextstep-t">${titulo}</p><p class="ana-nextstep-p">${esc(texto)}</p><button type="button" class="btn btn-primary" onclick="${fn}">${esc(btn)}</button></div>`;
+}
+
+function anaNextStepIrInicio() {
+  try { location.hash = '#/app/inicio'; } catch (e) {}
+}
+
+function anaNextStepIrImpulsar() {
+  try {
+    const box = document.getElementById('anaBoostRec');
+    if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {}
+}
+
+function anaNextStepMount() {
+  try {
+    const rootEl = document.getElementById('anaRoot');
+    if (!rootEl || document.getElementById('anaNextStep')) return;
+    rootEl.insertAdjacentHTML('afterbegin', '<div id="anaNextStep"></div>');
+    anaNextStepLoad();
+  } catch (e) {}
+}
+
+async function anaNextStepLoad() {
+  try {
+    const box = document.getElementById('anaNextStep');
+    if (!box || anaPastMode) return;
+    let posts = null;
+    try { posts = await api.get('/api/posts'); } catch (e) { posts = null; }
+    if (document.getElementById('anaNextStep') !== box) return;
+    if (!Array.isArray(posts)) return; // fail-closed: sin lista no se afirma nada
+    const wk = (typeof albumMondayKey === 'function') ? albumMondayKey() : '';
+    if (!wk) return;
+    const pendientes = anaNextStepPendientes(posts, wk);
+    if (pendientes > 0) { box.innerHTML = anaNextStepHTML('aprobar'); return; }
+    let mejor = null;
+    try { const d = await api.get('/api/estrategia/mejor-posteo'); mejor = (d && d.ok && d.mejor) ? d.mejor : null; } catch (e) { mejor = null; }
+    if (document.getElementById('anaNextStep') !== box) return;
+    const paso = anaNextStepElegir(0, !!mejor);
+    box.innerHTML = paso ? anaNextStepHTML(paso) : '';
+  } catch (e) {}
 }

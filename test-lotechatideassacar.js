@@ -37,7 +37,7 @@ const sliceFn = (src, from, to) => {
 t(srv.includes("const BUILD_ID = '20261101-v584'"), 'BUILD v584 en server.js');
 t(idx.includes('app.js?v=391'), 'index ES: app.js?v=391');
 t(idx.includes('styles.css?v=20261104'), 'index ES: styles 20261104');
-t(app.includes("const CHUNK_V = '20261101-v583'"), 'CHUNK_V sigue v583 (ningún chunk tocado)');
+t(app.includes("const CHUNK_V = '20261101-v589'"), 'CHUNK_V sigue v589 (tanda Estrategia lo bumpea)'); // (ESTRATEGIA ×6 + CARTA-MANO + CARTA-PERSONALIZADA · 3/11, con causa) pin v583→v589: la tanda toca chunk-analisis.js; el resto de pines rancios del archivo (BUILD v584, ?v=391, styles 20261104) se dejan como estaban, ya fallaban en base
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');

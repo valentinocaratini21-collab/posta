@@ -86,7 +86,7 @@ t('3: layout tira intacto (flex + radio + chev)', css.includes('.mx-tira-jardin{
 t('versiones: BUILD v585 (rotado por el liberador)', srv.includes("20261101-v585"));
 t('versiones: app.js?v=392 en index (la landing EN es estática, no carga app.js)', idx.includes('app.js?v=392'));
 t('versiones: styles?v=20261105 en ambos index', idx.includes('styles.css?v=20261105') && idxEn.includes('styles.css?v=20261105'));
-t('versiones: CHUNK_V v583 intacto', app.includes("CHUNK_V = '20261101-v583'"));
+t('versiones: CHUNK_V v589 (tanda Estrategia lo bumpea)', app.includes("CHUNK_V = '20261101-v589'")); // (ESTRATEGIA ×6 + CARTA-MANO + CARTA-PERSONALIZADA · 3/11, con causa) pin v583→v589: la tanda toca chunk-analisis.js; los otros pines de versiones del archivo (BUILD v585, ?v=392, styles 20261105) se dejan como estaban, ya fallaban en base
 t('censo: pzGoBack presente', app.includes('pzGoBack'));
 
 console.log(`\nRESULTADO: ${ok} ok, ${bad} fallos`);

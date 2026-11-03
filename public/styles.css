@@ -2862,6 +2862,7 @@ body.hf-sv-open{overflow:hidden}
 .ana-sec-t{font-size:12px;font-weight:900;letter-spacing:.6px;color:var(--cel);text-transform:uppercase;margin:18px 0 8px}
 .ana-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .ana-stat{background:#F2F9FD;border-radius:14px;padding:12px 10px;text-align:center}
+.ana-weeknums{display:flex;gap:10px;margin:14px 0 4px}.ana-weeknum{flex:1;background:#F2F9FD;border-radius:14px;padding:12px 8px;text-align:center}.ana-weeknum b{display:block;font-size:26px;font-weight:800;color:var(--txt)}.ana-weeknum span{display:block;font-size:12.5px;color:var(--mut);margin-top:2px}
 .ana-sn{font-size:24px;font-weight:900;color:var(--txt);margin:0;line-height:1.1}
 .ana-sl{font-size:11.5px;font-weight:700;color:var(--mut);margin:3px 0 0;line-height:1.35}
 .ana-traj{font-size:12.5px;color:var(--mut);margin-top:10px;line-height:1.55}
@@ -2913,6 +2914,7 @@ body.hf-sv-open{overflow:hidden}
 .ana-role-f{color:var(--mut);font-size:12px}
 .ana-role-w{font-size:12.5px;color:var(--mut);line-height:1.5;margin-top:2px}
 .ana-note{color:var(--dim);font-size:12px;margin-top:10px;line-height:1.5}
+.ana-aprende{margin:14px 0 4px;padding:10px 12px;border-left:3px solid #2793C8;background:rgba(39,147,200,.07);border-radius:0 12px 12px 0;font-size:15px;line-height:1.5}
 .ana-sign{text-align:center;margin-top:20px;padding-top:16px;border-top:2px dashed #C9E2EF}
 .ana-sign img{width:48px;height:48px;border-radius:50%;border:2px solid #FEC14D;background:#fff}
 .ana-fname{font-size:30px;font-weight:900;font-style:italic;letter-spacing:-.5px;color:var(--txt);margin:4px 0 0}
@@ -4370,6 +4372,10 @@ body.pz-postchat-open{overflow:hidden}
 
 /* LOTE IMPULSAR EN ESTRATEGIA */
 .ana-boostrec{background:#fff;border:2px solid #FEC14D;border-radius:16px;padding:16px;margin-top:16px;text-align:left}
+.ana-nextstep{margin-bottom:14px}
+.ana-nextstep-t{font-weight:800;font-size:16px;color:#0A1E33;margin:0 0 6px}
+.ana-nextstep-p{margin:0 0 12px;color:var(--mut);font-size:14px;line-height:1.5}
+
 .ana-boostrec-t{font-size:15px;font-weight:900;color:#0A1E33;margin:0 0 10px}
 .ana-boostrec-post{display:flex;gap:12px;align-items:flex-start}
 .ana-boostrec-img{width:72px;height:72px;object-fit:cover;border-radius:12px;flex:0 0 auto}
@@ -4379,6 +4385,9 @@ body.pz-postchat-open{overflow:hidden}
 .ana-boostrec-monto-t{font-size:13px;font-weight:800;color:#0A1E33;margin:0}
 .ana-boostrec-msg{font-size:13px;color:#0A1E33;margin:10px 0 0;line-height:1.5;font-weight:600}
 .ana-boostrec-nota{font-size:13.5px;color:#5A4A6B;margin:0;line-height:1.5}
+.ana-boostrec-sec{font-size:17px;font-weight:900;color:#0A1E33;margin:0 0 8px;line-height:1.3}
+.ana-boostrec-saludo{font-size:15px;font-weight:900;color:#0A1E33;margin:0 0 6px;line-height:1.4}
+.ana-boostrec-despedida{font-size:13.5px;font-weight:800;color:#0A1E33;margin:12px 0 0;padding-top:10px;border-top:1px solid #FEC14D;line-height:1.4}
 
 /* (LOTE CHATPANTALLA · 1/11) Pantalla completa del chat en vidrio — receta v519.
    El chat principal ya no es una hoja sobre Inicio: es pantalla propia
@@ -4793,3 +4802,31 @@ body.pz-postchat-open{overflow:hidden}
 .hf-filtro-vacio{margin:14px 0;color:#47617A;font-size:14px;text-align:center}
 #inicioView.hf-filtro-pendientes .hf-grid > :not([data-hf-filtro="pendientes"]){display:none}
 #inicioView.hf-filtro-publicados .hf-grid > :not([data-hf-filtro="publicados"]){display:none}
+
+/* ===== ESTRATEGIA-MAGIA (2/11, decisión Valentino): destellos de entrada en la carta de Estrategia; estrella de 4 puntas dorada/celeste, nunca puntos ni polvo; solo entrada, no tapa contenido ni bloquea toques; reduced-motion la anula ===== */
+.ana-lhead{position:relative}
+.ana-magia-entrada{position:absolute;inset:0;pointer-events:none;z-index:2}
+.ana-magia-entrada i{position:absolute;width:14px;height:14px;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);opacity:0;animation:anaMagiaEntradaKF 1.8s ease-in-out 1 forwards}
+.ana-magia-entrada .ana-mg-1{top:6px;left:8%}
+.ana-magia-entrada .ana-mg-2{top:22%;right:6%;width:18px;height:18px}
+.ana-magia-entrada .ana-mg-3{top:48%;left:2%}
+.ana-magia-entrada .ana-mg-4{top:64%;right:3%;width:12px;height:12px}
+.ana-magia-entrada .ana-mg-5{bottom:4px;left:22%}
+@keyframes anaMagiaEntradaKF{0%{opacity:0;transform:scale(.5)}25%{opacity:1;transform:scale(1.15)}70%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(.9)}}
+@media (prefers-reduced-motion: reduce){.ana-magia-entrada{display:none}.ana-magia-entrada i{animation:none}}
+
+/* CARTA-MANO (2026-11-02, opción 5 mock v2): fondo de carta literal en
+ * vidrio + letra a mano + esquina superior izquierda doblada. La receta
+ * glass es la vigente de la app (idéntica a .bb-app.bb-glass-pantallas
+ * .ana-card); no se inventa otra. El doblez es estático, sin animación. */
+.ana-carta-mano{position:relative;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10);border-radius:18px;font-family:'Gochi Hand',cursive,system-ui,sans-serif;color:#0A1E33}
+.ana-carta-mano::before{content:"";position:absolute;top:0;left:0;width:46px;height:46px;background:linear-gradient(to bottom right,#cfc6a8 0%,#cfc6a8 50%,rgba(0,0,0,0) 50%);filter:drop-shadow(2px 2px 3px rgba(10,30,51,.25));pointer-events:none;z-index:2}
+.ana-carta-mano .ana-title{font-size:30px}
+.ana-carta-mano .ana-ltr-p{font-size:21px;line-height:1.5}
+.ana-carta-mano .ana-ltr-greet{font-size:22px}
+.ana-carta-mano .ana-ltr-plan p{font-size:20px;line-height:1.5}
+.ana-carta-mano .ana-ltr-first{font-size:21px}
+.ana-carta-mano .ana-intro{font-size:20px;color:#0A1E33}
+.ana-carta-mano .ana-banner{font-size:21px}
+.ana-carta-mano .ana-fname{font-size:32px}
+.ana-carta-mano .ana-fline{font-size:19px;color:#0A1E33}

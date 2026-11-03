@@ -372,8 +372,54 @@ function medirHipotesisAnterior(db, uid, weekKey) {
   } catch (e) { return null; }
 }
 
+// LOTE ESTRATEGIA-APRENDE (2026-11-02): UNA frase de aprendizaje para la
+// pantalla Estrategia, desde el registro real de aprendizajeSemanaAnterior.
+// Prioridad: lo que más reaccionó la audiencia en IG → aceptados sin cambios
+// → primera pregunta recibida → semana aceptada entera. Fechas (cubiertas o
+// pendientes) son contexto, no aprendizaje, y las preguntas recientes sin
+// fecha de semana no son aprendizaje de semana: ninguna genera frase.
+// Sin aprendizaje (tiene=false) devuelve null: la línea no se dibuja jamás
+// con una frase inventada. Los datos (tema, conteos, pregunta) van verbatim;
+// solo las plantillas fijas se localizan ES/EN, sin cambiar el sentido.
+function fraseAprendizaje(ap, lang) {
+  if (!ap || !ap.tiene) return null;
+  const en = lang === 'en';
+  try {
+    if (Array.isArray(ap.ig) && ap.ig.length) {
+      const g = ap.ig.slice().sort((x, y) =>
+        ((+y.comments || 0) + (+y.saves || 0)) - ((+x.comments || 0) + (+x.saves || 0)))[0];
+      const partes = [];
+      if (+g.saves > 0) partes.push(en ? `${g.saves} saves` : `${g.saves} guardados`);
+      if (+g.comments > 0) partes.push(en ? `${g.comments} comments` : `${g.comments} comentarios`);
+      if (partes.length) {
+        return en
+          ? `On Instagram, «${g.tema}» got ${partes.join(' and ')}.`
+          : `En Instagram, «${g.tema}» sumó ${partes.join(' y ')}.`;
+      }
+    }
+    if (Array.isArray(ap.aces) && ap.aces.length) {
+      const lista = ap.aces.map((a) => (a.n > 1 ? `${a.tema} (${a.n} veces)` : a.tema)).join(' | ');
+      return en
+        ? `Accepted unchanged last week: ${ap.aces.map((a) => (a.n > 1 ? `${a.tema} (${a.n} times)` : a.tema)).join(' | ')}.`
+        : `Aceptados sin cambios la semana pasada: ${lista}.`;
+    }
+    if (Array.isArray(ap.preguntas) && ap.preguntas.length) {
+      return en
+        ? `Questions received last week: «${ap.preguntas[0].texto}»`
+        : `Preguntas recibidas la semana pasada: «${ap.preguntas[0].texto}»`;
+    }
+    if (ap.semanaAceptada && ap.prev) {
+      return en
+        ? `The week of ${ap.prev} was accepted in full.`
+        : `La semana del ${ap.prev} se aceptó entera.`;
+    }
+  } catch (e) { return null; }
+  return null;
+}
+
 module.exports = {
   prevWeekKey, nextWeekKey, aprendizajeSemanaAnterior, textoParaBrief,
   emparejarPicks, porqueConAprendizaje, registrarHipotesis, medirHipotesisAnterior,
+  fraseAprendizaje,
   _norm: norm, _sigTokens: sigTokens, _esPregunta: esPregunta,
 };

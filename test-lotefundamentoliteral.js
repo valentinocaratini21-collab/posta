@@ -165,7 +165,7 @@ t('censo app: pz-detalle-setup 1', cnt(app, 'pz-detalle-setup') === 1);
 t('censo app: /aprobar 1', cnt(app, '/aprobar') === 1);
 t('censo app: autofetch 0', cnt(app, 'autofetch') === 0);
 t('censo app: pcDayKeyShift 7', cnt(app, 'pcDayKeyShift') === 7);
-t('CHUNK_V v583 en el arbol (liberador lo bumpea por chunk-analisis)', app.includes("const CHUNK_V = '20261101-v583'"));
+t('CHUNK_V v589 en el arbol (liberador lo bumpea por chunk-analisis)', app.includes("const CHUNK_V = '20261101-v589'")); // (ESTRATEGIA ×6 + CARTA-MANO + CARTA-PERSONALIZADA · 3/11, con causa) pin v583→v589: la tanda toca chunk-analisis.js
 
 console.log(`LOTEFUNDAMENTOLITERAL: ${ok} ok, ${bad} fallos`);
 process.exit(bad ? 1 : 0);
