@@ -4,6 +4,7 @@
 const { trackUsage, markPhotoSent, photoHash } = require('./costs');
 const { casaTemas } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: pool de temas de la casa (fallback local)
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): chequeo de pertenencia + anclas
+const fundamentoLiteral = require('./fundamento-literal'); // LOTE FUNDAMENTO-LITERAL ×5 (3/11): vetos como puerta dura en generateIdeas
 // Hook engine (hooks.js): 50 fórmulas por intención + rotación. Se aplica al
 // final de generateContent/generateCaptions: el caption SIEMPRE abre con hook.
 const { pickHook, renderHook, ensureCaptionOpensWithHook, hookFits, captionOpenIsGarbled, HOOKS: HOOK_BANK } = require('./hooks');
@@ -576,8 +577,6 @@ const BANNED_PHRASES = [
   'a la manana fuerte', // TIC REAL 2026-10-25 (cuenta 84, ids 506/508/480): fragmento frontado, no es español natural — la forma humana es "para arrancar fuerte la mañana". OJO: la lista se matchea SIN acentos (captionPasses normaliza el caption a NFD y pela diacríticos), así que la entrada va SIN ñ: con 'mañana' nunca matchearía.
   'no te lo podes perder',
   'no te la podes perder', // VARIANTE FEMENINA (Juli, 2026-11-02 — id 529 real, cuenta 84, 2026-11-01: "No te la podés perder, ¡es nuestra última creación!" pasaba captionPasses limpio porque el banco solo tenía la forma masculina "lo"): cambiar el género no cambia el cliché — es el mismo CTA vacío. Entrada SIN acentos, como toda la lista (match NFD).
-  'te voy a ser honesto', // CONFESIÓN PREFABRICADA (Juli, 2026-11-03 — 11 captions reales en 3 cuentas, 2026-10-24/25: 84: 531/502/495/475/468, 80: 512/511/458/456, 81: 449, 12: 67 cancelado; todos "Te voy a ser honesto:" abriendo la segunda oración): el dispositivo lo ENSEÑA el propio prompt (CAPTION_CRAFT, "Confesión o detrás de escena"), por eso cruza cuentas — no es voz del cliente, es plantilla. La confesión no agrega nada: se va directo al dato ("el secreto está en…", "cada taza…") sin el preámbulo. Entrada SIN acentos, como toda la lista (match NFD).
-  'te voy a ser honesta', // Variante femenina del mismo dispositivo (misma regla que "la" del 2026-11-02: cambiar el género no cambia el cliché).
   'no te lo pierdas',
   'sumergite',
   'descubri el poder de',
@@ -2690,6 +2689,13 @@ async function generateIdeas(input, apiKey, opts = {}) {
   }
   // Filtro anti-invención: fuera ideas con placeholders típicos ("XYZ", "[...]").
   ideas = ideas.filter(i => !hasPlaceholders(`${i.titulo || ''} ${i.angulo || ''}`));
+  // (FUNDAMENTO-LITERAL · pieza 5) Puerta dura de vetos: cubre plantillas,
+  // IA y efemérides (la efeméride se antepone sin pasar por el filtro de
+  // excluidos, así que el post-filtro es el único cierre). Sin vetos no
+  // cambia nada.
+  if (input && Array.isArray(input.vetos) && input.vetos.length) {
+    ideas = fundamentoLiteral.filtrarIdeasVetadas(ideas, input.vetos);
+  }
   // Garantía de variedad: nunca dos ideas seguidas del mismo tipo.
   return fixTipos(ideas);
 }

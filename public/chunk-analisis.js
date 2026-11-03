@@ -907,6 +907,11 @@ function anaCartaHTML(d) {
     h += anaSignHTML(birth);
     if (!anaPastMode) h += anaShareBlockHTML(a);
     if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">${anaT('↻ Actualizar estrategia', '↻ Refresh strategy')}</button></div>`;
+    // (FUNDAMENTO-LITERAL · pieza 4) Confirmación semanal, solo carta
+    // actual (nunca en cartas viejas): un toque «Sigue igual» o editar
+    // un producto. No suma fricción a la aprobación: si no se toca, la
+    // semana se arma con el fundamento vigente. Se carga bajo demanda.
+    if (!anaPastMode) h += `<div class="ana-fl-confirm" style="margin-top:12px;text-align:center"><button class="btn btn-ghost btn-sm" onclick="anaFlConfirmLoad(this)">${anaT('¿Qué vendés esta semana?', 'What are you selling this week?')}</button><div id="anaFlBox" style="display:none;text-align:left;margin-top:10px"></div></div>`;
     h += `</div>`;
     return h;
   }
@@ -1041,4 +1046,54 @@ async function anaBoostRecLoad() {
   }
   box.dataset.postId = String(d.mejor.post_id);
   box.innerHTML = anaBoostRecHTML(d);
+}
+
+// ---------- FUNDAMENTO-LITERAL x5 (3/11) · pieza 4: confirmacion semanal ----------
+// Confirmacion de un toque junto a la carta actual: «Sigue igual» no
+// cambia nada; editar cambia solo ese producto; no tocarla no inventa
+// nada (la semana se arma con el fundamento vigente). Carga bajo demanda
+// para no sumar peso a la carta.
+function anaFlConfirmLoad(btn) {
+  const box = document.getElementById('anaFlBox');
+  if (!box) return;
+  box.style.display = 'block';
+  box.innerHTML = '<p class="ana-note">' + anaT('Cargando tu lista…', 'Loading your list…') + '</p>';
+  fetch('/api/fundamento/semana-confirm').then((r) => r.json()).then((d) => {
+    if (!d || !d.ok) throw new Error('no');
+    anaFlConfirmRender(d);
+  }).catch(() => { box.innerHTML = '<p class="ana-note">' + anaT('No pudimos cargar tu lista ahora.', 'We could not load your list right now.') + '</p>'; });
+}
+function anaFlConfirmRender(d) {
+  const box = document.getElementById('anaFlBox');
+  if (!box) return;
+  const list = (d.productos || []).map((p) => '<span style="display:inline-block;margin:2px 4px 2px 0;padding:6px 10px;background:#fff;border:1px solid #DCEFFF;border-radius:999px;font-size:14px;font-weight:700;color:#0A1E33">' + esc(p.nombre) + '</span>').join('');
+  // (FUNDAMENTO-LITERAL · pieza 5) Los vetos se ven y se pueden quitar
+  // desde este mismo lugar (revocable, como pide el lote).
+  const vetos = (d.vetos || []).map((v) => '<span style="display:inline-block;margin:2px 4px 2px 0;padding:6px 10px;background:#FDF0F0;border:1px solid #F3C6C6;border-radius:999px;font-size:14px;font-weight:700;color:#8B2E2E">' + esc(v) + ' <button type="button" onclick="anaFlQuitarVeto(this)" data-veto="' + esc(v) + '" style="border:0;background:none;color:#8B2E2E;font-weight:800;cursor:pointer">✕</button></span>').join('');
+  box.innerHTML = '<p class="ana-note">' + anaT('Esto es lo que tengo como lo que vendés. Si sigue igual, un toque y listo.', 'This is what I have as what you sell. If it is still the same, one tap and done.') + '</p>'
+    + '<div>' + (list || anaT('Sin productos todavía.', 'No products yet.')) + '</div>'
+    + (vetos ? '<p class="ana-note" style="margin-top:10px">' + anaT('Vetado (nunca se genera):', 'Banned (never generated):') + '</p><div>' + vetos + '</div>' : '')
+    + '<div style="margin-top:10px"><button class="btn btn-primary btn-sm" onclick="anaFlSeguir(this)">' + anaT('Sigue igual', 'Still the same') + '</button></div>'
+    + '<div style="margin-top:10px"><input id="anaFlEdit" class="oc-field" style="font-size:15px;padding:10px 12px" placeholder="' + anaT('Escribí un producto nuevo o uno corregido', 'Write a new or corrected product') + '"><button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="anaFlEditar(this)">' + anaT('Guardar cambio', 'Save change') + '</button></div>'
+    + '<p id="anaFlMsg" class="ana-note" style="display:none"></p>';
+}
+function anaFlSeguir(btn) {
+  fetch('/api/fundamento/semana-confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seguir: true }) }).then((r) => r.json()).then(() => {
+    const m = document.getElementById('anaFlMsg');
+    if (m) { m.style.display = 'block'; m.textContent = anaT('Listo, sigue igual. Tu semana se arma con esto.', 'Done, still the same. Your week is built from this.'); }
+  });
+}
+function anaFlEditar(btn) {
+  const v = (document.getElementById('anaFlEdit') || {}).value || '';
+  if (!v.trim()) return;
+  fetch('/api/fundamento/semana-confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: v }) }).then((r) => r.json()).then((d) => {
+    if (d && d.ok) anaFlConfirmRender(d);
+  });
+}
+function anaFlQuitarVeto(btn) {
+  const t = (btn && btn.getAttribute('data-veto')) || '';
+  if (!t) return;
+  fetch('/api/fundamento/veto', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ termino: t }) }).then((r) => r.json()).then((d) => {
+    if (d && d.ok) anaFlConfirmLoad();
+  });
 }

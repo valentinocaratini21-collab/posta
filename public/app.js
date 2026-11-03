@@ -2068,7 +2068,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v575'; // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
+const CHUNK_V = '20261101-v582'; // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -23521,6 +23521,10 @@ function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
   if (st === 'scheduled') b += `<button class="apv-sec-btn" id="apvHold" data-apvid="${id}">⏸<span>${en ? 'Hold' : 'Frenar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvDelete" data-apvid="${id}">${pzIc('trash', 20)}<span>${en ? 'Delete' : 'Eliminar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvRedo" data-apvid="${id}">↻<span>${en ? 'Redo' : 'Rehacer'}</span></button>`;
+  // (FUNDAMENTO-LITERAL · pieza 5) Veto desde el posteo en revisión: el
+  // cliente escribe el tema que NO vende y queda vetado para siempre en
+  // su fundamento (puerta dura en todos los caminos de generación).
+  b += `<div class="apv-veto-row" style="display:flex;gap:6px;margin-top:8px"><input id="apvVetoInput" class="apv-veto-input" style="flex:1;min-width:0;font-size:14px;padding:8px 10px;border:1px solid #DCEFFF;border-radius:10px" placeholder="${en ? 'What do you NOT sell? e.g. flowers' : '¿Qué NO vendés? ej: flores'}"><button class="apv-veto-btn" id="apvVetoBtn" type="button" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;color:var(--cel);font-size:10.5px;font-weight:700;line-height:1.2;padding:8px 2px;cursor:pointer;font-family:inherit">🚫<span>${en ? 'I don\'t sell this' : 'Esto no lo vendo'}</span></button></div>`;
   return `<div class="apv-actions apv-more" id="apvMore"><button type="button" class="apv-menu-btn" id="apvMenuBtn" aria-expanded="false" aria-controls="apvMenu" aria-label="${en ? 'More actions' : 'Más acciones'}">•••</button><div class="apv-menu" id="apvMenu" hidden>${b}</div></div>`;
 }
 function pzApvMenuToggle() {
@@ -23587,6 +23591,19 @@ function bindApprovalPost() {
   if (apvMenuBtn) apvMenuBtn.onclick = () => pzApvMenuToggle();
   const apvChangePub = document.getElementById('apvChangePub');
   if (apvChangePub) apvChangePub.onclick = () => pzHablarClick(apvChangePub.dataset.apvid);
+  // (FUNDAMENTO-LITERAL · pieza 5) Veto desde el posteo en revisión.
+  const apvEn = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const vb = document.getElementById('apvVetoBtn');
+  if (vb) vb.onclick = async () => {
+    const inp = document.getElementById('apvVetoInput');
+    const t = (inp && inp.value || '').trim();
+    if (!t) { toast('✏️ ' + (apvEn ? 'Write the topic you do not sell' : 'Escribí el tema que no vendés')); return; }
+    try {
+      await api.post('/api/fundamento/veto', { termino: t });
+      toast('✅ ' + (apvEn ? 'Vetoed: it will never generate again' : 'Vetado: nunca más se genera'));
+      if (inp) inp.value = '';
+    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo vetar')); }
+  };
   // (v326) Aceptar un BORRADOR desde el detalle: mismo gate de Instagram y
   // mismo flujo PATCH (programar en su horario) que el Aceptar de la Agenda.
 

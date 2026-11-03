@@ -299,6 +299,7 @@ const gridPattern = require('./grid-pattern');
 const feedDirector = require('./feed-director');
 const clientDigest = require('./client-digest');
 const onboardingProducts = require('./onboarding-products'); // Onboarding un clic: productos detectados + foto por producto (determinístico, USD 0) // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
+const fundamentoLiteral = require('./fundamento-literal'); // LOTE FUNDAMENTO-LITERAL ×5 (3/11): espejo, foto, link, confirmación semanal, vetos — nunca adivinar qué vende el cliente
 const analysisEngine = require('./analysis-engine'); // 🧠 Análisis (2026-10-19): radiografía + mercado + nacimiento + porqué + loop
 const semanaAprende = require('./semana-aprende'); // 🧠 Semana aprende (ítem 4): la semana anterior real ajusta la tanda y el porqué.
 const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
@@ -418,7 +419,31 @@ function ephemerisFor(profile, pais) {
   const desc = String((profile && profile.description) || '');
   if (/barber/i.test(cat + ' ' + biz)) return null;
   const m = catsMatch(eph, cat + ' ' + biz + ' ' + desc);
-  return (m !== null ? m : EPHEMERIS_GIFT_OK.test(cat)) ? eph : null;
+  if (!((m !== null ? m : EPHEMERIS_GIFT_OK.test(cat)))) return null;
+  // (FUNDAMENTO-LITERAL · pieza 5) Una efeméride vetada no genera nada:
+  // ni posteo, ni oportunidad del reporte, ni misión de foto del álbum.
+  // El veto se lee del profile.user_id (getProfile trae SELECT *): sin
+  // cambiar la firma, los pines de calendario-pais quedan intactos. Si
+  // el profile no trae user_id, no se filtra acá, pero el post-filtro
+  // de generateIdeas sigue bloqueando el tema vetado en la generación.
+  try {
+    const uidV = profile && profile.user_id;
+    if (uidV) {
+      const vs = vetosForUser(uidV);
+      if (vs.length && fundamentoLiteral.ideaVetada({ titulo: eph.name || eph.title || '' }, vs)) return null;
+    }
+  } catch (e) {}
+  return eph;
+}
+// Vetos vigentes de una cuenta (digest + ADN espejado): los 3 caminos
+// de efeméride los usan para no sugerir ni generar un tema vetado.
+function vetosForUser(uid) {
+  try {
+    const dg = clientDigest.getDigest(db, uid);
+    let vs = fundamentoLiteral.normalizarVetos(dg && dg.vetos);
+    try { const dn = readDna(uid) || {}; vs = fundamentoLiteral.normalizarVetos([...vs, ...(dn.vetos || [])]); } catch (e) {}
+    return vs;
+  } catch (e) { return []; }
 }
 // C1 + paquete de titulares (2026-10-16, aprobado por Valentino "arma
 // todo"; paquete makeheadline-decision-v113 de Mora + spec M53 de Uma):
@@ -1807,6 +1832,27 @@ function importTrialWeek(userId, igRaw, expectedBusiness) {
       n++;
     } catch (e) { /* un posteo fallido no frena los demás */ }
   }
+  // (FUNDAMENTO-LITERAL · pieza 1) El espejo aprobado de la prueba siembra
+  // la cuenta: productos literales + vetos al fundamento, y productos al
+  // ADN solo si el ADN todavía no tiene (el ADN es la fuente editable y
+  // manda en los refrescos). Nunca rompe la importación.
+  try {
+    const esp = (out && out.espejo) || null;
+    if (esp && esp.aprobado && Array.isArray(esp.productos) && esp.productos.length) {
+      if (!clientDigest.getStoredDigest(db, userId)) {
+        clientDigest.saveDigest(db, userId, {
+          productos: esp.productos.map((p) => ({ nombre: String(p.nombre || ''), precio: '', procedencia: String(p.procedencia || 'cliente') })),
+          vetos: fundamentoLiteral.normalizarVetos(esp.vetos),
+          espejo_aprobado: 1,
+        });
+      }
+      const dna0 = readDna(userId) || {};
+      if (!Array.isArray(dna0.productos) || !dna0.productos.length) {
+        dna0.productos = esp.productos.map((p) => ({ nombre: String(p.nombre || ''), procedencia: String(p.procedencia || 'cliente') }));
+        writeDna(userId, dna0);
+      }
+    }
+  } catch (e) { /* la siembra nunca frena la importación */ }
   return n;
 }
 
@@ -3977,6 +4023,191 @@ app.post('/api/onboarding/corregir', requireAuth, (req, res) => {
   res.json(r);
 });
 
+// ---------- FUNDAMENTO-LITERAL ×5 (3/11) ----------
+// Todo producto lleva procedencia; todo texto del cliente se guarda
+// literal; ningún producto sin procedencia genera un posteo; ningún veto
+// se ignora en ningún camino de generación. El digest es JSON libre:
+// vetos, espejo_aprobado y semana_confirmada_at sobreviven a saveDigest
+// (el scrub solo filtra productos/servicios/promos por plausibilidad).
+// PUNTO DE ENGANCHE con rubro-literal: su puerta fail-closed (sin
+// producto evidenciado no se genera semana) vive en el flujo de /prueba
+// y en la generación; este lote NO la toca: el espejo se apoya en ella
+// (espejo vacío = sin aprobación = sin semana en el flujo OC).
+function flDigest(uid) {
+  try { return clientDigest.getDigest(db, uid) || {}; } catch (e) { return {}; }
+}
+function flGuardar(uid, d) {
+  try { clientDigest.saveDigest(db, uid, d); } catch (e) { /* nunca rompe la respuesta */ }
+  // Los vetos viven TAMBIÉN en el ADN: así sobreviven a una
+  // reconstrucción del digest (que se construye desde el ADN).
+  try {
+    const dna0 = readDna(uid) || {};
+    dna0.vetos = fundamentoLiteral.normalizarVetos(d.vetos);
+    writeDna(uid, dna0);
+  } catch (e) { /* nunca rompe la respuesta */ }
+}
+function flProductos(d) {
+  const list = (d && Array.isArray(d.productos)) ? d.productos : [];
+  return list.map((p) => ({ nombre: String((p && p.nombre) || p || ''), precio: String((p && p.precio) || ''), procedencia: String((p && p.procedencia) || 'bio') })).filter((p) => p.nombre);
+}
+app.get('/api/fundamento/espejo', requireAuth, (req, res) => {
+  const d = flDigest(req.session.userId);
+  res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), espejo_aprobado: d.espejo_aprobado === 1 });
+});
+app.post('/api/fundamento/espejo/aprobar', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const d = flDigest(uid);
+  d.espejo_aprobado = 1;
+  flGuardar(uid, d);
+  res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos) });
+});
+app.post('/api/fundamento/espejo/corregir', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const d = flDigest(uid);
+  const nuevos = fundamentoLiteral.parsearCorreccion(String((req.body && req.body.texto) || ''));
+  if (!nuevos.length) return res.status(400).json({ ok: false, error: 'Escribí al menos un producto para corregir el espejo' });
+  d.productos = nuevos;
+  d.espejo_aprobado = 0; // lo corregido vuelve al espejo: hay que aprobar de nuevo
+  flGuardar(uid, d);
+  res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), espejo_aprobado: false });
+});
+// (FUNDAMENTO-LITERAL · pieza 3) Productos literales de un link público:
+// primero los servicios que trialWebContext ya extrae; si no hay, se
+// lee el HTML público buscando JSON-LD de producto (el marcado estándar
+// de tiendas). Solo datos públicos, sin logins ni credenciales; si no
+// se puede leer, se dice (422), nunca se inventa.
+async function flLinkProductos(url) {
+  let webData = null;
+  try { webData = await trialWebContext(url); } catch (e) { webData = null; }
+  const servicios = (webData && Array.isArray(webData.services)) ? webData.services : [];
+  let prods = fundamentoLiteral.construirEspejo({ link: servicios.map((s) => ({ nombre: String(s) })) }).filter((p) => p.procedencia === 'link');
+  if (prods.length) return prods;
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': 'PostyBot/1.0', Accept: 'text/html' }, signal: AbortSignal.timeout(10000) });
+    if (!r.ok) return [];
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 1024 * 1024) return [];
+    const ex = fundamentoLiteral.extraerProductosDeLink(buf.toString('utf8'), url);
+    return ex.productos || [];
+  } catch (e) { return []; }
+}
+app.post('/api/fundamento/link', requireAuth, express.json(), async (req, res) => {
+  const url = String((req.body && req.body.url) || '').trim().slice(0, 300);
+  if (!url) return res.status(400).json({ ok: false, error: 'Pegá el link de tu tienda' });
+  const prods = await flLinkProductos(url);
+  if (!prods.length) return res.status(422).json({ ok: false, error: 'No pudimos leer productos de ese link. Probá con otro link o escribil los vos.' });
+  const uid = req.session.userId;
+  const d = flDigest(uid);
+  const cur = flProductos(d);
+  const seen = new Set(cur.map((p) => fundamentoLiteral.norm(p.nombre)));
+  for (const p of prods) { if (!seen.has(fundamentoLiteral.norm(p.nombre))) { cur.push(p); seen.add(fundamentoLiteral.norm(p.nombre)); } }
+  d.productos = cur.slice(0, 8);
+  flGuardar(uid, d);
+  res.json({ ok: true, productos: flProductos(d), agregados: prods.length });
+});
+app.get('/api/fundamento/semana-confirm', requireAuth, (req, res) => {
+  const d = flDigest(req.session.userId);
+  res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), semana_confirmada_at: d.semana_confirmada_at || null });
+});
+app.post('/api/fundamento/semana-confirm', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const d = flDigest(uid);
+  if (req.body && req.body.seguir) {
+    // «Sigue igual»: no cambia nada, solo registra la confirmación.
+    d.semana_confirmada_at = new Date().toISOString();
+    flGuardar(uid, d);
+    return res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), cambiado: false });
+  }
+  const nuevos = fundamentoLiteral.aplicarEdicionSemanal(flProductos(d), String((req.body && req.body.texto) || ''));
+  const antes = JSON.stringify(flProductos(d));
+  d.productos = nuevos;
+  d.semana_confirmada_at = new Date().toISOString();
+  flGuardar(uid, d);
+  res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), cambiado: JSON.stringify(nuevos) !== antes });
+});
+app.post('/api/fundamento/veto', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const d = flDigest(uid);
+  d.vetos = fundamentoLiteral.agregarVeto(d.vetos, String((req.body && req.body.termino) || ''));
+  flGuardar(uid, d);
+  res.json({ ok: true, vetos: fundamentoLiteral.normalizarVetos(d.vetos) });
+});
+app.delete('/api/fundamento/veto', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const d = flDigest(uid);
+  d.vetos = fundamentoLiteral.quitarVeto(d.vetos, String((req.body && req.body.termino) || ''));
+  flGuardar(uid, d);
+  res.json({ ok: true, vetos: fundamentoLiteral.normalizarVetos(d.vetos) });
+});
+// (FUNDAMENTO-LITERAL · pieza 2) Visión que NOMBRA el producto concreto
+// de una foto, con la misma forma de llamada que tagAlbumPhoto
+// (gpt-4o-mini, JSON solo). Si no puede afirmar, devuelve pendiente:
+// nunca se inventa un producto desde una foto.
+async function visionNombreProducto(absPath, key) {
+  try {
+    if (!key || !fs.existsSync(absPath)) return { pendiente: true };
+    const b64 = fs.readFileSync(absPath).toString('base64');
+    const mime = /\.png$/i.test(absPath) ? 'image/png' : /\.webp$/i.test(absPath) ? 'image/webp' : 'image/jpeg';
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', max_tokens: 60,
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: '¿Qué producto concreto de un negocio se ve en primer plano en esta foto? Respondé SOLO con JSON: {"producto":"nombre del producto"} o {"producto":null} si no se puede afirmar con seguridad (foto borrosa, sin producto claro, solo ambiente). Nada de categorías genéricas: el nombre tal como se vendería.' },
+          { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}` } },
+        ] }],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const j = await r.json().catch(() => null);
+    const raw = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
+    let parsed = null;
+    try { parsed = JSON.parse(raw); } catch (e) { /* texto libre: no se usa */ }
+    return fundamentoLiteral.productoDesdeVision(parsed || {});
+  } catch (e) { return { pendiente: true }; }
+}
+app.post('/api/fundamento/foto', requireAuth, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const assetId = Number(req.body && req.body.asset_id);
+  if (!assetId) return res.status(400).json({ ok: false, error: 'Falta el asset de la foto' });
+  let row = null;
+  try { row = db.prepare('SELECT file_path FROM assets WHERE id = ? AND user_id = ?').get(assetId, uid); } catch (e) { row = null; }
+  if (!row || !row.file_path) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+  const abs = path.join(MEDIA_DIR, path.basename(String(row.file_path)));
+  const v = await visionNombreProducto(abs, openaiKeyFor(uid));
+  if (v.pendiente) return res.json({ ok: true, pendiente: true, productos: flProductos(flDigest(uid)) });
+  const d = flDigest(uid);
+  const cur = flProductos(d);
+  if (!cur.some((p) => fundamentoLiteral.norm(p.nombre) === fundamentoLiteral.norm(v.producto.nombre))) cur.push(v.producto);
+  d.productos = cur.slice(0, 8);
+  flGuardar(uid, d);
+  res.json({ ok: true, pendiente: false, productos: flProductos(d), agregado: v.producto.nombre });
+});
+// (FUNDAMENTO-LITERAL · piezas 2 y 3, flujo /prueba sin sesión) Link
+// público y visión de foto para el espejo de la prueba. Solo datos
+// públicos, sin logins ni credenciales; si no se puede leer, se dice.
+app.post('/api/trial/link', express.json(), async (req, res) => {
+  const url = String((req.body && req.body.url) || '').trim().slice(0, 300);
+  if (!url) return res.status(400).json({ ok: false, error: 'Pegá el link de tu tienda' });
+  const prods = await flLinkProductos(url);
+  if (!prods.length) return res.status(422).json({ ok: false, error: 'No pudimos leer productos de ese link. Probá con otro link o escribilos vos.' });
+  res.json({ ok: true, productos: prods });
+});
+app.post('/api/trial/foto-vision', express.raw({ type: 'multipart/form-data', limit: '6mb' }), async (req, res) => {
+  let file = null;
+  try { ({ file } = demo.parseMultipart(req, req.body)); } catch (e) { return res.status(400).json({ ok: false, error: e.message || 'Formulario inválido' }); }
+  if (!file || !file.buffer || !file.buffer.length) return res.status(400).json({ ok: false, error: 'Subí una foto' });
+  const tmp = path.join(MEDIA_DIR, `fl-vision-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.jpg`);
+  try {
+    fs.writeFileSync(tmp, file.buffer);
+    const v = await visionNombreProducto(tmp, openaiKeyFor(null));
+    if (v.pendiente) return res.json({ ok: true, pendiente: true });
+    return res.json({ ok: true, pendiente: false, producto: v.producto });
+  } catch (e) { return res.status(500).json({ ok: false, error: 'No pudimos leer la foto' }); }
+  finally { try { fs.unlinkSync(tmp); } catch (e) {} }
+});
+
 // ---------- Perfil del negocio ----------
 app.get('/api/profile', requireAuth, (req, res) => {
   const p = getProfile(req.session.userId);
@@ -5531,6 +5762,9 @@ app.post('/api/admin/digest/rebuild', requireAdminToken, express.json(), async (
         webCopy: web ? String(web.description || '') : '',
       });
       if (!digest) return res.status(500).json({ ok: false, error: 'rebuild_failed' });
+      // (FUNDAMENTO-LITERAL · pieza 5) Los vetos sobreviven a la
+      // reconstrucción: vienen del ADN (donde flGuardar los espeja).
+      digest.vetos = fundamentoLiteral.normalizarVetos(dna.vetos);
       clientDigest.saveDigest(db, uid, digest);
       // Fragmento digest→ADN solo en campos VACÍOS (convención de siembra).
       try {
@@ -7648,6 +7882,16 @@ function ideasInputFor(uid, weekKey) {
     // cuenta (además de qué tipos): el cerebro comercial se realimenta.
     contentPerf: contentPerformanceLine(uid) + anglePerformanceFor(uid).line,
   });
+  // (FUNDAMENTO-LITERAL · pieza 5) Los vetos viajan en el input para el
+  // post-filtro de generateIdeas (plantillas, IA y efemérides). Se ponen
+  // DESPUÉS del levelBoosted para que ningún boost los pierda. Se leen
+  // del digest y del ADN (espejo de flGuardar).
+  try {
+    const dgV = clientDigest.getDigest(db, uid);
+    let vs = fundamentoLiteral.normalizarVetos(dgV && dgV.vetos);
+    try { const dnV = readDna(uid) || {}; vs = fundamentoLiteral.normalizarVetos([...vs, ...(dnV.vetos || [])]); } catch (e) {}
+    ideasInput.vetos = vs;
+  } catch (e) { ideasInput.vetos = []; }
   if (isCasaHandle(profile.ig_username)) ideasInput.casaLinea = casaIdeasBlock();
   else {
     // LOTE POSTY APRENDE CLIENTES: la casa conserva su línea del equipo;
@@ -10762,6 +11006,18 @@ function excludedTopicsLine(userId) {
     `).all(userId);
     const temas = rows.map(r => String(r.caption || '').split('\n')[0].slice(0, 80).trim())
       .filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    // (FUNDAMENTO-LITERAL · pieza 5) Los vetos permanentes del fundamento
+    // viajan en la misma línea: la generación los trata como prohibidos
+    // (prompt + filtro de plantillas + post-filtro en generateIdeas).
+    // Se leen del digest y del ADN (espejo de flGuardar): cualquiera de
+    // los dos alcanza.
+    try {
+      const dg = clientDigest.getDigest(db, userId);
+      let vs = fundamentoLiteral.normalizarVetos(dg && dg.vetos);
+      try { const dn = readDna(userId) || {}; vs = fundamentoLiteral.normalizarVetos([...vs, ...(dn.vetos || [])]); } catch (e) {}
+      const lv = fundamentoLiteral.lineaVetos(vs, '');
+      if (lv) temas.push(lv);
+    } catch (e) { /* sin vetos: la línea queda como siempre */ }
     return temas.length ? temas.join(' | ') : '';
   } catch (e) { return ''; }
 }
@@ -23596,6 +23852,11 @@ function trialHasEvidencedProducts(x) {
   return list(o.servicios).length > 0 || list(o.catalogItems).length > 0 || list(o.detectados).length > 0;
 }
 
+// (FUNDAMENTO-LITERAL · pieza 1) El espejo aprobado viaja en el form del
+// cuestionario: espejo_flujo=1, espejo_aprobado=1, espejo_productos y
+// espejo_vetos como JSON. Las líneas del espejo mandan sobre cualquier
+// inferencia: entran al goal como literales y quedan en el payload de
+// la prueba (out.espejo) para sembrar la cuenta al registrarse.
 function trialLockGate(fields, webData, testMode) {
   try {
     if (!trialLock || testMode) return null;
@@ -23765,6 +24026,14 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
     return res.status(400).json({ error: lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio' });
   }
+  // (FUNDAMENTO-LITERAL · pieza 1) Sin aprobación del espejo no hay semana
+  // en el flujo del cuestionario (espejo_flujo=1). Los flujos viejos sin
+  // cuestionario no mandan el flag y no se ven afectados. Va DESPUÉS del
+  // gate OC (no anidado dentro): si quedara dentro, solo correría cuando
+  // el OC ya falló y nunca cerraría el flujo con respuestas válidas.
+  if (!trialTestMode(req) && String(fields.espejo_flujo || '') === '1' && String(fields.espejo_aprobado || '') !== '1') {
+    return res.status(400).json({ error: lang === 'en' ? 'Confirm the mirror first so your week is built on what you actually sell' : 'Confirmá el espejo primero así tu semana se arma sobre lo que realmente vendés' });
+  }
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
   // Preguntas previas de /prueba (opcionales): objetivo + producto + diferencial.
@@ -23811,6 +24080,10 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       if (wl.length) richGoal = [richGoal, ...wl].filter(Boolean).join('\n');
     }
   }
+  // (FUNDAMENTO-LITERAL · pieza 1) Los productos del espejo aprobado mandan
+  // sobre cualquier inferencia: entran al goal como líneas literales.
+  const espLines = fundamentoLiteral.espejoGoalLines(fields, lang);
+  if (espLines.length) richGoal = [richGoal, ...espLines].filter(Boolean).join('\n');
   if (!business) return res.status(400).json({ error: lang === 'en' ? 'Tell us your business name' : 'Contanos el nombre de tu negocio' });
   if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: lang === 'en' ? 'Invalid industry' : 'Rubro inválido' });
   if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: lang === 'en' ? 'Invalid country' : 'País inválido' });
@@ -23988,6 +24261,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
+      espejo: fundamentoLiteral.espejoFromFields(fields), // (FUNDAMENTO-LITERAL · pieza 1) espejo aprobado: siembra la cuenta al registrarse
       ig_pic: igPic, ig_name: igName,
       analysis: trialAnalysisJson,
       competition_line: trialCompetition,
@@ -24304,6 +24578,15 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     fail(lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio');
     return;
   }
+  // (FUNDAMENTO-LITERAL · pieza 1) Sin aprobación del espejo no hay semana
+  // en el flujo del cuestionario (espejo_flujo=1). Los flujos viejos sin
+  // cuestionario no mandan el flag y no se ven afectados. Va DESPUÉS del
+  // gate OC (no anidado dentro): si quedara dentro, solo correría cuando
+  // el OC ya falló y nunca cerraría el flujo con respuestas válidas.
+  if (!trialTestMode(req) && String(fields.espejo_flujo || '') === '1' && String(fields.espejo_aprobado || '') !== '1') {
+    fail(lang === 'en' ? 'Confirm the mirror first so your week is built on what you actually sell' : 'Confirmá el espejo primero así tu semana se arma sobre lo que realmente vendés');
+    return;
+  }
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
   const goal_key = ['vender', 'seguidores', 'lanzamiento', 'fidelizar'].includes(String(fields.goal_key || '').trim())
@@ -24612,6 +24895,11 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         webExtraPhotos = await trialWebPhotos(webData);
       }
     }
+    // (FUNDAMENTO-LITERAL · pieza 1) Espejo aprobado: líneas literales al
+    // goal. Va FUERA del bloque web (no anidado en webData): el espejo
+    // manda también en flujos solo-IG o solo-email, sin web.
+    const espLinesS = fundamentoLiteral.espejoGoalLines(fields, lang);
+    if (espLinesS.length) richGoal = [richGoal, ...espLinesS].filter(Boolean).join('\n');
     // (v230) LECTURA PROFUNDA + (v229) FUNDAMENTO: el digest se compila
     // con TODO lo recolectado (feed real: bio + captions; web; formulario;
     // catálogo profundo, link de bio y mapa foto→producto con sus
@@ -25173,6 +25461,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
+      espejo: fundamentoLiteral.espejoFromFields(fields), // (FUNDAMENTO-LITERAL · pieza 1) espejo aprobado: siembra la cuenta al registrarse
       feed_kind: feedKind,
       feed_formula: feedFormula,
       feed_palette: feedPalette,
@@ -26972,7 +27261,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v581';
+const BUILD_ID = '20261101-v582';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

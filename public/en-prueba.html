@@ -2273,6 +2273,8 @@ function buildGenFormData() {
     fd.append('precios', OC_ANS.precios || '');
     fd.append('donde', OC_ANS.donde || '');
   }
+  // (FUNDAMENTO-LITERAL · pieza 1) El espejo aprobado viaja con la generación.
+  if (window.OC_ESPEJO) { fd.append('espejo_flujo', '1'); fd.append('espejo_aprobado', String(window.OC_ESPEJO.aprobado || '')); fd.append('espejo_productos', JSON.stringify(window.OC_ESPEJO.productos || [])); fd.append('espejo_vetos', JSON.stringify(window.OC_ESPEJO.vetos || [])); }
   fd.append('producto', TRIAL_ANS.producto || '');
   fd.append('diferencial', TRIAL_ANS.diferencial || '');
   // Foto opcional del negocio (campo 'photo' del multipart)
@@ -4481,8 +4483,159 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     window.OC_DETECTADOS = (S.products || []).map(function (p) { return p.nombre; }).filter(Boolean).slice(0, 4);
     window.OC_REASK_Q1 = reaskQ1;
     try { trk('prueba_step', { step: 'oc_sprout' }); } catch (e) {}
-    setTimeout(function () { runGeneration(); }, reduced ? 300 : 900);
+    screenEspejo();
   }
+
+  // ---- LOTE FUNDAMENTO-LITERAL x5 (3/11) · ESPEJO antes de la semana ----
+  // After the 5 answers and BEFORE generating: the visitor sees the list
+  // literal of what Posty understood you sell, with where each item came
+  // from, and approves or corrects it. Without approval there is no week (the server
+  // requires espejo_aprobado=1 when espejo_flujo=1 comes in).
+  var FL = {
+    title: 'This is what I understood you sell',
+    sub: 'If anything is wrong, fix it here. Your week is built only from this.',
+    empty: 'I don\'t have any of your products yet. Add one below with your own words, photos or your sales link.',
+    from: { bio: 'from your bio', web: 'from your website', cliente: 'written by you', foto: 'from your photo', link: 'from your sales link' },
+    novendo: 'I don\'t sell this',
+    photoLbl: 'Upload 3 photos of your best sellers',
+    photoSkip: 'or skip',
+    photoPend: 'We couldn\'t confirm what that photo shows. We leave it pending: nothing is invented from it.',
+    photoRead: 'Reading photos\u2026',
+    linkLbl: 'Connect where you sell',
+    linkPh: 'Paste your store, marketplace, WhatsApp or Google link',
+    linkAdd: 'Read link',
+    linkRead: 'Reading link\u2026',
+    linkErr: 'We couldn\'t read products from that link. Try another link or write them yourself.',
+    freeLbl: 'Or write it in your own words',
+    freePh: 'E.g.: fields, wooden furniture\u2026',
+    freeAdd: 'Add',
+    editLbl: 'Correct the list',
+    editSave: 'Save correction',
+    ok: 'Looks good, build my week',
+    okEmpty: 'Add at least one product to build your week'
+  };
+  var FL_E = { productos: [], vetos: [] };
+  function flProcLabel(p) { return (FL.from[p] || FL.from.cliente); }
+  function flBuild() {
+    var list = [], seen = {};
+    var push = function (nombre, proc) {
+      nombre = (nombre || '').trim();
+      if (!nombre || seen[nombre.toLowerCase()]) return;
+      seen[nombre.toLowerCase()] = 1;
+      list.push({ nombre: nombre, precio: '', procedencia: proc });
+    };
+    var proc = (S.source === 'web') ? 'web' : 'bio';
+    (S.products || []).forEach(function (p) { push(p.nombre, proc); });
+    if (S.ans.q1) push(S.ans.q1, 'cliente');
+    return list.slice(0, 8);
+  }
+  function flRender() {
+    var box = ocq();
+    var rows = FL_E.productos.map(function (p, i) {
+      return '<div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#fff;border:2px solid #DCEFFF;border-radius:12px;margin-bottom:8px">'
+        + '<div style="flex:1;font-size:16px;font-weight:700;color:#0A1E33">' + esc(p.nombre)
+        + '<small style="display:block;font-size:12px;font-weight:500;color:#5A7488">' + esc(flProcLabel(p.procedencia)) + '</small></div>'
+        + '<button type="button" class="fl-veto" data-i="' + i + '" style="border:0;background:#FDF0F0;color:#8B2E2E;border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;cursor:pointer">' + esc(FL.novendo) + '</button></div>';
+    }).join('');
+    box.innerHTML = stemHTML() + '<h2 class="oc-q">' + esc(FL.title) + '</h2>'
+      + '<p class="oc-chat">' + esc(FL.sub) + '</p>'
+      + (FL_E.productos.length ? rows : '<p class="oc-chat">' + esc(FL.empty) + '</p>')
+      + '<div style="margin-top:14px"><label style="font-size:15px;font-weight:700;color:#0A1E33">' + esc(FL.photoLbl) + '</label>'
+      + '<input id="flFoto" type="file" accept="image/*" multiple style="display:block;margin-top:8px;font-size:15px">'
+      + '<small style="color:#5A7488">' + esc(FL.photoSkip) + '</small>'
+      + '<p id="flFotoMsg" class="oc-chat" style="display:none"></p></div>'
+      + '<div style="margin-top:14px"><label style="font-size:15px;font-weight:700;color:#0A1E33">' + esc(FL.linkLbl) + '</label>'
+      + '<div style="display:flex;gap:8px;margin-top:8px"><input id="flLink" class="oc-field" style="margin:0" placeholder="' + esc(FL.linkPh) + '">'
+      + '<button type="button" id="flLinkBtn" class="oc-btn" style="width:auto;margin:0;padding:0 18px">' + esc(FL.linkAdd) + '</button></div>'
+      + '<p id="flLinkMsg" class="oc-chat" style="display:none"></p></div>'
+      + '<div style="margin-top:14px"><label style="font-size:15px;font-weight:700;color:#0A1E33">' + esc(FL.freeLbl) + '</label>'
+      + '<div style="display:flex;gap:8px;margin-top:8px"><input id="flFree" class="oc-field" style="margin:0" placeholder="' + esc(FL.freePh) + '">'
+      + '<button type="button" id="flFreeBtn" class="oc-btn" style="width:auto;margin:0;padding:0 18px">' + esc(FL.freeAdd) + '</button></div></div>'
+      + '<div style="margin-top:14px"><button type="button" id="flEditBtn" style="border:0;background:none;color:#2793C8;font-size:15px;font-weight:700;cursor:pointer">' + esc(FL.editLbl) + '</button>'
+      + '<div id="flEditBox" style="display:none;margin-top:8px"><textarea id="flEdit" class="oc-field" rows="4"></textarea>'
+      + '<button type="button" id="flEditSave" class="oc-btn">' + esc(FL.editSave) + '</button></div></div>'
+      + '<button type="button" id="flOk" class="oc-btn" ' + (FL_E.productos.length ? '' : 'disabled') + '>' + esc(FL.ok) + '</button>'
+      + (FL_E.productos.length ? '' : '<p class="oc-chat">' + esc(FL.okEmpty) + '</p>');
+    show('v-ocq');
+    box.querySelectorAll('.fl-veto').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var i = Number(b.getAttribute('data-i'));
+        var p = FL_E.productos[i];
+        if (p) FL_E.vetos.push(p.nombre);
+        FL_E.productos.splice(i, 1);
+        flRender();
+      });
+    });
+    box.querySelector('#flFoto').addEventListener('change', function () {
+      var files = Array.prototype.slice.call(box.querySelector('#flFoto').files || []).slice(0, 3);
+      var msg = box.querySelector('#flFotoMsg');
+      if (!files.length) return;
+      msg.style.display = 'block'; msg.textContent = FL.photoRead;
+      var done = 0, pend = 0;
+      files.forEach(function (f) {
+        var fd = new FormData(); fd.append('photo', f);
+        fetch('/api/trial/foto-vision' + TEST_KEY_QS, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d && !d.pendiente && d.producto && d.producto.nombre) {
+            var n = d.producto.nombre.trim();
+            if (!FL_E.productos.some(function (p) { return p.nombre.toLowerCase() === n.toLowerCase(); })) FL_E.productos.push({ nombre: n, precio: '', procedencia: 'foto' });
+          } else pend++;
+        }).catch(function () { pend++; }).finally(function () {
+          done++;
+          if (done === files.length) {
+            flRender();
+            if (pend) { var m2 = ocq().querySelector('#flFotoMsg'); if (m2) { m2.style.display = 'block'; m2.textContent = FL.photoPend; } }
+          }
+        });
+      });
+    });
+    box.querySelector('#flLinkBtn').addEventListener('click', function () {
+      var url = (box.querySelector('#flLink').value || '').trim();
+      var msg = box.querySelector('#flLinkMsg');
+      if (!url) return;
+      msg.style.display = 'block'; msg.textContent = FL.linkRead;
+      fetch('/api/trial/link' + TEST_KEY_QS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url }) }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d && d.ok && Array.isArray(d.productos)) {
+          d.productos.forEach(function (p) {
+            if (!FL_E.productos.some(function (q) { return q.nombre.toLowerCase() === String(p.nombre).toLowerCase(); })) FL_E.productos.push({ nombre: String(p.nombre), precio: String(p.precio || ''), procedencia: 'link' });
+          });
+          flRender();
+        } else { msg.textContent = FL.linkErr; }
+      }).catch(function () { msg.textContent = FL.linkErr; });
+    });
+    box.querySelector('#flFreeBtn').addEventListener('click', function () {
+      var v = (box.querySelector('#flFree').value || '').trim();
+      if (!v) return;
+      v.split(/[,;\n]+/).map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (n) {
+        if (!FL_E.productos.some(function (p) { return p.nombre.toLowerCase() === n.toLowerCase(); })) FL_E.productos.push({ nombre: n, precio: '', procedencia: 'cliente' });
+      });
+      flRender();
+    });
+    box.querySelector('#flEditBtn').addEventListener('click', function () {
+      var eb = box.querySelector('#flEditBox');
+      eb.style.display = eb.style.display === 'none' ? 'block' : 'none';
+      box.querySelector('#flEdit').value = FL_E.productos.map(function (p) { return p.nombre; }).join('\n');
+    });
+    box.querySelector('#flEditSave').addEventListener('click', function () {
+      var lines = (box.querySelector('#flEdit').value || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!lines.length) return;
+      FL_E.productos = lines.map(function (n) { return { nombre: n, precio: '', procedencia: 'cliente' }; });
+      flRender();
+    });
+    box.querySelector('#flOk').addEventListener('click', function () {
+      window.OC_ESPEJO = { aprobado: 1, productos: FL_E.productos, vetos: FL_E.vetos };
+      var b2 = ocq();
+      b2.innerHTML = stemHTML() + '<p class="oc-chat">' + esc(T.sproutChat) + '</p><h2 class="oc-q">' + esc(T.sproutTitle) + '</h2>';
+      show('v-ocq');
+      setTimeout(function () { runGeneration(); }, reduced ? 300 : 900);
+    });
+  }
+  function screenEspejo() {
+    FL_E.productos = flBuild();
+    FL_E.vetos = [];
+    try { trk('prueba_step', { step: 'oc_espejo' }); } catch (e) {}
+    flRender();
+  }
+
 
   // ---- study (IG / web) ----
   async function studyIg(ig) {
