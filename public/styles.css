@@ -4498,7 +4498,7 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ropa-panel{border-radius:20px;padding:16px;max-width:520px;margin:0 auto}
 .pz-ropa-avatar{position:relative;width:min(280px,72vw);aspect-ratio:1;margin:2px auto 12px}
 .pz-ropa-cara{width:100%;height:100%;object-fit:cover;border-radius:28%;border:3px solid #fff;box-shadow:0 8px 24px rgba(10,30,51,.14);display:block;background:#fff}
-.pz-ropa-capa{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.pz-ropa-capa-img{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .pz-ropa-spark{position:absolute;color:#FEC14D;font-size:22px;animation:pz-ropa-tw 2.6s ease-in-out infinite;pointer-events:none}
 @keyframes pz-ropa-tw{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.15)}}
 .pz-ropa-nivel{text-align:center;font-size:20px;margin:4px 0 10px;color:#0A1E33}
@@ -4511,7 +4511,7 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ropa-fila{display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,255,255,.6);border:1px solid #D8ECF7;border-radius:14px}
 .pz-ropa-fila.puesto{border-color:#FEC14D;box-shadow:0 0 0 1px #FEC14D inset}
 .pz-ropa-mini{position:relative;width:44px;height:44px;flex:none;background:#fff;border:1px solid #D8ECF7;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:20px}
-.pz-ropa-mini svg{position:absolute;inset:0;width:100%;height:100%}
+.pz-ropa-mini img{width:100%;height:100%;object-fit:contain}
 .pz-ropa-nom{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .pz-ropa-nom b{font-size:15px;color:#0A1E33}
 .pz-ropa-nom span{font-size:12px;color:#47617A}

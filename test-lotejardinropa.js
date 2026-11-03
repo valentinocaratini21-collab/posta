@@ -136,13 +136,13 @@ t(cnt(app, 'pcDayKeyShift') === 7, 'censo app: pcDayKeyShift 7');
   loadConst(sb, 'PZ_ROPA');
   sb.pzRopaGuardar({ sombrero: 1, anteojos: 2, cuello: 3, extra: null, conjunto: null, corona: null });
   const av = sb.pzRopaAvatarHTML();
-  t((av.match(/<img/g) || []).length === 1 && av.includes('src="ai-avatar.png"'), 'avatar: una sola imagen, la cara canónica servida');
-  t(av.includes('viewBox="0 0 512 512"') && av.includes('pz-ropa-capa'), 'avatar: capa SVG encima de la cara');
+  t((av.match(/<img/g) || []).length === 4 && av.includes('src="ai-avatar.png"'), 'avatar: cara canónica + 3 capas PNG (ropa-real v571: SVG superseded con causa)');
+  t(av.includes('pz-ropa-capa-img') && av.includes('ropa/ropa-01.png'), 'avatar: capas PNG encima de la cara (ropa-real v571)');
   const tab = (() => { const s2 = sandbox('es'); loadConst(s2, 'PZ_ROPA'); return s2.PZ_ROPA; })();
-  t(av.includes(tab[0].svg) && av.includes(tab[1].svg) && av.includes(tab[2].svg), 'avatar: prendas elegidas dibujadas');
+  t(av.includes('ropa/ropa-01.png') && av.includes('ropa/ropa-02.png') && av.includes('ropa/ropa-03.png'), 'avatar: prendas elegidas como PNG reales (ropa-real v571)');
   sb.pzRopaGuardar({ sombrero: 1, anteojos: 2, cuello: 3, extra: null, conjunto: 6, corona: null });
   const av2 = sb.pzRopaAvatarHTML();
-  t(av2.includes(tab[5].svg) && !av2.includes(tab[0].svg), 'avatar: el conjunto tapa las prendas');
+  t(av2.includes('ropa/ropa-06.png') && !av2.includes('ropa/ropa-01.png'), 'avatar: el conjunto tapa las prendas');
   t(av.includes('✦'), 'avatar: magia de entrada (destellos, nunca puntos)');
 }
 

@@ -1846,12 +1846,13 @@ function pzRopaUnlock(nv, en) {
 function pzRopaAvatarHTML() {
   const sel = pzRopaSel();
   let capas = '';
-  if (sel.conjunto) { const e = pzRopaPorId(sel.conjunto); if (e) capas = e.svg; }
+  const img = (e) => `<img class="pz-ropa-capa-img" src="ropa/ropa-${String(e.nv).padStart(2, '0')}.png" alt="" aria-hidden="true">`;
+  if (sel.conjunto) { const e = pzRopaPorId(sel.conjunto); if (e) capas = img(e); }
   else {
     const orden = ['cuello', 'anteojos', 'sombrero', 'corona', 'extra'];
-    for (const k of orden) { if (sel[k]) { const e = pzRopaPorId(sel[k]); if (e) capas += e.svg; } }
+    for (const k of orden) { if (sel[k]) { const e = pzRopaPorId(sel[k]); if (e) capas += img(e); } }
   }
-  return `<img class="pz-ropa-cara" src="ai-avatar.png" alt="Posty"><svg class="pz-ropa-capa" viewBox="0 0 512 512" aria-hidden="true">${capas}</svg><span class="pz-ropa-spark" style="left:6%;top:8%">✦</span><span class="pz-ropa-spark" style="left:86%;top:16%;animation-delay:1.1s">✦</span><span class="pz-ropa-spark" style="left:90%;top:64%;animation-delay:2s">✦</span><span class="pz-ropa-spark" style="left:4%;top:70%;animation-delay:.6s">✦</span>`;
+  return `<img class="pz-ropa-cara" src="ai-avatar.png" alt="Posty">${capas}<span class="pz-ropa-spark" style="left:6%;top:8%">✦</span><span class="pz-ropa-spark" style="left:86%;top:16%;animation-delay:1.1s">✦</span><span class="pz-ropa-spark" style="left:90%;top:64%;animation-delay:2s">✦</span><span class="pz-ropa-spark" style="left:4%;top:70%;animation-delay:.6s">✦</span>`;
 }
 function pzRopaListaHTML(nivel) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
@@ -1867,7 +1868,7 @@ function pzRopaListaHTML(nivel) {
     const btn = on
       ? `<button type="button" class="pz-ropa-btn puesto" onclick="pzRopaToggle(${e.nv})" aria-pressed="true">${esc(en ? 'Worn ✓' : 'Puesto ✓')}</button>`
       : `<button type="button" class="pz-ropa-btn" onclick="pzRopaToggle(${e.nv})" aria-pressed="false">${esc(en ? 'Wear' : 'Ponerse')}</button>`;
-    return `<div class="pz-ropa-fila${on ? ' puesto' : ''}"><span class="pz-ropa-mini"><svg viewBox="0 0 512 512" aria-hidden="true">${e.svg}</svg></span><span class="pz-ropa-nom"><b>${esc(nom)}</b><span>${esc(en ? ('Level ' + e.nv) : ('Nivel ' + e.nv))}</span>${nuevo}</span>${btn}</div>`;
+    return `<div class="pz-ropa-fila${on ? ' puesto' : ''}"><span class="pz-ropa-mini"><img src="ropa/ropa-${String(e.nv).padStart(2, '0')}-mini.png" alt="" aria-hidden="true"></span><span class="pz-ropa-nom"><b>${esc(nom)}</b><span>${esc(en ? ('Level ' + e.nv) : ('Nivel ' + e.nv))}</span>${nuevo}</span>${btn}</div>`;
   }).join('');
 }
 function pzRopaPintar() {

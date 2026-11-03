@@ -32,9 +32,9 @@ const openSlice = sliceFn(app, 'function pzPostChatOpen(post) {', 'function pzPo
 const closeSlice = sliceFn(app, 'function pzPostChatClose()', '// (Corrección grilla 2026-10-25)');
 
 // ---------- Versiones + censo (base chat-posteo sobre v558) ----------
-t(srv.includes("const BUILD_ID = '20261101-v569'"), 'server del árbol: BUILD v557 (caveat: re-basar a v558 real al liberar)');
-t(idx.includes('app.js?v=380'), 'index ES: app.js?v=380');
-t(idx.includes('styles.css?v=20261098'), 'index ES: styles 20261090');
+t(srv.includes("const BUILD_ID = '20261101-v571'"), 'server del árbol: BUILD v557 (caveat: re-basar a v558 real al liberar)');
+t(idx.includes('app.js?v=382'), 'index ES: app.js?v=380');
+t(idx.includes('styles.css?v=20261099'), 'index ES: styles 20261090');
 t(idxEn.includes('styles.css?v=20261091') && !idxEn.includes('app.js?v='), 'en/index: styles 20261090, sin app.js (deriva preexistente)');
 t(app.includes("const CHUNK_V = '20261101-v565'"), 'CHUNK_V sigue v556 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
