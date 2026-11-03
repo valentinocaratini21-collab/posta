@@ -72,7 +72,8 @@ t(css.includes('.ag-upload-btn{pointer-events:auto;'), 'Schedule: botón grande 
   // (LOTE CHAT4S) El fundido del placeholder (~360 ms, pzPhFade) es deliberado:
   // solo anima #chatInput/.hf-ask-input con la clase pz-ph-fading, no la hoja.
   t(!/transition/.test(blk), 'hoja LOTE CHAT4S: el bloque nuevo no agrega transiciones');
-  t((blk.match(/animation:[^;}]+/g) || []).every(a => a.includes('pzPhFade') || a.includes('none')), 'hoja LOTE CHAT4S: la única animación nueva es el fundido pzPhFade del placeholder (y su apagado none en reduced-motion)');
+  /* (LOTE STAGING, regla magia 2/11) stgMagiaIn admitida: vive solo en el panel de staging (mcEscenasUI), nunca en la hoja del chat. El pin original cortaba css hasta EOF, por eso cualquier bloque agregado después lo disparaba. */
+  t((blk.match(/animation:[^;}]+/g) || []).every(a => a.includes('pzPhFade') || a.includes('none') || a.includes('stgMagiaIn')), 'hoja LOTE CHAT4S: la única animación nueva es el fundido pzPhFade del placeholder (y su apagado none en reduced-motion)');
 }
 
 // ---------- 5) Render funcional (vm) ----------

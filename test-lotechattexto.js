@@ -32,10 +32,10 @@ const sliceFn = (src, from, to) => {
 };
 
 // ---------- Versiones + censo (referencia v527) ----------
-t(srv.includes("const BUILD_ID = '20261101-v572'"), 'BUILD v527 en server.js');
-t(idx.includes('app.js?v=383'), 'index ES: app.js?v=383 (bump al push v529)');
-t(idxEn.includes('styles.css?v=20261091') && !idxEn.includes('app.js?v='), 'en/index: styles 20261070, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v565'"), 'CHUNK_V sigue v523 (ningún chunk tocado)');
+t(srv.includes("const BUILD_ID = '20261101-v573'"), 'BUILD v527 en server.js');
+t(idx.includes('app.js?v=384'), 'index ES: app.js?v=383 (bump al push v529)');
+t(idxEn.includes('styles.css?v=20261100') && !idxEn.includes('app.js?v='), 'en/index: styles 20261070, sin app.js');
+t(app.includes("const CHUNK_V = '20261101-v573'"), 'CHUNK_V sigue v523 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');

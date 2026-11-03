@@ -312,6 +312,9 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN ig_state_at TEXT DEFAULT ''`); } cat
 try { db.exec(`ALTER TABLE api_costs ADD COLUMN cached_tokens INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Abrir y listo (2026-10-03): 1 = Posty arma y programa la semana solo.
 try { db.exec(`ALTER TABLE users ADD COLUMN auto_week INTEGER NOT NULL DEFAULT 1`); } catch (e) { /* ya existe */ }
+// LOTE SUBIR-FOTO-TODO: default de subir fotos ('preguntar' | 'guardar' |
+// 'semana' | 'armar'). 'preguntar' es el default seguro: siempre pregunta.
+try { db.exec(`ALTER TABLE users ADD COLUMN sft_default TEXT NOT NULL DEFAULT 'preguntar'`); } catch (e) { /* ya existe */ }
 // SEMANA-DOS-IDIOMAS:START (2026-10-30, opt-in por cliente, APAGADO por defecto: 0).
 // La versión EN vive en posts.caption_en/headline_en; nunca toca users.lang.
 try { db.exec(`ALTER TABLE users ADD COLUMN bilingual_week INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
@@ -560,11 +563,35 @@ CREATE INDEX IF NOT EXISTS idx_assets_user ON assets(user_id, kind);
 try { db.exec(`ALTER TABLE assets ADD COLUMN album_tag TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE assets ADD COLUMN thumb_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE assets ADD COLUMN album_quality TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// LOTE SUBIR-FOTO-TODO: elección del cliente por foto subida
+// ('guardar' = Solo guardarla | 'semana' = Usarla en la semana |
+//  'armar' = Que Posty lo arme | 'despues' = Decido después | '' = sin decidir).
+// Sin elección, nunca se crea un posteo solo por subir.
+try { db.exec(`ALTER TABLE assets ADD COLUMN upload_choice TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// LOTE SUBIR-FOTO-TODO: corrección del cliente a lo que Posty ve en la foto.
+try { db.exec(`ALTER TABLE assets ADD COLUMN album_vision TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (media-cliente-3, reparación DB fresca: estos ALTERs también viven
 // antes del CREATE TABLE assets; acá sí corren siempre.)
 try { db.exec(`ALTER TABLE assets ADD COLUMN producto TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE assets ADD COLUMN favorito INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE assets ADD COLUMN permiso_testimonio INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+db.exec(`
+CREATE TABLE IF NOT EXISTS staging_sesiones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  asset_id INTEGER NOT NULL,
+  producto TEXT NOT NULL DEFAULT '',
+  estilo TEXT NOT NULL DEFAULT '',
+  paleta TEXT NOT NULL DEFAULT '',
+  es_mueble_venta INTEGER NOT NULL DEFAULT 0,
+  escenas_json TEXT NOT NULL DEFAULT '',
+  carrusel_json TEXT NOT NULL DEFAULT '',
+  elegida INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_staging_user ON staging_sesiones(user_id);
+`);
+
 try { db.exec(`ALTER TABLE assets ADD COLUMN permiso_nota TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (v237) gate de calidad del material del cliente: issues separados por coma ('oscura,movida,baja-res,cortada'), 'ok', u 'orientacion=…' en videos
 
 // Demo pública: rate limit de generaciones por IP por día (5/día)

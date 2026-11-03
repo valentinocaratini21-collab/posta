@@ -223,6 +223,17 @@ function ajustesView() {
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
       <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
+    <div style="font-weight:800;margin:18px 0 8px">📸 Cuando subo fotos</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Qué hace Posty apenas subís una foto. «Preguntar siempre» es el default: nada se crea sin tu toque. Aunque recuerde «Que Posty lo arme», siempre te muestra el texto antes de crear el borrador.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <select id="sftDefaultSel" style="font-size:14px;border-radius:10px;padding:9px 12px;border:1px solid rgba(10,30,51,.15);background:#fff;color:#0A1E33;">
+        <option value="preguntar">Preguntar siempre</option>
+        <option value="guardar">Solo guardarla</option>
+        <option value="semana">Usarla en la semana</option>
+        <option value="armar">Que Posty lo arme</option>
+      </select>
+      <span id="sftDefaultStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
     <div style="font-weight:800;margin:18px 0 8px">${pzIc('globe', 16)} Tu semana en dos idiomas</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Para negocios con turistas o clientes en inglés: la misma semana sale también en inglés. La versión en inglés es la traducción de tu semana en español — misma idea, mismos datos, nada nuevo. No cambia el idioma de la app.</p>
     <div style="display:flex;align-items:center;gap:12px">
@@ -948,6 +959,13 @@ function bindSettings() {
       btnAw.disabled = false;
     };
     loadAw();
+  }
+  // --- SUBIR-FOTO-TODO: default de subir fotos ---
+  const sftSel = $('#sftDefaultSel');
+  if (sftSel) {
+    const loadSft = async () => { try { const r = await api.get('/api/settings/fotos-default'); sftSel.value = (r && r.default) || 'preguntar'; } catch (e) {} };
+    sftSel.onchange = async () => { try { const r = await api.post('/api/settings/fotos-default', { default: sftSel.value }); const st = $('#sftDefaultStatus'); if (st) st.textContent = (r && r.ok) ? 'Guardado' : 'No se pudo guardar'; } catch (e) { const st = $('#sftDefaultStatus'); if (st) st.textContent = 'No se pudo guardar'; } };
+    loadSft();
   }
   // --- SEMANA-DOS-IDIOMAS:START — Semana en dos idiomas (opt-in, apagado por defecto, 2026-10-30) ---
   const btnBw = $('#btnBilingualWeekToggle');

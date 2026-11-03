@@ -2051,7 +2051,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v565'; // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
+const CHUNK_V = '20261101-v573'; // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -6629,6 +6629,7 @@ function mcAlbumToolsBind() {
     ['ultimo', '⏰ ' + (en ? 'Last day' : 'Último día')],
     ['stock', pzIc('box', 18) + ' ' + (en ? 'Stock' : 'Stock')],
     ['mitos', pzIc('idea', 18) + ' ' + (en ? 'Niche myth' : 'Mito del rubro')],
+    ['escenas', pzIc('image', 18) + ' ' + (en ? 'Scenes' : 'Escenas')],
   ];
   row.innerHTML = tools.map(t => `<button class="rv-mini" data-mctool="${t[0]}">${t[1]}</button>`).join('');
   row.querySelectorAll('[data-mctool]').forEach(b => b.onclick = () => {
@@ -6639,9 +6640,72 @@ function mcAlbumToolsBind() {
     if (k === 'ultimo') return mcUltimoDiaUI();
     if (k === 'stock') return mcStockUI();
     if (k === 'mitos') return mcMitosUI();
+    if (k === 'escenas') return mcEscenasUI();
   });
 }
 function mcAlbumPanel() { return document.getElementById('mcAlbumPanel'); }
+async function mcEscenasUI() {
+  const panel = mcAlbumPanel(); if (!panel) return; const en = mcEn();
+  const fotos = (typeof ASSETS !== 'undefined' ? ASSETS : []).filter(a => a.kind === 'photo');
+  if (!fotos.length) { panel.innerHTML = `<span style="font-size:11.5px">${en ? 'Add a product photo to your library first.' : 'Primero sumá la foto de un producto a tu librería.'}</span>`; return; }
+  const opt = fotos.map(a => `<option value="${a.id}">${esc(a.file_path.split('/').pop())}</option>`).join('');
+  panel.innerHTML = `<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${pzIc('image', 18)} ${en ? 'Stage your product — same product, rooms that match' : 'Armá escenas con tu producto: el mismo producto, en espacios que combinan'}</div>
+  <div style="display:flex;gap:6px;margin-bottom:6px"><select data-mcfoto style="font-size:14px;flex:1">${opt}</select><button class="pcsheet-opt" data-mcarmar="1">${en ? 'Build scenes' : 'Armar escenas'}</button></div>
+  <div style="font-size:11px;opacity:.7;margin-bottom:8px">${en ? 'The product is never touched: only the room around it is new. Nothing is scheduled without your OK.' : 'El producto nunca se toca: solo cambia lo de alrededor. Nada se programa sin tu OK.'}</div><div data-mcres></div>`;
+  let sesion = 0, esMueble = false;
+  const res = panel.querySelector('[data-mcres]');
+  const pintar = (paths, modo) => {
+    let sel = -1; const orden = [];
+    res.innerHTML = `<div style="position:relative"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">` + paths.map((p, i) => `<span style="position:relative;display:inline-block"><img src="${esc(p)}" data-mcimg="${i}" style="width:110px;height:138px;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid transparent">${modo === 'carrusel' ? `<button type="button" data-mcheart="${i}" aria-label="${en ? 'Approve scene' : 'Aprobar escena'}" style="position:absolute;top:4px;right:4px;border:0;border-radius:50%;width:30px;height:30px;line-height:0;background:rgba(255,255,255,.92);box-shadow:0 1px 4px rgba(0,0,0,.25);cursor:pointer">${pzIc('heart', 20)}</button>` : ''}</span>`).join('') + `</div><span class="stg-magia" style="left:2px;top:0;color:#FEC14D">✦</span><span class="stg-magia" style="right:4px;top:10px;color:#2793C8;animation-delay:.12s">✦</span><span class="stg-magia" style="left:10px;bottom:2px;color:#2793C8;animation-delay:.22s">✦</span><span class="stg-magia" style="right:12px;bottom:6px;color:#FEC14D;animation-delay:.3s">✦</span><span class="stg-magia" style="left:46%;top:-6px;color:#FEC14D;animation-delay:.18s">✦</span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${modo === 'carrusel' ? `<button class="pcsheet-opt" data-mcusarcarrusel="1">${en ? 'Use these scenes as carousel' : 'Usar estas escenas como carrusel'}</button>` : `<button class="pcsheet-opt" data-mcusar="1">${en ? 'Use this scene' : 'Usar esta escena'}</button>`}${esMueble && modo !== 'carrusel' ? `<button class="pcsheet-opt" data-mccarrusel="1">${en ? 'Build carousel (5 scenes)' : 'Armar carrusel (5 escenas)'}</button>` : ''}</div>`;
+    res.querySelectorAll('[data-mcimg]').forEach(im => im.onclick = () => {
+      if (modo !== 'carrusel') {
+        res.querySelectorAll('[data-mcimg]').forEach(x => x.style.borderColor = 'transparent');
+        im.style.borderColor = '#FEC14D'; sel = +im.dataset.mcimg;
+      }
+    });
+    res.querySelectorAll('[data-mcheart]').forEach(b => b.onclick = (ev) => {
+      ev.stopPropagation();
+      const i = +b.dataset.mcheart;
+      const at = orden.indexOf(i);
+      const im = res.querySelector(`[data-mcimg="${i}"]`);
+      if (at >= 0) { orden.splice(at, 1); if (im) im.style.borderColor = 'transparent'; b.style.background = 'rgba(255,255,255,.92)'; }
+      else { orden.push(i); if (im) im.style.borderColor = '#FEC14D'; b.style.background = '#FEC14D'; }
+    });
+    const usar = res.querySelector('[data-mcusar]');
+    if (usar) usar.onclick = async () => {
+      if (sel < 0) { toast(en ? 'Pick a scene first.' : 'Primero elegí una escena.'); return; }
+      const u = await api.post('/api/staging/elegir', { sesion_id: sesion, indice: sel }).catch(() => null);
+      if (u && u.ok) toast(en ? '✅ Saved as draft in review' : '✅ Quedó como borrador en revisión');
+      else toast(esc((u && u.error) || 'Error'));
+    };
+    const usarCar = res.querySelector('[data-mcusarcarrusel]');
+    if (usarCar) usarCar.onclick = async () => {
+      if (!orden.length) { toast(en ? 'Pick at least one scene.' : 'Elegí al menos una escena.'); return; }
+      const u = await api.post('/api/staging/elegir', { sesion_id: sesion, carrusel: true, escenas: orden }).catch(() => null);
+      if (u && u.ok) toast(en ? '✅ Carousel saved as draft in review' : '✅ Carrusel guardado como borrador en revisión');
+      else toast(esc((u && u.error) || 'Error'));
+    };
+    const car = res.querySelector('[data-mccarrusel]');
+    if (car) car.onclick = async () => {
+      res.innerHTML = `<span style="font-size:11.5px">⏳ ${en ? 'Building carousel…' : 'Armando el carrusel…'}</span>`;
+      const g = await api.post('/api/staging/generar', { sesion_id: sesion, formato: 'carrusel' }, { timeout: 300000 }).catch(() => null);
+      if (!g || !g.ok) { res.innerHTML = `<span style="font-size:11.5px">${esc((g && g.error) || 'Error')}</span>`; return; }
+      pintar(g.escenas, 'carrusel');
+    };
+  };
+  panel.querySelector('[data-mcarmar]').onclick = async () => {
+    const assetId = +panel.querySelector('[data-mcfoto]').value;
+    res.innerHTML = `<span style="font-size:11.5px">⏳ ${en ? 'Reading the product style…' : 'Leyendo el estilo del producto…'}</span>`;
+    const a = await api.post('/api/staging/analizar', { asset_id: assetId }).catch(() => null);
+    if (!a || !a.ok) { res.innerHTML = `<span style="font-size:11.5px">${esc((a && a.error) || 'Error')}</span>`; return; }
+    sesion = a.sesion_id; esMueble = !!a.es_mueble_venta;
+    res.innerHTML = `<span style="font-size:11.5px">⏳ ${en ? 'Building scenes that match…' : 'Armando escenas que combinan…'}</span>`;
+    const g = await api.post('/api/staging/generar', { sesion_id: sesion, formato: 'escenas' }, { timeout: 300000 }).catch(() => null);
+    if (!g || !g.ok) { res.innerHTML = `<span style="font-size:11.5px">${esc((g && g.error) || 'Error')}</span>`; return; }
+    pintar(g.escenas, 'escenas');
+  };
+}
 async function mcTestimoniosUI() {
   const panel = mcAlbumPanel(); if (!panel) return; const en = mcEn();
   panel.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ ${en ? 'Loading videos with permission…' : 'Cargando videos con permiso…'}</span>`;
@@ -9562,21 +9626,22 @@ function fileToVideoThumb(file, maxSize = 512) {
 }
 async function chatUploadPhotos(files) {
   const m = $('#chatMsg');
-  const items = [...(files || [])].filter(f => f.type && (f.type.startsWith('image/') || f.type.startsWith('video/'))).slice(0, 4);
-  if (!items.length) return;
+  const items = [...(files || [])].filter(f => pzSftEsArchivoMedio(f)).slice(0, 4);
+  if (!items.length) { if (m) m.innerHTML = `<div class="err">${esc(pzSftT('No pude usar esos archivos: fijate que sean fotos o videos.', 'I could not use those files: make sure they are photos or videos.'))}</div>`; return; }
   try {
-    const nImgs = items.filter(f => f.type.startsWith('image/')).length;
+    const nImgs = items.filter(f => pzSftKind(f).kind === 'photo').length;
     const nVids = items.length - nImgs;
     const what = [nImgs ? (nImgs > 1 ? nImgs + ' fotos' : 'foto') : '', nVids ? (nVids > 1 ? nVids + ' videos' : 'video') : ''].filter(Boolean).join(' y ');
     if (m) m.innerHTML = `<div class="okmsg">⏳ Subiendo ${what}…</div>`;
+    PZ_SFT_CHAT_START = CHAT_PHOTOS.length;
     for (const f of items) {
-      const isVid = f.type.startsWith('video/');
+      const isVid = pzSftKind(f).kind === 'video';
       const url = isVid ? '/api/assets?kind=video' : '/api/media';
-      const res = await fetch(url, { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type || (isVid ? 'video/mp4' : 'image/jpeg') }, body: f });
+      const res = await fetch(url, { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': pzSftKind(f).mime }, body: f });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo subir el archivo');
       const aiUrl = isVid ? await fileToVideoThumb(f) : await fileToThumb(f);
-      CHAT_PHOTOS.push({ file_path: data.path, aiUrl, sent: false, kind: isVid ? 'video' : 'photo' });
+      CHAT_PHOTOS.push({ file_path: data.path, aiUrl, sent: false, kind: isVid ? 'video' : 'photo', file: f });
     }
     if (m) m.innerHTML = '';
     renderChatPhotos();
@@ -9588,6 +9653,10 @@ async function chatUploadPhotos(files) {
     } else {
       chatSay('📸 agregado! la IA también lo puede ver 👇');
     }
+    // AJUSTE ENTRADA DIRECTA: lo subido por el chat ya NO abre la
+    // pantalla de opciones; la foto queda en el chat y la propuesta
+    // llega sola como mensaje (pzSftDespuesDeSubirChat redefinido).
+    try { pzSftDespuesDeSubirChat(); } catch (e) {}
   } catch (e) {
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo. Probá de nuevo')}</div>`;
   }
@@ -9759,6 +9828,8 @@ async function chatSend() {
   const unsent = CHAT_PHOTOS.filter(p => p.aiUrl && !p.sent);
   if (!text && !unsent.length) return;
   const sendText = text || (unsent.length === 1 ? '📷 Te mando una foto' : `📷 Te mando ${unsent.length} fotos`);
+  // AJUSTE ENTRADA DIRECTA: si hay foto pendiente, el texto es la instrucción.
+  try { pzSftChatTexto(sendText); } catch (e) {}
   const box = $('#chatBox');
   // Las opciones tocables se usan una sola vez: al responder se descartan
   const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
@@ -11546,34 +11617,40 @@ function wireAlbumUpload(inp, onDone) {
     if (!files.length) return;
     const msg = document.getElementById('albumMsg');
     let okCount = 0;
+  let subidos = [];
     let okVideos = 0;
     let videoIssues = [];
     let lastErr = '';
-    // Subida secuencial: el servidor festeja/clasifica cada foto en 2º plano.
+    // Subida secuencial: el servidor clasifica cada foto en 2º plano (sin festejo: la pantalla de subir fotos decide).
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      const isVid = (f.type || '').startsWith('video/');
+      const isVid = pzSftKind(f).kind === 'video';
       if (msg) msg.textContent = files.length > 1 ? `Subiendo ${i + 1} de ${files.length}…` : 'Subiendo…';
       try {
-        const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f, signal: AbortSignal.timeout(isVid ? 300000 : 120000) });
+        const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': pzSftKind(f).mime }, body: f, signal: AbortSignal.timeout(isVid ? 300000 : 120000) });
         const d = await r.json().catch(() => ({}));
         if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No pude subirla');
         okCount++;
         if (isVid || d.kind === 'video') okVideos++;
         if (d.kind === 'video' && Array.isArray(d.quality_issues) && d.quality_issues.length) videoIssues = d.quality_issues;
+        subidos.push({ assetId: d.id, kind: d.kind || (isVid ? 'video' : 'photo'), path: d.path, thumb: d.thumb || '', issues: Array.isArray(d.quality_issues) ? d.quality_issues : [], duplicada: pzSftDup(pzSftHuella(f)) });
+        pzSftRecordHuella(pzSftHuella(f), d.id);
       } catch (e) {
         lastErr = e.message || 'No pude subirla. Probá de nuevo.';
+        try { if (e && (e.name === 'TypeError' || /fetch|network|Failed/i.test(e.message || ''))) pzSftEncolar(f); } catch (e2) {}
         break; // ej.: llegó al tope de 20 — no tiene sentido seguir
       }
     }
     if (msg) {
-      if (okCount && files.length > 1) msg.innerHTML = `${pzIc('checkCircle', 14)} <b>¡${okCount} archivos nuevos!</b> Posty ya los tiene para tus posteos y reels ${lastErr ? `<br>${pzIc('alert', 13)} ${esc(lastErr)}` : ''}`;
-      else if (okCount && okVideos && videoIssues.length) { const ISSUE_ES = { oscura: 'se ve oscuro', movida: 'salió movido', 'baja-res': 'tiene poca definición', cortada: 'quedó cortado' }; const itx = videoIssues.map(x => ISSUE_ES[x] || x).join(' y '); msg.innerHTML = `${pzIc('checkCircle', 14)} <b>¡Video guardado!</b> Ojo: ${itx} Queda guardado igual, pero si lo grabás con buena luz y el celu quieto, el reel sale mucho mejor`; }
-      else if (okCount && okVideos) msg.innerHTML = pzIc('checkCircle', 14) + ' <b>¡Video guardado!</b> Posty lo va a usar en tus reels';
-      else if (okCount) msg.innerHTML = '' + pzIc('checkCircle', 14) + ' <b>¡Hermosa!</b> Posty la está convirtiendo en un posteo — te aviso cuando esté listo';
+      if (okCount) msg.innerHTML = pzIc('checkCircle', 14) + ' <b>¡Hermosa!</b> Posty ya la tiene.' + (lastErr ? `<br>${pzIc('alert', 13)} ${esc(lastErr)}` : '') + (PZ_SFT_COLA.length ? `<br><button type="button" onclick="pzSftColaReintentar()" class="btn btn-soft btn-sm">Reintentar subida (${PZ_SFT_COLA.length})</button>` : '');
       else msg.textContent = '' + (lastErr || 'No pude subirla. Probá de nuevo.');
     }
-    if (okCount) setTimeout(() => { try { onDone(); } catch (e) {} }, 2500);
+    // LOTE SUBIR-FOTO-TODO: onDone corre al cerrar la pantalla de subir
+    // fotos (después de elegir), no a los 2,5 s: un repintado antes de
+    // elegir borraría la pregunta.
+    if (okCount) {
+      try { pzSftDespuesDeSubir(subidos, { onDone }); } catch (e) { setTimeout(() => { try { onDone(); } catch (e2) {} }, 2500); }
+    }
   };
 }
 // (Gap 2, 2026-10-25) «🎬 Reel» en los videos del álbum: el video del
@@ -11622,7 +11699,7 @@ async function bindAlbumCard() {
   const weekDone = wst.key === 'full';
   const missionLine = mission.done
     ? `<div style="font-size:13.5px;margin-top:8px">${pzIc('checkCircle', 16)} <b>¡Misión cumplida!</b> Tu foto ya está trabajando por ${esc(biz)}.${mission.post_id ? ' Posty la convirtió en un posteo de tu semana' : ''}</div>`
-    : `<div style="font-size:13.5px;margin-top:8px">${pzIc('idea', 14)} <b>Idea de la semana:</b> ${esc(mission.text || 'Sacale una foto a tu negocio')}<br><span style="font-size:12.5px;opacity:.75">Mandala como salga — Posty la arregla y la convierte en posteo.</span></div>`;
+    : `<div style="font-size:13.5px;margin-top:8px">${pzIc('idea', 14)} <b>Idea de la semana:</b> ${esc(mission.text || 'Sacale una foto a tu negocio')}<br><span style="font-size:12.5px;opacity:.75">Mandala como salga — Posty te pregunta qué hacer con ella.</span></div>`;
   const weekBlockHTML = `
     <div id="albumWeekBlock" style="background:${weekDone ? '#E7F6EC' : '#FFF7E0'};border:1.5px ${weekDone ? 'solid #BFE6CC' : 'dashed #FEC14D'};border-radius:12px;padding:12px;margin:10px 0">
       <div style="font-size:15px"><b>${pzIc('camera', 14)} Fotos de esta semana</b></div>
@@ -11667,6 +11744,7 @@ async function bindAlbumCard() {
     <div>${chip('Productos', n.producto || 0, t.producto)}${chip('Tu local', n.local || 0, t.local)}${chip('Tu equipo', n.equipo || 0, t.equipo)}${complete ? '<div style="font-size:14px;margin-top:6px">' + pzIc('gift', 16) + ' <b>¡Álbum completo!</b> Posty tiene todo para que tus posteos sean 100% tuyos.</div>' : ''}</div>
     ${perfHTML}
     ${grid}
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-soft btn-sm" id="albumPendientesBtn">⏳ Pendientes de decidir</button><button type="button" class="btn btn-soft btn-sm" id="albumPickerBtn">🖼️ Usar fotos del álbum</button></div>
     <div id="albumMsg" style="font-size:13px;margin-top:6px"></div>
   </div>`;
   const trBtn = document.getElementById('talkReelBtn');
@@ -11698,6 +11776,14 @@ async function bindAlbumCard() {
     }
   } catch (e) {}
   wireVideoReelButtons(bindAlbumCard);
+  // LOTE SUBIR-FOTO-TODO: bandeja de pendientes + picker del álbum.
+  try {
+    const _pend = (data.photos || []).filter((p) => !p.upload_choice || p.upload_choice === 'despues').length;
+    const _pb = document.getElementById('albumPendientesBtn');
+    if (_pb) { if (_pend) _pb.textContent = `⏳ Pendientes de decidir (${_pend})`; _pb.onclick = () => { try { pzSftPendientes(); } catch (e) {} }; }
+    const _pk = document.getElementById('albumPickerBtn');
+    if (_pk) _pk.onclick = () => { try { pzSftPicker(); } catch (e) {} };
+  } catch (e) {}
   wireAlbumUpload(document.getElementById('albumFile'), bindAlbumCard);
   // v208: recordatorio de fotos de la semana dentro del chat de Schedule.
   try { maybePhotoWeekReminder(data); } catch (e) {}
@@ -22625,7 +22711,8 @@ function bindInicio() {
   // Barra de chat fija: + sube (mismo flujo), el campo abre la pantalla
   // de chat, el micrófono abre la pantalla y arranca la nota de voz.
   const plus = $('#mzPlus');
-  if (plus) plus.onclick = clickUp;
+  // AJUSTE ENTRADA DIRECTA: el + del dock manda la foto al chat, no al Álbum.
+  if (plus) plus.onclick = pzSftMzPlus;
   const open = $('#mzChatOpen');
   if (open) open.onclick = () => { location.hash = '#/app/chat'; };
   const mic = $('#mzMic');
@@ -23922,3 +24009,979 @@ window.addEventListener('hashchange', () => { try { const _r = render(); if (_r 
 render();
 try { pzPullInit(); } catch (e) {}
 setTimeout(trackScreen, 800); // primer screen_view de la carga (hashchange no dispara al entrar)
+/* LOTE SUBIR-FOTO-TODO — pantalla de subir fotos en la app real.
+   Regla madre: subir nunca crea un posteo solo. Pantalla 1 = elegir qué
+   hacer con cada foto; pantalla 2 = propuesta ANTES de crear el borrador.
+   Estilo: vidrio celeste futurista opción 2, fondo degradado de la app,
+   tarjetas grandes, campo 17px (sin zoom iOS), magia SOLO en la entrada.
+   ES/EN en todas las superficies. El chat normal no se toca salvo el
+   camino de la pregunta por foto (ver hooks en el parche). */
+function pzSftEn() { try { return typeof ME !== "undefined" && ME && ME.lang === "en"; } catch (e) { return false; } }
+function pzSftT(es, en) { return pzSftEn() ? en : es; }
+function pzSftEtiqueta(c) {
+  const en = pzSftEn();
+  if (c === "guardar") return en ? "Just save it" : "Solo guardarla";
+  if (c === "semana") return en ? "Use it for the week" : "Usarla en la semana";
+  if (c === "armar") return en ? "Let Posty build it" : "Que Posty lo arme";
+  if (c === "despues") return en ? "Decide later" : "Decido después";
+  return en ? "Not decided" : "Sin decidir";
+}
+function pzSftKind(f) {
+  const name = String((f && f.name) || "").toLowerCase();
+  const ext = name.split(".").pop() || "";
+  const t = String((f && f.type) || "");
+  if (t.indexOf("video/") === 0) return { kind: "video", mime: t };
+  if (t.indexOf("image/") === 0) return { kind: "photo", mime: t };
+  const map = { mp4: ["video", "video/mp4"], mov: ["video", "video/quicktime"], webm: ["video", "video/webm"], jpg: ["photo", "image/jpeg"], jpeg: ["photo", "image/jpeg"], png: ["photo", "image/png"], webp: ["photo", "image/webp"], heic: ["photo", "image/heic"], heif: ["photo", "image/heif"], avif: ["photo", "image/avif"] };
+  if (map[ext]) return { kind: map[ext][0], mime: map[ext][1] };
+  return { kind: "photo", mime: "image/jpeg" };
+}
+function pzSftHuella(f) { try { return String(f.name || "") + "|" + String(f.size || 0) + "|" + String(f.lastModified || 0); } catch (e) { return ""; } }
+function pzSftHuellas() { try { return JSON.parse(localStorage.getItem("posta-sft-huellas") || "[]"); } catch (e) { return []; } }
+function pzSftDup(huella) { if (!huella) return false; try { return pzSftHuellas().some((h) => h.huella === huella); } catch (e) { return false; } }
+function pzSftRecordHuella(huella, assetId) {
+  if (!huella) return;
+  try {
+    const arr = pzSftHuellas().filter((h) => h.huella !== huella);
+    arr.push({ huella: huella, assetId: assetId || 0, at: Date.now() });
+    localStorage.setItem("posta-sft-huellas", JSON.stringify(arr.slice(-200)));
+  } catch (e) {}
+}
+function pzSftPostDe(assetId) { try { const m = JSON.parse(localStorage.getItem("posta-sft-posts") || "{}"); return m[String(assetId)] || 0; } catch (e) { return 0; } }
+function pzSftGuardarPost(assetId, postId) { try { const m = JSON.parse(localStorage.getItem("posta-sft-posts") || "{}"); m[String(assetId)] = postId; localStorage.setItem("posta-sft-posts", JSON.stringify(m)); } catch (e) {} }
+function pzSftMover(arr, i, dir) {
+  const out = arr.slice();
+  const j = i + dir;
+  if (i < 0 || i >= out.length || j < 0 || j >= out.length) return out;
+  const tmp = out[i]; out[i] = out[j]; out[j] = tmp;
+  return out;
+}
+function pzSftAnimoAMood(a) { if (a === "alegre") return "upbeat"; if (a === "tranquilo") return "chill"; if (a === "energetico") return "groove"; return ""; }
+function pzSftIssueTexto(x) {
+  const en = pzSftEn();
+  const m = { oscura: en ? "looks dark" : "se ve oscura", movida: en ? "looks blurry" : "salió movida", "baja-res": en ? "low resolution" : "poca definición", cortada: en ? "the subject is cut off" : "el sujeto quedó cortado" };
+  return m[x] || x;
+}
+function pzSftTagTexto(tag) {
+  const en = pzSftEn();
+  if (tag === "producto") return en ? "a product" : "un producto";
+  if (tag === "local") return en ? "your place" : "tu local";
+  if (tag === "equipo") return en ? "your team" : "tu equipo";
+  return "";
+}
+/* Recomendación con porqué REAL, por reglas explícitas, nunca inventada:
+   duplicada → guardarla; problema de calidad → guardarla; tag producto →
+   armarla; default de Ajustes → ese default; si no, sin recomendación. */
+function pzSftRecomendar(it, defVal) {
+  const en = pzSftEn();
+  if (it.duplicada) return { choice: "guardar", why: en ? "You already uploaded this photo before." : "Esta foto ya la subiste antes." };
+  const iss = Array.isArray(it.issues) ? it.issues : [];
+  if (iss.indexOf("cortada") >= 0) return { choice: "guardar", why: en ? "It came out cut off: better to just save it like this." : "Quedó cortada: mejor guardarla así y no armarla." };
+  const blando = iss.filter((x) => x === "oscura" || x === "movida" || x === "baja-res")[0];
+  if (blando) return { choice: "guardar", why: en ? "It " + pzSftIssueTexto(blando) + ": better to just save it like this." : "Como " + pzSftIssueTexto(blando) + ", mejor guardarla así." };
+  if (it.tag === "producto") return { choice: "armar", why: en ? "Posty classified it as a product photo." : "Posty la clasificó como foto de producto." };
+  if (defVal && defVal !== "preguntar") return { choice: defVal, why: en ? "Your Settings say to always do this." : "Tu Ajuste dice que siempre se haga así." };
+  return null;
+}
+function pzSftToast(txt) {
+  try {
+    let d = document.getElementById("pzSftToast");
+    if (!d) { d = document.createElement("div"); d.id = "pzSftToast"; d.style.cssText = "position:fixed;left:16px;right:16px;bottom:84px;z-index:9999;background:#0A1E33;color:#fff;font-size:14px;padding:12px 14px;border-radius:14px;box-shadow:0 10px 30px rgba(10,30,51,.35);text-align:center;"; document.body.appendChild(d); }
+    d.textContent = txt; d.style.display = "";
+    clearTimeout(d._t); d._t = setTimeout(() => { try { d.style.display = "none"; } catch (e) {} }, 4200);
+  } catch (e) {}
+}
+var PZ_SFT = null;
+var PZ_SFT_COLA = [];
+var PZ_SFT_CHAT_START = 0;
+function pzSftEncolar(file) {
+  PZ_SFT_COLA.push({ file: file, intentos: 0 });
+  try { window.addEventListener("online", function h() { try { window.removeEventListener("online", h); } catch (e) {} pzSftColaReintentar(); }); } catch (e) {}
+}
+async function pzSftColaReintentar() {
+  const pendientes = PZ_SFT_COLA.slice(); PZ_SFT_COLA = [];
+  for (const it of pendientes) {
+    try {
+      const k = pzSftKind(it.file);
+      const r = await fetch("/api/album/photo", { method: "POST", headers: { "Content-Type": k.mime }, body: it.file });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) throw new Error((d && d.error) || "error");
+      pzSftRecordHuella(pzSftHuella(it.file), d.id);
+      pzSftToast(pzSftT("¡Listo! Tu foto quedó guardada.", "Done! Your photo is saved."));
+    } catch (e) { PZ_SFT_COLA.push(it); }
+  }
+  if (PZ_SFT_COLA.length) pzSftToast(pzSftT("Todavía hay fotos en cola: se reintentan cuando vuelva internet.", "Some photos are still queued: they will retry when you are back online."));
+}
+
+function pzSftAbrir(items, opts) {
+  const list = (items || []).filter((x) => x && !x.quitada);
+  if (!list.length) { try { if (opts && opts.onDone) opts.onDone(); } catch (e) {} return; }
+  list.forEach((it, i) => {
+    it.choice = it.choice || "";
+    it.vision = it.vision || "";
+    it.issues = Array.isArray(it.issues) ? it.issues : [];
+    it.duplicada = !!it.duplicada;
+    it.acepta = false; it.caraSinPermiso = false;
+    it.url = it.url || it.path || it.thumb || "";
+    it.idx = i;
+  });
+  PZ_SFT = { items: list, sel: 0, pantalla: "elegir", modo: "lote", orden: list.map((_, i) => i), cover: 0, propuesta: null, variantes: [], varSel: 0, propio: false, verFeed: false, gate: false, msg: "", onDone: (opts && opts.onDone) || null, origen: (opts && opts.origen) || "album", colaArmar: [], escena: null, escenas: [], sesion: null, escenaMsg: "", esMueble: false, escenaSel: [], postId: 0, defVal: (opts && opts.defVal) || "preguntar" };
+  const sug = pzSftMejorPortada();
+  if (sug >= 0) PZ_SFT.cover = sug;
+  let ov = document.getElementById("pzSftOverlay");
+  if (ov) ov.remove();
+  ov = document.createElement("div");
+  ov.id = "pzSftOverlay";
+  ov.style.cssText = "position:fixed;inset:0;z-index:9000;background:linear-gradient(180deg,#dff1fa 0%,#eef9fd 45%,#fdf9ec 75%,#fdeec2 100%);overflow-y:auto;-webkit-overflow-scrolling:touch;";
+  document.body.appendChild(ov);
+  pzSftRender();
+}
+function pzSftMejorPortada() {
+  if (!PZ_SFT) return -1;
+  const fotos = PZ_SFT.items.map((it, i) => ({ it: it, i: i })).filter((x) => x.it.kind !== "video");
+  if (fotos.length < 2) return -1;
+  const limpias = fotos.filter((x) => !(x.it.issues && x.it.issues.length) && x.it.tag === "producto");
+  if (limpias.length) return limpias[0].i;
+  const sinIssue = fotos.filter((x) => !(x.it.issues && x.it.issues.length));
+  if (sinIssue.length) return sinIssue[0].i;
+  return -1;
+}
+function pzSftCerrar() {
+  if (!PZ_SFT) return;
+  const st = PZ_SFT;
+  const onDone = st.onDone;
+  if (st.origen === "album") {
+    st.items.forEach((it) => {
+      if (!it.choice && !it.quitada && it.assetId) { try { api.post("/api/album/" + it.assetId + "/choice", { choice: "despues" }).catch(() => {}); } catch (e) {} }
+    });
+  }
+  try { const ov = document.getElementById("pzSftOverlay"); if (ov) ov.remove(); } catch (e) {}
+  PZ_SFT = null;
+  try { if (onDone) onDone(); } catch (e) {}
+}
+function pzSftSel(i) { if (!PZ_SFT) return; PZ_SFT.sel = i; PZ_SFT.msg = ""; pzSftRender(); }
+function pzSftQuitar(i) {
+  if (!PZ_SFT) return;
+  const it = PZ_SFT.items[i];
+  if (!it) return;
+  it.quitada = true;
+  if (it.assetId) { try { api.post("/api/album/" + it.assetId + "/choice", { choice: "despues" }).catch(() => {}); } catch (e) {} }
+  PZ_SFT.orden = PZ_SFT.orden.filter((x) => x !== i);
+  if (PZ_SFT.cover >= PZ_SFT.orden.length) PZ_SFT.cover = Math.max(0, PZ_SFT.orden.length - 1);
+  if (PZ_SFT.items.every((x) => x.quitada)) { pzSftCerrar(); return; }
+  if (PZ_SFT.sel === i) PZ_SFT.sel = PZ_SFT.orden[0] !== undefined ? PZ_SFT.orden[0] : 0;
+  pzSftRender();
+}
+function pzSftGuardarVision() {
+  if (!PZ_SFT) return;
+  const inp = document.getElementById("pzSftVision");
+  if (!inp) return;
+  const it = PZ_SFT.items[PZ_SFT.sel];
+  if (!it) return;
+  it.vision = inp.value.trim().slice(0, 200);
+  if (it.assetId && it.vision) { try { api.post("/api/album/" + it.assetId + "/vision", { vision: it.vision }).catch(() => {}); } catch (e) {} }
+}
+function pzSftMic() {
+  try {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.lang = pzSftEn() ? "en-US" : "es-AR";
+    rec.interimResults = false;
+    rec.onresult = (ev) => {
+      try {
+        const txt = ev.results[0][0].transcript || "";
+        const inp = document.getElementById("pzSftVision");
+        if (inp) { inp.value = (inp.value ? inp.value + " " : "") + txt; pzSftGuardarVision(); }
+      } catch (e) {}
+    };
+    rec.start();
+  } catch (e) {}
+}
+function pzSftThumbHTML(it, i, extra) {
+  const badge = it.choice ? "<span style=\"position:absolute;left:4px;bottom:4px;background:rgba(10,30,51,.85);color:#fff;font-size:10px;padding:3px 6px;border-radius:999px;\">" + esc(pzSftEtiqueta(it.choice)) + "</span>" : "";
+  const star = (PZ_SFT && PZ_SFT.modo === "carrusel" && PZ_SFT.orden[PZ_SFT.cover] === i) ? "<span style=\"position:absolute;right:22px;top:4px;font-size:14px;\">⭐</span>" : "";
+  const media = it.kind === "video" ? "<div style=\"width:100%;height:100%;background:#0A1E33;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;\">▶</div>" : "<img src=\"" + esc(it.url) + "\" style=\"width:100%;height:100%;object-fit:cover;display:block;\" onerror=\"this.style.display='none'\">";
+  return "<div style=\"position:relative;width:72px;height:72px;border-radius:14px;overflow:hidden;flex:none;box-shadow:" + (PZ_SFT && PZ_SFT.sel === i ? "0 0 0 3px #FEC14D" : "0 4px 14px rgba(10,30,51,.15)") + ";cursor:pointer;\" onclick=\"pzSftSel(" + i + ")\">" + media + badge + star + "<button type=\"button\" onclick=\"event.stopPropagation();pzSftQuitar(" + i + ")\" style=\"position:absolute;right:3px;top:3px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(10,30,51,.8);color:#fff;font-size:12px;line-height:1;cursor:pointer;\">×</button>" + (extra || "") + "</div>";
+}
+function pzSftCardHTML(icono, titulo, bajada, onclick, extra) {
+  return "<button type=\"button\" class=\"pz-sft-card\" onclick=\"" + onclick + "\"><span style=\"font-size:24px;flex:none;\">" + icono + "</span><span><b>" + titulo + "</b><span>" + bajada + "</span></span>" + (extra || "") + "</button>";
+}
+
+function pzSftRender() {
+  if (!PZ_SFT) return;
+  const ov = document.getElementById("pzSftOverlay");
+  if (!ov) return;
+  if (PZ_SFT.pantalla === "propuesta") { ov.innerHTML = pzSftHTMLPropuesta(); return; }
+  if (PZ_SFT.pantalla === "exito") { ov.innerHTML = pzSftHTMLExito(); return; }
+  if (PZ_SFT.pantalla === "escena") { ov.innerHTML = pzSftHTMLEscena(); return; }
+  ov.innerHTML = pzSftHTMLElegir();
+  const inp = document.getElementById("pzSftVision");
+  if (inp) { inp.onchange = pzSftGuardarVision; inp.onblur = pzSftGuardarVision; }
+}
+function pzSftHTMLElegir() {
+  const st = PZ_SFT;
+  const en = pzSftEn();
+  const vivos = st.items.filter((x) => !x.quitada);
+  const it = st.items[st.sel] || vivos[0];
+  const selIdx = st.items.indexOf(it);
+  const rec = pzSftRecomendar(it, st.defVal);
+  const tagTxt = pzSftTagTexto(it.tag);
+  const visionLine = it.vision ? esc(it.vision) : (tagTxt ? (en ? "Posty sees: " + tagTxt : "Posty ve: " + tagTxt) : (en ? "Posty has not classified this photo yet." : "Posty todavía no clasificó esta foto."));
+  const issuesHTML = it.issues.length ? "<div style=\"font-size:12.5px;color:#7A4A00;background:rgba(254,193,77,.35);border-radius:12px;padding:9px 12px;margin:10px 16px 0;\">⚠️ " + it.issues.map((x) => pzSftIssueTexto(x)).join(" · ") + "</div>" : "";
+  const dupHTML = it.duplicada ? "<div style=\"font-size:12.5px;color:#47617A;background:rgba(255,255,255,.6);border-radius:12px;padding:9px 12px;margin:10px 16px 0;\">" + (en ? "You already uploaded this photo before." : "Esta foto ya la subiste antes.") + "</div>" : "";
+  const recHTML = rec ? "<div style=\"margin:12px 16px 0;background:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.9);border-radius:14px;padding:11px 13px;font-size:13.5px;\"><b>✦ " + (en ? "Posty recommends: " : "Posty recomienda: ") + esc(pzSftEtiqueta(rec.choice)) + "</b><br><span style=\"color:#47617A;\">" + esc(rec.why) + "</span></div>" : "";
+  const puedeCarrusel = vivos.length >= 2 && st.modo !== "carrusel";
+  const puedeEscena = it.tag === "producto" && it.kind !== "video" && !!it.assetId;
+  const ordenHTML = st.modo === "carrusel" ? "<div style=\"margin:10px 16px 0;font-size:12.5px;color:#47617A;\">" + (en ? "Order with the arrows, tap the star for the cover." : "Ordená con las flechas, tocá la estrella para la portada.") + "</div>" : "";
+  const thumbs = (st.modo === "carrusel" ? st.orden : st.items.map((_, i) => i)).filter((i) => !st.items[i].quitada).map((i) => {
+    let extra = "";
+    if (st.modo === "carrusel") {
+      const pos = st.orden.indexOf(i);
+      extra = "<div style=\"position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;padding:2px;\"><button type=\"button\" onclick=\"event.stopPropagation();pzSftMoverOrden(" + pos + ",-1)\" style=\"background:rgba(10,30,51,.8);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;\">‹</button><button type=\"button\" onclick=\"event.stopPropagation();pzSftSetCover(" + pos + ")\" style=\"background:rgba(10,30,51,.8);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;\">★</button><button type=\"button\" onclick=\"event.stopPropagation();pzSftMoverOrden(" + pos + ",1)\" style=\"background:rgba(10,30,51,.8);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;\">›</button></div>";
+    }
+    return pzSftThumbHTML(st.items[i], i, extra);
+  }).join("");
+  const big = it.kind === "video" ? "<video src=\"" + esc(it.url) + "\" controls playsinline style=\"width:100%;max-height:26vh;object-fit:contain;background:#0A1E33;border-radius:18px;\"></video>" : "<img src=\"" + esc(it.url) + "\" style=\"width:100%;max-height:26vh;object-fit:contain;border-radius:18px;background:#fff;\" onerror=\"this.style.display='none'\">";
+  const micBtn = (window.SpeechRecognition || window.webkitSpeechRecognition) ? "<button type=\"button\" onclick=\"pzSftMic()\" style=\"width:44px;height:44px;border-radius:50%;border:none;background:rgba(39,147,200,.15);font-size:18px;flex:none;cursor:pointer;\">🎤</button>" : "";
+  return "<div style=\"max-width:520px;margin:0 auto;padding-bottom:28px;\">"
+    + "<div style=\"display:flex;align-items:center;gap:10px;padding:14px 16px 6px;\"><button type=\"button\" onclick=\"pzSftCerrar()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;box-shadow:0 4px 14px rgba(10,30,51,.12);\">←</button><div><b style=\"font-size:16px;color:#0A1E33;\">" + (en ? "Your photos" : "Tus fotos") + "</b><span style=\"font-size:12px;color:#47617A;display:block;\">" + (en ? "Not posts yet — you decide." : "Todavía no son posteos: vos decidís.") + "</span></div><span style=\"margin-left:auto;font-size:12px;color:#47617A;\">" + vivos.length + "</span></div>"
+    + "<div style=\"display:flex;gap:10px;padding:6px 16px;overflow-x:auto;\">" + thumbs + "</div>"
+    + "<div style=\"margin:10px 16px 0;position:relative;\"><span class=\"pz-sft-magia\" style=\"top:10px;right:14px;color:#FEC14D;\">✦</span><span class=\"pz-sft-magia\" style=\"top:38px;right:40px;color:#2793C8;font-size:12px;\">✦</span>" + big + "</div>"
+    + "<div style=\"margin:12px 16px 0;font-size:13.5px;color:#0A1E33;\"><b>" + visionLine + "</b></div>"
+    + "<div style=\"display:flex;gap:8px;margin:10px 16px 0;\"><input id=\"pzSftVision\" value=\"" + esc(it.vision) + "\" placeholder=\"" + (en ? "what is this photo? tell me…" : "¿qué es esta foto? contame…") + "\" style=\"flex:1;min-width:0;font-size:17px;border:none;border-radius:999px;padding:12px 16px;box-shadow:0 8px 24px rgba(10,30,51,.12);color:#0A1E33;\">" + micBtn + "</div>"
+    + issuesHTML + dupHTML + recHTML + ordenHTML
+    + "<div style=\"margin:16px 16px 0;font-size:19px;font-weight:800;color:#0A1E33;\">" + (en ? "What do I do with this photo?" : "¿Qué hago con esta foto?") + "<span style=\"display:block;font-size:13.5px;font-weight:400;color:#47617A;margin-top:4px;\">" + (en ? "One tap. Until you choose, no post, headline or caption is created." : "Un toque. Hasta que elijas, no se crea ningún posteo, titular ni caption.") + "</span></div>"
+    + "<div style=\"display:flex;flex-direction:column;gap:10px;margin:14px 16px 0;\">"
+    + pzSftCardHTML("🖼️", pzSftEtiqueta("guardar"), en ? "Clean photo, no text, no post. I will not use it on my own later." : "Queda limpia, sin texto ni posteo. No la uso sola después.", "pzSftAplicar('guardar')", rec && rec.choice === "guardar" ? "<span style=\"font-size:12px;color:#7A4A00;font-weight:700;\">✦</span>" : "")
+    + pzSftCardHTML("📅", pzSftEtiqueta("semana"), en ? "Material for the posts to come. No post is made today." : "Material para los posteos que vienen. Hoy no se arma nada.", "pzSftAplicar('semana')", rec && rec.choice === "semana" ? "<span style=\"font-size:12px;color:#7A4A00;font-weight:700;\">✦</span>" : "")
+    + pzSftCardHTML("✨", pzSftEtiqueta("armar"), en ? "I show you only the text first. You approve before any draft exists." : "Te propongo solo el texto primero. Aprobás antes de que exista el borrador.", "pzSftAplicar('armar')", rec && rec.choice === "armar" ? "<span style=\"font-size:12px;color:#7A4A00;font-weight:700;\">✦</span>" : "")
+    + (puedeEscena ? pzSftCardHTML("🏠", en ? "Build a scene" : "Armar escena", en ? "Your product, untouched, in a room that matches its style. You choose the scene." : "Tu producto intacto, en un ambiente que combina con su estilo. Elegís la escena.", "pzSftEscena()") : "")
+    + (puedeCarrusel ? pzSftCardHTML("🎞️", en ? "Build a carousel with these photos" : "Armar carrusel con estas fotos", en ? "One post with these photos, in the order you choose." : "Un solo posteo con estas fotos, en el orden que elijas.", "pzSftModoCarrusel()") : "")
+    + "</div>"
+    + (st.modo === "carrusel" ? "<div style=\"margin:14px 16px 0;\"><button type=\"button\" onclick=\"pzSftIrAPropuestaCarrusel()\" style=\"width:100%;border:none;border-radius:999px;padding:15px;font-size:16px;font-weight:800;background:#2793C8;color:#fff;cursor:pointer;box-shadow:0 10px 26px rgba(39,147,200,.4);\">" + (en ? "Continue: carousel proposal" : "Seguir: propuesta del carrusel") + "</button></div>" : "")
+    + "<div style=\"display:flex;gap:8px;margin:14px 16px 0;flex-wrap:wrap;\"><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftAplicarTodas()\">" + (en ? "Apply to all undecided" : "Aplicar a todas las que faltan") + "</button><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftDecidoDespues()\">" + (en ? "Decide later" : "Decido después") + "</button><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftPendientes()\">" + (en ? "Pending tray" : "Bandeja de pendientes") + "</button></div>"
+    + "<div style=\"margin:14px 16px 0;font-size:12.5px;color:#47617A;\">" + (en ? "Next time, do this without asking: " : "La próxima vez, hacelo sin preguntar: ") + "<select id=\"pzSftDefSel\" onchange=\"pzSftGuardarDefault(this.value)\" style=\"font-size:13px;border-radius:999px;padding:6px 10px;border:1px solid rgba(255,255,255,.9);background:#fff;color:#0A1E33;\"><option value=\"preguntar\">" + (en ? "Always ask" : "Preguntar siempre") + "</option><option value=\"guardar\">" + pzSftEtiqueta("guardar") + "</option><option value=\"semana\">" + pzSftEtiqueta("semana") + "</option><option value=\"armar\">" + pzSftEtiqueta("armar") + "</option></select><span style=\"display:block;margin-top:6px;\">" + (en ? "Even remembering “build it”, Posty always shows the text before creating the draft. Nothing is ever published alone." : "Aunque recuerde “lo arme”, Posty siempre muestra el texto antes de crear el borrador. Nunca se publica solo.") + "</span></div>"
+    + (st.msg ? "<div style=\"margin:14px 16px 0;font-size:13.5px;color:#7A1F1F;background:rgba(255,255,255,.7);border-radius:12px;padding:10px 12px;\">" + esc(st.msg) + "</div>" : "")
+    + "<div style=\"text-align:center;font-size:12px;color:#47617A;margin-top:14px;\">" + (en ? "If you leave without choosing, the photos stay in Pending, with no post." : "Si te vas sin elegir, las fotos quedan en Pendientes, sin posteo.") + "</div>"
+    + "</div>";
+}
+function pzSftMoverOrden(pos, dir) { if (!PZ_SFT) return; PZ_SFT.orden = pzSftMover(PZ_SFT.orden, pos, dir); pzSftRender(); }
+function pzSftSetCover(pos) { if (!PZ_SFT) return; PZ_SFT.cover = pos; pzSftRender(); }
+function pzSftModoCarrusel() { if (!PZ_SFT) return; PZ_SFT.modo = "carrusel"; PZ_SFT.orden = PZ_SFT.items.map((_, i) => i).filter((i) => !PZ_SFT.items[i].quitada); PZ_SFT.cover = 0; pzSftRender(); }
+async function pzSftGuardarDefault(v) { try { const r = await api.post("/api/settings/fotos-default", { default: v }); if (r && r.ok) { if (PZ_SFT) PZ_SFT.defVal = v; pzSftToast(pzSftT("Guardado: la próxima vez se hace así.", "Saved: next time it will work like that.")); } } catch (e) { pzSftToast(pzSftT("No pude guardar tu preferencia.", "I could not save your preference.")); } }
+
+async function pzSftAsegurarAsset(it) {
+  if (it.assetId) return true;
+  if (it.origen === "chat" && it.file) {
+    try {
+      const k = pzSftKind(it.file);
+      const r = await fetch("/api/album/photo", { method: "POST", headers: { "Content-Type": k.mime }, body: it.file });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) throw new Error((d && d.error) || "error");
+      it.assetId = d.id;
+      it.issues = Array.isArray(d.quality_issues) ? d.quality_issues : it.issues;
+      it.url = d.path || it.url;
+      pzSftRecordHuella(pzSftHuella(it.file), d.id);
+      return true;
+    } catch (e) { if (PZ_SFT) { PZ_SFT.msg = pzSftT("No pude subir esa foto al álbum. Probá de nuevo.", "I could not upload that photo to the album. Try again."); pzSftRender(); } return false; }
+  }
+  return false;
+}
+async function pzSftAplicar(choice) {
+  if (!PZ_SFT) return;
+  const it = PZ_SFT.items[PZ_SFT.sel];
+  if (!it) return;
+  if (choice === "armar") { await pzSftIrAPropuesta(it); return; }
+  if (!(await pzSftAsegurarAsset(it))) return;
+  try { await api.post("/api/album/" + it.assetId + "/choice", { choice: choice }); } catch (e) {}
+  it.choice = choice;
+  const sig = PZ_SFT.items.findIndex((x, i) => i > PZ_SFT.sel && !x.choice && !x.quitada);
+  if (sig >= 0) PZ_SFT.sel = sig;
+  pzSftToast(pzSftT("Listo: ", "Done: ") + pzSftEtiqueta(choice) + ".");
+  pzSftRender();
+}
+async function pzSftAplicarTodas() {
+  if (!PZ_SFT) return;
+  const it = PZ_SFT.items[PZ_SFT.sel];
+  if (!it || !it.choice) { PZ_SFT.msg = pzSftT("Primero elegí para esta foto, después lo aplico a las demás.", "First choose for this photo, then I apply it to the rest."); pzSftRender(); return; }
+  if (it.choice === "armar") { PZ_SFT.colaArmar = PZ_SFT.items.map((x, i) => i).filter((i) => !PZ_SFT.items[i].choice && !PZ_SFT.items[i].quitada); await pzSftIrAPropuesta(it); return; }
+  for (const x of PZ_SFT.items) {
+    if (x.choice || x.quitada) continue;
+    if (!(await pzSftAsegurarAsset(x))) continue;
+    try { await api.post("/api/album/" + x.assetId + "/choice", { choice: it.choice }); } catch (e) {}
+    x.choice = it.choice;
+  }
+  pzSftRender();
+}
+async function pzSftDecidoDespues() {
+  if (!PZ_SFT) return;
+  const it = PZ_SFT.items[PZ_SFT.sel];
+  if (!it) return;
+  if (it.assetId) { try { await api.post("/api/album/" + it.assetId + "/choice", { choice: "despues" }); } catch (e) {} }
+  it.choice = "despues";
+  const sig = PZ_SFT.items.findIndex((x, i) => i > PZ_SFT.sel && !x.choice && !x.quitada);
+  if (sig >= 0) PZ_SFT.sel = sig;
+  pzSftRender();
+}
+async function pzSftIrAPropuesta(it) {
+  if (!PZ_SFT) return;
+  if (!(await pzSftAsegurarAsset(it))) return;
+  PZ_SFT.pantalla = "propuesta";
+  PZ_SFT.propuesta = null; PZ_SFT.variantes = []; PZ_SFT.varSel = 0; PZ_SFT.propio = false; PZ_SFT.verFeed = false; PZ_SFT.gate = false; PZ_SFT.msg = "";
+  PZ_SFT.itemPropuesta = it;
+  pzSftRender();
+  try {
+    const r = await api.post("/api/album/" + it.assetId + "/propuesta", { vision: it.vision || "" });
+    if (r && r.ok) {
+      PZ_SFT.propuesta = { tag: r.tag || it.tag || "", issues: r.issues || it.issues || [], hard: r.hard || [] };
+      PZ_SFT.variantes = [{ headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "" }];
+      it.tag = PZ_SFT.propuesta.tag || it.tag;
+      it.issues = PZ_SFT.propuesta.issues || it.issues;
+    } else { PZ_SFT.msg = (r && r.error) || pzSftT("No pude armar la propuesta.", "I could not build the proposal."); }
+  } catch (e) { PZ_SFT.msg = pzSftT("No pude armar la propuesta.", "I could not build the proposal."); }
+  pzSftRender();
+}
+async function pzSftOtraVersion() {
+  if (!PZ_SFT || !PZ_SFT.itemPropuesta) return;
+  const it = PZ_SFT.itemPropuesta;
+  try {
+    const r = await api.post("/api/album/" + it.assetId + "/propuesta", { vision: it.vision || "", feedback: "otra versión, distinta a la anterior" });
+    if (r && r.ok) { PZ_SFT.variantes.push({ headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "" }); PZ_SFT.varSel = PZ_SFT.variantes.length - 1; }
+    else PZ_SFT.msg = (r && r.error) || pzSftT("No pude armar otra versión.", "I could not build another version.");
+  } catch (e) { PZ_SFT.msg = pzSftT("No pude armar otra versión.", "I could not build another version."); }
+  pzSftRender();
+}
+async function pzSftPedirCambio() {
+  if (!PZ_SFT || !PZ_SFT.itemPropuesta) return;
+  const inp = document.getElementById("pzSftCambio");
+  const fb = inp ? inp.value.trim() : "";
+  if (!fb) return;
+  const it = PZ_SFT.itemPropuesta;
+  try {
+    const r = await api.post("/api/album/" + it.assetId + "/propuesta", { vision: it.vision || "", feedback: fb });
+    if (r && r.ok) { PZ_SFT.variantes.push({ headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "" }); PZ_SFT.varSel = PZ_SFT.variantes.length - 1; if (inp) inp.value = ""; }
+    else PZ_SFT.msg = (r && r.error) || pzSftT("No pude armar la propuesta nueva.", "I could not build the new proposal.");
+  } catch (e) { PZ_SFT.msg = pzSftT("No pude armar la propuesta nueva.", "I could not build the new proposal."); }
+  pzSftRender();
+}
+function pzSftHTMLPropuesta() {
+  const st = PZ_SFT;
+  const en = pzSftEn();
+  const it = st.itemPropuesta || st.items[st.sel];
+  const esCarrusel = st.modo === "carrusel";
+  const v = st.variantes[st.varSel];
+  const hard = (st.propuesta && st.propuesta.hard) || (it.issues.indexOf("cortada") >= 0 ? ["cortada"] : []);
+  const gateOn = st.gate || (hard.length && !it.acepta);
+  const handle = (typeof PROFILE !== "undefined" && PROFILE && (PROFILE.instagram || PROFILE.ig_username)) || "";
+  const feedHTML = st.verFeed && v ? "<div style=\"margin:12px 16px 0;background:#fff;border-radius:18px;padding:12px;box-shadow:0 10px 26px rgba(10,30,51,.14);\"><div style=\"font-size:13px;font-weight:700;color:#0A1E33;\">" + esc(handle ? "@" + String(handle).replace(/^@+/, "") : (en ? "your profile" : "tu perfil")) + "</div><img src=\"" + esc(esCarrusel ? st.items[st.orden[st.cover]].url : it.url) + "\" style=\"width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px;margin-top:8px;\" onerror=\"this.style.display='none'\"><div style=\"font-size:13px;color:#0A1E33;margin-top:8px;line-height:1.45;\">" + esc(String(v.caption).slice(0, 90)) + "</div><span style=\"display:inline-block;margin-top:8px;font-size:11px;background:#F1F5F9;border-radius:999px;padding:4px 9px;\">" + (en ? "Draft" : "Borrador") + "</span></div>" : "";
+  const variantesHTML = st.variantes.map((x, i) => "<div onclick=\"pzSftVarSel(" + i + ")\" style=\"background:#fff;border-radius:16px;padding:13px 14px;margin-top:10px;box-shadow:" + (st.varSel === i ? "0 0 0 2px #2793C8" : "0 8px 20px rgba(10,30,51,.10)") + ";cursor:pointer;\"><div style=\"font-size:12px;color:#47617A;font-weight:700;\">" + (en ? "Option " : "Opción ") + (i + 1) + (st.varSel === i ? " ✓" : "") + "</div><div style=\"font-size:15px;font-weight:700;color:#0A1E33;margin-top:4px;line-height:1.3;\">" + esc(x.headline || "") + "</div><div style=\"font-size:13.5px;color:#0A1E33;margin-top:6px;line-height:1.5;white-space:pre-wrap;\">" + esc(x.caption || "") + "</div>" + (x.hashtags ? "<div style=\"font-size:12px;color:#47617A;margin-top:6px;\">" + esc(x.hashtags) + "</div>" : "") + "</div>").join("");
+  const propioHTML = st.propio ? "<div style=\"margin:12px 16px 0;\"><input id=\"pzSftTit\" placeholder=\"" + (en ? "Headline, in your words" : "Titular, con tus palabras") + "\" style=\"width:100%;font-size:17px;border:none;border-radius:14px;padding:12px 14px;margin-bottom:8px;box-shadow:0 8px 20px rgba(10,30,51,.10);color:#0A1E33;\"><textarea id=\"pzSftCap\" rows=\"4\" placeholder=\"" + (en ? "Caption, in your words" : "Caption, con tus palabras") + "\" style=\"width:100%;font-size:17px;border:none;border-radius:14px;padding:12px 14px;box-shadow:0 8px 20px rgba(10,30,51,.10);color:#0A1E33;font-family:inherit;\"></textarea><div style=\"font-size:12px;color:#47617A;margin-top:6px;\">" + (en ? "Posty does not rewrite your text." : "Posty no reescribe tu texto.") + "</div></div>" : "";
+  const videoHTML = it.kind === "video" ? "<div style=\"margin:12px 16px 0;background:rgba(255,255,255,.6);border-radius:14px;padding:11px 13px;font-size:13.5px;\"><label style=\"display:block;margin:4px 0;\"><input type=\"checkbox\" id=\"pzSftVidSil\"> " + (en ? "Remove silences in the middle" : "Quitar silencios del medio") + "</label><label style=\"display:block;margin:4px 0;\"><input type=\"checkbox\" id=\"pzSftVidLenta\"> " + (en ? "Slow motion (whole clip, only if it fits 90s)" : "Cámara lenta (todo el clip, solo si entra en 90 s)") + "</label><label style=\"display:block;margin:4px 0;\">" + (en ? "Music mood: " : "Música por ánimo: ") + "<select id=\"pzSftVidAnimo\" style=\"font-size:13px;border-radius:999px;padding:6px 10px;border:1px solid #fff;background:#fff;color:#0A1E33;\"><option value=\"\">" + (en ? "By category" : "Según rubro") + "</option><option value=\"alegre\">" + (en ? "Cheerful" : "Alegre") + "</option><option value=\"tranquilo\">" + (en ? "Calm" : "Tranquilo") + "</option><option value=\"energetico\">" + (en ? "Energetic" : "Enérgico") + "</option></select></label></div>" : "";
+  const gateHTML = gateOn ? "<div style=\"margin:12px 16px 0;background:#FDECEC;border:1px solid #F5B5B5;border-radius:14px;padding:12px 14px;font-size:13.5px;color:#7A1F1F;\"><b>" + (en ? "Hold on: something to resolve before publishing." : "Ojo: hay algo que resolver antes de publicar.") + "</b><br>" + (en ? "Cut photo, people without permission, or burned-in date/brand: it is not published until you fix it or accept it knowingly." : "Foto cortada, personas sin permiso o fecha/marca quemada: no se publica hasta que lo resuelvas o lo aceptes sabiéndolo.") + "<div style=\"display:flex;gap:8px;margin-top:10px;\"><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftAceptarSabiendo()\">" + (en ? "I accept it knowingly" : "Lo acepto sabiéndolo") + "</button><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftVolverElegir()\">" + (en ? "Change the photo" : "Cambiar la foto") + "</button></div></div>" : "";
+  const caraHTML = "<div style=\"margin:12px 16px 0;font-size:13px;\"><label><input type=\"checkbox\" id=\"pzSftCara\" onchange=\"pzSftCaraCheck(this.checked)\"> " + (en ? "This photo has people without permission to publish" : "Esta foto tiene personas sin permiso para publicar") + "</label><br><label><input type=\"checkbox\" id=\"pzSftFechaMarca\" onchange=\"pzSftFechaCheck(this.checked)\"> " + (en ? "It has a burned-in date or brand mark" : "Tiene fecha o marca quemada en la foto") + "</label></div>";
+  return "<div style=\"max-width:520px;margin:0 auto;padding-bottom:28px;\">"
+    + "<div style=\"display:flex;align-items:center;gap:10px;padding:14px 16px 6px;\"><button type=\"button\" onclick=\"pzSftVolverElegir()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><div><b style=\"font-size:16px;color:#0A1E33;\">" + (en ? "Posty's proposal — before anything exists" : "Propuesta de Posty, antes de que exista nada") + "</b><span style=\"font-size:12px;color:#47617A;display:block;\">" + (en ? "Nothing goes to the feed until you approve." : "Nada va al feed hasta que apruebes.") + "</span></div></div>"
+    + "<div style=\"margin:10px 16px 0;\">" + (it.kind === "video" ? "<video src=\"" + esc(it.url) + "\" controls playsinline style=\"width:100%;max-height:26vh;object-fit:contain;background:#0A1E33;border-radius:18px;\"></video>" : "<img src=\"" + esc(esCarrusel ? st.items[st.orden[st.cover]].url : it.url) + "\" style=\"width:100%;max-height:26vh;object-fit:contain;border-radius:18px;background:#fff;\" onerror=\"this.style.display='none'\">") + "</div>"
+    + (esCarrusel ? "<div style=\"margin:10px 16px 0;font-size:12.5px;color:#47617A;\">" + (en ? "Carousel: " : "Carrusel: ") + st.orden.filter((i) => !st.items[i].quitada).length + (en ? " photos, in your order." : " fotos, en tu orden.") + "</div>" : "")
+    + (v ? "<div style=\"margin:4px 16px 0;\">" + variantesHTML + "</div>" : "<div style=\"margin:14px 16px 0;font-size:14px;color:#47617A;\">⏳ " + (en ? "Posty is writing your proposal…" : "Posty está escribiendo tu propuesta…") + "</div>")
+    + "<div style=\"display:flex;gap:8px;margin:12px 16px 0;flex-wrap:wrap;\"><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftOtraVersion()\">" + (en ? "See another version" : "Ver otra versión") + "</button><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftVerFeedToggle()\">" + (en ? "See it in the feed" : "Verlo en el feed") + "</button><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftPropioToggle()\">" + (en ? "I write the text" : "Yo escribo el texto") + "</button></div>"
+    + "<div style=\"display:flex;gap:8px;margin:12px 16px 0;\"><input id=\"pzSftCambio\" placeholder=\"" + (en ? "what do you want different?…" : "¿qué querés distinto?…") + "\" style=\"flex:1;min-width:0;font-size:17px;border:none;border-radius:999px;padding:12px 16px;box-shadow:0 8px 24px rgba(10,30,51,.12);color:#0A1E33;\"><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftPedirCambio()\">" + (en ? "Ask" : "Pedir") + "</button></div>"
+    + propioHTML + videoHTML + caraHTML + gateHTML + feedHTML
+    + "<div style=\"margin:16px;\"><button type=\"button\" onclick=\"pzSftAprobar()\" style=\"width:100%;border:none;border-radius:999px;padding:15px;font-size:16px;font-weight:800;background:#2793C8;color:#fff;cursor:pointer;box-shadow:0 10px 26px rgba(39,147,200,.4);\">" + (en ? "Approve and build the draft" : "Aprobar y armar el borrador") + "</button></div>"
+    + (st.msg ? "<div style=\"margin:0 16px;font-size:13.5px;color:#7A1F1F;background:rgba(255,255,255,.7);border-radius:12px;padding:10px 12px;\">" + esc(st.msg) + "</div>" : "")
+    + "</div>";
+}
+function pzSftVarSel(i) { if (!PZ_SFT) return; PZ_SFT.varSel = i; pzSftRender(); }
+function pzSftPropioToggle() { if (!PZ_SFT) return; PZ_SFT.propio = !PZ_SFT.propio; pzSftRender(); }
+function pzSftVerFeedToggle() { if (!PZ_SFT) return; PZ_SFT.verFeed = !PZ_SFT.verFeed; pzSftRender(); }
+function pzSftVolverElegir() { if (!PZ_SFT) return; PZ_SFT.pantalla = "elegir"; PZ_SFT.gate = false; pzSftRender(); }
+function pzSftCaraCheck(v) { if (!PZ_SFT || !PZ_SFT.itemPropuesta) return; PZ_SFT.itemPropuesta.caraSinPermiso = !!v; PZ_SFT.gate = !!v; pzSftRender(); }
+function pzSftFechaCheck(v) { if (!PZ_SFT || !PZ_SFT.itemPropuesta) return; PZ_SFT.itemPropuesta.marcaQuemada = !!v; PZ_SFT.gate = !!v; pzSftRender(); }
+function pzSftAceptarSabiendo() { if (!PZ_SFT || !PZ_SFT.itemPropuesta) return; PZ_SFT.itemPropuesta.acepta = true; PZ_SFT.gate = false; pzSftAprobar(); }
+
+async function pzSftAprobar() {
+  if (!PZ_SFT) return;
+  const st = PZ_SFT;
+  const it = st.itemPropuesta || st.items[st.sel];
+  if (!it) return;
+  const hard = (st.propuesta && st.propuesta.hard) || [];
+  if ((hard.length || it.caraSinPermiso || it.marcaQuemada) && !it.acepta) { st.gate = true; pzSftRender(); return; }
+  let headline = "", caption = "", hashtags = "";
+  if (st.propio) {
+    const t = document.getElementById("pzSftTit");
+    const c = document.getElementById("pzSftCap");
+    headline = t ? t.value.trim() : "";
+    caption = c ? c.value.trim() : "";
+    if (!caption) { st.msg = pzSftT("Escribí el caption para armar el borrador.", "Write the caption to build the draft."); pzSftRender(); return; }
+  } else {
+    const v = st.variantes[st.varSel];
+    if (!v) { st.msg = pzSftT("Elegí una propuesta primero.", "Choose a proposal first."); pzSftRender(); return; }
+    headline = v.headline || ""; caption = v.caption || ""; hashtags = v.hashtags || "";
+  }
+  st.msg = "";
+  pzSftRender();
+  try {
+    let r = null;
+    if (st.modo === "carrusel") {
+      for (const oi of st.orden) { const oi_it = st.items[oi]; if (oi_it && !oi_it.quitada) await pzSftAsegurarAsset(oi_it); }
+      const ids = st.orden.filter((i) => !st.items[i].quitada && st.items[i].assetId).map((i) => st.items[i].assetId);
+      const orderIds = st.orden.filter((i) => !st.items[i].quitada && st.items[i].assetId).map((i) => st.items[i].assetId);
+      r = await api.post("/api/album/carrusel", { asset_ids: ids, order: orderIds, cover: st.cover, headline: headline, caption: caption, hashtags: hashtags, acepta: !!it.acepta });
+      if (r && r.ok) { ids.forEach((id) => pzSftGuardarPost(id, r.post_id)); }
+    } else if (it.kind === "video") {
+      const sil = document.getElementById("pzSftVidSil");
+      const len = document.getElementById("pzSftVidLenta");
+      const ani = document.getElementById("pzSftVidAnimo");
+      r = await api.post("/api/album/" + it.assetId + "/crear", { headline: headline, caption: caption, hashtags: hashtags, acepta: !!it.acepta, video: { quitar_silencios: !!(sil && sil.checked), lenta: !!(len && len.checked), animo: ani ? ani.value : "" } });
+      if (r && r.ok) pzSftGuardarPost(it.assetId, r.post_id);
+      if (r && r.ok && (r.lenta === "no-aplicada-duracion")) st.msg = pzSftT("El reel se armó sin cámara lenta: el clip no entraba en 90 s así.", "The reel was built without slow motion: the clip would not fit 90s that way.");
+    } else {
+      r = await api.post("/api/album/" + it.assetId + "/crear", { headline: headline, caption: caption, hashtags: hashtags, acepta: !!it.acepta });
+      if (r && r.ok) pzSftGuardarPost(it.assetId, r.post_id);
+    }
+    if (r && r.ok) {
+      it.choice = "armar";
+      st.postId = r.post_id;
+      st.pantalla = "exito";
+      const sig = st.colaArmar.filter((i) => i !== st.items.indexOf(it));
+      st.colaArmar = sig;
+      if (sig.length) {
+        const nx = st.items[sig[0]];
+        setTimeout(() => { if (PZ_SFT) { PZ_SFT.pantalla = "propuesta"; pzSftIrAPropuesta(nx); } }, 900);
+        pzSftToast(pzSftT("Borrador listo. Falta el siguiente.", "Draft ready. One more to go."));
+        return;
+      }
+      pzSftRender();
+    } else if (r && r.gated) { st.gate = true; st.msg = (r && r.error) || ""; pzSftRender(); }
+    else { st.msg = (r && r.error) || pzSftT("No pude armar el borrador.", "I could not build the draft."); pzSftRender(); }
+  } catch (e) { st.msg = pzSftT("No pude armar el borrador.", "I could not build the draft."); pzSftRender(); }
+}
+function pzSftHTMLExito() {
+  const st = PZ_SFT;
+  const en = pzSftEn();
+  const it = st.itemPropuesta || st.items[st.sel];
+  return "<div style=\"max-width:520px;margin:0 auto;padding:28px 16px;text-align:center;\">"
+    + "<div style=\"font-size:44px;\">✦</div>"
+    + "<div style=\"font-size:22px;font-weight:800;color:#0A1E33;margin-top:8px;\">" + (en ? "Draft ready!" : "¡Borrador listo!") + "</div>"
+    + "<div style=\"font-size:14px;color:#47617A;margin-top:8px;line-height:1.5;\">" + (en ? "It is in review, like any post. Nothing is scheduled or published until you approve it." : "Quedó en revisión, como cualquier posteo. Nada se programa ni se publica hasta que lo apruebes.") + "</div>"
+    + "<div style=\"margin:20px 0 0;\"><button type=\"button\" onclick=\"pzSftVerBorrador()\" style=\"width:100%;border:none;border-radius:999px;padding:15px;font-size:16px;font-weight:800;background:#2793C8;color:#fff;cursor:pointer;box-shadow:0 10px 26px rgba(39,147,200,.4);\">" + (en ? "See draft" : "Ver borrador") + "</button></div>"
+    + "<div style=\"margin-top:12px;\"><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftRendimiento(" + (st.postId || 0) + ")\">" + (en ? "Will it work? (after it publishes)" : "¿Funcionó? (cuando se publique)") + "</button></div>"
+    + "<div id=\"pzSftRend\" style=\"margin-top:12px;font-size:13.5px;color:#47617A;\"></div>"
+    + "<div style=\"margin-top:16px;\"><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftCerrar()\">" + (en ? "Done" : "Listo") + "</button></div>"
+    + "</div>";
+}
+function pzSftVerBorrador() {
+  if (!PZ_SFT || !PZ_SFT.postId) return;
+  const id = PZ_SFT.postId;
+  pzSftCerrar();
+  try { location.hash = "#/app/post/" + id; } catch (e) {}
+}
+async function pzSftRendimiento(postId) {
+  const box = document.getElementById("pzSftRend");
+  const en = pzSftEn();
+  if (!postId) { if (box) box.textContent = en ? "No draft yet." : "Todavía no hay borrador."; return; }
+  if (box) box.textContent = "⏳…";
+  try {
+    const r = await api.get("/api/posts/" + postId + "/rendimiento");
+    if (!r || !r.ok) throw new Error("error");
+    if (r.status !== "published") { if (box) box.textContent = en ? "Not published yet: when it goes out, its real numbers will show here." : "Todavía no salió en Instagram: cuando salga, acá van a aparecer sus números reales."; return; }
+    if (r.likes == null && r.comments == null && r.reach == null) { if (box) box.textContent = en ? "Published, but Instagram has not reported numbers yet." : "Ya salió, pero Instagram todavía no reportó números."; return; }
+    const parts = [];
+    if (r.likes != null) parts.push("❤️ " + r.likes);
+    if (r.comments != null) parts.push("💬 " + r.comments);
+    if (r.reach != null) parts.push((en ? "reach " : "alcance ") + r.reach);
+    if (box) box.textContent = (en ? "Real Instagram numbers: " : "Números reales de Instagram: ") + parts.join(" · ");
+  } catch (e) { if (box) box.textContent = en ? "I could not read its numbers yet." : "No pude leer sus números todavía."; }
+}
+async function pzSftEscena() {
+  if (!PZ_SFT) return;
+  const it = PZ_SFT.items[PZ_SFT.sel];
+  if (!it || !it.assetId) return;
+  if (!(await pzSftAsegurarAsset(it))) return;
+  PZ_SFT.pantalla = "escena";
+  PZ_SFT.escenaMsg = pzSftT("Posty está leyendo el estilo de tu producto…", "Posty is reading your product's style…");
+  PZ_SFT.escenas = []; PZ_SFT.sesion = null;
+  pzSftRender();
+  try {
+    const a = await api.post("/api/staging/analizar", { asset_id: it.assetId });
+    if (!a || !a.ok) throw new Error((a && a.error) || "error");
+    PZ_SFT.sesion = a.sesion_id; PZ_SFT.esMueble = !!a.es_mueble_venta;
+    PZ_SFT.escenaMsg = pzSftT("Armando escenas que combinan con tu producto…", "Building rooms that match your product…");
+    pzSftRender();
+    const g = await api.post("/api/staging/generar", { sesion_id: a.sesion_id, formato: "escenas" });
+    if (!g || !g.ok) throw new Error((g && g.error) || "error");
+    PZ_SFT.escenas = g.escenas || [];
+    PZ_SFT.escenaMsg = "";
+  } catch (e) { PZ_SFT.escenaMsg = pzSftT("No pude armar las escenas. Probá de nuevo en un rato.", "I could not build the scenes. Try again in a bit."); }
+  pzSftRender();
+}
+function pzSftHTMLEscena() {
+  const st = PZ_SFT;
+  const en = pzSftEn();
+  const grid = st.escenas.map((p, i) => "<div style=\"background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 26px rgba(10,30,51,.14);\"><img src=\"" + esc(p) + "\" style=\"width:100%;aspect-ratio:4/5;object-fit:cover;display:block;\" onerror=\"this.style.display='none'\"><button type=\"button\" onclick=\"pzSftElegirEscena(" + i + ")\" style=\"width:100%;border:none;padding:12px;font-size:14px;font-weight:700;background:#2793C8;color:#fff;cursor:pointer;\">" + (en ? "Use this scene" : "Usar esta escena") + "</button></div>").join("");
+  return "<div style=\"max-width:520px;margin:0 auto;padding-bottom:28px;\">"
+    + "<div style=\"display:flex;align-items:center;gap:10px;padding:14px 16px 6px;\"><button type=\"button\" onclick=\"pzSftVolverElegir()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><div><b style=\"font-size:16px;color:#0A1E33;\">" + (en ? "Build a scene" : "Armar escena") + "</b><span style=\"font-size:12px;color:#47617A;display:block;\">" + (en ? "Your product untouched, in a room that matches." : "Tu producto intacto, en un ambiente que combina.") + "</span></div></div>"
+    + (st.escenaMsg ? "<div style=\"margin:14px 16px;font-size:14px;color:#47617A;\">⏳ " + esc(st.escenaMsg) + "</div>" : "")
+    + (grid ? "<div style=\"display:grid;grid-template-columns:1fr;gap:14px;margin:12px 16px 0;\">" + grid + "</div>" : "")
+    + (st.escenas.length && st.esMueble ? "<div style=\"margin:16px;\"><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftEscenaCarrusel()\">" + (en ? "Build a carousel with these scenes" : "Armar carrusel con estas escenas") + "</button></div>" : "")
+    + (st.msg ? "<div style=\"margin:12px 16px;font-size:13.5px;color:#7A1F1F;background:rgba(255,255,255,.7);border-radius:12px;padding:10px 12px;\">" + esc(st.msg) + "</div>" : "")
+    + "</div>";
+}
+async function pzSftElegirEscena(i) {
+  if (!PZ_SFT || !PZ_SFT.sesion) return;
+  try {
+    const r = await api.post("/api/staging/elegir", { sesion_id: PZ_SFT.sesion, indice: i });
+    if (r && r.ok) { PZ_SFT.postId = r.post_id; PZ_SFT.pantalla = "exito"; pzSftRender(); }
+    else { PZ_SFT.msg = (r && r.error) || ""; pzSftRender(); }
+  } catch (e) { PZ_SFT.msg = pzSftT("No pude armar el borrador.", "I could not build the draft."); pzSftRender(); }
+}
+async function pzSftEscenaCarrusel() {
+  if (!PZ_SFT || !PZ_SFT.sesion) return;
+  PZ_SFT.escenaMsg = pzSftT("Armando las escenas del carrusel…", "Building the carousel scenes…");
+  pzSftRender();
+  try {
+    const g = await api.post("/api/staging/generar", { sesion_id: PZ_SFT.sesion, formato: "carrusel" });
+    if (!g || !g.ok) throw new Error((g && g.error) || "error");
+    PZ_SFT.escenas = g.escenas || [];
+    PZ_SFT.escenaSel = [];
+    PZ_SFT.escenaMsg = "";
+    const ov = document.getElementById("pzSftOverlay");
+    const en = pzSftEn();
+    const grid = PZ_SFT.escenas.map((p, i) => "<div onclick=\"pzSftEscenaToggle(" + i + ")\" style=\"background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 26px rgba(10,30,51,.14);cursor:pointer;\"><img src=\"" + esc(p) + "\" style=\"width:100%;aspect-ratio:4/5;object-fit:cover;display:block;\"><div style=\"padding:10px;text-align:center;font-size:13px;font-weight:700;color:#0A1E33;\" id=\"pzSftEscCor" + i + "\">" + (en ? "Tap to choose" : "Tocá para elegir") + "</div></div>").join("");
+    if (ov) ov.innerHTML = "<div style=\"max-width:520px;margin:0 auto;padding-bottom:28px;\"><div style=\"padding:14px 16px;\"><button type=\"button\" onclick=\"pzSftVolverElegir()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><b style=\"font-size:16px;color:#0A1E33;margin-left:8px;\">" + (en ? "Choose scene by scene" : "Elegí escena por escena") + "</b></div><div style=\"display:grid;grid-template-columns:1fr;gap:14px;margin:0 16px;\">" + grid + "</div><div style=\"margin:16px;\"><button type=\"button\" onclick=\"pzSftEscenaCarruselCrear()\" style=\"width:100%;border:none;border-radius:999px;padding:15px;font-size:16px;font-weight:800;background:#2793C8;color:#fff;cursor:pointer;\">" + (en ? "Build the carousel" : "Armar el carrusel") + "</button></div></div>";
+  } catch (e) { PZ_SFT.escenaMsg = pzSftT("No pude armar el carrusel.", "I could not build the carousel."); pzSftRender(); }
+}
+function pzSftEscenaToggle(i) {
+  if (!PZ_SFT) return;
+  const at = PZ_SFT.escenaSel.indexOf(i);
+  if (at >= 0) PZ_SFT.escenaSel.splice(at, 1); else PZ_SFT.escenaSel.push(i);
+  const el = document.getElementById("pzSftEscCor" + i);
+  if (el) el.textContent = at >= 0 ? (pzSftEn() ? "Tap to choose" : "Tocá para elegir") : "❤️ " + (pzSftEn() ? "Chosen" : "Elegida");
+}
+async function pzSftEscenaCarruselCrear() {
+  if (!PZ_SFT || !PZ_SFT.sesion || !PZ_SFT.escenaSel.length) return;
+  try {
+    const r = await api.post("/api/staging/elegir", { sesion_id: PZ_SFT.sesion, carrusel: true, escenas: PZ_SFT.escenaSel });
+    if (r && r.ok) { PZ_SFT.postId = r.post_id; PZ_SFT.pantalla = "exito"; pzSftRender(); }
+    else { PZ_SFT.msg = (r && r.error) || ""; pzSftRender(); }
+  } catch (e) { PZ_SFT.msg = pzSftT("No pude armar el carrusel.", "I could not build the carousel."); pzSftRender(); }
+}
+
+async function pzSftPendientes() {
+  const en = pzSftEn();
+  let ov = document.getElementById("pzSftOverlay");
+  if (!ov) { ov = document.createElement("div"); ov.id = "pzSftOverlay"; ov.style.cssText = "position:fixed;inset:0;z-index:9000;background:linear-gradient(180deg,#dff1fa 0%,#eef9fd 45%,#fdf9ec 75%,#fdeec2 100%);overflow-y:auto;-webkit-overflow-scrolling:touch;"; document.body.appendChild(ov); }
+  ov.innerHTML = "<div style=\"max-width:520px;margin:0 auto;padding:14px 16px 28px;\"><div style=\"display:flex;align-items:center;gap:10px;\"><button type=\"button\" onclick=\"pzSftCerrarPendientes()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><b style=\"font-size:16px;color:#0A1E33;\">" + (en ? "Pending tray" : "Bandeja de pendientes") + "</b></div><div style=\"margin-top:12px;font-size:14px;color:#47617A;\">⏳ " + (en ? "Loading…" : "Cargando…") + "</div></div>";
+  try {
+    const data = await api.get("/api/album");
+    const photos = (data && data.photos) || [];
+    const pend = photos.filter((p) => !p.upload_choice || p.upload_choice === "despues");
+    const decididas = photos.filter((p) => p.upload_choice === "guardar" || p.upload_choice === "semana" || p.upload_choice === "armar");
+    const card = (p, acciones) => "<div style=\"display:flex;gap:10px;align-items:center;background:#fff;border-radius:16px;padding:10px;box-shadow:0 8px 20px rgba(10,30,51,.10);margin-top:10px;\">" + (p.kind === "video" ? "<div style=\"width:64px;height:64px;border-radius:12px;background:#0A1E33;color:#fff;display:flex;align-items:center;justify-content:center;flex:none;\">▶</div>" : "<img src=\"" + esc(p.path) + "\" style=\"width:64px;height:64px;object-fit:cover;border-radius:12px;flex:none;\" onerror=\"this.style.display='none'\">") + "<div style=\"flex:1;min-width:0;\"><div style=\"font-size:13px;font-weight:700;color:#0A1E33;\">" + (p.album_tag ? esc(p.album_tag) : (en ? "Photo" : "Foto")) + "</div><div style=\"font-size:12px;color:#47617A;\">" + esc(pzSftEtiqueta(p.upload_choice || "")) + (p.album_quality && p.album_quality !== "ok" ? " · " + esc(p.album_quality) : "") + "</div></div>" + acciones + "</div>";
+    const decidirBtn = (p) => "<button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftPendienteDecidir(" + p.id + ")\">" + (en ? "Decide" : "Decidir") + "</button>";
+    const postId = pzSftPostDe(p.id);
+    const rendBtn = postId ? "<button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftPendienteRend(" + postId + ",this)\">" + (en ? "Did it work?" : "¿Funcionó?") + "</button>" : "";
+    ov.innerHTML = "<div style=\"max-width:520px;margin:0 auto;padding:14px 16px 28px;\"><div style=\"display:flex;align-items:center;gap:10px;\"><button type=\"button\" onclick=\"pzSftCerrarPendientes()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><b style=\"font-size:16px;color:#0A1E33;\">" + (en ? "Pending tray" : "Bandeja de pendientes") + "</b></div>"
+      + "<div style=\"font-size:13.5px;color:#47617A;margin-top:10px;\">" + (en ? "Photos waiting for your decision never become posts on their own." : "Las fotos que esperan tu decisión nunca se convierten solas en posteos.") + "</div>"
+      + (pend.length ? pend.map((p) => card(p, decidirBtn(p))).join("") : "<div style=\"margin-top:12px;font-size:14px;color:#47617A;\">" + (en ? "Nothing pending. 🎉" : "Nada pendiente. 🎉") + "</div>")
+      + (decididas.length ? "<div style=\"font-size:15px;font-weight:800;color:#0A1E33;margin-top:20px;\">" + (en ? "Already decided — you can change your mind" : "Ya decididas — podés cambiar de opinión") + "</div>" + decididas.map((p) => card(p, decidirBtn(p) + rendBtn)).join("") : "")
+      + "<div id=\"pzSftPendMsg\" style=\"margin-top:12px;font-size:13.5px;color:#47617A;\"></div></div>";
+  } catch (e) {
+    ov.innerHTML = "<div style=\"max-width:520px;margin:0 auto;padding:14px 16px;\"><button type=\"button\" onclick=\"pzSftCerrarPendientes()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><div style=\"margin-top:12px;font-size:14px;color:#7A1F1F;\">" + (en ? "I could not load your album." : "No pude cargar tu álbum.") + "</div></div>";
+  }
+}
+function pzSftCerrarPendientes() { try { const ov = document.getElementById("pzSftOverlay"); if (ov) ov.remove(); } catch (e) {} if (PZ_SFT) { PZ_SFT = null; } }
+async function pzSftPendienteDecidir(assetId) {
+  try {
+    const data = await api.get("/api/album");
+    const p = ((data && data.photos) || []).find((x) => x.id === assetId);
+    if (!p) return;
+    try { const ov = document.getElementById("pzSftOverlay"); if (ov) ov.remove(); } catch (e) {}
+    pzSftAbrir([{ assetId: p.id, kind: p.kind, url: p.path, thumb: p.thumb_path || p.path, tag: p.album_tag || "", issues: String(p.album_quality || "").split(",").filter((x) => x && x !== "ok" && x.indexOf("orientacion") !== 0), choice: "", vision: p.album_vision || "", origen: "album" }], { origen: "album" });
+  } catch (e) {}
+}
+async function pzSftPendienteRend(postId, btn) {
+  const box = document.getElementById("pzSftPendMsg");
+  if (box) box.textContent = "⏳…";
+  try {
+    const r = await api.get("/api/posts/" + postId + "/rendimiento");
+    if (!r || !r.ok) throw new Error("error");
+    if (r.status !== "published") { if (box) box.textContent = pzSftT("Todavía no salió en Instagram: cuando salga, acá van sus números reales.", "Not published yet: when it goes out, its real numbers will show here."); return; }
+    if (r.likes == null && r.comments == null && r.reach == null) { if (box) box.textContent = pzSftT("Ya salió, pero Instagram todavía no reportó números.", "Published, but Instagram has not reported numbers yet."); return; }
+    const parts = [];
+    if (r.likes != null) parts.push("❤️ " + r.likes);
+    if (r.comments != null) parts.push("💬 " + r.comments);
+    if (r.reach != null) parts.push((pzSftEn() ? "reach " : "alcance ") + r.reach);
+    if (box) box.textContent = (pzSftEn() ? "Real Instagram numbers: " : "Números reales de Instagram: ") + parts.join(" · ");
+  } catch (e) { if (box) box.textContent = pzSftT("No pude leer sus números todavía.", "I could not read its numbers yet."); }
+}
+async function pzSftPicker() {
+  const en = pzSftEn();
+  let ov = document.getElementById("pzSftOverlay");
+  if (!ov) { ov = document.createElement("div"); ov.id = "pzSftOverlay"; ov.style.cssText = "position:fixed;inset:0;z-index:9000;background:linear-gradient(180deg,#dff1fa 0%,#eef9fd 45%,#fdf9ec 75%,#fdeec2 100%);overflow-y:auto;-webkit-overflow-scrolling:touch;"; document.body.appendChild(ov); }
+  ov.innerHTML = "<div style=\"max-width:520px;margin:0 auto;padding:14px 16px 28px;\"><div style=\"display:flex;align-items:center;gap:10px;\"><button type=\"button\" onclick=\"pzSftCerrarPendientes()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><b style=\"font-size:16px;color:#0A1E33;\">" + (en ? "Use photos from your album" : "Usar fotos de tu álbum") + "</b></div><div style=\"margin-top:12px;font-size:14px;color:#47617A;\">⏳ " + (en ? "Loading…" : "Cargando…") + "</div></div>";
+  try {
+    const data = await api.get("/api/album");
+    const photos = (data && data.photos) || [];
+    window.__pzSftPickerFotos = photos;
+    window.__pzSftPickerSel = [];
+    const renderPicker = (q) => {
+      const qq = String(q || "").toLowerCase();
+      const list = photos.filter((p) => !qq || String(p.album_tag || "").toLowerCase().indexOf(qq) >= 0 || String(p.created_at || "").indexOf(qq) >= 0 || String(p.path || "").toLowerCase().indexOf(qq) >= 0);
+      const grid = list.map((p) => {
+        const sel = window.__pzSftPickerSel.indexOf(p.id) >= 0;
+        return "<div onclick=\"pzSftPickerToggle(" + p.id + ")\" style=\"position:relative;border-radius:14px;overflow:hidden;cursor:pointer;box-shadow:" + (sel ? "0 0 0 3px #FEC14D" : "0 4px 14px rgba(10,30,51,.15)") + ";\">" + (p.kind === "video" ? "<div style=\"aspect-ratio:1;background:#0A1E33;color:#fff;display:flex;align-items:center;justify-content:center;\">▶</div>" : "<img src=\"" + esc(p.path) + "\" style=\"width:100%;aspect-ratio:1;object-fit:cover;display:block;\" onerror=\"this.style.display='none'\">") + (sel ? "<span style=\"position:absolute;top:6px;right:6px;background:#FEC14D;color:#0A1E33;font-size:12px;font-weight:800;border-radius:999px;padding:3px 8px;\">✓</span>" : "") + "</div>";
+      }).join("");
+      const inner = document.getElementById("pzSftPickerGrid");
+      if (inner) inner.innerHTML = grid || ("<div style=\"font-size:14px;color:#47617A;\">" + (en ? "No photos match that search." : "Ninguna foto coincide con esa búsqueda.") + "</div>");
+      const btn = document.getElementById("pzSftPickerGo");
+      if (btn) btn.textContent = (en ? "Continue with the chosen ones (" : "Seguir con las elegidas (") + window.__pzSftPickerSel.length + ")";
+    };
+    ov.innerHTML = "<div style=\"max-width:520px;margin:0 auto;padding:14px 16px 28px;\"><div style=\"display:flex;align-items:center;gap:10px;\"><button type=\"button\" onclick=\"pzSftCerrarPendientes()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><b style=\"font-size:16px;color:#0A1E33;\">" + (en ? "Use photos from your album" : "Usar fotos de tu álbum") + "</b></div>"
+      + "<input id=\"pzSftPickerQ\" placeholder=\"" + (en ? "search by product, local, team or date…" : "buscar por producto, local, equipo o fecha…") + "\" style=\"width:100%;font-size:17px;border:none;border-radius:999px;padding:12px 16px;margin-top:12px;box-shadow:0 8px 24px rgba(10,30,51,.12);color:#0A1E33;\">"
+      + "<div id=\"pzSftPickerGrid\" style=\"display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;\"></div>"
+      + "<div style=\"margin-top:16px;\"><button type=\"button\" id=\"pzSftPickerGo\" onclick=\"pzSftPickerGo()\" style=\"width:100%;border:none;border-radius:999px;padding:15px;font-size:16px;font-weight:800;background:#2793C8;color:#fff;cursor:pointer;\"></button></div></div>";
+    const q = document.getElementById("pzSftPickerQ");
+    if (q) q.oninput = () => renderPicker(q.value);
+    renderPicker("");
+  } catch (e) {
+    ov.innerHTML = "<div style=\"max-width:520px;margin:0 auto;padding:14px 16px;\"><button type=\"button\" onclick=\"pzSftCerrarPendientes()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><div style=\"margin-top:12px;font-size:14px;color:#7A1F1F;\">" + (en ? "I could not load your album." : "No pude cargar tu álbum.") + "</div></div>";
+  }
+}
+function pzSftPickerToggle(id) {
+  const sel = window.__pzSftPickerSel || [];
+  const at = sel.indexOf(id);
+  if (at >= 0) sel.splice(at, 1); else sel.push(id);
+  window.__pzSftPickerSel = sel;
+  const q = document.getElementById("pzSftPickerQ");
+  const grid = document.getElementById("pzSftPickerGrid");
+  if (grid) {
+    const photos = window.__pzSftPickerFotos || [];
+    const qq = q ? String(q.value || "").toLowerCase() : "";
+    const list = photos.filter((p) => !qq || String(p.album_tag || "").toLowerCase().indexOf(qq) >= 0 || String(p.created_at || "").indexOf(qq) >= 0 || String(p.path || "").toLowerCase().indexOf(qq) >= 0);
+    grid.innerHTML = list.map((p) => {
+      const s = sel.indexOf(p.id) >= 0;
+      return "<div onclick=\"pzSftPickerToggle(" + p.id + ")\" style=\"position:relative;border-radius:14px;overflow:hidden;cursor:pointer;box-shadow:" + (s ? "0 0 0 3px #FEC14D" : "0 4px 14px rgba(10,30,51,.15)") + ";\">" + (p.kind === "video" ? "<div style=\"aspect-ratio:1;background:#0A1E33;color:#fff;display:flex;align-items:center;justify-content:center;\">▶</div>" : "<img src=\"" + esc(p.path) + "\" style=\"width:100%;aspect-ratio:1;object-fit:cover;display:block;\" onerror=\"this.style.display='none'\">") + (s ? "<span style=\"position:absolute;top:6px;right:6px;background:#FEC14D;color:#0A1E33;font-size:12px;font-weight:800;border-radius:999px;padding:3px 8px;\">✓</span>" : "") + "</div>";
+    }).join("");
+  }
+  const btn = document.getElementById("pzSftPickerGo");
+  if (btn) btn.textContent = (pzSftEn() ? "Continue with the chosen ones (" : "Seguir con las elegidas (") + sel.length + ")";
+}
+function pzSftPickerGo() {
+  const sel = window.__pzSftPickerSel || [];
+  const photos = window.__pzSftPickerFotos || [];
+  const chosen = photos.filter((p) => sel.indexOf(p.id) >= 0);
+  if (!chosen.length) return;
+  try { const ov = document.getElementById("pzSftOverlay"); if (ov) ov.remove(); } catch (e) {}
+  pzSftAbrir(chosen.map((p) => ({ assetId: p.id, kind: p.kind, url: p.path, thumb: p.thumb_path || p.path, tag: p.album_tag || "", issues: String(p.album_quality || "").split(",").filter((x) => x && x !== "ok" && x.indexOf("orientacion") !== 0), choice: "", vision: p.album_vision || "", origen: "album" })), { origen: "album" });
+}
+async function pzSftDefaultActual() {
+  try { const r = await api.get("/api/settings/fotos-default"); return (r && r.default) || "preguntar"; } catch (e) { return "preguntar"; }
+}
+async function pzSftDespuesDeSubir(items, opts) {
+  const defVal = await pzSftDefaultActual();
+  const list = (items || []).map((it) => ({ assetId: it.assetId || it.id || 0, kind: it.kind || "photo", url: it.path || it.url || "", thumb: it.thumb || it.path || it.url || "", tag: it.tag || "", issues: it.issues || [], choice: "", vision: "", origen: "album", duplicada: !!it.duplicada }));
+  if (!list.length) { try { if (opts && opts.onDone) opts.onDone(); } catch (e) {} return; }
+  if (defVal === "guardar" || defVal === "semana") {
+    for (const it of list) { if (it.assetId) { try { await api.post("/api/album/" + it.assetId + "/choice", { choice: defVal }); } catch (e) {} } }
+    pzSftToast(pzSftT("Listo, según tu Ajuste: ", "Done, per your Settings: ") + pzSftEtiqueta(defVal) + ".");
+    try { if (opts && opts.onDone) opts.onDone(); } catch (e) {}
+    return;
+  }
+  pzSftAbrir(list, { origen: "album", defVal: defVal, onDone: opts && opts.onDone });
+  if (defVal === "armar" && PZ_SFT) { const first = PZ_SFT.items[0]; if (first) setTimeout(() => { try { pzSftAplicar("armar"); } catch (e) {} }, 50); }
+}
+async function pzSftDespuesDeSubirChat() {
+  try {
+    const nuevos = (typeof CHAT_PHOTOS !== "undefined" ? CHAT_PHOTOS.slice(PZ_SFT_CHAT_START) : []);
+    if (!nuevos.length) return;
+    const defVal = await pzSftDefaultActual();
+    const list = nuevos.map((c) => ({ assetId: 0, kind: c.kind || "photo", url: c.aiUrl || c.file_path || "", thumb: c.aiUrl || c.file_path || "", tag: "", issues: [], choice: "", vision: "", origen: "chat", file: c.file || null, duplicada: false }));
+    list.forEach((it, i) => { if (it.file) it.duplicada = pzSftDup(pzSftHuella(it.file)); });
+    if (defVal === "guardar" || defVal === "semana") {
+      for (const it of list) {
+        if (it.file && (await pzSftAsegurarAssetTmp(it))) { try { await api.post("/api/album/" + it.assetId + "/choice", { choice: defVal }); } catch (e) {} }
+      }
+      pzSftToast(pzSftT("Listo, según tu Ajuste: ", "Done, per your Settings: ") + pzSftEtiqueta(defVal) + ".");
+      return;
+    }
+    pzSftAbrir(list, { origen: "chat", defVal: defVal, onDone: null });
+    if (defVal === "armar" && PZ_SFT) { const first = PZ_SFT.items[0]; if (first) setTimeout(() => { try { pzSftAplicar("armar"); } catch (e) {} }, 50); }
+  } catch (e) {}
+}
+async function pzSftAsegurarAssetTmp(it) {
+  if (it.assetId) return true;
+  if (!it.file) return false;
+  try {
+    const k = pzSftKind(it.file);
+    const r = await fetch("/api/album/photo", { method: "POST", headers: { "Content-Type": k.mime }, body: it.file });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) return false;
+    it.assetId = d.id;
+    pzSftRecordHuella(pzSftHuella(it.file), d.id);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* LOTE SUBIR-FOTO-TODO (extra): helpers de tipo de archivo y carrusel. */
+function pzSftEsArchivoMedio(f) {
+  const t = String((f && f.type) || "");
+  if (t.indexOf("image/") === 0 || t.indexOf("video/") === 0) return true;
+  return /\.(jpe?g|png|webp|heic|heif|avif|mp4|mov|webm)$/i.test(String((f && f.name) || ""));
+}
+function pzSftCoverItem() {
+  if (!PZ_SFT) return null;
+  const st = PZ_SFT;
+  if (st.modo === "carrusel") {
+    const idx = st.orden[st.cover];
+    if (idx !== undefined && st.items[idx] && !st.items[idx].quitada) return st.items[idx];
+  }
+  return st.items[st.sel] || st.items[0] || null;
+}
+async function pzSftIrAPropuestaCarrusel() {
+  if (!PZ_SFT) return;
+  const cov = pzSftCoverItem();
+  if (!cov) return;
+  await pzSftIrAPropuesta(cov);
+}
+/* AJUSTE ENTRADA DIRECTA (3/11, vara Valentino «más fácil que ChatGPT y
+   que un CM humano»): mandar una foto a Posty + pedir algo no puede
+   tener más fricción que adjuntar + escribir. Cambia SOLO el orden de
+   entrada del flujo de chat/dock; las 24 mejoras y las pantallas
+   elegir/propuesta/éxito quedan intactas y accesibles.
+   - Antes: subir por chat abría la pantalla de 3 opciones.
+   - Ahora: la foto cae en el chat (input con foco + micrófono a mano),
+     Posty genera la propuesta en segundo plano y la muestra EN EL CHAT
+     (qué ve + qué haría + texto), sin preguntar nada. Un toque aprueba.
+   - Las 3 opciones viejas viven en «Otras opciones» (pantalla elegir) y
+     en el Álbum (picker/bandeja), no como pregunta obligada al inicio.
+   - «Decido después» sigue: explícito en el chat, y al cerrar la
+     pantalla de opciones sin elegir (igual que en el Álbum).
+   Esta sección se agrega DESPUÉS del bloque original, así que
+   pzSftDespuesDeSubirChat y pzSftCerrar redefinidos acá son los que
+   mandan. El flujo de Álbum (pzSftDespuesDeSubir) NO cambia. */
+var PZ_SFT_CHAT_PENDIENTE = null;
+function pzSftChatEn() { return pzSftEn(); }
+function pzSftChatAbrirYEnfocar() {
+  try { if (typeof mzOpenSheet === "function") mzOpenSheet(true); } catch (e) {}
+  try {
+    setTimeout(() => {
+      try {
+        const ci = document.getElementById("chatInput");
+        if (ci) { try { ci.focus({ preventScroll: true }); } catch (e2) { try { ci.focus(); } catch (e3) {} } }
+      } catch (e) {}
+    }, 120);
+  } catch (e) {}
+}
+/* Entrada del dock + y de cualquier picker que quiera «foto al chat»:
+   abre el chat y dispara el picker de fotos DEL CHAT (#chatFile), no el
+   del Álbum. El resto lo hace el flujo directo de abajo. */
+function pzSftFotoAlChat() {
+  pzSftChatAbrirYEnfocar();
+  let intentos = 0;
+  const t = setInterval(() => {
+    intentos++;
+    try {
+      const cf = document.getElementById("chatFile");
+      if (cf) { clearInterval(t); cf.click(); }
+      else if (intentos >= 8) clearInterval(t);
+    } catch (e) { clearInterval(t); }
+  }, 150);
+}
+function pzSftMzPlus() { pzSftFotoAlChat(); }
+/* Mejor uso a mostrar en el chat: la recomendación con porqué real si la
+   hay; sin señales, armar con el texto a la vista (nunca inventar un
+   porqué). Función pura, testeable en VM. */
+function pzSftChatMejorUso(rec) {
+  if (rec) return rec;
+  return { choice: "armar", why: pzSftT("Te muestro el texto primero; si no te gusta, elegís otra cosa.", "I show you the text first; if you do not like it, you pick something else.") };
+}
+function pzSftChatQuitarBotones() {
+  try { const b = document.getElementById("pzSftChatBtns"); if (b) b.remove(); } catch (e) {}
+  try { const b2 = document.getElementById("pzSftChatBtns2"); if (b2) b2.remove(); } catch (e) {}
+}
+function pzSftChatDecir(texto, botonesHTML) {
+  try { chatSay(texto); } catch (e) {
+    try {
+      const box = document.getElementById("chatBox");
+      if (box) box.insertAdjacentHTML("beforeend", "<div class=\"chat-msg a\">" + esc(texto) + "</div>");
+      if (typeof chatScroll === "function") chatScroll();
+    } catch (e2) {}
+  }
+  if (botonesHTML) {
+    try {
+      const box = document.getElementById("chatBox");
+      if (box) { box.insertAdjacentHTML("beforeend", botonesHTML); if (typeof chatScroll === "function") chatScroll(); }
+    } catch (e) {}
+  }
+}
+function pzSftChatBotones() {
+  const en = pzSftEn();
+  return "<div id=\"pzSftChatBtns\" style=\"display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px;\">"
+    + "<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"pzSftChatAprobar()\">" + (en ? "Approve and build the draft" : "Aprobar y armar el borrador") + "</button>"
+    + "<button type=\"button\" class=\"btn btn-soft btn-sm\" onclick=\"pzSftChatOpciones()\">" + (en ? "Other options" : "Otras opciones") + "</button>"
+    + "<button type=\"button\" class=\"btn btn-soft btn-sm\" onclick=\"pzSftChatDespues()\">" + (en ? "Decide later" : "Decido después") + "</button></div>";
+}
+/* REDEFINE el flujo de chat del lote original: ya NO abre la pantalla
+   de opciones. La foto queda en el chat y la propuesta llega sola. */
+async function pzSftDespuesDeSubirChat() {
+  try {
+    const nuevos = (typeof CHAT_PHOTOS !== "undefined" ? CHAT_PHOTOS.slice(PZ_SFT_CHAT_START) : []);
+    if (!nuevos.length) return;
+    const defVal = await pzSftDefaultActual();
+    const list = nuevos.map((c) => ({ assetId: 0, kind: c.kind || "photo", url: c.aiUrl || c.file_path || "", thumb: c.aiUrl || c.file_path || "", tag: "", issues: [], choice: "", vision: "", origen: "chat", file: c.file || null, duplicada: false }));
+    list.forEach((it) => { if (it.file) it.duplicada = pzSftDup(pzSftHuella(it.file)); });
+    if (defVal === "guardar" || defVal === "semana") {
+      for (const it of list) {
+        if (it.file && (await pzSftAsegurarAssetTmp(it))) { try { await api.post("/api/album/" + it.assetId + "/choice", { choice: defVal }); } catch (e) {} }
+      }
+      pzSftToast(pzSftT("Listo, según tu Ajuste: ", "Done, per your Settings: ") + pzSftEtiqueta(defVal) + ".");
+      return;
+    }
+    PZ_SFT_CHAT_PENDIENTE = { items: list, idx: 0, texto: "", propuesta: null, token: 0 };
+    pzSftChatAbrirYEnfocar();
+    pzSftChatProponer();
+  } catch (e) {}
+}
+/* Genera la propuesta de la foto pendiente y la muestra EN EL CHAT.
+   Si el usuario escribió algo mientras tanto, ese texto es la visión
+   (no se vuelve a preguntar). Token anti-carrera: si el texto cambió
+   en medio del fetch, se descarta el resultado viejo y se regenera. */
+async function pzSftChatProponer() {
+  const pend = PZ_SFT_CHAT_PENDIENTE;
+  if (!pend) return;
+  const it = pend.items[pend.idx];
+  if (!it) { PZ_SFT_CHAT_PENDIENTE = null; return; }
+  const token = ++pend.token;
+  const en = pzSftEn();
+  try {
+    if (!(await pzSftAsegurarAssetTmp(it))) {
+      if (pend.token !== token || PZ_SFT_CHAT_PENDIENTE !== pend) return;
+      pzSftChatDecir(en ? "I could not upload that photo to the album. Try again." : "No pude subir esa foto al álbum. Probá de nuevo.", "");
+      return;
+    }
+    if (pend.texto) it.vision = pend.texto;
+    const r = await api.post("/api/album/" + it.assetId + "/propuesta", { vision: it.vision || "" });
+    if (pend.token !== token || PZ_SFT_CHAT_PENDIENTE !== pend) { pzSftChatProponer(); return; }
+    if (!r || !r.ok) {
+      pzSftChatDecir(en ? "I could not build the proposal yet. Tap Other options to decide." : "No pude armar la propuesta todavía. Tocá Otras opciones para decidir.", pzSftChatBotones());
+      pend.propuesta = null;
+      return;
+    }
+    it.tag = r.tag || it.tag || "";
+    it.issues = r.issues || it.issues || [];
+    const rec = pzSftRecomendar(it, "preguntar");
+    const mejor = pzSftChatMejorUso(rec);
+    const tagTxt = pzSftTagTexto(it.tag);
+    const ve = it.vision ? esc(it.vision) : (tagTxt ? (en ? "Posty sees: " + tagTxt : "Posty ve: " + tagTxt) : (en ? "Posty has not classified this photo yet." : "Posty todavía no clasificó esta foto."));
+    pend.propuesta = { assetId: it.assetId, headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "", choice: mejor.choice, hard: r.hard || (it.issues.indexOf("cortada") >= 0 ? ["cortada"] : []) };
+    const texto = "✦ " + ve + "\n" + (en ? "My proposal: " : "Te propongo: ") + pzSftEtiqueta(mejor.choice) + " — " + mejor.why
+      + (pend.propuesta.headline ? "\n" + pend.propuesta.headline : "")
+      + (pend.propuesta.caption ? "\n" + pend.propuesta.caption : "")
+      + (pend.propuesta.hashtags ? "\n" + pend.propuesta.hashtags : "")
+      + "\n" + (en ? "Nothing goes to the feed until you approve." : "Nada va al feed hasta que apruebes.");
+    pzSftChatDecir(texto, pzSftChatBotones());
+  } catch (e) {
+    if (pend.token !== token || PZ_SFT_CHAT_PENDIENTE !== pend) return;
+    pzSftChatDecir(en ? "I could not build the proposal yet. Tap Other options to decide." : "No pude armar la propuesta todavía. Tocá Otras opciones para decidir.", pzSftChatBotones());
+  }
+}
+/* Un toque aprueba: el texto YA se mostró en el chat, así que crear el
+   borrador no es un salto a ciegas. Video: se crea con los valores por
+   defecto (sin silencios/lenta/ánimo); las opciones de video viven en
+   la pantalla de propuesta vía Otras opciones. Gate duro (cortada):
+   se transfiere a la pantalla de propuesta para resolverlo ahí. */
+async function pzSftChatAprobar() {
+  const pend = PZ_SFT_CHAT_PENDIENTE;
+  if (!pend || !pend.propuesta) return;
+  const it = pend.items[pend.idx];
+  const prop = pend.propuesta;
+  const en = pzSftEn();
+  pzSftChatQuitarBotones();
+  if ((prop.hard && prop.hard.length)) { pzSftChatOpciones(true); return; }
+  try {
+    const r = await api.post("/api/album/" + prop.assetId + "/crear", { headline: prop.headline, caption: prop.caption, hashtags: prop.hashtags, acepta: false });
+    if (r && r.ok) {
+      try { await api.post("/api/album/" + prop.assetId + "/choice", { choice: "armar" }); } catch (e) {}
+      pzSftGuardarPost(prop.assetId, r.post_id);
+      it.choice = "armar";
+      pzSftChatDecir((en ? "Draft ready! It is in review, like any post. Nothing is scheduled or published until you approve it." : "¡Borrador listo! Quedó en revisión, como cualquier posteo. Nada se programa ni se publica hasta que lo apruebes."),
+        "<div id=\"pzSftChatBtns2\" style=\"display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px;\"><button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"location.hash='#/app/post/" + r.post_id + "'\">" + (en ? "See draft" : "Ver borrador") + "</button></div>");
+      pend.idx++;
+      pend.propuesta = null;
+      if (pend.idx < pend.items.length) pzSftChatProponer();
+      else PZ_SFT_CHAT_PENDIENTE = null;
+    } else if (r && r.gated) {
+      pzSftChatOpciones(true);
+    } else {
+      pzSftChatDecir(en ? "I could not build the draft." : "No pude armar el borrador.", pzSftChatBotones());
+    }
+  } catch (e) {
+    pzSftChatDecir(en ? "I could not build the draft." : "No pude armar el borrador.", pzSftChatBotones());
+  }
+}
+/* Las 3 opciones viejas, accesibles desde la propuesta (y desde el
+   Álbum, como antes): abre la pantalla elegir con las fotos pendientes.
+   Si hay gate duro, abre directo la propuesta para resolverlo. */
+function pzSftChatOpciones(irAPropuesta) {
+  const pend = PZ_SFT_CHAT_PENDIENTE;
+  if (!pend) return;
+  const items = pend.items.map((x) => ({ assetId: x.assetId || 0, kind: x.kind, url: x.url, thumb: x.thumb, tag: x.tag || "", issues: x.issues || [], choice: "", vision: x.vision || "", origen: "chat", file: x.file || null, duplicada: !!x.duplicada }));
+  pzSftChatQuitarBotones();
+  PZ_SFT_CHAT_PENDIENTE = null;
+  pzSftAbrir(items, { origen: "chat", defVal: "preguntar" });
+  if (irAPropuesta && PZ_SFT) { const first = PZ_SFT.items[0]; if (first) pzSftIrAPropuesta(first); }
+}
+/* Decido después sigue: la foto queda en el Álbum pendiente, sin
+   posteo, y la cola de propuestas sigue con la foto siguiente. */
+async function pzSftChatDespues() {
+  const pend = PZ_SFT_CHAT_PENDIENTE;
+  if (!pend) return;
+  const it = pend.items[pend.idx];
+  const en = pzSftEn();
+  pzSftChatQuitarBotones();
+  try {
+    if (it.assetId) { try { await api.post("/api/album/" + it.assetId + "/choice", { choice: "despues" }); } catch (e) {} }
+    else if (it.file && (await pzSftAsegurarAssetTmp(it))) { try { await api.post("/api/album/" + it.assetId + "/choice", { choice: "despues" }); } catch (e) {} }
+  } catch (e) {}
+  it.choice = "despues";
+  pzSftToast(en ? "Left in Pending, with no post." : "Quedó en Pendientes, sin posteo.");
+  pend.idx++;
+  pend.propuesta = null;
+  if (pend.idx < pend.items.length) pzSftChatProponer();
+  else PZ_SFT_CHAT_PENDIENTE = null;
+}
+/* Hook desde chatSend: si hay una foto pendiente y el usuario escribió
+   algo de verdad, ese texto ES la instrucción (visión/feedback). No
+   bloquea el chat normal: sin pendiente, no hace nada. Ignora el texto
+   automático de foto sola y los diagnósticos. */
+function pzSftChatTexto(sendText) {
+  const pend = PZ_SFT_CHAT_PENDIENTE;
+  if (!pend) return;
+  const t = String(sendText || "").trim();
+  if (!t) return;
+  if (t.indexOf("📷 Te mando") === 0) return;
+  if (/^diagn[oó]stico/i.test(t)) return;
+  pend.texto = t;
+  const it = pend.items[pend.idx];
+  if (it) it.vision = t;
+  if (pend.propuesta) { pzSftChatQuitarBotones(); pend.propuesta = null; pzSftChatProponer(); }
+}
+/* REDEFINE el cierre del lote original: además del Álbum, cerrar la
+   pantalla sin elegir marca las fotos de origen chat como «despues»
+   (misma regla: si te vas sin elegir, quedan en Pendientes, sin
+   posteo). El resto del comportamiento es idéntico al original. */
+function pzSftCerrar() {
+  if (!PZ_SFT) return;
+  const st = PZ_SFT;
+  const onDone = st.onDone;
+  if (st.origen === "album" || st.origen === "chat") {
+    st.items.forEach((it) => {
+      if (!it.choice && !it.quitada && it.assetId) { try { api.post("/api/album/" + it.assetId + "/choice", { choice: "despues" }).catch(() => {}); } catch (e) {} }
+    });
+  }
+  try { const ov = document.getElementById("pzSftOverlay"); if (ov) ov.remove(); } catch (e) {}
+  PZ_SFT = null;
+  try { if (onDone) onDone(); } catch (e) {}
+}

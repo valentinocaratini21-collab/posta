@@ -8232,6 +8232,134 @@ async function celebratePhotoPost(uid, assetId, filePath) {
     try { await maybeAutoEnhanceProposal(uid, ins.lastInsertRowid); } catch (e) { console.error('[photo-mission] propuesta automática:', e.message); }
   } catch (e) { console.error('[album] festejo:', e.message); }
 }
+// ---------- LOTE SUBIR-FOTO-TODO: procesado de video del cliente ----------
+// Quitar silencios (filtro silenceremove real de ffmpeg) y cámara lenta.
+// La cámara lenta se aplica al clip entero SOLO si el resultado entra en
+// el tope de 90 s del reel; si no entra, NO se aplica y se devuelve
+// lenta:'no-aplicada-duracion' (nunca se aplica en silencio ni se finge).
+// Si ffmpeg falla en cualquier paso, se devuelve el archivo original con
+// los flags en false: el reel se arma igual, sin el efecto, y el cliente
+// lo ve en la respuesta (no es un fallo silencioso del producto).
+function sftVideoDuracion(abs) {
+  try {
+    const { execFileSync } = require('child_process');
+    try {
+      const out = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', abs], { timeout: 15000 }).toString().trim();
+      const d = parseFloat(out);
+      if (Number.isFinite(d) && d > 0) return d;
+    } catch (e) {}
+    const out = execFileSync('ffmpeg', ['-i', abs], { timeout: 15000 }).toString();
+    const m = String(out).match(/Duration: (\d+):(\d+):([\d.]+)/);
+    if (m) return (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]);
+  } catch (e) {}
+  return 0;
+}
+function sftProcesarVideo(absIn, opts) {
+  const res = { file: absIn, silenciado: false, lenta: false };
+  try {
+    const { execFileSync } = require('child_process');
+    let cur = absIn;
+    if (opts && opts.quitar_silencios) {
+      const outAbs = path.join(MEDIA_DIR, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}-sinsilencio.mp4`);
+      execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', cur, '-af', 'silenceremove=start_periods=1:start_threshold=-50dB:stop_periods=-1:stop_threshold=-50dB', '-c:v', 'copy', outAbs], { timeout: 120000 });
+      if (fs.existsSync(outAbs) && fs.statSync(outAbs).size > 0) { cur = outAbs; res.silenciado = true; }
+    }
+    if (opts && opts.lenta) {
+      const dur = sftVideoDuracion(cur);
+      if (dur > 0 && dur * 2 <= 90) {
+        const outAbs = path.join(MEDIA_DIR, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}-lenta.mp4`);
+        execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', cur, '-filter:v', 'setpts=2.0*PTS', '-filter:a', 'atempo=0.5', outAbs], { timeout: 120000 });
+        if (fs.existsSync(outAbs) && fs.statSync(outAbs).size > 0) { cur = outAbs; res.lenta = true; }
+      } else {
+        res.lenta = 'no-aplicada-duracion';
+      }
+    }
+    res.file = cur;
+  } catch (e) { /* fallback: archivo original, flags en false */ }
+  return res;
+}
+
+// LOTE SUBIR-FOTO-TODO: crear un borrador desde una foto con texto APROBADO.
+// Es el festejo, pero sin generar texto y sin gate semanal: la aprobación
+// explícita del cliente reemplaza el «un festejo por semana». Gate duro:
+// una foto cortada NO se convierte salvo aceptación con conocimiento
+// (approved.acepta === true). Advertencias blandas (oscura/movida/
+// baja-res) no bloquean: el cliente ya vio el aviso y aprobó igual.
+async function albumCrearFoto(uid, assetId, approved) {
+  try {
+    costs.assertAiOk(uid);
+    const key = openaiKeyFor(uid);
+    if (!key) return { error: 'no-key' };
+    const asset = db.prepare('SELECT id, file_path, album_quality FROM assets WHERE id = ? AND user_id = ?').get(assetId, uid);
+    if (!asset) return { error: 'no-asset' };
+    const issues = albumQualityIssues(asset.album_quality);
+    if (issues.includes('cortada') && !(approved && approved.acepta)) return { gated: ['cortada'] };
+    const filePath = asset.file_path;
+    const titulo = 'Lo nuevo de mi negocio, en foto real';
+    const headline = String((approved && approved.headline) || '');
+    const caption = String((approved && approved.caption) || '').trim();
+    if (!caption) return { error: 'sin-caption' };
+    const hashtags = String((approved && approved.hashtags) || '');
+    const genOut = {};
+    const imagePath = await conceptShotGenerateQueued({
+      uid,
+      idea: { titulo, porque: 'El cliente subió esta foto REAL de su negocio: usala como base y mejorala (luz, encuadre, fondo prolijo) manteniendo el producto y la escena EXACTAMENTE iguales.' },
+      tipo: 'foto', headline, refs: [filePath], refRoles: ['restyle'], restyle: true, resultOut: genOut, apiKey: key,
+    });
+    if (!imagePath) return { error: 'sin-imagen' };
+    const tz = userTz(uid);
+    const weekKey = mondayKeyOf(tzToday(tz));
+    const fid = genOut.fidelity || 'n/a';
+    const isClientPhoto = (fid === 'passed' || fid === 'fallback') ? 1 : 0;
+    const why = 'Borrador creado desde la foto real que subió el cliente (texto aprobado en la pantalla de subir fotos)' + ((approved && approved.acepta) ? ' — el cliente aceptó sabiendo que la foto tiene un problema duro (cortada).' : '');
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why)
+      VALUES (?,?,?,?, 'draft', 'image', 1, 'album', ?, ?, 'foto', ?)`)
+      .run(uid, imagePath, caption, hashtags, isClientPhoto, weekKey, why);
+    try { db.prepare('UPDATE album_missions SET post_id = ? WHERE user_id = ? AND week_key = ?').run(ins.lastInsertRowid, uid, weekKey); } catch (e) {}
+    try { push.sendPush(uid, { title: 'Tu borrador está listo ✏️', body: 'Posty armó el borrador con tu foto. Miralo en tu semana y aprobalo cuando quieras 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+    return { postId: ins.lastInsertRowid, imagePath };
+  } catch (e) {
+    if (e && e.name === 'AiCapExceeded') return { capped: true, error: e.message };
+    console.error('[album-crear]', e.message);
+    return { error: 'No pude armar el borrador' };
+  }
+}
+
+// LOTE SUBIR-FOTO-TODO: propuesta SOLO texto (sin insert, sin restyle).
+// Devuelve {headline, caption, hashtags, tag, issues, hard} o {gated} o
+// {error}. El feedback del cliente y su corrección de visión viajan en el
+// tema: el texto sale de lo que la foto muestra de verdad.
+async function albumPropuesta(uid, assetId, feedback, vision) {
+  try {
+    const asset = db.prepare('SELECT id, file_path, kind, album_tag, album_quality FROM assets WHERE id = ? AND user_id = ?').get(assetId, uid);
+    if (!asset) return { error: 'no-asset' };
+    if (vision !== undefined && String(vision).trim()) {
+      try { db.prepare('UPDATE assets SET album_vision = ? WHERE id = ?').run(String(vision).trim().slice(0, 200), assetId); } catch (e) {}
+    }
+    const issues = albumQualityIssues(asset.album_quality);
+    const hard = issues.filter((x) => x === 'cortada');
+    costs.assertAiOk(uid);
+    const key = openaiKeyFor(uid);
+    if (!key) return { error: 'sin-ia' };
+    const profile = getProfile(uid) || {};
+    let topic = asset.kind === 'video' ? 'Mi negocio, en video real' : 'Lo nuevo de mi negocio, en foto real';
+    if (vision && String(vision).trim()) topic += ' — lo que muestra la foto, según su dueño: ' + String(vision).trim().slice(0, 200);
+    if (feedback && String(feedback).trim()) topic += ' — cambio pedido por el dueño: ' + String(feedback).trim().slice(0, 200);
+    const albumInput = contentInputFor(uid, topic, asset.kind === 'video' ? 'reel' : 'foto', 0);
+    try { albumInput.prevCaptions = weekPrevCaptions(uid, mondayKeyOf(tzToday(userTz(uid))), 0); } catch (e) {}
+    const content = await generateContent(albumInput, key);
+    const caption = String((content && content.caption) || '').trim();
+    if (!caption) return { error: 'sin-caption' };
+    const hashtags = String((content && content.hashtags) || '');
+    const headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+    return { headline, caption, hashtags, tag: asset.album_tag || '', issues, hard };
+  } catch (e) {
+    if (e && e.name === 'AiCapExceeded') return { capped: true, error: e.message };
+    console.error('[album-propuesta]', e.message);
+    return { error: 'No pude armar la propuesta' };
+  }
+}
+
 // ---------- (Gap 2, 2026-10-25) «POSTEÁ ESTE VIDEO» ----------
 // El video del cliente puede SER el posteo: buildSingleClipReel lo
 // convierte en un reel protagonista (entero si dura ≤90 s; su audio
@@ -8242,7 +8370,7 @@ async function celebratePhotoPost(uid, assetId, filePath) {
 // en el álbum como referencia. Lock en memoria por usuario: un doble
 // toque (o el festejo + el toque a la vez) no duplica el reel.
 const videoReelLocks = new Set();
-async function buildClientVideoReelPost(uid, asset, source) {
+async function buildClientVideoReelPost(uid, asset, source, over) {
   if (videoReelLocks.has(uid)) return { busy: true };
   videoReelLocks.add(uid);
   try {
@@ -8253,22 +8381,35 @@ async function buildClientVideoReelPost(uid, asset, source) {
     if (issues.length) return { gated: issues };
     const profile = getProfile(uid) || {};
     const titulo = 'Mi negocio, en video real';
-    const input = contentInputFor(uid, titulo, 'reel', 0);
-    try { input.prevCaptions = weekPrevCaptions(uid, mondayKeyOf(tzToday(userTz(uid))), 0); } catch (e) {}
-    const content = await generateContent(input, key);
-    const caption = String((content && content.caption) || '').trim();
-    if (!caption) return { error: 'sin-caption' };
-    const hashtags = String((content && content.hashtags) || '');
-    const headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+    // LOTE SUBIR-FOTO-TODO: texto APROBADO por el cliente (over) salta la
+    // generación: el reel usa exactamente ese titular/caption/hashtags.
+    let caption = '', hashtags = '', headline = '';
+    if (over && over.caption) {
+      caption = String(over.caption || '').trim();
+      hashtags = String(over.hashtags || '');
+      headline = String(over.headline || '') || makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+      if (!caption) return { error: 'sin-caption' };
+    } else {
+      const input = contentInputFor(uid, titulo, 'reel', 0);
+      try { input.prevCaptions = weekPrevCaptions(uid, mondayKeyOf(tzToday(userTz(uid))), 0); } catch (e) {}
+      const content = await generateContent(input, key);
+      caption = String((content && content.caption) || '').trim();
+      if (!caption) return { error: 'sin-caption' };
+      hashtags = String((content && content.hashtags) || '');
+      headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+    }
     const igUser = String(profile.instagram || '').trim().replace(/^@+/, '');
     const settings = getSettings(uid) || {};
     const brandHex = (parseBrandHexes(settings.brand_colors)[0]) || '#2793C8';
     const reelEngine = require('./reel-engine');
-    const mood = reelEngine.moodForCategory(profile.category);
+    // LOTE SUBIR-FOTO-TODO: ánimo elegido por el cliente en la pantalla de
+    // subir fotos (alegre/tranquilo/enérgico → upbeat/chill/groove del
+    // catálogo CC0 de reels). Sin elección, el ánimo del rubro de siempre.
+    const mood = (over && ['upbeat', 'chill', 'groove'].includes(String(over.mood || ''))) ? String(over.mood) : reelEngine.moodForCategory(profile.category);
     const weekKey = mondayKeyOf(tzToday(userTz(uid)));
     const built = await reelEngine.buildSingleClipReel({
       mediaDir: MEDIA_DIR,
-      file: path.join(MEDIA_DIR, path.basename(String(asset.file_path))),
+      file: (over && over.procesadoAbs) ? String(over.procesadoAbs) : path.join(MEDIA_DIR, path.basename(String(asset.file_path))),
       hook: headline || 'Mirá esto 👀',
       cta: 'Escribinos y te contamos más 👇',
       handle: igUser ? '@' + igUser : '',
@@ -8339,7 +8480,7 @@ app.get('/api/album', requireAuth, (req, res) => {
     const uid = req.session.userId;
     // v181: el álbum incluye los VIDEOS del cliente (kind='video', con
     // miniatura en thumb_path). Los counts de progreso son solo de fotos.
-    const rows = db.prepare(`SELECT id, file_path, album_tag, album_quality, kind, thumb_path, created_at FROM assets WHERE user_id = ? AND kind IN ('photo','video') ORDER BY created_at DESC LIMIT 20`).all(uid);
+    const rows = db.prepare(`SELECT id, file_path, album_tag, album_quality, kind, thumb_path, created_at, upload_choice, album_vision FROM assets WHERE user_id = ? AND kind IN ('photo','video') ORDER BY created_at DESC LIMIT 20`).all(uid);
     const photos = rows.filter(r => r.kind === 'photo');
     // Clasificación perezosa: hasta 3 sin clasificar por visita, en 2º plano.
     let lazy = 0;
@@ -8568,9 +8709,9 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
       // miniatura del mejor frame (Gap 11) y calidad medida (Gap 5).
       const ing = await ingestClientVideo(uid, req.body, ct);
       if (ing.error) return res.status(400).json({ error: ing.error });
-      // (Gap 11, 2026-10-25) FESTEJO DE VIDEO: el primer video bueno de
-      // la semana se convierte en un reel solo, como la foto (Gap 2).
-      celebrateVideoPost(uid, ing.id, ing.path);
+      // LOTE SUBIR-FOTO-TODO: SIN festejo automático de video. El video
+      // queda como material y solo se convierte en reel con un toque del
+      // cliente (pantalla de subir fotos o botón explícito «Usar en un reel»).
       return res.json({ ok: true, id: ing.id, path: ing.path, kind: 'video', thumb: ing.thumb, mission_done: false, quality_issues: ing.qualityIssues || [] });
     }
     // (Gap 10, 2026-10-25) La foto se normaliza al entrar: EXIF aplicado
@@ -8594,9 +8735,10 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
     let detIssues = [];
     try { const m = await measurePhotoQuality(path.join(MEDIA_DIR, name)).catch(() => null); detIssues = qualityIssuesFromMetrics(m); } catch (e) {}
     res.json({ ok: true, id: assetId, path: filePath, kind: 'photo', mission_done: missionDone, quality_issues: detIssues });
-    // Segundo plano: clasificar + festejo (un posteo por semana).
+    // LOTE SUBIR-FOTO-TODO: segundo plano SOLO clasificar. El festejo
+    // automático se cierra: una foto subida nunca genera un posteo sola;
+    // la pregunta de la pantalla de subir fotos decide qué hacer con ella.
     tagAlbumPhoto(uid, assetId, filePath);
-    celebratePhotoPost(uid, assetId, filePath);
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 // Peso excedido en la subida del álbum → mensaje amable (no el 500 de Express).
@@ -8605,6 +8747,136 @@ app.use('/api/album/photo', (err, req, res, next) => {
     return res.status(400).json({ error: 'Ese archivo es muy pesado 😅 Fotos hasta 15 MB y videos hasta 60 MB.' });
   }
   next(err);
+});
+// ================= LOTE SUBIR-FOTO-TODO: endpoints =================
+// Regla madre: subir nunca crea un posteo solo. Toda creación pasa por
+// /crear o /carrusel con texto aprobado por el cliente.
+const SFT_CHOICES = ['guardar', 'semana', 'armar', 'despues', ''];
+function sftAssetPropio(uid, id) {
+  const n = Number(id);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return db.prepare('SELECT id, file_path, kind, album_tag, album_quality FROM assets WHERE id = ? AND user_id = ?').get(n, uid) || null;
+}
+app.post('/api/album/carrusel', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const ids = Array.isArray(b.asset_ids) ? b.asset_ids.map((x) => Number(x)).filter((x) => Number.isInteger(x) && x > 0) : [];
+    const order = Array.isArray(b.order) ? b.order.map((x) => Number(x)).filter((x) => Number.isInteger(x)) : [];
+    const caption = String(b.caption || '').trim();
+    const headline = String(b.headline || '');
+    const hashtags = String(b.hashtags || '');
+    if (ids.length < 2) return res.status(400).json({ ok: false, error: 'El carrusel necesita al menos 2 fotos' });
+    if (!caption) return res.status(400).json({ ok: false, error: 'Falta el texto aprobado para el carrusel' });
+    const rows = ids.map((id) => sftAssetPropio(uid, id)).filter(Boolean);
+    if (rows.length !== ids.length) return res.status(404).json({ ok: false, error: 'Una de las fotos no está en tu álbum' });
+    if (rows.some((r) => r.kind !== 'photo')) return res.status(400).json({ ok: false, error: 'El carrusel es solo de fotos' });
+    const cortadas = rows.filter((r) => albumQualityIssues(r.album_quality).includes('cortada'));
+    if (cortadas.length && !b.acepta) return res.status(409).json({ ok: false, gated: ['cortada'], error: 'Una foto del carrusel está cortada: resolvelo o aceptalo sabiéndolo' });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const ordered = (order.length ? order : ids).map((id) => byId.get(id)).filter(Boolean);
+    if (!ordered.length) return res.status(400).json({ ok: false, error: 'Falta el orden del carrusel' });
+    const paths = ordered.map((r) => r.file_path);
+    const coverIdx = Number.isInteger(b.cover) && b.cover >= 0 && b.cover < paths.length ? b.cover : 0;
+    const weekKey = mondayKeyOf(tzToday(userTz(uid)));
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, carousel_paths, needs_review, source, week_key, tipo, strategy_why)
+      VALUES (?,?,?,?, 'draft', 'carousel', ?, 1, 'album-carrusel', ?, 'foto', 'Carrusel creado desde las fotos que subió el cliente (texto aprobado en la pantalla de subir fotos)')`)
+      .run(uid, paths[coverIdx], caption, hashtags, JSON.stringify(paths), weekKey);
+    for (const r of rows) { try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', r.id); } catch (e) {} }
+    res.json({ ok: true, post_id: ins.lastInsertRowid });
+  } catch (e) { console.error('[album-carrusel]', e.message); res.status(500).json({ ok: false, error: 'No pude armar el carrusel' }); }
+});
+app.post('/api/album/:id/choice', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const asset = sftAssetPropio(uid, req.params.id);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    const choice = String((req.body && req.body.choice) || '');
+    if (!SFT_CHOICES.includes(choice)) return res.status(400).json({ ok: false, error: 'Elección inválida' });
+    db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run(choice, asset.id);
+    res.json({ ok: true, choice });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No pude guardar tu elección' }); }
+});
+app.post('/api/album/:id/vision', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const asset = sftAssetPropio(uid, req.params.id);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    db.prepare('UPDATE assets SET album_vision = ? WHERE id = ?').run(String((req.body && req.body.vision) || '').trim().slice(0, 200), asset.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No pude guardar lo que ves' }); }
+});
+app.post('/api/album/:id/propuesta', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const asset = sftAssetPropio(uid, req.params.id);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    const out = await albumPropuesta(uid, asset.id, (req.body && req.body.feedback) || '', (req.body && req.body.vision) || '');
+    if (out.capped) return res.status(402).json({ ok: false, error: out.error });
+    if (out.error) return res.status(400).json({ ok: false, error: out.error });
+    try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
+    res.json({ ok: true, ...out });
+  } catch (e) { console.error('[album-propuesta-ep]', e.message); res.status(500).json({ ok: false, error: 'No pude armar la propuesta' }); }
+});
+app.post('/api/album/:id/crear', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const asset = sftAssetPropio(uid, req.params.id);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    const b = req.body || {};
+    const caption = String(b.caption || '').trim();
+    if (!caption) return res.status(400).json({ ok: false, error: 'Falta el texto aprobado' });
+    const acepta = !!b.acepta;
+    if (asset.kind === 'video') {
+      const v = (b.video && typeof b.video === 'object') ? b.video : {};
+      const abs = path.join(MEDIA_DIR, path.basename(String(asset.file_path || '')));
+      let procesadoAbs = null; let procFlags = {};
+      if (v.quitar_silencios || v.lenta) {
+        const proc = sftProcesarVideo(abs, { quitar_silencios: !!v.quitar_silencios, lenta: !!v.lenta });
+        procFlags = { silenciado: proc.silenciado, lenta: proc.lenta };
+        if (proc.file && proc.file !== abs) procesadoAbs = proc.file;
+      }
+      const full = db.prepare('SELECT id, file_path, album_quality, thumb_path FROM assets WHERE id = ? AND user_id = ?').get(asset.id, uid);
+      const over = { caption, hashtags: String(b.hashtags || ''), headline: String(b.headline || ''), mood: (v.animo && { alegre: 'upbeat', tranquilo: 'chill', energetico: 'groove' }[String(v.animo)]) || undefined, procesadoAbs };
+      const out = await buildClientVideoReelPost(uid, full, 'album', over);
+      if (out.busy) return res.status(409).json({ ok: false, error: 'Ya estoy armando ese reel' });
+      if (out.gated) return res.status(409).json({ ok: false, gated: out.gated, error: 'Ese video no pasa el gate de calidad' });
+      if (!out.postId) return res.status(400).json({ ok: false, error: out.error || 'No pude armar el reel' });
+      try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
+      return res.json({ ok: true, post_id: out.postId, ...procFlags });
+    }
+    const out = await albumCrearFoto(uid, asset.id, { headline: String(b.headline || ''), caption, hashtags: String(b.hashtags || ''), acepta });
+    if (out.capped) return res.status(402).json({ ok: false, error: out.error });
+    if (out.gated) return res.status(409).json({ ok: false, gated: out.gated, error: 'Esa foto está cortada: resolvelo o aceptalo sabiéndolo' });
+    if (!out.postId) return res.status(400).json({ ok: false, error: out.error || 'No pude armar el borrador' });
+    try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
+    res.json({ ok: true, post_id: out.postId });
+  } catch (e) { console.error('[album-crear]', e.message); res.status(500).json({ ok: false, error: 'No pude armar el borrador' }); }
+});
+app.get('/api/posts/:id/rendimiento', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const n = Number(req.params.id);
+    if (!Number.isInteger(n) || n <= 0) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
+    const row = db.prepare(`SELECT p.status, pm.likes AS likes, pm.comments AS comments_count, pm.reach AS reach FROM posts p LEFT JOIN post_metrics pm ON pm.post_id = p.id WHERE p.id = ? AND p.user_id = ?`).get(n, uid);
+    if (!row) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
+    res.json({ ok: true, status: row.status, likes: row.likes == null ? null : row.likes, comments: row.comments_count == null ? null : row.comments_count, reach: row.reach == null ? null : row.reach });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No pude leer el rendimiento' }); }
+});
+app.get('/api/settings/fotos-default', requireAuth, (req, res) => {
+  try {
+    const u = db.prepare('SELECT sft_default FROM users WHERE id = ?').get(req.session.userId);
+    const v = (u && u.sft_default) || 'preguntar';
+    res.json({ ok: true, default: ['preguntar', 'guardar', 'semana', 'armar'].includes(v) ? v : 'preguntar' });
+  } catch (e) { res.json({ ok: true, default: 'preguntar' }); }
+});
+app.post('/api/settings/fotos-default', requireAuth, express.json(), (req, res) => {
+  try {
+    const v = String((req.body && req.body.default) || '');
+    if (!['preguntar', 'guardar', 'semana', 'armar'].includes(v)) return res.status(400).json({ ok: false, error: 'Valor inválido' });
+    db.prepare('UPDATE users SET sft_default = ? WHERE id = ?').run(v, req.session.userId);
+    res.json({ ok: true, default: v });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No pude guardar tu preferencia' }); }
 });
 // ================= RITUAL SEMANAL DE FOTOS (v183) =================
 // Una vez por semana (lunes ~10:00 hora local del cliente) Posty le pide al
@@ -15288,6 +15560,132 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
     console.error('[product-shot]', e.message);
     if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, error: e.message });
     res.status(500).json({ error: 'No se pudo generar la imagen' });
+  }
+});
+
+// ---------- LOTE STAGING DE PRODUCTO (trabajo completo, SIN PUSH) ----------
+// Flujo: el cliente sube la foto de su producto → Posty lee su estilo (visión)
+// → genera varias escenas que combinan con el producto intacto → el cliente
+// elige → queda como borrador EN REVISIÓN (nunca se programa solo).
+// Carrusel (solo mueble para vender): el cliente elige escena por escena con
+// corazón cuáles sí y cuáles no; solo las elegidas, en el orden elegido,
+// componen el carrusel final. Con 0 elegidas no hay carrusel ni borrador.
+// Costo: ~USD 0.063 por escena (gpt-image-2 medium, costs.js) + visión
+// gpt-4o-mini. Topes: assertAiOk + rate regen/día + 1 generación por formato
+// por sesión. La fidelidad la guarda fidelityGate (producto intacto o la
+// escena se cae: la foto cruda NUNCA se entrega como escena).
+const stagingMod = require('./product-staging');
+
+app.post('/api/staging/analizar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const assetId = Number((req.body && req.body.asset_id) || 0);
+    if (!assetId) return res.status(400).json({ ok: false, error: 'Falta la foto' });
+    const asset = db.prepare('SELECT id, file_path FROM assets WHERE id = ? AND user_id = ?').get(assetId, uid);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    const abs = path.join(MEDIA_DIR, path.basename(String(asset.file_path || '')));
+    if (!fs.existsSync(abs)) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    const key = openaiKeyFor(uid);
+    if (!key) return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
+    const mime = /\.png$/i.test(abs) ? 'image/png' : /\.webp$/i.test(abs) ? 'image/webp' : 'image/jpeg';
+    const b64 = fs.readFileSync(abs).toString('base64');
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-4o-mini', max_tokens: 200,
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: 'Describí el producto de esta foto para armarle escenas que combinen. Respondé SOLO con JSON: {"producto":"sillón gris de tela","estilo":"minimal frío, tela gris, patas negras de metal","paleta":"gris, negro, cemento","es_mueble_venta":true,"motivo":"mueble en primer plano, foto tipo catálogo"} — producto: qué es, en pocas palabras. estilo: materiales, colores y estilo en 25 palabras o menos. paleta: colores en palabras, separados por coma. es_mueble_venta: true SOLO si es un mueble (sillón, silla, mesa, cama, armario, escritorio, estantería, butaca) fotografiado para vender (en primer plano, foto tipo catálogo o de producto); false para comida, ropa, locales, personas, paisajes o un living entero sin un mueble protagonista.' },
+          { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}` } },
+        ] }], }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const j = await r.json().catch(() => null);
+    try { costs.trackUsage({ feature: 'staging-analizar', model: 'gpt-4o-mini', json: j }); } catch (e) {}
+    const raw = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
+    const nota = parseLooseJson(raw) || {};
+    const producto = String(nota.producto || '').trim();
+    const estilo = String(nota.estilo || '').trim();
+    if (!producto || !estilo) return res.status(502).json({ ok: false, error: 'No se pudo leer el estilo del producto' });
+    const paleta = String(nota.paleta || '').trim();
+    const esMueble = stagingMod.esMuebleVenta(nota) ? 1 : 0;
+    const ins = db.prepare('INSERT INTO staging_sesiones (user_id, asset_id, producto, estilo, paleta, es_mueble_venta) VALUES (?,?,?,?,?,?)').run(uid, assetId, producto, estilo, paleta, esMueble);
+    res.json({ ok: true, sesion_id: ins.lastInsertRowid, producto, estilo, paleta, es_mueble_venta: !!esMueble });
+  } catch (e) {
+    console.error('[staging-analizar]', e.message);
+    res.status(500).json({ ok: false, error: 'No se pudo analizar la foto' });
+  }
+});
+
+app.post('/api/staging/generar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const sesionId = Number((req.body && req.body.sesion_id) || 0);
+    const formato = (req.body && req.body.formato) === 'carrusel' ? 'carrusel' : 'escenas';
+    const ses = db.prepare('SELECT * FROM staging_sesiones WHERE id = ? AND user_id = ?').get(sesionId, uid);
+    if (!ses) return res.status(404).json({ ok: false, error: 'Sesión no encontrada' });
+    if (formato === 'carrusel' && !ses.es_mueble_venta) return res.status(400).json({ ok: false, error: 'El carrusel es solo para muebles para vender' });
+    const col = formato === 'carrusel' ? 'carrusel_json' : 'escenas_json';
+    if (ses[col]) return res.status(409).json({ ok: false, error: 'Esta sesión ya tiene sus ' + (formato === 'carrusel' ? 'escenas de carrusel' : 'escenas') });
+    try { costs.assertAiOk(uid); } catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    if (!costs.checkRate(uid, 'regen', aiLimitsFor(uid).regensPerDay).ok) return res.json({ ok: false, error: costs.MSG_REGEN_RATE });
+    const asset = db.prepare('SELECT file_path FROM assets WHERE id = ? AND user_id = ?').get(ses.asset_id, uid);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    const baseRef = path.join(MEDIA_DIR, path.basename(String(asset.file_path || '')));
+    if (!fs.existsSync(baseRef)) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    const key = openaiKeyFor(uid);
+    if (!key) return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
+    const note = refRoles.buildRefNote(['product']);
+    const escenas = stagingMod.escenasPara(formato);
+    const paths = []; let fallidas = 0;
+    for (const esc of escenas) {
+      try {
+        const prompt = stagingMod.buildScenePrompt({ fidelityClause: refRoles.FIDELITY_CLAUSE, producto: ses.producto, estilo: ses.estilo, paleta: ses.paleta, scene: esc.scene });
+        let b64 = await genConceptImage(key, prompt, [baseRef], note, uid, '1024x1280', null, 'product-staging');
+        const gate = await fidelityGate({ uid, key, baseAbs: baseRef, resultB64: b64,
+          regen: () => genConceptImage(key, prompt + '\n\n' + refRoles.FIDELITY_REINFORCE, [baseRef], note, uid, '1024x1280', null, 'product-staging') });
+        if (gate.status === 'passed' && gate.b64) b64 = gate.b64;
+        else if (gate.status === 'unverified' && gate.b64) b64 = gate.b64;
+        else { fallidas++; continue; } // fallback o fallo: la foto cruda NO es una escena, esa escena se cae y se informa
+        paths.push('/media/' + saveImageB64(b64));
+      } catch (e) { console.error('[staging-generar]', esc.id, e.message); fallidas++; }
+    }
+    if (!paths.length) return res.status(502).json({ ok: false, error: 'No se pudo armar ninguna escena' });
+    db.prepare(`UPDATE staging_sesiones SET ${col} = ? WHERE id = ?`).run(JSON.stringify(paths), sesionId);
+    res.json({ ok: true, sesion_id: sesionId, formato, escenas: paths, fallidas, es_mueble_venta: !!ses.es_mueble_venta });
+  } catch (e) {
+    console.error('[staging-generar]', e.message);
+    res.status(500).json({ ok: false, error: 'No se pudieron generar las escenas' });
+  }
+});
+
+app.post('/api/staging/elegir', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const sesionId = Number((req.body && req.body.sesion_id) || 0);
+    const ses = db.prepare('SELECT * FROM staging_sesiones WHERE id = ? AND user_id = ?').get(sesionId, uid);
+    if (!ses) return res.status(404).json({ ok: false, error: 'Sesión no encontrada' });
+    if (ses.elegida) return res.status(409).json({ ok: false, error: 'Esta sesión ya tiene su borrador' });
+    const en = langOfUser(uid) === 'en';
+    const caption = en ? `"${ses.producto}", in a space that matches.` : `"${ses.producto}", en un espacio que combina.`;
+    let postId = 0;
+    if (req.body && req.body.carrusel) {
+      const generadas = JSON.parse(ses.carrusel_json || '[]');
+      const arm = stagingMod.armarCarrusel(generadas, (req.body && req.body.escenas) || []);
+      if (arm.error) return res.status(400).json({ ok: false, error: arm.error === 'sin_elegidas' ? (en ? 'Pick at least one scene.' : 'Elegí al menos una escena.') : 'Escena inválida' });
+      const ins = db.prepare("INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, carousel_paths, needs_review, source, tipo, strategy_why) VALUES (?,?,?,'','draft','carousel',?,1,'staging','foto','Borrador de staging: el mismo producto en varias escenas')").run(uid, arm.paths[0], caption, JSON.stringify(arm.paths));
+      postId = ins.lastInsertRowid;
+    } else {
+      const paths = JSON.parse(ses.escenas_json || '[]');
+      const idx = Number((req.body && req.body.indice) || 0);
+      if (!Array.isArray(paths) || !paths[idx]) return res.status(400).json({ ok: false, error: 'Primero armá las escenas y elegí una' });
+      const ins = db.prepare("INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, tipo, strategy_why) VALUES (?,?,?,'','draft','image',1,'staging','foto','Borrador de staging: el producto en una escena que combina')").run(uid, paths[idx], caption);
+      postId = ins.lastInsertRowid;
+    }
+    db.prepare('UPDATE staging_sesiones SET elegida = 1 WHERE id = ?').run(sesionId);
+    res.json({ ok: true, post_id: postId });
+  } catch (e) {
+    console.error('[staging-elegir]', e.message);
+    res.status(500).json({ ok: false, error: 'No se pudo guardar el borrador' });
   }
 });
 
@@ -26515,7 +26913,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v572';
+const BUILD_ID = '20261101-v573';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -4679,3 +4679,25 @@ body.pz-postchat-open{overflow:hidden}
   box-shadow: 0 0 0 1px rgba(39,147,200,.35), 0 10px 30px rgba(39,147,200,.35);
   color: #0A1E33;
 }
+
+/* LOTE STAGING — magia de Posty al aparecer cada escena nueva (solo entrada).
+   Destellos ✦ de 4 puntas dorados #FEC14D y celestes #2793C8, nunca puntos
+   ni polvo. pointer-events:none: nunca tapa el contenido ni demora el toque.
+   La animación corre UNA vez y termina invisible (forwards a opacity 0):
+   no hay animación permanente. Con reduced-motion se anula todo. */
+.stg-magia{position:absolute;pointer-events:none;font-size:16px;line-height:1;z-index:2;animation:stgMagiaIn .85s ease-out forwards}
+@keyframes stgMagiaIn{0%{opacity:0;transform:scale(.4) rotate(0deg)}25%{opacity:1;transform:scale(1.15) rotate(20deg)}100%{opacity:0;transform:scale(.9) rotate(40deg)}}
+@media (prefers-reduced-motion: reduce){.stg-magia{animation:none;display:none}}
+
+/* LOTE SUBIR-FOTO-TODO — vidrio celeste futurista opción 2 (misma receta
+   que botones-glass): degradado celeste, blur 18 saturate 1.6, borde
+   blanco .85, glow celeste, texto navy. Tarjetas grandes, un toque. */
+.pz-sft-card{display:flex;gap:12px;align-items:flex-start;text-align:left;width:100%;border:none;cursor:pointer;font-family:inherit;border-radius:18px;padding:14px 13px;background:linear-gradient(135deg,rgba(39,147,200,.28),rgba(39,147,200,.12));backdrop-filter:blur(18px) saturate(1.6);-webkit-backdrop-filter:blur(18px) saturate(1.6);border:1px solid rgba(255,255,255,.85);box-shadow:0 0 0 1px rgba(39,147,200,.35),0 10px 26px rgba(39,147,200,.28);color:#0A1E33}
+.pz-sft-card b{font-size:15.5px;display:block}
+.pz-sft-card span span{font-size:12.5px;color:#47617A;line-height:1.4;display:block;margin-top:2px}
+.pz-sft-soft{border:1px solid rgba(255,255,255,.9);background:rgba(255,255,255,.7);color:#0A1E33;border-radius:999px;padding:10px 14px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit}
+/* Magia SOLO en la entrada: destellos ✦ dorados/celestes, nunca puntos ni
+   polvo; una sola vez, termina invisible; reduced-motion la anula. */
+.pz-sft-magia{position:absolute;pointer-events:none;font-size:18px;line-height:1;z-index:2;animation:pzSftMagiaIn .9s ease-out forwards}
+@keyframes pzSftMagiaIn{0%{opacity:0;transform:scale(.4) rotate(0deg)}25%{opacity:1;transform:scale(1.15) rotate(20deg)}100%{opacity:0;transform:scale(.9) rotate(40deg)}}
+@media (prefers-reduced-motion: reduce){.pz-sft-magia{animation:none;display:none}}
