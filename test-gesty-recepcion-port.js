@@ -122,7 +122,8 @@ function main() {
   ok('ruta: atendido usa cumplirEvento', serverJs.includes("vistas/atendido") && serverJs.includes('gestyAgenda.cumplirEvento'));
   ok('app: gzAtendido existe', appJs.includes('async function gzAtendido'));
   ok('app: Esperando ahora siempre visible', appJs.includes('Esperando ahora') && appJs.includes('Nadie esperando por ahora.'));
-  ok('app: upsell Sumar un agente en Ajustes', appJs.includes('Sumar un agente') && appJs.includes('gzUpsellGestyProbar') && appJs.includes('gz-upsell-contacto'));
+  // SUPERSEDED (lote ajustes-simple-2, decisión Valentino 2/11): el upsell 'Sumar un agente' se ELIMINÓ de Ajustes; la función gzUpsellGestyProbar queda definida pero sin llamadores a propósito.
+  ok('app: upsell Sumar un agente ELIMINADO de Ajustes', !appJs.includes('Sumar un agente') && appJs.includes('gzUpsellGestyProbar'));
   ok('app: gating gesty_contratado en Oficina/Prueba/Negocio/Ajustes', (appJs.match(/gesty_contratado === false/g) || []).length >= 4);
   ok('app: sin palabra de café hardcodeada (la especialización es por rubro, no por default)', !appJs.includes('Su mesa está lista'));
   ok('app: tarjeta Tipo de negocio + guardar', appJs.includes('Tipo de negocio') && appJs.includes('gzTipoGuardar') && appJs.includes('gz-tipo-select'));

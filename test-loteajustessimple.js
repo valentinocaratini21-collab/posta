@@ -31,19 +31,23 @@ function countLines(src, sub) {
 }
 
 // ---------- 1. Orden de tarjetas: Notificaciones primero, Más tras Mi plan ----------
+// SUPERSEDED (lote ajustes-simple-2, decisión Valentino 2/11): visibles solo
+// Notificaciones, Tu negocio, Mi plan; el resto queda detrás de un solo
+// botón «Más ajustes» que revela el bloque. El menú «Más» viejo ya no existe.
 const oNotif = idx(chunkSrc, 'id="ajsec-notif"');
 const oNeg = idx(chunkSrc, 'id="ajsec-negocio"');
 const oAuto = idx(chunkSrc, 'id="ajsec-auto"');
 const oPlan = idx(chunkSrc, 'id="ajsec-plan"');
-const oMas = idx(chunkSrc, 'id="ajsec-mas"');
+const oMas2 = idx(chunkSrc, 'id="ajsec-mas2"');
+const oWrap = idx(chunkSrc, 'id="ajsec-mas2-wrap"');
 const oConex = idx(chunkSrc, 'id="ajsec-conex"');
 const oMarca = idx(chunkSrc, 'id="ajsec-marca"');
 const oPag = idx(chunkSrc, 'id="ajsec-pagina"');
 const oSem = idx(chunkSrc, 'id="ajsec-semana"');
 const oRef = idx(chunkSrc, 'id="ajsec-referidos"');
-ok(oNotif < oNeg && oNeg < oAuto && oAuto < oPlan, 'orden: Notificaciones, Negocio, Automático, Plan');
-ok(oPlan < oMas && oMas < oConex, 'Más va tras Mi plan y antes de Conexiones');
-ok(oConex < oMarca && oMarca < oPag && oPag < oSem && oSem < oRef, 'secundarias en orden: Conexiones, Marca, Página, Semana, Referidos');
+ok(oNotif < oNeg && oNeg < oPlan, 'orden visible: Notificaciones, Negocio, Plan');
+ok(oPlan < oMas2 && oMas2 < oWrap && oWrap < oAuto, 'Más ajustes tras Mi plan; resto detrás del bloque');
+ok(oAuto < oConex && oConex < oMarca && oMarca < oPag && oPag < oSem && oSem < oRef, 'secundarias en orden: Automático, Conexiones, Marca, Página, Semana, Referidos');
 ok(chunkSrc.indexOf('id="ajsec-notif"') !== -1, 'tarjeta Notificaciones existe');
 
 // ---------- 2. Sin acordeones ----------
@@ -55,9 +59,13 @@ ok(cssSrc.indexOf('.card.ajsec.ajflat>.ajsec-b{display:block}') !== -1, 'CSS: aj
 ok(cssSrc.indexOf('.card.ajsec.ajflat>.ajsec-h{cursor:default') !== -1, 'CSS: header plano sin cursor pointer');
 
 // ---------- 3. Filas Más ----------
-for (const t of ['conex', 'pagina', 'semana', 'marca', 'referidos', 'preview']) {
+// SUPERSEDED (lote ajustes-simple-2, decisión Valentino 2/11): el menú viejo
+// se reemplaza por un solo botón; solo la fila preview sobrevive como fila.
+for (const t of ['preview']) {
   ok(chunkSrc.indexOf('data-ajmas="' + t + '"') !== -1, 'fila Más: ' + t);
 }
+ok(chunkSrc.indexOf('id="btnAjMas2"') !== -1, 'botón único Más ajustes');
+ok(chunkSrc.indexOf('id="ajsec-mas2-wrap" hidden') !== -1, 'bloque Más nace oculto');
 ok(chunkSrc.indexOf("$$('.ajmas-row')") !== -1, 'handler de filas Más');
 ok(chunkSrc.indexOf("getElementById('btnPreview')") !== -1, 'fila IA abre Vista previa');
 ok(chunkSrc.indexOf('ajDeepSec') !== -1, 'deep-link scrollea (ajDeepSec)');
@@ -88,7 +96,7 @@ ok(serverSrc.indexOf('has_native_push_sub: nativeSubs > 0') !== -1, 'servidor de
 ok(serverSrc.indexOf('has_push_sub: subs > 0') !== -1, 'servidor conserva has_push_sub');
 
 // ---------- 7. Espejo EN ----------
-for (const s of ["'Notifications'", "'Activate notifications'", "'More'", "'Notifications on in your phone.'"]) {
+for (const s of ["'Notifications'", "'Activate notifications'", "'More settings'", "'Notifications on in your phone.'"]) {
   ok(chunkSrc.indexOf(s) !== -1, 'EN presente: ' + s);
 }
 
@@ -109,7 +117,8 @@ n += 6;
 console.log('ok - helper ajPushNativeOn: 6 casos');
 
 // ---------- 9. Censo intacto (app.js y server.js no pierden marcadores) ----------
-assert.strictEqual(countLines(appSrc, 'pzGoBack'), 4, 'censo app pzGoBack 4');
+// PIN ROTADO (liberación ajustes-simple-2, causa: censo v589 real 6, no 4 de v559; chats v566 sumaron llamadores; el lote no toca pzGoBack).
+assert.strictEqual(countLines(appSrc, 'pzGoBack'), 6, 'censo app pzGoBack 6');
 assert.strictEqual(countLines(appSrc, 'pz-detalle-setup'), 1, 'censo app pz-detalle-setup 1');
 assert.strictEqual(countLines(appSrc, 'pcDayKeyShift'), 7, 'censo app pcDayKeyShift 7');
 assert.strictEqual(countLines(appSrc, 'autofetch'), 0, 'censo app autofetch 0');
@@ -117,7 +126,8 @@ assert.strictEqual(countLines(appSrc, '/aprobar'), 1, 'censo app /aprobar 1');
 assert.strictEqual((serverSrc.match(/catsMatch/g) || []).length, 3, 'censo server catsMatch 3');
 assert.strictEqual((serverSrc.match(/week-redo/g) || []).length, 16, 'censo server week-redo 16');
 assert.strictEqual((serverSrc.match(/first_week/g) || []).length, 3, 'censo server first_week 3');
-assert.strictEqual(countLines(serverSrc, '/aprobar'), 16, 'censo server /aprobar 16');
+// PIN ROTADO (liberación ajustes-simple-2, causa: censo v589 real 17, no 16 de v559; espejo v582 sumó la ruta; el lote no toca /aprobar).
+assert.strictEqual(countLines(serverSrc, '/aprobar'), 17, 'censo server /aprobar 17');
 n += 9;
 console.log('ok - censo intacto: 9 pines');
 

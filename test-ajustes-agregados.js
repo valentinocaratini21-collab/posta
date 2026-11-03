@@ -202,7 +202,8 @@ async function partA() {
     const iAuto = chunkSrc.indexOf("pzIc('bolt', 20)} Posty en automático");
     const iPre = chunkSrc.indexOf('id="btnPreNotifyToggle"');
     ok(iNotif > 0 && iNotif < iAuto && iPre > iNotif, 'chunk: Notificaciones va primera y el aviso pre-publicación vive SOLO ahí');
-    const autoSeg = chunkSrc.slice(iAuto, chunkSrc.indexOf('id="ajsec-plan"'));
+    // SEGMENTO ACTUALIZADO (lote ajustes-simple-2, decisión Valentino 2/11: Mi plan va ANTES de Automático, que quedó dentro del bloque Más; el viejo slice auto→plan daba vacío). El intento del assert no cambia: Pausar todo vive en Automático y el aviso pre-publicación no.
+    const autoSeg = chunkSrc.slice(iAuto, chunkSrc.indexOf('id="ajsec-conex"'));
     ok(autoSeg.includes('id="btnPauseAll"') && !autoSeg.includes('Aviso antes de publicar'), 'chunk: Pausar todo arriba de Automático; el aviso ya no está en Automático');
     ok(chunkSrc.includes('id="closedDaysRow"') && chunkSrc.includes('closed_days:'), 'chunk: selector de días de cierre presente y en el guardado');
     ok(chunkSrc.includes('/api/settings/notify-prefs') && chunkSrc.includes('/api/autopilot/pause-all') && chunkSrc.includes('/api/autopilot/resume-all'), 'chunk: llama a los tres endpoints nuevos');

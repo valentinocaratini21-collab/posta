@@ -204,6 +204,13 @@ function ajustesView() {
       <p class="hint" style="margin:6px 0 0 4px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'For your Instagram highlights — download each cover and set it in Instagram.' : 'Para tus destacadas de Instagram: descargá cada cubierta y ponela en Instagram.'}</p>
     </div>
   </div></div>
+  <div class="card ajsec ajflat" id="ajsec-plan"><div class="ajsec-h"><h3>${pzIc('card', 20)} Mi plan</h3>${stPlan}</div><div class="ajsec-b">
+    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
+    <p style="font-size:12.5px;color:var(--mut);margin-top:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</p>
+    <div id="founderZone"></div>
+  </div></div>
+  <div class="card ajsec ajflat" id="ajsec-mas2"><div class="ajsec-b"><button type="button" class="btn btn-ghost btn-block" id="btnAjMas2">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'More settings' : 'Más ajustes'} <span>›</span></button></div></div>
+  <div id="ajsec-mas2-wrap" hidden>
   <div class="card ajsec ajflat" id="ajsec-auto"><div class="ajsec-h"><h3>${pzIc('bolt', 20)} Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">⏸ Pausar todo</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">¿Vacaciones o una semana sin publicar? Frená todo con un toque: lo programado vuelve a borrador y nada sale hasta que reanudes. Tu semana y tus borradores quedan guardados, tal como están.</p>
@@ -242,19 +249,6 @@ function ajustesView() {
       <span id="bilingualWeekStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     </div>
-  </div></div>
-  <div class="card ajsec ajflat" id="ajsec-plan"><div class="ajsec-h"><h3>${pzIc('card', 20)} Mi plan</h3>${stPlan}</div><div class="ajsec-b">
-    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
-    <p style="font-size:12.5px;color:var(--mut);margin-top:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</p>
-    <div id="founderZone"></div>
-  </div></div>
-    <div class="card ajsec ajflat" id="ajsec-mas"><div class="ajsec-h"><h3>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'More' : 'Más'}</h3></div><div class="ajsec-b">
-    <button type="button" class="ajmas-row" data-ajmas="conex">${pzIc('plug', 16)} Conexiones <span>›</span></button>
-    <button type="button" class="ajmas-row" data-ajmas="pagina">${pzIc('globe', 16)} Tu página <span>›</span></button>
-    <button type="button" class="ajmas-row" data-ajmas="semana">${pzIc('link', 16)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'} <span>›</span></button>
-    <button type="button" class="ajmas-row" data-ajmas="marca">${pzIc('palette', 16)} Tu marca y estilos <span>›</span></button>
-    ${IS_NATIVE ? '' : `<button type="button" class="ajmas-row" data-ajmas="referidos">${pzIc('gift', 16)} Referidos · 50% off <span>›</span></button>`}
-    <button type="button" class="ajmas-row" data-ajmas="preview">${pzIc('bot', 16)} Cómo me ve la IA <span>›</span></button>
   </div></div>
 <div class="card ajsec ajflat" id="ajsec-conex"><div class="ajsec-h"><h3>${pzIc('plug', 20)} Conexiones</h3>${stIg}</div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">${pzIc('camera', 16)} Instagram</div>
@@ -364,8 +358,11 @@ function ajustesView() {
     </div>
     <button class="btn btn-primary" id="btnSaveSettings">Guardar</button> <span id="setMsg"></span>
   </details>
+  <div class="card ajsec ajflat" id="ajsec-mas2-preview"><div class="ajsec-b"><button type="button" class="ajmas-row" data-ajmas="preview">${pzIc('bot', 16)} Cómo me ve la IA <span>›</span></button></div></div>
+  </div>
   <div class="card" style="margin-top:16px"><button class="btn btn-danger btn-block" id="btnLogoutAj">${pzIc('logout', 18)} Salir</button></div>
-  <div id="gzAjustesBox"></div>`;
+  <div id="gzAjustesBox"></div>
+  <div class="card ajsec ajflat" id="ajsec-posty"><div class="ajsec-h"><h3>Posty · Community Manager</h3><span class="ajsec-st">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Your agent' : 'Tu agente'}</span></div></div>`;
 }
 
 
@@ -660,6 +657,20 @@ function ajPushNativeOn(r) {
   return false;
 }
 
+function pzAjMas2Mostrar() {
+  const w = document.getElementById('ajsec-mas2-wrap');
+  if (w) w.hidden = false;
+  const b = document.getElementById('btnAjMas2');
+  if (b) b.innerHTML = ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Fewer settings' : 'Menos ajustes') + ' <span>‹</span>';
+}
+function pzAjMas2Toggle() {
+  const w = document.getElementById('ajsec-mas2-wrap');
+  if (!w) return;
+  if (w.hidden) { pzAjMas2Mostrar(); return; }
+  w.hidden = true;
+  const b = document.getElementById('btnAjMas2');
+  if (b) b.innerHTML = ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'More settings' : 'Más ajustes') + ' <span>›</span>';
+}
 function bindSettings() {
   // (ARMA TODO ítem 1) plan=error ya se mostró en ajustesView: limpiamos el
   // parámetro para que un refresh no resucite el aviso. Diferido a propósito:
@@ -687,7 +698,9 @@ function bindSettings() {
     return '';
   };
   const ajDeep = ajDeepSec();
-  if (ajDeep) setTimeout(() => { try { const el = document.getElementById('ajsec-' + ajDeep); if (el) el.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' }); } catch (e) {} }, 120);
+  if (ajDeep) setTimeout(() => { try { const el = document.getElementById('ajsec-' + ajDeep); if (el) { const w = document.getElementById('ajsec-mas2-wrap'); if (w && w.contains(el)) pzAjMas2Mostrar(); el.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' }); } } catch (e) {} }, 120);
+  const btnAjMas2 = document.getElementById('btnAjMas2');
+  if (btnAjMas2) btnAjMas2.onclick = () => pzAjMas2Toggle();
   $$('.ajmas-row').forEach(btn => {
     btn.onclick = () => {
       const t = btn.getAttribute('data-ajmas');
@@ -703,7 +716,8 @@ function bindSettings() {
   try { styleGalleryLoad(); } catch (e) {}
   try { gustosZoneLoad(); } catch (e) {}
   // (fix chunk-ajustes v487) La caja Gesty vive en #gzAjustesBox (arriba, en ajustesView):
-  // gzAjustesFill la llena con Tipo/Conexiones/Bloqueos o el upsell "Sumar un agente".
+  // gzAjustesFill la llena con Tipo/Conexiones/Bloqueos (lote ajustes-simple-2:
+  // sin upsell: sin Gesty contratado ni en prueba, la caja queda vacía).
   // POSTY SOLO (TestFlight build 4): sin caja Gesty ni upsell en Ajustes.
   // --- Página pública del negocio (v169) ---
   const btnCopyPage = $('#btnCopyPage');
