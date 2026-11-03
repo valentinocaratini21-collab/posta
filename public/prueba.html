@@ -2268,6 +2268,7 @@ function buildGenFormData() {
   if (window.OC_ANS) {
     fd.append('producto_estrella', OC_ANS.producto_estrella || '');
     fd.append('producto_mix', OC_ANS.producto_mix || '');
+    if (window.OC_DETECTADOS) fd.append('productos_detectados', JSON.stringify(window.OC_DETECTADOS));
     fd.append('cta', OC_ANS.cta || '');
     fd.append('promo', OC_ANS.promo || '');
     fd.append('voz', OC_ANS.voz || '');
@@ -2297,6 +2298,9 @@ async function runGeneration() {
     // (v323 · pieza 8) Candado sin snapshot: el servidor responde 409 con
     // el mensaje amable y la fecha exacta — no es un error, es la tarjeta.
     if (data && data.trial_locked) { trackerStop(); showLockCard(data); return; }
+    // (rubro-literal) Sin producto evidenciado: volver a la pregunta 1
+    // en vez de mostrar un error genérico.
+    if (data && data.falta_producto && window.OC_REASK_Q1) { trackerStop(); window.OC_REASK_Q1(); return; }
     if (!res.ok) throw new Error(data.error || 'No pudimos armar tu prueba');
     // Que el tracker se vea completo aunque el backend haya sido rápido
     const wait = Math.max(0, 9000 - (Date.now() - t0));
@@ -2511,6 +2515,8 @@ function onStreamError(d) {
   if (STREAM_ERRORED) return;
   STREAM_ERRORED = true;
   trackerStop();
+  // (rubro-literal) Igual que en el clásico: falta el producto -> re-preguntar.
+  if (d && d.falta_producto && window.OC_REASK_Q1) { window.OC_REASK_Q1(); return; }
   $('#rStreamText').textContent = 'Algo salió mal 😅';
   $('#rStreamErrMsg').textContent = ((d && d.error) || 'No pudimos armar tu semana.') + ' Probá de nuevo 🙂';
   $('#rStreamErr').style.display = 'block';
@@ -4200,6 +4206,13 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     qWeb2: '¿Cuál es tu web?',
     todo: 'de todo un poco',
     todoSub: 'un poco de todo, sin un único fuerte',
+    libre: 'Escribilo con tus palabras',
+    libreSub: 'decímelo vos, así sale literal',
+    chatQ1Libre: 'dale, escribí qué vendés con tus palabras.',
+    q1Libre: '¿Qué vendés?',
+    librePh: 'escribí qué vendés',
+    libreErr: 'escribí qué vendés para armar tu semana.',
+    chatQ1Need: 'todavía me falta saber qué vendés. escribilo con tus palabras y armamos tu semana de verdad.',
     otro: 'otro rubro',
     otroSub: 'elegilo de la lista completa',
     back: 'volver',
@@ -4384,17 +4397,40 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     });
   }
 
-  function screenQ1() {
+  function screenQ1(chat) {
     var opts = (S.products || []).map(function (p) { return { v: p.nombre, l: p.nombre, foto: p.foto || null }; });
+    opts.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
     opts.push({ v: '__todo__', l: T.todo, sub: T.todoSub });
-    renderScreen((S.products || []).length ? T.chatQ1 : T.chatQ1Empty, T.q1, opts, {
+    renderScreen(chat || ((S.products || []).length ? T.chatQ1 : T.chatQ1Empty), T.q1, opts, {
       onPick: function (v) {
+        if (v === '__libre__') { screenQ1Libre(chat); return; }
         if (v === '__todo__') { S.ans.q1 = ''; S.ans.q1mix = 'todo'; }
         else { S.ans.q1 = v; S.ans.q1mix = 'uno'; }
         advance();
       },
       onBack: goBack
     });
+  }
+
+  // (rubro-literal) Escritura libre: el dueño dice qué vende con sus
+  // palabras y eso viaja literal (q1mix 'libre'), sin mapear a categoría.
+  function screenQ1Libre(chat) {
+    renderFieldScreen(chat || T.chatQ1Libre, T.q1Libre, T.librePh, T.nextBtn, function (val) {
+      var t = (val || '').trim();
+      if (!t) { screenErr(T.libreErr); return; }
+      S.ans.q1 = t.slice(0, 60); S.ans.q1mix = 'libre'; advance();
+    }, function () { screenQ1(); });
+  }
+
+  // (rubro-literal) Puente para el front exterior: si el servidor frena
+  // la generación con falta_producto, se vuelve a la pregunta 1 (sin
+  // borrar el resto de respuestas) para pedir el dato con un toque.
+  function reaskQ1() {
+    S.ans.q1 = undefined; S.ans.q1mix = undefined;
+    S.qi = S.plan.indexOf('q1');
+    if (S.qi < 0) { S.qi = 0; }
+    show('v-ocq');
+    screenQ1(T.chatQ1Need);
   }
 
   function currentScreen() {
@@ -4444,6 +4480,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       promo_semana: true
     };
     window.OC_CAT = S.ans.rubro || S.cat || window.OC_CAT || null;
+    window.OC_DETECTADOS = (S.products || []).map(function (p) { return p.nombre; }).filter(Boolean).slice(0, 4);
+    window.OC_REASK_Q1 = reaskQ1;
     try { trk('prueba_step', { step: 'oc_sprout' }); } catch (e) {}
     setTimeout(function () { runGeneration(); }, reduced ? 300 : 900);
   }
@@ -4463,7 +4501,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + ig; } catch (e) {}
       // El rubro confirmado por el dueño manda sobre lo detectado.
       if (!S.ans.rubro) { S.cat = d.category || null; if (S.cat) window.OC_CAT = S.cat; }
-      S.products = d.productos || [];
+      // (rubro-literal) No borrar: si la segunda fuente no trae
+      // productos, se conservan los de la primera (antes, un web sin
+      // servicios borraba los productos minados de la bio del IG).
+      if ((d.productos || []).length) S.products = d.productos;
       if (d.rubro_check && d.rubro_check.needed) { S.rubroOptions = d.rubro_check.options || []; }
       else { S.rubroOptions = undefined; }
       if (S.source === 'email') { while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++; }
@@ -4488,7 +4529,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       TRIAL_BIZ = S.biz; TRIAL_DESC = d.description || '';
       // El rubro confirmado por el dueño manda sobre lo detectado.
       if (!S.ans.rubro) { S.cat = d.category || null; if (S.cat) window.OC_CAT = S.cat; }
-      S.products = d.productos || [];
+      // (rubro-literal) No borrar: si la segunda fuente no trae
+      // productos, se conservan los de la primera (antes, un web sin
+      // servicios borraba los productos minados de la bio del IG).
+      if ((d.productos || []).length) S.products = d.productos;
       if (d.rubro_check && d.rubro_check.needed) { S.rubroOptions = d.rubro_check.options || []; }
       else { S.rubroOptions = undefined; }
       if (S.source === 'email') { while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++; }
@@ -4513,6 +4557,9 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
 
   function startFromField() {
     if (S.busy) return;
+    // (rubro-literal) Entrada fresca: se resetean los productos (la
+    // segunda fuente, en cambio, no borra: ver no-wipe en studyIg/Web).
+    S.products = [];
     var f = document.getElementById('oc_field');
     var val = (f && f.value || '').trim();
     if (!val) { entryErr(S.mode === 'web' ? T.errWeb : T.errEmail); return; }

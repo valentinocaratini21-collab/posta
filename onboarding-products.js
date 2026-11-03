@@ -32,8 +32,13 @@ function wordsOf(s) {
 }
 
 // Productos reales del negocio, máximo 4, sin duplicados.
-// Orden: servicios tal como vienen de la web; si no hay, bio minada.
-function detectProducts({ bio, captions, services } = {}) {
+// Orden: servicios tal como vienen de la web; si no hay, bio minada;
+// si tampoco hay, descripción de la web minada (rubro-literal: un negocio
+// que describe su oferta en prosa —sin lista de servicios— quedaba con
+// productos [] aunque su web sí dijera qué vende; ese era el caso del
+// primo). Los captions siguen sin aportar productos por diseño (aportan
+// temas): minar prosa de captions metería slogans como si fueran oferta.
+function detectProducts({ bio, captions, services, description } = {}) {
   let names = [];
   if (Array.isArray(services) && services.length) {
     names = services.filter((s) => isPlausibleOfferItem(s)).map((s) => String(s).trim()).filter(Boolean);
@@ -41,6 +46,12 @@ function detectProducts({ bio, captions, services } = {}) {
   if (!names.length && bio) {
     try {
       const mined = offeringsFromText(bio);
+      names = (mined && mined.items) || [];
+    } catch (e) { names = []; }
+  }
+  if (!names.length && description) {
+    try {
+      const mined = offeringsFromText(description);
       names = (mined && mined.items) || [];
     } catch (e) { names = []; }
   }

@@ -23532,7 +23532,13 @@ function onboardingAnswersFrom(fields) {
 }
 function onboardingAnswersOk(a, opts) {
   if (!a) return false;
-  if (a.producto_mix !== 'todo' && !(a.producto_mix === 'uno' && a.producto_estrella)) return false;
+  // (rubro-literal) 'libre' = el dueño escribió qué vende con sus palabras:
+  // vale como estrella, y viaja literal al fundamento (nunca se mapea a
+  // una categoría vecina). 'todo' sin estrella sigue pasando acá: la
+  // evidencia real se exige después, con web/catálogo/detectados a mano
+  // (trialHasEvidencedProducts, puerta fail-closed antes de generar).
+  if (a.producto_mix === 'uno' || a.producto_mix === 'libre') { if (!a.producto_estrella) return false; }
+  else if (a.producto_mix !== 'todo') return false;
   if (!OC_CTA.includes(a.cta)) return false;
   if (!OC_PROMO.includes(a.promo)) return false;
   if (!OC_VOZ.includes(a.voz)) return false;
@@ -23540,11 +23546,18 @@ function onboardingAnswersOk(a, opts) {
   if (!opts.ig && !opts.web && !OC_DONDE.includes(a.donde)) return false;
   return true;
 }
-function onboardingGoalLines(a, lang) {
+function onboardingGoalLines(a, lang, detectados) {
   const en = lang === 'en';
   if (!a) return [];
   const lines = [];
-  if (a.producto_mix === 'todo') lines.push(en ? 'Mix: a bit of everything, no single star product' : 'Mix: de todo un poco, sin un único producto estrella');
+  const det = Array.isArray(detectados) ? detectados.map((x) => String(x || '').trim()).filter(Boolean) : [];
+  if (a.producto_mix === 'todo') {
+    lines.push(en ? 'Mix: a bit of everything, no single star product' : 'Mix: de todo un poco, sin un único producto estrella');
+    // (rubro-literal) 'todo' CON productos detectados genera DESDE esos
+    // productos: se nombran para que temas e ideas no caigan a genéricos.
+    if (det.length) lines.push((en ? 'Detected products (from their IG/web): ' : 'Productos detectados (de su IG/web): ') + det.join(', '));
+  }
+  else if (a.producto_mix === 'libre' && a.producto_estrella) lines.push((en ? 'Literal product (written by the owner): ' : 'Producto literal (escrito por el dueño): ') + a.producto_estrella);
   else if (a.producto_estrella) lines.push((en ? 'Star product (chosen by the owner): ' : 'Producto estrella (elegido por el dueño): ') + a.producto_estrella);
   if (a.cta) lines.push((en ? 'Post goal: ' : 'Objetivo del posteo: ') + ({ reservar: en ? 'bookings' : 'reservas', escribirte: en ? 'messages' : 'mensajes', local: en ? 'store visits' : 'visitas al local', comprar: en ? 'purchases' : 'compras' }[a.cta] || a.cta));
   if (a.promo && a.promo !== 'ninguna') lines.push((en ? 'Real promo this week: ' : 'Promo real esta semana: ') + ({ porcentaje: en ? '% off' : '% de descuento', '2x1': '2x1', envio: en ? 'free shipping' : 'envío gratis' }[a.promo] || a.promo));
@@ -23552,6 +23565,35 @@ function onboardingGoalLines(a, lang) {
   if (a.precios) lines.push((en ? 'Prices in posts: ' : 'Precios en posteos: ') + ({ si: en ? 'yes' : 'sí', ofertas: en ? 'only on offers' : 'solo en ofertas', no: 'no' }[a.precios] || a.precios));
   if (a.donde) lines.push((en ? 'Where to find them: ' : 'Dónde lo encuentran: ') + ({ whatsapp: 'WhatsApp', instagram: 'Instagram', local: en ? 'at the store' : 'en el local', web: en ? 'on their website' : 'en su web' }[a.donde] || a.donde));
   return lines;
+}
+
+// (rubro-literal) Productos detectados que el front vio en la pregunta 1
+// (lista que el propio servidor produjo en prefill): se sanean y se topan.
+// No es una vía de confianza para contenido — el fundamento ya confía en
+// todo el formulario —, es la evidencia que sostiene un 'de todo un poco'.
+function trialParseDetectados(raw) {
+  try {
+    const arr = JSON.parse(String(raw || '[]'));
+    if (!Array.isArray(arr)) return [];
+    return arr.map((x) => String(x == null ? '' : x).trim().slice(0, 60)).filter(Boolean).slice(0, 10);
+  } catch (e) { return []; }
+}
+
+// (rubro-literal) PUERTA FAIL-CLOSED, pura y testeable: ¿hay al menos un
+// producto evidenciado para generar la semana? 'uno'/'libre' con estrella
+// = el dueño eligió o escribió un producto (evidencia directa). 'todo'
+// solo vale si hay productos reales detrás: servicios de la web, ítems
+// del catálogo profundo o productos detectados del prefill. Sin nada de
+// eso, la semana NO se genera (el front vuelve a pedir el dato con un
+// toque). Nunca un posteo sobre un producto que no está en el fundamento.
+function trialHasEvidencedProducts(x) {
+  const o = x || {};
+  const mix = String(o.mix || '');
+  const estrella = String(o.estrella || '').trim();
+  if ((mix === 'uno' || mix === 'libre') && estrella) return true;
+  if (mix !== 'todo') return false;
+  const list = (a) => (Array.isArray(a) ? a.map((s) => String(s == null ? '' : (s.nombre || s)).trim()).filter(Boolean) : []);
+  return list(o.servicios).length > 0 || list(o.catalogItems).length > 0 || list(o.detectados).length > 0;
 }
 
 function trialLockGate(fields, webData, testMode) {
@@ -23719,6 +23761,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // gastar IA. El serve de semana existente (caché/candado) no genera y
   // queda intacto: esto solo cierra la creación sin respuestas.
   const ocAns = onboardingAnswersFrom(fields);
+  const ocDetectados = trialParseDetectados(fields.productos_detectados);
   if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
     return res.status(400).json({ error: lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio' });
   }
@@ -23730,7 +23773,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados)].filter(Boolean).join('\n');
   // Colores: si el visitante mandó (ya no se pide en el form), se usan; si no,
   // intentamos los colores REALES de su perfil de Instagram (best-effort) y
   // si no se puede, cae a la paleta curada de su rubro.
@@ -23883,6 +23926,15 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
     const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal, deep, rubro: rubroRes, onboarding: ocAns });
+    // (rubro-literal) PUERTA FAIL-CLOSED: sin producto evidenciado no hay
+    // semana. 'todo' sin servicios, sin catálogo y sin detectados = el
+    // caso del primo (Q1 vacía): 400 con falta_producto para que el front
+    // vuelva a pedir el dato con un toque, en vez de armar una semana con
+    // temas genéricos. La estacionalidad (CyberMonday y demás) solo viste
+    // semanas que existen: sin semana, no viste nada.
+    if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados })) {
+      return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
+    }
     const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang });
     // 🧠 Análisis (2026-10-19): misma radiografía que la ruta stream. Si los
     // datos del @ no llegan, el análisis queda ausente — jamás se afirma un
@@ -24151,7 +24203,7 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
   // Las fotos del sitio se hotlinkean directo (son del propio negocio);
   // si alguna no carga, la tarjeta queda con el nombre (onerror).
   const ocProductos = onboardingProducts.mapProductPhotos(
-    onboardingProducts.detectProducts({ services: data.services || [] }),
+    onboardingProducts.detectProducts({ services: data.services || [], description: data.description || '' }),
     (data.photos || []).map((p) => ({ url: p.url, text: [p.alt || '', String(p.url || '').split('?')[0].split('/').pop() || ''].join(' ') })).filter((x) => x.url)
   );
   res.json({
@@ -24199,7 +24251,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch (e) {}
   };
   const finish = () => { if (!closed) { try { res.end(); } catch (e) {} } };
-  const fail = (msg) => { send('error', { error: msg }); finish(); };
+  const fail = (msg, extra) => { send('error', { error: msg, ...(extra || {}) }); finish(); };
 
   let fields, file;
   try {
@@ -24247,6 +24299,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
 
   // (onboarding un clic) SIN ATAJO, igual que en /api/trial/generate.
   const ocAns = onboardingAnswersFrom(fields);
+  const ocDetectados = trialParseDetectados(fields.productos_detectados);
   if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
     fail(lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio');
     return;
@@ -24257,7 +24310,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados)].filter(Boolean).join('\n');
   const pal = demo.CATEGORY_COLORS[category] || demo.CATEGORY_COLORS.otro;
   const hexOk = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || '').trim());
   let accent = hexOk(fields.accent) ? String(fields.accent).trim().toUpperCase() : pal[0];
@@ -24591,6 +24644,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
       formText: richGoal, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns,
     });
+    // (rubro-literal) PUERTA FAIL-CLOSED, igual que en /api/trial/generate:
+    // sin producto evidenciado no hay semana ni stream de piezas.
+    if (!trialTestMode(req) && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados })) {
+      fail(lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', { falta_producto: true });
+      return;
+    }
     // (v379 · ítem 5 — reaplicado en v382) DIAGNÓSTICO EXPRESS: la paleta
     // completa del feed, su registro lumínico y su línea YA se calculan
     // durante la espera (feedPalette/feedRegister y el fundamento de
@@ -26913,7 +26972,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v580';
+const BUILD_ID = '20261101-v581';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
