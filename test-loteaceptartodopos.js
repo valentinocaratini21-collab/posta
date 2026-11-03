@@ -84,7 +84,11 @@ ok(!APP.includes("acceptPillHTML(pzAcceptWeekCands.length, 'hfAcceptAllWeek')"),
   ok(iBar > 0 && iChat > 0 && iStack > 0, 'plantilla: barra, stack y chat presentes');
   ok(iStack > 0 && iStack < iBar && iBar < iChat, 'plantilla: orden stack → barra → chat (barra ENCIMA del chat)');
   ok(!iv.includes('id="mzPlus"') && iv.includes('id="mzChatOpen"') && iv.includes('id="mzMic"'), 'CHATBAR-MAS (Valentino 3/11): + de la barra SALIO, campo y mic intactos');
-  ok(iv.includes("hf-acceptbar-on") && iv.includes("pzAcceptWeekCands.length ? ' hf-acceptbar-on' : ''"), 'plantilla: clase de despeje solo con pendientes');
+  // (POSTEO-DEL-DIA 3/11, con causa: la barra salio de la plantilla de
+  // Inicio y Aceptar todo vive en el encabezado por inicio-3; la clase
+  // de despeje ya no se agrega en la plantilla, solo queda la limpieza
+  // runtime pzAcceptBarOff fuera de inicioView.)
+  ok(!iv.includes("pzAcceptWeekCands.length ? ' hf-acceptbar-on' : ''"), 'plantilla: sin clase de despeje (la barra salio; Aceptar todo vive en el encabezado)');
   ok(iv.indexOf('${pzAcceptWeekHTML}') > iv.indexOf('${gridHTML}'), 'barra va tras la grilla en la plantilla');
   ok(!iv.includes('${stripHTML}'), 'píldora vieja de borradores NO se inserta (sigue muerta)');
   ok(iv.includes('</div>\n  </div>\n  <div class="mz-sheet"'), 'stack se cierra antes de la hoja del chat');

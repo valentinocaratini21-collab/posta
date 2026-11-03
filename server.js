@@ -10454,8 +10454,10 @@ app.post('/api/week/first-redo', requireAuth, requireTrialValid, (req, res) => {
 // Fix auditoría #2 (2026-09-30): "⚡ Rearmar mi semana" del welcome honesto.
 // La importación de /prueba trajo 0 (cache vencido / payload roto, marcado en
 // users.trial_import_n): se genera la semana de nuevo en segundo plano con el
-// perfil que ya quedó aplicado al registrarse. Responde al toque; el push
-// "Tu semana está lista ✨" avisa cuando los borradores aparecen.
+// perfil que ya quedó aplicado al registrarse. Responde al toque; los
+// borradores aparecen en segundo plano y cada posteo lo anuncia su push
+// matutina por día de posteo-del-día (NOTIFICACIONES POR DÍA 3/11: ya no
+// hay push «Tu semana está lista» en lote).
 app.post('/api/trial/rebuild-import', requireAuth, requireTrialValid, (req, res) => {
   const uid = req.session.userId;
   try {
@@ -12511,13 +12513,11 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     if (imgFailCount > 0 && created < picks.length) {
       try { recordSweepFailure(uid, weekKey, 'img_fail'); } catch (e) {}
     }
-    // Push "tu semana está lista": avisar en el celu para que la revise.
-    // quiet (FASE 2): el sweep de nivel 0 manda el email con preview + botón
-    // "Publicar semana" en su lugar — el push exigiría entrar a la app.
-    if (created > 0 && !quiet) {
-      try { push.sendPush(uid, { title: 'Tu semana está lista ✨', body: 'Posty armó tus posteos: revisalos y aprobá 👇', url: '/#/app/semana' }).catch(() => {}); }
-      catch (e) { /* el push nunca bloquea */ }
-    }
+    // (NOTIFICACIONES POR DÍA 3/11, corrección Valentino: ya no se sube la
+    // semana completa, se sube por día) Sin aviso en lote al generarse la
+    // semana: el anuncio del contenido pasa a ser la push matutina por día
+    // de posteo-del-día («Tu posteo de hoy ya está 👇», 9:00 zona cuenta).
+    // Silencio hasta el primer día.
     // Historias + reels del plan: reusan las imágenes recién generadas.
     // Va en try/catch propio: si falla, el autopilot de feed queda intacto.
     // 2026-10-16: generateWeekExtras es idempotente (genera solo el
@@ -12567,7 +12567,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         const rA = scheduleAllDrafts(uid);
         if (rA && rA.ok && rA.scheduled && rA.scheduled.length) {
           console.log(`[pipeline:${tag}] piloto automático total: usuario ${uid}: ${rA.scheduled.length} posteos programados solos`);
-          try { push.sendPush(uid, { title: 'Tu semana se publica sola ✨', body: `${rA.scheduled.length} posteos quedaron programados en sus mejores horarios.`, url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+          // (NOTIFICACIONES POR DÍA 3/11) Sin push «se publica sola» en lote:
+          // el autopiloto publica un posteo por día y ya lo cubren el aviso
+          // de 30 min y la push de publicado, que son por posteo.
         }
       }
     } catch (e) { console.error(`[pipeline:${tag}] piloto automático:`, e.message); }
@@ -12649,9 +12651,10 @@ async function nextWeekSweep() {
             emailed = !!(er && er.ok);
           } catch (e) { console.error('[next-week sweep] week preview:', e.message); }
           if (!emailed) {
-            // Fallback: el push de siempre (mejor que silencio si no hay email).
-            try { push.sendPush(u.id, { title: 'Tu semana está lista ✨', body: 'Posty armó tus posteos: revisalos y aprobá 👇', url: '/#/app/semana' }).catch(() => {}); }
-            catch (e) { /* el push nunca bloquea */ }
+            // (NOTIFICACIONES POR DÍA 3/11) Sin push de respaldo en lote:
+            // la semana ya no se anuncia completa; cada posteo lo anuncia
+            // su push matutina por día de posteo-del-día. El email (arriba)
+            // queda fuera de este lote y no se toca.
           }
         }
         // 🚀 Abrir y listo: la semana semanal también se programa sola.
@@ -13146,15 +13149,10 @@ async function autoArmWeek(uid, tag) {
     const r = scheduleAllDrafts(uid);
     if (!r.ok) { console.log(`[auto-arm:${tag}] usuario ${uid}: ${r.reason}`); return r; }
     console.log(`[auto-arm:${tag}] usuario ${uid}: ${r.scheduled.length} programados 🚀`);
-    // 3) Aviso "tu semana está lista".
-    try {
-      const n = r.scheduled.length;
-      push.sendPush(uid, {
-        title: 'Tu semana está lista 🎉',
-        body: `${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario. Tocá para verla 👀`,
-        url: '/#/app/semana',
-      }).catch(() => {});
-    } catch (e) { /* el push nunca bloquea */ }
+    // 3) (NOTIFICACIONES POR DÍA 3/11) Sin aviso «tu semana está lista» en
+    // lote: la semana ya no se anuncia completa; cada posteo lo anuncia su
+    // push matutina por día de posteo-del-día. El email (abajo) queda fuera
+    // de este lote y no se toca.
     try {
       const em = require('./notify-email');
       if (em && em.sendWeekReady) em.sendWeekReady(db, uid, r.scheduled.length);
@@ -27467,7 +27465,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v590';
+const BUILD_ID = '20261101-v591';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

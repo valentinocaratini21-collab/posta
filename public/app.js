@@ -18265,6 +18265,95 @@ function hfTileChipParts(txt, en) {
   } catch (e) { return null; }
 }
 
+// (LOTE POSTEO-DEL-DIA · hero de la manana + reveal por dia)
+// La semana se sigue armando entera por dentro; cambia solo la ENTREGA:
+// cada manana el posteo de hoy protagoniza y los futuros de la semana
+// actual quedan colapsados (CSS). Solo presentacion: no se borra, mueve
+// ni reprograma ningun posteo. «Hoy» = zona de la cuenta (pcTz);
+// prohibido el +24h absoluto. Visitante: sin hero.
+function pzDiaHoyKey(tz, now) {
+  try {
+    const d = now ? (now instanceof Date ? now : new Date(now)) : new Date();
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString('en-CA', tz ? { timeZone: tz } : {});
+  } catch (e) { return ''; }
+}
+function pzDiaClavePost(p, tz) {
+  try {
+    if (!p || !p.scheduled_at) return '';
+    let d = null;
+    if (typeof pcParseDate === 'function') d = pcParseDate(p.scheduled_at);
+    if (!d) { const s = String(p.scheduled_at).replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }
+    if (!d || isNaN(d)) return '';
+    if (typeof schedDayKeyOf === 'function') return schedDayKeyOf(d, tz);
+    return d.toLocaleDateString('en-CA', tz ? { timeZone: tz } : {});
+  } catch (e) { return ''; }
+}
+function pzDiaEsFutura(p, hoyKey, lunesKey) {
+  try {
+    if (!p || p.status !== 'scheduled' || !p.scheduled_at || !hoyKey || !lunesKey) return false;
+    const tz = (typeof pcTz === 'function') ? pcTz() : undefined;
+    const k = pzDiaClavePost(p, tz);
+    if (!k || k <= hoyKey) return false;
+    const d0 = new Date(lunesKey + 'T12:00:00Z');
+    const d1 = new Date(k + 'T12:00:00Z');
+    if (isNaN(d0) || isNaN(d1)) return false;
+    const diff = Math.round((d1 - d0) / 86400000);
+    return diff >= 0 && diff <= 6;
+  } catch (e) { return false; }
+}
+function pzDiaPostHoy(posts, tz, now) {
+  try {
+    const hoy = pzDiaHoyKey(tz, now);
+    if (!hoy) return null;
+    const cands = (Array.isArray(posts) ? posts : []).filter((p) => p && p.status === 'scheduled' && p.scheduled_at && pzDiaClavePost(p, tz) === hoy);
+    if (!cands.length) return null;
+    cands.sort((a, b) => String(a.scheduled_at).localeCompare(String(b.scheduled_at)));
+    return cands[0];
+  } catch (e) { return null; }
+}
+function pzDiaAprobado(p) {
+  try {
+    if (!p) return false;
+    if (String(p.approval) === 'approved') return true;
+    if (typeof pzAprobadoEs === 'function') return pzAprobadoEs(p.id);
+    return false;
+  } catch (e) { return false; }
+}
+function pzDiaDismissKey(hoyKey) { return 'posta-dia-hero-' + String(hoyKey || ''); }
+function pzDiaDismissHoy(hoyKey) {
+  try {
+    if (typeof localStorage === 'undefined' || !hoyKey) return false;
+    return localStorage.getItem(pzDiaDismissKey(hoyKey)) === '1';
+  } catch (e) { return false; }
+}
+function pzDiaHeroHTML(post, o) {
+  try {
+    const opts = o || {};
+    if (!post || opts.dismissed) return '';
+    const en = !!opts.en;
+    const aprobado = !!opts.aprobado;
+    const isV = String(post.media_type || '') === 'video';
+    let media = '';
+    if (post.image_path) {
+      media = isV
+        ? `<video src="${esc(post.image_path)}" muted playsinline loop preload="metadata" onerror="__vidFb(this)"></video>`
+        : `<img src="${esc(post.image_path)}" loading="lazy" alt="" onerror="__imgFb(this)">`;
+    } else {
+      const cap = String(post.caption || '').replace(/\s+/g, ' ').trim();
+      media = `<span class="pz-dia-sinimg">${esc(cap || (en ? 'Image on its way' : 'imagen en camino'))}</span>`;
+    }
+    let chip = '';
+    try { chip = (typeof hfWhenChip === 'function') ? (hfWhenChip(post) || '') : ''; } catch (e) {}
+    const magia = `<span class="pz-dia-magia" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span>`;
+    const estado = aprobado
+      ? `<span class="pz-dia-estado pz-dia-ok">✓ ${en ? 'Ready, goes out today' : 'Listo, sale hoy'}</span>`
+      : `<span class="pz-dia-estado">${en ? 'Scheduled for today' : 'Programado para hoy'}</span>`;
+    const aceptar = aprobado ? '' : `<button type="button" class="btn btn-primary pz-dia-aceptar" data-pz-dia-accept="${esc(String(post.id))}">${en ? 'Accept' : 'Aceptar'}</button>`;
+    return `<div id="pzDiaHero" class="pz-dia-hero${aprobado ? ' pz-dia-listo' : ''}">${magia}<button type="button" class="pz-dia-x" data-pz-dia-x aria-label="${en ? 'Close' : 'Cerrar'}">×</button><div class="pz-dia-foto">${media}</div><div class="pz-dia-titulo">${en ? "Today's post" : 'El posteo de hoy'}</div>${chip ? `<div class="pz-dia-chip">${esc(chip)}</div>` : ''}${estado}<div class="pz-dia-acciones">${aceptar}<button type="button" class="btn btn-ghost" data-pz-dia-cambiar="${esc(String(post.id))}">${en ? 'Change something' : 'Cambiar algo'}</button></div></div>`;
+  } catch (e) { return ''; }
+}
+
 function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
@@ -18409,7 +18498,17 @@ function homeTileHTML(t, i) {
   const hfAprobado = (String(p.status) === 'draft' || String(p.status) === 'scheduled') && (typeof pzAprobadoEs === 'function') && pzAprobadoEs(p.id);
   const tikSpan = hfAprobado ? '<span class="hf-tik" aria-hidden="true">✓</span>' : '';
   const filtroGrupo = (p.status === 'draft' || p.status === 'scheduled') ? 'pendientes' : (p.status === 'published' ? 'publicados' : ''); // (LOTE FILTRO-FEED)
-  return `<span class="hf-cell" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : likeBtn}${tikSpan}</span></span>`;
+  // (LOTE POSTEO-DEL-DIA · marca de semana futura) Programado de la semana actual con dia posterior a hoy: la celda se colapsa (CSS, solo #inicioView). Fijados no se colapsan; visitante, borrador, publicado y sin fecha tampoco. Sin helpers o sin fecha, sin marca: nunca se esconde por duda.
+  let diaFuturaCls = '';
+  try {
+    if (!t.visitor && !p.pinned && p.status === 'scheduled' && p.scheduled_at && typeof pzDiaEsFutura === 'function') {
+      const tzDia = (typeof pcTz === 'function') ? pcTz() : undefined;
+      const hoyDia = (typeof pzDiaHoyKey === 'function') ? pzDiaHoyKey(tzDia) : '';
+      const lunDia = (typeof albumMondayKey === 'function') ? albumMondayKey() : '';
+      if (pzDiaEsFutura(p, hoyDia, lunDia)) diaFuturaCls = ' pz-dia-futura';
+    }
+  } catch (e) {}
+  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : likeBtn}${tikSpan}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -19363,6 +19462,22 @@ async function inicioView() {
   // menos un aprobado). Visitante nunca lo ve.
   const pzSemanaOk = (!HF_VISITOR) ? pzSemanaAprobadaState(tiles, (typeof albumMondayKey === 'function') ? albumMondayKey() : '').show : false;
   const pzSemanaOkHTML = pzSemanaOk ? pzSemanaAprobadaHTML(enHome) : '';
+  // (LOTE POSTEO-DEL-DIA · hero de la manana en inicioView) El posteo de
+  // hoy (programado, zona de la cuenta) protagoniza encima de la grilla;
+  // los programados futuros de la semana actual se colapsan (marca
+  // pz-dia-futura). Solo presentacion. Visitante: sin hero. Sin posteo
+  // hoy, sin hero. Con X, no vuelve ese dia (localStorage por dia).
+  // El hero manda sobre proximo-destacado: si hay hero, no se rinde
+  // la tarjeta del proximo. Aceptar todo sigue en el encabezado
+  // (inicio-3): el hero convive con ese boton, no lo duplica.
+  let pzDiaHeroHTML2 = '';
+  try {
+    if (!HF_VISITOR) {
+      const diaHoy = pzDiaHoyKey(tz);
+      const diaPost = pzDiaPostHoy(schedPosts, tz);
+      if (diaPost && !pzDiaDismissHoy(diaHoy)) pzDiaHeroHTML2 = pzDiaHeroHTML(diaPost, { en: enHome, aprobado: pzDiaAprobado(diaPost), dismissed: false });
+    }
+  } catch (e) {}
   // (v440 · SOLO FEED) La nota del kit de nacimiento (hf-kitnote) SALIÓ
   // del flujo principal de Inicio: con perfil kit, el encabezado y la
   // grilla ya muestran la propuesta; la nota competía con el feed.
@@ -19410,14 +19525,15 @@ async function inicioView() {
   let portTopInicio = '';
   if (!HF_VISITOR && nivelPosty) { try { portTopInicio = await mxPortTop(nivelPosty.poderes, nivelPosty, 'posty'); } catch (e) { portTopInicio = ''; } }
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
-  return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}${pzAcceptWeekCands.length ? ' hf-acceptbar-on' : ''}${HF_FILTRO === 'pendientes' ? ' hf-filtro-pendientes' : HF_FILTRO === 'publicados' ? ' hf-filtro-publicados' : ''}">
+  return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}${HF_FILTRO === 'pendientes' ? ' hf-filtro-pendientes' : HF_FILTRO === 'publicados' ? ' hf-filtro-publicados' : ''}">
   ${portTopInicio}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: !HF_VISITOR })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
   ${hfTabsHTML(HF_TAB, enHome)}
+  ${pzDiaHeroHTML2}
   ${HF_VISITOR ? '' : pzSemanaEtiquetaHTML(new Date(), tz, enHome)}
   ${pzSemanaOkHTML}
-  ${(!HF_VISITOR ? pzProximoDestacadoHTML(allPosts, enHome) : '')}
+  ${(!HF_VISITOR && !pzDiaHeroHTML2 ? pzProximoDestacadoHTML(allPosts, enHome) : '')}
   ${filtroHTML}
   ${gridHTML}
   ${tiles.length ? `<p class="hf-nota">${enHome ? pzIc('heart', 14) + ' Tap the heart to approve each post. They all go out on their date, unless you ask for a change.' : pzIc('heart', 14) + ' Tocá el corazón para aprobar el posteo. Todos salen en su fecha, salvo que pidas un cambio.'}</p>` : ''}
@@ -23019,6 +23135,22 @@ function bindInicio() {
   hfLikeBind(document.getElementById('inicioView'));
   try { hfProfileBind(document.getElementById('inicioView')); } catch (e) {}
   hfDurBind(document.getElementById('inicioView'));
+  // (LOTE POSTEO-DEL-DIA · bindings del hero) X descarta por hoy;
+  // Aceptar = mismo camino que el corazon de la tile (manual: aprueba;
+  // autopiloto: deja constancia, el posteo igual sale hoy); Cambiar
+  // algo abre la aprobacion/detalle con su mini-chat.
+  try {
+    $$('#inicioView [data-pz-dia-x]').forEach((b) => { b.onclick = () => { try { const k = pzDiaHoyKey(pcTz()); if (k) localStorage.setItem(pzDiaDismissKey(k), '1'); } catch (e) {} const h = document.getElementById('pzDiaHero'); if (h) h.remove(); }; });
+    $$('#inicioView [data-pz-dia-accept]').forEach((b) => { b.onclick = async () => {
+      const id = b.getAttribute('data-pz-dia-accept');
+      const tile = document.querySelector('.hf-tile[data-post-id="' + String(id) + '"]');
+      const found = (typeof HF_TILES !== 'undefined' ? HF_TILES : []).find((t) => t && t.kind === 'post' && String(t.post.id) === String(id));
+      if (tile) { try { await hfTileApprove(tile, found ? found.post : null); } catch (e) {} }
+      const hero = document.getElementById('pzDiaHero');
+      if (hero) { hero.classList.add('pz-dia-listo'); const acc = hero.querySelector('[data-pz-dia-accept]'); if (acc) acc.remove(); const st = hero.querySelector('.pz-dia-estado'); if (st) st.textContent = ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? '✓ Ready, goes out today' : '✓ Listo, sale hoy'); }
+    }; });
+    $$('#inicioView [data-pz-dia-cambiar]').forEach((b) => { b.onclick = () => { const id = b.getAttribute('data-pz-dia-cambiar'); if (id) location.hash = '#/app/post/' + encodeURIComponent(id); }; });
+  } catch (e) {}
   // Franja de revisión: "Aceptar todo" — el handler de siempre
   // (doAcceptAll completa los ítems desde REVIEW_DRAFTS, que
   // inicioView ya cargó con todos los borradores de la cuenta).

@@ -625,6 +625,18 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[publish-watchdog] no se pudo programar:', e.message);
   }
+  // (LOTE POSTEO-DEL-DIA · push matutina del posteo de hoy)
+  // PUSH MATUTINA: barrido cada 15 min; la ventana es la hora 9:00 en
+  // zona de la cuenta (decision Valentino 2/11 ~21:09) y el dedup por
+  // dia viven en morning-post-push.js. Sin posteo hoy, silencio. La
+  // primera pasada tras las 9:00 envia (llega 9:00-9:15 local).
+  try {
+    const mpp = require('./morning-post-push');
+    cron.schedule('*/15 * * * *', () => {
+      mpp.sendMorningPostPush(db).catch((e) => console.error('[morning-post-push]', e.message));
+    });
+    console.log('[posta] Push matutina del posteo del dia: barrido cada 15 min');
+  } catch (e) { console.error('[morning-post-push] no se pudo programar:', e.message); }
   // Recordatorio semanal por email: lunes 10:00 (Buenos Aires).
   // Solo a quienes tienen cuenta y NO instalaron la app en el teléfono.
   try {
@@ -2129,7 +2141,7 @@ async function weeklyWowSummary(db) {
         const { sendPush } = require('./push');
         await sendPush(u.id, {
           title: '🎉 Tu semana en Posty',
-          body: `${n} posteos publicados. Tocá para ver cómo te fue.`,
+          body: `Esta semana publicaste ${n} posteos, uno por día. Tocá para ver cómo te fue.`,
           url: '/#/app/semana',
         });
       } catch (e) {}
@@ -2312,4 +2324,4 @@ async function postyWeeklyDigest(db) {
   }
 }
 
-module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, autopilotPreNotify, sweepOverduePosts: publishWatchdog.sweep, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendTrialCloseNotices, sendFirstPublishEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily, postyWeeklyDigest, activationNudge, firstPublishNudge, celebrateWinsChat };
+module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, autopilotPreNotify, sweepOverduePosts: publishWatchdog.sweep, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendTrialCloseNotices, sendFirstPublishEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily, postyWeeklyDigest, activationNudge, firstPublishNudge, celebrateWinsChat, sendMorningPostPush: require('./morning-post-push').sendMorningPostPush };
