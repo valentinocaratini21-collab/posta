@@ -4296,6 +4296,35 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-postchat-body #chatAnchor{flex:none}
 .pz-postchat-body .chat-input-row{flex:none}
 body.pz-postchat-open{overflow:hidden}
+/* ============================================================
+   LOTE PEDIR-CAMBIO-LINDO (2/11): diseño del mock v1 sobre la
+   pantalla de chat del posteo. Hero sin cortar + pregunta +
+   tarjetas glass celeste (opción 2). El ancla original se oculta
+   SOLO dentro de .pz-postchat-body; fuera de la pantalla vuelve
+   a verse como siempre. Magia solo en la entrada (one-shot).
+   ============================================================ */
+.pz-pc-hero{flex:none;padding:0 14px 8px}
+.pz-pc-hero-imgwrap{position:relative;border-radius:22px;overflow:hidden;background:rgba(255,255,255,.45);box-shadow:0 14px 34px rgba(10,30,51,.18);max-height:26vh;display:flex;align-items:center;justify-content:center}
+.pz-pc-hero-img{width:100%;height:100%;max-height:26vh;object-fit:contain;display:block}
+.pz-pc-hero-ph{min-height:110px}
+.pz-pc-spark{position:absolute;top:12px;right:16px;color:#FEC14D;font-size:22px;text-shadow:0 0 12px rgba(254,193,77,.9);animation:pzPcSpark 1.4s ease-out forwards;pointer-events:none}
+.pz-pc-spark.s2{top:42px;right:44px;color:#fff;font-size:13px;animation-delay:.15s}
+@keyframes pzPcSpark{from{opacity:0;transform:scale(.4)}30%{opacity:1;transform:scale(1.15)}to{opacity:0;transform:scale(1) translateY(-6px)}}
+@media (prefers-reduced-motion: reduce){.pz-pc-spark{display:none}}
+.pz-pc-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pz-pc-chip{font-size:12.5px;color:#0A1E33;background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.8);border-radius:999px;padding:6px 11px}
+.pz-pc-q{font-size:19px;font-weight:800;color:#0A1E33;margin:12px 0 0;line-height:1.25}
+.pz-pc-sub{font-size:13.5px;color:#47617A;margin-top:4px}
+.pz-pc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.pz-pc-card{border:1px solid rgba(255,255,255,.85);border-radius:18px;padding:13px 12px;text-align:left;font-family:inherit;cursor:pointer;color:#0A1E33;background:linear-gradient(135deg,rgba(39,147,200,.28),rgba(39,147,200,.12));box-shadow:0 0 0 1px rgba(39,147,200,.35),0 10px 26px rgba(39,147,200,.28);backdrop-filter:blur(18px) saturate(1.6);-webkit-backdrop-filter:blur(18px) saturate(1.6)}
+.pz-pc-card:disabled{opacity:.45;cursor:default}
+.pz-pc-card i{font-style:normal;font-size:22px;display:block;margin-bottom:6px}
+.pz-pc-card b{font-size:14.5px;display:block}
+.pz-pc-card span{font-size:12px;color:#47617A}
+.pz-postchat-body #chatAnchor{display:none}
+.pz-postchat-body .chat-input-row .in{font-size:17px;padding:16px 20px}
+.pz-pc-note{text-align:center;font-size:12px;color:#47617A;padding:8px 8px 2px;flex:none}
+
 /* ============ LOTE CHAT SIMPLE (2026-11-01) ============ */
 /* La hoja de Inicio abraza su contenido (sin vacío blanco enorme):
    tarjeta a medida, mensajes con scroll interno, campo abajo siempre

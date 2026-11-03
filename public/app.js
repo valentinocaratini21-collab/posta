@@ -11931,6 +11931,12 @@ function pzPhMark(el) {
 }
 function pzChatPhNext() {
   try {
+    if (typeof PZ_PC_OPEN !== 'undefined' && PZ_PC_OPEN) {
+      var _en = false;
+      try { _en = pzPostChatIsEn(); } catch (e) {}
+      pzPhEls('#chatInput').forEach(function (el) { if (!el.value) el.placeholder = PZ_PC_EDIT_PH[_en ? 'en' : 'es']; });
+      return;
+    }
     const list = pzChatPhList();
     pzPhEls('#chatInput').forEach(el => pzPhAdvanceOne(el, list));
   } catch (e) {}
@@ -22352,6 +22358,85 @@ function pzPostChatEnsureLayer() {
   }
   return layer;
 }
+
+// (LOTE PEDIR-CAMBIO-LINDO 2/11) Diseño del mock v1 sobre la pantalla
+// de chat del posteo: hero sin cortar + pregunta + tarjetas glass.
+// No es un tercer chat: reutiliza #pzPostChat, hfAnchorChip y el campo
+// del #chatCard movido.
+var PZ_PC_OPEN = false;
+var PZ_PC_EDIT_PH = { es: 'qué le cambio a este posteo?', en: 'what do I change on this post?' };
+function pzPcStatusChip(p, en) {
+  try {
+    var st = String((p && p.status) || '');
+    if (st === 'scheduled') return en ? 'Pending' : 'Pendiente';
+    if (st === 'draft') return en ? 'Draft' : 'Borrador';
+    if (st === 'published') return en ? 'Published' : 'Publicado';
+  } catch (e) {}
+  return '';
+}
+function pzPcHeroHTML(post, en) {
+  var img = (post && (post.image_path || post.cover_path)) || '';
+  var imgHtml = '';
+  if (img) {
+    var big = img;
+    try { big = mv(img, 1080); } catch (e) {}
+    imgHtml = '<div class="pz-pc-hero-imgwrap"><img class="pz-pc-hero-img" src="' + esc(big) + '" alt="" data-full="' + esc(img) + '" onerror="__imgFb(this)">'
+      + '<span class="pz-pc-spark">✦</span><span class="pz-pc-spark s2">✦</span></div>';
+  } else {
+    imgHtml = '<div class="pz-pc-hero-imgwrap pz-pc-hero-ph"><span class="pz-pc-spark">✦</span></div>';
+  }
+  var when = '';
+  try { when = hfWhenChip(post) || ''; } catch (e) {}
+  var st = pzPcStatusChip(post, en);
+  var chips = '';
+  if (when) chips += '<span class="pz-pc-chip">' + esc(when) + '</span>';
+  if (st) chips += '<span class="pz-pc-chip">' + esc(st) + '</span>';
+  var redoDis = false;
+  try { redoDis = (hfRedoLeft(post) === 0); } catch (e) {}
+  var cards = ''
+    + '<button type="button" class="pz-pc-card" data-pz-pc-chip="photo"><i>🖼️</i><b>' + (en ? 'Change the photo' : 'Cambiar la foto') + '</b><span>' + (en ? 'Another image, another angle' : 'Otra imagen, otro ángulo') + '</span></button>'
+    + '<button type="button" class="pz-pc-card" data-pz-pc-chip="text"><i>✍️</i><b>' + (en ? 'Change the text' : 'Cambiar el texto') + '</b><span>' + (en ? 'The caption, the headline' : 'El caption, el titular') + '</span></button>'
+    + '<button type="button" class="pz-pc-card" data-pz-pc-chip="when"><i>🕖</i><b>' + (en ? 'Change the day/time' : 'Cambiar día y hora') + '</b><span>' + (en ? 'When it goes out' : 'Cuándo sale') + '</span></button>'
+    + '<button type="button" class="pz-pc-card" data-pz-pc-chip="redo"' + (redoDis ? ' disabled' : '') + '><i>🔄</i><b>' + (en ? 'Redo' : 'Rehacer') + '</b><span>' + (en ? 'From scratch, another idea' : 'De cero, con otra idea') + '</span></button>';
+  return imgHtml
+    + (chips ? '<div class="pz-pc-chips">' + chips + '</div>' : '')
+    + '<div class="pz-pc-q">' + (en ? 'What do I change on this post?' : '¿Qué le cambio a este posteo?') + '</div>'
+    + '<div class="pz-pc-sub">' + (en ? "Write it like you'd tell me on WhatsApp, or tap a shortcut." : 'Escribilo como me lo dirías por WhatsApp, o tocá un atajo.') + '</div>'
+    + '<div class="pz-pc-grid">' + cards + '</div>';
+}
+function pzPcRenderHero(post) {
+  try {
+    var layer = document.getElementById('pzPostChat');
+    var body = document.getElementById('pzPostChatBody');
+    if (!layer || !body) return;
+    var hero = document.getElementById('pzPcHero');
+    if (!hero) {
+      hero = document.createElement('div');
+      hero.id = 'pzPcHero';
+      hero.className = 'pz-pc-hero';
+      layer.insertBefore(hero, body);
+    }
+    hero.innerHTML = pzPcHeroHTML(post, pzPostChatIsEn());
+    var btns = hero.querySelectorAll('[data-pz-pc-chip]');
+    for (var i = 0; i < btns.length; i++) {
+      (function (b) {
+        b.onclick = function (e) { try { e.stopPropagation(); } catch (e2) {} try { hfAnchorChip(b.dataset.pzPcChip); } catch (e3) {} };
+      })(btns[i]);
+    }
+  } catch (e) {}
+}
+function pzPcClear() {
+  try {
+    var hero = document.getElementById('pzPcHero');
+    if (hero) hero.innerHTML = '';
+    var card = document.getElementById('chatCard');
+    if (card) { var n = card.querySelector('.pz-pc-note'); if (n) n.remove(); }
+  } catch (e) {}
+}
+function pzPcNoteHTML(en) {
+  return '<div class="pz-pc-note">' + (en ? 'Posty changes only this post · nothing goes out without your OK' : 'Posty lo cambia solo en este posteo · nada se publica sin tu OK') + '</div>';
+}
+
 function pzPostChatOpen(post) {
   if (!post || post.id == null) return false;
   var card = document.getElementById('chatCard');
@@ -22363,6 +22448,12 @@ function pzPostChatOpen(post) {
   if (!PZ_POSTCHAT_NODE) PZ_POSTCHAT_NODE = { card: card, parent: card.parentNode, next: card.nextSibling };
   try { hfSetAnchor(post); } catch (e) {}
   body.appendChild(card);
+  PZ_PC_OPEN = true;
+  try { pzPcRenderHero(post); } catch (e) {}
+  try {
+    var _row = card.querySelector('.chat-input-row');
+    if (_row && !card.querySelector('.pz-pc-note')) _row.insertAdjacentHTML('afterend', pzPcNoteHTML(pzPostChatIsEn()));
+  } catch (e) {}
   layer.hidden = false;
   layer.style.transform = '';
   try { document.body.classList.add('pz-postchat-open'); } catch (e) {}
@@ -22370,6 +22461,8 @@ function pzPostChatOpen(post) {
   try { chatScroll(); } catch (e) {}
   pzPostChatKbBind();
   pzPostChatKbSync();
+  var inp = document.getElementById('chatInput');
+  if (inp && !inp.value) { try { inp.placeholder = PZ_PC_EDIT_PH[pzPostChatIsEn() ? 'en' : 'es']; } catch (e) {} }
   var inp = document.getElementById('chatInput');
   if (inp) setTimeout(function () { try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} } }, 60);
   return true;
@@ -22403,6 +22496,8 @@ function pzPostChatClose() {
   if (!layer || layer.hidden) return;
   try { var inp = document.getElementById('chatInput'); if (inp) inp.blur(); } catch (e) {}
   layer.hidden = true;
+  PZ_PC_OPEN = false;
+  try { pzPcClear(); } catch (e) {}
   layer.style.transform = '';
   layer.style.height = '';
   layer.style.top = '';
