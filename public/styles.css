@@ -2817,14 +2817,6 @@ body.hf-sv-open{overflow:hidden}
 .sched-up-row{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}
 .sched-up-row .album-row-msg{flex:1 1 100%;margin-top:2px}
 .sched-up-row .album-row-msg:empty{min-height:0;margin-top:0}
-/* Chip de ideas (v236): pastilla tranquila junto al botón primario.
-   El badge tiene geometría FIJA reservada (22×22 siempre): el número
-   aparece/desaparece con visibility, jamás empuja el layout. */
-.ideas-chip{pointer-events:auto;border:1.5px solid var(--line);cursor:pointer;font-family:inherit;background:#fff;color:var(--txt);font-size:14.5px;font-weight:800;border-radius:999px;padding:12px 18px;display:inline-flex;align-items:center;gap:7px;touch-action:manipulation}
-.ideas-chip:active{transform:scale(.97)}
-.ideas-chip[aria-expanded="true"]{border-color:var(--cel);background:#EAF4FA}
-.ideas-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 22px;border-radius:999px;background:var(--cel);color:#fff;font-size:12px;font-weight:800;line-height:1}
-.ideas-badge.off{visibility:hidden}
 #hs-ideas.ideas-closed{display:none}
 .idea-comp-warn{flex:1 1 100%;margin-top:8px;font-size:12.5px;font-weight:700;color:#B3261E}
 
@@ -4344,7 +4336,6 @@ body.pz-postchat-open{overflow:hidden}
 /* Chips chicos SOLO en la hoja (Schedule conserva sus botones grandes). */
 .mz-sheet .sched-chips-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 2px;}
 .mz-sheet .sched-chips-row .ag-upload-btn{padding:8px 14px;font-size:13px;box-shadow:none;background:#fff;color:#0A1E33;border:1.5px solid var(--line);}
-.mz-sheet .sched-chips-row .ideas-chip{padding:8px 14px;font-size:13px;box-shadow:none;}
 
 /* LOTE JARDÍN · hero mosaico + slider (renders aprobados, nunca inventados) */
 .mx-hero-mosaico{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:6px}
@@ -4406,7 +4397,7 @@ body.pz-postchat-open{overflow:hidden}
 .pz-chatfull .chat-input-row .in{background:transparent;border:none;box-shadow:none}
 .pz-chatfull .chat-input-row .in:focus{border:none;box-shadow:none}
 .pz-chatfull .chat-plus-menu{background:rgba(255,255,255,.85);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
-.pz-chatfull .sched-chips-row .ag-upload-btn,.pz-chatfull .sched-chips-row .ideas-chip{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75)}
+.pz-chatfull .sched-chips-row .ag-upload-btn{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75)}
 @media(min-width:761px){.pz-chatfull{left:50%;right:auto;width:640px;margin-left:-320px}}
 
 /* (LOTE CHAT4S) Fundido del placeholder que rota: 360 ms (apaga,

@@ -63,7 +63,7 @@ t(app.includes('<div class="mz-sheet-body">${chatCardHTML(true, true, true, true
 t(app.includes('<div style="margin-top:18px">${chatCardHTML(true, true, true, true, true)}</div>'), 'Schedule: sigue con 5 args (botones grandes intactos)');
 t(css.includes('.mz-sheet .sched-chips-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 2px;}'), 'chips: fila chica en la hoja');
 t(css.includes('.mz-sheet .sched-chips-row .ag-upload-btn{padding:8px 14px;font-size:13px;'), 'chips: Subir chico en la hoja');
-t(css.includes('.mz-sheet .sched-chips-row .ideas-chip{padding:8px 14px;font-size:13px;'), 'chips: Ideas chico en la hoja');
+t(!css.includes('.mz-sheet .sched-chips-row .ideas-chip'), 'SACAR-IDEAS (Valentino 3/11): Ideas chico SALIO de la hoja con la píldora (el assert viejo que exigía su regla se actualiza con esta causa)');
 t(css.includes('.ag-upload-btn{pointer-events:auto;'), 'Schedule: botón grande base intacto');
 
 // ---------- 4) Sin animaciones nuevas (reduced-motion trivial) ----------
@@ -101,7 +101,7 @@ function sandboxChat(chat) {
     const sheet = sb.chatCardHTML(true, true, true, true, true, true);
     t(sheet.includes('sched-chips-row'), 'render hoja: fila de chips');
     t(!sheet.includes('sched-up-row'), 'render hoja: sin fila de botones grandes');
-    t(sheet.includes('id="agUploadBtn"') && sheet.includes('id="ideasChip"'), 'render hoja: mismos ids (handlers por id intactos)');
+    t(sheet.includes('id="agUploadBtn"'), 'render hoja: botón subir intacto (SACAR-IDEAS 3/11: la píldora Ideas salió de la fila; el assert viejo que exigía id="ideasChip" se actualiza con esta causa)');
     t(sheet.includes('id="albumFile"'), 'render hoja: input de álbum presente');
     t(sheet.includes('id="chatInput"') && sheet.includes('id="chatBox"'), 'render hoja: campo + caja de mensajes');
     t(sheet.includes('tenés 17 posteos'), 'render hoja: solo lo necesario, el mensaje de Posty');

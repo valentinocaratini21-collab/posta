@@ -99,7 +99,7 @@ t(view.includes('chatCardHTML(true, true, true, true, true, true)'), 'vista: MIS
 const bind = sliceFn(app, 'function bindChatFull()', '\n}\n');
 t(bind.includes('bindChat();'), 'bind: mismo bindChat de siempre');
 t(bind.includes('bindSchedUpload();'), 'bind: misma subida de Schedule');
-t(bind.includes("location.hash = '#/app/schedule';"), 'bind: Ideas va a Semana');
+t(!bind.includes("$('#ideasChip')"), 'SACAR-IDEAS (Valentino 3/11): bindChatFull SIN salto a Semana desde la píldora (el assert viejo que exigía ese salto se actualiza con esta causa)');
 t(bind.includes("sessionStorage.getItem('posty-chat-prefill')"), 'bind: mismo contrato prefill');
 t(bind.includes('__pzChatVoice'), 'bind: voz pendiente del dock');
 t(bind.includes('hfPaintAnchor();'), 'bind: pinta el ancla');
@@ -162,7 +162,8 @@ t(card.includes('id="chatPhotos"'), 'chatCard intacto: #chatPhotos');
 t(card.includes('id="chatProposal"'), 'chatCard intacto: #chatProposal');
 t(card.includes('id="chatMsg"'), 'chatCard intacto: #chatMsg');
 t(card.includes('id="agUploadBtn"'), 'chatCard intacto: botón subir (hoja/Schedule)');
-t(card.includes('id="ideasChip"'), 'chatCard intacto: chip Ideas');
+t(!card.includes('id="ideasChip"'), 'SACAR-IDEAS (Valentino 3/11): chip Ideas SALIO de la barra del chat (el assert viejo que lo exigía se actualiza con esta causa)');
+t(!card.includes('id="ideasBadge"'), 'SACAR-IDEAS: badge Ideas SALIO con la píldora');
 
 // ---------- Aprobación NO tocada; sus caminos llevan a la pantalla ----------
 t(app.includes('hf-ask-input'), 'aprobación intacta: mini-chat presente');

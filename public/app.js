@@ -9431,16 +9431,14 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
       ${noEditChip ? '' : `<button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">${pzIc('pencil', 13)} Editá un borrador</button>`}
       <button data-chip="Dame una idea para vender más esta semana">${pzIc('idea', 18)} Dame una idea</button>
     </div>` : '';
-  // (v236) A la derecha de la subida, el chip de ideas: nace en el
-  // HTML estático ya con su estado (badge y aria-expanded salen del
-  // estado en memoria) para que ningún repintado lo mueva ni lo prenda
-  // tarde. El badge tiene geometría fija reservada (CSS): el número
-  // jamás empuja el layout al aparecer o cambiar.
-  const ideasChip = schedMode ? `<button type="button" class="ideas-chip" id="ideasChip" aria-expanded="${IDEAS_PANEL_OPEN ? 'true' : 'false'}" aria-controls="hs-ideas">${pzIc('idea', 18)} Ideas <span class="ideas-badge${(typeof IDEAS_PENDING_COUNT === 'number' && IDEAS_PENDING_COUNT > 0) ? '' : ' off'}" id="ideasBadge">${typeof IDEAS_PENDING_COUNT === 'number' ? IDEAS_PENDING_COUNT : 0}</span></button>` : '';
+  // SACAR-IDEAS (decisión Valentino 3/11: «No quiero que aparezca mas»):
+  // la píldora «Ideas» salió de la fila de subida por completo (botón,
+  // ícono, texto y contador). Solo queda «Subir fotos o video». El
+  // panel de ideas de Semana queda sin botón que lo abra (su código
+  // sigue, sin llamadores visibles).
   const upRow = schedMode ? `
     <div class="${sheetChips ? 'sched-chips-row' : 'sched-up-row'}">
       <button type="button" class="ag-upload-btn" id="agUploadBtn">${pzIc('camera', 18)} Subir fotos o video</button>
-      ${ideasChip}
       <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
       <div class="album-row-msg" id="albumMsg" aria-live="polite"></div>
     </div>` : '';
@@ -19915,9 +19913,7 @@ function pzChatKbBind() {
 function bindChatFull() {
   try { bindChat(); } catch (e) {}
   try { bindSchedUpload(); } catch (e) {}
-  // Ideas: el panel vive en Semana — se abre allá, como en la hoja.
-  const ic = $('#ideasChip');
-  if (ic) ic.onclick = () => { IDEAS_PANEL_OPEN = true; location.hash = '#/app/schedule'; };
+  // SACAR-IDEAS (Valentino 3/11): sin píldora Ideas, sin salto a Semana desde ella.
   // Prefill pendiente: mismo contrato que usaba la hoja (Editar de #/app/post/:id).
   try {
     const pre = sessionStorage.getItem('posty-chat-prefill');
@@ -23097,12 +23093,9 @@ function bindSchedule() {
   try { enhanceAdsBoost(); } catch (e) {} // 🚀 pauta pendiente/recomendados: ciclo propio, no bloquea la agenda
   try { enhanceQuestion(); } catch (e) {} // 🤔 v238: Posty pregunta — tarjeta propia sobre el chat, mismo ciclo anti-flash
   try { enhanceShowcase(); } catch (e) {} // 📣 v370: su historia (borrador/activa) — tarjeta hermana, mismo ciclo
-  // (v236) Chip de ideas: el cableado sigue el patrón de la casa (se
-  // recablea en cada pintado) y el estado visible se re-aplica
-  // sincrónico tras el render — badge, expandido y panel como estaban.
-  try { paintIdeasChrome(); } catch (e) {}
-  const ideasChipBtn = $('#ideasChip');
-  if (ideasChipBtn) ideasChipBtn.onclick = () => { try { toggleIdeasPanel(); } catch (e) {} };
+  // SACAR-IDEAS (Valentino 3/11): sin píldora Ideas, sin su cableado ni
+  // su badge en este render. El panel de Semana sigue pintándose por
+  // enhanceIdeas, pero ya no tiene botón que lo abra.
   // (v436) ✨ Así va quedando tu feed — tocar un tile que se viene abre
   // SU detalle (#/app/post/:id: Aceptar / Editar / 💬 Pedir un cambio):
   // la vista Día a la que antes saltaba ya no existe, la pantalla ES
