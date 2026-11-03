@@ -23,7 +23,10 @@ ok(serverJs.includes("app.get('/carta/:token'"), 'ruta de la página de la carta
 ok(serverJs.includes("app.get('/carta/:token/audio.json'"), 'ruta de estado del audio');
 ok(serverJs.includes('Escuchá tu carta') && serverJs.includes('Listen to your letter'), 'botón del email ES + EN');
 ok(serverJs.includes('carta_url'), 'la respuesta del regalo y el análisis traen carta_url');
-ok(chunkAn.includes('carta_url') && chunkAn.includes('Escuchá tu carta'), 'botón en la carta mínima de Análisis');
+/* SUPERSEDED con causa (ESTRATEGIA-SIN-AUDIO, pedido Valentino 2/11 ~12:40):
+   la carta de Estrategia ya NO lleva el botón de audio; el resto del test
+   (email, página firmada, síntesis) sigue vigente y sin tocar. */
+ok(!chunkAn.includes('Escuchá tu carta') && !chunkAn.includes('Listen to your letter'), 'sin botón de audio en la carta mínima de Análisis');
 ok(holaInbox.includes('escucha tu carta') && holaInbox.includes('listen to your letter'), 'marcadores de respuesta actualizados');
 ok(fs.existsSync(path.join(__dirname, 'carta-audio.js')), 'módulo carta-audio presente');
 
