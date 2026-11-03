@@ -27,9 +27,9 @@ const region = (from, to) => {
 };
 
 // ---------- Versiones + censo (base de construcción v557-release = v558 servido en app/styles) ----------
-ok(srv.includes("const BUILD_ID = '20261101-v559'"), 'BUILD v559 en server.js (liberación: v558 Juli + bump)');
-ok(idx.includes('app.js?v=374'), 'index ES: app.js?v=374');
-ok(idx.includes('styles.css?v=20261091'), 'index ES: styles 20261091');
+ok(srv.includes("const BUILD_ID = '20261101-v562'"), 'BUILD v562 en server.js (liberación v562: v561 + bump)');
+ok(idx.includes('app.js?v=376'), 'index ES: app.js?v=376');
+ok(idx.includes('styles.css?v=20261092'), 'index ES: styles 20261092');
 ok(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 ok(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 ok(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -68,7 +68,7 @@ ok(!srv.includes('apvMenuBtn'), 'pública /aprobar sin tocar: server.js sin marc
   const bindIdx = app.indexOf('\nfunction bindApprovalPost()', apvIdx);
   const helpIdx = app.indexOf('function pzDetDirectoEsAjustable(w)');
   const scfIdx = app.indexOf('function bindScfMinis(root)', helpIdx);
-  const vmLabels = ['apv VM: menú programado trae los 7 ítems en orden', 'apv VM: orden Hablar<Editar<Rechazar<Frenar<Eliminar<Rehacer<No me gusta', 'apv VM: sin Aprobar duplicado en el menú', 'apv VM: ••• + menú oculto', 'apv VM: borrador sin Frenar (solo programados)', 'apv VM: publicado = Pedir un cambio', 'apv VM: publicado sin menú ni Eliminar', 'apv VM: toggle abre el menú y marca aria-expanded', 'apv VM: toggle cierra el menú', 'redirect VM: home borrador = ajustable', 'redirect VM: home programado = ajustable', 'redirect VM: home publicado = NO ajustable', 'redirect VM: Agenda programado = NO redirige (conserva pop)'];
+  const vmLabels = ['apv VM: menú programado trae los 5 ítems en orden', 'apv VM: orden Editar<Rechazar<Frenar<Eliminar<Rehacer', 'apv VM: sin Aprobar duplicado en el menú', 'apv VM: ••• + menú oculto', 'apv VM: borrador sin Frenar (solo programados)', 'apv VM: publicado = Pedir un cambio', 'apv VM: publicado sin menú ni Eliminar', 'apv VM: toggle abre el menú y marca aria-expanded', 'apv VM: toggle cierra el menú', 'redirect VM: home borrador = ajustable', 'redirect VM: home programado = ajustable', 'redirect VM: home publicado = NO ajustable', 'redirect VM: Agenda programado = NO redirige (conserva pop)'];
   if (apvIdx < 0 || bindIdx < 0 || helpIdx < 0 || scfIdx < 0) {
     // Control negativo: sin funciones nuevas no hay nada que ejecutar; cada assert VM falla limpio, sin crash.
     vmLabels.forEach((l) => ok(false, l));
@@ -84,10 +84,13 @@ ok(!srv.includes('apvMenuBtn'), 'pública /aprobar sin tocar: server.js sin marc
   vm.runInContext(src, sandbox);
   const post = { id: 99, image_path: '/x.jpg', status: 'scheduled' };
   const out = sandbox.apvMoreHTML(post, 'scheduled', true, false, 'Quiero editar');
-  const labels = ['Hablar de este posteo', 'Editar', 'Rechazar', 'Frenar', 'Eliminar', 'Rehacer', 'No me gusta'];
+  const labels = ['Editar', 'Rechazar', 'Frenar', 'Eliminar', 'Rehacer'];
   const pos = labels.map((l) => out.indexOf(l));
-  ok(pos.every((p) => p >= 0), 'apv VM: menú programado trae los 7 ítems en orden');
-  ok(pos.every((p, i) => i === 0 || p > pos[i - 1]), 'apv VM: orden Hablar<Editar<Rechazar<Frenar<Eliminar<Rehacer<No me gusta');
+  // (LOTE APROBACIÓN-RECORTE · decisión Valentino 2/11) SUPERSEDE con causa:
+  // el menú programado ya no trae 7 ítems: salieron Hablar (duplica el
+  // mini-chat) y No me gusta (se pisa con Rechazar). Quedan 5, en orden.
+  ok(pos.every((p) => p >= 0), 'apv VM: menú programado trae los 5 ítems en orden');
+  ok(pos.every((p, i) => i === 0 || p > pos[i - 1]), 'apv VM: orden Editar<Rechazar<Frenar<Eliminar<Rehacer');
   ok(!out.includes('Aprobar'), 'apv VM: sin Aprobar duplicado en el menú');
   ok(out.includes('id="apvMenuBtn"') && out.includes('id="apvMenu" hidden'), 'apv VM: ••• + menú oculto');
   const outDraft = sandbox.apvMoreHTML({ id: 5, image_path: '/x.jpg', status: 'draft' }, 'draft', false, true, 'Quiero editar');

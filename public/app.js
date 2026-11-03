@@ -11079,6 +11079,7 @@ let SCF_POP = null; // { wrap, card, vault, pop } — la tarjeta abierta, si hay
 let SCF_POP_TIMER = null; // (legado) ya no hay cierre diferido por hover
 let SCF_PINNED = false; // v221: click = capa FIJADA (queda hasta ✕ o click afuera)
 function scfClosePop(zoomBack) {
+  pzBlurActivo();
   if (SCF_POP_TIMER) { clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = null; }
   const wasPinned = SCF_PINNED;
   SCF_PINNED = false;
@@ -19692,7 +19693,20 @@ function mzOpenSheet(focus) {
   // (LOTE CHATTEXTO) Al abrir la hoja, la rotación arranca de nuevo.
   try { pzPhStart(); } catch (e) {}
 }
+// (LOTE SALIR-SIN-ZOOM · 2/11) Antes de retirar/ocultar una hoja,
+// soltar el foco: en WKWebView, si el campo enfocado se elimina u
+// oculta con el foco puesto, la escala del zoom automático de iOS
+// no se restaura y el feed queda con zoom. El blur PRIMERO deja
+// que el teclado baje y la escala vuelva; recién después se retira
+// la hoja. No-op sin activeElement enfocable.
+function pzBlurActivo() {
+  try {
+    const ae = document.activeElement;
+    if (ae && ae.blur && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) ae.blur();
+  } catch (e) {}
+}
 function mzCloseSheet() {
+  pzBlurActivo();
   const sh = $('#mzSheet');
   if (sh) sh.hidden = true;
   try { document.body.classList.remove('mz-sheet-open'); } catch (e) {}
@@ -21066,6 +21080,7 @@ function hfDetailOpen(post, tile) {
   hfDetailWire(ov, post, tile);
 }
 function hfDetailClose() {
+  pzBlurActivo();
   if (HF_DETAIL && HF_DETAIL.ov) { try { HF_DETAIL.ov.remove(); } catch (e) {} }
   HF_DETAIL = null;
   try { document.body.classList.remove('hf-d-open'); } catch (e) {}
@@ -22918,13 +22933,14 @@ function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
   }
   if (!canAct && !isDraft) return '';
   let b = '';
-  if ((st === 'draft' || st === 'scheduled') && p.image_path) b += `<button class="apv-sec-btn" id="apvTalk" data-apvid="${id}" aria-label="${en ? 'Talk about this post' : 'Hablar de este posteo'}">${pzIc('chat', 20)}<span>${en ? 'Talk about this post' : 'Hablar de este posteo'}</span></button>`;
+  // (LOTE APROBACIÓN-RECORTE · 2/11 · decisión Valentino) Fuera del menú: Hablar
+  // (duplica el mini-chat al pie) y No me gusta (se pisa con Rechazar). Quedan:
+  // Editar, Rechazar, Frenar (solo programados), Eliminar, Rehacer, en ese orden.
   b += `<button class="apv-sec-btn" id="apvEdit" data-apvedit="${esc(editPrompt || '')}">${pzIc('pencil', 20)}<span>${en ? 'Edit' : 'Editar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvReject">${pzIc('reject', 20)}<span>${en ? 'Reject' : 'Rechazar'}</span></button>`;
   if (st === 'scheduled') b += `<button class="apv-sec-btn" id="apvHold" data-apvid="${id}">⏸<span>${en ? 'Hold' : 'Frenar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvDelete" data-apvid="${id}">${pzIc('trash', 20)}<span>${en ? 'Delete' : 'Eliminar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvRedo" data-apvid="${id}">↻<span>${en ? 'Redo' : 'Rehacer'}</span></button>`;
-  b += `<button class="apv-sec-btn" id="apvDislike" data-apvid="${id}">${pzIc('thumbDown', 20)}<span>${en ? 'Dislike' : 'No me gusta'}</span></button>`;
   return `<div class="apv-actions apv-more" id="apvMore"><button type="button" class="apv-menu-btn" id="apvMenuBtn" aria-expanded="false" aria-controls="apvMenu" aria-label="${en ? 'More actions' : 'Más acciones'}">•••</button><div class="apv-menu" id="apvMenu" hidden>${b}</div></div>`;
 }
 function pzApvMenuToggle() {
@@ -22984,8 +23000,9 @@ function bindApprovalPost() {
   const tk = document.getElementById('apvTalk');
   if (tk) tk.onclick = () => pzHablarClick(tk.dataset.apvid);
   // (LOTE DETALLE-SIMPLE-DIRECTO A) Menú ••• de la aprobación + Pedir un cambio en publicados.
-  // Los ítems del menú conservan sus ids (apvTalk/apvEdit/apvReject/apvHold/apvDelete/
-  // apvRedo/apvDislike): sus handlers vigentes de abajo no cambian.
+  // Los ítems del menú conservan sus ids (apvEdit/apvReject/apvHold/apvDelete/
+  // apvRedo): sus handlers vigentes de abajo no cambian. apvTalk y apvDislike
+  // salieron con APROBACIÓN-RECORTE; sus bindings guardados quedan no-op.
   const apvMenuBtn = document.getElementById('apvMenuBtn');
   if (apvMenuBtn) apvMenuBtn.onclick = () => pzApvMenuToggle();
   const apvChangePub = document.getElementById('apvChangePub');
