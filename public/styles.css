@@ -1340,6 +1340,12 @@ textarea.in{resize:vertical;min-height:96px}
 /* Nota de voz: botón grabando */
 .btn-rec { background:#D63A2F !important; color:#fff !important; animation:recpulse 1.1s ease-in-out infinite; min-width:52px; }
 @keyframes recpulse { 50% { opacity:.55; } }
+/* (LOTE VOZ-EJECUTA) Barra de grabación/vista previa de la nota de voz: vidrio de la app. */
+.voz-bar{display:flex;gap:8px;align-items:center;background:rgba(255,255,255,.55);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);border-radius:16px;padding:10px 12px;box-shadow:0 8px 24px rgba(10,30,51,.10);margin-top:8px}
+.voz-bar .btn{padding:8px 14px;height:auto;width:auto;border-radius:999px;font-size:14px;flex:none}
+.voz-dot{width:12px;height:12px;border-radius:50%;background:#D63A2F;flex:none;animation:recpulse 1.1s ease-in-out infinite}
+.voz-lvl{flex:1;height:8px;border-radius:99px;background:rgba(10,30,51,.10);overflow:hidden}
+.voz-lvl i{display:block;height:100%;width:4%;background:linear-gradient(90deg,#2793C8,#FEC14D);border-radius:99px}
 
 /* Fase 5: serie, pausa de tipos, republicar */
 .serie-suggest{background:#F2F9FD;border:1.5px dashed var(--cel);border-radius:12px;padding:12px;margin:8px 0}

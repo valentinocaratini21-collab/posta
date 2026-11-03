@@ -5092,7 +5092,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     const lastUser = [...clean].reverse().find(m => m.role === 'user');
     if (lastUser) lastUser.text = heard.slice(0, 2000);
     else clean.push({ role: 'user', text: heard.slice(0, 2000) });
-    chatNote = 'El cliente mandó una NOTA DE VOZ transcripta: convertí lo que pide en un posteo concreto, sin pedirle más datos salvo que sea imposible.';
+    chatNote = 'El cliente mandó una NOTA DE VOZ. El texto siguiente es EXACTAMENTE lo que dijo (transcripción literal, no un resumen). Ejecutalo como si lo hubiera escrito: si pide aprobar, publicar, cambiar foto/texto/día/hora, rechazar, rehacer o cualquier otra acción sobre sus posteos, hacela de verdad con los mecanismos disponibles (bloques edit, publish, rule) y confirmá qué hiciste con el resultado real. Solo si no es accionable, respondé. Nunca finjas haber hecho algo que no hiciste.';
     // (voz-dueno) Si el audio es un reporte del dia, armar el borrador voz->posteo.
     // Nunca rompe el flujo normal: cualquier error deja vozPost en null.
     try { vozPost = await armarBorradorVozChat(uidChat, heard, audio, Array.isArray(photoPaths) ? photoPaths : []); } catch (e) { console.error('[voz-dueno] chat:', e.message); vozPost = null; }
@@ -5625,6 +5625,29 @@ app.post('/api/ideas/chat', async (req, res) => {
     res.status(500).json({ error: 'Uh, me trabé un segundo 😅 Dame otro intento que esta sale' });
   }
 });
+
+// (LOTE VOZ-EJECUTA · 3/11) Transcribir una nota de voz SIN correr el chat:
+// el cliente ve su texto exacto y lo manda como texto escrito (mismo pipeline).
+// No escribe historial: el chat de texto posterior sí lo hace.
+app.post('/api/ideas/transcribe', async (req, res) => {
+  try {
+    if (!req.session.userId) return res.status(401).json({ ok: false, error: 'no_session' });
+    let _txOk = false; requireTrialValid(req, res, () => { _txOk = true; });
+    if (!_txOk) return;
+    const { audio } = req.body || {};
+    if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.json({ ok: false, error: 'no_audio' });
+    const akey = (getSettings(req.session.userId).openai_key || process.env.OPENAI_API_KEY || '');
+    if (!akey) return res.json({ ok: false, error: 'no_key' });
+    let heard = '';
+    try { heard = await transcribeAudio(audio, akey); } catch (e) { console.error('[transcribe] whisper:', e.message); }
+    if (!heard || !String(heard).trim()) return res.json({ ok: false, error: 'no_heard' });
+    return res.json({ ok: true, transcript: String(heard).slice(0, 2000) });
+  } catch (e) {
+    console.error('[transcribe]:', e.message);
+    return res.json({ ok: false, error: 'error' });
+  }
+});
+
 
 // Cupo semanal por plan: posteos de feed vs postsPerWeek, reels vs reelsPerWeek,
 // historias vs storiesPerWeek. Cada formato consume SU cupo; sin pools compartidos.
@@ -27707,7 +27730,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v593';
+const BUILD_ID = '20261101-v594';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

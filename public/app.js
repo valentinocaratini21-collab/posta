@@ -10611,21 +10611,71 @@ async function chatMakePost(asVideo) {
   }
 }
 
-/* ---------- Nota de voz: pedir el posteo hablando ---------- */
+/* ---------- Nota de voz: pedir hablando, ver el texto exacto, ejecutar ---------- */
+/* (LOTE VOZ-EJECUTA · pedido Valentino 3/11) Tap para grabar, NO mantener:
+   1er toque graba, 2do toque para (vista previa, NO se manda solo),
+   Enviar manda, Descartar borra. La transcripción verbatim ES el mensaje
+   del cliente (texto + audio en la burbuja) y entra por el mismo pipeline
+   que el texto escrito. Si Whisper falla: mensaje honesto + re-grabar. */
 let VOICE_REC = null, VOICE_CHUNKS = [], VOICE_TIMER = null, VOICE_START = 0, VOICE_MIME = '';
+let VOICE_STATE = 'idle', VOICE_URL = '', VOICE_BLOB = null, VOICE_DUR = 0;
+let VOICE_CTX = null, VOICE_AN = null, VOICE_RAF = 0;
+function vozEn() { try { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); } catch (e) { return false; } }
+function vozMsgEl() { return document.getElementById('chatMsg'); }
+function vozMicEl() { return document.getElementById('chatMicSend'); }
+function vozFmt(s) { s = Math.floor(s / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function voiceTick() {
   if (!VOICE_REC) return;
-  const b = document.getElementById('chatMicSend');
-  const msg = document.getElementById('chatMsg');
-  const s = Math.floor((Date.now() - VOICE_START) / 1000);
-  const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const b = vozMicEl();
+  const t = vozFmt(Date.now() - VOICE_START);
   if (b) b.innerHTML = pzDot('#E5484D', 11) + ' ' + t;
-  if (msg) msg.innerHTML = `<div class="okmsg">${pzDot('#E5484D', 12)} grabando ${t} — tocá de nuevo para enviar</div>`;
+  const tm = document.getElementById('vozTm');
+  if (tm) tm.textContent = t;
+}
+function voiceLevelLoop() {
+  if (!VOICE_AN) return;
+  try {
+    const d = new Uint8Array(VOICE_AN.fftSize);
+    VOICE_AN.getByteTimeDomainData(d);
+    let peak = 0;
+    for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i] - 128) / 128; if (v > peak) peak = v; }
+    const bar = document.getElementById('vozLvl');
+    if (bar) bar.style.width = Math.max(4, Math.round(peak * 100)) + '%';
+  } catch (e) {}
+  VOICE_RAF = requestAnimationFrame(voiceLevelLoop);
+}
+function voiceRenderBar() {
+  const m = vozMsgEl(); if (!m) return;
+  const en = vozEn();
+  if (VOICE_STATE === 'rec') {
+    m.innerHTML = '<div class="voz-bar"><span class="voz-dot"></span><span id="vozTm">0:00</span><span class="voz-lvl"><i id="vozLvl"></i></span><button type="button" class="btn btn-soft" id="vozStop">' + (en ? 'Stop' : 'Parar') + '</button></div>';
+    const s = document.getElementById('vozStop'); if (s) s.onclick = () => voiceStop();
+  } else if (VOICE_STATE === 'preview' && VOICE_URL) {
+    m.innerHTML = '<div class="voz-bar"><audio controls src="' + esc(VOICE_URL) + '" style="flex:1;min-width:0;height:32px"></audio><span style="font-size:12px;color:var(--mut)">' + vozFmt(VOICE_DUR) + '</span><button type="button" class="btn btn-primary" id="vozSend">' + (en ? 'Send' : 'Enviar') + '</button><button type="button" class="btn btn-soft" id="vozDiscard">' + (en ? 'Discard' : 'Descartar') + '</button></div>';
+    const s = document.getElementById('vozSend'); if (s) s.onclick = () => voiceSend();
+    const d = document.getElementById('vozDiscard'); if (d) d.onclick = () => voiceDiscard();
+  } else if (VOICE_STATE === 'sending') {
+    m.innerHTML = '<div class="voz-bar"><span style="font-size:12.5px">' + (en ? 'Listening…' : 'Escuchando…') + '</span></div>';
+  } else if (VOICE_STATE === 'failed') {
+    m.innerHTML = '<div class="voz-bar"><span style="font-size:12.5px;flex:1">' + (en ? 'I could not hear your audio 🙏' : 'no pude escuchar tu audio 🙏') + '</span><button type="button" class="btn btn-primary" id="vozRetrySend">' + (en ? 'Try sending again' : 'Reintentar envío') + '</button><button type="button" class="btn btn-soft" id="vozRetry">' + (en ? 'Record again' : 'Grabar de nuevo') + '</button></div>';
+    const rs = document.getElementById('vozRetrySend'); if (rs) rs.onclick = () => { if (VOICE_BLOB) { VOICE_STATE = 'preview'; voiceSend(); } };
+    const r = document.getElementById('vozRetry'); if (r) r.onclick = () => { voiceDiscard(); voiceToggle(); };
+  } else {
+    m.innerHTML = '';
+  }
+}
+function voiceCleanup() {
+  try { if (VOICE_RAF) cancelAnimationFrame(VOICE_RAF); } catch (e) {}
+  VOICE_RAF = 0;
+  try { if (VOICE_CTX) VOICE_CTX.close(); } catch (e) {}
+  VOICE_CTX = null; VOICE_AN = null;
+  clearInterval(VOICE_TIMER); VOICE_TIMER = null;
 }
 async function voiceToggle() {
-  if (VOICE_REC) { voiceStop(); return; }
+  if (VOICE_STATE === 'rec' && VOICE_REC) { voiceStop(); return; }
+  if (VOICE_STATE !== 'idle') return; // preview/sending/failed: se resuelve con sus botones
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-    chatSay('🎙 tu navegador no soporta notas de voz. escribime el pedido 👇');
+    chatSay('🎙 ' + (vozEn() ? 'your browser does not support voice notes. write me instead 👇' : 'tu navegador no soporta notas de voz. escribime el pedido 👇'));
     return;
   }
   try {
@@ -10636,58 +10686,108 @@ async function voiceToggle() {
     VOICE_CHUNKS = [];
     VOICE_MIME = rec.mimeType || '';
     rec.ondataavailable = e => { if (e.data && e.data.size) VOICE_CHUNKS.push(e.data); };
-    rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); voiceSend(); };
+    rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); voiceCleanup(); voicePreview(); };
     VOICE_REC = rec;
+    VOICE_STATE = 'rec';
+    try {
+      VOICE_CTX = new (window.AudioContext || window.webkitAudioContext)();
+      const src = VOICE_CTX.createMediaStreamSource(stream);
+      VOICE_AN = VOICE_CTX.createAnalyser(); VOICE_AN.fftSize = 512;
+      src.connect(VOICE_AN);
+      VOICE_RAF = requestAnimationFrame(voiceLevelLoop);
+    } catch (e) {}
     rec.start();
     VOICE_START = Date.now();
-    const b = document.getElementById('chatMicSend');
-    if (b) { b.classList.add('btn-rec'); b.textContent = '⏺ 0:00'; }
+    const b = vozMicEl();
+    if (b) { b.classList.add('btn-rec'); b.innerHTML = pzDot('#E5484D', 11) + ' 0:00'; }
     clearInterval(VOICE_TIMER);
     VOICE_TIMER = setInterval(voiceTick, 500);
     voiceTick();
-    setTimeout(() => { if (VOICE_REC) voiceStop(); }, 90000); // tope 90 segundos
+    voiceRenderBar();
+    setTimeout(() => { if (VOICE_STATE === 'rec' && VOICE_REC) voiceStop(); }, 90000); // tope 90 segundos
   } catch (e) {
-    chatSay('🎙 no pudimos usar el micrófono. revisá el permiso (Ajustes → Safari → Micrófono) o escribime el pedido 👇');
+    chatSay('🎙 ' + (vozEn() ? 'we could not use the microphone. check the permission or write me instead 👇' : 'no pudimos usar el micrófono. revisá el permiso (Ajustes → Safari → Micrófono) o escribime el pedido 👇'));
   }
 }
 function voiceStop() {
   const rec = VOICE_REC;
   VOICE_REC = null;
-  clearInterval(VOICE_TIMER);
-  const b = document.getElementById('chatMicSend');
+  const b = vozMicEl();
   if (b) { b.classList.remove('btn-rec'); }
-  chatUpdateSendBtn();
-  const msg = document.getElementById('chatMsg');
-  if (msg) msg.innerHTML = '';
-  if (rec) { try { rec.stop(); } catch (e) { voiceSend(); } }
+  if (rec) { try { rec.stop(); } catch (e) { voiceCleanup(); voicePreview(); } }
+}
+function voicePreview() {
+  const chunks = VOICE_CHUNKS; VOICE_CHUNKS = [];
+  VOICE_BLOB = new Blob(chunks, { type: VOICE_MIME || 'audio/mp4' });
+  VOICE_DUR = Date.now() - VOICE_START;
+  if (!VOICE_BLOB || VOICE_BLOB.size < 1500) {
+    // Grabación vacía: no se manda nada, no se inventa texto.
+    VOICE_BLOB = null; VOICE_STATE = 'idle';
+    const m = vozMsgEl();
+    if (m) m.innerHTML = '<div class="voz-bar"><span style="font-size:12.5px;flex:1">' + (vozEn() ? 'nothing was recorded.' : 'no se grabó nada.') + '</span><button type="button" class="btn btn-primary" id="vozRetry2">' + (vozEn() ? 'Record again' : 'Grabar de nuevo') + '</button></div>';
+    const r = document.getElementById('vozRetry2'); if (r) r.onclick = () => { voiceDiscard(); voiceToggle(); };
+    try { chatUpdateSendBtn(); } catch (e) {}
+    return;
+  }
+  try { if (VOICE_URL) URL.revokeObjectURL(VOICE_URL); } catch (e) {}
+  VOICE_URL = URL.createObjectURL(VOICE_BLOB);
+  VOICE_STATE = 'preview';
+  voiceRenderBar();
+  try { chatUpdateSendBtn(); } catch (e) {}
+}
+function voiceDiscard() {
+  try { if (VOICE_URL) URL.revokeObjectURL(VOICE_URL); } catch (e) {}
+  VOICE_URL = ''; VOICE_BLOB = null; VOICE_DUR = 0; VOICE_STATE = 'idle'; VOICE_CHUNKS = [];
+  voiceRenderBar();
+  try { chatUpdateSendBtn(); } catch (e) {}
 }
 async function voiceSend() {
-  const chunks = VOICE_CHUNKS; VOICE_CHUNKS = [];
-  const blob = new Blob(chunks, { type: VOICE_MIME || 'audio/mp4' });
-  if (blob.size < 1500) return; // grabación vacía
-  // Base64 como data URL (data:audio/webm;base64,...): viaja en el JSON del chat
+  if (VOICE_STATE !== 'preview' || !VOICE_BLOB) return;
+  const blob = VOICE_BLOB;
+  const audioUrl = VOICE_URL;
+  VOICE_STATE = 'sending';
+  voiceRenderBar();
   const dataUrl = await new Promise((res) => {
     const fr = new FileReader();
     fr.onload = () => res(String(fr.result || ''));
     fr.onerror = () => res('');
     fr.readAsDataURL(blob);
   });
-  if (!dataUrl) { chatSay('🎙 no pudimos procesar la nota de voz. probá de nuevo o escribime 👇'); return; }
-  return chatExchange({ text: '🎙️ Nota de voz', extra: { audio: dataUrl } });
+  if (!dataUrl) { VOICE_STATE = 'failed'; voiceRenderBar(); return; }
+  let tr = null;
+  try { tr = await api.post('/api/ideas/transcribe', { audio: dataUrl }, { timeout: 90000 }); } catch (e) { tr = null; }
+  if (!tr || !tr.ok || !tr.transcript) { VOICE_STATE = 'failed'; voiceRenderBar(); return; }
+  const transcript = String(tr.transcript).slice(0, 2000);
+  // La transcripción VERBATIM es el mensaje del cliente: texto exacto + audio.
+  const box = $('#chatBox');
+  if (box) box.insertAdjacentHTML('beforeend', '<div class="chat-msg u msg-in">' + esc(transcript) + '<audio controls src="' + esc(audioUrl) + '" style="display:block;width:100%;height:32px;margin-top:6px"></audio></div>');
+  try { chatScroll(); } catch (e) {}
+  CHAT.push({ role: 'user', text: transcript });
+  VOICE_URL = ''; VOICE_BLOB = null; VOICE_STATE = 'idle';
+  voiceRenderBar();
+  try { chatUpdateSendBtn(); } catch (e) {}
+  // Mismo pipeline que el texto escrito (edits, publish, rule): sin audio.
+  return chatExchange({ text: transcript, pushed: true });
 }
 
 // Barra estilo Muse: a la derecha va 🎙 si no hay nada para enviar, ➤ si hay texto o fotos.
+// Durante grabación/vista previa/envío, la barra de voz manda: no tocar el botón.
 function chatUpdateSendBtn() {
   const b = $('#chatMicSend'), inp = $('#chatInput');
   if (!b) return;
+  if (typeof VOICE_STATE !== 'undefined' && VOICE_STATE !== 'idle') {
+    if (VOICE_STATE === 'rec') return; // grabando: el botón muestra el timer
+    // preview/sending/failed: micrófono neutro, sin arrancar otra grabación
+    b.innerHTML = pzIc('mic', 18); b.className = 'btn btn-soft'; b.title = vozEn() ? 'Voice note' : 'Nota de voz';
+    b.onclick = null; b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null;
+    return;
+  }
   const unsent = (typeof CHAT_PHOTOS !== 'undefined' && CHAT_PHOTOS.some(p => !p.sent));
   const ready = (inp && inp.value.trim().length > 0) || unsent;
-  if (VOICE_REC) return; // grabando: no tocar
   if (ready) { b.innerHTML = pzIc('send', 16); b.className = 'btn btn-primary'; b.title = 'Enviar'; b.onclick = () => chatSend(); b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null; }
   else { b.innerHTML = pzIc('mic', 18); b.className = 'btn btn-soft'; b.title = 'Mantener para hablar'; b.onclick = null;
     b.onpointerdown = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} voiceToggle(); };
-    b.onpointerup = () => { if (VOICE_REC) voiceStop(); else setTimeout(() => { if (VOICE_REC) voiceStop(); }, 800); };
-    b.onpointercancel = () => { if (VOICE_REC) voiceStop(); }; }
+    b.onpointerup = null; b.onpointercancel = null; }
 }
 
 function bindChat() {
