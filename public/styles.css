@@ -4275,6 +4275,27 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-info-row{display:inline-flex;align-items:center;gap:8px;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
 .hf-info-row:active{transform:scale(.97)}
 .hf-pubinfo-line{margin:8px 0;color:#0a1e33;font-size:15px;line-height:1.5}
+/* ============ LOTE CHAT-POSTEO-PANTALLA (2026-11-02) ============
+   La pantalla del chat de un posteo: capa fija a pantalla completa con
+   el degradado de la app. El #chatCard único se mueve acá (ver
+   pzPostChatOpen) y el historial scrollea adentro; el campo queda
+   anclado abajo y la altura la manda visualViewport (pzPostChatKbSync),
+   así el teclado nunca lo tapa. El tirador de arriba invita al desliz
+   hacia abajo que vuelve al posteo. */
+.pz-postchat{position:fixed;inset:0;z-index:400;background:linear-gradient(180deg,#dff1fa,#eef9fd 40%,#fdf9ec 70%,#fdeec2);display:flex;flex-direction:column;overflow:hidden}
+.pz-postchat[hidden]{display:none}
+.pz-postchat-grip{display:flex;justify-content:center;padding:calc(10px + env(safe-area-inset-top)) 0 2px;flex:none}
+.pz-postchat-grip span{display:block;width:44px;height:5px;border-radius:99px;background:rgba(10,30,51,.20)}
+.pz-postchat-head{display:flex;align-items:center;gap:10px;padding:6px 14px 10px;flex:none}
+.pz-postchat-back{width:36px;height:36px;border-radius:50%;border:none;background:#fff;color:var(--txt);font-size:18px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(10,30,51,.10);flex:none}
+.pz-postchat-tit{flex:1;text-align:center;font-size:16px;font-weight:800;color:var(--txt)}
+.pz-postchat-spacer{width:36px;flex:none}
+.pz-postchat-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0 14px calc(10px + env(safe-area-inset-bottom))}
+.pz-postchat-body #chatCard{flex:1;min-height:0;display:flex;flex-direction:column}
+.pz-postchat-body .chat-box{flex:1 1 auto;max-height:none;min-height:0;overflow-y:auto}
+.pz-postchat-body #chatAnchor{flex:none}
+.pz-postchat-body .chat-input-row{flex:none}
+body.pz-postchat-open{overflow:hidden}
 /* ============ LOTE CHAT SIMPLE (2026-11-01) ============ */
 /* La hoja de Inicio abraza su contenido (sin vacío blanco enorme):
    tarjeta a medida, mensajes con scroll interno, campo abajo siempre
@@ -4333,6 +4354,29 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .ana-boostrec-monto-t{font-size:13px;font-weight:800;color:#0A1E33;margin:0}
 .ana-boostrec-msg{font-size:13px;color:#0A1E33;margin:10px 0 0;line-height:1.5;font-weight:600}
 .ana-boostrec-nota{font-size:13.5px;color:#5A4A6B;margin:0;line-height:1.5}
+
+/* (LOTE CHATPANTALLA · 1/11) Pantalla completa del chat en vidrio — receta v519.
+   El chat principal ya no es una hoja sobre Inicio: es pantalla propia
+   (#/app/chat). El fondo es el degradado de Inicio; cabecera, burbujas,
+   campo y chips van en vidrio; las fotos quedan sin vidrio, como siempre.
+   La altura la fija JS con el viewport visible real (ver pzChatKbSync):
+   el 100dvh de acá es solo el arranque antes del primer sync. */
+.pz-chatfull{position:fixed;left:0;right:0;top:0;height:100dvh;z-index:300;display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.28),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(254,193,77,.35),rgba(254,193,77,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
+.pz-chatfull-head{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;margin:12px 12px 0;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10);border-radius:22px;flex:none}
+.pz-chatfull-back{width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.75);background:rgba(255,255,255,.6);color:var(--txt);font-family:inherit;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}
+.pz-chatfull-head .chat-face{width:38px;height:38px;border-radius:50%;border:2px solid #FEC14D;object-fit:cover;flex:none}
+.pz-chatfull-tit b{font-size:17px;letter-spacing:-.2px;color:var(--txt)}
+.pz-chatfull #chatCard{flex:1;display:flex;flex-direction:column;min-height:0;margin:0;background:transparent;border:none;box-shadow:none;padding:10px 12px 0}
+.pz-chatfull .chat-box{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto}
+.pz-chatfull .chat-msg.ai{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75)}
+.pz-chatfull .chat-msg.u{background:rgba(39,147,200,.72);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.5)}
+.pz-chatfull .chat-input-row{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10);border-radius:999px;padding:6px;margin:0 0 calc(10px + env(safe-area-inset-bottom));flex:none}
+.pz-chatfull .chat-input-row .in{background:transparent;border:none;box-shadow:none}
+.pz-chatfull .chat-input-row .in:focus{border:none;box-shadow:none}
+.pz-chatfull .chat-plus-menu{background:rgba(255,255,255,.85);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.pz-chatfull .sched-chips-row .ag-upload-btn,.pz-chatfull .sched-chips-row .ideas-chip{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75)}
+@media(min-width:761px){.pz-chatfull{left:50%;right:auto;width:640px;margin-left:-320px}}
+
 /* (LOTE CHAT4S) Fundido del placeholder que rota: 360 ms (apaga,
    cambia en el medio, enciende). Solo actúa con la clase
    pz-ph-fading, así no interfiere con las transiciones del input.

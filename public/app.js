@@ -623,6 +623,8 @@ async function pzPullRefresh() {
 
 function pzBackHTML(tab) {
   if (tab === 'inicio') return '';
+  // (LOTE CHATPANTALLA) El chat tiene su propio atrás en la cabecera: sin segundo control.
+  if (tab === 'chat') return '';
   // (LOTE 10B · A) El jardín tiene su propio control atrás (flecha +
   // «Volver» lado a lado): el círculo fijo lo tapaba. Sin segundo control.
   if (tab === 'jardin-posty') return '';
@@ -634,12 +636,16 @@ function pzBackHTML(tab) {
 }
 function pzBackMtopHTML(tab) {
   if (tab === 'inicio') return '';
+  // (LOTE CHATPANTALLA) El chat tiene su propio atrás en la cabecera: sin segundo control.
+  if (tab === 'chat') return '';
   // (LOTE 17) Igual que pzBackHTML: post y dogfood tienen su propio atrás.
   if (tab === 'post' || tab === 'dogfood') return '';
   return `<button type="button" class="pz-back pz-back-mtop" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function pzBackDesktopHTML(tab) {
   if (tab === 'inicio') return '';
+  // (LOTE CHATPANTALLA) El chat tiene su propio atrás en la cabecera: sin segundo control.
+  if (tab === 'chat') return '';
   // (LOTE 10B · A) Igual que pzBackHTML: en el jardín manda su propio atrás.
   if (tab === 'jardin-posty') return '';
   // (LOTE 17) Igual que pzBackHTML: post y dogfood tienen su propio atrás.
@@ -710,9 +716,7 @@ function bbShell(tab, content) {
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar">
-      ${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}
-    </nav>
+    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings')) + '</nav>'}
   </div>`;
 }
 async function bbLoadEstado(force) {
@@ -16271,8 +16275,8 @@ function pzPrefetchKick() {
   try { await bbLoadEstado(false); } catch (e) {}
   let content = '';
   try {
-  if (tab === 'oficina' || tab === 'negocio' || tab === 'chat') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: sin pantallas Gesty (la Bandeja vive: ahí se decide)
-  else if (tab === 'chat') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: el chat vive debajo del feed
+  if (tab === 'oficina' || tab === 'negocio') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: sin pantallas Gesty (la Bandeja vive: ahí se decide)
+  else if (tab === 'chat') { pzPaintSkeleton(tab); content = await chatFullView(); } // (LOTE CHATPANTALLA) El chat principal es pantalla completa en vidrio, no hoja
   else if (tab === 'inicio') { pzPaintSkeleton(tab); content = await inicioView(); } // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') { pzPaintSkeleton(tab); content = await scheduleView(); }
@@ -19672,26 +19676,14 @@ function pzNivelMount() {
 }
 
 function mzOpenSheet(focus) {
-  const sh = $('#mzSheet');
-  if (!sh) return;
-  sh.hidden = false;
-  // Prefill pendiente: el MISMO contrato que usa "Editar" de #/app/post/:id
-  // (sessionStorage 'posty-chat-prefill'), consumido al abrir el chat.
-  try {
-    const pre = sessionStorage.getItem('posty-chat-prefill');
-    if (pre) {
-      sessionStorage.removeItem('posty-chat-prefill');
-      const ci = document.getElementById('chatInput');
-      if (ci) ci.value = pre;
-    }
-  } catch (e) {}
+  // (LOTE CHATPANTALLA) La hoja se retiró: abrir el chat = navegar a
+  // su pantalla. Si ya estamos en ella, foco como siempre.
+  if ((location.hash || '').split('?')[0] !== '#/app/chat') { location.hash = '#/app/chat'; return; }
+  if (!focus) return;
+  const ci = document.getElementById('chatInput');
+  if (ci) setTimeout(() => { try { ci.focus({ preventScroll: true }); } catch (e) { try { ci.focus(); } catch (e2) {} } }, 60);
   try { chatUpdateSendBtn(); } catch (e) {}
   try { chatScroll(); } catch (e) {}
-  if (focus) {
-    const ci = document.getElementById('chatInput');
-    if (ci) setTimeout(() => { try { ci.focus({ preventScroll: true }); } catch (e) { try { ci.focus(); } catch (e2) {} } }, 60);
-  }
-  // (LOTE CHATTEXTO) Al abrir la hoja, la rotación arranca de nuevo.
   try { pzPhStart(); } catch (e) {}
 }
 // (LOTE SALIR-SIN-ZOOM · 2/11) Antes de retirar/ocultar una hoja,
@@ -19712,6 +19704,164 @@ function mzCloseSheet() {
   if (sh) sh.hidden = true;
   try { document.body.classList.remove('mz-sheet-open'); } catch (e) {}
 }
+/* ===== (LOTE CHATPANTALLA · 1/11) El chat principal es PANTALLA COMPLETA en vidrio =====
+   Reporte de Valentino con captura: al tocar el chat, el teclado tapaba
+   todo. Causa: el chat vivía en una hoja sobre Inicio y en la app nativa
+   (WKWebView) el teclado NO achica el layout viewport, así que la hoja
+   nunca se enteraba. La pantalla nueva: ruta propia (#/app/chat) con la
+   transición de siempre, cabecera con Posty + atrás, mensajes con scroll
+   interno y campo anclado abajo. La altura la manda el viewport visible
+   real (visualViewport, que SÍ se achica con el teclado en WKWebView),
+   con fallback a innerHeight. El contenido es EXACTAMENTE el de la hoja
+   (mismo chatCardHTML, mismos ids, mismo bindChat): solo cambia el
+   contenedor. La hoja se retiró de Inicio; abrir el chat navega acá. */
+function chatFullView() {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  return `<div class="pz-chatfull" id="pzChatFull">
+  <header class="pz-chatfull-head">
+    <button type="button" class="pz-chatfull-back" onclick="pzGoBack()" aria-label="${en ? 'Back' : 'Volver'}">${pzIc('arrowLeft', 20)}</button>
+    <img class="chat-face" src="ai-avatar.png" alt="Posty">
+    <div class="pz-chatfull-tit"><b>Posty<span class="pdot">.</span></b></div>
+  </header>
+  ${chatCardHTML(true, true, true, true, true, true)}
+</div>`;
+}
+// Sincroniza la altura de la pantalla con el viewport visible real.
+function pzChatKbSync() {
+  const root = document.getElementById('pzChatFull');
+  if (!root) return;
+  try {
+    const vv = window.visualViewport;
+    const h = vv ? vv.height : window.innerHeight;
+    if (h && h > 0) root.style.height = Math.round(h) + 'px';
+    root.style.top = (vv ? Math.round(vv.offsetTop) : 0) + 'px';
+  } catch (e) {}
+}
+// Escucha el teclado una sola vez por carga (el sync no hace nada fuera de la pantalla).
+function pzChatKbBind() {
+  if (window.__pzChatKbBound) return;
+  window.__pzChatKbBound = true;
+  try {
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener('resize', pzChatKbSync);
+      vv.addEventListener('scroll', pzChatKbSync);
+    }
+    window.addEventListener('resize', pzChatKbSync);
+    window.addEventListener('orientationchange', pzChatKbSync);
+  } catch (e) {}
+}
+function bindChatFull() {
+  try { bindChat(); } catch (e) {}
+  try { bindSchedUpload(); } catch (e) {}
+  // Ideas: el panel vive en Semana — se abre allá, como en la hoja.
+  const ic = $('#ideasChip');
+  if (ic) ic.onclick = () => { IDEAS_PANEL_OPEN = true; location.hash = '#/app/schedule'; };
+  // Prefill pendiente: mismo contrato que usaba la hoja (Editar de #/app/post/:id).
+  try {
+    const pre = sessionStorage.getItem('posty-chat-prefill');
+    if (pre) {
+      sessionStorage.removeItem('posty-chat-prefill');
+      const ci = document.getElementById('chatInput');
+      if (ci) ci.value = pre;
+    }
+  } catch (e) {}
+  try { chatUpdateSendBtn(); } catch (e) {}
+  try { chatScroll(); } catch (e) {}
+  // Voz pendiente del mic del dock: mismo delay de siempre (80 ms).
+  if (window.__pzChatVoice) {
+    window.__pzChatVoice = false;
+    setTimeout(() => { try { voiceToggle(); } catch (e) {} }, 80);
+  }
+  try { hfPaintAnchor(); } catch (e) {}
+  try { hfDeliverAskText(); } catch (e) {}
+  pzChatKbBind();
+  pzChatKbSync();
+  pzChatSwipeBind();
+  try { pzPhStart(); } catch (e) {}
+  const ci = document.getElementById('chatInput');
+  if (ci) setTimeout(() => { try { ci.focus({ preventScroll: true }); } catch (e) { try { ci.focus(); } catch (e2) {} } }, 60);
+}
+/* ===== (LOTE CHAT-INICIO-DESLIZAR · 2/11) Deslizar abajo en #/app/chat vuelve =====
+   Pedido de Valentino 2/11 («Lo mismo en el inicio!»): tocar el chat en
+   Inicio transforma la pantalla en el chat completo (lote chat-pantalla) y
+   deslizar hacia abajo vuelve. Reglas, en orden:
+   1. El desliz es la MISMA acción que el botón atrás de la cabecera:
+      en el flujo de Inicio (dock) eso es Inicio tal cual
+      estaba, sin reset; si se llegó al chat desde otro origen, vuelve a
+      ese origen. No se hardcodea '#/app/inicio' para no romper el origen
+      de Semana (hablar-posteo) ni divergir del botón atrás.
+   2. Anti-conflicto con el scroll del historial: el desliz solo cierra
+      cuando el historial está arriba del todo (scrollTop <= 4) o cuando
+      el gesto arranca en la cabecera (el tirador). Scrollear el historial
+      hacia abajo nunca cierra: si el historial no está arriba, el gesto
+      se ignora y el scroll sigue su curso. Un desliz horizontal o hacia
+      arriba tampoco cierra.
+   3. Teclado abierto (regla iOS, documentada): el primer desliz hacia
+      abajo (que cumpla la regla 2) solo cierra el teclado (blur); el
+      siguiente desliz, ya sin teclado, vuelve. El botón atrás sigue
+      volviendo directo con el teclado abierto, como siempre.
+   4. El panel sigue al dedo (translateY, tope 200px) y al soltar vuelve
+      con una transición corta, salvo reduced-motion (sin transición).
+      Solo táctil: en desktop el camino es el botón atrás.
+   El bind se hace en bindChatFull (la vista se re-renderiza en cada
+   navegación a #/app/chat, así que el flag vive en el elemento, no en
+   window: cada vista nueva se cablea una sola vez). */
+function pzChatSwipeKbAbierto() {
+  try {
+    const root = document.getElementById('pzChatFull');
+    const ae = document.activeElement;
+    if (root && ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA') && root.contains(ae)) return true;
+    const vv = window.visualViewport;
+    if (vv && window.innerHeight && (window.innerHeight - vv.height) > 80) return true;
+  } catch (e) {}
+  return false;
+}
+function pzChatSwipeBind() {
+  const root = document.getElementById('pzChatFull');
+  if (!root || root.dataset.pzSwipe) return;
+  root.dataset.pzSwipe = '1';
+  let sx = 0, sy = 0, track = false, fromHead = false, atTop = false, kb = false, dy = 0;
+  const box = () => root.querySelector('.chat-box');
+  root.addEventListener('touchstart', (e) => {
+    if (!e.touches || e.touches.length !== 1) { track = false; return; }
+    const t = e.touches[0];
+    sx = t.clientX; sy = t.clientY; dy = 0;
+    try { fromHead = !!(e.target && e.target.closest && e.target.closest('.pz-chatfull-head')); } catch (err) { fromHead = false; }
+    const b = box();
+    atTop = !b || b.scrollTop <= 4;
+    kb = pzChatSwipeKbAbierto();
+    track = true;
+    root.style.transition = 'none';
+  }, { passive: true });
+  root.addEventListener('touchmove', (e) => {
+    if (!track || !e.touches || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const ddx = t.clientX - sx; dy = t.clientY - sy;
+    if (dy <= 0 || Math.abs(ddx) > Math.abs(dy)) { track = false; root.style.transform = ''; return; }
+    if (!(fromHead || atTop)) { track = false; return; }
+    if (dy > 8) {
+      try { e.preventDefault(); } catch (err) {}
+      if (!kb) root.style.transform = 'translateY(' + Math.min(dy, 200) + 'px)';
+    }
+  }, { passive: false });
+  const fin = () => {
+    if (!track) { root.style.transform = ''; return; }
+    track = false;
+    try { root.style.transition = pzReducedMotion() ? '' : 'transform .18s ease'; } catch (err) { root.style.transition = 'transform .18s ease'; }
+    root.style.transform = '';
+    if (dy <= 0) return;
+    if (kb) {
+      if (dy > 60) { try { const ae = document.activeElement; if (ae && ae.blur) ae.blur(); } catch (err) {} }
+      return;
+    }
+    if (dy > 90) { try { pzGoBack(); } catch (err) {} }
+  };
+  root.addEventListener('touchend', fin, { passive: true });
+  root.addEventListener('touchcancel', () => { track = false; root.style.transform = ''; }, { passive: true });
+}
+
+
 /* ===== (LOTE CHAT-WEBSITE) El MISMO chat de la app en la home pública ===== */
 // El dock de entrada es el mismo dock de la app (cara + texto que rota);
 // la hoja es la misma hoja (mzSheet + chatCardHTML + chatSend + /api/ideas/chat).
@@ -21918,6 +22068,9 @@ async function pzHablarResolver(id) {
 }
 function pzHablarDePosteo(post) {
   if (!post || post.id == null) return;
+  // (LOTE CHAT-POSTEO-PANTALLA) Origen antes de cerrar, como hfAskChange.
+  var _kind = (typeof SCF_POP !== 'undefined' && SCF_POP) ? 'scf' : ((String(location.hash || '').indexOf('#/app/post/') === 0) ? 'apv' : 'generic');
+  pzPostChatCaptureOrigin(post, _kind);
   try { scfClosePop(); } catch (e) {}
   try { hfDetailClose(); } catch (e) {}
   try { pcCloseSheet(); } catch (e) {}
@@ -21972,18 +22125,15 @@ async function pzHablarClick(id) {
 })();
 function hfOpenChatForPost(post) {
   if (!post) return;
+  // (LOTE CHAT-POSTEO-PANTALLA) El chat de un posteo ya no es la hojita:
+  // es la pantalla completa pzPostChat. El chat general (dock) sigue
+  // usando la hoja directo y no pasa por acá.
+  if (!PZ_POSTCHAT_ORIGIN) pzPostChatCaptureOrigin(post, 'generic');
   hfSetAnchor(post);
-  const sheet = document.getElementById('mzSheet');
-  if (sheet && typeof mzOpenSheet === 'function') {
-    mzOpenSheet(true);
-    try { hfPaintAnchor(); } catch (e) {}
-    return;
-  }
-  const card = document.getElementById('chatCard');
-  if (card) { try { card.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
-  try { hfPaintAnchor(); } catch (e) {}
-  const inp = document.getElementById('chatInput');
-  if (inp) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) {} }, 350);
+  if (pzPostChatOpen(post)) return;
+  PZ_POSTCHAT_PENDING_POST = post;
+  if ((location.hash || '').split('?')[0] !== mzHomeHash()) location.hash = mzHomeHash();
+  else { try { render(); } catch (e) {} }
 }
 
 /* (ARMA TODO · Corrección 2 · UN SOLO CHAT — forma nueva en v442 ·
@@ -22052,16 +22202,16 @@ function hfDeliverAskText() {
 // bindInicio abre la hoja del chat único (HF_CHAT_OPEN_PENDING).
 function hfAskChange(post) {
   if (!post || post.id == null) return;
+  // (LOTE CHAT-POSTEO-PANTALLA) El origen se captura ANTES de cerrar el
+  // detalle: al volver, hay que caer exacto en este posteo.
+  var _kind = (typeof SCF_POP !== 'undefined' && SCF_POP) ? 'scf' : ((String(location.hash || '').indexOf('#/app/post/') === 0) ? 'apv' : 'generic');
+  pzPostChatCaptureOrigin(post, _kind);
   try { scfClosePop(); } catch (e) {}
   try { hfDetailClose(); } catch (e) {}
   try { pcCloseSheet(); } catch (e) {}
   const hadChat = !!(document.getElementById('mzSheet') || document.getElementById('chatCard'));
   hfOpenChatForPost(post);
-  if (!hadChat) {
-    HF_CHAT_OPEN_PENDING = true;
-    if ((location.hash || '').split('?')[0] !== mzHomeHash()) location.hash = mzHomeHash();
-    else { try { render(); } catch (e) {} }
-  }
+  if (!hadChat) HF_CHAT_OPEN_PENDING = true;
 }
 // Delegado global en captura (una sola vez): el submit del mini-chat
 // del detalle. Guarda el texto como pendiente, abre el chat único con
@@ -22085,6 +22235,192 @@ function hfAskChangeBind() {
     try { hfDeliverAskText(); } catch (e2) {}
   }, true);
 }
+/* ===== (LOTE CHAT-POSTEO-PANTALLA · 2/11) El chat de un posteo es PANTALLA COMPLETA =====
+   Captura de Valentino 2/11 12:41: el mini-chat de la hoja del detalle
+   («qué le cambiamos a este posteo?») quedaba apretado abajo y el
+   teclado iOS + su barra accesoria nativa ^/v/✓ se comían media
+   pantalla y cortaban el campo. En vez de pelear con la hojita, la
+   pantalla SE TRANSFORMA en un chat completo y deslizar abajo vuelve
+   exacto al posteo.
+   Cómo: NO se duplica el chat. Se MUEVE el #chatCard único de siempre
+   (mismo historial CHAT, mismo bindChat, mismo chatSend, misma ancla
+   hablar-posteo, misma voz) a una capa fija de pantalla completa, y al
+   cerrar se devuelve a su padre original. Si la vista cambió mientras
+   el chat estaba abierto, el padre ya no está conectado: el nodo viejo
+   se descarta (la vista nueva ya pintó su propio chatCard).
+   Teclado: la altura la manda visualViewport (que SÍ se achica con el
+   teclado en WKWebView), con fallback a innerHeight; sin
+   visualViewport no se rompe nada (solo no hay sync fino).
+   Volver: deslizar abajo (desde la cabecera/tirador, o con el historial
+   arriba del todo) cierra; si el teclado está abierto, el primer desliz
+   solo lo cierra (blur) y el segundo vuelve; el botón ← vuelve directo
+   siempre, teclado abierto o no. Escape también vuelve (desktop).
+   Al cerrar, el ancla NO se borra: el chat principal queda exactamente
+   como estaba, con su historial y su contexto. */
+var PZ_POSTCHAT_ORIGIN = null; // {kind, hash, scrollY, postId}
+var PZ_POSTCHAT_NODE = null; // {card, parent, next}
+var PZ_POSTCHAT_PENDING_POST = null;
+function pzPostChatIsEn() {
+  try { return (typeof hfIsEn === 'function') ? hfIsEn() : ((typeof ME !== 'undefined' && ME && ME.lang === 'en')); } catch (e) { return false; }
+}
+function pzPostChatCaptureOrigin(post, kind) {
+  var hash = '';
+  try { hash = location.hash || ''; } catch (e) {}
+  var y = 0;
+  try { y = window.scrollY || 0; } catch (e) {}
+  PZ_POSTCHAT_ORIGIN = { kind: kind || 'generic', hash: hash, scrollY: y, postId: (post && post.id != null) ? String(post.id) : '' };
+}
+function pzPostChatLayerHTML() {
+  var en = pzPostChatIsEn();
+  return '<div class="pz-postchat" id="pzPostChat" hidden>'
+    + '<div class="pz-postchat-grip" aria-hidden="true"><span></span></div>'
+    + '<div class="pz-postchat-head"><button type="button" class="pz-postchat-back" id="pzPostChatBack" aria-label="' + (en ? 'Back to the post' : 'Volver al posteo') + '">\u2190</button>'
+    + '<span class="pz-postchat-tit">Posty</span><span class="pz-postchat-spacer"></span></div>'
+    + '<div class="pz-postchat-body" id="pzPostChatBody"></div></div>';
+}
+function pzPostChatKbSync() {
+  var layer = document.getElementById('pzPostChat');
+  if (!layer || layer.hidden) return;
+  try {
+    var vv = window.visualViewport;
+    var h = vv ? vv.height : window.innerHeight;
+    if (h && h > 0) layer.style.height = Math.round(h) + 'px';
+    layer.style.top = vv ? Math.round(vv.offsetTop) + 'px' : '0px';
+  } catch (e) {}
+}
+function pzPostChatKbBind() {
+  if (window.__pzPostChatKbBound) return;
+  window.__pzPostChatKbBound = true;
+  try {
+    var vv = window.visualViewport;
+    if (vv) { vv.addEventListener('resize', pzPostChatKbSync); vv.addEventListener('scroll', pzPostChatKbSync); }
+    window.addEventListener('resize', pzPostChatKbSync);
+    window.addEventListener('orientationchange', pzPostChatKbSync);
+  } catch (e) {}
+}
+function pzPostChatEnsureLayer() {
+  var layer = document.getElementById('pzPostChat');
+  if (layer) return layer;
+  document.body.insertAdjacentHTML('beforeend', pzPostChatLayerHTML());
+  layer = document.getElementById('pzPostChat');
+  var back = document.getElementById('pzPostChatBack');
+  if (back) back.onclick = function (e) { try { e.preventDefault(); } catch (e2) {} pzPostChatClose(); };
+  if (!window.__pzPostChatBound) {
+    window.__pzPostChatBound = true;
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { var l = document.getElementById('pzPostChat'); if (l && !l.hidden) pzPostChatClose(); }
+    });
+    var sy = 0, sx = 0, tracking = false;
+    document.addEventListener('touchstart', function (e) {
+      var l = document.getElementById('pzPostChat');
+      if (!l || l.hidden) return;
+      var t = (e.target && e.target.closest) ? e.target.closest('.pz-postchat-head, .pz-postchat-grip') : null;
+      if (t && t.closest && t.closest('#pzPostChatBack')) return;
+      var box = document.getElementById('chatBox');
+      var atTop = box && box.scrollTop <= 0;
+      if (!t && !atTop) return;
+      var touch = e.touches && e.touches[0];
+      if (!touch) return;
+      sy = touch.clientY; sx = touch.clientX; tracking = true;
+    }, { passive: true });
+    document.addEventListener('touchmove', function (e) {
+      if (!tracking) return;
+      var l = document.getElementById('pzPostChat');
+      if (!l || l.hidden) { tracking = false; return; }
+      var touch = e.touches && e.touches[0];
+      if (!touch) return;
+      var dy = touch.clientY - sy, dx = touch.clientX - sx;
+      if (dy <= 0 || Math.abs(dx) > Math.abs(dy)) { tracking = false; l.style.transform = ''; return; }
+      var ae = document.activeElement;
+      if (ae && ae.id === 'chatInput') {
+        // Primer desliz con teclado abierto: solo cierra el teclado.
+        try { ae.blur(); } catch (e2) {}
+        tracking = false; l.style.transform = ''; return;
+      }
+      if (!pzReducedMotion()) { try { l.style.transform = 'translateY(' + Math.min(dy, 120) + 'px)'; } catch (e2) {} }
+      l.dataset.pzSwipeDy = String(dy);
+    }, { passive: true });
+    document.addEventListener('touchend', function () {
+      if (!tracking) return;
+      tracking = false;
+      var l = document.getElementById('pzPostChat');
+      if (!l || l.hidden) return;
+      var dy = Number(l.dataset.pzSwipeDy || 0);
+      l.dataset.pzSwipeDy = ''; l.style.transform = '';
+      if (dy >= 90) pzPostChatClose();
+    });
+  }
+  return layer;
+}
+function pzPostChatOpen(post) {
+  if (!post || post.id == null) return false;
+  var card = document.getElementById('chatCard');
+  if (!card) return false;
+  pzPostChatEnsureLayer();
+  var layer = document.getElementById('pzPostChat');
+  var body = document.getElementById('pzPostChatBody');
+  if (!layer || !body) return false;
+  if (!PZ_POSTCHAT_NODE) PZ_POSTCHAT_NODE = { card: card, parent: card.parentNode, next: card.nextSibling };
+  try { hfSetAnchor(post); } catch (e) {}
+  body.appendChild(card);
+  layer.hidden = false;
+  layer.style.transform = '';
+  try { document.body.classList.add('pz-postchat-open'); } catch (e) {}
+  try { hfPaintAnchor(); } catch (e) {}
+  try { chatScroll(); } catch (e) {}
+  pzPostChatKbBind();
+  pzPostChatKbSync();
+  var inp = document.getElementById('chatInput');
+  if (inp) setTimeout(function () { try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} } }, 60);
+  return true;
+}
+function pzPostChatReturn() {
+  var o = PZ_POSTCHAT_ORIGIN;
+  PZ_POSTCHAT_ORIGIN = null;
+  if (!o) return;
+  var attemptScf = function () {
+    if (o.kind !== 'scf' || !o.postId) return false;
+    var w = document.querySelector('.scf-mini-x[data-post-id="' + o.postId + '"]');
+    if (w && typeof scfOpenPop === 'function') {
+      scfOpenPop(w, true);
+      try { window.scrollTo(0, o.scrollY || 0); } catch (e) {}
+      return true;
+    }
+    return false;
+  };
+  try {
+    if (attemptScf()) return;
+    if (o.hash && (location.hash || '') !== o.hash) {
+      location.hash = o.hash;
+      setTimeout(function () { if (!attemptScf()) { try { window.scrollTo(0, o.scrollY || 0); } catch (e) {} } }, 350);
+      return;
+    }
+    window.scrollTo(0, o.scrollY || 0);
+  } catch (e) {}
+}
+function pzPostChatClose() {
+  var layer = document.getElementById('pzPostChat');
+  if (!layer || layer.hidden) return;
+  try { var inp = document.getElementById('chatInput'); if (inp) inp.blur(); } catch (e) {}
+  layer.hidden = true;
+  layer.style.transform = '';
+  layer.style.height = '';
+  layer.style.top = '';
+  try { document.body.classList.remove('pz-postchat-open'); } catch (e) {}
+  try {
+    if (PZ_POSTCHAT_NODE && PZ_POSTCHAT_NODE.card) {
+      var n = PZ_POSTCHAT_NODE;
+      PZ_POSTCHAT_NODE = null;
+      if (n.parent && n.parent.isConnected) {
+        if (n.next && n.next.parentNode === n.parent) n.parent.insertBefore(n.card, n.next);
+        else n.parent.appendChild(n.card);
+      } else {
+        try { n.card.remove(); } catch (e) {}
+      }
+    }
+  } catch (e) {}
+  pzPostChatReturn();
+}
 // (Corrección grilla 2026-10-25) El binding del botón de chat murió
 // con el botón: el chat vive solo dentro del detalle.
 
@@ -22098,14 +22434,22 @@ function bindInicio() {
   bindScfMinis(document.getElementById('inicioView'));
   // (ARMA TODO · Corrección 2) «Pedir un cambio» desde el detalle
   // standalone (apv): el ancla ya quedó fijada; se abre la hoja del
-  // chat único ni bien Inicio pinta.
+  // chat ni bien Inicio pinta.
   if (typeof HF_CHAT_OPEN_PENDING !== 'undefined' && HF_CHAT_OPEN_PENDING) {
     HF_CHAT_OPEN_PENDING = false;
-    try { mzOpenSheet(true); } catch (e) {}
-    try { hfPaintAnchor(); } catch (e) {}
-    // (v442) Si el cliente escribió en el mini-chat del detalle
-    // standalone, su mensaje se entrega ahora en el chat único.
-    try { hfDeliverAskText(); } catch (e) {}
+    if (typeof PZ_POSTCHAT_PENDING_POST !== 'undefined' && PZ_POSTCHAT_PENDING_POST) {
+      // (LOTE CHAT-POSTEO-PANTALLA) El pendiente era un chat de posteo:
+      // abre la pantalla completa, no la hoja.
+      var _pp = PZ_POSTCHAT_PENDING_POST; PZ_POSTCHAT_PENDING_POST = null;
+      try { pzPostChatOpen(_pp); } catch (e) {}
+      try { hfPaintAnchor(); } catch (e) {}
+      try { hfDeliverAskText(); } catch (e) {}
+    } else {
+      // (LOTE CHATPANTALLA) La hoja se retiró: el pendiente se entrega
+      // en la pantalla de chat (bindChatFull pinta el ancla y entrega).
+      if ((location.hash || '').split('?')[0] !== '#/app/chat') { location.hash = '#/app/chat'; }
+      else { try { hfPaintAnchor(); } catch (e) {} try { hfDeliverAskText(); } catch (e) {} }
+    }
   }
   // (Frente 3 · suma 2) Gestos del feed vivo (preview de reels con
   // press-and-hold + hoja de acciones en futuros): capa extra sobre el
@@ -22171,29 +22515,25 @@ function bindInicio() {
   $$('#inicioView [data-lightbox]').forEach(el => el.onclick = () => {
     lbOpenFrom(el);
   });
-  // El chat de la hoja: EXACTAMENTE el cableado de Schedule (mismo
-  // historial, mismo envío, misma subida). Una sola implementación.
+  // (LOTE CHATPANTALLA) El chat ya no vive en una hoja sobre Inicio:
+  // es pantalla completa (#/app/chat). El cableado de siempre corre
+  // en la pantalla (bindChatFull); acá estas dos llamadas no encuentran
+  // sus elementos y no hacen nada con el chat.
   try { bindChat(); } catch (e) {}
   try { bindSchedUpload(); } catch (e) {}
   const clickUp = () => { const f = document.getElementById('albumFile'); if (f) f.click(); };
   const agUp = $('#agUploadBtn');
   if (agUp) agUp.onclick = clickUp;
-  // El chip de Ideas dentro de la hoja: el panel de ideas vive en la
-  // Semana — se abre allá (sin callejones sin salida).
-  const ic = $('#ideasChip');
-  if (ic) ic.onclick = () => { IDEAS_PANEL_OPEN = true; mzCloseSheet(); location.hash = '#/app/schedule'; };
-  // Barra de chat fija: + sube (mismo flujo), el campo abre la hoja,
-  // el micrófono abre la hoja y arranca la nota de voz de siempre.
+  // (LOTE CHATPANTALLA) La hoja se retiró: el chip de Ideas de la hoja
+  // ya no existe en Inicio; en la pantalla de chat lo cablea bindChatFull.
+  // Barra de chat fija: + sube (mismo flujo), el campo abre la pantalla
+  // de chat, el micrófono abre la pantalla y arranca la nota de voz.
   const plus = $('#mzPlus');
   if (plus) plus.onclick = clickUp;
   const open = $('#mzChatOpen');
-  if (open) open.onclick = () => mzOpenSheet(true);
+  if (open) open.onclick = () => { location.hash = '#/app/chat'; };
   const mic = $('#mzMic');
-  if (mic) mic.onclick = () => { mzOpenSheet(false); setTimeout(() => { try { voiceToggle(); } catch (e) {} }, 80); };
-  const x = $('#mzSheetX');
-  if (x) x.onclick = mzCloseSheet;
-  const sh = $('#mzSheet');
-  if (sh) sh.addEventListener('click', (e) => { if (e.target === sh) mzCloseSheet(); });
+  if (mic) mic.onclick = () => { window.__pzChatVoice = true; location.hash = '#/app/chat'; };
   // (v442 · Corrección de Valentino 02:15: «eliminar esto.
   // innecesario.») El botón-anuncio de Ideas («💡 Tenés N ideas nuevas
   // de Posty →», mzIdeasGo) SALIÓ de la pantalla principal: ni su
@@ -22614,7 +22954,7 @@ function bindApp(tab) {
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
   if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
   if (tab === 'analisis' && typeof bindAnalisis === 'function') bindAnalisis(); // 🧠 la carta se pinta al cargar el chunk
-  if (tab === 'chat') bindChatView(); // chat como escape hatch (FASE 4: ya no es el home)
+  if (tab === 'chat') bindChatFull(); // (LOTE CHATPANTALLA) El chat principal es pantalla completa
   if (tab === 'schedule') bindSchedule();
   if (tab === 'inicio') bindInicio();
   if (tab === 'onboarding') bindOnboarding(); // FASE 4: cablea form directo o entrevista (antes dead code: nunca se llamaba)
