@@ -1,7 +1,7 @@
 // test-lotedockrota.js — LOTE DOCKROTA · la barra de Inicio rota.
 // Valentino 1/11 («Sí, que rote en la barra»): el botón .mz-ph
 // (#mzChatOpen, cara + texto) que abre la hoja tiene que rotar sus
-// frases igual que el chat de adentro: mismas 4 frases (ES/EN),
+// frases igual que el chat de adentro: mismas 9 preguntas (ES/EN, Valentino 3/11),
 // cada 4 s, mismo fundido ~360 ms. Solo rota el TEXTO: la cara,
 // el + y el micrófono quedan intactos, y el tap abre la hoja igual.
 // Node puro, lee el árbol. Uso: node test-lotedockrota.js
@@ -56,20 +56,20 @@ t(mzRule.includes('color:#47617A'), 'dock sigue #47617A (oscuro de chat-4s intac
 t(mzRule.includes('flex:1'), 'dock sigue flexible (sin anchos fijos nuevos)');
 
 // ---------- 4. Listas ES/EN intactas ----------
-t(app.includes("es: ['escribile a posty…', 'preguntale por tu semana…', 'pedile una idea para hoy…', 'contale qué vendés…']"), 'lista ES intacta');
-t(app.includes("en: ['write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…']"), 'lista EN intacta');
+t(app.includes("es: ['¿qué idea tenés para el próximo post?', '¿tenés fotos para mandarme?', '¿alguna promo esta semana?', 'pedime exactamente lo que querés', '¿qué querés vender esta semana?', '¿hay algo nuevo en tu negocio?', '¿qué te gustaría cambiar de tu feed?', 'contame qué vendiste hoy', '¿tenés un video para armar un reel?']"), 'lista ES intacta');
+t(app.includes("en: ['got an idea for the next post?', 'got photos to send me?', 'any promo this week?', 'ask me for exactly what you want', 'what do you want to sell this week?', 'anything new in your business?', 'what would you like to change about your feed?', 'tell me what you sold today', 'got a video to turn into a reel?']"), 'lista EN intacta');
 t(app.includes('function pzChatPhList()'), 'la lista se resuelve por idioma en cada tick');
 
 // ---------- 5. Versiones + censo (base v530 (chat-texto + chat-4s), sin bumps todavía) ----------
-t(srv.includes("const BUILD_ID = '20261101-v533'"), 'BUILD v530 (sin bump hasta el push)');
-t(idx.includes('app.js?v=355') && idx.includes('styles.css?v=20261074'), 'index: ?v= de v530 (bump al pushear)');
-t(idxEn.includes('styles.css?v=20261074') && !idxEn.includes('app.js?v='), 'en/index: styles v530, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V intacto');
+t(srv.includes("const BUILD_ID = '20261101-v572'"), 'BUILD v530 (sin bump hasta el push)');
+t(idx.includes('app.js?v=383') && idx.includes('styles.css?v=20261099'), 'index: ?v= de v530 (bump al pushear)');
+t(idxEn.includes('styles.css?v=20261091') && !idxEn.includes('app.js?v='), 'en/index: styles v530, sin app.js');
+t(app.includes("const CHUNK_V = '20261101-v565'"), 'CHUNK_V intacto');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
 t(cnt(srv, '/' + 'aprobar') === 16, 'censo server: marcador 16');
-t(cnt(app, 'pzGoBack') === 4, 'censo app: pzGoBack 4');
+t(cnt(app, 'pzGoBack') === 6, 'censo app: pzGoBack 4');
 t(cnt(app, 'pz-detalle-setup') === 1, 'censo app: pz-detalle-setup 1');
 t(cnt(app, '/' + 'aprobar') === 1, 'censo app: marcador 1');
 t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
@@ -122,14 +122,14 @@ function dockSandbox(spans, reduced) {
     t(timers.length === 1 && timers[0].ms === 4000, 'funcional: intervalo 4000 al arrancar');
     t(sp.textContent === 'escribile a posty…' && sp._classes.has('pz-ph-fading'), 'fundido dock: al arrancar se apaga sin cambiar todavía');
     await sleep(300);
-    t(sp.textContent === 'preguntale por tu semana…' && sp._classes.has('pz-ph-fading'), 'fundido dock: a los 300 ms ya cambió, clase todavía puesta');
+    t(sp.textContent === '¿tenés fotos para mandarme?' && sp._classes.has('pz-ph-fading'), 'fundido dock: a los 300 ms ya cambió, clase todavía puesta');
     await sleep(250);
-    t(!sp._classes.has('pz-ph-fading') && sp.textContent === 'preguntale por tu semana…', 'fundido dock: a los 550 ms la clase se fue y la frase quedó');
+    t(!sp._classes.has('pz-ph-fading') && sp.textContent === '¿tenés fotos para mandarme?', 'fundido dock: a los 550 ms la clase se fue y la frase quedó');
     // Tick: mismo fundido, tercera frase.
     timers[0].fn();
-    t(sp.textContent === 'preguntale por tu semana…' && sp._classes.has('pz-ph-fading'), 'fundido dock: el tick apaga antes de cambiar');
+    t(sp.textContent === '¿tenés fotos para mandarme?' && sp._classes.has('pz-ph-fading'), 'fundido dock: el tick apaga antes de cambiar');
     await sleep(300);
-    t(sp.textContent === 'pedile una idea para hoy…', 'fundido dock: el tick cambia a la tercera frase');
+    t(sp.textContent === '¿alguna promo esta semana?', 'fundido dock: el tick cambia a la tercera frase');
     // Reabrir no duplica el intervalo.
     sb.pzChatPhStart();
     t(timers.length === 1, 'reabrir no duplica el intervalo');
@@ -139,7 +139,7 @@ function dockSandbox(spans, reduced) {
     const sp = mockSpan('escribile a posty…');
     const { sb } = dockSandbox([sp], true);
     sb.pzChatPhStart();
-    t(sp.textContent === 'preguntale por tu semana…' && !sp._classes.has('pz-ph-fading'), 'reduced-motion dock: cambio instantáneo sin fundido');
+    t(sp.textContent === '¿tenés fotos para mandarme?' && !sp._classes.has('pz-ph-fading'), 'reduced-motion dock: cambio instantáneo sin fundido');
   }
   // Cada span con su propio índice.
   {
@@ -149,10 +149,10 @@ function dockSandbox(spans, reduced) {
     const { sb, timers } = dockSandbox([a, b], false);
     sb.pzChatPhStart();
     await sleep(300);
-    t(a.textContent === 'preguntale por tu semana…' && b.textContent === 'contale qué vendés…', 'cada span avanza desde su propio índice');
+    t(a.textContent === '¿tenés fotos para mandarme?' && b.textContent === 'pedime exactamente lo que querés', 'cada span avanza desde su propio índice');
     timers[0].fn();
     await sleep(300);
-    t(a.textContent === 'pedile una idea para hoy…' && b.textContent === 'escribile a posty…', 'tick dock: cada span sigue su propia rueda');
+    t(a.textContent === '¿alguna promo esta semana?' && b.textContent === '¿qué querés vender esta semana?', 'tick dock: cada span sigue su propia rueda');
   }
   // EN: misma rueda.
   {
@@ -161,20 +161,30 @@ function dockSandbox(spans, reduced) {
     sb.ME.lang = 'en';
     sb.pzChatPhStart();
     await sleep(300);
-    t(sp.textContent === 'ask about your week…', 'EN dock: rota con la lista en inglés');
+    t(sp.textContent === 'got photos to send me?', 'EN dock: rota con la lista en inglés');
   }
-  // La rueda completa vuelve al inicio (4 frases).
+  // La rueda completa vuelve al inicio (9 frases, Valentino 3/11).
   {
     const sp = mockSpan('escribile a posty…');
     const { sb, timers } = dockSandbox([sp], true);
     sb.pzChatPhStart();
-    t(sp.textContent === 'preguntale por tu semana…', 'rueda: frase 2');
+    t(sp.textContent === '¿tenés fotos para mandarme?', 'rueda: frase 2');
     timers[0].fn();
-    t(sp.textContent === 'pedile una idea para hoy…', 'rueda: frase 3');
+    t(sp.textContent === '¿alguna promo esta semana?', 'rueda: frase 3');
     timers[0].fn();
-    t(sp.textContent === 'contale qué vendés…', 'rueda: frase 4');
+    t(sp.textContent === 'pedime exactamente lo que querés', 'rueda: frase 4');
     timers[0].fn();
-    t(sp.textContent === 'escribile a posty…', 'rueda: vuelve a la frase 1');
+    t(sp.textContent === '¿qué querés vender esta semana?', 'rueda: frase 5');
+    timers[0].fn();
+    t(sp.textContent === '¿hay algo nuevo en tu negocio?', 'rueda: frase 6');
+    timers[0].fn();
+    t(sp.textContent === '¿qué te gustaría cambiar de tu feed?', 'rueda: frase 7');
+    timers[0].fn();
+    t(sp.textContent === 'contame qué vendiste hoy', 'rueda: frase 8');
+    timers[0].fn();
+    t(sp.textContent === '¿tenés un video para armar un reel?', 'rueda: frase 9');
+    timers[0].fn();
+    t(sp.textContent === '¿qué idea tenés para el próximo post?', 'rueda: vuelve a la frase 1');
   }
 
   console.log(`LOTEDOCKROTA: ${ok} ok, ${bad} fallos`);

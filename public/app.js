@@ -11850,7 +11850,7 @@ async function maybePhotoWeekReminder(data) {
 }
 
 // (LOTE CHATTEXTO · rotación unificada) Todos los campos de chat rotan
-// entre las mismas 4 sugerencias en minúscula: #chatInput (principal,
+// entre las mismas 9 preguntas en minúscula (Valentino 3/11): #chatInput (principal,
 // fijo de Inicio y hoja — chatCardHTML repite ese id) y .hf-ask-input
 // (mini-chat de aprobación). Un solo intervalo; cada campo rota con su
 // propio índice (dataset.phI), así ninguno queda fijo por ser «el
@@ -11863,8 +11863,8 @@ async function maybePhotoWeekReminder(data) {
 // Con prefers-reduced-motion la frase queda fija en la primera. Lista
 // por idioma según ME.lang en cada tick.
 const PZ_CHAT_PH = {
-  es: ['escribile a posty…', 'preguntale por tu semana…', 'pedile una idea para hoy…', 'contale qué vendés…'],
-  en: ['write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…']
+  es: ['¿qué idea tenés para el próximo post?', '¿tenés fotos para mandarme?', '¿alguna promo esta semana?', 'pedime exactamente lo que querés', '¿qué querés vender esta semana?', '¿hay algo nuevo en tu negocio?', '¿qué te gustaría cambiar de tu feed?', 'contame qué vendiste hoy', '¿tenés un video para armar un reel?'],
+  en: ['got an idea for the next post?', 'got photos to send me?', 'any promo this week?', 'ask me for exactly what you want', 'what do you want to sell this week?', 'anything new in your business?', 'what would you like to change about your feed?', 'tell me what you sold today', 'got a video to turn into a reel?']
 };
 function pzChatPhList() {
   try { return PZ_CHAT_PH[ME.lang === 'en' ? 'en' : 'es']; } catch (e) { return PZ_CHAT_PH.es; }

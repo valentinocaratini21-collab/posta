@@ -32,15 +32,15 @@ const sliceFn = (src, from, to) => {
 };
 
 // ---------- Versiones + censo (referencia v527) ----------
-t(srv.includes("const BUILD_ID = '20261101-v533'"), 'BUILD v527 en server.js');
-t(idx.includes('app.js?v=355'), 'index ES: app.js?v=355 (bump al push v529)');
-t(idxEn.includes('styles.css?v=20261074') && !idxEn.includes('app.js?v='), 'en/index: styles 20261070, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v523 (ningún chunk tocado)');
+t(srv.includes("const BUILD_ID = '20261101-v572'"), 'BUILD v527 en server.js');
+t(idx.includes('app.js?v=383'), 'index ES: app.js?v=383 (bump al push v529)');
+t(idxEn.includes('styles.css?v=20261091') && !idxEn.includes('app.js?v='), 'en/index: styles 20261070, sin app.js');
+t(app.includes("const CHUNK_V = '20261101-v565'"), 'CHUNK_V sigue v523 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
 t(cnt(srv, '/' + 'aprobar') === 16, 'censo server: marcador 16');
-t(cnt(app, 'pzGoBack') === 4, 'censo app: pzGoBack 4');
+t(cnt(app, 'pzGoBack') === 6, 'censo app: pzGoBack 4');
 t(cnt(app, 'pz-detalle-setup') === 1, 'censo app: pz-detalle-setup 1');
 t(cnt(app, '/' + 'aprobar') === 1, 'censo app: marcador 1');
 t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
@@ -62,8 +62,8 @@ t(ROT.includes("pzPhEls('#chatInput')") && ROT.includes("pzPhEls('.hf-ask-input'
 t(ROT.includes('setInterval(pzPhTick, 4000)') && cnt(ROT, 'setInterval(') === 1, 'rotador LOTE CHAT4S: un solo intervalo de 4000 ms (antes 8000 ms)');
 t(app.includes('try { pzPhStart(); } catch (e) {}') && sliceFn(app, 'function mzOpenSheet(', 'function mzCloseSheet()').includes('pzPhStart()'), 'hoja: mzOpenSheet arranca la rotación');
 t(ROT.includes("'(prefers-reduced-motion: reduce)'"), 'rotador: respeta reduced-motion');
-t(app.includes("es: ['escribile a posty…', 'preguntale por tu semana…', 'pedile una idea para hoy…', 'contale qué vendés…']"), 'contenido: mismas 4 frases ES');
-t(app.includes("en: ['write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…']"), 'contenido: espejo EN con 4 frases');
+t(app.includes("es: ['¿qué idea tenés para el próximo post?', '¿tenés fotos para mandarme?', '¿alguna promo esta semana?', 'pedime exactamente lo que querés', '¿qué querés vender esta semana?', '¿hay algo nuevo en tu negocio?', '¿qué te gustaría cambiar de tu feed?', 'contame qué vendiste hoy', '¿tenés un video para armar un reel?']"), 'contenido: mismas 4 frases ES');
+t(app.includes("en: ['got an idea for the next post?', 'got photos to send me?', 'any promo this week?', 'ask me for exactly what you want', 'what do you want to sell this week?', 'anything new in your business?', 'what would you like to change about your feed?', 'tell me what you sold today', 'got a video to turn into a reel?']"), 'contenido: espejo EN con 4 frases');
 
 // ---------- M78: llamadas del bloque resuelven ----------
 {
@@ -125,8 +125,8 @@ function makeSandbox(o) {
     setLang: (l) => { ME.lang = l; },
   };
 }
-const ES = ['escribile a posty…', 'preguntale por tu semana…', 'pedile una idea para hoy…', 'contale qué vendés…'];
-const EN = ['write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…'];
+const ES = ['¿qué idea tenés para el próximo post?', '¿tenés fotos para mandarme?', '¿alguna promo esta semana?', 'pedime exactamente lo que querés', '¿qué querés vender esta semana?', '¿hay algo nuevo en tu negocio?', '¿qué te gustaría cambiar de tu feed?', 'contame qué vendiste hoy', '¿tenés un video para armar un reel?'];
+const EN = ['got an idea for the next post?', 'got photos to send me?', 'any promo this week?', 'ask me for exactly what you want', 'what do you want to sell this week?', 'anything new in your business?', 'what would you like to change about your feed?', 'tell me what you sold today', 'got a video to turn into a reel?'];
 
 // --- 1. Arranque: avance inmediato + un solo intervalo ---
 {
@@ -152,8 +152,19 @@ const EN = ['write to posty…', 'ask about your week…', 'ask for an idea for 
   t(a.placeholder === ES[2], 'foco: con el campo enfocado Y vacío, el placeholder AVANZA (bug corregido)');
   s.tick();
   t(a.placeholder === ES[3], 'tick: avanza a la frase 4');
+  // 3/11 Valentino: rotación de 9 preguntas — el ciclo envuelve tras la 9, no tras la 4.
   s.tick();
-  t(a.placeholder === ES[0], 'tick: envuelve a la frase 1');
+  t(a.placeholder === ES[4], 'tick: avanza a la frase 5');
+  s.tick();
+  t(a.placeholder === ES[5], 'tick: avanza a la frase 6');
+  s.tick();
+  t(a.placeholder === ES[6], 'tick: avanza a la frase 7');
+  s.tick();
+  t(a.placeholder === ES[7], 'tick: avanza a la frase 8');
+  s.tick();
+  t(a.placeholder === ES[8], 'tick: avanza a la frase 9');
+  s.tick();
+  t(a.placeholder === ES[0], 'tick: envuelve a la frase 1 (ciclo de 9)');
 }
 
 // --- 3. Con texto: no avanza ni pisa; al vaciar, retoma ---

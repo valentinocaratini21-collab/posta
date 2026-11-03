@@ -74,7 +74,7 @@ t(css.includes('.in{width:100%;background:#FBFDFF') && css.includes('color:var(-
 t(css.includes('.hf-ask-input{flex:1;min-width:0') && sliceFn(css, '.hf-ask-input{', '}').includes('color:var(--txt)'), 'texto escrito .hf-ask-input sigue oscuro');
 
 // ---------- 7. EN espejado ----------
-t(app.includes("en: ['write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…']"), 'lista EN espejo intacta');
+t(app.includes("en: ['got an idea for the next post?', 'got photos to send me?', 'any promo this week?', 'ask me for exactly what you want', 'what do you want to sell this week?', 'anything new in your business?', 'what would you like to change about your feed?', 'tell me what you sold today', 'got a video to turn into a reel?']"), 'lista EN espejo intacta');
 t(rot.includes('pzChatPhList()'), 'la lista se resuelve por idioma en cada tick');
 
 // ---------- 8. Angosto: sin anchos nuevos ----------
@@ -83,15 +83,15 @@ const chat4sCss = css.slice(css.indexOf('/* (LOTE CHAT4S) Fundido'));
 t(!chat4sCss.includes('width:'), 'el bloque del fundido no agrega anchos');
 
 // ---------- 9. Versiones + censo (base v530) ----------
-t(srv.includes("const BUILD_ID = '20261101-v533'"), 'BUILD v530');
-t(idx.includes('app.js?v=355') && idx.includes('styles.css?v=20261074'), 'index: ?v= de v530');
-t(idxEn.includes('styles.css?v=20261074') && !idxEn.includes('app.js?v='), 'en/index: styles v530, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V intacto');
+t(srv.includes("const BUILD_ID = '20261101-v572'"), 'BUILD v530');
+t(idx.includes('app.js?v=383') && idx.includes('styles.css?v=20261099'), 'index: ?v= de v530');
+t(idxEn.includes('styles.css?v=20261091') && !idxEn.includes('app.js?v='), 'en/index: styles v530, sin app.js');
+t(app.includes("const CHUNK_V = '20261101-v565'"), 'CHUNK_V intacto');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
 t(cnt(srv, '/' + 'aprobar') === 16, 'censo server: marcador 16');
-t(cnt(app, 'pzGoBack') === 4, 'censo app: pzGoBack 4');
+t(cnt(app, 'pzGoBack') === 6, 'censo app: pzGoBack 4');
 t(cnt(app, 'pz-detalle-setup') === 1, 'censo app: pz-detalle-setup 1');
 t(cnt(app, '/' + 'aprobar') === 1, 'censo app: marcador 1');
 t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
@@ -143,25 +143,25 @@ function rotSandbox(inputs, reduced) {
   // Fundido: al arrancar no cambia de golpe; a los ~300 ms ya cambió
   // y la clase sigue; a los ~500 ms la clase se fue.
   {
-    const inp = mockInput('escribile a posty…');
+    const inp = mockInput('¿qué idea tenés para el próximo post?');
     const { sb, timers } = rotSandbox({ chat: [inp], ask: [] }, false);
     sb.pzChatPhStart();
     t(timers.length === 1 && timers[0].ms === 4000, 'funcional: intervalo 4000 al arrancar');
-    t(inp.placeholder === 'escribile a posty…' && inp._classes.has('pz-ph-fading'), 'fundido: al arrancar se apaga sin cambiar todavía');
+    t(inp.placeholder === '¿qué idea tenés para el próximo post?' && inp._classes.has('pz-ph-fading'), 'fundido: al arrancar se apaga sin cambiar todavía');
     await sleep(300);
-    t(inp.placeholder === 'preguntale por tu semana…' && inp._classes.has('pz-ph-fading'), 'fundido: a los 300 ms ya cambió, clase todavía puesta');
+    t(inp.placeholder === '¿tenés fotos para mandarme?' && inp._classes.has('pz-ph-fading'), 'fundido: a los 300 ms ya cambió, clase todavía puesta');
     await sleep(250);
-    t(!inp._classes.has('pz-ph-fading') && inp.placeholder === 'preguntale por tu semana…', 'fundido: a los 550 ms la clase se fue y la frase quedó');
+    t(!inp._classes.has('pz-ph-fading') && inp.placeholder === '¿tenés fotos para mandarme?', 'fundido: a los 550 ms la clase se fue y la frase quedó');
     // Tick: mismo fundido.
     timers[0].fn();
-    t(inp.placeholder === 'preguntale por tu semana…' && inp._classes.has('pz-ph-fading'), 'fundido: el tick apaga antes de cambiar');
+    t(inp.placeholder === '¿tenés fotos para mandarme?' && inp._classes.has('pz-ph-fading'), 'fundido: el tick apaga antes de cambiar');
     await sleep(300);
-    t(inp.placeholder === 'pedile una idea para hoy…', 'fundido: el tick cambia a la tercera frase');
+    t(inp.placeholder === '¿alguna promo esta semana?', 'fundido: el tick cambia a la tercera frase');
     // Con texto no rota ni con fundido.
     inp.value = 'hola';
     timers[0].fn();
     await sleep(450);
-    t(inp.placeholder === 'pedile una idea para hoy…' && !inp._classes.has('pz-ph-fading'), 'con texto no rota');
+    t(inp.placeholder === '¿alguna promo esta semana?' && !inp._classes.has('pz-ph-fading'), 'con texto no rota');
     inp.value = '';
     // Reabrir no duplica el intervalo.
     sb.pzChatPhStart();
@@ -169,42 +169,42 @@ function rotSandbox(inputs, reduced) {
   }
   // Escribir durante el fundido: no pisa lo escrito.
   {
-    const inp = mockInput('escribile a posty…');
+    const inp = mockInput('¿qué idea tenés para el próximo post?');
     const { sb, timers } = rotSandbox({ chat: [inp], ask: [] }, false);
     sb.pzChatPhStart();
     await sleep(50);
     inp.value = 'yo escribo';
     await sleep(450);
-    t(inp.placeholder === 'escribile a posty…' && !inp._classes.has('pz-ph-fading'), 'escribir durante el fundido: no pisa y quita la clase');
+    t(inp.placeholder === '¿qué idea tenés para el próximo post?' && !inp._classes.has('pz-ph-fading'), 'escribir durante el fundido: no pisa y quita la clase');
   }
   // Reduced-motion: instantáneo, sin clase.
   {
-    const inp = mockInput('escribile a posty…');
+    const inp = mockInput('¿qué idea tenés para el próximo post?');
     const { sb } = rotSandbox({ chat: [inp], ask: [] }, true);
     sb.pzChatPhStart();
-    t(inp.placeholder === 'preguntale por tu semana…' && !inp._classes.has('pz-ph-fading'), 'reduced-motion: cambio instantáneo sin fundido');
+    t(inp.placeholder === '¿tenés fotos para mandarme?' && !inp._classes.has('pz-ph-fading'), 'reduced-motion: cambio instantáneo sin fundido');
   }
   // Cada campo con su propio índice.
   {
-    const a = mockInput('escribile a posty…');
-    const b = mockInput('escribile a posty…');
+    const a = mockInput('¿qué idea tenés para el próximo post?');
+    const b = mockInput('¿qué idea tenés para el próximo post?');
     b.dataset.phI = '2';
     const { sb, timers } = rotSandbox({ chat: [a], ask: [b] }, false);
     sb.pzChatPhStart();
     await sleep(300);
-    t(a.placeholder === 'preguntale por tu semana…' && b.placeholder === 'contale qué vendés…', 'cada campo avanza desde su propio índice');
+    t(a.placeholder === '¿tenés fotos para mandarme?' && b.placeholder === 'pedime exactamente lo que querés', 'cada campo avanza desde su propio índice');
     timers[0].fn();
     await sleep(300);
-    t(a.placeholder === 'pedile una idea para hoy…' && b.placeholder === 'escribile a posty…', 'tick: cada campo sigue su propia rueda');
+    t(a.placeholder === '¿alguna promo esta semana?' && b.placeholder === '¿qué querés vender esta semana?', 'tick: cada campo sigue su propia rueda');
   }
   // EN: misma rueda, 4 s, fundido.
   {
-    const inp = mockInput('write to posty…');
+    const inp = mockInput('got an idea for the next post?');
     const { sb } = rotSandbox({ chat: [inp], ask: [] }, false);
     sb.ME.lang = 'en';
     sb.pzChatPhStart();
     await sleep(300);
-    t(inp.placeholder === 'ask about your week…', 'EN: rota con la lista en inglés');
+    t(inp.placeholder === 'got photos to send me?', 'EN: rota con la lista en inglés');
   }
 
   console.log(`LOTECHAT4S: ${ok} ok, ${bad} fallos`);

@@ -50,15 +50,15 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v518) ----------
-t(srv.includes("const BUILD_ID = '20261101-v533'"), 'BUILD v522 en server.js');
-t(idx.includes('app.js?v=355') && idx.includes('styles.css?v=20261074'), 'index: app 340 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261074') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
+t(srv.includes("const BUILD_ID = '20261101-v572'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=383') && idx.includes('styles.css?v=20261099'), 'index: app 340 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261091') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(app.includes("const CHUNK_V = '20261101-v565'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
 t(cnt(srv, '/' + 'aprobar') === 16, 'censo server: marcador 16');
-t(cnt(app, 'pzGoBack') === 4, 'censo app: pzGoBack 4');
+t(cnt(app, 'pzGoBack') === 6, 'censo app: pzGoBack 4');
 t(cnt(app, 'pz-detalle-setup') === 1, 'censo app: pz-detalle-setup 1');
 t(cnt(app, '/' + 'aprobar') === 1, 'censo app: marcador 1');
 t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
@@ -193,7 +193,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
 
 // ---------- ASK funcional: cambia sin escribir ----------
 {
-  const input = { value: '', placeholder: 'escribile a posty…', dataset: {} };
+  const input = { value: '', placeholder: '¿qué idea tenés para el próximo post?', dataset: {} };
   let timers = [];
   const sb = sandbox({
     document: {
@@ -218,22 +218,22 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
     .replace('function pzAskPhStart', 'globalThis.pzAskPhStart = function');
   vm.runInContext(code, sb);
   sb.pzAskPhStart();
-  t(input.placeholder === 'preguntale por tu semana…' && timers.length === 1 && timers[0].ms === 4000, 'ASKf LOTE CHAT4S: al abrir avanza una y arma intervalo 4 s');
+  t(input.placeholder === '¿tenés fotos para mandarme?' && timers.length === 1 && timers[0].ms === 4000, 'ASKf LOTE CHAT4S: al abrir avanza una y arma intervalo 4 s');
   timers[0].fn();
-  t(input.placeholder === 'pedile una idea para hoy…', 'ASKf: tick en idle avanza sin escribir');
+  t(input.placeholder === '¿alguna promo esta semana?', 'ASKf: tick en idle avanza sin escribir');
   input.value = 'hola';
   timers[0].fn();
-  t(input.placeholder === 'pedile una idea para hoy…', 'ASKf: con texto no rota');
+  t(input.placeholder === '¿alguna promo esta semana?', 'ASKf: con texto no rota');
   input.value = '';
   sb.document.activeElement = input;
   timers[0].fn();
-  t(input.placeholder === 'contale qué vendés…', 'ASKf LOTE CHATTEXTO: con el campo enfocado y vacío el tick SÍ avanza');
+  t(input.placeholder === 'pedime exactamente lo que querés', 'ASKf LOTE CHATTEXTO: con el campo enfocado y vacío el tick SÍ avanza');
   sb.document.activeElement = null;
   sb.pzAskPhStart();
-  t(timers.length === 1 && input.placeholder === 'contale qué vendés…', 'ASKf: reabrir no duplica el intervalo y avanza');
+  t(timers.length === 1 && input.placeholder === 'pedime exactamente lo que querés', 'ASKf: reabrir no duplica el intervalo y avanza');
   sb.ME.lang = 'en';
   sb.pzAskPhNext();
-  t(input.placeholder === 'write to posty…', 'ASKf: EN rota con la lista en inglés');
+  t(input.placeholder === 'what do you want to sell this week?', 'ASKf: EN rota con la lista en inglés (índice compartido: con 9, el índice 4 cae en EN[4])');
 }
 
 // ---------- Intactos ----------

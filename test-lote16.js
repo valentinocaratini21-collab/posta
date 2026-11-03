@@ -47,15 +47,15 @@ function loadFns(sb, names) {
 }
 
 // ---------- Versiones + censo (referencia v517) ----------
-t(srv.includes("const BUILD_ID = '20261101-v533'"), 'BUILD v522 en server.js');
-t(idx.includes('app.js?v=355') && idx.includes('styles.css?v=20261074'), 'index: app 339 + styles 20261064');
-t(idxEn.includes('styles.css?v=20261074') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
+t(srv.includes("const BUILD_ID = '20261101-v572'"), 'BUILD v522 en server.js');
+t(idx.includes('app.js?v=383') && idx.includes('styles.css?v=20261099'), 'index: app 339 + styles 20261064');
+t(idxEn.includes('styles.css?v=20261091') && !idxEn.includes('app.js?v='), 'en/index: styles 20261064, sin app.js');
+t(app.includes("const CHUNK_V = '20261101-v565'"), 'CHUNK_V sigue v516 (ningún chunk tocado)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
 t(cnt(srv, '/' + 'aprobar') === 16, 'censo server: marcador 16');
-t(cnt(app, 'pzGoBack') === 4, 'censo app: pzGoBack 4');
+t(cnt(app, 'pzGoBack') === 6, 'censo app: pzGoBack 4');
 t(cnt(app, 'pz-detalle-setup') === 1, 'censo app: pz-detalle-setup 1');
 t(cnt(app, '/' + 'aprobar') === 1, 'censo app: marcador 1');
 t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
@@ -142,8 +142,8 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
 
 // ---------- C1: placeholder que rota ----------
 {
-  t(app.includes("es: ['escribile a posty…', 'preguntale por tu semana…', 'pedile una idea para hoy…', 'contale qué vendés…']"), 'C1: lista ES exacta (4, minúscula)');
-  t(app.includes("en: ['write to posty…', 'ask about your week…', 'ask for an idea for today…', 'tell him what you sell…']"), 'C1: lista EN espejo');
+  t(app.includes("es: ['¿qué idea tenés para el próximo post?', '¿tenés fotos para mandarme?', '¿alguna promo esta semana?', 'pedime exactamente lo que querés', '¿qué querés vender esta semana?', '¿hay algo nuevo en tu negocio?', '¿qué te gustaría cambiar de tu feed?', 'contame qué vendiste hoy', '¿tenés un video para armar un reel?']"), 'C1: lista ES exacta (4, minúscula)');
+  t(app.includes("en: ['got an idea for the next post?', 'got photos to send me?', 'any promo this week?', 'ask me for exactly what you want', 'what do you want to sell this week?', 'anything new in your business?', 'what would you like to change about your feed?', 'tell me what you sold today', 'got a video to turn into a reel?']"), 'C1: lista EN espejo');
   t(app.includes('function pzChatPhNext') && app.includes('function pzChatPhStart') && app.includes('function pzChatPhList'), 'C1: funciones de rotación existen');
   t(app.includes('setInterval(pzPhTick, 4000)'), 'C1 LOTE CHAT4S: intervalo 4 s (antes ~8 s)');
   const rot = sliceFn(app, 'const PZ_CHAT_PH', 'async function bindChatView');
@@ -238,7 +238,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
 
 // ---------- Funcional: rotación del chat ----------
 {
-  const input = { value: '', placeholder: 'escribile a posty…', dataset: {} };
+  const input = { value: '', placeholder: '¿qué idea tenés para el próximo post?', dataset: {} };
   let timers = [];
   const sb = sandbox({
     document: {
@@ -257,24 +257,24 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
     .replace('function pzChatPhNext', 'globalThis.pzChatPhNext = function')
     .replace('function pzChatPhStart', 'globalThis.pzChatPhStart = function');
   vm.runInContext(code, sb);
-  t(sb.PZ_CHAT_PH.es.length === 4 && sb.PZ_CHAT_PH.en.length === 4, 'chat: 4 sugerencias por idioma');
+  t(sb.PZ_CHAT_PH.es.length === 9 && sb.PZ_CHAT_PH.en.length === 9, 'chat: 9 preguntas por idioma (Valentino 3/11)');
   sb.pzChatPhStart();
-  t(input.placeholder === 'preguntale por tu semana…' && timers.length === 1 && timers[0].ms === 4000, 'chat LOTE CHAT4S: al abrir avanza una y arma intervalo 4 s');
+  t(input.placeholder === '¿tenés fotos para mandarme?' && timers.length === 1 && timers[0].ms === 4000, 'chat LOTE CHAT4S: al abrir avanza una y arma intervalo 4 s');
   timers[0].fn();
-  t(input.placeholder === 'pedile una idea para hoy…', 'chat: tick en idle avanza');
+  t(input.placeholder === '¿alguna promo esta semana?', 'chat: tick en idle avanza');
   input.value = 'hola';
   timers[0].fn();
-  t(input.placeholder === 'pedile una idea para hoy…', 'chat: con texto no rota');
+  t(input.placeholder === '¿alguna promo esta semana?', 'chat: con texto no rota');
   input.value = '';
   sb.document.activeElement = input;
   timers[0].fn();
-  t(input.placeholder === 'contale qué vendés…', 'chat LOTE CHATTEXTO: con el campo enfocado y vacío el tick SÍ avanza');
+  t(input.placeholder === 'pedime exactamente lo que querés', 'chat LOTE CHATTEXTO: con el campo enfocado y vacío el tick SÍ avanza');
   sb.document.activeElement = null;
   sb.pzChatPhStart();
   t(timers.length === 1, 'chat: reabrir no duplica el intervalo');
   sb.ME.lang = 'en';
   sb.pzChatPhNext();
-  t(input.placeholder === 'write to posty…', 'chat EN: rota con la lista en inglés (índice compartido, vuelve a la base)');
+  t(input.placeholder === 'what do you want to sell this week?', 'chat EN: rota con la lista en inglés (índice compartido: con 9, el índice 4 cae en EN[4])');
 }
 
 console.log(`LOTE16: ${ok} ok, ${bad} fallos`);
