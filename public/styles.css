@@ -3970,20 +3970,16 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-despegue-chip{position:absolute;top:6px;left:6px;z-index:3;background:rgba(255,255,255,.94);color:#0A1E33;border:1.5px solid #FEC14D;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;pointer-events:none;white-space:nowrap}
 /* Ítem 6 — el próximo en salir: marco dorado exacto #FEC14D. */
 .hf-tile.hf-tile-next{outline:2px solid #FEC14D;outline-offset:-2px}
-/* ============ LOTE POSTEO-DIA · 4/11 · corrección Valentino 17:49 ============ */
-/* Solo el tile del posteo de hoy (clase hf-dia-hoy, puesta por
-   homeGridCompose) lleva magia: borde degradado dorado→celeste +
-   destellos ✦ + latido de BRILLO con doble golpe (loop 1,8 s).
-   NADA cambia el tamaño: el borde es un ::after absoluto con inset
-   (no ocupa layout), el brillo es box-shadow (no ocupa layout) y
-   los destellos son overlays con pointer-events:none. Sin escala:
-   el tile mide exactamente lo mismo que los demás, siempre.
-   Reduced-motion: sin latido, brillo suave fijo. */
-.hf-tile.hf-dia-hoy::after{content:"";position:absolute;inset:0;border-radius:inherit;border:3px solid transparent;background:linear-gradient(135deg,#FEC14D,#2793C8,#FEC14D,#2793C8) border-box;-webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;z-index:6;box-shadow:0 0 8px rgba(254,193,77,.35),0 0 12px rgba(39,147,200,.25);animation:pz-dia-latido 1.8s ease-in-out infinite}
-@keyframes pz-dia-latido{0%{box-shadow:0 0 8px rgba(254,193,77,.35),0 0 12px rgba(39,147,200,.25)}15%{box-shadow:0 0 20px rgba(254,193,77,.8),0 0 30px rgba(39,147,200,.55)}30%{box-shadow:0 0 12px rgba(254,193,77,.5),0 0 18px rgba(39,147,200,.35)}45%{box-shadow:0 0 18px rgba(254,193,77,.7),0 0 26px rgba(39,147,200,.5)}60%,100%{box-shadow:0 0 8px rgba(254,193,77,.35),0 0 12px rgba(39,147,200,.25)}}
-.pz-dia-spark{position:absolute;z-index:7;pointer-events:none;line-height:1;font-size:17px;text-shadow:0 0 8px currentColor;animation:pz-dia-tw 1.8s ease-in-out infinite}
-@keyframes pz-dia-tw{0%,100%{opacity:.5;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
-@media (prefers-reduced-motion:reduce){.hf-tile.hf-dia-hoy::after{animation:none;box-shadow:0 0 12px rgba(254,193,77,.5),0 0 18px rgba(39,147,200,.35)}.pz-dia-spark{animation:none;opacity:.9}}
+/* ============ LOTE POSTEO-DIA-2 · 4/11 · corrección Valentino 18:23 ============ */
+/* Carta oculta del próximo por salir (SUPERSEDE la magia de v645, que
+   se retira: el publicado de hoy ya no lleva marca especial). La carta
+   es una tile normal de la grilla (mismo tamaño, misma celda) con
+   superficie velada: velo neutro sin foto, sin magia (sin degradado
+   dorado-celeste, sin destellos) y chapita con la fecha y hora reales.
+   No es interactiva (cursor default) y no anima: nada que respetar en
+   reduced-motion. */
+.hf-tile.hf-carta-oculta{cursor:default;background:linear-gradient(160deg,#EDF1F5,#DCE4EB);border:1px solid rgba(10,30,51,.12)}
+.hf-tile.hf-carta-oculta .hf-carta-velo{position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(255,255,255,.45) 0 10px,rgba(255,255,255,0) 10px 24px);pointer-events:none}
 /* Ítem 3 — racha de constancia debajo del perfil. */
 .hf-racha{font-size:13px;font-weight:700;color:#0A1E33;margin-top:8px;display:flex;align-items:center;gap:8px}
 @media (prefers-color-scheme: dark){

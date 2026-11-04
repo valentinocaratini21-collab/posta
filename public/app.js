@@ -18108,10 +18108,42 @@ function homeGridCompose(input) {
   const recents = Array.isArray(o.recents) ? o.recents : [];
   const tiles = [];
   const isStory = (p) => String((p && p.media_type) || '') === 'story';
+  // (LOTE POSTEO-DIA-2 · 4/11 · corrección Valentino 18:23, SUPERSEDE
+  // v645) El «posteo del día» ya NO es el publicado de hoy: una vez
+  // que salió, es un tile publicado normal en su lugar cronológico,
+  // sin magia y sin primer puesto (el unshift y la marca de magia de
+  // v645 se retiran abajo). El posteo del día apunta al PRÓXIMO por
+  // salir: el programado no fijado con scheduled_at futuro más
+  // cercano (la misma definición de pzNextScheduledId: futuro
+  // estricto, mínimo; pzDiaEsFutura NO sirve acá: es «más adelante
+  // esta semana», no «el próximo», y dejaría afuera al de la semana
+  // que viene). Los fijados no se velan (elección explícita del
+  // dueño) y sin próximo no hay carta (fail-closed: nunca una carta
+  // con fecha inventada). El próximo sale del grupo de programadas y
+  // su tile va ÚLTIMO, al final de la grilla, después de TODOS los
+  // publicados: la carta se agrega después de la lista compuesta
+  // completa, sin asumir ningún tope (el cap FEED-6 lo quita
+  // PUBLICADOS-TODOS, el lote siguiente; así la carta sigue última
+  // con o sin cap).
+  let nextPost = null;
+  try {
+    const nowMs = Date.now();
+    let bestT = Infinity;
+    for (const it of upcoming) {
+      const p = it && it.p;
+      if (!p || p.status !== 'scheduled' || p.pinned || !p.scheduled_at) continue;
+      let d = null;
+      if (typeof pcParseDate === 'function') d = pcParseDate(p.scheduled_at);
+      if (!d) { const s = String(p.scheduled_at).replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }
+      if (!d || isNaN(d) || d.getTime() <= nowMs || d.getTime() >= bestT) continue;
+      bestT = d.getTime(); nextPost = p;
+    }
+  } catch (e) { nextPost = null; }
   for (const it of upcoming) {
     const p = it && it.p;
     if (!p || isStory(p) || p.status === 'failed') continue;
     if (p.status !== 'draft' && p.status !== 'scheduled') continue;
+    if (p === nextPost) continue; // (LOTE POSTEO-DIA-2) El próximo sale del grupo: su tile va último, velado.
     tiles.push({ kind: 'post', post: p, ymd: it.ymd || null, day: it.ymd || null, isNew: p.status === 'draft' });
   }
   // (LOTE FEED · nada se pierde en silencio — SUPERSEDED 1/11 para
@@ -18204,39 +18236,18 @@ function homeGridCompose(input) {
     }
     rest6.push(t);
   }
-  // (LOTE POSTEO-DIA · 4/11 · corrección Valentino 17:49, reemplaza el
-  // «último» del brief original) El posteo del día va PRIMERO, arriba
-  // de todo el feed, como primer tile de la grilla, dentro del feed
-  // (no es sección aparte): «último» era el último en salir, o sea el
-  // más reciente. El publicado con fecha de hoy en la zona de la
-  // cuenta sube al frente y lleva la marca pzDiaHoy (magia + latido
-  // en homeTileHTML); el resto conserva su orden relativo. Sin
-  // publicado hoy, o sin helpers/fecha, nada se mueve ni se marca:
-  // nunca se inventa un posteo del día. Los fijados (head, elección
-  // explícita del dueño) quedan después del posteo de hoy; si
-  // Valentino quiere que el fijado siga primero, es mover este
-  // unshift a después de head.
+  // (LOTE POSTEO-DIA-2 · 4/11 · corrección Valentino 18:23) La carta
+  // oculta del próximo va AL FINAL de la grilla, después de todos
+  // los publicados (con o sin cap: se agrega después de la lista
+  // compuesta completa). Al salir, el posteo pasa a tile publicado
+  // normal y el siguiente próximo se vuelve carta (avance automático:
+  // en la próxima composición el próximo es otro). La carta no lleva
+  // magia de v645 ni marco dorado (el marco lo pone inicioView solo
+  // sobre tiles kind 'post': la carta es kind 'oculta' y no lo
+  // recibe; el segundo próximo tampoco, porque su id no es el del
+  // próximo real). Sin próximo, nada se agrega.
   const finalTiles = head.concat(rest6);
-  try {
-    const tzDia = (typeof pcTz === 'function') ? pcTz() : undefined;
-    const hoyKey = (typeof pzDiaHoyKey === 'function') ? pzDiaHoyKey(tzDia) : '';
-    if (hoyKey) {
-      for (let k = 0; k < finalTiles.length; k++) {
-        const t = finalTiles[k];
-        if (!t || t.kind !== 'post' || !t.post || String(t.post.status) !== 'published') continue;
-        let d = null;
-        if (typeof pcParseDate === 'function') d = pcParseDate(t.post.published_at || t.post.scheduled_at);
-        if (!d) continue;
-        const key = (typeof schedDayKeyOf === 'function') ? schedDayKeyOf(d, tzDia) : '';
-        if (key && key === hoyKey) {
-          t.pzDiaHoy = true;
-          finalTiles.splice(k, 1);
-          finalTiles.unshift(t);
-          break;
-        }
-      }
-    }
-  } catch (e) { /* sin marca ni movimiento: la grilla queda como siempre */ }
+  if (nextPost) finalTiles.push({ kind: 'oculta', post: nextPost });
   return finalTiles;
 }
 const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
@@ -18966,16 +18977,10 @@ function homeTileHTML(t, i) {
   // vivo (t.justPub), jamás un render común.
   const justCls = t.justPub ? ' hf-justpub' : '';
   const justChip = t.justPub ? `<span class="hf-just-chip">${pzIc('sparkle', 12)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Just published' : 'Recién publicado'}</span>` : '';
-  // (LOTE POSTEO-DIA · 4/11 · corrección Valentino 17:49) Solo el
-  // tile del posteo de hoy (t.pzDiaHoy, puesto por homeGridCompose)
-  // lleva magia: borde degradado + destellos ✦ de 4 puntas (dorados
-  // y celestes, nunca puntos ni polvo) y latido de brillo (CSS).
-  // Los destellos son overlays con pointer-events:none: no tapan
-  // botones ni cambian el tamaño de la tile. Sin marca, nada.
-  const diaHoyCls = t.pzDiaHoy ? ' hf-dia-hoy' : '';
-  const diaHoyMagia = t.pzDiaHoy
-    ? '<span class="pz-dia-spark" style="left:7px;top:6px;color:#FEC14D;animation-delay:0s">✦</span><span class="pz-dia-spark" style="right:7px;top:6px;color:#2793C8;animation-delay:.45s">✦</span><span class="pz-dia-spark" style="left:7px;bottom:26px;color:#2793C8;animation-delay:.9s">✦</span><span class="pz-dia-spark" style="right:7px;bottom:26px;color:#FEC14D;animation-delay:1.35s">✦</span>'
-    : '';
+  // (LOTE POSTEO-DIA-2 · 4/11) La magia de v645 para el publicado de
+  // hoy se RETIRA: una vez que salió, el tile es publicado normal
+  // (corrección Valentino 18:23). La rama de la carta oculta está
+  // antes del return final.
   // (Corrección grilla 2026-10-25): la tile de reel sin portada elegida
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
@@ -19026,7 +19031,29 @@ function homeTileHTML(t, i) {
       if (pzDiaEsFutura(p, hoyDia, lunDia)) diaFuturaCls = ' pz-dia-futura';
     }
   } catch (e) {}
-  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${diaHoyCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${(likeInStrip && !hfAprobado) ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${(likeInStrip || hfAprobado) ? '' : likeBtn}${tikSpan}${diaHoyMagia}</span></span>`;
+  // (LOTE POSTEO-DIA-2 · 4/11 · corrección Valentino 18:23) Carta
+  // oculta del próximo por salir: sin foto, sin caption, sin corazón,
+  // sin tik y SIN detalle (no lleva data-post-id ni role=button:
+  // abrirla revelaría el posteo). Solo velo + chapita con la fecha y
+  // hora REALES del scheduled_at, en el mismo formato de las chapitas
+  // de la grilla (chapita ya calculada arriba; respaldo con el
+  // formato absoluto si la relativa viene vacía). La carta no es
+  // gestionable desde la grilla (sin corazón): el posteo se sigue
+  // aprobando desde Semana/Agenda o con Aprobar todo.
+  if (t.kind === 'oculta') {
+    let ocChip = chip;
+    if (!ocChip && typeof hfChipText === 'function') {
+      const ocTxt = hfChipText(p.scheduled_at);
+      if (ocTxt) {
+        const ocParts = hfTileChipParts(ocTxt, phEn);
+        ocChip = ocParts
+          ? `<span class="hf-chip"><span class="hf-chip-ico">${pzIc('clock', 12)}</span><span class="hf-chip-day">${esc(ocParts.day)}</span><span class="hf-chip-hm"> · ${esc(ocParts.hm)}</span></span>`
+          : `<span class="hf-chip">${pzIc('clock', 12)} ${esc(ocTxt)}</span>`;
+      }
+    }
+    return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta" data-sched-at="${esc(String(p.scheduled_at || ''))}" aria-label="${phEn ? 'Next post, hidden' : 'Próximo posteo, oculto'}"><span class="hf-carta-velo" aria-hidden="true"></span><span class="hf-strip">${ocChip}</span></span></span>`;
+  }
+  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${(likeInStrip && !hfAprobado) ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${(likeInStrip || hfAprobado) ? '' : likeBtn}${tikSpan}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
