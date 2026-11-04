@@ -6120,8 +6120,15 @@ function mzTabsHTML(tab) {
 /* (LOTE DOCK-MAS) Boton + central del dock: abre la hoja crear. No es
    pestana ni cambia de ruta: solo abre la hoja (pzDockMasSheet). */
 function pzDockMasBtn(shell) {
+  // (LOTE MEJORAS-INICIO · pieza 3 · 3/11) El + lleva su palabra abajo
+  // («Agregar», lo que hace la hoja) con geometría de pestaña: el círculo
+  // pasa a 24px para compartir la línea base de las etiquetas del resto.
+  // Un círculo de 52px + etiqueta obligaría a crecer el dock y rompería
+  // los offsets fijos del chat (72px) y del wrap (96px). Receta glass intacta.
   const cls = shell === 'bb' ? 'bb-tab bb-tab-mas' : 'mz-tab mz-tab-mas';
-  return `<button type="button" class="${cls}" aria-label="${gzT('Crear', 'Create')}" onclick="pzDockMasToggle()">+</button>`;
+  const ic = shell === 'bb' ? 'bb-tab-mas-ic' : 'mz-tab-mas-ic';
+  const lb = shell === 'bb' ? 'bb-tab-mas-lb' : 'mz-tab-mas-lb';
+  return `<button type="button" class="${cls}" aria-label="${gzT('Crear', 'Create')}" onclick="pzDockMasToggle()"><span class="${ic}">+</span><span class="${lb}">${gzT('Agregar', 'Add')}</span></button>`;
 }
 function pzDockMasHTML() {
   return `<div class="pz-dockmas" id="pzDockMasSheet" hidden>
@@ -17898,12 +17905,13 @@ function homeGridCompose(input) {
   // (tile.archivedExt → chip «Archivado» en homeTileHTML). Decisión
   // Valentino 1/11: salen de la grilla del dueño (el feed es literal
   // el feed de IG y un archivado ya no está ahí); el filtro vive en
-  // inicioView/f3RevealCheck/hfLiveApply, no acá, para no tocar el
-  // resto de consumidores de tiles. Nada se borra: siguen en Tu
+  // inicioView/f3RevealCheck/hfLiveApply; y desde MEJORAS-INICIO
+  // (pieza 6) también se excluyen acá ANTES del tope de 6, para no
+  // ocupar slots del tope. Nada se borra: siguen en Tu
   // archivo → Archivados en Instagram, y si se desarchiva en IG el
   // posteo vuelve solo por reconciliación. El visitante los seguía
   // sin ver (hfVisitorTiles los excluye: ya no están en Instagram).
-  const pubs = published.filter((p) => p && !isStory(p) && p.status === 'published')
+  const pubs = published.filter((p) => p && !isStory(p) && p.status === 'published' && p.ig_state !== 'archived_ext') // (LOTE MEJORAS-INICIO · pieza 6) Archivados ANTES del tope: si no, ocupaban slots y los grises no eran los últimos 6 de IG.
     .slice().sort((a, b) => String(b.published_at || b.scheduled_at || '').localeCompare(String(a.published_at || a.scheduled_at || '')));
   for (const p of pubs) {
     tiles.push({ kind: 'post', post: p, ymd: null, day: null, isNew: false, archivedExt: p.ig_state === 'archived_ext' });
@@ -18053,62 +18061,6 @@ function pcDayKeyShift(date, tz, n) {
     const u = new Date(Date.UTC(y, m - 1, d, 12));
     u.setUTCDate(u.getUTCDate() + (n || 0));
     return u.toISOString().slice(0, 10);
-  } catch (e) { return ''; }
-}
-// (LOTE ETIQUETA-SEMANA · 2/11) Lunes–domingo de la semana actual en la
-// zona de la cuenta, sin +24 h absoluto: se toman las partes y/m/d y el
-// día de semana en esa zona y se avanza por fecha UTC (misma técnica del
-// desplazamiento por fecha UTC, para no caer en días DST). Devuelve {lun, dom} en
-// 'YYYY-MM-DD' o null si no se puede calcular (nunca se inventa).
-function pzSemanaLunDom(now, tz) {
-  try {
-    const d = (now instanceof Date) ? now : new Date(now);
-    if (isNaN(d)) return null;
-    const zo = tz ? { timeZone: tz } : {};
-    const ymd = d.toLocaleDateString('en-CA', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo));
-    const wd = d.toLocaleDateString('en-US', Object.assign({ weekday: 'short' }, zo));
-    const back = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }[wd];
-    if (back === undefined) return null;
-    const parts = ymd.split('-').map(Number);
-    if (parts.length !== 3 || parts.some(isNaN)) return null;
-    const lun = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12));
-    lun.setUTCDate(lun.getUTCDate() - back);
-    const dom = new Date(lun); dom.setUTCDate(dom.getUTCDate() + 6);
-    const key = (x) => x.toISOString().slice(0, 10);
-    return { lun: key(lun), dom: key(dom) };
-  } catch (e) { return null; }
-}
-// (LOTE ETIQUETA-SEMANA · 2/11) Texto de la semana actual: ES «Semana del
-// 3 al 9 de noviembre», EN «Week of November 3 to 9». Si la semana cruza
-// de mes, se nombran los dos meses; si cruza de año, se agregan los años.
-// Sin semana calculable devuelve '' (no se dibuja nada inventado).
-function pzSemanaEtiqueta(now, tz, en) {
-  try {
-    const r = pzSemanaLunDom(now, tz);
-    if (!r) return '';
-    const parse = (k) => { const p = k.split('-').map(Number); return new Date(Date.UTC(p[0], p[1] - 1, p[2], 12)); };
-    const a = parse(r.lun), b = parse(r.dom);
-    const mes = (x) => x.toLocaleDateString(en ? 'en-US' : 'es-AR', { month: 'long', timeZone: 'UTC' });
-    const dia = (x) => x.getUTCDate();
-    const anio = (x) => x.getUTCFullYear();
-    const mismoMes = a.getUTCMonth() === b.getUTCMonth() && anio(a) === anio(b);
-    if (en) {
-      if (mismoMes) return `Week of ${mes(a)} ${dia(a)} to ${dia(b)}`;
-      if (anio(a) === anio(b)) return `Week of ${mes(a)} ${dia(a)} to ${mes(b)} ${dia(b)}`;
-      return `Week of ${mes(a)} ${dia(a)}, ${anio(a)} to ${mes(b)} ${dia(b)}, ${anio(b)}`;
-    }
-    if (mismoMes) return `Semana del ${dia(a)} al ${dia(b)} de ${mes(a)}`;
-    if (anio(a) === anio(b)) return `Semana del ${dia(a)} de ${mes(a)} al ${dia(b)} de ${mes(b)}`;
-    return `Semana del ${dia(a)} de ${mes(a)} de ${anio(a)} al ${dia(b)} de ${mes(b)} de ${anio(b)}`;
-  } catch (e) { return ''; }
-}
-// (LOTE ETIQUETA-SEMANA · 2/11) Etiqueta solo lectura, sin navegación ni
-// filtro. Sin texto, no rinde nada.
-function pzSemanaEtiquetaHTML(now, tz, en) {
-  try {
-    const t = pzSemanaEtiqueta(now, tz, en);
-    if (!t) return '';
-    return `<p class="hf-semana">${esc(t)}</p>`;
   } catch (e) { return ''; }
 }
 function hfWhenChip(post, now) {
@@ -18596,37 +18548,6 @@ function pzNextScheduledId(posts, now) {
   } catch (e) { return null; }
 }
 
-// (LOTE PRÓXIMO-DESTACADO · 2/11 · decisión Valentino: arriba del feed,
-// una tarjeta con el próximo posteo programado real) El próximo es el
-// scheduled con scheduled_at real más cercano en el futuro, calculado
-// con el selector vigente pzNextScheduledId. Sin futuro, null: nunca
-// una tarjeta inventada.
-function pzProximoDestacadoPost(posts, now) {
-  try {
-    const id = (typeof pzNextScheduledId === 'function') ? pzNextScheduledId(posts, now) : null;
-    if (id === null || id === undefined) return null;
-    const list = Array.isArray(posts) ? posts : [];
-    for (const p of list) { if (p && String(p.id) === String(id)) return p; }
-    return null;
-  } catch (e) { return null; }
-}
-function pzProximoDestacadoHTML(posts, en) {
-  try {
-    const p = pzProximoDestacadoPost(posts, new Date());
-    if (!p || !p.scheduled_at) return '';
-    const chipTxt = (typeof hfWhenChip === 'function') ? hfWhenChip(p) : '';
-    if (!chipTxt) return '';
-    const isV = String(p.media_type || '') === 'video';
-    const phCap = String(p.caption || '').replace(/\s+/g, ' ').trim();
-    const phTxt = phCap ? (phCap.length > 90 ? phCap.slice(0, 90).trimEnd() + '…' : phCap) : '';
-    const media = !p.image_path
-      ? `<span class="hf-nextup-ph"><span>${(typeof pzIc === 'function') ? pzIc('sparkle', 16) : ''}</span><span>${esc(phTxt || (en ? 'Image on its way' : 'imagen en camino'))}</span></span>`
-      : isV
-        ? `<video class="hf-nextup-media" src="${esc(p.image_path)}" muted playsinline preload="metadata" data-ph="${esc(phTxt || (en ? 'Image on its way' : 'imagen en camino'))}" onerror="__vidFb(this)"></video>`
-        : `<img class="hf-nextup-media" src="${esc(mv(p.image_path, 900))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
-    return `<button type="button" class="hf-nextup" data-hf-nextup="${esc(String(p.id))}" aria-label="${en ? 'Open next post' : 'Abrir el próximo posteo'}"><span class="hf-nextup-head"><span class="hf-nextup-title">${en ? 'Next up' : 'El próximo en salir'}</span><span class="hf-nextup-when">${(typeof pzIc === 'function') ? pzIc('clock', 12) : ''} ${esc(chipTxt)}</span></span>${media}<span class="hf-nextup-foot"><span class="hf-nextup-status">${en ? 'Scheduled' : 'Programado'}</span>${phTxt ? `<span class="hf-nextup-cap">${esc(phTxt)}</span>` : ''}</span></button>`;
-  } catch (e) { return ''; }
-}
 
 // (LOTE 16 · chapita sin mes, hora intacta) Parte «Mar 17/11 · 19:00»
 // en día («Mar 17», sin mes) y hora («19:00»). EN el orden es mes/día
@@ -19191,52 +19112,6 @@ function hfTabTiles(tiles, tab, prof) {
   }
   return list;
 }
-// (LOTE FILTRO-FEED) Filtro rápido de Inicio, SOLO vista: no borra,
-// no archiva, no cambia estados. 'pendientes' = borrador o programado;
-// 'publicados' = ya salido (post publicado o leído de Instagram).
-// Cualquier otro estado no califica: solo se ve en Todos.
-function hfFiltroGrupo(t) {
-  if (!t) return null;
-  if (t.kind === 'ig') return 'publicados';
-  if (t.kind === 'post' && t.post) {
-    if (t.post.status === 'draft' || t.post.status === 'scheduled') return 'pendientes';
-    if (t.post.status === 'published') return 'publicados';
-  }
-  return null;
-}
-function hfFiltroTiles(tiles, filtro) {
-  const list = Array.isArray(tiles) ? tiles : [];
-  if (filtro !== 'pendientes' && filtro !== 'publicados') return list;
-  return list.filter((t) => hfFiltroGrupo(t) === filtro);
-}
-function hfFiltroHTML(filtro, en, vacio) {
-  const f = (filtro === 'pendientes' || filtro === 'publicados') ? filtro : 'todos';
-  const L = en ? ['All', 'Pending', 'Published'] : ['Todos', 'Pendientes', 'Publicados'];
-  const btn = (v, i) => `<button type="button" class="hf-filtro-chip${f === v ? ' on' : ''}" data-hf-filtro-chip="${v}" aria-pressed="${f === v ? 'true' : 'false'}">${L[i]}</button>`;
-  return `<div class="hf-filtro" role="group" aria-label="${en ? 'Feed filter' : 'Filtro del feed'}">${btn('todos', 0)}${btn('pendientes', 1)}${btn('publicados', 2)}</div><p class="hf-filtro-vacio" id="hfFiltroVacio"${vacio ? '' : ' hidden'}>${en ? 'No posts in this filter.' : 'No hay posteos en este filtro.'}</p>`;
-}
-function hfFiltroAplicar() {
-  try {
-    const root = document.getElementById('inicioView'); if (!root) return;
-    root.classList.remove('hf-filtro-pendientes', 'hf-filtro-publicados');
-    if (HF_FILTRO === 'pendientes') root.classList.add('hf-filtro-pendientes');
-    if (HF_FILTRO === 'publicados') root.classList.add('hf-filtro-publicados');
-    root.querySelectorAll('[data-hf-filtro-chip]').forEach((el) => {
-      const on = el.dataset.hfFiltroChip === HF_FILTRO;
-      el.classList.toggle('on', on);
-      el.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-    const note = document.getElementById('hfFiltroVacio');
-    if (note) {
-      let vacio = false;
-      if (HF_FILTRO !== 'todos') {
-        const grid = root.querySelector('.hf-grid');
-        vacio = !grid || !root.querySelector('.hf-grid > [data-hf-filtro="' + HF_FILTRO + '"]');
-      }
-      note.hidden = !vacio;
-    }
-  } catch (e) {}
-}
 function hfVisitorTiles(tiles) {
   // La vista del visitante: SOLO lo que ya está en Instagram
   // (publicados por Posty + leídos de su cuenta), en su orden de
@@ -19436,21 +19311,17 @@ function hfDetailHTML(p, opts) {
   // fuente o sin plan, el servidor responde null y esto no aparece.
   const commentsBox = (!o.visitor && p.status === 'published')
     ? `<div class="hf-cm-list" data-hfd-comments hidden></div>` : '';
-  // (LOTE DETALLE-3) El porqué: solo el dato real guardado
-  // (strategy_why, del análisis/fundamento de su semana). Sin dato,
-  // la línea no se dibuja: nunca texto genérico inventado. Ya viene
-  // en el idioma de la cuenta, no hay etiqueta que traducir.
-  const whyTxt = String(p.strategy_why || '').trim();
-  const whyLine = whyTxt ? `<div class="hf-d-why">${pzIc('sparkle', 13)} ${esc(whyTxt)}</div>` : '';
-  const overlayHTML = String(p.overlay_text || '').trim() ? `<div class="hf-d-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''; // (CONTENIDO-FOTO) el texto sobre la foto es dato propio
+  // (LOTE MEJORAS-INICIO · pieza 7 DETALLE-LIMPIO · 3/11) Menos es más:
+  // la línea del porqué (detalle-3) y la del texto sobre la foto
+  // (contenido-foto) SALEN del detalle del feed. La vista de
+  // aprobación (apv) NO se toca: sus líneas quedan como están.
   return `<div class="hf-d" data-post-id="${esc(String(p.id))}">
     <div class="hf-d-head">${ava}<div class="hf-d-names"><div class="hf-d-user">${esc(headName)}</div>${locLine}</div>${o.visitor ? '' : `<button type="button" class="hf-d-dots" data-hfd-act="menu" aria-label="${en ? 'More options' : 'Más opciones'}">•••</button>`}</div>
     ${media}
     ${coverRow}
     ${bar}
     ${likesLine}
-    ${capHTML}${overlayHTML}
-    ${whyLine}
+    ${capHTML}
     ${rgLineHTML(p, en)}
     ${commentsLine}
     ${commentsBox}
@@ -19539,9 +19410,10 @@ function hfProfileActionsHTML(en, acceptHTML) {
   // de que haya pendientes). La ubicación separada de la nota del
   // lote corazón-nota (arriba de la grilla, construido 1/11) queda
   // SUPERSEDED por esta: no se pone la nota en dos lugares.
+  // (LOTE MEJORAS-INICIO · pieza 1 · 3/11) Botón a la izquierda, nota con ❤️ a la derecha, un solo renglón a 390px (ver CSS: nowrap + ellipsis de seguridad).
   return '<div class="hf-pacts hf-pacts-accept">'
     + (acceptHTML || '')
-    + '<span class="hf-accept-note">' + (en ? 'Tap the heart to approve.' : 'Tocá el corazón para aprobar.') + '</span>'
+    + '<span class="hf-accept-note">' + (en ? '❤️ Tap the heart to approve.' : '❤️ Tocá el corazón para aprobar.') + '</span>'
     + '</div>';
 }
 /* — Ítem 12: cubiertas de destacadas (render determinístico, $0 de IA) — */
@@ -19729,7 +19601,6 @@ let HOME_PROF = null; // v331: último payload de /api/home/profile (réplica de
 // (Publicaciones · Reels · Etiquetados), espejo «Ver como visitante»,
 // la composición vigente y las propuestas por posteo (para el detalle).
 let HF_TAB = 'posts';
-let HF_FILTRO = 'todos'; // (LOTE FILTRO-FEED) filtro rápido de Inicio; 'todos' por defecto
 let HF_VISITOR = false;
 let HF_TILES = [];
 let HF_CUR_PROF = null;
@@ -19898,8 +19769,6 @@ async function inicioView() {
   // dan su feedback en esta vista.
   // (LOTE FILTRO-FEED) Conteo solo para la nota de vacío del render;
   // el ocultado en vivo lo hace CSS por clase en la raíz.
-  const filtroTiles = hfFiltroTiles(displayTiles, HF_FILTRO);
-  const filtroHTML = hfFiltroHTML(HF_FILTRO, enHome, HF_FILTRO !== 'todos' && !filtroTiles.length);
   const stripHTML = (!HF_VISITOR && drafts.length)
     ? `${acceptPillHTML(drafts.length, 'hfAcceptAll')}<div id="revMsg"></div>`
     : '';
@@ -19984,16 +19853,13 @@ async function inicioView() {
   let portTopInicio = '';
   if (!HF_VISITOR && nivelPosty) { try { portTopInicio = await mxPortTop(nivelPosty.poderes, nivelPosty, 'posty'); } catch (e) { portTopInicio = ''; } }
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
-  return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}${HF_FILTRO === 'pendientes' ? ' hf-filtro-pendientes' : HF_FILTRO === 'publicados' ? ' hf-filtro-publicados' : ''}">
+  return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${portTopInicio}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: !HF_VISITOR })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
   ${hfTabsHTML(HF_TAB, enHome)}
   ${pzDiaHeroHTML2}
-  ${HF_VISITOR ? '' : pzSemanaEtiquetaHTML(new Date(), tz, enHome)}
   ${pzSemanaOkHTML}
-  ${(!HF_VISITOR && !pzDiaHeroHTML2 ? pzProximoDestacadoHTML(allPosts, enHome) : '')}
-  ${filtroHTML}
   ${gridHTML}
   ${visitorPillHTML}
   <div class="mz-bottomstack" id="mzBottomStack">
@@ -23615,28 +23481,7 @@ function bindInicio() {
     el.onclick = () => { if (HF_TAB !== el.dataset.hfTab) { HF_TAB = el.dataset.hfTab; try { render(); } catch (e) {} } };
   });
 
-  // (LOTE PRÓXIMO-DESTACADO) La tarjeta abre el detalle/aprobación del
-  // posteo, el mismo destino que tocar su tile. Delegado en la raíz:
-  // sobrevive al reemplazo de la tarjeta en el refresh vivo.
-  try {
-    const iv = document.getElementById('inicioView');
-    if (iv && !iv._pzNextupBound) {
-      iv._pzNextupBound = true;
-      iv.addEventListener('click', (e) => {
-        const card = (e.target && e.target.closest) ? e.target.closest('[data-hf-nextup]') : null;
-        if (!card || !iv.contains(card)) return;
-        const id = card.dataset ? card.dataset.hfNextup : '';
-        if (!id) return;
-        location.hash = '#/app/post/' + encodeURIComponent(id);
-      });
-    }
-  } catch (e) {}
 
-  // (LOTE FILTRO-FEED) Chips del filtro: solo vista, sin re-render
-  // (no se pierde scroll ni se rompen los binds de las tiles).
-  $$('#inicioView [data-hf-filtro-chip]').forEach((el) => {
-    el.onclick = () => { if (HF_FILTRO !== el.dataset.hfFiltroChip) { HF_FILTRO = el.dataset.hfFiltroChip; try { hfFiltroAplicar(); } catch (e) {} } };
-  });
   // (Tanda feed 5 · ítem 7) «Ver como visitante» y su vuelta.
   $$('#inicioView [data-hf-visitor]').forEach((el) => {
     el.onclick = () => { HF_VISITOR = el.dataset.hfVisitor === '1'; try { render(); } catch (e) {} };
