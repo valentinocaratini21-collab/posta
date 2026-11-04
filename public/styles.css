@@ -4871,3 +4871,35 @@ body.pz-postchat-open{overflow:hidden}
 .pz-oficina-nom span{font-size:13px;opacity:.75}
 .pz-oficina-nuevo{font-weight:700}
 .pz-oficina-fila.lock{opacity:.7}
+
+/* (LOTE GLASS-CIMA · Valentino 2/11: arriba del feed y fondo en vidrio
+   como la barra de abajo; también Jardín, Estrategia y Ajustes)
+   RECETA DEL DOCK (la que se ve en la barra inferior): la barra viva
+   (.bb-bar bajo .bb-glass-inicio/.bb-glass-pantallas) es blanco .55 +
+   blur 16px saturate 1.4 + borde blanco .75 + sombra — la receta v519.
+   NO es la regla base .bb-bar (.96, blur 10): esa es casi opaca y no
+   es lo que se ve en la captura. Por eso todo abajo usa .55.
+   HALLAZGO (ver STATUS §1): tira (.55), botones (.55), chatbar (.55),
+   barra (.55) y paneles de Jardín/Estrategia/Ajustes (.55 vía v539) YA
+   usaban esta receta; lo que faltaba era: (1) hf-head seguía en .40
+   (excepción v537, hoy SUPERSEDED por este pedido: pasa a .55);
+   (2) dos paneles blancos fuera de v539 (.mx-zona del jardín sin
+   candado, .card.int-advanced de Ajustes); (3) el fondo del feed: el
+   degradado ya estaba (v519) pero su parte alta es casi plana, y
+   vidrio sobre plano se lee plano — por eso SOLO en Inicio se sube
+   la presencia de los dos resplandores (mismos tonos, posiciones,
+   tamaños y paradas del degradado lineal). Sin eso, el físico no
+   mostraría ningún cambio arriba. Imágenes y visuales SIN vidrio: este
+   bloque no toca ninguna imagen, tile ni slider. Modo oscuro: este
+   bloque va al final y gana por especificidad/orden como v519/v539
+   (precedente vigente). Excepciones con causa: .mx-zona.lock conserva
+   su fondo gris (el candado debe leerse bloqueado); .mx-zona-viva
+   conserva su anillo dorado; .bp-card conserva su degradado de
+   marca (inline); la tarjeta Salir (.card pelada de Ajustes) queda
+   sólida porque no hay gancho por pestaña para acotarla sin vidriar
+   .card peladas de otras pantallas. */
+#inicioView .hf-head{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+#inicioView.hf-wrap{background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.45),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(254,193,77,.50),rgba(254,193,77,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
+.bb-app.bb-glass-pantallas .mx-jardin-posty .mx-zona:not(.lock){background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.bb-app.bb-glass-pantallas .mx-jardin-posty .mx-zona-viva{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 0 0 2px rgba(254,193,77,.55),0 6px 16px rgba(10,30,51,.12)}
+.bb-app.bb-glass-pantallas .card.int-advanced{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
