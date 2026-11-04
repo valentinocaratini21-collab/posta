@@ -5029,3 +5029,30 @@ body.pz-postchat-open{overflow:hidden}
    handler, pero oculto por esta regla; el handler y el alcance de
    aprobación no cambian). Sin aprobar: solo el botón corazón. */
 #inicioView .hf-tile .hf-tik{display:none}
+
+/* ============ LOTE ZOOM-AL-DESLIZAR + DOCK-ESPACIADO (4/11) ============ */
+/* ZOOM. Causa medida en el video de Valentino (ver STATUS): la página
+   escalaba de golpe al deslizar (~1,26x en <0,3 s) con dock y chatbar
+   sin escalar: eso es zoom de viewport de iOS (doble toque accidental
+   al deslizar), no un handler propio ni un reflow — el meta permitía
+   escalar (sin maximum-scale ni user-scalable=no) y no existe ningún
+   gesturestart/dblclick/scale de página en app.js. El meta lo bloquea
+   en WKWebView; el touch-action acotado es cinturón para el caso en
+   que el shell ignorara el meta. Se acota a Inicio + dock + bottomstack
+   a propósito: NO se toca el visor de fotos F3 (pinch manual por
+   PointerEvents sobre .apv-media/.igmock-media, fuera de estas
+   superficies) ni el scroll nativo (pan-x pan-y lo permite). */
+/* touch-action: pan-x pan-y = desplazar sí, zoom de gestos no. */
+#inicioView,.bb-bar,.mz-tabs,.mz-bottomstack{touch-action:pan-x pan-y}
+/* Cinturón layout: en estado colapsado, usuario y nombre ya llevan
+   ellipsis pero sin min-width:0 su mínimo automático (texto nowrap)
+   supera el viewport; con 0 encogen con puntos suspensivos. */
+#inicioView.hf-collapsed .hf-head .hf-user,#inicioView.hf-collapsed .hf-head .hf-name{min-width:0}
+/* DOCK-ESPACIADO. Causa: .bb-bar usa space-around con 4 pestañas a
+   contenido (min-width:58px + padding) y solo el + con flex:1: los
+   centros no son equidistantes (en la captura, huecos del medio mucho
+   mayores). Con flex:1 + min-width:0 en las 5, cada columna mide
+   exactamente 1/5 de la barra y el ícono centrado da centros
+   equidistantes. El padding no mueve el centro. .mz-tabs ya era flex:1
+   en sus 5 y no se toca. Vidrio, 24px, base y + #47617A intactos. */
+.bb-bar .bb-tab{flex:1;min-width:0}
