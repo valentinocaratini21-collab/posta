@@ -50,6 +50,7 @@ const { upcomingEphemeris, catsMatch } = require('./ephemeris');
 const creator = require('./creator.js');
 const qaGate = require('./qa-gate'); // (2026-10-26) QA gate síncrono: ninguna pieza que no pase la vara llega al dueño
 const photoCliente = require('./photo-cliente.js');
+const fotoGrounding = require('./foto-grounding'); // (CONTENIDO-FOTO) gate foto↔texto
 const mediaCliente = require('./media-cliente.js');
 const vozDueno = require('./voz-dueno.js'); // VOZ DEL DUENO -> POSTEO (29/10/2026, local)
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
@@ -5252,7 +5253,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   // después lo que necesita atención (publicando/fallido), después lo ya publicado.
   let cleanDrafts = [];
   try {
-    const rows = db.prepare(`SELECT id, caption, scheduled_for, scheduled_at, status, media_type, needs_review FROM posts
+    const rows = db.prepare(`SELECT id, caption, scheduled_for, scheduled_at, status, media_type, needs_review, overlay_text FROM posts
       WHERE user_id = ? AND status IN ('draft','scheduled','publishing','failed','published')
       ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'publishing' THEN 2 WHEN 'failed' THEN 3 ELSE 4 END,
         COALESCE(scheduled_for, created_at) DESC LIMIT 12`).all(uidChat) || [];
@@ -5262,6 +5263,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     cleanDrafts = rows.map(r => ({
       id: r.id,
       caption: String(r.caption || '').slice(0, 300),
+      overlay: String(r.overlay_text || '').slice(0, 80),
       when: wallInTz(r.scheduled_at || r.scheduled_for, chatTz),
       status: r.status,
       media_type: r.media_type || 'image',
@@ -5444,19 +5446,20 @@ app.post('/api/ideas/chat', async (req, res) => {
       const textOnlyEdit = /cambi[aá]\s+(el\s+)?(caption|texto|copy|palabras|t[ií]tulo)|cambiame\s+(el\s+)?(texto|caption|t[ií]tulo)|solo\s+(el\s+)?texto|m[aá]s\s+corto|acort[aá]|s[aá]cale|sac[aá]les?|quit[aá](le|les)?|emojis?/i.test(lastUserMsg);
       let n = 0, imgRegen = 0;
       const editedIds = [];
+      const overlayEdits = []; // (CONTENIDO-FOTO) cambios de texto sobre la foto pedidos por el chat
       const regenJobs = [];
       for (const ed of out.edits) {
         if (!(ed.draft >= 1 && ed.draft <= cleanDrafts.length)) continue;
-        if (ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined) continue;
+        if (ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined && ed.overlay === undefined) continue;
         const target = cleanDrafts[ed.draft - 1];
         const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
         if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) continue;
         // Historial de versiones: si este edit cambia algo, guardar la anterior
         // para que el cliente pueda "volver atrás" ("el anterior estaba mejor").
-        if (ed.caption !== undefined || ed.hashtags !== undefined || Number.isInteger(ed.photo_index)) {
+        if (ed.caption !== undefined || ed.hashtags !== undefined || Number.isInteger(ed.photo_index) || ed.overlay !== undefined) {
           try {
-            db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path) VALUES (?,?,?,?)`)
-              .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''));
+            db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path, overlay_text) VALUES (?,?,?,?,?)`)
+              .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''), String(post.overlay_text || ''));
           } catch (e) { console.error('[chat-edit] version save:', e.message); }
         }
         const newCaption = ed.caption !== undefined ? ed.caption : post.caption;
@@ -5539,6 +5542,7 @@ app.post('/api/ideas/chat', async (req, res) => {
             scheduleLintForPost(uid, post.id); // (v198-A) lint al programar
           }
         }
+        if (ed.overlay !== undefined) overlayEdits.push({ id: post.id, overlay: ed.overlay });
         recordSignal(uid, post, 'edited'); // lo retocó = señal de gusto
         n++;
         editedIds.push(post.id);
@@ -5548,6 +5552,18 @@ app.post('/api/ideas/chat', async (req, res) => {
       if (regenJobs.length) {
         const done = await Promise.all(regenJobs);
         imgRegen = done.filter(Boolean).length;
+      }
+      // (CONTENIDO-FOTO) Texto sobre la foto pedido por el chat: se
+      // aplica DESPUÉS de cualquier regeneración, sobre la imagen
+      // final, sin regenerar el posteo. Si el re-render falla, el
+      // texto viejo queda (el caption igual se aplicó).
+      for (const ov of overlayEdits) {
+        try {
+          const cur = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(ov.id, uid);
+          if (!cur || (cur.status !== 'draft' && cur.status !== 'scheduled')) continue;
+          const rec = recompositePostOverlay(uid, cur, ov.overlay);
+          if (!rec.ok) console.error('[chat-edit] overlay re-render falló:', rec.reason);
+        } catch (e) { console.error('[chat-edit] overlay:', e.message); }
       }
       if (n) {
         // Devolver las imágenes de los borradores editados para mostrarlas en el chat.
@@ -5603,11 +5619,11 @@ app.post('/api/ideas/chat', async (req, res) => {
         // post_versions y la restaurada pasa a vigente (caption, hashtags
         // E imagen). Otro «volvé» deshace el intercambio. No se borra historial.
         try {
-          db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path) VALUES (?,?,?,?)`)
-            .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''));
+          db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path, overlay_text) VALUES (?,?,?,?,?)`)
+            .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''), String(post.overlay_text || ''));
         } catch (e) {}
-        db.prepare(`UPDATE posts SET caption = ?, hashtags = ?, image_path = ? WHERE id = ?`)
-          .run(prev.caption, prev.hashtags, prev.image_path, post.id);
+        db.prepare(`UPDATE posts SET caption = ?, hashtags = ?, image_path = ?, overlay_text = ? WHERE id = ?`)
+          .run(prev.caption, prev.hashtags, prev.image_path, prev.overlay_text || '', post.id);
         db.prepare(`DELETE FROM post_versions WHERE id = ?`).run(prev.id);
         try { recordSignal(uid, post, 'rejected'); } catch (e) {}
         n++;
@@ -8499,7 +8515,7 @@ app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'],
   // (Gap 9, 2026-10-25) La foto de esta puerta corre la MISMA
   // clasificación + medición de calidad que la del álbum, en segundo
   // plano: el registro queda poblado igual entre por donde entre.
-  if (kind === 'photo') { try { tagAlbumPhoto(req.session.userId, r.lastInsertRowid, filePath); } catch (e) {} }
+  if (kind === 'photo') { try { tagAlbumPhoto(req.session.userId, r.lastInsertRowid, filePath, langOfUser(req.session.userId)); } catch (e) {} }
   res.json({ ok: true, id: r.lastInsertRowid, path: filePath, kind });
 });
 
@@ -8590,7 +8606,7 @@ function qualityIssuesFromMetrics(m) {
   if (typeof m.edge === 'number' && m.edge < 5.0) out.push('movida');
   return out;
 }
-async function tagAlbumPhoto(uid, assetId, filePath) {
+async function tagAlbumPhoto(uid, assetId, filePath, lang = 'es') { // (CONTENIDO-FOTO) lang: idioma de la nota
   try {
     // v181: los videos del álbum NO se clasifican por imagen (llevan tag
     // 'video' de nacimiento); mandar un .mp4 como imagen rompería la llamada.
@@ -8612,9 +8628,9 @@ async function tagAlbumPhoto(uid, assetId, filePath) {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', max_tokens: 80,
+        model: 'gpt-4o-mini', max_tokens: 200,
         messages: [{ role: 'user', content: [
-          { type: 'text', text: 'Clasificá esta foto de un negocio y su CALIDAD. Respondé SOLO con JSON: {"tag":"producto","calidad":"buena"} — tag: producto (un producto, plato o prenda en primer plano), local (el espacio, interior o frente del negocio), equipo (personas trabajando o el dueño), otro. calidad: buena, oscura (muy poca luz), movida (borrosa, fuera de foco) o cortada (el producto o sujeto principal está cortado por el borde de la foto).' },
+          { type: 'text', text: (String(lang || 'es').toLowerCase().startsWith('en') ? 'Classify this business photo and its QUALITY, and describe what is actually VISIBLE. Reply ONLY with JSON: {"tag":"producto","calidad":"buena","nota":"..."} — tag: producto (a product, dish or garment in the foreground), local (the business space, interior or storefront), equipo (people working or the owner), otro. calidad: buena, oscura (very low light), movida (blurry, out of focus) or cortada (the main product or subject is cut off by the photo edge). nota: in English, max 25 words: main subject, place, visible text or logos, people. If nothing is distinguishable, empty nota.' : 'Clasificá esta foto de un negocio y su CALIDAD, y describí lo que SE VE. Respondé SOLO con JSON: {"tag":"producto","calidad":"buena","nota":"..."} — tag: producto (un producto, plato o prenda en primer plano), local (el espacio, interior o frente del negocio), equipo (personas trabajando o el dueño), otro. calidad: buena, oscura (muy poca luz), movida (borrosa, fuera de foco) o cortada (el producto o sujeto principal está cortado por el borde de la foto). nota: en español, máximo 25 palabras: sujeto principal, lugar, texto o logos visibles, personas. Si no se distingue nada, nota vacía.') },
           { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}` } },
         ] }],
       }),
@@ -8630,10 +8646,23 @@ async function tagAlbumPhoto(uid, assetId, filePath) {
       tag = ['producto', 'local', 'equipo'].includes(w) ? w : 'otro';
     }
     const visionQuality = parsed && String(parsed.calidad || '').toLowerCase();
+    const visionNota = parsed && typeof parsed.nota === 'string' ? parsed.nota.trim().slice(0, 300) : ''; // (CONTENIDO-FOTO) descripción de lo que SE VE
     if (['oscura', 'movida', 'cortada'].includes(visionQuality) && !issues.includes(visionQuality)) issues.push(visionQuality);
-    db.prepare('UPDATE assets SET album_tag = ?, album_quality = ? WHERE id = ?').run(tag, issues.length ? issues.join(',') : 'ok', assetId);
+    db.prepare('UPDATE assets SET album_tag = ?, album_quality = ?, album_vision = ? WHERE id = ?').run(tag, issues.length ? issues.join(',') : 'ok', visionNota, assetId);
   } catch (e) { /* clasificar nunca bloquea */ }
 }
+// (CONTENIDO-FOTO) Nota de visión de una foto del álbum: la guardada,
+// o recién clasificada si todavía no tiene. Nunca lanza.
+async function ensurePhotoVision(uid, assetId, filePath) {
+  try {
+    const row = db.prepare('SELECT album_tag, album_vision FROM assets WHERE id = ?').get(assetId);
+    if (row && String(row.album_vision || '').trim()) return { tag: String(row.album_tag || ''), note: String(row.album_vision) };
+    await tagAlbumPhoto(uid, assetId, filePath, langOfUser(uid));
+    const row2 = db.prepare('SELECT album_tag, album_vision FROM assets WHERE id = ?').get(assetId);
+    return { tag: String((row2 && row2.album_tag) || ''), note: String((row2 && row2.album_vision) || '') };
+  } catch (e) { return { tag: '', note: '' }; }
+}
+
 // (v237) Los VIDEOS del álbum se clasifican por su MINIATURA (visión:
 // producto/local/equipo) y su ORIENTACIÓN sale del probe de ffprobe
 // (ancho/alto del stream). Queda en las columnas del asset: album_tag
@@ -8803,11 +8832,39 @@ async function celebratePhotoPost(uid, assetId, filePath) {
     // posteo de la semana corriente — genera contra sus captions.
     const albumInput = contentInputFor(uid, titulo, 'foto', 0);
     try { albumInput.prevCaptions = weekPrevCaptions(uid, mondayKeyOf(tzToday(userTz(uid))), 0); } catch (e) {}
+    // (CONTENIDO-FOTO) La foto manda: antes de generar, la nota de
+    // visión de ESTA foto (qué muestra de verdad). Sin ella, el texto
+    // saldría del rubro en general, no de la foto.
+    let fotoVis = { tag: '', note: '' };
+    try { fotoVis = await ensurePhotoVision(uid, assetId, filePath); } catch (e) {}
+    albumInput.photoVision = fotoVis.note || '';
+    albumInput.photoTag = fotoVis.tag || '';
+    albumInput.photoVisionLang = langOfUser(uid);
     const content = await generateContent(albumInput, key);
-    const caption = String((content && content.caption) || '').trim();
+    let caption = String((content && content.caption) || '').trim();
     if (!caption) return;
-    const hashtags = String((content && content.hashtags) || '');
-    const headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+    let hashtags = String((content && content.hashtags) || '');
+    let headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+    // (CONTENIDO-FOTO) Gate foto↔texto: la foto manda. Si la foto no
+    // muestra el negocio (tag 'otro') y el texto vende la oferta, se
+    // reintenta una vez con ángulo desde la foto; si sigue sin calzar,
+    // NO se crea el posteo (la foto queda como material limpio).
+    let fotoGate = fotoGrounding.groundingGate({ tag: fotoVis.tag, visionNote: fotoVis.note, caption, overlay: headline });
+    if (fotoGate.reason === 'foto-promo-desajuste') {
+      try {
+        albumInput.feedback = `El texto anterior no calzaba con la foto (la foto muestra: ${fotoVis.note || fotoVis.tag}). Escribí sobre lo que la foto SÍ muestra, no una promo del producto.`;
+        const content2 = await generateContent(albumInput, key);
+        const caption2 = String((content2 && content2.caption) || '').trim();
+        if (caption2) {
+          caption = caption2;
+          hashtags = String((content2 && content2.hashtags) || '');
+          headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+          fotoGate = fotoGrounding.groundingGate({ tag: fotoVis.tag, visionNote: fotoVis.note, caption, overlay: headline });
+        }
+      } catch (e) { /* el reintento nunca rompe el festejo */ }
+    }
+    if (!fotoGate.ok) { console.log(`[album] usuario ${uid}: foto ${assetId} NO genera posteo — gate foto↔texto: ${fotoGate.reason} (queda como material)`); return; }
+    if (!fotoVis.note) headline = ''; // (CONTENIDO-FOTO) Sin nota de visión no hay titular (fail-closed).
     // (v237) El festejo es un RESTYLE declarado como tal: la idea
     // ("el producto y la escena EXACTAMENTE iguales") y la nota de rol
     // por fin dicen lo mismo (antes la nota genérica pedía una escena
@@ -8829,9 +8886,9 @@ async function celebratePhotoPost(uid, assetId, filePath) {
     const fid = genOut.fidelity || 'n/a';
     const isClientPhoto = (fid === 'passed' || fid === 'fallback') ? 1 : 0;
     const needRev = (trainingWheelsActive(uid) || fid === 'fallback' || fid === 'unverified' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja')) ? 1 : 0;
-    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why)
-      VALUES (?,?,?,?, 'draft', 'image', ?, 'album', ?, ?, 'foto', 'Posteo creado desde la foto real que subió el cliente')`)
-      .run(uid, imagePath, caption, hashtags, needRev, isClientPhoto, weekKey);
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why, overlay_text, vision_note)
+      VALUES (?,?,?,?, 'draft', 'image', ?, 'album', ?, ?, 'foto', 'Posteo creado desde la foto real que subió el cliente', ?, ?)`)
+      .run(uid, imagePath, caption, hashtags, needRev, isClientPhoto, weekKey, headline, fotoVis.note || '');
     try { db.prepare('UPDATE album_missions SET post_id = ? WHERE user_id = ? AND week_key = ?').run(ins.lastInsertRowid, uid, weekKey); } catch (e) {}
     console.log(`[album] usuario ${uid}: foto ${assetId} convertida en el posteo ${ins.lastInsertRowid} ✨`);
     try { push.sendPush(uid, { title: 'Tu foto ya es un posteo ✨', body: 'Posty la convirtió en un posteo listo para publicar. Miralo en tu semana 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
@@ -8942,6 +8999,14 @@ async function albumPropuesta(uid, assetId, feedback, vision) {
   try {
     const asset = db.prepare('SELECT id, file_path, kind, album_tag, album_quality FROM assets WHERE id = ? AND user_id = ?').get(assetId, uid);
     if (!asset) return { error: 'no-asset' };
+    // (CONTENIDO-FOTO) Gate foto↔texto — BLOQUEANTE: la foto manda.
+    // La visión del MODELO se captura ANTES de que la descripción del
+    // dueño (vision) la pise en album_vision: el gate usa tag+nota del
+    // modelo; la descripción del dueño solo cubre el caso sin-visión.
+    let fotoVis = { tag: String(asset.album_tag || ''), note: '' };
+    if (asset.kind !== 'video') {
+      try { fotoVis = await ensurePhotoVision(uid, assetId, asset.file_path); } catch (e) {}
+    }
     if (vision !== undefined && String(vision).trim()) {
       try { db.prepare('UPDATE assets SET album_vision = ? WHERE id = ?').run(String(vision).trim().slice(0, 200), assetId); } catch (e) {}
     }
@@ -8956,11 +9021,39 @@ async function albumPropuesta(uid, assetId, feedback, vision) {
     if (feedback && String(feedback).trim()) topic += ' — cambio pedido por el dueño: ' + String(feedback).trim().slice(0, 200);
     const albumInput = contentInputFor(uid, topic, asset.kind === 'video' ? 'reel' : 'foto', 0);
     try { albumInput.prevCaptions = weekPrevCaptions(uid, mondayKeyOf(tzToday(userTz(uid))), 0); } catch (e) {}
+    // (CONTENIDO-FOTO) La foto manda: su visión viaja al generador.
+    if (asset.kind !== 'video') {
+      albumInput.photoVision = fotoVis.note || '';
+      albumInput.photoTag = fotoVis.tag || '';
+      albumInput.photoVisionLang = langOfUser(uid);
+    }
     const content = await generateContent(albumInput, key);
-    const caption = String((content && content.caption) || '').trim();
+    let caption = String((content && content.caption) || '').trim();
     if (!caption) return { error: 'sin-caption' };
-    const hashtags = String((content && content.hashtags) || '');
-    const headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+    let hashtags = String((content && content.hashtags) || '');
+    let headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+    // (CONTENIDO-FOTO) Gate foto↔texto en la propuesta: si la foto no
+    // muestra el negocio y el texto vende la oferta, se reintenta una
+    // vez con ángulo desde la foto; si sigue sin calzar, NO se devuelve
+    // texto promo (gated:true) — el cliente puede escribir su texto.
+    if (asset.kind !== 'video') {
+      const gateNote = fotoVis.note || String(vision || '').trim().slice(0, 300);
+      let fotoGate = fotoGrounding.groundingGate({ tag: fotoVis.tag, visionNote: gateNote, caption, overlay: headline });
+      if (fotoGate.reason === 'foto-promo-desajuste') {
+        try {
+          albumInput.feedback = `El texto anterior no calzaba con la foto (la foto muestra: ${gateNote || fotoVis.tag}). Escribí sobre lo que la foto SÍ muestra, no una promo del producto.`;
+          const content2 = await generateContent(albumInput, key);
+          const caption2 = String((content2 && content2.caption) || '').trim();
+          if (caption2) {
+            caption = caption2;
+            hashtags = String((content2 && content2.hashtags) || '');
+            headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+            fotoGate = fotoGrounding.groundingGate({ tag: fotoVis.tag, visionNote: gateNote, caption, overlay: headline });
+          }
+        } catch (e) { /* el reintento nunca rompe la propuesta */ }
+      }
+      if (!fotoGate.ok) { console.log(`[album-propuesta] usuario ${uid}: foto ${assetId} NO genera propuesta — gate foto↔texto: ${fotoGate.reason}`); return { gated: true, reason: fotoGate.reason }; }
+    }
     return { headline, caption, hashtags, tag: asset.album_tag || '', issues, hard };
   } catch (e) {
     if (e && e.name === 'AiCapExceeded') return { capped: true, error: e.message };
@@ -9094,7 +9187,7 @@ app.get('/api/album', requireAuth, (req, res) => {
     // Clasificación perezosa: hasta 3 sin clasificar por visita, en 2º plano.
     let lazy = 0;
     for (const ph of photos) {
-      if (!ph.album_tag && lazy < 3) { lazy++; tagAlbumPhoto(uid, ph.id, ph.file_path); }
+      if (!ph.album_tag && lazy < 3) { lazy++; tagAlbumPhoto(uid, ph.id, ph.file_path, langOfUser(uid)); }
     }
     const counts = { producto: 0, local: 0, equipo: 0, otro: 0 };
     for (const ph of photos) { if (counts[ph.album_tag] !== undefined) counts[ph.album_tag]++; }
@@ -9347,7 +9440,7 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
     // LOTE SUBIR-FOTO-TODO: segundo plano SOLO clasificar. El festejo
     // automático se cierra: una foto subida nunca genera un posteo sola;
     // la pregunta de la pantalla de subir fotos decide qué hacer con ella.
-    tagAlbumPhoto(uid, assetId, filePath);
+    tagAlbumPhoto(uid, assetId, filePath, langOfUser(uid));
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 // Peso excedido en la subida del álbum → mensaje amable (no el 500 de Express).
@@ -10270,7 +10363,20 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     if (caption !== undefined && caption !== post.caption) {
       try { tasteMemory.noteCaptionEdit(db, req.session.userId, { oldCaption: post.caption, newCaption: caption, oldHashtags: post.hashtags, newHashtags: hashtags !== undefined ? hashtags : post.hashtags }); } catch (e) {}
     }
-    db.prepare(`UPDATE posts SET caption=?, hashtags=?, image_path=?, prev_image_path=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, image_path || post.image_path, (image_path && image_path !== post.image_path) ? (post.image_path || '') : (post.prev_image_path || ''), post.id);
+    // (CONTENIDO-FOTO) Texto en la foto como dato propio: si cambia, se
+    // re-renderiza desde la base limpia, sin regenerar el posteo. Si el
+    // re-render falla, el texto NO se guarda (la imagen no mentiría).
+    let overlayNext = post.overlay_text || '';
+    let imageNext = image_path || post.image_path;
+    let prevNext = (image_path && image_path !== post.image_path) ? (post.image_path || '') : (post.prev_image_path || '');
+    if (req.body && req.body.overlay_text !== undefined && String(req.body.overlay_text) !== String(post.overlay_text || '')) {
+      const rec = recompositePostOverlay(req.session.userId, post, String(req.body.overlay_text));
+      if (!rec.ok) return res.status(409).json({ error: 'overlay_rerender_failed', message: 'No se pudo re-renderizar el texto en la foto.' });
+      overlayNext = rec.overlay;
+      imageNext = rec.image_path;
+      prevNext = post.image_path || '';
+    }
+    db.prepare(`UPDATE posts SET caption=?, hashtags=?, image_path=?, prev_image_path=?, overlay_text=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, imageNext, prevNext, overlayNext, post.id);
     // (media-cliente-2) Herencia por evidencia: foto nueva en un
     // borrador cuyo caption nombra exactamente un producto real.
     if (image_path && image_path !== post.image_path) {
@@ -18915,6 +19021,50 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
 // reconociblemente LA MISMA foto — la IA edita (luz, nitidez, color)
 // sobre la base limpia y el titular, si lo lleva, se recompone POR
 // CÓDIGO (composite-headline.py, bandas, sin mayúsculas forzadas).
+// (CONTENIDO-FOTO) Re-render del texto sobre la foto desde su dato
+// propio, SIN regenerar el posteo. Sigue la convención del toggle de
+// caption: compone a archivo NUEVO, actualiza image_path y guarda la
+// base limpia hermana del nuevo archivo. Devuelve {ok, overlay,
+// image_path} o {ok:false, reason}. Nunca lanza.
+function recompositePostOverlay(uid, post, newOverlayRaw) {
+  try {
+    if (!post || String(post.media_type || '') === 'video' || String(post.media_type || '') === 'carousel') return { ok: false, reason: 'no-imagen' };
+    const shown = String(post.image_path || '');
+    const absShown = photoCliente.mediaAbs(MEDIA_DIR, shown);
+    if (!absShown || !fs.existsSync(absShown)) return { ok: false, reason: 'sin-foto' };
+    const newOverlay = makeHeadline(String(newOverlayRaw || '').trim(), 6, 70, rubroOf(uid)) || '';
+    // Base limpia: la hermana si existe; si no, se congela la mostrada
+    // como hermana (la mostrada ES limpia por convención en ese caso).
+    const cleanPath = photoCliente.cleanSisterPath(MEDIA_DIR, shown);
+    if (cleanPath && !fs.existsSync(cleanPath)) { try { fs.copyFileSync(absShown, cleanPath); } catch (e) {} }
+    const baseForCompose = (cleanPath && fs.existsSync(cleanPath)) ? cleanPath : absShown;
+    const settings = getSettings(uid);
+    if (!newOverlay) {
+      // Vacío explícito = quitar el texto: la foto queda limpia.
+      const cleanOut = `/media/${path.basename(baseForCompose)}`;
+      if (cleanOut !== shown) db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, overlay_text = ? WHERE id = ?').run(cleanOut, shown, '', post.id);
+      else db.prepare('UPDATE posts SET overlay_text = ? WHERE id = ?').run('', post.id);
+      return { ok: true, overlay: '', image_path: cleanOut };
+    }
+    // Se quita un sufijo -cap previo para no acumular -cap-cap en
+    // ediciones repetidas: el nombre de salida es estable por foto.
+    const baseName = path.basename(shown).replace(/-cap(\.[a-z0-9]+)$/i, '$1');
+    const outName = photoCliente.captionOutName(baseName);
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const { execFileSync } = require('child_process');
+    const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', baseForCompose, '--headline', newOverlay, '--out', outAbs];
+    const hexes = parseBrandHexes(settings.brand_colors);
+    if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
+    cArgs.push('--font', brandFontOf(settings));
+    execFileSync('python3', cArgs, { timeout: 30000 });
+    const outPath = `/media/${outName}`;
+    try { fs.copyFileSync(baseForCompose, path.join(MEDIA_DIR, photoCliente.cleanSisterName(outName))); } catch (e) {}
+    try { db.prepare('INSERT OR IGNORE INTO image_meta (media_path) VALUES (?)').run(`/media/${photoCliente.cleanSisterName(outName)}`); } catch (e) {}
+    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, overlay_text = ? WHERE id = ?').run(outPath, shown, newOverlay, post.id);
+    return { ok: true, overlay: newOverlay, image_path: outPath };
+  } catch (e) { console.error('[overlay-rerender]', e.message); return { ok: false, reason: 'render-fallo' }; }
+}
+
 async function enhancePhotoGenerate(uid, post, promptOverride) {
   const shown = String(post.image_path || '');
   const absShown = photoCliente.mediaAbs(MEDIA_DIR, shown);
@@ -18947,7 +19097,7 @@ async function enhancePhotoGenerate(uid, post, promptOverride) {
   // makeHeadline de la primera línea — nunca texto editado por la IA).
   if (hadComposite) {
     try {
-      const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
+      const headline = String(post.overlay_text || '').trim() || makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || ''; // (CONTENIDO-FOTO) el dato guardado manda; sin dato, la derivación de siempre
       if (headline) {
         const { execFileSync } = require('child_process');
         const nPath = path.join(MEDIA_DIR, newName);
@@ -27776,7 +27926,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v606';
+const BUILD_ID = '20261101-v607';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

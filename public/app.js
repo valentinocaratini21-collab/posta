@@ -19442,13 +19442,14 @@ function hfDetailHTML(p, opts) {
   // en el idioma de la cuenta, no hay etiqueta que traducir.
   const whyTxt = String(p.strategy_why || '').trim();
   const whyLine = whyTxt ? `<div class="hf-d-why">${pzIc('sparkle', 13)} ${esc(whyTxt)}</div>` : '';
+  const overlayHTML = String(p.overlay_text || '').trim() ? `<div class="hf-d-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''; // (CONTENIDO-FOTO) el texto sobre la foto es dato propio
   return `<div class="hf-d" data-post-id="${esc(String(p.id))}">
     <div class="hf-d-head">${ava}<div class="hf-d-names"><div class="hf-d-user">${esc(headName)}</div>${locLine}</div>${o.visitor ? '' : `<button type="button" class="hf-d-dots" data-hfd-act="menu" aria-label="${en ? 'More options' : 'Más opciones'}">•••</button>`}</div>
     ${media}
     ${coverRow}
     ${bar}
     ${likesLine}
-    ${capHTML}
+    ${capHTML}${overlayHTML}
     ${whyLine}
     ${rgLineHTML(p, en)}
     ${commentsLine}
@@ -24424,6 +24425,7 @@ async function approvalPostView(id) {
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
+    ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''} // (CONTENIDO-FOTO) el texto sobre la foto es dato propio
     ${apvWhyLine}
     ${rgLineHTML(p, en)}
     ${actions}${draftActions}
@@ -25421,7 +25423,8 @@ async function pzSftIrAPropuesta(it) {
   pzSftRender();
   try {
     const r = await api.post("/api/album/" + it.assetId + "/propuesta", { vision: it.vision || "" });
-    if (r && r.ok) {
+    if (r && r.gated) { PZ_SFT.msg = r.reason === "sin-vision" ? pzSftT("Esta foto no me dice nada claro todavía, así que no armo un texto sobre ella. Probá con otra foto o contame qué muestra.", "This photo doesn't tell me anything clear yet, so I won't write text about it. Try another photo or tell me what it shows.") : pzSftT("Esta foto no muestra tu producto, tu local ni tu equipo, así que no armo un texto promocional sobre ella. Podés guardarla como material o escribir vos el texto.", "This photo doesn't show your product, place or team, so I won't write a promotional text about it. You can keep it as material or write the text yourself."); }
+    else if (r && r.ok) {
       PZ_SFT.propuesta = { tag: r.tag || it.tag || "", issues: r.issues || it.issues || [], hard: r.hard || [] };
       PZ_SFT.variantes = [{ headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "" }];
       it.tag = PZ_SFT.propuesta.tag || it.tag;
@@ -25435,7 +25438,8 @@ async function pzSftOtraVersion() {
   const it = PZ_SFT.itemPropuesta;
   try {
     const r = await api.post("/api/album/" + it.assetId + "/propuesta", { vision: it.vision || "", feedback: "otra versión, distinta a la anterior" });
-    if (r && r.ok) { PZ_SFT.variantes.push({ headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "" }); PZ_SFT.varSel = PZ_SFT.variantes.length - 1; }
+    if (r && r.gated) { PZ_SFT.msg = r.reason === "sin-vision" ? pzSftT("Esta foto no me dice nada claro todavía, así que no armo un texto sobre ella. Probá con otra foto o contame qué muestra.", "This photo doesn't tell me anything clear yet, so I won't write text about it. Try another photo or tell me what it shows.") : pzSftT("Esta foto no muestra tu producto, tu local ni tu equipo, así que no armo un texto promocional sobre ella. Podés guardarla como material o escribir vos el texto.", "This photo doesn't show your product, place or team, so I won't write a promotional text about it. You can keep it as material or write the text yourself."); }
+    else if (r && r.ok) { PZ_SFT.variantes.push({ headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "" }); PZ_SFT.varSel = PZ_SFT.variantes.length - 1; }
     else PZ_SFT.msg = (r && r.error) || pzSftT("No pude armar otra versión.", "I could not build another version.");
   } catch (e) { PZ_SFT.msg = pzSftT("No pude armar otra versión.", "I could not build another version."); }
   pzSftRender();
@@ -25448,7 +25452,8 @@ async function pzSftPedirCambio() {
   const it = PZ_SFT.itemPropuesta;
   try {
     const r = await api.post("/api/album/" + it.assetId + "/propuesta", { vision: it.vision || "", feedback: fb });
-    if (r && r.ok) { PZ_SFT.variantes.push({ headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "" }); PZ_SFT.varSel = PZ_SFT.variantes.length - 1; if (inp) inp.value = ""; }
+    if (r && r.gated) { PZ_SFT.msg = r.reason === "sin-vision" ? pzSftT("Esta foto no me dice nada claro todavía, así que no armo un texto sobre ella. Probá con otra foto o contame qué muestra.", "This photo doesn't tell me anything clear yet, so I won't write text about it. Try another photo or tell me what it shows.") : pzSftT("Esta foto no muestra tu producto, tu local ni tu equipo, así que no armo un texto promocional sobre ella. Podés guardarla como material o escribir vos el texto.", "This photo doesn't show your product, place or team, so I won't write a promotional text about it. You can keep it as material or write the text yourself."); }
+    else if (r && r.ok) { PZ_SFT.variantes.push({ headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "" }); PZ_SFT.varSel = PZ_SFT.variantes.length - 1; if (inp) inp.value = ""; }
     else PZ_SFT.msg = (r && r.error) || pzSftT("No pude armar la propuesta nueva.", "I could not build the new proposal.");
   } catch (e) { PZ_SFT.msg = pzSftT("No pude armar la propuesta nueva.", "I could not build the new proposal."); }
   pzSftRender();

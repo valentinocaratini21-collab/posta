@@ -1931,7 +1931,7 @@ function goldenLine(golden) {
   return `\nEjemplos de posteos APROBADOS para este cliente (este es el estilo correcto: escribí como estos, no copies el contenido):\n${ex}`;
 }
 
-async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock, salesIntent, salesAngle, salesProof, casaLinea, propiaLinea }, apiKey) {
+async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock, salesIntent, salesAngle, salesProof, photoVision, photoVisionLang, casaLinea, propiaLinea }, apiKey) {
   // 🧠 (v232) CEREBRO COMERCIAL: si la pieza declara su intención de
   // venta, el brief la nombra con su ángulo y su prueba concreta: el
   // caption entero trabaja para esa intención y cierra acorde.
@@ -1968,6 +1968,8 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
             `\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}${goalLine(goal)}${tipoLine(tipo)}${taste || ''}` +
             (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
             (feedback ? `\nAjuste de calidad (OBEDECELO al regenerar): ${feedback}` : '') +
+            (photoVision ? `
+Foto real que acompaña este posteo — lo que SE VE en la foto: ${String(photoVision).slice(0, 300)}. ${photoVisionLang === 'en' ? 'Caption and headline must talk about what is actually visible in the photo or something directly related to it. If the photo shows neither the product, the place nor the team, do NOT write a promotional caption for the product: write about what the photo does show.' : 'El caption y el titular deben hablar de lo que SE VE en la foto o de algo directamente relacionado con ella. Si la foto no muestra el producto, el local ni el equipo del negocio, NO escribas un caption promocional del producto: escribí sobre lo que la foto sí muestra.'}` : '') +
             (voice ? `\n${voice}` : '') +
             (tasteBlock ? `\n${tasteBlock}` : (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '')) +
             goldenLine(golden) +
@@ -2083,7 +2085,7 @@ async function generateContent(input, apiKey) {
     // intento de modelo; si ninguno pasa entero, sale el MEJOR candidato
     // medido (puntaje: puerta > ancla > dentro de contrato) y el motivo
     // queda logueado — nunca un candidato peor que el de antes.
-    let feedback = null;
+    let feedback = input.feedback || null; // (CONTENIDO-FOTO) feedback inicial del llamador (reintento del gate foto↔texto)
     let best = null, bestScore = -1;
     for (let attempt = 0; attempt < 3 && !out; attempt++) {
       let cand = null;
@@ -2863,7 +2865,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   // nada si esta lista tiene items. Si preguntan "cómo viene la semana", respondé con la posta.
   const stLabel = (s) => s === 'scheduled' ? 'PROGRAMADO' : s === 'published' ? 'publicado' : s === 'publishing' ? 'PUBLICANDO' : s === 'failed' ? 'FALLIDO' : 'borrador';
   const draftList = (Array.isArray(drafts) ? drafts : [])
-    .map((d, i) => `${i + 1}. [${stLabel(d.status)}${d.needs_review ? ' · EN REVISIÓN' : ''} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"`)
+    .map((d, i) => `${i + 1}. [${stLabel(d.status)}${d.needs_review ? ' · EN REVISIÓN' : ''} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"${d.overlay ? ` [texto en la foto: "${String(d.overlay).slice(0, 60)}"]` : ''}`)
     .join('\n');
   const draftsGuide = draftList
     ? 'TODO lo del cliente en Instagram (borradores + programados + publicados + fallidos):\n' + draftList + '\n' +
@@ -2871,6 +2873,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       'identificá cuál es por su número o por el tema, y aplicá el cambio DIRECTO con este bloque al final de tu mensaje:\n' +
       '```edit\n{"draft": 2, "caption": "texto nuevo completo", "hashtags": "#tags nuevos"}\n```\n' +
       'El número es el de la lista de arriba (1 = primero). Incluí solo los campos que cambian. ' +
+      'Si te pide cambiar el TEXTO SOBRE LA FOTO ("cambiá lo que dice la foto", "sacá el texto de la foto"): agregá "overlay" con el texto nuevo exacto (máx. 6 palabras); con "overlay": "" la foto queda limpia. La imagen se vuelve a renderizar con ese texto, sin regenerar el posteo. ' +
       'Solo se puede editar/reprogramar borradores y programados: si te piden cambiar uno ya PUBLICADO, decilo en 1 línea ("ese ya salió, pero te armo uno nuevo con ese cambio 🚀"). ' +
       'Si te pide cambiar VARIOS a la vez ("a todos sacales los emojis", "los tres más cancheros"): emití VARIOS bloques ```edit seguidos, uno por borrador. ' +
       'Para REPROGRAMAR ("el segundo pasalo para mañana a las 18", "el viernes a la mañana el tercero"): agregá "when" con formato exacto "AAAA-MM-DD HH:MM" en hora local del cliente ' +
@@ -4530,6 +4533,7 @@ function parseEditBlock(raw, tz) {
   const e = { draft: j.draft };
   if (typeof j.caption === 'string' && j.caption.trim()) e.caption = cortar(j.caption.trim(), 900);
   if (typeof j.hashtags === 'string' && j.hashtags.trim()) e.hashtags = cortar(j.hashtags.trim(), 300);
+  if (typeof j.overlay === 'string') e.overlay = cortar(j.overlay.trim(), 70); // (CONTENIDO-FOTO) "" = quitar el texto (foto limpia)
   if (Number.isInteger(j.photo_index) && j.photo_index >= 0) e.photo_index = j.photo_index;
   if (typeof j.when === 'string' && j.when.trim()) {
     const w = normalizeWhen(j.when);
@@ -4548,7 +4552,7 @@ async function repairEditJson(brokenRaw, apiKey, tz) {
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'Devolvé ÚNICAMENTE el JSON corregido dentro de un bloque ```edit, sin ningún otro texto. El JSON debe tener "draft" (entero ≥ 1); opcionalmente "caption", "hashtags", "photo_index" (entero ≥ 0) y "when" ("AAAA-MM-DD HH:MM").' },
+        { role: 'system', content: 'Devolvé ÚNICAMENTE el JSON corregido dentro de un bloque ```edit, sin ningún otro texto. El JSON debe tener "draft" (entero ≥ 1); opcionalmente "caption", "hashtags", "photo_index" (entero ≥ 0), "when" ("AAAA-MM-DD HH:MM") y "overlay" (texto sobre la foto, o "" para quitarlo).' },
         { role: 'user', content: 'Corregí este JSON para que sea válido:\n' + String(brokenRaw || '').slice(0, 2000) },
       ],
       max_tokens: 300,

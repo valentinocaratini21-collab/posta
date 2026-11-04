@@ -1492,6 +1492,9 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN cover_path TEXT DEFAULT ''`); } catc
 try { db.exec(`ALTER TABLE posts ADD COLUMN cover_origin TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (Tanda feed 6C · ítem 6) origen de la portada: 'frame@<segundos>' cuando la eligió el dueño desde el selector (captura de SU video); el director de feed no pisa una portada con este origen
 try { db.exec(`ALTER TABLE posts ADD COLUMN cover_pos INTEGER DEFAULT 50`); } catch (e) { /* ya existe */ } // (Tanda feed 6C · ítem 6) encuadre vertical de la portada en la grilla: object-position vertical 0–100 (0=arriba, 50=centro, 100=abajo)
 try { db.exec(`ALTER TABLE posts ADD COLUMN ab_winner TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN overlay_text TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (CONTENIDO-FOTO) texto exacto sobre la foto
+try { db.exec(`ALTER TABLE posts ADD COLUMN vision_note TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (CONTENIDO-FOTO) nota de visión con la que nació el posteo
+try { db.exec(`ALTER TABLE post_versions ADD COLUMN overlay_text TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (CONTENIDO-FOTO) texto sobre la foto en el historial de versiones
 
 // FASE 1 (2026-10-05): una sola escalera de confianza — trust_level 0/1/2.
 // Unifica los 3 mecanismos redundantes: training_wheels, autopilot_enabled +
