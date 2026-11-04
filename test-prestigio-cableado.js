@@ -2,6 +2,7 @@
 // Uso: node test-prestigio-cableado.js (desde la raíz del repo).
 // DB real en memoria (node:sqlite). Nada de stubs de SQL.
 // Cubre: helper nivelPosty (L3 P0, L6 entrada, L7 no-entrada, L50 techo,
+// SOLO-POSTEOS (4/11): los niveles se alimentan con posteos, no semanas;
 // fallback sin prestigio.js, nunca baja), estáticos del cableado en
 // server.js / oficina.js / app.js, vetos (sin dinero ni compra ni nivel 51)
 // y módulo prestigio.js intacto (md5).
@@ -26,7 +27,13 @@ function freshDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('CREATE TABLE oficina_nivel_eventos (user_id INTEGER, poder TEXT, evento TEXT, hecho TEXT, registro_ref TEXT, ts INTEGER)');
   db.exec("CREATE TABLE oficina_registros (user_id INTEGER, poder TEXT, tipo TEXT, resumen TEXT, registro_ref TEXT, recibo_json TEXT, estado TEXT, ts INTEGER, salida INTEGER DEFAULT 0)");
+  db.exec('CREATE TABLE posts (user_id INTEGER, status TEXT, media_type TEXT, ig_permalink TEXT, published_at INTEGER)');
   return db;
+}
+// SOLO-POSTEOS (4/11): n posteos publicados por Posty (feed real).
+function posts(db, n) {
+  const ins = db.prepare('INSERT INTO posts (user_id, status, media_type, ig_permalink) VALUES (?,?,?,?)');
+  for (let i = 0; i < n; i++) ins.run(UID, 'published', 'image', 'https://www.instagram.com/p/PC_' + i + '/');
 }
 const UID = 7;
 const MONDAY = (y, m, d) => new Date(Date.UTC(y, m - 1, d)).getTime();
@@ -53,39 +60,39 @@ function semillaL6(db) {
   ev(db, 'pieza_aceptada_primera', MONDAY(2026, 10, 5));
 }
 
-console.log('— Helper: P0 conserva base + etiqueta formato viejo —');
+console.log('— Helper: P0 con 3 posteos + etiqueta formato viejo —');
 {
   const db = freshDb();
-  ev(db, 'fundamento_leido', MONDAY(2026, 8, 31));
-  ev(db, 'semana_generada', MONDAY(2026, 8, 31));
-  ev(db, 'decision_bandeja', MONDAY(2026, 8, 31));
+  posts(db, 3); // SOLO-POSTEOS: L3 = 3 posteos
   const r = HP.nivelPosty(db, UID, {}, MONDAY(2026, 8, 31));
-  t(r.nivel === 3, 'L3 con fundamento + semana + decisión (got ' + r.nivel + ')');
+  t(r.nivel === 3, 'L3 con 3 posteos (got ' + r.nivel + ')');
   t(r.prestigio === 0 && r.nombre_prestigio === null && r.insignia === null, 'P0 sin prestigio ni insignia');
   t(r.etiqueta_tirita === 'Nivel 3 · De la casa', 'etiqueta P0: «Nivel 3 · De la casa» (got ' + r.etiqueta_tirita + ')');
   t(r.nombre_siguiente === 'Mano derecha de tu Instagram', 'nombre_siguiente L4 (got ' + r.nombre_siguiente + ')');
   t(r.premio_actual === null && r.desbloqueo_actual === null, 'sin premio ni desbloqueo actual en P0');
   t(r.premios.length === 0 && r.desbloqueos.length === 0 && r.meta_final === null, 'sin premios ni meta en P0');
   t(r.color === '#2793C8' && r.nombre === 'Posty', 'color y nombre del poder intactos');
-  t(r.gate && r.gate.pendientes.every((p) => p.clave && p.falta), 'faltantes con forma base {clave, falta}');
+  t(r.gate && r.gate.pendientes.length === 0, 'sin requisitos de gate (solo posteos)');
+  t(r.avance && r.avance.hechos === 3 && r.avance.total === 6, 'avance en posteos 3/6 (got ' + JSON.stringify(r.avance) + ')');
 }
 
 console.log('— Helper: entrada a prestigio 1 (L6) —');
 {
   const db = freshDb();
   semillaL6(db);
+  posts(db, 14); // SOLO-POSTEOS: L6 = 14 posteos
   const r = HP.nivelPosty(db, UID, {}, MONDAY(2026, 10, 12));
-  t(r.nivel === 6, 'L6 con 6 semanas + 4 piezas + racha (got ' + r.nivel + ')');
+  t(r.nivel === 6, 'L6 con 14 posteos (got ' + r.nivel + ')');
   t(r.etiqueta_tirita === 'Prestigio 1 · Nivel 6', 'etiqueta: «Prestigio 1 · Nivel 6» (got ' + r.etiqueta_tirita + ')');
   t(r.prestigio === 1 && r.nombre_prestigio === 'Brote dorado' && r.insignia === 'Brote dorado', 'P1 Brote dorado con insignia');
   t(r.premios.length === 1 && r.premios[0].premio.includes('Brote dorado'), 'un premio: el de P1');
   t(r.desbloqueos.length === 1 && r.desbloqueos[0].desbloqueo === 'Hoja dorada pequeña', 'un desbloqueo: el de L6');
   t(r.nombre_siguiente === PRE.nombreNivel(7), 'nombre_siguiente = nombre de L7 (got ' + r.nombre_siguiente + ')');
   t(r.gate && r.gate.nivel_objetivo === 7, 'gate en curso apunta a L7');
-  t(typeof r.proximo_paso === 'string' && r.proximo_paso.includes('Semanas publicadas') && !r.proximo_paso.includes('semana_publicada'), 'proximo_paso es frase, no clave cruda (got ' + r.proximo_paso + ')');
+  t(typeof r.proximo_paso === 'string' && r.proximo_paso.includes('posteos') && !r.proximo_paso.includes('semana_publicada'), 'proximo_paso es frase en posteos, no clave cruda (got ' + r.proximo_paso + ')');
   t(r.premio_actual && r.premio_actual.includes('Brote dorado'), 'premio_actual = premio de entrada P1');
   t(r.desbloqueo_actual === 'Hoja dorada pequeña', 'desbloqueo_actual = desbloqueo de L6');
-  t(r.hitos.length > 0 && r.hitos_cumplidos > 0, 'hitos extendidos presentes y contados');
+  t(r.avance && r.avance.hechos === 14 && r.avance.total === 18 && r.posteos_posty === 14, 'avance en posteos 14/18 (got ' + JSON.stringify(r.avance) + ')');
   t(r.nivel >= NIV.computarNivel(db, UID, 'posty', {}).nivel, 'el extendido nunca baja del base');
 }
 
@@ -95,8 +102,9 @@ console.log('— Helper: nivel sin entrada (L7) —');
   semillaL6(db);
   semanas(db, 2, MONDAY(2026, 10, 19)); // total 8 semanas
   for (let i = 0; i < 7; i++) ev(db, 'decision_bandeja', MONDAY(2026, 10, 19) + i); // total 8
+  posts(db, 18); // SOLO-POSTEOS: L7 = 18 posteos
   const r = HP.nivelPosty(db, UID, {}, MONDAY(2026, 10, 26));
-  t(r.nivel === 7, 'L7 con 8 semanas + 8 decisiones (got ' + r.nivel + ')');
+  t(r.nivel === 7, 'L7 con 18 posteos (got ' + r.nivel + ')');
   t(r.etiqueta_tirita === 'Prestigio 1 · Nivel 7', 'etiqueta L7 (got ' + r.etiqueta_tirita + ')');
   t(r.premio_actual === null, 'sin premio_actual en nivel sin entrada');
   t(r.desbloqueo_actual === 'Piedra del sendero', 'desbloqueo_actual = desbloqueo de L7');
@@ -109,9 +117,10 @@ console.log('— Helper: techo L50 —');
   semanas(db, 90, MONDAY(2026, 10, 5)); // 94 semanas consecutivas en total
   for (let i = 0; i < 45; i++) ev(db, 'pieza_aceptada_primera', MONDAY(2026, 10, 5) + i);
   for (let i = 0; i < 91; i++) ev(db, 'decision_bandeja', MONDAY(2026, 10, 5) + i);
+  posts(db, 210); // SOLO-POSTEOS: L50 = 210 posteos
   const fin = MONDAY(2026, 10, 5) + 89 * 7 * 86400000;
   const r = HP.nivelPosty(db, UID, {}, fin);
-  t(r.nivel === 50, 'L50 con todos los hechos (got ' + r.nivel + ')');
+  t(r.nivel === 50, 'L50 con 210 posteos (got ' + r.nivel + ')');
   t(r.etiqueta_tirita === 'Prestigio 9 · Nivel 50', 'etiqueta L50 (got ' + r.etiqueta_tirita + ')');
   t(r.nombre_siguiente === null, 'en L50 no hay siguiente');
   t(r.meta_final !== null && r.premios.length === 9, 'meta final + 9 premios');

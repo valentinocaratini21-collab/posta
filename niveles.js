@@ -270,18 +270,22 @@ function computarNivel(db, uid, poder, metrics) {
 function registrarEvento(db, uid, { poder, evento, hecho, registro_ref }, metrics) {
   poder = resolverPoder(poder); // el pliegue: el evento nace bajo su anfitrión
   const antes = computarNivel(db, uid, poder, metrics);
-  // Posty extendido (Lote 3): el nivel 6–50 se mide ANTES del evento, porque
-  // el cómputo base se queda en 5. Require perezoso: posty-nivel50 requiere
-  // niveles solo dentro de nivelPosty, así que no hay ciclo.
-  let antesExt = null;
-  if (poder === 'posty') {
-    try { const np = require('./posty-nivel50'); antesExt = np.nivelPosty(db, uid, metrics); } catch (e) {}
-  }
+  // Posty SOLO-POSTEOS (4/11): la subida NO se detecta comparando el
+  // nivel antes/después del evento, porque el posteo ya existe en posts
+  // cuando se registra el evento (el pre-evento ya lo contaría y nunca
+  // se detectaría la subida). Se compara contra el último nivel
+  // registrado en el río (refs 'nivel:posty:N:ts'), en la rama de abajo.
+  // Require perezoso: posty-nivel50 requiere niveles solo dentro de
+  // nivelPosty, así que no hay ciclo.
   db.prepare('INSERT INTO oficina_nivel_eventos (user_id, poder, evento, hecho, registro_ref, ts) VALUES (?, ?, ?, ?, ?, ?)')
     .run(uid, poder, evento, hecho || '', registro_ref || '', Date.now());
   const despues = computarNivel(db, uid, poder, metrics);
   let subida = null;
-  if (antes && despues && despues.nivel > antes.nivel) {
+  // SOLO-POSTEOS (4/11): para posty el nivel ya no sale de los gates, así
+  // que la subida del cómputo base NO se registra (sería una subida por
+  // fundamento/Bandeja/semana, no por posteos). La subida real de posty
+  // la registra la rama de abajo, comparando nivelPosty antes/después.
+  if (poder !== 'posty' && antes && despues && despues.nivel > antes.nivel) {
     subida = {
       poder,
       nombre: PODERES[poder].nombre,
@@ -296,18 +300,29 @@ function registrarEvento(db, uid, { poder, evento, hecho, registro_ref }, metric
         .run(uid, poder, 'subida_nivel', `${PODERES[poder].nombre} subió a ${despues.nombre_nivel}`, `nivel:${poder}:${despues.nivel}:${Date.now()}`, null, 'registrado', Date.now());
     } catch (e) { /* el río es derivado: si falla, la subida igual ocurrió */ }
   }
-  // Posty extendido (Lote 3): si el nivel 6–50 subió, la subida queda en el
-  // río con la misma forma que 2–5 y se devuelve como subida principal
-  // (si el mismo evento subió base 4→5 y extendido 5→6, quedan ambos
-  // registros: el historial muestra los dos niveles, sin huecos).
-  // OJO: el salto 4→5 del base también se refleja en el extendido (fallback
-  // 4→5); por eso el registro extendido exige llegar a 6+: sin ese piso,
-  // un 4→5 escribiría dos registros del 5.
+  // Posty SOLO-POSTEOS (4/11): si el nivel por posteos supera al último
+  // registrado en el río (CUALQUIER salto, no solo 6+), la subida queda
+  // en el río y se devuelve como subida principal. El piso 6+ del Lote 3
+  // ya no aplica: con el motor viejo los niveles 1–5 los registraba la
+  // rama base, y esa rama ya no registra para posty (ver arriba), así
+  // que sin este registro los saltos 1→2, 2→3, 3→4 y 4→5 quedarían sin
+  // historia. Efecto migración (una sola vez): un usuario que ya está
+  // en L4 por posteos pero cuyo río quedó en L2 de la era de gates
+  // registra su L4 actual en el próximo evento posty; después, solo
+  // subidas reales. Idempotente: mismo nivel, sin duplicados.
   if (poder === 'posty') {
     try {
       const np = require('./posty-nivel50');
       const despuesExt = np.nivelPosty(db, uid, metrics);
-      if (antesExt && despuesExt && despuesExt.nivel >= 6 && despuesExt.nivel > antesExt.nivel) {
+      let ultimo = 1;
+      try {
+        const rows = db.prepare(`SELECT registro_ref FROM oficina_registros WHERE user_id = ? AND poder = 'posty' AND tipo = 'subida_nivel'`).all(uid);
+        for (const r of rows) {
+          const m = /^nivel:posty:(\d+):/.exec(String((r && r.registro_ref) || ''));
+          if (m) ultimo = Math.max(ultimo, parseInt(m[1], 10));
+        }
+      } catch (e) {}
+      if (despuesExt && despuesExt.nivel > ultimo) {
         const subExt = {
           poder,
           nombre: PODERES[poder].nombre,

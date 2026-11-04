@@ -1,6 +1,8 @@
 /* LOTE 4 — checks: después del jardín completo (las 4) + momento del avance (las 5).
    Uso: node test-lote4.js (desde la raíz del árbol). Sin dependencias (node:sqlite).
-   «Ahora» fijo: lunes 2026-11-02 (como test-lote3) para determinismo. */
+   «Ahora» fijo: lunes 2026-11-02 (como test-lote3) para determinismo.
+   SOLO-POSTEOS (4/11): el nivel ya no viene de semanas sino de posteos:
+   usuarioL50 suma 210 posteos (L50) y el caso L5 suma 10 (L5). */
 'use strict';
 const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs');
@@ -26,7 +28,13 @@ function freshDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('CREATE TABLE oficina_nivel_eventos (user_id INTEGER, poder TEXT, evento TEXT, hecho TEXT, registro_ref TEXT, ts INTEGER)');
   db.exec("CREATE TABLE oficina_registros (user_id INTEGER, poder TEXT, tipo TEXT, resumen TEXT, registro_ref TEXT, recibo_json TEXT, estado TEXT, ts INTEGER, salida INTEGER DEFAULT 0)");
+  db.exec('CREATE TABLE posts (user_id INTEGER, status TEXT, media_type TEXT, ig_permalink TEXT, published_at INTEGER)');
   return db;
+}
+// SOLO-POSTEOS (4/11): n posteos publicados por Posty (feed real).
+function posts(db, n) {
+  const ins = db.prepare('INSERT INTO posts (user_id, status, media_type, ig_permalink) VALUES (?,?,?,?)');
+  for (let i = 0; i < n; i++) ins.run(UID, 'published', 'image', 'https://www.instagram.com/p/L4_' + i + '/');
 }
 function ev(db, evento, ts) {
   db.prepare('INSERT INTO oficina_nivel_eventos VALUES (?,?,?,?,?,?)').run(UID, 'posty', evento, evento, 'ev:' + evento + ':' + ts, ts);
@@ -49,6 +57,7 @@ function usuarioL50(db) {
   semanasRecientes(db, 30);
   for (let i = 0; i < 30; i++) ev(db, 'decision_bandeja', MONDAY(2026, 8, 31) + i);
   for (let i = 0; i < 16; i++) ev(db, 'pieza_aceptada_primera', MONDAY(2026, 8, 31) + i);
+  posts(db, 210); // SOLO-POSTEOS: el L50 viene de 210 posteos, no de semanas.
 }
 function subida(db, nivel, ts) {
   db.prepare('INSERT INTO oficina_registros (user_id, poder, tipo, resumen, registro_ref, recibo_json, estado, ts) VALUES (?,?,?,?,?,?,?,?)')
@@ -118,6 +127,7 @@ console.log('== 2. estadoPost50 con DB (nivel 50 vs nivel 5) ==');
 (function () {
   const db = freshDb();
   baseL5(db);
+  posts(db, 10); // SOLO-POSTEOS: el L5 viene de 10 posteos.
   const r = NP.nivelPosty(db, UID, undefined, NOW);
   const est = PJ.estadoPost50(db, UID, undefined, 'America/Argentina/Buenos_Aires', NOW);
   check('L5: no completo', est && est.completo === false && r.nivel === 5, 'nivelPosty=' + r.nivel);

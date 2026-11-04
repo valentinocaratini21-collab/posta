@@ -867,7 +867,13 @@ function bbTalloHTML(nivel, color, alto) {
 }
 function bbBarraHTML(nivel, color) {
   if (!nivel) return '';
-  const pct = nivel.nivel >= 5 ? 100 : (nivel.gate ? nivel.gate.progreso_pct : 0);
+  // SOLO-POSTEOS (4/11): la tarjeta de Posty en LA OFICINA pinta el
+  // progreso real (avance en posteos) en 1–49; el 100% fijo de «nivel>=5»
+  // era del motor viejo (base completa) y mentiría en L5–L49 nuevos.
+  // Otros poderes, intactos.
+  const pct = (nivel.poder === 'posty' && nivel.nivel < 50)
+    ? (nivel.avance && nivel.avance.total > 0 ? Math.round(100 * nivel.avance.hechos / nivel.avance.total) : (nivel.gate ? nivel.gate.progreso_pct : 0))
+    : (nivel.nivel >= 5 ? 100 : (nivel.gate ? nivel.gate.progreso_pct : 0));
   return `<div class="bb-barra" style="--bbc:${color}"><span style="width:${pct}%"></span></div>`;
 }
 function bbShell(tab, content) {
@@ -1547,16 +1553,22 @@ function pzProximoPremioTira(nvP, origen) {
   // Sin imagen generada ni bloque de color.
   const img = `<img src="ropa/ropa-${String(n + 1).padStart(2, '0')}-mini.png" alt="" aria-hidden="true">`;
   const premio = `<span class="mx-tira-premio">${img}<span>${esc(en ? ('Level ' + (n + 1) + ': ' + nom) : ('Nivel ' + (n + 1) + ': ' + nom))}</span></span>`;
-  // Cuánto falta, en la unidad real de la barrita: los requisitos
-  // pendientes del gate del próximo nivel (nv.faltantes — misma fuente
-  // que avance.hechos/total). Sin avance en curso (Nv 5+) o sin lista,
-  // no se dice nada: nunca un número inventado.
+  // Cuánto falta, en la unidad real de la barrita: POSTEOS hechos a través
+  // de Posty (decisión Valentino 4/11: el nivel sube solo con posteos).
+  // Fuente: avance.hechos/total del servidor (la misma que la barrita) o,
+  // en su defecto, los campos explícitos posteos_posty/proximo_umbral.
+  // Sin avance ni campos (Nv 50: todo desbloqueado), no se dice nada:
+  // nunca un número inventado.
   let falta = '';
   try {
-    const falt = (nvP && Array.isArray(nvP.faltantes)) ? nvP.faltantes : [];
-    const conAvance = nvP && nvP.avance && Number(nvP.avance.total) > 0;
-    if (conAvance && falt.length) {
-      falta = `<span class="mx-tira-falta">${esc(falt.length === 1 ? (en ? '1 thing left' : 'te falta 1 cosa') : (en ? (falt.length + ' things left') : ('te faltan ' + falt.length + ' cosas')))}</span>`;
+    let faltan = null;
+    if (nvP && nvP.avance && Number(nvP.avance.total) > 0) {
+      faltan = Math.max(0, Math.round(Number(nvP.avance.total) - Number(nvP.avance.hechos)));
+    } else if (nvP && typeof nvP.posteos_posty === 'number' && typeof nvP.proximo_umbral === 'number') {
+      faltan = Math.max(0, nvP.proximo_umbral - nvP.posteos_posty);
+    }
+    if (faltan !== null && faltan > 0) {
+      falta = `<span class="mx-tira-falta">${esc(faltan === 1 ? (en ? '1 post left' : 'te falta 1 posteo') : (en ? (faltan + ' posts left') : ('te faltan ' + faltan + ' posteos')))}</span>`;
     }
   } catch (e) {}
   return premio + falta;

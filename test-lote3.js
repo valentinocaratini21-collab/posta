@@ -2,7 +2,10 @@
    Uso: node test-lote3.js (desde la raíz del árbol). Sin dependencias (node:sqlite).
    La racha se mide con un "ahora" fijo (lunes 2026-11-02) para que el test sea
    determinista; solo el check de registrarEvento usa Date.now() real, por diseño
-   (el evento insertado cae siempre en la semana en curso → racha ≥ 1). */
+   (el evento insertado cae siempre en la semana en curso → racha ≥ 1).
+   SOLO-POSTEOS (4/11): las secciones 3 y 5 (nivelPosty / registrarEvento)
+   ya no se alimentan de semanas sino de posteos; las secciones 1, 2, 4 y 6
+   (helpers puros de prestigio, reescalado, historial, estáticos) no cambian. */
 'use strict';
 const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs');
@@ -27,7 +30,17 @@ function freshDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('CREATE TABLE oficina_nivel_eventos (user_id INTEGER, poder TEXT, evento TEXT, hecho TEXT, registro_ref TEXT, ts INTEGER)');
   db.exec("CREATE TABLE oficina_registros (user_id INTEGER, poder TEXT, tipo TEXT, resumen TEXT, registro_ref TEXT, recibo_json TEXT, estado TEXT, ts INTEGER, salida INTEGER DEFAULT 0)");
+  db.exec('CREATE TABLE posts (user_id INTEGER, status TEXT, media_type TEXT, ig_permalink TEXT, published_at INTEGER)');
   return db;
+}
+// SOLO-POSTEOS (4/11): n posteos publicados por Posty (feed real).
+function posts(db, n) {
+  const ins = db.prepare('INSERT INTO posts (user_id, status, media_type, ig_permalink) VALUES (?,?,?,?)');
+  for (let i = 0; i < n; i++) ins.run(UID, 'published', 'image', 'https://www.instagram.com/p/L3_' + i + '/');
+}
+function subidaRec(db, nivel) {
+  db.prepare("INSERT INTO oficina_registros (user_id, poder, tipo, resumen, registro_ref, recibo_json, estado, ts) VALUES (?,?,?,?,?,?,?,?)")
+    .run(UID, 'posty', 'subida_nivel', 'subida', 'nivel:posty:' + nivel + ':test', '{}', 'ok', Date.now());
 }
 function ev(db, evento, ts) {
   db.prepare('INSERT INTO oficina_nivel_eventos VALUES (?,?,?,?,?,?)').run(UID, 'posty', evento, evento, 'ev:' + evento + ':' + ts, ts);
@@ -146,10 +159,10 @@ console.log('== 2. Guard no-baja + meta 7 meses (db real) ==');
   check('usuario quieto no sube solo: sigue 5', r.nivel === 5, r.nivel);
 })();
 
-console.log('== 3. Vista previa: próximo nivel (nivelPosty) ==');
+console.log('== 3. Vista previa: próximo nivel (nivelPosty, SOLO-POSTEOS) ==');
 (function () {
   const db = freshDb();
-  baseL5(db);
+  posts(db, 10); // L5 = 10 posteos
   const r = NP.nivelPosty(db, UID, undefined, NOW);
   check('en L5: siguiente es 6', r.nivel === 5 && r.nombre_siguiente === 'Primer brote dorado', r.nivel + '/' + r.nombre_siguiente);
   check('en L5: premio P1', !!r.siguiente_premio && r.siguiente_premio.indexOf('Brote dorado') >= 0, r.siguiente_premio);
@@ -157,21 +170,18 @@ console.log('== 3. Vista previa: próximo nivel (nivelPosty) ==');
 })();
 (function () {
   const db = freshDb();
-  baseL5(db);
-  semanasRecientes(db, 2);
+  posts(db, 14); // L6 = 14 posteos
   const r = NP.nivelPosty(db, UID, undefined, NOW);
-  check('con 2 sem recientes → L6', r.nivel === 6, r.nivel);
+  check('con 14 posteos → L6', r.nivel === 6, r.nivel);
   check('en L6: siguiente es 7', r.nombre_siguiente === 'Hojas doradas', r.nombre_siguiente);
   check('en L6: sin premio (7 no abre)', r.siguiente_premio === null, r.siguiente_premio);
   check('en L6: desbloqueo 7', r.siguiente_desbloqueo === 'Piedra del sendero', r.siguiente_desbloqueo);
 })();
 (function () {
   const db = freshDb();
-  baseL5(db);
-  semanasRecientes(db, 4);
-  for (let i = 0; i < 3; i++) ev(db, 'decision_bandeja', MONDAY(2026, 8, 31) + i);
+  posts(db, 30); // L10 = 30 posteos
   const r = NP.nivelPosty(db, UID, undefined, NOW);
-  check('con 4 sem → L10', r.nivel === 10, r.nivel);
+  check('con 30 posteos → L10', r.nivel === 10, r.nivel);
   check('en L10: siguiente es 11', r.nombre_siguiente === 'Raíz profunda', r.nombre_siguiente);
   check('en L10: premio P2', !!r.siguiente_premio && r.siguiente_premio.indexOf('Raíz firme') >= 0, r.siguiente_premio);
   check('en L10: desbloqueo 11', r.siguiente_desbloqueo === 'Raíz visible', r.siguiente_desbloqueo);
@@ -205,14 +215,14 @@ console.log('== 4. Historial 6–50 ==');
   })());
 })();
 
-console.log('== 5. registrarEvento escribe subidas 6–50 ==');
+console.log('== 5. registrarEvento escribe subidas SOLO-POSTEOS ==');
 (function () {
   const db = freshDb();
-  baseL5(db);
-  // Antes: racha 0 (semanas viejas) → extendido en 5. El evento de hoy cae en
-  // la semana en curso → racha 1 → L6 (semana 2, pieza 1 ya cumplidos).
+  subidaRec(db, 5); // río al día en L5
+  posts(db, 10); // L5 = 10 posteos
   const antes = NP.nivelPosty(db, UID, undefined, Date.now());
   check('antes del evento: 5', antes.nivel === 5, antes.nivel);
+  posts(db, 4); // 14 posteos → L6 (el posteo ya existe al registrar el evento)
   const r = NIV.registrarEvento(db, UID, { poder: 'posty', evento: 'semana_publicada', hecho: 'Semana publicada', registro_ref: 'test:lote3' }, undefined);
   check('subida devuelta es 6', !!r.subida && r.subida.nivel === 6, r.subida && r.subida.nivel);
   check('subida con nombre 6', !!r.subida && r.subida.nombre_nivel === 'Primer brote dorado');
@@ -220,19 +230,13 @@ console.log('== 5. registrarEvento escribe subidas 6–50 ==');
   check('río tiene subida 6', !!row, row);
 })();
 (function () {
-  // Base 4→5 sin subida extendida: un solo registro (el 5), nada de 6.
+  // Una subida por posteos: un solo registro (el 5), nada de 6.
   const db = freshDb();
-  ev(db, 'fundamento_leido', MONDAY(2026, 8, 31));
-  ev(db, 'semana_generada', MONDAY(2026, 8, 31));
-  ev(db, 'decision_bandeja', MONDAY(2026, 8, 31));
-  ev(db, 'semana_aceptada', MONDAY(2026, 8, 31));
-  for (let i = 0; i < 3; i++) ev(db, 'pieza_aceptada_primera', MONDAY(2026, 8, 31) + i);
-  for (let i = 0; i < 4; i++) ev(db, 'semana_publicada', MONDAY(2026, 9, 7) + i * 7 * 86400000);
-  ev(db, 'pregunta_respondida', MONDAY(2026, 9, 7));
-  const r = NIV.registrarEvento(db, UID, { poder: 'posty', evento: 'pregunta_respondida', hecho: 'Pregunta', registro_ref: 'test:lote3' }, undefined);
-  check('base 4→5: subida 5', !!r.subida && r.subida.nivel === 5, r.subida && r.subida.nivel);
+  posts(db, 10); // L5 = 10 posteos, río vacío (último = 1)
+  const r = NIV.registrarEvento(db, UID, { poder: 'posty', evento: 'semana_publicada', hecho: 'Semana publicada', registro_ref: 'test:lote3' }, undefined);
+  check('subida a 5', !!r.subida && r.subida.nivel === 5, r.subida && r.subida.nivel);
   const rows = db.prepare("SELECT registro_ref FROM oficina_registros WHERE tipo = 'subida_nivel'").all();
-  check('base 4→5: un solo registro', rows.length === 1 && rows[0].registro_ref.indexOf('nivel:posty:5:') === 0, rows.length);
+  check('subida a 5: un solo registro', rows.length === 1 && rows[0].registro_ref.indexOf('nivel:posty:5:') === 0, rows.length);
 })();
 
 console.log('== 6. Cliente: vista previa + vitrina (estáticos) ==');

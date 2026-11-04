@@ -1,4 +1,7 @@
 // test-lotepremiostira.js — Lote PREMIOS-TIRA (node, sin DOM real).
+// SOLO-POSTEOS (4/11): la falta ya no se cuenta en «cosas» de gate sino
+// en posteos (avance.hechos/total); con avance presente, la falta se
+// muestra aunque no venga lista de faltantes.
 // Extrae pzProximoPremioTira + pzRopaPorNivel + PZ_ROPA del bundle
 // parcheado y los ejecuta con stubs mínimos. Falla (exit 1) ante el
 // primer check roto.
@@ -39,19 +42,19 @@ let out = pzProximoPremioTira(nv(f3, { hechos: 2, total: 5 }), 'posty');
 check('mini real nivel 3', out.includes('ropa/ropa-03-mini.png'), out);
 check('copy simple ES', out.includes('Nivel 3: Bufanda celeste'), out);
 check('sin copy viejo', !out.includes('próximo:'), out);
-check('falta 3 cosas', out.includes('te faltan 3 cosas'), out);
+check('falta 3 posteos', out.includes('te faltan 3 posteos'), out);
 check('sin número inventado: no semanas', !out.includes('semana'), out);
 
 // 2. EN.
 ME = { lang: 'en' };
 out = pzProximoPremioTira(nv(f3, { hechos: 2, total: 5 }), 'posty');
 check('copy simple EN', out.includes('Level 3: Light blue scarf'), out);
-check('falta EN', out.includes('3 things left'), out);
+check('falta EN', out.includes('3 posts left'), out);
 
 // 3. Singular.
 ME = { lang: 'es' };
 out = pzProximoPremioTira(nv([{ clave: 'a', falta: 'A' }], { hechos: 4, total: 5 }), 'posty');
-check('singular', out.includes('te falta 1 cosa'), out);
+check('singular', out.includes('te falta 1 posteo'), out);
 
 // 4. Sin avance en curso (Nv 5+): premio sí, falta NO.
 out = pzProximoPremioTira({ nivel: 6, faltantes: f3, avance: null }, 'posty');
@@ -61,7 +64,7 @@ check('sin avance: falta no', !out.includes('te falt'), out);
 // 5. Sin lista de faltantes: premio sí, falta NO.
 out = pzProximoPremioTira({ nivel: 2, avance: { hechos: 2, total: 5 } }, 'posty');
 check('sin lista: premio sí', out.includes('Nivel 3: Bufanda celeste'), out);
-check('sin lista: falta no', !out.includes('te falt'), out);
+check('sin lista: falta sí por avance', out.includes('te faltan 3 posteos'), out);
 
 // 6. Bordes: 50, origen no-posty, sin nivel.
 out = pzProximoPremioTira({ nivel: 50 }, 'posty');
