@@ -3710,6 +3710,12 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-post50-vive p,.pz-post50-semillas p{font-size:13px;line-height:1.5;margin:0 0 8px}
 .pz-post50-btn{border:0;border-radius:999px;padding:11px 16px;font-weight:800;background:#2793C8;color:#fff;cursor:pointer}
 .pz-post50-hist{margin:16px 0 0;padding:14px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:18px}
+.pz-semilla{margin:16px 0 0;padding:14px;background:#FFFBF0;border:1px solid #F0D9A8;border-radius:18px}
+.pz-semilla h3{margin:0 0 6px;font-size:16px}
+.pz-semilla p{font-size:13px;line-height:1.5;margin:0 0 8px}
+.pz-semilla-row{display:flex;gap:8px}
+.pz-semilla-row input{flex:1;min-width:0;border:1px solid #EAD9A8;border-radius:12px;padding:11px 12px;font-size:14px}
+.pz-post50-semilla{font-size:13px;line-height:1.5;margin:0 0 6px}
 .pz-post50-hist h3{margin:0 0 4px;font-size:17px}
 .pz-post50-hist-sub{font-size:13px;color:var(--mut);margin:0 0 10px}
 .pz-post50-mes{font-size:13px;line-height:1.5;margin:0 0 10px}

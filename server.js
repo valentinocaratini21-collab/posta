@@ -4050,19 +4050,40 @@ app.get('/api/oficina/jardin-post50', requireAuth, (req, res) => {
 });
 
 // LOTE 4 — Regalar una semilla de Maestro (solo nivel 50, solo Posty).
-// Registra el regalo real (fecha). La redención por un negocio nuevo
-// (que su jardín arranque de la semilla) es follow-up aparte: requiere
-// aceptar semilla en onboarding y NO viaja acá. Sin nivel 50 no hay
-// semilla: 403, nunca inventada.
+// Registra el regalo real con su código único canjeable. Sin nivel 50
+// no hay semilla: 403, nunca inventada.
+// LOTE SEMILLAS — Canje por un negocio nuevo: el jardín del negocio
+// arranca de la semilla del Maestro (procedencia, nunca niveles ni
+// descuentos). Un código, un canje; la propia no se canjea; un negocio
+// canjea una sola semilla.
 app.post('/api/oficina/jardin-semilla-regalo', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
     const pj = require('./postjardin');
     const est = pj.estadoPost50(db, uid, oficina.metricas(db, uid), userTz(uid), Date.now());
     if (!est || !est.completo) return res.status(403).json({ ok: false, error: 'jardin_no_completo' });
-    const ts = Date.now();
-    db.prepare('INSERT INTO jardin_semillas_regalo (user_id, ts) VALUES (?,?)').run(uid, ts);
-    res.json({ ok: true, ts });
+    const reg = pj.semillaRegalar(db, uid, Date.now());
+    res.json({ ok: true, ts: reg.ts, codigo: pj.semillaMostrar(reg.codigo) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/oficina/jardin-semilla-canjear', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const pj = require('./postjardin');
+    const codigo = (req.body && req.body.codigo) || '';
+    if (!String(codigo).trim()) return res.status(400).json({ ok: false, error: 'semilla_sin_codigo' });
+    const r = pj.semillaCanjear(db, uid, codigo, Date.now());
+    if (!r.ok) {
+      const status = r.error === 'semilla_no_existe' ? 404 : r.error === 'semilla_propia' ? 403 : 409;
+      return res.status(status).json({ ok: false, error: r.error });
+    }
+    res.json({ ok: true, giver_negocio: r.giver_negocio || null, ts: r.ts });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/oficina/jardin-semilla-mia', requireAuth, (req, res) => {
+  try {
+    const pj = require('./postjardin');
+    res.json({ ok: true, miSemilla: pj.miSemilla(db, req.session.userId) });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -27755,7 +27776,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v603';
+const BUILD_ID = '20261101-v604';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -110,9 +110,101 @@ function historiaMesesPara(rows, tz, resolver) {
   return [...meses.values()].sort((a, b) => (a.mes < b.mes ? -1 : a.mes > b.mes ? 1 : 0));
 }
 
-// ---------- TABLA DE SEMILLAS REGALADAS ----------
+// ---------- TABLAS DE SEMILLAS DE MAESTRO ----------
+// LOTE SEMILLAS: cada regalo nuevo lleva un código único canjeable una
+// sola vez; el canje queda en registro durable (quién dio, quién canjeó,
+// cuándo). El canje es reconocimiento/procedencia, NUNCA niveles,
+// descuentos ni meses gratis (SPEC regla 3). Los regalos viejos (sin
+// código) quedan como historia, no canjeables: nunca se les inventa un
+// código. Un jardín tiene un solo origen: un negocio canjea una sola
+// semilla, y nadie canjea la propia.
+const SEMILLA_ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function semillaNormalizar(raw) {
+  return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+function semillaMostrar(codigo) {
+  const c = semillaNormalizar(codigo);
+  if (!c.startsWith('POSTY') || c.length !== 13) return c;
+  return 'POSTY-' + c.slice(5, 9) + '-' + c.slice(9, 13);
+}
+function semillaCodigoNuevo() {
+  const crypto = require('crypto');
+  let s = '';
+  for (let i = 0; i < 8; i++) s += SEMILLA_ALFABETO[crypto.randomInt(SEMILLA_ALFABETO.length)];
+  return 'POSTY' + s;
+}
 function semillasEnsure(db) {
-  try { db.exec('CREATE TABLE IF NOT EXISTS jardin_semillas_regalo (user_id INTEGER NOT NULL, ts INTEGER NOT NULL)'); } catch (e) {}
+  try {
+    const existe = db.prepare("SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name = 'jardin_semillas_regalo' LIMIT 1").get();
+    if (existe) {
+      const cols = db.prepare('PRAGMA table_info(jardin_semillas_regalo)').all().map((r) => r.name);
+      if (!cols.includes('codigo')) {
+        db.exec('CREATE TABLE IF NOT EXISTS jardin_semillas_regalo_new (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, ts INTEGER NOT NULL, codigo TEXT UNIQUE, canje_ts INTEGER, canje_user_id INTEGER)');
+        db.exec('INSERT OR IGNORE INTO jardin_semillas_regalo_new (user_id, ts) SELECT user_id, ts FROM jardin_semillas_regalo');
+        db.exec('DROP TABLE jardin_semillas_regalo');
+        db.exec('ALTER TABLE jardin_semillas_regalo_new RENAME TO jardin_semillas_regalo');
+      }
+    } else {
+      db.exec('CREATE TABLE IF NOT EXISTS jardin_semillas_regalo (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, ts INTEGER NOT NULL, codigo TEXT UNIQUE, canje_ts INTEGER, canje_user_id INTEGER)');
+    }
+    db.exec('CREATE TABLE IF NOT EXISTS jardin_semillas_canje (id INTEGER PRIMARY KEY AUTOINCREMENT, semilla_id INTEGER NOT NULL UNIQUE, giver_id INTEGER NOT NULL, redeemer_id INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL)');
+  } catch (e) {}
+}
+function negocioNombre(db, uid) {
+  try {
+    const p = db.prepare('SELECT business_name, ig_username FROM profiles WHERE user_id = ?').get(uid);
+    if (!p) return null;
+    const n = String(p.business_name || '').trim();
+    if (n) return n;
+    const ig = String(p.ig_username || '').trim().replace(/^@/, '');
+    return ig ? '@' + ig : null;
+  } catch (e) { return null; }
+}
+function semillaRegalar(db, uid, ts) {
+  semillasEnsure(db);
+  for (let intento = 0; intento < 8; intento++) {
+    const codigo = semillaCodigoNuevo();
+    try {
+      const r = db.prepare('INSERT INTO jardin_semillas_regalo (user_id, ts, codigo) VALUES (?,?,?)').run(uid, ts, codigo);
+      return { id: Number(r.lastInsertRowid), ts, codigo };
+    } catch (e) { if (!/UNIQUE/.test(String((e && e.message) || ''))) throw e; }
+  }
+  throw new Error('semilla_codigo_colision');
+}
+function semillaCanjear(db, redeemerId, codigoRaw, ts) {
+  semillasEnsure(db);
+  const codigo = semillaNormalizar(codigoRaw);
+  if (!codigo) return { ok: false, error: 'semilla_sin_codigo' };
+  const g = db.prepare('SELECT * FROM jardin_semillas_regalo WHERE codigo = ?').get(codigo);
+  if (!g) return { ok: false, error: 'semilla_no_existe' };
+  if (g.canje_user_id) return { ok: false, error: 'semilla_ya_canjeada' };
+  if (Number(g.user_id) === Number(redeemerId)) return { ok: false, error: 'semilla_propia' };
+  const ya = db.prepare('SELECT 1 AS x FROM jardin_semillas_canje WHERE redeemer_id = ? LIMIT 1').get(redeemerId);
+  if (ya) return { ok: false, error: 'semilla_ya_tiene' };
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const g2 = db.prepare('SELECT * FROM jardin_semillas_regalo WHERE id = ?').get(g.id);
+    const ya2 = db.prepare('SELECT 1 AS x FROM jardin_semillas_canje WHERE redeemer_id = ? LIMIT 1').get(redeemerId);
+    if (!g2 || g2.canje_user_id || ya2) {
+      db.exec('ROLLBACK');
+      return { ok: false, error: (!g2 || g2.canje_user_id) ? 'semilla_ya_canjeada' : 'semilla_ya_tiene' };
+    }
+    db.prepare('UPDATE jardin_semillas_regalo SET canje_ts = ?, canje_user_id = ? WHERE id = ?').run(ts, redeemerId, g.id);
+    db.prepare('INSERT INTO jardin_semillas_canje (semilla_id, giver_id, redeemer_id, ts) VALUES (?,?,?,?)').run(g.id, g.user_id, redeemerId, ts);
+    db.exec('COMMIT');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (e2) {}
+    throw e;
+  }
+  return { ok: true, semilla_id: g.id, giver_id: g.user_id, giver_negocio: negocioNombre(db, g.user_id), ts };
+}
+function miSemilla(db, uid) {
+  try {
+    semillasEnsure(db);
+    const c = db.prepare('SELECT * FROM jardin_semillas_canje WHERE redeemer_id = ?').get(uid);
+    if (!c) return null;
+    return { semilla_id: c.semilla_id, giver_id: c.giver_id, giver_negocio: negocioNombre(db, c.giver_id), ts: c.ts };
+  } catch (e) { return null; }
 }
 
 // ---------- ESTADO COMPLETO (DB → puras) ----------
@@ -139,7 +231,7 @@ function estadoPost50(db, uid, metrics, tz, ahoraMs) {
     } catch (e) {}
     semillasEnsure(db);
     let regalos = [];
-    try { regalos = db.prepare('SELECT ts FROM jardin_semillas_regalo WHERE user_id = ? ORDER BY ts ASC').all(uid) || []; } catch (e) {}
+    try { regalos = db.prepare('SELECT id, ts, codigo, canje_ts, canje_user_id FROM jardin_semillas_regalo WHERE user_id = ? ORDER BY ts ASC').all(uid) || []; } catch (e) {}
     // Filas para la historia (río real, nada más).
     const rows = [];
     try {
@@ -168,7 +260,8 @@ function estadoPost50(db, uid, metrics, tz, ahoraMs) {
       estacion: completo ? estacionPara(ahoraMs || Date.now(), tz) : null,
       zonas: completo ? zonasPara(semanasPost50) : [],
       postyVive: completo ? { anios, flores_especiales: anios } : null,
-      semillas: completo ? regalos.map((g) => ({ ts: g.ts })) : [],
+      semillas: completo ? regalos.map((g) => ({ ts: g.ts, codigo: g.codigo ? semillaMostrar(g.codigo) : null, canjeada: !!g.canje_user_id, canje_ts: g.canje_ts || null, canje_negocio: g.canje_user_id ? negocioNombre(db, g.canje_user_id) : null })) : [],
+      miSemilla: miSemilla(db, uid),
       historia,
     };
   } catch (e) { return null; }
@@ -177,4 +270,6 @@ function estadoPost50(db, uid, metrics, tz, ahoraMs) {
 module.exports = {
   ZONAS_POST50, zonasPara, hemisferioDe, estacionPara, fechaEnTz,
   aniosConPosty, historiaMesesPara, semillasEnsure, estadoPost50,
+  semillaNormalizar, semillaMostrar, semillaCodigoNuevo, negocioNombre,
+  semillaRegalar, semillaCanjear, miSemilla,
 };

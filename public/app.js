@@ -2068,7 +2068,7 @@ function pzOficinaSeccionHTML(nivel) {
 }
 // FIN LOTE OFICINA ×50
 
-function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML) {
+function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML, miSemilla) {
   const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">${pzIc('arrowLeft', 16)} ${gzT('Volver', 'Back')}</button>`;
   if (tipo === 'posty') {
     const nvNum = mxNvNum(nvP);
@@ -2077,7 +2077,7 @@ function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML) {
     const sig = (nvP && nvP.nombre_siguiente) ? esc(nvP.nombre_siguiente) : '';
     const barra = pct === null ? '' : `<div class="pz-ropa-barra-wrap"><div class="pz-ropa-barra"><i style="width:${pct}%"></i></div><p class="pz-ropa-barra-txt">${nvNum >= 50 ? gzT('Nivel máximo', 'Max level') : (gzT('Próximo: Nv ', 'Next: Lv ') + (nvNum + 1) + (sig ? ' · ' + sig : ''))}</p></div>`;
     const msg = gzT('cuanto más subís de nivel, mejores posteos y más conozco lo que buscás', 'the higher your level, the better your posts and the more I know what you are looking for');
-    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head"><h1>${gzT('Premios', 'Prizes')}</h1></header><div class="mx-bloque"><div class="pz-ropa-panel"><div class="pz-ropa-avatar" id="pzRopaAvatar">${pzRopaAvatarHTML()}</div><h2 class="pz-ropa-nivel">${gzT('Nv', 'Lv')} ${nvNum}${(nvP && nvP.nombre_nivel) ? ' · ' + esc(nvP.nombre_nivel) : ''}</h2>${barra}<p class="pz-ropa-msg">${msg}</p><div class="pz-ropa-lista" id="pzRopaLista" data-nivel="${nvNum}">${pzRopaListaHTML(nvNum)}</div>${pzOficinaSeccionHTML(nvNum)}</div></div></div>`;
+    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head"><h1>${gzT('Premios', 'Prizes')}</h1></header><div class="mx-bloque"><div class="pz-ropa-panel"><div class="pz-ropa-avatar" id="pzRopaAvatar">${pzRopaAvatarHTML()}</div><h2 class="pz-ropa-nivel">${gzT('Nv', 'Lv')} ${nvNum}${(nvP && nvP.nombre_nivel) ? ' · ' + esc(nvP.nombre_nivel) : ''}</h2>${barra}<p class="pz-ropa-msg">${msg}</p><div class="pz-ropa-lista" id="pzRopaLista" data-nivel="${nvNum}">${pzRopaListaHTML(nvNum)}</div>${pzOficinaSeccionHTML(nvNum)}${mxSemillaCanjeHTML(miSemilla)}</div></div></div>`;
   }
   return mxJardinErrorHTML(); // POSTY SOLO: sin jardín Gesty
 }
@@ -2095,7 +2095,9 @@ async function mxJardinPost50() {
 async function bbJardinPostyContent() {
   const nvP = await mxNivel('posty');
   if (!nvP) return mxJardinErrorHTML();
-  return mxJardinHTML('posty', nvP, null, null);
+  let miSemilla = null;
+  try { const r = await api.get('/api/oficina/jardin-semilla-mia'); miSemilla = (r && r.miSemilla) || null; } catch (e) {}
+  return mxJardinHTML('posty', nvP, null, null, null, null, miSemilla);
 }
 async function bbJardinGestyContent() {
   const nvG = await mxNivel('gesty');
@@ -20385,7 +20387,14 @@ function mxJardinPost50HTML(post50) {
     html += `</div>`;
     const sems = Array.isArray(post50.semillas) ? post50.semillas : [];
     html += `<div class="pz-post50-semillas"><h4>${gzT('Semillas de Maestro', 'Master seeds')}</h4><p>${gzT('Un Maestro del jardín puede regalar una semilla de su jardín a un negocio nuevo. Ese jardín arranca de tu jardín.', 'A garden Master can gift a seed of their garden to a new business. That garden starts from yours.')}</p>`;
-    if (sems.length) html += `<p>${gzT('Semillas regaladas: ', 'Seeds gifted: ')}${sems.length}</p>`;
+    if (sems.length) {
+      html += `<p>${gzT('Semillas regaladas: ', 'Seeds gifted: ')}${sems.length}</p>`;
+      for (const s of sems) {
+        const cod = s.codigo ? esc(s.codigo) : '';
+        const est = s.canjeada ? `${gzT('canjeada por ', 'redeemed by ')}${esc(s.canje_negocio || gzT('un negocio', 'a business'))}` : gzT('sin canjear', 'not redeemed yet');
+        html += `<p class="pz-post50-semilla">🌱 ${cod ? cod + ' · ' : ''}${est}</p>`;
+      }
+    }
     html += `<button type="button" class="pz-post50-btn" onclick="pzSemillaRegalar()">${gzT('Regalar una semilla', 'Gift a seed')}</button></div>`;
     html += `</section>`;
   }
@@ -20413,12 +20422,44 @@ async function pzSemillaRegalar() {
   let r = null;
   try { r = await api.post('/api/oficina/jardin-semilla-regalo', {}); } catch (e) { r = null; }
   if (!r || !r.ok) { bbToast(gzT('No se pudo regalar la semilla. Probá de nuevo.', 'Could not gift the seed. Try again.')); return; }
-  const texto = gzT('Te regalo una semilla de mi jardín 🌱 — Posty', 'I gift you a seed from my garden 🌱 — Posty');
+  const cod = (r && r.codigo) ? String(r.codigo) : '';
+  const texto = cod
+    ? gzT('Te regalo una semilla de mi jardín 🌱 — Posty. Canjeala con el código: ' + cod, 'I gift you a seed from my garden 🌱 — Posty. Redeem it with code: ' + cod)
+    : gzT('Te regalo una semilla de mi jardín 🌱 — Posty', 'I gift you a seed from my garden 🌱 — Posty');
   try {
     if (navigator.share) await navigator.share({ text: texto });
     else if (navigator.clipboard) { await navigator.clipboard.writeText(texto); bbToast(gzT('Texto copiado ✓', 'Text copied ✓')); }
   } catch (e) {}
   bbToast(gzT('Semilla regalada', 'Seed gifted'));
+  try { render(); } catch (e) {}
+}
+// LOTE SEMILLAS — Canjear una semilla / procedencia del jardín.
+// La caja vive en el jardín (no en onboarding: el onboarding aprobado
+// es de un clic con 5 preguntas exactas y no crece). El servidor es la
+// única fuente de verdad: sin canje no hay procedencia pintada.
+function mxSemillaCanjeHTML(miSemilla) {
+  if (miSemilla) {
+    const neg = miSemilla.giver_negocio ? esc(String(miSemilla.giver_negocio)) : gzT('un Maestro del jardín', 'a garden Master');
+    return `<section class="pz-semilla"><h3>${gzT('Tu semilla', 'Your seed')}</h3><p>🌱 ${gzT('Tu jardín nació de la semilla de ', 'Your garden grew from the seed of ')}${neg}.</p></section>`;
+  }
+  return `<section class="pz-semilla"><h3>${gzT('¿Tenés una semilla de Maestro?', 'Have a Master seed?')}</h3><p>${gzT('Si un Maestro te regaló una semilla, canjeala acá y tu jardín arranca del suyo.', 'If a Master gifted you a seed, redeem it here and your garden starts from theirs.')}</p><div class="pz-semilla-row"><input type="text" id="pzSemillaCod" inputmode="text" autocomplete="off" placeholder="POSTY-ABCD-EFGH"><button type="button" class="pz-post50-btn" onclick="pzSemillaCanjear()">${gzT('Canjear', 'Redeem')}</button></div></section>`;
+}
+async function pzSemillaCanjear() {
+  const el = document.getElementById('pzSemillaCod');
+  const codigo = el ? el.value.trim() : '';
+  if (!codigo) { bbToast(gzT('Escribí el código de la semilla.', 'Enter the seed code.')); return; }
+  let r = null;
+  try { r = await api.post('/api/oficina/jardin-semilla-canjear', { codigo }); } catch (e) { r = null; }
+  if (!r || !r.ok) {
+    const err = (r && r.error) || '';
+    const msg = err === 'semilla_no_existe' ? gzT('Ese código no existe. Revisalo y probá de nuevo.', 'That code does not exist. Check it and try again.')
+      : err === 'semilla_ya_canjeada' ? gzT('Esa semilla ya fue canjeada.', 'That seed was already redeemed.')
+      : err === 'semilla_propia' ? gzT('No podés canjear tu propia semilla.', 'You cannot redeem your own seed.')
+      : err === 'semilla_ya_tiene' ? gzT('Tu jardín ya nació de una semilla.', 'Your garden already grew from a seed.')
+      : gzT('No se pudo canjear. Probá de nuevo.', 'Could not redeem. Try again.');
+    bbToast(msg); return;
+  }
+  bbToast(gzT('¡Semilla canjeada! Tu jardín arranca de ese jardín 🌱', 'Seed redeemed! Your garden grows from that garden 🌱'));
   try { render(); } catch (e) {}
 }
 // Informe mensual real (2026-10-26, ítem 5): solo números reales del mes.
