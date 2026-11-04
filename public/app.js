@@ -5073,6 +5073,7 @@ const AUTH_STR = {
   es: {
     navCreate: 'Crear cuenta', navLogin: 'Entrar',
     loginH2: 'Bienvenido de vuelta', loginSub: 'Entrá para seguir automatizando.',
+    trialCta: 'Probar 3 días gratis', trialOr: 'o entrá con tu cuenta',
     regH2: 'Creá tu cuenta', regSub: 'Probalo gratis, sin tarjeta.',
     emailPh: 'vos@tunegocio.com', passLabel: 'Contraseña', passPh: 'Mínimo 6 caracteres',
     btnLogin: 'Entrar', btnReg: 'Crear cuenta',
@@ -5096,6 +5097,7 @@ const AUTH_STR = {
   en: {
     navCreate: 'Create account', navLogin: 'Log in',
     loginH2: 'Welcome back', loginSub: 'Log in to keep automating.',
+    trialCta: 'Try 3 days free', trialOr: 'or log in to your account',
     regH2: 'Create your account', regSub: 'Try it free, no card needed.',
     emailPh: 'you@yourbusiness.com', passLabel: 'Password', passPh: 'At least 6 characters',
     btnLogin: 'Log in', btnReg: 'Create account',
@@ -5396,6 +5398,8 @@ function authView(mode) {
   <div class="wrap"><div class="form-card">
     <h2>${isLogin ? S.loginH2 : S.regH2}</h2>
     <p class="sub">${isLogin ? S.loginSub : S.regSub}</p>
+    ${isLogin ? `<a id="btnTrialLogin" class="btn btn-primary btn-block" href="${authLang() === 'en' ? '/en/prueba' : '/prueba'}">${S.trialCta}</a>
+    <div class="social-div"><span>${S.trialOr}</span></div>` : ''}
     <div id="socialBlock"></div>
     ${isLogin ? '<div id="savedAccounts"></div>' : ''}
     <div id="authFormFields">
