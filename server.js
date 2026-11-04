@@ -56,6 +56,7 @@ const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = requi
 const { startScheduler, publishSinglePost } = require('./scheduler');
 const modoEvento = require('./modo-evento'); // MODO EVENTO (2026-10-30): mini-campaña anticipación + día + cierre.
 const approval = require('./approval');
+const waitlist = require('./waitlist'); // CUENTA REGRESIVA CORTADA (26/10): ventana 29–31/1/2027, solo lista de espera.
 // RECICLAR-GANADORES:require
 const reciclar = require('./reciclar'); // RECICLAR GANADORES (2026-10-30, mejora 4/5) // "Posty te avisa": firmas y avisos de aprobación
 let cartaAudio = null;
@@ -811,6 +812,16 @@ app.use('/media', express.static(MEDIA_DIR, {
 app.use('/fonts', express.static(path.join(__dirname, 'fonts'), {
   maxAge: '30d', immutable: true,
 }));
+// ---------- CUENTA REGRESIVA CORTADA (decisión Valentino 26/10) ----------
+// 29–31/1/2027, SOLO lista de espera para el visitante sin sesión; el
+// cliente con sesión sigue usando la app normal (su semana no se frena).
+// Va ANTES del static de public: si no, / ya habría servido index.html.
+// Fuera de la ventana esto no hace nada. La hora exacta de apertura del
+// 1/2 y el destino de los emails quedan pendientes de Valentino: los
+// emails solo se guardan en la tabla waitlist, no se envía nada.
+app.use(waitlist.createWaitlistGate());
+waitlist.registerWaitlistRoutes(app, db);
+
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, fp) => {
     // sw.js: SIEMPRE fresco — si queda cacheado, la PWA no se entera de
@@ -27744,7 +27755,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v602';
+const BUILD_ID = '20261101-v603';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

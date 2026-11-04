@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Posty opens on February 1</title>
+<meta name="description" content="Join the founder list and lock in the founder price.">
+<link rel="canonical" href="https://postycommunitymanager.com/en/lista-espera">
+<link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/lista-espera">
+<link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/en/lista-espera">
+<link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/lista-espera">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://postycommunitymanager.com/en/lista-espera">
+<meta property="og:title" content="Posty opens on February 1">
+<meta property="og:description" content="Join the founder list and lock in the founder price.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--cel:#2793C8;--yl:#FEC14D;--navy:#0A1E33;--bg:#fff;--bg2:#F2F9FD;--mut:#47617A;--line:#E2EDF5}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(--navy);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1060px;margin:0 auto;padding:0 20px}
+.nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;padding:14px 20px}
+.logo{font-weight:900;font-size:24px;color:var(--navy);text-decoration:none}
+.logo .dot{color:var(--cel)}
+.hero{text-align:center;padding:56px 0 8px}
+.hero h1{font-size:clamp(30px,5vw,48px);font-weight:900;line-height:1.15;margin:0 0 14px}
+.hero .sub{color:var(--mut);font-size:18px;max-width:640px;margin:0 auto;line-height:1.6}
+.manana{font-size:19px;font-weight:800;color:var(--cel);margin:14px 0 0}
+.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:28px;box-shadow:0 12px 40px rgba(10,30,51,.07)}
+.form-card{max-width:640px;margin:32px auto 60px}
+.field{margin-bottom:16px}
+.field input[type=email]{width:100%;border:2px solid var(--line);border-radius:12px;padding:15px 16px;font-family:inherit;font-size:16px;color:var(--navy);background:#fff;outline:none;transition:border-color .15s}
+.field input[type=email]:focus{border-color:var(--cel)}
+.btn{display:inline-block;border:none;cursor:pointer;font-family:inherit;font-weight:800;border-radius:999px;padding:16px 34px;font-size:17px;text-decoration:none;transition:transform .12s,box-shadow .12s;width:100%}
+.btn-primary{background:var(--cel);color:#fff;box-shadow:0 10px 26px rgba(39,147,200,.4)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(39,147,200,.55)}
+.btn-primary:disabled{opacity:.55;transform:none;box-shadow:none}
+.msg{min-height:24px;margin-top:14px;font-size:15px;font-weight:700;text-align:center}
+.msg.ok{color:var(--cel)}
+.msg.err{color:#C0392B}
+@media(max-width:600px){.hero{padding:40px 0 8px}.card{padding:22px 18px}}
+</style>
+</head>
+<body>
+<header class="nav"><div class="wrap"><a class="logo" href="/en/">Posty<span class="dot">.</span></a></div></header>
+<main class="wrap">
+  <section class="hero">
+    <h1>Posty opens on February 1</h1>
+    <!--WAITLIST_MANANA-->
+    <p class="sub">Join the founder list and lock in the founder price.</p>
+  </section>
+  <section class="card form-card">
+    <form id="wl-form">
+      <div class="field"><input type="email" id="wl-email" name="email" placeholder="Your email" aria-label="Your email" autocomplete="email" required></div>
+      <button type="submit" class="btn btn-primary" id="wl-btn">Join the list</button>
+    </form>
+    <p class="msg" id="wl-msg" aria-live="polite"></p>
+  </section>
+</main>
+<script>
+(function () {
+  var form = document.getElementById('wl-form');
+  var emailEl = document.getElementById('wl-email');
+  var btn = document.getElementById('wl-btn');
+  var msg = document.getElementById('wl-msg');
+  var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  function show(text, kind) {
+    msg.textContent = text;
+    msg.className = 'msg ' + (kind || '');
+  }
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var email = (emailEl.value || '').trim();
+    if (!EMAIL_RE.test(email)) { show('Check your email', 'err'); emailEl.focus(); return; }
+    btn.disabled = true;
+    fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, lang: 'en' })
+    }).then(function (r) { return r.json().then(function (d) { return { status: r.status, body: d }; }); })
+    .then(function (out) {
+      if (out.status === 200 && out.body && out.body.ok) {
+        form.style.display = 'none';
+        show("You're on the list.", 'ok');
+      } else if (out.body && out.body.error === 'email_invalido') {
+        show('Check your email', 'err');
+        btn.disabled = false;
+      } else {
+        show('Something went wrong, try again', 'err');
+        btn.disabled = false;
+      }
+    })
+    .catch(function () {
+      show('Something went wrong, try again', 'err');
+      btn.disabled = false;
+    });
+  });
+})();
+</script>
+</body>
+</html>

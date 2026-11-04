@@ -541,6 +541,18 @@ db.exec(`CREATE TABLE IF NOT EXISTS ideas_subscribers (
   last_sent_at TEXT DEFAULT ''
 )`);
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_ideas_subs_status ON ideas_subscribers(status, rubro)`); } catch (e) {}
+// Lista de espera de la CUENTA REGRESIVA CORTADA (decisión Valentino 26/10):
+// 29–31/1/2027 SOLO lista de espera. Registro durable y separado del
+// newsletter (ideas_subscribers): quien se suma acá NO recibe el email de
+// ideas de los lunes. No se envía nada a ningún destino: el destino de
+// estos emails queda pendiente de Valentino. Sin posición ni conteo.
+db.exec(`CREATE TABLE IF NOT EXISTS waitlist (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  lang TEXT NOT NULL DEFAULT 'es',
+  source TEXT NOT NULL DEFAULT 'lista-espera',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_preapproval_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN media_type TEXT DEFAULT 'image'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN source_topic TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
