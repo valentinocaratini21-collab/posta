@@ -603,7 +603,10 @@ function anaLetterMinimalHTML(a, opts) {
   const render = (it) => {
     if (!it) return '';
     if (it.t === 'photo' && it.src) {
-      return `<figure style="margin:2px 0 12px"><img src="${esc(it.src)}" alt="" loading="lazy" style="width:148px;height:148px;object-fit:cover;border-radius:14px;display:block" onerror="this.parentNode.style.display='none'"></figure>`;
+      /* CARTA-SIN-IMAGEN 4/11 (corrección Valentino): la foto del cuerpo
+         NO se rinde en la carta mínima — solo texto. El payload la sigue
+         trayendo (la usa la portada para compartir); acá no se dibuja. */
+      return '';
     } else if (it.t === 'action') {
       return `<div class="ana-ltr-plan"><p>• ${esc(it.text || '')}</p></div>`;
     } else if (it.t === 'p') {
