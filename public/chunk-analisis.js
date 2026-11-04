@@ -583,12 +583,20 @@ function anaSignHTML(birth) {
  * cartas viejas (sin letter) se siguen
  * leyendo con la forma de bloques v3 de abajo: nada se rompe hacia atrás. */
 
-/* CARTA MÍNIMA EN 3 BLOQUES (decisión Valentino 2/11, sobre la forma v2):
- * saludo + foto + festejo/honesta → "Qué pasó" · acciones de la semana →
- * "Qué viene" · "De tu lado" → "Qué hacer". Mismo contenido, mismo orden,
- * solo agrupado con título; sin botón de audio en la carta (la página
- * firmada y el email lo conservan). ~10 líneas: nada más se renderiza en
- * esta vista. Las cartas v1 guardadas conservan su forma vieja. */
+/* CARTA-LIDER (decisión Valentino 3/11, SUPERSEDE carta-corta 2/11): la
+ * carta mínima es de un LÍDER MOTIVACIONAL en 2 secciones de cuerpo +
+ * cierre con agradecimiento (el banner, desde el motor): 1) Felicitaciones
+ * — UN avance real (el festejo del motor, nunca inventado; sin festejo no
+ * hay sección, nunca una felicitación fingida) · 2) Qué mejoramos y en qué
+ * trabajamos — la línea honesta (qué mejorar, con su arreglo en marcha) +
+ * las acciones (pasos claros) + el De tu lado. Partición POR KIND (el motor
+ * los emite); kind desconocido o sin kind cae por posición (pre-acciones →
+ * 1, resto → 2) para no perder NUNCA contenido. Sin acciones: forma plana
+ * de siempre, sin secciones vacías (precedente carta-corta). El saludo del
+ * cuerpo se suprime cuando opts.saludoTop (carta-personalizada: la carta
+ * actual ya lo rinde arriba). Sin botón de audio (estrategia-sin-audio
+ * v565). ~10 líneas: nada más se renderiza en esta vista. Las cartas v1
+ * guardadas conservan su forma vieja. */
 function anaLetterMinimalHTML(a, opts) {
   const L = a.letter;
   const items = Array.isArray(L.body) ? L.body : [];
@@ -603,37 +611,43 @@ function anaLetterMinimalHTML(a, opts) {
     }
     return '';
   };
-  // CARTA CORTA EN 3 BLOQUES (decisión Valentino 2/11): la forma mínima v2
-  // ya venía ordenada saludo → foto → festejo/honesta → acciones →
-  // "De tu lado"; la partición es por posición, sin reescribir ni inventar
-  // contenido: antes de la primera acción / acciones / después de la última
-  // acción. Sin botón de audio (decisión estrategia-sin-audio 2/11, ya
-  // aplicada en v565: la carta en Estrategia no lo lleva; la página
-  // firmada /carta/:token y el botón del email quedan intactos en
-  // server.js). El saludo del cuerpo se suprime cuando opts.saludoTop
-  // (carta-personalizada: la carta actual ya lo rinde arriba).
   const actionIdx = [];
   items.forEach((it, i) => { if (it && it.t === 'action') actionIdx.push(i); });
   if (!actionIdx.length) {
     // Carta degenerada (sin acciones): forma plana de siempre, sin audio y
-    // sin bloques inventados; nunca se muestra una sección vacía.
+    // sin secciones vacías; nunca se muestra una sección vacía.
     let h = '';
     if (L.greeting && !(opts && opts.saludoTop)) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
     items.forEach((it) => { h += render(it); });
     return h;
   }
-  const first = actionIdx[0], last = actionIdx[actionIdx.length - 1];
-  let pre = '', mid = '', post = '';
-  if (L.greeting && !(opts && opts.saludoTop)) pre += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
+  const first = actionIdx[0];
+  // Bucket por kind; la foto va con la felicitación (así la emite el
+  // motor: tras el saludo, junto al festejo). La sección 1 existe si
+  // tiene contenido: con kinds del motor, sin festejo queda vacía (la
+  // honesta va a la 2) y no se rinde — nunca una felicitación fingida.
+  // El saludo — si no lo suprime saludoTop — abre la sección 1 si existe
+  // y si no, la 2: un saludo no es una felicitación.
+  let cel = '', trab = '';
   items.forEach((it, i) => {
-    if (i < first) pre += render(it);
-    else if (i <= last) mid += render(it);
-    else post += render(it);
+    if (!it) return;
+    const k = it.kind || '';
+    let b = null;
+    if (it.t === 'photo' || k === 'festejo') b = 'cel';
+    else if (k === 'honesta' || k === 'acciones-head' || it.t === 'action' || k === 'pedido') b = 'trab';
+    else b = i < first ? 'cel' : 'trab';
+    if (b === 'cel') cel += render(it);
+    else trab += render(it);
   });
   const sec = (es, enS, inner) => `<section class="ana-ltr-sec"><p class="ana-sec-t">${anaT(es, enS)}</p>${inner}</section>`;
-  return sec('Qué pasó', 'What happened', pre)
-    + sec('Qué viene', "What's next", mid)
-    + sec('Qué hacer', 'What to do', post);
+  let out = '';
+  if (L.greeting && !(opts && opts.saludoTop)) {
+    const g = `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
+    if (cel) cel = g + cel; else trab = g + trab;
+  }
+  if (cel) out += sec('Felicitaciones', 'Congratulations', cel);
+  if (trab) out += sec('Qué mejoramos y en qué trabajamos', 'What we improve and work on', trab);
+  return out;
 }
 
 /* ---------- Así nace tu semana: hallazgo → decisión de la semana ----------
@@ -886,6 +900,16 @@ function anaAprendeHTML(d) {
   if (typeof anaPastMode !== 'undefined' && anaPastMode) return '';
   const f = d && typeof d.aprendizaje === 'string' ? d.aprendizaje.trim() : '';
   if (!f) return '';
+  // (CARTA-LIDER) Si la carta ya dice esta frase textual, no se repite
+  // debajo: cada pieza dice una sola cosa. Normalización inline (sin
+  // función nueva en el chunk: el censo M78 de carta-mano exige 0 nuevas).
+  try {
+    const a = d && d.analysis;
+    const body = (a && a.letter && Array.isArray(a.letter.body)) ? a.letter.body : [];
+    const txt = body.map((it) => it.text || '').join(' ');
+    const norm = (s) => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
+    if (f.length >= 10 && norm(txt).indexOf(norm(f)) !== -1) return '';
+  } catch (e) {}
   return `<p class="ana-aprende"><b>${anaT('Posty aprendió', 'Posty learned')}</b>: ${esc(f)}</p>`;
 }
 
@@ -951,7 +975,18 @@ function anaCartaHTML(d) {
   // (LOTE CEREBRO-CM) Tema de la semana actual, solo en la carta actual
   // (nunca en cartas viejas) y solo si hay semana guardada. Sin tema,
   // la carta sale como siempre.
-  if (!anaPastMode && d && d.temaSemana) h += `<p class="ana-tema">${anaT('Esta semana: ', 'This week: ')}${esc(String(d.temaSemana))}</p>`;
+  // (CARTA-LIDER) Fusión, no duplicación: si la carta ya dice el tema
+  // textual, la línea standalone no se dibuja — la carta ya lo dice.
+  // Normalización inline (sin función nueva en el chunk: el censo M78
+  // de carta-mano exige 0 nuevas); aguja corta (<4) no dispara.
+  const cartaTxtTema = (a && a.letter && Array.isArray(a.letter.body)) ? a.letter.body.map((it) => it.text || '').join(' ') : '';
+  let temaNuevo = true;
+  try {
+    const normTema = (s) => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
+    const tTema = normTema(String(d.temaSemana));
+    temaNuevo = !(tTema.length >= 4 && normTema(cartaTxtTema).indexOf(tTema) !== -1);
+  } catch (e) { temaNuevo = true; }
+  if (!anaPastMode && d && d.temaSemana && temaNuevo) h += `<p class="ana-tema">${anaT('Esta semana: ', 'This week: ')}${esc(String(d.temaSemana))}</p>`;
   // (2026-10-25) APERTURA: la explicación de cómo se armó el plan — el
   // week_summary del motor («qué vi → por eso tu semana es así») — encabeza
   // la ventana como su línea de apertura. Es el contenido que vivía en la

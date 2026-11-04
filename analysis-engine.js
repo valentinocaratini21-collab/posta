@@ -1114,6 +1114,13 @@ function buildLetter(analysis, ctx = {}) {
   else closing = T('Tenés el negocio — la constancia la pongo yo.', 'You have the business — consistency is on me.')
     + (sun || T(' El domingo que viene, a esta hora, te escribo de nuevo, con este plan ya medido contra tu cuenta.', ' Next Sunday, at this time, I will write you again, with this plan already measured against your account.'));
 
+  // (CARTA-LIDER 3/11, decisión Valentino): la carta cierra agradeciendo
+  // trabajar con Posty. El agradecimiento ABRE el cierre, no lo reemplaza:
+  // la línea motivacional y la cadencia del domingo siguiente quedan
+  // intactas (por eso los tests viejos que buscan "Domingo N conmigo"
+  // siguen pasando). Pasa el lint de tono: no hay palabra de reto.
+  closing = T('Gracias por trabajar con Posty. ', 'Thank you for working with Posty. ') + closing;
+
   // Cuerpo mínimo, en orden de lectura (la foto va tras el saludo, junto
   // al festejo). Fail-closed por ítem con el lint de tono de siempre; sin
   // festejo ni honesta no hay carta (la vista v3 hace de fallback).
