@@ -1476,7 +1476,34 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
             }
           }
         } catch (e) { console.error('[nudges] link de aprobación:', e.message); }
-        const r = await draftsNudgeEmail({ email: u.email, name, count: drafts, lang: u.lang, approveUrl }, base);
+        // LOTE EMAIL-LINDO (v621): traer los borradores viejos para las
+        // previews del email (misma condición del conteo: draft, >24h).
+        // Orden: con fecha primero (cronológico), sin fecha al final; así
+        // la primera tarjeta es el pendiente con fecha más vieja.
+        let draftRows = [];
+        try {
+          draftRows = db.prepare(`
+            SELECT caption, image_path, media_type, scheduled_at, created_at FROM posts
+            WHERE user_id = ? AND status = 'draft'
+              AND datetime(created_at) < datetime('now', '-1 day')
+            ORDER BY (scheduled_at IS NULL), scheduled_at ASC, created_at ASC
+          `).all(u.id);
+        } catch (e) { console.error('[nudges] borradores preview:', e.message); }
+        let tzMail = 'America/Argentina/Buenos_Aires';
+        try { tzMail = (getSettings(db, u.id) || {}).timezone || tzMail; } catch (e) {}
+        const draftsForMail = draftRows.map((row) => {
+          let img = '';
+          const mp = String(row.image_path || '');
+          // Solo image/carousel tienen foto usable: un video trae el mp4
+          // en image_path y jamás debe salir como <img>.
+          if ((row.media_type === 'image' || row.media_type === 'carousel') && mp) {
+            img = /^https?:\/\//i.test(mp)
+              ? mp.replace(/https?:\/\/(www\.)?(postahacetodo|postyhacetodo)\.com/i, 'https://postycommunitymanager.com')
+              : base + (mp.startsWith('/') ? mp : '/' + mp);
+          }
+          return { img, caption: row.caption || '', when: row.scheduled_at || null };
+        });
+        const r = await draftsNudgeEmail({ email: u.email, name, count: drafts, lang: u.lang, approveUrl, drafts: draftsForMail, tz: tzMail }, base);
         if (r && r.ok) {
           db.prepare(`INSERT INTO nudges (user_id, kind) VALUES (?, 'drafts')`).run(u.id);
           sent++;

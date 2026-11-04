@@ -266,10 +266,72 @@ function emailShell(inner, lang) {
 </div>`;
 }
 
+// LOTE EMAIL-LINDO (v621): previews reales en el nudge de borradores.
+// El barrido pasa user.drafts = borradores viejos ordenados (con fecha
+// primero) como { img, caption, when }; img vacío = sin foto usable
+// (video sin póster, etc.). Se muestran las primeras 3 tarjetas CON foto;
+// el resto (con y sin foto) cuenta en la línea +N. Sin fotos, la pieza
+// sale exactamente como antes (sin tarjetas vacías).
+function draftsNudgeEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Etiqueta día/hora de un borrador en la zona horaria de la cuenta.
+// scheduled_at viene en UTC (ISO con Z o 'YYYY-MM-DD HH:MM:SS' sin marca):
+// sin la Z, new Date lo leería como hora local y el día saldría corrido.
+function draftsNudgeDayLabel(when, tz, lang) {
+  if (!when) return lang === 'en' ? 'Unscheduled' : 'Sin fecha';
+  const raw = String(when).trim();
+  const norm = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(raw) ? raw.replace(' ', 'T') + 'Z' : raw;
+  const d = new Date(norm);
+  if (isNaN(d.getTime())) return '';
+  const zone = tz || 'America/Argentina/Buenos_Aires';
+  try {
+    const fmt = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'es', {
+      weekday: 'long', day: '2-digit', month: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: lang === 'en', timeZone: zone,
+    });
+    const parts = fmt.formatToParts(d);
+    const get = (t) => (parts.find((p) => p.type === t) || {}).value || '';
+    const wd = get('weekday');
+    const cap = wd ? wd.charAt(0).toUpperCase() + wd.slice(1) : '';
+    if (lang === 'en') {
+      const ap = (get('dayPeriod') || '').toUpperCase();
+      const h = String(parseInt(get('hour'), 10) || 0);
+      return `${cap} ${get('month')}/${get('day')} · ${h}:${get('minute')} ${ap}`.trim();
+    }
+    return `${cap} ${get('day')}/${get('month')} · ${get('hour')}:${get('minute')}`;
+  } catch (e) { return ''; }
+}
+
+function draftsNudgeCards(user, lang) {
+  const list = Array.isArray(user && user.drafts) ? user.drafts : [];
+  const shown = list.filter((x) => x && x.img).slice(0, 3);
+  if (!shown.length) return '';
+  const tz = (user && user.tz) || 'America/Argentina/Buenos_Aires';
+  const cards = shown.map((x) => {
+    const cap = draftsNudgeEsc(String(x.caption || '').split('\n')[0].trim());
+    const when = draftsNudgeDayLabel(x.when, tz, lang);
+    return `
+    <div style="background:#fff;border-radius:12px;overflow:hidden;margin:0 0 12px;box-shadow:0 2px 10px rgba(10,30,51,.08)">
+      <img src="${draftsNudgeEsc(x.img)}" alt="" style="width:100%;display:block">
+      <div style="padding:12px 14px">
+        <p style="margin:0 0 4px;font-size:15px;font-weight:700">${cap}</p>
+        ${when ? `<p style="margin:0;font-size:13px;color:#47617A">${draftsNudgeEsc(when)}</p>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  const total = (user && user.count) || list.length;
+  const rest = total - shown.length;
+  const more = rest > 0 ? `
+    <p style="font-size:14px;color:#47617A;text-align:center;margin:0 0 20px">${lang === 'en' ? `+ ${rest} more waiting for your review` : `+ ${rest} más esperando tu revisión`}</p>` : '';
+  return cards + more;
+}
+
 // Nudge "ya tenemos tus posteos listos": el usuario tiene borradores sin revisar.
 // Solo se manda si los borradores existen de verdad (el mensaje tiene que ser verdad).
 // (v373 · paridad total) Variante EN del nudge de borradores.
-function draftsNudgeEmailEn(user, baseUrl) {
+function buildDraftsNudgeEmailEn(user, baseUrl) {
   const name = (user.name || '').trim();
   const cta = `${baseUrl}/#/app/ideas`;
   const subject = `Your Instagram posts for this week are ready 👀`;
@@ -298,12 +360,12 @@ function draftsNudgeEmailEn(user, baseUrl) {
       I already built them with your brand and your style. ${lead}
       or edit anything you want before they go out. I'll be waiting 😄<br>
       <span style="font-size:13px"><b>Posty</b> 🤖</span>
-    </p>${buttons}`, 'en');
-  return sendEmail({ to: user.email, subject, html });
+    </p>${draftsNudgeCards(user, 'en')}${buttons}`, 'en');
+  return { subject, html };
 }
 
-function draftsNudgeEmail(user, baseUrl) {
-  if (user && user.lang === 'en') return draftsNudgeEmailEn(user, baseUrl);
+function buildDraftsNudgeEmail(user, baseUrl) {
+  if (user && user.lang === 'en') return buildDraftsNudgeEmailEn(user, baseUrl);
   const name = (user.name || '').trim();
   const n = user.count || 0;
   const cta = `${baseUrl}/#/app/ideas`;
@@ -332,8 +394,14 @@ function draftsNudgeEmail(user, baseUrl) {
       Ya los armé con tu marca y tu estilo. ${lead}
       o editá lo que quieras antes de que salgan. Te espero 😄<br>
       <span style="font-size:13px"><b>Posty</b> 🤖</span>
-    </p>${buttons}`);
-  return sendEmail({ to: user.email, subject, html });
+    </p>${draftsNudgeCards(user, 'es')}${buttons}`);
+  return { subject, html };
+}
+
+// Wrapper de envío (firma intacta para scheduler.js): construye y manda.
+function draftsNudgeEmail(user, baseUrl) {
+  const b = buildDraftsNudgeEmail(user, baseUrl);
+  return sendEmail({ to: user.email, subject: b.subject, html: b.html });
 }
 
 // Nudge "tu semana te está esperando" (abandono de trial, 2026-09-30).
@@ -855,4 +923,4 @@ function trialClosedEmail(user, baseUrl) {
   return sendEmail({ to: user.email, subject, html: emailShell(inner) });
 }
 
-module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, firstPublishNudgeEmail, photoRitualEmail };
+module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, firstPublishNudgeEmail, photoRitualEmail };
