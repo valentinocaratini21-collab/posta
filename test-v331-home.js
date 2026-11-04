@@ -182,7 +182,9 @@ async function api(cookie, method, p, body) {
   ok(tiles3.length === 2, 'sin publicados por Posty: los leídos entran todos (no hay duplicado posible)');
   const many = [];
   for (let i = 0; i < 30; i++) many.push({ img: '/media/m' + i + '.jpg', type: 'image', taken_at: i });
-  ok(homeGridCompose({ upcoming: [], published: [], recents: many }).length === 30, 'sin tope (LOTE FEED): 30 leídos rinden 30');
+  // (LOTE FEED-6 · decisión Valentino 2/11, SUPERSEDE el «sin tope» del
+  // LOTE FEED SOLO para ya salidos: máximo 6, los 6 últimos.)
+  ok(homeGridCompose({ upcoming: [], published: [], recents: many }).length === 6, 'FEED-6: 30 leídos rinden 6 (los 6 más recientes)');
 
   const headFull = homeHeadHTML({ username: 'cafesol', name: 'Café Sol', bio: 'Línea 1\nLínea 2', bio_unread: false, link: '', pic: null, followers: 340, posts_count: 128, following: 57, highlights: [{ title: 'Menú', cover: '/media/h.jpg' }] }, 'X');
   ok(headFull.includes('cafesol') && headFull.includes('340') && headFull.includes('seguidores') && headFull.includes('Menú') && headFull.includes('hf-hls'), 'encabezado completo: username, conteos, destacadas');

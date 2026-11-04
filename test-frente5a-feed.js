@@ -68,7 +68,7 @@ ok(pins[0].post.id === 4 && pins[1].post.id === 3, 'fijados primeros, en orden d
 ok(pins[2].post.id === 1 && pins[3].post.id === 2 && pins[4].kind === 'ig', 'el resto conserva su orden tras los fijados');
 const capIn = { upcoming: [], published: Array.from({ length: 30 }, (_, i) => P(100 + i, 'published', i === 29 ? { pinned: 1, pinned_at: '2026-10-01 00:00:00' } : {})), recents: [] };
 const capped = es.homeGridCompose(capIn);
-ok(capped.length === 24 && capped[0].post.id === 129, 'el tope de grilla se respeta y el fijado entra primero');
+ok(capped.length === 7 && capped[0].post.id === 129, 'FEED-6 (decisión 2/11, supersede tope 24): fijado primero + 6 ya salidos');
 
 // — Ítem 3: tile y glyph —
 const tPin = es.homeTileHTML({ kind: 'post', post: P(7, 'scheduled', { pinned: 1 }), day: '2026-10-27', isNew: false }, 0);

@@ -92,8 +92,10 @@ function loadFns(sb, names) {
   const ids = mixed.map((x) => (x.kind === 'post' ? String(x.post.id) : 'ig'));
   t(ids[0] === '22', 'orden: fijado primero (regla IG, no pedida cambiar)');
   t(ids.slice(1).join(',') === '12,11,10,20,21,ig', 'orden: resto = no-pub desc (borrador 30, prog 29, borrador 27) + pub desc (pub 28, pub 20, ig)');
-  // (LOTE FEED 1/11, orden Valentino «nada se pierde en silencio»): el tope de 24
-  // queda SUPERSEDED — la grilla rinde TODO lo compuesto, sin cortar en silencio.
+  // (LOTE FEED-6 · decisión Valentino 2/11, SUPERSEDE el «sin tope»
+  // del LOTE FEED SOLO para ya salidos: máximo 6 publicados, los 6
+  // últimos. Programados/borradores siguen sin tope; lo viejo sigue
+  // en Instagram, simplemente no rinde en el feed del producto.)
   const manyPub = [];
   for (let d = 1; d <= 30; d++) manyPub.push(P(100 + d, 'published', `2026-10-${String(d).padStart(2, '0')}T18:00:00Z`));
   const capped = sb.homeGridCompose({
@@ -104,11 +106,12 @@ function loadFns(sb, names) {
     published: manyPub,
     recents: [],
   });
-  t(capped.length === 32, 'sin tope: 2 próximos + 30 publicados rinden 32');
+  t(capped.length === 8, 'FEED-6: 2 próximos + 6 publicados rinden 8');
   const capIds = capped.map((x) => String(x.post.id));
-  t(capIds.includes('201') && capIds.includes('202'), 'sin tope: los próximos de la semana siguen dentro');
-  t(capIds.includes('101') && capIds.includes('108'), 'sin tope: los publicados más viejos (1–8 oct) ya NO quedan fuera');
-  t(capIds[0] === '202' && capIds[capIds.length - 1] === '101', 'sin tope: primero el borrador más nuevo (2 nov), último el publicado más viejo del conjunto (1 oct)');
+  t(capIds.includes('201') && capIds.includes('202'), 'FEED-6: los próximos de la semana siguen dentro');
+  t(capIds.includes('130') && capIds.includes('125'), 'FEED-6: solo los 6 publicados más recientes (25–30 oct)');
+  t(!capIds.includes('124') && !capIds.includes('101'), 'FEED-6: los publicados viejos (1–24 oct) ya NO rinden (siguen en IG)');
+  t(capIds[0] === '202' && capIds[capIds.length - 1] === '125', 'FEED-6: primero el borrador más nuevo (2 nov), último el 6º publicado (25 oct)');
   // Los valores de fecha no se tocan.
   t(capped.every((x) => !x.post || typeof x.post.published_at === 'string' || x.post.published_at == null), 'valores: ninguna fecha mutada por el orden');
 }

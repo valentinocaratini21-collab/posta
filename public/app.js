@@ -17806,7 +17806,25 @@ function homeGridCompose(input) {
     if (pa !== pb) return pa - pb;
     return hfCmpDescKey(hfFeedSortKey(a), hfFeedSortKey(b));
   });
-  return head.concat(rest);
+  // (LOTE FEED-6 · decisión Valentino 2/11) Los posteos ya publicados
+  // NO son importantes para el producto: el grupo de ya salidos
+  // (publicados + IG, en el orden v513 vigente, el más reciente
+  // primero) se corta en los 6 más recientes. Del 7º en adelante no
+  // se renderizan en la grilla. SUPERSEDE parcial del «sin tope»
+  // del LOTE FEED, SOLO para ya salidos: programados y borradores
+  // siguen intactos y sin tope. Los fijados (head) son elección
+  // explícita del dueño y quedan fuera del tope. Nada se borra ni
+  // se archiva: lo viejo sigue en Instagram, simplemente no rinde.
+  const rest6 = [];
+  let pubs6 = 0;
+  for (const t of rest) {
+    if (isPubTile12(t)) {
+      if (pubs6 >= 6) continue;
+      pubs6++;
+    }
+    rest6.push(t);
+  }
+  return head.concat(rest6);
 }
 const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
 const HOME_PIN_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M15.6 3.5l4.9 4.9-2.1.7-2.3 2.3.02 3.4c0 .4-.42.62-.75.4l-3.35-2.26-2.94 2.94a1.06 1.06 0 0 1-1.5-1.5l2.94-2.94L8.56 8.03a.53.53 0 0 1 .4-.76l3.4.02 2.3-2.3.7-2.44a.5.5 0 0 1 .24-.05z"/></svg>';
