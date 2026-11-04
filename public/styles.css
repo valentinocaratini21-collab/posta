@@ -5058,3 +5058,35 @@ body.pz-postchat-open{overflow:hidden}
    equidistantes. El padding no mueve el centro. .mz-tabs ya era flex:1
    en sus 5 y no se toca. Vidrio, 24px, base y + #47617A intactos. */
 .bb-bar .bb-tab{flex:1;min-width:0}
+
+/* ============ LOTE HEADER-IZQ (4/11) ============ */
+/* En móvil la fila del encabezado (.hf-prow: avatar + stats + íconos)
+   no entraba en una línea: los íconos bajaban solos a una 2ª línea
+   alineada a la derecha y dejaban ~250px (74% de la fila) de blanco
+   muerto a la izquierda, entre el avatar y el nombre. En website la
+   fila es una sola línea (avatar + stats + íconos a la derecha).
+   Fix solo-móvil: compactar la fila para que vuelva a ser una línea
+   con las mismas proporciones (avatar ~18% del ancho, stats al
+   centro, íconos a la derecha). No se toca escritorio, ni el dock,
+   ni la fila Aceptar todo, ni ninguna capa de zoom. El wrap de v614
+   queda como red de seguridad: si una cuenta tiene contadores más
+   anchos, los íconos vuelven a bajar antes que solaparse. */
+@media(max-width:820px){
+  #inicioView .hf-head{padding:12px}
+  #inicioView .hf-ava-in{width:60px;height:60px}
+  #inicioView .hf-prow{gap:10px}
+  #inicioView .hf-stats{gap:6px}
+  #inicioView .hf-stat{padding:0}
+  #inicioView .hf-stat span{font-size:11px}
+  #inicioView .hf-head-icons{gap:4px}
+  #inicioView .hf-head-ic{width:32px;height:32px}
+  #inicioView .hf-head-ic svg{width:16px;height:16px}
+}
+@media(max-width:380px){
+  #inicioView .hf-ava-in{width:52px;height:52px}
+  #inicioView .hf-prow{gap:8px}
+  #inicioView .hf-stats{gap:4px}
+  #inicioView .hf-stat span{font-size:10px}
+  #inicioView .hf-head-ic{width:28px;height:28px}
+  #inicioView .hf-head-ic svg{width:14px;height:14px}
+}
