@@ -14194,7 +14194,22 @@ app.get('/api/home/live-grid', requireAuth, async (req, res) => {
     // con 0 posteos pasa con ventana vacía (ahí todo tile publicado
     // con shortcode es, por definición, contenido que ya no está).
     if (codes.length === 0 && total !== 0) return res.json({ ok: true, complete: false });
-    return res.json({ ok: true, complete: true, shortcodes: codes });
+    // (LOTE PUBLICADOS-TODOS) Piso fechado de la ventana viva: el
+    // live-drop solo puede esconder tiles que la ventana realmente
+    // abarca. El piso es el taken_at más viejo de los recents vivos
+    // (segundos de IG; si viniera en ms se detecta por magnitud).
+    // Sin fechas en la ventana no hay cobertura comprobable: no se
+    // filtra nada. Cuenta vacía (total 0): la ventana cubre todo.
+    let windowOldest = null;
+    for (const r of payload.recents) {
+      if (r && typeof r.taken_at === 'number' && r.taken_at > 0) {
+        const ms = r.taken_at < 1e12 ? r.taken_at * 1000 : r.taken_at;
+        if (windowOldest === null || ms < windowOldest) windowOldest = ms;
+      }
+    }
+    if (total === 0) windowOldest = 0;
+    if (windowOldest === null) return res.json({ ok: true, complete: false });
+    return res.json({ ok: true, complete: true, shortcodes: codes, window_oldest: new Date(windowOldest).toISOString() });
   } catch (e) {
     return res.json({ ok: true, complete: false });
   }
@@ -28042,7 +28057,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v648';
+const BUILD_ID = '20261101-v649';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

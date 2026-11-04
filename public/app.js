@@ -18101,6 +18101,26 @@ function hfFeedUpcoming(all, tz) {
   } catch (e) {}
   return out;
 }
+// (LOTE PUBLICADOS-TODOS · 4/11) /api/posts sin status trae LIMIT 500
+// en el servidor: para que los publicados rindan TODOS, los sitios
+// que componen la grilla mezclan además /api/posts?status=published
+// (rama sin LIMIT), deduplicados por id. Sin esa segunda fuente, un
+// cliente con más de 500 filas perdería sus publicados viejos en
+// silencio. Pura y testeable; ante cualquier duda devuelve la base.
+function hfMergePostsAll(base, extra) {
+  try {
+    const out = Array.isArray(base) ? base.slice() : [];
+    const seen = new Set();
+    for (const p of out) { if (p && p.id !== undefined && p.id !== null) seen.add(String(p.id)); }
+    for (const p of (Array.isArray(extra) ? extra : [])) {
+      if (!p || p.id === undefined || p.id === null) continue;
+      if (seen.has(String(p.id))) continue;
+      seen.add(String(p.id));
+      out.push(p);
+    }
+    return out;
+  } catch (e) { return Array.isArray(base) ? base : []; }
+}
 function homeGridCompose(input) {
   const o = input || {};
   const upcoming = Array.isArray(o.upcoming) ? o.upcoming : [];
@@ -18218,24 +18238,17 @@ function homeGridCompose(input) {
     if (pa !== pb) return pa - pb;
     return hfCmpDescKey(hfFeedSortKey(a), hfFeedSortKey(b));
   });
-  // (LOTE FEED-6 · decisión Valentino 2/11) Los posteos ya publicados
-  // NO son importantes para el producto: el grupo de ya salidos
-  // (publicados + IG, en el orden v513 vigente, el más reciente
-  // primero) se corta en los 6 más recientes. Del 7º en adelante no
-  // se renderizan en la grilla. SUPERSEDE parcial del «sin tope»
-  // del LOTE FEED, SOLO para ya salidos: programados y borradores
-  // siguen intactos y sin tope. Los fijados (head) son elección
-  // explícita del dueño y quedan fuera del tope. Nada se borra ni
-  // se archiva: lo viejo sigue en Instagram, simplemente no rinde.
-  const rest6 = [];
-  let pubs6 = 0;
-  for (const t of rest) {
-    if (isPubTile12(t)) {
-      if (pubs6 >= 6) continue;
-      pubs6++;
-    }
-    rest6.push(t);
-  }
+  // (LOTE PUBLICADOS-TODOS · decisión Valentino 4/11 · SUPERSEDE
+  // FEED-6) Los publicados rinden TODOS, sin tope: el feed es literal
+  // el feed de Instagram del cliente. El tope de 6 cortaba posteos
+  // viejos en silencio. El nombre rest6 queda por historia (evita
+  // renombres que choquen con la fusión de posteo-dia-2); ya no
+  // corta nada. Programadas/borradores siguen intactos y sin tope;
+  // los fijados (head) siguen primeros por elección del dueño. La
+  // carta oculta de posteo-dia-2 se anexa DESPUÉS de todo este
+  // bloque (el liberador la deja última, después del publicado más
+  // viejo, nunca entre los primeros).
+  const rest6 = rest;
   // (LOTE POSTEO-DIA-2 · 4/11 · corrección Valentino 18:23) La carta
   // oculta del próximo va AL FINAL de la grilla, después de todos
   // los publicados (con o sin cap: se agrega después de la lista
@@ -19862,17 +19875,29 @@ let HF_PROPS = {};
 // que desapareció). Si el usuario ya navegó fuera de Inicio cuando
 // llega la respuesta, no se toca nada.
 let HF_LIVE_BUSY = false;
-function hfLiveDropTile(t, liveSet) {
+function hfLiveDropTile(t, liveSet, cutoffMs) {
   try {
     if (!t || !liveSet) return false;
+    // (LOTE PUBLICADOS-TODOS) Sin piso de cobertura no se esconde
+    // nada: un tile viejo fuera de la ventana viva jamás se borra
+    // por error. Solo se esconde si su fecha está dentro de la
+    // ventana (fecha >= piso) y su shortcode falta en lo vivo.
+    if (typeof cutoffMs !== 'number' || !Number.isFinite(cutoffMs)) return false;
     if (t.kind === 'post') {
       const p = t.post || {};
       if (p.status !== 'published' || p.pinned) return false;
+      const d = (typeof pcParseDate === 'function') ? pcParseDate(p.published_at || p.scheduled_at) : null;
+      if (!d || isNaN(d)) return false;
+      if (d.getTime() < cutoffMs) return false;
       const sc = (typeof hfIgShortcode === 'function') ? hfIgShortcode(p.ig_permalink) : null;
       return !!(sc && !liveSet.has(String(sc)));
     }
     if (t.kind === 'ig') {
       const sc = t.shortcode ? String(t.shortcode) : null;
+      if (!sc) return false;
+      if (!(typeof t.taken_at === 'number' && t.taken_at > 0)) return false;
+      const ms = t.taken_at < 1e12 ? t.taken_at * 1000 : t.taken_at;
+      if (ms < cutoffMs) return false;
       return !!(sc && !liveSet.has(sc));
     }
   } catch (e) {}
@@ -19894,7 +19919,9 @@ async function hfLiveRevalidateFeed() {
       if (res && res.ok) r = await res.json().catch(() => null);
     } catch (e) { r = null; }
     try { clearTimeout(to); } catch (e) {}
-    if (!r || !r.complete || !Array.isArray(r.shortcodes)) return;
+    if (!r || !r.complete || !Array.isArray(r.shortcodes) || !r.window_oldest) return;
+    const cutoffMs = Date.parse(r.window_oldest);
+    if (!Number.isFinite(cutoffMs)) return;
     try { if (!(location.hash || '').startsWith('#/app/inicio')) return; } catch (e) { return; }
     const live = new Set(r.shortcodes.map((x) => String(x)));
     const tiles = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES : [];
@@ -19902,7 +19929,7 @@ async function hfLiveRevalidateFeed() {
     const dropIg = new Set();
     const kept = [];
     for (const t of tiles) {
-      if (hfLiveDropTile(t, live)) {
+      if (hfLiveDropTile(t, live, cutoffMs)) {
         if (t.kind === 'post' && t.post) dropPostIds.add(String(t.post.id));
         if (t.kind === 'ig' && t.shortcode) dropIg.add(String(t.shortcode));
         continue;
@@ -19930,11 +19957,12 @@ async function inicioView() {
   let allPosts = [];
   let weekEr = null;
   try {
-    const [postsRes, erRes] = await Promise.all([
+    const [postsRes, erRes, pubRes] = await Promise.all([
       api.get('/api/posts').catch(() => []),
       api.post('/api/week/ensure', {}).catch(() => null),
+      api.get('/api/posts?status=published').catch(() => []),
     ]);
-    allPosts = postsRes; weekEr = erRes;
+    allPosts = hfMergePostsAll(postsRes, pubRes); weekEr = erRes;
   } catch (e) { allPosts = []; }
   if (!Array.isArray(allPosts)) allPosts = [];
   const drafts = allPosts.filter(p => p.status === 'draft').sort((a, b) => a.id - b.id);
@@ -22102,12 +22130,14 @@ async function hfLiveTick(force) {
   if (force && now - HF_LIVE.lastFetch < 10000) return;
   HF_LIVE.busy = true;
   try {
-    const [allPosts, hp] = await Promise.all([
+    let [allPosts, hp, pubPosts] = await Promise.all([
       api.get('/api/posts').catch(() => null),
       api.get('/api/home/profile').catch(() => null),
+      api.get('/api/posts?status=published').catch(() => null),
     ]);
     HF_LIVE.lastFetch = Date.now();
     if (!Array.isArray(allPosts)) return;
+    allPosts = hfMergePostsAll(allPosts, pubPosts);
     const prof = (hp && hp.ok) ? hp : HF_CUR_PROF;
     const { tiles, props } = hfLiveCompose(allPosts, prof);
     const snap = hfLiveSnapshot(tiles, prof);
@@ -25196,6 +25226,10 @@ async function f3RevealCheck() {
   if (!hfGrid && !fpGrid) return false;
   let all = null;
   try { all = await api.get('/api/posts'); } catch (e) { return false; }
+  // (LOTE PUBLICADOS-TODOS) Mezcla de publicados sin tope: si este
+  // re-render no mezclara, borraría de la grilla los publicados
+  // viejos que inicioView sí muestra (el fetch base trae LIMIT 500).
+  try { const pub = await api.get('/api/posts?status=published').catch(() => null); if (Array.isArray(pub)) all = hfMergePostsAll(all, pub); } catch (e) {}
   if (!Array.isArray(all)) return false;
   F3_LIVE.pending = all.filter(p => p && p.status === 'draft' && !p.image_path).length;
   const tz = pcTz();
