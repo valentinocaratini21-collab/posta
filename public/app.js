@@ -9584,27 +9584,26 @@ function pzAcceptBarOff() {
   try { const v = document.getElementById('inicioView'); if (v) v.classList.remove('hf-acceptbar-on'); } catch (e) {}
 }
 
-// (LOTE ACEPTAR-TODO-SEMANA) Candidatos del «Aceptar todo» de la
-// semana nueva: SOLO programados pendientes de la semana corriente.
-// week_key = lunes actual en la zona de la cuenta (misma identidad
-// que usan los borradores de la semana). Sin week_key no se acepta
-// en bloque (fail-closed: el corazón sigue aprobando uno por uno).
-// Borradores sin fecha, semanas viejas, publicados y archivados
-// quedan FUERA siempre. isPilot=true (piloto) excluye además los
-// que ya dejaron constancia (owner_liked=1); en render se pasa
-// null (modo aún desconocido) y el handler corrige al tocar.
+// (LOTE APROBAR-TODO-PENDIENTES · 4/11 · decisión Valentino) Candidatos
+// del «Aprobar todo» de Inicio: TODOS los programados pendientes, SIN
+// filtro de semana. Antes (LOTE ACEPTAR-TODO-SEMANA) solo contaba la
+// semana corriente (week_key == albumMondayKey()); Valentino ordenó
+// que apruebe todos los pendientes. Borradores sin fecha, publicados
+// y archivados quedan FUERA siempre, como antes. isPilot=true (piloto)
+// excluye además los que ya dejaron constancia (owner_liked=1); en
+// render se pasa null (modo aún desconocido) y el handler corrige al
+// tocar. El nombre conserva «Week» por historia; el alcance ya no es
+// semanal. La píldora «Aceptar todo» de Agenda NO usa este helper
+// (doAcceptAll sobre borradores) y NO cambia.
 function pzAcceptAllWeekCands(list, isPilot) {
   const out = [];
   try {
-    const wk = (typeof albumMondayKey === 'function') ? albumMondayKey() : '';
-    if (!wk) return out;
     for (const t of (Array.isArray(list) ? list : [])) {
       if (!t || t.kind !== 'post' || !t.post) continue;
       const p = t.post;
       if (t.archivedExt) continue;
       if (String(p.status || '') !== 'scheduled') continue;
       if (String(p.approval || 'pending') !== 'pending') continue;
-      if (String(p.week_key || '') !== wk) continue;
       if (isPilot === true && Number(p.owner_liked || 0) === 1) continue;
       out.push(t);
     }
@@ -9711,8 +9710,9 @@ function pzAcceptAllWeekMark(tile, post) {
     }
   } catch (e) {}
 }
-// (LOTE ACEPTAR-TODO-SEMANA) Un toque acepta TODA la semana nueva
-// pendiente (solo programados, ver pzAcceptAllWeekCands). Reutiliza
+// (LOTE ACEPTAR-TODO-SEMANA + APROBAR-TODO-PENDIENTES 4/11) Un toque
+// acepta TODOS los pendientes programados (sin filtro de semana, ver
+// pzAcceptAllWeekCands). Reutiliza
 // el camino por posteo del corazón: en manual POST /approve, en
 // piloto PATCH like (constancia). Sin pantalla de confirmación.
 // Sin render(): cada éxito se marca en su lugar; al final, toast
@@ -9765,13 +9765,13 @@ async function pzAcceptAllWeek(btn) {
     else { try { const c = btn.querySelector('.accept-count'); if (c) c.textContent = String(rest.length); } catch (e) {} }
     try { pzSemanaAprobadaSync(); } catch (e) {}
     if (ok && !fail) {
-      if (mode.manual) toast('✅ ' + (en ? 'Week accepted · ' + ok + ' posts' : 'Semana aceptada · ' + ok + ' posteos'));
+      if (mode.manual) toast('✅ ' + (en ? 'Accepted · ' + ok + ' posts' : 'Aprobados · ' + ok + ' posteos'));
       else toast('❤️ ' + (en ? 'Seen · ' + ok + ' posts' : 'Vistos · ' + ok + ' posteos'));
     }
     else if (ok && fail) toast('✅ ' + (en ? ok + ' accepted · ' + fail + ' failed — try again' : ok + ' aceptados · ' + fail + ' fallaron — probá de nuevo'));
-    else toast('😅 ' + (en ? 'Could not accept the week — try again' : 'No pude aceptar la semana — probá de nuevo'));
+    else toast('😅 ' + (en ? 'Could not approve the pending posts — try again' : 'No pude aprobar los pendientes — probá de nuevo'));
   } catch (e) {
-    try { toast('😅 ' + esc((e && e.message) || 'No se pudo aceptar la semana')); } catch (e2) {}
+    try { toast('😅 ' + esc((e && e.message) || 'No se pudieron aprobar los pendientes')); } catch (e2) {}
   } finally {
     try { btn._pzBusy = false; btn.disabled = false; } catch (e) {}
   }
@@ -19939,12 +19939,12 @@ async function inicioView() {
   const stripHTML = (!HF_VISITOR && drafts.length)
     ? `${acceptPillHTML(drafts.length, 'hfAcceptAll')}<div id="revMsg"></div>`
     : '';
-  // (LOTE ACEPTAR-TODO-SEMANA) Botón «Aceptar todo» de la semana
-  // nueva: SOLO programados pendientes de la semana corriente.
-  // Sin pendientes no se dibuja. La píldora vieja #hfAcceptAll de
-  // borradores se calcula arriba pero nunca se inserta en la
-  // plantilla: queda muerta a propósito, este botón NO la revive
-  // (el alcance aprobado excluye borradores sin fecha).
+  // (LOTE ACEPTAR-TODO-SEMANA + APROBAR-TODO-PENDIENTES 4/11) Botón
+  // «Aprobar todo» de Inicio: TODOS los programados pendientes, sin
+  // filtro de semana. Sin pendientes no se dibuja. La píldora vieja
+  // #hfAcceptAll de borradores se calcula arriba pero nunca se
+  // inserta en la plantilla: queda muerta a propósito, este botón NO
+  // la revive (el alcance aprobado excluye borradores sin fecha).
   // (LOTE ACEPTAR-TODO-POSICIÓN) Barra fina a todo el ancho, fila
   // propia del bloque inferior fijo: vive dentro de .mz-bottomstack
   // justo encima del chat, no flotando sobre él.

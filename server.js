@@ -3973,14 +3973,8 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
     // (v461 · tira simple) Avance del gate en curso, en requisitos
     // completados vs. total — el cliente pinta la barrita con esto, sin
     // mostrar ningún número. L5: sin gate en curso, avance null (llena).
-    // SOLO-POSTEOS (4/11): para posty el avance lo trae nivelPosty en
-    // posteos (hechos vs. umbral del próximo nivel) y se usa tal cual;
-    // la derivación por hitos quedaría null porque posty ya no tiene
-    // hitos de gate. Otros poderes, intactos.
     const gateHitos = (niv.hitos || []).filter((h) => h.nivel_objetivo === niv.nivel + 1);
-    const avance = (oficina.niveles.resolverPoder(poder) === 'posty' && niv.avance)
-      ? niv.avance
-      : (niv.nivel >= 5 || !gateHitos.length ? null : { hechos: gateHitos.filter((h) => h.cumplido).length, total: gateHitos.length });
+    const avance = niv.nivel >= 5 || !gateHitos.length ? null : { hechos: gateHitos.filter((h) => h.cumplido).length, total: gateHitos.length };
     res.json({
       ok: true, poder: niv.poder, nivel: niv.nivel,
       nombre_nivel: niv.nombre_nivel,
@@ -27960,7 +27954,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v637';
+const BUILD_ID = '20261101-v638';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
