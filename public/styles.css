@@ -4963,3 +4963,69 @@ body.pz-postchat-open{overflow:hidden}
 .card.ajsec.ajflat.ajfold-closed > .ajsec-b{display:none}
 .ajfold-chev{display:inline-block;font-size:19.5px;line-height:1;transition:transform .18s;margin-left:10px}
 .ajfold-open .ajfold-chev{transform:rotate(90deg)}
+
+/* ============ LOTE INICIO-DOCK-ZOOM (3/11) ============ */
+/* Pieza 1 — OVERFLOW / ZOOM. Causa raíz medida en la captura de
+   Valentino (ver STATUS): la fila del encabezado (.hf-prow: avatar
+   72 + 3 stats ES + 2 íconos) tiene un min-content de ~465px, mayor
+   que el contenido de Inicio a 390/430px. Si .main pierde su
+   min-width:0 efectivo, el documento entero se ensancha a ~517px
+   y, con overflow-x:clip en html/body, la derecha queda cortada
+   sin poder scrollear (3ª columna a la mitad, lápiz cortado,
+   píldora y chat cortados); con min-width:0, la fila encoge pero
+   las etiquetas de stats se pintan unas sobre otras. El fix hace
+   que la fila QUEPA de verdad: en móvil los íconos bajan a una
+   segunda línea (wrap, no se tocan en escritorio donde hay lugar)
+   y las stats se compactan (gap + letra) sin recortar ninguna
+   etiqueta. Ojo: el wrap solo dispara si las stats no pueden
+   encogerse bajo su contenido — por eso .hf-stats lleva
+   min-width:max-content (sin él, las stats se aplastan a 167px y
+   las etiquetas se pintan unas sobre otras en vez de bajar los
+   íconos). El clip en #inicioView es cinturón, no el fix. */
+#inicioView{overflow-x:clip}
+#inicioView .hf-head{min-width:0}
+#inicioView:not(.hf-collapsed) .hf-prow{min-width:0;flex-wrap:wrap}
+#inicioView .hf-stats{min-width:max-content}
+@media(max-width:820px){
+  #inicioView .hf-head{padding:14px}
+  #inicioView .hf-ava-in{width:68px;height:68px}
+  #inicioView .hf-prow{gap:12px}
+  #inicioView .hf-stats{gap:8px}
+  #inicioView .hf-stat span{font-size:12px}
+  #inicioView .hf-head-icons{margin-left:auto}
+}
+@media(max-width:380px){
+  #inicioView .hf-ava-in{width:60px;height:60px}
+  #inicioView .hf-prow{gap:10px}
+  #inicioView .hf-stat span{font-size:11px}
+}
+/* Pieza 2 — DOCK ALINEADO. Los 5 ítems comparten caja de ícono de
+   24px y la misma línea de base de etiqueta. Antes, .mz-tab-ic era
+   un bloque con el svg de 24px sobre una línea de 20px (la caja
+   medía ~28px) mientras el + era un círculo exacto de 24px: el +
+   quedaba desfasado. Ahora los 4 íconos viven en una caja flex de
+   24px y el + en su círculo de 24px, con la misma etiqueta debajo. */
+.mz-tab{display:flex;flex-direction:column;align-items:center;line-height:1.35}
+.mz-tab-ic{display:flex;align-items:center;justify-content:center;height:24px;margin-bottom:2px}
+/* Pieza 3 — + DEL MISMO COLOR. El + deja el vidrio blanco con +
+   oscuro y usa el mismo tratamiento que los otros 4 (sin fondo,
+   ícono #47617A). Forma intacta: círculo de 24px + «Agregar» abajo. */
+.mz-tab-mas-ic{background:transparent;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;color:#47617A}
+.bb-tab-mas-ic{background:transparent;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;color:#47617A}
+/* Pieza 4 — ACEPTAR TODO ARRIBA. El botón vive en el encabezado
+   (.hf-pacts-accept) desde v585, pero la regla base .hf-accept-bar
+   (v568) lo dejaba en position:fixed abajo a la derecha: por eso
+   flotaba sobre el chat y el encabezado mostraba solo la nota. La
+   regla de .hf-pacts-accept fijaba tamaño pero NO posición. Con
+   position:static el botón fluye en su fila del encabezado, junto
+   a la nota, en una sola instancia (la de abajo era la misma, no
+   otra: solo existe #hfAcceptAllWeek, vía pzAcceptWeekHTML; no hay
+   segunda instancia que eliminar). */
+.hf-pacts-accept .hf-accept-bar{position:static}
+/* Pieza 5 — LIKE REEMPLAZA AL CORAZÓN. La tile aprobada mostraba
+   dos marcas a la vez (corazón lleno + tik verde). Desde hoy, el
+   like ES el estado: el corazón lleno queda como única marca y el
+   tik no se dibuja en la tile (sigue agregándose en vivo por el
+   handler, pero oculto por esta regla; el handler y el alcance de
+   aprobación no cambian). Sin aprobar: solo el botón corazón. */
+#inicioView .hf-tile .hf-tik{display:none}
