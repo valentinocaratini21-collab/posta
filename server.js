@@ -12482,7 +12482,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // se resuelven UNA vez por corrida, no por posteo.
     const usedFamilies = [];
     const weekDigest = (() => { try { return digestForUser(uid); } catch (e) { return null; } })();
-    const weekFavorites = (() => { try { return getStyleFavorites(uid); } catch (e) { return []; } })();
+    const weekFavorites = []; /* (LOTE AJUSTES-LIMPIO) Posty elige: favoritos de estilo inertes */
     const weekBoosts = (() => { try { return require('./learning').getClientBoosts(db, uid) || {}; } catch (e) { return {}; } })();
     const usedStyles = [];
     // (v234) Sin patrón de grilla, el perfil de feed sale del digest solo.
@@ -16338,13 +16338,13 @@ function styleFragFor(styleCode, settings, profile, opts = {}) {
         theme: opts.theme || '', rubro: (profile && profile.category) || (digest && digest.categoria) || '',
         digest, feedProfile: require('./image-styles').feedProfileFromDigest(digest), offerProfile: require('./image-styles').offerProfileFromDigest(digest),
         salesIntent: opts.salesIntent || '', baseReal: true,
-        favorites: getStyleFavorites(opts.uid), boosts: require('./learning').getClientBoosts(db, opts.uid) || {},
+        favorites: [] /* (LOTE AJUSTES-LIMPIO) Posty elige */, boosts: require('./learning').getClientBoosts(db, opts.uid) || {},
       });
       st = (pick && pick.style) || null;
       if (opts.pickOut) { opts.pickOut.style = st; opts.pickOut.reason = (pick && pick.reason) || ''; }
     }
     if (!st) {
-      st = ((pickStyle({ theme: opts.theme || '', rubro: (profile && profile.category) || '', favorites: (settings && settings.user_id) ? getStyleFavorites(settings.user_id) : [] }) || {}).style || null);
+      st = ((pickStyle({ theme: opts.theme || '', rubro: (profile && profile.category) || '', favorites: [] /* (LOTE AJUSTES-LIMPIO) Posty elige */ }) || {}).style || null);
     }
     if (!st) return '';
     const hexes = (typeof parseBrandHexes === 'function' && settings) ? parseBrandHexes(settings.brand_colors) : [];
@@ -16394,7 +16394,7 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
       theme: idea, rubro: (profile && profile.category) || (digest && digest.categoria) || '',
       digest, feedProfile: require('./image-styles').feedProfileFromDigest(digest), offerProfile: require('./image-styles').offerProfileFromDigest(digest),
       salesIntent, baseReal: true, tipo: 'foto',
-      favorites: getStyleFavorites(uid), boosts: require('./learning').getClientBoosts(db, uid) || {},
+      favorites: [] /* (LOTE AJUSTES-LIMPIO) Posty elige */, boosts: require('./learning').getClientBoosts(db, uid) || {},
     });
     const styleObj = manualStyle || (pick && pick.style) || null;
     const hexes = (typeof parseBrandHexes === 'function' && settings) ? parseBrandHexes(settings.brand_colors) : [];
@@ -17732,7 +17732,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     const explicitIntent = (intent && IS[intent]) ? { intent, source: 'forced' } : known;
     stylePick = style
       ? { style: getStyle(style), reason: `estilo elegido manualmente (${style})`, intent: explicitIntent.intent || '', intentSource: explicitIntent.source === 'forced' ? 'explicit' : 'manual' }
-      : pickStyle({ intent: explicitIntent.intent, tipo: String(tipo || ''), theme, angle, rubro: profile.category || '', subrubro: (digestForStyle && digestForStyle.subcat) || profile.subrubro || '', businessName: profile.business_name || '', usedThisWeek: usedStyles, boosts: learnBoosts, favorites: getStyleFavorites(uid), digest: digestForStyle, avoidFamilies: usedFamilies });
+      : pickStyle({ intent: explicitIntent.intent, tipo: String(tipo || ''), theme, angle, rubro: profile.category || '', subrubro: (digestForStyle && digestForStyle.subcat) || profile.subrubro || '', businessName: profile.business_name || '', usedThisWeek: usedStyles, boosts: learnBoosts, favorites: [] /* (LOTE AJUSTES-LIMPIO) Posty elige */, digest: digestForStyle, avoidFamilies: usedFamilies });
     if (stylePick && stylePick.style) {
       if (!stylePick.family) { try { stylePick.family = famOf(stylePick.style); } catch (e) {} }
       if (Array.isArray(usedStyles) && !usedStyles.includes(stylePick.style.code)) usedStyles.push(stylePick.style.code);
@@ -18996,7 +18996,7 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
         tipo: post.tipo || '',
         theme: String(post.caption || '').split('\n')[0],
         rubro: rubroOf(uid),
-        favorites: getStyleFavorites(uid),
+        favorites: [] /* (LOTE AJUSTES-LIMPIO) Posty elige */,
         boosts: require('./learning').getClientBoosts(db, uid) || {},
       });
       st = (pick && pick.style) || IS.getStyle('/goldenhour');
@@ -27948,7 +27948,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v611';
+const BUILD_ID = '20261101-v612';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

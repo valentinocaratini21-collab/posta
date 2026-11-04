@@ -2104,27 +2104,11 @@ async function bbJardinGestyContent() {
   if (!nvG) return mxJardinErrorHTML();
   return mxJardinHTML('gesty', null, nvG, null);
 }
-// ————— Los avisos también viven en AJUSTES (DETALLE-TOTAL §5) —————
-// La vista de Ajustes clásica se renderiza dentro del shell; al terminar,
-// se le suma la tarjeta de la oficina con los mismos controles que en
-// Mi negocio (una sola puerta de datos: /api/oficina/push-prefs).
+// (LOTE AJUSTES-LIMPIO) La tarjeta «Cómo te avisa tu oficina» se eliminó
+// de Ajustes: esta función ya no renderiza nada. Las preferencias en
+// servidor quedan intactas; la vista Mi negocio conserva su propio bloque.
 async function bbAvisosEnAjustes() {
-  if (!BB_SHELL_ON() || document.getElementById('bbAvisosCard')) return;
-  const host = document.querySelector('.bb-main');
-  if (!host) return;
-  let prefs = BB.prefs;
-  if (!prefs) {
-    try { const pr = await api.get('/api/oficina/push-prefs'); if (pr && pr.ok) { BB.prefs = pr.prefs; prefs = pr.prefs; } } catch (e) {}
-  }
-  if (!prefs || document.getElementById('bbAvisosCard')) return;
-  const agentes = ['posty', 'venty', 'atenty', 'gesty', 'oficina'];
-  const div = document.createElement('section');
-  div.id = 'bbAvisosCard'; div.className = 'bb-bloque'; div.style.marginTop = '14px';
-  div.innerHTML = `<h2>Cómo te avisa tu oficina</h2>
-    <p class="bb-sub">Cada agente te escribe solo por tres motivos: una decisión que espera tu toque, una buena noticia que ya pasó, o una urgencia real. De noche, silencio (22 a 8) salvo urgencia.</p>
-    ${agentes.map((a) => { const m = BB_META[a]; const on = !prefs.agentes || prefs.agentes[a] !== false; return `<div class="bb-pref"><span>${bbAvatarHTML(a, null, m.n, m.c, 'bb-av bb-av-sm', false)} ${m.n}</span><button class="bb-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" onclick="bbTogglePref('${a}', this)"><span></span></button></div>`; }).join('')}
-    <div class="bb-pref bb-pref-total"><span>${pzIc('bellOff', 18)} Silencio total de la oficina</span><button class="bb-switch${prefs.silencio ? ' on' : ''}" role="switch" aria-checked="${!!prefs.silencio}" onclick="bbToggleSilencio(this)"><span></span></button></div>`;
-  host.appendChild(div);
+  return;
 }
 // ================= FIN ESPINA BAMBOOTY =================
 
@@ -2230,7 +2214,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v611'; // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
+const CHUNK_V = '20261101-v612'; // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -16930,7 +16914,7 @@ function pzPrefetchKick() {
     if (tab === 'ajustes' && (_pq.get('plan') || _pq.get('plan_sel'))) {
       const _pz = document.getElementById('planZone');
       const _card = _pz && _pz.closest('.card');
-      if (_card) setTimeout(() => _card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+      if (_card) setTimeout(() => { try { if (typeof ajFoldAbrir === 'function') ajFoldAbrir('plan'); } catch (e) {} _card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
     }
   } catch (e) {}
   // (ARMA TODO ítem 1) Retorno post-pago: ?plan=ok aterriza en LA SEMANA con su tarjeta de bienvenida.

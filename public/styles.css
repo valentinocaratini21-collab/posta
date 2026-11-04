@@ -4954,3 +4954,12 @@ body.pz-postchat-open{overflow:hidden}
 .ajmas-row{padding:9px 2px}
 .card.int-advanced{padding:13px 14px;margin-bottom:11px}
 .card.aj-salir{padding:13px 14px}
+
+/* (LOTE AJUSTES-LIMPIO) Carpetas de Ajustes: encabezado clickeable con
+   flecha; cerrada esconde el cuerpo. Especificidad mayor que la regla
+   ajflat para que el plegado gane. */
+.card.ajsec.ajflat.ajfold > .ajsec-h{cursor:pointer}
+.card.ajsec.ajflat.ajfold-closed > .ajsec-h{margin-bottom:0}
+.card.ajsec.ajflat.ajfold-closed > .ajsec-b{display:none}
+.ajfold-chev{display:inline-block;font-size:19.5px;line-height:1;transition:transform .18s;margin-left:10px}
+.ajfold-open .ajfold-chev{transform:rotate(90deg)}

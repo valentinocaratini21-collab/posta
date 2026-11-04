@@ -12,9 +12,11 @@
 function ajustesView() {
   const p = PROFILE, s = SETTINGS;
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  // (LOTE AJUSTES-SIMPLE) Ajustes plano, sin acordeones: todas las tarjetas
-  // nacen visibles; los deep-links (?plan, ?ig, ...) scrollean a su tarjeta
-  // en bindSettings (ajDeepSec), no abren nada.
+  // (LOTE AJUSTES-LIMPIO) Ajustes en carpetas: las secciones plegables
+  // nacen cerradas en la primera apertura (estado en localStorage) salvo
+  // Notificaciones y Referidos, siempre visibles; los deep-links
+  // (?plan, ?ig, ...) abren la carpeta destino en bindSettings (ajDeepSec
+  // + ajFoldAbrir) y scrollean a su tarjeta.
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡TikTok conectado! Ya podés compartir tus posteos</div>`
@@ -108,27 +110,24 @@ function ajustesView() {
       </div>
       <div id="ajPushOn" style="display:none">${pzIc('checkCircle', 15)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications on in your phone.' : 'Notificaciones activadas en tu celu.'}</div>
     </div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Posty notifies you on your phone — only when it matters, no noise.' : 'Posty te avisa por notificación en tu celu — solo cuando importa, nada de ruido.'}</p>
-    <div style="font-weight:800;margin-bottom:6px">Aviso antes de publicar</div>
+        <div style="font-weight:800;margin-bottom:6px">Aviso antes de publicar</div>
     <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">Te aviso 30 minutos antes de que salga cada posteo automático, para que puedas frenarlo desde Schedule si querés.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnPreNotifyToggle">Cargando...</button>
       <span id="preNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     <div style="font-weight:800;margin:12px 0 6px">${pzIc('mail', 16)} Tu carta del domingo</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">Cada domingo a la noche te escribo tu carta: cómo viene tu Instagram y qué ya estoy haciendo por tu negocio. Te aviso apenas llega.</p>
-    <div style="display:flex;align-items:center;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnLetterToggle">Cargando...</button>
       <span id="letterNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     <div style="font-weight:800;margin:12px 0 6px">${pzIc('alert', 16)} Si un posteo no pudo salir</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">Si un posteo falla al publicar, te aviso en el momento. Nunca sale a medias: queda en borrador para que lo mires.</p>
-    <div style="display:flex;align-items:center;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnFailToggle">Cargando...</button>
       <span id="failNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     <div style="font-weight:800;margin:12px 0 6px">💬 Tu carta por WhatsApp</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">Cada domingo a la noche te mando tu carta por WhatsApp con el botón para aprobar tu semana en un toque, sin abrir la app.</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">Cada domingo a la noche, con el botón para aprobar tu semana en un toque.</p>
     <div class="field"><label>Tu número de WhatsApp</label><input id="s_waNotify" placeholder="Ej.: 5491123456789" inputmode="tel" maxlength="20" autocomplete="off"><div class="hint">Con código de país (Argentina: 54 9 + tu número). Solo lo uso para mandarte tu carta y avisos de tu semana.</div></div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
       <button class="btn btn-ghost" id="btnWaNotifyToggle">Cargando...</button>
@@ -136,6 +135,9 @@ function ajustesView() {
     </div>
     <div class="hint" id="waNotifyGateHint" style="display:none;margin-top:10px">WhatsApp todavía no está encendido del lado de Posty: podés dejar tu número y tu permiso guardados, y te llega apenas se encienda. Mientras tanto, tu carta llega por notificación y en Tu análisis.</div>
   </div></div>
+  ${IS_NATIVE ? '' : `<div class="card ajsec ajflat" id="ajsec-referidos"><div class="ajsec-h"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3></div><div class="ajsec-b">
+    <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
+  </div></div>`}
   <div class="card ajsec ajflat" id="ajsec-negocio"><div class="ajsec-h"><h3>${pzIc('store', 20)} Tu negocio</h3>${stBiz}</div><div class="ajsec-b">
   <p style="color:var(--mut);font-size:11.5px;margin:-6px 0 14px">${pzIc('bot', 16)} Uso estos datos para crear tus posteos.</p>
     <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
@@ -149,10 +151,10 @@ function ajustesView() {
         ${TIMEZONES.map(([v, l]) => `<option ${s.timezone === v ? 'selected' : ''} value="${v}">${l}</option>`).join('')}
       </select></div>
       <div class="field"><label>Objetivo</label><input type="hidden" id="s_goal" value="${esc(p.goal || '')}"><div class="pz-pick">${GOALS.map(([v, ico, t]) => `<button type="button" class="pz-pick-btn${p.goal === v ? ' sel' : ''}" data-pz-pick="${v}" onclick="pzPick(this,'s_goal')">${pzIc(ico, 20)}<span>${t}</span></button>`).join('')}</div></div>
-      <div class="field"><label>${pzIc('target', 16)} Foco de este mes</label><input id="s_mgoal" value="${esc(p.monthly_goal || '')}" placeholder="Ej.: vender más los viernes" maxlength="120"><div class="hint">Lo que querés empujar ESTE mes. Posty inclina todos los posteos a esto — cambialo cuando quieras.</div></div>
+      <div class="field"><label>${pzIc('target', 16)} Foco de este mes</label><input id="s_mgoal" value="${esc(p.monthly_goal || '')}" placeholder="Ej.: vender más los viernes" maxlength="120"><div class="hint">Posty inclina todos los posteos a esto.</div></div>
     </div>
     <div class="field"><label>Descripción (para que la IA te conozca)</label><textarea id="s_desc" maxlength="600" placeholder="Contanos qué vendés, para quién y qué te hace distinto...">${esc(p.description)}</textarea>
-      <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600 · Mientras más nos cuentes, mejores ideas creamos por vos.</div>
+      <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600</div>
       </div>
     <div class="field"><label>Tus competidores</label>
       <div class="comp-box" id="s_compbox"><div class="comp-chips" id="s_chips"></div><input id="s_compin" name="compinput" placeholder="Agregar competidor…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')"></div>
@@ -160,7 +162,7 @@ function ajustesView() {
       <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
     <div class="field" style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px">
       <label style="font-size:13px">${pzIc('dna', 16)} Lo que la IA sabe de tu negocio</label>
-      <div class="hint" style="margin:-6px 0 12px">Completá lo que quieras: la IA lo usa para crear posteos que venden de verdad.</div>
+      <div class="hint" style="margin:-6px 0 12px">Completá lo que quieras.</div>
       <div class="field"><label>Productos <span id="dnaChip_productos"></span> <span style="color:var(--dim);font-weight:400">(uno por línea: nombre — precio)</span></label>
         <textarea id="s_dna_productos" rows="3" placeholder="Nombre del producto — precio (uno por línea)"></textarea></div>
       <div class="field"><label>Promos activas <span id="dnaChip_promos_activas"></span> <span style="color:var(--dim);font-weight:400">(una por línea)</span></label>
@@ -170,10 +172,10 @@ function ajustesView() {
         <div class="field"><label>Ubicación <span id="dnaChip_ubicacion"></span></label><input id="s_dna_ubicacion" placeholder="Barrio y ciudad" autocomplete="off"></div>
       </div>
       <div class="field"><label>${pzIc('door', 16)} Días que cerrás</label>
-        <div id="closedDaysRow" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <div id="closedDaysRow" style="display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px"></div>
         <div class="hint" id="closedDaysHint">Tocá los días en que tu negocio no abre: Posty no programa posteos esos días.</div>
       </div>
-      <div class="hint">Estos datos se guardan con el botón <b>Guardar</b> de acá abajo, junto con todo tu negocio — un solo guardado para todo.</div>
+      <div class="hint">Se guardan con el botón <b>Guardar</b> de acá abajo.</div>
       <div id="webDnaZone"></div>
       <div id="dnaFuentesZone"></div>
     </div>
@@ -187,7 +189,6 @@ function ajustesView() {
     <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
       <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;margin-bottom:10px">${pzIc('book', 16)} Lo que Posty sabe de tu negocio <span class="lvl-pill" id="lvlPill" style="display:none"><span class="lvl-num" id="lvlPillNum">Nivel 1</span><span class="lvl-name" id="lvlPillName"></span></span></div>
     <div class="lvl-block" id="lvlBlock"><p class="hint">Calculando tu nivel…</p></div>
-    <p class="src-intro">Lo estudio solo para crear posteos que venden.</p>
     <div class="src-row" id="webZone"><p class="hint">Cargando…</p></div>
     <div class="src-row" id="storiesZone"><p class="hint">Cargando…</p></div>
     <div class="src-row" id="fbZone"><p class="hint">Cargando…</p></div>
@@ -196,7 +197,7 @@ function ajustesView() {
     </div>
     <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
       <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;margin-bottom:10px">${pzIc('post', 16)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "What I've learned from you" : 'Lo que aprendí de vos'}</div>
-    <p class="src-intro">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Your standing tastes: what you taught me in the chat or by correcting me. They shape every new week — delete one and it stops applying from the next generation.' : 'Tus gustos fijos: lo que me enseñaste en el chat o corrigiéndome. Dan forma a cada semana nueva — borrás uno y deja de aplicar desde la próxima generación.'}</p>
+    <p class="src-intro">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Delete one and it stops applying from the next generation.' : 'Si borrás uno, deja de aplicar desde la próxima generación.'}</p>
     <div id="gustosZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
     </div>
     <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
@@ -213,28 +214,26 @@ function ajustesView() {
   <div id="ajsec-mas2-wrap" hidden>
   <div class="card ajsec ajflat" id="ajsec-auto"><div class="ajsec-h"><h3>${pzIc('bolt', 20)} Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">⏸ Pausar todo</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">¿Vacaciones o una semana sin publicar? Frená todo con un toque: lo programado vuelve a borrador y nada sale hasta que reanudes. Tu semana y tus borradores quedan guardados, tal como están.</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Lo programado vuelve a borrador y nada sale hasta que reanudes.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnPauseAll">Cargando...</button>
       <span id="pauseStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     <div style="border-bottom:1px solid var(--line);margin:18px 0"></div>
     <div style="font-weight:800;margin-bottom:8px">Publicación</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Posty programa y publica tus posteos solo, en sus mejores horarios — vos no tenés que aceptar nada. Si algo no pasa el filtro de calidad, queda en revisión y te avisa. Y cualquier posteo se puede frenar antes de que salga, desde Schedule.</p>
-    <div style="display:flex;align-items:center;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnAutopilotToggle">Cargando...</button>
       <span id="autopilotStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     <div id="autopilotInfo" style="font-size:11.5px;color:var(--dim);margin-top:8px"></div>
     <div style="font-weight:800;margin:12px 0 6px">Tu semana</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Posty arma tu semana solo y la deja programada. Si no tocás nada en 24 horas, sale sola. Vos solo mirás y disfrutás.</p>
-    <div style="display:flex;align-items:center;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
       <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
     <div style="font-weight:800;margin:12px 0 6px">📸 Cuando subo fotos</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Qué hace Posty apenas subís una foto. «Preguntar siempre» es el default: nada se crea sin tu toque. Aunque recuerde «Que Posty lo arme», siempre te muestra el texto antes de crear el borrador.</p>
-    <div style="display:flex;align-items:center;gap:12px">
-      <select id="sftDefaultSel" style="font-size:14px;border-radius:10px;padding:9px 12px;border:1px solid rgba(10,30,51,.15);background:#fff;color:#0A1E33;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <select id="sftDefaultSel" style="font-size:14px;border-radius:10px;padding:9px 12px;border:1px solid rgba(10,30,51,.15);background:#fff;color:#0A1E33;max-width:100%">
         <option value="preguntar">Preguntar siempre</option>
         <option value="guardar">Solo guardarla</option>
         <option value="semana">Usarla en la semana</option>
@@ -243,11 +242,10 @@ function ajustesView() {
       <span id="sftDefaultStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     <div style="font-weight:800;margin:12px 0 6px">${pzIc('globe', 16)} Tu semana en dos idiomas</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Para negocios con turistas o clientes en inglés: la misma semana sale también en inglés. La versión en inglés es la traducción de tu semana en español — misma idea, mismos datos, nada nuevo. No cambia el idioma de la app.</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">No cambia el idioma de la app.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnBilingualWeekToggle">Cargando...</button>
       <span id="bilingualWeekStatus" style="font-size:12px;color:var(--dim)"></span>
-    </div>
     </div>
   </div></div>
 <div class="card ajsec ajflat" id="ajsec-conex"><div class="ajsec-h"><h3>${pzIc('plug', 20)} Conexiones</h3>${stIg}</div><div class="ajsec-b">
@@ -255,7 +253,7 @@ function ajustesView() {
     ${igBody}
     <div id="pzBioSealSlot"></div>
     <div style="font-weight:800;margin:12px 0 6px">${pzIc('music', 16)} TikTok</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>${pzIc('music', 16)} Compartir en TikTok</b>. Y si activás TikTok semanal, tus videos semanales salen solos (cuando TikTok apruebe la auditoría); si no lo activás, Posty nunca publica ahí sin que lo pidas.</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Cada posteo publicado suma el botón <b>${pzIc('music', 16)} Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
     <div id="ttZone"><p class="hint">Cargando…</p></div>
     <div id="ttMsg"></div>
     <div style="font-weight:800;margin:12px 0 6px">⭐ Google · Reseñas</div>
@@ -263,13 +261,12 @@ function ajustesView() {
     <div id="ggZone"><p class="hint">Cargando…</p></div>
     <div id="ggMsg"></div>
     <div style="font-weight:800;margin:12px 0 6px">${pzIc('bag', 16)} Tiendanube</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Tu tienda, conectada: Posty lee tu catálogo, tu stock y tus ventas para postear solo lo que tenés, con tu producto más vendido al frente. Solo lee: nunca toca precios ni stock.</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Posty lee tu catálogo y stock para postear solo lo que tenés. Solo lee: nunca toca precios ni stock.</p>
     <div id="tnZone"><p class="hint">Cargando…</p></div>
     <div id="tnMsg"></div>
   </div></div>
-  <div class="card ajsec ajflat" id="ajsec-marca"><div class="ajsec-h"><h3>${pzIc('palette', 20)} Tu marca y estilos</h3>${stBrand}</div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
-    <div class="row2">
+  <div class="card ajsec ajflat" id="ajsec-marca"><div class="ajsec-h"><h3>${pzIc('palette', 20)} Tu marca</h3>${stBrand}</div><div class="ajsec-b">
+        <div class="row2">
       <div class="field"><label>Logo</label>
         <div style="display:flex;gap:10px;align-items:center">
           ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:11.5px">Sin logo</span>'}
@@ -295,38 +292,29 @@ function ajustesView() {
           </div>
         </div>`).join('')}
       </div>
-      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano tocando el color o escribiendo su código. Con el menú de cada color elegís si es Principal, Secundario o Acento: se reordenan solos. El principal domina los diseños, el secundario lo acompaña y el acento va en botones y detalles.</div>
+      <div class="hint">Subí tu logo y detectamos tus colores, o elegilos a mano. El principal domina los diseños, el secundario lo acompaña y el acento va en detalles.</div>
     </div>
     <div class="field"><label>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Headline font' : 'Tipografía de tus titulares'}</label>
-      <div style="font-size:11.5px;color:var(--mut);margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'The font of the headline inside your post images. It changes only the headline — not captions, colors or web/app text.' : 'La letra del titular dentro de tus posteos. Cambia solo el titular — no cambia captions, colores ni texto de web/app.'}</div>
+      <div style="font-size:11.5px;color:var(--mut);margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'It changes only the headline inside your post images.' : 'Solo cambia el titular dentro de tus posteos.'}</div>
       <div id="fontRow" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px"></div>
       <div class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Applies to new weeks and regenerations. Published posts keep their look.' : 'Aplica a semanas nuevas y regeneraciones. Los posteos ya publicados conservan su look.'}</div>
     </div>
     <div class="field"><label>Vista previa</label>
       <div id="brandPrev"></div>
-      <div class="hint">Así se ve tu marca en tus posteos. Se actualiza sola cuando cambiás los colores.</div>
-    </div>
+          </div>
     <div class="field"><label>Foto de perfil</label>
       <div style="display:flex;gap:12px;align-items:center">
         <div class="brand-pf" id="brandPf"></div>
-        <div class="hint" style="margin:0">Así se ve tu logo recortado en círculo, como foto de perfil de Instagram.</div>
-      </div>
+              </div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
       <span id="brandDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
     </div>
     <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:11.5px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
-    <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
-      <div style="font-weight:800;font-size:15px;margin-bottom:10px">${pzIc('palette', 16)} Estilos de tus posteos</div>
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:6px">Elegí los que te gusten. Si no elegís, elijo yo por vos</p>
-    <p style="color:var(--dim);font-size:11.5px;margin-bottom:14px">Muestras de estilo: así se compone un posteo con cada uno — con una foto de tu rubro, tu nombre y tus colores. Marcá hasta 3 favoritos y tus posteos nuevos van a salir con esos looks primero.</p>
-    <div id="styleGallery"><div style="color:var(--mut);font-size:11.5px">Cargando estilos…</div></div>
-    <div class="hint" id="styleFavMsg" style="margin-top:10px"></div>
-    </div>
   </div></div>
   <div class="card ajsec ajflat" id="ajsec-pagina"><div class="ajsec-h"><h3>${pzIc('globe', 20)} Tu página</h3>${stPage}</div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: una página linda con tu negocio y tus posteos ya publicados, con botón directo a tu WhatsApp. Cada persona que la visita conoce Posty</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: tu negocio y tus posteos ya publicados, con botón a tu WhatsApp.</p>
     <div class="field"><label>Tu dirección</label>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-size:13.5px;color:var(--mut)">postycommunitymanager.com/p/</span>
@@ -343,12 +331,9 @@ function ajustesView() {
     </div>
   </div></div>
   <div class="card ajsec ajflat" id="ajsec-semana"><div class="ajsec-h"><h3>${pzIc('link', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'}</h3><span class="ajsec-st" id="ajStSemana"></span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Show your week to your partner or your family before it goes out: a read-only link with your posts just as they are on your home. No password, no access to your account — they only see the week.' : 'Mostrale tu semana a tu socio o a tu familia antes de que salga: un link de solo lectura con tus posteos tal cual están en tu home. Sin tu contraseña y sin entrar a tu cuenta: solo ven la semana.'}</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'A read-only link with your week, no password: they only see the week.' : 'Un link de solo lectura con tu semana, sin tu contraseña: solo ven la semana.'}</p>
     <div id="weekShareZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
   </div></div>
-  ${IS_NATIVE ? '' : `<div class="card ajsec ajflat" id="ajsec-referidos"><div class="ajsec-h"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3></div><div class="ajsec-b">
-    <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>`}
   <details class="card int-advanced"><summary>${pzIc('gear', 16)} Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás pegar la dirección de embed que Meta genera para tu Instagram. La mayoría no tiene que tocar nada acá.</p>
     <div class="int-block"><h4>Instagram Embed URL</h4>
@@ -671,6 +656,79 @@ function pzAjMas2Toggle() {
   const b = document.getElementById('btnAjMas2');
   if (b) b.innerHTML = ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'More settings' : 'Más ajustes') + ' <span>›</span>';
 }
+// (LOTE AJUSTES-LIMPIO) Carpetas: en la primera apertura, las secciones
+// plegables nacen CERRADAS; Notificaciones y Referidos (lo principal) no se
+// pliegan nunca: su contenido queda siempre visible. Tocar el encabezado de
+// una carpeta la abre o la cierra; el estado persiste en localStorage.
+// Los deep-links (?plan, ?ig, ...) abren la carpeta destino vía ajFoldAbrir.
+const AJ_FOLDABLE = ['negocio', 'plan', 'auto', 'conex', 'marca', 'pagina', 'semana'];
+function ajFoldKey() {
+  try {
+    const uid = (typeof ME !== 'undefined' && ME && ME.id) ? String(ME.id) : '';
+    return 'posta-ajustes-carpetas' + (uid ? '_' + uid : '');
+  } catch (e) { return 'posta-ajustes-carpetas'; }
+}
+function ajFoldLoad() {
+  let raw = null;
+  try { raw = localStorage.getItem(ajFoldKey()); } catch (e) { return null; }
+  if (!raw) return undefined;
+  try { const o = JSON.parse(raw); if (o && Array.isArray(o.open)) return o.open; } catch (e) {}
+  return null;
+}
+function ajFoldSave(open) {
+  try { localStorage.setItem(ajFoldKey(), JSON.stringify({ v: 1, open: open })); } catch (e) {}
+}
+function ajFoldSet(id, open) {
+  const card = document.getElementById('ajsec-' + id);
+  if (!card) return;
+  card.classList.toggle('ajfold', true);
+  card.classList.toggle('ajfold-open', !!open);
+  card.classList.toggle('ajfold-closed', !open);
+}
+function ajFoldCurrentOpen() {
+  const out = [];
+  AJ_FOLDABLE.forEach((id) => {
+    const card = document.getElementById('ajsec-' + id);
+    if (card && card.classList.contains('ajfold-open')) out.push(id);
+  });
+  return out;
+}
+function ajFoldAbrir(id) {
+  if (AJ_FOLDABLE.indexOf(id) === -1) return;
+  const card = document.getElementById('ajsec-' + id);
+  if (!card) return;
+  const w = document.getElementById('ajsec-mas2-wrap');
+  if (w && w.contains(card)) pzAjMas2Mostrar();
+  ajFoldSet(id, true);
+  ajFoldSave(ajFoldCurrentOpen());
+}
+function ajFoldInit() {
+  const stored = ajFoldLoad();
+  let open;
+  if (stored === undefined) { open = []; ajFoldSave([]); }
+  else if (stored === null) { open = AJ_FOLDABLE.slice(); }
+  else open = stored;
+  AJ_FOLDABLE.forEach((id) => {
+    const card = document.getElementById('ajsec-' + id);
+    if (!card) return;
+    const head = card.querySelector('.ajsec-h');
+    if (head) {
+      if (!head.querySelector('.ajfold-chev')) {
+        const chev = document.createElement('span');
+        chev.className = 'ajfold-chev';
+        chev.textContent = '›';
+        head.appendChild(chev);
+      }
+      head.onclick = () => {
+        const isOpen = card.classList.contains('ajfold-open');
+        ajFoldSet(id, !isOpen);
+        ajFoldSave(ajFoldCurrentOpen());
+      };
+    }
+    ajFoldSet(id, open.indexOf(id) !== -1);
+  });
+}
+
 function bindSettings() {
   // (ARMA TODO ítem 1) plan=error ya se mostró en ajustesView: limpiamos el
   // parámetro para que un refresh no resucite el aviso. Diferido a propósito:
@@ -680,9 +738,9 @@ function bindSettings() {
     const _pqErr = new URLSearchParams(location.hash.split('?')[1] || '');
     if (_pqErr.get('plan') === 'error') setTimeout(() => { try { if ((location.hash || '').indexOf('plan=error') > -1) history.replaceState(null, '', location.pathname + '#/app/ajustes'); } catch (e) {} }, 400);
   } catch (e) {}
-  // (LOTE AJUSTES-SIMPLE) Ajustes plano, sin acordeones: las tarjetas ya
-  // nacen visibles (clase ajflat). Los deep-links scrollean a su tarjeta y
-  // las filas de Más navegan a su sección o abren su vista.
+  // (LOTE AJUSTES-LIMPIO) Las tarjetas plegables nacen como carpetas
+  // (ajFoldInit, arriba): cerradas en la primera apertura, estado en
+  // localStorage. Los deep-links abren la carpeta destino antes de scrollear.
   const ajDeepSec = () => {
     try {
       const pq = new URLSearchParams(location.hash.split('?')[1] || '');
@@ -697,8 +755,9 @@ function bindSettings() {
     } catch (e) {}
     return '';
   };
+  try { ajFoldInit(); } catch (e) {}
   const ajDeep = ajDeepSec();
-  if (ajDeep) setTimeout(() => { try { const el = document.getElementById('ajsec-' + ajDeep); if (el) { const w = document.getElementById('ajsec-mas2-wrap'); if (w && w.contains(el)) pzAjMas2Mostrar(); el.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' }); } } catch (e) {} }, 120);
+  if (ajDeep) setTimeout(() => { try { const el = document.getElementById('ajsec-' + ajDeep); if (el) { const w = document.getElementById('ajsec-mas2-wrap'); if (w && w.contains(el)) pzAjMas2Mostrar(); try { ajFoldAbrir(ajDeep); } catch (e) {} el.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' }); } } catch (e) {} }, 120);
   const btnAjMas2 = document.getElementById('btnAjMas2');
   if (btnAjMas2) btnAjMas2.onclick = () => pzAjMas2Toggle();
   $$('.ajmas-row').forEach(btn => {
@@ -1100,7 +1159,7 @@ function bindSettings() {
     const paintClosed = () => {
       closedRow.innerHTML = DAYLBL.map((lbl, i) => {
         const d = i + 1, on = closedSel.has(d);
-        return `<button type="button" data-day="${d}" style="border:1px solid ${on ? 'var(--cel)' : 'var(--line)'};background:${on ? 'var(--cel)' : '#fff'};color:${on ? '#fff' : 'var(--mut)'};border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer">${lbl}</button>`;
+        return `<button type="button" data-day="${d}" style="border:1px solid ${on ? 'var(--cel)' : 'var(--line)'};background:${on ? 'var(--cel)' : '#fff'};color:${on ? '#fff' : 'var(--mut)'};border-radius:999px;padding:7px 11px;font-size:12.5px;font-weight:700;cursor:pointer;flex:none">${lbl}</button>`;
       }).join('');
       closedRow.querySelectorAll('button[data-day]').forEach(b => { b.onclick = () => { const d = Number(b.dataset.day); if (closedSel.has(d)) closedSel.delete(d); else closedSel.add(d); paintClosed(); markDirty(); }; });
       const hint = $('#closedDaysHint');
@@ -1247,7 +1306,7 @@ function bindSettings() {
     }
     for (const field of Object.keys(fuentes)) {
       if (known.has(field) || DNA_INFO_SKIP.has(field) || !dnaHas(d[field])) continue;
-      const title = pzIc('tag', 15) + ' ' + field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const title = pzIc('tag', 15) + ' ' + esc(field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
       blocks.push([field, title, d[field]]);
     }
     if (!blocks.length) { zone.innerHTML = ''; return; }
@@ -1256,12 +1315,11 @@ function bindSettings() {
         <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">${pzIc('book', 16)} Datos de otras fuentes</div>
         ${blocks.map(([field, title, v]) => `
           <div class="field" style="margin-bottom:10px">
-            <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${esc(title)} ${dnaSrcChip(fuentes, field)}</label>
+            <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${title} ${dnaSrcChip(fuentes, field)}</label>
             <div style="margin-top:6px">${Array.isArray(v)
               ? v.slice(0, 6).map(dnaInfoLine).join('') + (v.length > 6 ? `<div class="hint">…y ${v.length - 6} más</div>` : '')
               : `<div style="font-size:12.5px">${esc(String(v))}</div>`}</div>
           </div>`).join('')}
-        <div class="hint">Uso estos datos para crear posteos que venden de verdad.</div>
       </div>`;
   };
   // Guardado del ADN (v282): lo invoca el botón Guardar único de la tarjeta
