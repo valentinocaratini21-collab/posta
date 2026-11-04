@@ -617,7 +617,7 @@ function anaLetterMinimalHTML(a, opts) {
     // Carta degenerada (sin acciones): forma plana de siempre, sin audio y
     // sin secciones vacías; nunca se muestra una sección vacía.
     let h = '';
-    if (L.greeting && !(opts && opts.saludoTop)) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
+    if (L.greeting && !(opts && opts.saludoTop)) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(String(L.greeting).replace(/\.+:/g, ':'))}</p>`;
     items.forEach((it) => { h += render(it); });
     return h;
   }
@@ -628,7 +628,18 @@ function anaLetterMinimalHTML(a, opts) {
   // honesta va a la 2) y no se rinde — nunca una felicitación fingida.
   // El saludo — si no lo suprime saludoTop — abre la sección 1 si existe
   // y si no, la 2: un saludo no es una felicitación.
-  let cel = '', trab = '';
+  // (CARTA-DEDUP) Partición en entradas primero, para poder ordenar y
+  // dedupar antes de renderizar: 1) en la sección 1 el festejo abre
+  // (foto + festejo estables primero, resto después) — orden aprobado
+  // 3/11: felicitar primero; 2) un paso (action) que re-enuncia lo que
+  // la honesta ya dice (contenido textual o solape ≥0.8) no se lista —
+  // cada mejora se enuncia UNA sola vez; si no queda ningún paso, el
+  // encabezado «Esta semana hago esto:» tampoco se rinde.
+  const normD = (s) => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
+  const stopD = new Set('de la el en y a los las un una que es por con su sus tu tus se al del lo hoy ya esta este eso the a an and of to in your you this that is it'.split(' '));
+  const wD = (s) => normD(s).replace(/[^a-z0-9áéíóúñü ]/g, ' ').split(' ').filter((w) => w && !stopD.has(w));
+  const ovD = (x, y) => { const A = new Set(wD(x)), B = new Set(wD(y)); if (!A.size || !B.size) return 0; let n = 0; A.forEach((w) => { if (B.has(w)) n++; }); return n / new Set([...A, ...B]).size; };
+  const celE = [], trabE = [];
   items.forEach((it, i) => {
     if (!it) return;
     const k = it.kind || '';
@@ -636,13 +647,22 @@ function anaLetterMinimalHTML(a, opts) {
     if (it.t === 'photo' || k === 'festejo') b = 'cel';
     else if (k === 'honesta' || k === 'acciones-head' || it.t === 'action' || k === 'pedido') b = 'trab';
     else b = i < first ? 'cel' : 'trab';
-    if (b === 'cel') cel += render(it);
-    else trab += render(it);
+    (b === 'cel' ? celE : trabE).push(it);
   });
+  const celOrd = celE.filter((it) => it.t === 'photo' || (it.kind || '') === 'festejo').concat(celE.filter((it) => !(it.t === 'photo' || (it.kind || '') === 'festejo')));
+  let cel = celOrd.map(render).join('');
+  const honestaTxt = trabE.filter((it) => (it.kind || '') === 'honesta').map((it) => it.text || '');
+  let trabF = trabE.filter((it) => {
+    if (it.t !== 'action') return true;
+    const t = it.text || '';
+    return !honestaTxt.some((hx) => { const nt = normD(t), nh = normD(hx); return (nh && (nh.indexOf(nt) !== -1 || nt.indexOf(nh) !== -1)) || ovD(t, hx) >= 0.8; });
+  });
+  if (!trabF.some((it) => it.t === 'action')) trabF = trabF.filter((it) => (it.kind || '') !== 'acciones-head');
+  let trab = trabF.map(render).join('');
   const sec = (es, enS, inner) => `<section class="ana-ltr-sec"><p class="ana-sec-t">${anaT(es, enS)}</p>${inner}</section>`;
   let out = '';
   if (L.greeting && !(opts && opts.saludoTop)) {
-    const g = `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
+    const g = `<p class="ana-ltr-p ana-ltr-greet">${esc(String(L.greeting).replace(/\.+:/g, ':'))}</p>`;
     if (cel) cel = g + cel; else trab = g + trab;
   }
   if (cel) out += sec('Felicitaciones', 'Congratulations', cel);
@@ -718,7 +738,7 @@ function anaLetterBodyHTML(a, opts) {
   const items = Array.isArray(L.body) ? L.body : [];
   const phaseNums = ['①', '②', '③'];
   let h = '';
-  if (L.greeting && !(opts && opts.saludoTop)) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
+  if (L.greeting && !(opts && opts.saludoTop)) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(String(L.greeting).replace(/\.+:/g, ':'))}</p>`;
   let lastPhase = -1;
   items.forEach((it) => {
     if (!it) return;
@@ -926,11 +946,16 @@ function anaAprendeHTML(d) {
 function anaSaludoTop(a, carta) {
   if (!carta) return '';
   try { if (typeof anaPastMode !== 'undefined' && anaPastMode) return ''; } catch (e) { return ''; }
-  const g = String((a && a.letter && a.letter.greeting) || '').trim();
+  // (CARTA-DEDUP) El punto de más («Hola, Posty.:») viene del NOMBRE
+  // guardado («Posty.» con punto final), no de la plantilla del motor
+  // (que emite 'Hola, ' + nombre + ':'). Se normaliza el saludo final
+  // (puntos antes de ':') en todos los puntos de render: el saludo con
+  // nombre del negocio queda «Hola, Posty:» sin tocar opts.saludoTop.
+  const g = String((a && a.letter && a.letter.greeting) || '').trim().replace(/\.+:/g, ':');
   const m = g.match(/^(Hola|Hi), (.+):$/);
   if (m && m[2]) return g;
   const ctx = anaCtx();
-  if (ctx.biz) return anaT('Hola, ' + ctx.biz + ':', 'Hi, ' + ctx.biz + ':');
+  if (ctx.biz) return anaT('Hola, ' + ctx.biz + ':', 'Hi, ' + ctx.biz + ':').replace(/\.+:/g, ':');
   return '';
 }
 
@@ -995,14 +1020,37 @@ function anaCartaHTML(d) {
   // del motor en el idioma de la cuenta (paridad ES/EN sin croma nueva) y
   // «Así nace tu semana» ya no lo repite. Sin week_summary no se inventa
   // apertura: la ventana abre como siempre.
-  if (wsOpen) h += wsOpen.split('\n').filter(Boolean).map((l) => `<p class="ana-intro">${esc(l)}</p>`).join('');
+  // (CARTA-DEDUP) En carta MÍNIMA (v2) la carta ES la superficie: el
+  // week_summary NO encabeza (antes de la felicitación violaba el orden
+  // aprobado 3/11 y duplicaba problema + mejora con el cuerpo). Las
+  // cartas v1 conservan su forma vieja y la vista sin carta, también.
+  // Lo que el intro aporte de NUEVO (no dicho en el cuerpo) se rinde
+  // DESPUÉS del cuerpo, nunca antes — ver abajo, tras anaLetterBodyHTML.
+  const minimalCarta = carta && !!(a.letter && (a.letter.v >= 2 || a.letter.minimal));
+  if (wsOpen && !minimalCarta) h += wsOpen.split('\n').filter(Boolean).map((l) => `<p class="ana-intro">${esc(l)}</p>`).join('');
   if (carta) {
     // FORMA CARTA (domingo a la noche): narración primero, datos como apoyo.
     // CARTA MÍNIMA (v2): la carta ES la superficie — kit/mercado/historial
     // no se agregan debajo (el análisis completo sigue en el payload y en
     // las vistas sin carta; las cartas v1 conservan su forma con apoyo).
-    const minimal = !!(a.letter && (a.letter.v >= 2 || a.letter.minimal));
+    const minimal = minimalCarta;
     h += anaLetterBodyHTML(a, { saludoTop: !!saludoTop });
+    if (minimal && wsOpen) {
+      // Intro filtrada contra el cuerpo: cada frase del week_summary que
+      // ya dice el cuerpo (contenido textual o solape ≥0.5 con algún ítem)
+      // se cae — problema y mejora quedan UNA sola vez, en «qué
+      // mejoramos». Solo sobrevive lo genuinamente nuevo, y va después
+      // del cuerpo (nunca antes de la felicitación). Sin sobrevivientes,
+      // no se rinde nada.
+      const normI = (s) => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
+      const stopI = new Set('de la el en y a los las un una que es por con su sus tu tus se al del lo hoy ya esta este eso the a an and of to in your you this that is it'.split(' '));
+      const wI = (s) => normI(s).replace(/[^a-z0-9áéíóúñü ]/g, ' ').split(' ').filter((w) => w && !stopI.has(w));
+      const ovI = (x, y) => { const A = new Set(wI(x)), B = new Set(wI(y)); if (!A.size || !B.size) return 0; let n = 0; A.forEach((w) => { if (B.has(w)) n++; }); return n / new Set([...A, ...B]).size; };
+      const bodyTxt = (a.letter.body || []).map((it) => it.text || '');
+      const sents = wsOpen.split('\n').filter(Boolean).map((l) => (l.match(/[^.!?]+[.!?]+/g) || [l])).flat();
+      const keep = sents.filter((s) => { const ns = normI(s); if (ns.length < 4) return false; return !bodyTxt.some((b) => { const nb = normI(b); return (nb && (nb.indexOf(ns) !== -1 || ns.indexOf(nb) !== -1)) || ovI(s, b) >= 0.5; }); });
+      if (keep.length) h += keep.map((s) => `<p class="ana-intro">${esc(s.trim())}</p>`).join('');
+    }
     if (minimal) {
       h += `<div style="text-align:center;margin:14px 0 4px"><button class="btn btn-ghost" id="anaFullBtn" onclick="anaToggleFull(this)">${anaT('Ver mi estrategia completa', 'See my full strategy') + ' ' + pzIc('arrowRight', 13)}</button></div><div id="anaFull" style="display:none">${anaFullHTML(d, a, birth)}</div>`;
     }
