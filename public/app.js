@@ -10678,6 +10678,7 @@ async function chatMakePost(asVideo) {
    que el texto escrito. Si Whisper falla: mensaje honesto + re-grabar. */
 let VOICE_REC = null, VOICE_CHUNKS = [], VOICE_TIMER = null, VOICE_START = 0, VOICE_MIME = '';
 let VOICE_STATE = 'idle', VOICE_URL = '', VOICE_BLOB = null, VOICE_DUR = 0;
+let VOICE_FAIL_CODE = '';
 let VOICE_CANCEL = false, VOICE_START_X = 0, VOICE_START_Y = 0, VOICE_EARLY_UP = false, VOICE_ABORTED = false;
 let VOICE_CTX = null, VOICE_AN = null, VOICE_RAF = 0;
 function vozEn() { try { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); } catch (e) { return false; } }
@@ -10718,7 +10719,15 @@ function voiceRenderBar() {
   } else if (VOICE_STATE === 'sending') {
     m.innerHTML = '<div class="voz-bar"><span style="font-size:12.5px">' + (en ? 'Listening…' : 'Escuchando…') + '</span></div>';
   } else if (VOICE_STATE === 'failed') {
-    m.innerHTML = '<div class="voz-bar"><span style="font-size:12.5px;flex:1">' + (en ? 'I could not hear your audio 🙏' : 'no pude escuchar tu audio 🙏') + '</span><button type="button" class="btn btn-primary" id="vozRetrySend">' + (en ? 'Try sending again' : 'Reintentar envío') + '</button><button type="button" class="btn btn-soft" id="vozRetry">' + (en ? 'Record again' : 'Grabar de nuevo') + '</button></div>';
+    var failSub = '';
+    try {
+      var fc = (typeof VOICE_FAIL_CODE !== 'undefined') ? VOICE_FAIL_CODE : '';
+      if (fc === 'bad_audio') failSub = en ? 'the audio did not arrive in a format I can read.' : 'el audio no llegó en un formato que pueda leer.';
+      else if (fc === 'no_heard') failSub = en ? 'nothing could be understood from the note.' : 'no se entendió nada de la nota.';
+      else if (fc === 'no_key') failSub = en ? 'the audio key is not configured.' : 'falta configurar la clave de audio.';
+      else if (fc === 'network') failSub = en ? 'the connection dropped while sending.' : 'se cortó la conexión al enviar.';
+    } catch (e2) {}
+    m.innerHTML = '<div class="voz-bar"><span style="font-size:12.5px;flex:1">' + (en ? 'I could not hear your audio 🙏' : 'no pude escuchar tu audio 🙏') + (failSub ? '<span style="display:block;font-size:11.5px;color:var(--mut)">' + failSub + '</span>' : '') + '</span><button type="button" class="btn btn-primary" id="vozRetrySend">' + (en ? 'Try sending again' : 'Reintentar envío') + '</button><button type="button" class="btn btn-soft" id="vozRetry">' + (en ? 'Record again' : 'Grabar de nuevo') + '</button></div>';
     const rs = document.getElementById('vozRetrySend'); if (rs) rs.onclick = () => { if (VOICE_BLOB) { VOICE_STATE = 'preview'; voiceSend(); } };
     const r = document.getElementById('vozRetry'); if (r) r.onclick = () => { voiceDiscard(); voiceToggle(); };
   } else {
@@ -10732,6 +10741,23 @@ function voiceCleanup() {
   VOICE_CTX = null; VOICE_AN = null;
   clearInterval(VOICE_TIMER); VOICE_TIMER = null;
 }
+// (LOTE VOZ-FALLA-2 · 3/11) MIME del grabador: esencia limpia, sin
+// parámetros (;codecs=...). La data URL real de iOS trae el parámetro y
+// el regex viejo del servidor la rechazaba antes de Whisper (el video
+// del 3/11: error en <0,4 s, sin llamada a Whisper). Orden: mp4 primero
+// (contenedor nativo de Safari, se reproduce en todos lados, Whisper lo
+// acepta con el nombre correcto de v610); webm después; '' = default.
+function pzPickVoiceMime() {
+  try {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+      if (MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4';
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm';
+    }
+  } catch (e) {}
+  return '';
+}
+function pzVoiceMimeEssence(m) { try { return String(m || '').split(';')[0].trim(); } catch (e) { return ''; } }
 async function voiceToggle() {
   if (VOICE_STATE === 'rec' && VOICE_REC) { voiceStop(); return; }
   if (VOICE_STATE !== 'idle') return; // preview/sending/failed: se resuelve con sus botones
@@ -10742,12 +10768,10 @@ async function voiceToggle() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     if (VOICE_ABORTED) { stream.getTracks().forEach(t => { try { t.stop(); } catch (e2) {} }); return; }
-    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
-      : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+    const mime = pzPickVoiceMime();
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     VOICE_CHUNKS = [];
-    VOICE_MIME = rec.mimeType || '';
+    VOICE_MIME = pzVoiceMimeEssence(rec.mimeType);
     rec.ondataavailable = e => { if (e.data && e.data.size) VOICE_CHUNKS.push(e.data); };
     rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); voiceCleanup(); voicePreview(); };
     VOICE_REC = rec;
@@ -10804,7 +10828,7 @@ function voicePreview() {
 }
 function voiceDiscard() {
   try { if (VOICE_URL) URL.revokeObjectURL(VOICE_URL); } catch (e) {}
-  VOICE_URL = ''; VOICE_BLOB = null; VOICE_DUR = 0; VOICE_STATE = 'idle'; VOICE_CHUNKS = []; VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false;
+  VOICE_URL = ''; VOICE_BLOB = null; VOICE_DUR = 0; VOICE_STATE = 'idle'; VOICE_CHUNKS = []; VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_FAIL_CODE = '';
   voiceRenderBar();
   try { chatUpdateSendBtn(); } catch (e) {}
 }
@@ -10821,9 +10845,9 @@ async function voiceSend() {
     fr.readAsDataURL(blob);
   });
   if (!dataUrl) { VOICE_STATE = 'failed'; voiceRenderBar(); return; }
-  let tr = null;
-  try { tr = await api.post('/api/ideas/transcribe', { audio: dataUrl }, { timeout: 90000 }); } catch (e) { tr = null; }
-  if (!tr || !tr.ok || !tr.transcript) { VOICE_STATE = 'failed'; voiceRenderBar(); return; }
+  let tr = null; VOICE_FAIL_CODE = '';
+  try { tr = await api.post('/api/ideas/transcribe', { audio: dataUrl }, { timeout: 90000 }); } catch (e) { tr = null; VOICE_FAIL_CODE = (e && e.data && e.data.error) || (e && e.networkError ? 'network' : 'error'); }
+  if (!tr || !tr.ok || !tr.transcript) { if (!VOICE_FAIL_CODE) VOICE_FAIL_CODE = (tr && tr.error) || 'no_heard'; VOICE_STATE = 'failed'; voiceRenderBar(); return; }
   const transcript = String(tr.transcript).slice(0, 2000);
   // La transcripción VERBATIM es el mensaje del cliente: texto exacto + audio.
   const box = $('#chatBox');
@@ -12748,11 +12772,10 @@ async function pnVoiceToggle(id, done) {
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    const mime = pzPickVoiceMime();
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     PN_CHUNKS = [];
-    PN_MIME = rec.mimeType || '';
+    PN_MIME = pzVoiceMimeEssence(rec.mimeType);
     rec.ondataavailable = e => { if (e.data && e.data.size) PN_CHUNKS.push(e.data); };
     rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); pnVoiceSend(id, done); };
     PN_REC = rec;

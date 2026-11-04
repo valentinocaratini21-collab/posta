@@ -1762,7 +1762,12 @@ function whisperAudioFilename(mime, buf) {
   return 'audio.mp4';
 }
 async function transcribeAudio(dataUrl, apiKey) {
-  const m = String(dataUrl).match(/^data:(audio\/[\w+.-]+);base64,(.+)$/);
+  // (LOTE VOZ-FALLA-2) La data URL real trae parámetros (;codecs=opus en
+  // Safari 18.4+, ;codecs=mp4a.40.2 en Safari clásico). El regex viejo exigía
+  // ;base64, justo tras el MIME y rechazaba el audio con 'audio inválido'
+  // ANTES de whisperAudioFilename (video 3/11: error en <0,4 s, sin Whisper).
+  // m[1] sigue siendo la esencia (para el nombre) y m[2] el payload.
+  const m = String(dataUrl).match(/^data:(audio\/[\w+.-]+)(?:;[^;,]+)*;base64,(.+)$/);
   if (!m) throw new Error('audio inválido');
   const buf = Buffer.from(m[2], 'base64');
   if (!buf.length || buf.length > 12 * 1024 * 1024) throw new Error('audio inválido');
@@ -5710,8 +5715,9 @@ app.post('/api/ideas/transcribe', async (req, res) => {
     const akey = (getSettings(req.session.userId).openai_key || process.env.OPENAI_API_KEY || '');
     if (!akey) return res.json({ ok: false, error: 'no_key' });
     let heard = '';
-    try { heard = await transcribeAudio(audio, akey); } catch (e) { console.error('[transcribe] whisper:', e.message); }
-    if (!heard || !String(heard).trim()) return res.json({ ok: false, error: 'no_heard' });
+    let txErr = '';
+    try { heard = await transcribeAudio(audio, akey); } catch (e) { txErr = (e && e.message) || ''; console.error('[transcribe] whisper:', txErr); }
+    if (!heard || !String(heard).trim()) return res.json({ ok: false, error: (txErr === 'audio inválido' ? 'bad_audio' : 'no_heard') });
     return res.json({ ok: true, transcript: String(heard).slice(0, 2000) });
   } catch (e) {
     console.error('[transcribe]:', e.message);
@@ -27948,7 +27954,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v612';
+const BUILD_ID = '20261101-v613';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
