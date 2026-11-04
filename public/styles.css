@@ -5098,10 +5098,11 @@ body.pz-postchat-open{overflow:hidden}
 }
 
 /* ============ LOTE WEB-MEJORAS (4/11) ============ */
-/* Ítem 4a: la foto de la tile ya publicada se ve EN GRIS en la grilla de
-   Inicio. Solo la foto de la tile: el detalle/lightbox no se toca (carga
-   desde data-lightbox, fuera de este selector). */
-#inicioView .hf-tile.pub img{filter:grayscale(1)}
+/* (LOTE PUBLICADOS-3 · corrección Valentino 4/11) La regla grayscale(1)
+   de WEB-MEJORAS se quitó: NO era gris literal, eran oscuritas. Vuelve
+   a mandar la regla vigente de v623 (línea 2086):
+   .hf-tile.pub img { filter: brightness(.58) saturate(.85) }. */
+
 
 /* ============ LOTE CHAT-PILDORA (4/11) ============ */
 /* Mock aprobado por Valentino 4/11 («me gusta asi»): la barra de Inicio

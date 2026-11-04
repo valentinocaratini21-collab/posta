@@ -159,10 +159,32 @@ function parseEmbedPosts(html) {
       // El caption se captura del segmento CRUDO (con \" intactos) y lo
       // decodifica decodeCaption en sus dos niveles.
       const fRaw = (rx) => { const mm = rx.exec(segRaw); return mm ? mm[1] : null; };
+      // (LOTE PUBLICADOS-3 · 4/11) La ventana de 9000 caracteres se
+      // desbordaba al posteo siguiente: la lámina de un carrusel heredaba
+      // fecha, caption y shortcode del posteo siguiente, pasaba
+      // isTopLevelReadPost y el dedup por fecha|caption borraba el
+      // posteo real siguiente (caso 4/11: una lámina del carrusel del
+      // café heredó los datos del 1/11 y el 1/11 real desapareció de la
+      // grilla, con la lámina 4ª y el 29/10 cortado por el tope de 6).
+      // Los campos de IDENTIDAD (fecha, shortcode, caption) se extraen
+      // solo del nodo propio: hasta el próximo __typename Graph* o
+      // 9000 caracteres. El resto (thumb, likes, comments, pinned)
+      // sigue con la ventana completa de siempre, sin cambios: los
+      // campos propios de un carrusel padre preceden a su bloque de
+      // hijos, así que no se pierde nada de un posteo real.
+      const segEnd = (() => {
+        const tail = html.slice(m.index + m[0].length);
+        const bm = /__typename\\":\\"Graph(?:Image|Video|Sidecar)/.exec(tail);
+        return bm ? m.index + m[0].length + bm.index : m.index + 9000;
+      })();
+      const segRawId = html.slice(m.index, Math.min(segEnd, m.index + 9000));
+      const segId = segRawId.split(Q).join('"');
+      const fId = (rx) => { const mm = rx.exec(segId); return mm ? mm[1] : null; };
+      const fRawId = (rx) => { const mm = rx.exec(segRawId); return mm ? mm[1] : null; };
       const qe = '\\\\"'; // en regex: casa con \" del archivo
-      const capRaw = fRaw(new RegExp(qe + 'text' + qe + ':' + qe + '((?:[^"\\\\]|\\\\.){0,500})'));
+      const capRaw = fRawId(new RegExp(qe + 'text' + qe + ':' + qe + '((?:[^"\\\\]|\\\\.){0,500})'));
       const thumbRaw = f(/"display_url":"((?:[^"\\]|\\.){0,600})/);
-      const takenAt = f(/"taken_at_timestamp":(\d+)/) ? parseInt(f(/"taken_at_timestamp":(\d+)/), 10) : null;
+      const takenAt = fId(/"taken_at_timestamp":(\d+)/) ? parseInt(fId(/"taken_at_timestamp":(\d+)/), 10) : null;
       const caption = cleanCaptionResidue(decodeCaption(capRaw || ''));
       // (2026-10-24) Nodo duplicado del MISMO posteo (misma fecha + mismo
       // caption, otro shortcode de CDN): el embed de la cuenta 12 traía la
@@ -175,7 +197,7 @@ function parseEmbedPosts(html) {
       }
       posts.push({
         type: m[1],
-        shortcode: f(/"shortcode":"([A-Za-z0-9_-]+)"/),
+        shortcode: fId(/"shortcode":"([A-Za-z0-9_-]+)"/),
         taken_at: takenAt,
         caption,
         comments: f(/"edge_media_to_comment":\{"count":(\d+)/) ? parseInt(f(/"edge_media_to_comment":\{"count":(\d+)/), 10) : null,
