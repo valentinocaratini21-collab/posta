@@ -19994,7 +19994,6 @@ async function inicioView() {
   ${(!HF_VISITOR && !pzDiaHeroHTML2 ? pzProximoDestacadoHTML(allPosts, enHome) : '')}
   ${filtroHTML}
   ${gridHTML}
-  ${tiles.length ? `<p class="hf-nota">${enHome ? pzIc('heart', 14) + ' Tap the heart to approve each post. They all go out on their date, unless you ask for a change.' : pzIc('heart', 14) + ' Tocá el corazón para aprobar el posteo. Todos salen en su fecha, salvo que pidas un cambio.'}</p>` : ''}
   ${visitorPillHTML}
   <div class="mz-bottomstack" id="mzBottomStack">
   <div class="mz-chatbar" id="mzChatBar">
