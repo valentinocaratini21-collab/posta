@@ -99,7 +99,7 @@ async function anaLoad(useRefresh) {
   }
   anaLastPayload = d;
   rootEl.innerHTML = anaCartaHTML(d);
-  anaNextStepMount();
+  /* SACAR-PROXIMO-PASO 4/11: esta tarjeta ya no se monta en Estrategia. */
   anaBoostRecLoad();
   anaWeekNumsLoad();
   anaMagiaEntrada();
@@ -509,7 +509,7 @@ function anaBackCurrent() {
   anaPastMode = false;
   if (anaLastPayload) {
     rootEl.innerHTML = anaCartaHTML(anaLastPayload);
-    anaNextStepMount();
+    /* SACAR-PROXIMO-PASO 4/11: esta tarjeta ya no se monta en Estrategia. */
     anaBoostRecLoad();
     anaWeekNumsLoad();
     try { window.scrollTo(0, 0); } catch (e) {}
