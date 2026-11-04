@@ -5130,6 +5130,12 @@ body.pz-postchat-open{overflow:hidden}
   border:none;cursor:pointer;padding:0;color:#0A1E33;
 }
 #inicioView .mz-chatbar .mz-mic svg{width:20px;height:20px;stroke:#0A1E33;}
+
+/* ============ LOTE PILDORA-CHAT-DERECHA (4/11, aprobado por Valentino: mock posty-pildora-chat-mock-v1.png) ============ */
+/* La zona de texto NO estiraba en todos los anchos (el flex:1 genérico vive solo en ≤820px): en escritorio el mic quedaba a mitad de la píldora con espacio muerto a la derecha (captura Valentino 4/11). Ahora .mz-ph llena la píldora en cualquier ancho, el texto largo se corta con … sin empujar al mic, y el mic queda clavado a la derecha de todo. Solo #inicioView .mz-chatbar: la barra genérica fija ya tenía flex:1 y no se toca. */
+#inicioView .mz-chatbar .mz-ph{flex:1;min-width:0;}
+#inicioView .mz-chatbar .mz-ph-tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#inicioView .mz-chatbar .mz-mic{margin-left:auto;}
 /* Escritorio: píldora de 640px centrada (medido en el mock aprobado:
    638px en 1280), no el ancho de la columna. En móvil la barra ya ocupa
    el stack (12px por lado, como el mock: 364px en 390) y no se acota. */
