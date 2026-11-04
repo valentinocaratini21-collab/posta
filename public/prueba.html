@@ -4625,12 +4625,102 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     });
     box.querySelector('#flOk').addEventListener('click', function () {
       window.OC_ESPEJO = { aprobado: 1, productos: FL_E.productos, vetos: FL_E.vetos };
-      var b2 = ocq();
-      b2.innerHTML = stemHTML() + '<p class="oc-chat">' + esc(T.sproutChat) + '</p><h2 class="oc-q">' + esc(T.sproutTitle) + '</h2>';
-      show('v-ocq');
-      setTimeout(function () { runGeneration(); }, reduced ? 300 : 900);
+      fmShow();
     });
   }
+  // ---- LOTE FOTO-MEJORA-PRUEBA (3/11) · Foto opcional tras el espejo ----
+  // Paso OPCIONAL y SALTABLE con un toque, DESPUÉS del espejo aprobado y
+  // ANTES de generar: el visitante puede subir una foto de su negocio y
+  // verla lado a lado (original vs. versión Posty, rotulada DEMO). La
+  // versión Posty es composición local: la foto enmarcada como posteo
+  // (nombre del negocio + foto entera, sin recorte), sin píxeles editados
+  // por IA y sin titular inventado. NADA se postea ni entra a la semana
+  // sin un toque: "Usar esta foto" alimenta el fundamento como prueba
+  // (OPT_PHOTO + producto 'foto' en OC_ESPEJO, mecanismo v582) y recién
+  // ahí genera. Saltar reproduce el camino viejo exacto (brote + demora).
+  // La escena de subir-foto-todo (v573) NO se reutiliza: exige sesión y
+  // la prueba es anónima; la visión anónima /api/trial/foto-vision (v582)
+  // sí se reutiliza, solo para detectar el producto, nunca para inventar.
+  var FM = {
+    title: 'Subí una foto de tu negocio',
+    sub: 'Opcional — te muestro cómo se vería como posteo de Posty. Si la saltás, tu semana se arma igual.',
+    skip: 'Saltar, armar mi semana igual',
+    tooBig: 'Esa foto pesa más de 5 MB, probá con otra',
+    readErr: 'No pudimos leer esa foto. Probá con otra o saltá este paso.',
+    reading: 'Leyendo tu foto…',
+    orig: 'Tu foto',
+    posty: 'Versión Posty',
+    demo: 'DEMO — así se vería en tu feed',
+    sees: 'Posty ve: ',
+    pend: 'No pudimos afirmar qué muestra esa foto, pero la foto es tuya y entra como prueba.',
+    use: 'Usar esta foto',
+    nouse: 'Seguir sin esta foto',
+    bizFallback: 'Tu negocio'
+  };
+  var FM_FILE = null, FM_URL = null, FM_PROD = null, FM_PEND = false;
+  function fmGoGenerate() {
+    var b2 = ocq();
+    b2.innerHTML = stemHTML() + '<p class="oc-chat">' + esc(T.sproutChat) + '</p><h2 class="oc-q">' + esc(T.sproutTitle) + '</h2>';
+    show('v-ocq');
+    setTimeout(function () { runGeneration(); }, reduced ? 300 : 900);
+  }
+  function fmShow() {
+    FM_FILE = null; FM_PROD = null; FM_PEND = false;
+    if (FM_URL) { try { URL.revokeObjectURL(FM_URL); } catch (e) {} FM_URL = null; }
+    var box = ocq();
+    box.innerHTML = stemHTML() + '<h2 class="oc-q">' + esc(FM.title) + '</h2>'
+      + '<p class="oc-chat">' + esc(FM.sub) + '</p>'
+      + '<div style="margin-top:14px"><input id="fmFoto" type="file" accept="image/*" style="display:block;font-size:15px">'
+      + '<p id="fmMsg" class="oc-chat" style="display:none"></p></div>'
+      + '<div id="fmDemo" style="display:none;margin-top:14px"></div>'
+      + '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">'
+      + '<button type="button" id="fmUse" class="oc-btn" style="display:none;width:auto">' + esc(FM.use) + '</button>'
+      + '<button type="button" id="fmNo" class="oc-btn" style="display:none;width:auto">' + esc(FM.nouse) + '</button></div>'
+      + '<button type="button" id="fmSkip" style="border:0;background:none;color:#2793C8;font-size:15px;font-weight:700;cursor:pointer;margin-top:14px">' + esc(FM.skip) + '</button>';
+    show('v-ocq');
+    try { trk('prueba_step', { step: 'fm_foto' }); } catch (e) {}
+    box.querySelector('#fmSkip').addEventListener('click', function () { fmGoGenerate(); });
+    box.querySelector('#fmFoto').addEventListener('change', function () {
+      var f = (box.querySelector('#fmFoto').files || [])[0];
+      var msg = box.querySelector('#fmMsg');
+      if (!f) return;
+      if (f.size > 5 * 1024 * 1024) { msg.style.display = 'block'; msg.textContent = FM.tooBig; return; }
+      FM_FILE = f;
+      if (FM_URL) { try { URL.revokeObjectURL(FM_URL); } catch (e) {} }
+      try { FM_URL = URL.createObjectURL(f); } catch (e) { msg.style.display = 'block'; msg.textContent = FM.readErr; return; }
+      msg.style.display = 'block'; msg.textContent = FM.reading;
+      var fd = new FormData(); fd.append('photo', f);
+      fetch('/api/trial/foto-vision' + TEST_KEY_QS, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d && !d.pendiente && d.producto && d.producto.nombre) { FM_PROD = d.producto.nombre; FM_PEND = false; }
+        else { FM_PROD = null; FM_PEND = true; }
+        fmRenderDemo();
+      }).catch(function () { FM_PROD = null; FM_PEND = true; fmRenderDemo(); });
+    });
+  }
+  function fmRenderDemo() {
+    var box = ocq();
+    var demo = box.querySelector('#fmDemo'); if (!demo) return;
+    var biz = (typeof TRIAL_BIZ !== 'undefined' && TRIAL_BIZ) ? TRIAL_BIZ : FM.bizFallback;
+    demo.style.display = 'block';
+    demo.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      + '<div><p style="font-size:13px;font-weight:700;color:#5A7488;margin:0 0 6px">' + esc(FM.orig) + '</p><img src="' + esc(FM_URL) + '" style="width:100%;border-radius:12px;object-fit:contain;background:#F2F8FC" alt=""></div>'
+      + '<div><p style="font-size:13px;font-weight:700;color:#5A7488;margin:0 0 6px">' + esc(FM.posty) + '</p>'
+      + '<div style="background:#fff;border:2px solid #DCEFFF;border-radius:14px;overflow:hidden"><div style="display:flex;align-items:center;gap:8px;padding:8px 10px"><span style="width:28px;height:28px;border-radius:50%;background:#2793C8;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">P</span><b style="font-size:14px;color:#0A1E33">' + esc(biz) + '</b></div>'
+      + '<img src="' + esc(FM_URL) + '" style="width:100%;display:block;object-fit:contain;background:#F2F8FC" alt="">'
+      + '<p style="margin:0;padding:8px 10px;font-size:12px;font-weight:700;color:#B8860B">✦ ' + esc(FM.demo) + '</p></div></div></div>'
+      + (FM_PROD ? '<p class="oc-chat" style="margin-top:10px">' + esc(FM.sees + FM_PROD) + '</p>' : (FM_PEND ? '<p class="oc-chat" style="margin-top:10px">' + esc(FM.pend) + '</p>' : ''));
+    var msg = box.querySelector('#fmMsg'); if (msg) msg.style.display = 'none';
+    var use = box.querySelector('#fmUse'), no = box.querySelector('#fmNo');
+    use.style.display = 'inline-block'; no.style.display = 'inline-block';
+    use.onclick = function () {
+      OPT_PHOTO = FM_FILE;
+      if (FM_PROD && window.OC_ESPEJO && !OC_ESPEJO.productos.some(function (p) { return p.nombre.toLowerCase() === FM_PROD.toLowerCase(); })) OC_ESPEJO.productos.push({ nombre: FM_PROD, precio: '', procedencia: 'foto' });
+      try { trk('prueba_step', { step: 'fm_usar' }); } catch (e) {}
+      fmGoGenerate();
+    };
+    no.onclick = function () { fmGoGenerate(); };
+  }
+  // ---- FIN LOTE FOTO-MEJORA-PRUEBA ----
   function screenEspejo() {
     FL_E.productos = flBuild();
     FL_E.vetos = [];
