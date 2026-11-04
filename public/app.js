@@ -18200,7 +18200,40 @@ function homeGridCompose(input) {
     }
     rest6.push(t);
   }
-  return head.concat(rest6);
+  // (LOTE POSTEO-DIA · 4/11 · corrección Valentino 17:49, reemplaza el
+  // «último» del brief original) El posteo del día va PRIMERO, arriba
+  // de todo el feed, como primer tile de la grilla, dentro del feed
+  // (no es sección aparte): «último» era el último en salir, o sea el
+  // más reciente. El publicado con fecha de hoy en la zona de la
+  // cuenta sube al frente y lleva la marca pzDiaHoy (magia + latido
+  // en homeTileHTML); el resto conserva su orden relativo. Sin
+  // publicado hoy, o sin helpers/fecha, nada se mueve ni se marca:
+  // nunca se inventa un posteo del día. Los fijados (head, elección
+  // explícita del dueño) quedan después del posteo de hoy; si
+  // Valentino quiere que el fijado siga primero, es mover este
+  // unshift a después de head.
+  const finalTiles = head.concat(rest6);
+  try {
+    const tzDia = (typeof pcTz === 'function') ? pcTz() : undefined;
+    const hoyKey = (typeof pzDiaHoyKey === 'function') ? pzDiaHoyKey(tzDia) : '';
+    if (hoyKey) {
+      for (let k = 0; k < finalTiles.length; k++) {
+        const t = finalTiles[k];
+        if (!t || t.kind !== 'post' || !t.post || String(t.post.status) !== 'published') continue;
+        let d = null;
+        if (typeof pcParseDate === 'function') d = pcParseDate(t.post.published_at || t.post.scheduled_at);
+        if (!d) continue;
+        const key = (typeof schedDayKeyOf === 'function') ? schedDayKeyOf(d, tzDia) : '';
+        if (key && key === hoyKey) {
+          t.pzDiaHoy = true;
+          finalTiles.splice(k, 1);
+          finalTiles.unshift(t);
+          break;
+        }
+      }
+    }
+  } catch (e) { /* sin marca ni movimiento: la grilla queda como siempre */ }
+  return finalTiles;
 }
 const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
 const HOME_PIN_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M15.6 3.5l4.9 4.9-2.1.7-2.3 2.3.02 3.4c0 .4-.42.62-.75.4l-3.35-2.26-2.94 2.94a1.06 1.06 0 0 1-1.5-1.5l2.94-2.94L8.56 8.03a.53.53 0 0 1 .4-.76l3.4.02 2.3-2.3.7-2.44a.5.5 0 0 1 .24-.05z"/></svg>';
@@ -18929,6 +18962,16 @@ function homeTileHTML(t, i) {
   // vivo (t.justPub), jamás un render común.
   const justCls = t.justPub ? ' hf-justpub' : '';
   const justChip = t.justPub ? `<span class="hf-just-chip">${pzIc('sparkle', 12)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Just published' : 'Recién publicado'}</span>` : '';
+  // (LOTE POSTEO-DIA · 4/11 · corrección Valentino 17:49) Solo el
+  // tile del posteo de hoy (t.pzDiaHoy, puesto por homeGridCompose)
+  // lleva magia: borde degradado + destellos ✦ de 4 puntas (dorados
+  // y celestes, nunca puntos ni polvo) y latido de brillo (CSS).
+  // Los destellos son overlays con pointer-events:none: no tapan
+  // botones ni cambian el tamaño de la tile. Sin marca, nada.
+  const diaHoyCls = t.pzDiaHoy ? ' hf-dia-hoy' : '';
+  const diaHoyMagia = t.pzDiaHoy
+    ? '<span class="pz-dia-spark" style="left:7px;top:6px;color:#FEC14D;animation-delay:0s">✦</span><span class="pz-dia-spark" style="right:7px;top:6px;color:#2793C8;animation-delay:.45s">✦</span><span class="pz-dia-spark" style="left:7px;bottom:26px;color:#2793C8;animation-delay:.9s">✦</span><span class="pz-dia-spark" style="right:7px;bottom:26px;color:#FEC14D;animation-delay:1.35s">✦</span>'
+    : '';
   // (Corrección grilla 2026-10-25): la tile de reel sin portada elegida
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
@@ -18979,7 +19022,7 @@ function homeTileHTML(t, i) {
       if (pzDiaEsFutura(p, hoyDia, lunDia)) diaFuturaCls = ' pz-dia-futura';
     }
   } catch (e) {}
-  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${(likeInStrip && !hfAprobado) ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${(likeInStrip || hfAprobado) ? '' : likeBtn}${tikSpan}</span></span>`;
+  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${diaHoyCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${(likeInStrip && !hfAprobado) ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${(likeInStrip || hfAprobado) ? '' : likeBtn}${tikSpan}${diaHoyMagia}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
