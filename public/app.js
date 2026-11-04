@@ -482,6 +482,11 @@ const PZ_PULL_MAX = 96;
 let PZ_PULL_ON = false;
 let PZ_PULL_BUSY = false;
 let PZ_PULL_S = null;
+// (LOTE REFRESHLINDO · indicador) El brote + los destellos se construyen
+// UNA sola vez acá; pzPullShow solo cambia clases y la variable de
+// crecimiento, nunca reescribe el innerHTML en cada touchmove (eso era
+// una fuente de tirones). Sin texto visible, sin cara: el estado se lee
+// por tamaño del brote (g1/g2/g3), destellos y clases on/armed/busy/done.
 function pzPullEl() {
   try {
     let el = document.getElementById('pzPull');
@@ -490,6 +495,12 @@ function pzPullEl() {
     el.id = 'pzPull';
     el.className = 'pz-pull';
     el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<span class="pz-pull-sprout" aria-hidden="true"><svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M24 44 C24 34 24 28 24 18" fill="none" stroke="#2793C8" stroke-width="3" stroke-linecap="round"/><path d="M24 27 C16 27 10 21 10 12 C18 12 24 18 24 27 Z" fill="#2793C8"/><path d="M24 21 C32 21 38 15 38 6 C30 6 24 12 24 21 Z" fill="#FEC14D"/></svg></span>'
+      + '<span class="pz-pull-spark pz-pull-spark-1" aria-hidden="true">✦</span>'
+      + '<span class="pz-pull-spark pz-pull-spark-2" aria-hidden="true">✦</span>'
+      + '<span class="pz-pull-spark pz-pull-spark-3" aria-hidden="true">✦</span>'
+      + '<span class="pz-pull-spark pz-pull-spark-4" aria-hidden="true">✦</span>'
+      + '<span class="pz-pull-spark pz-pull-spark-5" aria-hidden="true">✦</span>';
     document.body.appendChild(el);
     return el;
   } catch (e) { return null; }
@@ -550,18 +561,32 @@ function pzPullShow(dy, armed) {
   try {
     const el = pzPullEl(); if (!el) return;
     const p = pzPullProgress(dy);
+    const q = p / PZ_PULL_MAX;
+    try { el.style.setProperty('--pz-pull-p', q.toFixed(3)); } catch (e) {}
     el.classList.add('on');
     el.classList.toggle('armed', !!armed);
-    el.classList.remove('busy', 'done');
+    el.classList.remove('busy');
+    el.classList.remove('done');
+    el.classList.remove('burst');
+    el.classList.toggle('g1', q < 0.4);
+    el.classList.toggle('g2', q >= 0.4 && q < 0.75);
+    el.classList.toggle('g3', q >= 0.75);
     el.style.transform = 'translate(-50%, ' + (-70 + Math.round(p * 80 / PZ_PULL_MAX)) + 'px)';
-    el.innerHTML = (armed ? '↻ ' : '↓ ') + (armed ? gzT('Soltá para actualizar', 'Release to refresh') : gzT('Deslizá para actualizar', 'Pull to refresh'));
   } catch (e) {}
 }
 function pzPullHide() {
   try {
     const el = document.getElementById('pzPull'); if (!el) return;
-    el.classList.remove('on', 'armed', 'busy', 'done');
+    el.classList.remove('on');
+    el.classList.remove('armed');
+    el.classList.remove('busy');
+    el.classList.remove('done');
+    el.classList.remove('burst');
+    el.classList.remove('g1');
+    el.classList.remove('g2');
+    el.classList.remove('g3');
     el.style.transform = '';
+    try { el.style.setProperty('--pz-pull-p', '0'); } catch (e) {}
   } catch (e) {}
 }
 function pzPullInit() {
@@ -607,16 +632,35 @@ async function pzPullRefresh() {
   PZ_PULL_BUSY = true;
   try {
     const el = pzPullEl();
-    if (el) { el.classList.add('on', 'busy'); el.classList.remove('armed', 'done'); el.style.transform = 'translate(-50%, 10px)'; el.innerHTML = '↻ ' + gzT('Actualizando…', 'Refreshing…'); }
+    if (el) {
+      el.classList.add('on');
+      el.classList.add('busy');
+      el.classList.add('burst');
+      el.classList.remove('armed');
+      el.classList.remove('done');
+      el.classList.remove('g1');
+      el.classList.remove('g2');
+      el.classList.add('g3');
+      try { el.style.setProperty('--pz-pull-p', '1.000'); } catch (e) {}
+      el.style.transform = 'translate(-50%, 10px)';
+    }
+    // La ráfaga dura ~450 ms: a los 500 ms se quita la clase para que
+    // durante la carga se vea el titileo suave (busy), no destellos quietos.
+    setTimeout(() => { try { const e2 = document.getElementById('pzPull'); if (e2) e2.classList.remove('burst'); } catch (e) {} }, 500);
     try { await api.post('/api/home/profile/refresh', {}, { timeout: 12000 }); } catch (e) {}
     try { pzCacheClear(); } catch (e) {}
     try { if (typeof BB !== 'undefined' && BB) BB.estado = null; } catch (e) {}
     try { await render(); } catch (e) {}
     try { window.scrollTo(0, 0); } catch (e) {}
-    if (el) { el.classList.remove('busy'); el.classList.add('done'); el.innerHTML = '✓ ' + gzT('Actualizado', 'Updated'); }
-    setTimeout(() => { try { const e2 = document.getElementById('pzPull'); if (e2) { e2.classList.remove('on', 'done'); e2.style.transform = ''; } } catch (e) {} }, 750);
+    if (el) {
+      el.classList.remove('busy');
+      el.classList.remove('burst');
+      el.classList.add('done');
+      try { el.style.setProperty('--pz-pull-p', '1.000'); } catch (e) {}
+    }
+    setTimeout(() => { try { const e2 = document.getElementById('pzPull'); if (e2) { e2.classList.remove('on'); e2.classList.remove('done'); e2.classList.remove('burst'); e2.classList.remove('g1'); e2.classList.remove('g2'); e2.classList.remove('g3'); e2.style.transform = ''; try { e2.style.setProperty('--pz-pull-p', '0'); } catch (e) {} } } catch (e) {} }, 750);
   } catch (e) {
-    try { const el = document.getElementById('pzPull'); if (el) { el.classList.remove('on', 'busy', 'done'); el.style.transform = ''; } } catch (e2) {}
+    try { const el = document.getElementById('pzPull'); if (el) { el.classList.remove('on'); el.classList.remove('busy'); el.classList.remove('done'); el.classList.remove('burst'); el.classList.remove('g1'); el.classList.remove('g2'); el.classList.remove('g3'); el.style.transform = ''; try { el.style.setProperty('--pz-pull-p', '0'); } catch (e) {} } } catch (e2) {}
   } finally { PZ_PULL_BUSY = false; }
 }
 // ===== /PULL-TO-REFRESH =====

@@ -25,15 +25,15 @@ const sliceFn = (src, from, to) => {
 };
 
 // ---------- Versiones + censo (referencia v523) ----------
-t(srv.includes("const BUILD_ID = '20261101-v533'"), 'BUILD v524 en server.js');
-t(idx.includes('app.js?v=355') && idx.includes('styles.css?v=20261074'), 'index: app 346 + styles 20261067');
-t(idxEn.includes('styles.css?v=20261074') && !idxEn.includes('app.js?v='), 'en/index: styles 20261067, sin app.js');
-t(app.includes("const CHUNK_V = '20261101-v523'"), 'CHUNK_V sigue v523 (ningún chunk tocado)');
+t(srv.includes("const BUILD_ID = '20261101-v601'"), 'BUILD v601 en server.js (pin rotado con causa: re-base v600->v601)');
+t(idx.includes('app.js?v=405') && idx.includes('styles.css?v=20261117'), 'index: app 405 + styles 20261117 (pin rotado con causa)');
+t(idxEn.includes('styles.css?v=20261117') && !idxEn.includes('app.js?v='), 'en/index: styles 20261117, sin app.js (pin rotado con causa)');
+t(app.includes("const CHUNK_V = '20261101-v599'"), 'CHUNK_V sigue v599 (ningún chunk tocado; pin rotado con causa)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
-t(cnt(srv, '/' + 'aprobar') === 16, 'censo server: marcador 16');
-t(cnt(app, 'pzGoBack') === 4, 'censo app: pzGoBack 4');
+t(cnt(srv, '/' + 'aprobar') === 17, 'censo server: marcador 16');
+t(cnt(app, 'pzGoBack') === 6, 'censo app: pzGoBack 4');
 t(cnt(app, 'pz-detalle-setup') === 1, 'censo app: pz-detalle-setup 1');
 t(cnt(app, '/' + 'aprobar') === 1, 'censo app: marcador 1');
 t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
@@ -226,7 +226,7 @@ async function main() {
     fire(s.listeners, 'touchmove', { changedTouches: [{ clientX: 100, clientY: 280 }], target: tgt });
     const ind = s.byId.pzPull;
     t(!!ind && ind.classList.contains('on') && ind.classList.contains('armed'), 'gesto: tirón 80px muestra indicador armado');
-    t(ind.innerHTML.includes('Soltá para actualizar'), 'gesto: texto armado ES');
+    t(ind.innerHTML.includes('pz-pull-sprout') && ind.innerHTML.includes('✦') && ind.classList.contains('g3'), 'gesto: tirón 80px muestra brote con destellos y estado g3 (LOTE REFRESHLINDO: el texto genérico fue reemplazado por el brote)');
     fire(s.listeners, 'touchend', {});
     await new Promise((r) => setTimeout(r, 0));
     t(s.state.posted && s.state.posted[0] === '/api/home/profile/refresh', 'refresh: pide re-lectura fresca de IG');
@@ -234,10 +234,12 @@ async function main() {
     t(s.state.rendered === true, 'refresh: re-renderiza la vista');
     t(s.sb.BB.estado === null, 'refresh: estado de oficina fuera');
     t(s.state.scrolled && s.state.scrolled[0] === 0 && s.state.scrolled[1] === 0, 'refresh: vuelve arriba');
-    t(ind.classList.contains('done') && ind.innerHTML.includes('Actualizado'), 'refresh: indicador “Actualizado”');
+    t(ind.classList.contains('done') && ind.innerHTML.includes('pz-pull-sprout'), 'refresh: indicador asentado con brote entero (LOTE REFRESHLINDO: sin texto “Actualizado”, el brote se asienta)');
     // el timeout de 750 ms esconde el indicador (capturado, no corrido)
-    t(s.state.timeouts.length === 1, 'refresh: programa el fade del indicador');
+    t(s.state.timeouts.length === 2, 'refresh: programa quitar-ráfaga (500 ms) + fade (750 ms) (LOTE REFRESHLINDO)');
     s.state.timeouts[0]();
+    t(!ind.classList.contains('burst') && ind.classList.contains('on'), 'refresh: tras la ráfaga, sigue visible sin burst');
+    s.state.timeouts[1]();
     t(!ind.classList.contains('on'), 'refresh: tras el fade, el indicador se esconde');
     // tirón corto 30px → no arma → soltar → sin refresh
     s = makeSandbox(); s.sb.pzPullInit();
@@ -264,7 +266,7 @@ async function main() {
     s = makeSandbox(); s.setLang('en'); s.sb.pzPullInit();
     fire(s.listeners, 'touchstart', { changedTouches: [{ clientX: 100, clientY: 200 }], target: new El('div', { parent: s.appEl }) });
     fire(s.listeners, 'touchmove', { changedTouches: [{ clientX: 100, clientY: 290 }], target: new El('div') });
-    t(s.byId.pzPull.innerHTML.includes('Release to refresh'), 'gesto: texto armado EN');
+    t(s.byId.pzPull.innerHTML.includes('pz-pull-sprout') && s.byId.pzPull.innerHTML.includes('✦'), 'gesto: brote con destellos EN (LOTE REFRESHLINDO: mismo visual en ambos idiomas)');
   }
   console.log(`\nlotepull: ${ok} ok, ${bad} fallos`);
   process.exit(bad ? 1 : 0);

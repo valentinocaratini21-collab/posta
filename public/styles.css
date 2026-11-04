@@ -4262,12 +4262,44 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 }
 
 /* LOTE PULL-TO-REFRESH (Valentino 1/11): indicador del tirón para refrescar. */
-.pz-pull{position:fixed;top:10px;left:50%;z-index:400;display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.88);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid rgba(39,147,200,.45);box-shadow:0 6px 18px rgba(10,30,51,.18);color:#0A1E33;font-size:13px;font-weight:700;white-space:nowrap;pointer-events:none;opacity:0;transform:translate(-50%,-70px);transition:transform .12s ease-out,opacity .12s ease-out}
+/* LOTE REFRESHLINDO · el indicador es un disco de vidrio con un brote que
+crece con --pz-pull-p (0..1, lo pone pzPullShow) y destellos ✦ de 4 puntas
+(dorados #FEC14D y celestes #2793C8, nunca puntos ni polvo) que aparecen
+en estela al crecer: g1 uno, g2 tres, g3 los cinco con titileo. Al soltar
+(burst) vuelan hacia afuera una vez; cargando (busy) el brote se mece
+suave y los destellos titilan lento; listo (done) el brote queda entero
+con brillo dorado. Todo con transform/opacity/box-shadow: nada mueve el
+layout (fixed, sin top/height/width por estado). El vidrio blanco sirve
+igual en modo oscuro (el chat ya es blanco en ambos modos); los destellos
+llevan sombra suave para leerse sobre claro y oscuro. */
+.pz-pull{position:fixed;top:10px;left:50%;z-index:400;display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.88);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid rgba(39,147,200,.45);box-shadow:0 6px 18px rgba(10,30,51,.18);pointer-events:none;opacity:0;transform:translate(-50%,-70px);transition:transform .12s ease-out,opacity .12s ease-out}
 .pz-pull.on{opacity:1}
-.pz-pull.armed{border-color:rgba(254,193,77,.9);background:linear-gradient(90deg,rgba(39,147,200,.16),rgba(254,193,77,.28))}
+.pz-pull.armed{border-color:rgba(254,193,77,.9);background:linear-gradient(135deg,rgba(39,147,200,.22),rgba(254,193,77,.32))}
 .pz-pull.busy{border-color:rgba(39,147,200,.7)}
-.pz-pull.done{border-color:rgba(46,125,50,.6)}
+.pz-pull.done{border-color:rgba(254,193,77,.95);box-shadow:0 6px 18px rgba(10,30,51,.18),0 0 18px rgba(254,193,77,.55)}
+.pz-pull-sprout{display:block;width:34px;height:34px;transform:scale(calc(.45 + .55 * var(--pz-pull-p, 0)));transform-origin:50% 100%}
+.pz-pull-sprout svg{display:block;width:100%;height:100%}
+.pz-pull-spark{position:absolute;font-size:14px;line-height:1;opacity:0;transform:scale(.6);text-shadow:0 1px 3px rgba(10,30,51,.35);pointer-events:none}
+.pz-pull-spark-1{top:-4px;left:6px;color:#FEC14D;--dx:-14px;--dy:-12px}
+.pz-pull-spark-2{top:2px;right:-2px;color:#2793C8;--dx:14px;--dy:-10px}
+.pz-pull-spark-3{bottom:4px;left:-4px;color:#2793C8;--dx:-13px;--dy:10px}
+.pz-pull-spark-4{bottom:-2px;right:8px;color:#FEC14D;--dx:12px;--dy:12px}
+.pz-pull-spark-5{top:16px;right:-8px;color:#FEC14D;font-size:11px;--dx:16px;--dy:0px}
+.pz-pull.g1 .pz-pull-spark-1{opacity:.85}
+.pz-pull.g2 .pz-pull-spark-1,.pz-pull.g2 .pz-pull-spark-2,.pz-pull.g2 .pz-pull-spark-3{opacity:.9}
+.pz-pull.g3 .pz-pull-spark{opacity:1;animation:pzSparkTwinkle 1.1s ease-in-out infinite}
+.pz-pull.g3 .pz-pull-spark-2,.pz-pull.g3 .pz-pull-spark-4{animation-delay:.35s}
+.pz-pull.g3 .pz-pull-spark-3,.pz-pull.g3 .pz-pull-spark-5{animation-delay:.7s}
+.pz-pull.burst .pz-pull-spark{animation:pzSparkBurst .45s ease-out}
+.pz-pull.busy .pz-pull-spark{opacity:.8}
+.pz-pull.busy:not(.burst) .pz-pull-spark{animation:pzSparkTwinkle 1.8s ease-in-out infinite}
+.pz-pull.busy .pz-pull-sprout{animation:pzSproutSway 1.4s ease-in-out infinite}
+.pz-pull.done .pz-pull-spark{opacity:1;animation:pzSparkTwinkle .6s ease-in-out 2}
+@keyframes pzSparkTwinkle{0%,100%{opacity:.55;transform:scale(.75)}50%{opacity:1;transform:scale(1.15)}}
+@keyframes pzSparkBurst{0%{opacity:1;transform:scale(.8) translate(0,0)}100%{opacity:0;transform:scale(1.5) translate(var(--dx,0),var(--dy,0))}}
+@keyframes pzSproutSway{0%,100%{rotate:-3deg}50%{rotate:3deg}}
 @media (prefers-reduced-motion: reduce){.pz-pull{transition:none}}
+@media (prefers-reduced-motion: reduce){.pz-pull-sprout,.pz-pull-spark{animation:none}}
 /* (LOTE SLIDER FIX) Capas apiladas: la superior funde sin recargar la imagen */
 .mx-slider-fotos{position:relative;display:block;line-height:0}
 .mx-slider-foto-top{position:absolute;left:0;top:0;width:100%;height:150px;object-fit:cover;transition:opacity .15s linear}
