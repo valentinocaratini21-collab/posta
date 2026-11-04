@@ -25191,6 +25191,88 @@ if (typeof window !== 'undefined' && window.addEventListener && !window.__pzHead
   window.__pzHeadCollapseBound = true;
   window.addEventListener('scroll', pzHeadCollapseSync, { passive: true });
 }
+// LOTE DIAGNOSTICO2 (TEMPORAL — quitar en el lote del fix real): reporter del
+// ensanchamiento del feed en el webView real. NO cambia ningún layout ni
+// comportamiento: solo mide y manda por track() (tabla events, recuperable
+// con GET /api/admin/events?name=diag_defecto2&limit=100&era=all vía admin).
+// Gatillo: scroll asentado en Inicio o cambio de colapso; tope 6 reportes
+// por sesión y throttle 5 s. No toca colapso, grilla, dock, chat ni zoom.
+(function () {
+  try {
+    if (window.__pzDiag2) return;
+    window.__pzDiag2 = true;
+    var sent = 0, lastSent = 0, timer = null, colObs = null;
+    function rOf(el) {
+      try { var r = el.getBoundingClientRect(); return { w: Math.round(r.width), l: Math.round(r.left), r: Math.round(r.right) }; }
+      catch (e) { return null; }
+    }
+    function collect(trigger) {
+      try {
+        var iw = window.innerWidth || 0;
+        var doc = document.documentElement, body = document.body;
+        var bb = document.querySelector('.bb-main');
+        var iv = document.getElementById('inicioView');
+        var grid = iv ? iv.querySelector('.hf-grid') : null;
+        var over = [];
+        try {
+          var all = document.querySelectorAll('body *');
+          for (var i = 0; i < all.length; i++) {
+            var el = all[i];
+            if (!el.getBoundingClientRect) continue;
+            var r = el.getBoundingClientRect();
+            if (r.right > iw + 0.5 && r.width > 0) {
+              over.push({ t: (el.tagName || '').toLowerCase(),
+                id: String(el.id || '').slice(0, 30),
+                c: (typeof el.className === 'string' ? el.className : '').slice(0, 40),
+                l: Math.round(r.left), r: Math.round(r.right), w: Math.round(r.width) });
+            }
+          }
+        } catch (e) {}
+        over.sort(function (a, b) { return (b.r - iw) - (a.r - iw); });
+        over = over.slice(0, 5);
+        var p = { trig: trigger, iw: iw, dsw: doc ? doc.scrollWidth : 0,
+          bsw: body ? body.scrollWidth : 0, bb: bb ? rOf(bb) : null,
+          iv: iv ? rOf(iv) : null, grid: grid ? rOf(grid) : null,
+          col: (iv && iv.classList.contains('hf-collapsed')) ? 1 : 0,
+          y: Math.round(window.scrollY || 0), over: over };
+        try { if (JSON.stringify(p).length > 1800) p.over = p.over.slice(0, 3); } catch (e) {}
+        track('diag_defecto2', p);
+      } catch (e) {}
+    }
+    function schedule(trigger) {
+      try {
+        if (sent >= 6) return;
+        if (Date.now() - lastSent < 5000) return;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(function () { lastSent = Date.now(); sent++; collect(trigger); }, 400);
+      } catch (e) {}
+    }
+    function attachColObs() {
+      try {
+        var iv = document.getElementById('inicioView');
+        if (!iv || colObs || !window.MutationObserver) return;
+        colObs = new MutationObserver(function () { schedule('collapse'); });
+        colObs.observe(iv, { attributes: true, attributeFilter: ['class'] });
+      } catch (e) {}
+    }
+    window.addEventListener('scroll', function () {
+      try { if (!document.getElementById('inicioView')) return; schedule('scroll'); }
+      catch (e) {}
+    }, { passive: true });
+    try {
+      attachColObs();
+      if (window.MutationObserver) {
+        var bo = new MutationObserver(function () {
+          attachColObs();
+          if (colObs && bo) { try { bo.disconnect(); } catch (e) {} }
+        });
+        bo.observe(document.documentElement, { childList: true, subtree: true });
+      }
+    } catch (e) {}
+  } catch (e) {}
+})();
+// FIN LOTE DIAGNOSTICO2
+
  // primer screen_view de la carga (hashchange no dispara al entrar)
 /* LOTE SUBIR-FOTO-TODO — pantalla de subir fotos en la app real.
    Regla madre: subir nunca crea un posteo solo. Pantalla 1 = elegir qué
