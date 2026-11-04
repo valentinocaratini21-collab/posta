@@ -4334,7 +4334,7 @@ llevan sombra suave para leerse sobre claro y oscuro. */
 .pz-postchat[hidden]{display:none}
 .pz-postchat-grip{display:flex;justify-content:center;padding:calc(10px + env(safe-area-inset-top)) 0 2px;flex:none}
 .pz-postchat-grip span{display:block;width:44px;height:5px;border-radius:99px;background:rgba(10,30,51,.20)}
-.pz-postchat-head{display:flex;align-items:center;gap:10px;padding:6px 14px 10px;flex:none}
+.pz-postchat-head{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;flex:none}
 .pz-postchat-back{width:36px;height:36px;border-radius:50%;border:none;background:#fff;color:var(--txt);font-size:18px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(10,30,51,.10);flex:none}
 .pz-postchat-tit{flex:1;text-align:center;font-size:16px;font-weight:800;color:var(--txt)}
 .pz-postchat-spacer{width:36px;flex:none}
@@ -4372,6 +4372,13 @@ body.pz-postchat-open{overflow:hidden}
 .pz-postchat-body #chatAnchor{display:none}
 .pz-postchat-body .chat-input-row .in{font-size:17px;padding:16px 20px}
 .pz-pc-note{text-align:center;font-size:12px;color:#47617A;padding:8px 8px 2px;flex:none}
+.pz-postchat.pz-pc-kb .pz-pc-hero-imgwrap{max-height:64px}
+.pz-postchat.pz-pc-kb .pz-pc-hero-img{max-height:64px}
+.pz-postchat.pz-pc-kb .pz-pc-grid{display:none}
+.pz-postchat.pz-pc-kb .pz-pc-sub{display:none}
+.pz-postchat.pz-pc-kb .pz-pc-chips{display:none}
+.pz-postchat.pz-pc-kb .pz-pc-q{margin-top:6px;font-size:15px}
+.pz-postchat.pz-pc-kb .pz-pc-hero{padding-bottom:2px}
 
 /* ============ LOTE CHAT SIMPLE (2026-11-01) ============ */
 /* La hoja de Inicio abraza su contenido (sin vacío blanco enorme):

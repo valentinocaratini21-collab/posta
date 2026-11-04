@@ -1739,13 +1739,35 @@ function setPausedTipo(userId, tipo, paused) {
   return true;
 }
 // Transcribe un data URL de audio con Whisper. Devuelve el texto o lanza.
+// (LOTE CHAT-PERFECTO) Nombre de archivo para Whisper según el formato
+// REAL del audio: Whisper infiere el formato por la extensión, y mandar
+// un mp4 de iOS con nombre .webm lo rechaza siempre (causa raíz del
+// «no pude escuchar tu audio» en notas de iPhone). Mapa por MIME +
+// olfato por bytes mágicos cuando el MIME no dice nada.
+function whisperAudioFilename(mime, buf) {
+  const map = { 'audio/mp4': 'mp4', 'audio/x-m4a': 'm4a', 'audio/m4a': 'm4a', 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/opus': 'opus', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/flac': 'flac' };
+  const m = map[String(mime || '').toLowerCase()];
+  if (m) return 'audio.' + m;
+  try {
+    const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf || []);
+    if (b.length >= 12 && b.toString('ascii', 4, 8) === 'ftyp') return 'audio.mp4';
+    if (b.length >= 4 && b[0] === 0x1A && b[1] === 0x45 && b[2] === 0xDF && b[3] === 0xA3) return 'audio.webm';
+    if (b.length >= 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WAVE') return 'audio.wav';
+    if (b.length >= 3 && b.toString('ascii', 0, 3) === 'ID3') return 'audio.mp3';
+    if (b.length >= 4 && b.toString('ascii', 0, 4) === 'fLaC') return 'audio.flac';
+    if (b.length >= 4 && b.toString('ascii', 0, 4) === 'OggS') return 'audio.ogg';
+  } catch (e) {}
+  const sub = String(mime || '').toLowerCase().replace('audio/', '');
+  if (['mp4', 'm4a', 'webm', 'ogg', 'opus', 'wav', 'mp3', 'flac'].includes(sub)) return 'audio.' + sub;
+  return 'audio.mp4';
+}
 async function transcribeAudio(dataUrl, apiKey) {
   const m = String(dataUrl).match(/^data:(audio\/[\w+.-]+);base64,(.+)$/);
   if (!m) throw new Error('audio inválido');
   const buf = Buffer.from(m[2], 'base64');
   if (!buf.length || buf.length > 12 * 1024 * 1024) throw new Error('audio inválido');
   const form = new FormData();
-  form.append('file', new Blob([buf], { type: m[1] }), 'audio.webm');
+  form.append('file', new Blob([buf], { type: m[1] }), whisperAudioFilename(m[1], buf));
   form.append('model', 'whisper-1');
   form.append('language', 'es');
   const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -9054,7 +9076,7 @@ async function albumPropuesta(uid, assetId, feedback, vision) {
       }
       if (!fotoGate.ok) { console.log(`[album-propuesta] usuario ${uid}: foto ${assetId} NO genera propuesta — gate foto↔texto: ${fotoGate.reason}`); return { gated: true, reason: fotoGate.reason }; }
     }
-    return { headline, caption, hashtags, tag: asset.album_tag || '', issues, hard };
+    return { headline, caption, hashtags, tag: asset.album_tag || '', issues, hard, visionNote: fotoVis.note || '' };
   } catch (e) {
     if (e && e.name === 'AiCapExceeded') return { capped: true, error: e.message };
     console.error('[album-propuesta]', e.message);
@@ -27926,7 +27948,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v609';
+const BUILD_ID = '20261101-v610';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

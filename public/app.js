@@ -9680,6 +9680,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     <div class="chat-input-row">
       <img class="chat-face" src="ai-avatar.png" alt="Posty">
       <input id="chatInput" class="in" placeholder="escribile a posty…" maxlength="2000" autocomplete="off">
+      <button class="btn btn-soft" id="chatPhotoBtn" title="Mandar una foto">${pzIc('camera', 18)}</button>
       <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">${pzIc('mic', 18)}</button>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
     </div>
@@ -9699,6 +9700,23 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     const b = e.target && e.target.closest ? e.target.closest('[data-voz-accion]') : null;
     if (!b) return;
     vozAccion(Number(b.dataset.vozId), b.dataset.vozAccion, b.dataset.vozValor || undefined);
+  });
+})();
+// (LOTE CHAT-PERFECTO) El botón 📷 abre el picker de fotos de su propia
+// tarjeta de chat (no el primero del documento): así anda en el chat
+// principal, en pantalla completa, en el chat del posteo y en la
+// landing con sesión. Delegado una sola vez, no por vista.
+(function chatPhotoDelegar() {
+  if (window.__chatPhotoDelegado) return;
+  window.__chatPhotoDelegado = true;
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('#chatPhotoBtn') : null;
+    if (!b) return;
+    try {
+      const card = (b.closest && b.closest('#chatCard')) || document;
+      const picker = (card.querySelector ? card.querySelector('#chatFile') : null) || document.getElementById('chatFile');
+      if (picker) picker.click();
+    } catch (err) {}
   });
 })();
 
@@ -10676,6 +10694,7 @@ async function chatMakePost(asVideo) {
    que el texto escrito. Si Whisper falla: mensaje honesto + re-grabar. */
 let VOICE_REC = null, VOICE_CHUNKS = [], VOICE_TIMER = null, VOICE_START = 0, VOICE_MIME = '';
 let VOICE_STATE = 'idle', VOICE_URL = '', VOICE_BLOB = null, VOICE_DUR = 0;
+let VOICE_CANCEL = false, VOICE_START_X = 0, VOICE_START_Y = 0, VOICE_EARLY_UP = false, VOICE_ABORTED = false;
 let VOICE_CTX = null, VOICE_AN = null, VOICE_RAF = 0;
 function vozEn() { try { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); } catch (e) { return false; } }
 function vozMsgEl() { return document.getElementById('chatMsg'); }
@@ -10705,8 +10724,9 @@ function voiceRenderBar() {
   const m = vozMsgEl(); if (!m) return;
   const en = vozEn();
   if (VOICE_STATE === 'rec') {
-    m.innerHTML = '<div class="voz-bar"><span class="voz-dot"></span><span id="vozTm">0:00</span><span class="voz-lvl"><i id="vozLvl"></i></span><button type="button" class="btn btn-soft" id="vozStop">' + (en ? 'Stop' : 'Parar') + '</button></div>';
+    m.innerHTML = '<div class="voz-bar"><span class="voz-dot"></span><span id="vozTm">0:00</span><span class="voz-lvl"><i id="vozLvl"></i></span><span id="vozCancelMsg" style="display:none;font-size:12px;color:var(--mut)">' + (en ? 'Release to cancel' : 'Soltá para cancelar') + '</span><button type="button" class="btn btn-soft" id="vozCancel">' + (en ? 'Cancel' : 'Cancelar') + '</button><button type="button" class="btn btn-soft" id="vozStop">' + (en ? 'Stop' : 'Parar') + '</button></div>';
     const s = document.getElementById('vozStop'); if (s) s.onclick = () => voiceStop();
+    const cx = document.getElementById('vozCancel'); if (cx) cx.onclick = () => voiceDiscard();
   } else if (VOICE_STATE === 'preview' && VOICE_URL) {
     m.innerHTML = '<div class="voz-bar"><audio controls src="' + esc(VOICE_URL) + '" style="flex:1;min-width:0;height:32px"></audio><span style="font-size:12px;color:var(--mut)">' + vozFmt(VOICE_DUR) + '</span><button type="button" class="btn btn-primary" id="vozSend">' + (en ? 'Send' : 'Enviar') + '</button><button type="button" class="btn btn-soft" id="vozDiscard">' + (en ? 'Discard' : 'Descartar') + '</button></div>';
     const s = document.getElementById('vozSend'); if (s) s.onclick = () => voiceSend();
@@ -10737,8 +10757,10 @@ async function voiceToggle() {
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (VOICE_ABORTED) { stream.getTracks().forEach(t => { try { t.stop(); } catch (e2) {} }); return; }
     const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+      : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     VOICE_CHUNKS = [];
     VOICE_MIME = rec.mimeType || '';
@@ -10754,6 +10776,7 @@ async function voiceToggle() {
       VOICE_RAF = requestAnimationFrame(voiceLevelLoop);
     } catch (e) {}
     rec.start();
+    if (VOICE_EARLY_UP) { VOICE_EARLY_UP = false; voiceStop(); }
     VOICE_START = Date.now();
     const b = vozMicEl();
     if (b) { b.classList.add('btn-rec'); b.innerHTML = pzDot('#E5484D', 11) + ' 0:00'; }
@@ -10789,12 +10812,15 @@ function voicePreview() {
   try { if (VOICE_URL) URL.revokeObjectURL(VOICE_URL); } catch (e) {}
   VOICE_URL = URL.createObjectURL(VOICE_BLOB);
   VOICE_STATE = 'preview';
-  voiceRenderBar();
+  // LOTE CHAT-PERFECTO (decisión Valentino 3/11, reemplaza v594): al
+  // soltar el dedo la nota se manda sola — no hay vista previa con
+  // botón Enviar en el medio. voiceSend usa este estado 'preview'.
   try { chatUpdateSendBtn(); } catch (e) {}
+  voiceSend();
 }
 function voiceDiscard() {
   try { if (VOICE_URL) URL.revokeObjectURL(VOICE_URL); } catch (e) {}
-  VOICE_URL = ''; VOICE_BLOB = null; VOICE_DUR = 0; VOICE_STATE = 'idle'; VOICE_CHUNKS = [];
+  VOICE_URL = ''; VOICE_BLOB = null; VOICE_DUR = 0; VOICE_STATE = 'idle'; VOICE_CHUNKS = []; VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false;
   voiceRenderBar();
   try { chatUpdateSendBtn(); } catch (e) {}
 }
@@ -10843,8 +10869,10 @@ function chatUpdateSendBtn() {
   const ready = (inp && inp.value.trim().length > 0) || unsent;
   if (ready) { b.innerHTML = pzIc('send', 16); b.className = 'btn btn-primary'; b.title = 'Enviar'; b.onclick = () => chatSend(); b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null; }
   else { b.innerHTML = pzIc('mic', 18); b.className = 'btn btn-soft'; b.title = 'Mantener para hablar'; b.onclick = null;
-    b.onpointerdown = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} voiceToggle(); };
-    b.onpointerup = null; b.onpointercancel = null; }
+    b.onpointerdown = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_START_X = e.clientX; VOICE_START_Y = e.clientY; voiceToggle(); };
+    b.onpointermove = (e) => { if (VOICE_STATE !== 'rec') return; if ((VOICE_START_X - e.clientX) > 60) { VOICE_CANCEL = true; const hm = document.getElementById('vozCancelMsg'); if (hm) hm.style.display = ''; } };
+    b.onpointerup = (e) => { if (VOICE_STATE !== 'rec') { VOICE_EARLY_UP = true; return; } if (VOICE_CANCEL) { VOICE_CANCEL = false; voiceDiscard(); } else voiceStop(); };
+    b.onpointercancel = (e) => { if (VOICE_STATE !== 'rec') { VOICE_ABORTED = true; return; } VOICE_CANCEL = false; voiceDiscard(); }; }
 }
 
 function bindChat() {
@@ -20735,6 +20763,7 @@ function pzLpChatBind() {
     // Sin sesión: sin subida de fotos, sin nota de voz, sin chips de cuenta.
     // En su lugar: botón Enviar simple + invitaciones a entrar y a la prueba.
     const plus = document.getElementById('chatPlus'); if (plus) plus.remove();
+    const phb = document.getElementById('chatPhotoBtn'); if (phb) phb.remove();
     const mic = document.getElementById('chatMicSend');
     if (mic) {
       const send = document.createElement('button');
@@ -23188,7 +23217,6 @@ function pzPostChatCaptureOrigin(post, kind) {
 function pzPostChatLayerHTML() {
   var en = pzPostChatIsEn();
   return '<div class="pz-postchat" id="pzPostChat" hidden>'
-    + '<div class="pz-postchat-grip" aria-hidden="true"><span></span></div>'
     + '<div class="pz-postchat-head"><button type="button" class="pz-postchat-back" id="pzPostChatBack" aria-label="' + (en ? 'Back to the post' : 'Volver al posteo') + '">\u2190</button>'
     + '<span class="pz-postchat-tit">Posty</span><span class="pz-postchat-spacer"></span></div>'
     + '<div class="pz-postchat-body" id="pzPostChatBody"></div></div>';
@@ -23201,6 +23229,10 @@ function pzPostChatKbSync() {
     var h = vv ? vv.height : window.innerHeight;
     if (h && h > 0) layer.style.height = Math.round(h) + 'px';
     layer.style.top = vv ? Math.round(vv.offsetTop) + 'px' : '0px';
+    try {
+      var kbOpen = !!(vv && window.innerHeight && (window.innerHeight - vv.height) > 120);
+      if (kbOpen) layer.classList.add('pz-pc-kb'); else layer.classList.remove('pz-pc-kb');
+    } catch (e2) {}
   } catch (e) {}
 }
 function pzPostChatKbBind() {
@@ -23273,6 +23305,8 @@ function pzPostChatEnsureLayer() {
 // No es un tercer chat: reutiliza #pzPostChat, hfAnchorChip y el campo
 // del #chatCard movido.
 var PZ_PC_OPEN = false;
+var PZ_PC_POST = null;
+var PZ_PC_DIRTY = false;
 var PZ_PC_EDIT_PH = { es: 'qué le cambio a este posteo?', en: 'what do I change on this post?' };
 function pzPcStatusChip(p, en) {
   try {
@@ -23329,10 +23363,140 @@ function pzPcRenderHero(post) {
     var btns = hero.querySelectorAll('[data-pz-pc-chip]');
     for (var i = 0; i < btns.length; i++) {
       (function (b) {
-        b.onclick = function (e) { try { e.stopPropagation(); } catch (e2) {} try { hfAnchorChip(b.dataset.pzPcChip); } catch (e3) {} };
+        b.onclick = function (e) { try { e.stopPropagation(); } catch (e2) {} try { pzPcChipAction(b.dataset.pzPcChip); } catch (e3) {} };
       })(btns[i]);
     }
   } catch (e) {}
+}
+// (LOTE CHAT-PERFECTO · pieza 4 · 3/11) Los 4 atajos del chat del posteo
+// disparan su acción real (antes solo escribían texto en el campo y
+// con el teclado abierto el campo quedaba tapado por el hero, así que
+// el toque parecía muerto): foto abre el picker de foto del propio
+// chat, texto manda el pedido anclado (el motor de edición lo aplica
+// sobre ESTE posteo), día/hora abre el picker de reprogramación
+// vigente, rehacer regenera sin render() (un render() a mitad del
+// post-chat duplicaría #chatCard; el feed se refresca al cerrar).
+function pzPcChipAction(kind) {
+  var a = (typeof HF_CHAT_ANCHOR !== 'undefined') ? HF_CHAT_ANCHOR : null;
+  if (!a) return;
+  var en = pzPostChatIsEn();
+  if (kind === 'redo') { pzPcRedo(); return; }
+  if (kind === 'when') { pzPcReschedSheet(); return; }
+  if (kind === 'photo') {
+    var card = document.getElementById('chatCard');
+    var pb = card ? card.querySelector('#chatPhotoBtn') : document.getElementById('chatPhotoBtn');
+    if (pb) { try { pb.click(); return; } catch (e) {} }
+    var fl = card ? card.querySelector('#chatFile') : document.getElementById('chatFile');
+    if (fl) { try { fl.click(); return; } catch (e2) {} }
+    pzPcSendAnchored(en ? 'I want to change the photo of this post' : 'Quiero cambiar la foto de este posteo');
+    return;
+  }
+  if (kind === 'text') {
+    pzPcSendAnchored(en ? 'I want to change the text of this post' : 'Quiero cambiar el texto de este posteo');
+    return;
+  }
+}
+function pzPcSendAnchored(text) {
+  var inp = document.getElementById('chatInput');
+  if (!inp) return;
+  inp.value = text;
+  try { chatUpdateSendBtn(); } catch (e) {}
+  try { chatSend(); } catch (e2) {}
+}
+async function pzPcRedo() {
+  var post = PZ_PC_POST || HF_CHAT_ANCHOR;
+  if (!post || post.id == null) return;
+  var en = pzPostChatIsEn();
+  if (String(post.status || '') === 'published' || String(post.media_type || '') === 'video') {
+    try { toast(en ? 'This post already went out, it cannot be redone' : 'Este posteo ya salió, no se puede rehacer'); } catch (e) {}
+    return;
+  }
+  try { toast(en ? '⏳ Redoing this post…' : '⏳ Rehaciendo este posteo…'); } catch (e) {}
+  var r = null;
+  try {
+    r = await api.post('/api/drafts/' + encodeURIComponent(post.id) + '/photo-restyle', {}, { timeout: 180000 });
+  } catch (e) {
+    var raw = String((e && e.message) || '');
+    if (/redo_exhausted/.test(raw)) {
+      if (HF_CHAT_ANCHOR) HF_CHAT_ANCHOR.redo_left = 0;
+      if (PZ_PC_POST) PZ_PC_POST.redo_left = 0;
+      try { pzPcRenderHero(PZ_PC_POST || post); } catch (e2) {}
+      toast(en ? 'You already used the 3 redos for this post' : 'Ya usaste los 3 rehaces de este posteo');
+      return;
+    }
+    toast((en ? 'Could not redo it: ' : 'No se pudo rehacer: ') + raw);
+    return;
+  }
+  if (r && r.ok && r.path) {
+    if (HF_CHAT_ANCHOR) { HF_CHAT_ANCHOR.image_path = r.path; var cur = hfRedoLeft(HF_CHAT_ANCHOR); if (cur !== null) HF_CHAT_ANCHOR.redo_left = Math.max(0, cur - 1); }
+    if (PZ_PC_POST) { PZ_PC_POST.image_path = r.path; var cur2 = hfRedoLeft(PZ_PC_POST); if (cur2 !== null) PZ_PC_POST.redo_left = Math.max(0, cur2 - 1); }
+    PZ_PC_DIRTY = true;
+    toast('✅ ' + (en ? 'New image ready' : 'Imagen nueva lista'));
+    try { pzPcRenderHero(PZ_PC_POST || post); } catch (e) {}
+    return;
+  }
+  if (r && (r.error === 'redo_exhausted' || r.redo_exhausted)) {
+    if (HF_CHAT_ANCHOR) HF_CHAT_ANCHOR.redo_left = 0;
+    if (PZ_PC_POST) PZ_PC_POST.redo_left = 0;
+    try { pzPcRenderHero(PZ_PC_POST || post); } catch (e2) {}
+    toast(en ? 'You already used the 3 redos for this post' : 'Ya usaste los 3 rehaces de este posteo');
+    return;
+  }
+  toast((en ? 'Could not redo it: ' : 'No se pudo rehacer: ') + ((r && r.error) || ''));
+}
+function pzPcReschedSheet() {
+  var post = PZ_PC_POST || HF_CHAT_ANCHOR;
+  if (!post || post.id == null) return;
+  try { pcCloseSheet(); } catch (e) {}
+  var en = pzPostChatIsEn();
+  var cur = '';
+  try { cur = isoToLocalInput(post.scheduled_at || ''); } catch (e2) {}
+  var bd = document.createElement('div');
+  bd.className = 'pcsheet-backdrop';
+  bd.innerHTML = '<div class="pcsheet hf-actions" role="dialog" aria-modal="true">'
+    + '<div class="pcsheet-handle"></div>'
+    + '<div class="pcsheet-title">' + (en ? 'New day and time' : 'Nuevo día y hora') + '</div>'
+    + '<input type="datetime-local" class="pcsheet-select pz-pc-resched-inp" value="' + esc(cur) + '" aria-label="' + (en ? 'New day and time' : 'Nuevo día y hora') + '">'
+    + '<button type="button" class="pcsheet-opt" data-pz-pc-resched-save>' + pzIc('check', 14) + ' ' + (en ? 'Save new time' : 'Guardar nueva fecha') + '</button>'
+    + '<div class="pcsheet-msg pz-pc-resched-msg"></div>'
+    + '<button type="button" class="pcsheet-close" data-pz-pc-resched-close>' + (en ? 'Close' : 'Cerrar') + '</button></div>';
+  document.body.appendChild(bd);
+  bd.addEventListener('click', function (e) { if (e.target === bd) pcCloseSheet(); });
+  var sv = bd.querySelector('[data-pz-pc-resched-save]');
+  if (sv) sv.onclick = function () { pzPcReschedSave(post, bd); };
+  var cl = bd.querySelector('[data-pz-pc-resched-close]');
+  if (cl) cl.onclick = function () { pcCloseSheet(); };
+  var inp = bd.querySelector('.pz-pc-resched-inp');
+  if (inp) { try { inp.focus({ preventScroll: true }); } catch (e3) {} }
+}
+async function pzPcReschedSave(post, bd) {
+  var en = pzPostChatIsEn();
+  var inp = bd ? bd.querySelector('.pz-pc-resched-inp') : null;
+  var msg = bd ? bd.querySelector('.pz-pc-resched-msg') : null;
+  var btn = bd ? bd.querySelector('[data-pz-pc-resched-save]') : null;
+  var v = inp ? inp.value : '';
+  if (!v) { if (msg) msg.textContent = en ? 'Pick a day and time first' : 'Elegí un día y una hora primero'; return; }
+  var d = new Date(v);
+  if (isNaN(d)) { if (msg) msg.textContent = en ? 'That date does not work' : 'Esa fecha no sirve'; return; }
+  var iso = d.toISOString();
+  if (btn) btn.disabled = true;
+  try {
+    var tile = { dataset: { schedAt: post.scheduled_at || '', media: post.media_type || 'image' } };
+    var okQ = await hfReschedQuotaOk(post.id, tile, iso);
+    if (!okQ) { pcCloseSheet(); return; }
+    await api.patch('/api/posts/' + encodeURIComponent(post.id), { scheduled_at: iso });
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    if (isPlanLimitErr(e)) { pcCloseSheet(); planLimitModal(e); return; }
+    if (msg) msg.textContent = (en ? 'Could not reschedule: ' : 'No se pudo reprogramar: ') + ((e && e.message) || '');
+    return;
+  }
+  pcCloseSheet();
+  if (PZ_PC_POST) PZ_PC_POST.scheduled_at = iso;
+  if (HF_CHAT_ANCHOR) HF_CHAT_ANCHOR.scheduled_at = iso;
+  PZ_PC_DIRTY = true;
+  toast('🗓️ ' + (en ? 'Rescheduled — ' : 'Reprogramado — ') + hfChipText(iso));
+  try { pzPcRenderHero(PZ_PC_POST || post); } catch (e) {}
 }
 function pzPcClear() {
   try {
@@ -23356,6 +23520,7 @@ function pzPostChatOpen(post) {
   if (!layer || !body) return false;
   if (!PZ_POSTCHAT_NODE) PZ_POSTCHAT_NODE = { card: card, parent: card.parentNode, next: card.nextSibling };
   try { hfSetAnchor(post); } catch (e) {}
+  PZ_PC_POST = post;
   body.appendChild(card);
   PZ_PC_OPEN = true;
   try { pzPcRenderHero(post); } catch (e) {}
@@ -23372,8 +23537,10 @@ function pzPostChatOpen(post) {
   pzPostChatKbSync();
   var inp = document.getElementById('chatInput');
   if (inp && !inp.value) { try { inp.placeholder = PZ_PC_EDIT_PH[pzPostChatIsEn() ? 'en' : 'es']; } catch (e) {} }
-  var inp = document.getElementById('chatInput');
-  if (inp) setTimeout(function () { try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} } }, 60);
+  // (LOTE CHAT-PERFECTO · pieza 4) Sin foco automático al abrir: el
+  // teclado se abría solo y colapsaba el hero antes de ver la foto y
+  // los atajos. El teclado abre al tocar el campo; un cambio pendiente
+  // se manda solo vía hfDeliverAskText.
   return true;
 }
 function pzPostChatReturn() {
@@ -23406,6 +23573,7 @@ function pzPostChatClose() {
   try { var inp = document.getElementById('chatInput'); if (inp) inp.blur(); } catch (e) {}
   layer.hidden = true;
   PZ_PC_OPEN = false;
+  PZ_PC_POST = null;
   try { pzPcClear(); } catch (e) {}
   layer.style.transform = '';
   layer.style.height = '';
@@ -23423,6 +23591,7 @@ function pzPostChatClose() {
       }
     }
   } catch (e) {}
+  if (PZ_PC_DIRTY) { PZ_PC_DIRTY = false; try { render(); } catch (e) {} }
   pzPostChatReturn();
 }
 // (Corrección grilla 2026-10-25) El binding del botón de chat murió
@@ -25723,7 +25892,7 @@ function pzSftFotoAlChat() {
     try {
       const cf = document.getElementById("chatFile");
       if (cf) { clearInterval(t); cf.click(); }
-      else if (intentos >= 8) clearInterval(t);
+      else if (intentos >= 8) { clearInterval(t); try { chatSay(pzSftT('No pude abrir el selector de fotos. Entrá al chat y tocá el botón de la cámara 📷.', 'I could not open the photo picker. Open the chat and tap the camera button 📷.')); } catch (e2) {} }
     } catch (e) { clearInterval(t); }
   }, 150);
 }
@@ -25807,12 +25976,18 @@ async function pzSftChatProponer() {
       pend.propuesta = null;
       return;
     }
+    if (r.gated) {
+      pzSftChatDecir(en ? "This photo does not show your business clearly enough for an honest proposal. Keep it as material, or write me what it shows." : "Esta foto no muestra tu negocio con claridad como para armarte una propuesta honesta. Guardala como material, o escribime qué muestra.", pzSftChatBotones());
+      pend.propuesta = null;
+      return;
+    }
     it.tag = r.tag || it.tag || "";
     it.issues = r.issues || it.issues || [];
     const rec = pzSftRecomendar(it, "preguntar");
     const mejor = pzSftChatMejorUso(rec);
     const tagTxt = pzSftTagTexto(it.tag);
-    const ve = it.vision ? esc(it.vision) : (tagTxt ? (en ? "Posty sees: " + tagTxt : "Posty ve: " + tagTxt) : (en ? "Posty has not classified this photo yet." : "Posty todavía no clasificó esta foto."));
+    const visionNote = (r && typeof r.visionNote === 'string') ? r.visionNote.trim() : '';
+    const ve = it.vision ? esc(it.vision) : (visionNote ? (en ? 'veo ' : 'veo ') + esc(visionNote) : (tagTxt ? (en ? "Posty sees: " + tagTxt : "Posty ve: " + tagTxt) : (en ? "Posty has not classified this photo yet." : "Posty todavía no clasificó esta foto.")));
     pend.propuesta = { assetId: it.assetId, headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "", choice: mejor.choice, hard: r.hard || (it.issues.indexOf("cortada") >= 0 ? ["cortada"] : []) };
     const texto = "✦ " + ve + "\n" + (en ? "My proposal: " : "Te propongo: ") + pzSftEtiqueta(mejor.choice) + " — " + mejor.why
       + (pend.propuesta.headline ? "\n" + pend.propuesta.headline : "")
