@@ -5003,13 +5003,11 @@ body.pz-postchat-open{overflow:hidden}
    otra: solo existe #hfAcceptAllWeek, vía pzAcceptWeekHTML; no hay
    segunda instancia que eliminar). */
 .hf-pacts-accept .hf-accept-bar{position:static}
-/* Pieza 5 — LIKE REEMPLAZA AL CORAZÓN. La tile aprobada mostraba
-   dos marcas a la vez (corazón lleno + tik verde). Desde hoy, el
-   like ES el estado: el corazón lleno queda como única marca y el
-   tik no se dibuja en la tile (sigue agregándose en vivo por el
-   handler, pero oculto por esta regla; el handler y el alcance de
-   aprobación no cambian). Sin aprobar: solo el botón corazón. */
-#inicioView .hf-tile .hf-tik{display:none}
+/* Pieza 5 — LIKE REEMPLAZA AL CORAZÓN (REVERSO 4/11 · orden Valentino:
+   al likear, la tile cambia de corazón a tik verde). La tile aprobada
+   muestra SOLO el tik verde (sin corazón); sin aprobar: solo el botón
+   corazón. La regla que ocultaba el tik en Inicio se eliminó: los
+   spans .hf-tik solo existen en tiles aprobadas, así que nada más cambia. */
 
 /* ============ LOTE ZOOM-AL-DESLIZAR + DOCK-ESPACIADO (4/11) ============ */
 /* ZOOM. Causa medida en el video de Valentino (ver STATUS): la página

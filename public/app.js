@@ -9582,6 +9582,24 @@ function pzAcceptAllWeekCands(list, isPilot) {
   return out;
 }
 
+// (LOTE APROBAR-TIK-EN-VIVO) Número en vivo: tras aprobar por corazón el
+// botón recalcula con la MISMA fuente del render (HF_TILES, ya actualizado
+// en memoria) y se actualiza en su lugar; en 0 el botón se va (sin render
+// completo ni salto). Si el botón no está en el DOM, no hay nada que hacer.
+// El botón Aprobar-todo ya hacía esto tras su propio loop; faltaba el
+// camino del corazón, y por eso el número mentía tras likear uno por uno.
+function pzAcceptCountSync() {
+  try {
+    const btn = document.getElementById('hfAcceptAllWeek');
+    if (!btn) return;
+    const list = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES : [];
+    const n = pzAcceptAllWeekCands(list, null).length;
+    if (!n) { try { btn.remove(); } catch (e) {} try { pzAcceptBarOff(); } catch (e) {} return; }
+    const c = btn.querySelector('.accept-count');
+    if (c) c.textContent = String(n);
+  } catch (e) {}
+}
+
 // (LOTE SEMANA-APROBADA) Estado «semana aprobada» de Inicio: se muestra
 // SOLO cuando la semana corriente (mismo week_key = lunes actual zona
 // cuenta que usa Aceptar todo) tiene CERO programados pendientes Y al
@@ -9652,7 +9670,7 @@ function pzAcceptAllWeekMark(tile, post) {
     if (typeof pzAprobarEnSitio === 'function') { try { pzAprobarEnSitio(tile, String(post.id), post.scheduled_at); return; } catch (e) {} }
     if (!tile) return;
     const like = tile.querySelector ? tile.querySelector('[data-hf-like]') : null;
-    if (like) { like.setAttribute('data-hf-on', '1'); like.setAttribute('aria-pressed', 'true'); }
+    if (like && like.remove) like.remove(); // (LOTE APROBAR-TIK-EN-VIVO) aprobado = tik, no corazón
     if (tile.querySelector && !tile.querySelector('.hf-tik')) {
       const s = document.createElement('span');
       s.className = 'hf-tik';
@@ -13713,7 +13731,7 @@ async function pcApprove(id, card, btn) {
   } catch (e) {
     if (btn) btn.disabled = false;
     toast('No se pudo aprobar: ' + esc((e && e.message) || 'probá de nuevo'));
-    return;
+    return false;
   }
   document.querySelectorAll('[data-post-id="' + id + '"]').forEach(c => {
     const b = c.querySelector('.pcard-badge');
@@ -13722,6 +13740,7 @@ async function pcApprove(id, card, btn) {
     if (ab) ab.remove();
   });
   toast('✅ Aprobado — sale a su hora');
+  return true;
 }
 // --- Publicar ahora desde la tarjeta de Schedule (v241): el MISMO
 // publishNowFlow de la tarjeta de revisión — hoja de OK explícito,
@@ -18917,7 +18936,7 @@ function homeTileHTML(t, i) {
   // la aprobación. Guardia typeof: los harnesses viejos que extraen
   // homeTileHTML sola no rompen si el helper no está cargado (en el
   // bundle siempre está definido).
-  const hfAprobado = (String(p.status) === 'draft' || String(p.status) === 'scheduled') && (typeof pzAprobadoEs === 'function') && pzAprobadoEs(p.id);
+  const hfAprobado = (String(p.status) === 'draft' || String(p.status) === 'scheduled') && (String(p.approval || '') === 'approved' || ((typeof pzAprobadoEs === 'function') && pzAprobadoEs(p.id)));
   const tikSpan = hfAprobado ? '<span class="hf-tik" aria-hidden="true">✓</span>' : '';
   const filtroGrupo = (p.status === 'draft' || p.status === 'scheduled') ? 'pendientes' : (p.status === 'published' ? 'publicados' : ''); // (LOTE FILTRO-FEED)
   // (LOTE POSTEO-DEL-DIA · marca de semana futura) Programado de la semana actual con dia posterior a hoy: la celda se colapsa (CSS, solo #inicioView). Fijados no se colapsan; visitante, borrador, publicado y sin fecha tampoco. Sin helpers o sin fecha, sin marca: nunca se esconde por duda.
@@ -18930,7 +18949,7 @@ function homeTileHTML(t, i) {
       if (pzDiaEsFutura(p, hoyDia, lunDia)) diaFuturaCls = ' pz-dia-futura';
     }
   } catch (e) {}
-  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : likeBtn}${tikSpan}</span></span>`;
+  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${(likeInStrip && !hfAprobado) ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${(likeInStrip || hfAprobado) ? '' : likeBtn}${tikSpan}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -22494,8 +22513,9 @@ function pzAprobarEnSitio(tile, id, schedAt) {
     if (!el) return false;
     try { if (typeof pzAprobadoMarcar === 'function') pzAprobadoMarcar(id); } catch (e) {}
     try {
+      // (LOTE APROBAR-TIK-EN-VIVO · orden Valentino 4/11, REVERSO de la pieza 5 de v614): al aprobar, el corazón CAMBIA a tik verde: el botón corazón se quita y queda solo el tik.
       const like = el.querySelector('.hf-like');
-      if (like) { like.setAttribute('data-hf-on', '1'); like.setAttribute('aria-pressed', 'true'); }
+      if (like && like.remove) like.remove();
       if (!el.querySelector('.hf-tik')) {
         // (CORAZÓN-EN-LÍNEA x GRIS-TIK v548: el botón puede vivir DENTRO
         // de la franja (.hf-strip, absoluta); insertar el tik tras el botón
@@ -22568,7 +22588,8 @@ async function hfTileApprove(tile, post) {
       return;
     }
     if (st === 'scheduled') {
-      await pcApprove(id, tile, null);
+      const _pzOk = await pcApprove(id, tile, null);
+      if (!_pzOk) return; // (LOTE APROBAR-TIK-EN-VIVO) sin éxito real no se marca
       // (LOTE SEMANA-APROBADA) El corazon simple no mutaba
       // HF_TILES: se anota la aprobacion en la entrada para
       // que el sync la cuente.
@@ -22579,6 +22600,7 @@ async function hfTileApprove(tile, post) {
       // viejo sin el helper igual renderiza.
       try { if (typeof pzAprobarEnSitio === 'function') { if (!pzAprobarEnSitio(tile, id, null) && typeof render === 'function') render(); } else if (typeof render === 'function') render(); } catch (e) {}
       try { pzSemanaAprobadaSync(); } catch (e) {}
+      try { pzAcceptCountSync(); } catch (e) {}
       return;
     }
     if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
@@ -22604,6 +22626,7 @@ async function hfTileApprove(tile, post) {
     try { if (typeof pzAprobarEnSitio === 'function') { if (!pzAprobarEnSitio(tile, id, (res && res.scheduled_at) || when || undefined) && typeof render === 'function') render(); } else if (typeof render === 'function') render(); } catch (e) {}
     toast('✅ <b>¡Listo!</b> Quedó programado 🙌');
     try { pzSemanaAprobadaSync(); } catch (e) {}
+    try { pzAcceptCountSync(); } catch (e) {}
 
   } catch (e) {
     try { toast('😅 ' + esc((e && e.message) || 'No se pudo programar')); } catch (e2) {}
