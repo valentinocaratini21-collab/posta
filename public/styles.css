@@ -4857,19 +4857,23 @@ body.pz-postchat-open{overflow:hidden}
 @keyframes anaMagiaEntradaKF{0%{opacity:0;transform:scale(.5)}25%{opacity:1;transform:scale(1.15)}70%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(.9)}}
 @media (prefers-reduced-motion: reduce){.ana-magia-entrada{display:none}.ana-magia-entrada i{animation:none}}
 
-/* CARTA-MANO (2026-11-02, opción 5 mock v2): fondo de carta literal en
- * vidrio + letra a mano + esquina superior izquierda doblada. La receta
- * glass es la vigente de la app (idéntica a .bb-app.bb-glass-pantallas
- * .ana-card); no se inventa otra. El doblez es estático, sin animación. */
-.ana-carta-mano{position:relative;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10);border-radius:18px;font-family:'Gochi Hand',cursive,system-ui,sans-serif;color:#0A1E33}
-.ana-carta-mano::before{content:"";position:absolute;top:0;left:0;width:46px;height:46px;background:linear-gradient(to bottom right,#cfc6a8 0%,#cfc6a8 50%,rgba(0,0,0,0) 50%);filter:drop-shadow(2px 2px 3px rgba(10,30,51,.25));pointer-events:none;z-index:2}
+/* LOTE CARTA-DOBLADA-MANO (4/11, aprobado Valentino + regla de letra):
+ * papel crema opaco + doblez realista (degradé luz/sombra, borde curvo,
+ * sombra suave sobre la hoja) en vez del triángulo plano. Letra a mano
+ * (Gochi Hand) SOLO en la prosa de la carta (saludo, cuerpo, plan, cierre,
+ * firma); todo lo demás hereda la letra de la app (stack Inter del body,
+ * línea 21: la misma que en Inicio). Sin cambios de tamaño. */
+.ana-carta-mano{position:relative;background:#FDF6E3;border:1px solid rgba(190,160,90,.35);box-shadow:0 10px 28px rgba(10,30,51,.14), inset 0 0 60px rgba(190,160,90,.10);border-radius:18px;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#0A1E33}
+.ana-carta-mano::after{content:"";position:absolute;top:0;left:0;width:78px;height:78px;background:linear-gradient(135deg, rgba(110,85,30,.38) 0%, rgba(110,85,30,.16) 45%, rgba(0,0,0,0) 70%);clip-path:polygon(0 0,100% 0,0 100%);clip-path:path("M0,0 L78,0 L0,78 Q20,48 0,0 Z");pointer-events:none;z-index:1}
+.ana-carta-mano::before{content:"";position:absolute;top:0;left:0;width:78px;height:78px;background:linear-gradient(to bottom right,#F8EDD2 0%,#EADFBF 40%,#CDBE96 100%);clip-path:polygon(0 0,100% 0,0 100%);clip-path:path("M0,0 L78,0 Q44,14 22,36 Q8,52 0,78 Z");filter:drop-shadow(2px 3px 3px rgba(90,70,20,.40));pointer-events:none;z-index:2}
 .ana-carta-mano .ana-title{font-size:30px}
-.ana-carta-mano .ana-ltr-p{font-size:21px;line-height:1.5}
+.ana-carta-mano .ana-ltr-p{font-size:21px;line-height:1.5;font-family:'Gochi Hand',cursive,system-ui,sans-serif}
 .ana-carta-mano .ana-ltr-greet{font-size:22px}
-.ana-carta-mano .ana-ltr-plan p{font-size:20px;line-height:1.5}
-.ana-carta-mano .ana-ltr-first{font-size:21px}
+.ana-carta-mano .ana-ltr-plan p{font-size:20px;line-height:1.5;font-family:'Gochi Hand',cursive,system-ui,sans-serif}
+.ana-carta-mano .ana-ltr-first{font-size:21px;font-family:'Gochi Hand',cursive,system-ui,sans-serif}
 .ana-carta-mano .ana-intro{font-size:20px;color:#0A1E33}
-.ana-carta-mano .ana-banner{font-size:21px}
+.ana-carta-mano .ana-banner{font-size:21px;font-family:'Gochi Hand',cursive,system-ui,sans-serif}
+.ana-carta-mano .ana-sign{font-family:'Gochi Hand',cursive,system-ui,sans-serif}
 .ana-carta-mano .ana-fname{font-size:32px}
 .ana-carta-mano .ana-fline{font-size:19px;color:#0A1E33}
 
