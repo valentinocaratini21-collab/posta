@@ -4873,25 +4873,6 @@ body.pz-postchat-open{overflow:hidden}
 .ana-carta-mano .ana-fname{font-size:32px}
 .ana-carta-mano .ana-fline{font-size:19px;color:#0A1E33}
 
-/* (LOTE POSTEO-DEL-DIA · hero de la manana + reveal por dia) */
-#pzDiaHero { position: relative; width: min(92vw, 520px); margin: 6px auto 14px; background: #fff; border: 1px solid #e3ecf2; border-radius: 18px; box-shadow: 0 10px 30px rgba(10,30,51,.12); padding: 14px; text-align: center; }
-.pz-dia-foto img, .pz-dia-foto video { width: 100%; max-height: 46vh; object-fit: contain; display: block; background: #eef3f6; border-radius: 12px; }
-.pz-dia-sinimg { display: block; padding: 26px 12px; font-size: 15px; line-height: 1.5; color: #47617A; }
-.pz-dia-x { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid #e3ecf2; background: rgba(255,255,255,.9); color: #0A1E33; font-size: 18px; line-height: 1; cursor: pointer; z-index: 3; }
-.pz-dia-titulo { font-size: 19px; font-weight: 800; margin: 10px 0 2px; }
-.pz-dia-chip { font-size: 13.5px; color: #47617A; margin: 2px 0 6px; }
-.pz-dia-estado { display: block; font-size: 13.5px; color: #47617A; margin: 2px 0 10px; }
-.pz-dia-estado.pz-dia-ok { color: #1FA855; font-weight: 700; }
-.pz-dia-acciones { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-.pz-dia-magia { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
-.pz-dia-magia i { position: absolute; font-style: normal; animation: pzDiaSpark 1.8s ease forwards; opacity: 0; }
-.pz-dia-magia i:nth-child(1) { top: 12px; left: 14px; color: #FEC14D; font-size: 20px; animation-delay: 0s; }
-.pz-dia-magia i:nth-child(2) { top: 26px; right: 20px; color: #2793C8; font-size: 16px; animation-delay: .18s; }
-.pz-dia-magia i:nth-child(3) { top: 52%; left: 8px; color: #2793C8; font-size: 14px; animation-delay: .36s; }
-.pz-dia-magia i:nth-child(4) { top: 40%; right: 10px; color: #FEC14D; font-size: 18px; animation-delay: .54s; }
-.pz-dia-magia i:nth-child(5) { bottom: 14px; left: 44%; color: #FEC14D; font-size: 15px; animation-delay: .72s; }
-@keyframes pzDiaSpark { 0% { opacity: 0; transform: scale(.4); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1.15) translateY(-6px); } }
-@media (prefers-reduced-motion: reduce) { .pz-dia-magia { display: none; } }
 #inicioView .hf-cell.pz-dia-futura { display: none; }
 
 /* LOTE OFICINA ×50: escena por capas en Premios + tira de semillas. */
