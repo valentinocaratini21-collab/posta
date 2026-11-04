@@ -5071,3 +5071,28 @@ body.pz-postchat-open{overflow:hidden}
   #inicioView .hf-head-ic{width:28px;height:28px}
   #inicioView .hf-head-ic svg{width:14px;height:14px}
 }
+
+/* ============ LOTE BLUR-DESK (4/11) ============ */
+/* En escritorio el scroll de Inicio iba a los saltos: el dock fijo y la
+   barra de chat fija llevan backdrop-filter (vidrio 16px saturate 1.4)
+   y el navegador lo recalcula en cada cuadro mientras las fotos de la
+   grilla pasan por debajo. En escritorio (min-width:761px, el corte
+   desktop que el código ya usa) se quita el blur de esos dos fijos y se
+   compensa con fondo apenas más opaco (.96, el mismo del dock base):
+   mismo tinte, mismos bordes y sombras. Móvil intacto: por debajo de
+   761px el vidrio sigue exactamente igual. No se toca ningún otro
+   panel con blur (modales, tarjetas, hojas). */
+@media(min-width:761px){
+  .bb-app.bb-glass-inicio .bb-bar,
+  .bb-app.bb-glass-pantallas .bb-bar,
+  .bb-bar{
+    -webkit-backdrop-filter:none;
+    backdrop-filter:none;
+    background:rgba(255,255,255,.96);
+  }
+  #inicioView .mz-chatbar{
+    -webkit-backdrop-filter:none;
+    backdrop-filter:none;
+    background:rgba(255,255,255,.96);
+  }
+}
