@@ -5139,3 +5139,14 @@ body.pz-postchat-open{overflow:hidden}
   width:min(640px,100%);
   margin-left:auto;margin-right:auto;
 }
+
+/* ============ LOTE DEFECTO2-CINTURON (4/11) ============ */
+/* El shell de la app (.bb-main) es flex item sin min-width:0: su minimo
+   automatico es el min-content de su contenido, y #inicioView tampoco
+   lo tiene. Si algun descendiente supera el ancho, .bb-main se ensancha,
+   #inicioView con el y la grilla minmax(0,1fr) estira las tiles (borde
+   izquierdo fijo, derecha recortada por overflow-x:clip, fijos intactos).
+   Espeja la regla ya existente de .main (min-width:0). Riesgo cero: no
+   cambia ningun layout sano. */
+.bb-main{min-width:0}
+#inicioView{min-width:0}
