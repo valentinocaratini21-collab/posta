@@ -2121,7 +2121,7 @@ body.hf-d-open{overflow:hidden}
 /* (Frente 3 · suma 2) Gestos del feed: el scroll vertical manda
    (pan-y: el navegador toma el gesto y dispara pointercancel, que
    detiene la preview / cancela la hoja). */
-.hf-tile{touch-action:pan-y}
+.hf-tile{touch-action:manipulation}
 .hf-tile.hf-tile-vid{background:linear-gradient(160deg,#EAF4FA,#FDF3D8)}
 .hf-tile.hf-previewing video{filter:none}
 /* (Frente 3 · suma 2) La semana «cae» en la grilla: entrada breve y

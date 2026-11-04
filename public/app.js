@@ -646,6 +646,20 @@ let PZ_ZOOM_ON = false;
 function pzZoomInF3(t) {
   try { return !!(t && t.closest && t.closest('.apv-media, .igmock-media')); } catch (e) { return false; }
 }
+// ZOOM-3: exclusión del bloqueo touchstart. Los toques sobre botones,
+// enlaces, campos, barras fijas de navegación y F3 nunca se bloquean y
+// además rompen la pareja de toques: un toque en un botón distinto
+// nunca se come el siguiente. Las tiles son <span role="button">,
+// no <button>: el bloqueo SÍ las cubre (ahí ocurre el zoom).
+function pzZoomTapExcluded(t) {
+  try {
+    if (!t || !t.closest) return false;
+    if (t.closest('input, textarea, select, [contenteditable="true"], button, a')) return true;
+    if (t.closest('.bb-bar, .mz-tabs')) return true;
+    if (pzZoomInF3(t)) return true;
+  } catch (e) {}
+  return false;
+}
 function pzZoomBlockInit() {
   try {
     if (PZ_ZOOM_ON) return;
@@ -676,6 +690,63 @@ function pzZoomBlockInit() {
         e.preventDefault();
       } catch (err) {}
     }, { passive: false });
+    // ZOOM-3: bloqueo a nivel touchstart. v616 dedupeaba solo en
+    // touchend (<350 ms y <40 px): durante un deslizamiento con
+    // paradas bruscas el segundo toque se convierte en arrastre
+    // (su touchend llega tarde y desplazado) o WebKit ya decidió
+    // el zoom al bajar el segundo dedo, así que el dedup no lo
+    // veía. Además el cinturón manipulation de v616 no llegaba a
+    // las tiles: .hf-tile lleva touch-action:pan-y propio y la
+    // intersección con el belt da pan-y, no manipulation (la
+    // regla de la tile se cambia a manipulation en styles.css).
+    // Este guard mata el segundo toque EN SU BAJADA, antes de
+    // que ningún reconocedor lo cuente: solo si el toque
+    // anterior fue ESTACIONARIO (un tap, no un scroll: mover
+    // >=12 px rompe la pareja) y el nuevo cae <500 ms y <60 px
+    // de él. 500 ms cubre la cadencia parada->rearranque al
+    // frenar un scroll con impulso; 60 px es menor que una
+    // tile (~120 px), así que toques en tiles vecinas pasan.
+    // Un toque bloqueado NO se registra: exactamente un toque
+    // muerto por intento, el siguiente pasa. Sin
+    // stopPropagation: pointerdown (hold/peek/arrastre de tiles)
+    // corre antes que touchstart y pointerup sigue disparando,
+    // así que el detector de doble toque de F3 (pointerup) y
+    // el visor F3 no se tocan. Un toque simple o un arrastre
+    // nunca se bloquean: el scroll, el pull, el carrusel y el
+    // chat quedan intactos.
+    let pzZ3DownX = 0, pzZ3DownY = 0, pzZ3Single = false, pzZ3Blocked = false;
+    let pzZ3TapT = 0, pzZ3TapX = 0, pzZ3TapY = 0;
+    document.addEventListener('touchstart', (e) => {
+      try {
+        if (!e.touches || e.touches.length !== 1) { pzZ3Single = false; return; }
+        const tg = e.target;
+        const t = e.touches[0];
+        pzZ3DownX = t.clientX; pzZ3DownY = t.clientY; pzZ3Single = true; pzZ3Blocked = false;
+        if (pzZoomTapExcluded(tg)) { pzZ3TapT = 0; return; }
+        const now = Date.now();
+        const dx = t.clientX - pzZ3TapX, dy = t.clientY - pzZ3TapY;
+        if (pzZ3TapT && now - pzZ3TapT < 500 && (dx * dx + dy * dy) < 3600) {
+          e.preventDefault();
+          pzZ3Blocked = true;
+          pzZ3TapT = 0;
+        }
+      } catch (err) {}
+    }, { passive: false });
+    document.addEventListener('touchend', (e) => {
+      try {
+        if (!pzZ3Single || pzZ3Blocked) { pzZ3Single = false; pzZ3Blocked = false; return; }
+        if (!e.touches || e.touches.length !== 0) return;
+        if (!e.changedTouches || e.changedTouches.length !== 1) return;
+        const tg = e.target;
+        if (pzZoomTapExcluded(tg)) { pzZ3TapT = 0; pzZ3Single = false; return; }
+        const t = e.changedTouches[0];
+        const dx = t.clientX - pzZ3DownX, dy = t.clientY - pzZ3DownY;
+        if ((dx * dx + dy * dy) < 144) { pzZ3TapT = Date.now(); pzZ3TapX = t.clientX; pzZ3TapY = t.clientY; }
+        else { pzZ3TapT = 0; }
+        pzZ3Single = false;
+      } catch (err) {}
+    }, { passive: false });
+
   } catch (e) {}
 }
 try { pzZoomBlockInit(); } catch (e) {}
