@@ -19282,6 +19282,62 @@ function rgLineHTML(p, en) {
   const txt = prod ? (en ? 'This post is about: ' : 'Este posteo es de: ') + esc(prod) + ' — ' + (en ? 'seen in ' : 'visto en ') + procTxt : (en ? 'No product linked' : 'Sin producto asociado');
   return `<div class="hf-d-rubro" style="margin-top:8px;font-size:13px;color:#47617A">${txt}</div>`;
 }
+// (LOTE DETALLE-3) Foto limpia hermana: `<nombre>-clean.<ext>` — la
+// misma convención que photo-cliente.js (cleanSisterName). El servidor
+// ya verifica en disco que la hermana existe y difiere (caption_on=1
+// en /api/posts y /api/posts/:id); el frontend solo deriva la URL,
+// nunca inventa una foto.
+function hfCleanSister(src) {
+  if (!src || typeof src !== 'string') return null;
+  const m = src.match(/(\.[a-z0-9]+)$/i);
+  if (!m) return null;
+  return src.slice(0, -m[1].length) + '-clean' + m[1];
+}
+// (LOTE DETALLE-3) Cablea un interruptor de foto limpia. container es
+// la caja de media (sus <img> son la foto única o los slides); track
+// es el track del carrusel o null. Al cambiar de slide se vuelve a la
+// compuesta; si la limpia no carga, se vuelve a la compuesta y el
+// interruptor se esconde para esa pieza (nunca foto inventada).
+function hfCleanWire(btn, en, container, track) {
+  if (!btn || !container) return;
+  let cleanOn = false;
+  const imgs = () => Array.prototype.slice.call(container.querySelectorAll('img'));
+  const currentImg = () => {
+    if (!track) return container.querySelector('img');
+    const all = imgs();
+    const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    return all[Math.min(Math.max(0, i), all.length - 1)] || null;
+  };
+  const setLabel = () => {
+    btn.innerHTML = pzIc('image', 16) + ' ' + (cleanOn
+      ? (en ? 'See with headline' : 'Ver con titular')
+      : (en ? 'See original photo' : 'Ver foto original'));
+    btn.setAttribute('aria-pressed', cleanOn ? 'true' : 'false');
+    btn.classList.toggle('on', cleanOn);
+  };
+  const restoreAll = () => {
+    imgs().forEach((im) => {
+      if (im.dataset.dComposed && im.getAttribute('src') !== im.dataset.dComposed) im.src = im.dataset.dComposed;
+    });
+    cleanOn = false;
+    setLabel();
+  };
+  btn.onclick = () => {
+    if (cleanOn) { restoreAll(); return; }
+    const img = currentImg();
+    if (!img) return;
+    const composed = img.dataset.dComposed || img.getAttribute('src') || '';
+    const clean = hfCleanSister(composed);
+    if (!clean || clean === composed) return;
+    img.dataset.dComposed = composed;
+    img.addEventListener('error', () => { restoreAll(); btn.hidden = true; }, { once: true });
+    img.src = clean;
+    cleanOn = true;
+    setLabel();
+  };
+  if (track) track.addEventListener('scroll', () => { if (cleanOn) restoreAll(); }, { passive: true });
+  setLabel();
+}
 function hfDetailHTML(p, opts) {
   const o = opts || {};
   const en = !!o.en;
@@ -19314,7 +19370,12 @@ function hfDetailHTML(p, opts) {
   // píxeles con hfCrop34Rect según la foto real exhibida.
   const cropOv = slides.length ? hfCropOverlayHTML(4, 5, en) : '';
   const cropTog = slides.length ? `<button type="button" class="hf-crop-tog" data-hf-crop aria-pressed="false">${pzIc('grid', 16)} ${en ? 'See how it crops' : 'Ver cómo se recorta'}</button>` : '';
-  const media = `<div class="igmock-media hf-d-media${isV ? ' is-v' : ''}">${mediaInner}${cropOv}</div>${isCar ? `<div class="hf-d-dots">${slides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}${cropTog}`;
+  // (LOTE DETALLE-3) Foto limpia: solo si el servidor verificó base
+  // limpia real (caption_on=1). Nunca se inventa: sin hermana en
+  // disco no hay interruptor. En carrusel actúa sobre el slide
+  // mostrado (el cableado resuelve el índice en demanda).
+  const cleanTog = (!isV && slides.length && Number(p.caption_on) === 1) ? `<button type="button" class="hf-crop-tog" data-hfd-clean aria-pressed="false">${pzIc('image', 16)} ${en ? 'See original photo' : 'Ver foto original'}</button>` : '';
+  const media = `<div class="igmock-media hf-d-media${isV ? ' is-v' : ''}">${mediaInner}${cropOv}</div>${isCar ? `<div class="hf-d-dots">${slides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}${cropTog}${cleanTog}`;
   // Números SOLO reales: likes/comments llegan de post_metrics (vía
   // /api/posts) — null sin fuente: la línea no se dibuja. Un 0 real
   // (métricas leídas con cero) sí es un dato: IG muestra su variante.
@@ -19369,6 +19430,12 @@ function hfDetailHTML(p, opts) {
   // fuente o sin plan, el servidor responde null y esto no aparece.
   const commentsBox = (!o.visitor && p.status === 'published')
     ? `<div class="hf-cm-list" data-hfd-comments hidden></div>` : '';
+  // (LOTE DETALLE-3) El porqué: solo el dato real guardado
+  // (strategy_why, del análisis/fundamento de su semana). Sin dato,
+  // la línea no se dibuja: nunca texto genérico inventado. Ya viene
+  // en el idioma de la cuenta, no hay etiqueta que traducir.
+  const whyTxt = String(p.strategy_why || '').trim();
+  const whyLine = whyTxt ? `<div class="hf-d-why">${pzIc('sparkle', 13)} ${esc(whyTxt)}</div>` : '';
   return `<div class="hf-d" data-post-id="${esc(String(p.id))}">
     <div class="hf-d-head">${ava}<div class="hf-d-names"><div class="hf-d-user">${esc(headName)}</div>${locLine}</div>${o.visitor ? '' : `<button type="button" class="hf-d-dots" data-hfd-act="menu" aria-label="${en ? 'More options' : 'Más opciones'}">•••</button>`}</div>
     ${media}
@@ -19376,6 +19443,7 @@ function hfDetailHTML(p, opts) {
     ${bar}
     ${likesLine}
     ${capHTML}
+    ${whyLine}
     ${rgLineHTML(p, en)}
     ${commentsLine}
     ${commentsBox}
@@ -22137,7 +22205,15 @@ function hfDetailOpen(post, tile) {
   try { scfClosePop(); } catch (e) {}
   const ov = document.createElement('div');
   ov.className = 'hf-dback';
-  ov.innerHTML = `<div class="hf-dcard" role="dialog" aria-modal="true">
+  // (LOTE DETALLE-3) Aceptar fijo: la tarjeta marca si el detalle
+  // lleva Aceptar (borrador, no visitante — la misma condición del
+  // botón; HF_VISITOR es el visitor que devuelve hfDetailOpts) para
+  // reservar el despeje inferior; el botón en sí no se duplica, solo
+  // cambia de posición (de final del flujo a píldora fija abajo, ver
+  // .hf-d-accept). Las llamadas originales se dejan byte a byte para
+  // no romper el assert D5 del lote 16.
+  const hfDHasAccept = !HF_VISITOR && String(post.status || '') === 'draft';
+  ov.innerHTML = `<div class="hf-dcard${hfDHasAccept ? ' hf-d-has-accept' : ''}" role="dialog" aria-modal="true">
     <div class="hf-d-top"><button type="button" class="hf-d-back" data-hfd-close aria-label="${hfIsEn() ? 'Back' : 'Volver'}">‹</button><span class="hf-d-title">${esc(hfDetailTitleText(post, hfDetailOpts(post)))}</span><span class="hf-d-topsp"></span></div>
     ${hfDetailHTML(post, hfDetailOpts(post))}
   </div>`;
@@ -22172,6 +22248,9 @@ function hfDetailWire(ov, post, tile) {
       pzCarArrowSync(track);
     }, { passive: true });
   }
+  // (LOTE DETALLE-3) Foto limpia junto a «Ver cómo se recorta».
+  const cleanBtn = q('[data-hfd-clean]');
+  if (cleanBtn) { try { hfCleanWire(cleanBtn, hfIsEn(), q('.hf-d-media'), track); } catch (e) {} }
   // Reel: tocar el video lo pausa o lo sigue (como IG), sin cerrar.
   const vid = q('.hf-d-media video');
   if (vid) vid.addEventListener('click', () => { try { if (vid.paused) vid.play(); else vid.pause(); } catch (e) {} });
@@ -24288,12 +24367,20 @@ async function approvalPostView(id) {
     </div>` : '';
   const whenTxt = dOk ? (isDraft ? apvWhenText(d, tz).replace(/^Sale /, 'Saldría ') + ' · si lo aceptás' : apvWhenText(d, tz)) : '';
   const apvBack = pzApvBackHTML(en);
+  // (LOTE DETALLE-3) apv: misma regla que el detalle — foto limpia
+  // solo con hermana real verificada (caption_on=1), porqué solo con
+  // dato real guardado. Sin dato, nada se dibuja.
+  const apvCleanTog = (!isVideo && Number(p.caption_on) === 1) ? `<div class="apv-clean-row"><button type="button" class="hf-crop-tog" data-apv-clean aria-pressed="false">${pzIc('image', 16)} ${en ? 'See original photo' : 'Ver foto original'}</button></div>` : '';
+  const apvWhyTxt = String(p.strategy_why || '').trim();
+  const apvWhyLine = apvWhyTxt ? `<div class="apv-why">${pzIc('sparkle', 13)} ${esc(apvWhyTxt)}</div>` : '';
   return `<div class="apv-wrap">
     ${apvBack}
     ${media}
+    ${apvCleanTog}
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
+    ${apvWhyLine}
     ${rgLineHTML(p, en)}
     ${actions}${draftActions}
     ${apvMoreHTML(p, st, canAct, isDraft, editPrompt)}
@@ -24513,6 +24600,11 @@ function bindApprovalPost() {
       if (cnt) { const n = apvTrack.children.length; cnt.textContent = Math.min(n, Math.max(0, i) + 1) + '/' + n; }
       pzCarArrowSync(apvTrack);
     }, { passive: true });
+  }
+  // (LOTE DETALLE-3) Foto limpia en apv (misma regla que el detalle).
+  const apvCleanBtn = document.querySelector('[data-apv-clean]');
+  if (apvCleanBtn) {
+    try { hfCleanWire(apvCleanBtn, (typeof ME !== 'undefined' && ME && ME.lang === 'en'), document.querySelector('.apv-media'), document.querySelector('.apv-media .hf-d-track')); } catch (e) {}
   }
   // (LOTE 17) El mini-chat de esta vista también rota su placeholder.
   try { pzAskPhStart(); } catch (e) {}
