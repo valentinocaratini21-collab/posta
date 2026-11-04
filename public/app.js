@@ -11554,6 +11554,7 @@ function scfOpenPop(wrap, pinned) {
   } catch (e) {}
   wrap.classList.add('pop-open');
   SCF_POP = { wrap, card, vault, pop };
+  try { pzScfKbBind(); pzScfKbSync(); } catch (e) {}
   SCF_PINNED = !!pinned;
   // Click dentro de la capa = queda fijada: la misma semántica que
   // daba el listener de la tile cuando la capa vivía adentro (el ✕
@@ -11573,6 +11574,105 @@ function scfOpenPop(wrap, pinned) {
   // (v436) El botón «Ver el día completo» de la capa murió con la
   // vista Día: la capa ES el detalle del posteo (Aceptar/Editar/💬).
 }
+
+/* ===== (LOTE CHAT-DETALLE-TECLADO · 2/11) La capa del detalle con el teclado =====
+   Reporte de Valentino con captura (app iOS, v547): al tocar el campo del
+   mini-chat de la capa del detalle, pasaban dos cosas: (1) la parte de
+   arriba de la capa quedaba cortada bajo la barra de estado; (2) el campo
+   quedaba tapado por la barra accesoria nativa del teclado (^/v/✓) y el
+   botón de enviar cortado en el borde. Causa: en WKWebView el teclado NO
+   achica el layout viewport (el precedente del chat principal lo probó),
+   así que la capa centrada con top:50% + translate(-50%,-50%) sobre el
+   layout viewport queda fuera del área visible real cuando iOS desplaza
+   la vista para mostrar el campo. La barra accesoria es nativa y no se
+   quita desde web: el fix trabaja CON ella presente. Fix (mismo patrón
+   del chat principal): con el teclado abierto, la capa se ancla al
+   viewport VISIBLE (visualViewport, que SI se achica): arriba =
+   offsetTop + área segura, abajo = offsetTop + alto visible - 8px,
+   centrada en horizontal con el offsetLeft visible; el contenido
+   scrollea dentro y el campo enfocado se lleva a la vista dentro del
+   scroller. Sin teclado, la capa vuelve a su centrado de siempre (se
+   borran los estilos inline). Sin visualViewport (desktop), no hace
+   nada: ahí el teclado no tapa nada. No toca el chat principal, ni el
+   cierre, ni Frenar, ni Pedir un cambio, ni carrusel, ni lightbox. */
+// Área segura superior real (medida con sonda env(); 0 si no hay soporte).
+function pzScfSafeTop() {
+  try {
+    let pr = document.getElementById('pzScfSatProbe');
+    if (!pr) {
+      pr = document.createElement('div');
+      pr.id = 'pzScfSatProbe';
+      pr.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;padding-top:env(safe-area-inset-top,0px);';
+      document.body.appendChild(pr);
+    }
+    return parseFloat(getComputedStyle(pr).paddingTop) || 0;
+  } catch (e) { return 0; }
+}
+// Lleva el campo enfocado a la vista DENTRO del scroller de la capa.
+function pzScfScrollInput(pop) {
+  try {
+    const ae = document.activeElement;
+    if (!pop || !ae || !pop.contains(ae)) return;
+    const sc = pop.querySelector('.igmock');
+    if (!sc) return;
+    const r = ae.getBoundingClientRect();
+    const sr = sc.getBoundingClientRect();
+    if (r.bottom > sr.bottom) sc.scrollTop += (r.bottom - sr.bottom) + 10;
+    else if (r.top < sr.top) sc.scrollTop -= (sr.top - r.top) + 10;
+  } catch (e) {}
+}
+// Reubica la capa dentro del viewport visible cuando el teclado está abierto.
+function pzScfKbSync() {
+  const pop = document.querySelector('.scf-pop');
+  if (!pop) return;
+  try {
+    const vv = window.visualViewport;
+    const ae = document.activeElement;
+    const aeInPop = !!(ae && pop.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'));
+    const kbOpen = vv ? (vv.height < window.innerHeight - 40 || (aeInPop && vv.height < window.innerHeight)) : false;
+    if (!kbOpen) {
+      if (pop.classList.contains('pz-kb')) {
+        pop.classList.remove('pz-kb');
+        pop.style.top = ''; pop.style.left = ''; pop.style.height = '';
+        pop.style.maxHeight = ''; pop.style.transform = '';
+      }
+      return;
+    }
+    const safeTop = Math.max(8, Math.round(pzScfSafeTop()) + 4);
+    const top = Math.round(vv.offsetTop) + safeTop;
+    const h = Math.max(220, Math.round(vv.height) - safeTop - 8);
+    pop.classList.add('pz-kb');
+    pop.style.left = (Math.round(vv.offsetLeft) + Math.round(vv.width / 2)) + 'px';
+    pop.style.top = top + 'px';
+    pop.style.height = h + 'px';
+    pop.style.maxHeight = 'none';
+    pop.style.transform = 'translateX(-50%)';
+    pzScfScrollInput(pop);
+  } catch (e) {}
+}
+// Escucha el teclado una sola vez por carga (el sync no hace nada sin capa).
+function pzScfKbBind() {
+  if (window.__pzScfKbBound) return;
+  window.__pzScfKbBound = true;
+  try {
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener('resize', pzScfKbSync);
+      vv.addEventListener('scroll', pzScfKbSync);
+    }
+    window.addEventListener('resize', pzScfKbSync);
+    window.addEventListener('orientationchange', pzScfKbSync);
+    document.addEventListener('focusin', (e) => {
+      const t = e.target;
+      if (t && t.closest && t.closest('.scf-pop') && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) {
+        pzScfKbSync();
+        setTimeout(() => { pzScfKbSync(); const p = document.querySelector('.scf-pop'); if (p) pzScfScrollInput(p); }, 350);
+      }
+    });
+    document.addEventListener('focusout', () => { setTimeout(pzScfKbSync, 120); });
+  } catch (e) {}
+}
+/* ===== FIN LOTE CHAT-DETALLE-TECLADO ===== */
 // (v436) La pantalla principal ES el feed (decisión de Valentino,
 // 25/10: «que sea solamente el feed»): el bloque compone el perfil
 // literal + la grilla (feedPreviewHTML) y nada de cromo arriba. La

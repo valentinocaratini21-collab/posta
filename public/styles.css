@@ -2773,6 +2773,8 @@ body.hf-sv-open{overflow:hidden}
    (la barra con la ✕ queda siempre visible). */
 .scf-mini-x.pop-open::before{content:'';position:fixed;inset:0;background:rgba(10,30,51,.45);z-index:79}
 .scf-pop{position:fixed;top:50%;top:calc(50% + (env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))/2);left:50%;transform:translate(-50%,-50%);z-index:80;width:min(340px,92vw);max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);max-height:calc(100dvh - 24px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;animation:scfPopIn .16s ease-out}
+/* (LOTE CHAT-DETALLE-TECLADO) Con teclado, la altura la manda JS (viewport visible); el max-height del centrado no debe recortarla. */
+.scf-pop.pz-kb{max-height:none}
 @keyframes scfPopIn{from{opacity:0;transform:translate(-50%,-47%) scale(.98)}to{opacity:1;transform:translate(-50%,-50%)}}
 .scf-pop .igmock{margin:0;max-width:none;width:100%;box-shadow:0 18px 50px rgba(10,30,51,.30);overflow-y:auto;min-height:0;flex:1 1 auto}
 .scf-pop-bar{flex:none}
