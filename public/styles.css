@@ -4788,7 +4788,7 @@ body.pz-postchat-open{overflow:hidden}
 .hf-head-ic svg{width:20px;height:20px}
 .hf-pacts-accept{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;padding:12px 10px 2px}
 .hf-pacts-accept .hf-accept-bar{width:auto;flex:none;margin:0;padding:10px 12px;font-size:14px}
-.hf-accept-note{font-size:12.5px;line-height:1.3;color:#47617A;min-width:0;flex:1 1 auto;margin-left:0;text-align:left;white-space:normal}
+.hf-accept-note{font-size:12.5px;line-height:1.3;color:#47617A;min-width:0;flex:1 1 auto;margin-left:0;text-align:left;white-space:normal;align-self:center}
 
 /* (LOTE CHAT-WEBSITE-LINDO · 3/11) Base: la cara de la cabecera de la landing solo se
    muestra en el panel de escritorio; en móvil la cabecera queda exactamente como hoy

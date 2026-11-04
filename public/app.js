@@ -9544,7 +9544,7 @@ function acceptPillHTML(n, id) {
 // acceptPillHTML y NO se toca.
 function acceptBarHTML(n) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  return `<button type="button" class="hf-accept-bar" id="hfAcceptAllWeek">${pzIc('checkCircle', 18)} ${en ? 'Accept all' : 'Aceptar todo'} <span class="accept-count">${n}</span></button>`;
+  return `<button type="button" class="hf-accept-bar" id="hfAcceptAllWeek">${pzIc('checkCircle', 18)} ${en ? 'Approve all' : 'Aprobar todo'} <span class="accept-count">${n}</span></button>`;
 }
 
 // (LOTE ACEPTAR-TODO-POSICIÓN) Al quitarse la barra, el despeje
