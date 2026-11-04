@@ -6246,9 +6246,9 @@ function pzDockMasHTML() {
   return `<div class="pz-dockmas" id="pzDockMasSheet" hidden>
     <div class="pz-dockmas-back" onclick="pzDockMasClose()"></div>
     <div class="pz-dockmas-card" role="dialog" aria-label="${gzT('Crear', 'Create')}">
-      <div class="pz-dockmas-head"><span>${gzT('¿Qué querés agregar?', 'What do you want to add?')}</span><button type="button" class="pz-dockmas-x" aria-label="${gzT('Cerrar', 'Close')}" onclick="pzDockMasClose()">×</button></div>
-      <button type="button" class="pz-dockmas-row" onclick="pzDockMasFoto()">${pzIc('camera', 20)} ${gzT('Agregar foto', 'Add photo')}</button>
-      <button type="button" class="pz-dockmas-row" onclick="pzDockMasVideo()">${pzIc('reel', 20)} ${gzT('Agregar video', 'Add video')}</button>
+      <div class="pz-dockmas-head"><span>${gzT('¿Qué querés subir?', 'What do you want to upload?')}</span><button type="button" class="pz-dockmas-x" aria-label="${gzT('Cerrar', 'Close')}" onclick="pzDockMasClose()">×</button></div>
+      <button type="button" class="pz-dockmas-row" onclick="pzDockMasFoto()">${pzIc('camera', 20)} ${gzT('Subir foto', 'Upload photo')}</button>
+      <button type="button" class="pz-dockmas-row" onclick="pzDockMasVideo()">${pzIc('reel', 20)} ${gzT('Subir video', 'Upload video')}</button>
     </div>
   </div>`;
 }
