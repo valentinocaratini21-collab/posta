@@ -25157,6 +25157,45 @@ let pzHeadCollapseState = { collapsed: false, lastY: 0 };
 // El guard traga UN solo evento en dirección de eco por toggle y actualiza
 // lastY sin cambiar el estado; el descolapso real al subir sigue andando.
 let pzHeadCollapseEcho = 0;
+// LOTE MOVIMIENTO-RESIDUAL (4/11): el toggle colapsar/expandir era instantaneo
+// (display:none) y el documento perdia ~275px de alto en un cuadro: todo lo
+// que esta debajo del header saltaba esa distancia (medido en video real,
+// cuadros 89->90: pildora/tabs/grilla +275px en 33ms, sin transicion y sin
+// compensacion de anchoring en WKWebView). La animacion de alto convierte
+// ese salto en un pliegue suave de .22s: el estado final es identico, solo
+// cambia COMO se llega. Sin animacion con reduced-motion.
+let pzHeadCollapseAnimToken = 0;
+function pzHeadCollapseAnimate(iv, collapsed) {
+  try {
+    const head = iv ? iv.querySelector('.hf-head') : null;
+    if (!head) { iv.classList.toggle('hf-collapsed', collapsed); return; }
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      iv.classList.toggle('hf-collapsed', collapsed); return;
+    }
+    const h0 = head.offsetHeight;
+    iv.classList.toggle('hf-collapsed', collapsed);
+    const h1 = head.offsetHeight;
+    if (!h0 || !h1 || h0 === h1) return;
+    const my = ++pzHeadCollapseAnimToken;
+    head.style.height = h0 + 'px';
+    head.style.overflow = 'hidden';
+    head.style.transition = 'height .22s ease-out';
+    void head.offsetHeight;
+    head.style.height = h1 + 'px';
+    let done = false;
+    const clear = () => {
+      if (done || my !== pzHeadCollapseAnimToken) return;
+      done = true;
+      head.style.height = '';
+      head.style.overflow = '';
+      head.style.transition = '';
+    };
+    head.addEventListener('transitionend', clear, { once: true });
+    setTimeout(clear, 300);
+  } catch (e) {
+    try { iv.classList.toggle('hf-collapsed', collapsed); } catch (_) {}
+  }
+}
 function pzHeadCollapseSync() {
   try {
     const iv = document.getElementById('inicioView');
@@ -25183,8 +25222,12 @@ function pzHeadCollapseSync() {
     const prevCollapsed = pzHeadCollapseState.collapsed;
     const next = pzHeadCollapseNext(y, pzHeadCollapseState.lastY, pzHeadCollapseState.collapsed);
     pzHeadCollapseState = next;
-    if (next.collapsed !== prevCollapsed) pzHeadCollapseEcho = next.collapsed ? -1 : 1;
-    iv.classList.toggle('hf-collapsed', next.collapsed);
+    if (next.collapsed !== prevCollapsed) {
+      pzHeadCollapseEcho = next.collapsed ? -1 : 1;
+      pzHeadCollapseAnimate(iv, next.collapsed);
+    } else {
+      iv.classList.toggle('hf-collapsed', next.collapsed);
+    }
   } catch (e) {}
 }
 if (typeof window !== 'undefined' && window.addEventListener && !window.__pzHeadCollapseBound) {
