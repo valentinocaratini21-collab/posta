@@ -73,7 +73,7 @@ function ajustesView() {
     ${igCuentaRow}
     ${p.ig_connected ? '' : `<div style="margin-top:14px">
       <div style="font-weight:700;font-size:13px">¿Todavía no conectás?</div>
-      <p style="color:var(--mut);font-size:12.5px;margin:4px 0 10px">Escribí tu @ y te analizo igual — tu estilo, tus horarios y tu competencia — sin conectar nada.</p>
+      <p style="color:var(--mut);font-size:11.5px;margin:4px 0 10px">Escribí tu @ y te analizo igual — tu estilo, tus horarios y tu competencia — sin conectar nada.</p>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div class="field" style="flex:1;min-width:170px;margin:0"><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="tu_usuario" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
         <button class="btn btn-primary btn-sm" id="btnIgUserSave" style="flex:none">Guardar @</button>
@@ -83,7 +83,7 @@ function ajustesView() {
     ${igKnowRow}
     <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
       <div style="font-weight:800;margin-bottom:10px">${pzIc('phone', 16)} Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
-      <ol style="margin:0 0 12px 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
+      <ol style="margin:0 0 12px 20px;padding:0;font-size:11.5px;color:var(--mut);line-height:1.8">
         <li>Abrí Instagram y andá a tu perfil</li>
         <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
         <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
@@ -96,39 +96,39 @@ function ajustesView() {
       <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
     </div>
     <div id="igMsg"></div>`;
-  return `<div class="page-head"><div class="ph-ico">${pzIc('gear', 26)}</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu Instagram, tu plan y tu marca.</p></div></div>
+  return `<div class="page-head aj-head"><div class="ph-ico">${pzIc('gear', 26)}</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu Instagram, tu plan y tu marca.</p></div></div>
   ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
   <div class="card ajsec ajflat" id="ajsec-notif"><div class="ajsec-h"><h3>${pzIc('bell', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications' : 'Notificaciones'}</h3><span class="ajsec-st" id="ajStAvisos"></span></div><div class="ajsec-b">
-    <div id="avisosPushHint" style="margin-bottom:16px">
+    <div id="avisosPushHint" style="margin-bottom:12px">
       <div id="ajPushOff">
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You have not turned on notifications on your phone yet: your alerts are on, but they have nowhere to go.' : 'Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar.'}</p>
+        <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You have not turned on notifications on your phone yet: your alerts are on, but they have nowhere to go.' : 'Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar.'}</p>
         <button class="btn btn-primary" id="btnPushEnable">🔔 ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Activate notifications' : 'Activar notificaciones'}</button>
         <div class="err" id="pzPushErr" style="display:none;margin-top:8px"></div> <!-- (LOTE PUSH-ERROR-VISIBLE) -->
         <div class="hint" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'When Posty asks permission to send notifications, tap Allow.' : 'Cuando Posty te pida permiso para mandar notificaciones, tocá Permitir.'}</div>
       </div>
       <div id="ajPushOn" style="display:none">${pzIc('checkCircle', 15)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications on in your phone.' : 'Notificaciones activadas en tu celu.'}</div>
     </div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:14px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Posty notifies you on your phone — only when it matters, no noise.' : 'Posty te avisa por notificación en tu celu — solo cuando importa, nada de ruido.'}</p>
-    <div style="font-weight:800;margin-bottom:8px">Aviso antes de publicar</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Te aviso 30 minutos antes de que salga cada posteo automático, para que puedas frenarlo desde Schedule si querés.</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Posty notifies you on your phone — only when it matters, no noise.' : 'Posty te avisa por notificación en tu celu — solo cuando importa, nada de ruido.'}</p>
+    <div style="font-weight:800;margin-bottom:6px">Aviso antes de publicar</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">Te aviso 30 minutos antes de que salga cada posteo automático, para que puedas frenarlo desde Schedule si querés.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnPreNotifyToggle">Cargando...</button>
       <span id="preNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div style="font-weight:800;margin:18px 0 8px">${pzIc('mail', 16)} Tu carta del domingo</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cada domingo a la noche te escribo tu carta: cómo viene tu Instagram y qué ya estoy haciendo por tu negocio. Te aviso apenas llega.</p>
+    <div style="font-weight:800;margin:12px 0 6px">${pzIc('mail', 16)} Tu carta del domingo</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">Cada domingo a la noche te escribo tu carta: cómo viene tu Instagram y qué ya estoy haciendo por tu negocio. Te aviso apenas llega.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnLetterToggle">Cargando...</button>
       <span id="letterNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div style="font-weight:800;margin:18px 0 8px">${pzIc('alert', 16)} Si un posteo no pudo salir</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Si un posteo falla al publicar, te aviso en el momento. Nunca sale a medias: queda en borrador para que lo mires.</p>
+    <div style="font-weight:800;margin:12px 0 6px">${pzIc('alert', 16)} Si un posteo no pudo salir</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">Si un posteo falla al publicar, te aviso en el momento. Nunca sale a medias: queda en borrador para que lo mires.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnFailToggle">Cargando...</button>
       <span id="failNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div style="font-weight:800;margin:18px 0 8px">💬 Tu carta por WhatsApp</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cada domingo a la noche te mando tu carta por WhatsApp con el botón para aprobar tu semana en un toque, sin abrir la app.</p>
+    <div style="font-weight:800;margin:12px 0 6px">💬 Tu carta por WhatsApp</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">Cada domingo a la noche te mando tu carta por WhatsApp con el botón para aprobar tu semana en un toque, sin abrir la app.</p>
     <div class="field"><label>Tu número de WhatsApp</label><input id="s_waNotify" placeholder="Ej.: 5491123456789" inputmode="tel" maxlength="20" autocomplete="off"><div class="hint">Con código de país (Argentina: 54 9 + tu número). Solo lo uso para mandarte tu carta y avisos de tu semana.</div></div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
       <button class="btn btn-ghost" id="btnWaNotifyToggle">Cargando...</button>
@@ -137,7 +137,7 @@ function ajustesView() {
     <div class="hint" id="waNotifyGateHint" style="display:none;margin-top:10px">WhatsApp todavía no está encendido del lado de Posty: podés dejar tu número y tu permiso guardados, y te llega apenas se encienda. Mientras tanto, tu carta llega por notificación y en Tu análisis.</div>
   </div></div>
   <div class="card ajsec ajflat" id="ajsec-negocio"><div class="ajsec-h"><h3>${pzIc('store', 20)} Tu negocio</h3>${stBiz}</div><div class="ajsec-b">
-  <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">${pzIc('bot', 16)} Uso estos datos para crear tus posteos.</p>
+  <p style="color:var(--mut);font-size:11.5px;margin:-6px 0 14px">${pzIc('bot', 16)} Uso estos datos para crear tus posteos.</p>
     <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
     <div class="row2">
       <div class="field"><label>Rubro</label><input type="hidden" id="s_cat" value="${esc(catSel(p.category))}"><div class="pz-pick">${CATS.map(([v, ico, t]) => `<button type="button" class="pz-pick-btn${catSel(p.category) === v ? ' sel' : ''}" data-pz-pick="${v}" onclick="pzPick(this,'s_cat')">${pzIc(ico, 20)}<span>${t}</span></button>`).join('')}</div></div>
@@ -206,33 +206,33 @@ function ajustesView() {
   </div></div>
   <div class="card ajsec ajflat" id="ajsec-plan"><div class="ajsec-h"><h3>${pzIc('card', 20)} Mi plan</h3>${stPlan}</div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
-    <p style="font-size:12.5px;color:var(--mut);margin-top:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</p>
+    <p style="font-size:11.5px;color:var(--mut);margin-top:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</p>
     <div id="founderZone"></div>
   </div></div>
   <div class="card ajsec ajflat" id="ajsec-mas2"><div class="ajsec-b"><button type="button" class="btn btn-ghost btn-block" id="btnAjMas2">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'More settings' : 'Más ajustes'} <span>›</span></button></div></div>
   <div id="ajsec-mas2-wrap" hidden>
   <div class="card ajsec ajflat" id="ajsec-auto"><div class="ajsec-h"><h3>${pzIc('bolt', 20)} Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">⏸ Pausar todo</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">¿Vacaciones o una semana sin publicar? Frená todo con un toque: lo programado vuelve a borrador y nada sale hasta que reanudes. Tu semana y tus borradores quedan guardados, tal como están.</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">¿Vacaciones o una semana sin publicar? Frená todo con un toque: lo programado vuelve a borrador y nada sale hasta que reanudes. Tu semana y tus borradores quedan guardados, tal como están.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnPauseAll">Cargando...</button>
       <span id="pauseStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     <div style="border-bottom:1px solid var(--line);margin:18px 0"></div>
     <div style="font-weight:800;margin-bottom:8px">Publicación</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty programa y publica tus posteos solo, en sus mejores horarios — vos no tenés que aceptar nada. Si algo no pasa el filtro de calidad, queda en revisión y te avisa. Y cualquier posteo se puede frenar antes de que salga, desde Schedule.</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Posty programa y publica tus posteos solo, en sus mejores horarios — vos no tenés que aceptar nada. Si algo no pasa el filtro de calidad, queda en revisión y te avisa. Y cualquier posteo se puede frenar antes de que salga, desde Schedule.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnAutopilotToggle">Cargando...</button>
       <span id="autopilotStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
     <div id="autopilotInfo" style="font-size:11.5px;color:var(--dim);margin-top:8px"></div>
-    <div style="font-weight:800;margin:18px 0 8px">Tu semana</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty arma tu semana solo y la deja programada. Si no tocás nada en 24 horas, sale sola. Vos solo mirás y disfrutás.</p>
+    <div style="font-weight:800;margin:12px 0 6px">Tu semana</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Posty arma tu semana solo y la deja programada. Si no tocás nada en 24 horas, sale sola. Vos solo mirás y disfrutás.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
       <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
-    <div style="font-weight:800;margin:18px 0 8px">📸 Cuando subo fotos</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Qué hace Posty apenas subís una foto. «Preguntar siempre» es el default: nada se crea sin tu toque. Aunque recuerde «Que Posty lo arme», siempre te muestra el texto antes de crear el borrador.</p>
+    <div style="font-weight:800;margin:12px 0 6px">📸 Cuando subo fotos</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Qué hace Posty apenas subís una foto. «Preguntar siempre» es el default: nada se crea sin tu toque. Aunque recuerde «Que Posty lo arme», siempre te muestra el texto antes de crear el borrador.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <select id="sftDefaultSel" style="font-size:14px;border-radius:10px;padding:9px 12px;border:1px solid rgba(10,30,51,.15);background:#fff;color:#0A1E33;">
         <option value="preguntar">Preguntar siempre</option>
@@ -242,8 +242,8 @@ function ajustesView() {
       </select>
       <span id="sftDefaultStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div style="font-weight:800;margin:18px 0 8px">${pzIc('globe', 16)} Tu semana en dos idiomas</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Para negocios con turistas o clientes en inglés: la misma semana sale también en inglés. La versión en inglés es la traducción de tu semana en español — misma idea, mismos datos, nada nuevo. No cambia el idioma de la app.</p>
+    <div style="font-weight:800;margin:12px 0 6px">${pzIc('globe', 16)} Tu semana en dos idiomas</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Para negocios con turistas o clientes en inglés: la misma semana sale también en inglés. La versión en inglés es la traducción de tu semana en español — misma idea, mismos datos, nada nuevo. No cambia el idioma de la app.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnBilingualWeekToggle">Cargando...</button>
       <span id="bilingualWeekStatus" style="font-size:12px;color:var(--dim)"></span>
@@ -254,25 +254,25 @@ function ajustesView() {
     <div style="font-weight:800;margin-bottom:8px">${pzIc('camera', 16)} Instagram</div>
     ${igBody}
     <div id="pzBioSealSlot"></div>
-    <div style="font-weight:800;margin:18px 0 8px">${pzIc('music', 16)} TikTok</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>${pzIc('music', 16)} Compartir en TikTok</b>. Y si activás TikTok semanal, tus videos semanales salen solos (cuando TikTok apruebe la auditoría); si no lo activás, Posty nunca publica ahí sin que lo pidas.</p>
+    <div style="font-weight:800;margin:12px 0 6px">${pzIc('music', 16)} TikTok</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>${pzIc('music', 16)} Compartir en TikTok</b>. Y si activás TikTok semanal, tus videos semanales salen solos (cuando TikTok apruebe la auditoría); si no lo activás, Posty nunca publica ahí sin que lo pidas.</p>
     <div id="ttZone"><p class="hint">Cargando…</p></div>
     <div id="ttMsg"></div>
-    <div style="font-weight:800;margin:18px 0 8px">⭐ Google · Reseñas</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
+    <div style="font-weight:800;margin:12px 0 6px">⭐ Google · Reseñas</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
     <div id="ggZone"><p class="hint">Cargando…</p></div>
     <div id="ggMsg"></div>
-    <div style="font-weight:800;margin:18px 0 8px">${pzIc('bag', 16)} Tiendanube</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu tienda, conectada: Posty lee tu catálogo, tu stock y tus ventas para postear solo lo que tenés, con tu producto más vendido al frente. Solo lee: nunca toca precios ni stock.</p>
+    <div style="font-weight:800;margin:12px 0 6px">${pzIc('bag', 16)} Tiendanube</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Tu tienda, conectada: Posty lee tu catálogo, tu stock y tus ventas para postear solo lo que tenés, con tu producto más vendido al frente. Solo lee: nunca toca precios ni stock.</p>
     <div id="tnZone"><p class="hint">Cargando…</p></div>
     <div id="tnMsg"></div>
   </div></div>
   <div class="card ajsec ajflat" id="ajsec-marca"><div class="ajsec-h"><h3>${pzIc('palette', 20)} Tu marca y estilos</h3>${stBrand}</div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
     <div class="row2">
       <div class="field"><label>Logo</label>
         <div style="display:flex;gap:10px;align-items:center">
-          ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:12.5px">Sin logo</span>'}
+          ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:11.5px">Sin logo</span>'}
           <button class="btn btn-ghost btn-sm" id="btnBrandLogo">${pzIc('share', 18)} ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
           ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">' + pzIc('trash', 18) + ' Quitar</button>' : ''}
         </div>
@@ -298,7 +298,7 @@ function ajustesView() {
       <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano tocando el color o escribiendo su código. Con el menú de cada color elegís si es Principal, Secundario o Acento: se reordenan solos. El principal domina los diseños, el secundario lo acompaña y el acento va en botones y detalles.</div>
     </div>
     <div class="field"><label>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Headline font' : 'Tipografía de tus titulares'}</label>
-      <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'The font of the headline inside your post images. It changes only the headline — not captions, colors or web/app text.' : 'La letra del titular dentro de tus posteos. Cambia solo el titular — no cambia captions, colores ni texto de web/app.'}</div>
+      <div style="font-size:11.5px;color:var(--mut);margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'The font of the headline inside your post images. It changes only the headline — not captions, colors or web/app text.' : 'La letra del titular dentro de tus posteos. Cambia solo el titular — no cambia captions, colores ni texto de web/app.'}</div>
       <div id="fontRow" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px"></div>
       <div class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Applies to new weeks and regenerations. Published posts keep their look.' : 'Aplica a semanas nuevas y regeneraciones. Los posteos ya publicados conservan su look.'}</div>
     </div>
@@ -319,14 +319,14 @@ function ajustesView() {
     <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:11.5px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
     <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
       <div style="font-weight:800;font-size:15px;margin-bottom:10px">${pzIc('palette', 16)} Estilos de tus posteos</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:6px">Elegí los que te gusten. Si no elegís, elijo yo por vos</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:6px">Elegí los que te gusten. Si no elegís, elijo yo por vos</p>
     <p style="color:var(--dim);font-size:11.5px;margin-bottom:14px">Muestras de estilo: así se compone un posteo con cada uno — con una foto de tu rubro, tu nombre y tus colores. Marcá hasta 3 favoritos y tus posteos nuevos van a salir con esos looks primero.</p>
-    <div id="styleGallery"><div style="color:var(--mut);font-size:12.5px">Cargando estilos…</div></div>
+    <div id="styleGallery"><div style="color:var(--mut);font-size:11.5px">Cargando estilos…</div></div>
     <div class="hint" id="styleFavMsg" style="margin-top:10px"></div>
     </div>
   </div></div>
   <div class="card ajsec ajflat" id="ajsec-pagina"><div class="ajsec-h"><h3>${pzIc('globe', 20)} Tu página</h3>${stPage}</div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: una página linda con tu negocio y tus posteos ya publicados, con botón directo a tu WhatsApp. Cada persona que la visita conoce Posty</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: una página linda con tu negocio y tus posteos ya publicados, con botón directo a tu WhatsApp. Cada persona que la visita conoce Posty</p>
     <div class="field"><label>Tu dirección</label>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-size:13.5px;color:var(--mut)">postycommunitymanager.com/p/</span>
@@ -343,7 +343,7 @@ function ajustesView() {
     </div>
   </div></div>
   <div class="card ajsec ajflat" id="ajsec-semana"><div class="ajsec-h"><h3>${pzIc('link', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'}</h3><span class="ajsec-st" id="ajStSemana"></span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Show your week to your partner or your family before it goes out: a read-only link with your posts just as they are on your home. No password, no access to your account — they only see the week.' : 'Mostrale tu semana a tu socio o a tu familia antes de que salga: un link de solo lectura con tus posteos tal cual están en tu home. Sin tu contraseña y sin entrar a tu cuenta: solo ven la semana.'}</p>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Show your week to your partner or your family before it goes out: a read-only link with your posts just as they are on your home. No password, no access to your account — they only see the week.' : 'Mostrale tu semana a tu socio o a tu familia antes de que salga: un link de solo lectura con tus posteos tal cual están en tu home. Sin tu contraseña y sin entrar a tu cuenta: solo ven la semana.'}</p>
     <div id="weekShareZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
   </div></div>
   ${IS_NATIVE ? '' : `<div class="card ajsec ajflat" id="ajsec-referidos"><div class="ajsec-h"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3></div><div class="ajsec-b">
@@ -360,7 +360,7 @@ function ajustesView() {
   </details>
   <div class="card ajsec ajflat" id="ajsec-mas2-preview"><div class="ajsec-b"><button type="button" class="ajmas-row" data-ajmas="preview">${pzIc('bot', 16)} Cómo me ve la IA <span>›</span></button></div></div>
   </div>
-  <div class="card" style="margin-top:16px"><button class="btn btn-danger btn-block" id="btnLogoutAj">${pzIc('logout', 18)} Salir</button></div>
+  <div class="card aj-salir" style="margin-top:10px"><button class="btn btn-danger btn-block" id="btnLogoutAj">${pzIc('logout', 18)} Salir</button></div>
   <div id="gzAjustesBox"></div>
   <div class="card ajsec ajflat" id="ajsec-posty"><div class="ajsec-h"><h3>Posty · Community Manager</h3><span class="ajsec-st">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Your agent' : 'Tu agente'}</span></div></div>`;
 }
