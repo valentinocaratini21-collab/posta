@@ -9789,7 +9789,7 @@ function chatNextWeekHTML() {
   const more = w.n > w.total ? (en ? ` · and <b>${w.n - w.total} more</b> on hold` : ` · y <b>${w.n - w.total} más</b> en espera`) : '';
   return `<div class="chat-msg ai">${en ? `✨ <b>${shown} of ${w.total}</b> posts for next week are already lined up` : `✨ ya están armados <b>${shown} de ${w.total}</b> de la semana que viene`}${more}</div>`;
 }
-function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetChips) {
+function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetChips, noUpRow) {
   // (v442 · Corrección de Valentino 02:20) En la pantalla principal
   // (mainScr: Inicio y Semana) el chat va SIN prólogo: sin saludo
   // («hola! qué hacemos hoy?»), sin la línea de estado de la semana
@@ -9823,7 +9823,11 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
   // ícono, texto y contador). Solo queda «Subir fotos o video». El
   // panel de ideas de Semana queda sin botón que lo abra (su código
   // sigue, sin llamadores visibles).
-  const upRow = schedMode ? `
+  // SACAR-BOTON-CHAT-INICIO (orden Valentino 4/11 ~18:18): en #/app/chat la
+  // píldora «Subir fotos o video» sobra porque la barra ya tiene camarita
+  // (chatPhotoBtn → #chatFile). noUpRow la apaga SOLO en ese llamador;
+  // Semana y el chat del posteo conservan su botón.
+  const upRow = (schedMode && !noUpRow) ? `
     <div class="${sheetChips ? 'sched-chips-row' : 'sched-up-row'}">
       <button type="button" class="ag-upload-btn" id="agUploadBtn">${pzIc('camera', 18)} Subir fotos o video</button>
       <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
@@ -20844,7 +20848,7 @@ function chatFullView() {
     <img class="chat-face" src="ai-avatar.png" alt="Posty">
     <div class="pz-chatfull-tit"><b>Posty<span class="pdot">.</span></b></div>
   </header>
-  ${chatCardHTML(true, true, true, true, true, true)}
+  ${chatCardHTML(true, true, true, true, true, true, true)}
 </div>`;
 }
 // Sincroniza la altura de la pantalla con el viewport visible real.
