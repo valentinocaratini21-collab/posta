@@ -627,6 +627,59 @@ function pzPullInit() {
     window.addEventListener('touchcancel', () => { PZ_PULL_S = null; pzPullHide(); }, { passive: true });
   } catch (e) {}
 }
+
+/* ---------- ZOOM-2: bloquear el zoom de viewport a nivel JS ---------- */
+// v615 puso maximum-scale=1 + user-scalable=no en el meta, pero iOS
+// ignora user-scalable=no desde iOS 10 (accesibilidad) y el video del
+// 4/11 lo confirma en el teléfono real: el zoom alterna on/off al
+// deslizar (firma del doble-toque-zoom) aunque el CSS v615 sí llegó
+// (dock equidistante en los cuadros normales). El meta no se quita,
+// pero el bloqueo real vive acá: doble toque (dedup de touchend +
+// dblclick) y pellizco (gesture events + touchmove de dos dedos).
+// NO se usa stopPropagation: los handlers propios (F3 doble toque por
+// pointerup, pull, carrusel, chat) siguen corriendo; el guard solo
+// suprime el click sintético del segundo toque. El visor de fotos F3
+// (.apv-media/.igmock-media, pinch por PointerEvents) queda EXCLUIDO
+// del bloqueo de dos dedos. Inputs/textarea/select no entran en el
+// dedup de touchend (la parte Z ya evita el zoom al enfocar).
+let PZ_ZOOM_ON = false;
+function pzZoomInF3(t) {
+  try { return !!(t && t.closest && t.closest('.apv-media, .igmock-media')); } catch (e) { return false; }
+}
+function pzZoomBlockInit() {
+  try {
+    if (PZ_ZOOM_ON) return;
+    if (typeof document === 'undefined' || !document.addEventListener) return;
+    PZ_ZOOM_ON = true;
+    document.addEventListener('gesturestart', (e) => { try { e.preventDefault(); } catch (err) {} }, { passive: false });
+    document.addEventListener('gesturechange', (e) => { try { e.preventDefault(); } catch (err) {} }, { passive: false });
+    document.addEventListener('gestureend', (e) => { try { e.preventDefault(); } catch (err) {} }, { passive: false });
+    document.addEventListener('dblclick', (e) => { try { e.preventDefault(); } catch (err) {} }, { passive: false });
+    let lastTe = 0, lastX = 0, lastY = 0;
+    document.addEventListener('touchend', (e) => {
+      try {
+        if (!e.touches || e.touches.length !== 0) return;
+        if (!e.changedTouches || e.changedTouches.length !== 1) return;
+        const tg = e.target;
+        if (tg && tg.closest && tg.closest('input, textarea, select, [contenteditable="true"]')) return;
+        const t = e.changedTouches[0];
+        const now = Date.now();
+        const dx = t.clientX - lastX, dy = t.clientY - lastY;
+        if (now - lastTe < 350 && (dx * dx + dy * dy) < 1600) { e.preventDefault(); }
+        lastX = t.clientX; lastY = t.clientY; lastTe = now;
+      } catch (err) {}
+    }, { passive: false });
+    document.addEventListener('touchmove', (e) => {
+      try {
+        if (!e.touches || e.touches.length < 2) return;
+        if (pzZoomInF3(e.target)) return;
+        e.preventDefault();
+      } catch (err) {}
+    }, { passive: false });
+  } catch (e) {}
+}
+try { pzZoomBlockInit(); } catch (e) {}
+
 async function pzPullRefresh() {
   if (PZ_PULL_BUSY) return;
   PZ_PULL_BUSY = true;

@@ -5042,8 +5042,10 @@ body.pz-postchat-open{overflow:hidden}
    a propósito: NO se toca el visor de fotos F3 (pinch manual por
    PointerEvents sobre .apv-media/.igmock-media, fuera de estas
    superficies) ni el scroll nativo (pan-x pan-y lo permite). */
-/* touch-action: pan-x pan-y = desplazar sí, zoom de gestos no. */
-#inicioView,.bb-bar,.mz-tabs,.mz-bottomstack{touch-action:pan-x pan-y}
+/* ZOOM-2: manipulation = desplazar sí, doble-toque-zoom no. El meta de
+   v615 resultó ignorado en el teléfono real (video 4/11: el zoom alterna
+   on/off); el pellizco lo bloquea JS (pzZoomBlockInit en app.js). */
+#inicioView,.bb-bar,.mz-tabs,.mz-bottomstack{touch-action:manipulation}
 /* Cinturón layout: en estado colapsado, usuario y nombre ya llevan
    ellipsis pero sin min-width:0 su mínimo automático (texto nowrap)
    supera el viewport; con 0 encogen con puntos suspensivos. */
