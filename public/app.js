@@ -1541,7 +1541,25 @@ function pzProximoPremioTira(nvP, origen) {
   const sig = pzRopaPorNivel(n + 1);
   if (!sig) return '';
   const nom = en ? sig.en : sig.es;
-  return `<span class="mx-tira-proximo">${esc(en ? ('next: ' + nom + ' at level ' + (n + 1)) : ('próximo: ' + nom + ' en nivel ' + (n + 1)))}</span>`;
+  // (LOTE PREMIOS-TIRA · decisión Valentino 4/11) El premio se VE: su
+  // mini real (ropa/ropa-NN-mini.png, el mismo archivo que la pantalla
+  // de Premios usa para la prenda) + copy simple «Nivel N: Nombre».
+  // Sin imagen generada ni bloque de color.
+  const img = `<img src="ropa/ropa-${String(n + 1).padStart(2, '0')}-mini.png" alt="" aria-hidden="true">`;
+  const premio = `<span class="mx-tira-premio">${img}<span>${esc(en ? ('Level ' + (n + 1) + ': ' + nom) : ('Nivel ' + (n + 1) + ': ' + nom))}</span></span>`;
+  // Cuánto falta, en la unidad real de la barrita: los requisitos
+  // pendientes del gate del próximo nivel (nv.faltantes — misma fuente
+  // que avance.hechos/total). Sin avance en curso (Nv 5+) o sin lista,
+  // no se dice nada: nunca un número inventado.
+  let falta = '';
+  try {
+    const falt = (nvP && Array.isArray(nvP.faltantes)) ? nvP.faltantes : [];
+    const conAvance = nvP && nvP.avance && Number(nvP.avance.total) > 0;
+    if (conAvance && falt.length) {
+      falta = `<span class="mx-tira-falta">${esc(falt.length === 1 ? (en ? '1 thing left' : 'te falta 1 cosa') : (en ? (falt.length + ' things left') : ('te faltan ' + falt.length + ' cosas')))}</span>`;
+    }
+  } catch (e) {}
+  return premio + falta;
 }
 function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   const ambos = pod.posty && pod.gesty;

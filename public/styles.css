@@ -5163,3 +5163,12 @@ body.pz-postchat-open{overflow:hidden}
    dock, chat, zoom ni el bloque TEMPORAL DIAGNOSTICO2 (sigue en app.js
    para verificar el fix con reportes nuevos). */
 #inicioView{max-width:100%}
+
+/* LOTE PREMIOS-TIRA (decisión Valentino 4/11): la tira de Inicio muestra
+   el premio del próximo nivel con su mini real + cuánto falta en la
+   unidad de la barrita (requisitos pendientes del gate). Solo la tira;
+   la pantalla de Premios no se toca. */
+.mx-tira-premio{display:flex;align-items:center;gap:8px;margin-top:5px}
+.mx-tira-premio img{width:30px;height:30px;flex:none;border-radius:8px;object-fit:cover}
+.mx-tira-premio span{flex:1;min-width:0;font-size:12px;color:#6E5A85}
+.mx-tira-falta{display:block;margin-top:3px;font-size:12px;color:#47617A}
