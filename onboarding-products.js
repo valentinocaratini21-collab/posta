@@ -38,7 +38,19 @@ function wordsOf(s) {
 // productos [] aunque su web sí dijera qué vende; ese era el caso del
 // primo). Los captions siguen sin aportar productos por diseño (aportan
 // temas): minar prosa de captions metería slogans como si fueran oferta.
-function detectProducts({ bio, captions, services, description } = {}) {
+// (LOTE PRUEBA-PRODUCTO-REAL) La bio minada NO pasaba la puerta que sí
+// pasan los servicios: una bio con fechas («Lanzamiento 1/2/2027»)
+// dejaba «Lanzamiento 1» y «2027» como «productos». Misma puerta +
+// rechazo de años/números sueltos/palabras de lanzamiento.
+function isMinableOfferItem(s) {
+  if (!isPlausibleOfferItem(s)) return false;
+  if (/\b(19|20)\d{2}\b/.test(s)) return false; // año suelto
+  if (/^\d+$/.test(String(s).trim())) return false;
+  if (/lanzamiento|coming soon|próximamente|proximamente/i.test(s)) return false;
+  return true;
+}
+
+function detectProducts({ bio, captions, services, description, excludeNames } = {}) {
   let names = [];
   if (Array.isArray(services) && services.length) {
     names = services.filter((s) => isPlausibleOfferItem(s)).map((s) => String(s).trim()).filter(Boolean);
@@ -46,20 +58,25 @@ function detectProducts({ bio, captions, services, description } = {}) {
   if (!names.length && bio) {
     try {
       const mined = offeringsFromText(bio);
-      names = (mined && mined.items) || [];
+      names = ((mined && mined.items) || []).filter(isMinableOfferItem);
     } catch (e) { names = []; }
   }
   if (!names.length && description) {
     try {
       const mined = offeringsFromText(description);
-      names = (mined && mined.items) || [];
+      names = ((mined && mined.items) || []).filter(isMinableOfferItem);
     } catch (e) { names = []; }
   }
   const seen = new Set();
   const out = [];
+  // (LOTE PRUEBA-PRODUCTO-REAL) Tu propio nombre no es tu producto: la
+  // bio empieza con el nombre («Posty • …») y el minado lo devolvía
+  // como «producto». El prefill pasa nombre/@ y se excluyen.
+  const excl = new Set((Array.isArray(excludeNames) ? excludeNames : []).map((x) => normStr(String(x || '')).replace(/[^a-z0-9]+/g, ' ').trim()).filter(Boolean));
   for (const n of names) {
     const k = normStr(n).replace(/\s+/g, ' ').trim();
     if (!k || seen.has(k)) continue;
+    if (excl.has(k)) continue;
     seen.add(k);
     out.push(String(n).trim());
     if (out.length >= 4) break;

@@ -3973,8 +3973,14 @@ app.get('/api/oficina/nivel', requireAuth, (req, res) => {
     // (v461 · tira simple) Avance del gate en curso, en requisitos
     // completados vs. total — el cliente pinta la barrita con esto, sin
     // mostrar ningún número. L5: sin gate en curso, avance null (llena).
+    // SOLO-POSTEOS (4/11): para posty el avance lo trae nivelPosty en
+    // posteos (hechos vs. umbral del próximo nivel) y se usa tal cual;
+    // la derivación por hitos quedaría null porque posty ya no tiene
+    // hitos de gate. Otros poderes, intactos.
     const gateHitos = (niv.hitos || []).filter((h) => h.nivel_objetivo === niv.nivel + 1);
-    const avance = niv.nivel >= 5 || !gateHitos.length ? null : { hechos: gateHitos.filter((h) => h.cumplido).length, total: gateHitos.length };
+    const avance = (oficina.niveles.resolverPoder(poder) === 'posty' && niv.avance)
+      ? niv.avance
+      : (niv.nivel >= 5 || !gateHitos.length ? null : { hechos: gateHitos.filter((h) => h.cumplido).length, total: gateHitos.length });
     res.json({
       ok: true, poder: niv.poder, nivel: niv.nivel,
       nombre_nivel: niv.nombre_nivel,
@@ -24766,6 +24772,10 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   }
   // (FUNDAMENTO-LITERAL · pieza 1) Los productos del espejo aprobado mandan
   // sobre cualquier inferencia: entran al goal como líneas literales.
+  // (LOTE PRUEBA-PRODUCTO-REAL) El digest se compila SIN esas líneas:
+  // minarlas convertía la etiqueta («Productos confirmados por el dueño
+  // en el espejo…») en un «servicio». El goal las conserva (al prompt).
+  const formTextBase = richGoal;
   const espLines = fundamentoLiteral.espejoGoalLines(fields, lang);
   if (espLines.length) richGoal = [richGoal, ...espLines].filter(Boolean).join('\n');
   if (!business) return res.status(400).json({ error: lang === 'en' ? 'Tell us your business name' : 'Contanos el nombre de tu negocio' });
@@ -24870,6 +24880,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         colorSource = 'web';
       }
       webExtraPhotos = await trialWebPhotos(webData);
+      marcaWebBrand(webData, webExtraPhotos);
     }
     // (v230) LECTURA PROFUNDA: catálogo completo de su web (páginas de
     // catálogo + PDFs enlazados) y mapa foto→producto de las fotos del
@@ -24888,7 +24899,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     const effCategory = rubroRes.category;
     // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
-    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal, deep, rubro: rubroRes, onboarding: ocAns });
+    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns });
     // (rubro-literal) PUERTA FAIL-CLOSED: sin producto evidenciado no hay
     // semana. 'todo' sin servicios, sin catálogo y sin detectados = el
     // caso del primo (Q1 vacía): 400 con falta_producto para que el front
@@ -24898,7 +24909,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados })) {
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
     }
-    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang });
+    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true });
     // 🧠 Análisis (2026-10-19): misma radiografía que la ruta stream. Si los
     // datos del @ no llegan, el análisis queda ausente — jamás se afirma un
     // nacimiento sobre una cuenta que no se pudo leer.
@@ -24924,11 +24935,17 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         }), 'trial');
       }
       if (trialAnalysisJson && Array.isArray(posts)) {
-        for (const p of posts) {
-          if (!p || p.why) continue;
-          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, trialAnalysisJson, trialDigest);
+        // (LOTE PRUEBA-PRODUCTO-REAL) «Porque muestra X» exige que la
+        // pieza muestre X: posts[i] ↔ spec.specPosts[i] (mismo orden).
+        // Sin foto↔producto en el mapa, sinMuestra → cae al candidato
+        // honesto. Sin spec, fail-closed: tampoco se afirma.
+        const spList = (spec && Array.isArray(spec.specPosts)) ? spec.specPosts : [];
+        posts.forEach((p, i) => {
+          if (!p || p.why) return;
+          const sp = spList[i];
+          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, trialAnalysisJson, trialDigest, { sinMuestra: !(sp && sp.photo_product) });
           if (w) p.why = w;
-        }
+        });
       }
     } catch (e) { /* el análisis nunca frena la prueba */ }
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
@@ -25043,7 +25060,7 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
   // fotos mapeadas (la CDN de IG no se deja hotlinkear: sin esto las
   // tarjetas saldrían grises, lección v187). Nunca lanza: si una foto no
   // se pudo bajar, la tarjeta queda con el nombre.
-  const ocProds = onboardingProducts.detectProducts({ bio: bio || '', captions });
+  const ocProds = onboardingProducts.detectProducts({ bio: bio || '', captions, excludeNames: [name, ig] });
   const ocMapped = onboardingProducts.mapProductPhotos(ocProds, embedPosts.map((p) => ({ url: p.thumb, text: p.caption || '' })).filter((x) => x.url));
   let ocProductos = ocMapped;
   try {
@@ -25107,6 +25124,23 @@ async function trialWebPhotos(webData) {
   try { return await webExtract.localizeSitePhotos(webData.photos, MEDIA_DIR, 6); }
   catch (e) { return []; }
 }
+// (LOTE PRUEBA-PRODUCTO-REAL) La foto de portada del negocio (og:image,
+// primera de webData.photos) es imagen DE MARCA: se marca con el tema
+// 'marca' para que el gate de la prueba la pueda usar en cualquier
+// posteo (es su propia imagen, siempre on-topic). Sin esto, las fotos
+// de marca sin tags derivables quedaban fuera del pool y el stock las
+// reemplazaba.
+function marcaWebBrand(webData, extraPhotos) {
+  try {
+    if (!webData || !Array.isArray(webData.photos) || !webData.photos.length) return;
+    if (!Array.isArray(extraPhotos) || !extraPhotos.length) return;
+    const og = webData.photos[0] && webData.photos[0].url;
+    if (!og) return;
+    for (const w of extraPhotos) {
+      if (w && w.url === og) w.temas = [...new Set([...(w.temas || []), 'marca'])];
+    }
+  } catch (e) { /* best-effort: sin marca, la semana sale con pósters */ }
+}
 function trialWebPhotosUsed(specPhotos) {
   return (specPhotos || []).filter((p) => typeof p === 'string' && path.basename(p).startsWith('web-')).length;
 }
@@ -25167,7 +25201,7 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
   // Las fotos del sitio se hotlinkean directo (son del propio negocio);
   // si alguna no carga, la tarjeta queda con el nombre (onerror).
   const ocProductos = onboardingProducts.mapProductPhotos(
-    onboardingProducts.detectProducts({ services: data.services || [], description: data.description || '' }),
+    onboardingProducts.detectProducts({ services: data.services || [], description: data.description || '', excludeNames: [data.name] }),
     (data.photos || []).map((p) => ({ url: p.url, text: [p.alt || '', String(p.url || '').split('?')[0].split('/').pop() || ''].join(' ') })).filter((x) => x.url)
   );
   res.json({
@@ -25586,11 +25620,16 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           colorSource = 'web';
         }
         webExtraPhotos = await trialWebPhotos(webData);
+        marcaWebBrand(webData, webExtraPhotos);
       }
     }
     // (FUNDAMENTO-LITERAL · pieza 1) Espejo aprobado: líneas literales al
     // goal. Va FUERA del bloque web (no anidado en webData): el espejo
     // manda también en flujos solo-IG o solo-email, sin web.
+    // (LOTE PRUEBA-PRODUCTO-REAL) El digest se compila SIN esas líneas
+    // (ver /api/trial/generate): minarlas convertía la etiqueta del
+    // espejo en un «servicio». El goal las conserva (al prompt).
+    const formTextBaseS = richGoal;
     const espLinesS = fundamentoLiteral.espejoGoalLines(fields, lang);
     if (espLinesS.length) richGoal = [richGoal, ...espLinesS].filter(Boolean).join('\n');
     // (v230) LECTURA PROFUNDA + (v229) FUNDAMENTO: el digest se compila
@@ -25623,7 +25662,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const trialDigest = buildTrialDigest({
       business, category, webData,
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
-      formText: richGoal, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns,
+      formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns,
     });
     // (rubro-literal) PUERTA FAIL-CLOSED, igual que en /api/trial/generate:
     // sin producto evidenciado no hay semana ni stream de piezas.
@@ -25664,7 +25703,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     let uploadProduct = { classified: false };
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang });
+    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true });
     const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
     const week = buildTrialWeek(n, lang); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(effCategory) ? effCategory : 'otro';
@@ -26033,7 +26072,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       };
       const probe = (off) => {
         try {
-          return demo.buildDemoSpec({ business, category, country: effCountry, tone, photoPath: null, goal: richGoal, goal_key, accent, btn, count: 1, topicOffset: off, excludePhotos: [...usedPhoto], bioText, lang });
+          return demo.buildDemoSpec({ business, category, country: effCountry, tone, photoPath: null, goal: richGoal, goal_key, accent, btn, count: 1, topicOffset: off, excludePhotos: [...usedPhoto], bioText, lang, trialNoStock: true });
         } catch (e) { return null; }
       };
       for (let off = n; off < n + 3 && posts.length < 3; off++) {
@@ -26134,11 +26173,15 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       competitionLine = trialCompetitionLine(trialAnalysis);
       trialAnalysis = analysisEngine.gateForPlan(trialAnalysis, 'trial');
       if (Array.isArray(posts)) {
-        for (const p of posts) {
-          if (!p || p.why) continue;
-          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, trialAnalysis, trialDigest);
+        // (LOTE PRUEBA-PRODUCTO-REAL) «Porque muestra X» exige foto↔
+        // producto real: posts[i] ↔ specPosts[i] (mismo orden). Sin
+        // foto del producto en el mapa, sinMuestra → candidato honesto.
+        posts.forEach((p, i) => {
+          if (!p || p.why) return;
+          const sp = specPosts[i];
+          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, trialAnalysis, trialDigest, { sinMuestra: !(sp && sp.photo_product) });
           if (w) p.why = w;
-        }
+        });
       }
     } catch (e) { /* el análisis nunca frena la prueba */ }
     // Payload IDÉNTICO al de /api/trial/generate (el frontend lo guarda en idb igual)
@@ -27954,7 +27997,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v638';
+const BUILD_ID = '20261101-v639';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

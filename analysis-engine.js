@@ -550,7 +550,7 @@ const INTENT_WHY_EN = {
 const FINDING_FOR_FORMAT = { reel: 'reels', video: 'reels' };
 const FINDING_FOR_TIPO = { promo: 'estrella', novedad: 'estrella' };
 
-function whyForPost(post, analysis, digest) {
+function whyForPost(post, analysis, digest, opts) {
   if (!post || typeof post !== 'object') return null;
   const en = !!(analysis && analysis.lang === 'en');
   const T = (es, enS) => (en ? enS : es);
@@ -570,7 +570,11 @@ function whyForPost(post, analysis, digest) {
   const d = digest || {};
   const anchor = ((d.productos || [])[0] && (d.productos[0].nombre || d.productos[0])) ||
     ((d.servicios || [])[0] && (d.servicios[0].nombre || d.servicios[0])) || null;
-  if (anchor) candidates.push(T('Porque muestra ' + String(anchor) + ', uno de los fuertes de tu negocio, con tu línea visual.', 'Because it shows ' + String(anchor) + ', one of your business strengths, in your visual line.'));
+  // (LOTE PRUEBA-PRODUCTO-REAL · sinMuestra) «Porque muestra X» solo
+  // si la pieza REALMENTE muestra X (foto↔producto del mapa). Una pieza
+  // de marca/stock sin foto del producto no puede afirmar que lo muestra:
+  // el porqué cae al siguiente candidato honesto (la semana como un todo).
+  if (anchor && !(opts && opts.sinMuestra)) candidates.push(T('Porque muestra ' + String(anchor) + ', uno de los fuertes de tu negocio, con tu línea visual.', 'Because it shows ' + String(anchor) + ', one of your business strengths, in your visual line.'));
   const intent = String(post.salesIntent || post.intent || post.intencion || '').toLowerCase();
   if (INTENT[intent]) candidates.push(INTENT[intent] + T(': sale en tu mejor franja y con un gancho que frena el scroll.', ': it goes out in your best time band with a hook that stops the scroll.'));
   candidates.push(T('Porque forma parte de una semana pensada como un todo: cada pieza cumple un rol distinto en tu grilla.', 'Because it is part of a week designed as a whole: every piece plays a different role on your grid.'));

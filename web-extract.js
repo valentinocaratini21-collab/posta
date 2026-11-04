@@ -199,6 +199,34 @@ function temasFromText(text) {
 }
 
 // ---------- Extracción principal ----------
+// (LOTE PRUEBA-PRODUCTO-REAL) Un nombre de negocio NO es un titular:
+// el hero problema-primero («Mi feed queda a medias…», Posty postea…)
+// llegaba como og:title y se guardaba como nombre. name-like = corto,
+// sin comillas de cita, sin pinta de frase, nunca una palabra basura
+// de navegación (Inicio/Home). Si ningún candidato parece nombre, '':
+// mejor pedir el nombre que inventarlo.
+const NAME_JUNK = new Set(['inicio', 'home', 'bienvenidos', 'bienvenido', 'welcome', 'pagina principal', 'página principal', 'portada', 'index']);
+function cutNameSep(t) {
+  return String(t || '').split(/\s[|–—:·]\s/)[0].trim();
+}
+function isNameLike(raw) {
+  const s = cutNameSep(raw);
+  if (!s || s.length < 2 || s.length > 60) return false;
+  if (/[«»]/.test(s)) return false; // cita/problema, no nombre
+  if (!/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(s)) return false;
+  const words = s.split(/\s+/).filter(Boolean);
+  if (words.length > 7) return false; // una frase, no un nombre
+  if (NAME_JUNK.has(s.toLowerCase())) return false;
+  return true;
+}
+function pickName(cands) {
+  for (const c of (cands || [])) {
+    const s = cutNameSep(c);
+    if (isNameLike(s)) return s.slice(0, 60);
+  }
+  return '';
+}
+
 async function fetchBusinessSite(rawUrl) {
   const url = normalizeSiteUrl(rawUrl);
   if (!url) return null;
@@ -228,13 +256,12 @@ async function fetchBusinessSite(rawUrl) {
   }
   const ldText = (x) => cleanText(typeof x === 'string' ? x : (x && x.name) || '').slice(0, 300);
 
-  // 2) Nombre: JSON-LD > og:site_name > title (cortado en separadores)
-  let name = ld ? ldText(ld.name) : '';
-  if (!name) name = meta(html, 'og:site_name');
-  if (!name) {
-    const t = meta(html, 'og:title') || (html.match(/<title[^>]*>([^<]{1,120})<\/title>/i) ? cleanText(html.match(/<title[^>]*>([^<]{1,120})<\/title>/i)[1]) : '');
-    name = t.split(/\s[|–—:—·]\s/)[0].trim().slice(0, 60);
-  }
+  // 2) Nombre: JSON-LD > og:site_name > <title> > og:title, solo si
+  // parece nombre (LOTE PRUEBA-PRODUCTO-REAL: el hero problema-primero
+  // NO es el nombre del negocio; el <title> manda sobre un og:title
+  // con pinta de titular). Sin candidato válido: '' (no inventar).
+  const titleTag = (html.match(/<title[^>]*>([^<]{1,120})<\/title>/i) ? cleanText(html.match(/<title[^>]*>([^<]{1,120})<\/title>/i)[1]) : '');
+  const name = pickName([ld ? ldText(ld.name) : '', meta(html, 'og:site_name'), titleTag, meta(html, 'og:title')]);
   // 3) Descripción: JSON-LD > meta description/og
   let description = ld ? ldText(ld.description) : '';
   if (!description) description = meta(html, 'description') || meta(html, 'og:description');
@@ -420,4 +447,6 @@ module.exports = {
   localizeSitePhotos,
   temasFromText,
   isPrivateIpLiteral,
+  pickName,
+  isNameLike,
 };

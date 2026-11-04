@@ -396,7 +396,7 @@ const PHOTO_STRONG_TEMAS = new Set([
   'dental', 'salud', 'tech', 'reparacion', 'autos', 'viaje', 'playa',
 ]);
 
-function photoGateCtx({ category, subcat, topic, isCafe, neutralDefault }) {
+function photoGateCtx({ category, subcat, topic, isCafe, neutralDefault, trialNoStock }) {
   // (v199) El mundo se resuelve por subrubro. (v235) Belleza sin subrubro:
   // con contexto de cliente/prueba (neutralDefault, digest presente) el
   // mundo es NEUTRO — el default pelo quedó solo para el harness legacy
@@ -407,7 +407,7 @@ function photoGateCtx({ category, subcat, topic, isCafe, neutralDefault }) {
   const world = new Set(PHOTO_WORLD[key] || PHOTO_WORLD[category] || PHOTO_WORLD.otro);
   const forb = new Set(AUDIENCE_FORBIDDEN_TEMAS[key] || AUDIENCE_FORBIDDEN_TEMAS[category] || []);
   if (topic && topic.tema) for (const c of (TEMA_CONFLICTS[topic.tema] || [])) forb.add(c);
-  return { world, forb, isCafe: !!isCafe };
+  return { world, forb, isCafe: !!isCafe, trialNoStock: !!trialNoStock };
 }
 
 // El gate sobre una lista de temas (v212): lo comparte el stock (vía
@@ -416,6 +416,10 @@ function photoGateCtx({ category, subcat, topic, isCafe, neutralDefault }) {
 function temasPassGate(temas, ctx) {
   if (!temas || !temas.length) return false; // sin tags: el gate es duro, no entra
   if (temas.some((x) => ctx.forb.has(x))) return false;
+  // (LOTE PRUEBA-PRODUCTO-REAL) En la prueba, la foto de MARCA del negocio
+  // (og:image, temas ['marca']) pasa el gate: es su propia imagen, no
+  // necesita pertenecer al mundo del rubro. Solo en trialNoStock.
+  if (ctx && ctx.trialNoStock && temas.includes('marca')) return true;
   if (temas.some((x) => PHOTO_STRONG_TEMAS.has(x) && !ctx.world.has(x))) return false;
   if (!temas.some((x) => ctx.world.has(x))) return false;
   return true;
@@ -465,10 +469,19 @@ function pickPhotoGated(topic, poolFams, used, ctx) {
 function pickWebPhoto(topic, webPool, used, ctx) {
   if (!webPool || !webPool.length) return null;
   const productHit = (w) => !!(topic && topic.digest_anchor && w.producto && clientDigest.sameItemName(w.producto, topic.digest_anchor));
+  // (LOTE PRUEBA-PRODUCTO-REAL) En la prueba no hay «cualquier foto que
+  // pase»: el rango 2 (cualquier foto del pool) es el que colaba fotos
+  // de ejemplo (café) o de otra cosa en posteos de un negocio que no
+  // vende eso. En trialNoStock el tercer rango es solo la foto de MARCA
+  // (og:image del negocio, temas ['marca']): su propia imagen siempre
+  // puede ilustrar sus posteos; cualquier otra foto sin match exacto
+  // no se usa — el slot sale como póster de marca, nunca stock.
   const tiers = [
     (w) => productHit(w),
     (w) => !!(topic && topic.tema && w.temas.includes(topic.tema)),
-    () => true,
+    (ctx && ctx.trialNoStock)
+      ? (w) => (w.temas || []).includes('marca')
+      : () => true,
   ];
   for (let ti = 0; ti < tiers.length; ti++) {
     const hit = webPool.find((w) => {
@@ -1243,7 +1256,7 @@ function renderDemoVideo(imagePaths, runDir, idx) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang, trialNoStock = false }) {
   // (v274 · MODO EN) lang 'en': catálogo de temas EN, frames del digest EN,
   // goalLine "As you asked:" y caps de titular con hang-words EN. Sin lang
   // (o 'es') el comportamiento es idéntico al histórico.
@@ -1367,7 +1380,11 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     for (let k = topicOffset; k < allTopics.length && chosen.length < n; k++) {
       const t = allTopics[k];
       const isPoster = posterMode && topicOffset === 0 && chosen.length === 0;
-      if (!isPoster) {
+      // (LOTE PRUEBA-PRODUCTO-REAL · trialNoStock) En la prueba el tema
+      // no necesita que el stock lo ilustre: un tema del fundamento
+      // entra igual y, sin foto real, sale como póster de marca. Sin
+      // este bypass, una semana sin web (vía @) quedaría en 1 pieza.
+      if (!isPoster && !trialNoStock) {
         const ctx = photoGateCtx({ category: cat, subcat, topic: t, isCafe, neutralDefault });
         // Un tema entra si lo puede ilustrar el stock O una foto de su web.
         // (v230) También entra si el mapa foto→producto cubre una foto de
@@ -1401,7 +1418,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
             const chk = clientDigest.pieceAnchored(`${t.headline || ''} ${t.caption || ''}`, anchors);
             if (chk.ok) continue;
             const cand = digestTopics.find((dt) => dt && !inUse.has(dt.digest_anchor)
-              && topicPhotoMatchable(dt, poolFams, photoGateCtx({ category: cat, subcat, topic: dt, isCafe, neutralDefault })));
+              && (trialNoStock || topicPhotoMatchable(dt, poolFams, photoGateCtx({ category: cat, subcat, topic: dt, isCafe, neutralDefault }))));
             if (cand) {
               inUse.add(cand.digest_anchor);
               topics[i] = cand;
@@ -1426,7 +1443,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       .sort((a, b) => (topics[b].tema ? 1 : 0) - (topics[a].tema ? 1 : 0));
     const usedWeb = new Set();
     for (const i of order) {
-      const ctx = photoGateCtx({ category: cat, subcat, topic: topics[i], isCafe, neutralDefault });
+      const ctx = photoGateCtx({ category: cat, subcat, topic: topics[i], isCafe, neutralDefault, trialNoStock });
       // (v212) Primero las fotos de SU web (son suyas y venden más): match
       // exacto de tema, después cualquier pase del gate; sin uso repetido
       // salvo que no quede otra que pase.
@@ -1438,8 +1455,13 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         }
         continue;
       }
-      const famName = pickPhotoGated(topics[i], poolFams, usedFams, ctx);
+      // (LOTE PRUEBA-PRODUCTO-REAL · trialNoStock) Sin stock en la
+      // prueba: si no hay foto real (web con match o producto), el slot
+      // sale como póster de marca (medallón + titular + paleta del
+      // negocio) — nunca una foto de stock de otra cosa.
+      const famName = trialNoStock ? null : pickPhotoGated(topics[i], poolFams, usedFams, ctx);
       if (!famName) {
+        if (trialNoStock) { posterAt.add(i); photos[i] = profilePicPath || null; continue; }
         // No debería pasar (la selección ya exigió match): si pasa, el
         // slot sale como póster SOLO si la semana todavía no tiene el
         // suyo (v197: máximo 1) y si no, con la primera foto del pool —
@@ -1733,9 +1755,9 @@ function closeTrialCaption(caption, topic, tone, lang) {
   return captions.ensureCaptionCtaClose(caption, t.kind, tone, lang);
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang }) {
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang });
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang, trialNoStock });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 
@@ -2252,6 +2274,28 @@ function httpsGet(url, timeoutMs, extraHeaders) {
   });
 }
 
+// (LOTE PRUEBA-PRODUCTO-REAL) Decodifica un full_name del embed y corta
+// el tagline («Nombre • eslogan» → «Nombre»). El embed trae el JSON
+// DOBLE escapado (\\u2022 en el HTML = \u2022 tras un nivel = • tras
+// dos): se decodifica en dos pasadas, cada una de un solo nivel, para
+// no comerse una barra ni decodificar de más.
+function decodeIgName(raw) {
+  let name = String(raw || '');
+  for (let k = 0; k < 2; k++) {
+    name = name.replace(/\\(\\|u[0-9a-fA-F]{4}|[nrt\/])/g, (_, esc) => {
+      if (esc === '\\') return '\\';
+      if (esc === '/') return '/';
+      if (esc[0] === 'u') {
+        try { return String.fromCharCode(parseInt(esc.slice(1), 16)); } catch (e) { return ''; }
+      }
+      return ' '; // \n \r \t
+    });
+  }
+  name = name.replace(/[\u0000-\u001F]/g, '');
+  const cut = name.split(/\s*•\s*/)[0].trim();
+  return (cut || name).trim().slice(0, 60);
+}
+
 async function fetchIgProfile(ig) {
   // Devuelve { colors, pic, name } o null. Best-effort con timeouts acotados.
   const user = String(ig || '').replace(/[^A-Za-z0-9._]/g, '').slice(0, 40);
@@ -2268,8 +2312,12 @@ async function fetchIgProfile(ig) {
   if (!/^https:\/\/[a-z0-9.-]*cdninstagram\.com\//i.test(picUrl)) return null;
   const img = await httpsGet(picUrl, 6000);
   if (!String(img.headers['content-type'] || '').startsWith('image/')) return null;
-  const nm = html.match(/\\"full_name\\":\\"([^\\]+)\\"/);
-  const name = nm ? nm[1].replace(/[\u0000-\u001F]/g, '').slice(0, 60) : '';
+  // (LOTE PRUEBA-PRODUCTO-REAL) full_name con escapes: el nombre real
+  // trae \uXXXX (la • de «Posty • Tu community manager») y el [^\\]+
+  // viejo cortaba el match entero → nombre vacío y la vía por @ moría
+  // en «Contanos el nombre». Mismo patrón que extractIgBiography.
+  const nm = html.match(/\\"full_name\\":\\"((?:\\[nrt\\/]|\\u[0-9a-fA-F]{4}|[^"\\])*)\\"/);
+  const name = nm ? decodeIgName(nm[1]) : '';
   const tmp = path.join(os.tmpdir(), 'igpic-' + Date.now() + '-' + Math.floor(Math.random() * 1e6) + '.jpg');
   fs.writeFileSync(tmp, img.body);
   try {
@@ -2529,6 +2577,8 @@ module.exports = {
   // Prueba en 1 campo (prefill + streaming)
   fetchIgEmbedHtml,
   fetchIgProfilePageHtml,
+  fetchIgProfile,
+  decodeIgName,
   extractIgBiography,
   cutWords,
   categoryFromText,
@@ -2554,6 +2604,7 @@ module.exports = {
   photoGateCtx,
   photoPassesGate,
   pickPhotoGated,
+  pickWebPhoto,
   topicPhotoMatchable,
   posterBgFor,
   treatmentForStyle,

@@ -349,6 +349,12 @@ function offeringsFromText(text) {
   for (const seg0 of segments) {
     let s = cleanSegment(seg0);
     if (!s) continue;
+    // (LOTE PRUEBA-PRODUCTO-REAL) Las líneas del espejo son texto del
+    // sistema («Productos confirmados por el dueño en el espejo (usar
+    // EXACTAMENTE estos…)»): minarlas convertía la ETIQUETA en un
+    // «servicio» y el porqué afirmaba que la foto «muestra Productos
+    // confirmados por el dueño». Nunca son oferta del negocio.
+    if (/confirmados? por el dueñ|confirmed by the owner|usar EXACTAMENTE|use EXACTLY/i.test(s)) continue;
     // "… en Palermo" → ciudad + servicio sin la cola geográfica.
     const mCity = s.match(/^(.*?)\s+en\s+([A-ZÁÉÍÓÚÑ][\wáéíóúñ]+(?:\s[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)?)$/);
     if (mCity && mCity[1].split(' ').length >= 1) {
@@ -378,6 +384,11 @@ function offeringsFromText(text) {
     // (v343) La puerta manda también acá: un segmento de prosa que no
     // es una oferta plausible no se convierte en "servicio".
     if (!isPlausibleOfferItem(s)) continue;
+    // (LOTE PRUEBA-PRODUCTO-REAL) Basura de fecha: un segmento con año
+    // («Lanzamiento 1», «2027») no es una oferta — la bio con fechas
+    // de lanzamiento lo colaba como «servicio» y de ahí a los temas
+    // («Lanzamiento 1», «2027» como titulares de la semana).
+    if (/\b(19|20)\d{2}\b/.test(s) || /^\d+$/.test(s) || /lanzamiento|coming soon|próximamente|proximamente/i.test(s)) continue;
     items.push(s.charAt(0).toUpperCase() + s.slice(1));
     if (items.length >= 8) break;
   }
