@@ -21,7 +21,7 @@ function ajustesView() {
     : q.get('ig') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡TikTok conectado! Ya podés compartir tus posteos</div>`
     : q.get('tiktok') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar TikTok')}</div>` : '';
-  const ggMsg = q.get('google') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡Google conectado! Ya podés responder tus reseñas ⭐</div>`
+  const ggMsg = q.get('google') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡Google conectado! Ya podés responder tus reseñas</div>`
     : q.get('google') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar Google')}</div>` : '';
   const tnMsg = q.get('tn') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡Tiendanube conectada! Posty ya lee tu catálogo, tu stock y tus ventas</div>`
     : q.get('tn') === 'error' ? `<div class="err">${pzIc('reject', 15)} No pudimos conectar tu Tiendanube. Probá de nuevo desde Conexiones.</div>` : '';
@@ -104,7 +104,7 @@ function ajustesView() {
     <div id="avisosPushHint" style="margin-bottom:12px">
       <div id="ajPushOff">
         <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You have not turned on notifications on your phone yet: your alerts are on, but they have nowhere to go.' : 'Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar.'}</p>
-        <button class="btn btn-primary" id="btnPushEnable">🔔 ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Activate notifications' : 'Activar notificaciones'}</button>
+        <button class="btn btn-primary" id="btnPushEnable">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Activate notifications' : 'Activar notificaciones'}</button>
         <div class="err" id="pzPushErr" style="display:none;margin-top:8px"></div> <!-- (LOTE PUSH-ERROR-VISIBLE) -->
         <div class="hint" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'When Posty asks permission to send notifications, tap Allow.' : 'Cuando Posty te pida permiso para mandar notificaciones, tocá Permitir.'}</div>
       </div>
@@ -126,7 +126,7 @@ function ajustesView() {
       <button class="btn btn-ghost" id="btnFailToggle">Cargando...</button>
       <span id="failNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div style="font-weight:800;margin:12px 0 6px">💬 Tu carta por WhatsApp</div>
+    <div style="font-weight:800;margin:12px 0 6px">Tu carta por WhatsApp</div>
     <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">Cada domingo a la noche, con el botón para aprobar tu semana en un toque.</p>
     <div class="field"><label>Tu número de WhatsApp</label><input id="s_waNotify" placeholder="Ej.: 5491123456789" inputmode="tel" maxlength="20" autocomplete="off"><div class="hint">Con código de país (Argentina: 54 9 + tu número). Solo lo uso para mandarte tu carta y avisos de tu semana.</div></div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
@@ -231,7 +231,7 @@ function ajustesView() {
       <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
       <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div style="font-weight:800;margin:12px 0 6px">📸 Cuando subo fotos</div>
+    <div style="font-weight:800;margin:12px 0 6px">Cuando subo fotos</div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <select id="sftDefaultSel" style="font-size:14px;border-radius:10px;padding:9px 12px;border:1px solid rgba(10,30,51,.15);background:#fff;color:#0A1E33;max-width:100%">
         <option value="preguntar">Preguntar siempre</option>
@@ -256,7 +256,7 @@ function ajustesView() {
     <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Cada posteo publicado suma el botón <b>${pzIc('music', 16)} Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
     <div id="ttZone"><p class="hint">Cargando…</p></div>
     <div id="ttMsg"></div>
-    <div style="font-weight:800;margin:12px 0 6px">⭐ Google · Reseñas</div>
+    <div style="font-weight:800;margin:12px 0 6px">Google · Reseñas</div>
     <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
     <div id="ggZone"><p class="hint">Cargando…</p></div>
     <div id="ggMsg"></div>
@@ -370,9 +370,9 @@ function ttSemanalRow(sem, connected) {
     : (en ? 'Your weekly videos do NOT go to TikTok unless you ask.'
            : 'Tus videos semanales NO salen en TikTok salvo que lo pidas.');
   const last = (sem && Array.isArray(sem.last) && sem.last.length)
-    ? `<div class="hint" style="margin-top:6px">${(sem.last || []).map(r => `🎵 ${esc(r.status || '')}${r.privacy ? ' · ' + esc(r.privacy) : ''}${r.created_at ? ' · ' + esc(String(r.created_at).slice(0, 10)) : ''}`).join('<br>')}</div>`
+    ? `<div class="hint" style="margin-top:6px">${(sem.last || []).map(r => `${esc(r.status || '')}${r.privacy ? ' · ' + esc(r.privacy) : ''}${r.created_at ? ' · ' + esc(String(r.created_at).slice(0, 10)) : ''}`).join('<br>')}</div>`
     : '';
-  return `<div class="set-row" style="margin-top:12px"><div><div class="t">🎵 TikTok semanal (opcional)</div>
+  return `<div class="set-row" style="margin-top:12px"><div><div class="t">TikTok semanal (opcional)</div>
     <div class="d">${nota}</div>${last}</div>
     <button class="btn ${on ? 'btn-danger' : 'btn-primary'} btn-sm" id="btnTtSemanal" style="flex:none">${on ? (en ? 'Turn off weekly TikTok' : 'Desactivar TikTok semanal') : (en ? 'Turn on weekly TikTok' : 'Activar TikTok semanal')}</button></div>`;
 }
@@ -432,7 +432,7 @@ async function ggZoneLoad() {
   try { st = await api.get('/api/google/status'); } catch (e) { /* queda el fallback */ }
   if (!st) { zone.innerHTML = '<p class="hint">No se pudo cargar el estado de Google.</p>'; return; }
   if (!st.configured) {
-    zone.innerHTML = `<div class="set-row"><div><div class="t">⭐ Google — Próximamente</div>
+    zone.innerHTML = `<div class="set-row"><div><div class="t">Google — Próximamente</div>
       <div class="d">Estamos terminando la conexión con Google. Cuando esté lista, vas a poder responder las reseñas de tu negocio con un toque, sin salir de Posty.</div></div></div>`;
     return;
   }
@@ -489,7 +489,7 @@ async function tnZoneLoad() {
   }
   const datos = [];
   if (st.products_total != null) datos.push(`${st.products_total} productos`);
-  if (st.star && st.star.name) datos.push(`⭐ tu más vendido: <b>${esc(st.star.name)}</b> (${st.star.units_30d} ventas en 30 días)`);
+  if (st.star && st.star.name) datos.push(`tu más vendido: <b>${esc(st.star.name)}</b> (${st.star.units_30d} ventas en 30 días)`);
   let syncTxt = '';
   if (st.synced_at) {
     const d = new Date(String(st.synced_at).replace(' ', 'T'));
@@ -574,7 +574,7 @@ async function styleGalleryLoad() {
     let next;
     if (favs.includes(code)) next = favs.filter((c) => c !== code);
     else {
-      if (favs.length >= 3) { if (msg) msg.textContent = 'Hasta 3 favoritos ⭐ — sacá uno para cambiarlo por otro.'; return; }
+      if (favs.length >= 3) { if (msg) msg.textContent = 'Hasta 3 favoritos — sacá uno para cambiarlo por otro.'; return; }
       next = favs.concat([code]);
     }
     try {
@@ -992,8 +992,8 @@ function bindSettings() {
               (r2.wa_number_masked || waMasked) ? ('Activado: tu carta llega al ' + (r2.wa_number_masked || waMasked) + ' con el botón para aprobar.') : 'Activado: tu carta llega por WhatsApp con el botón para aprobar.',
               'Sin WhatsApp: tu carta llega por notificación y en Tu análisis.');
             if (waIn) waIn.value = '';
-          } else alert((r2 && r2.error) || 'No pude cambiarlo 😅');
-        } catch (e) { alert('No pude cambiarlo 😅'); }
+          } else alert((r2 && r2.error) || 'No pude cambiarlo');
+        } catch (e) { alert('No pude cambiarlo'); }
         btnWa.disabled = false;
       };
       const paintSum = () => {
@@ -1408,7 +1408,7 @@ function bindSettings() {
       try { webStatus = await api.get('/api/website/status'); } catch (e) { /* queda el anterior */ }
       paintWebZone(webStatus);
       refreshWebDna();
-      toast('✅ <b>Ya estudiamos tu web.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
+      toast('<b>Ya estudiamos tu web.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
     } catch (e) {
       paintWebZone(webStatus, (e && e.message) || 'No se pudo analizar tu web');
     }
@@ -1459,7 +1459,7 @@ function bindSettings() {
       try { storiesStatus = await api.get('/api/ig/stories-status'); } catch (e) { /* queda el anterior */ }
       paintStoriesZone(storiesStatus);
       refreshWebDna();
-      toast('✅ <b>Ya leímos tus historias.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
+      toast('<b>Ya leímos tus historias.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
     } catch (e) {
       paintStoriesZone(storiesStatus, (e && e.message) || 'No se pudieron analizar tus historias');
     }
@@ -1516,7 +1516,7 @@ function bindSettings() {
       await api.post('/api/ig/mine-comments', body, { timeout: 240000 });
       try { srcCommentsStatus = await api.get('/api/ig/comments-status'); } catch (e) { /* queda el anterior */ }
       paintSrcComments(srcCommentsStatus);
-      toast('✅ <b>Ya analizamos tus comentarios.</b><br>La IA ahora sabe qué te preguntan tus seguidores.');
+      toast('<b>Ya analizamos tus comentarios.</b><br>La IA ahora sabe qué te preguntan tus seguidores.');
     } catch (e) {
       paintSrcComments(srcCommentsStatus, (e && e.message) || 'No se pudieron analizar los comentarios');
     }
@@ -1566,7 +1566,7 @@ function bindSettings() {
       await api.post('/api/places/analyze', body, { timeout: 240000 });
       try { placesStatus = await api.get('/api/places/status'); } catch (e) { /* queda el anterior */ }
       paintPlacesZone(placesStatus);
-      toast('✅ <b>Ya leímos tus reseñas.</b><br>Los testimonios quedaron en "🧬 Lo que la IA sabe".');
+      toast('<b>Ya leímos tus reseñas.</b><br>Los testimonios quedaron en "🧬 Lo que la IA sabe".');
     } catch (e) {
       paintPlacesZone(placesStatus, (e && e.message) || 'No se pudo buscar tu negocio');
     }
@@ -1611,7 +1611,7 @@ function bindSettings() {
       try { fbStatus = await api.get('/api/fb/status'); } catch (e) { /* queda el anterior */ }
       paintFbZone(fbStatus);
       refreshWebDna();
-      toast('✅ <b>Ya estudiamos tu página de Facebook.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
+      toast('<b>Ya estudiamos tu página de Facebook.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
     } catch (e) {
       paintFbZone(fbStatus, (e && e.message) || 'No se pudo analizar tu página');
     }
@@ -1652,7 +1652,7 @@ function bindSettings() {
     }
     if (lv.leveled_up) { // una sola vez por nivel: el backend lo garantiza, el frontend no re-dispara
       try {
-        toast('🎉 <b>¡Nivel ' + n + '!</b> ' + esc(String(lv.level_message || 'Posty te conoce cada vez mejor.')));
+        toast('<b>¡Nivel ' + n + '!</b> ' + esc(String(lv.level_message || 'Posty te conoce cada vez mejor.')));
         postyCelebrate(); // confetti + coreografía de malabares
       } catch (e) {}
     }
@@ -1728,7 +1728,7 @@ function bindSettings() {
     const fpLbl = fpN ? ((fpCur === 'UYU' ? '$U ' : '$') + fpN.toLocaleString('es-AR') + (fpCur === 'USD' ? ' USD' : '')) : '';
     const fpLine = fpN ? (en ? `${pzIc('heart', 14)} Your founder price (${fpLbl}/mo) stays fixed for 12 months from your signup.` : `${pzIc('heart', 14)} Tu precio de fundador (${fpLbl}/mes) queda fijo por 12 meses desde tu alta.`) : '';
     z.innerHTML = `<div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
-      <div style="font-size:15px;font-weight:800">⭐ ${en ? 'Founder' : 'Fundador'} #${n} ${en ? 'of The First 200' : 'de Los Primeros 200'}</div>
+      <div style="font-size:15px;font-weight:800">${en ? 'Founder' : 'Fundador'} #${n} ${en ? 'of The First 200' : 'de Los Primeros 200'}</div>
       <p style="color:var(--mut);font-size:13px;line-height:1.55;margin:6px 0 10px">${en ? 'Your spot in the founding cohort is yours. Do you want your business on the public founders page, with its name, trade and city?' : 'Tu lugar en la cohorte fundadora ya es tuyo. ¿Te sumás a la página de fundadores con el nombre de tu negocio, su rubro y su ciudad?'}</p>
       ${fpLine ? `<p style="color:var(--mut);font-size:13px;line-height:1.55;margin:0 0 10px">${fpLine}</p>` : ''}
       <label style="display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:700;cursor:pointer"><input type="checkbox" id="founderPub" ${pub ? 'checked' : ''} style="width:18px;height:18px"> ${en ? 'Yes, list my business' : 'Sí, sumame a la página'}</label>
@@ -2251,7 +2251,7 @@ function bindSettings() {
         try { document.execCommand('copy'); } catch (e2) {}
         t.remove();
       }
-      say(okMsg || '✅ Link copiado');
+      say(okMsg || 'Link copiado');
     };
     $('#pzRefCopy').onclick = () => copyLink();
     const copyText = async (t, okMsg) => {
@@ -2261,9 +2261,9 @@ function bindSettings() {
         try { document.execCommand('copy'); } catch (e2) {}
         ta.remove();
       }
-      say(okMsg || '✅ Copiado');
+      say(okMsg || 'Copiado');
     };
-    $('#pzRefCopyMsg').onclick = () => copyText(shareMsg, '✅ Mensaje copiado: pegalo donde quieras');
+    $('#pzRefCopyMsg').onclick = () => copyText(shareMsg, 'Mensaje copiado: pegalo donde quieras');
     z.querySelectorAll('[data-nudge]').forEach(b => b.onclick = () => {
       const p = info.pending[Number(b.dataset.nudge)];
       if (!p) return;
@@ -2279,7 +2279,7 @@ function bindSettings() {
       const k = b.dataset.share;
       if (k === 'wa') window.open('https://wa.me/?text=' + encodeURIComponent(shareMsg), '_blank');
       else if (k === 'x') window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareMsg), '_blank');
-      else if (k === 'ig') copyLink('✅ Link copiado: pegalo en tu historia o por DM');
+      else if (k === 'ig') copyLink('Link copiado: pegalo en tu historia o por DM');
     });
   })();
   // Marca
@@ -2310,7 +2310,7 @@ function bindSettings() {
     if (!orig) return;
     try {
       const nm = (orig.name || '').toLowerCase();
-      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#brandMsg').innerHTML = '<span style="font-size:12.5px;color:var(--dim)">⏳ Convirtiendo tu archivo a imagen…</span>';
+      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#brandMsg').innerHTML = '<span style="font-size:12.5px;color:var(--dim)">Convirtiendo tu archivo a imagen…</span>';
       const f = await logoFileToImage(orig);
       await uploadAssetFile(f, 'logo');
       try {
@@ -2462,7 +2462,7 @@ function bindSettings() {
     if (!confirm('¿Reiniciar todo? Se borran el logo, los colores, el nombre del negocio y los posteos pendientes (borradores y programados). El historial publicado no se toca.')) return;
     const brandMsgEl = $('#brandMsg');
     try {
-      brandMsgEl.innerHTML = '<span style="color:var(--mut);font-size:12.5px">⏳ Reiniciando…</span>';
+      brandMsgEl.innerHTML = '<span style="color:var(--mut);font-size:12.5px">Reiniciando…</span>';
       await api.post('/api/brand/reset', {});
       ASSETS = await api.get('/api/assets').catch(() => []);
       SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);

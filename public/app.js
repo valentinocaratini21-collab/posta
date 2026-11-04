@@ -33,6 +33,10 @@ const PZ_IC = {
   gear: '<path d="M21.9 10.4L21.9 13.6L18.5 16.7L20.1 17.9L17.9 20.1L13.3 19.9L13.6 21.9L10.4 21.9L7.3 18.5L6.1 20.1L3.9 17.9L4.1 13.3L2.1 13.6L2.1 10.4L5.5 7.3L3.9 6.1L6.1 3.9L10.7 4.1L10.4 2.1L13.6 2.1L16.7 5.5L17.9 3.9L20.1 6.1L19.9 10.7Z"/><circle cx="12" cy="12" r="3.2"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
   sprout: '<path d="M12 21V9"/><path d="M12 14Q8 14 5.5 10.5Q9 9.5 12 14Z"/><path d="M12 11Q16 11 18.5 7.5Q15 6.5 12 11Z"/>',
+  // (LOTE WEB-MEJORAS · 4/11) Íconos de navegación = los del dock del celular.
+  navCasa: '<path d="M3 11.5 12 3l9 8.5"/><path d="M5.5 10v10h13V10"/>',
+  navBarras: '<path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/>',
+  navBambu: '<path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/>',
   share: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6.5" r="2.5"/><circle cx="18" cy="17.5" r="2.5"/><path d="M8.3 10.8 15.6 7.7M8.3 13.2 15.6 16.3"/>',
   pencil: '<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/>',
   eye: '<path d="M2.5 12Q12 5.5 21.5 12Q12 18.5 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
@@ -2053,7 +2057,7 @@ function pzRopaListaHTML(nivel) {
   const puesto = (e) => (e.cat === 'conjunto' ? sel.conjunto === e.nv : sel[e.cat] === e.nv);
   return PZ_ROPA.map((e) => {
     const nom = en ? e.en : e.es;
-    if (e.nv > nv) return `<div class="pz-ropa-fila lock"><span class="pz-ropa-mini lock" aria-hidden="true">🔒</span><span class="pz-ropa-nom"><b>${esc(nom)}</b><span>${esc(en ? ('Unlocks at Level ' + e.nv) : ('Se desbloquea en el Nivel ' + e.nv))}</span></span></div>`;
+    if (e.nv > nv) return `<div class="pz-ropa-fila lock"><span class="pz-ropa-mini lock" aria-hidden="true">${pzIc('lock', 20)}</span><span class="pz-ropa-nom"><b>${esc(nom)}</b><span>${esc(en ? ('Unlocks at Level ' + e.nv) : ('Se desbloquea en el Nivel ' + e.nv))}</span></span></div>`;
     const on = puesto(e);
     const nuevo = (e.nv === nv) ? `<span class="pz-ropa-nuevo">✦ ${esc(en ? 'New!' : '¡Nuevo!')}</span>` : '';
     const btn = on
@@ -2171,7 +2175,7 @@ function pzOficinaListaHTML(nivel) {
   const nv = Math.max(0, Math.min(50, Number(nivel) || 0));
   return PZ_OFICINA.map((e) => {
     const nom = en ? e.en : e.es;
-    if (e.nv > nv) return '<div class="pz-oficina-fila lock"><span class="pz-oficina-mini lock" aria-hidden="true">🔒</span><span class="pz-oficina-nom"><b>' + esc(nom) + '</b><span>' + esc(en ? ('Unlocks at Level ' + e.nv) : ('Se desbloquea en el Nivel ' + e.nv)) + '</span></span></div>';
+    if (e.nv > nv) return '<div class="pz-oficina-fila lock"><span class="pz-oficina-mini lock" aria-hidden="true">' + pzIc('lock', 22) + '</span><span class="pz-oficina-nom"><b>' + esc(nom) + '</b><span>' + esc(en ? ('Unlocks at Level ' + e.nv) : ('Se desbloquea en el Nivel ' + e.nv)) + '</span></span></div>';
     const nuevo = (e.nv === nv && nv >= 1) ? '<span class="pz-oficina-nuevo">✦ ' + esc(en ? 'New!' : '¡Nuevo!') + '</span>' : '';
     const mini = e.full ? (e.mini || '') : e.svg;
     return '<div class="pz-oficina-fila"><span class="pz-oficina-mini"><svg viewBox="0 0 100 100" aria-hidden="true">' + mini + '</svg></span><span class="pz-oficina-nom"><b>' + esc(nom) + '</b><span>' + esc(en ? ('Level ' + e.nv) : ('Nivel ' + e.nv)) + '</span>' + nuevo + '</span></div>';
@@ -2338,7 +2342,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v622'; // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
+const CHUNK_V = '20261101-v624'; // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -6221,7 +6225,7 @@ function mzTabsHTML(tab) {
     : tab === 'analisis' ? 'analisis'
     : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('posty'), 'Inicio')}${t('analisis', 'analisis', pzIc('stems'), 'Estrategia')}${pzDockMasBtn('mz')}${t('jardin', 'jardin-posty', pzIc('sprout'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>${pzDockMasHTML()}`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${pzDockMasBtn('mz')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>${pzDockMasHTML()}`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -6303,9 +6307,9 @@ function appShell(tab, content) {
       <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" class="side-posty-ava"></span>
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
-    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('posty')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
-    <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('stems')}</span>Estrategia</button>
-    <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('sprout')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Prizes' : 'Premios'}</button>
+    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
+    <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('navBarras')}</span>Estrategia</button>
+    <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('navBambu')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Prizes' : 'Premios'}</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">${pzIc('logout')}</span>Salir</button>
@@ -18083,9 +18087,15 @@ function homeGridCompose(input) {
   // propio, se descarta una sola vez; si no, rinde aunque sea nuevo.
   const pubShortcodes = new Set();
   for (const p of pubs) { const sc = hfIgShortcode(p.ig_permalink); if (sc) pubShortcodes.add(sc); }
+  // (LOTE WEB-MEJORAS · 4/11) Un archivado no vuelve por recents viejos:
+  // si el snapshot aún trae un posteo que DB ya marca archived_ext, se
+  // descarta igual que su publicado (el feed es literal el feed de IG).
+  const archivedShortcodes = new Set();
+  for (const p of published) { if (p && !isStory(p) && p.status === 'published' && p.ig_state === 'archived_ext') { const sc = hfIgShortcode(p.ig_permalink); if (sc) archivedShortcodes.add(sc); } }
   for (const r of recents) {
     if (!r || !r.img) continue;
     if (r.shortcode && pubShortcodes.has(String(r.shortcode))) continue;
+    if (r.shortcode && archivedShortcodes.has(String(r.shortcode))) continue;
     tiles.push({ kind: 'ig', img: r.img, type: r.type || 'image', taken_at: (typeof r.taken_at === 'number' ? r.taken_at : null), isNew: false, pinned: r.pinned === true, likes: (typeof r.likes === 'number' ? r.likes : null), comments: (typeof r.comments === 'number' ? r.comments : null) });
   }
   // (Tanda feed 5 · ítem 3) FIJADOS del dueño (📌): las piezas propias
@@ -19510,7 +19520,7 @@ function hfProfileActionsHTML(en, acceptHTML) {
   // El espacio libre lo ocupa «Aceptar todo» REUBICADO (mismo
   // acceptBarHTML, mismo handler pzAcceptAllWeek, mismo alcance:
   // solo programados de la semana nueva pendientes, un toque sin
-  // confirmación) + una línea chiquita «Tocá el corazón para
+  // confirmación) + una línea chiquita «Tocá el corazón en los posteos para
   // aprobar.» JUNTO al botón, sin competir con él. La píldora
   // compacta de encima del chat SALE de .mz-bottomstack: Aceptar
   // todo existe UNA sola vez, en el encabezado. Sin candidatos, la
@@ -19518,10 +19528,10 @@ function hfProfileActionsHTML(en, acceptHTML) {
   // de que haya pendientes). La ubicación separada de la nota del
   // lote corazón-nota (arriba de la grilla, construido 1/11) queda
   // SUPERSEDED por esta: no se pone la nota en dos lugares.
-  // (LOTE MEJORAS-INICIO · pieza 1 · 3/11) Botón a la izquierda, nota con ❤️ a la derecha, un solo renglón a 390px (ver CSS: nowrap + ellipsis de seguridad).
+  // (LOTE MEJORAS-INICIO · pieza 1 · 3/11) Botón a la izquierda, nota a su lado en balance con él, sin emoji, alineada a la izquierda (en móvil envuelve a dos líneas).
   return '<div class="hf-pacts hf-pacts-accept">'
     + (acceptHTML || '')
-    + '<span class="hf-accept-note">' + (en ? '❤️ Tap the heart to approve.' : '❤️ Tocá el corazón para aprobar.') + '</span>'
+    + '<span class="hf-accept-note">' + (en ? 'Tap the heart on the posts to approve.' : 'Tocá el corazón en los posteos para aprobar.') + '</span>'
     + '</div>';
 }
 /* — Ítem 12: cubiertas de destacadas (render determinístico, $0 de IA) — */
@@ -20231,7 +20241,7 @@ function pzMomentoAvanceShow(o) {
     <button type="button" class="pz-celeb-x" data-pz-momento-x aria-label="${en ? 'Continue' : 'Seguir'}">${pzIc("x", 16)}</button>
     <span class="pz-momento-magia" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
     <span class="pz-momento-posty pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;object-fit:cover"></span>
-    <div class="pz-momento-candado" data-pz-momento-candado>🔒</div>
+    <div class="pz-momento-candado" data-pz-momento-candado>${pzIc('lock', 34)}</div>
     <div class="pz-momento-premio" data-pz-momento-premio>✦ ${esc(o.unlock)}</div>
     <p class="pz-momento-msg">${esc(en ? 'Posty brought your prize and placed it in the garden.' : 'Posty trajo tu premio y lo puso en el jardín.')}</p>
     ${o.siguiente ? `<p class="pz-momento-sigue">${esc(o.siguiente)}${o.siguientePremio ? ' — ' + esc(o.siguientePremio) : ''}</p>` : ''}

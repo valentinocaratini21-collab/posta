@@ -337,7 +337,7 @@ function anaStarterPhases() {
 
 function anaNeedLine(a, birth) {
   if (!birth) {
-    return anaT('De tu lado: <b>nada</b> — yo arranco. Tu semana ya está armada con este plan: la ves en ', 'On your side: <b>nothing</b> — I take it from here. Your week is already built with this plan: see it in ') + `<a href="#/app/schedule" style="color:inherit;text-decoration:underline">${anaT('tu agenda', 'your Schedule')}</a> 👇`;
+    return anaT('De tu lado: <b>nada</b> — yo arranco. Tu semana ya está armada con este plan: la ves en ', 'On your side: <b>nothing</b> — I take it from here. Your week is already built with this plan: see it in ') + `<a href="#/app/schedule" style="color:inherit;text-decoration:underline">${anaT('tu agenda', 'your Schedule')}</a>`;
   }
   const parts = [];
   try {
@@ -880,7 +880,7 @@ async function anaShareWeek(btn) {
     x.textAlign = 'center';
     x.fillStyle = accent;
     x.font = '800 40px system-ui, Arial, sans-serif';
-    x.fillText(en ? 'MY WEEK 💙' : 'MI SEMANA 💙', W / 2, baseY);
+    x.fillText(en ? 'MY WEEK' : 'MI SEMANA', W / 2, baseY);
     x.fillStyle = inkOnPrimary;
     let hSize = 86;
     x.font = '900 ' + hSize + 'px system-ui, Arial, sans-serif';
@@ -902,7 +902,7 @@ async function anaShareWeek(btn) {
       aEl.href = url; aEl.download = 'mi-semana-posty.png';
       document.body.appendChild(aEl); aEl.click(); aEl.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
-      if (typeof toast === 'function') toast(en ? '✅ Card downloaded — share it wherever you like' : '✅ Tarjeta descargada — compartila donde quieras');
+      if (typeof toast === 'function') toast(en ? 'Card downloaded — share it wherever you like' : 'Tarjeta descargada — compartila donde quieras');
     }
   } catch (e) {
     if (e && e.name === 'AbortError') return;
