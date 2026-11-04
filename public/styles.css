@@ -5150,3 +5150,18 @@ body.pz-postchat-open{overflow:hidden}
    cambia ningun layout sano. */
 .bb-main{min-width:0}
 #inicioView{min-width:0}
+
+/* ============ LOTE FIX-DEFECTO2-REAL (4/11) ============ */
+/* Causa: en colapsado, .hf-head pasa a fila flex nowrap (prow flex:none 118 +
+   user nowrap 216 + name nowrap 44 + gaps ≈ 400). #inicioView (.hf-wrap,
+   margin:0 auto) no queda ceñido al contenedor: sigue el ancho natural de
+   esa fila (424.3 + márgenes 24 = 448.3) y la ellipsis del user nunca se
+   dispara porque la fila nunca se ve constreñida. El cinturón v631
+   (min-width:0) no podía contenerlo: el mínimo ya era 0; el problema es
+   la falta de tope, no el piso. Tope: #inicioView nunca supera el ancho
+   del contenedor. Solo recorta el caso defectuoso: el estado arriba
+   queda byte-idéntico (verificado 390/430) y en escritorio no cambia
+   nada (100% del contenedor ≤ 560). No se toca colapso/descolapso,
+   dock, chat, zoom ni el bloque TEMPORAL DIAGNOSTICO2 (sigue en app.js
+   para verificar el fix con reportes nuevos). */
+#inicioView{max-width:100%}
