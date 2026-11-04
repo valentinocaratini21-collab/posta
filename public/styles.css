@@ -5102,3 +5102,39 @@ body.pz-postchat-open{overflow:hidden}
    Inicio. Solo la foto de la tile: el detalle/lightbox no se toca (carga
    desde data-lightbox, fuera de este selector). */
 #inicioView .hf-tile.pub img{filter:grayscale(1)}
+
+/* ============ LOTE CHAT-PILDORA (4/11) ============ */
+/* Mock aprobado por Valentino 4/11 («me gusta asi»): la barra de Inicio
+   deja de ser tira de lado a lado y pasa a píldora flotante centrada y
+   sólida (nada de vidrio: en escritorio sigue la regla v620 y en móvil
+   el mock aprobado también la muestra sólida), con + celeste, cara,
+   placeholder y mic en círculo claro. Solo #inicioView .mz-chatbar: la
+   hoja, el chat fullscreen, el dock y la landing no se tocan. */
+#inicioView .mz-chatbar{
+  background:#fff;
+  -webkit-backdrop-filter:none;
+  backdrop-filter:none;
+  border:1px solid rgba(10,30,51,.08);
+  box-shadow:0 8px 26px rgba(10,30,51,.13);
+  border-radius:999px;
+}
+#inicioView .mz-chatbar .mz-plus{
+  width:38px;height:38px;border-radius:50%;background:var(--cel);color:#fff;
+  font-size:22px;font-weight:600;display:flex;align-items:center;justify-content:center;
+  flex:0 0 38px;border:none;cursor:pointer;font-family:inherit;line-height:1;
+}
+#inicioView .mz-chatbar .mz-ph .chat-face{width:38px;height:38px;}
+#inicioView .mz-chatbar .mz-ph{display:flex;align-items:center;padding:0;border:none;}
+#inicioView .mz-chatbar .mz-mic{
+  width:38px;height:38px;border-radius:50%;background:rgba(39,147,200,.10);
+  display:flex;align-items:center;justify-content:center;flex:0 0 38px;
+  border:none;cursor:pointer;padding:0;color:#0A1E33;
+}
+#inicioView .mz-chatbar .mz-mic svg{width:20px;height:20px;stroke:#0A1E33;}
+/* Escritorio: píldora de 640px centrada (medido en el mock aprobado:
+   638px en 1280), no el ancho de la columna. En móvil la barra ya ocupa
+   el stack (12px por lado, como el mock: 364px en 390) y no se acota. */
+.main #inicioView .mz-bottomstack .mz-chatbar{
+  width:min(640px,100%);
+  margin-left:auto;margin-right:auto;
+}

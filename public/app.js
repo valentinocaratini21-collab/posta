@@ -19965,6 +19965,7 @@ async function inicioView() {
   ${visitorPillHTML}
   <div class="mz-bottomstack" id="mzBottomStack">
   <div class="mz-chatbar" id="mzChatBar">
+    <button type="button" class="mz-plus" id="mzChatPlus" aria-label="Agregar" onclick="pzDockMasToggle()">+</button>
     <button type="button" class="mz-ph" id="mzChatOpen"><img class="chat-face" src="ai-avatar.png" alt="Posty"><span class="mz-ph-tx">escribile a posty…</span></button>
     <button type="button" class="mz-mic" id="mzMic" aria-label="Pedir con nota de voz">${pzIc('mic', 20)}</button>
   </div>
