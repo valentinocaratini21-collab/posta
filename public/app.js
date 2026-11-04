@@ -17741,13 +17741,18 @@ function homeGridCompose(input) {
     if (p.status !== 'draft' && p.status !== 'scheduled') continue;
     tiles.push({ kind: 'post', post: p, ymd: it.ymd || null, day: it.ymd || null, isNew: p.status === 'draft' });
   }
-  // (LOTE FEED · nada se pierde en silencio) Los publicados archivados
-  // EN Instagram (ig_state = 'archived_ext', reconciliación del
-  // servidor) RINDEN en la grilla MARCADOS (tile.archivedExt → chip
-  // «Archivado» en homeTileHTML), en el grupo de ya salidos: el
-  // registro existe y el dueño lo ve, no se esconde. Solo el
-  // visitante no los ve (hfVisitorTiles los excluye: ya no están
-  // en Instagram).
+  // (LOTE FEED · nada se pierde en silencio — SUPERSEDED 1/11 para
+  // la grilla del dueño, LOTE SIN ARCHIVADOS) Antes los publicados
+  // archivados EN Instagram (ig_state = 'archived_ext',
+  // reconciliación del servidor) RENDÍAN en la grilla MARCADOS
+  // (tile.archivedExt → chip «Archivado» en homeTileHTML). Decisión
+  // Valentino 1/11: salen de la grilla del dueño (el feed es literal
+  // el feed de IG y un archivado ya no está ahí); el filtro vive en
+  // inicioView/f3RevealCheck/hfLiveApply, no acá, para no tocar el
+  // resto de consumidores de tiles. Nada se borra: siguen en Tu
+  // archivo → Archivados en Instagram, y si se desarchiva en IG el
+  // posteo vuelve solo por reconciliación. El visitante los seguía
+  // sin ver (hfVisitorTiles los excluye: ya no están en Instagram).
   const pubs = published.filter((p) => p && !isStory(p) && p.status === 'published')
     .slice().sort((a, b) => String(b.published_at || b.scheduled_at || '').localeCompare(String(a.published_at || a.scheduled_at || '')));
   for (const p of pubs) {
@@ -19621,7 +19626,14 @@ async function inicioView() {
   // visitante solo lo publicado (sin atenuar); la pestaña activa
   // filtra sin recomponer; en Reels las tiles de video piden su
   // duración real (metadata del archivo) para la chapita de duración.
-  const baseTiles = HF_VISITOR ? hfVisitorTiles(tiles) : tiles;
+  // (LOTE SIN ARCHIVADOS 1/11 · decisión Valentino: los archivados en
+  // Instagram salen de la grilla del dueño — el feed es literal el
+  // feed de IG y un archivado ya no está ahí. Mismo predicado que
+  // hfVisitorTiles; Tu archivo → Archivados en Instagram los sigue
+  // mostrando, y si se desarchiva en IG vuelve solo por
+  // reconciliación.) El visitante ya los excluía; el dueño ahora
+  // también.
+  const baseTiles = HF_VISITOR ? hfVisitorTiles(tiles) : tiles.filter((t) => t && !t.archivedExt);
   const displayTiles = hfTabTiles(baseTiles, HF_TAB, prof).map((t) => {
     const c = Object.assign({}, t);
     if (HF_VISITOR) c.visitor = true;
@@ -21768,6 +21780,10 @@ function hfLiveApply(job) {
       const rec = nextById[String(id)];
       if (!rec) continue;
       const t2 = Object.assign({}, rec.t);
+      // (LOTE SIN ARCHIVADOS 1/11) Un tile archivado no entra a la
+      // grilla del dueño ni por el vivo (publicar + archivar entre
+      // dos ticks).
+      if (t2.archivedExt) continue;
       if (diff.justPublished.includes(String(id))) { t2.justPub = true; HF_LIVE.justPub.add(String(id)); }
       if (HF_VISITOR) t2.visitor = true;
       const firstPub = grid.querySelector('.hf-tile.pub');
@@ -24606,7 +24622,11 @@ async function f3RevealCheck() {
   if (hfGrid) {
     const before = new Map();
     hfGrid.querySelectorAll('[data-post-id]').forEach(el => before.set(el.dataset.postId, f3TileHasMedia(el)));
-    const { tiles, pl } = f3HomeTilesFrom(all, tz);
+    const { tiles: allTiles, pl } = f3HomeTilesFrom(all, tz);
+    // (LOTE SIN ARCHIVADOS 1/11) Este re-render reconstruye la grilla
+    // entera: sin este filtro, los archivados volverían a la grilla
+    // del dueño en cuanto un borrador estrenara media.
+    const tiles = allTiles.filter((t) => t && !t.archivedExt);
     const fresh = tiles.filter(t => t.kind === 'post' && t.post.image_path && (!before.has(String(t.post.id)) || before.get(String(t.post.id)) === false));
     if (!fresh.length) return false;
     const freshIds = new Set(fresh.map(t => String(t.post.id)));
