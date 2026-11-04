@@ -141,6 +141,17 @@ const sinZonaPull = (s) => {
   if (a === -1 || b === -1) return null;
   return s.slice(0, a) + s.slice(b);
 };
+// LOTE SEGUIDOS POR API: server.js cambia además en el hook de seguidos
+// (require + homeProfileReadAndStore). Se descuentan esas dos zonas solo
+// del lado actual (en la base no existen: el replace es no-op).
+const sinZonaSeguidosApi = (s) => {
+  let out = s.replace("const igFollows = require('./ig-follows');\n", '');
+  const a = out.indexOf('// (LOTE SEGUIDOS POR API');
+  const b = out.indexOf('    homeSnapshotPut(uid, handle, payload);', a);
+  if (a === -1 || b === -1) return out;
+  const ls = out.lastIndexOf('\n', a) + 1;
+  return out.slice(0, ls) + out.slice(b);
+};
 const baseSin = sinZonaImpulsar(normSrv(srvBase));
 const curSin0 = sinZonaImpulsar(normSrv(srv));
 // (LOTE FECHA/HORA) La base ya es v524 y CONTIENE la zona Pull: se descuenta
@@ -161,7 +172,7 @@ const sinZonaPerfil = (s) => s.split('\n')
   .map((l) => l.replace(', is_verified: null', ''))
   .join('\n');
 const baseSin3 = baseSin2 === null ? null : sinZonaPerfil(baseSin2);
-const curSin3 = curSin === null ? null : sinZonaPerfil(curSin);
+const curSin3 = curSin === null ? null : sinZonaPerfil(sinZonaSeguidosApi(curSin));
 t(baseSin3 !== null && curSin3 !== null && baseSin3 === curSin3, 'server.js: fuera de la zona Impulsar, solo cambia el BUILD_ID (resto idéntico)');
 t(srv.includes("const BUILD_ID = '20261101-v533'"), 'server.js: BUILD_ID v521 para verificar el deploy');
 

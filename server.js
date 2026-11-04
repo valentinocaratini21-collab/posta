@@ -293,6 +293,7 @@ const mp = require('./mercadopago');
 const stripeBilling = require('./stripe-billing'); // (v285) cobro US en USD — fail-closed sin STRIPE_SECRET_KEY
 const demo = require('./demo');
 const feedAudit = require('./feed-audit');
+const igFollows = require('./ig-follows');
 const feedReconcile = require('./feed-reconcile');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
@@ -13825,6 +13826,19 @@ async function homeProfileReadAndStore(uid, handle) {
   const payload = await homeProfileFromRead(handle, data).catch(() => null);
   if (payload) {
     payload.verified_source = verifiedSource;
+    // (LOTE SEGUIDOS POR API 1/11) El embed no trae seguidos: si faltan,
+    // se completan con follows_count de la API para la cuenta conectada
+    // (mismo nodo que websiteFromIgBio; sin llamada si el embed ya los
+    // trajo; sin permisos nuevos; fallo -> stat oculto, nunca inventado).
+    if (payload.following == null) {
+      try {
+        const s = getSettings(uid);
+        if (s && s.ig_user_id && s.ig_access_token) {
+          const apiF = await igFollows.fetchFollowsCount({ igUserId: s.ig_user_id, accessToken: s.ig_access_token, expectedHandle: handle });
+          if (typeof apiF === 'number') payload.following = apiF;
+        }
+      } catch (e) { /* sin seguidos por API: la home nunca se cae por esto */ }
+    }
     homeSnapshotPut(uid, handle, payload);
     // (2026-10-24) Reconciliación del espejo: con la lectura completa
     // recién hecha, los publicados propios que ya NO están en la grilla
@@ -27730,7 +27744,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v599';
+const BUILD_ID = '20261101-v600';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
