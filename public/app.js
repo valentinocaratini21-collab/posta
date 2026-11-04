@@ -25138,6 +25138,14 @@ function pzHeadCollapseNext(scrollY, lastY, collapsed) {
   return { collapsed: !!collapsed, lastY: y };
 }
 let pzHeadCollapseState = { collapsed: false, lastY: 0 };
+// SCROLL-DESK-2 (4/11): guard de eco de scroll-anchoring. Al colapsar o
+// descolapsar, el documento cambia de alto y el navegador re-ajusta scrollY
+// (anchoring) disparando un scroll en dirección contraria: sin este guard,
+// ese eco re-disparaba el toggle opuesto y el par colapsa/descolapsa entraba
+// en bucle (medido: 5-59 toggles por scroll, cuadros >33ms sostenidos).
+// El guard traga UN solo evento en dirección de eco por toggle y actualiza
+// lastY sin cambiar el estado; el descolapso real al subir sigue andando.
+let pzHeadCollapseEcho = 0;
 function pzHeadCollapseSync() {
   try {
     const iv = document.getElementById('inicioView');
@@ -25147,11 +25155,24 @@ function pzHeadCollapseSync() {
     if (maxScroll <= 0) {
       iv.classList.remove('hf-collapsed');
       pzHeadCollapseState = { collapsed: false, lastY: 0 };
+      pzHeadCollapseEcho = 0;
       return;
     }
     const y = window.scrollY || (doc && doc.scrollTop) || 0;
+    if (pzHeadCollapseEcho === -1 && y < pzHeadCollapseState.lastY) {
+      pzHeadCollapseState.lastY = y;
+      pzHeadCollapseEcho = 0;
+      return;
+    }
+    if (pzHeadCollapseEcho === 1 && y > pzHeadCollapseState.lastY) {
+      pzHeadCollapseState.lastY = y;
+      pzHeadCollapseEcho = 0;
+      return;
+    }
+    const prevCollapsed = pzHeadCollapseState.collapsed;
     const next = pzHeadCollapseNext(y, pzHeadCollapseState.lastY, pzHeadCollapseState.collapsed);
     pzHeadCollapseState = next;
+    if (next.collapsed !== prevCollapsed) pzHeadCollapseEcho = next.collapsed ? -1 : 1;
     iv.classList.toggle('hf-collapsed', next.collapsed);
   } catch (e) {}
 }
