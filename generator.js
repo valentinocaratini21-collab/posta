@@ -531,7 +531,7 @@ Tono: cercano y canchero, como el dueño del local hablando con un cliente amigo
 TÉCNICAS DE HOOK (elegí UNA por caption, la que mejor pegue con el tema):
 - Pregunta que duele o da curiosidad: "¿Cuántas veces te pasó que...?"
 - Número concreto: "3 errores que...", "Solo quedan 5"
-- Confesión o detrás de escena: "Te voy a ser honesto..."
+- Detrás de escena: el dato directo, sin anunciar honestidad ("El secreto está en los presupuestos bien armados", "Así armamos cada taza")
 - Contraste: "Antes lo hacíamos así. Ahora..."
 - Directo sin humo: el producto + el beneficio en una línea.
 
@@ -553,6 +553,7 @@ PROHIBIDO (suena a IA, está quemado):
 - "Te presentamos" / "Les presentamos" / "Atención, que"
 - Preguntas retóricas vacías ("¿A quién no le gusta...?")
 - "Mirá lo que tenemos para vos"
+- "Te voy a ser honesto/a:" como preámbulo (andá directo al dato, sin anunciar que vas a ser honesto)
 
 EJEMPLOS del nivel esperado:
 1. "El vacío del domingo no se discute. 🔥 Vuelta y vuelta, chimichurri de la casa y la mesa llena. Reservá por DM que los domingos vuelan."
@@ -578,6 +579,8 @@ const BANNED_PHRASES = [
   'a la manana fuerte', // TIC REAL 2026-10-25 (cuenta 84, ids 506/508/480): fragmento frontado, no es español natural — la forma humana es "para arrancar fuerte la mañana". OJO: la lista se matchea SIN acentos (captionPasses normaliza el caption a NFD y pela diacríticos), así que la entrada va SIN ñ: con 'mañana' nunca matchearía.
   'no te lo podes perder',
   'no te la podes perder', // VARIANTE FEMENINA (Juli, 2026-11-02 — id 529 real, cuenta 84, 2026-11-01: "No te la podés perder, ¡es nuestra última creación!" pasaba captionPasses limpio porque el banco solo tenía la forma masculina "lo"): cambiar el género no cambia el cliché — es el mismo CTA vacío. Entrada SIN acentos, como toda la lista (match NFD).
+  'te voy a ser honesto', // CONFESIÓN PREFABRICADA (Juli, 2026-11-03 — 11 captions reales en 3 cuentas, 2026-10-24/25; RESTAURADA 2026-11-04: la entrada v579 no estaba en el árbol v624 — un push posterior de otro frente la perdió al reescribir generator.js desde una base vieja, y la sección (r) del test fallaba 3/3 en HEAD. La puerta (captionPasses) rechaza "te voy a ser honesto/honesta" siempre. La semilla del prompt se retiró el mismo día (CAPTION_CRAFT ya no enseña "Confesión o detrás de escena: Te voy a ser honesto..."): la puerta queda como respaldo, no como único freno. Entrada SIN acentos, como toda la lista (match NFD).
+  'te voy a ser honesta', // Variante femenina del mismo dispositivo (misma regla que "la" del 2026-11-02: cambiar el género no cambia el cliché).
   'no te lo pierdas',
   'sumergite',
   'descubri el poder de',

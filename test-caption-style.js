@@ -180,6 +180,14 @@ function check(name, cond, extra) {
   check('openaiGenerate: checklist inyectado', sys1.includes('CHECKLIST ANTI-GENÉRICO'));
   check('openaiGenerate: conserva CAPTION_CRAFT', sys1.includes('TÉCNICAS DE HOOK'));
   check('openaiGenerate: conserva regla de identidad', sys1.includes('REGLA DE IDENTIDAD'));
+  // Semilla de confesión retirada del prompt (Juli, 2026-11-04): el bloque de hooks ya no
+  // enseña "Te voy a ser honesto" (la checklist lo sigue nombrando como PROHIBIDO, por eso
+  // el corte se hace sobre el bloque TÉCNICAS DE HOOK, no sobre todo el prompt).
+  const hookBlock = sys1.slice(sys1.indexOf('TÉCNICAS DE HOOK'), sys1.indexOf('REGLAS DE ORO'));
+  check('prompt sin semilla de confesión en hooks', !/Te voy a ser honesto/i.test(hookBlock));
+  check('prompt reemplaza confesión por dato directo', /Detrás de escena: el dato directo/.test(hookBlock));
+  const prohibidoBlock = sys1.slice(sys1.indexOf('PROHIBIDO'), sys1.indexOf('EJEMPLOS del nivel'));
+  check('prompt prohíbe el preámbulo de confesión', /Te voy a ser honesto\/a/.test(prohibidoBlock));
 
   captured.length = 0;
   await generateCaptions({ ...baseInput, captionExtras: captionPromptExtras(db, 102) }, 2, 'sk-test-fake');
