@@ -14155,6 +14155,51 @@ app.post('/api/home/profile/refresh', requireAuth, async (req, res) => {
   }
 });
 
+// (LOTE BORRADO-IG-SYNC · Valentino 4/11) Revalidación en vivo del feed:
+// si el dueño borra un posteo en Instagram, tiene que desaparecer del
+// feed de Posty apenas se abre la app, sin esperar el TTL de 24 h del
+// snapshot. Este endpoint hace UNA lectura fresca del embed (la misma
+// de homeProfileRefreshOnce, deduplicada por usuario) y devuelve el
+// conjunto vivo de shortcodes de la grilla reciente. El cliente filtra
+// la vista con ese conjunto (sin tocar la DB: ocultar, no borrar).
+// FAIL-CLOSED TOTAL: sin lectura, sin ventana, con error o con timeout
+// (carrera 8 s), complete:false y el cliente NO esconde nada. La
+// ventana es la del embed (los recientes): el filtro es sólido para el
+// bloque de publicados porque ese bloque se corta en los 6 más
+// recientes (FEED-6) — todo tile rendido está dentro de la ventana
+// salvo los fijados, que se eximen a propósito (el pin del dueño manda
+// y la ventana no los cubre). Sin shortcode (sin permalink) nunca se
+// esconde nada. Instagram no avisa borrados por webhook: «inmediato»
+// acá = ausente apenas se abre el feed, tras la lectura fresca
+// (~2-4 s típicos, tope 8 s), no push instantáneo.
+app.get('/api/home/live-grid', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const prof = getProfile(uid) || {};
+    const handle = String(prof.ig_username || '').replace(/^@+/, '').trim().toLowerCase();
+    if (!handle) return res.json({ ok: true, complete: false, reason: 'no_handle' });
+    let payload = null;
+    try {
+      payload = await Promise.race([
+        homeProfileRefreshOnce(uid, handle),
+        new Promise((r) => setTimeout(() => r(null), 8000)),
+      ]);
+    } catch (e) { payload = null; }
+    if (!payload || !Array.isArray(payload.recents)) return res.json({ ok: true, complete: false });
+    const total = (typeof payload.posts_count === 'number' && Number.isFinite(payload.posts_count)) ? payload.posts_count : null;
+    const codes = [];
+    for (const r of payload.recents) { if (r && r.shortcode) codes.push(String(r.shortcode)); }
+    // Ventana vacía con cuenta no vacía = lectura sospechosa (parse
+    // fallido): jamás filtrar sobre una ventana vacía. Solo una cuenta
+    // con 0 posteos pasa con ventana vacía (ahí todo tile publicado
+    // con shortcode es, por definición, contenido que ya no está).
+    if (codes.length === 0 && total !== 0) return res.json({ ok: true, complete: false });
+    return res.json({ ok: true, complete: true, shortcodes: codes });
+  } catch (e) {
+    return res.json({ ok: true, complete: false });
+  }
+});
+
 /* ---------- (Tanda feed 6D · ítem 14) TU ARCHIVO ----------
    Lectura de lo que la cuenta YA tiene guardado, en tres fuentes reales:
    · versiones anteriores de los rehaces/ediciones (post_versions),
@@ -27997,7 +28042,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v645';
+const BUILD_ID = '20261101-v646';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

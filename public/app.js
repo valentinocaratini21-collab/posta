@@ -18145,7 +18145,7 @@ function homeGridCompose(input) {
     if (!r || !r.img) continue;
     if (r.shortcode && pubShortcodes.has(String(r.shortcode))) continue;
     if (r.shortcode && archivedShortcodes.has(String(r.shortcode))) continue;
-    tiles.push({ kind: 'ig', img: r.img, type: r.type || 'image', taken_at: (typeof r.taken_at === 'number' ? r.taken_at : null), isNew: false, pinned: r.pinned === true, likes: (typeof r.likes === 'number' ? r.likes : null), comments: (typeof r.comments === 'number' ? r.comments : null) });
+    tiles.push({ kind: 'ig', img: r.img, type: r.type || 'image', taken_at: (typeof r.taken_at === 'number' ? r.taken_at : null), isNew: false, pinned: r.pinned === true, likes: (typeof r.likes === 'number' ? r.likes : null), comments: (typeof r.comments === 'number' ? r.comments : null), shortcode: (r.shortcode ? String(r.shortcode) : null) });
   }
   // (Tanda feed 5 · ítem 3) FIJADOS del dueño (📌): las piezas propias
   // con pinned cargado rinden PRIMERAS, en su orden de fijado
@@ -18862,7 +18862,7 @@ function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
     const glyph = t.pinned ? HOME_PIN_SVG : t.type === 'video' ? HOME_REEL_SVG : t.type === 'carousel' ? HOME_CAR_SVG : '';
-    return `<button type="button" class="hf-tile pub" data-hf-filtro="publicados" data-lightbox="${esc(t.img)}" data-video="0" data-cap="" data-tags="" aria-label="Posteo de tu Instagram"><img src="${esc(t.img)}" loading="lazy" alt="" onerror="__imgFb(this)">${glyph}</button>`;
+    return `<button type="button" class="hf-tile pub" data-hf-filtro="publicados" data-lightbox="${esc(t.img)}" data-video="0" data-cap="" data-tags=""${t.shortcode ? ` data-shortcode="${esc(String(t.shortcode))}"` : ''} aria-label="Posteo de tu Instagram"><img src="${esc(t.img)}" loading="lazy" alt="" onerror="__imgFb(this)">${glyph}</button>`;
   }
   const p = t.post;
   const isV = String(p.media_type || '') === 'video';
@@ -19815,6 +19815,83 @@ let HF_VISITOR = false;
 let HF_TILES = [];
 let HF_CUR_PROF = null;
 let HF_PROPS = {};
+// (LOTE BORRADO-IG-SYNC · Valentino 4/11) Si el dueño borra un posteo
+// en Instagram, tiene que desaparecer del feed apenas se abre la app,
+// sin esperar el TTL de 24 h del snapshot. El feed pinta al instante
+// desde la caché (nunca espera a Instagram) y en paralelo se pide la
+// ventana viva a /api/home/live-grid; cuando llega, las tiles
+// publicadas cuyo shortcode YA NO está en la grilla real se quitan del
+// DOM y de HF_TILES. Solo vista: jamás se borra ni se marca ninguna
+// fila de la DB desde acá (eso lo decide otro lote; la reconciliación
+// del servidor, que ya corría en cada refresh, sigue su propio camino).
+// FAIL-CLOSED: sin respuesta, incompleta, con error o con timeout, no
+// se esconde nada. Exentos siempre: programadas y borradores (nunca
+// son publicados), fijados (el pin del dueño manda y la ventana no los
+// cubre) y todo tile sin shortcode (sin permalink no se puede probar
+// que desapareció). Si el usuario ya navegó fuera de Inicio cuando
+// llega la respuesta, no se toca nada.
+let HF_LIVE_BUSY = false;
+function hfLiveDropTile(t, liveSet) {
+  try {
+    if (!t || !liveSet) return false;
+    if (t.kind === 'post') {
+      const p = t.post || {};
+      if (p.status !== 'published' || p.pinned) return false;
+      const sc = (typeof hfIgShortcode === 'function') ? hfIgShortcode(p.ig_permalink) : null;
+      return !!(sc && !liveSet.has(String(sc)));
+    }
+    if (t.kind === 'ig') {
+      const sc = t.shortcode ? String(t.shortcode) : null;
+      return !!(sc && !liveSet.has(sc));
+    }
+  } catch (e) {}
+  return false;
+}
+async function hfLiveRevalidateFeed() {
+  if (HF_LIVE_BUSY) return;
+  try { if (!(location.hash || '').startsWith('#/app/inicio')) return; } catch (e) { return; }
+  HF_LIVE_BUSY = true;
+  try {
+    const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const to = setTimeout(() => { try { if (ctl) ctl.abort(); } catch (e) {} }, 12000);
+    let r = null;
+    try {
+      // fetch crudo a propósito (no api.get): un 401 acá NO debe
+      // rebotar al login como hace api.req; solo significa «sin
+      // revalidación» y el feed queda como está.
+      const res = await fetch('/api/home/live-grid', { credentials: 'same-origin', signal: ctl ? ctl.signal : undefined });
+      if (res && res.ok) r = await res.json().catch(() => null);
+    } catch (e) { r = null; }
+    try { clearTimeout(to); } catch (e) {}
+    if (!r || !r.complete || !Array.isArray(r.shortcodes)) return;
+    try { if (!(location.hash || '').startsWith('#/app/inicio')) return; } catch (e) { return; }
+    const live = new Set(r.shortcodes.map((x) => String(x)));
+    const tiles = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES : [];
+    const dropPostIds = new Set();
+    const dropIg = new Set();
+    const kept = [];
+    for (const t of tiles) {
+      if (hfLiveDropTile(t, live)) {
+        if (t.kind === 'post' && t.post) dropPostIds.add(String(t.post.id));
+        if (t.kind === 'ig' && t.shortcode) dropIg.add(String(t.shortcode));
+        continue;
+      }
+      kept.push(t);
+    }
+    if (!dropPostIds.size && !dropIg.size) return;
+    HF_TILES = kept;
+    const grid = document.querySelector('#inicioView .hf-grid');
+    if (grid) {
+      for (const id of dropPostIds) {
+        grid.querySelectorAll('[data-post-id="' + id + '"]').forEach((el) => { try { const c = el.closest('.hf-cell'); (c || el).remove(); } catch (e) {} });
+      }
+      for (const sc of dropIg) {
+        grid.querySelectorAll('[data-shortcode="' + sc + '"]').forEach((el) => { try { const c = el.closest('.hf-cell'); (c || el).remove(); } catch (e) {} });
+      }
+    }
+  } catch (e) {}
+  finally { HF_LIVE_BUSY = false; }
+}
 async function inicioView() {
   const tz = pcTz();
   // LOTE VELOCIDAD: posts y ensure son independientes: un solo viaje en
@@ -19907,6 +19984,10 @@ async function inicioView() {
   // detalle IG y las pestañas (que filtran sin recomponer).
   HF_TILES = tiles;
   HF_CUR_PROF = prof;
+  // (LOTE BORRADO-IG-SYNC) La revalidación corre en segundo plano y
+  // NO bloquea la pintura: el setTimeout dispara tras el render y la
+  // respuesta filtra las tiles borradas en IG cuando llega.
+  try { setTimeout(() => { try { hfLiveRevalidateFeed(); } catch (e) {} }, 0); } catch (e) {}
   // (Ítem 17) Marcas de la grilla, calculadas una vez sobre las
   // tiles cargadas (nunca inventadas): despegue y próximo
   // programado. Solo fuera de modo visitante: al visitante no se
