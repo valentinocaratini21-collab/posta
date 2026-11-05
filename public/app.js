@@ -439,7 +439,7 @@ let BB = { estado: null, prefs: null, pendingAsk: '' };
 const BB_META = {
   posty: { n: 'Posty', c: '#2793C8', a: '/ai-avatar.png' },
   gesty: { n: 'Gesty', c: '#5B8C5A', a: null },
-  venty: { n: 'Venty', c: '#FF7A59', a: null },
+  venty: { n: 'Venty', c: '#4CAF50', a: null },
   growty: { n: 'Growty', c: '#8BC34A', a: null },
   atenty: { n: 'Atenty', c: '#2E8C83', a: null },
   desy: { n: 'Desy', c: '#E0218A', a: null },
@@ -447,7 +447,7 @@ const BB_META = {
   bossty: { n: 'Bossty', c: '#C9962E', a: null },
   oficina: { n: 'Bambooty', c: '#DBA453', a: '/bambooty-avatar.webp' },
 };
-const MG_CANON = { posty: '#2793C8', venty: '#E8836B', gesty: '#A175CA', atenty: '#3FA7A3', oficina: '#DBA453' };
+const MG_CANON = { posty: '#2793C8', venty: '#4CAF50', gesty: '#A175CA', atenty: '#3FA7A3', oficina: '#DBA453' };
 function BB_SHELL_ON() {
   try {
     if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
@@ -2450,7 +2450,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v683'; // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos»
+const CHUNK_V = '20261105-v686'; // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -6555,6 +6555,7 @@ function appShell(tab, content) {
     </div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
     <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('navBarras')}</span>Estrategia</button>
+    <button class="drawer-link ${tab === 'venty' ? 'on' : ''}" data-tab="venty"><span class="di">${pzIc('megaphone')}</span>Venty</button>
     <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('navBambu')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Prizes' : 'Premios'}</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
@@ -17576,6 +17577,7 @@ function pzPrefetchKick() {
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') { pzPaintSkeleton(tab); content = await scheduleView(); }
   else if (tab === 'analisis') { pzPaintSkeleton(tab); let __okAn = true; try { await loadChunk('analisis'); } catch (e) { __okAn = false; } content = __okAn ? analisisView() : chunkFailHTML(); } // 🧠 Análisis: LA CARTA v3 (chunk-analisis.js)
+  else if (tab === 'venty') { pzPaintSkeleton(tab); let __okV = true; try { await loadChunk('venty'); } catch (e) { __okV = false; } content = __okV ? ventyView() : chunkFailHTML(); } // 🟢 Venty: ventas y crecimiento (chunk-venty.js, slice 1 Modo Prueba)
   else if (tab === 'numeros') content = statsView(); // 📊 Tus números (stats de IG)
   else if (tab === 'crear') { location.hash = '#/app/schedule'; return; } // Creador manual fusionado en Schedule
   else if (tab === 'ideas') { location.hash = '#/app/schedule'; return; } // Ideas se fusionó en Schedule
@@ -25068,6 +25070,7 @@ function bindApp(tab) {
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
   if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
   if (tab === 'analisis' && typeof bindAnalisis === 'function') bindAnalisis(); // 🧠 la carta se pinta al cargar el chunk
+  if (tab === 'venty' && typeof bindVenty === 'function') bindVenty(); // 🟢 Venty: se pinta al cargar el chunk
   if (tab === 'chat') bindChatFull(); // (LOTE CHATPANTALLA) El chat principal es pantalla completa
   if (tab === 'schedule') bindSchedule();
   if (tab === 'inicio') bindInicio();

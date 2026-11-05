@@ -5246,3 +5246,85 @@ body.pz-postchat-open{overflow:hidden}
 .pz-sfp-acel{display:block;width:100%;padding:14px 16px;border:0;border-radius:14px;background:linear-gradient(135deg,rgba(39,147,200,.28),rgba(254,193,77,.45));color:#0A1E33;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px}
 .pz-sfp-volver,.pz-sfp-escribir{display:block;width:100%;padding:12px;border:0;border-radius:12px;background:transparent;color:#47617A;font-size:14px;cursor:pointer}
 .pz-sfp-cargando{font-size:16px;color:#47617A;text-align:center;padding:28px 8px}
+
+/* ===== VENTY (slice 1: capa de app en Modo Prueba) =====
+ * Paleta oficial Venty: Clásico #4CAF50, profunda #2E7D32, navy #0A1E33,
+ * tint #EFFAF3, borde #C8E6C9, oscuro #0B3D2A. REGLA: nunca texto blanco
+ * sobre verde — los botones verdes llevan texto navy #0A1E33.
+ * Todo escopado bajo .vt-wrap: no toca ninguna regla de Posty. */
+.vt-wrap{--vt:#4CAF50;--vt-d:#2E7D32;--vt-navy:#0A1E33;--vt-tint:#EFFAF3;--vt-borde:#C8E6C9;--vt-oscuro:#0B3D2A;max-width:720px;margin:0 auto;padding:12px 12px 90px}
+.vt-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 2px 12px}
+.vt-titulo{margin:0;font-size:24px;color:var(--vt-navy)}
+.vt-head-btns{display:flex;gap:8px}
+.vt-btn{border:0;border-radius:12px;padding:10px 14px;font-size:14px;font-weight:700;cursor:pointer;background:var(--vt);color:var(--vt-navy)}
+.vt-btn:disabled{opacity:.55;cursor:default}
+.vt-btn-ok{background:var(--vt);color:var(--vt-navy)}
+.vt-btn-no{background:#fff;border:1px solid #E0E0E0;color:var(--vt-navy)}
+.vt-btn-ghost{background:transparent;color:var(--vt-d);border:1px solid var(--vt-borde)}
+.vt-link{background:none;border:0;color:var(--vt-d);font-size:14px;font-weight:700;cursor:pointer;padding:4px 0}
+.vt-tabs{display:flex;gap:8px;margin:0 2px 14px}
+.vt-tab{flex:1;border:1px solid var(--vt-borde);background:#fff;color:var(--vt-navy);border-radius:12px;padding:10px 6px;font-size:14px;font-weight:700;cursor:pointer}
+.vt-tab.on{background:var(--vt);color:var(--vt-navy);border-color:var(--vt)}
+.vt-frase{background:var(--vt-oscuro);color:#EFFAF3;border-radius:16px;padding:16px;margin-bottom:14px}
+.vt-frase-txt{font-size:16px;line-height:1.45;margin-bottom:12px}
+.vt-norte{display:flex;gap:24px}
+.vt-norte-num b{display:block;font-size:30px;line-height:1;color:#A5D6A7}
+.vt-norte-num span{font-size:12px;color:#C8E6C9}
+.vt-pausa{background:#FFF3E0;border:1px solid #FFE0B2;color:#5D4037;border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+.vt-bloque{margin-bottom:16px}
+.vt-bloque h2{font-size:16px;color:var(--vt-navy);margin:0 2px 8px}
+.vt-vacio{color:#47617A;font-size:14px;margin:4px 2px}
+.vt-nota{color:#47617A;font-size:13px;line-height:1.45;margin:8px 2px}
+.vt-bcard{background:#fff;border:1px solid var(--vt-borde);border-left:4px solid var(--vt);border-radius:14px;padding:12px;margin-bottom:10px}
+.vt-bcard-que{font-weight:700;color:var(--vt-navy);font-size:15px;line-height:1.4}
+.vt-bcard-porque{color:#47617A;font-size:13px;line-height:1.45;margin:6px 0 10px}
+.vt-bcard-acciones{display:flex;gap:8px;flex-wrap:wrap}
+.vt-cambio{margin-top:10px}
+.vt-cambio textarea{width:100%;border:1px solid var(--vt-borde);border-radius:10px;padding:10px;font-size:14px;font-family:inherit;box-sizing:border-box}
+.vt-filtros{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.vt-chip{border:1px solid var(--vt-borde);background:#fff;color:var(--vt-navy);border-radius:999px;padding:8px 14px;font-size:14px;font-weight:700;cursor:pointer}
+.vt-chip.on{background:var(--vt);color:var(--vt-navy);border-color:var(--vt)}
+.vt-buscador{flex:1;min-width:140px;border:1px solid var(--vt-borde);border-radius:10px;padding:9px 12px;font-size:14px}
+.vt-lista{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.vt-row{background:#fff;border:1px solid #E2EDF5;border-radius:14px;padding:12px;cursor:pointer}
+.vt-row-need{border-color:var(--vt);border-left:4px solid var(--vt)}
+.vt-row-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.vt-row-top b{color:var(--vt-navy);font-size:15px}
+.vt-row-estado{font-size:12px;font-weight:700;color:var(--vt-d);white-space:nowrap}
+.vt-row-ultima{color:#47617A;font-size:13px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vt-row-meta{color:#47617A;font-size:12px;margin-top:4px}
+.vt-msglog{display:flex;flex-direction:column;gap:8px}
+.vt-msg{background:#fff;border:1px solid #E2EDF5;border-radius:14px;padding:10px 12px}
+.vt-msg-top{display:flex;gap:8px;align-items:baseline;font-size:13px;flex-wrap:wrap}
+.vt-msg-top b{color:var(--vt-navy)}
+.vt-msg-top span{color:#47617A}
+.vt-sololectura{background:var(--vt-tint);color:var(--vt-d);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700}
+.vt-msg-txt{font-size:14px;line-height:1.45;color:var(--vt-navy);margin-top:6px}
+.vt-estado{color:#47617A;font-size:12px;text-align:center;margin-top:16px}
+.vt-hilo{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.vt-burbuja{max-width:85%;border-radius:14px;padding:10px 12px;font-size:15px;line-height:1.45}
+.vt-bub-venty{background:#E8F5E9;color:var(--vt-navy);align-self:flex-start}
+.vt-bub-cliente{background:#fff;border:1px solid #E2EDF5;color:var(--vt-navy);align-self:flex-end}
+.vt-bub-fuente{font-size:11px;color:#47617A;margin-top:4px}
+.vt-meta{color:#47617A;font-size:13px;margin:0 2px 4px}
+.vt-verbos{display:flex;gap:10px;align-items:center;margin:12px 0;flex-wrap:wrap}
+.vt-chatbox{display:flex;gap:8px;align-items:center}
+.vt-input{flex:1;border:1px solid var(--vt-borde);border-radius:12px;padding:11px 12px;font-size:15px;min-width:0}
+.vt-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.vt-chat-resp,.vt-sim-resp{font-size:14px;line-height:1.5;color:var(--vt-navy);margin-top:10px}
+.vt-kv{display:flex;justify-content:space-between;gap:10px;padding:9px 2px;border-bottom:1px solid #E2EDF5;font-size:14px}
+.vt-kv span{color:#47617A}
+.vt-kv b{color:var(--vt-navy)}
+.vt-parte{background:#fff;border:1px solid var(--vt-borde);border-radius:14px;padding:6px 12px;margin-bottom:12px}
+.vt-cupo{background:var(--vt-tint);border:1px solid var(--vt-borde);border-radius:14px;padding:12px;margin-bottom:12px}
+.vt-cupo-txt{font-weight:700;color:var(--vt-navy);font-size:14px}
+.vt-cupo-bar{height:10px;background:#fff;border:1px solid var(--vt-borde);border-radius:999px;margin:8px 0;overflow:hidden}
+.vt-cupo-fill{height:100%;background:var(--vt)}
+.vt-zona{background:#fff;border:1px solid var(--vt-borde);border-radius:14px;padding:12px;margin-bottom:10px;color:var(--vt-navy)}
+.vt-zona-nums{color:#47617A;font-size:13px;margin-top:4px}
+.vt-prosp{background:#fff;border:1px solid #E2EDF5;border-radius:14px;padding:12px;margin-bottom:10px}
+.vt-prosp-top{display:flex;justify-content:space-between;gap:8px}
+.vt-prosp-top b{color:var(--vt-navy)}
+.vt-tier{font-size:12px;font-weight:700;color:var(--vt-d);white-space:nowrap}
+.vt-prosp-porque{color:#47617A;font-size:13px;line-height:1.45;margin-top:6px}
+.vt-prosp-estado{color:#47617A;font-size:12px;margin-top:6px}

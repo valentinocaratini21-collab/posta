@@ -65,8 +65,10 @@ try { cartaAudio = require('./carta-audio'); } catch (e) { console.error('[carta
 const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispositivo: cuentas guardadas en la entrada, hash + rotación + revocación
 const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleados, gating por pack, registro durable, fundamento-vista y bandeja con la matriz forzada en el servidor
 const oficina = require('./oficina'); // ESPINA BAMBOOTY (programa TestFlight): fundamento único, río de la oficina, Bandeja «Para vos», partes (contrato de la oficina) y chat que rutea. La presentación Bambooty vive SOLO en el shell (la web pública sigue siendo Posty).
+const venty = require('./venty'); // VENTY (slice 1): ventas y crecimiento en Modo Prueba, partidas simuladas Café Aroma, registro durable.
 const informeMensual = require('./informe-mensual'); // INFORME MENSUAL REAL (ítem 5, 2026-10-26): números reales del mes, sin ROI inventado.
 try { oficina.init(db); } catch (e) { console.error('[oficina] init:', e.message); }
+try { venty.init(db); } catch (e) { console.error('[venty] init:', e.message); }
 const postyOficina = require('./posty-oficina'); // POSTY en la oficina: su semana real entra al río y a la Bandeja.
 try { postyOficina.init(db); } catch (e) { console.error('[posty-oficina] init:', e.message); }
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
@@ -3963,6 +3965,179 @@ app.put('/api/oficina/push-prefs', requireAuth, (req, res) => {
     if (typeof b.silencio === 'boolean') pushOficinaMod.setSilencioGlobal(db, req.session.userId, b.silencio);
     if (b.agente && typeof b.activado === 'boolean') pushOficinaMod.setPrefAgente(db, req.session.userId, String(b.agente), b.activado);
     res.json({ ok: true, prefs: pushOficinaMod.getPrefs(db, req.session.userId) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ---------- VENTY (slice 1: capa de app en Modo Prueba) ----------
+// Las 5 pantallas del mock aprobado viviendo en la app real, con partidas
+// simuladas de Café Aroma y registro durable. Todo responde con modo:
+// 'prueba'. La caza es ejemplo rotulado hasta el slice 4.
+const ventyUid = (req) => { try { venty.asegurarSemilla(db, req.session.userId); } catch (e) { console.error('[venty] semilla:', e.message); } return req.session.userId; };
+app.get('/api/venty/estado', requireAuth, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const f = venty.leerFundamento(db, uid);
+    res.json({ ok: true, modo: 'prueba', freno: { pausado: venty.estaPausado(db, uid), alcance: 'mensajes y contactos nuevos; los turnos agendados siguen' },
+      canales: [{ canal: 'simulacion', estado: 'activo' }, { canal: 'whatsapp', estado: 'no_conectado' }, { canal: 'instagram', estado: 'no_conectado' }, { canal: 'email', estado: 'no_conectado' }],
+      ultima_lectura: { fuente: 'lista cargada', ts: (f && f.updated_at) || '' },
+      venty: { precio_usd: venty.PRECIO_MENSUAL_USD, plan: 'unico', estreno: venty.ESTRENO } });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/partidas', requireAuth, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const filtro = String(req.query.filtro || 'todas');
+    const q = String(req.query.q || '').trim().toLowerCase();
+    let rows = venty.listarPartidas(db, uid);
+    if (filtro === 'need') {
+      const pend = new Set(venty.listarBandeja(db, uid).map((j) => j.partida_id));
+      rows = rows.filter((r) => r.estado === 'viva' && pend.has(r.id));
+    }
+    if (q) rows = rows.filter((r) => String(r.cliente_nombre || '').toLowerCase().includes(q));
+    res.json({ ok: true, modo: 'prueba', partidas: rows });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/partidas/:id', requireAuth, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const p = venty.obtenerPartida(db, uid, Number(req.params.id));
+    if (!p) return res.status(404).json({ ok: false, error: 'partida_no_encontrada' });
+    res.json({ ok: true, modo: 'prueba', partida: p });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/partidas/:id/tomar', requireAuth, (req, res) => {
+  try {
+    const r = venty.tomarPartida(db, ventyUid(req), Number(req.params.id));
+    if (!r.ok) return res.status(400).json({ ok: false, ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/partidas/:id/seguir', requireAuth, (req, res) => {
+  try {
+    const r = venty.seguirPartida(db, ventyUid(req), Number(req.params.id));
+    if (!r.ok) return res.status(400).json({ ok: false, ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/bandeja', requireAuth, (req, res) => {
+  try { res.json({ ok: true, modo: 'prueba', jugadas: venty.listarBandeja(db, ventyUid(req)) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/bandeja/:id/aceptar', requireAuth, (req, res) => {
+  try {
+    const r = venty.resolverJugada(db, ventyUid(req), Number(req.params.id), 'aceptar', '');
+    if (!r.ok) return res.status(400).json({ ok: false, ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/bandeja/:id/rechazar', requireAuth, (req, res) => {
+  try {
+    const r = venty.resolverJugada(db, ventyUid(req), Number(req.params.id), 'rechazar', String(((req.body || {}).nota) || ''));
+    if (!r.ok) return res.status(400).json({ ok: false, ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/bandeja/:id/cambio', requireAuth, (req, res) => {
+  try {
+    const r = venty.resolverJugada(db, ventyUid(req), Number(req.params.id), 'cambio', String(((req.body || {}).nota) || ''));
+    if (!r.ok) return res.status(400).json({ ok: false, ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/frase', requireAuth, (req, res) => {
+  try { res.json({ ok: true, ...venty.computarFrase(db, ventyUid(req)) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/parte', requireAuth, (req, res) => {
+  try {
+    const p = venty.computarParte(db, ventyUid(req), String(req.query.semana || ''));
+    if (!p.emitido) return res.json({ ok: true, modo: 'prueba', emitido: false, semana: p.semana, razon: p.razon });
+    try {
+      db.prepare(`INSERT INTO venty_parte (user_id, semana, datos_json, emitido_at) VALUES (?,?,?,?)
+        ON CONFLICT(user_id, semana) DO UPDATE SET datos_json = excluded.datos_json, emitido_at = excluded.emitido_at`)
+        .run(req.session.userId, p.semana, JSON.stringify(p), new Date().toISOString().slice(0, 19).replace('T', ' '));
+    } catch (e) { /* el parte se calcula igual sin persistir */ }
+    res.json({ ok: true, ...p });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/mensajes-hoy', requireAuth, (req, res) => {
+  try { res.json({ ok: true, modo: 'prueba', mensajes: venty.mensajesHoy(db, ventyUid(req)) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/freno', requireAuth, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const pausado = !!((req.body || {}).pausado);
+    const r = venty.setFreno(db, uid, pausado);
+    venty.registrarEvento(db, uid, 'freno', null, { pausado });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/fundamento', requireAuth, (req, res) => {
+  try {
+    const f = venty.leerFundamento(db, ventyUid(req));
+    if (!f) return res.status(404).json({ ok: false, error: 'sin_fundamento' });
+    res.json({ ok: true, modo: 'prueba', fundamento: f });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/chat', requireAuth, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const rows = db.prepare(`SELECT datos_json, created_at FROM venty_eventos WHERE user_id = ? AND tipo = 'chat_dueno' ORDER BY created_at ASC, id ASC LIMIT 50`).all(uid);
+    const turnos = rows.map((r) => { try { return JSON.parse(r.datos_json || '{}'); } catch (e) { return null; } }).filter(Boolean);
+    res.json({ ok: true, modo: 'prueba', turnos });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/chat', requireAuth, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const texto = String(((req.body || {}).text) || '').slice(0, 2000).trim();
+    if (!texto) return res.status(400).json({ ok: false, error: 'sin_texto' });
+    const r = venty.responderChatDueno(db, uid, texto);
+    venty.registrarEvento(db, uid, 'chat_dueno', null, { texto, reply: r.reply, options: r.options || [] });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/chat/audio', requireAuth, async (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const audioDataUrl = (req.body && req.body.audioDataUrl) || '';
+    if (!String(audioDataUrl).startsWith('data:audio/'))
+      return res.status(400).json({ ok: false, error: 'falta_audio' });
+    const apiKey = (getSettings(uid).openai_key) || process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return res.status(400).json({ ok: false, error: 'sin_llave_openai' });
+    let transcript = '';
+    try { transcript = await transcribeAudio(audioDataUrl, apiKey); }
+    catch (e) { console.error('[venty] whisper:', e.message); return res.status(400).json({ ok: false, error: 'no_te_escucho' }); }
+    if (!transcript) return res.status(400).json({ ok: false, error: 'audio_sin_texto' });
+    const r = venty.responderChatDueno(db, uid, transcript);
+    venty.registrarEvento(db, uid, 'chat_dueno', null, { texto: transcript, reply: r.reply, options: r.options || [], via: 'audio' });
+    res.json({ ok: true, modo: 'prueba', transcript, ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/caza', requireAuth, (req, res) => {
+  try { ventyUid(req); res.json({ ok: true, modo: 'prueba', ...venty.CAZA_EJEMPLO }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/simulacion/nueva', requireAuth, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const nombre = String(((req.body || {}).cliente_nombre) || '').slice(0, 80).trim();
+    if (!nombre) return res.status(400).json({ ok: false, error: 'sin_cliente' });
+    const canal = ['simulacion', 'whatsapp', 'instagram', 'email'].includes(String((req.body || {}).canal)) ? String((req.body || {}).canal) : 'simulacion';
+    const ahora = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const r = db.prepare(`INSERT INTO venty_partidas (user_id, cliente_nombre, canal, estado, modo_rubro, monto, forma_cierre, motivo_perdida, seguimiento_toque, proximo_toque_at, origen, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(uid, nombre, canal, 'viva', 'gastronomía', 0, '', '', 0, '', 'simulacion', ahora, ahora);
+    res.json({ ok: true, modo: 'prueba', partida_id: Number(r.lastInsertRowid) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/simulacion/mensaje', requireAuth, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = venty.jugarMensaje(db, uid, Number(((req.body || {}).partida_id) || 0), String(((req.body || {}).texto) || ''));
+    if (!r.ok && (r.kind === 'en_pausa' || r.kind === 'tomada_por_dueno')) return res.status(409).json({ ok: false, modo: 'prueba', ...r });
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 // ---------- Tira de nivel Posty — tallo vivo (v457) ----------
@@ -29340,7 +29515,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v685';
+const BUILD_ID = '20261105-v686';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
