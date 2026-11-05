@@ -5222,23 +5222,6 @@ body.pz-postchat-open{overflow:hidden}
 .mx-tira-premio img{width:30px;height:30px;flex:none;border-radius:8px;object-fit:cover}
 .mx-tira-premio span{flex:1;min-width:0;font-size:12px;color:#6E5A85}
 .mx-tira-falta{display:block;margin-top:3px;font-size:12px;color:#47617A}
-/* (LOTE ANALISIS-FEED · 4/11) Tab Análisis: glass neutro, sin amarillo de fondo (el dorado solo vive en el destello del título). */
-.anf-wrap{max-width:680px;margin:0 auto;padding:6px 0 110px}
-.anf-hero{display:flex;gap:12px;align-items:center;padding:18px;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);border-radius:22px;box-shadow:0 8px 24px rgba(10,30,51,.10)}
-.anf-ava{width:64px;height:64px;flex:none;border-radius:50%;object-fit:cover;border:3px solid #2793C8}
-.anf-hero h1{font-size:32px;line-height:1.05;letter-spacing:-.5px}
-.anf-spark{color:#FEC14D}
-.anf-line{font-size:15px;color:#47617A;margin-top:6px;line-height:1.4}
-.anf-totals{font-size:14px;font-weight:700;margin-top:8px}
-.anf-card{margin-top:14px;padding:18px;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);border-radius:22px;box-shadow:0 8px 24px rgba(10,30,51,.10)}
-.anf-card h2{display:flex;align-items:center;gap:8px;font-size:19px;margin-bottom:6px}
-.anf-big{font-size:64px;font-weight:800;line-height:1;letter-spacing:-2px}
-.anf-big span{font-size:30px;letter-spacing:0}
-.anf-bar{height:12px;border-radius:8px;background:rgba(10,30,51,.08);overflow:hidden;margin-top:12px}
-.anf-bar i{display:block;height:100%;border-radius:8px;background:#2793C8}
-.anf-pend{text-align:center;font-size:13px;color:#47617A;margin-top:16px;line-height:1.4}
-.anf-foot{text-align:center;font-size:13px;color:#47617A;margin-top:10px}
-.anf-foot a{color:#2793C8;font-weight:700;text-decoration:none}
 
 /* ── SUBIR-FOTO-PREGUNTAS (Valentino 4/11 ~21:03) ──
    Modal de preguntas con un toque al subir foto/video. Una pregunta por
