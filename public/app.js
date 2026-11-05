@@ -25528,6 +25528,29 @@ function pzHeadCollapseAnimate(iv, collapsed) {
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       iv.classList.toggle('hf-collapsed', collapsed); return;
     }
+    // LOTE SLIDER-FINAL (4/11): colapso instantáneo cuando el encabezado ya
+    // está fuera de pantalla POR ARRIBA y el scroll está en el tope final.
+    // Medido: al llegar al final, el FLIP .22s animaba la altura de un head
+    // que no se ve y el navegador tenía que re-ajustar scrollY contra el
+    // tope durante toda la animación — en WKWebView ese ajuste llega en
+    // pasos y se lee como un enganche justo al final. Con el toggle
+    // instantáneo, el clamp al maxScroll nuevo ocurre en un solo layout y
+    // nada se mueve en pantalla (el head no se ve; el contenido de abajo
+    // queda exactamente donde estaba). Solo colapso (nunca expansión) y
+    // solo en el tope final: a mitad del feed el FLIP sigue vigente, porque
+    // ahí el pliegue sí se ve y el salto instantáneo sería visible.
+    if (collapsed) {
+      try {
+        const rect = head.getBoundingClientRect();
+        const docEl = document.documentElement;
+        const maxScroll = (docEl ? docEl.scrollHeight : 0) - (window.innerHeight || 0);
+        const yNow = window.scrollY || (docEl && docEl.scrollTop) || 0;
+        if (rect.bottom <= 0 && yNow >= maxScroll - 2) {
+          iv.classList.toggle('hf-collapsed', collapsed);
+          return;
+        }
+      } catch (e) {}
+    }
     const h0 = head.offsetHeight;
     iv.classList.toggle('hf-collapsed', collapsed);
     const h1 = head.offsetHeight;
