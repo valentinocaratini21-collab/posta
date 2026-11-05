@@ -18782,8 +18782,24 @@ function homeGridCompose(input) {
   const finalTiles = head.concat(rest6);
   if (nextPost) {
     const idxPub = finalTiles.findIndex((t) => t && (t.kind === 'ig' || (t.post && t.post.status === 'published' && !t.post.pinned)));
-    if (idxPub >= 0) finalTiles.splice(idxPub + 1, 0, { kind: 'oculta', post: nextPost });
-    else finalTiles.push({ kind: 'oculta', post: nextPost });
+    // (LOTE PROXIMO-VELO · corrección Valentino 5/11 09:04 — «Si sale
+    // hoy el posteo ya debería haberse abierto el post, no?») El velo
+    // solo cubre el próximo de día FUTURO: si sale HOY, la carta se
+    // muestra ABIERTA (foto visible + abre el detalle). «Hoy» = mismo
+    // día calendario que hoy en la zona de la cuenta (pcTz, default
+    // Buenos Aires). Sin fecha o sin zona, fail-closed (velada).
+    let cardHoy = false;
+    try {
+      const tzV = (typeof pcTz === 'function') ? pcTz() : undefined;
+      const zoV = tzV ? { timeZone: tzV } : {};
+      const keyV = (x) => { try { return x.toLocaleDateString('en-CA', zoV); } catch (e) { return ''; } };
+      let dV = null;
+      if (typeof pcParseDate === 'function') dV = pcParseDate(nextPost.scheduled_at);
+      if (!dV) { const sV = String(nextPost.scheduled_at).replace(' ', 'T'); dV = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(sV) ? sV : sV + 'Z'); }
+      if (dV && !isNaN(dV)) cardHoy = keyV(dV) === keyV(new Date());
+    } catch (e) { cardHoy = false; }
+    if (idxPub >= 0) finalTiles.splice(idxPub + 1, 0, { kind: 'oculta', post: nextPost, openHoy: cardHoy });
+    else finalTiles.push({ kind: 'oculta', post: nextPost, openHoy: cardHoy });
   }
   return finalTiles;
 }
@@ -19601,6 +19617,21 @@ function homeTileHTML(t, i) {
     // sigue sin foto/caption/corazón/tik/detalle, la carta va justo
     // después del publicado más reciente y con fecha/hora reales; los publicados NO llevan magia.
     const proxLbl = phEn ? 'Next up' : 'El próximo';
+    // (LOTE PROXIMO-VELO · corrección Valentino 5/11 09:04 — «Si sale
+    // hoy el posteo ya debería haberse abierto el post, no?») El próximo
+    // que sale HOY se muestra ABIERTO: foto visible y abre el detalle
+    // (scf-mini-x + data-post-id + data-status, mismo camino que
+    // cualquier tile programado en Inicio: en táctil hfDetailBind no lo
+    // encuentra en HF_TILES —kind 'oculta'— y el click llega a
+    // bindScfMinis, que navega directo por data-status=scheduled; en
+    // mouse, pzDetDirectoEsAjustable navega directo). La píldora, el
+    // borde dorado (hf-carta-magia) y la chapita quedan intactos; sin
+    // corazón/tik en la grilla (la carta no se gestiona desde la
+    // grilla). El velo (hf-carta-velo + hf-carta-oculta) solo cubre el
+    // próximo de día FUTURO. t.openHoy lo pone homeGridCompose.
+    if (t.openHoy) {
+      return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
+    }
     return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta hf-carta-magia" data-sched-at="${esc(String(p.scheduled_at || ''))}" aria-label="${phEn ? 'Next post, hidden' : 'Próximo posteo, oculto'}"><span class="hf-carta-velo" aria-hidden="true"></span><span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
   }
   return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${(likeInStrip && !hfAprobado) ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${(likeInStrip || hfAprobado) ? '' : likeBtn}${tikSpan}</span></span>`;
