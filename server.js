@@ -318,6 +318,7 @@ function saveGoldenExample(uid, postId, caption, visualBrief) {
 const mp = require('./mercadopago');
 const stripeBilling = require('./stripe-billing'); // (v285) cobro US en USD — fail-closed sin STRIPE_SECRET_KEY
 const demo = require('./demo');
+const draftOnboarding = require('./draft-onboarding'); // DRAFT-ONBOARDING (4/11): gusto del draft
 const feedAudit = require('./feed-audit');
 const igFollows = require('./ig-follows');
 const igMedia = require('./ig-media');
@@ -1142,7 +1143,7 @@ async function classifyWithVision(signals, photoUrls, lang) {
 // recolectó (web + feed + formulario). Determinístico, USD 0. El digest
 // viaja en el payload de la prueba y en trial_cache: es el fundamento
 // que la conversión siembra en la cuenta.
-function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding }) {
+function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding, draft }) {
   try {
     const _trialDigestBuilt = clientDigest.buildFromParts({
       business,
@@ -1163,6 +1164,10 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       webCopy: webData ? String(webData.description || '') : '',
     });
     if (_trialDigestBuilt && onboarding) _trialDigestBuilt.onboarding = onboarding;
+    // (DRAFT-ONBOARDING · 4/11) El gusto del draft queda guardado en el
+    // fundamento: la semana de la prueba lo consume en el spec y la
+    // cuenta lo hereda al registrarse (seedFromTrialDigest).
+    if (_trialDigestBuilt && draft) _trialDigestBuilt.draft_gusto = draft;
     return _trialDigestBuilt;
   } catch (e) { console.error('[digest] build trial:', e.message); return null; }
 }
@@ -25860,6 +25865,10 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // queda intacto: esto solo cierra la creación sin respuestas.
   const ocAns = onboardingAnswersFrom(fields);
   const ocDetectados = trialParseDetectados(fields.productos_detectados);
+  // (DRAFT-ONBOARDING · 4/11) Gusto del draft: se valida estricto; si
+  // viene roto, se ignora (la semana se genera como hoy, nunca se
+  // frena por un draft inválido).
+  const ocDraft = draftOnboarding.draftGustoFrom(fields.draft_gusto || '');
   if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
     return res.status(400).json({ error: lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio' });
   }
@@ -25879,7 +25888,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados), ...draftOnboarding.draftGoalLines(ocDraft, lang)].filter(Boolean).join('\n');
   // Colores: si el visitante mandó (ya no se pide en el form), se usan; si no,
   // intentamos los colores REALES de su perfil de Instagram (best-effort) y
   // si no se puede, cae a la paleta curada de su rubro.
@@ -26046,7 +26055,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     const effCategory = rubroRes.category;
     // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
-    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns });
+    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft });
     // (rubro-literal) PUERTA FAIL-CLOSED: sin producto evidenciado no hay
     // semana. 'todo' sin servicios, sin catálogo y sin detectados = el
     // caso del primo (Q1 vacía): 400 con falta_producto para que el front
@@ -26056,7 +26065,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados })) {
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
     }
-    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true });
+    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft });
     // 🧠 Análisis (2026-10-19): misma radiografía que la ruta stream. Si los
     // datos del @ no llegan, el análisis queda ausente — jamás se afirma un
     // nacimiento sobre una cuenta que no se pudo leer.
@@ -26452,6 +26461,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // (onboarding un clic) SIN ATAJO, igual que en /api/trial/generate.
   const ocAns = onboardingAnswersFrom(fields);
   const ocDetectados = trialParseDetectados(fields.productos_detectados);
+  // (DRAFT-ONBOARDING · 4/11) Gusto del draft: se valida estricto; si
+  // viene roto, se ignora (la semana se genera como hoy, nunca se
+  // frena por un draft inválido).
+  const ocDraft = draftOnboarding.draftGustoFrom(fields.draft_gusto || '');
   if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
     fail(lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio');
     return;
@@ -26471,7 +26484,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados), ...draftOnboarding.draftGoalLines(ocDraft, lang)].filter(Boolean).join('\n');
   const pal = demo.CATEGORY_COLORS[category] || demo.CATEGORY_COLORS.otro;
   const hexOk = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || '').trim());
   let accent = hexOk(fields.accent) ? String(fields.accent).trim().toUpperCase() : pal[0];
@@ -26816,7 +26829,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const trialDigest = buildTrialDigest({
       business, category, webData,
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
-      formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns,
+      formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft,
     });
     // (rubro-literal) PUERTA FAIL-CLOSED, igual que en /api/trial/generate:
     // sin producto evidenciado no hay semana ni stream de piezas.
@@ -26857,7 +26870,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     let uploadProduct = { classified: false };
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true });
+    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft });
     const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
     const week = buildTrialWeek(n, lang); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(effCategory) ? effCategory : 'otro';
@@ -29153,7 +29166,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v676';
+const BUILD_ID = '20261101-v677';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

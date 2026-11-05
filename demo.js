@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const https = require('https');
 const db = require('./db');
 const captions = require('./demo-captions');
+const draftMod = require('./draft-onboarding'); // DRAFT-ONBOARDING (4/11): gusto del draft sobre el spec
 const clientDigest = require('./client-digest');
 const rubroId = require('./rubro-id'); // (v235) subrubros canónicos del clasificador
 const demoAi = require('./demo-ai'); // (v231) subject_scale por familia de arte
@@ -1256,7 +1257,7 @@ function renderDemoVideo(imagePaths, runDir, idx) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang, trialNoStock = false }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang, trialNoStock = false, draft = null }) {
   // (v274 · MODO EN) lang 'en': catálogo de temas EN, frames del digest EN,
   // goalLine "As you asked:" y caps de titular con hang-words EN. Sin lang
   // (o 'es') el comportamiento es idéntico al histórico.
@@ -1496,6 +1497,15 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     if (!t) continue;
     if (!t._digest && !t.intent) { t.intent = 'autoridad'; t.angle = 'directo'; t.proof = ''; t._filler = 1; }
   }
+  // (DRAFT-ONBOARDING · 4/11) El gusto del draft mueve la ventana de
+  // temas ANTES del filtro de pre-lanzamiento: la etapa del negocio
+  // sigue mandando (un tema de relleno que el draft metió se reescribe
+  // igual abajo), y los temas del digest (reales) no los toca ese
+  // filtro. Sin draft, cero cambio. Nunca achica la ventana ni inventa
+  // un tema: sin reemplazo válido, el slot queda como está.
+  if (draft) {
+    try { topics = draftMod.applyDraftToTopics({ topics, pool: allTopics, draft }); } catch (e) { /* el draft nunca frena la prueba */ }
+  }
   // (v348 · D2) FILTRO DE RELLENO PRE-LANZAMIENTO: el fundamento ya
   // derivó sus temas en clave de presentación/lista de espera, pero el
   // RELLENO de pool trae captions de negocio operando ("Agenda abierta
@@ -1584,7 +1594,10 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // CTA: ver generateDemo y el stream de /prueba). El modo queda
   // registrado en el payload (design.posts[i].text_mode) y el renderer
   // lo cumple vía paraRender + la vía limpia de render_v2.
-  const textModes = captions.assignTextModes(topics, Math.min(2, Math.max(0, specPosts.length - 1)), 2);
+  // (DRAFT-ONBOARDING · 4/11) La ronda de texto del draft manda la
+  // cantidad (limpia 0 / equilibrada 2 / titulares 3); sin draft, 2.
+  const draftTextN = draftMod.draftTextCount(draft);
+  const textModes = captions.assignTextModes(topics, Math.min(2, Math.max(0, specPosts.length - 1)), draftTextN);
   // El póster es una pieza tipográfica: sin texto no existe. Si quedó
   // limpio, entra en las 2 y sale la pieza con texto de menor prioridad.
   for (const pi of posterAt) {
@@ -1597,10 +1610,18 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
           if (r >= worstRank) { worstRank = r; worst = j; }
         }
       });
-      if (worst >= 0 && textModes.filter((m) => m === 'text').length > 2) textModes[worst] = 'clean';
+      if (worst >= 0 && textModes.filter((m) => m === 'text').length > draftTextN) textModes[worst] = 'clean';
     }
   }
   specPosts.forEach((sp, i) => { sp.text_mode = textModes[i] || 'text'; });
+  // (DRAFT-ONBOARDING · 4/11) La campeona de texto marca la pieza
+  // principal: titulares → con texto, limpia → limpia. Nunca sobre un
+  // póster (tipográfico por naturaleza) ni sobre el slot del video.
+  try {
+    const champText = draftMod.draftChampionText(draft);
+    const vIdx0 = Math.min(2, Math.max(0, specPosts.length - 1));
+    if (champText && specPosts[0] && !specPosts[0].poster && vIdx0 !== 0) specPosts[0].text_mode = champText;
+  } catch (e) { /* el draft nunca frena la prueba */ }
   // (2026-10-18) PILA DE TEXTO ACOTADA (amendment, misma vara que
   // clientes): en las piezas CON texto, el máximo es titular (≤6) + UN
   // solo elemento extra — la bajada (≤8 palabras) o la pastilla, nunca
@@ -1661,7 +1682,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     }
   }
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null };
+  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -1755,9 +1776,9 @@ function closeTrialCaption(caption, topic, tone, lang) {
   return captions.ensureCaptionCtaClose(caption, t.kind, tone, lang);
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false }) {
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang, trialNoStock });
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang, trialNoStock, draft });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 
