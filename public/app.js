@@ -9534,15 +9534,25 @@ function chatStripCelebrate(t) { return String(t || '').replace(CELEBRATE_MARKER
 function chatStripMcMarker(t) { return chatStripCelebrate(t); }
 // Claves de mensajes ya renderizados: un mensaje con [celebrate] festeja UNA sola vez,
 // aunque el historial se recargue (visibilitychange, re-render, etc.).
+// (LOTE SACAR-AVATAR-FESTEJO-APERTURA · 5/11) La PRIMERA carga del historial en
+// una carga de página NO festeja: siembra el set sin disparar. Los [celebrate]
+// que ya están en el historial (publicaciones de ayer, wins) no son un festejo
+// de apertura — festejarlos en cada apertura en frío es el bug que Valentino
+// reporta (avatar + confetti al abrir, después de los 3 puntitos). Solo los
+// [celebrate] que llegan DESPUÉS (nueva publicación en vivo, recarga al volver
+// a primer plano con el chat activo) festejan.
 const CHAT_CELEBRATED_SEEN = new Set();
+let CHAT_CELEBRATE_SEEDED = false;
 function chatCelebrateScan(messages) {
   try {
+    const seedOnly = !CHAT_CELEBRATE_SEEDED;
+    CHAT_CELEBRATE_SEEDED = true;
     (messages || []).forEach(m => {
       if (!m || m.role === 'user' || !m.text) return;
       const key = m.role + ' ' + String(m.text);
       if (CHAT_CELEBRATED_SEEN.has(key)) return;
       CHAT_CELEBRATED_SEEN.add(key);
-      if (CELEBRATE_MARKER.test(String(m.text))) postyCelebrate();
+      if (!seedOnly && CELEBRATE_MARKER.test(String(m.text))) postyCelebrate();
     });
   } catch (e) {}
 }
@@ -24991,8 +25001,10 @@ function bindInicio() {
   });
   // (LOTE CHATPANTALLA) El chat ya no vive en una hoja sobre Inicio:
   // es pantalla completa (#/app/chat). El cableado de siempre corre
-  // en la pantalla (bindChatFull); acá estas dos llamadas no encuentran
-  // sus elementos y no hacen nada con el chat.
+  // en la pantalla (bindChatFull). OJO: bindChat() SÍ corre acá — la
+  // tarjeta de chat de Inicio tiene #chatInput — y carga el historial
+  // (chatLoadHistory); el scan de [celebrate] de esa carga NO festeja
+  // en la primera carga de página (semilla, lote avatar-festejo).
   try { bindChat(); } catch (e) {}
   try { bindSchedUpload(); } catch (e) {}
   const clickUp = () => { const f = document.getElementById('albumFile'); if (f) f.click(); };
