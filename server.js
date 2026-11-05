@@ -1786,6 +1786,33 @@ function whisperAudioFilename(mime, buf) {
   if (['mp4', 'm4a', 'webm', 'ogg', 'opus', 'wav', 'mp3', 'flac'].includes(sub)) return 'audio.' + sub;
   return 'audio.mp4';
 }
+// (LOTE VOZ-SILENCIO · 4/11) Whisper ante silencio NO devuelve vacío:
+// alucina líneas de crédito de subtítulos (caso real 4/11: audio de 2 s en
+// silencio → «Subtítulos realizados por la comunidad de Amara.org»), y ese
+// texto inventado entraba al chat como si el usuario lo hubiera dicho.
+// Filtro determinista sobre la transcripción: si es una alucinación
+// conocida de silencio, se trata como no escuchado y NUNCA llega al modelo.
+// Reglas, deliberadamente acotadas para no tocar habla real:
+//  - solo marcadores de no-habla entre corchetes («[Música]», «[Aplausos]»)
+//    o solo símbolos (♪): no hay habla del usuario en el texto.
+//  - familia Amara: la palabra «amara» JUNTO a una palabra de subtítulos
+//    (ES/EN/PT/FR/IT/DE/PL): el crédito completo, no un nombre suelto —
+//    «Amara» sola o «mi negocio se llama Amara» NO se filtran.
+// No se agregaron listas amplias de frases de YouTube («thanks for
+// watching», etc.): un cliente podría dictarlas de verdad y el costo de
+// un falso positivo sería un «no te escuché» injusto.
+function whisperEsAlucinacionSilencio(texto) {
+  const crudo = String(texto || '').trim();
+  if (!crudo) return false;
+  // Solo marcadores de no-habla entre corchetes (pueden venir repetidos).
+  if (/^(\[[^\]]*\]\s*)+$/.test(crudo)) return true;
+  const t = crudo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // Solo símbolos (♪, …, etc.): normalizado vacío pero texto presente.
+  if (!t) return true;
+  // Crédito de subtítulos de Amara.org, en cualquier idioma de la familia.
+  if (t.includes('amara') && /(subtitul|subtitle|legenda|sous titr|sottotitol|untertitel|subtitrare|napisy|caption)/.test(t)) return true;
+  return false;
+}
 async function transcribeAudio(dataUrl, apiKey) {
   // (LOTE VOZ-FALLA-2) La data URL real trae parámetros (;codecs=opus en
   // Safari 18.4+, ;codecs=mp4a.40.2 en Safari clásico). El regex viejo exigía
@@ -1813,7 +1840,16 @@ async function transcribeAudio(dataUrl, apiKey) {
     const minutes = Math.max(0.05, (buf.length * 8 / 64000) / 60);
     costs.logApiCost({ userId: null, feature: 'whisper', model: 'whisper-1', minutes });
   } catch (e) {}
-  return String((j && j.text) || '').trim();
+  const texto = String((j && j.text) || '').trim();
+  // (LOTE VOZ-SILENCIO) La alucinación de silencio no se devuelve como
+  // transcripción: todos los llamadores (transcribe, chat con audio, dna,
+  // subtítulos) caen en su camino no_heard existente y el texto inventado
+  // nunca llega al modelo ni al historial.
+  if (whisperEsAlucinacionSilencio(texto)) {
+    try { console.error('[transcribe] alucinacion-silencio filtrada:', texto.slice(0, 120)); } catch (e) {}
+    return '';
+  }
+  return texto;
 }
 function maskSettings(s) {
   const c = { ...s };
@@ -28564,7 +28600,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v670';
+const BUILD_ID = '20261101-v671';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
