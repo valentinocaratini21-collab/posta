@@ -339,6 +339,10 @@ const cmFormatos = require('./cm-formatos');
 const cmTema = require('./cm-tema-semana');
 const cmNumeros = require('./cm-numeros');
 const cmGusto = require('./cm-gusto');
+// (SABE-SIEMPRE) Filtros y reglas de que Posty sepa siempre qué postear:
+// rendimiento por tema/formato, anti-repetición, promo real, foto por
+// producto y reglas visibles en una línea. Fail-closed, sin datos no cambia nada.
+const sabeSiempre = require('./sabe-siempre');
 const cmTendencias = require('./cm-tendencias');
 const cmObjetivo = require('./cm-objetivo');
 const cmHorario = require('./cm-horario');
@@ -4529,21 +4533,52 @@ app.post('/api/fundamento/link', requireAuth, express.json(), async (req, res) =
 });
 app.get('/api/fundamento/semana-confirm', requireAuth, (req, res) => {
   const d = flDigest(req.session.userId);
-  res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), semana_confirmada_at: d.semana_confirmada_at || null });
+  // (SABE-SIEMPRE · ítem 2) Una foto por producto, de los propios posteos
+  // del cliente (nunca stock): la pregunta semanal se responde tocando
+  // fotos. Sin foto, el nombre sigue funcionando.
+  const fotos = {};
+  try {
+    for (const p of flProductos(d)) {
+      const f = sabeSiempre.fotoPorProducto(db, req.session.userId, p.nombre);
+      if (f) fotos[p.nombre] = f;
+    }
+  } catch (e) {}
+  res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), semana_confirmada_at: d.semana_confirmada_at || null, fotos, semana_elegida: d.semana_elegida || null });
 });
 app.post('/api/fundamento/semana-confirm', requireAuth, express.json(), (req, res) => {
   const uid = req.session.userId;
   const d = flDigest(uid);
-  if (req.body && req.body.seguir) {
-    // «Sigue igual»: no cambia nada, solo registra la confirmación.
+  // (SABE-SIEMPRE · ítem 2) Productos elegidos tocando fotos: solo nombres
+  // que ya están en los productos del fundamento (nunca se inventa uno).
+  // La elección queda guardada con la week_key en curso: la semana se arma
+  // con esto (brief + filtro del pool), y una elección vieja es inerte.
+  if (req.body && Array.isArray(req.body.productos)) {
+    const cur = flProductos(d);
+    const elegidos = [];
+    for (const n of req.body.productos) {
+      const hit = cur.find((p) => fundamentoLiteral.norm(p.nombre) === fundamentoLiteral.norm(String(n || '')));
+      if (hit && !elegidos.includes(hit.nombre)) elegidos.push(hit.nombre);
+    }
+    if (!elegidos.length) return res.status(400).json({ ok: false, error: 'Elegí al menos un producto de tu lista' });
+    d.semana_elegida = { week_key: mondayKeyOf(tzToday(userTz(uid))), productos: elegidos, at: new Date().toISOString() };
     d.semana_confirmada_at = new Date().toISOString();
     flGuardar(uid, d);
-    return res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), cambiado: false });
+    return res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), semana_elegida: d.semana_elegida });
+  }
+  if (req.body && req.body.seguir) {
+    // «Sigue igual»: la lista no cambia, pero la confirmación SÍ deja la
+    // elección de la semana registrada (antes solo quedaba el timestamp y
+    // la promesa «tu semana se arma con esto» no se cumplía).
+    d.semana_confirmada_at = new Date().toISOString();
+    d.semana_elegida = { week_key: mondayKeyOf(tzToday(userTz(uid))), productos: flProductos(d).map((p) => p.nombre), at: new Date().toISOString() };
+    flGuardar(uid, d);
+    return res.json({ ok: true, productos: flProductos(d), hipotesis: flHipotesis(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), cambiado: false, semana_elegida: d.semana_elegida });
   }
   const nuevos = fundamentoLiteral.aplicarEdicionSemanal(flProductos(d), String((req.body && req.body.texto) || ''));
   const antes = JSON.stringify(flProductos(d));
   d.productos = nuevos;
   d.semana_confirmada_at = new Date().toISOString();
+  d.semana_elegida = { week_key: mondayKeyOf(tzToday(userTz(uid))), productos: flProductos(d).map((p) => p.nombre), at: new Date().toISOString() };
   // (RUBRO-GARANTÍAS ×6 · pieza 4) Lo que el cliente escribe acá es
   // palabra del cliente: si nombra una hipótesis, queda confirmada y
   // sale de pendientes.
@@ -5799,6 +5834,11 @@ app.post('/api/ideas/chat', async (req, res) => {
     // (CHAT-TODO) Todo lo que el modelo pidió y NO se pudo hacer queda acá y se reporta
     // en el recibo: JAMÁS un reply que festeje algo que no pasó.
     const editIssues = [];
+    // (SABE-SIEMPRE · ítem 1) Líneas «aprendí: …» del turno: cada edición,
+    // rehacer o rechazo que dejó regla durable se ve en UNA línea en el
+    // recibo del chat (la regla vive en style_rules + cm_gusto y se
+    // consulta en GET /api/aprendizaje).
+    const learnedLines = [];
     const chatTitle = (p) => String((p && p.caption) || 'posteo').split('\n')[0].slice(0, 40);
     if (Array.isArray(out.edits) && out.edits.length) {
       // Palanca 7: si el pedido cambia el CONCEPTO (no solo el texto), la imagen se
@@ -5848,6 +5888,8 @@ app.post('/api/ideas/chat', async (req, res) => {
           try { tasteMemory.noteCaptionEdit(db, uid, { oldCaption: post.caption, newCaption, oldHashtags: post.hashtags, newHashtags: ed.hashtags !== undefined ? ed.hashtags : post.hashtags }); } catch (e) {}
           // 🧠 CEREBRO-CM: pedir un cambio en el chat = señal durable de gusto.
           try { cmGusto.registrar(db, uid, post, 'cambio'); } catch (e) {}
+          // (SABE-SIEMPRE · ítem 1) El cambio queda como regla visible en el recibo.
+          try { learnedLines.push(sabeSiempre.lineaAprendi(chatTitle(post), 'cambio')); } catch (e) {}
         }
         // Cambio de foto: el índice refiere a sus fotos guardadas (0 = la más nueva)
         let pickedOwnPhoto = false;
@@ -6061,6 +6103,8 @@ app.post('/api/ideas/chat', async (req, res) => {
           try { cmGusto.registrar(db, uid, post, 'rechazada'); } catch (e) {}
           try { recordSignal(uid, post, 'rejected'); } catch (e) {}
           cancelled.push(chatTitle(post));
+          // (SABE-SIEMPRE · ítem 1) El rechazo queda como regla visible en el recibo.
+          try { learnedLines.push(sabeSiempre.lineaAprendi(chatTitle(post), 'rechazo')); } catch (e) {}
           continue;
         }
         if (post.status === 'draft') {
@@ -6210,6 +6254,11 @@ app.post('/api/ideas/chat', async (req, res) => {
             continue;
           }
           try { recordSignal(uid, post, 'edited'); } catch (e) {}
+          // (SABE-SIEMPRE · ítem 1) El rehacer también es señal durable de
+          // gusto: antes solo dejaba post_signals, ahora deja 'cambio' en
+          // cm_gusto y su línea visible en el recibo.
+          try { cmGusto.registrar(db, uid, post, 'cambio'); } catch (e) {}
+          try { learnedLines.push(sabeSiempre.lineaAprendi(chatTitle(post), 'cambio')); } catch (e) {}
           redone.push({ title: chatTitle(post), copy: true });
           continue;
         }
@@ -6253,6 +6302,10 @@ app.post('/api/ideas/chat', async (req, res) => {
         // Sin cambio real (texto igual + imagen no regenerada): no se festeja
         // un rehacer que no pasó.
         if (!textChangedActual && !imageDone) { editIssues.push({ kind: 'redo_failed', title: chatTitle(post) }); continue; }
+        // (SABE-SIEMPRE · ítem 1) Igual que la copia: el rehacer en su lugar
+        // deja 'cambio' en cm_gusto y su línea visible en el recibo.
+        try { cmGusto.registrar(db, uid, post, 'cambio'); } catch (e) {}
+        try { learnedLines.push(sabeSiempre.lineaAprendi(chatTitle(post), 'cambio')); } catch (e) {}
         redone.push({ title: chatTitle(post), copy: false, image: media === 'image' ? imageDone : false });
       }
       if (redone.length) redoneApplied = { ok: redone };
@@ -6306,6 +6359,7 @@ app.post('/api/ideas/chat', async (req, res) => {
         reverted: (revertApplied && revertApplied.titles) || [],
         created: (createdApplied && createdApplied.ok) || [],
         redone: (redoneApplied && redoneApplied.ok) || [],
+        learned: learnedLines,
         issues: editIssues,
       });
       if (receiptLines.length) out.reply = String(out.reply || '') + '\n' + receiptLines.join('\n');
@@ -8673,6 +8727,17 @@ app.post('/api/gustos/propuestas/responder', requireAuth, (req, res) => {
   } catch (e) { res.status(500).json({ error: 'gustos' }); }
 });
 
+// ---------- 📖 LO QUE POSTY APRENDIÓ (SABE-SIEMPRE · ítem 1) ----------
+// Una línea por regla activa: dónde vive (style_rules + cm_gusto) y cómo
+// se consulta (este endpoint). Sin datos: lista vacía, nunca un error.
+// Las reglas de gusto por patrón se siguen viendo y borrando en
+// «Lo que aprendí de vos» (GET /api/gustos); acá van las reglas duras.
+app.get('/api/aprendizaje', requireAuth, (req, res) => {
+  try {
+    res.json({ ok: true, reglas: sabeSiempre.lineasAprendizaje(db, req.session.userId) });
+  } catch (e) { res.status(500).json({ error: 'aprendizaje' }); }
+});
+
 // Feedback de la sugerencia de arranque (first_pick): el usuario elige el
 // posteo sugerido, otro, o la descarta. Es la PRIMERA señal de taste del
 // usuario → se guarda en post_signals ('picked'→'approved',
@@ -8877,6 +8942,23 @@ function ideasInputFor(uid, weekKey) {
   // salvo fechas y tema anterior: nunca frena la generación.
   let cmBloque = '';
   try { cmBloque = (cmContextoSemana(uid, weekKey || '') || {}).cmBloque || ''; } catch (e) {}
+  // (SABE-SIEMPRE · ítems 2 y 3) Rendimiento por tema y formato con datos
+  // reales de IG + la semana que el cliente eligió tocando fotos en la
+  // pregunta semanal. Sin datos, vacío: la semana se arma como hoy.
+  let sabeSiempreTxt = '';
+  let semanaElegida = null;
+  try {
+    const dgS = clientDigest.getDigest(db, uid);
+    if (dgS && dgS.semana_elegida && dgS.semana_elegida.week_key === weekKey && Array.isArray(dgS.semana_elegida.productos) && dgS.semana_elegida.productos.length) {
+      semanaElegida = dgS.semana_elegida;
+    }
+    const rt = sabeSiempre.rendimientoTemas(db, uid);
+    const rf = sabeSiempre.rendimientoFormatos(db, uid);
+    sabeSiempreTxt = sabeSiempre.bloqueParaBrief(rt, rf);
+    if (semanaElegida) {
+      sabeSiempreTxt += `\nESTA SEMANA EL CLIENTE ELIGIÓ VENDER (pregunta semanal, su palabra manda): ${semanaElegida.productos.join(' · ')}. La semana se arma sobre estos productos.`;
+    }
+  } catch (e) {}
   const ideasInput = levelBoosted(uid, 'ideas', {
     business: profile.business_name,
     ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
@@ -8947,6 +9029,10 @@ function ideasInputFor(uid, weekKey) {
       if (pl) ideasInput.propiaLinea = pl;
     } catch (e) {}
   }
+  // (SABE-SIEMPRE) El brief lleva el rendimiento y la semana elegida:
+  // se ponen DESPUÉS del levelBoosted, igual que vetos y productos.
+  try { if (sabeSiempreTxt) ideasInput.sabeSiempre = sabeSiempreTxt; } catch (e) {}
+  try { if (semanaElegida) ideasInput.semanaElegida = semanaElegida; } catch (e) {}
   return ideasInput;
 }
 // Hook engine: rotación de 8 semanas por cliente (hooks.js).
@@ -11926,8 +12012,9 @@ app.get('/api/week/:weekKey/publish', (req, res) => {
 app.post('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
   if (guestBackstop(req, res)) return;
   const post = req.approvalPost;
+  const tituloRechazo = String(post.caption || 'posteo').split('\n')[0].slice(0, 40);
   if (post.approval === 'rejected' || post.status === 'cancelled') {
-    return res.json({ ok: true, approval: 'rejected' }); // idempotente
+    return res.json({ ok: true, approval: 'rejected', aprendido: sabeSiempre.lineaAprendi(tituloRechazo, 'rechazo') }); // idempotente
   }
   if (post.status === 'published') {
     return res.status(409).json({ error: 'already_published', message: 'Este posteo ya salió: no se puede cancelar.' });
@@ -11940,11 +12027,13 @@ app.post('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
   try { cmGusto.registrar(db, post.user_id, post, 'rechazada'); } catch (e) {}
   try { recordSignal(post.user_id, post, 'rejected'); } catch (e) {} // FASE 5: el veto en el pre-aviso es señal fuerte
   console.log(`[posta] Post #${post.id} rechazado por el cliente → cancelado`);
-  res.json({ ok: true, approval: 'rejected' });
+  // (SABE-SIEMPRE · ítem 1) La regla se ve en una línea en la respuesta.
+  res.json({ ok: true, approval: 'rejected', aprendido: sabeSiempre.lineaAprendi(tituloRechazo, 'rechazo') });
 });
 
 app.get('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
   const post = req.approvalPost;
+  const tituloRechazo = String(post.caption || 'posteo').split('\n')[0].slice(0, 40);
   if (post.approval === 'rejected' || post.status === 'cancelled') {
     return res.send(approvalPage('Ya estaba cancelado', 'Este posteo ya estaba cancelado: no se va a publicar.'));
   }
@@ -11959,7 +12048,8 @@ app.get('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
   try { cmGusto.registrar(db, post.user_id, post, 'rechazada'); } catch (e) {}
   try { recordSignal(post.user_id, post, 'rejected'); } catch (e) {} // FASE 5: el veto en el pre-aviso es señal fuerte
   console.log(`[posta] Post #${post.id} rechazado por el cliente → cancelado`);
-  res.send(approvalPage('Posteo cancelado', 'Listo: este posteo no se va a publicar.'));
+  // (SABE-SIEMPRE · ítem 1) La regla se ve en una línea en la página.
+  res.send(approvalPage('Posteo cancelado', `Listo: este posteo no se va a publicar. ${sabeSiempre.lineaAprendi(tituloRechazo, 'rechazo')}.`));
 });
 
 // Duplicar un posteo como borrador (para re-publicarlo sin armarlo de cero)
@@ -12962,8 +13052,44 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         console.log(`[pipeline:${tag}] usuario ${uid}: pool de ideas reforzado → ${pool.length}`);
       } catch (e) { console.error(`[pipeline:${tag}] refuerzo de ideas falló:`, e.message); }
     }
+    // (SABE-SIEMPRE · ítems 2, 3, 4, 5) Filtros deterministas del pool,
+    // ANTES del slice: promo sin promo real, temas de la semana anterior
+    // y perdedores medidos salen solo si el pool sigue ≥ déficit. La
+    // semana elegida por el cliente pasa siempre (su palabra manda).
+    // Cada paso es fail-open al pool original: nunca vacía la semana.
+    try {
+      const dgF = clientDigest.getDigest(db, uid);
+      const dnaF = readDna(uid) || {};
+      let elegida = null;
+      if (dgF && dgF.semana_elegida && dgF.semana_elegida.week_key === weekKey && Array.isArray(dgF.semana_elegida.productos)) elegida = dgF.semana_elegida.productos;
+      const rtF = sabeSiempre.rendimientoTemas(db, uid);
+      const rfF = sabeSiempre.rendimientoFormatos(db, uid);
+      const prevF = sabeSiempre.semanaAnterior(db, uid, weekKey);
+      const resF = sabeSiempre.filtrarPool(pool, {
+        deficit,
+        tienePromo: sabeSiempre.tienePromoReal(dgF, dnaF),
+        prevPosts: prevF.posts,
+        perdedoresTemas: rtF.perdedores,
+        perdedoresFormatos: rfF.perdedores,
+        excepciones: elegida || [],
+      });
+      if (resF.quitados.length) {
+        pool.splice(0, pool.length, ...resF.pool);
+        console.log(`[pipeline:${tag}] usuario ${uid}: sabe-siempre quitó ${resF.quitados.length} ideas (${resF.quitados.map((q) => q.motivo).join(', ')})`);
+      }
+    } catch (e) { console.error(`[pipeline:${tag}] sabe-siempre falló:`, e.message); }
     const picks = pool.slice(0, deficit + 2);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
+    // (SABE-SIEMPRE · ítem 4) La secuencia de formatos (tipos, en orden)
+    // no se repite idéntica a la de la semana anterior: se canjea el
+    // último pick por el primer pick del buffer con otro tipo.
+    try {
+      const prevSeq = sabeSiempre.semanaAnterior(db, uid, weekKey);
+      if (prevSeq.tiene) {
+        const guarded = sabeSiempre.evitarSecuenciaFormatoIgual(picks, pool, prevSeq.tipos);
+        if (guarded !== picks) picks.splice(0, picks.length, ...guarded);
+      }
+    } catch (e) {}
     // 🎯 CUOTAS DE INTENCIÓN (v231, adopción Predis): si la ventana sale
     // degenerada (toda venta, o toda una sola intención), se canjean
     // picks de la ventana por picks del buffer YA generado — cero IA
@@ -29166,7 +29292,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v678';
+const BUILD_ID = '20261101-v679';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -1241,7 +1241,16 @@ function anaFlConfirmLoad(btn) {
 function anaFlConfirmRender(d) {
   const box = document.getElementById('anaFlBox');
   if (!box) return;
-  const list = (d.productos || []).map((p) => '<span style="display:inline-block;margin:2px 4px 2px 0;padding:6px 10px;background:#fff;border:1px solid #DCEFFF;border-radius:999px;font-size:14px;font-weight:700;color:#0A1E33">' + esc(p.nombre) + '</span>').join('');
+  const fotos = (d && d.fotos) || {};
+  // (SABE-SIEMPRE · ítem 2) La pregunta semanal con fotos: cada producto
+  // con foto sale como tarjeta tocable (la foto es de sus propios
+  // posteos, nunca stock); sin foto, la chip de texto de siempre. Tocar
+  // una foto la selecciona para ESTA semana; el botón de abajo la guarda.
+  const list = (d.productos || []).map((p) => {
+    const f = fotos[p.nombre];
+    if (f) return '<button type="button" class="ana-fl-foto" data-prod="' + esc(p.nombre) + '" onclick="anaFlToggleFoto(this)" style="display:inline-block;vertical-align:top;margin:2px 6px 6px 0;padding:0 0 6px;border:2px solid #DCEFFF;border-radius:14px;background:#fff;cursor:pointer;overflow:hidden;width:104px"><img src="' + esc(f) + '" alt="" loading="lazy" style="display:block;width:104px;height:78px;object-fit:cover"><span style="display:block;padding:4px 6px 0;font-size:13px;font-weight:700;color:#0A1E33;line-height:1.2">' + esc(p.nombre) + '</span></button>';
+    return '<span style="display:inline-block;margin:2px 4px 2px 0;padding:6px 10px;background:#fff;border:1px solid #DCEFFF;border-radius:999px;font-size:14px;font-weight:700;color:#0A1E33">' + esc(p.nombre) + '</span>';
+  }).join('');
   // (FUNDAMENTO-LITERAL · pieza 5) Los vetos se ven y se pueden quitar
   // desde este mismo lugar (revocable, como pide el lote).
   const vetos = (d.vetos || []).map((v) => '<span style="display:inline-block;margin:2px 4px 2px 0;padding:6px 10px;background:#FDF0F0;border:1px solid #F3C6C6;border-radius:999px;font-size:14px;font-weight:700;color:#8B2E2E">' + esc(v) + ' <button type="button" onclick="anaFlQuitarVeto(this)" data-veto="' + esc(v) + '" style="border:0;background:none;color:#8B2E2E;font-weight:800;cursor:pointer">✕</button></span>').join('');
@@ -1253,9 +1262,35 @@ function anaFlConfirmRender(d) {
     + '<div>' + (list || anaT('Sin productos todavía.', 'No products yet.')) + '</div>'
     + (hips ? '<p class="ana-note" style="margin-top:10px">' + anaT('¿Esto también lo vendés? Lo vi en una sola fuente, confirmalo para usarlo:', 'Do you also sell this? I saw it in one source only — confirm it to use it:') + '</p><div>' + hips + '</div>' : '')
     + (vetos ? '<p class="ana-note" style="margin-top:10px">' + anaT('Vetado (nunca se genera):', 'Banned (never generated):') + '</p><div>' + vetos + '</div>' : '')
-    + '<div style="margin-top:10px"><button class="btn btn-primary btn-sm" onclick="anaFlSeguir(this)">' + anaT('Sigue igual', 'Still the same') + '</button></div>'
+    + (d.semana_elegida && d.semana_elegida.productos && d.semana_elegida.productos.length ? '<p class="ana-note" style="margin-top:10px">' + anaT('Tu semana ya está elegida con: ', 'Your week is already picked with: ') + d.semana_elegida.productos.map((n) => esc(n)).join(' · ') + '</p>' : '')
+    + '<div style="margin-top:10px"><button class="btn btn-primary btn-sm" onclick="anaFlSeguir(this)">' + anaT('Sigue igual', 'Still the same') + '</button> <button id="anaFlElegirBtn" class="btn btn-primary btn-sm" style="display:none" onclick="anaFlElegirSemana(this)">' + anaT('Armar mi semana con estos', 'Build my week with these') + '</button></div>'
     + '<div style="margin-top:10px"><input id="anaFlEdit" class="oc-field" style="font-size:15px;padding:10px 12px" placeholder="' + anaT('Escribí un producto nuevo o uno corregido', 'Write a new or corrected product') + '"><button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="anaFlEditar(this)">' + anaT('Guardar cambio', 'Save change') + '</button></div>'
     + '<p id="anaFlMsg" class="ana-note" style="display:none"></p>';
+}
+function anaFlToggleFoto(btn) {
+  if (!btn) return;
+  const sel = btn.getAttribute('data-sel') === '1';
+  btn.setAttribute('data-sel', sel ? '0' : '1');
+  btn.style.borderColor = sel ? '#DCEFFF' : '#FEC14D';
+  btn.style.background = sel ? '#fff' : '#FFF8E1';
+  const box = document.getElementById('anaFlBox');
+  const n = box ? box.querySelectorAll('.ana-fl-foto[data-sel="1"]').length : 0;
+  const b = document.getElementById('anaFlElegirBtn');
+  if (b) b.style.display = n > 0 ? 'inline-block' : 'none';
+}
+function anaFlElegirSemana(btn) {
+  const box = document.getElementById('anaFlBox');
+  if (!box) return;
+  const names = Array.from(box.querySelectorAll('.ana-fl-foto[data-sel="1"]')).map((el) => el.getAttribute('data-prod') || '').filter(Boolean);
+  if (!names.length) return;
+  fetch('/api/fundamento/semana-confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productos: names }) }).then((r) => r.json()).then((d) => {
+    const m = document.getElementById('anaFlMsg');
+    if (m) { m.style.display = 'block'; m.textContent = (d && d.ok) ? anaT('Listo, tu semana se arma con estos.', 'Done, your week is built from these.') : anaT('No pudimos guardar tu elección ahora.', 'We could not save your pick right now.'); }
+    if (d && d.ok) anaFlConfirmLoad();
+  }).catch(() => {
+    const m = document.getElementById('anaFlMsg');
+    if (m) { m.style.display = 'block'; m.textContent = anaT('No pudimos guardar tu elección ahora.', 'We could not save your pick right now.'); }
+  });
 }
 function anaFlSeguir(btn) {
   fetch('/api/fundamento/semana-confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seguir: true }) }).then((r) => r.json()).then(() => {

@@ -2610,7 +2610,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, cmBloque, tasteBlock, styleLockExtras, casaLinea, propiaLinea, lang }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, cmBloque, sabeSiempre, tasteBlock, styleLockExtras, casaLinea, propiaLinea, lang }, apiKey) {
   const en = lang === 'en';
   // (growth ola 2) Capa de campaña comercial: sugiere SIN imponer — si el
   // negocio no vende en esa fecha, se ignora (test de pertenencia manda).
@@ -2660,7 +2660,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'user',
           content: businessContext({ business, category, description, dna, tone, learnings }) +
-            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${cmBloque ? `\nCEREBRO CM — cómo piensa un gran community manager para ESTE negocio (todo con datos reales de esta cuenta, nada inventado):\n${cmBloque}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\n${casaLinea ? `\n${casaLinea}` : ''}\n${propiaLinea ? `\n${propiaLinea}` : ''}
+            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${cmBloque ? `\nCEREBRO CM — cómo piensa un gran community manager para ESTE negocio (todo con datos reales de esta cuenta, nada inventado):\n${cmBloque}` : ''}${sabeSiempre ? `\n${sabeSiempre}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\n${casaLinea ? `\n${casaLinea}` : ''}\n${propiaLinea ? `\n${propiaLinea}` : ''}
 Generá las 7 ideas.`,
         },
       ],
@@ -4731,6 +4731,11 @@ function chatReceiptLines(r) {
       else lines.push(`rehice: ${q(d.title)} — imagen nueva, sigue como borrador 👍`);
     }
     if (r.redone.length > 3) lines.push(`y ${r.redone.length - 3} más rehechos`);
+  }
+  // (SABE-SIEMPRE · ítem 1) Reglas aprendidas en el turno, una línea cada una.
+  if (r && Array.isArray(r.learned) && r.learned.length) {
+    for (const l of r.learned.slice(0, 3)) lines.push(String(l));
+    if (r.learned.length > 3) lines.push(`y ${r.learned.length - 3} reglas más aprendidas`);
   }
   const issueLine = (it) => {
     switch (it.kind) {
