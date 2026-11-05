@@ -1485,10 +1485,7 @@ textarea.in{resize:vertical;min-height:96px}
 /* Posty vivo: movimiento humano sutil (respira, no flota). Solo la imagen se mueve; el círculo queda quieto. */
 .chome-ava{animation:posty-idle 6s ease-in-out infinite}
 @keyframes posty-idle{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}22%{transform:translateY(-1.5px) rotate(.8deg) scale(1.008)}47%{transform:translateY(.5px) rotate(-.5deg) scale(1)}71%{transform:translateY(-1px) rotate(.3deg) scale(1.005)}}
-/* Magia de primera apertura: el avatar "saluda" (bounce + giro sutil, 1.2s, una sola vez).
-   Va DESPUÉS de .chome-ava para pisar la animación idle mientras dura; al sacarse la clase, vuelve el idle. */
-@keyframes posty-wave{0%{transform:translateY(0) rotate(0deg)}20%{transform:translateY(-9px) rotate(-7deg)}40%{transform:translateY(0) rotate(5deg)}60%{transform:translateY(-5px) rotate(-4deg)}80%{transform:translateY(0) rotate(2deg)}100%{transform:translateY(0) rotate(0deg)}}
-.chome-ava-wave{animation:posty-wave 1.2s ease-in-out 1;transform-origin:50% 85%}
+/* Celebración de apertura RETIRADA por orden de Valentino 4/11 (avatar saluda + pelotita): tras los 3 puntitos, el feed aparece directo. El idle del avatar (.chome-ava, posty-idle) sigue, que es su movimiento normal. */
 /* Posty trabajando (v210): sin video de malabares — mientras genera, el
    avatar queda quieto (se apaga el idle) y nada más. */
 .chome-ava-wrap.working .chome-ava{animation:none}

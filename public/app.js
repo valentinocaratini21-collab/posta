@@ -6097,22 +6097,7 @@ function postyCelebrate() {
     }, 3300);
   } catch (e) {}
 }
-// Magia de primera apertura: confetti sutil (ya existente) + el avatar "saluda"
-// (bounce + giro sutil, 1.2s, CSS puro). Una sola vez por sesión.
-function firstOpenParty() {
-  let done = false;
-  try { done = sessionStorage.getItem('posta_first_open_party') === '1'; } catch (e) {}
-  if (done) return;
-  try { sessionStorage.setItem('posta_first_open_party', '1'); } catch (e) {}
-  try { if (typeof postyCelebrate === 'function') postyCelebrate(); } catch (e) {} // confetti + pelotita
-  try {
-    const ava = document.querySelector('.chome-ava');
-    if (ava) {
-      ava.classList.add('chome-ava-wave');
-      setTimeout(() => { try { ava.classList.remove('chome-ava-wave'); } catch (e2) {} }, 1600);
-    }
-  } catch (e) {}
-}
+/* Celebración de apertura RETIRADA por orden de Valentino 4/11: tras los 3 puntitos, el feed aparece directo (sin avatar con pelotita ni saludo). postyCelebrate/postyConfetti siguen vivos para sus otros usos (activar semana, marcador [celebrate], checklist). */
 /* ---------- CHECKLIST COMPACTO: reemplaza los 3 banners apilados ---------- */
 function igConnectHere() {
   const cur = '/#' + ((location.hash.split('?')[0] || '#/app/schedule').replace(/^#/, ''));
@@ -9533,9 +9518,6 @@ async function chatLoadHistory() {
       if (box) box.insertAdjacentHTML('afterbegin', `<div class="chat-msg ai">${esc(r.welcome.trim().slice(0, 600))}</div>`);
       const chips = $('#chatChips');
       if (chips) chips.remove();
-      // Magia de primera apertura: confetti sutil + el avatar saluda.
-      // Solo si el chat está visible (este fetch también corre desde otras vistas).
-      if (box) { try { firstOpenParty(); } catch (e) {} }
     }
     // Fix auditoría #2: si la importación de /prueba trajo 0, el welcome honesto
     // viene con 1 tap para rearmar la semana (POST /api/trial/rebuild-import).
