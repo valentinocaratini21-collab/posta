@@ -24758,8 +24758,6 @@ async function approvalPostView(id) {
   // solo con hermana real verificada (caption_on=1), porqué solo con
   // dato real guardado. Sin dato, nada se dibuja.
   const apvCleanTog = (!isVideo && Number(p.caption_on) === 1) ? `<div class="apv-clean-row"><button type="button" class="hf-crop-tog" data-apv-clean aria-pressed="false">${pzIc('image', 16)} ${en ? 'See original photo' : 'Ver foto original'}</button></div>` : '';
-  const apvWhyTxt = String(p.strategy_why || '').trim();
-  const apvWhyLine = apvWhyTxt ? `<div class="apv-why">${pzIc('sparkle', 13)} ${esc(apvWhyTxt)}</div>` : '';
   return `<div class="apv-wrap">
     ${apvBack}
     ${media}
@@ -24767,9 +24765,7 @@ async function approvalPostView(id) {
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
-    ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''} // (CONTENIDO-FOTO) el texto sobre la foto es dato propio
-    ${apvWhyLine}
-    ${rgLineHTML(p, en)}
+    ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''}
     ${actions}${draftActions}
     ${apvMoreHTML(p, st, canAct, isDraft, editPrompt)}
     ${hfAskChangeBtnHTML(p)}
