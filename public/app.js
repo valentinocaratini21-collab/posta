@@ -9718,7 +9718,9 @@ async function chatLoadHistory() {
       if (ta0 && r.idea.caption) { ta0.value = r.idea.caption; ta0.dataset.touched = '1'; }
       refreshChatCaption();
     }
-    chatScroll();
+    // (LOTE CHAT-SCROLL) El historial recién pintado arranca abajo y el
+    // pin se re-afirma mientras se asienta el layout (teclado, imágenes).
+    try { pzChatPinArm(); } catch (e) {}
     // Banners de logo candidato que ya no existe: se auto-ocultan.
     try { chatLogoBannersVerify(); } catch (_) {}
   } catch (e) { /* sin historial: se empieza de cero */ }
@@ -10450,9 +10452,97 @@ function chatEditCommand(text) {
   return false;
 }
 
-function chatScroll() {
+/* (LOTE CHAT-SCROLL · Valentino 5/11 «siempre tiene que arrancar desde
+   abajo de todo») El scroll al fondo era UNA asignación sincrónica en el
+   momento de pintar, y nada la volvía a afirmar: después de pintar, el
+   layout sigue asentándose (el foco del input a los 60 ms abre el
+   teclado y pzChatKbSync achica la caja; las previews de la propuesta y
+   las fotos del chat cargan tarde y la caja flex se achica; las imágenes
+   sin alto fijo dentro de las burbujas crecen al cargar) y el fondo
+   quedaba más abajo que el scrollTop que quedó — había que deslizar.
+   Regla, como WhatsApp:
+   - al ABRIR el chat, siempre abajo (pin), y el pin se re-afirma
+     mientras el usuario no suba a leer (observadores + reintentos
+     cortos tras pintar);
+   - ENVIAR un mensaje te deja abajo (force);
+   - un mensaje nuevo solo te lleva abajo si ya estabas abajo: si
+     subiste a leer el historial, nada te arrastra (el pin se apaga al
+     subir y se vuelve a prender al volver al fondo).
+   El pin vive en un flag global porque hay UNA sola #chatBox viva por
+   vez (la del posteo mueve el mismo nodo; la landing tiene la suya en
+   otra carga de página). */
+let PZ_CHAT_PIN = false;
+function pzChatNearBottom(b) {
+  if (!b) return false;
+  try { return (b.scrollHeight - b.scrollTop - b.clientHeight) <= 64; } catch (e) { return false; }
+}
+function pzChatToBottom(b) {
+  b = b || $('#chatBox');
+  if (!b) return false;
+  try { b.scrollTop = b.scrollHeight; } catch (e) {}
+  return true;
+}
+function chatScroll(force) {
   const b = $('#chatBox');
-  if (b) b.scrollTop = b.scrollHeight;
+  if (!b) return;
+  if (force) { PZ_CHAT_PIN = true; pzChatToBottom(b); return; }
+  if (PZ_CHAT_PIN) pzChatToBottom(b);
+}
+// El pin sigue al dedo: subir a leer lo apaga, volver al fondo lo prende.
+// Se instala en bindChat (la caja es nueva en cada render: el listener
+// muere con ella; el flag dataset evita duplicados si se re-cablea).
+function pzChatPinBind() {
+  const b = $('#chatBox');
+  if (!b || b.dataset.pzChatPin) return;
+  try { b.dataset.pzChatPin = '1'; } catch (e) {}
+  try {
+    b.addEventListener('scroll', () => {
+      try { PZ_CHAT_PIN = pzChatNearBottom(b); } catch (e) {}
+    }, { passive: true });
+  } catch (e) {}
+}
+// Re-afirma el fondo mientras el pin siga prendido: cubre el asentado
+// posterior a la pintura (teclado, imágenes tardías, propuesta). Los
+// observadores mueren con la caja; los reintentos cortos son respaldo
+// por si el navegador no dispara el observador a tiempo.
+function pzChatPinArm() {
+  const b = $('#chatBox');
+  if (!b) return;
+  PZ_CHAT_PIN = true;
+  pzChatToBottom(b);
+  pzChatPinBind();
+  try {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => { try { if (PZ_CHAT_PIN) pzChatToBottom(); } catch (e) {} });
+    }
+  } catch (e) {}
+  [250, 600, 1200].forEach((ms) => {
+    try { setTimeout(() => { try { if (PZ_CHAT_PIN) pzChatToBottom(); } catch (e) {} }, ms); } catch (e) {}
+  });
+  try {
+    if (typeof ResizeObserver !== 'undefined' && !b.dataset.pzChatRo) {
+      b.dataset.pzChatRo = '1';
+      const ro = new ResizeObserver(() => { try { if (PZ_CHAT_PIN) pzChatToBottom(b); } catch (e) {} });
+      ro.observe(b);
+    }
+  } catch (e) {}
+  try {
+    if (typeof MutationObserver !== 'undefined' && !b.dataset.pzChatMo) {
+      b.dataset.pzChatMo = '1';
+      const mo = new MutationObserver(() => { try { if (PZ_CHAT_PIN) pzChatToBottom(b); } catch (e) {} });
+      mo.observe(b, { childList: true, subtree: true });
+    }
+  } catch (e) {}
+  try {
+    if (!b.dataset.pzChatLd) {
+      b.dataset.pzChatLd = '1';
+      b.addEventListener('load', (ev) => {
+        try {
+          if (PZ_CHAT_PIN && ev && ev.target && (ev.target.tagName === 'IMG' || ev.target.tagName === 'VIDEO')) pzChatToBottom(b);
+        } catch (e) {}
+      }, true);
+    }
+  } catch (e) {}
 }
 
 function chatRenderProposal() {
@@ -10760,7 +10850,8 @@ async function chatSend() {
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(sendText)}</div>`);
   inp.value = '';
   chatUpdateSendBtn();
-  chatScroll();
+  // (LOTE CHAT-SCROLL) Enviar te deja abajo.
+  chatScroll(true);
   // "diagnostico imagen" → prueba la generación de imagen y reporta el error exacto.
   if (/diagn[oó]stico imagen/i.test(sendText)) {
     (async () => {
@@ -11154,7 +11245,8 @@ async function chatExchange({ text, display, extra, pushed }) {
     const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
     CHAT.push({ role: 'user', text });
     box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(display || text)}</div>`);
-    chatScroll();
+    // (LOTE CHAT-SCROLL) La burbuja del usuario es un envío: abajo.
+    chatScroll(true);
   }
   if (btn) btn.disabled = true;
   CHAT_IDEA = null; CUSTOM_PAL = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
@@ -11576,7 +11668,11 @@ function bindChat() {
   // (LOTE CHATBAR-MAS · decisión Valentino 3/11) El + de la barra del
   // chat salió: foto/video entran solo por el + del dock (pzDockMas),
   // que dispara el picker #chatFile de abajo. El menú viejo no existe.
-  chatScroll();
+  // (LOTE CHAT-SCROLL) Al cablear el chat, el fondo es el punto de
+  // partida (como siempre) y el pin queda prendido hasta que el
+  // usuario suba a leer.
+  chatScroll(true);
+  try { pzChatPinBind(); } catch (e) {}
   try { hfPaintAnchor(); } catch (e) {}
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.onclick = () => { track('chat_idea_accepted', { reel: false }); chatMakePost(false); };
@@ -21641,7 +21737,8 @@ function pzVoicePendingDeliver() {
         const lb = bubbles && bubbles.length ? bubbles[bubbles.length - 1] : null;
         if (lb && !lb.querySelector('audio')) lb.insertAdjacentHTML('beforeend', '<audio controls src="' + esc(p.audio) + '" style="display:block;width:100%;height:32px;margin-top:6px"></audio>');
       }
-      try { chatScroll(); } catch (e) {}
+      // (LOTE CHAT-SCROLL) La nota pendiente es un envío: abajo.
+      try { chatScroll(true); } catch (e) {}
       chatExchange({ text: p.text, pushed: true });
     } catch (e) {}
   });
@@ -21660,7 +21757,9 @@ function bindChatFull() {
     }
   } catch (e) {}
   try { chatUpdateSendBtn(); } catch (e) {}
-  try { chatScroll(); } catch (e) {}
+  // (LOTE CHAT-SCROLL) Abrir el chat arranca abajo y el pin se
+  // re-afirma mientras se asienta el layout (teclado, imágenes).
+  try { pzChatPinArm(); } catch (e) {}
   // Voz pendiente del mic del dock: mismo delay de siempre (80 ms).
   if (window.__pzChatVoice) {
     window.__pzChatVoice = false;
@@ -21824,6 +21923,9 @@ function pzLpChatBind() {
   }
   try { pzPhStart(); } catch (e) {}
   try { chatLoadHistory(); } catch (e) {}
+  // (LOTE CHAT-SCROLL) La hoja de la landing comparte el camino: el
+  // pin sigue al dedo también acá (pzLpOpen arma el resto al abrir).
+  try { pzChatPinBind(); } catch (e) {}
 }
 // (LOTE CHAT-WEBSITE-LINDO · 3/11) Abrir/cerrar SOLO del chat de la landing.
 // Por qué existe: v566 retiró la hoja para la app (mzOpenSheet navega a #/app/chat),
@@ -21844,7 +21946,9 @@ function pzLpOpen() {
     try { ci.focus({ preventScroll: true }); } catch (e) { try { ci.focus(); } catch (e2) {} }
   }, desktop ? 320 : 60);
   try { chatUpdateSendBtn(); } catch (e) {}
-  try { chatScroll(); } catch (e) {}
+  // (LOTE CHAT-SCROLL) La hoja de la landing comparte el camino: al
+  // abrir, abajo, con el mismo pin de asentado que el chat principal.
+  try { pzChatPinArm(); } catch (e) {}
 }
 function pzLpClose() {
   try { pzBlurActivo(); } catch (e) {}
@@ -24612,7 +24716,9 @@ function pzPostChatOpen(post) {
   layer.style.transform = '';
   try { document.body.classList.add('pz-postchat-open'); } catch (e) {}
   try { hfPaintAnchor(); } catch (e) {}
-  try { chatScroll(); } catch (e) {}
+  // (LOTE CHAT-SCROLL) El chat del posteo mueve el mismo nodo: al
+  // abrir, abajo, con el mismo pin de asentado que el chat principal.
+  try { pzChatPinArm(); } catch (e) {}
   pzPostChatKbBind();
   pzPostChatKbSync();
   var inp = document.getElementById('chatInput');
