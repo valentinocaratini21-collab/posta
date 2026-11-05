@@ -25445,6 +25445,33 @@ function pzHeadCollapseAnimate(iv, collapsed) {
     try { iv.classList.toggle('hf-collapsed', collapsed); } catch (_) {}
   }
 }
+// LOTE SCROLL-PRIMERA-VEZ (4/11): aplicación diferida al asentarse el scroll.
+// Medido con las funciones reales: el colapso FLIP durante el primer swipe
+// sumaba ~275px de alto en .22s mientras el dedo seguía deslizando y el feed
+// se movía ~1.9x más rápido que el dedo (pico 6375 px/s vs base 3375 px/s);
+// el segundo swipe, ya colapsado, era normal. La decisión (pzHeadCollapseNext)
+// se sigue evaluando en cada evento con la semántica exacta de siempre, pero
+// el cambio visual espera a que no llegue ningún evento de scroll en 120ms
+// (el momentum dispara eventos a ~60Hz, así que 120ms sin eventos = gesto
+// terminado): durante el gesto la altura NO cambia y el primer scroll se
+// siente igual que los siguientes; al asentarse, el FLIP .22s hace el
+// pliegue con el dedo ya quieto, donde se lee como animación y no como
+// velocidad extra. Guard v623, tope max-width v633 y FLIP v634 INTACTOS:
+// el guard sigue tragando el eco de anchoring (antes de cualquier timer) y
+// el eco solo se arma cuando se APLICA el toggle, como antes.
+let pzHeadCollapseApplied = false;
+let pzHeadCollapseTimer = null;
+function pzHeadCollapseApply() {
+  pzHeadCollapseTimer = null;
+  try {
+    const iv = document.getElementById('inicioView');
+    if (!iv) return;
+    if (pzHeadCollapseState.collapsed === pzHeadCollapseApplied) return;
+    pzHeadCollapseEcho = pzHeadCollapseState.collapsed ? -1 : 1;
+    pzHeadCollapseApplied = pzHeadCollapseState.collapsed;
+    pzHeadCollapseAnimate(iv, pzHeadCollapseState.collapsed);
+  } catch (e) {}
+}
 function pzHeadCollapseSync() {
   try {
     const iv = document.getElementById('inicioView');
@@ -25452,9 +25479,11 @@ function pzHeadCollapseSync() {
     const doc = document.documentElement;
     const maxScroll = (doc ? doc.scrollHeight : 0) - (window.innerHeight || 0);
     if (maxScroll <= 0) {
+      if (pzHeadCollapseTimer) { clearTimeout(pzHeadCollapseTimer); pzHeadCollapseTimer = null; }
       iv.classList.remove('hf-collapsed');
       pzHeadCollapseState = { collapsed: false, lastY: 0 };
       pzHeadCollapseEcho = 0;
+      pzHeadCollapseApplied = false;
       return;
     }
     const y = window.scrollY || (doc && doc.scrollTop) || 0;
@@ -25468,15 +25497,19 @@ function pzHeadCollapseSync() {
       pzHeadCollapseEcho = 0;
       return;
     }
-    const prevCollapsed = pzHeadCollapseState.collapsed;
     const next = pzHeadCollapseNext(y, pzHeadCollapseState.lastY, pzHeadCollapseState.collapsed);
     pzHeadCollapseState = next;
-    if (next.collapsed !== prevCollapsed) {
-      pzHeadCollapseEcho = next.collapsed ? -1 : 1;
-      pzHeadCollapseAnimate(iv, next.collapsed);
-    } else {
-      iv.classList.toggle('hf-collapsed', next.collapsed);
+    if (next.collapsed !== pzHeadCollapseApplied) {
+      if (pzHeadCollapseTimer) clearTimeout(pzHeadCollapseTimer);
+      pzHeadCollapseTimer = setTimeout(pzHeadCollapseApply, 120);
+    } else if (pzHeadCollapseTimer) {
+      clearTimeout(pzHeadCollapseTimer);
+      pzHeadCollapseTimer = null;
     }
+    // Mantener la clase sincronizada con lo aplicado (no-op si ya coincide;
+    // repara el caso de un #inicioView re-renderizado, como hacía el else
+    // original). Nunca cambia la altura por sí solo cuando ya coincide.
+    iv.classList.toggle('hf-collapsed', pzHeadCollapseApplied);
   } catch (e) {}
 }
 if (typeof window !== 'undefined' && window.addEventListener && !window.__pzHeadCollapseBound) {
