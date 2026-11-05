@@ -7066,6 +7066,56 @@ app.get('/api/admin/email-log', requireAdminToken, (req, res) => {
     res.json({ ok: true, count: rows.length, last_error: lastError, rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// ---------- Push: salud de la config + prueba a demanda (LOTE PUSH-FUNCIONANDO) ----------
+// GET /api/admin/push/health — estado de la config APNs/VAPID/FCM (solo
+// booleanos, nunca secretos) + suscripciones por transporte. La clave APNs
+// se valida firmando un payload de prueba, sin red.
+// POST /api/admin/push/test — manda UNA push de prueba a UN usuario
+// (user_id requerido; sin broadcast). Devuelve el resultado real del
+// envío (sent / reason) + suscripciones del usuario por transporte.
+// Se usa para verificar la push sin esperar al ritual de las 9:00 ni a
+// un posteo programado.
+app.get('/api/admin/push/health', requireAdminToken, (req, res) => {
+  try {
+    res.json({ ok: true, ...push.pushHealth() });
+  } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
+});
+// Mensaje en claro para quien dispara la prueba: nunca fallar en
+// silencio. El caso sin token (no_subs) es el que se ve en Ajustes
+// como «El iPhone no entregó el token»: no es un fallo del servidor,
+// es que el dispositivo nunca entregó token — la salida es reinstalar
+// limpio el build 8; si sigue sin token, lote diagnóstico (no portal).
+function pushTestHint(r, subs) {
+  if (r && r.ok) return 'La push salió (sent=' + (r.sent || 0) + '). Si no llega al teléfono, revisar que las notificaciones estén permitidas en Ajustes del iPhone.';
+  const reason = (r && r.reason) || '';
+  if (reason === 'no_subs' || !subs || subs.total === 0) return 'Sin token: el usuario no tiene ningún dispositivo registrado. Primero revisar en el iPhone Ajustes → Posty → Notificaciones: si está apagado, prenderlo y volver a tocar «Activar notificaciones» en la app; si está prendido y sigue sin token, borrar la app e instalar limpio el build 8 desde TestFlight; si aun así nada, toca lote diagnóstico (no más cambios en el portal).';
+  if (reason === 'apns_no_configurado') return 'Falta la config APNs en el servidor: revisar APNS_KEY_P8/KEY_ID/TEAM_ID en Railway.';
+  if (reason === 'apns_InvalidProviderToken') return 'La clave APNs no firma bien: revisar la clave APNS_KEY_P8 en Railway.';
+  if (reason === 'apns_unreachable' || reason === 'fcm_unreachable') return 'No se pudo contactar a Apple/Google: revisar la salida de red del servidor.';
+  if (reason === 'no_vapid') return 'Falta la config VAPID (solo afecta webpush, no la app nativa).';
+  return 'Revisar el motivo (reason) y la salud en GET /api/admin/push/health.';
+}
+app.post('/api/admin/push/test', requireAdminToken, express.json(), async (req, res) => {
+  try {
+    const uid = Number((req.body || {}).user_id);
+    if (!uid) return res.status(400).json({ ok: false, error: 'user_id requerido' });
+    const title = String((req.body || {}).title || 'Posty — prueba de push 🔔').slice(0, 80);
+    const body = String((req.body || {}).body || 'Si ves esto en tu teléfono, las push andan.').slice(0, 200);
+    let subs = { total: 0, apns: 0, fcm: 0, webpush: 0 };
+    try {
+      const rows = db.prepare('SELECT transport, COUNT(*) AS c FROM push_subscriptions WHERE user_id = ? GROUP BY transport').all(uid);
+      for (const r of rows) {
+        const n = Number(r.c) || 0;
+        subs.total += n;
+        if (r.transport === 'apns') subs.apns = n;
+        else if (r.transport === 'fcm') subs.fcm = n;
+        else subs.webpush += n;
+      }
+    } catch (e) {}
+    const r = await push.sendPush(uid, { title, body, url: '/#/app/inicio', data: { test: 1 } });
+    res.json({ ok: !!r.ok, sent: r.sent || 0, reason: r.reason || null, subs, hint: pushTestHint(r, subs) });
+  } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
+});
 // 📣 PRUEBA SOCIAL REAL (v370): los casos y su estado, SOLO LECTURA —
 // el diseño no tiene ningún camino de alta admin: un caso nace solo del
 // consentimiento registrado del cliente (ver showcase.js).
@@ -29717,7 +29767,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v694';
+const BUILD_ID = '20261101-v695';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

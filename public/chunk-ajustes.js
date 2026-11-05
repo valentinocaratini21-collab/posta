@@ -103,10 +103,10 @@ function ajustesView() {
   <div class="card ajsec ajflat" id="ajsec-notif"><div class="ajsec-h"><h3>${pzIc('bell', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications' : 'Notificaciones'}</h3><span class="ajsec-st" id="ajStAvisos"></span></div><div class="ajsec-b">
     <div id="avisosPushHint" style="margin-bottom:12px">
       <div id="ajPushOff">
-        <p style="color:var(--mut);font-size:11.5px;margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You have not turned on notifications on your phone yet: your alerts are on, but they have nowhere to go.' : 'Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar.'}</p>
+        <p id="ajPushOffTxt" style="color:var(--mut);font-size:11.5px;margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You have not turned on notifications on your phone yet: your alerts are on, but they have nowhere to go.' : 'Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar.'}</p>
         <button class="btn btn-primary" id="btnPushEnable">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Activate notifications' : 'Activar notificaciones'}</button>
         <div class="err" id="pzPushErr" style="display:none;margin-top:8px"></div> <!-- (LOTE PUSH-ERROR-VISIBLE) -->
-        <div class="hint" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'When Posty asks permission to send notifications, tap Allow.' : 'Cuando Posty te pida permiso para mandar notificaciones, tocá Permitir.'}</div>
+        <div class="hint" id="ajPushOffHint" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'When Posty asks permission to send notifications, tap Allow.' : 'Cuando Posty te pida permiso para mandar notificaciones, tocá Permitir.'}</div>
       </div>
       <div id="ajPushOn" style="display:none">${pzIc('checkCircle', 15)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications on in your phone.' : 'Notificaciones activadas en tu celu.'}</div>
     </div>
@@ -928,12 +928,47 @@ function bindSettings() {
       const nativeOn = ajPushNativeOn(r);
       if (off) off.style.display = nativeOn ? 'none' : '';
       if (on) on.style.display = nativeOn ? '' : 'none';
+      // (LOTE PUSH-FUNCIONANDO) Permiso negado: iOS no vuelve a preguntar,
+      // así que el botón no puede reintentarlo. Ajustes lo dice claro desde
+      // el primer render — con el camino exacto donde se arregla — en vez
+      // del mensaje genérico de no-token.
+      try {
+        if (!nativeOn && (typeof pzPushRowDenied === 'function') && pzPushRowDenied()) {
+          const ajEn = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+          const ajNat = (typeof pzNativePush === 'function') && pzNativePush();
+          const t = $('#ajPushOffTxt'), h = $('#ajPushOffHint'), b = $('#btnPushEnable');
+          if (t) t.textContent = ajNat
+            ? (ajEn ? 'Notifications are off for Posty in your iPhone Settings. Open iPhone Settings → Posty → Notifications and turn them on.' : 'Las notificaciones están apagadas para Posty en tu iPhone. Abrí Ajustes del iPhone → Posty → Notificaciones y prendelas.')
+            : (ajEn ? 'Notifications are blocked in your browser settings.' : 'Las notificaciones están bloqueadas en los ajustes de tu navegador.');
+          if (h) h.textContent = ajNat
+            ? (ajEn ? 'iPhone Settings → Posty → Notifications.' : 'Ajustes del iPhone → Posty → Notificaciones.')
+            : (ajEn ? 'Allow notifications in your browser settings.' : 'Permitilas en los ajustes de notificaciones de tu navegador.');
+          if (b) b.textContent = ajEn ? 'How to turn them on' : 'Cómo activarlas';
+        }
+      } catch (e) {}
       // (LOTE PUSH-ERROR-VISIBLE) Motivo legible cuando activar notificaciones falla.
       function pzPushErrTexto(pr, en) {
         if (!pr || pr.ok) return '';
         const r = pr.reason;
-        if (r === 'denied') return en ? 'Notifications are off in your iPhone Settings' : 'Las notificaciones están apagadas en Ajustes del iPhone';
-        if (r === 'no_token') return en ? 'Your iPhone did not deliver the notifications token' : 'El iPhone no entregó el token de notificaciones';
+        // (LOTE PUSH-FUNCIONANDO) Denegado: iOS no vuelve a preguntar — el
+        // mensaje dice DÓNDE se arregla (Ajustes del iPhone → Posty →
+        // Notificaciones), no el genérico de no-token. En web, ajustes del navegador.
+        if (r === 'denied') {
+          const nat = (typeof pzNativePush === 'function') && pzNativePush();
+          if (nat) return en ? 'Notifications are off for Posty in your iPhone Settings. Open iPhone Settings → Posty → Notifications and turn them on.' : 'Las notificaciones están apagadas para Posty en tu iPhone. Abrí Ajustes del iPhone → Posty → Notificaciones y prendelas.';
+          return en ? 'Notifications are blocked in your browser settings.' : 'Las notificaciones están bloqueadas en los ajustes de tu navegador.';
+        }
+        // (LOTE PUSH-FUNCIONANDO) no_token con permiso en ON: el problema es
+        // (b) registrationError o (c) entorno APNs. Si iOS dejó un error de
+        // registro (PZ_NATIVE_LAST_ERROR), se muestra — antes se tragaba y
+        // solo quedaba el genérico. Sin error, el genérico queda (reintento
+        // automático al abrir la app).
+        if (r === 'no_token') {
+          let det = '';
+          try { det = (typeof PZ_NATIVE_LAST_ERROR !== 'undefined' && PZ_NATIVE_LAST_ERROR) || ''; } catch (e) {}
+          const base = en ? 'Your iPhone did not deliver the notifications token' : 'El iPhone no entregó el token de notificaciones';
+          return det ? base + ': ' + String(det).slice(0, 120) : base;
+        }
         if (r === 'pendiente') return en ? 'Your token is saved: it will be sent next time you open the app signed in' : 'Tu token quedó guardado: se manda solo la próxima vez que abras la app con sesión';
         let det = '';
         try { det = (typeof PZ_NATIVE_LAST_ERROR !== 'undefined' && PZ_NATIVE_LAST_ERROR) || ''; } catch (e) {}
@@ -951,6 +986,10 @@ function bindSettings() {
       }
       const btnPush = $('#btnPushEnable');
       if (btnPush) btnPush.onclick = async () => {
+        // (LOTE PUSH-FUNCIONANDO) Permiso negado: no reintentar en silencio
+        // (iOS no vuelve a preguntar y pzNativeEnableFlow volvería denied
+        // sin hacer nada) — el botón lleva a la explicación con el camino.
+        if ((typeof pzPushRowDenied === 'function') && pzPushRowDenied()) { pzPushErrMostrar({ ok: false, reason: 'denied' }); return; }
         btnPush.disabled = true;
         try {
           if (typeof pushEnableFlow === 'function') {

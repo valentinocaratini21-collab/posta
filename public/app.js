@@ -2450,7 +2450,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v686'; // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
+const CHUNK_V = '20261105-v695'; // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -5976,6 +5976,10 @@ function pushPerm() { try { return Notification.permission; } catch (e) { return
 let PZ_NATIVE_PERM = 'prompt';
 // (LOTE PUSH-ERROR-VISIBLE) Último error nativo de registro push, para mostrarlo.
 let PZ_NATIVE_LAST_ERROR = '';
+// (LOTE PUSH-FUNCIONANDO) Error del listener registrationError, SOLO ese:
+// PZ_NATIVE_LAST_ERROR también lo pone un POST fallido del token, y el
+// loop de pzNativeSubscribe no puede confundirlos (pendiente vs registro).
+let PZ_NATIVE_REG_ERROR = '';
 function pzNativePlugin() {
   try {
     if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) {
@@ -6073,6 +6077,12 @@ async function pzNativeSubscribe() {
     // POST fallido con un token de otra sesión y devolvía ok en falso.
     let seqAntes = 0;
     try { seqAntes = parseInt(localStorage.getItem('pz-native-token-seq') || '0', 10) || 0; } catch (e) {}
+    // (LOTE PUSH-FUNCIONANDO) Borrar el error de registro viejo: si el
+    // register() de ahora falla, el listener lo vuelve a poner; si no se
+    // borra, un error del arranque se comería un no_token de ahora.
+    // OJO: se borra SOLO PZ_NATIVE_REG_ERROR (el del listener). El
+    // PZ_NATIVE_LAST_ERROR de un POST fallido NO se toca: es el pendiente.
+    try { PZ_NATIVE_REG_ERROR = ''; } catch (e) {}
     try { await PN.register(); } catch (e) { return { ok: false, reason: (e && e.message) || 'error' }; }
     // El token llega por el evento 'registration' (no hay getToken): se
     // espera a que el listener lo confirme en el servidor. Un pendiente de
@@ -6087,10 +6097,19 @@ async function pzNativeSubscribe() {
           // al abrir la app; no es un éxito, pero tampoco un no_token.
           if (i >= 10) return { ok: false, reason: 'pendiente' };
         }
+        // (LOTE PUSH-FUNCIONANDO) Si iOS ya dijo que el registro falló
+        // (registrationError — p. ej. sin entitlement aps-environment —),
+        // no esperar los 5 s: el error ES el motivo, no un no_token
+        // genérico. La pantalla muestra ese detalle (PZ_NATIVE_LAST_ERROR).
+        // Se mira PZ_NATIVE_REG_ERROR (solo el listener), no
+        // PZ_NATIVE_LAST_ERROR: un POST fallido del token también lo pone
+        // y eso es 'pendiente', no error de registro (test-lotepushfix 3/5).
+        if (PZ_NATIVE_REG_ERROR) return { ok: false, reason: 'registration_error' };
       } catch (e) {}
       await new Promise((r) => setTimeout(r, 200));
     }
     try { if (pzNativePendGet()) return { ok: false, reason: 'pendiente' }; } catch (e) {}
+    try { if (PZ_NATIVE_REG_ERROR) return { ok: false, reason: 'registration_error' }; } catch (e) {}
     return { ok: false, reason: 'no_token' };
   } catch (e) { return { ok: false, reason: (e && e.message) || 'error' }; }
 }
@@ -6113,7 +6132,7 @@ async function pzNativeBoot() {
       try { const d = (a && a.notification && a.notification.data) || {}; const h = pzNativeRoute(d.url, true); if (h) location.hash = h; } catch (e) {}
     });
     PN.addListener('registration', (reg) => { try { pzNativeSaveToken(reg && reg.value); } catch (e) {} });
-    PN.addListener('registrationError', (e) => { try { const m = (e && e.error && (e.error.message || e.error.code)) || (e && e.message) || 'registration_error'; PZ_NATIVE_LAST_ERROR = String(m).slice(0, 120); } catch (_) {} }); // (LOTE PUSH-ERROR-VISIBLE)
+    PN.addListener('registrationError', (e) => { try { const m = (e && e.error && (e.error.message || e.error.code)) || (e && e.message) || 'registration_error'; PZ_NATIVE_LAST_ERROR = String(m).slice(0, 120); PZ_NATIVE_REG_ERROR = String(m).slice(0, 120); } catch (_) {} }); // (LOTE PUSH-ERROR-VISIBLE)
   } catch (e) {}
   try {
     const st = await PN.checkPermissions();

@@ -40,15 +40,28 @@ if (fns) {
   const els = {};
   global.$ = (sel) => (els[sel] = els[sel] || { textContent: '', style: {} });
   const el = () => els['#pzPushErr'];
+  // (LOTE PUSH-FUNCIONANDO) El chunk corre en la app, donde pzNativePush
+  // existe: simular nativo para las ramas iOS; la rama web se prueba aparte.
+  global.pzNativePush = () => true;
 
   global.ME = { lang: 'es' };
   delete global.PZ_NATIVE_LAST_ERROR;
-  eq('denied ES', t({ ok: false, reason: 'denied' }, false), 'Las notificaciones están apagadas en Ajustes del iPhone');
+  // (LOTE PUSH-FUNCIONANDO) El copy de denied cambió por orden: ahora dice
+  // el camino exacto (Ajustes del iPhone → Posty → Notificaciones).
+  eq('denied ES', t({ ok: false, reason: 'denied' }, false), 'Las notificaciones están apagadas para Posty en tu iPhone. Abrí Ajustes del iPhone → Posty → Notificaciones y prendelas.');
   global.ME = { lang: 'en' };
-  eq('denied EN', t({ ok: false, reason: 'denied' }, true), 'Notifications are off in your iPhone Settings');
+  eq('denied EN', t({ ok: false, reason: 'denied' }, true), 'Notifications are off for Posty in your iPhone Settings. Open iPhone Settings → Posty → Notifications and turn them on.');
+  global.pzNativePush = () => false;
+  eq('denied ES web -> ajustes del navegador', t({ ok: false, reason: 'denied' }, false), 'Las notificaciones están bloqueadas en los ajustes de tu navegador.');
+  global.pzNativePush = () => true;
   global.ME = { lang: 'es' };
   eq('no_token ES', t({ ok: false, reason: 'no_token' }, false), 'El iPhone no entregó el token de notificaciones');
   eq('no_token EN', t({ ok: false, reason: 'no_token' }, true), 'Your iPhone did not deliver the notifications token');
+  // (LOTE PUSH-FUNCIONANDO) no_token con error de registro: muestra el detalle.
+  global.PZ_NATIVE_LAST_ERROR = 'no valid aps-environment entitlement string found';
+  eq('no_token + registrationError -> detalle', t({ ok: false, reason: 'no_token' }, false), 'El iPhone no entregó el token de notificaciones: no valid aps-environment entitlement string found');
+  eq('registration_error + detalle', t({ ok: false, reason: 'registration_error' }, false), 'No se pudo activar: no valid aps-environment entitlement string found');
+  delete global.PZ_NATIVE_LAST_ERROR;
   eq('ok -> vacío', t({ ok: true }, false), '');
   eq('pr nulo -> vacío', t(null, false), '');
   eq('error sin detalle -> genérico', t({ ok: false, reason: 'error' }, false), 'No se pudo activar, probá de nuevo');
@@ -65,7 +78,7 @@ if (fns) {
   // Mostrar: DOM falso.
   global.ME = { lang: 'es' };
   m({ ok: false, reason: 'denied' });
-  eq('mostrar pone texto', el().textContent, 'Las notificaciones están apagadas en Ajustes del iPhone');
+  eq('mostrar pone texto', el().textContent, 'Las notificaciones están apagadas para Posty en tu iPhone. Abrí Ajustes del iPhone → Posty → Notificaciones y prendelas.');
   eq('mostrar revela', el().style.display, '');
   m({ ok: true });
   eq('mostrar ok limpia texto', el().textContent, '');
@@ -77,7 +90,9 @@ if (fns) {
 
 // Estáticos: app.js guarda el error nativo; chunk tiene div + handler.
 has('app declara PZ_NATIVE_LAST_ERROR', app.includes("let PZ_NATIVE_LAST_ERROR = '';"));
+has('app declara PZ_NATIVE_REG_ERROR (solo registrationError)', app.includes("let PZ_NATIVE_REG_ERROR = '';"));
 has('app registrationError guarda motivo', app.includes('PZ_NATIVE_LAST_ERROR = String(m)'));
+has('app registrationError marca REG_ERROR', app.includes('PZ_NATIVE_REG_ERROR = String(m)'));
 has('app sin listener vacío', !app.includes("PN.addListener('registrationError', () => {});"));
 has('chunk tiene div pzPushErr', chunk.includes('id="pzPushErr"'));
 has('chunk handler llama mostrar', chunk.includes('pzPushErrMostrar(pr || '));

@@ -39,6 +39,68 @@ function ensureTransportColumn(db) {
 function initPush(db) {
   DB = db;
   ensureTransportColumn(db);
+  // (LOTE PUSH-FUNCIONANDO) Si las envs APNs están pero la clave no se
+  // puede firmar, avisar al arrancar: sin esto, cada envío APNs falla
+  // con 403 en silencio y nadie lo ve hasta que un cliente se queja.
+  try {
+    const chk = apnsKeyCheck();
+    if ((process.env.APNS_KEY_P8 || process.env.APNS_KEY_ID || process.env.APNS_TEAM_ID) && !chk.keyParseable) {
+      console.error('[push/apns] la clave APNS no se puede usar (keyParseable=false): revisá APNS_KEY_P8/KEY_ID/TEAM_ID');
+    }
+  } catch (e) {}
+}
+
+// ---------- Salud de la config de push (LOTE PUSH-FUNCIONANDO) ----------
+// Solo booleanos y nombres — NUNCA secretos. La clave APNs se valida
+// firmando un payload de prueba (sin red): PEM legible + curva P-256 +
+// firma ES256 de 64 bytes (P1363). Si la firma sale DER (71 bytes), la
+// config está rota aunque las envs existan (era el bug que mataba APNs).
+function apnsKeyCheck() {
+  const p8 = (process.env.APNS_KEY_P8 || '').replace(/\\n/g, '\n');
+  const keyId = (process.env.APNS_KEY_ID || '').trim();
+  const teamId = (process.env.APNS_TEAM_ID || '').trim();
+  const present = { p8: !!p8, keyId: !!keyId, teamId: !!teamId };
+  if (!p8 || !keyId || !teamId) return { configured: false, present, keyParseable: false, signatureBytes: 0 };
+  try {
+    const s = crypto.createSign('sha256');
+    s.update('push-health-check');
+    const sig = s.sign({ key: p8, format: 'pem', dsaEncoding: 'ieee-p1363' });
+    const n = Buffer.isBuffer(sig) ? sig.length : 0;
+    return { configured: true, present, keyParseable: n === 64, signatureBytes: n };
+  } catch (e) {
+    return { configured: true, present, keyParseable: false, signatureBytes: 0, error: String((e && e.message) || e).slice(0, 120) };
+  }
+}
+function pushHealth() {
+  const apns = apnsKeyCheck();
+  const cfg = apnsConfig();
+  let subs = { total: 0, apns: 0, fcm: 0, webpush: 0 };
+  try {
+    if (DB) {
+      const rows = DB.prepare('SELECT transport, COUNT(*) AS c FROM push_subscriptions GROUP BY transport').all();
+      for (const r of rows) {
+        const n = Number(r.c) || 0;
+        subs.total += n;
+        if (r.transport === 'apns') subs.apns = n;
+        else if (r.transport === 'fcm') subs.fcm = n;
+        else subs.webpush += n;
+      }
+    }
+  } catch (e) {}
+  return {
+    apns: {
+      configured: apns.configured,
+      keyPresent: apns.present.p8, keyIdPresent: apns.present.keyId, teamIdPresent: apns.present.teamId,
+      keyParseable: apns.keyParseable, signatureBytes: apns.signatureBytes,
+      bundleId: cfg ? cfg.bundleId : (process.env.APNS_BUNDLE_ID || 'com.postycommunitymanager.app').trim(),
+      sandbox: cfg ? cfg.host === 'api.sandbox.push.apple.com' : (process.env.APNS_SANDBOX === '1'),
+      host: cfg ? cfg.host : null,
+      error: apns.error || undefined,
+    },
+    vapid: { configured: !!vapidKeys() },
+    fcm: { configured: !!fcmServiceAccount() },
+    subs,
+  };
 }
 
 // ---------- Web Push / VAPID (flujo original — NO TOCAR) ----------
@@ -152,6 +214,7 @@ async function sendFcmBatch(subs, msg) {
   const sendUrl = 'https://fcm.googleapis.com/v1/projects/' + encodeURIComponent(sa.project_id) + '/messages:send';
   const fullUrl = /^https?:\/\//i.test(msg.url) ? msg.url : 'https://postycommunitymanager.com' + msg.url;
   let sent = 0;
+  let firstReason = '';
   for (const s of subs) {
     try {
       const message = {
@@ -170,16 +233,18 @@ async function sendFcmBatch(subs, msg) {
       // Token muerto (no registrado / inválido): limpiarlo.
       let code = '';
       try { code = ((JSON.parse(r.body || '{}').error || {}).details || []).map(d => d.errorCode).join(','); } catch (e) {}
+      if (!firstReason) firstReason = code ? 'fcm_' + String(code).split(',')[0] : 'fcm_http_' + r.status;
       if (r.status === 404 || /UNREGISTERED|INVALID_ARGUMENT/i.test(code + ' ' + (r.body || ''))) {
         try { if (DB) DB.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(s.id); } catch (e2) { /* no bloquear */ }
       } else {
         console.error('[push/fcm] envío falló:', r.status, (r.body || '').slice(0, 200));
       }
     } catch (e) {
+      if (!firstReason) firstReason = 'fcm_unreachable';
       console.error('[push/fcm] envío falló:', e.message);
     }
   }
-  return { ok: sent > 0, sent };
+  return { ok: sent > 0, sent, reason: sent > 0 ? undefined : (firstReason || 'send_failed') };
 }
 
 // ---------- APNs (apps iOS nativas, HTTP/2) ----------
@@ -205,7 +270,11 @@ function apnsProviderToken(cfg) {
   const claims = base64url(JSON.stringify({ iss: cfg.teamId, iat: now }));
   const signer = crypto.createSign('sha256');
   signer.update(header + '.' + claims);
-  const sig = base64url(signer.sign({ key: cfg.p8, format: 'pem' }));
+  // (LOTE PUSH-FUNCIONANDO) JWS ES256 exige la firma en formato IEEE
+  // P1363 (R||S, 64 bytes). crypto.sign devuelve DER por defecto (71
+  // bytes, 0x30...) y Apple lo rechaza con 403 InvalidProviderToken:
+  // sin esto, NINGUNA push APNs salía aunque todo lo demás anduviera.
+  const sig = base64url(signer.sign({ key: cfg.p8, format: 'pem', dsaEncoding: 'ieee-p1363' }));
   apnsTokenCache = { token: header + '.' + claims + '.' + sig, exp: now + 3000 };
   return apnsTokenCache.token;
 }
@@ -241,6 +310,18 @@ function apnsSendOne(cfg, providerToken, deviceToken, msg) {
     req.end();
   });
 }
+// Razón legible del fallo APNs (Apple devuelve {"reason":"..."} en el
+// body). Pura y testeable sin red. status 0 = sin respuesta (red/timeout).
+// Antes el batch no devolvía razón y sendPush inventaba
+// 'apns_no_configurado' aunque la config existiera.
+function apnsFailureReason(status, body) {
+  if (!status) return 'apns_unreachable';
+  let reason = '';
+  try { const j = JSON.parse(String(body || '')); if (j && j.reason) reason = String(j.reason); } catch (e) {}
+  if (reason) return 'apns_' + reason;
+  if (status === 410) return 'apns_Unregistered';
+  return 'apns_http_' + status;
+}
 async function sendApnsBatch(subs, msg) {
   const cfg = apnsConfig();
   if (!cfg) return { ok: false, reason: 'apns_no_configurado', sent: 0 };
@@ -248,21 +329,24 @@ async function sendApnsBatch(subs, msg) {
   try { providerToken = apnsProviderToken(cfg); }
   catch (e) { console.error('[push/apns] no se pudo firmar el provider token:', e.message); return { ok: false, reason: 'apns_no_configurado', sent: 0 }; }
   let sent = 0;
+  let firstReason = '';
   for (const s of subs) {
     try {
       const r = await apnsSendOne(cfg, providerToken, s.endpoint, msg);
       if (r.status === 200) { sent++; continue; }
       // 410 = token muerto (app desinstalada): limpiarlo.
+      if (!firstReason) firstReason = apnsFailureReason(r.status, r.body);
       if (r.status === 410 || /Unregistered|BadDeviceToken/i.test(r.body || '')) {
         try { if (DB) DB.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(s.id); } catch (e2) { /* no bloquear */ }
       } else {
         console.error('[push/apns] envío falló:', r.status, (r.body || '').slice(0, 200));
       }
     } catch (e) {
+      if (!firstReason) firstReason = 'apns_unreachable';
       console.error('[push/apns] envío falló:', e.message);
     }
   }
-  return { ok: sent > 0, sent };
+  return { ok: sent > 0, sent, reason: sent > 0 ? undefined : (firstReason || 'send_failed') };
 }
 
 // ---------- Envío principal: rutea por transport ----------
@@ -446,8 +530,9 @@ module.exports = {
   vapidPublicKey,
   pushConfigured,
   ensureTransportColumn,
+  pushHealth,
   notifySundayLetter,
   notifyPostFailed,
   TRANSPORTS: ['webpush', 'fcm', 'apns'],
-  _internal: { apnsConfig, apnsProviderToken, fcmServiceAccount },
+  _internal: { apnsConfig, apnsProviderToken, apnsFailureReason, fcmServiceAccount },
 };
