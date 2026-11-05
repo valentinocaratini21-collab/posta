@@ -3468,6 +3468,13 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .bb-tab .bb-tab-ic svg{width:24px;height:24px}
 .bb-tab.on{color:#8A6420;font-weight:700}
 .bb-badge{position:absolute;top:-2px;right:8px;background:#C2452D;color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+/* (PREMIOS-NOTIF · 4/11) Badge de premio nuevo en el tab Premios (ambos docks).
+   Reutiliza .bb-badge en el dock bb; en el dock mz el tab necesita
+   position:relative para anclar el punto. .off lo oculta sin hueco. */
+.mz-tab{position:relative}
+.mz-badge{position:absolute;top:2px;right:12px;background:#C2452D;color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.pz-premios-badge.off{display:none}
+
 .bb-medal{width:58px;height:58px;border-radius:50%;border:3px solid var(--bb-gold);padding:0;margin:-22px 2px 0;background:#fff;cursor:pointer;box-shadow:0 6px 18px rgba(160,120,40,.35);overflow:hidden;flex:none}
 .bb-medal img{width:100%;height:100%;object-fit:cover;display:block}
 .bb-medal.on{box-shadow:0 6px 22px rgba(160,120,40,.6)}

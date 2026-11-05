@@ -890,7 +890,7 @@ function bbShell(tab, content) {
     semana: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
-  const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
+  const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}${k === 'jardin' ? '<span class="bb-badge pz-premios-badge off"></span>' : ''}</button>`;
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
@@ -2079,6 +2079,45 @@ function pzRopaAvatarHTML() {
   }
   return `<img class="pz-ropa-cara" src="ai-avatar.png" alt="Posty">${capas}<span class="pz-ropa-spark" style="left:6%;top:8%">✦</span><span class="pz-ropa-spark" style="left:86%;top:16%;animation-delay:1.1s">✦</span><span class="pz-ropa-spark" style="left:90%;top:64%;animation-delay:2s">✦</span><span class="pz-ropa-spark" style="left:4%;top:70%;animation-delay:.6s">✦</span>`;
 }
+// ---------- PREMIOS-NOTIF (4/11): aviso de premio nuevo ----------
+// La tira salió de Inicio (v653): el premio nuevo avisa en el tab Premios
+// del dock (badge con la cantidad) hasta que se abra Premios, donde los
+// premios nuevos se marcan con «¡Nuevo!» y el aviso se limpia.
+// PZ_PREMIOS_NUEVOS = niveles no vistos según el servidor (badge).
+// PZ_PREMIOS_NUEVOS_MARCA = niveles a marcar ¡Nuevo! en ESTA visita a
+// Premios (foto tomada al construir la vista; sobrevive al limpiado para
+// que las marcas no se borren al re-pintar la lista en la misma visita).
+let PZ_PREMIOS_NUEVOS = [];
+let PZ_PREMIOS_NUEVOS_MARCA = [];
+let PZ_PREMIOS_SYNC_VUELO = false;
+async function pzPremiosNuevosSync() {
+  if (PZ_PREMIOS_SYNC_VUELO) return;
+  PZ_PREMIOS_SYNC_VUELO = true;
+  try {
+    const r = await api.get('/api/oficina/premios-no-vistos');
+    if (r && r.ok && Array.isArray(r.niveles)) PZ_PREMIOS_NUEVOS = r.niveles;
+  } catch (e) {}
+  PZ_PREMIOS_SYNC_VUELO = false;
+  try {
+    const n = PZ_PREMIOS_NUEVOS.length;
+    document.querySelectorAll('.pz-premios-badge').forEach((el) => {
+      el.textContent = n > 0 ? String(n) : '';
+      el.classList.toggle('off', n === 0);
+    });
+  } catch (e) {}
+}
+// Al abrir Premios: el servidor limpia los no vistos y el badge se apaga.
+// Solo se apaga si el POST tuvo éxito: si falló (sin red), el badge queda
+// y el próximo sync lo vuelve a mostrar.
+async function pzPremiosNuevosLimpiar() {
+  let ok = false;
+  try { const r = await api.post('/api/oficina/premios-vistos', {}); ok = !!(r && r.ok); } catch (e) {}
+  if (!ok) return;
+  PZ_PREMIOS_NUEVOS = [];
+  try {
+    document.querySelectorAll('.pz-premios-badge').forEach((el) => { el.textContent = ''; el.classList.add('off'); });
+  } catch (e) {}
+}
 function pzRopaListaHTML(nivel) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const nv = Math.max(1, Math.min(50, Number(nivel) || 1));
@@ -2089,7 +2128,7 @@ function pzRopaListaHTML(nivel) {
     const nom = en ? e.en : e.es;
     if (e.nv > nv) return `<div class="pz-ropa-fila lock"><span class="pz-ropa-mini lock" aria-hidden="true">${pzIc('lock', 20)}</span><span class="pz-ropa-nom"><b>${esc(nom)}</b><span>${esc(en ? ('Unlocks at Level ' + e.nv) : ('Se desbloquea en el Nivel ' + e.nv))}</span></span></div>`;
     const on = puesto(e);
-    const nuevo = (e.nv === nv) ? `<span class="pz-ropa-nuevo">✦ ${esc(en ? 'New!' : '¡Nuevo!')}</span>` : '';
+    const nuevo = (PZ_PREMIOS_NUEVOS_MARCA.indexOf(e.nv) >= 0) ? `<span class="pz-ropa-nuevo">✦ ${esc(en ? 'New!' : '¡Nuevo!')}</span>` : '';
     const btn = on
       ? `<button type="button" class="pz-ropa-btn puesto" onclick="pzRopaToggle(${e.nv})" aria-pressed="true">${esc(en ? 'Worn ✓' : 'Puesto ✓')}</button>`
       : `<button type="button" class="pz-ropa-btn" onclick="pzRopaToggle(${e.nv})" aria-pressed="false">${esc(en ? 'Wear' : 'Ponerse')}</button>`;
@@ -2206,7 +2245,7 @@ function pzOficinaListaHTML(nivel) {
   return PZ_OFICINA.map((e) => {
     const nom = en ? e.en : e.es;
     if (e.nv > nv) return '<div class="pz-oficina-fila lock"><span class="pz-oficina-mini lock" aria-hidden="true">' + pzIc('lock', 22) + '</span><span class="pz-oficina-nom"><b>' + esc(nom) + '</b><span>' + esc(en ? ('Unlocks at Level ' + e.nv) : ('Se desbloquea en el Nivel ' + e.nv)) + '</span></span></div>';
-    const nuevo = (e.nv === nv && nv >= 1) ? '<span class="pz-oficina-nuevo">✦ ' + esc(en ? 'New!' : '¡Nuevo!') + '</span>' : '';
+    const nuevo = (PZ_PREMIOS_NUEVOS_MARCA.indexOf(e.nv) >= 0) ? '<span class="pz-oficina-nuevo">✦ ' + esc(en ? 'New!' : '¡Nuevo!') + '</span>' : '';
     const mini = e.full ? (e.mini || '') : e.svg;
     return '<div class="pz-oficina-fila"><span class="pz-oficina-mini"><svg viewBox="0 0 100 100" aria-hidden="true">' + mini + '</svg></span><span class="pz-oficina-nom"><b>' + esc(nom) + '</b><span>' + esc(en ? ('Level ' + e.nv) : ('Nivel ' + e.nv)) + '</span>' + nuevo + '</span></div>';
   }).join('');
@@ -2255,6 +2294,14 @@ async function bbJardinPostyContent() {
   if (!nvP) return mxJardinErrorHTML();
   let miSemilla = null;
   try { const r = await api.get('/api/oficina/jardin-semilla-mia'); miSemilla = (r && r.miSemilla) || null; } catch (e) {}
+  // (PREMIOS-NOTIF) Foto de premios no vistos ANTES de pintar: las marcas
+  // ¡Nuevo! de esta visita salen de acá, no del nivel actual (que marcaría
+  // siempre el último nivel aunque ya se haya visto).
+  try {
+    const r = await api.get('/api/oficina/premios-no-vistos');
+    PZ_PREMIOS_NUEVOS_MARCA = (r && r.ok && Array.isArray(r.niveles)) ? r.niveles : [];
+    PZ_PREMIOS_NUEVOS = PZ_PREMIOS_NUEVOS_MARCA.slice();
+  } catch (e) { PZ_PREMIOS_NUEVOS_MARCA = []; }
   return mxJardinHTML('posty', nvP, null, null, null, null, miSemilla);
 }
 async function bbJardinGestyContent() {
@@ -6254,7 +6301,7 @@ function mzTabsHTML(tab) {
     : tab === 'jardin-posty' ? 'jardin'
     : tab === 'analisis' ? 'analisis'
     : tab === 'ajustes' ? 'ajustes' : '';
-  const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
+  const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}${key === 'jardin' ? '<span class="mz-badge pz-premios-badge off"></span>' : ''}</button>`;
   return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${pzDockMasBtn('mz')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>${pzDockMasHTML()}`;
 }
 
@@ -17168,6 +17215,11 @@ function pzPrefetchKick() {
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  // (PREMIOS-NOTIF · 4/11) Badge de premio nuevo en el dock (tras pintar:
+  // el dock se re-crea en cada render) y, si esta pantalla ES Premios, el
+  // aviso se limpia: las marcas ¡Nuevo! ya quedaron pintadas arriba.
+  setTimeout(() => { try { pzPremiosNuevosSync(); } catch (e) {} }, 0);
+  if (tab === 'jardin-posty') setTimeout(() => { try { pzPremiosNuevosLimpiar(); } catch (e) {} }, 0);
   // (LOTE FEED · transiciones) Entrada deslizada + estela mágica, solo
   // al cambiar de pantalla (misma vista = sin animación: el chat no
   // salta y el scroll restaurado no se toca). Transform solo: nunca

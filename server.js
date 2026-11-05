@@ -4074,6 +4074,34 @@ app.post('/api/oficina/nivel/desafio-aceptado', requireAuth, (req, res) => {
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// ---------- PREMIOS-NOTIF (4/11): aviso de premio nuevo ----------
+// La tira salió de Inicio (v653): un premio nuevo avisa por dos vías —
+// push al desbloquearse (la dispara el publish, ver scheduler.js) y badge
+// en el tab Premios del dock hasta que se vea (cliente, ver public/app.js).
+// Nivel nuevo = premio no visto. El conteo de niveles (v637) NO se toca:
+// estos endpoints solo leen el nivel y registran qué falta ver.
+app.get('/api/oficina/premios-no-vistos', requireAuth, (req, res) => {
+  try {
+    const pn = require('./premios-notif');
+    const uid = req.session.userId;
+    // Red de seguridad SILENCIOSA (sin push): si el publish no procesó la
+    // subida, el badge igual la muestra al abrir la app. El usuario está
+    // en la app en este momento: la push la dispara solo el publish.
+    try {
+      const np = require('./posty-nivel50');
+      const niv = np.nivelPosty(db, uid, oficina.metricas(db, uid));
+      if (niv && niv.nivel) pn.procesarNivel(db, uid, niv.nivel);
+    } catch (e) {}
+    res.json({ ok: true, niveles: pn.noVistos(db, uid) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/oficina/premios-vistos', requireAuth, (req, res) => {
+  try {
+    const pn = require('./premios-notif');
+    const n = pn.marcarVistos(db, req.session.userId);
+    res.json({ ok: true, limpiados: n });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 app.get('/api/oficina/jardin', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
@@ -28358,7 +28386,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v664';
+const BUILD_ID = '20261101-v665';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
