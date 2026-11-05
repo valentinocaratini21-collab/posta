@@ -11429,11 +11429,101 @@ function vozEnInicio() { try { return !document.getElementById('pzChatFull') && 
 function vozMsgEl() { return vozHostEl(); }
 function vozMicEl() { return document.getElementById('chatMicSend'); }
 function vozFmt(s) { s = Math.floor(s / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+// (LOTE VOZ-LINDA · mock v1 aprobado 5/11) Reproductor de nota de voz:
+// burbuja celeste clara con play navy, onda y doble tilde. Sin <audio
+// controls nativo (era el reproductor genérico del navegador).
+var VB_WAVE_H = [10, 16, 22, 12, 26, 18, 28, 12, 20, 26, 14, 24, 10, 18, 24, 14, 22, 28, 16, 12, 24, 16, 26, 14, 20, 24, 12, 18];
+var VB_PLAY_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>';
+var VB_PAUSE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg>';
+var VB_TICKS_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#2793C8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12.5 5 16 11 8.5"/><path d="M8 12.5 11.5 16 17.5 8.5"/></svg>';
+function pzVoiceWaveBars() {
+  var out = '';
+  for (var i = 0; i < VB_WAVE_H.length; i++) out += '<i data-h="' + VB_WAVE_H[i] + '" style="height:' + VB_WAVE_H[i] + 'px"></i>';
+  return out;
+}
+function pzVoicePlayerHTML(audioUrl, durMs, state) {
+  var dur = vozFmt(durMs || 0);
+  var row = '<div class="vb-player"><button type="button" class="vb-play"' + (state === 'sending' ? ' disabled' : '') + ' aria-label="' + (state === 'sending' ? (vozEn() ? 'Sending' : 'Enviando') : (vozEn() ? 'Listen' : 'Escuchar')) + '">' + VB_PLAY_SVG + '</button><div class="vb-wave">' + pzVoiceWaveBars() + '</div><span class="vb-dur">' + dur + '</span>' + (state === 'sent' ? '<span class="vb-ticks">' + VB_TICKS_SVG + '</span>' : '') + '</div>';
+  if (state === 'sending') row += '<div class="vb-sending-tx">' + (vozEn() ? 'Sending…' : 'Enviando…') + '</div>';
+  return row;
+}
+function pzVoiceBubbleHTML(audioUrl, durMs, state) {
+  return '<div class="chat-msg u vb-voice' + (state === 'sending' ? ' vb-sending' : '') + ' msg-in">' + pzVoicePlayerHTML(audioUrl, durMs, state) + '</div>';
+}
+var VOICE_BUBBLE_EL = null, VOICE_BUBBLE_URL = '';
+function vozBubbleSending() {
+  try {
+    if (!document.getElementById('pzChatFull')) return;
+    if (VOICE_BUBBLE_EL && VOICE_BUBBLE_EL.isConnected) return;
+    const box = document.getElementById('chatBox');
+    if (!box) return;
+    VOICE_BUBBLE_URL = VOICE_URL || '';
+    box.insertAdjacentHTML('beforeend', pzVoiceBubbleHTML(VOICE_BUBBLE_URL, VOICE_DUR, 'sending'));
+    VOICE_BUBBLE_EL = box.lastElementChild;
+    try { chatScroll(); } catch (e) {}
+  } catch (e) {}
+}
+function vozBubbleQuitar() {
+  try { if (VOICE_BUBBLE_EL && VOICE_BUBBLE_EL.remove) VOICE_BUBBLE_EL.remove(); } catch (e) {}
+  VOICE_BUBBLE_EL = null; VOICE_BUBBLE_URL = '';
+}
+function vozBubbleEnviada(durMs) {
+  try {
+    const el = VOICE_BUBBLE_EL;
+    if (!el || !el.isConnected) return;
+    el.classList.remove('vb-sending');
+    el.innerHTML = pzVoicePlayerHTML(VOICE_BUBBLE_URL, durMs || VOICE_DUR, 'sent');
+    pzVoiceBubbleInit(el, VOICE_BUBBLE_URL, durMs || VOICE_DUR);
+    try { chatScroll(); } catch (e) {}
+  } catch (e) {}
+}
+function pzVoiceBubbleInit(el, audioUrl, durMs) {
+  if (!el || !audioUrl) return;
+  const btn = el.querySelector('.vb-play');
+  const wave = el.querySelector('.vb-wave');
+  const durEl = el.querySelector('.vb-dur');
+  if (!btn || !wave) return;
+  if (btn.disabled) return;
+  let total = durMs || 0;
+  let au = null;
+  try { au = new Audio(audioUrl); au.preload = 'metadata'; } catch (e) { return; }
+  function fmtTotal() { try { if (durEl) durEl.textContent = vozFmt((total && total > 0) ? total : ((au.duration || 0) * 1000)); } catch (e) {} }
+  function paint(frac) { try { const bars = wave.querySelectorAll('i'); for (let i = 0; i < bars.length; i++) { if (i < frac * bars.length) bars[i].classList.add('on'); else bars[i].classList.remove('on'); } } catch (e) {} }
+  function setPlaying(on) { try { btn.innerHTML = on ? VB_PAUSE_SVG : VB_PLAY_SVG; btn.setAttribute('aria-label', on ? 'Pausar' : 'Escuchar'); } catch (e) {} }
+  au.addEventListener('loadedmetadata', function () { try { if (!total && au.duration) total = Math.round(au.duration * 1000); } catch (e) {} fmtTotal(); });
+  au.addEventListener('play', function () { setPlaying(true); });
+  au.addEventListener('pause', function () { setPlaying(false); fmtTotal(); });
+  au.addEventListener('ended', function () { setPlaying(false); paint(0); fmtTotal(); try { if (window.__pzVoicePlaying === au) window.__pzVoicePlaying = null; } catch (e) {} });
+  au.addEventListener('timeupdate', function () { try { const d = au.duration || 0; if (!d) return; paint(au.currentTime / d); if (durEl) durEl.textContent = vozFmt(Math.max(0, (d - au.currentTime) * 1000)); } catch (e) {} });
+  btn.addEventListener('click', function () {
+    try {
+      if (au.paused) { try { if (window.__pzVoicePlaying && window.__pzVoicePlaying !== au) window.__pzVoicePlaying.pause(); } catch (e) {} window.__pzVoicePlaying = au; const pr = au.play(); if (pr && pr.catch) pr.catch(function () {}); }
+      else au.pause();
+    } catch (e) {}
+  });
+  wave.addEventListener('click', function (e) { try { const d = au.duration || 0; if (!d) return; const r = wave.getBoundingClientRect(); let f = (e.clientX - r.left) / Math.max(1, r.width); f = Math.max(0, Math.min(1, f)); au.currentTime = f * d; paint(f); } catch (e2) {} });
+  fmtTotal();
+  try { el._pzAu = au; } catch (e) {}
+}
+// (LOTE VOZ-LINDA) Estado «grabando»: la chatbar se retira (la píldora
+// queda sola abajo) y el header muestra «● grabando». Al parar/descartar
+// vuelve todo a la normal («en línea»).
+function vozUIgrabando(on) {
+  try {
+    const root = document.getElementById('pzChatFull');
+    if (root) root.classList.toggle('voz-grabando', !!on);
+    const est = document.getElementById('pzChatEstado');
+    if (est) {
+      if (on) { est.classList.add('rec'); est.innerHTML = '<span class="pz-est-dot"></span>' + (vozEn() ? 'recording' : 'grabando'); }
+      else { est.classList.remove('rec'); est.textContent = vozEn() ? 'online' : 'en línea'; }
+    }
+  } catch (e) {}
+}
 function voiceTick() {
+  // (LOTE VOZ-LINDA) El temporizador vive SOLO en la barra (#vozTm): el
+  // botón del mic ya no lleva texto (se recortaba en la chatbar).
   if (!VOICE_REC) return;
-  const b = vozMicEl();
   const t = vozFmt(Date.now() - VOICE_START);
-  if (b) b.innerHTML = pzDot('#E5484D', 11) + ' ' + t;
   const tm = document.getElementById('vozTm');
   if (tm) tm.textContent = t;
 }
@@ -11446,6 +11536,16 @@ function voiceLevelLoop() {
     for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i] - 128) / 128; if (v > peak) peak = v; }
     const bar = document.getElementById('vozLvl');
     if (bar) bar.style.width = Math.max(4, Math.round(peak * 100)) + '%';
+    // (LOTE VOZ-LINDA) Onda en vivo de la píldora de grabación: cada barra
+    // respira con el nivel (su alto base vive en data-h).
+    const wave = document.getElementById('vozWave');
+    if (wave) {
+      const bars = wave.querySelectorAll('i');
+      for (let i = 0; i < bars.length; i++) {
+        const base = parseFloat(bars[i].getAttribute('data-h') || '16');
+        bars[i].style.height = Math.max(4, Math.round(base * (0.35 + 0.65 * peak))) + 'px';
+      }
+    }
   } catch (e) {}
   VOICE_RAF = requestAnimationFrame(voiceLevelLoop);
 }
@@ -11453,7 +11553,9 @@ function voiceRenderBar() {
   const m = vozMsgEl(); if (!m) return;
   const en = vozEn();
   if (VOICE_STATE === 'rec') {
-    m.innerHTML = '<div class="voz-bar"><span class="voz-dot"></span><span id="vozTm">0:00</span><span class="voz-lvl"><i id="vozLvl"></i></span><span id="vozCancelMsg" style="display:none;font-size:12px;color:var(--mut)">' + (en ? 'Release to cancel' : 'Soltá para cancelar') + '</span><button type="button" class="btn btn-soft" id="vozCancel">' + (en ? 'Cancel' : 'Cancelar') + '</button><button type="button" class="btn btn-soft" id="vozStop">' + (en ? 'Stop' : 'Parar') + '</button></div>';
+    // (LOTE VOZ-LINDA · mock v1) Una sola píldora: punto + timer + onda en
+    // vivo; Cancelar discreto + Parar navy con cuadradito; hint abajo.
+    m.innerHTML = '<div class="voz-bar voz-rec"><div class="voz-rec-top"><span class="voz-dot"></span><span id="vozTm">0:00</span><span class="voz-wave" id="vozWave">' + pzVoiceWaveBars() + '</span></div><div class="voz-rec-actions"><button type="button" class="voz-cancel" id="vozCancel">' + (en ? 'Cancel' : 'Cancelar') + '</button><button type="button" class="voz-stop" id="vozStop"><span class="voz-stop-sq"></span>' + (en ? 'Stop' : 'Parar') + '</button></div><div class="voz-hint"><span id="vozHintTx">' + (en ? 'Release to send · Slide to cancel' : 'Soltá para enviar · Deslizá para cancelar') + '</span><span id="vozCancelMsg" style="display:none">' + (en ? 'Release to cancel' : 'Soltá para cancelar') + '</span></div></div>';
     const s = document.getElementById('vozStop'); if (s) s.onclick = () => voiceStop();
     const cx = document.getElementById('vozCancel'); if (cx) cx.onclick = () => voiceDiscard();
   } else if (VOICE_STATE === 'preview' && VOICE_URL) {
@@ -11461,8 +11563,18 @@ function voiceRenderBar() {
     const s = document.getElementById('vozSend'); if (s) s.onclick = () => voiceSend();
     const d = document.getElementById('vozDiscard'); if (d) d.onclick = () => voiceDiscard();
   } else if (VOICE_STATE === 'sending') {
-    m.innerHTML = '<div class="voz-bar"><span style="font-size:12.5px">' + (en ? 'Listening…' : 'Escuchando…') + '</span></div>';
+    // (LOTE VOZ-LINDA · mock v1) En el chat, el enviando es la burbuja de
+    // voz atenuada con «Enviando…» (la barra queda vacía y la chatbar
+    // vuelve a la normal). En Inicio no hay chat visible: queda la
+    // píldora glass con el punto celeste.
+    if (vozEnInicio()) {
+      m.innerHTML = '<div class="voz-bar"><span class="voz-send-dot"></span><span class="voz-send-tx">' + (en ? 'Listening…' : 'Escuchando…') + '</span><span class="voz-send-dots"><i></i><i></i><i></i></span><span class="voz-send-lvl"></span></div>';
+    } else {
+      vozBubbleSending();
+      m.innerHTML = '';
+    }
   } else if (VOICE_STATE === 'failed') {
+    vozBubbleQuitar();
     var failSub = '';
     try {
       var fc = (typeof VOICE_FAIL_CODE !== 'undefined') ? VOICE_FAIL_CODE : '';
@@ -11547,8 +11659,9 @@ async function voiceToggle() {
     rec.start();
     if (VOICE_EARLY_UP) { VOICE_EARLY_UP = false; voiceStop(); }
     VOICE_START = Date.now();
-    const b = vozMicEl();
-    if (b) { b.classList.add('btn-rec'); b.innerHTML = pzDot('#E5484D', 11) + ' 0:00'; }
+    // (LOTE VOZ-LINDA) La chatbar se retira y la píldora lleva el timer;
+    // el botón del mic no se toca (su texto se recortaba).
+    vozUIgrabando(true);
     clearInterval(VOICE_TIMER);
     VOICE_TIMER = setInterval(voiceTick, 500);
     voiceTick();
@@ -11563,8 +11676,7 @@ async function voiceToggle() {
 function voiceStop() {
   const rec = VOICE_REC;
   VOICE_REC = null;
-  const b = vozMicEl();
-  if (b) { b.classList.remove('btn-rec'); }
+  vozUIgrabando(false);
   if (rec) { try { rec.stop(); } catch (e) { voiceCleanup(); voicePreview(); } }
 }
 function voicePreview() {
@@ -11592,6 +11704,7 @@ function voicePreview() {
 function voiceDiscard() {
   try { if (VOICE_URL) URL.revokeObjectURL(VOICE_URL); } catch (e) {}
   VOICE_URL = ''; VOICE_BLOB = null; VOICE_DUR = 0; VOICE_STATE = 'idle'; VOICE_CHUNKS = []; VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_FAIL_CODE = '';
+  vozUIgrabando(false);
   voiceRenderBar();
   try { chatUpdateSendBtn(); } catch (e) {}
 }
@@ -11625,10 +11738,10 @@ async function voiceSend() {
     location.hash = '#/app/chat';
     return;
   }
-  // La transcripción VERBATIM es el mensaje del cliente: texto exacto + audio.
-  const box = $('#chatBox');
-  if (box) box.insertAdjacentHTML('beforeend', '<div class="chat-msg u msg-in">' + esc(transcript) + '<audio controls src="' + esc(audioUrl) + '" style="display:block;width:100%;height:32px;margin-top:6px"></audio></div>');
-  try { chatScroll(); } catch (e) {}
+  // (LOTE VOZ-LINDA · mock v1) La burbuja atenuada pasa a enviada: solo el
+  // reproductor (sin transcripto en la burbuja). El texto exacto sigue
+  // yendo al pipeline (CHAT + chatExchange) como siempre.
+  vozBubbleEnviada(VOICE_DUR);
   CHAT.push({ role: 'user', text: transcript });
   VOICE_URL = ''; VOICE_BLOB = null; VOICE_STATE = 'idle';
   voiceRenderBar();
@@ -11643,7 +11756,7 @@ function chatUpdateSendBtn() {
   const b = $('#chatMicSend'), inp = $('#chatInput');
   if (!b) return;
   if (typeof VOICE_STATE !== 'undefined' && VOICE_STATE !== 'idle') {
-    if (VOICE_STATE === 'rec') return; // grabando: el botón muestra el timer
+    if (VOICE_STATE === 'rec') return; // grabando: el botón no se toca (la píldora lleva el timer)
     // preview/sending/failed: micrófono neutro, sin arrancar otra grabación
     b.innerHTML = pzIc('mic', 18); b.className = 'btn btn-soft'; b.title = vozEn() ? 'Voice note' : 'Nota de voz';
     b.onclick = null; b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null;
@@ -11654,7 +11767,7 @@ function chatUpdateSendBtn() {
   if (ready) { b.innerHTML = pzIc('send', 16); b.className = 'btn btn-primary'; b.title = 'Enviar'; b.onclick = () => chatSend(); b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null; }
   else { b.innerHTML = pzIc('mic', 18); b.className = 'btn btn-soft'; b.title = 'Mantener para hablar'; b.onclick = null;
     b.onpointerdown = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_START_X = e.clientX; VOICE_START_Y = e.clientY; voiceToggle(); };
-    b.onpointermove = (e) => { if (VOICE_STATE !== 'rec') return; if ((VOICE_START_X - e.clientX) > 60) { VOICE_CANCEL = true; const hm = document.getElementById('vozCancelMsg'); if (hm) hm.style.display = ''; } };
+    b.onpointermove = (e) => { if (VOICE_STATE !== 'rec') return; if ((VOICE_START_X - e.clientX) > 60) { VOICE_CANCEL = true; const hm = document.getElementById('vozCancelMsg'); if (hm) hm.style.display = ''; const ht = document.getElementById('vozHintTx'); if (ht) ht.style.display = 'none'; } };
     b.onpointerup = (e) => { if (VOICE_STATE !== 'rec') { VOICE_EARLY_UP = true; return; } if (VOICE_CANCEL) { VOICE_CANCEL = false; voiceDiscard(); } else voiceStop(); };
     b.onpointercancel = (e) => { if (VOICE_STATE !== 'rec') { VOICE_ABORTED = true; return; } VOICE_CANCEL = false; voiceDiscard(); }; }
 }
@@ -21686,7 +21799,7 @@ function chatFullView() {
   <header class="pz-chatfull-head">
     <button type="button" class="pz-chatfull-back" onclick="pzGoBack()" aria-label="${en ? 'Back' : 'Volver'}">${pzIc('arrowLeft', 20)}</button>
     <img class="chat-face" src="ai-avatar.png" alt="Posty">
-    <div class="pz-chatfull-tit"><b>Posty<span class="pdot">.</span></b></div>
+    <div class="pz-chatfull-tit"><b>Posty<span class="pdot">.</span></b><span class="pz-chatfull-est" id="pzChatEstado">${en ? 'online' : 'en línea'}</span></div>
   </header>
   ${chatCardHTML(true, true, true, true, true, true, true)}
 </div>`;
@@ -21731,11 +21844,11 @@ function pzVoicePendingDeliver() {
       const lastUser = (typeof CHAT !== 'undefined' && CHAT.length) ? CHAT[CHAT.length - 1] : null;
       if (!lastUser || lastUser.role !== 'user' || lastUser.text !== p.text) {
         CHAT.push({ role: 'user', text: p.text });
-        if (box) box.insertAdjacentHTML('beforeend', '<div class="chat-msg u msg-in">' + esc(p.text) + (p.audio ? '<audio controls src="' + esc(p.audio) + '" style="display:block;width:100%;height:32px;margin-top:6px"></audio>' : '') + '</div>');
+        if (box) { box.insertAdjacentHTML('beforeend', p.audio ? pzVoiceBubbleHTML(p.audio, 0, 'sent') : '<div class="chat-msg u msg-in">' + esc(p.text) + '</div>'); const nb = box.lastElementChild; if (nb && p.audio) pzVoiceBubbleInit(nb, p.audio, 0); }
       } else if (box && p.audio) {
         const bubbles = box.querySelectorAll('.chat-msg.u, .msg-in');
         const lb = bubbles && bubbles.length ? bubbles[bubbles.length - 1] : null;
-        if (lb && !lb.querySelector('audio')) lb.insertAdjacentHTML('beforeend', '<audio controls src="' + esc(p.audio) + '" style="display:block;width:100%;height:32px;margin-top:6px"></audio>');
+        if (lb && !lb.querySelector('.vb-player')) { lb.insertAdjacentHTML('beforeend', pzVoicePlayerHTML(p.audio, 0, 'sent')); pzVoiceBubbleInit(lb, p.audio, 0); }
       }
       // (LOTE CHAT-SCROLL) La nota pendiente es un envío: abajo.
       try { chatScroll(true); } catch (e) {}
@@ -24906,7 +25019,7 @@ function bindInicio() {
   // navegaba primero quedó reemplazado por estos handlers.
   if (mic) {
     mic.onpointerdown = (e) => { e.preventDefault(); try { mic.setPointerCapture(e.pointerId); } catch (err) {} VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_START_X = e.clientX; VOICE_START_Y = e.clientY; voiceToggle(); };
-    mic.onpointermove = (e) => { if (VOICE_STATE !== 'rec') return; if ((VOICE_START_X - e.clientX) > 60) { VOICE_CANCEL = true; const hm = document.getElementById('vozCancelMsg'); if (hm) hm.style.display = ''; } };
+    mic.onpointermove = (e) => { if (VOICE_STATE !== 'rec') return; if ((VOICE_START_X - e.clientX) > 60) { VOICE_CANCEL = true; const hm = document.getElementById('vozCancelMsg'); if (hm) hm.style.display = ''; const ht = document.getElementById('vozHintTx'); if (ht) ht.style.display = 'none'; } };
     mic.onpointerup = (e) => { if (VOICE_STATE !== 'rec') { VOICE_EARLY_UP = true; return; } if (VOICE_CANCEL) { VOICE_CANCEL = false; voiceDiscard(); } else voiceStop(); };
     mic.onpointercancel = (e) => { if (VOICE_STATE !== 'rec') { VOICE_ABORTED = true; return; } VOICE_CANCEL = false; voiceDiscard(); };
   }
