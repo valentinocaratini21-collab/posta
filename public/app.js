@@ -25689,7 +25689,7 @@ function pzSftAbrir(items, opts) {
   if (ov) ov.remove();
   ov = document.createElement("div");
   ov.id = "pzSftOverlay";
-  ov.style.cssText = "position:fixed;inset:0;z-index:9000;background:linear-gradient(180deg,#dff1fa 0%,#eef9fd 45%,#fdf9ec 75%,#fdeec2 100%);overflow-y:auto;-webkit-overflow-scrolling:touch;";
+  ov.style.cssText = "position:fixed;inset:0;z-index:9000;background:linear-gradient(180deg,#dff1fa 0%,#eef9fd 45%,#f7fbfe 100%);overflow-y:auto;-webkit-overflow-scrolling:touch;";
   document.body.appendChild(ov);
   pzSftRender();
 }
@@ -26131,7 +26131,7 @@ async function pzSftEscenaCarruselCrear() {
 async function pzSftPendientes() {
   const en = pzSftEn();
   let ov = document.getElementById("pzSftOverlay");
-  if (!ov) { ov = document.createElement("div"); ov.id = "pzSftOverlay"; ov.style.cssText = "position:fixed;inset:0;z-index:9000;background:linear-gradient(180deg,#dff1fa 0%,#eef9fd 45%,#fdf9ec 75%,#fdeec2 100%);overflow-y:auto;-webkit-overflow-scrolling:touch;"; document.body.appendChild(ov); }
+  if (!ov) { ov = document.createElement("div"); ov.id = "pzSftOverlay"; ov.style.cssText = "position:fixed;inset:0;z-index:9000;background:linear-gradient(180deg,#dff1fa 0%,#eef9fd 45%,#f7fbfe 100%);overflow-y:auto;-webkit-overflow-scrolling:touch;"; document.body.appendChild(ov); }
   ov.innerHTML = "<div style=\"max-width:520px;margin:0 auto;padding:14px 16px 28px;\"><div style=\"display:flex;align-items:center;gap:10px;\"><button type=\"button\" onclick=\"pzSftCerrarPendientes()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><b style=\"font-size:16px;color:#0A1E33;\">" + (en ? "Pending tray" : "Bandeja de pendientes") + "</b></div><div style=\"margin-top:12px;font-size:14px;color:#47617A;\">⏳ " + (en ? "Loading…" : "Cargando…") + "</div></div>";
   try {
     const data = await api.get("/api/album");
@@ -26179,7 +26179,7 @@ async function pzSftPendienteRend(postId, btn) {
 async function pzSftPicker() {
   const en = pzSftEn();
   let ov = document.getElementById("pzSftOverlay");
-  if (!ov) { ov = document.createElement("div"); ov.id = "pzSftOverlay"; ov.style.cssText = "position:fixed;inset:0;z-index:9000;background:linear-gradient(180deg,#dff1fa 0%,#eef9fd 45%,#fdf9ec 75%,#fdeec2 100%);overflow-y:auto;-webkit-overflow-scrolling:touch;"; document.body.appendChild(ov); }
+  if (!ov) { ov = document.createElement("div"); ov.id = "pzSftOverlay"; ov.style.cssText = "position:fixed;inset:0;z-index:9000;background:linear-gradient(180deg,#dff1fa 0%,#eef9fd 45%,#f7fbfe 100%);overflow-y:auto;-webkit-overflow-scrolling:touch;"; document.body.appendChild(ov); }
   ov.innerHTML = "<div style=\"max-width:520px;margin:0 auto;padding:14px 16px 28px;\"><div style=\"display:flex;align-items:center;gap:10px;\"><button type=\"button\" onclick=\"pzSftCerrarPendientes()\" style=\"width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.7);font-size:18px;cursor:pointer;\">←</button><b style=\"font-size:16px;color:#0A1E33;\">" + (en ? "Use photos from your album" : "Usar fotos de tu álbum") + "</b></div><div style=\"margin-top:12px;font-size:14px;color:#47617A;\">⏳ " + (en ? "Loading…" : "Cargando…") + "</div></div>";
   try {
     const data = await api.get("/api/album");

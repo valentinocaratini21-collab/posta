@@ -4004,7 +4004,7 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .drawer-link:active{transform:scale(.97);opacity:.8}
 .bb-btn:active{transform:scale(.97)}
 /* LOTE CARGA-PUNTITOS: entre rutas, solo 3 puntitos sobre el degradado (nunca pantalla blanca) */
-.pz-load{margin:-6px -14px 0;min-height:62dvh;display:flex;align-items:center;justify-content:center;gap:12px;background:linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
+.pz-load{margin:-6px -14px 0;min-height:62dvh;display:flex;align-items:center;justify-content:center;gap:12px;background:linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%)}
 .pz-dot{width:14px;height:14px;border-radius:50%;flex:none;animation:pz-dot-bounce 1.2s ease-in-out infinite}
 .pz-dot-1{background:#2793C8}
 .pz-dot-2{background:#FEC14D;animation-delay:.15s}
@@ -4222,7 +4222,8 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    dos barras fijas (chat, tabs): jamás sobre la grilla con scroll ni
    sobre tiles. En modo oscuro rige igual que el blanco forzado de
    Inicio (Lotes 12/17): estos selectores ganan por especificidad/orden. */
-#inicioView.hf-wrap{background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.28),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(254,193,77,.35),rgba(254,193,77,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
+/* (FONDO-GLASS · Valentino 4/11: fuera el fondo amarillo — el lavado crema/dorado pasa a vidrio neutro celeste; #FEC14D queda solo como acento chico) */
+#inicioView.hf-wrap{background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.22),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(39,147,200,.12),rgba(39,147,200,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%)}
 #inicioView .mx-port-top{margin:10px 12px 14px}
 #inicioView .mx-tira-jardin.mx-tira-posty{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
 #inicioView .hf-head{background:rgba(255,255,255,.40);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10);border-radius:22px;margin:0 12px;padding:16px}
@@ -4340,7 +4341,7 @@ llevan sombra suave para leerse sobre claro y oscuro. */
    anclado abajo y la altura la manda visualViewport (pzPostChatKbSync),
    así el teclado nunca lo tapa. El tirador de arriba invita al desliz
    hacia abajo que vuelve al posteo. */
-.pz-postchat{position:fixed;inset:0;z-index:400;background:linear-gradient(180deg,#dff1fa,#eef9fd 40%,#fdf9ec 70%,#fdeec2);display:flex;flex-direction:column;overflow:hidden}
+.pz-postchat{position:fixed;inset:0;z-index:400;background:linear-gradient(180deg,#dff1fa,#eef9fd 40%,#f7fbfe);display:flex;flex-direction:column;overflow:hidden}
 .pz-postchat[hidden]{display:none}
 .pz-postchat-grip{display:flex;justify-content:center;padding:calc(10px + env(safe-area-inset-top)) 0 2px;flex:none}
 .pz-postchat-grip span{display:block;width:44px;height:5px;border-radius:99px;background:rgba(10,30,51,.20)}
@@ -4461,7 +4462,7 @@ body.pz-postchat-open{overflow:hidden}
    campo y chips van en vidrio; las fotos quedan sin vidrio, como siempre.
    La altura la fija JS con el viewport visible real (ver pzChatKbSync):
    el 100dvh de acá es solo el arranque antes del primer sync. */
-.pz-chatfull{position:fixed;left:0;right:0;top:0;height:100dvh;z-index:300;display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.28),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(254,193,77,.35),rgba(254,193,77,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
+.pz-chatfull{position:fixed;left:0;right:0;top:0;height:100dvh;z-index:300;display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.22),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(39,147,200,.12),rgba(39,147,200,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%)}
 .pz-chatfull-head{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;margin:12px 12px 0;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10);border-radius:22px;flex:none}
 .pz-chatfull-back{width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.75);background:rgba(255,255,255,.6);color:var(--txt);font-family:inherit;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}
 .pz-chatfull-head .chat-face{width:38px;height:38px;border-radius:50%;border:2px solid #FEC14D;object-fit:cover;flex:none}
@@ -4503,7 +4504,7 @@ body.pz-postchat-open{overflow:hidden}
    Va al final del archivo, después de los bloques oscuros, así gana por orden como el
    bloque glass de Inicio; no hay reglas oscuras para estas clases, y el navy sobre vidrio
    claro sigue legible en ambos modos. */
-.bb-app.bb-glass-pantallas{background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.28),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(254,193,77,.35),rgba(254,193,77,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
+.bb-app.bb-glass-pantallas{background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.22),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(39,147,200,.12),rgba(39,147,200,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%)}
 .bb-app.bb-glass-pantallas .bb-bar{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border-top:1px solid rgba(255,255,255,.75)}
 .bb-app.bb-glass-pantallas .mx-jardin-posty .mx-tarjeta{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
 .bb-app.bb-glass-pantallas .ana-card{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
@@ -4519,7 +4520,7 @@ body.pz-postchat-open{overflow:hidden}
    Jardín/Estrategia/Ajustes (v539), chat principal (lote chat-pantalla), web pública,
    /prueba, /aprobar, /fundadores, lista-espera, pop de semana .scf-pop (preview
    transitorio, no pantalla), .bb-card de la oficina (pantalla redirigida en POSTY SOLO). */
-.app-shell, .hf-dback, body:has(.form-card){background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.28),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(254,193,77,.35),rgba(254,193,77,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
+.app-shell, .hf-dback, body:has(.form-card){background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.22),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(39,147,200,.12),rgba(39,147,200,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%)}
 .sched-col, .bb-bcard, .bb-bloque:not(.bb-bloque-top), .bb-libre, .apv-wrap .card, .hf-dcard, .form-card, .st-card, .st-wrap .card, .ob-wrap .card, .ads-wrap .card, .ads-wrap .ads-rec, #adminCard{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
 .sched-col.today{border:2px solid var(--cel);box-shadow:0 8px 24px rgba(39,147,200,.20)}
 .mz-tabs{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border-top:1px solid rgba(255,255,255,.75)}
@@ -4930,7 +4931,7 @@ body.pz-postchat-open{overflow:hidden}
    sólida porque no hay gancho por pestaña para acotarla sin vidriar
    .card peladas de otras pantallas. */
 #inicioView .hf-head{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
-#inicioView.hf-wrap{background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.45),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(254,193,77,.50),rgba(254,193,77,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#fdf9ec 62%,#fdeec2 100%)}
+#inicioView.hf-wrap{background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.38),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(39,147,200,.20),rgba(39,147,200,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 30%,#f7fbfe 100%)}
 .bb-app.bb-glass-pantallas .mx-jardin-posty .mx-zona:not(.lock){background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
 .bb-app.bb-glass-pantallas .mx-jardin-posty .mx-zona-viva{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 0 0 2px rgba(254,193,77,.55),0 6px 16px rgba(10,30,51,.12)}
 .bb-app.bb-glass-pantallas .card.int-advanced{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
