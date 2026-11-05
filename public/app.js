@@ -367,7 +367,7 @@ const api = {
         // rebotar sacaba al anónimo de la landing a los ~80 ms (v371:
         // ttEnhance pedía /api/tiktok/status en cada render, también en
         // las rutas públicas, y este efecto lateral lo mandaba al login).
-        if (hasSessionContext()) {
+        if (hasSessionContext() && !opts.noLoginRedirect) {
           if (typeof ME !== 'undefined') ME = null;
           try { if ((location.hash || '').startsWith('#/app')) sessionStorage.setItem('posta_return_to', location.hash); } catch (e) {}
           try { location.hash = '#/login'; } catch (e) {}
@@ -2450,7 +2450,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v679'; // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos»
+const CHUNK_V = '20261101-v683'; // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos»
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -6020,15 +6020,40 @@ function pzPushRowDenied() {
   if (pzNativePush()) return pzNativePermState() === 'denied';
   try { return pushPerm() === 'denied'; } catch (e) { return false; }
 }
+// (LOTE PUSHFIX) Cola del token nativo: el token se guarda en local
+// ANTES del POST y nunca se descarta. Si el POST falla (sin sesión, sin
+// red, 500), queda pendiente y se reintenta solo al abrir la app.
+function pzNativePendGet() {
+  try { const raw = localStorage.getItem('pz-native-token-pendiente'); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+function pzNativePendClear() { try { localStorage.removeItem('pz-native-token-pendiente'); } catch (e) {} }
+let PZ_NATIVE_FLUSH_AT = 0;
+async function pzNativeFlushPendiente() {
+  const pend = pzNativePendGet();
+  if (!pend || !pend.token) return { ok: false, reason: 'sin_pendiente' };
+  const now = Date.now();
+  if (PZ_NATIVE_FLUSH_AT && now - PZ_NATIVE_FLUSH_AT < 60000) return { ok: false, reason: 'reciente' };
+  PZ_NATIVE_FLUSH_AT = now;
+  return pzNativeSaveToken(pend.token);
+}
 async function pzNativeSaveToken(token) {
   const transport = pzNativeTransport();
   if (!transport || !pzNativeTokenOk(transport, token)) return { ok: false, reason: 'token_invalido' };
+  const tok = String(token).trim();
+  try { localStorage.setItem('pz-native-token-pendiente', JSON.stringify({ transport: transport, token: tok, ts: Date.now() })); } catch (e) {}
   try {
-    await api.post('/api/push/subscribe', { transport: transport, token: String(token).trim() });
-    try { localStorage.setItem('pz-native-token', String(token).trim()); } catch (e) {}
+    await api.post('/api/push/subscribe', { transport: transport, token: tok }, { noLoginRedirect: true });
+    try { localStorage.setItem('pz-native-token', tok); } catch (e) {}
     try { localStorage.setItem('pz-native-transport', transport); } catch (e) {}
+    try { const seq = (parseInt(localStorage.getItem('pz-native-token-seq') || '0', 10) || 0) + 1; localStorage.setItem('pz-native-token-seq', String(seq)); } catch (e) {}
+    pzNativePendClear();
+    try { PZ_NATIVE_LAST_ERROR = ''; } catch (e) {}
     return { ok: true };
-  } catch (e) { return { ok: false, reason: (e && e.message) || 'error' }; }
+  } catch (e) {
+    const es401 = !!(e && e.status === 401);
+    try { PZ_NATIVE_LAST_ERROR = es401 ? 'Tu sesión se cerró: entrá de nuevo y activá las notificaciones' : String((e && e.message) || 'error').slice(0, 120); } catch (_) {}
+    return { ok: false, reason: es401 ? 'sesion' : ((e && e.message) || 'error') };
+  }
 }
 async function pzNativeSubscribe() {
   const PN = pzNativePlugin();
@@ -6043,14 +6068,29 @@ async function pzNativeSubscribe() {
     }
     PZ_NATIVE_PERM = perm;
     if (perm !== 'granted') return { ok: false, reason: 'denied' };
+    // (LOTE PUSHFIX) El éxito se mide por el avance del contador de
+    // confirmaciones, no por "hay un token viejo guardado": eso tapaba un
+    // POST fallido con un token de otra sesión y devolvía ok en falso.
+    let seqAntes = 0;
+    try { seqAntes = parseInt(localStorage.getItem('pz-native-token-seq') || '0', 10) || 0; } catch (e) {}
     try { await PN.register(); } catch (e) { return { ok: false, reason: (e && e.message) || 'error' }; }
     // El token llega por el evento 'registration' (no hay getToken): se
-    // espera a que el listener lo guarde. Si ya habia uno de una sesion
-    // anterior y register() anduvo, ese sigue siendo el ultimo bueno.
-    for (let i = 0; i < 10; i++) {
-      try { if (localStorage.getItem('pz-native-token')) return { ok: true }; } catch (e) {}
+    // espera a que el listener lo confirme en el servidor. Un pendiente de
+    // un arranque anterior se reintenta ya.
+    try { await pzNativeFlushPendiente(); } catch (e) {}
+    for (let i = 0; i < 25; i++) {
+      try {
+        const seq = parseInt(localStorage.getItem('pz-native-token-seq') || '0', 10) || 0;
+        if (seq > seqAntes) return { ok: true };
+        if (pzNativePendGet()) {
+          // Token guardado, POST todavía sin confirmar: se reintenta solo
+          // al abrir la app; no es un éxito, pero tampoco un no_token.
+          if (i >= 10) return { ok: false, reason: 'pendiente' };
+        }
+      } catch (e) {}
       await new Promise((r) => setTimeout(r, 200));
     }
+    try { if (pzNativePendGet()) return { ok: false, reason: 'pendiente' }; } catch (e) {}
     return { ok: false, reason: 'no_token' };
   } catch (e) { return { ok: false, reason: (e && e.message) || 'error' }; }
 }
@@ -6079,6 +6119,14 @@ async function pzNativeBoot() {
     const st = await PN.checkPermissions();
     PZ_NATIVE_PERM = (st && st.receive) || 'prompt';
     if (PZ_NATIVE_PERM === 'granted') { try { await PN.register(); } catch (e) {} }
+  } catch (e) {}
+  // (LOTE PUSHFIX) Reintento del pendiente al arrancar y al volver a la
+  // app: el POST lleva noLoginRedirect, así que un 401 no rebota a login.
+  try { await pzNativeFlushPendiente(); } catch (e) {}
+  try {
+    document.addEventListener('visibilitychange', () => {
+      try { if (!document.hidden) pzNativeFlushPendiente(); } catch (e) {}
+    });
   } catch (e) {}
 }
 
@@ -25001,9 +25049,13 @@ async function doLogout() {
   try { await api.post('/api/auth/logout'); } catch (e) {}
   try { sessionStorage.removeItem('posta_return_to'); } catch (e) {}
   // Nativo: el token de este dispositivo deja de ser de esta cuenta.
+  // (LOTE PUSHFIX) El pendiente y el contador también se van: un token
+  // pendiente de otra cuenta jamás debe reintentarse tras el logout.
   try {
     const nt = localStorage.getItem('pz-native-token');
     if (nt) { try { await api.post('/api/push/unsubscribe', { endpoint: nt }); } catch (e) {} try { localStorage.removeItem('pz-native-token'); } catch (e2) {} }
+    try { localStorage.removeItem('pz-native-token-pendiente'); } catch (e) {}
+    try { localStorage.removeItem('pz-native-token-seq'); } catch (e) {}
   } catch (e) {}
   location.hash = '#/login';
   render();

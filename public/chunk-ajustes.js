@@ -934,6 +934,7 @@ function bindSettings() {
         const r = pr.reason;
         if (r === 'denied') return en ? 'Notifications are off in your iPhone Settings' : 'Las notificaciones están apagadas en Ajustes del iPhone';
         if (r === 'no_token') return en ? 'Your iPhone did not deliver the notifications token' : 'El iPhone no entregó el token de notificaciones';
+        if (r === 'pendiente') return en ? 'Your token is saved: it will be sent next time you open the app signed in' : 'Tu token quedó guardado: se manda solo la próxima vez que abras la app con sesión';
         let det = '';
         try { det = (typeof PZ_NATIVE_LAST_ERROR !== 'undefined' && PZ_NATIVE_LAST_ERROR) || ''; } catch (e) {}
         if (!det && r && r !== 'error') det = String(r);
