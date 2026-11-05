@@ -94,6 +94,28 @@ function deleteProposalFiles(mediaDir, proposalPath) {
   return n;
 }
 
+// resolveStoryPhoto(mediaDir, photoAbs) — STORY-TEXTO-UNICO (2026-11-04,
+// post 553): una story NUNCA usa como fondo una foto que ya lleva el
+// titular quemado. El cover 9:16 recorta ese titular a los costados, el
+// velo oscuro lo deja ilegible, y el overlay de la story lo duplica
+// (la gemela del post 551 salió con «¿te imaginás tener 3 días gratis…»
+// dos veces: arriba cortado y oscuro + en el medio blanco y legible).
+// Si la foto mostrada tiene base limpia hermana que difiere
+// (captionState 'on' = titular compuesto por código), la story usa LA
+// BASE LIMPIA y el overlay es el único texto. Sin hermana (foto limpia
+// o sin registro), la foto entra como hoy. Fail-closed: cualquier duda
+// devuelve photoAbs sin cambios.
+function resolveStoryPhoto(mediaDir, photoAbs) {
+  try {
+    if (!photoAbs || !fs.existsSync(photoAbs)) return photoAbs;
+    const shown = '/media/' + path.basename(String(photoAbs));
+    if (captionState(mediaDir, shown) !== 'on') return photoAbs;
+    const clean = cleanSisterPath(mediaDir, shown);
+    if (clean && fs.existsSync(clean)) return clean;
+  } catch (e) { /* fail-closed: la foto entra como hoy */ }
+  return photoAbs;
+}
+
 module.exports = {
   isMediaPath,
   mediaAbs,
@@ -103,4 +125,5 @@ module.exports = {
   captionOutName,
   deleteMediaFile,
   deleteProposalFiles,
+  resolveStoryPhoto,
 };

@@ -17,6 +17,11 @@
 //   · El texto va en banda superior o inferior según las zonas tranquilas
 //     de la foto (brand-card.py --band auto): nunca en el centro, nunca
 //     sobre caras u ojos.
+//   · (STORY-TEXTO-UNICO, 2026-11-04 — post 553) La foto de una story
+//     NUNCA lleva el titular quemado: si la fuente tiene base limpia
+//     hermana que difiere (titular compuesto por código), el render usa
+//     la base limpia (resolveStoryPhoto) y el overlay es el único texto.
+//     Sin hermana, la foto entra como hoy (fail-closed).
 //   · (v330) POSTY NO SE REPITE: si la imagen fuente nació con el avatar
 //     del negocio como protagonista (image_meta.avatar_protagonist), la
 //     gemela NO estampa el medallón con ese mismo avatar. Para fotos de
@@ -38,6 +43,7 @@ const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const { makeHeadline, captionPasses } = require('./generator');
 const { captionOpenIsGarbled } = require('./hooks');
+const photoCliente = require('./photo-cliente');
 
 const BRAND_CARD_PY = path.join(__dirname, 'brand-card.py');
 const STORY_W = 1080;
@@ -218,6 +224,10 @@ function daysUntil(ymd) {
 // ---------------------------------------------------------------------------
 function renderStoryPng({ headline, sub, business, bgHex, textHex, logoAbs, photoAbs, outDir, band, meta }) {
   const out = path.join(outDir, `story-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.png`);
+  // (STORY-TEXTO-UNICO) La foto base no lleva texto: si la fuente trae el
+  // titular quemado y existe su base limpia hermana, se renderiza sobre
+  // la base limpia. El overlay es el único texto de la story.
+  if (photoAbs) photoAbs = photoCliente.resolveStoryPhoto(outDir, photoAbs);
   const args = [BRAND_CARD_PY,
     '--mode', 'story', '--w', String(STORY_W), '--h', String(STORY_H),
     '--headline', clean(headline, 120),

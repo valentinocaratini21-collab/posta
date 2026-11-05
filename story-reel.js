@@ -12,6 +12,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { renderVideo, ffmpegAvailable, resolveFont } = require('./video');
 const { getPlan, TRIAL_PLAN } = require('./config/plans');
+const photoCliente = require('./photo-cliente');
 
 const SW = 1080;
 const SH = 1920;
@@ -354,7 +355,12 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
   for (let i = have.story; i < nStories; i++) {
     const post = feed[i % feed.length];
     try {
-      const src = localFile(mediaDir, post.image_path);
+      // (STORY-TEXTO-UNICO) Misma regla que la gemela: si la foto del
+      // posteo lleva el titular quemado y existe su base limpia hermana,
+      // la story se compone sobre la base limpia; el caption del overlay
+      // es el único texto. Sin hermana, la foto entra como hoy.
+      let src = localFile(mediaDir, post.image_path);
+      if (src) src = photoCliente.resolveStoryPhoto(mediaDir, src);
       const name = `story-${uid}-${weekKey}-${i + 1}-${crypto.randomBytes(3).toString('hex')}.jpg`;
       const outFile = path.join(mediaDir, name);
       await makeStoryImage({ srcFile: src, caption: post.caption, outFile });
