@@ -20498,8 +20498,9 @@ async function inicioView() {
   // paralelo en vez de dos en serie (los flags se calculan abajo igual).
   let allPosts = [];
   let weekEr = null;
+  let ritRes = null; // (HOTFIX INICIO-ROTO · 5/11) ritRes se lee FUERA del try (banner del ritual): un const dentro del bloque no existe ahí → ReferenceError en cada Inicio. Vive afuera; si el fetch falla queda null y no hay banner (fail-closed).
   try {
-    const [postsRes, erRes, pubRes, ritRes] = await Promise.all([
+    const [postsRes, erRes, pubRes, ritResFetch] = await Promise.all([
       api.get('/api/posts').catch(() => []),
       api.post('/api/week/ensure', {}).catch(() => null),
       api.get('/api/posts?status=published').catch(() => []),
@@ -20507,7 +20508,7 @@ async function inicioView() {
       // banner: NO genera alternas (eso vive solo en #/app/ritual).
       api.get('/api/ritual/estado').catch(() => null),
     ]);
-    allPosts = hfMergePostsAll(postsRes, pubRes); weekEr = erRes;
+    allPosts = hfMergePostsAll(postsRes, pubRes); weekEr = erRes; ritRes = ritResFetch;
   } catch (e) { allPosts = []; }
   if (!Array.isArray(allPosts)) allPosts = [];
   const drafts = allPosts.filter(p => p.status === 'draft').sort((a, b) => a.id - b.id);
