@@ -1213,13 +1213,27 @@ function captionPasses(caption, input) {
   // nuestras opciones…», «Aquí te paso 3 tips…»). Firma angosta, a
   // propósito FUERA de BANNED_PHRASES: un «elige» pelado por substring
   // matchearía la pasiva legítima «se elige». Solo se rechaza: (a)
-  // «elige» abriendo oración (inicio — tras pelar emojis iniciales —
-  // o tras . ! ? ¡ ¿) = imperativo peninsular, en rioplatense es
-  // «elegí»; (b) «aqui te/les/va/van» = deíctico peninsular, en
-  // rioplatense es «acá». Pasan: «se elige el grano» (pasiva),
-  // «el cliente elige» (tercera persona con sujeto), «elegí»,
-  // «acá te paso», «pasá por acá». Va DESPUÉS del gate de lista
-  // anunciada para que el id 520 siga cayendo por su motivo primero.
+  // «elige» o «deja» abriendo oración (inicio — tras pelar emojis
+  // iniciales — o tras . ! ? ¡ ¿) = imperativo peninsular, en
+  // rioplatense es «elegí» / «dejá»; (b) «aqui te/les/va/van» =
+  // deíctico peninsular, en rioplatense es «acá». Pasan: «se elige
+  // el grano» (pasiva), «el cliente elige» (tercera persona con
+  // sujeto), «me deja tranquilo» (tercera persona con complemento),
+  // «elegí», «dejá», «acá te paso», «pasá por acá». Va DESPUÉS del
+  // gate de lista anunciada para que el id 520 siga cayendo por su
+  // motivo primero.
+  // PENINSULAR-DEJA (Juli, 2026-11-05 — id 554 real, cuenta 12):
+  // «Deja de preocuparte y dejame hacerlo por vos» — el mismo
+  // imperativo peninsular con otro verbo; la familia no se cierra
+  // con «elige»: cada verbo que reaparezca así se suma acá, con sus
+  // controles de tercera persona intactos.
+  // OJO (por qué «deja» NO va en el mismo regex que «elige»): `low`
+  // pela los acentos (NFD), así que «dejá» colapsa a «deja» y un
+  // match sobre `low` rechazaría el voseo correcto. «elige» no tiene
+  // ese problema («elegí» pela a «elegi», distinto de «elige»). Por
+  // eso «deja» se matchea sobre el texto CON acentos
+  // (sinEmojiMedioAcc): «dejá» ≠ «deja» ahí, y «me deja tranquilo»
+  // sigue pasando porque no abre oración.
   // PENINSULAR-EMOJI (Juli, 2026-11-01 — variante del id 505 real):
   // el regex viejo exigía [.!?¡¿]\s*elige, así que un emoji o salto
   // entre el signo y la palabra («¿…? 🎂\nElige entre…») lo cegaba
@@ -1231,8 +1245,9 @@ function captionPasses(caption, input) {
   {
     const sinEmojiInicial = low.replace(/^[^\p{L}\p{N}]+/u, '');
     const sinEmojiMedio = sinEmojiInicial.replace(/([.!?¡¿])[^\p{L}\p{N}]+/gu, '$1 ');
-    if (/(?:^|[.!?¡¿]\s*)elige[\s,;:]/.test(sinEmojiMedio) || /\baqui\s+(te|les|va|van)\b/.test(low)) {
-      return { ok: false, reason: 'peninsular (PENINSULAR): «elige» abriendo oración o «aquí te/les/va/van» — en rioplatense es «elegí» / «acá»' };
+    const sinEmojiMedioAcc = c.toLowerCase().replace(/^[^\p{L}\p{N}]+/u, '').replace(/([.!?¡¿])[^\p{L}\p{N}]+/gu, '$1 ');
+    if (/(?:^|[.!?¡¿]\s*)elige[\s,;:]/.test(sinEmojiMedio) || /(?:^|[.!?¡¿]\s*)deja[\s,;:]/.test(sinEmojiMedioAcc) || /\baqui\s+(te|les|va|van)\b/.test(low)) {
+      return { ok: false, reason: 'peninsular (PENINSULAR): «elige» o «deja» abriendo oración o «aquí te/les/va/van» — en rioplatense es «elegí» / «dejá» / «acá»' };
     }
   }
   // ===== Verificación contra datos del negocio (tanda D, casos 92-100) =====

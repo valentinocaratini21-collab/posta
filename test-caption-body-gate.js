@@ -430,5 +430,45 @@ ok('control: «honesto» fuera del dispositivo (precio honesto) NO se rechaza po
   assert.strictEqual(chk.ok, true, chk.reason);
 });
 
+console.log('== (s) Peninsular: «deja» abriendo oración (id 554 real, 2026-11-05) ==');
+ok('id 554 real: «Deja de preocuparte…» se rechaza por peninsular', () => {
+  const cap = '¿Cuántas veces te pasó que no sabés qué postear en Instagram? 🤔\nDeja de preocuparte y dejame hacerlo por vos. \nProbá gratis por 3 días y armemos juntos un feed que brille. Mandame un DM y empecemos.';
+  const chk = gen.captionPasses(cap, { business: 'Posty', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/peninsular/i.test(chk.reason), chk.reason);
+});
+ok('variante: «Deja» tras punto + emoji también se rechaza', () => {
+  const cap = '¿Cuántas veces te pasó que no sabés qué postear? 🤔\nEl feed no se arma solo. 🎂\nDeja que Posty lo haga por vos: diseños, textos y hashtags con tu estilo.\nMandame un DM y arrancamos hoy.';
+  const chk = gen.captionPasses(cap, { business: 'Posty', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/peninsular/i.test(chk.reason), chk.reason);
+});
+ok('variante: «Deja» abriendo el caption también se rechaza', () => {
+  const cap = 'Deja que Posty se encargue de tu Instagram: diseños, textos y hashtags con tu estilo.\nProbá gratis por 3 días y empezá a publicar todos los días.\nMandame un DM y arrancamos hoy.';
+  const chk = gen.captionPasses(cap, { business: 'Posty', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/peninsular/i.test(chk.reason), chk.reason);
+});
+ok('control: la reescritura del 554 con «Dejá» pasa', () => {
+  const cap = '¿Cuántas veces te pasó que no sabés qué postear en Instagram? 🤔\nDejá de preocuparte y dejame hacerlo por vos.\nProbá gratis por 3 días y armemos juntos un feed que brille. Mandame un DM y arrancamos hoy.';
+  const chk = gen.captionPasses(cap, { business: 'Posty', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «me deja tranquilo» (tercera persona con complemento) pasa', () => {
+  const cap = 'El café de la casa me deja tranquilo cada mañana: grano fresco y leche cremosa.\nPasá por el local hoy y probalo.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «eso deja…» (tercera persona con sujeto) pasa', () => {
+  const cap = 'Lo que sale del horno deja el local con un aroma increíble cada mañana.\nPasá por Palermo y probá las medialunas.';
+  const chk = gen.captionPasses(cap, { business: 'Café Aroma', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «Dejá que Posty…» abriendo el caption pasa (voseo con acento, no peninsular)', () => {
+  const cap = 'Dejá que Posty se encargue de tu Instagram: diseños, textos y hashtags con tu estilo.\nProbá gratis por 3 días y empezá a publicar todos los días.\nMandame un DM y arrancamos hoy.';
+  const chk = gen.captionPasses(cap, { business: 'Posty', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
