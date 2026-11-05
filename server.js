@@ -1813,7 +1813,12 @@ function whisperEsAlucinacionSilencio(texto) {
   if (t.includes('amara') && /(subtitul|subtitle|legenda|sous titr|sottotitol|untertitel|subtitrare|napisy|caption)/.test(t)) return true;
   return false;
 }
-async function transcribeAudio(dataUrl, apiKey) {
+async function transcribeAudio(dataUrl, apiKey, lang) {
+  // (LOTE POSTY-HABLA-COMO-BAMBOO) Pista de idioma para Whisper: la cuenta
+  // ES transcribe con 'es' y la EN con 'en' (antes era 'es' fijo para todos,
+  // lo que empeora la transcripción de cuentas en inglés y de acentos).
+  // Sin lang, el default sigue siendo 'es' (llamadores sin contexto de
+  // cuenta: subtítulos y otros caminos viejos quedan exactamente igual).
   // (LOTE VOZ-FALLA-2) La data URL real trae parámetros (;codecs=opus en
   // Safari 18.4+, ;codecs=mp4a.40.2 en Safari clásico). El regex viejo exigía
   // ;base64, justo tras el MIME y rechazaba el audio con 'audio inválido'
@@ -1826,7 +1831,7 @@ async function transcribeAudio(dataUrl, apiKey) {
   const form = new FormData();
   form.append('file', new Blob([buf], { type: m[1] }), whisperAudioFilename(m[1], buf));
   form.append('model', 'whisper-1');
-  form.append('language', 'es');
+  form.append('language', (lang === 'en' ? 'en' : 'es'));
   const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -5282,7 +5287,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     const noAudio = { reply: 'no pude escuchar tu audio 🙏 me lo escribís en una línea?', idea: null };
     if (!akey) return res.json(noAudio);
     let heard = '';
-    try { heard = await transcribeAudio(audio, akey); } catch (e) { console.error('[chat] whisper:', e.message); }
+    try { heard = await transcribeAudio(audio, akey, langOfUser(uidChat)); } catch (e) { console.error('[chat] whisper:', e.message); }
     if (!heard) return res.json(noAudio);
     const lastUser = [...clean].reverse().find(m => m.role === 'user');
     if (lastUser) lastUser.text = heard.slice(0, 2000);
@@ -6224,7 +6229,7 @@ app.post('/api/ideas/transcribe', async (req, res) => {
     if (!akey) return res.json({ ok: false, error: 'no_key' });
     let heard = '';
     let txErr = '';
-    try { heard = await transcribeAudio(audio, akey); } catch (e) { txErr = (e && e.message) || ''; console.error('[transcribe] whisper:', txErr); }
+    try { heard = await transcribeAudio(audio, akey, langOfUser(req.session.userId)); } catch (e) { txErr = (e && e.message) || ''; console.error('[transcribe] whisper:', txErr); }
     if (!heard || !String(heard).trim()) return res.json({ ok: false, error: (txErr === 'audio inválido' ? 'bad_audio' : 'no_heard') });
     return res.json({ ok: true, transcript: String(heard).slice(0, 2000) });
   } catch (e) {
@@ -28600,7 +28605,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v671';
+const BUILD_ID = '20261101-v672';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
