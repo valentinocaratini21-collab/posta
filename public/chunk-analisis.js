@@ -983,6 +983,14 @@ function anaCartaHTML(d) {
   const manoCls = anaPastMode ? '' : ' ana-carta-mano';
   let h = `<div class="ana-card ana-letter${manoCls}">
     <div class="ana-lhead">
+      <!-- CARTA-EXPLICA 4/11 (corrección Valentino: su hermana no entendía
+           que esto es una carta de Posty): rótulo arriba de todo del papel,
+           antes del avatar y del saludo, parte del papel (Gochi, chico,
+           sin banner de UI). Punto único: toda carta (mínima, v1 y
+           anteriores) pasa por anaCartaHTML, así que sale exactamente 1
+           vez por construcción, sin duplicar. Sin cambio de styles.css:
+           el estilo va inline. -->
+      <p class="ana-ltr-tag" style="font-family:'Gochi Hand',cursive,system-ui,sans-serif;font-size:16px;letter-spacing:.05em;color:rgba(10,30,51,.55);margin:0 0 8px">${anaT('Carta de Posty', 'A letter from Posty')}</p>
       <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
       <h3 class="ana-title">${esc(title)}</h3>
       ${bizLine ? `<p class="ana-biz">${esc(bizLine)}</p>` : ''}
