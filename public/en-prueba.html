@@ -1807,6 +1807,7 @@ function show(id) {
   $('#wfBack').onclick = () => { WEB = null; GEN_WEB = false; $('#webCard').style.display = 'none'; $('#stepIg').style.display = 'block'; };
   $('#btnGo2').onclick = startTrialFallback;
   $('#btnPrefillGo').onclick = startTrialPrefill;
+  try { opResumeShowBanner(); } catch (e) {}
   $('#btnSave').onclick = openRegTrial;
   const bge = $('#btnGuestEnter'); if (bge) bge.onclick = doGuestEnter;
   const bmm = $('#btnMakeMine'); if (bmm) bmm.onclick = () => { trk('prueba_step', { step: 'share_banner_cta' }); location.href = '/en/prueba'; };
@@ -3087,6 +3088,7 @@ function finishGeneration(data, genSecs) {
 // ---------- resultados ----------
 function renderResults() {
   const t = TRIAL;
+  try { opResumeClear(); } catch (e) {}
   trk('prueba_complete', { cached: !!(t && t.cached) });
   const rb = $('#rBiz');
   if (rb) rb.textContent = t.business;
@@ -3124,6 +3126,18 @@ function renderResults() {
 
   // Semana (extraída a función para re-renderizar cuando el chat edita textos)
   renderWeek();
+  // (LOTE ONBOARDING-PERFECTO · ítem 3) La última pantalla ES la semana
+  // en su feed: el CTA de entrar va pegado al mockup del feed, antes de
+  // los bloques de venta (fundador, beneficios, precio). Solo reordena el
+  // DOM, no cambia ningún bloque ni texto.
+  try {
+    var opPhone = document.getElementById('rWeek');
+    var opDone = document.getElementById('weekDone');
+    if (opPhone && opDone) {
+      var opWrap = (opPhone.closest && opPhone.closest('.phone')) || opPhone.parentNode;
+      if (opWrap && opWrap.parentNode) opWrap.parentNode.insertBefore(opDone, opWrap.nextSibling);
+    }
+  } catch (e) {}
 
   // (v379 · item 5) Express diagnosis in results and restores too: it
   // comes from the payload (diagnosis + first post), no stream needed.
@@ -4085,6 +4099,7 @@ async function pzTrialSocialMount() {
 // posts) and the app opens on THEIR FEED. The @ and domain come from
 // what the visitor already typed (nothing new is asked).
 async function doGuestEnter() {
+  try { opResumeClear(); } catch (e) {}
   const b = $('#btnGuestEnter');
   const errEl = $('#guestEnterErr');
   const showErr = (m) => { if (errEl) { errEl.textContent = m; errEl.style.display = 'block'; } };
@@ -4444,7 +4459,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
             var nm = (val || '').trim();
             if (!nm) { screenErr(T.errName); return; }
             S.biz = nm; TRIAL_BIZ = nm;
-            advance();
+            screenFotoEstudio();
           }, goEntry);
         }
       },
@@ -4497,11 +4512,12 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     S.qi++;
     while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++;
     if (S.qi >= S.plan.length) { sprout(); return; }
+    try { opResumeSave('preguntas'); } catch (e) {}
     currentScreen();
   }
 
   function goBack() {
-    if (S.qi > 0) { S.qi--; currentScreen(); return; }
+    if (S.qi > 0) { S.qi--; try { opResumeSave('preguntas'); } catch (e) {} currentScreen(); return; }
     goEntry();
   }
 
@@ -4567,7 +4583,9 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     editLbl: 'Correct the list',
     editSave: 'Save correction',
     ok: 'Looks good, build my week',
-    okEmpty: 'Add at least one product to build your week'
+    okEmpty: 'Add at least one product to build your week',
+    ev: 'I saw you sell',
+    evIn: { bio: 'in your bio', web: 'on your website', foto: 'in your photo' }
   };
   var FL_E = { productos: [], vetos: [] };
   function flProcLabel(p) { return (FL.from[p] || FL.from.cliente); }
@@ -4580,7 +4598,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       list.push({ nombre: nombre, precio: '', procedencia: proc });
     };
     var proc = (S.source === 'web') ? 'web' : 'bio';
-    (S.products || []).forEach(function (p) { push(p.nombre, proc); });
+    (S.products || []).forEach(function (p) { push(p.nombre, (p && p.proc) || proc); });
     if (S.ans.q1) push(S.ans.q1, 'cliente');
     return list.slice(0, 8);
   }
@@ -4594,6 +4612,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     }).join('');
     box.innerHTML = stemHTML() + '<h2 class="oc-q">' + esc(FL.title) + '</h2>'
       + '<p class="oc-chat">' + esc(FL.sub) + '</p>'
+      + opEvidenceHTML()
       + (FL_E.productos.length ? rows : '<p class="oc-chat">' + esc(FL.empty) + '</p>')
       + '<div style="margin-top:14px"><label style="font-size:15px;font-weight:700;color:#0A1E33">' + esc(FL.photoLbl) + '</label>'
       + '<input id="flFoto" type="file" accept="image/*" multiple style="display:block;margin-top:8px;font-size:15px">'
@@ -4680,6 +4699,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       window.OC_ESPEJO = { aprobado: 1, productos: FL_E.productos, vetos: FL_E.vetos };
       draftStartOrSkip(); // DRAFT-ONBOARDING (4/11): draft before the photo; without real products, straight to fmShow().
     });
+    try { opResumeSave('espejo'); } catch (e) {}
   }
   // ---- LOTE FOTO-MEJORA-PRUEBA (3/11) · Foto opcional tras el espejo ----
   // Paso OPCIONAL y SALTABLE con un toque, DESPUÉS del espejo aprobado y
@@ -4697,6 +4717,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   var FM = {
     title: 'Upload a photo of your business',
     sub: 'Optional — I’ll show you how it would look as a Posty post. If you skip it, your week is built just the same.',
+    guideTitle: 'Send me a photo of your star product',
+    guideSub: 'If you have a photo of {star}, upload it: your week will feature your real product. If you don’t have one, carry on — your week is built just the same.',
     skip: 'Skip, build my week anyway',
     tooBig: 'That photo is over 5 MB, try another one',
     readErr: 'We couldn’t read that photo. Try another one or skip this step.',
@@ -4721,8 +4743,11 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     FM_FILE = null; FM_PROD = null; FM_PEND = false;
     if (FM_URL) { try { URL.revokeObjectURL(FM_URL); } catch (e) {} FM_URL = null; }
     var box = ocq();
-    box.innerHTML = stemHTML() + '<h2 class="oc-q">' + esc(FM.title) + '</h2>'
-      + '<p class="oc-chat">' + esc(FM.sub) + '</p>'
+    var fmStar = ((S.ans.q1 && (S.ans.q1mix === 'uno' || S.ans.q1mix === 'libre')) ? S.ans.q1 : (((FL_E.productos || [])[0] || {}).nombre || ''));
+    var fmTitle = fmStar ? FM.guideTitle.replace('{star}', fmStar) : FM.title;
+    var fmSub = fmStar ? FM.guideSub.replace('{star}', fmStar) : FM.sub;
+    box.innerHTML = stemHTML() + '<h2 class="oc-q">' + esc(fmTitle) + '</h2>'
+      + '<p class="oc-chat">' + esc(fmSub) + '</p>'
       + '<div style="margin-top:14px"><input id="fmFoto" type="file" accept="image/*" style="display:block;font-size:15px">'
       + '<p id="fmMsg" class="oc-chat" style="display:none"></p></div>'
       + '<div id="fmDemo" style="display:none;margin-top:14px"></div>'
@@ -4733,6 +4758,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     show('v-ocq');
     try { trk('prueba_step', { step: 'fm_foto' }); } catch (e) {}
     box.querySelector('#fmSkip').addEventListener('click', function () { fmGoGenerate(); });
+    try { opResumeSave('foto'); } catch (e) {}
     box.querySelector('#fmFoto').addEventListener('change', function () {
       var f = (box.querySelector('#fmFoto').files || [])[0];
       var msg = box.querySelector('#fmMsg');
@@ -4775,10 +4801,151 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   }
   // ---- FIN LOTE FOTO-MEJORA-PRUEBA ----
   function screenEspejo() {
-    FL_E.productos = flBuild();
-    FL_E.vetos = [];
+    if (window.OP_FL_RESTORED) { FL_E.productos = window.OP_FL_RESTORED.productos || []; FL_E.vetos = window.OP_FL_RESTORED.vetos || []; window.OP_FL_RESTORED = null; }
+    else { FL_E.productos = flBuild(); FL_E.vetos = []; }
     try { trk('prueba_step', { step: 'oc_espejo' }); } catch (e) {}
     flRender();
+    try { opResumeSave('espejo'); } catch (e) {}
+  }
+
+  // ---- LOTE ONBOARDING-PERFECTO (4/11) · Espejo con porqué + retomar + foto-estudio ----
+  // Ítem 1: el espejo muestra la EVIDENCIA (foto real del producto estrella
+  // + "vi que vendés X" + procedencia real). NUNCA se afirma un "mejor
+  // posteo por likes": el prefill de la prueba no devuelve engagement, así
+  // que la evidencia es la foto real del feed + su procedencia. Inventar
+  // un ranking de likes violaría la regla de verdad.
+  function opEvidenceHTML() {
+    var star = '';
+    if (S.ans.q1 && (S.ans.q1mix === 'uno' || S.ans.q1mix === 'libre')) star = S.ans.q1;
+    else if ((FL_E.productos || []).length) star = FL_E.productos[0].nombre;
+    if (!star) return '';
+    var foto = null, proc = (S.source === 'web') ? 'web' : 'bio';
+    var ps = S.products || [];
+    for (var i = 0; i < ps.length; i++) {
+      if (ps[i] && ps[i].nombre === star) { if (ps[i].foto) foto = ps[i].foto; if (ps[i].proc) proc = ps[i].proc; break; }
+    }
+    if (!foto) { for (var j = 0; j < ps.length; j++) { if (ps[j] && ps[j].foto) { foto = ps[j].foto; break; } } }
+    if (!foto) { try { if (typeof PREFILL !== 'undefined' && PREFILL && PREFILL.photo) foto = PREFILL.photo; } catch (e) {} }
+    var flp = (FL_E.productos || []).filter(function (p) { return p.nombre === star; })[0];
+    if (flp && flp.procedencia) proc = flp.procedencia;
+    var where = (FL.evIn && FL.evIn[proc]) || (FL.evIn && FL.evIn.bio) || '';
+    var img = foto ? '<img src="' + esc(foto) + '" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:14px;border:2px solid #FEC14D" onerror="this.style.display=\'none\'">' : '';
+    return '<div style="display:flex;gap:12px;align-items:center;padding:12px;background:#FFF8E1;border:2px solid #FEC14D;border-radius:14px;margin-bottom:12px">'
+      + img + '<div><b style="font-size:16px;color:#0A1E33">' + esc(FL.ev + ' ' + star) + '</b>'
+      + '<small style="display:block;font-size:12px;color:#5A7488">' + esc(OP_L.evSeen + ' ' + where) + '</small></div></div>';
+  }
+  // Ítem 4: retomar donde quedó. Se guarda el paso exacto en localStorage
+  // en cada avance; al volver, un banner de un toque restaura el paso.
+  // Nunca se restaura de cero ni se inventa un paso: sin estado guardado
+  // (o vencido >7 días) el flujo es el de siempre. Al completar la
+  // generación o entrar al feed, el estado se borra.
+  var OP_RESUME_KEY = 'posta_onboarding_resume_v1';
+  var OP_L = { stepPreguntas: 'your questions', stepEspejo: 'the mirror', stepDraft: 'the draft', stepFoto: 'the photo', resumeText: 'You left off at {paso}. Pick up there?', resumeGo: 'Continue where I left off', resumeNew: 'Start over', evSeen: 'I saw it' };
+  function opResumeSave(stage) {
+    try {
+      var payload = { v: 1, ts: Date.now(), stage: stage,
+        S: { source: S.source, email: S.email, ig: S.ig, web: S.web, biz: S.biz, cat: S.cat, products: S.products || [], rubroOptions: (S.rubroOptions === undefined) ? null : S.rubroOptions, plan: S.plan || [], qi: S.qi || 0, ans: S.ans || {} },
+        FL: { productos: FL_E.productos || [], vetos: FL_E.vetos || [] },
+        DR: (typeof DR !== 'undefined' && DR) ? { dims: DR.dims, picks: DR.picks, champ: DR.champ } : null };
+      localStorage.setItem(OP_RESUME_KEY, JSON.stringify(payload));
+    } catch (e) {}
+  }
+  function opResumeClear() { try { localStorage.removeItem(OP_RESUME_KEY); } catch (e) {} }
+  function opResumeLoad() {
+    try {
+      var raw = localStorage.getItem(OP_RESUME_KEY);
+      if (!raw) return null;
+      var d = JSON.parse(raw);
+      if (!d || d.v !== 1 || !d.S || !Array.isArray(d.S.plan)) return null;
+      if (Date.now() - (d.ts || 0) > 7 * 24 * 3600 * 1000) return null;
+      return d;
+    } catch (e) { return null; }
+  }
+  function opResumeStepLabel(stage) {
+    if (stage === 'espejo') return OP_L.stepEspejo;
+    if (stage === 'draft') return OP_L.stepDraft;
+    if (stage === 'foto') return OP_L.stepFoto;
+    return OP_L.stepPreguntas;
+  }
+  function opResumeShowBanner() {
+    try {
+      var d = opResumeLoad();
+      if (!d) return;
+      var host = document.getElementById('v-onboarding');
+      if (!host || document.getElementById('opResumeBanner')) return;
+      var b = document.createElement('div');
+      b.id = 'opResumeBanner';
+      b.style.cssText = 'margin:0 0 14px;padding:14px;background:#FFF8E1;border:2px solid #FEC14D;border-radius:14px;text-align:center';
+      b.innerHTML = '<p style="margin:0 0 10px;font-size:15px;font-weight:700;color:#0A1E33">' + esc(OP_L.resumeText.replace('{paso}', opResumeStepLabel(d.stage))) + '</p>'
+        + '<button type="button" id="opResumeGo" class="oc-btn" style="width:auto;margin:0 6px 0 0">' + esc(OP_L.resumeGo) + '</button>'
+        + '<button type="button" id="opResumeNew" style="border:0;background:none;color:#2793C8;font-size:15px;font-weight:700;cursor:pointer">' + esc(OP_L.resumeNew) + '</button>';
+      host.insertBefore(b, host.firstChild);
+      document.getElementById('opResumeGo').addEventListener('click', function () { opResumeGo(); });
+      document.getElementById('opResumeNew').addEventListener('click', function () { opResumeClear(); var el = document.getElementById('opResumeBanner'); if (el) el.remove(); });
+    } catch (e) {}
+  }
+  function opResumeGo() {
+    var d = opResumeLoad();
+    if (!d) return;
+    try {
+      var s = d.S;
+      S.source = s.source; S.email = s.email; S.ig = s.ig; S.web = s.web; S.biz = s.biz; S.cat = s.cat;
+      S.products = s.products || []; S.rubroOptions = (s.rubroOptions === undefined) ? null : s.rubroOptions;
+      S.plan = s.plan || []; S.qi = s.qi || 0; S.ans = s.ans || {};
+      if (s.biz) { try { TRIAL_BIZ = s.biz; } catch (e) {} }
+      if (s.ig) { try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + s.ig; } catch (e) {} }
+      window.OC_ANS = { producto_estrella: S.ans.q1 || '', producto_mix: S.ans.q1mix || 'uno', cta: S.ans.q2 || '', promo: S.ans.q3 || '', voz: S.ans.q4 || '', precios: S.ans.q5 || '', donde: S.ans.donde || '', promo_semana: true };
+      window.OC_CAT = S.ans.rubro || S.cat || window.OC_CAT || null;
+      window.OC_DETECTADOS = (S.products || []).map(function (p) { return p.nombre; }).filter(Boolean).slice(0, 4);
+      window.OC_REASK_Q1 = reaskQ1;
+      var el = document.getElementById('opResumeBanner'); if (el) el.remove();
+      if (d.stage === 'espejo') { window.OP_FL_RESTORED = d.FL || { productos: [], vetos: [] }; screenEspejo(); }
+      else if (d.stage === 'draft' && d.DR) {
+        DR = { dims: d.DR.dims || [], picks: d.DR.picks || [], champ: d.DR.champ || null };
+        if (DR.champ) draftFinish();
+        else if (DR.picks.length >= 4) draftShowChamp();
+        else draftShowRound(DR.picks.length);
+      }
+      else if (d.stage === 'foto') { fmShow(); }
+      else { currentScreen(); }
+    } catch (e) { try { goEntry(); } catch (e2) {} }
+  }
+  // Ítem 5: sin IG ni web, la foto ES el estudio. Solo-email: tras el
+  // nombre, Posty pide una foto del producto y la visión anónima detecta
+  // productos reales (procedencia 'foto') ANTES de las preguntas. Saltar
+  // sigue el camino viejo exacto. Sin foto, el espejo queda con agregado
+  // manual como hoy: nunca un callejón sin salida.
+  var FS = { chat: 'No Instagram, no website — your photo is enough for me to study you.', title: 'Upload a photo of your product', reading: 'Reading your photo…', skip: 'Continue without a photo', back: 'Back' };
+  function screenFotoEstudio() {
+    var box = ocq();
+    box.innerHTML = stemHTML() + '<p class="oc-chat">' + esc(FS.chat) + '</p><h2 class="oc-q">' + esc(FS.title) + '</h2>'
+      + '<div style="margin-top:14px"><input id="fsFoto" type="file" accept="image/*" multiple style="display:block;font-size:15px">'
+      + '<p id="fsMsg" class="oc-chat" style="display:none"></p></div>'
+      + '<button type="button" class="oc-back" id="oc_back">' + esc(FS.back) + '</button>'
+      + '<button type="button" id="fsSkip" style="border:0;background:none;color:#2793C8;font-size:15px;font-weight:700;cursor:pointer;margin-top:14px">' + esc(FS.skip) + '</button>';
+    show('v-ocq');
+    try { trk('prueba_step', { step: 'fs_foto_estudio' }); } catch (e) {}
+    document.getElementById('oc_back').addEventListener('click', function () { screenDonde(); });
+    box.querySelector('#fsSkip').addEventListener('click', function () { advance(); });
+    box.querySelector('#fsFoto').addEventListener('change', function () {
+      var files = Array.prototype.slice.call(box.querySelector('#fsFoto').files || []).slice(0, 3);
+      var msg = box.querySelector('#fsMsg');
+      if (!files.length) return;
+      msg.style.display = 'block'; msg.textContent = FS.reading;
+      var done = 0;
+      files.forEach(function (f) {
+        var fd = new FormData(); fd.append('photo', f);
+        fetch('/api/trial/foto-vision' + TEST_KEY_QS, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d && !d.pendiente && d.producto && d.producto.nombre) {
+            var n = d.producto.nombre.trim();
+            if (!S.products.some(function (p) { return p.nombre.toLowerCase() === n.toLowerCase(); })) S.products.push({ nombre: n, foto: null, proc: 'foto' });
+          }
+        }).catch(function () {}).finally(function () {
+          done++;
+          if (done === files.length) { msg.style.display = 'none'; advance(); }
+        });
+      });
+    });
   }
 
   // ---- DRAFT-ONBOARDING (4/11) · 4 rounds of 3, FIFA draft style ----
@@ -4857,6 +5024,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   }
   function draftShowRound(i) {
     var box = ocq();
+    try { opResumeSave('draft'); } catch (e) {}
     var dim = DR.dims[i];
     var opts = draftOptionsFor(dim);
     var cards = opts.map(function (o, oi) {
@@ -4897,6 +5065,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   }
   function draftShowChamp() {
     var box = ocq();
+    try { opResumeSave('draft'); } catch (e) {}
     var cards = DR.picks.map(function (p, i) {
       return '<button type="button" class="oc-draft-card" data-i="' + i + '">'
         + (p.foto ? '<img src="' + esc(p.foto) + '" alt="" onerror="this.style.display=\'none\'">' : '')
