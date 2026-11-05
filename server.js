@@ -32,7 +32,7 @@ try {
   const r = db.prepare(`UPDATE assets SET kind='design' WHERE kind='photo' AND file_path IN (SELECT image_path FROM posts WHERE image_path LIKE '/media/%')`).run();
   if (r.changes) console.log(`[migracion] kind=design: ${r.changes} diseños reclasificados`);
 } catch (e) { console.error('[migracion] kind=design:', e.message); }
-const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionBodyKey } = require('./generator');
+const { generateContent, generateCaptions, generateIdeas, chatIdea, chatReceiptLines, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionBodyKey } = require('./generator');
 const { isCasaHandle, casaIdeasBlock, casaCaptionBlock } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: línea editorial solo para la casa
 const { propiaLineaForClient } = require('./posty-cliente-linea'); // LOTE POSTY APRENDE CLIENTES: referencia propia por cliente, sin cruces
 // ---------- ATENCIÓN AL CLIENTE (plan Total) — cableado 2026-10-21 ----------
@@ -5326,7 +5326,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   // después lo que necesita atención (publicando/fallido), después lo ya publicado.
   let cleanDrafts = [];
   try {
-    const rows = db.prepare(`SELECT id, caption, scheduled_for, scheduled_at, status, media_type, needs_review, overlay_text, overlay_zone FROM posts
+    const rows = db.prepare(`SELECT id, caption, scheduled_for, scheduled_at, status, media_type, needs_review, overlay_text, overlay_zone, redo_left, error FROM posts
       WHERE user_id = ? AND status IN ('draft','scheduled','publishing','failed','published')
       ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'publishing' THEN 2 WHEN 'failed' THEN 3 ELSE 4 END,
         COALESCE(scheduled_for, created_at) DESC LIMIT 12`).all(uidChat) || [];
@@ -5338,6 +5338,10 @@ app.post('/api/ideas/chat', async (req, res) => {
       caption: String(r.caption || '').slice(0, 300),
       overlay: String(r.overlay_text || '').slice(0, 80),
       zone: String(r.overlay_zone || 'top'),
+      // (CHAT-TODO) El modelo ve rehaces y error: no promete imagen nueva sin rehaces
+      // ni deja un fallido sin explicación real.
+      redo_left: (r.redo_left === null || r.redo_left === undefined) ? null : Number(r.redo_left),
+      error: String(r.error || '').slice(0, 120),
       when: wallInTz(r.scheduled_at || r.scheduled_for, chatTz),
       status: r.status,
       media_type: r.media_type || 'image',
@@ -5462,9 +5466,20 @@ app.post('/api/ideas/chat', async (req, res) => {
       needMediaAsk = lastAsk < Date.now() - 7 * 24 * 3600 * 1000 && freshCount === 0;
     } catch (e) {}
     let out;
+    // (CHAT-TODO) Nivel y premios en el contexto: el chat responde con datos reales,
+    // no con "no sé en qué nivel vas". Mismo cómputo que /api/oficina/nivel.
+    let levelLine = '';
+    try {
+      const np = require('./posty-nivel50');
+      const niv = np.nivelPosty(db, uid0, oficina.metricas(db, uid0));
+      if (niv) {
+        const sigPremio = (typeof niv.siguiente_premio === 'string' && niv.siguiente_premio) ? ` · próximo premio: ${niv.siguiente_premio}` : '';
+        levelLine = `Nv ${niv.nivel} · ${niv.nombre_nivel || ''}${niv.proximo_paso ? ` · ${niv.proximo_paso}` : ''}${sigPremio}`.trim();
+      }
+    } catch (e) { levelLine = ''; }
     try { out = await chatIdea(
       // Niveles que se sienten: el nivel cambia REALMENTE el payload del chat.
-      levelBoosted(uid0, 'chat', { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk, captionExtras: captionExtrasFor(uid0), strict: true }),
+      levelBoosted(uid0, 'chat', { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk, captionExtras: captionExtrasFor(uid0), strict: true, levelLine }),
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     ); } catch (e) {
       console.error('[chat] IA caída (modo estricto):', e.message);
@@ -5537,6 +5552,10 @@ app.post('/api/ideas/chat', async (req, res) => {
     let editApplied = null;
     let editPhotoFailed = false;
     let editPublishedSkipped = 0; // (CHAT-EDITA) edits que apuntaron a publicados (el código los saltea)
+    // (CHAT-TODO) Todo lo que el modelo pidió y NO se pudo hacer queda acá y se reporta
+    // en el recibo: JAMÁS un reply que festeje algo que no pasó.
+    const editIssues = [];
+    const chatTitle = (p) => String((p && p.caption) || 'posteo').split('\n')[0].slice(0, 40);
     if (Array.isArray(out.edits) && out.edits.length) {
       // Palanca 7: si el pedido cambia el CONCEPTO (no solo el texto), la imagen se
       // regenera vía concept-shot para acompañar. Solo se salta si el usuario pidió
@@ -5551,15 +5570,19 @@ app.post('/api/ideas/chat', async (req, res) => {
       const regenJobs = [];
       for (const ed of out.edits) {
         if (!(ed.draft >= 1 && ed.draft <= cleanDrafts.length)) continue;
-        if (ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined && ed.overlay === undefined && ed.overlay_pos === undefined) continue;
+        if (ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined && ed.overlay === undefined && ed.overlay_pos === undefined && ed.when_dropped === undefined) continue;
         const target = cleanDrafts[ed.draft - 1];
         const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
         if (!post) continue;
         // (CHAT-EDITA) El publicado se cuenta, no se traga en silencio: el
         // respaldo de abajo deja la línea honesta + ofrecimiento en la
         // respuesta (nunca un "no puedo" seco ni un "listo" mentiroso).
-        if (post.status === 'published') { editPublishedSkipped++; continue; }
+        // (CHAT-TODO) Un edit sobre un publicado no se calla: queda en el recibo.
+        // (CHAT-EDITA) Y se cuenta para el respaldo de abajo (línea honesta + ofrecimiento).
+        if (post.status === 'published') { editIssues.push({ kind: 'published', title: chatTitle(post) }); editPublishedSkipped++; continue; }
         if (post.status !== 'draft' && post.status !== 'scheduled') continue;
+        // (CHAT-TODO) Solo fecha pasada/inválida: nada que aplicar, pero se reporta.
+        if (ed.when_dropped && ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined && ed.overlay === undefined && ed.overlay_pos === undefined) { editIssues.push({ kind: 'when_past', title: chatTitle(post) }); continue; }
         // Historial de versiones: si este edit cambia algo, guardar la anterior
         // para que el cliente pueda "volver atrás" ("el anterior estaba mejor").
         if (ed.caption !== undefined || ed.hashtags !== undefined || Number.isInteger(ed.photo_index) || ed.overlay !== undefined || ed.overlay_pos !== undefined) {
@@ -5610,7 +5633,8 @@ app.post('/api/ideas/chat', async (req, res) => {
           // igual se aplica (es gratis); solo se salta la regeneración.
           const redoGatePost = db.prepare('SELECT redo_left, media_type FROM posts WHERE id = ? AND user_id = ?').get(post.id, uid);
           if (redoLeftOf(redoGatePost) !== null && redoLeftOf(redoGatePost) <= 0) {
-            // sin rehaces: no se empuja trabajo de regeneración
+            // sin rehaces: no se empuja trabajo de regeneración (se reporta en el recibo)
+            editIssues.push({ kind: 'redo_empty', title: chatTitle(post) });
           } else {
           const capForImg = String(newCaption);
           const tipoForImg = post.tipo || '';
@@ -5624,6 +5648,7 @@ app.post('/api/ideas/chat', async (req, res) => {
                 // (QA gate 2026-10-26) En bandeja la imagen nueva NO reemplaza a la vigente: queda la vieja y el posteo va a revisión (sin consumir el redo).
                 if (redoGate.qaGate && redoGate.qaGate.outcome === 'bandeja') {
                   try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postIdForRedo); console.log(`[chat-edit] post ${postIdForRedo}: QA gate agotado — se conserva la imagen vigente + needs_review`); } catch (e) {}
+                  editIssues.push({ kind: 'qa_bandeja', title: String(capForImg).split('\n')[0].slice(0, 40) });
                   return false;
                 }
                 // Punto de compromiso (6A): imagen nueva entregada.
@@ -5640,6 +5665,9 @@ app.post('/api/ideas/chat', async (req, res) => {
           })());
           }
         }
+        // (CHAT-TODO) Fecha pasada/inválida con otros cambios: los cambios se aplican igual,
+        // pero la reprogramación fallida queda en el recibo.
+        if (ed.when_dropped) editIssues.push({ kind: 'when_past', title: chatTitle(post) });
         // Reprogramar: "AAAA-MM-DD HH:MM" en hora local del cliente → UTC. Solo futuro.
         if (typeof ed.when === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(ed.when.trim())) {
           const iso = zonedWallToUtc(ed.when.trim(), userTz(uid));
@@ -5738,6 +5766,89 @@ app.post('/api/ideas/chat', async (req, res) => {
       }
       if (n) revertApplied = { ok: true, count: n };
     }
+    // (CHAT-TODO) Aprobar, aprobar todo, rechazar/cancelar y duplicar desde el chat.
+    // Misma semántica que los endpoints de la app (approve / reject / duplicate / Aprobar todo):
+    // aprobar no publica (sale a su hora); rechazar un programado lo cancela; un borrador se borra.
+    let approveApplied = null, approveAllApplied = null, rejectApplied = null, duplicateApplied = null;
+    if (Array.isArray(out.approves) && out.approves.length) {
+      const ok = [], iss = [];
+      for (const ap of out.approves) {
+        if (!(ap.draft >= 1 && ap.draft <= cleanDrafts.length)) continue;
+        const target = cleanDrafts[ap.draft - 1];
+        const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
+        if (!post) continue;
+        if (post.status === 'published') { iss.push({ kind: 'published', title: chatTitle(post) }); continue; }
+        if (post.status === 'cancelled' || post.approval === 'rejected') { iss.push({ kind: 'already_cancelled', title: chatTitle(post) }); continue; }
+        // (CHAT-TODO) Fallido o saliendo: aprobar no lo arregla ni hace falta — se dice, no se finge.
+        if (post.status === 'failed') { iss.push({ kind: 'failed_post', title: chatTitle(post) }); continue; }
+        if (post.status === 'publishing') { iss.push({ kind: 'publishing', title: chatTitle(post) }); continue; }
+        if (post.approval !== 'approved' && post.approval !== 'auto') {
+          db.prepare(`UPDATE posts SET approval = 'approved', approved_at = datetime('now') WHERE id = ?`).run(post.id);
+          try { cmGusto.registrar(db, uid, post, 'aprobada'); } catch (e) {}
+        }
+        ok.push(chatTitle(post));
+      }
+      if (ok.length || iss.length) { approveApplied = { ok, issues: iss }; editIssues.push(...iss); }
+    }
+    if (out.approveAll) {
+      // (v638) TODOS los programados pendientes, de cualquier semana, sin filtro week_key.
+      const rows = db.prepare(`SELECT id, caption FROM posts WHERE user_id = ? AND status = 'scheduled' AND (approval IS NULL OR approval = 'pending')`).all(uid) || [];
+      for (const r of rows) {
+        db.prepare(`UPDATE posts SET approval = 'approved', approved_at = datetime('now') WHERE id = ?`).run(r.id);
+        try { const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(r.id); if (post) cmGusto.registrar(db, uid, post, 'aprobada'); } catch (e) {}
+      }
+      approveAllApplied = rows.length;
+    }
+    if (Array.isArray(out.rejects) && out.rejects.length) {
+      const cancelled = [], deleted = [], iss = [];
+      for (const rj of out.rejects) {
+        if (!(rj.draft >= 1 && rj.draft <= cleanDrafts.length)) continue;
+        const target = cleanDrafts[rj.draft - 1];
+        const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
+        if (!post) continue;
+        if (post.status === 'published') { iss.push({ kind: 'published', title: chatTitle(post) }); continue; }
+        if (post.status === 'cancelled' || post.approval === 'rejected') { iss.push({ kind: 'already_cancelled', title: chatTitle(post) }); continue; }
+        if (post.status === 'scheduled' && ['pending', 'approved'].includes(post.approval || 'pending')) {
+          db.prepare(`UPDATE posts SET approval = 'rejected', status = 'cancelled', error = '' WHERE id = ?`).run(post.id);
+          try { cmGusto.registrar(db, uid, post, 'rechazada'); } catch (e) {}
+          try { recordSignal(uid, post, 'rejected'); } catch (e) {}
+          cancelled.push(chatTitle(post));
+          continue;
+        }
+        if (post.status === 'draft') {
+          // Espejo de DELETE /api/posts/:id: señal + borrado + reconstrucción si la semana queda en cero.
+          try { recordSignal(uid, post, 'rejected'); } catch (e) {}
+          db.prepare('DELETE FROM posts WHERE id = ? AND user_id = ?').run(post.id, uid);
+          try {
+            const tz = userTz(uid);
+            const curWk = mondayKeyOf(tzToday(tz));
+            const dwk = post.week_key || curWk;
+            let left;
+            if (dwk === curWk) left = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND (week_key = '' OR week_key = ?)`).get(uid, curWk).n || 0;
+            else left = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND week_key = ?`).get(uid, dwk).n || 0;
+            if (left === 0) maybeStartRebuild(uid, dwk);
+          } catch (e) {}
+          deleted.push(chatTitle(post));
+          continue;
+        }
+        iss.push({ kind: 'not_rejectable', title: chatTitle(post) });
+      }
+      if (cancelled.length || deleted.length || iss.length) { rejectApplied = { cancelled, deleted, issues: iss }; editIssues.push(...iss); }
+    }
+    if (Array.isArray(out.duplicates) && out.duplicates.length) {
+      const done = [];
+      for (const dp of out.duplicates) {
+        if (!(dp.draft >= 1 && dp.draft <= cleanDrafts.length)) continue;
+        const target = cleanDrafts[dp.draft - 1];
+        const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
+        if (!post) continue;
+        // Espejo de POST /api/posts/:id/duplicate: copia como borrador, sin fecha.
+        const r = db.prepare('INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review) VALUES (?,?,?,?,?,?,?,?)')
+          .run(uid, post.image_path, post.caption, post.hashtags, null, 'draft', post.media_type || 'image', trainingWheelsActive(uid) ? 1 : 0);
+        if (r && r.lastInsertRowid) done.push(chatTitle(post));
+      }
+      if (done.length) duplicateApplied = { ok: done };
+    }
     // MODO OPCIONES: las ideas se devuelven como TEXTO. La imagen se genera
     // una sola vez cuando el usuario crea el posteo (draftFromIdea).
     // (2026-10-02: eliminado el bloque que generaba 3 imágenes acá — tardaba
@@ -5769,6 +5880,21 @@ app.post('/api/ideas/chat', async (req, res) => {
     // ("¡ya está saliendo!") no puede quedar: se corrige el reply acá,
     // después de procesar los bloques y antes de responder.
     out.reply = fixPublishReply(out.reply, publishApplied);
+    // (CHAT-TODO) Recibo de lo ejecutado: va DESPUÉS de fixPublishReply (que puede
+    // reemplazar el reply entero) para que nunca se pierda. El cliente ve en el chat
+    // exactamente lo que pasó, sin que el modelo tenga que adivinarlo.
+    try {
+      const receiptLines = chatReceiptLines({
+        approved: (approveApplied && approveApplied.ok) || [],
+        approvedAll: approveAllApplied,
+        cancelled: (rejectApplied && rejectApplied.cancelled) || [],
+        deleted: (rejectApplied && rejectApplied.deleted) || [],
+        duplicated: (duplicateApplied && duplicateApplied.ok) || [],
+        issues: editIssues,
+      });
+      if (receiptLines.length) out.reply = String(out.reply || '') + '\n' + receiptLines.join('\n');
+    } catch (e) { console.error('[chat] receipt:', e.message); }
+
     // (CHAT-EDITA) Respaldo: si hubo edits para publicados, la respuesta
     // cierra con la línea honesta + ofrecimiento, nunca un "no puedo" seco.
     out.reply = chatPublishedEditBackstop(out.reply, editPublishedSkipped);
@@ -5779,7 +5905,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     // usuario (tope de 3 en paralelo) ya acota los 429s, y el preview reutiliza la imagen
     // (draftFromPreview) así que no hay doble gasto.
     if (out.idea && (out.idea.titulo || out.idea.title)) pregenIdeaImage(uidChat, out.idea);
-    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
+    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, approve: approveApplied, approveAll: approveAllApplied, reject: rejectApplied, duplicate: duplicateApplied, dna: dnaSaved, options: out.options || null, showDrafts, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
   } catch (e) {
     console.error('[chat]', e.message);
     res.status(500).json({ error: 'Uh, me trabé un segundo 😅 Dame otro intento que esta sale' });
@@ -28176,7 +28302,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v656';
+const BUILD_ID = '20261101-v657';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

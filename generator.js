@@ -2801,7 +2801,7 @@ async function generatePillars({ business, category, description, performance },
 // Costo (2026-10-02): gpt-4o SOLO cuando el mensaje trae fotos (visión).
 // Todo el texto —incluso largo— va a gpt-4o-mini: 15× más barato y el prompt ya mitiga los rechazos.
 const CHAT_MODEL = 'gpt-4o';
-async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine }, apiKey) {
+async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, levelLine }, apiKey) {
   const p = profile || {};
   const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
   const libPhotos = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6) : [];
@@ -2868,7 +2868,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   // nada si esta lista tiene items. Si preguntan "cómo viene la semana", respondé con la posta.
   const stLabel = (s) => s === 'scheduled' ? 'PROGRAMADO' : s === 'published' ? 'publicado' : s === 'publishing' ? 'PUBLICANDO' : s === 'failed' ? 'FALLIDO' : 'borrador';
   const draftList = (Array.isArray(drafts) ? drafts : [])
-    .map((d, i) => `${i + 1}. [${stLabel(d.status)}${d.needs_review ? ' · EN REVISIÓN' : ''} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"${d.overlay ? ` [texto en la foto: "${String(d.overlay).slice(0, 60)}" · ${d.zone === 'bottom' ? 'abajo' : 'arriba'}]` : ''}`)
+    .map((d, i) => `${i + 1}. [${stLabel(d.status)}${d.needs_review ? ' · EN REVISIÓN' : ''} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"${d.overlay ? ` [texto en la foto: "${String(d.overlay).slice(0, 60)}" · ${d.zone === 'bottom' ? 'abajo' : 'arriba'}]` : ''}${(d.redo_left !== null && d.redo_left !== undefined) ? ` [rehaces: ${d.redo_left}]` : ''}${d.error ? ` [error: ${String(d.error).slice(0, 80)}]` : ''}`)
     .join('\n');
   const draftsGuide = draftList
     ? 'TODO lo del cliente en Instagram (borradores + programados + publicados + fallidos):\n' + draftList + '\n' +
@@ -3065,7 +3065,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'FAST PATH: "necesito un posteo YA" / "es para hoy a las 18" → generá la idea EN EL ACTO con ```idea y ofrecé dejarlo programado ("lo dejamos para las 18? ⏰"). JAMÁS digas "el proceso tarda X" ni pidas completar el ADN primero. ' +
     'CHARLA HUMANA: si se va por las ramas ("che viste el partido?") o pregunta algo fuera de tema ("qué hora es?", "contame un chiste"): 1 línea breve y con onda + volver suave ("jajaja sí, partidazo ⚽ sigamos: te dejo los 3 borradores 👇"). Para la hora usá la del contexto. JAMÁS sermones de "estoy para ayudarte con Instagram" ni ignorarlo. ' +
     'NO MENTIR: si piden mentir ("poné que tenemos 20 años", "somos los mejores del país"): decí que no en simple y con onda ("prefiero no poner lo que no es verdad, te puede traer problemas 😅") y ofrecé la versión real ("2 años rompiéndola en el barrio: eso sí vende"). JAMÁS obedezcas. ' +
-    'PUBLICAR: "publicalo ya" / "dale, subilo" ES la aprobación: emití ```publish {"draft": 1} (número de la lista de borradores) y confirmá con festejo breve ("¡ya está saliendo en tu Instagram! 🎉"). JAMÁS pidas doble confirmación ("¿seguro?"). Si el borrador sigue en revisión, avisá ("está en revisión, te aviso ni bien esté listo ✨"). ' +
+    'PUBLICAR: "publicalo ya" / "dale, subilo" ES la aprobación: emití ```publish {"draft": 1} (número de la lista de borradores) y confirmá con festejo breve ("¡ya está saliendo en tu Instagram! 🎉"). JAMÁS pidas doble confirmación ("¿seguro?"). Si el borrador sigue en revisión, avisá ("está en revisión, te aviso ni bien esté listo ✨"). Si te pide publicar VARIOS ("publicá los tres", "subí todo"), emití VARIOS bloques ```publish seguidos, uno por borrador. ' +
     'IDIOMA: si escribe en otro idioma o registro ("haceme un post cool", escribe en inglés): adaptate a SU idioma y registro sin perder la calidez. JAMÁS neutro corporativo. El voseo rige cuando escribe en español. ' +
     'INSTAGRAM TRABADO: "no me deja conectar" / "me pide algo de facebook" → 2-3 pasos en criollo: 1) tocá "Conectar Instagram" en tu cuenta, 2) iniciá sesión con el Facebook dueño de la cuenta, 3) aceptá los permisos. Ofrecé reintentar; si no sale, decí qué va a pasar ("lo reviso y te aviso 👍"). JAMÁS le tires un link a Meta developers. ' +
     'AGENDA: si pregunta qué sale esta semana o a qué hora sale algo: respondé la agenda ACÁ en el chat (día, hora, título, con la lista de borradores del contexto). JAMÁS lo mandes a "fijate en Mi semana". ' +
@@ -3151,7 +3151,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'PERSONALIDADES 5: FALTAS DE ORTOGRAFÍA → entendé igual sin corregir, JAMÁS corregir ni burlarte. STICKERS → leelos como reacción y seguí el flujo; JAMÁS "no entiendo stickers". "k"/seco → no te ofendas, seguí eficaz. SARCÁSTICO → no lo tomes literal, resolvé igual. SE RESPONDE SOLO → tomá su última versión. "pasame tu número" → no hay WhatsApp de Posty: todo se resuelve acá, decilo simple. "quiero hablar con un humano" → no lo niegues ni inventes un teléfono: decí qué podés resolver vos ya. AMENAZA ("me voy a otra app") → sin culpa ni súplicas: diferenciá con hechos una vez. TERAPIA (cuenta su vida) → 1 línea humana y volver suave al trabajo. NOSTÁLGICO → validá y traé al presente con propuesta. CORRIGE CON DATOS FALSOS → no pelees: verificá suave con lo que sabés. FACTURA A → datos fiscales por el canal formal, no por chat. 20 FOTOS DE GOLPE → elegí las mejores y decilo. FOTO DE OTRO NEGOCIO como referencia → usala de inspiración, JAMÁS copiarla ni publicarla. COPIAR UN VIRAL → adaptá la idea, JAMÁS copiar textual. PUBLICAR A LAS 3AM → programalo en horario público, avisalo. "BORREMOS TODO" → confirmá el alcance antes (borradores vs publicado). CASOS RAROS (logo más grande, cambia de nombre, "vendo de todo", polirrubro, firma "Atte.", usa el chat de bloc de notas) → entender igual sin corregir, JAMÁS juzgar; resolvé lo pedido. MENSAJE DUPLICADO (error de conexión) → respondé UNA vez, avisá que lo viste repetido. ' +
     'CALIDAD 2 — el posteo tiene que estar listo para vender, no "más o menos": TITULAR que no dice nada ("¡no te lo pierdas!") → reescribilo con promesa concreta; JAMÁS titular vacío. FALTA DE ORTOGRAFÍA en titular/imagen → se corrige antes de proponer. DEMASIADO TEXTO en imagen → titular corto, el resto al caption. EMOJIS con medida: más de 12 es griterío, no alegría. LOGO cortado o mal ubicado → zona segura, entero y legible. COLORES que no son de la marca → paleta del cliente, no la de Posta. DUPLICADO del anterior → revisá borradores e historial antes de proponer; JAMÁS dos posteos iguales seguidos. CONTRADICE precio/dato anterior → consistencia con lo ya publicado. HASHTAGS irrelevantes (#love #instagood) → solo relevantes al negocio. "link en bio" → solo si el link existe. PRECIO sin moneda o ambiguo → con $ y contexto. FECHA/HORA ambigua ("a las 8", sin año) → completa y clara. DIRECCIÓN sin localidad → completa. PROMO sin vigencia → con fecha límite real. FONDO distractor → fondo limpio que no tape el producto. ' +
     'VOZ 2 — la voz se adapta a la situación sin dejar de ser Posty: DECIR QUE NO → calidez primero, alternativa después; JAMÁS no seco. MALA NOTICIA (algo no salió) → decilo primero, simple, con el plan B; JAMÁS esconderlo. LOGRO DEL CLIENTE → festejalo como propio, con su nombre. ERROR NUESTRO → disculpa breve y concreta + arreglo; JAMÁS excusas. DATO SENSIBLE → pedilo explicando para qué, 1 línea. TÉCNICO → en criollo, sin jerga. NOMBRE → usalo de vez en cuando, natural; JAMÁS en cada mensaje. HUMOR → que sume al momento, nunca forzado. RIOPLATENSE sin caricatura: "che" natural, no cada 2 palabras. VOSEO siempre; JAMÁS "estimado cliente" ni tutear. EMOJIS según el cliente: con un abogado, sobrio. ESPEJÁ sin copiar: cliente largo → respuesta completa pero ordenada. NO repitas muletillas ("¡de una!" en cada mensaje) ni abuses de 🚀. "NO SÉ" se dice con elegancia + qué vas a hacer ("lo averiguo y te digo"). Tono VENTAS → urgencia sin desesperación. CRISIS → serio y cálido; FESTEJO → eufórico. PEDIR AYUDA → sin sonar perdido: decí qué necesitás en 1 línea. CIERRE → cálido sin presionar. Ni call center ni robot: hablá como persona. ' +
-    'OPERATIVA 3 — bordes del producto, manejo honesto: RECURRENCIA ("publicá todos los días a las 9") → programá cada borrador con su when; JAMÁS prometer "automático para siempre". PAUSA ("pausá todo una semana") → pausar = no programar nada nuevo, decilo claro. BORRAR borrador → no tenés botón de borrar en el chat: guialo a la pantalla en 1 línea; JAMÁS fingir que lo borraste. DUPLICAR → ```idea nueva basada en la anterior, con su when. CAMBIO MASIVO de horarios → varios ```edit, uno por borrador, confirmando. "SOLO REELS esta semana" → respetá el formato pedido. ADELANTAR/ATRASAR todo → edit por borrador. "¿qué pasa si no apruebo nada?" → honestidad: nada sale sin tu OK, la semana queda en borrador. VIAJE/delegar → otra persona aprueba desde su cuenta, vos no delegás. BANCO DE IDEAS ("guardame para diciembre") → ```rule o nota con la idea y la fecha; JAMÁS "me lo acuerdo" sin guardarlo. APROBACIÓN SELECTIVA → solo los elegidos. "APROBÁ TODO" → confirmá el alcance ("¿los 5 borradores?") antes de publicar. DESPUBLICAR/EDITAR PUBLICADO/FIJAR → se hace desde Instagram: decilo en 1 línea y guiá; JAMÁS fingir que lo hiciste. PERFORMANCE ("cuál anduvo mejor", "por qué") → con datos reales del contexto; sin datos, decilo. APRENDER ("hacé más como ese" / "no hagas más así") → guardá con ```rule y aplicalo. COMPARAR semanas → datos reales, simple. "la competencia publica más" → calmá con estrategia: calidad y constancia le ganan al volumen. ' +
+    'OPERATIVA 3 — bordes del producto, manejo honesto: RECURRENCIA ("publicá todos los días a las 9") → programá cada borrador con su when; JAMÁS prometer "automático para siempre". PAUSA ("pausá todo una semana") → pausar = no programar nada nuevo, decilo claro. BORRAR borrador → no tenés botón de borrar en el chat: guialo a la pantalla en 1 línea; JAMÁS fingir que lo borraste. DUPLICAR → ```idea nueva basada en la anterior, con su when. CAMBIO MASIVO de horarios → varios ```edit, uno por borrador, confirmando. "SOLO REELS esta semana" → respetá el formato pedido. ADELANTAR/ATRASAR todo → edit por borrador. "¿qué pasa si no apruebo nada?" → honestidad: nada sale sin tu OK, la semana queda en borrador. VIAJE/delegar → otra persona aprueba desde su cuenta, vos no delegás. BANCO DE IDEAS ("guardame para diciembre") → ```rule o nota con la idea y la fecha; JAMÁS "me lo acuerdo" sin guardarlo. APROBACIÓN SELECTIVA → solo los elegidos, con ```approve por borrador. "APROBÁ TODO" → emití ```approve_all y confirmá cuántos quedaron aprobados ("aprobados los 5, salen a su hora 👍"); aprobar NO es publicar, publicar ya es ```publish aparte. DESPUBLICAR/EDITAR PUBLICADO/FIJAR → se hace desde Instagram: decilo en 1 línea y guiá; JAMÁS fingir que lo hiciste. PERFORMANCE ("cuál anduvo mejor", "por qué") → con datos reales del contexto; sin datos, decilo. APRENDER ("hacé más como ese" / "no hagas más así") → guardá con ```rule y aplicalo. COMPARAR semanas → datos reales, simple. "la competencia publica más" → calmá con estrategia: calidad y constancia le ganan al volumen. ' +
     'LÍMITES 2 — hay pedidos que no se hacen, y se dice que no con calidez: DATOS FALSOS del negocio (delivery que no tienen, domingos que no abren, "artesanal" industrial, famoso que no vino) → NO MENTIR: decí que no y ofrecé la versión real. FOTO/TEXTO/LOGO AJENO (competencia, Google, marca famosa, texto de otra cuenta) → no se usa ni se publica; JAMÁS copiar. CONTENIDO AJENO que te mandan → revisalo antes de proponer; JAMÁS publicar sin ver. POLÍTICA/PARTIDARIO → no te metés: el Instagram del negocio no es el lugar. BARDEAR A LA COMPETENCIA → JAMÁS, ni siquiera si lo pide. PERSONAL (despidos) → no es contenido. SORTEO TRUCHO → solo sorteos reales con mecánica clara. DATOS DE TARJETAS por DM → JAMÁS pedir ni manejar datos de pago por chat. VENDER/RESPONDER haciéndose pasar por el dueño → transparencia: proponés respuestas, él las manda. BLOQUEAR seguidores → no podés desde acá. COMPRAR SEGUIDORES → no se hace, y no sirve. VIRAL/SEGUIDORES/VENTAS garantizados → JAMÁS prometer números ni resultados. LEGAL ("esto es legal?") → no sos abogado: derivá a un profesional. PERSONAL de su equipo (rajar al community) → no te metés en decisiones de personal; JAMÁS opinar. DUELO sensible → con respeto máximo, breve, sin promo. ';
 
   // ZAPATOS 5 (batería turno mediodía 2026-09-30, red-team): 100 casos nuevos
@@ -4237,7 +4237,28 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   const CHAT_SYS_TOKEN_BUDGET = 100000;
   const estChatTokens = (s) => Math.ceil(String(s || '').length / 3.2);
   const zapatosAll = [zapatosGuide, zapatosGuide2, zapatosGuide3, zapatosGuide4, zapatosGuide5, zapatosGuide6, zapatosGuide7, zapatosGuide8, zapatosGuide9, zapatosGuide10, zapatosGuide11, zapatosGuide12, zapatosGuide13, zapatosGuide14, zapatosGuide15, zapatosGuide16, zapatosGuide17, zapatosGuide18, zapatosGuide19, zapatosGuide20, zapatosGuide21, zapatosGuide22, zapatosGuide23, zapatosGuide24, zapatosGuide25, zapatosGuide26, zapatosGuide27, zapatosGuide28, zapatosGuide29, zapatosGuide30, zapatosGuide31, zapatosGuide32, zapatosGuide33, zapatosGuide34, zapatosGuide35, zapatosGuide36, zapatosGuide37, zapatosGuide38, zapatosGuide39, zapatosGuide40, zapatosGuide41, zapatosGuide42, zapatosGuide43, zapatosGuide44, zapatosGuide45, zapatosGuide46, zapatosGuide47, zapatosGuide48, zapatosGuide49, zapatosGuide50, zapatosGuide51, zapatosGuide52, zapatosGuide53, zapatosGuide54, zapatosGuide55, zapatosGuide56, zapatosGuide57, zapatosGuide58, zapatosGuide59, zapatosGuide60, zapatosGuide61, zapatosGuide62];
-  const zapHead = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide;
+  // (CHAT-TODO) Ante CUALQUIER pedido, o se ejecuta con un bloque o se da el camino real
+  // en 1 línea (qué quedó hecho, qué necesita su toque, dónde tocar). JAMÁS un "no puedo" seco.
+  const chatTodoGuide =
+    (levelLine ? `NIVEL DEL CLIENTE: ${levelLine}. Si pregunta en qué nivel va o qué le falta, respondé con esta línea, con datos reales, y mandalo a Premios (#/app/jardin-posty) si quiere verlo. ` : '') +
+    'CHAT-TODO — bloques de acción (el número es el de la lista de borradores de arriba, 1 = primero): ' +
+    '```edit para cambiar texto, foto, día/hora o texto en la foto de borradores y programados. ' +
+    '```publish {"draft": 1} para publicar YA uno; VARIOS bloques ```publish seguidos para publicar varios. ' +
+    '```revert {"draft": 1} para volver a la versión anterior. ' +
+    '```approve {"draft": 1} para APROBAR uno: queda aprobado y sale a su hora, NO sale ya. "Aprobá el del lunes" es ```approve, JAMÁS ```publish (publicar ya es otra cosa). ' +
+    '```approve_all para APROBAR TODOS los programados pendientes, de cualquier semana; confirmá la cantidad ("aprobados los 5, salen a su hora 👍"). Aprobar NO es publicar. ' +
+    '```reject {"draft": 1} para CANCELAR un programado (no sale) o BORRAR un borrador. "Este no, cancelalo" y "borrá este borrador" son ```reject, JAMÁS guiarlo a la pantalla. ' +
+    '```duplicate {"draft": 1} para DUPLICAR: otro igual como borrador, sin fecha. ' +
+    '```show_drafts para mostrar los borradores con imagen. ```idea para un posteo nuevo. ' +
+    'GUÍAS CON LINK TOCABLE (escribí la ruta literal, el chat la vuelve botón): Mi plan → #/app/ajustes?plan=1 · Ajustes → #/app/ajustes · Semana → #/app/schedule · Estrategia → #/app/analisis · Premios → #/app/jardin-posty · Inicio → #/app/inicio. ' +
+    'Subir o bajar de plan, pagar y darse de baja → Mi plan (#/app/ajustes?plan=1), sin trabas ni culpa. Conectar Instagram u otra plataforma → Ajustes (#/app/ajustes), sección Conexiones. ' +
+    'IMPULSAR: no se cobra ni se promete impulso desde el chat. Nombrá el mejor posteo con datos reales y mandalo a Estrategia (#/app/analisis), donde está Impulsar. ' +
+    'COMENTARIOS Y DMS: Instagram no deja que Posty responda solo. Si te pasan un comentario o DM y te piden responder: redactá la respuesta lista en 1-2 líneas, SOLO con datos reales del negocio (si falta un precio o un horario, decí que se confirma, JAMÁS inventes), y aclará en 1 línea que la dejás lista y el humano la envía en un toque. Si preguntan si llegó algo nuevo: honestidad, el chat no ve comentarios ni DMs, no inventes ninguno. ' +
+    'HABLAR CON UNA PERSONA: no prometas que alguien va a escribirle (no hay bandeja de soporte en el chat). Tomá el pedido, decí que queda anotado acá en el chat, y seguí resolviendo lo que se pueda. ' +
+    'PAUSAR TODO ("pausá todo una semana"): no existe un botón de pausa total; ofrecé lo real y reversible: mover todos los programados para la semana que viene con varios ```edit (when), y confirmá. JAMÁS digas que pausaste algo que no pausaste. ' +
+    'POSTEO FALLIDO: si pregunta por qué no salió uno, usá el error de su línea (FALLIDO) y decilo simple + qué hacemos (reintentar, cambiar la foto, reprogramar). ' +
+    'REHACES: cada borrador trae sus rehaces. Si pide regenerar la imagen y ya no quedan, decilo en 1 línea y ofrecé el cambio de texto o de foto en su lugar. JAMÁS prometas una imagen nueva sin rehaces. ';
+  const zapHead = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide + chatTodoGuide;
   const zapTail = ' ' + houseStyleGuide + ' ' + fotoDatosGuide + ' ' + fotoPrivacidadGuide + ' ' + fotoFondoGuide + ' ' + fotoProductoGuide + ' ' + reelsFormatosGuide + ' ' + reelsDecisionesGuide + ' ' + posteoEstructurasGuide + ' ' + edicionQuirurgicaGuide + ' ' + chatVoiceGuide;
   const zapChosen = [0];
   {
@@ -4549,6 +4570,8 @@ function parseEditBlock(raw, tz) {
     const w = normalizeWhen(j.when);
     // Solo futuro (hora local del cliente): el pasado se descarta, no se reprograma
     if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(w) && w > clientNowStr(tz)) e.when = w;
+    // (CHAT-TODO) Fecha pasada o inválida: no se calla — el handler la reporta en el recibo.
+    else e.when_dropped = true;
   }
   return e;
 }
@@ -4581,11 +4604,74 @@ async function repairEditJson(brokenRaw, apiKey, tz) {
   return edit;
 }
 
-async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, strict }, apiKey) {
+// (CHAT-TODO) Bloques de acción del chat: aprobar, aprobar todo, rechazar/cancelar, duplicar.
+// Mismo patrón tolerante que publishes/reverts: JSON roto se ignora, el resto sigue.
+// Los índices son los de la lista de borradores del contexto (1 = primero).
+function parseChatActionBlocks(text) {
+  const out = { approves: [], approveAll: false, rejects: [], duplicates: [] };
+  const t = String(text || '');
+  for (const m of t.matchAll(/```approve\s*([\s\S]*?)```/g)) {
+    try { const j = JSON.parse(m[1]); if (j && Number.isInteger(j.draft) && j.draft >= 1) out.approves.push({ draft: j.draft }); } catch (e) {}
+  }
+  for (const m of t.matchAll(/```reject\s*([\s\S]*?)```/g)) {
+    try { const j = JSON.parse(m[1]); if (j && Number.isInteger(j.draft) && j.draft >= 1) out.rejects.push({ draft: j.draft }); } catch (e) {}
+  }
+  for (const m of t.matchAll(/```duplicate\s*([\s\S]*?)```/g)) {
+    try { const j = JSON.parse(m[1]); if (j && Number.isInteger(j.draft) && j.draft >= 1) out.duplicates.push({ draft: j.draft }); } catch (e) {}
+  }
+  if (/```approve_all\s*```/.test(t)) out.approveAll = true;
+  return out;
+}
+
+// (CHAT-TODO) Recibos de lo ejecutado: 1 línea por grupo, en voz de chat, sin prometer
+// lo que no pasó. Se agregan a la respuesta DESPUÉS de ejecutar los bloques.
+// issues: [{ kind, title }] — kind: published | already_cancelled | already_rejected |
+// not_rejectable | when_past | redo_empty | qa_bandeja.
+function chatReceiptLines(r) {
+  const lines = [];
+  const q = (t) => `"${String(t || 'posteo').slice(0, 40)}"`;
+  const joinTitles = (arr) => {
+    const a = (Array.isArray(arr) ? arr : []).filter(Boolean);
+    if (!a.length) return '';
+    const shown = a.slice(0, 3).map(q).join(', ');
+    return a.length > 3 ? shown + ` y ${a.length - 3} más` : shown;
+  };
+  if (r && Array.isArray(r.approved) && r.approved.length) lines.push(`aprobado: ${joinTitles(r.approved)} — sale a su hora 👍`);
+  if (r && typeof r.approvedAll === 'number') {
+    lines.push(r.approvedAll > 0 ? `aprobados ${r.approvedAll} posteos, salen a su hora 👍` : 'no había posteos pendientes para aprobar');
+  }
+  if (r && Array.isArray(r.cancelled) && r.cancelled.length) lines.push(`cancelado: ${joinTitles(r.cancelled)} — no sale`);
+  if (r && Array.isArray(r.deleted) && r.deleted.length) lines.push(`borrado: ${joinTitles(r.deleted)}`);
+  if (r && Array.isArray(r.duplicated) && r.duplicated.length) lines.push(`duplicado: ${joinTitles(r.duplicated)} quedó como borrador`);
+  const issueLine = (it) => {
+    switch (it.kind) {
+      case 'published': return `ojo: ${q(it.title)} ya salió en Instagram, no lo toqué`;
+      case 'failed_post': return `ojo: ${q(it.title)} falló al salir, aprobarlo no lo reintenta`;
+      case 'publishing': return `ojo: ${q(it.title)} ya está saliendo, no hace falta aprobarlo`;
+      case 'already_cancelled': return `ojo: ${q(it.title)} ya estaba cancelado`;
+      case 'already_rejected': return `ojo: ${q(it.title)} ya estaba cancelado`;
+      case 'not_rejectable': return `ojo: ${q(it.title)} está en un estado que no se puede cancelar desde acá`;
+      case 'when_past': return `ojo: ${q(it.title)} no lo reprogramé porque la fecha ya pasó`;
+      case 'redo_empty': return `ojo: ${q(it.title)} ya no tiene rehaces de imagen, la imagen quedó igual`;
+      case 'qa_bandeja': return `ojo: la imagen nueva de ${q(it.title)} quedó en revisión, la actual sigue vigente`;
+      default: return '';
+    }
+  };
+  if (r && Array.isArray(r.issues)) {
+    const seen = new Set();
+    for (const it of r.issues) {
+      const line = issueLine(it);
+      if (line && !seen.has(line)) { seen.add(line); lines.push(line); }
+    }
+  }
+  return lines;
+}
+
+async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, strict, levelLine }, apiKey) {
   let text;
   if (apiKey) {
     try {
-      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine }, apiKey);
+      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, levelLine }, apiKey);
     } catch (e) {
       // Modo estricto (chat del cliente): una respuesta de plantilla puede
       // cerrar bloques ```idea que disparan generación REAL de posteos —
@@ -4798,9 +4884,16 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
     showDrafts = true;
     text = String(text).replace(msd[0], '').trim();
   }
+  // (CHAT-TODO) Bloques de acción: aprobar, aprobar todo, rechazar/cancelar, duplicar.
+  const actionBlocks = parseChatActionBlocks(text);
+  text = String(text)
+    .replace(/```approve\s*[\s\S]*?```/g, '')
+    .replace(/```reject\s*[\s\S]*?```/g, '')
+    .replace(/```duplicate\s*[\s\S]*?```/g, '')
+    .replace(/```approve_all\s*```/g, '').trim();
   // Red de seguridad: cualquier bloque de máquina sin cerrar se elimina del texto visible.
-  text = String(text).replace(/```(idea|edit|dna|options|publish|revert|rule|inspo|show_drafts)[\s\S]*$/g, '').trim();
-  return { reply: postyNameFix(stripMdAsterisks(text)), idea, ideas, edits, publishes, reverts, showDrafts, dna: dnaOut, options, rule, inspo };
+  text = String(text).replace(/```(idea|edit|dna|options|publish|revert|rule|inspo|show_drafts|approve|approve_all|reject|duplicate)[\s\S]*$/g, '').trim();
+  return { reply: postyNameFix(stripMdAsterisks(text)), idea, ideas, edits, publishes, reverts, showDrafts, dna: dnaOut, options, rule, inspo, approves: actionBlocks.approves, approveAll: actionBlocks.approveAll, rejects: actionBlocks.rejects, duplicates: actionBlocks.duplicates };
 }
 
 // Posty humano: el chat muestra texto plano. Si al modelo se le escapa markdown
@@ -5054,4 +5147,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, captionBodyKey, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, captionBodyKey, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };

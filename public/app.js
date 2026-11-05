@@ -9330,12 +9330,31 @@ function chatCelebrateScan(messages) {
 // HTML ya escapado ni se escapa el <a> generado. Los marcadores internos
 // ([celebrate], [logo-candidate:...]) ya se stripearon antes de llegar acá.
 const CHAT_URL_RE = /(https?:\/\/[^\s<>"'`]+)/g;
+// (CHAT-TODO) Rutas internas de la app: el modelo las escribe literales y el chat
+// las vuelve botones (navegación interna, sin pestaña nueva).
+const CHAT_APP_LINK_RE = /(#\/app\/[^\s<>"'`]+)/g;
 function linkifyEsc(text) {
+  // Puntuación de fin de frase fuera del link: "https://x.com/p/1." linkea sin el punto.
+  const stripTrail = (u) => {
+    const m = u.match(/^(.*?)([.,;:!?]+)$/);
+    return m ? [m[1], m[2]] : [u, ''];
+  };
+  // Paréntesis de cierre sin abrir (típico: "Mi plan (#/app/ajustes?plan=1)"): fuera del link.
+  const stripParen = (u, trail) => {
+    if ((u.endsWith(')') || u.endsWith(']')) && !u.includes('(') && !u.includes('[')) return [u.slice(0, -1), u.slice(-1) + trail];
+    return [u, trail];
+  };
   return String(text || '').split(CHAT_URL_RE).map((p, i) => {
-    if (i % 2 !== 1) return esc(p);
-    // Puntuación de fin de frase fuera del link: "https://x.com/p/1." linkea sin el punto.
-    const m = p.match(/^(.*?)([.,;:!?]+)$/);
-    const url = m ? m[1] : p, trail = m ? m[2] : '';
+    if (i % 2 !== 1) {
+      // Tramos sin URL externa: linkificar rutas internas de la app.
+      return String(p).split(CHAT_APP_LINK_RE).map((q, j) => {
+        if (j % 2 !== 1) return esc(q);
+        let [url, trail] = stripTrail(q);
+        [url, trail] = stripParen(url, trail);
+        return `<a href="${esc(url)}">${esc(url)}</a>${esc(trail)}`;
+      }).join('');
+    }
+    const [url, trail] = stripTrail(p);
     return `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>${esc(trail)}`;
   }).join('');
 }
