@@ -1,7 +1,8 @@
 /* ===== CAPA DE JUEGO + SCROLL — homes (ES/EN) · 2026-10-25 =====
-   El viaje de niveles, los botones vivos, la luz que viaja con la lectura,
-   las secciones que Posty trae y la semana de ejemplo que se arma — y se
-   publica — mientras el visitante baja. Sin scroll-jacking: todo acompaña.
+   El viaje de niveles, los botones vivos, [luz de progreso RETIRADA
+   2026-11-04 · SACAR-BARRITA-COLORES], las secciones que Posty trae
+   y la semana de ejemplo que se arma — y se publica — mientras el
+   visitante baja. Sin scroll-jacking: todo acompaña.
    Dorado de la website: #DFA856 / #DBA453 / #D6A463 · celeste #2793C8. */
 :root{--gj-gold1:#DFA856;--gj-gold2:#DBA453;--gj-gold3:#D6A463;--gj-cel:#2793C8;--gj-navy:#0A1E33}
 
@@ -14,12 +15,7 @@
   50%{box-shadow:0 8px 24px rgba(39,147,200,.30),0 0 0 6px rgba(223,168,86,.32),0 0 22px 2px rgba(219,164,83,.35)}
 }
 
-/* ---------- la luz dorada viaja con la lectura ---------- */
-.gj-light{position:fixed;top:0;left:0;right:0;height:3px;z-index:2000;pointer-events:none;opacity:0;transition:opacity .5s ease}
-html.gj-scroll .gj-light{opacity:1}
-.gj-light i{display:block;height:100%;transform-origin:0 50%;transform:scaleX(0);
-  background:linear-gradient(90deg,var(--gj-cel),var(--gj-gold1) 55%,var(--gj-gold2));
-  box-shadow:0 1px 10px rgba(219,164,83,.55);will-change:transform}
+/* ---------- [RETIRADA 2026-11-04 · SACAR-BARRITA-COLORES: .gj-light ya no existe] ---------- */
 
 /* ---------- las secciones entran como si Posty las trajera ---------- */
 html.gj-armed [data-gj-rv]{opacity:0;transform:translateY(16px)}
@@ -148,7 +144,6 @@ html.gj-armed .gj-cin.on,html.gj-armed .gj-cout.on{opacity:1;transform:none}
 @media (prefers-reduced-motion: reduce){
   .nav .btn-primary,.hero .btn-primary,.gj-levels .btn-primary{animation:none}
   .btn-primary{transition:none}
-  .gj-light{display:none}
   html.gj-armed [data-gj-rv],html.gj-armed .gj-piece{opacity:1!important;transform:none!important;transition:none!important}
   .gj-pub{animation:none!important}
   .gj-pub.on{opacity:1;transform:scale(1) rotate(-3deg)}

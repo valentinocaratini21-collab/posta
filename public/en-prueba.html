@@ -826,12 +826,8 @@ body.sfb-on{padding-bottom:88px}
 #v-results .phone::after{content:"";position:absolute;top:-24px;right:-12px;width:54px;height:54px;z-index:4;
   background:url(/bambooty-placa.webp) center/contain no-repeat;filter:drop-shadow(0 6px 12px rgba(185,126,28,.35))}
 @media(max-width:560px){#v-results .phone::after{width:44px;height:44px;right:-4px;top:-20px}}
-/* --- capa de scroll: la luz viaja con la lectura; las secciones y los
-   posteos del resultado entran como si Posty los trajera --- */
-.gj-light{position:fixed;top:0;left:0;right:0;height:3px;z-index:2000;pointer-events:none;opacity:0;transition:opacity .5s ease}
-html.gj-scroll .gj-light{opacity:1}
-.gj-light i{display:block;height:100%;transform-origin:0 50%;transform:scaleX(0);
-  background:linear-gradient(90deg,#2793C8,#DFA856 55%,#DBA453);box-shadow:0 1px 10px rgba(219,164,83,.55);will-change:transform}
+/* --- capa de scroll [luz de progreso RETIRADA 2026-11-04 · SACAR-BARRITA-COLORES];
+   las secciones y los posteos del resultado entran como si Posty los trajera --- */
 html.gj-armed [data-gj-rv]{opacity:0;transform:translateY(16px)}
 html.gj-armed [data-gj-rv].gj-in{opacity:1;transform:none;transition:opacity .7s ease,transform .7s cubic-bezier(.22,.8,.32,1)}
 #rWeek .day{animation:gjDayIn .5s cubic-bezier(.22,.8,.32,1) both}
@@ -847,7 +843,6 @@ html.gj-armed [data-gj-rv].gj-in{opacity:1;transform:none;transition:opacity .7s
  .res-hero.gj-glow{animation:none}
  .gj-jseg i{transition:none}
  .btn-primary{transition:none}
- .gj-light{display:none}
  html.gj-armed [data-gj-rv]{opacity:1!important;transform:none!important;transition:none!important}
  #rWeek .day{animation:none}
  .gj-pub{animation:none!important}
@@ -4999,28 +4994,10 @@ fetch('/api/campaign/current?lang=en').then(function(r){return r.json()}).then(f
   }
   evaluate();
 
-  /* ===== capa de scroll: la luz viaja, las secciones entran, y un posteo
+  /* ===== capa de scroll [luz de progreso RETIRADA 2026-11-04 ·
+     SACAR-BARRITA-COLORES]: las secciones entran, y un posteo
      de ejemplo se publica solo (demo, sobre el material de ejemplo) ===== */
   var RM2 = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  if (!RM2) {
-    var light = document.createElement('div');
-    light.className = 'gj-light'; light.setAttribute('aria-hidden', 'true'); light.innerHTML = '<i></i>';
-    document.documentElement.appendChild(light);
-    var bar = light.firstChild, tk = false;
-    var onSc = function () {
-      if (tk) return; tk = true;
-      requestAnimationFrame(function () {
-        tk = false;
-        var h = document.documentElement, max = h.scrollHeight - h.clientHeight;
-        var p = max > 0 ? Math.min(1, (window.scrollY || h.scrollTop) / max) : 0;
-        bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
-        h.classList.toggle('gj-scroll', p > 0.005);
-      });
-    };
-    addEventListener('scroll', onSc, { passive: true });
-    addEventListener('resize', onSc, { passive: true });
-    onSc();
-  }
   if ('IntersectionObserver' in window && !RM2) {
     document.documentElement.classList.add('gj-armed');
     var rio = new IntersectionObserver(function (es) {

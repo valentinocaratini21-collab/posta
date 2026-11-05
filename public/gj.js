@@ -1,6 +1,7 @@
 /* ===== CAPA DE JUEGO + SCROLL — homes · 2026-10-25 =====
    1) El viaje de niveles crece al entrar en pantalla.
-   2) La luz dorada viaja con la lectura (progreso real de scroll).
+   2) [RETIRADA 2026-11-04 · SACAR-BARRITA-COLORES: la luz de progreso de
+      scroll se quitó por completo; no vuelve sin orden de Valentino.]
    3) Las secciones entran suaves cuando llegan al viewport.
    4) La semana de ejemplo se arma posteo a posteo y UN posteo se publica
       solo (demo del piloto automático, sobre material de ejemplo rotulado).
@@ -13,30 +14,9 @@
   var EN = (document.documentElement.lang || '').indexOf('en') === 0;
   var armed = new WeakSet();
 
-  /* ---------- 2) la luz que viaja con la lectura ---------- */
-  if (!RM) {
-    var light = document.createElement('div');
-    light.className = 'gj-light';
-    light.setAttribute('aria-hidden', 'true');
-    light.innerHTML = '<i></i>';
-    document.documentElement.appendChild(light);
-    var bar = light.firstChild, ticking = false;
-    var onScroll = function () {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(function () {
-        ticking = false;
-        var h = document.documentElement;
-        var max = h.scrollHeight - h.clientHeight;
-        var p = max > 0 ? Math.min(1, (window.scrollY || h.scrollTop) / max) : 0;
-        bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
-        document.documentElement.classList.toggle('gj-scroll', p > 0.005);
-      });
-    };
-    addEventListener('scroll', onScroll, { passive: true });
-    addEventListener('resize', onScroll, { passive: true });
-    onScroll();
-  }
+  /* ---------- 2) RETIRADA 2026-11-04 · SACAR-BARRITA-COLORES ----------
+     La luz de progreso de scroll (.gj-light) se quitó por completo:
+     el bloque que la creaba y su listener ya no existen. ---------- */
 
   /* ---------- observador único de reveals ---------- */
   var revealIO = null;
