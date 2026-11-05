@@ -1457,7 +1457,9 @@ async function sendWeeklyReminders(db) {
 //  - Caso B (semana vacía): sin borradores y sin nada programado → email honesto
 //    que NO promete posteos inexistentes, invita a armarlos en 2 minutos.
 // Topes anti-spam: sin nudge en los últimos 3 días, respeta email_opt_out,
-// solo trial o plan activo, cuenta con más de 1 día.
+// solo trial VIGENTE o plan activo, nunca cuentas frenadas (publishing_stopped),
+// cuenta con más de 1 día. (LIMPIEZA: trials vencidos y cuentas frenadas quedan
+// fuera del barrido — gap real: Mili recibió el nudge con el trial vencido.)
 async function sendContentNudges(db) {
   const { emailConfigured, draftsNudgeEmail, emptyWeekEmail } = require('./email');
   if (!emailConfigured()) {
@@ -1466,11 +1468,12 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
   }
   const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const users = db.prepare(`
-    SELECT u.id, u.email, u.lang, p.business_name FROM users u
+    SELECT u.id, u.email, u.lang, u.plan_status, u.trial_ends_at, u.trial_extended_until, u.created_at, p.business_name FROM users u
     LEFT JOIN profiles p ON p.user_id = u.id
     WHERE u.email IS NOT NULL AND u.email != ''
       AND COALESCE(u.is_guest, 0) = 0
       AND COALESCE(u.email_opt_out, 0) = 0
+      AND COALESCE(u.publishing_stopped, 0) = 0
       AND COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
       AND datetime(u.created_at) < datetime('now', '-1 day')
       AND NOT EXISTS (
@@ -1481,6 +1484,18 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
   let sent = 0, skipped = 0;
   for (const u of users) {
     try {
+      // LIMPIEZA: un trial vencido NO recibe el nudge. Misma matemática que
+      // la guarda de publicación (trialExpiryEffectiveEnd, definida más abajo
+      // en este archivo): fin efectivo = extensión vigente si la hay, si no
+      // el menor entre trial_ends_at y created_at + 3 días. Sin dato (fin 0)
+      // NO se excluye (fail-open, igual que trialActiveForNudge en
+      // first-publish-nudge.js): el nudge no publica nada, así que no se
+      // copia el fail-closed de la guarda de publicación. El plan NULL se
+      // trata como trial, igual que el filtro SQL de arriba.
+      if ((u.plan_status || 'trial') === 'trial') {
+        const end = trialExpiryEffectiveEnd(u, Date.now());
+        if (end > 0 && end <= Date.now()) { skipped++; continue; }
+      }
       // ¿Tiene algo programado o publicado en los últimos 7 días? → está al día, no molestar
       const live = db.prepare(`
         SELECT COUNT(*) AS c FROM posts

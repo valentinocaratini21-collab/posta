@@ -15,6 +15,11 @@
 //  - Tirita Lun–Lun con punto por día.
 //  - La semana es Lun–Lun = 8 posteos. Si llegan menos de 8 (semana parcial),
 //    el conteo, el título y la tirita usan el número real: la verdad sobre el copy.
+//  - MODELO POR DÍA (v591 posteo-del-día; LIMPIEZA): la semana se presenta
+//    día por día — una sección por día con su posteo — no como un lote de
+//    tarjetas. El título con el nombre del negocio, la cajita amarilla de
+//    autopiloto y el botón "Aprobar semana" se mantienen; lo que cambia es
+//    la presentación de los posteos: agrupados por día, no en lote.
 //  - La muestra incluía un div "Asunto: ..." como artefacto del mock: en el
 //    email real el asunto va en el campo subject, no en el cuerpo (no se incluye).
 //  - EN: traducción directa del copy aprobado (misma práctica que la paridad v373);
@@ -114,6 +119,7 @@ const CSS = `
   .open { font-size: 13px; color: #2793C8; font-weight: 600; margin: 10px 0 0; }
   .strip-title { text-align: center; font-size: 13px; color: #5b7186; margin: 22px 0 0; }
   .strip { display: flex; background: #fff; border: 1px solid #dbe7ef; border-radius: 16px; margin: 10px 20px 0; padding: 12px 8px; }
+  .dayhead { font-size: 13px; font-weight: 800; letter-spacing: 1px; color: #2793C8; margin: 26px 20px 0; text-transform: uppercase; }
   .day { flex: 1; text-align: center; font-size: 11px; color: #5b7186; }
   .day strong { display: block; font-size: 17px; color: #0A1E33; }
   .day i { font-style: normal; color: #2793C8; font-size: 14px; }
@@ -163,7 +169,28 @@ function buildWeekEmailV4(opts) {
     const f = p.f || {};
     return `<div class="day">${esc(f.dow || '')}<strong>${esc(f.dom || '')}</strong><i>●</i></div>`;
   }).join('');
-  const cards = posts.map((p) => {
+  // Secciones por día: cada día su encabezado y su(s) posteo(s). Los
+  // posteos sin fecha parseable van al final bajo "Sin fecha" / "Unscheduled".
+  // El copy de cada tarjeta NO cambia: solo la agrupación (marco por día).
+  const dayGroups = [];
+  const dayIndex = new Map();
+  for (const p of posts) {
+    const f = p.f || {};
+    const key = f.dow ? `${f.dow}|${f.dom}|${f.mon}` : 'sin-fecha';
+    if (!dayIndex.has(key)) {
+      dayIndex.set(key, dayGroups.length);
+      dayGroups.push({ key, f, items: [] });
+    }
+    dayGroups[dayIndex.get(key)].items.push(p);
+  }
+  const dayHead = (g) => {
+    if (g.key === 'sin-fecha') return en ? 'Unscheduled' : 'Sin fecha';
+    const f = g.f || {};
+    return en
+      ? `${esc(f.dow || '')} · ${esc(f.mon || '')} ${esc(f.dom || '')}`
+      : `${esc(f.dow || '')} · ${esc(f.dom || '')} ${esc(f.mon || '')}`;
+  };
+  const cardOf = (p) => {
     const f = p.f || {};
     const when = en
       ? `${esc(f.dow || '')} ${esc(f.mon || '')} ${esc(f.dom || '')} · ${esc(f.hm || '')}`
@@ -179,6 +206,9 @@ function buildWeekEmailV4(opts) {
       </div>
     </div>
   </a>`;
+  };
+  const sections = dayGroups.map((g) => {
+    return `<div class="dayhead">${dayHead(g)}</div>\n  ` + g.items.map(cardOf).join('\n  ');
   }).join('\n  ');
   const closingQ = en ? 'Like the week as-is?' : '¿Te gusta la semana así?';
   const closingBtn = en ? `Approve all ${n} posts` : `Aprobar los ${n} posteos`;
@@ -221,7 +251,7 @@ function buildWeekEmailV4(opts) {
     ${strip}
   </div>
 
-  ${cards}
+  ${sections}
 
   <div class="closing">
     <p>${closingQ}</p>
