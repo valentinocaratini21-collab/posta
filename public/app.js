@@ -10714,6 +10714,11 @@ function renderChatIdeaOptions(ideas) {
 
 // Intercambio completo con /api/ideas/chat. `extra` agrega campos al JSON
 // (ej: { audio: "data:audio/webm;base64,..." } para notas de voz).
+// (CHAT-COHERENCIA) Serie de intercambios: sin esto, dos mensajes rápidos
+// corrían en paralelo y las respuestas podían mostrarse en orden de llegada,
+// no de envío. La burbuja del usuario sale al instante; solo la ida y vuelta
+// a la IA se encola.
+let CHAT_X_QUEUE = Promise.resolve();
 async function chatExchange({ text, display, extra, pushed }) {
   const box = $('#chatBox'), m = $('#chatMsg'), btn = $('#chatMicSend');
   if (!pushed) {
@@ -10729,7 +10734,9 @@ async function chatExchange({ text, display, extra, pushed }) {
   postyTyping(document.getElementById('chatTyping'));
   chatScroll();
   postyWorking(true);
+  const run = CHAT_X_QUEUE.then(async () => {
   // Fotos subidas en el chat que la IA todavía no vio → se las mandamos con este mensaje
+  // (se calcula DENTRO de la cola: si no, dos intercambios encolados mandarían las mismas fotos)
   const unsentPhotos = CHAT_PHOTOS.filter(p => p.aiUrl && !p.sent).map(p => p.aiUrl);
   // Sus fotos guardadas (miniaturas): para que pueda usar la que le pidan ("la del asado")
   let libThumbs = [];
@@ -10777,10 +10784,14 @@ async function chatExchange({ text, display, extra, pushed }) {
   } catch (e) {
     const t = $('#chatTyping'); if (t) { stopPostyThinking(t); t.remove(); }
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
+  } finally {
+    postyWorking(false);
+    if (btn) { btn.disabled = false; chatUpdateSendBtn(); }
+    chatScroll();
   }
-  postyWorking(false);
-  if (btn) { btn.disabled = false; chatUpdateSendBtn(); }
-  chatScroll();
+  });
+  CHAT_X_QUEUE = run.catch(() => {});
+  return run;
 }
 
 // Posty parpadea como un humano: cada 3.5-6.5s cierra los ojos 140ms.

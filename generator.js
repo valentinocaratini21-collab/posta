@@ -2850,7 +2850,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     (libPhotos.length
       ? `El cliente tiene ${libPhotos.length} fotos guardadas. REGLA DE ÍNDICES ÚNICA: índice 0 = la más nueva de TODAS las que ves — primero las guardadas (en orden), después las que adjuntó recién en este chat. Si te pide usar una guardada ("la del asado", "la segunda"), elegí el índice correcto mirándolas. `
       : '') +
-    ((cleanPhotos.length || libPhotos.length)
+    ((cleanPhotos.length)
       ? 'Como director de fotografía: opiná brevemente sobre la calidad de cada foto que ves (luz, foco, encuadre) y recomendá cuál conviene usar como protagonista y por qué. Si alguna está oscura o borrosa, decilo sin vueltas. '
       : '') +
     'Cuando la idea esté concreta y el cliente la apruebe (o te pida hacerla), cerrá tu mensaje con un bloque ' +
@@ -3087,7 +3087,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   // Batería "zapatos del cliente" ronda 2: escenarios 21-80. Foco: ENTENDER
   // PERFECTO lo que desea el cliente aunque lo diga mal, a medias o entre líneas.
   const zapatosGuide2 =
-    'SALUDO: si te saludan ("hola", "qué onda posty", "buenas") → respondé corto y alegre: "¡Hola! 😄 ¿Con qué te ayudo hoy?" JAMÁS arranques con otro tema ni des una charla larga. ' +
+    'SALUDO: si te saludan ("hola", "qué onda posty", "buenas") → respondé corto y alegre: "¡Hola! 😄 ¿Con qué te ayudo hoy?" JAMÁS arranques con otro tema ni des una charla larga. Un saludo REPETIDO ("hola, hola, hola") también es solo un saludo: respondé igual. Si el mensaje es un saludo o no menciona fotos, JAMÁS comentes fotos guardadas ni las celebres: las guardadas solo se usan si te las pide por nombre. ' +
     'ENTENDER LA INTENCIÓN: "cambiá ese" sin decir cuál → si hay un borrador obvio (el último mostrado), asumilo y DECÍ cuál tocás ("te cambio el de las facturas 👍"); si hay varios, mostrá los títulos para elegir. JAMÁS cambies uno al azar en silencio. ' +
     'MULTI-INTENCIÓN: si pide varias cosas en un mensaje ("cambiá el segundo y programá toda la semana") → hacé LAS DOS en orden y confirmá cada una en 1 línea. JAMÁS hagas solo la primera. ' +
     'CORRECCIÓN: "no, el otro" → refiere al anterior al que tocaste: entendelo del contexto. JAMÁS preguntes "¿cuál?". ' +
@@ -4304,24 +4304,29 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     (goldenLine(golden) ? `\n${goldenLine(golden)}\n` : '') +
     (note ? `\n${note}\n` : '') +
     'Charlemos la idea del cliente.';
-  const omsgs = messages.map(m => ({ role: m.role, content: m.text }));
+  let omsgs = messages.map(m => ({ role: m.role, content: m.text }));
   // Orden: primero las fotos GUARDADAS (índices 0..N-1, 0 = la más nueva), después las adjuntadas en el chat.
-  const visionImgs = [
-    ...libPhotos.map(u => ({ type: 'image_url', image_url: { url: u, detail: 'low' } })),
-    ...cleanPhotos.map(u => ({ type: 'image_url', image_url: { url: u, detail: 'low' } })),
-  ];
+  const visionLib = libPhotos.map(u => ({ type: 'image_url', image_url: { url: u, detail: 'low' } }));
+  const visionNew = cleanPhotos.map(u => ({ type: 'image_url', image_url: { url: u, detail: 'low' } }));
+  const visionImgs = [...visionLib, ...visionNew];
   if (visionImgs.length) {
-    for (let i = omsgs.length - 1; i >= 0; i--) {
-      if (omsgs[i].role === 'user') {
-        omsgs[i] = {
-          role: 'user',
-          content: [
-            { type: 'text', text: omsgs[i].content },
-            ...visionImgs,
-          ],
-        };
-        break;
+    // (CHAT-COHERENCIA) Las guardadas NO van pegadas al último mensaje del usuario:
+    // antes el modelo las recibía como "fotos que acaba de mandar" y contestaba
+    // "qué buenas fotos" a un saludo. Ahora van en un turno aparte, rotuladas
+    // como referencia, ANTES del último mensaje; las recién adjuntadas sí van con
+    // el último mensaje (son las que acaba de mandar). Los índices no cambian:
+    // guardadas primero (0..N-1), adjuntadas después.
+    let li = -1;
+    for (let i = omsgs.length - 1; i >= 0; i--) { if (omsgs[i].role === 'user') { li = i; break; } }
+    if (li >= 0) {
+      const rebuilt = [];
+      for (let i = 0; i < omsgs.length; i++) {
+        if (i === li) {
+          if (visionLib.length) rebuilt.push({ role: 'user', content: [{ type: 'text', text: 'FOTOS GUARDADAS DE REFERENCIA — el cliente NO las acaba de mandar en este mensaje. Solo usalas si te pide una por nombre ("la del asado", "la segunda"). Nunca las comentes ni las celebres si no te las pidió.' }, ...visionLib] });
+          rebuilt.push(visionNew.length ? { role: 'user', content: [{ type: 'text', text: omsgs[i].content }, ...visionNew] } : omsgs[i]);
+        } else rebuilt.push(omsgs[i]);
       }
+      omsgs = rebuilt;
     }
   }
   // Costo (2026-10-02): gpt-4o SOLO cuando hay foto para analizar. Todo el texto va a mini.

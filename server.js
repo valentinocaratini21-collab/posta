@@ -247,6 +247,30 @@ function levelBoosted(uid, kind, payload) {
     return payload;
   }
 }
+// (CHAT-COHERENCIA) Saludo puro aunque venga REPETIDO: "hola, hola, hola, hola.",
+// "hola hola", "buenas, buenas". El regex de saludo exigía UN solo saludo y el
+// saludo repetido caía al modelo, que contestaba cualquier cosa (caso real 4/11:
+// "Hola, hola, hola, hola." → "Qué buenas fotos!"). Solo palabras de saludo,
+// nada más: "hola, ¿me ayudás con un posteo?" NO es saludo puro (tiene otras
+// palabras) y sigue yendo al modelo. Se usa EN OR con el regex viejo para no
+// achicar ningún caso que ya andaba ("buen día posty", "hola genio", etc.).
+function pzIsPureGreeting(text) {
+  const norm = String(text || '').trim().toLowerCase()
+    .replace(/[^\p{L}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!norm) return false;
+  const PHRASE = '(hola|holis|buenas|buen día|buen dia|buenas tardes|buenas noches|qué tal|que tal|qué onda|que onda|cómo va|como va|cómo andás|como andas|saludos)';
+  if (new RegExp(`^${PHRASE}( ${PHRASE})*$`).test(norm)) return true;
+  if (/^(hola|holis|buenas|saludos) (posty|genio|capo|master|che|querido)$/.test(norm)) return true;
+  return false;
+}
+// (CHAT-COHERENCIA) Predicados de la guarda de fotos: ¿el texto menciona fotos?
+// ¿la respuesta afirma fotos que el cliente habría mandado ("qué buenas fotos",
+// "use alguna para un posteo")? Un pedido proactivo ("mandame una foto") NO
+// afirma fotos mandadas y no dispara la guarda.
+function pzChatPhotoRef(text) { return /\bfoto|imagen|pic\b|📷|📸|la del|el del/i.test(String(text || '')); }
+function pzChatClaimsSentPhotos(reply) { return /qué buenas fotos|qué lindas fotos|hermosas fotos|preciosas fotos|me encanta(n)? (estas|las|tus) fotos|las fotos que (me )?mandaste|fotos que me mandaste|use alguna|usar alguna|alguna para un posteo/i.test(String(reply || '')); }
 const TRIAL_DAYS = 3;
 // "Primera semana con rueditas": los primeros borradores de cada cliente pasan
 // por revisión (humana o por agente) antes de ser visibles. TRAINING_WHEELS=0 lo
@@ -5096,7 +5120,7 @@ async function pzChatPublic(req, res) {
   // Saludo puro: respuesta instantánea sin gastar una llamada al modelo (mismo contrato que el chat con sesión).
   const lastUserText = thread.filter((m) => m.role === 'user').pop().text || '';
   const greetRe = /^(hola+|buenas|buen d[ií]a|buenas tardes|buenas noches|qu[ée] tal|qu[ée] onda|c[óo]mo (va|and[aá]s)|saludos|holis?|hi+|hello|hey|good (morning|afternoon|evening)|how are you|whats up)[ ,!.…?]*((posty|genio|capo|master|che|querido)[ ,!.…?]*)*$/i;
-  if (greetRe.test(lastUserText.trim())) {
+  if (greetRe.test(lastUserText.trim()) || pzIsPureGreeting(lastUserText)) {
     const reply = lang === 'en' ? 'hi! 😄 how can i help today?' : 'hola! 😄 con qué te ayudo hoy?';
     try { postyChatSave('srv-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10), 'landing', thread, reply, false); } catch (e) {}
     return res.json({ reply, idea: null });
@@ -5209,7 +5233,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   {
     const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
     const greetRe = /^(hola+|buenas|buen d[ií]a|buenas tardes|buenas noches|qu[ée] tal|qu[ée] onda|c[óo]mo (va|and[aá]s)|saludos|holis?)[ ,!.…?]*((posty|genio|capo|master|che|querido)[ ,!.…?]*)*$/i;
-    if (greetRe.test(lastUserText.trim())) {
+    if (greetRe.test(lastUserText.trim()) || pzIsPureGreeting(lastUserText)) {
       const reply = 'hola! 😄 con qué te ayudo hoy?';
       try {
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
@@ -5486,6 +5510,38 @@ app.post('/api/ideas/chat', async (req, res) => {
       return res.json({ reply: 'uy, se me cortó la conexión un segundo 😅 probá de nuevo en un ratito.', idea: null });
     }
     if (out && typeof out.reply === 'string') out.reply = chatStripOpen(out.reply);
+    // (CHAT-COHERENCIA) Guarda: la respuesta NUNCA puede hablar de fotos que el
+    // cliente no mandó en este turno ni pidió. Caso real 4/11: "Hola, hola, hola,
+    // hola." → "Qué buenas fotos!". Si la respuesta afirma fotos mandadas y el
+    // turno no trae foto ni referencia a foto, no se envía así: saludo → saludo;
+    // si no, un intento de regeneración con corrección explícita y, si vuelve a
+    // afirmar fotos, una respuesta corta y honesta sin inventos. Los bloques de
+    // la respuesta incoherente (idea/edits/dna/rule/inspo) nunca se aplican.
+    try {
+      const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+      const recentPhoto = clean.filter(m => m.role === 'user').slice(0, -1).slice(-3).some(m => pzChatPhotoRef(m.text || ''));
+      if (pzChatClaimsSentPhotos(out.reply) && !cleanPhotos.length && !pzChatPhotoRef(lastUserText) && !recentPhoto) {
+        console.error('[chat-coherencia] guard: respuesta con fotos sin foto en el turno; último mensaje:', JSON.stringify(lastUserText.slice(0, 120)));
+        if (pzIsPureGreeting(lastUserText)) {
+          out = { reply: 'hola! 😄 con qué te ayudo hoy?', idea: null };
+          out.edits = []; out.dna = null; out.rule = null; out.inspo = null;
+        } else {
+          let regen = null;
+          try {
+            regen = await chatIdea(
+              levelBoosted(uid0, 'chat', { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: (chatNote ? chatNote + '\n' : '') + 'CORRECCIÓN: el cliente NO mandó fotos en este mensaje ni te pidió usar fotos. Respondé SOLO a su último mensaje, sin mencionar fotos.', tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk, captionExtras: captionExtrasFor(uid0), strict: true, levelLine }),
+              settings.openai_key || process.env.OPENAI_API_KEY || ''
+            );
+          } catch (e) { regen = null; }
+          if (regen && typeof regen.reply === 'string') regen.reply = chatStripOpen(regen.reply);
+          if (regen && regen.reply && !pzChatClaimsSentPhotos(regen.reply)) out = regen;
+          else {
+            out = { reply: 'dale 😄 ¿me contás un poco más y lo armamos?', idea: null };
+            out.edits = []; out.dna = null; out.rule = null; out.inspo = null;
+          }
+        }
+      }
+    } catch (e) { console.error('[chat-coherencia] guard error:', e.message); }
     const uid = req.session.userId;
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', clean[clean.length - 1].text);
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', String(out.reply || '').slice(0, 2000));
@@ -28302,7 +28358,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v663';
+const BUILD_ID = '20261101-v664';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
