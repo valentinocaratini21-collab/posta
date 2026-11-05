@@ -380,6 +380,20 @@ const api = {
         errAnon.data = data;
         throw errAnon;
       }
+      if (r.status === 402 && data.guest_account_required) {
+        // (LOTE PRUEBA-ENTRADA-DIRECTA) El invitado tocó algo que pide
+        // cuenta y el servidor lo frenó (respaldo de la puerta del
+        // cliente): abrir la hoja de crear cuenta. La acción pendiente
+        // se reintenta al crearla. No se marca trial_expired ni se
+        // rebota a plan: el invitado no tiene prueba vencida, le falta
+        // la cuenta.
+        if (typeof pzGuestAccountSheet === 'function') pzGuestAccountSheet();
+        const errGuest = new Error('Creá tu cuenta para seguir 💙');
+        errGuest.status = 402;
+        errGuest.data = data;
+        errGuest.guest_account_required = true;
+        throw errGuest;
+      }
       if (r.status === 402 && data.error === 'trial_expired') {
         if (typeof ME !== 'undefined' && ME) ME.trial_expired = true;
         // (LOTE SALTO-MI-PLAN) Nada de rebote silencioso arriba de Ajustes:
@@ -2438,7 +2452,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v660'; // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
+const CHUNK_V = '20261101-v676'; // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -2585,6 +2599,111 @@ async function refreshSession(force) {
   }
   if (lastErr && lastErr.networkError) { NET_OFFLINE = true; return; } // mantenemos ME anterior
   ME = null; NET_OFFLINE = false; PZ_SESS_AT = 0;
+}
+// ================= LOTE PRUEBA-ENTRADA-DIRECTA (4/11) =================
+// Cuenta al primer toque: el invitado (ME.is_guest) navega y mira todo,
+// pero al primer intento de ACCIÓN (aprobar, aceptar todo, programar,
+// escribirle a Posty, pagar) se le abre la hoja de crear cuenta. Al
+// crearla, la MISMA sesión sigue (refreshSession(true)) y la acción
+// pendiente se reintenta sola. Si la prueba quedó consumida por email,
+// va a Mi plan en vez de reintentar.
+function pzIsGuest() {
+  try { return !!(typeof ME !== 'undefined' && ME && ME.is_guest); } catch (e) { return false; }
+}
+let PZ_GUEST_PENDING = null;
+function pzGuestAccountSheet(pending) {
+  if (typeof pending === 'function') PZ_GUEST_PENDING = pending;
+  if (document.getElementById('pzGuestSheet')) return; // ya abierta
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const ov = document.createElement('div');
+  ov.className = 'modal-ov'; ov.id = 'pzGuestSheet'; ov.style.zIndex = '10004'; // (PRUEBA-ENTRADA) por encima de chatfull (300) y de pcsheet (10003): la hoja es un gate duro, nunca puede quedar tapada
+  ov.innerHTML = `<div class="modal-card" style="max-width:420px">
+    <h2 style="margin:0 0 6px">${en ? 'Create your account 💙' : 'Creá tu cuenta 💙'}</h2>
+    <p class="d" style="margin:0 0 14px">${en ? 'To keep going, Posty needs an account. Your feed, your posts and your trial stay exactly the same.' : 'Para seguir, Posty necesita una cuenta. Tu feed, tus posteos y tu prueba siguen exactamente igual.'}</p>
+    <div class="field"><input id="pzGuestEmail" type="email" placeholder="tu@email.com" autocomplete="email"></div>
+    <div class="field"><input id="pzGuestPass" type="password" placeholder="${en ? 'Password (6+ characters)' : 'Contraseña (6+ caracteres)'}" autocomplete="new-password"></div>
+    <div id="pzGuestErr" class="err" style="display:none"></div>
+    <button class="btn btn-primary btn-block" id="pzGuestGo">${en ? 'Create my account' : 'Crear mi cuenta'}</button>
+    <button class="btn btn-ghost btn-block" id="pzGuestLater" style="margin-top:8px">${en ? 'Later' : 'Después'}</button>
+  </div>`;
+  ov.addEventListener('click', (e) => { if (e.target === ov) pzGuestCloseSheet(); });
+  document.body.appendChild(ov);
+  const emEl = document.getElementById('pzGuestEmail');
+  const pwEl = document.getElementById('pzGuestPass');
+  const errEl = document.getElementById('pzGuestErr');
+  const goBtn = document.getElementById('pzGuestGo');
+  if (emEl) emEl.focus();
+  const showErr = (m) => { if (errEl) { errEl.textContent = m; errEl.style.display = 'block'; } };
+  document.getElementById('pzGuestLater').onclick = pzGuestCloseSheet;
+  const submit = async () => {
+    const email = (emEl.value || '').trim();
+    const password = pwEl.value || '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showErr(en ? 'Check your email' : 'Revisá el email'); return; }
+    if (password.length < 6) { showErr(en ? 'Password needs 6+ characters' : 'La contraseña tiene que tener 6 caracteres como mínimo'); return; }
+    goBtn.disabled = true; goBtn.textContent = en ? 'Creating…' : 'Creando…';
+    try {
+      const r = await api.post('/api/guest/upgrade', { email, password });
+      pzGuestCloseSheet();
+      await refreshSession(true);
+      if (r && r.consumed) {
+        // La prueba de ese email ya se usó con otro @: sin prueba
+        // fresca — el camino honesto es Mi plan, con todo conservado.
+        try { toast(en ? 'That email already used its trial — pick your plan and your feed stays.' : 'Ese email ya usó su prueba — elegí tu plan y tu feed queda igual.'); } catch (e) {}
+        location.hash = '#/app/ajustes?plan=1';
+        PZ_GUEST_PENDING = null;
+        return;
+      }
+      const pend = PZ_GUEST_PENDING; PZ_GUEST_PENDING = null;
+      if (pend) { try { await pend(); } catch (e) { /* el reintento falló: la acción queda para el próximo toque */ } }
+      pzGuestMaybeIgPrompt();
+    } catch (e) {
+      goBtn.disabled = false; goBtn.textContent = en ? 'Create my account' : 'Crear mi cuenta';
+      showErr((e && e.message) || (en ? 'Something failed, try again' : 'Algo falló, probá de nuevo'));
+    }
+  };
+  goBtn.onclick = submit;
+  pwEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  emEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') pwEl.focus(); });
+}
+function pzGuestCloseSheet() { const m = document.getElementById('pzGuestSheet'); if (m) m.remove(); }
+// Prompt de conectar IG (UN CLIC, UNA sola vez): tras crear la cuenta, si
+// el invitado todavía no conectó su Instagram, se le ofrece conectarlo
+// para que el posteo del día salga desde el producto. Si lo salta, no se
+// insiste: queda en Ajustes → Conexiones.
+function pzGuestMaybeIgPrompt() {
+  try {
+    if (localStorage.getItem('pz_ig_prompt_done')) return;
+    if (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected) { localStorage.setItem('pz_ig_prompt_done', '1'); return; }
+  } catch (e) {}
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const ov = document.createElement('div');
+  ov.className = 'modal-ov'; ov.id = 'pzGuestIgPrompt'; ov.style.zIndex = '10004'; // (PRUEBA-ENTRADA) mismo gate que la hoja de cuenta: por encima de chatfull (300)
+  ov.innerHTML = `<div class="modal-card" style="max-width:420px">
+    <h2 style="margin:0 0 6px">${en ? 'Connect your Instagram 📸' : 'Conectá tu Instagram 📸'}</h2>
+    <p class="d" style="margin:0 0 14px">${en ? 'One tap and your posts go out from Posty, on their own, at their time. No posting by hand.' : 'Un toque y tus posteos salen desde Posty, solos, a su hora. Nada de publicar a mano.'}</p>
+    <button class="btn btn-primary btn-block" data-ig-connect>${en ? 'Connect Instagram' : 'Conectar Instagram'}</button>
+    <button class="btn btn-ghost btn-block" id="pzGuestIgLater" style="margin-top:8px">${en ? 'Later' : 'Después'}</button>
+  </div>`;
+  ov.addEventListener('click', (e) => { if (e.target === ov) pzGuestCloseIgPrompt(); });
+  document.body.appendChild(ov);
+  const later = document.getElementById('pzGuestIgLater');
+  if (later) later.onclick = pzGuestCloseIgPrompt;
+  const conn = ov.querySelector('[data-ig-connect]');
+  if (conn) conn.onclick = () => { pzGuestCloseIgPrompt(); try { igConnect(); } catch (e) { location.hash = '#/app/ajustes'; } };
+}
+function pzGuestCloseIgPrompt() {
+  try { localStorage.setItem('pz_ig_prompt_done', '1'); } catch (e) {}
+  const m = document.getElementById('pzGuestIgPrompt'); if (m) m.remove();
+}
+// Id del dispositivo para el anti-abuso (una prueba por dispositivo/IP):
+// estable por navegador, guardado en localStorage (no es identidad real,
+// solo un freno a la generación infinita).
+function pzGuestDeviceId() {
+  try {
+    let d = localStorage.getItem('pz_device_id');
+    if (!d) { d = 'dvc_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); localStorage.setItem('pz_device_id', d); }
+    return d;
+  } catch (e) { return ''; }
 }
 // Pantalla cuando hay sesión pero no hay internet: reintentar, nunca pedir login.
 function offlineView() {
@@ -8422,6 +8541,9 @@ function pickRejectReason() {
 // Núcleo de "Programar mi semana": lo usan #btnScheduleAll (Mi semana) y el
 // chip del chat. Sin salir de la pantalla: programa todo y festeja en modal.
 async function doScheduleAll(btn) {
+  // (LOTE PRUEBA-ENTRADA-DIRECTA) Cuenta al primer toque, antes del gate
+  // de IG: primero la cuenta, después (si hace falta) conectar IG.
+  if (pzIsGuest()) { pzGuestAccountSheet(() => doScheduleAll(btn)); return; }
   const b = btn || document.getElementById('btnScheduleAll');
   // Sin Instagram conectado, "sale solo" es mentira: mismo gate que el accept individual.
   if (!(PROFILE && PROFILE.ig_connected)) {
@@ -8577,6 +8699,9 @@ function igGateFeedback(anchorBtn) {
   toast('📸 <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.');
 }
 async function doAcceptAll(btn) {
+  // (LOTE PRUEBA-ENTRADA-DIRECTA) Cuenta al primer toque, antes del gate
+  // de IG: primero la cuenta, después (si hace falta) conectar IG.
+  if (pzIsGuest()) { pzGuestAccountSheet(() => doAcceptAll(btn)); return; }
   const b = btn || document.getElementById('btnAcceptAll');
   // Sin Instagram conectado, "sale solo" es mentira: mismo gate que los demás.
   if (!(PROFILE && PROFILE.ig_connected)) {
@@ -10560,6 +10685,11 @@ async function pzSubirCompletar() {
 }
 
 async function chatSend() {
+  // (LOTE PRUEBA-ENTRADA-DIRECTA) Cuenta al primer toque: el invitado
+  // escribe pero todavía no manda — primero la hoja de crear cuenta; al
+  // crearla, este mismo chatSend se reintenta con el texto intacto (el
+  // input no se limpió porque salimos antes de mandar).
+  if (pzIsGuest()) { pzGuestAccountSheet(() => chatSend()); return; }
   const inp = $('#chatInput');
   const text = (inp.value || '').trim();
   // Las fotos se pueden mandar solas, sin texto: antes el botón no hacía nada en ese caso.
@@ -14092,6 +14222,9 @@ function pcDelDraft(id, root, el) {
 }
 // --- Aprobar ---
 async function pcApprove(id, card, btn) {
+  // (LOTE PRUEBA-ENTRADA-DIRECTA) Cuenta al primer toque: antes de
+  // aprobar, la hoja; al crearla se reintenta este mismo aprobar.
+  if (pzIsGuest()) { pzGuestAccountSheet(() => pcApprove(id, card, btn)); return false; }
   if (btn) btn.disabled = true;
   try {
     await api.post('/api/posts/' + encodeURIComponent(id) + '/approve', {});

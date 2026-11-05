@@ -1918,6 +1918,10 @@ function bindSettings() {
       };
       const bindSub = () => {
         $$('#planList [data-sub], #planListDl [data-sub]').forEach(b => b.onclick = async () => {
+          // (LOTE PRUEBA-ENTRADA-DIRECTA) Cuenta al primer toque: pagar
+          // pide cuenta real (el cobro necesita un email). Al crearla, el
+          // invitado queda en Mi plan y toca Suscribirse de nuevo.
+          if (typeof pzIsGuest === 'function' && pzIsGuest()) { pzGuestAccountSheet(); return; }
           track('plan_select', { plan: b.dataset.sub });
           // (v285, pais-selector) Países Stripe (US/GB/EU): el cobro va por
           // Stripe Checkout — sin paso de email de MP; Stripe pide los datos

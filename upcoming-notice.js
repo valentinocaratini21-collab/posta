@@ -99,8 +99,8 @@ function duePosts(db) {
       WHERE p.status = 'scheduled'
         AND COALESCE(p.autopilot_notified, 0) = 0
         AND COALESCE(p.needs_review, 0) = 0
-        AND p.scheduled_at > datetime('now', '+${WINDOW_MIN} minutes')
-        AND p.scheduled_at <= datetime('now', '+${WINDOW_MAX} minutes')
+        AND datetime(p.scheduled_at) > datetime('now', '+${WINDOW_MIN} minutes')
+        AND datetime(p.scheduled_at) <= datetime('now', '+${WINDOW_MAX} minutes')
       ORDER BY p.scheduled_at ASC
     `).all();
   } catch (e) { return []; }
@@ -122,7 +122,16 @@ async function processUpcomingNotices(db, opts) {
     const mode = modeFor(db, p, user);
     const cap = String(p.caption || '').split('\n')[0].slice(0, 60);
     try {
-      // 1) PUSH primero (el canal histórico).
+      // (LOTE PRUEBA-ENTRADA-DIRECTA) Aviso 30 min: NOTIFICACIÓN + EMAIL
+      // (ambos, no cascada excluyente). El push se intenta siempre; el
+      // email también cuando hay email real (un invitado no tiene:
+      // sendUpcomingEmail devuelve guest_no_email y jamás se intenta
+      // enviar a @guest.invalid). Un solo aviso por posteo: se marca al
+      // entregar por CUALQUIER canal. Si el push sale pero el email
+      // falla transitorio, el aviso YA llegó por push y no se re-pushea
+      // (el tick siguiente no lo reintenta porque está marcado). Solo
+      // si NINGÚN canal entregó y el fallo del email es transitorio,
+      // queda para reintento dentro de la ventana (25–35 min).
       let pr = null;
       try {
         pr = await pushFn(p.user_id, {
@@ -133,34 +142,35 @@ async function processUpcomingNotices(db, opts) {
           url: `/#/app/semana?post=${p.id}`,
         });
       } catch (e) { pr = { ok: false, reason: 'push_throw: ' + e.message }; }
-      if (pr && pr.ok) {
-        markNotified(db, p.id);
-        trackEvent(db, p.user_id, 'post_upcoming_notice', { post_id: p.id, channel: 'push', mode });
+      const pushOk = !!(pr && pr.ok);
+      if (pushOk) {
         out.push++;
         out.detalle.push({ post_id: p.id, channel: 'push', mode });
-        continue;
       }
-      const pushReason = (pr && pr.reason) || 'send_failed';
+      const pushReason = (pr && pr.reason) || (pushOk ? '' : 'send_failed');
 
-      // 2) EMAIL de respaldo (nunca duplicado: solo si el push no llegó).
       let er = null;
       try { er = await emailFn(db, p, mode); } catch (e) { er = { ok: false, reason: 'email_throw', transient: true, error: e.message }; }
-      if (er && er.ok) {
-        markNotified(db, p.id);
-        trackEvent(db, p.user_id, 'post_upcoming_notice', { post_id: p.id, channel: 'email', mode, push_reason: pushReason });
+      const emailOk = !!(er && er.ok);
+      if (emailOk) {
         out.email++;
         out.detalle.push({ post_id: p.id, channel: 'email', mode, push_reason: pushReason });
+      }
+      if (pushOk || emailOk) {
+        markNotified(db, p.id);
+        trackEvent(db, p.user_id, 'post_upcoming_notice', { post_id: p.id, channel: pushOk && emailOk ? 'push+email' : (pushOk ? 'push' : 'email'), mode, push_reason: pushReason });
         continue;
       }
-      // Fallo transitorio del email: NO se marca ni se disfraza de chat —
-      // el próximo tick dentro de la ventana (25–35 min) reintenta.
+      // Ningún canal entregó. Fallo transitorio del email: NO se marca
+      // ni se disfraza de chat — el próximo tick dentro de la ventana
+      // (25–35 min) reintenta.
       if (er && er.transient) {
         trackEvent(db, p.user_id, 'post_upcoming_notice', { post_id: p.id, channel: 'retry', mode, push_reason: pushReason, email_reason: er.reason || '' });
         out.retried++;
         out.detalle.push({ post_id: p.id, channel: 'retry', mode, push_reason: pushReason });
         continue;
       }
-      // 3) Fail-closed honesto: sin canal externo posible (sin
+      // Fail-closed honesto: sin canal externo posible (sin
       // RESEND_API_KEY, sin email en la cuenta o push sin configurar), el
       // aviso queda en el chat de la cuenta y el evento dice la verdad.
       const emailReason = (er && er.reason) || 'sin_email';

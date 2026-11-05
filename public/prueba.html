@@ -608,7 +608,7 @@ html{scroll-behavior:smooth}
   .phone-notch{display:block;width:92px;height:20px;top:7px}
   .phone-head{padding-top:38px}
 }
-#btnSave{animation:savePulse 2.6s ease-in-out infinite}
+#btnGuestEnter{animation:savePulse 2.6s ease-in-out infinite}
 @keyframes savePulse{0%,100%{box-shadow:0 8px 24px rgba(254,193,77,.45)}50%{box-shadow:0 8px 34px rgba(254,193,77,.85)}}
 @media(prefers-reduced-motion:reduce){#btnSave{animation:none}}
 /* Chat y brief: radios y sombras del mismo sistema */
@@ -790,7 +790,7 @@ body.sfb-on{padding-bottom:88px}
 .gj-journey.gj-celebrate{border-color:#DBA453;box-shadow:0 0 0 4px rgba(223,168,86,.25),0 10px 26px rgba(219,164,83,.30)}
 .res-hero.gj-glow{animation:gjGlow 1.6s ease-out 1}
 @keyframes gjGlow{0%{filter:drop-shadow(0 0 0 rgba(223,168,86,0))}35%{filter:drop-shadow(0 0 22px rgba(223,168,86,.75))}100%{filter:drop-shadow(0 0 0 rgba(223,168,86,0))}}
-#btnGo,#btnPrefillGo,#btnWebTrialGo,#btnGo2,#btnSave{animation:gjBreathe 2.8s ease-in-out infinite}
+#btnGo,#btnPrefillGo,#btnWebTrialGo,#btnGo2,#btnGuestEnter{animation:gjBreathe 2.8s ease-in-out infinite}
 @keyframes gjBreathe{0%,100%{box-shadow:0 6px 18px rgba(39,147,200,.28),0 0 0 0 rgba(223,168,86,0)}50%{box-shadow:0 8px 24px rgba(39,147,200,.30),0 0 0 6px rgba(223,168,86,.32),0 0 22px 2px rgba(219,164,83,.35)}}
 .btn-primary{transition:transform .16s cubic-bezier(.34,1.56,.64,1)}
 .btn-primary:active{transform:scale(.965)}
@@ -844,7 +844,7 @@ html.gj-armed [data-gj-rv].gj-in{opacity:1;transform:none;transition:opacity .7s
 @keyframes gjDayIn{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
 @media(max-width:560px){.gj-jnode{width:62px}.gj-jnode b{font-size:10.5px}}
 @media (prefers-reduced-motion: reduce){
- #btnGo,#btnPrefillGo,#btnWebTrialGo,#btnGo2,#btnSave{animation:none}
+ #btnGo,#btnPrefillGo,#btnWebTrialGo,#btnGo2,#btnSave,#btnGuestEnter{animation:none}
  .gj-jnode.act .gj-jdot{animation:none}
  .gj-dots i{animation:none}
  .res-hero.gj-glow{animation:none}
@@ -1394,7 +1394,13 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
       </div>
       <div id="weekDone" style="display:none">
         <div style="text-align:center;margin-top:22px">
-          <button class="btn btn-primary" id="btnSave" style="font-size:19px;padding:18px 46px;max-width:100%">Guardá tu semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-down"/></svg></button>
+          <!-- (LOTE PRUEBA-ENTRADA-DIRECTA · 4/11) Entrada directa: sin
+               email y sin link — el feed con sus 3 posteos ya mismo. El
+               camino con email queda abajo como secundario. -->
+          <button class="btn btn-primary" id="btnGuestEnter" style="font-size:19px;padding:18px 46px;max-width:100%">Entrar directo a mi feed <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+          <p class="tiny" style="margin:8px 0 0">Sin email, sin link: tu feed con tus 3 posteos ya mismo</p>
+          <p id="guestEnterErr" class="err" style="display:none;margin:10px auto 0;max-width:440px"></p>
+          <button class="btn btn-ghost" id="btnSave" style="font-size:16px;padding:14px 32px;max-width:100%;margin-top:14px">O guardá tu semana con tu email <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-down"/></svg></button>
           <p class="tiny">Sin tarjeta para probar · Cancelás cuando quieras</p>
         </div>
         <div class="share-row"><button class="share-btn" id="btnShare"><svg class="wb-ic wb-ic-l" aria-hidden="true"><use href="#wb-share"/></svg> Compartir mi semana</button><button class="share-btn wa" id="btnShareWa"><svg class="wb-ic wb-ic-l" aria-hidden="true"><use href="#wb-chat"/></svg> Compartir por WhatsApp</button></div>
@@ -1794,6 +1800,7 @@ function show(id) {
   $('#btnGo2').onclick = startTrialFallback;
   $('#btnPrefillGo').onclick = startTrialPrefill;
   $('#btnSave').onclick = openRegTrial;
+  const bge = $('#btnGuestEnter'); if (bge) bge.onclick = doGuestEnter;
   const bmm = $('#btnMakeMine'); if (bmm) bmm.onclick = () => { trk('prueba_step', { step: 'share_banner_cta' }); location.href = '/prueba'; };
   const bpc = $('#btnPhotosCard');
   if (bpc) bpc.onclick = () => { trk('prueba_step', { step: 'photos_card' }); openRegTrial(); };
@@ -4065,6 +4072,42 @@ async function pzTrialSocialMount() {
     if (!d.apple) { const b = el.querySelector('[data-social="apple"]'); if (b) b.remove(); }
     el.style.display = 'flex';
   } catch (e) { /* sin proveedores: el email queda como única vía */ }
+}
+
+// (LOTE PRUEBA-ENTRADA-DIRECTA · 4/11) Entrada directa: sin email y sin
+// link. El servidor abre la sesión invitada con la semana recién
+// generada (3 posteos) y la app abre en SU FEED. El @ y el dominio
+// salen de lo que el visitante ya escribió (nada nuevo se pregunta).
+// Errores honestos: si esa @ ya usó su prueba, el servidor dice
+// entrar/pagar (409 trial_used); si la semana no está en caché, 404.
+async function doGuestEnter() {
+  const b = $('#btnGuestEnter');
+  const errEl = $('#guestEnterErr');
+  const showErr = (m) => { if (errEl) { errEl.textContent = m; errEl.style.display = 'block'; } };
+  if (errEl) errEl.style.display = 'none';
+  if (b) { b.disabled = true; b.textContent = 'Abriendo tu feed…'; }
+  try {
+    let ig = '';
+    try { ig = String((TRIAL && TRIAL.ig) || '').trim().replace(/^@/, '').toLowerCase(); } catch (e) {}
+    if (!ig) { try { ig = String(($('#f_ig') || {}).value || '').trim().replace(/^@/, '').toLowerCase(); } catch (e) {} }
+    let domain = '';
+    try { if (typeof GEN_WEB !== 'undefined' && GEN_WEB && WEB && WEB.web) domain = String(WEB.web); } catch (e) {}
+    if (!domain) { try { domain = String(($('#f_web') || {}).value || '').trim(); } catch (e) {} }
+    let device = '';
+    try {
+      device = localStorage.getItem('pz_device_id') || '';
+      if (!device) { device = 'dvc_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); localStorage.setItem('pz_device_id', device); }
+    } catch (e) {}
+    const r = await fetch('/api/guest/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ig, domain, device, lang: 'es' }) });
+    let d = {};
+    try { d = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error((d && d.error) || 'No pudimos abrir tu feed todavía.');
+    try { trk('prueba_guest_enter', { posts: d.posts || 0 }); } catch (e) {}
+    location.href = '/#/app/inicio';
+  } catch (e) {
+    if (b) { b.disabled = false; b.innerHTML = 'Entrar directo a mi feed <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg>'; }
+    showErr((e && e.message) || 'No pudimos abrir tu feed todavía.');
+  }
 }
 
 function openRegTrial() {

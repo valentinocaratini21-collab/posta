@@ -743,6 +743,26 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[cierre-prueba] no se pudo programar:', e.message);
   }
+  // (LOTE PRUEBA-ENTRADA-DIRECTA) Nudges de invitados SIN EMAIL: 24h y fin
+  // de prueba llegan como mensaje de Posty en el chat (+ push si aceptó
+  // notificaciones). Cada hora, minuto 20 (junto al cierre, sin pisarlo).
+  // Idempotente por guest_nudges: una vez por cuenta y tipo.
+  try {
+    cron.schedule('20 * * * *', () => {
+      try {
+        const { sendGuestTrialNudges } = require('./guest-trial');
+        const { sendPush } = require('./push');
+        sendGuestTrialNudges(db, {
+          pushFn: (uid, payload) => sendPush(uid, payload),
+        }).then((r) => {
+          if (r && (r.n24 || r.nEnd)) console.log(`[guest-nudges] 24h: ${r.n24}, fin: ${r.nEnd}`);
+        }).catch((e) => console.error('[guest-nudges]', e.message));
+      } catch (e) { console.error('[guest-nudges] no se pudo cargar:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Nudges de invitados (chat+push): cada hora (Buenos Aires)');
+  } catch (e) {
+    console.error('[guest-nudges] no se pudo programar:', e.message);
+  }
   // ✨ MAGIA POST-PAGO (2026-10-25): cada hora — (a) la idea proactiva
   // 24 h: el sweep vive en server.js (tiene runIdeasForUser) y se llama
   // por lazy-require como el loop semanal; (b) el resumen del mes 30
@@ -1449,6 +1469,7 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
     SELECT u.id, u.email, u.lang, p.business_name FROM users u
     LEFT JOIN profiles p ON p.user_id = u.id
     WHERE u.email IS NOT NULL AND u.email != ''
+      AND COALESCE(u.is_guest, 0) = 0
       AND COALESCE(u.email_opt_out, 0) = 0
       AND COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
       AND datetime(u.created_at) < datetime('now', '-1 day')
@@ -1703,6 +1724,11 @@ function ensureTrialClosedColumn(db) {
 
 async function sendTrialCloseNotices(db) {
   ensureTrialClosedColumn(db);
+  // (LOTE PRUEBA-ENTRADA-DIRECTA) Los invitados NO reciben este aviso:
+  // no tienen email real (el placeholder nunca se usa) y su cierre lo
+  // cubre el nudge de invitado en chat (+ push si aceptó). El esquema
+  // de invitados se asegura primero (mismo patrón que la columna).
+  try { require('./guest-trial').ensureSchema(db); } catch (e) {}
   const { emailConfigured, trialClosedEmail } = require('./email');
   const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const now = Date.now();
@@ -1716,6 +1742,7 @@ async function sendTrialCloseNotices(db) {
       FROM users u
       LEFT JOIN profiles p ON p.user_id = u.id
       WHERE COALESCE(u.plan_status, 'trial') = 'trial'
+        AND COALESCE(u.is_guest, 0) = 0
         AND u.trial_ends_at IS NOT NULL
         AND COALESCE(u.trial_closed_notified, 0) = 0
         AND EXISTS (SELECT 1 FROM posts WHERE user_id = u.id)
@@ -1845,6 +1872,7 @@ async function sendWeeklyReports(db) {
     WHERE p.status = 'published'
       AND datetime(p.published_at) >= datetime('now', '-7 days')
       AND u.email IS NOT NULL AND u.email != ''
+      AND COALESCE(u.is_guest, 0) = 0
       AND COALESCE(u.email_opt_out, 0) = 0
       AND COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
   `).all();

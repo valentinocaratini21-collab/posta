@@ -180,6 +180,56 @@ function purgeLock(db, igKey, domainKey) {
   }
 }
 
+// (LOTE PRUEBA-ENTRADA-DIRECTA · 4/11) CANDADO PERMANENTE POR @ / DOMINIO /
+// EMAIL: la prueba se usa UNA sola vez por @ y UNA sola vez por email,
+// PARA SIEMPRE (no solo 90 días). El candado de 90 días (trial_locks)
+// sigue vivo para su snapshot dentro de la ventana, pero ya NO habilita
+// una prueba nueva al día 91: si la identidad está en trial_used, no hay
+// otra prueba. Como trial_locks, trial_used queda EXENTA del reseteo por
+// época del analytics: es regla de producto, no medición.
+// La allowlist (marca/dogfooding) salta ambos candados y nunca ensucia
+// trial_used: las pruebas de la casa no cuentan como uso.
+function ensureTrialUsedSchema(db) {
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS trial_used (
+      kind TEXT NOT NULL, value TEXT NOT NULL, user_id INTEGER,
+      created_at INTEGER NOT NULL, PRIMARY KEY (kind, value))`);
+  } catch (e) {}
+}
+
+// ¿Esta identidad ya usó su prueba (para siempre)? kind ig/domain/email.
+// Devuelve la fila o null. La allowlist nunca está "usada".
+function findUsed(db, igKey, domainKey, emailKey) {
+  try {
+    if (!db) return null;
+    if (isAllowlisted(db, igKey || '', domainKey || '')) return null;
+    const q = (kind, val) => {
+      if (!val) return null;
+      try { return db.prepare('SELECT kind, value, user_id, created_at FROM trial_used WHERE kind = ? AND value = ?').get(kind, val) || null; }
+      catch (e) { return null; }
+    };
+    return q('ig', igKey || '') || q('domain', domainKey || '') || q('email', (emailKey || '').trim().toLowerCase()) || null;
+  } catch (e) { return null; }
+}
+
+// Registra uso permanente (idempotente). Las identidades exceptuadas no
+// se registran: la casa puede probar siempre sin gastar su "una vez".
+function recordUsed(db, { ig, domain, email, userId }) {
+  try {
+    if (!db) return;
+    if (isAllowlisted(db, ig || '', domain || '')) return;
+    const now = Date.now();
+    const ins = (kind, val) => {
+      if (!val) return;
+      try { db.prepare('INSERT OR IGNORE INTO trial_used (kind, value, user_id, created_at) VALUES (?, ?, ?, ?)').run(kind, val, userId || null, now); }
+      catch (e) {}
+    };
+    ins('ig', ig || '');
+    ins('domain', domain || '');
+    ins('email', (email || '').trim().toLowerCase());
+  } catch (e) {}
+}
+
 module.exports = {
   LOCK_MS,
   normalizeIg,
@@ -190,4 +240,7 @@ module.exports = {
   purgeLock,
   decorateSnapshot,
   lockMessage,
+  ensureTrialUsedSchema,
+  findUsed,
+  recordUsed,
 };

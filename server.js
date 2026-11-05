@@ -1216,11 +1216,12 @@ async function trialPhotoEntries(webPhotos, itemNames) {
 // Transferencia TOTAL al registrarse: la cuenta nace con el fundamento
 // de la prueba sembrado (digest persistido + ADN + perfil + colores).
 // Solo completa campos vacíos/genéricos: jamás pisa datos del dueño.
-function seedFromTrialDigest(userId, igRaw) {
+function seedFromTrialDigest(userId, igRaw, opts) {
   try {
     const ig = String(igRaw || '').trim().replace(/^@/, '').toLowerCase();
-    if (!ig) return false;
-    const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(ig);
+    const cacheKey = (opts && opts.cacheKey) || ig;
+    if (!cacheKey) return false;
+    const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(cacheKey);
     if (!hit) return false;
     let out;
     try { out = JSON.parse(hit.payload); } catch (e) { return false; }
@@ -1895,10 +1896,13 @@ function trialPostUsesClientPhoto(out, i) {
 // y client_photo=1 en los posteos que usan fotos reales del cliente.
 // expectedBusiness (opcional): si se pasa, la semana cacheada tiene que ser de
 // ese negocio — si es de otro (cache cruzado), NO se importa nada.
-function importTrialWeek(userId, igRaw, expectedBusiness) {
+function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
   const ig = String(igRaw || '').trim().replace(/^@/, '').toLowerCase();
-  if (!ig) return 0;
-  const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(ig);
+  // (LOTE PRUEBA-ENTRADA-DIRECTA) cacheKey: la entrada solo-web lee su
+  // semana de la fila 'web:<dominio>'; limit: el invitado importa 3.
+  const cacheKey = (opts && opts.cacheKey) || ig;
+  if (!cacheKey) return 0;
+  const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(cacheKey);
   if (!hit) return 0;
   let out;
   try { out = JSON.parse(hit.payload); } catch (e) { return 0; }
@@ -1921,7 +1925,7 @@ function importTrialWeek(userId, igRaw, expectedBusiness) {
   if (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(userId).c) return 0;
   let n = 0;
   let idx = -1;
-  for (const p of posts.slice(0, 7)) {
+  for (const p of posts.slice(0, (opts && opts.limit) || 7)) {
     idx++;
     try {
       const isVideo = p.type === 'video' && p.video;
@@ -2057,12 +2061,37 @@ app.post('/api/auth/register', (req, res) => {
       if (referrer && referrer.id) referredBy = referrer.id;
     }
     const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
+    // (LOTE PRUEBA-ENTRADA-DIRECTA) Candado por email en el registro: si
+    // esa dirección ya usó una prueba (otro @), NO se regala otra — la
+    // cuenta nace con trial_ends_at = ahora (paywall directo, sin prueba
+    // fresca), igual que en la subida de cuenta del invitado. El ajuste
+    // se hace justo después del INSERT (abajo), para no tocar el flujo
+    // de duplicados del UNIQUE.
+    let registerConsumed = false;
+    try {
+      if (trialLock && trialLock.findUsed) {
+        const hit = trialLock.findUsed(db, '', '', email.trim().toLowerCase());
+        if (hit) registerConsumed = true;
+      }
+    } catch (e) {}
     // (v322) el canal se guarda NORMALIZADO (email/dm/referido/clinica/
     // organico/directo/otro) para que el tablero separe sin adivinar textos.
     const utmS = LA.normalizeSrc(utm && utm.source) || String((utm && utm.source) || '').slice(0, 40);
     const utmC = String((utm && utm.campaign) || '').slice(0, 80);
     const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC, regEn ? 'en' : 'es');
     const newUserId = r.lastInsertRowid;
+    // (LOTE PRUEBA-ENTRADA-DIRECTA) Email ya usado → sin prueba fresca
+    // (trial_ends_at = ahora). Y el email queda registrado como "usó su
+    // prueba" en ambos casos: este registro ES su uso de la prueba.
+    if (registerConsumed) {
+      try { db.prepare('UPDATE users SET trial_ends_at = ? WHERE id = ?').run(Date.now(), newUserId); } catch (e) {}
+    }
+    try {
+      if (trialLock && trialLock.recordUsed) {
+        trialLock.ensureTrialUsedSchema && trialLock.ensureTrialUsedSchema(db);
+        trialLock.recordUsed(db, { email: email.trim().toLowerCase(), userId: newUserId });
+      }
+    } catch (e) {}
     // Si viene de /prueba con el mismo @, su semana generada lo espera adentro como borradores
     try {
       const nImp = importTrialWeek(newUserId, trial_ig);
@@ -2097,6 +2126,57 @@ app.post('/api/auth/register', (req, res) => {
       return res.status(400).json({ error: regEn ? 'That email already has an account 😄 Try logging in instead' : 'Ese email ya tiene cuenta 😄 Probá entrando directamente' });
     console.error('[posta] register:', e.message);
     res.status(500).json({ error: regEn ? 'Something failed on our side 😅 Please try again in a bit' : 'Algo falló de nuestro lado 😅 Probá de nuevo en un rato' });
+  }
+});
+
+// (LOTE PRUEBA-ENTRADA-DIRECTA · 4/11) Cuenta al primer toque: el invitado
+// convierte SU fila en cuenta real (mismo feed, mismos posteos, mismo
+// fundamento, mismo reloj — created_at y trial_ends_at NO se tocan).
+// Email ya con cuenta real → error "ya tiene cuenta" (camino login).
+// Email que ya usó una prueba con otro @ → la cuenta se crea PERO SIN
+// prueba fresca (trial_ends_at = ahora → paywall directo), con todo su
+// feed conservado. El email queda registrado en trial_used: esa dirección
+// ya usó su prueba, para siempre.
+app.post('/api/guest/upgrade', requireAuth, async (req, res) => {
+  try {
+    if (!trialLock || !guestTrial) return res.status(503).json({ error: 'Servicio no disponible' });
+    const userId = req.session.userId;
+    const body = req.body || {};
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = String(body.password || '');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Revisá el email' });
+    if (password.length < 6) return res.status(400).json({ error: 'La contraseña tiene que tener al menos 6 caracteres' });
+    if (guestTrial.isGuestEmail(email)) return res.status(400).json({ error: 'Revisá el email' });
+    const row = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(userId);
+    if (!row || !row.is_guest) return res.status(400).json({ error: 'Esta cuenta ya no es invitada' });
+    const hash = bcrypt.hashSync(password, 10);
+    const r = guestTrial.upgradeGuest(db, {
+      userId, email, passwordHash: hash,
+      findUsed: (ig, dom, em) => trialLock.findUsed ? trialLock.findUsed(db, ig || '', dom || '', em || '') : null,
+    });
+    if (r.error === 'email_taken') return res.status(400).json({ error: 'Ese email ya tiene cuenta. Entrá con tu contraseña.' });
+    if (r.error) return res.status(400).json({ error: r.error });
+    // El email queda marcado como "usó su prueba" (para siempre), salvo
+    // que el invitado sea de la casa (la allowlist nunca ensucia
+    // trial_used: el dogfooding no gasta su "una vez").
+    try {
+      const grow = db.prepare('SELECT guest_ig, guest_domain FROM users WHERE id = ?').get(userId);
+      const house = trialLock.isAllowlisted ? trialLock.isAllowlisted(db, (grow && grow.guest_ig) || '', (grow && grow.guest_domain) || '') : false;
+      if (!house && trialLock.recordUsed) {
+        trialLock.ensureTrialUsedSchema && trialLock.ensureTrialUsedSchema(db);
+        trialLock.recordUsed(db, { email, userId });
+      }
+    } catch (e) {}
+    track(userId, 'guest_upgrade', r.consumed ? 'consumed' : 'ok');
+    req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: 'No se pudo iniciar sesión' });
+      req.session.userId = userId;
+      res.json({ ok: true, consumed: !!r.consumed, trial_ends_at: r.trialEnds,
+        plan_url: r.consumed ? '/#/app/ajustes?plan=1' : null });
+    });
+  } catch (e) {
+    console.error('[guest] upgrade falló:', e);
+    res.status(500).json({ error: 'No pudimos crear tu cuenta todavía.' });
   }
 });
 
@@ -3085,6 +3165,18 @@ app.post('/api/auth/magic-request', async (req, res) => {
         const r2 = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1, ?)")
           .run(em, code, referredBy, trialEnds, String(utmO.source || '').slice(0, 40), String(utmO.campaign || '').slice(0, 80), magicLang);
         const userId = r2.lastInsertRowid;
+        // (LOTE PRUEBA-ENTRADA-DIRECTA) Candado por email, espejo del
+        // registro: email que ya usó una prueba → sin prueba fresca
+        // (trial_ends_at = ahora); el email queda registrado como usado.
+        try {
+          if (trialLock && trialLock.findUsed && trialLock.findUsed(db, '', '', em)) {
+            db.prepare('UPDATE users SET trial_ends_at = ? WHERE id = ?').run(Date.now(), userId);
+          }
+          if (trialLock && trialLock.recordUsed) {
+            trialLock.ensureTrialUsedSchema && trialLock.ensureTrialUsedSchema(db);
+            trialLock.recordUsed(db, { email: em, userId });
+          }
+        } catch (e) {}
         try {
           const expBiz = (trial_profile && trial_profile.business_name) || null;
           const nImp = importTrialWeek(userId, trial_ig, expBiz);
@@ -3160,6 +3252,18 @@ app.get('/api/auth/magic', (req, res) => {
       const r = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1, ?)")
         .run(email, code, referredBy, trialEnds, utmS, utmC, payload.lang === 'en' ? 'en' : 'es');
       const userId = r.lastInsertRowid;
+      // (LOTE PRUEBA-ENTRADA-DIRECTA) Candado por email, espejo del
+      // registro: email que ya usó una prueba → sin prueba fresca
+      // (trial_ends_at = ahora); el email queda registrado como usado.
+      try {
+        if (trialLock && trialLock.findUsed && trialLock.findUsed(db, '', '', email)) {
+          db.prepare('UPDATE users SET trial_ends_at = ? WHERE id = ?').run(Date.now(), userId);
+        }
+        if (trialLock && trialLock.recordUsed) {
+          trialLock.ensureTrialUsedSchema && trialLock.ensureTrialUsedSchema(db);
+          trialLock.recordUsed(db, { email, userId });
+        }
+      } catch (e) {}
       try {
         // El negocio esperado sale del perfil de la prueba (lo que el usuario
         // escribió en SU navegador): si la semana cacheada es de otro negocio,
@@ -3724,7 +3828,7 @@ app.post('/api/auth/device-issue', requireAuth, (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
-  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, email_verified, lang, founder_number, founder_public, founder_price, founder_currency, founder_plan, founder_price_at, bambooty_shell FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, email_verified, lang, founder_number, founder_public, founder_price, founder_currency, founder_plan, founder_price_at, bambooty_shell, is_guest, guest_ig FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.json({ user: null });
   // Sello de fundador (red de seguridad): cualquier alta paga real —MP, Stripe
   // o manual— recibe su número al primer /me, en orden, hasta 200.
@@ -3760,6 +3864,12 @@ app.get('/api/auth/me', (req, res) => {
       founder_plan: user.founder_plan || '',
       founder_price_at: user.founder_price_at || 0,
       lang: user.lang === 'en' ? 'en' : 'es', // (v274) idioma de la cuenta (del funnel de la prueba)
+      // (LOTE PRUEBA-ENTRADA-DIRECTA) Sesión invitada: el cliente lee
+      // is_guest para la puerta de cuenta; guest_ig para mostrar su @
+      // sin depender del perfil. El email placeholder nunca se muestra
+      // como email real (el cliente lo ignora cuando is_guest=1).
+      is_guest: !!user.is_guest,
+      guest_ig: user.guest_ig || '',
     },
   });
 });
@@ -4460,6 +4570,7 @@ app.delete('/api/fundamento/veto', requireAuth, express.json(), (req, res) => {
 // idea con producto real, el veto igual queda y se dice (nunca se
 // regenera con otro tema inventado).
 app.post('/api/posts/:id/no-es-mi-rubro', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  if (guestBackstop(req, res)) return;
   const uid = req.session.userId;
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(Number(req.params.id), uid);
   if (!post) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
@@ -5000,6 +5111,7 @@ app.post('/api/client-brief/refresh', requireAuth, async (req, res) => {
 
 // ---------- Generador ----------
 app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
+  if (guestBackstop(req, res)) return;
   const { topic, n, seed, tipo } = req.body || {};
   if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contame de qué es el posteo y lo armamos juntos ✍️' });
   const count = Math.min(3, Math.max(1, parseInt(n, 10) || 1));
@@ -5265,6 +5377,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   if (!req.session.userId) return pzChatPublic(req, res);
   let _lpNx = false; requireTrialValid(req, res, () => { _lpNx = true; });
   if (!_lpNx) return;
+  if (guestBackstop(req, res)) return;
   const { messages, photos, library, drafts, audio, anchor_post_id, photoPaths } = req.body || {};
   const uidChat = req.session.userId;
   // Kill-switch de gasto diario: mensaje amable de Posty, nunca un error robótico.
@@ -10838,6 +10951,7 @@ function scheduleLintForPosts(uid, ids) {
 }
 
 app.patch('/api/posts/:id', requireAuth, (req, res) => {
+  if (guestBackstop(req, res)) return;
   const { scheduled_at, caption, hashtags, image_path, action } = req.body || {};
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
@@ -11620,6 +11734,7 @@ function approvalAuth(action) {
 }
 
 app.post('/api/posts/:id/approve', approvalAuth('approve'), (req, res) => {
+  if (guestBackstop(req, res)) return;
   const post = req.approvalPost;
   if (post.approval === 'rejected') {
     return res.status(409).json({ error: 'rejected', message: 'Este posteo fue rechazado: ya no se puede aprobar.' });
@@ -11804,6 +11919,7 @@ app.get('/api/week/:weekKey/publish', (req, res) => {
 });
 
 app.post('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
+  if (guestBackstop(req, res)) return;
   const post = req.approvalPost;
   if (post.approval === 'rejected' || post.status === 'cancelled') {
     return res.json({ ok: true, approval: 'rejected' }); // idempotente
@@ -14117,6 +14233,7 @@ function autoWeekEnabled(uid) {
 }
 
 app.post('/api/posts/schedule-all', requireAuth, async (req, res) => {
+  if (guestBackstop(req, res)) return;
   const uid = req.session.userId;
   const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(image_path,'') != '' ORDER BY created_at ASC`).all(uid);
   if (!drafts.length) {
@@ -15952,6 +16069,7 @@ app.all('/api/admin/grant-free', (req, res) => {
 });
 
 app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
+  if (guestBackstop(req, res)) return;
   const { plan: planIdRaw, country, payer_email, agente: agenteRaw } = req.body || {};
   // (Pagos lado app, 2026-10-25) Riel MP: SOLO AR + UY. BR/MX/CL/CO/PE
   // pasaron a Stripe (tarjeta en USD); si llegan acá, caen a AR como
@@ -16214,6 +16332,7 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
 // Fail-closed y silencioso: sin STRIPE_SECRET_KEY los endpoints responden un
 // error limpio y nada más cambia (el sitio y la app quedan como siempre).
 app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
+  if (guestBackstop(req, res)) return;
   const { plan: planIdRaw } = req.body || {};
   // (Pagos lado app, 2026-10-25) Riel Stripe: US + GB + EU + BR/MX/CL/CO/PE
   // (estos últimos con planes USD). Sin país válido, US. CA no entra acá
@@ -25266,6 +25385,113 @@ app.get('/api/trial/status', (req, res) => {
   res.json({ ok: true, used: false });
 });
 
+// (LOTE PRUEBA-ENTRADA-DIRECTA · 4/11) Respaldo del servidor a la puerta
+// de cuenta del cliente: un invitado que pega directo a un endpoint de
+// mutación recibe 402 guest_account_required (el cliente abre la hoja de
+// crear cuenta). Las lecturas NUNCA pasan por acá: el invitado lee su
+// feed, su perfil y su historial sin que se le pida nada.
+function guestBackstop(req, res) {
+  try {
+    const row = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(req.session.userId);
+    if (row && row.is_guest) {
+      res.status(402).json({ error: 'guest_account_required', guest_account_required: true });
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+// (LOTE PRUEBA-ENTRADA-DIRECTA · 4/11) Entrada directa del invitado:
+// tras la semana de /prueba (generada en este mismo recorrido), el
+// visitante entra A LA APP sin magic link: sesión sobre una fila users
+// invitada (is_guest=1) con sus 3 posteos ya importados y programados.
+// No pide email ni contraseña: la cuenta llega al primer toque (ver
+// /api/guest/upgrade). El reloj de 3 días arranca ACÁ (created_at de la
+// fila) y la subida de cuenta NO lo toca.
+app.post('/api/guest/start', (req, res) => {
+  try {
+    if (!trialLock || !guestTrial) return res.status(503).json({ error: 'Servicio no disponible' });
+    const body = req.body || {};
+    const lang = (body.lang === 'en' || body.lang === 'es') ? body.lang : (req.headers['accept-language'] || '').toLowerCase().includes('en') ? 'en' : 'es';
+    const igRaw = String(body.ig || '').trim().replace(/^@/, '').toLowerCase();
+    const domRaw = String(body.domain || body.web || '').trim();
+    const igK = trialLock.normalizeIg(igRaw);
+    const domK = trialLock.normalizeDomain(domRaw);
+    if (!igK && !domK) return res.status(400).json({ error: lang === 'en' ? 'Tell me your @ or your website first.' : 'Decime primero tu @ o tu web.' });
+    const testMode = trialTestMode(req);
+    const allowlisted = trialLock.isAllowlisted(db, igK, domK);
+    // Candado permanente + respaldo de 90 días (backfill de locks viejos):
+    // un negocio que ya probó no abre otra sesión invitada, aunque su
+    // generación haya sido anterior a este lote.
+    if (!testMode && !allowlisted) {
+      try { guestTrial.backfillUsedFromLocks(db); } catch (e) {}
+      const used = trialLock.findUsed ? trialLock.findUsed(db, igK, domK) : null;
+      if (used) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
+      const oldLock = trialLock.findLock(db, igK, domK);
+      if (oldLock) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
+    }
+    // Anti-abuso: una prueba por dispositivo/IP (la allowlist y el modo
+    // test saltan este control; el anti-spam 5/día por IP sigue aparte).
+    const device = String(body.device || '').trim().slice(0, 128);
+    const ip = String(req.ip || '').slice(0, 64);
+    if (!testMode && !allowlisted) {
+      const du = guestTrial.deviceUsed(db, device, ip);
+      if (du) return res.status(409).json({ error: lang === 'en' ? 'This device already used its free trial 💛 Log in to your account or pick your plan.' : 'Este dispositivo ya usó su prueba gratis 💛 Entrá a tu cuenta o elegí tu plan.', device_used: true });
+    }
+    // Semana: del caché por @, o por dominio si entró solo con web.
+    const cacheKey = igK || ('web:' + domK);
+    let payload = null;
+    try {
+      const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(cacheKey);
+      if (row && row.payload) payload = JSON.parse(row.payload);
+    } catch (e) {}
+    if (!payload || !(payload.posts || []).length) {
+      return res.status(404).json({ error: lang === 'en' ? 'Your week is not ready yet — go back to /prueba and generate it first.' : 'Tu semana todavía no está lista — volvé a /prueba y generala primero.', no_week: true });
+    }
+    // Fila invitada (email placeholder: nunca se le manda nada).
+    const g = guestTrial.createGuest(db, {
+      referralCode: typeof newReferralCode === 'function' ? newReferralCode() : '',
+      lang, ig: igK, domain: domK, device,
+    });
+    // Importar exactamente 3 posteos (misma maquinaria que el alta por
+    // magic link, con límite 3 y sin los extras de stories/reels).
+    const nImp = importTrialWeek(g.userId, igK, null, { limit: 3, cacheKey });
+    if (!nImp) {
+      try { db.prepare('DELETE FROM users WHERE id = ?').run(g.userId); } catch (e) {}
+      return res.status(500).json({ error: lang === 'en' ? 'We could not open your feed yet — try again in a minute.' : 'No pudimos abrir tu feed todavía — intentá de nuevo en un minuto.' });
+    }
+    try { applyTrialLang(g.userId, igK); } catch (e) {}
+    try { seedFromTrialDigest(g.userId, igK, { cacheKey }); } catch (e) {}
+    try { recordTrialImport(g.userId, igK, nImp, false); } catch (e) {}
+    try { streakFromTrialImport(g.userId); } catch (e) {}
+    // Perfil: su @, su nombre y su rubro (la home muestra SU feed).
+    try {
+      const biz = String(payload.business || '').trim();
+      const cat = String(payload.category || '').trim();
+      db.prepare(`UPDATE profiles SET ig_username = COALESCE(NULLIF(ig_username, ''), ?), business_name = COALESCE(NULLIF(business_name, ''), ?), category = COALESCE(NULLIF(category, ''), ?) WHERE user_id = ?`)
+        .run(igK || '', biz, cat, g.userId);
+    } catch (e) {}
+    // Programar los 3 (la grilla muestra solo scheduled): si el gate de
+    // calidad retiene alguno, queda como borrador en Bandeja, igual que
+    // una prueba por magic link de hoy.
+    let sched = null;
+    try { sched = scheduleAllDrafts(g.userId); } catch (e) { console.error('[guest] schedule falló:', e.message); }
+    try { guestTrial.welcomeGuestMessage(db, g.userId, { lang, business: String(payload.business || '').trim(), nPosts: nImp }); } catch (e) {}
+    if (!testMode && !allowlisted) {
+      try { guestTrial.recordDevice(db, device, ip, g.userId); } catch (e) {}
+    }
+    track(null, 'guest_start', (igK || domK) + '|' + nImp);
+    req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: 'No se pudo abrir la sesión' });
+      req.session.userId = g.userId;
+      res.json({ ok: true, user_id: g.userId, trial_ends_at: g.trialEnds, posts: nImp, scheduled: sched && sched.scheduled ? sched.scheduled.length : 0 });
+    });
+  } catch (e) {
+    console.error('[guest] start falló:', e);
+    res.status(500).json({ error: 'No pudimos abrir tu feed todavía.' });
+  }
+});
+
 // Llave de prueba del dueño: con ?test_key=... se saltea el límite de 1 prueba
 // por IP y no se registra el uso. La llave vive en Railway (variable
 // TRIAL_TEST_KEY), nunca en el código ni en el repo.
@@ -25312,6 +25538,10 @@ const TRIAL_IMG_MIME = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png'
 // allowlist interna/QA vive ahí + tabla trial_lock_allowlist).
 let trialLock = null;
 try { trialLock = require('./trial-lock'); } catch (e) { console.error('[init] trial-lock no disponible:', e.message); }
+// (LOTE PRUEBA-ENTRADA-DIRECTA · 4/11) Sesión invitada + candado permanente.
+// El esquema vive en el módulo y se asegura en el arranque (idempotente).
+let guestTrial = null;
+try { guestTrial = require('./guest-trial'); guestTrial.ensureSchema(db); } catch (e) { console.error('[init] guest-trial no disponible:', e.message); }
 
 // Identidad del negocio para el candado, desde los campos crudos del form
 // (la normalización robusta vive en el módulo: URL pegada, mayúsculas, @).
@@ -25417,11 +25647,28 @@ function trialLockGate(fields, webData, testMode) {
     let domK = trialLock.normalizeDomain((fields && fields.web) || '');
     if (!domK && webData && webData.url) domK = trialLock.normalizeDomain(webData.url);
     if (!igK && !domK) return null;
+    // (LOTE PRUEBA-ENTRADA-DIRECTA) Candado PERMANENTE primero: si este
+    // negocio ya usó su prueba (para siempre), no hay otra — ni snapshot
+    // ni generación. La allowlist (casa) salta este chequeo en findUsed.
+    try {
+      if (trialLock.findUsed) {
+        const used = trialLock.findUsed(db, igK, domK);
+        if (used) return { usedForever: true, igK, domK, used };
+      }
+    } catch (e) {}
     const lock = trialLock.findLock(db, igK, domK);
     if (!lock) return null;
     track(null, 'prueba_lock', (igK || domK) + '|' + (lock.payload ? 'snapshot' : 'mensaje'));
     return { lock, igK, domK };
   } catch (e) { return null; }
+}
+
+// Mensaje del candado permanente: ya usó su única prueba — el camino
+// honesto es entrar (si tiene cuenta) o elegir un plan, no otra prueba.
+function trialUsedMessage(lang) {
+  return lang === 'en'
+    ? `This business already used its one free trial 💛 If it's yours, log in to your account or pick your plan and Posty keeps publishing for you every week.`
+    : `Este negocio ya usó su única prueba gratis 💛 Si es tuyo, entrá a tu cuenta o elegí tu plan y Posty sigue publicando para vos cada semana.`;
 }
 
 // Sirve el snapshot del candado decorado (banderas del candado + semana y
@@ -25451,7 +25698,36 @@ function trialLockRecordFor(fields, webData, business, lang, out) {
       domain: trialLock.normalizeDomain((fields && fields.web) || '') || (webData ? trialLock.normalizeDomain(webData.url || '') : ''),
       business, lang, payloadStr: JSON.stringify(out),
     });
+    // (LOTE PRUEBA-ENTRADA-DIRECTA) El mismo nacimiento registra el uso
+    // PERMANENTE: a partir de acá, esa @ y ese dominio ya usaron su única
+    // prueba (el candado de 90 días sigue para su snapshot, pero no para
+    // una prueba nueva).
+    try {
+      if (trialLock.recordUsed) {
+        trialLock.ensureTrialUsedSchema && trialLock.ensureTrialUsedSchema(db);
+        trialLock.recordUsed(db, {
+          ig: trialLock.normalizeIg((fields && fields.ig) || ''),
+          domain: trialLock.normalizeDomain((fields && fields.web) || '') || (webData ? trialLock.normalizeDomain(webData.url || '') : ''),
+        });
+      }
+    } catch (e) {}
   } catch (e) { /* el candado nunca rompe la generación */ }
+}
+
+// (LOTE PRUEBA-ENTRADA-DIRECTA) La semana también se cachea por dominio
+// (clave 'web:<dominio>') para que una entrada solo-web pueda entrar
+// directo sin @: el caché por @ no existe para esos visitantes.
+function trialCacheWriteWeb(domainRaw, out, testMode) {
+  try {
+    if (testMode || !trialLock) return;
+    const dom = trialLock.normalizeDomain(domainRaw || '');
+    if (!dom) return;
+    const payload = JSON.stringify(out);
+    if (payload.length >= 12 * 1024 * 1024) return;
+    db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
+      ON CONFLICT(ig) DO UPDATE SET payload=excluded.payload, created_at=excluded.created_at`)
+      .run('web:' + dom, payload, Date.now());
+  } catch (e) {}
 }
 
 // Pieza 13 · ESCUDO INVISIBLE ANTI-BOTS (cero fricción visible, nada de
@@ -25559,6 +25835,14 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   if (!trialTestMode(req)) {
     const gate = trialLockGate(fields, null, false);
     if (gate) {
+      // (LOTE PRUEBA-ENTRADA-DIRECTA) Prueba ya usada para siempre: no
+      // hay snapshot ni generación nueva — solo el camino a entrar/pagar.
+      if (gate.usedForever) {
+        return res.status(409).json({
+          error: trialUsedMessage(lang),
+          trial_used: true,
+        });
+      }
       const snap = trialLockServePayload(gate.lock);
       if (snap) return res.json(snap);
       return res.status(409).json({
@@ -25853,6 +26137,8 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         }
       } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
     }
+    // (LOTE PRUEBA-ENTRADA-DIRECTA) Y por dominio, para entrar sin @.
+    if (!testMode) trialCacheWriteWeb(fields.web, out, testMode);
     // (v323 · pieza 8) Nace el candado de 90 días de este negocio (@ o
     // dominio): la próxima generación de esta identidad espera al día 91.
     if (!testMode) trialLockRecordFor(fields, webData, business, lang, out);
@@ -26146,6 +26432,11 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   if (!trialTestMode(req)) {
     const gate = trialLockGate(fields, null, false);
     if (gate) {
+      // (LOTE PRUEBA-ENTRADA-DIRECTA) Prueba ya usada para siempre.
+      if (gate.usedForever) {
+        send('used', { trial_used: true, message: trialUsedMessage(lang) });
+        return finish();
+      }
       const snap = trialLockServePayload(gate.lock);
       if (snap) { send('done', { out: snap }); return finish(); }
       send('locked', {
@@ -27098,6 +27389,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         }
       } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
     }
+    // (LOTE PRUEBA-ENTRADA-DIRECTA) Y por dominio, para entrar sin @.
+    if (!testMode) trialCacheWriteWeb(fields.web, out, testMode);
     // (v323 · pieza 8) Nace el candado de 90 días de este negocio.
     if (!testMode) trialLockRecordFor(fields, webData, business, lang, out);
     track(null, 'prueba_done', igKey);
@@ -28860,7 +29153,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v675';
+const BUILD_ID = '20261101-v676';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

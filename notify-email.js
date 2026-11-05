@@ -374,6 +374,15 @@ async function sendUpcomingEmail(db, post, opts) {
     if (!emailConfigured()) return { ok: false, reason: 'no_config' };
     const user = getUser(db, post.user_id);
     if (!user || !String(user.email || '').trim()) return { ok: false, reason: 'no_email' };
+    // (LOTE PRUEBA-ENTRADA-DIRECTA) Un invitado no tiene email real: su
+    // placeholder @guest.invalid NUNCA se usa para enviar. No es un fallo
+    // transitorio (no hay nada que reintentar): el aviso llega por push
+    // o por chat, según el cascade de upcoming-notice.
+    try {
+      if (require('./guest-trial').isGuestEmail(user.email)) return { ok: false, reason: 'guest_no_email' };
+    } catch (e) {
+      if (String(user.email || '').toLowerCase().endsWith('@guest.invalid')) return { ok: false, reason: 'guest_no_email' };
+    }
     const base = BASE_URL();
     const en = user.lang === 'en';
     const when = dayHourLabel(db, post.user_id, post.scheduled_at, en ? 'en' : undefined);
