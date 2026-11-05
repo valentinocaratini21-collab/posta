@@ -371,6 +371,111 @@ function applyDraftToTopics({ topics, pool, draft }) {
   return win;
 }
 
+// ---------- Aplicación sobre el pool de la semana de la APP (lote 2/8) ----------
+// Misma semántica que applyDraftToTopics (veto → mezcla → tema → campeona),
+// adaptada al vocabulario de la semana de la app: las ideas llevan `tipo`
+// (promo/tip/social/detras/novedad), no `kind`. Mapeo: tip→tip, social→
+// social, novedad→novedad, promo→promo; reserva y sorteo NO tienen tipo
+// en la app (sin efecto observable — se documenta, no se inventa otro).
+// VENTA en la app = los kinds de venta que existen como tipo (promo,
+// novedad), igual que en la prueba. Diferencias deliberadas con la prueba:
+// - Nunca achica el pool por debajo de `deficit` (fail-open como
+//   filtrarPool de sabe-siempre): un veto que dejaría la semana
+//   incompleta no se aplica.
+// - La mezcla y el frente ORDENAN, no reemplazan: la semana de la app
+//   ya viene con ideas generadas; reordenar alcanza para que el gusto
+//   se vea en los picks (el slice posterior toma los primeros).
+// - Tras reordenar, se preserva la garantía de fixTipos (nunca dos
+//   seguidas del mismo tipo) con canjes locales; esa garantía dura gana
+//   sobre el conteo exacto de la mezcla en casos borde.
+// - La campeona queda primera (posteo principal/preferido); pasos
+//   posteriores del pipeline (rebalance de intención, cerebro) pueden
+//   reordenar, igual que en la prueba el filtro pre-lanzamiento puede
+//   reescribir un tema del draft.
+const KIND_TO_TIPO = { tip: 'tip', social: 'social', novedad: 'novedad', promo: 'promo', reserva: null, sorteo: null };
+const VENTA_APP = new Set(['promo', 'novedad']);
+
+function applyDraftToPool({ pool, draft, deficit }) {
+  const orig = Array.isArray(pool) ? pool.slice() : [];
+  const out = { pool: orig, quitados: [], frente: null, aplicado: false };
+  if (!draft || !orig.length) return out;
+  const def = Math.max(1, Number(deficit) || 1);
+  const tipoOf = (i) => String((i && i.tipo) || '').toLowerCase();
+  let cur = orig.slice();
+  // 1) VETO: kind del veto explícito + kinds de venta descartados en tema.
+  const veto = new Set();
+  const vetoRound = (draft.rondas || []).find((x) => x.dim === 'veto');
+  if (vetoRound) {
+    const v = (DRAFT_DIMS.veto.options || []).find((o) => o.v === vetoRound.elegida);
+    if (v && v.kind && KIND_TO_TIPO[v.kind]) veto.add(KIND_TO_TIPO[v.kind]);
+  }
+  for (const k of discardVentaKinds(draft)) if (KIND_TO_TIPO[k]) veto.add(k);
+  if (veto.size) {
+    const kept = cur.filter((i) => !veto.has(tipoOf(i)));
+    if (kept.length >= def) {
+      for (const i of cur) if (veto.has(tipoOf(i))) out.quitados.push({ titulo: String(i.titulo || ''), motivo: 'draft_veto' });
+      cur = kept;
+    }
+    // Si quitar rompería el déficit, el veto no se aplica (fail-open).
+  }
+  // 2) DEGRADADOS: kinds no-venta descartados en tema → van últimos.
+  const demoted = new Set();
+  for (const k of discardDemotedKinds(draft)) if (KIND_TO_TIPO[k]) demoted.add(KIND_TO_TIPO[k]);
+  if (demoted.size) {
+    const head = cur.filter((i) => !demoted.has(tipoOf(i)));
+    const tail = cur.filter((i) => demoted.has(tipoOf(i)));
+    cur = head.concat(tail);
+  }
+  // 3) MEZCLA (enfoque) sobre la ventana efectiva (los primeros `def`):
+  // venta → al menos 2 de venta; marca → a lo sumo 1. Solo canjes dentro
+  // del pool, nunca se descarta nada.
+  const enfoque = (draft.rondas || []).find((x) => x.dim === 'enfoque');
+  const esVenta = (i) => VENTA_APP.has(tipoOf(i));
+  if (enfoque && (enfoque.elegida === 'venta' || enfoque.elegida === 'marca')) {
+    if (enfoque.elegida === 'venta') {
+      while (cur.slice(0, def).filter(esVenta).length < 2) {
+        let ri = -1;
+        for (let i = def; i < cur.length; i++) if (esVenta(cur[i])) { ri = i; break; }
+        let wi = -1;
+        for (let i = def - 1; i >= 0; i--) if (!esVenta(cur[i])) { wi = i; break; }
+        if (ri < 0 || wi < 0) break;
+        const tmp = cur[wi]; cur[wi] = cur[ri]; cur[ri] = tmp;
+      }
+    } else {
+      while (cur.slice(0, def).filter(esVenta).length > 1) {
+        let wi = -1;
+        for (let i = def - 1; i >= 0; i--) if (esVenta(cur[i])) { wi = i; break; }
+        let ri = -1;
+        for (let i = def; i < cur.length; i++) if (!esVenta(cur[i])) { ri = i; break; }
+        if (wi < 0 || ri < 0) break;
+        const tmp = cur[wi]; cur[wi] = cur[ri]; cur[ri] = tmp;
+      }
+    }
+  }
+  // 4) FRENTE: tema al frente, campeona al frente (gana la posición 0).
+  const frontTipo = (tipo) => {
+    if (!tipo) return;
+    const at = cur.findIndex((i) => tipoOf(i) === tipo);
+    if (at > 0) { const [t] = cur.splice(at, 1); cur.unshift(t); }
+  };
+  const tema = (draft.rondas || []).find((x) => x.dim === 'tema');
+  if (tema) frontTipo(KIND_TO_TIPO[tema.kind || tema.elegida]);
+  if (draft.campeona && draft.campeona.kind) frontTipo(KIND_TO_TIPO[draft.campeona.kind]);
+  // 5) Preservar fixTipos: nunca dos seguidas del mismo tipo (la
+  // posición 0 no se toca: la campeona/tema queda al frente).
+  for (let i = 1; i < cur.length; i++) {
+    if (!tipoOf(cur[i]) || tipoOf(cur[i]) !== tipoOf(cur[i - 1])) continue;
+    let j = -1;
+    for (let k = i + 1; k < cur.length; k++) if (tipoOf(cur[k]) !== tipoOf(cur[i])) { j = k; break; }
+    if (j < 0) break;
+    const tmp = cur[i]; cur[i] = cur[j]; cur[j] = tmp;
+  }
+  out.pool = cur;
+  out.frente = cur.length ? tipoOf(cur[0]) : null;
+  out.aplicado = true;
+  return out;
+}
+
 module.exports = {
   DRAFT_VERSION: 1,
   VENTA_KINDS,
@@ -387,4 +492,7 @@ module.exports = {
   discardVentaKinds,
   discardDemotedKinds,
   applyDraftToTopics,
+  KIND_TO_TIPO,
+  VENTA_APP,
+  applyDraftToPool,
 };

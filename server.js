@@ -13078,6 +13078,23 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         console.log(`[pipeline:${tag}] usuario ${uid}: sabe-siempre quitó ${resF.quitados.length} ideas (${resF.quitados.map((q) => q.motivo).join(', ')})`);
       }
     } catch (e) { console.error(`[pipeline:${tag}] sabe-siempre falló:`, e.message); }
+    // (GUSTO-APP · lote 2/8) El gusto del draft de la prueba también mueve
+    // la semana de la app: misma semántica que la semana de la prueba
+    // (veto → mezcla → tema → campeona, ver draft-onboarding.js
+    // applyDraftToPool). El digest lo trae de la prueba
+    // (seedFromTrialDigest); sin draft_gusto, la semana sale como hoy.
+    // Fail-open: un draft inválido o cualquier error deja el pool intacto.
+    try {
+      const dgG = clientDigest.getDigest(db, uid);
+      const draftG = dgG ? draftOnboarding.draftGustoFrom(dgG.draft_gusto) : null;
+      if (draftG) {
+        const resG = draftOnboarding.applyDraftToPool({ pool, draft: draftG, deficit });
+        if (resG.quitados.length || resG.frente) {
+          pool.splice(0, pool.length, ...resG.pool);
+          console.log(`[pipeline:${tag}] usuario ${uid}: gusto del draft aplicado (quitados ${resG.quitados.length}, frente ${resG.frente || '-'})`);
+        }
+      }
+    } catch (e) { console.error(`[pipeline:${tag}] gusto del draft falló:`, e.message); }
     const picks = pool.slice(0, deficit + 2);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
     // (SABE-SIEMPRE · ítem 4) La secuencia de formatos (tipos, en orden)
@@ -29292,7 +29309,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v681';
+const BUILD_ID = '20261101-v682';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
