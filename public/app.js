@@ -205,6 +205,23 @@ window.__imgFb = function (el) {
   el.dataset.fbk = '1';
   if (el.dataset.full) el.src = el.dataset.full;
 };
+// (EDITAR-POSTEO · 4/11) Segundo escalón para la miniatura del ancla:
+// si la variante @240 no existe (imágenes viejas: 404) cae a la
+// maestra; si la maestra también falla, la miniatura se reemplaza
+// por el placeholder — nunca queda el icono roto del navegador.
+window.__imgFbAnchor = function (el) {
+  if (!el) return;
+  if (!el.dataset.fbk) {
+    el.dataset.fbk = '1';
+    if (el.dataset.full) { el.src = el.dataset.full; return; }
+  }
+  try {
+    const ph = document.createElement('span');
+    ph.className = 'hf-anchor-thumb hf-anchor-ph';
+    ph.innerHTML = (typeof pzIc === 'function') ? pzIc('sparkle', 18) : '✦';
+    if (el.parentNode) el.parentNode.replaceChild(ph, el);
+  } catch (e) {}
+};
 // (LOTE 16 · reel sin cuadro) Si el video de una tile de reel falla,
 // la tile ya no queda vacía: se reemplaza por el mismo remedio del
 // Lote 13 (texto del posteo o «imagen en camino» sobre degradado).
@@ -18568,26 +18585,33 @@ function hfRedoLineHTML(p, en) {
 // rápidos (foto · texto · día y hora · rehacer) + la línea del contador.
 function hfAnchorBarHTML(p, en) {
   if (!p || p.id === null || p.id === undefined) return '';
-  const thumb = p.image_path ? `<img class="hf-anchor-thumb" src="${esc(mv(p.image_path, 240))}" alt="" onerror="__imgFb(this)">` : '<span class="hf-anchor-thumb hf-anchor-ph">' + pzIc('sparkle', 18) + '</span>';
-  const redo = hfRedoLineHTML(p, en);
+  const isPub = String(p.status || '') === 'published';
+  const thumb = p.image_path ? `<img class="hf-anchor-thumb" src="${esc(mv(p.image_path, 240))}" data-full="${esc(p.image_path)}" alt="" onerror="__imgFbAnchor(this)">` : '<span class="hf-anchor-thumb hf-anchor-ph">' + pzIc('sparkle', 18) + '</span>';
+  const redo = isPub ? '' : hfRedoLineHTML(p, en);
   // (LOTE HABLAR-DE-ESTE-POSTEO) La tarjeta de contexto lleva foto +
   // TEXTO: el caption real del posteo, recortado, escapado. Sin
   // caption no hay línea (la tarjeta queda como hoy).
   const capT = String(p.caption || '').trim();
   const capLine = capT ? `<div class="hf-anchor-cap">${esc(capT.slice(0, 140))}</div>` : '';
+  // (EDITAR-POSTEO · 4/11) Publicado: la tarjeta dice la verdad — no
+  // se edita en su lugar, se rehace como versión nueva en Bandeja.
+  // La foto identifica el posteo (sin caption) y NO se ofrece
+  // «cambiar el día y hora».
+  const pubLine = isPub ? `<div class="hf-anchor-pub">${en ? 'Changes come back as a new version in your Bandeja' : 'Si lo cambiás, vuelve como versión nueva a tu Bandeja'}</div>` : '';
   const redoBtn = (hfRedoLeft(p) === 0)
     ? `<button type="button" class="hf-chipq" data-hf-chipq="redo" disabled>${en ? 'Redo' : 'Rehacer'}</button>`
     : `<button type="button" class="hf-chipq" data-hf-chipq="redo">${en ? 'Redo' : 'Rehacer'}</button>`;
+  const whenBtn = isPub ? '' : `<button type="button" class="hf-chipq" data-hf-chipq="when">${en ? 'Change the day/time' : 'Cambiar el día y hora'}</button>`;
   return `<div class="hf-anchor" data-anchor-id="${esc(String(p.id))}" data-anchor-open="1" title="${en ? 'Open this post' : 'Abrir este posteo'}">
     ${thumb}
     <div class="hf-anchor-main">
-      <div class="hf-anchor-t">${en ? 'Editing this post' : 'Editando este posteo'}</div>
-      ${capLine}
+      <div class="hf-anchor-t">${isPub ? (en ? 'Already live on Instagram' : 'Este posteo ya salió') : (en ? 'Editing this post' : 'Editando este posteo')}</div>
+      ${isPub ? pubLine : capLine}
       ${redo}
       <div class="hf-anchor-chips">
         <button type="button" class="hf-chipq" data-hf-chipq="photo">${en ? 'Change the photo' : 'Cambiar la foto'}</button>
         <button type="button" class="hf-chipq" data-hf-chipq="text">${en ? 'Change the text' : 'Cambiar el texto'}</button>
-        <button type="button" class="hf-chipq" data-hf-chipq="when">${en ? 'Change the day/time' : 'Cambiar el día y hora'}</button>
+        ${whenBtn}
         ${redoBtn}
       </div>
     </div>
@@ -21122,6 +21146,7 @@ function bindChatFull() {
   // (LOTE MIC-INICIO) Nota enviada desde Inicio: se entrega al abrir el chat.
   try { pzVoicePendingDeliver(); } catch (e) {}
   try { hfPaintAnchor(); } catch (e) {}
+  try { hfAnchorRefresh(); } catch (e) {}
   try { hfDeliverAskText(); } catch (e) {}
   pzChatKbBind();
   pzChatKbSync();
@@ -23409,22 +23434,72 @@ function hfSetAnchor(post) {
     status: post.status || '', media_type: post.media_type || '',
   } : null;
   try { hfPaintAnchor(); } catch (e) {}
+  try { hfAnchorRefresh(); } catch (e) {}
+}
+// (EDITAR-POSTEO · 4/11) El ancla puede venir de una tarjeta vieja
+// (HF_ASK_POSTS o una tile anterior a publicar) con el estado anterior
+// a la publicación: refresco silencioso del estado real. Si el servidor
+// dice otro estado, se corrige y se repinta. Fail-closed: si el fetch
+// falla, la tarjeta queda como estaba.
+function hfAnchorRefresh() {
+  try {
+    const a = HF_CHAT_ANCHOR;
+    if (!a || a.id === null || a.id === undefined) return;
+    if (typeof api === 'undefined' || !api.get) return;
+    // Sin contexto de sesión no se dispara: un 401 de fondo con sesión
+    // muerta rebotaría al login (api.req) sin que el usuario haya hecho nada.
+    if (typeof hasSessionContext === 'function' && !hasSessionContext()) return;
+    api.get('/api/posts/' + encodeURIComponent(a.id)).then((r) => {
+      const f = (r && r.post) ? r.post : r;
+      if (!f || f.id == null || !HF_CHAT_ANCHOR || String(HF_CHAT_ANCHOR.id) !== String(f.id)) return;
+      let changed = false;
+      const put = (k, v) => {
+        if (v === null || v === undefined || v === '') return;
+        if (String(HF_CHAT_ANCHOR[k]) !== String(v)) { HF_CHAT_ANCHOR[k] = v; changed = true; }
+      };
+      put('status', f.status); put('media_type', f.media_type);
+      put('image_path', f.image_path); put('caption', f.caption);
+      if (f.redo_left !== null && f.redo_left !== undefined && Number(HF_CHAT_ANCHOR.redo_left) !== Number(f.redo_left)) { HF_CHAT_ANCHOR.redo_left = f.redo_left; changed = true; }
+      if (changed) { try { hfPaintAnchor(); } catch (e) {} }
+    }).catch(() => {});
+  } catch (e) {}
+}
+// (EDITAR-POSTEO · 4/11) Anclar un posteo por id sin abrir el chat del
+// posteo: para el «Editar» de la aprobación, que aterriza en el chat
+// principal con la tarjeta anclada y el campo limpio.
+async function hfAnchorForId(id) {
+  try {
+    if (typeof pzHablarResolver !== 'function') return;
+    const post = await pzHablarResolver(id);
+    if (post) hfSetAnchor(post);
+  } catch (e) {}
 }
 function hfAnchorChip(kind) {
   if (!HF_CHAT_ANCHOR) return;
   const en = hfIsEn();
-  if (kind === 'redo') { hfRedoPost(HF_CHAT_ANCHOR.id); return; }
+  if (kind === 'redo') {
+    // Publicado: rehacer va por el chat (versión nueva en Bandeja);
+    // el endpoint de restyle es de borradores.
+    if (String(HF_CHAT_ANCHOR.status || '') === 'published') { hfAnchorSend(en ? 'Redo this post' : 'Rehacé este posteo'); return; }
+    hfRedoPost(HF_CHAT_ANCHOR.id); return;
+  }
   const texts = {
     photo: en ? 'I want to change the photo of this post' : 'Quiero cambiar la foto de este posteo',
     text: en ? 'I want to change the text of this post' : 'Quiero cambiar el texto de este posteo',
     when: en ? 'I want to change the day and time of this post' : 'Quiero cambiar el día y hora de este posteo',
   };
-  const inp = document.getElementById('chatInput');
-  if (inp && texts[kind]) {
-    inp.value = texts[kind];
+  if (texts[kind]) hfAnchorSend(texts[kind]);
+}
+// (EDITAR-POSTEO · 4/11) Un toque = se manda: las opciones no solo
+// rellenan el campo, ejecutan. Sin campo (otra superficie), no hace nada.
+function hfAnchorSend(text) {
+  try {
+    const inp = document.getElementById('chatInput');
+    if (!inp) return;
+    inp.value = text;
     try { chatUpdateSendBtn(); } catch (e) {}
-    try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} }
-  }
+    if (typeof chatSend === 'function') chatSend();
+  } catch (e) {}
 }
 async function hfRedoPost(id) {
   const en = hfIsEn();
@@ -24761,15 +24836,6 @@ function apvNotFound() {
     <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Volver a Schedule</a>
   </div></div>`;
 }
-// Mensaje pre-llenado del chat para "Editar": el usuario completa qué cambiar.
-function apvEditPrompt(d, tz) {
-  const hm = apvHM(d, tz), k = apvDayKey(d, tz);
-  if (k === apvDayKey(new Date(), tz)) return `Quiero editar el posteo que sale hoy a las ${hm}`;
-  if (k === pcDayKeyShift(new Date(), tz, 1)) return `Quiero editar el posteo que sale mañana a las ${hm}`;
-  let dl = '';
-  try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) {}
-  return dl ? `Quiero editar el posteo que sale el ${dl} a las ${hm}` : 'Quiero editar ese posteo';
-}
 // ---------------------------------------------------------------------------
 // Posty dogfood: tarjeta de la propuesta del día + vista dedicada (#/app/dogfood/:id).
 // ---------------------------------------------------------------------------
@@ -24872,7 +24938,6 @@ async function approvalPostView(id) {
     : '';
   const cap = esc(String(p.caption || 'Sin texto todavía')).replace(/\n/g, '<br>');
   const tags = String(p.hashtags || '').trim();
-  const editPrompt = dOk ? apvEditPrompt(d, tz) : 'Quiero editar ese posteo';
   // (LOTE 17) Aceptar único como acción principal: antes compartía la
   // fila con otros tres botones y el texto desbordaba la píldora.
   const actions = canAct ? `
@@ -24952,7 +25017,7 @@ function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
   // (LOTE APROBACIÓN-RECORTE · 2/11 · decisión Valentino) Fuera del menú: Hablar
   // (duplica el mini-chat al pie) y No me gusta (se pisa con Rechazar). Quedan:
   // Editar, Rechazar, Frenar (solo programados), Eliminar, Rehacer, en ese orden.
-  b += `<button class="apv-sec-btn" id="apvEdit" data-apvedit="${esc(editPrompt || '')}">${pzIc('pencil', 20)}<span>${en ? 'Edit' : 'Editar'}</span></button>`;
+  b += `<button class="apv-sec-btn" id="apvEdit" data-apvid="${id}">${pzIc('pencil', 20)}<span>${en ? 'Edit' : 'Editar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvReject">${pzIc('reject', 20)}<span>${en ? 'Reject' : 'Rechazar'}</span></button>`;
   if (st === 'scheduled') b += `<button class="apv-sec-btn" id="apvHold" data-apvid="${id}">⏸<span>${en ? 'Hold' : 'Frenar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvDelete" data-apvid="${id}">${pzIc('trash', 20)}<span>${en ? 'Delete' : 'Eliminar'}</span></button>`;
@@ -25016,8 +25081,11 @@ function bindApprovalPost() {
   };
   const ed = document.getElementById('apvEdit');
   if (ed) ed.onclick = () => {
-    // La edición vive en el chat (ahí Posty edita posteos hablando): se pre-llena el mensaje.
-    try { sessionStorage.setItem('posty-chat-prefill', ed.dataset.apvedit || 'Quiero editar ese posteo'); } catch (e) {}
+    // (EDITAR-POSTEO · 4/11) Sin prefill: el campo queda limpio; la
+    // tarjeta anclada (foto real + opciones en un toque) es el camino.
+    // Un prefill viejo pendiente se descarta: sería otro contexto.
+    try { sessionStorage.removeItem('posty-chat-prefill'); } catch (e) {}
+    try { const id = ed.dataset.apvid; if (id && typeof hfAnchorForId === 'function') hfAnchorForId(id); } catch (e) {}
     location.hash = '#/app/chat';
   };
   // (LOTE HABLAR-DE-ESTE-POSTEO) Hablar de este posteo desde la
