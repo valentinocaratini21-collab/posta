@@ -343,6 +343,9 @@ const cmGusto = require('./cm-gusto');
 // rendimiento por tema/formato, anti-repetición, promo real, foto por
 // producto y reglas visibles en una línea. Fail-closed, sin datos no cambia nada.
 const sabeSiempre = require('./sabe-siempre');
+// (LOTE MEDICIÓN 4 PILARES) Tres métricas con datos ya existentes: foto→posteo,
+// onboarding→semana, % semanas aceptadas sin cambios. Lectura: GET /api/medicion.
+const medicion = require('./medicion');
 const cmTendencias = require('./cm-tendencias');
 const cmObjetivo = require('./cm-objetivo');
 const cmHorario = require('./cm-horario');
@@ -6264,8 +6267,11 @@ app.post('/api/ideas/chat', async (req, res) => {
         }
         if (post.status !== 'draft' && post.status !== 'scheduled') continue;
         if (media !== 'image' && !textChange) { editIssues.push({ kind: 'redo_media', title: chatTitle(post) }); continue; }
-        // En su lugar: guardar versión anterior solo si cambia el texto.
-        if (textChange) {
+        // En su lugar: guardar versión anterior si cambia el texto o si se
+        // rehace la imagen. Sin esto, un rehacer solo de imagen no deja
+        // rastro y «volver atrás» pierde la imagen anterior (y la medición
+        // de semanas sin cambios no lo vería como cambio).
+        if (textChange || media === 'image') {
           try {
             db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path, overlay_text) VALUES (?,?,?,?,?)`)
               .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''), String(post.overlay_text || ''));
@@ -8736,6 +8742,19 @@ app.get('/api/aprendizaje', requireAuth, (req, res) => {
   try {
     res.json({ ok: true, reglas: sabeSiempre.lineasAprendizaje(db, req.session.userId) });
   } catch (e) { res.status(500).json({ error: 'aprendizaje' }); }
+});
+
+// (LOTE MEDICIÓN 4 PILARES) Lectura de las tres métricas, sin UI nueva:
+// foto→posteo y semanas = solo datos del usuario que pide; onboarding→
+// semana = agregados globales SIN identificadores (sin @, sin user_id,
+// sin dominio). Uso: GET /api/medicion con la sesión del dueño.
+app.get('/api/medicion', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    let tz = 'America/Argentina/Buenos_Aires';
+    try { tz = userTz(uid) || tz; } catch (e) {}
+    res.json({ ok: true, ...medicion.computeMedicion(db, uid, tz) });
+  } catch (e) { res.status(500).json({ error: 'medicion' }); }
 });
 
 // Feedback de la sugerencia de arranque (first_pick): el usuario elige el
@@ -20072,8 +20091,8 @@ app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.js
     if (!caption) return fail('caption_fallo', en ? 'I could not write the text for this photo, try again in a bit 🙏' : 'no pude armar el texto para esta foto, probá de nuevo en un rato 🙏');
     // 6. Programado directo: elegir las opciones YA es aprobarlo.
     const needsReview = trainingWheelsActive(uid) ? 1 : 0;
-    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review, approval, approved_at, intent, source_topic) VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),?,?)`)
-      .run(uid, assetPath, caption, hashtags, iso, 'scheduled', mediaType, needsReview, 'approved', intent, 'subir-foto-preguntas');
+    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review, approval, approved_at, intent, source_topic, foto_asset_id) VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),?,?,?)`)
+      .run(uid, assetPath, caption, hashtags, iso, 'scheduled', mediaType, needsReview, 'approved', intent, 'subir-foto-preguntas', own.id);
     const postId = r.lastInsertRowid;
     let post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
     const applied = [], notes = [];
@@ -25966,6 +25985,12 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // (v212) La web del negocio (si pegó su link): la extracción determinística
   // arranca YA, en paralelo con el resto; se consume con carrera acotada.
   const webRaw = String(fields.web || '').trim().slice(0, 300);
+  // (LOTE MEDICIÓN 4 PILARES) Inicio de la prueba para medir onboarding→semana:
+  // se empareja con trial_locks.generated_at por @ o dominio. Nunca bloquea;
+  // fuera de testMode para no ensuciar la métrica con generaciones de test.
+  if (!trialTestMode(req)) {
+    try { track(null, 'prueba_start', ig ? trialLock.normalizeIg(ig) : 'web:' + trialLock.normalizeDomain(webRaw)); } catch (e) {}
+  }
   const webDescEdited = String(fields.web_desc || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const webCtxPromise = webRaw ? trialWebContext(webRaw) : Promise.resolve(null);
   const category = String(fields.category || '').trim();
@@ -26569,6 +26594,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // (v212) La web del negocio (si pegó su link): la extracción determinística
   // arranca YA, en paralelo con el resto; se consume con carrera acotada.
   const webRaw = String(fields.web || '').trim().slice(0, 300);
+  // (LOTE MEDICIÓN 4 PILARES) Inicio de la prueba para medir onboarding→semana:
+  // se empareja con trial_locks.generated_at por @ o dominio. Nunca bloquea;
+  // fuera de testMode para no ensuciar la métrica con generaciones de test.
+  if (!trialTestMode(req)) {
+    try { track(null, 'prueba_start', ig ? trialLock.normalizeIg(ig) : 'web:' + trialLock.normalizeDomain(webRaw)); } catch (e) {}
+  }
   const webDescEdited = String(fields.web_desc || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const webCtxPromise = webRaw ? trialWebContext(webRaw) : Promise.resolve(null);
   const category = String(fields.category || '').trim();
@@ -29309,7 +29340,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v684';
+const BUILD_ID = '20261101-v685';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

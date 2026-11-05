@@ -144,6 +144,10 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN img_redos INTEGER DEFAULT 0`); } cat
 // nace con 3 (las filas existentes también, por el DEFAULT de la migración).
 try { db.exec(`ALTER TABLE posts ADD COLUMN redo_left INTEGER NOT NULL DEFAULT 3`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN prev_image_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE MEDICIÓN 4 PILARES) Foto del cliente que originó el posteo (flujo
+// subir-foto): permite medir foto→posteo con exactitud
+// (assets.created_at → posts.created_at). Solo lo escribe subir-foto.
+try { db.exec(`ALTER TABLE posts ADD COLUMN foto_asset_id INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN enhance_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN enhance_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (media-cliente-2) Propuestas de la 2ª tanda: cada una vive aparte de
