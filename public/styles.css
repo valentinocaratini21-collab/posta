@@ -5239,3 +5239,27 @@ body.pz-postchat-open{overflow:hidden}
 .anf-pend{text-align:center;font-size:13px;color:#47617A;margin-top:16px;line-height:1.4}
 .anf-foot{text-align:center;font-size:13px;color:#47617A;margin-top:10px}
 .anf-foot a{color:#2793C8;font-weight:700;text-decoration:none}
+
+/* ── SUBIR-FOTO-PREGUNTAS (Valentino 4/11 ~21:03) ──
+   Modal de preguntas con un toque al subir foto/video. Una pregunta por
+   pantalla, opciones grandes (patrón onboarding), glass, sin animaciones.
+   Clases nuevas .pz-sfp-*; no toca ninguna regla existente. */
+.pz-sfp-back{position:fixed;inset:0;z-index:9999;background:rgba(10,30,51,.45);display:flex;align-items:flex-end;justify-content:center;padding:12px}
+.pz-sfp-sheet{width:100%;max-width:480px;max-height:88vh;overflow-y:auto;background:rgba(255,255,255,.88);backdrop-filter:blur(16px) saturate(1.4);border-radius:20px 20px 12px 12px;padding:16px 16px 20px;box-shadow:0 12px 40px rgba(10,30,51,.25)}
+.pz-sfp-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.pz-sfp-head img{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none}
+.pz-sfp-body{display:block}
+.pz-sfp-head b{flex:1;font-size:17px;color:#0A1E33}
+.pz-sfp-x{width:32px;height:32px;border:0;border-radius:50%;background:rgba(39,147,200,.14);color:#0A1E33;font-size:15px;cursor:pointer;flex:none}
+.pz-sfp-thumb{width:100%;max-height:200px;object-fit:cover;border-radius:14px;display:block;margin-bottom:12px}
+.pz-sfp-thumb-vid{display:flex;align-items:center;justify-content:center;height:120px;background:rgba(39,147,200,.12);font-size:40px;color:#2793C8}
+.pz-sfp-prog{font-size:12px;color:#47617A;margin-bottom:4px}
+.pz-sfp-q{font-size:19px;font-weight:700;color:#0A1E33;line-height:1.3;margin-bottom:14px}
+.pz-sfp-opts{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.pz-sfp-opt{display:block;width:100%;text-align:left;padding:14px 16px;border:0;border-radius:14px;background:rgba(39,147,200,.14);color:#0A1E33;font-size:16px;font-weight:600;cursor:pointer}
+.pz-sfp-opt:active{background:rgba(39,147,200,.28)}
+.pz-sfp-dias{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.pz-sfp-dia{padding:12px 8px;border:0;border-radius:12px;background:rgba(39,147,200,.14);color:#0A1E33;font-size:14px;font-weight:600;cursor:pointer}
+.pz-sfp-acel{display:block;width:100%;padding:14px 16px;border:0;border-radius:14px;background:linear-gradient(135deg,rgba(39,147,200,.28),rgba(254,193,77,.45));color:#0A1E33;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px}
+.pz-sfp-volver,.pz-sfp-escribir{display:block;width:100%;padding:12px;border:0;border-radius:12px;background:transparent;color:#47617A;font-size:14px;cursor:pointer}
+.pz-sfp-cargando{font-size:16px;color:#47617A;text-align:center;padding:28px 8px}

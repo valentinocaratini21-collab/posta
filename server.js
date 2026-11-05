@@ -19636,6 +19636,261 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
   }
 });
 
+// ── SUBIR-FOTO-PREGUNTAS (Valentino 4/11 ~21:03) ────────────────────────
+// Al subir UNA foto o video sin instrucción clara, el cliente responde
+// SOLO lo clave con un toque (una pregunta por pantalla, opciones grandes)
+// y el posteo queda PROGRAMADO directo. Principio: Posty PROPONE todo y el
+// dueño solo CORRIGE; las preguntas son puntos de corrección, no un
+// formulario. Elegir las opciones YA es aprobarlo: la fila nace con
+// status 'scheduled' + approval 'approved' (distinto del bloque ```create
+// de v666, que deja programado pendiente). La mejora de luz/color se hace
+// SIEMPRE (no se pregunta): es el acabado de Posty, no una decisión.
+//   — A diferencia del botón «Mejorar» manual (propuesta + aceptación del
+//     dueño), acá el acabado aplica directo: el dueño ya aprobó el posteo
+//     al elegir las opciones, y el resultado sigue siendo reconociblemente
+//     LA MISMA foto (la IA edita luz/nitidez/color sobre la base, con la
+//     cláusula de fidelidad del pipeline restyle).
+// Video: mismo flujo; Q3 (texto) y Q4 (cambio) no aplican y usan el default
+// de Posty (sin texto quemado, sin cambio). Multi-foto (>1 adjunto) NO abre
+// el flujo: va por el chat normal. Voz con foto tampoco (la nota ya trae
+// la instrucción hablada). Con ancla de posteo o propuesta IDEA abierta,
+// tampoco: la foto puede ser sobre ese posteo.
+// Nada de esto toca el handler de /api/ideas/chat: el flujo llama a su
+// propio endpoint y reutiliza la maquinaria existente (cupo, lint,
+// zonedWallToUtc, generateCaptions, enhance, restyle, media-crops,
+// composite-headline) sin duplicarla.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Slots y días para Q1, en la zona de la cuenta. Puro y testeable.
+// Devuelve { slots: [{label, when}], days: [{label, when}] } con when en
+// "YYYY-MM-DD HH:MM" pared de la cuenta. El primer slot es hoy a la mejor
+// hora si todavía falta (margen 10 min) y si no, mañana; el segundo, el día
+// siguiente. Los días del picker son los 14 días siguientes a mañana.
+function subirFotoSlots(tz, bestHour, nowMs, lang) {
+  const zone = tz || 'America/Argentina/Buenos_Aires';
+  const bh = (Number.isInteger(bestHour) && bestHour >= 9 && bestHour <= 21) ? bestHour : 18;
+  const en = lang === 'en';
+  const pad = (n) => String(n).padStart(2, '0');
+  const wallParts = (ms) => {
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+    const p = Object.fromEntries(fmt.formatToParts(new Date(ms)).map(x => [x.type, x.value]));
+    const hh = p.hour === '24' ? '00' : p.hour;
+    return { y: +p.year, m: +p.month, d: +p.day, wall: `${p.year}-${p.month}-${p.day} ${hh}:${p.minute}` };
+  };
+  const plusDay = (y, m, d, n) => { const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)); dt.setUTCDate(dt.getUTCDate() + n); return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() }; };
+  const sameDay = (a, b) => a.y === b.y && a.m === b.m && a.d === b.d;
+  const wallOf = (o) => `${o.y}-${pad(o.m)}-${pad(o.d)} ${pad(bh)}:00`;
+  const wdShort = (o) => {
+    try {
+      const dt = new Date(Date.UTC(o.y, o.m - 1, o.d, 12, 0, 0));
+      return new Intl.DateTimeFormat(en ? 'en' : 'es', { timeZone: 'UTC', weekday: 'short' }).format(dt).replace('.', '');
+    } catch (e) { return ''; }
+  };
+  const now = wallParts(nowMs);
+  const limit = wallParts(nowMs + 10 * 60 * 1000);
+  const tomorrow = plusDay(now.y, now.m, now.d, 1);
+  const first = (wallOf(now) > limit.wall) ? { y: now.y, m: now.m, d: now.d } : tomorrow;
+  const second = plusDay(first.y, first.m, first.d, 1);
+  const labelFor = (o) => {
+    const hh = `${pad(bh)}:00`;
+    if (sameDay(o, now)) return en ? `Today ${hh}` : `Hoy ${hh}`;
+    if (sameDay(o, tomorrow)) return en ? `Tomorrow ${hh}` : `Mañana ${hh}`;
+    const wd = wdShort(o);
+    const dm = en ? `${o.m}/${o.d}` : `${o.d}/${o.m}`;
+    return wd ? `${wd} ${dm} · ${hh}` : `${dm} · ${hh}`;
+  };
+  const slots = [
+    { label: labelFor(first), when: wallOf(first) },
+    { label: labelFor(second), when: wallOf(second) },
+  ];
+  const days = [];
+  let cur = tomorrow;
+  for (let i = 0; i < 14; i++) {
+    days.push({ label: labelFor(cur), when: wallOf(cur) });
+    cur = plusDay(cur.y, cur.m, cur.d, 1);
+  }
+  return { slots, days };
+}
+
+// Etiqueta legible de un when pared ("2026-11-05 18:00") para el recibo.
+function subirFotoWhenLabel(when, lang) {
+  try {
+    const m = String(when).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+    if (!m) return String(when);
+    const dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12, 0, 0));
+    const wd = new Intl.DateTimeFormat(lang === 'en' ? 'en' : 'es', { timeZone: 'UTC', weekday: 'long' }).format(dt);
+    const dm = lang === 'en' ? `${+m[2]}/${+m[3]}` : `${+m[3]}/${+m[2]}`;
+    return lang === 'en' ? `${wd} ${dm} at ${m[4]}:${m[5]}` : `${wd} ${dm} a las ${m[4]}:${m[5]}`;
+  } catch (e) { return String(when); }
+}
+
+// Primera promo activa del fundamento (dna.promos / promos_activas), o ''.
+function subirFotoPromoTitulo(uid) {
+  try {
+    const dna = readDna(uid) || {};
+    const src = (Array.isArray(dna.promos) && dna.promos.length ? dna.promos : null)
+      || (Array.isArray(dna.promos_activas) && dna.promos_activas.length ? dna.promos_activas : null) || [];
+    const p = src.find(x => x && (x.titulo || x.nombre));
+    return p ? String(p.titulo || p.nombre).slice(0, 60) : '';
+  } catch (e) { return ''; }
+}
+
+app.get('/api/subir-foto/propuesta', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const tz = userTz(uid);
+  let bestHour = 18;
+  try { const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid); if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour; } catch (e) {}
+  const lang = langOfUser(uid);
+  const { slots, days } = subirFotoSlots(tz, bestHour, Date.now(), lang);
+  const promoTitulo = subirFotoPromoTitulo(uid);
+  res.json({ ok: true, bestHour, slots, days, hasPromo: !!promoTitulo, promoTitulo, lang });
+});
+
+app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const lang = langOfUser(uid);
+  const en = lang === 'en';
+  const fail = (error, message) => res.json({ ok: false, error, message });
+  try {
+    const body = req.body || {};
+    const media = body.media === 'video' ? 'video' : 'photo';
+    const ans = body.answers || {};
+    // 1. Foto/video verificable como propio (misma regla que ```create:
+    //    nunca se crea nada desde material no verificado).
+    const assetPath = String(body.assetPath || '');
+    const kind = media === 'video' ? 'video' : 'photo';
+    if (!assetPath.startsWith('/media/')) return fail('foto_no_verificada', en ? 'I could not verify that photo as yours, please send it again 🙏' : 'no pude verificar esa foto como tuya, mandala de nuevo 🙏');
+    const own = db.prepare('SELECT id FROM assets WHERE user_id = ? AND file_path = ? AND kind = ?').get(uid, assetPath, kind);
+    if (!own) return fail('foto_no_verificada', en ? 'I could not verify that photo as yours, please send it again 🙏' : 'no pude verificar esa foto como tuya, mandala de nuevo 🙏');
+    // 2. Respuestas válidas. Video: Q3/Q4 usan el default de Posty.
+    const when = String(ans.when || '');
+    if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(when)) return fail('when_invalido', en ? 'That day and time do not work, pick another 🙏' : 'ese día y hora no sirven, elegí otro 🙏');
+    const iso = zonedWallToUtc(when, userTz(uid));
+    if (!iso || new Date(iso).getTime() <= Date.now() + 5 * 60 * 1000) return fail('when_pasado', en ? 'That time already passed, pick another 🙏' : 'esa hora ya pasó, elegí otra 🙏');
+    const intent = ['vengan', 'conozcan', 'vender'].includes(ans.intent) ? ans.intent : 'conozcan';
+    const textOpt = media === 'video' ? 'sin-texto' : (ans.text === 'con-titular' ? 'con-titular' : 'sin-texto');
+    const changeOpt = media === 'video' ? 'ninguno' : (['otra-version', 'recorte'].includes(ans.change) ? ans.change : 'ninguno');
+    const promoTitulo = subirFotoPromoTitulo(uid);
+    const withPromo = ans.promo === 'con-promo' && !!promoTitulo;
+    // 3. Cupo de la semana destino (misma autoridad que el PATCH).
+    const mediaType = media === 'video' ? 'video' : 'image';
+    const q = quotaForWeek(uid, mediaType, mondayKeyOf(when.slice(0, 10)));
+    if (q && q.left <= 0) {
+      return res.status(403).json({ ok: false, error: 'plan_limit', plan_limit: true, limit: q.limit, used: q.used, plan_name: q.plan_name, week_key: q.week_key,
+        message: en ? `You reached your ${q.plan_name} plan limit (${q.limit} ${quotaUnitName(mediaType)} per week). Upgrade your plan to keep posting that week.`
+                   : `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(mediaType)} por semana). Mejorá tu paquete para seguir posteando esa semana.` });
+    }
+    // 4. Tope de gasto IA + ritmo (mismo que el turno de chat que reemplaza).
+    try { costs.assertAiOk(uid); }
+    catch (e) { if (e && e.name === 'AiCapExceeded') return fail('ai_cap', e.message); throw e; }
+    if (!costs.checkRate(uid, 'chat', aiLimitsFor(uid).chatPerDay).ok) return fail('chat_rate', costs.MSG_CHAT_RATE);
+    // 5. Caption real con el fundamento (misma maquinaria que la semana).
+    const profile = getProfile(uid) || {};
+    const dna = readDna(uid);
+    let styleRules = [];
+    try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
+    let voice = '';
+    try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
+    const topicBase = intent === 'vengan' ? 'invitar a venir al negocio, con esta foto real del negocio'
+      : intent === 'vender' ? 'vender lo que muestra esta foto real del negocio'
+      : 'presentar lo que muestra esta foto real del negocio';
+    const topic = withPromo ? `${topicBase} — con la promo activa: ${promoTitulo}` : topicBase;
+    const key = (getSettings(uid).openai_key || process.env.OPENAI_API_KEY || '');
+    let caption = '', hashtags = '';
+    try {
+      const out = await generateCaptions({ business: profile.business_name, category: profile.category, description: profile.description, dna, tone: profile.tone, topic, tipo: '', goal: profile.goal, taste: tasteProfile(uid), performance: [performanceBrief(db, uid), bestHoursLine(db, uid)].filter(Boolean).join('\n'), styleRules, voice, golden: goldenExamples(uid) }, 1, key);
+      caption = (out.captions && out.captions[0]) || '';
+      hashtags = out.hashtags || '';
+    } catch (e) { console.error('[subir-foto] caption:', e.message); }
+    if (!caption) return fail('caption_fallo', en ? 'I could not write the text for this photo, try again in a bit 🙏' : 'no pude armar el texto para esta foto, probá de nuevo en un rato 🙏');
+    // 6. Programado directo: elegir las opciones YA es aprobarlo.
+    const needsReview = trainingWheelsActive(uid) ? 1 : 0;
+    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review, approval, approved_at, intent, source_topic) VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),?,?)`)
+      .run(uid, assetPath, caption, hashtags, iso, 'scheduled', mediaType, needsReview, 'approved', intent, 'subir-foto-preguntas');
+    const postId = r.lastInsertRowid;
+    let post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
+    const applied = [], notes = [];
+    if (media === 'photo') {
+      // a. Mejora de luz/color, SIEMPRE (acabado de Posty, no una decisión).
+      //    Best-effort: si no se puede, sigue la foto original, nunca se
+      //    bloquea el posteo por esto.
+      try {
+        const gen = await enhancePhotoGenerate(uid, post);
+        if (gen && gen.proposalPath) {
+          db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(String(gen.proposalPath), String(post.image_path || ''), postId);
+          post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
+          applied.push('mejora');
+        }
+      } catch (e) { console.error('[subir-foto] mejora:', e.message); }
+      // b. Cambio elegido: otra versión (restyle) o recorte distinto (pad
+      //    4:5, foto entera con fondo difuminado, CERO corte del producto).
+      //    Best-effort con línea honesta si no sale; nunca bloquea.
+      if (changeOpt === 'otra-version') {
+        try {
+          let st = null;
+          try {
+            const digest = (() => { try { return digestForUser(uid); } catch (e) { return null; } })();
+            const IS = require('./image-styles');
+            const pick = IS.pickStyle({ digest, feedProfile: IS.feedProfileFromDigest(digest), offerProfile: IS.offerProfileFromDigest(digest), salesIntent: '', baseReal: true, tipo: '', theme: String(caption).split('\n')[0], rubro: rubroOf(uid), favorites: [], boosts: require('./learning').getClientBoosts(db, uid) || {} });
+            st = (pick && pick.style) || IS.getStyle('/goldenhour');
+          } catch (e) { st = null; }
+          const headline0 = makeHeadline(String(caption).split('\n')[0], 6, 70, rubroOf(uid)) || '';
+          const styleOut = {}, genOut = {};
+          const newPath = st ? await conceptShotGenerateQueued({ uid, idea: caption, tipo: '', intent, headline: headline0, refs: [post.image_path], refRoles: ['restyle'], style: st.code, styleOut, resultOut: genOut, restyle: true }) : null;
+          if (newPath) {
+            const needRev = (genOut.fidelity === 'fallback' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja')) ? 1 : 0;
+            db.prepare(`UPDATE posts SET image_path = ?, style_code = ?, prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1${needRev ? ', needs_review = 1' : ''} WHERE id = ?`).run(String(newPath), st.code, String(post.image_path || ''), postId);
+            post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
+            applied.push('otra-version');
+          } else notes.push('otra-version');
+        } catch (e) { console.error('[subir-foto] otra-version:', e.message); notes.push('otra-version'); }
+      } else if (changeOpt === 'recorte') {
+        try {
+          const { execFileSync } = require('child_process');
+          const abs = photoCliente.mediaAbs(MEDIA_DIR, post.image_path);
+          const out = execFileSync('python3', [path.join(__dirname, 'media-crops.py'), abs, MEDIA_DIR], { timeout: 60000, encoding: 'utf8' });
+          const parsed = JSON.parse(out);
+          const feed = (parsed.formats || []).find(f => f.format === 'feed');
+          if (feed && feed.pad && fs.existsSync(path.join(MEDIA_DIR, feed.pad))) {
+            db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(`/media/${feed.pad}`, String(post.image_path || ''), postId);
+            post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
+            applied.push('recorte');
+          } else notes.push('recorte');
+        } catch (e) { console.error('[subir-foto] recorte:', e.message); notes.push('recorte'); }
+      }
+      // c. Titular, ÚLTIMO: se quema por código sobre la imagen final.
+      if (textOpt === 'con-titular') {
+        try {
+          const headline = makeHeadline(String(caption).split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(String(caption), 5, 70, rubroOf(uid)) || '';
+          if (headline) {
+            const rr = recompositePostOverlay(uid, post, headline);
+            if (rr && rr.ok) { post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId); applied.push('titular'); }
+            else notes.push('titular');
+          } else notes.push('titular');
+        } catch (e) { console.error('[subir-foto] titular:', e.message); notes.push('titular'); }
+      }
+    }
+    try { scheduleLintForPost(uid, postId); } catch (e) {}
+    // 7. Recibo: programado + título + líneas honestas de lo que no salió.
+    const whenLabel = subirFotoWhenLabel(when, lang);
+    const title = String(caption).split('\n')[0].slice(0, 60);
+    let reply = en ? `done, scheduled for ${whenLabel} ✅` : `listo, programado para ${whenLabel} ✅`;
+    if (title) reply += `\n"${title}"`;
+    const noteLines = { 'otra-version': en ? 'I could not make another version of the photo, so I scheduled the original.' : 'no pude hacer otra versión de la foto, así que programé la original.',
+      'recorte': en ? 'I could not make the different crop, so I scheduled the full photo.' : 'no pude hacer el recorte distinto, así que programé la foto entera.',
+      'titular': en ? 'I could not burn the headline on the photo, so it goes without text on the image.' : 'no pude quemar el titular en la foto, así que va sin texto en la imagen.' };
+    for (const n of notes) if (noteLines[n]) reply += `\n${noteLines[n]}`;
+    try {
+      db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', String(body.displayText || '').slice(0, 2000));
+      db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', reply);
+    } catch (e) {}
+    res.json({ ok: true, postId, when, whenLabel, applied, notes, reply });
+  } catch (e) {
+    console.error('[subir-foto] programar:', e.message);
+    res.status(500).json({ ok: false, error: 'programar_fallo', message: en ? 'Something went wrong, try again 🙏' : 'algo falló, probá de nuevo 🙏' });
+  }
+});
+
 // (foto-cliente-experto, 2026-10-26) «Mejorar» genera una PROPUESTA.
 // La mejora ya NO aplica in situ: el endpoint guarda la mejorada como
 // propuesta (enhance_proposal_path/base) y el dueño la acepta o la
@@ -28605,7 +28860,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v674';
+const BUILD_ID = '20261101-v675';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

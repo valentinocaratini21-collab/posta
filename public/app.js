@@ -10368,6 +10368,197 @@ function postyTyping(el) {
   el.innerHTML = '<span class="typing-dots" aria-label="Posty está escribiendo"><span></span><span></span><span></span></span>';
 }
 
+// ── SUBIR-FOTO-PREGUNTAS (Valentino 4/11 ~21:03) ──
+// Al subir UNA foto o video sin instrucción clara, Posty pregunta SOLO lo
+// clave con un toque (una pregunta por pantalla, opciones grandes, patrón
+// onboarding) y el posteo queda PROGRAMADO directo. Posty PROPONE todo y
+// el dueño solo CORRIGE. «Programalo así» acepta la propuesta en un toque.
+// Si el texto ya dice qué hacer, NO hay preguntas: ejecución directa por
+// el chat normal (misma regla que las opciones v666: mensaje claro →
+// directo). Video: sin Q3/Q4 (defaults). Multi-foto, ancla, IDEA abierta
+// o voz no abren el flujo.
+
+// ¿El texto que acompaña la foto ya dice qué hacer? Señales de instrucción
+// (ES/EN). Un "mirá", "qué te parece" o "me gusta" NO es instrucción: ahí
+// van las preguntas. Un falso positivo solo degrada al chat normal (el
+// modelo lo resuelve); un falso negativo solo abre las preguntas.
+function pzSubirTieneInstruccion(text) {
+  const t = ' ' + String(text || '').toLowerCase() + ' ';
+  if (!t.trim()) return false;
+  const accion = /\b(publica|poste[ao]|sub[íi]|sac[áa]|programa|crea|arm[áa])(la|lo|las|los|me)?\b|\bhac[eé]me\b|\b(publish|schedule|create|make|post)\b/;
+  const cuando = /\bpara (mañana|pasado mañana|el lunes|el martes|el mi[eé]rcoles|el jueves|el viernes|el s[aá]bado|el domingo|la semana que viene)\b|\bmañana a las\b|\btomorrow\b|\bnext week\b|\d{1,2}:\d{2}\b/;
+  const cambio = /\bcambi[áa](le|la|lo|las|los|me)?\b|\btitular\b|\btexto en\b|\bpromo\b|\boferta\b|\bdescuento\b|\bvender\b|\bque vengan\b|\bchange\b|\bheadline\b|\boffer\b|\bdiscount\b|\bsell\b/;
+  return accion.test(t) || cuando.test(t) || cambio.test(t);
+}
+
+// Lista de preguntas en orden, desde la propuesta del servidor y el medio.
+// Video: sin Q3/Q4 (defaults de Posty). Promo: solo si hay en el fundamento.
+function pzSubirPreguntasArmar(prop, media) {
+  const en = prop && prop.lang === 'en';
+  const qs = [];
+  qs.push({ id: 'when', q: en ? 'When do you want to post it?' : '¿Cuándo la querés subir?',
+    opts: (prop.slots || []).map(s => ({ v: s.when, label: s.label })).concat([{ v: '__otro', label: en ? 'Another day' : 'Otro día' }]) });
+  qs.push({ id: 'intent', q: en ? 'What is this post for?' : '¿Para qué es este posteo?',
+    opts: en ? [{ v: 'vengan', label: 'Bring people in' }, { v: 'conozcan', label: 'Show it off' }, { v: 'vender', label: 'Sell something' }]
+             : [{ v: 'vengan', label: 'Que vengan' }, { v: 'conozcan', label: 'Que lo conozcan' }, { v: 'vender', label: 'Vender algo' }] });
+  if (media !== 'video') {
+    qs.push({ id: 'text', q: en ? 'Text on the photo?' : '¿Texto en la foto?',
+      opts: en ? [{ v: 'sin-texto', label: 'No text, just the photo' }, { v: 'con-titular', label: 'With a headline, Posty writes it' }]
+               : [{ v: 'sin-texto', label: 'Sin texto, solo la foto' }, { v: 'con-titular', label: 'Con titular, Posty lo escribe' }] });
+    qs.push({ id: 'change', q: en ? 'Change anything?' : '¿Le cambio algo?',
+      opts: en ? [{ v: 'ninguno', label: 'No, it is perfect' }, { v: 'otra-version', label: 'Another version' }, { v: 'recorte', label: 'A different crop' }]
+               : [{ v: 'ninguno', label: 'No, así está' }, { v: 'otra-version', label: 'Otra versión' }, { v: 'recorte', label: 'Recorte distinto' }] });
+  }
+  if (prop && prop.hasPromo && prop.promoTitulo) {
+    qs.push({ id: 'promo', q: en ? 'With the promo?' : '¿Con la promo?',
+      opts: en ? [{ v: 'con-promo', label: `Yes, with ${prop.promoTitulo}` }, { v: 'sin-promo', label: 'No, without promo' }]
+               : [{ v: 'con-promo', label: `Sí, con ${prop.promoTitulo}` }, { v: 'sin-promo', label: 'No, sin promo' }] });
+  }
+  return qs;
+}
+
+let pzSubirFlujo = null;
+
+function pzSubirCerrar(escribir) {
+  const f = pzSubirFlujo; pzSubirFlujo = null;
+  const el = document.getElementById('pzSfpBack'); if (el) el.remove();
+  if (escribir && f) {
+    const inp = $('#chatInput');
+    if (inp) { inp.value = f.textoGuardado || ''; try { inp.focus(); } catch (e) {} }
+  }
+}
+
+function pzSubirFotoAbrir(photo, textoGuardado) {
+  if (pzSubirFlujo) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  pzSubirFlujo = { photo, media: photo.kind === 'video' ? 'video' : 'photo', textoGuardado: textoGuardado || '', prop: null, qs: [], idx: 0, ans: {}, mode: 'qs' };
+  const inp = $('#chatInput'); if (inp) { inp.value = ''; try { inp.blur(); } catch (e) {} }
+  const back = document.createElement('div');
+  back.className = 'pz-sfp-back'; back.id = 'pzSfpBack';
+  back.innerHTML = `<div class="pz-sfp-sheet" role="dialog" aria-label="Posty">
+    <div class="pz-sfp-head"><img src="/ai-avatar.png" alt="Posty"><b>Posty</b><button type="button" class="pz-sfp-x" aria-label="Cerrar">✕</button></div>
+    <div class="pz-sfp-body"><div class="pz-sfp-cargando">${esc(en ? 'Putting your options together…' : 'Armando tus opciones…')}</div></div>
+  </div>`;
+  back.querySelector('.pz-sfp-x').onclick = () => pzSubirCerrar(true);
+  back.addEventListener('click', (e) => { if (e.target === back) pzSubirCerrar(true); });
+  document.body.appendChild(back);
+  api.get('/api/subir-foto/propuesta').then(prop => {
+    if (!pzSubirFlujo || !prop || !prop.ok) { pzSubirFallo(); return; }
+    pzSubirFlujo.prop = prop;
+    pzSubirFlujo.qs = pzSubirPreguntasArmar(prop, pzSubirFlujo.media);
+    pzSubirRender();
+  }).catch(() => pzSubirFallo());
+}
+
+function pzSubirFallo() {
+  const f = pzSubirFlujo; if (!f) return;
+  const body = document.querySelector('#pzSfpBack .pz-sfp-body');
+  const en = f.prop && f.prop.lang === 'en';
+  if (body) body.innerHTML = `<div class="pz-sfp-q">${esc(en ? 'I could not put your options together, write me what you want for this photo 👇' : 'no pude armar tus opciones, escribime qué querés para esta foto 👇')}</div>
+    <button type="button" class="pz-sfp-escribir">${esc(en ? 'Write to Posty' : 'Escribirle a Posty')}</button>`;
+  const b = document.querySelector('#pzSfpBack .pz-sfp-escribir');
+  if (b) b.onclick = () => pzSubirCerrar(true);
+}
+
+function pzSubirAceleradorHtml(en) {
+  return `<button type="button" class="pz-sfp-acel">${esc(en ? '✦ Schedule it like this' : '✦ Programalo así')}</button>`;
+}
+function pzSubirBindAcelerador(body) {
+  const b = body.querySelector('.pz-sfp-acel');
+  if (b) b.onclick = () => pzSubirProgramaloAsi();
+}
+
+function pzSubirRender() {
+  const f = pzSubirFlujo; if (!f) return;
+  const body = document.querySelector('#pzSfpBack .pz-sfp-body');
+  if (!body) return;
+  const en = f.prop.lang === 'en';
+  const thumb = f.photo.aiUrl ? `<img class="pz-sfp-thumb" src="${esc(f.photo.aiUrl)}" alt="">` : `<div class="pz-sfp-thumb pz-sfp-thumb-vid">▶</div>`;
+  if (f.mode === 'days') {
+    const days = (f.prop.days || []).map(d => `<button type="button" class="pz-sfp-dia" data-when="${esc(d.when)}">${esc(d.label)}</button>`).join('');
+    body.innerHTML = `${thumb}<div class="pz-sfp-prog">${esc(en ? 'When?' : '¿Cuándo?')}</div>
+      <div class="pz-sfp-q">${esc(en ? 'Pick a day' : 'Elegí el día')}</div>
+      <div class="pz-sfp-dias">${days}</div>
+      <button type="button" class="pz-sfp-volver">← ${esc(en ? 'Back' : 'Volver')}</button>
+      ${pzSubirAceleradorHtml(en)}`;
+    body.querySelectorAll('.pz-sfp-dia').forEach(b => b.onclick = () => { f.ans.when = b.dataset.when; f.mode = 'qs'; f.idx++; if (f.idx >= f.qs.length) pzSubirCompletar(); else pzSubirRender(); });
+    const v = body.querySelector('.pz-sfp-volver'); if (v) v.onclick = () => { f.mode = 'qs'; pzSubirRender(); };
+    pzSubirBindAcelerador(body);
+    return;
+  }
+  const q = f.qs[f.idx];
+  if (!q) { pzSubirCompletar(); return; }
+  const total = f.qs.length;
+  const opts = q.opts.map(o => `<button type="button" class="pz-sfp-opt" data-v="${esc(o.v)}">${esc(o.label)}</button>`).join('');
+  body.innerHTML = `${thumb}<div class="pz-sfp-prog">${esc(`${f.idx + 1} ${en ? 'of' : 'de'} ${total}`)}</div>
+    <div class="pz-sfp-q">${esc(q.q)}</div>
+    <div class="pz-sfp-opts">${opts}</div>
+    ${pzSubirAceleradorHtml(en)}
+    <button type="button" class="pz-sfp-escribir">${esc(en ? 'Write to Posty instead' : 'Escribirle a Posty')}</button>`;
+  body.querySelectorAll('.pz-sfp-opt').forEach(b => b.onclick = () => {
+    const v = b.dataset.v;
+    if (q.id === 'when' && v === '__otro') { f.mode = 'days'; pzSubirRender(); return; }
+    f.ans[q.id] = v;
+    f.idx++;
+    if (f.idx >= f.qs.length) pzSubirCompletar(); else pzSubirRender();
+  });
+  const w = body.querySelector('.pz-sfp-escribir'); if (w) w.onclick = () => pzSubirCerrar(true);
+  pzSubirBindAcelerador(body);
+}
+
+function pzSubirProgramaloAsi() {
+  const f = pzSubirFlujo; if (!f) return;
+  if (!f.ans.when) f.ans.when = ((f.prop.slots || [])[0] || {}).when;
+  if (!f.ans.intent) f.ans.intent = 'conozcan';
+  if (f.media !== 'video') { if (!f.ans.text) f.ans.text = 'sin-texto'; if (!f.ans.change) f.ans.change = 'ninguno'; }
+  if (f.prop.hasPromo && !f.ans.promo) f.ans.promo = 'sin-promo';
+  pzSubirCompletar();
+}
+
+function pzSubirResumen(f) {
+  const en = f.prop.lang === 'en';
+  const medio = f.media === 'video' ? (en ? 'With this video' : 'Con este video') : (en ? 'With this photo' : 'Con esta foto');
+  const labOpt = (id, v) => { const qq = (f.qs.find(x => x.id === id) || {}); const o = (qq.opts || []).find(o => o.v === v); return o ? o.label : v; };
+  const labWhen = (w) => { const all = [...(f.prop.slots || []), ...(f.prop.days || [])]; const o = all.find(x => x.when === w); return o ? o.label : w; };
+  const partes = [medio + ': ' + labOpt('intent', f.ans.intent), labWhen(f.ans.when)];
+  if (f.media !== 'video') { partes.push(labOpt('text', f.ans.text)); partes.push(labOpt('change', f.ans.change)); }
+  if (f.prop.hasPromo && f.ans.promo) partes.push(labOpt('promo', f.ans.promo));
+  return partes.join(' · ');
+}
+
+async function pzSubirCompletar() {
+  const f = pzSubirFlujo; if (!f) return;
+  const body = document.querySelector('#pzSfpBack .pz-sfp-body');
+  const en = f.prop.lang === 'en';
+  if (body) body.innerHTML = `<div class="pz-sfp-cargando">${esc(en ? 'Scheduling it…' : 'Programándolo…')}</div>`;
+  const displayText = pzSubirResumen(f);
+  let r = null;
+  try {
+    r = await api.post('/api/subir-foto/programar', { assetPath: f.photo.file_path, media: f.media,
+      answers: { when: f.ans.when, intent: f.ans.intent, text: f.ans.text || 'sin-texto', change: f.ans.change || 'ninguno', promo: f.ans.promo || 'sin-promo' }, displayText });
+  } catch (e) { r = null; }
+  const photo = f.photo;
+  const textoGuardado = f.textoGuardado;
+  pzSubirCerrar(false);
+  const box = $('#chatBox');
+  if (r && r.ok) {
+    if (box) {
+      const thumb = photo.aiUrl ? `<img src="${esc(photo.aiUrl)}" style="width:100%;border-radius:10px;margin-bottom:6px;display:block" alt="">` : '';
+      box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${thumb}<div>${esc(displayText)}</div></div>`);
+      box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', r.reply || '…'));
+      chatScroll();
+    }
+    const i = CHAT_PHOTOS.indexOf(photo); if (i >= 0) CHAT_PHOTOS.splice(i, 1);
+    renderChatPhotos(); chatUpdateSendBtn();
+    try { render(); } catch (e) {}
+  } else {
+    const msg = (r && r.message) ? r.message : (en ? 'I could not schedule it, try again 🙏' : 'no pude programarlo, probá de nuevo 🙏');
+    if (box) { box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(msg)}</div>`); chatScroll(); }
+    const inp = $('#chatInput');
+    if (inp && textoGuardado) inp.value = textoGuardado;
+  }
+}
+
 async function chatSend() {
   const inp = $('#chatInput');
   const text = (inp.value || '').trim();
@@ -10375,6 +10566,18 @@ async function chatSend() {
   const unsent = CHAT_PHOTOS.filter(p => p.aiUrl && !p.sent);
   if (!text && !unsent.length) return;
   const sendText = text || (unsent.length === 1 ? '📷 Te mando una foto' : `📷 Te mando ${unsent.length} fotos`);
+  // (SUBIR-FOTO-PREGUNTAS) UNA foto/video sin instrucción clara → preguntas
+  // con un toque, no envío directo. Multi-foto, ancla, IDEA abierta o texto
+  // con instrucción van por el chat normal.
+  try {
+    const pendientes = CHAT_PHOTOS.filter(p => !p.sent);
+    const conAncla = (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id);
+    const ideaAbierta = (typeof CHAT_IDEA !== 'undefined' && CHAT_IDEA);
+    if (pendientes.length === 1 && !pzSubirFlujo && !ideaAbierta && !conAncla && !pzSubirTieneInstruccion(text)) {
+      pzSubirFotoAbrir(pendientes[0], text);
+      return;
+    }
+  } catch (e) {}
   // AJUSTE ENTRADA DIRECTA: si hay foto pendiente, el texto es la instrucción.
   try { pzSftChatTexto(sendText); } catch (e) {}
   const box = $('#chatBox');
