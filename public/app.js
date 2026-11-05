@@ -10881,7 +10881,21 @@ let VOICE_FAIL_CODE = '';
 let VOICE_CANCEL = false, VOICE_START_X = 0, VOICE_START_Y = 0, VOICE_EARLY_UP = false, VOICE_ABORTED = false;
 let VOICE_CTX = null, VOICE_AN = null, VOICE_RAF = 0;
 function vozEn() { try { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); } catch (e) { return false; } }
-function vozMsgEl() { return document.getElementById('chatMsg'); }
+function vozHostEl() {
+  // (LOTE MIC-INICIO) Host de la barra de voz: en la pantalla de chat,
+  // #chatMsg de siempre; en Inicio, la barra visible #mzVoiceBar (el
+  // #chatMsg de Inicio vive en la hoja oculta y no se ve). Sin ninguna
+  // de las dos, #chatMsg como siempre (chat del posteo).
+  try {
+    if (document.getElementById('pzChatFull')) return document.getElementById('chatMsg');
+    const vb = document.getElementById('mzVoiceBar');
+    if (vb) return vb;
+  } catch (e) {}
+  return document.getElementById('chatMsg');
+}
+// ¿Estamos grabando/mandando desde Inicio (no desde la pantalla de chat)?
+function vozEnInicio() { try { return !document.getElementById('pzChatFull') && !!document.getElementById('mzVoiceBar'); } catch (e) { return false; } }
+function vozMsgEl() { return vozHostEl(); }
 function vozMicEl() { return document.getElementById('chatMicSend'); }
 function vozFmt(s) { s = Math.floor(s / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function voiceTick() {
@@ -10932,6 +10946,21 @@ function voiceRenderBar() {
   } else {
     m.innerHTML = '';
   }
+  // (LOTE MIC-INICIO) En Inicio la barra vive en #mzVoiceBar: se muestra
+  // solo mientras hay contenido (grabando/vista previa/enviando/fallo).
+  try {
+    const vb = document.getElementById('mzVoiceBar');
+    if (vb && m === vb) vb.hidden = !m.innerHTML;
+  } catch (e) {}
+}
+function vozFalloInicio(texto) {
+  // (LOTE MIC-INICIO) Fallo de grabación en Inicio: la barra visible con
+  // la causa y botón para grabar de nuevo. En el chat este camino sigue
+  // siendo chatSay (no se toca).
+  const vb = document.getElementById('mzVoiceBar'); if (!vb) return;
+  vb.hidden = false;
+  vb.innerHTML = '<div class="voz-bar"><span style="font-size:12.5px;flex:1">' + esc(texto) + '</span><button type="button" class="btn btn-primary" id="vozRetry3">' + (vozEn() ? 'Record again' : 'Grabar de nuevo') + '</button></div>';
+  const r = document.getElementById('vozRetry3'); if (r) r.onclick = () => { vb.innerHTML = ''; vb.hidden = true; voiceToggle(); };
 }
 function voiceCleanup() {
   try { if (VOICE_RAF) cancelAnimationFrame(VOICE_RAF); } catch (e) {}
@@ -10961,6 +10990,8 @@ async function voiceToggle() {
   if (VOICE_STATE === 'rec' && VOICE_REC) { voiceStop(); return; }
   if (VOICE_STATE !== 'idle') return; // preview/sending/failed: se resuelve con sus botones
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    // (LOTE MIC-INICIO) En Inicio no hay chat visible: la causa va en la barra, no en chatSay.
+    if (vozEnInicio()) { vozFalloInicio(vozEn() ? 'your browser does not support voice notes. write me instead 👇' : 'tu navegador no soporta notas de voz. escribime el pedido 👇'); return; }
     chatSay('🎙 ' + (vozEn() ? 'your browser does not support voice notes. write me instead 👇' : 'tu navegador no soporta notas de voz. escribime el pedido 👇'));
     return;
   }
@@ -10993,6 +11024,8 @@ async function voiceToggle() {
     voiceRenderBar();
     setTimeout(() => { if (VOICE_STATE === 'rec' && VOICE_REC) voiceStop(); }, 90000); // tope 90 segundos
   } catch (e) {
+    // (LOTE MIC-INICIO) En Inicio no hay chat visible: la causa va en la barra, no en chatSay.
+    if (vozEnInicio()) { vozFalloInicio(vozEn() ? 'we could not use the microphone. check the permission or write me instead 👇' : 'no pudimos usar el micrófono. revisá el permiso (Ajustes → Safari → Micrófono) o escribime el pedido 👇'); return; }
     chatSay('🎙 ' + (vozEn() ? 'we could not use the microphone. check the permission or write me instead 👇' : 'no pudimos usar el micrófono. revisá el permiso (Ajustes → Safari → Micrófono) o escribime el pedido 👇'));
   }
 }
@@ -11048,6 +11081,19 @@ async function voiceSend() {
   try { tr = await api.post('/api/ideas/transcribe', { audio: dataUrl }, { timeout: 90000 }); } catch (e) { tr = null; VOICE_FAIL_CODE = (e && e.data && e.data.error) || (e && e.networkError ? 'network' : 'error'); }
   if (!tr || !tr.ok || !tr.transcript) { if (!VOICE_FAIL_CODE) VOICE_FAIL_CODE = (tr && tr.error) || 'no_heard'; VOICE_STATE = 'failed'; voiceRenderBar(); return; }
   const transcript = String(tr.transcript).slice(0, 2000);
+  // (LOTE MIC-INICIO) Nota grabada desde Inicio: la nota ya está enviada
+  // (transcripción lista). No se pinta en la hoja oculta ni se corre el
+  // intercambio con el cuadro viejo: se deja el pendiente y se navega;
+  // la pantalla del chat lo consume al abrir (burbuja + audio +
+  // intercambio con el cuadro nuevo). Si falla, no se navega (arriba).
+  if (vozEnInicio()) {
+    try { window.__pzVoicePending = { text: transcript, audio: audioUrl }; } catch (e) {}
+    VOICE_URL = ''; VOICE_BLOB = null; VOICE_STATE = 'idle';
+    voiceRenderBar();
+    try { chatUpdateSendBtn(); } catch (e) {}
+    location.hash = '#/app/chat';
+    return;
+  }
   // La transcripción VERBATIM es el mensaje del cliente: texto exacto + audio.
   const box = $('#chatBox');
   if (box) box.insertAdjacentHTML('beforeend', '<div class="chat-msg u msg-in">' + esc(transcript) + '<audio controls src="' + esc(audioUrl) + '" style="display:block;width:100%;height:32px;margin-top:6px"></audio></div>');
@@ -20228,6 +20274,7 @@ async function inicioView() {
   ${gridHTML}
   ${visitorPillHTML}
   <div class="mz-bottomstack" id="mzBottomStack">
+  <div id="mzVoiceBar" hidden></div>
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-plus" id="mzChatPlus" aria-label="Agregar" onclick="pzDockMasToggle()">+</button>
     <button type="button" class="mz-ph" id="mzChatOpen"><img class="chat-face" src="ai-avatar.png" alt="Posty"><span class="mz-ph-tx">escribile a posty…</span></button>
@@ -20963,6 +21010,32 @@ function pzChatKbBind() {
     window.addEventListener('orientationchange', pzChatKbSync);
   } catch (e) {}
 }
+// (LOTE MIC-INICIO) Nota enviada desde Inicio: al abrir el chat, la
+// burbuja del usuario (con audio) tiene que estar en el cuadro NUEVO y
+// el intercambio correr con ese cuadro — no con el de la hoja oculta.
+// Se espera al historial en vuelo: si lo barrió, se repone la burbuja;
+// si ya está pintada desde CHAT, solo se le agrega el audio.
+function pzVoicePendingDeliver() {
+  const p = (typeof window !== 'undefined') ? window.__pzVoicePending : null;
+  if (!p || !p.text) return;
+  try { window.__pzVoicePending = null; } catch (e) {}
+  Promise.resolve(window.__chatHistP).catch(() => {}).then(() => {
+    try {
+      const box = document.getElementById('chatBox');
+      const lastUser = (typeof CHAT !== 'undefined' && CHAT.length) ? CHAT[CHAT.length - 1] : null;
+      if (!lastUser || lastUser.role !== 'user' || lastUser.text !== p.text) {
+        CHAT.push({ role: 'user', text: p.text });
+        if (box) box.insertAdjacentHTML('beforeend', '<div class="chat-msg u msg-in">' + esc(p.text) + (p.audio ? '<audio controls src="' + esc(p.audio) + '" style="display:block;width:100%;height:32px;margin-top:6px"></audio>' : '') + '</div>');
+      } else if (box && p.audio) {
+        const bubbles = box.querySelectorAll('.chat-msg.u, .msg-in');
+        const lb = bubbles && bubbles.length ? bubbles[bubbles.length - 1] : null;
+        if (lb && !lb.querySelector('audio')) lb.insertAdjacentHTML('beforeend', '<audio controls src="' + esc(p.audio) + '" style="display:block;width:100%;height:32px;margin-top:6px"></audio>');
+      }
+      try { chatScroll(); } catch (e) {}
+      chatExchange({ text: p.text, pushed: true });
+    } catch (e) {}
+  });
+}
 function bindChatFull() {
   try { bindChat(); } catch (e) {}
   try { bindSchedUpload(); } catch (e) {}
@@ -20983,6 +21056,8 @@ function bindChatFull() {
     window.__pzChatVoice = false;
     setTimeout(() => { try { voiceToggle(); } catch (e) {} }, 80);
   }
+  // (LOTE MIC-INICIO) Nota enviada desde Inicio: se entrega al abrir el chat.
+  try { pzVoicePendingDeliver(); } catch (e) {}
   try { hfPaintAnchor(); } catch (e) {}
   try { hfDeliverAskText(); } catch (e) {}
   pzChatKbBind();
@@ -24056,7 +24131,18 @@ function bindInicio() {
   const open = $('#mzChatOpen');
   if (open) open.onclick = () => { location.hash = '#/app/chat'; };
   const mic = $('#mzMic');
-  if (mic) mic.onclick = () => { window.__pzChatVoice = true; location.hash = '#/app/chat'; };
+  // (LOTE MIC-INICIO · orden Valentino 4/11) El mic de Inicio graba y
+  // manda DESDE Inicio (modelo WhatsApp v610: mantener graba, soltar
+  // manda, deslizar >60px o Cancelar descarta). Solo cuando la nota se
+  // envía se navega a #/app/chat (lo hace voiceSend); si falla, no se
+  // navega y queda la barra con causa en Inicio. El onclick viejo que
+  // navegaba primero quedó reemplazado por estos handlers.
+  if (mic) {
+    mic.onpointerdown = (e) => { e.preventDefault(); try { mic.setPointerCapture(e.pointerId); } catch (err) {} VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_START_X = e.clientX; VOICE_START_Y = e.clientY; voiceToggle(); };
+    mic.onpointermove = (e) => { if (VOICE_STATE !== 'rec') return; if ((VOICE_START_X - e.clientX) > 60) { VOICE_CANCEL = true; const hm = document.getElementById('vozCancelMsg'); if (hm) hm.style.display = ''; } };
+    mic.onpointerup = (e) => { if (VOICE_STATE !== 'rec') { VOICE_EARLY_UP = true; return; } if (VOICE_CANCEL) { VOICE_CANCEL = false; voiceDiscard(); } else voiceStop(); };
+    mic.onpointercancel = (e) => { if (VOICE_STATE !== 'rec') { VOICE_ABORTED = true; return; } VOICE_CANCEL = false; voiceDiscard(); };
+  }
   // (v442 · Corrección de Valentino 02:15: «eliminar esto.
   // innecesario.») El botón-anuncio de Ideas («💡 Tenés N ideas nuevas
   // de Posty →», mzIdeasGo) SALIÓ de la pantalla principal: ni su
