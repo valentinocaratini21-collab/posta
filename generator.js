@@ -2915,7 +2915,10 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   const optionsGuide =
     'Cuando necesites una aclaración para avanzar, hacé UNA pregunta corta y ofrecé 2-3 opciones tocables con el bloque:\n' +
     '```options\n["Opción 1","Opción 2"]\n```\n' +
-    'Las opciones van DESPUÉS de tu pregunta, no reemplazan tu mensaje.';
+    'Las opciones van DESPUÉS de tu pregunta, no reemplazan tu mensaje. ' +
+    'OPCIONES EN UN TOQUE (CHAT-BAMBOO-BAR): solo cuando falta un dato o una elección cambia el resultado (qué posteo, qué día, foto propia o imagen nueva). ' +
+    'Nunca después de ejecutar una acción (el recibo ya dice qué pasó) ni como sustituto de ejecutar un pedido claro: si el mensaje ya es claro, ejecutá DIRECTO sin preguntar. ' +
+    'Máximo 3, cortas, en minúscula de chat, cada una una instrucción completa y ejecutable (posteo nombrado + acción, nunca un "sí" pelado sin referente). Nunca un callejón: cada toque ejecuta algo real.';
   // Reglas permanentes dictadas por el cliente.
   const ruleGuide =
     'Si el cliente te dicta una regla permanente ("siempre sin emojis", "nunca mayúsculas", "hablá de precios"), ' +
@@ -4249,7 +4252,12 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     '```approve_all para APROBAR TODOS los programados pendientes, de cualquier semana; confirmá la cantidad ("aprobados los 5, salen a su hora 👍"). Aprobar NO es publicar. ' +
     '```reject {"draft": 1} para CANCELAR un programado (no sale) o BORRAR un borrador. "Este no, cancelalo" y "borrá este borrador" son ```reject, JAMÁS guiarlo a la pantalla. ' +
     '```duplicate {"draft": 1} para DUPLICAR: otro igual como borrador, sin fecha. ' +
-    '```show_drafts para mostrar los borradores con imagen. ```idea para un posteo nuevo. ' +
+    '```show_drafts para mostrar los borradores con imagen. ```idea para PROPONER una idea (sale la tarjeta IDEA LISTA y el cliente la crea en un toque). ' +
+    '```create para CREAR el posteo directo cuando el cliente lo pide ("haceme un posteo de X", "armame uno de la promo"): queda como borrador (o programado pendiente si dio día/hora) para aprobar en un toque. NUNCA se publica desde ```create: publicar es solo ```publish con pedido explícito ("publicalo"). Solo posteos con imagen: reels, carruseles e historias NO se crean por chat (decilo en 1 línea + ofrecé el posteo con imagen). ' +
+    '```redo {"draft": 1} para REHACER un posteo ("rehacé este", "este no me gusta, hacelo de nuevo"): borrador/programado se regenera en su lugar (gasta 1 rehacer, la versión anterior queda guardada); publicado/fallido → copia nueva como borrador. Con "caption" rehacé también el texto. Sin rehaces: 1 línea honesta + alternativa (cambio de texto o foto propia), NUNCA prometas imagen nueva sin rehaces. NUNCA se publica desde ```redo. ' +
+    'REFERENTE (CHAT-BAMBOO-BAR): si no está claro DE QUÉ posteo habla (sin ancla, sin cita entre comillas, sin nombre o día que lo identifique), NO adivines: preguntá con ```options nombrando los candidatos (título + día). Si el mensaje ya es claro, ejecutá DIRECTO sin preguntar. ' +
+    'POR QUÉ (CHAT-BAMBOO-BAR): cuando propongas un posteo o un cambio, decí por qué en 1 línea con un dato real (su feed, su semana, su rubro, su nivel). Si no tenés el dato, decilo, no lo inventes. ' +
+    'NO REPETIR (CHAT-BAMBOO-BAR): antes de preguntar un dato, fijate si ya está en esta conversación, en el ADN o en sus gustos: si está, usalo, no lo vuelvas a preguntar. ' +
     'GUÍAS CON LINK TOCABLE (escribí la ruta literal, el chat la vuelve botón): Mi plan → #/app/ajustes?plan=1 · Ajustes → #/app/ajustes · Semana → #/app/schedule · Estrategia → #/app/analisis · Premios → #/app/jardin-posty · Inicio → #/app/inicio. ' +
     'Subir o bajar de plan, pagar y darse de baja → Mi plan (#/app/ajustes?plan=1), sin trabas ni culpa. Conectar Instagram u otra plataforma → Ajustes (#/app/ajustes), sección Conexiones. ' +
     'IMPULSAR: no se cobra ni se promete impulso desde el chat. Nombrá el mejor posteo con datos reales y mandalo a Estrategia (#/app/analisis), donde está Impulsar. ' +
@@ -4581,6 +4589,41 @@ function parseEditBlock(raw, tz) {
   return e;
 }
 
+// (CHAT-BAMBOO-BAR) Parsea UN bloque ```create: crear un posteo nuevo directo
+// como borrador (o programado pendiente si trae when futuro). Nunca publica:
+// publicar es solo el bloque ```publish con pedido explícito del cliente.
+// Lanza si el JSON está roto (el llamador decide si intenta rescatarlo).
+function parseCreateBlock(raw, tz) {
+  const j = JSON.parse(raw);
+  if (!j || typeof j !== 'object') return null;
+  const brief = (typeof j.brief === 'string' && j.brief.trim()) ? cortar(j.brief.trim(), 280) : null;
+  const caption = (typeof j.caption === 'string' && j.caption.trim()) ? cortar(j.caption.trim(), 900) : null;
+  if (!brief && !caption) return null;
+  const c = { brief: brief || caption, caption: caption || brief };
+  if (typeof j.hashtags === 'string' && j.hashtags.trim()) c.hashtags = cortar(j.hashtags.trim(), 300);
+  if (Number.isInteger(j.photo_index) && j.photo_index >= 0) c.photo_index = j.photo_index;
+  if (typeof j.media_type === 'string' && j.media_type.trim()) c.media_type = j.media_type.trim().toLowerCase();
+  if (typeof j.when === 'string' && j.when.trim()) {
+    const w = normalizeWhen(j.when);
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(w) && w > clientNowStr(tz)) c.when = w;
+    else c.when_dropped = true;
+  }
+  return c;
+}
+
+// (CHAT-BAMBOO-BAR) Parsea UN bloque ```redo: rehacer un posteo (nueva versión).
+// Borrador/programado se regenera en su lugar; publicado/fallido → copia nueva
+// como borrador. caption/hashtags opcionales: rehacer con otro texto.
+// Lanza si el JSON está roto (el llamador decide si intenta rescatarlo).
+function parseRedoBlock(raw) {
+  const j = JSON.parse(raw);
+  if (!j || !Number.isInteger(j.draft) || j.draft < 1) return null;
+  const r = { draft: j.draft };
+  if (typeof j.caption === 'string' && j.caption.trim()) r.caption = cortar(j.caption.trim(), 900);
+  if (typeof j.hashtags === 'string' && j.hashtags.trim()) r.hashtags = cortar(j.hashtags.trim(), 300);
+  return r;
+}
+
 // El modelo emitió el bloque ```edit con JSON roto o truncado: un único reintento
 // pidiendo solo el JSON. Si también falla, lanza (el llamador decide).
 async function repairEditJson(brokenRaw, apiKey, tz) {
@@ -4648,6 +4691,31 @@ function chatReceiptLines(r) {
   if (r && Array.isArray(r.cancelled) && r.cancelled.length) lines.push(`cancelado: ${joinTitles(r.cancelled)} — no sale`);
   if (r && Array.isArray(r.deleted) && r.deleted.length) lines.push(`borrado: ${joinTitles(r.deleted)}`);
   if (r && Array.isArray(r.duplicated) && r.duplicated.length) lines.push(`duplicado: ${joinTitles(r.duplicated)} quedó como borrador`);
+  // (CHAT-BAMBOO-BAR) Recibo verificado de ediciones, publicaciones, reversiones,
+  // creaciones y rehaces: el cliente ve lo que REALMENTE pasó, no lo que el
+  // modelo dijo que pasó. Los títulos vienen del servidor, nunca del modelo.
+  if (r && Array.isArray(r.edited) && r.edited.length) {
+    lines.push(`editado: ${joinTitles(r.edited)}${(r.imageRegen > 0) ? ` · ${r.imageRegen} con imagen nueva` : ''}`);
+  }
+  if (r && Array.isArray(r.published) && r.published.length) lines.push(`publicado: ${joinTitles(r.published)} — ya está en Instagram`);
+  if (r && Array.isArray(r.publishedReview) && r.publishedReview.length) lines.push(`ojo: ${joinTitles(r.publishedReview)} quedó en revisión antes de salir`);
+  if (r && Array.isArray(r.publishedFailed) && r.publishedFailed.length) lines.push(`ojo: ${joinTitles(r.publishedFailed)} no pudo salir`);
+  if (r && Array.isArray(r.reverted) && r.reverted.length) lines.push(`volví a la versión anterior: ${joinTitles(r.reverted)}`);
+  if (r && Array.isArray(r.created) && r.created.length) {
+    for (const c of r.created.slice(0, 3)) {
+      if (c.review) lines.push(`creado: ${q(c.title)} — quedó como borrador en revisión para tu OK 👍`);
+      else lines.push(c.when ? `creado: ${q(c.title)} — programado para ${String(c.when).slice(0, 16)}, falta tu OK 👍` : `creado: ${q(c.title)} — quedó como borrador para tu OK 👍`);
+    }
+    if (r.created.length > 3) lines.push(`y ${r.created.length - 3} más creados como borrador`);
+  }
+  if (r && Array.isArray(r.redone) && r.redone.length) {
+    for (const d of r.redone.slice(0, 3)) {
+      if (d.copy) lines.push(`rehice: ${q(d.title)} — nueva versión como borrador para tu OK 👍`);
+      else if (d.image === false) lines.push(`rehice: ${q(d.title)} — texto nuevo, sigue como borrador 👍`);
+      else lines.push(`rehice: ${q(d.title)} — imagen nueva, sigue como borrador 👍`);
+    }
+    if (r.redone.length > 3) lines.push(`y ${r.redone.length - 3} más rehechos`);
+  }
   const issueLine = (it) => {
     switch (it.kind) {
       case 'published': return `ojo: ${q(it.title)} ya salió en Instagram, no lo toqué`;
@@ -4659,6 +4727,14 @@ function chatReceiptLines(r) {
       case 'when_past': return `ojo: ${q(it.title)} no lo reprogramé porque la fecha ya pasó`;
       case 'redo_empty': return `ojo: ${q(it.title)} ya no tiene rehaces de imagen, la imagen quedó igual`;
       case 'qa_bandeja': return `ojo: la imagen nueva de ${q(it.title)} quedó en revisión, la actual sigue vigente`;
+      case 'photo_failed': return `ojo: no pude usar esa foto en ${q(it.title)}, quedó la anterior`;
+      case 'create_failed': return `ojo: no pude crear ${q(it.title)} — probá de nuevo o mandame una foto`;
+      case 'create_media': return `ojo: ${q(it.title)} — reels y carruseles todavía no los creo por chat, te lo puedo armar como posteo con imagen`;
+      case 'create_photo': return `ojo: no pude usar esa foto para ${q(it.title)}, no creé nada para no inventar`;
+      case 'when_past_create': return `ojo: la fecha ya pasó, dejé ${q(it.title)} como borrador sin fecha`;
+      case 'redo_publishing': return `ojo: ${q(it.title)} está saliendo ahora, no lo toqué`;
+      case 'redo_media': return `ojo: ${q(it.title)} es video/reel, por chat solo rehago el texto`;
+      case 'redo_failed': return `ojo: no pude rehacer ${q(it.title)}, probá de nuevo`;
       default: return '';
     }
   };
@@ -4880,6 +4956,51 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
     } catch (e) { /* bloque inválido: se ignora */ }
     text = String(text).replace(mr2[0], '').trim();
   }
+  // Crear un posteo nuevo directo como borrador (```create) — CHAT-BAMBOO-BAR.
+  // Varios por turno si pide varios. JSON roto se ignora, el resto sigue.
+  let creates = [];
+  for (const mc of String(text).matchAll(/```create\s*([\s\S]*?)```/g)) {
+    try {
+      const c = parseCreateBlock(mc[1], tz);
+      if (c) creates.push(c);
+    } catch (e) { /* bloque inválido: se ignora */ }
+    text = String(text).replace(mc[0], '').trim();
+  }
+  {
+    const mu = String(text).match(/```create\s*([\s\S]*)$/);
+    if (mu) {
+      let parsed = null;
+      try { parsed = parseCreateBlock(mu[1], tz); } catch (e) {}
+      if (!parsed) {
+        const salvaged = extractBalancedJson(mu[1]);
+        if (salvaged) { try { parsed = parseCreateBlock(salvaged, tz); } catch (e) {} }
+      }
+      if (parsed) creates.push(parsed);
+      text = String(text).replace(mu[0], '').trim();
+    }
+  }
+  // Rehacer un posteo (```redo) — CHAT-BAMBOO-BAR. Varios por turno.
+  let redos = [];
+  for (const mr3 of String(text).matchAll(/```redo\s*([\s\S]*?)```/g)) {
+    try {
+      const r = parseRedoBlock(mr3[1]);
+      if (r) redos.push(r);
+    } catch (e) { /* bloque inválido: se ignora */ }
+    text = String(text).replace(mr3[0], '').trim();
+  }
+  {
+    const mu = String(text).match(/```redo\s*([\s\S]*)$/);
+    if (mu) {
+      let parsed = null;
+      try { parsed = parseRedoBlock(mu[1]); } catch (e) {}
+      if (!parsed) {
+        const salvaged = extractBalancedJson(mu[1]);
+        if (salvaged) { try { parsed = parseRedoBlock(salvaged); } catch (e) {} }
+      }
+      if (parsed) redos.push(parsed);
+      text = String(text).replace(mu[0], '').trim();
+    }
+  }
   // Mostrar borradores existentes en el chat (```show_drafts): el servidor los
   // resuelve a las imágenes reales. Nunca describirlos en texto ni mentir.
   // El modelo a veces no cierra el bloque: se acepta con o sin ``` de cierre.
@@ -4897,8 +5018,8 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
     .replace(/```duplicate\s*[\s\S]*?```/g, '')
     .replace(/```approve_all\s*```/g, '').trim();
   // Red de seguridad: cualquier bloque de máquina sin cerrar se elimina del texto visible.
-  text = String(text).replace(/```(idea|edit|dna|options|publish|revert|rule|inspo|show_drafts|approve|approve_all|reject|duplicate)[\s\S]*$/g, '').trim();
-  return { reply: postyNameFix(stripMdAsterisks(text)), idea, ideas, edits, publishes, reverts, showDrafts, dna: dnaOut, options, rule, inspo, approves: actionBlocks.approves, approveAll: actionBlocks.approveAll, rejects: actionBlocks.rejects, duplicates: actionBlocks.duplicates };
+  text = String(text).replace(/```(idea|edit|dna|options|publish|revert|rule|inspo|show_drafts|approve|approve_all|reject|duplicate|create|redo)[\s\S]*$/g, '').trim();
+  return { reply: postyNameFix(stripMdAsterisks(text)), idea, ideas, edits, publishes, reverts, creates, redos, showDrafts, dna: dnaOut, options, rule, inspo, approves: actionBlocks.approves, approveAll: actionBlocks.approveAll, rejects: actionBlocks.rejects, duplicates: actionBlocks.duplicates };
 }
 
 // Posty humano: el chat muestra texto plano. Si al modelo se le escapa markdown
@@ -5152,4 +5273,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, captionBodyKey, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, captionBodyKey, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
