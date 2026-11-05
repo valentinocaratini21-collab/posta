@@ -18151,7 +18151,13 @@ function homeGridCompose(input) {
     let bestT = Infinity;
     for (const it of upcoming) {
       const p = it && it.p;
-      if (!p || p.status !== 'scheduled' || p.pinned || !p.scheduled_at) continue;
+      // (LOTE FEED-ORDEN-COMPLETO · 4/11) Las historias NUNCA son la
+      // carta: no rinden como tiles en la grilla (el bucle de upcoming
+      // ya las saltea) y la carta anticipa el próximo POSTEO del feed.
+      // Caso real: la carta mostraba la historia 553 («Hoy · 22:00»)
+      // en vez del próximo posteo (518, mañana). Sin próximo de feed,
+      // no hay carta (fail-closed, igual que antes).
+      if (!p || isStory(p) || p.status !== 'scheduled' || p.pinned || !p.scheduled_at) continue;
       let d = null;
       if (typeof pcParseDate === 'function') d = pcParseDate(p.scheduled_at);
       if (!d) { const s = String(p.scheduled_at).replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }

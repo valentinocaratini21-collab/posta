@@ -296,6 +296,7 @@ const stripeBilling = require('./stripe-billing'); // (v285) cobro US en USD —
 const demo = require('./demo');
 const feedAudit = require('./feed-audit');
 const igFollows = require('./ig-follows');
+const igMedia = require('./ig-media');
 const feedReconcile = require('./feed-reconcile');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
@@ -14072,6 +14073,34 @@ async function homeProfileReadAndStore(uid, handle) {
       verifiedSource = r.source;
     }
   } catch (e) { /* se queda el embed */ }
+  // (LOTE FEED-ORDEN-COMPLETO · 4/11) El embed es UNA página sin
+  // paginación: con carruseles se llena de hijos y los posteos viejos
+  // quedan afuera (caso real @posty.communitymanager: 12 posteos, el
+  // embed trae solo 6 + 10 láminas; 1/11, 31/10, 30/10, 29/10, 28/10 y
+  // 20/10 invisibles para snapshot, live-grid y reconciliación — y por
+  // eso la tarjeta velada quedaba «en el medio», justo después del trío
+  // café, cuando abajo deberían seguir 6 posteos más viejos). Se
+  // completa con la media oficial de la CUENTA CONECTADA (mismo token
+  // que follows, sin permisos nuevos): solo se AGREGAN los posteos
+  // oficiales cuyo shortcode no está ya en el embed (dedupe estricto;
+  // sin shortcode no se agrega nada). Si la API falla, data queda
+  // intacta: la home rinde el embed como hoy. La reconciliación y el
+  // live-drop heredan la grilla completa sin cambios en sus reglas
+  // (la ventana viva pasa a cubrir todo el feed, así que un borrado
+  // viejo también se esconde al abrir, como manda borrado-ig).
+  try {
+    const s = getSettings(uid);
+    if (data && data.ok && Array.isArray(data.posts) && s && s.ig_user_id && s.ig_access_token) {
+      const official = await igMedia.fetchOfficialMedia({ igUserId: s.ig_user_id, accessToken: s.ig_access_token, expectedHandle: handle });
+      if (Array.isArray(official) && official.length) {
+        const merged = igMedia.mergeOfficialPosts(data.posts, official);
+        if (merged.added) {
+          data.posts = merged.posts;
+          console.log(`[ig-media] user ${uid} @${handle}: embed=${data.posts.length - merged.added} official=${official.length} merged=+${merged.added}`);
+        }
+      }
+    }
+  } catch (e) { /* sin media oficial: queda el embed, como hoy */ }
   const payload = await homeProfileFromRead(handle, data).catch(() => null);
   if (payload) {
     payload.verified_source = verifiedSource;
@@ -28147,7 +28176,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v653';
+const BUILD_ID = '20261101-v654';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
