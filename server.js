@@ -5128,6 +5128,45 @@ async function pzChatPublic(req, res) {
   }
 }
 
+// (CHAT-EDITA) Busca el posteo que el cliente cita entre comillas en su
+// último mensaje (overlay o caption). Devuelve la fila cruda o null. El
+// llamador la pone primera en el contexto; el tope 12 no puede dejar afuera
+// al posteo discutido. Fail-soft: sin comillas o sin coincidencia, null.
+function chatQuotedPostMatch(db, uid, lastUserText) {
+  try {
+    const text = String(lastUserText || '');
+    const frags = [...text.matchAll(/[""«»']([^""«»']{4,80})[""«»']/g)]
+      .map(m => String(m[1] || '').trim()).filter(Boolean);
+    if (!frags.length) return null;
+    const esc = (s) => String(s).replace(/[%_\\]/g, (c) => '\\' + c);
+    const cond = frags.map(() => `(overlay_text LIKE ? ESCAPE '\\' OR caption LIKE ? ESCAPE '\\')`).join(' OR ');
+    const params = [];
+    frags.forEach((f) => { const p = '%' + esc(f) + '%'; params.push(p, p); });
+    const row = db.prepare(`SELECT id, caption, scheduled_for, scheduled_at, status, media_type, needs_review, overlay_text, overlay_zone FROM posts
+      WHERE user_id = ? AND status IN ('draft','scheduled','publishing','failed','published') AND (${cond})
+      ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'publishing' THEN 2 WHEN 'failed' THEN 3 ELSE 4 END,
+        COALESCE(scheduled_for, created_at) DESC LIMIT 1`).get(uid, ...params);
+    return row || null;
+  } catch (e) { console.error('[chat] quoted match:', e.message); return null; }
+}
+
+// (CHAT-EDITA) Respaldo contra el "no puedo" seco: si el modelo emitió
+// edits para posteos ya publicados (el código los saltea), la respuesta no
+// puede quedar ni mintiendo ni negándose. Si la respuesta trae la frase
+// exacta del fallo real, se reemplaza por la línea honesta + ofrecimiento;
+// si no menciona lo publicado, se agrega; si ya lo explica, no se toca.
+// El ofrecimiento es una acción pendiente (con su OK), nunca una promesa.
+function chatPublishedEditBackstop(reply, skipped) {
+  const text = String(reply || '');
+  if (!skipped) return text;
+  const honest = 'ese posteo ya salió en instagram y ahí no se puede mover el texto ni cambiar la foto en el lugar. si querés, te armo la versión corregida y te la dejo lista para que la apruebes en un toque en tu bandeja — decímelo y la preparo.';
+  const m = text.match(/no puedo[^.\n]*im[áa]genes[^.\n]*[.\n]?/i);
+  if (m) return text.replace(m[0], honest);
+  // Ya lo explica (la frase del prompt es "ese ya salió..."): no duplicar.
+  if (/publicad|ya sali[oó]/i.test(text)) return text;
+  return text ? text.replace(/\s*$/, '\n\n' + honest) : honest;
+}
+
 app.post('/api/ideas/chat', async (req, res) => {
   if (!req.session.userId) return pzChatPublic(req, res);
   let _lpNx = false; requireTrialValid(req, res, () => { _lpNx = true; });
@@ -5286,7 +5325,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   // después lo que necesita atención (publicando/fallido), después lo ya publicado.
   let cleanDrafts = [];
   try {
-    const rows = db.prepare(`SELECT id, caption, scheduled_for, scheduled_at, status, media_type, needs_review, overlay_text FROM posts
+    const rows = db.prepare(`SELECT id, caption, scheduled_for, scheduled_at, status, media_type, needs_review, overlay_text, overlay_zone FROM posts
       WHERE user_id = ? AND status IN ('draft','scheduled','publishing','failed','published')
       ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'publishing' THEN 2 WHEN 'failed' THEN 3 ELSE 4 END,
         COALESCE(scheduled_for, created_at) DESC LIMIT 12`).all(uidChat) || [];
@@ -5297,6 +5336,7 @@ app.post('/api/ideas/chat', async (req, res) => {
       id: r.id,
       caption: String(r.caption || '').slice(0, 300),
       overlay: String(r.overlay_text || '').slice(0, 80),
+      zone: String(r.overlay_zone || 'top'),
       when: wallInTz(r.scheduled_at || r.scheduled_for, chatTz),
       status: r.status,
       media_type: r.media_type || 'image',
@@ -5310,6 +5350,32 @@ app.post('/api/ideas/chat', async (req, res) => {
       const ai = cleanDrafts.findIndex(d => Number(d.id) === anchorId);
       if (ai > 0) { const [anch] = cleanDrafts.splice(ai, 1); cleanDrafts.unshift(anch); }
     }
+    // (CHAT-EDITA) El posteo del que habla el cliente SIEMPRE entra al
+    // contexto: si cita un texto entre comillas que coincide con el overlay
+    // o el caption de un posteo, ese posteo va primero (como el ancla),
+    // aunque el tope 12 lo hubiera dejado afuera (caso real 4/11: el
+    // publicado ni entraba y el modelo contestó que no podía).
+    try {
+      const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+      const hit = chatQuotedPostMatch(db, uidChat, lastUserText);
+      if (hit) {
+        const ai = cleanDrafts.findIndex(d => Number(d.id) === Number(hit.id));
+        if (ai > 0) { const [anch] = cleanDrafts.splice(ai, 1); cleanDrafts.unshift(anch); }
+        else if (ai === -1) {
+          cleanDrafts.unshift({
+            id: hit.id,
+            caption: String(hit.caption || '').slice(0, 300),
+            overlay: String(hit.overlay_text || '').slice(0, 80),
+            zone: String(hit.overlay_zone || 'top'),
+            when: wallInTz(hit.scheduled_at || hit.scheduled_for, chatTz),
+            status: hit.status,
+            media_type: hit.media_type || 'image',
+            needs_review: !!hit.needs_review,
+          });
+          if (cleanDrafts.length > 12) cleanDrafts.length = 12;
+        }
+      }
+    } catch (e) { console.error('[chat] quoted ctx:', e.message); }
   } catch (e) { console.error('[chat] drafts ctx:', e.message); }
   try {
     const settings = getSettings(req.session.userId);
@@ -5469,6 +5535,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     // La IA puede mandar VARIOS bloques ```edit (uno por borrador) y reprogramar con "when".
     let editApplied = null;
     let editPhotoFailed = false;
+    let editPublishedSkipped = 0; // (CHAT-EDITA) edits que apuntaron a publicados (el código los saltea)
     if (Array.isArray(out.edits) && out.edits.length) {
       // Palanca 7: si el pedido cambia el CONCEPTO (no solo el texto), la imagen se
       // regenera vía concept-shot para acompañar. Solo se salta si el usuario pidió
@@ -5483,13 +5550,18 @@ app.post('/api/ideas/chat', async (req, res) => {
       const regenJobs = [];
       for (const ed of out.edits) {
         if (!(ed.draft >= 1 && ed.draft <= cleanDrafts.length)) continue;
-        if (ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined && ed.overlay === undefined) continue;
+        if (ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined && ed.overlay === undefined && ed.overlay_pos === undefined) continue;
         const target = cleanDrafts[ed.draft - 1];
         const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
-        if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) continue;
+        if (!post) continue;
+        // (CHAT-EDITA) El publicado se cuenta, no se traga en silencio: el
+        // respaldo de abajo deja la línea honesta + ofrecimiento en la
+        // respuesta (nunca un "no puedo" seco ni un "listo" mentiroso).
+        if (post.status === 'published') { editPublishedSkipped++; continue; }
+        if (post.status !== 'draft' && post.status !== 'scheduled') continue;
         // Historial de versiones: si este edit cambia algo, guardar la anterior
         // para que el cliente pueda "volver atrás" ("el anterior estaba mejor").
-        if (ed.caption !== undefined || ed.hashtags !== undefined || Number.isInteger(ed.photo_index) || ed.overlay !== undefined) {
+        if (ed.caption !== undefined || ed.hashtags !== undefined || Number.isInteger(ed.photo_index) || ed.overlay !== undefined || ed.overlay_pos !== undefined) {
           try {
             db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path, overlay_text) VALUES (?,?,?,?,?)`)
               .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''), String(post.overlay_text || ''));
@@ -5575,7 +5647,7 @@ app.post('/api/ideas/chat', async (req, res) => {
             scheduleLintForPost(uid, post.id); // (v198-A) lint al programar
           }
         }
-        if (ed.overlay !== undefined) overlayEdits.push({ id: post.id, overlay: ed.overlay });
+        if (ed.overlay !== undefined || ed.overlay_pos !== undefined) overlayEdits.push({ id: post.id, overlay: ed.overlay, overlay_pos: ed.overlay_pos });
         recordSignal(uid, post, 'edited'); // lo retocó = señal de gusto
         n++;
         editedIds.push(post.id);
@@ -5594,7 +5666,9 @@ app.post('/api/ideas/chat', async (req, res) => {
         try {
           const cur = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(ov.id, uid);
           if (!cur || (cur.status !== 'draft' && cur.status !== 'scheduled')) continue;
-          const rec = recompositePostOverlay(uid, cur, ov.overlay);
+          // (CHAT-EDITA) Solo posición: se re-renderiza el texto vigente en
+          // la otra banda, sin tocar el texto ni regenerar el posteo.
+          const rec = recompositePostOverlay(uid, cur, ov.overlay !== undefined ? ov.overlay : (cur.overlay_text || ''), ov.overlay_pos);
           if (!rec.ok) console.error('[chat-edit] overlay re-render falló:', rec.reason);
         } catch (e) { console.error('[chat-edit] overlay:', e.message); }
       }
@@ -5694,6 +5768,9 @@ app.post('/api/ideas/chat', async (req, res) => {
     // ("¡ya está saliendo!") no puede quedar: se corrige el reply acá,
     // después de procesar los bloques y antes de responder.
     out.reply = fixPublishReply(out.reply, publishApplied);
+    // (CHAT-EDITA) Respaldo: si hubo edits para publicados, la respuesta
+    // cierra con la línea honesta + ofrecimiento, nunca un "no puedo" seco.
+    out.reply = chatPublishedEditBackstop(out.reply, editPublishedSkipped);
     // Pre-generar la imagen AHORA en background: cuando el cliente abra la
     // tarjeta "IDEA LISTA", ya va a estar lista en vez de hacerlo esperar.
     // REACTIVADA (2026-10-04): la generación on-demand sincrónica falla por
@@ -19120,13 +19197,25 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
 // caption: compone a archivo NUEVO, actualiza image_path y guarda la
 // base limpia hermana del nuevo archivo. Devuelve {ok, overlay,
 // image_path} o {ok:false, reason}. Nunca lanza.
-function recompositePostOverlay(uid, post, newOverlayRaw) {
+// (CHAT-EDITA) Posición del texto sobre la foto: 'top' (arriba, histórico)
+// o 'bottom' (abajo). Sin dato válido, manda la posición guardada del posteo;
+// sin guardada, arriba. Nunca rompe: lo desconocido cae a 'top'.
+function normalizeOverlayZone(raw, fallback) {
+  const z = String(raw || '').trim().toLowerCase();
+  if (z === 'bottom' || z === 'abajo') return 'bottom';
+  if (z === 'top' || z === 'arriba') return 'top';
+  const f = String(fallback || '').trim().toLowerCase();
+  return f === 'bottom' ? 'bottom' : 'top';
+}
+
+function recompositePostOverlay(uid, post, newOverlayRaw, zoneRaw) {
   try {
     if (!post || String(post.media_type || '') === 'video' || String(post.media_type || '') === 'carousel') return { ok: false, reason: 'no-imagen' };
     const shown = String(post.image_path || '');
     const absShown = photoCliente.mediaAbs(MEDIA_DIR, shown);
     if (!absShown || !fs.existsSync(absShown)) return { ok: false, reason: 'sin-foto' };
     const newOverlay = makeHeadline(String(newOverlayRaw || '').trim(), 6, 70, rubroOf(uid)) || '';
+    const zone = normalizeOverlayZone(zoneRaw, post.overlay_zone);
     // Base limpia: la hermana si existe; si no, se congela la mostrada
     // como hermana (la mostrada ES limpia por convención en ese caso).
     const cleanPath = photoCliente.cleanSisterPath(MEDIA_DIR, shown);
@@ -19136,8 +19225,8 @@ function recompositePostOverlay(uid, post, newOverlayRaw) {
     if (!newOverlay) {
       // Vacío explícito = quitar el texto: la foto queda limpia.
       const cleanOut = `/media/${path.basename(baseForCompose)}`;
-      if (cleanOut !== shown) db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, overlay_text = ? WHERE id = ?').run(cleanOut, shown, '', post.id);
-      else db.prepare('UPDATE posts SET overlay_text = ? WHERE id = ?').run('', post.id);
+      if (cleanOut !== shown) db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, overlay_text = ?, overlay_zone = ? WHERE id = ?').run(cleanOut, shown, '', zone, post.id);
+      else db.prepare('UPDATE posts SET overlay_text = ?, overlay_zone = ? WHERE id = ?').run('', zone, post.id);
       return { ok: true, overlay: '', image_path: cleanOut };
     }
     // Se quita un sufijo -cap previo para no acumular -cap-cap en
@@ -19150,11 +19239,12 @@ function recompositePostOverlay(uid, post, newOverlayRaw) {
     const hexes = parseBrandHexes(settings.brand_colors);
     if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
     cArgs.push('--font', brandFontOf(settings));
+    cArgs.push('--zone', zone); // (CHAT-EDITA) la posición pedida viaja al compositor
     execFileSync('python3', cArgs, { timeout: 30000 });
     const outPath = `/media/${outName}`;
     try { fs.copyFileSync(baseForCompose, path.join(MEDIA_DIR, photoCliente.cleanSisterName(outName))); } catch (e) {}
     try { db.prepare('INSERT OR IGNORE INTO image_meta (media_path) VALUES (?)').run(`/media/${photoCliente.cleanSisterName(outName)}`); } catch (e) {}
-    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, overlay_text = ? WHERE id = ?').run(outPath, shown, newOverlay, post.id);
+    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, overlay_text = ?, overlay_zone = ? WHERE id = ?').run(outPath, shown, newOverlay, zone, post.id);
     return { ok: true, overlay: newOverlay, image_path: outPath };
   } catch (e) { console.error('[overlay-rerender]', e.message); return { ok: false, reason: 'render-fallo' }; }
 }
@@ -28057,7 +28147,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v650';
+const BUILD_ID = '20261101-v651';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

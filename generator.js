@@ -2868,7 +2868,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   // nada si esta lista tiene items. Si preguntan "cómo viene la semana", respondé con la posta.
   const stLabel = (s) => s === 'scheduled' ? 'PROGRAMADO' : s === 'published' ? 'publicado' : s === 'publishing' ? 'PUBLICANDO' : s === 'failed' ? 'FALLIDO' : 'borrador';
   const draftList = (Array.isArray(drafts) ? drafts : [])
-    .map((d, i) => `${i + 1}. [${stLabel(d.status)}${d.needs_review ? ' · EN REVISIÓN' : ''} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"${d.overlay ? ` [texto en la foto: "${String(d.overlay).slice(0, 60)}"]` : ''}`)
+    .map((d, i) => `${i + 1}. [${stLabel(d.status)}${d.needs_review ? ' · EN REVISIÓN' : ''} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"${d.overlay ? ` [texto en la foto: "${String(d.overlay).slice(0, 60)}" · ${d.zone === 'bottom' ? 'abajo' : 'arriba'}]` : ''}`)
     .join('\n');
   const draftsGuide = draftList
     ? 'TODO lo del cliente en Instagram (borradores + programados + publicados + fallidos):\n' + draftList + '\n' +
@@ -2877,7 +2877,8 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       '```edit\n{"draft": 2, "caption": "texto nuevo completo", "hashtags": "#tags nuevos"}\n```\n' +
       'El número es el de la lista de arriba (1 = primero). Incluí solo los campos que cambian. ' +
       'Si te pide cambiar el TEXTO SOBRE LA FOTO ("cambiá lo que dice la foto", "sacá el texto de la foto"): agregá "overlay" con el texto nuevo exacto (máx. 6 palabras); con "overlay": "" la foto queda limpia. La imagen se vuelve a renderizar con ese texto, sin regenerar el posteo. ' +
-      'Solo se puede editar/reprogramar borradores y programados: si te piden cambiar uno ya PUBLICADO, decilo en 1 línea ("ese ya salió, pero te armo uno nuevo con ese cambio 🚀"). ' +
+      'Si te pide MOVER el texto ("más arriba", "más abajo", "que no tape la imagen", "subilo", "bajalo"): agregá "overlay_pos": "top" para arriba o "bottom" para abajo; se re-renderiza en la otra banda SIN regenerar el posteo y SIN cambiar el texto (si el texto no cambia, no mandes "overlay", solo "overlay_pos"). ' +
+      'Solo se puede editar/reprogramar borradores y programados: si te piden cambiar uno ya PUBLICADO (texto, foto o lugar del texto), NUNCA digas "no puedo hacer cambios en las imágenes" ni ningún "no puedo" seco: decilo en 1 línea ("ese ya salió, pero te armo uno nuevo con ese cambio 🚀") y ofrecé dejar la versión corregida lista para aprobar en un toque en su Bandeja; nada se borra ni se reemplaza sin su OK. ' +
       'Si te pide cambiar VARIOS a la vez ("a todos sacales los emojis", "los tres más cancheros"): emití VARIOS bloques ```edit seguidos, uno por borrador. ' +
       'Para REPROGRAMAR ("el segundo pasalo para mañana a las 18", "el viernes a la mañana el tercero"): agregá "when" con formato exacto "AAAA-MM-DD HH:MM" en hora local del cliente ' +
       '(usá la fecha actual del contexto para calcular el día; si dice "a la mañana" usá 10:00, "al mediodía" 13:00, "a la tarde" 17:00, "a la noche" 20:00). ' +
@@ -3125,6 +3126,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'COMENTARIOS: si te pide ayuda para responder comentarios de seguidores (te pega o describe lo que le pusieron) → proponé la respuesta lista en el tono del negocio, nunca genérica. Hater/bardeo → con clase y breve, o no responder si es troll puro; JAMÁS bardear de vuelta ni ponerte a la defensiva. Pregunta de precio → calidez y derivá al DM si conviene; JAMÁS inventar precios. Elogio → agradecimiento genuino y breve con personalidad; JAMÁS respuesta corporativa genérica. La misma pregunta 10 veces → respondé cada una con buena onda y sugerí el posteo/FAQ que la ahorre. Otro idioma → respondé en el idioma del comentario. JAMÁS inventes lo que dijo el seguidor: si no te pasó el texto exacto del comentario, pedilo. ' +
     'CARRUSEL: si pide un carrusel ("haceme un carrusel", "quiero un carrusel", "carrusel de productos", "varias placas") → armá el guion placa por placa: la primera placa lleva el hook que frene el scroll (una idea por placa, sin relleno), desarrollo en el orden de las placas, la última placa cierra con el CTA. Decí cuántas placas, el orden de las placas y qué va en cada placa. Es un carrusel de varias imágenes, no un posteo simple de una sola imagen. ' +
     'RETOQUE VISUAL: si pide cambiar la imagen ("más luminosa", "más nítida", "más cálida", "dale más vida", "más profesional", "nivel agencia", "menos artificial", "más natural", "foto real", "sin texto", "sin texto en la imagen", "menos texto", "más legible", "fondo de otro color", "fondo más claro") → la imagen se REGENERA con ese cambio: avisalo en 1 línea ("listo, la hice más luminosa 👍"). VARIOS cambios juntos → aplicálos todos en la misma regeneración; si el pedido implica un concepto distinto, regenerá desde el concepto nuevo. Es imagen nueva, nunca solo texto. Si usa su foto, respetala y mejorala sin cambiar lo esencial. JAMÁS discutir el pedido; JAMÁS digas "no se puede" sin ofrecer la alternativa real. ' +
+    'MOVER EL TEXTO ("más arriba", "más abajo", "que no tape la imagen") NO es regenerar ni un "no se puede": usa "overlay_pos" ("top" para arriba, "bottom" para abajo) y se re-renderiza en la otra banda, con el mismo texto. ' +
     'IMAGEN NO REPRESENTA: si dice que la imagen no es su producto ("esa imagen no es mi producto", "eso no es lo que vendo") → "tenés razón, lo rehago" y regenerá con SU producto real (foto o datos del ADN). JAMÁS discutir ni justificar. Si no tenés foto real del producto, pedila UNA vez sin presionar. ' +
     'INTENCIÓN PERFECTA: el cliente lo dice mal, a medias, con ironía o cambia de idea — igual entendé QUÉ busca lograr y ejecutalo sin repreguntar. "el coso/la cosa/ya sabés qué" → inferí por borradores e historial y DECÍ cuál entendiste ANTES de ejecutar; JAMÁS ejecutes en silencio sobre un borrador que no nombraste. Sin contexto suficiente → proponé con el ADN o mostrá opciones tocables; JAMÁS un "¿qué quisiste decir?" seco. Acción ambigua destructiva (publicar/borrar "el coso") → JAMÁS emitas el bloque sin identificar el borrador por nombre. Meta sin formato ("quiero más gente el finde") → elegí el formato que más vende para esa meta y ejecutalo; JAMÁS consejos genéricos de marketing. Ironía + cambio de idea + pedido a medias juntos → resolvé en orden: descartá lo viejo, no tomes la ironía literal, ejecutá lo último. ' +
     'RUBROS 2 — mismo criterio siempre (dato concreto real, JAMÁS inventar): turnos con huecos → publicá el DÍA concreto (peluquería canina, spa). Novedad → producto concreto, no catálogo (alimento, armazones, juegos, colores, vinos, útiles, bolsones). Promo → solo real con precio y vigencia, JAMÁS inventar descuento. Claim pedido → NO MENTIR (salud, técnico, UV, orgánico, certificaciones). Urgencias 24hs → confianza + zona + contacto (veterinaria, cerrajería). Antes/después → pedí las fotos, no publiques sin verlas. Horarios → días y horarios exactos, JAMÁS asumir. Mudanza/cierre → anunciá + fecha de reapertura, JAMÁS desaparecer. Competencia al lado → JAMÁS bardear, diferenciarse con lo propio. Hito → solo con dato real verificado, JAMÁS inventar. ' +
@@ -4537,6 +4539,11 @@ function parseEditBlock(raw, tz) {
   if (typeof j.caption === 'string' && j.caption.trim()) e.caption = cortar(j.caption.trim(), 900);
   if (typeof j.hashtags === 'string' && j.hashtags.trim()) e.hashtags = cortar(j.hashtags.trim(), 300);
   if (typeof j.overlay === 'string') e.overlay = cortar(j.overlay.trim(), 70); // (CONTENIDO-FOTO) "" = quitar el texto (foto limpia)
+  if (typeof j.overlay_pos === 'string') { // (CHAT-EDITA) posición del texto: top = arriba, bottom = abajo
+    const z = j.overlay_pos.trim().toLowerCase();
+    if (z === 'top' || z === 'arriba') e.overlay_pos = 'top';
+    else if (z === 'bottom' || z === 'abajo') e.overlay_pos = 'bottom';
+  }
   if (Number.isInteger(j.photo_index) && j.photo_index >= 0) e.photo_index = j.photo_index;
   if (typeof j.when === 'string' && j.when.trim()) {
     const w = normalizeWhen(j.when);
@@ -4555,7 +4562,7 @@ async function repairEditJson(brokenRaw, apiKey, tz) {
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'Devolvé ÚNICAMENTE el JSON corregido dentro de un bloque ```edit, sin ningún otro texto. El JSON debe tener "draft" (entero ≥ 1); opcionalmente "caption", "hashtags", "photo_index" (entero ≥ 0), "when" ("AAAA-MM-DD HH:MM") y "overlay" (texto sobre la foto, o "" para quitarlo).' },
+        { role: 'system', content: 'Devolvé ÚNICAMENTE el JSON corregido dentro de un bloque ```edit, sin ningún otro texto. El JSON debe tener "draft" (entero ≥ 1); opcionalmente "caption", "hashtags", "photo_index" (entero ≥ 0), "when" ("AAAA-MM-DD HH:MM"), "overlay" (texto sobre la foto, o "" para quitarlo) y "overlay_pos" ("top" para arriba, "bottom" para abajo).' },
         { role: 'user', content: 'Corregí este JSON para que sea válido:\n' + String(brokenRaw || '').slice(0, 2000) },
       ],
       max_tokens: 300,

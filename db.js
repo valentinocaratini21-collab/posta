@@ -1493,6 +1493,7 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN cover_origin TEXT DEFAULT ''`); } ca
 try { db.exec(`ALTER TABLE posts ADD COLUMN cover_pos INTEGER DEFAULT 50`); } catch (e) { /* ya existe */ } // (Tanda feed 6C · ítem 6) encuadre vertical de la portada en la grilla: object-position vertical 0–100 (0=arriba, 50=centro, 100=abajo)
 try { db.exec(`ALTER TABLE posts ADD COLUMN ab_winner TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN overlay_text TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (CONTENIDO-FOTO) texto exacto sobre la foto
+try { db.exec(`ALTER TABLE posts ADD COLUMN overlay_zone TEXT DEFAULT 'top'`); } catch (e) { /* ya existe */ } // (CHAT-EDITA) posición del texto sobre la foto: 'top' (arriba) o 'bottom' (abajo); el re-render la respeta
 try { db.exec(`ALTER TABLE posts ADD COLUMN vision_note TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (CONTENIDO-FOTO) nota de visión con la que nació el posteo
 try { db.exec(`ALTER TABLE post_versions ADD COLUMN overlay_text TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (CONTENIDO-FOTO) texto sobre la foto en el historial de versiones
 
