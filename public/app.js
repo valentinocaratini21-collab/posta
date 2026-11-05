@@ -18654,11 +18654,9 @@ function homeGridCompose(input) {
   // que viene). Los fijados no se velan (elección explícita del
   // dueño) y sin próximo no hay carta (fail-closed: nunca una carta
   // con fecha inventada). El próximo sale del grupo de programadas y
-  // su tile va ÚLTIMO, al final de la grilla, después de TODOS los
-  // publicados: la carta se agrega después de la lista compuesta
-  // completa, sin asumir ningún tope (el cap FEED-6 lo quita
-  // PUBLICADOS-TODOS, el lote siguiente; así la carta sigue última
-  // con o sin cap).
+  // su tile va JUSTO DESPUÉS del posteo publicado más reciente
+  // (decisión Valentino 5/11 ~07:48, LOTE PROXIMO-ARRIBA, reemplaza
+  // el orden v648 que lo dejaba último).
   let nextPost = null;
   try {
     const nowMs = Date.now();
@@ -18765,22 +18763,28 @@ function homeGridCompose(input) {
   // renombres que choquen con la fusión de posteo-dia-2); ya no
   // corta nada. Programadas/borradores siguen intactos y sin tope;
   // los fijados (head) siguen primeros por elección del dueño. La
-  // carta oculta de posteo-dia-2 se anexa DESPUÉS de todo este
-  // bloque (el liberador la deja última, después del publicado más
-  // viejo, nunca entre los primeros).
+  // carta oculta del próximo se inserta JUSTO DESPUÉS del primer
+  // publicado del grupo de publicados (decisión Valentino 5/11
+  // ~07:48, reemplaza el orden v648 que la dejaba última).
   const rest6 = rest;
-  // (LOTE POSTEO-DIA-2 · 4/11 · corrección Valentino 18:23) La carta
-  // oculta del próximo va AL FINAL de la grilla, después de todos
-  // los publicados (con o sin cap: se agrega después de la lista
-  // compuesta completa). Al salir, el posteo pasa a tile publicado
-  // normal y el siguiente próximo se vuelve carta (avance automático:
-  // en la próxima composición el próximo es otro). La carta no lleva
-  // magia de v645 ni marco dorado (el marco lo pone inicioView solo
-  // sobre tiles kind 'post': la carta es kind 'oculta' y no lo
-  // recibe; el segundo próximo tampoco, porque su id no es el del
-  // próximo real). Sin próximo, nada se agrega.
+  // (LOTE PROXIMO-ARRIBA · 5/11 · decisión Valentino 07:48,
+  // REEMPLAZA el orden v648) La carta oculta del próximo va JUSTO
+  // DESPUÉS del posteo publicado más reciente: se inserta tras el
+  // primer tile publicado del grupo de publicados (los fijados van
+  // aparte y no son el ancla; sin publicados, cae al final). Al
+  // salir, el posteo pasa a tile publicado normal y el siguiente
+  // próximo se vuelve carta (avance automático: en la próxima
+  // composición el próximo es otro). La carta no lleva magia de
+  // v645 ni marco dorado (el marco lo pone inicioView solo sobre
+  // tiles kind 'post': la carta es kind 'oculta' y no lo recibe; el
+  // segundo próximo tampoco, porque su id no es el del próximo
+  // real). Sin próximo, nada se agrega.
   const finalTiles = head.concat(rest6);
-  if (nextPost) finalTiles.push({ kind: 'oculta', post: nextPost });
+  if (nextPost) {
+    const idxPub = finalTiles.findIndex((t) => t && (t.kind === 'ig' || (t.post && t.post.status === 'published' && !t.post.pinned)));
+    if (idxPub >= 0) finalTiles.splice(idxPub + 1, 0, { kind: 'oculta', post: nextPost });
+    else finalTiles.push({ kind: 'oculta', post: nextPost });
+  }
   return finalTiles;
 }
 const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
@@ -19594,8 +19598,8 @@ function homeTileHTML(t, i) {
     // (LOTE MAGIA-PROXIMO · 4/11 · orden Valentino 19:37, SUPERSEDE la
     // «sin magia» de 18:23 SOLO para esta tarjeta) La magia vive en el
     // BORDE (destellos ✦, SIN latido desde la corrección 19:45), nunca en el contenido: el velo
-    // sigue sin foto/caption/corazón/tik/detalle, la carta sigue
-    // última y con fecha/hora reales; los publicados NO llevan magia.
+    // sigue sin foto/caption/corazón/tik/detalle, la carta va justo
+    // después del publicado más reciente y con fecha/hora reales; los publicados NO llevan magia.
     const proxLbl = phEn ? 'Next up' : 'El próximo';
     return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta hf-carta-magia" data-sched-at="${esc(String(p.scheduled_at || ''))}" aria-label="${phEn ? 'Next post, hidden' : 'Próximo posteo, oculto'}"><span class="hf-carta-velo" aria-hidden="true"></span><span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
   }
@@ -25468,7 +25472,7 @@ async function approvalPostView(id) {
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
     ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''}
     ${actions}${draftActions}
-    ${apvMoreHTML(p, st, canAct, isDraft, editPrompt)}
+    ${apvMoreHTML(p, st, canAct, isDraft)}
     ${hfAskChangeBtnHTML(p)}
   </div>`;
 }
