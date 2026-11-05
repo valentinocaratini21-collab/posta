@@ -906,12 +906,13 @@ function bbShell(tab, content) {
     inicio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 3l9 8.5"/><path d="M5.5 10v10h13V10"/></svg>',
     semana: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
+    'analisis-feed': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
   };
   const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}${k === 'jardin' ? '<span class="bb-badge pz-premios-badge off"></span>' : ''}</button>`;
-  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin') ? ' bb-glass-pantallas' : ''}">
+  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'analisis-feed' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
-    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + pzDockMasBtn('bb') + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings')) + '</nav>' + pzDockMasHTML()}
+    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('analisis-feed', '#/app/analisis-feed', gzT('Análisis', 'Analysis')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings')) + '</nav>' + pzDockMasHTML()}
   </div>`;
 }
 async function bbLoadEstado(force) {
@@ -1478,6 +1479,7 @@ function mxTabKey(tab) {
   if (tab === 'schedule' || tab === 'post') return 'semana';
   if (tab === 'jardin-posty') return 'jardin';
   if (tab === 'analisis') return 'analisis';
+  if (tab === 'analisis-feed') return 'analisis-feed';
   return '';
 }
 function mxModoActual(tab) {
@@ -6302,14 +6304,19 @@ function mzTabsHTML(tab) {
     : (tab === 'schedule' || tab === 'post') ? 'semana'
     : tab === 'jardin-posty' ? 'jardin'
     : tab === 'analisis' ? 'analisis'
+    : tab === 'analisis-feed' ? 'analisis-feed'
     : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}${key === 'jardin' ? '<span class="mz-badge pz-premios-badge off"></span>' : ''}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${pzDockMasBtn('mz')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>${pzDockMasHTML()}`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('analisis-feed', 'analisis-feed', pzIc('search'), gzT('Análisis', 'Analysis'))}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>${pzDockMasHTML()}`;
 }
 
 /* (LOTE DOCK-MAS) */
 /* (LOTE DOCK-MAS) Boton + central del dock: abre la hoja crear. No es
    pestana ni cambia de ruta: solo abre la hoja (pzDockMasSheet). */
+/* (LOTE ANALISIS-FEED · 4/11) El dock ya no usa este botón: el slot central
+   es el tab Análisis. La hoja sigue abriéndose desde el + del chat
+   (mzChatPlus → pzDockMasToggle) y desde esta misma hoja; la función se
+   conserva por eso, no se borra. */
 function pzDockMasBtn(shell) {
   // (LOTE MEJORAS-INICIO · pieza 3 · 3/11) El + lleva su palabra abajo
   // («Agregar», lo que hace la hoja) con geometría de pestaña: el círculo
@@ -6388,6 +6395,7 @@ function appShell(tab, content) {
     </div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
     <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('navBarras')}</span>Estrategia</button>
+    <button class="drawer-link ${tab === 'analisis-feed' ? 'on' : ''}" data-tab="analisis-feed"><span class="di">${pzIc('search')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Analysis' : 'Análisis'}</button>
     <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('navBambu')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Prizes' : 'Premios'}</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
@@ -16889,6 +16897,7 @@ function pzPrefetchKick() {
      : key === '#/app/schedule' ? (en ? 'Week' : 'Semana')
      : key === '#/app/jardin-posty' ? (en ? 'Prizes' : 'Premios')
      : key === '#/app/analisis' ? (en ? 'Strategy' : 'Estrategia')
+     : key === '#/app/analisis-feed' ? (en ? 'Analysis' : 'Análisis')
      : key === '#/app/ajustes' ? (en ? 'Settings' : 'Ajustes')
      : (en ? 'Back' : 'Volver');
    return `<a class="apv-back" href="${href}">${pzIc('arrowLeft', 14)} ${label}</a>`;
@@ -17192,6 +17201,7 @@ function pzPrefetchKick() {
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') { pzPaintSkeleton(tab); content = await scheduleView(); }
   else if (tab === 'analisis') { pzPaintSkeleton(tab); let __okAn = true; try { await loadChunk('analisis'); } catch (e) { __okAn = false; } content = __okAn ? analisisView() : chunkFailHTML(); } // 🧠 Análisis: LA CARTA v3 (chunk-analisis.js)
+  else if (tab === 'analisis-feed') { pzPaintSkeleton(tab); content = await analisisFeedView(); } // 📊 Análisis: vista overall del feed (inline en app.js, sin chunk)
   else if (tab === 'numeros') content = statsView(); // 📊 Tus números (stats de IG)
   else if (tab === 'crear') { location.hash = '#/app/schedule'; return; } // Creador manual fusionado en Schedule
   else if (tab === 'ideas') { location.hash = '#/app/schedule'; return; } // Ideas se fusionó en Schedule
@@ -24370,6 +24380,199 @@ function statsView() {
     <div class="st-grid" id="stGrid">${cards}</div>
     <div id="stBest"></div>
     <div id="stRate"></div>
+  </div>`;
+}
+/* (LOTE ANALISIS-FEED · 4/11) Tab Análisis: la vista overall del feed.
+   Aprobación Valentino 4/11 ~21:03 sobre el mock v3, elevada a premium:
+   hero + 3 bloques grandes + pendientes honestos. Reglas duras:
+   - Solo datos REALES: todo sale de los posteos publicados reales (DB +
+     recientes de IG, el mismo conjunto que muestra el feed), del perfil
+     real y del nivel real. Nada inventado, nada de adorno.
+   - Sin posteo por posteo: overall (constancia, formatos, próximo hito).
+   - Sin predicción (la hace la carta de Estrategia) y sin alcance/likes/
+     comentarios: eso necesita las estadísticas oficiales y va como
+     pendiente honesto, nunca como número.
+   - Motivador, nunca culpa: la racha y la comparación se cuentan como
+     progreso; si un número baja, se dice sin juicio.
+   - Temas del mock v3 NO se pintan. Verificado: source_topic es el
+     título de cada posteo (uno por pieza), no una categoría: agruparlo
+     daría porcentajes arbitrarios de títulos distintos, no temas reales.
+     El tercer bloque es el próximo hito (siempre real, siempre un
+     objetivo concreto). Si el generador suma categorías reales de tema,
+     Temas vuelve. */
+// (LOTE ANALISIS-FEED) Conjunto publicado real que usa la vista: posteos
+// de la DB ya salidos (sin archivados, sin historias) + recientes de IG
+// deduplicados por shortcode (misma regla que homeGridCompose). Un posteo
+// sin fecha no entra al cómputo de días (sin fecha no se puede ubicar);
+// un tipo desconocido cuenta para los días pero no para los formatos.
+function pzAnalisisFeedMerge(dbPublished, recents, fns) {
+  const sc = (fns && fns.shortcode) || (() => null);
+  const parse = (fns && fns.parse) || ((s) => { const d = new Date(String(s || '').replace(' ', 'T')); return isNaN(d) ? null : d; });
+  const out = [];
+  const pubSc = new Set();
+  const archSc = new Set();
+  const list = Array.isArray(dbPublished) ? dbPublished : [];
+  for (const p of list) {
+    if (!p || p.status !== 'published') continue;
+    const mt = String(p.media_type || '');
+    if (mt === 'story') continue;
+    const code = p.ig_permalink ? sc(p.ig_permalink) : null;
+    if (p.ig_state === 'archived_ext') { if (code) archSc.add(String(code)); continue; }
+    if (code) pubSc.add(String(code));
+    const d = parse(p.published_at || p.scheduled_at);
+    if (!d) continue;
+    out.push({ t: d.getTime(), type: (mt === 'carousel' ? 'carousel' : mt === 'video' ? 'video' : mt === 'image' ? 'image' : null) });
+  }
+  const rs = Array.isArray(recents) ? recents : [];
+  for (const r of rs) {
+    if (!r || !r.img) continue;
+    if (r.shortcode && (pubSc.has(String(r.shortcode)) || archSc.has(String(r.shortcode)))) continue;
+    if (typeof r.taken_at !== 'number') continue;
+    const ty = String(r.type || 'image');
+    out.push({ t: r.taken_at * 1000, type: (ty === 'carousel' ? 'carousel' : ty === 'video' ? 'video' : ty === 'image' ? 'image' : null) });
+  }
+  return out;
+}
+// (LOTE ANALISIS-FEED) Cálculo puro de la vista overall. Entrada: posteos
+// publicados {t: ms, type} + zona + avance de nivel. Salida: el modelo de
+// la vista. Sin datos, los bloques dicen que todavía no hay datos; nunca
+// NaN, nunca un número que no salió de la entrada.
+function pzAnalisisFeedCalc(input) {
+  const o = input || {};
+  const pubs = Array.isArray(o.published) ? o.published : [];
+  const tz = o.tz || 'America/Argentina/Buenos_Aires';
+  const nowMs = typeof o.nowMs === 'number' ? o.nowMs : Date.now();
+  const dayKey = (ms) => { try { return new Date(ms).toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } };
+  const shiftKey = (key, delta) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key || '');
+    if (!m) return '';
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    d.setUTCDate(d.getUTCDate() + delta);
+    return d.toISOString().slice(0, 10);
+  };
+  const today = dayKey(nowMs);
+  const postDays = new Set();
+  for (const p of pubs) { if (p && typeof p.t === 'number') { const k = dayKey(p.t); if (k) postDays.add(k); } }
+  const keys30 = [];
+  for (let i = 0; i < 30; i++) keys30.push(shiftKey(today, -i));
+  const daysWith = keys30.filter((k) => postDays.has(k)).length;
+  let streak = 0;
+  {
+    let cur = postDays.has(today) ? today : (postDays.has(shiftKey(today, -1)) ? shiftKey(today, -1) : '');
+    while (cur && postDays.has(cur)) { streak++; cur = shiftKey(cur, -1); }
+  }
+  const countIn = (keys) => { const s = new Set(keys); let n = 0; for (const p of pubs) { if (p && typeof p.t === 'number' && s.has(dayKey(p.t))) n++; } return n; };
+  const weekKeys = []; for (let i = 0; i < 7; i++) weekKeys.push(shiftKey(today, -i));
+  const prevKeys = []; for (let i = 7; i < 14; i++) prevKeys.push(shiftKey(today, -i));
+  const weekCur = countIn(weekKeys);
+  const weekPrev = countIn(prevKeys);
+  const fc = { image: 0, carousel: 0, video: 0 };
+  for (const p of pubs) { if (p && Object.prototype.hasOwnProperty.call(fc, p.type)) fc[p.type]++; }
+  const fmtTotal = fc.image + fc.carousel + fc.video;
+  let topType = null; let topN = 0;
+  for (const k of ['image', 'carousel', 'video']) { if (fc[k] > topN) { topN = fc[k]; topType = k; } }
+  const av = (o.avance && typeof o.avance.total === 'number' && o.avance.total > 0) ? o.avance : null;
+  return {
+    total: pubs.length,
+    constancy: { pct: Math.round(100 * daysWith / 30), daysWith, daysTotal: 30 },
+    streak,
+    week: { cur: weekCur, prev: weekPrev },
+    formats: { total: fmtTotal, topType, topN, topPct: fmtTotal > 0 ? Math.round(100 * topN / fmtTotal) : 0, counts: fc },
+    milestone: av ? { hechos: av.hechos, total: av.total, faltan: Math.max(0, av.total - av.hechos), pct: Math.round(100 * av.hechos / av.total) } : null,
+  };
+}
+// (LOTE ANALISIS-FEED) La vista: hero + Constancia + Formatos + Próximo
+// hito + pendientes honestos. Inline en app.js, sin chunk nuevo. Los datos
+// son los mismos que ya cargan Inicio y el nivel: ningún endpoint nuevo,
+// ningún número que no venga de ahí.
+async function analisisFeedView() {
+  const tz = pcTz();
+  let allPosts = [];
+  try {
+    const [postsRes, pubRes] = await Promise.all([
+      api.get('/api/posts').catch(() => []),
+      api.get('/api/posts?status=published').catch(() => []),
+    ]);
+    allPosts = hfMergePostsAll(postsRes, pubRes);
+  } catch (e) { allPosts = []; }
+  if (!Array.isArray(allPosts)) allPosts = [];
+  let prof = (typeof HOME_PROF !== 'undefined' && HOME_PROF) || null;
+  let nivel = null;
+  try {
+    const [hpRes, nvRes] = await Promise.all([
+      api.get('/api/home/profile').catch(() => null),
+      (!HF_VISITOR ? api.get('/api/oficina/nivel?poder=posty').catch(() => null) : Promise.resolve(null)),
+    ]);
+    if (hpRes && hpRes.ok) { prof = hpRes; try { HOME_PROF = hpRes; } catch (e) {} }
+    if (nvRes && nvRes.ok) nivel = nvRes;
+  } catch (e) {}
+  const dbPub = allPosts.filter((p) => p && p.status === 'published');
+  const entries = pzAnalisisFeedMerge(dbPub, (prof && prof.recents) || [], { shortcode: hfIgShortcode, parse: pcParseDate });
+  const m = pzAnalisisFeedCalc({ published: entries, tz, nowMs: Date.now(), avance: (nivel && nivel.avance) || null });
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const T = (es, enTxt) => en ? enTxt : es;
+  const fmtName = (t) => t === 'image' ? T('foto', 'photo') : t === 'video' ? T('reel', 'reel') : t === 'carousel' ? T('carrusel', 'carousel') : '';
+  // Hero: totales reales. Seguidores solo si hay lectura (sin lectura no
+  // hay número, nunca un 0 inventado). Posteos: conteo de IG si lo hay,
+  // si no los publicados conocidos.
+  const postsCount = (prof && typeof prof.posts_count === 'number') ? prof.posts_count : m.total;
+  const followers = (prof && typeof prof.followers === 'number' && prof.followers > 0) ? prof.followers : null;
+  const nivelNum = (nivel && typeof nivel.nivel === 'number') ? nivel.nivel : null;
+  const totals = [];
+  totals.push(`${postsCount} ${postsCount === 1 ? T('posteo', 'post') : T('posteos', 'posts')}`);
+  if (followers !== null) totals.push(`${followers} ${T('seguidores', 'followers')}`);
+  if (nivelNum !== null) totals.push(`Nv ${nivelNum}`);
+  let heroLine;
+  if (m.total === 0) heroLine = T('tu primer posteo arranca el ritmo', 'your first post kicks off the rhythm');
+  else if (m.constancy.pct >= 70) heroLine = T('¡viene con ritmo!', 'it has rhythm!');
+  else if (m.constancy.pct >= 40) heroLine = T('viene agarrando ritmo', 'it is picking up rhythm');
+  else heroLine = T('cada posteo suma: el ritmo se construye día a día', 'every post counts: rhythm builds day by day');
+  const weekLine = `${T('esta semana', 'this week')} ${m.week.cur} · ${T('la anterior', 'last week')} ${m.week.prev}` +
+    (m.week.cur > m.week.prev ? ` · ${T('¡vas arriba de la semana pasada!', 'you are above last week!')}` :
+     m.week.cur === m.week.prev ? ` · ${T('mismo ritmo que la semana pasada', 'same pace as last week')}` : '');
+  const streakLine = m.streak >= 2 ? `<p class="anf-line"><b>${m.streak} ${T('días seguidos publicando', 'days in a row posting')}</b></p>` : '';
+  const fmtLine = m.formats.total > 0
+    ? `${T('foto', 'photo')} ${m.formats.counts.image} · ${T('reel', 'reel')} ${m.formats.counts.video} · ${T('carrusel', 'carousel')} ${m.formats.counts.carousel}`
+    : T('todavía no hay formatos para comparar', 'no formats to compare yet');
+  const fmtInsight = m.formats.topType
+    ? `${T('tu formato más usado es', 'your most used format is')} ${fmtName(m.formats.topType)}`
+    : '';
+  let hitoHTML = '';
+  if (nivelNum === 50) {
+    hitoHTML = `<section class="anf-card"><h2>${pzIc('sparkle', 20)} ${T('Próximo hito', 'Next milestone')}</h2><div class="anf-big">50</div><p class="anf-line">${T('llegaste al techo: Era Maestro', 'you reached the top: Master Era')}</p></section>`;
+  } else if (m.milestone && nivelNum !== null) {
+    const faltanTxt = m.milestone.faltan === 0
+      ? T('tu próximo nivel está al caer', 'your next level is about to drop')
+      : `${T('te faltan', 'you need')} ${m.milestone.faltan} ${m.milestone.faltan === 1 ? T('posteo', 'post') : T('posteos', 'posts')} ${T('para el', 'for')} Nv ${nivelNum + 1}`;
+    hitoHTML = `<section class="anf-card"><h2>${pzIc('sparkle', 20)} ${T('Próximo hito', 'Next milestone')}</h2><div class="anf-big">${m.milestone.faltan}</div><p class="anf-line">${faltanTxt}</p><div class="anf-bar"><i style="width:${m.milestone.pct}%"></i></div></section>`;
+  }
+  return `
+  <div class="anf-wrap">
+    <section class="anf-hero">
+      <img class="anf-ava" src="ai-avatar.png" alt="Posty">
+      <div>
+        <h1>${T('Análisis', 'Analysis')} <span class="anf-spark">✦</span></h1>
+        <p class="anf-line">${esc(heroLine)}</p>
+        ${totals.length ? `<p class="anf-totals">${totals.join(' · ')}</p>` : ''}
+      </div>
+    </section>
+    <section class="anf-card">
+      <h2>${pzIc('calendar', 20)} ${T('Constancia', 'Consistency')}</h2>
+      <div class="anf-big">${m.constancy.pct}<span>%</span></div>
+      <p class="anf-line">${T('de los días con posteo', 'of days with a post')}: ${m.constancy.daysWith} ${T('de', 'of')} 30 ${T('días', 'days')}</p>
+      <div class="anf-bar"><i style="width:${m.constancy.pct}%"></i></div>
+      ${streakLine}
+      <p class="anf-line">${weekLine}</p>
+    </section>
+    <section class="anf-card">
+      <h2>${pzIc('layers', 20)} ${T('Formatos', 'Formats')}</h2>
+      <div class="anf-big">${m.formats.total > 0 ? `${m.formats.topPct}<span>%</span>` : '0'}</div>
+      <p class="anf-line">${fmtLine}</p>
+      ${fmtInsight ? `<p class="anf-line"><b>${fmtInsight}</b></p>` : ''}
+    </section>
+    ${hitoHTML}
+    <p class="anf-pend">${T('Alcance, likes y qué rinde más llegan con las estadísticas oficiales.', 'Reach, likes and what performs best arrive with the official stats connection.')}</p>
+    <p class="anf-foot">${T('Análisis mira hacia atrás', 'Analysis looks back')} · <a href="#/app/analisis">${T('Estrategia mira adelante', 'Strategy looks ahead')}</a></p>
   </div>`;
 }
 function bindStats() {
