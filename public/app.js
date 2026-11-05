@@ -19089,7 +19089,13 @@ function homeTileHTML(t, i) {
           : `<span class="hf-chip">${pzIc('clock', 12)} ${esc(ocTxt)}</span>`;
       }
     }
-    return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta" data-sched-at="${esc(String(p.scheduled_at || ''))}" aria-label="${phEn ? 'Next post, hidden' : 'Próximo posteo, oculto'}"><span class="hf-carta-velo" aria-hidden="true"></span><span class="hf-strip">${ocChip}</span></span></span>`;
+    // (LOTE MAGIA-PROXIMO · 4/11 · orden Valentino 19:37, SUPERSEDE la
+    // «sin magia» de 18:23 SOLO para esta tarjeta) La magia vive en el
+    // BORDE (destellos ✦, SIN latido desde la corrección 19:45), nunca en el contenido: el velo
+    // sigue sin foto/caption/corazón/tik/detalle, la carta sigue
+    // última y con fecha/hora reales; los publicados NO llevan magia.
+    const proxLbl = phEn ? 'Next up' : 'El próximo';
+    return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta hf-carta-magia" data-sched-at="${esc(String(p.scheduled_at || ''))}" aria-label="${phEn ? 'Next post, hidden' : 'Próximo posteo, oculto'}"><span class="hf-carta-velo" aria-hidden="true"></span><span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
   }
   return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${(likeInStrip && !hfAprobado) ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${(likeInStrip || hfAprobado) ? '' : likeBtn}${tikSpan}</span></span>`;
 }
@@ -24752,6 +24758,8 @@ async function approvalPostView(id) {
   // solo con hermana real verificada (caption_on=1), porqué solo con
   // dato real guardado. Sin dato, nada se dibuja.
   const apvCleanTog = (!isVideo && Number(p.caption_on) === 1) ? `<div class="apv-clean-row"><button type="button" class="hf-crop-tog" data-apv-clean aria-pressed="false">${pzIc('image', 16)} ${en ? 'See original photo' : 'Ver foto original'}</button></div>` : '';
+  const apvWhyTxt = String(p.strategy_why || '').trim();
+  const apvWhyLine = apvWhyTxt ? `<div class="apv-why">${pzIc('sparkle', 13)} ${esc(apvWhyTxt)}</div>` : '';
   return `<div class="apv-wrap">
     ${apvBack}
     ${media}
@@ -24759,7 +24767,9 @@ async function approvalPostView(id) {
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
-    ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''}
+    ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''} // (CONTENIDO-FOTO) el texto sobre la foto es dato propio
+    ${apvWhyLine}
+    ${rgLineHTML(p, en)}
     ${actions}${draftActions}
     ${apvMoreHTML(p, st, canAct, isDraft, editPrompt)}
     ${hfAskChangeBtnHTML(p)}

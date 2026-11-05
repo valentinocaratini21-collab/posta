@@ -3980,6 +3980,30 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    reduced-motion. */
 .hf-tile.hf-carta-oculta{cursor:default;background:linear-gradient(160deg,#EDF1F5,#DCE4EB);border:1px solid rgba(10,30,51,.12)}
 .hf-tile.hf-carta-oculta .hf-carta-velo{position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(255,255,255,.45) 0 10px,rgba(255,255,255,0) 10px 24px);pointer-events:none}
+/* ============ LOTE MAGIA-PROXIMO · 4/11 · orden Valentino 19:37, corrección 19:45 ============ */
+/* La tarjeta del próximo SÍ lleva magia, pero SOLO en el borde:
+   destellos ✦ de 4 puntas (dorado #FEC14D / celeste #2793C8, nunca
+   puntos ni polvo) con titileo suave. SIN latido (veredicto Valentino
+   19:45: «me gusta pero que no este latiendo»): el borde dorado 2px
+   queda fijo con un brillo suave estático. El contenido NO cambia:
+   velo sin foto/caption/corazón/tik/detalle, carta última,
+   fecha/hora reales. Los publicados NO llevan estas clases. Con
+   reduced-motion los destellos se quedan fijos. */
+.hf-tile.hf-carta-magia{border:2px solid rgba(254,193,77,.9);box-shadow:0 0 10px rgba(39,147,200,.25)}
+.hf-carta-destellos{position:absolute;inset:0;z-index:3;pointer-events:none}
+.hf-carta-destellos i{position:absolute;font-style:normal;line-height:1;animation:hf-carta-destello 2.4s ease-in-out infinite;text-shadow:0 0 6px currentColor}
+.hf-carta-destellos i:nth-child(1){top:6px;right:8px;font-size:17px;color:#FEC14D}
+.hf-carta-destellos i:nth-child(2){top:34%;left:7px;font-size:13px;color:#2793C8;animation-delay:.5s}
+.hf-carta-destellos i:nth-child(3){top:52%;right:7px;font-size:14px;color:#FEC14D;animation-delay:1s}
+.hf-carta-destellos i:nth-child(4){top:12%;left:26%;font-size:11px;color:#2793C8;animation-delay:1.5s}
+@keyframes hf-carta-destello{0%,100%{opacity:.25;transform:scale(.7) rotate(0deg)}50%{opacity:1;transform:scale(1.15) rotate(20deg)}}
+.hf-tile.hf-carta-magia > .hf-strip{flex-direction:column;align-items:flex-start;gap:5px}
+.hf-tile.hf-carta-magia > .hf-strip .hf-chip{flex:0 0 auto}
+.hf-carta-proximo{display:inline-flex;align-items:center;background:linear-gradient(135deg,#FEC14D,#FFD97A);color:#0A1E33;font-size:10.5px;font-weight:800;line-height:1;padding:5px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 1px 4px rgba(10,30,51,.25)}
+@media (prefers-reduced-motion: reduce){
+  .hf-tile.hf-carta-magia{box-shadow:0 0 12px rgba(39,147,200,.35)}
+  .hf-carta-destellos i{animation:none;opacity:.85}
+}
 /* Ítem 3 — racha de constancia debajo del perfil. */
 .hf-racha{font-size:13px;font-weight:700;color:#0A1E33;margin-top:8px;display:flex;align-items:center;gap:8px}
 @media (prefers-color-scheme: dark){
