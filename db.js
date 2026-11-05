@@ -1491,6 +1491,11 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN user_stopped INTEGER DEFAULT 0`); } 
 // esa cuenta (aunque un posteo puntual no tenga la marca user_stopped)
 // hasta que el dueño mismo reanude programando/aceptando.
 try { db.exec(`ALTER TABLE users ADD COLUMN publishing_stopped INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// MODO CONSERJE (lote conserje, base v697): users.concierge=1 pausa el
+// cerebro automático para ese cliente — su mensaje va a la consola y lo
+// responde el equipo como Posty. Default 0: nadie cambia de
+// comportamiento sin que el equipo lo prenda.
+try { db.exec(`ALTER TABLE users ADD COLUMN concierge INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN caption_b TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN cover_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (v332) portada elegida/graduada por el director de feed para posteos de video: el video no se toca, la portada es la superficie que toca la grilla
 try { db.exec(`ALTER TABLE posts ADD COLUMN cover_origin TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (Tanda feed 6C · ítem 6) origen de la portada: 'frame@<segundos>' cuando la eligió el dueño desde el selector (captura de SU video); el director de feed no pisa una portada con este origen

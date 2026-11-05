@@ -7,6 +7,9 @@ const approval = require('./approval');
 const autopilot = require('./autopilot');
 const publishGuard = require('./publish-guard');
 const publishWatchdog = require('./publish-watchdog');
+// 🛟 CONSOLA DE SOPORTE (lote consola-soporte, base v697): las alertas que
+// abren casos solas corren junto al vigía (mismo barrido + pasada al boot).
+const supportCases = require('./support-cases');
 const { activationNudge } = require('./activation-nudge');
 const { firstPublishNudge } = require('./first-publish-nudge');
 const magiaMod = require('./magia-postpago'); // (2026-10-25 · MAGIA POST-PAGO) celebración del primer posteo pago + mes 30
@@ -637,12 +640,17 @@ function startScheduler(db) {
         const r = publishWatchdog.sweep(db);
         if (r && r.requeued) processDuePosts(db);
       } catch (e) { console.error('[publish-watchdog]', e.message); }
+      // 🛟 Consola de soporte: alertas → casos (mismo barrido que el vigía).
+      try { supportCases.scanAlerts(db, {}); supportCases.refreshCaseStates(db, {}); }
+      catch (e) { console.error('[soporte]', e.message); }
     });
     setTimeout(() => {
       try {
         const r = publishWatchdog.sweep(db);
         if (r && r.requeued) processDuePosts(db);
       } catch (e) { console.error('[publish-watchdog] boot:', e.message); }
+      try { supportCases.scanAlerts(db, {}); supportCases.refreshCaseStates(db, {}); }
+      catch (e) { console.error('[soporte] boot:', e.message); }
     }, 30000);
     console.log(`[posta] Vigía de vencidos activo (barrido cada ${wdEvery} min + pasada al boot)`);
   } catch (e) {

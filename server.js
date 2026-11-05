@@ -21,6 +21,11 @@ push.initPush(db); // push notifications (VAPID); inactivo en silencio sin las e
 // abajo porque usa makeIdeaDraft del ámbito del servidor.
 const ritualManana = require('./ritual-manana');
 const morningPostPush = require('./morning-post-push');
+// 🛟 CONSOLA DE SOPORTE (lote consola-soporte, base v697): un solo panel de
+// control de principio a fin — recorrido del cliente, espejo, alertas que
+// abren casos, casos con cierre solo con confirmación del cliente, y
+// acciones del equipo con registro. La consola NUNCA publica.
+const supportCases = require('./support-cases');
 const dogfood = require('./dogfood');
 dogfood.initDogfood(db); // Posty dogfood: columna kind + tabla dogfood_state
 // Observabilidad dogfood (2026-10-05): los errores de imagen del dogfood van
@@ -5603,11 +5608,15 @@ app.post('/api/ideas/chat', async (req, res) => {
   if (guestBackstop(req, res)) return;
   const { messages, photos, library, drafts, audio, anchor_post_id, photoPaths } = req.body || {};
   const uidChat = req.session.userId;
+  // (MODO CONSERJE) Flag por cliente: con el cerebro pausado, el mensaje
+  // no gasta IA — no se le aplica el tope ni el rate de chat.
+  let conciergeMode = false;
+  try { conciergeMode = supportCases.isConcierge(db, uidChat); } catch (e) { conciergeMode = false; }
   // Kill-switch de gasto diario: mensaje amable de Posty, nunca un error robótico.
-  try { costs.assertAiOk(uidChat); }
+  try { if (!conciergeMode) costs.assertAiOk(uidChat); }
   catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ reply: e.message, idea: null }); throw e; }
   // Rate limit por plan: 40/80/150 mensajes/día (Esencial/Pro/Total). Anti-abuso.
-  if (!costs.checkRate(uidChat, 'chat', aiLimitsFor(uidChat).chatPerDay).ok) return res.json({ reply: costs.MSG_CHAT_RATE, idea: null });
+  if (!conciergeMode && !costs.checkRate(uidChat, 'chat', aiLimitsFor(uidChat).chatPerDay).ok) return res.json({ reply: costs.MSG_CHAT_RATE, idea: null });
   if (!Array.isArray(messages) || !messages.length) {
     if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.status(400).json({ error: 'Contanos tu idea' });
   }
@@ -5634,6 +5643,21 @@ app.post('/api/ideas/chat', async (req, res) => {
     try { vozPost = await armarBorradorVozChat(uidChat, heard, audio, Array.isArray(photoPaths) ? photoPaths : []); } catch (e) { console.error('[voz-dueno] chat:', e.message); vozPost = null; }
   }
   if (!clean.length) return res.status(400).json({ error: 'Contanos tu idea' });
+  // (MODO CONSERJE) El cerebro no responde solo: el mensaje se guarda,
+  // abre/actualiza el caso conserje y el cliente recibe un acuse honesto
+  // de Posty. FAIL-SAFE: cualquier fallo del desvío sigue con la IA —
+  // el cliente nunca queda sin respuesta y su mensaje nunca se pierde.
+  if (conciergeMode) {
+    try {
+      const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+      const dv = supportCases.divertToConcierge(db, uidChat, lastUserText);
+      if (dv && dv.ok) {
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', dv.ack);
+        return res.json({ reply: dv.ack, idea: null, concierge: true });
+      }
+    } catch (e) { console.error('[conserje] desvío falló, sigue la IA:', e.message); }
+  }
   // Saludo puro ("hola", "qué onda posty"): Posty responde al instante, sin gastar una llamada al modelo.
   {
     const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
@@ -7999,6 +8023,146 @@ app.post('/api/admin/review/:id/reject', requireAdminToken, (req, res) => {
     .catch(e => console.error('[review] regen:', e.message));
   console.log(`[review] rechazado borrador ${post.id} (usuario ${uid}), regenerando`);
   res.json({ ok: true, id: post.id, regenerating: true });
+});
+
+// ---------- CONSOLA DE SOPORTE (lote consola-soporte, base v697) ----------
+// Un solo panel de control, de principio a fin. Solo lectura del equipo
+// salvo las acciones de CONTROL (reprogramar / rehacer / responder en el
+// chat), que siempre quedan en support_team_log. NINGUNA ruta de acá
+// publica: no hay camino de publicación en la consola.
+app.get('/api/admin/support/overview', requireAdminToken, (req, res) => {
+  try { res.json(supportCases.buildOverview(db, {})); }
+  catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/support/scan', requireAdminToken, (req, res) => {
+  try {
+    const out = supportCases.scanAlerts(db, {});
+    const ref = supportCases.refreshCaseStates(db, {});
+    res.json({ ok: true, ...out, ...ref });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.get('/api/admin/support/cases', requireAdminToken, (req, res) => {
+  try {
+    res.json({ ok: true, casos: supportCases.listCases(db, {
+      estado: req.query.estado || '', userId: req.query.user_id || '',
+      tipo: req.query.tipo || '', limit: req.query.limit || 50 }) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/support/cases', requireAdminToken, (req, res) => {
+  const b = req.body || {};
+  const r = supportCases.openCase(db, { userId: b.user_id, tipo: b.tipo, titulo: b.titulo,
+    detalle: b.detalle, postId: b.post_id, dueno: b.dueno, siguientePaso: b.siguiente_paso,
+    dedupKey: b.dedup_key || '' });
+  if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+  res.json({ ok: true, caso: supportCases.getCase(db, r.caso.id) });
+});
+app.get('/api/admin/support/cases/:id', requireAdminToken, (req, res) => {
+  const c = supportCases.getCase(db, req.params.id);
+  if (!c) return res.status(404).json({ ok: false, error: 'no_existe' });
+  res.json({ ok: true, caso: c });
+});
+app.post('/api/admin/support/cases/:id/nota', requireAdminToken, (req, res) => {
+  const b = req.body || {};
+  if (!String(b.texto || '').trim()) return res.status(400).json({ ok: false, error: 'texto_vacio' });
+  const c = supportCases.getCase(db, req.params.id);
+  if (!c) return res.status(404).json({ ok: false, error: 'no_existe' });
+  supportCases.addEvent(db, c.id, { actor: 'equipo', kind: b.kind || 'nota', texto: b.texto });
+  res.json({ ok: true, caso: supportCases.getCase(db, c.id) });
+});
+app.post('/api/admin/support/cases/:id/dueno', requireAdminToken, (req, res) => {
+  const r = supportCases.setOwner(db, req.params.id, (req.body || {}).dueno, 'equipo');
+  if (!r.ok) return res.status(404).json({ ok: false, error: r.error });
+  res.json({ ok: true, caso: r.caso });
+});
+app.post('/api/admin/support/cases/:id/paso', requireAdminToken, (req, res) => {
+  const r = supportCases.setNextStep(db, req.params.id, (req.body || {}).paso, 'equipo');
+  if (!r.ok) return res.status(404).json({ ok: false, error: r.error });
+  res.json({ ok: true, caso: r.caso });
+});
+app.post('/api/admin/support/cases/:id/cerrar', requireAdminToken, (req, res) => {
+  const r = supportCases.closeCase(db, req.params.id, { confirmadoPor: (req.body || {}).confirmado_por });
+  if (!r.ok) return res.status(r.error === 'no_existe' ? 404 : 400).json({ ok: false, error: r.error });
+  res.json({ ok: true, caso: r.caso });
+});
+app.post('/api/admin/support/cases/:id/reabrir', requireAdminToken, (req, res) => {
+  const r = supportCases.reopenCase(db, req.params.id, { actor: 'equipo', texto: (req.body || {}).texto });
+  if (!r.ok) return res.status(r.error === 'no_existe' ? 404 : 400).json({ ok: false, error: r.error });
+  res.json({ ok: true, caso: r.caso });
+});
+app.get('/api/admin/support/team-log', requireAdminToken, (req, res) => {
+  try {
+    res.json({ ok: true, log: supportCases.teamLog(db, {
+      userId: req.query.user_id || '', postId: req.query.post_id || '',
+      caseId: req.query.case_id || '', limit: req.query.limit || 50 }) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+// ---------- MODO CONSERJE + PANEL DEL DUEÑO (lote conserje, base v697) ----------
+// El cerebro se pausa por cliente (flag users.concierge); su mensaje va a
+// la consola y lo responde el equipo como Posty. El panel del dueño
+// muestra TODO lo que hace el operador, con el registro real de la DB.
+// NINGUNA ruta de acá publica: confirmar la mañana solo registra y
+// responde en el chat; los posteos salen por la programación vigente.
+app.get('/api/admin/support/conserje', requireAdminToken, (req, res) => {
+  try { res.json({ ok: true, clientes: supportCases.conciergeClients(db, {}) }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.get('/api/admin/support/conserje/pendientes', requireAdminToken, (req, res) => {
+  try { res.json(supportCases.pendingConcierge(db, {})); }
+  catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.get('/api/admin/support/conserje/panel', requireAdminToken, (req, res) => {
+  try { res.json(supportCases.buildOwnerPanel(db, { limit: req.query.limit || 100 })); }
+  catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/support/:userId/conserje', requireAdminToken, (req, res) => {
+  if (!/^\d+$/.test(String(req.params.userId || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+  const on = (req.body || {}).concierge === true || String((req.body || {}).concierge || '') === '1';
+  const r = supportCases.setConcierge(db, Number(req.params.userId), on, 'equipo');
+  if (!r.ok) return res.status(r.error === 'sin_usuario' ? 404 : 400).json({ ok: false, error: r.error });
+  res.json({ ok: true, user_id: r.user_id, concierge: r.concierge });
+});
+app.get('/api/admin/support/:userId/manana', requireAdminToken, (req, res) => {
+  if (!/^\d+$/.test(String(req.params.userId || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+  const r = supportCases.morningFor(db, Number(req.params.userId));
+  if (!r.ok) return res.status(404).json({ ok: false, error: r.error });
+  res.json(r);
+});
+app.post('/api/admin/support/:userId/manana', requireAdminToken, (req, res) => {
+  if (!/^\d+$/.test(String(req.params.userId || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+  const r = supportCases.confirmMorning(db, Number(req.params.userId), { actor: 'equipo', mensaje: (req.body || {}).mensaje });
+  if (!r.ok) return res.status(404).json({ ok: false, error: r.error });
+  res.json({ ok: true, dia: r.dia, posts: r.posts, enviado: r.enviado });
+});
+app.post('/api/admin/support/:userId/accion', requireAdminToken, (req, res) => {
+  if (!/^\d+$/.test(String(req.params.userId || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+  const b = req.body || {};
+  const r = supportCases.logOperatorAction(db, Number(req.params.userId), b.action, { actor: 'equipo', postId: b.post_id, caseId: b.case_id, detalle: b.detalle });
+  if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+  res.json({ ok: true, id: r.id });
+});
+app.get('/api/admin/support/:userId/journey', requireAdminToken, (req, res) => {
+  if (!/^\d+$/.test(String(req.params.userId || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+  const r = supportCases.buildJourney(db, Number(req.params.userId), { absImageUrl });
+  if (!r.ok) return res.status(404).json({ ok: false, error: r.error });
+  res.json(r);
+});
+app.post('/api/admin/support/posts/:id/reprogramar', requireAdminToken, (req, res) => {
+  const r = supportCases.reschedulePost(db, req.params.id, (req.body || {}).scheduled_at, { actor: 'equipo' });
+  if (!r.ok) return res.status(r.error === 'no_existe' ? 404 : 400).json({ ok: false, error: r.error });
+  res.json({ ok: true, post: r.post });
+});
+app.post('/api/admin/support/posts/:id/rehacer', requireAdminToken, (req, res) => {
+  const r = supportCases.redoPost(db, req.params.id, { actor: 'equipo', note: (req.body || {}).note,
+    regen: (uid, wk, topic) => regenerateOneDraft(uid, wk, topic) });
+  if (!r.ok) return res.status(r.error === 'no_existe' ? 404 : 400).json({ ok: false, error: r.error });
+  res.json({ ok: true, modo: r.modo, post_id: r.post_id });
+});
+app.post('/api/admin/support/:userId/chat', requireAdminToken, (req, res) => {
+  if (!/^\d+$/.test(String(req.params.userId || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+  const r = supportCases.replyAsPosty(db, Number(req.params.userId), (req.body || {}).texto,
+    { actor: 'equipo', caseId: (req.body || {}).case_id });
+  if (!r.ok) return res.status(r.error === 'sin_usuario' ? 404 : 400).json({ ok: false, error: r.error });
+  res.json({ ok: true, id: r.id, case_id: r.case_id });
 });
 
 // Regenera UN borrador para reemplazar uno rechazado en revisión. El rechazo ya
@@ -29767,7 +29931,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v697';
+const BUILD_ID = '20261105-v698';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
