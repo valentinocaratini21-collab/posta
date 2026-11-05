@@ -25653,6 +25653,7 @@ let pzHeadCollapseEcho = 0;
 // cambia COMO se llega. Sin animacion con reduced-motion.
 let pzHeadCollapseAnimToken = 0;
 function pzHeadCollapseAnimate(iv, collapsed) {
+  if (pzHeadCollapseIsMobile()) { try { if (iv) iv.classList.remove('hf-collapsed'); } catch (_) {} return; }
   try {
     const head = iv ? iv.querySelector('.hf-head') : null;
     if (!head) { iv.classList.toggle('hf-collapsed', collapsed); return; }
@@ -25722,8 +25723,33 @@ function pzHeadCollapseAnimate(iv, collapsed) {
 // el eco solo se arma cuando se APLICA el toggle, como antes.
 let pzHeadCollapseApplied = false;
 let pzHeadCollapseTimer = null;
+// LOTE HEADER-SIN-CAMBIO (4/11 · Valentino: el encabezado de Inicio NO
+// cambia de forma al bajar en el celular, se mantiene igual). En móvil
+// (mismo corte que mzIsMobile: ≤820px) el colapso queda DESACTIVADO por
+// completo: el encabezado conserva siempre su forma completa y baja con
+// el contenido (está en flujo normal, no es sticky), y al volver arriba
+// está idéntico. En escritorio (>820px) el colapso sigue exactamente
+// como hoy. El gate vive en tres puntos para que ningún camino lo deje
+// a medio desactivar: Sync (no decide), Apply (no aplica un timer
+// programado en escritorio) y Animate (nivel más bajo: nunca pone la
+// clase en móvil), más un listener de resize para el giro de pantalla
+// sin scroll. pzHeadCollapseNext NO se toca (tests de otros lotes la
+// exigen byte-idéntica) y el CSS .hf-collapsed sigue vivo para desktop.
+function pzHeadCollapseIsMobile() {
+  try { return !!(window.matchMedia && window.matchMedia('(max-width: 820px)').matches); } catch (e) { return false; }
+}
+function pzHeadCollapseMobileReset(iv) {
+  try {
+    if (pzHeadCollapseTimer) { clearTimeout(pzHeadCollapseTimer); pzHeadCollapseTimer = null; }
+    if (iv) iv.classList.remove('hf-collapsed');
+    pzHeadCollapseState = { collapsed: false, lastY: 0 };
+    pzHeadCollapseEcho = 0;
+    pzHeadCollapseApplied = false;
+  } catch (e) {}
+}
 function pzHeadCollapseApply() {
   pzHeadCollapseTimer = null;
+  if (pzHeadCollapseIsMobile()) { pzHeadCollapseMobileReset(document.getElementById('inicioView')); return; }
   try {
     const iv = document.getElementById('inicioView');
     if (!iv) return;
@@ -25737,6 +25763,7 @@ function pzHeadCollapseSync() {
   try {
     const iv = document.getElementById('inicioView');
     if (!iv) return;
+    if (pzHeadCollapseIsMobile()) { pzHeadCollapseMobileReset(iv); return; }
     const doc = document.documentElement;
     const maxScroll = (doc ? doc.scrollHeight : 0) - (window.innerHeight || 0);
     if (maxScroll <= 0) {
@@ -25776,6 +25803,10 @@ function pzHeadCollapseSync() {
 if (typeof window !== 'undefined' && window.addEventListener && !window.__pzHeadCollapseBound) {
   window.__pzHeadCollapseBound = true;
   window.addEventListener('scroll', pzHeadCollapseSync, { passive: true });
+}
+if (typeof window !== 'undefined' && window.addEventListener && !window.__pzHeadCollapseResizeBound) {
+  window.__pzHeadCollapseResizeBound = true;
+  window.addEventListener('resize', () => { try { if (pzHeadCollapseIsMobile()) pzHeadCollapseMobileReset(document.getElementById('inicioView')); } catch (e) {} }, { passive: true });
 }
 // LOTE DIAGNOSTICO2 (TEMPORAL — quitar en el lote del fix real): reporter del
 // ensanchamiento del feed en el webView real. NO cambia ningún layout ni
