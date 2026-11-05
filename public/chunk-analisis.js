@@ -7,7 +7,8 @@
  * existan en app.js u otro chunk — por eso TODO acá lleva prefijo ana.
  *
  * analisisView() devuelve la cáscara con un loading amable; bindAnalisis() pide
- * GET /api/analysis y pinta la carta; anaRefresh() hace POST /api/analysis/refresh.
+ * GET /api/analysis y pinta la carta; anaRefresh() intenta POST
+ * /api/analysis/refresh (BLOQUEADO desde ESTRATEGIA-SEMANAL: 410) y cae a GET.
  *
  * EL ANÁLISIS COMPLETO (pantalla "Tu análisis", diseño cerrado de Valentino):
  * la carta mínima es la superficie; su radiografía entera vive a un toque en
@@ -1074,7 +1075,7 @@ function anaCartaHTML(d) {
     h += `<div class="ana-banner">${esc(a.letter.closing || anaBanner(stage, ctx))}</div>`;
     h += anaSignHTML(birth);
     if (!anaPastMode) h += anaShareBlockHTML(a);
-    if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">${anaT('↻ Actualizar estrategia', '↻ Refresh strategy')}</button></div>`;
+    if (!anaPastMode) h += `<div class="ana-refresh"><p style="font-size:12.5px;color:var(--mut);margin:0">${anaT('Se actualiza una vez por semana', 'It updates once a week')}</p></div>`;
     // (FUNDAMENTO-LITERAL · pieza 4) Confirmación semanal, solo carta
     // actual (nunca en cartas viejas): un toque «Sigue igual» o editar
     // un producto. No suma fricción a la aprobación: si no se toca, la
@@ -1106,7 +1107,7 @@ function anaCartaHTML(d) {
   }
   h += `<div class="ana-banner">${esc(anaBanner(stage, ctx))}</div>`;
   h += anaSignHTML(birth);
-  if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">${anaT('↻ Actualizar estrategia', '↻ Refresh strategy')}</button></div>`;
+  if (!anaPastMode) h += `<div class="ana-refresh"><p style="font-size:12.5px;color:var(--mut);margin:0">${anaT('Se actualiza una vez por semana', 'It updates once a week')}</p></div>`;
   h += anaAprendeHTML(d);
   h += `</div>`;
   h += `<div id="anaBoostRec"></div>`;

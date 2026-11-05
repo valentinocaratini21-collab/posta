@@ -10202,14 +10202,14 @@ app.get('/api/analysis', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: 'analysis_failed' });
   }
 });
+// (ESTRATEGIA-SEMANAL 4/11) La estrategia se actualiza UNA VEZ POR SEMANA,
+// solo por la generación automática (sweep dominical + GET perezoso del
+// primer armado). El refresh manual a demanda queda BLOQUEADO: este POST
+// devuelve 410 y el cliente muestra la carta guardada (anaLoad cae a
+// GET /api/analysis). buildAccountAnalysis sigue vivo para el sweep y el
+// GET; este endpoint ya no lo llama nadie.
 app.post('/api/analysis/refresh', requireAuth, async (req, res) => {
-  try {
-    const uid = req.session.userId;
-    const fresh = await buildAccountAnalysis(uid);
-    res.json(analysisPayload(uid, fresh));
-  } catch (e) {
-    res.status(500).json({ ok: false, error: 'analysis_failed' });
-  }
+  res.status(410).json({ ok: false, error: 'estrategia_semanal', message: 'La estrategia se actualiza una vez por semana.' });
 });
 // (Cartas anteriores) Carta anterior ENTERA: el payload completo ya vive guardado en
 // account_analysis (saveAnalysis); este endpoint lo sirve SOLO al dueño de
@@ -28302,7 +28302,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261101-v659';
+const BUILD_ID = '20261101-v660';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

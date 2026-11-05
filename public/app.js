@@ -2372,7 +2372,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261101-v652'; // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
+const CHUNK_V = '20261101-v660'; // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado)
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -24090,7 +24090,7 @@ async function analysisView() {
   const head = `<div class="card" style="padding:18px">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
       <div style="font-size:20px;font-weight:800">${pzIc('idea', 15)} Tu estrategia</div>
-      <button class="btn btn-ghost btn-sm" onclick="pzAnalysisRefresh(this)">↻ Actualizar</button>
+      <span style="font-size:12.5px;color:var(--mut)">Se actualiza una vez por semana</span>
     </div>
     <p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:6px">Esto es lo que Posty ve de tu cuenta y de tu mercado — y las decisiones que toma con eso. Cada posteo de tu semana nace de acá.</p>
   </div>`;
