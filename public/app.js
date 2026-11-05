@@ -20183,12 +20183,13 @@ async function inicioView() {
   // prólogo). El
   // botón-anuncio de Ideas y la burbuja de relación salieron de la
   // pantalla principal (v442).
-  // (PORT MOCK v24) Switcher + tira de jardín arriba de Inicio (reusa nivelPosty).
-  let portTopInicio = '';
-  if (!HF_VISITOR && nivelPosty) { try { portTopInicio = await mxPortTop(nivelPosty.poderes, nivelPosty, 'posty'); } catch (e) { portTopInicio = ''; } }
+  // (SACAR-PREMIOS-INICIO · orden Valentino 4/11) La tira «Premios · Nv N»
+  // ya NO se monta en Inicio: ni fetch de mxPortTop ni interpolación.
+  // La tira sigue viva en Oficina (mxPortTop 'gesty') y la pestaña
+  // Premios sigue intacta; el nivel (nivelPosty/HF_NIVEL) se sigue
+  // calculando para chat y Estrategia.
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
-  ${portTopInicio}
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: !HF_VISITOR })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
   ${hfTabsHTML(HF_TAB, enHome)}
