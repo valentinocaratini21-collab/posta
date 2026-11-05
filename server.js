@@ -16,6 +16,11 @@ costs.initCosts(db, {
 }); // medición de gasto de IA (api_costs) + techo mensual por usuario
 const push = require('./push');
 push.initPush(db); // push notifications (VAPID); inactivo en silencio sin las env vars
+// 🌅 RITUAL DE LA MAÑANA (LOTE 5/8): día, racha, álbum y elección (módulo
+// puro + SQL); la generación de alternas frescas vive en los endpoints de
+// abajo porque usa makeIdeaDraft del ámbito del servidor.
+const ritualManana = require('./ritual-manana');
+const morningPostPush = require('./morning-post-push');
 const dogfood = require('./dogfood');
 dogfood.initDogfood(db); // Posty dogfood: columna kind + tabla dogfood_state
 // Observabilidad dogfood (2026-10-05): los errores de imagen del dogfood van
@@ -11869,6 +11874,203 @@ app.post('/api/posts/swap', requireAuth, express.json(), (req, res) => {
   res.json({ ok: true,
     a: { id: pa.id, scheduled_at: na.at, status: na.status },
     b: { id: pb.id, scheduled_at: nb.at, status: nb.status } });
+});
+
+/* 🌅 RITUAL DE LA MAÑANA (LOTE 5/8, aprobado Valentino 5/11 «Arma todo»).
+   La push de las 9:00 abre #/app/ritual (morning-post-push.js): el paquete
+   del día trae 3 cartas — la recomendada (el posteo programado para hoy)
+   + 2 alternas de verdad distintas —, el dueño elige una, esa sale hoy
+   y va al álbum. Sin elección, sale la recomendada (el scheduler vigente;
+   acá no se programa nada nuevo). Solo posteos: el video semanal NO entra
+   y acá nunca se genera video (regla de costo cero en reels 5/11).
+   Alternas: primero borradores reales del usuario (costo cero); solo si
+   faltan, se generan frescas por makeIdeaDraft con ideas sintéticas de
+   productos del fundamento (nunca tocan posty_ideas: el UPDATE de 'made'
+   no encuentra la idea sintética y no cambia nada; la frescura pasa
+   porque la idea sintética no tiene fecha de vencimiento). Si todo
+   falla, el ritual sigue con la recomendada sola, nunca con cartas
+   inventadas. Elegir ES aprobar (approval + needs_review limpio, como
+   en /api/posts/:id/approve) y ES la revisión del dueño. */
+function ritualLang(uid) {
+  try {
+    const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid);
+    return u && u.lang === 'en' ? 'en' : 'es';
+  } catch (e) { return 'es'; }
+}
+
+function ritualPublicadoHoy(uid, tz, dayKey) {
+  try {
+    const rows = db.prepare(`SELECT published_at, scheduled_at FROM posts WHERE user_id = ? AND status = 'published' AND (published_at IS NOT NULL OR scheduled_at IS NOT NULL)`).all(uid);
+    return rows.some((r) => {
+      const raw = r.published_at || r.scheduled_at;
+      if (!raw) return false;
+      const d = new Date(String(raw).replace(' ', 'T'));
+      if (isNaN(d)) return false;
+      return morningPostPush.dayKeyInTz(d, tz) === dayKey;
+    });
+  } catch (e) { return false; }
+}
+
+// Ideas sintéticas para alternas frescas: productos del fundamento
+// distintos al de la recomendada, con tipos distintos al de la
+// recomendada y entre sí. Mapeo de tipo a source de makeIdeaDraft:
+// calendar→promo, reel→novedad, winner→social, resto→detras.
+function ritualIdeasSinteticas(uid, rec) {
+  const ideas = [];
+  try {
+    const dg = clientDigest.getDigest(db, uid);
+    const prods = rubroGarantias.productosDesdeDigest(dg && dg.productos, readDna(uid));
+    const recProd = String(rec.rg_producto || '');
+    const recTipo = String(rec.tipo || '');
+    const tipos = ['social', 'detras', 'novedad', 'promo'].filter((t) => t !== recTipo);
+    const srcFor = { social: 'winner', detras: '', novedad: 'reel', promo: 'calendar' };
+    const cands = prods.filter((p) => p && p.nombre && p.nombre !== recProd);
+    const pool = cands.length ? cands : prods.filter((p) => p && p.nombre);
+    for (let i = 0; i < tipos.length && ideas.length < 2 && pool.length; i++) {
+      const prod = pool[(i * 2) % pool.length];
+      if (!prod || !prod.nombre) continue;
+      ideas.push({ title: prod.nombre, brief: '', why: '', source: srcFor[tipos[i]], format: 'image', angle_key: 'ritual-' + tipos[i] });
+    }
+  } catch (e) { /* sin fundamento legible: sin alternas frescas */ }
+  return ideas;
+}
+
+async function ritualResolverAlternas(uid, rec) {
+  const out = ritualManana.reutilizarBorradores(db, uid, rec);
+  if (out.length >= 2) return out;
+  const ideas = ritualIdeasSinteticas(uid, rec).slice(0, 2 - out.length);
+  if (!ideas.length) return out;
+  const gens = await Promise.allSettled(ideas.map((idea) => makeIdeaDraft(uid, idea)));
+  for (const g of gens) {
+    if (out.length >= 2) break;
+    if (g.status !== 'fulfilled' || !g.value || !g.value.ok) continue;
+    let p = null;
+    try { p = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(g.value.post_id, uid); } catch (e) {}
+    if (!p || !String(p.image_path || '').startsWith('/media/')) continue;
+    if (p.media_type === 'video') continue;
+    if (out.includes(p.id) || p.id === rec.id) continue;
+    out.push(p.id);
+  }
+  return out.slice(0, 2);
+}
+
+// Estado liviano para el banner de Inicio: NO genera alternas (la
+// generación vive solo en /api/ritual/hoy, que se abre con el ritual).
+app.get('/api/ritual/estado', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    ritualManana.ensureRitualTable(db);
+    const tz = userTz(uid);
+    const hoy = tzToday(tz);
+    const sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+    const rec = morningPostPush.pickTodayPost(sched, tz, new Date());
+    const row = ritualManana.getRow(db, uid, hoy);
+    res.json({ ok: true, tiene_hoy: !!rec, ya_elegido: !!(row && row.picked_post_id), racha: ritualManana.rachaVigente(db, uid, hoy), recomendado_id: rec ? rec.id : null, publicado_hoy: ritualPublicadoHoy(uid, tz, hoy) });
+  } catch (e) { res.json({ ok: false, error: 'ritual_estado' }); }
+});
+
+app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  try {
+    ritualManana.ensureRitualTable(db);
+    const tz = userTz(uid);
+    const hoy = tzToday(tz);
+    const lang = ritualLang(uid);
+    const sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+    const rec = morningPostPush.pickTodayPost(sched, tz, new Date());
+    const album = ritualManana.albumWeek(db, uid, hoy, lang);
+    const publicadoHoy = ritualPublicadoHoy(uid, tz, hoy);
+    const racha = ritualManana.rachaVigente(db, uid, hoy);
+    if (!rec) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy });
+    let row = ritualManana.getRow(db, uid, hoy);
+    if (!row) {
+      ritualManana.upsertRow(db, uid, hoy, rec.id);
+      row = ritualManana.getRow(db, uid, hoy);
+    }
+    // La recomendada cambió (semana regenerada) antes de elegir: el día
+    // se rearma con la nueva recomendada y sin alternas viejas. Si ya
+    // se eligió, la historia no se toca.
+    if (!row.picked_post_id && Number(row.recommended_post_id) !== Number(rec.id)) {
+      db.prepare(`UPDATE pz_ritual SET recommended_post_id = ?, alt_post_ids = '[]', picked_post_id = NULL, gold = 0 WHERE user_id = ? AND day_key = ?`).run(rec.id, uid, hoy);
+      row = ritualManana.getRow(db, uid, hoy);
+    }
+    let alts = [];
+    try { alts = JSON.parse(row.alt_post_ids || '[]'); } catch (e) { alts = []; }
+    if (!row.picked_post_id && !alts.length) {
+      alts = await ritualResolverAlternas(uid, rec);
+      try { db.prepare(`UPDATE pz_ritual SET alt_post_ids = ? WHERE user_id = ? AND day_key = ?`).run(JSON.stringify(alts), uid, hoy); } catch (e) {}
+      row = ritualManana.getRow(db, uid, hoy);
+    }
+    const byId = new Map();
+    try {
+      // Si ya se eligió, las cartas son las 3 originales de la fila (la
+      // recomendada original hoy es borrador y ya no saldría en el
+      // pick de hoy); si no, la recomendada vigente + alternas.
+      const baseIds = row.picked_post_id
+        ? [Number(row.recommended_post_id), ...alts.map(Number)]
+        : [Number(rec.id), ...alts.map(Number)];
+      const placeholders = baseIds.map(() => '?').join(',');
+      db.prepare(`SELECT * FROM posts WHERE user_id = ? AND id IN (${placeholders})`).all(uid, ...baseIds)
+        .forEach((p) => byId.set(Number(p.id), p));
+    } catch (e) {}
+    const cartas = [];
+    const recCard = ritualManana.cardOf(byId.get(Number(row.recommended_post_id)) || rec, true);
+    if (recCard && recCard.imagen) cartas.push(recCard);
+    for (const aid of alts) {
+      if (Number(aid) === Number(row.recommended_post_id)) continue;
+      const p = byId.get(Number(aid));
+      if (!p || !String(p.image_path || '').startsWith('/media/')) continue;
+      const c = ritualManana.cardOf(p, false);
+      if (c && c.imagen) cartas.push(c);
+    }
+    if (!cartas.length) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy });
+    const dorada = row.picked_post_id ? !!row.gold : ritualManana.esDorada(racha + 1, ritualManana.totalPicks(db, uid) + 1);
+    res.json({ ok: true, dia: hoy, recomendada: recCard, cartas, elegida: row.picked_post_id || null, dorada, racha, album, publicado_hoy: publicadoHoy });
+  } catch (e) {
+    console.error('[ritual] hoy:', e.message);
+    res.status(500).json({ ok: false, error: 'No pude abrir tu paquete 😅 Probá de nuevo' });
+  }
+});
+
+app.post('/api/ritual/elegir', requireAuth, express.json(), async (req, res) => {
+  if (guestBackstop(req, res)) return;
+  const uid = req.session.userId;
+  const pid = Number((req.body || {}).post_id);
+  if (!pid) return res.status(400).json({ error: 'post_id' });
+  try {
+    ritualManana.ensureRitualTable(db);
+    const tz = userTz(uid);
+    const hoy = tzToday(tz);
+    const row = ritualManana.getRow(db, uid, hoy);
+    // Cupo (mismo criterio que /api/posts/swap): solo quien PASA a
+    // programado lo consume; el intercambio neto es cero, pero el tipo
+    // de medio puede cambiar de unidad.
+    if (row && !row.picked_post_id && pid !== Number(row.recommended_post_id)) {
+      const pick = db.prepare('SELECT media_type, week_key FROM posts WHERE id = ? AND user_id = ?').get(pid, uid);
+      if (pick) {
+        const q = quotaForWeek(uid, pick.media_type, pick.week_key || mondayKeyOf(hoy));
+        if (q && q.left <= 0) {
+          return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, used: q.used, plan_name: q.plan_name, week_key: q.week_key,
+            message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(pick.media_type)} por semana). Mejorá tu paquete para seguir posteando esa semana.` });
+        }
+      }
+    }
+    const r = ritualManana.aplicarPick(db, uid, hoy, pid);
+    if (r.error) {
+      const code = (r.error === 'no_es_carta' || r.error === 'post_id') ? 400
+        : (r.error === 'sin_ritual' || r.error === 'no_encontrado') ? 404
+        : (r.error === 'sin_programado' || r.error === 'estado') ? 409 : 500;
+      return res.status(code).json({ ok: false, error: r.error });
+    }
+    // Lint al programar (como el swap) + señal de gusto (como aprobar):
+    // ninguno frena la respuesta si falla.
+    try { if (r.intercambio) scheduleLintForPost(uid, pid); } catch (e) {}
+    try { const p = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(pid, uid); if (p) cmGusto.registrar(db, uid, p, 'aprobada'); } catch (e) {}
+    res.json({ ok: true, elegida: r.elegida, dorada: r.dorada, racha: r.racha, ya: !!r.ya, album: ritualManana.albumWeek(db, uid, hoy, ritualLang(uid)) });
+  } catch (e) {
+    console.error('[ritual] elegir:', e.message);
+    res.status(500).json({ ok: false, error: 'No se pudo guardar tu elección 😅 Probá de nuevo' });
+  }
 });
 
 /* Ítem 10: comentarios REALES de un posteo publicado, para su detalle.
@@ -29515,7 +29717,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v686';
+const BUILD_ID = '20261101-v687';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

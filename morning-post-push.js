@@ -5,7 +5,7 @@
 //
 // Cada mañana, en la ZONA DE LA CUENTA, al usuario con posteo programado
 // para hoy le llega un mensajito push que al tocarlo abre la app en
-// Inicio, donde vive el hero del posteo de hoy.
+// el ritual (#/app/ritual, lote 5/8), donde vive el paquete del día.
 //
 // Reglas duras (fail-closed, nunca push sin posteo real):
 // · Ventana: la hora 9:00 en la zona de la cuenta (settings.timezone,
@@ -25,8 +25,10 @@
 //   sent > 0.
 // · No se anuncia a cuentas con publishing_stopped = 1 (no van a
 //   publicar: anunciar sería mentir).
-// · Idioma: users.lang (en → EN, resto ES). URL '/#/app/inicio': el
-//   hero vive en Inicio y el tap nativo rutea por url (push.js la
+// · Idioma: users.lang (en → EN, resto ES). URL '/#/app/ritual': el
+//   ritual vive ahí desde el lote 5/8 (antes '/#/app/inicio': el hero
+//   vivía en Inicio; ahora la push abre el paquete del día y el posteo
+//   del día se elige ahí). El tap nativo rutea por url (push.js la
 //   incluye en el payload APNs y web).
 // · Esto NO reemplaza el aviso de 30 min ni la carta: es solo el
 //   anuncio matutino del hero. No publica nada, no aprueba nada, no
@@ -130,7 +132,7 @@ async function sendMorningPostPush(db, opts) {
       if (!post) { res.skipped++; continue; }
       const t = morningText(lang);
       let r = null;
-      try { r = await pushFn(uid, { title: t.title, body: t.body, url: '/#/app/inicio', data: { postId: String(post.id) } }); }
+      try { r = await pushFn(uid, { title: t.title, body: t.body, url: '/#/app/ritual', data: { postId: String(post.id) } }); }
       catch (e) { r = { ok: false, reason: 'throw:' + e.message }; }
       if (r && (r.ok || Number(r.sent) > 0)) {
         try {

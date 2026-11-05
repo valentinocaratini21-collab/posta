@@ -69,7 +69,7 @@ const MON_12_BA = new Date('2026-11-02T15:00:00Z');
   ok(r1.sent === 2, 'barrido 09:00 BA: envía solo a 1 (ES) y 4 (EN), no a 2/3/5/6/7 (sent=' + r1.sent + ')');
   ok(sent.length === 2, 'dos pushes capturados');
   const p1 = sent.find((s) => s.uid === 1);
-  ok(p1 && p1.payload.body === 'Tu posteo de hoy ya está 👇' && p1.payload.url === '/#/app/inicio' && p1.payload.data.postId === '11', 'push 1: texto ES, url Inicio, postId del posteo');
+  ok(p1 && p1.payload.body === 'Tu posteo de hoy ya está 👇' && p1.payload.url === '/#/app/ritual' && p1.payload.data.postId === '11', 'push 1: texto ES, url ritual (lote 5/8: la push abre el paquete del día), postId del posteo');
   const p4 = sent.find((s) => s.uid === 4);
   ok(p4 && p4.payload.body === 'Your post for today is ready 👇', 'push 4: texto EN');
   ok(db.prepare('SELECT COUNT(*) AS n FROM morning_post_push').get().n === 2, 'dedup: 2 filas marcadas');

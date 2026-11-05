@@ -17594,6 +17594,7 @@ function pzPrefetchKick() {
   else if (tab === 'jardin-combinado' || tab === 'jardin-gesty') { location.hash = '#/app/jardin-posty'; return; } // POSTY SOLO: solo jardín Posty
   else if (tab === 'jardin-posty') { pzPaintSkeleton(tab); content = await bbJardinPostyContent(); }
   else if (tab === 'bandeja') { pzPaintSkeleton(tab); content = await bbBandejaContent(); } // (LOTE 10B · 2-1) La Bandeja: decidir en un toque
+  else if (tab === 'ritual') { pzPaintSkeleton(tab); content = await ritualView(); } // (RITUAL · lote 5/8) El paquete de la mañana
   else { location.hash = mzHomeHash(); return; } // tab desconocida: a la home (antes caía en Ajustes sin avisar)
   } catch (e) { content = '<div class="bb-error"><p>No pude cargar esta pantalla.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>'; }
   bootSplashOff();
@@ -20489,10 +20490,13 @@ async function inicioView() {
   let allPosts = [];
   let weekEr = null;
   try {
-    const [postsRes, erRes, pubRes] = await Promise.all([
+    const [postsRes, erRes, pubRes, ritRes] = await Promise.all([
       api.get('/api/posts').catch(() => []),
       api.post('/api/week/ensure', {}).catch(() => null),
       api.get('/api/posts?status=published').catch(() => []),
+      // (RITUAL · lote 5/8) Estado liviano del paquete de hoy para el
+      // banner: NO genera alternas (eso vive solo en #/app/ritual).
+      api.get('/api/ritual/estado').catch(() => null),
     ]);
     allPosts = hfMergePostsAll(postsRes, pubRes); weekEr = erRes;
   } catch (e) { allPosts = []; }
@@ -20721,8 +20725,16 @@ async function inicioView() {
   // Premios sigue intacta; el nivel (nivelPosty/HF_NIVEL) se sigue
   // calculando para chat y Estrategia.
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
+  // (RITUAL · lote 5/8) Banner del paquete de hoy: solo si hay posteo
+  // programado para hoy y todavía no se eligió. Sin posteo hoy, sin
+  // elección pendiente o visitante: no se pinta nada (nunca un banner
+  // que prometa un paquete que no existe).
+  const ritualBannerHTML = (!HF_VISITOR && ritRes && ritRes.ok && ritRes.tiene_hoy && !ritRes.ya_elegido)
+    ? `<button type="button" class="pz-ritual-banner" onclick="bbGo('#/app/ritual')"><span class="pz-ritual-banner-tx"><b>${enHome ? 'Your pack for today' : 'Tu paquete de hoy'}</b><span>${enHome ? '3 cards inside — pick the one that goes out today' : '3 cartas adentro — elegí la que sale hoy'}</span></span><span class="pz-ritual-banner-spark">✦</span></button>`
+    : '';
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: !HF_VISITOR })}
+  ${ritualBannerHTML}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
   ${hfTabsHTML(HF_TAB, enHome)}
   ${pzSemanaOkHTML}
@@ -20745,6 +20757,108 @@ async function inicioView() {
 
 </div>`;
 }
+/* ===== RITUAL DE LA MAÑANA (lote 5/8, aprobado Valentino 5/11 «Arma todo») ===== */
+// La push de las 9:00 abre acá: el paquete del día se devela con magia y
+// trae 3 cartas (la recomendada + 2 alternas de verdad distintas). El
+// dueño elige una, esa sale hoy y va al álbum. Sin elección, sale la
+// recomendada (el scheduler vigente; esta vista no programa nada nuevo).
+// La vista pinta primero el estado «conjurando» y después el paquete:
+// la generación de alternas (si hace falta) corre en el fetch de hoy.
+// Magia solo Posty, solo entrada, liviana, sin tapar contenido (las
+// clases .pz-ritual-spark* animan una sola vez; reduced-motion las anula).
+async function ritualView() {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  setTimeout(() => { try { pzRitualCargar(); } catch (e) {} }, 0);
+  return `<div id="pzRitual" class="pz-ritual-wrap">
+  <div class="pz-ritual-conjuro"><div class="pz-ritual-sparkrow"><span>✦</span><span>✦</span><span>✦</span></div>
+  <p>${en ? 'Posty is conjuring your pack…' : 'Posty está conjurando tu paquete…'}</p>
+  <div class="pz-ritual-dots"><span></span><span></span><span></span></div></div>
+</div>`;
+}
+async function pzRitualCargar() {
+  const box = document.getElementById('pzRitual');
+  if (!box) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  let d = null;
+  try { d = await api.get('/api/ritual/hoy'); } catch (e) { d = null; }
+  if (!box.isConnected) return;
+  if (!d || !d.ok) {
+    box.innerHTML = `<div class="pz-ritual-vacio"><p>${en ? 'I could not open your pack 😅' : 'No pude abrir tu paquete 😅'}</p><button type="button" class="bb-btn" onclick="pzRitualCargar()">${en ? 'Try again' : 'Probar de nuevo'}</button> <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
+    return;
+  }
+  box.innerHTML = pzRitualHTML(d, en);
+}
+function pzRitualCardHTML(c, d, en) {
+  const img = c.media_type === 'video'
+    ? `<video src="${esc(c.imagen)}" muted playsinline preload="metadata" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block"></video>`
+    : `<img src="${esc(mv(c.imagen, 640))}" data-full="${esc(c.imagen)}" onerror="__imgFb(this)" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block" alt="">`;
+  const picked = d.elegida && Number(d.elegida) === Number(c.id);
+  return `<div class="pz-ritual-carta${picked ? ' on' : ''}${c.recomendada ? ' rec' : ''}">
+  ${img}
+  <div class="pz-ritual-carta-tx">${c.recomendada ? `<span class="pz-ritual-badge rec">${en ? 'Recommended' : 'Recomendada'}</span>` : ''}${d.dorada && picked ? `<span class="pz-ritual-badge gold">✦ ${en ? 'Golden' : 'Dorada'}</span>` : ''}
+  <p>${esc(c.caption_corta || '')}</p></div>
+  ${d.elegida ? '' : `<button type="button" class="pz-ritual-elegir" data-pz-ritual-elegir="${c.id}">${en ? 'Goes out today' : 'Sale hoy'}</button>`}
+</div>`;
+}
+function pzRitualHTML(d, en) {
+  if (!d.hoy) {
+    return `<div class="pz-ritual-vacio">
+  <img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty">
+  <p>${d.publicado_hoy ? (en ? 'Today’s post already went out — tomorrow there’s another pack.' : 'El posteo de hoy ya salió, mañana hay otro paquete.') : (en ? 'You have no post scheduled for today.' : 'Hoy no tenés posteo programado.')}</p>
+  <button type="button" class="bb-btn" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
+  }
+  const rachaTx = d.racha > 0
+    ? (en ? `Streak: ${d.racha} day${d.racha === 1 ? '' : 's'}` : `Racha: ${d.racha} día${d.racha === 1 ? '' : 's'}`)
+    : (en ? 'Your streak starts today' : 'Hoy empieza tu racha');
+  const album = (d.album && d.album.slots ? d.album.slots : []).map((s) => s.imagen
+    ? `<div class="pz-ritual-slot${s.hoy ? ' hoy' : ''}${s.dorada ? ' gold' : ''}" title="${esc(s.etiqueta)}"><img src="${esc(mv(s.imagen, 200))}" onerror="__imgFb(this)" alt=""></div>`
+    : `<div class="pz-ritual-slot sil${s.hoy ? ' hoy' : ''}" title="${esc(s.etiqueta)}"><span>🔒</span></div>`).join('');
+  const head = `<div class="pz-ritual-head"><img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty"><div><b>${en ? 'good morning' : 'buen día'}</b><span>${en ? 'I brought your pack for today' : 'te traje tu paquete de hoy'}</span></div></div>
+  <p class="pz-ritual-racha">${esc(rachaTx)}</p>`;
+  if (d.elegida) {
+    const picked = (d.cartas || []).find((c) => Number(c.id) === Number(d.elegida)) || d.cartas[0];
+    return `<div class="pz-ritual-wrap-in">${head}
+  <div class="pz-ritual-listo"><h2>${en ? 'Done — this one goes out today' : 'Listo, hoy sale esta'}</h2>${d.dorada ? `<p class="pz-ritual-hito">✦ ${en ? 'Golden card: a milestone day' : 'Carta dorada: día de hito'}</p>` : ''}
+  ${picked ? pzRitualCardHTML(picked, d, en) : ''}
+  <p class="pz-ritual-nota">${en ? 'The others stayed as drafts — you can use them another day.' : 'Las otras quedaron como borradores, las podés usar otro día.'}</p></div>
+  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'your collection keeps growing' : 'tu colección se va llenando'}</p><div class="pz-ritual-slots">${album}</div></div>
+  <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
+  }
+  const n = (d.cartas || []).length;
+  const packSub = n >= 3
+    ? (en ? '3 cards inside' : '3 cartas adentro')
+    : (en ? `only the recommended one today` : `hoy solo está la recomendada`);
+  return `<div class="pz-ritual-wrap-in">${head}
+  <div class="pz-ritual-pack${d.dorada ? ' gold' : ''}" id="pzRitualPack">
+  <span class="pz-ritual-pack-chip">hoy · 9:00</span>
+  <div class="pz-ritual-pack-band"><span>✦</span></div>
+  <h2>${en ? 'your pack for today' : 'tu paquete de hoy'}</h2>
+  <p>${esc(packSub)}</p>
+  <button type="button" class="pz-ritual-abrir" onclick="document.getElementById('pzRitualPack').classList.add('abierto');document.getElementById('pzRitualCartas').hidden=false;document.getElementById('pzRitualCartas').classList.add('pz-ritual-reveal');this.remove()">${en ? 'Open my pack' : 'Abrir mi paquete'}</button></div>
+  <div id="pzRitualCartas" hidden><h2 class="pz-ritual-elegi">${en ? 'pick your favorite' : 'elegí tu favorita'}</h2><p class="pz-ritual-sub">${en ? 'tap the one you like most' : 'tocá la que más te guste'}</p>
+  <div class="pz-ritual-fan">${(d.cartas || []).map((c) => pzRitualCardHTML(c, d, en)).join('')}</div>
+  <p class="pz-ritual-nota">${en ? 'The one you pick goes out today and into your album.' : 'La que elijas sale hoy y va al álbum.'}</p>
+  <div id="pzRitualErr" class="pz-ritual-err" hidden></div></div>
+  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'your collection keeps growing' : 'tu colección se va llenando'}</p><div class="pz-ritual-slots">${album}</div><p class="pz-ritual-nota">${en ? 'Coming ones look like this: dark silhouette with a lock — they are real posts, just not shown yet.' : 'Los que vienen se ven así: silueta con candado, son posteos reales, todavía no se ven.'}</p></div>
+  <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
+}
+async function pzRitualElegir(id) {
+  const err = document.getElementById('pzRitualErr');
+  const btns = document.querySelectorAll('[data-pz-ritual-elegir]');
+  btns.forEach((b) => { b.disabled = true; });
+  try {
+    const r = await api.post('/api/ritual/elegir', { post_id: Number(id) });
+    if (r && r.ok) { render(); return; }
+    throw new Error('No se pudo guardar tu elección 😅');
+  } catch (e) {
+    btns.forEach((b) => { b.disabled = false; });
+    if (err) { err.hidden = false; err.textContent = (e && e.message) || 'No se pudo guardar tu elección 😅'; }
+  }
+}
+document.addEventListener('click', (e) => {
+  const b = e.target && e.target.closest ? e.target.closest('[data-pz-ritual-elegir]') : null;
+  if (b) { e.preventDefault(); pzRitualElegir(b.dataset.pzRitualElegir); }
+});
 /* ===== TIRA DE NIVEL POSTY — tallo vivo en Inicio (v457) ===== */
 // La tira vive debajo del perfil literal (bio y destacadas) y arriba de la
 // grilla. USA EL MISMO endpoint y el mismo modulo que el tallo vivo del
