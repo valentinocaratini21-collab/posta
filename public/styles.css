@@ -3386,6 +3386,40 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-ps-wa{background:#25D366;color:#fff;border:0;border-radius:999px;padding:11px 16px;font-weight:800;font-size:14px;text-decoration:none;font-family:inherit}
 .hf-ps-alt{background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;color:var(--txt);font-family:inherit}
 .hf-ps-msg{font-size:13px;color:var(--txt);margin-top:8px;min-height:0;text-align:center}
+/* (LOTE HOJAS-DISENO · 5/11, mock v1 aprobado por Valentino) Las 3 hojas de
+   perfil en glass: SOLO las tarjetas con .hf-ps-glass (Compartir, Editar,
+   ¿Cómo publica Posty?). Las demás láminas .hf-ps-card (cubiertas,
+   archivo) no cambian: sus botones y tarjetas quedan como hoy. */
+.hf-ps-card.hf-ps-glass{background:rgba(255,255,255,.55);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.65);border-radius:28px;box-shadow:0 18px 50px rgba(10,30,51,.28);padding:20px 18px}
+.hf-ps-glass .hf-ps-title{font-size:24px;letter-spacing:-.2px}
+.hf-ps-glass .hf-ps-note{font-size:15px;line-height:1.4;color:#5a6b7a}
+.hf-ps-glass .hf-ps-qr{margin:18px auto 14px;width:fit-content;background:rgba(255,255,255,.82);border:1px solid rgba(10,30,51,.08);border-radius:22px;padding:14px;box-shadow:0 6px 18px rgba(10,30,51,.10)}
+.hf-ps-glass .hf-ps-qr svg{display:block;width:204px;height:auto}
+.hf-ps-glass .hf-ps-user{font-size:20px;margin-top:0}
+.hf-ps-glass .hf-ps-link{font-size:13px;color:#5a6b7a;margin:4px 0 20px}
+.hf-ps-glass .hf-ps-acts{gap:10px}
+.hf-ps-glass .hf-ps-primary{height:54px;border-radius:999px;border:1px solid rgba(39,147,200,.38);background:linear-gradient(180deg,rgba(39,147,200,.28),rgba(39,147,200,.12));backdrop-filter:blur(18px) saturate(1.6);-webkit-backdrop-filter:blur(18px) saturate(1.6);color:#0A1E33;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:9px;font-family:inherit;cursor:pointer;text-decoration:none}
+.hf-ps-glass a.hf-ps-wa{width:100%}
+.hf-ps-glass .hf-ps-wa-glyph{width:24px;height:24px;flex:none}
+.hf-ps-glass .hf-ps-wa-glyph svg{display:block;width:24px;height:24px}
+.hf-ps-glass button.hf-ps-primary{flex:1}
+.hf-ps-glass .hf-ps-acts>button.hf-ps-primary:only-child{flex:none;width:auto;margin-left:auto;margin-right:auto;padding:0 46px}
+.hf-ps-glass .hf-ps-btn:not(.hf-ps-primary),.hf-ps-glass .hf-ps-alt{height:44px;border-radius:999px;border:1px solid rgba(10,30,51,.14);background:rgba(255,255,255,.55);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);color:#0A1E33;font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 16px}
+.hf-ps-glass .hf-ps-acts .hf-ps-btn:not(.hf-ps-primary){flex:1}
+.hf-ps-glass .hf-ps-btn svg,.hf-ps-glass .hf-ed-copy svg{width:17px;height:17px}
+.hf-ps-glass.hf-ed-card .hf-ps-alt{height:54px;padding:0 22px}
+.hf-ps-glass .hf-ed-field label{font-size:16px}
+.hf-ps-glass .hf-ed-field input[type="text"]{height:48px;padding:0 14px;border:1px solid rgba(10,30,51,.12);border-radius:16px;font-size:17px;background:rgba(255,255,255,.55)}
+.hf-ps-glass .hf-ed-field textarea{height:64px;padding:12px 14px;border:1px solid rgba(10,30,51,.12);border-radius:16px;font-size:17px;background:rgba(255,255,255,.55);resize:none}
+.hf-ps-glass .hf-ed-copy{height:48px;border-radius:999px;border:1px solid rgba(10,30,51,.14);background:rgba(255,255,255,.55);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);color:#0A1E33;font-size:16px;font-weight:600;padding:0 18px;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.hf-ps-glass .hf-ed-count{font-size:13px;color:#8a97a3}
+.hf-ps-glass .hf-ed-preview{background:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.7);border-radius:22px;padding:14px 14px 10px}
+.hf-ps-glass .hf-ed-preview .hf-ava-in{width:66px;height:66px;background:#fff;border:3px solid #FEC14D;box-shadow:0 0 0 2px rgba(39,147,200,.55)}
+.hf-ps-glass.hf-pubinfo-card .hf-ps-acts{margin-top:22px}
+.hf-ps-glass .hf-pubinfo-line{display:flex;gap:11px;align-items:flex-start;margin:0 0 14px;font-size:17px;line-height:1.35}
+.hf-ps-glass .hf-pubinfo-line:first-of-type{margin-top:6px}
+.hf-ps-glass .hf-pubinfo-line:last-of-type{margin-bottom:0}
+.hf-ps-glass .hf-pubinfo-line svg{width:17px;height:17px;flex:none;margin-top:3px}
 .hf-cov-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
 .hf-cov-item{margin:0;text-align:center;min-width:0}
 .hf-cov-art{border-radius:14px;overflow:hidden;border:1px solid var(--line)}

@@ -19751,8 +19751,8 @@ function pzPubInfoHTML(en) {
       'En modo manual, nada sale sin tu OK.',
     ],
   };
-  const lis = t.lines.map((l) => `<p class="hf-pubinfo-line">• ${esc(l)}</p>`).join('');
-  return `<div class="hf-ps-card"><div class="hf-ps-title">${esc(t.title)}</div>${lis}<div class="hf-ps-acts"><button type="button" class="hf-ps-btn" data-hf-ps-close>${en ? 'Got it' : 'Entendido'}</button></div></div>`;
+  const lis = t.lines.map((l, i) => '<p class="hf-pubinfo-line"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L14.2 9.8 L22 12 L14.2 14.2 L12 22 L9.8 14.2 L2 12 L9.8 9.8 Z" fill="' + (i % 2 === 0 ? '#FEC14D' : '#2793C8') + '"/></svg><span>' + esc(l) + '</span></p>').join('');
+  return `<div class="hf-ps-card hf-ps-glass hf-pubinfo-card"><div class="hf-ps-title">${esc(t.title)}</div>${lis}<div class="hf-ps-acts"><button type="button" class="hf-ps-btn hf-ps-primary" data-hf-ps-close>${en ? 'Got it' : 'Entendido'}</button></div></div>`;
 }
 function pzPubInfoOpen() {
   try {
@@ -20164,23 +20164,28 @@ function hfQrSVG(text, size) {
   const px = size || 232;
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + tot + ' ' + tot + '" width="' + px + '" height="' + px + '" role="img" aria-label="QR"><rect width="' + tot + '" height="' + tot + '" fill="#fff"/><path d="' + d + '" fill="#0A1E33"/></svg>';
 }
+/* (LOTE HOJAS-DISENO · 5/11, mock v1 aprobado) Glifos de las hojas de
+   perfil: los mismos SVG del mock. El QR lo sigue generando hfQrSVG. */
+const HF_WA_GLYPH = '<span class="hf-ps-wa-glyph"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#25D366"/><g fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5.2c-3.7 0-6.8 3-6.8 6.8 0 1.4.4 2.7 1.2 3.8L5.5 19l3.3-.9c1 .6 2.2.9 3.2.9 3.7 0 6.8-3 6.8-6.8S15.7 5.2 12 5.2z"/><path d="M9 9.2c.3 1.8 1.4 3.4 2.9 4.3l1.5 1c.5.2 1-.1 1.1-.6l.4-1c.1-.4-.1-.8-.5-1l-1-.7c-.3-.2-.7-.1-.9.2l-.4.5c-.8-.5-1.5-1.2-2-2l.5-.4c.3-.2.4-.6.2-.9l-.7-1c-.2-.4-.6-.6-1-.5l-1 .4c-.4.2-.6.7-.5 1.1.1.4.2.8.4 1.1z" fill="#fff" stroke="none"/></g></svg></span>';
+const HF_COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const HF_SHARE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.7l6.8-4.4M8.6 13.3l6.8 4.4"/></svg>';
 function hfShareSheetHTML(prof, en) {
   const url = hfIgUrl(prof);
   const user = String((prof && prof.username) || '').replace(/^@+/, '');
   const close = '<button type="button" class="hf-ps-alt" data-hf-ps-close>' + (en ? 'Close' : 'Cerrar') + '</button>';
   if (!url) {
-    return '<div class="hf-ps-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</div>'
+    return '<div class="hf-ps-card hf-ps-glass" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</div>'
       + '<p class="hf-ps-note">' + (en ? 'We do not have your Instagram handle yet, so there is nothing to share. Add it in Settings and this sheet will show your QR and your link.' : 'Todavía no tenemos tu usuario de Instagram, así que no hay nada para compartir. Cargalo en Ajustes y esta lámina va a mostrar tu QR y tu link.') + '</p>'
       + '<div class="hf-ps-acts">' + close + '</div></div>';
   }
-  return '<div class="hf-ps-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</div>'
+  return '<div class="hf-ps-card hf-ps-glass" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</div>'
     + '<div class="hf-ps-qr" data-hf-qr>' + hfQrSVG(url) + '</div>'
     + '<div class="hf-ps-user">@' + esc(user) + '</div>'
     + '<div class="hf-ps-link">' + esc(url) + '</div>'
     + '<div class="hf-ps-acts">'
-    + '<a class="hf-ps-wa" href="' + esc(hfWaUrl(prof, en)) + '" target="_blank" rel="noopener">' + (en ? 'Send by WhatsApp' : 'Enviar por WhatsApp') + '</a>'
-    + '<button type="button" class="hf-ps-btn" data-hf-ps-act="copy">' + (en ? 'Copy link' : 'Copiar link') + '</button>'
-    + '<button type="button" class="hf-ps-btn" data-hf-ps-act="native">' + (en ? 'Share…' : 'Compartir…') + '</button>'
+    + '<a class="hf-ps-wa hf-ps-primary" href="' + esc(hfWaUrl(prof, en)) + '" target="_blank" rel="noopener">' + HF_WA_GLYPH + (en ? 'Send by WhatsApp' : 'Enviar por WhatsApp') + '</a>'
+    + '<button type="button" class="hf-ps-btn" data-hf-ps-act="copy">' + HF_COPY_ICON + (en ? 'Copy link' : 'Copiar link') + '</button>'
+    + '<button type="button" class="hf-ps-btn" data-hf-ps-act="native">' + HF_SHARE_ICON + (en ? 'Share…' : 'Compartir…') + '</button>'
     + close
     + '</div><div class="hf-ps-msg" data-hf-ps-msg></div></div>';
 }
@@ -20296,16 +20301,16 @@ function hfEditPreviewProf(prof, vals) {
 function hfEditProfileHTML(prof, disp, en) {
   const d = disp || {};
   const f = (key, label, inner) => '<div class="hf-ed-field"><label>' + label + '</label><div class="hf-ed-row">' + inner
-    + '<button type="button" class="hf-ed-copy" data-hf-ed-copy="' + key + '">' + (en ? 'Copy' : 'Copiar') + '</button></div></div>';
-  return '<div class="hf-ps-card hf-ed-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Edit profile' : 'Editar perfil') + '</div>'
+    + '<button type="button" class="hf-ed-copy" data-hf-ed-copy="' + key + '">' + HF_COPY_ICON + (en ? 'Copy' : 'Copiar') + '</button></div></div>';
+  return '<div class="hf-ps-card hf-ed-card hf-ps-glass" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Edit profile' : 'Editar perfil') + '</div>'
     + '<div class="hf-ed-preview" data-hf-ed-preview></div>'
     + f('name', en ? 'Name' : 'Nombre', '<input type="text" data-hf-ed="name" maxlength="30" value="' + esc(d.name || '') + '" autocomplete="off">')
     + '<div class="hf-ed-field"><label>' + (en ? 'Bio' : 'Bio') + '</label><textarea data-hf-ed="bio" maxlength="150" rows="3">' + esc(d.bio || '') + '</textarea>'
     + '<div class="hf-ed-count"><span data-hf-ed-count>' + String(d.bio || '').length + '</span>/150</div>'
-    + '<div class="hf-ed-row" style="margin-top:6px;justify-content:flex-end"><button type="button" class="hf-ed-copy" data-hf-ed-copy="bio">' + (en ? 'Copy' : 'Copiar') + '</button></div></div>'
+    + '<div class="hf-ed-row" style="margin-top:6px;justify-content:flex-end"><button type="button" class="hf-ed-copy" data-hf-ed-copy="bio">' + HF_COPY_ICON + (en ? 'Copy' : 'Copiar') + '</button></div></div>'
     + f('link', en ? 'Link' : 'Link', '<input type="text" data-hf-ed="link" value="' + esc(d.link || '') + '" placeholder="tunegocio.com" autocomplete="off" autocapitalize="off">')
     + '<p class="hf-ps-note">' + (en ? 'This is saved in Posty. Instagram does not let anyone change your profile from outside: copy each field and paste it in Instagram, in Edit profile.' : 'Esto queda guardado en Posty. Instagram no deja cambiar tu perfil desde afuera: copiá cada campo y pegalo en Editar perfil de Instagram.') + '</p>'
-    + '<div class="hf-ps-acts"><button type="button" class="hf-ps-btn" data-hf-ed-save>' + (en ? 'Save in Posty' : 'Guardar en Posty') + '</button>'
+    + '<div class="hf-ps-acts"><button type="button" class="hf-ps-btn hf-ps-primary" data-hf-ed-save>' + (en ? 'Save in Posty' : 'Guardar en Posty') + '</button>'
     + '<button type="button" class="hf-ps-alt" data-hf-ps-close>' + (en ? 'Close' : 'Cerrar') + '</button></div>'
     + '<div class="hf-ps-msg" data-hf-ed-msg></div></div>';
 }
