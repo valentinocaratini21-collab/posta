@@ -33,28 +33,34 @@ ok(chunk.indexOf('card aj-salir') !== -1, 'tarjeta Salir con clase aj-salir');
 // ---------- 2. Nada eliminado: 29 ids de ajustes-simple ----------
 const IDS29 = ['btnPushEnable', 'btnPreNotifyToggle', 'btnLetterToggle', 'btnFailToggle',
   'btnWaNotifyToggle', 'btnSaveProfile', 'btnSaveBrand', 'btnSavePage', 'btnCopyPage',
-  'btnLogoutAj', 'btnPreview', 'planZone', 'founderZone', 'weekShareZone', 'refZone',
+  'btnLogoutAj', 'btnPreview', 'planZone', 'founderZone', 'refZone',
   'ttZone', 'ggZone', 'tnZone', 'styleGallery', 'brandPrev', 'brandPf', 'igMsg',
-  'ajStAvisos', 'ajStAuto', 'ajStSemana', 's_waNotify', 's_slug', 's_whats', 's_pageon'];
+  'ajStAvisos', 'ajStAuto', 's_waNotify', 's_slug', 's_whats', 's_pageon'];
 for (const id of IDS29) ok(chunk.indexOf('id="' + id + '"') !== -1, 'id presente: ' + id);
+// (ACTUALIZADO lote ajustes-simple 6/11: fuera weekShareZone y ajStSemana —
+// la sección «Compartir mi semana» sale de Ajustes. styleGallery sigue en la
+// lista: ya fallaba en PRE — el div no existe en v721, pin rancio, no de este lote.)
 // Re-base v598 (ajustes-simple-2 v590): las 5 filas Más pasaron a tarjetas dentro del desplegable «Más ajustes»; solo preview sigue siendo fila ajmas.
-for (const c of ['ajsec-conex', 'ajsec-pagina', 'ajsec-semana', 'ajsec-marca', 'ajsec-referidos'])
+// (ACTUALIZADO lote ajustes-simple 6/11: «Compartir mi semana» sale; la fila
+// preview también sale — queda solo el comentario histórico de abajo.)
+for (const c of ['ajsec-conex', 'ajsec-pagina', 'ajsec-marca', 'ajsec-referidos'])
   ok(chunk.indexOf('id="' + c + '"') !== -1, 'destino Más como tarjeta: ' + c);
-ok(chunk.indexOf('data-ajmas="preview"') !== -1, 'fila Más: preview');
+ok(chunk.indexOf('data-ajmas="preview"') === -1, 'fila Más preview eliminada (6/11)');
 ok(chunk.indexOf('id="btnAjMas2"') !== -1 && chunk.indexOf('id="ajsec-mas2-wrap" hidden') !== -1, 'botón y desplegable «Más ajustes» presentes');
 ok(chunk.indexOf('Configuración avanzada') !== -1, 'Configuración avanzada intacta');
 ok(chunk.indexOf('id="gzAjustesBox"') !== -1, 'caja Gesty intacta');
 
-// ---------- 3. Orden: Notificaciones primera, botón adentro ----------
+// ---------- 3. Orden: Referidos primera, botón adentro ----------
 // Re-base v598 (ajustes-simple-2 v590): Automático vive DENTRO del desplegable «Más ajustes», después de Mi plan.
+// ACTUALIZADO (lote ajustes-simple 6/11): Referidos es la primera tarjeta; el pie Posty sale.
+const oRef = chunk.indexOf('id="ajsec-referidos"');
 const oNotif = chunk.indexOf('id="ajsec-notif"');
 const oNeg = chunk.indexOf('id="ajsec-negocio"');
 const oPlan = chunk.indexOf('id="ajsec-plan"');
 const oMas = chunk.indexOf('id="ajsec-mas2"');
 const oSalir = chunk.indexOf('id="btnLogoutAj"');
-const oPosty = chunk.indexOf('id="ajsec-posty"');
-ok(oNotif !== -1 && oNotif < oNeg && oNeg < oPlan && oPlan < oMas && oMas < oSalir && oSalir < oPosty,
-  'orden: Notificaciones > Negocio > Plan > Más ajustes > Salir > tarjeta Posty');
+ok(oRef !== -1 && oRef < oNotif && oNotif < oNeg && oNeg < oPlan && oPlan < oMas && oMas < oSalir,
+  'orden: Referidos > Notificaciones > Negocio > Plan > Más ajustes > Salir');
 ok(chunk.indexOf('id="btnPushEnable"') > oNotif && chunk.indexOf('id="btnPushEnable"') < oNeg,
   'botón push dentro de Notificaciones (arriba)');
 

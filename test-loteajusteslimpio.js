@@ -13,7 +13,9 @@ const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 const idx = (s, sub) => s.indexOf(sub);
 
 // ---------- PIEZA 1 + 5: carpetas + orden principal ----------
-// Orden en el template: notif → referidos → negocio → plan → botón Más → wrap → Salir → Posty.
+// Orden en el template: referidos → notif → negocio → plan → botón Más → wrap → Salir → caja Gesty.
+// ACTUALIZADO (lote ajustes-simple 6/11): Referidos primero, arriba de todo;
+// «Compartir mi semana» y el pie Posty salen de Ajustes.
 const iNotif = idx(chk, 'id="ajsec-notif"');
 const iRef = idx(chk, 'id="ajsec-referidos"');
 const iNeg = idx(chk, 'id="ajsec-negocio"');
@@ -21,14 +23,14 @@ const iPlan = idx(chk, 'id="ajsec-plan"');
 const iMas2 = idx(chk, 'id="ajsec-mas2"');
 const iWrap = idx(chk, 'id="ajsec-mas2-wrap"');
 const iSalir = idx(chk, 'id="btnLogoutAj"');
-const iPosty = idx(chk, 'id="ajsec-posty"');
-t(iNotif > 0 && iRef > 0 && iNeg > 0 && iPlan > 0 && iMas2 > 0 && iWrap > 0 && iSalir > 0 && iPosty > 0, 'todas las tarjetas existen');
-t(iNotif < iRef && iRef < iNeg && iNeg < iPlan && iPlan < iMas2 && iMas2 < iWrap, 'orden: notif → referidos → negocio → plan → Más ajustes → wrap');
+const iGz = idx(chk, 'id="gzAjustesBox"');
+t(iRef > 0 && iNotif > 0 && iNeg > 0 && iPlan > 0 && iMas2 > 0 && iWrap > 0 && iSalir > 0, 'todas las tarjetas existen');
+t(iRef < iNotif && iNotif < iNeg && iNeg < iPlan && iPlan < iMas2 && iMas2 < iWrap, 'orden: referidos → notif → negocio → plan → Más ajustes → wrap');
 t(iRef < iWrap, 'referidos FUERA de Más ajustes (antes del wrap)');
 t(cnt(chk, 'id="ajsec-referidos"') === 1, 'referidos NO duplicado (1 sola tarjeta)');
-t(iWrap < iSalir && iSalir < iPosty, 'Salir y tarjeta Posty siguen visibles al final, después del wrap');
-// Dentro del wrap siguen: auto, conex, marca, pagina, semana.
-for (const id of ['auto', 'conex', 'marca', 'pagina', 'semana']) {
+t(iWrap < iSalir && iSalir < iGz, 'Salir sigue visible al final, después del wrap; caja Gesty después');
+// Dentro del wrap siguen: auto, conex, marca, pagina.
+for (const id of ['auto', 'conex', 'marca', 'pagina']) {
   const i = idx(chk, 'id="ajsec-' + id + '"');
   t(i > iWrap, 'ajsec-' + id + ' sigue dentro de Más ajustes');
 }
@@ -37,7 +39,7 @@ const mFold = chk.match(/const AJ_FOLDABLE = \[([^\]]*)\]/);
 t(!!mFold, 'existe AJ_FOLDABLE');
 if (mFold) {
   const list = mFold[1];
-  for (const id of ['negocio', 'plan', 'auto', 'conex', 'marca', 'pagina', 'semana']) t(list.includes("'" + id + "'"), 'plegable: ' + id);
+  for (const id of ['negocio', 'plan', 'auto', 'conex', 'marca', 'pagina']) t(list.includes("'" + id + "'"), 'plegable: ' + id);
   t(!list.includes("'notif'") && !list.includes("'referidos'"), 'notif y referidos NO son plegables');
 }
 t(chk.includes('function ajFoldInit()'), 'existe ajFoldInit');
@@ -47,12 +49,12 @@ t(chk.includes('ajFoldInit()'), 'bindSettings llama a ajFoldInit');
 t(chk.includes('ajFoldAbrir(ajDeep)'), 'deep-link abre la carpeta destino');
 t(app.includes("ajFoldAbrir('plan')"), 'scroll ?plan=1 abre la carpeta Mi plan');
 // Notificaciones: botón Activar + cartel de error intactos, dentro de notif.
-const notifSec = chk.slice(iNotif, iRef);
+const notifSec = chk.slice(iNotif, iNeg);
 t(notifSec.includes('id="btnPushEnable"'), 'botón Activar notificaciones sigue en notif');
 t(notifSec.includes('id="pzPushErr"'), 'cartel #pzPushErr sigue junto al botón');
 // Más ajustes y su desplegable intactos.
 t(chk.includes('id="btnAjMas2"') && chk.includes('function pzAjMas2Toggle()') && chk.includes('function pzAjMas2Mostrar()'), 'botón y funciones Más ajustes intactos');
-t(chk.includes('id="ajsec-mas2-preview"'), 'fila Cómo me ve la IA intacta dentro del wrap');
+t(!chk.includes('id="ajsec-mas2-preview"'), 'fila Cómo me ve la IA eliminada (6/11: vive en Tu negocio)');
 // CSS de carpetas con especificidad mayor que ajflat.
 t(css.includes('.card.ajsec.ajflat.ajfold-closed > .ajsec-b{display:none}'), 'CSS: carpeta cerrada esconde el cuerpo');
 t(css.includes('.card.ajsec.ajflat.ajfold > .ajsec-h{cursor:pointer}'), 'CSS: encabezado de carpeta con cursor pointer');
@@ -141,7 +143,6 @@ const presentes = [
   'Posty inclina todos los posteos a esto.',
   'Se guardan con el botón <b>Guardar</b> de acá abajo.',
   'Si borrás uno, deja de aplicar desde la próxima generación.',
-  'Un link de solo lectura con tu semana, sin tu contraseña',
   'Solo lee: nunca toca precios ni stock',
   'Solo letras minúsculas, números y guiones',
   'Aceptamos imagen, PDF o Word.',
@@ -168,7 +169,7 @@ for (const s of presentes) t(chk.includes(s), 'conservado: ' + s.slice(0, 52));
 for (const id of ['btnPushEnable', 'pzPushErr', 'btnPreNotifyToggle', 'btnLetterToggle', 'btnFailToggle', 'btnWaNotifyToggle',
   's_biz', 's_cat', 's_tone', 's_desc', 's_tz', 'closedDaysRow', 'btnSaveProfile',
   'planZone', 'btnPauseAll', 'btnAutopilotToggle', 'btnAutoWeekToggle', 'btnBilingualWeekToggle',
-  'btnSaveBrand', 'btnBrandLogo', 's_slug', 'btnSavePage', 'weekShareZone', 'refZone', 'btnLogoutAj']) {
+  'btnSaveBrand', 'btnBrandLogo', 's_slug', 'btnSavePage', 'refZone', 'btnLogoutAj']) {
   t(chk.includes('id="' + id + '"'), 'control intacto: ' + id);
 }
 

@@ -13,11 +13,13 @@ function t(name, cond) {
 const aj = fs.readFileSync(path.join(base, 'public/chunk-ajustes.js'), 'utf8');
 const app = fs.readFileSync(path.join(base, 'public/app.js'), 'utf8');
 
-// 1) Orden final del template: notif, negocio, plan, mas2, wrap, salir, gz, posty.
-const order = ['ajsec-notif', 'ajsec-negocio', 'ajsec-plan', 'ajsec-mas2',
+// 1) Orden final del template: referidos primero, notif, negocio, plan, mas2,
+// wrap, salir, gz. (ACTUALIZADO lote ajustes-simple 6/11: Referidos arriba de
+// todo; «Compartir mi semana» y el pie Posty eliminados.)
+const order = ['ajsec-referidos', 'ajsec-notif', 'ajsec-negocio', 'ajsec-plan', 'ajsec-mas2',
   'ajsec-mas2-wrap', 'ajsec-auto', 'ajsec-conex', 'ajsec-marca',
-  'ajsec-pagina', 'ajsec-semana', 'int-advanced', 'btnLogoutAj',
-  'gzAjustesBox', 'ajsec-posty'];
+  'ajsec-pagina', 'int-advanced', 'btnLogoutAj',
+  'gzAjustesBox'];
 const pos = order.map((id) => aj.indexOf(id));
 t('todas las marcas presentes', pos.every((p) => p >= 0));
 t('orden final correcto', pos.every((p, k) => k === 0 || p > pos[k - 1]));
@@ -25,18 +27,18 @@ t('orden final correcto', pos.every((p, k) => k === 0 || p > pos[k - 1]));
 // 2) El wrap contiene el resto y NADA de lo visible ni de Salir/Posty.
 const wrap = aj.slice(aj.indexOf('id="ajsec-mas2-wrap"'), aj.indexOf('btnLogoutAj'));
 for (const id of ['ajsec-auto', 'ajsec-conex', 'ajsec-marca', 'ajsec-pagina',
-  'ajsec-semana', 'ajsec-referidos', 'int-advanced', 'data-ajmas="preview"'])
+  'int-advanced'])
   t('wrap contiene ' + id, wrap.includes(id));
-for (const id of ['ajsec-notif', 'ajsec-negocio', 'ajsec-plan', 'btnLogoutAj',
-  'gzAjustesBox', 'ajsec-posty'])
+for (const id of ['ajsec-referidos', 'ajsec-notif', 'ajsec-negocio', 'ajsec-plan', 'btnLogoutAj',
+  'gzAjustesBox'])
   t('wrap NO contiene ' + id, !wrap.includes(id));
 t('wrap nace oculto', aj.includes('id="ajsec-mas2-wrap" hidden'));
 t('menú Más viejo eliminado', !aj.includes('id="ajsec-mas"'));
 
-// 3) ES/EN espejo.
+// 3) ES/EN espejo. (ACTUALIZADO lote ajustes-simple 6/11: el pie
+// «Posty · Community Manager — Tu agente» sale de Ajustes.)
 for (const s of ['Más ajustes', 'Menos ajustes', 'More settings',
-  'Fewer settings', 'Tu agente', 'Your agent',
-  'Posty · Community Manager']) t('texto presente: ' + s, aj.includes(s));
+  'Fewer settings']) t('texto presente: ' + s, aj.includes(s));
 
 // 4) Upsell eliminado de app.js.
 for (const s of ['Sumar un agente', 'Probar Gesty gratis', 'Gesty · Recepción',

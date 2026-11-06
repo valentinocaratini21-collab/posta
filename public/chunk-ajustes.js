@@ -43,7 +43,7 @@ function ajustesView() {
   try { if (p.page_slug) stPage = `<span class="ajsec-st">${esc(p.page_slug)}</span>`; } catch (e) {}
   // --- Bloque Instagram (vive dentro de "🔌 Conexiones") ---
   // Conectado y sano (con @ y sin aviso de token): colapsa a la fila de estado
-  // + el botón de re-análisis. Con cualquier problema (o sin conectar) vuelve
+  // + el botón de actualizar lo que Posty sabe. Con cualquier problema (o sin conectar) vuelve
   // el bloque completo: checklist, modo Demo/Real y guía profesional.
   const igHealthy = !!(p.ig_connected && p.ig_username && !s.ig_token_warning);
   const igCuentaRow = `
@@ -100,6 +100,9 @@ function ajustesView() {
     <div id="igMsg"></div>`;
   return `<div class="page-head aj-head"><div class="ph-ico">${pzIc('gear', 26)}</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu Instagram, tu plan y tu marca.</p></div></div>
   ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
+  <div class="card ajsec ajflat" id="ajsec-referidos"><div class="ajsec-h"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3></div><div class="ajsec-b">
+    <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
+  </div></div>
   <div class="card ajsec ajflat" id="ajsec-notif"><div class="ajsec-h"><h3>${pzIc('bell', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications' : 'Notificaciones'}</h3><span class="ajsec-st" id="ajStAvisos"></span></div><div class="ajsec-b">
     <div id="avisosPushHint" style="margin-bottom:12px">
       <div id="ajPushOff">
@@ -133,11 +136,8 @@ function ajustesView() {
       <button class="btn btn-ghost" id="btnWaNotifyToggle">Cargando...</button>
       <span id="waNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div class="hint" id="waNotifyGateHint" style="display:none;margin-top:10px">WhatsApp todavía no está encendido del lado de Posty: podés dejar tu número y tu permiso guardados, y te llega apenas se encienda. Mientras tanto, tu carta llega por notificación y en Tu análisis.</div>
+    <div class="hint" id="waNotifyGateHint" style="display:none;margin-top:10px">WhatsApp todavía no está encendido del lado de Posty: podés dejar tu número y tu permiso guardados, y te llega apenas se encienda. Mientras tanto, tu carta llega por notificación y en Estrategia.</div>
   </div></div>
-  ${IS_NATIVE ? '' : `<div class="card ajsec ajflat" id="ajsec-referidos"><div class="ajsec-h"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3></div><div class="ajsec-b">
-    <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>`}
   <div class="card ajsec ajflat" id="ajsec-negocio"><div class="ajsec-h"><h3>${pzIc('store', 20)} Tu negocio</h3>${stBiz}</div><div class="ajsec-b">
   <p style="color:var(--mut);font-size:11.5px;margin:-6px 0 14px">${pzIc('bot', 16)} Uso estos datos para crear tus posteos.</p>
     <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
@@ -330,10 +330,6 @@ function ajustesView() {
       <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página ${pzIc('arrowRight', 13)}</a>
     </div>
   </div></div>
-  <div class="card ajsec ajflat" id="ajsec-semana"><div class="ajsec-h"><h3>${pzIc('link', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'}</h3><span class="ajsec-st" id="ajStSemana"></span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'A read-only link with your week, no password: they only see the week.' : 'Un link de solo lectura con tu semana, sin tu contraseña: solo ven la semana.'}</p>
-    <div id="weekShareZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
-  </div></div>
   <details class="card int-advanced"><summary>${pzIc('gear', 16)} Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás pegar la dirección de embed que Meta genera para tu Instagram. La mayoría no tiene que tocar nada acá.</p>
     <div class="int-block"><h4>Instagram Embed URL</h4>
@@ -343,11 +339,9 @@ function ajustesView() {
     </div>
     <button class="btn btn-primary" id="btnSaveSettings">Guardar</button> <span id="setMsg"></span>
   </details>
-  <div class="card ajsec ajflat" id="ajsec-mas2-preview"><div class="ajsec-b"><button type="button" class="ajmas-row" data-ajmas="preview">${pzIc('bot', 16)} Cómo me ve la IA <span>›</span></button></div></div>
   </div>
   <div class="card aj-salir" style="margin-top:10px"><button class="btn btn-danger btn-block" id="btnLogoutAj">${pzIc('logout', 18)} Salir</button></div>
-  <div id="gzAjustesBox"></div>
-  <div class="card ajsec ajflat" id="ajsec-posty"><div class="ajsec-h"><h3>Posty · Community Manager</h3><span class="ajsec-st">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Your agent' : 'Tu agente'}</span></div></div>`;
+  <div id="gzAjustesBox"></div>`;
 }
 
 
@@ -590,48 +584,6 @@ async function styleGalleryLoad() {
 }
 
 // --- Compartir mi semana (v398): link público firmado de solo lectura ---
-async function weekShareLoad() {
-  const zone = document.getElementById('weekShareZone');
-  if (!zone) return;
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  let st = null;
-  try { st = await api.get('/api/week-share'); } catch (e) {}
-  if (!st || !st.ok) { zone.innerHTML = '<p class="hint">' + (en ? 'Could not load right now — try again in a moment.' : 'No se pudo cargar ahora — probá de nuevo en un momento.') + '</p>'; return; }
-  const stEl = document.getElementById('ajStSemana');
-  if (st.active && st.url) {
-    const url = location.origin + st.url;
-    if (stEl) stEl.textContent = en ? 'Link on' : 'Link activo';
-    zone.innerHTML = `
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input id="wsUrl" readonly value="${url}" style="flex:1;min-width:200px" onclick="this.select()">
-        <button class="btn btn-ghost btn-sm" id="wsCopy" type="button">${pzIc('copy', 18)} ${en ? 'Copy link' : 'Copiar link'}</button>
-      </div>
-      <div class="hint">${en ? 'Anyone with the link sees your week (read-only). If you make a new one or turn it off, this one stops working right away.' : 'Quien tenga el link ve tu semana (solo lectura). Si generás uno nuevo o lo apagás, este deja de funcionar al instante.'}</div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
-        <button class="btn btn-ghost btn-sm" id="wsRegen" type="button">${pzIc('refresh', 18)} ${en ? 'Make a new link' : 'Generar uno nuevo'}</button>
-        <button class="btn btn-ghost btn-sm" id="wsRevoke" type="button">${pzIc('ban', 18)} ${en ? 'Turn off link' : 'Apagar link'}</button>
-      </div>`;
-    const cp = document.getElementById('wsCopy');
-    if (cp) cp.onclick = async () => {
-      try { await navigator.clipboard.writeText(url); cp.innerHTML = en ? `${pzIc('checkCircle', 15)} Copied!` : `${pzIc('checkCircle', 15)} ¡Copiado!`; }
-      catch (e) { window.prompt(en ? 'Copy your link:' : 'Copiá tu link:', url); }
-    };
-    const rg = document.getElementById('wsRegen');
-    if (rg) rg.onclick = async () => { rg.disabled = true; try { await api.post('/api/week-share/regenerate'); } catch (e) {} weekShareLoad(); };
-    const rv = document.getElementById('wsRevoke');
-    if (rv) rv.onclick = async () => { rv.disabled = true; try { await api.post('/api/week-share/revoke'); } catch (e) {} weekShareLoad(); };
-  } else {
-    if (stEl) stEl.textContent = '';
-    zone.innerHTML = `
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" id="wsEnable" type="button">${pzIc('link', 18)} ${en ? 'Create my link' : 'Crear mi link'}</button>
-      </div>
-      <div class="hint">${en ? 'Your link shows your current week and updates as the week changes.' : 'Tu link muestra tu semana actual y se actualiza a medida que la semana cambia.'}</div>`;
-    const en2 = document.getElementById('wsEnable');
-    if (en2) en2.onclick = async () => { en2.disabled = true; try { await api.post('/api/week-share/enable'); } catch (e) {} weekShareLoad(); };
-  }
-}
-
 // (LOTE AJUSTES-SIMPLE) ¿El celu tiene suscripción NATIVA (apns/fcm)?
 // Una suscripción web NO cuenta: no debe esconder el botón nativo.
 // Sin campo (servidor viejo) o sin prefs: false -> fail-open, botón visible.
@@ -661,7 +613,7 @@ function pzAjMas2Toggle() {
 // pliegan nunca: su contenido queda siempre visible. Tocar el encabezado de
 // una carpeta la abre o la cierra; el estado persiste en localStorage.
 // Los deep-links (?plan, ?ig, ...) abren la carpeta destino vía ajFoldAbrir.
-const AJ_FOLDABLE = ['negocio', 'plan', 'auto', 'conex', 'marca', 'pagina', 'semana'];
+const AJ_FOLDABLE = ['negocio', 'plan', 'auto', 'conex', 'marca', 'pagina'];
 function ajFoldKey() {
   try {
     const uid = (typeof ME !== 'undefined' && ME && ME.id) ? String(ME.id) : '';
@@ -749,7 +701,6 @@ function bindSettings() {
       if (pq.get('auto')) return 'auto';
       if (pq.get('avisos')) return 'notif';
       if (pq.get('pagina')) return 'pagina';
-      if (pq.get('semana')) return 'semana';
       if (pq.get('estilos') || pq.get('marca')) return 'marca';
       if (pq.get('referidos')) return 'referidos';
     } catch (e) {}
@@ -760,18 +711,9 @@ function bindSettings() {
   if (ajDeep) setTimeout(() => { try { const el = document.getElementById('ajsec-' + ajDeep); if (el) { const w = document.getElementById('ajsec-mas2-wrap'); if (w && w.contains(el)) pzAjMas2Mostrar(); try { ajFoldAbrir(ajDeep); } catch (e) {} el.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' }); } } catch (e) {} }, 120);
   const btnAjMas2 = document.getElementById('btnAjMas2');
   if (btnAjMas2) btnAjMas2.onclick = () => pzAjMas2Toggle();
-  $$('.ajmas-row').forEach(btn => {
-    btn.onclick = () => {
-      const t = btn.getAttribute('data-ajmas');
-      if (t === 'preview') { const pv = document.getElementById('btnPreview'); if (pv) pv.click(); return; }
-      const el = document.getElementById('ajsec-' + t);
-      if (el) el.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' });
-    };
-  });
   try { ttZoneLoad(); } catch (e) {}
   try { ggZoneLoad(); } catch (e) {}
   try { tnZoneLoad(); } catch (e) {}
-  try { weekShareLoad(); } catch (e) {}
   try { styleGalleryLoad(); } catch (e) {}
   try { gustosZoneLoad(); } catch (e) {}
   // (fix chunk-ajustes v487) La caja Gesty vive en #gzAjustesBox (arriba, en ajustesView):
@@ -1009,7 +951,7 @@ function bindSettings() {
       };
       let letterOn = !!r.notify_letter, failOn = !!r.notify_failed;
       const btnL = $('#btnLetterToggle'), btnF = $('#btnFailToggle');
-      paintT(btnL, $('#letterNotifyStatus'), letterOn, 'Te aviso el domingo apenas tu carta esté lista.', 'Sin aviso: la carta llega igual — la leés en Tu análisis.');
+      paintT(btnL, $('#letterNotifyStatus'), letterOn, 'Te aviso el domingo apenas tu carta esté lista.', 'Sin aviso: la carta llega igual — la leés en Estrategia.');
       paintT(btnF, $('#failNotifyStatus'), failOn, 'Te aviso apenas un posteo no pueda salir.', 'Sin aviso: los fallos los ves al entrar a tu semana.');
       // --- 💬 WhatsApp: carta del domingo con botón de aprobar (whatsapp-aprobacion) ---
       // La UI nunca promete envío: si el server no tiene WhatsApp encendido, se avisa y solo se guarda número + permiso.
@@ -1019,7 +961,7 @@ function bindSettings() {
       if (waGate) waGate.style.display = r.wa_available ? 'none' : '';
       const paintWa = () => paintT(btnWa, waSt, waOn,
         waMasked ? ('Activado: tu carta llega al ' + waMasked + ' con el botón para aprobar.') : 'Activado: tu carta llega por WhatsApp con el botón para aprobar.',
-        'Sin WhatsApp: tu carta llega por notificación y en Tu análisis.');
+        'Sin WhatsApp: tu carta llega por notificación y en Estrategia.');
       paintWa();
       if (btnWa) btnWa.onclick = async () => {
         btnWa.disabled = true;
@@ -1030,7 +972,7 @@ function bindSettings() {
             waOn = !!r2.wa_opted_in;
             paintT(btnWa, waSt, waOn,
               (r2.wa_number_masked || waMasked) ? ('Activado: tu carta llega al ' + (r2.wa_number_masked || waMasked) + ' con el botón para aprobar.') : 'Activado: tu carta llega por WhatsApp con el botón para aprobar.',
-              'Sin WhatsApp: tu carta llega por notificación y en Tu análisis.');
+              'Sin WhatsApp: tu carta llega por notificación y en Estrategia.');
             if (waIn) waIn.value = '';
           } else alert((r2 && r2.error) || 'No pude cambiarlo');
         } catch (e) { alert('No pude cambiarlo'); }
@@ -1049,7 +991,7 @@ function bindSettings() {
         btnL.disabled = true;
         try {
           const r2 = await api.post('/api/settings/notify-prefs', { notify_letter: !letterOn });
-          if (r2 && r2.ok) { letterOn = !!r2.notify_letter; paintT(btnL, $('#letterNotifyStatus'), letterOn, 'Te aviso el domingo apenas tu carta esté lista.', 'Sin aviso: la carta llega igual — la leés en Tu análisis.'); paintSum(); }
+          if (r2 && r2.ok) { letterOn = !!r2.notify_letter; paintT(btnL, $('#letterNotifyStatus'), letterOn, 'Te aviso el domingo apenas tu carta esté lista.', 'Sin aviso: la carta llega igual — la leés en Estrategia.'); paintSum(); }
           else alert('No pude cambiarlo');
         } catch (e) { alert('No pude cambiarlo'); }
         btnL.disabled = false;
@@ -1455,7 +1397,7 @@ function bindSettings() {
   };
   if (webZone) {
     api.get('/api/website/status').then(st => paintWebZone(st)).catch(() => paintWebZone(null));
-    // refresco invocable desde el auto-análisis post-OAuth (?ig=ok)
+    // refresco invocable desde la auto-actualización post-OAuth (?ig=ok)
     PZ_WEB_REFRESH = () => {
       api.get('/api/website/status').then(st => paintWebZone(st)).catch(() => {});
       refreshWebDna();
@@ -2567,7 +2509,7 @@ function bindSettings() {
   if (igProLink) igProLink.onclick = (e) => { e.preventDefault(); const g = $('#igProGuide'); if (g) g.style.display = g.style.display === 'none' ? '' : 'none'; };
   try { pzFillBioSeal(); } catch (e) {}
   // Actualizar lo que Posty sabe de mí (v282): UN solo botón que corre los
-  // tres re-análisis EN ORDEN — estilo visual → cómo escribo → brief (el
+  // tres actualizaciones EN ORDEN — estilo visual → cómo escribo → brief (el
   // brief se compone de los otros dos: NEGOCIO + VOZ + VISUAL + MARCA, por
   // eso va último). Si un paso falla, se dice cuál y no se finge éxito.
   const bKnow = $('#btnKnowUpdate');

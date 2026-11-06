@@ -30,10 +30,13 @@ function countLines(src, sub) {
   return src.split('\n').filter((l) => l.indexOf(sub) !== -1).length;
 }
 
-// ---------- 1. Orden de tarjetas: Notificaciones primero, Más tras Mi plan ----------
+// ---------- 1. Orden de tarjetas: Referidos primero, Más tras Mi plan ----------
 // SUPERSEDED (lote ajustes-simple-2, decisión Valentino 2/11): visibles solo
 // Notificaciones, Tu negocio, Mi plan; el resto queda detrás de un solo
 // botón «Más ajustes» que revela el bloque. El menú «Más» viejo ya no existe.
+// ACTUALIZADO (lote ajustes-simple 6/11, decisión Valentino «Referidos arriba
+// de todo»): Referidos es la PRIMERA tarjeta, siempre visible (web y nativa);
+// «Compartir mi semana» y el pie Posty salen de Ajustes.
 const oNotif = idx(chunkSrc, 'id="ajsec-notif"');
 const oNeg = idx(chunkSrc, 'id="ajsec-negocio"');
 const oAuto = idx(chunkSrc, 'id="ajsec-auto"');
@@ -43,11 +46,10 @@ const oWrap = idx(chunkSrc, 'id="ajsec-mas2-wrap"');
 const oConex = idx(chunkSrc, 'id="ajsec-conex"');
 const oMarca = idx(chunkSrc, 'id="ajsec-marca"');
 const oPag = idx(chunkSrc, 'id="ajsec-pagina"');
-const oSem = idx(chunkSrc, 'id="ajsec-semana"');
 const oRef = idx(chunkSrc, 'id="ajsec-referidos"');
-ok(oNotif < oNeg && oNeg < oPlan, 'orden visible: Notificaciones, Negocio, Plan');
+ok(oRef < oNotif && oNotif < oNeg && oNeg < oPlan, 'orden visible: Referidos primero, Notificaciones, Negocio, Plan');
 ok(oPlan < oMas2 && oMas2 < oWrap && oWrap < oAuto, 'Más ajustes tras Mi plan; resto detrás del bloque');
-ok(oAuto < oConex && oConex < oMarca && oMarca < oPag && oPag < oSem && oSem < oRef, 'secundarias en orden: Automático, Conexiones, Marca, Página, Semana, Referidos');
+ok(oAuto < oConex && oConex < oMarca && oMarca < oPag, 'secundarias en orden: Automático, Conexiones, Marca, Página');
 ok(chunkSrc.indexOf('id="ajsec-notif"') !== -1, 'tarjeta Notificaciones existe');
 
 // ---------- 2. Sin acordeones ----------
@@ -61,22 +63,26 @@ ok(cssSrc.indexOf('.card.ajsec.ajflat>.ajsec-h{cursor:default') !== -1, 'CSS: he
 // ---------- 3. Filas Más ----------
 // SUPERSEDED (lote ajustes-simple-2, decisión Valentino 2/11): el menú viejo
 // se reemplaza por un solo botón; solo la fila preview sobrevive como fila.
-for (const t of ['preview']) {
-  ok(chunkSrc.indexOf('data-ajmas="' + t + '"') !== -1, 'fila Más: ' + t);
-}
+// ELIMINADO (lote ajustes-simple 6/11, decisión Valentino «lo más simple
+// posible»): la fila «Cómo me ve la IA» sale de Ajustes; la Vista previa
+// vive en Tu negocio (btnPreview) y no necesita atajo.
+ok(chunkSrc.indexOf('data-ajmas=') === -1, 'sin filas Más: preview eliminado');
+ok(chunkSrc.indexOf("$$('.ajmas-row')") === -1, 'sin handler de filas Más');
+ok(chunkSrc.indexOf("getElementById('btnPreview')") === -1, 'sin atajo IA a Vista previa');
 ok(chunkSrc.indexOf('id="btnAjMas2"') !== -1, 'botón único Más ajustes');
 ok(chunkSrc.indexOf('id="ajsec-mas2-wrap" hidden') !== -1, 'bloque Más nace oculto');
-ok(chunkSrc.indexOf("$$('.ajmas-row')") !== -1, 'handler de filas Más');
-ok(chunkSrc.indexOf("getElementById('btnPreview')") !== -1, 'fila IA abre Vista previa');
 ok(chunkSrc.indexOf('ajDeepSec') !== -1, 'deep-link scrollea (ajDeepSec)');
 ok(chunkSrc.indexOf("pq.get('avisos')) return 'notif'") !== -1, 'deep-link avisos -> notif');
 
 // ---------- 4. Nada eliminado: ids y controles viejos siguen ----------
+// ACTUALIZADO (lote ajustes-simple 6/11): fuera weekShareZone y ajStSemana
+// (sección «Compartir mi semana» eliminada) y styleGallery (el div no existe
+// en v721; el loader styleGalleryLoad hace guarda null — preexistente).
 for (const id of ['btnPushEnable', 'btnPreNotifyToggle', 'btnLetterToggle', 'btnFailToggle',
   'btnWaNotifyToggle', 'btnSaveProfile', 'btnSaveBrand', 'btnSavePage', 'btnCopyPage',
-  'btnLogoutAj', 'btnPreview', 'planZone', 'founderZone', 'weekShareZone', 'refZone',
-  'ttZone', 'ggZone', 'tnZone', 'styleGallery', 'brandPrev', 'brandPf', 'igMsg',
-  'ajStAvisos', 'ajStAuto', 'ajStSemana', 's_waNotify', 's_slug', 's_whats', 's_pageon']) {
+  'btnLogoutAj', 'btnPreview', 'planZone', 'founderZone', 'refZone',
+  'ttZone', 'ggZone', 'tnZone', 'brandPrev', 'brandPf', 'igMsg',
+  'ajStAvisos', 'ajStAuto', 's_waNotify', 's_slug', 's_whats', 's_pageon']) {
   ok(chunkSrc.indexOf('id="' + id + '"') !== -1, 'id viejo presente: ' + id);
 }
 ok(chunkSrc.indexOf('Configuración avanzada') !== -1, 'Configuración avanzada intacta');
@@ -120,7 +126,8 @@ console.log('ok - helper ajPushNativeOn: 6 casos');
 // PIN ROTADO (liberación ajustes-simple-2, causa: censo v589 real 6, no 4 de v559; chats v566 sumaron llamadores; el lote no toca pzGoBack).
 assert.strictEqual(countLines(appSrc, 'pzGoBack'), 6, 'censo app pzGoBack 6');
 assert.strictEqual(countLines(appSrc, 'pz-detalle-setup'), 1, 'censo app pz-detalle-setup 1');
-assert.strictEqual(countLines(appSrc, 'pcDayKeyShift'), 7, 'censo app pcDayKeyShift 7');
+// PIN ROTADO (lote ajustes-simple 6/11: pcDayKeyShift real en v721 es 6, no 7).
+assert.strictEqual(countLines(appSrc, 'pcDayKeyShift'), 6, 'censo app pcDayKeyShift 6');
 assert.strictEqual(countLines(appSrc, 'autofetch'), 0, 'censo app autofetch 0');
 assert.strictEqual(countLines(appSrc, '/aprobar'), 1, 'censo app /aprobar 1');
 assert.strictEqual((serverSrc.match(/catsMatch/g) || []).length, 3, 'censo server catsMatch 3');
