@@ -124,6 +124,15 @@ async function sendMorningPostPush(db, opts) {
       let already = null;
       try { already = db.prepare('SELECT 1 AS x FROM morning_post_push WHERE user_id = ? AND day_key = ?').get(uid, dayKey); } catch (e) {}
       if (already) { res.skipped++; continue; }
+      // (LOTE RITUAL-1-OPCION · 6/11) Un posteo por día: si hoy no hay
+      // nada programado, se genera el posteo del día ANTES de decidir
+      // la push (ensureTodayPost es idempotente: si ya existe, no hace
+      // nada; si la generación falla, se sigue con lo que haya — sin
+      // posteo hoy, silencio, como siempre). Opcional: sin ensure, el
+      // barrido anda igual que antes.
+      if (typeof o.ensureTodayPost === 'function') {
+        try { await o.ensureTodayPost(uid, tz, now); } catch (e) { console.error('[morning-post-push] ensure hoy:', e.message); }
+      }
       let posts = [];
       try {
         posts = db.prepare(`SELECT id, scheduled_at, status FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);

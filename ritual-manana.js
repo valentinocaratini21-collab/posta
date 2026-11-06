@@ -1,24 +1,23 @@
 'use strict';
-// ritual-manana.js — RITUAL DE LA MAÑANA (LOTE 5/8, aprobado Valentino 5/11 «Arma todo»).
-//
-// Cada mañana la push de las 9:00 («Tu posteo de hoy ya está 👇», texto
-// INTOCABLE, morning-post-push.js) abre el ritual: el paquete del día se
-// devela con magia y trae 3 cartas — la recomendada (el posteo ya
-// programado para hoy) + 2 alternativas de verdad distintas —, el dueño
-// elige una, esa sale hoy y va al álbum. Sin elección, sale la
-// recomendada (el flujo vigente del scheduler; acá no se programa nada
+// ritual-manana.js — RITUAL DE LA MAÑANA (LOTE 5/8, aprobado Valentino 5/11 «Arma todo»;
+// LOTE RITUAL-1-OPCION · 6/11 · decisión Valentino «una sola opción + editar»:
+// el paquete del día trae UNA sola carta — la recomendada (el posteo ya
+// programado para hoy) —, el dueño la revela con un toque y la confirma
+// con [Sale así] o pide otra versión desde el chat. Sin elección, sale
+// la recomendada (el flujo vigente del scheduler; acá no se programa nada
 // nuevo). Solo posteos: el video semanal NO entra.
 //
 // Mecánica (fail-closed, nunca inventar):
-// · Una fila por usuario y día en pz_ritual: recomendada + 2 alternas +
-//   elegida + dorada. Las alternas se resuelven una sola vez por día
-//   (primero borradores reales del usuario; solo si faltan, se generan
-//   frescas por el camino de ideas — eso vive en server.js, no acá).
+// · Una fila por usuario y día en pz_ritual: recomendada + elegida +
+//   dorada. (Las alternas —alt_post_ids y reutilizarBorradores— se
+//   RETIRARON 6/11: el ritual ya no genera ni resuelve 3 opciones; la
+//   columna alt_post_ids queda en la tabla por compatibilidad con filas
+//   viejas, siempre '[]' en filas nuevas.)
 // · Elegir ES aprobar: la elegida queda scheduled en el slot de hoy con
 //   approval='approved' y needs_review=0 (la elección del dueño ES la
-//   revisión); la recomendada desplazada vuelve a borrador (no se borra:
-//   queda para otro día). Intercambio atómico, mismo criterio de
-//   /api/posts/swap (un día por posteo, sin chocar con terceros).
+//   revisión); con una sola opción la elegida ES la recomendada, sin
+//   intercambio (el camino de intercambio queda para filas viejas de la
+//   era de 3 opciones, que podían elegir una alterna).
 // · Racha REAL: días consecutivos con elección, contados desde las
 //   elecciones guardadas. Sin actividad no hay racha (nunca se inventa).
 // · Dorada = hito: la elección completa una racha de 7, 30 o 100 días,
@@ -160,34 +159,11 @@ function albumWeek(db, uid, dayKey, lang) {
   return { lunes, slots };
 }
 
-// Borradores reutilizables como alternas: piezas reales del usuario con
-// imagen, distintas a la recomendada y entre sí (caption e imagen).
-// Nunca toca ideas ni genera nada: costo cero.
-function reutilizarBorradores(db, uid, rec) {
-  const out = [];
-  try {
-    const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft'
-      AND COALESCE(needs_review, 0) = 0 AND image_path LIKE '/media/%'
-      AND media_type IN ('image', 'carousel') AND id != ?
-      ORDER BY id DESC LIMIT 12`).all(uid, rec.id);
-    const seen = new Set([normCaption(rec.caption), String(rec.image_path || '')]);
-    for (const d of drafts) {
-      if (out.length >= 2) break;
-      const k = normCaption(d.caption);
-      if (k && seen.has(k)) continue;
-      if (seen.has(String(d.image_path || ''))) continue;
-      if (k) seen.add(k);
-      seen.add(String(d.image_path || ''));
-      out.push(d.id);
-    }
-  } catch (e) { /* sin borradores: el llamador genera o sigue con menos cartas */ }
-  return out;
-}
-
 // (LOTE PROXIMO-RITUAL · 5/11) Rubro de una carta del ritual, para la
-// chapita visible y para el contrato con RUBRO-ROTACION (que garantiza
-// las 3 opciones en 3 rubros distintos comparando este campo en el
-// servidor, nunca en la UI). Clasificador MÍNIMO y honesto:
+// chapita visible. (El contrato con RUBRO-ROTACION —3 opciones en 3
+// rubros distintos— quedó SUPERSEDED 6/11 por la decisión «una sola
+// opción»: el rubro sigue viviendo en la chapita de la carta única.)
+// Clasificador MÍNIMO y honesto:
 // 0) si la fila ya trae rubro guardado (columna posts.rubro de
 //    RUBRO-ROTACION) → ese valor, sin reclasificar;
 // 1) si el posteo tiene producto de referencia (rg_producto) → el
@@ -215,12 +191,15 @@ function rubroDeCarta(post) {
 
 // Carta para la vista: lo mínimo para pintarla (la imagen se sirve por
 // /media/... como en el feed; la vista usa mv() igual que las tiles).
+// `caption` es el texto COMPLETO (la edición in situ lo necesita en
+// data-full); `caption_corta` es la primera línea para mostrar.
 function cardOf(post, recomendada) {
   if (!post) return null;
   const cap = String(post.caption || '').split('\n')[0].trim();
   return {
     id: post.id,
     imagen: String(post.image_path || ''),
+    caption: String(post.caption || ''),
     caption_corta: cap.slice(0, 120),
     tipo: String(post.tipo || ''),
     media_type: String(post.media_type || 'image'),
@@ -294,7 +273,6 @@ module.exports = {
   totalPicks,
   esDorada,
   albumWeek,
-  reutilizarBorradores,
   cardOf,
   rubroDeCarta,
   aplicarPick,

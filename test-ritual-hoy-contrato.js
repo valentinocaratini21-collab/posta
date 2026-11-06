@@ -1,4 +1,7 @@
-// test-ritual-hoy-contrato.js — LOTE RITUAL-HOY-FIX (bug en vivo 6/11 ~01:20).
+// test-ritual-hoy-contrato.js — LOTE RITUAL-HOY-FIX (bug en vivo 6/11 ~01:20)
+// + LOTE RITUAL-1-OPCION (6/11 · decisión Valentino «una sola opción +
+// editar»: el éxito trae UNA sola carta — la recomendada —, sin
+// alternas; el paquete velado revela directo la recomendada).
 // CONTRATO entre GET /api/ritual/hoy (servidor) y pzRitualHTML (cliente):
 // el servidor responde el éxito con la clave `hoy` (día "YYYY-MM-DD") y el
 // cliente renderiza el paquete solo si `d.hoy` es truthy.
@@ -210,19 +213,25 @@ async function getHoy(sid) {
       'hoy=' + JSON.stringify(d.hoy) + ' esperado=' + TODAY + ' claves=' + Object.keys(d).join(','));
     t('A3: CONTRATO — el éxito NO trae la clave vieja `dia`', !('dia' in d),
       'claves=' + Object.keys(d).join(','));
-    t('A4: el éxito trae 3 cartas (recomendada + 2 alternas)', Array.isArray(d.cartas) && d.cartas.length === 3,
+    t('A4: el éxito trae UNA sola carta (la recomendada, sin alternas)', Array.isArray(d.cartas) && d.cartas.length === 1 && d.cartas[0].id === 518,
       'cartas=' + JSON.stringify((d.cartas || []).map((c) => c.id)));
+    t('A4b: la carta trae la hora de salida para el toast', typeof d.recomendada.hora_salida === 'string' && d.recomendada.hora_salida.length > 0,
+      'hora_salida=' + JSON.stringify(d.recomendada && d.recomendada.hora_salida));
     const html = String(pzRitualHTML(d, false));
     t('A5: el cliente renderiza EL PAQUETE con la respuesta real (sin «Hoy no tenés posteo programado»)',
       !html.includes('Hoy no tenés posteo programado'), html.slice(0, 200));
     // El paquete nace VELADO (sin foto a propósito): la foto aparece al
     // ELEGIR. Con la respuesta real, elegir la recomendada revela su foto.
     const htmlR = String(pzRitualHTML(d, false, d.recomendada && d.recomendada.id));
-    t('A6: al elegir la recomendada (respuesta real) se revela SU foto (518)',
+    t('A6: al revelar la recomendada (respuesta real) se muestra SU foto (518)',
       htmlR.includes('/media/518.jpg') && htmlR.includes('Sale así'),
       htmlR.slice(0, 300));
-    t('A7: el paquete es el velado (data-pz-ritual-ver) con las 3 opciones ocultas',
-      html.includes('data-pz-ritual-ver="1"') && html.includes('id="pzRitualCartas" hidden'));
+    t('A6b: la revelada trae [Editar texto] (data-pc-act=edit-cap) y el caption con data-full',
+      htmlR.includes('data-pc-act="edit-cap"') && htmlR.includes('pcard-cap') && htmlR.includes('data-full='),
+      htmlR.slice(0, 400));
+    t('A6c: la revelada trae [Cambiar algo] con el posteo', htmlR.includes('Cambiar algo') && htmlR.includes('data-pz-ritual-cambio="518"'));
+    t('A7: el paquete es el velado (data-pz-ritual-ver) con UNA carta adentro, sin abanico de opciones',
+      html.includes('data-pz-ritual-ver="1"') && html.includes('1 carta adentro') && !html.includes('id="pzRitualCartas"') && !html.includes('pzRitualOpcionHTML') && !html.includes('3 opciones'));
 
     // ===== B) VACÍO REAL: sin posteo hoy el estado vacío sigue andando =====
     const resV = await getHoy('ritual-hoy-13');
@@ -254,6 +263,14 @@ async function getHoy(sid) {
     // es otro endpoint con otro consumidor: NO se toca.
     t('S4: la `dia:` de /api/admin/support/:userId/manana sigue intacta (otro contrato)',
       SRV.includes("res.json({ ok: true, dia: r.dia, posts: r.posts, enviado: r.enviado })"));
+    // (LOTE RITUAL-1-OPCION · 6/11) El ritual garantiza el posteo del
+    // día antes de responder vacío, y ya no resuelve alternas.
+    t('S5: /api/ritual/hoy garantiza el día (ensureTodayPost) cuando no hay programado',
+      handler.includes('ensureTodayPost(uid, tz'));
+    t('S6: el servidor ya NO resuelve alternas (sin definición ni llamada; solo queda la mención histórica en el comentario del bloque)',
+      !SRV.includes('function ritualResolverAlternas') && !SRV.includes('function ritualIdeasSinteticas') && !SRV.includes('reutilizarBorradores(db') && !SRV.includes('ritualResolverAlternas(uid'));
+    t('S7: la respuesta de éxito trae hora_salida en la recomendada',
+      handler.includes('hora_salida'));
 
     console.log(`\nRITUAL-HOY-CONTRATO: ${pass} ok, ${fail} fallas`);
     kill();

@@ -687,7 +687,14 @@ function startScheduler(db) {
   try {
     const mpp = require('./morning-post-push');
     cron.schedule('*/15 * * * *', () => {
-      mpp.sendMorningPostPush(db).catch((e) => console.error('[morning-post-push]', e.message));
+      // (LOTE RITUAL-1-OPCION · 6/11) El barrido matutino garantiza el
+      // posteo del día ANTES de avisar (ensureTodayPost, idempotente):
+      // sin posteo hoy, la push no tiene nada que anunciar. El require
+      // es perezoso DENTRO del callback: server.js ya está cargado a
+      // esta altura (es quien requiere este módulo).
+      let ensureFn = null;
+      try { const srv = require('./server'); if (srv && typeof srv.ensureTodayPost === 'function') ensureFn = srv.ensureTodayPost; } catch (e) {}
+      mpp.sendMorningPostPush(db, { ensureTodayPost: ensureFn }).catch((e) => console.error('[morning-post-push]', e.message));
     });
     console.log('[posta] Push matutina del posteo del dia: barrido cada 15 min');
   } catch (e) { console.error('[morning-post-push] no se pudo programar:', e.message); }
@@ -1089,64 +1096,36 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[stories] no se pudo programar:', e.message);
   }
-  // Pipeline perpetuo (Track 4): DOMINGO 7:00 (Buenos Aires) — la semana que viene
-  // se arma el domingo para que el cliente la VEA antes del primer posteo del lunes
-  // (regla sagrada: ningún primer posteo sale sin que el cliente haya visto la semana).
-  // Respaldo del trigger inline de /api/posts/schedule-all. Para cada usuario que
-  // cumple los 4 gates (plan/trial vigente, activo 7 días, sin borradores de la
-  // próxima semana, pipeline vivo 14 días) genera los borradores de la semana que viene.
-  // Solo BORRADORES: nada se programa ni publica sin el tap del usuario.
-  // Require perezoso DENTRO del callback: server.js ya está cargado a esta
-  // altura (es quien requiere este módulo), así que no se re-ejecuta.
+  // (LOTE RITUAL-1-OPCION · 6/11 · decisión Valentino «un posteo por
+  // día») La generación semanal en tanda QUEDA FUERA: el barrido
+  // dominical de la semana que viene (nextWeekSweep) NO corre más en
+  // automático — cada día se genera el posteo del día (ensureTodayPost,
+  // desde la push 9:00, /api/ritual/hoy y /api/week/ensure). La función
+  // nextWeekSweep sigue exportada para uso manual/admin. Lo único que
+  // queda en este horario es la graduación al nivel 2 de confianza,
+  // que vivía dentro de ese barrido (trustLevel2Sweep, server.js):
+  // evalúa, no genera.
   try {
     cron.schedule('0 7 * * 0', () => {
       try {
         const srv = require('./server');
-        if (srv && typeof srv.nextWeekSweep === 'function') {
-          srv.nextWeekSweep().catch((e) => console.error('[next-week sweep]', e.message));
+        if (srv && typeof srv.trustLevel2Sweep === 'function') {
+          srv.trustLevel2Sweep().catch((e) => console.error('[trust-level2]', e.message));
         }
-      } catch (e) { console.error('[next-week sweep] no se pudo cargar el pipeline:', e.message); }
+      } catch (e) { console.error('[trust-level2] no se pudo cargar:', e.message); }
     }, { timezone: 'America/Argentina/Buenos_Aires' });
-    console.log('[posta] Pipeline perpetuo (borradores semana+1): domingo 7:00 (Buenos Aires)');
+    console.log('[posta] Graduación nivel 2: domingo 7:00 (Buenos Aires)');
   } catch (e) {
-    console.error('[next-week sweep] no se pudo programar:', e.message);
+    console.error('[trust-level2] no se pudo programar:', e.message);
   }
 
-  // Resiliencia del generador semanal (2026-10-05): cada 3 horas reintenta
-  // los fallos del barrido registrados en sweep_failures (backoff
-  // exponencial: 3h, 6h, 12h...). Así un domingo con la IA caída no deja la
-  // semana vacía: en cuanto vuelve el crédito, la semana se genera sola.
-  try {
-    cron.schedule('0 */3 * * *', () => {
-      try {
-        const srv = require('./server');
-        if (srv && typeof srv.retrySweepFailures === 'function') {
-          srv.retrySweepFailures().catch((e) => console.error('[sweep-retry]', e.message));
-        }
-      } catch (e) { console.error('[sweep-retry] no se pudo cargar el pipeline:', e.message); }
-    }, { timezone: 'America/Argentina/Buenos_Aires' });
-    console.log('[posta] Reintento de fallos del sweep: cada 3 horas (Buenos Aires)');
-  } catch (e) {
-    console.error('[sweep-retry] no se pudo programar:', e.message);
-  }
-
-  // Backfill diario (2026-10-05): 8:00 ART genera la semana EN CURSO para los
-  // usuarios que el barrido del domingo no cubrió. Aunque el domingo falle
-  // TODO, el lunes a la mañana la semana existe (tarde, pero existe).
-  // Idempotente por el guard already_exists.
-  try {
-    cron.schedule('0 8 * * *', () => {
-      try {
-        const srv = require('./server');
-        if (srv && typeof srv.backfillThisWeek === 'function') {
-          srv.backfillThisWeek().catch((e) => console.error('[backfill]', e.message));
-        }
-      } catch (e) { console.error('[backfill] no se pudo cargar el pipeline:', e.message); }
-    }, { timezone: 'America/Argentina/Buenos_Aires' });
-    console.log('[posta] Backfill semanal: 8:00 diario (Buenos Aires)');
-  } catch (e) {
-    console.error('[backfill] no se pudo programar:', e.message);
-  }
+  // (LOTE RITUAL-1-OPCION · 6/11) El reintento de fallos del sweep
+  // (cada 3h) y el backfill diario de las 8:00 se RETIRAN con la tanda:
+  // reintentaban y generaban semanas en lote. Sin barrido semanal no
+  // hay fallos que reintentar ni semana que reponer; el posteo del día
+  // lo cubre ensureTodayPost (push 9:00 + ritual + week/ensure). Las
+  // funciones retrySweepFailures/backfillThisWeek siguen exportadas
+  // para uso manual/admin.
 
   // 🚀 Abrir y listo — regla 24h (2026-10-03): cada hora, los borradores que
   // llevan 24h+ sin que el cliente los toque se programan SOLOS (si el usuario

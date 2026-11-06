@@ -12227,13 +12227,13 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     .sort((a, b) => ((a.status === 'draft' ? 0 : 1) - (b.status === 'draft' ? 0 : 1)) || String(a.scheduled_at || a.created_at || '').localeCompare(String(b.scheduled_at || b.created_at || '')));
   if (!list.length) {
     // 2026-10-06 (ensure honesto): el backend descartó la generación por falta
-    // de ADN (reason:'no_dna') — NO mostrar el spinner "armando tu semana"
+    // de ADN (reason:'no_dna') — NO mostrar el spinner "armando tu posteo de hoy"
     // porque no hay nada en camino. Tarjeta honesta con camino a Ajustes.
     // Usa clase propia (hs-nodna) para que el loop de refresh de .hs-generating
     // no corra en este caso.
     if (noDna) return `<div class="hs-nodna" id="hsNoDna">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-    <b>Para armar tu semana necesito conocer tu negocio ${pzIc('arrowDown', 13)}</b>
+    <b>Para armar tus posteos necesito conocer tu negocio ${pzIc('arrowDown', 13)}</b>
     <p>Contame de qué se trata en 2 minutos y la armo sola</p>
     <a class="btn btn-primary btn-block" href="#/app/ajustes" style="margin-top:4px">Contar de mi negocio</a>
   </div>`;
@@ -12241,7 +12241,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // haya tenido posteos antes — la semana actual está vacía.
     if (generating) return `<div class="hs-generating" id="hsGenerating">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-    <b>Posty está armando tu semana ${pzIc('sparkle', 16)}</b>
+    <b>Posty está armando tu posteo de hoy ${pzIc('sparkle', 16)}</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá ${pzIc('arrowDown', 14)}</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
     <button type="button" class="btn btn-ghost btn-sm" id="hsDiagBtn" style="margin-top:12px">${pzIc('search', 18)} ¿Por qué tarda tanto?</button>
@@ -12252,12 +12252,12 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     const everHad = all.length > 0;
     if (everHad) return `<div class="hs-done">
       <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-      <b>Tu semana está completa ${pzIc('gift', 16)}</b>
-      <p>Todo publicado. La próxima se arma sola</p>
+      <b>Nada pendiente por ahora ${pzIc('gift', 16)}</b>
+      <p>Tu posteo de hoy ya salió, o aparece acá en cuanto esté listo</p>
     </div>`;
     return `<div class="hs-generating" id="hsGenerating">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-    <b>Posty está armando tu semana ${pzIc('sparkle', 16)}</b>
+    <b>Posty está armando tu posteo de hoy ${pzIc('sparkle', 16)}</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá ${pzIc('arrowDown', 14)}</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
   </div>`;
@@ -12310,7 +12310,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">${pzIc('checkCircle', 18)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Accept all' : 'Aceptar todo'} <span class="accept-count">${list.filter(p => p.status === 'draft').length}</span></button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
-    ${generating ? `<div class="hs-completing">${pzIc('sparkle', 14)} Estoy armando los posteos que faltan…</div>` : ''}
+    ${generating ? `<div class="hs-completing">${pzIc('sparkle', 14)} Estoy armando tu posteo de hoy…</div>` : ''}
     ${staleHTML}
     <div class="hs-carousel">
       <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
@@ -12721,7 +12721,7 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
     ${drafts.length ? acceptPillHTML(drafts.length, 'hsAcceptAll') : ''}
     <div id="revMsg"></div>
     <div id="hs-report"></div>
-    ${generating ? '<div class="hs-completing">' + pzIc('sparkle', 14) + ' Estoy armando los posteos que faltan…</div>' : ''}
+    ${generating ? '<div class="hs-completing">' + pzIc('sparkle', 14) + ' Estoy armando tu posteo de hoy…</div>' : ''}
     ${schedStaleHTML(posts, tz)}
   </div>`;
 }
@@ -13884,7 +13884,7 @@ async function chatGreet() {
   try { const rs = await api.get('/api/review-status'); inReview = (rs && rs.pending) || 0; } catch (e) {}
   let text, cta = '';
   if (running) {
-    text = 'Estoy armando tu semana ahora mismo ⏳ Te aviso acá cuando esté lista.';
+    text = 'Estoy armando tu posteo de hoy ahora mismo ⏳ Te aviso acá cuando esté listo.';
   } else if (inReview > 0) {
     text = 'Tu primera semana está en el horno ✨ La estamos dejando perfecta — te aviso acá cuando puedas revisarla.';
   } else if (drafts.length > 0) {
@@ -18916,12 +18916,34 @@ function homeGridCompose(input) {
       bestT = d.getTime(); nextPost = p;
     }
   } catch (e) { nextPost = null; }
+  // (LOTE RITUAL-1-OPCION · 6/11) Clave del día de hoy en la zona de
+  // la cuenta, para el filtro «un posteo por día» del bucle de abajo.
+  let hoyKey = '';
+  try { const tzH = (typeof pcTz === 'function') ? pcTz() : undefined; hoyKey = new Date().toLocaleDateString('en-CA', tzH ? { timeZone: tzH } : {}); } catch (e) { hoyKey = ''; }
   for (const it of upcoming) {
     const p = it && it.p;
     if (!p || isStory(p) || p.status === 'failed') continue;
     if (p.status !== 'draft' && p.status !== 'scheduled') continue;
     if (p === nextPost) continue; // (LOTE POSTEO-DIA-2) El próximo sale del grupo: su tile va primera (idx 0), velada.
-    tiles.push({ kind: 'post', post: p, ymd: it.ymd || null, day: it.ymd || null, isNew: p.status === 'draft' });
+    // (LOTE RITUAL-1-OPCION · 6/11 · «un posteo por día») La grilla
+    // muestra SOLO el posteo de hoy + los ya publicados. Los borradores
+    // (futuros, sin programar) y los programados de días futuros NO
+    // rinden acá: viven en la vista Semana. El posteo de hoy rinde como
+    // carta velada (nextPost, idx 0), no como tile. Un programado de hoy
+    // que no es nextPost (p. ej. ya vencido, en publicación) sí rinde:
+    // es de hoy.
+    if (p.status === 'draft') continue;
+    if (p.status === 'scheduled' && hoyKey) {
+      let dayKey = it.ymd || '';
+      try {
+        if (p.scheduled_at && typeof pcParseDate === 'function') {
+          const dd = pcParseDate(p.scheduled_at);
+          if (dd && typeof schedDayKeyOf === 'function') dayKey = schedDayKeyOf(dd, (typeof pcTz === 'function') ? pcTz() : undefined) || dayKey;
+        }
+      } catch (e) {}
+      if (dayKey && dayKey !== hoyKey) continue;
+    }
+    tiles.push({ kind: 'post', post: p, ymd: it.ymd || null, day: it.ymd || null, isNew: false });
   }
   // (LOTE FEED · nada se pierde en silencio — SUPERSEDED 1/11 para
   // la grilla del dueño, LOTE SIN ARCHIVADOS) Antes los publicados
@@ -19879,7 +19901,7 @@ function homeTileHTML(t, i) {
     // próximo que sale HOY se muestra ABIERTO solo si ya se eligió
     // (o si hoy no hay ritual, día co-creado): antes de elegir va
     // VELADO, con data-pz-abrir-ritual, y tocarlo abre la hoja del
-    // ritual con las 3 opciones. El velo (hf-carta-velo +
+    // ritual, que revela directo la recomendada. El velo (hf-carta-velo +
     // hf-carta-oculta) cubre el próximo de día FUTURO y el de HOY
     // hasta elegir. t.openHoy lo pone homeGridCompose.
     if (t.openHoy) {
@@ -21066,11 +21088,13 @@ async function inicioView() {
 
 </div>`;
 }
-/* ===== RITUAL DE LA MAÑANA (lote 5/8, aprobado Valentino 5/11 «Arma todo») ===== */
+/* ===== RITUAL DE LA MAÑANA (lote 5/8, aprobado Valentino 5/11 «Arma todo»;
+   LOTE RITUAL-1-OPCION · 6/11 · «una sola opción + editar») ===== */
 // La push de las 9:00 abre acá: el paquete del día se devela con magia y
-// trae 3 cartas (la recomendada + 2 alternas de verdad distintas). El
-// dueño elige una, esa sale hoy y va al álbum. Sin elección, sale la
-// recomendada (el scheduler vigente; esta vista no programa nada nuevo).
+// trae UNA sola carta (la recomendada). El dueño la revela con un toque
+// y la confirma con [Sale así] o pide otra versión desde el chat. Sin
+// elección, sale la recomendada (el scheduler vigente; esta vista no
+// programa nada nuevo).
 // La vista pinta primero el estado «conjurando» y después el paquete:
 // la generación de alternas (si hace falta) corre en el fetch de hoy.
 // Magia solo Posty, solo entrada, liviana, sin tapar contenido (las
@@ -21150,12 +21174,12 @@ async function pzRitualCargar() {
     box.innerHTML = `<div class="pz-ritual-vacio"><p>${en ? 'I could not open your pack 😅' : 'No pude abrir tu paquete 😅'}</p><button type="button" class="bb-btn" onclick="pzRitualCargar()">${en ? 'Try again' : 'Probar de nuevo'}</button> <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
     return;
   }
-  // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11) La selección vive en
-  // localStorage (clave por día): si el cliente pidió un cambio en el
-  // chat y vuelve, la hoja muestra el posteo revelado, no el velo.
-  // Ya no hay auto-open ni botón «Abrir mi paquete»: la hoja SIEMPRE
-  // nace en el paquete velado a pantalla completa y tocarlo muestra
-  // las 3 opciones.
+  // (LOTE RITUAL-1-OPCION · 6/11) La selección vive en localStorage
+  // (clave por día): si el cliente pidió un cambio en el chat y
+  // vuelve, la hoja muestra el posteo revelado, no el velo. Ya no hay
+  // auto-open ni botón «Abrir mi paquete»: la hoja SIEMPRE nace en el
+  // paquete velado a pantalla completa y tocarlo revela directo la
+  // recomendada (una sola opción).
   let selId = 0;
   try { selId = (typeof pzRitualSelLeer === 'function') ? pzRitualSelLeer() : 0; } catch (e) { selId = 0; }
   if (selId && !(d.cartas || []).some((c) => Number(c.id) === Number(selId))) {
@@ -21177,16 +21201,6 @@ function pzRitualCardHTML(c, d, en) {
 </div>`;
 }
 
-function pzRitualOpcionHTML(c, d, en) {
-  // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11) Opción VELADA: la
-  // elección es por RUBRO (chip) + Recomendada, sin foto ni texto —
-  // la foto y el texto se REVELAN al elegir. Tocar la carta elige.
-  return `<div class="pz-ritual-carta pz-ritual-opcion${c.recomendada ? ' rec' : ''}" data-pz-ritual-elegir="${c.id}" role="button" tabindex="0" aria-label="${en ? 'Choose this one' : 'Elegir esta'}: ${esc(c.rubro || '')}">
-  <div class="pz-ritual-opcion-velo" aria-hidden="true"><span>✦</span></div>
-  <div class="pz-ritual-carta-tx">${c.recomendada ? `<span class="pz-ritual-badge rec">${en ? 'Recommended' : 'Recomendada'}</span>` : ''}${c.rubro ? `<span class="pz-ritual-badge rubro">${esc(c.rubro)}</span>` : ''}
-  <p>${en ? 'Tap to reveal it' : 'Tocá para verla'}</p></div>
-</div>`;
-}
 function pzRitualHTML(d, en, selId) {
   if (!d.hoy) {
     return `<div class="pz-ritual-vacio">
@@ -21197,9 +21211,20 @@ function pzRitualHTML(d, en, selId) {
   const rachaTx = d.racha > 0
     ? (en ? `Streak: ${d.racha} day${d.racha === 1 ? '' : 's'}` : `Racha: ${d.racha} día${d.racha === 1 ? '' : 's'}`)
     : (en ? 'Your streak starts today' : 'Hoy empieza tu racha');
-  const album = (d.album && d.album.slots ? d.album.slots : []).map((s) => s.imagen
-    ? `<div class="pz-ritual-slot${s.hoy ? ' hoy' : ''}${s.dorada ? ' gold' : ''}" title="${esc(s.etiqueta)}"><img src="${esc(mv(s.imagen, 200))}" onerror="__imgFb(this)" alt=""></div>`
-    : `<div class="pz-ritual-slot sil${s.hoy ? ' hoy' : ''}" title="${esc(s.etiqueta)}"><span>🔒</span></div>`).join('');
+  // (LOTE RITUAL-1-OPCION · 6/11) El álbum muestra el DÍA bajo cada
+  // casilla (Lun…Dom, «Hoy» en el día de hoy) + candado SOLO en días
+  // que pasaron sin salir: hoy (pendiente) y los futuros no llevan
+  // candado — todavía no salieron, no fallaron. La casilla pendiente
+  // lleva ✦ (silueta a la espera, no un hueco vacío).
+  const album = (d.album && d.album.slots ? d.album.slots : []).map((s) => {
+    const diaTx = s.hoy ? (en ? 'Today' : 'Hoy') : (s.etiqueta ? String(s.etiqueta).charAt(0).toUpperCase() + String(s.etiqueta).slice(1) : '');
+    const esFecha = /^\d{4}-\d{2}-\d{2}$/.test(String(d.hoy || ''));
+    const pasoSinSalir = !s.jugado && !s.hoy && esFecha && String(s.dia || '') < String(d.hoy || '');
+    const inner = s.imagen
+      ? `<div class="pz-ritual-slot${s.hoy ? ' hoy' : ''}${s.dorada ? ' gold' : ''}" title="${esc(s.etiqueta)}"><img src="${esc(mv(s.imagen, 200))}" onerror="__imgFb(this)" alt=""></div>`
+      : `<div class="pz-ritual-slot sil${s.hoy ? ' hoy' : ''}" title="${esc(s.etiqueta)}">${pasoSinSalir ? '<span>🔒</span>' : '<span>✦</span>'}</div>`;
+    return `<div class="pz-ritual-slotcol">${inner}<span class="pz-ritual-dia">${esc(diaTx)}</span></div>`;
+  }).join('');
   const head = `<div class="pz-ritual-head"><img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty"><div><b>${en ? 'good morning' : 'buen día'}</b><span>${en ? 'I brought your pack for today' : 'te traje tu paquete de hoy'}</span></div></div>
   <p class="pz-ritual-racha">${esc(rachaTx)}</p>`;
   if (d.elegida) {
@@ -21207,16 +21232,17 @@ function pzRitualHTML(d, en, selId) {
     return `<div class="pz-ritual-wrap-in">${head}
   <div class="pz-ritual-listo"><h2>${en ? 'Done — this one goes out today' : 'Listo, hoy sale esta'}</h2>${d.dorada ? `<p class="pz-ritual-hito">✦ ${en ? 'Golden card: a milestone day' : 'Carta dorada: día de hito'}</p>` : ''}
   ${picked ? pzRitualCardHTML(picked, d, en) : ''}
-  <p class="pz-ritual-nota">${en ? 'The others stayed as drafts — you can use them another day.' : 'Las otras quedaron como borradores, las podés usar otro día.'}</p></div>
-  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'your collection keeps growing' : 'tu colección se va llenando'}</p><div class="pz-ritual-slots">${album}</div></div>
+  <p class="pz-ritual-nota">${(d.recomendada && d.recomendada.hora_salida) ? (en ? 'It goes out today at ' + esc(d.recomendada.hora_salida) : 'Sale hoy a las ' + esc(d.recomendada.hora_salida)) : (en ? 'It goes out today.' : 'Sale hoy.')}</p></div>
+  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'Each day a post goes out, its sticker unlocks.' : 'Cada día que sale, se desbloquea su figurita.'}</p><div class="pz-ritual-slots">${album}</div></div>
   <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
   }
-  // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11 · decisión Valentino
-  // 11:31) Flujo de la mañana: (V) paquete VELADO a pantalla completa
-  // → tocarlo muestra (O) las 3 opciones veladas → elegir una la
-  // REVELA (R) con foto + texto + cambio + OK. La aprobación vive en
-  // OK (pzRitualConfirmar), no en elegir. Sin OK, el servidor sigue
-  // publicando la recomendada (v687 intacto).
+  // (LOTE RITUAL-1-OPCION · 6/11 · decisión Valentino 11:31) Flujo de
+  // la mañana: (V) paquete VELADO a pantalla completa → tocarlo
+  // REVELA directo la recomendada (R) con foto + texto + [Sale así] /
+  // [Editar] / [Cambiar algo]. Una sola opción: no hay paso de elegir
+  // entre 3. La aprobación vive en OK (pzRitualConfirmar), no en
+  // revelar. Sin OK, el servidor sigue publicando la recomendada
+  // (v687 intacto).
   const sel = (selId && (d.cartas || []).find((c) => Number(c.id) === Number(selId))) || null;
   if (sel) {
     const img = sel.media_type === 'video'
@@ -21228,41 +21254,57 @@ function pzRitualHTML(d, en, selId) {
   <h2>${en ? 'This one goes out today' : 'Hoy sale este'}</h2>
   ${img}
   <div class="pz-ritual-carta-tx">${sel.recomendada ? `<span class="pz-ritual-badge rec">${en ? 'Recommended' : 'Recomendada'}</span>` : ''}${sel.rubro ? `<span class="pz-ritual-badge rubro">${esc(sel.rubro)}</span>` : ''}
-  <p>${esc(sel.caption_corta || '')}</p></div>
+  <p class="pcard-cap" data-full="${esc(sel.caption || sel.caption_corta || '')}">${esc(sel.caption_corta || '')}</p></div>
   <button type="button" class="pz-ritual-ok" data-pz-ritual-ok="${sel.id}">${en ? 'Post it like this' : 'Sale así'}</button>
+  <button type="button" class="pz-ritual-cambio" data-pc-act="edit-cap">${en ? 'Edit text' : 'Editar texto'}</button>
   <button type="button" class="pz-ritual-cambio" data-pz-ritual-cambio="${sel.id}">${en ? 'Change something' : 'Cambiar algo'}</button>
   <p class="pz-ritual-nota">${en ? 'The one you confirm goes out today and into your album.' : 'La que confirmes sale hoy y va al álbum.'}</p>
   <div id="pzRitualErr" class="pz-ritual-err" hidden></div></div>
-  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'your collection keeps growing' : 'tu colección se va llenando'}</p><div class="pz-ritual-slots">${album}</div></div>
+  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'Each day a post goes out, its sticker unlocks.' : 'Cada día que sale, se desbloquea su figurita.'}</p><div class="pz-ritual-slots">${album}</div></div>
   <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
   }
-  const n = (d.cartas || []).length;
-  const packSub = n >= 3
-    ? (en ? '3 cards inside' : '3 cartas adentro')
-    : (en ? `only the recommended one today` : `hoy solo está la recomendada`);
+  const recId = (d.recomendada && d.recomendada.id) || ((d.cartas && d.cartas[0] && d.cartas[0].id) || '');
   return `<div class="pz-ritual-wrap-in">${head}
-  <div class="pz-ritual-pack${d.dorada ? ' gold' : ''} pz-ritual-velado" id="pzRitualPack" data-pz-ritual-ver="1" role="button" tabindex="0" aria-label="${en ? 'Your post for today, hidden. Tap to see the 3 options' : 'Tu posteo de hoy, oculto. Tocá para ver las 3 opciones'}">
+  <div class="pz-ritual-pack${d.dorada ? ' gold' : ''} pz-ritual-velado" id="pzRitualPack" data-pz-ritual-ver="1" data-pz-ritual-rec="${recId}" role="button" tabindex="0" aria-label="${en ? 'Your post for today, hidden. Tap to see it' : 'Tu posteo de hoy, oculto. Tocá para verlo'}">
   <span class="pz-ritual-pack-chip">hoy · 9:00</span>
   <div class="pz-ritual-pack-velo" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><i class="pz-dorso"><b>✦</b></i><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
   <h2>${en ? 'your post for today' : 'tu posteo de hoy'}</h2>
-  <p>${esc(packSub)}</p>
-  <p class="pz-ritual-ver-hint">${en ? 'Tap to see the 3 options' : 'Tocá para ver las 3 opciones'}</p></div>
-  <div id="pzRitualCartas" hidden><h2 class="pz-ritual-elegi">${en ? 'pick your favorite' : 'elegí tu favorita'}</h2><p class="pz-ritual-sub">${en ? 'tap the one you like most' : 'tocá la que más te guste'}</p>
-  <div class="pz-ritual-fan">${(d.cartas || []).map((c) => pzRitualOpcionHTML(c, d, en)).join('')}</div>
-  <p class="pz-ritual-nota">${en ? 'The one you pick goes out today and into your album.' : 'La que elijas sale hoy y va al álbum.'}</p>
-  <div id="pzRitualErr" class="pz-ritual-err" hidden></div></div>
-  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'your collection keeps growing' : 'tu colección se va llenando'}</p><div class="pz-ritual-slots">${album}</div></div>
+  <p>${en ? '1 card inside' : '1 carta adentro'}</p>
+  <p class="pz-ritual-ver-hint">${en ? 'Tap to see it' : 'Tocá para verla'}</p></div>
+  <div id="pzRitualErr" class="pz-ritual-err" hidden></div>
+  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'Each day a post goes out, its sticker unlocks.' : 'Cada día que sale, se desbloquea su figurita.'}</p><div class="pz-ritual-slots">${album}</div></div>
   <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
 }function pzRitualElegir(id) {
-  // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11) Elegir SELECCIONA, no
-  // aprueba: guarda la selección y re-carga la hoja, que muestra el
-  // posteo REVELADO (foto + texto) con cambio + OK. La aprobación
-  // vive en OK (pzRitualConfirmar). Sin OK, el servidor sigue
-  // publicando la recomendada (v687 intacto). Sin POST acá: elegir no
-  // toca el servidor.
+  // (LOTE RITUAL-1-OPCION · 6/11) Revelar SELECCIONA, no aprueba:
+  // guarda la selección y re-carga la hoja, que muestra el posteo
+  // REVELADO (foto + texto) con [Sale así] / [Editar] / [Cambiar
+  // algo]. La aprobación vive en OK (pzRitualConfirmar). Sin OK, el
+  // servidor sigue publicando la recomendada (v687 intacto). Sin POST
+  // acá: revelar no toca el servidor.
   try { if (typeof pzRitualSelGuardar === 'function') pzRitualSelGuardar(id); } catch (e) {}
   try { PZ_RITUAL_SEL = Number(id) || 0; } catch (e) {}
   try { if (typeof pzRitualCargar === 'function') pzRitualCargar(); } catch (e) {}
+}
+// (LOTE RITUAL-1-OPCION · 6/11) Tocar el paquete REVELA directo la
+// recomendada: es el mismo gesto que elegir, con el nombre del flujo
+// nuevo (una sola opción, sin paso de elegir entre 3).
+function pzRitualRevelar(id) {
+  try { if (typeof pzRitualElegir === 'function') pzRitualElegir(id); } catch (e) {}
+}
+// (LOTE RITUAL-1-OPCION · 6/11) [Cambiar algo] = pedir otra versión:
+// el tap mismo manda el pedido al chat (el cliente no tiene que
+// explicar qué cambiar). El texto pendiente se entrega al abrir el
+// chat con el posteo anclado (hfDeliverAskText → chatSend → el
+// servidor regenera el posteo anclado en su lugar, gasta 1 rehacer).
+// El cliente puede escribir qué no le gustó, o pedir otra: el pedido
+// ya está en camino. La entrega vive en bindInicio (HF_CHAT_OPEN_PENDING),
+// el mismo camino que el mini-chat del detalle desde una vista sin chat.
+function pzRitualPedirCambio(id) {
+  try {
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    HF_ASK_TEXT_PENDING = en ? 'make me another version of this post' : 'haceme otra versión de este posteo';
+  } catch (e) {}
+  try { if (typeof pzHablarClick === 'function') pzHablarClick(id); } catch (e) {}
 }
 async function pzRitualConfirmar(id) {
   const err = document.getElementById('pzRitualErr');
@@ -21273,20 +21315,22 @@ async function pzRitualConfirmar(id) {
     if (r && r.ok) {
       try { if (typeof pzRitualSelLimpiar === 'function') pzRitualSelLimpiar(); } catch (e) {}
       try { PZ_RITUAL_SEL = 0; } catch (e) {}
-      // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11) La apertura FIFA
-      // (pzPackFifaOpen) vive ahora en OK, no en elegir: navega a
-      // #/app/post/<id> tras 950 ms, así que solo puede llamarse
-      // DESPUÉS del POST (en v1 estaba en elegir porque elegir era
-      // aprobar). Si FIFA no aterrizó, el render vigente muestra
-      // «Listo, hoy sale esta».
-      if (typeof pzPackFifaOpen === 'function') {
-        try {
-          const wrap = document.querySelector('[data-pz-ritual-revelada="1"]');
-          if (wrap) wrap.dataset.postId = String(id);
-          if (wrap && pzPackFifaOpen(wrap)) return;
-        } catch (e) { /* fallback al render vigente */ }
-      }
-      render(); return;
+      // (LOTE RITUAL-1-OPCION · 6/11 · fricción cero) Confirmar es UN
+      // toque: toast con la hora + vuelta al feed. La apertura FIFA
+      // (pzPackFifaOpen) NO existe en este bundle y la pantalla
+      // «Listo» intermedia con botón [Inicio] se retira: era un paso
+      // de más entre aceptar y el feed. La figurita queda registrada
+      // en el álbum (el servidor la marca dorada si corresponde).
+      try {
+        const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+        const hora = (r && r.hora_salida) || '';
+        toast(hora
+          ? (en ? 'Done — it goes out today at ' + esc(hora) : 'Listo, sale hoy a las ' + esc(hora))
+          : (en ? 'Done — it goes out today' : 'Listo, sale hoy'));
+      } catch (e) {}
+      if (typeof bbGo === 'function') bbGo('#/app/inicio');
+      else location.hash = '#/app/inicio';
+      return;
     }
     throw new Error('No se pudo guardar tu elección 😅');
   } catch (e) {
@@ -21294,22 +21338,17 @@ async function pzRitualConfirmar(id) {
     if (err) { err.hidden = false; err.textContent = (e && e.message) || 'No se pudo guardar tu elección 😅'; }
   }
 }
-document.addEventListener('click', (e) => {
-  const b = e.target && e.target.closest ? e.target.closest('[data-pz-ritual-elegir]') : null;
-  if (b) { e.preventDefault(); pzRitualElegir(b.dataset.pzRitualElegir); }
-});
-// (LOTE PROXIMO-RITUAL · 5/11 · orden Valentino 10:52 — SUPERSEDE el
-// ajuste de la mañana 5/11 · decisión Valentino 11:31) La carta velada
-// del próximo abre la hoja del ritual, que SIEMPRE nace en el paquete
-// velado a pantalla completa: tocarlo muestra las 3 opciones. La push
-// de las 9:00 abre la misma hoja. El velo no revela el posteo: la hoja
-// es el ritual, no el detalle.
+// (LOTE RITUAL-1-OPCION · 6/11) La carta velada del próximo abre la
+// hoja del ritual, que SIEMPRE nace en el paquete velado a pantalla
+// completa: tocarlo revela directo la recomendada. La push de las 9:00
+// abre la misma hoja. El velo no revela el posteo: la hoja es el
+// ritual, no el detalle.
 function pzRitualAbrirDesdeCarta() {
-  // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11) La carta (velada o de
-  // hoy sin elegir) abre la hoja del ritual, que SIEMPRE nace en el
-  // paquete velado a pantalla completa (ya no hay auto-open ni botón
-  // «Abrir mi paquete»: el paquete ES la pantalla y tocarlo muestra
-  // las 3 opciones).
+  // (LOTE RITUAL-1-OPCION · 6/11) La carta (velada o de hoy sin
+  // elegir) abre la hoja del ritual, que SIEMPRE nace en el paquete
+  // velado a pantalla completa (ya no hay auto-open ni botón «Abrir mi
+  // paquete»: el paquete ES la pantalla y tocarlo revela la
+  // recomendada).
   if (typeof bbGo === 'function') bbGo('#/app/ritual');
   else location.hash = '#/app/ritual';
 }
@@ -21323,23 +21362,23 @@ document.addEventListener('keydown', (e) => {
   if (b) { e.preventDefault(); pzRitualAbrirDesdeCarta(); }
 });
 document.addEventListener('click', (e) => {
-  // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11) Tocar el paquete velado
-  // muestra las 3 opciones (sin re-render: el velo se levanta en el lugar).
+  // (LOTE RITUAL-1-OPCION · 6/11) Tocar el paquete velado REVELA
+  // directo la recomendada (una sola opción): guarda la selección y
+  // re-carga la hoja, que muestra el posteo revelado. Sin paso de
+  // elegir entre 3 (el abanico #pzRitualCartas se retiró).
   const v = e.target && e.target.closest ? e.target.closest('[data-pz-ritual-ver]') : null;
   if (v) {
     e.preventDefault();
     try {
-      const pack = document.getElementById('pzRitualPack');
-      const cartas = document.getElementById('pzRitualCartas');
-      if (pack) pack.classList.add('abierto');
-      if (cartas) { cartas.hidden = false; cartas.classList.add('pz-ritual-reveal'); }
+      const recId = (v.dataset && v.dataset.pzRitualRec) || 0;
+      if (recId && typeof pzRitualRevelar === 'function') pzRitualRevelar(recId);
     } catch (err) {}
     return;
   }
   const o = e.target && e.target.closest ? e.target.closest('[data-pz-ritual-ok]') : null;
   if (o) { e.preventDefault(); pzRitualConfirmar(o.dataset.pzRitualOk); return; }
   const c = e.target && e.target.closest ? e.target.closest('[data-pz-ritual-cambio]') : null;
-  if (c) { e.preventDefault(); try { if (typeof pzHablarClick === 'function') pzHablarClick(c.dataset.pzRitualCambio); } catch (err) {} return; }
+  if (c) { e.preventDefault(); try { if (typeof pzRitualPedirCambio === 'function') pzRitualPedirCambio(c.dataset.pzRitualCambio); } catch (err) {} return; }
 });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -21347,15 +21386,11 @@ document.addEventListener('keydown', (e) => {
   if (v) {
     e.preventDefault();
     try {
-      const pack = document.getElementById('pzRitualPack');
-      const cartas = document.getElementById('pzRitualCartas');
-      if (pack) pack.classList.add('abierto');
-      if (cartas) { cartas.hidden = false; cartas.classList.add('pz-ritual-reveal'); }
+      const recId = (v.dataset && v.dataset.pzRitualRec) || 0;
+      if (recId && typeof pzRitualRevelar === 'function') pzRitualRevelar(recId);
     } catch (err) {}
     return;
   }
-  const o = e.target && e.target.closest ? e.target.closest('[data-pz-ritual-elegir]') : null;
-  if (o) { e.preventDefault(); pzRitualElegir(o.dataset.pzRitualElegir); }
 });
 /* ===== TIRA DE NIVEL POSTY — tallo vivo en Inicio (v457) ===== */
 // La tira vive debajo del perfil literal (bio y destacadas) y arriba de la

@@ -5374,19 +5374,12 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ritual-pack{position:relative;text-align:center;padding:22px 16px 20px;border-radius:22px;background:#FDF6E3;border:2px solid #FEC14D;color:#0A1E33;overflow:hidden;margin:14px 0;box-shadow:0 12px 32px rgba(10,30,51,.16)}
 .pz-ritual-pack.gold{border:2px solid #FEC14D;box-shadow:0 12px 32px rgba(254,193,77,.5)}
 .pz-ritual-pack::after{content:'✦  ✦  ✦';position:absolute;left:0;right:0;bottom:12px;text-align:center;font-size:15px;letter-spacing:16px;color:#FEC14D;text-shadow:0 0 8px rgba(254,193,77,.7)}
-.pz-ritual-pack.abierto::after{display:none}
 .pz-ritual-pack-chip{align-self:center;display:inline-block;font-size:12px;font-weight:700;background:#FEC14D;color:#0A1E33;border-radius:999px;padding:4px 10px;margin-bottom:14px}
 .pz-ritual-pack-band{height:22px;background:#FEC14D;border-radius:6px;display:flex;align-items:center;justify-content:center;margin:6px 0 14px}
 .pz-ritual-pack-band span{font-size:18px;color:#0A1E33}
 .pz-ritual-pack h2{margin:0 0 4px;font-size:22px;color:#0A1E33}
 .pz-ritual-pack p{margin:0 0 16px;font-size:14px;color:#47617A}
-.pz-ritual-elegi{text-align:center;font-size:21px;color:#0A1E33;margin:18px 0 2px}
-.pz-ritual-sub{text-align:center;font-size:14px;color:#47617A;margin:0 0 14px}
-.pz-ritual-fan{display:flex;gap:8px;align-items:flex-start}
 .pz-ritual-carta{flex:1;min-width:0;background:rgba(255,255,255,.88);border-radius:16px;overflow:hidden;box-shadow:0 6px 20px rgba(10,30,51,.12)}
-.pz-ritual-fan .pz-ritual-carta:nth-child(1){transform:rotate(-4deg)}
-.pz-ritual-fan .pz-ritual-carta:nth-child(3){transform:rotate(4deg)}
-.pz-ritual-fan .pz-ritual-carta:nth-child(2){transform:scale(1.04);z-index:2;box-shadow:0 10px 26px rgba(10,30,51,.18)}
 .pz-ritual-carta.on{outline:3px solid #FEC14D}
 .pz-ritual-carta-tx{padding:8px 10px 10px}
 .pz-ritual-carta-tx p{margin:0;font-size:13px;line-height:1.35;color:#0A1E33;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -5394,11 +5387,9 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ritual-badge.rec{background:rgba(39,147,200,.16);color:#1F7FB4}
 .pz-ritual-badge.gold{background:#FEC14D;color:#0A1E33}
 .pz-ritual-badge.rubro{background:rgba(10,30,51,.08);color:#47617A}
-/* (LOTE PROXIMO-RITUAL · ajuste mañana 5/11) Paquete velado a pantalla
-   completa, opciones veladas y revelación con OK. */
+/* (LOTE RITUAL-1-OPCION · 6/11) Paquete velado a pantalla completa y
+   revelación directa con OK. El abanico de 3 opciones se retiró. */
 .pz-ritual-velado{min-height:58vh;display:flex;flex-direction:column;justify-content:center;cursor:pointer}
-.pz-ritual-pack.abierto{min-height:0;padding:16px 16px 14px}
-.pz-ritual-pack.abierto .pz-ritual-pack-velo,.pz-ritual-pack.abierto .pz-ritual-ver-hint{display:none}
 .pz-ritual-pack-velo{position:relative;height:196px;margin:4px 0 16px;display:flex;align-items:center;justify-content:center}
 .pz-dorso{flex:none;width:106px;height:150px;border-radius:12px;background-color:#0A1E33;background-image:repeating-linear-gradient(45deg,rgba(254,193,77,.16) 0 2px,transparent 2px 16px),repeating-linear-gradient(-45deg,rgba(254,193,77,.16) 0 2px,transparent 2px 16px);border:1.5px solid #FEC14D;box-shadow:0 8px 20px rgba(10,30,51,.28);display:flex;align-items:center;justify-content:center;margin:0 -14px}
 .pz-dorso:nth-child(1){transform:rotate(-9deg) translateY(8px)}
@@ -5408,12 +5399,6 @@ body.pz-postchat-open{overflow:hidden}
 .pz-dorso-spark{position:absolute;font-size:20px;color:#2793C8;top:4px;left:14px;animation:pzRitualSpark .9s ease both}
 .pz-dorso-spark.b{top:auto;bottom:2px;left:auto;right:16px;color:#FEC14D;animation-delay:.2s}
 .pz-ritual-pack p.pz-ritual-ver-hint{font-size:15px;font-weight:700;margin:0;color:#0A1E33}
-.pz-ritual-opcion{cursor:pointer;min-height:200px;display:flex;flex-direction:column;background:#0A1E33;border:1.5px solid #FEC14D}
-.pz-ritual-opcion-velo{flex:1;min-height:128px;background-color:#0A1E33;background-image:repeating-linear-gradient(45deg,rgba(254,193,77,.16) 0 2px,transparent 2px 16px),repeating-linear-gradient(-45deg,rgba(254,193,77,.16) 0 2px,transparent 2px 16px);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 2px rgba(254,193,77,.4),inset 0 0 0 6px #0A1E33,inset 0 0 0 7.5px rgba(254,193,77,.3)}
-.pz-ritual-opcion-velo span{font-size:38px;color:#FEC14D;text-shadow:0 0 10px rgba(254,193,77,.8)}
-.pz-ritual-opcion .pz-ritual-carta-tx p{font-size:12.5px;color:rgba(255,255,255,.85)}
-.pz-ritual-opcion .pz-ritual-badge.rec{background:#FEC14D;color:#0A1E33}
-.pz-ritual-opcion .pz-ritual-badge.rubro{background:rgba(255,255,255,.16);color:#fff}
 .pz-ritual-revelada{animation:pzRitualIn .5s ease both}
 .pz-ritual-revelada h2{text-align:center;font-size:21px;color:#0A1E33;margin:14px 0 10px}
 .pz-ritual-revelada .pz-ritual-sparkrow{margin-top:6px}
@@ -5438,7 +5423,9 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ritual-album h3{text-align:center;font-size:18px;color:#0A1E33;margin:0 0 2px}
 .pz-ritual-album p{text-align:center;font-size:13px;color:#47617A;margin:0 0 10px}
 .pz-ritual-slots{display:flex;gap:6px;justify-content:center}
-.pz-ritual-slot{flex:1;max-width:64px;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#0A1E33;display:flex;align-items:center;justify-content:center}
+.pz-ritual-slotcol{flex:1;max-width:64px;text-align:center}
+.pz-ritual-dia{display:block;font-size:11px;line-height:1.2;color:#5B7186;margin-top:4px;font-weight:600}
+.pz-ritual-slot{width:100%;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#0A1E33;display:flex;align-items:center;justify-content:center}
 .pz-ritual-slot img{width:100%;height:100%;object-fit:cover;display:block}
 .pz-ritual-slot.sil span{font-size:20px;color:#FEC14D}
 .pz-ritual-slot.hoy{outline:2px solid #2793C8;outline-offset:2px}

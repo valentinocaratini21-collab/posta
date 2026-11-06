@@ -12170,14 +12170,18 @@ app.post('/api/posts/rebuild-week', requireAuth, requireTrialValid, async (req, 
   res.json({ ok: true, emptied: drafts.length, week_key: wk, ...r });
 });
 
-// POST /api/week/ensure — garantiza que la semana actual tenga sus posteos.
-// Idempotente por usuario: si la semana ya alcanzó el objetivo del plan, no
-// hace nada. Si falta alguno (semana vacía O parcial), dispara
-// generateWeekDrafts en segundo plano — que crea SOLO el déficit — y
-// devuelve { generating: true }. El frontend lo llama al abrir el home
-// (sin bloquear la UI) y refresca hasta que aparecen las tarjetas.
+// POST /api/week/ensure — garantiza que HOY tenga su posteo.
+// (LOTE RITUAL-1-OPCION · 6/11) Antes garantizaba la semana (tanda);
+// ahora garantiza el día: si hoy ya hay posteo programado, no hace
+// nada; si no, dispara ensureTodayPost en segundo plano (1 posteo,
+// nunca una tanda) y devuelve { generating: true }. El frontend lo
+// llama al abrir el home (sin bloquear la UI) y refresca hasta que
+// aparece la tarjeta. Idempotente por usuario y día (el candado vive
+// en ensureTodayPost). Contrato de respuesta intacto ({ generating,
+// count, complete, week_key, reason }) para no tocar el frontend.
 // (2026-10-05: pedido de Valentino — los 5 posteos tienen que estar listos
-// al entrar a la app, sin comandos ni recargas.)
+// al entrar a la app, sin comandos ni recargas.) → SUPERSEDED 6/11:
+// ahora es 1 posteo por día, el de hoy, listo al entrar.
 app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) => {
   const uid = req.session.userId;
   try {
@@ -12194,31 +12198,17 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
         if (r.changes > 0) console.log(`[week-ensure] fundador ${uid}: ${r.changes} posteos liberados de revisión`);
       }
     } catch (e) { console.error('[week-ensure] liberar revisión:', e.message); }
-    // ¿Ya hay trabajo de esta semana? (borradores o programados, no cancelados)
-    // Solo contar los VISIBLES (needs_review=0), que son los que ve el frontend.
-    let n = 0;
+    // (LOTE RITUAL-1-OPCION · 6/11 · «un posteo por día») La tanda
+    // semanal QUEDA FUERA: este endpoint ya no genera la semana ni
+    // completa déficits (generateWeekDrafts NO se llama acá). Garantiza
+    // el posteo de HOY (ensureTodayPost, en segundo plano, sin
+    // bloquear): si hoy ya hay posteo programado, no hace nada.
+    let recHoy = null;
     try {
-      // Ocupación unificada (mismo criterio que el pipeline y el cupo):
-      // incluye publicados y programados por fecha, no solo week_key.
-      n = weekOccupancyRows(uid, wk).filter(p => !p.needs_review).length;
-    } catch (e) { /* DB sin week_key: seguir */ }
-    // Fallback: borradores sin week_key (pipeline viejo) también cuentan.
-    if (!n) {
-      try {
-        n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND (week_key = '' OR week_key IS NULL) AND COALESCE(needs_review,0)=0`).get(uid).n || 0;
-      } catch (e) {}
-    }
-    // 2026-10-14: la semana se completa SOLA hasta el objetivo del plan
-    // (pedido de Valentino). Antes, con n>0 no se hacía nada y la semana
-    // parcial quedaba incompleta para siempre.
-    let target = 3;
-    try {
-      const u = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid) || {};
-      target = (getPlan(u.plan_status === 'active' ? u.plan : TRIAL_PLAN).postsPerWeek) || 3;
-    } catch (e) {}
-    if (n >= target) return res.json({ ok: true, generating: false, count: n, complete: true, week_key: wk });
-    // ¿Ya hay una generación en curso? No duplicar.
-    if (nextweekRunningFresh(uid)) return res.json({ ok: true, generating: true, count: n, missing: target - n, week_key: wk });
+      const schedHoy = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+      recHoy = morningPostPush.pickTodayPost(schedHoy, tz, new Date());
+    } catch (e) { /* sin programado legible: se intenta asegurar */ }
+    if (recHoy) return res.json({ ok: true, generating: false, count: 1, complete: true, week_key: wk });
     if (!planOrTrialOk(uid)) return res.json({ ok: false, generating: false, reason: 'no_plan', week_key: wk });
     // Gate de ADN "no generar a ciegas" (MISMA lógica que generateWeekDrafts):
     // si la cuenta no tiene descripción del negocio ni producto_estrella, no
@@ -12235,28 +12225,28 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
         return res.json({ ok: true, generating: false, reason: 'no_dna', week_key: wk });
       }
     } catch (e) { /* si falla el chequeo, dejar que el pipeline decida */ }
-    // Cooldown anti-loop (2026-10-14): si la última corrida de ESTA semana
-    // falló hace menos de 10 minutos, no re-disparar en cada apertura de la
-    // app. La red de reintentos (sweep cada 3h + backfill diario) sigue.
+    // Cooldown anti-loop (2026-10-14): si el último intento de HOY
+    // falló hace menos de 10 minutos, no re-disparar en cada apertura
+    // de la app. La push 9:00 y el ritual reintentan por su lado.
     try {
       const last = LAST_WEEK_RESULT.get(uid);
       if (last && last.weekKey === wk && !last.ok && last.reason !== 'running' && Date.now() - (last.at || 0) < 10 * 60 * 1000) {
-        return res.json({ ok: true, generating: false, reason: last.reason || 'retry_cooldown', count: n, week_key: wk });
+        return res.json({ ok: true, generating: false, reason: last.reason || 'retry_cooldown', count: 0, week_key: wk });
       }
     } catch (e) {}
     // Disparar en segundo plano: la respuesta vuelve al toque.
     // 2026-10-08: guardar el resultado para que el frontend lo pueda mostrar
     // (antes el error se perdía en los logs del servidor).
-    generateWeekDrafts(uid, { weekKey: wk, tag: 'ensure', quiet: false })
+    ensureTodayPost(uid, tz, new Date())
       .then(r => {
-        console.log(`[week-ensure] usuario ${uid} semana ${wk}:`, r.ok ? `${r.created} creados` : `falló (${r.reason})`);
-        try { LAST_WEEK_RESULT.set(uid, { ...r, at: Date.now(), weekKey: wk }); } catch (e) {}
+        console.log(`[week-ensure] usuario ${uid} hoy:`, r.ok ? `posteo ${r.post && r.post.id} (${r.fuente})` : `sin posteo (${r.reason})`);
+        try { LAST_WEEK_RESULT.set(uid, { ok: r.ok, reason: r.reason || 'today_ok', created: r.ok ? 1 : 0, at: Date.now(), weekKey: wk }); } catch (e) {}
       })
       .catch(e => {
-        console.error('[week-ensure] pipeline:', e.message);
+        console.error('[week-ensure] ensure-hoy:', e.message);
         try { LAST_WEEK_RESULT.set(uid, { ok: false, reason: 'exception', error: String(e.message || e).slice(0, 300), at: Date.now(), weekKey: wk }); } catch (e2) {}
       });
-    return res.json({ ok: true, generating: true, count: n, missing: target - n, week_key: wk });
+    return res.json({ ok: true, generating: true, count: 0, missing: 1, week_key: wk });
   } catch (e) {
     console.error('[week-ensure]:', e.message);
     return res.status(500).json({ ok: false, error: 'No se pudo verificar la semana.' });
@@ -12541,19 +12531,145 @@ app.post('/api/posts/swap', requireAuth, express.json(), (req, res) => {
 
 /* 🌅 RITUAL DE LA MAÑANA (LOTE 5/8, aprobado Valentino 5/11 «Arma todo»).
    La push de las 9:00 abre #/app/ritual (morning-post-push.js): el paquete
-   del día trae 3 cartas — la recomendada (el posteo programado para hoy)
-   + 2 alternas de verdad distintas —, el dueño elige una, esa sale hoy
-   y va al álbum. Sin elección, sale la recomendada (el scheduler vigente;
-   acá no se programa nada nuevo). Solo posteos: el video semanal NO entra
+   del día trae UNA sola carta — la recomendada (el posteo programado
+   para hoy) —, el dueño la revela con un toque y la confirma con
+   [Sale así] o pide otra versión desde el chat. Sin elección, sale la
+   recomendada (el scheduler vigente; el posteo del día lo garantiza
+   ensureTodayPost, que corre antes de la push 9:00 y al abrir el
+   ritual). Solo posteos: el video semanal NO entra
    y acá nunca se genera video (regla de costo cero en reels 5/11).
-   Alternas: primero borradores reales del usuario (costo cero); solo si
-   faltan, se generan frescas por makeIdeaDraft con ideas sintéticas de
-   productos del fundamento (nunca tocan posty_ideas: el UPDATE de 'made'
-   no encuentra la idea sintética y no cambia nada; la frescura pasa
-   porque la idea sintética no tiene fecha de vencimiento). Si todo
-   falla, el ritual sigue con la recomendada sola, nunca con cartas
-   inventadas. Elegir ES aprobar (approval + needs_review limpio, como
+   Las alternas (ritualResolverAlternas + reutilizarBorradores) se
+   RETIRARON 6/11: el ritual ya no genera 3 opciones ni resuelve
+   alternas. Elegir ES aprobar (approval + needs_review limpio, como
    en /api/posts/:id/approve) y ES la revisión del dueño. */
+// (LOTE RITUAL-1-OPCION · 6/11 · decisión Valentino «un posteo por día»)
+// Garantiza UN posteo programado para hoy: usa el de hoy si existe;
+// si hay un borrador de hoy sin programar, lo programa; si no hay
+// nada, genera UNO nuevo (makeIdeaDraft, 1 idea del fundamento, nunca
+// una tanda). Idempotente: candado en memoria por (usuario, día) +
+// re-chequeo antes de programar — nunca 2 posteos el mismo día.
+// Fail-closed: si la generación falla (IA caída, sin ADN, sin cupo),
+// devuelve { ok:false } y el ritual muestra el vacío de hoy — nunca
+// un posteo inventado. La marca needs_review NO frena la programación:
+// el posteo se programa igual y [Sale así] es la revisión que la
+// limpia (aplicarPick); si el cliente no toca nada, el vigía de
+// publicación lo retiene (regla vigente, no de este lote).
+const ENSURE_TODAY_RUNNING = new Map(); // `${uid}:${hoy}` -> { promise, at }
+function horaSalidaEnTz(iso, tz, lang) {
+  try {
+    const d = new Date(String(iso || '').replace(' ', 'T'));
+    if (isNaN(d)) return '';
+    return new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'es-ES', {
+      timeZone: tz || 'America/Argentina/Buenos_Aires', hour: 'numeric', minute: '2-digit', hour12: lang === 'en',
+    }).format(d);
+  } catch (e) { return ''; }
+}
+function bestHourDe(uid) {
+  let bestHour = 19;
+  try {
+    const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid);
+    if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
+  } catch (e) { /* respaldo 19:00, igual que assignScheduleSlots */ }
+  return bestHour;
+}
+// Programa un borrador HOY a la best_hour de la cuenta. Solo toca
+// borradores (guard de estado: si otro camino ya lo programó, no hay
+// doble programación). Devuelve el posteo programado o null.
+function programarHoy(uid, postId, tz, hoy) {
+  const iso = zonedWallToUtc(`${hoy} ${String(bestHourDe(uid)).padStart(2, '0')}:00`, tz);
+  if (!iso) return null;
+  try {
+    db.prepare(`UPDATE posts SET status = 'scheduled', scheduled_at = ? WHERE id = ? AND user_id = ? AND status = 'draft'`).run(iso, postId, uid);
+    const p = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    return (p && p.status === 'scheduled') ? p : null;
+  } catch (e) { return null; }
+}
+// UNA idea para el posteo del día, del fundamento (mismo molde que las
+// ideas sintéticas del ritual retirado, que ya alimentaban makeIdeaDraft):
+// producto + tipo rotan por día (determinista: mismo día → misma idea,
+// un reintento tras un fallo no cambia de tema; días distintos →
+// producto y tipo distintos). Sin fundamento legible → null.
+function ideaDiariaSintetica(uid, hoy) {
+  try {
+    const dg = clientDigest.getDigest(db, uid);
+    const prods = rubroGarantias.productosDesdeDigest(dg && dg.productos, readDna(uid));
+    if (!prods.length) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(hoy || ''));
+    if (!m) return null;
+    const dayIdx = Math.floor(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12) / 86400000);
+    const tipos = ['social', 'detras', 'novedad', 'promo'];
+    const tipo = tipos[dayIdx % tipos.length];
+    const prod = prods[dayIdx % prods.length];
+    if (!prod || !prod.nombre) return null;
+    const srcFor = { social: 'winner', detras: '', novedad: 'reel', promo: 'calendar' };
+    return { title: prod.nombre, brief: '', why: '', source: srcFor[tipo], format: 'image', angle_key: 'diaria-' + tipo };
+  } catch (e) { return null; }
+}
+async function ensureTodayPost(uid, tz, now) {
+  const hoy = morningPostPush.dayKeyInTz(now || new Date(), tz);
+  if (!hoy) return { ok: false, reason: 'sin_dia' };
+  const key = uid + ':' + hoy;
+  const prev = ENSURE_TODAY_RUNNING.get(key);
+  if (prev && prev.promise && Date.now() - (prev.at || 0) < 15 * 60 * 1000) {
+    try { return await prev.promise; } catch (e) { return { ok: false, reason: 'exception' }; }
+  }
+  const p = (async () => {
+    try {
+      if (!planOrTrialOk(uid)) return { ok: false, reason: 'no_plan' };
+      if (closedDaysOf(uid).has(weekdayOfYmd(hoy))) return { ok: false, reason: 'dia_cerrado' };
+      const at = now || new Date();
+      // 1) Programado hoy: se usa tal cual, no se regenera.
+      let sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+      let rec = morningPostPush.pickTodayPost(sched, tz, at);
+      if (rec) return { ok: true, post: rec, fuente: 'programado' };
+      // 2) Borrador de hoy (creado hoy, con imagen, no rechazado): se
+      // programa a la best_hour. El contenido ya existe: no consume
+      // generación ni se re-evalúa el cupo.
+      let draft = null;
+      try {
+        const cands = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft'
+          AND image_path LIKE '/media/%' AND media_type IN ('image','carousel')
+          AND COALESCE(approval,'pending') != 'rejected'
+          AND created_at >= datetime('now', '-2 days') ORDER BY id DESC`).all(uid);
+        for (const c of cands) {
+          let d = null;
+          try { d = new Date(String(c.created_at || '').replace(' ', 'T') + 'Z'); } catch (e) {}
+          if (d && !isNaN(d) && morningPostPush.dayKeyInTz(d, tz) === hoy) { draft = c; break; }
+        }
+      } catch (e) { /* sin borrador: se genera */ }
+      if (draft) {
+        const prog = programarHoy(uid, draft.id, tz, hoy);
+        if (prog) return { ok: true, post: prog, fuente: 'borrador' };
+      }
+      // 3) Nada hoy: generar UNO. Cupo semanal de feed: sin cupo no se
+      // genera (límite honesto del plan, igual que /api/ritual/elegir).
+      try {
+        const q = quotaFor(uid, 'image');
+        if (q && q.left <= 0) return { ok: false, reason: 'plan_limit' };
+      } catch (e) { /* sin cupo legible: el pipeline decide */ }
+      const idea = ideaDiariaSintetica(uid, hoy);
+      if (!idea) return { ok: false, reason: 'no_idea' };
+      let gen = null;
+      try { gen = await makeIdeaDraft(uid, idea); } catch (e) { return { ok: false, reason: 'ai_error' }; }
+      if (!gen || !gen.ok || !gen.post_id) return { ok: false, reason: (gen && gen.reason) || 'ai_error' };
+      // Otro llamador pudo programar mientras se generaba: el suyo
+      // manda; el recién generado queda borrador para otro día (nunca
+      // 2 posteos hoy).
+      sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+      rec = morningPostPush.pickTodayPost(sched, tz, at);
+      if (rec) return { ok: true, post: rec, fuente: 'programado' };
+      const prog = programarHoy(uid, gen.post_id, tz, hoy);
+      if (!prog) return { ok: false, reason: 'sin_slot' };
+      return { ok: true, post: prog, fuente: 'generado' };
+    } catch (e) {
+      console.error('[ensure-hoy] usuario', uid, e.message);
+      return { ok: false, reason: 'exception' };
+    }
+  })();
+  ENSURE_TODAY_RUNNING.set(key, { promise: p, at: Date.now() });
+  try { return await p; }
+  finally { try { if (ENSURE_TODAY_RUNNING.get(key) && ENSURE_TODAY_RUNNING.get(key).promise === p) ENSURE_TODAY_RUNNING.delete(key); } catch (e) {} }
+}
 function ritualLang(uid) {
   try {
     const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid);
@@ -12572,49 +12688,6 @@ function ritualPublicadoHoy(uid, tz, dayKey) {
       return morningPostPush.dayKeyInTz(d, tz) === dayKey;
     });
   } catch (e) { return false; }
-}
-
-// Ideas sintéticas para alternas frescas: productos del fundamento
-// distintos al de la recomendada, con tipos distintos al de la
-// recomendada y entre sí. Mapeo de tipo a source de makeIdeaDraft:
-// calendar→promo, reel→novedad, winner→social, resto→detras.
-function ritualIdeasSinteticas(uid, rec) {
-  const ideas = [];
-  try {
-    const dg = clientDigest.getDigest(db, uid);
-    const prods = rubroGarantias.productosDesdeDigest(dg && dg.productos, readDna(uid));
-    const recProd = String(rec.rg_producto || '');
-    const recTipo = String(rec.tipo || '');
-    const tipos = ['social', 'detras', 'novedad', 'promo'].filter((t) => t !== recTipo);
-    const srcFor = { social: 'winner', detras: '', novedad: 'reel', promo: 'calendar' };
-    const cands = prods.filter((p) => p && p.nombre && p.nombre !== recProd);
-    const pool = cands.length ? cands : prods.filter((p) => p && p.nombre);
-    for (let i = 0; i < tipos.length && ideas.length < 2 && pool.length; i++) {
-      const prod = pool[(i * 2) % pool.length];
-      if (!prod || !prod.nombre) continue;
-      ideas.push({ title: prod.nombre, brief: '', why: '', source: srcFor[tipos[i]], format: 'image', angle_key: 'ritual-' + tipos[i] });
-    }
-  } catch (e) { /* sin fundamento legible: sin alternas frescas */ }
-  return ideas;
-}
-
-async function ritualResolverAlternas(uid, rec) {
-  const out = ritualManana.reutilizarBorradores(db, uid, rec);
-  if (out.length >= 2) return out;
-  const ideas = ritualIdeasSinteticas(uid, rec).slice(0, 2 - out.length);
-  if (!ideas.length) return out;
-  const gens = await Promise.allSettled(ideas.map((idea) => makeIdeaDraft(uid, idea)));
-  for (const g of gens) {
-    if (out.length >= 2) break;
-    if (g.status !== 'fulfilled' || !g.value || !g.value.ok) continue;
-    let p = null;
-    try { p = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(g.value.post_id, uid); } catch (e) {}
-    if (!p || !String(p.image_path || '').startsWith('/media/')) continue;
-    if (p.media_type === 'video') continue;
-    if (out.includes(p.id) || p.id === rec.id) continue;
-    out.push(p.id);
-  }
-  return out.slice(0, 2);
 }
 
 // Estado liviano para el banner de Inicio: NO genera alternas (la
@@ -12640,7 +12713,20 @@ app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
     const hoy = tzToday(tz);
     const lang = ritualLang(uid);
     const sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
-    const rec = morningPostPush.pickTodayPost(sched, tz, new Date());
+    let rec = morningPostPush.pickTodayPost(sched, tz, new Date());
+    // (LOTE RITUAL-1-OPCION · 6/11) Un posteo por día: si hoy no hay
+    // nada programado, se garantiza el posteo del día (usa borrador
+    // de hoy o genera UNO) antes de responder. Sin posteo tras el
+    // intento, el vacío de hoy es honesto (nunca inventado).
+    if (!rec) {
+      try {
+        const ens = await ensureTodayPost(uid, tz, new Date());
+        if (ens && ens.ok && ens.post) {
+          const sched2 = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+          rec = morningPostPush.pickTodayPost(sched2, tz, new Date());
+        }
+      } catch (e) { console.error('[ritual] hoy ensure:', e.message); }
+    }
     const album = ritualManana.albumWeek(db, uid, hoy, lang);
     const publicadoHoy = ritualPublicadoHoy(uid, tz, hoy);
     const racha = ritualManana.rachaVigente(db, uid, hoy);
@@ -12657,34 +12743,17 @@ app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
       db.prepare(`UPDATE pz_ritual SET recommended_post_id = ?, alt_post_ids = '[]', picked_post_id = NULL, gold = 0 WHERE user_id = ? AND day_key = ?`).run(rec.id, uid, hoy);
       row = ritualManana.getRow(db, uid, hoy);
     }
-    let alts = [];
-    try { alts = JSON.parse(row.alt_post_ids || '[]'); } catch (e) { alts = []; }
-    if (!row.picked_post_id && !alts.length) {
-      alts = await ritualResolverAlternas(uid, rec);
-      try { db.prepare(`UPDATE pz_ritual SET alt_post_ids = ? WHERE user_id = ? AND day_key = ?`).run(JSON.stringify(alts), uid, hoy); } catch (e) {}
-      row = ritualManana.getRow(db, uid, hoy);
-    }
-    const byId = new Map();
-    try {
-      // Si ya se eligió, las cartas son las 3 originales de la fila (la
-      // recomendada original hoy es borrador y ya no saldría en el
-      // pick de hoy); si no, la recomendada vigente + alternas.
-      const baseIds = row.picked_post_id
-        ? [Number(row.recommended_post_id), ...alts.map(Number)]
-        : [Number(rec.id), ...alts.map(Number)];
-      const placeholders = baseIds.map(() => '?').join(',');
-      db.prepare(`SELECT * FROM posts WHERE user_id = ? AND id IN (${placeholders})`).all(uid, ...baseIds)
-        .forEach((p) => byId.set(Number(p.id), p));
-    } catch (e) {}
+    // (LOTE RITUAL-1-OPCION · 6/11) UNA sola carta: la recomendada (o
+    // la ya elegida, en días de la era de 3 opciones la elegida puede
+    // ser una alterna vieja: se muestra ESA, no la recomendada).
+    const shownId = row.picked_post_id ? Number(row.picked_post_id) : Number(rec.id);
+    let shownPost = null;
+    try { shownPost = db.prepare('SELECT * FROM posts WHERE user_id = ? AND id = ?').get(uid, shownId) || null; } catch (e) {}
     const cartas = [];
-    const recCard = ritualManana.cardOf(byId.get(Number(row.recommended_post_id)) || rec, true);
-    if (recCard && recCard.imagen) cartas.push(recCard);
-    for (const aid of alts) {
-      if (Number(aid) === Number(row.recommended_post_id)) continue;
-      const p = byId.get(Number(aid));
-      if (!p || !String(p.image_path || '').startsWith('/media/')) continue;
-      const c = ritualManana.cardOf(p, false);
-      if (c && c.imagen) cartas.push(c);
+    const recCard = ritualManana.cardOf(shownPost || rec, shownId === Number(row.recommended_post_id));
+    if (recCard && recCard.imagen) {
+      try { recCard.hora_salida = horaSalidaEnTz((shownPost || rec).scheduled_at, tz, lang); } catch (e) {}
+      cartas.push(recCard);
     }
     if (!cartas.length) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy });
     const dorada = row.picked_post_id ? !!row.gold : ritualManana.esDorada(racha + 1, ritualManana.totalPicks(db, uid) + 1);
@@ -12729,7 +12798,12 @@ app.post('/api/ritual/elegir', requireAuth, express.json(), async (req, res) => 
     // ninguno frena la respuesta si falla.
     try { if (r.intercambio) scheduleLintForPost(uid, pid); } catch (e) {}
     try { const p = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(pid, uid); if (p) cmGusto.registrar(db, uid, p, 'aprobada'); } catch (e) {}
-    res.json({ ok: true, elegida: r.elegida, dorada: r.dorada, racha: r.racha, ya: !!r.ya, album: ritualManana.albumWeek(db, uid, hoy, ritualLang(uid)) });
+    // (LOTE RITUAL-1-OPCION · 6/11) La hora de salida viaja en la
+    // respuesta: el toast de confirmación la dice («Listo, sale hoy a
+    // las 17:00»).
+    let horaSalida = '';
+    try { const pp = db.prepare('SELECT scheduled_at FROM posts WHERE id = ? AND user_id = ?').get(pid, uid); if (pp) horaSalida = horaSalidaEnTz(pp.scheduled_at, tz, ritualLang(uid)); } catch (e) {}
+    res.json({ ok: true, elegida: r.elegida, dorada: r.dorada, racha: r.racha, ya: !!r.ya, hora_salida: horaSalida, album: ritualManana.albumWeek(db, uid, hoy, ritualLang(uid)) });
   } catch (e) {
     console.error('[ritual] elegir:', e.message);
     res.status(500).json({ ok: false, error: 'No se pudo guardar tu elección 😅 Probá de nuevo' });
@@ -14951,6 +15025,22 @@ async function nextWeekSweep() {
   }
   console.log(`[next-week sweep] generadas: ${ok}, salteadas: ${skip}`);
   return { ok: true, generated: ok, skipped: skip };
+}
+// (LOTE RITUAL-1-OPCION · 6/11) La graduación al nivel 2 vivía dentro
+// del barrido dominical de la semana (nextWeekSweep): al salir la tanda
+// en automático, la graduación se queda sola, en el mismo horario
+// (domingo 7:00 ART, cron en scheduler.js), sin generar nada. Se evalúa
+// una vez por semana, como antes (la función misma lleva su ventana de
+// 7 días: llamarla a diario inflaría el contador).
+async function trustLevel2Sweep() {
+  let users = [];
+  try { users = db.prepare('SELECT id FROM users').all(); } catch (e) { return { ok: false, error: e.message }; }
+  let n = 0;
+  for (const u of users) {
+    try { autopilot.maybeGraduateLevel2(db, u.id); n++; } catch (e) {}
+  }
+  console.log(`[trust-level2] evaluados: ${n}`);
+  return { ok: true, evaluated: n };
 }
 // Reintenta los fallos registrados del sweep con backoff exponencial
 // (3h, 6h, 12h, 12h, 12h; a los 5 intentos se rinde y lo reporta).
@@ -30465,7 +30555,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v709';
+const BUILD_ID = '20261105-v710';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -31126,4 +31216,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep };
