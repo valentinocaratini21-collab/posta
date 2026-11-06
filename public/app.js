@@ -914,6 +914,7 @@ function bbShell(tab, content) {
   const ic = {
     oficina: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
     jardin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
+    ads: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v3a1 1 0 0 0 1 1h1.5v-5H5a1 1 0 0 0-1 1z"/><path d="M6.5 10 20 5.5v13L6.5 14"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/></svg>',
     bandeja: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-5l2-7z"/></svg>',
     negocio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M2.5 6.5 4 3h16l1.5 3.5a3.2 3.2 0 0 1-6.1 1.4 3.4 3.4 0 0 1-6.8 0 3.2 3.2 0 0 1-6.1-1.4z"/><path d="M9.5 20v-6h5v6"/></svg>',
     ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.9 10.4L21.9 13.6L18.5 16.7L20.1 17.9L17.9 20.1L13.3 19.9L13.6 21.9L10.4 21.9L7.3 18.5L6.1 20.1L3.9 17.9L4.1 13.3L2.1 13.6L2.1 10.4L5.5 7.3L3.9 6.1L6.1 3.9L10.7 4.1L10.4 2.1L13.6 2.1L16.7 5.5L17.9 3.9L20.1 6.1L19.9 10.7Z"/><circle cx="12" cy="12" r="3.2"/></svg>',
@@ -925,7 +926,7 @@ function bbShell(tab, content) {
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
-    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + pzDockMasBtn('bb') + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings')) + '</nav>' + pzDockMasHTML()}
+    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads')) + pzDockMasBtn('bb') + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings')) + '</nav>' + pzDockMasHTML()}
   </div>`;
 }
 async function bbLoadEstado(force) {
@@ -1487,7 +1488,7 @@ function mxPoderesBB() {
   try { return (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.poderes) ? mxPoderesDe(BB.estado.poderes) : null; } catch (e) { return null; }
 }
 function mxTabKey(tab) {
-  if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat') return tab;
+  if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat' || tab === 'ads') return tab;
   if (tab === 'inicio') return 'inicio';
   if (tab === 'schedule' || tab === 'post') return 'semana';
   if (tab === 'jardin-posty') return 'jardin';
@@ -2450,7 +2451,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v695'; // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
+const CHUNK_V = '20261105-v711'; // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -6490,7 +6491,7 @@ function mzTabsHTML(tab) {
     : tab === 'analisis' ? 'analisis'
     : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}${key === 'jardin' ? '<span class="mz-badge pz-premios-badge off"></span>' : ''}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${pzDockMasBtn('mz')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>${pzDockMasHTML()}`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${pzDockMasBtn('mz')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>${pzDockMasHTML()}`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -16375,7 +16376,7 @@ function isoWeekKey(d) {
 /* ---------- Republicar: un posteo que voló, con diseño fresco ---------- */
 let _recycleDismissed = false;
 function fmtARSc(cents) { return '$' + Math.round((cents || 0) / 100).toLocaleString('es-AR'); }
-let ADS_CTX = null; // { balance, minTopup } — lo llena adsView para pintar los botones sin parpadeo
+let ADS_CTX = null; // { balance, minTopup } — lo llenaba el tab Ads viejo (crédito ARS); el tab nuevo (billetera USD) no lo escribe. bindAds lo lee con guarda y la tarjeta de Agenda trae su propio cfg.
 
 // Tarjeta de posteo recomendado: pills de presupuesto + botón que se adapta solo.
 // Se usa en Mi semana (a la vista) y en #/app/ads.
@@ -16589,88 +16590,31 @@ async function enhanceAdsBoost() {
   if (pending || hasTopup) { try { await handlePendingBoost(); } catch (e) {} }
 }
 
+// (LOTE DOCK-ADS) El tab Ads del dock: la billetera USD de v707, tal cual
+// vive en la carta de Estrategia (chunk-analisis.js: anaBilleteraHTML +
+// anaBilleteraTabDatos). Datos REALES de los endpoints de billetera;
+// nunca números inventados. Sin el chunk 'analisis' no hay tab (la carta
+// amable de chunkFailHTML). La vuelta de MercadoPago de un topup viejo
+// sigue atendiéndose en bindAds (handlePendingBoost), sin tocarla.
 async function adsView() {
-  const q = new URLSearchParams((location.hash.split('?')[1] || ''));
-  const topupState = q.get('topup'); // ok | pending | error (vuelta de MercadoPago)
-  let cfg = null, recs = null, boosts = null;
-  try { cfg = await api.get('/api/ads/config'); } catch (e) {}
-  try { recs = await api.get('/api/ads/recommendations'); } catch (e) {}
-  try { boosts = await api.get('/api/ads/boosts'); } catch (e) {}
-  ADS_CTX = { balance: cfg ? cfg.balance_cents : 0, minTopup: cfg ? cfg.min_topup_cents : 1000000 };
-  const bal = ADS_CTX.balance;
-
-  const topupBanner = topupState === 'ok'
-    ? `<div class="okmsg" style="margin-bottom:12px">${pzIc('coin', 15)} ¡Crédito acreditado! Ya podés potenciar tus posteos.</div>`
-    : topupState === 'pending'
-      ? `<div class="okmsg" style="margin-bottom:12px">⏳ Tu pago está en proceso. El crédito aparece acá cuando se acredite.</div>`
-      : topupState === 'error'
-        ? `<div class="err" style="margin-bottom:12px">No se pudo completar el pago. Probá de nuevo.</div>`
-        : '';
-
-  const topupBtns = cfg && cfg.topup_options
-    ? cfg.topup_options.map(c => `<button class="btn btn-soft" data-topup="${c}" style="flex:1;min-width:90px">${fmtARSc(c)}</button>`).join('')
-    : '';
-
-  const list = (recs && recs.recommendations) || [];
-  const budgets = (cfg && cfg.budget_options) || [];
-  const recCards = recs === null
-    ? `<div class="st-empty"><div class="st-empty-ico">${pzIc('star', 26)}</div><b>No pude cargar tus recomendaciones ahora</b><p>Probá de nuevo en un ratito.</p><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="render()">Reintentar</button></div>`
-    : list.length && budgets.length
-    ? `<div id="adsRecsCard">${list.map(r => adsRecCardHTML(r, budgets)).join('')}</div>`
-    : `<div class="st-empty">
-         <div class="st-empty-ico">${pzIc('star', 26)}</div>
-         <b>Las recomendaciones van a vivir acá</b>
-         <p>Cuando tus posteos junten alcance, te marcamos acá cuáles conviene potenciar.</p>
-         <a class="btn btn-primary btn-sm" href="#/app/schedule" style="margin-top:12px">${pzIc('calendar', 18)} Ir a mi semana</a>
-       </div>`;
-
-  const bl = (boosts && boosts.boosts) || [];
-  const statusTxt = (b) => b.status === 'active' ? pzDot('#22A06B', 11) + ' Activa'
-    : b.status === 'pending' ? pzIc('clock', 12) + ' Activándose' : b.status === 'finished' ? pzIc('checkCircle', 12) + ' Finalizada' : esc(b.status || '');
-  const boostRows = boosts === null
-    ? `<div class="st-empty"><div class="st-empty-ico">${pzIc('megaphone', 26)}</div><b>No pude cargar tus pautas ahora</b><p>Probá de nuevo en un ratito.</p><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="render()">Reintentar</button></div>`
-    : bl.length ? bl.map(b => `
-    <div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #EDF1F5">
-      <div style="flex:1;min-width:0;font-size:11.5px">
-        <div style="font-weight:700">${statusTxt(b)} · ${fmtARSc(b.budget_cents)}</div>
-        <div style="color:var(--mut);font-size:10.5px">${b.last_reach ? `${pzIc('eye', 13)} ${Number(b.last_reach)}.toLocaleString('es-AR')} alcance · ${pzIc('coin', 13)} ${fmtARSc(b.last_spend_cents)} gastados` : 'Ya la estamos poniendo en marcha'}</div>
-      </div>
-    </div>`).join('')
-    : `<div class="st-empty">
-         <div class="st-empty-ico">${pzIc('megaphone', 26)}</div>
-         <b>Tus pautas van a vivir acá</b>
-         <p>Cuando potencies tu primer posteo, lo ves acá con su alcance y lo gastado, sin misterio.</p>
-         <button class="btn btn-soft btn-sm" id="adsBoostGoRecs" style="margin-top:12px">⭐ Ver recomendaciones</button>
-       </div>`;
-
+  let __okAn = true;
+  try { await loadChunk('analisis'); } catch (e) { __okAn = false; }
+  if (!__okAn) return chunkFailHTML();
+  let datos = null;
+  try { datos = await anaBilleteraTabDatos(); } catch (e) { datos = null; }
+  const walletHTML = datos
+    ? anaBilleteraHTML()
+    : `<p class="ana-note">${anaT('No pudimos cargar tu billetera ahora. Probá de nuevo.', 'We could not load your wallet right now. Try again.')}</p>`;
+  const histHTML = datos ? anaBilleteraHistorialHTML() : '';
   return `<div class="ads-wrap">
   <div class="card" style="text-align:center">
-    <h2 style="margin:0 0 4px">${pzIc('rocket', 15)} Potenciar</h2>
-    <p class="d" style="margin:0">Llevá tus mejores posteos a más gente, sin tocar el administrador de anuncios. Nosotros nos ocupamos.</p>
+    <h2 style="margin:0 0 4px">${pzIc('megaphone', 15)} Ads</h2>
+    <p class="d" style="margin:0">${gzT('Impulsá tus posteos y que te vean más clientes.', 'Boost your posts so more customers see you.')}</p>
   </div>
-  ${topupBanner}
-  ${!cfg ? `<div class="card" style="border:2px solid var(--yel)">
-    <h3 style="margin:0 0 4px">${pzIc('coin', 16)} Tu crédito</h3>
-    <p class="d" style="margin:0 0 10px">No pude cargar tu crédito ahora No es tu cuenta: es un tropiezo de conexión de mi lado.</p>
-    <button class="btn btn-primary btn-sm" onclick="render()">Reintentar</button>
-  </div>` : `<div class="card" style="border:2px solid var(--yel)">
-    <h3 style="margin:0 0 4px">${pzIc('coin', 16)} Tu crédito</h3>
-    <div style="font-size:30px;font-weight:800;margin:2px 0 6px">${fmtARSc(bal)}</div>
-    <p class="d" style="margin:0 0 10px">Un solo precio por potenciar tu posteo durante 7 días en Instagram y Facebook. Sin letra chica.</p>
-    ${cfg && cfg.mp_ready ? `
-      <p style="font-weight:700;font-size:12.5px;margin:0 0 8px">Cargar crédito</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${topupBtns}</div>
-      <div id="adsMsg"></div>
-    ` : `<p class="d">La carga de crédito se habilita en estos días. <a href="#/app/chat" style="color:var(--cel);font-weight:700">Escribile a Posty</a> y la activamos para tu cuenta.</p>`}
-  </div>`}
-  <div class="card" id="adsRecsSec">
-    <h3 style="margin:0 0 4px">⭐ Te recomendamos potenciar</h3>
-    <p class="d" style="margin:0 0 10px">Elegidos por rendimiento real, no por corazonada.</p>
-    ${recCards}
-  </div>
+  <div class="card"><div id="adsBilleteraBox">${walletHTML}</div></div>
   <div class="card">
-    <h3 style="margin:0 0 6px">${pzIc('megaphone', 15)} Tus pautas</h3>
-    ${boostRows}
+    <h3 style="margin:0 0 6px">${pzIc('megaphone', 15)} ${gzT('Últimos impulsos', 'Recent boosts')}</h3>
+    <div id="adsHistorial">${histHTML}</div>
   </div>
 </div>`;
 }

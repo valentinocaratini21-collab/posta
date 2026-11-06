@@ -1144,7 +1144,7 @@ function anaCartaHTML(d) {
  * cuerpo en e.data — los handlers de este lote leen e.data.motivo; el
  * patrón viejo (j = null en el catch) perdía el motivo del servidor.) */
 
-let anaBilleteraDatos = null; // { mejor, billetera, elegibles, selId, selMonto } del último load
+let anaBilleteraDatos = null; // { mejor, billetera, elegibles, movimientos, boosts, selId, selMonto } del último load (carta o tab Ads)
 
 function anaBoostRecPartes(m) {
   const p = [];
@@ -1314,14 +1314,12 @@ function anaBilleteraHTML() {
 function anaBilleteraElegirPosteo(id, btn) {
   if (!anaBilleteraDatos) return;
   anaBilleteraDatos.selId = Number(id) || 0;
-  const box = document.getElementById('anaBoostRec');
-  if (box) box.innerHTML = anaBilleteraHTML();
+  anaBilleteraPintar();
 }
 function anaBilleteraElegirMonto(monto, btn) {
   if (!anaBilleteraDatos) return;
   anaBilleteraDatos.selMonto = Number(monto) || 20;
-  const box = document.getElementById('anaBoostRec');
-  if (box) box.innerHTML = anaBilleteraHTML();
+  anaBilleteraPintar();
 }
 
 // Cargar plata: un toque cobra con la tarjeta guardada y acredita en la
@@ -1335,6 +1333,7 @@ async function anaBilleteraCargar(monto, btn) {
   if (j && j.ok) {
     const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
     await anaBoostRecLoad(true);
+    await anaBilleteraTabLoad();
     const msg = document.getElementById('anaBoostRecMsg');
     if (msg) msg.textContent = anaT('Listo, cargaste $' + monto + '. Tu billetera tiene $' + nuevoSaldo + '.', 'Done, you topped up $' + monto + '. Your wallet now has $' + nuevoSaldo + '.');
   } else {
@@ -1358,6 +1357,7 @@ async function anaBilleteraImpulsar(btn) {
   if (j && j.ok) {
     const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
     await anaBoostRecLoad(true);
+    await anaBilleteraTabLoad();
     const msg2 = document.getElementById('anaBoostRecMsg');
     if (msg2) msg2.textContent = anaT('Listo, ya tiene ads por 7 días. Tu billetera quedó en $' + nuevoSaldo + '. Posty te va a reportar números reales cuando lleguen.', 'Done, it has ads for 7 days. Your wallet is now at $' + nuevoSaldo + '. Posty will report real numbers when they arrive.');
   } else {
@@ -1366,34 +1366,149 @@ async function anaBilleteraImpulsar(btn) {
   }
 }
 
-async function anaBoostRecLoad(keepSel) {
-  const box = document.getElementById('anaBoostRec');
-  if (!box || anaPastMode) return;
-  const prevSel = keepSel && anaBilleteraDatos ? { selId: anaBilleteraDatos.selId, selMonto: anaBilleteraDatos.selMonto } : null;
+// (LOTE DOCK-ADS) Las 3 lecturas de la billetera, compartidas por la carta
+// y por el tab Ads: mejor posteo, billetera y elegibles. Ninguna tira si
+// falla: cada una cae a null y el constructor decide qué mostrar.
+async function anaBilleteraFetchDatos() {
   let d = null, bil = null, elig = null;
   try { d = await api.get('/api/estrategia/mejor-posteo'); } catch (e) { d = null; }
   try { bil = await api.get('/api/ads/billetera'); } catch (e) { bil = null; }
   try { elig = await api.get('/api/ads/billetera/elegibles'); } catch (e) { elig = null; }
-  if (document.getElementById('anaBoostRec') !== box) return;
-  if (!d || !d.ok) { box.innerHTML = ''; return; }
-  const tieneMejor = !!d.mejor;
-  const tieneEleg = elig && elig.ok && Array.isArray(elig.elegibles) && elig.elegibles.length > 0;
-  if (!tieneMejor && !tieneEleg) { box.innerHTML = ''; return; }
-  anaBilleteraDatos = {
-    mejor: d.mejor || null, boostHabilitado: d.boostHabilitado,
-    ads_permiso: (bil && bil.ok && bil.ads_permiso !== undefined) ? bil.ads_permiso : d.ads_permiso,
-    conversion_pendiente: d.conversion_pendiente,
+  return { d, bil, elig };
+}
+
+// Constructor de anaBilleteraDatos desde las 3 lecturas. El recomendado va
+// pre-seleccionado; si había selección, se conserva si el posteo sigue
+// elegible. Sin mejor, se pre-selecciona el primer elegible (antes quedaba
+// sin selección y el botón Impulsar deshabilitado hasta tocar uno).
+// (FIX DOCK-ADS: los elegibles traen `post_id`, no `id` — el conjunto viejo
+// era de undefined y la selección se perdía tras cada carga o impulso; el
+// comentario de anaBilleteraHTML ya lo decía.)
+function anaBilleteraConstruirDatos(f, prevSel) {
+  const d = f && f.d, bil = f && f.bil, elig = f && f.elig;
+  const tieneMejor = !!(d && d.ok && d.mejor);
+  const elegibles = (elig && elig.ok && Array.isArray(elig.elegibles)) ? elig.elegibles : [];
+  const datos = {
+    mejor: tieneMejor ? d.mejor : null,
+    boostHabilitado: (d && d.boostHabilitado !== undefined) ? d.boostHabilitado : (bil && bil.ok ? bil.boostHabilitado : undefined),
+    ads_permiso: (bil && bil.ok && bil.ads_permiso !== undefined) ? bil.ads_permiso : (d ? d.ads_permiso : undefined),
+    conversion_pendiente: (d && d.conversion_pendiente !== undefined) ? d.conversion_pendiente : (bil && bil.ok ? bil.conversion_pendiente : undefined),
     billetera: bil && bil.ok ? bil : { balance_cents: 0, currency: 'USD', montos_usd: [20, 50, 100] },
-    elegibles: elig && elig.ok ? (elig.elegibles || []) : [],
+    elegibles,
+    movimientos: (bil && bil.ok && Array.isArray(bil.movimientos)) ? bil.movimientos : [],
+    boosts: [],
     selId: 0, selMonto: 20,
   };
-  // Recomendado pre-seleccionado; si había selección, se conserva si el
-  // posteo sigue elegible.
-  const ids = new Set(anaBilleteraDatos.elegibles.map((e) => e.id));
-  const defecto = tieneMejor ? d.mejor.post_id : (anaBilleteraDatos.elegibles[0] ? anaBilleteraDatos.elegibles[0].id : 0);
-  anaBilleteraDatos.selId = (prevSel && prevSel.selId && ids.has(prevSel.selId)) ? prevSel.selId : defecto;
-  anaBilleteraDatos.selMonto = (prevSel && prevSel.selMonto) ? prevSel.selMonto : 20;
+  const ids = new Set(elegibles.map((e) => e.post_id));
+  const defecto = tieneMejor ? d.mejor.post_id : (elegibles[0] ? elegibles[0].post_id : 0);
+  datos.selId = (prevSel && prevSel.selId && ids.has(prevSel.selId)) ? prevSel.selId : defecto;
+  datos.selMonto = (prevSel && prevSel.selMonto) ? prevSel.selMonto : 20;
+  return datos;
+}
+
+async function anaBoostRecLoad(keepSel) {
+  const box = document.getElementById('anaBoostRec');
+  if (!box || anaPastMode) return;
+  const prevSel = keepSel && anaBilleteraDatos ? { selId: anaBilleteraDatos.selId, selMonto: anaBilleteraDatos.selMonto } : null;
+  const f = await anaBilleteraFetchDatos();
+  if (document.getElementById('anaBoostRec') !== box) return;
+  if (!f.d || !f.d.ok) { box.innerHTML = ''; return; }
+  const tieneMejor = !!f.d.mejor;
+  const tieneEleg = f.elig && f.elig.ok && Array.isArray(f.elig.elegibles) && f.elig.elegibles.length > 0;
+  if (!tieneMejor && !tieneEleg) { box.innerHTML = ''; return; }
+  anaBilleteraDatos = anaBilleteraConstruirDatos(f, prevSel);
   box.innerHTML = anaBilleteraHTML();
+}
+
+// ---------- TAB ADS (LOTE DOCK-ADS) ----------
+// El tab Ads del dock reutiliza la billetera de la carta: mismos datos,
+// misma UI (anaBilleteraHTML), más el historial real de impulsos. Sin
+// endpoints nuevos: /api/ads/boosts ya existe (la usaba el tab viejo).
+// Si las 3 lecturas fallan, devuelve null y adsView muestra la nota
+// honesta (nunca el bloque de «no habilitado», que sería mentira).
+async function anaBilleteraTabDatos() {
+  const prevSel = anaBilleteraDatos ? { selId: anaBilleteraDatos.selId, selMonto: anaBilleteraDatos.selMonto } : null;
+  const f = await anaBilleteraFetchDatos();
+  if (!f.d && !f.bil && !f.elig) return null;
+  let boosts = null;
+  try { boosts = await api.get('/api/ads/boosts'); } catch (e) { boosts = null; }
+  const datos = anaBilleteraConstruirDatos(f, prevSel);
+  datos.boosts = (boosts && boosts.ok && Array.isArray(boosts.boosts)) ? boosts.boosts : [];
+  anaBilleteraDatos = datos;
+  return datos;
+}
+
+// Re-pinta el tab Ads tras cargar plata o impulsar (los handlers de la
+// billetera llaman a anaBoostRecLoad para la carta; acá va el tab). Si el
+// tab no está montado, no hace nada; si la recarga falla, deja el
+// contenido viejo (nunca lo reemplaza por un error).
+async function anaBilleteraTabLoad() {
+  const box = document.getElementById('adsBilleteraBox');
+  if (!box) return;
+  let datos = null;
+  try { datos = await anaBilleteraTabDatos(); } catch (e) { datos = null; }
+  if (!datos || document.getElementById('adsBilleteraBox') !== box) return;
+  box.innerHTML = anaBilleteraHTML();
+  anaBilleteraHistorialPintar();
+}
+
+// Re-pinta la billetera donde esté montada (carta y/o tab Ads).
+function anaBilleteraPintar() {
+  const h = anaBilleteraHTML();
+  const a = document.getElementById('anaBoostRec'); if (a) a.innerHTML = h;
+  const b = document.getElementById('adsBilleteraBox'); if (b) b.innerHTML = h;
+}
+
+// Historial real de impulsos (de /api/ads/boosts: la misma tabla que
+// escribe la billetera). Estado, monto, días, fechas y —cuando Meta ya los
+// reportó— alcance y gasto reales. Sin clics: el endpoint no los trae y no
+// se inventan (el mock mostraba «1.840 clics» ilustrativos).
+function anaBilleteraHistorialHTML() {
+  const boosts = (anaBilleteraDatos && Array.isArray(anaBilleteraDatos.boosts)) ? anaBilleteraDatos.boosts : [];
+  if (!boosts.length) return `<p class="ana-note">${anaT('Todavía no impulsaste ningún posteo. Cuando lo hagas, aparece acá con sus números reales.', "You haven't boosted any post yet. When you do, it shows here with its real numbers.")}</p>`;
+  const en = anaLang === 'en';
+  const loc = en ? 'en-US' : 'es-AR';
+  const fechaCorta = (ts) => { try { return new Date(String(ts).replace(' ', 'T')).toLocaleDateString(loc, { day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
+  const hasta = (b) => {
+    try {
+      const ini = new Date(String(b.created_at).replace(' ', 'T'));
+      const fin = new Date(ini.getTime() + (Number(b.duration_days) || 7) * 86400000);
+      return fin.toLocaleDateString(loc, { day: 'numeric', month: 'short' });
+    } catch (e) { return ''; }
+  };
+  const estadoTxt = (b) => {
+    if (b.status === 'active') return `<span style="display:inline-block;padding:2px 8px;background:#E6F7EE;color:#1FA855;border-radius:999px;font-size:12px;font-weight:800">${anaT('Activo', 'Active')}</span>`;
+    if (b.status === 'pending') return `<span style="display:inline-block;padding:2px 8px;background:#FFF3D6;color:#8A6D00;border-radius:999px;font-size:12px;font-weight:800">${anaT('Pendiente', 'Pending')}</span>`;
+    if (b.status === 'finished') return `<span style="display:inline-block;padding:2px 8px;background:#EDF1F5;color:#47617A;border-radius:999px;font-size:12px;font-weight:800">${anaT('Terminado', 'Finished')}</span>`;
+    if (b.status === 'error') return `<span style="display:inline-block;padding:2px 8px;background:#FDECEC;color:#B3261E;border-radius:999px;font-size:12px;font-weight:800">${anaT('Revisar', 'Needs review')}</span>`;
+    return `<span style="display:inline-block;padding:2px 8px;background:#EDF1F5;color:#47617A;border-radius:999px;font-size:12px;font-weight:800">${esc(String(b.status || ''))}</span>`;
+  };
+  const montoTxt = (b) => {
+    const m = Math.floor(Number(b.budget_cents || 0) / 100);
+    return '$' + m.toLocaleString(loc) + ((b.currency && b.currency !== 'USD') ? ' ' + b.currency : '');
+  };
+  return boosts.slice(0, 5).map((b) => {
+    const dias = Number(b.duration_days) || 7;
+    const alcance = Number(b.last_reach || 0);
+    const gastado = Math.floor(Number(b.last_spend_cents || 0) / 100);
+    const det = [anaT('Posteo #', 'Post #') + (b.post_id || '?')];
+    const fIni = fechaCorta(b.created_at); if (fIni) det.push(fIni);
+    const fFin = hasta(b); if (fFin) det.push(anaT('hasta ', 'until ') + fFin);
+    if (alcance > 0) det.push(anaT('Alcance ', 'Reach ') + alcance.toLocaleString(loc));
+    if (gastado > 0) det.push(anaT('Gastado $', 'Spent $') + gastado.toLocaleString(loc));
+    return `<div style="padding:10px 0;border-top:1px solid #EDF1F5">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <span style="font-size:14px;font-weight:800;color:#0A1E33">${montoTxt(b)} · ${dias} ${anaT('días', 'days')}</span>
+        ${estadoTxt(b)}
+      </div>
+      <div style="font-size:12px;color:var(--mut);margin-top:4px">${esc(det.join(' · '))}</div>
+    </div>`;
+  }).join('') + (boosts.length > 5 ? `<p class="ana-note">${anaT('Mostramos los 5 más recientes.', 'Showing the 5 most recent.')}</p>` : '');
+}
+
+function anaBilleteraHistorialPintar() {
+  const box = document.getElementById('adsHistorial');
+  if (box) box.innerHTML = anaBilleteraHistorialHTML();
 }
 
 // ---------- FUNDAMENTO-LITERAL x5 (3/11) · pieza 4: confirmacion semanal ----------
