@@ -184,6 +184,35 @@ function reutilizarBorradores(db, uid, rec) {
   return out;
 }
 
+// (LOTE PROXIMO-RITUAL · 5/11) Rubro de una carta del ritual, para la
+// chapita visible y para el contrato con RUBRO-ROTACION (que garantiza
+// las 3 opciones en 3 rubros distintos comparando este campo en el
+// servidor, nunca en la UI). Clasificador MÍNIMO y honesto:
+// 0) si la fila ya trae rubro guardado (columna posts.rubro de
+//    RUBRO-ROTACION) → ese valor, sin reclasificar;
+// 1) si el posteo tiene producto de referencia (rg_producto) → el
+//    nombre del producto normalizado en minúsculas;
+// 2) si es un posteo de Posty mismo (sin producto, con el personaje
+//    como protagonista en el prompt/la caption/el tema) → 'avatar';
+// 3) si no se sabe con seguridad → el tipo del posteo, o 'general'
+//    (nunca un rubro inventado).
+function rubroDeCarta(post) {
+  try {
+    // (LOTE RUBRO-ROTACION · 5/11 · columna posts.rubro) Si la fila ya
+    // trae el rubro GUARDADO, manda ese valor: es la decisión de la
+    // rotación (o de la línea editorial), no una clasificación hecha acá.
+    const guardado = String((post && post.rubro) || '').trim().toLowerCase();
+    if (guardado) return guardado.slice(0, 24);
+    const prod = String((post && post.rg_producto) || '').trim().toLowerCase();
+    if (prod) return prod.slice(0, 24);
+    const hay = [post && post.image_prompt, post && post.caption, post && post.source_topic, post && post.source_angle, post && post.tipo]
+      .map((x) => String(x || '').toLowerCase()).join(' ');
+    if (/\b(posty|avatar)\b/.test(hay)) return 'avatar';
+    const tipo = String((post && post.tipo) || '').trim().toLowerCase();
+    return tipo ? tipo.slice(0, 24) : 'general';
+  } catch (e) { return 'general'; }
+}
+
 // Carta para la vista: lo mínimo para pintarla (la imagen se sirve por
 // /media/... como en el feed; la vista usa mv() igual que las tiles).
 function cardOf(post, recomendada) {
@@ -196,6 +225,7 @@ function cardOf(post, recomendada) {
     tipo: String(post.tipo || ''),
     media_type: String(post.media_type || 'image'),
     recomendada: !!recomendada,
+    rubro: rubroDeCarta(post),
   };
 }
 
@@ -266,6 +296,7 @@ module.exports = {
   albumWeek,
   reutilizarBorradores,
   cardOf,
+  rubroDeCarta,
   aplicarPick,
   dayKeyInTz,
 };
