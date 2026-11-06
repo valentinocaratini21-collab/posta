@@ -8111,7 +8111,7 @@ app.get('/api/admin/support/conserje/pendientes', requireAdminToken, (req, res) 
   catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
 app.get('/api/admin/support/conserje/panel', requireAdminToken, (req, res) => {
-  try { res.json(supportCases.buildOwnerPanel(db, { limit: req.query.limit || 100 })); }
+  try { res.json(supportCases.buildOwnerPanel(db, { limit: req.query.limit || 100, absImageUrl })); }
   catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
 app.post('/api/admin/support/:userId/conserje', requireAdminToken, (req, res) => {
@@ -29957,7 +29957,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v699';
+const BUILD_ID = '20261105-v700';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

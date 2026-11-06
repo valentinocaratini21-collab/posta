@@ -968,69 +968,211 @@ async function bindAdmin() {
   // la DB: respuestas, posteos, fotos, envíos de la mañana). La única
   // parte que decide el dueño es la Bandeja (las acciones de caso de
   // siempre: nota, paso, cerrar con confirmación del cliente).
+  // ---------- CONSERJE — PANEL DEL DUEÑO v2 (conserje-panel-v2, base v698) ----------
+  // Una sola pantalla, diseño Posty: la cara de Posty, colores exactos
+  // (#2793C8, #FEC14D, #0A1E33), tarjetas grandes, legible en el celu.
+  // Se ve el trabajo, no ceros: foto del negocio, último mensaje, posteo
+  // de hoy, feed, mañana de todos, próximos posteos y el registro REAL en
+  // vivo. Las alertas son solo hechos reales de la DB.
+  // Auto-refresh 45 s + al volver a la pestaña, solo si el panel sigue
+  // visible (marcador data-cj-panel); el timer se limpia al cambiar de
+  // pestaña y al abrir la vista de un cliente. Preserva el scroll.
+  let __cjTimer = null;
+  function clearCjTimer() { try { if (__cjTimer) { clearInterval(__cjTimer); __cjTimer = null; } } catch (e) {} }
+  function armCjRefresh() {
+    clearCjTimer();
+    try {
+      __cjTimer = setInterval(() => {
+        try {
+          if (body.querySelector('[data-cj-panel]')) {
+            const y = window.scrollY || 0;
+            showConcierge().then(() => { try { window.scrollTo(0, y); } catch (e) {} });
+          } else { clearCjTimer(); }
+        } catch (e) { clearCjTimer(); }
+      }, 45000);
+    } catch (e) {}
+    try {
+      if (!window.__cjVisBound) {
+        window.__cjVisBound = true;
+        document.addEventListener('visibilitychange', () => {
+          try { if (!document.hidden && body.querySelector('[data-cj-panel]')) showConcierge(); } catch (e) {}
+        });
+      }
+    } catch (e) {}
+  }
   async function showConcierge() {
-    body.innerHTML = `<div class="d">⏳ Cargando el panel del conserje…</div>`;
+    const yaVisible = !!body.querySelector('[data-cj-panel]');
+    if (!yaVisible) body.innerHTML = `<div class="d">⏳ Cargando el panel del conserje…</div>`;
     let r;
     try { r = await adminApi('support/conserje/panel'); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar el panel.</div>`; return; }
-    const C = r.contadores || {};
-    const cnt = (label, v) => `<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">${label}</div><div style="font-size:20px;font-weight:800">${v}</div></div>`;
+    catch (e) {
+      if (!yaVisible) body.innerHTML = `<div class="err">No se pudo cargar el panel.</div>`;
+      return;
+    }
     const hora = (s) => esc(String(s || '').slice(5, 16).replace(' ', ' · '));
-    const pendientes = (r.clientes || []).filter(c => c.pendiente);
-    body.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <h4 style="margin:0">${pzIc('heart', 16)} Conserje — lo que hace el equipo por los clientes</h4>
-        <span style="font-size:12px;color:var(--mut)">Actualizado ${hora(r.generado_en)}</span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px">
-        ${cnt('Clientes en conserje', C.clientes_conserje || 0)}${cnt('Con mensajes sin responder', C.con_pendientes || 0)}${cnt('Necesidades abiertas', C.necesidades_abiertas || 0)}${cnt('Bandeja (tu decisión)', C.bandeja || 0)}${cnt('Acciones del equipo (30d)', C.acciones_30d || 0)}
-      </div>
-      <h4 style="margin:0 0 8px">Mensajes sin responder — lo primero</h4>
-      ${pendientes.map(c => `
-      <button class="btn btn-ghost btn-block" data-cj-client="${c.user_id}" style="text-align:left;margin-bottom:6px;border-left:4px solid #E8A100">
-        <b>${esc(c.business_name || c.email)}</b> <span style="color:var(--mut)">@${esc(c.ig_username || '—')} · ${c.mensajes_pendientes} mensaje(s) sin responder</span>
-        <br><span style="font-size:12.5px">«${esc((c.ultimo_mensaje || '').slice(0, 160))}»</span>
-        <br><span style="font-size:11.5px;color:var(--mut)">${hora(c.ultimo_mensaje_en)}${c.caso_conserje ? ` · Caso #${c.caso_conserje.numero}` : ''}</span>
-      </button>`).join('') || '<div class="d">' + pzIc('gift', 14) + ' Nada pendiente: todos los mensajes tienen respuesta.</div>'}
-      <h4 style="margin:14px 0 8px">Clientes en modo conserje</h4>
-      ${(r.clientes || []).map(c => `
-      <div class="card" style="padding:10px 12px;margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
-          <div><b>${esc(c.business_name || c.email)}</b> <span style="color:var(--mut)">@${esc(c.ig_username || '—')} · ${esc(c.plan || '')}/${esc(c.plan_status || '')}</span>
-          <br><span style="font-size:12px;color:var(--mut)">${c.pendiente ? `⏳ ${c.mensajes_pendientes} mensaje(s) sin responder` : '✅ Al día'}${c.casos_abiertos ? ` · ${c.casos_abiertos} caso(s) abierto(s)` : ''}${c.ultimo_mensaje ? ` · Último: «${esc(c.ultimo_mensaje.slice(0, 80))}»` : ''}</span></div>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-soft btn-sm" data-cj-client="${c.user_id}">Ver cliente</button>
-            <button class="btn btn-soft btn-sm" data-cj-off="${c.user_id}">Sacar de conserje</button>
-          </div>
+    const clientes = r.clientes || [];
+    const pendientes = clientes.filter(c => c.pendiente);
+    const totalPend = pendientes.reduce((n, c) => n + (c.mensajes_pendientes || 0), 0);
+    const alertas = r.alertas || [];
+    const proximos = r.proximos_posteos || [];
+    const registro = r.registro || [];
+    const inicial = (c) => String((c.business_name || c.email || '?').trim().charAt(0) || '?').toUpperCase();
+    const fotoHTML = (c, size) => c.foto
+      ? `<img src="${esc(c.foto)}" alt="" style="width:${size}px;height:${size}px;object-fit:cover;border-radius:50%;flex:none">`
+      : `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#2793C8;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:${Math.round(size * 0.42)}px;flex:none">${esc(inicial(c))}</div>`;
+    const thumbHTML = (p, size) => p && p.image_url
+      ? `<img src="${esc(p.image_url)}" alt="" style="width:${size}px;height:${size}px;object-fit:cover;border-radius:10px;flex:none">`
+      : `<div style="width:${size}px;height:${size}px;border-radius:10px;background:#F2F9FD;border:1px solid #E2EDF5;display:flex;align-items:center;justify-content:center;font-size:18px;flex:none">✦</div>`;
+    const etiqueta = (t) => `<div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#47617A;margin:12px 0 4px">${t}</div>`;
+    const pillPend = (c) => c.pendiente
+      ? `<span style="background:#FEC14D;color:#0A1E33;font-size:12px;font-weight:800;border-radius:999px;padding:5px 10px;white-space:nowrap">⏳ ${c.mensajes_pendientes} sin responder</span>`
+      : `<span style="background:#F0FDF4;color:#15803D;font-size:12px;font-weight:800;border-radius:999px;padding:5px 10px;white-space:nowrap">✅ Al día</span>`;
+    const posteoHoyHTML = (c) => {
+      const p = c.posteo_hoy;
+      if (!p) return `<div style="font-size:13px;color:#47617A">Hoy no hay posteo programado — falta armar el posteo de hoy.</div>`;
+      return `<div style="display:flex;gap:10px;align-items:flex-start">${thumbHTML(p, 64)}
+        <div style="min-width:0"><div style="font-size:13.5px;line-height:1.35">${esc((p.caption || '').slice(0, 120))}</div>
+        <div style="font-size:12px;color:#47617A;margin-top:3px">Sale ${esc(p.cuando || ('hoy ' + String(p.scheduled_at || '').slice(11, 16)))}${p.strategy_why ? ` · ${esc(p.strategy_why)}` : ''}</div></div></div>`;
+    };
+    const feedHTML = (c) => {
+      const f = c.feed || { publicados: [], proximo: null };
+      const pubs = (f.publicados || []).slice(0, 3);
+      if (!pubs.length && !f.proximo) return `<div style="font-size:13px;color:#47617A">Sin feed todavía.</div>`;
+      const mini = (p, tag) => `<div style="width:64px;flex:none">${thumbHTML(p, 56)}
+        <div style="font-size:11px;color:#47617A;line-height:1.25;margin-top:3px;overflow:hidden;max-height:28px">${tag ? `<b style="color:#2793C8">${tag}</b> ` : ''}${esc((p.caption || '').slice(0, 40))}</div>
+        <div style="font-size:11px;color:#8CA3B8">${esc(p.cuando || '')}</div></div>`;
+      return `<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:2px">${pubs.map(p => mini(p, '')).join('')}${f.proximo ? mini(f.proximo, 'Próximo') : ''}</div>`;
+    };
+    const clienteCard = (c) => {
+      const man = c.manana || {};
+      const necesita = c.pendiente
+        ? `«${esc((c.ultimo_mensaje || '').slice(0, 160))}» <span style="color:#47617A">· ${hora(c.ultimo_mensaje_en)}</span>`
+        : 'Nada pendiente — no escribió nada nuevo.';
+      const hecho = c.ultima_actividad
+        ? `<b>${esc(c.ultima_actividad.etiqueta || c.ultima_actividad.action || '')}</b> · ${hora(c.ultima_actividad.created_at)}${c.ultima_actividad.detalle ? `<div style="color:#47617A;margin-top:2px">${esc(c.ultima_actividad.detalle.slice(0, 140))}</div>` : ''}`
+        : 'Todavía no hicimos nada por este cliente.';
+      const falta = (c.caso_conserje && c.caso_conserje.siguiente_paso)
+        ? esc(c.caso_conserje.siguiente_paso)
+        : (c.pendiente ? 'Responder en el chat como Posty.' : 'Nada pendiente.');
+      return `<div class="card" style="padding:14px;margin-bottom:12px">
+        <div style="display:flex;gap:10px;align-items:center">
+          ${fotoHTML(c, 52)}
+          <div style="min-width:0;flex:1"><b style="font-size:16px;color:#0A1E33">${esc(c.business_name || c.email)}</b>
+            <div style="font-size:12px;color:#47617A">@${esc(c.ig_username || '—')} · ${esc(c.plan || '')}/${esc(c.plan_status || '')}</div></div>
+          ${pillPend(c)}
         </div>
-      </div>`).join('') || '<div class="d">Nadie en modo conserje todavía. Se prende desde la vista del cliente en Soporte.</div>'}
-      <h4 style="margin:14px 0 8px">Necesidades abiertas</h4>
+        ${etiqueta('Qué necesita')}<div style="font-size:13.5px;line-height:1.4">${necesita}</div>
+        ${etiqueta('Posteo de hoy')}${posteoHoyHTML(c)}
+        ${etiqueta('Feed')}${feedHTML(c)}
+        ${c.proximos_semana ? `<div style="font-size:12px;color:#47617A;margin-top:8px">${c.proximos_semana === 1 ? '1 posteo programado' : c.proximos_semana + ' posteos programados'} esta semana.</div>` : ''}
+        ${etiqueta('Qué se hizo')}<div style="font-size:13px;line-height:1.4">${hecho}</div>
+        ${etiqueta('Qué falta')}<div style="font-size:13px;line-height:1.4">${falta}</div>
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" data-cj-client="${c.user_id}">Ver cliente</button>
+          <button class="btn btn-ghost btn-sm" data-cj-off="${c.user_id}">Sacar de conserje</button>
+        </div>
+      </div>`;
+    };
+    const mananaRow = (c) => {
+      const man = c.manana || {};
+      const p = c.posteo_hoy;
+      const estado = !p
+        ? `<span style="font-size:12px;font-weight:800;color:#47617A">Sin posteo hoy</span>`
+        : man.confirmada
+          ? `<span style="font-size:12px;font-weight:800;color:#15803D">✅ Confirmada ${hora(man.confirmado_en)}</span>`
+          : `<span style="font-size:12px;font-weight:800;color:#B45309">⏳ Sin confirmar</span>`;
+      return `<div class="card" style="padding:12px;margin-bottom:8px"><div style="display:flex;gap:10px;align-items:center">
+        ${fotoHTML(c, 40)}
+        <div style="min-width:0;flex:1"><b style="font-size:14px;color:#0A1E33">${esc(c.business_name || c.email)}</b>
+          <div style="font-size:12px;color:#47617A">${p ? `«${esc((p.caption || '').slice(0, 70))}» · ${esc(p.cuando || '')}` : 'Hoy no sale nada.'}</div></div>
+        ${estado}
+      </div></div>`;
+    };
+    body.innerHTML = `<div data-cj-panel>
+      ${(alertas.length ? `<div style="margin-bottom:12px;border-radius:14px;padding:12px 14px;background:#FEF2F2;border:1.5px solid #DC2626">
+        <b style="font-size:14px;color:#DC2626">⚠ Hay cosas que necesitan atención</b>
+        ${alertas.map(a => `<div style="font-size:13px;line-height:1.4;margin-top:6px;color:#7F1D1D">• ${esc(a.detalle || '')}</div>`).join('')}
+      </div>` : '')}
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:4px">
+        <img src="/ai-avatar.png" alt="Posty" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">
+        <div style="min-width:0;flex:1">
+          <h4 style="margin:0;font-size:20px;color:#0A1E33">Conserje</h4>
+          <div style="font-size:12.5px;color:#47617A">Lo que hace el equipo por los clientes</div>
+        </div>
+        <span style="font-size:12px;color:#47617A;white-space:nowrap">Actualizado ${hora(r.generado_en)}</span>
+      </div>
+      ${clientes.length ? (pendientes.length
+        ? `<div style="margin:10px 0;border-radius:14px;padding:12px 14px;background:#FFF7E0;border:1.5px solid #FEC14D;font-size:13.5px;color:#0A1E33">⚠ <b>${totalPend === 1 ? '1 mensaje sin responder' : totalPend + ' mensajes sin responder'}</b> — respondé primero.</div>`
+        : `<div style="margin:10px 0;border-radius:14px;padding:12px 14px;background:#F0FDF4;border:1.5px solid #22C55E;font-size:13.5px;color:#0A1E33">✅ Todo al día — ningún mensaje sin responder.</div>`) : ''}
+      ${clientes.length ? `
+      <h4 style="margin:14px 0 8px;color:#0A1E33">Mensajes sin responder — lo primero</h4>
+      ${pendientes.map(c => `
+      <div class="card" style="padding:14px;margin-bottom:10px;border-left:4px solid #FEC14D">
+        <div style="display:flex;gap:10px;align-items:center">
+          ${fotoHTML(c, 48)}
+          <div style="min-width:0;flex:1"><b style="font-size:15px;color:#0A1E33">${esc(c.business_name || c.email)}</b>
+            <div style="font-size:12px;color:#47617A">@${esc(c.ig_username || '—')} · ${c.mensajes_pendientes === 1 ? '1 mensaje sin responder' : c.mensajes_pendientes + ' mensajes sin responder'}</div></div>
+          <button class="btn btn-primary btn-sm" data-cj-client="${c.user_id}">Responder</button>
+        </div>
+        <div style="font-size:13.5px;line-height:1.4;margin-top:10px">«${esc((c.ultimo_mensaje || '').slice(0, 160))}»</div>
+        <div style="font-size:11.5px;color:#47617A;margin-top:4px">${hora(c.ultimo_mensaje_en)}${c.caso_conserje ? ` · Caso #${c.caso_conserje.numero}` : ''}</div>
+      </div>`).join('') || `<div class="d">${pzIc('gift', 14)} Nada pendiente: todos los mensajes tienen respuesta.</div>`}
+      <h4 style="margin:14px 0 8px;color:#0A1E33">Clientes en modo conserje</h4>
+      ${clientes.map(clienteCard).join('')}
+      <h4 style="margin:14px 0 8px;color:#0A1E33">La mañana de todos</h4>
+      ${clientes.map(mananaRow).join('')}
+      <h4 style="margin:14px 0 8px;color:#0A1E33">Próximos posteos</h4>
+      ${proximos.length ? proximos.map(p => `
+      <div class="card" style="padding:12px;margin-bottom:8px"><div style="display:flex;gap:10px;align-items:flex-start">
+        ${thumbHTML(p, 56)}
+        <div style="min-width:0;flex:1"><b style="font-size:13.5px;color:#0A1E33">${esc(p.business_name || '')}</b>
+          <div style="font-size:13px;line-height:1.35">«${esc((p.caption || '').slice(0, 100))}»</div>
+          <div style="font-size:12px;color:#47617A;margin-top:3px">${esc(p.cuando || '')} · ${p.approval === 'approved' || p.approval === 'auto' ? '✅ Aprobado' : '⏳ Pendiente de aprobación'}</div></div>
+      </div></div>`).join('') : '<div class="d">Nada programado para los próximos 7 días.</div>'}
+      ` : `
+      <div class="card" style="padding:24px 18px;margin:16px 0;text-align:center">
+        <img src="/ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;object-fit:cover">
+        <h4 style="margin:12px 0 6px;color:#0A1E33">Todavía no hay clientes en modo conserje</h4>
+        <p class="d" style="margin:0 auto 14px;max-width:300px">El conserje es el equipo respondiendo como Posty y haciendo los posteos. Se prende desde la vista del cliente en Soporte.</p>
+        <button class="btn btn-primary btn-sm" data-cj-soporte>Ver clientes en Soporte</button>
+      </div>`}
+      <h4 style="margin:14px 0 8px;color:#0A1E33"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22C55E;margin-right:6px"></span>Actividad en vivo — todo lo que hizo el equipo</h4>
+      <div style="font-size:12px;color:#47617A;margin-bottom:8px">Se actualiza sola cada 45 segundos.</div>
+      ${registro.slice(0, 30).map(e => `
+      <div style="font-size:13px;padding:8px 0;border-bottom:1px solid var(--line)">
+        <span style="color:#47617A;font-size:11.5px">${hora(e.created_at)}</span> · <b>${esc(e.business_name || e.email || ('usuario ' + (e.user_id || '')))}</b> · <b>${esc(e.etiqueta || e.action || '')}</b>${e.post_id ? ` · posteo #${e.post_id}` : ''}${e.case_id ? ` · caso #${e.case_id}` : ''}
+        ${e.detalle ? `<div style="white-space:pre-wrap;color:#47617A">${esc(e.detalle)}</div>` : ''}
+      </div>`).join('') || '<div class="d">Sin actividad registrada todavía.</div>'}
+      ${registro.length > 30 ? `<div style="font-size:12px;color:#47617A;margin-top:6px">…y ${registro.length - 30} más en el registro completo.</div>` : ''}
+      <h4 style="margin:14px 0 8px;color:#0A1E33">Necesidades abiertas</h4>
       ${(r.necesidades || []).map(c => `
       <button class="btn btn-ghost btn-block" data-sp-case="${c.id}" style="text-align:left;margin-bottom:6px">
         <b>Caso #${c.id}</b> · ${esc(tipoLabel(c.tipo))} · ${esc(c.business_name || c.email || ('usuario ' + c.user_id))}
         <br><span style="font-size:11.5px;color:var(--mut)">Dueño: ${esc(c.dueno || 'equipo')}${c.siguiente_paso ? ` · Siguiente paso: ${esc(c.siguiente_paso)}` : ''}</span>
       </button>`).join('') || '<div class="d">' + pzIc('gift', 14) + ' Sin necesidades abiertas.</div>'}
-      <h4 style="margin:14px 0 8px">Bandeja — lo que necesita tu decisión</h4>
+      <h4 style="margin:14px 0 8px;color:#0A1E33">Bandeja — lo que necesita tu decisión</h4>
       ${(r.bandeja || []).map(c => `
       <button class="btn btn-ghost btn-block" data-sp-case="${c.id}" style="text-align:left;margin-bottom:6px;border-left:4px solid #2793C8">
         <b>Caso #${c.id}</b> · ${esc(tipoLabel(c.tipo))} · ${esc(c.business_name || c.email || ('usuario ' + c.user_id))} · ${esc(c.titulo || '')}
         <br><span style="font-size:11.5px;color:var(--mut)">${c.siguiente_paso ? `Siguiente paso: ${esc(c.siguiente_paso)}` : 'Sin siguiente paso marcado.'}</span>
       </button>`).join('') || '<div class="d">Nada en la Bandeja: ningún caso te está esperando.</div>'}
-      <h4 style="margin:14px 0 8px">Registro de actividad — todo lo que hizo el equipo</h4>
-      ${(r.registro || []).map(e => `
-      <div style="font-size:12.5px;padding:7px 0;border-bottom:1px solid var(--line)">
-        <span style="color:var(--mut);font-size:11px">${hora(e.created_at)}</span> · <b>${esc(e.business_name || e.email || ('usuario ' + (e.user_id || '')))}</b> · <b>${esc(e.etiqueta || e.action || '')}</b>${e.post_id ? ` · posteo #${e.post_id}` : ''}${e.case_id ? ` · caso #${e.case_id}` : ''}
-        ${e.detalle ? `<div style="white-space:pre-wrap;color:var(--mut)">${esc(e.detalle)}</div>` : ''}
-      </div>`).join('') || '<div class="d">Sin actividad registrada todavía.</div>'}`;
-    body.querySelectorAll('[data-cj-client]').forEach(b => b.onclick = () => showSupportClient(b.dataset.cjClient));
+    </div>`;
+    body.querySelectorAll('[data-cj-client]').forEach(b => b.onclick = () => { clearCjTimer(); showSupportClient(b.dataset.cjClient); });
     body.querySelectorAll('[data-cj-off]').forEach(b => b.onclick = async () => {
       if (!confirm('¿Sacar a este cliente del modo conserje? El cerebro automático vuelve a responder solo.')) return;
       try { await adminApi('support/' + b.dataset.cjOff + '/conserje', 'POST', { concierge: false }); showConcierge(); }
       catch (e) { alert('No se pudo sacar de conserje.'); }
     });
-    body.querySelectorAll('[data-sp-case]').forEach(b => b.onclick = () => showSupportCase(b.dataset.spCase));
+    body.querySelectorAll('[data-cj-soporte]').forEach(b => b.onclick = () => {
+      const t = document.querySelector('#adminCard [data-atab="support"]');
+      if (t) t.click();
+    });
+    body.querySelectorAll('[data-sp-case]').forEach(b => b.onclick = () => { clearCjTimer(); showSupportCase(b.dataset.spCase); });
+    armCjRefresh();
   }
+
   $$('#adminCard [data-atab]').forEach(b => b.onclick = () => {
+    clearCjTimer();
     $$('#adminCard [data-atab]').forEach(x => x.classList.remove('btn-primary'));
     b.classList.add('btn-primary');
     ({ launch: showLaunch, support: showSupport, conserje: showConcierge, home: showHome, funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview, money: showMoney, referrals: showReferrals, content: showContent, cohorts: showCohorts, churn: showChurn, health: showHealth })[b.dataset.atab]();

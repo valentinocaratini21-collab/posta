@@ -406,7 +406,7 @@ function detectNoApproval(db, now, stopped, out) {
     const r = openCase(db, {
       userId: g.uid, tipo: 'sin_aprobar', dedupKey: 'noaprob:' + key,
       titulo: 'Semana sin aprobar hace 2 días',
-      detalle: g.n + ' posteo(s) programados siguen sin aprobar desde ' + (g.first || 'sin dato') + ' (semana ' + g.wk + ').',
+      detalle: (g.n === 1 ? '1 posteo programado sigue sin aprobar desde ' : g.n + ' posteos programados siguen sin aprobar desde ') + (g.first || 'sin dato') + ' (semana ' + g.wk + ').',
       siguientePaso: 'Preguntarle qué le frena y aprobar juntos.',
     });
     if (r.ok && !r.duplicado) out.opened.push(r.caso);
@@ -698,7 +698,7 @@ function buildJourney(db, userId, deps) {
   stages.push({
     key: 'publicacion', titulo: 'Publicación — qué salió, qué falló',
     estado: failed24.length ? 'falla' : (!published.length && !failedEvents.length ? 'sin_datos' : 'ok'),
-    resumen: failed24.length ? failed24.length + ' posteo(s) fallaron en las últimas 24 h.'
+    resumen: failed24.length ? (failed24.length === 1 ? '1 posteo falló en las últimas 24 h.' : failed24.length + ' posteos fallaron en las últimas 24 h.')
       : !published.length && !failedEvents.length ? 'Sin publicaciones ni fallos registrados en 30 días.'
       : (lastPub ? 'Último publicado: #' + lastPub.id + ' (' + (lastPub.published_at || 'sin hora') + ').' : 'Sin publicados en 30 días.'),
     publicados: published.slice(0, 10).map((p) => postView(p, absImageUrl)),
@@ -1001,6 +1001,163 @@ function pendingCountFor(db, uid) {
   return (row && row.c) || 0;
 }
 
+// ---------- PANEL V2 (conserje-panel-v2, base v698) ----------
+// El panel del dueño muestra el trabajo, no ceros: por cliente, su foto
+// (la imagen de su posteo más reciente, producto real), su posteo de hoy,
+// su feed (últimos publicados + próximo programado), su mañana (confirmada
+// o no) y sus próximos posteos. Las alertas son solo hechos reales de la
+// DB (posteo fallido, sin posteo mañana, mensaje >2h sin respuesta).
+// Si el enriquecimiento falla, el cliente sale con la forma vieja (nunca
+// un 500 del panel por un dato nuevo).
+
+// Etiqueta corta y honesta para una fecha en la zona de la cuenta:
+// «hoy 17:00», «mañana 12:00» o «vie 14/11 17:00».
+function cuandoLabel(ms, tz, nowMs) {
+  const t = Number(ms);
+  if (!Number.isFinite(t)) return '';
+  try {
+    const zone = tz || DEFAULT_TZ;
+    const hora = new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: zone }).format(new Date(t));
+    const hoyKey = dayKeyInTz(new Date(Number(nowMs) || Date.now()), zone);
+    const manKey = dayKeyInTz(new Date((Number(nowMs) || Date.now()) + 24 * 3600 * 1000), zone);
+    const key = dayKeyInTz(new Date(t), zone);
+    if (key === hoyKey) return 'hoy ' + hora;
+    if (key === manKey) return 'mañana ' + hora;
+    const dia = new Intl.DateTimeFormat('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: zone }).format(new Date(t)).replace(/[.,]/g, '');
+    return dia + ' ' + hora;
+  } catch (e) { return ''; }
+}
+
+// Vista mínima de un posteo para el panel: foto, caption, día y hora.
+// `img` resuelve la URL absoluta; `p` puede ser una fila de posts o la
+// vista que devuelve morningFor (ambas llevan image_path).
+function postViewMini(uid, p, img, tz, nowMs) {
+  if (!p) return null;
+  const t = toMs(p.scheduled_at);
+  return {
+    id: p.id, caption: p.caption || '', scheduled_at: p.scheduled_at || null,
+    published_at: p.published_at || null, status: p.status || '', approval: p.approval || '',
+    image_url: img(p), tipo: p.tipo || p.media_type || '', strategy_why: p.strategy_why || '',
+    cuando: cuandoLabel(t, tz, nowMs),
+  };
+}
+
+// Datos nuevos del panel por cliente: foto, posteo de hoy, feed, mañana,
+// próximos. Todo de la DB; sin dato, null/vacío — nunca inventado.
+function panelClientExtra(db, uid, opts) {
+  const o = opts || {};
+  const abs = typeof o.absImageUrl === 'function' ? o.absImageUrl : null;
+  const img = (p) => (p ? (abs ? abs(uid, p.image_path) : (p.image_path || '')) : '');
+  const tz = accountTz(db, uid);
+  const now = new Date();
+  const nowMs = now.getTime();
+  // Foto del negocio: su posteo más reciente con imagen (publicado primero).
+  const fotoRow = safe(() => db.prepare(
+    `SELECT * FROM posts WHERE user_id = ? AND status <> 'cancelled' AND COALESCE(image_path, '') <> ''
+     ORDER BY (status = 'published') DESC, id DESC LIMIT 1`).get(uid), null);
+  const foto = fotoRow ? img(fotoRow) : null;
+  // Posteo de hoy + mañana (reusa morningFor: ritual + programados de hoy).
+  const man = morningFor(db, uid);
+  const hoy = man.ok ? (man.elegido || man.recomendado || (man.posts_hoy && man.posts_hoy[0]) || null) : null;
+  const posteoHoy = hoy ? postViewMini(uid, hoy, img, tz, nowMs) : null;
+  // ¿La mañana ya se confirmó hoy? (envio_manana en el registro, fecha de
+  // hoy en la zona de la cuenta).
+  const ultimoEnvio = safe(() => db.prepare(
+    `SELECT created_at FROM support_team_log WHERE user_id = ? AND action = 'envio_manana' ORDER BY id DESC LIMIT 1`).get(uid), null);
+  const diaHoy = dayKeyInTz(now, tz);
+  const confirmada = !!(ultimoEnvio && dayKeyInTz(new Date(toMs(ultimoEnvio.created_at)), tz) === diaHoy);
+  const manana = man.ok ? {
+    dia: man.dia,
+    recomendado: man.recomendado ? postViewMini(uid, man.recomendado, img, tz, nowMs) : null,
+    elegido: man.elegido ? postViewMini(uid, man.elegido, img, tz, nowMs) : null,
+    posts_hoy: (man.posts_hoy || []).map((p) => postViewMini(uid, p, img, tz, nowMs)),
+    confirmada, confirmado_en: confirmada ? ultimoEnvio.created_at : null,
+  } : { dia: diaHoy, recomendado: null, elegido: null, posts_hoy: [], confirmada: false, confirmado_en: null };
+  // Feed: últimos publicados (3) + próximo programado. El panel piensa
+  // en días (como morningFor), no en horas: el próximo es el primer
+  // programado de hoy en adelante, aunque su hora ya haya pasado y siga
+  // en scheduled (en producción ya habría salido o estaría trabado).
+  const publicados = safe(() => db.prepare(
+    `SELECT * FROM posts WHERE user_id = ? AND status = 'published'
+     ORDER BY COALESCE(published_at, created_at) DESC, id DESC LIMIT 3`).all(uid), []);
+  const schedAll = safe(() => db.prepare(
+    `SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' ORDER BY scheduled_at ASC`).all(uid), []);
+  const keyOf = (p) => { const t = toMs(p.scheduled_at); return Number.isFinite(t) ? dayKeyInTz(new Date(t), tz) : ''; };
+  const proximo = schedAll.find((p) => keyOf(p) >= diaHoy) || null;
+  const feed = {
+    publicados: publicados.map((p) => postViewMini(uid, p, img, tz, nowMs)),
+    proximo: proximo ? postViewMini(uid, proximo, img, tz, nowMs) : null,
+  };
+  // Próximos 7 días (para la sección «Próximos posteos»): de hoy en
+  // adelante, por día de la cuenta.
+  const finKey = dayKeyInTz(new Date(nowMs + 7 * 24 * 3600 * 1000), tz);
+  const proximos = schedAll
+    .filter((p) => { const k = keyOf(p); return k && k >= diaHoy && k <= finKey; })
+    .slice(0, 5)
+    .map((p) => postViewMini(uid, p, img, tz, nowMs));
+  return {
+    foto, posteo_hoy: posteoHoy, posts_hoy_total: man.ok ? (man.posts_hoy || []).length : 0,
+    proximos_semana: proximos.length, proximos, feed, manana,
+  };
+}
+
+function panelClientExtraSafe(db, uid, opts) {
+  try { return panelClientExtra(db, uid, opts); }
+  catch (e) {
+    return { foto: null, posteo_hoy: null, posts_hoy_total: 0, proximos_semana: 0,
+      proximos: [], feed: { publicados: [], proximo: null },
+      manana: { dia: '', recomendado: null, elegido: null, posts_hoy: [], confirmada: false, confirmado_en: null } };
+  }
+}
+
+// Alertas del panel: SOLO hechos reales de la DB. Reglas:
+// 1 · post_fallido: evento post_failed en las últimas 24 h.
+// 2 · sin_posteo_manana: cliente en conserje sin posteo programado mañana.
+// 3 · mensaje_sin_respuesta: mensajes pendientes con el último hace ≥ 2 h.
+// Sin nada: lista vacía (la vista no muestra nada, nunca un rojo inventado).
+function panelAlerts(db, clientes) {
+  const nowMs = Date.now();
+  const alertas = [];
+  for (const c of clientes || []) {
+    const uid = c.user_id;
+    const nombre = c.business_name || c.email || ('usuario ' + uid);
+    const tz = accountTz(db, uid);
+    const fails = safe(() => db.prepare(
+      `SELECT id, created_at, props FROM events WHERE user_id = ? AND name = 'post_failed'
+       AND datetime(created_at) >= datetime('now', '-1 day') ORDER BY id DESC LIMIT 3`).all(uid), []);
+    for (const f of fails) {
+      let pr = {};
+      try { pr = JSON.parse(f.props || '{}'); } catch (e) {}
+      alertas.push({ tipo: 'post_fallido', user_id: uid, business_name: nombre, post_id: pr.post_id || null,
+        detalle: 'El posteo' + (pr.post_id ? ' #' + pr.post_id : '') + ' de ' + nombre + ' falló'
+          + (pr.cause ? ': ' + String(pr.cause).slice(0, 120) : '') + '.',
+        created_at: f.created_at });
+    }
+    const mananaKey = dayKeyInTz(new Date(nowMs + 24 * 3600 * 1000), tz);
+    const sched = safe(() => db.prepare(
+      `SELECT scheduled_at FROM posts WHERE user_id = ? AND status = 'scheduled'`).all(uid), []);
+    const hayManana = sched.some((p) => {
+      const t = toMs(p.scheduled_at);
+      return Number.isFinite(t) && dayKeyInTz(new Date(t), tz) === mananaKey;
+    });
+    if (!hayManana) {
+      alertas.push({ tipo: 'sin_posteo_manana', user_id: uid, business_name: nombre, post_id: null,
+        detalle: nombre + ' no tiene posteo programado para mañana.',
+        created_at: nowUtc() });
+    }
+    if (c.pendiente && c.ultimo_mensaje_en) {
+      const t = toMs(c.ultimo_mensaje_en);
+      const horas = Number.isFinite(t) ? Math.floor((nowMs - t) / 3600000) : 0;
+      if (horas >= 2) {
+        alertas.push({ tipo: 'mensaje_sin_respuesta', user_id: uid, business_name: nombre, post_id: null,
+          detalle: nombre + ' lleva ' + horas + ' h con un mensaje sin responder: «' + trunc(c.ultimo_mensaje || '', 80) + '»',
+          created_at: c.ultimo_mensaje_en });
+      }
+    }
+  }
+  return alertas;
+}
+
 function conciergeClients(db, opts) {
   ensureSchema(db);
   const rows = safe(() => db.prepare(
@@ -1028,7 +1185,10 @@ function conciergeClients(db, opts) {
       pendiente: pendientes > 0,
       caso_conserje: caso ? { numero: caso.id, estado: caso.estado, siguiente_paso: caso.siguiente_paso || '' } : null,
       casos_abiertos: (openCases && openCases.c) || 0,
-      ultima_actividad: lastAct ? { action: lastAct.action, detalle: lastAct.detalle, created_at: lastAct.created_at } : null,
+      ultima_actividad: lastAct ? { action: lastAct.action, etiqueta: ACTION_LABELS[lastAct.action] || lastAct.action, detalle: lastAct.detalle, created_at: lastAct.created_at } : null,
+      // Panel v2: foto, posteo de hoy, feed, mañana y próximos (solo si
+      // el llamador lo pide — el cron de pendientes no lo necesita).
+      ...((opts || {}).detalle ? panelClientExtraSafe(db, uid, opts) : {}),
     };
   });
 }
@@ -1073,6 +1233,7 @@ function morningFor(db, uid) {
     id: p.id, caption: p.caption || '', scheduled_at: p.scheduled_at || null,
     status: p.status || '', approval: p.approval || '',
     image_path: p.image_path || '', tipo: p.tipo || p.media_type || '',
+    strategy_why: p.strategy_why || '',
   } : null;
   return {
     ok: true, user_id: userId, dia: dayKey, timezone: tz,
@@ -1093,7 +1254,7 @@ function confirmMorning(db, uid, opts) {
   const horas = m.posts_hoy.map((p) => '#' + p.id + ' ' + String(p.scheduled_at || '').slice(11, 16)).join(', ');
   logTeamAction(db, { actor: o.actor || 'equipo', action: 'envio_manana', userId: Number(uid),
     detalle: 'Mañana del ' + m.dia + ' confirmada: ' + (m.posts_hoy.length
-      ? m.posts_hoy.length + ' posteo(s) — ' + horas + '.' : 'sin posteos programados para hoy.') });
+      ? (m.posts_hoy.length === 1 ? '1 posteo — ' : m.posts_hoy.length + ' posteos — ') + horas + '.' : 'sin posteos programados para hoy.') });
   let enviado = null;
   const mensaje = String(o.mensaje || '').trim();
   if (mensaje) {
@@ -1128,7 +1289,17 @@ function buildOwnerPanel(db, opts) {
   ensureSchema(db);
   const o = opts || {};
   const limit = Math.min(Math.max(Number(o.limit) || 100, 1), 200);
-  const clientes = conciergeClients(db, o);
+  // Panel v2: los clientes vienen enriquecidos (foto, posteo de hoy, feed,
+  // mañana, próximos). El resto de la forma no cambia.
+  const clientes = conciergeClients(db, { ...o, detalle: true });
+  const alertas = panelAlerts(db, clientes);
+  const proximosPosteos = [];
+  for (const c of clientes) {
+    for (const p of (c.proximos || [])) {
+      proximosPosteos.push({ ...p, user_id: c.user_id, business_name: c.business_name || c.email || '' });
+    }
+  }
+  proximosPosteos.sort((a, b) => (toMs(a.scheduled_at) || Infinity) - (toMs(b.scheduled_at) || Infinity));
   const necesidades = listCases(db, { estado: 'abierto', limit: 50 })
     .sort((a, b) => ((a.tipo === 'conserje' ? 0 : 1) - (b.tipo === 'conserje' ? 0 : 1)) || (b.id - a.id));
   const rows = safe(() => db.prepare(
@@ -1162,6 +1333,9 @@ function buildOwnerPanel(db, opts) {
         `SELECT COUNT(*) AS c FROM support_team_log WHERE datetime(created_at) >= datetime('now', '-30 days')`).get(), { c: 0 }).c) || 0,
     },
     clientes, necesidades, registro, bandeja,
+    // Panel v2: alertas reales (vacío = nada que alertar) y próximos
+    // posteos de todos los clientes, ordenados por fecha.
+    alertas, proximos_posteos: proximosPosteos.slice(0, 20),
   };
 }
 
