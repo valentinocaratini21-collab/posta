@@ -38,7 +38,7 @@ const sliceFn = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + base v710 (BUILD v711 en el árbol final) ----------
-  t(srv.includes("const BUILD_ID = '20261105-v712'"), 'server: BUILD v712 (re-base carta-estrategia)');
+  t(srv.includes("const BUILD_ID = '20261105-v720'"), 'server: BUILD v720 (lote ads-nativa)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -49,7 +49,7 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v712'"), 'CHUNK_V v712 (re-base carta-estrategia: toca chunk-analisis.js)');
-  t(md5(css) === '0336c503fced5ec2715ef1c1ec7c5611', 'styles.css con jerarquia carta-estrategia (md5 v712, 4 reglas; re-base)');
+  t(md5(css) === '9671bbea210fa4b9c4ec62c14db92342', 'styles.css (md5 v718, sin cambio en este lote)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 10, 'server: 10 rutas /api/ads, sin endpoints nuevos');
 
   // ---------- 2. Dock v2: Inicio, Ads, +, Estrategia, Premios, Ajustes (las dos shells) ----------

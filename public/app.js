@@ -6488,6 +6488,7 @@ function mzTabsHTML(tab) {
     : (tab === 'schedule' || tab === 'post') ? 'semana'
     : tab === 'jardin-posty' ? 'jardin'
     : tab === 'analisis' ? 'analisis'
+    : tab === 'ads' ? 'ads'
     : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}${key === 'jardin' ? '<span class="mz-badge pz-premios-badge off"></span>' : ''}</button>`;
   return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${pzDockMasBtn('mz')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>${pzDockMasHTML()}`;
@@ -16418,6 +16419,15 @@ function paintAdsBtn(card, balanceCents, minTopupCents) {
     btn.dataset.load = String(load);
   }
 }
+// Checkout externo (MercadoPago): en web navega ahí mismo; en la app nativa
+// se abre en el navegador del sistema para no sacar al usuario de la app
+// (mismo mecanismo que los links de compartir en Ajustes: window.open _blank).
+function adsAbrirCheckout(url) {
+  try {
+    if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) { window.open(url, '_blank'); return; }
+  } catch (e) {}
+  location.href = url;
+}
 function bindAdsRecCards(scope, opts) {
   // opts: { balance, minTopup, returnTo }
   if (!scope) return;
@@ -16441,11 +16451,22 @@ async function adsRecAction(card, opts) {
     // Un solo toque: guarda la pauta pendiente, cobra por MercadoPago y al volver se activa sola
     const load = Number(btn.dataset.load) || budget;
     try { localStorage.setItem('posta_pending_boost', JSON.stringify({ post_id: Number(card.dataset.rec), budget_cents: budget, ts: Date.now() })); } catch (e) {}
-    btn.disabled = true; btn.textContent = '⏳ Abriendo MercadoPago…';
+    const esNativa = (() => { try { return typeof IS_NATIVE !== 'undefined' && !!IS_NATIVE; } catch (e) { return false; } })();
+    btn.disabled = true; btn.textContent = esNativa ? '⏳ Abriendo el pago en tu navegador…' : '⏳ Abriendo MercadoPago…';
     try {
       const r = await api.post('/api/ads/topup', { amount_cents: load, return_to: opts.returnTo });
       track('checkout_start', { kind: 'ads_topup' }); trackBeacon();
-      if (r && r.init_point) { location.href = r.init_point; return; }
+      if (r && r.init_point) {
+        adsAbrirCheckout(r.init_point);
+        if (esNativa) {
+          // En nativa el pago se completa en el navegador: el usuario sigue
+          // en el tab Ads; el saldo se acredita en el servidor y la pauta
+          // se activa con un toque en Potenciar al volver.
+          btn.disabled = false; paintAdsBtn(card, opts.balance, opts.minTopup);
+          box.innerHTML = `<div class="okmsg">${esc(gzT('Se abrió el pago en tu navegador. Cuando vuelvas, tu saldo ya va a estar actualizado.', 'The payment opened in your browser. When you come back, your balance will be updated.'))}</div>`;
+        }
+        return;
+      }
       throw new Error('No se pudo generar el pago');
     } catch (e) {
       btn.disabled = false; paintAdsBtn(card, opts.balance, opts.minTopup);
@@ -16635,7 +16656,7 @@ function bindAds() {
     try {
       const r = await api.post('/api/ads/topup', { amount_cents: Number(b.dataset.topup), return_to: 'ads' });
       track('checkout_start', { kind: 'ads_topup' }); trackBeacon();
-      if (r && r.init_point) location.href = r.init_point; // checkout de MercadoPago
+      if (r && r.init_point) adsAbrirCheckout(r.init_point); // checkout de MercadoPago (en nativa, en el navegador del sistema)
       else if (msg) msg.innerHTML = `<div class="err">No se pudo generar el pago</div>`;
     } catch (e) {
       if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No se pudo generar el pago')}</div>`;
@@ -17769,7 +17790,7 @@ function pzPrefetchKick() {
   else if (tab === 'onboarding') { if (!OB) OB = loadOB() || freshOB(); content = onboardingView(); }
   else if (tab === 'calendario') { location.hash = '#/app/schedule'; return; } // Calendario fusionado en Schedule
   else if (tab === 'historial') { location.hash = '#/app/schedule'; return; } // Historial fusionado en Schedule
-  else if (tab === 'ads') { if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) { location.hash = '#/app/semana'; } else content = await adsView(); } // 🚀 Potenciar: billetera + boost (solo web)
+  else if (tab === 'ads') { content = await adsView(); } // 🚀 Potenciar: billetera + boost (web y nativa: la recarga es cobro por API a la tarjeta guardada, sin checkout web)
   else if (tab === 'admin') { pzPaintSkeleton(tab); let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
   else if (tab === 'post') { pzPaintSkeleton(tab); content = await approvalPostView(postId); } // 🔔 Posty te avisa: aprobar por notificación
   else if (tab === 'dogfood') { pzPaintSkeleton(tab); content = await dogfoodView(postId); } // 🤖 Posty dogfood: propuesta del día
