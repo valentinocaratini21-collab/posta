@@ -464,41 +464,12 @@ function pzGoBack() {
   } catch (e) {}
   bbGo('#/app/inicio');
 }
-// (LOTE FEED · transiciones mágicas — Valentino 1/11: «para que se
-// sienta una app impresionante») Rápidas (~300 ms), nunca lentas: la
-// navegación no espera a la animación (el contenido ya está pintado;
-// solo se desliza). Transform solo: no toca scroll ni layout. Con
-// reduced-motion: sin movimiento (ni slide, ni estela, ni zoom).
+// (LOTE FEED · transiciones mágicas — RETIRADO por decisión de
+// Valentino 6/11: el cambio de pantalla es instantáneo, sin deslizar
+// ni estela. La detección sigue: otros efectos — zoom, carrusel,
+// pull-to-refresh — la consultan para no moverse con reduced-motion.)
 function pzReducedMotion() {
   try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; }
-}
-function pzMagicTrail() {
-  try {
-    if (pzReducedMotion()) return;
-    const d = document.createElement('div');
-    d.className = 'pz-trail';
-    d.setAttribute('aria-hidden', 'true');
-    d.innerHTML = '<span class="pz-trail-band"></span><span class="pz-trail-spark">✦</span><span class="pz-trail-spark s2">✦</span><span class="pz-trail-spark s3">✦</span>';
-    document.body.appendChild(d);
-    const anim = d.animate([{ transform: 'translateX(-30%)' }, { transform: 'translateX(130%)' }], { duration: 300, easing: 'ease-out' });
-    if (anim && anim.finished) anim.finished.then(() => { try { d.remove(); } catch (e) {} }).catch(() => {});
-    else setTimeout(() => { try { d.remove(); } catch (e) {} }, 340);
-  } catch (e) {}
-}
-function pzPlayEnter() {
-  try {
-    if (!PZ_NAV_DIR || pzReducedMotion()) return;
-    const el = document.querySelector('.bb-main') || document.querySelector('.app-shell .main');
-    if (!el) return;
-    const cls = PZ_NAV_DIR === 'back' ? 'pz-enter-back' : 'pz-enter-fwd';
-    el.classList.remove('pz-enter-fwd', 'pz-enter-back');
-    void el.offsetWidth; // reinicia la animación aunque la clase ya estaba
-    el.classList.add(cls);
-    pzMagicTrail();
-    const done = () => { try { el.classList.remove(cls); } catch (e) {} };
-    el.addEventListener('animationend', done, { once: true });
-    setTimeout(done, 360); // respaldo si animationend no llega
-  } catch (e) {}
 }
 // (LOTE PULL-TO-REFRESH · Valentino 1/11 «dale»: deslizar para abajo refresca)
 // En todas las pantallas de la app, tirar hacia abajo con la vista arriba
@@ -17468,7 +17439,6 @@ function pzPrefetchKick() {
  // pantalla que abrió el posteo (o a Inicio sin origen válido) y restaura
  // su scroll. Solo se actualiza cuando cambia la vista, no en repintados.
  let PZ_VIEW_KEY = ''; let PZ_PREV_VIEW = ''; const PZ_SCROLL_POS = {};
- let PZ_NAV_STACK = []; let PZ_NAV_DIR = null; // (LOTE FEED · transiciones) pila para la dirección
  function pzApvBackHTML(en) {
    const prev = (typeof PZ_PREV_VIEW === 'string') ? PZ_PREV_VIEW : '';
    let href = '#/app/inicio';
@@ -17497,15 +17467,6 @@ function pzPrefetchKick() {
      const _k = (location.hash || '#/').split('?')[0];
      if (_k !== PZ_VIEW_KEY) {
        if (PZ_VIEW_KEY) { try { PZ_SCROLL_POS[PZ_VIEW_KEY] = window.scrollY || 0; } catch (e) {} PZ_PREV_VIEW = PZ_VIEW_KEY; }
-       // (LOTE FEED · transiciones) Dirección del cambio: volver = la
-       // nueva clave es la anterior de la pila; si no, avanzar. En
-       // la primera pintura no hay dirección (sin animación).
-       try {
-         if (PZ_VIEW_KEY && PZ_NAV_STACK.length >= 2 && PZ_NAV_STACK[PZ_NAV_STACK.length - 2] === _k) { PZ_NAV_DIR = 'back'; PZ_NAV_STACK.pop(); }
-         else if (PZ_VIEW_KEY) { PZ_NAV_DIR = 'fwd'; PZ_NAV_STACK.push(_k); }
-         else { PZ_NAV_DIR = null; PZ_NAV_STACK.push(_k); }
-         if (PZ_NAV_STACK.length > 24) PZ_NAV_STACK.splice(0, PZ_NAV_STACK.length - 24);
-       } catch (e) { PZ_NAV_DIR = null; }
        PZ_VIEW_KEY = _k;
      }
    } catch (e) {}
@@ -17809,11 +17770,6 @@ function pzPrefetchKick() {
   // aviso se limpia: las marcas ¡Nuevo! ya quedaron pintadas arriba.
   setTimeout(() => { try { pzPremiosNuevosSync(); } catch (e) {} }, 0);
   if (tab === 'jardin-posty') setTimeout(() => { try { pzPremiosNuevosLimpiar(); } catch (e) {} }, 0);
-  // (LOTE FEED · transiciones) Entrada deslizada + estela mágica, solo
-  // al cambiar de pantalla (misma vista = sin animación: el chat no
-  // salta y el scroll restaurado no se toca). Transform solo: nunca
-  // retrasa la llegada ni toca el scroll.
-  try { pzPlayEnter(); } catch (e) {}
   // LOTE VELOCIDAD: los fills que render() lanzaba a 60-90 ms (antes de la
   // pintura final) se re-disparan tras pintar: con esqueleto, la primera
   // pasada no encontraba los slots. Son idempotentes (dataset.done).

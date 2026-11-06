@@ -138,15 +138,15 @@ t(css.includes('body:has(#inicioView)') && css.includes('.bb-app.bb-glass-inicio
 
 // ---------- Transiciones ----------
 t(app.includes('function pzReducedMotion'), 'existe pzReducedMotion');
-t(app.includes('function pzMagicTrail'), 'existe pzMagicTrail');
-t(app.includes('function pzPlayEnter'), 'existe pzPlayEnter');
-t(app.includes('PZ_NAV_STACK') && app.includes("PZ_NAV_DIR = 'back'") && app.includes("PZ_NAV_DIR = 'fwd'"), 'dirección avance/vuelta por pila');
-t(app.includes('pzPlayEnter()') && app.includes("root.innerHTML = appShell(tab, content);"), 'hook tras pintar');
+t(!app.includes('function pzMagicTrail'), 'sin pzMagicTrail (retirado 6/11)');
+t(!app.includes('function pzPlayEnter'), 'sin pzPlayEnter (retirado 6/11)');
+t(!app.includes('PZ_NAV_STACK') && !app.includes('PZ_NAV_DIR'), 'sin pila de dirección (retirado 6/11)');
+t(!app.includes('pzPlayEnter()') && app.includes("root.innerHTML = appShell(tab, content);"), 'sin hook de entrada tras pintar (el contenido se pinta igual)');
 t(app.includes('scfClosePop(true)'), 'cierres explícitos con vuelta a la tile');
 t(app.includes('pop.animate') && app.includes('translate('), 'zoom FLIP desde la tile (WAAPI)');
-t(css.includes('@keyframes pzSlideFwd') && css.includes('@keyframes pzSlideBack'), 'slides avance/vuelta en CSS');
-t(css.includes('.pz-enter-fwd{animation:pzSlideFwd .3s ease-out}'), 'slide ~300 ms');
-t(css.includes('.pz-trail-spark') && css.includes('#FEC14D') && css.includes('#2793C8'), 'estela dorada + celeste con destellos');
+t(!css.includes('@keyframes pzSlideFwd') && !css.includes('@keyframes pzSlideBack'), 'sin slides de entrada en CSS (retirado 6/11)');
+t(!css.includes('.pz-enter-fwd') && !css.includes('.pz-enter-back'), 'sin clases de entrada en CSS (retirado 6/11)');
+t(!css.includes('.pz-trail-spark') && !css.includes('.pz-trail-band') && !css.includes('.pz-trail{'), 'sin estela en CSS (retirado 6/11)');
 t(css.includes(':where(#app) button:active{transform:scale(.97)'), 'botón responde al instante (scale + brillo)');
 t(css.includes("@media (prefers-reduced-motion: reduce)") && app.includes("prefers-reduced-motion: reduce"), 'reduced-motion: sin animación (CSS + JS)');
 

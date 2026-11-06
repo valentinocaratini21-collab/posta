@@ -34,7 +34,7 @@ const orderOk = (s, keys) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + base v721 ----------
-  t(srv.includes("const BUILD_ID = '20261105-v722'"), 'server: BUILD v722');
+  t(srv.includes("const BUILD_ID = '20261105-v725'"), 'server: BUILD v724 (re-pin sacar-transición, base v723)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -44,9 +44,9 @@ const orderOk = (s, keys) => {
   t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-  t(app.includes("const CHUNK_V = '20261105-v712'"), 'CHUNK_V v712 (sin cambio)');
-  t(md5(css) === '0a08dc1ceeb237d6cbb9eb5338d09587', 'styles.css md5 (lote dock-5)');
-  t(md5(app) === '92691f2785472497c890b32b86371a90', 'app.js md5 (lote dock-5)');
+  t(app.includes("const CHUNK_V = '20261105-v723'"), 'CHUNK_V v723 (ajustes-simple; sin cambio en este lote)');
+  t(md5(css) === 'fff8181f706ca8526db1c0f35095608e', 'styles.css md5 (re-pin sacar-transición v725: fuera keyframes entrada)');
+  t(md5(app) === '894a011fcc170e01524f5d45e5a1ff1f', 'app.js md5 (re-pin sacar-transición v725: fuera pzPlayEnter/pzMagicTrail)');
 
   // ---------- 2. Dock de 5 en las dos shells ----------
   const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');
