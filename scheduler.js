@@ -77,6 +77,18 @@ function getSettings(db, userId) {
 }
 
 async function publishSinglePost(db, post, opts = {}) {
+  // (PUSH-PUBLICADO-DIARIO · 5/11) Idempotencia durable: si la fila ya
+  // está 'published', este posteo ya salió y ya se avisó — no se vuelve
+  // a publicar ni a avisar. Todos los llamadores (scheduler, publish-now,
+  // chat, dogfood) dejan la fila en 'publishing' antes de llamar, así
+  // que el guarda solo frena una segunda llamada sobre un posteo ya
+  // publicado. Si la fila no existe (dobles sin DB), se sigue como antes.
+  try {
+    const fresh = db.prepare('SELECT status, ig_permalink FROM posts WHERE id = ?').get(post.id);
+    if (fresh && fresh.status === 'published') {
+      return { ok: true, already_published: true, permalink: post.ig_permalink || fresh.ig_permalink || '' };
+    }
+  } catch (e) { /* sin fila: seguir como antes */ }
   // Red de seguridad FINAL: ningún camino (endpoint, chat, scheduler, links de
   // aprobación) puede publicar si la prueba del usuario venció. El posteo se
   // pausa con mensaje amable en vez de publicarse gratis. Excepción: dogfood
@@ -301,10 +313,11 @@ async function publishSinglePost(db, post, opts = {}) {
     try {
       if (!result.demo) magiaMod.celebrateFirstPaidPost(db, { ...post, ig_permalink: result.permalink || post.ig_permalink || '' });
     } catch (e) { console.error('[magia-postpago] celebración:', e.message); }
-    // Aviso "ya salió": solo cuando importa — primer posteo (hito) o publicación
+    // Aviso "ya salió" (EMAIL): solo cuando importa — primer posteo (hito) o publicación
     // automática (el usuario no respondió al aviso de aprobación). Si lo aprobó
     // él hace 3 horas, ya lo sabe: no molestar. (respeta opt-out, no en demo)
     // El primer posteo se celebra como un hito en email y push.
+    // El gate del email NO cambia en este lote.
     let isFirstPost = false;
     try {
       const c = db.prepare("SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'published'").get(post.user_id);
@@ -312,6 +325,10 @@ async function publishSinglePost(db, post, opts = {}) {
     } catch (e) {}
     const wasAuto = post.approval !== 'approved'; // 'pending'→auto o 'auto' ya marcado
     const notifyPublished = (isFirstPost || wasAuto) && !result.demo;
+    // (PUSH-PUBLICADO-DIARIO · 5/11, Valentino: la push llega CADA DÍA
+    // cuando sale el posteo, para verlo primero.) La push ya NO comparte
+    // el gate del email: sale en cada publicación real.
+    const notifyPushPublished = !result.demo;
     try {
       if (notifyPublished) {
         const u = db.prepare('SELECT email, name, lang, COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
@@ -330,9 +347,15 @@ async function publishSinglePost(db, post, opts = {}) {
         }
       }
     } catch (e) { console.error('[email ya-salió]', e.message); }
-    // Push "¡tu posteo ya salió!": solo primer posteo o publicación automática.
+    // Push "¡tu posteo ya salió!": CADA DÍA, en cada publicación real
+    // (antes: solo primer posteo o automática). El toque abre /#/app/semana,
+    // donde el detalle muestra «Ver en Instagram» con el permalink — un
+    // toque más y está viendo el posteo. Abrir el permalink directo desde
+    // la push NO anda en la app nativa: pzNativeRoute (public/app.js) solo
+    // acepta rutas #/app/... y manda cualquier URL externa a #/app/oficina.
+    // Cambiar eso es un lote aparte (app.js + handler nativo + TestFlight).
     try {
-      if (notifyPublished) {
+      if (notifyPushPublished) {
         const { sendPush } = require('./push');
         const oo = db.prepare('SELECT COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
         if (!oo || !oo.oo) {
