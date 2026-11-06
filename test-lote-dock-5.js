@@ -34,7 +34,7 @@ const orderOk = (s, keys) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + base v721 ----------
-  t(srv.includes("const BUILD_ID = '20261105-v727'"), 'server: BUILD v727 (re-pin iconos-linea-info v727, re-base sobre v726)');
+  t(srv.includes("const BUILD_ID = '20261105-v728'"), 'server: BUILD v727 (re-pin iconos-linea-info v727, re-base sobre v726)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -45,7 +45,7 @@ const orderOk = (s, keys) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v723'"), 'CHUNK_V v723 (ajustes-simple; sin cambio en este lote)');
-  t(md5(css) === '9e51333fea9118ed693c467dbe3d1397', 'styles.css md5 (re-pin iconos-linea-info v727: íconos en la línea de info)');
+  t(md5(css) === '1ab1e38c5985f589df399bca8fea4c53', 'styles.css md5 (re-pin iconos-linea-info v727: íconos en la línea de info)');
   t(md5(app) === 'fb6d3f801b555a0f343f1448c335cab9', 'app.js md5 (re-pin iconos-linea-info v727: headIconsHTML en la línea de info)');
 
   // ---------- 2. Dock de 5 en las dos shells ----------

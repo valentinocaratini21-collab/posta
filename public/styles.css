@@ -4888,7 +4888,14 @@ body.pz-postchat-open{overflow:hidden}
    400 (.bb-tab no fija font-weight) y el 700 de esta regla hacía que
    «Agregar» se viera oscura/negrita al lado de las demás. En el shell
    mz las etiquetas ya van en 700 (.mz-tab), así que ahí se mantiene. */
-.bb-tab-mas-lb{display:block;font-size:11px;font-weight:400;line-height:1.35;color:#47617A}
+/* (LOTE MAS-ARRIBA · 6/11) La etiqueta del + llevaba line-height:1.35
+   (14,85px) mientras las demás etiquetas bb usan normal (14px): el botón
+   del + era 0,84px más alto y su círculo quedaba 0,84px por encima del
+   centro de los otros íconos. line-height:normal lo iguala. NO poner 1.35
+   aquí: el botón .bb-tab-mas sí lleva 1.35 !important y se hereda si se
+   quita esta línea. (En mz la etiqueta del + SÍ lleva 1.35 porque allí
+   las demás también usan 1.35 — .mz-tab —, así que no se toca.) */
+.bb-tab-mas-lb{display:block;font-size:11px;font-weight:400;line-height:normal;color:#47617A}
 .pz-dockmas{position:fixed;inset:0;z-index:90}
 .pz-dockmas-back{position:absolute;inset:0;background:rgba(10,30,51,.35)}
 .pz-dockmas-card{position:absolute;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));background:rgba(255,255,255,.88);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);border-radius:18px;box-shadow:0 10px 30px rgba(10,30,51,.20);padding:14px}
@@ -5132,6 +5139,17 @@ body.pz-postchat-open{overflow:hidden}
    24px y el + en su círculo de 24px, con la misma etiqueta debajo. */
 .mz-tab{display:flex;flex-direction:column;align-items:center;line-height:1.35}
 .mz-tab-ic{display:flex;align-items:center;justify-content:center;height:24px;margin-bottom:2px}
+/* (LOTE MAS-ARRIBA · 6/11, decisión Valentino: el + se veía ~2px más bajo
+   que los otros íconos en la shell bb) La Pieza 2 del 3/11 puso las cajas
+   de ícono mz en flex de 24px, pero .bb-tab-ic quedó como span en línea:
+   el svg de 24px se apoyaba en la línea base y el puntal (strut) dejaba
+   ~3px vacíos debajo, así la caja medía ~27px y la tinta quedaba 1,5px
+   arriba de su centro; además el botón del + (círculo exacto de 24px)
+   era ~2px más bajo y, con align-items:flex-end en .bb-bar, su círculo
+   quedaba 0,66px más bajo. Total: el + ~2,16px más bajo (medido con
+   Chromium a 390 y 360). Ahora .bb-tab-ic es caja flex de 24px como
+   .mz-tab-ic: los 5 íconos comparten centro y etiqueta. */
+.bb-tab-ic{display:flex;align-items:center;justify-content:center;height:24px}
 /* (DOCK-5 · 6/11, decisión Valentino: círculo alrededor del +) El +
    vuelve a su círculo de vidrio de 24px (receta base .mz-tab-mas-ic /
    .bb-tab-mas-ic, sin tocar: mismo alto que las cajas de ícono de los
