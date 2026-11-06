@@ -109,7 +109,7 @@ t('4 edicion: vacia no cambia nada', (() => {
   return out.length === 1 && out[0].nombre === 'campos';
 })());
 t('4 server: seguir=true no cambia nada, solo fecha', srv.includes("req.body && req.body.seguir") && srv.includes('semana_confirmada_at'));
-t('4 chunk: tira solo carta actual (anaPastMode la excluye)', chunk.includes('anaFlConfirmLoad') && chunk.includes('anaFlBox') && chunk.includes("if (!anaPastMode) h += `<div class=\"ana-fl-confirm\""));
+t('4 chunk: confirmación semanal FUERA de la carta (decisión 6/11: la carta termina en Compartir; el flujo queda dormido)', chunk.includes('anaFlConfirmLoad') && chunk.includes('anaFlBox') && !chunk.includes("if (!anaPastMode) h += `<div class=\"ana-fl-confirm\""));
 t('4 chunk: Sigue igual + editar', chunk.includes('Sigue igual') && chunk.includes('anaFlSeguir') && chunk.includes('anaFlEditar'));
 t('5 chunk: vetos visibles y revocables en la confirmacion semanal', chunk.includes('anaFlQuitarVeto') && chunk.includes("method: 'DELETE'") && chunk.includes('Vetado (nunca se genera)'));
 

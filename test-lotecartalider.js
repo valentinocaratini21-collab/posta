@@ -7,8 +7,10 @@
    Posty (el cierre, desde el motor). REGLA DURA: NADA REPETIDO DOS VECES —
    lo que dice la carta no se repite textual en próximo-paso, aprende ni
    números; el tema semanal se fusiona si duplica (no se duplica).
-   Preserva: carta-mano, saludo con nombre del negocio, ana-fl-confirm,
-   Impulsar + gate, cartas v1 con su forma vieja. Corre con:
+   Preserva: carta-mano, saludo con nombre del negocio,
+   Impulsar + gate, cartas v1 con su forma vieja. (6/11: ana-fl-confirm
+   sale de la carta por decisión de Valentino — la carta termina en
+   Compartir; el flujo anaFlConfirmLoad/Render queda dormido.) Corre con:
    node test-lotecartalider.js (desde el árbol del lote). */
 const fs = require('fs');
 const path = require('path');
@@ -251,7 +253,7 @@ if (aEN && aEN.letter) {
 }
 
 /* ---------- No se tocó lo demás ---------- */
-ok(chunk.includes('ana-fl-confirm'), 'confirmación semanal ana-fl-confirm intacta en la carta');
+ok(!chunk.includes('ana-fl-confirm'), 'confirmación semanal ana-fl-confirm FUERA de la carta (decisión 6/11: la carta termina en Compartir)');
 ok(chunk.includes('<div id="anaBoostRec">'), 'superficie Impulsar (anaBoostRec) intacta en la carta');
 ok(chunk.includes('anaBanner') && chunk.includes('anaSignHTML'), 'banner de cierre y firma intactos en la carta');
 ok(chunk.includes('ana-carta-mano'), 'carta-mano intacta');

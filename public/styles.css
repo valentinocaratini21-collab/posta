@@ -2938,7 +2938,7 @@ body.hf-sv-open{overflow:hidden}
 .ana-group .ana-f:first-of-type{border-top:none;padding-top:2px}
 .ana-t{font-size:14px;color:var(--txt);line-height:1.45;margin:0}
 .ana-ltr-p{font-size:15px;color:var(--txt);line-height:1.62;margin:13px 0 0}
-.ana-ltr-greet{font-weight:800;font-size:16px;margin-top:16px}
+.ana-ltr-greet{font-weight:800;font-size:16px;margin-top:16px;color:rgba(10,30,51,.6)}
 .ana-ltr-plan{background:#F2F9FD;border-radius:12px;padding:11px 13px;margin:10px 0 0}
 .ana-ltr-plan p{font-size:14px;line-height:1.55;color:var(--txt);margin:0}
 .ana-ltr-plan .ana-fx{color:#47617A}
@@ -4166,7 +4166,7 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .mz-sheet{left:12px;right:12px;top:auto;bottom:calc(136px + env(safe-area-inset-bottom));background:transparent;align-items:flex-end}
 .mz-sheet-card{height:min(54dvh,460px);border-radius:22px}
 /* Ítem 5/6 — primera línea de la carta Estrategia. */
-.ana-ltr-first{font-size:17px;font-weight:800;color:#0A1E33;line-height:1.45;margin:16px 0 0}
+.ana-ltr-first{font-size:17px;font-weight:800;color:#2793C8;line-height:1.45;margin:16px 0 0}
 /* Ítem 7 — feed y chat TODO BLANCOS también con modo oscuro del
    sistema: las reglas viven DENTRO del bloque oscuro vigente (no un
    tercer bloque: test-feed-16-17 cuenta 2), al final para ganar por
@@ -5006,9 +5006,9 @@ body.pz-postchat-open{overflow:hidden}
 .ana-carta-mano::before{content:"";position:absolute;top:0;left:0;width:78px;height:78px;background:linear-gradient(to bottom right,#F8EDD2 0%,#EADFBF 40%,#CDBE96 100%);clip-path:polygon(0 0,100% 0,0 100%);clip-path:path("M0,0 L78,0 Q44,14 22,36 Q8,52 0,78 Z");filter:drop-shadow(2px 3px 3px rgba(90,70,20,.40));pointer-events:none;z-index:2}
 .ana-carta-mano .ana-title{font-size:30px}
 .ana-carta-mano .ana-ltr-p{font-size:21px;line-height:1.5;font-family:'Gochi Hand',cursive,system-ui,sans-serif}
-.ana-carta-mano .ana-ltr-greet{font-size:22px}
+.ana-carta-mano .ana-ltr-greet{font-size:17px;font-weight:700;color:rgba(10,30,51,.55)}
 .ana-carta-mano .ana-ltr-plan p{font-size:20px;line-height:1.5;font-family:'Gochi Hand',cursive,system-ui,sans-serif}
-.ana-carta-mano .ana-ltr-first{font-size:21px;font-family:'Gochi Hand',cursive,system-ui,sans-serif}
+.ana-carta-mano .ana-ltr-first{font-size:26px;color:#2793C8;font-family:'Gochi Hand',cursive,system-ui,sans-serif}
 .ana-carta-mano .ana-intro{font-size:20px;color:#0A1E33}
 .ana-carta-mano .ana-banner{font-size:21px;font-family:'Gochi Hand',cursive,system-ui,sans-serif}
 .ana-carta-mano .ana-sign{font-family:'Gochi Hand',cursive,system-ui,sans-serif}

@@ -146,8 +146,8 @@ t('server: aprendizaje usa la semana actual zona cuenta y user_id',
   serverJs.includes('mondayKeyOf(tzToday(userTz(uid)))') && serverJs.includes('aprendizajeSemanaAnterior(db, uid, wk)'));
 t('server: fail-closed (el aprendizaje nunca frena /api/analysis)',
   /catch \(e\) \{ aprendizaje = null; \}/.test(serverJs));
-t('chunk: anaAprendeHTML llamada en las 2 ramas de anaCartaHTML',
-  (chunk.match(/h \+= anaAprendeHTML\(d\);/g) || []).length === 2);
+t('chunk: anaAprendeHTML llamada SOLO en la rama sin carta de anaCartaHTML (decisión 6/11: la carta termina en Compartir)',
+  (chunk.match(/h \+= anaAprendeHTML\(d\);/g) || []).length === 1);
 t('server: la carta anterior (:id) NO trae aprendizaje (doble guarda)',
   serverJs.includes('plan: plan.id, past: true, analysis: analysisEngine.gateForPlan(analysis, plan.id) })'));
 t('styles: regla .ana-aprende', styles.includes('.ana-aprende{'));

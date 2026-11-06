@@ -129,7 +129,8 @@ ok(html.indexOf('De tu lado') < html.indexOf('Gracias por trabajar con Posty.'),
 
 // 6) Resto intacto (superficie de la carta).
 ok(html.includes('anaFullBtn'), 'botón Ver mi estrategia completa intacto');
-ok(html.includes('ana-fl-confirm'), 'ana-fl-confirm intacto');
+ok(!html.includes('ana-fl-confirm'), 'ana-fl-confirm FUERA de la carta (decisión 6/11: la carta termina en Compartir)');
+ok(!html.includes('ana-refresh'), 'nota de actualización FUERA de la carta (decisión 6/11)');
 ok(html.includes('anaBoostRec'), 'anaBoostRec (Impulsar) intacto');
 ok(html.includes('ana-carta-mano'), 'carta-mano intacta');
 ok(chunk.includes('function anaAprendeHTML'), 'anaAprendeHTML sigue en el chunk');
@@ -143,19 +144,21 @@ const htmlAllDup = global.anaCartaHTML(carta3({}, { body: bodyAllDup }));
 ok(!stripTags(htmlAllDup).includes('Esta semana hago esto:'), 'sin pasos, cae el encabezado (no sección vacía)');
 ok(count(htmlAllDup, 'la semana suma reels') === 1, 'con todos los pasos duplicados, la mejora sigue 1 vez');
 
-// 8) Borde: intro con frase NUEVA sobrevive, DESPUÉS del cuerpo, nunca antes.
+// 8) Decisión 6/11: el intro YA NO sobrevive en la carta (ni la frase nueva).
+// La frase nueva del week_summary no se rinde en ninguna rama de la carta.
 const WS_NEW = WS_DUP + '\nAdemás, tu web nueva ya está enlazada en tu perfil.';
 const htmlNew = global.anaCartaHTML(carta3({}, {}));
 const htmlNew2 = global.anaCartaHTML({ analysis: carta3().analysis, week_summary: WS_NEW, temaSemana: null });
-ok(stripTags(htmlNew2).includes('tu web nueva ya está enlazada en tu perfil'), 'frase nueva del intro sobrevive');
-ok(htmlNew2.indexOf('tu web nueva ya está enlazada') > htmlNew2.indexOf('Qué mejoramos'), 'frase nueva después de Qué mejoramos (nunca antes de felicitar)');
-ok(htmlNew2.indexOf('tu web nueva ya está enlazada') < htmlNew2.indexOf('ana-banner'), 'frase nueva antes del banner');
+ok(!stripTags(htmlNew2).includes('tu web nueva ya está enlazada en tu perfil'), 'frase nueva del intro YA NO sobrevive en la carta (decisión 6/11)');
+ok(!stripTags(htmlNew2).includes('miré tu cuenta'), 'intro fuera de la carta también con frase nueva');
 ok(count(htmlNew2, 'la semana suma reels') === 1, 'con frase nueva, la mejora sigue 1 vez');
 
-// 9) Cartas v1 conservan su forma vieja: el intro sigue encabezando.
+// 9) Decisión 6/11: las cartas v1 TAMBIÉN pierden el intro en la carta.
 const v1 = { analysis: { lang: 'es', letter: { v: 1, title: 'Tu estrategia', greeting: 'Hola, Posty.:', closing: 'Gracias por trabajar con Posty.', body: body3 } }, week_summary: WS_DUP, temaSemana: null };
 const htmlV1 = global.anaCartaHTML(v1);
-ok(htmlV1.indexOf('ana-intro') !== -1 && htmlV1.indexOf('ana-intro') < htmlV1.indexOf('Primero festejemos'), 'v1: intro sigue encabezando (forma vieja intacta)');
+ok(!stripTags(htmlV1).includes('miré tu cuenta'), 'v1: intro fuera de la carta (decisión 6/11)');
+ok(!stripTags(htmlV1).includes('Por eso tu semana es así'), 'v1: segunda línea del intro fuera de la carta');
+ok(htmlV1.includes('Primero festejemos'), 'v1: cuerpo intacto sin intro');
 
 // 10) EN: saludo normalizado también.
 global.anaLang = 'en';

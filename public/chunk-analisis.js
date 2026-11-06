@@ -1026,20 +1026,18 @@ function anaCartaHTML(d) {
   if (!anaPastMode && d && d.temaSemana && temaNuevo) h += `<p class="ana-tema">${anaT('Esta semana: ', 'This week: ')}${esc(String(d.temaSemana))}</p>`;
   // (2026-10-25) APERTURA: la explicación de cómo se armó el plan — el
   // week_summary del motor («qué vi → por eso tu semana es así») — encabeza
-  // la ventana como su línea de apertura. Es el contenido que vivía en la
-  // tarjeta «Lo que vi de tu cuenta» de la Agenda, eliminada por Valentino
-  // (la pantalla principal no lleva resúmenes de Análisis). El texto viene
-  // del motor en el idioma de la cuenta (paridad ES/EN sin croma nueva) y
-  // «Así nace tu semana» ya no lo repite. Sin week_summary no se inventa
-  // apertura: la ventana abre como siempre.
-  // (CARTA-DEDUP) En carta MÍNIMA (v2) la carta ES la superficie: el
-  // week_summary NO encabeza (antes de la felicitación violaba el orden
-  // aprobado 3/11 y duplicaba problema + mejora con el cuerpo). Las
-  // cartas v1 conservan su forma vieja y la vista sin carta, también.
-  // Lo que el intro aporte de NUEVO (no dicho en el cuerpo) se rinde
-  // DESPUÉS del cuerpo, nunca antes — ver abajo, tras anaLetterBodyHTML.
+  // la ventana SIN CARTA como su línea de apertura. Es el contenido que
+  // vivía en la tarjeta «Lo que vi de tu cuenta» de la Agenda, eliminada
+  // por Valentino (la pantalla principal no lleva resúmenes de Análisis).
+  // El texto viene del motor en el idioma de la cuenta (paridad ES/EN sin
+  // croma nueva) y «Así nace tu semana» ya no lo repite. Sin week_summary
+  // no se inventa apertura: la ventana abre como siempre.
+  // (CARTA-ESTRATEGIA 6/11, decisión Valentino) En la carta el
+  // week_summary NO se rinde en ninguna versión (ni v1 ni mínima v2):
+  // la frase «Esta semana miré tu cuenta y vi que…» repetía lo que el
+  // cuerpo ya dice. La carta ES la superficie.
   const minimalCarta = carta && !!(a.letter && (a.letter.v >= 2 || a.letter.minimal));
-  if (wsOpen && !minimalCarta) h += wsOpen.split('\n').filter(Boolean).map((l) => `<p class="ana-intro">${esc(l)}</p>`).join('');
+  if (wsOpen && !minimalCarta && !carta) h += wsOpen.split('\n').filter(Boolean).map((l) => `<p class="ana-intro">${esc(l)}</p>`).join('');
   if (carta) {
     // FORMA CARTA (domingo a la noche): narración primero, datos como apoyo.
     // CARTA MÍNIMA (v2): la carta ES la superficie — kit/mercado/historial
@@ -1047,22 +1045,10 @@ function anaCartaHTML(d) {
     // las vistas sin carta; las cartas v1 conservan su forma con apoyo).
     const minimal = minimalCarta;
     h += anaLetterBodyHTML(a, { saludoTop: !!saludoTop });
-    if (minimal && wsOpen) {
-      // Intro filtrada contra el cuerpo: cada frase del week_summary que
-      // ya dice el cuerpo (contenido textual o solape ≥0.5 con algún ítem)
-      // se cae — problema y mejora quedan UNA sola vez, en «qué
-      // mejoramos». Solo sobrevive lo genuinamente nuevo, y va después
-      // del cuerpo (nunca antes de la felicitación). Sin sobrevivientes,
-      // no se rinde nada.
-      const normI = (s) => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
-      const stopI = new Set('de la el en y a los las un una que es por con su sus tu tus se al del lo hoy ya esta este eso the a an and of to in your you this that is it'.split(' '));
-      const wI = (s) => normI(s).replace(/[^a-z0-9áéíóúñü ]/g, ' ').split(' ').filter((w) => w && !stopI.has(w));
-      const ovI = (x, y) => { const A = new Set(wI(x)), B = new Set(wI(y)); if (!A.size || !B.size) return 0; let n = 0; A.forEach((w) => { if (B.has(w)) n++; }); return n / new Set([...A, ...B]).size; };
-      const bodyTxt = (a.letter.body || []).map((it) => it.text || '');
-      const sents = wsOpen.split('\n').filter(Boolean).map((l) => (l.match(/[^.!?]+[.!?]+/g) || [l])).flat();
-      const keep = sents.filter((s) => { const ns = normI(s); if (ns.length < 4) return false; return !bodyTxt.some((b) => { const nb = normI(b); return (nb && (nb.indexOf(ns) !== -1 || ns.indexOf(nb) !== -1)) || ovI(s, b) >= 0.5; }); });
-      if (keep.length) h += keep.map((s) => `<p class="ana-intro">${esc(s.trim())}</p>`).join('');
-    }
+    // (CARTA-ESTRATEGIA 6/11, decisión Valentino) El week_summary ya NO
+    // se rinde en la carta (ni v1 ni mínima v2): la frase «Esta semana
+    // miré tu cuenta y vi que…» repetía lo que el cuerpo ya dice. El
+    // dato sigue en el payload y en la vista sin carta.
     // (LOTE ADS-BILLETERA · base IMPULSAR-UN-CLIC) El bloque de ads vive
     // DENTRO de la carta, justo después del cuerpo (las 3 partes) y antes
     // del resto: muy a la vista en la carta del domingo, no después de
@@ -1081,13 +1067,12 @@ function anaCartaHTML(d) {
     h += `<div class="ana-banner">${esc(a.letter.closing || anaBanner(stage, ctx))}</div>`;
     h += anaSignHTML(birth);
     if (!anaPastMode) h += anaShareBlockHTML(a);
-    if (!anaPastMode) h += `<div class="ana-refresh"><p style="font-size:12.5px;color:var(--mut);margin:0">${anaT('Se actualiza una vez por semana', 'It updates once a week')}</p></div>`;
-    // (FUNDAMENTO-LITERAL · pieza 4) Confirmación semanal, solo carta
-    // actual (nunca en cartas viejas): un toque «Sigue igual» o editar
-    // un producto. No suma fricción a la aprobación: si no se toca, la
-    // semana se arma con el fundamento vigente. Se carga bajo demanda.
-    if (!anaPastMode) h += `<div class="ana-fl-confirm" style="margin-top:12px;text-align:center"><button class="btn btn-ghost btn-sm" onclick="anaFlConfirmLoad(this)">${anaT('¿Qué vendés esta semana?', 'What are you selling this week?')}</button><div id="anaFlBox" style="display:none;text-align:left;margin-top:10px"></div></div>`;
-    h += anaAprendeHTML(d);
+    // (CARTA-ESTRATEGIA 6/11, decisión Valentino) La carta termina en
+    // «Compartir mi semana»: debajo del botón no se rinde nada — fuera
+    // la nota «Se actualiza una vez por semana», la confirmación
+    // «¿Qué vendés esta semana?» y Aprende. (El refresh y Aprende
+    // siguen en la vista SIN carta; el flujo anaFlConfirmLoad/Render
+    // queda dormido, sin botón que lo abra desde la carta.)
     h += `</div>`;
     return h;
   }
