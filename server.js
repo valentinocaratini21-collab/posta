@@ -77,9 +77,20 @@ const ventyWebTokens = require('./venty-web-tokens'); // VENTY-WEB (slice 1-web)
 const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleados, gating por pack, registro durable, fundamento-vista y bandeja con la matriz forzada en el servidor
 const oficina = require('./oficina'); // ESPINA BAMBOOTY (programa TestFlight): fundamento único, río de la oficina, Bandeja «Para vos», partes (contrato de la oficina) y chat que rutea. La presentación Bambooty vive SOLO en el shell (la web pública sigue siendo Posty).
 const venty = require('./venty'); // VENTY (slice 1): ventas y crecimiento en Modo Prueba, partidas simuladas Café Aroma, registro durable.
+const ventyConexiones = require('./venty-conexiones'); // VENTY-CONECTAR-4: registro de conexión por negocio y canal (solo credencial_ref, nunca secretos).
+const ventyGobernador = require('./venty-gobernador'); // VENTY-CONECTAR-4: cupos por canal y por día por negocio, fail-closed.
+const ventyWhatsapp = require('./venty-whatsapp'); // VENTY-CONECTAR-4: WhatsApp por cliente (texto libre + hilos por lead).
+const ventyInstagram = require('./venty-instagram'); // VENTY-CONECTAR-4: webhook de Instagram + DM con remitente por zona.
+const ventyEmail = require('./venty-email'); // VENTY-CONECTAR-4: dirección de reenvío + plantilla con paleta del negocio + supresión.
+const ventyWeb = require('./venty-web'); // VENTY-CONECTAR-4: el sitio del negocio como fuente conectada del fundamento.
 const informeMensual = require('./informe-mensual'); // INFORME MENSUAL REAL (ítem 5, 2026-10-26): números reales del mes, sin ROI inventado.
 try { oficina.init(db); } catch (e) { console.error('[oficina] init:', e.message); }
 try { venty.init(db); } catch (e) { console.error('[venty] init:', e.message); }
+try { ventyConexiones.ensureSchema(db); } catch (e) { console.error('[venty-conexiones] init:', e.message); }
+try { ventyGobernador.ensureSchema(db); } catch (e) { console.error('[venty-gobernador] init:', e.message); }
+try { ventyWhatsapp.ensureSchema(db); } catch (e) { console.error('[venty-whatsapp] init:', e.message); }
+try { ventyInstagram.ensureSchema(db); } catch (e) { console.error('[venty-instagram] init:', e.message); }
+try { ventyEmail.ensureSchema(db); } catch (e) { console.error('[venty-email] init:', e.message); }
 const postyOficina = require('./posty-oficina'); // POSTY en la oficina: su semana real entra al río y a la Bandeja.
 try { postyOficina.init(db); } catch (e) { console.error('[posty-oficina] init:', e.message); }
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
@@ -4133,8 +4144,11 @@ app.get('/api/venty/estado', requireAuthOrWebToken, (req, res) => {
   try {
     const uid = ventyUid(req);
     const f = venty.leerFundamento(db, uid);
+    // CONECTAR-4: estados REALES desde venty-conexiones (nunca hardcodeados).
+    let reales = [];
+    try { reales = ventyConexiones.resumenEstado(db, uid); } catch (e) { reales = []; }
     res.json({ ok: true, modo: 'prueba', freno: { pausado: venty.estaPausado(db, uid), alcance: 'mensajes y contactos nuevos; los turnos agendados siguen' },
-      canales: [{ canal: 'simulacion', estado: 'activo' }, { canal: 'whatsapp', estado: 'no_conectado' }, { canal: 'instagram', estado: 'no_conectado' }, { canal: 'email', estado: 'no_conectado' }],
+      canales: [{ canal: 'simulacion', estado: 'activo' }, ...reales],
       ultima_lectura: { fuente: 'lista cargada', ts: (f && f.updated_at) || '' },
       venty: { precio_usd: venty.PRECIO_MENSUAL_USD, plan: 'unico', estreno: venty.ESTRENO } });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -4296,6 +4310,199 @@ app.post('/api/venty/simulacion/mensaje', requireAuthOrWebToken, (req, res) => {
     if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// ---------- VENTY-CONECTAR-4: conexiones, representantes, gobernador ----------
+// Todo bajo requireAuthOrWebToken + ventyWebCors (mismo guard que el resto
+// de /api/venty/*). Nada de esto conecta nada vivo por sí solo: registra la
+// intención + la ref y deja el canal en pendiente / falta una acción hasta
+// que el paso de Meta / del dueño se complete. Los webhooks de Meta van
+// aparte, abajo (públicos, verificados por token/firma, no por sesión).
+app.get('/api/venty/conexiones', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    res.json({ ok: true, modo: 'prueba', conexiones: ventyConexiones.listarConexiones(db, uid) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/conexiones', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const b = req.body || {};
+    const c = ventyConexiones.iniciarConexion(db, uid, String(b.canal || ''), b);
+    res.json({ ok: true, modo: 'prueba', conexion: c });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/conexiones/:canal', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const c = ventyConexiones.estadoCanal(db, uid, String(req.params.canal || ''));
+    res.json({ ok: true, modo: 'prueba', conexion: c });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/conexiones/:canal/revocar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const c = ventyConexiones.revocarConexion(db, uid, String(req.params.canal || ''));
+    res.json({ ok: true, modo: 'prueba', conexion: c });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+// Web: guardar la URL y refrescar el fundamento desde el sitio (web-extract).
+app.post('/api/venty/conexiones/web/refrescar', requireAuthOrWebToken, async (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const b = req.body || {};
+    const url = String(b.website_url || (venty.leerFundamento(db, uid) || {}).website_url || '');
+    if (!url) return res.status(400).json({ ok: false, error: 'sin_url' });
+    // Registrar la conexión web si no existe (sin secreto: solo URL).
+    try { ventyConexiones.iniciarConexion(db, uid, 'web', { proveedor: 'sitio', etiqueta: url }); } catch (e) { /* ya existe: se sigue */ }
+    const r = await ventyWeb.refrescarDesdeWeb(db, uid, url, {});
+    if (!r.ok) return res.status(502).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Zonas / representantes (uno por zona) / leads pre-contacto.
+app.get('/api/venty/zonas', requireAuthOrWebToken, (req, res) => {
+  try { const uid = ventyUid(req); res.json({ ok: true, modo: 'prueba', zonas: venty.listarZonas(db, uid) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/zonas', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = venty.crearZona(db, uid, req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/representantes', requireAuthOrWebToken, (req, res) => {
+  try { const uid = ventyUid(req); res.json({ ok: true, modo: 'prueba', representantes: venty.listarRepresentantes(db, uid) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/representantes', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = venty.crearRepresentante(db, uid, req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/leads', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    res.json({ ok: true, modo: 'prueba', leads: venty.listarLeads(db, uid, { zona_id: req.query.zona_id, estado: req.query.estado }) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/leads', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = venty.crearLead(db, uid, req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, lead_id: r.lead_id || null });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Gobernador: resumen del día + tope por canal (el dueño solo puede bajarlo).
+app.get('/api/venty/gobernador', requireAuthOrWebToken, (req, res) => {
+  try { const uid = ventyUid(req); res.json({ ok: true, modo: 'prueba', dia: ventyGobernador.resumenDia(db, uid) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/gobernador/tope', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const b = req.body || {};
+    const r = ventyGobernador.setTope(db, uid, String(b.canal || ''), b.tope);
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+// Email: dirección de reenvío por negocio (se muestra completa una sola vez).
+app.get('/api/venty/email/direccion', requireAuthOrWebToken, (req, res) => {
+  try { const uid = ventyUid(req); res.json({ ok: true, modo: 'prueba', ...ventyEmail.estadoDireccion(db, uid) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/email/direccion', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = ventyEmail.generarDireccion(db, uid);
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Baja por link (pública: el token HMAC es la credencial, no la sesión).
+// El destinatario se resuelve por email (users.email); token inválido → 400
+// sin revelar nada.
+app.get('/api/venty/email/baja', (req, res) => {
+  try {
+    const email = String(req.query.e || '').trim().toLowerCase();
+    const token = String(req.query.t || '');
+    if (!email || !token) return res.status(400).send('enlace de baja inválido.');
+    const u = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(email);
+    if (!u) return res.status(400).send('enlace de baja inválido.');
+    if (!ventyEmail.verificarBaja(Number(u.id), email, token)) return res.status(400).send('enlace de baja inválido.');
+    ventyEmail.suprimir(db, Number(u.id), email, 'baja_link');
+    return res.send('listo: no te escribimos más a ' + email + '.');
+  } catch (e) { return res.status(500).send('no se pudo procesar la baja.'); }
+});
+// Envío de email a prospecto: solo con jugada aceptada en Bandeja.
+app.post('/api/venty/email/enviar', requireAuthOrWebToken, async (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const base = (req.protocol + '://' + req.get('host'));
+    const r = await ventyEmail.enviarEmail(db, uid, { ...(req.body || {}), bajaUrlBase: base });
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// WhatsApp por cliente: hilos por lead (lectura; el envío real va por
+// jugada/Bandeja en el lote de cierre, no por endpoint directo).
+app.get('/api/venty/whatsapp/hilos', requireAuthOrWebToken, (req, res) => {
+  try { const uid = ventyUid(req); res.json({ ok: true, modo: 'prueba', hilos: ventyWhatsapp.listarHilos(db, uid) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/whatsapp/hilos/:id', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = ventyWhatsapp.listarMensajes(db, uid, Number(req.params.id));
+    if (!r) return res.status(404).json({ ok: false, error: 'hilo_no_encontrado' });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Instagram: hilos + envío de DM con jugada aceptada.
+app.get('/api/venty/instagram/hilos', requireAuthOrWebToken, (req, res) => {
+  try { const uid = ventyUid(req); res.json({ ok: true, modo: 'prueba', hilos: ventyInstagram.listarHilos(db, uid) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/instagram/dm', requireAuthOrWebToken, async (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = await ventyInstagram.enviarDM(db, uid, req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// ---------- Webhooks de Venty (Meta → Posta; públicos, verificados) ----------
+// Instagram: GET verifica con INSTAGRAM_VERIFY_TOKEN; POST verifica la
+// firma X-Hub-Signature-256 con INSTAGRAM_APP_SECRET. Sin secretos: 403.
+app.get('/api/webhooks/instagram', (req, res) => {
+  const challenge = ventyInstagram.verifyWebhookGet(req.query || {});
+  if (!challenge) return res.sendStatus(403);
+  return res.send(challenge);
+});
+app.post('/api/webhooks/instagram', (req, res) => {
+  try {
+    if (!ventyInstagram.verifySignature(process.env.INSTAGRAM_APP_SECRET, req.rawBody, req.headers['x-hub-signature-256'])) return res.sendStatus(403);
+    const out = ventyInstagram.handleWebhook(db, req.body || {});
+    return res.json({ ok: true, ...out });
+  } catch (e) { return res.sendStatus(200); } // un error interno no debe generar reintentos de Meta
+});
+// WhatsApp por cliente: misma verificación que el webhook global, pero el
+// ruteo al dueño es por phone_number_id (cuenta_ref de la conexión).
+app.get('/api/webhooks/whatsapp-venty', (req, res) => {
+  const challenge = ventyWhatsapp.verifyWebhook(req.query['hub.mode'], req.query['hub.verify_token'], req.query['hub.challenge'], process.env);
+  if (!challenge) return res.sendStatus(403);
+  return res.send(challenge);
+});
+app.post('/api/webhooks/whatsapp-venty', (req, res) => {
+  try {
+    if (!ventyWhatsapp.verifySignature(process.env.WHATSAPP_APP_SECRET, req.rawBody, req.headers['x-hub-signature-256'])) return res.sendStatus(403);
+    const out = ventyWhatsapp.handleIncomingVenty(db, req.body || {});
+    return res.json({ ok: true, ...out });
+  } catch (e) { return res.sendStatus(200); }
 });
 // ---------- Tira de nivel Posty — tallo vivo (v457) ----------
 // CONTRATO COMPARTIDO website <-> app: un solo modulo (niveles.js) y un
@@ -30820,7 +31027,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v720';
+const BUILD_ID = '20261105-v721';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

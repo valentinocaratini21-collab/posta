@@ -123,9 +123,61 @@ function init(db) {
     tono TEXT DEFAULT '',
     derechos_json TEXT DEFAULT '{}',
     objeciones_json TEXT DEFAULT '[]',
+    website_url TEXT DEFAULT '',
+    ciudad TEXT DEFAULT '',
+    paleta_json TEXT DEFAULT '[]',
     version INTEGER DEFAULT 1,
     updated_at TEXT DEFAULT ''
   )`);
+  // Migración CONECTAR-4: fundamentos creados antes del lote no tienen
+  // estas columnas; ALTER guardado (si ya existen, no pasa nada).
+  for (const col of ['website_url TEXT', 'ciudad TEXT', 'paleta_json TEXT']) {
+    try { db.exec(`ALTER TABLE venty_fundamento ADD COLUMN ${col}`); } catch (e) { /* ya existe */ }
+  }
+  // ---- CONECTAR-4: representantes por zona + leads pre-contacto ----
+  // UN representante POR ZONA por cliente (modelo vigente 6/11): cada uno
+  // hace TODO en su zona (email + Instagram + seguimiento) con la misma
+  // voz; identidad remitente por zona por cliente; fundamento y lista de
+  // leads compartidos (para no escribir dos veces al mismo prospecto ni
+  // pasarse del cupo — el cupo lo gobierna venty-gobernador.js).
+  db.exec(`CREATE TABLE IF NOT EXISTS venty_zonas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    nombre TEXT NOT NULL DEFAULT '',
+    ciudad TEXT NOT NULL DEFAULT '',
+    estado TEXT NOT NULL DEFAULT 'activa',
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, nombre)
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS venty_representantes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    zona_id INTEGER NOT NULL,
+    nombre TEXT NOT NULL DEFAULT '',
+    remitente_nombre TEXT NOT NULL DEFAULT '',
+    remitente_email TEXT NOT NULL DEFAULT '',
+    remitente_ig TEXT NOT NULL DEFAULT '',
+    remitente_wa TEXT NOT NULL DEFAULT '',
+    voz_nota TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, zona_id)
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS venty_leads (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    zona_id INTEGER,
+    nombre TEXT NOT NULL DEFAULT '',
+    nombre_norm TEXT NOT NULL DEFAULT '',
+    canal_preferido TEXT NOT NULL DEFAULT '',
+    contacto_ref TEXT NOT NULL DEFAULT '',
+    puntaje INTEGER DEFAULT 0,
+    porque TEXT NOT NULL DEFAULT '',
+    estado TEXT NOT NULL DEFAULT 'pendiente',
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, nombre_norm)
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_venty_leads_user ON venty_leads(user_id, zona_id, estado)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_venty_rep_user ON venty_representantes(user_id, zona_id)');
   db.exec(`CREATE TABLE IF NOT EXISTS venty_partidas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -206,6 +258,9 @@ function leerFundamento(db, userId) {
     const j = (s, dflt) => { try { return JSON.parse(s || ''); } catch (e) { return dflt; } };
     return {
       ...row,
+      website_url: row.website_url || '',
+      ciudad: row.ciudad || '',
+      paleta: j(row.paleta_json, []),
       precios: j(row.precios_json, []),
       politicas: j(row.politicas_json, {}),
       limites: j(row.limites_json, {}),
@@ -213,6 +268,116 @@ function leerFundamento(db, userId) {
       objeciones: j(row.objeciones_json, []),
     };
   } catch (e) { return null; }
+}
+
+// ---- CONECTAR-4: puente del fundamento (website_url / ciudad / paleta) ----
+// Solo actualiza los campos del puente. Nunca toca precios, estrella,
+// políticas ni tono: eso lo decide el dueño, no la web ni Posty.
+function actualizarFundamentoPuente(db, userId, cambios) {
+  const c = cambios || {};
+  const sets = [];
+  const vals = [];
+  if (c.website_url !== undefined) { sets.push('website_url=?'); vals.push(String(c.website_url || '').slice(0, 500)); }
+  if (c.ciudad !== undefined) { sets.push('ciudad=?'); vals.push(String(c.ciudad || '').slice(0, 80)); }
+  if (c.paleta !== undefined) {
+    const pal = Array.isArray(c.paleta) ? c.paleta.slice(0, 2).map((p) => ({
+      hex: String(typeof p === 'string' ? p : (p.hex || '')).toUpperCase(),
+      rol: (p && p.rol) || '',
+    })).filter((p) => /^#[0-9A-F]{6}$/.test(p.hex)) : [];
+    sets.push('paleta_json=?'); vals.push(JSON.stringify(pal));
+  }
+  if (c.rubro !== undefined) { sets.push('rubro=?'); vals.push(String(c.rubro || '').slice(0, 80)); }
+  if (!sets.length) return leerFundamento(db, userId);
+  sets.push('updated_at=?'); vals.push(ahoraIso());
+  vals.push(userId);
+  db.prepare(`UPDATE venty_fundamento SET ${sets.join(', ')} WHERE user_id = ?`).run(...vals);
+  return leerFundamento(db, userId);
+}
+
+// ---- CONECTAR-4: zonas / representantes (uno por zona) / leads ----------
+function crearZona(db, userId, opts) {
+  const o = opts || {};
+  const nombre = String(o.nombre || '').trim().slice(0, 80);
+  if (!nombre) return { ok: false, error: 'sin_nombre' };
+  const ciudad = String(o.ciudad || '').trim().slice(0, 80);
+  try {
+    const r = db.prepare(`INSERT INTO venty_zonas (user_id, nombre, ciudad, estado, created_at) VALUES (?,?,?,'activa',?)`)
+      .run(userId, nombre, ciudad, ahoraIso());
+    return { ok: true, id: Number(r.lastInsertRowid), nombre, ciudad };
+  } catch (e) {
+    return { ok: false, error: 'zona_ya_existe' };
+  }
+}
+
+function listarZonas(db, userId) {
+  return db.prepare('SELECT * FROM venty_zonas WHERE user_id = ? ORDER BY nombre ASC').all(userId);
+}
+
+function crearRepresentante(db, userId, opts) {
+  const o = opts || {};
+  const zonaId = Number(o.zona_id || 0);
+  if (!zonaId) return { ok: false, error: 'sin_zona' };
+  const zona = db.prepare('SELECT * FROM venty_zonas WHERE id = ? AND user_id = ?').get(zonaId, userId);
+  if (!zona) return { ok: false, error: 'zona_no_encontrada' };
+  const nombre = String(o.nombre || '').trim().slice(0, 80);
+  if (!nombre) return { ok: false, error: 'sin_nombre' };
+  try {
+    const r = db.prepare(`INSERT INTO venty_representantes
+      (user_id, zona_id, nombre, remitente_nombre, remitente_email, remitente_ig, remitente_wa, voz_nota, created_at)
+      VALUES (?,?,?,?,?,?,?,?,?)`).run(userId, zonaId, nombre,
+      String(o.remitente_nombre || nombre).slice(0, 80),
+      String(o.remitente_email || '').trim().slice(0, 200),
+      String(o.remitente_ig || '').trim().slice(0, 120),
+      String(o.remitente_wa || '').replace(/\D/g, '').slice(0, 20),
+      String(o.voz_nota || '').slice(0, 300), ahoraIso());
+    return { ok: true, id: Number(r.lastInsertRowid), zona_id: zonaId, nombre };
+  } catch (e) {
+    return { ok: false, error: 'zona_ya_tiene_representante' };
+  }
+}
+
+function listarRepresentantes(db, userId) {
+  return db.prepare(`SELECT r.*, z.nombre AS zona_nombre FROM venty_representantes r
+    LEFT JOIN venty_zonas z ON z.id = r.zona_id WHERE r.user_id = ? ORDER BY z.nombre ASC`).all(userId);
+}
+
+function representanteDeZona(db, userId, zonaId) {
+  return db.prepare('SELECT * FROM venty_representantes WHERE user_id = ? AND zona_id = ?').get(userId, Number(zonaId || 0)) || null;
+}
+
+function normNombreLead(nombre) {
+  return String(nombre || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 120);
+}
+
+// Dedupe por (negocio, prospecto): mismo nombre normalizado → mismo lead,
+// nunca se escribe dos veces al mismo prospecto.
+function crearLead(db, userId, opts) {
+  const o = opts || {};
+  const nombre = String(o.nombre || '').trim().slice(0, 120);
+  if (!nombre) return { ok: false, error: 'sin_nombre' };
+  const nombreNorm = normNombreLead(nombre);
+  const zonaId = o.zona_id ? Number(o.zona_id) : null;
+  if (zonaId) {
+    const zona = db.prepare('SELECT id FROM venty_zonas WHERE id = ? AND user_id = ?').get(zonaId, userId);
+    if (!zona) return { ok: false, error: 'zona_no_encontrada' };
+  }
+  const canal = ['email', 'instagram', 'whatsapp'].includes(String(o.canal_preferido || '')) ? String(o.canal_preferido) : '';
+  const existente = db.prepare('SELECT * FROM venty_leads WHERE user_id = ? AND nombre_norm = ?').get(userId, nombreNorm);
+  if (existente) return { ok: false, error: 'lead_ya_existe', lead_id: existente.id };
+  const r = db.prepare(`INSERT INTO venty_leads
+    (user_id, zona_id, nombre, nombre_norm, canal_preferido, contacto_ref, puntaje, porque, estado, created_at)
+    VALUES (?,?,?,?,?,?,?,?,'pendiente',?)`).run(userId, zonaId, nombre, nombreNorm, canal,
+    String(o.contacto_ref || '').trim().slice(0, 200),
+    Math.max(0, Math.min(100, Number(o.puntaje || 0) || 0)),
+    String(o.porque || '').slice(0, 300), ahoraIso());
+  return { ok: true, id: Number(r.lastInsertRowid), nombre };
+}
+
+function listarLeads(db, userId, opts) {
+  const o = opts || {};
+  if (o.zona_id) return db.prepare('SELECT * FROM venty_leads WHERE user_id = ? AND zona_id = ? ORDER BY puntaje DESC, nombre ASC').all(userId, Number(o.zona_id));
+  if (o.estado) return db.prepare('SELECT * FROM venty_leads WHERE user_id = ? AND estado = ? ORDER BY puntaje DESC, nombre ASC').all(userId, String(o.estado));
+  return db.prepare('SELECT * FROM venty_leads WHERE user_id = ? ORDER BY puntaje DESC, nombre ASC').all(userId);
 }
 
 function estaPausado(db, userId) {
@@ -706,7 +871,9 @@ function mensajesHoy(db, userId) {
 module.exports = {
   MODO, PRECIO_MENSUAL_USD, ESTRENO, DESCUENTO_MAX, GRUPO_ESCALA, SEGUIMIENTO_MAX,
   CAFE_AROMA, CAZA_EJEMPLO,
-  init, asegurarSemilla, leerFundamento, estaPausado, setFreno,
+  init, asegurarSemilla, leerFundamento, actualizarFundamentoPuente, estaPausado, setFreno,
+  crearZona, listarZonas, crearRepresentante, listarRepresentantes, representanteDeZona,
+  crearLead, listarLeads, normNombreLead,
   listarPartidas, obtenerPartida, tomarPartida, seguirPartida,
   listarBandeja, resolverJugada,
   computarFrase, computarLineaNorte, computarParte, mensajesHoy,
