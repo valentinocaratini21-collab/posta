@@ -21018,6 +21018,7 @@ async function inicioView() {
 // día) la puerta NO dispara y el feed es normal, sin error.
 let PZ_RITUAL_ESTADO = null; // { tieneHoy, yaElegido } (cache de inicioView)
 let PZ_RITUAL_SEL = 0; // posteo elegido (selección, todavía sin aprobar)
+let PZ_RITUAL_CUENTA_T = 0; // LOTE CUENTA-REGRESIVA: intervalo del tick de 1 s
 function pzRitualPendiente(rit) {
   // ¿Hay un ritual pendiente (paquete hoy, sin elegir)? Sin estado
   // conocido → pendiente (velo; fail-closed: la carta abre el ritual,
@@ -21073,12 +21074,24 @@ async function ritualView() {
 async function pzRitualCargar() {
   const box = document.getElementById('pzRitual');
   if (!box) return;
+  // LOTE CUENTA-REGRESIVA: parar el tick anterior (si lo había) antes de
+  // cargar de nuevo; se rearma abajo solo si se renderiza la cuenta.
+  try { if (PZ_RITUAL_CUENTA_T) { clearInterval(PZ_RITUAL_CUENTA_T); PZ_RITUAL_CUENTA_T = 0; } } catch (e) {}
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   let d = null;
   try { d = await api.get('/api/ritual/hoy'); } catch (e) { d = null; }
   if (!box.isConnected) return;
   if (!d || !d.ok) {
     box.innerHTML = `<div class="pz-ritual-vacio"><p>${en ? 'I could not open your pack 😅' : 'No pude abrir tu paquete 😅'}</p><button type="button" class="bb-btn" onclick="pzRitualCargar()">${en ? 'Try again' : 'Probar de nuevo'}</button> <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
+    return;
+  }
+  // LOTE CUENTA-REGRESIVA (decisión Valentino 6/11 01:43 — el vacío NO
+  // aparece nunca): sin posteo hoy no hay carta ni puerta ni push; si
+  // alguien abre #/app/ritual directo, vuelve a Inicio sin pantalla
+  // intermedia. (La variante publicado_hoy sí se muestra: es el estado
+  // (e) de la spec, no el vacío.)
+  if (!d.hoy && !d.publicado_hoy) {
+    try { if (typeof bbGo === 'function') bbGo('#/app/inicio'); else location.hash = '#/app/inicio'; } catch (e) {}
     return;
   }
   // (LOTE RITUAL-1-OPCION · 6/11) La selección vive en localStorage
@@ -21094,7 +21107,59 @@ async function pzRitualCargar() {
     selId = 0;
   }
   box.innerHTML = pzRitualHTML(d, en, selId);
+  // LOTE CUENTA-REGRESIVA: arrancar el tick si se renderizó la cuenta.
+  try {
+    if (document.getElementById('pzRitualCuenta')) {
+      PZ_RITUAL_CUENTA_T = setInterval(pzRitualCuentaTick, 1000);
+    }
+  } catch (e) {}
 }
+// --- LOTE CUENTA-REGRESIVA (mock aprobado Valentino 6/11 01:53; solo la
+// cuenta — los-3 quedó fuera por decisión Valentino 6/11 16:16) ---
+// Texto del conteo para un resto en ms: {reloj: '07:17:24', hm: '07:17',
+// ss: ':24', faltan: '7 h 17 min'}. Los segundos van más chicos que
+// las horas:minutos (mock aprobado: 07:17 grande, :24 chico).
+function pzRitualCuentaTxt(ms) {
+  try {
+    const total = Math.max(0, Math.floor(Number(ms) / 1000));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    let faltan = '';
+    if (total >= 3600) faltan = h + ' h ' + pad(m) + ' min';
+    else if (total >= 60) faltan = m + ' min';
+    else faltan = s + ' s';
+    return { reloj: pad(h) + ':' + pad(m) + ':' + pad(s), hm: pad(h) + ':' + pad(m), ss: ':' + pad(s), faltan };
+  } catch (e) { return { reloj: '00:00:00', hm: '00:00', ss: ':00', faltan: '0 min' }; }
+}
+
+// Tick de 1 s de la cuenta regresiva: actualiza el conteo en vivo; al
+// llegar a 0 recarga la pantalla (el paquete aparece sin navegar). Si la
+// pantalla ya no está, se apaga solo.
+function pzRitualCuentaTick() {
+  try {
+    const el = document.getElementById('pzRitualCuenta');
+    if (!el) { try { if (PZ_RITUAL_CUENTA_T) { clearInterval(PZ_RITUAL_CUENTA_T); PZ_RITUAL_CUENTA_T = 0; } } catch (e) {} return; }
+    const abre = el.getAttribute('data-pz-cuenta-abre');
+    const sesgo = Number(el.getAttribute('data-pz-cuenta-sesgo') || 0) || 0;
+    const falta = Date.parse(abre) - (Date.now() + sesgo);
+    if (!Number.isFinite(falta) || falta <= 0) {
+      try { if (PZ_RITUAL_CUENTA_T) { clearInterval(PZ_RITUAL_CUENTA_T); PZ_RITUAL_CUENTA_T = 0; } } catch (e) {}
+      pzRitualCargar();
+      return;
+    }
+    const cuenta = pzRitualCuentaTxt(falta);
+    el.innerHTML = '<span class="pz-ritual-cuenta-hm">' + cuenta.hm + '</span><span class="pz-ritual-cuenta-ss">' + cuenta.ss + '</span>';
+    const sub = document.getElementById('pzRitualCuentaSub');
+    if (sub) {
+      const hora = sub.getAttribute('data-pz-cuenta-hora') || '9:00';
+      const en = sub.getAttribute('data-pz-cuenta-en') === '1';
+      sub.innerHTML = en ? `only <b>${cuenta.faltan}</b> left until ${hora}` : `faltan <b>${cuenta.faltan}</b> para las ${hora}`;
+    }
+  } catch (e) {}
+}
+
 function pzRitualCardHTML(c, d, en) {
   const img = c.media_type === 'video'
     ? `<video src="${esc(c.imagen)}" muted playsinline preload="metadata" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block"></video>`
@@ -21169,6 +21234,37 @@ function pzRitualHTML(d, en, selId) {
   <div id="pzRitualErr" class="pz-ritual-err" hidden></div></div>
   <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'Each day a post goes out, its sticker unlocks.' : 'Cada día que sale, se desbloquea su figurita.'}</p><div class="pz-ritual-slots">${album}</div></div>
   <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
+  }
+  // LOTE CUENTA-REGRESIVA (mock aprobado Valentino 6/11 01:53; solo la
+  // cuenta — los-3 quedó fuera por decisión Valentino 6/11 16:16): si hay
+  // paquete hoy y todavía no son las 9:00 de la cuenta, la pantalla es
+  // la cuenta regresiva en vivo con el paquete velado detrás (nada
+  // tocable ni revelado). A las 9:00 el tick recarga y aparece el
+  // paquete, sin navegar. `abre_a`/`ahora` vienen del servidor (la zona
+  // es la de la cuenta); si faltan, se muestra el paquete de siempre.
+  // Si ya hay una selección (sel), la revelada manda sobre la cuenta:
+  // la elección solo pudo hacerse con el paquete abierto (después de
+  // las 9:00), así que esconderla detrás de la cuenta sería un error.
+  if (!d.elegida && !sel && d.abre_a) {
+    const sesgo = d.ahora ? (Date.parse(d.ahora) - Date.now()) : 0;
+    const falta = Date.parse(d.abre_a) - (Date.now() + sesgo);
+    if (Number.isFinite(falta) && falta > 0) {
+      const cuenta = pzRitualCuentaTxt(falta);
+      const horaTxt = String(d.abre_hora || '9:00').replace(/^0/, '');
+      return `<div class="pz-ritual-wrap-in">${head}
+  <div class="pz-ritual-cuenta">
+  <span class="pz-ritual-pack-chip">hoy · ${esc(horaTxt)}</span>
+  <p class="pz-ritual-cuenta-tit">${en ? 'your pack opens in' : 'tu paquete se abre en'}</p>
+  <p class="pz-ritual-cuenta-num" id="pzRitualCuenta" data-pz-cuenta-abre="${esc(d.abre_a)}" data-pz-cuenta-sesgo="${sesgo}"><span class="pz-ritual-cuenta-hm">${cuenta.hm}</span><span class="pz-ritual-cuenta-ss">${cuenta.ss}</span></p>
+  <p class="pz-ritual-cuenta-sub" id="pzRitualCuentaSub" data-pz-cuenta-hora="${esc(horaTxt)}"${en ? ' data-pz-cuenta-en="1"' : ''}>${en ? `only <b>${esc(cuenta.faltan)}</b> left until ${esc(horaTxt)}` : `faltan <b>${esc(cuenta.faltan)}</b> para las ${esc(horaTxt)}`}</p>
+  <div class="pz-ritual-pack-velo" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><i class="pz-dorso"><b>✦</b></i><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
+  <h2>${en ? 'your post for today' : 'tu posteo de hoy'}</h2>
+  <p>${en ? '1 card inside' : '1 carta adentro'}</p>
+  <p class="pz-ritual-ver-hint">${en ? `It opens at ${esc(horaTxt)}` : `Se abre a las ${esc(horaTxt)}`}</p></div>
+  <p class="pz-ritual-nota">${en ? `At ${esc(horaTxt)} it opens on its own, <b>or the push lets you know</b><br>Come in whenever you like: the pack is waiting for you.` : `A las ${esc(horaTxt)} se abre solo, <b>o te llega la push</b><br>Entrá cuando quieras: el paquete te espera.`}</p>
+  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'Each day a post goes out, its sticker unlocks.' : 'Cada día que sale, se desbloquea su figurita.'}</p><div class="pz-ritual-slots">${album}</div></div>
+  <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
+    }
   }
   const recId = (d.recomendada && d.recomendada.id) || ((d.cartas && d.cartas[0] && d.cartas[0].id) || '');
   return `<div class="pz-ritual-wrap-in">${head}

@@ -5417,6 +5417,17 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ritual-vacio{text-align:center;padding:40px 16px;color:#47617A}
 .pz-ritual-vacio p{font-size:16px;color:#0A1E33}
 .pz-ritual-err{color:#b3261e;font-size:14px;text-align:center;margin-top:10px}
+/* LOTE CUENTA-REGRESIVA (mock aprobado Valentino 6/11 01:53; solo la cuenta — los-3 quedó fuera por decisión Valentino 6/11 16:16) */
+.pz-ritual-cuenta{position:relative;text-align:center;padding:22px 16px 20px;border-radius:22px;background:#FDF6E3;border:2px solid #FEC14D;color:#0A1E33;overflow:hidden;margin:14px 0;box-shadow:0 12px 32px rgba(10,30,51,.16)}
+.pz-ritual-cuenta .pz-ritual-pack-velo{height:168px}
+.pz-ritual-cuenta>p{margin:0 0 16px;font-size:14px;color:#47617A}
+.pz-ritual-cuenta p.pz-ritual-cuenta-tit{font-size:15px;color:#47617A;margin:2px 0 0}
+.pz-ritual-cuenta p.pz-ritual-cuenta-num{font-size:52px;line-height:1.05;font-weight:800;letter-spacing:1px;color:#0A1E33;margin:6px 0 4px;font-variant-numeric:tabular-nums}
+.pz-ritual-cuenta-ss{font-size:30px}
+.pz-ritual-cuenta p.pz-ritual-cuenta-sub{font-size:15px;color:#47617A;margin:0 0 10px}
+.pz-ritual-cuenta p.pz-ritual-cuenta-sub b{color:#0A1E33}
+.pz-ritual-cuenta h2{margin:0 0 4px;font-size:22px;color:#0A1E33}
+.pz-ritual-cuenta p.pz-ritual-ver-hint{font-size:15px;font-weight:700;margin:0;color:#0A1E33}
 @media (prefers-reduced-motion:reduce){
 .pz-ritual-sparkrow span,.pz-ritual-reveal .pz-ritual-carta,.pz-ritual-revelada,.pz-dorso-spark{animation:none}
 }

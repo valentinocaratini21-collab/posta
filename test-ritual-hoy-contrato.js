@@ -230,8 +230,16 @@ async function getHoy(sid) {
       htmlR.includes('data-pc-act="edit-cap"') && htmlR.includes('pcard-cap') && htmlR.includes('data-full='),
       htmlR.slice(0, 400));
     t('A6c: la revelada trae [Cambiar algo] con el posteo', htmlR.includes('Cambiar algo') && htmlR.includes('data-pz-ritual-cambio="518"'));
-    t('A7: el paquete es el velado (data-pz-ritual-ver) con UNA carta adentro, sin abanico de opciones',
-      html.includes('data-pz-ritual-ver="1"') && html.includes('1 carta adentro') && !html.includes('id="pzRitualCartas"') && !html.includes('pzRitualOpcionHTML') && !html.includes('3 opciones'));
+    // LOTE CUENTA-REGRESIVA (mock aprobado Valentino 6/11 01:53): antes de
+    // las 9:00 de la cuenta el render real es la cuenta regresiva, no el
+    // paquete; después de las 9:00, el paquete velado. En ambos casos,
+    // nunca el vacío (A5 ya lo afirma).
+    const antes9 = d.abre_a ? (Date.parse(d.abre_a) > Date.now()) : false;
+    t('A7: el paquete es el velado (data-pz-ritual-ver) con UNA carta adentro — o la cuenta regresiva si todavía no son las 9:00',
+      antes9
+        ? (html.includes('id="pzRitualCuenta"') && !html.includes('data-pz-ritual-ver="1"'))
+        : (html.includes('data-pz-ritual-ver="1"') && html.includes('1 carta adentro') && !html.includes('id="pzRitualCartas"') && !html.includes('pzRitualOpcionHTML') && !html.includes('3 opciones')),
+      'antes9=' + antes9 + ' abre_a=' + d.abre_a);
 
     // ===== B) VACÍO REAL: sin posteo hoy el estado vacío sigue andando =====
     const resV = await getHoy('ritual-hoy-13');

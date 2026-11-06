@@ -12975,7 +12975,14 @@ app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
     }
     if (!cartas.length) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy });
     const dorada = row.picked_post_id ? !!row.gold : ritualManana.esDorada(racha + 1, ritualManana.totalPicks(db, uid) + 1);
-    res.json({ ok: true, hoy: hoy, recomendada: recCard, cartas, elegida: row.picked_post_id || null, dorada, racha, album, publicado_hoy: publicadoHoy });
+    // LOTE CUENTA-REGRESIVA (mock aprobado Valentino 6/11 01:53; solo la
+    // cuenta — los-3 quedó fuera por decisión Valentino 6/11 16:16): la
+    // cuenta regresiva necesita el instante de apertura (hoy 9:00 en la
+    // zona de la cuenta) y el ahora del servidor (corrige el reloj del
+    // dispositivo).
+    const horaAperturaTxt = String(morningPostPush.MORNING_START_HOUR).padStart(2, '0') + ':00';
+    const abreA = zonedWallToUtc(hoy + ' ' + horaAperturaTxt, tz);
+    res.json({ ok: true, hoy: hoy, recomendada: recCard, cartas, elegida: row.picked_post_id || null, dorada, racha, album, publicado_hoy: publicadoHoy, abre_a: abreA, ahora: new Date().toISOString(), abre_hora: '9:00' });
   } catch (e) {
     console.error('[ritual] hoy:', e.message);
     res.status(500).json({ ok: false, error: 'No pude abrir tu paquete 😅 Probá de nuevo' });
@@ -31027,7 +31034,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v725';
+const BUILD_ID = '20261105-v726';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
