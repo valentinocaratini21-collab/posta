@@ -39,7 +39,7 @@ const sliceFn = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + base v710 (BUILD v711 en el árbol final) ----------
-  t(srv.includes("const BUILD_ID = '20261105-v728'"), 'server: BUILD v727 (re-pin iconos-linea-info v727, re-base sobre v726)');
+  t(srv.includes("const BUILD_ID = '20261105-v729'"), 'server: BUILD v729 (re-pin marca-hoy v729, re-base sobre v728)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -50,7 +50,7 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v723'"), 'CHUNK_V v723 (ajustes-simple; sin cambio en este lote)');
-  t(md5(css) === '1ab1e38c5985f589df399bca8fea4c53', 'styles.css md5 (re-pin iconos-linea-info v727: íconos en la línea de info)');
+  t(md5(css) === '74143a1301cfb7005b57c011c8204990', 'styles.css md5 (re-pin marca-hoy v729: píldora HOY; re-base sobre v728)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 10, 'server: 10 rutas /api/ads, sin endpoints nuevos');
 
   // ---------- 2. Dock v2: Inicio, Ads, +, Estrategia, Premios (las dos shells; DOCK-5 6/11: Ajustes sale del dock y vive en el perfil) ----------

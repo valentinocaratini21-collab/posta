@@ -3326,6 +3326,14 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-tile.hf-justpub{animation:hf-justpub 1.6s ease-out both}
 @keyframes hf-justpub{0%{box-shadow:inset 0 0 0 3px #FEC14D}100%{box-shadow:inset 0 0 0 0 rgba(254,193,77,0)}}
 .hf-just-chip{position:absolute;top:6px;left:6px;z-index:3;background:#FEC14D;color:#0A1E33;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;box-shadow:0 2px 8px rgba(10,30,51,.25)}
+/* (LOTE MARCA-HOY-DOCK · 6/11 · re-base sobre v728) Marca HOY del
+   posteo del día: misma familia de chapitas que .hf-just-chip
+   (arriba a la izquierda, 10px/800, píldora), en azul Posty con
+   texto blanco para no confundirla con «Recién publicado»
+   (amarilla). Solo la lleva el posteo de hoy; los publicados nunca.
+   La regla del dock ≤400px (10px) del lote original NO va: con
+   dock-5 (v722) «Estrategia» a 11px entra a 360 con ~16px de sobra. */
+.hf-hoy-badge{position:absolute;top:6px;left:6px;z-index:3;background:#2793C8;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;box-shadow:0 2px 8px rgba(10,30,51,.25);pointer-events:none;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.hf-tile.hf-justpub{animation:none}}
 /* Ítem 5: peek (mantener apretado) */
 .hf-peek-back{position:fixed;inset:0;z-index:1200;background:rgba(10,30,51,.45);display:flex;align-items:center;justify-content:center;padding:18px}

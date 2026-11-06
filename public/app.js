@@ -18852,17 +18852,20 @@ function homeGridCompose(input) {
     // que no es nextPost (p. ej. ya vencido, en publicación) sí rinde:
     // es de hoy.
     if (p.status === 'draft') continue;
+    // (LOTE MARCA-HOY-DOCK · 6/11) dayKeyHoy vive fuera del if para
+    // poder marcar la tile de hoy abajo: el posteo del día lleva la
+    // marca HOY (t.hoy), los publicados nunca.
+    let dayKeyHoy = it.ymd || '';
     if (p.status === 'scheduled' && hoyKey) {
-      let dayKey = it.ymd || '';
       try {
         if (p.scheduled_at && typeof pcParseDate === 'function') {
           const dd = pcParseDate(p.scheduled_at);
-          if (dd && typeof schedDayKeyOf === 'function') dayKey = schedDayKeyOf(dd, (typeof pcTz === 'function') ? pcTz() : undefined) || dayKey;
+          if (dd && typeof schedDayKeyOf === 'function') dayKeyHoy = schedDayKeyOf(dd, (typeof pcTz === 'function') ? pcTz() : undefined) || dayKeyHoy;
         }
       } catch (e) {}
-      if (dayKey && dayKey !== hoyKey) continue;
+      if (dayKeyHoy && dayKeyHoy !== hoyKey) continue;
     }
-    tiles.push({ kind: 'post', post: p, ymd: it.ymd || null, day: it.ymd || null, isNew: false });
+    tiles.push({ kind: 'post', post: p, ymd: it.ymd || null, day: it.ymd || null, isNew: false, hoy: p.status === 'scheduled' && !!hoyKey && !!dayKeyHoy && dayKeyHoy === hoyKey });
   }
   // (LOTE FEED · nada se pierde en silencio — SUPERSEDED 1/11 para
   // la grilla del dueño, LOTE SIN ARCHIVADOS) Antes los publicados
@@ -18998,7 +19001,7 @@ function homeGridCompose(input) {
     // debajo). El ancla FIFA (idxPub + avance por día) se retira: en
     // idx 0 no hay nada que partir y el fix v1 queda SUPERSEDED por
     // decisión (ver STATUS.md §0c y §4).
-    finalTiles.splice(0, 0, { kind: 'oculta', post: nextPost, openHoy: openHoyRit });
+    finalTiles.splice(0, 0, { kind: 'oculta', post: nextPost, openHoy: openHoyRit, hoy: cardHoy });
   }
   return finalTiles;
 }
@@ -19683,6 +19686,14 @@ function homeTileHTML(t, i) {
   // el justPub transitorio comparte la esquina, pero se limpia en
   // el render siguiente y no hay colisión en estado estable.
   const despChip = t.pzDespegue ? `<span class="pz-despegue-chip">${pzIc('flame', 14)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Breakout' : 'despegando'}</span>` : '';
+  // (LOTE MARCA-HOY-DOCK · 6/11 · re-base sobre v728) Marca HOY del
+  // posteo del día: la lleva SOLO el posteo de hoy (t.hoy lo pone
+  // homeGridCompose: la carta del próximo si cae hoy, o el programado
+  // de hoy). Los publicados nunca. Arriba a la izquierda, misma
+  // familia de chapitas que .hf-just-chip (amarilla): esta es azul
+  // Posty para no confundirlas. Si por algún camino coincidieran, el
+  // «Recién publicado» manda y HOY no se pinta (no se solapan).
+  const hoyBadge = (t.hoy && !t.justPub) ? `<span class="hf-hoy-badge">${phEn ? 'TODAY' : 'HOY'}</span>` : '';
   // (LOTE FEED · marca de archivado) El archivado se ve MARCADO, no
   // se esconde: chip en la franja (la única excepción a «nada de
   // texto sobre la imagen», igual que la chapita) + borde propio.
@@ -19815,11 +19826,11 @@ function homeTileHTML(t, i) {
     // hf-carta-oculta) cubre el próximo de día FUTURO y el de HOY
     // hasta elegir. t.openHoy lo pone homeGridCompose.
     if (t.openHoy) {
-      return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
+      return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
     }
-    return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta hf-carta-magia" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pz-abrir-ritual="1" role="button" tabindex="0" aria-label="${phEn ? 'Next post, hidden. Tap to see the options' : 'Próximo posteo, oculto. Tocá para ver las opciones'}"><span class="hf-carta-velo" aria-hidden="true"></span><span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
+    return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta hf-carta-magia" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pz-abrir-ritual="1" role="button" tabindex="0" aria-label="${phEn ? 'Next post, hidden. Tap to see the options' : 'Próximo posteo, oculto. Tocá para ver las opciones'}"><span class="hf-carta-velo" aria-hidden="true"></span>${hoyBadge}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
   }
-  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span></span>`;
+  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${hoyBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
