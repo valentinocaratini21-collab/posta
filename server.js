@@ -73,6 +73,7 @@ const reciclar = require('./reciclar'); // RECICLAR GANADORES (2026-10-30, mejor
 let cartaAudio = null;
 try { cartaAudio = require('./carta-audio'); } catch (e) { console.error('[carta-audio] módulo no disponible:', e.message); }
 const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispositivo: cuentas guardadas en la entrada, hash + rotación + revocación
+const ventyWebTokens = require('./venty-web-tokens'); // VENTY-WEB (slice 1-web): códigos de un solo uso + tokens Bearer para la app web de ventysalesmanager.com (modelo device-tokens.js)
 const gesty = require('./gesty'); // G-02 FUNDACIÓN GESTY: registro de empleados, gating por pack, registro durable, fundamento-vista y bandeja con la matriz forzada en el servidor
 const oficina = require('./oficina'); // ESPINA BAMBOOTY (programa TestFlight): fundamento único, río de la oficina, Bandeja «Para vos», partes (contrato de la oficina) y chat que rutea. La presentación Bambooty vive SOLO en el shell (la web pública sigue siendo Posty).
 const venty = require('./venty'); // VENTY (slice 1): ventas y crecimiento en Modo Prueba, partidas simuladas Café Aroma, registro durable.
@@ -381,7 +382,7 @@ const onboarding = require('./onboarding'); // ✨ BIENVENIDA MÁGICA POST-PAGO 
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
 const webExtract = require('./web-extract');
-const { sendEmail, magicLinkEmail, setSendLogger, emailFaceHeader } = require('./email');
+const { sendEmail, magicLinkEmail, ventyCodeEmail, setSendLogger, emailFaceHeader } = require('./email');
 // (P0 2026-10-24) Todo envío queda registrado en email_send_log (tabla en
 // db.js): el motivo literal del rechazo de Resend deja de vivir solo en los
 // logs efímeros de Railway. Lectura: GET /api/admin/email-log.
@@ -887,6 +888,50 @@ app.use(express.static(path.join(__dirname, 'public'), {
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) return res.status(401).json({ error: 'No autenticado' });
   next();
+};
+
+// ---------- VENTY-WEB (slice 1-web): CORS de origen exacto + auth Bearer ----------
+// La app web de Venty vive en ventysalesmanager.com y llama a esta API desde
+// otro dominio. La sesión (cookie SameSite=lax, host-only) NO viaja en fetch
+// cross-origin, así que la web se autentica con token Bearer (módulo
+// venty-web-tokens.js, modelo device-tokens.js). CORS: origen exacto, sin
+// '*', sin credenciales de cookie. localhost solo fuera de producción.
+const VENTY_WEB_ORIGIN = 'https://ventysalesmanager.com';
+function ventyWebEsOrigenPermitido(origen) {
+  if (!origen) return false;
+  if (origen === VENTY_WEB_ORIGIN) return true;
+  if (process.env.NODE_ENV !== 'production' && /^http:\/\/localhost:\d+$/.test(origen)) return true;
+  return false;
+}
+const ventyWebCors = (req, res, next) => {
+  const origen = req.headers && req.headers.origin;
+  if (origen && ventyWebEsOrigenPermitido(origen)) {
+    res.set('Access-Control-Allow-Origin', origen);
+    res.set('Vary', 'Origin');
+    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  }
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  next();
+};
+// Bearer de la app web: resuelve el token a user_id y lo deja en
+// req.webUserId. 401 si falta, tiene mal formato, está revocado o vencido.
+const requireWebToken = (req, res, next) => {
+  const h = req.headers && req.headers.authorization;
+  const m = h && h.match(/^Bearer\s+([0-9a-f]{64})$/i);
+  if (!m) return res.status(401).json({ error: 'No autenticado' });
+  let row = null;
+  try { row = ventyWebTokens.lookupWebToken(db, m[1]); } catch (e) { console.error('[venty-web] token:', e.message); }
+  if (!row) return res.status(401).json({ error: 'No autenticado' });
+  req.webUserId = row.user_id;
+  next();
+};
+// Sesión O token: la app de Posty sigue usando sesión; la web usa Bearer.
+// Durante la transición aceptan los dos; después del traslado, se puede
+// dejar solo token en /api/venty/*.
+const requireAuthOrWebToken = (req, res, next) => {
+  if (req.session && req.session.userId) return next();
+  return requireWebToken(req, res, next);
 };
 
 // Si la prueba gratis venció, no se puede generar ni programar: el paywall es "Mi plan"
@@ -3439,6 +3484,7 @@ app.post('/api/auth/reset', (req, res) => {
     // la cuenta: si el cambio fue por compromiso, ninguna "cuenta guardada"
     // puede reabrir la puerta. Este navegador recibe uno fresco abajo.
     try { deviceTokens.revokeAllForUser(db, row.user_id); } catch (e) { console.error('[posta] reset: no pude revocar device tokens:', e.message); }
+    try { ventyWebTokens.revokeAllForUser(db, row.user_id); } catch (e) { console.error('[posta] reset: no pude revocar venty web tokens:', e.message); }
     authHitClear(rlKey);
     // Sesión regenerada tras autenticar (anti fijación de sesión).
     req.session.regenerate(() => {
@@ -3978,12 +4024,107 @@ app.put('/api/oficina/push-prefs', requireAuth, (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// ---------- VENTY-WEB (slice 1-web): auth por código + token Bearer ----------
+// La app web de Venty vive en ventysalesmanager.com y llama a esta API desde
+// otro dominio. La sesión (cookie SameSite=lax, host-only) NO viaja en fetch
+// cross-origin, así que la web se autentica con token Bearer (módulo
+// venty-web-tokens.js). Flujo: el cliente pide el código por email
+// (POST /api/auth/venty-code-request) → el email trae el link a la web con
+// ?code= → la web canjea el código por un token (POST /api/auth/venty-token)
+// → cada llamada a /api/venty/* manda Authorization: Bearer.
+// Variante del plan (§2.4): magic link directo a la web, sin tocar el login
+// de Posta. GET /api/auth/venty-code (con sesión) queda para el flujo
+// return_to futuro de la app de Posty, que es un lote aparte y no se toca acá.
+// CORS de origen exacto para la web y para los endpoints de token.
+app.use(['/api/venty', '/api/auth/venty-code-request', '/api/auth/venty-token', '/api/auth/venty-refresh', '/api/auth/venty-revoke'], ventyWebCors);
+
+// Pide el código por email. Siempre responde {ok:true} para no revelar si
+// el email existe (espejo de magic-request), salvo que el envío no pueda
+// salir: ahí el error es honesto (incidente 2026-10-21). Rate-limit: máx 5
+// pedidos por hora por email+IP (espejo de forgot).
+app.post('/api/auth/venty-code-request', async (req, res) => {
+  const em = String((req.body && req.body.email) || '').trim().toLowerCase();
+  if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return res.json({ ok: true });
+  const rlKey = 'venty-code-req|' + em + '|' + (req.ip || '');
+  if (authHitCount(rlKey, 3600 * 1000) >= 5)
+    return res.status(429).json({ error: 'Ya pediste varios códigos 😅 Esperá una hora y probá de nuevo.' });
+  authHitRecord(rlKey);
+  let user = null;
+  try { user = db.prepare('SELECT id, email, lang FROM users WHERE email = ?').get(em); } catch (e) { console.error('[venty-web] code-request:', e.message); }
+  if (!user) return res.json({ ok: true });
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[venty-web] code-request: RESEND_API_KEY ausente — el código no puede salir');
+    return res.status(503).json({ error: 'El envío de emails está en mantenimiento 😅 Probá de nuevo en un rato.' });
+  }
+  let issued = null;
+  try { issued = ventyWebTokens.issueCode(db, user.id, em); } catch (e) { console.error('[venty-web] code-request:', e.message); }
+  if (!issued) return res.status(500).json({ error: 'No se pudo generar el código. Probá de nuevo.' });
+  const link = 'https://ventysalesmanager.com/app/?code=' + issued.code;
+  let sent = null;
+  try { sent = await ventyCodeEmail(em, link, user.lang === 'en' ? 'en' : 'es'); } catch (e) { console.error('[venty-web] code-request email:', e.message); }
+  if (!sent || !sent.ok) {
+    try { ventyWebTokens.revokeCode(db, issued.code); } catch (e) {}
+    return res.status(503).json({ error: 'No se pudo mandar el email 😅 Probá de nuevo en un rato.' });
+  }
+  return res.json({ ok: true });
+});
+
+// Emite un código para la sesión logueada (flujo return_to futuro de la app
+// de Posty). El código viaja solo por el canal del usuario (redirect con
+// ?code=) y nunca se loguea. Rate-limit: máx 5 por hora por usuario.
+app.get('/api/auth/venty-code', requireAuth, (req, res) => {
+  const rlKey = 'venty-code|' + req.session.userId;
+  if (authHitCount(rlKey, 3600 * 1000) >= 5)
+    return res.status(429).json({ error: 'Ya pediste varios códigos 😅 Esperá una hora y probá de nuevo.' });
+  authHitRecord(rlKey);
+  let issued = null;
+  try { issued = ventyWebTokens.issueCode(db, req.session.userId, ''); } catch (e) { console.error('[venty-web] code:', e.message); }
+  if (!issued) return res.status(500).json({ error: 'No se pudo generar el código. Probá de nuevo.' });
+  return res.json({ ok: true, code: issued.code, expires_at: issued.expiresAt });
+});
+
+// Canjea el código por un web token (opaco, TTL 60 días). El código queda
+// usado y no se puede reutilizar. Rate-limit: máx 10 intentos por hora por IP.
+app.post('/api/auth/venty-token', async (req, res) => {
+  const code = String((req.body && req.body.code) || '').trim().toLowerCase();
+  const rlKey = 'venty-token|' + (req.ip || '');
+  if (authHitCount(rlKey, 3600 * 1000) >= 10)
+    return res.status(429).json({ error: 'Demasiados intentos 😅 Esperá una hora y probá de nuevo.' });
+  authHitRecord(rlKey);
+  let userId = null;
+  try { userId = ventyWebTokens.consumeCode(db, code); } catch (e) { console.error('[venty-web] token:', e.message); }
+  if (!userId) return res.status(401).json({ error: 'codigo_invalido' });
+  let issued = null;
+  try { issued = ventyWebTokens.issueWebToken(db, userId, 'web'); } catch (e) { console.error('[venty-web] token:', e.message); }
+  if (!issued) return res.status(500).json({ error: 'No se pudo emitir el token. Probá de nuevo.' });
+  return res.json({ ok: true, token: issued.token, expires_at: issued.expiresAt });
+});
+
+// Rota el token presentado: lo revoca y emite uno nuevo. La web lo hace
+// silenciosamente cuando quedan <7 días.
+app.post('/api/auth/venty-refresh', requireWebToken, (req, res) => {
+  const h = req.headers && req.headers.authorization;
+  const m = h && h.match(/^Bearer\s+([0-9a-f]{64})$/i);
+  let fresh = null;
+  try { fresh = ventyWebTokens.exchangeWebToken(db, m && m[1]); } catch (e) { console.error('[venty-web] refresh:', e.message); }
+  if (!fresh) return res.status(401).json({ error: 'No autenticado' });
+  return res.json({ ok: true, token: fresh.token, expires_at: fresh.expiresAt });
+});
+
+// Revoca el token presentado (el «Salir» de la app web).
+app.post('/api/auth/venty-revoke', requireWebToken, (req, res) => {
+  const h = req.headers && req.headers.authorization;
+  const m = h && h.match(/^Bearer\s+([0-9a-f]{64})$/i);
+  try { ventyWebTokens.revokeWebToken(db, m && m[1]); } catch (e) { console.error('[venty-web] revoke:', e.message); }
+  return res.json({ ok: true });
+});
+
 // ---------- VENTY (slice 1: capa de app en Modo Prueba) ----------
 // Las 5 pantallas del mock aprobado viviendo en la app real, con partidas
 // simuladas de Café Aroma y registro durable. Todo responde con modo:
 // 'prueba'. La caza es ejemplo rotulado hasta el slice 4.
-const ventyUid = (req) => { try { venty.asegurarSemilla(db, req.session.userId); } catch (e) { console.error('[venty] semilla:', e.message); } return req.session.userId; };
-app.get('/api/venty/estado', requireAuth, (req, res) => {
+const ventyUid = (req) => { const uid = (req.session && req.session.userId) || req.webUserId; try { venty.asegurarSemilla(db, uid); } catch (e) { console.error('[venty] semilla:', e.message); } return uid; };
+app.get('/api/venty/estado', requireAuthOrWebToken, (req, res) => {
   try {
     const uid = ventyUid(req);
     const f = venty.leerFundamento(db, uid);
@@ -3993,7 +4134,7 @@ app.get('/api/venty/estado', requireAuth, (req, res) => {
       venty: { precio_usd: venty.PRECIO_MENSUAL_USD, plan: 'unico', estreno: venty.ESTRENO } });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get('/api/venty/partidas', requireAuth, (req, res) => {
+app.get('/api/venty/partidas', requireAuthOrWebToken, (req, res) => {
   try {
     const uid = ventyUid(req);
     const filtro = String(req.query.filtro || 'todas');
@@ -4007,7 +4148,7 @@ app.get('/api/venty/partidas', requireAuth, (req, res) => {
     res.json({ ok: true, modo: 'prueba', partidas: rows });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get('/api/venty/partidas/:id', requireAuth, (req, res) => {
+app.get('/api/venty/partidas/:id', requireAuthOrWebToken, (req, res) => {
   try {
     const uid = ventyUid(req);
     const p = venty.obtenerPartida(db, uid, Number(req.params.id));
@@ -4015,66 +4156,67 @@ app.get('/api/venty/partidas/:id', requireAuth, (req, res) => {
     res.json({ ok: true, modo: 'prueba', partida: p });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/venty/partidas/:id/tomar', requireAuth, (req, res) => {
+app.post('/api/venty/partidas/:id/tomar', requireAuthOrWebToken, (req, res) => {
   try {
     const r = venty.tomarPartida(db, ventyUid(req), Number(req.params.id));
     if (!r.ok) return res.status(400).json({ ok: false, ...r });
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/venty/partidas/:id/seguir', requireAuth, (req, res) => {
+app.post('/api/venty/partidas/:id/seguir', requireAuthOrWebToken, (req, res) => {
   try {
     const r = venty.seguirPartida(db, ventyUid(req), Number(req.params.id));
     if (!r.ok) return res.status(400).json({ ok: false, ...r });
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get('/api/venty/bandeja', requireAuth, (req, res) => {
+app.get('/api/venty/bandeja', requireAuthOrWebToken, (req, res) => {
   try { res.json({ ok: true, modo: 'prueba', jugadas: venty.listarBandeja(db, ventyUid(req)) }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/venty/bandeja/:id/aceptar', requireAuth, (req, res) => {
+app.post('/api/venty/bandeja/:id/aceptar', requireAuthOrWebToken, (req, res) => {
   try {
     const r = venty.resolverJugada(db, ventyUid(req), Number(req.params.id), 'aceptar', '');
     if (!r.ok) return res.status(400).json({ ok: false, ...r });
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/venty/bandeja/:id/rechazar', requireAuth, (req, res) => {
+app.post('/api/venty/bandeja/:id/rechazar', requireAuthOrWebToken, (req, res) => {
   try {
     const r = venty.resolverJugada(db, ventyUid(req), Number(req.params.id), 'rechazar', String(((req.body || {}).nota) || ''));
     if (!r.ok) return res.status(400).json({ ok: false, ...r });
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/venty/bandeja/:id/cambio', requireAuth, (req, res) => {
+app.post('/api/venty/bandeja/:id/cambio', requireAuthOrWebToken, (req, res) => {
   try {
     const r = venty.resolverJugada(db, ventyUid(req), Number(req.params.id), 'cambio', String(((req.body || {}).nota) || ''));
     if (!r.ok) return res.status(400).json({ ok: false, ...r });
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get('/api/venty/frase', requireAuth, (req, res) => {
+app.get('/api/venty/frase', requireAuthOrWebToken, (req, res) => {
   try { res.json({ ok: true, ...venty.computarFrase(db, ventyUid(req)) }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get('/api/venty/parte', requireAuth, (req, res) => {
+app.get('/api/venty/parte', requireAuthOrWebToken, (req, res) => {
   try {
-    const p = venty.computarParte(db, ventyUid(req), String(req.query.semana || ''));
+    const uid = ventyUid(req);
+    const p = venty.computarParte(db, uid, String(req.query.semana || ''));
     if (!p.emitido) return res.json({ ok: true, modo: 'prueba', emitido: false, semana: p.semana, razon: p.razon });
     try {
       db.prepare(`INSERT INTO venty_parte (user_id, semana, datos_json, emitido_at) VALUES (?,?,?,?)
         ON CONFLICT(user_id, semana) DO UPDATE SET datos_json = excluded.datos_json, emitido_at = excluded.emitido_at`)
-        .run(req.session.userId, p.semana, JSON.stringify(p), new Date().toISOString().slice(0, 19).replace('T', ' '));
+        .run(uid, p.semana, JSON.stringify(p), new Date().toISOString().slice(0, 19).replace('T', ' '));
     } catch (e) { /* el parte se calcula igual sin persistir */ }
     res.json({ ok: true, ...p });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get('/api/venty/mensajes-hoy', requireAuth, (req, res) => {
+app.get('/api/venty/mensajes-hoy', requireAuthOrWebToken, (req, res) => {
   try { res.json({ ok: true, modo: 'prueba', mensajes: venty.mensajesHoy(db, ventyUid(req)) }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/venty/freno', requireAuth, (req, res) => {
+app.post('/api/venty/freno', requireAuthOrWebToken, (req, res) => {
   try {
     const uid = ventyUid(req);
     const pausado = !!((req.body || {}).pausado);
@@ -4083,14 +4225,14 @@ app.post('/api/venty/freno', requireAuth, (req, res) => {
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get('/api/venty/fundamento', requireAuth, (req, res) => {
+app.get('/api/venty/fundamento', requireAuthOrWebToken, (req, res) => {
   try {
     const f = venty.leerFundamento(db, ventyUid(req));
     if (!f) return res.status(404).json({ ok: false, error: 'sin_fundamento' });
     res.json({ ok: true, modo: 'prueba', fundamento: f });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get('/api/venty/chat', requireAuth, (req, res) => {
+app.get('/api/venty/chat', requireAuthOrWebToken, (req, res) => {
   try {
     const uid = ventyUid(req);
     const rows = db.prepare(`SELECT datos_json, created_at FROM venty_eventos WHERE user_id = ? AND tipo = 'chat_dueno' ORDER BY created_at ASC, id ASC LIMIT 50`).all(uid);
@@ -4098,7 +4240,7 @@ app.get('/api/venty/chat', requireAuth, (req, res) => {
     res.json({ ok: true, modo: 'prueba', turnos });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/venty/chat', requireAuth, (req, res) => {
+app.post('/api/venty/chat', requireAuthOrWebToken, (req, res) => {
   try {
     const uid = ventyUid(req);
     const texto = String(((req.body || {}).text) || '').slice(0, 2000).trim();
@@ -4108,7 +4250,7 @@ app.post('/api/venty/chat', requireAuth, (req, res) => {
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/venty/chat/audio', requireAuth, async (req, res) => {
+app.post('/api/venty/chat/audio', requireAuthOrWebToken, async (req, res) => {
   try {
     const uid = ventyUid(req);
     const audioDataUrl = (req.body && req.body.audioDataUrl) || '';
@@ -4125,11 +4267,11 @@ app.post('/api/venty/chat/audio', requireAuth, async (req, res) => {
     res.json({ ok: true, modo: 'prueba', transcript, ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get('/api/venty/caza', requireAuth, (req, res) => {
+app.get('/api/venty/caza', requireAuthOrWebToken, (req, res) => {
   try { ventyUid(req); res.json({ ok: true, modo: 'prueba', ...venty.CAZA_EJEMPLO }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/venty/simulacion/nueva', requireAuth, (req, res) => {
+app.post('/api/venty/simulacion/nueva', requireAuthOrWebToken, (req, res) => {
   try {
     const uid = ventyUid(req);
     const nombre = String(((req.body || {}).cliente_nombre) || '').slice(0, 80).trim();
@@ -4141,7 +4283,7 @@ app.post('/api/venty/simulacion/nueva', requireAuth, (req, res) => {
     res.json({ ok: true, modo: 'prueba', partida_id: Number(r.lastInsertRowid) });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/venty/simulacion/mensaje', requireAuth, (req, res) => {
+app.post('/api/venty/simulacion/mensaje', requireAuthOrWebToken, (req, res) => {
   try {
     const uid = ventyUid(req);
     const r = venty.jugarMensaje(db, uid, Number(((req.body || {}).partida_id) || 0), String(((req.body || {}).texto) || ''));
@@ -4280,14 +4422,14 @@ function nivelDesafioAceptado(db, uid) {
     return !!r;
   } catch (e) { return false; }
 }
-app.get('/api/oficina/nivel', requireAuth, (req, res) => {
+app.get('/api/oficina/nivel', requireAuthOrWebToken, (req, res) => {
   try {
     nivelCelebracionesEnsure();
     nivelTablasEnsure();
     const poder = String(req.query.poder || 'posty');
     const def = oficina.niveles.PODERES[oficina.niveles.resolverPoder(poder)];
     if (!def) return res.status(400).json({ ok: false, error: 'poder_desconocido' });
-    const uid = req.session.userId;
+    const uid = (req.session && req.session.userId) || req.webUserId;
     // Nivel ANTES del puente: la subida durante una ausencia no cuenta el
     // puente (es un backfill, no progreso de esos días).
     let nivelPre = null;
@@ -30043,7 +30185,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v704';
+const BUILD_ID = '20261105-v705';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

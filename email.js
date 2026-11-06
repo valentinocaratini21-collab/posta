@@ -801,6 +801,34 @@ function firstPublishNudgeEmail(user, baseUrl) {
 // (v369 · paridad de idioma) lang='en' → el email sale en inglés: la cuenta
 // creada desde el funnel EN guarda users.lang='en' y el acceso no puede
 // llegarle en español. Default histórico: 'es'.
+// VENTY-WEB (slice 1-web): email con el link de entrada a la app web de
+// Venty. El link lleva el código de un solo uso (?code=, vale 5 minutos).
+// Voz de Venty: minúsculas, sin ¿/¡.
+function ventyCodeEmail(email, link, lang) {
+  if (lang === 'en') {
+    const subject = 'Sign in to Venty — no password needed ✨';
+    const html = emailShell(`
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Tap it and you're in — no password needed 👇 (valid for 5 minutes)<br>
+      <span style="font-size:13px">Sent to you by <b>Venty</b> ♟️</span>
+    </p>
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${link}" style="display:inline-block;background:#4CAF50;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Open my Venty ✨</a>
+    </p>`, 'en');
+    return sendEmail({ to: email, subject, html });
+  }
+  const subject = 'Entrá a tu Venty ✨';
+  const html = emailShell(`
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Tocalo y entrás a tu Venty, sin contraseña 👇 (vale 5 minutos)<br>
+      <span style="font-size:13px">Te lo manda <b>Venty</b> ♟️</span>
+    </p>
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${link}" style="display:inline-block;background:#4CAF50;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Entrar a mi Venty ✨</a>
+    </p>`);
+  return sendEmail({ to: email, subject, html });
+}
+
 function magicLinkEmail(email, link, lang) {
   if (lang === 'en') {
     const subject = 'Sign in to Posty — no password needed ✨';
@@ -923,4 +951,4 @@ function trialClosedEmail(user, baseUrl) {
   return sendEmail({ to: user.email, subject, html: emailShell(inner) });
 }
 
-module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, firstPublishNudgeEmail, photoRitualEmail };
+module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, ventyCodeEmail, firstPublishNudgeEmail, photoRitualEmail };
