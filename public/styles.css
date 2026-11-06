@@ -4355,7 +4355,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 /* (LOTE GLASS · despeje píldora flotante «Aceptar todo») La píldora fija
    vive a 86px+safe y mide ~46px (tope ~132px+safe): 148px+safe despeja
    píldora, chat y tabs en Inicio y en Schedule (que no tenía despeje). */
-#inicioView.hf-wrap{padding-bottom:calc(148px + env(safe-area-inset-bottom))}
+/* (LOTE SACAR-CHATBAR-INICIO · decisión Valentino 5/11) Sin chatbar fija en Inicio, el despeje
+   vuelve al del dock solo (96px+safe, como .hf-wrap y .main con tabs). La barra «Aprobar todo»
+   vive en el encabezado (en flujo), no necesita despeje inferior. .sched-wrap no se toca. */
+#inicioView.hf-wrap{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .sched-wrap{padding-bottom:calc(148px + env(safe-area-inset-bottom))}
 
 /* (LOTE FEED · nada se pierde en silencio) Marca de archivado en la

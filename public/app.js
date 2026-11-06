@@ -21056,14 +21056,7 @@ async function inicioView() {
   ${pzSemanaOkHTML}
   ${gridHTML}
   ${visitorPillHTML}
-  <div class="mz-bottomstack" id="mzBottomStack">
-  <div id="mzVoiceBar" hidden></div>
-  <div class="mz-chatbar" id="mzChatBar">
-    <button type="button" class="mz-plus" id="mzChatPlus" aria-label="Agregar" onclick="pzDockMasToggle()">+</button>
-    <button type="button" class="mz-ph" id="mzChatOpen"><img class="chat-face" src="ai-avatar.png" alt="Posty"><span class="mz-ph-tx">escribile a posty…</span></button>
-    <button type="button" class="mz-mic" id="mzMic" aria-label="Pedir con nota de voz">${pzIc('mic', 20)}</button>
-  </div>
-  </div>
+  <!-- (LOTE SACAR-CHATBAR-INICIO · decisión Valentino 5/11) La caja de chat sale de Inicio: sin campo, sin mic, sin +. La entrada de subida es el tab Agregar del dock (hoja «Subir foto / Subir video» → chat con la foto). La hoja del chat (mzSheet) queda: es la superficie del cambio del posteo (hfOpenChatForPost). -->
   <div class="mz-sheet" id="mzSheet" hidden>
     <div class="mz-sheet-card">
       <div class="mz-sheet-head"><span></span><button type="button" class="mz-sheet-x" id="mzSheetX" aria-label="Cerrar">${pzIc("x", 16)}</button></div>
