@@ -9880,12 +9880,13 @@ function pzAcceptAllWeekCands(list, isPilot) {
   return out;
 }
 
-// (LOTE APROBAR-TIK-EN-VIVO) Número en vivo: tras aprobar por corazón el
+// (LOTE APROBAR-TIK-EN-VIVO) Número en vivo: tras aprobar uno por uno el
 // botón recalcula con la MISMA fuente del render (HF_TILES, ya actualizado
 // en memoria) y se actualiza en su lugar; en 0 el botón se va (sin render
 // completo ni salto). Si el botón no está en el DOM, no hay nada que hacer.
 // El botón Aprobar-todo ya hacía esto tras su propio loop; faltaba el
-// camino del corazón, y por eso el número mentía tras likear uno por uno.
+// camino de aprobar uno por uno, y por eso el número mentía tras aprobar
+// uno por uno. (SACAR-CORAZÓN 6/11: el corazón ya no es el camino.)
 function pzAcceptCountSync() {
   try {
     const btn = document.getElementById('hfAcceptAllWeek');
@@ -9953,7 +9954,7 @@ function pzSemanaAprobadaSync() {
 // (LOTE ACEPTAR-TODO-SEMANA) Marca en su lugar tras aprobar uno por
 // el botón, sin render(). Si existe el helper de la enmienda
 // sin-refresh (pzAprobarEnSitio, lote gris-tik) manda él; si no,
-// marcado mínimo propio (tik verde en el slot del corazón, sin estilos
+// marcado mínimo propio (tik verde en el lugar donde vivía el corazón, sin estilos
 // en línea — la geometría la pone .hf-tik — para que el visual coincida
 // con y sin ese lote). El próximo render completo lo reemplaza por
 // el marcado canónico, así que nunca se duplica el tik. Solo se
@@ -9967,10 +9968,10 @@ function pzAcceptAllWeekMark(tile, post) {
     // "[object Object]" en 'posta-aprobados'. Se pasa id + fecha.)
     if (typeof pzAprobarEnSitio === 'function') { try { pzAprobarEnSitio(tile, String(post.id), post.scheduled_at); return; } catch (e) {} }
     if (!tile) return;
-    const like = tile.querySelector ? tile.querySelector('[data-hf-like]') : null;
-    const likeInStrip = !!(like && like.closest && like.closest('.hf-strip'));
-    if (like && like.remove) like.remove(); // (LOTE APROBAR-TIK-EN-VIVO) aprobado = tik, no corazón
-    // (LOTE TIK-EN-CORAZON 5/11: el tik va EN EL SLOT del corazón — en la franja si el corazón vivía ahí, abajo a la derecha sobre la foto si no. Sin estilos en línea: la geometría la pone .hf-tik en styles.css. Solo es el respaldo si pzAprobarEnSitio no está; en el bundle siempre está.)
+    // (SACAR-CORAZÓN 6/11: ya no hay corazón que sacar; el tik va en el
+    // slot que ocupaba: en la franja si hay chapita, abajo-sobre-foto si no.)
+    const likeInStrip = !!(tile.querySelector && tile.querySelector('.hf-chip'));
+    // (LOTE TIK-EN-CORAZON 5/11: el tik va EN EL LUGAR donde vivía el corazón — en la franja si hay chapita, abajo a la derecha sobre la foto si no. Sin estilos en línea: la geometría la pone .hf-tik en styles.css. Solo es el respaldo si pzAprobarEnSitio no está; en el bundle siempre está.)
     if (tile.querySelector && !tile.querySelector('.hf-tik')) {
       const s = document.createElement('span');
       s.className = 'hf-tik';
@@ -9986,7 +9987,7 @@ function pzAcceptAllWeekMark(tile, post) {
 // (LOTE ACEPTAR-TODO-SEMANA + APROBAR-TODO-PENDIENTES 4/11) Un toque
 // acepta TODOS los pendientes programados (sin filtro de semana, ver
 // pzAcceptAllWeekCands). Reutiliza
-// el camino por posteo del corazón: en manual POST /approve, en
+// el camino de aprobación por posteo: en manual POST /approve, en
 // piloto PATCH like (constancia). Sin pantalla de confirmación.
 // Sin render(): cada éxito se marca en su lugar; al final, toast
 // honesto (nunca «todo aprobado» si algo falló) y el botón se va
@@ -11935,8 +11936,9 @@ function igRelTime(iso, en) {
    UN solo primario fijo abajo (Aceptar, solo borradores, mismos attrs
    data-revaccept/data-proposed de hoy) y TODO lo demás en un solo menú •••
    (Frenar, Pedir un cambio, Editar, Eliminar, No me gusta). FUERA: la fila
-   de 5 íconos tipo IG (decorado de IG, no acciones del producto: el corazón
-   ya vive en los tiles), la caja de edición por defecto (Editar abre solo
+   de 5 íconos tipo IG (decorado de IG, no acciones del producto: sin
+   corazón — la aprobación vive en el ritual), la caja de edición por
+   defecto (Editar abre solo
    el campo + UN Guardar; ✕/atrás descarta, no hay Cancelar grande) y el
    mini-chat propio del detalle. SUPERSESIÓN CON CAUSA: el mini-chat del
    lote simplificar-detalle (aprobado 1/11) queda SUPERSEDED SOLO para el
@@ -12908,18 +12910,16 @@ function bindScfMinis(root) {
       if (t) clearTimeout(t); // si se fue antes de los 130 ms, no abre
       // El CIERRE al salir lo maneja el rastreador geométrico global.
     });
-    // (LOTE 15 · tiles web + LOTE CORAZÓN) Sobre la franja (chapita) y el corazón (arriba a la derecha) el pop
-    // no se arma ni queda abierto: al bajar al corazón la vista previa
-    // se disuelve para que el corazón quede clickeable. El pop fijado
-    // explícitamente no se toca.
+    // (LOTE 15 · tiles web) Sobre la franja (chapita) el pop no se arma
+    // ni queda abierto. El pop fijado explícitamente no se toca.
+    // (SACAR-CORAZÓN 6/11: el corazón ya no vive en la tile.)
     w.addEventListener('mousemove', (e) => {
-      if (e.target && e.target.closest && (e.target.closest('.hf-strip, [data-hf-like]') || e.target.closest('[data-hf-chat]'))) {
+      if (e.target && e.target.closest && (e.target.closest('.hf-strip') || e.target.closest('[data-hf-chat]'))) {
         if (t) { clearTimeout(t); t = null; }
         if (SCF_POP && SCF_POP.wrap === w && !SCF_PINNED) scfClosePop();
       }
     });
     w.addEventListener('click', (e) => {
-      if (e.target.closest && e.target.closest('[data-hf-like]')) return; // (LOTE 11) el corazón lo maneja hfLikeBind, no la capa
       if (e.target.closest && e.target.closest('[data-hf-chat]')) return; // (LOTE HABLAR-DE-ESTE-POSTEO) el botón 💬 lo maneja hfChatBtnBind, no la capa
       if (e.target.closest('.scf-pop')) {
         // Click sobre la propia capa: queda FIJADA.
@@ -19736,9 +19736,9 @@ function homeTileHTML(t, i) {
   const chipTxt = (p.status === 'draft' || p.status === 'scheduled')
       ? (hfWhenChip(p) || (p.status === 'draft' ? hfPlanChip(t.day) : ''))
       : '';
-  // (LOTE 16 · la hora nunca se corta + LOTE CORAZÓN: el día tampoco)
-  // La chapita ya no recorta nada: el corazón salió de la fila, el día
-  // va entero (flex-none, sin ellipsis) y la hora va en su tramo fijo.
+  // (LOTE 16 · la hora nunca se corta + el día tampoco)
+  // La chapita ya no recorta nada: el día va entero (flex-none, sin
+  // ellipsis) y la hora va en su tramo fijo.
   const chipParts = hfTileChipParts(chipTxt, phEn);
   const chip = chipTxt ? (chipParts
     ? `<span class="hf-chip"><span class="hf-chip-ico">${pzIc('clock', 12)}</span><span class="hf-chip-day">${esc(chipParts.day)}</span><span class="hf-chip-hm"> · ${esc(chipParts.hm)}</span></span>`
@@ -19749,19 +19749,16 @@ function homeTileHTML(t, i) {
   // post abierto en grande: el detalle trae el mini-chat «Pedir un
   // cambio» (hfAskChangeBtnHTML), que abre el chat ÚNICO con el posteo
   // anclado. Tocar una tile abre siempre el detalle.
-  // (LOTE 12 · corrección de Valentino 31/10: el corazón vive
-  // adentro de la foto, ARRIBA A LA DERECHA, fuera de la franja
-  // (LOTE CORAZÓN 1/11: la chapita abajo ocupa toda la fila y el día
-  // ya no colapsa a una letra. Con glifo arriba a la derecha, el
-  // corazón baja a top:32px, clase hf-has-glyph.)
-  // (LOTE 13 · corazón y fecha no se tocan) (LOTE CORAZÓN · 1/11) La franja inferior es .hf-strip flex: chapita a lo ancho; el día nunca lleva ellipsis y el corazón mantiene 34×34 arriba a la derecha. Es la ÚNICA excepción a «ningún botón
-  // flotante tapa la imagen»: los captions siguen sin pintarse
-  // sobre la imagen.)
+  // (SACAR-CORAZÓN 6/11 · decisión Valentino: el corazón para aprobar
+  // sale del feed — la aprobación vive solo en el ritual [Sale así].
+  // La franja inferior es .hf-strip flex: chapita a lo ancho; el día
+  // nunca lleva ellipsis. La ÚNICA marca de una tile es el tik verde
+  // de aprobado-sin-salir, en el lugar donde vivía el corazón.)
   // REGLA DURA DE TILES (misma corrección — «los captions enormes en
   // el medio»): ninguna tile pinta texto sobre la imagen. homeTileHTML
   // no renderiza ningún caption: solo media, chapita chica abajo a la
-  // izquierda, corazón arriba a la derecha, glifo arriba a la derecha
-  // y nada más. Los captions
+  // izquierda, tik verde de aprobado (si corresponde) y glifo arriba
+  // a la derecha, y nada más. Los captions
   // viven DEBAJO de la media, en tamaño normal, solo en el detalle
   // (.hf-d-cap 14px), el visor (.lb-cap 14px) y la tarjeta del cofre
   // (.igmock-cap 13px) — nunca centrados, nunca gigantes, nunca sobre
@@ -19788,36 +19785,30 @@ function homeTileHTML(t, i) {
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  // (LOTE TIK-EN-CORAZON 5/11 · decisión Valentino: un estado, un lugar.
-  // SUPERSEDE la parte de CORAZÓN-MARCA que llenaba el corazón por estar
-  // programado: el corazón lleno ahora marca SOLO que ya salió (publicado).
-  // Pendiente (draft/scheduled sin aprobar) = corazón contorno; aprobado sin
-  // salir = tik verde en el lugar del corazón; publicado = corazón lleno.
-  const hfLikeOn = String(p.status) === 'published';
+  // (SACAR-CORAZÓN 6/11 · decisión Valentino: el corazón sale del feed;
+  // la aprobación vive solo en el ritual [Sale así]. SUPERSEDE
+  // TIK-EN-CORAZON 5/11 en lo del corazón: ya no hay corazón en ningún
+  // estado. Pendiente = sin marca; aprobado sin salir = tik verde en el
+  // lugar donde vivía el corazón; publicado = sin marca.)
   // (LOTE HABLAR-DE-ESTE-POSTEO · 2/11 · aprobado por Valentino) Botón
   // 💬 en la tile: un toque abre el chat principal con este posteo
   // anclado (foto + texto). Solo posteos ajustables del dueño
   // (programado/borrador con imagen): nunca visitante, IG, publicado
-  // ni archivado. Abajo a la IZQUIERDA sobre la foto, espejo del
-  // corazón: arriba-derecha vive el glifo, abajo-derecha el corazón
-  // (v545) y el tik (gris-tik), y la chapita ocupa toda la fila
-  // inferior — la izquierda sobre la foto es el único rincón libre
-  // en todas las configuraciones (incluida corazón-en-línea, que
-  // mueve el corazón a la fila de la chapita).
+  // ni archivado. Abajo a la IZQUIERDA sobre la foto: arriba-derecha
+  // vive el glifo, abajo-derecha el tik de aprobado (si corresponde),
+  // y la chapita ocupa toda la fila inferior — la izquierda sobre la
+  // foto es el único rincón libre en todas las configuraciones.
   // (LOTE FEED-TIRA-DÍA · 2/11 · decisión Valentino) El globito de comentario sale de las tiles del feed; hablar sigue por detalle/aprobación.
   const talkBtn = '';
-  // (LOTE CORAZÓN-EN-LÍNEA · decisión Valentino 2/11: el corazón va MÁS
-  // CHIQUITO y EN LA MISMA LÍNEA del día y la hora. Con chapita vive
-  // DENTRO de la franja (.hf-strip), en la misma fila que día+hora; sin
-  // chapita (borrador sin fecha) queda hijo directo, posición
-  // abajo-sobre-foto del lote corazón-abajo — este lote no la toca.)
-  const likeBtn = `<button type="button" class="hf-like hf-like-in" data-hf-like${hfLikeOn ? ' data-hf-on="1"' : ''} aria-pressed="${hfLikeOn ? 'true' : 'false'}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button>`;
+  // (SACAR-CORAZÓN 6/11: el corazón sale — el tik de aprobado ocupa su
+  // lugar. Con chapita vive DENTRO de la franja (.hf-strip), en la misma
+  // fila que día+hora; sin chapita queda hijo directo, abajo-sobre-foto.)
   const likeInStrip = !!chipTxt;
   // (LOTE CORAZÓN-GRIS-TIK 2/11: aprobado = tik verde a todo color, SIN gris,
   // no debe parecer archivado. LOTE TIK-EN-CORAZON 5/11: el tik va EN EL LUGAR
-  // del corazón — un estado, un lugar. Solo mientras sigue sin salir
+  // donde vivía el corazón — un estado, un lugar. Solo mientras sigue sin salir
   // (draft/scheduled): al publicarse baja al grupo de ya salidos con su aspecto
-  // normal y el corazón lleno sigue marcando la aprobación. Guardia typeof: los
+  // normal y sin marca. Guardia typeof: los
   // harnesses viejos que extraen homeTileHTML sola no rompen si el helper no está
   // cargado (en el bundle siempre está definido).
   const hfAprobado = (String(p.status) === 'draft' || String(p.status) === 'scheduled') && (String(p.approval || '') === 'approved' || ((typeof pzAprobadoEs === 'function') && pzAprobadoEs(p.id)));
@@ -19872,7 +19863,7 @@ function homeTileHTML(t, i) {
     }
     return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta hf-carta-magia" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pz-abrir-ritual="1" role="button" tabindex="0" aria-label="${phEn ? 'Next post, hidden. Tap to see the options' : 'Próximo posteo, oculto. Tocá para ver las opciones'}"><span class="hf-carta-velo" aria-hidden="true"></span><span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
   }
-  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? (hfAprobado ? tikSpan : likeBtn) : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : (hfAprobado ? tikSpan : likeBtn)}</span></span>`;
+  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -20467,18 +20458,15 @@ function hfProfileActionsHTML(en, acceptHTML) {
   // El espacio libre lo ocupa «Aceptar todo» REUBICADO (mismo
   // acceptBarHTML, mismo handler pzAcceptAllWeek, mismo alcance:
   // solo programados de la semana nueva pendientes, un toque sin
-  // confirmación) + una línea chiquita «Tocá el corazón en los posteos para
-  // aprobar.» JUNTO al botón, sin competir con él. La píldora
+  // confirmación). La píldora
   // compacta de encima del chat SALE de .mz-bottomstack: Aceptar
-  // todo existe UNA sola vez, en el encabezado. Sin candidatos, la
-  // fila muestra solo la nota (la enseñanza del corazón no depende
-  // de que haya pendientes). La ubicación separada de la nota del
-  // lote corazón-nota (arriba de la grilla, construido 1/11) queda
-  // SUPERSEDED por esta: no se pone la nota en dos lugares.
-  // (LOTE MEJORAS-INICIO · pieza 1 · 3/11) Botón a la izquierda, nota a su lado en balance con él, sin emoji, alineada a la izquierda (en móvil envuelve a dos líneas).
+  // todo existe UNA sola vez, en el encabezado.
+  // (SACAR-CORAZÓN 6/11: la nota que enseñaba a aprobar con el corazón
+  // sale — la aprobación vive solo en el ritual [Sale así].
+  // Sin candidatos no hay fila: sin botón no hay nada que mostrar.)
+  if (!acceptHTML) return '';
   return '<div class="hf-pacts hf-pacts-accept">'
     + (acceptHTML || '')
-    + '<span class="hf-accept-note">' + (en ? 'Tap the heart on the posts to approve.' : 'Tocá el corazón en los posteos para aprobar.') + '</span>'
     + '</div>';
 }
 /* — Ítem 12: cubiertas de destacadas (render determinístico, $0 de IA) — */
@@ -23839,25 +23827,24 @@ async function hfDetailShare(post) {
   }
 }
 
-// (LOTE 2 · doble toque en tiles + corazón) La grilla promete «Tocá el
-// corazón para aprobar» (nota bajo la grilla) pero el gesto f3 solo cubre
-// .igmock-media/.apv-media: en tiles no existía. Acá va, SOLO táctil
-// (como hfDetailBind): el primer toque espera 300ms (ventana corta, con
-// feedback :active inmediato del Lote velocidad — no es la demora vieja
-// de esperar al servidor); el segundo toque en la misma tile aprueba con
-// el burst de corazón y NO navega al detalle. Un toque distinto cancela
-// el pendiente anterior sin navegar (y solo navega si el hash no cambió
-// en la ventana, para no abrir el detalle tras un cambio de pantalla).
+// (LOTE 2 · doble toque en tiles — SACAR-CORAZÓN 6/11: el segundo toque
+// YA NO aprueba; la aprobación vive solo en el ritual [Sale así].
+// Queda la maquinaria: SOLO táctil, el primer toque espera 300ms
+// (ventana corta, con feedback :active inmediato del Lote velocidad —
+// no es la demora vieja de esperar al servidor); el segundo toque en la
+// misma tile solo re-arma el defer y abre el detalle como un toque
+// simple. Un toque distinto cancela el pendiente anterior sin navegar
+// (y solo navega si el hash no cambió en la ventana, para no abrir el
+// detalle tras un cambio de pantalla).
 // Hold/peek/arrastre/mover ya suprimen su click antes de llegar acá.
-// Publicado o IG: no se aprueba nada. En autopilot, corazón afectivo
-// sin cambio de estado (igual que f3GestureApprove).
+// Publicado o IG: no se aprueba nada.
 let HF_DBL = { key: '', t: 0, timer: null, tile: null, post: null, hash: '' };
 function hfDblReset() {
   try { if (HF_DBL.timer) clearTimeout(HF_DBL.timer); } catch (e) {}
   HF_DBL = { key: '', t: 0, timer: null, tile: null, post: null, hash: '' };
 }
 // (LOTE CORAZÓN-GRIS-TIK · Valentino 2/11: lo likeado NO desaparece)
-// Diagnóstico: hfTileApprove hacía render() completo y el orden v513
+// Diagnóstico: aprobar desde la tile hacía render() completo y el orden v513
 // movía el posteo recién programado a su posición nueva; la vista no
 // lo seguía y parecía borrado (nunca se borra: sigue en el feed).
 // ENMIENDA Valentino 2/11 ~07:22 (SUPERSEDE render+scroll): al aprobar,
@@ -23910,16 +23897,13 @@ function pzAprobarEnSitio(tile, id, schedAt) {
     if (!el) return false;
     try { if (typeof pzAprobadoMarcar === 'function') pzAprobadoMarcar(id); } catch (e) {}
     try {
-      // (LOTE APROBAR-TIK-EN-VIVO · orden Valentino 4/11, REVERSO de la pieza 5 de v614): al aprobar, el corazón CAMBIA a tik verde: el botón corazón se quita y queda solo el tik.
-      // (LOTE TIK-EN-CORAZON 5/11 · decisión Valentino: un estado, un lugar. El tik va EN EL SLOT del corazón: dentro de la franja si el corazón vivía ahí o si la franja ya tiene chapita, abajo a la derecha sobre la foto si no. Nunca arriba a la izquierda. Si la aprobación trae chapita (bloque de abajo), el próximo render natural pone el tik en la franja; el marcado en vivo queda en el slot del corazón, que es el mismo lugar.)
-      const like = el.querySelector('.hf-like');
-      const likeInStrip = !!(like && like.closest && like.closest('.hf-strip'));
-      if (like && like.remove) like.remove();
+      // (LOTE APROBAR-TIK-EN-VIVO · orden Valentino 4/11, REVERSO de la pieza 5 de v614): al aprobar, el tik verde marca en vivo, sin render() ni salto.
+      // (LOTE TIK-EN-CORAZON 5/11 · decisión Valentino: un estado, un lugar. El tik va EN EL LUGAR donde vivía el corazón: dentro de la franja si ya tiene chapita, abajo a la derecha sobre la foto si no. Nunca arriba a la izquierda. Si la aprobación trae chapita (bloque de abajo), el próximo render natural pone el tik en la franja; el marcado en vivo queda en el mismo lugar. SACAR-CORAZÓN 6/11: ya no hay botón corazón que quitar — la consulta al botón era siempre null y se retira.)
       if (!el.querySelector('.hf-tik')) {
         const tikHtml = '<span class="hf-tik" aria-hidden="true">\u2713</span>';
         const strip = el.querySelector('.hf-strip');
         const stripHasChip = !!(strip && strip.querySelector && strip.querySelector('.hf-chip'));
-        if ((likeInStrip || stripHasChip) && strip && strip.insertAdjacentHTML) strip.insertAdjacentHTML('beforeend', tikHtml);
+        if (stripHasChip && strip && strip.insertAdjacentHTML) strip.insertAdjacentHTML('beforeend', tikHtml);
         else if (el.insertAdjacentHTML) el.insertAdjacentHTML('beforeend', tikHtml);
       }
     } catch (e) {}
@@ -23951,98 +23935,12 @@ function pzAprobarEnSitio(tile, id, schedAt) {
     return true;
   } catch (e) { return false; }
 }
-async function hfTileApprove(tile, post) {
-  try {
-    const st = String((tile && tile.dataset && tile.dataset.status) || (post && post.status) || '');
-    const en = f3En();
-    if (st !== 'draft' && st !== 'scheduled') {
-      // (LOTE CORAZÓN-MARCA) Ningún toque mudo: ya salió o ya no se puede.
-      if (st === 'published') toast('✅ ' + (en ? 'Already published on Instagram' : 'Ya salió en Instagram'));
-      else toast('😅 ' + (en ? 'This post can no longer be approved' : 'Este posteo ya no se puede aprobar'));
-      return;
-    }
-    const id = String((tile && tile.dataset && tile.dataset.postId) || (post && post.id) || '');
-    if (!id) { toast('😅 ' + (en ? 'Could not find this post' : 'No pude encontrar este posteo')); return; }
-    const mode = await f3ApprovalMode();
-    if (mode.known === false) {
-      // (LOTE CORAZÓN-MARCA) Modo desconocido: no se adivina, se avisa.
-      toast('😅 ' + (en ? 'Could not check the mode — try again' : 'No pude verificar el modo — probá de nuevo'));
-      return;
-    }
-    if (!mode.manual) {
-      try { track('lote2_dbltap_like', { autopilot: true }); } catch (e) {}
-      // (LOTE AVISO) En piloto automático el corazón es afectivo, no
-      // aprueba — pero deja constancia (owner_liked) para que el aviso
-      // de 30 minutos no moleste a quien ya lo vio: solo suprime el
-      // aviso, nunca aprueba ni reprograma. Solo en programados.
-      if (st === 'scheduled') {
-        try { await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'like' }); } catch (e2) {}
-        // (LOTE SEMANA-APROBADA) Constancia en la entrada + sync.
-        try { const _e = (typeof HF_TILES !== 'undefined' ? HF_TILES : []).find((x) => x && x.kind === 'post' && String(x.post.id) === String(id)); if (_e && _e.post) _e.post.owner_liked = 1; } catch (e) {}
-        try { pzSemanaAprobadaSync(); } catch (e) {}
-        toast('❤️ ' + (en ? 'Seen' : 'Visto'));
-      } else {
-        toast('❤️ ' + (en ? 'On autopilot, Posty publishes on its own' : 'En piloto automático, Posty publica solo'));
-      }
-      return;
-    }
-    if (st === 'scheduled') {
-      const _pzOk = await pcApprove(id, tile, null);
-      if (!_pzOk) return; // (LOTE APROBAR-TIK-EN-VIVO) sin éxito real no se marca
-      // (LOTE SEMANA-APROBADA) El corazon simple no mutaba
-      // HF_TILES: se anota la aprobacion en la entrada para
-      // que el sync la cuente.
-      try { const _e = (typeof HF_TILES !== 'undefined' ? HF_TILES : []).find((x) => x && x.kind === 'post' && String(x.post.id) === String(id)); if (_e && _e.post) _e.post.approval = 'approved'; } catch (e) {}
-      // (ENMIENDA SIN-REFRESH) Aprobado: el tile se actualiza EN SU
-      // LUGAR (corazón + tik + chapita), sin render() ni salto. Si
-      // el nodo no está en el DOM, ahí sí render(). Guardia: harness
-      // viejo sin el helper igual renderiza.
-      try { if (typeof pzAprobarEnSitio === 'function') { if (!pzAprobarEnSitio(tile, id, null) && typeof render === 'function') render(); } else if (typeof render === 'function') render(); } catch (e) {}
-      try { pzSemanaAprobadaSync(); } catch (e) {}
-      try { pzAcceptCountSync(); } catch (e) {}
-      return;
-    }
-    if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
-      toast(en ? 'Connect your Instagram first' : 'Conectá tu Instagram primero');
-      return;
-    }
-    const when = (tile && tile.dataset && tile.dataset.schedAt) || (post && post.scheduled_at) || undefined;
-    const res = await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: when || undefined });
-    // (LOTE CORAZÓN-MARCA) El servidor puede devolver ok con warning
-    // ('sin_dia_libre'): el posteo QUEDA en borrador. Decirlo con
-    // honestidad y NUNCA mostrar "¡Listo! Quedó programado" en ese caso.
-    if (res && res.warning) {
-      if (res.warning === 'sin_dia_libre') toast('😅 ' + (en ? 'Not scheduled: no free day this week' : 'No quedó programado: no hay día libre en la semana'));
-      else toast('😅 ' + (en ? 'Not scheduled — try again' : 'No quedó programado — probá de nuevo'));
-      try { render(); } catch (e) {}
-      return;
-    }
-    try { await api.post('/api/posts/' + encodeURIComponent(id) + '/signal', { signal: 'approved' }); } catch (e) {}
-    try { track('lote2_dbltap_approve', { id, draft: true }); } catch (e) {}
-    // (ENMIENDA SIN-REFRESH) Solo con éxito real: el warning
-    // 'sin_dia_libre' retorna antes y NO marca (sigue borrador).
-    // Fecha real del PATCH (res.scheduled_at) o la pedida (when).
-    try { if (typeof pzAprobarEnSitio === 'function') { if (!pzAprobarEnSitio(tile, id, (res && res.scheduled_at) || when || undefined) && typeof render === 'function') render(); } else if (typeof render === 'function') render(); } catch (e) {}
-    toast('✅ <b>¡Listo!</b> Quedó programado 🙌');
-    try { pzSemanaAprobadaSync(); } catch (e) {}
-    try { pzAcceptCountSync(); } catch (e) {}
-
-  } catch (e) {
-    try { toast('😅 ' + esc((e && e.message) || 'No se pudo programar')); } catch (e2) {}
-  }
-}
-
 function hfDetailBind(root) {
   if (!root || root._hfDetailBound) return;
   root._hfDetailBound = true;
   root.addEventListener('click', (e) => {
     const tile = e.target && e.target.closest ? e.target.closest('.hf-tile[data-post-id]') : null;
     if (!tile) return;
-    // (LOTE 11 · corazón adentro de la foto) El toque en el corazón
-    // NO es un toque en la tile: se deja pasar al handler del corazón
-    // (hfLikeBind). Sin este guard, el capture de este listener se
-    // comería el click antes de llegar al botón.
-    if (e.target && e.target.closest && e.target.closest('[data-hf-like]')) return;
     // (LOTE HABLAR-DE-ESTE-POSTEO) El toque en el botón 💬 NO es un
     // toque en la tile: se deja pasar al handler del botón
     // (hfChatBtnBind). Sin este guard, el capture se comería el click
@@ -24059,12 +23957,12 @@ function hfDetailBind(root) {
     // (LOTE 2 · doble toque en tiles) Ver comentario en HF_DBL.
     const dblKey = String(tile.dataset.postId);
     const dblNow = Date.now();
+    // (SACAR-CORAZÓN 6/11: el doble toque YA NO aprueba — la aprobación
+    // vive solo en el ritual [Sale así]. El segundo toque dentro de la
+    // ventana solo re-arma el defer de 300 ms: abre el detalle como un
+    // toque simple, nunca aprueba.)
     if (HF_DBL.key === dblKey && HF_DBL.tile && document.contains(HF_DBL.tile) && dblNow - HF_DBL.t < 300) {
       hfDblReset();
-      try { f3HeartBurst(tile); } catch (e2) {}
-      hfTileApprove(tile, t.post);
-      try { pzSonido('aprobar'); } catch (e2) {}
-      return;
     }
     hfDblReset();
     HF_DBL = { key: dblKey, t: dblNow, timer: null, tile, post: t.post, hash: location.hash };
@@ -24075,7 +23973,8 @@ function hfDetailBind(root) {
         // (LOTE DETALLE-SIMPLE-DIRECTO A) Borrador/programado -> aprobación DIRECTA, sin
         // overlay .hf-dcard intermedio y sin flicker (navegación por hash, no overlay).
         // Publicado: camino vigente (hfDetailOpen; su foto abre el lightbox) — no va a
-        // aprobación. El doble toque de arriba (300 ms, aprobar en su lugar) NO cambia.
+        // aprobación. (SACAR-CORAZÓN 6/11: el doble toque ya no aprueba en su
+        // lugar; solo re-arma este defer.)
         try {
           const stD = (pend.post && String(pend.post.status || '')) || (pend.tile && pend.tile.dataset && String(pend.tile.dataset.status || ''));
           if (stD === 'draft' || stD === 'scheduled') location.hash = '#/app/post/' + encodeURIComponent(pend.post.id);
@@ -24085,46 +23984,7 @@ function hfDetailBind(root) {
     }, 300);
   }, true);
 }
-// (LOTE 10 · ítem 1, movido en LOTE 11) Corazón visible en cada tile,
-// ADENTRO de la foto (arriba a la derecha, fuera de la fila de la chapita día+hora; LOTE CORAZÓN).
-// Vive DENTRO de .hf-tile, así que el doble toque y la capa lo verían
-// como toque en la tile: los guards en hfDetailBind y bindScfMinis
-// dejan pasar el click hasta acá. La acción es EXACTAMENTE la del
-// corazón del detalle y la del doble toque: burst + hfTileApprove
-// (en autopilot, solo afectivo; en publicado, solo burst). Sin
-// data-post-id en el botón: se resuelve la tile que lo contiene en
-// el click, así el parcheo en vivo (que reemplaza la celda entera)
-// nunca deja un id viejo.
-function hfLikeBind(root) {
-  if (!root || root._hfLikeBound) return;
-  root._hfLikeBound = true;
-  // (LOTE 15 · tiles web) Fase de CAPTURA: el click en el corazón
-  // aprueba y corta la propagación ANTES que cualquier handler de la
-  // tile o del pop, así en web con mouse el corazón ya no abre el
-  // detalle. En táctil no cambia nada (hfDetailBind captura, antes,
-  // ya retorna ante el corazón).
-  root.addEventListener('click', (e) => {
-    const btn = e.target && e.target.closest ? e.target.closest('[data-hf-like]') : null;
-    if (!btn) return;
-    const cell = btn.closest('.hf-cell');
-    const tile = cell ? cell.querySelector('.hf-tile[data-post-id]') : null;
-    if (!tile) { try { toast('😅 ' + (f3En() ? 'Could not find this post' : 'No pude encontrar este posteo')); } catch (e2) {} return; }
-    e.preventDefault();
-    e.stopPropagation();
-    const t = HF_TILES.find((x) => x && x.kind === 'post' && String(x.post.id) === String(tile.dataset.postId));
-    if (!t) {
-      // (LOTE CORAZÓN-MARCA) La tile existe pero no está en HF_TILES:
-      // igual se responde usando los datos de la tile, nunca en mudo.
-      try { f3HeartBurst(tile); } catch (e2) {}
-      hfTileApprove(tile, { id: tile.dataset.postId, status: tile.dataset.status, scheduled_at: tile.dataset.schedAt || undefined });
-      try { pzSonido('aprobar'); } catch (e2) {}
-      return;
-    }
-    try { f3HeartBurst(tile); } catch (e2) {}
-    hfTileApprove(tile, t.post);
-    try { pzSonido('aprobar'); } catch (e2) {}
-  }, true);
-}
+
 function hfDurBind(root) {
   if (!root) return;
   root.querySelectorAll('video[data-hf-dur]').forEach((v) => {
@@ -25277,7 +25137,6 @@ function bindInicio() {
   // (Tanda feed 5 · ítem 1) El detalle IG de las piezas + la duración
   // real en las tiles de la pestaña Reels.
   hfDetailBind(document.getElementById('inicioView'));
-  hfLikeBind(document.getElementById('inicioView'));
   try { hfProfileBind(document.getElementById('inicioView')); } catch (e) {}
   hfDurBind(document.getElementById('inicioView'));
   // Franja de revisión: "Aceptar todo" — el handler de siempre
@@ -26061,10 +25920,11 @@ async function approvalPostView(id) {
 // pausa distinta para un posteo. Solo en posteos con algo que decidir
 // (programado pendiente/aprobado o borrador); el publicado no se toca.
 // (LOTE 17) UNA sola fila secundaria pareja: la primera fila (Aceptar,
-// corazón, Editar, Rechazar) y la segunda (Eliminar, Rehacer, No me
-// gusta) se juntan acá; Aceptar queda solo como acción principal
-// arriba. El corazón conserva su acción (aprobar + burst, Lote 2) y
-// Frenar sigue solo para programados. Etiqueta chica en ES/EN.
+// Editar, Rechazar) y la segunda (Eliminar, Rehacer, No me gusta) se
+// juntan acá; Aceptar queda solo como acción principal arriba.
+// (SACAR-CORAZÓN 6/11: el corazón ya no está en el menú — su acción la
+// cubre Aceptar, como siempre.) Frenar sigue solo para programados.
+// Etiqueta chica en ES/EN.
 function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
   // (LOTE DETALLE-SIMPLE-DIRECTO A) La pantalla de la captura (vista standalone de
   // aprobación) se simplifica con el patrón detalle-simple: UN primario Aceptar (ya
@@ -26199,19 +26059,6 @@ function bindApprovalPost() {
   // (v326) Aceptar un BORRADOR desde el detalle: mismo gate de Instagram y
   // mismo flujo PATCH (programar en su horario) que el Aceptar de la Agenda.
 
-  // (LOTE 2 · corazón en detalle) Tocar el corazón aprueba con la acción
-  // vigente (el mismo botón Aceptar) + burst sobre la media. Las dos
-  // filas (programado y borrador) nunca coexisten, pero el binding por
-  // clase cubre ambas sin depender de ids únicos.
-  document.querySelectorAll('.apv-like').forEach((b) => {
-    b.onclick = () => {
-      try { const m = document.querySelector('.apv-media'); if (m) f3HeartBurst(m); } catch (e) {}
-      const a1 = document.getElementById('apvAccept');
-      if (a1 && !a1.disabled) { a1.click(); return; }
-      const a2 = document.getElementById('apvAcceptDraft');
-      if (a2 && !a2.disabled) a2.click();
-    };
-  });
   const acd = document.getElementById('apvAcceptDraft');
   if (acd) acd.onclick = async () => {
     const id = acd.dataset.apvid;

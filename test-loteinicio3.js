@@ -2,8 +2,8 @@
 // 1) el + del dock alineado con los otros botones (sin elevar) y con
 //    su vidrio intacto, en bb-bar y mz-tabs; 2) Editar/Compartir como
 //    SOLO ÍCONOS a la derecha de los contadores + «Aceptar todo»
-//    REUBICADO en el encabezado con su nota chiquita (una sola vez,
-//    sin la píldora de encima del chat); 3) la tirita de Inicio dice
+//    REUBICADO en el encabezado (SACAR-CORAZÓN 6/11: SIN su nota chiquita,
+//    que sale completa; una sola vez, sin la píldora de encima del chat); 3) la tirita de Inicio dice
 //    «Premios» (no «mi jardín») y sin la imagen vieja del jardín, y el
 //    título de la pantalla pasa a «Premios» (renombre decidido 3/11).
 // Uso: node test-loteinicio3.js [dir]
@@ -54,20 +54,20 @@ t('2: íconos: aria-labels ES/EN, sin texto', headRow.includes('aria-label="${en
 t('2: íconos: mismos handlers (data-hf-pact, bind por atributo)', app.includes("root.querySelectorAll('[data-hf-pact]')") && app.includes("if (act === 'share') hfShareOpen();") && app.includes("else if (act === 'edit') hfEditOpen();"));
 t('2: Inicio pide los íconos (headIcons, no visitante)', app.includes('headIcons: !HF_VISITOR'));
 const outEs = hfProfileActionsHTML(false, acceptBarHTML(3));
-t('2: encabezado ES: Aceptar todo + nota, sin botones de texto', outEs.includes('hfAcceptAllWeek') && outEs.includes('Aceptar todo') && outEs.includes('accept-count') && outEs.includes('Tocá el corazón para aprobar.') && !outEs.includes('hf-pmain') && !outEs.includes('Editar perfil') && !outEs.includes('Compartir mi perfil'));
+t('2: encabezado ES: Aprobar todo SIN nota, sin botones de texto', outEs.includes('hfAcceptAllWeek') && outEs.includes('Aprobar todo') && outEs.includes('accept-count') && !outEs.includes('Tocá el corazón') && !outEs.includes('hf-pmain') && !outEs.includes('Editar perfil') && !outEs.includes('Compartir mi perfil'));
 ME.lang = 'en';
 const outEn = hfProfileActionsHTML(true, acceptBarHTML(2));
-t('2: encabezado EN: Accept all + nota espejo', outEn.includes('Accept all') && outEn.includes('Tap the heart to approve.'));
+t('2: encabezado EN: Approve all SIN nota', outEn.includes('Approve all') && !outEn.includes('Tap the heart'));
 ME.lang = 'es';
 const outVacio = hfProfileActionsHTML(false, '');
-t('2: sin candidatos: solo la nota, sin botón duplicado', outVacio.includes('Tocá el corazón para aprobar.') && !outVacio.includes('hfAcceptAllWeek'));
+t('2: sin candidatos: fila vacía (sin nota, sin botón duplicado)', outVacio === '' && !outVacio.includes('hfAcceptAllWeek'));
 t('2: Aceptar todo UNA sola vez (un solo id renderizado)', cnt(app, 'id="hfAcceptAllWeek"') === 1);
 t('2: bind del botón intacto (mismo id, mismo handler)', app.includes("$('#hfAcceptAllWeek')") && app.includes('pzAcceptAllWeek(haw)'));
 t('2: alcance intacto (candidatos = semana nueva pendientes)', app.includes('pzAcceptWeekCands = (!HF_VISITOR) ? pzAcceptAllWeekCands(tiles, null) : []'));
 t('2: píldora del chat FUERA del bottomstack', !blockOf('<div class="mz-bottomstack"', '<div class="mz-chatbar"').includes('pzAcceptWeekHTML'));
 t('2: encabezado recibe el HTML de Aceptar todo', app.includes('hfProfileActionsHTML(enHome, pzAcceptWeekHTML)'));
-t('2: nota ÚNICA en app.js (sin duplicar corazón-nota)', cnt(app, 'Tocá el corazón para aprobar.') === 1 && cnt(app, 'Tap the heart to approve.') === 1);
-t('2: CSS: ícono 40px + botón compacto + nota chiquita gris', css.includes('.hf-head-ic{width:40px;height:40px') && css.includes('.hf-pacts-accept .hf-accept-bar{width:auto') && css.includes('.hf-accept-note{font-size:12.5px') && css.includes('.hf-accept-note{font-size:12.5px;line-height:1.3;color:#47617A'));
+t('2: nota AUSENTE en app.js (SACAR-CORAZÓN 6/11: 0 ocurrencias ES y EN)', cnt(app, 'Tocá el corazón para aprobar.') === 0 && cnt(app, 'Tap the heart to approve.') === 0 && cnt(app, 'Tocá el corazón en los posteos para aprobar.') === 0 && cnt(app, 'Tap the heart on the posts to approve.') === 0);
+t('2: CSS: ícono 40px + botón compacto, sin regla de nota', css.includes('.hf-head-ic{width:40px;height:40px') && css.includes('.hf-pacts-accept .hf-accept-bar{width:auto') && !css.includes('.hf-accept-note'));
 
 // ---------- 3. Tirita Premios + título Premios ----------
 const tira = blockOf('function mxTiraHTML', 'async function mxPortTop');

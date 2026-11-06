@@ -129,7 +129,8 @@ function loadFns(sb, names) {
   t(/\.sort\(\(a, b\) => a\.d - b\.d\)/.test(sv), 'semana: scheduled y publicados ya ordenaban ascendente (sin cambio)');
 }
 
-// ---------- Corazón adentro de la foto ----------
+// ---------- SIN corazón en las tiles (SACAR-CORAZÓN 6/11 · SUPERSEDE
+// el criterio LOTE 11/12: la aprobación vive solo en el ritual [Sale así]) ----------
 {
   const sb = sandbox({
     pzIc: () => '<svg>',
@@ -140,25 +141,24 @@ function loadFns(sb, names) {
   });
   loadFns(sb, ['hfTileChipParts', 'homeTileHTML']);
   const out = sb.homeTileHTML({ kind: 'post', post: { id: 7, status: 'draft', media_type: 'image', image_path: 'x.jpg' }, day: '2026-10-31' }, 0);
-  t((out.match(/data-hf-like/g) || []).length === 1, 'corazón: uno solo por posteo, no duplicado');
-  t(!/hf-cell-actions/.test(out), 'corazón: ya no hay fila abajo');
-  t(/hf-like-in/.test(out), 'corazón: clase superpuesta presente');
-  const tileIdx = out.indexOf('scf-mini-x');
-  const btnIdx = out.indexOf('data-hf-like');
-  const closeIdx = out.lastIndexOf('</span>');
-  t(tileIdx >= 0 && btnIdx > tileIdx && btnIdx < closeIdx, 'corazón: el botón vive DENTRO de la tile (después de scf-mini-x, antes del cierre)');
-  t(/Aprobar con corazón/.test(out), 'corazón: misma acción (aprobar) y mismo aria-label');
-  const guardDetail = app.slice(app.indexOf('function hfDetailBind'), app.indexOf('function hfLikeBind'));
-  t(/closest\('\[data-hf-like\]'\)/.test(guardDetail), 'guard: hfDetailBind (capture) deja pasar el click del corazón');
+  t((out.match(/data-hf-like/g) || []).length === 0, 'corazón: CERO por posteo (el botón salió del feed)');
+  t(!/hf-cell-actions/.test(out), 'corazón: sigue sin fila abajo');
+  t(!/hf-like-in/.test(out), 'corazón: clase superpuesta AUSENTE');
+  t(!/hf-like/.test(out), 'corazón: ninguna clase hf-like en el render');
+  t(!/Aprobar con corazón/.test(out), 'corazón: sin aria-label de aprobar');
+  t(/hf-chip/.test(out), 'chapita: el día sigue en la franja');
+  t(/scf-mini-x/.test(out), 'tile: la foto sigue presente');
+  const guardDetail = app.slice(app.indexOf('function hfDetailBind'), app.indexOf('function hfDurBind'));
+  t(!/closest\('\[data-hf-like\]'\)/.test(guardDetail), 'guard: hfDetailBind YA NO tiene guard de corazón');
+  t(/, 300\)/.test(guardDetail), 'defer: el toque simple sigue con 300ms (la maquinaria HF_DBL queda)');
   const scf = app.slice(app.indexOf('function bindScfMinis'), app.indexOf('function scfWireGlobals'));
-  t(/closest\('\[data-hf-like\]'\)/.test(scf), 'guard: bindScfMinis no abre la capa con el toque del corazón');
-  t(/\.hf-like-in\{[^}]*position:absolute/.test(css), 'css: hf-like-in absoluto');
-  t(/\.hf-like-in\{[^}]*bottom:8px;right:8px/.test(css), 'css: hf-like-in abajo a la derecha (a la derecha de la chapita, misma franja inferior)');
+  t(!/closest\('\[data-hf-like\]'\)/.test(scf), 'guard: bindScfMinis YA NO tiene guard de corazón');
+  t(!/\.hf-like-in\{/.test(css), 'css: regla .hf-like-in ELIMINADA');
+  t(!/\.hf-like\{/.test(css), 'css: regla .hf-like ELIMINADA');
+  t(/\.hf-tik\{[^}]*background:#1FA855/.test(css), 'css: el tik verde sigue (única marca de aprobado)');
   t(/\.hf-chip\{[^}]*left:6px;bottom:6px/.test(css), 'css: chapita sigue abajo a la izquierda');
-  t(/\.hf-like-in\{[^}]*z-index:5/.test(css), 'css: hf-like-in por encima de la foto');
-  t(/\.hf-tile\{[^}]*position:relative/.test(css), 'css: la tile ya es relative, el absoluto ancla bien');
-  const oldComment = /ningún botón\s*\n?\s*\/\/ flotante tapa la imagen/.test(app);
-  t(!oldComment || /ÚNICA excepción/.test(app), 'comentario: la vieja prohibición queda exceptuada solo para el corazón');
+  t(/\.hf-tile\{[^}]*position:relative/.test(css), 'css: la tile sigue relative');
+  t(!app.includes('ningún botón flotante'), 'comentario: la vieja prohibición del botón flotante ya no hace falta');
 }
 
 console.log(`lote11: ${ok} ok, ${bad} mal`);

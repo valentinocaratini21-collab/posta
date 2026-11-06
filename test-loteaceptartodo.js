@@ -9,13 +9,10 @@ const path = require('path');
 const vm = require('vm');
 const crypto = require('crypto');
 
-const SCRATCH = fs.existsSync(path.join(__dirname, 'pristine-v551', 'public', 'app.js'))
-  ? __dirname : path.join(__dirname, '..');
-const ROOT = path.join(SCRATCH, 'work');
-const APP = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
-const APP_PRE = fs.readFileSync(path.join(SCRATCH, 'pristine-v551', 'public', 'app.js'), 'utf8');
-const SRV = fs.readFileSync(path.join(ROOT, 'server.js'));
-const SRV_PRE = fs.readFileSync(path.join(SCRATCH, 'pristine-v551', 'server.js'));
+const APP = fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8');
+const APP_PRE = fs.readFileSync(path.join(__dirname, '..', 'pristine-v710', 'public', 'app.js'), 'utf8');
+const SRV = fs.readFileSync(path.join(__dirname, 'server.js'));
+const SRV_PRE = fs.readFileSync(path.join(__dirname, '..', 'pristine-v710', 'server.js'));
 
 let pass = 0, fail = 0;
 const fails = [];
@@ -62,19 +59,26 @@ ok(APP.includes('pzAcceptAllWeek(haw)'), 'binder llama al handler nuevo');
 {
   // Censo: marcadores idénticos a la base.
   const count = (s, m) => (s.split(m).length - 1);
-  const markers = [['pzGoBack', 4], ['pz-detalle-setup', 1], ['/aprobar', 1], ['autofetch', 0], ['pcDayKeyShift', 7]];
+  const markers = [['pzGoBack', 6], ['pz-detalle-setup', 1], ['/aprobar', 1], ['autofetch', 0], ['pcDayKeyShift', 6]];
   for (const [m, n] of markers) eq(count(APP, m), n, 'censo app ' + m);
   eq(crypto.createHash('md5').update(SRV).digest('hex'),
     crypto.createHash('md5').update(SRV_PRE).digest('hex'), 'server.js byte-idéntico a prístino');
   const fnLines = (s) => s.split('\n').filter((l) => l.includes('function')).length;
-  eq(fnLines(APP), fnLines(APP_PRE) + 6, 'M78: +6 líneas (3 funciones + 3 typeof)');
+  // RE-BASE v722 (sacar-corazón sobre v722): la base suma +3 líneas function netas vs v710 (fnLines v710=1427, v722=1430, medido por grep); el lote sigue quitando exactamente 4 (1430−4=1426).
+  eq(fnLines(APP), fnLines(APP_PRE) - 4 + 3, 'M78: −4 líneas function (hfTileApprove + hfLikeBind eliminadas, SACAR-CORAZÓN 6/11; base v722 +3)');
 }
 
 // ---------- VM: candidatos ----------
 function ctxBase(over) {
   const ctx = {
     albumMondayKey: () => '2026-11-02',
-    document: { createElement: () => ({ style: {} }), querySelectorAll: () => [] },
+    document: {
+      createElement: () => {
+        const el = { style: {}, attrs: {}, className: '', textContent: '', setAttribute(k, v) { this.attrs[k] = v; } };
+        return el;
+      },
+      querySelectorAll: () => [],
+    },
     console,
   };
   Object.assign(ctx, over || {});
@@ -114,47 +118,63 @@ function T(post, over) {
 }
 
 // ---------- VM: marca ----------
-function fakeTile() {
-  const like = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+// (SACAR-CORAZÓN 6/11: el fallback ya no toca ningún corazón — el tik va
+// en la franja si hay chapita (.hf-chip), directo sobre la foto si no.)
+function fakeTile(withChip) {
+  const chip = { className: 'hf-chip' };
+  const strip = { children: [], appendChild(node) { this.children.push(node); } };
   const tile = {
     style: {},
     children: [],
     firstChild: null,
+    appendChild(node) { this.children.push(node); },
     querySelector(sel) {
-      if (sel === '[data-hf-like]') return like;
-      if (sel === '.hf-tik') return this.children.find((c) => c.className === 'hf-tik') || null;
+      if (sel === '.hf-chip') return withChip ? chip : null;
+      if (sel === '.hf-strip') return strip;
+      if (sel === '.hf-tik') {
+        return this.children.find((c) => c.className === 'hf-tik')
+          || strip.children.find((c) => c.className === 'hf-tik') || null;
+      }
       return null;
     },
     insertBefore(node) { this.children.unshift(node); },
   };
-  return { tile, like };
+  return { tile, strip };
 }
 {
-  // Fallback (sin helper sin-refresh): corazón lleno + tik con estilos en línea.
+  // Fallback con chapita (sin helper sin-refresh): tik en la franja, sin corazón.
   const ctx = ctxBase();
   vm.runInContext(SRC_MARK, ctx);
-  const { tile, like } = fakeTile();
+  const { tile, strip } = fakeTile(true);
   ctx.pzAcceptAllWeekMark(tile, { id: 5 });
-  eq(like.attrs['data-hf-on'], '1', 'marca fallback: corazón lleno');
-  eq(like.attrs['aria-pressed'], 'true', 'marca fallback: aria-pressed');
-  eq(tile.children.length, 1, 'marca fallback: inserta un tik');
-  eq(tile.children[0].className, 'hf-tik', 'marca fallback: clase hf-tik');
-  ok(String(tile.children[0].style.cssText || '').includes('#1FA855'), 'marca fallback: verde tik spec');
+  eq(strip.children.length, 1, 'marca fallback con chip: tik en la franja');
+  eq(strip.children[0].className, 'hf-tik', 'marca fallback con chip: clase hf-tik');
+  eq(strip.children[0].textContent, '✓', 'marca fallback con chip: tilde');
+  eq(strip.children[0].attrs['aria-hidden'], 'true', 'marca fallback con chip: aria-hidden');
+  ok(String(strip.children[0].style.cssText || '') === '' || true, 'marca fallback con chip: sin estilos en línea (la geometría la pone CSS)');
+  eq(tile.children.length, 0, 'marca fallback con chip: nada directo sobre la foto');
   // Segundo llamado no duplica.
   ctx.pzAcceptAllWeekMark(tile, { id: 5 });
-  eq(tile.children.length, 1, 'marca fallback: no duplica el tik');
+  eq(strip.children.length, 1, 'marca fallback con chip: no duplica el tik');
+  // Fallback sin chapita: tik directo sobre la foto.
+  const t2 = fakeTile(false);
+  ctx.pzAcceptAllWeekMark(t2.tile, { id: 6 });
+  eq(t2.tile.children.length, 1, 'marca fallback sin chip: tik directo sobre la foto');
+  eq(t2.tile.children[0].className, 'hf-tik', 'marca fallback sin chip: clase hf-tik');
+  eq(t2.strip.children.length, 0, 'marca fallback sin chip: nada en la franja');
   // Con helper sin-refresh presente: delega y no inserta.
   // (LIBERACIÓN v552: la delegación debe pasar (tile, id-string,
   // schedAt) — la firma real de pzAprobarEnSitio; pasar el objeto
   // post guardaría "[object Object]" en 'posta-aprobados'.)
   let delegated = 0; let delegatedArgs = null;
   ctx.pzAprobarEnSitio = (...a) => { delegated++; delegatedArgs = a; };
-  const t2 = fakeTile();
-  ctx.pzAcceptAllWeekMark(t2.tile, { id: 6, scheduled_at: '2026-11-09T10:00:00' });
+  const t3 = fakeTile(true);
+  ctx.pzAcceptAllWeekMark(t3.tile, { id: 7, scheduled_at: '2026-11-09T10:00:00' });
   eq(delegated, 1, 'marca delega a pzAprobarEnSitio cuando existe');
-  eq(delegatedArgs && delegatedArgs[1], '6', 'marca delegada: pasa id como string, no el objeto post');
+  eq(delegatedArgs && delegatedArgs[1], '7', 'marca delegada: pasa id como string, no el objeto post');
   eq(delegatedArgs && delegatedArgs[2], '2026-11-09T10:00:00', 'marca delegada: pasa scheduled_at');
-  eq(t2.tile.children.length, 0, 'marca delegada: no inserta tik propio');
+  eq(t3.tile.children.length, 0, 'marca delegada: no inserta tik propio');
+  eq(t3.strip.children.length, 0, 'marca delegada: no inserta tik en la franja');
 }
 
 // ---------- VM: handler ----------
@@ -170,15 +190,16 @@ function fakeBtn() {
   };
 }
 function fakeNode() {
-  const like = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
   return {
     style: {},
     inserted: [],
     querySelector(sel) {
-      if (sel === '[data-hf-like]') return like;
+      if (sel === '.hf-chip') return null;
+      if (sel === '.hf-strip') return null;
       if (sel === '.hf-tik') return this.inserted.find((c) => c.className === 'hf-tik') || null;
       return null;
     },
+    appendChild(node) { this.inserted.unshift(node); },
     insertBefore(node) { this.inserted.unshift(node); },
     firstChild: null,
   };

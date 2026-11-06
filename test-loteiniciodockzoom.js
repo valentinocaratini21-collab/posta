@@ -42,8 +42,9 @@ ok(css.includes('.bb-tab-mas-ic{background:transparent;border:0;box-shadow:none;
 ok(css.includes('.hf-pacts-accept .hf-accept-bar{position:static}'), 'pieza 4: aceptar static en el encabezado');
 ok(count(appjs, 'id="hfAcceptAllWeek"') === 1, 'pieza 4: una sola instancia #hfAcceptAllWeek en app.js');
 ok(count(appjs, 'acceptBarHTML(') === 2, 'pieza 4: acceptBarHTML solo definición + 1 llamada');
-// Pieza 5: tik oculto en la tile
-ok(css.includes('#inicioView .hf-tile .hf-tik{display:none}'), 'pieza 5: tik oculto en la tile');
+// Pieza 5: tik visible en la tile (SACAR-CORAZÓN 6/11: el tik es la única
+// marca de aprobado; la regla que lo ocultaba en Inicio salió en el lote aprobar-tik)
+ok(!css.includes('#inicioView .hf-tile .hf-tik{display:none}'), 'pieza 5: sin regla que oculte el tik en la tile');
 // Sin tocar: data/ no existe en el árbol de trabajo
 ok(!fs.existsSync(path.join(TREE, 'data')), 'sin data/ en el árbol');
 // Pristino (si se pasa): solo styles.css cambió
@@ -58,14 +59,15 @@ if (PRISTINE) {
 }
 
 // --- 2. Medición real con Chromium (anchos de caja, no declaraciones) ---
-const HEART = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.5-9.5-9C.8 8.9 2.6 5 6 5c2 0 3.5 1 4.5 2.5C11.5 6 13 5 15 5c3.4 0 5.2 3.9 3.5 7C19 16.5 12 21 12 21z"/></svg>';
-function tile(chip, on, tik, label) {
-  const like = `<button type="button" class="hf-like hf-like-in" data-hf-like${on ? ' data-hf-on="1"' : ''}>${HEART}</button>`;
-  const strip = chip ? `<span class="hf-strip"><span class="hf-chip"><span class="hf-chip-day">${label}</span></span>${like}</span>` : '';
-  return `<span class="hf-cell"><span class="hf-tile${chip ? ' hf-has-chip' : ''}"><span style="display:block;aspect-ratio:3/4;background:#7ab8d9"></span>${strip}${chip ? '' : like}${tik ? '<span class="hf-tik" aria-hidden="true">✓</span>' : ''}</span></span>`;
+// (SACAR-CORAZÓN 6/11: la fixture ya no lleva botón corazón — la tile
+// aprobada lleva solo el tik verde; la de pendiente no lleva marca.)
+function tile(chip, tik, label) {
+  const tikSpan = tik ? '<span class="hf-tik" aria-hidden="true">✓</span>' : '';
+  const strip = chip ? `<span class="hf-strip"><span class="hf-chip"><span class="hf-chip-day">${label}</span></span>${tikSpan}</span>` : '';
+  return `<span class="hf-cell"><span class="hf-tile${chip ? ' hf-has-chip' : ''}"><span style="display:block;aspect-ratio:3/4;background:#7ab8d9"></span>${strip}${chip ? '' : tikSpan}</span></span>`;
 }
 const svg24 = '<svg width="24" height="24" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" fill="currentColor"/></svg>';
-const tiles = tile(true, true, true, 'Dom · 19:00') + tile(true, false, false, 'Sáb · 19:00') + tile(false, true, false, '') + tile(false, false, false, '') + tile(true, true, false, 'Vie · 19:00') + tile(true, false, false, 'Jue · 19:00');
+const tiles = tile(true, true, 'Dom · 19:00') + tile(true, false, 'Sáb · 19:00') + tile(false, false, '') + tile(false, false, '') + tile(true, false, 'Vie · 19:00') + tile(true, false, 'Jue · 19:00');
 const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="stylesheet" href="styles.css"></head><body>
@@ -89,7 +91,7 @@ const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
 <a class="hf-link" href="#">postycommunitymanager.com</a>
 <div class="hf-racha"><button type="button" class="hf-info-row"><span class="hf-info-btn">i</span><span class="hf-info-row-txt">¿Cómo publica Posty?</span></button></div>
 </div>
-<div class="hf-pacts hf-pacts-accept"><button type="button" class="hf-accept-bar" id="hfAcceptAllWeek">✓ Aceptar todo <span class="accept-count">4</span></button><span class="hf-accept-note">❤️ Tocá el corazón para aprobar.</span></div>
+<div class="hf-pacts hf-pacts-accept"><button type="button" class="hf-accept-bar" id="hfAcceptAllWeek">✓ Aprobar todo <span class="accept-count">4</span></button></div>
 <div class="hf-tabs"><button type="button" class="hf-tab on">▦</button><button type="button" class="hf-tab">▣</button><button type="button" class="hf-tab">◉</button></div>
 <div class="hf-grid">${tiles}</div>
 <div class="mz-bottomstack"><div class="mz-chatbar"><button type="button" class="mz-ph"><span class="mz-ph-tx">escribile a posty…</span></button><button type="button" class="mz-mic">🎤</button></div></div>
@@ -167,9 +169,9 @@ with sync_playwright() as p:
             check(m['acceptBtn']['top'] < m['grid']['top'], "aceptar arriba del grid")
             check(m['acceptBtn']['bottom'] <= m['pacts']['bottom'], "aceptar dentro de su fila")
             tc = m['tileChecks']
-            check(tc[0]['hearts'] == 1 and tc[0]['tikDisp'] == 'none' and not tc[0]['tikVisible'], "tile aprobada: 1 corazon, tik oculto")
+            check(tc[0]['hearts'] == 0 and tc[0]['tikDisp'] != 'none' and tc[0]['tikVisible'], "tile aprobada: 0 corazones, tik visible")
             for i in [1, 2, 3]:
-                check(tc[i]['hearts'] == 1, f"tile {i}: 1 corazon")
+                check(tc[i]['hearts'] == 0, f"tile {i}: 0 corazones")
             pg.close()
     b.close()
 print('MEDICION_FALLOS:' + str(len(fails)))

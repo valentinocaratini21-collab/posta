@@ -69,8 +69,8 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(det.includes('data-hfd-act="comment"') && det.includes('data-hfd-act="share"')
     && det.includes('data-hfd-act="followers"') && det.includes('data-hfd-act="save"'),
     'D2: la fila conserva comentar/compartir/ojo/guardar');
-  t(app.includes('hfLikeBind') && app.includes('data-hf-like'), 'D2: corazón sigue en tiles (hfLikeBind intacto)');
-  t(app.includes('f3GestureApprove') && app.includes('hfTileApprove'), 'D2: doble toque sigue aprobando (gesto intacto)');
+  t(!app.includes('hfLikeBind') && !app.includes('data-hf-like'), 'D2 (SACAR-CORAZÓN 6/11): corazón fuera de las tiles (hfLikeBind eliminado)');
+  t(app.includes('f3GestureApprove') && !app.includes('hfTileApprove'), 'D2 (SACAR-CORAZÓN 6/11): el gesto del detalle sigue (f3GestureApprove); hfTileApprove eliminado del feed');
 }
 
 // ---------- D3: portada del reel solo si es reel ----------
@@ -118,7 +118,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(app.includes('hf-chip-day') && app.includes('hf-chip-hm'), 'I2: chapita partida en día/hora');
   t(css.includes('.hf-strip .hf-chip-day{') && css.includes('text-overflow:ellipsis'), 'I2: ellipsis solo en el día');
   t(css.includes('.hf-strip .hf-chip-hm{flex:0 0 auto'), 'I2: la hora no se achica');
-  t(css.includes('.hf-strip{') && css.includes('gap:8px'), 'I2: gap fijo con el corazón intacto (Lote 13)');
+  t(css.includes('.hf-strip{') && css.includes('gap:8px'), 'I2: gap fijo con el tik intacto (SACAR-CORAZÓN 6/11)');
 }
 
 // ---------- I3: reel sin cuadro ----------
@@ -133,11 +133,11 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(app.includes("querySelector('.hf-tile-ph')") || app.includes('hf-tile-ph'), 'I3: detector de generando sigue vigilando .hf-tile-ph');
 }
 
-// ---------- I4: corazones idénticos ----------
+// ---------- I4: tik idéntico (SACAR-CORAZÓN 6/11 · SUPERSEDE corazones idénticos) ----------
 {
-  t(css.includes('.hf-tile > .hf-like-in{') && css.includes('background:transparent'), 'I4: corazón de la tile en vidrio, botón transparente (CORAZÓN-ABAJO 1/11: abajo a la derecha, 26px en ::before)');
-  t(css.includes('.hf-tile > .hf-like-in::before{') && css.includes('box-shadow:0 1px 6px'), 'I4: sombra sutil en el ::before de vidrio (CORAZÓN-ABAJO 1/11)');
-  t(css.includes('.hf-like{') && app.includes("pzIc('heart', 20)"), 'I4: tamaño 34×34 e ícono intactos');
+  t(css.includes('.hf-tile > .hf-strip .hf-tik{') && css.includes('box-shadow:0 1px 6px'), 'I4: tik en franja con sombra sutil (SACAR-CORAZÓN 6/11: el tik ocupa el lugar del corazón)');
+  t(css.includes('.hf-tik{') && css.includes('#1FA855'), 'I4: tik verde 34×34 intacto');
+  t(!css.includes('.hf-like-in') && app.includes("pzIc('heart', 20)"), 'I4: sin regla de corazón en tiles; el ícono corazón queda solo en carrusel/likes');
 }
 
 // ---------- C1: placeholder que rota ----------

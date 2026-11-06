@@ -20,22 +20,22 @@ function ok(c, msg) {
   else { failN++; console.log('FALLA:', msg); }
 }
 
-// ---------- 1) Corazón visible adentro de la foto (LOTE 11: corrige
-// el criterio Lote 2 por orden explícita de Valentino 31/10) ----------
+// ---------- 1) SIN corazón en las tiles (SACAR-CORAZÓN 6/11 · SUPERSEDE
+// LOTE 11: la aprobación vive solo en el ritual [Sale así]) ----------
 ok(APP.includes('<span class="hf-cell"><span class="scf-mini-x hf-tile'),
   '1: la tile de posteo va envuelta en .hf-cell');
-ok(APP.includes('data-hf-like') && APP.includes('class="hf-like hf-like-in"'),
-  '1: botón corazón data-hf-like ADENTRO de la foto (LOTE 11)');
-ok(APP.includes('function hfLikeBind(root)') && APP.includes("hfLikeBind(document.getElementById('inicioView'))"),
-  '1: hfLikeBind definido y cableado en Inicio');
-ok(APP.includes("closest('[data-hf-like]')") && APP.includes('f3HeartBurst(tile)') && APP.includes('hfTileApprove(tile, t.post)'),
-  '1: el corazón hace burst + hfTileApprove (igual que detalle y doble toque)');
+ok(!APP.includes('data-hf-like') && !APP.includes('class="hf-like hf-like-in"'),
+  '1: SIN botón corazón en la tile (ni data-hf-like ni clase hf-like)');
+ok(!APP.includes('function hfLikeBind(root)') && !APP.includes("hfLikeBind(document.getElementById('inicioView'))") && APP.includes("hfDetailBind(document.getElementById('inicioView'))"),
+  '1: hfLikeBind ELIMINADO (sin cableado en Inicio); hfDetailBind sigue');
+ok(!APP.includes('hfTileApprove') && APP.includes('function f3HeartBurst('),
+  '1: hfTileApprove ELIMINADO (el doble toque ya no aprueba); f3HeartBurst sigue en el detalle');
 ok(APP.includes("cell0.outerHTML = homeTileHTML(t2, rec.i)") && APP.includes("fc.insertAdjacentHTML('beforebegin', homeTileHTML(t2, rec.i))"),
   '1: el parcheo en vivo reemplaza/inserta la celda entera, no la tile suelta');
-ok(APP.includes('apv-like') && APP.includes('apvAccept'),
-  '1: el corazón del detalle sigue presente (apv-like + apvAccept)');
-ok(!APP.includes('hf-cell-actions') && APP.includes('hf-has-chip') && APP.includes('${chip}${archChip}${likeInStrip ? likeBtn : \'\'}'),
-  '1: con chapita el botón vive DENTRO de la franja (CORAZÓN-EN-LÍNEA 2/11, Valentino: chiquito en la misma línea que día+hora; sin chapita queda hijo directo)');
+ok(!APP.includes('apv-like') && APP.includes('apvAccept'),
+  '1: el corazón del detalle YA NO está (sin apv-like, era código muerto); apvAccept sigue');
+ok(!APP.includes('hf-cell-actions') && APP.includes('hf-has-chip') && APP.includes('${chip}${archChip}${likeInStrip ? tikSpan : \'\'}'),
+  '1: con chapita el TIK vive DENTRO de la franja (SACAR-CORAZÓN 6/11: el tik ocupa el lugar del corazón; sin chapita queda hijo directo)');
 
 // ---------- 2) Día + hora reales (programado o planificado) ----------
 ok(APP.includes('function hfPlanChip(ymd)'),
@@ -146,8 +146,8 @@ ok(CSS.includes('#pzNivelStrip{background:#0A1E33'),
   '7: la tirita del jardín NO se toca (sigue navy en oscuro)');
 ok(CSS.includes('.chat-msg.ai') && CSS.includes('.chat-msg.u'),
   '7: burbujas distinguibles Posty/usuario intactas');
-ok(CSS.includes('.hf-like{') && CSS.includes('background:#fff'),
-  '7: el corazón visible va sobre blanco');
+ok(CSS.includes('.hf-tik{') && CSS.includes('#1FA855'),
+  '7: el tik verde marca aprobado (única marca de la tile)');
 
 // ---------- M78: funciones llamadas desde tarjetas/menús existen ----------
 (function () {
@@ -155,7 +155,7 @@ ok(CSS.includes('.hf-like{') && CSS.includes('background:#fff'),
   for (const src of [APP, CH]) {
     for (const m of src.matchAll(/function\s+([A-Za-z0-9_$]+)\s*\(/g)) defs.push(m[1]);
   }
-  const called = ['pzIc', 'f3HeartBurst', 'hfTileApprove', 'hfPlanChip', 'hfWhenChip', 'slotHour', 'pcTz', 'anaT', 'mzOpenSheet', 'mzCloseSheet', 'chatUpdateSendBtn', 'chatScroll'];
+  const called = ['pzIc', 'f3HeartBurst', 'hfPlanChip', 'hfWhenChip', 'slotHour', 'pcTz', 'anaT', 'mzOpenSheet', 'mzCloseSheet', 'chatUpdateSendBtn', 'chatScroll'];
   const missing = called.filter((f) => !defs.includes(f));
   ok(!missing.length, 'M78: funciones auditadas ' + (called.length - missing.length) + '/' + called.length + (missing.length ? ' (faltan: ' + missing.join(', ') + ')' : ''));
 })();

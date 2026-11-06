@@ -4148,16 +4148,11 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-informe-nav{display:flex;gap:8px;margin-top:12px}
 
 /* ============ LOTE 10 (2026-10-31) ============ */
-/* Ítem 1 — corazón visible debajo de cada tile: la celda envuelve la
-   tile + su fila de acciones (nunca sobre la foto). La fila vive fuera
-   de .hf-tile para no competir con el doble toque ni los holds. */
+/* Ítem 1 — (SACAR-CORAZÓN 6/11: el corazón sale; queda la celda que
+   envuelve la tile + su fila de acciones, nunca sobre la foto.) */
 .hf-cell{display:block;min-width:0}/* (MEJORAS-INICIO · pieza 5) El ítem de la grilla tampoco puede imponer un mínimo por su contenido. */
 .hf-cell-actions{display:flex;align-items:center;gap:8px;padding:6px 2px 10px}
-.hf-like{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:#0A1E33;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
-.hf-like:active{transform:scale(.9)}
-.hf-like-in{position:absolute;bottom:8px;right:8px;z-index:5;background:rgba(10,30,51,.45);border-color:transparent;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.35)}
-.hf-like-in:active{transform:scale(.9)}
-/* (LOTE 13 · corazón y fecha no se tocan) La franja inferior de la tile es flex: chapita a la izquierda, corazón a la derecha, gap fijo 8px. La chapita recorta con puntos suspensivos antes de tocar el corazón; el corazón mantiene 34×34. */
+/* (LOTE 13 · chapita y tik no se tocan) La franja inferior de la tile es flex: chapita a lo ancho; el tik de aprobado, si hay, va a la derecha, 24×24. (SACAR-CORAZÓN 6/11: el corazón sale del feed.) */
 .hf-strip{position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;align-items:flex-end;gap:8px;padding:6px}
 .hf-strip .hf-chip{position:static;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:clip}
 /* Ítem 4 — chat fijo abajo como panel compacto, no como pantalla:
@@ -4297,19 +4292,14 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-strip .hf-chip-hm{flex:0 0 auto;white-space:nowrap}
 .hf-tile-under{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;height:100%;padding:10px;font-size:12px;font-weight:700;color:#0A1E33;text-align:center;line-height:1.35;background:linear-gradient(140deg,#eaf6fd,#fdf3d7);box-sizing:border-box}
 .hf-tile-under>span{display:block}
-/* (LOTE CORAZÓN-ABAJO 1/11 · decisión Valentino: el corazón flota abajo a la derecha de la foto, sobre la foto y por encima de la franja (nunca sobre la chapita: bottom:38px despeja la franja de ~31px con ~7px de aire; día+hora enteros, decisión v528 intacta); visible 26px en vidrio v519 con caja de toque intacta 34px; el glifo queda arriba a la derecha y ya no hace falta el drop a top:32px — la regla se elimina y la clase hf-has-glyph queda solo como marca en el HTML y en los tests) */
-.hf-tile > .hf-like-in{position:absolute;bottom:38px;right:6px;z-index:5;background:transparent;border-color:transparent;color:#0A1E33;box-shadow:none}
-.hf-tile > .hf-like-in::before{content:"";position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);z-index:-1;border-radius:50%;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 1px 6px rgba(10,30,51,.25)}
-.hf-tile > .hf-like-in .pz-ic svg{filter:drop-shadow(0 0 2px rgba(255,255,255,.9)) drop-shadow(0 1px 2px rgba(10,30,51,.35))}
-/* (LOTE HABLAR-DE-ESTE-POSTEO) Botón 💬 de la tile: espejo del corazón
-   en vidrio (círculo 26px visible, zona de toque 34px), abajo a la
-   izquierda sobre la foto. */
+/* (SACAR-CORAZÓN 6/11 · SUPERSEDE LOTE CORAZÓN-ABAJO 1/11: el corazón sale del feed; el tik de aprobado ocupa su slot, bottom:38px right:6px — ver .hf-tik. La clase hf-has-glyph queda solo como marca en el HTML y en los tests.) */
+/* (LOTE HABLAR-DE-ESTE-POSTEO) Botón 💬 de la tile: círculo 26px visible
+   en vidrio, zona de toque 34px, abajo a la izquierda sobre la foto
+   (espejo del slot donde vivía el corazón). */
 .hf-tile-chat{position:absolute;left:6px;bottom:38px;z-index:5;width:34px;height:34px;border-radius:50%;border:1px solid transparent;background:transparent;color:#0A1E33;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .hf-tile-chat::before{content:"";position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%);z-index:-1;border-radius:50%;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 1px 6px rgba(10,30,51,.25)}
 .hf-tile-chat:active{transform:scale(.9)}
 .hf-tile-chat .pz-ic svg{filter:drop-shadow(0 0 2px rgba(255,255,255,.9)) drop-shadow(0 1px 2px rgba(10,30,51,.35))}
-/* (LOTE CORAZÓN-MARCA) Corazón lleno persistente en posteos programados/publicados: relleno celeste Posty, como Instagram. */
-.hf-like[data-hf-on="1"] svg{fill:#2793C8;stroke:#2793C8}
 
 /* ---------- LOTE 17 · vista de aprobación + tira ---------- */
 /* Aceptar único como acción principal: ancho completo, sin recorte. */
@@ -4663,27 +4653,25 @@ body.pz-postchat-open{overflow:hidden}
 /* (LOTE CORAZÓN-GRIS-TIK · Valentino 2/11: lo likeado no desaparece)
    El posteo aprobado queda visible en el feed, A TODO COLOR, con
    tik verde (CORRECCIÓN VALENTINO 2/11: SIN GRIS — nada que lo haga
-   ver archivado; la marca es solo el tik + el corazón lleno).
-   (LOTE TIK-EN-CORAZON · Valentino 5/11: un estado, un lugar — el tic va
-   EN EL LUGAR del corazón y lo reemplaza. Sin chapita ocupa el slot del
-   corazón abajo a la derecha sobre la foto (34px, igual que .hf-like-in);
-   con chapita vive dentro de la franja (24px, igual que el corazón en
-   línea). La regla vieja top:6px left:6px 26px se retira: ningún estado
-   pone el tik arriba a la izquierda. Verde #1FA855 y ✓ blanco intactos.) */
+   ver archivado; la marca es solo el tik).
+   (LOTE TIK-EN-CORAZON · Valentino 5/11: un estado, un lugar — el tik va
+   EN EL LUGAR donde vivía el corazón. Sin chapita ocupa el slot abajo a
+   la derecha sobre la foto (34px); con chapita vive dentro de la franja
+   (24px). La regla vieja top:6px left:6px 26px se retira: ningún estado
+   pone el tik arriba a la izquierda. Verde #1FA855 y ✓ blanco intactos.
+   SACAR-CORAZÓN 6/11: el corazón sale; el tik queda como única marca.) */
 .hf-tik{position:absolute;bottom:38px;right:6px;z-index:5;width:34px;height:34px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;line-height:1;box-shadow:0 1px 6px rgba(10,30,51,.35)}
 .hf-tile > .hf-strip .hf-tik{position:static;flex:none;width:24px;height:24px;margin:0;font-size:14px;box-shadow:0 1px 6px rgba(10,30,51,.25);z-index:5}
 
-/* (LOTE CORAZÓN-EN-LÍNEA · decisión Valentino 2/11: corazón chiquito en
-   la misma línea que día+hora. Solo tiles CON chapita (hf-has-chip);
-   sin chapita no se toca nada: queda la posición abajo-sobre-foto del
-   lote corazón-abajo. El día recorta con ellipsis; la hora NUNCA.) */
+/* (SACAR-CORAZÓN 6/11 · SUPERSEDE CORAZÓN-EN-LÍNEA 2/11: el tik chiquito
+   va en la misma línea que día+hora. Solo tiles CON chapita (hf-has-chip);
+   sin chapita no se toca nada: queda la posición abajo-sobre-foto. El día
+   NUNCA recorta; la hora NUNCA.) */
 .hf-tile.hf-has-chip > .hf-strip{padding:4px 6px}
 .hf-tile.hf-has-chip > .hf-strip .hf-chip{text-overflow:clip}
-/* (LOTE FEED-TIRA-DÍA · 2/11 · decisión Valentino: el día NUNCA recorta; la chapita ya se estira hasta el corazón con flex:1 y el corazón queda flex:none 24x24.) */
+/* (LOTE FEED-TIRA-DÍA · 2/11 · decisión Valentino: el día NUNCA recorta; la chapita ya se estira hasta el tik con flex:1 y el tik queda flex:none 24x24.) */
 .hf-tile.hf-has-chip > .hf-strip .hf-chip-day{flex:0 0 auto;overflow:visible;text-overflow:clip;white-space:nowrap}
 .hf-tile.hf-has-chip > .hf-strip .hf-chip-hm{flex:0 0 auto;white-space:nowrap}
-.hf-tile.hf-has-chip > .hf-strip .hf-like-in{position:static;flex:none;width:24px;height:24px;margin:0;background:#fff;border-color:var(--line);color:#0A1E33;box-shadow:0 1px 6px rgba(10,30,51,.25);z-index:5}
-.hf-tile.hf-has-chip > .hf-strip .hf-like-in svg{width:16px;height:16px}
 
 /* LOTE AJUSTES-SIMPLE (2/11): Ajustes plano, sin acordeones. Las tarjetas
    nacen visibles (ajflat) y las filas de Más navegan a su sección. */
@@ -4924,16 +4912,15 @@ body.pz-postchat-open{overflow:hidden}
 @media (prefers-reduced-motion: reduce){.bb-tab-mas,.mz-tab-mas{transform:none}}
 
 /* (LOTE INICIO-3 · 3/11) Íconos de encabezado a la derecha de los
-   contadores + Aceptar todo reubicado en el encabezado con su nota.
+   contadores + Aceptar todo reubicado en el encabezado.
    .hf-pacts-accept vence a las reglas .hf-accept-bar de ancho 100%
-   por especificidad: el botón queda compacto y la nota chiquita a
-   su lado, sin competir con él y sin agrandar el encabezado. */
+   por especificidad: el botón queda compacto sin agrandar el encabezado.
+   (SACAR-CORAZÓN 6/11: la nota sale con el corazón.) */
 .hf-head-icons{display:flex;gap:6px;flex:none;align-items:center}
 .hf-head-ic{width:40px;height:40px;flex:none;border-radius:50%;border:1px solid rgba(255,255,255,.75);background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);color:#0A1E33;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(10,30,51,.06);padding:0}
 .hf-head-ic svg{width:20px;height:20px}
 .hf-pacts-accept{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;padding:12px 10px 2px}
 .hf-pacts-accept .hf-accept-bar{width:auto;flex:none;margin:0;padding:10px 12px;font-size:14px}
-.hf-accept-note{font-size:12.5px;line-height:1.3;color:#47617A;min-width:0;flex:1 1 auto;margin-left:0;text-align:left;white-space:normal;align-self:center}
 
 /* (LOTE CHAT-WEBSITE-LINDO · 3/11) Base: la cara de la cabecera de la landing solo se
    muestra en el panel de escritorio; en móvil la cabecera queda exactamente como hoy

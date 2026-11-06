@@ -1,13 +1,14 @@
 // TIK-EN-CORAZON (5/11 ~11:03) — regresión sobre el bundle REAL.
 // Decisión Valentino (captura del 518 aprobado): el tic verde va EN EL MISMO
-// LUGAR que el corazón. Fundamento: un estado, un lugar — el corazón es el
-// control de aprobar y el tic es la confirmación de lo mismo.
-// MÁQUINA DE ESTADOS, UN SOLO SLOT:
-//   pendiente (draft/scheduled sin aprobar) = corazón contorno (tocar aprueba)
-//   aprobado sin salir (draft/scheduled)   = tic verde EN LUGAR del corazón
-//   publicado                              = corazón lleno, sin tic
+// LUGAR que el corazón. Fundamento: un estado, un lugar.
+// (SACAR-CORAZÓN 6/11 · SUPERSEDE lo del corazón: el corazón SALE del feed;
+// la aprobación vive solo en el ritual [Sale así].) MÁQUINA DE ESTADOS,
+// UN SOLO SLOT (el tik, sin corazón en ningún estado):
+//   pendiente (draft/scheduled sin aprobar) = SIN MARCA (ni corazón ni tic)
+//   aprobado sin salir (draft/scheduled)   = tic verde EN EL LUGAR donde vivía el corazón
+//   publicado                              = SIN MARCA (ni corazón lleno ni tic)
 // El tic NO des-aprueba: es un span sin handler, el toque abre el detalle.
-// Geometría 1:1 con el corazón: 34px abajo-derecha sobre la foto sin chapita,
+// Geometría 1:1 con el slot viejo del corazón: 34px abajo-derecha sobre la foto sin chapita,
 // 24px dentro de la franja (.hf-strip) con chapita. Nunca arriba a la izquierda.
 // El mismo test sobre v694 PRÍSTINO debe fallar (tic arriba-izquierda + corazón
 // lleno en programado no aprobado + tic fuera de la franja con chapita).
@@ -213,16 +214,16 @@ function tree(html) { return parseHTML(html)[0]; }
   }
 
   // ---------- 1) render estático: máquina de estados ----------
-  // 1a) borrador pendiente, sin chapita → corazón contorno, sin tic
+  // 1a) borrador pendiente, sin chapita → SIN MARCA (ni corazón ni tic)
   let h = tileHTML(post({ id: 101 }));
   let tr = tree(h);
-  t('1a pendiente sin chapita: corazón contorno, sin tic',
-    !!tr.querySelector('[data-hf-like]') && !tr.querySelector('[data-hf-like]').getAttribute('data-hf-on') && !tr.querySelector('.hf-tik'),
+  t('1a pendiente sin chapita: sin marca (ni corazón ni tic)',
+    !tr.querySelector('[data-hf-like]') && !tr.querySelector('.hf-tik'),
     h.slice(0, 200));
   // 1b) borrador aprobado, sin chapita → tic hijo directo de la tile, sin corazón
   h = tileHTML(post({ id: 102, approval: 'approved' }));
   tr = tree(h);
-  t('1b aprobado sin chapita: tic en el slot del corazón (hijo directo), sin corazón',
+  t('1b aprobado sin chapita: tic en el lugar del corazón (hijo directo), sin corazón',
     !!tr.querySelector('.hf-tile > .hf-tik') && !tr.querySelector('[data-hf-like]'),
     'tik-directo=' + !!tr.querySelector('.hf-tile > .hf-tik'));
   // 1c) programado aprobado, CON chapita → tic DENTRO de la franja, sin corazón
@@ -232,17 +233,17 @@ function tree(html) { return parseHTML(html)[0]; }
   t('1c aprobado con chapita: tic DENTRO de la franja, sin corazón',
     !!tr.querySelector('.hf-strip .hf-tik') && !tr.querySelector('.hf-tile > .hf-tik') && !tr.querySelector('[data-hf-like]'),
     'tik-strip=' + !!tr.querySelector('.hf-strip .hf-tik') + ' tik-directo=' + !!tr.querySelector('.hf-tile > .hf-tik'));
-  // 1d) programado pendiente, CON chapita → corazón contorno EN la franja, sin tic
+  // 1d) programado pendiente, CON chapita → SIN MARCA (ni corazón en la franja ni tic)
   h = tileHTML(post({ id: 104, status: 'scheduled', approval: '', scheduled_at: '2026-11-07T22:00:00.000Z' }));
   tr = tree(h);
-  t('1d pendiente con chapita: corazón contorno EN la franja, sin tic',
-    !!tr.querySelector('.hf-strip [data-hf-like]') && !tr.querySelector('.hf-strip [data-hf-like]').getAttribute('data-hf-on') && !tr.querySelector('.hf-tik'),
+  t('1d pendiente con chapita: sin marca (ni corazón en la franja ni tic)',
+    !tr.querySelector('[data-hf-like]') && !tr.querySelector('.hf-tik'),
     'corazon-strip=' + !!tr.querySelector('.hf-strip [data-hf-like]'));
-  // 1e) publicado → corazón lleno, sin tic
+  // 1e) publicado → SIN MARCA (ni corazón lleno ni tic)
   h = tileHTML(post({ id: 105, status: 'published', approval: 'approved', published_at: '2026-11-04T22:00:00.000Z' }));
   tr = tree(h);
-  t('1e publicado: corazón lleno, sin tic',
-    !!tr.querySelector('[data-hf-like]') && tr.querySelector('[data-hf-like]').getAttribute('data-hf-on') === '1' && !tr.querySelector('.hf-tik'),
+  t('1e publicado: sin marca (ni corazón lleno ni tic)',
+    !tr.querySelector('[data-hf-like]') && !tr.querySelector('.hf-tik'),
     'corazon-lleno=' + (tr.querySelector('[data-hf-like]') || {}).getAttribute?.('data-hf-on'));
   // 1f) programado aprobado, SIN chapita → tic hijo directo, sin corazón
   h = tileHTML(post({ id: 106, status: 'scheduled', approval: 'approved', scheduled_at: null }));
@@ -253,7 +254,7 @@ function tree(html) { return parseHTML(html)[0]; }
 
   // ---------- 2) CSS: geometría del slot, nunca arriba-izquierda ----------
   const tikRule = (STYLES.match(/\.hf-tik\{[^}]*\}/) || [''])[0];
-  t('2a CSS .hf-tik ocupa el slot del corazón (bottom:38px right:6px 34px)',
+  t('2a CSS .hf-tik ocupa el lugar del corazón (bottom:38px right:6px 34px)',
     tikRule.includes('bottom:38px') && tikRule.includes('right:6px') && tikRule.includes('width:34px'),
     tikRule.slice(0, 120));
   t('2b CSS .hf-tik NO tiene la regla vieja arriba-izquierda',
@@ -269,49 +270,49 @@ function tree(html) { return parseHTML(html)[0]; }
   t('3a JS: sin estilo en línea top:6px para el tik',
     !SRC.includes('top:6px;left:6px;width:26px'),
     '');
-  t('3b JS: homeTileHTML no concatena el tik fuera del slot',
-    !/(\$\{tikSpan\})(?!\s*:)/.test(SRC) || SRC.includes('likeInStrip ? (hfAprobado ? tikSpan : likeBtn)'),
+  t('3b JS: homeTileHTML pone el tik SOLO en su slot (franja con chapita, directo sin ella) y no hay likeBtn',
+    SRC.includes("${likeInStrip ? tikSpan : ''}") && SRC.includes("${likeInStrip ? '' : tikSpan}") && !SRC.includes('likeBtn'),
     '');
 
   // ---------- 4) marcadores en vivo ----------
-  function buildTile({ inStrip, chip }) {
+  // (SACAR-CORAZÓN 6/11: la tile real ya no trae corazón; el helper arma
+  // la tile sin él. El tik va en la franja si hay chapita, directo si no.)
+  function buildTile({ chip }) {
     const tile = new El('span', { class: 'scf-mini-x hf-tile' + (chip ? ' hf-has-chip' : ''), 'data-post-id': '102', 'data-status': 'scheduled' });
     tile.appendChild(new El('img', { src: IMG }));
     const strip = new El('span', { class: 'hf-strip' });
     if (chip) { const c = new El('span', { class: 'hf-chip' }); c.text = 'Sáb · 19:00'; strip.appendChild(c); }
     tile.appendChild(strip);
-    const like = new El('button', { class: 'hf-like hf-like-in', 'data-hf-like': '' });
-    if (inStrip) strip.appendChild(like); else tile.appendChild(like);
-    return { tile, strip, like };
+    return { tile, strip };
   }
-  // 4a) pzAprobarEnSitio, corazón en franja → tic en franja, sin corazón
-  let b = buildTile({ inStrip: true, chip: true });
+  // 4a) pzAprobarEnSitio, CON chapita → tic en franja
+  let b = buildTile({ chip: true });
   let ok = sandbox.pzAprobarEnSitio(b.tile, '102', null);
   const tikA = b.tile.querySelector('.hf-tik');
-  t('4a vivo (franja): corazón fuera, tic EN la franja',
-    ok !== false && !b.tile.querySelector('.hf-like') && !!tikA && tikA.parent === b.strip,
+  t('4a vivo (franja): tic EN la franja',
+    ok !== false && !!tikA && tikA.parent === b.strip,
     'ok=' + ok);
-  // 4b) pzAprobarEnSitio, corazón hijo directo → tic hijo directo, sin corazón
-  b = buildTile({ inStrip: false, chip: false });
+  // 4b) pzAprobarEnSitio, SIN chapita → tic hijo directo
+  b = buildTile({ chip: false });
   ok = sandbox.pzAprobarEnSitio(b.tile, '102', null);
   const tikB = b.tile.querySelector('.hf-tik');
-  t('4b vivo (foto): corazón fuera, tic hijo directo de la tile',
-    ok !== false && !b.tile.querySelector('.hf-like') && !!tikB && tikB.parent === b.tile && !b.strip.querySelector('.hf-tik'),
+  t('4b vivo (foto): tic hijo directo de la tile',
+    ok !== false && !!tikB && tikB.parent === b.tile && !b.strip.querySelector('.hf-tik'),
     'ok=' + ok);
   // 4c) respaldo pzAcceptAllWeekMark sin pzAprobarEnSitio: mismo slot, sin estilos en línea
   const saved = sandbox.pzAprobarEnSitio;
   sandbox.pzAprobarEnSitio = undefined;
-  b = buildTile({ inStrip: true, chip: true });
+  b = buildTile({ chip: true });
   sandbox.pzAcceptAllWeekMark(b.tile, { id: '102', scheduled_at: null });
   const tikC = b.strip.querySelector('.hf-tik');
   t('4c respaldo (franja): tic en la franja, sin estilo en línea top:6px',
-    !!tikC && !b.tile.querySelector('.hf-like') && !(tikC.style && tikC.style.cssText && String(tikC.style.cssText).includes('top:6px')),
+    !!tikC && !(tikC.style && tikC.style.cssText && String(tikC.style.cssText).includes('top:6px')),
     'tik-strip=' + !!tikC);
-  b = buildTile({ inStrip: false, chip: false });
+  b = buildTile({ chip: false });
   sandbox.pzAcceptAllWeekMark(b.tile, { id: '102', scheduled_at: null });
   const tikC2 = b.tile.querySelector('.hf-tik');
   t('4c respaldo (foto): tic hijo directo, sin estilo en línea top:6px',
-    !!tikC2 && tikC2.parent === b.tile && !b.tile.querySelector('.hf-like'),
+    !!tikC2 && tikC2.parent === b.tile,
     '');
   sandbox.pzAprobarEnSitio = saved;
 

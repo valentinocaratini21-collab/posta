@@ -21,17 +21,17 @@ const ana = read('public/chunk-analisis.js');
 const aju = read('public/chunk-ajustes.js');
 const wb = read('week-bilingual.js');
 
-console.log('== ÍTEM 1: doble toque/corazón ==');
-check('hfTileApprove definida 1 vez', count(app, 'async function hfTileApprove(') === 1);
+console.log('== ÍTEM 1: doble toque/corazón (SACAR-CORAZÓN 6/11) ==');
+check('hfTileApprove ELIMINADA (0 veces)', count(app, 'async function hfTileApprove(') === 0 && count(app, 'hfTileApprove') === 0);
 check('hfDblReset definida 1 vez', count(app, 'function hfDblReset(') === 1);
 check('ventana 300ms en handler', app.includes('dblNow - HF_DBL.t < 300'));
-check('doble toque: burst + approve, sin navegar', app.includes('f3HeartBurst(tile)') && app.includes('hfTileApprove(tile, t.post)'));
+check('doble toque: ya NO aprueba (sin hfTileApprove, sin burst en la tile)', !app.includes('hfTileApprove(tile, t.post)') && app.includes('abre el detalle como un'));
 check('timer navega al detalle', app.includes('hfDetailOpen(pend.post, pend.tile)'));
 check('guardia hash sin cambio', app.includes('location.hash === pend.hash'));
 check('OPCION A 2/11: corazon apv-like eliminado (Aprobar ya es el Aceptar primario, sin duplicado)', app.includes('id="apvAccept"') && count(app, 'class="apv-sec-btn apv-like"') === 0);
-check('binding corazón por clase', app.includes("querySelectorAll('.apv-like')"));
-check('icono corazón pzIc heart', app.includes("pzIc('heart', 20)"));
-check('M78: nuevas fns definidas 1 vez', count(app, 'async function hfTileApprove(') === 1 && count(app, 'function hfDblReset(') === 1);
+check('binding corazón por clase ELIMINADO', !app.includes("querySelectorAll('.apv-like')"));
+check('icono corazón pzIc heart (queda en carrusel Aprobar escena + likes)', app.includes("pzIc('heart', 20)"));
+check('M78: hfTileApprove 0, hfDblReset 1 vez', count(app, 'async function hfTileApprove(') === 0 && count(app, 'function hfDblReset(') === 1);
 console.log('== Lote 1 intacto ==');
 check('tab jardin', app.includes("tabBtn('jardin', '#/app/jardin-posty'"));
 check('sin tab semana', !app.includes("tabBtn('semana'"));
@@ -70,60 +70,25 @@ check('autofetch 0', c(srv, 'autofetch') === 0 && c(app, 'autofetch') === 0);
 
 async function main() {
   console.log('== FUNCIONALES (vm) ==');
-  // --- hfTileApprove: ruteo por estado ---
+  // --- hfTileApprove: ELIMINADA (SACAR-CORAZÓN 6/11) ---
+  // La aprobación desde el feed ya no existe: ni doble toque en la tile
+  // ni botón corazón. La única aprobación del posteo del día es [Sale así]
+  // en el ritual. Acá solo se verifica la ausencia + que el defer de 300ms
+  // y la navegación al detalle siguen (hfDetailBind extraído y corrido).
+  check('hfTileApprove ausente del bundle', !app.includes('hfTileApprove'));
   try {
-    const sandbox = vm.createContext({ console });
-    function extractAsync(src, name) {
-      const i = src.indexOf('async function ' + name + '(');
-      if (i < 0) throw new Error('no fn ' + name);
-      let j = src.indexOf('{', i), d = 0;
-      for (let k = j; k < src.length; k++) {
-        if (src[k] === '{') d++;
-        else if (src[k] === '}') { d--; if (d === 0) return src.slice(i, k + 1); }
-      }
-      throw new Error('sin cierre ' + name);
-    }
-    const calls = { patch: [], post: [], pcApprove: [], toast: [], render: 0, track: [] };
-    const stub = `
-      var PROFILE = { ig_connected: true };
-      function esc(s){ return String(s); }
-      function toast(m){ globalThis.__calls.toast.push(m); }
-      function track(n, o){ globalThis.__calls.track.push(n); }
-      function render(){ globalThis.__calls.render++; }
-      async function f3ApprovalMode(){ return { manual: globalThis.__manual }; }
-      function f3En(){ return false; }
-      async function pcApprove(id, tile, btn){ globalThis.__calls.pcApprove.push(id); }
-      var api = {
-        patch: async (u, b) => { globalThis.__calls.patch.push([u, b]); return { scheduled_at: b && b.scheduled_at }; },
-        post: async (u, b) => { globalThis.__calls.post.push([u, b]); return {}; },
-      };
-    `;
-    vm.runInContext(stub, sandbox);
-    sandbox.__calls = calls;
-    vm.runInContext(extractAsync(app, 'hfTileApprove').replace('async function hfTileApprove', 'globalThis.hfTileApprove = async function'), sandbox);
-    const tile = (st, sched) => ({ dataset: { postId: '7', status: st, schedAt: sched || '' } });
-    const reset = () => { calls.patch = []; calls.post = []; calls.pcApprove = []; calls.toast = []; calls.render = 0; calls.track = []; };
-    // 1. borrador + manual + IG -> PATCH + signal + render, sin pcApprove
-    sandbox.__manual = true; sandbox.PROFILE = { ig_connected: true }; reset();
-    await sandbox.hfTileApprove(tile('draft', '2026-11-02T21:00:00Z'), { id: '7', status: 'draft', scheduled_at: '2026-11-02T21:00:00Z' });
-    check('borrador: PATCH + signal + render', calls.patch.length === 1 && calls.patch[0][0] === '/api/posts/7' && calls.post.length === 1 && calls.post[0][1].signal === 'approved' && calls.render === 1 && calls.pcApprove.length === 0, JSON.stringify(calls));
-    // 2. programado + manual -> pcApprove + render, sin PATCH
-    reset();
-    await sandbox.hfTileApprove(tile('scheduled'), { id: '7', status: 'scheduled' });
-    check('programado: pcApprove + render', calls.pcApprove.length === 1 && calls.pcApprove[0] === '7' && calls.render === 1 && calls.patch.length === 0, JSON.stringify(calls));
-    // 3. publicado -> nada
-    reset();
-    await sandbox.hfTileApprove(tile('published'), { id: '7', status: 'published' });
-    check('publicado: sin llamadas', calls.patch.length === 0 && calls.post.length === 0 && calls.pcApprove.length === 0 && calls.render === 0, JSON.stringify(calls));
-    // 4. borrador + autopilot -> nada (corazón afectivo)
-    sandbox.__manual = false; reset();
-    await sandbox.hfTileApprove(tile('draft', '2026-11-02T21:00:00Z'), { id: '7', status: 'draft' });
-    check('autopilot: sin cambios', calls.patch.length === 0 && calls.post.length === 0 && calls.pcApprove.length === 0, JSON.stringify(calls));
-    // 5. borrador sin IG -> nada, aviso Instagram
-    sandbox.__manual = true; sandbox.PROFILE = { ig_connected: false }; reset();
-    await sandbox.hfTileApprove(tile('draft', '2026-11-02T21:00:00Z'), { id: '7', status: 'draft' });
-    check('sin IG: sin PATCH + aviso', calls.patch.length === 0 && calls.toast.some((t) => String(t).includes('Instagram')), JSON.stringify(calls));
-  } catch (e) { check('hfTileApprove vm', false, String((e && e.stack) || e).slice(0, 300)); }
+    const src = app;
+    const i = src.indexOf('function hfDetailBind(root)');
+    if (i < 0) throw new Error('no fn hfDetailBind');
+    let j = src.indexOf('{', i), d = 0, k = j;
+    for (; k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}') { d--; if (d === 0) break; } }
+    const fnSrc = src.slice(i, k + 1);
+    check('hfDetailBind: sin hfTileApprove dentro', !fnSrc.includes('hfTileApprove'));
+    check('hfDetailBind: defer 300ms intacto', fnSrc.includes(', 300)'));
+    check('hfDetailBind: navega al detalle por hash', fnSrc.includes("location.hash = '#/app/post/'"));
+    check('hfDetailBind: guard del botón 💬 intacto', fnSrc.includes("[data-hf-chat]"));
+    check('hfDetailBind: sin guard de corazón', !fnSrc.includes('[data-hf-like]'));
+  } catch (e) { check('hfDetailBind vm', false, String((e && e.stack) || e).slice(0, 300)); }
 
   // --- bilingualizeWeek con db falsa ---
   try {

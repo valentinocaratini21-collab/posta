@@ -25,7 +25,7 @@ function ruleBody(txt, selector) {
   return j < 0 ? '' : txt.slice(i, j + 1);
 }
 
-// 1. Franja flex: chip izq, corazón der, gap fijo 8px.
+// 1. Franja flex: chapita a lo ancho, tik der cuando está aprobado, gap fijo 8px.
 const strip = ruleBody(css, '.hf-strip{');
 t(strip.includes('display:flex'), 'strip display:flex');
 t(strip.includes('gap:8px'), 'strip gap 8px fijo');
@@ -36,17 +36,17 @@ t(stripChip.includes('position:static'), 'chip en strip estática (no absoluta)'
 t(stripChip.includes('min-width:0'), 'chip min-width 0');
 t(stripChip.includes('overflow:hidden'), 'chip overflow hidden');
 t(stripChip.includes('text-overflow:clip'), 'chip clip, no ellipsis (LOTE CORAZÓN: el día se lee entero)');
-const stripLike = ruleBody(css, '.hf-strip .hf-like-in{');
-t(css.includes('.hf-tile.hf-has-chip > .hf-strip .hf-like-in{position:static'), 'corazón EN franja solo con chapita (CORAZÓN-EN-LÍNEA 2/11, Valentino: en la misma línea que día+hora)');
-t(app.includes('${despChip}${talkBtn}${likeInStrip ? \'\' : likeBtn}'), 'corazón hijo directo SOLO sin chapita (CORAZÓN-EN-LÍNEA 2/11; con chapita va en la franja; HABLAR 2/11: el botón 💬 precede al corazón, la regla no cambia)');
-const likeBase = ruleBody(css, '.hf-like{');
-t(likeBase.includes('width:34px') && likeBase.includes('height:34px'), 'corazón 34×34 usable');
+const stripTik = ruleBody(css, '.hf-strip .hf-tik{');
+t(css.includes('.hf-tile > .hf-strip .hf-tik{position:static'), 'tik EN franja solo con chapita (SACAR-CORAZÓN 6/11: el tik ocupa el lugar del corazón)');
+t(app.includes('${despChip}${talkBtn}${likeInStrip ? \'\' : tikSpan}'), 'tik hijo directo SOLO sin chapita (SACAR-CORAZÓN 6/11; con chapita va en la franja; HABLAR 2/11: el botón 💬 precede al tik, la regla no cambia)');
+const tikBase = ruleBody(css, '.hf-tik{');
+t(tikBase.includes('width:34px') && tikBase.includes('height:34px'), 'tik 34×34 usable');
 
-// 2. La tile emite chip + corazón DENTRO del strip, en ese orden; guards intactos.
-t(app.includes('<span class="hf-strip">${chip}${archChip}${likeInStrip ? likeBtn : \'\'}</span>${justChip}'),
-  'tile: corazón en franja con chapita, chip primero (CORAZÓN-EN-LÍNEA 2/11, Valentino: en la misma línea que día+hora)');
-t(app.includes('data-hf-like'), 'corazón conserva data-hf-like');
-t(app.includes("[data-hf-like]"), 'guards data-hf-like presentes');
+// 2. La tile emite chip + tik DENTRO del strip, en ese orden; guards intactos.
+t(app.includes('<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : \'\'}</span>${justChip}'),
+  'tile: tik en franja con chapita, chip primero (SACAR-CORAZÓN 6/11: el tik ocupa el lugar del corazón)');
+t(!app.includes('data-hf-like'), 'corazón: data-hf-like AUSENTE');
+t(!app.includes("[data-hf-like]"), 'guards data-hf-like AUSENTES');
 t(!app.includes('class="hf-cell-actions"'), 'sin fila abajo (no vuelve la fila del Lote 10)');
 
 // 3. Geometría con números: tile mínima 390pt, 3 cols, gap 2px.

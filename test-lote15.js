@@ -43,7 +43,7 @@ t(app.includes('const MX_BROTE_SVG'), 'brote (LOTE JARDÍN): el glifo queda defi
 // ---- 1+5 · Home pulida / pulido fino ----
 t(css.includes('.hf-grid .hf-tile{border-radius:10px'), 'home: tiles con radio del mock');
 t(css.includes('.mx-tira-jardin{box-shadow:0 4px 14px'), 'home: sombra suave en la tira');
-t(css.includes('.hf-strip{') && css.includes('gap:8px'), 'home: chapita+corazón con gap fijo intacto (Lote 13)');
+t(css.includes('.hf-strip{') && css.includes('gap:8px'), 'home: chapita+tik con gap fijo intacto (SACAR-CORAZÓN 6/11: el tik ocupa el lugar del corazón)');
 t(css.includes('.hf-tile.hf-tile-draft{outline:1.5px dashed rgba(39,147,200,.35)'), 'borrador: marca más suave');
 t(css.indexOf('.hf-tile.hf-tile-draft{outline:1.5px dashed rgba(39,147,200,.35)') > css.indexOf('.hf-tile.hf-tile-draft{outline:2px dashed #2793C8'), 'borrador: el suave gana por cascada al viejo');
 t(css.includes('.bb-bcard{box-shadow:0 4px 14px') && css.includes('.bb-bcard.foco{outline:2px solid #FEC14D'), 'bandeja: sombra + anillo dorado en foco');
@@ -81,16 +81,14 @@ t(app.includes("matchMedia('(prefers-reduced-motion: reduce)')"), 'sonidos: gate
 const sndBody = bodyOf(app, 'function pzSonido', 'function pzMomentoSonido');
 t(!sndBody.includes('vibrate'), 'sonidos: nunca vibración fingida');
 t(app.includes('[784, 988, 1175]'), 'sonido nivel: tríada ascendente en el momento del avance');
-t(cnt(app, "pzSonido('aprobar')") === 3, 'sonido aprobar: 3 ganchos (corazón, doble toque, detalle)');
+t(cnt(app, "pzSonido('aprobar')") === 1, 'sonido aprobar: 1 gancho (el me gusta del detalle, que queda; los 2 del corazón del feed salieron)');
 t(cnt(app, "pzSonido('publicar')") === 1, 'sonido publicar: 1 gancho (celebración)');
 
-// ---- Tiles web: corazón vs detalle ----
-const likeBody = bodyOf(app, 'function hfLikeBind', 'function hfDurBind');
-t(likeBody.includes('}, true);'), 'tiles web: corazón en captura');
-t(likeBody.includes('stopPropagation'), 'tiles web: corazón corta la propagación');
-t(app.includes("addEventListener('mousemove'") && app.includes("closest('.hf-strip, [data-hf-like]')") && app.includes('!SCF_PINNED) scfClosePop()'), 'tiles web: pop suprimido sobre la franja y el corazón (LOTE CORAZÓN: corazón arriba a la derecha)');
-const detBind = bodyOf(app, 'function hfDetailBind', 'function hfLikeBind');
-t(detBind.includes("hover: none") && detBind.includes('< 300') && detBind.includes("closest('[data-hf-like]')"), 'táctil intacto: doble toque 300ms + corazón sin navegar');
+// ---- Tiles web: SIN corazón (SACAR-CORAZÓN 6/11) ----
+t(!app.includes('function hfLikeBind'), 'tiles web: hfLikeBind ELIMINADO');
+t(app.includes("addEventListener('mousemove'") && app.includes("closest('.hf-strip')") && app.includes("closest('[data-hf-chat]')") && !app.includes("closest('[data-hf-like]')") && app.includes('!SCF_PINNED) scfClosePop()'), 'tiles web: pop suprimido sobre la franja y el chat (sin guard de corazón)');
+const detBind = bodyOf(app, 'function hfDetailBind', 'function hfDurBind');
+t(detBind.includes("hover: none") && detBind.includes('< 300') && !detBind.includes("closest('[data-hf-like]')"), 'táctil intacto: doble toque 300ms sin aprobar + sin guard de corazón');
 
 // ---- 3 · Estrategia: carta simple sin repeticiones ----
 t(ch.includes("if (a) h += `<p class=\"ana-ltr-first\""), 'estrategia: primera línea en ambos caminos con análisis');
