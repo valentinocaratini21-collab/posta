@@ -9856,6 +9856,17 @@ function ideasInputFor(uid, weekKey) {
     try { const dnV = readDna(uid) || {}; vs = fundamentoLiteral.normalizarVetos([...vs, ...(dnV.vetos || [])]); } catch (e) {}
     ideasInput.vetos = vs;
   } catch (e) { ideasInput.vetos = []; }
+  // (LOTE ONBOARDING-Q1) Q6/Q7/Q8 del fundamento (digest.onboarding):
+  // la audiencia y el diferencial viajan como líneas del brief; las
+  // líneas rojas viajan como puerta dura (mismo post-filtro que los
+  // vetos en generateIdeas). Sin onboarding, nada cambia.
+  try {
+    const dgO = clientDigest.getDigest(db, uid);
+    const onb = (dgO && dgO.onboarding) || {};
+    if (onb.audiencia) ideasInput.audiencia = String(onb.audiencia).slice(0, 60);
+    if (onb.diferencial) ideasInput.diferencial = String(onb.diferencial).slice(0, 120);
+    if (onb.lineas_rojas) ideasInput.lineasRojas = fundamentoLiteral.normalizarVetos(String(onb.lineas_rojas).split(/[,;]+/));
+  } catch (e) {}
   // (RUBRO-GARANTÍAS ×6 · piezas 1, 4 y 6) Los productos literales del
   // fundamento viajan en el input para la puerta final de generateIdeas
   // (anota _rgProducto/_rgSinProducto) y para filtrar los pools de
@@ -26764,6 +26775,144 @@ function guestBackstop(req, res) {
 // No pide email ni contraseña: la cuenta llega al primer toque (ver
 // /api/guest/upgrade). El reloj de 3 días arranca ACÁ (created_at de la
 // fila) y la subida de cuenta NO lo toca.
+// (LOTE PRUEBA-CHAT · 6/11) Onboarding por chat con bamboo: el visitante
+// entra al conserje con un invitado temprano, ANTES de generar los 3
+// posteos. El reloj de 3 días arranca en el chat (guest/start reusa a este
+// invitado, no crea otro). Candados espejo de guest/start: trial consumido
+// → 409; invitado con posteos → 409; dispositivo de OTRO usuario → 409.
+// Las preguntas guionadas NO se insertan como mensajes del visitante (no
+// alertan al cron): cada pregunta viaja como assistant (INSERT directo) y
+// cada respuesta queda solo como evento del caso (sin chat_message, sin
+// pendiente). El texto libre sí: mensaje user + desvío + ACK instantáneo
+// (el ACK es INSERT directo y NO resetea el pendiente: pendingCountFor
+// cuenta desde la última respuesta REAL del operador). Sin sesión de
+// prueba todavía no hay nada que responder: el front no inventa ninguna
+// respuesta, solo muestra el ACK y pausa el flujo hasta que bamboo
+// responde en vivo o el visitante toca «seguir con las preguntas».
+// POST kind: 'join' (crea/reusa invitado + conserje) · 'question' (Posty
+// pregunta; INSERT assistant) · 'answer' (respuesta guionada; solo evento
+// del caso) · 'free' (texto libre; user + desvío + ACK). GET pollea el
+// hilo (after=<id>) para las respuestas de bamboo.
+app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (req, res) => {
+  try {
+    if (!trialLock || !guestTrial) return res.status(503).json({ ok: false, error: 'Servicio no disponible' });
+    const b = (req && req.body) || {};
+    const kind = String(b.kind || 'join');
+    if (kind !== 'join' && kind !== 'question' && kind !== 'answer' && kind !== 'free')
+      return res.status(400).json({ ok: false, error: 'kind_invalido' });
+    const lang = (b.lang === 'en' || b.lang === 'es') ? b.lang : 'es';
+    const igK = trialLock.normalizeIg(String(b.ig || '').trim().replace(/^@/, '').toLowerCase());
+    const domK = trialLock.normalizeDomain(String(b.domain || b.web || '').trim());
+    if (!igK && !domK) return res.status(400).json({ ok: false, error: lang === 'en' ? 'Tell me your @ or your website first.' : 'Decime primero tu @ o tu web.' });
+    const device = String(b.device || '').trim().slice(0, 128);
+    const ip = String(req.ip || '').slice(0, 64);
+    const testMode = trialTestMode(req);
+    const allowlisted = trialLock.isAllowlisted(db, igK, domK);
+    // Candados espejo de guest/start.
+    if (!testMode && !allowlisted) {
+      try { guestTrial.backfillUsedFromLocks(db); } catch (e) {}
+      const consumed = trialLock.findConsumedUsed ? trialLock.findConsumedUsed(db, igK, domK) : null;
+      if (consumed) return res.status(409).json({ ok: false, error: 'trial_used', trial_used: true });
+      const entered = guestTrial.findGuestByIdentity ? guestTrial.findGuestByIdentity(db, igK, domK) : null;
+      if (entered) {
+        let nPosts = 0;
+        try { const r0 = db.prepare('SELECT COUNT(*) AS n FROM posts WHERE user_id = ?').get(entered.id); nPosts = (r0 && r0.n) || 0; } catch (e) {}
+        // Con posteos, la prueba ya se usó: no hay chat nuevo.
+        if (nPosts > 0) return res.status(409).json({ ok: false, error: 'trial_used', trial_used: true });
+      }
+      const du = guestTrial.deviceUsed(db, device, ip);
+      // El dispositivo del propio invitado (reuso) no es de otro usuario.
+      if (du && !(entered && String(du.user_id) === String(entered.id)))
+        return res.status(409).json({ ok: false, error: 'device_used', device_used: true });
+    }
+    // Invitado temprano: reusa is_guest=1 con 0 posteos o crea uno nuevo.
+    let uid = null;
+    try {
+      const row = guestTrial.findGuestByIdentity ? guestTrial.findGuestByIdentity(db, igK, domK) : null;
+      if (row) uid = row.id;
+    } catch (e) {}
+    let trialEnds = 0;
+    if (!uid) {
+      const g = guestTrial.createGuest(db, {
+        referralCode: typeof newReferralCode === 'function' ? newReferralCode() : '',
+        lang, ig: igK, domain: domK, device,
+      });
+      uid = g.userId; trialEnds = g.trialEnds || 0;
+      if (!testMode && !allowlisted) { try { guestTrial.recordDevice(db, device, ip, uid); } catch (e) {} }
+    } else {
+      try { const r1 = db.prepare('SELECT trial_ends_at FROM users WHERE id = ?').get(uid); trialEnds = (r1 && r1.trial_ends_at) || 0; } catch (e) {}
+    }
+    // Conserje (una sola vez: setConcierge registra una acción de equipo
+    // por llamada).
+    try { if (supportCases && !supportCases.isConcierge(db, uid)) supportCases.setConcierge(db, uid, true, 'prueba-chat'); } catch (e) {}
+    // Sesión del visitante sobre el invitado (igual que guest/start).
+    try {
+      if (!req.session || req.session.userId !== uid) {
+        await new Promise((resolve) => {
+          try { req.session.regenerate(() => resolve()); } catch (e) { resolve(); }
+        });
+        if (req.session) req.session.userId = uid;
+      }
+    } catch (e) {}
+    if (kind === 'join') return res.json({ ok: true, user_id: uid, trial_ends_at: trialEnds, concierge: true });
+    if (kind === 'question') {
+      const text = String(b.text || '').trim().slice(0, 500);
+      if (!text) return res.status(400).json({ ok: false, error: 'texto_vacio' });
+      let msgId = 0;
+      try { const r = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', text); msgId = r.lastInsertRowid || 0; } catch (e) {}
+      return res.json({ ok: true, user_id: uid, msg_id: msgId, concierge: true });
+    }
+    if (kind === 'answer') {
+      // Respuesta guionada: SOLO evento del caso. Sin chat_message (no
+      // alerta al cron) y sin ACK: la siguiente pregunta ES la respuesta.
+      const q = String(b.question || '').trim().slice(0, 40);
+      const v = String(b.value || '').trim().slice(0, 200);
+      let casoId = 0;
+      try {
+        const dv = supportCases.divertToConcierge(db, uid, (q ? q + ': ' : '') + (v || '(sin respuesta)'));
+        if (dv && dv.ok) casoId = dv.caso_id || 0;
+      } catch (e) {}
+      return res.json({ ok: true, user_id: uid, caso_id: casoId, concierge: true });
+    }
+    // kind === 'free': texto libre del visitante.
+    const text = String(b.text || '').trim().slice(0, 2000);
+    if (!text) return res.status(400).json({ ok: false, error: 'texto_vacio' });
+    const ack = (supportCases && supportCases.CONCIERGE_ACK) || 'dale, ya lo vi 😄 te lo reviso y te escribo en un rato.';
+    let casoId = 0;
+    try {
+      const dv = supportCases.divertToConcierge(db, uid, text);
+      if (dv && dv.ok) casoId = dv.caso_id || 0;
+    } catch (e) {}
+    // INSERT user + ACK (INSERT directo: no resetea el pendiente, el cron
+    // avisa a bamboo porque hay un user sin respuesta real del operador).
+    let msgId = 0;
+    try {
+      db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', text);
+      const r = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', ack);
+      msgId = r.lastInsertRowid || 0;
+    } catch (e) {}
+    return res.json({ ok: true, user_id: uid, reply: ack, caso_id: casoId, msg_id: msgId, concierge: true });
+  } catch (e) {
+    console.error('[prueba-chat] chat-onboarding falló:', e);
+    return res.status(500).json({ ok: false, error: 'No pudimos abrir el chat todavía.' });
+  }
+});
+
+app.get('/api/trial/chat-onboarding', (req, res) => {
+  try {
+    const uid = req.session && req.session.userId;
+    if (!uid) return res.status(401).json({ ok: false, error: 'sin_sesion' });
+    const after = Math.max(0, parseInt(String((req.query && req.query.after) || '0'), 10) || 0);
+    let rows = [];
+    try {
+      rows = db.prepare('SELECT id, role, text FROM chat_messages WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT 50').all(uid, after) || [];
+    } catch (e) { rows = []; }
+    return res.json({ ok: true, user_id: uid, messages: rows.map((r) => ({ id: r.id, role: r.role, text: r.text })) });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'No pudimos leer el chat todavía.' });
+  }
+});
+
 app.post('/api/guest/start', (req, res) => {
   try {
     if (!trialLock || !guestTrial) return res.status(503).json({ error: 'Servicio no disponible' });
@@ -26779,6 +26928,9 @@ app.post('/api/guest/start', (req, res) => {
     // Candado permanente + respaldo de 90 días (backfill de locks viejos):
     // un negocio que ya probó no abre otra sesión invitada, aunque su
     // generación haya sido anterior a este lote.
+    // (LOTE PRUEBA-CHAT) El invitado reusado vive en el alcance del
+    // handler: lo leen el candado, el control de dispositivo y la creación.
+    let reuseGuest = null;
     if (!testMode && !allowlisted) {
       try { guestTrial.backfillUsedFromLocks(db); } catch (e) {}
       // (FIX-ENTRADA-PRUEBA · 5/11) La generación registra el candado de
@@ -26792,7 +26944,20 @@ app.post('/api/guest/start', (req, res) => {
       const consumed = trialLock.findConsumedUsed ? trialLock.findConsumedUsed(db, igK, domK) : null;
       if (consumed) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
       const entered = guestTrial.findGuestByIdentity ? guestTrial.findGuestByIdentity(db, igK, domK) : null;
-      if (entered) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
+      // (LOTE PRUEBA-CHAT · 6/11) Reuso del invitado del chat: si el
+      // visitante ya entró al conserje desde el chat del onboarding, su
+      // fila invitada existe con 0 posteos todavía — se REUSA (la semana
+      // se importa ahí, en la misma fila; el reloj de 3 días sigue siendo
+      // el del chat) y NO se devuelve 409. Solo bloquea si esa fila YA
+      // tiene posteos (la prueba ya se usó de verdad).
+      if (entered) {
+        let nPosts = 0;
+        try { const r0 = db.prepare('SELECT COUNT(*) AS n FROM posts WHERE user_id = ?').get(entered.id); nPosts = (r0 && r0.n) || 0; } catch (e) {}
+        if (nPosts > 0) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
+        let trialEnds = 0;
+        try { const r1 = db.prepare('SELECT trial_ends_at FROM users WHERE id = ?').get(entered.id); trialEnds = (r1 && r1.trial_ends_at) || 0; } catch (e) {}
+        reuseGuest = { userId: entered.id, trialEnds };
+      }
     }
     // Anti-abuso: una prueba por dispositivo/IP (la allowlist y el modo
     // test saltan este control; el anti-spam 5/día por IP sigue aparte).
@@ -26800,7 +26965,9 @@ app.post('/api/guest/start', (req, res) => {
     const ip = String(req.ip || '').slice(0, 64);
     if (!testMode && !allowlisted) {
       const du = guestTrial.deviceUsed(db, device, ip);
-      if (du) return res.status(409).json({ error: lang === 'en' ? 'This device already used its free trial 💛 Log in to your account or pick your plan.' : 'Este dispositivo ya usó su prueba gratis 💛 Entrá a tu cuenta o elegí tu plan.', device_used: true });
+      // (LOTE PRUEBA-CHAT) El dispositivo que usó el chat ES el del
+      // invitado que se reusa: no es "de otro usuario".
+      if (du && !(reuseGuest && String(du.user_id) === String(reuseGuest.userId))) return res.status(409).json({ error: lang === 'en' ? 'This device already used its free trial 💛 Log in to your account or pick your plan.' : 'Este dispositivo ya usó su prueba gratis 💛 Entrá a tu cuenta o elegí tu plan.', device_used: true });
     }
     // Semana: del caché por @, o por dominio si entró solo con web.
     const cacheKey = igK || ('web:' + domK);
@@ -26813,7 +26980,9 @@ app.post('/api/guest/start', (req, res) => {
       return res.status(404).json({ error: lang === 'en' ? 'Your week is not ready yet — go back to /prueba and generate it first.' : 'Tu semana todavía no está lista — volvé a /prueba y generala primero.', no_week: true });
     }
     // Fila invitada (email placeholder: nunca se le manda nada).
-    const g = guestTrial.createGuest(db, {
+    // (LOTE PRUEBA-CHAT) Invitado del chat: se reusa su fila; si no hay,
+    // se crea como siempre.
+    const g = reuseGuest || guestTrial.createGuest(db, {
       referralCode: typeof newReferralCode === 'function' ? newReferralCode() : '',
       lang, ig: igK, domain: domK, device,
     });
@@ -26821,7 +26990,9 @@ app.post('/api/guest/start', (req, res) => {
     // magic link, con límite 3 y sin los extras de stories/reels).
     const nImp = importTrialWeek(g.userId, igK, null, { limit: 3, cacheKey });
     if (!nImp) {
-      try { db.prepare('DELETE FROM users WHERE id = ?').run(g.userId); } catch (e) {}
+      // (LOTE PRUEBA-CHAT) La fila reusada del chat NO se borra: tiene el
+      // hilo del conserje; solo se limpia la fila recién creada.
+      if (!reuseGuest) { try { db.prepare('DELETE FROM users WHERE id = ?').run(g.userId); } catch (e) {} }
       return res.status(500).json({ error: lang === 'en' ? 'We could not open your feed yet — try again in a minute.' : 'No pudimos abrir tu feed todavía — intentá de nuevo en un minuto.' });
     }
     try { applyTrialLang(g.userId, igK); } catch (e) {}
@@ -26915,7 +27086,7 @@ try { guestTrial = require('./guest-trial'); guestTrial.ensureSchema(db); } catc
 // exento como el resto de los gates de la prueba. La promo se marca SOLO
 // para la semana de prueba: una promo de esta semana no es fundamento
 // permanente (promo_semana: true en el objeto guardado).
-const OC_CTA = ['reservar', 'escribirte', 'local', 'comprar'];
+const OC_CTA = ['reservar', 'escribirte', 'local', 'comprar', 'seguirme'];
 const OC_PROMO = ['ninguna', 'porcentaje', '2x1', 'envio'];
 const OC_VOZ = ['cercano', 'profesional', 'divertido', 'elegante'];
 const OC_PRECIOS = ['si', 'ofertas', 'no'];
@@ -26931,6 +27102,14 @@ function onboardingAnswersFrom(fields) {
     voz: clean(f.voz, 20),
     precios: clean(f.precios, 20),
     donde: clean(f.donde, 20),
+    // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: audiencia, diferencial y líneas
+    // rojas. Viajan al fundamento (digest.onboarding) y a la semana.
+    audiencia: clean(f.audiencia, 60),
+    audiencia_mix: clean(f.audiencia_mix, 10),
+    diferencial: clean(f.diferencial, 120),
+    diferencial_mix: clean(f.diferencial_mix, 10),
+    lineas_rojas: clean(f.lineas_rojas, 200),
+    lineas_rojas_mix: clean(f.lineas_rojas_mix, 10),
   };
 }
 function onboardingAnswersOk(a, opts) {
@@ -26940,13 +27119,22 @@ function onboardingAnswersOk(a, opts) {
   // una categoría vecina). 'todo' sin estrella sigue pasando acá: la
   // evidencia real se exige después, con web/catálogo/detectados a mano
   // (trialHasEvidencedProducts, puerta fail-closed antes de generar).
-  if (a.producto_mix === 'uno' || a.producto_mix === 'libre') { if (!a.producto_estrella) return false; }
-  else if (a.producto_mix !== 'todo') return false;
+  if (a.producto_mix === 'uno' || a.producto_mix === 'libre' || a.producto_mix === 'servicio' || a.producto_mix === 'marca') { if (!a.producto_estrella) return false; }
+  else if (a.producto_mix !== 'todo' && a.producto_mix !== 'sin_oferta') return false;
   if (!OC_CTA.includes(a.cta)) return false;
   if (!OC_PROMO.includes(a.promo)) return false;
   if (!OC_VOZ.includes(a.voz)) return false;
   if (!OC_PRECIOS.includes(a.precios)) return false;
   if (!opts.ig && !opts.web && !OC_DONDE.includes(a.donde)) return false;
+  // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: cada una tiene un fallback honesto
+  // ('todos' / 'nose' / 'nada') que pasa sin valor; cualquier otro mix
+  // exige el valor escrito o elegido. Nadie inventa una respuesta.
+  if (a.audiencia_mix === 'uno' || a.audiencia_mix === 'libre') { if (!a.audiencia) return false; }
+  else if (a.audiencia_mix !== 'todos') return false;
+  if (a.diferencial_mix === 'uno' || a.diferencial_mix === 'libre') { if (!a.diferencial) return false; }
+  else if (a.diferencial_mix !== 'nose') return false;
+  if (a.lineas_rojas_mix === 'uno' || a.lineas_rojas_mix === 'libre') { if (!a.lineas_rojas) return false; }
+  else if (a.lineas_rojas_mix !== 'nada') return false;
   return true;
 }
 function onboardingGoalLines(a, lang, detectados) {
@@ -26961,12 +27149,21 @@ function onboardingGoalLines(a, lang, detectados) {
     if (det.length) lines.push((en ? 'Detected products (from their IG/web): ' : 'Productos detectados (de su IG/web): ') + det.join(', '));
   }
   else if (a.producto_mix === 'libre' && a.producto_estrella) lines.push((en ? 'Literal product (written by the owner): ' : 'Producto literal (escrito por el dueño): ') + a.producto_estrella);
+  else if (a.producto_mix === 'servicio' && a.producto_estrella) lines.push((en ? 'Service (what the owner offers): ' : 'Servicio (lo que ofrece el dueño): ') + a.producto_estrella);
+  else if (a.producto_mix === 'marca' && a.producto_estrella) lines.push((en ? 'Personal brand: the product is the person and their content (' : 'Marca personal: el producto es la persona y su contenido (') + a.producto_estrella + ')');
+  else if (a.producto_mix === 'sin_oferta') lines.push(en ? 'NO OFFER YET: the business is just starting; the week builds authority and growth in its niche, without inventing any product, service, price or promo.' : 'SIN OFERTA TODAVÍA: el negocio está empezando; la semana construye autoridad y crecimiento en su rubro, sin inventar ningún producto, servicio, precio ni promo.');
   else if (a.producto_estrella) lines.push((en ? 'Star product (chosen by the owner): ' : 'Producto estrella (elegido por el dueño): ') + a.producto_estrella);
-  if (a.cta) lines.push((en ? 'Post goal: ' : 'Objetivo del posteo: ') + ({ reservar: en ? 'bookings' : 'reservas', escribirte: en ? 'messages' : 'mensajes', local: en ? 'store visits' : 'visitas al local', comprar: en ? 'purchases' : 'compras' }[a.cta] || a.cta));
+  if (a.cta) lines.push((en ? 'Post goal: ' : 'Objetivo del posteo: ') + ({ reservar: en ? 'bookings' : 'reservas', escribirte: en ? 'messages' : 'mensajes', local: en ? 'store visits' : 'visitas al local', comprar: en ? 'purchases' : 'compras', seguirme: en ? 'followers' : 'seguidores' }[a.cta] || a.cta));
   if (a.promo && a.promo !== 'ninguna') lines.push((en ? 'Real promo this week: ' : 'Promo real esta semana: ') + ({ porcentaje: en ? '% off' : '% de descuento', '2x1': '2x1', envio: en ? 'free shipping' : 'envío gratis' }[a.promo] || a.promo));
   if (a.voz) lines.push((en ? 'Voice: ' : 'Voz: ') + a.voz);
   if (a.precios) lines.push((en ? 'Prices in posts: ' : 'Precios en posteos: ') + ({ si: en ? 'yes' : 'sí', ofertas: en ? 'only on offers' : 'solo en ofertas', no: 'no' }[a.precios] || a.precios));
   if (a.donde) lines.push((en ? 'Where to find them: ' : 'Dónde lo encuentran: ') + ({ whatsapp: 'WhatsApp', instagram: 'Instagram', local: en ? 'at the store' : 'en el local', web: en ? 'on their website' : 'en su web' }[a.donde] || a.donde));
+  // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: audiencia, diferencial y líneas rojas.
+  if (a.audiencia_mix === 'todos') lines.push(en ? 'Audience: everyone' : 'Audiencia: todo el mundo');
+  else if (a.audiencia) lines.push((en ? 'Audience: ' : 'Audiencia: ') + a.audiencia + (en ? ' — the content speaks to them, not to everyone' : ' — el contenido le habla a esa persona, no a todos'));
+  if (a.diferencial_mix === 'nose') lines.push(en ? 'Differential: not defined yet — do not invent one' : 'Diferencial: todavía no definido — no inventar uno');
+  else if (a.diferencial) lines.push((en ? 'Differential (hooks come from here): ' : 'Diferencial (de ahí salen los ganchos): ') + a.diferencial);
+  if (a.lineas_rojas) lines.push((en ? 'RED LINES — NEVER POST: ' : 'LÍNEAS ROJAS — NUNCA PUBLICAR: ') + a.lineas_rojas);
   return lines;
 }
 
@@ -26993,7 +27190,13 @@ function trialHasEvidencedProducts(x) {
   const o = x || {};
   const mix = String(o.mix || '');
   const estrella = String(o.estrella || '').trim();
-  if ((mix === 'uno' || mix === 'libre') && estrella) return true;
+  // (LOTE ONBOARDING-Q1) 'servicio'/'marca' con estrella = el dueño
+  // declaró su oferta (evidencia directa, como 'uno'/'libre').
+  // 'sin_oferta' = el dueño declaró que no vende nada todavía: la
+  // semana es de autoridad y crecimiento, no de un producto — la línea
+  // de objetivo lo deja explícito y no se inventa nada.
+  if ((mix === 'uno' || mix === 'libre' || mix === 'servicio' || mix === 'marca') && estrella) return true;
+  if (mix === 'sin_oferta') return true;
   if (mix !== 'todo') return false;
   const list = (a) => (Array.isArray(a) ? a.map((s) => String(s == null ? '' : (s.nombre || s)).trim()).filter(Boolean) : []);
   return list(o.servicios).length > 0 || list(o.catalogItems).length > 0 || list(o.detectados).length > 0;
@@ -27554,6 +27757,23 @@ function trialPrefillAllowed(ip) {
     return { ok: true, remaining: Math.max(0, 30 - (row ? row.count + 1 : 1)) };
   } catch (e) { return { ok: true, remaining: 30 }; }
 }
+// (LOTE ONBOARDING-Q1) Hechos del negocio desde IG (bio + captions):
+// mismo motor determinístico que la web (web-extract), aplicado al
+// texto del perfil. La web es la fuente principal; IG complementa y
+// rellena huecos. Nunca frena el prefill.
+function trialIgFacts(bio, captions, igCategory) {
+  const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const text = [bio || '', ...(Array.isArray(captions) ? captions : [])].filter(Boolean).join(' ');
+  let f = null;
+  try { f = webExtract.extractBusinessFacts('<p>' + esc(text) + '</p>', null) || null; } catch (e) { f = null; }
+  if (!f) f = { has_local: false, address: '', takes_reservations: false, sells_online: false, has_prices: false, has_promo: false, tone: 'neutral', is_creator: false, audience: [], diferencial: [] };
+  const bioLow = String(bio || '').toLowerCase();
+  const catLow = String(igCategory || '').toLowerCase();
+  f.is_creator = /creador|influencer|content creator|creador de contenido|seguidores|tiktoker|youtuber/i.test(bioLow)
+    || /digital creator|public figure|artist|musician\/band|video creator|blogger/i.test(catLow);
+  return f;
+}
+
 app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res) => {
   const ip = demo.clientIp(req);
   if (!trialPrefillAllowed(ip).ok) return res.status(429).json({ ok: false, error: 'Demasiados intentos, probá en un rato' });
@@ -27619,6 +27839,9 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
     rubro_check: hasVotes ? resolved.rubroCheck : { needed: false, options: [], detected: null },
     photo: (prof && prof.pic) || null, // dataURL de la foto de perfil
     productos: ocProductos,
+    // (LOTE ONBOARDING-Q1) Hechos del negocio (bio + captions): la Q2 y
+    // las Q6/Q7 se adaptan a esto. La web manda si también se estudió.
+    facts: trialIgFacts(bio, captions, (prof && prof.category) || ''),
   });
 });
 
@@ -27701,6 +27924,14 @@ function trialWebGoalLines(webData, editedDesc) {
   if (desc) lines.push('Sobre el negocio (de su web): ' + desc);
   if (webData.services && webData.services.length) lines.push('Servicios: ' + webData.services.slice(0, 8).join(', '));
   if (webData.city) lines.push('Ciudad: ' + webData.city);
+  // (LOTE ONBOARDING-Q1) Hechos de la web: la semana y la Q2 se adaptan
+  // a lo que el negocio ES (local, reservas, venta online, tono).
+  const f = webData.facts || {};
+  if (f.has_local) lines.push('Tiene local físico' + (f.address ? ' (' + String(f.address).slice(0, 120) + ')' : ''));
+  if (f.takes_reservations) lines.push('Toma reservas/turnos');
+  if (f.sells_online) lines.push('Vende online');
+  if (f.has_prices) lines.push('La web muestra precios');
+  if (f.has_promo) lines.push('La web muestra una promo vigente');
   return lines;
 }
 app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, res) => {
@@ -27751,6 +27982,11 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
     photos: (data.photos || []).map((p) => p.url),
     photoCount: (data.photos || []).length,
     productos: ocProductos,
+    // (LOTE ONBOARDING-Q1) Hechos del negocio (de la web, fuente
+    // principal): local, reservas, venta online, precios, promos, tono,
+    // audiencia y diferencial. La Q2 y las Q6/Q7 se adaptan a esto.
+    facts: data.facts || null,
+    address: data.address || '',
   });
 });
 
@@ -30555,7 +30791,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v713';
+const BUILD_ID = '20261105-v716';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

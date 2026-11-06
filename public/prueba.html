@@ -927,6 +927,16 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 .oc-btn:disabled{opacity:.6}
 .oc-link{background:none;border:0;color:#2793C8;font-size:14px;font-weight:700;cursor:pointer;padding:8px 0}
 .oc-back{background:none;border:0;color:#7A93A6;font-size:14px;cursor:pointer;padding:10px 0 0}
+.oc-chat-msgs{display:flex;flex-direction:column;gap:10px;margin:14px 0}
+.oc-chat-msgs .msg{max-width:88%}
+.oc-chat-q{font-weight:800;color:#0A1E33}
+.oc-chat-free{display:flex;gap:8px;margin-top:12px}
+.oc-chat-free .oc-field{flex:1;margin:0}
+.oc-chat-free .oc-btn{width:auto;margin:0;padding:12px 18px;font-size:16px}
+.oc-chat-hint{font-size:13px;color:#5A7488;margin-top:6px}
+.oc-chat-pause{margin-top:12px;padding:12px 14px;background:#FFF8E1;border:2px solid #FEC14D;border-radius:14px;text-align:center}
+.oc-chat-pause p{margin:0 0 10px;font-size:15px;font-weight:700;color:#0A1E33}
+.oc-chat-pause .oc-btn{margin-top:0}
 .oc-err{display:none;margin-top:12px;padding:12px 14px;background:#FDF0F0;border:1px solid #F3C6C6;border-radius:12px;color:#8B2E2E;font-size:15px}
 .oc-burst{position:absolute;width:10px;height:10px;background:#FEC14D;transform:rotate(45deg);pointer-events:none;animation:oc-burst .6s ease-out forwards;box-shadow:0 0 8px rgba(254,193,77,.9)}
 @keyframes oc-burst{from{opacity:1;transform:rotate(45deg) translate(0,0) scale(1)}to{opacity:0;transform:rotate(45deg) translate(var(--bx,10px),var(--by,-14px)) scale(.3)}}
@@ -4259,7 +4269,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
 </script>
 <script>
 /* Onboarding un clic — flujo ES (solo /prueba).
-   Un solo campo (email o @) → Posty estudia IG/web → preguntas de UN
+   Entrada IG + web (IG obligatorio, web con escape «No tengo web»;
+   email como alternativa) → Posty estudia IG/web → preguntas de UN
    TOQUE, una por pantalla, con tallo que crece y magia dorada al tocar.
    OBLIGATORIO, SIN OMITIR: no hay botón de saltear ni atajo a la semana.
    La semana solo aparece después de responder lo que corresponde; el
@@ -4271,15 +4282,25 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
 (function () {
   'use strict';
   var T = {
-    entryChat: 'dale, pasame tu email o tu @ y te conozco en un minuto. sin formularios: tocás y listo.',
+    entryChat: 'pasame tu Instagram y tu web y te conozco en un minuto. sin formularios: tocás y listo.',
     entryPh: 'tu email o tu @',
+    entryIgPh: 'tu @ de Instagram',
+    entryWebPh: 'https://tuweb.com',
     entryBtn: 'empezar',
     toWeb: '¿preferís entrar con tu web?',
     toEmail: '¿preferís entrar con tu email?',
+    toBoth: '¿preferís entrar con tu Instagram y tu web?',
+    noWeb: 'No tengo web',
+    hasWeb: 'Sí tengo web',
+    noWebNote: 'sin web, estudio tu Instagram.',
+    errIgEmpty: 'pasame tu @ para empezar.',
+    errWebEmpty: 'pasame tu web o tocá «No tengo web».',
+    errWebBad: 'esa web no parece un link. revisala o tocá «No tengo web».',
     photoLink: 'agregar una foto (opcional)',
     photoBig: 'esa foto pesa más de 5 mb, probá con otra',
     studyIg: 'mirando tu instagram…',
     studyWeb: 'leyendo tu web…',
+    studyBoth: 'leyendo tu web y tu Instagram…',
     errIg: 'no encontré ese @. revisalo o entrá con tu email.',
     errWeb: 'no pude leer esa web. revisá el link o entrá con tu email.',
     errEmail: 'ese email no parece válido. revisalo y probá de nuevo.',
@@ -4292,6 +4313,19 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     chatQ3: '¿hay algo lindo esta semana para contar?',
     chatQ4: '¿cómo les hablás vos a tus clientes?',
     chatQ5: '¿y los precios? ¿los mostramos en los posteos?',
+    chatQ6: '¿a quién le hablás cuando posteás?',
+    chatQ7: '¿qué tiene tu negocio que no tenga otro?',
+    chatQ8: 'contame qué no querés ver jamás en tus posteos.',
+    // (LOTE PRUEBA-CHAT) Textos del chat de onboarding.
+    chatJoin: 'hola! soy Posty 👋 ya leí tu web y tu Instagram. te pregunto solo lo que me falta para armar tus posteos.',
+    chatJoinEmail: 'hola! soy Posty 👋 te pregunto solo lo que necesito para armar tus posteos.',
+    chatFreePh: 'escribime acá…',
+    chatFreeBamboo: 'mensaje para Posty',
+    chatWaiting: 'Posty te está respondiendo…',
+    chatFollow: 'seguir con las preguntas',
+    chatBlocked: 'esta cuenta ya usó su prueba. si querés otra semana, la seguimos desde tu feed.',
+    chatErr: 'no pude enviarlo, probá de nuevo.',
+    chatEntry: 'volver al inicio',
     chatName: '¿cómo se llama tu negocio?',
     chatIg2: 'pasame tu @ para mirarlo.',
     chatWeb2: 'pasame el link de tu web para leerla.',
@@ -4302,6 +4336,24 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     q3: '¿Tenés alguna promo esta semana?',
     q4: '¿Cómo le hablás a tus clientes?',
     q5: '¿Mostramos los precios en los posteos?',
+    q6: '¿Quién es tu cliente?',
+    q7: '¿Qué te hace distinto?',
+    q8: '¿Qué no publico jamás?',
+    q6Libre: '¿Quién es tu cliente?',
+    q6LibrePh: 'ej: mujeres de 20 a 40, familias',
+    q6LibreErr: 'escribí quién es tu cliente para armar tu semana.',
+    q6Todos: 'Todo el mundo',
+    q6TodosSub: 'le hablo a cualquiera',
+    q7Libre: '¿Qué te hace distinto?',
+    q7LibrePh: 'ej: todo hecho a mano, atención personalizada',
+    q7LibreErr: 'escribí qué te hace distinto para armar tu semana.',
+    q7Nose: 'Todavía no lo sé',
+    q7NoseSub: 'lo descubrimos juntos',
+    q8Libre: '¿Qué no publico jamás?',
+    q8LibrePh: 'ej: fotos de clientes, precios',
+    q8LibreErr: 'escribí qué no querés que publique jamás.',
+    q8Nada: 'Nada, todo vale',
+    q8NadaSub: 'no tengo líneas rojas',
     qName: '¿Cómo se llama tu negocio?',
     qIg2: '¿Cuál es tu @?',
     qWeb2: '¿Cuál es tu web?',
@@ -4309,6 +4361,16 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     todoSub: 'un poco de todo, sin un único fuerte',
     libre: 'Escribilo con tus palabras',
     libreSub: 'decímelo vos, así sale literal',
+    servicio: 'Vendo un servicio',
+    servicioSub: 'turnos, clases, asesorías, lo que hago',
+    marca: 'Mi marca soy yo',
+    marcaSub: 'mi contenido y mi trabajo',
+    sinOferta: 'Todavía no vendo nada',
+    sinOfertaSub: 'estoy empezando, quiero crecer',
+    chatQ1Servicio: 'contame qué servicio ofrecés.',
+    q1Servicio: '¿Qué servicio ofrecés?',
+    servicioPh: 'ej: cortes de pelo, clases de yoga',
+    servicioErr: 'escribí tu servicio para armar tu semana.',
     chatQ1Libre: 'dale, escribí qué vendés con tus palabras.',
     q1Libre: '¿Qué vendés?',
     librePh: 'escribí qué vendés',
@@ -4325,14 +4387,262 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     nextBtn: 'seguir',
     entryBtnBusy: 'empezando…'
   };
-  var Q2 = [{ v: 'reservar', l: 'Reservar' }, { v: 'escribirte', l: 'Escribirte' }, { v: 'local', l: 'Ir al local' }, { v: 'comprar', l: 'Comprar' }];
+  // (LOTE ONBOARDING-Q1) Q2 adaptativa: cada opción aparece solo si
+  // aplica a este negocio (según lo extraído de web/IG). 'need' nombra
+  // el hecho que la habilita; sin estudio (email) no se esconde nada.
+  var Q2_ALL = [
+    { v: 'reservar', l: 'Reservar', need: 'reservas' },
+    { v: 'escribirte', l: 'Escribirte', need: null },
+    { v: 'local', l: 'Ir al local', need: 'local' },
+    { v: 'comprar', l: 'Comprar', need: 'online' },
+    { v: 'seguirme', l: 'Seguirme', need: 'creador' }
+  ];
+  // (LOTE PRUEBA-CHAT) Huecos determinísticos, portados verbatim de
+  // preguntas-dinamicas.js (la fuente de verdad; el test compara ambos).
+  // Sin IA: las 8 fijas se preguntan en el chat, solo lo que no se supo.
+  // Los 12 targets posibles. `field` = el campo del fundamento que la
+  // respuesta alimenta (q1..q8, como las 8 fijas) o un hecho (facts.*).
+  // `kind` = 'answer' (pregunta del cuestionario) o 'fact' (pregunta que
+  // resuelve un hecho: local / reservas / venta online).
+  const DYN_TARGETS = [
+    { target: 'local', field: 'facts.has_local', order: 0, kind: 'fact' },
+    { target: 'reservas', field: 'facts.takes_reservations', order: 1, kind: 'fact' },
+    { target: 'venta_online', field: 'facts.sells_online', order: 2, kind: 'fact' },
+    { target: 'producto', field: 'q1', order: 3, kind: 'answer' },
+    { target: 'estrella', field: 'q1', order: 3, kind: 'answer' },
+    { target: 'objetivo', field: 'q2', order: 4, kind: 'answer' },
+    { target: 'promo', field: 'q3', order: 5, kind: 'answer' },
+    { target: 'tono', field: 'q4', order: 6, kind: 'answer' },
+    { target: 'precios', field: 'q5', order: 7, kind: 'answer' },
+    { target: 'audiencia', field: 'q6', order: 8, kind: 'answer' },
+    { target: 'diferencial', field: 'q7', order: 9, kind: 'answer' },
+    { target: 'lineas_rojas', field: 'q8', order: 10, kind: 'answer' },
+  ];
+  const DYN_TARGET_SET = new Set(DYN_TARGETS.map((t) => t.target));
+  const MAX_DYN_QUESTIONS = 8;
+
+  // Rubros donde el hecho importa y vale preguntarlo si no se ve.
+  // (best-effort: si el rubro no se reconoce, el hecho no se pregunta y
+  // el objetivo lo cubre con sus opciones, como hoy.)
+  const PRESENCIAL = ['cafeter', 'gastronom', 'restaurant', 'bar', 'peluquer', 'barber', 'estetic', 'salon', 'spa', 'gimnasi', 'tienda', 'panader', 'pasteler', 'helader', 'farmacia', 'veterinar', 'hotel', 'hospedaje', 'caf'];
+  const SERVICIO = ['peluquer', 'barber', 'estetic', 'salon', 'spa', 'gimnasi', 'salud', 'clinic', 'odontolog', 'abogad', 'contador', 'consultor', 'construcc', 'contratista', 'remodel', 'plomer', 'electric', 'limpieza', 'mudanza', 'fotograf', 'disen', 'marketing', 'educacion', 'clase', 'curso', 'coach', 'terapia', 'servicio'];
+  const PRODUCTO = ['tienda', 'e-commerce', 'ecommerce', 'ropa', 'moda', 'calzado', 'mueble', 'decoracion', 'joyer', 'cosmetic', 'alimento', 'bebida', 'electronic', 'librer', 'jugueter', 'mascota', 'arte', 'artesani', 'panader', 'pasteler', 'cafeter'];
+
+  function normCat(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+  function catHas(cat, list) {
+    const c = normCat(cat);
+    if (!c) return false;
+    return list.some((k) => c.includes(k));
+  }
+
+  // Listas genéricas por target, en los dos idiomas (el dueño elige, nunca
+  // se inventa). Las extraídas (audiencia/diferencial/productos) van primero.
+  const GEN = {
+    es: {
+      audiencia: ['Mujeres', 'Hombres', 'Familias', 'Jóvenes', 'Empresas'],
+      diferencial: ['Hecho a mano', 'Atención personalizada', 'Calidad antes que precio', 'Años de experiencia', 'Lo local, de barrio'],
+      lineas_rojas: ['Fotos de clientes sin permiso', 'Temas sensibles / política', 'Hablar mal de la competencia', 'Mi vida personal', 'Memes / humor'],
+      si_no: ['Sí', 'No'],
+    },
+    en: {
+      audiencia: ['Women', 'Men', 'Families', 'Young people', 'Businesses'],
+      diferencial: ['Handmade', 'Personal attention', 'Quality over price', 'Years of experience', 'Local, from the neighborhood'],
+      lineas_rojas: ['Photos of clients without permission', 'Sensitive topics / politics', 'Talking badly about competitors', 'My personal life', 'Memes / humor'],
+      si_no: ['Yes', 'No'],
+    },
+  };
+
+  // Opciones canónicas (los valores que el fundamento entiende) por target.
+  // El AI puede reescribir el rótulo (l), nunca el valor (v).
+  const CANON = {
+    objetivo: [
+      { v: 'reservar', l: 'Reservar', need: 'reservas' },
+      { v: 'escribirte', l: 'Escribirte', need: null },
+      { v: 'local', l: 'Ir al local', need: 'local' },
+      { v: 'comprar', l: 'Comprar', need: 'online' },
+      { v: 'seguirme', l: 'Seguirme', need: 'creador' },
+    ],
+    promo: [
+      { v: 'ninguna', l: 'Sin promo' },
+      { v: 'porcentaje', l: '% de descuento' },
+      { v: '2x1', l: '2x1' },
+      { v: 'envio', l: 'Envío gratis' },
+    ],
+    tono: [
+      { v: 'cercano', l: 'Cercano' },
+      { v: 'profesional', l: 'Profesional' },
+      { v: 'divertido', l: 'Divertido' },
+      { v: 'elegante', l: 'Elegante' },
+    ],
+    precios: [
+      { v: 'si', l: 'Sí' },
+      { v: 'ofertas', l: 'Solo en ofertas' },
+      { v: 'no', l: 'No' },
+    ],
+  };
+
+  // Huecos: qué necesita preguntar el AI para completar el fundamento.
+  // Determinístico (sin AI): solo decide QUÉ falta; el AI decide CÓMO
+  // preguntarlo. Devuelve { needed: [{target, why}], known: {campo:
+  // {value, mix}} } — `known` son las respuestas que el estudio ya resolvió
+  // con seguridad y que el cliente NO tiene que contestar.
+  function preguntasDinamicasGaps(input) {
+    const f = (input && input.facts) || {};
+    const productos = ((input && input.productos) || [])
+      .map((p) => String((p && p.nombre) || p || '').trim())
+      .filter(Boolean).slice(0, 4);
+    const cat = (input && input.category) || '';
+    const needed = [];
+    const known = {};
+    const push = (target, why) => needed.push({ target, why });
+    // Hechos (solo si el rubro sugiere que el hecho importa y no se ve).
+    if (!f.has_local && catHas(cat, PRESENCIAL)) push('local', 'no se ve local físico en web/IG');
+    if (!f.takes_reservations && catHas(cat, SERVICIO)) push('reservas', 'no se ven turnos/reservas');
+    if (!f.sells_online && catHas(cat, PRODUCTO)) push('venta_online', 'no se ve tienda online');
+    // Producto: con productos detectados se elige la estrella; sin ellos,
+    // se pregunta qué vende (con las opciones de servicio/marca/sin oferta).
+    if (productos.length) push('estrella', 'elegir la estrella entre los productos detectados');
+    else push('producto', 'sin productos detectados');
+    // Objetivo: siempre (es una decisión del dueño, no un hecho).
+    push('objetivo', 'el objetivo lo elige el dueño');
+    // Promo: si no hay promo en ningún lado, la respuesta es ninguna.
+    if (f.has_promo) push('promo', 'hay promo: confirmar si sigue esta semana');
+    else known.q3 = { value: 'ninguna' };
+    // Tono: si se detectó voseo/usted, no se pregunta (manda el hecho).
+    if (f.tone === 'vos') known.q4 = { value: 'cercano' };
+    else if (f.tone === 'usted') known.q4 = { value: 'profesional' };
+    else push('tono', 'tono no detectado');
+    // Precios: si publican precios, la respuesta es sí.
+    if (f.has_prices) known.q5 = { value: 'si' };
+    else push('precios', 'no se ven precios');
+    // Audiencia: si se detectó, no se pregunta.
+    if (Array.isArray(f.audience) && f.audience.length) known.q6 = { value: String(f.audience[0]).slice(0, 60), mix: 'uno' };
+    else push('audiencia', 'sin audiencia detectada');
+    // Diferencial: si se detectó, no se pregunta.
+    if (Array.isArray(f.diferencial) && f.diferencial.length) known.q7 = { value: String(f.diferencial[0]).slice(0, 120), mix: 'uno' };
+    else push('diferencial', 'sin diferencial detectado');
+    // Líneas rojas: siempre (las pone el dueño, nunca se saben).
+    push('lineas_rojas', 'las líneas rojas las pone el dueño');
+    // Cap a 8: los hechos sobran primero (el objetivo ya los cubre con
+    // sus opciones, como hoy).
+    let list = needed.slice();
+    while (list.length > MAX_DYN_QUESTIONS) {
+      const i = list.findIndex((n) => n.target === 'local' || n.target === 'reservas' || n.target === 'venta_online');
+      if (i < 0) break;
+      list.splice(i, 1);
+    }
+    return { needed: list, known, productos };
+  }
+
+  // Opciones con respaldo para un target: solo lo leído (hechos/productos)
+  // + las listas genéricas/canónicas. El AI elige entre estas; nunca
+  // inventa una opción.
+  function groundedOptionsFor(target, input, gaps) {
+    const lang = (input && input.lang) === 'en' ? 'en' : 'es';
+    const f = (input && input.facts) || {};
+    const gen = GEN[lang];
+    const productos = (gaps && gaps.productos) || [];
+    switch (target) {
+      case 'producto':
+      case 'estrella':
+        return productos.map((p) => ({ v: p, l: p }));
+      case 'objetivo': {
+        // Mismo filtro que la Q2 adaptativa: cada opción solo si aplica.
+        const known = !!(f && f._known);
+        return CANON.objetivo.filter((o) => {
+          if (!o.need) return true;
+          if (o.need === 'local') return known ? !!f.has_local : true;
+          if (o.need === 'reservas') return known ? !!f.takes_reservations : true;
+          if (o.need === 'online') return known ? !!f.sells_online : true;
+          if (o.need === 'creador') return !!f.is_creator;
+          return true;
+        }).map((o) => ({ v: o.v, l: o.l, need: o.need }));
+      }
+      case 'promo': return CANON.promo.map((o) => ({ v: o.v, l: o.l }));
+      case 'tono': return CANON.tono.map((o) => ({ v: o.v, l: o.l }));
+      case 'precios': return CANON.precios.map((o) => ({ v: o.v, l: o.l }));
+      case 'audiencia': {
+        const out = [];
+        const seen = new Set();
+        ((f.audience || []).slice(0, 4)).forEach((a) => { const s = String(a || '').trim(); if (s && !seen.has(s.toLowerCase())) { seen.add(s.toLowerCase()); out.push({ v: s, l: s }); } });
+        gen.audiencia.forEach((a) => { if (!seen.has(a.toLowerCase())) { seen.add(a.toLowerCase()); out.push({ v: a, l: a }); } });
+        return out;
+      }
+      case 'diferencial': {
+        const out = [];
+        const seen = new Set();
+        ((f.diferencial || []).slice(0, 4)).forEach((a) => { const s = String(a || '').trim(); if (s && !seen.has(s.toLowerCase())) { seen.add(s.toLowerCase()); out.push({ v: s, l: s }); } });
+        gen.diferencial.forEach((a) => { if (!seen.has(a.toLowerCase())) { seen.add(a.toLowerCase()); out.push({ v: a, l: a }); } });
+        return out;
+      }
+      case 'lineas_rojas': return gen.lineas_rojas.map((a) => ({ v: a, l: a }));
+      case 'local':
+      case 'reservas':
+      case 'venta_online': return [{ v: 'si', l: gen.si_no[0] }, { v: 'no', l: gen.si_no[1] }];
+      default: return [];
+    }
+  }
+
+  // Prompt para gpt-4o-mini: los hechos + los huecos + las opciones con
+  // respaldo. El modelo solo redacta y elige; la validación después
+  // descarta todo lo que no tenga respaldo.
+  // (LOTE PRUEBA-CHAT) Del target del hueco a la llave de pregunta fija.
+  var DYN_TARGET_TO_KEY = { estrella: 'q1', producto: 'q1', objetivo: 'q2', promo: 'q3', tono: 'q4', precios: 'q5', audiencia: 'q6', diferencial: 'q7', lineas_rojas: 'q8' };
+  function chatGaps() {
+    var input = { facts: S.facts || {}, productos: (S.products || []).map(function (p) { return p.nombre; }), category: S.cat || '', lang: 'es' };
+    try { return preguntasDinamicasGaps(input); }
+    catch (e) { return { needed: DYN_TARGETS.filter(function (t) { return t.kind === 'answer'; }), known: {} }; }
+  }
+  function q2Options() {
+    var f = S.facts || {};
+    var known = !!f._known;
+    var q1mix = (S.ans && S.ans.q1mix) || '';
+    return Q2_ALL.filter(function (o) {
+      if (!o.need) return true;
+      if (o.need === 'local') return known ? !!f.has_local : true;
+      if (o.need === 'reservas') return known ? !!f.takes_reservations : true;
+      if (o.need === 'online') return known ? !!f.sells_online : true;
+      if (o.need === 'creador') return !!f.is_creator || q1mix === 'marca' || q1mix === 'sin_oferta';
+      return true;
+    }).map(function (o) { return { v: o.v, l: o.l }; });
+  }
   var Q3 = [{ v: 'ninguna', l: 'Sin promo' }, { v: 'porcentaje', l: '% de descuento' }, { v: '2x1', l: '2x1' }, { v: 'envio', l: 'Envío gratis' }];
   var Q4 = [{ v: 'cercano', l: 'Cercano' }, { v: 'profesional', l: 'Profesional' }, { v: 'divertido', l: 'Divertido' }, { v: 'elegante', l: 'Elegante' }];
   var Q5 = [{ v: 'si', l: 'Sí' }, { v: 'ofertas', l: 'Solo en ofertas' }, { v: 'no', l: 'No' }];
   var DONDE = [{ v: 'whatsapp', l: 'WhatsApp' }, { v: 'instagram', l: 'Instagram' }, { v: 'local', l: 'En el local' }, { v: 'web', l: 'En mi web' }];
+  // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: opciones genéricas (el dueño elige,
+  // nunca se inventa) + las extraídas de web/IG, que van primero.
+  var Q6_GEN = [{ v: 'Mujeres', l: 'Mujeres' }, { v: 'Hombres', l: 'Hombres' }, { v: 'Familias', l: 'Familias' }, { v: 'Jóvenes', l: 'Jóvenes' }, { v: 'Empresas', l: 'Empresas' }];
+  var Q7_GEN = [{ v: 'Hecho a mano', l: 'Hecho a mano' }, { v: 'Atención personalizada', l: 'Atención personalizada' }, { v: 'Calidad antes que precio', l: 'Calidad antes que precio' }, { v: 'Años de experiencia', l: 'Años de experiencia' }, { v: 'Lo local, de barrio', l: 'Lo local, de barrio' }];
+  var Q8_OPTS = [{ v: 'Fotos de clientes sin permiso', l: 'Fotos de clientes sin permiso' }, { v: 'Temas sensibles / política', l: 'Temas sensibles / política' }, { v: 'Hablar mal de la competencia', l: 'Hablar mal de la competencia' }, { v: 'Mi vida personal', l: 'Mi vida personal' }, { v: 'Memes / humor', l: 'Memes / humor' }];
+  // (LOTE ONBOARDING-Q1) Fusión de hechos: la web es la fuente principal
+  // e IG rellena huecos. La segunda fuente nunca borra a la primera.
+  function mergeFacts(webFacts, igFacts) {
+    var w = webFacts || null, g = igFacts || null;
+    var f = { has_local: false, address: '', takes_reservations: false, sells_online: false, has_prices: false, has_promo: false, tone: 'neutral', is_creator: false, audience: [], diferencial: [], _known: false };
+    if (!w && !g) return f;
+    f._known = true;
+    f.has_local = !!(w && w.has_local) || !!(g && g.has_local);
+    f.address = (w && w.address) || (g && g.address) || '';
+    f.takes_reservations = !!(w && w.takes_reservations) || !!(g && g.takes_reservations);
+    f.sells_online = !!(w && w.sells_online) || !!(g && g.sells_online);
+    f.has_prices = !!(w && w.has_prices) || !!(g && g.has_prices);
+    f.has_promo = !!(w && w.has_promo) || !!(g && g.has_promo);
+    f.tone = (w && w.tone && w.tone !== 'neutral') ? w.tone : ((g && g.tone) || 'neutral');
+    f.is_creator = !!(w && w.is_creator) || !!(g && g.is_creator);
+    var aud = [], seen = {};
+    ((w && w.audience) || []).concat((g && g.audience) || []).forEach(function (a) { var k = String(a || '').toLowerCase(); if (a && !seen[k]) { seen[k] = 1; aud.push(a); } });
+    f.audience = aud.slice(0, 4);
+    var dif = [], seenD = {};
+    ((w && w.diferencial) || []).concat((g && g.diferencial) || []).forEach(function (a) { var k = String(a || '').toLowerCase(); if (a && !seenD[k]) { seenD[k] = 1; dif.push(a); } });
+    f.diferencial = dif.slice(0, 4);
+    return f;
+  }
 
   // Estado de la sesión. plan = preguntas en orden; ans = respuestas.
-  var S = { source: null, email: null, ig: null, web: null, biz: null, cat: null, products: [], rubroOptions: null, plan: [], qi: 0, ans: {}, mode: 'auto', busy: false };
+  var S = { source: null, email: null, ig: null, web: null, biz: null, cat: null, products: [], rubroOptions: null, plan: [], qi: 0, ans: {}, mode: 'both', busy: false, noWeb: false, facts: null, webFacts: null, igFacts: null };
   var reduced = false;
   try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
 
@@ -4434,10 +4744,13 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (key === 'rubro') return screenRubro;
     if (key === 'donde') return screenDonde;
     if (key === 'q1') return screenQ1;
-    if (key === 'q2') return function () { renderScreen(T.chatQ2, T.q2, Q2, { onPick: function (v) { S.ans.q2 = v; advance(); }, onBack: goBack }); };
+    if (key === 'q2') return function () { renderScreen(T.chatQ2, T.q2, q2Options(), { onPick: function (v) { S.ans.q2 = v; advance(); }, onBack: goBack }); };
     if (key === 'q3') return function () { renderScreen(T.chatQ3, T.q3, Q3, { onPick: function (v) { S.ans.q3 = v; advance(); }, onBack: goBack }); };
     if (key === 'q4') return function () { renderScreen(T.chatQ4, T.q4, Q4, { onPick: function (v) { S.ans.q4 = v; advance(); }, onBack: goBack }); };
     if (key === 'q5') return function () { renderScreen(T.chatQ5, T.q5, Q5, { onPick: function (v) { S.ans.q5 = v; advance(); }, onBack: goBack }); };
+    if (key === 'q6') return screenQ6;
+    if (key === 'q7') return screenQ7;
+    if (key === 'q8') return screenQ8;
     return null;
   }
 
@@ -4504,15 +4817,101 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   // (el mismo que el espejo usa como estrella por defecto). Va primera
   // por construccion (orden del estudio) y se marca con anillo dorado + ✦.
   // Tocar la foto responde igual que tocar el texto (data-v).
+  // (LOTE ONBOARDING-Q1) Q1 generalizada: además de los productos, el
+  // dueño puede decir que vende un servicio, que su marca es él, o que
+  // todavía no vende nada. Cada opción alimenta el fundamento sin
+  // inventar un producto.
   function screenQ1(chat) {
     var opts = (S.products || []).map(function (p, i) { return { v: p.nombre, l: p.nombre, foto: p.foto || null, estrella: i === 0 }; });
+    opts.push({ v: '__servicio__', l: T.servicio, sub: T.servicioSub });
+    opts.push({ v: '__marca__', l: T.marca, sub: T.marcaSub });
+    opts.push({ v: '__sin_oferta__', l: T.sinOferta, sub: T.sinOfertaSub });
     opts.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
     opts.push({ v: '__todo__', l: T.todo, sub: T.todoSub });
     renderScreen(chat || ((S.products || []).length ? T.chatQ1 : T.chatQ1Empty), T.q1, opts, {
       onPick: function (v) {
         if (v === '__libre__') { screenQ1Libre(chat); return; }
+        if (v === '__servicio__') {
+          screenFreeText(T.chatQ1Servicio, T.q1Servicio, T.servicioPh, T.servicioErr, 60, function (t) { S.ans.q1 = t; S.ans.q1mix = 'servicio'; advance(); }, function () { screenQ1(); });
+          return;
+        }
+        if (v === '__marca__') { S.ans.q1 = (S.biz || '').trim() || (S.ig ? '@' + S.ig : 'tu marca'); S.ans.q1mix = 'marca'; advance(); return; }
+        if (v === '__sin_oferta__') { S.ans.q1 = ''; S.ans.q1mix = 'sin_oferta'; advance(); return; }
         if (v === '__todo__') { S.ans.q1 = ''; S.ans.q1mix = 'todo'; }
         else { S.ans.q1 = v; S.ans.q1mix = 'uno'; }
+        advance();
+      },
+      onBack: goBack
+    });
+  }
+
+  // (LOTE ONBOARDING-Q1) Texto libre genérico para Q1-servicio, Q6, Q7
+  // y Q8: el dueño escribe con sus palabras y eso viaja literal
+  // (mix 'libre'). screenQ1Libre NO se toca (camino probado).
+  function screenFreeText(chat, title, ph, errMsg, max, onDone, onBack) {
+    renderFieldScreen(chat, title, ph, T.nextBtn, function (val) {
+      var t = (val || '').trim();
+      if (!t) { screenErr(errMsg); return; }
+      onDone(t.slice(0, max || 200));
+    }, onBack);
+  }
+
+  // (LOTE ONBOARDING-Q1) Q6: ¿quién es tu cliente? Opciones extraídas
+  // de web/IG primero, genéricas después, libre y «todo el mundo».
+  function screenQ6() {
+    var opts = ((S.facts && S.facts.audience) || []).map(function (a) { return { v: a, l: a }; });
+    Q6_GEN.forEach(function (o) { if (!opts.some(function (x) { return String(x.v).toLowerCase() === String(o.v).toLowerCase(); })) opts.push(o); });
+    opts.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+    opts.push({ v: '__todos__', l: T.q6Todos, sub: T.q6TodosSub });
+    renderScreen(T.chatQ6, T.q6, opts, {
+      onPick: function (v) {
+        if (v === '__libre__') {
+          screenFreeText(T.chatQ6, T.q6Libre, T.q6LibrePh, T.q6LibreErr, 60, function (t) { S.ans.q6 = t; S.ans.q6mix = 'libre'; advance(); }, screenQ6);
+          return;
+        }
+        if (v === '__todos__') { S.ans.q6 = ''; S.ans.q6mix = 'todos'; }
+        else { S.ans.q6 = v; S.ans.q6mix = 'uno'; }
+        advance();
+      },
+      onBack: goBack
+    });
+  }
+
+  // (LOTE ONBOARDING-Q1) Q7: ¿qué te hace distinto? Opciones extraídas
+  // de web/IG primero, genéricas después, libre y «todavía no lo sé».
+  function screenQ7() {
+    var opts = ((S.facts && S.facts.diferencial) || []).map(function (a) { return { v: a, l: a }; });
+    Q7_GEN.forEach(function (o) { if (!opts.some(function (x) { return String(x.v).toLowerCase() === String(o.v).toLowerCase(); })) opts.push(o); });
+    opts.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+    opts.push({ v: '__nose__', l: T.q7Nose, sub: T.q7NoseSub });
+    renderScreen(T.chatQ7, T.q7, opts, {
+      onPick: function (v) {
+        if (v === '__libre__') {
+          screenFreeText(T.chatQ7, T.q7Libre, T.q7LibrePh, T.q7LibreErr, 120, function (t) { S.ans.q7 = t; S.ans.q7mix = 'libre'; advance(); }, screenQ7);
+          return;
+        }
+        if (v === '__nose__') { S.ans.q7 = ''; S.ans.q7mix = 'nose'; }
+        else { S.ans.q7 = v; S.ans.q7mix = 'uno'; }
+        advance();
+      },
+      onBack: goBack
+    });
+  }
+
+  // (LOTE ONBOARDING-Q1) Q8: ¿qué no publico jamás? Líneas rojas comunes
+  // en un toque, libre (puede listar varias con coma) y «nada, todo vale».
+  function screenQ8() {
+    var opts = Q8_OPTS.slice();
+    opts.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+    opts.push({ v: '__nada__', l: T.q8Nada, sub: T.q8NadaSub });
+    renderScreen(T.chatQ8, T.q8, opts, {
+      onPick: function (v) {
+        if (v === '__libre__') {
+          screenFreeText(T.chatQ8, T.q8Libre, T.q8LibrePh, T.q8LibreErr, 200, function (t) { S.ans.q8 = t; S.ans.q8mix = 'libre'; advance(); }, screenQ8);
+          return;
+        }
+        if (v === '__nada__') { S.ans.q8 = ''; S.ans.q8mix = 'nada'; }
+        else { S.ans.q8 = v; S.ans.q8mix = 'uno'; }
         advance();
       },
       onBack: goBack
@@ -4533,16 +4932,23 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   // la generación con falta_producto, se vuelve a la pregunta 1 (sin
   // borrar el resto de respuestas) para pedir el dato con un toque.
   function reaskQ1() {
+    // (LOTE PRUEBA-CHAT) Reabre el chat solo en q1 (el resto de respuestas
+    // se conserva y se salta al avanzar).
     S.ans.q1 = undefined; S.ans.q1mix = undefined;
     S.qi = S.plan.indexOf('q1');
     if (S.qi < 0) { S.qi = 0; }
+    S.chatOverride = { q1: T.chatQ1Need };
+    S.chatRebuild = true;
     show('v-ocq');
-    screenQ1(T.chatQ1Need);
+    chatOpen();
   }
 
   function currentScreen() {
-    var fn = screenFor(S.plan[S.qi]);
-    if (fn) fn();
+    // (LOTE PRUEBA-CHAT) Las pantallas de preguntas (screenFor) quedan
+    // reemplazadas por el chat: misma planilla, otra piel. screenFor y las
+    // screenQ* quedan en el archivo sin uso por el flujo de preguntas
+    // (el desvío donde/foto sigue usando renderFieldScreen).
+    chatOpen();
   }
 
   function advance() {
@@ -4560,15 +4966,469 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
 
   function goEntry() {
     show('v-onboarding');
-    try { var f = document.getElementById('oc_field'); if (f) f.focus(); } catch (e) {}
+    try {
+      var f = S.mode === 'email' ? document.getElementById('oc_field') : document.getElementById('oc_ig');
+      if (f) f.focus();
+    } catch (e) {}
     window.scrollTo({ top: 0 });
+  }
+
+  // ---- LOTE PRUEBA-CHAT: el onboarding por chat con bamboo ----
+  // Posty pregunta UNA por vez, con un toque, solo lo que no se supo con
+  // seguridad. Las respuestas guionadas NO se insertan como mensajes del
+  // visitante en el conserje (no alertan al cron): solo las preguntas
+  // viajan como hilo (assistant) y cada respuesta queda como evento del
+  // caso. El texto libre sí: mensaje user + desvío + ACK instantáneo, y
+  // el flujo se pausa hasta que bamboo responde o el visitante toca
+  // «seguir con las preguntas». Las preguntas guionadas SON la respuesta
+  // en segundos: no hay espera de IA por turno. Bamboo monitorea el hilo
+  // en la consola del conserje y responde en vivo al texto libre.
+  var CHAT_POLL_MS = 3000;
+  var CHAT_ACK_TEXT = 'dale, ya lo vi 😄 te lo reviso y te escribo en un rato.';
+  function chatDeviceId() {
+    try {
+      var d = localStorage.getItem('pz_device_id') || '';
+      if (!d) { d = 'dvc_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); localStorage.setItem('pz_device_id', d); }
+      return d;
+    } catch (e) { return ''; }
+  }
+  function chatPost(kind, payload) {
+    var ig = S.ig || '', web = S.web || '';
+    if (!ig && !web) return Promise.resolve({ ok: false, error: 'sin_identidad' });
+    var body = { kind: kind, ig: ig, web: web, device: chatDeviceId(), lang: 'es' };
+    if (payload) { for (var k in payload) body[k] = payload[k]; }
+    return fetch('/api/trial/chat-onboarding' + TEST_KEY_QS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'respuesta_invalida', status: r.status }; }); })
+      .then(function (d) {
+        if (d && d.error === 'trial_used') chatBlocked();
+        return d || { ok: false };
+      })
+      .catch(function () { return { ok: false, error: 'red' }; });
+  }
+  function chatJoin() {
+    if (S.chatJoined) return;
+    if (!S.ig && !S.web) return; // email sin IG/web todavía: el chat va en local hasta que haya identidad.
+    chatPost('join', {}).then(function (d) {
+      if (d && d.ok) { S.chatJoined = true; S.chatGuest = d.user_id || null; S.chatLastId = 0; }
+    });
+  }
+  function chatSeenAdd(id) {
+    S.chatSeen = S.chatSeen || {};
+    S.chatSeen[id] = 1;
+    var keys = Object.keys(S.chatSeen);
+    if (keys.length > 60) { delete S.chatSeen[keys[0]]; }
+  }
+  function chatPollStart() {
+    if (S.chatTimer) return;
+    S.chatTimer = setInterval(function () {
+      if (!document.getElementById('oc_chat_msgs')) { chatPollStop(); return; }
+      if (!S.chatJoined) return;
+      fetch('/api/trial/chat-onboarding?after=' + (S.chatLastId || 0) + TEST_KEY_QS.replace('?', '&'))
+        .then(function (r) { return r.json().catch(function () { return null; }); })
+        .then(function (d) {
+          if (!d || !d.ok || !Array.isArray(d.messages)) return;
+          var bamboo = false;
+          d.messages.forEach(function (m) {
+            if (!m || m.id == null) return;
+            if (m.id > (S.chatLastId || 0)) S.chatLastId = m.id;
+            if (S.chatSeen && S.chatSeen[m.id]) return;
+            chatSeenAdd(m.id);
+            chatLogPush(m.role === 'user' ? 'user' : 'bot', m.text);
+            if (m.role === 'assistant' && m.text !== CHAT_ACK_TEXT) bamboo = true;
+          });
+          if (bamboo && S.chatPaused) { S.chatPaused = false; chatRender(); }
+          else if (bamboo) { chatScrollBottom(); }
+        })
+        .catch(function () {});
+    }, CHAT_POLL_MS);
+  }
+  function chatPollStop() { if (S.chatTimer) { clearInterval(S.chatTimer); S.chatTimer = null; } }
+  function chatLogPush(w, t, h) {
+    S.chatLog = S.chatLog || [];
+    S.chatLog.push(h ? { w: w, h: h } : { w: w, t: t });
+    if (S.chatLog.length > 100) S.chatLog = S.chatLog.slice(-100);
+    var box = document.getElementById('oc_chat_msgs');
+    if (box) {
+      var d = document.createElement('div');
+      d.className = 'msg ' + w;
+      if (h) d.innerHTML = h; else d.textContent = t;
+      box.appendChild(d);
+      chatScrollBottom();
+    }
+  }
+  function chatScrollBottom() {
+    var box = document.getElementById('oc_chat_msgs');
+    if (box) { try { box.scrollTop = box.scrollHeight; } catch (e) {} }
+  }
+  function chatQText(key) {
+    if (S.chatOverride && S.chatOverride[key]) { var c = S.chatOverride[key]; delete S.chatOverride[key]; return { chat: c, title: T.q1 }; }
+    if (key === 'rubro') return { chat: T.chatRubro, title: T.qRubro };
+    if (key === 'donde') return { chat: T.chatDonde, title: T.qDonde };
+    if (key === 'q1') return { chat: ((S.products || []).length ? T.chatQ1 : T.chatQ1Empty), title: T.q1 };
+    if (key === 'q2') return { chat: T.chatQ2, title: T.q2 };
+    if (key === 'q3') return { chat: T.chatQ3, title: T.q3 };
+    if (key === 'q4') return { chat: T.chatQ4, title: T.q4 };
+    if (key === 'q5') return { chat: T.chatQ5, title: T.q5 };
+    if (key === 'q6') return { chat: T.chatQ6, title: T.q6 };
+    if (key === 'q7') return { chat: T.chatQ7, title: T.q7 };
+    if (key === 'q8') return { chat: T.chatQ8, title: T.q8 };
+    return { chat: '', title: '' };
+  }
+  function chatAnswerLabel(key) {
+    var a = S.ans || {};
+    if (key === 'rubro') return a.rubro || '';
+    if (key === 'donde') { var d = DONDE.filter(function (o) { return o.v === a.donde; })[0]; return d ? d.l : (a.donde || ''); }
+    if (key === 'q1') {
+      if (a.q1mix === 'todo') return T.todo;
+      if (a.q1mix === 'sin_oferta') return T.sinOferta;
+      if (a.q1mix === 'marca') return a.q1 || T.marca;
+      return a.q1 || '';
+    }
+    if (key === 'q2') { var o2 = Q2_ALL.filter(function (o) { return o.v === a.q2; })[0]; return o2 ? o2.l : (a.q2 || ''); }
+    if (key === 'q3') { var o3 = Q3.filter(function (o) { return o.v === a.q3; })[0]; return o3 ? o3.l : (a.q3 || ''); }
+    if (key === 'q4') { var o4 = Q4.filter(function (o) { return o.v === a.q4; })[0]; return o4 ? o4.l : (a.q4 || ''); }
+    if (key === 'q5') { var o5 = Q5.filter(function (o) { return o.v === a.q5; })[0]; return o5 ? o5.l : (a.q5 || ''); }
+    if (key === 'q6') { if (a.q6mix === 'todos') return T.q6Todos; return a.q6 || ''; }
+    if (key === 'q7') { if (a.q7mix === 'nose') return T.q7Nose; return a.q7 || ''; }
+    if (key === 'q8') { if (a.q8mix === 'nada') return T.q8Nada; return a.q8 || ''; }
+    return '';
+  }
+  function chatRebuildLog() {
+    S.chatLog = [{ w: 'bot', t: S.source === 'email' ? T.chatJoinEmail : T.chatJoin }];
+    var i, k, q;
+    for (i = 0; i < S.qi; i++) {
+      k = S.plan[i];
+      if (S.ans[k] === undefined) continue;
+      q = chatQText(k);
+      S.chatLog.push({ w: 'bot', h: esc(q.chat) + '<br><span class="oc-chat-q">' + esc(q.title) + '</span>' });
+      S.chatLog.push({ w: 'user', t: chatAnswerLabel(k) });
+    }
+  }
+  function chatOpen() {
+    if (S.chatRebuild) { S.chatRebuild = false; chatRebuildLog(); }
+    if (!S.chatLog || !S.chatLog.length) chatRebuildLog();
+    while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++;
+    if (S.qi >= S.plan.length) { sprout(); return; }
+    chatAskCurrent();
+    chatRender();
+    chatJoin();
+    chatPollStart();
+  }
+  function chatAskCurrent() {
+    var key = S.plan[S.qi];
+    if (!key) return;
+    var q = chatQText(key);
+    S.chatLog.push({ w: 'bot', h: esc(q.chat) + '<br><span class="oc-chat-q">' + esc(q.title) + '</span>' });
+    if (!S.chatPostedQ) S.chatPostedQ = {};
+    if (!S.chatPostedQ[key]) {
+      S.chatPostedQ[key] = 1;
+      chatPost('question', { question: key, text: q.chat + ' ' + q.title }).then(function (d) {
+        if (d && d.msg_id) chatSeenAdd(d.msg_id);
+      });
+    }
+  }
+  function chatRender() {
+    var box = ocq();
+    var key = S.plan[S.qi];
+    var html = stemHTML();
+    html += '<div class="oc-chat-msgs" id="oc_chat_msgs">';
+    (S.chatLog || []).forEach(function (m) {
+      html += '<div class="msg ' + m.w + '">' + (m.h ? m.h : esc(m.t || '')) + '</div>';
+    });
+    html += '</div>';
+    if (S.chatBlocked) {
+      html += '<div class="oc-chat-pause" style="display:block"><p>' + esc(T.chatBlocked) + '</p>'
+        + '<button type="button" class="oc-btn" id="oc_chat_entry">' + esc(T.chatEntry) + '</button></div>';
+    } else {
+      html += '<div id="oc_chat_opts"></div>';
+      html += '<div id="oc_chat_pause" class="oc-chat-pause" style="display:' + (S.chatPaused ? 'block' : 'none') + '">'
+        + '<p>' + esc(T.chatWaiting) + '</p>'
+        + '<button type="button" class="oc-btn" id="oc_chat_follow">' + esc(T.chatFollow) + '</button></div>';
+      html += '<div class="oc-chat-free"><input id="oc_chat_in" class="oc-field" placeholder="' + esc(S.chatLibreKey ? chatLibrePh(S.chatLibreKey, S.chatLibreMode) : T.chatFreePh) + '">'
+        + '<button type="button" class="oc-btn" id="oc_chat_send">' + esc(T.chatFreeBtn || 'enviar') + '</button></div>';
+      html += '<div class="oc-chat-hint" id="oc_chat_hint">' + esc(S.chatLibreKey ? chatLibreHint(S.chatLibreKey, S.chatLibreMode) : T.chatFreeBamboo) + '</div>';
+    }
+    html += '<button type="button" class="oc-back" id="oc_back">' + esc(T.back) + '</button>';
+    html += '<div class="oc-err" id="oc_screen_err"></div>';
+    box.innerHTML = html;
+    show('v-ocq');
+    window.scrollTo({ top: 0 });
+    if (S.chatBlocked) {
+      var eb = document.getElementById('oc_chat_entry');
+      if (eb) eb.addEventListener('click', function () { goEntry(); });
+    } else {
+      chatRenderOpts(key);
+      chatBindFree();
+      var fl = document.getElementById('oc_chat_follow');
+      if (fl) fl.addEventListener('click', function () { S.chatPaused = false; chatRender(); });
+    }
+    var bk = document.getElementById('oc_back');
+    if (bk) bk.addEventListener('click', function () { chatBack(); });
+    chatScrollBottom();
+  }
+  function chatRenderOpts(key, catalog) {
+    var host = document.getElementById('oc_chat_opts');
+    if (!host) return;
+    if (S.chatPaused || S.chatBlocked) { host.innerHTML = ''; return; }
+    var opts = catalog ? Object.keys(CATS).map(function (k) { return { v: k, l: CATS[k] }; }) : chatOptionsFor(key);
+    var gridCls = opts.length <= 2 ? 'oc-grid oc-one' : 'oc-grid';
+    host.innerHTML = '<div class="' + gridCls + '">' + opts.map(function (o) { return cardHTML(o); }).join('') + '</div>';
+    var cards = host.querySelectorAll('.oc-card');
+    cards.forEach(function (c) {
+      c.addEventListener('click', function () {
+        if (c.classList.contains('oc-picked')) return;
+        c.classList.add('oc-picked'); burst(c);
+        var v = c.getAttribute('data-v');
+        setTimeout(function () { chatPick(key, v); }, 120);
+      });
+    });
+  }
+  function chatOptionsFor(key) {
+    if (key === 'rubro') {
+      var opts = (S.rubroOptions || []).map(function (o) { return { v: o.rubro, sub: o.subrubro || '', l: o.label }; });
+      if (!opts.length) { return Object.keys(CATS).map(function (k) { return { v: k, l: CATS[k] }; }); }
+      opts.push({ v: '__otro__', l: T.otro, sub: T.otroSub });
+      return opts;
+    }
+    if (key === 'donde') return DONDE.slice();
+    if (key === 'q1') {
+      var o = (S.products || []).map(function (p, i) { return { v: p.nombre, l: p.nombre, foto: p.foto || null, estrella: i === 0 }; });
+      o.push({ v: '__servicio__', l: T.servicio, sub: T.servicioSub });
+      o.push({ v: '__marca__', l: T.marca, sub: T.marcaSub });
+      o.push({ v: '__sin_oferta__', l: T.sinOferta, sub: T.sinOfertaSub });
+      o.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+      o.push({ v: '__todo__', l: T.todo, sub: T.todoSub });
+      return o;
+    }
+    if (key === 'q2') return q2Options();
+    if (key === 'q3') return Q3.slice();
+    if (key === 'q4') return Q4.slice();
+    if (key === 'q5') return Q5.slice();
+    if (key === 'q6') {
+      var o6 = ((S.facts && S.facts.audience) || []).map(function (a) { return { v: a, l: a }; });
+      Q6_GEN.forEach(function (x) { if (!o6.some(function (y) { return String(y.v).toLowerCase() === String(x.v).toLowerCase(); })) o6.push(x); });
+      o6.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+      o6.push({ v: '__todos__', l: T.q6Todos, sub: T.q6TodosSub });
+      return o6;
+    }
+    if (key === 'q7') {
+      var o7 = ((S.facts && S.facts.diferencial) || []).map(function (a) { return { v: a, l: a }; });
+      Q7_GEN.forEach(function (x) { if (!o7.some(function (y) { return String(y.v).toLowerCase() === String(x.v).toLowerCase(); })) o7.push(x); });
+      o7.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+      o7.push({ v: '__nose__', l: T.q7Nose, sub: T.q7NoseSub });
+      return o7;
+    }
+    if (key === 'q8') {
+      var o8 = Q8_OPTS.slice();
+      o8.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+      o8.push({ v: '__nada__', l: T.q8Nada, sub: T.q8NadaSub });
+      return o8;
+    }
+    return [];
+  }
+  function chatPick(key, v) {
+    if (key === 'rubro') {
+      if (v === '__otro__') { chatRenderOpts(key, true); return; }
+      var o = (S.rubroOptions || []).filter(function (x) { return x.rubro === v; })[0] || {};
+      S.ans.rubro = v; S.cat = v; window.OC_CAT = v;
+      try { RUBRO_ANS = { rubro: v, subcat: o.subrubro || '', src: 'pregunta' }; } catch (e) {}
+      chatPost('answer', { question: T.qRubro, value: v });
+      chatNext();
+      return;
+    }
+    if (key === 'donde') {
+      S.ans.donde = v;
+      chatPost('answer', { question: T.qDonde, value: v });
+      dondeFollow(v);
+      return;
+    }
+    if (key === 'q1') {
+      if (v === '__libre__') { chatLibre('q1', 'libre'); return; }
+      if (v === '__servicio__') { chatLibre('q1', 'servicio'); return; }
+      if (v === '__marca__') { S.ans.q1 = (S.biz || '').trim() || (S.ig ? '@' + S.ig : 'tu marca'); S.ans.q1mix = 'marca'; }
+      else if (v === '__sin_oferta__') { S.ans.q1 = ''; S.ans.q1mix = 'sin_oferta'; }
+      else if (v === '__todo__') { S.ans.q1 = ''; S.ans.q1mix = 'todo'; }
+      else { S.ans.q1 = v; S.ans.q1mix = 'uno'; }
+      chatPost('answer', { question: T.q1, value: S.ans.q1 || S.ans.q1mix });
+      chatNext();
+      return;
+    }
+    if (key === 'q6' && v === '__libre__') { chatLibre('q6', 'libre'); return; }
+    if (key === 'q7' && v === '__libre__') { chatLibre('q7', 'libre'); return; }
+    if (key === 'q8' && v === '__libre__') { chatLibre('q8', 'libre'); return; }
+    if (key === 'q6' && v === '__todos__') { S.ans.q6 = ''; S.ans.q6mix = 'todos'; }
+    else if (key === 'q7' && v === '__nose__') { S.ans.q7 = ''; S.ans.q7mix = 'nose'; }
+    else if (key === 'q8' && v === '__nada__') { S.ans.q8 = ''; S.ans.q8mix = 'nada'; }
+    else { S.ans[key] = v; if (key === 'q6') S.ans.q6mix = 'uno'; if (key === 'q7') S.ans.q7mix = 'uno'; if (key === 'q8') S.ans.q8mix = 'uno'; }
+    var QT = { q2: T.q2, q3: T.q3, q4: T.q4, q5: T.q5, q6: T.q6, q7: T.q7, q8: T.q8 };
+    chatPost('answer', { question: QT[key] || key, value: v });
+    chatNext();
+  }
+  function dondeFollow(v) {
+    if (v === 'instagram') {
+      renderFieldScreen(T.chatIg2, T.qIg2, T.igPh, T.nextBtn, function (val) {
+        var ig = cleanIg(val || '');
+        if (!ig) { screenErr(T.errIg); return; }
+        studyIg(ig);
+      }, function () { chatBackTo('donde'); });
+    } else if (v === 'web') {
+      renderFieldScreen(T.chatWeb2, T.qWeb2, T.webPh, T.nextBtn, function (val) {
+        var w = (val || '').trim();
+        if (!w) { screenErr(T.errWeb); return; }
+        studyWeb(w);
+      }, function () { chatBackTo('donde'); });
+    } else {
+      renderFieldScreen(T.chatName, T.qName, T.namePh, T.nextBtn, function (val) {
+        var nm = (val || '').trim();
+        if (!nm) { screenErr(T.errName); return; }
+        S.biz = nm; TRIAL_BIZ = nm;
+        screenFotoEstudio();
+      }, function () { chatBackTo('donde'); });
+    }
+  }
+  function chatLibrePh(key, mode) {
+    if (key === 'q1' && mode === 'servicio') return T.servicioPh;
+    if (key === 'q1') return T.librePh;
+    if (key === 'q6') return T.q6LibrePh;
+    if (key === 'q7') return T.q7LibrePh;
+    if (key === 'q8') return T.q8LibrePh;
+    return T.chatFreePh;
+  }
+  function chatLibreHint(key, mode) {
+    if (key === 'q1' && mode === 'servicio') return T.q1Servicio;
+    if (key === 'q1') return T.q1Libre;
+    if (key === 'q6') return T.q6Libre;
+    if (key === 'q7') return T.q7Libre;
+    if (key === 'q8') return T.q8Libre;
+    return '';
+  }
+  function chatLibre(key, mode) {
+    S.chatLibreKey = key;
+    S.chatLibreMode = mode || 'libre';
+    var inp = document.getElementById('oc_chat_in');
+    var hint = document.getElementById('oc_chat_hint');
+    if (inp) { inp.placeholder = chatLibrePh(key, S.chatLibreMode); try { inp.focus(); } catch (e) {} }
+    if (hint) hint.textContent = chatLibreHint(key, S.chatLibreMode);
+    chatScrollBottom();
+  }
+  function chatBindFree() {
+    var inp = document.getElementById('oc_chat_in');
+    var btn = document.getElementById('oc_chat_send');
+    if (!inp || !btn) return;
+    var send = function () {
+      var t = (inp.value || '').trim();
+      if (!t) return;
+      if (S.chatLibreKey) {
+        var key = S.chatLibreKey, mode = S.chatLibreMode;
+        var max = key === 'q7' ? 120 : key === 'q8' ? 200 : 60;
+        t = t.slice(0, max);
+        if (key === 'q1') { S.ans.q1 = t; S.ans.q1mix = mode === 'servicio' ? 'servicio' : 'libre'; }
+        if (key === 'q6') { S.ans.q6 = t; S.ans.q6mix = 'libre'; }
+        if (key === 'q7') { S.ans.q7 = t; S.ans.q7mix = 'libre'; }
+        if (key === 'q8') { S.ans.q8 = t; S.ans.q8mix = 'libre'; }
+        S.chatLibreKey = null; S.chatLibreMode = null;
+        inp.value = '';
+        chatPost('answer', { question: chatQText(key).title, value: t });
+        chatNext();
+        return;
+      }
+      // Texto libre para bamboo: ACK instantáneo + pausa del flujo.
+      inp.value = '';
+      chatLogPush('user', t);
+      chatPost('free', { text: t }).then(function (d) {
+        if (d && d.ok) {
+          if (d.msg_id) chatSeenAdd(d.msg_id);
+          chatLogPush('bot', d.reply || CHAT_ACK_TEXT);
+          S.chatPaused = true;
+          try { opResumeSave('preguntas'); } catch (e) {}
+          var opts = document.getElementById('oc_chat_opts'); if (opts) opts.style.display = 'none';
+          var pz = document.getElementById('oc_chat_pause'); if (pz) pz.style.display = 'block';
+        } else if (d && d.error === 'trial_used') {
+          chatBlocked();
+        } else {
+          chatLogPush('bot', T.chatErr);
+        }
+      });
+    };
+    btn.addEventListener('click', send);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+  }
+  function chatNext() {
+    S.qi++;
+    while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++;
+    try { opResumeSave('preguntas'); } catch (e) {}
+    if (S.qi >= S.plan.length) { chatPollStop(); sprout(); return; }
+    chatAskCurrent();
+    chatRender();
+  }
+  function chatBack() {
+    if (S.qi > 0) {
+      S.qi--;
+      var k = S.plan[S.qi];
+      S.ans[k] = undefined;
+      if (k === 'q1') S.ans.q1mix = undefined;
+      if (k === 'q6') S.ans.q6mix = undefined;
+      if (k === 'q7') S.ans.q7mix = undefined;
+      if (k === 'q8') S.ans.q8mix = undefined;
+      if (k === 'rubro') { S.ans.rubro = undefined; }
+      S.chatLibreKey = null; S.chatLibreMode = null;
+      try { opResumeSave('preguntas'); } catch (e) {}
+      chatRebuildLog();
+      chatAskCurrent();
+      chatRender();
+      return;
+    }
+    goEntry();
+  }
+  function chatBackTo(key) {
+    S.qi = S.plan.indexOf(key);
+    if (S.qi < 0) { S.qi = 0; }
+    var k = S.plan[S.qi];
+    if (k) { S.ans[k] = undefined; }
+    S.chatLibreKey = null; S.chatLibreMode = null;
+    try { opResumeSave('preguntas'); } catch (e) {}
+    chatRebuildLog();
+    chatAskCurrent();
+    chatRender();
+  }
+  function chatBlocked() {
+    S.chatBlocked = true;
+    chatPollStop();
+    chatRender();
   }
 
   function buildPlan() {
     var plan = [];
     if (S.source === 'email') { plan.push('rubro', 'donde'); }
     else if (S.rubroOptions !== null && S.rubroOptions !== undefined) { plan.push('rubro'); }
-    plan.push('q1', 'q2', 'q3', 'q4', 'q5');
+    // (LOTE PRUEBA-CHAT) El chat pregunta SOLO lo que no se supo con
+    // seguridad: los huecos determinísticos (sin IA). Las 8 fijas son la
+    // lista de lo que el fundamento necesita; las que el estudio ya cerró
+    // con evidencia (promo ausente, tono, precios, audiencia, diferencial)
+    // se pre-cargan en S.ans y NO se preguntan — el espejo es el punto de
+    // corrección si algo se entendió mal. Sin estudio (email), se preguntan
+    // las 8: la ausencia de estudio no es evidencia de nada. Los hechos
+    // (local/reservas/venta online) no se preguntan: los cubren las
+    // opciones adaptativas de q2, como hoy.
+    var studied = !!(S.facts && S.facts._known);
+    var g = chatGaps();
+    var kn = studied ? (g.known || {}) : {};
+    if (kn.q3) S.ans.q3 = kn.q3.value;
+    if (kn.q4) S.ans.q4 = kn.q4.value;
+    if (kn.q5) S.ans.q5 = kn.q5.value;
+    if (kn.q6) { S.ans.q6 = kn.q6.value; S.ans.q6mix = kn.q6.mix || 'uno'; }
+    if (kn.q7) { S.ans.q7 = kn.q7.value; S.ans.q7mix = kn.q7.mix || 'uno'; }
+    var keys = [];
+    if (studied) {
+      g.needed.forEach(function (n) {
+        if (n.kind !== 'answer') return;
+        var k = DYN_TARGET_TO_KEY[n.target];
+        if (k && keys.indexOf(k) < 0) keys.push(k);
+      });
+    } else {
+      keys = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8'];
+    }
+    keys.forEach(function (k) { if (plan.indexOf(k) < 0) plan.push(k); });
     S.plan = plan;
     S.qi = 0;
   }
@@ -4585,6 +5445,14 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       voz: S.ans.q4 || '',
       precios: S.ans.q5 || '',
       donde: S.ans.donde || '',
+      // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: audiencia, diferencial y líneas
+      // rojas viajan al fundamento con su mix, como la Q1.
+      audiencia: S.ans.q6 || '',
+      audiencia_mix: S.ans.q6mix || 'todos',
+      diferencial: S.ans.q7 || '',
+      diferencial_mix: S.ans.q7mix || 'nose',
+      lineas_rojas: S.ans.q8 || '',
+      lineas_rojas_mix: S.ans.q8mix || 'nada',
       promo_semana: true
     };
     window.OC_CAT = S.ans.rubro || S.cat || window.OC_CAT || null;
@@ -4603,6 +5471,9 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     title: 'Esto entend\u00ed que vend\u00e9s',
     sub: 'Si algo no es, corregilo ac\u00e1. Tu semana se arma solo con esto.',
     empty: 'Todav\u00eda no tengo ning\u00fan producto tuyo. Agregalo abajo con tus palabras, con fotos o con tu link de venta.',
+    // (LOTE ONBOARDING-Q1) Sin oferta todavía: la semana se arma para
+    // crecer y que te conozcan, sin inventar un producto.
+    emptySinOferta: 'Todavía no vendés nada: tu semana se arma para crecer y que te conozcan, sin inventar un producto. Si algo de esto es tuyo, corregilo acá.',
     from: { bio: 'de tu bio', web: 'de tu web', cliente: 'escrito por vos', foto: 'de tu foto', link: 'de tu link de venta' },
     novendo: 'Esto no lo vendo',
     photoLbl: 'Sub\u00ed 3 fotos de lo que m\u00e1s vend\u00e9s',
@@ -4641,6 +5512,11 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   }
   function flRender() {
     var box = ocq();
+    // (LOTE ONBOARDING-Q1) Sin oferta todavía, el botón OK se habilita
+    // aunque no haya productos: si no, el espejo sería un callejón sin
+    // salida para quien está empezando.
+    var flOkEnabled = FL_E.productos.length || S.ans.q1mix === 'sin_oferta';
+    var emptyTxt = S.ans.q1mix === 'sin_oferta' ? FL.emptySinOferta : FL.empty;
     var rows = FL_E.productos.map(function (p, i) {
       return '<div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#fff;border:2px solid #DCEFFF;border-radius:12px;margin-bottom:8px">'
         + '<div style="flex:1;font-size:16px;font-weight:700;color:#0A1E33">' + esc(p.nombre)
@@ -4650,7 +5526,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     box.innerHTML = stemHTML() + '<h2 class="oc-q">' + esc(FL.title) + '</h2>'
       + '<p class="oc-chat">' + esc(FL.sub) + '</p>'
       + opEvidenceHTML()
-      + (FL_E.productos.length ? rows : '<p class="oc-chat">' + esc(FL.empty) + '</p>')
+      + (FL_E.productos.length ? rows : '<p class="oc-chat">' + esc(emptyTxt) + '</p>')
       + '<div style="margin-top:14px"><label style="font-size:15px;font-weight:700;color:#0A1E33">' + esc(FL.photoLbl) + '</label>'
       + '<input id="flFoto" type="file" accept="image/*" multiple style="display:block;margin-top:8px;font-size:15px">'
       + '<small style="color:#5A7488">' + esc(FL.photoSkip) + '</small>'
@@ -4665,8 +5541,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       + '<div style="margin-top:14px"><button type="button" id="flEditBtn" style="border:0;background:none;color:#2793C8;font-size:15px;font-weight:700;cursor:pointer">' + esc(FL.editLbl) + '</button>'
       + '<div id="flEditBox" style="display:none;margin-top:8px"><textarea id="flEdit" class="oc-field" rows="4"></textarea>'
       + '<button type="button" id="flEditSave" class="oc-btn">' + esc(FL.editSave) + '</button></div></div>'
-      + '<button type="button" id="flOk" class="oc-btn" ' + (FL_E.productos.length ? '' : 'disabled') + '>' + esc(FL.ok) + '</button>'
-      + (FL_E.productos.length ? '' : '<p class="oc-chat">' + esc(FL.okEmpty) + '</p>');
+      + '<button type="button" id="flOk" class="oc-btn" ' + (flOkEnabled ? '' : 'disabled') + '>' + esc(FL.ok) + '</button>'
+      + (flOkEnabled ? '' : '<p class="oc-chat">' + esc(FL.okEmpty) + '</p>');
     show('v-ocq');
     box.querySelectorAll('.fl-veto').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -4780,7 +5656,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     FM_FILE = null; FM_PROD = null; FM_PEND = false;
     if (FM_URL) { try { URL.revokeObjectURL(FM_URL); } catch (e) {} FM_URL = null; }
     var box = ocq();
-    var fmStar = ((S.ans.q1 && (S.ans.q1mix === 'uno' || S.ans.q1mix === 'libre')) ? S.ans.q1 : (((FL_E.productos || [])[0] || {}).nombre || ''));
+    var fmStar = ((S.ans.q1 && (S.ans.q1mix === 'uno' || S.ans.q1mix === 'libre' || S.ans.q1mix === 'servicio' || S.ans.q1mix === 'marca')) ? S.ans.q1 : (((FL_E.productos || [])[0] || {}).nombre || ''));
     var fmTitle = fmStar ? FM.guideTitle.replace('{star}', fmStar) : FM.title;
     var fmSub = fmStar ? FM.guideSub.replace('{star}', fmStar) : FM.sub;
     box.innerHTML = stemHTML() + '<h2 class="oc-q">' + esc(fmTitle) + '</h2>'
@@ -4853,7 +5729,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   // un ranking de likes violaría la regla de verdad.
   function opEvidenceHTML() {
     var star = '';
-    if (S.ans.q1 && (S.ans.q1mix === 'uno' || S.ans.q1mix === 'libre')) star = S.ans.q1;
+    if (S.ans.q1 && (S.ans.q1mix === 'uno' || S.ans.q1mix === 'libre' || S.ans.q1mix === 'servicio' || S.ans.q1mix === 'marca')) star = S.ans.q1;
     else if ((FL_E.productos || []).length) star = FL_E.productos[0].nombre;
     if (!star) return '';
     var foto = null, proc = (S.source === 'web') ? 'web' : 'bio';
@@ -4881,7 +5757,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   function opResumeSave(stage) {
     try {
       var payload = { v: 1, ts: Date.now(), stage: stage,
-        S: { source: S.source, email: S.email, ig: S.ig, web: S.web, biz: S.biz, cat: S.cat, products: S.products || [], rubroOptions: (S.rubroOptions === undefined) ? null : S.rubroOptions, plan: S.plan || [], qi: S.qi || 0, ans: S.ans || {} },
+        S: { source: S.source, email: S.email, ig: S.ig, web: S.web, biz: S.biz, cat: S.cat, products: S.products || [], rubroOptions: (S.rubroOptions === undefined) ? null : S.rubroOptions, plan: S.plan || [], qi: S.qi || 0, ans: S.ans || {}, noWeb: S.noWeb, facts: S.facts || null, webFacts: S.webFacts || null, igFacts: S.igFacts || null,
+          chatLog: (S.chatLog || []).slice(-100), chatPostedQ: S.chatPostedQ || {}, chatJoined: !!S.chatJoined, chatGuest: S.chatGuest || null, chatLastId: S.chatLastId || 0, chatPaused: !!S.chatPaused, chatSeen: Object.keys(S.chatSeen || {}).slice(-50) },
         FL: { productos: FL_E.productos || [], vetos: FL_E.vetos || [] },
         DR: (typeof DR !== 'undefined' && DR) ? { dims: DR.dims, picks: DR.picks, champ: DR.champ } : null };
       localStorage.setItem(OP_RESUME_KEY, JSON.stringify(payload));
@@ -4929,9 +5806,13 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.source = s.source; S.email = s.email; S.ig = s.ig; S.web = s.web; S.biz = s.biz; S.cat = s.cat;
       S.products = s.products || []; S.rubroOptions = (s.rubroOptions === undefined) ? null : s.rubroOptions;
       S.plan = s.plan || []; S.qi = s.qi || 0; S.ans = s.ans || {};
+      S.noWeb = !!s.noWeb; S.facts = s.facts || null; S.webFacts = s.webFacts || null; S.igFacts = s.igFacts || null;
+      // (LOTE PRUEBA-CHAT) El chat se reanuda donde quedó (hilo + pausa).
+      S.chatLog = s.chatLog || []; S.chatPostedQ = s.chatPostedQ || {}; S.chatJoined = !!s.chatJoined; S.chatGuest = s.chatGuest || null; S.chatLastId = s.chatLastId || 0; S.chatPaused = !!s.chatPaused;
+      S.chatSeen = {}; (s.chatSeen || []).forEach(function (id) { S.chatSeen[id] = 1; });
       if (s.biz) { try { TRIAL_BIZ = s.biz; } catch (e) {} }
       if (s.ig) { try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + s.ig; } catch (e) {} }
-      window.OC_ANS = { producto_estrella: S.ans.q1 || '', producto_mix: S.ans.q1mix || 'uno', cta: S.ans.q2 || '', promo: S.ans.q3 || '', voz: S.ans.q4 || '', precios: S.ans.q5 || '', donde: S.ans.donde || '', promo_semana: true };
+      window.OC_ANS = { producto_estrella: S.ans.q1 || '', producto_mix: S.ans.q1mix || 'uno', cta: S.ans.q2 || '', promo: S.ans.q3 || '', voz: S.ans.q4 || '', precios: S.ans.q5 || '', donde: S.ans.donde || '', audiencia: S.ans.q6 || '', audiencia_mix: S.ans.q6mix || 'todos', diferencial: S.ans.q7 || '', diferencial_mix: S.ans.q7mix || 'nose', lineas_rojas: S.ans.q8 || '', lineas_rojas_mix: S.ans.q8mix || 'nada', promo_semana: true };
       window.OC_CAT = S.ans.rubro || S.cat || window.OC_CAT || null;
       window.OC_DETECTADOS = (S.products || []).map(function (p) { return p.nombre; }).filter(Boolean).slice(0, 4);
       window.OC_REASK_Q1 = reaskQ1;
@@ -4962,7 +5843,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       + '<button type="button" id="fsSkip" style="border:0;background:none;color:#2793C8;font-size:15px;font-weight:700;cursor:pointer;margin-top:14px">' + esc(FS.skip) + '</button>';
     show('v-ocq');
     try { trk('prueba_step', { step: 'fs_foto_estudio' }); } catch (e) {}
-    document.getElementById('oc_back').addEventListener('click', function () { screenDonde(); });
+    document.getElementById('oc_back').addEventListener('click', function () { if ((S.plan || []).indexOf('donde') >= 0) { chatBackTo('donde'); } else { screenDonde(); } });
     box.querySelector('#fsSkip').addEventListener('click', function () { advance(); });
     box.querySelector('#fsFoto').addEventListener('change', function () {
       var files = Array.prototype.slice.call(box.querySelector('#fsFoto').files || []).slice(0, 3);
@@ -5008,7 +5889,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   var DR = null;
   function draftAvailable() { return (FL_E.productos || []).length > 0; }
   function draftStarName() {
-    if (S.ans.q1 && (S.ans.q1mix === 'uno' || S.ans.q1mix === 'libre')) return S.ans.q1;
+    if (S.ans.q1 && (S.ans.q1mix === 'uno' || S.ans.q1mix === 'libre' || S.ans.q1mix === 'servicio' || S.ans.q1mix === 'marca')) return S.ans.q1;
     return '';
   }
   function draftPhotoFor(name) {
@@ -5149,17 +6030,22 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
 
 
   // ---- estudio (IG / web) ----
-  async function studyIg(ig) {
+  // (LOTE ONBOARDING-Q1) `quiet` = la llama studyBoth (entrada IG+web):
+  // no avanza a las preguntas ni muestra el error de entrada — el
+  // llamador decide. En quiet, GEN_WEB no se toca (el combinado necesita
+  // ambos flags) y los hechos se fusionan (web primaria, IG rellena).
+  async function studyIg(ig, quiet) {
     renderStudy(T.studyIg);
     try {
       var r = await fetch('/api/trial/prefill' + TEST_KEY_QS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ig: ig }) });
       var d = await r.json().catch(function () { return {}; });
       if (!r.ok || !d.ok) throw new Error((d && d.error) || T.errIg);
-      PREFILL = d; GEN_PREFILL = true; GEN_WEB = false;
+      PREFILL = d; GEN_PREFILL = true; if (!quiet) GEN_WEB = false;
       S.source = S.source || 'ig';
       S.ig = ig;
       S.biz = d.name || S.biz || '';
       TRIAL_BIZ = S.biz;
+      S.igFacts = d.facts || null; S.facts = mergeFacts(S.webFacts, S.igFacts);
       try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + ig; } catch (e) {}
       // El rubro confirmado por el dueño manda sobre lo detectado.
       if (!S.ans.rubro) { S.cat = d.category || null; if (S.cat) window.OC_CAT = S.cat; }
@@ -5169,26 +6055,32 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       if ((d.productos || []).length) S.products = d.productos;
       if (d.rubro_check && d.rubro_check.needed) { S.rubroOptions = d.rubro_check.options || []; }
       else { S.rubroOptions = undefined; }
-      if (S.source === 'email') { while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++; }
-      else { buildPlan(); }
-      currentScreen();
+      if (!quiet) {
+        // (LOTE PRUEBA-CHAT) El chat reconstruye el plan de huecos tras
+        // cada estudio (también en el desvío email→IG/web): las respuestas
+        // ya dadas se saltan al abrir el chat.
+        buildPlan();
+        currentScreen();
+      }
     } catch (e) {
+      if (quiet) throw e;
       show('v-onboarding');
       entryErr((e && e.message) || T.errIg);
     }
   }
 
-  async function studyWeb(url) {
+  async function studyWeb(url, quiet) {
     renderStudy(T.studyWeb);
     try {
       var r = await fetch('/api/trial/web-prefill' + TEST_KEY_QS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web: url }) });
       var d = await r.json().catch(function () { return {}; });
       if (!r.ok || !d.ok) throw new Error((d && d.error) || T.errWeb);
-      WEB = d; GEN_WEB = true; GEN_PREFILL = false;
+      WEB = d; GEN_WEB = true; if (!quiet) GEN_PREFILL = false;
       S.source = S.source || 'web';
       S.web = url;
       S.biz = d.name || S.biz || '';
       TRIAL_BIZ = S.biz; TRIAL_DESC = d.description || '';
+      S.webFacts = d.facts || null; S.facts = mergeFacts(S.webFacts, S.igFacts);
       // El rubro confirmado por el dueño manda sobre lo detectado.
       if (!S.ans.rubro) { S.cat = d.category || null; if (S.cat) window.OC_CAT = S.cat; }
       // (rubro-literal) No borrar: si la segunda fuente no trae
@@ -5197,13 +6089,37 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       if ((d.productos || []).length) S.products = d.productos;
       if (d.rubro_check && d.rubro_check.needed) { S.rubroOptions = d.rubro_check.options || []; }
       else { S.rubroOptions = undefined; }
-      if (S.source === 'email') { while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++; }
-      else { buildPlan(); }
-      currentScreen();
+      if (!quiet) {
+        // (LOTE PRUEBA-CHAT) El chat reconstruye el plan de huecos tras
+        // cada estudio (también en el desvío email→IG/web): las respuestas
+        // ya dadas se saltan al abrir el chat.
+        buildPlan();
+        currentScreen();
+      }
     } catch (e) {
+      if (quiet) throw e;
       show('v-onboarding');
       entryErr((e && e.message) || T.errWeb);
     }
+  }
+
+  // (LOTE ONBOARDING-Q1) Entrada IG + web: la web es la fuente principal
+  // y se estudia primero; IG complementa. Si la web falla, se sigue con
+  // IG solo (la web nunca frena la prueba). Si el IG falla, error de
+  // entrada: el IG es obligatorio y hay que corregirlo.
+  async function studyBoth(ig, web) {
+    renderStudy(web ? T.studyBoth : T.studyIg);
+    S.products = [];
+    var webOk = false;
+    if (web) {
+      try { await studyWeb(web, true); webOk = true; } catch (e) { S.web = null; S.webFacts = null; }
+    }
+    try { await studyIg(ig, true); }
+    catch (e) { show('v-onboarding'); entryErr((e && e.message) || T.errIg); return; }
+    if (webOk) { GEN_PREFILL = true; GEN_WEB = true; }
+    S.facts = mergeFacts(S.webFacts, S.igFacts);
+    buildPlan();
+    currentScreen();
   }
 
   // ---- entrada (campo único) ----
@@ -5217,17 +6133,21 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (b) { b.disabled = !!busy; b.textContent = busy ? T.entryBtnBusy : T.entryBtn; }
   }
 
+  // (LOTE ONBOARDING-Q1) Entrada IG + web: el modo por defecto pide los
+  // dos de entrada (IG obligatorio; web obligatoria salvo «No tengo web»).
+  // El modo email es el camino viejo exacto, como alternativa.
   function startFromField() {
     if (S.busy) return;
     // (rubro-literal) Entrada fresca: se resetean los productos (la
     // segunda fuente, en cambio, no borra: ver no-wipe en studyIg/Web).
     S.products = [];
-    var f = document.getElementById('oc_field');
-    var val = (f && f.value || '').trim();
-    if (!val) { entryErr(S.mode === 'web' ? T.errWeb : T.errEmail); return; }
-    if (S.mode === 'web') { studyWeb(val); return; }
-    var isEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val);
-    if (isEmail) {
+    S.webFacts = null; S.igFacts = null; S.facts = null;
+    if (S.mode === 'email') {
+      var f = document.getElementById('oc_field');
+      var val = (f && f.value || '').trim();
+      if (!val) { entryErr(T.errEmail); return; }
+      var isEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val);
+      if (!isEmail) { entryErr(T.errEmail); return; }
       S.source = 'email'; S.email = val; window.OC_EMAIL = val;
       buildPlan();
       // Sin fuente: el rubro se pregunta con el catálogo completo.
@@ -5236,9 +6156,18 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       currentScreen();
       return;
     }
-    var ig = cleanIg(val);
-    if (!ig) { entryErr(T.errIg); return; }
-    studyIg(ig);
+    var igEl = document.getElementById('oc_ig');
+    var ig = cleanIg((igEl && igEl.value) || '');
+    if (!ig) { entryErr(T.errIgEmpty); return; }
+    var web = null;
+    if (!S.noWeb) {
+      var wEl = document.getElementById('oc_web');
+      web = ((wEl && wEl.value) || '').trim();
+      if (!web) { entryErr(T.errWebEmpty); return; }
+      if (!/^https?:\/\//i.test(web)) web = 'https://' + web;
+      if (!/\./.test(web.replace(/^https?:\/\//i, '')) || /\s/.test(web)) { entryErr(T.errWebBad); return; }
+    }
+    studyBoth(ig, web);
   }
 
   function ocInit() {
@@ -5250,28 +6179,54 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     });
     var noIg = document.getElementById('btnNoIg');
     if (noIg && noIg.parentElement) noIg.parentElement.style.display = 'none';
+    // (LOTE ONBOARDING-Q1) Entrada IG + web: los dos campos de entrada,
+    // con escape «No tengo web» en un toque. El modo email queda como
+    // alternativa (un solo campo, camino viejo).
     var box = document.createElement('div');
     box.id = 'oc_entry';
     box.innerHTML = '<p class="oc-chat">' + esc(T.entryChat) + '</p>' +
+      '<div id="oc_both">' +
+      '<input id="oc_ig" class="oc-field" placeholder="' + esc(T.entryIgPh) + '" autocomplete="off" inputmode="text">' +
+      '<input id="oc_web" class="oc-field" placeholder="' + esc(T.entryWebPh) + '" autocomplete="off" inputmode="url" style="margin-top:8px">' +
+      '<p style="margin:6px 0 0;text-align:right"><button type="button" class="oc-link" id="oc_noweb">' + esc(T.noWeb) + '</button></p>' +
+      '<p class="oc-chat" id="oc_noweb_note" style="display:none;margin-top:6px">' + esc(T.noWebNote) + '</p>' +
+      '</div>' +
+      '<div id="oc_email_box" style="display:none">' +
       '<input id="oc_field" class="oc-field" placeholder="' + esc(T.entryPh) + '" autocomplete="email" inputmode="email">' +
+      '</div>' +
       '<button type="button" class="oc-btn" id="oc_go">' + esc(T.entryBtn) + '</button>' +
       '<div class="oc-err" id="oc_err"></div>' +
-      '<p style="margin:10px 0 0"><button type="button" class="oc-link" id="oc_mode">' + esc(T.toWeb) + '</button></p>' +
+      '<p style="margin:10px 0 0"><button type="button" class="oc-link" id="oc_mode">' + esc(T.toEmail) + '</button></p>' +
       '<p style="margin:2px 0 0"><button type="button" class="oc-link" id="oc_photo_link">' + esc(T.photoLink) + '</button></p>' +
       '<div id="oc_photo_box" style="display:none;margin-top:8px"><input type="file" id="oc_photo" accept="image/*"><span class="oc-chat" id="oc_photo_name" style="margin-left:8px"></span></div>';
     fc.insertBefore(box, fc.firstChild);
     document.getElementById('oc_go').addEventListener('click', startFromField);
+    document.getElementById('oc_ig').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField(); } });
+    document.getElementById('oc_web').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField(); } });
     document.getElementById('oc_field').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField(); } });
+    document.getElementById('oc_noweb').addEventListener('click', function () {
+      S.noWeb = !S.noWeb;
+      var w = document.getElementById('oc_web');
+      var note = document.getElementById('oc_noweb_note');
+      var btn = document.getElementById('oc_noweb');
+      if (S.noWeb) { if (w) w.style.display = 'none'; if (note) note.style.display = 'block'; btn.textContent = T.hasWeb; }
+      else { if (w) w.style.display = ''; if (note) note.style.display = 'none'; btn.textContent = T.noWeb; try { if (w) w.focus(); } catch (e) {} }
+    });
     document.getElementById('oc_mode').addEventListener('click', function () {
-      var f = document.getElementById('oc_field');
-      if (S.mode === 'web') {
-        S.mode = 'auto'; f.placeholder = T.entryPh; f.setAttribute('inputmode', 'email');
-        document.getElementById('oc_mode').textContent = T.toWeb;
+      var both = document.getElementById('oc_both');
+      var eb = document.getElementById('oc_email_box');
+      var modeBtn = document.getElementById('oc_mode');
+      if (S.mode === 'email') {
+        S.mode = 'both';
+        if (both) both.style.display = ''; if (eb) eb.style.display = 'none';
+        modeBtn.textContent = T.toEmail;
+        try { var ig = document.getElementById('oc_ig'); if (ig) ig.focus(); } catch (e) {}
       } else {
-        S.mode = 'web'; f.placeholder = T.webPh; f.setAttribute('inputmode', 'url');
-        document.getElementById('oc_mode').textContent = T.toEmail;
+        S.mode = 'email';
+        if (both) both.style.display = 'none'; if (eb) eb.style.display = '';
+        modeBtn.textContent = T.toBoth;
+        try { var f = document.getElementById('oc_field'); if (f) f.focus(); } catch (e) {}
       }
-      try { f.focus(); } catch (e) {}
     });
     document.getElementById('oc_photo_link').addEventListener('click', function () {
       var pb = document.getElementById('oc_photo_box');
@@ -5288,7 +6243,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     // preguntas). Si el visitante ya tiene semana guardada, el listener
     // principal la mostró antes y este init no interfiere.
     if (DEEP_IG && !TEST_KEY_QS) { /* lo dispara ocDeepStart desde el listener principal */ }
-    else if (DEEP_WEB) { S.mode = 'web'; var f0 = document.getElementById('oc_field'); if (f0) f0.value = DEEP_WEB; }
+    if (DEEP_IG) { var f1 = document.getElementById('oc_ig'); if (f1) f1.value = DEEP_IG; }
+    if (DEEP_WEB) { var f0 = document.getElementById('oc_web'); if (f0) f0.value = DEEP_WEB; }
   }
 
   // Deep link (?ig= / ?web=): estudio → preguntas → generar. Nunca

@@ -227,6 +227,100 @@ function pickName(cands) {
   return '';
 }
 
+// ---------- Hechos del negocio (LOTE ONBOARDING-Q1) ----------
+// Señales determinísticas sobre CÓMO es el negocio (no qué vende):
+// local físico, reservas, venta online, precios, promos, tono,
+// audiencia y diferencial. Todo se lee del HTML visible + JSON-LD.
+// Best-effort: si no se ve, el hecho es false/vacío y la pregunta lo
+// cubre — la extracción nunca inventa ni frena la prueba.
+const AUDIENCE_NOUNS = [
+  'mujeres', 'hombres', 'ninos', 'ninas', 'familias', 'bebes', 'mascotas',
+  'empresas', 'negocios', 'deportistas', 'novias', 'estudiantes',
+  'turistas', 'mamas', 'papas', 'jovenes', 'adultos', 'emprendedores',
+  'profesionales', 'parejas', 'mayores',
+];
+const DIFF_MARKERS = [
+  'unico', 'unica', 'diferente', 'especial', 'hecho a mano', 'artesanal',
+  'familiar', 'tradicional', 'personalizado', 'personalizada',
+  'experiencia', 'anos de', 'desde 19', 'desde 20', 'nuestra diferencia',
+  'lo que nos hace', 'hecho con amor', 'casero', 'casera',
+];
+function extractBusinessFacts(html, ld) {
+  const raw = String(html || '');
+  const text = cleanText(raw.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ''));
+  const t = norm(text);
+  const facts = {
+    has_local: false, address: '', takes_reservations: false,
+    sells_online: false, has_prices: false, has_promo: false,
+    tone: 'neutral', is_creator: false, audience: [], diferencial: [],
+  };
+  // Local: JSON-LD address manda; si no, <address> o texto.
+  try {
+    if (ld && ld.address) {
+      const a = ld.address;
+      const addr = typeof a === 'string' ? a : [a.streetAddress, a.addressLocality, a.addressRegion].filter(Boolean).join(', ');
+      if (addr) { facts.has_local = true; facts.address = cleanText(addr).slice(0, 120); }
+    }
+  } catch (e) {}
+  if (!facts.has_local) {
+    const m = raw.match(/<address[^>]*>([\s\S]{1,200})<\/address>/i);
+    if (m) { facts.has_local = true; facts.address = cleanText(m[1]).slice(0, 120); }
+    else if (/direccion|ubicacion|estamos en|visitanos|nuestro local|nuestra tienda|nuestro salon|📍/i.test(text)) facts.has_local = true;
+  }
+  // Reservas: texto + plataformas de turnos.
+  if (/reserv|turno|agend[ae]|booking|cita|pedir hora|pedir turno/i.test(t)
+    || /calendly|booksy|fresha|square.*appointments|setmore|timely|treatwell/i.test(t)) facts.takes_reservations = true;
+  // Venta online: texto + plataformas de e-commerce.
+  if (/tienda online|carrito|comprar ahora|agregar al carrito|checkout|compr[áa] online|envio a todo/i.test(t)
+    || /shopify|woocommerce|tiendanube|mercadolibre|mercado libre|tienda\.nube|ecwid/i.test(t)) facts.sells_online = true;
+  // Precios: montos con moneda.
+  if (/\$\s?\d[\d.,]{1,}|usd\s?\d|ars\s?\d|\d[\d.,]*\s?(pesos|dolares|usd)/i.test(text)) facts.has_prices = true;
+  // Promos.
+  if (/promo|descuento|% off|2x1|oferta|liquidacion|black friday|cyber/i.test(t)) facts.has_promo = true;
+  // Tono: voseo vs usted (si hay de los dos, neutral). Se prueba sobre
+  // el texto normalizado (sin acentos): «querés» normaliza a «queres».
+  const vos = /\b(queres|tenes|podes|vos|veni|mira|fijate|contanos|escribinos|pedinos)\b/i.test(t);
+  const usted = /\busted\b/i.test(t);
+  if (vos && !usted) facts.tone = 'vos';
+  else if (usted && !vos) facts.tone = 'usted';
+  // Audiencia: «para (las|los) X» / «dirigido a» / «pensado para».
+  const audSeen = new Set();
+  const pushAud = (w1, w2) => {
+    if (facts.audience.length >= 4) return;
+    const n1 = norm(w1 || '');
+    if (!AUDIENCE_NOUNS.includes(n1) || audSeen.has(n1)) return;
+    audSeen.add(n1);
+    let label = (w1 || '').trim();
+    if (w2 && AUDIENCE_NOUNS.includes(norm(w2))) label += ' ' + w2.trim();
+    facts.audience.push(label.slice(0, 40));
+  };
+  let am;
+  const audRe = /para (?:las |los |la |el )?([a-záéíóúñ]+)(?: ([a-záéíóúñ]+))?/gi;
+  while ((am = audRe.exec(text)) !== null && facts.audience.length < 4) pushAud(am[1], am[2]);
+  const audRe2 = /(?:dirigido|dirigida|pensado|pensada) (?:a|para) (?:las |los |la |el )?([a-záéíóúñ]+)(?: ([a-záéíóúñ]+))?/gi;
+  while ((am = audRe2.exec(text)) !== null && facts.audience.length < 4) pushAud(am[1], am[2]);
+  // Diferencial: frases cortas del texto con marcadores de diferencia.
+  // Primero la descripción (meta/JSON-LD — el «nosotros» del negocio),
+  // después el texto visible.
+  const NAV_JUNK = /^(men[uú]|inicio|home|contacto|nosotros|servicios?|productos?|galer[ií]a|blog|cookies|aviso legal|pol[ií]tica)/i;
+  const seenD = new Set();
+  let descTxt = '';
+  try { descTxt = (ld && ld.description) ? cleanText(ld.description) : (meta(html, 'description') || meta(html, 'og:description') || ''); } catch (e) {}
+  const sentences = String((descTxt ? descTxt + '. ' : '') + text)
+    .split(/[.!?|\n]+/).map((s) => s.trim()).filter((s) => s.length >= 15 && s.length <= 120);
+  for (const s of sentences) {
+    if (facts.diferencial.length >= 4) break;
+    if (NAV_JUNK.test(s)) continue;
+    const ns = norm(s);
+    if (!DIFF_MARKERS.some((m) => ns.includes(m))) continue;
+    const key = ns.slice(0, 60);
+    if (seenD.has(key)) continue;
+    seenD.add(key);
+    facts.diferencial.push(s.slice(0, 80));
+  }
+  return facts;
+}
+
 async function fetchBusinessSite(rawUrl) {
   const url = normalizeSiteUrl(rawUrl);
   if (!url) return null;
@@ -372,12 +466,18 @@ async function fetchBusinessSite(rawUrl) {
     city,
     palette: palette.slice(0, 2),
     photos,
+    // (LOTE ONBOARDING-Q1) Hechos del negocio: local, reservas, venta
+    // online, precios, promos, tono, audiencia y diferencial. La web es
+    // la fuente principal; la Q2 y las Q6/Q7 se adaptan a esto.
+    facts: extractBusinessFacts(html, ld),
+    address: '',
     // (v235) categoryHint: el @type declarado en el JSON-LD del propio
     // sitio — la cabecera de este módulo lo prometía desde v209 y el
     // result nunca lo devolvía. Lo consume rubro-id.js (familia jsonld,
     // la señal más declarativa: el negocio se auto-clasificó).
     categoryHint: ld ? (Array.isArray(ld['@type']) ? ld['@type'].join(' ') : String(ld['@type'] || '')) : '',
   };
+  result.address = (result.facts && result.facts.address) || '';
   // Temas por foto: gate-compatible (sin temas → el gate la deja afuera,
   // igual que al stock sin tags — regla v196). Señales: alt/contexto +
   // nombre de archivo (las rutas de uploads suelen nombrar el contenido).
@@ -449,4 +549,5 @@ module.exports = {
   isPrivateIpLiteral,
   pickName,
   isNameLike,
+  extractBusinessFacts,
 };

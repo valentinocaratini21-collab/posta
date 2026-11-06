@@ -2638,7 +2638,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, cmBloque, sabeSiempre, tasteBlock, styleLockExtras, casaLinea, propiaLinea, lang }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, cmBloque, sabeSiempre, tasteBlock, styleLockExtras, casaLinea, propiaLinea, audiencia, diferencial, lang }, apiKey) {
   const en = lang === 'en';
   // (growth ola 2) Capa de campaña comercial: sugiere SIN imponer — si el
   // negocio no vende en esa fecha, se ignora (test de pertenencia manda).
@@ -2668,6 +2668,14 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
   const webAngleLine = (dna && dna.website_url)
     ? `\nEl negocio tiene web (${String(dna.website_url).slice(0, 80)}): CON CRITERIO (orientativo: como máximo 1 de cada 6-8 ideas, nunca siempre), una de las ideas puede ser un posteo que lleve tráfico a la web. Tiene que presentar algo CONCRETO de la web (un producto con su precio real, el catálogo, una promo vigente) y cerrar con CTA "link en bio" o "mirá todos los detalles en la web". Solo cuando el tema calce de verdad; prohibido el posteo vago tipo "visitá nuestra web" sin nada concreto.`
     : '';
+  // (LOTE ONBOARDING-Q1) Q6/Q7 de la prueba, dichas por el dueño: a
+  // quién le habla el contenido y de dónde salen los ganchos.
+  const audienciaLine = audiencia
+    ? (en ? `\nAudience (who the content speaks to — not everyone): ${String(audiencia).slice(0, 60)}` : `\nAudiencia (a quién le habla el contenido, no a todos): ${String(audiencia).slice(0, 60)}`)
+    : '';
+  const diferencialLine = diferencial
+    ? (en ? `\nWhat makes this business different (hooks come from here): ${String(diferencial).slice(0, 120)}` : `\nDiferencial del negocio (de ahí salen los ganchos): ${String(diferencial).slice(0, 120)}`)
+    : '';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     signal: AbortSignal.timeout(45000),
     method: 'POST',
@@ -2688,7 +2696,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'user',
           content: businessContext({ business, category, description, dna, tone, learnings }) +
-            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${cmBloque ? `\nCEREBRO CM — cómo piensa un gran community manager para ESTE negocio (todo con datos reales de esta cuenta, nada inventado):\n${cmBloque}` : ''}${sabeSiempre ? `\n${sabeSiempre}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\n${casaLinea ? `\n${casaLinea}` : ''}\n${propiaLinea ? `\n${propiaLinea}` : ''}
+            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${cmBloque ? `\nCEREBRO CM — cómo piensa un gran community manager para ESTE negocio (todo con datos reales de esta cuenta, nada inventado):\n${cmBloque}` : ''}${sabeSiempre ? `\n${sabeSiempre}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\n${casaLinea ? `\n${casaLinea}` : ''}\n${propiaLinea ? `\n${propiaLinea}` : ''}${audienciaLine}${diferencialLine}
 Generá las 7 ideas.`,
         },
       ],
@@ -2745,6 +2753,12 @@ async function generateIdeas(input, apiKey, opts = {}) {
   // cambia nada.
   if (input && Array.isArray(input.vetos) && input.vetos.length) {
     ideas = fundamentoLiteral.filtrarIdeasVetadas(ideas, input.vetos);
+  }
+  // (LOTE ONBOARDING-Q1) Puerta dura de líneas rojas (Q8 de la prueba):
+  // mismo post-filtro que los vetos — una idea que toca lo que el dueño
+  // dijo que jamás publica no sale ni con otra vuelta.
+  if (input && Array.isArray(input.lineasRojas) && input.lineasRojas.length) {
+    ideas = fundamentoLiteral.filtrarIdeasVetadas(ideas, input.lineasRojas);
   }
   // (RUBRO-GARANTÍAS ×6 · pieza 1) Puerta FINAL de producto: cada idea
   // queda anotada con su producto del fundamento (_rgProducto) o marcada
