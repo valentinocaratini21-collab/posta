@@ -203,6 +203,12 @@ function cardOf(post, recomendada) {
     caption_corta: cap.slice(0, 120),
     tipo: String(post.tipo || ''),
     media_type: String(post.media_type || 'image'),
+    // (LOTE PROXIMO-DESTAPADO · 6/11) El ritual necesita saber CUÁNDO
+    // se creó el posteo y CUÁNDO sale para decidir si ya está abierto
+    // desde las 00:00 (pzProximoYaAbierto): sin created_at o sin
+    // scheduled_at, fail-closed.
+    created_at: String(post.created_at || ''),
+    scheduled_at: String(post.scheduled_at || ''),
     recomendada: !!recomendada,
     rubro: rubroDeCarta(post),
   };

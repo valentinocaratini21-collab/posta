@@ -18794,6 +18794,58 @@ function hfMergePostsAll(base, extra) {
     return out;
   } catch (e) { return Array.isArray(base) ? base : []; }
 }
+// (LOTE PROXIMO-DESTAPADO · 6/11 · decisión Valentino «a las 00:00») El
+// velo se levanta a las 00:00 del día del posteo (zona de la cuenta):
+// un posteo que ya existía antes de la medianoche se muestra ABIERTO
+// desde las 00:00, para que el cliente tenga la noche y la mañana para
+// mirarlo, editarlo o pedir un cambio. Derivación pura (post, now,
+// tz), sin estado nuevo. Fail-closed: sin created_at legible, velado.
+// Inicio del día calendario de `date` en la zona `tz`: se toman las
+// partes y/m/d en la zona y se busca el instante cuya pared es 00:00
+// (correcto en días DST: nunca se suman 24 h). Si la pared del
+// candidato no es 00:00, NaN (fail-closed).
+function pzTzOffsetMs(inst, tz) {
+  try {
+    const zo = tz ? { timeZone: tz } : {};
+    const p = new Intl.DateTimeFormat('en-US', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }, zo)).formatToParts(inst);
+    const get = (t) => { const x = p.find((q) => q.type === t); return x ? Number(x.value) : 0; };
+    let h = get('hour'); if (h === 24) h = 0;
+    return Date.UTC(get('year'), get('month') - 1, get('day'), h, get('minute'), get('second')) - Math.floor(inst.getTime() / 1000) * 1000;
+  } catch (e) { return 0; }
+}
+function pzDiaInicioMs(date, tz) {
+  try {
+    const d = (date instanceof Date) ? date : new Date(date);
+    if (!d || isNaN(d)) return NaN;
+    const zo = tz ? { timeZone: tz } : {};
+    const p = new Intl.DateTimeFormat('en-US', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo)).formatToParts(d);
+    const get = (t) => { const x = p.find((q) => q.type === t); return x ? Number(x.value) : NaN; };
+    const y = get('year'), mo = get('month'), da = get('day');
+    if (!y || !mo || !da) return NaN;
+    const guess = Date.UTC(y, mo - 1, da, 12, 0, 0);
+    let cand = guess - pzTzOffsetMs(new Date(guess), tz) - 12 * 3600000;
+    cand = guess - pzTzOffsetMs(new Date(cand), tz) - 12 * 3600000;
+    try {
+      const v = new Intl.DateTimeFormat('en-US', Object.assign({ hour: '2-digit', minute: '2-digit', hour12: false }, zo)).formatToParts(new Date(cand));
+      const gv = (t) => { const x = v.find((q) => q.type === t); return x ? Number(x.value) : NaN; };
+      let vh = gv('hour'); if (vh === 24) vh = 0;
+      if (vh !== 0 || gv('minute') !== 0) return NaN;
+    } catch (e) { return NaN; }
+    return cand;
+  } catch (e) { return NaN; }
+}
+function pzProximoYaAbierto(post, nowMs, tz) {
+  try {
+    if (!post || !post.scheduled_at || !post.created_at) return false;
+    const sched = (typeof pcParseDate === 'function') ? pcParseDate(post.scheduled_at) : new Date(String(post.scheduled_at).replace(' ', 'T'));
+    const creado = (typeof pcParseDate === 'function') ? pcParseDate(post.created_at) : new Date(String(post.created_at).replace(' ', 'T'));
+    if (!sched || isNaN(sched) || !creado || isNaN(creado)) return false;
+    const inicio = (typeof pzDiaInicioMs === 'function') ? pzDiaInicioMs(sched, tz) : NaN;
+    if (!Number.isFinite(inicio)) return false;
+    const now = (typeof nowMs === 'number') ? nowMs : Date.now();
+    return creado.getTime() < inicio && now >= inicio;
+  } catch (e) { return false; }
+}
 function homeGridCompose(input) {
   const o = input || {};
   const upcoming = Array.isArray(o.upcoming) ? o.upcoming : [];
@@ -18995,13 +19047,26 @@ function homeGridCompose(input) {
     const ritArg = (typeof input !== 'undefined' && input && ('ritual' in input)) ? input.ritual : undefined;
     const ritPend = (typeof pzRitualPendiente === 'function') ? pzRitualPendiente(ritArg) : true;
     const openHoyRit = cardHoy && !ritPend;
+    // (LOTE PROXIMO-DESTAPADO · 6/11 · «a las 00:00») El posteo de un
+    // día futuro (o de hoy, creado antes de medianoche) rinde ABIERTO
+    // desde las 00:00 de su día: el cliente lo ve entero para
+    // editarlo o pedir un cambio. Y si ya lo reveló en el ritual
+    // (sel local), el feed no lo vuelve a velar. Sin created_at o
+    // sin zona, fail-closed (velado): pzProximoYaAbierto devuelve
+    // false. Los guards typeof protegen la extracción standalone
+    // del bloque HOME_FEED en tests (sin el resto del bundle).
+    let abiertoYa = false;
+    try { const tzA = (typeof pcTz === 'function') ? pcTz() : undefined; abiertoYa = (typeof pzProximoYaAbierto === 'function') ? pzProximoYaAbierto(nextPost, Date.now(), tzA) : false; } catch (e) { abiertoYa = false; }
+    let selAbierto = false;
+    try { selAbierto = (typeof pzRitualSelLeer === 'function') ? pzRitualSelLeer() === Number(nextPost.id) : false; } catch (e) { selAbierto = false; }
+    const openHoy = openHoyRit || abiertoYa || selAbierto;
     // (LOTE PROXIMO-RITUAL · ajuste posición 5/11 · decisión Valentino
     // 13:26) La carta va PRIMERA (idx 0): splice en 0, sin ancla. El
     // resto de la grilla no cambia de orden (el trío entero queda
     // debajo). El ancla FIFA (idxPub + avance por día) se retira: en
     // idx 0 no hay nada que partir y el fix v1 queda SUPERSEDED por
     // decisión (ver STATUS.md §0c y §4).
-    finalTiles.splice(0, 0, { kind: 'oculta', post: nextPost, openHoy: openHoyRit, hoy: cardHoy });
+    finalTiles.splice(0, 0, { kind: 'oculta', post: nextPost, openHoy, hoy: cardHoy });
   }
   return finalTiles;
 }
@@ -19840,10 +19905,33 @@ function homeTileHTML(t, i) {
     // ritual, que revela directo la recomendada. El velo (hf-carta-velo +
     // hf-carta-oculta) cubre el próximo de día FUTURO y el de HOY
     // hasta elegir. t.openHoy lo pone homeGridCompose.
+    // (LOTE PROXIMO-DESTAPADO · 6/11 · «a las 00:00») La cuenta de la
+    // tardecita vive EN la carta velada (día futuro): cuenta en vivo
+    // hasta las 00:00 de su día («faltan 4 h 37 min para las 00:00»,
+    // copy del mock aprobado). Solo si la medianoche está en el
+    // futuro y a menos de 24 h (si no, la chapita con día+hora reales
+    // ya alcanza). Reutiliza pzRitualCuentaTxt; el tick de 1 s vive
+    // en hfCuentaAbreTick. Sin fecha o sin zona, sin cuenta (nunca
+    // una fecha inventada).
+    let cuentaHtml = '';
+    try {
+      if (!t.openHoy && typeof pzDiaInicioMs === 'function' && typeof pzRitualCuentaTxt === 'function') {
+        const tzC = (typeof pcTz === 'function') ? pcTz() : undefined;
+        let dC = null;
+        if (typeof pcParseDate === 'function') dC = pcParseDate(p.scheduled_at);
+        if (!dC) { const sC = String(p.scheduled_at || '').replace(' ', 'T'); dC = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(sC) ? sC : sC + 'Z'); }
+        const abreMs = (dC && !isNaN(dC)) ? pzDiaInicioMs(dC, tzC) : NaN;
+        const faltaC = Number.isFinite(abreMs) ? abreMs - Date.now() : NaN;
+        if (Number.isFinite(faltaC) && faltaC > 0 && faltaC <= 24 * 3600000) {
+          const cuC = pzRitualCuentaTxt(faltaC);
+          cuentaHtml = `<span class="hf-cuenta-abre" data-pz-cuenta-abre="${new Date(abreMs).toISOString()}">${phEn ? `only <b>${esc(cuC.faltan)}</b> left until 00:00` : `faltan <b>${esc(cuC.faltan)}</b> para las 00:00`}</span>`;
+        }
+      }
+    } catch (e) { cuentaHtml = ''; }
     if (t.openHoy) {
       return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
     }
-    return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta hf-carta-magia" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pz-abrir-ritual="1" role="button" tabindex="0" aria-label="${phEn ? 'Next post, hidden. Tap to see the options' : 'Próximo posteo, oculto. Tocá para ver las opciones'}"><span class="hf-carta-velo" aria-hidden="true"></span>${hoyBadge}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
+    return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta hf-carta-magia" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pz-abrir-ritual="1" role="button" tabindex="0" aria-label="${phEn ? 'Next post, hidden. Tap to see the options' : 'Próximo posteo, oculto. Tocá para ver las opciones'}"><span class="hf-carta-velo" aria-hidden="true"></span>${hoyBadge}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}${cuentaHtml}</span></span></span>`;
   }
   return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${hoyBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span></span>`;
 }
@@ -21239,6 +21327,13 @@ function pzRitualHTML(d, en, selId) {
   }).join('');
   const head = `<div class="pz-ritual-head"><img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty"><div><b>${en ? 'good morning' : 'buen día'}</b><span>${en ? 'I brought your pack for today' : 'te traje tu paquete de hoy'}</span></div></div>
   <p class="pz-ritual-racha">${esc(rachaTx)}</p>`;
+  // (LOTE PROXIMO-DESTAPADO · corrección Valentino 6/11 17:32) La
+  // pantalla velada se ve de tarde a noche (17:00–00:00), no a la
+  // mañana: SIN saludo de hora del día — solo «te traje tu paquete
+  // de hoy». El saludo («buen día» / «good morning») queda solo en
+  // el ritual de la mañana (revelada / elegida). Sin saludo nuevo.
+  const headSinSaludo = `<div class="pz-ritual-head"><img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty"><div><span>${en ? 'I brought your pack for today' : 'te traje tu paquete de hoy'}</span></div></div>
+  <p class="pz-ritual-racha">${esc(rachaTx)}</p>`;
   if (d.elegida) {
     const picked = (d.cartas || []).find((c) => Number(c.id) === Number(d.elegida)) || d.cartas[0];
     return `<div class="pz-ritual-wrap-in">${head}
@@ -21255,7 +21350,23 @@ function pzRitualHTML(d, en, selId) {
   // entre 3. La aprobación vive en OK (pzRitualConfirmar), no en
   // revelar. Sin OK, el servidor sigue publicando la recomendada
   // (v687 intacto).
-  const sel = (selId && (d.cartas || []).find((c) => Number(c.id) === Number(selId))) || null;
+  let sel = (selId && (d.cartas || []).find((c) => Number(c.id) === Number(selId))) || null;
+  // (LOTE PROXIMO-DESTAPADO · 6/11 · «a las 00:00») Si el posteo de
+  // hoy ya se veía desde anoche (creado antes de medianoche, ya
+  // abierto), el ritual NO muestra un paquete velado falso ni una
+  // cuenta atrás falsa: rinde la carta revelada, lista para
+  // confirmar ([Sale así] / [Editar] / [Cambiar algo]). Las 9:00
+  // son la confirmación, no la revelación. Sin created_at legible,
+  // fail-closed (velo + cuenta, comportamiento v726 intacto).
+  if (!sel && !d.elegida) {
+    try {
+      const rec0 = d.recomendada || ((d.cartas && d.cartas[0]) || null);
+      if (rec0 && typeof pzProximoYaAbierto === 'function') {
+        const tzR = (typeof pcTz === 'function') ? pcTz() : undefined;
+        if (pzProximoYaAbierto(rec0, Date.now(), tzR)) sel = rec0;
+      }
+    } catch (e) {}
+  }
   if (sel) {
     const img = sel.media_type === 'video'
       ? `<video src="${esc(sel.imagen)}" muted playsinline controls preload="metadata" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block"></video>`
@@ -21291,13 +21402,13 @@ function pzRitualHTML(d, en, selId) {
     if (Number.isFinite(falta) && falta > 0) {
       const cuenta = pzRitualCuentaTxt(falta);
       const horaTxt = String(d.abre_hora || '9:00').replace(/^0/, '');
-      return `<div class="pz-ritual-wrap-in">${head}
+      return `<div class="pz-ritual-wrap-in">${headSinSaludo}
   <div class="pz-ritual-cuenta">
   <span class="pz-ritual-pack-chip">hoy · ${esc(horaTxt)}</span>
   <p class="pz-ritual-cuenta-tit">${en ? 'your pack opens in' : 'tu paquete se abre en'}</p>
   <p class="pz-ritual-cuenta-num" id="pzRitualCuenta" data-pz-cuenta-abre="${esc(d.abre_a)}" data-pz-cuenta-sesgo="${sesgo}"><span class="pz-ritual-cuenta-hm">${cuenta.hm}</span><span class="pz-ritual-cuenta-ss">${cuenta.ss}</span></p>
   <p class="pz-ritual-cuenta-sub" id="pzRitualCuentaSub" data-pz-cuenta-hora="${esc(horaTxt)}"${en ? ' data-pz-cuenta-en="1"' : ''}>${en ? `only <b>${esc(cuenta.faltan)}</b> left until ${esc(horaTxt)}` : `faltan <b>${esc(cuenta.faltan)}</b> para las ${esc(horaTxt)}`}</p>
-  <div class="pz-ritual-pack-velo" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><i class="pz-dorso"><b>✦</b></i><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
+  <div class="pz-ritual-pack-velo" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
   <h2>${en ? 'your post for today' : 'tu posteo de hoy'}</h2>
   <p>${en ? '1 card inside' : '1 carta adentro'}</p>
   <p class="pz-ritual-ver-hint">${en ? `It opens at ${esc(horaTxt)}` : `Se abre a las ${esc(horaTxt)}`}</p></div>
@@ -21307,10 +21418,10 @@ function pzRitualHTML(d, en, selId) {
     }
   }
   const recId = (d.recomendada && d.recomendada.id) || ((d.cartas && d.cartas[0] && d.cartas[0].id) || '');
-  return `<div class="pz-ritual-wrap-in">${head}
+  return `<div class="pz-ritual-wrap-in">${headSinSaludo}
   <div class="pz-ritual-pack${d.dorada ? ' gold' : ''} pz-ritual-velado" id="pzRitualPack" data-pz-ritual-ver="1" data-pz-ritual-rec="${recId}" role="button" tabindex="0" aria-label="${en ? 'Your post for today, hidden. Tap to see it' : 'Tu posteo de hoy, oculto. Tocá para verlo'}">
   <span class="pz-ritual-pack-chip">hoy · 9:00</span>
-  <div class="pz-ritual-pack-velo" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><i class="pz-dorso"><b>✦</b></i><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
+  <div class="pz-ritual-pack-velo" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
   <h2>${en ? 'your post for today' : 'tu posteo de hoy'}</h2>
   <p>${en ? '1 card inside' : '1 carta adentro'}</p>
   <p class="pz-ritual-ver-hint">${en ? 'Tap to see it' : 'Tocá para verla'}</p></div>
@@ -23375,10 +23486,32 @@ function hfLiveBusy() {
   } catch (e) {}
   return false;
 }
+let HF_CUENTA_T = 0; // LOTE PROXIMO-DESTAPADO: intervalo del tick de 1 s de la cuenta hasta las 00:00
+// Tick de 1 s de la cuenta de la tardecita (carta velada del feed, día
+// futuro): actualiza el texto en vivo; a 0 fuerza el tick vivo para
+// que la carta se abra sola, sin re-cargar. Sin carta velada no hace
+// nada (el intervalo sigue, una query por segundo). Si la app está
+// oculta, no cuenta (el tick vivo de 50 s + visibilitychange se
+// encargan al volver).
+function hfCuentaAbreTick() {
+  try {
+    if (typeof document === 'undefined' || document.hidden) return;
+    const el = document.querySelector('[data-pz-cuenta-abre]');
+    if (!el) return;
+    const abre = el.getAttribute('data-pz-cuenta-abre');
+    const falta = Date.parse(abre) - Date.now();
+    if (!Number.isFinite(falta) || falta <= 0) { try { if (typeof hfLiveTick === 'function') hfLiveTick(true); } catch (e) {} return; }
+    if (typeof pzRitualCuentaTxt !== 'function') return;
+    const cu = pzRitualCuentaTxt(falta);
+    const en = (typeof hfIsEn === 'function') ? hfIsEn() : false;
+    el.innerHTML = en ? `only <b>${esc(cu.faltan)}</b> left until 00:00` : `faltan <b>${esc(cu.faltan)}</b> para las 00:00`;
+  } catch (e) {}
+}
 function hfLiveStart() {
   if (HF_LIVE.started) return;
   HF_LIVE.started = true;
   setInterval(() => { try { hfLiveTick(false); } catch (e) {} }, 50000);
+  if (!HF_CUENTA_T) HF_CUENTA_T = setInterval(() => { try { hfCuentaAbreTick(); } catch (e) {} }, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { hfLiveTick(true); } catch (e) {} } });
   window.addEventListener('focus', () => { try { hfLiveTick(true); } catch (e) {} });
 }
