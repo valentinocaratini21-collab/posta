@@ -19226,6 +19226,21 @@ function hfLiveSnapshot(tiles, prof) {
         image_path: String(p.image_path || ''), pinned: p.pinned ? 1 : 0, published_at: String(p.published_at || ''),
         cover_path: String(p.cover_path || ''), cover_pos: (p.cover_pos === null || p.cover_pos === undefined) ? 50 : Number(p.cover_pos),
       };
+    } else if (t.kind === 'oculta' && t.post && t.post.id !== null && t.post.id !== undefined) {
+      // (LOTE PROXIMO-ATASCADO · 6/11 · reporte Valentino 17:06) La carta
+      // velada del próximo TAMBIÉN se registra, por su post id, para que
+      // el diff vivo la siga: sin ella, al salir el posteo de hoy la
+      // carta vieja quedaba clavada en idx 0 y la nueva nunca entraba.
+      // La clave 'oculta:<id>' no se cruza con ningún post id real. Lo
+      // que vigila el diff es lo que define la carta: scheduled_at y si
+      // hoy ya se eligió (openHoy: velada → abierta).
+      const p = t.post;
+      posts['oculta:' + String(p.id)] = {
+        id: 'oculta:' + String(p.id), status: 'oculta', scheduled_at: String(p.scheduled_at || ''),
+        image_path: '', pinned: 0, published_at: '',
+        cover_path: '', cover_pos: 50,
+        openHoy: t.openHoy ? 1 : 0,
+      };
     } else if (t.kind === 'ig' && t.img) {
       posts['ig:' + String(t.img)] = { id: 'ig:' + String(t.img), status: 'ig', scheduled_at: '', image_path: String(t.img), pinned: t.pinned ? 1 : 0, published_at: '' };
     }
@@ -19243,7 +19258,7 @@ function hfLiveDiff(prev, next) {
   for (const id of Object.keys(B)) {
     if (!(id in A)) { out.added.push(id); if (B[id].status === 'published') out.justPublished.push(id); continue; }
     const a = A[id], b = B[id];
-    if (a.status !== b.status || a.scheduled_at !== b.scheduled_at || a.image_path !== b.image_path || a.pinned !== b.pinned || a.published_at !== b.published_at || a.cover_path !== b.cover_path || a.cover_pos !== b.cover_pos) {
+    if (a.status !== b.status || a.scheduled_at !== b.scheduled_at || a.image_path !== b.image_path || a.pinned !== b.pinned || a.published_at !== b.published_at || a.cover_path !== b.cover_path || a.cover_pos !== b.cover_pos || a.openHoy !== b.openHoy) {
       out.changed.push(id);
       if (a.status !== 'published' && b.status === 'published') out.justPublished.push(id);
     }
@@ -23449,7 +23464,18 @@ function hfLiveApply(job) {
   try { pzPubCelebMaybe(job); } catch (e) {}
   const grid = root.querySelector('.hf-grid');
   const nextById = {};
-  tiles.forEach((t, i) => { if (t.kind === 'post' && t.post) nextById[String(t.post.id)] = { t, i }; });
+  const nextOculta = {};
+  tiles.forEach((t, i) => {
+    if (t.kind === 'post' && t.post) nextById[String(t.post.id)] = { t, i };
+    else if (t.kind === 'oculta' && t.post) nextOculta['oculta:' + String(t.post.id)] = { t, i };
+  });
+  // (LOTE PROXIMO-ATASCADO · 6/11) La carta del próximo (velada o
+  // abierta) es la única tile con .hf-carta-magia; velada no lleva
+  // data-post-id por diseño, así que se la ubica por esa clase, nunca
+  // por id. La abierta TAMBIÉN la lleva, así que el mismo gancho sirve
+  // para los dos estados.
+  const hfNextCardEl = () => { try { return root.querySelector('.hf-tile.hf-carta-magia'); } catch (e) { return null; } };
+  const hfNextCardCell = (el) => { if (!el) return null; try { const c = el.closest('.hf-cell'); return c || el; } catch (e) { return el; } };
   // Conteos del encabezado: se actualizan los <b> en el orden en que
   // homeHeadHTML los emite (publicaciones · seguidores · seguidos),
   // solo si el conjunto de conteos presentes no cambió; si cambió,
@@ -23481,12 +23507,26 @@ function hfLiveApply(job) {
   // Tiles removidas (salieron de la composición, p. ej. archivadas).
   for (const id of diff.removed) {
     if (String(id).startsWith('ig:')) continue;
+    if (String(id).startsWith('oculta:')) {
+      const card = hfNextCardEl();
+      if (card) { const c = hfNextCardCell(card); if (c) c.remove(); }
+      continue;
+    }
     const el = root.querySelector(`.hf-tile[data-post-id="${CSS.escape ? CSS.escape(String(id)) : String(id)}"]`);
     if (el) el.remove();
   }
   // Tiles cambiadas: reemplazo en el lugar (outerHTML), preservando
   // posición y scroll. La que acaba de publicarse entra con realce.
   for (const id of diff.changed) {
+    if (String(id).startsWith('oculta:')) {
+      const rec = nextOculta[String(id)];
+      if (!rec) continue;
+      const card = hfNextCardEl();
+      if (!card) continue;
+      const cell0 = hfNextCardCell(card);
+      if (cell0) cell0.outerHTML = homeTileHTML(rec.t, rec.i);
+      continue;
+    }
     const rec = nextById[String(id)];
     if (!rec) continue;
     const el = root.querySelector(`.hf-tile[data-post-id="${CSS.escape ? CSS.escape(String(id)) : String(id)}"]`);
@@ -23502,6 +23542,17 @@ function hfLiveApply(job) {
   // primera publicada; las recién publicadas, al frente de las pub).
   if (grid) {
     for (const id of diff.added) {
+      if (String(id).startsWith('oculta:')) {
+        const rec = nextOculta[String(id)];
+        if (!rec) continue;
+        const t2 = Object.assign({}, rec.t);
+        if (HF_VISITOR) t2.visitor = true;
+        const html = homeTileHTML(t2, rec.i);
+        const cur = grid.querySelector('.hf-tile.hf-carta-magia');
+        if (cur) { const c = cur.closest('.hf-cell'); if (c) c.outerHTML = html; else cur.outerHTML = html; }
+        else grid.insertAdjacentHTML('afterbegin', html);
+        continue;
+      }
       const rec = nextById[String(id)];
       if (!rec) continue;
       const t2 = Object.assign({}, rec.t);
