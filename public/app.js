@@ -9953,8 +9953,8 @@ function pzSemanaAprobadaSync() {
 // (LOTE ACEPTAR-TODO-SEMANA) Marca en su lugar tras aprobar uno por
 // el botón, sin render(). Si existe el helper de la enmienda
 // sin-refresh (pzAprobarEnSitio, lote gris-tik) manda él; si no,
-// marcado mínimo propio (corazón lleno + tik verde con estilos en
-// línea idénticos a la spec gris-tik, para que el visual coincida
+// marcado mínimo propio (tik verde en el slot del corazón, sin estilos
+// en línea — la geometría la pone .hf-tik — para que el visual coincida
 // con y sin ese lote). El próximo render completo lo reemplaza por
 // el marcado canónico, así que nunca se duplica el tik. Solo se
 // llama en modo manual: en piloto la constancia no se marca (por
@@ -9968,14 +9968,18 @@ function pzAcceptAllWeekMark(tile, post) {
     if (typeof pzAprobarEnSitio === 'function') { try { pzAprobarEnSitio(tile, String(post.id), post.scheduled_at); return; } catch (e) {} }
     if (!tile) return;
     const like = tile.querySelector ? tile.querySelector('[data-hf-like]') : null;
+    const likeInStrip = !!(like && like.closest && like.closest('.hf-strip'));
     if (like && like.remove) like.remove(); // (LOTE APROBAR-TIK-EN-VIVO) aprobado = tik, no corazón
+    // (LOTE TIK-EN-CORAZON 5/11: el tik va EN EL SLOT del corazón — en la franja si el corazón vivía ahí, abajo a la derecha sobre la foto si no. Sin estilos en línea: la geometría la pone .hf-tik en styles.css. Solo es el respaldo si pzAprobarEnSitio no está; en el bundle siempre está.)
     if (tile.querySelector && !tile.querySelector('.hf-tik')) {
       const s = document.createElement('span');
       s.className = 'hf-tik';
       s.textContent = '✓';
-      s.style.cssText = 'position:absolute;top:6px;left:6px;width:26px;height:26px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;';
-      tile.style.position = 'relative';
-      tile.insertBefore(s, tile.firstChild);
+      s.setAttribute('aria-hidden', 'true');
+      const strip = tile.querySelector ? tile.querySelector('.hf-strip') : null;
+      if (likeInStrip && strip && strip.appendChild) strip.appendChild(s);
+      else if (tile.appendChild) tile.appendChild(s);
+      else if (tile.insertBefore) tile.insertBefore(s, tile.firstChild);
     }
   } catch (e) {}
 }
@@ -19781,12 +19785,12 @@ function homeTileHTML(t, i) {
   // lleva fondo de respaldo de marca (no gris) mientras carga el
   // primer frame: jamás un cuadro gris vacío, ni siquiera transitorio.
   const vidCls = (isV && covT && !covT.has) ? ' hf-tile-vid' : '';
-  // (LOTE CORAZÓN-MARCA) Corazón lleno persistente: el posteo ya
-  // está en la agenda (programado) o ya salió (publicado). Los
-  // borradores pendientes quedan vacíos. No es la aprobación fina
-  // ('pending' vs 'approved'): programar desde el corazón YA deja
-  // el posteo en la agenda, y esa es la marca que se espera ver.
-  const hfLikeOn = String(p.status) === 'scheduled' || String(p.status) === 'published';
+  // (LOTE TIK-EN-CORAZON 5/11 · decisión Valentino: un estado, un lugar.
+  // SUPERSEDE la parte de CORAZÓN-MARCA que llenaba el corazón por estar
+  // programado: el corazón lleno ahora marca SOLO que ya salió (publicado).
+  // Pendiente (draft/scheduled sin aprobar) = corazón contorno; aprobado sin
+  // salir = tik verde en el lugar del corazón; publicado = corazón lleno.
+  const hfLikeOn = String(p.status) === 'published';
   // (LOTE HABLAR-DE-ESTE-POSTEO · 2/11 · aprobado por Valentino) Botón
   // 💬 en la tile: un toque abre el chat principal con este posteo
   // anclado (foto + texto). Solo posteos ajustables del dueño
@@ -19806,14 +19810,13 @@ function homeTileHTML(t, i) {
   // abajo-sobre-foto del lote corazón-abajo — este lote no la toca.)
   const likeBtn = `<button type="button" class="hf-like hf-like-in" data-hf-like${hfLikeOn ? ' data-hf-on="1"' : ''} aria-pressed="${hfLikeOn ? 'true' : 'false'}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Approve with heart' : 'Aprobar con corazón'}">${pzIc('heart', 20)}</button>`;
   const likeInStrip = !!chipTxt;
-  // (LOTE CORAZÓN-GRIS-TIK) Aprobado con el corazón: queda visible
-  // en el feed, a todo color, con tik verde (corrección Valentino
-  // 2/11: SIN gris, no debe parecer archivado). Solo mientras sigue
-  // sin salir (draft/scheduled): al publicarse baja al grupo de ya
-  // salidos con su aspecto normal y el corazón lleno sigue marcando
-  // la aprobación. Guardia typeof: los harnesses viejos que extraen
-  // homeTileHTML sola no rompen si el helper no está cargado (en el
-  // bundle siempre está definido).
+  // (LOTE CORAZÓN-GRIS-TIK 2/11: aprobado = tik verde a todo color, SIN gris,
+  // no debe parecer archivado. LOTE TIK-EN-CORAZON 5/11: el tik va EN EL LUGAR
+  // del corazón — un estado, un lugar. Solo mientras sigue sin salir
+  // (draft/scheduled): al publicarse baja al grupo de ya salidos con su aspecto
+  // normal y el corazón lleno sigue marcando la aprobación. Guardia typeof: los
+  // harnesses viejos que extraen homeTileHTML sola no rompen si el helper no está
+  // cargado (en el bundle siempre está definido).
   const hfAprobado = (String(p.status) === 'draft' || String(p.status) === 'scheduled') && (String(p.approval || '') === 'approved' || ((typeof pzAprobadoEs === 'function') && pzAprobadoEs(p.id)));
   const tikSpan = hfAprobado ? '<span class="hf-tik" aria-hidden="true">✓</span>' : '';
   const filtroGrupo = (p.status === 'draft' || p.status === 'scheduled') ? 'pendientes' : (p.status === 'published' ? 'publicados' : ''); // (LOTE FILTRO-FEED)
@@ -19870,7 +19873,7 @@ function homeTileHTML(t, i) {
     }
     return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta hf-carta-magia" data-sched-at="${esc(String(p.scheduled_at || ''))}" aria-label="${phEn ? 'Next post, hidden' : 'Próximo posteo, oculto'}"><span class="hf-carta-velo" aria-hidden="true"></span><span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
   }
-  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${(likeInStrip && !hfAprobado) ? likeBtn : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${(likeInStrip || hfAprobado) ? '' : likeBtn}${tikSpan}</span></span>`;
+  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}<span class="hf-strip">${chip}${archChip}${likeInStrip ? (hfAprobado ? tikSpan : likeBtn) : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : (hfAprobado ? tikSpan : likeBtn)}</span></span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -23691,14 +23694,16 @@ function pzAprobarEnSitio(tile, id, schedAt) {
     try { if (typeof pzAprobadoMarcar === 'function') pzAprobadoMarcar(id); } catch (e) {}
     try {
       // (LOTE APROBAR-TIK-EN-VIVO · orden Valentino 4/11, REVERSO de la pieza 5 de v614): al aprobar, el corazón CAMBIA a tik verde: el botón corazón se quita y queda solo el tik.
+      // (LOTE TIK-EN-CORAZON 5/11 · decisión Valentino: un estado, un lugar. El tik va EN EL SLOT del corazón: dentro de la franja si el corazón vivía ahí o si la franja ya tiene chapita, abajo a la derecha sobre la foto si no. Nunca arriba a la izquierda. Si la aprobación trae chapita (bloque de abajo), el próximo render natural pone el tik en la franja; el marcado en vivo queda en el slot del corazón, que es el mismo lugar.)
       const like = el.querySelector('.hf-like');
+      const likeInStrip = !!(like && like.closest && like.closest('.hf-strip'));
       if (like && like.remove) like.remove();
       if (!el.querySelector('.hf-tik')) {
-        // (CORAZÓN-EN-LÍNEA x GRIS-TIK v548: el botón puede vivir DENTRO
-        // de la franja (.hf-strip, absoluta); insertar el tik tras el botón
-        // lo dejaría dentro de la franja y se posicionaría contra ella, no
-        // contra la tile. El tik va SIEMPRE como hijo de la tile: arriba-izquierda.)
-        if (el.insertAdjacentHTML) el.insertAdjacentHTML('beforeend', '<span class="hf-tik" aria-hidden="true">\u2713</span>');
+        const tikHtml = '<span class="hf-tik" aria-hidden="true">\u2713</span>';
+        const strip = el.querySelector('.hf-strip');
+        const stripHasChip = !!(strip && strip.querySelector && strip.querySelector('.hf-chip'));
+        if ((likeInStrip || stripHasChip) && strip && strip.insertAdjacentHTML) strip.insertAdjacentHTML('beforeend', tikHtml);
+        else if (el.insertAdjacentHTML) el.insertAdjacentHTML('beforeend', tikHtml);
       }
     } catch (e) {}
     try {

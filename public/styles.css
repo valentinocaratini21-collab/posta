@@ -4659,10 +4659,14 @@ body.pz-postchat-open{overflow:hidden}
    El posteo aprobado queda visible en el feed, A TODO COLOR, con
    tik verde (CORRECCIÓN VALENTINO 2/11: SIN GRIS — nada que lo haga
    ver archivado; la marca es solo el tik + el corazón lleno).
-   El tik va arriba a la IZQUIERDA: el corazón vive arriba a la
-   derecha (v544) o abajo a la derecha (corazón-abajo) y la chapita
-   abajo — la esquina superior izquierda no tapa nada en ningún lote. */
-.hf-tik{position:absolute;top:6px;left:6px;z-index:6;width:26px;height:26px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;line-height:1;box-shadow:0 1px 6px rgba(10,30,51,.35)}
+   (LOTE TIK-EN-CORAZON · Valentino 5/11: un estado, un lugar — el tic va
+   EN EL LUGAR del corazón y lo reemplaza. Sin chapita ocupa el slot del
+   corazón abajo a la derecha sobre la foto (34px, igual que .hf-like-in);
+   con chapita vive dentro de la franja (24px, igual que el corazón en
+   línea). La regla vieja top:6px left:6px 26px se retira: ningún estado
+   pone el tik arriba a la izquierda. Verde #1FA855 y ✓ blanco intactos.) */
+.hf-tik{position:absolute;bottom:38px;right:6px;z-index:5;width:34px;height:34px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;line-height:1;box-shadow:0 1px 6px rgba(10,30,51,.35)}
+.hf-tile > .hf-strip .hf-tik{position:static;flex:none;width:24px;height:24px;margin:0;font-size:14px;box-shadow:0 1px 6px rgba(10,30,51,.25);z-index:5}
 
 /* (LOTE CORAZÓN-EN-LÍNEA · decisión Valentino 2/11: corazón chiquito en
    la misma línea que día+hora. Solo tiles CON chapita (hf-has-chip);
