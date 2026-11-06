@@ -2422,7 +2422,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v723'; // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
+const CHUNK_V = '20261105-v732'; // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -3588,7 +3588,7 @@ function lpInitHero() {
     const items = [
       '🐾 <b>Posty</b> publicó el posteo del martes <span>· hace 2 h</span>',
       '💬 <b>Posty</b> dejó listas 3 respuestas a comentarios <span>· hace 5 h</span>',
-      '🎬 El reel de la semana ya está listo <span>· ayer</span>',
+      '🎬 Los reels de la semana ya están listos <span>· ayer</span>',
       '📸 Historia de la promo programada <span>· hoy 9:00</span>',
       '📊 Tu reporte de la semana está listo <span>· el lunes</span>'
     ];
@@ -4581,7 +4581,7 @@ function lpAtencionHTML() {
  * PROPIA sección completa — kicker, titular de beneficio, explicación,
  * 3 ✓, MUESTRA real del producto y CTA — estilo Predis, con el sistema
  * visual del sitio. Posteos y Análisis ya tienen su sección completa
- * arriba (#analisis y la semana); acá van las que faltaban: Reels,
+ * arriba (#analisis y la semana); acá van las que faltaban:
  * Historias, Comentarios, Growth, Ideas y Tienda, más el detalle de
  * pieza de Posteos. Solo se afirma lo que el producto hace hoy. */
 function lpCapSectionsHTML() {
@@ -4594,7 +4594,7 @@ function lpCapSectionsHTML() {
     <div class="cap-copy">
       <div class="cap-kick">Posteos de Instagram</div>
       <h2>Tu semana entera, <span class="hl">publicada sola</span></h2>
-      <p class="cap-exp">Posty estudia tu negocio y arma tu semana completa: 7 posteos + 1 reel con tus productos, tus colores y tu protagonista. Se publica a tu mejor hora. Vos solo mirás — y frenás si algo no te cierra.</p>
+      <p class="cap-exp">Posty estudia tu negocio y arma tu semana completa: 7 posteos + 2 reels (martes y jueves) con tus productos, tus colores y tu protagonista. Se publica a tu mejor hora. Vos solo mirás — y frenás si algo no te cierra.</p>
       <ul class="cap-list">
         <li>De tu producto exacto, nunca genérico</li>
         <li>La línea visual de TU feed, heredada</li>
@@ -4616,9 +4616,9 @@ function lpCapSectionsHTML() {
     <div class="cap-copy">
       <div class="cap-kick">Reels</div>
       <h2>Reels que muestran tu negocio <span class="hl">en movimiento</span></h2>
-      <p class="cap-exp">El video es lo que más gente nueva trae, y es lo que menos tiempo tenés de hacer. Posty arma tus reels con tu material y tu marca, con el gancho primero y el cierre que empuja a escribirte. Salen publicados solos.</p>
+      <p class="cap-exp">El video es lo que más gente nueva trae, y es lo que menos tiempo tenés de hacer. Posty arma tus reels con tu material y tu marca, con el gancho primero y el cierre que empuja a escribirte. Salen publicados solos, martes y jueves.</p>
       <ul class="cap-list">
-        <li>5 por semana</li>
+        <li>2 por semana, martes y jueves</li>
         <li>Con tus fotos y videos, o creados desde cero</li>
         <li>Se publican solos, a tu mejor hora</li>
       </ul>
@@ -4626,11 +4626,11 @@ function lpCapSectionsHTML() {
     </div>
     <div class="cap-side">
       <div class="cap-phone">
-        <video src="posty-rubros.mp4?v=2" poster="posty-rubros-poster.jpg?v=2" autoplay muted loop playsinline preload="metadata" aria-label="Reel real armado por Posty para un café"></video>
+        <img src="posty-rubros-poster.jpg?v=2" alt="Reel real armado por Posty para un café">
         <span class="cap-ph-chip">🎬 REEL</span>
-        <div class="cap-ph-bot"><b>@tu.negocio</b><span>El reel de tu semana, listo y publicado solo.</span><div class="cap-ph-bar"><i></i></div></div>
+        <div class="cap-ph-bot"><b>@tu.negocio</b><span>Tus reels, listos y publicados solos.</span><div class="cap-ph-bar"><i></i></div></div>
       </div>
-      <p class="cap-note">Video real de Posty trabajando: así sale un reel tuyo.</p>
+      <p class="cap-note">Un reel real de Posty trabajando: así sale uno tuyo.</p>
     </div>
   </div></div></div>
   <div class="section cap-sec"><div class="wrap"><div class="cap-grid">
@@ -5220,7 +5220,7 @@ function landingView(cfg) {
     <div class="cmp-scroll"><div class="cmp-table cmp4" role="table" aria-label="Comparación: hacerlo vos, un community manager freelance, una agencia o Posty">
       <div class="cmp-row cmp-head" role="row"><div></div><div>Lo hacés vos</div><div>CM freelance</div><div>Agencia</div><div class="win">Posty</div></div>
       <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>$0 de bolsillo — pero es tu tiempo</div><div>Desde $1.000.000 *</div><div>Más que un CM freelance *</div><div class="win" id="cmpPostyPrice">Desde ${esc(lpPlanLabel)}</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Qué incluye</div><div>Lo que llegues a hacer</div><div>Posteos; reels e historias, según acuerdo</div><div>Posteos y estrategia</div><div class="win">7 posteos por semana · 5 reels · historias todos los días</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Qué incluye</div><div>Lo que llegues a hacer</div><div>Posteos; reels e historias, según acuerdo</div><div>Posteos y estrategia</div><div class="win">7 posteos por semana · 2 reels (martes y jueves)</div></div>
       <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>Horas, cada semana</div><div>Días</div><div>1 a 2 semanas</div><div class="win">1 minuto</div></div>
       <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>—</div><div>Coordinación y aprobaciones</div><div>Varias por mes</div><div class="win">Cero</div></div>
       <div class="cmp-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>Vos, cuando podés</div><div>A veces está incluido</div><div>Si está en el contrato</div><div class="win">Respuestas listas para tu OK en un toque</div></div>
@@ -5281,7 +5281,7 @@ function landingView(cfg) {
   <div class="lp-stats"><div class="wrap">
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">7 posteos + 5 reels</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">7 posteos + 2 reels</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
       <div class="lp-stat"><div class="lp-stat-n">USD 6,63<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta desde $1.000.000 por mes</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>

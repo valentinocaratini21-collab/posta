@@ -1143,7 +1143,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
     <p class="lede">Tres pasos y tu Instagram anda solo.</p>
     <div class="steps3">
       <div class="step3"><div class="n">1</div><div><b>Pasame tu @ o tu web</b><p>10 segundos: tu Instagram o el link de tu sitio, nada más.</p></div></div>
-      <div class="step3"><div class="n">2</div><div><b>Armo tu semana</b><p>5 posteos + 1 reel: diseño, caption y hashtags con tu onda y tus colores.</p></div></div>
+      <div class="step3"><div class="n">2</div><div><b>Armo tu semana</b><p>5 posteos + 1 reel de muestra: diseño, caption y hashtags con tu onda y tus colores.</p></div></div>
       <div class="step3"><div class="n">3</div><div><b>Vos aprobás, yo publico</b><p>Nada sale sin tu OK.</p></div></div>
     </div>
   </div>
@@ -1206,7 +1206,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
     <h3>Todo lo que Posty hace por vos</h3>
     <p class="lede">No es solo postear: es el trabajo completo de un community manager, todos los días.</p>
     <div class="hace-grid">
-      <div class="hace-item"><div class="he">🎨</div><div><b>Diseña tu semana</b><p>Posteos, reels e historias con tu marca: tus fotos, tus colores y tu producto exacto. Nada de plantillas iguales para todos.</p></div></div>
+      <div class="hace-item"><div class="he">🎨</div><div><b>Diseña tu semana</b><p>Posteos y reels con tu marca: tus fotos, tus colores y tu producto exacto. Nada de plantillas iguales para todos.</p></div></div>
       <div class="hace-item"><div class="he">✍️</div><div><b>Escribe para vender</b><p>Captions y hashtags en tu tono, pensados para que te compren, no para rellenar.</p></div></div>
       <div class="hace-item"><div class="he">⏰</div><div><b>Publica solo</b><p>A la mejor hora, todos los días. Te avisa 30 minutos antes por si querés frenar algo.</p></div></div>
       <div class="hace-item"><div class="he">🔍</div><div><b>Estudia tu negocio</b><p>Lee tu Instagram y tu rubro: qué vende, qué está funcionando y qué hace tu competencia.</p></div></div>
@@ -1410,7 +1410,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
         <h3>Todo esto viene con tu cuenta 👇</h3>
         <div class="benefit"><span class="b-ic">📅</span><span>Posteos automáticos: tu semana se crea y se publica sola, sin que hagas nada.</span></div>
         <div class="benefit"><span class="b-ic">🔔</span><span>Te aviso 30 minutos antes de cada publicación.</span></div>
-        <div class="benefit"><span class="b-ic">🎯</span><span>7 posteos y 1 reel por semana, pensados para vender: cada uno con su intención (reservas, consultas, ventas).</span></div>
+        <div class="benefit"><span class="b-ic">🎯</span><span>7 posteos y 2 reels por semana, martes y jueves, pensados para vender: cada uno con su intención (reservas, consultas, ventas).</span></div>
         <div class="benefit"><span class="b-ic">💬</span><span>Chat con Posty: pedís cambios hablando normal y se ajusta al toque.</span></div>
         <div class="benefit"><span class="b-ic">🔍</span><span>Análisis de tu cuenta y tu competencia trabajando en silencio: cada semana nace mejor que la anterior.</span></div>
         <div class="benefit"><span class="b-ic">💌</span><span>La Carta del domingo: el resumen de tu semana y lo que viene, sin que pidas nada.</span></div>
@@ -2860,10 +2860,10 @@ function auditStatsHTML(a) {
 // y su efecto, atados al número de hoy y al número con Posty del payload.
 const AUD_STEP_MAP = [
   { re: /ritmo de publicación/i, phase: 0,
-    step: () => 'Tu semana sale completa y pareja: 7 posteos + 1 reel, armada y programada por mí.',
+    step: () => 'Tu semana sale completa y pareja: 7 posteos + 2 reels (martes y jueves), armada y programada por mí.',
     fx: (f) => 'Pasás de ' + (f.now || 'tu ritmo de hoy') + ' a tu semana completa, todas las semanas.' },
   { re: /reels/i, phase: 0,
-    step: () => 'Sumo 1 reel por semana a tu grilla, creado por mí, con tu marca.',
+    step: () => 'Sumo 2 reels por semana a tu grilla — martes y jueves —, creados por mí, con tu marca.',
     fx: () => 'El formato que más empuja Instagram entra a tu mix desde esta semana.' },
   { re: /horarios muy repartidos/i, phase: 1,
     step: () => 'Cada posteo sale programado en una franja fija, siempre la misma.',
@@ -3759,7 +3759,7 @@ function renderReelRow() {
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || 'No se pudo cortar el reel');
       if (j.video) {
-        box.innerHTML = `<video src="${esc(j.video)}" controls playsinline style="width:100%;max-width:300px;border-radius:14px"></video><p class="tiny" style="margin-top:8px">🎬 Tu reel de muestra: nace de tu material y tu fundamento. En tu plan, sale uno así cada semana, solo.</p>`;
+        box.innerHTML = `<video src="${esc(j.video)}" controls playsinline style="width:100%;max-width:300px;border-radius:14px"></video><p class="tiny" style="margin-top:8px">🎬 Tu reel de muestra: nace de tu material y tu fundamento. En tu plan, salen 2 así por semana — martes y jueves —, solos.</p>`;
         trk('prueba_sample_reel_done', { scripted: !!j.scripted, cached: !!j.cached });
       } else {
         box.innerHTML = '<p class="tiny">' + esc(j.message || 'Hoy no se pudo cortar el reel de muestra 😅 Tu semana quedó guardada igual.') + '</p>';

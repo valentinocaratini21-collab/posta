@@ -1862,7 +1862,7 @@ function bindSettings() {
           ? `<div class="pz-trial-warn">⏰ <b>¡Te ${trialLeft === 1 ? 'queda 1 día' : `quedan ${trialLeft} días`} de prueba!</b> Suscribite para no frenar tus posteos.</div>`
           : `<div class="pz-trial-ok">${pzIc('gift', 14)} Estás en tu prueba gratis: te quedan <b>${trialLeft} días</b>.</div>`;
       }
-      const pmMixTxt = (pl) => [pl.postsPerWeek > 0 && `${pl.postsPerWeek} posteos`, pl.reelsPerWeek > 0 && `${pl.reelsPerWeek} reels`, pl.storiesPerWeek > 0 && `${pl.storiesPerWeek} historias`].filter(Boolean).join(' + ');
+      const pmMixTxt = (pl) => [pl.postsPerWeek > 0 && `${pl.postsPerWeek} posteos`, pl.reelsPerWeek > 0 && `${pl.reelsPerWeek} reels`].filter(Boolean).join(' + ');
       const curPlan = plans.find(p => p.id === cur) || plans[0];
       // Mix semanal con iconos (solo lo que el plan incluye) + features sin duplicar el mix.
       const pmMixItem = (icon, n, label) => n > 0 ? `<span>${icon} <b>${n}</b> ${label}</span>` : '';
@@ -1870,11 +1870,10 @@ function bindSettings() {
         const items = [
           pmMixItem(pzIc('post', 14), p.postsPerWeek, p.postsPerWeek === 1 ? 'posteo' : 'posteos'),
           pmMixItem(pzIc('reel', 14), p.reelsPerWeek, p.reelsPerWeek === 1 ? 'reel' : 'reels'),
-          pmMixItem(pzIc('story', 14), p.storiesPerWeek, p.storiesPerWeek === 1 ? 'historia' : 'historias'),
         ].filter(Boolean).join('');
         return items ? `<div class="pm-mix">${items}</div>` : '';
       };
-      const pmMixDup = /(\d+\s*(posts?|reels|historias)\b|historias todos los días)/i;
+      const pmMixDup = /(\d+\s*(posts?|reels)\b)/i; // (COPY-2-REELS v732) el mix es posteos + reels: se filtra la feature que lo duplica
       const planCard = (p) => {
         const pmSym = ({ ARS: '$', UYU: '$U ', USD: isUS ? '$' : 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' })[p.currency] || '$';
         const pmDec = (p.currency === 'ARS' || p.currency === 'UYU') ? 0 : 2;
@@ -2017,7 +2016,7 @@ function bindSettings() {
           <div class="plan-cur">
             <div class="pc-label">Plan actual</div>
             <div class="pc-name">Founder</div>
-            <div class="pc-det">Gratis para siempre · 7 posteos + 5 reels + 7 historias/semana</div>
+            <div class="pc-det">Gratis para siempre · 7 posteos + 2 reels/semana</div>
           </div>
         </div>
         <div id="planMsg" style="margin-top:10px"></div>`;

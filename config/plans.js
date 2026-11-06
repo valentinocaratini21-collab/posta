@@ -26,7 +26,6 @@ const DETAIL_ES_COMUN = {
 const DETAIL_ES = {
   esencial: [
     DETAIL_ES_COMUN.semana,
-    'Te produzco 1 reel por semana, con el guión pensado para tu negocio.',
     DETAIL_ES_COMUN.carrusel,
     DETAIL_ES_COMUN.captions,
     DETAIL_ES_COMUN.publicacion,
@@ -35,7 +34,6 @@ const DETAIL_ES = {
   ],
   pro: [
     DETAIL_ES_COMUN.semana,
-    'Te produzco 3 reels por semana y 3 historias por semana: tu negocio está presente todos los días.',
     DETAIL_ES_COMUN.carrusel,
     DETAIL_ES_COMUN.captions,
     DETAIL_ES_COMUN.publicacion,
@@ -46,7 +44,7 @@ const DETAIL_ES = {
   ],
   total: [
     DETAIL_ES_COMUN.semana,
-    'Te produzco 5 reels por semana e historias todos los días.',
+    'Te produzco 2 reels por semana, martes y jueves, con el guión pensado para tu negocio.',
     DETAIL_ES_COMUN.carrusel,
     DETAIL_ES_COMUN.captions,
     DETAIL_ES_COMUN.publicacion,
@@ -65,7 +63,6 @@ const DETAIL_ES = {
 const DETAIL_EN = {
   esencial: [
     'I build your whole week: 7 posts with your photos, your colors and your exact product — no cookie-cutter templates.',
-    'I produce 1 reel per week, scripted for your business.',
     'When an idea calls for it, I turn it into a carousel (up to 2 per week).',
     'I write every caption in your voice, with its selling angle and its hashtags.',
     'I post everything on its own, at the best time — and I give you a heads-up 30 minutes before, in case you want to pause anything.',
@@ -74,7 +71,6 @@ const DETAIL_EN = {
   ],
   pro: [
     'I build your whole week: 7 posts with your photos, your colors and your exact product — no cookie-cutter templates.',
-    'I produce 3 reels per week and 3 stories per week: your business shows up every day.',
     'When an idea calls for it, I turn it into a carousel (up to 2 per week).',
     'I write every caption in your voice, with its selling angle and its hashtags.',
     'I post everything on its own, at the best time — and I give you a heads-up 30 minutes before, in case you want to pause anything.',
@@ -83,7 +79,7 @@ const DETAIL_EN = {
   ],
   total: [
     'I build your whole week: 7 posts with your photos, your colors and your exact product — no cookie-cutter templates.',
-    'I produce 3 reels per week and stories every day.',
+    'I produce 2 reels per week, on Tuesdays and Thursdays, scripted for your business.',
     'When an idea calls for it, I turn it into a carousel (up to 2 per week).',
     'I write every caption in your voice, with its selling angle and its hashtags.',
     'I post everything on its own, at the best time — and I give you a heads-up 30 minutes before, in case you want to pause anything.',
@@ -170,7 +166,6 @@ const PLANS_AR = {
     ai: AI_LIMITS.esencial,
     features: [
       '7 posteos por semana, automáticos',
-      '1 reel por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -191,8 +186,6 @@ const PLANS_AR = {
     ai: AI_LIMITS.pro,
     features: [
       '7 posteos por semana, automáticos',
-      '3 reels por semana',
-      '3 historias por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -216,15 +209,14 @@ const PLANS_AR = {
     currency: 'ARS',
     postsPerWeek: 7,
     carouselsPerWeek: 2,
-    reelsPerWeek: 5,
+    reelsPerWeek: 2,
     storiesPerWeek: 7,
     tagline: 'Tu negocio atendido y vendiendo, con tu OK en un toque',
     detail: DETAIL_ES.total,
     ai: AI_LIMITS.total,
     features: [
       '7 posteos por semana, automáticos',
-      '5 reels por semana',
-      'Historias todos los días',
+      '2 reels por semana (martes y jueves)',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -259,7 +251,7 @@ const PLAN_UNICO = {
   currency: 'USD',
   postsPerWeek: 7,
   carouselsPerWeek: 2,
-  reelsPerWeek: 5,
+  reelsPerWeek: 2,
   storiesPerWeek: 7,
   tagline: 'Tu negocio atendido y vendiendo, con tu OK en un toque',
   detail: DETAIL_ES.total,
@@ -284,7 +276,6 @@ const PLANS_UY = {
     ai: AI_LIMITS.esencial,
     features: [
       '7 posteos por semana, automáticos',
-      '1 reel por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -305,8 +296,6 @@ const PLANS_UY = {
     ai: AI_LIMITS.pro,
     features: [
       '7 posteos por semana, automáticos',
-      '3 reels por semana',
-      '3 historias por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -324,15 +313,14 @@ const PLANS_UY = {
     currency: 'UYU',
     postsPerWeek: 7,
     carouselsPerWeek: 2,
-    reelsPerWeek: 5,
+    reelsPerWeek: 2,
     storiesPerWeek: 7,
     tagline: 'Tu negocio atendido y vendiendo, con tu OK en un toque',
     detail: DETAIL_ES.total,
     ai: AI_LIMITS.total,
     features: [
       '7 posteos por semana, automáticos',
-      '5 reels por semana',
-      'Historias todos los días',
+      '2 reels por semana (martes y jueves)',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -382,7 +370,6 @@ const PLANS_US = {
     ai: AI_LIMITS.esencial,
     features: [
       '7 posts per week, automatic',
-      '1 reel per week',
       'Strategic ideas for your business',
       'Designs + captions + hashtags',
       'Scheduled automatic publishing',
@@ -403,8 +390,6 @@ const PLANS_US = {
     ai: AI_LIMITS.pro,
     features: [
       '7 posts per week, automatic',
-      '3 reels per week',
-      '3 stories per week',
       'Strategic ideas for your business',
       'Designs + captions + hashtags',
       'Scheduled automatic publishing',
@@ -419,15 +404,14 @@ const PLANS_US = {
     currency: 'USD',
     postsPerWeek: 7,
     carouselsPerWeek: 2,
-    reelsPerWeek: 3,
+    reelsPerWeek: 2,
     storiesPerWeek: 7,
     tagline: 'Everything, handled for you',
     detail: DETAIL_EN.total,
     ai: AI_LIMITS.total,
     features: [
       '7 posts per week, automatic',
-      '3 reels per week',
-      'Daily stories',
+      '2 reels per week (Tuesdays and Thursdays)',
       'Strategic ideas for your business',
       'Designs + captions + hashtags',
       'Scheduled automatic publishing',
