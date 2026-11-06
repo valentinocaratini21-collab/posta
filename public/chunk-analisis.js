@@ -1063,6 +1063,12 @@ function anaCartaHTML(d) {
       const keep = sents.filter((s) => { const ns = normI(s); if (ns.length < 4) return false; return !bodyTxt.some((b) => { const nb = normI(b); return (nb && (nb.indexOf(ns) !== -1 || ns.indexOf(nb) !== -1)) || ovI(s, b) >= 0.5; }); });
       if (keep.length) h += keep.map((s) => `<p class="ana-intro">${esc(s.trim())}</p>`).join('');
     }
+    // (LOTE ADS-BILLETERA · base IMPULSAR-UN-CLIC) El bloque de ads vive
+    // DENTRO de la carta, justo después del cuerpo (las 3 partes) y antes
+    // del resto: muy a la vista en la carta del domingo, no después de
+    // ella. La carta sigue recomendando qué posteo rindió más; la
+    // billetera + el picker dejan la elección en el cliente.
+    h += `<div id="anaBoostRec"></div>`;
     if (minimal) {
       h += `<div style="text-align:center;margin:14px 0 4px"><button class="btn btn-ghost" id="anaFullBtn" onclick="anaToggleFull(this)">${anaT('Ver mi estrategia completa', 'See my full strategy') + ' ' + pzIc('arrowRight', 13)}</button></div><div id="anaFull" style="display:none">${anaFullHTML(d, a, birth)}</div>`;
     }
@@ -1083,7 +1089,6 @@ function anaCartaHTML(d) {
     if (!anaPastMode) h += `<div class="ana-fl-confirm" style="margin-top:12px;text-align:center"><button class="btn btn-ghost btn-sm" onclick="anaFlConfirmLoad(this)">${anaT('¿Qué vendés esta semana?', 'What are you selling this week?')}</button><div id="anaFlBox" style="display:none;text-align:left;margin-top:10px"></div></div>`;
     h += anaAprendeHTML(d);
     h += `</div>`;
-    h += `<div id="anaBoostRec"></div>`;
     return h;
   }
   if (!birth) h += `<div class="ana-verdict"><p class="ana-vlabel">${anaT('Mi veredicto', 'My verdict')}</p><p class="ana-vq">${esc(anaVerdict(a, stage, birth))}</p></div>`;
@@ -1107,21 +1112,39 @@ function anaCartaHTML(d) {
   }
   h += `<div class="ana-banner">${esc(anaBanner(stage, ctx))}</div>`;
   h += anaSignHTML(birth);
+  // (LOTE ADS-BILLETERA · base IMPULSAR-UN-CLIC) Sin carta guardada no hay
+  // carta del domingo, pero el bloque sigue DENTRO de la tarjeta, no
+  // después de ella.
+  h += `<div id="anaBoostRec"></div>`;
   if (!anaPastMode) h += `<div class="ana-refresh"><p style="font-size:12.5px;color:var(--mut);margin:0">${anaT('Se actualiza una vez por semana', 'It updates once a week')}</p></div>`;
   h += anaAprendeHTML(d);
   h += `</div>`;
-  h += `<div id="anaBoostRec"></div>`;
   return h;
 }
 
-/* ---------- LOTE IMPULSAR EN ESTRATEGIA: mejor posteo + impulso ---------- */
-/* La carta recomienda el mejor posteo de LA SEMANA por dato real de IG
- * (GET /api/estrategia/mejor-posteo) y ofrece impulsarlo con los 3 montos
- * fijos del Impulsar ($20/$50/$100, 7 días) por /api/destacado/impulsar.
- * Reglas: sin dato = sin recomendación inventada; el cobro lo decide el
- * servidor (gates intactos: flag, conversión pendiente, sin reembolso
- * automático); solo se muestra éxito con ok:true. En cartas anteriores
- * (anaPastMode) no se muestra: la recomendación es de la carta actual. */
+/* ---------- LOTE ADS-BILLETERA: billetera + elegir posteo + impulsar ---------- */
+/* (Base: LOTE IMPULSAR-UN-CLIC, ABSORBIDO — su código vive acá, no dos
+ * sistemas de ads.) La carta recomienda el mejor posteo de LA SEMANA por
+ * dato real de IG (GET /api/estrategia/mejor-posteo) y el bloque vive
+ * DENTRO de la carta-líder, justo después del cuerpo: muy a la vista el
+ * domingo a la noche, no después de la carta. El cliente hace DOS pasos
+ * y nada más: (1) CARGA PLATA ($20/$50/$100 USD a la billetera, con la
+ * tarjeta guardada) y (2) ELIGE el posteo (el recomendado de la carta va
+ * marcado «el que más rindió» y pre-seleccionado — sugerencia, no
+ * imposición). Posty hace TODO el resto: público, presupuesto desde el
+ * saldo, 7 días, creación del ad en Meta, gestión. El débito del saldo
+ * ocurre SOLO cuando el ad se crea bien; si falla, NO se debita nada.
+ * Gates intactos: permiso ads_management ANTES de gastar; sin tasa
+ * USD→ARS → conversion_pendiente SIN gasto; sin reembolso automático
+ * (registro + revisión manual). Sin dato = sin recomendación inventada;
+ * solo se muestra éxito con ok:true. En cartas anteriores (anaPastMode)
+ * no se muestra: la recomendación es de la carta actual.
+ * Sin cambios de CSS: se reutilizan las clases .ana-boostrec*.
+ * (CORRECCIÓN al patrón heredado: api.post TIRA excepción en 409 con el
+ * cuerpo en e.data — los handlers de este lote leen e.data.motivo; el
+ * patrón viejo (j = null en el catch) perdía el motivo del servidor.) */
+
+let anaBilleteraDatos = null; // { mejor, billetera, elegibles, selId, selMonto } del último load
 
 function anaBoostRecPartes(m) {
   const p = [];
@@ -1137,10 +1160,28 @@ function anaBoostRecMotivo(motivo, monto, cobroId) {
   switch (motivo) {
     case 'conversion_pendiente':
       return anaT('Queda armado: ' + m + ' por 7 días para este posteo. Todavía no se puede cobrar porque falta definir la conversión USD→ARS. No se cobró nada.', "Armed and waiting: " + m + " for 7 days on this post. It can't be charged yet because the USD→ARS conversion isn't set. Nothing was charged.");
+    case 'ads_sin_permiso':
+      return anaT('Todavía no podemos crear anuncios en Meta para tu cuenta: falta el permiso de publicidad (ads_management). Cuando esté aprobado, un toque y sale. No se gastó nada.', "We can't create Meta ads for your account yet: the advertising permission (ads_management) is missing. Once it's approved, one tap and it's live. Nothing was spent.");
+    case 'ads_verificacion_fallida':
+      return anaT('No pudimos verificar el permiso de publicidad con Meta ahora. Probá de nuevo en unos minutos. No se gastó nada.', "We couldn't check the advertising permission with Meta right now. Try again in a few minutes. Nothing was spent.");
+    case 'ads_no_configurado':
+      return anaT('La pauta todavía no está configurada para tu cuenta. Te avisamos en cuanto esté lista. No se gastó nada.', "Ads aren't set up for your account yet. We'll let you know as soon as it's ready. Nothing was spent.");
+    case 'sin_autorizacion_publicitaria':
+      return anaT('Tu Página de Facebook todavía no autorizó la cuenta publicitaria. No se gastó nada.', "Your Facebook Page hasn't authorized the ad account yet. Nothing was spent.");
+    case 'sin_destacado':
+      return anaT('No hay un posteo destacado esta semana para impulsar.', "There's no featured post this week to boost.");
+    case 'posteo_no_encontrado':
+      return anaT('Ese posteo ya no está en tu semana.', "That post is no longer in your week.");
+    case 'sin_zona':
+      return anaT('Falta la zona de tu negocio para pautar. No se gastó nada.', "We need your business area to run the ad. Nothing was spent.");
+    case 'sin_cliente':
+      return anaT('No pudimos identificar tu cuenta para el cobro. No se gastó nada.', "We couldn't identify your account for the charge. Nothing was spent.");
+    case 'sin_proveedores':
+      return anaT('El impulso no está disponible ahora. No se gastó nada.', "Boosting isn't available right now. Nothing was spent.");
     case 'boost_deshabilitado':
       return anaT('El impulso todavía no está habilitado en tu cuenta.', "Boosting isn't enabled on your account yet.");
     case 'sin_tarjeta_guardada':
-      return anaT('No tenés una tarjeta guardada para cobrar el impulso.', "You don't have a saved card to charge the boost.");
+      return anaT('No tenés una tarjeta guardada para cargar la billetera.', "You don't have a saved card to top up the wallet.");
     case 'cobro_requiere_accion':
       return anaT('El cobro necesita una confirmación tuya y no se puede hacer solo. No se cobró nada.', "The charge needs your confirmation and can't run on its own. Nothing was charged.");
     case 'cobro_fallido':
@@ -1151,76 +1192,208 @@ function anaBoostRecMotivo(motivo, monto, cobroId) {
       return anaT('Este posteo todavía no está publicado en Instagram.', "This post isn't published on Instagram yet.");
     case 'monto_invalido':
       return anaT('Ese monto no es válido. Elegí $20, $50 o $100.', "That amount isn't valid. Choose $20, $50 or $100.");
+    // NUEVOS (ADS-BILLETERA)
+    case 'saldo_insuficiente':
+      return anaT('No te alcanza el saldo de la billetera para ' + m + '. Cargá plata primero — un toque y listo.', "Your wallet balance doesn't cover " + m + ". Top it up first — one tap and done.");
+    case 'saldo_ars_pendiente':
+      return anaT('Todavía tenés saldo viejo en pesos en la billetera. Gastalo o pedinos que lo revisemos antes de cargar en dólares.', "You still have old pesos balance in the wallet. Spend it or ask us to review it before topping up in dollars.");
+    case 'cobro_sin_acreditar':
+      return anaT('El cobro se hizo pero la plata no entró a tu billetera. Quedó registrado' + (cobroId ? ' (cobro ' + cobroId + ')' : '') + ' para revisión urgente. Escribinos y lo resolvemos.', "The charge went through but the money didn't reach your wallet. It was recorded" + (cobroId ? ' (charge ' + cobroId + ')' : '') + " for urgent review. Write to us and we'll sort it out.");
+    case 'debito_fallido':
+      return anaT('El anuncio se creó en Meta pero no se pudo debitar de tu billetera. Quedó registrado para revisión manual — no se te cobró dos veces.', "The ad was created on Meta but couldn't be debited from your wallet. It was recorded for manual review — you weren't charged twice.");
+    case 'ya_impulsado':
+      return anaT('Ese posteo ya tiene una pauta activa. Elegí otro posteo.', "That post already has an active boost. Pick another post.");
+    case 'sin_posteo':
+      return anaT('Elegí primero el posteo al que le querés meter ads.', "First pick the post you want to boost.");
+    case 'demo':
+      return anaT('Todavía estás en modo demo: conectá tu Instagram para cargar plata y meterle ads.', "You're still in demo mode: connect your Instagram to top up and run ads.");
     default:
-      return anaT('No se pudo impulsar. No se cobró nada.', "It couldn't be boosted. Nothing was charged.");
+      return anaT('No se pudo impulsar. No se gastó nada de tu billetera.', "It couldn't be boosted. Nothing was spent from your wallet.");
   }
 }
 
-function anaBoostRecHTML(d) {
-  const m = d.mejor;
-  const partes = anaBoostRecPartes(m);
-  const porque = partes.length
-    ? anaT('Fue tu posteo con más interacción esta semana: ', 'Your highest-engagement post this week: ') + partes.join(', ') + '.'
-    : anaT('Fue tu posteo con más interacción esta semana.', 'Your highest-engagement post this week.');
-  const img = m.image_path ? `<img src="${esc(m.image_path)}" alt="" class="ana-boostrec-img">` : '';
-  const cap = m.caption ? `<p class="ana-boostrec-cap">${esc(m.caption)}</p>` : '';
-  const boost = d.boostHabilitado
-    ? `<div class="ana-boostrec-montos" id="anaBoostRecMontos">
-        <p class="ana-boostrec-monto-t">${anaT('Impulsalo por 7 días:', 'Boost it for 7 days:')}</p>
-        ${[20, 50, 100].map((x) => `<button type="button" class="btn btn-primary btn-sm" onclick="anaBoostRecElegir(${x})">$${x}</button>`).join(' ')}
-      </div><div class="ana-boostrec-msg" id="anaBoostRecMsg"></div>`
-    : `<p class="ana-boostrec-nota">${anaT('Impulsar todavía no está habilitado en tu cuenta.', "Boosting isn't enabled on your account yet.")}</p>`;
+// Render del bloque de ads con billetera. Lee anaBilleteraDatos (mejor +
+// billetera + elegibles del último load). La recomendación de la carta se
+// muestra arriba; abajo: saldo + cargar, picker de posteos (recomendado
+// marcado y pre-seleccionado), monto y [Meter ads por 7 días].
+function anaBilleteraHTML() {
+  const d = anaBilleteraDatos || {};
+  const mejor = d.mejor || null;
+  const bil = d.billetera || {};
+  const eleg = Array.isArray(d.elegibles) ? d.elegibles : [];
+  const saldoCents = Number(bil.balance_cents || 0);
+  const moneda = bil.currency || 'USD';
+  const saldoUSD = moneda === 'USD' ? Math.floor(saldoCents / 100) : 0;
+  const selId = d.selId || 0;
+  const selMonto = d.selMonto || 20;
+  // Pre-estados ANTES del toque: el bloque nunca ofrece un botón que el
+  // servidor va a rechazar. ads_permiso false = falta el permiso
+  // ads_management (bloqueado claro, sin botones); null = no configurado
+  // o no se pudo verificar (nota honesta, sin botones); true = todo
+  // disponible. (Heredado de IMPULSAR-UN-CLIC.)
+  if (!d.boostHabilitado) {
+    return `<div class="ana-boostrec">
+    <p class="ana-boostrec-sec">${anaT('Impulsar', 'Boost')}</p>
+    <p class="ana-boostrec-nota">${anaT('Impulsar todavía no está habilitado en tu cuenta.', "Boosting isn't enabled on your account yet.")}</p>
+  </div>`;
+  }
+  if (d.ads_permiso === false) {
+    return `<div class="ana-boostrec">
+    <p class="ana-boostrec-sec">${anaT('Impulsar', 'Boost')}</p>
+    <p class="ana-boostrec-nota">${anaT('Todavía no podemos crear anuncios en Meta para tu cuenta: falta el permiso de publicidad (ads_management). Cuando esté aprobado, un toque y sale.', "We can't create Meta ads for your account yet: the advertising permission (ads_management) is missing. Once it's approved, one tap and it's live.")}</p>
+  </div>`;
+  }
+  if (d.ads_permiso === null || d.ads_permiso === undefined) {
+    return `<div class="ana-boostrec">
+    <p class="ana-boostrec-sec">${anaT('Impulsar', 'Boost')}</p>
+    <p class="ana-boostrec-nota">${anaT('Impulsar todavía no está habilitado en tu cuenta.', "Boosting isn't enabled on your account yet.")}</p>
+  </div>`;
+  }
+  let recHTML = '';
+  if (mejor) {
+    const partes = anaBoostRecPartes(mejor);
+    const porque = partes.length
+      ? anaT('Fue tu posteo con más interacción esta semana: ', 'Your highest-engagement post this week: ') + partes.join(', ') + '.'
+      : anaT('Fue tu posteo con más interacción esta semana.', 'Your highest-engagement post this week.');
+    const img = mejor.image_path ? `<img src="${esc(mejor.image_path)}" alt="" class="ana-boostrec-img">` : '';
+    const cap = mejor.caption ? `<p class="ana-boostrec-cap">${esc(mejor.caption)}</p>` : '';
+    recHTML = `<p class="ana-boostrec-t">${anaT('Tu mejor posteo de la semana', 'Your best post this week')}</p>
+    <div class="ana-boostrec-post">${img}<div>${cap}<p class="ana-boostrec-why">${esc(porque)}</p></div></div>`;
+  }
+  const saldoTxt = moneda === 'USD'
+    ? anaT('Tu billetera de ads: $' + saldoUSD, 'Your ads wallet: $' + saldoUSD)
+    : anaT('Tu billetera vieja tiene $' + Math.floor(saldoCents / 100) + ' en pesos. La primera carga en dólares la pasa a USD.', 'Your old wallet has $' + Math.floor(saldoCents / 100) + ' in pesos. The first dollar top-up switches it to USD.');
+  const cargarHTML = `<div class="ana-boostrec-montos" style="margin-top:10px">
+      <p class="ana-boostrec-monto-t">${anaT('Cargar plata:', 'Top up:')}</p>
+      ${[20, 50, 100].map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="anaBilleteraCargar(${x}, this)">$${x}</button>`).join(' ')}
+    </div>`;
+  // Picker: recomendado primero, 5 más recientes como máximo. Sin
+  // elegibles, la nota honesta (el cliente igual puede cargar plata).
+  // (Los elegibles traen `post_id`, no `id`: así los devuelve el módulo.)
+  const mejorId = mejor ? mejor.post_id : 0;
+  const lista = eleg.slice().sort((a, b) => ((b.post_id === mejorId) ? 1 : 0) - ((a.post_id === mejorId) ? 1 : 0)).slice(0, 5);
+  const pickerHTML = eleg.length
+    ? `<p class="ana-boostrec-monto-t" style="margin:12px 0 4px">${anaT('¿A cuál le metemos ads?', 'Which post gets the ads?')}</p>` + lista.map((e) => {
+      const sel = e.post_id === selId;
+      const rec = mejor && e.post_id === mejor.post_id;
+      const cap = esc(String(e.caption || 'Posteo sin caption').slice(0, 120));
+      const img = e.image_path ? `<img src="${esc(e.image_path)}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:10px;flex:0 0 auto">` : '';
+      return `<button type="button" onclick="anaBilleteraElegirPosteo(${e.post_id}, this)" style="display:flex;gap:10px;align-items:center;width:100%;text-align:left;margin:6px 0;padding:8px;border:2px solid ${sel ? '#FEC14D' : '#DCEFFF'};border-radius:14px;background:${sel ? '#FFF8E1' : '#fff'};cursor:pointer">${img}<span style="flex:1;min-width:0"><span style="display:block;font-size:13.5px;font-weight:700;color:#0A1E33;line-height:1.35">${cap}</span>${rec ? `<span style="display:inline-block;margin-top:4px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${anaT('✦ el que más rindió', '✦ top performer')}</span>` : ''}</span>${sel ? '<span style="font-size:18px;color:#1FA855">✓</span>' : ''}</button>`;
+    }).join('') + (eleg.length > 5 ? `<p class="ana-boostrec-nota">${anaT('Mostramos los 5 más recientes.', 'Showing the 5 most recent.')}</p>` : '')
+    : `<p class="ana-boostrec-nota" style="margin-top:10px">${anaT('Todavía no tenés posteos publicados para impulsar.', "You don't have published posts to boost yet.")}</p>`;
+  const montoHTML = `<div class="ana-boostrec-montos" style="margin-top:12px">
+      <p class="ana-boostrec-monto-t">${anaT('¿Cuánto le metemos?', 'How much?')}</p>
+      ${[20, 50, 100].map((x) => `<button type="button" class="btn ${x === selMonto ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="anaBilleteraElegirMonto(${x}, this)">$${x}</button>`).join(' ')}
+    </div>`;
+  const puede = selId > 0 && eleg.length > 0 && saldoUSD >= selMonto;
+  const faltaTxt = selId > 0 && eleg.length > 0 && saldoUSD < selMonto
+    ? `<p class="ana-boostrec-nota" style="margin-top:8px">${anaT('Te faltan $' + (selMonto - saldoUSD) + ' en la billetera. Cargá plata arriba.', "You're $" + (selMonto - saldoUSD) + " short in the wallet. Top up above.")}</p>`
+    : '';
+  const notaConv = d.conversion_pendiente === true
+    ? `<p class="ana-boostrec-nota" style="margin-top:8px">${anaT('Queda armado por 7 días. Todavía no se puede gastar porque falta definir la conversión USD→ARS. No se gasta nada todavía.', "Armed for 7 days. It can't be spent yet because the USD→ARS conversion isn't set. Nothing is spent yet.")}</p>`
+    : '';
+  const impulsarHTML = eleg.length
+    ? `<button type="button" class="btn btn-primary" style="width:100%;margin-top:12px" onclick="anaBilleteraImpulsar(this)" ${puede ? '' : 'disabled'}>${anaT('Meter ads por 7 días · $' + selMonto, 'Run ads for 7 days · $' + selMonto)}</button>${faltaTxt}${notaConv}`
+    : '';
   return `<div class="ana-boostrec">
     <p class="ana-boostrec-sec">${anaT('Impulsar', 'Boost')}</p>
     <p class="ana-boostrec-saludo">${anaT('¡Hola! Te traigo una idea cortita:', 'Hi! A quick idea for you:')}</p>
-    <p class="ana-boostrec-t">${anaT('Tu mejor posteo de la semana', 'Your best post this week')}</p>
-    <div class="ana-boostrec-post">${img}<div>${cap}<p class="ana-boostrec-why">${esc(porque)}</p></div></div>
-    ${boost}
+    ${recHTML}
+    <p class="ana-boostrec-nota" style="margin-top:10px;font-weight:800;color:#0A1E33">${saldoTxt}</p>
+    ${cargarHTML}
+    ${pickerHTML}
+    ${montoHTML}
+    ${impulsarHTML}
+    <div class="ana-boostrec-msg" id="anaBoostRecMsg"></div>
     <p class="ana-boostrec-despedida">— Posty</p>
   </div>`;
 }
 
-function anaBoostRecElegir(monto) {
-  const caja = document.getElementById('anaBoostRecMontos');
-  const msg = document.getElementById('anaBoostRecMsg');
-  if (!caja) return;
-  caja.innerHTML = `<button type="button" class="btn btn-primary btn-sm" onclick="anaBoostRecConfirmar(${monto}, this)">${anaT('Confirmar $', 'Confirm $')}${monto}</button> <button type="button" class="btn btn-ghost btn-sm" onclick="anaBoostRecLoad()">${anaT('Cancelar', 'Cancel')}</button>`;
-  if (msg) msg.textContent = '';
+// Selección en el picker / monto: re-render desde los datos cacheados
+// (sin otro viaje al servidor; la elección es local hasta el toque).
+function anaBilleteraElegirPosteo(id, btn) {
+  if (!anaBilleteraDatos) return;
+  anaBilleteraDatos.selId = Number(id) || 0;
+  const box = document.getElementById('anaBoostRec');
+  if (box) box.innerHTML = anaBilleteraHTML();
+}
+function anaBilleteraElegirMonto(monto, btn) {
+  if (!anaBilleteraDatos) return;
+  anaBilleteraDatos.selMonto = Number(monto) || 20;
+  const box = document.getElementById('anaBoostRec');
+  if (box) box.innerHTML = anaBilleteraHTML();
 }
 
-async function anaBoostRecConfirmar(monto, btn) {
-  const box = document.getElementById('anaBoostRec');
-  const msg = document.getElementById('anaBoostRecMsg');
-  const postId = box ? Number(box.dataset.postId || 0) : 0;
-  if (!postId) return;
+// Cargar plata: un toque cobra con la tarjeta guardada y acredita en la
+// billetera. El mensaje se pone DESPUÉS del refresh (el re-render borra
+// el msg viejo).
+async function anaBilleteraCargar(monto, btn) {
   if (btn) btn.disabled = true;
   let j = null;
-  try { j = await api.post('/api/destacado/impulsar', { montoUSD: monto, posteoId: postId }); } catch (e) { j = null; }
-  if (!msg) return;
-  if (j && j.ok) {
-    msg.textContent = anaT('Impulsado. Posty te va a reportar números reales cuando lleguen.', 'Boosted. Posty will report real numbers when they arrive.');
-    const caja = document.getElementById('anaBoostRecMontos');
-    if (caja) caja.innerHTML = '';
-  } else {
-    const motivo = (j && j.motivo) || '';
-    msg.textContent = anaBoostRecMotivo(motivo, monto, j && j.cobroId);
-  }
+  try { j = await api.post('/api/ads/billetera/cargar', { montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
   if (btn) btn.disabled = false;
+  if (j && j.ok) {
+    const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
+    await anaBoostRecLoad(true);
+    const msg = document.getElementById('anaBoostRecMsg');
+    if (msg) msg.textContent = anaT('Listo, cargaste $' + monto + '. Tu billetera tiene $' + nuevoSaldo + '.', 'Done, you topped up $' + monto + '. Your wallet now has $' + nuevoSaldo + '.');
+  } else {
+    const msg = document.getElementById('anaBoostRecMsg');
+    if (msg) msg.textContent = anaBoostRecMotivo((j && j.motivo) || '', monto, j && j.cobroId);
+  }
 }
 
-async function anaBoostRecLoad() {
+// Impulsar con saldo: el débito ocurre SOLO si el ad se creó bien en
+// Meta (lo garantiza el servidor); acá solo se muestra el resultado.
+async function anaBilleteraImpulsar(btn) {
+  const msg = document.getElementById('anaBoostRecMsg');
+  if (!anaBilleteraDatos || !msg) return;
+  const posteoId = anaBilleteraDatos.selId || 0;
+  const monto = anaBilleteraDatos.selMonto || 20;
+  if (!posteoId) { msg.textContent = anaBoostRecMotivo('sin_posteo', monto); return; }
+  if (btn) btn.disabled = true;
+  let j = null;
+  try { j = await api.post('/api/ads/billetera/impulsar', { posteoId, montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
+  if (btn) btn.disabled = false;
+  if (j && j.ok) {
+    const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
+    await anaBoostRecLoad(true);
+    const msg2 = document.getElementById('anaBoostRecMsg');
+    if (msg2) msg2.textContent = anaT('Listo, ya tiene ads por 7 días. Tu billetera quedó en $' + nuevoSaldo + '. Posty te va a reportar números reales cuando lleguen.', 'Done, it has ads for 7 days. Your wallet is now at $' + nuevoSaldo + '. Posty will report real numbers when they arrive.');
+  } else {
+    const msg3 = document.getElementById('anaBoostRecMsg');
+    if (msg3) msg3.textContent = anaBoostRecMotivo((j && j.motivo) || '', monto, j && j.cobroId);
+  }
+}
+
+async function anaBoostRecLoad(keepSel) {
   const box = document.getElementById('anaBoostRec');
   if (!box || anaPastMode) return;
-  let d = null;
+  const prevSel = keepSel && anaBilleteraDatos ? { selId: anaBilleteraDatos.selId, selMonto: anaBilleteraDatos.selMonto } : null;
+  let d = null, bil = null, elig = null;
   try { d = await api.get('/api/estrategia/mejor-posteo'); } catch (e) { d = null; }
+  try { bil = await api.get('/api/ads/billetera'); } catch (e) { bil = null; }
+  try { elig = await api.get('/api/ads/billetera/elegibles'); } catch (e) { elig = null; }
   if (document.getElementById('anaBoostRec') !== box) return;
   if (!d || !d.ok) { box.innerHTML = ''; return; }
-  if (!d.mejor) {
-    box.innerHTML = '';
-    return;
-  }
-  box.dataset.postId = String(d.mejor.post_id);
-  box.innerHTML = anaBoostRecHTML(d);
+  const tieneMejor = !!d.mejor;
+  const tieneEleg = elig && elig.ok && Array.isArray(elig.elegibles) && elig.elegibles.length > 0;
+  if (!tieneMejor && !tieneEleg) { box.innerHTML = ''; return; }
+  anaBilleteraDatos = {
+    mejor: d.mejor || null, boostHabilitado: d.boostHabilitado,
+    ads_permiso: (bil && bil.ok && bil.ads_permiso !== undefined) ? bil.ads_permiso : d.ads_permiso,
+    conversion_pendiente: d.conversion_pendiente,
+    billetera: bil && bil.ok ? bil : { balance_cents: 0, currency: 'USD', montos_usd: [20, 50, 100] },
+    elegibles: elig && elig.ok ? (elig.elegibles || []) : [],
+    selId: 0, selMonto: 20,
+  };
+  // Recomendado pre-seleccionado; si había selección, se conserva si el
+  // posteo sigue elegible.
+  const ids = new Set(anaBilleteraDatos.elegibles.map((e) => e.id));
+  const defecto = tieneMejor ? d.mejor.post_id : (anaBilleteraDatos.elegibles[0] ? anaBilleteraDatos.elegibles[0].id : 0);
+  anaBilleteraDatos.selId = (prevSel && prevSel.selId && ids.has(prevSel.selId)) ? prevSel.selId : defecto;
+  anaBilleteraDatos.selMonto = (prevSel && prevSel.selMonto) ? prevSel.selMonto : 20;
+  box.innerHTML = anaBilleteraHTML();
 }
 
 // ---------- FUNDAMENTO-LITERAL x5 (3/11) · pieza 4: confirmacion semanal ----------

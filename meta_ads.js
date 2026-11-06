@@ -161,4 +161,20 @@ async function getBoostStats(campaignId) {
   };
 }
 
-module.exports = { adsConfigured, checkEligibility, resolvePageId, createBoost, getBoostStats };
+// ¿El token de Meta trae ads_management? (permiso de App Review).
+// Sin él, crear anuncios falla en Meta DESPUÉS de cobrar: por eso se
+// verifica ANTES de cualquier cobro. Devuelve { ok, hasAdsManagement }.
+// ok:false = no se pudo verificar (Meta caído o sin configurar): el
+// llamador falla cerrado, nunca asume el permiso.
+async function checkAdsPermission() {
+  if (!adsConfigured()) return { ok: false, hasAdsManagement: false, reason: 'no_configurado' };
+  try {
+    const d = await g('/me/permissions');
+    const perms = (d.data || []).filter((p) => p && p.status === 'granted').map((p) => p.permission);
+    return { ok: true, hasAdsManagement: perms.includes('ads_management'), permissions: perms };
+  } catch (e) {
+    return { ok: false, hasAdsManagement: false, reason: 'verificacion_fallida' };
+  }
+}
+
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats };

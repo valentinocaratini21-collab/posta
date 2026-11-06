@@ -75,4 +75,46 @@ async function cobrarImpulso(input) {
   return { ok: false, motivo: 'cobro_no_confirmado', piStatus: pi.status || null };
 }
 
-module.exports = { MONTOS_USD, validarMontoUSD, resolverTarjetaGuardada, cobrarImpulso };
+module.exports = { MONTOS_USD, validarMontoUSD, resolverTarjetaGuardada, cobrarImpulso, cobrarCargaBilletera };
+
+// cobrarCargaBilletera({ client, customerId, montoUSD, ref })
+//   → { ok: true, cobroId } ó { ok: false, motivo [, detalle] }.
+// LOTE ADS-BILLETERA: la carga de plata a la billetera USD. Mismo cableado
+// que cobrarImpulso (off-session con la tarjeta guardada, solo los 3 montos
+// fijos, fail-closed en cada paso), pero con otro concepto: la plata queda
+// en la billetera y se gasta después, al impulsar. La clave de idempotencia
+// es el `ref` de la carga (uno por intento): un reintento con el mismo ref
+// no duplica el cargo. Sin ref, se usa cliente+monto+día (un solo cargo de
+// ese monto por día y cliente como red de seguridad).
+async function cobrarCargaBilletera(input) {
+  const { client, customerId, montoUSD, ref } = input || {};
+  if (!client) return { ok: false, motivo: 'stripe_no_configurado' };
+  if (!customerId) return { ok: false, motivo: 'sin_cliente_stripe' };
+  if (!validarMontoUSD(montoUSD)) return { ok: false, motivo: 'monto_invalido' };
+  const pmId = await resolverTarjetaGuardada(client, customerId);
+  if (!pmId) return { ok: false, motivo: 'sin_tarjeta_guardada' };
+  const idem = ref
+    ? ['billetera', String(customerId), String(ref)].join(':')
+    : ['billetera', String(customerId), String(montoUSD), new Date().toISOString().slice(0, 10)].join(':');
+  let pi;
+  try {
+    pi = await client.paymentIntents.create({
+      amount: montoUSD * 100,
+      currency: 'usd',
+      customer: customerId,
+      payment_method: pmId,
+      off_session: true,
+      confirm: true,
+      description: `Posty · Carga billetera ads $${montoUSD}`,
+      metadata: { app: 'posty', tipo: 'billetera_carga', monto_usd: String(montoUSD) },
+    }, { idempotencyKey: idem });
+  } catch (e) {
+    return { ok: false, motivo: 'cobro_fallido', detalle: String((e && e.message) || e).slice(0, 200) };
+  }
+  if (!pi || !pi.id) return { ok: false, motivo: 'cobro_fallido' };
+  if (pi.status === 'succeeded') return { ok: true, cobroId: pi.id };
+  if (pi.status === 'requires_action' || pi.status === 'requires_payment_method' || pi.status === 'requires_confirmation') {
+    return { ok: false, motivo: 'cobro_requiere_accion', piStatus: pi.status };
+  }
+  return { ok: false, motivo: 'cobro_no_confirmado', piStatus: pi.status || null };
+}

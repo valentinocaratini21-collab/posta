@@ -176,6 +176,17 @@ function montosFijos() {
   return [...DESTACADO_MONTOS_USD];
 }
 
+// Tasa USD→ARS como config (env IMPULSO_TASA_ARS, pesos por dólar).
+// Sin definir o inválida → null: el flujo falla cerrado con
+// conversion_pendiente ANTES de cobrar. La tasa la define Valentino;
+// acá nunca se inventa. Devuelve (montoUSD) => centavos ARS.
+function conversionARSFromEnv(env) {
+  const raw = env && env.IMPULSO_TASA_ARS != null ? String(env.IMPULSO_TASA_ARS).trim() : '';
+  const tasa = Number(raw);
+  if (!raw || !Number.isFinite(tasa) || tasa <= 0) return null;
+  return (montoUSD) => Math.round(Number(montoUSD) * tasa * 100);
+}
+
 // Solo los 3 fijos, como número entero. Strings, decimales, negativos y
 // cualquier otro valor se rechazan (sin campo libre, sin "casi").
 function validarMonto(monto) {
@@ -198,6 +209,7 @@ function crearImpulso(input) {
   const {
     semana, monto, clienteId, zona, env,
     adsConfigurado, paginaAutorizada, posteoPublicado, cobrar, publicarAnuncio,
+    permisoAds,
   } = input || {};
   const no = (motivo) => ({ ok: false, motivo });
   if (!boostHabilitado(env)) return no('boost_deshabilitado');
@@ -208,6 +220,10 @@ function crearImpulso(input) {
   if (typeof zona !== 'string' || !zona.trim()) return no('sin_zona');
   if (!adsConfigurado) return no('ads_no_configurado');
   if (!paginaAutorizada) return no('sin_autorizacion_publicitaria');
+  // Permiso ads_management (App Review): sin él Meta rechaza la creación
+  // del anuncio DESPUÉS del cobro. Se exige antes de cobrar, igual que
+  // la autorización de la Página. Sin verificar = bloqueado.
+  if (!permisoAds) return no('ads_sin_permiso');
   if (!clienteId) return no('sin_cliente');
   if (typeof cobrar !== 'function' || typeof publicarAnuncio !== 'function') {
     return no('sin_proveedores');
@@ -283,6 +299,7 @@ async function procesarImpulso(input) {
     semana, monto, clienteId, zona, env,
     adsConfigurado, paginaAutorizada, posteoPublicado,
     conversionARS, cobrar, publicarAnuncio, registrar,
+    permisoAds,
   } = input || {};
   const no = (motivo, extra) => ({ ok: false, motivo, ...(extra || {}) });
   if (!boostHabilitado(env)) return no('boost_deshabilitado');
@@ -293,6 +310,10 @@ async function procesarImpulso(input) {
   if (typeof zona !== 'string' || !zona.trim()) return no('sin_zona');
   if (!adsConfigurado) return no('ads_no_configurado');
   if (!paginaAutorizada) return no('sin_autorizacion_publicitaria');
+  // Permiso ads_management (App Review): sin él Meta rechaza la creación
+  // del anuncio DESPUÉS del cobro. Se exige antes de cobrar, igual que
+  // la autorización de la Página. Sin verificar = bloqueado.
+  if (!permisoAds) return no('ads_sin_permiso');
   if (!clienteId) return no('sin_cliente');
   // Conversión USD→ARS sin definir: fail-closed ANTES de cualquier cobro.
   let spendCents = 0;
@@ -369,6 +390,7 @@ module.exports = {
   objetivoBoton,
   montosFijos,
   validarMonto,
+  conversionARSFromEnv,
   boostHabilitado,
   crearImpulso,
   procesarImpulso,

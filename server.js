@@ -399,6 +399,11 @@ const metaAds = require('./meta_ads');
 const destacadoSemana = require('./destacado-semana');
 const destacadoCobro = require('./destacado-cobro');
 // === DESTACADO-BOOST require (fin) ===
+// === ADS-BILLETERA require (inicio) ===
+// Billetera USD: el cliente carga plata ($20/$50/$100, Stripe off-session)
+// y elige el posteo; Posty hace el resto. Módulo puro + inyectado.
+const adsBilletera = require('./ads-billetera');
+// === ADS-BILLETERA require (fin) ===
 const { AD_FEE_PCT, AD_MIN_TOPUP_CENTS, AD_TOPUP_OPTIONS, AD_BUDGET_OPTIONS, AD_MIN_BUDGET_CENTS, AD_DEFAULT_DAYS, adSplit, fmtARS } = require('./config/ads');
 
 // Funnel: eventos de conversión (prueba → registro → conexión → semana → pago).
@@ -8561,6 +8566,17 @@ app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res
     let gate = { ready: false };
     try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
     if (!gate.ready) return res.status(409).json({ ok: false, motivo: 'sin_autorizacion_publicitaria' });
+    // Permiso ads_management (App Review): se verifica ANTES de cobrar.
+    // Sin él, Meta rechaza la creación del anuncio DESPUÉS del cobro
+    // (el cliente pagaría por un ad que nunca corre). Sin verificar
+    // (Meta caído) también se bloquea: nunca se asume el permiso.
+    try {
+      const perm = await metaAds.checkAdsPermission();
+      if (!perm.ok) return res.status(503).json({ ok: false, motivo: 'ads_verificacion_fallida' });
+      if (!perm.hasAdsManagement) return res.status(409).json({ ok: false, motivo: 'ads_sin_permiso' });
+    } catch (e) {
+      return res.status(503).json({ ok: false, motivo: 'ads_verificacion_fallida' });
+    }
     const post = db.prepare('SELECT ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(targetId, uid) || {};
     if (!post.ig_media_id) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
     const stripeCustomer = (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return (u && u.stripe_customer_id) || ''; } catch (e) { return ''; } })();
@@ -8568,7 +8584,8 @@ app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res
       semana: { destacadoId: targetId }, monto, clienteId: uid,
       zona: adCountry(uid), env: process.env, adsConfigurado: true,
       paginaAutorizada: true, posteoPublicado: true,
-      conversionARS: null,
+      permisoAds: true,
+      conversionARS: destacadoSemana.conversionARSFromEnv(process.env),
       cobrar: (a) => destacadoCobro.cobrarImpulso({
         client: stripeBilling.stripeClient(), customerId: stripeCustomer,
         montoUSD: a.montoUSD, posteoId: a.posteoId, weekKey: st.week_key, dias: 7,
@@ -8634,7 +8651,7 @@ function elegirMejorPosteoSemana(rows) {
   return cands[0];
 }
 
-app.get('/api/estrategia/mejor-posteo', requireAuth, (req, res) => {
+app.get('/api/estrategia/mejor-posteo', requireAuth, async (req, res) => {
   try {
     const uid = req.session.userId;
     const wk = mondayKeyOf(tzToday(userTz(uid)));
@@ -8647,7 +8664,25 @@ app.get('/api/estrategia/mejor-posteo', requireAuth, (req, res) => {
         AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
         AND p.week_key = ?`).all(uid, wk);
     const mejor = elegirMejorPosteoSemana(rows);
+    // Estado del impulso para la carta (LOTE IMPULSAR-UN-CLIC): la carta
+    // muestra el bloque con el estado real ANTES del toque. ads_permiso:
+    // true = el token trae ads_management; false = no lo trae (bloqueado
+    // claro, sin botones); null = no configurado o no se pudo verificar
+    // (Meta lento/caído: carrera de 3 s, nunca se cuelga la carta).
+    // conversion_pendiente: true mientras la tasa USD→ARS no esté definida.
+    let adsPermiso = null;
+    try {
+      if (metaAds.adsConfigured()) {
+        const perm = await Promise.race([
+          metaAds.checkAdsPermission(),
+          new Promise((r) => setTimeout(() => r(null), 3000)),
+        ]);
+        adsPermiso = perm && perm.ok ? !!perm.hasAdsManagement : null;
+      }
+    } catch (e) { adsPermiso = null; }
+    const conversionPendiente = !destacadoSemana.conversionARSFromEnv(process.env);
     res.json({ ok: true, week_key: wk, boostHabilitado: destacadoSemana.boostHabilitado(process.env),
+      ads_permiso: adsPermiso, conversion_pendiente: conversionPendiente,
       mejor: mejor ? { post_id: mejor.id, image_path: mejor.image_path, caption: (mejor.caption || '').slice(0, 90),
         ig_media_id: mejor.ig_media_id, reach: mejor.reach, likes: mejor.likes,
         comments: mejor.comments, saved: mejor.saved,
@@ -8670,6 +8705,213 @@ app.get('/api/ads/config', requireAuth, (req, res) => {
     ads_ready: metaAds.adsConfigured(),
     mp_ready: mp.mpConfigured(),
   });
+});
+
+// ---------- ADS-BILLETERA (LOTE ADS-BILLETERA) ----------
+// El cliente CARGA PLATA ($20/$50/$100 USD, Stripe off-session con la
+// tarjeta guardada) y ELIGE el posteo; Posty hace TODO el resto (público,
+// presupuesto desde el saldo, creación del ad en Meta, gestión). Dos pasos
+// del cliente, nada más. La carta sigue recomendando qué posteo rindió
+// más, pero la elección es del cliente.
+// Moneda: la billetera nueva es USD. La vieja es ARS (MercadoPago): nunca
+// se mezclan — con saldo ARS > 0 la carga USD se rechaza con
+// 'saldo_ars_pendiente'; con saldo ARS = 0 la primera carga migra la
+// moneda a USD. Sin tasa USD→ARS → conversion_pendiente SIN gasto; sin
+// permiso ads_management → ads_sin_permiso SIN gasto; sin reembolso
+// automático (registro + revisión manual).
+
+// Estado de la billetera para el cliente: saldo, moneda, montos, el estado
+// del impulso ANTES del toque (ads_permiso / conversion_pendiente, igual
+// que mejor-posteo) y los últimos movimientos del ledger.
+app.get('/api/ads/billetera', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const w = getAdWallet(uid);
+    let movs = [];
+    try { movs = db.prepare(`SELECT kind, amount_cents, balance_after, ref, note, created_at FROM ad_transactions WHERE user_id = ? ORDER BY id DESC LIMIT 20`).all(uid); } catch (e) { movs = []; }
+    let adsPermiso = null;
+    try {
+      if (metaAds.adsConfigured()) {
+        const perm = await Promise.race([
+          metaAds.checkAdsPermission(),
+          new Promise((r) => setTimeout(() => r(null), 3000)),
+        ]);
+        adsPermiso = perm && perm.ok ? !!perm.hasAdsManagement : null;
+      }
+    } catch (e) { adsPermiso = null; }
+    res.json({ ok: true, balance_cents: w.balance_cents, currency: w.currency,
+      montos_usd: adsBilletera.MONTOS_CARGA_USD, dias: adsBilletera.DIAS_BILLETERA,
+      boostHabilitado: destacadoSemana.boostHabilitado(process.env),
+      ads_permiso: adsPermiso, conversion_pendiente: !destacadoSemana.conversionARSFromEnv(process.env),
+      movimientos: movs });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar tu billetera' }); }
+});
+
+// Cargar plata: $20/$50/$100 con la tarjeta guardada (Stripe off-session).
+// El cobro va primero; la acreditación es transaccional con el ledger.
+// Si el cobro sale pero la acreditación falla, vuelve 'cobro_sin_acreditar'
+// con el cobroId para revisión manual URGENTE (nunca silencio).
+app.post('/api/ads/billetera/cargar', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const montoUSD = Number(req.body.montoUSD);
+    if (!adsBilletera.validarMontoUSD(montoUSD)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
+    const ref = String(req.body.ref || '').slice(0, 80) || `carga_${uid}_${Date.now().toString(36)}`;
+    const stripeCustomer = (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return (u && u.stripe_customer_id) || ''; } catch (e) { return ''; } })();
+    const client = stripeBilling.stripeConfigured() ? stripeBilling.stripeClient() : null;
+    const w0 = getAdWallet(uid);
+    const r = await adsBilletera.cargarBilletera({
+      clienteId: uid, montoUSD, monedaActual: w0.currency, saldoActual: w0.balance_cents, ref,
+      demo: !!((getSettings(uid) || {}).demo_mode),
+      buscarCarga: (rf) => { try { return db.prepare(`SELECT ref FROM ad_transactions WHERE user_id = ? AND kind = 'topup_usd' AND ref = ?`).get(uid, rf) || null; } catch (e) { return null; } },
+      cobrar: () => destacadoCobro.cobrarCargaBilletera({ client, customerId: stripeCustomer, montoUSD, ref }),
+      acreditar: async ({ montoUSD: m, cobroId }) => {
+        try {
+          // Migración de moneda ARS→USD solo con saldo 0 (nunca se mezcla
+          // ni se pierde plata: con saldo ARS > 0 el módulo ya bloqueó).
+          const w1 = getAdWallet(uid);
+          if (w1.currency === 'ARS' && w1.balance_cents === 0) {
+            db.prepare(`UPDATE ad_wallets SET currency = 'USD' WHERE user_id = ?`).run(uid);
+          }
+          const after = adWalletMove(uid, m * 100, 'topup_usd', cobroId || '', `Carga billetera ads $${m}`);
+          try { track(uid, 'ad_topup_usd', String(m * 100)); } catch (e) {}
+          return { ok: true, saldoNuevo: after };
+        } catch (e) { return { ok: false, motivo: 'acreditar_fallido' }; }
+      },
+    });
+    if (!r.ok) {
+      const status = r.motivo === 'monto_invalido' ? 400 : 409;
+      return res.status(status).json({ ok: false, motivo: r.motivo, ...(r.cobroId ? { cobroId: r.cobroId } : {}) });
+    }
+    const w = getAdWallet(uid);
+    res.json({ ok: true, cobroId: r.cobroId, montoUSD: r.montoUSD, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w.balance_cents, currency: w.currency, ...(r.ya_cargado ? { ya_cargado: true } : {}) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar la billetera' }); }
+});
+
+// Elegibles para el picker: posteos publicados con ig_media_id (los únicos
+// que Meta puede pautar), sin los que ya tienen pauta activa o pendiente.
+// El mejor posteo de la semana (el de la carta) va marcado como
+// recomendado: sugerencia, no imposición — elige el cliente.
+// Sin elegibilidad completa (sin IG, sin Página autorizada o sin Meta),
+// la lista va vacía con el motivo honesto (igual que /api/ads/recommendations).
+app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const gate = await adsReadiness(uid).catch(() => ({ ready: false, code: 'page_not_authorized' }));
+    if (!gate.ready) {
+      return res.json({ ok: true, elegibles: [], ads_ready: false, motivo: gate.code || 'page_not_authorized' });
+    }
+    let rows = [];
+    try {
+      rows = db.prepare(`
+        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key,
+               COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
+               COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
+        FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
+        WHERE p.user_id = ? AND p.status = 'published'
+          AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
+          AND datetime(p.published_at) >= datetime('now', '-60 days')
+        ORDER BY p.published_at DESC LIMIT 20`).all(uid);
+    } catch (e) { rows = []; }
+    const wk = mondayKeyOf(tzToday(userTz(uid)));
+    const mejor = elegirMejorPosteoSemana(rows.filter((r) => r.week_key === wk));
+    let impulsados = new Set();
+    try { impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id)); } catch (e) { impulsados = new Set(); }
+    res.json({ ok: true, ads_ready: true, elegibles: adsBilletera.elegiblesParaAds(rows, mejor ? mejor.id : null, impulsados) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron cargar tus posteos' }); }
+});
+
+// Impulsar con saldo: el cliente elige posteo + monto; Posty hace el resto.
+// El débito ocurre SOLO cuando el ad se creó bien en Meta; si la creación
+// falla, NO se debita nada. Sin tasa → conversion_pendiente sin gasto; sin
+// permiso ads_management → ads_sin_permiso sin gasto; sin saldo →
+// saldo_insuficiente; reintento del mismo impulso → el ya creado, sin
+// segundo débito. Sin reembolso automático.
+app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    if (!destacadoSemana.boostHabilitado(process.env)) return res.status(403).json({ ok: false, motivo: 'boost_deshabilitado' });
+    const posteoId = Number(req.body.posteoId) || 0;
+    const montoUSD = Number(req.body.montoUSD);
+    if (!adsBilletera.validarMontoUSD(montoUSD)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
+    if (!posteoId) return res.status(400).json({ ok: false, motivo: 'sin_posteo' });
+    const cand = db.prepare('SELECT id, status, ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(posteoId, uid);
+    if (!cand) return res.status(404).json({ ok: false, motivo: 'posteo_no_encontrado' });
+    if (cand.status !== 'published' || !cand.ig_media_id) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
+    // Ese posteo ya tiene una pauta activa o pendiente: no se crea una
+    // segunda encima (el picker ya los excluye; esto es la puerta del
+    // servidor para llamadas directas a la API).
+    let yaActivo = null;
+    try { yaActivo = db.prepare(`SELECT id FROM ad_boosts WHERE user_id = ? AND post_id = ? AND status IN ('pending','active') LIMIT 1`).get(uid, posteoId); } catch (e) { yaActivo = null; }
+    if (yaActivo) return res.status(409).json({ ok: false, motivo: 'ya_impulsado' });
+    if (!metaAds.adsConfigured()) return res.status(503).json({ ok: false, motivo: 'ads_no_configurado' });
+    let gate = { ready: false };
+    try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
+    if (!gate.ready) return res.status(409).json({ ok: false, motivo: 'sin_autorizacion_publicitaria' });
+    const elig = await metaAds.checkEligibility(cand.ig_media_id).catch(() => ({ ok: true }));
+    if (!elig.ok) return res.status(409).json({ ok: false, motivo: 'sin_elegible' });
+    // Permiso ads_management ANTES de gastar (mismo gate que impulsar).
+    try {
+      const perm = await metaAds.checkAdsPermission();
+      if (!perm.ok) return res.status(503).json({ ok: false, motivo: 'ads_verificacion_fallida' });
+      if (!perm.hasAdsManagement) return res.status(409).json({ ok: false, motivo: 'ads_sin_permiso' });
+    } catch (e) {
+      return res.status(503).json({ ok: false, motivo: 'ads_verificacion_fallida' });
+    }
+    const w = getAdWallet(uid);
+    if (w.currency === 'ARS' && w.balance_cents > 0) {
+      return res.status(409).json({ ok: false, motivo: 'saldo_ars_pendiente' });
+    }
+    const saldoCentsUSD = w.currency === 'USD' ? w.balance_cents : 0;
+    const r = await adsBilletera.impulsarConSaldo({
+      clienteId: uid, posteoId, montoUSD, zona: adCountry(uid), env: process.env,
+      adsConfigurado: true, paginaAutorizada: true, permisoAds: true,
+      conversionARS: destacadoSemana.conversionARSFromEnv(process.env),
+      saldoCentsUSD, fecha: new Date().toISOString().slice(0, 10),
+      demo: !!((getSettings(uid) || {}).demo_mode),
+      buscarDebito: (ref) => {
+        try {
+          return db.prepare(`SELECT meta_campaign_id FROM ad_boosts WHERE user_id = ? AND post_id = ? AND budget_cents = ? AND currency = 'USD' AND status IN ('active','pending') AND date(created_at) = date('now') ORDER BY id DESC LIMIT 1`).get(uid, posteoId, montoUSD * 100) || null;
+        } catch (e) { return null; }
+      },
+      crearAnuncio: async (a) => {
+        const cr = await metaAds.createBoost({
+          name: `Posty · Billetera u${uid} · p${a.posteoId}`,
+          pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: cand.ig_media_id,
+          spendCents: a.spendCents, days: 7, country: adCountry(uid),
+        });
+        return { ok: true, anuncioId: cr.campaignId, campaignId: cr.campaignId, adsetId: cr.adsetId, adId: cr.adId };
+      },
+      debitar: async (d) => {
+        try {
+          const after = adWalletMove(uid, -d.montoUSD * 100, 'boost_usd', d.ref, `Impulso posteo ${d.posteoId} $${d.montoUSD} x 7 días`);
+          return { ok: true, saldoNuevo: after };
+        } catch (e) { return { ok: false, motivo: 'saldo_insuficiente' }; }
+      },
+      registrar: async (rec) => {
+        if (rec.tipo === 'exito') {
+          db.prepare(`INSERT INTO ad_boosts
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
+            VALUES (?,?,?,?,?,?,'USD','active',?,?,?,'engagement',7)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, rec.montoUSD * 100, 0, rec.spendCents, rec.campaignId || '', rec.adsetId || '', rec.adId || '');
+          try { track(uid, 'ad_boost_usd', String(rec.montoUSD * 100)); } catch (e) {}
+        } else if (rec.tipo === 'debito_fallido') {
+          // El ad SÍ se creó en Meta pero el saldo no se pudo debitar: queda
+          // asentado como error con el campaign id para revisión manual.
+          db.prepare(`INSERT INTO ad_boosts
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error)
+            VALUES (?,?,?,?,?,?,'USD','error',?,?,?,'engagement',7,?)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, rec.montoUSD * 100, 0, rec.spendCents, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `ad creado sin débito (ref ${rec.ref || ''})`);
+        }
+      },
+    });
+    if (!r.ok) {
+      const status = r.motivo === 'boost_deshabilitado' ? 403 : 409;
+      return res.status(status).json({ ok: false, motivo: r.motivo, ...(r.anuncioId ? { anuncioId: r.anuncioId } : {}) });
+    }
+    const w2 = getAdWallet(uid);
+    res.json({ ok: true, anuncioId: r.anuncioId, posteoId: r.posteoId, montoUSD: r.montoUSD, dias: r.dias, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w2.balance_cents, currency: 'USD', ...(r.ya_creado ? { ya_creado: true } : {}) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo impulsar con saldo' }); }
 });
 
 // Crear preferencia de MercadoPago para cargar crédito
@@ -8832,43 +9074,81 @@ app.post('/api/ads/boost', requireAuth, async (req, res) => {
   if (!elig.ok) {
     return res.status(409).json({ error: 'Este posteo no se puede promocionar (a veces pasa por la música o el formato). Probemos con otro de tus posteos ganadores.' });
   }
+  // GAP CERRADO (LOTE ADS-BILLETERA): el flujo viejo creaba ads SIN verificar
+  // el permiso ads_management — el débito ocurría antes de saber si Meta
+  // aceptaba el ad. Ahora se verifica ANTES de tocar la billetera, igual
+  // que en impulsar y en la billetera USD. Solo cuando Meta está
+  // configurado: sin configurar, el flujo sigue el camino viejo de pauta
+  // 'pending' para activación manual del equipo.
+  if (metaAds.adsConfigured()) {
+    try {
+      const perm = await metaAds.checkAdsPermission();
+      if (!perm.ok) return res.status(503).json({ error: 'No pudimos verificar el permiso de publicidad con Meta. Probá de nuevo en unos minutos.' });
+      if (!perm.hasAdsManagement) return res.status(409).json({ error: 'Todavía no podemos crear anuncios en Meta para tu cuenta: falta el permiso de publicidad (ads_management).' });
+    } catch (e) {
+      return res.status(503).json({ error: 'No pudimos verificar el permiso de publicidad con Meta. Probá de nuevo en unos minutos.' });
+    }
+  }
   const { fee_cents, spend_cents } = adSplit(budgetCents);
   const w = getAdWallet(req.session.userId);
   if (w.balance_cents < budgetCents) {
     return res.status(402).json({ error: 'no_balance', message: 'No tenés crédito suficiente para esta pauta. Cargá crédito primero.' });
   }
-  adWalletMove(req.session.userId, -budgetCents, 'boost_hold', '', `Pauta: ${(post.caption || 'posteo').slice(0, 40)}`);
-  const br = db.prepare(`INSERT INTO ad_boosts
-    (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days)
-    VALUES (?,?,?,?,?,?,'ARS','pending','engagement',?)`)
-    .run(req.session.userId, postId, post.ig_media_id, budgetCents, fee_cents, spendCents, AD_DEFAULT_DAYS);
-  const boostId = br.lastInsertRowid;
-  try { track(req.session.userId, 'ad_boost', String(budgetCents)); } catch (e) {}
-
-  // Lanzar en Meta si está configurado; si no, queda pendiente y la activa el equipo
+  // ORDEN NUEVO (LOTE ADS-BILLETERA): el ad se crea PRIMERO y el saldo se
+  // debita SOLO si se creó bien. Antes se debitaba primero y si Meta
+  // fallaba quedaba plata retenida con una pauta 'pending' que nunca se
+  // lanzó. Si la creación falla, NO se debita nada y se dice claro.
+  // Sin Meta configurado, la rama vieja queda intacta: débito + pauta
+  // 'pending' para activación manual del equipo.
+  let boostId = 0;
   let launched = false, launchError = '';
   if (metaAds.adsConfigured()) {
+    let r;
     try {
-      const r = await metaAds.createBoost({
-        name: `Posty · Boost #${boostId} · u${req.session.userId}`,
+      r = await metaAds.createBoost({
+        name: `Posty · Boost u${req.session.userId} · p${postId}`,
         pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
         spendCents, days: AD_DEFAULT_DAYS, country: adCountry(req.session.userId),
       });
-      db.prepare(`UPDATE ad_boosts SET status='active', meta_campaign_id=?, meta_adset_id=?, meta_ad_id=?, started_at=datetime('now'), error='' WHERE id=?`)
-        .run(r.campaignId, r.adsetId, r.adId, boostId);
-      launched = true;
-      // Ledger de publicación (publish-guard): el boost queda asentado
-      // como kind 'boost' SOLO a fines de auditoría — es una llamada a la
-      // Ads API sobre un posteo ya publicado; no consume el presupuesto
-      // orgánico de media_publish que protege el guard.
-      try {
-        const pg = require('./publish-guard');
-        pg.record(db, { userId: req.session.userId, postId, kind: 'boost', status: 'published', detail: `boost ${boostId} camp ${r.campaignId || ''}` });
-      } catch (e) { /* el ledger nunca bloquea una pauta lograda */ }
     } catch (e) {
-      launchError = String(e.message || e).slice(0, 300);
-      db.prepare(`UPDATE ad_boosts SET error=? WHERE id=?`).run(launchError, boostId);
+      return res.status(409).json({ error: 'No se pudo lanzar la pauta en Meta. No se debitó nada.', launch_error: String(e.message || e).slice(0, 300) });
     }
+    try {
+      adWalletMove(req.session.userId, -budgetCents, 'boost_hold', '', `Pauta: ${(post.caption || 'posteo').slice(0, 40)}`);
+    } catch (e) {
+      // El ad SÍ se creó en Meta pero el saldo no se pudo debitar: queda
+      // asentado como error con el campaign id para revisión manual.
+      const be = db.prepare(`INSERT INTO ad_boosts
+        (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error)
+        VALUES (?,?,?,?,?,?,'ARS','error',?,?,?,'engagement',?,'ad creado sin débito')`)
+        .run(req.session.userId, postId, post.ig_media_id, budgetCents, fee_cents, spendCents, r.campaignId, r.adsetId, r.adId, AD_DEFAULT_DAYS);
+      return res.status(409).json({ error: 'La pauta se creó en Meta pero no se pudo debitar el saldo. Quedó registrada para revisión.', boost_id: be.lastInsertRowid, launched: true });
+    }
+    const br = db.prepare(`INSERT INTO ad_boosts
+      (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days)
+      VALUES (?,?,?,?,?,?,'ARS','active','engagement',?)`)
+      .run(req.session.userId, postId, post.ig_media_id, budgetCents, fee_cents, spendCents, AD_DEFAULT_DAYS);
+    boostId = br.lastInsertRowid;
+    try { track(req.session.userId, 'ad_boost', String(budgetCents)); } catch (e) {}
+    db.prepare(`UPDATE ad_boosts SET meta_campaign_id=?, meta_adset_id=?, meta_ad_id=?, started_at=datetime('now'), error='' WHERE id=?`)
+      .run(r.campaignId, r.adsetId, r.adId, boostId);
+    launched = true;
+    // Ledger de publicación (publish-guard): el boost queda asentado
+    // como kind 'boost' SOLO a fines de auditoría — es una llamada a la
+    // Ads API sobre un posteo ya publicado; no consume el presupuesto
+    // orgánico de media_publish que protege el guard.
+    try {
+      const pg = require('./publish-guard');
+      pg.record(db, { userId: req.session.userId, postId, kind: 'boost', status: 'published', detail: `boost ${boostId} camp ${r.campaignId || ''}` });
+    } catch (e) { /* el ledger nunca bloquea una pauta lograda */ }
+  } else {
+    adWalletMove(req.session.userId, -budgetCents, 'boost_hold', '', `Pauta: ${(post.caption || 'posteo').slice(0, 40)}`);
+    const br = db.prepare(`INSERT INTO ad_boosts
+      (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days)
+      VALUES (?,?,?,?,?,?,'ARS','pending','engagement',?)`)
+      .run(req.session.userId, postId, post.ig_media_id, budgetCents, fee_cents, spendCents, AD_DEFAULT_DAYS);
+    boostId = br.lastInsertRowid;
+    try { track(req.session.userId, 'ad_boost', String(budgetCents)); } catch (e) {}
   }
   const w2 = getAdWallet(req.session.userId);
   res.json({
@@ -30185,7 +30465,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v706';
+const BUILD_ID = '20261105-v707';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

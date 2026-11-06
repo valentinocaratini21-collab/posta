@@ -88,6 +88,7 @@ const ds = require(path.join(__dirname, 'destacado-semana.js'));
 (async () => {
   const base = { semana: { destacadoId: 7 }, monto: 50, clienteId: 1, zona: 'AR',
     env: { DESTACADO_BOOST_ENABLED: '1' }, adsConfigurado: true, paginaAutorizada: true,
+    permisoAds: true, // LOTE IMPULSAR-UN-CLIC: gate estricto, el endpoint siempre lo pasa verificado
     posteoPublicado: true, registrar: async () => {} };
   let cobroLlamado = false;
   const r1 = await ds.procesarImpulso({ ...base, conversionARS: null,
