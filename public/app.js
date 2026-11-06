@@ -19925,12 +19925,24 @@ function homeHeadHTML(prof, bizName, opts) {
   const infoBtnHTML = `<button type="button" class="hf-info-btn" onclick="pzPubInfoOpen()" aria-label="${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}">i</button>`;
   const infoRowHTML = `<button type="button" class="hf-info-row" onclick="pzPubInfoOpen()" aria-label="${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}"><span class="hf-info-btn" aria-hidden="true">i</span><span class="hf-info-row-txt">${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}</span></button>`;
   const rachaTxt = (opts && Number(opts.racha) >= 2) ? `<span class="hf-racha-txt">${pzIc('flame', 14)} ${en ? `${Math.floor(opts.racha)} weeks in a row posting` : `${Math.floor(opts.racha)} semanas seguidas publicando`}</span>` : '';
-  const rachaHTML = user ? `<div class="hf-racha">${rachaTxt ? rachaTxt + infoBtnHTML : infoRowHTML}</div>` : '';
+  // (LOTE ICONOS-LINEA-INFO · 6/11, decisión Valentino) Los 3 íconos
+  // (Editar/Compartir/Ajustes) viven en la misma línea que
+  // «¿Cómo publica Posty?» (fila .hf-racha), a la derecha: la info a
+  // la izquierda y los íconos a la derecha. Antes vivían en .hf-prow
+  // (fila del avatar, después de las stats) y dejaban un blanco
+  // enorme a la izquierda. Sin anidar botones: la fila de info es
+  // un <button>, así que la línea es un contenedor flex con el botón
+  // de info y el span de íconos como hermanos. Mismos data-hf-pact,
+  // mismos handlers (hfProfileBind), mismos aria-labels y mismo
+  // tamaño/estilo (.hf-head-ic). Con racha >= 2 siguen en la misma
+  // línea (texto de racha + (i) + íconos).
+  const headIconsHTML = (opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="edit" aria-label="${en ? 'Edit profile' : 'Editar perfil'}">${pzIc('pencil', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Share my profile' : 'Compartir mi perfil'}">${pzIc('share', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="settings" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button></span>` : '';
+  const rachaHTML = user ? `<div class="hf-racha">${rachaTxt ? rachaTxt + infoBtnHTML : infoRowHTML}${headIconsHTML}</div>` : '';
   return `<div class="hf-head">
     ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
-      ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}${(opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="edit" aria-label="${en ? 'Edit profile' : 'Editar perfil'}">${pzIc('pencil', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Share my profile' : 'Compartir mi perfil'}">${pzIc('share', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="settings" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button></span>` : ''}
+      ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
     </div>
     ${name ? `<div class="hf-name">${esc(name)}</div>` : ''}
     ${catHTML}
@@ -20410,7 +20422,9 @@ function hfProfileActionsHTML(en, acceptHTML) {
   // del encabezado ya NO lleva «Editar perfil» ni «Compartir mi
   // perfil»: esos dos viven como SOLO ÍCONOS (lápiz y compartir, con
   // los mismos data-hf-pact y handlers de siempre, vía hfProfileBind)
-  // a la derecha de los contadores (opts.headIcons en homeHeadHTML).
+  // a la derecha de la fila «¿Cómo publica Posty?» (opts.headIcons
+  // en homeHeadHTML; antes vivían a la derecha de los contadores,
+  // LOTE ICONOS-LINEA-INFO 6/11).
   // El espacio libre lo ocupa «Aceptar todo» REUBICADO (mismo
   // acceptBarHTML, mismo handler pzAcceptAllWeek, mismo alcance:
   // solo programados de la semana nueva pendientes, un toque sin

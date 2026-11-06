@@ -37,9 +37,16 @@ const collapsed = css.split('LOTE ENCABEZADO-COLAPSABLE')[1] || '';
 check('bloque hf-collapsed existe', !!collapsed);
 check('head compacto en flex una fila', /#inicioView\.hf-collapsed \.hf-head\{display:flex;align-items:center/.test(css));
 check('avatar compacto 40px', /#inicioView\.hf-collapsed \.hf-head \.hf-ava-in\{width:40px;height:40px\}/.test(css));
-for (const sel of ['hf-stats', 'hf-cat', 'hf-bio', 'hf-link', 'hf-racha', 'ig-head-chip']) {
+for (const sel of ['hf-stats', 'hf-cat', 'hf-bio', 'hf-link', 'ig-head-chip']) {
   check('oculto en compacto: ' + sel, collapsed.includes('.hf-head .' + sel));
 }
+// (LOTE ICONOS-LINEA-INFO · 6/11, decisión Valentino: los íconos viven
+// en la fila .hf-racha, así que la fila ya NO se oculta entera al
+// colapsar: se muestra como 4ª pieza con SOLO los íconos; la info
+// queda oculta. SUPERSEDE el viejo «oculto en compacto: hf-racha».)
+check('compacto: la fila .hf-racha se muestra (4ª pieza)', /#inicioView\.hf-collapsed \.hf-head \.hf-racha\{display:flex;order:4;flex:none;margin:0\}/.test(css));
+check('compacto: la info de la racha queda oculta', css.includes('#inicioView.hf-collapsed .hf-head .hf-racha .hf-info-row,') && css.includes('#inicioView.hf-collapsed .hf-head .hf-racha .hf-racha-txt,') && css.includes("#inicioView.hf-collapsed .hf-head .hf-racha > .hf-info-btn{display:none}"));
+check('compacto: ningún display:none sobre .hf-head-icons', !/\.hf-head-icons\s*\{[^}]*display\s*:\s*none/.test(collapsed));
 check('pacts NUNCA ocultos en compacto', !collapsed.includes('hf-pacts'));
 check('sin transición en el bloque (instantáneo)', !/transition/.test(collapsed));
 const collapsedSelectors = [...css.matchAll(/([^{}]*hf-collapsed[^{}]*)\{/g)].map((m) => m[1]);

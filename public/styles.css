@@ -4906,6 +4906,17 @@ body.pz-postchat-open{overflow:hidden}
 .hf-head-icons{display:flex;gap:6px;flex:none;align-items:center}
 .hf-head-ic{width:40px;height:40px;flex:none;border-radius:50%;border:1px solid rgba(255,255,255,.75);background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);color:#0A1E33;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(10,30,51,.06);padding:0}
 .hf-head-ic svg{width:20px;height:20px}
+/* (LOTE ICONOS-LINEA-INFO · 6/11, decisión Valentino) Los 3 íconos del
+   perfil (Editar/Compartir/Ajustes) viven en la misma línea que
+   «¿Cómo publica Posty?», a la derecha de la fila .hf-racha. La
+   regla base .hf-racha NO se toca (la afirma test-lotei-racha con su
+   texto exacto). min-width:0 en la info y en el texto de racha para
+   que la fila nunca desborde a 360px con los 3 íconos; la etiqueta
+   de info recorta con puntos suspensivos si hiciera falta. */
+.hf-racha .hf-head-icons{margin-left:auto}
+.hf-racha .hf-info-row{min-width:0}
+.hf-racha .hf-racha-txt{min-width:0}
+.hf-racha .hf-info-row-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hf-pacts-accept{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;padding:12px 10px 2px}
 .hf-pacts-accept .hf-accept-bar{width:auto;flex:none;margin:0;padding:10px 12px;font-size:14px}
 
@@ -4942,10 +4953,13 @@ body.pz-postchat-open{overflow:hidden}
 
 /* (LOTE ENCABEZADO-COLAPSABLE · Valentino 2/11) Estado compacto del
    encabezado de Inicio: una sola fila (avatar 40px + @usuario +
-   nombre). Secundarios ocultos: stats, cat, bio, link, racha, chip.
-   Los pacts (Editar/Compartir) NO se tocan: siguen visibles en ambos
-   estados. Sin animación: el cambio es instantáneo, sin riesgo de
-   tirones con el scroll en iOS. */
+   nombre + íconos). Secundarios ocultos: stats, cat, bio, link,
+   chip y la INFO de la racha (botón/etiqueta, texto de racha, «i»).
+   Los íconos (Editar/Compartir/Ajustes) NO se tocan: siguen visibles
+   en ambos estados — viven en la fila .hf-racha desde el LOTE
+   ICONOS-LINEA-INFO (6/11), así que la fila ya no se oculta entera:
+   se muestra como 4ª pieza con solo los íconos. Sin animación: el
+   cambio es instantáneo, sin riesgo de tirones con el scroll en iOS. */
 #inicioView.hf-collapsed .hf-head{display:flex;align-items:center;gap:10px;padding:10px 12px}
 #inicioView.hf-collapsed .hf-head .hf-prow{order:1;flex:none}
 #inicioView.hf-collapsed .hf-head .hf-user{order:2;margin:0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -4956,8 +4970,15 @@ body.pz-postchat-open{overflow:hidden}
 #inicioView.hf-collapsed .hf-head .hf-cat,
 #inicioView.hf-collapsed .hf-head .hf-bio,
 #inicioView.hf-collapsed .hf-head .hf-link,
-#inicioView.hf-collapsed .hf-head .hf-racha,
 #inicioView.hf-collapsed .hf-head .ig-head-chip{display:none}
+/* (LOTE ICONOS-LINEA-INFO · 6/11) La fila .hf-racha ya NO se oculta
+   entera al colapsar: los íconos viven en ella y tienen que seguir
+   visibles. Se muestra como 4ª pieza de la fila única (después del
+   nombre), con SOLO los íconos: la info queda oculta. */
+#inicioView.hf-collapsed .hf-head .hf-racha{display:flex;order:4;flex:none;margin:0}
+#inicioView.hf-collapsed .hf-head .hf-racha .hf-info-row,
+#inicioView.hf-collapsed .hf-head .hf-racha .hf-racha-txt,
+#inicioView.hf-collapsed .hf-head .hf-racha > .hf-info-btn{display:none}
 
 /* (LOTE SEMANA-APROBADA) Mensaje tranquilo encima del feed, solo cuando la semana esta toda aprobada. */
 .hf-semana-ok{display:flex;align-items:center;justify-content:center;gap:6px;text-align:center;color:var(--mut);font-size:14px;line-height:1.5;margin:12px 0 2px}
@@ -5175,7 +5196,11 @@ body.pz-postchat-open{overflow:hidden}
    centro, íconos a la derecha). No se toca escritorio, ni el dock,
    ni la fila Aceptar todo, ni ninguna capa de zoom. El wrap de v614
    queda como red de seguridad: si una cuenta tiene contadores más
-   anchos, los íconos vuelven a bajar antes que solaparse. */
+   anchos, los íconos vuelven a bajar antes que solaparse.
+   (LOTE ICONOS-LINEA-INFO · 6/11) Los íconos ya no viven en .hf-prow:
+   se mudaron a la fila «¿Cómo publica Posty?». El wrap y la
+   compactación de esta regla quedan como red de seguridad para las
+   stats. */
 @media(max-width:820px){
   #inicioView .hf-head{padding:12px}
   #inicioView .hf-ava-in{width:60px;height:60px}

@@ -49,7 +49,7 @@ t('1: mz-tabs: + entre Estrategia y Premios, orden intacto', mzNav.indexOf("t('a
 
 // ---------- 2. Íconos en contadores + Aceptar todo en el encabezado ----------
 const headRow = blockOf('function homeHeadHTML', 'function pzPubInfoHTML');
-t('2: contadores: íconos lápiz y compartir a la derecha (hf-head-icons)', headRow.includes('hf-head-icons') && headRow.includes('data-hf-pact="edit"') && headRow.includes('data-hf-pact="share"'));
+t('2: íconos lápiz y compartir en la línea de info (hf-head-icons)', headRow.includes('hf-head-icons') && headRow.includes('data-hf-pact="edit"') && headRow.includes('data-hf-pact="share"'));
 t('2: íconos: aria-labels ES/EN, sin texto', headRow.includes('aria-label="${en ? \'Edit profile\' : \'Editar perfil\'}"') && headRow.includes('aria-label="${en ? \'Share my profile\' : \'Compartir mi perfil\'}"'));
 t('2: íconos: mismos handlers (data-hf-pact, bind por atributo)', app.includes("root.querySelectorAll('[data-hf-pact]')") && app.includes("if (act === 'share') hfShareOpen();") && app.includes("else if (act === 'edit') hfEditOpen();"));
 t('2: Inicio pide los íconos (headIcons, no visitante)', app.includes('headIcons: !HF_VISITOR'));
