@@ -12826,6 +12826,15 @@ function ideaDiariaSintetica(uid, hoy) {
 async function ensureTodayPost(uid, tz, now) {
   const hoy = morningPostPush.dayKeyInTz(now || new Date(), tz);
   if (!hoy) return { ok: false, reason: 'sin_dia' };
+  // (LOTE GUARD-YA-PUBLICADO · 6/11 · caso 570) Un posteo por día: si
+  // hoy YA salió un posteo (published), no se genera ni se programa
+  // nada más. El paso 1 solo ve programados y el paso 3 generaba un
+  // segundo posteo el mismo día — el comentario «nunca 2 posteos hoy»
+  // era cierto en intención, no en código. ritualPublicadoHoy es el
+  // chequeo que faltaba acá. Un solo punto cubre los 3 llamadores
+  // (home, ritual, push matutina) y tapa el re-armado del borrador
+  // frenado (paso 2) mientras siga siendo de hoy.
+  if (ritualPublicadoHoy(uid, tz, hoy)) return { ok: false, reason: 'ya_publicado_hoy' };
   const key = uid + ':' + hoy;
   const prev = ENSURE_TODAY_RUNNING.get(key);
   if (prev && prev.promise && Date.now() - (prev.at || 0) < 15 * 60 * 1000) {
@@ -12848,6 +12857,7 @@ async function ensureTodayPost(uid, tz, now) {
         const cands = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft'
           AND image_path LIKE '/media/%' AND media_type IN ('image','carousel')
           AND COALESCE(approval,'pending') != 'rejected'
+          AND COALESCE(user_stopped, 0) = 0
           AND created_at >= datetime('now', '-2 days') ORDER BY id DESC`).all(uid);
         for (const c of cands) {
           let d = null;
@@ -31034,7 +31044,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v729';
+const BUILD_ID = '20261105-v730';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
