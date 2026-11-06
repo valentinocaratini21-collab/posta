@@ -24783,6 +24783,10 @@ function pzPostChatEnsureLayer() {
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') { var l = document.getElementById('pzPostChat'); if (l && !l.hidden) pzPostChatClose(); }
     });
+    // (LOTE CHAT-POSTEO-REDISENO 6/11) Delegación única de los 4 atajos
+    // de la fila de chips (viven en #chatCard, fuera del hero): una sola
+    // vez, sobrevive a re-renders de hero y de tarjeta.
+    try { layer.addEventListener('click', function (e) { pzPcChipRowClick(e); }); } catch (e2) {}
     var sy = 0, sx = 0, tracking = false;
     document.addEventListener('touchstart', function (e) {
       var l = document.getElementById('pzPostChat');
@@ -24827,12 +24831,15 @@ function pzPostChatEnsureLayer() {
 }
 
 // (LOTE PEDIR-CAMBIO-LINDO 2/11) Diseño del mock v1 sobre la pantalla
-// de chat del posteo: hero sin cortar + pregunta + tarjetas glass.
+// de chat del posteo. (REDISENO 6/11: el hero sin cortar + tarjetas
+// glass pasaron a tira compacta + burbuja de pregunta + fila de chips;
+// el mock v1 quedó SUPERSEDED por el mock de chat-posteo-rediseno.)
 // No es un tercer chat: reutiliza #pzPostChat, hfAnchorChip y el campo
 // del #chatCard movido.
 var PZ_PC_OPEN = false;
 var PZ_PC_POST = null;
 var PZ_PC_DIRTY = false;
+var PZ_PC_UPROW = null; // {node, parent, next} — píldora «Subir fotos o video» desmontada mientras el chat del posteo está abierto (vuelve a Inicio al cerrar).
 var PZ_PC_EDIT_PH = { es: 'qué le cambio a este posteo?', en: 'what do I change on this post?' };
 function pzPcStatusChip(p, en) {
   try {
@@ -24843,35 +24850,47 @@ function pzPcStatusChip(p, en) {
   } catch (e) {}
   return '';
 }
-function pzPcHeroHTML(post, en) {
+// (LOTE CHAT-POSTEO-REDISENO 6/11 · mock v1 aprobado «Perfectoooo»)
+// La foto gigante + pregunta + grilla 2×2 tapaban el hilo: ahora la
+// pantalla es tira compacta + pregunta como primera burbuja + fila de
+// chips. La pregunta NO se siembra dentro de #chatBox: chatLoadHistory
+// la reconstruye con innerHTML y la borraría (también los proactive
+// asks); vive como burbuja hermana encima del hilo, en #pzPcHero, que
+// solo la escribe el render del hero y la limpia el clear.
+function pzPcStripHTML(post, en) {
   var img = (post && (post.image_path || post.cover_path)) || '';
-  var imgHtml = '';
+  var thumb = '';
   if (img) {
     var big = img;
     try { big = mv(img, 1080); } catch (e) {}
-    imgHtml = '<div class="pz-pc-hero-imgwrap"><img class="pz-pc-hero-img" src="' + esc(big) + '" alt="" data-full="' + esc(img) + '" onerror="__imgFb(this)">'
-      + '<span class="pz-pc-spark">✦</span><span class="pz-pc-spark s2">✦</span></div>';
+    thumb = '<img class="pz-pc-strip-img" src="' + esc(big) + '" alt="" data-full="' + esc(img) + '" onerror="__imgFb(this)">';
   } else {
-    imgHtml = '<div class="pz-pc-hero-imgwrap pz-pc-hero-ph"><span class="pz-pc-spark">✦</span></div>';
+    thumb = '<div class="pz-pc-strip-img pz-pc-strip-ph"><span>✦</span></div>';
   }
   var when = '';
   try { when = hfWhenChip(post) || ''; } catch (e) {}
   var st = pzPcStatusChip(post, en);
-  var chips = '';
-  if (when) chips += '<span class="pz-pc-chip">' + esc(when) + '</span>';
-  if (st) chips += '<span class="pz-pc-chip">' + esc(st) + '</span>';
+  var t2 = '';
+  if (st && when) t2 = '<b>' + esc(st) + '</b> · ' + esc(when);
+  else if (st) t2 = '<b>' + esc(st) + '</b>';
+  else if (when) t2 = esc(when);
+  return '<div class="pz-pc-strip">' + thumb
+    + '<div class="pz-pc-strip-tx"><div class="pz-pc-strip-t1">' + (en ? "Today's post" : 'Posteo de hoy') + '</div>'
+    + (t2 ? '<div class="pz-pc-strip-t2">' + t2 + '</div>' : '') + '</div></div>';
+}
+function pzPcHeroHTML(post, en) {
+  return pzPcStripHTML(post, en)
+    + '<div class="chat-msg ai pz-pc-qbubble"><b>' + (en ? 'What do I change on this post?' : '¿Qué le cambio a este posteo?') + '</b>'
+    + '<span>' + (en ? "Write it like you'd tell me on WhatsApp, or tap a shortcut." : 'Escribilo como me lo dirías por WhatsApp, o tocá un atajo.') + '</span></div>';
+}
+function pzPcChipRowHTML(post, en) {
   var redoDis = false;
   try { redoDis = (hfRedoLeft(post) === 0); } catch (e) {}
-  var cards = ''
-    + '<button type="button" class="pz-pc-card" data-pz-pc-chip="photo"><i>🖼️</i><b>' + (en ? 'Change the photo' : 'Cambiar la foto') + '</b><span>' + (en ? 'Another image, another angle' : 'Otra imagen, otro ángulo') + '</span></button>'
-    + '<button type="button" class="pz-pc-card" data-pz-pc-chip="text"><i>✍️</i><b>' + (en ? 'Change the text' : 'Cambiar el texto') + '</b><span>' + (en ? 'The caption, the headline' : 'El caption, el titular') + '</span></button>'
-    + '<button type="button" class="pz-pc-card" data-pz-pc-chip="when"><i>🕖</i><b>' + (en ? 'Change the day/time' : 'Cambiar día y hora') + '</b><span>' + (en ? 'When it goes out' : 'Cuándo sale') + '</span></button>'
-    + '<button type="button" class="pz-pc-card" data-pz-pc-chip="redo"' + (redoDis ? ' disabled' : '') + '><i>🔄</i><b>' + (en ? 'Redo' : 'Rehacer') + '</b><span>' + (en ? 'From scratch, another idea' : 'De cero, con otra idea') + '</span></button>';
-  return imgHtml
-    + (chips ? '<div class="pz-pc-chips">' + chips + '</div>' : '')
-    + '<div class="pz-pc-q">' + (en ? 'What do I change on this post?' : '¿Qué le cambio a este posteo?') + '</div>'
-    + '<div class="pz-pc-sub">' + (en ? "Write it like you'd tell me on WhatsApp, or tap a shortcut." : 'Escribilo como me lo dirías por WhatsApp, o tocá un atajo.') + '</div>'
-    + '<div class="pz-pc-grid">' + cards + '</div>';
+  return '<div class="pz-pc-chiprow" id="pzPcChipRow">'
+    + '<button type="button" class="pz-pc-chipbtn" data-pz-pc-chip="photo">🖼️ ' + (en ? 'Change the photo' : 'Cambiar la foto') + '</button>'
+    + '<button type="button" class="pz-pc-chipbtn" data-pz-pc-chip="text">✍️ ' + (en ? 'Change the text' : 'Cambiar el texto') + '</button>'
+    + '<button type="button" class="pz-pc-chipbtn" data-pz-pc-chip="when">🕖 ' + (en ? 'Change the day/time' : 'Cambiar día y hora') + '</button>'
+    + '<button type="button" class="pz-pc-chipbtn" data-pz-pc-chip="redo"' + (redoDis ? ' disabled' : '') + '>🔄 ' + (en ? 'Redo' : 'Rehacer') + '</button></div>';
 }
 function pzPcRenderHero(post) {
   try {
@@ -24886,13 +24905,30 @@ function pzPcRenderHero(post) {
       layer.insertBefore(hero, body);
     }
     hero.innerHTML = pzPcHeroHTML(post, pzPostChatIsEn());
-    var btns = hero.querySelectorAll('[data-pz-pc-chip]');
-    for (var i = 0; i < btns.length; i++) {
-      (function (b) {
-        b.onclick = function (e) { try { e.stopPropagation(); } catch (e2) {} try { pzPcChipAction(b.dataset.pzPcChip); } catch (e3) {} };
-      })(btns[i]);
+    // La fila de chips vive dentro de #chatCard (entre el hilo y el
+    // composer), no en el hero: se re-renderiza acá junto con la tira
+    // (el estado disabled de Rehacer y la hora cambian con el posteo).
+    var card = document.getElementById('chatCard');
+    var old = card ? card.querySelector('#pzPcChipRow') : null;
+    if (old) old.remove();
+    var anchor = card ? card.querySelector('#chatAnchor') : null;
+    if (card && anchor) anchor.insertAdjacentHTML('afterend', pzPcChipRowHTML(post, pzPostChatIsEn()));
+    else if (card) {
+      var row = card.querySelector('.chat-input-row');
+      if (row) row.insertAdjacentHTML('beforebegin', pzPcChipRowHTML(post, pzPostChatIsEn()));
     }
   } catch (e) {}
+}
+// (LOTE CHAT-POSTEO-REDISENO 6/11) Delegación única en #pzPostChat:
+// los chips viven dentro de #chatCard, fuera de #pzPcHero — si el
+// binding se quedara en el hero, querySelectorAll devolvería vacío y
+// los 4 atajos morirían en silencio (síntoma del 3/11). Se cablea una
+// sola vez en pzPostChatEnsureLayer y sobrevive a re-renders.
+function pzPcChipRowClick(e) {
+  var b = e && e.target && e.target.closest ? e.target.closest('[data-pz-pc-chip]') : null;
+  if (!b) return;
+  try { e.stopPropagation(); } catch (e2) {}
+  try { pzPcChipAction(b.dataset.pzPcChip); } catch (e3) {}
 }
 // (LOTE CHAT-PERFECTO · pieza 4 · 3/11) Los 4 atajos del chat del posteo
 // disparan su acción real (antes solo escribían texto en el campo y
@@ -25029,7 +25065,12 @@ function pzPcClear() {
     var hero = document.getElementById('pzPcHero');
     if (hero) hero.innerHTML = '';
     var card = document.getElementById('chatCard');
-    if (card) { var n = card.querySelector('.pz-pc-note'); if (n) n.remove(); }
+    if (card) {
+      var r = card.querySelector('#pzPcChipRow');
+      if (r) r.remove();
+      var n = card.querySelector('.pz-pc-note');
+      if (n) n.remove();
+    }
   } catch (e) {}
 }
 function pzPcNoteHTML(en) {
@@ -25048,6 +25089,19 @@ function pzPostChatOpen(post) {
   try { hfSetAnchor(post); } catch (e) {}
   PZ_PC_POST = post;
   body.appendChild(card);
+  // (LOTE CHAT-POSTEO-REDISENO 6/11) La píldora «Subir fotos o video»
+  // viene con la #chatCard de Inicio: se DESMONTA al abrir (nunca se
+  // oculta con CSS — sale del DOM en esta pantalla) y se re-inserta al
+  // cerrar. La camarita del input queda y sigue subiendo fotos.
+  try {
+    if (!PZ_PC_UPROW) {
+      var _up = card.querySelector('.sched-up-row, .sched-chips-row');
+      if (_up && _up.querySelector('#agUploadBtn')) {
+        PZ_PC_UPROW = { node: _up, parent: _up.parentNode, next: _up.nextSibling };
+        _up.remove();
+      }
+    }
+  } catch (e) {}
   PZ_PC_OPEN = true;
   try { pzPcRenderHero(post); } catch (e) {}
   try {
@@ -25103,6 +25157,23 @@ function pzPostChatClose() {
   PZ_PC_OPEN = false;
   PZ_PC_POST = null;
   try { pzPcClear(); } catch (e) {}
+  // (LOTE CHAT-POSTEO-REDISENO 6/11) La píldora vuelve a Inicio en su
+  // lugar original, ANTES de devolver la tarjeta (y antes del render()
+  // por PZ_PC_DIRTY, que re-cablea la subida con el nodo ya en su sitio).
+  try {
+    if (PZ_PC_UPROW && PZ_PC_UPROW.node) {
+      var _u = PZ_PC_UPROW; PZ_PC_UPROW = null;
+      var _card = document.getElementById('chatCard');
+      if (_card && _u.parent === _card) {
+        if (_u.next && _u.next.parentNode === _card) _card.insertBefore(_u.node, _u.next);
+        else _card.appendChild(_u.node);
+      } else if (_card) {
+        var _row = _card.querySelector('.chat-input-row');
+        if (_row) _row.insertAdjacentElement('beforebegin', _u.node);
+        else _card.appendChild(_u.node);
+      }
+    }
+  } catch (e) {}
   layer.style.transform = '';
   layer.style.height = '';
   layer.style.top = '';

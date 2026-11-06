@@ -4486,32 +4486,33 @@ body.pz-postchat-open{overflow:hidden}
    a verse como siempre. Magia solo en la entrada (one-shot).
    ============================================================ */
 .pz-pc-hero{flex:none;padding:0 14px 8px}
-.pz-pc-hero-imgwrap{position:relative;border-radius:22px;overflow:hidden;background:rgba(255,255,255,.45);box-shadow:0 14px 34px rgba(10,30,51,.18);max-height:26vh;display:flex;align-items:center;justify-content:center}
-.pz-pc-hero-img{width:100%;height:100%;max-height:26vh;object-fit:contain;display:block}
-.pz-pc-hero-ph{min-height:110px}
-.pz-pc-spark{position:absolute;top:12px;right:16px;color:#FEC14D;font-size:22px;text-shadow:0 0 12px rgba(254,193,77,.9);animation:pzPcSpark 1.4s ease-out forwards;pointer-events:none}
-.pz-pc-spark.s2{top:42px;right:44px;color:#fff;font-size:13px;animation-delay:.15s}
-@keyframes pzPcSpark{from{opacity:0;transform:scale(.4)}30%{opacity:1;transform:scale(1.15)}to{opacity:0;transform:scale(1) translateY(-6px)}}
-@media (prefers-reduced-motion: reduce){.pz-pc-spark{display:none}}
-.pz-pc-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.pz-pc-chip{font-size:12.5px;color:#0A1E33;background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.8);border-radius:999px;padding:6px 11px}
-.pz-pc-q{font-size:19px;font-weight:800;color:#0A1E33;margin:12px 0 0;line-height:1.25}
-.pz-pc-sub{font-size:13.5px;color:#47617A;margin-top:4px}
-.pz-pc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
-.pz-pc-card{border:1px solid rgba(255,255,255,.85);border-radius:18px;padding:13px 12px;text-align:left;font-family:inherit;cursor:pointer;color:#0A1E33;background:linear-gradient(135deg,rgba(39,147,200,.28),rgba(39,147,200,.12));box-shadow:0 0 0 1px rgba(39,147,200,.35),0 10px 26px rgba(39,147,200,.28);backdrop-filter:blur(18px) saturate(1.6);-webkit-backdrop-filter:blur(18px) saturate(1.6)}
-.pz-pc-card:disabled{opacity:.45;cursor:default}
-.pz-pc-card i{font-style:normal;font-size:22px;display:block;margin-bottom:6px}
-.pz-pc-card b{font-size:14.5px;display:block}
-.pz-pc-card span{font-size:12px;color:#47617A}
+/* (LOTE CHAT-POSTEO-REDISENO 6/11 · mock v1 aprobado) La foto gigante +
+   grilla 2×2 tapaban el hilo: tira compacta sticky (el hero ya es
+   flex:none: nunca scrollea) + pregunta como primera burbuja + fila de
+   chips con scroll. La burbuja reusa .chat-msg.ai (avatar por CSS). */
+.pz-pc-strip{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.8);border-radius:18px;padding:8px 10px;margin:0 0 8px;box-shadow:0 2px 10px rgba(10,30,51,.06)}
+.pz-pc-strip-img{width:56px;height:56px;object-fit:cover;border-radius:12px;flex:none;display:block;background:rgba(255,255,255,.45)}
+.pz-pc-strip-ph{display:flex;align-items:center;justify-content:center;color:#FEC14D;font-size:22px}
+.pz-pc-strip-tx{min-width:0}
+.pz-pc-strip-t1{font-size:14.5px;font-weight:800;color:#0A1E33;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pz-pc-strip-t2{font-size:12.5px;color:#47617A;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pz-pc-strip-t2 b{color:#2793C8}
+.pz-pc-qbubble{margin:0}
+.pz-pc-qbubble b{display:block;font-size:15px;line-height:1.3}
+.pz-pc-qbubble span{display:block;font-size:13px;color:#47617A;margin-top:2px;line-height:1.4}
+.pz-pc-chiprow{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0 8px;flex:none;-webkit-overflow-scrolling:touch;mask-image:linear-gradient(90deg,#000 88%,transparent);-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent)}
+.pz-pc-chiprow::-webkit-scrollbar{display:none}
+.pz-pc-chipbtn{flex:none;white-space:nowrap;font-family:inherit;font-size:12px;font-weight:700;color:#0A1E33;background:#fff;border:1px solid rgba(39,147,200,.45);border-radius:999px;padding:8px 10px;cursor:pointer;box-shadow:0 2px 8px rgba(10,30,51,.06)}
+.pz-pc-chipbtn:disabled{opacity:.45;cursor:default}
+.pz-pc-chipbtn:active{transform:scale(.97)}
 .pz-postchat-body #chatAnchor{display:none}
-.pz-postchat-body .chat-input-row .in{font-size:17px;padding:16px 20px}
-.pz-pc-note{text-align:center;font-size:12px;color:#47617A;padding:8px 8px 2px;flex:none}
-.pz-postchat.pz-pc-kb .pz-pc-hero-imgwrap{max-height:64px}
-.pz-postchat.pz-pc-kb .pz-pc-hero-img{max-height:64px}
-.pz-postchat.pz-pc-kb .pz-pc-grid{display:none}
-.pz-postchat.pz-pc-kb .pz-pc-sub{display:none}
-.pz-postchat.pz-pc-kb .pz-pc-chips{display:none}
-.pz-postchat.pz-pc-kb .pz-pc-q{margin-top:6px;font-size:15px}
+.pz-postchat-body .chat-input-row .in{font-size:14px;padding:12px 12px}
+.pz-postchat-body .chat-input-row .btn{width:38px;height:38px;font-size:17px}
+.pz-pc-note{text-align:center;font-size:11.5px;color:#47617A;padding:2px 8px 10px;flex:none}
+.pz-postchat.pz-pc-kb .pz-pc-chiprow{display:none}
+.pz-postchat.pz-pc-kb .pz-pc-strip-img{width:40px;height:40px;border-radius:10px}
+.pz-postchat.pz-pc-kb .pz-pc-strip-t2{display:none}
+.pz-postchat.pz-pc-kb .pz-pc-strip{padding:6px 10px;margin-bottom:4px}
 .pz-postchat.pz-pc-kb .pz-pc-hero{padding-bottom:2px}
 
 /* ============ LOTE CHAT SIMPLE (2026-11-01) ============ */

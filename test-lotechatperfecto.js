@@ -84,8 +84,10 @@ ok('E5 KbSync post-chat sigue usando visualViewport', wApp.includes('visualViewp
 ok('E6 swipe-cierre post-chat intacto', wApp.includes('pzSwipeDy'));
 
 // (G) Pieza 4: los 4 atajos disparan su acción real.
-const pcCards = region(wApp, 'pzPcRenderHero', 1500);
-ok('G1 tarjetas del posteo llaman a pzPcChipAction (no a hfAnchorChip)', pcCards.includes('pzPcChipAction(b.dataset.pzPcChip)') && !pcCards.includes('hfAnchorChip(b.dataset.pzPcChip)'));
+const pcDel = region(wApp, 'function pzPcChipRowClick(e) {', 600);
+ok('G1 atajos del posteo llaman a pzPcChipAction por delegación en la capa (no a hfAnchorChip)', pcDel.includes('pzPcChipAction(b.dataset.pzPcChip)') && !pcDel.includes('hfAnchorChip(b.dataset.pzPcChip)'));
+const pcRender = region(wApp, 'function pzPcRenderHero(post) {', 1600);
+ok('G1b el render ya no cablea por botón (la delegación vive en la capa)', !pcRender.includes("querySelectorAll('[data-pz-pc-chip]')"));
 const act = region(wApp, 'function pzPcChipAction(kind) {', 1800);
 ok('G2 foto abre el picker de foto del propio chat', act.includes("querySelector('#chatPhotoBtn')") && act.includes("querySelector('#chatFile')"));
 ok('G3 texto manda el pedido anclado', act.includes('pzPcSendAnchored') && wApp.includes("function pzPcSendAnchored(text)") && region(wApp, 'function pzPcSendAnchored(text) {', 400).includes('chatSend()'));
@@ -105,11 +107,11 @@ const layerFn = region(wApp, 'function pzPostChatLayerHTML() {', 800);
 ok('H1 capa sin grip de hoja', !layerFn.includes('pz-postchat-grip'));
 ok('H2 head con safe-area (el grip la aportaba)', wCss.includes('.pz-postchat-head{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;flex:none}'));
 ok('H3 KbSync marca teclado abierto', wApp.includes("layer.classList.add('pz-pc-kb')") && wApp.includes("(window.innerHeight - vv.height) > 120"));
-ok('H4 con teclado: foto fija compacta 64px (no se va)', wCss.includes('.pz-postchat.pz-pc-kb .pz-pc-hero-imgwrap{max-height:64px}') && wCss.includes('.pz-postchat.pz-pc-kb .pz-pc-hero-img{max-height:64px}'));
-ok('H5 con teclado: tarjetas ocultas para dar lugar al campo', wCss.includes('.pz-postchat.pz-pc-kb .pz-pc-grid{display:none}'));
+ok('H4 con teclado: tira fija compacta 40px + sin 2ª línea (no se va)', wCss.includes('.pz-postchat.pz-pc-kb .pz-pc-strip-img{width:40px;height:40px') && wCss.includes('.pz-postchat.pz-pc-kb .pz-pc-strip-t2{display:none}'));
+ok('H5 con teclado: fila de chips oculta para dar lugar al campo', wCss.includes('.pz-postchat.pz-pc-kb .pz-pc-chiprow{display:none}'));
 ok('H6 hero flex:none (no scrollea) + capa fixed fullscreen', wCss.includes('.pz-pc-hero{flex:none') && wCss.includes('.pz-postchat{position:fixed;inset:0'));
 ok('H7 campo fijo abajo en post-chat (input-row flex:none)', wCss.includes('.pz-postchat-body .chat-input-row{flex:none}'));
-const openFn = region(wApp, 'function pzPostChatOpen(post) {', 1400);
+const openFn = region(wApp, 'function pzPostChatOpen(post) {', 2600);
 ok('H8 sin foco automático al abrir (teclado no tapa foto y atajos)', !openFn.includes('setTimeout(function () { try { inp.focus'));
 ok('H9 placeholder de edición sigue puesto al abrir', openFn.includes('PZ_PC_EDIT_PH'));
 
