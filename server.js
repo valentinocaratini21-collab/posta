@@ -97,7 +97,7 @@ const preguntasPosteos = require('./preguntas-posteos'); // PP-PREGUNTAS-POSTEOS
 const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { postyLevel, LEVEL_UP_MSGS } = require('./posty-level'); // 🧠 Niveles de conocimiento de Posty
-const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR, SELECTOR_COUNTRIES, COUNTRY_META, getRail, PODERES, PODER_NOMBRE, completoPrice, teamPrice, contratoTier } = require('./config/plans');
+const { PLANS, PLAN_UNICO, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR, SELECTOR_COUNTRIES, COUNTRY_META, getRail, PODERES, PODER_NOMBRE, completoPrice, teamPrice, contratoTier } = require('./config/plans');
 const LA = require('./launch-analytics'); // (v322) analytics de lanzamiento: época, tablero, termómetro, alertas, carta
 const metaDeauth = require('./meta-deauthorize'); // (Frente 4b) Deauthorize callback de Meta: baja lógica IG + evento durable
 const holaInbox = require('./hola-inbox'); // (Frente 4b) Lector SOLO LECTURA de respuestas a hola@ (Carta/toque), clasificador por reglas
@@ -17318,6 +17318,33 @@ app.get('/api/billing/plans', (req, res) => {
   const plans = getPlans(country);
   const anchor = PLAN_ANCHOR[country];
   const meta = COUNTRY_META[country] || COUNTRY_META.AR;
+  // (PLAN ÚNICO, Valentino 2026-11-06) La vidriera sirve UN SOLO plan
+  // (Posty, USD 199/mes) vía ?unico=1. La app (Mi plan, checkout, paywall,
+  // modal y banner de trial) sigue usando el catálogo de 3 tiers sin el
+  // parámetro: la facturación interna queda intacta.
+  if (req.query.unico === '1') {
+    const p = { ...PLAN_UNICO, price_label: formatPrice(PLAN_UNICO) };
+    const anchorU = PLAN_ANCHOR[country] ? { cm: PLAN_ANCHOR[country].cm, desde: 'USD 199' } : null;
+    return res.json({
+      country,
+      currency: 'USD',
+      rail: meta.rail,
+      local_price_pending: false,
+      countries: SELECTOR_COUNTRIES.map((c) => ({ code: c, ...COUNTRY_META[c] })),
+      plans: [p],
+      anchor: anchorU,
+      trial_plan: TRIAL_PLAN,
+      mp_configured: mp.mpConfigured(),
+      stripe_configured: stripeBilling.stripeConfigured(),
+      poderes: PODERES,
+      // Completo fundador = 3x el poder (USD 597); equipo con teamPrice.
+      completo: { prices: { posty: 3 * PLAN_UNICO.price }, price_labels: { posty: formatPrice({ price: 3 * PLAN_UNICO.price, currency: 'USD' }) } },
+      equipo: {
+        descuentos: { 2: 10, 3: 15, 4: 20 },
+        precios: Object.fromEntries([2, 3, 4].map((n) => [n, { posty: teamPrice(n, PLAN_UNICO.price) }])),
+      },
+    });
+  }
   // (Pagos lado app, 2026-10-25) Campos AGREGADOS, ninguno quitado: el
   // shape viejo sigue intacto y el cliente nuevo usa estos para el banner
   // del deep link (completo) y el total con equipo. CA → completo null
@@ -30791,7 +30818,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v716';
+const BUILD_ID = '20261105-v717';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

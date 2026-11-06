@@ -7,6 +7,9 @@
    despliega los 3 planes), paywall (modal de trial vencido) y app →
    Ajustes/Mi plan (plan-mini en chunk-ajustes).
    Parte 1: la fuente de verdad (config/plans.js) — detail por plan y país.
+   (PLAN ÚNICO 2026-11-06: la vidriera sirve SOLO PLAN_UNICO 'posty' USD
+   199 vía ?unico=1; los 3 tiers quedan como catálogo interno de
+   facturación y sus detail se siguen verificando aquí.)
    Parte 2: estático sobre cada superficie.
    Parte 3: COMPORTAMIENTO — se extraen los bloques reales (app.js y el
    espejo inline EN) y se ejecutan con un DOM mínimo: tocar la tarjeta
@@ -49,6 +52,13 @@ const usT = P.PLANS_US.total.detail.join(' ');
 ok(/approve each one/i.test(usT), 'US Total detail: comment/message replies with approval (mirror of US features)');
 ok(/competition|competitor/i.test(P.PLANS_US.pro.detail.join(' ')), 'US Pro detail: competitor breakdown');
 ok(serverJs.includes('...p, price_label'), 'la API /api/billing/plans sigue esparciendo el plan entero (detail viaja solo)');
+// PLAN ÚNICO (2026-11-06): la vidriera sirve UN SOLO plan, Posty USD 199
+ok(P.PLAN_UNICO && P.PLAN_UNICO.id === 'posty' && P.PLAN_UNICO.price === 199 && P.PLAN_UNICO.currency === 'USD', 'PLAN_UNICO: id posty, USD 199');
+ok(P.PLAN_UNICO.detail === P.PLANS_AR.total.detail, 'PLAN_UNICO: detail = el del tier Total (producto completo)');
+ok(P.PLAN_UNICO.ai && P.PLAN_UNICO.ai.chatPerDay === 150 && P.PLAN_UNICO.ai.regensPerDay === 8, 'PLAN_UNICO: límites de IA = los del tier Total (150 chats/día, 8 regens/día)');
+ok(serverJs.includes("req.query.unico === '1'"), 'API: rama ?unico=1 presente');
+ok(appJs.includes('&unico=1'), 'ES: la landing pide el plan único (&unico=1)');
+ok(enHtml.includes('&unico=1'), 'EN: el toggle pide el plan único (&unico=1)');
 
 /* ---------- Parte 2: estático por superficie ---------- */
 // Home ES (app.js)
@@ -62,12 +72,14 @@ ok(appJs.includes("track('plan_detail_open'"), 'app.js: abrir el detalle se mide
 // Paywall (modal de trial vencido en app.js)
 ok(appJs.includes('pz-exp-detail') && appJs.includes('data-exp-more'), 'app.js paywall: detalle desplegable por fila (pz-exp-detail)');
 ok(appJs.includes('Elegir el plan ${esc(p.name)}'), 'app.js paywall: el detalle trae su propio botón Elegir');
-// Home EN (estática)
-ok((enHtml.match(/data-plan-card=/g) || []).length === 3, 'EN: las 3 tarjetas llevan data-plan-card');
-ok((enHtml.match(/class="plan-detail" hidden/g) || []).length === 3, 'EN: las 3 tarjetas llevan su detalle oculto');
-ok((enHtml.match(/See everything it does for you/g) || []).length >= 3, 'EN: affordance «See everything it does for you» en las 3');
-ok(enHtml.includes('Everything the Total plan does for you'), 'EN: título del detalle Total');
-ok(enHtml.includes('I look after your Instagram customer care'), 'EN: el detalle Total incluye la atención (espejo de su tarjeta)');
+// Home EN (estática) — PLAN ÚNICO: 1 tarjeta 'posty' (la 2ª ocurrencia de
+// data-plan-card= es la plantilla JS de pzApplyEN, no una tarjeta)
+ok((enHtml.match(/data-plan-card="posty"/g) || []).length === 1, 'EN: 1 tarjeta, id posty');
+ok((enHtml.match(/data-plan-card="(esencial|pro|total)"/g) || []).length === 0, 'EN: 0 tarjetas de tiers viejos');
+ok((enHtml.match(/class="plan-detail" hidden/g) || []).length === 1, 'EN: la tarjeta lleva su detalle oculto');
+ok((enHtml.match(/See everything it does for you/g) || []).length >= 1, 'EN: affordance «See everything it does for you» en la tarjeta');
+ok(enHtml.includes('Everything the Posty plan does for you'), 'EN: título del detalle Posty');
+ok(enHtml.includes('I look after your Instagram customer care'), 'EN: el detalle Posty incluye la atención (espejo de su tarjeta)');
 // /prueba ES + EN
 for (const [label, src, hint, pick] of [
   ['prueba ES', prueba, 'Tocá la tarjeta y mirá todo lo que hace cada plan por vos', 'Empezar con el plan'],

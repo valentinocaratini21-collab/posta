@@ -243,6 +243,31 @@ const PLANS_AR = {
   },
 };
 
+// ─────────────────────────────────────────────────────────────────────────
+// PLAN ÚNICO (decisión Valentino 2026-11-06): Posty tiene UN SOLO plan:
+// Posty, USD 199/mes, prueba 3 días gratis, sin tarjeta. Los 3 tiers
+// viejos (Esencial/Pro/Total) quedan SOLO como catálogo interno de
+// facturación (usuarios existentes, founder_price congelado, límites de IA)
+// y NUNCA se muestran en la vidriera. La vidriera (landing ES/EN, JSON-LD)
+// sirve este plan vía /api/billing/plans?unico=1. Sin precio en ARS: la
+// tasa USD→ARS está sin decidir y no se inventa un número. El plan único
+// es el producto completo: lo que el tier Total incluía.
+const PLAN_UNICO = {
+  id: 'posty',
+  name: 'Posty',
+  price: 199,
+  currency: 'USD',
+  postsPerWeek: 7,
+  carouselsPerWeek: 2,
+  reelsPerWeek: 5,
+  storiesPerWeek: 7,
+  tagline: 'Tu negocio atendido y vendiendo, con tu OK en un toque',
+  detail: DETAIL_ES.total,
+  ai: AI_LIMITS.total,
+  features: PLANS_AR.total.features,
+  highlighted: true,
+};
+
 // ✅ UY (escalera de familia Bambooty, 2026-10-24) — misma arquitectura que AR: el Pro es el héroe (≈ $U 250/día).
 const PLANS_UY = {
   esencial: {
@@ -572,4 +597,4 @@ function formatPrice(plan) {
   return '$' + Number(plan.price).toLocaleString('es-AR');
 }
 
-module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLANS_GB, PLANS_EU, PLANS_CA, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice, SELECTOR_COUNTRIES, COUNTRY_META, getRail, PODERES, PODER_NOMBRE, COMPLETO_FUNDADOR, completoPrice, teamPrice, contratoTier };
+module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLANS_GB, PLANS_EU, PLANS_CA, PLAN_UNICO, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice, SELECTOR_COUNTRIES, COUNTRY_META, getRail, PODERES, PODER_NOMBRE, COMPLETO_FUNDADOR, completoPrice, teamPrice, contratoTier };

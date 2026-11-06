@@ -2801,15 +2801,15 @@ const catCustom = v => (catKnown(v) || v === 'otro' || !v) ? '' : v;
 const PZ_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
 const PZ_PAIS_META = {
   US: { flag: '\u{1F1FA}\u{1F1F8}', nombre: 'Estados Unidos', nota: 'Precios en USD.' },
-  AR: { flag: '\u{1F1E6}\u{1F1F7}', nombre: 'Argentina', nota: 'Precios en pesos argentinos. Pagás con Mercado Pago.' },
-  BR: { flag: '\u{1F1E7}\u{1F1F7}', nombre: 'Brasil', nota: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.' },
-  MX: { flag: '\u{1F1F2}\u{1F1FD}', nombre: 'México', nota: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.' },
-  CL: { flag: '\u{1F1E8}\u{1F1F1}', nombre: 'Chile', nota: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.' },
-  CO: { flag: '\u{1F1E8}\u{1F1F4}', nombre: 'Colombia', nota: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.' },
-  PE: { flag: '\u{1F1F5}\u{1F1EA}', nombre: 'Perú', nota: 'Pagás con tarjeta en USD por Stripe. El precio local para tu país todavía no está publicado.' },
-  UY: { flag: '\u{1F1FA}\u{1F1FE}', nombre: 'Uruguay', nota: 'Precios en pesos uruguayos. Pagás con Mercado Pago.' },
-  GB: { flag: '\u{1F1EC}\u{1F1E7}', nombre: 'Reino Unido', nota: 'Precios en libras. Pagás con Stripe.' },
-  EU: { flag: '\u{1F1EA}\u{1F1FA}', nombre: 'Eurozona', nota: 'Precios en euros. Pagás con Stripe.' },
+  AR: { flag: '\u{1F1E6}\u{1F1F7}', nombre: 'Argentina', nota: 'Pagás con Mercado Pago.' },
+  BR: { flag: '\u{1F1E7}\u{1F1F7}', nombre: 'Brasil', nota: 'Pagás con tarjeta en USD por Stripe.' },
+  MX: { flag: '\u{1F1F2}\u{1F1FD}', nombre: 'México', nota: 'Pagás con tarjeta en USD por Stripe.' },
+  CL: { flag: '\u{1F1E8}\u{1F1F1}', nombre: 'Chile', nota: 'Pagás con tarjeta en USD por Stripe.' },
+  CO: { flag: '\u{1F1E8}\u{1F1F4}', nombre: 'Colombia', nota: 'Pagás con tarjeta en USD por Stripe.' },
+  PE: { flag: '\u{1F1F5}\u{1F1EA}', nombre: 'Perú', nota: 'Pagás con tarjeta en USD por Stripe.' },
+  UY: { flag: '\u{1F1FA}\u{1F1FE}', nombre: 'Uruguay', nota: 'Pagás con Mercado Pago.' },
+  GB: { flag: '\u{1F1EC}\u{1F1E7}', nombre: 'Reino Unido', nota: 'Pagás con tarjeta.' },
+  EU: { flag: '\u{1F1EA}\u{1F1FA}', nombre: 'Eurozona', nota: 'Pagás con tarjeta.' },
 };
 function pzPaisGuardado() {
   try {
@@ -2863,7 +2863,7 @@ function planDetailHTML(p) {
 function planCardsHTML(plans) {
   return (plans || []).map(p => `
     <div class="price-card${p.highlighted ? ' hot' : ''}" data-plan-card="${esc(p.id)}">
-      ${p.highlighted ? '<div class="tag">RECOMENDADO</div>' : ''}
+      ${(p.highlighted && plans.length > 1) ? '<div class="tag">RECOMENDADO</div>' : ''}
       <h3>Plan ${esc(p.name)}</h3>
       <div class="price">${esc(p.price_label)}<small>/mes</small></div>
       ${pzPerDayHTML(p)}
@@ -2941,7 +2941,7 @@ async function switchPlansCountry(c) {
   const nota = document.getElementById('plansCountryNote');
   if (nota && PZ_PAIS_META[PLANS_COUNTRY]) nota.textContent = PZ_PAIS_META[PLANS_COUNTRY].nota;
   try {
-    const cfg = await api.get('/api/billing/plans?country=' + PLANS_COUNTRY);
+    const cfg = await api.get('/api/billing/plans?country=' + PLANS_COUNTRY + '&unico=1');
     PLANS_CACHE = cfg;
     const planes = (cfg.plans || []).map(pp => ({ ...pp, price_label: pzFmtPrecioES(pp) }));
     const row = document.getElementById('plansRow');
@@ -2950,13 +2950,13 @@ async function switchPlansCountry(c) {
     // latam), no se deja el ancla argentina vieja: solo «Posty arranca en…».
     const anchor = document.getElementById('anchorLine');
     if (anchor) {
-      anchor.innerHTML = cfg.anchor ? anchorHTML(cfg.anchor) : ('Posty arranca en <b>' + (planes.find(pp => pp.id === 'esencial') ? planes.find(pp => pp.id === 'esencial').price_label : '') + '</b>.');
+      anchor.innerHTML = cfg.anchor ? anchorHTML(cfg.anchor) : ('Posty arranca en <b>' + ((planes[0] ? planes[0].price_label : '')) + '</b>.');
     }
     const unico = document.getElementById('unicoLine');
     if (unico) {
       unico.innerHTML = cfg.anchor
         ? anchorHTML(cfg.anchor)
-        : ('Posty arranca en <b>' + (planes.find(pp => pp.id === 'esencial') ? planes.find(pp => pp.id === 'esencial').price_label : '') + '</b>.');
+        : ('Posty arranca en <b>' + ((planes[0] ? planes[0].price_label : '')) + '</b>.');
     }
     /* v377: el comparador y la calculadora siguen al plan real del país elegido */
     if (planes.length) lpCalcSetPlan(planes.find(pp => pp.id === 'esencial') || planes[0]);
@@ -3993,7 +3993,7 @@ function lpGoAudit(e) {
 let LP_CALC_RATE = 5000;
 /* v377: calculadora del costo de no estar — dos controles (horas × valor de
    la hora) y el contraste contra el plan real de /api/billing/plans. */
-let LP_CALC_PLAN = { label: '$199.999', perDay: 6667, sym: '$' };
+let LP_CALC_PLAN = { label: 'USD 199', perDay: 7, sym: 'USD ' };
 let LP_CALC_CFG = { sym: '$', min: 1000, max: 30000, step: 250 };
 let LP_ESENCIAL_OBJ = null;
 function lpCalcMoney(n) { return LP_CALC_CFG.sym + Math.round(n).toLocaleString('es-AR'); }
@@ -4595,8 +4595,7 @@ function lpAnalisisHTML() {
 function lpAtencionHTML() {
   return `
   <div class="section" id="atencion" style="background:var(--bg2)"><div class="wrap">
-    <p style="text-align:center;margin:0 0 6px"><span style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:12px;letter-spacing:.6px;text-transform:uppercase;padding:6px 14px;border-radius:999px">Exclusivo del plan Total</span></p>
-    <h2>Y con Total, Posty también <span class="hl">atiende y vende por vos</span></h2>
+    <h2>Posty también <span class="hl">atiende y vende por vos</span></h2>
     <p class="lede">El posteo trae la consulta. ¿Y después? Si nadie responde rápido, esa venta se enfría. Con Atención al cliente, Posty está atento las 24 horas: prepara cada respuesta al instante — con tus precios reales y tu forma de atender — y vos la aprobás con un toque antes de que salga. Nada se manda sin tu OK.</p>
     <div class="lp-cm-cards">
       <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>La respuesta lista al instante, 24/7</h3><p class="lp-cm-tag">Mensajes y comentarios de Instagram</p><p>Tus precios, tus servicios, tus horarios: preparo cada respuesta con los datos reales de tu negocio, en tu tono, y te la dejo lista para aprobar con un toque. Nada de respuestas genéricas ni precios inventados — y nada sale sin tu OK.</p></div>
@@ -4604,7 +4603,7 @@ function lpAtencionHTML() {
       <div class="lp-cm-card"><div class="lp-cm-i">🎯</div><h3>Sigo cada consulta hasta el cierre</h3><p class="lp-cm-tag">Ningún interesado se enfría</p><p>Si alguien preguntó y no cerró, te preparo el seguimiento a tiempo para que salga con tu toque. Cuando está listo para comprar, el cierre va con link de pago o seña — y después de la venta, la reseña de Google también te queda lista para aprobar.</p></div>
     </div>
     <p class="lp-cm-close">🤝 Vos ves todo: cada conversación queda en tu cuenta, nada sale sin tu OK, y lo sensible — quejas, descuentos, plata — te lo derivo a vos. <b>Posty atiende; vos mandás.</b></p>
-    <div style="text-align:center"><a class="btn btn-primary btn-lg" href="#planes">Ver el plan Total →</a></div>
+    <div style="text-align:center"><a class="btn btn-primary btn-lg" href="#planes">Ver el plan →</a></div>
   </div></div>`;
 }
 /* 🧩 Secciones por capacidad (2026-10-20): cada utilidad de Posty con su
@@ -4648,7 +4647,7 @@ function lpCapSectionsHTML() {
       <h2>Reels que muestran tu negocio <span class="hl">en movimiento</span></h2>
       <p class="cap-exp">El video es lo que más gente nueva trae, y es lo que menos tiempo tenés de hacer. Posty arma tus reels con tu material y tu marca, con el gancho primero y el cierre que empuja a escribirte. Salen publicados solos.</p>
       <ul class="cap-list">
-        <li>1 por semana en Esencial · 3 en Pro · 5 en Total</li>
+        <li>5 por semana</li>
         <li>Con tus fotos y videos, o creados desde cero</li>
         <li>Se publican solos, a tu mejor hora</li>
       </ul>
@@ -4665,13 +4664,13 @@ function lpCapSectionsHTML() {
   </div></div></div>
   <div class="section cap-sec"><div class="wrap"><div class="cap-grid">
     <div class="cap-copy">
-      <div class="cap-kick">Historias<span class="cap-plan">Plan Pro</span></div>
+      <div class="cap-kick">Historias</div>
       <h2>Tu negocio, presente <span class="hl">todos los días</span></h2>
       <p class="cap-exp">Cada posteo sale también como historia, y Posty suma historias que hacen participar a tu audiencia: encuestas, preguntas y cuentas regresivas para tus fechas fuertes. Tu cuenta se mueve todos los días, aunque vos no abras la app.</p>
       <ul class="cap-list">
         <li>Cada posteo, también en historias</li>
         <li>Encuestas y preguntas que hacen participar</li>
-        <li>3 por semana en Pro · todos los días en Total</li>
+        <li>Todos los días</li>
       </ul>
       <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
     </div>
@@ -4689,7 +4688,7 @@ function lpCapSectionsHTML() {
   </div></div></div>
   <div class="section cap-sec tint"><div class="wrap"><div class="cap-grid cap-flip">
     <div class="cap-copy">
-      <div class="cap-kick">Comentarios y respuestas<span class="cap-plan">Plan Total</span></div>
+      <div class="cap-kick">Comentarios y respuestas</div>
       <h2>Ningún comentario queda <span class="hl">sin respuesta</span></h2>
       <p class="cap-exp">Posty lee cada comentario y cada mensaje que te llega, prepara la respuesta en tu tono y te la deja lista. Vos la mandás con un toque. Tu bandeja queda en cero sin vivir pegado al teléfono — y si algo es delicado, te lo pasa a vos.</p>
       <ul class="cap-list">
@@ -4710,7 +4709,7 @@ function lpCapSectionsHTML() {
   </div></div></div>
   <div class="section cap-sec navy"><div class="wrap"><div class="cap-grid">
     <div class="cap-copy">
-      <div class="cap-kick">Growth<span class="cap-plan">Plan Pro</span></div>
+      <div class="cap-kick">Growth</div>
       <h2>Lo que funciona, <span class="hl">se potencia</span></h2>
       <p class="cap-exp">Posty detecta el posteo que mejor te está andando y te propone potenciarlo con pauta. Vos fijás el tope de gasto y nada se mueve sin tu OK. Y cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.</p>
       <ul class="cap-list">
@@ -4828,16 +4827,16 @@ function landingView(cfg) {
   const planCards = planCardsHTML(plans);
   /* v377: comparador honesto + calculadora — el precio de Posty sale del plan real */
   const lpEsencial = plans.find(p => p.id === 'esencial') || plans[0] || null;
-  const lpCur = (lpEsencial && lpEsencial.currency) || 'ARS';
+  const lpCur = (lpEsencial && lpEsencial.currency) || 'USD';
   const lpChips = lpCur === 'UYU' ? [200, 350, 600] : lpCur === 'ARS' ? [3000, 5000, 10000] : [10, 25, 50];
   const lpDefRate = lpCur === 'UYU' ? 350 : lpCur === 'ARS' ? 5000 : 25;
   const lpSym = lpEsencial ? pzSimbolo(lpEsencial) : '$';
   const lpFmt = (n) => lpSym + Math.round(n).toLocaleString('es-AR');
   const lpDefCost = Math.round(6 * 4.33 * lpDefRate);
   const lpHorasMes = Math.round(6 * 4.33);
-  const lpPlanLabel = (lpEsencial && lpEsencial.price_label) || '$199.999';
-  const lpPerDay = lpEsencial ? Math.round(Number(lpEsencial.price || 0) / 30) : 6667;
-  const lpPerDaySym = lpEsencial ? pzSimbolo(lpEsencial) : '$';
+  const lpPlanLabel = (lpEsencial && lpEsencial.price_label) || 'USD 199';
+  const lpPerDay = lpEsencial ? Math.round(Number(lpEsencial.price || 0) / 30) : 7;
+  const lpPerDaySym = lpEsencial ? pzSimbolo(lpEsencial) : 'USD ';
   LP_CALC_RATE = lpDefRate;
   LP_ESENCIAL_OBJ = lpEsencial;
   LP_CALC_PLAN = { label: lpPlanLabel, perDay: lpPerDay, sym: lpPerDaySym };
@@ -5181,7 +5180,7 @@ function landingView(cfg) {
       <div class="lp-cm-row" role="row"><div class="crit">Potencia lo que anda con pauta</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Piensa el foco de cada mes</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Está disponible</div><div>En su horario</div><div class="win">Todos los días, a toda hora</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>Desde $1.000.000 por mes</div><div class="win">Desde $6.667 por día</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>Desde $1.000.000 por mes</div><div class="win">USD 6,63 por día</div></div>
     </div>
     <p class="lp-cm-close">El mismo trabajo. Sin sueldos, sin cargas sociales, sin vacaciones.</p>
     <div style="text-align:center"><a class="btn btn-primary btn-lg" href="/prueba">Quiero mi community manager <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></div>
@@ -5219,9 +5218,9 @@ function landingView(cfg) {
     <p class="lp-ctl-close">Posty trabaja solo. <b>Vos mandás.</b></p>
   </div></div>
   <div class="section" id="planes"><div class="wrap">
-    <h2>Elegí tu plan</h2>
-    <p class="lede">Primero probá gratis 3 días. Si te gusta tu semana, elegís tu plan acá.</p>
-    <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar un peso y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
+    <h2>Un solo plan. Todo incluido.</h2>
+    <p class="lede">Probá gratis 3 días. Si te gusta tu semana, este es tu plan.</p>
+    <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar nada y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
     <div class="country-toggle">
       ${PZ_PAISES.map(c => `<button type="button" class="${country === c ? 'on' : ''}" data-country="${c}" onclick="switchPlansCountry('${c}')" title="${PZ_PAIS_META[c].nombre}" aria-label="${PZ_PAIS_META[c].nombre}" aria-pressed="${country === c ? 'true' : 'false'}">${PZ_PAIS_META[c].flag}</button>`).join('')}
     </div>
@@ -5229,10 +5228,10 @@ function landingView(cfg) {
     <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
     <div id="lpSocial"></div>
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
-    <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
+    <div class="plan-dots" id="planDots"><span class="on"></span></div>
     <p class="lp-plans-note">Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
     <p class="lp-plans-note">Si tu primera semana no te convence, te la rehacemos entera, gratis.</p>
-    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque los planes suban.</p>
+    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque el precio suba.</p>
 
     <!-- (v344) Mini-bloque del fundador en Planes: foto entera,
          textos aprobados del módulo (el mismo de /prueba v341). -->
@@ -5250,17 +5249,17 @@ function landingView(cfg) {
     <div class="cmp-scroll"><div class="cmp-table cmp4" role="table" aria-label="Comparación: hacerlo vos, un community manager freelance, una agencia o Posty">
       <div class="cmp-row cmp-head" role="row"><div></div><div>Lo hacés vos</div><div>CM freelance</div><div>Agencia</div><div class="win">Posty</div></div>
       <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>$0 de bolsillo — pero es tu tiempo</div><div>Desde $1.000.000 *</div><div>Más que un CM freelance *</div><div class="win" id="cmpPostyPrice">Desde ${esc(lpPlanLabel)}</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Qué incluye</div><div>Lo que llegues a hacer</div><div>Posteos; reels e historias, según acuerdo</div><div>Posteos y estrategia</div><div class="win">7 posteos por semana en todos los planes; reels e historias según tu plan</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Qué incluye</div><div>Lo que llegues a hacer</div><div>Posteos; reels e historias, según acuerdo</div><div>Posteos y estrategia</div><div class="win">7 posteos por semana · 5 reels · historias todos los días</div></div>
       <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>Horas, cada semana</div><div>Días</div><div>1 a 2 semanas</div><div class="win">1 minuto</div></div>
       <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>—</div><div>Coordinación y aprobaciones</div><div>Varias por mes</div><div class="win">Cero</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>Vos, cuando podés</div><div>A veces está incluido</div><div>Si está en el contrato</div><div class="win">Plan Total: respuestas listas para tu OK en un toque</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Reseñas de Google</div><div>A mano, una por una</div><div>No suele incluirlas</div><div>Se cobra aparte</div><div class="win">Plan Total</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>Vos, cuando podés</div><div>A veces está incluido</div><div>Si está en el contrato</div><div class="win">Respuestas listas para tu OK en un toque</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Reseñas de Google</div><div>A mano, una por una</div><div>No suele incluirlas</div><div>Se cobra aparte</div><div class="win">Gestionadas, con tu OK</div></div>
       <div class="cmp-row" role="row"><div class="crit">Pauta publicitaria</div><div>La armás y la seguís vos</div><div>Honorarios aparte</div><div>Honorarios aparte</div><div class="win">Potencia tu mejor posteo desde la app</div></div>
       <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>—</div><div>Rara vez</div><div>No existe</div><div class="win">3 días gratis, sin tarjeta</div></div>
       <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>—</div><div>Mes a mes, informal</div><div>3 a 6 meses</div><div class="win">Mensual, cancelás cuando querés</div></div>
     </div></div>
     <p class="cmp-note">* Precios de referencia de mercado para un servicio equivalente. El precio de Posty es el real: el de los planes de acá abajo.</p>
-    <p class="unico-line" id="unicoLine">Un community manager cuesta <b>desde $1.000.000 por mes</b>. Posty arranca en <b>$199.999</b>.</p>
+    <p class="unico-line" id="unicoLine">Un community manager cuesta <b>desde $1.000.000 por mes</b>. Posty cuesta <b>USD 199 por mes</b>.</p>
     <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Podés frenar cualquier posteo antes de que salga</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
@@ -5311,8 +5310,8 @@ function landingView(cfg) {
   <div class="lp-stats"><div class="wrap">
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">7 posteos + 1 reel</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">$6.667<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta desde $1.000.000 por mes</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">7 posteos + 5 reels</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">USD 6,63<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta desde $1.000.000 por mes</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
   </div></div>
@@ -5325,7 +5324,7 @@ function landingView(cfg) {
       <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
       <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Lo frenás antes de que salga, en un toque. ¿No te gusta la imagen? La rehacés con otro estilo o volvés a la anterior, gratis. Y aprendo de lo que te gusta para que cada semana salga mejor.</p></details>
-      <details><summary>¿Posty también atiende a mis clientes?</summary><p>Con el plan Total, sí: Posty está atento a tus mensajes de Instagram las 24 horas y prepara cada respuesta al instante, con tus precios y servicios reales. También te deja listos los turnos y reservas para confirmar, el seguimiento a quien preguntó y no cerró, y el cierre con link de pago o seña. Vos aprobás cada mensaje con un toque antes de que salga — nada se manda sin tu OK — y lo sensible te lo derivo a vos.</p></details>
+      <details><summary>¿Posty también atiende a mis clientes?</summary><p>Sí: Posty está atento a tus mensajes de Instagram las 24 horas y prepara cada respuesta al instante, con tus precios y servicios reales. También te deja listos los turnos y reservas para confirmar, el seguimiento a quien preguntó y no cerró, y el cierre con link de pago o seña. Vos aprobás cada mensaje con un toque antes de que salga — nada se manda sin tu OK — y lo sensible te lo derivo a vos.</p></details>
       <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca veo ni guardo tu contraseña.</p></details>
       <details><summary>¿Los posteos se publican solos?</summary><p>Sí, esa es la idea: tu semana sale sola en los mejores horarios, sin que toques nada. Antes de cada publicación te aviso, y si algo no te cierra lo frenás con un toque. ¿Preferís aprobar todo a mano? También podés: apagás la publicación automática en Ajustes y nada sale sin tu OK.</p></details>
       <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: mirá tu semana armada en 1 minuto y decidí. Si no te sirve, no pagás nada.</p></details>
@@ -17565,7 +17564,7 @@ function pzPrefetchKick() {
   // Anclas dentro de la landing (#como-funciona, #incluye, #planes, #faq): no son rutas de la app
   if (!path.startsWith('#/')) {
     if (!LANDING_ON) {
-      PLANS_CACHE = await api.get('/api/billing/plans?country=' + pzPaisGuardado()).catch(() => null);
+      PLANS_CACHE = await api.get('/api/billing/plans?country=' + pzPaisGuardado() + '&unico=1').catch(() => null);
       if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = landingView(PLANS_CACHE);
       LANDING_ON = true;
@@ -17724,7 +17723,7 @@ function pzPrefetchKick() {
     // Visitante no logueado: la landing pública no cambia.
     await refreshSession();
     if (ME) { postAuthLanding(); return; }
-    PLANS_CACHE = await api.get('/api/billing/plans?country=' + pzPaisGuardado()).catch(() => null);
+    PLANS_CACHE = await api.get('/api/billing/plans?country=' + pzPaisGuardado() + '&unico=1').catch(() => null);
     if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
