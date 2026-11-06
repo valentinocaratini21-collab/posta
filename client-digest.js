@@ -311,6 +311,12 @@ function isPlausibleOfferItem(raw) {
   const s = cleanOfferName(raw);
   if (s.length < 3 || s.length > 60) return false;
   if (/[,;:!?\u00a1\u00bf]/.test(s)) return false; // puntuación de oración o de lista interna
+  // (FIX-ENTRADA-PRUEBA · 5/11) Variable de plantilla sin reemplazar
+  // (clave=valor, {{...}}, ${...}): jamás es un producto o servicio —
+  // sin este rechazo, una línea del sistema («tema=tip») se minaba como
+  // ítem y anclaba los titulares de la semana.
+  if (/=/.test(s)) return false;
+  if (/\{\{|\}\}|\$\{/.test(s)) return false;
   const words = s.split(' ').filter(Boolean);
   if (words.length < 1 || words.length > 5) return false;
   const nw = words.map((w) => norm(w)).filter(Boolean);

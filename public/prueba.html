@@ -4119,7 +4119,7 @@ async function doGuestEnter() {
   try { opResumeClear(); } catch (e) {}
   const b = $('#btnGuestEnter');
   const errEl = $('#guestEnterErr');
-  const showErr = (m) => { if (errEl) { errEl.textContent = m; errEl.style.display = 'block'; } };
+  const showErr = (m) => { if (errEl) { errEl.textContent = m; errEl.style.display = 'block'; try { errEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} } };
   if (errEl) errEl.style.display = 'none';
   if (b) { b.disabled = true; b.textContent = 'Abriendo tu feed…'; }
   try {
@@ -4134,7 +4134,20 @@ async function doGuestEnter() {
       device = localStorage.getItem('pz_device_id') || '';
       if (!device) { device = 'dvc_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); localStorage.setItem('pz_device_id', device); }
     } catch (e) {}
-    const r = await fetch('/api/guest/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ig, domain, device, lang: 'es' }) });
+    // (FIX-ENTRADA-PRUEBA · 5/11) El botón nunca queda girando: 30 s de
+    // tope y error honesto si el servidor no responde. El error se muestra
+    // con scroll a la vista: que sea inconfundible, no un banner más.
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 30000) : null;
+    let r;
+    try {
+      r = await fetch('/api/guest/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ig, domain, device, lang: 'es' }), ...(ctrl ? { signal: ctrl.signal } : {}) });
+    } catch (e) {
+      if (timer) clearTimeout(timer);
+      if (e && e.name === 'AbortError') throw new Error('Tardó demasiado en responder. Revisá tu conexión y probá de nuevo.');
+      throw new Error('El servidor no responde. Revisá tu conexión y probá de nuevo.');
+    }
+    if (timer) clearTimeout(timer);
     let d = {};
     try { d = await r.json(); } catch (e) {}
     if (!r.ok) throw new Error((d && d.error) || 'No pudimos abrir tu feed todavía.');

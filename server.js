@@ -26183,10 +26183,18 @@ app.post('/api/guest/start', (req, res) => {
     // generación haya sido anterior a este lote.
     if (!testMode && !allowlisted) {
       try { guestTrial.backfillUsedFromLocks(db); } catch (e) {}
-      const used = trialLock.findUsed ? trialLock.findUsed(db, igK, domK) : null;
-      if (used) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
-      const oldLock = trialLock.findLock(db, igK, domK);
-      if (oldLock) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
+      // (FIX-ENTRADA-PRUEBA · 5/11) La generación registra el candado de
+      // 90 días + el uso permanente con user_id NULL: ESO ES LA GENERACIÓN
+      // MISMA, no un uso. Bloquear por findUsed/findLock solos cerraba la
+      // entrada del trial que se acaba de generar (el botón muerto de
+      // /prueba). Bloquea solo lo consumido de verdad: (a) trial_used con
+      // user_id de una cuenta real, o (b) una fila invitada que ya entró
+      // con este @/dominio. El candado de 90 días sigue bloqueando la
+      // RE-generación (trialLockGate), no la entrada.
+      const consumed = trialLock.findConsumedUsed ? trialLock.findConsumedUsed(db, igK, domK) : null;
+      if (consumed) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
+      const entered = guestTrial.findGuestByIdentity ? guestTrial.findGuestByIdentity(db, igK, domK) : null;
+      if (entered) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
     }
     // Anti-abuso: una prueba por dispositivo/IP (la allowlist y el modo
     // test saltan este control; el anti-spam 5/día por IP sigue aparte).
@@ -26647,7 +26655,14 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados), ...draftOnboarding.draftGoalLines(ocDraft, lang)].filter(Boolean).join('\n');
+  // (FIX-ENTRADA-PRUEBA · 5/11) La línea del draft viaja al goal (al
+  // prompt de ideas) pero NO al formText del digest: minarla convertía
+  // cada elección en un «producto» y los titulares salían con variables
+  // de plantilla («3 claves de tema=tip»). Mismo patrón que las líneas
+  // del espejo (ver formTextBase abajo): el gusto real va por el spec
+  // estructurado, no por texto.
+  const draftLines = draftOnboarding.draftGoalLines(ocDraft, lang);
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados)].filter(Boolean).join('\n');
   // Colores: si el visitante mandó (ya no se pide en el form), se usan; si no,
   // intentamos los colores REALES de su perfil de Instagram (best-effort) y
   // si no se puede, cae a la paleta curada de su rubro.
@@ -26690,7 +26705,10 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // (LOTE PRUEBA-PRODUCTO-REAL) El digest se compila SIN esas líneas:
   // minarlas convertía la etiqueta («Productos confirmados por el dueño
   // en el espejo…») en un «servicio». El goal las conserva (al prompt).
+  // (FIX-ENTRADA-PRUEBA) Igual la línea del draft: va al goal pero no al
+  // digest — su consumo real es el spec estructurado.
   const formTextBase = richGoal;
+  if (draftLines.length) richGoal = [richGoal, ...draftLines].filter(Boolean).join('\n');
   const espLines = fundamentoLiteral.espejoGoalLines(fields, lang);
   if (espLines.length) richGoal = [richGoal, ...espLines].filter(Boolean).join('\n');
   if (!business) return res.status(400).json({ error: lang === 'en' ? 'Tell us your business name' : 'Contanos el nombre de tu negocio' });
@@ -27249,7 +27267,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados), ...draftOnboarding.draftGoalLines(ocDraft, lang)].filter(Boolean).join('\n');
+  // (FIX-ENTRADA-PRUEBA · 5/11) La línea del draft viaja al goal (al
+  // prompt de ideas) pero NO al formText del digest (ver formTextBaseS
+  // abajo): minarla convertía cada elección en un «producto». Mismo
+  // patrón que en /api/trial/generate.
+  const draftLinesS = draftOnboarding.draftGoalLines(ocDraft, lang);
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados)].filter(Boolean).join('\n');
   const pal = demo.CATEGORY_COLORS[category] || demo.CATEGORY_COLORS.otro;
   const hexOk = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || '').trim());
   let accent = hexOk(fields.accent) ? String(fields.accent).trim().toUpperCase() : pal[0];
@@ -27561,7 +27584,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // (LOTE PRUEBA-PRODUCTO-REAL) El digest se compila SIN esas líneas
     // (ver /api/trial/generate): minarlas convertía la etiqueta del
     // espejo en un «servicio». El goal las conserva (al prompt).
+    // (FIX-ENTRADA-PRUEBA) Igual la línea del draft: va al goal pero no al
+    // digest — su consumo real es el spec estructurado.
     const formTextBaseS = richGoal;
+    if (draftLinesS.length) richGoal = [richGoal, ...draftLinesS].filter(Boolean).join('\n');
     const espLinesS = fundamentoLiteral.espejoGoalLines(fields, lang);
     if (espLinesS.length) richGoal = [richGoal, ...espLinesS].filter(Boolean).join('\n');
     // (v230) LECTURA PROFUNDA + (v229) FUNDAMENTO: el digest se compila
@@ -29931,7 +29957,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v698';
+const BUILD_ID = '20261105-v699';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

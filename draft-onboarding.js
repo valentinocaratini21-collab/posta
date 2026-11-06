@@ -233,19 +233,41 @@ function draftGustoFrom(raw) {
 
 // Líneas legibles para richGoal (registro; el consumo real va por el
 // spec, no por texto — ver applyDraftToTopics).
+// (FIX-ENTRADA-PRUEBA · 5/11) Las elecciones salen como ETIQUETAS
+// humanas («Protagonista: El producto»), jamás como pares clave=valor
+// («protagonista=producto»): la forma vieja se minaba como si fueran
+// productos del negocio (offeringsFromText parte la línea por «·» y cada
+// «dim=valor» pasaba la puerta de admisibilidad) y los titulares salían
+// «3 claves de tema=tip», «Protagonista=producto: pedilo hoy». Con «:»
+// cada segmento lo rechaza isPlausibleOfferItem, y el digest además ya
+// no recibe esta línea (ver formTextBase en /api/trial/generate).
 function draftGoalLines(draft, lang) {
   if (!draft) return [];
   const en = lang === 'en';
-  const pick = (dim) => {
-    const r = (draft.rondas || []).find((x) => x.dim === dim);
-    return r ? r.elegida : null;
+  const DIM_LABEL = {
+    foto: en ? 'Photo' : 'Foto',
+    protagonista: en ? 'Star' : 'Protagonista',
+    texto: en ? 'Text' : 'Texto',
+    enfoque: en ? 'Focus' : 'Enfoque',
+    tema: en ? 'Theme' : 'Tema',
+    veto: en ? 'Leave out' : 'Sin',
+  };
+  const labelFor = (dim, v) => {
+    const def = DRAFT_DIMS[dim];
+    if (!def) return String(v);
+    if (dim === 'tema') {
+      const kl = (def.kindLabels || {})[v];
+      return kl ? (en ? kl.en : kl.l) : String(v);
+    }
+    const opt = (def.options || []).find((o) => o.v === v);
+    return opt ? (en ? opt.en : opt.l) : String(v);
   };
   const parts = [];
   for (const dim of (draft.dims || [])) {
-    const v = pick(dim);
-    if (v) parts.push(dim + '=' + v);
+    const r = (draft.rondas || []).find((x) => x.dim === dim);
+    if (r && r.elegida) parts.push((DIM_LABEL[dim] || dim) + ': ' + labelFor(dim, r.elegida));
   }
-  if (draft.campeona) parts.push((en ? 'champion' : 'campeona') + '=' + draft.campeona.dim + ':' + draft.campeona.v);
+  if (draft.campeona) parts.push((en ? 'Champion' : 'Campeona') + ': ' + labelFor(draft.campeona.dim, draft.campeona.v));
   if (!parts.length) return [];
   return [(en ? 'Draft taste (onboarding draft): ' : 'Gusto del draft (draft del onboarding): ') + parts.join(' · ')];
 }

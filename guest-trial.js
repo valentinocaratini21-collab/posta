@@ -110,6 +110,21 @@ function recordDevice(db, device, ip, userId) {
   } catch (e) {}
 }
 
+// (FIX-ENTRADA-PRUEBA · 5/11) ¿Esta identidad YA ENTRÓ como invitada?
+// La fila users invitada (guest_ig/guest_domain) es la prueba de que el
+// trial se consumió por entrada — aunque la cuenta después haya migrado
+// a real (el upgrade no borra guest_ig/guest_domain). Sin fila: la
+// generación sola no es entrada.
+function findGuestByIdentity(db, igKey, domainKey) {
+  try {
+    if (!db || (!igKey && !domainKey)) return null;
+    const row = db.prepare(
+      `SELECT id, is_guest FROM users WHERE (? <> '' AND guest_ig = ?) OR (? <> '' AND guest_domain = ?) LIMIT 1`
+    ).get(igKey || '', igKey || '', domainKey || '', domainKey || '');
+    return row || null;
+  } catch (e) { return null; }
+}
+
 // Crea la fila invitada. NO verifica candados (el handler lo hace antes,
 // con allowlist y modo test): esta función solo persiste.
 function createGuest(db, { referralCode, lang, ig, domain, device }) {
@@ -263,6 +278,7 @@ module.exports = {
   GUEST_EMAIL_DOMAIN,
   ensureSchema,
   backfillUsedFromLocks,
+  findGuestByIdentity,
   isGuestEmail,
   guestPlaceholderEmail,
   guestTrialEnd,

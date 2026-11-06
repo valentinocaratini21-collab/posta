@@ -1253,6 +1253,35 @@ function renderDemoVideo(imagePaths, runDir, idx) {
 }
 
 // ---------- Orquestador ----------
+// (FIX-ENTRADA-PRUEBA · 5/11) Variables de plantilla sin reemplazar en
+// texto visible de un tema: clave=valor (ej. «tema=tip»), {{...}} o
+// ${...}. Un tema que trae una NUNCA llega a la semana (fail-closed):
+// dropTemplateVarTopics lo saca del pool antes de elegir la ventana.
+// El `=` con espacios («a = b») no se caza acá a propósito: el texto
+// normal no trae `=` pegado a una clave, y las vías conocidas (línea del
+// draft, minería del fundamento) ya no lo producen — ver draftGoalLines,
+// formTextBase e isPlausibleOfferItem.
+const TEMPLATE_VAR_RE = /\b[a-zA-Z_][\w.-]*=[^\s]{1,60}|\{\{[^}]*\}\}|\$\{[^}]*\}/;
+function topicHasTemplateVar(t) {
+  if (!t) return false;
+  for (const f of ['headline', 'subline', 'caption', 'cta']) {
+    const s = String((t && t[f]) || '');
+    if (s && TEMPLATE_VAR_RE.test(s)) return true;
+  }
+  return false;
+}
+function dropTemplateVarTopics(list) {
+  const out = [];
+  for (const t of (Array.isArray(list) ? list : [])) {
+    if (topicHasTemplateVar(t)) {
+      try { console.error('[demo] tema descartado por variable de plantilla:', String((t && (t.headline || t.caption)) || '').slice(0, 120)); } catch (e) {}
+      continue;
+    }
+    out.push(t);
+  }
+  return out;
+}
+
 // count: cantidad de posteos a generar (3 = demo clásica 2+1; 5 = semana de prueba Pro)
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
@@ -1302,10 +1331,15 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // client-digest.deriveTopics) y el catálogo por rubro SOLO rellena los
   // slots sin dato. Solo en la semana principal (topicOffset 0): los
   // visuales extra de la grilla no repiten los temas del fundamento.
-  const digestTopics = (digest && topicOffset === 0)
+  const digestTopics = dropTemplateVarTopics((digest && topicOffset === 0)
     ? clientDigest.deriveTopics(digest, { count: n, category: cat, lang })
-    : [];
-  const allTopics = digestTopics.length ? [...digestTopics, ...goalTopics] : goalTopics;
+    : []);
+  // (FIX-ENTRADA-PRUEBA · 5/11) RED FAIL-CLOSED: un tema cuyo texto
+  // visible trae una variable de plantilla sin reemplazar (clave=valor,
+  // {{...}}, ${...}) NUNCA llega a la semana — se saca del pool antes de
+  // elegir la ventana y el hueco lo cubre el siguiente tema limpio. Un
+  // posteo con una variable sin reemplazar no se muestra ni se sirve.
+  const allTopics = dropTemplateVarTopics(digestTopics.length ? [...digestTopics, ...goalTopics] : goalTopics);
   // topicOffset (v187): temas desde una posición del pool — lo usan los
   // visuales extra de la grilla CON Posty para NO repetir los temas (ni las
   // fotos, vía excludePhotos) de la semana ya generada.
@@ -2614,6 +2648,9 @@ module.exports = {
   ensureCaptionCtaClose: captions.ensureCaptionCtaClose,
   ensureCaptionCloseForIntent: captions.ensureCaptionCloseForIntent,
   closeTrialCaption,
+  // (FIX-ENTRADA-PRUEBA) red fail-closed de variables de plantilla
+  topicHasTemplateVar,
+  dropTemplateVarTopics,
   DEMO_LIMIT_PER_DAY,
   DEMO_ENGINE_V,
   PHOTO_TAGS,

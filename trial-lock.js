@@ -197,6 +197,26 @@ function ensureTrialUsedSchema(db) {
   } catch (e) {}
 }
 
+// (FIX-ENTRADA-PRUEBA · 5/11) ¿Esta identidad ya CONSUMIÓ su prueba con
+// una cuenta real? La generación registra el uso con user_id NULL (ver
+// trialLockRecordFor en server.js) y el backfill copia los candados con
+// NULL: ese registro dice «se generó», no «se usó». Solo un user_id
+// presente (alta real, server.js ~2114/2189/3199/3286) es consumo. La
+// entrada de un trial fresco se decide con esto + la fila invitada (ver
+// guest-trial.findGuestByIdentity), nunca con findUsed/findLock solos.
+function findConsumedUsed(db, igKey, domainKey) {
+  try {
+    if (!db || (!igKey && !domainKey)) return null;
+    if (isAllowlisted(db, igKey || '', domainKey || '')) return null;
+    const q = (kind, val) => {
+      if (!val) return null;
+      try { return db.prepare('SELECT kind, value, user_id, created_at FROM trial_used WHERE kind = ? AND value = ? AND user_id IS NOT NULL').get(kind, val) || null; }
+      catch (e) { return null; }
+    };
+    return q('ig', igKey || '') || q('domain', domainKey || '') || null;
+  } catch (e) { return null; }
+}
+
 // ¿Esta identidad ya usó su prueba (para siempre)? kind ig/domain/email.
 // Devuelve la fila o null. La allowlist nunca está "usada".
 function findUsed(db, igKey, domainKey, emailKey) {
@@ -242,5 +262,6 @@ module.exports = {
   lockMessage,
   ensureTrialUsedSchema,
   findUsed,
+  findConsumedUsed,
   recordUsed,
 };
