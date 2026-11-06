@@ -926,7 +926,7 @@ function bbShell(tab, content) {
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
-    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads')) + pzDockMasBtn('bb') + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings')) + '</nav>' + pzDockMasHTML()}
+    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads')) + pzDockMasBtn('bb') + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + '</nav>' + pzDockMasHTML()}
   </div>`;
 }
 async function bbLoadEstado(force) {
@@ -6488,10 +6488,9 @@ function mzTabsHTML(tab) {
     : (tab === 'schedule' || tab === 'post') ? 'semana'
     : tab === 'jardin-posty' ? 'jardin'
     : tab === 'analisis' ? 'analisis'
-    : tab === 'ads' ? 'ads'
-    : tab === 'ajustes' ? 'ajustes' : '';
+    : tab === 'ads' ? 'ads' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}${key === 'jardin' ? '<span class="mz-badge pz-premios-badge off"></span>' : ''}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${pzDockMasBtn('mz')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))}${t('ajustes', 'ajustes', pzIc('gear'), 'Ajustes')}</nav>${pzDockMasHTML()}`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${pzDockMasBtn('mz')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))}</nav>${pzDockMasHTML()}`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -19984,7 +19983,7 @@ function homeHeadHTML(prof, bizName, opts) {
     ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
-      ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}${(opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="edit" aria-label="${en ? 'Edit profile' : 'Editar perfil'}">${pzIc('pencil', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Share my profile' : 'Compartir mi perfil'}">${pzIc('share', 20)}</button></span>` : ''}
+      ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}${(opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="edit" aria-label="${en ? 'Edit profile' : 'Editar perfil'}">${pzIc('pencil', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Share my profile' : 'Compartir mi perfil'}">${pzIc('share', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="settings" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button></span>` : ''}
     </div>
     ${name ? `<div class="hf-name">${esc(name)}</div>` : ''}
     ${catHTML}
@@ -22845,6 +22844,7 @@ function hfProfileBind(root) {
       const act = el.dataset.hfPact;
       if (act === 'share') hfShareOpen();
       else if (act === 'edit') hfEditOpen();
+      else if (act === 'settings') { location.hash = '#/app/ajustes'; }
       else if (act === 'covers') hfCoversOpen();
       else if (act === 'archive') hfArchiveOpen();
     };

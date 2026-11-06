@@ -35,7 +35,7 @@ const sliceFn = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + base v718 ----------
-  t(srv.includes("const BUILD_ID = '20261105-v720'"), 'server: BUILD v720');
+  t(srv.includes("const BUILD_ID = '20261105-v722'"), 'server: BUILD v722');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -46,7 +46,7 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v712'"), 'CHUNK_V v712 intacto');
-  t(md5(css) === '9671bbea210fa4b9c4ec62c14db92342', 'styles.css sin tocar (md5 v718)');
+  t(md5(css) === '0a08dc1ceeb237d6cbb9eb5338d09587', 'styles.css (md5 lote dock-5: círculo del + y peso Agregar)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 10, 'server: 10 rutas /api/ads, sin endpoints nuevos');
 
   // ---------- 2. El router ya no rebot a semana ----------

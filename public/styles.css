@@ -4905,9 +4905,15 @@ body.pz-postchat-open{overflow:hidden}
 /* (LOTE MEJORAS-INICIO · pieza 3) El + del dock con su palabra abajo: geometría de pestaña para compartir la línea base de las etiquetas del resto. El círculo pasa de 52px a 24px (misma receta glass); un círculo de 52px + etiqueta obligaría a crecer el dock y rompería los offsets fijos del chat (72px) y del wrap (96px). */
 .mz-tab-mas{display:block !important;flex:1 !important;min-width:0 !important;width:auto !important;height:auto !important;border-radius:0 !important;background:none !important;border:none !important;box-shadow:none !important;padding:2px 0 !important;font-size:11px !important;font-weight:700 !important;line-height:1.35 !important;color:#47617A !important;text-align:center !important}
 .bb-tab-mas{display:flex !important;flex-direction:column !important;align-items:center !important;gap:2px !important;flex:1 !important;min-width:0 !important;width:auto !important;height:auto !important;border-radius:0 !important;background:none !important;border:none !important;box-shadow:none !important;padding:4px 8px !important;font-size:11px !important;font-weight:700 !important;line-height:1.35 !important;color:#47617A !important}
-.mz-tab-mas-ic{display:flex;align-items:center;justify-content:center;width:24px;height:24px;margin:0 auto 2px;border-radius:50%;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(39,147,200,.35),0 6px 16px rgba(39,147,200,.35);color:#0A1E33;font-size:20px;font-weight:700;line-height:1;flex:none}
-.bb-tab-mas-ic{display:flex;align-items:center;justify-content:center;width:24px;height:24px;margin:0 auto;border-radius:50%;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(39,147,200,.35),0 6px 16px rgba(39,147,200,.35);color:#0A1E33;font-size:20px;font-weight:700;line-height:1;flex:none}
-.mz-tab-mas-lb,.bb-tab-mas-lb{display:block;font-size:11px;font-weight:700;line-height:1.35;color:#47617A}
+.mz-tab-mas-ic{display:flex;align-items:center;justify-content:center;width:24px;height:24px;margin:0 auto 2px;border-radius:50%;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(39,147,200,.35),0 6px 16px rgba(39,147,200,.35);color:#47617A;font-size:20px;font-weight:700;line-height:1;flex:none}
+.bb-tab-mas-ic{display:flex;align-items:center;justify-content:center;width:24px;height:24px;margin:0 auto;border-radius:50%;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(39,147,200,.35),0 6px 16px rgba(39,147,200,.35);color:#47617A;font-size:20px;font-weight:700;line-height:1;flex:none}
+.mz-tab-mas-lb{display:block;font-size:11px;font-weight:700;line-height:1.35;color:#47617A}
+/* (DOCK-5 · 6/11) «Agregar» del mismo color Y PESO que las demás
+   etiquetas inactivas. En el shell bb las etiquetas inactivas van en
+   400 (.bb-tab no fija font-weight) y el 700 de esta regla hacía que
+   «Agregar» se viera oscura/negrita al lado de las demás. En el shell
+   mz las etiquetas ya van en 700 (.mz-tab), así que ahí se mantiene. */
+.bb-tab-mas-lb{display:block;font-size:11px;font-weight:400;line-height:1.35;color:#47617A}
 .pz-dockmas{position:fixed;inset:0;z-index:90}
 .pz-dockmas-back{position:absolute;inset:0;background:rgba(10,30,51,.35)}
 .pz-dockmas-card{position:absolute;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));background:rgba(255,255,255,.88);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);border-radius:18px;box-shadow:0 10px 30px rgba(10,30,51,.20);padding:14px}
@@ -5131,11 +5137,14 @@ body.pz-postchat-open{overflow:hidden}
    24px y el + en su círculo de 24px, con la misma etiqueta debajo. */
 .mz-tab{display:flex;flex-direction:column;align-items:center;line-height:1.35}
 .mz-tab-ic{display:flex;align-items:center;justify-content:center;height:24px;margin-bottom:2px}
-/* Pieza 3 — + DEL MISMO COLOR. El + deja el vidrio blanco con +
-   oscuro y usa el mismo tratamiento que los otros 4 (sin fondo,
-   ícono #47617A). Forma intacta: círculo de 24px + «Agregar» abajo. */
-.mz-tab-mas-ic{background:transparent;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;color:#47617A}
-.bb-tab-mas-ic{background:transparent;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;color:#47617A}
+/* (DOCK-5 · 6/11, decisión Valentino: círculo alrededor del +) El +
+   vuelve a su círculo de vidrio de 24px (receta base .mz-tab-mas-ic /
+   .bb-tab-mas-ic, sin tocar: mismo alto que las cajas de ícono de los
+   otros 4, misma etiqueta debajo, sin crecer el dock). La Pieza 3 del
+   3/11 lo había dejado sin fondo para igualarlo a los otros 4; el
+   círculo es lo que marca el + como acción principal. El glifo queda
+   #47617A, como los otros íconos (el color #0A1E33 de la receta base
+   pasa a #47617A en esas dos reglas). */
 /* Pieza 4 — ACEPTAR TODO ARRIBA. El botón vive en el encabezado
    (.hf-pacts-accept) desde v585, pero la regla base .hf-accept-bar
    (v568) lo dejaba en position:fixed abajo a la derecha: por eso

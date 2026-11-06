@@ -1,7 +1,8 @@
 // test-lote-dock-ads.js — LOTE DOCK-ADS v2 (base v710, BUILD v711, preparador).
 // Retrabajo del lote v1 por decisión de Valentino 6/11 12:27: el dock queda
-// Inicio, Ads, + (centro, Agregar, se queda), Estrategia, Premios, Ajustes
-// (6 lugares) en las dos shells (bbShell nativa + mzTabsHTML escritorio);
+// Inicio, Ads, + (centro, Agregar, se queda), Estrategia, Premios
+// (5 lugares; DOCK-5 6/11: Ajustes sale del dock y vive en el perfil)
+// en las dos shells (bbShell nativa + mzTabsHTML escritorio);
 // Premios VUELVE al dock con su ruta #/app/jardin-posty y la fila
 // «🏆 Premios · Nivel N» que el v1 había agregado en Ajustes SE SACA
 // (Ajustes vuelve a como estaba en v710). Premios NO va dentro de Ads:
@@ -38,7 +39,7 @@ const sliceFn = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + base v710 (BUILD v711 en el árbol final) ----------
-  t(srv.includes("const BUILD_ID = '20261105-v720'"), 'server: BUILD v720 (lote ads-nativa)');
+  t(srv.includes("const BUILD_ID = '20261105-v722'"), 'server: BUILD v722 (lote dock-5: re-pin, base v721)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -49,24 +50,26 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v712'"), 'CHUNK_V v712 (re-base carta-estrategia: toca chunk-analisis.js)');
-  t(md5(css) === '9671bbea210fa4b9c4ec62c14db92342', 'styles.css (md5 v718, sin cambio en este lote)');
+  t(md5(css) === '0a08dc1ceeb237d6cbb9eb5338d09587', 'styles.css (md5 lote dock-5: círculo del + y peso Agregar)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 10, 'server: 10 rutas /api/ads, sin endpoints nuevos');
 
-  // ---------- 2. Dock v2: Inicio, Ads, +, Estrategia, Premios, Ajustes (las dos shells) ----------
+  // ---------- 2. Dock v2: Inicio, Ads, +, Estrategia, Premios (las dos shells; DOCK-5 6/11: Ajustes sale del dock y vive en el perfil) ----------
   const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');
-  const bbOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin', 'ajustes']
+  const bbOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin']
     .map((k) => bbNav.indexOf(k === 'pzDockMasBtn' ? 'pzDockMasBtn' : `tabBtn('${k}'`));
   t(bbNav.includes("tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))"), 'bbShell: tab Ads en el dock');
   t(bbNav.includes("tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes'))"), 'bbShell: Premios vuelve al dock');
-  t(cnt(bbNav, 'tabBtn(') === 5 && cnt(bbNav, 'pzDockMasBtn') === 1, 'bbShell: dock en 6 (5 tabs + Agregar centro)');
-  t(bbOrd.every((v) => v !== -1) && bbOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'bbShell: orden Inicio, Ads, +, Estrategia, Premios, Ajustes');
+  t(cnt(bbNav, 'tabBtn(') === 4 && cnt(bbNav, 'pzDockMasBtn') === 1, 'bbShell: dock en 5 (4 tabs + Agregar centro)');
+  t(bbOrd.every((v) => v !== -1) && bbOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'bbShell: orden Inicio, Ads, +, Estrategia, Premios');
+  t(!bbNav.includes("tabBtn('ajustes'"), 'bbShell: sin tab Ajustes (vive en el perfil)');
   const mzNav = (app.split('\n').find((l) => l.includes('<nav class="mz-tabs"')) || '');
-  const mzOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin', 'ajustes']
+  const mzOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin']
     .map((k) => mzNav.indexOf(k === 'pzDockMasBtn' ? 'pzDockMasBtn' : `t('${k}'`));
   t(mzNav.includes("t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))"), 'mzTabsHTML: tab Ads con megáfono');
   t(mzNav.includes("t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))"), 'mzTabsHTML: Premios vuelve al dock');
-  t(cnt(mzNav, "t('") === 5 && cnt(mzNav, 'pzDockMasBtn') === 1, 'mzTabsHTML: dock en 6 (5 tabs + Agregar centro)');
-  t(mzOrd.every((v) => v !== -1) && mzOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'mzTabsHTML: orden Inicio, Ads, +, Estrategia, Premios, Ajustes');
+  t(cnt(mzNav, "t('") === 4 && cnt(mzNav, 'pzDockMasBtn') === 1, 'mzTabsHTML: dock en 5 (4 tabs + Agregar centro)');
+  t(mzOrd.every((v) => v !== -1) && mzOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'mzTabsHTML: orden Inicio, Ads, +, Estrategia, Premios');
+  t(!mzNav.includes("t('ajustes'"), 'mzTabsHTML: sin tab Ajustes (vive en el perfil)');
   t(app.includes("    ads: '<svg"), 'bbShell: icono megáfono en el mapa ic');
   t(app.includes("|| tab === 'ads') return tab;"), "mxTabKey: 'ads' resuelve a 'ads' (tab activo)");
   t(app.includes("else if (tab === 'ads')") && app.includes('content = await adsView()'), "router: tab 'ads' → adsView()");
