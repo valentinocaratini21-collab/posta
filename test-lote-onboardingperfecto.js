@@ -46,7 +46,9 @@ for (const [tag, html] of [['ES', es], ['EN', en]]) {
   // (LOTE PRUEBA-CHAT) 'preguntas' pasa de 2 a 6 guardados: el chat guarda
   // en cada paso (chatNext/chatBack/chatBackTo + ACK de texto libre) para
   // retomar a mitad del hilo, no solo en avance/retroceso de pantallas.
-  ok(tag + ' ítem4: guardado en avance/retroceso/espejo/draft/foto', count(html, "opResumeSave('preguntas')") === 6 && count(html, "opResumeSave('espejo')") === 2 && count(html, "opResumeSave('draft')") === 2 && count(html, "opResumeSave('foto')") === 1);
+  // (LOTE PREGUNTA-DONDE) 'espejo' pasa de 2 a 3 guardados: corregir la
+  // ubicación en el espejo también guarda, si no un refresh la pierde.
+  ok(tag + ' ítem4: guardado en avance/retroceso/espejo/draft/foto', count(html, "opResumeSave('preguntas')") === 6 && count(html, "opResumeSave('espejo')") === 3 && count(html, "opResumeSave('draft')") === 2 && count(html, "opResumeSave('foto')") === 1);
   ok(tag + ' ítem4: borrado al completar y al entrar', has(html, 'function renderResults() {\n  const t = TRIAL;\n  try { opResumeClear(); }') && has(html, 'async function doGuestEnter() {\n  try { opResumeClear(); }'));
   ok(tag + ' ítem4: banner al iniciar', has(html, 'opResumeShowBanner(); } catch (e) {}'));
   ok(tag + ' ítem4: vence a los 7 días', has(html, '7 * 24 * 3600 * 1000'));

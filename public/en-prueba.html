@@ -4316,6 +4316,14 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     chatWeb2: 'give me your website link so i can read it.',
     qRubro: 'What is your business about?',
     qDonde: 'Where can people find you?',
+    // (LOTE PREGUNTA-DONDE) Location: asked only if the study did not
+    // learn it with certainty ('ubicacion' gap, not a fixed q9).
+    chatUbicacion: 'and where are you? tell me the neighborhood or city.',
+    qUbicacion: 'Where can people find you?',
+    ubicDomicilio: 'Home visits',
+    ubicOnline: 'Online',
+    ubicLibrePh: 'E.g.: Palermo, Buenos Aires',
+    ubicLibre: 'Write the neighborhood or city where people find you.',
     q1: 'What do you sell most?',
     q2: 'What do you want people to do when they see the post?',
     q3: 'Do you have a promo this week?',
@@ -4579,6 +4587,18 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var input = { facts: S.facts || {}, productos: (S.products || []).map(function (p) { return p.nombre; }), category: S.cat || '', lang: 'es' };
     try { return preguntasDinamicasGaps(input); }
     catch (e) { return { needed: DYN_TARGETS.filter(function (t) { return t.kind === 'answer'; }), known: {} }; }
+  }
+
+  // (LOTE PREGUNTA-DONDE) Location learned with certainty = the study
+  // saw a physical-place signal: a concrete address (facts.address, from
+  // the web's JSON-LD/<address> or the bio) or a detected local
+  // (facts.has_local: the bio or web carries a place, like the 📍).
+  // The city alone is a candidate, not a certainty: it is offered as an
+  // option, it does not close the question. With no place signal, ask.
+  // Never guess the location, never invent an address.
+  function dondeAprendido(facts) {
+    var f = facts || {};
+    return !!((f.address || '').trim() || f.has_local);
   }
   function q2Options() {
     var f = S.facts || {};
@@ -5050,6 +5070,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (S.chatOverride && S.chatOverride[key]) { var c = S.chatOverride[key]; delete S.chatOverride[key]; return { chat: c, title: T.q1 }; }
     if (key === 'rubro') return { chat: T.chatRubro, title: T.qRubro };
     if (key === 'donde') return { chat: T.chatDonde, title: T.qDonde };
+    if (key === 'ubicacion') return { chat: T.chatUbicacion, title: T.qUbicacion };
     if (key === 'q1') return { chat: ((S.products || []).length ? T.chatQ1 : T.chatQ1Empty), title: T.q1 };
     if (key === 'q2') return { chat: T.chatQ2, title: T.q2 };
     if (key === 'q3') return { chat: T.chatQ3, title: T.q3 };
@@ -5064,6 +5085,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var a = S.ans || {};
     if (key === 'rubro') return a.rubro || '';
     if (key === 'donde') { var d = DONDE.filter(function (o) { return o.v === a.donde; })[0]; return d ? d.l : (a.donde || ''); }
+    if (key === 'ubicacion') return a.ubicacion || '';
     if (key === 'q1') {
       if (a.q1mix === 'todo') return T.todo;
       if (a.q1mix === 'sin_oferta') return T.sinOferta;
@@ -5177,6 +5199,18 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       return opts;
     }
     if (key === 'donde') return DONDE.slice();
+    if (key === 'ubicacion') {
+      // (LOTE PREGUNTA-DONDE) Real extracted candidates first (the web's
+      // city, if any), then the generic ones. Values are the literal text
+      // (like q6/q7): they travel verbatim to the fundamento.
+      var oU = [], seenU = {};
+      var pushU = function (v) { var s = String(v || '').trim().slice(0, 60); var k = s.toLowerCase(); if (s && !seenU[k]) { seenU[k] = 1; oU.push({ v: s, l: s }); } };
+      try { if (typeof WEB !== 'undefined' && WEB && WEB.city) pushU(WEB.city); } catch (e) {}
+      pushU(T.ubicDomicilio);
+      pushU(T.ubicOnline);
+      oU.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+      return oU;
+    }
     if (key === 'q1') {
       var o = (S.products || []).map(function (p, i) { return { v: p.nombre, l: p.nombre, foto: p.foto || null, estrella: i === 0 }; });
       o.push({ v: '__servicio__', l: T.servicio, sub: T.servicioSub });
@@ -5226,6 +5260,13 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.ans.donde = v;
       chatPost('answer', { question: T.qDonde, value: v });
       dondeFollow(v);
+      return;
+    }
+    if (key === 'ubicacion') {
+      if (v === '__libre__') { chatLibre('ubicacion', 'libre'); return; }
+      S.ans.ubicacion = v;
+      chatPost('answer', { question: T.qUbicacion, value: v });
+      chatNext();
       return;
     }
     if (key === 'q1') {
@@ -5278,6 +5319,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (key === 'q6') return T.q6LibrePh;
     if (key === 'q7') return T.q7LibrePh;
     if (key === 'q8') return T.q8LibrePh;
+    if (key === 'ubicacion') return T.ubicLibrePh;
     return T.chatFreePh;
   }
   function chatLibreHint(key, mode) {
@@ -5286,6 +5328,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (key === 'q6') return T.q6Libre;
     if (key === 'q7') return T.q7Libre;
     if (key === 'q8') return T.q8Libre;
+    if (key === 'ubicacion') return T.ubicLibre;
     return '';
   }
   function chatLibre(key, mode) {
@@ -5312,6 +5355,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
         if (key === 'q6') { S.ans.q6 = t; S.ans.q6mix = 'libre'; }
         if (key === 'q7') { S.ans.q7 = t; S.ans.q7mix = 'libre'; }
         if (key === 'q8') { S.ans.q8 = t; S.ans.q8mix = 'libre'; }
+        if (key === 'ubicacion') { S.ans.ubicacion = t; }
         S.chatLibreKey = null; S.chatLibreMode = null;
         inp.value = '';
         chatPost('answer', { question: chatQText(key).title, value: t });
@@ -5414,6 +5458,16 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     } else {
       keys = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8'];
     }
+    // (LOTE PREGUNTA-DONDE) The study did not learn the location with
+    // certainty: 'ubicacion' joins the plan as one more gap, however the
+    // visitor came in. Only once there was a study (with no study there is
+    // nothing to learn: the email flow asks 'donde' and the study comes
+    // later; buildPlan is rebuilt after each study and the gap shows up
+    // then). It goes right after rubro/donde, before the qs — the plan
+    // builds as [rubro?, donde?, ubicacion?, q1..q8]. Learned = a concrete
+    // address or a detected local (the bio or web carries a place); the
+    // city alone is a candidate, not a certainty.
+    if (studied && !dondeAprendido(S.facts) && plan.indexOf('ubicacion') < 0) { plan.push('ubicacion'); }
     keys.forEach(function (k) { if (plan.indexOf(k) < 0) plan.push(k); });
     S.plan = plan;
     S.qi = 0;
@@ -5430,7 +5484,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       promo: S.ans.q3 || '',
       voz: S.ans.q4 || '',
       precios: S.ans.q5 || '',
-      donde: S.ans.donde || '',
+      // (LOTE PREGUNTA-DONDE) The answered location beats the channel.
+      donde: S.ans.ubicacion || S.ans.donde || '',
       // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: audience, differential and red
       // lines travel to the fundamento with their mix, like Q1.
       audiencia: S.ans.q6 || '',
@@ -5478,6 +5533,11 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     editSave: 'Guardar correcci\u00f3n',
     ok: 'Est\u00e1 bien, armar mi semana',
     okEmpty: 'Agreg\u00e1 al menos un producto para armar tu semana',
+    dondeLbl: 'D\u00f3nde te encuentran',
+    dondeVacio: 'Sin definir',
+    dondeEdit: 'Corregir',
+    dondeSave: 'Guardar',
+    dondePh: 'Ej: Palermo, Buenos Aires',
     ev: 'Vi que vendés',
     evIn: { bio: 'en tu bio', web: 'en tu web', foto: 'en tu foto' }
   };
@@ -5496,6 +5556,25 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (S.ans.q1) push(S.ans.q1, 'cliente');
     return list.slice(0, 8);
   }
+  // (LOTE PREGUNTA-DONDE) The location the mirror shows and lets the
+  // visitor correct: the chat answer ('ubicacion') wins; then the channel
+  // ('donde'); then the address the study brought. Empty = not set.
+  function flDondeVal() {
+    if ((S.ans.ubicacion || '').trim()) return String(S.ans.ubicacion).trim();
+    if ((S.ans.donde || '').trim()) { var d = DONDE.filter(function (o) { return o.v === S.ans.donde; })[0]; return d ? d.l : String(S.ans.donde).trim(); }
+    if (S.facts && (S.facts.address || '').trim()) return String(S.facts.address).trim();
+    return '';
+  }
+  function flDondeRowHTML() {
+    var v = flDondeVal();
+    return '<div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#fff;border:2px solid #DCEFFF;border-radius:12px;margin-bottom:8px">'
+      + '<div style="flex:1;font-size:16px;font-weight:700;color:#0A1E33">' + esc(FL.dondeLbl)
+      + '<small style="display:block;font-size:12px;font-weight:500;color:#5A7488">' + esc(v || FL.dondeVacio) + '</small></div>'
+      + '<button type="button" id="flDondeEdit" style="border:0;background:none;color:#2793C8;font-size:15px;font-weight:700;cursor:pointer">' + esc(FL.dondeEdit) + '</button></div>'
+      + '<div id="flDondeBox" style="display:none;margin-bottom:8px"><div style="display:flex;gap:8px"><input id="flDondeIn" class="oc-field" style="margin:0" placeholder="' + esc(FL.dondePh) + '">'
+      + '<button type="button" id="flDondeSave" class="oc-btn" style="width:auto;margin:0;padding:0 18px">' + esc(FL.dondeSave) + '</button></div></div>';
+  }
+
   function flRender() {
     var box = ocq();
     // (LOTE ONBOARDING-Q1) With no offer yet, the OK button is enabled
@@ -5512,6 +5591,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     box.innerHTML = stemHTML() + '<h2 class="oc-q">' + esc(FL.title) + '</h2>'
       + '<p class="oc-chat">' + esc(FL.sub) + '</p>'
       + opEvidenceHTML()
+      + flDondeRowHTML()
       + (FL_E.productos.length ? rows : '<p class="oc-chat">' + esc(emptyTxt) + '</p>')
       + '<div style="margin-top:14px"><label style="font-size:15px;font-weight:700;color:#0A1E33">' + esc(FL.photoLbl) + '</label>'
       + '<input id="flFoto" type="file" accept="image/*" multiple style="display:block;margin-top:8px;font-size:15px">'
@@ -5592,6 +5672,23 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       var lines = (box.querySelector('#flEdit').value || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
       if (!lines.length) return;
       FL_E.productos = lines.map(function (n) { return { nombre: n, precio: '', procedencia: 'cliente' }; });
+      flRender();
+    });
+    var fde = box.querySelector('#flDondeEdit');
+    if (fde) fde.addEventListener('click', function () {
+      var db = box.querySelector('#flDondeBox');
+      var di = box.querySelector('#flDondeIn');
+      if (db) db.style.display = db.style.display === 'none' ? 'block' : 'none';
+      if (di) { di.value = flDondeVal(); try { di.focus(); } catch (e) {} }
+    });
+    var fds = box.querySelector('#flDondeSave');
+    if (fds) fds.addEventListener('click', function () {
+      var di = box.querySelector('#flDondeIn');
+      var v = (di && di.value || '').trim().slice(0, 60);
+      S.ans.ubicacion = v;
+      window.OC_ANS = window.OC_ANS || {};
+      window.OC_ANS.donde = S.ans.ubicacion || S.ans.donde || '';
+      try { opResumeSave('espejo'); } catch (e) {}
       flRender();
     });
     box.querySelector('#flOk').addEventListener('click', function () {
@@ -5798,7 +5895,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.chatSeen = {}; (s.chatSeen || []).forEach(function (id) { S.chatSeen[id] = 1; });
       if (s.biz) { try { TRIAL_BIZ = s.biz; } catch (e) {} }
       if (s.ig) { try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + s.ig; } catch (e) {} }
-      window.OC_ANS = { producto_estrella: S.ans.q1 || '', producto_mix: S.ans.q1mix || 'uno', cta: S.ans.q2 || '', promo: S.ans.q3 || '', voz: S.ans.q4 || '', precios: S.ans.q5 || '', donde: S.ans.donde || '', audiencia: S.ans.q6 || '', audiencia_mix: S.ans.q6mix || 'todos', diferencial: S.ans.q7 || '', diferencial_mix: S.ans.q7mix || 'nose', lineas_rojas: S.ans.q8 || '', lineas_rojas_mix: S.ans.q8mix || 'nada', promo_semana: true };
+      window.OC_ANS = { producto_estrella: S.ans.q1 || '', producto_mix: S.ans.q1mix || 'uno', cta: S.ans.q2 || '', promo: S.ans.q3 || '', voz: S.ans.q4 || '', precios: S.ans.q5 || '', donde: S.ans.ubicacion || S.ans.donde || '', audiencia: S.ans.q6 || '', audiencia_mix: S.ans.q6mix || 'todos', diferencial: S.ans.q7 || '', diferencial_mix: S.ans.q7mix || 'nose', lineas_rojas: S.ans.q8 || '', lineas_rojas_mix: S.ans.q8mix || 'nada', promo_semana: true };
       window.OC_CAT = S.ans.rubro || S.cat || window.OC_CAT || null;
       window.OC_DETECTADOS = (S.products || []).map(function (p) { return p.nombre; }).filter(Boolean).slice(0, 4);
       window.OC_REASK_Q1 = reaskQ1;

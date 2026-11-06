@@ -27128,7 +27128,9 @@ function onboardingAnswersFrom(fields) {
     promo: clean(f.promo, 20),
     voz: clean(f.voz, 20),
     precios: clean(f.precios, 20),
-    donde: clean(f.donde, 20),
+    // (LOTE PREGUNTA-DONDE) La respuesta puede ser un lugar (barrio/ciudad),
+    // no solo un canal: 60 caracteres como la estrella, no 20.
+    donde: clean(f.donde, 60),
     // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: audiencia, diferencial y líneas
     // rojas. Viajan al fundamento (digest.onboarding) y a la semana.
     audiencia: clean(f.audiencia, 60),
@@ -30818,7 +30820,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v718';
+const BUILD_ID = '20261105-v719';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

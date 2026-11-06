@@ -172,6 +172,94 @@ ok('server: no borra la fila reusada si falla la importación', has(srv, 'if (!r
 ok('server: setConcierge solo si no lo es (sin spam de acciones)', has(srv, '!supportCases.isConcierge(db, uid)'));
 ok('server: reloj de 3 días arranca en el chat (comentario de diseño)', has(srv, 'El reloj de 3 días arranca en el chat'));
 
+// ---------- G) LOTE PREGUNTA-DONDE: hueco 'ubicacion' ----------
+// La ubicación se pregunta solo si el estudio no la aprendió con
+// seguridad (dirección concreta o local detectado). Hueco más del plan,
+// no q9 fija; ES+EN espejados; el espejo muestra y deja corregir.
+ok('G1 ES: T.chatUbicacion/qUbicacion/ubic*', has(es, "chatUbicacion: '¿y dónde están? pasame el barrio o la ciudad.'") && has(es, "qUbicacion: '¿Dónde te encuentran?'") && has(es, "ubicDomicilio: 'A domicilio'") && has(es, "ubicOnline: 'Online'") && has(es, "ubicLibrePh: 'Ej: Palermo, Buenos Aires'") && has(es, "ubicLibre: 'Escribí el barrio o la ciudad donde te encuentran.'"));
+ok('G1b EN: T.chatUbicacion/qUbicacion/ubic*', has(en, "chatUbicacion: 'and where are you? tell me the neighborhood or city.'") && has(en, "qUbicacion: 'Where can people find you?'") && has(en, "ubicDomicilio: 'Home visits'") && has(en, "ubicOnline: 'Online'") && has(en, "ubicLibrePh: 'E.g.: Palermo, Buenos Aires'") && has(en, "ubicLibre: 'Write the neighborhood or city where people find you.'"));
+ok('G2 ES+EN: dondeAprendido definida 1 vez por archivo', count(es, 'function dondeAprendido(facts) {') === 1 && count(en, 'function dondeAprendido(facts) {') === 1);
+ok('G3 ES+EN: buildPlan inserta ubicacion solo con estudio y sin aprender', has(es, "if (studied && !dondeAprendido(S.facts) && plan.indexOf('ubicacion') < 0) { plan.push('ubicacion'); }") && has(en, "if (studied && !dondeAprendido(S.facts) && plan.indexOf('ubicacion') < 0) { plan.push('ubicacion'); }"));
+ok('G4 ES+EN: chatQText tiene rama ubicacion', has(es, "if (key === 'ubicacion') return { chat: T.chatUbicacion, title: T.qUbicacion };") && has(en, "if (key === 'ubicacion') return { chat: T.chatUbicacion, title: T.qUbicacion };"));
+ok('G4b ES+EN: chatAnswerLabel tiene rama ubicacion', has(es, "if (key === 'ubicacion') return a.ubicacion || '';") && has(en, "if (key === 'ubicacion') return a.ubicacion || '';"));
+ok('G4c ES+EN: chatOptionsFor tiene rama ubicacion', has(es, "if (key === 'ubicacion') {") && has(en, "if (key === 'ubicacion') {"));
+ok('G4d ES+EN: chatPick guarda ubicacion + libre', has(es, "if (v === '__libre__') { chatLibre('ubicacion', 'libre'); return; }") && has(en, "if (v === '__libre__') { chatLibre('ubicacion', 'libre'); return; }") && has(es, 'S.ans.ubicacion = v;') && has(en, 'S.ans.ubicacion = v;'));
+ok('G4e ES+EN: chatLibrePh/Hint + guardado libre de ubicacion', has(es, "if (key === 'ubicacion') return T.ubicLibrePh;") && has(en, "if (key === 'ubicacion') return T.ubicLibrePh;") && has(es, "if (key === 'ubicacion') return T.ubicLibre;") && has(en, "if (key === 'ubicacion') return T.ubicLibre;") && has(es, "if (key === 'ubicacion') { S.ans.ubicacion = t; }") && has(en, "if (key === 'ubicacion') { S.ans.ubicacion = t; }"));
+ok('G5 ES+EN: OC_ANS.donde con la ubicación primero (sprout + resume)', count(es, 'donde: S.ans.ubicacion || S.ans.donde || ') === 2 && count(en, 'donde: S.ans.ubicacion || S.ans.donde || ') === 2);
+ok('G6 ES+EN: espejo tiene fila dónde + bindings', has(es, 'dondeLbl:') && has(en, 'dondeLbl:') && has(es, '+ flDondeRowHTML()') && has(en, '+ flDondeRowHTML()') && has(es, "box.querySelector('#flDondeEdit')") && has(en, "box.querySelector('#flDondeEdit')") && has(es, "box.querySelector('#flDondeSave')") && has(en, "box.querySelector('#flDondeSave')"));
+ok('G7 server: donde admite 60 (lugar), ya no 20', has(srv, 'donde: clean(f.donde, 60),') && !has(srv, 'donde: clean(f.donde, 20),'));
+
+// Unit: el buildPlan REAL del HTML (extraído y corrido en VM) con los
+// escenarios del encargo + rebuild email→IG + web con/sin dirección.
+const vm = require('vm');
+function fnFrom(html, sig) {
+  const i = html.indexOf(sig);
+  if (i < 0) return null;
+  let d = 0, j = i;
+  for (; j < html.length; j++) {
+    if (html[j] === '{') d++;
+    else if (html[j] === '}') { d--; if (d === 0) return html.slice(i, j + 1); }
+  }
+  return null;
+}
+function planCtx(html, S, WEB) {
+  const ctx = { S, WEB, DYN_TARGETS, preguntasDinamicasGaps };
+  vm.createContext(ctx);
+  vm.runInContext('function chatGaps() { var input = { facts: S.facts || {}, productos: (S.products || []).map(function (p) { return p.nombre; }), category: S.cat || \'\', lang: \'es\' }; try { return preguntasDinamicasGaps(input); } catch (e) { return { needed: DYN_TARGETS.filter(function (t) { return t.kind === \'answer\'; }), known: {} }; } }', ctx, { filename: 'chatGaps-stub' });
+  const m = html.match(/var DYN_TARGET_TO_KEY = (\{[^}]+\});/);
+  if (!m) throw new Error('sin DYN_TARGET_TO_KEY en el HTML');
+  vm.runInContext('var DYN_TARGET_TO_KEY = ' + m[1] + ';', ctx, { filename: 'dynmap' });
+  const srcDonde = fnFrom(html, 'function dondeAprendido(facts) {');
+  const srcPlan = fnFrom(html, 'function buildPlan() {');
+  if (!srcDonde || !srcPlan) throw new Error('sin dondeAprendido/buildPlan en el HTML');
+  vm.runInContext(srcDonde + '\n' + srcPlan, ctx, { filename: 'buildPlan' });
+  return ctx;
+}
+function planFor(html, S, WEB) {
+  const ctx = planCtx(html, S, WEB);
+  vm.runInContext('buildPlan();', ctx, { filename: 'run-plan' });
+  return ctx.S.plan.slice();
+}
+function mkS(source, facts, products, cat, ans) {
+  return { source, rubroOptions: undefined, facts, products: products || [], cat: cat || '', ans: ans || {} };
+}
+const planBarberia = planFor(es, mkS('ig', { _known: true, has_local: false, address: '', category: 'barberia', rubro: '' }, [{ nombre: 'Corte' }], 'barberia'), undefined);
+ok('G-VM1 IG sin dirección (barbería): se pregunta ubicacion, antes de las q', planBarberia.includes('ubicacion') && !planBarberia.includes('donde') && planBarberia.slice(0, 2).includes('ubicacion'), JSON.stringify(planBarberia));
+const planCafe = planFor(es, mkS('ig', { _known: true, has_local: true, address: '', category: 'cafe', rubro: '' }, [{ nombre: 'Café de especialidad' }], 'cafe'), undefined);
+ok('G-VM2 IG con local detectado (café, 📍 en bio): NO se pregunta ubicacion', !planCafe.includes('ubicacion'), JSON.stringify(planCafe));
+const planCafeDir = planFor(es, mkS('ig', { _known: true, has_local: true, address: '1065 Ralph David Abernathy Blvd, Atlanta', category: 'cafe', rubro: '' }, [{ nombre: 'Café de especialidad' }], 'cafe'), undefined);
+ok('G-VM3 IG con dirección: NO se pregunta ubicacion', !planCafeDir.includes('ubicacion'), JSON.stringify(planCafeDir));
+const planEmail = planFor(es, mkS('email', null, [], ''), undefined);
+ok('G-VM4 email sin estudio: se pregunta donde (canal) como hoy, NO ubicacion', planEmail.includes('donde') && !planEmail.includes('ubicacion'), JSON.stringify(planEmail));
+const planEmailIg = planFor(es, mkS('email', { _known: true, has_local: false, address: '', category: 'barberia', rubro: '' }, [{ nombre: 'Corte' }], 'barberia', { donde: 'instagram' }), undefined);
+ok('G-VM5 email + estudio IG sin dirección (rebuild): se pregunta ubicacion', planEmailIg.includes('ubicacion'), JSON.stringify(planEmailIg));
+const planWebDir = planFor(es, mkS('web', { _known: true, has_local: true, address: 'Calle Falsa 123', category: 'tienda', rubro: '' }, [{ nombre: 'Vestido' }], 'tienda'), undefined);
+ok('G-VM6 web con dirección: NO se pregunta ubicacion', !planWebDir.includes('ubicacion'), JSON.stringify(planWebDir));
+const planWebCiudad = planFor(es, mkS('web', { _known: true, has_local: false, address: '', category: 'tienda', rubro: '' }, [{ nombre: 'Vestido' }], 'tienda'), { city: 'Atlanta' });
+ok('G-VM7 web solo con ciudad: se pregunta ubicacion (la ciudad es candidata, no certeza)', planWebCiudad.includes('ubicacion'), JSON.stringify(planWebCiudad));
+const planBarberiaEN = planFor(en, mkS('ig', { _known: true, has_local: false, address: '', category: 'barberia', rubro: '' }, [{ nombre: 'Corte' }], 'barberia'), undefined);
+ok('G-VM8 EN: IG sin dirección también pregunta ubicacion (paridad)', planBarberiaEN.includes('ubicacion'), JSON.stringify(planBarberiaEN));
+const planCafeEN = planFor(en, mkS('ig', { _known: true, has_local: true, address: '', category: 'cafe', rubro: '' }, [{ nombre: 'Café de especialidad' }], 'cafe'), undefined);
+ok('G-VM9 EN: IG con local tampoco pregunta ubicacion (paridad)', !planCafeEN.includes('ubicacion'), JSON.stringify(planCafeEN));
+
+// Opciones de un toque de 'ubicacion': candidatos reales primero.
+function optsFor(html, S, WEB, T) {
+  const ctx = { S, WEB, T };
+  vm.createContext(ctx);
+  const src = fnFrom(html, 'function chatOptionsFor(key) {');
+  if (!src) throw new Error('sin chatOptionsFor en el HTML');
+  vm.runInContext(src, ctx, { filename: 'chatOptionsFor' });
+  return vm.runInContext('chatOptionsFor("ubicacion")', ctx, { filename: 'opts' });
+}
+const TES = { ubicDomicilio: 'A domicilio', ubicOnline: 'Online', libre: 'Escribilo con tus palabras', libreSub: 'Escribí lo que vendés, con tus palabras' };
+const TEN = { ubicDomicilio: 'Home visits', ubicOnline: 'Online', libre: 'Write it in your own words', libreSub: 'Write what you sell, in your own words' };
+const oCiudad = optsFor(es, { facts: {} }, { city: 'Atlanta' }, TES);
+ok('G-OPT1 con ciudad: la ciudad primero, luego A domicilio/Online/libre', JSON.stringify(oCiudad.map((o) => o.v)) === JSON.stringify(['Atlanta', 'A domicilio', 'Online', '__libre__']), JSON.stringify(oCiudad));
+const oSin = optsFor(es, { facts: {} }, undefined, TES);
+ok('G-OPT2 sin ciudad: A domicilio/Online/libre', JSON.stringify(oSin.map((o) => o.v)) === JSON.stringify(['A domicilio', 'Online', '__libre__']), JSON.stringify(oSin));
+const oCiudadEN = optsFor(en, { facts: {} }, { city: 'Atlanta' }, TEN);
+ok('G-OPT3 EN con ciudad: paridad 1:1', JSON.stringify(oCiudadEN.map((o) => o.v)) === JSON.stringify(['Atlanta', 'Home visits', 'Online', '__libre__']), JSON.stringify(oCiudadEN));
+
 // ---------- F) Boot: endpoints en vivo ----------
 // (Salta si no hay node_modules: el preparador lo corre con deps.)
 const PORT = 3997;
