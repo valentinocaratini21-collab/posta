@@ -470,5 +470,34 @@ ok('control: «Dejá que Posty…» abriendo el caption pasa (voseo con acento, 
   assert.strictEqual(chk.ok, true, chk.reason);
 });
 
+console.log('== (t) Filtración del fundamento: rótulos del brief en el caption (id 555 real, 2026-11-06) ==');
+ok('id 555 real: el bloque del fundamento pegado se rechaza', () => {
+  const cap = 'Nuevo blend de la casa ☕\n\nTostado esta semana, de origen único.\n\nPasá por el local y probalo hoy\nTal como pediste: Producto literal (escrito por el dueño): Café de especialidad Objetivo del posteo: compras Voz: cercano Precios en posteos: sí Dónde lo encu…';
+  const chk = gen.captionPasses(cap, { business: 'Café de Prueba Bamboo', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/filtraci/i.test(chk.reason), chk.reason);
+});
+ok('variante: solo «Objetivo del posteo» también se rechaza', () => {
+  const cap = 'Nuevo blend de la casa ☕\n\nTostado esta semana, de origen único. Objetivo del posteo: compras.\n\nPasá por el local y probalo hoy.';
+  const chk = gen.captionPasses(cap, { business: 'Café de Prueba Bamboo', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/filtraci/i.test(chk.reason), chk.reason);
+});
+ok('control: la reescritura del 555 sin el bloque pasa', () => {
+  const cap = 'Nuevo blend de la casa ☕\n\nTostado esta semana, de origen único.\n\nPasá por el local y probalo hoy.';
+  const chk = gen.captionPasses(cap, { business: 'Café de Prueba Bamboo', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «producto» suelto no es filtración', () => {
+  const cap = 'El producto estrella de la casa es el flat white: leche cremosa y café intenso.\n\nPasá por el local hoy y probalo.';
+  const chk = gen.captionPasses(cap, { business: 'Café de Prueba Bamboo', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: «el objetivo del día» no es el rótulo del brief', () => {
+  const cap = 'El objetivo del día es simple: que pruebes el blend nuevo.\n\nPasá por el local hoy y probalo.';
+  const chk = gen.captionPasses(cap, { business: 'Café de Prueba Bamboo', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -167,6 +167,7 @@ function check(name, cond, extra) {
   check('checklist prohíbe muletillas', /¡Hola!/.test(ex5) && /¿Sabías que/.test(ex5));
   check('checklist prohíbe confesión prefabricada', /te voy a ser honesto/i.test(ex5));
   check('checklist prohíbe imperativo peninsular «deja»', /Deja de preocuparte/i.test(ex5));
+  check('checklist prohíbe filtrar el fundamento', /EL FUNDAMENTO NO SE PUBLICA/.test(ex5));
   check('checklist matchea imagen', /MATCHEAR lo que muestra la imagen/.test(ex5));
   check('checklist prohíbe #love #instagood', /#love #instagood/.test(ex5));
   check('isArgentineClient AR=true', isArgentineClient(db, 101) === true);

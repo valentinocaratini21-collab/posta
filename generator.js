@@ -731,6 +731,19 @@ function captionPasses(caption, input) {
   for (const p of BANNED_PHRASES) {
     if (low.includes(p)) return { ok: false, reason: `contiene la frase quemada "${p}"` };
   }
+  // FILTRACIÓN DEL FUNDAMENTO (Juli, 2026-11-06 — id 555 real, cuenta 85
+  // guest, creado 2026-11-06 01:03, scheduled HOY 22:00Z): el caption trae
+  // pegado el bloque interno del brief — "Tal como pediste: Producto
+  // literal (escrito por el dueño): Café de especialidad Objetivo del
+  // posteo: compras Voz: cercano Precios en posteos: sí Dónde lo encu…" —
+  // cortado a mitad de palabra por el tope de largo. El fundamento es la
+  // materia prima para escribir, nunca texto publicable: sus rótulos
+  // ("Producto literal", "Objetivo del posteo") no existen en el habla de
+  // ningún dueño. Match sobre `low` (NFD sin acentos, como BANNED_PHRASES):
+  // los dos rótulos no llevan acentos y no aparecen en un caption humano.
+  for (const m of ['producto literal', 'objetivo del posteo']) {
+    if (low.includes(m)) return { ok: false, reason: `filtración del fundamento: el caption trae texto interno del brief ("${m}") — el fundamento se usa para escribir, nunca se publica` };
+  }
   if (c.trim().length < 40) return { ok: false, reason: 'es demasiado corto (menos de 40 caracteres)' };
   // LIMPIEZA (2026-10-18, Valentino: "posteos más limpios, sin tantas
   // palabras, como los del website"): topes DUROS de largo, bloques y
