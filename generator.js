@@ -4763,6 +4763,7 @@ function chatReceiptLines(r) {
       case 'when_past': return `ojo: ${q(it.title)} no lo reprogramé porque la fecha ya pasó`;
       case 'redo_empty': return `ojo: ${q(it.title)} ya no tiene rehaces de imagen, la imagen quedó igual`;
       case 'qa_bandeja': return `ojo: la imagen nueva de ${q(it.title)} quedó en revisión, la actual sigue vigente`;
+      case 'character_review': return `ojo: el protagonista de ${q(it.title)} no quedó igual al de siempre, lo dejé en revisión para que lo veas`;
       case 'photo_failed': return `ojo: no pude usar esa foto en ${q(it.title)}, quedó la anterior`;
       case 'create_failed': return `ojo: no pude crear ${q(it.title)} — probá de nuevo o mandame una foto`;
       case 'create_media': return `ojo: ${q(it.title)} — reels y carruseles todavía no los creo por chat, te lo puedo armar como posteo con imagen`;

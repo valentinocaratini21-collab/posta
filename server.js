@@ -2712,9 +2712,9 @@ async function makeIdeaDraft(uid, idea) {
   }
   if (!imagePath) return { ok: false, reason: 'no_image' };
   const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, rg_producto, rg_procedencia)
-    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, String(idea.title || '').slice(0, 200), String('idea:' + (idea.angle_key || '')).slice(0, 120),
-      tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || genOut.character === 'failed' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || rgSinProducto) ? 1 : 0,
+      tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || characterBlocksDelivery(genOut) || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || rgSinProducto) ? 1 : 0,
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
       String((content && content.hookId) || ''), promptForMedia(imagePath),
       (rgMatch ? rgMatch.nombre : ''), (rgMatch ? (rgMatch.procedencia || '') : ''));
@@ -2816,7 +2816,7 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
       String((content && content.hookId) || ''), promptForMedia(imagePath), rgP2, rgProc2, post.id);
   if (rgSin2) { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id); } catch (e) {} }
   // (v239) QA de personaje: identidad no garantizada ⇒ la pieza queda en revisión.
-  if (genOut.character === 'failed') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id); console.log(`[admin-regen] post ${post.id}: protagonista no garantizado — needs_review`); } catch (e) {} }
+  if (characterBlocksDelivery(genOut)) { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id); console.log(`[admin-regen] post ${post.id}: protagonista no garantizado — needs_review`); } catch (e) {} }
   // (QA gate 2026-10-26) Gate agotado ⇒ la pieza queda en revisión.
   if (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id); console.log(`[admin-regen] post ${post.id}: QA gate agotado — bandeja (needs_review)`); } catch (e) {} }
   stampPostDigest(post.id, uid, content && content._anchored === false); // (v229) el reemplazo hereda el fundamento vigente
@@ -6144,6 +6144,14 @@ app.post('/api/ideas/chat', async (req, res) => {
                   editIssues.push({ kind: 'qa_bandeja', title: String(capForImg).split('\n')[0].slice(0, 40) });
                   return false;
                 }
+                // (AVATAR-POSTY) Protagonista no garantizado: igual que
+                // bandeja — la imagen nueva NO reemplaza a la vigente,
+                // el posteo va a revisión y NO se consume el redo.
+                if (characterBlocksDelivery(redoGate)) {
+                  try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postIdForRedo); console.log(`[chat-edit] post ${postIdForRedo}: protagonista no garantizado — se conserva la imagen vigente + needs_review`); } catch (e) {}
+                  editIssues.push({ kind: 'character_review', title: String(capForImg).split('\n')[0].slice(0, 40) });
+                  return false;
+                }
                 // Punto de compromiso (6A): imagen nueva entregada.
                 const cur = db.prepare('SELECT redo_left, media_type FROM posts WHERE id = ? AND user_id = ?').get(postIdForRedo, uid);
                 if (redoLeftOf(cur) !== null && !consumeRedo(uid, postIdForRedo)) return false;
@@ -6360,6 +6368,7 @@ app.post('/api/ideas/chat', async (req, res) => {
         if (String(cb.media_type || 'image') !== 'image') { editIssues.push({ kind: 'create_media', title }); continue; }
         let imagePath = null;
         let qaReview = false;
+        let charReview = false; // (AVATAR-POSTY) protagonista no garantizado: no se programa
         if (Number.isInteger(cb.photo_index) && cb.photo_index >= 0) {
           const { photoPaths } = req.body || {};
           let newPath = null;
@@ -6384,6 +6393,10 @@ app.post('/api/ideas/chat', async (req, res) => {
             if (!newPath) { editIssues.push({ kind: 'create_failed', title }); continue; }
             imagePath = String(newPath);
             if (gate.qaGate && gate.qaGate.outcome === 'bandeja') qaReview = true;
+            // (AVATAR-POSTY) HUECO DEL 554: el veredicto de personaje
+            // NUNCA se leía acá — un 'failed' del gate se programaba
+            // como si estuviera bien. Ahora bloquea la programación.
+            if (characterBlocksDelivery(gate)) { charReview = true; editIssues.push({ kind: 'character_review', title }); }
           } catch (e) {
             console.error('[chat-create] imagen:', e.message);
             editIssues.push({ kind: 'create_failed', title }); continue;
@@ -6402,12 +6415,16 @@ app.post('/api/ideas/chat', async (req, res) => {
           if (iso && new Date(iso).getTime() > Date.now() + 5 * 60 * 1000) { schedIso = iso; schedWall = cb.when.trim(); }
           else editIssues.push({ kind: 'when_past_create', title });
         } else if (cb.when_dropped) editIssues.push({ kind: 'when_past_create', title });
-        const needsReview = (trainingWheelsActive(uid) ? 1 : 0) || (qaReview ? 1 : 0);
+        // (AVATAR-POSTY) Protagonista no garantizado: la pieza NO se
+        // programa como buena — queda en borrador para revisión (la fecha
+        // pedida se descarta; no se reprograma sola cuando se apruebe).
+        const schedIsoEff = charReview ? null : schedIso;
+        const needsReview = (trainingWheelsActive(uid) ? 1 : 0) || (qaReview ? 1 : 0) || (charReview ? 1 : 0);
         const r = db.prepare('INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review) VALUES (?,?,?,?,?,?,?,?)')
-          .run(uid, imagePath, String(cb.caption || ''), String(cb.hashtags || ''), schedIso, schedIso ? 'scheduled' : 'draft', 'image', needsReview);
+          .run(uid, imagePath, String(cb.caption || ''), String(cb.hashtags || ''), schedIsoEff, schedIsoEff ? 'scheduled' : 'draft', 'image', needsReview);
         if (r && r.lastInsertRowid) {
-          if (schedIso) { try { scheduleLintForPost(uid, r.lastInsertRowid); } catch (e) {} }
-          created.push({ title, when: schedWall, review: qaReview || undefined });
+          if (schedIsoEff) { try { scheduleLintForPost(uid, r.lastInsertRowid); } catch (e) {} }
+          created.push({ title, when: charReview ? null : schedWall, review: (qaReview || charReview) || undefined });
         }
       }
       if (created.length) createdApplied = { ok: created };
@@ -6446,6 +6463,11 @@ app.post('/api/ideas/chat', async (req, res) => {
                 if (gate.qaGate && gate.qaGate.outcome === 'bandeja') {
                   db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(copyId);
                   editIssues.push({ kind: 'qa_bandeja', title: chatTitle(post) });
+                } else if (characterBlocksDelivery(gate)) {
+                  // (AVATAR-POSTY) La imagen nueva NO reemplaza a la
+                  // vigente: queda la original y la copia va a revisión.
+                  db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(copyId);
+                  editIssues.push({ kind: 'character_review', title: chatTitle(post) });
                 } else {
                   const cur = db.prepare('SELECT redo_left, media_type FROM posts WHERE id = ? AND user_id = ?').get(copyId, uid);
                   if (redoLeftOf(cur) === null || consumeRedo(uid, copyId)) { db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), copyId); copyImageDone = true; }
@@ -6500,6 +6522,11 @@ app.post('/api/ideas/chat', async (req, res) => {
                 if (gate.qaGate && gate.qaGate.outcome === 'bandeja') {
                   db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id);
                   editIssues.push({ kind: 'qa_bandeja', title: chatTitle(post) });
+                } else if (characterBlocksDelivery(gate)) {
+                  // (AVATAR-POSTY) La imagen nueva NO reemplaza a la
+                  // vigente: queda la original y el posteo va a revisión.
+                  db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id);
+                  editIssues.push({ kind: 'character_review', title: chatTitle(post) });
                 } else {
                   const cur = db.prepare('SELECT redo_left, media_type FROM posts WHERE id = ? AND user_id = ?').get(post.id, uid);
                   if (redoLeftOf(cur) === null || consumeRedo(uid, post.id)) { db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), post.id); imageDone = true; }
@@ -8228,7 +8255,7 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
   const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
     VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '',
-      String(idea.porque || '').slice(0, 500), weekKey || '', (trainingWheelsActive(uid) || genOut2.character === 'failed' || (genOut2.qaGate && genOut2.qaGate.outcome === 'bandeja')) ? 1 : 0,
+      String(idea.porque || '').slice(0, 500), weekKey || '', (trainingWheelsActive(uid) || characterBlocksDelivery(genOut2) || (genOut2.qaGate && genOut2.qaGate.outcome === 'bandeja')) ? 1 : 0,
       String(styleOut2.code || ''), String(styleOut2.reason || ''), String(styleOut2.intent || ''), String(regenProductRef || ''), String((content && content.hookId) || ''), promptForMedia(imagePath));
   stampPostDigest(r.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
   console.log(`[review] regenerado borrador ${r.lastInsertRowid} para usuario ${uid}`);
@@ -12733,6 +12760,7 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
         uid, idea: { titulo: topic, porque: angles[i] }, tipo, headline, refs, apiKey: key, resultOut: variantGate,
       });
       if (variantGate.qaGate && variantGate.qaGate.outcome === 'bandeja') throw new Error('variante en bandeja por QA gate');
+      if (characterBlocksDelivery(variantGate)) throw new Error('variante con protagonista no garantizado');
       return { image_path: imagePath, caption, hashtags: out.hashtags || '' };
     }));
     const variants = results.filter(r => r.status === 'fulfilled').map(r => r.value);
@@ -12759,6 +12787,7 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
             const variantGate2 = {};
             const imagePath2 = await conceptShotGenerateQueued({ uid, idea: { titulo: topic, porque: angles[vi] }, tipo, headline: headline2, refs, apiKey: key, resultOut: variantGate2 });
             if (variantGate2.qaGate && variantGate2.qaGate.outcome === 'bandeja') throw new Error('reemplazo en bandeja por QA gate');
+            if (characterBlocksDelivery(variantGate2)) throw new Error('reemplazo con protagonista no garantizado');
             variants[vi] = { image_path: imagePath2, caption: cap2, hashtags: out2.hashtags || '' };
             seen.set(k2, vi);
             replaced = true;
@@ -14255,10 +14284,10 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               continue;
             }
             // (v239) QA de personaje: identidad no garantizada ⇒ revisión.
-            if (genOut.character === 'failed') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: protagonista no garantizado — needs_review`); } catch (e) {} }
+            if (characterBlocksDelivery(genOut)) { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: protagonista no garantizado — needs_review`); } catch (e) {} }
             if (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: QA gate agotado — bandeja (needs_review)`); } catch (e) {} }
           } else {
-            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, ((genOut.character === 'failed' || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || idea._rgSinProducto) ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
+            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, ((characterBlocksDelivery(genOut) || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || idea._rgSinProducto) ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
             if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); cmRegistrarPosteo(insInfo.lastInsertRowid, idea, caption, { motivoCalidad }); }
           }
           } else {
@@ -18874,6 +18903,23 @@ async function characterGate({ uid, key, refAbs, resultB64, regen, kind }) {
   return { status: 'failed', b64: b64b, detalle: v2.detalle || v1.detalle };
 }
 
+// (AVATAR-POSTY · v239) Veredicto de personaje → la pieza NO se entrega
+// como buena. 'failed' = el protagonista es OTRO (o no aparece): bloquea
+// SIEMPRE. 'unverified' + cuenta de la casa = si no se pudo verificar la
+// identidad de Posty, tampoco se programa como buena (decisión 5/11: sin
+// verificar no hay entrega). 'unverified' fuera de la casa = se entrega
+// marcada como sin verificar (diseño original del gate: el cliente decide
+// en Bandeja). 'n/a' (sin protagonista con lock) y 'passed' no bloquean.
+// TODOS los llamadores de conceptShotGenerateQueued deben pasar por acá:
+// el 554 se programó con un robot que no es Posty porque chat-create
+// leía solo gate.qaGate y jamás miraba gate.character.
+function characterBlocksDelivery(gate) {
+  if (!gate) return false;
+  if (gate.character === 'failed') return true;
+  if (gate.character === 'unverified' && gate.characterHouse) return true;
+  return false;
+}
+
 // ---------- Chequeo automático de marca (Style Lock) ----------
 // Visión post-generación con gpt-4o (el usuario lo pidió explícito, no mini):
 // verifica paleta integrada, logo idéntico y línea visual. Nunca lanza:
@@ -19122,6 +19168,7 @@ function pregenIdeaImage(uid, idea) {
       resultOut: pregenGate,
     }).then(path => {
       if (pregenGate.qaGate && pregenGate.qaGate.outcome === 'bandeja') { PREGEN.set(key, { status: 'error', error: 'en revisión', at: Date.now() }); return; }
+      if (characterBlocksDelivery(pregenGate)) { PREGEN.set(key, { status: 'error', error: 'en revisión', at: Date.now() }); return; }
       PREGEN.set(key, { status: 'done', path, style: styleOut.code || null, styleName: styleOut.name || '', at: Date.now() });
     }).catch(err => {
       PREGEN.set(key, { status: 'error', error: String((err && err.message) || '').slice(0, 200), at: Date.now() });
@@ -19423,7 +19470,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   // si estuviera bien. Sin veredicto ⇒ 'unverified' (no bloquea, como
   // la fidelidad). Corre ANTES del QA de fidelidad: si el reintento de
   // personaje cambia la imagen, la fidelidad juzga la versión final.
-  if (resultOut) { resultOut.character = characterSent ? 'unverified' : 'n/a'; resultOut.characterDetail = ''; }
+  if (resultOut) { resultOut.character = characterSent ? 'unverified' : 'n/a'; resultOut.characterDetail = ''; resultOut.characterHouse = !!(characterSent && protagonist && protagonist.house); }
   if (characterSent) {
     try {
       const cGate = await characterGate({ uid, key, refAbs: protagonistRefAbs, resultB64: b64, kind: (protagonist && protagonist.kind) || 'character', regen: () => genExtra(refRoles.CHARACTER_REINFORCE) });
@@ -19443,14 +19490,21 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   // key, tope de IA, error del QA) → se entrega marcada 'unverified'.
   // En generación de cero este bloque no corre: el QA sigue siendo la
   // auditoría de siempre.
+  // (AVATAR-POSTY) Si DESPUÉS del QA de personaje otra puerta regenera
+  // la imagen (fidelidad o QA gate), el veredicto de personaje describía
+  // una imagen que ya no existe — así se entregó el 554 (QA gate: 2
+  // intentos; la imagen final nunca se verificó). El flag dispara la
+  // re-verificación de la imagen FINAL, más abajo.
+  let postCharacterRegen = false;
   if (resultOut) { resultOut.fidelity = clientBaseRef ? 'unverified' : 'n/a'; resultOut.fidelityDetail = ''; }
   if (clientBaseRef) {
     try {
       const gate = await fidelityGate({ uid, key, baseAbs: clientBaseRef, resultB64: b64, regen: () => genOnce(true) });
       if (resultOut) { resultOut.fidelity = gate.status; resultOut.fidelityDetail = gate.detalle || ''; }
-      if (gate.status === 'passed' && gate.b64) b64 = gate.b64;
-      else if (gate.status === 'unverified' && gate.b64) b64 = gate.b64;
+      if (gate.status === 'passed' && gate.b64) { b64 = gate.b64; postCharacterRegen = true; }
+      else if (gate.status === 'unverified' && gate.b64) { b64 = gate.b64; postCharacterRegen = true; }
       else if (gate.status === 'fallback') {
+        postCharacterRegen = true;
         try { b64 = fs.readFileSync(clientBaseRef).toString('base64'); }
         catch (e) { if (resultOut) resultOut.fidelity = 'unverified'; console.error('[qa-fidelidad] no se pudo leer la foto original para el fallback:', e.message); }
       }
@@ -19607,6 +19661,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   // resultOut.qaGate.
   let gateFinalPub = `/media/${imgName}`;
   let gateFinalPrompt = withStyle(prompt);
+  let qaGateAttempts = 1; // (AVATAR-POSTY) intentos del QA gate: >1 = la imagen final es otra
   try {
     const gate = await qaGate.runQaGate({
       basePrompt: withStyle(prompt),
@@ -19653,6 +19708,8 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     });
     gateFinalPub = gate.path;
     gateFinalPrompt = gate.finalPrompt;
+    qaGateAttempts = gate.attempts || 1;
+    if (qaGateAttempts > 1) postCharacterRegen = true;
     if (resultOut) resultOut.qaGate = { passed: gate.outcome === 'delivered', attempts: gate.attempts, outcome: gate.outcome, failedChecks: gate.failedChecks, reason: gate.reason };
     try {
       db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
@@ -19669,6 +19726,28 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     } catch (e) { console.error('[qa-gate] db:', e.message); }
     if (gate.outcome === 'bandeja') console.log(`[qa-gate] usuario ${uid}: pieza a bandeja tras ${gate.attempts} intentos (${gate.failedChecks.join(',')}) — needs_review en el llamador`);
   } catch (e) { console.error('[qa-gate]', e.message); throw e; }
+  // (AVATAR-POSTY) La imagen FINAL es la que se entrega: si después del
+  // QA de personaje otra puerta regeneró la imagen (fidelidad o QA gate),
+  // el veredicto de personaje describía una imagen que ya no existe.
+  // Una sola llamada de verificación sobre el archivo final, SIN
+  // regenerar: distinto ⇒ 'failed', sin veredicto ⇒ 'unverified'. El
+  // llamador decide con el veredicto FINAL (el flag avatar_protagonist
+  // de más abajo también lo lee ya corregido). Sin regen posterior el
+  // veredicto original se respeta y no se gasta ninguna llamada extra.
+  if (characterSent && postCharacterRegen && resultOut) {
+    try {
+      const finalAbs = path.join(MEDIA_DIR, path.basename(String(gateFinalPub || '')));
+      const finalB64 = fs.existsSync(finalAbs) ? fs.readFileSync(finalAbs).toString('base64') : null;
+      const refB64b = protagonistRefAbs ? fs.readFileSync(protagonistRefAbs).toString('base64') : null;
+      const vF = (finalB64 && refB64b) ? await qaCharacterB64(refB64b, finalB64, key, (protagonist && protagonist.kind) || 'character') : null;
+      if (!vF) { resultOut.character = 'unverified'; resultOut.characterDetail = 'QA de personaje sin veredicto sobre la imagen final'; }
+      else if (!vF.ok) {
+        resultOut.character = 'failed'; resultOut.characterDetail = vF.detalle || 'protagonista distinto en la imagen final';
+        try { retainQaFailedB64({ uid, gate: 'personaje', reason: vF.detalle || 'protagonista distinto en la imagen final', b64: finalB64 }); } catch (e) {}
+        console.log(`[qa-personaje] uid ${uid}: la imagen final cambió al protagonista (${vF.detalle || 'sin detalle'}) — la pieza queda marcada para revisión`);
+      } else { resultOut.character = 'passed'; resultOut.characterDetail = vF.detalle || ''; }
+    } catch (e) { console.error('[qa-personaje] re-verificación final falló (se entrega sin verificar):', e.message); }
+  }
   try { rememberPrompt(gateFinalPub, gateFinalPrompt); } catch (e) {}
   // (v330) POSTY NO SE REPITE: queda registrado si esta imagen nació con
   // el avatar/protagonista del negocio como sujeto (la referencia del
@@ -19739,6 +19818,7 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles, 
       });
       if (!p) continue;
       if (coverGate.qaGate && coverGate.qaGate.outcome === 'bandeja') continue; // intento fallido: el 2º intento cambia el prompt; si ambos fallan, sceneAbs null → needsReview (degradación honesta de siempre)
+      if (characterBlocksDelivery(coverGate)) continue; // (AVATAR-POSTY) protagonista no garantizado: mismo trato que bandeja
       const abs = absOf(p);
       if (qaScrollStopB64) {
         let b64 = null;
@@ -20192,8 +20272,10 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
     const imagePath = await conceptShotGenerateQueued({ uid, idea, tipo, headline, refs, style: String(style || '').trim() || null, usedStyles: Array.isArray(excludeStyles) ? excludeStyles.slice() : null, styleOut, resultOut: csGate });
     // (QA gate 2026-10-26) Preview on-demand: en bandeja NO se entrega la imagen fallida ni como preview.
     if (csGate.qaGate && csGate.qaGate.outcome === 'bandeja') { return res.json({ ok: false, qaGate: csGate.qaGate, error: 'La imagen no pasó la vara de calidad tras 3 intentos — quedó en revisión.' }); }
+    // (AVATAR-POSTY) Protagonista no garantizado: tampoco se entrega ni como preview.
+    if (characterBlocksDelivery(csGate)) { return res.json({ ok: false, character: csGate.character || null, error: 'El protagonista no quedó garantizado en esta imagen — quedó en revisión.' }); }
     console.log(`[concept-shot] generado para usuario ${uid} (tipo=${tipo || '-'}, refs=${(refs || []).length}, estilo=${styleOut.code || '-'})`);
-    res.json({ ok: true, path: imagePath, style: styleOut.code || null, styleName: styleOut.name || null, qaGate: csGate.qaGate || null });
+    res.json({ ok: true, path: imagePath, style: styleOut.code || null, styleName: styleOut.name || null, qaGate: csGate.qaGate || null, character: csGate.character || null });
   } catch (e) {
     console.error('[concept-shot]', e.message);
     try { logGenError('concept-shot', e); } catch (e2) {}
@@ -20418,10 +20500,14 @@ app.post('/api/drafts/:id/photo-style', requireAuth, requireTrialValid, express.
     if (redoLeftOf(post) !== null && redoLeftOf(post) <= 0) return redoExhausted(res);
     const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
     const styleOut = {};
+    const genOut = {};
     const newPath = await conceptShotGenerateQueued({
-      uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline, refs: [], style: st.code, styleOut,
+      uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline, refs: [], style: st.code, styleOut, resultOut: genOut,
     });
     if (!newPath) throw new Error('sin imagen');
+    // (AVATAR-POSTY) Protagonista no garantizado: no se cambia la imagen
+    // del posteo (puede estar programado) ni se consume el rehacer.
+    if (characterBlocksDelivery(genOut)) return res.json({ ok: false, error: 'El protagonista no quedó garantizado con este estilo — probá otro estilo.' });
     // Punto de compromiso (6A): la imagen nueva ya existe y pasó los
     // controles internos de conceptShot — recién acá se descuenta, atómico.
     if (redoLeftOf(post) !== null && !consumeRedo(uid, postId)) return redoExhausted(res);
@@ -29957,7 +30043,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v700';
+const BUILD_ID = '20261105-v701';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -30618,4 +30704,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery };
