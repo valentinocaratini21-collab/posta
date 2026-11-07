@@ -1204,6 +1204,7 @@ function anaBoostRecMotivo(motivo, monto, cobroId) {
 function anaBilleteraHTML() {
   const d = anaBilleteraDatos || {};
   const mejor = d.mejor || null;
+  const hoy = d.hoy || null;
   const bil = d.billetera || {};
   const eleg = Array.isArray(d.elegibles) ? d.elegibles : [];
   const saldoCents = Number(bil.balance_cents || 0);
@@ -1211,29 +1212,18 @@ function anaBilleteraHTML() {
   const saldoUSD = moneda === 'USD' ? Math.floor(saldoCents / 100) : 0;
   const selId = d.selId || 0;
   const selMonto = d.selMonto || 20;
-  // Pre-estados ANTES del toque: el bloque nunca ofrece un botón que el
-  // servidor va a rechazar. ads_permiso false = falta el permiso
-  // ads_management (bloqueado claro, sin botones); null = no configurado
-  // o no se pudo verificar (nota honesta, sin botones); true = todo
-  // disponible. (Heredado de IMPULSAR-UN-CLIC.)
-  if (!d.boostHabilitado) {
-    return `<div class="ana-boostrec">
-    <p class="ana-boostrec-sec">${anaT('Impulsar', 'Boost')}</p>
-    <p class="ana-boostrec-nota">${anaT('Impulsar todavía no está habilitado en tu cuenta.', "Boosting isn't enabled on your account yet.")}</p>
-  </div>`;
-  }
-  if (d.ads_permiso === false) {
-    return `<div class="ana-boostrec">
-    <p class="ana-boostrec-sec">${anaT('Impulsar', 'Boost')}</p>
-    <p class="ana-boostrec-nota">${anaT('Todavía no podemos crear anuncios en Meta para tu cuenta: falta el permiso de publicidad (ads_management). Cuando esté aprobado, un toque y sale.', "We can't create Meta ads for your account yet: the advertising permission (ads_management) is missing. Once it's approved, one tap and it's live.")}</p>
-  </div>`;
-  }
-  if (d.ads_permiso === null || d.ads_permiso === undefined) {
-    return `<div class="ana-boostrec">
-    <p class="ana-boostrec-sec">${anaT('Impulsar', 'Boost')}</p>
-    <p class="ana-boostrec-nota">${anaT('Impulsar todavía no está habilitado en tu cuenta.', "Boosting isn't enabled on your account yet.")}</p>
-  </div>`;
-  }
+  // (LOTE ADS-PANTALLA) La compuerta bloquea GASTAR, no mostrar: la
+  // pantalla se ve igual en todos los estados y solo cambian el botón y
+  // la nota honesta. Habilitado = flag + permiso, los dos en true
+  // explícito; cualquier duda (null/undefined) es bloqueado (fail-closed:
+  // nunca se ofrece un botón que el servidor va a rechazar).
+  // Orden del motivo (el del mock aprobado): primero lo que el cliente
+  // puede entender — sin permiso, o Meta sin conectar — y la flag
+  // (interruptor interno) solo cuando Meta ya está lista pero la flag
+  // está apagada. Hoy (flag apagada + Meta sin conectar) la nota es la
+  // de Meta, como en el mock.
+  const habilitado = d.boostHabilitado === true && d.ads_permiso === true;
+  const motivoBloqueo = d.ads_permiso === false ? 'ads_sin_permiso' : (d.ads_permiso !== true ? 'ads_no_configurado' : 'boost_deshabilitado');
   let recHTML = '';
   if (mejor) {
     const partes = anaBoostRecPartes(mejor);
@@ -1245,6 +1235,20 @@ function anaBilleteraHTML() {
     recHTML = `<p class="ana-boostrec-t">${anaT('Tu mejor posteo de la semana', 'Your best post this week')}</p>
     <div class="ana-boostrec-post">${img}<div>${cap}<p class="ana-boostrec-why">${esc(porque)}</p></div></div>`;
   }
+  // (LOTE ADS-PANTALLA) Sin mejor de la semana, el posteo de hoy es el
+  // recomendado: siempre hay un posteo para impulsar. Es el programado
+  // de hoy (todavía no publicado): se muestra, no se puede elegir para
+  // gastar hasta que salga — el picker pre-selecciona el publicado más
+  // reciente.
+  let hoyHTML = '';
+  if (!mejor && hoy) {
+    const img = hoy.image_path ? `<img src="${esc(hoy.image_path)}" alt="" class="ana-boostrec-img">` : '';
+    const cap = hoy.caption ? `<p class="ana-boostrec-cap">${esc(hoy.caption)}</p>` : '';
+    const chip = hoy.hora ? `<span style="display:inline-block;margin-top:4px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${anaT('Sale hoy · ' + hoy.hora, 'Goes live today · ' + hoy.hora)}</span>` : '';
+    hoyHTML = `<p class="ana-boostrec-t">${anaT('El posteo de hoy', "Today's post")}</p>
+    <div class="ana-boostrec-post">${img}<div>${cap}${chip}</div></div>
+    <p class="ana-boostrec-nota">${anaT('En cuanto se publique, queda listo para impulsar.', "As soon as it's published, it's ready to boost.")}</p>`;
+  }
   const saldoTxt = moneda === 'USD'
     ? anaT('Tu billetera de ads: $' + saldoUSD, 'Your ads wallet: $' + saldoUSD)
     : anaT('Tu billetera vieja tiene $' + Math.floor(saldoCents / 100) + ' en pesos. La primera carga en dólares la pasa a USD.', 'Your old wallet has $' + Math.floor(saldoCents / 100) + ' in pesos. The first dollar top-up switches it to USD.');
@@ -1255,17 +1259,28 @@ function anaBilleteraHTML() {
   // Picker: recomendado primero, 5 más recientes como máximo. Sin
   // elegibles, la nota honesta (el cliente igual puede cargar plata).
   // (Los elegibles traen `post_id`, no `id`: así los devuelve el módulo.)
+  // (LOTE ADS-PANTALLA) El posteo elegido por el buscador, si no está
+  // entre los 5, se agrega como fila extra seleccionada: la elección
+  // nunca se pierde de vista. Sin mejor, la primera fila lleva el chip
+  // «el más reciente».
   const mejorId = mejor ? mejor.post_id : 0;
   const lista = eleg.slice().sort((a, b) => ((b.post_id === mejorId) ? 1 : 0) - ((a.post_id === mejorId) ? 1 : 0)).slice(0, 5);
+  const selPost = (d.selPost && Number(d.selPost.post_id) === Number(selId)) ? d.selPost : null;
+  const listaIds = new Set(lista.map((e) => e.post_id));
+  const extra = (selPost && !listaIds.has(selPost.post_id)) ? [selPost] : [];
   const pickerHTML = eleg.length
-    ? `<p class="ana-boostrec-monto-t" style="margin:12px 0 4px">${anaT('¿A cuál le metemos ads?', 'Which post gets the ads?')}</p>` + lista.map((e) => {
-      const sel = e.post_id === selId;
-      const rec = mejor && e.post_id === mejor.post_id;
-      const cap = esc(String(e.caption || 'Posteo sin caption').slice(0, 120));
-      const img = e.image_path ? `<img src="${esc(e.image_path)}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:10px;flex:0 0 auto">` : '';
-      return `<button type="button" onclick="anaBilleteraElegirPosteo(${e.post_id}, this)" style="display:flex;gap:10px;align-items:center;width:100%;text-align:left;margin:6px 0;padding:8px;border:2px solid ${sel ? '#FEC14D' : '#DCEFFF'};border-radius:14px;background:${sel ? '#FFF8E1' : '#fff'};cursor:pointer">${img}<span style="flex:1;min-width:0"><span style="display:block;font-size:13.5px;font-weight:700;color:#0A1E33;line-height:1.35">${cap}</span>${rec ? `<span style="display:inline-block;margin-top:4px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${anaT('✦ el que más rindió', '✦ top performer')}</span>` : ''}</span>${sel ? '<span style="font-size:18px;color:#1FA855">✓</span>' : ''}</button>`;
-    }).join('') + (eleg.length > 5 ? `<p class="ana-boostrec-nota">${anaT('Mostramos los 5 más recientes.', 'Showing the 5 most recent.')}</p>` : '')
+    ? `<p class="ana-boostrec-monto-t" style="margin:12px 0 4px">${anaT('¿A cuál le metemos ads?', 'Which post gets the ads?')}</p>` + lista.map((e, i) => anaBilleteraPickerRow(e, e.post_id === selId, !!(mejor && e.post_id === mejor.post_id), !mejor && i === 0)).join('') + extra.map((e) => anaBilleteraPickerRow(e, true, false, false)).join('') + (eleg.length > 5 ? `<p class="ana-boostrec-nota">${anaT('Mostramos los 5 más recientes.', 'Showing the 5 most recent.')}</p>` : '')
     : `<p class="ana-boostrec-nota" style="margin-top:10px">${anaT('Todavía no tenés posteos publicados para impulsar.', "You don't have published posts to boost yet.")}</p>`;
+  // (LOTE ADS-PANTALLA) Buscador: encontrar CUALQUIER posteo del feed
+  // por una palabra de su caption, sin límite de edad. La búsqueda solo
+  // repinta sus resultados (nunca el bloque entero: el input no pierde
+  // el foco mientras se escribe).
+  const busq = d.busq || { q: '', resultados: [], buscando: false, hecho: false };
+  const busqHTML = `<div style="margin-top:12px">
+    <p class="ana-boostrec-monto-t">${anaT('¿Buscás otro posteo?', 'Looking for another post?')}</p>
+    <input type="search" id="anaBoostRecBusq" value="${esc(busq.q || '')}" placeholder="${esc(anaT('Escribí una palabra del posteo…', 'Type a word from the post…'))}" oninput="anaBilleteraBuscar(this.value)" autocomplete="off" style="width:100%;padding:10px 12px;border:2px solid #DCEFFF;border-radius:12px;font-size:14px;color:#0A1E33;background:#fff;box-sizing:border-box">
+    <div id="anaBoostRecBusqRes">${anaBilleteraBusqResHTML()}</div>
+  </div>`;
   const montoHTML = `<div class="ana-boostrec-montos" style="margin-top:12px">
       <p class="ana-boostrec-monto-t">${anaT('¿Cuánto le metemos?', 'How much?')}</p>
       ${[20, 50, 100].map((x) => `<button type="button" class="btn ${x === selMonto ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="anaBilleteraElegirMonto(${x}, this)">$${x}</button>`).join(' ')}
@@ -1277,28 +1292,123 @@ function anaBilleteraHTML() {
   const notaConv = d.conversion_pendiente === true
     ? `<p class="ana-boostrec-nota" style="margin-top:8px">${anaT('Queda armado por 7 días. Todavía no se puede gastar porque falta definir la conversión USD→ARS. No se gasta nada todavía.', "Armed for 7 days. It can't be spent yet because the USD→ARS conversion isn't set. Nothing is spent yet.")}</p>`
     : '';
-  const impulsarHTML = eleg.length
-    ? `<button type="button" class="btn btn-primary" style="width:100%;margin-top:12px" onclick="anaBilleteraImpulsar(this)" ${puede ? '' : 'disabled'}>${anaT('Meter ads por 7 días · $' + selMonto, 'Run ads for 7 days · $' + selMonto)}</button>${faltaTxt}${notaConv}`
-    : '';
+  // (LOTE ADS-PANTALLA) Botón de acción según el estado. Habilitado: el
+  // de siempre («Meter ads por 7 días»), que gasta de verdad. Bloqueado:
+  // el botón del chat («Quiero impulsar este posteo»): abre el chat con
+  // Posty con el posteo anclado y el mensaje ya escrito — no gasta ni
+  // promete nada, la intención queda en la conversación. Sin posteo
+  // elegido no hay botón (no hay nada que anclar); la nota honesta
+  // queda igual.
+  const notaBloqueo = motivoBloqueo === 'boost_deshabilitado'
+    ? anaT('El impulso todavía no está habilitado en tu cuenta. Posty lo está dejando listo y te avisa. No se gastó nada.', "Boosting isn't enabled on your account yet. Posty is getting it ready and will let you know. Nothing was spent.")
+    : motivoBloqueo === 'ads_sin_permiso'
+      ? anaT('Todavía no podemos crear anuncios en Meta para tu cuenta: falta el permiso de publicidad (ads_management). Posty te avisa en cuanto esté aprobado. No se gastó nada.', "We can't create Meta ads for your account yet: the advertising permission (ads_management) is missing. Posty will let you know once it's approved. Nothing was spent.")
+      : anaT('Todavía no se pueden crear anuncios: falta conectar la cuenta publicitaria de Meta. Posty te avisa en cuanto esté lista. No se gastó nada.', "Ads can't be created yet: the Meta ad account still needs to be connected. Posty will let you know as soon as it's ready. Nothing was spent.");
+  const tienePosteo = selId > 0 && (eleg.length > 0 || !!selPost);
+  const accionHTML = habilitado
+    ? (eleg.length
+      ? `<button type="button" class="btn btn-primary" style="width:100%;margin-top:12px" onclick="anaBilleteraImpulsar(this)" ${puede ? '' : 'disabled'}>${anaT('Meter ads por 7 días · $' + selMonto, 'Run ads for 7 days · $' + selMonto)}</button>${faltaTxt}${notaConv}`
+      : '')
+    : `${tienePosteo ? `<button type="button" class="btn btn-primary" style="width:100%;margin-top:12px" onclick="anaBilleteraQuieroImpulsar(this)">💬 ${anaT('Quiero impulsar este posteo', 'I want to boost this post')}</button>` : ''}<p class="ana-boostrec-nota" style="margin-top:8px">${notaBloqueo}</p>`;
   return `<div class="ana-boostrec">
     <p class="ana-boostrec-sec">${anaT('Impulsar', 'Boost')}</p>
     <p class="ana-boostrec-saludo">${anaT('¡Hola! Te traigo una idea cortita:', 'Hi! A quick idea for you:')}</p>
-    ${recHTML}
     <p class="ana-boostrec-nota" style="margin-top:10px;font-weight:800;color:#0A1E33">${saldoTxt}</p>
     ${cargarHTML}
+    ${recHTML}
+    ${hoyHTML}
     ${pickerHTML}
+    ${busqHTML}
     ${montoHTML}
-    ${impulsarHTML}
+    ${accionHTML}
     <div class="ana-boostrec-msg" id="anaBoostRecMsg"></div>
     <p class="ana-boostrec-despedida">— Posty</p>
   </div>`;
 }
 
+// Fila del picker de posteos (recomendado, recientes y resultados del
+// buscador comparten la misma fila: miniatura real + caption + chip).
+function anaBilleteraPickerRow(e, sel, rec, masReciente) {
+  const cap = esc(String(e.caption || 'Posteo sin caption').slice(0, 120));
+  const img = e.image_path ? `<img src="${esc(e.image_path)}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:10px;flex:0 0 auto">` : '';
+  const chip = rec
+    ? `<span style="display:inline-block;margin-top:4px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${anaT('✦ el que más rindió', '✦ top performer')}</span>`
+    : (masReciente ? `<span style="display:inline-block;margin-top:4px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${anaT('✦ el más reciente', '✦ most recent')}</span>` : '');
+  return `<button type="button" onclick="anaBilleteraElegirPosteo(${e.post_id}, this)" style="display:flex;gap:10px;align-items:center;width:100%;text-align:left;margin:6px 0;padding:8px;border:2px solid ${sel ? '#FEC14D' : '#DCEFFF'};border-radius:14px;background:${sel ? '#FFF8E1' : '#fff'};cursor:pointer">${img}<span style="flex:1;min-width:0"><span style="display:block;font-size:13.5px;font-weight:700;color:#0A1E33;line-height:1.35">${cap}</span>${chip}</span>${sel ? '<span style="font-size:18px;color:#1FA855">✓</span>' : ''}</button>`;
+}
+
+// Resultados del buscador: solo repintan su contenedor (nunca el bloque
+// entero, para no robarle el foco al input mientras se escribe).
+function anaBilleteraBusqResHTML() {
+  const d = anaBilleteraDatos || {};
+  const b = d.busq || {};
+  const res = Array.isArray(b.resultados) ? b.resultados : [];
+  if (b.buscando) return `<p class="ana-boostrec-nota">${anaT('Buscando…', 'Searching…')}</p>`;
+  if ((b.q || '').trim().length >= 2 && b.hecho && !res.length) return `<p class="ana-boostrec-nota">${anaT('No encontré ningún posteo con esa palabra.', 'No post found with that word.')}</p>`;
+  if (!res.length) return '';
+  return res.map((e) => anaBilleteraPickerRow(e, e.post_id === (d.selId || 0), !!(d.mejor && e.post_id === d.mejor.post_id), false)).join('');
+}
+
+var ANA_BUSQ_TIMER = null;
+function anaBilleteraBuscar(q) {
+  const d = anaBilleteraDatos;
+  if (!d) return;
+  if (!d.busq) d.busq = { q: '', resultados: [], buscando: false, hecho: false };
+  d.busq.q = String(q || '');
+  const qq = d.busq.q.trim();
+  if (ANA_BUSQ_TIMER) { clearTimeout(ANA_BUSQ_TIMER); ANA_BUSQ_TIMER = null; }
+  const pintarRes = () => {
+    const box = document.getElementById('anaBoostRecBusqRes');
+    if (box) box.innerHTML = anaBilleteraBusqResHTML();
+  };
+  if (qq.length < 2) { d.busq.resultados = []; d.busq.buscando = false; d.busq.hecho = false; pintarRes(); return; }
+  d.busq.buscando = true;
+  pintarRes();
+  const qEnviada = qq;
+  ANA_BUSQ_TIMER = setTimeout(async () => {
+    let j = null;
+    try { j = await api.get('/api/ads/billetera/buscar?q=' + encodeURIComponent(qEnviada)); } catch (e) { j = null; }
+    const dd = anaBilleteraDatos;
+    if (!dd || !dd.busq || dd.busq.q.trim() !== qEnviada) return; // ya cambió la búsqueda
+    dd.busq.buscando = false;
+    dd.busq.hecho = true;
+    dd.busq.resultados = (j && j.ok && Array.isArray(j.resultados)) ? j.resultados : [];
+    const box = document.getElementById('anaBoostRecBusqRes');
+    if (box) box.innerHTML = anaBilleteraBusqResHTML();
+  }, 300);
+}
+
+// (LOTE ADS-PANTALLA) Estado bloqueado: el botón no gasta ni promete
+// nada — abre el chat con Posty con el posteo anclado y el mensaje ya
+// escrito. Mismo camino que «Pedir un cambio» (HF_ASK_TEXT_PENDING +
+// hfAskChange + hfDeliverAskText): la intención queda en la
+// conversación, donde el conserje la ve y la sigue.
+function anaBilleteraQuieroImpulsar(btn) {
+  const d = anaBilleteraDatos;
+  if (!d) return;
+  const post = d.selPost || ((d.elegibles || []).find((e) => e.post_id === d.selId) || null);
+  if (!post || !post.post_id) return;
+  const monto = d.selMonto || 20;
+  const texto = anaT('Quiero impulsar este posteo con $' + monto + ' por 7 días', 'I want to boost this post with $' + monto + ' for 7 days');
+  const anchorPost = { id: post.post_id, image_path: post.image_path || '', caption: post.caption || '', status: 'published', media_type: '' };
+  try { HF_ASK_TEXT_PENDING = texto; } catch (e) {}
+  try { if (typeof hfAskChange === 'function') hfAskChange(anchorPost); } catch (e) {}
+  try { if (typeof hfDeliverAskText === 'function') hfDeliverAskText(); } catch (e) {}
+}
+
 // Selección en el picker / monto: re-render desde los datos cacheados
 // (sin otro viaje al servidor; la elección es local hasta el toque).
+// (LOTE ADS-PANTALLA) La elección guarda también el posteo completo
+// (selPost): el elegido por el buscador puede no estar entre los 5
+// recientes y tiene que seguir visible como fila seleccionada.
 function anaBilleteraElegirPosteo(id, btn) {
   if (!anaBilleteraDatos) return;
-  anaBilleteraDatos.selId = Number(id) || 0;
+  const d = anaBilleteraDatos;
+  const nid = Number(id) || 0;
+  d.selId = nid;
+  const enEleg = (d.elegibles || []).find((e) => e.post_id === nid) || null;
+  const enBusq = ((d.busq && d.busq.resultados) || []).find((e) => e.post_id === nid) || null;
+  d.selPost = enEleg || enBusq || ((d.selPost && d.selPost.post_id === nid) ? d.selPost : null);
   anaBilleteraPintar();
 }
 function anaBilleteraElegirMonto(monto, btn) {
@@ -1341,6 +1451,10 @@ async function anaBilleteraImpulsar(btn) {
   if (btn) btn.disabled = false;
   if (j && j.ok) {
     const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
+    // (LOTE ADS-PANTALLA) El posteo recién impulsado ya no se puede
+    // volver a impulsar: sale de la selección antes de recargar, para
+    // que el picker no lo siga mostrando como elegido.
+    if (anaBilleteraDatos) { anaBilleteraDatos.selId = 0; anaBilleteraDatos.selPost = null; }
     await anaBoostRecLoad(true);
     await anaBilleteraTabLoad();
     const msg2 = document.getElementById('anaBoostRecMsg');
@@ -1355,11 +1469,12 @@ async function anaBilleteraImpulsar(btn) {
 // y por el tab Ads: mejor posteo, billetera y elegibles. Ninguna tira si
 // falla: cada una cae a null y el constructor decide qué mostrar.
 async function anaBilleteraFetchDatos() {
-  let d = null, bil = null, elig = null;
+  let d = null, bil = null, elig = null, hoy = null;
   try { d = await api.get('/api/estrategia/mejor-posteo'); } catch (e) { d = null; }
   try { bil = await api.get('/api/ads/billetera'); } catch (e) { bil = null; }
   try { elig = await api.get('/api/ads/billetera/elegibles'); } catch (e) { elig = null; }
-  return { d, bil, elig };
+  try { hoy = await api.get('/api/ads/billetera/hoy'); } catch (e) { hoy = null; }
+  return { d, bil, elig, hoy };
 }
 
 // Constructor de anaBilleteraDatos desde las 3 lecturas. El recomendado va
@@ -1373,8 +1488,10 @@ function anaBilleteraConstruirDatos(f, prevSel) {
   const d = f && f.d, bil = f && f.bil, elig = f && f.elig;
   const tieneMejor = !!(d && d.ok && d.mejor);
   const elegibles = (elig && elig.ok && Array.isArray(elig.elegibles)) ? elig.elegibles : [];
+  const hoy = (f && f.hoy && f.hoy.ok && f.hoy.hoy) ? f.hoy.hoy : null;
   const datos = {
     mejor: tieneMejor ? d.mejor : null,
+    hoy,
     boostHabilitado: (d && d.boostHabilitado !== undefined) ? d.boostHabilitado : (bil && bil.ok ? bil.boostHabilitado : undefined),
     ads_permiso: (bil && bil.ok && bil.ads_permiso !== undefined) ? bil.ads_permiso : (d ? d.ads_permiso : undefined),
     conversion_pendiente: (d && d.conversion_pendiente !== undefined) ? d.conversion_pendiente : (bil && bil.ok ? bil.conversion_pendiente : undefined),
@@ -1383,10 +1500,22 @@ function anaBilleteraConstruirDatos(f, prevSel) {
     movimientos: (bil && bil.ok && Array.isArray(bil.movimientos)) ? bil.movimientos : [],
     boosts: [],
     selId: 0, selMonto: 20,
+    selPost: null,
+    busq: { q: '', resultados: [], buscando: false, hecho: false },
   };
   const ids = new Set(elegibles.map((e) => e.post_id));
   const defecto = tieneMejor ? d.mejor.post_id : (elegibles[0] ? elegibles[0].post_id : 0);
-  datos.selId = (prevSel && prevSel.selId && ids.has(prevSel.selId)) ? prevSel.selId : defecto;
+  // (LOTE ADS-PANTALLA) La selección sobrevive a la recarga si el posteo
+  // sigue elegible; si venía del buscador (fuera de los 20), sobrevive
+  // con su objeto guardado (selPost) y se vuelve a mostrar como fila.
+  const prevPost = (prevSel && prevSel.selPost && Number(prevSel.selPost.post_id) === Number(prevSel.selId)) ? prevSel.selPost : null;
+  if (prevSel && prevSel.selId && (ids.has(prevSel.selId) || prevPost)) {
+    datos.selId = prevSel.selId;
+    datos.selPost = elegibles.find((e) => e.post_id === prevSel.selId) || prevPost;
+  } else {
+    datos.selId = defecto;
+    datos.selPost = elegibles.find((e) => e.post_id === defecto) || null;
+  }
   datos.selMonto = (prevSel && prevSel.selMonto) ? prevSel.selMonto : 20;
   return datos;
 }
@@ -1394,7 +1523,7 @@ function anaBilleteraConstruirDatos(f, prevSel) {
 async function anaBoostRecLoad(keepSel) {
   const box = document.getElementById('anaBoostRec');
   if (!box || anaPastMode) return;
-  const prevSel = keepSel && anaBilleteraDatos ? { selId: anaBilleteraDatos.selId, selMonto: anaBilleteraDatos.selMonto } : null;
+  const prevSel = keepSel && anaBilleteraDatos ? { selId: anaBilleteraDatos.selId, selMonto: anaBilleteraDatos.selMonto, selPost: anaBilleteraDatos.selPost || null } : null;
   const f = await anaBilleteraFetchDatos();
   if (document.getElementById('anaBoostRec') !== box) return;
   if (!f.d || !f.d.ok) { box.innerHTML = ''; return; }
@@ -1412,9 +1541,9 @@ async function anaBoostRecLoad(keepSel) {
 // Si las 3 lecturas fallan, devuelve null y adsView muestra la nota
 // honesta (nunca el bloque de «no habilitado», que sería mentira).
 async function anaBilleteraTabDatos() {
-  const prevSel = anaBilleteraDatos ? { selId: anaBilleteraDatos.selId, selMonto: anaBilleteraDatos.selMonto } : null;
+  const prevSel = anaBilleteraDatos ? { selId: anaBilleteraDatos.selId, selMonto: anaBilleteraDatos.selMonto, selPost: anaBilleteraDatos.selPost || null } : null;
   const f = await anaBilleteraFetchDatos();
-  if (!f.d && !f.bil && !f.elig) return null;
+  if (!f.d && !f.bil && !f.elig && !f.hoy) return null;
   let boosts = null;
   try { boosts = await api.get('/api/ads/boosts'); } catch (e) { boosts = null; }
   const datos = anaBilleteraConstruirDatos(f, prevSel);

@@ -124,7 +124,7 @@ const cnt = (s, sub) => (s.split(sub).length - 1);
     anaT: (es) => es,
     esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') };
   vm.createContext(sb);
-  for (const n of ['anaBoostRecPartes', 'anaBoostRecMotivo', 'anaBilleteraHTML']) {
+  for (const n of ['anaBoostRecPartes', 'anaBoostRecMotivo', 'anaBilleteraHTML', 'anaBilleteraPickerRow', 'anaBilleteraBusqResHTML']) {
     const c = extractFn(chunk, n);
     t(c.length > 0, 'existe ' + n);
     if (c) vm.runInContext(c.replace('function ' + n, 'globalThis.' + n + ' = function'), sb);
@@ -150,14 +150,21 @@ const cnt = (s, sub) => (s.split(sub).length - 1);
     t(hPobre.includes('Te faltan $50') && hPobre.includes('disabled'), 'saldo insuficiente: botón deshabilitado + dice cuánto falta (antes del toque)');
     const hConv = render({ ...datosBase(), conversion_pendiente: true });
     t(hConv.includes('$20') && hConv.includes('conversión USD→ARS'), 'sin tasa: botones + nota previa de conversión pendiente (sin sorpresa al tocar)');
+    // (LOTE ADS-PANTALLA · 6/11 · SUPERSEDE los 4 asserts de abajo) El
+    // mock v1 APROBADO por Valentino cambió el diseño: en estado
+    // bloqueado la pantalla YA NO es una caja muerta — billetera,
+    // cargar y montos se ven SIEMPRE, y lo que desaparece es solo el
+    // botón de GASTAR («Meter ads por 7 días»), reemplazado por el botón
+    // del chat («Quiero impulsar este posteo»). Fail-closed sigue vivo:
+    // sin permiso/config/flag nunca se ofrece gastar, solo hablar.
     const hSinPerm = render({ ...datosBase(), ads_permiso: false });
-    t(!hSinPerm.includes('$20') && !hSinPerm.includes('Cargar plata') && hSinPerm.includes('ads_management') && hSinPerm.includes('permiso de publicidad'), 'sin permiso: SIN botones de cargar ni impulsar, nota bloqueada clara (qué falta)');
+    t(hSinPerm.includes('$20') && hSinPerm.includes('Cargar plata') && hSinPerm.includes('ads_management') && hSinPerm.includes('permiso de publicidad') && !hSinPerm.includes('Meter ads por 7 días') && hSinPerm.includes('Quiero impulsar este posteo'), 'sin permiso: billetera + cargar visibles, nota clara (qué falta), sin botón de gastar, con botón del chat');
     const hNull = render({ ...datosBase(), ads_permiso: null });
-    t(!hNull.includes('$20') && hNull.includes('todavía no está habilitado'), 'permiso no verificable: sin botones muertos, nota honesta');
+    t(hNull.includes('$20') && hNull.includes('falta conectar la cuenta publicitaria de Meta') && !hNull.includes('Meter ads por 7 días'), 'permiso no verificable: billetera visible, nota honesta (Meta sin conectar), sin botón de gastar');
     const hOff = render({ ...datosBase(), boostHabilitado: false });
-    t(!hOff.includes('$20') && hOff.includes('todavía no está habilitado'), 'flag off: sin botones, nota honesta');
+    t(hOff.includes('$20') && hOff.includes('todavía no está habilitado') && !hOff.includes('Meter ads por 7 días'), 'flag off: billetera visible, nota honesta, sin botón de gastar');
     const hViejo = render({ ...datosBase(), ads_permiso: undefined });
-    t(!hViejo.includes('$20'), 'respuesta sin ads_permiso (vieja): sin botones (fail-closed: sin estado de permiso no se ofrece gastar)');
+    t(hViejo.includes('$20') && hViejo.includes('falta conectar la cuenta publicitaria de Meta') && !hViejo.includes('Meter ads por 7 días'), 'respuesta sin ads_permiso (vieja): billetera visible, nota honesta, sin botón de gastar (fail-closed: no se ofrece gastar)');
     const hSinEleg = render({ ...datosBase(), elegibles: [] });
     t(hSinEleg.includes('Todavía no tenés posteos publicados') && hSinEleg.includes('Cargar plata:'), 'sin elegibles: nota honesta, pero cargar sigue disponible');
     const hArs = render({ ...datosBase(), billetera: { balance_cents: 30000, currency: 'ARS' } });

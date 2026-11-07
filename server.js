@@ -9024,15 +9024,18 @@ app.post('/api/ads/billetera/cargar', requireAuth, express.json(), async (req, r
 // que Meta puede pautar), sin los que ya tienen pauta activa o pendiente.
 // El mejor posteo de la semana (el de la carta) va marcado como
 // recomendado: sugerencia, no imposición — elige el cliente.
-// Sin elegibilidad completa (sin IG, sin Página autorizada o sin Meta),
-// la lista va vacía con el motivo honesto (igual que /api/ads/recommendations).
+// (LOTE ADS-PANTALLA · 6/11) La compuerta bloquea GASTAR, no mostrar: la
+// lista NO pasa por adsReadiness — con Meta sin configurar igual se ven
+// los posteos (si no, la pantalla no tendría nada que impulsar y la regla
+// «siempre hay un posteo» no se cumple). El gate sigue vivo donde importa:
+// /impulsar lo exige antes de gastar, y ads_ready + motivo viajan igual
+// para que el cliente sepa qué falta. Sin filtro de antigüedad: el picker
+// muestra los 20 publicados más recientes de cualquier edad (el impulso
+// del servidor tampoco pide edad) y el buscador cubre el resto del feed.
 app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
   try {
     const uid = req.session.userId;
     const gate = await adsReadiness(uid).catch(() => ({ ready: false, code: 'page_not_authorized' }));
-    if (!gate.ready) {
-      return res.json({ ok: true, elegibles: [], ads_ready: false, motivo: gate.code || 'page_not_authorized' });
-    }
     let rows = [];
     try {
       rows = db.prepare(`
@@ -9042,15 +9045,63 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
         FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
         WHERE p.user_id = ? AND p.status = 'published'
           AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
-          AND datetime(p.published_at) >= datetime('now', '-60 days')
         ORDER BY p.published_at DESC LIMIT 20`).all(uid);
     } catch (e) { rows = []; }
     const wk = mondayKeyOf(tzToday(userTz(uid)));
     const mejor = elegirMejorPosteoSemana(rows.filter((r) => r.week_key === wk));
     let impulsados = new Set();
     try { impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id)); } catch (e) { impulsados = new Set(); }
-    res.json({ ok: true, ads_ready: true, elegibles: adsBilletera.elegiblesParaAds(rows, mejor ? mejor.id : null, impulsados) });
+    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? {} : { motivo: gate.code || 'page_not_authorized' }), elegibles: adsBilletera.elegiblesParaAds(rows, mejor ? mejor.id : null, impulsados) });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron cargar tus posteos' }); }
+});
+
+// Buscador del picker (LOTE ADS-PANTALLA · 6/11): encontrar CUALQUIER
+// posteo del feed por una palabra de su caption, sin límite de edad.
+// Solo lectura de posteos publicados con ig_media_id (los únicos que
+// Meta puede pautar), sin los que ya tienen pauta activa o pendiente.
+// q < 2 caracteres → lista vacía (sin error, sin viaje a la DB).
+// La compuerta NO aplica acá: buscar no gasta, solo muestra.
+app.get('/api/ads/billetera/buscar', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) return res.json({ ok: true, resultados: [] });
+    const escLike = q.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    let rows = [];
+    try {
+      rows = db.prepare(`
+        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key,
+               COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
+               COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
+        FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
+        WHERE p.user_id = ? AND p.status = 'published'
+          AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
+          AND p.caption LIKE '%' || ? || '%' ESCAPE '\\'
+        ORDER BY p.published_at DESC LIMIT 20`).all(uid, escLike);
+    } catch (e) { rows = []; }
+    let impulsados = new Set();
+    try { impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id)); } catch (e) { impulsados = new Set(); }
+    res.json({ ok: true, resultados: adsBilletera.elegiblesParaAds(rows, null, impulsados) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo buscar tus posteos' }); }
+});
+
+// Posteo de hoy para la pantalla Ads (LOTE ADS-PANTALLA · 6/11): el
+// programado de hoy, solo lectura. NUNCA genera ni rearma nada: si hoy
+// no hay nada programado, hoy es null y la pantalla lo dice con
+// honestidad (la generación vive solo en /api/ritual/hoy). La hora sale
+// formateada en la zona y el idioma del cliente.
+app.get('/api/ads/billetera/hoy', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const tz = userTz(uid);
+    let rec = null;
+    try {
+      const sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+      rec = morningPostPush.pickTodayPost(sched, tz, new Date());
+    } catch (e) { rec = null; }
+    if (!rec) return res.json({ ok: true, hoy: null });
+    res.json({ ok: true, hoy: { post_id: rec.id, caption: String(rec.caption || '').slice(0, 90), image_path: rec.image_path || '', scheduled_at: rec.scheduled_at || '', hora: horaSalidaEnTz(rec.scheduled_at, tz, ritualLang(uid)) } });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar el posteo de hoy' }); }
 });
 
 // Impulsar con saldo: el cliente elige posteo + monto; Posty hace el resto.
@@ -31349,7 +31400,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v749';
+const BUILD_ID = '20261105-v750';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
