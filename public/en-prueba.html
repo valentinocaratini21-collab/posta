@@ -4655,7 +4655,12 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     const cat = (input && input.category) || '';
     const needed = [];
     const known = {};
-    const push = (target, why) => needed.push({ target, why });
+    // (LOTE PRUEBA-CHAT-GATE-FIX) El hueco lleva su kind de DYN_TARGETS:
+    // buildPlan filtra por kind === 'answer' y sin kind los huecos se
+    // descartaban todos: con estudio, el plan quedaba sin q1/q2/q8 y el
+    // gate del servidor rechazaba la generación. Los hechos ('fact')
+    // siguen sin mapear a ninguna q (DYN_TARGET_TO_KEY no los tiene).
+  const push = (target, why) => needed.push({ target, why, kind: (DYN_TARGETS.find((t) => t.target === target) || {}).kind || 'answer' });
     // Hechos (solo si el rubro sugiere que el hecho importa y no se ve).
     if (!f.has_local && catHas(cat, PRESENCIAL)) push('local', 'no se ve local físico en web/IG');
     if (!f.takes_reservations && catHas(cat, SERVICIO)) push('reservas', 'no se ven turnos/reservas');
@@ -5436,7 +5441,11 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       o.push({ v: '__marca__', l: T.marca, sub: T.marcaSub });
       o.push({ v: '__sin_oferta__', l: T.sinOferta, sub: T.sinOfertaSub });
       o.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
-      o.push({ v: '__todo__', l: T.todo, sub: T.todoSub });
+      // (LOTE PRUEBA-CHAT-GATE-FIX) 'De todo un poco' presupone un
+      // surtido detectado: sin productos, es un callejón (el espejo
+      // queda vacío y trialHasEvidencedProducts rechaza 'todo' sin
+      // evidencia). Sin detectados, el camino es escribir qué vende.
+      if ((S.products || []).length) o.push({ v: '__todo__', l: T.todo, sub: T.todoSub });
       return o;
     }
     if (key === 'q2') return q2Options();
@@ -6258,7 +6267,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (star) return star;
     var ps = (FL_E.productos || []).map(function (p) { return p.nombre; }).filter(Boolean);
     if (!ps.length) return '';
-    return ps[optIdx % ps.length];
+    // (LOTE PRUEBA-CHAT-GATE-FIX) Sin estrella, las 3 tarjetas de la
+    // ronda muestran el MISMO producto (el primero): rotar por tarjeta
+    // hacía creer que cada opción era un producto distinto.
+    return ps[0];
   }
   function draftOptionsFor(dim) {
     if (dim === 'tema') {

@@ -321,6 +321,25 @@ function extractBusinessFacts(html, ld) {
   return facts;
 }
 
+// (LOTE PRUEBA-CHAT-GATE-FIX) Chrome de la tienda en los encabezados:
+// selectores de país/moneda, carrito, cuenta, newsletter, envíos y
+// etiquetas de sección («New arrivals») no son servicios — sin este
+// filtro llegaban como «productos» al espejo (Ladyee: «Country/region
+// and currency», «Your bag», «New arrivals»). Tampoco un titular con
+// pinta de frase (dos oraciones: «Timeless style. Effortless you.»):
+// es un slogan, no una oferta. El filtro viejo (JUNK_H local) se eliminó; este es el único.
+const NAV_JUNK_H = /^(men[uú]|inicio|home|contacto|nosotros|bienvenidos?|servicios?|productos?|galer[ií]a|testimonios|blog|noticias|preguntas frecuentes|faq|novedades|destacados|lo nuevo|qu[eé] hay de nuevo|ofertas?)$/i;
+const UI_CHROME_H = /country|region|currency|your bag|shopping bag|shopping cart|\bcart\b|checkout|\bsearch\b|log ?in|sign ?in|sign ?up|newsletter|subscribe|shipping|returns|new arrivals|shop all|shop now|my account|wishlist|filter by|sort by|track (your )?order/i;
+function isJunkServiceHeading(v) {
+  const s = String(v || '').trim();
+  if (!s) return true;
+  if (/^[¿¡]/.test(s)) return true;
+  if (NAV_JUNK_H.test(s.replace(/^[¿¡]+/, '').trim())) return true;
+  if (UI_CHROME_H.test(s)) return true;
+  if (/[.!?]\s+[A-ZÁÉÍÓÚÑ]/.test(s)) return true; // dos oraciones = slogan
+  return false;
+}
+
 async function fetchBusinessSite(rawUrl) {
   const url = normalizeSiteUrl(rawUrl);
   if (!url) return null;
@@ -384,11 +403,12 @@ async function fetchBusinessSite(rawUrl) {
       items.slice(0, 10).forEach(pushService);
     } catch (e) { /* se sigue con encabezados */ }
   }
-  const JUNK_H = /^(men[uú]|inicio|home|contacto|nosotros|bienvenidos?|servicios?|productos?|galer[ií]a|testimonios|blog|noticias|preguntas frecuentes|faq|novedades|destacados|lo nuevo|qu[eé] hay de nuevo|ofertas?)$/i;
+  // (LOTE PRUEBA-CHAT-GATE-FIX) El filtro de encabezados basura vive en
+  // isJunkServiceHeading (módulo, testeable).
   for (const m of html.matchAll(/<h[123][^>]*>([\s\S]{1,140})<\/h[123]>/gi)) {
     if (services.length >= 8) break;
     const v = cleanText(m[1]);
-    if (JUNK_H.test(v.replace(/^[¿¡]+/, '').trim()) || /^[¿¡]/.test(v)) continue;
+    if (isJunkServiceHeading(v)) continue;
     pushService(v);
   }
 
@@ -549,5 +569,6 @@ module.exports = {
   isPrivateIpLiteral,
   pickName,
   isNameLike,
+  isJunkServiceHeading,
   extractBusinessFacts,
 };

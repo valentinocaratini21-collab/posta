@@ -110,7 +110,12 @@ function preguntasDinamicasGaps(input) {
   const cat = (input && input.category) || '';
   const needed = [];
   const known = {};
-  const push = (target, why) => needed.push({ target, why });
+  // (LOTE PRUEBA-CHAT-GATE-FIX) El hueco lleva su kind de DYN_TARGETS:
+  // buildPlan filtra por kind === 'answer' y sin kind los huecos se
+  // descartaban todos: con estudio, el plan quedaba sin q1/q2/q8 y el
+  // gate del servidor rechazaba la generación. Los hechos ('fact')
+  // siguen sin mapear a ninguna q (DYN_TARGET_TO_KEY no los tiene).
+  const push = (target, why) => needed.push({ target, why, kind: (DYN_TARGETS.find((t) => t.target === target) || {}).kind || 'answer' });
   // Hechos (solo si el rubro sugiere que el hecho importa y no se ve).
   if (!f.has_local && catHas(cat, PRESENCIAL)) push('local', 'no se ve local físico en web/IG');
   if (!f.takes_reservations && catHas(cat, SERVICIO)) push('reservas', 'no se ven turnos/reservas');

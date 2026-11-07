@@ -47,6 +47,10 @@ function isMinableOfferItem(s) {
   if (/\b(19|20)\d{2}\b/.test(s)) return false; // año suelto
   if (/^\d+$/.test(String(s).trim())) return false;
   if (/lanzamiento|coming soon|próximamente|proximamente/i.test(s)) return false;
+  // (LOTE PRUEBA-CHAT-GATE-FIX) Anuncios y llamados a la acción no son
+  // oferta: «Walk-ins welcome», «Book your chair», «New arrivals» se
+  // minaban como «productos» en bios/captions de negocios solo-IG.
+  if (/\b(walk-?ins?|welcome|book (your|now|a|an)|new arrivals?|just landed|link in bio|follow (us|me)|dm (us|me)|now open|grand opening|sale ends|free shipping)\b/i.test(s)) return false;
   return true;
 }
 
@@ -64,6 +68,21 @@ function detectProducts({ bio, captions, services, description, excludeNames } =
   if (!names.length && description) {
     try {
       const mined = offeringsFromText(description);
+      names = ((mined && mined.items) || []).filter(isMinableOfferItem);
+    } catch (e) { names = []; }
+  }
+  // (LOTE PRUEBA-CHAT-GATE-FIX) Último recurso: captions de IG. Solo
+  // cuando bio/servicios/descripción no dieron nada (negocios solo-IG
+  // con bio corta, como una barbería): los captions son la única señal
+  // de qué vende. Misma puerta que la bio (isMinableOfferItem): un
+  // slogan o un anuncio no pasa a ser «producto». Un caption con dos
+  // oraciones («Timeless style. Effortless you.») es un slogan: se
+  // salta entero antes de minar (el minador parte las oraciones en
+  // segmentos y cada mitad pasaría la puerta como si fuera oferta).
+  if (!names.length && Array.isArray(captions) && captions.length) {
+    try {
+      const prose = captions.filter((c) => !/[.!?]\s+[A-ZÁÉÍÓÚÑ]/.test(String(c || '')));
+      const mined = offeringsFromText(prose.join(' | '));
       names = ((mined && mined.items) || []).filter(isMinableOfferItem);
     } catch (e) { names = []; }
   }
