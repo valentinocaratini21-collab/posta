@@ -992,10 +992,23 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 .oc-draft-slot .dk{font-size:11px;font-weight:500;color:#5A7488}
 .oc-draft-pack{font-size:13px;font-weight:800;color:#B8860B;letter-spacing:.04em}
 .oc-draft-card{position:relative;display:flex;flex-direction:column;background:#fff;border:2px solid #DCEFFF;border-radius:16px;overflow:hidden;cursor:pointer;text-align:left;padding:0}
-.oc-draft-card img{width:100%;height:110px;object-fit:cover;display:block;background:#F2F9FD}
+.oc-draft-card img{width:100%;height:148px;object-fit:cover;display:block;background:#F2F9FD}
 .oc-draft-card b{display:block;padding:12px 14px 2px;font-size:17px;color:#0A1E33}
 .oc-draft-card small{display:block;padding:0 14px 12px;font-size:13px;font-weight:500;color:#5A7488}
 .oc-draft-card.oc-picked{border-color:#DFA856;background:#FFF8E6;box-shadow:0 0 0 3px rgba(223,168,86,.35),0 8px 24px rgba(223,168,86,.25)}
+/* (LOTE DISEÑO-FAVORITA) Cada opción con SU imagen: recortes distintos de la
+   foto real (mock 1/2/2b). La tarjeta tiene overflow:hidden, así que el
+   scale recorta sin desbordar. */
+img.crop-close{object-position:50% 32%;transform:scale(1.55)}
+img.crop-action{object-position:50% 68%;transform:scale(1.2)}
+img.crop-brand{object-position:50% 50%}
+img.crop-a{object-position:50% 18%}
+img.crop-b{object-position:50% 50%}
+img.crop-c{object-position:50% 82%;transform:scale(1.25)}
+.oc-champ-chip{display:none;position:absolute;top:10px;left:10px;background:#FEC14D;color:#0A1E33;font-size:12px;font-weight:800;padding:5px 10px;border-radius:999px;box-shadow:0 2px 8px rgba(10,30,51,.25);z-index:2}
+.oc-draft-card.oc-picked .oc-champ-chip{display:block}
+.oc-draft-step{float:right;background:#E8F4FC;color:#2793C8;font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px}
+@media (min-width:900px){.oc-grid.oc-champ{grid-template-columns:repeat(4,1fr)}}
 .oc-draft-burst{position:absolute;font-size:18px;line-height:1;pointer-events:none;animation:oc-draft-burst .7s ease-out forwards;z-index:2}
 @keyframes oc-draft-burst{from{opacity:1;transform:translate(-50%,-50%) scale(.4) rotate(0deg)}to{opacity:0;transform:translate(calc(-50% + var(--bx,10px)),calc(-50% + var(--by,-14px))) scale(1.3) rotate(90deg)}}
 @media (prefers-reduced-motion:reduce){.oc-draft-burst{animation:none;opacity:0}}
@@ -6302,6 +6315,78 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     // hacía creer que cada opción era un producto distinto.
     return ps[0];
   }
+  // (LOTE DISEÑO-FAVORITA) Pool de fotos REALES del negocio para el draft:
+  // fotos de los productos del espejo + fotos de la web + foto de perfil
+  // (logo/marca). Sin stock, sin genéricos: todo sale de lo estudiado.
+  function draftPhotoPool() {
+    var pool = [];
+    function add(u) { if (u && typeof u === 'string' && pool.indexOf(u) === -1) pool.push(u); }
+    var star = draftStarName();
+    if (star) add(draftPhotoFor(star));
+    var ps = S.products || [];
+    for (var j = 0; j < ps.length; j++) { if (ps[j] && ps[j].foto) add(ps[j].foto); }
+    try { if (typeof WEB !== 'undefined' && WEB && WEB.photos) { for (var k = 0; k < WEB.photos.length; k++) add(WEB.photos[k]); } } catch (e) {}
+    try { if (typeof PREFILL !== 'undefined' && PREFILL && PREFILL.photo) add(PREFILL.photo); } catch (e) {}
+    return pool;
+  }
+  function draftLogoPhoto() {
+    try { if (typeof PREFILL !== 'undefined' && PREFILL && PREFILL.photo) return PREFILL.photo; } catch (e) {}
+    return null;
+  }
+  // Recortes distintos para que una sola foto rinda 3 tarjetas distintas.
+  var DRAFT_CROPS = ['crop-a', 'crop-b', 'crop-c'];
+  // Descripción de cada recorte (la <small> de la tarjeta: lo que se ve).
+  var DRAFT_CROP_DESC = { 'crop-a': 'El producto, bien grande', 'crop-b': 'Otro ángulo', 'crop-c': 'De cerca' };
+  // (LOTE DISEÑO-FAVORITA) Una imagen DISTINTA por opción (mock 1/2/2b):
+  // la ronda 'foto' muestra su ángulo (producto grande / en acción /
+  // marca al frente); la ronda 'tema' ilustra el tema (consejos = detalle
+  // de cerca, para que el título coincida con lo que se ve — nit del mock 2,
+  // la 4ª opción decía «Consejos» con una foto que no lo ilustraba); el
+  // resto rota fotos reales del pool con recortes distintos. Con una sola
+  // foto, los recortes hacen las 3 tarjetas distintas (mock 2b: 4 recortes
+  // del mismo vestido). Devuelve {src, crop, desc} — desc es lo que se ve
+  // en la foto y va en la <small> de la tarjeta.
+  function draftCardPhoto(dim, opt, oi) {
+    var pool = draftPhotoPool();
+    var main = pool[0] || null;
+    var logo = draftLogoPhoto();
+    if (dim === 'foto') {
+      if (opt.v === 'producto') return { src: main, crop: 'crop-close', desc: 'Tu producto, gigante en la foto' };
+      if (opt.v === 'accion') return { src: (pool[1] || main), crop: 'crop-action', desc: 'En uso, con vida' };
+      if (opt.v === 'marca') return { src: (logo && logo !== main ? logo : main), crop: 'crop-brand', desc: 'Tu logo, grande y al centro' };
+    }
+    if (dim === 'tema') {
+      if (opt.v === 'tip') return { src: main, crop: 'crop-close', desc: 'Detalle de cerca' };
+      if (opt.v === 'social') return { src: (pool[1] || main), crop: 'crop-b', desc: 'Tu comunidad' };
+      if (opt.v === 'promo') return { src: main, crop: 'crop-a', desc: 'El producto, protagonista' };
+      if (opt.v === 'novedad') return { src: (pool[1] || main), crop: 'crop-c', desc: 'Lo nuevo, primero' };
+    }
+    var src = pool.length ? pool[oi % pool.length] : null;
+    var crop = DRAFT_CROPS[oi % DRAFT_CROPS.length];
+    return { src: src, crop: crop, desc: DRAFT_CROP_DESC[crop] || '' };
+  }
+  // (LOTE DISEÑO-FAVORITA) La favorita junta 4 picks de 4 rondas distintas:
+  // dos picks pueden caer en la misma (foto, recorte) — p. ej. 'foto/producto'
+  // y 'tema/tip' usan la misma foto en primer plano. La favorita rota el
+  // recorte del pick que se repite para que las 4 tarjetas sean distintas.
+  // Es idempotente: una segunda pasada no cambia nada.
+  var DRAFT_CHAMP_CROPS = ['crop-close', 'crop-action', 'crop-brand', 'crop-a', 'crop-b', 'crop-c'];
+  function draftDedupePicks(picks) {
+    var seen = {};
+    picks.forEach(function (p) {
+      if (!p || !p.foto) return;
+      var key = p.foto + '|' + (p.crop || '');
+      var guard = 0;
+      while (seen[key] && guard < DRAFT_CHAMP_CROPS.length) {
+        var idx = DRAFT_CHAMP_CROPS.indexOf(p.crop || 'crop-a');
+        p.crop = DRAFT_CHAMP_CROPS[(idx + 1) % DRAFT_CHAMP_CROPS.length];
+        key = p.foto + '|' + p.crop;
+        guard++;
+      }
+      seen[key] = 1;
+    });
+    return picks;
+  }
   function draftOptionsFor(dim) {
     if (dim === 'tema') {
       var kinds = (DRAFT_TEMA[S.cat] || DRAFT_TEMA.default);
@@ -6316,7 +6401,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       var champ = DR.champ && DR.champ.round === i;
       if (!p) { slots += '<span class="oc-draft-slot">?</span>'; continue; }
       var cls = 'oc-draft-slot filled' + (champ ? ' champ' : '');
-      var foto = p.foto ? '<img src="' + esc(p.foto) + '" alt="" onerror="this.style.display=\'none\'">' : '';
+      var foto = p.foto ? '<img src="' + esc(p.foto) + '" alt="" class="' + esc(p.crop || '') + '" onerror="this.style.display=\'none\'">' : '';
       slots += '<span class="' + cls + '">' + foto + esc(p.l) + (champ ? ' ✦' : '') + '</span>';
     }
     return '<div class="oc-draft-mini">' + slots + '</div>';
@@ -6343,13 +6428,13 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var opts = draftOptionsFor(dim);
     var cards = opts.map(function (o, oi) {
       var prod = draftCardProduct(i, oi);
-      var foto = draftPhotoFor(prod);
+      var ph = draftCardPhoto(dim, o, oi);
       return '<button type="button" class="oc-draft-card" data-v="' + esc(o.v) + '">'
-        + (foto ? '<img src="' + esc(foto) + '" alt="" onerror="this.style.display=\'none\'">' : '')
-        + '<b>' + esc(o.l) + '</b><small>' + esc(prod) + '</small></button>';
+        + (ph.src ? '<img src="' + esc(ph.src) + '" alt="" class="' + esc(ph.crop || '') + '" onerror="this.style.display=\'none\'">' : '')
+        + '<b>' + esc(o.l) + '</b><small>' + esc(ph.desc || prod) + '</small></button>';
     }).join('');
     box.innerHTML = stemHTML()
-      + '<p class="oc-draft-pack">✦ ' + esc(DRAFT_T.pack) + ' ' + (i + 1) + ' ' + esc(DRAFT_T.of) + '</p>'
+      + '<p class="oc-draft-pack">✦ ' + esc(DRAFT_T.pack) + ' ' + (i + 1) + ' ' + esc(DRAFT_T.of) + '<span class="oc-draft-step">' + (i + 1) + ' de 4</span></p>'
       + draftMiniHTML()
       + '<p class="oc-chat">' + esc(DRAFT_T.chat) + '</p><h2 class="oc-q">' + esc(DRAFT_Q[dim]) + '</h2>'
       + '<div class="oc-grid">' + cards + '</div>'
@@ -6362,8 +6447,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
         c.classList.add('oc-picked'); draftBurst(c);
         var v = c.getAttribute('data-v');
         var oi = Array.prototype.indexOf.call(els, c);
-        var prod = draftCardProduct(i, oi);
-        DR.picks[i] = { dim: dim, v: v, l: opts[oi].l, foto: draftPhotoFor(prod) };
+        var ph = draftCardPhoto(dim, opts[oi], oi);
+        DR.picks[i] = { dim: dim, v: v, l: opts[oi].l, foto: ph.src, crop: ph.crop, imgDesc: ph.desc || draftCardProduct(i, oi) };
         try { trk('prueba_step', { step: 'draft_r' + (i + 1) }); } catch (e) {}
         setTimeout(function () {
           if (i + 1 < 4) draftShowRound(i + 1);
@@ -6380,16 +6465,18 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   function draftShowChamp() {
     var box = ocq();
     try { opResumeSave('draft'); } catch (e) {}
+    draftDedupePicks(DR.picks);
     var cards = DR.picks.map(function (p, i) {
       return '<button type="button" class="oc-draft-card" data-i="' + i + '">'
-        + (p.foto ? '<img src="' + esc(p.foto) + '" alt="" onerror="this.style.display=\'none\'">' : '')
-        + '<b>' + esc(p.l) + '</b><small>' + esc(DRAFT_Q[p.dim]) + '</small></button>';
+        + '<span class="oc-champ-chip">✓ Tu favorita</span>'
+        + (p.foto ? '<img src="' + esc(p.foto) + '" alt="" class="' + esc(p.crop || '') + '" onerror="this.style.display=\'none\'">' : '')
+        + '<b>' + esc(p.l) + '</b><small>' + esc(p.imgDesc || DRAFT_Q[p.dim]) + '</small></button>';
     }).join('');
     box.innerHTML = stemHTML()
       + draftMiniHTML()
-      + '<p class="oc-chat">' + esc(DRAFT_T.champChat) + '</p><h2 class="oc-q">' + esc(DRAFT_T.champTitle) + '</h2>'
+      + '<p class="oc-chat">' + esc(DRAFT_T.champChat) + '</p><h2 class="oc-q">' + esc(DRAFT_T.champTitle) + '<span class="oc-draft-step">4 de 4</span></h2>'
       + '<p class="oc-chat">' + esc(DRAFT_T.champSub) + '</p>'
-      + '<div class="oc-grid">' + cards + '</div>'
+      + '<div class="oc-grid oc-champ">' + cards + '</div>'
       + '<button type="button" class="oc-back" id="oc_back">' + esc(T.back) + '</button>';
     show('v-ocq');
     var els = box.querySelectorAll('.oc-draft-card');
