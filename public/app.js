@@ -8494,6 +8494,16 @@ function pickRejectReason() {
       igGateFeedback(b);
       return;
     }
+    // (LOTE ACEPTAR-APROBADO) Doble aceptación: si el posteo ya no es
+    // borrador (lista vieja, aprobado desde otro lado), no re-programar:
+    // el botón no debería existir, y si igual se dispara, el objeto
+    // fresco manda. Si la verificación falla por red, se sigue como
+    // antes.
+    try {
+      const fresh = await api.get('/api/posts/' + id);
+      const fp = (fresh && fresh.post) ? fresh.post : fresh;
+      if (fp && String(fp.status || '') !== 'draft') { toast('✅ Este posteo ya estaba aprobado — sale a su hora 🙌'); try { render(); } catch (e) {} return; }
+    } catch (e) {}
     b.disabled = true;
     try {
       const ta = document.querySelector(`[data-revcap="${id}"]`);
@@ -26173,12 +26183,18 @@ async function approvalPostView(id) {
   const d = apvParse(p.scheduled_at), dOk = !isNaN(d);
   const st = String(p.status || ''), ap = String(p.approval || '');
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  // Acciones solo mientras todavía hay algo que decidir.
-  const canAct = st === 'scheduled' && (ap === 'pending' || ap === 'approved');
+  // (LOTE ACEPTAR-APROBADO · 7/11) Una sola fuente de verdad, igual que
+  // postCardHTML (canApprove): Aceptar solo mientras hay algo que
+  // decidir — programado + pendiente. Un posteo ya aprobado muestra la
+  // píldora «Aprobado — sale a las…» y NADA que aceptar: el botón no
+  // se renderiza. El menú ••• y el diálogo de Rechazar siguen para
+  // programados (pendiente o aprobado) y borradores.
+  const canAccept = st === 'scheduled' && ap === 'pending';
   // (v326) Los borradores también se deciden ACÁ: el detalle era un callejón
   // sin salida (ni Aceptar, ni Editar, ni Rechazar) y es a donde llevan
   // "Ver posteo" y las filas de la semana de Inicio.
   const isDraft = st === 'draft';
+  const canMenu = (st === 'scheduled' && (ap === 'pending' || ap === 'approved')) || isDraft;
   const isVideo = String(p.media_type || '') === 'video';
   // (LOTE 17) Carrusel prolijo: la vista mostraba solo la portada y el
   // «Deslizá» del caption no hacía nada; el borde claro de la foto al
@@ -26200,17 +26216,21 @@ async function approvalPostView(id) {
   const tags = String(p.hashtags || '').trim();
   // (LOTE 17) Aceptar único como acción principal: antes compartía la
   // fila con otros tres botones y el texto desbordaba la píldora.
-  const actions = canAct ? `
-    <div class="apv-actions apv-primary" id="apvActions">
+  // (LOTE ACEPTAR-APROBADO) El botón Aceptar vive solo si canAccept; el
+  // diálogo de Rechazar vive para programados (pendiente o aprobado) —
+  // nunca para borradores, que rechazan con su propio diálogo
+  // (apvCancelYes, PATCH action=cancel).
+  const actions = (canAccept || canMenu) ? `
+    ${canAccept ? `<div class="apv-actions apv-primary" id="apvActions">
       <button class="btn btn-primary apv-accept" id="apvAccept" data-apvid="${esc(String(p.id))}">${pzIc('checkCircle', 18)} Aceptar</button>
-    </div>
-    <div class="apv-confirm" id="apvConfirm" hidden>
+    </div>` : ''}
+    ${canMenu && !isDraft ? `<div class="apv-confirm" id="apvConfirm" hidden>
       <p><b>¿Seguro?</b> No se va a publicar.</p>
       <div class="apv-actions">
         <button class="btn btn-danger" id="apvRejectYes" data-apvid="${esc(String(p.id))}">Sí, rechazar</button>
         <button class="btn btn-soft" id="apvRejectNo">Cancelar</button>
       </div>
-    </div>` : '';
+    </div>` : ''}` : '';
   // (v326) Acciones del borrador: Aceptar lo programa en su horario propuesto
   // (el mismo flujo PATCH que usa la Agenda), Editar va al chat con el
   // prefill de siempre y Rechazar lo cancela con confirmación.
@@ -26241,7 +26261,7 @@ async function approvalPostView(id) {
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
     ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''}
     ${actions}${draftActions}
-    ${apvMoreHTML(p, st, canAct, isDraft)}
+    ${apvMoreHTML(p, st, canMenu, isDraft)}
     ${hfAskChangeBtnHTML(p)}
   </div>`;
 }
@@ -26258,7 +26278,7 @@ async function approvalPostView(id) {
 // (SACAR-CORAZÓN 6/11: el corazón ya no está en el menú — su acción la
 // cubre Aceptar, como siempre.) Frenar sigue solo para programados.
 // Etiqueta chica en ES/EN.
-function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
+function apvMoreHTML(p, st, canMenu, isDraft, editPrompt) {
   // (LOTE DETALLE-SIMPLE-DIRECTO A) La pantalla de la captura (vista standalone de
   // aprobación) se simplifica con el patrón detalle-simple: UN primario Aceptar (ya
   // existe fuera de este menú: apvAccept / apvAcceptDraft, mismos handlers) y el resto
@@ -26273,7 +26293,9 @@ function apvMoreHTML(p, st, canAct, isDraft, editPrompt) {
   if (st === 'published') {
     return `<div class="apv-actions apv-more apv-pub" id="apvMore"><button class="btn btn-soft apv-change-pub" id="apvChangePub" data-apvid="${id}">${pzIc('chat', 18)} ${en ? 'Request a change' : 'Pedir un cambio'}</button></div>`;
   }
-  if (!canAct && !isDraft) return '';
+  // (LOTE ACEPTAR-APROBADO) El menú sigue para programados (pendiente o
+  // aprobado) y borradores; canMenu ya incluye ambos casos.
+  if (!canMenu) return '';
   let b = '';
   // (LOTE APROBACIÓN-RECORTE · 2/11 · decisión Valentino) Fuera del menú: Hablar
   // (duplica el mini-chat al pie) y No me gusta (se pisa con Rechazar). Quedan:
@@ -26556,6 +26578,9 @@ async function f3GestureApprove(media) {
   if (rev && !rev.disabled) {
     if (typeof rev.onclick === 'function') { rev.click(); return; }
     // Superficie sin bindReview: núcleo vigente del Aceptar.
+    // (LOTE ACEPTAR-APROBADO) Solo borradores: la tarjeta lleva el
+    // estado en data-f3-status; si ya no es borrador, no re-programar.
+    if (root.dataset.f3Status && root.dataset.f3Status !== 'draft') return;
     if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
       try { igGateFeedback(rev); } catch (e) { toast(f3En() ? 'Connect your Instagram first' : 'Conectá tu Instagram primero'); }
       return;
