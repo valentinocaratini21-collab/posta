@@ -543,15 +543,28 @@ async function genParticlesPng(tmpDir) {
 // geq, antialias de 1 px) y el handle compuesto adentro. Reemplaza al
 // rectángulo de drawtext de bordes rectos.
 async function genPlatePng(tmpDir, handle, brandHex) {
-  const advH = await measureAdvance(handle, 82, tmpDir);
-  const PW = advH + 96, PH = 150;
+  // FIX handle largo (lote reel-handle-largo, 2026-11-06): un handle de
+  // más de ~16 caracteres daba PW > 1080 y el pad=1080:1920 del cierre
+  // reventaba el render entero («Padded dimensions cannot be smaller
+  // than input dimensions»). Se achica la fuente hasta que la pastilla
+  // entre en 1000 px. Para handles cortos (PW <= 1000) el camino es
+  // byte-idéntico al de antes: fontsize 82, misma pastilla.
+  let fontSize = 82;
+  let advH = await measureAdvance(handle, fontSize, tmpDir);
+  let PW = advH + 96;
+  if (PW > 1000) {
+    fontSize = Math.max(28, Math.floor(82 * (1000 - 96) / advH));
+    advH = await measureAdvance(handle, fontSize, tmpDir);
+    PW = advH + 96;
+  }
+  const PH = 150;
   const CX = Math.floor(PW / 2), HX = Math.floor(PW / 2) - 34, HY = 75 - 34;
   const r = parseInt(brandHex.slice(1, 3), 16), g = parseInt(brandHex.slice(3, 5), 16), b = parseInt(brandHex.slice(5, 7), 16);
   const f = path.join(tmpDir, 'handle.txt');
   fs.writeFileSync(f, handle, 'utf8');
   const out = path.join(tmpDir, 'plate.png');
   await runFfmpeg(['-f', 'lavfi', '-i', `color=black:s=${PW}x${PH}`, '-vf',
-    `format=rgba,geq=r=${r}:g=${g}:b=${b}:a='255*clip(34.5-sqrt(pow(max(abs(X-${CX})-${HX},0),2)+pow(max(abs(Y-75)-${HY},0),2))-min(max(abs(X-${CX})-${HX},abs(Y-75)-${HY}),0),0,1)',drawtext=fontfile='${FONT}':textfile='${f}':fontsize=82:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2`,
+    `format=rgba,geq=r=${r}:g=${g}:b=${b}:a='255*clip(34.5-sqrt(pow(max(abs(X-${CX})-${HX},0),2)+pow(max(abs(Y-75)-${HY},0),2))-min(max(abs(X-${CX})-${HX},abs(Y-75)-${HY}),0),0,1)',drawtext=fontfile='${FONT}':textfile='${f}':fontsize=${fontSize}:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2`,
     '-frames:v', '1', out]);
   return { file: out, w: PW, h: PH };
 }
@@ -1341,4 +1354,4 @@ async function buildSingleClipReel(opts) {
   }
 }
 
-module.exports = { buildReelPro, buildReelV3, buildSingleClipReel, detectFocus, bestFrameTimeIn, measureFrameQuality, moodForCategory, wrapLines, MUSIC_TRACKS, MUSIC_CATALOG, pickMusicFile, moodTracksFor, MOTION_TEMPLATES, templateFor, movementPlanFor, measureAdvance, findKeyword, mediaInfo };
+module.exports = { buildReelPro, buildReelV3, buildSingleClipReel, detectFocus, bestFrameTimeIn, measureFrameQuality, moodForCategory, wrapLines, MUSIC_TRACKS, MUSIC_CATALOG, pickMusicFile, moodTracksFor, MOTION_TEMPLATES, templateFor, movementPlanFor, measureAdvance, findKeyword, mediaInfo, genPlatePng };
