@@ -311,25 +311,26 @@ async function runBoot() {
     // F2: el join no postea nada (el hilo arranca vacío).
     const poll0 = await req('a', 'GET', '/api/trial/chat-onboarding?after=0');
     ok('boot F2: tras join, el hilo está vacío', poll0.status === 200 && poll0.json && Array.isArray(poll0.json.messages) && poll0.json.messages.length === 0, poll0.status + ' ' + poll0.text.slice(0, 120));
-    // F3: la pregunta guionada viaja como assistant.
+    // F3 (RE-PIN LOTE PREGUNTA-DUPLICADA · 7/11): la pregunta guionada ya NO
+    // inserta chat_message (el poll la ecoaba como burbuja plana duplicada):
+    // solo evento del caso (caso_id), msg_id 0. El cliente la muestra local.
     const q = await req('a', 'POST', '/api/trial/chat-onboarding', { kind: 'question', ig, device: 'dvc-test-a', question: 'q1', text: 'esto es lo que vi que vendés. ¿cuál es tu fuerte? ¿Qué es lo que más vendés?' });
-    ok('boot F3: question 200 + msg_id', q.status === 200 && q.json && q.json.ok && Number(q.json.msg_id) > 0, q.status + ' ' + q.text.slice(0, 120));
+    ok('boot F3: question 200 + caso_id, sin chat_message', q.status === 200 && q.json && q.json.ok && Number(q.json.caso_id) > 0 && Number(q.json.msg_id) === 0, q.status + ' ' + q.text.slice(0, 120));
     // F4: la respuesta guionada NO inserta chat_message (solo evento del caso).
     const a = await req('a', 'POST', '/api/trial/chat-onboarding', { kind: 'answer', ig, device: 'dvc-test-a', question: '¿Qué es lo que más vendés?', value: 'Café de especialidad' });
     ok('boot F4: answer 200 + caso_id', a.status === 200 && a.json && a.json.ok && Number(a.json.caso_id) > 0, a.status + ' ' + a.text.slice(0, 120));
     const poll1 = await req('a', 'GET', '/api/trial/chat-onboarding?after=0');
-    ok('boot F4b: tras answer, el hilo sigue con 1 mensaje (la pregunta)', poll1.json && poll1.json.messages.length === 1 && poll1.json.messages[0].role === 'assistant', JSON.stringify(poll1.json && poll1.json.messages));
+    ok('boot F4b: tras answer, el hilo sigue vacío (la pregunta no se inserta)', poll1.json && poll1.json.messages.length === 0, JSON.stringify(poll1.json && poll1.json.messages));
     // F5: texto libre → ACK instantáneo + user en el hilo (pendiente para bamboo).
     const f = await req('a', 'POST', '/api/trial/chat-onboarding', { kind: 'free', ig, device: 'dvc-test-a', text: 'hola, ¿puedo vender también tortas?' });
     ok('boot F5: free 200 + ACK instantáneo', f.status === 200 && f.json && f.json.ok && f.json.reply === ACK, f.status + ' ' + f.text.slice(0, 160));
     const poll2 = await req('a', 'GET', '/api/trial/chat-onboarding?after=0');
-    ok('boot F5b: el hilo tiene pregunta + user + ACK, en orden', poll2.json && poll2.json.messages.length === 3
-      && poll2.json.messages[0].role === 'assistant'
-      && poll2.json.messages[1].role === 'user' && poll2.json.messages[1].text.includes('tortas')
-      && poll2.json.messages[2].role === 'assistant' && poll2.json.messages[2].text === ACK,
+    ok('boot F5b: el hilo tiene user + ACK, en orden (sin la pregunta)', poll2.json && poll2.json.messages.length === 2
+      && poll2.json.messages[0].role === 'user' && poll2.json.messages[0].text.includes('tortas')
+      && poll2.json.messages[1].role === 'assistant' && poll2.json.messages[1].text === ACK,
       JSON.stringify(poll2.json && poll2.json.messages));
     // F6: el poll con after salta lo ya visto.
-    const lastId = poll2.json.messages[2].id;
+    const lastId = poll2.json.messages[poll2.json.messages.length - 1].id;
     const poll3 = await req('a', 'GET', '/api/trial/chat-onboarding?after=' + lastId);
     ok('boot F6: poll after=último devuelve vacío', poll3.json && poll3.json.messages.length === 0, JSON.stringify(poll3.json));
     // F7: segundo join con el mismo @ reusa al invitado (mismo user_id, 0 posteos).

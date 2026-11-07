@@ -5255,7 +5255,22 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (S.chatJoined) return;
     if (!S.ig && !S.web) return; // email with no IG/web yet: the chat runs locally until there is an identity.
     chatPost('join', {}).then(function (d) {
-      if (d && d.ok) { S.chatJoined = true; S.chatGuest = d.user_id || null; S.chatLastId = 0; }
+      if (d && d.ok) {
+        S.chatJoined = true; S.chatGuest = d.user_id || null;
+        // (LOTE PREGUNTA-DUPLICADA) The first poll does not re-show the old
+        // thread: start from the last id that already exists, without
+        // painting anything (the local log already has the scripted Q&A).
+        try {
+          fetch('/api/trial/chat-onboarding?after=0' + TEST_KEY_QS.replace('?', '&'))
+            .then(function (r) { return r.json().catch(function () { return null; }); })
+            .then(function (dd) {
+              if (dd && dd.ok && Array.isArray(dd.messages)) {
+                dd.messages.forEach(function (m) { if (m && m.id > (S.chatLastId || 0)) S.chatLastId = m.id; });
+              }
+            })
+            .catch(function () {});
+        } catch (e) {}
+      }
     });
   }
   function chatSeenAdd(id) {
@@ -5279,6 +5294,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
             if (m.id > (S.chatLastId || 0)) S.chatLastId = m.id;
             if (S.chatSeen && S.chatSeen[m.id]) return;
             chatSeenAdd(m.id);
+            if (m.role === 'assistant' && chatIsScriptedQuestion(m.text)) return;
             chatLogPush(m.role === 'user' ? 'user' : 'bot', m.text);
             if (m.role === 'assistant' && m.text !== CHAT_ACK_TEXT) bamboo = true;
           });
@@ -5322,6 +5338,21 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (key === 'q8') return { chat: T.chatQ8, title: T.q8 };
     return { chat: '', title: '' };
   }
+  function chatIsScriptedQuestion(text) {
+    // (LOTE PREGUNTA-DUPLICADA) Belt next to the server fix: a scripted
+    // question inserted before the fix is not shown again as a plain bubble.
+    // Exact match with the text the client posts (q.chat + ' ' + q.title)
+    // for some key of the plan. chatQText is not called with a pending
+    // override: it would consume it.
+    if (!text) return false;
+    var keys = S.plan || [];
+    for (var i = 0; i < keys.length; i++) {
+      if (S.chatOverride && S.chatOverride[keys[i]]) continue;
+      var q = chatQText(keys[i]);
+      if (q && (q.chat + ' ' + q.title) === text) return true;
+    }
+    return false;
+  }
   function chatAnswerLabel(key) {
     var a = S.ans || {};
     if (key === 'rubro') return a.rubro || '';
@@ -5344,6 +5375,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     return '';
   }
   function chatRebuildLog() {
+    S.chatPushedQ = {};
     S.chatLog = [{ w: 'bot', t: S.source === 'email' ? T.chatJoinEmail : T.chatJoin }];
     var i, k, q;
     for (i = 0; i < S.qi; i++) {
@@ -5368,7 +5400,14 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var key = S.plan[S.qi];
     if (!key) return;
     var q = chatQText(key);
-    S.chatLog.push({ w: 'bot', h: esc(q.chat) + '<br><span class="oc-chat-q">' + esc(q.title) + '</span>' });
+    // (LOTE PREGUNTA-DUPLICADA) The local push, guarded against a double
+    // call: without this, reopening the chat duplicated the titled bubble.
+    // chatRebuildLog resets the guard (going back shows it again).
+    if (!S.chatPushedQ) S.chatPushedQ = {};
+    if (!S.chatPushedQ[key]) {
+      S.chatPushedQ[key] = 1;
+      S.chatLog.push({ w: 'bot', h: esc(q.chat) + '<br><span class="oc-chat-q">' + esc(q.title) + '</span>' });
+    }
     if (!S.chatPostedQ) S.chatPostedQ = {};
     if (!S.chatPostedQ[key]) {
       S.chatPostedQ[key] = 1;

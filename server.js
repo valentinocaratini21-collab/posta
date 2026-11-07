@@ -27477,18 +27477,20 @@ function guestBackstop(req, res) {
 // posteos. El reloj de 3 días arranca en el chat (guest/start reusa a este
 // invitado, no crea otro). Candados espejo de guest/start: trial consumido
 // → 409; invitado con posteos → 409; dispositivo de OTRO usuario → 409.
-// Las preguntas guionadas NO se insertan como mensajes del visitante (no
-// alertan al cron): cada pregunta viaja como assistant (INSERT directo) y
-// cada respuesta queda solo como evento del caso (sin chat_message, sin
-// pendiente). El texto libre sí: mensaje user + desvío + ACK instantáneo
+// Las preguntas guionadas NO se insertan como mensajes (no alertan al cron
+// y el poll no las ecoa): la pregunta viaja SOLO como evento del caso y el
+// cliente la muestra con su push local; cada respuesta queda solo como evento
+// del caso (sin chat_message, sin pendiente). El texto libre sí: mensaje user
+// + desvío + ACK instantáneo
 // (el ACK es INSERT directo y NO resetea el pendiente: pendingCountFor
 // cuenta desde la última respuesta REAL del operador). Sin sesión de
 // prueba todavía no hay nada que responder: el front no inventa ninguna
 // respuesta, solo muestra el ACK y pausa el flujo hasta que bamboo
 // responde en vivo o el visitante toca «seguir con las preguntas».
 // POST kind: 'join' (crea/reusa invitado + conserje) · 'question' (Posty
-// pregunta; INSERT assistant) · 'answer' (respuesta guionada; solo evento
-// del caso) · 'free' (texto libre; user + desvío + ACK). GET pollea el
+// pregunta; solo evento del caso, sin chat_message — antes INSERT assistant
+// y el poll la duplicaba como burbuja plana) · 'answer' (respuesta guionada;
+// solo evento del caso) · 'free' (texto libre; user + desvío + ACK). GET pollea el
 // hilo (after=<id>) para las respuestas de bamboo.
 app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (req, res) => {
   try {
@@ -27553,11 +27555,20 @@ app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (r
     } catch (e) {}
     if (kind === 'join') return res.json({ ok: true, user_id: uid, trial_ends_at: trialEnds, concierge: true });
     if (kind === 'question') {
+      // (LOTE PREGUNTA-DUPLICADA · 7/11) La pregunta guionada NO se inserta
+      // como chat_message: el cliente ya la muestra con su push local y el
+      // poll la ecoaba como segunda burbuja en texto plano (si un tick caía
+      // entre el INSERT y la llegada del POST, el dedup por msg_id no la
+      // cazaba). Como 'answer': SOLO evento del caso, sin chat_message.
       const text = String(b.text || '').trim().slice(0, 500);
       if (!text) return res.status(400).json({ ok: false, error: 'texto_vacio' });
-      let msgId = 0;
-      try { const r = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', text); msgId = r.lastInsertRowid || 0; } catch (e) {}
-      return res.json({ ok: true, user_id: uid, msg_id: msgId, concierge: true });
+      const q = String(b.question || '').trim().slice(0, 40);
+      let casoId = 0;
+      try {
+        const dv = supportCases.divertToConcierge(db, uid, (q ? q + ': ' : '') + (text || '(sin texto)'));
+        if (dv && dv.ok) casoId = dv.caso_id || 0;
+      } catch (e) {}
+      return res.json({ ok: true, user_id: uid, msg_id: 0, caso_id: casoId, concierge: true });
     }
     if (kind === 'answer') {
       // Respuesta guionada: SOLO evento del caso. Sin chat_message (no
@@ -31542,7 +31553,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v755';
+const BUILD_ID = '20261105-v756';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
