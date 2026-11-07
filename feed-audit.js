@@ -806,6 +806,93 @@ async function analyzePalette(posts) {
 }
 
 // ---------------------------------------------------------------------------
+// (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) Perfil de estilo
+// del feed: señales DETERMINÍSTICAS (cero IA, cero fetches nuevos salvo las
+// miniaturas que analyzePalette ya descarga) desde los posteos del embed:
+// ritmo, largo de captions, hashtags que más usa, mejores posteos (por
+// likes) y paleta observada (buckets de tono). Todo nullable: lo que no se
+// observó, no se afirma.
+// ---------------------------------------------------------------------------
+const HUE_NAMES_ES = ['rojo', 'naranja', 'amarillo', 'verde', 'turquesa', 'azul', 'violeta', 'rosa', 'rojo'];
+const HUE_NAMES_EN = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'violet', 'pink', 'red'];
+function hueName(bucket, lang) {
+  const b = Number(bucket);
+  if (!Number.isFinite(b) || b < 0 || b > 8) return null;
+  return (lang === 'en' ? HUE_NAMES_EN : HUE_NAMES_ES)[b] || null;
+}
+function paletteProfileFromHexes(hexes) {
+  try {
+    const buckets = [];
+    (Array.isArray(hexes) ? hexes : []).forEach((h) => {
+      if (typeof h !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(h)) return;
+      const b = hexToHueBucket(h);
+      if (b >= 0 && buckets.indexOf(b) < 0) buckets.push(b);
+    });
+    if (!buckets.length) return null;
+    buckets.sort((a, b) => a - b);
+    return {
+      palette_buckets: buckets,
+      palette_names: buckets.map((b) => hueName(b, 'es')).filter(Boolean),
+      palette_names_en: buckets.map((b) => hueName(b, 'en')).filter(Boolean),
+    };
+  } catch (_) { return null; }
+}
+async function analyzePaletteBuckets(posts) {
+  try {
+    const thumbs = posts.map((p) => p.thumb).filter(Boolean).slice(0, MAX_THUMBS);
+    if (!thumbs.length) return null;
+    const bufs = await Promise.all(thumbs.map((u) => downloadThumb(u)));
+    const buckets = new Set();
+    for (const buf of bufs) {
+      if (!buf) continue;
+      const cols = await extractColors(buf);
+      cols.forEach((c) => { const b = hexToHueBucket(c); if (b >= 0) buckets.add(b); });
+    }
+    return buckets.size ? Array.from(buckets).sort((a, b) => a - b) : null;
+  } catch (_) { return null; }
+}
+async function trialStyleProfile(posts, profile, opts = {}) {
+  try {
+    const list = (Array.isArray(posts) ? posts : []).filter((p) => p && typeof p === 'object');
+    if (!list.length && !(opts && Array.isArray(opts.webPalette) && opts.webPalette.length)) return null;
+    const sig = computeSignals(profile || {}, list);
+    const caps = list.map((p) => String(p.caption || '')).filter((c) => c.trim());
+    const tagCounts = {};
+    caps.forEach((c) => {
+      (c.match(/#[\p{L}0-9_]+/gu) || []).forEach((t) => {
+        const k = t.slice(1).toLowerCase();
+        if (k.length >= 2 && k.length <= 30) tagCounts[k] = (tagCounts[k] || 0) + 1;
+      });
+    });
+    const hashtagsTop = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]).slice(0, 5);
+    const liked = list.filter((p) => Number.isFinite(p.likes) && p.likes > 0)
+      .sort((a, b) => b.likes - a.likes).slice(0, 3)
+      .map((p) => ({ shortcode: p.shortcode || '', likes: p.likes, caption_head: String(p.caption || '').slice(0, 80) }));
+    let buckets = null;
+    try {
+      buckets = await Promise.race([analyzePaletteBuckets(list), new Promise((r) => setTimeout(() => r(null), 1500))]);
+    } catch (_) { buckets = null; }
+    const webProf = paletteProfileFromHexes(opts.webPalette || []);
+    const allBuckets = Array.from(new Set([...(buckets || []), ...((webProf && webProf.palette_buckets) || [])])).sort((a, b) => a - b);
+    const tone = (opts.tone === 'vos' || opts.tone === 'usted') ? opts.tone : 'neutral';
+    const out = {
+      posts_per_week: sig.posts_per_week,
+      avg_caption_words: sig.avg_caption_words || 0,
+      avg_hashtags: sig.avg_hashtags || 0,
+      hashtags_top: hashtagsTop,
+      best_posts: liked,
+      formats: { images: sig.images || 0, videos: sig.videos || 0, carousels: sig.carousels || 0 },
+      palette_buckets: allBuckets.length ? allBuckets : null,
+      palette_names: allBuckets.map((b) => hueName(b, 'es')).filter(Boolean),
+      palette_names_en: allBuckets.map((b) => hueName(b, 'en')).filter(Boolean),
+      tone,
+    };
+    const usable = out.posts_per_week != null || out.hashtags_top.length || out.best_posts.length || out.palette_names.length || tone !== 'neutral' || out.avg_caption_words > 0;
+    return usable ? out : null;
+  } catch (_) { return null; }
+}
+
+// ---------------------------------------------------------------------------
 // Prompt para gpt-4o-mini (con checklist ANTI-GENERICO)
 // ---------------------------------------------------------------------------
 const CLICHES = [
@@ -1071,6 +1158,10 @@ module.exports = {
   trialProfileFromAudit,
   trialAuditFromData,
   analyzePalette,
+  analyzePaletteBuckets,
+  hueName,
+  paletteProfileFromHexes,
+  trialStyleProfile,
   localizeTrialPhotos,
   localizeTrialPic,
   AUDIT_LIMIT_PER_DAY,

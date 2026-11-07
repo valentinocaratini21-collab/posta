@@ -82,7 +82,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v759', ver.status === 200 && ver.json && ver.json.build === '20261105-v759', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v760', ver.status === 200 && ver.json && ver.json.build === '20261105-v760', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
     const db = new DatabaseSync(dbPath, { readOnly: true });
@@ -155,6 +155,17 @@ const FNS = [
   'function chatRebuildLog() {',
   'function chatAskCurrent() {',
   'function esc(',
+  // (LOTE ONBOARDING-DIVERTIDO v760) chatRebuildLog/chatAskCurrent ahora
+  // dependen de estas: tarjeta de lo aprendido/rama honesta, reacciones
+  // y la tarjeta destacada de la pregunta vigente (chatLogHTML).
+  'function chatHonestNeeded() {',
+  'function chatKnownRows() {',
+  'function chatHonestRows() {',
+  'function chatJoinHonestText() {',
+  'function chatReactionFor(',
+  'function chatQIntro(',
+  'function chatLogHTML(',
+  'function chatStyleLine() {',
 ];
 function loadChat(html) {
   const parts = [];
@@ -178,6 +189,10 @@ function loadChat(html) {
 }
 
 const fakeBox = { appendChild: () => {}, scrollTop: 0, scrollHeight: 0 };
+// (LOTE ONBOARDING-DIVERTIDO v760) chatLogPush arma la burbuja con avatar
+// (createElement + setAttribute + appendChild): el elemento falso tiene
+// que soportar eso, si no el poll aborta en el primer mensaje bot.
+function fakeEl() { return { className: '', textContent: '', innerHTML: '', src: '', alt: '', style: {}, setAttribute() {}, appendChild() {}, addEventListener() {}, querySelectorAll() { return []; } }; }
 
 function parteB() {
   console.log('— B) cliente: poll, join y push local —');
@@ -189,7 +204,7 @@ function parteB() {
 
     // (b) El poll salta la pregunta guionada y sigue mostrando lo real.
     {
-      const ctx = { S: {}, TEST_KEY_QS: '', document: { getElementById: () => fakeBox, createElement: () => ({}) }, chatRender: () => {}, chatBlocked: () => {}, chatDeviceId: () => 'dev-test', console };
+      const ctx = { S: {}, TEST_KEY_QS: '', document: { getElementById: () => fakeBox, createElement: () => fakeEl(), documentElement: { lang: lang === 'ES' ? 'es' : 'en' } }, chatRender: () => {}, chatBlocked: () => {}, chatDeviceId: () => 'dev-test', console };
       let tick = null;
       ctx.setInterval = (fn) => { tick = fn; return 1; };
       ctx.clearInterval = () => {};
@@ -228,7 +243,7 @@ function parteB() {
     // (d) Doble llamado a chatAskCurrent pushea una sola vez.
     {
       const posts = [];
-      const ctx = { S: {}, TEST_KEY_QS: '', document: { getElementById: () => fakeBox, createElement: () => ({}) }, chatRender: () => {}, chatBlocked: () => {}, chatDeviceId: () => 'dev-test', console };
+      const ctx = { S: {}, TEST_KEY_QS: '', document: { getElementById: () => fakeBox, createElement: () => fakeEl(), documentElement: { lang: lang === 'ES' ? 'es' : 'en' } }, chatRender: () => {}, chatBlocked: () => {}, chatDeviceId: () => 'dev-test', console };
       ctx.fetch = (url, opts) => { posts.push({ url, opts }); return Promise.resolve({ json: () => Promise.resolve({ ok: true, msg_id: 0 }) }); };
       vm.createContext(ctx);
       vm.runInContext(loaded.code, ctx);
@@ -237,18 +252,24 @@ function parteB() {
       vm.runInContext('chatAskCurrent(); chatAskCurrent();', ctx);
       const log = vm.runInContext('S.chatLog', ctx);
       check(`B4 ${lang} doble chatAskCurrent pushea UNA sola burbuja`, log.length === 1, 'chatLog=' + JSON.stringify(log));
-      check(`B5 ${lang} esa única burbuja es la pregunta con su título en negrita`, log.length === 1 && log[0].w === 'bot' && /oc-chat-q/.test(log[0].h || '') && (log[0].h || '').includes(T.qUbicacion), JSON.stringify(log[0]));
+      // (LOTE ONBOARDING-DIVERTIDO v760) La pregunta vigente ya no es una
+      // burbuja con el título en negrita: es una TARJETA destacada
+      // (entrada qcard). La única entrada es esa tarjeta y al pintarla
+      // lleva la chapita, la intro y la pregunta en grande.
+      check(`B5 ${lang} esa única entrada es la tarjeta destacada de la pregunta (qcard)`, log.length === 1 && log[0].w === 'bot' && log[0].qcard === 'ubicacion', JSON.stringify(log[0]));
+      const cardHtml = vm.runInContext('chatLogHTML(S.chatLog[0])', ctx);
+      check(`B5b ${lang} la tarjeta pinta chapita + pregunta en grande`, /oc-qcard/.test(cardHtml) && cardHtml.includes(T.qUbicacion), cardHtml.slice(0, 300));
       check(`B6 ${lang} el post al servidor también es uno solo`, posts.length === 1 && /kind/.test(posts[0].opts.body) && JSON.parse(posts[0].opts.body).kind === 'question', JSON.stringify(posts));
       // Control: tras rebuild (volver atrás) la pregunta vuelve a aparecer una vez.
       vm.runInContext('S.qi = 0; S.ans = {}; chatRebuildLog(); chatAskCurrent();', ctx);
       const log2 = vm.runInContext('S.chatLog', ctx);
-      check(`B7 ${lang} tras rebuild la pregunta aparece de nuevo UNA vez (no cero)`, log2.filter((m) => (m.h || '').includes(T.qUbicacion)).length === 1, 'chatLog=' + JSON.stringify(log2));
+      check(`B7 ${lang} tras rebuild la pregunta aparece de nuevo UNA vez (no cero)`, log2.filter((m) => m.qcard === 'ubicacion').length === 1, 'chatLog=' + JSON.stringify(log2));
     }
 
     // (c) El join inicializa lastId con el último id existente.
     {
       const calls = [];
-      const ctx = { S: {}, TEST_KEY_QS: '', document: { getElementById: () => fakeBox, createElement: () => ({}) }, chatRender: () => {}, chatBlocked: () => {}, chatDeviceId: () => 'dev-test', console };
+      const ctx = { S: {}, TEST_KEY_QS: '', document: { getElementById: () => fakeBox, createElement: () => fakeEl(), documentElement: { lang: lang === 'ES' ? 'es' : 'en' } }, chatRender: () => {}, chatBlocked: () => {}, chatDeviceId: () => 'dev-test', console };
       ctx.fetch = (url, opts) => {
         calls.push({ url, method: (opts && opts.method) || 'GET' });
         if (opts && opts.method === 'POST') return Promise.resolve({ json: () => Promise.resolve({ ok: true, user_id: 88 }) });

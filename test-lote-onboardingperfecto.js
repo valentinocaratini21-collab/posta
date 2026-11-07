@@ -50,7 +50,10 @@ for (const [tag, html] of [['ES', es], ['EN', en]]) {
   // ubicación en el espejo también guarda, si no un refresh la pierde.
   // (LOTE ETAPA-INSTAGRAM) 'espejo' pasa de 3 a 4 guardados: corregir la
   // etapa en el espejo también guarda, por el mismo motivo.
-  ok(tag + ' ítem4: guardado en avance/retroceso/espejo/draft/foto', count(html, "opResumeSave('preguntas')") === 6 && count(html, "opResumeSave('espejo')") === 4 && count(html, "opResumeSave('draft')") === 2 && count(html, "opResumeSave('foto')") === 1);
+  // (LOTE ONBOARDING-DIVERTIDO v760) 'preguntas' pasa de 6 a 7 guardados:
+  // studySoftApply guarda tras rellenar con el estudio en paralelo, para
+  // que un refresh no pierda lo que el estudio ya cerró.
+  ok(tag + ' ítem4: guardado en avance/retroceso/espejo/draft/foto', count(html, "opResumeSave('preguntas')") === 7 && count(html, "opResumeSave('espejo')") === 4 && count(html, "opResumeSave('draft')") === 2 && count(html, "opResumeSave('foto')") === 1);
   ok(tag + ' ítem4: borrado al completar y al entrar', has(html, 'function renderResults() {\n  const t = TRIAL;\n  try { opResumeClear(); }') && has(html, 'async function doGuestEnter() {\n  try { opResumeClear(); }'));
   ok(tag + ' ítem4: banner al iniciar', has(html, 'opResumeShowBanner(); } catch (e) {}'));
   ok(tag + ' ítem4: vence a los 7 días', has(html, '7 * 24 * 3600 * 1000'));

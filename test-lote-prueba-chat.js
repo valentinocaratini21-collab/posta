@@ -106,9 +106,18 @@ function gapsBlockFromModule() {
   const j = src.indexOf('// UMD.');
   return src.slice(i, j);
 }
-for (const [tag, html] of [['ES', es], ['EN', en]]) {
-  ok(tag + ': bloque gaps del IIFE idéntico a preguntas-dinamicas.js', normGaps(gapsBlockFrom(html)) === normGaps(gapsBlockFromModule()));
+ok('ES: bloque gaps del IIFE idéntico a preguntas-dinamicas.js', normGaps(gapsBlockFrom(es)) === normGaps(gapsBlockFromModule()));
+// (LOTE ONBOARDING-DIVERTIDO v760) El CANON EN lleva los rótulos en inglés
+// (paridad real: antes el EN mostraba los rótulos en español). El módulo
+// sigue siendo la fuente de verdad de valores y estructura; el bloque EN
+// es idéntico al módulo con los rótulos traducidos según esta tabla.
+const CANON_EN = { Reservar: 'Book', Escribirte: 'Message me', 'Ir al local': 'Visit the store', Comprar: 'Buy', Seguirme: 'Follow me', 'Pedir a domicilio': 'Order delivery', 'Agendar un turno': 'Book a slot', 'Ir a mi tienda o web': 'Go to my store or site', Llamarme: 'Call me', 'Sin promo': 'No promo', '% de descuento': '% off', '2x1': '2-for-1', 'Envío gratis': 'Free shipping', '3x2': '3-for-2', 'Cuotas sin interés': 'Interest-free installments', 'Regalo con tu compra': 'Gift with purchase', 'Combo en oferta': 'Combo deal', 'Precio especial por unos días': 'Special price for a few days', Cercano: 'Friendly', Profesional: 'Professional', Divertido: 'Fun', Elegante: 'Elegant', Inspirador: 'Inspiring', Educativo: 'Educational', 'Directo y vendedor': 'Direct and salesy', 'Canchero y juvenil': 'Cool and young', 'Sí': 'Yes', 'Solo en ofertas': 'Only on offers', 'Solo en algunos productos': 'Only on some products', 'A veces, según el posteo': 'Sometimes, depending on the post' };
+function toEN(block) {
+  let out = block;
+  for (const [esL, enL] of Object.entries(CANON_EN)) out = out.split("l: '" + esL + "'").join("l: '" + enL + "'");
+  return out;
 }
+ok('EN: bloque gaps del IIFE idéntico al módulo con rótulos en inglés', normGaps(gapsBlockFrom(en)) === toEN(normGaps(gapsBlockFromModule())));
 
 // ---------- D) Unit: huecos determinísticos (sin IA) ----------
 const { preguntasDinamicasGaps, groundedOptionsFor, DYN_TARGETS, MAX_DYN_QUESTIONS } = gapsMod;
@@ -213,6 +222,13 @@ function planCtx(html, S, WEB) {
   const srcPlan = fnFrom(html, 'function buildPlan() {');
   if (!srcDonde || !srcPlan) throw new Error('sin dondeAprendido/buildPlan en el HTML');
   vm.runInContext(srcDonde + '\n' + srcPlan, ctx, { filename: 'buildPlan' });
+  // (LOTE ONBOARDING-DIVERTIDO v760) buildPlan llama a chatHonestNeeded()
+  // (rama honesta). Se extrae el real: en estos escenarios no hay marcas
+  // de estudio (igTried/webTried sin definir), así que da false, igual
+  // que antes del lote; la tercera rama (chatKnownRows) no se alcanza.
+  const srcHonest = fnFrom(html, 'function chatHonestNeeded() {');
+  if (!srcHonest) throw new Error('sin chatHonestNeeded en el HTML');
+  vm.runInContext(srcHonest, ctx, { filename: 'chatHonestNeeded' });
   return ctx;
 }
 function planFor(html, S, WEB) {

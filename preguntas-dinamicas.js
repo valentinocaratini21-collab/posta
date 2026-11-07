@@ -12,7 +12,9 @@
 // En prueba.html / en-prueba.html estas mismas funciones viven portadas
 // dentro del IIFE (el front no carga este archivo); este archivo es la
 // fuente de verdad para los tests y debe mantenerse idéntico al bloque
-// del IIFE.
+// del IIFE. (LOTE ONBOARDING-DIVERTIDO v760: el CANON EN lleva los
+// rótulos en inglés — paridad real — así que el bloque EN es idéntico a
+// este módulo con los rótulos traducidos; el test lo verifica así.)
 
 // Los 12 targets posibles. `field` = el campo del fundamento que la
 // respuesta alimenta (q1..q8, como las 8 fijas) o un hecho (facts.*).
@@ -77,23 +79,38 @@ const CANON = {
     { v: 'local', l: 'Ir al local', need: 'local' },
     { v: 'comprar', l: 'Comprar', need: 'online' },
     { v: 'seguirme', l: 'Seguirme', need: 'creador' },
+    { v: 'domicilio', l: 'Pedir a domicilio', need: null },
+    { v: 'turno', l: 'Agendar un turno', need: null },
+    { v: 'tienda', l: 'Ir a mi tienda o web', need: null },
+    { v: 'llamar', l: 'Llamarme', need: null },
   ],
   promo: [
     { v: 'ninguna', l: 'Sin promo' },
     { v: 'porcentaje', l: '% de descuento' },
     { v: '2x1', l: '2x1' },
     { v: 'envio', l: 'Envío gratis' },
+    { v: '3x2', l: '3x2' },
+    { v: 'cuotas', l: 'Cuotas sin interés' },
+    { v: 'regalo', l: 'Regalo con tu compra' },
+    { v: 'combo', l: 'Combo en oferta' },
+    { v: 'temporal', l: 'Precio especial por unos días' },
   ],
   tono: [
     { v: 'cercano', l: 'Cercano' },
     { v: 'profesional', l: 'Profesional' },
     { v: 'divertido', l: 'Divertido' },
     { v: 'elegante', l: 'Elegante' },
+    { v: 'inspirador', l: 'Inspirador' },
+    { v: 'educativo', l: 'Educativo' },
+    { v: 'directo', l: 'Directo y vendedor' },
+    { v: 'canchero', l: 'Canchero y juvenil' },
   ],
   precios: [
     { v: 'si', l: 'Sí' },
     { v: 'ofertas', l: 'Solo en ofertas' },
     { v: 'no', l: 'No' },
+    { v: 'algunos', l: 'Solo en algunos productos' },
+    { v: 'aveces', l: 'A veces, según el posteo' },
   ],
 };
 
@@ -177,11 +194,11 @@ function groundedOptionsFor(target, input, gaps) {
         if (o.need === 'online') return known ? !!f.sells_online : true;
         if (o.need === 'creador') return !!f.is_creator;
         return true;
-      }).map((o) => ({ v: o.v, l: o.l, need: o.need }));
+      }).map((o) => ({ v: o.v, l: o.l, e: o.e, sub: o.sub, need: o.need }));
     }
-    case 'promo': return CANON.promo.map((o) => ({ v: o.v, l: o.l }));
-    case 'tono': return CANON.tono.map((o) => ({ v: o.v, l: o.l }));
-    case 'precios': return CANON.precios.map((o) => ({ v: o.v, l: o.l }));
+    case 'promo': return CANON.promo.map((o) => ({ v: o.v, l: o.l, e: o.e, sub: o.sub }));
+    case 'tono': return CANON.tono.map((o) => ({ v: o.v, l: o.l, e: o.e, sub: o.sub }));
+    case 'precios': return CANON.precios.map((o) => ({ v: o.v, l: o.l, e: o.e, sub: o.sub }));
     case 'audiencia': {
       const out = [];
       const seen = new Set();

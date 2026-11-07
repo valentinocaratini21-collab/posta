@@ -27889,10 +27889,10 @@ try { guestTrial = require('./guest-trial'); guestTrial.ensureSchema(db); } catc
 // exento como el resto de los gates de la prueba. La promo se marca SOLO
 // para la semana de prueba: una promo de esta semana no es fundamento
 // permanente (promo_semana: true en el objeto guardado).
-const OC_CTA = ['reservar', 'escribirte', 'local', 'comprar', 'seguirme'];
-const OC_PROMO = ['ninguna', 'porcentaje', '2x1', 'envio'];
-const OC_VOZ = ['cercano', 'profesional', 'divertido', 'elegante'];
-const OC_PRECIOS = ['si', 'ofertas', 'no'];
+const OC_CTA = ['reservar', 'escribirte', 'local', 'comprar', 'seguirme', 'domicilio', 'turno', 'tienda', 'llamar'];
+const OC_PROMO = ['ninguna', 'porcentaje', '2x1', 'envio', '3x2', 'cuotas', 'regalo', 'combo', 'temporal'];
+const OC_VOZ = ['cercano', 'profesional', 'divertido', 'elegante', 'inspirador', 'educativo', 'directo', 'canchero'];
+const OC_PRECIOS = ['si', 'ofertas', 'no', 'algunos', 'aveces'];
 const OC_DONDE = ['whatsapp', 'instagram', 'local', 'web'];
 const OC_ETAPA = ['lanzamiento', 'irregular', 'activo'];
 function onboardingAnswersFrom(fields) {
@@ -27901,10 +27901,14 @@ function onboardingAnswersFrom(fields) {
   return {
     producto_estrella: clean(f.producto_estrella, 60),
     producto_mix: clean(f.producto_mix, 10),
-    cta: clean(f.cta, 20),
-    promo: clean(f.promo, 20),
-    voz: clean(f.voz, 20),
-    precios: clean(f.precios, 20),
+    cta: clean(f.cta, 60),
+    cta_mix: clean(f.cta_mix, 10),
+    promo: clean(f.promo, 60),
+    promo_mix: clean(f.promo_mix, 10),
+    voz: clean(f.voz, 60),
+    voz_mix: clean(f.voz_mix, 10),
+    precios: clean(f.precios, 60),
+    precios_mix: clean(f.precios_mix, 10),
     // (LOTE PREGUNTA-DONDE) La respuesta puede ser un lugar (barrio/ciudad),
     // no solo un canal: 60 caracteres como la estrella, no 20.
     donde: clean(f.donde, 60),
@@ -27930,10 +27934,15 @@ function onboardingAnswersOk(a, opts) {
   // (trialHasEvidencedProducts, puerta fail-closed antes de generar).
   if (a.producto_mix === 'uno' || a.producto_mix === 'libre' || a.producto_mix === 'servicio' || a.producto_mix === 'marca') { if (!a.producto_estrella) return false; }
   else if (a.producto_mix !== 'todo' && a.producto_mix !== 'sin_oferta') return false;
-  if (!OC_CTA.includes(a.cta)) return false;
-  if (!OC_PROMO.includes(a.promo)) return false;
-  if (!OC_VOZ.includes(a.voz)) return false;
-  if (!OC_PRECIOS.includes(a.precios)) return false;
+  // (LOTE ONBOARDING-DIVERTIDO v760) Texto libre con sus palabras (mix 'libre'): el valor viaja literal y el gate solo exige que no venga vacío.
+  if (a.cta_mix === 'libre') { if (!a.cta) return false; }
+  else if (!OC_CTA.includes(a.cta)) return false;
+  if (a.promo_mix === 'libre') { if (!a.promo) return false; }
+  else if (!OC_PROMO.includes(a.promo)) return false;
+  if (a.voz_mix === 'libre') { if (!a.voz) return false; }
+  else if (!OC_VOZ.includes(a.voz)) return false;
+  if (a.precios_mix === 'libre') { if (!a.precios) return false; }
+  else if (!OC_PRECIOS.includes(a.precios)) return false;
   if (!opts.ig && !opts.web && !OC_DONDE.includes(a.donde)) return false;
   // (LOTE ETAPA-INSTAGRAM) La etapa es opcional en el gate (ausente =
   // prueba como hoy), pero si viene tiene que ser uno de los 3 valores.
@@ -27965,10 +27974,14 @@ function onboardingGoalLines(a, lang, detectados) {
   else if (a.producto_mix === 'marca' && a.producto_estrella) lines.push((en ? 'Personal brand: the product is the person and their content (' : 'Marca personal: el producto es la persona y su contenido (') + a.producto_estrella + ')');
   else if (a.producto_mix === 'sin_oferta') lines.push(en ? 'NO OFFER YET: the business is just starting; the week builds authority and growth in its niche, without inventing any product, service, price or promo.' : 'SIN OFERTA TODAVÍA: el negocio está empezando; la semana construye autoridad y crecimiento en su rubro, sin inventar ningún producto, servicio, precio ni promo.');
   else if (a.producto_estrella) lines.push((en ? 'Star product (chosen by the owner): ' : 'Producto estrella (elegido por el dueño): ') + a.producto_estrella);
-  if (a.cta) lines.push((en ? 'Post goal: ' : 'Objetivo del posteo: ') + ({ reservar: en ? 'bookings' : 'reservas', escribirte: en ? 'messages' : 'mensajes', local: en ? 'store visits' : 'visitas al local', comprar: en ? 'purchases' : 'compras', seguirme: en ? 'followers' : 'seguidores' }[a.cta] || a.cta));
-  if (a.promo && a.promo !== 'ninguna') lines.push((en ? 'Real promo this week: ' : 'Promo real esta semana: ') + ({ porcentaje: en ? '% off' : '% de descuento', '2x1': '2x1', envio: en ? 'free shipping' : 'envío gratis' }[a.promo] || a.promo));
-  if (a.voz) lines.push((en ? 'Voice: ' : 'Voz: ') + a.voz);
-  if (a.precios) lines.push((en ? 'Prices in posts: ' : 'Precios en posteos: ') + ({ si: en ? 'yes' : 'sí', ofertas: en ? 'only on offers' : 'solo en ofertas', no: 'no' }[a.precios] || a.precios));
+  if (a.cta_mix === 'libre' && a.cta) lines.push((en ? 'Post goal (in their words): ' : 'Objetivo del posteo (con sus palabras): ') + a.cta);
+  else if (a.cta) lines.push((en ? 'Post goal: ' : 'Objetivo del posteo: ') + ({ reservar: en ? 'bookings' : 'reservas', escribirte: en ? 'messages' : 'mensajes', local: en ? 'store visits' : 'visitas al local', comprar: en ? 'purchases' : 'compras', seguirme: en ? 'followers' : 'seguidores', domicilio: en ? 'delivery orders' : 'pedidos a domicilio', turno: en ? 'appointments' : 'turnos', tienda: en ? 'store or website visits' : 'visitas a la tienda o web', llamar: en ? 'phone calls' : 'llamadas' }[a.cta] || a.cta));
+  if (a.promo_mix === 'libre' && a.promo) lines.push((en ? 'Real promo this week (in their words): ' : 'Promo real esta semana (con sus palabras): ') + a.promo);
+  else if (a.promo && a.promo !== 'ninguna') lines.push((en ? 'Real promo this week: ' : 'Promo real esta semana: ') + ({ porcentaje: en ? '% off' : '% de descuento', '2x1': '2x1', '3x2': '3x2', envio: en ? 'free shipping' : 'envío gratis', cuotas: en ? 'interest-free installments' : 'cuotas sin interés', regalo: en ? 'gift with purchase' : 'regalo con la compra', combo: en ? 'combo deal' : 'combo en oferta', temporal: en ? 'limited-time special price' : 'precio especial por unos días' }[a.promo] || a.promo));
+  if (a.voz_mix === 'libre' && a.voz) lines.push((en ? 'Voice (in their words): ' : 'Voz (con sus palabras): ') + a.voz);
+  else if (a.voz) lines.push((en ? 'Voice: ' : 'Voz: ') + a.voz);
+  if (a.precios_mix === 'libre' && a.precios) lines.push((en ? 'Prices in posts (in their words): ' : 'Precios en posteos (con sus palabras): ') + a.precios);
+  else if (a.precios) lines.push((en ? 'Prices in posts: ' : 'Precios en posteos: ') + ({ si: en ? 'yes' : 'sí', ofertas: en ? 'only on offers' : 'solo en ofertas', no: 'no', algunos: en ? 'only on some products' : 'solo en algunos productos', aveces: en ? 'sometimes, depending on the post' : 'a veces, según el posteo' }[a.precios] || a.precios));
   if (a.donde) lines.push((en ? 'Where to find them: ' : 'Dónde lo encuentran: ') + ({ whatsapp: 'WhatsApp', instagram: 'Instagram', local: en ? 'at the store' : 'en el local', web: en ? 'on their website' : 'en su web' }[a.donde] || a.donde));
   // (LOTE ETAPA-INSTAGRAM) La etapa viaja al digest como línea propia.
   if (a.etapa) lines.push((en ? 'Instagram stage: ' : 'Etapa del Instagram: ') + ({ lanzamiento: en ? 'just starting' : 'recién arranca', irregular: en ? 'posts when they remember' : 'postea cuando se acuerda', activo: en ? 'posts often' : 'postea seguido' }[a.etapa] || a.etapa));
@@ -27980,6 +27993,106 @@ function onboardingGoalLines(a, lang, detectados) {
   if (a.lineas_rojas) lines.push((en ? 'RED LINES — NEVER POST: ' : 'LÍNEAS ROJAS — NUNCA PUBLICAR: ') + a.lineas_rojas);
   return lines;
 }
+
+// (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El perfil de estilo
+// que manda el cliente (campo 'estilo' del form): validación estricta, sin
+// excepciones — lo que viene roto o fuera de rango se ignora, nunca se
+// inventa ni se guarda tal cual.
+function parseTrialStyle(v) {
+  try {
+    const s = typeof v === 'string' ? JSON.parse(v) : v;
+    if (!s || typeof s !== 'object' || Array.isArray(s)) return null;
+    const num = (x, max) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= max) ? x : null;
+    const strs = (a, maxN, maxL) => Array.isArray(a) ? a.filter((x) => typeof x === 'string' && x.length > 0 && x.length <= maxL).slice(0, maxN) : [];
+    const out = {};
+    const ppw = num(s.posts_per_week, 50); if (ppw != null) out.posts_per_week = ppw;
+    const acw = num(s.avg_caption_words, 500); if (acw != null) out.avg_caption_words = acw;
+    const ah = num(s.avg_hashtags, 30); if (ah != null) out.avg_hashtags = ah;
+    const ht = strs(s.hashtags_top, 5, 30); if (ht.length) out.hashtags_top = ht;
+    const pn = strs(s.palette_names, 4, 20); if (pn.length) out.palette_names = pn;
+    const pne = strs(s.palette_names_en, 4, 20); if (pne.length) out.palette_names_en = pne;
+    if (s.tone === 'vos' || s.tone === 'usted') out.tone = s.tone;
+    if (s.formats && typeof s.formats === 'object') {
+      const f = {};
+      const im = num(s.formats.images, 1000), vi = num(s.formats.videos, 1000), ca = num(s.formats.carousels, 1000);
+      if (im != null) f.images = im; if (vi != null) f.videos = vi; if (ca != null) f.carousels = ca;
+      if (Object.keys(f).length) out.formats = f;
+    }
+    if (Array.isArray(s.best_posts)) {
+      const bp = s.best_posts.slice(0, 3).filter((b) => b && typeof b === 'object' && typeof b.shortcode === 'string' && typeof b.likes === 'number').map((b) => ({ shortcode: b.shortcode.slice(0, 40), likes: b.likes, caption_head: typeof b.caption_head === 'string' ? b.caption_head.slice(0, 80) : '' }));
+      if (bp.length) out.best_posts = bp;
+    }
+    return Object.keys(out).length ? out : null;
+  } catch (e) { return null; }
+}
+// (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El estilo
+// observado, como líneas del fundamento: solo lo observado, en el idioma de
+// la generación. Sin estilo, cero líneas (nunca se inventa un estilo).
+function styleGoalLines(style, lang) {
+  const lines = [];
+  if (!style) return lines;
+  const en = lang === 'en';
+  const names = (en ? style.palette_names_en : style.palette_names) || style.palette_names || [];
+  if (names.length) lines.push(en ? ('Their feed palette uses ' + names.slice(0, 2).join(' and ') + ' tones — keep the week inside those tones.') : ('Su paleta del feed usa tonos ' + names.slice(0, 2).join(' y ') + ' — la semana se queda dentro de esos tonos.'));
+  if (typeof style.avg_caption_words === 'number' && style.avg_caption_words > 0) {
+    const band = style.avg_caption_words <= 12 ? (en ? 'short' : 'cortas') : style.avg_caption_words <= 30 ? (en ? 'medium-length' : 'medianas') : (en ? 'long' : 'largas');
+    lines.push(en ? ('Their captions are ' + band + ' (about ' + style.avg_caption_words + ' words) — match that length.') : ('Sus captions son ' + band + ' (unas ' + style.avg_caption_words + ' palabras) — respetá ese largo.'));
+  }
+  if (style.hashtags_top && style.hashtags_top.length) lines.push(en ? ('They use hashtags like ' + style.hashtags_top.slice(0, 3).map((h) => '#' + h).join(' ') + ' — reuse their real hashtags when they fit.') : ('Usa hashtags como ' + style.hashtags_top.slice(0, 3).map((h) => '#' + h).join(' ') + ' — reutilizá sus hashtags reales cuando encajen.'));
+  if (typeof style.posts_per_week === 'number') lines.push(en ? ('They post about ' + style.posts_per_week + ' times a week — keep their rhythm, never flood.') : ('Postea unas ' + style.posts_per_week + ' veces por semana — respetá su ritmo, sin saturar.'));
+  if (style.tone === 'vos') lines.push(en ? 'Their tone is close and informal (voseo) — write like they write.' : 'Su tono es cercano, con voseo — escribí como escriben ellos.');
+  if (style.tone === 'usted') lines.push(en ? 'Their tone is formal (usted) — write like they write.' : 'Su tono es formal, con usted — escribí como escriben ellos.');
+  if (style.best_posts && style.best_posts.length) lines.push(en ? ('Their best post starts with «' + (style.best_posts[0].caption_head || '').slice(0, 60) + '» — learn from what worked.') : ('Su mejor posteo empieza con «' + (style.best_posts[0].caption_head || '').slice(0, 60) + '» — aprendé de lo que funcionó.'));
+  return lines;
+}
+// (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Encuadre en palabras
+// simples según el estilo real de la pieza (código del sistema de estilos).
+const TRIAL_PROMPT_FRAMING = {
+  '/product': { es: 'tu producto, grande en primer plano', en: 'your product, big in the foreground' },
+  '/macro': { es: 'un detalle de cerca de tu producto', en: 'a close-up detail of your product' },
+  '/flatlay': { es: 'tu producto desde arriba, ordenado', en: 'your product from above, neatly arranged' },
+  '/lifestyle': { es: 'tu producto en uso, con vida', en: 'your product in use, full of life' },
+  '/food': { es: 'tu plato en primer plano', en: 'your dish in the foreground' },
+  '/aerial': { es: 'tu producto desde arriba', en: 'your product from above' },
+  '/packaging': { es: 'tu producto con su packaging', en: 'your product with its packaging' },
+  '/goldenhour': { es: 'tu producto con luz cálida de atardecer', en: 'your product in warm sunset light' },
+};
+// (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) El prompt que se
+// muestra por posteo, en palabras simples, desde lo REALMENTE usado para esa
+// pieza: foto, estilo/encuadre, paleta observada, tono. Nada inventado: cada
+// parte solo se agrega si existe. prompt_detalle = el detalle técnico
+// completo (desplegable «cómo se hizo este posteo»).
+function trialPostPrompt(o) {
+  const en = o && o.lang === 'en';
+  const T = (es, enS) => (en ? enS : es);
+  const parts = [];
+  const sp = (o && o.specPost) || {};
+  const post = (o && o.post) || {};
+  if (sp.photo_product) parts.push(T('tu foto de ' + sp.photo_product, 'your photo of ' + sp.photo_product));
+  else if (sp.photo) parts.push(T('tu foto del producto', 'your product photo'));
+  const fr = TRIAL_PROMPT_FRAMING[sp.style];
+  if (fr) parts.push(en ? fr.en : fr.es);
+  else if (sp.style_name) parts.push(T('estilo «' + String(sp.style_name).toLowerCase() + '»', 'style «' + String(sp.style_name).toLowerCase() + '»'));
+  const names = (o && o.paletteNames) || [];
+  if (names.length) parts.push(T('con tu paleta ' + names.slice(0, 2).join(' y '), 'with your palette of ' + names.slice(0, 2).join(' and ')));
+  if (o && o.tone === 'vos') parts.push(T('con tu tono cercano', 'with your close tone'));
+  if (o && o.tone === 'usted') parts.push(T('con tu tono formal', 'with your formal tone'));
+  if (post.ai) parts.push(T('foto realista con luz natural', 'realistic photo with natural light'));
+  if (post.type === 'video') parts.push(T('tu reel', 'your reel'));
+  let simple = parts.join(', ');
+  if (!simple) simple = T('hecho con tu producto y tu estilo', 'made with your product and your style');
+  simple = simple.charAt(0).toUpperCase() + simple.slice(1) + '.';
+  const det = [];
+  det.push(T('Estilo: ', 'Style: ') + (sp.style_name || sp.style || '—'));
+  det.push(T('Foto: ', 'Photo: ') + (sp.photo_product || (sp.photo ? T('foto real del producto', 'real product photo') : T('sin foto real', 'no real photo'))));
+  det.push(T('Paleta: ', 'Palette: ') + (names.length ? names.join(', ') : T('no observada', 'not observed')));
+  det.push(T('Tono: ', 'Tone: ') + (o && o.tone ? o.tone : T('no observado', 'not observed')));
+  det.push(T('Motor: ', 'Engine: ') + (post.ai ? (post.engine || 'IA') : T('plantilla', 'template')));
+  if (post.headline) det.push(T('Titular: ', 'Headline: ') + post.headline);
+  if (post.artBrief) det.push(T('Brief: ', 'Brief: ') + post.artBrief);
+  return { prompt_simple: simple, prompt_detalle: det.join('\n') };
+}
+
 
 // (rubro-literal) Productos detectados que el front vio en la pregunta 1
 // (lista que el propio servidor produjo en prefill): se sanean y se topan.
@@ -28246,6 +28359,8 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // gastar IA. El serve de semana existente (caché/candado) no genera y
   // queda intacto: esto solo cierra la creación sin respuestas.
   const ocAns = onboardingAnswersFrom(fields);
+  const estilo = parseTrialStyle(fields && fields.estilo);
+  const estiloPaletteNames = estilo ? (((lang === 'en' ? estilo.palette_names_en : estilo.palette_names) || estilo.palette_names) || []) : [];
   const ocDetectados = trialParseDetectados(fields.productos_detectados);
   // (DRAFT-ONBOARDING · 4/11) Gusto del draft: se valida estricto; si
   // viene roto, se ignora (la semana se genera como hoy, nunca se
@@ -28277,7 +28392,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // del espejo (ver formTextBase abajo): el gusto real va por el spec
   // estructurado, no por texto.
   const draftLines = draftOnboarding.draftGoalLines(ocDraft, lang);
-  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados), ...styleGoalLines(estilo, lang)].filter(Boolean).join('\n');
   // Colores: si el visitante mandó (ya no se pide en el form), se usan; si no,
   // intentamos los colores REALES de su perfil de Instagram (best-effort) y
   // si no se puede, cae a la paleta curada de su rubro.
@@ -28471,6 +28586,14 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
     }
     const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft });
+    // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Cada posteo lleva
+    // su prompt en palabras simples, desde lo realmente usado para esa pieza.
+    (posts || []).forEach((pp, _i) => {
+      if (!pp) return;
+      const _sp = Object.assign({}, ((spec && spec.posts) || [])[_i] || {}, { style: pp.style, style_name: pp.style_name });
+      const _pr = trialPostPrompt({ post: pp, specPost: _sp, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
+      pp.prompt_simple = _pr.prompt_simple; pp.prompt_detalle = _pr.prompt_detalle;
+    });
     // 🧠 Análisis (2026-10-19): misma radiografía que la ruta stream. Si los
     // datos del @ no llegan, el análisis queda ausente — jamás se afirma un
     // nacimiento sobre una cuenta que no se pudo leer.
@@ -28679,6 +28802,12 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
       });
     }
   } catch (e) { /* tarjetas con nombre */ }
+  // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) Perfil de estilo
+  // observado del feed (ritmo, captions, hashtags, mejores posteos, paleta):
+  // determinístico, best-effort, nunca frena el prefill.
+  const factsIg = trialIgFacts(bio, captions, (prof && prof.category) || '');
+  let styleIg = null;
+  try { styleIg = await feedAudit.trialStyleProfile(embedPosts, { bio: bio || '', followers: (prof && prof.followers) || null, posts_count: igStage.posts_count }, { tone: factsIg.tone, lang: prefillLang }); } catch (e) { styleIg = null; }
   res.json({
     ok: true,
     ig,
@@ -28692,7 +28821,8 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
     productos: ocProductos,
     // (LOTE ONBOARDING-Q1) Hechos del negocio (bio + captions): la Q2 y
     // las Q6/Q7 se adaptan a esto. La web manda si también se estudió.
-    facts: trialIgFacts(bio, captions, (prof && prof.category) || ''),
+    facts: factsIg,
+    style: styleIg,
     ig_stage: igStage,
   });
 });
@@ -28831,6 +28961,7 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
     subcat: wHasVotes ? (wresolved.subcat || '') : '',
     rubro_check: wHasVotes ? wresolved.rubroCheck : { needed: false, options: [], detected: null },
     palette: data.palette || [],
+    style: feedAudit.paletteProfileFromHexes(data.palette || []),
     photos: (data.photos || []).map((p) => p.url),
     photoCount: (data.photos || []).length,
     productos: ocProductos,
@@ -28929,6 +29060,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
 
   // (onboarding un clic) SIN ATAJO, igual que en /api/trial/generate.
   const ocAns = onboardingAnswersFrom(fields);
+  const estilo = parseTrialStyle(fields && fields.estilo);
+  const estiloPaletteNames = estilo ? (((lang === 'en' ? estilo.palette_names_en : estilo.palette_names) || estilo.palette_names) || []) : [];
   const ocDetectados = trialParseDetectados(fields.productos_detectados);
   // (DRAFT-ONBOARDING · 4/11) Gusto del draft: se valida estricto; si
   // viene roto, se ignora (la semana se genera como hoy, nunca se
@@ -28958,7 +29091,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // abajo): minarla convertía cada elección en un «producto». Mismo
   // patrón que en /api/trial/generate.
   const draftLinesS = draftOnboarding.draftGoalLines(ocDraft, lang);
-  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial), ...onboardingGoalLines(ocAns, lang, ocDetectados), ...styleGoalLines(estilo, lang)].filter(Boolean).join('\n');
   const pal = demo.CATEGORY_COLORS[category] || demo.CATEGORY_COLORS.otro;
   const hexOk = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || '').trim());
   let accent = hexOk(fields.accent) ? String(fields.accent).trim().toUpperCase() : pal[0];
@@ -29393,6 +29526,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         style_name: specPosts[i].style_name,
         text_mode: specPosts[i].text_mode || 'text',
       };
+      const _prI = trialPostPrompt({ post: posts[i], specPost: specPosts[i] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
+      posts[i].prompt_simple = _prI.prompt_simple; posts[i].prompt_detalle = _prI.prompt_detalle;
       send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
     });
     runDir = streamed.runDir;
@@ -29598,6 +29733,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                   engine: pieceEngines[i] || null,
                   qa: pieceQa[i] || null,
                 };
+                const _prP = trialPostPrompt({ post: posts[i], specPost: specPosts[i] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
+                posts[i].prompt_simple = _prP.prompt_simple; posts[i].prompt_detalle = _prP.prompt_detalle;
                 send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
               },
             });
@@ -29675,6 +29812,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                 aPost.image = 'data:image/jpeg;base64,' + fs.readFileSync(comp.jpegPath).toString('base64');
                 aPost.ai = true;
                 aPost.upload_anchored = true;
+                const _prA = trialPostPrompt({ post: aPost, specPost: aSpec || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
+                aPost.prompt_simple = _prA.prompt_simple; aPost.prompt_detalle = _prA.prompt_detalle;
                 uploadProduct.fidelity = 'passed';
                 send('post', { index: anchorIdx, day: week[anchorIdx] && week[anchorIdx].day, date: week[anchorIdx] && week[anchorIdx].date, hour: week[anchorIdx] && week[anchorIdx].hour, post: aPost });
               } else {
@@ -29783,6 +29922,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         ...(pieceEngines[videoIdx] ? { ai: true, engine: pieceEngines[videoIdx], qa: pieceQa[videoIdx] || null, ...(demoTreatments ? { treatment: demoTreatments[videoIdx] } : {}) } : {}),
       };
     }
+    const _prV = trialPostPrompt({ post: posts[videoIdx], specPost: specPosts[videoIdx] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
+    posts[videoIdx].prompt_simple = _prV.prompt_simple; posts[videoIdx].prompt_detalle = _prV.prompt_detalle;
     send('post', { index: videoIdx, day: week[videoIdx].day, date: week[videoIdx].date, hour: week[videoIdx].hour, post: posts[videoIdx] });
 
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
@@ -31648,7 +31789,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v759';
+const BUILD_ID = '20261105-v760';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -965,6 +965,86 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 .oc-chat-msgs{display:flex;flex-direction:column;gap:10px;margin:14px 0}
 .oc-chat-msgs .msg{max-width:88%}
 .oc-chat-q{font-weight:800;color:#0A1E33}
+/* (LOTE ONBOARDING-DIVERTIDO v760) Hero de Posty trabajando, avatar en burbujas, tarjeta de pregunta, lo aprendido, momento armando, confetti. */
+.oc-workhero{position:relative;border-radius:28px;overflow:hidden;box-shadow:0 10px 30px rgba(22,104,160,.14);border:3px solid #fff;background:#fff;margin:0 0 16px}
+.oc-workhero .oc-frame{aspect-ratio:6/5;overflow:hidden;position:relative}
+.oc-workhero .oc-hero-img{width:100%;height:100%;object-fit:cover;object-position:50% 16%;display:block;animation:ocHeroZoom 16s ease-in-out infinite alternate}
+@keyframes ocHeroZoom{from{transform:scale(1)}to{transform:scale(1.12)}}
+.oc-float-cards{position:absolute;inset:0;pointer-events:none}
+.oc-float-card{position:absolute;width:44px;height:56px;background:rgba(255,255,255,.95);border-radius:9px;box-shadow:0 8px 18px rgba(18,49,74,.22);display:grid;place-items:center;font-size:20px;animation:ocFloaty 5s ease-in-out infinite}
+.oc-float-card.fc1{top:12%;right:4%;--r:7deg}
+.oc-float-card.fc2{top:38%;right:2.5%;--r:-6deg;animation-delay:1.2s;width:38px;height:48px;font-size:17px}
+.oc-float-card.fc3{top:60%;right:5%;--r:5deg;animation-delay:2.3s;width:40px;height:50px;font-size:18px}
+@keyframes ocFloaty{0%,100%{transform:translateY(0) rotate(var(--r,0deg))}50%{transform:translateY(-10px) rotate(var(--r,0deg))}}
+.oc-live-pill{position:absolute;top:12px;left:12px;display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.92);color:#12314A;font-weight:700;font-size:13px;padding:6px 12px;border-radius:999px;box-shadow:0 4px 14px rgba(18,49,74,.18)}
+.oc-live-dot{width:9px;height:9px;border-radius:50%;background:#2FBF71;animation:ocPulse 1.4s ease-in-out infinite}
+@keyframes ocPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.55}}
+.oc-video-caption{position:absolute;left:12px;right:12px;bottom:12px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.94);color:#12314A;border-radius:16px;padding:10px 14px;box-shadow:0 6px 18px rgba(18,49,74,.16)}
+.oc-video-caption .face{width:38px;height:38px;border-radius:50%;flex:0 0 auto;overflow:hidden;background:#fff;border:2px solid #E3F2FA;display:block}
+.oc-video-caption .face img{width:100%;height:100%;display:block;object-fit:cover;object-position:50% 22%;transform:scale(1.6);transform-origin:50% 25%}
+.oc-video-caption p{margin:0;font-weight:800;font-size:15px;line-height:1.25}
+.oc-video-caption small{display:block;font-weight:600;color:#4A6B84;font-size:12px}
+.oc-typing{display:inline-flex;gap:4px;margin-left:2px;vertical-align:middle}
+.oc-typing i{width:6px;height:6px;border-radius:50%;background:#2793C8;display:inline-block;animation:ocTp 1.1s infinite}
+.oc-typing i:nth-child(2){animation-delay:.15s}
+.oc-typing i:nth-child(3){animation-delay:.3s}
+@keyframes ocTp{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+.msg-row{display:flex;gap:8px;align-items:flex-start}
+.msg-row.user{justify-content:flex-end}
+.msg-row.bot .msg{flex:1;min-width:0;max-width:none}
+.msg-ava{width:32px;height:32px;border-radius:50%;flex:0 0 auto;overflow:hidden;background:#fff;border:2px solid #fff;box-shadow:0 4px 10px rgba(22,104,160,.3)}
+.msg-ava img{width:100%;height:100%;display:block;object-fit:cover;object-position:50% 22%;transform:scale(1.6);transform-origin:50% 25%}
+.msg-ava.oc-qava{width:46px;height:46px;border:3px solid #FEC14D}
+.oc-chat-msgs .msg.bot.oc-qcard{max-width:none;background:#FFF6D8;border:3px solid #FEC14D;border-radius:8px 22px 22px 22px;padding:16px 18px 15px;box-shadow:0 10px 26px rgba(232,164,28,.28),0 4px 14px rgba(22,104,160,.10)}
+.q-badge{display:inline-flex;align-items:center;gap:6px;background:#2793C8;color:#fff;font-weight:800;font-size:12px;letter-spacing:.05em;text-transform:uppercase;padding:5px 11px;border-radius:999px;margin-bottom:10px}
+.q-intro{display:block;font-size:15px;font-weight:600;color:#4A6B84;line-height:1.4;margin-bottom:5px}
+.q-ask{display:block;font-weight:800;font-size:22px;line-height:1.18;color:#0A1E33}
+.q-hint{display:flex;align-items:center;gap:6px;margin-top:11px;padding-top:10px;border-top:2px dashed rgba(232,164,28,.55);font-size:14px;font-weight:800;color:#1668A0}
+.q-hint .bounce{display:inline-block;animation:ocQbounce 1s ease-in-out infinite}
+@keyframes ocQbounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+.backlink{align-self:flex-start;background:none;border:none;cursor:pointer;font-weight:800;color:#4A6B84;padding:8px 2px 0;font-size:14px}
+.backlink:hover{color:#2793C8}
+.oc-reaction{align-self:flex-start;margin-left:45px;font-size:13px;font-weight:700;color:#1668A0;background:#E3F2FA;padding:5px 12px;border-radius:999px}
+.known-card{margin-left:45px;background:#fff;border:2px solid #D6ECF7;border-radius:20px 20px 20px 6px;padding:15px 16px;box-shadow:0 10px 30px rgba(22,104,160,.14)}
+.known-head{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+.known-head .face{width:42px;height:42px;border-radius:50%;flex:0 0 auto;overflow:hidden;background:#fff;border:2px solid #FEC14D}
+.known-head .face img{width:100%;height:100%;display:block;object-fit:cover;object-position:50% 22%;transform:scale(1.6);transform-origin:50% 25%}
+.known-head h3{margin:0;font-size:19px;font-weight:800;line-height:1.15}
+.known-head p{margin:2px 0 0;font-size:13px;font-weight:600;color:#4A6B84;line-height:1.35}
+.known-rows{display:flex;flex-direction:column;gap:8px}
+.known-row{display:flex;align-items:center;gap:11px;background:#F2F9FD;border:2px solid #D6ECF7;border-radius:14px;padding:10px 12px}
+.known-row .k-emoji{font-size:20px;flex:0 0 auto}
+.known-row .k-text{flex:1;min-width:0}
+.known-row .k-label{display:block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#4A6B84}
+.known-row .k-value{display:block;font-weight:700;font-size:16px;line-height:1.25;color:#0A1E33}
+.known-row .k-check{flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:#2FBF71;color:#fff;display:grid;place-items:center;font-size:13px;font-weight:800}
+.known-row .k-check.miss{background:#C4553B}
+.known-row .k-check.ask{background:#2793C8}
+.known-foot{margin:11px 0 0;font-size:13px;font-weight:700;color:#1668A0;line-height:1.4}
+.oc-opts-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}
+.oc-opts-head strong{font-weight:800;font-size:17px;line-height:1.2;color:#0A1E33}
+.oc-opts-count{flex:0 0 auto;background:#E3F2FA;color:#1668A0;border:2px solid #D6ECF7;font-weight:800;font-size:12px;padding:5px 10px;border-radius:999px;white-space:nowrap}
+.oc-card .oc-card-e{display:block;font-size:26px;margin-bottom:4px}
+.oc-card.oc-free{grid-column:1/-1;border-style:dashed}
+#tkSteps{display:flex;flex-direction:column;gap:9px}
+.tk-work{border-radius:18px;overflow:hidden;aspect-ratio:2/1;background:#fff;margin:0 0 14px}
+.tk-work img{width:100%;height:100%;object-fit:cover;object-position:50% 18%;display:block}
+.bstep{display:flex;align-items:center;gap:11px;background:#F2F9FD;border:2px solid #D6ECF7;border-radius:14px;padding:11px 13px;font-weight:700;color:#4A6B84}
+.bstep-ico{flex:0 0 auto;width:27px;height:27px;border-radius:50%;border:3px solid #D6ECF7;display:grid;place-items:center;font-size:13px;font-weight:800;color:#fff;background:transparent}
+.bstep.active{color:#0A1E33;border-color:#2793C8}
+.bstep.active .bstep-ico{border-color:#E3F2FA;border-top-color:#2793C8;animation:ocSpin .7s linear infinite}
+@keyframes ocSpin{to{transform:rotate(360deg)}}
+.bstep.done{color:#0A1E33}
+.bstep.done .bstep-ico{background:#2FBF71;border-color:#2FBF71}
+.bstep-state{margin-left:auto;font-size:12px;font-weight:800;color:#4A6B84;white-space:nowrap}
+.bstep.active .bstep-state{color:#1668A0}
+.bstep.done .bstep-state{color:#1E9E57}
+.res-hero{position:relative}
+.oc-confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.oc-confetti i{position:absolute;top:-14px;width:9px;height:14px;border-radius:3px;animation:ocFall linear forwards}
+@keyframes ocFall{to{transform:translateY(560px) rotate(560deg);opacity:.9}}
+@media (max-width:400px){.known-card{margin-left:0}.oc-reaction{margin-left:0}}
+@media (prefers-reduced-motion: reduce){.oc-workhero .oc-hero-img,.oc-float-card{animation:none}}
 .oc-chat-free{display:flex;gap:8px;margin-top:12px}
 .oc-chat-free .oc-field{flex:1;margin:0}
 .oc-chat-free .oc-btn{width:auto;margin:0;padding:12px 18px;font-size:16px}
@@ -985,19 +1065,50 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 .oc-draft-slot .dk{font-size:11px;font-weight:500;color:#5A7488}
 .oc-draft-pack{font-size:13px;font-weight:800;color:#B8860B;letter-spacing:.04em}
 .oc-draft-card{position:relative;display:flex;flex-direction:column;background:#fff;border:2px solid #DCEFFF;border-radius:16px;overflow:hidden;cursor:pointer;text-align:left;padding:0}
-.oc-draft-card img{width:100%;height:148px;object-fit:cover;display:block;background:#F2F9FD}
+/* (LOTE ONBOARDING-DIVERTIDO v760 · mock v2) La imagen va en su propio marco con overflow:hidden y position:relative (el logo de marca va ENCIMA de la foto): el texto de la tarjeta nunca queda tapado. */
+.oc-draft-img{position:relative;display:block;height:148px;overflow:hidden;background:#F2F9FD}
+.oc-draft-img img{width:100%;height:100%;object-fit:cover;display:block}
+.oc-draft-nophoto{display:flex;align-items:center;justify-content:center;gap:8px;height:148px;background:#F2F9FD;color:#5A7488;font-size:13px;font-weight:600;padding:12px 16px;text-align:center}
+.oc-draft-slot.pending{border-style:dashed;color:#8AA5B5}
+.oc-slot-dots{display:inline-flex;gap:4px}
+.oc-slot-dots i{width:6px;height:6px;border-radius:50%;background:#8AA5B5;animation:oc-slot-dot 1.2s infinite}
+.oc-slot-dots i:nth-child(2){animation-delay:.2s}
+.oc-slot-dots i:nth-child(3){animation-delay:.4s}
+@keyframes oc-slot-dot{0%,100%{opacity:.3}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.oc-slot-dots i{animation:none;opacity:.6}}
 .oc-draft-card b{display:block;padding:12px 14px 2px;font-size:17px;color:#0A1E33}
 .oc-draft-card small{display:block;padding:0 14px 12px;font-size:13px;font-weight:500;color:#5A7488}
 .oc-draft-card.oc-picked{border-color:#DFA856;background:#FFF8E6;box-shadow:0 0 0 3px rgba(223,168,86,.35),0 8px 24px rgba(223,168,86,.25)}
-/* (LOTE DISEÑO-FAVORITA) Cada opción con SU imagen: recortes distintos de la
-   foto real (mock 1/2/2b). La tarjeta tiene overflow:hidden, así que el
-   scale recorta sin desbordar. */
-img.crop-close{object-position:50% 32%;transform:scale(1.55)}
-img.crop-action{object-position:50% 68%;transform:scale(1.2)}
-img.crop-brand{object-position:50% 50%}
-img.crop-a{object-position:50% 18%}
-img.crop-b{object-position:50% 50%}
-img.crop-c{object-position:50% 82%;transform:scale(1.25)}
+/* (LOTE ONBOARDING-DIVERTIDO v760 · mock v2 aprobado) Sin recortes: cada
+   opción muestra una foto REAL y DISTINTA; la diferencia la hace la foto,
+   nunca el scale (el scale 1.55x pintaba sobre el pie y lo cortaba). La
+   marca lleva el logo grande ENCIMA de su foto. */
+.oc-draft-preview{position:relative;margin:12px 0 4px}
+.oc-draft-img.big{height:260px}
+.oc-draft-nophoto.big{height:260px}
+.oc-draft-chip{position:absolute;top:10px;left:10px;background:#FEC14D;color:#0A1E33;font-size:13px;font-weight:800;padding:6px 10px;border-radius:999px;box-shadow:0 2px 8px rgba(10,30,51,.25);z-index:2}
+.oc-draft-prevcap{margin:8px 2px 0;font-size:14px;color:#5A7488}
+.oc-draft-choose{margin:14px 2px 8px;font-size:12px;font-weight:800;letter-spacing:.08em;color:#5A7488;text-transform:uppercase}
+.oc-grid.oc-grid-3{grid-template-columns:repeat(3,1fr)}
+.oc-grid-3 .oc-draft-card b{font-size:15px;padding:10px 10px 2px}
+.oc-grid-3 .oc-draft-card small{font-size:12px;padding:0 10px 10px}
+.oc-draft-card.oc-picked{border-color:#FEC14D}
+.oc-pick-tick{position:absolute;top:6px;right:6px;z-index:2;width:22px;height:22px;border-radius:50%;background:#2FBF71;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(10,30,51,.3)}
+.oc-draft-logo-over{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.oc-draft-logo-over img{width:62%;height:auto;max-height:82%;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(10,30,51,.35))}
+.oc-draft-go{display:block;width:100%;margin:14px 0 8px;padding:15px;border:0;border-radius:14px;background:#FEC14D;color:#0A1E33;font-size:17px;font-weight:800;cursor:pointer}
+.oc-draft-foot{margin:4px 2px 0;text-align:center;font-size:13px;color:#5A7488}
+/* (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) */
+.oc-prompt{margin:8px 2px 0;font-size:13px;line-height:1.45;color:#0A1E33;background:#FFF8E1;border-radius:10px;padding:8px 10px}
+.oc-prompt-det{margin:6px 2px 0;font-size:12px;color:#5A7488}
+.oc-prompt-det summary{cursor:pointer;font-weight:700;color:#2793C8}
+.oc-prompt-det div{white-space:pre-line;margin-top:4px;line-height:1.5}
+#lbPrompt{margin:10px 0 0;font-size:14px;line-height:1.5;color:#0A1E33}
+/* (LOTE ONBOARDING-DIVERTIDO v760 · entrada web igual que IG) Dos filas iguales: mismo input, mismo botón. */
+.oc-entry-row{margin-bottom:14px}
+.oc-entry-row:last-of-type{margin-bottom:0}
+.oc-entry-row .oc-btn{margin-top:8px}
+.oc-trust{margin:14px 2px 0;text-align:center;font-size:13px;color:#5A7488}
 .oc-champ-chip{display:none;position:absolute;top:10px;left:10px;background:#FEC14D;color:#0A1E33;font-size:12px;font-weight:800;padding:5px 10px;border-radius:999px;box-shadow:0 2px 8px rgba(10,30,51,.25);z-index:2}
 .oc-draft-card.oc-picked .oc-champ-chip{display:block}
 .oc-draft-step{float:right;background:#E8F4FC;color:#2793C8;font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px}
@@ -1017,6 +1128,23 @@ img.crop-c{object-position:50% 82%;transform:scale(1.25)}
 <!-- VISTA: onboarding -->
 <div id="v-onboarding">
   <div class="wrap">
+    <section class="oc-workhero" aria-label="Posty working on your posts">
+      <div class="oc-frame">
+        <img class="oc-hero-img" src="posty-disenando.webp" alt="Posty, the blue robot, with a pen in one hand and post cards in the other, designing your posts">
+        <div class="oc-float-cards" aria-hidden="true">
+          <span class="oc-float-card fc1">☕</span>
+          <span class="oc-float-card fc2">🌿</span>
+          <span class="oc-float-card fc3">🌅</span>
+        </div>
+        <span class="oc-live-pill"><span class="oc-live-dot"></span> Posty is working</span>
+        <div class="oc-video-caption">
+          <span class="face" aria-hidden="true"><img src="posty-con-placa.png" alt=""></span>
+          <p>This is how Posty works for you
+            <small>building your posts while we chat <span class="oc-typing" aria-hidden="true"><i></i><i></i><i></i></span></small>
+          </p>
+        </div>
+      </div>
+    </section>
     <div class="hero">
       <div class="pres-video-wrap"><video class="pres-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty introducing himself: this is how I work for your business"></video></div>
       <h1>Hi! I'm Posty</h1>
@@ -1361,12 +1489,13 @@ img.crop-c{object-position:50% 82%;transform:scale(1.25)}
 <div id="v-loading" style="display:none">
   <div class="wrap">
     <div class="tracker">
-      <span class="pill">WORKING FOR YOU ⚙️</span>
+      <span class="pill">POSTY IS WORKING</span>
+      <div class="tk-work"><img src="posty-disenando.webp" alt="Posty working on your posts"></div>
       <div class="tk-head">
         <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" class="tk-avatar"></span>
         <h2 id="tkTitle">Building your week…</h2>
       </div>
-      <p class="sub">This is what we would do for you every week, automatically.</p>
+      <p class="sub">With your real product, your photos and your tone — nothing generic.</p>
       <div data-gjourney></div>
     <div id="tkSteps"></div>
       <div class="pbar"><i id="tkBar"></i></div>
@@ -1686,7 +1815,7 @@ img.crop-c{object-position:50% 82%;transform:scale(1.25)}
   <button class="lb-nav prev" id="lbPrev" aria-label="Previous post"><svg class="wb-ic" aria-hidden="true"><use href="#wb-chev-l"/></svg></button>
   <button class="lb-nav next" id="lbNext" aria-label="Next post"><svg class="wb-ic" aria-hidden="true"><use href="#wb-chev-r"/></svg></button>
   <div id="lbMedia"></div>
-  <div class="lb-cap"><h3 id="lbHeadline" style="display:none"></h3><p id="lbCap"></p><div class="tags" id="lbTags"></div>
+  <div class="lb-cap"><h3 id="lbHeadline" style="display:none"></h3><p id="lbCap"></p><div class="tags" id="lbTags"></div><div id="lbPrompt" style="display:none"></div>
     <div class="lb-actions">
       <button class="lb-btn" id="lbPhoto"><svg class="wb-ic wb-ic-l" aria-hidden="true"><use href="#wb-camera"/></svg> Change photo</button>
       <button class="lb-btn ghost" id="lbImprove"><svg class="wb-ic wb-ic-l" aria-hidden="true"><use href="#wb-chat"/></svg> Improve this post</button>
@@ -1982,13 +2111,16 @@ function show(id) {
 // ---------- generar ----------
 // Posty pensando en voz alta: cada paso en primera persona, como si te contara
 // lo que está haciendo por vos ahora mismo.
+// (LOTE ONBOARDING-DIVERTIDO v760) «Posty is putting your week together» moment: 4 live steps (icon queued, spins while active, ✓ when done).
 const TK_STEPS = [
-  ['🔍', 'I am looking up your Instagram…', 'I pull your profile and your brand colors.'],
-  ['📸', 'I am picking your best photo…', 'The photo that sells the most is the one that stars.'],
-  ['✍️', 'Writing in your tone…', 'No generic templates: it sounds like you.'],
-  ['🎨', 'Designing your posts…', 'With your colors and your name.'],
-  ['✨', 'Almost done…', 'Just a moment more before I show you your week.'],
+  ['🔍', 'Looking at your posts'],
+  ['📸', 'Picking your best photos'],
+  ['✍️', 'Writing the captions in your tone'],
+  ['🎨', 'Putting your week together'],
 ];
+const TK_STATE_QUEUED = 'queued';
+const TK_STATE_NOW = 'now…';
+const TK_STATE_DONE = 'done!';
 let tkTimer = null;
 let tkTipTimer = null;
 // Tips que rotan mientras se arma la semana (entretienen la espera)
@@ -2340,21 +2472,26 @@ function trackerStart(title) {
   show('v-loading');
   $('#tkTitle').textContent = title;
   const box = $('#tkSteps');
-  box.innerHTML = TK_STEPS.map((s, i) => `<div class="tstep" id="tk${i}"><div class="ic">${s[0]}</div><div><b>${s[1]}</b><small>${s[2]}</small></div></div>`).join('');
+  // (LOTE ONBOARDING-DIVERTIDO v760) Momento «Posty está armando tu semana»: pasos en vivo que se tildan (en cola → ahora… → ¡listo!), como el mock aprobado.
+  const n = TK_STEPS.length;
+  box.innerHTML = TK_STEPS.map((s, i) => `<div class="bstep" id="tk${i}"><span class="bstep-ico">${s[0]}</span><span>${s[1]}</span><span class="bstep-state">${TK_STATE_QUEUED}</span></div>`).join('');
   const bar = $('#tkBar'), pct = $('#tkPct');
   let p = 0;
   const mark = (i, cls) => { const el = $('#tk' + i); if (el) { el.classList.remove('act'); if (cls) el.classList.add(cls); } };
+  const setState = (i, txt) => { const el = document.querySelector('#tk' + i + ' .bstep-state'); if (el) el.textContent = txt; };
+  const setIco = (i, txt) => { const el = document.querySelector('#tk' + i + ' .bstep-ico'); if (el) el.textContent = txt; };
   tkTimer = setInterval(() => {
-    p = Math.min(p + 1, 5);
-    for (let i = 0; i < 5; i++) {
-      if (i < p) { mark(i, 'done'); $('#tk' + i + ' .ic').textContent = '✓'; }
-      else if (i === p && p < 5) { $('#tk' + i).classList.add('act'); }
+    p = Math.min(p + 1, n);
+    for (let i = 0; i < n; i++) {
+      if (i < p) { mark(i, 'done'); setIco(i, '✓'); setState(i, TK_STATE_DONE); }
+      else if (i === p && p < n) { $('#tk' + i).classList.add('act'); setIco(i, ''); setState(i, TK_STATE_NOW); }
     }
-    bar.style.width = (p / 5 * 100) + '%';
-    pct.textContent = Math.round(p / 5 * 100) + '%';
-    if (p >= 5) clearInterval(tkTimer);
+    bar.style.width = (p / n * 100) + '%';
+    pct.textContent = Math.round(p / n * 100) + '%';
+    if (p >= n) clearInterval(tkTimer);
   }, 5200);
-  $('#tk0').classList.add('act');
+  const first = $('#tk0');
+  if (first) { first.classList.add('act'); setIco(0, ''); setState(0, TK_STATE_NOW); }
   // Tips rotativos mientras espera (se apaga solo al salir del tracker)
   let tipI = 0;
   const tipEl = $('#tkTip');
@@ -2415,6 +2552,10 @@ function buildGenFormData() {
     fd.append('promo', OC_ANS.promo || '');
     fd.append('voz', OC_ANS.voz || '');
     fd.append('precios', OC_ANS.precios || '');
+    fd.append('cta_mix', OC_ANS.cta_mix || '');
+    fd.append('promo_mix', OC_ANS.promo_mix || '');
+    fd.append('voz_mix', OC_ANS.voz_mix || '');
+    fd.append('precios_mix', OC_ANS.precios_mix || '');
     fd.append('donde', OC_ANS.donde || '');
     fd.append('etapa', OC_ANS.etapa || '');
     // (LOTE PRUEBA-CHAT-GATE-FIX2) Q6/Q7/Q8 travel to the server: without
@@ -2433,6 +2574,8 @@ function buildGenFormData() {
   if (window.OC_ESPEJO) { fd.append('espejo_flujo', '1'); fd.append('espejo_aprobado', String(window.OC_ESPEJO.aprobado || '')); fd.append('espejo_productos', JSON.stringify(window.OC_ESPEJO.productos || [])); fd.append('espejo_vetos', JSON.stringify(window.OC_ESPEJO.vetos || [])); }
   // DRAFT-ONBOARDING (4/11): the draft taste travels with generation; the server validates strictly and ignores it if broken.
   if (window.OC_DRAFT) { fd.append('draft_gusto', JSON.stringify(window.OC_DRAFT)); }
+  // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El perfil de estilo observado viaja con la generación (fundamento).
+  if (typeof S !== 'undefined' && S.style) { try { fd.append('estilo', JSON.stringify(S.style)); } catch (e) {} }
   fd.append('producto', TRIAL_ANS.producto || '');
   // (LOTE PRUEBA-CHAT-GATE-FIX2) The old 'diferencial' (TRIAL_ANS) is
   // only sent when there is NO OC_ANS: parseMultipart keeps the LAST
@@ -2446,8 +2589,12 @@ function buildGenFormData() {
 // ---------- generación: stream primero (sneak peeks), clásico como fallback ----------
 let GEN_T0 = 0;
 async function runGeneration() {
+  // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El análisis
+  // tiene que estar listo antes de armar la semana: si todavía corre, la
+  // generación espera hasta 15 s (el tracker ya muestra «armando tu semana»).
+  if (S.studyPromise) { try { await Promise.race([S.studyPromise, new Promise(function (r) { setTimeout(r, 15000); })]); } catch (e) {} }
   const fd = buildGenFormData();
-  trackerStart('Building your week for ' + TRIAL_BIZ + '…');
+  trackerStart('Posty is putting your week together');
   GEN_T0 = Date.now();
   let streamed = false;
   try { streamed = await generateWithStream(fd); } catch (e) { streamed = false; }
@@ -3193,6 +3340,30 @@ function projFromTrial() {
 }
 
 // Final común del clásico y del stream: guarda en idb y muestra resultados.
+// (LOTE ONBOARDING-DIVERTIDO v760) Confetti de celebración sobre la semana lista (42 piezas, colores Posty; se limpia solo).
+function ocConfetti() {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var hero = document.querySelector('#v-results .res-hero');
+  if (!hero) return;
+  var box = document.getElementById('ocConfetti');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'oc-confetti'; box.id = 'ocConfetti'; box.setAttribute('aria-hidden', 'true');
+    hero.appendChild(box);
+  }
+  box.innerHTML = '';
+  var colors = ['#2793C8', '#FEC14D', '#2FBF71', '#FF7BAC', '#1668A0'];
+  for (var i = 0; i < 42; i++) {
+    var p = document.createElement('i');
+    p.style.left = Math.random() * 100 + '%';
+    p.style.background = colors[i % colors.length];
+    p.style.animationDuration = (1.6 + Math.random() * 1.8) + 's';
+    p.style.animationDelay = (Math.random() * 0.7) + 's';
+    p.style.transform = 'rotate(' + (Math.random() * 360) + 'deg)';
+    box.appendChild(p);
+  }
+  setTimeout(function () { box.innerHTML = ''; }, 4500);
+}
 function finishGeneration(data, genSecs) {
   trackerStop();
   // (v323 · piece 1) Without streaming (classic fallback), the "first
@@ -3223,6 +3394,8 @@ function finishGeneration(data, genSecs) {
   } catch (e) {}
   if (!TEST_KEY_QS) { try { idb.set(data); } catch (e) {} }
   renderResults();
+  // (LOTE ONBOARDING-DIVERTIDO v760) Celebración al terminar la generación (cubre stream y clásico): confetti sobre la semana lista.
+  try { ocConfetti(); } catch (e) {}
 }
 
 // ---------- resultados ----------
@@ -3453,7 +3626,7 @@ function renderWeek() {
     const media = isV
       ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
       : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}" loading="lazy">`;
-    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}" tabindex="0" role="button" aria-label="Ver posteo del ${esc(w.day)}"><div class="dh"><b>${isV ? '🎬 Your reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${w.hour ? ' · ' + esc(w.hour) : ''}${isV ? ' · ready to post' : ''}</small></div><div class="db">${media}</div>${igrow}<div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div>${p.why ? `<div class="dwhy">💡 <b>Why:</b> ${esc(p.why)}</div>` : ''}</div>`;
+    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}" tabindex="0" role="button" aria-label="Ver posteo del ${esc(w.day)}"><div class="dh"><b>${isV ? '🎬 Your reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${w.hour ? ' · ' + esc(w.hour) : ''}${isV ? ' · ready to post' : ''}</small></div><div class="db">${media}</div>${igrow}<div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div>${p.why ? `<div class="dwhy">💡 <b>Why:</b> ${esc(p.why)}</div>` : ''}${p.prompt_simple ? `<div class="oc-prompt">✦ ${esc(p.prompt_simple)}</div><details class="oc-prompt-det"><summary>${esc(T.promptHow)}</summary><div>${esc(p.prompt_detalle || '')}</div></details>` : ''}</div>`;
   }).join('');
   $$('#rWeek .day').forEach((d) => {
     const open = () => openLb(parseInt(d.dataset.i, 10));
@@ -3584,6 +3757,13 @@ function lbRender() {
   else { hl.textContent = ''; hl.style.display = 'none'; }
   $('#lbCap').textContent = p.caption || '';
   $('#lbTags').textContent = p.hashtags || '';
+  var lbp = document.getElementById('lbPrompt');
+  if (lbp) {
+    if (p.prompt_simple) {
+      lbp.innerHTML = '✦ ' + esc(p.prompt_simple) + (p.prompt_detalle ? '<details class="oc-prompt-det"><summary>' + esc(T.promptHow) + '</summary><div>' + esc(p.prompt_detalle) + '</div></details>' : '');
+      lbp.style.display = 'block';
+    } else { lbp.innerHTML = ''; lbp.style.display = 'none'; }
+  }
 }
 function openLb(i) {
   const wk = trialWeekOrdered();
@@ -4454,10 +4634,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
 (function () {
   'use strict';
   var T = {
-    entryChat: 'give me your Instagram and your website and i will get to know you in a minute. no forms: just tap and done.',
+    entryChat: 'Paste your Instagram or your website and see your real week, with your brand ✌️',
     entryPh: 'your email or your @',
-    entryIgPh: 'your Instagram @',
-    entryWebPh: 'https://yourwebsite.com',
+    entryIgPh: '@your_business',
+    entryWebPh: 'www.yourbusiness.com',
     entryBtn: 'start',
     toWeb: 'prefer to enter with your website?',
     toEmail: 'prefer to enter with your email?',
@@ -4466,8 +4646,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     hasWeb: 'I do have a website',
     noWebNote: 'no website, i will study your Instagram.',
     errIgEmpty: 'give me your @ to start.',
-    errWebEmpty: 'give me your website or tap \u201cI don\u2019t have a website\u201d.',
-    errWebBad: 'that website does not look like a link. check it or tap \u201cI don\u2019t have a website\u201d.',
+    errWebEmpty: 'give me your website to start.',
+    errWebBad: 'that website does not look like a link. check it.',
     photoLink: 'add a photo (optional)',
     photoBig: 'that photo is over 5 mb, try another one',
     studyIg: 'looking at your instagram…',
@@ -4491,6 +4671,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     // (LOTE PRUEBA-CHAT) Onboarding chat texts.
     chatJoin: "hi! i'm Posty 👋 i already read your website and Instagram. i'll only ask what i still need to make your posts.",
     chatJoinEmail: "hi! i'm Posty 👋 i'll only ask what i need to make your posts.",
+    chatJoinHonest: "hi! i'm Posty 👋 heads up: i couldn't open your Instagram, so i'll ask a little more. i won't invent anything about your business — a few extra taps and your week still comes out 💙",
+    chatJoinHonestWeb: "hi! i'm Posty 👋 heads up: i couldn't read your website, so i'll ask a little more. i won't invent anything about your business — a few extra taps and your week still comes out 💙", 
     chatFreePh: 'write here…',
     chatFreeBamboo: 'message for Posty',
     chatWaiting: 'Posty is replying…',
@@ -4508,9 +4690,19 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     chatUbicacion: 'and where are you? tell me the neighborhood or city.',
     qUbicacion: 'Where can people find you?',
     ubicDomicilio: 'Home visits',
+    ubicDomicilioSub: 'you go where they are',
     ubicOnline: 'Online',
+    ubicOnlineSub: 'all online',
     ubicLibrePh: 'E.g.: Palermo, Buenos Aires',
     ubicLibre: 'Write the neighborhood or city where people find you.',
+    ubicEnvios: 'With shipping',
+    ubicEnviosSub: 'you ship anywhere',
+    ubicFerias: 'At fairs and markets',
+    ubicFeriasSub: 'at fairs and markets',
+    ubicEncargo: 'By order only',
+    ubicEncargoSub: 'only when they ask',
+    ubicLocalOnline: 'In store and online',
+    ubicLocalOnlineSub: 'in store and online',
     // (LOTE ETAPA-INSTAGRAM) The IG stage: detected in the study and
     // proposed to confirm with one tap ('etapa' gap, not a fixed q9).
     chatEtapa: "i looked at your instagram and it's empty — we're starting from zero, right?",
@@ -4522,6 +4714,14 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     q3: 'Do you have a promo this week?',
     q4: 'How do you talk to your customers?',
     q5: 'Do we show prices in the posts?',
+    q2LibrePh: 'e.g. have them write to me on WhatsApp',
+    q2LibreErr: 'write what you want people to do so i can build your week.',
+    q3LibrePh: 'e.g. 20% off croissants',
+    q3LibreErr: 'write what promo there is this week so i can build your week.',
+    q4LibrePh: 'e.g. like talking to a friend',
+    q4LibreErr: 'write how you talk to your customers so i can build your week.',
+    q5LibrePh: 'e.g. only on the featured ones',
+    q5LibreErr: 'write how we show prices so i can build your week.', 
     q6: 'Who is your customer?',
     q7: 'What makes you different?',
     q8: 'What do I never post?',
@@ -4547,6 +4747,69 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     todoSub: 'a bit of everything, no single strongest product',
     libre: 'Write it in your own words',
     libreSub: 'tell me yourself, so it comes out literal',
+    // (LOTE ONBOARDING-DIVERTIDO v760) Featured question card, what Posty learned, honest branch, reactions, building moment.
+    qBadge: '❓ Question {n} of {total} · Posty asks you',
+    qHint: 'Pick a card below — all the options are there',
+    qIntroRubro: "First the basics, because i couldn't see it:",
+    qIntroRubroBase: "Let's start with the basics:",
+    qIntroUbicacionEmail: 'Found you! 🎉 Since you came in with just an email, one little thing:',
+    qIntroUbicacionHonest: 'And to place your posts well:',
+    qIntroQ1: 'Tell me, tap your star ⭐:',
+    qIntroQ2: 'When someone sees your post…',
+    qIntroQ3: 'It goes in the posts if you want 🏷️',
+    qIntroQ4: 'Almost there… Posty copies your tone 🎙️',
+    qIntroQ5: 'Last one, i promise! 🤙',
+    qBack: '← back',
+    reactRubro: 'Noted! With your niche i can already picture your posts in your world 🎯',
+    reactUbicacion: 'Perfect! Now i know where to place your posts 📍',
+    reactQ1: 'Noted! That one will star in your posts ⭐',
+    reactQ2: 'You got it! Every post will push toward that 👉',
+    reactQ3: "Done! I'll add it to this week's posts 🏷️",
+    reactQ4: "That's the tone! That's how your posts will sound 🎙️",
+    reactQ5: "Great! I've got everything 💪",
+    knownTitle: 'What i already know about you 🔍',
+    knownSub: "I read it from your Instagram and your website — i won't ask you again.",
+    knownFoot: 'If anything isn\'t right, correct me in the questions 👇',
+    knownRubro: 'Your niche',
+    knownCiudad: 'Where you are',
+    knownProducto: 'Your star product',
+    honestTitle: "What i couldn't see 🙈",
+    honestSub: "I'll tell you straight: i'd rather ask than pretend i read it all.",
+    honestFoot: "With your answers i'll build the week just the same — nothing is lost 👇",
+    honestIg: 'Your Instagram',
+    honestIgMiss: "I couldn't open it",
+    honestWeb: 'Your website',
+    honestWebMiss: "I couldn't find it",
+    honestThen: 'So what do i do?',
+    honestThenVal: 'I just ask a little more — nothing else',
+    optsHead: 'Pick the one you like best',
+    optsCount: '{n} options',
+    buildSub: 'With your real product, your photos and your tone — nothing generic.',
+    draftNoPhoto: 'No photo of your product yet',
+    draftSlotPending: 'Still to pick in this round',
+    draftFotoSub: 'Tap a style and see how it looks. Whatever you pick, that is how your product comes out all week.',
+    draftFotoChoose: 'PICK A STYLE',
+    draftFotoGo: 'Continue with this style',
+    draftFotoFoot: 'Posty uses your style all week long.',
+    draftPackSub: 'Pick your favorite: tap the one you like most and I learn which posts you want.',
+    draftPreviewAs: 'this is how it would look',
+    promptHow: 'how this post was made',
+    knownEstilo: 'Your style',
+    styleRhythm: 'you post about {n} times a week',
+    stylePalette: 'your palette is {names}',
+    styleCapShort: 'short captions',
+    styleCapMid: 'medium captions',
+    styleCapLong: 'long captions',
+    styleTags: 'you use {tags}',
+    styleVos: 'you speak informally (vos)',
+    styleUsted: 'you speak formally (usted)',
+    promptFotoMarca: 'your logo big front and center, over your photo of {prod}',
+    promptPalette: 'with your palette of {names}',
+    promptToneVos: 'with your close tone',
+    promptToneUsted: 'with your formal tone',
+    entryIgGo: 'See my week →',
+    entryWebGo: 'Use my website →',
+    entryTrust: '✓ No card · ✓ 3 days free · ✓ Cancel anytime', 
     servicio: 'I sell a service',
     servicioSub: 'appointments, classes, consulting, what i do',
     marca: 'My brand is me',
@@ -4577,11 +4840,15 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   // applies to this business (from what web/IG extracted). 'need' names
   // the fact that enables it; with no study (email) nothing is hidden.
   var Q2_ALL = [
-    { v: 'reservar', l: 'Reservar', need: 'reservas' },
-    { v: 'escribirte', l: 'Escribirte', need: null },
-    { v: 'local', l: 'Ir al local', need: 'local' },
-    { v: 'comprar', l: 'Comprar', need: 'online' },
-    { v: 'seguirme', l: 'Seguirme', need: 'creador' }
+    { v: 'reservar', l: 'Book', e: '📅', sub: 'so they book a table or a slot', need: 'reservas' },
+    { v: 'escribirte', l: 'Message me', e: '💬', sub: 'they write to you directly', need: null },
+    { v: 'local', l: 'Visit the store', e: '📍', sub: 'they come meet you', need: 'local' },
+    { v: 'comprar', l: 'Buy', e: '🛍️', sub: 'they buy right away', need: 'online' },
+    { v: 'seguirme', l: 'Follow me', e: '➕', sub: 'they follow for more', need: 'creador' },
+    { v: 'domicilio', l: 'Order delivery', e: '🛵', sub: 'orders to their place', need: null },
+    { v: 'turno', l: 'Book a slot', e: '📆', sub: 'they pick a day and time', need: null },
+    { v: 'tienda', l: 'Go to my store or site', e: '🌐', sub: 'they visit your store', need: null },
+    { v: 'llamar', l: 'Call me', e: '📞', sub: 'they call you', need: null }
   ];
   // (LOTE PRUEBA-CHAT) Deterministic gaps, ported verbatim from
   // preguntas-dinamicas.js (the source of truth; the test compares both).
@@ -4644,28 +4911,43 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   // El AI puede reescribir el rótulo (l), nunca el valor (v).
   const CANON = {
     objetivo: [
-      { v: 'reservar', l: 'Reservar', need: 'reservas' },
-      { v: 'escribirte', l: 'Escribirte', need: null },
-      { v: 'local', l: 'Ir al local', need: 'local' },
-      { v: 'comprar', l: 'Comprar', need: 'online' },
-      { v: 'seguirme', l: 'Seguirme', need: 'creador' },
+      { v: 'reservar', l: 'Book', need: 'reservas' },
+      { v: 'escribirte', l: 'Message me', need: null },
+      { v: 'local', l: 'Visit the store', need: 'local' },
+      { v: 'comprar', l: 'Buy', need: 'online' },
+      { v: 'seguirme', l: 'Follow me', need: 'creador' },
+      { v: 'domicilio', l: 'Order delivery', need: null },
+      { v: 'turno', l: 'Book a slot', need: null },
+      { v: 'tienda', l: 'Go to my store or site', need: null },
+      { v: 'llamar', l: 'Call me', need: null },
     ],
     promo: [
-      { v: 'ninguna', l: 'Sin promo' },
-      { v: 'porcentaje', l: '% de descuento' },
-      { v: '2x1', l: '2x1' },
-      { v: 'envio', l: 'Envío gratis' },
+      { v: 'ninguna', l: 'No promo' },
+      { v: 'porcentaje', l: '% off' },
+      { v: '2x1', l: '2-for-1' },
+      { v: 'envio', l: 'Free shipping' },
+      { v: '3x2', l: '3-for-2' },
+      { v: 'cuotas', l: 'Interest-free installments' },
+      { v: 'regalo', l: 'Gift with purchase' },
+      { v: 'combo', l: 'Combo deal' },
+      { v: 'temporal', l: 'Special price for a few days' },
     ],
     tono: [
-      { v: 'cercano', l: 'Cercano' },
-      { v: 'profesional', l: 'Profesional' },
-      { v: 'divertido', l: 'Divertido' },
-      { v: 'elegante', l: 'Elegante' },
+      { v: 'cercano', l: 'Friendly' },
+      { v: 'profesional', l: 'Professional' },
+      { v: 'divertido', l: 'Fun' },
+      { v: 'elegante', l: 'Elegant' },
+      { v: 'inspirador', l: 'Inspiring' },
+      { v: 'educativo', l: 'Educational' },
+      { v: 'directo', l: 'Direct and salesy' },
+      { v: 'canchero', l: 'Cool and young' },
     ],
     precios: [
-      { v: 'si', l: 'Sí' },
-      { v: 'ofertas', l: 'Solo en ofertas' },
+      { v: 'si', l: 'Yes' },
+      { v: 'ofertas', l: 'Only on offers' },
       { v: 'no', l: 'No' },
+      { v: 'algunos', l: 'Only on some products' },
+      { v: 'aveces', l: 'Sometimes, depending on the post' },
     ],
   };
 
@@ -4749,11 +5031,11 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
           if (o.need === 'online') return known ? !!f.sells_online : true;
           if (o.need === 'creador') return !!f.is_creator;
           return true;
-        }).map((o) => ({ v: o.v, l: o.l, need: o.need }));
+        }).map((o) => ({ v: o.v, l: o.l, e: o.e, sub: o.sub, need: o.need }));
       }
-      case 'promo': return CANON.promo.map((o) => ({ v: o.v, l: o.l }));
-      case 'tono': return CANON.tono.map((o) => ({ v: o.v, l: o.l }));
-      case 'precios': return CANON.precios.map((o) => ({ v: o.v, l: o.l }));
+      case 'promo': return CANON.promo.map((o) => ({ v: o.v, l: o.l, e: o.e, sub: o.sub }));
+      case 'tono': return CANON.tono.map((o) => ({ v: o.v, l: o.l, e: o.e, sub: o.sub }));
+      case 'precios': return CANON.precios.map((o) => ({ v: o.v, l: o.l, e: o.e, sub: o.sub }));
       case 'audiencia': {
         const out = [];
         const seen = new Set();
@@ -4802,18 +5084,20 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var f = S.facts || {};
     var known = !!f._known;
     var q1mix = (S.ans && S.ans.q1mix) || '';
-    return Q2_ALL.filter(function (o) {
+    var out = Q2_ALL.filter(function (o) {
       if (!o.need) return true;
       if (o.need === 'local') return known ? !!f.has_local : true;
       if (o.need === 'reservas') return known ? !!f.takes_reservations : true;
       if (o.need === 'online') return known ? !!f.sells_online : true;
       if (o.need === 'creador') return !!f.is_creator || q1mix === 'marca' || q1mix === 'sin_oferta';
       return true;
-    }).map(function (o) { return { v: o.v, l: o.l }; });
+    }).map(function (o) { return { v: o.v, l: o.l, e: o.e, sub: o.sub }; });
+    out.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+    return out;
   }
-  var Q3 = [{ v: 'ninguna', l: 'No promo' }, { v: 'porcentaje', l: '% off' }, { v: '2x1', l: '2-for-1' }, { v: 'envio', l: 'Free shipping' }];
-  var Q4 = [{ v: 'cercano', l: 'Friendly' }, { v: 'profesional', l: 'Professional' }, { v: 'divertido', l: 'Fun' }, { v: 'elegante', l: 'Elegant' }];
-  var Q5 = [{ v: 'si', l: 'Yes' }, { v: 'ofertas', l: 'Only on offers' }, { v: 'no', l: 'No' }];
+  var Q3 = [{ v: 'ninguna', l: 'No promo', e: '🚫', sub: 'no offers this week' }, { v: 'porcentaje', l: '% off', e: '🏷️', sub: 'a % off something' }, { v: '2x1', l: '2-for-1', e: '2️⃣', sub: 'buy 2, pay 1' }, { v: 'envio', l: 'Free shipping', e: '🚚', sub: 'no shipping cost' }, { v: '3x2', l: '3-for-2', e: '3️⃣', sub: 'buy 3, pay 2' }, { v: 'cuotas', l: 'Interest-free installments', e: '💳', sub: 'pay in installments' }, { v: 'regalo', l: 'Gift with purchase', e: '🎁', sub: 'a little extra with each order' }, { v: 'combo', l: 'Combo deal', e: '🎉', sub: 'everything together, cheaper' }, { v: 'temporal', l: 'Special price for a few days', e: '⏰', sub: 'only for a few days' }];
+  var Q4 = [{ v: 'cercano', l: 'Friendly', e: '🤗', sub: 'like chatting with a friend' }, { v: 'profesional', l: 'Professional', e: '👔', sub: 'serious and tidy' }, { v: 'divertido', l: 'Fun', e: '😄', sub: 'with humor and good vibes' }, { v: 'elegante', l: 'Elegant', e: '✨', sub: 'refined and classy' }, { v: 'inspirador', l: 'Inspiring', e: '🌟', sub: 'motivating and moving' }, { v: 'educativo', l: 'Educational', e: '📚', sub: 'teaching something useful' }, { v: 'directo', l: 'Direct and salesy', e: '🎯', sub: 'straight to the point, to sell' }, { v: 'canchero', l: 'Cool and young', e: '😎', sub: 'fresh and current' }];
+  var Q5 = [{ v: 'si', l: 'Yes', e: '✅', sub: 'prices out in the open' }, { v: 'ofertas', l: 'Only on offers', e: '🏷️', sub: 'only when there is an offer' }, { v: 'no', l: 'No', e: '🚫', sub: 'no prices in the posts' }, { v: 'algunos', l: 'Only on some products', e: '🔍', sub: 'on the ones you pick' }, { v: 'aveces', l: 'Sometimes, depending on the post', e: '🤷', sub: 'when it suits' }];
   var DONDE = [{ v: 'whatsapp', l: 'WhatsApp' }, { v: 'instagram', l: 'Instagram' }, { v: 'local', l: 'At the store' }, { v: 'web', l: 'On my website' }];
   var ETAPA_OPTS = [
     { v: 'lanzamiento', l: 'Just starting', sub: 'my instagram is empty or almost' },
@@ -4874,7 +5158,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   }
 
   // Session state. plan = questions in order; ans = answers.
-  var S = { source: null, email: null, ig: null, web: null, biz: null, cat: null, products: [], rubroOptions: null, plan: [], qi: 0, ans: {}, mode: 'both', busy: false, noWeb: false, facts: null, webFacts: null, igFacts: null, igStage: null };
+  var S = { source: null, email: null, ig: null, web: null, biz: null, cat: null, products: [], rubroOptions: null, plan: [], qi: 0, ans: {}, mode: 'both', busy: false, noWeb: false, facts: null, webFacts: null, igFacts: null, igStage: null, style: null, studyPending: false, studyPromise: null };
   var reduced = false;
   try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
 
@@ -4902,7 +5186,9 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
         '<img src="' + esc(opt.foto) + '" alt="" onerror="this.style.display=\'none\'">' +
         '<span>' + esc(opt.l) + (opt.sub ? '<small>' + esc(opt.sub) + '</small>' : '') + '</span></button>';
     }
-    return '<button type="button" class="oc-card' + starCls + '" data-v="' + esc(opt.v) + '">' + starBadge + esc(opt.l) +
+    var freeCls = opt.v === '__libre__' ? ' oc-free' : '';
+    var emo = opt.e ? '<span class="oc-card-e" aria-hidden="true">' + esc(opt.e) + '</span>' : '';
+    return '<button type="button" class="oc-card' + starCls + freeCls + '" data-v="' + esc(opt.v) + '">' + starBadge + emo + esc(opt.l) +
       (opt.sub ? '<small>' + esc(opt.sub) + '</small>' : '') + '</button>';
   }
 
@@ -4976,16 +5262,56 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (key === 'donde') return screenDonde;
     if (key === 'etapa') return screenEtapa;
     if (key === 'q1') return screenQ1;
-    if (key === 'q2') return function () { renderScreen(T.chatQ2, T.q2, q2Options(), { onPick: function (v) { S.ans.q2 = v; advance(); }, onBack: goBack }); };
-    if (key === 'q3') return function () { renderScreen(T.chatQ3, T.q3, Q3, { onPick: function (v) { S.ans.q3 = v; advance(); }, onBack: goBack }); };
-    if (key === 'q4') return function () { renderScreen(T.chatQ4, T.q4, Q4, { onPick: function (v) { S.ans.q4 = v; advance(); }, onBack: goBack }); };
-    if (key === 'q5') return function () { renderScreen(T.chatQ5, T.q5, Q5, { onPick: function (v) { S.ans.q5 = v; advance(); }, onBack: goBack }); };
+    if (key === 'q2') return screenQ2;
+    if (key === 'q3') return screenQ3;
+    if (key === 'q4') return screenQ4;
+    if (key === 'q5') return screenQ5;
     if (key === 'q6') return screenQ6;
     if (key === 'q7') return screenQ7;
     if (key === 'q8') return screenQ8;
     return null;
   }
 
+  // (LOTE ONBOARDING-DIVERTIDO v760) Q2–Q5 con texto libre (mismo patrón que Q6): la opción libre escribe con sus palabras y viaja literal (mix 'libre').
+  function screenQ2() {
+    renderScreen(T.chatQ2, T.q2, q2Options(), {
+      onPick: function (v) {
+        if (v === '__libre__') { screenFreeText(T.chatQ2, T.q2, T.q2LibrePh, T.q2LibreErr, 60, function (t) { S.ans.q2 = t; S.ans.q2mix = 'libre'; advance(); }, screenQ2); return; }
+        S.ans.q2 = v; advance();
+      },
+      onBack: goBack
+    });
+  }
+  function screenQ3() {
+    var opts = Q3.slice(); opts.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+    renderScreen(T.chatQ3, T.q3, opts, {
+      onPick: function (v) {
+        if (v === '__libre__') { screenFreeText(T.chatQ3, T.q3, T.q3LibrePh, T.q3LibreErr, 60, function (t) { S.ans.q3 = t; S.ans.q3mix = 'libre'; advance(); }, screenQ3); return; }
+        S.ans.q3 = v; advance();
+      },
+      onBack: goBack
+    });
+  }
+  function screenQ4() {
+    var opts = Q4.slice(); opts.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+    renderScreen(T.chatQ4, T.q4, opts, {
+      onPick: function (v) {
+        if (v === '__libre__') { screenFreeText(T.chatQ4, T.q4, T.q4LibrePh, T.q4LibreErr, 60, function (t) { S.ans.q4 = t; S.ans.q4mix = 'libre'; advance(); }, screenQ4); return; }
+        S.ans.q4 = v; advance();
+      },
+      onBack: goBack
+    });
+  }
+  function screenQ5() {
+    var opts = Q5.slice(); opts.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
+    renderScreen(T.chatQ5, T.q5, opts, {
+      onPick: function (v) {
+        if (v === '__libre__') { screenFreeText(T.chatQ5, T.q5, T.q5LibrePh, T.q5LibreErr, 60, function (t) { S.ans.q5 = t; S.ans.q5mix = 'libre'; advance(); }, screenQ5); return; }
+        S.ans.q5 = v; advance();
+      },
+      onBack: goBack
+    });
+  }
   function screenRubro() {
     var opts = (S.rubroOptions || []).map(function (o) { return { v: o.rubro, sub: o.subrubro || '', l: o.label }; });
     if (!opts.length) { screenCatalog(); return; }
@@ -5312,8 +5638,25 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var box = document.getElementById('oc_chat_msgs');
     if (box) {
       var d = document.createElement('div');
-      d.className = 'msg ' + w;
-      if (h) d.innerHTML = h; else d.textContent = t;
+      if (w === 'bot') {
+        d.className = 'msg-row bot';
+        var av = document.createElement('span');
+        av.className = 'msg-ava';
+        av.setAttribute('aria-hidden', 'true');
+        var im = document.createElement('img');
+        im.src = 'posty-con-placa.png'; im.alt = '';
+        av.appendChild(im);
+        var b = document.createElement('div');
+        b.className = 'msg bot';
+        if (h) b.innerHTML = h; else b.textContent = t;
+        d.appendChild(av); d.appendChild(b);
+      } else {
+        d.className = 'msg-row user';
+        var u = document.createElement('div');
+        u.className = 'msg user';
+        u.textContent = t;
+        d.appendChild(u);
+      }
       box.appendChild(d);
       chatScrollBottom();
     }
@@ -5374,9 +5717,71 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (key === 'q8') { if (a.q8mix === 'nada') return T.q8Nada; return a.q8 || ''; }
     return '';
   }
+  // (LOTE ONBOARDING-DIVERTIDO v760) Lo aprendido, la rama honesta, la reacción y la intro de la pregunta vigente. Funciones puras (sin DOM): se prueban en vm.
+  function chatKnownRows() {
+    var rows = [];
+    var cat = S.cat || (S.facts && S.facts.category) || '';
+    if (cat) rows.push({ e: '🏪', l: T.knownRubro, v: (typeof CATS !== 'undefined' && CATS[cat]) ? CATS[cat] : cat });
+    var city = '';
+    try { if (typeof WEB !== 'undefined' && WEB && WEB.city) city = WEB.city; } catch (e) {}
+    if (!city && S.facts && S.facts.address) city = S.facts.address;
+    if (city) rows.push({ e: '📍', l: T.knownCiudad, v: city });
+    var star = ((S.products || [])[0] || {}).nombre || '';
+    if (star) rows.push({ e: '⭐', l: T.knownProducto, v: star });
+    var stLine = '';
+    try { stLine = chatStyleLine(); } catch (e) { stLine = ''; }
+    if (stLine) rows.push({ e: '✦', l: T.knownEstilo, v: stLine });
+    return rows;
+  }
+  function chatHonestNeeded() {
+    if (S.igTried && !S.igOk) return true;
+    if (S.webTried && !S.webOk) return true;
+    // Estudio que no leyó nada usable (perfil vacío): tampoco se afirma nada.
+    if ((S.igTried || S.webTried) && !chatKnownRows().length && !(S.facts && S.facts._known)) return true;
+    return false;
+  }
+  function chatHonestRows() {
+    var rows = [];
+    if (S.igTried && !S.igOk) rows.push({ e: '📸', l: T.honestIg, v: T.honestIgMiss, mark: '✕', cls: 'miss' });
+    if (S.webTried && !S.webOk) rows.push({ e: '🌐', l: T.honestWeb, v: T.honestWebMiss, mark: '✕', cls: 'miss' });
+    rows.push({ e: '💬', l: T.honestThen, v: T.honestThenVal, mark: '→', cls: 'ask' });
+    return rows;
+  }
+  function chatJoinHonestText() {
+    if (S.webTried && !S.webOk && !(S.igTried && !S.igOk)) return T.chatJoinHonestWeb;
+    return T.chatJoinHonest;
+  }
+  function chatReactionFor(key) {
+    if (key === 'rubro') return T.reactRubro;
+    if (key === 'ubicacion') return T.reactUbicacion;
+    if (key === 'q1') return T.reactQ1;
+    if (key === 'q2') return T.reactQ2;
+    if (key === 'q3') return T.reactQ3;
+    if (key === 'q4') return T.reactQ4;
+    if (key === 'q5') return T.reactQ5;
+    return '';
+  }
+  function chatQIntro(key) {
+    if (key === 'rubro') return chatHonestNeeded() ? T.qIntroRubro : T.qIntroRubroBase;
+    if (key === 'ubicacion') {
+      if (S.source === 'email') return T.qIntroUbicacionEmail;
+      if (chatHonestNeeded()) return T.qIntroUbicacionHonest;
+      return '';
+    }
+    if (key === 'q1') return T.qIntroQ1;
+    if (key === 'q2') return T.qIntroQ2;
+    if (key === 'q3') return T.qIntroQ3;
+    if (key === 'q4') return T.qIntroQ4;
+    if (key === 'q5') return T.qIntroQ5;
+    return '';
+  }
   function chatRebuildLog() {
     S.chatPushedQ = {};
-    S.chatLog = [{ w: 'bot', t: S.source === 'email' ? T.chatJoinEmail : T.chatJoin }];
+    var honest = chatHonestNeeded();
+    S.chatLog = [{ w: 'bot', t: honest ? chatJoinHonestText() : (S.source === 'email' ? T.chatJoinEmail : T.chatJoin) }];
+    // (LOTE ONBOARDING-DIVERTIDO v760) Tarjeta de lo aprendido o rama honesta, justo después del saludo (determinista desde el estado: el rebuild la regenera idéntica).
+    if (honest) { S.chatLog.push({ w: 'bot', honest: chatHonestRows() }); }
+    else { var known = chatKnownRows(); if (known.length) S.chatLog.push({ w: 'bot', known: known }); }
     var i, k, q;
     for (i = 0; i < S.qi; i++) {
       k = S.plan[i];
@@ -5384,6 +5789,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       q = chatQText(k);
       S.chatLog.push({ w: 'bot', h: esc(q.chat) + '<br><span class="oc-chat-q">' + esc(q.title) + '</span>' });
       S.chatLog.push({ w: 'user', t: chatAnswerLabel(k) });
+      var react = chatReactionFor(k);
+      if (react) S.chatLog.push({ w: 'bot', t: react, reaction: 1 });
     }
   }
   function chatOpen() {
@@ -5406,7 +5813,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (!S.chatPushedQ) S.chatPushedQ = {};
     if (!S.chatPushedQ[key]) {
       S.chatPushedQ[key] = 1;
-      S.chatLog.push({ w: 'bot', h: esc(q.chat) + '<br><span class="oc-chat-q">' + esc(q.title) + '</span>' });
+      // (LOTE ONBOARDING-DIVERTIDO v760) La pregunta vigente es una tarjeta destacada (no una burbuja común): al responder, chatRebuildLog la baja a burbuja con su reacción.
+      var last = (S.chatLog || [])[(S.chatLog || []).length - 1];
+      var qh = esc(q.chat) + '<br><span class="oc-chat-q">' + esc(q.title) + '</span>';
+      if (!last || (last.qcard !== key && last.h !== qh)) S.chatLog.push({ w: 'bot', qcard: key });
     }
     if (!S.chatPostedQ) S.chatPostedQ = {};
     if (!S.chatPostedQ[key]) {
@@ -5416,13 +5826,40 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       });
     }
   }
+  // (LOTE ONBOARDING-DIVERTIDO v760) Cada entrada del log se pinta según su tipo: burbuja común (con el avatar real de Posty), tarjeta destacada de la pregunta vigente, tarjeta de lo aprendido/honesta, o reacción.
+  function chatLogHTML(m) {
+    if (m.known) {
+      var rows = m.known.map(function (r) {
+        return '<div class="known-row"><span class="k-emoji" aria-hidden="true">' + esc(r.e || '') + '</span><span class="k-text"><span class="k-label">' + esc(r.l || '') + '</span><span class="k-value">' + esc(r.v || '') + '</span></span><span class="k-check" aria-hidden="true">✓</span></div>';
+      }).join('');
+      return '<div class="known-card"><div class="known-head"><span class="face" aria-hidden="true"><img src="posty-con-placa.png" alt=""></span><div><h3>' + esc(T.knownTitle) + '</h3><p>' + esc(T.knownSub) + '</p></div></div><div class="known-rows">' + rows + '</div><p class="known-foot">' + esc(T.knownFoot) + '</p></div>';
+    }
+    if (m.honest) {
+      var hrows = m.honest.map(function (r) {
+        return '<div class="known-row"><span class="k-emoji" aria-hidden="true">' + esc(r.e || '') + '</span><span class="k-text"><span class="k-label">' + esc(r.l || '') + '</span><span class="k-value">' + esc(r.v || '') + '</span></span><span class="k-check ' + esc(r.cls || '') + '" aria-hidden="true">' + esc(r.mark || '') + '</span></div>';
+      }).join('');
+      return '<div class="known-card"><div class="known-head"><span class="face" aria-hidden="true"><img src="posty-con-placa.png" alt=""></span><div><h3>' + esc(T.honestTitle) + '</h3><p>' + esc(T.honestSub) + '</p></div></div><div class="known-rows">' + hrows + '</div><p class="known-foot">' + esc(T.honestFoot) + '</p></div>';
+    }
+    if (m.qcard) {
+      var q = chatQText(m.qcard);
+      var intro = chatQIntro(m.qcard);
+      var idx = (S.plan || []).indexOf(m.qcard);
+      var total = Math.max((S.plan || []).length, 1);
+      var badge = (T.qBadge || '').replace('{n}', String(idx + 1)).replace('{total}', String(total));
+      var back = (S.qi > 0) ? '<button type="button" class="backlink" data-ocback="1">' + esc(T.qBack || '← volver') + '</button>' : '';
+      return '<div class="msg-row bot"><span class="msg-ava oc-qava" aria-hidden="true"><img src="posty-con-placa.png" alt=""></span><div class="msg bot oc-qcard"><span class="q-badge">' + esc(badge) + '</span>' + (intro ? '<span class="q-intro">' + esc(intro) + '</span>' : '') + '<span class="q-ask">' + esc(q.title) + '</span><span class="q-hint"><span class="bounce" aria-hidden="true">👇</span> ' + esc(T.qHint) + '</span>' + back + '</div></div>';
+    }
+    if (m.reaction) return '<div class="oc-reaction">' + esc(m.t || '') + '</div>';
+    if (m.w === 'bot') return '<div class="msg-row bot"><span class="msg-ava" aria-hidden="true"><img src="posty-con-placa.png" alt=""></span><div class="msg bot">' + (m.h ? m.h : esc(m.t || '')) + '</div></div>';
+    return '<div class="msg-row user"><div class="msg user">' + esc(m.t || '') + '</div></div>';
+  }
   function chatRender() {
     var box = ocq();
     var key = S.plan[S.qi];
     var html = stemHTML();
     html += '<div class="oc-chat-msgs" id="oc_chat_msgs">';
     (S.chatLog || []).forEach(function (m) {
-      html += '<div class="msg ' + m.w + '">' + (m.h ? m.h : esc(m.t || '')) + '</div>';
+      html += chatLogHTML(m);
     });
     html += '</div>';
     if (S.chatBlocked) {
@@ -5453,6 +5890,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     }
     var bk = document.getElementById('oc_back');
     if (bk) bk.addEventListener('click', function () { chatBack(); });
+    var ocb = box.querySelectorAll('[data-ocback]');
+    ocb.forEach(function (b) { b.addEventListener('click', function () { chatBack(); }); });
     chatScrollBottom();
   }
   function chatRenderOpts(key, catalog) {
@@ -5461,7 +5900,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (S.chatPaused || S.chatBlocked) { host.innerHTML = ''; return; }
     var opts = catalog ? Object.keys(CATS).map(function (k) { return { v: k, l: CATS[k] }; }) : chatOptionsFor(key);
     var gridCls = opts.length <= 2 ? 'oc-grid oc-one' : 'oc-grid';
-    host.innerHTML = '<div class="' + gridCls + '">' + opts.map(function (o) { return cardHTML(o); }).join('') + '</div>';
+    var optsHead = opts.length ? '<div class="oc-opts-head"><strong>' + esc(T.optsHead || '') + '</strong><span class="oc-opts-count">' + esc((T.optsCount || '{n}').replace('{n}', String(opts.length))) + '</span></div>' : '';
+    host.innerHTML = optsHead + '<div class="' + gridCls + '">' + opts.map(function (o) { return cardHTML(o); }).join('') + '</div>';
     // (LOTE ETAPA-INSTAGRAM) Gold proposal: chip + note, only when
     // detection brought a stage (no detection, nothing).
     if (key === 'etapa' && etapaDetectada()) {
@@ -5490,10 +5930,14 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       // city, if any), then the generic ones. Values are the literal text
       // (like q6/q7): they travel verbatim to the fundamento.
       var oU = [], seenU = {};
-      var pushU = function (v) { var s = String(v || '').trim().slice(0, 60); var k = s.toLowerCase(); if (s && !seenU[k]) { seenU[k] = 1; oU.push({ v: s, l: s }); } };
-      try { if (typeof WEB !== 'undefined' && WEB && WEB.city) pushU(WEB.city); } catch (e) {}
-      pushU(T.ubicDomicilio);
-      pushU(T.ubicOnline);
+      var pushU = function (v, e, sub) { var s = String(v || '').trim().slice(0, 60); var k = s.toLowerCase(); if (s && !seenU[k]) { seenU[k] = 1; oU.push({ v: s, l: s, e: e || undefined, sub: sub || undefined }); } };
+      try { if (typeof WEB !== 'undefined' && WEB && WEB.city) pushU(WEB.city, '📍', ''); } catch (e) {}
+      pushU(T.ubicDomicilio, '🛵', T.ubicDomicilioSub);
+      pushU(T.ubicOnline, '💻', T.ubicOnlineSub);
+      pushU(T.ubicEnvios, '📦', T.ubicEnviosSub);
+      pushU(T.ubicFerias, '🎪', T.ubicFeriasSub);
+      pushU(T.ubicEncargo, '📝', T.ubicEncargoSub);
+      pushU(T.ubicLocalOnline, '🏪💻', T.ubicLocalOnlineSub);
       oU.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
       return oU;
     }
@@ -5515,9 +5959,9 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       return o;
     }
     if (key === 'q2') return q2Options();
-    if (key === 'q3') return Q3.slice();
-    if (key === 'q4') return Q4.slice();
-    if (key === 'q5') return Q5.slice();
+    if (key === 'q3') { var o3 = Q3.slice(); o3.push({ v: '__libre__', l: T.libre, sub: T.libreSub }); return o3; }
+    if (key === 'q4') { var o4 = Q4.slice(); o4.push({ v: '__libre__', l: T.libre, sub: T.libreSub }); return o4; }
+    if (key === 'q5') { var o5 = Q5.slice(); o5.push({ v: '__libre__', l: T.libre, sub: T.libreSub }); return o5; }
     if (key === 'q6') {
       var o6 = ((S.facts && S.facts.audience) || []).map(function (a) { return { v: a, l: a }; });
       Q6_GEN.forEach(function (x) { if (!o6.some(function (y) { return String(y.v).toLowerCase() === String(x.v).toLowerCase(); })) o6.push(x); });
@@ -5580,6 +6024,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       chatNext();
       return;
     }
+    if (key === 'q2' && v === '__libre__') { chatLibre('q2', 'libre'); return; }
+    if (key === 'q3' && v === '__libre__') { chatLibre('q3', 'libre'); return; }
+    if (key === 'q4' && v === '__libre__') { chatLibre('q4', 'libre'); return; }
+    if (key === 'q5' && v === '__libre__') { chatLibre('q5', 'libre'); return; }
     if (key === 'q6' && v === '__libre__') { chatLibre('q6', 'libre'); return; }
     if (key === 'q7' && v === '__libre__') { chatLibre('q7', 'libre'); return; }
     if (key === 'q8' && v === '__libre__') { chatLibre('q8', 'libre'); return; }
@@ -5620,6 +6068,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (key === 'q7') return T.q7LibrePh;
     if (key === 'q8') return T.q8LibrePh;
     if (key === 'ubicacion') return T.ubicLibrePh;
+    if (key === 'q2') return T.q2LibrePh;
+    if (key === 'q3') return T.q3LibrePh;
+    if (key === 'q4') return T.q4LibrePh;
+    if (key === 'q5') return T.q5LibrePh;
     return T.chatFreePh;
   }
   function chatLibreHint(key, mode) {
@@ -5629,6 +6081,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (key === 'q7') return T.q7Libre;
     if (key === 'q8') return T.q8Libre;
     if (key === 'ubicacion') return T.ubicLibre;
+    if (key === 'q2') return T.q2;
+    if (key === 'q3') return T.q3;
+    if (key === 'q4') return T.q4;
+    if (key === 'q5') return T.q5;
     return '';
   }
   function chatLibre(key, mode) {
@@ -5656,6 +6112,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
         if (key === 'q7') { S.ans.q7 = t; S.ans.q7mix = 'libre'; }
         if (key === 'q8') { S.ans.q8 = t; S.ans.q8mix = 'libre'; }
         if (key === 'ubicacion') { S.ans.ubicacion = t; }
+        if (key === 'q2') { S.ans.q2 = t; S.ans.q2mix = 'libre'; }
+        if (key === 'q3') { S.ans.q3 = t; S.ans.q3mix = 'libre'; }
+        if (key === 'q4') { S.ans.q4 = t; S.ans.q4mix = 'libre'; }
+        if (key === 'q5') { S.ans.q5 = t; S.ans.q5mix = 'libre'; }
         S.chatLibreKey = null; S.chatLibreMode = null;
         inp.value = '';
         chatPost('answer', { question: chatQText(key).title, value: t });
@@ -5688,19 +6148,32 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) S.qi++;
     try { opResumeSave('preguntas'); } catch (e) {}
     if (S.qi >= S.plan.length) { chatPollStop(); sprout(); return; }
+    // (LOTE ONBOARDING-DIVERTIDO v760) La pregunta respondida baja a burbuja común con su reacción: el log se reconstruye desde S.ans y la pregunta vigente vuelve como tarjeta destacada.
+    chatRebuildLog();
     chatAskCurrent();
     chatRender();
+  }
+  // (LOTE ONBOARDING-DIVERTIDO v760) Volver borra desde esa pregunta en adelante: respuesta, mix y marcas anti-duplicado, para que la pregunta vuelva a mostrarse fresca.
+  function chatClearFrom(idx) {
+    var i, k;
+    for (i = idx; i < (S.plan || []).length; i++) {
+      k = S.plan[i];
+      S.ans[k] = undefined;
+      if (k === 'q1') S.ans.q1mix = undefined;
+      if (k === 'q2') S.ans.q2mix = undefined;
+      if (k === 'q3') S.ans.q3mix = undefined;
+      if (k === 'q4') S.ans.q4mix = undefined;
+      if (k === 'q5') S.ans.q5mix = undefined;
+      if (k === 'q6') S.ans.q6mix = undefined;
+      if (k === 'q7') S.ans.q7mix = undefined;
+      if (k === 'q8') S.ans.q8mix = undefined;
+      if (S.chatPostedQ) delete S.chatPostedQ[k];
+    }
   }
   function chatBack() {
     if (S.qi > 0) {
       S.qi--;
-      var k = S.plan[S.qi];
-      S.ans[k] = undefined;
-      if (k === 'q1') S.ans.q1mix = undefined;
-      if (k === 'q6') S.ans.q6mix = undefined;
-      if (k === 'q7') S.ans.q7mix = undefined;
-      if (k === 'q8') S.ans.q8mix = undefined;
-      if (k === 'rubro') { S.ans.rubro = undefined; }
+      chatClearFrom(S.qi);
       S.chatLibreKey = null; S.chatLibreMode = null;
       try { opResumeSave('preguntas'); } catch (e) {}
       chatRebuildLog();
@@ -5713,8 +6186,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   function chatBackTo(key) {
     S.qi = S.plan.indexOf(key);
     if (S.qi < 0) { S.qi = 0; }
-    var k = S.plan[S.qi];
-    if (k) { S.ans[k] = undefined; }
+    chatClearFrom(S.qi);
     S.chatLibreKey = null; S.chatLibreMode = null;
     try { opResumeSave('preguntas'); } catch (e) {}
     chatRebuildLog();
@@ -5767,6 +6239,11 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     // builds as [rubro?, donde?, ubicacion?, etapa?, q1..q8]. Learned = a concrete
     // address or a detected local (the bio or web carries a place); the
     // city alone is a candidate, not a certainty.
+    // (LOTE ONBOARDING-DIVERTIDO v760) Rama honesta: si el estudio no pudo leer la web o el IG, Posty lo dice de frente y pregunta rubro + ubicación (aunque donde se haya aprendido: el estudio no es fiable ahí).
+    if (chatHonestNeeded()) {
+      if (plan.indexOf('rubro') < 0) plan.push('rubro');
+      if (plan.indexOf('ubicacion') < 0) plan.push('ubicacion');
+    }
     if (studied && !dondeAprendido(S.facts) && plan.indexOf('ubicacion') < 0) { plan.push('ubicacion'); }
     // (LOTE ETAPA-INSTAGRAM) The stage is ALWAYS asked (a gap, not a
     // fixed q9: the answer is never known in advance — detection only
@@ -5787,9 +6264,13 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       producto_estrella: S.ans.q1 || '',
       producto_mix: S.ans.q1mix || 'uno',
       cta: S.ans.q2 || '',
+      cta_mix: S.ans.q2mix || '',
       promo: S.ans.q3 || '',
+      promo_mix: S.ans.q3mix || '',
       voz: S.ans.q4 || '',
+      voz_mix: S.ans.q4mix || '',
       precios: S.ans.q5 || '',
+      precios_mix: S.ans.q5mix || '',
       // (LOTE PREGUNTA-DONDE) The answered location beats the channel.
       donde: S.ans.ubicacion || S.ans.donde || '',
       // (LOTE ETAPA-INSTAGRAM) The confirmed stage travels to the fundamento.
@@ -6186,8 +6667,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   function opResumeSave(stage) {
     try {
       var payload = { v: 1, ts: Date.now(), stage: stage,
-        S: { source: S.source, email: S.email, ig: S.ig, web: S.web, biz: S.biz, cat: S.cat, products: S.products || [], rubroOptions: (S.rubroOptions === undefined) ? null : S.rubroOptions, plan: S.plan || [], qi: S.qi || 0, ans: S.ans || {}, noWeb: S.noWeb, facts: S.facts || null, webFacts: S.webFacts || null, igFacts: S.igFacts || null, igStage: S.igStage || null,
-          chatLog: (S.chatLog || []).slice(-100), chatPostedQ: S.chatPostedQ || {}, chatJoined: !!S.chatJoined, chatGuest: S.chatGuest || null, chatLastId: S.chatLastId || 0, chatPaused: !!S.chatPaused, chatSeen: Object.keys(S.chatSeen || {}).slice(-50) },
+        S: { source: S.source, email: S.email, ig: S.ig, web: S.web, biz: S.biz, cat: S.cat, products: S.products || [], rubroOptions: (S.rubroOptions === undefined) ? null : S.rubroOptions, plan: S.plan || [], qi: S.qi || 0, ans: S.ans || {}, noWeb: S.noWeb, facts: S.facts || null, webFacts: S.webFacts || null, igFacts: S.igFacts || null, igStage: S.igStage || null, style: S.style || null, igTried: !!S.igTried, igOk: !!S.igOk, webTried: !!S.webTried, webOk: !!S.webOk,
+          chatLog: (S.chatLog || []).slice(-100), chatPostedQ: S.chatPostedQ || {}, chatPushedQ: S.chatPushedQ || {}, chatJoined: !!S.chatJoined, chatGuest: S.chatGuest || null, chatLastId: S.chatLastId || 0, chatPaused: !!S.chatPaused, chatSeen: Object.keys(S.chatSeen || {}).slice(-50) },
         FL: { productos: FL_E.productos || [], vetos: FL_E.vetos || [] },
         DR: (typeof DR !== 'undefined' && DR) ? { dims: DR.dims, picks: DR.picks, champ: DR.champ } : null };
       localStorage.setItem(OP_RESUME_KEY, JSON.stringify(payload));
@@ -6235,13 +6716,13 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.source = s.source; S.email = s.email; S.ig = s.ig; S.web = s.web; S.biz = s.biz; S.cat = s.cat;
       S.products = s.products || []; S.rubroOptions = (s.rubroOptions === undefined) ? null : s.rubroOptions;
       S.plan = s.plan || []; S.qi = s.qi || 0; S.ans = s.ans || {};
-      S.noWeb = !!s.noWeb; S.facts = s.facts || null; S.webFacts = s.webFacts || null; S.igFacts = s.igFacts || null; S.igStage = s.igStage || null;
+      S.noWeb = !!s.noWeb; S.facts = s.facts || null; S.webFacts = s.webFacts || null; S.igFacts = s.igFacts || null; S.igStage = s.igStage || null; S.style = s.style || null; S.igTried = !!s.igTried; S.igOk = !!s.igOk; S.webTried = !!s.webTried; S.webOk = !!s.webOk;
       // (LOTE PRUEBA-CHAT) The chat resumes where it left off (thread + pause).
-      S.chatLog = s.chatLog || []; S.chatPostedQ = s.chatPostedQ || {}; S.chatJoined = !!s.chatJoined; S.chatGuest = s.chatGuest || null; S.chatLastId = s.chatLastId || 0; S.chatPaused = !!s.chatPaused;
+      S.chatLog = s.chatLog || []; S.chatPostedQ = s.chatPostedQ || {}; S.chatPushedQ = s.chatPushedQ || {}; S.chatJoined = !!s.chatJoined; S.chatGuest = s.chatGuest || null; S.chatLastId = s.chatLastId || 0; S.chatPaused = !!s.chatPaused;
       S.chatSeen = {}; (s.chatSeen || []).forEach(function (id) { S.chatSeen[id] = 1; });
       if (s.biz) { try { TRIAL_BIZ = s.biz; } catch (e) {} }
       if (s.ig) { try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + s.ig; } catch (e) {} }
-      window.OC_ANS = { producto_estrella: S.ans.q1 || '', producto_mix: S.ans.q1mix || 'uno', cta: S.ans.q2 || '', promo: S.ans.q3 || '', voz: S.ans.q4 || '', precios: S.ans.q5 || '', donde: S.ans.ubicacion || S.ans.donde || '', etapa: S.ans.etapa || '', audiencia: S.ans.q6 || '', audiencia_mix: S.ans.q6mix || 'todos', diferencial: S.ans.q7 || '', diferencial_mix: S.ans.q7mix || 'nose', lineas_rojas: S.ans.q8 || '', lineas_rojas_mix: S.ans.q8mix || 'nada', promo_semana: true };
+      window.OC_ANS = { producto_estrella: S.ans.q1 || '', producto_mix: S.ans.q1mix || 'uno', cta: S.ans.q2 || '', cta_mix: S.ans.q2mix || '', promo: S.ans.q3 || '', promo_mix: S.ans.q3mix || '', voz: S.ans.q4 || '', voz_mix: S.ans.q4mix || '', precios: S.ans.q5 || '', precios_mix: S.ans.q5mix || '', donde: S.ans.ubicacion || S.ans.donde || '', etapa: S.ans.etapa || '', audiencia: S.ans.q6 || '', audiencia_mix: S.ans.q6mix || 'todos', diferencial: S.ans.q7 || '', diferencial_mix: S.ans.q7mix || 'nose', lineas_rojas: S.ans.q8 || '', lineas_rojas_mix: S.ans.q8mix || 'nada', promo_semana: true };
       window.OC_CAT = S.ans.rubro || S.cat || window.OC_CAT || null;
       window.OC_DETECTADOS = (S.products || []).map(function (p) { return p.nombre; }).filter(Boolean).slice(0, 4);
       window.OC_REASK_Q1 = reaskQ1;
@@ -6312,9 +6793,11 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   var DRAFT_SETS = { gastronomia: ['foto', 'protagonista', 'texto', 'tema'], cafeteria: ['foto', 'protagonista', 'texto', 'tema'], bar: ['foto', 'protagonista', 'texto', 'tema'], moda: ['foto', 'protagonista', 'tema', 'enfoque'], belleza: ['foto', 'protagonista', 'texto', 'enfoque'], barberia: ['foto', 'protagonista', 'texto', 'enfoque'], flores: ['foto', 'protagonista', 'texto', 'tema'], mascotas: ['foto', 'protagonista', 'texto', 'tema'], fitness: ['foto', 'texto', 'tema', 'enfoque'], salud: ['foto', 'texto', 'tema', 'enfoque'], hogar: ['foto', 'protagonista', 'texto', 'tema'], deco: ['foto', 'protagonista', 'texto', 'tema'], joyeria: ['foto', 'protagonista', 'texto', 'tema'], fotografia: ['foto', 'protagonista', 'texto', 'tema'], inmobiliaria: ['texto', 'enfoque', 'tema', 'veto'], autos: ['foto', 'texto', 'enfoque', 'tema'], educacion: ['texto', 'enfoque', 'tema', 'veto'], turismo: ['foto', 'protagonista', 'texto', 'tema'], eventos: ['foto', 'protagonista', 'texto', 'tema'], tecnologia: ['texto', 'enfoque', 'tema', 'veto'], profesionales: ['texto', 'enfoque', 'tema', 'veto'], servicios: ['texto', 'enfoque', 'tema', 'veto'], viajes: ['foto', 'protagonista', 'texto', 'tema'], arte: ['foto', 'protagonista', 'texto', 'tema'], boliche: ['foto', 'protagonista', 'texto', 'tema'], otro: ['foto', 'texto', 'enfoque', 'tema'] };
   var DRAFT_TEMA = { default: ['tip', 'social', 'promo'], barberia: ['tip', 'promo', 'novedad'] };
   var DRAFT_Q = { foto: '¿Cómo querés que salga tu producto?', protagonista: '¿Quién protagoniza tus posteos?', texto: '¿Querés texto en la foto?', enfoque: '¿Tu semana tira más a…?', tema: '¿Qué tema querés que predomine?', veto: '¿Hay algo que preferís que no salga?' };
-  var DRAFT_OPTS = { foto: [{ v: 'producto', l: 'El producto, bien grande' }, { v: 'accion', l: 'El producto en acción' }, { v: 'marca', l: 'Tu marca al frente' }], protagonista: [{ v: 'producto', l: 'El producto' }, { v: 'gente', l: 'La gente' }, { v: 'lugar', l: 'El lugar' }], texto: [{ v: 'limpia', l: 'Solo la foto, limpia' }, { v: 'equilibrada', l: 'Un poco de texto' }, { v: 'titulares', l: 'Con titulares' }], enfoque: [{ v: 'venta', l: 'Vender' }, { v: 'marca', l: 'Mostrar el negocio' }, { v: 'mezcla', l: 'Mezcla' }], veto: [{ v: 'promo', l: 'Menos promos' }, { v: 'sorteo', l: 'Menos sorteos' }, { v: 'ninguno', l: 'Todo me sirve' }] };
+  var DRAFT_OPTS = { foto: [{ v: 'producto', l: 'Huge' }, { v: 'accion', l: 'In action' }, { v: 'marca', l: 'Brand front and center' }], protagonista: [{ v: 'producto', l: 'El producto' }, { v: 'gente', l: 'La gente' }, { v: 'lugar', l: 'El lugar' }], texto: [{ v: 'limpia', l: 'Solo la foto, limpia' }, { v: 'equilibrada', l: 'Un poco de texto' }, { v: 'titulares', l: 'Con titulares' }], enfoque: [{ v: 'venta', l: 'Vender' }, { v: 'marca', l: 'Mostrar el negocio' }, { v: 'mezcla', l: 'Mezcla' }], veto: [{ v: 'promo', l: 'Menos promos' }, { v: 'sorteo', l: 'Menos sorteos' }, { v: 'ninguno', l: 'Todo me sirve' }] };
+  var DRAFT_DESC = { foto: { producto: 'Your product, huge in the photo', accion: 'In use, full of life', marca: 'Your logo, big and front and center' }, tema: { tip: 'Close-up detail', social: 'Your community', promo: 'The product, front and center', novedad: 'What is new, first' } };
+  var DRAFT_PREVIEW_DESC = { producto: 'Your product, big, the way your customers would see it.', accion: 'Your product in use, full of life, the way your customers live it.', marca: 'Your logo, big and front and center, the way your customers see it.' };
   var DRAFT_KIND_L = { tip: 'Consejos', social: 'Comunidad', novedad: 'Novedades', promo: 'Promos', reserva: 'Reservas', sorteo: 'Sorteos' };
-  var DRAFT_T = { pack: 'Paquete', of: 'de 4', chat: 'elegí tu favorita, como en el draft. así aprendo qué posteos querés.', mini: 'Tu semana se va armando', champChat: 'ya elegiste 4. ¿cuál es tu favorita?', champTitle: '¿Cuál es tu favorita?', champSub: 'Esa va a ser el posteo principal de tu semana.' };
+  var DRAFT_T = { pack: 'Paquete', of: 'de 4', chat: 'Pick your favorite: tap the one you like most and I learn which posts you want.', mini: 'Tu semana se va armando', champChat: 'ya elegiste 4. ¿cuál es tu favorita?', champTitle: '¿Cuál es tu favorita?', champSub: 'Esa va a ser el posteo principal de tu semana.' };
   var DR = null;
   function draftAvailable() { return (FL_E.productos || []).length > 0; }
   function draftStarName() {
@@ -6324,7 +6807,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   function draftPhotoFor(name) {
     var ps = S.products || [];
     for (var i = 0; i < ps.length; i++) { if (ps[i] && ps[i].nombre === name && ps[i].foto) return ps[i].foto; }
-    try { if (typeof PREFILL !== 'undefined' && PREFILL && PREFILL.photo) return PREFILL.photo; } catch (e) {}
+    // (LOTE ONBOARDING-DIVERTIDO v760 · Solo Hacienda Campos) Sin foto del producto, null: la foto de perfil (logo) NO es foto de producto — usarla hacía que las 3 tarjetas de estilo mostraran el mismo logo.
     try { if (typeof WEB !== 'undefined' && WEB && WEB.photos && WEB.photos[0]) return WEB.photos[0]; } catch (e) {}
     return null;
   }
@@ -6349,17 +6832,13 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var ps = S.products || [];
     for (var j = 0; j < ps.length; j++) { if (ps[j] && ps[j].foto) add(ps[j].foto); }
     try { if (typeof WEB !== 'undefined' && WEB && WEB.photos) { for (var k = 0; k < WEB.photos.length; k++) add(WEB.photos[k]); } } catch (e) {}
-    try { if (typeof PREFILL !== 'undefined' && PREFILL && PREFILL.photo) add(PREFILL.photo); } catch (e) {}
+    // (LOTE ONBOARDING-DIVERTIDO v760 · Solo Hacienda Campos) La foto de perfil (logo) NO entra al pool de fotos de producto.
     return pool;
   }
   function draftLogoPhoto() {
     try { if (typeof PREFILL !== 'undefined' && PREFILL && PREFILL.photo) return PREFILL.photo; } catch (e) {}
     return null;
   }
-  // Recortes distintos para que una sola foto rinda 3 tarjetas distintas.
-  var DRAFT_CROPS = ['crop-a', 'crop-b', 'crop-c'];
-  // Descripción de cada recorte (la <small> de la tarjeta: lo que se ve).
-  var DRAFT_CROP_DESC = { 'crop-a': 'El producto, bien grande', 'crop-b': 'Otro ángulo', 'crop-c': 'De cerca' };
   // (LOTE DISEÑO-FAVORITA) Una imagen DISTINTA por opción (mock 1/2/2b):
   // la ronda 'foto' muestra su ángulo (producto grande / en acción /
   // marca al frente); la ronda 'tema' ilustra el tema (consejos = detalle
@@ -6369,47 +6848,31 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   // foto, los recortes hacen las 3 tarjetas distintas (mock 2b: 4 recortes
   // del mismo vestido). Devuelve {src, crop, desc} — desc es lo que se ve
   // en la foto y va en la <small> de la tarjeta.
+  function draftPoolUnused() {
+    var pool = draftPhotoPool() || [];
+    var used = {};
+    (DR.picks || []).forEach(function (p) { if (p && p.foto) used[p.foto] = 1; });
+    return pool.filter(function (u) { return !used[u]; });
+  }
+  // (LOTE ONBOARDING-DIVERTIDO v760 · mock v2 aprobado) Cada opción con UNA
+  // foto REAL y DISTINTA del mismo rubro, del pool sin usar. Sin recortes:
+  // la misma foto recompuesta es el error que el mock prohíbe. La marca
+  // lleva el logo grande ENCIMA de una foto distinta (nunca logo solo).
+  // { src, desc, logo } — src null cuando el pool no alcanza (placeholder honesto).
   function draftCardPhoto(dim, opt, oi) {
-    var pool = draftPhotoPool();
-    var main = pool[0] || null;
+    var unused = draftPoolUnused();
     var logo = draftLogoPhoto();
     if (dim === 'foto') {
-      if (opt.v === 'producto') return { src: main, crop: 'crop-close', desc: 'Tu producto, gigante en la foto' };
-      if (opt.v === 'accion') return { src: (pool[1] || main), crop: 'crop-action', desc: 'En uso, con vida' };
-      if (opt.v === 'marca') return { src: (logo && logo !== main ? logo : main), crop: 'crop-brand', desc: 'Tu logo, grande y al centro' };
+      if (opt.v === 'producto') return { src: unused[0] || null, desc: DRAFT_DESC.foto.producto, logo: null };
+      if (opt.v === 'accion') return { src: unused[1] || null, desc: DRAFT_DESC.foto.accion, logo: null };
+      return { src: unused[2] || null, desc: DRAFT_DESC.foto.marca, logo: logo };
     }
-    if (dim === 'tema') {
-      if (opt.v === 'tip') return { src: main, crop: 'crop-close', desc: 'Detalle de cerca' };
-      if (opt.v === 'social') return { src: (pool[1] || main), crop: 'crop-b', desc: 'Tu comunidad' };
-      if (opt.v === 'promo') return { src: main, crop: 'crop-a', desc: 'El producto, protagonista' };
-      if (opt.v === 'novedad') return { src: (pool[1] || main), crop: 'crop-c', desc: 'Lo nuevo, primero' };
-    }
-    var src = pool.length ? pool[oi % pool.length] : null;
-    var crop = DRAFT_CROPS[oi % DRAFT_CROPS.length];
-    return { src: src, crop: crop, desc: DRAFT_CROP_DESC[crop] || '' };
+    if (dim === 'tema') return { src: unused[oi] || null, desc: (DRAFT_DESC.tema[opt.v] || ''), logo: null };
+    return { src: unused[oi] || null, desc: '', logo: null };
   }
-  // (LOTE DISEÑO-FAVORITA) La favorita junta 4 picks de 4 rondas distintas:
-  // dos picks pueden caer en la misma (foto, recorte) — p. ej. 'foto/producto'
-  // y 'tema/tip' usan la misma foto en primer plano. La favorita rota el
-  // recorte del pick que se repite para que las 4 tarjetas sean distintas.
-  // Es idempotente: una segunda pasada no cambia nada.
-  var DRAFT_CHAMP_CROPS = ['crop-close', 'crop-action', 'crop-brand', 'crop-a', 'crop-b', 'crop-c'];
-  function draftDedupePicks(picks) {
-    var seen = {};
-    picks.forEach(function (p) {
-      if (!p || !p.foto) return;
-      var key = p.foto + '|' + (p.crop || '');
-      var guard = 0;
-      while (seen[key] && guard < DRAFT_CHAMP_CROPS.length) {
-        var idx = DRAFT_CHAMP_CROPS.indexOf(p.crop || 'crop-a');
-        p.crop = DRAFT_CHAMP_CROPS[(idx + 1) % DRAFT_CHAMP_CROPS.length];
-        key = p.foto + '|' + p.crop;
-        guard++;
-      }
-      seen[key] = 1;
-    });
-    return picks;
-  }
+  // (LOTE ONBOARDING-DIVERTIDO v760 · mock v2) Sin dedupe por recorte: los
+  // picks ya son fotos distintas por construcción (draftPoolUnused) y rotar
+  // el recorte de la misma foto es el error que el mock prohíbe.
   function draftOptionsFor(dim) {
     if (dim === 'tema') {
       var kinds = (DRAFT_TEMA[S.cat] || DRAFT_TEMA.default);
@@ -6422,9 +6885,9 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     for (var i = 0; i < 4; i++) {
       var p = DR.picks[i];
       var champ = DR.champ && DR.champ.round === i;
-      if (!p) { slots += '<span class="oc-draft-slot">?</span>'; continue; }
+      if (!p) { slots += '<span class="oc-draft-slot pending" aria-label="' + esc(T.draftSlotPending || '') + '"><span class="oc-slot-dots" aria-hidden="true"><i></i><i></i><i></i></span></span>'; continue; }
       var cls = 'oc-draft-slot filled' + (champ ? ' champ' : '');
-      var foto = p.foto ? '<img src="' + esc(p.foto) + '" alt="" class="' + esc(p.crop || '') + '" onerror="this.style.display=\'none\'">' : '';
+      var foto = p.foto ? '<img src="' + esc(p.foto) + '" alt="" onerror="this.style.display=\'none\'">' : '';
       slots += '<span class="' + cls + '">' + foto + esc(p.l) + (champ ? ' ✦' : '') + '</span>';
     }
     return '<div class="oc-draft-mini">' + slots + '</div>';
@@ -6444,43 +6907,125 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       setTimeout(function () { try { b.remove(); } catch (e) {} }, 800);
     });
   }
-  function draftShowRound(i) {
+  // (LOTE ONBOARDING-DIVERTIDO v760 · mock v2 aprobado) La ronda de foto es
+  // la pantalla del mock: vista previa grande arriba (la foto de la opción
+  // elegida, cambia total al tocar otro estilo), 3 opciones con fotos
+  // distintas, paquete con fotos distintas, botón «Seguir con este estilo».
+  // Tocar una opción solo la selecciona; el botón registra el pick y avanza.
+  function draftFotoDefaultSel(dim, opts) {
+    for (var i = 0; i < opts.length; i++) {
+      if (draftCardPhoto(dim, opts[i], i).src) return i;
+    }
+    return 0;
+  }
+  function draftFotoPreviewData(dim, opt, oi) {
+    var card = draftCardPhoto(dim, opt, oi);
+    var label = (DRAFT_OPTS[dim] || [])[oi] ? (DRAFT_OPTS[dim] || [])[oi].l : '';
+    return { src: card.src, logo: card.logo, label: label, caption: (DRAFT_PREVIEW_DESC[opt.v] || card.desc || '') };
+  }
+  function draftShowRound(round) {
     var box = ocq();
     try { opResumeSave('draft'); } catch (e) {}
-    var dim = DR.dims[i];
-    var opts = draftOptionsFor(dim);
-    var cards = opts.map(function (o, oi) {
-      var prod = draftCardProduct(i, oi);
-      var ph = draftCardPhoto(dim, o, oi);
-      return '<button type="button" class="oc-draft-card" data-v="' + esc(o.v) + '">'
-        + (ph.src ? '<img src="' + esc(ph.src) + '" alt="" class="' + esc(ph.crop || '') + '" onerror="this.style.display=\'none\'">' : '')
-        + '<b>' + esc(o.l) + '</b><small>' + esc(ph.desc || prod) + '</small></button>';
-    }).join('');
-    box.innerHTML = stemHTML()
-      + '<p class="oc-draft-pack">✦ ' + esc(DRAFT_T.pack) + ' ' + (i + 1) + ' ' + esc(DRAFT_T.of) + '<span class="oc-draft-step">' + (i + 1) + ' de 4</span></p>'
-      + draftMiniHTML()
-      + '<p class="oc-chat">' + esc(DRAFT_T.chat) + '</p><h2 class="oc-q">' + esc(DRAFT_Q[dim]) + '</h2>'
-      + '<div class="oc-grid">' + cards + '</div>'
-      + '<button type="button" class="oc-back" id="oc_back">' + esc(T.back) + '</button>';
-    show('v-ocq');
-    var els = box.querySelectorAll('.oc-draft-card');
-    els.forEach(function (c) {
-      c.addEventListener('click', function () {
-        if (c.classList.contains('oc-picked')) return;
-        c.classList.add('oc-picked'); draftBurst(c);
-        var v = c.getAttribute('data-v');
-        var oi = Array.prototype.indexOf.call(els, c);
-        var ph = draftCardPhoto(dim, opts[oi], oi);
-        DR.picks[i] = { dim: dim, v: v, l: opts[oi].l, foto: ph.src, crop: ph.crop, imgDesc: ph.desc || draftCardProduct(i, oi) };
-        try { trk('prueba_step', { step: 'draft_r' + (i + 1) }); } catch (e) {}
-        setTimeout(function () {
-          if (i + 1 < 4) draftShowRound(i + 1);
-          else draftShowChamp();
-        }, reduced ? 0 : 650);
+    var dim = DR.dims[round];
+    var opts = DRAFT_OPTS[dim];
+    var html = stemHTML() + '<div class="oc-draft-wrap">';
+    var sfx = document.getElementById('draftSound');
+    if (sfx) { try { sfx.play(); } catch (e) {} }
+    var i, opt, card;
+    if (dim === 'foto') {
+      var sel = draftFotoDefaultSel(dim, opts);
+      var prev = draftFotoPreviewData(dim, opts[sel], sel);
+      html += '<div class="oc-draft-head"><span class="oc-draft-pill">✦ ' + esc(DRAFT_T.pack) + '</span><span class="oc-draft-count">' + (round + 1) + ' de ' + DR.dims.length + '</span></div>';
+      html += '<h2 class="oc-draft-title">' + esc(DRAFT_Q[dim]) + '</h2><p class="oc-draft-sub">' + esc(T.draftFotoSub) + '</p>';
+      html += '<div class="oc-draft-preview" id="ocFotoPreview">';
+      if (prev.src) html += '<span class="oc-draft-img big"><img src="' + esc(prev.src) + '" alt="">' + (prev.logo ? '<span class="oc-draft-logo-over"><img src="' + esc(prev.logo) + '" alt=""></span>' : '') + '</span>';
+      else html += '<span class="oc-draft-nophoto big">📷 ' + esc(T.draftNoPhoto) + '</span>';
+      html += '<span class="oc-draft-chip">★ ' + esc(prev.label) + ' · ' + esc(T.draftPreviewAs) + '</span>';
+      html += '</div><p class="oc-draft-prevcap" id="ocFotoPrevCap">' + esc(prev.caption) + '</p>';
+      html += '<p class="oc-draft-choose">' + esc(T.draftFotoChoose) + '</p>';
+      html += '<div class="oc-grid oc-grid-3">';
+      for (i = 0; i < opts.length; i++) {
+        opt = opts[i]; card = draftCardPhoto(dim, opt, i);
+        html += '<div class="oc-draft-card' + (i === sel ? ' oc-picked' : '') + '" data-i="' + i + '" data-v="' + esc(opt.v) + '">';
+        if (i === sel) html += '<span class="oc-pick-tick">✓</span>';
+        if (card.src) html += '<span class="oc-draft-img"><img src="' + esc(card.src) + '" alt="">' + (card.logo ? '<span class="oc-draft-logo-over"><img src="' + esc(card.logo) + '" alt=""></span>' : '') + '</span>';
+        else html += '<span class="oc-draft-nophoto">📷 ' + esc(T.draftNoPhoto) + '</span>';
+        html += '<b>' + esc(opt.l) + '</b><small>' + esc(card.desc) + '</small></div>';
+      }
+      html += '</div>';
+      html += '<p class="oc-draft-pack">' + esc(T.draftPackSub) + '</p>';
+      html += draftMiniHTML();
+      html += '<button type="button" class="oc-draft-go" id="oc_foto_go">' + esc(T.draftFotoGo) + '</button>';
+      html += '<p class="oc-draft-back"><button type="button" class="oc-link" id="oc_draft_back">' + esc(T.back) + '</button></p>';
+      html += '<p class="oc-draft-foot">' + esc(T.draftFotoFoot) + '</p></div>';
+      box.innerHTML = html;
+      show('v-ocq');
+      var pv = document.getElementById('ocFotoPreview');
+      function paintPreview(idx) {
+        var d = draftFotoPreviewData(dim, opts[idx], idx);
+        if (!pv) return;
+        pv.innerHTML = (d.src ? '<span class="oc-draft-img big"><img src="' + esc(d.src) + '" alt="">' + (d.logo ? '<span class="oc-draft-logo-over"><img src="' + esc(d.logo) + '" alt=""></span>' : '') + '</span>' : '<span class="oc-draft-nophoto big">📷 ' + esc(T.draftNoPhoto) + '</span>') + '<span class="oc-draft-chip">★ ' + esc(d.label) + ' · ' + esc(T.draftPreviewAs) + '</span>';
+        var cap = document.getElementById('ocFotoPrevCap');
+        if (cap) cap.textContent = d.caption;
+      }
+      box.querySelectorAll('.oc-draft-card').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var idx = parseInt(el.getAttribute('data-i'), 10) || 0;
+          box.querySelectorAll('.oc-draft-card').forEach(function (c) {
+            c.classList.remove('oc-picked');
+            var tk = c.querySelector('.oc-pick-tick'); if (tk) tk.remove();
+          });
+          el.classList.add('oc-picked');
+          el.insertAdjacentHTML('afterbegin', '<span class="oc-pick-tick">✓</span>');
+          paintPreview(idx);
+        });
       });
-    });
-    document.getElementById('oc_back').addEventListener('click', function () {
-      if (i > 0) { DR.picks.length = i - 1; DR.champ = null; draftShowRound(i - 1); }
+      var go = document.getElementById('oc_foto_go');
+      if (go) go.addEventListener('click', function () {
+        var picked = box.querySelector('.oc-draft-card.oc-picked');
+        var idx = picked ? (parseInt(picked.getAttribute('data-i'), 10) || 0) : 0;
+        var opt = opts[idx];
+        var card = draftCardPhoto(dim, opt, idx);
+        DR.picks.push({ dim: dim, v: opt.v, l: opt.l, foto: card.src, logo: card.logo || null, imgDesc: card.desc });
+        var next = round + 1;
+        if (next < DR.dims.length) draftShowRound(next);
+        else { draftShowChamp(); }
+      });
+    } else {
+      html += '<div class="oc-draft-head"><span class="oc-draft-pill">✦ ' + esc(DRAFT_T.pack) + '</span><span class="oc-draft-count">' + (round + 1) + ' de ' + DR.dims.length + '</span></div>';
+      html += '<h2 class="oc-draft-title">' + esc(DRAFT_Q[dim]) + '</h2>';
+      html += '<p class="oc-draft-chat">' + esc(DRAFT_T.chat) + '</p>';
+      html += '<div class="oc-grid">';
+      for (i = 0; i < opts.length; i++) {
+        opt = opts[i]; card = draftCardPhoto(dim, opt, i);
+        html += '<div class="oc-draft-card" data-v="' + esc(opt.v) + '">';
+        if (card.src) html += '<span class="oc-draft-img"><img src="' + esc(card.src) + '" alt="">' + (card.logo ? '<span class="oc-draft-logo-over"><img src="' + esc(card.logo) + '" alt=""></span>' : '') + '</span>';
+        else html += '<span class="oc-draft-nophoto">📷 ' + esc(T.draftNoPhoto) + '</span>';
+        html += '<b>' + esc(opt.l) + '</b>' + (card.desc ? '<small>' + esc(card.desc) + '</small>' : '') + '</div>';
+      }
+      html += '</div>';
+      html += '<p class="oc-draft-pack">' + esc(T.draftPackSub) + '</p>';
+      html += draftMiniHTML();
+      html += '<p class="oc-draft-back"><button type="button" class="oc-link" id="oc_draft_back">' + esc(T.back) + '</button></p>';
+      html += '<p class="oc-draft-foot">' + esc(T.draftFotoFoot) + '</p></div>';
+      box.innerHTML = html;
+      show('v-ocq');
+      box.querySelectorAll('.oc-draft-card').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var v = el.getAttribute('data-v');
+          var o = opts.find(function (x) { return x.v === v; }) || opts[0];
+          var oi = opts.indexOf(o);
+          var card = draftCardPhoto(dim, o, oi);
+          DR.picks.push({ dim: dim, v: o.v, l: o.l, foto: card.src, logo: card.logo || null, imgDesc: card.desc });
+          var next = round + 1;
+          if (next < DR.dims.length) draftShowRound(next);
+          else { draftShowChamp(); }
+        });
+      });
+    }
+    var back = document.getElementById('oc_draft_back');
+    if (back) back.addEventListener('click', function () {
+      if (round > 0) { DR.picks.length = round - 1; DR.champ = null; draftShowRound(round - 1); }
       else { DR = null; screenEspejo(); }
     });
     window.scrollTo({ top: 0 });
@@ -6488,19 +7033,24 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   function draftShowChamp() {
     var box = ocq();
     try { opResumeSave('draft'); } catch (e) {}
-    draftDedupePicks(DR.picks);
-    var cards = DR.picks.map(function (p, i) {
-      return '<button type="button" class="oc-draft-card" data-i="' + i + '">'
-        + '<span class="oc-champ-chip">✓ Tu favorita</span>'
-        + (p.foto ? '<img src="' + esc(p.foto) + '" alt="" class="' + esc(p.crop || '') + '" onerror="this.style.display=\'none\'">' : '')
-        + '<b>' + esc(p.l) + '</b><small>' + esc(p.imgDesc || DRAFT_Q[p.dim]) + '</small></button>';
-    }).join('');
-    box.innerHTML = stemHTML()
-      + draftMiniHTML()
+    var i, p;
+    var html = stemHTML() + draftMiniHTML()
       + '<p class="oc-chat">' + esc(DRAFT_T.champChat) + '</p><h2 class="oc-q">' + esc(DRAFT_T.champTitle) + '<span class="oc-draft-step">4 de 4</span></h2>'
       + '<p class="oc-chat">' + esc(DRAFT_T.champSub) + '</p>'
-      + '<div class="oc-grid oc-champ">' + cards + '</div>'
+      + '<div class="oc-grid oc-champ">';
+    for (i = 0; i < DR.picks.length; i++) {
+      p = DR.picks[i];
+      html += '<button type="button" class="oc-draft-card" data-i="' + i + '">'
+        + '<span class="oc-champ-chip">✓ Tu favorita</span>'
+        + (p.foto ? '<span class="oc-draft-img"><img src="' + esc(p.foto) + '" alt="">' + (p.logo ? '<span class="oc-draft-logo-over"><img src="' + esc(p.logo) + '" alt=""></span>' : '') + '</span>' : '<span class="oc-draft-nophoto">📷 ' + esc(T.draftNoPhoto || '') + '</span>')
+        + '<b>' + esc(p.l) + '</b><small>' + esc(p.imgDesc || DRAFT_Q[p.dim]) + '</small>';
+      var pr = draftPromptFor(p);
+      if (pr) html += '<div class="oc-prompt">✦ ' + esc(pr) + '</div>';
+      html += '</button>';
+    }
+    html += '</div>'
       + '<button type="button" class="oc-back" id="oc_back">' + esc(T.back) + '</button>';
+    box.innerHTML = html;
     show('v-ocq');
     var els = box.querySelectorAll('.oc-draft-card');
     els.forEach(function (c) {
@@ -6541,7 +7091,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   // caller decides. In quiet mode GEN_WEB is untouched (the combined flow
   // needs both flags) and facts are merged (web primary, IG fills in).
   async function studyIg(ig, quiet) {
-    renderStudy(T.studyIg);
+    S.igTried = true; S.igOk = false;
+    if (!quiet) renderStudy(T.studyIg);
     try {
       var r = await fetch('/api/trial/prefill' + TEST_KEY_QS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ig: ig }) });
       var d = await r.json().catch(function () { return {}; });
@@ -6552,6 +7103,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.biz = d.name || S.biz || '';
       TRIAL_BIZ = S.biz;
       S.igFacts = d.facts || null; S.facts = mergeFacts(S.webFacts, S.igFacts);
+      S.igOk = true;
+      if (d.style) S.style = mergeStyle(S.style, d.style);
       // (LOTE ETAPA-INSTAGRAM) Stage signal from prefill (ig_stage).
       S.igStage = d.ig_stage || null;
       try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + ig; } catch (e) {}
@@ -6578,7 +7131,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   }
 
   async function studyWeb(url, quiet) {
-    renderStudy(T.studyWeb);
+    S.webTried = true; S.webOk = false;
+    if (!quiet) renderStudy(T.studyWeb);
     try {
       var r = await fetch('/api/trial/web-prefill' + TEST_KEY_QS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web: url }) });
       var d = await r.json().catch(function () { return {}; });
@@ -6589,6 +7143,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.biz = d.name || S.biz || '';
       TRIAL_BIZ = S.biz; TRIAL_DESC = d.description || '';
       S.webFacts = d.facts || null; S.facts = mergeFacts(S.webFacts, S.igFacts);
+      S.webOk = true;
+      if (d.style) S.style = mergeStyle(S.style, d.style);
       // El rubro confirmado por el dueño manda sobre lo detectado.
       if (!S.ans.rubro) { S.cat = d.category || null; if (S.cat) window.OC_CAT = S.cat; }
       // (rubro-literal) No borrar: si la segunda fuente no trae
@@ -6615,19 +7171,112 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   // and is studied first; IG complements it. If the web fails, we go on
   // with IG only (the web never blocks the trial). If the IG fails, entry
   // error: the IG is mandatory and must be fixed.
+  // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El estudio ya NO
+  // bloquea el chat: la entrada abre el chat al instante con el plan completo
+  // y el estudio corre en segundo plano. Cuando aterriza, studySoftApply
+  // rellena lo que ahora sabe (sin tocar el progreso del visitante).
   async function studyBoth(ig, web) {
-    renderStudy(web ? T.studyBoth : T.studyIg);
-    S.products = [];
-    var webOk = false;
-    if (web) {
-      try { await studyWeb(web, true); webOk = true; } catch (e) { S.web = null; S.webFacts = null; }
+    S.igTried = !!ig; S.webTried = !!web;
+    S.igOk = false; S.webOk = false;
+    try {
+      if (web) await studyWeb(web, true);
+      if (ig) await studyIg(ig, true);
+      if (!ig && !web) { entryErr(T.errIgEmpty); S.studyPending = false; return; }
+      if (!ig && !S.webOk) { entryErr(T.errWeb); S.studyPending = false; return; }
+      if (ig && !S.igOk) { entryErr(T.errIg); S.studyPending = false; return; }
+    } catch (e) {
+      entryErr(T.errIg);
+      S.studyPending = false; return;
     }
-    try { await studyIg(ig, true); }
-    catch (e) { show('v-onboarding'); entryErr((e && e.message) || T.errIg); return; }
-    if (webOk) { GEN_PREFILL = true; GEN_WEB = true; }
-    S.facts = mergeFacts(S.webFacts, S.igFacts);
-    buildPlan();
-    currentScreen();
+    S.studyPending = false;
+    studySoftApply();
+  }
+  // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) Mezcla dos
+  // perfiles de estilo: paletas y hashtags se unen, el tono no neutral gana,
+  // los mejores posteos de IG mandan.
+  function mergeStyle(a, b) {
+    if (!a) return b || null;
+    if (!b) return a;
+    var out = {};
+    var names = (a.palette_names || []).concat(b.palette_names || []);
+    var namesEn = (a.palette_names_en || []).concat(b.palette_names_en || []);
+    out.palette_names = names.filter(function (v, i) { return v && names.indexOf(v) === i; }).slice(0, 3);
+    out.palette_names_en = namesEn.filter(function (v, i) { return v && namesEn.indexOf(v) === i; }).slice(0, 3);
+    var buckets = (a.palette_buckets || []).concat(b.palette_buckets || []);
+    out.palette_buckets = buckets.filter(function (v, i) { return buckets.indexOf(v) === i; }).slice(0, 3);
+    out.posts_per_week = b.posts_per_week || a.posts_per_week || null;
+    out.avg_caption_words = b.avg_caption_words || a.avg_caption_words || null;
+    out.avg_hashtags = b.avg_hashtags || a.avg_hashtags || null;
+    var tags = (a.hashtags_top || []).concat(b.hashtags_top || []);
+    out.hashtags_top = tags.filter(function (v, i) { return tags.indexOf(v) === i; }).slice(0, 5);
+    out.best_posts = (a.best_posts && a.best_posts.length ? a.best_posts : (b.best_posts || [])).slice(0, 3);
+    var fmt = a.formats || b.formats || null;
+    out.formats = fmt ? { images: fmt.images || 0, videos: fmt.videos || 0, carousels: fmt.carousels || 0 } : null;
+    out.tone = (a.tone && a.tone !== 'neutral') ? a.tone : (b.tone || a.tone || null);
+    return out;
+  }
+  // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El estudio
+  // aterrizó mientras el visitante responde: rellena lo que ahora sabe, sin
+  // tocar su progreso. NO re-corre buildPlan (resetearía qi a 0 y perdería
+  // lo respondido): inserta rubro/ubicación en la posición actual si el
+  // estudio las sumó, y avanza por las ya respondidas.
+  function studySoftApply() {
+    if (!S.plan || !S.plan.length) { buildPlan(); currentScreen(); return; }
+    var gaps = chatGaps();
+    var changed = false;
+    ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7'].forEach(function (k) {
+      if (gaps.known[k] && S.ans[k] === undefined) { S.ans[k] = gaps.known[k]; changed = true; }
+    });
+    if (gaps.known.q1mix && S.ans.q1mix === undefined) S.ans.q1mix = gaps.known.q1mix;
+    if (gaps.known.q2mix && S.ans.q2mix === undefined) S.ans.q2mix = gaps.known.q2mix;
+    if (S.rubroOptions && S.ans.rubro === undefined && S.plan.indexOf('rubro') < 0) {
+      S.plan.splice(S.qi, 0, 'rubro'); changed = true;
+    }
+    var ubiNeeded = (S.studied && !dondeAprendido(S.facts)) || chatHonestNeeded();
+    if (S.ans.ubicacion === undefined && S.plan.indexOf('ubicacion') < 0 && ubiNeeded) {
+      S.plan.splice(S.qi, 0, 'ubicacion'); changed = true;
+    }
+    var moved = false;
+    while (S.qi < S.plan.length && S.ans[S.plan[S.qi]] !== undefined) { S.qi++; moved = true; }
+    if (changed || moved) {
+      chatRebuildLog();
+      if (S.qi < S.plan.length) chatAskCurrent();
+      opResumeSave('preguntas');
+    }
+  }
+  // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El estilo
+  // observado, en palabras simples, solo con lo que el estudio vio de verdad.
+  function chatStyleLine() {
+    var st = S.style;
+    if (!st) return '';
+    var en = document.documentElement.lang === 'en';
+    var parts = [];
+    if (st.posts_per_week) parts.push(T.styleRhythm.replace('{n}', String(st.posts_per_week)));
+    var names = en ? (st.palette_names_en || st.palette_names || []) : (st.palette_names || []);
+    if (names.length) parts.push(T.stylePalette.replace('{names}', names.slice(0, 2).join(' y ')));
+    if (st.avg_caption_words) parts.push(st.avg_caption_words <= 12 ? T.styleCapShort : (st.avg_caption_words <= 30 ? T.styleCapMid : T.styleCapLong));
+    if (st.hashtags_top && st.hashtags_top.length) parts.push(T.styleTags.replace('{tags}', st.hashtags_top.slice(0, 3).join(', ')));
+    if (st.tone === 'vos') parts.push(T.styleVos);
+    if (st.tone === 'usted') parts.push(T.styleUsted);
+    return parts.join(' · ');
+  }
+  // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) El prompt de la
+  // favorita, en palabras simples y solo con lo real: su foto, su paleta, su tono.
+  function draftPromptFor(p) {
+    if (!p) return '';
+    var en = document.documentElement.lang === 'en';
+    var parts = [];
+    var prod = ((S.products || [])[0] || {}).nombre || '';
+    if (p.dim === 'foto' && p.v === 'marca' && p.foto) parts.push(T.promptFotoMarca.replace('{prod}', prod || (en ? 'your product' : 'tu producto')));
+    else if (p.imgDesc) parts.push(p.imgDesc);
+    var st = S.style;
+    if (st) {
+      var names = en ? (st.palette_names_en || st.palette_names || []) : (st.palette_names || []);
+      if (names.length) parts.push(T.promptPalette.replace('{names}', names.slice(0, 2).join(' y ')));
+      if (st.tone === 'vos') parts.push(T.promptToneVos);
+      if (st.tone === 'usted') parts.push(T.promptToneUsted);
+    }
+    return parts.join(', ');
   }
 
   // ---- entry (single field) ----
@@ -6636,46 +7285,44 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (e) { e.textContent = msg; e.style.display = 'block'; }
   }
 
-  function entryBusy(busy) {
-    var b = document.getElementById('oc_go');
-    if (b) { b.disabled = !!busy; b.textContent = busy ? T.entryBtnBusy : T.entryBtn; }
+  function entryBusy(b) {
+    ['oc_go_ig', 'oc_go_web'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.disabled = !!b;
+      if (b) el.textContent = T.entryBtnBusy;
+      else el.textContent = (id === 'oc_go_ig') ? T.entryIgGo : T.entryWebGo;
+    });
   }
 
   // (LOTE ONBOARDING-Q1) IG + web entry: the default mode asks for
   // both up front (IG mandatory; web mandatory unless 'I don't have a
   // website'). Email mode is the old exact path, as an alternative.
-  function startFromField() {
-    if (S.busy) return;
-    // (rubro-literal) Entrada fresca: se resetean los productos (la
-    // segunda fuente, en cambio, no borra: ver no-wipe en studyIg/Web).
-    S.products = [];
-    S.webFacts = null; S.igFacts = null; S.facts = null;
-    if (S.mode === 'email') {
-      var f = document.getElementById('oc_field');
-      var val = (f && f.value || '').trim();
-      if (!val) { entryErr(T.errEmail); return; }
-      var isEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val);
-      if (!isEmail) { entryErr(T.errEmail); return; }
-      S.source = 'email'; S.email = val; window.OC_EMAIL = val;
-      buildPlan();
-      // Sin fuente: el rubro se pregunta con el catálogo completo.
-      S.rubroOptions = null;
-      try { trk('prueba_step', { step: 'oc_email' }); } catch (e) {}
-      currentScreen();
+  async function startFromField(via) {
+    if (via === 'email') {
+      var em = (document.getElementById('oc_field') || {}).value || '';
+      em = String(em).trim().toLowerCase();
+      if (!em || em.indexOf('@') < 0) { entryErr(T.errEmail); return; }
+      S.source = 'email'; S.email = em;
+      S.igTried = false; S.webTried = false; S.igOk = false; S.webOk = false;
+      buildPlan(); currentScreen();
       return;
     }
-    var igEl = document.getElementById('oc_ig');
-    var ig = cleanIg((igEl && igEl.value) || '');
-    if (!ig) { entryErr(T.errIgEmpty); return; }
-    var web = null;
-    if (!S.noWeb) {
-      var wEl = document.getElementById('oc_web');
-      web = ((wEl && wEl.value) || '').trim();
-      if (!web) { entryErr(T.errWebEmpty); return; }
-      if (!/^https?:\/\//i.test(web)) web = 'https://' + web;
-      if (!/\./.test(web.replace(/^https?:\/\//i, '')) || /\s/.test(web)) { entryErr(T.errWebBad); return; }
-    }
-    studyBoth(ig, web);
+    var ig = cleanIg((document.getElementById('oc_ig') || {}).value || '');
+    var webRaw = String((document.getElementById('oc_web') || {}).value || '').trim();
+    var web = webRaw;
+    if (web && web.indexOf('http') !== 0) web = 'https://' + web;
+    if (web && !/^https?:\/\/[^\s/]+\.[^\s/]{2,}/.test(web)) { entryErr(T.errWebBad); return; }
+    if (via === 'web' && !web) { entryErr(T.errWebEmpty); return; }
+    if (via !== 'web' && !ig) { entryErr(T.errIgEmpty); return; }
+    S.source = ig ? 'ig' : 'web'; S.ig = ig || null; S.web = web || null;
+    S.igTried = false; S.webTried = false; S.igOk = false; S.webOk = false;
+    S.style = null;
+    // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El chat abre al
+    // instante con el plan completo; el estudio corre en segundo plano.
+    S.studyPending = true;
+    buildPlan(); currentScreen();
+    S.studyPromise = studyBoth(ig || null, web || null);
   }
 
   function ocInit() {
@@ -6692,36 +7339,37 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     // as an alternative (single field, old path).
     var box = document.createElement('div');
     box.id = 'oc_entry';
+    // (LOTE ONBOARDING-DIVERTIDO v760 · entrada web igual que IG) Dos filas
+    // IGUALES, una arriba de la otra, cada una una acción completa: su input
+    // + su botón grande. Sin jerarquía: no hay «¿Preferís?» ni escape «No
+    // tengo web» (la web es opcional: se deja vacía y se toca el botón de IG).
     box.innerHTML = '<p class="oc-chat">' + esc(T.entryChat) + '</p>' +
       '<div id="oc_both">' +
+      '<div class="oc-entry-row">' +
       '<input id="oc_ig" class="oc-field" placeholder="' + esc(T.entryIgPh) + '" autocomplete="off" inputmode="text">' +
       '<div id="oc_ig_sug" class="ig-sug" style="display:none"></div>' +
-      '<input id="oc_web" class="oc-field" placeholder="' + esc(T.entryWebPh) + '" autocomplete="off" inputmode="url" style="margin-top:8px">' +
-      '<p style="margin:6px 0 0;text-align:right"><button type="button" class="oc-link" id="oc_noweb">' + esc(T.noWeb) + '</button></p>' +
-      '<p class="oc-chat" id="oc_noweb_note" style="display:none;margin-top:6px">' + esc(T.noWebNote) + '</p>' +
+      '<button type="button" class="oc-btn" id="oc_go_ig">' + esc(T.entryIgGo) + '</button>' +
+      '</div>' +
+      '<div class="oc-entry-row">' +
+      '<input id="oc_web" class="oc-field" placeholder="' + esc(T.entryWebPh) + '" autocomplete="off" inputmode="url">' +
+      '<button type="button" class="oc-btn" id="oc_go_web">' + esc(T.entryWebGo) + '</button>' +
+      '</div>' +
+      '<p class="oc-trust">' + esc(T.entryTrust) + '</p>' +
       '</div>' +
       '<div id="oc_email_box" style="display:none">' +
       '<input id="oc_field" class="oc-field" placeholder="' + esc(T.entryPh) + '" autocomplete="email" inputmode="email">' +
       '</div>' +
-      '<button type="button" class="oc-btn" id="oc_go">' + esc(T.entryBtn) + '</button>' +
       '<div class="oc-err" id="oc_err"></div>' +
       '<p style="margin:10px 0 0"><button type="button" class="oc-link" id="oc_mode">' + esc(T.toEmail) + '</button></p>' +
       '<p style="margin:2px 0 0"><button type="button" class="oc-link" id="oc_photo_link">' + esc(T.photoLink) + '</button></p>' +
       '<div id="oc_photo_box" style="display:none;margin-top:8px"><input type="file" id="oc_photo" accept="image/*"><span class="oc-chat" id="oc_photo_name" style="margin-left:8px"></span></div>';
     fc.insertBefore(box, fc.firstChild);
-    document.getElementById('oc_go').addEventListener('click', startFromField);
-    document.getElementById('oc_ig').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField(); } });
+    document.getElementById('oc_go_ig').addEventListener('click', function () { startFromField('ig'); });
+    document.getElementById('oc_go_web').addEventListener('click', function () { startFromField('web'); });
+    document.getElementById('oc_ig').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField('ig'); } });
     try { igSuggestWire(document.getElementById('oc_ig'), document.getElementById('oc_ig_sug'), IG_SUG_EN); } catch (e) {} // (IG-SEARCH LOT) @ lookup in the onboarding chat
-    document.getElementById('oc_web').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField(); } });
+    document.getElementById('oc_web').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField('web'); } });
     document.getElementById('oc_field').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField(); } });
-    document.getElementById('oc_noweb').addEventListener('click', function () {
-      S.noWeb = !S.noWeb;
-      var w = document.getElementById('oc_web');
-      var note = document.getElementById('oc_noweb_note');
-      var btn = document.getElementById('oc_noweb');
-      if (S.noWeb) { if (w) w.style.display = 'none'; if (note) note.style.display = 'block'; btn.textContent = T.hasWeb; }
-      else { if (w) w.style.display = ''; if (note) note.style.display = 'none'; btn.textContent = T.noWeb; try { if (w) w.focus(); } catch (e) {} }
-    });
     document.getElementById('oc_mode').addEventListener('click', function () {
       var both = document.getElementById('oc_both');
       var eb = document.getElementById('oc_email_box');
