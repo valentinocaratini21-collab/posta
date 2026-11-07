@@ -9117,6 +9117,9 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
       montos_usd: adsBilletera.MONTOS_CARGA_USD, dias: adsBilletera.DIAS_BILLETERA,
       boostHabilitado: destacadoSemana.boostHabilitado(process.env),
       ads_permiso: adsPermiso, conversion_pendiente: !destacadoSemana.conversionARSFromEnv(process.env),
+      // (LOTE ADS-DIRECTO v758) Carga automática + si hay con qué cobrarla.
+      auto_topup: adsBilletera.getAutoTopup(db, uid),
+      tiene_tarjeta: (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return !!(u && u.stripe_customer_id); } catch (e) { return false; } })(),
       movimientos: movs });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar tu billetera' }); }
 });
@@ -9160,6 +9163,48 @@ app.post('/api/ads/billetera/cargar', requireAuth, express.json(), async (req, r
     const w = getAdWallet(uid);
     res.json({ ok: true, cobroId: r.cobroId, montoUSD: r.montoUSD, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w.balance_cents, currency: w.currency, ...(r.ya_cargado ? { ya_cargado: true } : {}) });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar la billetera' }); }
+});
+
+// (LOTE ADS-DIRECTO v758) Carga automática: prenderla exige permiso
+// explícito + tarjeta guardada REAL (se verifica contra Stripe antes de
+// persistir; sin cliente, sin Stripe o sin tarjeta → 409 y queda
+// apagada). Apagarla es un toque y no verifica nada. Esta ruta NUNCA
+// cobra: solo persiste el flag; el cobro automático lo hace el impulso
+// cuando el saldo no alcanza y la automática está prendida.
+app.post('/api/ads/billetera/auto', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const on = req.body && req.body.on;
+    if (typeof on !== 'boolean') return res.status(400).json({ ok: false, motivo: 'valor_invalido' });
+    if (!on) return res.json({ ok: true, auto_topup: adsBilletera.setAutoTopup(db, uid, 0) });
+    const stripeCustomer = (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return (u && u.stripe_customer_id) || ''; } catch (e) { return ''; } })();
+    if (!stripeCustomer) return res.status(409).json({ ok: false, motivo: 'sin_cliente_stripe' });
+    const client = stripeBilling.stripeConfigured() ? stripeBilling.stripeClient() : null;
+    if (!client) return res.status(409).json({ ok: false, motivo: 'stripe_no_configurado' });
+    const pmId = await destacadoCobro.resolverTarjetaGuardada(client, stripeCustomer);
+    if (!pmId) return res.status(409).json({ ok: false, motivo: 'sin_tarjeta_guardada' });
+    return res.json({ ok: true, auto_topup: adsBilletera.setAutoTopup(db, uid, 1) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cambiar la carga automática' }); }
+});
+
+// (LOTE ADS-DIRECTO v758) El feed entero para la grilla: TODOS los
+// posteos publicados con ig_media_id (REGLA DURA 6/11), sin límite de
+// antigüedad ni de cantidad, con ya_impulsado. La compuerta bloquea
+// GASTAR, no mostrar (igual que /elegibles).
+app.get('/api/ads/billetera/feed', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    let rows = [];
+    try {
+      rows = db.prepare(`SELECT p.id, p.image_path, p.caption, p.status, p.published_at, p.ig_media_id FROM posts p WHERE p.user_id = ? AND p.status = 'published' AND p.ig_media_id IS NOT NULL AND p.ig_media_id != '' ORDER BY p.published_at DESC`).all(uid);
+    } catch (e) { rows = []; }
+    let impulsados = new Set();
+    try {
+      impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id));
+    } catch (e) { impulsados = new Set(); }
+    const feed = adsBilletera.feedParaAds(rows, impulsados);
+    res.json({ ok: true, total: feed.length, posts: feed });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar tu feed' }); }
 });
 
 // Elegibles para el picker: posteos publicados con ig_media_id (los únicos
@@ -9242,7 +9287,7 @@ app.get('/api/ads/billetera/hoy', requireAuth, async (req, res) => {
       rec = morningPostPush.pickTodayPost(sched, tz, new Date());
     } catch (e) { rec = null; }
     if (!rec) return res.json({ ok: true, hoy: null });
-    res.json({ ok: true, hoy: { post_id: rec.id, caption: String(rec.caption || '').slice(0, 90), image_path: rec.image_path || '', scheduled_at: rec.scheduled_at || '', hora: horaSalidaEnTz(rec.scheduled_at, tz, ritualLang(uid)) } });
+    res.json({ ok: true, hoy: { post_id: rec.id, caption: adsBilletera.cortarCaption(String(rec.caption || ''), 90), image_path: rec.image_path || '', scheduled_at: rec.scheduled_at || '', hora: horaSalidaEnTz(rec.scheduled_at, tz, ritualLang(uid)) } });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar el posteo de hoy' }); }
 });
 
@@ -31603,7 +31648,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v757';
+const BUILD_ID = '20261105-v759';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

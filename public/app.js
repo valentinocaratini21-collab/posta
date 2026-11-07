@@ -2422,7 +2422,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v757'; // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
+const CHUNK_V = '20261105-v759'; // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -16618,21 +16618,13 @@ async function adsView() {
   if (!__okAn) return chunkFailHTML();
   let datos = null;
   try { datos = await anaBilleteraTabDatos(); } catch (e) { datos = null; }
-  const walletHTML = datos
-    ? anaBilleteraHTML()
+  // (LOTE ADS-DIRECTO v758) La vista entera la renderiza el chunk
+  // (anaAdsTabHTML: principal o grilla del feed); la carta de Estrategia
+  // sigue con su propio render.
+  const tabHTML = datos
+    ? anaAdsTabHTML()
     : `<p class="ana-note">${anaT('No pudimos cargar tu billetera ahora. Probá de nuevo.', 'We could not load your wallet right now. Try again.')}</p>`;
-  const histHTML = datos ? anaBilleteraHistorialHTML() : '';
-  return `<div class="ads-wrap">
-  <div class="card" style="text-align:center">
-    <h2 style="margin:0 0 4px">${pzIc('megaphone', 15)} Ads</h2>
-    <p class="d" style="margin:0">${gzT('Impulsá tus posteos y que te vean más clientes.', 'Boost your posts so more customers see you.')}</p>
-  </div>
-  <div class="card"><div id="adsBilleteraBox">${walletHTML}</div></div>
-  <div class="card">
-    <h3 style="margin:0 0 6px">${pzIc('megaphone', 15)} ${gzT('Últimos impulsos', 'Recent boosts')}</h3>
-    <div id="adsHistorial">${histHTML}</div>
-  </div>
-</div>`;
+  return `<div class="ads-wrap"><div id="adsTabRoot">${tabHTML}</div></div>`;
 }
 
 function bindAds() {

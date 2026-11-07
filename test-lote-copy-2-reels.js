@@ -170,10 +170,10 @@ t(APP.includes('cap-kick">Historias'), 'ES landing: la sección Historias sigue 
 t(EN.includes('cap-kick">Stories'), 'EN landing: la sección Stories sigue');
 
 // ---------- 9. Bumps M78 / BUILD (re-pin v741: el BUILD y el ?v= avanzaron) ----------
-t(SRV.includes("const BUILD_ID = '20261105-v757'"), 'BUILD v757');
-t(IDX.includes('/app.js?v=499'), 'index ES: app.js?v=499');
+t(SRV.includes("const BUILD_ID = '20261105-v759'"), 'BUILD v759');
+t(IDX.includes('/app.js?v=501'), 'index ES: app.js?v=501');
 t(!EN.includes('/app.js?v='), 'index EN: sin app.js?v= (la EN no carga app.js)');
-t(APP.includes("const CHUNK_V = '20261105-v757'"), 'CHUNK_V 20261105-v757 (chat-foto)');
+t(APP.includes("const CHUNK_V = '20261105-v759'"), 'CHUNK_V 20261105-v759');
 
 console.log(`\ntest-lote-copy-2-reels: ${okN} ok, ${badN} fallos`);
 process.exit(badN ? 1 : 0);

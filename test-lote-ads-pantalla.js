@@ -32,8 +32,10 @@ const sliceFn = (src, from, to) => {
 };
 
 (async () => {
-  // ---------- 1. Censo (sin cambio) + base v750 ----------
-  t(srv.includes("const BUILD_ID = '20261105-v750'"), 'server: BUILD v750');
+  // ---------- 1. Censo (sin cambio) + base v756, re-base v759 ----------
+  // (LOTE ADS-DIRECTO v759: pins del preparador — BUILD v759, CHUNK_V v759,
+  // 14 rutas /api/ads (12 + feed + auto); el picker usa anaCortarCaption.)
+  t(srv.includes("const BUILD_ID = '20261105-v759'"), 'server: BUILD v759');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -43,10 +45,10 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-  t(app.includes("const CHUNK_V = '20261105-v750'"), 'CHUNK_V v750 (bump ads-pantalla: chunk-analisis cambia)');
-  t(md5(app) === 'b840232301749c9924b482481f872709', 'app.js solo CHUNK_V (md5 v750)');
+  t(app.includes("const CHUNK_V = '20261105-v759'"), 'CHUNK_V v759');
+  t(md5(app) === '34d663302f590625b1b2978ef401c5d8', 'app.js md5 v759 (adsView directa + CHUNK_V v759, re-base v757)');
   t(md5(css) === '8d16705e3a63aa3aedb926274f9d0664', 'styles.css sin tocar (md5 v748)');
-  t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 12, 'server: 12 rutas /api/ads (10 + buscar + hoy)');
+  t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
 
   // ---------- 2. Server: elegibles sin gate de listado, buscar, hoy ----------
   t(srv.includes("app.get('/api/ads/billetera/buscar'"), 'server: GET /api/ads/billetera/buscar existe');
@@ -81,6 +83,7 @@ const sliceFn = (src, from, to) => {
   t(ana.includes('function anaBilleteraQuieroImpulsar('), 'chunk: botón del chat (estado bloqueado)');
   t(ana.includes("anaT('Quiero impulsar este posteo'"), 'chunk: texto del botón del chat');
   t(ana.includes("api.get('/api/ads/billetera/hoy')"), 'chunk: fetch de hoy (4º fetch)');
+  t(ana.includes("api.get('/api/ads/billetera/feed')"), 'chunk: fetch del feed (5º fetch, grilla del tab)');
   t(ana.includes('HF_ASK_TEXT_PENDING'), 'chunk: el botón del chat usa HF_ASK_TEXT_PENDING (flujo «Pedir un cambio»)');
   t(ana.includes('hfAskChange(anchorPost)'), 'chunk: el botón del chat ancla el posteo con hfAskChange');
   t(ana.includes('hfDeliverAskText()'), 'chunk: el botón del chat entrega el texto con hfDeliverAskText');
@@ -89,13 +92,14 @@ const sliceFn = (src, from, to) => {
 
   // ---------- 4. VM: anaBilleteraHTML en cada estado ----------
   const srcHTML = sliceFn(ana, 'function anaBilleteraHTML() {', '// Fila del picker de posteos');
+  const srcCortar = sliceFn(ana, 'function anaCortarCaption(', 'function anaBilleteraPickerRow(');
   const srcRow = sliceFn(ana, 'function anaBilleteraPickerRow(', '// Resultados del buscador');
   const srcBusqRes = sliceFn(ana, 'function anaBilleteraBusqResHTML()', 'var ANA_BUSQ_TIMER');
   const srcQuiero = sliceFn(ana, 'function anaBilleteraQuieroImpulsar(', '// Selección en el picker');
   const srcElegir = sliceFn(ana, 'function anaBilleteraElegirPosteo(', 'function anaBilleteraElegirMonto(');
   const srcConstruir = sliceFn(ana, 'function anaBilleteraConstruirDatos(', 'async function anaBoostRecLoad(');
   t(srcHTML.length > 500, 'VM: anaBilleteraHTML extraído');
-  t(srcRow.length > 100 && srcBusqRes.length > 50 && srcQuiero.length > 100, 'VM: helpers extraídos');
+  t(srcCortar.length > 50 && srcRow.length > 100 && srcBusqRes.length > 50 && srcQuiero.length > 100, 'VM: helpers extraídos (incluido anaCortarCaption, que usa el picker)');
   t(srcElegir.length > 100 && srcConstruir.length > 500, 'VM: elegir/construir extraídos');
   const escStub = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const makeCtx = (lang) => {
@@ -112,7 +116,7 @@ const sliceFn = (src, from, to) => {
       HF_ASK_TEXT_PENDING: '',
       __calls: calls,
     });
-    vm.runInContext(srcHTML + '\n' + srcRow + '\n' + srcBusqRes + '\n' + srcQuiero + '\n' + srcElegir + '\n' + srcConstruir, ctx);
+    vm.runInContext(srcCortar + '\n' + srcHTML + '\n' + srcRow + '\n' + srcBusqRes + '\n' + srcQuiero + '\n' + srcElegir + '\n' + srcConstruir, ctx);
     return ctx;
   };
   const render = (ctx, datos) => {
@@ -287,7 +291,7 @@ const sliceFn = (src, from, to) => {
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v750', `boot: /api/version 20261105-v750 (vino ${ver.build})`);
+      t(ver.build === '20261105-v759', `boot: /api/version 20261105-v759 (vino ${ver.build})`);
       // Sin sesión: 401 en los endpoints nuevos.
       const s1 = await api('', 'GET', '/api/ads/billetera/buscar?q=cafe');
       t(s1.status === 401, 'boot: sin sesión, buscar → 401');

@@ -483,8 +483,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS ad_wallets (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   balance_cents INTEGER NOT NULL DEFAULT 0,
   currency TEXT NOT NULL DEFAULT 'ARS',
+  auto_topup INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
+try { db.exec(`ALTER TABLE ad_wallets ADD COLUMN auto_topup INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
 db.exec(`CREATE TABLE IF NOT EXISTS ad_boosts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -42,6 +42,21 @@
 const MONTOS_CARGA_USD = [20, 50, 100];
 const DIAS_BILLETERA = 7;
 
+// (LOTE ADS-DIRECTO v759) Corte de caption por palabra, nunca a mitad:
+// si el corte cae justo en un límite de palabra se queda ahí; si no, se
+// retrocede al último espacio; sin espacio, corte duro. Siempre con …
+// cuando se recorta. Espejo en el cliente: anaCortarCaption.
+function cortarCaption(texto, max) {
+  const t = String(texto || '');
+  const m = Math.max(0, Math.floor(Number(max) || 0));
+  if (!m || t.length <= m) return t;
+  const recorte = t.slice(0, m);
+  if (t[m] === ' ') return recorte + '…';
+  const ultimoEspacio = recorte.lastIndexOf(' ');
+  if (ultimoEspacio > 0) return recorte.slice(0, ultimoEspacio) + '…';
+  return recorte + '…';
+}
+
 function validarMontoUSD(monto) {
   return typeof monto === 'number' && Number.isInteger(monto) && MONTOS_CARGA_USD.includes(monto);
 }
@@ -213,7 +228,7 @@ function elegiblesParaAds(rows, mejorPostId, yaImpulsados) {
     .map((r) => ({
       post_id: r.id,
       image_path: r.image_path || '',
-      caption: String(r.caption || '').slice(0, 90),
+      caption: cortarCaption(String(r.caption || ''), 90),
       ig_media_id: r.ig_media_id,
       reach: Number(r.reach || 0),
       likes: Number(r.likes || 0),
@@ -226,12 +241,55 @@ function elegiblesParaAds(rows, mejorPostId, yaImpulsados) {
     .sort((a, b) => (b.recomendado ? 1 : 0) - (a.recomendado ? 1 : 0));
 }
 
+// (LOTE ADS-DIRECTO v759) El feed entero para la grilla: TODOS los
+// posteos publicados con ig_media_id (REGLA DURA 6/11: todos, no solo
+// los recientes), ordenados por publicado desc, con el flag ya_impulsado
+// (pauta activa o pendiente). `rows` = filas de posts, `yaImpulsados` =
+// Set de post_id con pauta activa/pendiente. Puro: la consulta vive en
+// el endpoint.
+function feedParaAds(rows, yaImpulsados) {
+  const impulsados = yaImpulsados instanceof Set ? yaImpulsados : new Set(yaImpulsados || []);
+  return (Array.isArray(rows) ? rows : [])
+    .filter((r) => r && r.status === 'published' && r.ig_media_id)
+    .map((r) => ({
+      post_id: r.id,
+      image_path: r.image_path || '',
+      caption: cortarCaption(String(r.caption || ''), 90),
+      publicado_en: r.published_at || '',
+      ya_impulsado: impulsados.has(r.id),
+    }))
+    .sort((a, b) => String(b.publicado_en || '').localeCompare(String(a.publicado_en || '')));
+}
+
+// (LOTE ADS-DIRECTO v759) Carga automática: flag persistida en
+// ad_wallets (db inyectada). Por defecto 0: solo se prende con permiso
+// explícito del cliente + tarjeta guardada verificada (lo verifica el
+// endpoint; acá solo se persiste). Nunca cobra nada por sí misma.
+function getAutoTopup(db, userId) {
+  try {
+    const row = db.prepare('SELECT auto_topup FROM ad_wallets WHERE user_id = ?').get(userId);
+    return row && row.auto_topup ? 1 : 0;
+  } catch (e) { return 0; }
+}
+function setAutoTopup(db, userId, on) {
+  const v = on === true || on === 1 ? 1 : 0;
+  try {
+    db.prepare('INSERT OR IGNORE INTO ad_wallets (user_id, auto_topup) VALUES (?, ?)').run(userId, v);
+    db.prepare("UPDATE ad_wallets SET auto_topup = ?, updated_at = datetime('now') WHERE user_id = ?").run(v, userId);
+  } catch (e) { return 0; }
+  return v;
+}
+
 module.exports = {
   MONTOS_CARGA_USD,
   DIAS_BILLETERA,
   validarMontoUSD,
+  cortarCaption,
   refDebitoBoost,
   cargarBilletera,
   impulsarConSaldo,
   elegiblesParaAds,
+  feedParaAds,
+  getAutoTopup,
+  setAutoTopup,
 };

@@ -1167,6 +1167,10 @@ function anaBoostRecMotivo(motivo, monto, cobroId) {
       return anaT('El impulso todavía no está habilitado en tu cuenta.', "Boosting isn't enabled on your account yet.");
     case 'sin_tarjeta_guardada':
       return anaT('No tenés una tarjeta guardada para cargar la billetera.', "You don't have a saved card to top up the wallet.");
+    case 'sin_cliente_stripe':
+      return anaT('Todavía no tenés una forma de pago guardada para la carga automática.', "You don't have a saved payment method for auto top-up yet.");
+    case 'stripe_no_configurado':
+      return anaT('La carga automática todavía no está disponible. No se cobró nada.', "Auto top-up isn't available yet. Nothing was charged.");
     case 'cobro_requiere_accion':
       return anaT('El cobro necesita una confirmación tuya y no se puede hacer solo. No se cobró nada.', "The charge needs your confirmation and can't run on its own. Nothing was charged.");
     case 'cobro_fallido':
@@ -1328,8 +1332,23 @@ function anaBilleteraHTML() {
 
 // Fila del picker de posteos (recomendado, recientes y resultados del
 // buscador comparten la misma fila: miniatura real + caption + chip).
+// (LOTE ADS-DIRECTO v759) Corte de caption por palabra, nunca a mitad:
+// si el corte cae justo en un límite de palabra se queda ahí; si no, se
+// retrocede al último espacio; sin espacio, corte duro. Espejo en el
+// servidor: cortarCaption en ads-billetera.js.
+function anaCortarCaption(texto, max) {
+  const t = String(texto || '');
+  const m = Math.max(0, Math.floor(Number(max) || 0));
+  if (!m || t.length <= m) return t;
+  const recorte = t.slice(0, m);
+  if (t[m] === ' ') return recorte + '…';
+  const ultimoEspacio = recorte.lastIndexOf(' ');
+  if (ultimoEspacio > 0) return recorte.slice(0, ultimoEspacio) + '…';
+  return recorte + '…';
+}
+
 function anaBilleteraPickerRow(e, sel, rec, masReciente) {
-  const cap = esc(String(e.caption || 'Posteo sin caption').slice(0, 120));
+  const cap = esc(anaCortarCaption(String(e.caption || 'Posteo sin caption'), 120));
   const img = e.image_path ? `<img src="${esc(e.image_path)}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:10px;flex:0 0 auto">` : '';
   const chip = rec
     ? `<span style="display:inline-block;margin-top:4px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${anaT('✦ el que más rindió', '✦ top performer')}</span>`
@@ -1390,7 +1409,7 @@ function anaBilleteraQuieroImpulsar(btn) {
   if (!post || !post.post_id) return;
   const monto = d.selMonto || 20;
   const texto = anaT('Quiero impulsar este posteo con $' + monto + ' por 7 días', 'I want to boost this post with $' + monto + ' for 7 days');
-  const anchorPost = { id: post.post_id, image_path: post.image_path || '', caption: post.caption || '', status: 'published', media_type: '' };
+  const anchorPost = { id: post.post_id, image_path: post.image_path || '', caption: post.caption || '', status: (d.hoy && d.hoy.post_id && Number(d.hoy.post_id) === Number(post.post_id)) ? 'scheduled' : 'published', media_type: '' };
   try { HF_ASK_TEXT_PENDING = texto; } catch (e) {}
   try { if (typeof hfAskChange === 'function') hfAskChange(anchorPost); } catch (e) {}
   try { if (typeof hfDeliverAskText === 'function') hfDeliverAskText(); } catch (e) {}
@@ -1407,8 +1426,9 @@ function anaBilleteraElegirPosteo(id, btn) {
   const nid = Number(id) || 0;
   d.selId = nid;
   const enEleg = (d.elegibles || []).find((e) => e.post_id === nid) || null;
+  const enFeed = (d.feed || []).find((e) => e.post_id === nid) || null;
   const enBusq = ((d.busq && d.busq.resultados) || []).find((e) => e.post_id === nid) || null;
-  d.selPost = enEleg || enBusq || ((d.selPost && d.selPost.post_id === nid) ? d.selPost : null);
+  d.selPost = enEleg || enFeed || enBusq || ((d.selPost && d.selPost.post_id === nid) ? d.selPost : null);
   anaBilleteraPintar();
 }
 function anaBilleteraElegirMonto(monto, btn) {
@@ -1437,54 +1457,109 @@ async function anaBilleteraCargar(monto, btn) {
   }
 }
 
+// (LOTE ADS-DIRECTO v759) Decisión pura del toque Impulsar: qué hace
+// UN toque con lo que hay pre-seleccionado. 'impulsar' = directo al
+// servidor; 'cargar_y_impulsar' = la automática carga el monto y después
+// impulsa, todo en el mismo toque; 'saldo_insuficiente' = manual, 2
+// toques (Cargar y después Impulsar); 'chat' = bloqueado o posteo sin
+// publicar: abre el chat con Posty, nunca un botón que el servidor va a
+// rechazar ni un cobro en estado bloqueado; 'ya_impulsado' y
+// 'sin_posteo' = nota honesta. Sin DOM ni red: se testea en VM.
+function anaAdsRutaImpulsar(d) {
+  const sel = (d && d.selPost) || null;
+  if (!sel || !sel.post_id) return { ruta: 'sin_posteo' };
+  const id = String(sel.post_id);
+  const enFeed = ((d.feed || []).find((p) => String(p.post_id) === id)) || null;
+  if (enFeed && enFeed.ya_impulsado) return { ruta: 'ya_impulsado' };
+  const esHoy = !!(d.hoy && d.hoy.post_id && String(d.hoy.post_id) === id);
+  const publicado = ((d.elegibles || []).some((p) => String(p.post_id) === id));
+  if (!d.boostHabilitado || esHoy || !publicado) return { ruta: 'chat' };
+  const monto = Number(d.selMonto) || 20;
+  const saldo = Math.floor(Number((d.billetera && d.billetera.balance_cents) || 0) / 100);
+  if (saldo >= monto) return { ruta: 'impulsar' };
+  if (d.auto_topup) return { ruta: 'cargar_y_impulsar' };
+  return { ruta: 'saldo_insuficiente' };
+}
+
 // Impulsar con saldo: el débito ocurre SOLO si el ad se creó bien en
 // Meta (lo garantiza el servidor); acá solo se muestra el resultado.
+// (LOTE ADS-DIRECTO v759) El toque se decide con anaAdsRutaImpulsar:
+// con todo pre-seleccionado y saldo, es 1 toque; con automática
+// prendida y saldo corto, carga y después impulsa en el mismo toque;
+// bloqueado o sin publicar, va al chat (nunca se ofrece un botón que el
+// servidor va a rechazar).
 async function anaBilleteraImpulsar(btn) {
-  const msg = document.getElementById('anaBoostRecMsg');
-  if (!anaBilleteraDatos || !msg) return;
-  const posteoId = anaBilleteraDatos.selId || 0;
-  const monto = anaBilleteraDatos.selMonto || 20;
-  if (!posteoId) { msg.textContent = anaBoostRecMotivo('sin_posteo', monto); return; }
+  if (!anaBilleteraDatos) return;
+  const d = anaBilleteraDatos;
+  const ruta = anaAdsRutaImpulsar(d);
+  const posteoId = d.selId || 0;
+  const monto = d.selMonto || 20;
+  const decir = (t) => { const m = document.getElementById('anaBoostRecMsg'); if (m) m.textContent = t; };
+  if (ruta.ruta === 'sin_posteo') { decir(anaBoostRecMotivo('sin_posteo', monto)); return; }
+  if (ruta.ruta === 'ya_impulsado') { decir(anaBoostRecMotivo('ya_impulsado', monto)); return; }
+  if (ruta.ruta === 'chat') { anaBilleteraQuieroImpulsar(); return; }
+  if (ruta.ruta === 'saldo_insuficiente') { decir(anaBoostRecMotivo('saldo_insuficiente', monto)); return; }
   if (btn) btn.disabled = true;
-  let j = null;
-  try { j = await api.post('/api/ads/billetera/impulsar', { posteoId, montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
-  if (btn) btn.disabled = false;
-  if (j && j.ok) {
-    const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
-    // (LOTE ADS-PANTALLA) El posteo recién impulsado ya no se puede
-    // volver a impulsar: sale de la selección antes de recargar, para
-    // que el picker no lo siga mostrando como elegido.
-    if (anaBilleteraDatos) { anaBilleteraDatos.selId = 0; anaBilleteraDatos.selPost = null; }
-    await anaBoostRecLoad(true);
-    await anaBilleteraTabLoad();
-    const msg2 = document.getElementById('anaBoostRecMsg');
-    if (msg2) msg2.textContent = anaT('Listo, ya tiene ads por 7 días. Tu billetera quedó en $' + nuevoSaldo + '. Posty te va a reportar números reales cuando lleguen.', 'Done, it has ads for 7 days. Your wallet is now at $' + nuevoSaldo + '. Posty will report real numbers when they arrive.');
-  } else {
-    const msg3 = document.getElementById('anaBoostRecMsg');
-    if (msg3) msg3.textContent = anaBoostRecMotivo((j && j.motivo) || '', monto, j && j.cobroId);
+  try {
+    if (ruta.ruta === 'cargar_y_impulsar') {
+      let c = null;
+      try { c = await api.post('/api/ads/billetera/cargar', { montoUSD: monto, ref: 'carga_auto_' + Date.now().toString(36) }); } catch (e) { c = (e && e.data) || null; }
+      if (!c || !c.ok) { decir(anaBoostRecMotivo((c && c.motivo) || 'cobro_fallido', monto, c && c.cobroId)); return; }
+    }
+    let j = null;
+    try { j = await api.post('/api/ads/billetera/impulsar', { posteoId, montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
+    if (j && j.ok) {
+      const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
+      // (LOTE ADS-PANTALLA) El posteo recién impulsado ya no se puede
+      // volver a impulsar: sale de la selección antes de recargar, para
+      // que el picker no lo siga mostrando como elegido.
+      if (anaBilleteraDatos) { anaBilleteraDatos.selId = 0; anaBilleteraDatos.selPost = null; }
+      await anaBoostRecLoad(true);
+      await anaBilleteraTabLoad();
+      const msg2 = document.getElementById('anaBoostRecMsg');
+      if (msg2) msg2.textContent = anaT('Listo, ya tiene ads por 7 días. Tu billetera quedó en $' + nuevoSaldo + '. Posty te va a reportar números reales cuando lleguen.', 'Done, it has ads for 7 days. Your wallet is now at $' + nuevoSaldo + '. Posty will report real numbers when they arrive.');
+    } else {
+      decir(anaBoostRecMotivo((j && j.motivo) || '', monto, j && j.cobroId));
+    }
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
-// (LOTE DOCK-ADS) Las 3 lecturas de la billetera, compartidas por la carta
+// (LOTE ADS-DIRECTO v759) Cargar con el monto SELECCIONADO (el botón
+// «↓ Cargar $20» usa lo que está elegido, no un monto fijo).
+async function anaAdsCargar(btn) {
+  const d = anaBilleteraDatos || {};
+  await anaBilleteraCargar(Number(d.selMonto) || 20, btn);
+}
+
+// (LOTE DOCK-ADS) Las lecturas de la billetera, compartidas por la carta
 // y por el tab Ads: mejor posteo, billetera y elegibles. Ninguna tira si
 // falla: cada una cae a null y el constructor decide qué mostrar.
+// (LOTE ADS-DIRECTO v759) Se suma la 5ª lectura: el feed entero para la
+// grilla (GET /api/ads/billetera/feed).
 async function anaBilleteraFetchDatos() {
-  let d = null, bil = null, elig = null, hoy = null;
+  let d = null, bil = null, elig = null, hoy = null, feed = null;
   try { d = await api.get('/api/estrategia/mejor-posteo'); } catch (e) { d = null; }
   try { bil = await api.get('/api/ads/billetera'); } catch (e) { bil = null; }
   try { elig = await api.get('/api/ads/billetera/elegibles'); } catch (e) { elig = null; }
   try { hoy = await api.get('/api/ads/billetera/hoy'); } catch (e) { hoy = null; }
-  return { d, bil, elig, hoy };
+  try { feed = await api.get('/api/ads/billetera/feed'); } catch (e) { feed = null; }
+  return { d, bil, elig, hoy, feed };
 }
 
-// Constructor de anaBilleteraDatos desde las 3 lecturas. El recomendado va
+// Constructor de anaBilleteraDatos desde las lecturas. El recomendado va
 // pre-seleccionado; si había selección, se conserva si el posteo sigue
 // elegible. Sin mejor, se pre-selecciona el primer elegible (antes quedaba
 // sin selección y el botón Impulsar deshabilitado hasta tocar uno).
+// (LOTE ADS-DIRECTO v759) `preferHoy`: en el tab Ads el destacado por
+// defecto es el posteo de hoy (si lo hay); la carta sigue con el mejor.
+// El feed entero y la automática viajan en los datos para la grilla y la
+// fila de carga automática del tab.
 // (FIX DOCK-ADS: los elegibles traen `post_id`, no `id` — el conjunto viejo
 // era de undefined y la selección se perdía tras cada carga o impulso; el
 // comentario de anaBilleteraHTML ya lo decía.)
-function anaBilleteraConstruirDatos(f, prevSel) {
+function anaBilleteraConstruirDatos(f, prevSel, preferHoy) {
   const d = f && f.d, bil = f && f.bil, elig = f && f.elig;
   const tieneMejor = !!(d && d.ok && d.mejor);
   const elegibles = (elig && elig.ok && Array.isArray(elig.elegibles)) ? elig.elegibles : [];
@@ -1497,6 +1572,10 @@ function anaBilleteraConstruirDatos(f, prevSel) {
     conversion_pendiente: (d && d.conversion_pendiente !== undefined) ? d.conversion_pendiente : (bil && bil.ok ? bil.conversion_pendiente : undefined),
     billetera: bil && bil.ok ? bil : { balance_cents: 0, currency: 'USD', montos_usd: [20, 50, 100] },
     elegibles,
+    feed: (f && f.feed && f.feed.ok && Array.isArray(f.feed.posts)) ? f.feed.posts : [],
+    auto_topup: (bil && bil.ok && bil.auto_topup) ? 1 : 0,
+    tiene_tarjeta: !!(bil && bil.ok && bil.tiene_tarjeta),
+    vistaFeed: false,
     movimientos: (bil && bil.ok && Array.isArray(bil.movimientos)) ? bil.movimientos : [],
     boosts: [],
     selId: 0, selMonto: 20,
@@ -1504,7 +1583,8 @@ function anaBilleteraConstruirDatos(f, prevSel) {
     busq: { q: '', resultados: [], buscando: false, hecho: false },
   };
   const ids = new Set(elegibles.map((e) => e.post_id));
-  const defecto = tieneMejor ? d.mejor.post_id : (elegibles[0] ? elegibles[0].post_id : 0);
+  const defectoHoy = (preferHoy && hoy) ? hoy.post_id : 0;
+  const defecto = defectoHoy || (tieneMejor ? d.mejor.post_id : (elegibles[0] ? elegibles[0].post_id : 0));
   // (LOTE ADS-PANTALLA) La selección sobrevive a la recarga si el posteo
   // sigue elegible; si venía del buscador (fuera de los 20), sobrevive
   // con su objeto guardado (selPost) y se vuelve a mostrar como fila.
@@ -1514,7 +1594,7 @@ function anaBilleteraConstruirDatos(f, prevSel) {
     datos.selPost = elegibles.find((e) => e.post_id === prevSel.selId) || prevPost;
   } else {
     datos.selId = defecto;
-    datos.selPost = elegibles.find((e) => e.post_id === defecto) || null;
+    datos.selPost = elegibles.find((e) => e.post_id === defecto) || ((defectoHoy && hoy && Number(hoy.post_id) === Number(defecto)) ? hoy : null);
   }
   datos.selMonto = (prevSel && prevSel.selMonto) ? prevSel.selMonto : 20;
   return datos;
@@ -1534,19 +1614,22 @@ async function anaBoostRecLoad(keepSel) {
   box.innerHTML = anaBilleteraHTML();
 }
 
-// ---------- TAB ADS (LOTE DOCK-ADS) ----------
-// El tab Ads del dock reutiliza la billetera de la carta: mismos datos,
-// misma UI (anaBilleteraHTML), más el historial real de impulsos. Sin
-// endpoints nuevos: /api/ads/boosts ya existe (la usaba el tab viejo).
-// Si las 3 lecturas fallan, devuelve null y adsView muestra la nota
-// honesta (nunca el bloque de «no habilitado», que sería mentira).
+// ---------- TAB ADS (LOTE DOCK-ADS + LOTE ADS-DIRECTO v759) ----------
+// El tab Ads del dock usa los mismos datos que la carta, pero con su
+// propia vista directa (anaAdsTabHTML): billetera + carga automática +
+// posteo de hoy destacado + grilla del feed. Si las lecturas fallan,
+// devuelve null y adsView muestra la nota honesta (nunca el bloque de
+// «no habilitado», que sería mentira). /api/ads/boosts ya existe (la
+// usaba el tab viejo).
 async function anaBilleteraTabDatos() {
   const prevSel = anaBilleteraDatos ? { selId: anaBilleteraDatos.selId, selMonto: anaBilleteraDatos.selMonto, selPost: anaBilleteraDatos.selPost || null } : null;
+  const prevVista = anaBilleteraDatos ? !!anaBilleteraDatos.vistaFeed : false;
   const f = await anaBilleteraFetchDatos();
-  if (!f.d && !f.bil && !f.elig && !f.hoy) return null;
+  if (!f.d && !f.bil && !f.elig && !f.hoy && !f.feed) return null;
   let boosts = null;
   try { boosts = await api.get('/api/ads/boosts'); } catch (e) { boosts = null; }
-  const datos = anaBilleteraConstruirDatos(f, prevSel);
+  const datos = anaBilleteraConstruirDatos(f, prevSel, true);
+  datos.vistaFeed = prevVista;
   datos.boosts = (boosts && boosts.ok && Array.isArray(boosts.boosts)) ? boosts.boosts : [];
   anaBilleteraDatos = datos;
   return datos;
@@ -1557,20 +1640,179 @@ async function anaBilleteraTabDatos() {
 // tab no está montado, no hace nada; si la recarga falla, deja el
 // contenido viejo (nunca lo reemplaza por un error).
 async function anaBilleteraTabLoad() {
-  const box = document.getElementById('adsBilleteraBox');
+  const box = document.getElementById('adsTabRoot');
   if (!box) return;
   let datos = null;
   try { datos = await anaBilleteraTabDatos(); } catch (e) { datos = null; }
-  if (!datos || document.getElementById('adsBilleteraBox') !== box) return;
-  box.innerHTML = anaBilleteraHTML();
-  anaBilleteraHistorialPintar();
+  if (!datos || document.getElementById('adsTabRoot') !== box) return;
+  box.innerHTML = anaAdsTabHTML();
 }
 
 // Re-pinta la billetera donde esté montada (carta y/o tab Ads).
 function anaBilleteraPintar() {
   const h = anaBilleteraHTML();
   const a = document.getElementById('anaBoostRec'); if (a) a.innerHTML = h;
-  const b = document.getElementById('adsBilleteraBox'); if (b) b.innerHTML = h;
+  const b = document.getElementById('adsTabRoot'); if (b) b.innerHTML = anaAdsTabHTML();
+}
+
+// ---------- TAB ADS DIRECTO (LOTE ADS-DIRECTO v759 · mock v4 aprobado) ----------
+// La pantalla Ads directa: billetera visible con Cargar + carga
+// automática con regla visible, montos en UNA fila, posteo de hoy
+// destacado y pre-seleccionado, botón Feed con la grilla del feed,
+// Impulsar en 1 toque cuando todo está pre-seleccionado. La carta de
+// Estrategia (anaBilleteraHTML) no se toca.
+function anaAdsDirectoHTML() {
+  const d = anaBilleteraDatos || {};
+  const bil = d.billetera || {};
+  const saldo = Math.floor(Number(bil.balance_cents || 0) / 100);
+  const moneda = bil.currency || 'USD';
+  const selMonto = Number(d.selMonto) || 20;
+  const dias = Number(bil.dias) || 7;
+  const selPost = d.selPost || null;
+  const hoy = d.hoy || null;
+  const mejor = d.mejor || null;
+  const autoOn = !!d.auto_topup;
+  const esHoy = !!(selPost && hoy && Number(selPost.post_id) === Number(hoy.post_id));
+  const esMejor = !!(selPost && mejor && Number(selPost.post_id) === Number(mejor.post_id));
+  const backBtn = `<a href="#/app/inicio" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:1.5px solid #DCEFFF;background:#fff;color:#0A1E33;font-size:18px;text-decoration:none;flex:0 0 auto">←</a>`;
+  // Tirita de pasos: 1 Posteo · 2 Monto · 3 Impulsar. El 1 se tilda
+  // cuando hay posteo elegido; el 2 siempre (el monto nace elegido).
+  const paso = (n, txt, listo) => `<span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:#0A1E33"><span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:${listo ? '#FEC14D' : '#E8F1F8'};color:#0A1E33;font-size:12px;font-weight:900">${listo ? '✓' : n}</span>${esc(txt)}</span>`;
+  const pasos = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff;border:1px solid #DCEFFF;border-radius:14px;padding:10px 14px;margin-bottom:14px">${paso(1, anaT('Posteo', 'Post'), !!selPost)}<span style="color:#B9CBD9">·</span>${paso(2, anaT('Monto', 'Amount'), true)}<span style="color:#B9CBD9">·</span>${paso(3, anaT('Impulsar', 'Boost'), false)}</div>`;
+  // Billetera: saldo + UNA fila de montos + Cargar + automática.
+  const montos = `<div class="ana-ads-montos" style="display:flex;gap:8px;margin:10px 0">${[20, 50, 100].map((x) => `<button type="button" onclick="anaBilleteraElegirMonto(${x}, this)" style="flex:1;padding:10px 0;border:2px solid ${x === selMonto ? '#FEC14D' : '#DCEFFF'};border-radius:12px;background:${x === selMonto ? '#FFF8E1' : '#fff'};font-size:15px;font-weight:800;color:#0A1E33;cursor:pointer">$${x}</button>`).join('')}</div>`;
+  const toggle = `<button type="button" data-auto="${autoOn ? 'on' : 'off'}" onclick="anaBilleteraAutoToggle(this)" aria-label="${esc(anaT('Carga automática', 'Auto top-up'))}" style="width:52px;height:30px;border-radius:999px;background:${autoOn ? '#1FA855' : '#CBD5E1'};border:0;position:relative;cursor:pointer;flex:0 0 auto;padding:0"><span style="position:absolute;top:3px;${autoOn ? 'right:3px' : 'left:3px'};width:24px;height:24px;border-radius:50%;background:#fff;display:block"></span></button>`;
+  const walletCard = `<div class="card">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+      <span style="font-size:15px;font-weight:900;color:#0A1E33">${esc(anaT('Billetera', 'Wallet'))}</span>
+      <span style="font-size:22px;font-weight:900;color:#0A1E33">$${saldo} ${esc(moneda)}</span>
+    </div>
+    ${montos}
+    <button type="button" onclick="anaAdsCargar(this)" style="width:100%;padding:12px;border:0;border-radius:12px;background:#2793C8;color:#fff;font-size:15px;font-weight:900;cursor:pointer">↓ ${esc(anaT('Cargar $' + selMonto, 'Top up $' + selMonto))}</button>
+    <p style="margin:8px 0 0;text-align:center;font-size:12px;color:#5A4A6B">${esc(anaT('La primera carga es en USD', 'Your first top-up is in USD'))}</p>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid #E8F1F8">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:800;color:#0A1E33">${esc(anaT('Carga automática', 'Auto top-up'))}</div>
+        <div style="font-size:12.5px;color:#5A4A6B;line-height:1.4">${esc(anaT('cuando se acaba, carga $' + selMonto + ' desde tu banco', 'when it runs out, it tops up $' + selMonto + ' from your bank'))}</div>
+        ${(!autoOn && !d.tiene_tarjeta) ? `<div style="font-size:12.5px;color:#5A4A6B;line-height:1.4;margin-top:2px">${esc(anaT('Necesitás una tarjeta guardada para prenderla.', 'You need a saved card to turn it on.'))}</div>` : ''}
+      </div>
+      ${toggle}
+    </div>
+  </div>`;
+  // Posteo destacado: el elegido (por defecto, el de hoy), con borde
+  // amarillo + tilde verde, y su chip (Sale hoy / el que más rindió).
+  const chipDestacado = esHoy && hoy.hora
+    ? `<span style="display:inline-block;margin-top:8px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${esc(anaT('Sale hoy · ' + hoy.hora, 'Goes live today · ' + hoy.hora))}</span>`
+    : (esMejor ? `<span style="display:inline-block;margin-top:8px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${esc(anaT('✦ el que más rindió', '✦ top performer'))}</span>` : '');
+  const destacado = selPost
+    ? `<div style="position:relative;background:#fff;border:2px solid #FEC14D;border-radius:16px;overflow:hidden;margin-bottom:14px">
+      <span style="position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;z-index:1">✓</span>
+      ${selPost.image_path ? `<img src="${esc(selPost.image_path)}" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block">` : ''}
+      <div style="padding:12px 14px"><div style="font-size:14px;font-weight:700;color:#0A1E33;line-height:1.4">${esc(anaCortarCaption(selPost.caption || '', 90))}</div>${chipDestacado}</div>
+    </div>`
+    : `<p class="ana-boostrec-nota">${esc(anaT('Todavía no tenés posteos para impulsar.', "You don't have posts to boost yet."))}</p>`;
+  const cta = `<button type="button" onclick="anaBilleteraImpulsar(this)" style="width:100%;padding:14px;border:0;border-radius:14px;background:#FEC14D;color:#0A1E33;font-size:16px;font-weight:900;cursor:pointer;margin-bottom:6px">${esc(anaT('Impulsar con $' + selMonto + ' · ' + dias + ' días', 'Boost with $' + selMonto + ' · ' + dias + ' days'))}</button>
+  <p style="margin:0 0 14px;text-align:center;font-size:12.5px;color:#5A4A6B">${esc(anaT('Posty elige el público y lo gestiona.', 'Posty picks the audience and runs it.'))}</p>`;
+  const feedBtn = `<button type="button" onclick="anaAdsAbrirFeed()" style="width:100%;padding:12px;border:2px solid #DCEFFF;border-radius:14px;background:#fff;font-size:14.5px;font-weight:800;color:#0A1E33;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="1" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="6.7" y="1" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="12.4" y="1" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="1" y="6.7" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="6.7" y="6.7" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="12.4" y="6.7" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="1" y="12.4" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="6.7" y="12.4" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="12.4" y="12.4" width="4.6" height="4.6" rx="1" fill="#2793C8"/></svg>${esc(anaT('Elegí qué foto del feed impulsar', 'Choose which feed photo to boost'))}</button>`;
+  const hist = `<div class="card"><h3 style="margin:0 0 6px">${esc(anaT('Últimos impulsos', 'Recent boosts'))}</h3><div id="adsHistorial">${anaBilleteraHistorialHTML()}</div></div>`;
+  return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">${backBtn}<div style="flex:1;min-width:0"><div style="font-size:20px;font-weight:900;color:#0A1E33;line-height:1.2">Ads</div><div style="font-size:13.5px;color:#5A4A6B;line-height:1.4">${esc(anaT('Impulsá tus posteos y que te vean más clientes.', 'Boost your posts so more customers see you.'))}</div></div></div>
+  ${pasos}
+  ${walletCard}
+  ${destacado}
+  ${cta}
+  <div class="ana-boostrec-msg" id="anaBoostRecMsg"></div>
+  ${feedBtn}
+  ${hist}`;
+}
+
+// Grilla del feed: TODOS los posteos publicados + el de hoy primero (si
+// lo hay y todavía no está publicado: es el elegido por defecto del mock
+// y tiene que verse con su borde + tilde). 3 columnas, borde a borde
+// (el sangrado -14px cancela el padding de .bb-main), scroll nativo.
+// La elegida lleva borde amarillo + tilde verde; la que ya tiene ads
+// lleva su marca y no se puede volver a elegir.
+function anaAdsFeedHTML() {
+  const d = anaBilleteraDatos || {};
+  const feed = Array.isArray(d.feed) ? d.feed : [];
+  const hoy = d.hoy || null;
+  const lista = [];
+  if (hoy && hoy.post_id && !feed.some((p) => Number(p.post_id) === Number(hoy.post_id))) lista.push(hoy);
+  feed.forEach((p) => lista.push(p));
+  const backBtn = `<button type="button" onclick="anaAdsCerrarFeed()" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:1.5px solid #DCEFFF;background:#fff;color:#0A1E33;font-size:18px;cursor:pointer;flex:0 0 auto;padding:0">←</button>`;
+  const celdas = lista.map((p) => {
+    const esElegida = Number(p.post_id) === Number(d.selId || 0);
+    const esHoyCelda = !!(hoy && Number(p.post_id) === Number(hoy.post_id));
+    const chip = esHoyCelda && hoy.hora
+      ? `<span style="position:absolute;left:6px;bottom:6px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:11px;font-weight:800;color:#0A1E33">${esc(anaT('Sale hoy · ' + hoy.hora, 'Goes live today · ' + hoy.hora))}</span>`
+      : (p.ya_impulsado ? `<span style="position:absolute;left:6px;bottom:6px;padding:2px 8px;background:rgba(10,30,51,.75);border-radius:999px;font-size:11px;font-weight:800;color:#fff">${esc(anaT('Con ads', 'With ads'))}</span>` : '');
+    return `<button type="button" onclick="anaAdsElegirFeed(${p.post_id}, this)" style="position:relative;padding:0;border:0;background:#E8F1F8;cursor:pointer;aspect-ratio:1/1;overflow:hidden;${esElegida ? 'box-shadow:inset 0 0 0 3px #FEC14D;' : ''}">${p.image_path ? `<img src="${esc(p.image_path)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">` : ''}${esElegida ? '<span style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900">✓</span>' : ''}${chip}</button>`;
+  }).join('');
+  const grid = lista.length
+    ? `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-left:-14px;margin-right:-14px">${celdas}</div>`
+    : `<p class="ana-boostrec-nota">${esc(anaT('Todavía no tenés posteos publicados en tu feed.', "You don't have published posts in your feed yet."))}</p>`;
+  return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">${backBtn}<div style="flex:1;min-width:0"><div style="font-size:20px;font-weight:900;color:#0A1E33;line-height:1.2">${esc(anaT('Tu feed', 'Your feed'))}</div><div style="font-size:13.5px;color:#5A4A6B;line-height:1.4">${esc(anaT('Tocá la foto que querés impulsar', 'Tap the photo you want to boost'))}</div></div><span style="font-size:13px;font-weight:800;color:#0A1E33;white-space:nowrap">${esc(anaT(lista.length + ' posteos', lista.length + ' posts'))}</span></div>
+  <div class="ana-boostrec-msg" id="anaAdsFeedMsg"></div>
+  ${grid}`;
+}
+
+// Despachador del tab Ads: grilla o vista principal.
+function anaAdsTabHTML() {
+  return (anaBilleteraDatos && anaBilleteraDatos.vistaFeed) ? anaAdsFeedHTML() : anaAdsDirectoHTML();
+}
+
+function anaAdsAbrirFeed() {
+  if (!anaBilleteraDatos) return;
+  anaBilleteraDatos.vistaFeed = true;
+  anaBilleteraPintar();
+}
+function anaAdsCerrarFeed() {
+  if (!anaBilleteraDatos) return;
+  anaBilleteraDatos.vistaFeed = false;
+  anaBilleteraPintar();
+}
+
+// Elegir desde la grilla: la elegida pasa a ser el destacado y se
+// vuelve a la vista principal. La que ya tiene ads no se elige: avisa
+// y no cambia nada.
+function anaAdsElegirFeed(id, btn) {
+  const d = anaBilleteraDatos;
+  if (!d) return;
+  const nid = Number(id) || 0;
+  const enFeed = (d.feed || []).find((p) => Number(p.post_id) === nid) || null;
+  if (enFeed && enFeed.ya_impulsado) {
+    const m = document.getElementById('anaAdsFeedMsg');
+    if (m) m.textContent = anaBoostRecMotivo('ya_impulsado');
+    return;
+  }
+  const enEleg = (d.elegibles || []).find((e) => Number(e.post_id) === nid) || null;
+  const esHoy = (d.hoy && Number(d.hoy.post_id) === nid) ? d.hoy : null;
+  d.selId = nid;
+  d.selPost = enFeed || enEleg || esHoy || ((d.selPost && Number(d.selPost.post_id) === nid) ? d.selPost : null);
+  d.vistaFeed = false;
+  anaBilleteraPintar();
+}
+
+// Carga automática: un toque la prende o la apaga. Prenderla exige
+// tarjeta guardada (lo verifica el servidor); si no la hay, queda
+// apagada y se dice por qué. Apagarla nunca cobra ni verifica nada.
+async function anaBilleteraAutoToggle(btn) {
+  const d = anaBilleteraDatos || {};
+  const nuevo = !d.auto_topup;
+  if (btn) btn.disabled = true;
+  let j = null;
+  try { j = await api.post('/api/ads/billetera/auto', { on: nuevo }); } catch (e) { j = (e && e.data) || null; }
+  if (btn) btn.disabled = false;
+  if (j && j.ok) {
+    anaBilleteraDatos.auto_topup = j.auto_topup ? 1 : 0;
+    anaBilleteraPintar();
+    const msg = document.getElementById('anaBoostRecMsg');
+    if (msg) msg.textContent = nuevo
+      ? anaT('Listo, la carga automática está prendida: cuando se acabe el saldo, carga $' + (Number(d.selMonto) || 20) + ' desde tu banco.', 'Done, auto top-up is on: when the balance runs out, it tops up $' + (Number(d.selMonto) || 20) + ' from your bank.')
+      : anaT('Listo, la carga automática está apagada.', 'Done, auto top-up is off.');
+  } else {
+    const msg = document.getElementById('anaBoostRecMsg');
+    if (msg) msg.textContent = anaBoostRecMotivo((j && j.motivo) || '', Number(d.selMonto) || 20);
+  }
 }
 
 // Historial real de impulsos (de /api/ads/boosts: la misma tabla que
