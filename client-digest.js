@@ -345,7 +345,15 @@ const OFFER_PROSE_OPENERS = new Set(('su sus esta este esto estos estas nuestro 
  * acá, en la única puerta de admisión, para que ningún camino (minería,
  * catálogo, bio-link, ADN, unión de refresco) las vuelva a sembrar. */
 const OFFER_AUDIENCE_NOUNS = new Set(['comercios', 'negocios', 'profesionales', 'pymes', 'clientes', 'emprendedores', 'empresas', 'personas', 'usuarios', 'seguidores', 'emprendimientos']);
-const OFFER_SECOND_PERSON = new Set(['tu', 'tus', 'vos', 'te', 'ti', 'contigo', 'tuyo', 'tuya', 'tuyos', 'tuyas']);
+const OFFER_SECOND_PERSON = new Set(['tu', 'tus', 'vos', 'te', 'ti', 'contigo', 'tuyo', 'tuya', 'tuyos', 'tuyas', 'your']);
+/* (LOTE PLACEHOLDER-COPY) Chrome de tienda (Shopify y genérico):
+ * rótulos del selector de país/moneda, del carrito, de la cuenta y
+ * de secciones de la tienda. Ninguna de estas frases es algo que el
+ * negocio venda — en Ladyee llegaron como «productos» al digest y de
+ * ahí al picker («Country/region and currency» en las 3 tarjetas), al
+ * título del reel y a los captions («3 claves de your bag»). Se
+ * chequea sobre el nombre normalizado (sin acentos, minúsculas). */
+const OFFER_STORE_CHROME = ['country/region', 'country region', 'your bag', 'shopping bag', 'shopping cart', 'my cart', 'my account', 'my wishlist', 'new arrivals', 'shop all', 'shop now', 'wishlist', 'track your order', 'track order', 'join our tribe', 'sign in', 'log in', 'sign up', 'filter by', 'sort by'];
 const OFFER_2P_VERBS = new Set(['aprende', 'aprendes', 'aprobas', 'aproba', 'descubre', 'descubri', 'empeza', 'empezas', 'mira', 'miras', 'suma', 'sumas', 'sumate', 'uni', 'unis', 'unite', 'gana', 'ganas', 'ahorra', 'ahorras', 'crece', 'creces', 'ordena', 'ordenas', 'organiza', 'organizas', 'delega', 'delegas', 'vende', 'vendes', 'elegi', 'elegis', 'elegilo', 'hace', 'haces', 'hacelo', 'tene', 'tenes', 'pode', 'podes', 'quere', 'queres', 'senti', 'sentis', 'pensa', 'pensas', 'cree', 'crees', 'segui', 'seguis', 'veni', 'venis', 'abri', 'abris', 'cerra', 'cerras', 'entra', 'entras', 'sali', 'salis', 'dormi', 'dormis', 'rei', 'reis']);
 function cleanOfferName(raw) {
   const v = (raw && typeof raw === 'object') ? (raw.nombre || raw.titulo || raw.name || '') : raw;
@@ -363,6 +371,9 @@ function isPlausibleOfferItem(raw) {
   // ítem y anclaba los titulares de la semana.
   if (/=/.test(s)) return false;
   if (/\{\{|\}\}|\$\{/.test(s)) return false;
+  // (LOTE PLACEHOLDER-COPY) Una barra es un rótulo o una ruta
+  // («Country/region and currency», «Men/Women»), nunca un producto.
+  if (s.includes('/')) return false;
   const words = s.split(' ').filter(Boolean);
   if (words.length < 1 || words.length > 5) return false;
   const nw = words.map((w) => norm(w)).filter(Boolean);
@@ -378,6 +389,17 @@ function isPlausibleOfferItem(raw) {
   // fragmento de pitch — nunca la oferta del negocio.
   if (nw.some((w) => OFFER_SECOND_PERSON.has(w))) return false;
   if (nw.some((w) => OFFER_2P_VERBS.has(w))) return false;
+  // (LOTE PLACEHOLDER-COPY) Chrome de tienda (ver OFFER_STORE_CHROME):
+  // el rótulo del selector de país/moneda, del carrito o de una
+  // sección no es algo que el negocio venda.
+  const ns = norm(s);
+  if (OFFER_STORE_CHROME.some((p) => ns.includes(p))) return false;
+  // (LOTE PLACEHOLDER-COPY) Slogan de dos oraciones («Timeless style.
+  // Effortless you.»): es el hero de la tienda, no un producto. La
+  // guarda de abreviatura (primer segmento de UNA palabra: «Dr.»,
+  // «St.») evita rechazar marcas reales («Dr. Martens»).
+  const _segs = s.split(/[.?!]\s+/);
+  if (_segs.length > 1 && _segs[0].split(' ').filter(Boolean).length >= 2) return false;
   return true;
 }
 function cleanOfferRaw(x) {

@@ -117,7 +117,7 @@ function cleanPrice(raw) {
   if (!m) return '';
   return m[0].replace(/\s+/, ' ').replace(/[.,]+$/, '');
 }
-const JUNK_NAME_RE = /^(men[uú]|inicio|home|contacto|nosotros|bienvenidos?|servicios|productos|galer[ií]a|testimonios|blog|noticias|preguntas frecuentes|faq|novedades|carrito|checkout|mi cuenta|buscar|ver todo|ver m[aá]s|comprar|agregar al carrito|a[ñn]adir|env[ií]os?|devoluciones|t[eé]rminos|privacidad|seguinos|redes|whatsapp|instagram|facebook|precio|precios|total|desde|hasta|cuotas?|c\/u|unidad|oferta|promoci[oó]n|stock|disponible)$/i;
+const JUNK_NAME_RE = /^(men[uú]|inicio|home|contacto|nosotros|bienvenidos?|servicios|productos|galer[ií]a|testimonios|blog|noticias|preguntas frecuentes|faq|novedades|carrito|checkout|mi cuenta|buscar|ver todo|ver m[aá]s|comprar|agregar al carrito|a[ñn]adir|env[ií]os?|devoluciones|t[eé]rminos|privacidad|seguinos|redes|whatsapp|instagram|facebook|precio|precios|total|desde|hasta|cuotas?|c\/u|unidad|oferta|promoci[oó]n|stock|disponible|wishlist|shop all|new arrivals|your bag|shopping bag|shopping cart|my account|my cart|my wishlist|country|region|currency|sign in|log in|track order)$/i;
 
 function cleanItemName(s) {
   return String(s || '')
@@ -195,10 +195,28 @@ function itemsFromHtml(html, fuente) {
   const plain = extractCleanText(noScripts);
   for (const h of heads) {
     if (!validItemName(h.name)) continue;
+    // (LOTE PLACEHOLDER-COPY) Un encabezado es ítem SOLO si hay precio
+    // cerca: el comentario de arriba lo prometía pero el código
+    // empujaba el heading igual, y en una tienda Shopify TODOS los h2
+    // de chrome son «productos» («Country/region and currency» del
+    // selector de país, «Your bag» del carrito, el slogan del hero,
+    // «New arrivals»). Y aunque haya precio cerca (carrito con ítems),
+    // el chrome de tienda nunca es un ítem: misma puerta que la home
+    // (web-extract.isStoreChromeText, sin la regla de slogan — un
+    // producto real puede llamarse «Dr. Martens»).
+    if (webExtract.isStoreChromeText(h.name)) continue;
+    // Slogan de dos oraciones («Timeless style. Effortless you.»):
+    // es el hero, no un producto — con la misma guarda de abreviatura
+    // que la puerta («Dr. Martens» no es slogan). Sin esto, en una
+    // página compacta el slogan cae a menos de 900 caracteres del
+    // primer precio y la regla de precio sola no lo frena.
+    const _segs = h.name.split(/[.?!]\s+/);
+    if (_segs.length > 1 && _segs[0].split(' ').filter(Boolean).length >= 2) continue;
     // Precio "cerca" en el HTML crudo siguiente (antes del próximo heading).
     const after = noScripts.slice(h.idx, h.idx + 900);
     const pm = after.replace(/<[^>]*>/g, ' ').match(PRICE_RE);
-    pushItem(out, seen, h.name, pm ? pm[0] : '', fuente);
+    if (!pm) continue;
+    pushItem(out, seen, h.name, pm[0], fuente);
   }
   // 3) Líneas de texto limpio con precio en la misma línea.
   for (const line of plain.split('\n')) itemsFromLine(line, out, seen, fuente);
@@ -210,6 +228,10 @@ function itemsFromLine(line, out, seen, fuente) {
   const pm = l.match(PRICE_RE);
   if (!pm) return;
   const name = cleanItemName(l.replace(pm[0], ' ').replace(/[.·•\-–—]{2,}/g, ' '));
+  // (LOTE PLACEHOLDER-COPY) Una línea con precio también puede ser
+  // chrome («Country/region and currency $85.00» si el texto limpio
+  // funde el rótulo con el precio): la puerta compartida la cierra.
+  if (!clientDigest.isPlausibleOfferItem(name)) return;
   if (validItemName(name)) pushItem(out, seen, name, pm[0], fuente);
 }
 /* Ítems desde texto plano (PDF): líneas con precio; línea que es SOLO

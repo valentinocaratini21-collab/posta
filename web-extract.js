@@ -328,14 +328,25 @@ function extractBusinessFacts(html, ld) {
 // and currency», «Your bag», «New arrivals»). Tampoco un titular con
 // pinta de frase (dos oraciones: «Timeless style. Effortless you.»):
 // es un slogan, no una oferta. El filtro viejo (JUNK_H local) se eliminó; este es el único.
-const NAV_JUNK_H = /^(men[uú]|inicio|home|contacto|nosotros|bienvenidos?|servicios?|productos?|galer[ií]a|testimonios|blog|noticias|preguntas frecuentes|faq|novedades|destacados|lo nuevo|qu[eé] hay de nuevo|ofertas?)$/i;
-const UI_CHROME_H = /country|region|currency|your bag|shopping bag|shopping cart|\bcart\b|checkout|\bsearch\b|log ?in|sign ?in|sign ?up|newsletter|subscribe|shipping|returns|new arrivals|shop all|shop now|my account|wishlist|filter by|sort by|track (your )?order/i;
+const NAV_JUNK_H = /^(men[uú]|inicio|home|contacto|nosotros|bienvenidos?|servicios?|productos?|galer[ií]a|testimonios|blog|noticias|preguntas frecuentes|faq|novedades|destacados|lo nuevo|qu[eé] hay de nuevo|ofertas?|filter)$/i;
+const UI_CHROME_H = /country|region|currency|your bag|shopping bag|shopping cart|\bcart\b|checkout|\bsearch\b|log ?in|sign ?in|sign ?up|newsletter|subscribe|shipping|returns|new arrivals|shop all|shop now|my account|wishlist|filter by|sort by|track (your )?order|join (our|the) (tribe|club)/i;
+// (LOTE PLACEHOLDER-COPY) SOLO el vocabulario de chrome de tienda
+// (sin la regla de slogan de dos oraciones): lo usa la lectura
+// profunda, donde un heading SÍ puede ser un producto real con
+// abreviatura («Dr. Martens») — la regla de slogan vive solo en
+// isJunkServiceHeading, para los servicios de la home.
+function isStoreChromeText(v) {
+  const s = String(v || '').trim();
+  if (!s) return true;
+  if (NAV_JUNK_H.test(s.replace(/^[¿¡]+/, '').trim())) return true;
+  if (UI_CHROME_H.test(s)) return true;
+  return false;
+}
 function isJunkServiceHeading(v) {
   const s = String(v || '').trim();
   if (!s) return true;
   if (/^[¿¡]/.test(s)) return true;
-  if (NAV_JUNK_H.test(s.replace(/^[¿¡]+/, '').trim())) return true;
-  if (UI_CHROME_H.test(s)) return true;
+  if (isStoreChromeText(s)) return true;
   if (/[.!?]\s+[A-ZÁÉÍÓÚÑ]/.test(s)) return true; // dos oraciones = slogan
   return false;
 }
@@ -602,6 +613,7 @@ module.exports = {
   pickName,
   isNameLike,
   isJunkServiceHeading,
+  isStoreChromeText,
   productNamesFromHtml,
   extractBusinessFacts,
 };
