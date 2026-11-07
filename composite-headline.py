@@ -69,6 +69,39 @@ def wrap(draw, text, font, max_w, max_lines=3):
     return kept
 
 
+# Sello del cliente (LOTE PERSONALIZACIÓN · ítem 1): su logo como medallón
+# circular en la esquina opuesta al titular (abajo a la derecha si el
+# titular va arriba, y viceversa). Fail-open: si algo falla, la pieza sale
+# sin sello y la generación nunca se rompe. Sin logo no se dibuja nada.
+def stamp_logo(img, logo_path, zone):
+    try:
+        from PIL import Image, ImageDraw
+        if not logo_path or not os.path.exists(logo_path):
+            return img
+        logo = Image.open(logo_path).convert('RGBA')
+        W, H = img.size
+        d = max(48, min(110, int(W * 0.09)))
+        side = min(logo.size)
+        logo = logo.crop(((logo.size[0] - side) // 2, (logo.size[1] - side) // 2,
+                          (logo.size[0] + side) // 2, (logo.size[1] + side) // 2))
+        logo = logo.resize((d, d), Image.LANCZOS)
+        mask = Image.new('L', (d, d), 0)
+        ImageDraw.Draw(mask).ellipse([0, 0, d, d], fill=255)
+        badge = Image.new('RGBA', (d + 8, d + 8), (0, 0, 0, 0))
+        ImageDraw.Draw(badge).ellipse([0, 0, d + 8, d + 8], fill=(255, 255, 255, 255))
+        badge.paste(logo, (4, 4), mask)
+        m = int(W * 0.04)
+        x = W - m - (d + 8)
+        y = m if zone == 'bottom' else H - m - (d + 8)
+        shadow = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        ImageDraw.Draw(shadow).ellipse([x + 2, y + 3, x + d + 10, y + d + 11], fill=(0, 0, 0, 90))
+        img = Image.alpha_composite(img.convert('RGBA'), shadow)
+        img.paste(badge, (x, y), badge)
+        return img.convert('RGB')
+    except Exception:
+        return img
+
+
 def main():
     from PIL import Image, ImageDraw, ImageFilter
     ap = argparse.ArgumentParser()
@@ -93,6 +126,9 @@ def main():
     # recompone abajo en vez de pelear con la foto.
     ap.add_argument('--zone', default='top', choices=('top', 'bottom'))
     ap.add_argument('--font', default='montserrat', help='id de tipografia del titular (montserrat, nunito, playfair, oswald, fredoka, poppins; desconocido = montserrat)')
+    # Sello del cliente (LOTE PERSONALIZACIÓN · ítem 1): ruta local del logo
+    # del cliente (foto de perfil de IG descargada). Sin logo, sin sello.
+    ap.add_argument('--logo', default='')
     a = ap.parse_args()
 
     headline = str(a.headline or '').strip()
@@ -116,6 +152,7 @@ def main():
             ink_rgb = None
 
     if not headline:
+        img = stamp_logo(img, a.logo, a.zone)
         img.save(a.out)
         return
 
@@ -268,6 +305,9 @@ def main():
         except Exception:
             pass
 
+    # Sello del cliente (LOTE PERSONALIZACIÓN · ítem 1): el logo del cliente
+    # como medallón en la esquina opuesta al titular. Sin logo, sin sello.
+    img = stamp_logo(img, a.logo, a.zone)
     img.save(a.out)
     print('ok area=%.1f contrast=%s' % (area_pct, ('%.2f' % contrast) if contrast is not None else '-'))
     # Variantes livianas de la pieza FINAL (con titular) para la UI.

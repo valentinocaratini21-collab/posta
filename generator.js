@@ -5,6 +5,7 @@ const { trackUsage, markPhotoSent, photoHash } = require('./costs');
 const { casaTemas } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: pool de temas de la casa (fallback local)
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): chequeo de pertenencia + anclas
 const fundamentoLiteral = require('./fundamento-literal'); // LOTE FUNDAMENTO-LITERAL ×5 (3/11): vetos como puerta dura en generateIdeas
+const personalizacion = require('./personalizacion'); // LOTE PERSONALIZACIÓN DE POSTEOS (6/11): ondas, voz, historia, testimonio
 const rubroGarantias = require('./rubro-garantias'); // LOTE RUBRO-GARANTÍAS ×6 (3/11): puerta final de producto + genéricos fuera con fundamento
 // Hook engine (hooks.js): 50 fórmulas por intención + rotación. Se aplica al
 // final de generateContent/generateCaptions: el caption SIEMPRE abre con hook.
@@ -2465,7 +2466,7 @@ function launchArcIdeas({ business, lang, star }) {
   ];
 }
 
-function templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa, productos }) {
+function templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa, productos, ondaElegida, testimonioCitas, historiaProducto }) {
   const biz = business || 'your business';
   const vs = competitors
     ? ` Stand out from ${competitors}: show what they don't have.`
@@ -2498,6 +2499,16 @@ function templateIdeasEn({ business, category, competitors, goal, recentTopics, 
     { formato: 'Community', tipo: 'social', titulo: 'we read you: which one do you pick?', angulo: 'Ask and spark comments: interaction lifts reach.' },
     { formato: 'Reel/Video', tipo: 'novedad', titulo: r1 ? `watch ${r1} in action` : 'see it in action', angulo: 'Vertical video with your photos: the highest-reach format on Instagram today.' },
   ];
+  // (LOTE PERSONALIZACIÓN · ítems 5 y 7) Historia del producto (solo con
+  // historia real) y testimonio con cita real: reemplazan sus slots sin
+  // cambiar el total de 7. Sin historia, el slot queda «behind the
+  // scenes»; sin cita, el Testimonio lo reemplaza el gate de generateIdeas.
+  {
+    const hs = personalizacion.historiaSlot({ r1, historia: historiaProducto, lang: 'en' });
+    if (hs) { const ix = all.findIndex((x) => x.formato === 'Behind the scenes'); if (ix >= 0) all[ix] = hs; }
+    const ts = personalizacion.testimonioSlot({ citas: testimonioCitas, lang: 'en' });
+    if (ts) { const ix = all.findIndex((x) => x.formato === 'Testimonial'); if (ix >= 0) all[ix] = ts; }
+  }
   if (dna && dna.website_url) {
     all.splice(4, 0, {
       formato: 'Web',
@@ -2541,6 +2552,10 @@ function templateIdeasEn({ business, category, competitors, goal, recentTopics, 
   if (etapa === 'lanzamiento') {
     return launchArcIdeas({ business, lang: 'en', star: r1 }).concat(pool.slice(0, 4));
   }
+  // (LOTE PERSONALIZACIÓN · ítem 2) La onda elegida por el cliente abre la
+  // semana (su palabra manda): el slot de ese ángulo va primero. Sin onda,
+  // el orden queda como siempre. La efeméride, si la hay, sigue primera.
+  pool = personalizacion.ordenarPoolPorOnda(pool, ondaElegida);
   if (ephemeris && pool.length) {
     // (v348 · D2) Ephemeris + pre-launch: presentation, not a deal.
     const themed = etapa === 'pre-lanzamiento'
@@ -2551,7 +2566,7 @@ function templateIdeasEn({ business, category, competitors, goal, recentTopics, 
   return pool;
 }
 
-function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, lang, etapa, casaLinea, productos }) {
+function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, lang, etapa, casaLinea, productos, ondaElegida, testimonioCitas, historiaProducto }) {
   // LOTE POSTY APRENDE: sin IA, la casa usa su pool de temas (no los 7
   // esqueletos genéricos). Los filtros vigentes de excluidos/recientes se
   // aplican igual, con el mismo piso de 4. Los clientes no pasan por acá.
@@ -2569,7 +2584,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
     }
     return withEphemeris(pool.slice(0, 7));
   }
-  if (lang === 'en') return templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa, productos });
+  if (lang === 'en') return templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa, productos, ondaElegida, testimonioCitas, historiaProducto });
   const w = CAT_WORDS[category] || CAT_WORDS.otro;
   const ga = GOAL_LINES[goal] ? ' ' + GOAL_LINES[goal].split('. ')[1] : '';
   const biz = business || 'tu negocio';
@@ -2611,6 +2626,16 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
     { formato: 'Comunidad', tipo: 'social', titulo: 'te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' + ga },
     { formato: 'Reel/Video', tipo: 'novedad', titulo: `así se ve ${r1 || w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' + ga },
   ];
+  // (LOTE PERSONALIZACIÓN · ítems 5 y 7) Historia del producto (solo con
+  // historia real) y testimonio con cita real: reemplazan sus slots sin
+  // cambiar el total de 7. Sin historia, el slot queda «detrás de escena»;
+  // sin cita, el Testimonio lo reemplaza el gate de generateIdeas.
+  {
+    const hs = personalizacion.historiaSlot({ r1, historia: historiaProducto, lang: 'es' });
+    if (hs) { const ix = all.findIndex((x) => x.formato === 'Detrás de escena'); if (ix >= 0) all[ix] = hs; }
+    const ts = personalizacion.testimonioSlot({ citas: testimonioCitas, lang: 'es' });
+    if (ts) { const ix = all.findIndex((x) => x.formato === 'Testimonio'); if (ix >= 0) all[ix] = ts; }
+  }
   // Ángulo "web" (solo si el negocio tiene web estudiada): una idea de la
   // semana lleva tráfico a la web con algo concreto + CTA "link en bio".
   // Entra en el slot 5 y se mantiene el total en 7 (~1 de cada 7 ideas).
@@ -2662,6 +2687,10 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   if (etapa === 'lanzamiento') {
     return withEphemeris(launchArcIdeas({ business, lang: 'es', star: r1 }).concat(pool.slice(0, 4)));
   }
+  // (LOTE PERSONALIZACIÓN · ítem 2) La onda elegida por el cliente abre la
+  // semana (su palabra manda): el slot de ese ángulo va primero. Sin onda,
+  // el orden queda como siempre. La efeméride, si la hay, sigue primera.
+  pool = personalizacion.ordenarPoolPorOnda(pool, ondaElegida);
   return withEphemeris(pool);
   // La efeméride va primera y marcada, también en el fallback sin IA
   function withEphemeris(list) {
@@ -2676,7 +2705,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, cmBloque, sabeSiempre, tasteBlock, styleLockExtras, casaLinea, propiaLinea, audiencia, diferencial, lang }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, cmBloque, sabeSiempre, tasteBlock, styleLockExtras, casaLinea, propiaLinea, audiencia, diferencial, lang, ondaElegida, vozMarcadores, testimonioCitas, historiaProducto }, apiKey) {
   const en = lang === 'en';
   // (growth ola 2) Capa de campaña comercial: sugiere SIN imponer — si el
   // negocio no vende en esa fecha, se ignora (test de pertenencia manda).
@@ -2714,6 +2743,15 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
   const diferencialLine = diferencial
     ? (en ? `\nWhat makes this business different (hooks come from here): ${String(diferencial).slice(0, 120)}` : `\nDiferencial del negocio (de ahí salen los ganchos): ${String(diferencial).slice(0, 120)}`)
     : '';
+  // (LOTE PERSONALIZACIÓN · ítems 2, 3, 5, 7) Onda elegida, voz del cliente,
+  // historia real del producto y testimonios reales: cada línea solo se
+  // emite cuando hay dato real; sin dato, la semana se arma como hoy.
+  const perspLine = [
+    personalizacion.lineaOnda(ondaElegida, lang),
+    personalizacion.lineaVoz(vozMarcadores, lang),
+    personalizacion.lineaHistoriaProducto(historiaProducto, (dna && dna.producto_estrella) || '', lang),
+    personalizacion.lineaTestimonio(testimonioCitas, lang),
+  ].filter(Boolean).map((l) => `\n${l}`).join('');
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     signal: AbortSignal.timeout(45000),
     method: 'POST',
@@ -2734,7 +2772,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'user',
           content: businessContext({ business, category, description, dna, tone, learnings }) +
-            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${cmBloque ? `\nCEREBRO CM — cómo piensa un gran community manager para ESTE negocio (todo con datos reales de esta cuenta, nada inventado):\n${cmBloque}` : ''}${sabeSiempre ? `\n${sabeSiempre}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\n${casaLinea ? `\n${casaLinea}` : ''}\n${propiaLinea ? `\n${propiaLinea}` : ''}${audienciaLine}${diferencialLine}
+            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${cmBloque ? `\nCEREBRO CM — cómo piensa un gran community manager para ESTE negocio (todo con datos reales de esta cuenta, nada inventado):\n${cmBloque}` : ''}${sabeSiempre ? `\n${sabeSiempre}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\n${casaLinea ? `\n${casaLinea}` : ''}\n${propiaLinea ? `\n${propiaLinea}` : ''}${audienciaLine}${diferencialLine}${perspLine}
 Generá las 7 ideas.`,
         },
       ],
@@ -2807,6 +2845,27 @@ async function generateIdeas(input, apiKey, opts = {}) {
   // viejos), no anota nada y nada cambia.
   if (input && Array.isArray(input.productos) && input.productos.length) {
     ideas = rubroGarantias.anotarIdeas(ideas, input.productos);
+  }
+  // (LOTE PERSONALIZACIÓN · ítem 7) TESTIMONIO FAIL-CLOSED: una idea de
+  // testimonio SIN cita real guardada no sale — se reemplaza por Proceso
+  // (el trabajo real de preparación). Cubre plantillas e IA por igual (la
+  // IA también puede devolver un Testimonio sin cita). Con citas, la idea
+  // queda tal cual: la cita viaja en su ángulo. La anotación de producto
+  // (_rgProducto) se conserva en el reemplazo.
+  if (input && ideas.some((i) => i && /testimoni/i.test(String(i.formato || '')))) {
+    const tieneCitas = Array.isArray(input.testimonioCitas) && input.testimonioCitas.some((c) => c && String(c.texto || '').trim().length >= 8);
+    if (!tieneCitas) {
+      const r1g = (input.dna && input.dna.producto_estrella)
+        || (Array.isArray(input.productos) && input.productos[0] && (input.productos[0].nombre || input.productos[0]))
+        || '';
+      ideas = ideas.map((i) => {
+        if (!/testimoni/i.test(String(i.formato || ''))) return i;
+        const rep = personalizacion.procesoSlot({ r1: String(r1g || ''), lang: input.lang });
+        if (i._rgProducto) rep._rgProducto = i._rgProducto;
+        if (i._rgSinProducto) rep._rgSinProducto = i._rgSinProducto;
+        return rep;
+      });
+    }
   }
   // Garantía de variedad: nunca dos ideas seguidas del mismo tipo.
   return fixTipos(ideas);

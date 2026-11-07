@@ -28,6 +28,7 @@
  * ===================================================================== */
 const crypto = require('crypto');
 const rubroId = require('./rubro-id'); // (v235) clasificador especialista de rubro
+const personalizacion = require('./personalizacion'); // (LOTE PERSONALIZACIÓN 6/11) voz + logo
 
 const DIGEST_VERSION = 1;
 
@@ -509,6 +510,15 @@ function emptyDigest() {
     v: DIGEST_VERSION, built_at: null, business: '', category: '', subcat: '',
     servicios: [], productos: [], promos: [], temas_feed: [],
     protagonista: '', paleta: [], registro: null, ciudad: '', diferencial: '',
+    // (LOTE PERSONALIZACIÓN 6/11) La marca del cliente tiene que verse:
+    // logo_url = foto de perfil de IG (la lectura pública la trae); '' =
+    // sin foto → NO se dibuja ningún logo. logo_paleta = colores sacados
+    // del logo (el refresco async la calcula; [] = todavía no calculada).
+    // voz_marcadores = sus palabras reales (captions + respuestas).
+    // onda_elegida = { onda, at } cuando elige con un toque (ítem 2).
+    // Ninguno entra en el hash de anclas (no son fundamento leído del
+    // feed/web) y el refresco los preserva (applyDeepBlocks).
+    logo_url: '', logo_paleta: [], logo_file: '', voz_marcadores: [], onda_elegida: null,
     has_booking: false, fuentes: {},
     // (v348 · D2) ETAPA del negocio: '' = operando; 'pre-lanzamiento' =
     // todavía no abrió (fecha futura + léxico de lanzamiento en sus
@@ -559,8 +569,9 @@ function emptyDigest() {
 /* buildFromParts — compila el digest desde las fuentes disponibles.
  * parts: { business, category, subcat,
  *          web:  {name, description, services[], city, palette[], url} | null,
- *          feed: {bio, captions[], name, handle} | null,
+ *          feed: {bio, captions[], name, handle, pic} | null,
  *          form: {description, goal} | null,
+ *          ownerWords: [textos del dueño (respuestas/chat)] | null,
  *          dna:  {…business_dna…} | null,
  *          palette: [{hex, rol}] | feedPalette | null,
  *          registro: 'light'|'dark'|null }
@@ -673,6 +684,20 @@ function buildFromParts(parts) {
     }
   }
   d.temas_feed = temaSet.slice(0, 8);
+
+  // (LOTE PERSONALIZACIÓN · ítem 1) LOGO: la foto de perfil de IG ES el
+  // logo en la mayoría de los negocios. Se guarda la URL tal cual la trae
+  // la lectura pública; si no hay foto, queda '' y NO se dibuja ningún
+  // logo (fail-closed: sin logo en el fundamento, no hay sello).
+  if (p.feed && typeof p.feed.pic === 'string' && /^https:\/\//.test(p.feed.pic)) d.logo_url = p.feed.pic.slice(0, 500);
+  // (LOTE PERSONALIZACIÓN · ítem 3) VOZ: marcadores aprendidos de SUS
+  // captions (+ palabras del dueño si el llamador las pasa en
+  // p.ownerWords). Determinístico, USD 0. Sin captions, [].
+  try {
+    d.voz_marcadores = personalizacion.extraerMarcadoresVoz(
+      (p.feed && Array.isArray(p.feed.captions)) ? p.feed.captions : [],
+      Array.isArray(p.ownerWords) ? p.ownerWords : []);
+  } catch (e) { d.voz_marcadores = []; }
 
   // --- protagonista / ciudad / diferencial ---
   const soy = String((p.feed && p.feed.bio) || (p.form && p.form.description) || '').match(/soy\s+([A-ZÁÉÍÓÚÑ][\wáéíóúñ]+(?:\s[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)?)/);
@@ -1232,6 +1257,15 @@ function applyDeepBlocks(stored, fresh) {
     const mergedEntries = { ...((out.photo_map && out.photo_map.entries) || {}), ...fresh.photo_map.entries };
     out.photo_map = { entries: mergedEntries, at: fresh.photo_map.at || new Date().toISOString() };
     if (fresh.fuentes && fresh.fuentes.photo_map) out.fuentes = { ...(out.fuentes || {}), photo_map: { at: out.photo_map.at, fotos: Object.keys(mergedEntries).length } };
+  }
+  // (LOTE PERSONALIZACIÓN · ítems 1 y 3) La voz se re-mina de los captions
+  // y el logo se re-lee de la foto de perfil: solo reemplazan si la
+  // corrida fresca TUVO feed (sin lectura, el «fresco» sería parcial y
+  // borraría lo aprendido). La onda elegida y la paleta del logo nunca
+  // las trae el fresco: sobreviven por la copia base de arriba.
+  if (fresh.fuentes && fresh.fuentes.feed) {
+    if (Array.isArray(fresh.voz_marcadores)) out.voz_marcadores = fresh.voz_marcadores;
+    if (fresh.logo_url) out.logo_url = fresh.logo_url;
   }
   // (v238) El estrella que confirmó el DUEÑO (Posty pregunta) no lo pisa
   // una inferencia fresca: la respuesta en persona es la fuente más

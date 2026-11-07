@@ -352,6 +352,7 @@ const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
 const feedDirector = require('./feed-director');
 const clientDigest = require('./client-digest');
+const personalizacion = require('./personalizacion'); // LOTE PERSONALIZACIÓN DE POSTEOS (6/11)
 const onboardingProducts = require('./onboarding-products'); // Onboarding un clic: productos detectados + foto por producto (determinístico, USD 0) // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
 const fundamentoLiteral = require('./fundamento-literal'); // LOTE FUNDAMENTO-LITERAL ×5 (3/11): espejo, foto, link, confirmación semanal, vetos — nunca adivinar qué vende el cliente
 const rubroGarantias = require('./rubro-garantias'); // LOTE RUBRO-GARANTÍAS ×6 (3/11): puerta final de producto, rubro visible, 2 fuentes, feed propio
@@ -1232,7 +1233,7 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       subcat: rubro ? (rubro.subcat || '') : undefined,
       rubroId: rubro ? rubro.rubroId : undefined,
       web: webData ? { name: webData.name, description: webData.description, services: webData.services || [], city: webData.city, palette: webData.palette || [], url: webData.url, categoryHint: webData.categoryHint } : null,
-      feed: feed ? { bio: feed.bio || '', captions: feed.captions || [], name: feed.name || '', handle: feed.handle || '' } : null,
+      feed: feed ? { bio: feed.bio || '', captions: feed.captions || [], name: feed.name || '', handle: feed.handle || '', pic: feed.pic || '' } : null,
       form: formText ? { description: formText } : null,
       feedPalette: feedPalette || null,
       registro: registro || null,
@@ -1243,6 +1244,9 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       bioLink: (deep && deep.bioLink) || null,
       photoEntries: (deep && deep.photoEntries) || null,
       webCopy: webData ? String(webData.description || '') : '',
+      // (LOTE PERSONALIZACIÓN · ítem 3) Las palabras del dueño (respuestas
+      // de la prueba) también alimentan los marcadores de voz.
+      ownerWords: onboarding ? [onboarding.producto_estrella, onboarding.diferencial, onboarding.audiencia].filter((x) => x) : [],
     });
     if (_trialDigestBuilt && onboarding) _trialDigestBuilt.onboarding = onboarding;
     // (DRAFT-ONBOARDING · 4/11) El gusto del draft queda guardado en el
@@ -1328,6 +1332,22 @@ function seedFromTrialDigest(userId, igRaw, opts) {
     // puerta ANTES de sembrar descripción/ADN: la siembra derivada
     // («Ofrece: …») se construye de estos ítems tal cual.
     digest = clientDigest.scrubDigestItems(digest);
+    // (LOTE PERSONALIZACIÓN · ítem 2) La onda elegida en la prueba viaja a
+    // la cuenta: la semana del cliente se arma con ese ángulo. Sin
+    // elección guardada, nada cambia.
+    try {
+      const ondaRow = db.prepare('SELECT onda FROM trial_onda WHERE ig = ?').get(ig);
+      if (ondaRow && personalizacion.ondaValida(ondaRow.onda)) digest.onda_elegida = { onda: String(ondaRow.onda), at: Date.now() };
+    } catch (e) {}
+    // (LOTE PERSONALIZACIÓN · ítem 1) El archivo del logo de la prueba
+    // pasa a ser el del usuario (mismo volumen, solo cambia el nombre).
+    try {
+      if (digest.logo_file && String(digest.logo_file).startsWith('logo-trial-')) {
+        const src = path.join(MEDIA_DIR, String(digest.logo_file));
+        const dst = path.join(MEDIA_DIR, `logo-${userId}.png`);
+        if (fs.existsSync(src)) { fs.copyFileSync(src, dst); digest.logo_file = `logo-${userId}.png`; }
+      }
+    } catch (e) {}
     clientDigest.saveDigest(db, userId, digest);
     // ADN: merge respetando lo ya cargado (convención del ADN).
     try {
@@ -1376,14 +1396,18 @@ function seedFromTrialDigest(userId, igRaw, opts) {
       if (sets.length) { sets.push("updated_at = datetime('now')"); vals.push(userId); db.prepare(`UPDATE profiles SET ${sets.join(', ')} WHERE user_id = ?`).run(...vals); }
     } catch (e) { console.error('[digest] seed perfil:', e.message); }
     // Colores de marca desde la paleta del digest (si Ajustes no tiene).
+    // (LOTE PERSONALIZACIÓN · ítem 1) La paleta sacada DEL LOGO manda
+    // sobre la del feed cuando existe: es la marca del cliente, no solo
+    // la de sus fotos.
     try {
-      if ((digest.paleta || []).length >= 2) {
+      const palSrc = ((digest.logo_paleta || []).length >= 2) ? digest.logo_paleta : digest.paleta;
+      if ((palSrc || []).length >= 2) {
         getSettings(userId);
         const st = db.prepare('SELECT brand_colors FROM settings WHERE user_id = ?').get(userId);
         let has = false;
         try { const bc = JSON.parse((st && st.brand_colors) || 'null'); has = Array.isArray(bc) && bc.length >= 2; } catch (e) {}
         if (!has) {
-          const hexes = digest.paleta.map((c) => c.hex).filter((h) => /^#[0-9a-fA-F]{6}$/.test(h || '')).slice(0, 3);
+          const hexes = palSrc.map((c) => c.hex).filter((h) => /^#[0-9a-fA-F]{6}$/.test(h || '')).slice(0, 3);
           if (hexes.length >= 2) db.prepare('UPDATE settings SET brand_colors = ? WHERE user_id = ?').run(JSON.stringify(hexes), userId);
         }
       }
@@ -10054,6 +10078,21 @@ function ideasInputFor(uid, weekKey) {
     // cuenta (además de qué tipos): el cerebro comercial se realimenta.
     contentPerf: contentPerformanceLine(uid) + anglePerformanceFor(uid).line,
   });
+  // (LOTE PERSONALIZACIÓN · ítems 2, 3, 5, 7) Lo que el cliente eligió y
+  // lo que es suyo de verdad viaja en el input para plantillas e IA: onda
+  // elegida (un toque), voz (sus palabras), historia real del producto,
+  // testimonios reales. Sin dato, el campo queda vacío y la semana se
+  // arma como hoy (fail-open al resto del brief).
+  try {
+    const dgP = clientDigest.getDigest(db, uid);
+    if (dgP) {
+      if (dgP.onda_elegida && dgP.onda_elegida.onda) ideasInput.ondaElegida = dgP.onda_elegida.onda;
+      if (Array.isArray(dgP.voz_marcadores) && dgP.voz_marcadores.length) ideasInput.vozMarcadores = dgP.voz_marcadores;
+      const histP = (dgP.onboarding && dgP.onboarding.diferencial) || dgP.diferencial || '';
+      if (String(histP).trim()) ideasInput.historiaProducto = String(histP).trim().slice(0, 240);
+    }
+    ideasInput.testimonioCitas = citasRealesParaBrief(db, uid);
+  } catch (e) { ideasInput.testimonioCitas = []; }
   // (FUNDAMENTO-LITERAL · pieza 5) Los vetos viajan en el input para el
   // post-filtro de generateIdeas (plantillas, IA y efemérides). Se ponen
   // DESPUÉS del levelBoosted para que ningún boost los pierda. Se leen
@@ -10133,6 +10172,9 @@ function contentInputFor(uid, topic, tipo, seed, sales) {
   try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
   let voice = '';
   try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
+  // (LOTE PERSONALIZACIÓN · ítem 3) Sus palabras reales también van en
+  // el caption: los marcadores del fundamento se suman a los ejemplos.
+  try { const dgV = clientDigest.getDigest(db, uid); const lv = personalizacion.lineaVoz(dgV && dgV.voz_marcadores, langOfUser(uid)); if (lv) voice = (voice ? voice + '\\n' : '') + lv; } catch (e) {}
   // Niveles que se sienten: el nivel cambia REALMENTE el payload de captions.
   // LOTE POSTY APRENDE: igual que en ideasInputFor — la línea viaja
   // después del levelBoosted, solo para la casa.
@@ -13474,6 +13516,9 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
     try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
     let voice = '';
     try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
+    // (LOTE PERSONALIZACIÓN · ítem 3) Sus palabras reales también van en
+    // la variante: los marcadores del fundamento se suman a los ejemplos.
+    try { const dgV = clientDigest.getDigest(db, uid); const lv = personalizacion.lineaVoz(dgV && dgV.voz_marcadores, langOfUser(uid)); if (lv) voice = (voice ? voice + '\\n' : '') + lv; } catch (e) {}
     // (v237) Refs del álbum POR PIEZA (mapeada/tag/calidad), no las 2
     // más recientes a ciegas.
     const refs = albumRefsForPiece(uid, { tipo, texts: topic }).refs;
@@ -13724,6 +13769,16 @@ function outcomeBrief(userId) {
 // prior = el promedio del PROPIO cliente (no el global): 1 posteo viral no
 // domina. Solo habla con evidencia (>=2 posteos medidos por tipo, >=4 total)
 // y cuando algún tipo se desvía de forma significativa de su promedio.
+// (LOTE PERSONALIZACIÓN · ítem 7) Citas reales para el brief: reseñas
+// guardadas en review_queue (Google Business, solo lectura) con texto.
+// Máximo 2, las más recientes. Sin reseñas → [] (fail-closed: sin frase
+// real guardada, no hay posteo de testimonio).
+function citasRealesParaBrief(db, uid) {
+  try {
+    const rows = db.prepare(`SELECT reviewer, text FROM review_queue WHERE user_id = ? AND status = 'pending' AND text IS NOT NULL AND length(trim(text)) >= 8 ORDER BY created_at DESC LIMIT 2`).all(uid);
+    return rows.map((r) => ({ texto: String(r.text || '').trim().slice(0, 200), autor: String(r.reviewer || '').trim().slice(0, 40) })).filter((c) => c.texto.length >= 8);
+  } catch (e) { return []; }
+}
 function contentPerformanceLine(userId) {
   try {
     const { engagementRate, C_PRIOR, PRIOR_ER } = require('./learning');
@@ -14994,6 +15049,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
                       const bc = JSON.parse(st10619.brand_colors || '[]');
                       if (Array.isArray(bc) && /^#[0-9a-fA-F]{6}$/.test(bc[0] || '')) cArgs.push('--grade', String(bc[0]));
                       cArgs.push('--font', brandFontOf(st10619));
+                      cArgs.push(...logoSealArgsForUser(uid)); // (LOTE PERSONALIZACIÓN · ítem 1) sello del logo del cliente, si lo hay
                     } catch (e) {}
                     execFileSync('python3', cArgs, { timeout: 30000 });
                   } catch (e) { console.error(`[pipeline:${tag}] composite stock falló:`, e.message); }
@@ -16042,6 +16098,140 @@ app.get('/api/ig/search', async (req, res) => {
   }
 });
 
+// ---------- LOTE PERSONALIZACIÓN DE POSTEOS (6/11) ----------
+// Ítem 2: el cliente elige la onda con un toque (3 posteos terminados, 3
+// ángulos) y la elección queda guardada y pesa en la semana. Ítem 1: el
+// logo del cliente como sello en cada pieza + paleta desde el logo.
+try { db.exec(`CREATE TABLE IF NOT EXISTS trial_onda (ig TEXT PRIMARY KEY, onda TEXT NOT NULL, created_at INTEGER NOT NULL)`); } catch (e) {}
+function trialOndaByIg(ig) {
+  try {
+    const r = db.prepare('SELECT onda FROM trial_onda WHERE ig = ?').get(String(ig || '').trim().toLowerCase().replace(/^@/, ''));
+    return (r && r.onda) || '';
+  } catch (e) { return ''; }
+}
+// Opciones de onda para la prueba: 3 posteos terminados del producto
+// estrella (vender / historia / enseñar), sin IA. Sin producto real
+// evidenciado no hay opciones (fail-closed).
+app.post('/api/trial/onda-opciones', express.json({ limit: '16kb' }), async (req, res) => {
+  try {
+    const ip = demo.clientIp(req);
+    if (!trialGenHourlyAllowed(ip)) return res.status(429).json({ error: 'Muchas pruebas desde esta conexión. Probá en un rato 🚀' });
+    const ig = String((req.body && req.body.ig) || '').trim().toLowerCase().replace(/^@/, '');
+    const lang = (req.body && req.body.lang) === 'en' ? 'en' : 'es';
+    if (!/^[a-z0-9._]{1,30}$/.test(ig)) return res.status(400).json({ error: 'Falta el @ de Instagram' });
+    const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(ig);
+    if (!hit) return res.status(404).json({ error: 'Primero armá tu semana de prueba 🙂' });
+    let out = null;
+    try { out = JSON.parse(hit.payload); } catch (e) {}
+    if (!out) return res.status(404).json({ error: 'Primero armá tu semana de prueba 🙂' });
+    const dg = (out && out.digest && typeof out.digest === 'object') ? out.digest : null;
+    const ob = (out && out.onboarding && typeof out.onboarding === 'object') ? out.onboarding : null;
+    const prod0 = (dg && Array.isArray(dg.productos) && dg.productos[0]) || null;
+    const producto = (prod0 && prod0.nombre) || (dg && dg.inferred_star && dg.inferred_star.nombre) || (ob && ob.producto_estrella) || '';
+    if (!producto) return res.status(400).json({ error: 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
+    const precio = (prod0 && prod0.precio) || '';
+    const diferencial = (ob && ob.diferencial) || (dg && dg.diferencial) || '';
+    const foto = (out && Array.isArray(out.posts) && out.posts[0] && out.posts[0].image) || null;
+    const opciones = personalizacion.generarOpcionesOnda({ producto, precio, foto, diferencial, historia: '', lang });
+    res.json({ ok: true, producto, opciones });
+  } catch (e) { res.status(500).json({ error: 'No pudimos armar las opciones 😅 Probá de nuevo' }); }
+});
+// La elección de onda de la prueba: queda guardada por @ y la cuenta la
+// hereda al registrarse (seedFromTrialDigest).
+app.post('/api/trial/onda', express.json({ limit: '16kb' }), (req, res) => {
+  try {
+    const ip = demo.clientIp(req);
+    if (!trialGenHourlyAllowed(ip)) return res.status(429).json({ error: 'Muchas pruebas desde esta conexión. Probá en un rato 🚀' });
+    const ig = String((req.body && req.body.ig) || '').trim().toLowerCase().replace(/^@/, '');
+    const onda = String((req.body && req.body.onda) || '').trim().toLowerCase();
+    if (!/^[a-z0-9._]{1,30}$/.test(ig)) return res.status(400).json({ error: 'Falta el @ de Instagram' });
+    if (!personalizacion.ondaValida(onda)) return res.status(400).json({ error: 'Onda inválida' });
+    db.prepare(`INSERT INTO trial_onda (ig, onda, created_at) VALUES (?, ?, ?)
+      ON CONFLICT(ig) DO UPDATE SET onda=excluded.onda, created_at=excluded.created_at`).run(ig, onda, Date.now());
+    res.json({ ok: true, onda });
+  } catch (e) { res.status(500).json({ error: 'No pudimos guardar tu elección 😅 Probá de nuevo' }); }
+});
+// La onda de un cliente con cuenta: se guarda en su fundamento y pesa en
+// su semana (ideasInputFor).
+app.post('/api/onda', requireAuth, express.json({ limit: '16kb' }), (req, res) => {
+  try {
+    const onda = String((req.body && req.body.onda) || '').trim().toLowerCase();
+    if (!personalizacion.ondaValida(onda)) return res.status(400).json({ error: 'Onda inválida' });
+    const dg = clientDigest.getDigest(db, req.session.userId) || {};
+    dg.onda_elegida = { onda, at: Date.now() };
+    clientDigest.saveDigest(db, req.session.userId, dg);
+    res.json({ ok: true, onda });
+  } catch (e) { res.status(500).json({ error: 'No pudimos guardar tu elección 😅 Probá de nuevo' }); }
+});
+// (LOTE PERSONALIZACIÓN · ítem 1) LOGO: descarga + paleta + archivo local.
+// Devuelve { paleta, file } o null si algo falla (best-effort: sin logo no
+// hay sello ni paleta, y nada se rompe). El archivo vive en MEDIA_DIR con
+// el nombre que pasa el llamador.
+function logoExtDeBytes(buf) {
+  if (!buf || buf.length < 12) return 'png';
+  if (buf[0] === 0xFF && buf[1] === 0xD8) return 'jpg';
+  if (buf[0] === 0x89 && buf[1] === 0x50) return 'png';
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  return 'png';
+}
+async function logoPaletaYArchivo(logoUrl, fileBase) {
+  try {
+    if (!logoUrl || !/^https:\/\//.test(logoUrl)) return null;
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 10000);
+    let buf = null;
+    try {
+      const r = await fetch(logoUrl, { signal: ctl.signal, headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15' } });
+      if (!r.ok) return null;
+      buf = Buffer.from(await r.arrayBuffer());
+    } finally { clearTimeout(t); }
+    if (!buf || buf.length < 200) return null;
+    const file = `${fileBase}.${logoExtDeBytes(buf)}`;
+    try { fs.writeFileSync(path.join(MEDIA_DIR, file), buf); } catch (e) { return null; }
+    let paleta = [];
+    try {
+      const cols = await demo.extractColorsFromBuffer(buf);
+      paleta = (Array.isArray(cols) ? cols : []).filter((h) => /^#[0-9a-fA-F]{6}$/.test(h || '')).slice(0, 3).map((hex) => ({ hex: String(hex).toUpperCase(), rol: 'logo' }));
+    } catch (e) { paleta = []; }
+    return { paleta, file };
+  } catch (e) { return null; }
+}
+// Refresca el logo de una cuenta con fundamento: paleta desde el logo +
+// archivo local para el sello. Solo si hay logo_url y falta paleta o
+// archivo. Best-effort, nunca frena al llamador.
+async function refreshLogoPaleta(db, uid) {
+  try {
+    const dg = clientDigest.getDigest(db, uid);
+    if (!dg) return false;
+    if (dg.logo_file && (dg.logo_paleta || []).length >= 2) return true;
+    let logoUrl = dg.logo_url || '';
+    if (!logoUrl) {
+      const prof = getProfile(uid) || {};
+      if (prof.ig_username) {
+        try { const c = db.prepare('SELECT pic_url FROM ig_avatar_cache WHERE username=?').get(String(prof.ig_username).toLowerCase()); if (c && c.pic_url) logoUrl = c.pic_url; } catch (e) {}
+      }
+    }
+    const got = await logoPaletaYArchivo(logoUrl, `logo-${uid}`);
+    if (!got) return false;
+    const dg2 = clientDigest.getDigest(db, uid) || {};
+    dg2.logo_url = logoUrl;
+    dg2.logo_file = got.file;
+    if (got.paleta.length >= 2) dg2.logo_paleta = got.paleta;
+    clientDigest.saveDigest(db, uid, dg2);
+    return true;
+  } catch (e) { return false; }
+}
+// Argumentos --logo para composite-headline.py cuando el fundamento tiene
+// logo descargado. Sin logo, []: la pieza sale como hoy, sin sello.
+function logoSealArgsForUser(uid) {
+  try {
+    const dg = clientDigest.getDigest(db, uid);
+    const f = dg && dg.logo_file;
+    if (!f || /[/\\]/.test(String(f))) return [];
+    const abs = path.join(MEDIA_DIR, String(f));
+    if (!fs.existsSync(abs)) return [];
+    return ['--logo', abs];
+  } catch (e) { return []; }
+}
 // ---------- 🏠 HOME (v331): el perfil literal del cliente ----------
 // La home de la app es el perfil de Instagram del cliente TAL CUAL es:
 // encabezado fiel (foto, @, nombre, bio, link, conteos) + sus posteos
@@ -20437,6 +20627,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       ];
       if (hexes && hexes[0]) compArgs.push('--grade', String(hexes[0])); // look de color del feed
       compArgs.push('--font', brandFontOf(settings));
+      compArgs.push(...logoSealArgsForUser(uid)); // (LOTE PERSONALIZACIÓN · ítem 1) sello del logo del cliente, si lo hay
       execFileSync('python3', compArgs, { timeout: 30000 });
       console.log(`[concept-shot] titular compuesto: "${cleanHeadline.slice(0, 40)}"`);
       // (Gap 6, 2026-10-25) ZONA MEDIDA, como ya hace la PRUEBA: el QA
@@ -20460,6 +20651,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
             ];
             if (hexes && hexes[0]) compArgs2.push('--grade', String(hexes[0]));
             compArgs2.push('--font', brandFontOf(settings));
+            compArgs2.push(...logoSealArgsForUser(uid)); // (LOTE PERSONALIZACIÓN · ítem 1) sello del logo del cliente, si lo hay
             execFileSync('python3', compArgs2, { timeout: 30000 });
             console.log(`[concept-shot] titular RECOMPUESTO abajo: el QA marcó que arriba tapaba al sujeto ("${cleanHeadline.slice(0, 40)}")`);
           }
@@ -20523,6 +20715,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
           // igual que los demás call sites, o el titular regenerado saldría
           // con la fuente por defecto en vez de la del cliente.
           try { cArgs.push('--font', brandFontOf(settings)); } catch (e) {}
+          cArgs.push(...logoSealArgsForUser(uid)); // (LOTE PERSONALIZACIÓN · ítem 1) sello del logo del cliente, si lo hay
           execFileSync('python3', cArgs, { timeout: 30000 });
         } catch (e) { console.error('[qa-gate] composite:', e.message); }
       },
@@ -21578,6 +21771,9 @@ app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.js
     try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
     let voice = '';
     try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
+    // (LOTE PERSONALIZACIÓN · ítem 3) Sus palabras reales también van en
+    // el caption de la foto subida: los marcadores del fundamento se suman.
+    try { const dgV = clientDigest.getDigest(db, uid); const lv = personalizacion.lineaVoz(dgV && dgV.voz_marcadores, langOfUser(uid)); if (lv) voice = (voice ? voice + '\\n' : '') + lv; } catch (e) {}
     const topicBase = intent === 'vengan' ? 'invitar a venir al negocio, con esta foto real del negocio'
       : intent === 'vender' ? 'vender lo que muestra esta foto real del negocio'
       : 'presentar lo que muestra esta foto real del negocio';
@@ -21740,6 +21936,7 @@ function recompositePostOverlay(uid, post, newOverlayRaw, zoneRaw) {
     if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
     cArgs.push('--font', brandFontOf(settings));
     cArgs.push('--zone', zone); // (CHAT-EDITA) la posición pedida viaja al compositor
+    cArgs.push(...logoSealArgsForUser(uid)); // (LOTE PERSONALIZACIÓN · ítem 1) sello del logo del cliente, si lo hay
     execFileSync('python3', cArgs, { timeout: 30000 });
     const outPath = `/media/${outName}`;
     try { fs.copyFileSync(baseForCompose, path.join(MEDIA_DIR, photoCliente.cleanSisterName(outName))); } catch (e) {}
@@ -21789,6 +21986,7 @@ async function enhancePhotoGenerate(uid, post, promptOverride) {
         const hexes = parseBrandHexes(settings.brand_colors);
         if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
         cArgs.push('--font', brandFontOf(settings));
+        cArgs.push(...logoSealArgsForUser(uid)); // (LOTE PERSONALIZACIÓN · ítem 1) sello del logo del cliente, si lo hay
         execFileSync('python3', cArgs, { timeout: 30000 });
         console.log(`[photo-enhance] titular recompuesto por código: "${headline.slice(0, 40)}"`);
       }
@@ -27802,6 +28000,10 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       }
     } catch (e) { /* fallback silencioso */ }
   }
+  // (LOTE PERSONALIZACIÓN · ítem 1) LOGO: la descarga de la foto de
+  // perfil corre en paralelo con el render; se espera con carrera
+  // corta antes del payload (abajo). Sin foto, no hay sello.
+  const logoTrialPromise = igPic ? logoPaletaYArchivo(igPic, `logo-trial-${String(ig || '').toLowerCase().replace(/[^a-z0-9._]/g, '')}`).catch(() => null) : Promise.resolve(null);
   // (v212) Web del negocio (1/2): nombre si el form no lo trajo y
   // descripción/servicios al goal. Carrera acotada: la web nunca frena.
   let webData = null;
@@ -27920,7 +28122,11 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // presenta como si fuera del rubro. Flujos viejos sin espejo: sin
     // productos, la puerta no actúa (igual que en generateIdeas).
     const espTrial = (() => { try { return fundamentoLiteral.espejoFromFields(fields); } catch (e) { return null; } })();
-    const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors, lang, etapa: etapaTrial, productos: (espTrial && espTrial.productos) || [] }, null)).catch(() => []);
+    // (LOTE PERSONALIZACIÓN · ítem 2) La onda elegida en una prueba anterior
+    // y el diferencial del dueño también pesan en las 6 ideas de la vista
+    // previa (la voz y los testimonios viven en la semana de la cuenta).
+    const ondaTrial = (() => { try { return trialOndaByIg(ig); } catch (e) { return ''; } })();
+    const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors, lang, etapa: etapaTrial, productos: (espTrial && espTrial.productos) || [], ondaElegida: ondaTrial || undefined, historiaProducto: (ocAns && ocAns.diferencial) || '' }, null)).catch(() => []);
     // (v212) Web del negocio (2/2): su paleta manda si no hay otra fuente de
     // color (con @, manda el feed) y sus fotos entran como material gateado.
     let webExtraPhotos = [];
@@ -28001,6 +28207,17 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     } catch (e) { /* el análisis nunca frena la prueba */ }
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
+    // (LOTE PERSONALIZACIÓN · ítem 1) LOGO: paleta desde la foto de
+    // perfil + archivo local para el sello. Viaja en el digest al
+    // trial_cache y a la cuenta al registrarse.
+    try {
+      const logoGot = await Promise.race([logoTrialPromise, new Promise((r) => setTimeout(() => r(null), 3000))]);
+      if (logoGot && trialDigest) {
+        trialDigest.logo_url = igPic;
+        trialDigest.logo_file = logoGot.file;
+        if (logoGot.paleta.length >= 2) trialDigest.logo_paleta = logoGot.paleta;
+      }
+    } catch (e) {}
 
     let screenshot = null;
     if (photoPath) {
@@ -28789,7 +29006,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const effCategory = rubroRes.category;
     const trialDigest = buildTrialDigest({
       business, category, webData,
-      feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
+      feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig, pic: trialProfile.pic || igPic || '' } : null,
       formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft,
     });
     // (rubro-literal) PUERTA FAIL-CLOSED, igual que en /api/trial/generate:
@@ -31127,7 +31344,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v742';
+const BUILD_ID = '20261105-v743';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -31586,6 +31803,7 @@ async function refreshDigestsSweep() {
                 bio: data.profile.bio || '',
                 captions: (data.posts || []).map((x) => String((x && x.caption) || '').slice(0, 240)).filter(Boolean).slice(0, 12),
                 name: data.profile.name || '', handle: data.profile.handle || prof.ig_username,
+                pic: data.profile.pic || '', // (LOTE PERSONALIZACIÓN · ítem 1) la foto de perfil ES el logo
               };
               feedLink = data.profile.link || '';
               summary.feed++;
@@ -31705,6 +31923,10 @@ async function refreshDigestsSweep() {
         } catch (e) { /* la reclasificación nunca frena el refresco */ }
         clientDigest.saveDigest(db, uid, finalDigest);
         summary.saved++;
+        // (LOTE PERSONALIZACIÓN · ítem 1) LOGO: si el digest tiene logo y
+        // todavía no hay paleta ni archivo local, se calculan ahora
+        // (best-effort, nunca frenan el refresco).
+        try { if (finalDigest.logo_url && (!finalDigest.logo_paleta || !finalDigest.logo_paleta.length)) await refreshLogoPaleta(db, uid); } catch (e) {}
       } catch (e) { summary.errors++; console.error('[digest-refresh] usuario ' + uid + ':', e.message); }
     }
   } catch (e) { console.error('[digest-refresh] sweep:', e.message); }
