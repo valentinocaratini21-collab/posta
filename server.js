@@ -106,6 +106,7 @@ const { analyzeWebsite } = require('./website-study');
 const meliApi = require('./meli'); // MercadoLibre: API pública sin key (Track 4)
 const { analyzeFbPage, extractPageId } = require('./fb-page');
 const { mineComments, buildDnaPatch, fetchCommentsForMedia } = require('./ig-comments');
+const studyComments = require('./study-comments'); // ESTUDIO-PROFUNDO M1 · COMENTARIOS: extracción determinística con procedencia (fundamento.comments)
 const preguntasPosteos = require('./preguntas-posteos'); // PP-PREGUNTAS-POSTEOS-SERVER
 const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
@@ -346,6 +347,8 @@ const stripeBilling = require('./stripe-billing'); // (v285) cobro US en USD —
 const demo = require('./demo');
 const draftOnboarding = require('./draft-onboarding'); // DRAFT-ONBOARDING (4/11): gusto del draft
 const feedAudit = require('./feed-audit');
+const studyFeedMap = require('./study-feedmap'); // ESTUDIO-PROFUNDO · mejora 4 MAPA DEL FEED (7/11): grilla 9-12 + huecos → la semana los tapa
+const studyCompetitorsMod = require('./study-competitors'); // ESTUDIO-PROFUNDO · M5 COMPETENCIA: 3-5 cuentas mismo rubro/ciudad + hueco, en fundamento.competitors
 const igFollows = require('./ig-follows');
 const igMedia = require('./ig-media');
 const feedReconcile = require('./feed-reconcile');
@@ -353,9 +356,11 @@ const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
 const feedDirector = require('./feed-director');
 const clientDigest = require('./client-digest');
+const studyRestudy = require('./study-restudy'); // ESTUDIO-PROFUNDO · M6 RE-ESTUDIO SEMANAL (7/11): diff semanal del fundamento + «qué cambió»
 const personalizacion = require('./personalizacion'); // LOTE PERSONALIZACIÓN DE POSTEOS (6/11)
 const onboardingProducts = require('./onboarding-products'); // Onboarding un clic: productos detectados + foto por producto (determinístico, USD 0) // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
 const fundamentoLiteral = require('./fundamento-literal'); // LOTE FUNDAMENTO-LITERAL ×5 (3/11): espejo, foto, link, confirmación semanal, vetos — nunca adivinar qué vende el cliente
+const studyOffer = require('./study-offer'); // M3 ESTUDIO-PROFUNDO (7/11): ficha de oferta con fechas + puerta en la generación
 const rubroGarantias = require('./rubro-garantias'); // LOTE RUBRO-GARANTÍAS ×6 (3/11): puerta final de producto, rubro visible, 2 fuentes, feed propio
 // 🧠 CEREBRO-CM (3/11, SIN PUSH): Posty piensa como los mejores CMs —
 // biblioteca de formatos, tema semanal, números reales, gusto durable,
@@ -1396,7 +1401,7 @@ async function classifyWithVision(signals, photoUrls, lang, photoShortcodes) {
 // recolectó (web + feed + formulario). Determinístico, USD 0. El digest
 // viaja en el payload de la prueba y en trial_cache: es el fundamento
 // que la conversión siembra en la cuenta.
-function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding, draft }) {
+function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding, draft, comments, offerSheet, feedMap }) {
   try {
     const _trialDigestBuilt = clientDigest.buildFromParts({
       business,
@@ -1418,12 +1423,27 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       // (LOTE PERSONALIZACIÓN · ítem 3) Las palabras del dueño (respuestas
       // de la prueba) también alimentan los marcadores de voz.
       ownerWords: onboarding ? [onboarding.producto_estrella, onboarding.diferencial, onboarding.audiencia].filter((x) => x) : [],
+      // (M3 FICHA-OFERTA) La ficha del estudio viaja en su espacio de
+      // nombres propio dentro del fundamento (digest.offerSheet).
+      offerSheet: offerSheet || null,
     });
     if (_trialDigestBuilt && onboarding) _trialDigestBuilt.onboarding = onboarding;
+    // (ESTUDIO-PROFUNDO M1 · COMENTARIOS) El estudio de comentarios vive
+    // en su propio espacio de nombres (fundamento.comments): FAQs, ganchos
+    // en palabras exactas y quejas, cada uno con procedencia. No reescribe
+    // nada del fundamento existente; en la prueba invitada es la rama
+    // honesta (sin token: no_ig_connected) y se completa al conectar IG.
+    if (_trialDigestBuilt && comments) _trialDigestBuilt.comments = comments;
     // (DRAFT-ONBOARDING · 4/11) El gusto del draft queda guardado en el
     // fundamento: la semana de la prueba lo consume en el spec y la
     // cuenta lo hereda al registrarse (seedFromTrialDigest).
     if (_trialDigestBuilt && draft) _trialDigestBuilt.draft_gusto = draft;
+    // (ESTUDIO-PROFUNDO · mejora 4 MAPA DEL FEED) El mapa vive en el
+    // fundamento con su propio espacio de nombres (fundamento.feedMap):
+    // viaja al trial_cache y la cuenta lo hereda al registrarse
+    // (seedFromTrialDigest → saveDigest, que no poda campos nuevos).
+    // Sin mapa, nada cambia.
+    if (_trialDigestBuilt && feedMap && studyFeedMap.isFeedMap(feedMap)) _trialDigestBuilt.feedMap = feedMap;
     return _trialDigestBuilt;
   } catch (e) { console.error('[digest] build trial:', e.message); return null; }
 }
@@ -5226,6 +5246,40 @@ app.post('/api/fundamento/espejo/corregir', requireAuth, express.json(), (req, r
   d.espejo_aprobado = 0; // lo corregido vuelve al espejo: hay que aprobar de nuevo
   flGuardar(uid, d);
   res.json({ ok: true, productos: flProductos(d), vetos: fundamentoLiteral.normalizarVetos(d.vetos), espejo_aprobado: false });
+});
+// (ESTUDIO-PROFUNDO · M6 RE-ESTUDIO SEMANAL) Disparador manual + superficie
+// «qué cambió». El disparador semanal es el digest-refresh de los lunes
+// 06:30 (refreshDigestsSweep, sin cron nuevo); estos endpoints son el
+// camino bajo demanda (el cliente o el admin lo corre cuando quiere) y
+// la lectura de la última corrida para la tarjeta de la carta semanal.
+// GET /api/estudio/ultimo-cambio no inventa nada: sin corrida, run null.
+app.post('/api/estudio/reestudio', requireAuth, express.json(), async (req, res) => {
+  try {
+    const r = await studyRestudy.runRestudyForUser(db, req.session.userId, {});
+    if (!r.ok) return res.json({ ok: false, error: r.error || 'fuentes_no_leidas', fuentes_no_leidas: r.fuentes_no_leidas || [], cambios: [], conflictos: r.conflictos || [] });
+    res.json({ ok: true, cambios: r.cambios || [], conflictos: r.conflictos || [], run: r.run || null });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'No pudimos re-estudiar tu negocio ahora. Probá de nuevo en unos minutos.' });
+  }
+});
+app.get('/api/estudio/ultimo-cambio', requireAuth, (req, res) => {
+  try {
+    const d = clientDigest.getStoredDigest(db, req.session.userId);
+    const runs = (d && d.studyHistory && Array.isArray(d.studyHistory.runs)) ? d.studyHistory.runs : [];
+    const run = runs.length ? runs[runs.length - 1] : null;
+    res.json({ ok: true, run, hasHistory: runs.length > 0, pendientes: (d && d.studyHistory && d.studyHistory.pendientes) || 0 });
+  } catch (e) {
+    res.json({ ok: true, run: null, hasHistory: false, pendientes: 0 });
+  }
+});
+app.post('/api/estudio/conflicto/resolver', requireAuth, express.json(), (req, res) => {
+  const r = studyRestudy.resolveConflict(db, req.session.userId, {
+    tipo: String((req.body && req.body.tipo) || ''),
+    nombre: String((req.body && req.body.nombre) || ''),
+    decision: String((req.body && req.body.decision) || ''),
+  });
+  if (!r.ok) return res.status(400).json({ ok: false, error: 'No encontramos ese conflicto pendiente' });
+  res.json({ ok: true, decision: r.decision });
 });
 // (FUNDAMENTO-LITERAL · pieza 3) Productos literales de un link público:
 // primero los servicios que trialWebContext ya extrae; si no hay, se
@@ -10382,6 +10436,17 @@ function ideasInputFor(uid, weekKey) {
       sabeSiempreTxt += `\nESTA SEMANA EL CLIENTE ELIGIÓ VENDER (pregunta semanal, su palabra manda): ${semanaElegida.productos.join(' · ')}. La semana se arma sobre estos productos.`;
     }
   } catch (e) {}
+  // (ESTUDIO-PROFUNDO · mejora 4 MAPA DEL FEED) Los huecos de su grilla
+  // (fundamento.feedMap, con procedencia) viajan en el mismo bloque de
+  // texto que el prompt de ideas ya interpola tal cual: la IA propone
+  // ideas que tapen los huecos en vez de repetir el formato dominante.
+  // Sin mapa o sin huecos, vacío: la semana se arma como hoy.
+  try {
+    const dgM = clientDigest.getDigest(db, uid);
+    const fmM = studyFeedMap.feedMapFromDigest(dgM);
+    const briefM = studyFeedMap.feedMapBriefLines(fmM, profile.lang === 'en' ? 'en' : 'es');
+    if (briefM) sabeSiempreTxt += (sabeSiempreTxt ? '\n' : '') + briefM;
+  } catch (e) {}
   const ideasInput = levelBoosted(uid, 'ideas', {
     business: profile.business_name,
     ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
@@ -14906,6 +14971,24 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         }
       }
     } catch (e) { console.error(`[pipeline:${tag}] gusto del draft falló:`, e.message); }
+    // (ESTUDIO-PROFUNDO · mejora 4 MAPA DEL FEED) El plan de la semana
+    // USA el mapa (fundamento.feedMap): si la grilla del cliente tiene
+    // huecos (sin caras, sin video, sin carrusel, todo producto), el pool
+    // se reordena para que la ventana traiga ideas que los tapen, con
+    // canje ventana/buffer — mismo patrón que el rebalance de intención.
+    // Fail-open: sin mapa, sin huecos o sin idea que tape, el pool queda
+    // intacto y la semana sale como hoy.
+    try {
+      const dgM = clientDigest.getDigest(db, uid);
+      const fmM = studyFeedMap.feedMapFromDigest(dgM);
+      if (fmM && fmM.gaps && fmM.gaps.length) {
+        const resM = studyFeedMap.applyFeedMapToPool(pool, fmM, deficit);
+        if (resM.applied) {
+          pool.splice(0, pool.length, ...resM.pool);
+          console.log(`[pipeline:${tag}] usuario ${uid}: mapa del feed — ${resM.moves.length} canjes para tapar huecos (${resM.gapsCovered.join(', ')})`);
+        }
+      }
+    } catch (e) { console.error(`[pipeline:${tag}] mapa del feed falló:`, e.message); }
     const picks = pool.slice(0, deficit + 2);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
     // (SABE-SIEMPRE · ítem 4) La secuencia de formatos (tipos, en orden)
@@ -28140,6 +28223,39 @@ function parseTrialStyle(v) {
       }
       if (Object.keys(fm).length) out.firma = fm;
     }
+    // (ESTUDIO-PROFUNDO M2 · RANKEO PROPIO) Top 3 por tasa de respuesta
+    // contra el promedio propio (de study-ranking.js, vía trialStyleProfile):
+    // validación estricta — sin tasa y vs_promedio numéricos no entra
+    // nada; lo roto se descarta, nunca se inventa ni se guarda tal cual.
+    if (Array.isArray(s.top_posts)) {
+      const tp = s.top_posts.slice(0, 3).filter((b) => b && typeof b === 'object' && typeof b.shortcode === 'string' && b.shortcode.length > 0 && typeof b.tasa === 'number' && Number.isFinite(b.tasa) && typeof b.vs_promedio === 'number' && Number.isFinite(b.vs_promedio)).map((b) => ({
+        shortcode: b.shortcode.slice(0, 40),
+        likes: (typeof b.likes === 'number' && Number.isFinite(b.likes)) ? b.likes : null,
+        comments: (typeof b.comments === 'number' && Number.isFinite(b.comments)) ? b.comments : null,
+        tasa: b.tasa, vs_promedio: b.vs_promedio,
+        formato: typeof b.formato === 'string' ? b.formato.slice(0, 20) : '',
+        gancho: typeof b.gancho === 'string' ? b.gancho.slice(0, 80) : '',
+        gancho_es_pregunta: b.gancho_es_pregunta === true,
+        tema: typeof b.tema === 'string' ? b.tema.slice(0, 40) : '',
+        tema_palabras: Array.isArray(b.tema_palabras) ? b.tema_palabras.filter((x) => typeof x === 'string').slice(0, 6) : [],
+        hora: (typeof b.hora === 'number' && Number.isFinite(b.hora)) ? b.hora : null,
+        franja: typeof b.franja === 'string' ? b.franja.slice(0, 20) : '',
+        taken_at: (typeof b.taken_at === 'number' && Number.isFinite(b.taken_at)) ? b.taken_at : null,
+        caption_head: typeof b.caption_head === 'string' ? b.caption_head.slice(0, 80) : '',
+        procedencia: 'tu feed',
+      }));
+      if (tp.length) out.top_posts = tp;
+    }
+    if (s.ranking && typeof s.ranking === 'object' && !Array.isArray(s.ranking) && typeof s.ranking.calculable === 'boolean') {
+      const rk = { calculable: s.ranking.calculable };
+      if (typeof s.ranking.seguidores === 'number' && Number.isFinite(s.ranking.seguidores)) rk.seguidores = s.ranking.seguidores;
+      if (typeof s.ranking.promedio_tasa === 'number' && Number.isFinite(s.ranking.promedio_tasa)) rk.promedio_tasa = s.ranking.promedio_tasa;
+      if (typeof s.ranking.n_posts === 'number' && Number.isFinite(s.ranking.n_posts)) rk.n_posts = s.ranking.n_posts;
+      if (typeof s.ranking.n_medibles === 'number' && Number.isFinite(s.ranking.n_medibles)) rk.n_medibles = s.ranking.n_medibles;
+      if (typeof s.ranking.motivo_no_calculable === 'string') rk.motivo_no_calculable = s.ranking.motivo_no_calculable.slice(0, 40);
+      if (typeof s.ranking.nota === 'string') rk.nota = s.ranking.nota.slice(0, 240);
+      out.ranking = rk;
+    }
     return Object.keys(out).length ? out : null;
   } catch (e) { return null; }
 }
@@ -28164,7 +28280,26 @@ function styleGoalLines(style, lang) {
   // (LOTE ESTILO-PROPIO · 7/11) La firma, con conteos y procedencia:
   // solo lo observado; sin dominante, cero líneas.
   if (style.firma) lines.push(...feedAudit.firmaGoalLines(style.firma, lang));
-  return lines;
+  // (ESTUDIO-PROFUNDO M2 · RANKEO PROPIO) Top 3 por tasa de respuesta
+  // contra su propio promedio: los temas refuerzan productos con
+  // procedencia «tu feed» (garantía #6 de rubro-garantias.js). Sin top 3
+  // no se inventa ninguno; si la tasa no es calculable, el fundamento
+  // documenta el motivo en vez de inventar una tasa.
+  if (style.top_posts && style.top_posts.length) {
+    const fmt = (f) => en ? ({ video: 'reel', imagen: 'image', carrusel: 'carousel' }[f] || 'post') : (f || 'posteo');
+    const fr = (f) => en ? ({ madrugada: 'overnight', 'mañana': 'morning', tarde: 'afternoon', noche: 'evening' }[f] || '') : (f || '');
+    const vs = (x) => { const v = Number(x); if (!Number.isFinite(v)) return ''; return '×' + (en ? v.toFixed(1) : v.toFixed(1).replace('.', ',')); };
+    const bits = style.top_posts.slice(0, 3).map((t, i) => {
+      const tema = t.tema || (t.tema_palabras && t.tema_palabras[0]) || '';
+      if (!tema) return '';
+      const hora = (typeof t.hora === 'number') ? (t.hora + 'h') : '';
+      const det = [fmt(t.formato), hora].filter(Boolean).join(' ');
+      return (i + 1) + ') «' + tema + '»' + (t.vs_promedio != null ? ' ' + vs(t.vs_promedio) : '') + (det ? ' (' + det + ')' : '');
+    }).filter(Boolean);
+    if (bits.length) lines.push(en ? ('What got the most response in your feed (vs their own average): ' + bits.join(' · ') + ' — make more of that.') : ('Lo que más respondió en tu feed (vs tu propio promedio): ' + bits.join(' · ') + ' — hacé más de eso.'));
+  } else if (style.ranking && style.ranking.calculable === false) {
+    lines.push(en ? ('Response rate: not calculable — no follower count was read, so no rate was invented (' + (style.ranking.motivo_no_calculable || 'no data') + ').') : ('Tasa de respuesta: no calculable — sin dato de seguidores, no se inventa ninguna tasa (' + (style.ranking.motivo_no_calculable || 'sin datos') + ').'));
+  }  return lines;
 }
 // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Encuadre en palabras
 // simples según el estilo real de la pieza (código del sistema de estilos).
@@ -28367,6 +28502,35 @@ function trialHoneypotHit(fields) {
   return !!(fields && String(fields.hp_empresa || '').trim());
 }
 
+// (ESTUDIO-PROFUNDO · M5 COMPETENCIA) Estudio de la competencia para el
+// momento del estudio de la prueba: 3-5 cuentas del mismo rubro y misma
+// ciudad, con tipos de posteo y temas; el hueco queda en
+// trialDigest.competitors (ver study-competitors.js: esquema y contrato
+// para el lote semanal de tendencias). Corre con carrera de 6 s y nunca
+// lanza ni frena la prueba; sin rubro o sin ciudad, rama honesta.
+async function trialCompetitorsStudy({ trialDigest, rubro, ig, competitorsField, bio, captions, posts, peers }) {
+  try {
+    if (!trialDigest) return null;
+    const block = await Promise.race([
+      studyCompetitorsMod.studyCompetitors({
+        rubro: rubro || '',
+        ciudad: trialDigest.ciudad || '',
+        clientHandle: ig || '',
+        competitorsField: competitorsField || '',
+        clientBio: bio || '',
+        clientCaptions: captions || [],
+        clientPosts: posts || [],
+        clientTopics: trialDigest.temas_feed || [],
+        preFetchedPeers: peers || [],
+        fetchAuditData: (h) => feedAudit.fetchAuditData(h),
+      }),
+      new Promise((r) => setTimeout(() => r(null), 6000)),
+    ]);
+    if (block) studyCompetitorsMod.attachCompetitorsToDigest(trialDigest, block);
+    return block;
+  } catch (e) { return null; }
+}
+
 // (v323 · pieza 19) SU COMPETENCIA EN UNA LÍNEA: datos para UNA línea de
 // contraste REAL arriba de los resultados — cadencia propia vs la de los
 // pares LEÍDOS de su zona/rubro (los que el análisis ya leyó). Sin pares
@@ -28553,11 +28717,13 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // (v212) Web del negocio (1/2): nombre si el form no lo trajo y
   // descripción/servicios al goal. Carrera acotada: la web nunca frena.
   let webData = null;
+  let trialOfferSheet = null; // (M3 FICHA-OFERTA) ficha del estudio (web + catálogo + correcciones del cliente)
   if (webRaw) {
     webData = await Promise.race([webCtxPromise, new Promise((r) => setTimeout(() => r(null), 9000))]).catch(() => null);
     if (webData) {
       if (!business && webData.name) business = webData.name;
-      const wl = trialWebGoalLines(webData, webDescEdited);
+      trialOfferSheet = trialOfferBuildSheet({ webData, key: trialOfferKey({ ig, web: webRaw }) });
+      const wl = trialWebGoalLines(webData, webDescEdited, trialOfferSheet);
       if (wl.length) richGoal = [richGoal, ...wl].filter(Boolean).join('\n');
     }
   }
@@ -28572,6 +28738,13 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   if (draftLines.length) richGoal = [richGoal, ...draftLines].filter(Boolean).join('\n');
   const espLines = fundamentoLiteral.espejoGoalLines(fields, lang);
   if (espLines.length) richGoal = [richGoal, ...espLines].filter(Boolean).join('\n');
+  // (ESTUDIO-PROFUNDO M1 · COMENTARIOS) Las palabras exactas de los
+  // clientes van al goal de generación (ganchos, problema primero). En la
+  // prueba invitada no hay token y las líneas son [] (nada inventado); el
+  // estudio viaja igual en el digest (trialComments, abajo).
+  const trialComments = studyComments.studyForTrial();
+  const cmLines = studyComments.commentsGoalLines(trialComments, lang);
+  if (cmLines.length) richGoal = [richGoal, ...cmLines].filter(Boolean).join('\n');
   if (!business) return res.status(400).json({ error: lang === 'en' ? 'Tell us your business name' : 'Contanos el nombre de tu negocio' });
   if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: lang === 'en' ? 'Invalid industry' : 'Rubro inválido' });
   if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: lang === 'en' ? 'Invalid country' : 'País inválido' });
@@ -28695,6 +28868,11 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       const photoEntries = await raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 7000);
       deep = { catalog, photoEntries };
     }
+    // (M3 FICHA-OFERTA) La ficha se completa con el catálogo profundo
+    // (precios por ítem) y con las correcciones guardadas del cliente.
+    // Nace con @ o web aunque la web no se haya podido leer: el estudio
+    // corrió (o el cliente ya corrigió) y la puerta tiene que actuar.
+    trialOfferSheet = trialOfferBuildSheet({ webData, deep, igHandle: ig, key: trialOfferKey({ ig, web: webRaw }) });
     // (v235) RUBRO ANTES DE GENERAR: confirmación del front (la pregunta
     // de /prueba viaja como fields) o voto multi-señal con las fuentes
     // de esta ruta. La categoría resuelta gobierna spec, digest e ideas.
@@ -28702,7 +28880,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     const effCategory = rubroRes.category;
     // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
-    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft });
+    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialComments, offerSheet: trialOfferSheet });
     // (rubro-literal) PUERTA FAIL-CLOSED: sin producto evidenciado no hay
     // semana. 'todo' sin servicios, sin catálogo y sin detectados = el
     // caso del primo (Q1 vacía): 400 con falta_producto para que el front
@@ -28739,11 +28917,24 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
           : analysisEngine.analyzeExisting({ profile: dataJson.profile, posts: dataJson.posts, ctx: { postsPerWeek: 7, plan: 'trial', peers: peersJ, source: 'instagram', lang } });
         trialCompetition = trialCompetitionLine(rawAJ);
         trialAnalysisJson = analysisEngine.gateForPlan(rawAJ, 'trial');
+        // (ESTUDIO-PROFUNDO · M5) Competencia del estudio (reutiliza los
+        // pares ya leídos: peersJ, sin re-fetch). trialDigest.competitors.
+        await trialCompetitorsStudy({ trialDigest, rubro: (rubroRes && rubroRes.rubroId && rubroRes.rubroId.rubro) || effCategory, ig, competitorsField: competitors, bio: (dataJson.profile && dataJson.profile.bio) || '', captions: (dataJson.posts || []).map((p) => String((p && p.caption) || '')).filter(Boolean), posts: dataJson.posts || [], peers: peersJ });
       } else if (!ig) {
         trialAnalysisJson = analysisEngine.gateForPlan(analysisEngine.analyzeColdStart({
           business: { name: business, category: effCategory, city: (trialDigest && trialDigest.ciudad) || '', ig_username: '' },
           digest: trialDigest, peers: [], reviews: null, ctx: { postsPerWeek: 7, plan: 'trial', lang },
         }), 'trial');
+        // (ESTUDIO-PROFUNDO · M5) Sin @ no hay pares leídos: la competencia
+        // se estudia igual desde el campo competitors + Places (si hay key).
+        await trialCompetitorsStudy({ trialDigest, rubro: (rubroRes && rubroRes.rubroId && rubroRes.rubroId.rubro) || effCategory, ig, competitorsField: competitors, bio: '', captions: [], posts: [], peers: [] });
+      } else {
+        // (ESTUDIO-PROFUNDO · M5 · puente del coordinador) @ presente pero
+        // ilegible (sin dataJson): sin pares leídos, la competencia se
+        // estudia igual desde el campo competitors + Places (si hay key);
+        // sin ciudad/rubro, la rama honesta (sin_ciudad/sin_rubro), nunca
+        // un null silencioso en el fundamento.
+        await trialCompetitorsStudy({ trialDigest, rubro: (rubroRes && rubroRes.rubroId && rubroRes.rubroId.rubro) || effCategory, ig, competitorsField: competitors, bio: '', captions: [], posts: [], peers: [] });
       }
       if (trialAnalysisJson && Array.isArray(posts)) {
         // (LOTE PRUEBA-PRODUCTO-REAL) «Porque muestra X» exige que la
@@ -28757,6 +28948,26 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
           const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, trialAnalysisJson, trialDigest, { sinMuestra: !(sp && sp.photo_product) });
           if (w) p.why = w;
         });
+      }
+      // (ESTUDIO-PROFUNDO · mejora 4 MAPA DEL FEED) Grilla 9-12 + huecos
+      // desde los MISMOS datos crudos del @ (cero fetches nuevos salvo la
+      // paleta por posteo, con carrera acotada). El spec de ESTA semana ya
+      // se generó antes de que llegara el @, así que el mapa no lo puede
+      // mover acá: viaja en el fundamento (trialDigest.feedMap → trial_cache
+      // → la cuenta al registrarse) y en el payload, y la semana de la
+      // cuenta lo usa para tapar los huecos. Nunca frena la prueba.
+      if (dataJson && dataJson.ok && Array.isArray(dataJson.posts) && trialDigest) {
+        try {
+          const huesM = await Promise.race([
+            feedAudit.analyzePalettePerPost(dataJson.posts),
+            new Promise((r) => setTimeout(() => r({}), 2000)),
+          ]).catch(() => ({}));
+          const fmG = studyFeedMap.buildFeedMap(dataJson.posts, {
+            postsCountTotal: (dataJson.profile && dataJson.profile.posts_count) || null,
+            huesByShortcode: huesM || {},
+          });
+          if (studyFeedMap.isFeedMap(fmG)) trialDigest.feedMap = fmG;
+        } catch (e) { /* sin mapa: la prueba sale como hoy */ }
       }
     } catch (e) { /* el análisis nunca frena la prueba */ }
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
@@ -28787,6 +28998,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       rubro_check: rubroRes.rubroCheck, // (v235) la duda queda registrada en el payload
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
+      feedMap: (trialDigest && trialDigest.feedMap) || null, // (ESTUDIO-PROFUNDO · mejora 4) mapa del feed, también en el payload
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
@@ -28933,8 +29145,14 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
   // observado del feed (ritmo, captions, hashtags, mejores posteos, paleta):
   // determinístico, best-effort, nunca frena el prefill.
   const factsIg = trialIgFacts(bio, captions, (prof && prof.category) || '');
+  // (ESTUDIO-PROFUNDO M2 · RANKEO PROPIO) fetchIgProfile NO trae
+  // seguidores (solo colors/pic/name): la tasa de respuesta necesita el
+  // followers_count del MISMO embed ya bajado (cero fetches nuevos).
+  // Sin él, el rankeo quedaría siempre no calculable.
+  let embedFollowers = null;
+  try { embedFollowers = feedAudit.followersFromEmbedHtml(html); } catch (e) { embedFollowers = null; }
   let styleIg = null;
-  try { styleIg = await feedAudit.trialStyleProfile(embedPosts, { bio: bio || '', followers: (prof && prof.followers) || null, posts_count: igStage.posts_count }, { tone: factsIg.tone, lang: prefillLang }); } catch (e) { styleIg = null; }
+try { styleIg = await feedAudit.trialStyleProfile(embedPosts, { bio: bio || '', followers: (prof && prof.followers) || embedFollowers || null, posts_count: igStage.posts_count }, { tone: factsIg.tone, lang: prefillLang }); } catch (e) { styleIg = null; }
   // (LOTE ESTILO-PROPIO · 7/11) Firma de estilo del feed: qué tipo de
   // posteo hace, qué muestra y cómo lo muestra — con conteos y
   // procedencia. La visión corre en UNA llamada, best-effort; sin ella,
@@ -28959,6 +29177,13 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
     facts: factsIg,
     style: styleIg,
     ig_stage: igStage,
+    // (M3 FICHA-OFERTA) Ficha de oferta leída del IG (bio + captions),
+    // con las correcciones guardadas del cliente ya fusionadas.
+    offer_sheet: (() => { try {
+      const s = studyOffer.extractOfferSheet({ igText: [bio || '', ...captions].filter(Boolean).join('\n'), igHandle: ig, now: new Date() });
+      const saved = trialOfferSavedSheet(trialOfferKey({ ig }));
+      return saved ? studyOffer.mergeOfferSheet(s, saved, new Date()) : s;
+    } catch (e) { return null; } })(),
   });
 });
 
@@ -29034,7 +29259,7 @@ function trialWebInfo(webData, photosUsed) {
 // Líneas de goal que aporta la web (descripción editada por el visitante si
 // la mandó en web_desc; si no, la extraída) — se suman al richGoal para que
 // temas, ideas y captions hablen de SU negocio y no solo de su rubro.
-function trialWebGoalLines(webData, editedDesc) {
+function trialWebGoalLines(webData, editedDesc, offerSheet) {
   if (!webData) return [];
   const desc = String(editedDesc || '').replace(/<[^>]*>/g, '').trim().slice(0, 400) || webData.description || '';
   const lines = [];
@@ -29048,9 +29273,113 @@ function trialWebGoalLines(webData, editedDesc) {
   if (f.takes_reservations) lines.push('Toma reservas/turnos');
   if (f.sells_online) lines.push('Vende online');
   if (f.has_prices) lines.push('La web muestra precios');
-  if (f.has_promo) lines.push('La web muestra una promo vigente');
+  // (M3 FICHA-OFERTA) La línea de promo al goal solo sale con oferta
+  // CON fecha vigente y con su fecha: una promo sin fecha no alimenta
+  // ideas ni posteos (clase del 531). Sin ficha, la línea vieja no se
+  // emite (mejor silencio que un tease sin términos).
+  if (offerSheet) {
+    const vig = studyOffer.currentOffer(offerSheet, new Date());
+    if (vig) lines.push('La web muestra una promo vigente hasta el ' + String(vig.ends_at || '') + ' (' + String(vig.titulo || '').slice(0, 80) + ')');
+  }
   return lines;
 }
+// ---------- M3 FICHA-OFERTA: ficha del estudio + correcciones del cliente ----------
+// Correcciones del cliente (palabra del dueño) en su propia tabla: la
+// semana cacheada (72h) no es el lugar (su payload es un snapshot y se
+// regenera). La generación fusiona lo guardado acá con la extracción
+// fresca (mergeOfferSheet): el re-estudio nunca pisa lo corregido a mano.
+try { db.exec('CREATE TABLE IF NOT EXISTS trial_offer_corrections (key TEXT PRIMARY KEY, payload TEXT, updated_at INTEGER)'); } catch (e) {}
+function trialOfferKey({ ig, web }) {
+  try {
+    if (ig) return String(ig).trim().replace(/^@/, '').toLowerCase().slice(0, 40);
+    if (web && trialLock) return 'web:' + trialLock.normalizeDomain(String(web || ''));
+  } catch (e) {}
+  return null;
+}
+function trialOfferSavedSheet(key) {
+  try {
+    if (!key) return null;
+    const row = db.prepare('SELECT payload FROM trial_offer_corrections WHERE key = ?').get(key);
+    if (!row) return null;
+    const p = JSON.parse(row.payload);
+    return (p && p.v === 1) ? p : null;
+  } catch (e) { return null; }
+}
+function trialOfferPatchCache(key, sheet) {
+  // La semana cacheada para esta identidad también lleva la ficha
+  // corregida: un cache-hit sirve la corrección sin regenerar.
+  try {
+    if (!key || !sheet) return;
+    const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(key);
+    if (!row) return;
+    const out = JSON.parse(row.payload);
+    if (!out || !out.digest) return;
+    out.digest.offerSheet = sheet;
+    db.prepare('UPDATE trial_cache SET payload = ? WHERE ig = ?').run(JSON.stringify(out), key);
+  } catch (e) {}
+}
+function trialOfferBuildSheet({ webData, deep, igText, igHandle, key }) {
+  // Sin fuente (ni web, ni @, ni texto de IG): el estudio no corrió y
+  // no hay ficha — el gate no actúa (legacy). Con @ o web, la ficha
+  // nace aunque la lectura venga vacía: el estudio corrió y no encontró
+  // oferta, y eso también es un dato (rama honesta).
+  if (!webData && !igText && !igHandle && !key) return null;
+  try {
+    const items = [...((webData && webData.services) || []), ...((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre)];
+    const catLines = ((deep && deep.catalog && deep.catalog.items) || []).map((x) => String(x.nombre || '') + (x.precio ? ' ' + x.precio : '')).join('\n');
+    const webText = [webData && webData.description, (webData && webData.services || []).join('\n'), catLines].filter(Boolean).join('\n');
+    let sheet = studyOffer.extractOfferSheet({
+      webText, igText: igText || '', webUrl: webData && webData.url, igHandle: igHandle || '',
+      items, facts: (webData && webData.facts) || {}, address: (webData && webData.address) || '', now: new Date(),
+    });
+    if (key) {
+      const saved = trialOfferSavedSheet(key);
+      if (saved) sheet = studyOffer.mergeOfferSheet(sheet, saved, new Date());
+    }
+    return sheet;
+  } catch (e) { return null; }
+}
+function trialOfferSaveCorrection(key, correction) {
+  try {
+    let saved = trialOfferSavedSheet(key);
+    if (!saved) {
+      // Semilla: la ficha de la semana cacheada para esta identidad, si existe.
+      try {
+        const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(key);
+        if (row) { const p = JSON.parse(row.payload); if (p && p.digest && p.digest.offerSheet) saved = p.digest.offerSheet; }
+      } catch (e) {}
+    }
+    const base = saved || studyOffer.emptyOfferSheet(new Date());
+    const r = studyOffer.applyClientCorrection(base, correction, new Date());
+    if (!r.ok) return { ok: false, error: r.error };
+    db.prepare(`INSERT INTO trial_offer_corrections (key, payload, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET payload=excluded.payload, updated_at=excluded.updated_at`).run(key, JSON.stringify(r.sheet), Date.now());
+    trialOfferPatchCache(key, r.sheet);
+    return { ok: true, sheet: r.sheet };
+  } catch (e) { return { ok: false, error: 'No se pudo guardar la corrección' }; }
+}
+// Corrección de la ficha con un toque (visitante anónimo de la prueba):
+// { ig | web, correccion: { campo, titulo?, valor?, ends_at? } }.
+// Rate limit del prefill (30/hora/IP): mismo espíritu, sin fricción.
+app.post('/api/trial/offer-correct', express.json({ limit: '16kb' }), async (req, res) => {
+  const ip = demo.clientIp(req);
+  if (!trialPrefillAllowed(ip).ok) return res.status(429).json({ ok: false, error: 'Demasiados intentos, probá en un rato' });
+  const body = req.body || {};
+  const ig = String(body.ig || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40);
+  const web = String(body.web || '').trim().slice(0, 300);
+  const key = trialOfferKey({ ig, web });
+  if (!key) return res.status(400).json({ ok: false, error: 'Falta el @ o la web de tu prueba' });
+  const c = body.correccion || {};
+  const clean = {
+    campo: String(c.campo || '').slice(0, 30),
+    titulo: String(c.titulo || c.producto || '').slice(0, 140),
+    valor: String(c.valor || '').slice(0, 140),
+    ends_at: String(c.ends_at || '').slice(0, 20),
+  };
+  const out = trialOfferSaveCorrection(key, clean);
+  if (!out.ok) return res.status(400).json({ ok: false, error: out.error || 'No se pudo guardar la corrección' });
+  return res.json({ ok: true, offer_sheet: out.sheet });
+});
 app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, res) => {
   const ip = demo.clientIp(req);
   if (!trialPrefillAllowed(ip).ok) return res.status(429).json({ ok: false, error: 'Demasiados intentos, probá en un rato' });
@@ -29115,6 +29444,11 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
     // audiencia y diferencial. La Q2 y las Q6/Q7 se adaptan a esto.
     facts: data.facts || null,
     address: data.address || '',
+    // (M3 FICHA-OFERTA) Ficha de oferta leída de la web, con las
+    // correcciones guardadas del cliente ya fusionadas.
+    offer_sheet: (() => { try {
+      return trialOfferBuildSheet({ webData: data, key: trialOfferKey({ web: data.url }) });
+    } catch (e) { return null; } })(),
   });
 });
 
@@ -29536,10 +29870,15 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // el perfil aportaron la suya (con @ manda lo visual del feed) y sus
     // fotos como material gateado (pasan el gate foto↔tema como todo).
     let webExtraPhotos = [];
+    let trialOfferSheetS = null; // (M3 FICHA-OFERTA)
     if (webRaw) {
       if (!webData) webData = await Promise.race([webCtxPromise, new Promise((r) => setTimeout(() => r(null), 9000))]).catch(() => null);
       if (webData) {
-        const wl = trialWebGoalLines(webData, webDescEdited);
+        trialOfferSheetS = trialOfferBuildSheet({
+          webData, igText: [bioText, ...((trialProfile && trialProfile.captions) || [])].filter(Boolean).join('\n'),
+          igHandle: ig, key: trialOfferKey({ ig, web: webRaw }),
+        });
+        const wl = trialWebGoalLines(webData, webDescEdited, trialOfferSheetS);
         if (wl.length) richGoal = [richGoal, ...wl].filter(Boolean).join('\n');
         if (!bioText && webData.description) bioText = webData.description;
         if (colorSource === 'rubro' && webData.palette && webData.palette[0]) {
@@ -29563,6 +29902,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     if (draftLinesS.length) richGoal = [richGoal, ...draftLinesS].filter(Boolean).join('\n');
     const espLinesS = fundamentoLiteral.espejoGoalLines(fields, lang);
     if (espLinesS.length) richGoal = [richGoal, ...espLinesS].filter(Boolean).join('\n');
+    // (ESTUDIO-PROFUNDO M1 · COMENTARIOS) Igual que en /api/trial/generate:
+    // palabras exactas de los clientes al goal; en la prueba invitada las
+    // líneas son [] y el estudio viaja en el digest (trialCommentsS).
+    const trialCommentsS = studyComments.studyForTrial();
+    const cmLinesS = studyComments.commentsGoalLines(trialCommentsS, lang);
+    if (cmLinesS.length) richGoal = [richGoal, ...cmLinesS].filter(Boolean).join('\n');
     // (v230) LECTURA PROFUNDA + (v229) FUNDAMENTO: el digest se compila
     // con TODO lo recolectado (feed real: bio + captions; web; formulario;
     // catálogo profundo, link de bio y mapa foto→producto con sus
@@ -29578,6 +29923,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       const photoEntries = webExtraPhotos.length ? await raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 6000) : null;
       deep = { catalog, bioLink, photoEntries };
     }
+    // (M3 FICHA-OFERTA) La ficha se completa con el catálogo profundo y,
+    // si no hubo web, nace del feed (bio + captions) con sus correcciones.
+    trialOfferSheetS = trialOfferBuildSheet({
+      webData, deep,
+      igText: [bioText, ...((trialProfile && trialProfile.captions) || [])].filter(Boolean).join('\n'),
+      igHandle: ig, key: trialOfferKey({ ig, web: webRaw }),
+    });
     // (v235) RUBRO ANTES DEL SPEC: la confirmación del front (pregunta o
     // select tocado a mano) manda; si no, el voto multi-señal con TODO lo
     // recolectado (feed real + web + formulario). Con duda: padre seguro
@@ -29590,10 +29942,37 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       lang,
     });
     const effCategory = rubroRes.category;
+    // (ESTUDIO-PROFUNDO · mejora 4 MAPA DEL FEED) Grilla 9-12 + huecos
+    // desde los datos crudos del @ que ya están en vuelo (trialData: cero
+    // fetches nuevos salvo la paleta por posteo, con carrera acotada).
+    // Acá el spec todavía NO se armó: las líneas del mapa entran al
+    // richGoal ANTES de buildDemoSpec, así que ESTA semana de la prueba
+    // ya tapa los huecos (el spec y las captions se derivan del goal).
+    // El mapa también viaja en el fundamento (trialDigest.feedMap →
+    // trial_cache → la cuenta) para las semanas siguientes. Best-effort:
+    // sin @ o sin datos, nada cambia y la prueba sale como hoy.
+    let trialFeedMap = null;
+    if (trialData && trialData.ok && Array.isArray(trialData.posts)) {
+      try {
+        const huesS = await Promise.race([
+          feedAudit.analyzePalettePerPost(trialData.posts),
+          new Promise((r) => setTimeout(() => r({}), 2000)),
+        ]).catch(() => ({}));
+        const fmS = studyFeedMap.buildFeedMap(trialData.posts, {
+          postsCountTotal: (trialData.profile && trialData.profile.posts_count) || null,
+          huesByShortcode: huesS || {},
+        });
+        if (studyFeedMap.isFeedMap(fmS)) {
+          trialFeedMap = fmS;
+          const goalLinesS = studyFeedMap.feedMapGoalLines(fmS, lang);
+          if (goalLinesS.length) richGoal = [richGoal, ...goalLinesS].filter(Boolean).join('\n');
+        }
+      } catch (e) { /* sin mapa: la prueba sale como hoy */ }
+    }
     const trialDigest = buildTrialDigest({
       business, category, webData,
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig, pic: trialProfile.pic || igPic || '' } : null,
-      formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft,
+      formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialCommentsS, offerSheet: trialOfferSheetS, feedMap: trialFeedMap,
     });
     // (rubro-literal) PUERTA FAIL-CLOSED, igual que en /api/trial/generate:
     // sin producto evidenciado no hay semana ni stream de piezas.
@@ -29650,10 +30029,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       });
       // (v209) Pieza LIMPIA (dosificación): el caption cierra con el CTA.
       // 🧠 (v232) Y el cierre es el de la INTENCIÓN DE VENTA del topic.
+      // (M3 FICHA-OFERTA) Los términos van ANTES del cierre, igual que en
+      // generateDemo: el caption gateado ya pasó y la fecha no se pierde.
       const cleanPiece = specPosts[i].text_mode === 'clean';
+      const baseCaptionS = demo.appendOfferTerms(r.caption, topics[r.topicIndex] || t, lang);
       const finalCaption = cleanPiece
-        ? demo.closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone, lang)
-        : r.caption;
+        ? demo.closeTrialCaption(baseCaptionS, topics[r.topicIndex] || t, tone, lang)
+        : baseCaptionS;
       prevCaps.push(finalCaption);
       return {
         caption: finalCaption,
@@ -30111,6 +30493,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       // CRUDO (el gate de prueba vacía los pares): solo números leídos.
       competitionLine = trialCompetitionLine(trialAnalysis);
       trialAnalysis = analysisEngine.gateForPlan(trialAnalysis, 'trial');
+      // (ESTUDIO-PROFUNDO · M5) Competencia del estudio (reutiliza los pares
+      // ya leídos: peers, sin re-fetch). trialDigest.competitors.
+      await trialCompetitorsStudy({ trialDigest, rubro: (rubroRes && rubroRes.rubroId && rubroRes.rubroId.rubro) || effCategory, ig, competitorsField: competitors, bio: (trialData && trialData.profile && trialData.profile.bio) || '', captions: ((trialData && trialData.posts) || []).map((p) => String((p && p.caption) || '')).filter(Boolean), posts: (trialData && trialData.posts) || [], peers });
       if (Array.isArray(posts)) {
         // (LOTE PRUEBA-PRODUCTO-REAL) «Porque muestra X» exige foto↔
         // producto real: posts[i] ↔ specPosts[i] (mismo orden). Sin
@@ -30133,6 +30518,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       rubro_check: rubroRes.rubroCheck, // (v235) la duda queda registrada
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
+      feedMap: (trialDigest && trialDigest.feedMap) || null, // (ESTUDIO-PROFUNDO · mejora 4) mapa del feed, también en el payload
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
@@ -31769,8 +32155,19 @@ app.post('/api/ig/mine-comments', requireAuth, async (req, res) => {
     const apiKey = (s.openai_key) || process.env.OPENAI_API_KEY || '';
     const r = await mineComments(s.ig_user_id, s.ig_access_token, apiKey);
     if (r.error) return res.status(400).json({ error: r.error });
+    // (ESTUDIO-PROFUNDO M1 · COMENTARIOS) Extracción determinística con
+    // procedencia sobre el MISMO bundle ya leído por mineComments (cero
+    // fetches extra a IG): vive en su espacio de nombres en el ADN y en
+    // el digest guardado, para que la generación use las palabras exactas
+    // de los clientes. Nunca rompe el minado si falla.
+    let commentsStudy = null;
+    try { commentsStudy = studyComments.extractFromBundle(r.bundle || { items: [] }); } catch (e) { commentsStudy = null; }
     const cur = readDna(uid);
-    writeDna(uid, { ...cur, ...buildDnaPatch(cur, r) });
+    writeDna(uid, { ...cur, ...buildDnaPatch(cur, r), ...(commentsStudy ? { comments: commentsStudy } : {}) });
+    try {
+      const dg = clientDigest.getStoredDigest(db, uid);
+      if (dg && commentsStudy) { dg.comments = commentsStudy; clientDigest.saveDigest(db, uid, dg); }
+    } catch (e) { /* el minado igual responde */ }
     // PP-PREGUNTAS-POSTEOS-SERVER: preguntas repetidas reales -> cola
     // de propuestas en la Bandeja (pendientes de un toque del dueño).
     // Nunca publica nada; si la cola falla, el minado igual responde.
@@ -31938,7 +32335,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v763';
+const BUILD_ID = '20261105-v764';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -32515,6 +32912,18 @@ async function refreshDigestsSweep() {
             }
           }
         } catch (e) { /* la reclasificación nunca frena el refresco */ }
+        // (ESTUDIO-PROFUNDO · M6 RE-ESTUDIO SEMANAL) El re-estudio se
+        // ancla al refresco semanal: diff guardado vs fresco, palabra
+        // del cliente protegida y corrida en digest.studyHistory. Sin
+        // cron nuevo: corre con el digest-refresh de los lunes 06:30
+        // (scheduler.js). rubroDecidido: el bloque de arriba ya decidió
+        // el rubro con sus salvaguardas — acá no se toca. Si el registro
+        // falla, el fundamento se guarda igual (el historial nunca frena
+        // el refresco).
+        try {
+          const rr = studyRestudy.recordRestudyRun(db, uid, stored, finalDigest, { sources: { web: !!webFresh, feed: !!feedFresh, catalog: !!parts.catalog }, rubroDecidido: true });
+          if (rr && rr.ok) summary.restudy = (summary.restudy || 0) + 1;
+        } catch (e) { console.error('[re-estudio] usuario ' + uid + ':', e.message); }
         clientDigest.saveDigest(db, uid, finalDigest);
         summary.saved++;
         // (LOTE PERSONALIZACIÓN · ítem 1) LOGO: si el digest tiene logo y

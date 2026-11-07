@@ -687,6 +687,15 @@ html{scroll-behavior:smooth}
 .phone-feed .day.feat .db{aspect-ratio:auto}
 /* (v323 · piece 21) Benefits block: one line per benefit, clean card. */
 .benefits-card{background:#fff;border:1.5px solid #E2EDF5;border-radius:20px;padding:22px;margin:16px auto 4px;max-width:560px;text-align:left}
+.offer-sheet-card{background:#fff;border:1.5px solid #E2EDF5;border-radius:20px;padding:22px;margin:16px auto 4px;max-width:560px;text-align:left}
+.offer-sheet-card h3{margin:0 0 8px;font-size:20px;color:#0A1E33}
+.os-row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;justify-content:space-between;padding:10px 0;border-top:1px solid #EDF3F8;font-size:15px;color:#0A1E33}
+.os-row:first-of-type{border-top:none}
+.os-row .os-tx{flex:1;min-width:0;line-height:1.45}
+.os-row .os-sub{display:block;font-size:13px;color:#47617A;margin-top:2px}
+.os-fix{flex:none;font-size:13px;font-weight:800;color:var(--cel);background:#EAF6FD;border:1.5px solid #BFE3F5;border-radius:10px;padding:7px 12px;cursor:pointer}
+.os-edit{flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.os-edit input{font-size:15px;padding:9px 10px;border:1.5px solid #BFE3F5;border-radius:10px;flex:1;min-width:140px;box-sizing:border-box;color:#0A1E33}
 .benefits-card h3{margin:0 0 14px;font-size:20px;color:#0A1E33}
 .benefit{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid #F0F6FB;font-size:15px;line-height:1.5;color:#33475C}
 .benefit:last-child{border-bottom:none}
@@ -1573,6 +1582,16 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
       </div>
       <!-- (LOTE PERSONALIZACIÓN · ítem 2) Picker de onda (mock v3): el MISMO
            producto en 3 tarjetas, 3 ángulos. Se llena por JS. -->
+      <!-- (M3 FICHA-OFERTA) The offer sheet with dates: what the study
+           read from your website and Instagram, to fix with one tap.
+           Only prices and promos WITH a date from this sheet reach your
+           posts. Filled by JS (renderOfferSheet). -->
+      <div class="offer-sheet-card" id="offerSheetCard" style="display:none">
+        <h3>Your offer, as I read it 📋</h3>
+        <p class="lede" style="margin:0 0 6px">This is what I found on your website and Instagram. If anything is wrong, fix it with one tap: your posts only use prices and promos with a date from here.</p>
+        <div id="offerSheetRows"></div>
+        <p class="tiny" id="offerSheetMsg" style="display:none;margin:8px 0 0;min-height:18px"></p>
+      </div>
       <div class="sec" id="ondaSec">
         <h3>Pick your week's vibe ✨</h3>
         <div class="onda-bubble">
@@ -3497,6 +3516,7 @@ function renderResults() {
   try { renderProvLine(); } catch (e) {}
   try { const fc = $('#founderCard'); if (fc) fc.style.display = 'block'; } catch (e) {}
   try { renderBenefits(); } catch (e) {}
+  try { renderOfferSheet(); } catch (e) {}
   try { renderGiftRow(); } catch (e) {}
   try { renderReelRow(); } catch (e) {}
   try { pzRenderSelectorPrueba(); } catch (e) {}
@@ -4036,6 +4056,116 @@ function renderProvLine() {
 // (piece 21) Benefits: the block's view is instrumented (it is THE
 // conversion piece; its effect gets measured in the funnel).
 let _benefitsSeen = false;
+// (M3 FICHA-OFERTA) The offer sheet with dates: what the study read
+// from your website and Instagram, to fix with one tap. Only prices and
+// promos WITH a date from this sheet reach your posts. A fix is the
+// owner's word: it is saved on the server (offer-correct) and the
+// re-study respects it.
+function offerSheetOf() {
+  try {
+    if (TRIAL && TRIAL.digest && TRIAL.digest.offerSheet) return TRIAL.digest.offerSheet;
+    if (typeof S !== 'undefined' && S && S.offerSheet) return S.offerSheet;
+  } catch (e) {}
+  return null;
+}
+function offerSheetDateFmt(iso) {
+  const p = String(iso || '').split('-');
+  if (p.length !== 3) return String(iso || '');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return months[Number(p[1]) - 1] + ' ' + Number(p[2]) + ', ' + p[0];
+}
+function renderOfferSheet() {
+  const card = $('#offerSheetCard');
+  if (!card) return;
+  const sh = offerSheetOf();
+  const rows = $('#offerSheetRows');
+  const msg = $('#offerSheetMsg');
+  if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
+  if (!sh) { card.style.display = 'none'; return; }
+  const prods = Array.isArray(sh.productos) ? sh.productos : [];
+  const promos = Array.isArray(sh.promos) ? sh.promos : [];
+  const hasAny = prods.length || promos.length || (sh.horarios && sh.horarios.texto) || (sh.ubicacion && sh.ubicacion.texto);
+  let html = '';
+  prods.forEach(function (p, i) {
+    html += '<div class="os-row"><div class="os-tx">🛍️ <b>' + esc(p.nombre || '') + '</b>' + (p.precio ? ' — ' + esc(p.precio) : '')
+      + '<span class="os-sub">Price read from ' + (p.fuente === 'dueno' ? 'your fix' : p.fuente === 'ig' ? 'your Instagram' : 'your website') + '</span></div>'
+      + '<button class="os-fix" data-os-campo="precio" data-os-titulo="' + esc(p.nombre || '') + '">Fix</button></div>';
+  });
+  promos.forEach(function (p, i) {
+    let st = '';
+    if (p.status === 'vigente') st = 'Valid until ' + offerSheetDateFmt(p.ends_at);
+    else if (p.status === 'vencida') st = '⌛ Expired on ' + offerSheetDateFmt(p.ends_at) + ' — it will not appear in your posts';
+    else st = '⚠️ No end date — it will not appear in your posts until you add a date';
+    html += '<div class="os-row"><div class="os-tx">🔥 <b>' + esc(p.titulo || '') + '</b>'
+      + '<span class="os-sub">' + esc(st) + ' · read from ' + (p.fuente === 'dueno' ? 'your fix' : p.fuente === 'ig' ? 'your Instagram' : 'your website') + '</span></div>'
+      + '<button class="os-fix" data-os-campo="promo_ends_at" data-os-titulo="' + esc(p.titulo || '') + '" data-os-fecha="' + esc(p.ends_at || '') + '">' + (p.status === 'vigente' ? 'Fix' : 'Add date') + '</button></div>';
+  });
+  if (sh.horarios && sh.horarios.texto) {
+    html += '<div class="os-row"><div class="os-tx">🕐 <b>Hours:</b> ' + esc(sh.horarios.texto)
+      + '</div><button class="os-fix" data-os-campo="horarios">Fix</button></div>';
+  }
+  if (sh.ubicacion && sh.ubicacion.texto) {
+    html += '<div class="os-row"><div class="os-tx">📍 <b>Location:</b> ' + esc(sh.ubicacion.texto)
+      + '</div><button class="os-fix" data-os-campo="ubicacion">Fix</button></div>';
+  }
+  if (!hasAny) {
+    html += '<div class="os-row"><div class="os-tx">I did not find prices or promos on your website or Instagram. Add your promo with one tap and your posts will use it with its date.</div>'
+      + '<button class="os-fix" data-os-campo="promo_nueva">Add promo</button></div>';
+  }
+  rows.innerHTML = html;
+  rows.querySelectorAll('.os-fix').forEach(function (b) {
+    b.addEventListener('click', function () { offerEditRow(b); });
+  });
+  card.style.display = 'block';
+}
+function offerEditRow(btn) {
+  const campo = btn.getAttribute('data-os-campo');
+  const titulo = btn.getAttribute('data-os-titulo') || '';
+  const row = btn.closest('.os-row');
+  if (!row) return;
+  const msg = $('#offerSheetMsg');
+  const close = function () { renderOfferSheet(); };
+  let editor = '<div class="os-edit">';
+  if (campo === 'promo_ends_at') {
+    editor += '<input type="date" id="osDate" value="' + esc(btn.getAttribute('data-os-fecha') || '') + '">';
+  } else if (campo === 'promo_nueva') {
+    editor += '<input type="text" id="osTitle" placeholder="Promo: 20% OFF everything" maxlength="140"><input type="date" id="osDate">';
+  } else {
+    editor += '<input type="text" id="osVal" placeholder="Type the correct detail" maxlength="140">';
+  }
+  editor += '<button class="os-fix" id="osSave">Save</button><button class="os-fix" id="osCancel" style="background:#fff">Cancel</button></div>';
+  row.insertAdjacentHTML('beforeend', editor);
+  btn.style.display = 'none';
+  row.querySelector('#osCancel').addEventListener('click', close);
+  row.querySelector('#osSave').addEventListener('click', async function () {
+    const corr = { campo: campo, titulo: titulo };
+    if (campo === 'promo_ends_at') {
+      corr.ends_at = (row.querySelector('#osDate') || {}).value || '';
+      if (!corr.ends_at) { if (msg) { msg.textContent = 'Pick an end date for the promo.'; msg.style.display = 'block'; } return; }
+    } else if (campo === 'promo_nueva') {
+      corr.valor = ((row.querySelector('#osTitle') || {}).value || '').trim();
+      corr.ends_at = (row.querySelector('#osDate') || {}).value || '';
+      if (!corr.valor) { if (msg) { msg.textContent = 'Type the promo title.'; msg.style.display = 'block'; } return; }
+    } else {
+      corr.valor = ((row.querySelector('#osVal') || {}).value || '').trim();
+      if (!corr.valor) { if (msg) { msg.textContent = 'Type the correct detail.'; msg.style.display = 'block'; } return; }
+    }
+    try {
+      const body = { ig: (TRIAL && TRIAL.ig) || (typeof S !== 'undefined' && S.ig) || '', web: (TRIAL && TRIAL.web_info && TRIAL.web_info.url) || (typeof S !== 'undefined' && S.web) || '', correccion: corr };
+      const r = await fetch('/api/trial/offer-correct' + TEST_KEY_QS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json().catch(function () { return {}; });
+      if (!r.ok || !j.ok) throw new Error((j && j.error) || 'Could not save');
+      if (TRIAL && TRIAL.digest) TRIAL.digest.offerSheet = j.offer_sheet;
+      if (typeof S !== 'undefined' && S) S.offerSheet = j.offer_sheet;
+      renderOfferSheet();
+      const m2 = $('#offerSheetMsg');
+      if (m2) { m2.textContent = 'Saved ✓ — your week uses the corrected detail.'; m2.style.display = 'block'; }
+    } catch (e) {
+      if (msg) { msg.textContent = 'Could not save, try again.'; msg.style.display = 'block'; }
+      btn.style.display = '';
+    }
+  });
+}
 function renderBenefits() {
   const card = $('#benefitsCard');
   if (!card) return;
@@ -7120,6 +7250,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.biz = d.name || S.biz || '';
       TRIAL_BIZ = S.biz;
       S.igFacts = d.facts || null; S.facts = mergeFacts(S.webFacts, S.igFacts);
+      if (d.offer_sheet) S.offerSheet = d.offer_sheet;
       S.igOk = true;
       if (d.style) S.style = mergeStyle(S.style, d.style);
       // (LOTE ETAPA-INSTAGRAM) Stage signal from prefill (ig_stage).
@@ -7160,6 +7291,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.biz = d.name || S.biz || '';
       TRIAL_BIZ = S.biz; TRIAL_DESC = d.description || '';
       S.webFacts = d.facts || null; S.facts = mergeFacts(S.webFacts, S.igFacts);
+      if (d.offer_sheet) S.offerSheet = d.offer_sheet; // (M3 FICHA-OFERTA) the website is the primary source
       S.webOk = true;
       if (d.style) S.style = mergeStyle(S.style, d.style);
       // El rubro confirmado por el dueño manda sobre lo detectado.
@@ -7227,6 +7359,11 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var tags = (a.hashtags_top || []).concat(b.hashtags_top || []);
     out.hashtags_top = tags.filter(function (v, i) { return tags.indexOf(v) === i; }).slice(0, 5);
     out.best_posts = (a.best_posts && a.best_posts.length ? a.best_posts : (b.best_posts || [])).slice(0, 3);
+    // (ESTUDIO-PROFUNDO M2 · RANKEO PROPIO) El top 3 por tasa de
+    // respuesta es de IG (la web no tiene posteos): manda el que lo trae,
+    // igual que best_posts. El resumen del rankeo viaja con él.
+    out.top_posts = (a.top_posts && a.top_posts.length ? a.top_posts : (b.top_posts || [])).slice(0, 3);
+    out.ranking = a.ranking || b.ranking || null;
     var fmt = a.formats || b.formats || null;
     out.formats = fmt ? { images: fmt.images || 0, videos: fmt.videos || 0, carousels: fmt.carousels || 0 } : null;
     out.tone = (a.tone && a.tone !== 'neutral') ? a.tone : (b.tone || a.tone || null);

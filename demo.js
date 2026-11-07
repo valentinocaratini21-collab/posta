@@ -15,6 +15,7 @@ const db = require('./db');
 const captions = require('./demo-captions');
 const draftMod = require('./draft-onboarding'); // DRAFT-ONBOARDING (4/11): gusto del draft sobre el spec
 const clientDigest = require('./client-digest');
+const studyOffer = require('./study-offer'); // (M3 FICHA-OFERTA) puerta de fecha en la generación
 const rubroId = require('./rubro-id'); // (v235) subrubros canónicos del clasificador
 const demoAi = require('./demo-ai'); // (v231) subject_scale por familia de arte
 
@@ -1747,6 +1748,21 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       if (t.caption) t.caption = stripNums(t.caption);
     });
   }
+  // (M3 FICHA-OFERTA · PUERTA EN LA GENERACIÓN) Defensa en profundidad
+  // sobre el candado de números: cualquier pieza promo que llegue al
+  // spec sin una oferta con fecha vigente en el fundamento se reescribe
+  // como novedad (sin reclamo de promo, sin números, sin urgencia). La
+  // derivación de temas ya la frena (deriveTopics); esto cubre los temas
+  // de relleno/catálogo que también nacen promo. Sin ficha en el digest,
+  // el gate no actúa (legacy).
+  if (digest && digest.offerSheet) {
+    specPosts.forEach((sp, i) => {
+      if (!sp || sp.kind !== 'promo') return;
+      const r = studyOffer.sanitizePromoPost(sp, topics[i], digest, new Date());
+      specPosts[i] = r.post;
+      if (r.topic) topics[i] = r.topic;
+    });
+  }
   // (v197) La foto de perfil aparece como máximo en 2 piezas y con
   // tratamientos DISTINTOS entre sí: el medallón protagonista del
   // póster (si lo hay) y una marca suave grande sobre UNA pieza con
@@ -1865,8 +1881,31 @@ function closeTrialCaption(caption, topic, tone, lang) {
   return captions.ensureCaptionCtaClose(caption, t.kind, tone, lang);
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false }) {
-  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
+// (M3 FICHA-OFERTA) Términos de la oferta en el caption final: el gate
+// de captions puede reescribir el caption del tema y perder la fecha de
+// fin — la línea de vigencia se repone DESPUÉS del gate, con la fecha
+// del fundamento. Solo en piezas promo con oferta vigente (topic con
+// offer_ends_at); si el caption ya trae la fecha, no se duplica. La
+// línea es una cadena fija con la fecha (no copy generado), así que no
+// necesita volver a pasar por el gate.
+function appendOfferTerms(caption, topic, lang) {
+  try {
+    const ends = topic && topic.offer_ends_at;
+    if (!ends || !topic || topic.kind !== 'promo') return caption;
+    const parts = String(ends).split('-').map(Number);
+    const y = parts[0], m = parts[1], d = parts[2];
+    if (!y || !m || !d) return caption;
+    const en = lang === 'en';
+    const txt = en
+      ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m - 1]} ${d}, ${y}`
+      : `${d}/${m}/${y}`;
+    if (String(caption || '').includes(txt)) return caption;
+    const line = en ? `Valid until ${txt}.` : `Válido hasta el ${txt}.`;
+    return String(caption || '').trim() + '\n\n' + line;
+  } catch (e) { return caption; }
+}
+
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang, trialNoStock, draft, firmaStyle, firmaSinVideo });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
@@ -1900,10 +1939,13 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
       });
       // (v209) Pieza LIMPIA: sin titular ni botón en la imagen, el
       // caption carga la idea y CIERRA con el CTA — garantizado acá.
+      // (M3 FICHA-OFERTA) Los términos van ANTES del cierre: el caption
+      // gateado ya pasó y la fecha no se vuelve a perder.
+      const baseCaption = appendOfferTerms(r.caption, topics[r.topicIndex] || t, lang);
       const cleanPiece = specPosts[i].text_mode === 'clean';
       const finalCaption = cleanPiece
-        ? closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone, lang)
-        : r.caption;
+        ? closeTrialCaption(baseCaption, topics[r.topicIndex] || t, tone, lang)
+        : baseCaption;
       prevCaps.push(finalCaption);
       return {
         image: 'data:image/jpeg;base64,' + bufs[i].toString('base64'),
@@ -2703,6 +2745,7 @@ module.exports = {
   ensureCaptionCtaClose: captions.ensureCaptionCtaClose,
   ensureCaptionCloseForIntent: captions.ensureCaptionCloseForIntent,
   closeTrialCaption,
+  appendOfferTerms,
   // (FIX-ENTRADA-PRUEBA) red fail-closed de variables de plantilla
   topicHasTemplateVar,
   dropTemplateVarTopics,

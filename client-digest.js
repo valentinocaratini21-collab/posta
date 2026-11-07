@@ -161,6 +161,13 @@ function digestNumbers(digest) {
   pushItems(digest.promos, ['titulo', 'nombre', 'precio']);
   if (digest.catalog) pushItems(digest.catalog.items, ['nombre', 'precio']);
   if (digest.bio_link) pushItems(digest.bio_link.items, ['nombre', 'precio']);
+  // (M3 FICHA-OFERTA) Los números de la ficha también son verdad del
+  // digest: un precio de la ficha pasa el candado de promo.
+  if (digest.offerSheet) {
+    pushItems(digest.offerSheet.productos, ['nombre', 'precio']);
+    pushItems(digest.offerSheet.precios, ['precio', 'contexto']);
+    pushItems(digest.offerSheet.promos, ['titulo', 'descuento']);
+  }
   chunks.push(String(digest.diferencial || ''));
   for (const t of (digest.temas_feed || [])) chunks.push(String(t || ''));
   for (const c of chunks) for (const n of numbersInText(c)) out.add(n);
@@ -620,6 +627,11 @@ function emptyDigest() {
     // trazabilidad de v229 no se invalida: el hash sigue siendo el de
     // productos/servicios/promos/temas/protagonista/ciudad/diferencial).
     catalog: null, bio_link: null, lexicon: null, photo_map: null,
+    // (ESTUDIO-PROFUNDO · M5 COMPETENCIA) La competencia del estudio:
+    // fundamento.competitors (ver study-competitors.js: esquema y contrato
+    // para el lote semanal de tendencias). null = todavía no estudiada. El
+    // hash de anclas NO la cubre y el refresco la preserva por copia base.
+    competitors: null,
     inferred_star: null, contradictions: [], question_candidates: [],
     // (2026-10-20) POSTY CONECTADO: bloques de conexiones externas de
     // SOLO LECTURA (hoy: connections.tiendanube, que escribe el sync de
@@ -651,6 +663,14 @@ function emptyDigest() {
     // applyDeepBlocks parte del digest guardado y el fresco nunca los
     // trae.
     gustos: [], gustos_pendientes: [], gustos_evidencia: {}, gustos_rechazos: {},
+    // (M3 FICHA-OFERTA · ESTUDIO-PROFUNDO) La ficha de oferta con fechas
+    // (study-offer.js): producto/precio/promo CON fecha de fin, compra,
+    // horarios y ubicación, cada dato con procedencia. null = el estudio
+    // todavía no corrió. Espacio de nombres propio: el resto del
+    // fundamento no se reescribe. El hash de anclas NO la cubre (no es
+    // fundamento leído del feed/web en el sentido de v229) y el refresco
+    // la preserva con sus correcciones del cliente (applyDeepBlocks).
+    offerSheet: null,
   };
 }
 
@@ -891,6 +911,10 @@ function buildFromParts(parts) {
     if (Object.keys(d.photo_map.entries).length) d.fuentes.photo_map = { at: now, fotos: Object.keys(d.photo_map.entries).length };
     else d.photo_map = null;
   }
+  // (M3 FICHA-OFERTA) La ficha del estudio viaja tal cual (el módulo
+  // study-offer es dueño de su forma): espacio de nombres propio dentro
+  // del fundamento, sin reescribir nada de lo anterior.
+  if (p.offerSheet && typeof p.offerSheet === 'object' && p.offerSheet.v) d.offerSheet = p.offerSheet;
   d.built_at = now;
   return finalizeDigest(d);
 }
@@ -1376,6 +1400,17 @@ function applyDeepBlocks(stored, fresh) {
       }
     }
   }
+  // (M3 FICHA-OFERTA) La ficha se fusiona, no se reemplaza a ciegas: la
+  // extracción fresca manda en lo leído, pero las correcciones del
+  // cliente guardadas (origen 'dueno') se re-aplican después — el
+  // re-estudio semanal (mejora 6) nunca pisa lo corregido a mano. Sin
+  // ficha fresca, la guardada sobrevive por la copia base de arriba.
+  if (fresh.offerSheet || out.offerSheet) {
+    try {
+      const so = require('./study-offer');
+      out.offerSheet = so.mergeOfferSheet(fresh.offerSheet || null, out.offerSheet || null);
+    } catch (e) { /* sin merge: sobrevive la copia base */ }
+  }
   // (v235) RUBRO_ID: el guardado MANDA — el merge nunca lo reemplaza por
   // la clasificación fresca. Solo se completa si el guardado no tenía
   // (digest viejo). La reclasificación la decide el barrido semanal
@@ -1625,7 +1660,24 @@ function deriveTopics(digest, opts) {
   // titular (o a la bajada si el título ya es largo). El número sale
   // SIEMPRE del digest: sin número en el digest, la promo sale sin
   // número (candado de verdad, promoNumberGuard).
-  const promo = (digest.promos || [])[0];
+  // (M3 FICHA-OFERTA) PUERTA DE FECHA: el slot promo solo lo ocupa una
+  // oferta CON fecha de fin vigente (study-offer.promoVigentePara). Sin
+  // ficha, la promo del dueño pasa como siempre (legacy); con ficha, una
+  // promo sin fecha o vencida cae al else (novedad del ítem N.º 2) — la
+  // clase del posteo 531 no nace. La pieza vigente lleva sus términos
+  // (fecha de fin en el caption y en offer_ends_at).
+  let promoVig = null;
+  try {
+    const so = require('./study-offer');
+    promoVig = so.promoVigentePara(digest, new Date());
+  } catch (e) { promoVig = (digest.promos || [])[0] ? { titulo: String((digest.promos[0] || {}).titulo || ''), ends_at: null, fuente: 'dueno' } : null; }
+  const promo = promoVig;
+  const promoEndsTxt = (() => {
+    if (!promoVig || !promoVig.ends_at) return '';
+    const [y, m, d] = String(promoVig.ends_at).split('-').map(Number);
+    if (!y || !m || !d) return '';
+    return en ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m - 1]} ${d}, ${y}` : `${d}/${m}/${y}`;
+  })();
   if (prelaunch) {
     // (v348 · D2) Sin operación no hay promo que empujar: el slot 2
     // PRESENTA el segundo servicio y suma a la lista de espera.
@@ -1649,24 +1701,29 @@ function deriveTopics(digest, opts) {
     }
   } else if (promo && (promo.titulo || promo)) {
     const A = String(promo.titulo || promo).trim();
-    const promoPrice = (promo && typeof promo === 'object') ? String(promo.precio || '').trim() : '';
+    const dnaMatch = (digest.promos || []).find((pr) => pr && norm(String(pr.titulo || pr.nombre || '')) === norm(A));
+    const promoPrice = (dnaMatch && typeof dnaMatch === 'object') ? String(dnaMatch.precio || '').trim() : '';
     const tituloWords = A.split(/\s+/).filter(Boolean).length;
     const tituloHasNum = numbersInText(A).size > 0;
     const priceInHeadline = !!promoPrice && !tituloHasNum && tituloWords <= 4;
+    const termsLine = promoEndsTxt ? (en ? `\n\nValid until ${promoEndsTxt}.` : `\n\nVálido hasta el ${promoEndsTxt}.`) : '';
     const t = en ? mk('promo', A, {
       tag: 'PROMO',
       headline: (x) => (priceInHeadline ? `${x} at ${promoPrice}` : x),
       subline: () => ((promoPrice && !tituloHasNum && !priceInHeadline) ? `${promoPrice}, just like you see it` : ''),
       cta: 'I want this deal',
-      caption: (x) => `${x} at ${bizPh} 🔥\n\nFor a limited time only: when it's gone, it's gone.\n\nMessage us and we'll hold yours 📩`,
+      caption: (x) => `${x} at ${bizPh} 🔥\n\nFor a limited time only: when it's gone, it's gone.${termsLine}\n\nMessage us and we'll hold yours 📩`,
     }) : mk('promo', A, {
       tag: 'PROMO',
       headline: (x) => (priceInHeadline ? `${x} a ${promoPrice}` : x),
       subline: () => ((promoPrice && !tituloHasNum && !priceInHeadline) ? `A ${promoPrice}, como lo ves` : ''),
       cta: 'Quiero aprovecharla',
-      caption: (x) => `${x} en ${bizPh} 🔥\n\nEs por tiempo limitado: cuando se termina, se termina.\n\nEscribinos y te lo reservamos 📩`,
+      caption: (x) => `${x} en ${bizPh} 🔥\n\nEs por tiempo limitado: cuando se termina, se termina.${termsLine}\n\nEscribinos y te lo reservamos 📩`,
     });
-    if (t) topics.push(t);
+    if (t) {
+      if (promoVig && promoVig.ends_at) { t.offer_ends_at = promoVig.ends_at; t.offer_terms = promoEndsTxt; }
+      topics.push(t);
+    }
   } else {
     const it2 = pickItem(1);
     if (it2) {

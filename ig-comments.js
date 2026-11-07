@@ -184,6 +184,10 @@ async function mineComments(igUserId, accessToken, apiKey) {
       objeciones: mined.objeciones,
       deseos: mined.deseos,
       counts: { posts: bundle.posts, comments: bundle.comments },
+      // (ESTUDIO-PROFUNDO M1) El bundle crudo viaja también: el endpoint
+      // extrae el estudio determinístico con procedencia sobre lo ya leído,
+      // sin un segundo fetch a IG.
+      bundle,
     };
   } catch (e) {
     return { error: 'No pudimos traer tus comentarios de Instagram, probá de nuevo en un rato' };

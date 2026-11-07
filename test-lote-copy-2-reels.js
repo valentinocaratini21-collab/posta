@@ -212,10 +212,10 @@ t(!APP.includes('cap-kick">Historias'), 'ES landing: la sección Historias SALE 
 t(!EN.includes('cap-kick">Stories'), 'EN landing: la sección Stories SALE entera (v761)');
 
 // ---------- 9. Bumps M78 / BUILD (re-pin v741: el BUILD y el ?v= avanzaron) ----------
-t(SRV.includes("const BUILD_ID = '20261105-v761'"), 'BUILD v761');
-t(IDX.includes('/app.js?v=503'), 'index ES: app.js?v=503');
+t(SRV.includes("const BUILD_ID = '20261105-v764'"), 'BUILD v764 (base v763, este lote no re-estampa)');
+t(IDX.includes('/app.js?v=504'), 'index ES: app.js?v=504');
 t(!EN.includes('/app.js?v='), 'index EN: sin app.js?v= (la EN no carga app.js)');
-t(APP.includes("const CHUNK_V = '20261105-v760'"), 'CHUNK_V 20261105-v760 (onboarding v760)');
+t(APP.includes("const CHUNK_V = '20261105-v764'"), 'CHUNK_V 20261105-v764 (estudio-profundo M6: chunk-analisis.js cambió)');
 
 console.log(`\ntest-lote-copy-2-reels: ${okN} ok, ${badN} fallos`);
 process.exit(badN ? 1 : 0);

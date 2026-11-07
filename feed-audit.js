@@ -282,6 +282,21 @@ function resolveHomeVerified(embedVerified, pageHtml, handle) {
   const ev = (embedVerified === true ? true : (embedVerified === false ? false : null));
   return { is_verified: ev, source: 'embed' };
 }
+// (ESTUDIO-PROFUNDO M2 · RANKEO PROPIO) Seguidores desde el HTML del
+// embed ya bajado (misma fuente y mismo regex que fetchAuditData, que
+// lee followers_count del perfil). fetchIgProfile NO trae seguidores
+// (solo colors/pic/name), así que sin esto el prefill de la prueba
+// nunca podría calcular la tasa de respuesta. NUNCA lanza; sin el
+// dato, null (no se inventa).
+function followersFromEmbedHtml(html) {
+  try {
+    const s = String(html || '').split(String.fromCharCode(92) + '"').join('"');
+    const m = /"followers_count":(\d+)/.exec(s);
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  } catch (_) { return null; }
+}
 async function fetchAuditData(handle, fetchOverride, profOverride) {
   const ig = sanitizeHandle(handle);
   if (!ig) return { ok: false, error: 'Pasame tu @ de Instagram' };
@@ -856,6 +871,35 @@ async function analyzePaletteBuckets(posts) {
     return buckets.size ? Array.from(buckets).sort((a, b) => a - b) : null;
   } catch (_) { return null; }
 }
+
+// (ESTUDIO-PROFUNDO · mejora 4 MAPA DEL FEED) Paleta POR POSTEO: el tono
+// dominante de cada posteo de la ventana (hasta 12), como mapa
+// { shortcode: bucket 0-8 }. Reusa downloadThumb + extractColors (la
+// misma extracción que analyzePaletteBuckets, sin reconstruir nada): el
+// primer color que devuelve extract_colors.py es el dominante de la
+// foto. Best-effort total: sin thumb, sin descarga o sin color, ese
+// posteo simplemente no entra en el mapa (el mapa del feed marca
+// hue=null con fuente 'sin_dato', nunca inventa un tono). NUNCA lanza.
+async function analyzePalettePerPost(posts) {
+  const out = {};
+  try {
+    const list = (Array.isArray(posts) ? posts : []).filter((p) => p && p.thumb && p.shortcode).slice(0, 12);
+    if (!list.length) return out;
+    const bufs = await Promise.all(list.map((p) => downloadThumb(p.thumb)));
+    for (let i = 0; i < list.length; i++) {
+      try {
+        const buf = bufs[i];
+        if (!buf) continue;
+        const cols = await extractColors(buf);
+        for (const c of cols) {
+          const b = hexToHueBucket(c);
+          if (b >= 0) { out[list[i].shortcode] = b; break; }
+        }
+      } catch (_) { /* ese posteo queda sin tono */ }
+    }
+  } catch (_) {}
+  return out;
+}
 async function trialStyleProfile(posts, profile, opts = {}) {
   try {
     const list = (Array.isArray(posts) ? posts : []).filter((p) => p && typeof p === 'object');
@@ -873,6 +917,13 @@ async function trialStyleProfile(posts, profile, opts = {}) {
     const liked = list.filter((p) => Number.isFinite(p.likes) && p.likes > 0)
       .sort((a, b) => b.likes - a.likes).slice(0, 3)
       .map((p) => ({ shortcode: p.shortcode || '', likes: p.likes, caption_head: String(p.caption || '').slice(0, 80) }));
+    // (ESTUDIO-PROFUNDO M2 · RANKEO PROPIO) Top 3 por TASA de respuesta
+    // contra el promedio PROPIO (no por likes absolutos) + porqué
+    // (formato, gancho, tema, hora). Lazy require dentro de try: si el
+    // módulo no está, el perfil sale igual que siempre (best_posts
+    // intacto); nunca rompe el estudio ni inventa una tasa.
+    let ranking = null;
+    try { const sr = require('./study-ranking'); ranking = sr.rankOwnPosts(list, sig.followers, { lang: (opts && opts.lang) || 'es' }); } catch (_) { ranking = null; }
     let buckets = null;
     try {
       buckets = await Promise.race([analyzePaletteBuckets(list), new Promise((r) => setTimeout(() => r(null), 1500))]);
@@ -886,13 +937,19 @@ async function trialStyleProfile(posts, profile, opts = {}) {
       avg_hashtags: sig.avg_hashtags || 0,
       hashtags_top: hashtagsTop,
       best_posts: liked,
+      // (ESTUDIO-PROFUNDO M2 · RANKEO PROPIO) Espacio de nombres propio:
+      // top_posts (top 3 por tasa, con porqué) + ranking (resumen con la
+      // tasa promedio propia y el motivo si no es calculable). Sin
+      // seguidores, top_posts es [] y ranking lo documenta.
+      top_posts: (ranking && ranking.top3) || [],
+      ranking: ranking ? { calculable: ranking.calculable, seguidores: ranking.seguidores, promedio_tasa: ranking.promedio_tasa, n_posts: ranking.n_posts, n_medibles: ranking.n_medibles, motivo_no_calculable: ranking.motivo_no_calculable, nota: ranking.nota } : null,
       formats: { images: sig.images || 0, videos: sig.videos || 0, carousels: sig.carousels || 0 },
       palette_buckets: allBuckets.length ? allBuckets : null,
       palette_names: allBuckets.map((b) => hueName(b, 'es')).filter(Boolean),
       palette_names_en: allBuckets.map((b) => hueName(b, 'en')).filter(Boolean),
       tone,
     };
-    const usable = out.posts_per_week != null || out.hashtags_top.length || out.best_posts.length || out.palette_names.length || tone !== 'neutral' || out.avg_caption_words > 0;
+    const usable = out.posts_per_week != null || out.hashtags_top.length || out.best_posts.length || (out.top_posts && out.top_posts.length) || out.palette_names.length || tone !== 'neutral' || out.avg_caption_words > 0;
     return usable ? out : null;
   } catch (_) { return null; }
 }
@@ -1313,12 +1370,14 @@ module.exports = {
   parseEmbedPosts,
   cleanCaptionResidue,
   fetchAuditData,
+  followersFromEmbedHtml,
   parseProfilePageVerified,
   resolveHomeVerified,
   trialProfileFromAudit,
   trialAuditFromData,
   analyzePalette,
   analyzePaletteBuckets,
+  analyzePalettePerPost,
   hueName,
   paletteProfileFromHexes,
   trialStyleProfile,

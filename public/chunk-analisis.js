@@ -102,6 +102,7 @@ async function anaLoad(useRefresh) {
   rootEl.innerHTML = anaCartaHTML(d);
   /* SACAR-PROXIMO-PASO 4/11: esta tarjeta ya no se monta en Estrategia. */
   anaBoostRecLoad();
+  anaRestudioLoad();
   anaWeekNumsLoad();
   anaMagiaEntrada();
   try { window.scrollTo(0, 0); } catch (e) {}
@@ -1055,6 +1056,12 @@ function anaCartaHTML(d) {
     // ella. La carta sigue recomendando qué posteo rindió más; la
     // billetera + el picker dejan la elección en el cliente.
     h += `<div id="anaBoostRec"></div>`;
+    // (ESTUDIO-PROFUNDO · M6 RE-ESTUDIO SEMANAL) La tarjeta «qué cambió»
+    // vive DENTRO de la carta, después del cuerpo y antes de «Compartir
+    // mi semana»: el cliente ve qué cambió su negocio esta semana sin
+    // salir de la carta. Carga bajo demanda (anaRestudioLoad); sin
+    // corrida, el hueco queda vacío (nada inventado).
+    h += `<div id="anaRestudioBox"></div>`;
     if (minimal) {
       h += `<div style="text-align:center;margin:14px 0 4px"><button class="btn btn-ghost" id="anaFullBtn" onclick="anaToggleFull(this)">${anaT('Ver mi estrategia completa', 'See my full strategy') + ' ' + pzIc('arrowRight', 13)}</button></div><div id="anaFull" style="display:none">${anaFullHTML(d, a, birth)}</div>`;
     }
@@ -1101,6 +1108,9 @@ function anaCartaHTML(d) {
   // carta del domingo, pero el bloque sigue DENTRO de la tarjeta, no
   // después de ella.
   h += `<div id="anaBoostRec"></div>`;
+  // (ESTUDIO-PROFUNDO · M6 RE-ESTUDIO SEMANAL) Vista sin carta: la
+  // tarjeta «qué cambió» va junto a la nota de actualización semanal.
+  h += `<div id="anaRestudioBox"></div>`;
   if (!anaPastMode) h += `<div class="ana-refresh"><p style="font-size:12.5px;color:var(--mut);margin:0">${anaT('Se actualiza una vez por semana', 'It updates once a week')}</p></div>`;
   h += anaAprendeHTML(d);
   h += `</div>`;
@@ -1967,6 +1977,65 @@ function anaFlConfirmarHipotesis(btn) {
   fetch('/api/fundamento/hipotesis/confirmar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: t }) }).then((r) => r.json()).then((d) => {
     if (d && d.ok) anaFlConfirmLoad();
   });
+}
+
+// ---------- ESTUDIO-PROFUNDO · M6 RE-ESTUDIO SEMANAL: tarjeta «qué cambió» ----------
+// Carga bajo demanda la última corrida del re-estudio y la rinde en la
+// carta: qué cambió en el negocio esta semana (productos, precios,
+// promos) y los conflictos pendientes — un dato que el estudio fresco
+// contradice y que el cliente corrigió queda con SU valor hasta que él
+// decida (botones «Queda como está» / «Usar lo nuevo»). Sin corrida, la
+// tarjeta no se dibuja (nada inventado). ES+EN en paridad (anaT).
+function anaRestudioLoad() {
+  const box = document.getElementById('anaRestudioBox');
+  if (!box) return;
+  fetch('/api/estudio/ultimo-cambio').then((r) => r.json()).then((d) => {
+    if (!d || !d.ok || !d.run) return;
+    anaRestudioRender(d.run);
+  }).catch(() => { /* sin corrida o sin red: la tarjeta no se dibuja */ });
+}
+function anaRestudioLinea(c) {
+  if (!c || !c.tipo) return '';
+  const it = esc(String(c.item || ''));
+  if (c.tipo === 'producto_nuevo') return '+ ' + it + (c.despues ? ' · ' + esc(String(c.despues)) : '') + ' ' + anaT('(producto nuevo)', '(new product)');
+  if (c.tipo === 'producto_falta') return '− ' + it + ' ' + anaT('(ya no está)', '(no longer listed)');
+  if (c.tipo === 'precio_cambio') return it + ': ' + esc(String(c.antes || '—')) + ' → ' + esc(String(c.despues || '—'));
+  if (c.tipo === 'servicio_nuevo') return '+ ' + it + ' ' + anaT('(servicio nuevo)', '(new service)');
+  if (c.tipo === 'servicio_falta') return '− ' + it + ' ' + anaT('(ya no está)', '(no longer listed)');
+  if (c.tipo === 'promo_nueva') return '+ ' + it + ' ' + anaT('(promo nueva)', '(new promo)');
+  if (c.tipo === 'promo_falta') return '− ' + it + ' ' + anaT('(promo terminada)', '(promo ended)');
+  return '';
+}
+function anaRestudioRender(run) {
+  const box = document.getElementById('anaRestudioBox');
+  if (!box || !run) return;
+  const cambios = Array.isArray(run.cambios) ? run.cambios : [];
+  const conflictos = Array.isArray(run.conflictos) ? run.conflictos.filter((c) => c && c.estado === 'pendiente') : [];
+  const noLeidas = Array.isArray(run.fuentes_no_leidas) ? run.fuentes_no_leidas : [];
+  if (!cambios.length && !conflictos.length && !noLeidas.length) {
+    box.innerHTML = `<div style="margin:12px 0;padding:12px 14px;background:#F2F9FE;border:1px solid #DCEFFF;border-radius:14px"><p style="margin:0;font-size:14px;font-weight:800;color:#0A1E33">${anaT('Qué cambió esta semana', 'What changed this week')}</p><p class="ana-note" style="margin:6px 0 0">${anaT('Revisé tu Instagram y tu web esta semana: nada cambió.', "I checked your Instagram and website this week: nothing changed.")}</p></div>`;
+    return;
+  }
+  let fecha = '';
+  try { fecha = new Date(run.at || Date.now()).toLocaleDateString(anaLang === 'en' ? 'en-US' : 'es-AR', { day: 'numeric', month: 'short' }); } catch (e) {}
+  const lineas = cambios.map((c) => '<li style="margin:3px 0">' + anaRestudioLinea(c) + '</li>').join('');
+  const confs = conflictos.map((c) => '<div style="margin-top:10px;padding:10px 12px;background:#FFF8E1;border:1px solid #F3D27A;border-radius:12px">'
+    + '<p style="margin:0;font-size:14px;color:#0A1E33">⚠ ' + esc(String(c.item || '')) + ': ' + anaT('vos tenés ', 'you have ') + '<b>' + esc(String(c.valor_cliente || '—')) + '</b>' + anaT(', el estudio ve ', ', the study sees ') + '<b>' + esc(String(c.valor_nuevo || anaT('que ya no está', 'gone'))) + '</b>' + anaT('. Queda lo tuyo hasta que decidas.', '. Yours stays until you decide.') + '</p>'
+    + '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-ghost btn-sm" data-item="' + esc(String(c.item || '')) + '" data-tipo="' + esc(String(c.tipo || '')) + '" onclick="anaRestudioResolver(this,\'cliente\')">' + anaT('Queda como está', 'Keep mine') + '</button><button class="btn btn-primary btn-sm" data-item="' + esc(String(c.item || '')) + '" data-tipo="' + esc(String(c.tipo || '')) + '" onclick="anaRestudioResolver(this,\'nuevo\')">' + anaT('Usar lo nuevo', 'Use the new one') + '</button></div></div>').join('');
+  const noLeidasHtml = noLeidas.length ? '<p class="ana-note" style="margin:8px 0 0">' + anaT('No pude leer: ', "I couldn't read: ") + esc(noLeidas.join(' + ')) + anaT(' — no se cambió nada.', ' — nothing was changed.') + '</p>' : '';
+  box.innerHTML = `<div style="margin:12px 0;padding:12px 14px;background:#F2F9FE;border:1px solid #DCEFFF;border-radius:14px"><p style="margin:0;font-size:14px;font-weight:800;color:#0A1E33">${anaT('Qué cambió esta semana', 'What changed this week')}${fecha ? ' · ' + esc(fecha) : ''}</p>`
+    + (lineas ? '<ul style="margin:8px 0 0;padding-left:18px;font-size:14px;color:#0A1E33">' + lineas + '</ul>' : '')
+    + confs + noLeidasHtml + '</div>';
+}
+function anaRestudioResolver(btn, decision) {
+  const item = (btn && btn.getAttribute('data-item')) || '';
+  const tipo = (btn && btn.getAttribute('data-tipo')) || '';
+  if (!item || !tipo || !decision) return;
+  if (btn) btn.disabled = true;
+  fetch('/api/estudio/conflicto/resolver', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo, nombre: item, decision }) }).then((r) => r.json()).then((d) => {
+    if (d && d.ok) anaRestudioLoad();
+    else if (btn) btn.disabled = false;
+  }).catch(() => { if (btn) btn.disabled = false; });
 }
 
 /* ---------- ESTRATEGIA-MAGIA (2/11, decisión Valentino): destellos de entrada
