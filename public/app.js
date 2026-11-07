@@ -18804,6 +18804,8 @@ function hfMergePostsAll(base, extra) {
 // partes y/m/d en la zona y se busca el instante cuya pared es 00:00
 // (correcto en días DST: nunca se suman 24 h). Si la pared del
 // candidato no es 00:00, NaN (fail-closed).
+// Lo usa la cuenta de la tardecita de la carta velada (hasta las 00:00
+// de su día).
 function pzTzOffsetMs(inst, tz) {
   try {
     const zo = tz ? { timeZone: tz } : {};
@@ -19905,14 +19907,15 @@ function homeTileHTML(t, i) {
     // ritual, que revela directo la recomendada. El velo (hf-carta-velo +
     // hf-carta-oculta) cubre el próximo de día FUTURO y el de HOY
     // hasta elegir. t.openHoy lo pone homeGridCompose.
-    // (LOTE PROXIMO-DESTAPADO · 6/11 · «a las 00:00») La cuenta de la
+    // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c + LOTE PROXIMO-DESTAPADO
+    // «a las 00:00» + corrección Valentino 19:26) La cuenta de la
     // tardecita vive EN la carta velada (día futuro): cuenta en vivo
-    // hasta las 00:00 de su día («faltan 4 h 37 min para las 00:00»,
-    // copy del mock aprobado). Solo si la medianoche está en el
-    // futuro y a menos de 24 h (si no, la chapita con día+hora reales
-    // ya alcanza). Reutiliza pzRitualCuentaTxt; el tick de 1 s vive
-    // en hfCuentaAbreTick. Sin fecha o sin zona, sin cuenta (nunca
-    // una fecha inventada).
+    // hasta ver el próximo posteo («faltan 4 h 37 min para ver tu próximo
+    // posteo» — la cuenta es para VER el posteo, no «para las 00:00»).
+    // Solo si la medianoche está en el futuro y a menos de 24 h (si no,
+    // la chapita con día+hora reales ya alcanza). Reutiliza
+    // pzRitualCuentaTxt; el tick de 1 s vive en hfCuentaAbreTick. Sin
+    // fecha o sin zona, sin cuenta (nunca una fecha inventada).
     let cuentaHtml = '';
     try {
       if (!t.openHoy && typeof pzDiaInicioMs === 'function' && typeof pzRitualCuentaTxt === 'function') {
@@ -19924,14 +19927,27 @@ function homeTileHTML(t, i) {
         const faltaC = Number.isFinite(abreMs) ? abreMs - Date.now() : NaN;
         if (Number.isFinite(faltaC) && faltaC > 0 && faltaC <= 24 * 3600000) {
           const cuC = pzRitualCuentaTxt(faltaC);
-          cuentaHtml = `<span class="hf-cuenta-abre" data-pz-cuenta-abre="${new Date(abreMs).toISOString()}">${phEn ? `only <b>${esc(cuC.faltan)}</b> left until 00:00` : `faltan <b>${esc(cuC.faltan)}</b> para las 00:00`}</span>`;
+          // (VARIANTE B · 6/11 · elección Valentino 19:31) La cuenta
+          // es la protagonista en dorado, en 3 líneas (ES) / 2 (EN):
+          // «faltan» / «4 h 37 min» / «para ver tu próximo posteo».
+          cuentaHtml = `<span class="hf-cuenta-abre" data-pz-cuenta-abre="${new Date(abreMs).toISOString()}">${phEn ? `<b>${esc(cuC.faltan)}</b><br>left to see your next post` : `faltan<br><b>${esc(cuC.faltan)}</b><br>para ver tu próximo posteo`}</span>`;
         }
       }
     } catch (e) { cuentaHtml = ''; }
     if (t.openHoy) {
       return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
     }
-    return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="hf-tile hf-carta-oculta hf-carta-magia" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pz-abrir-ritual="1" role="button" tabindex="0" aria-label="${phEn ? 'Next post, hidden. Tap to see the options' : 'Próximo posteo, oculto. Tocá para ver las opciones'}"><span class="hf-carta-velo" aria-hidden="true"></span>${hoyBadge}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}${cuentaHtml}</span></span></span>`;
+    // (VARIANTE B · 6/11 · elección Valentino 19:31 «MÁS MAGIA») La
+    // carta velada del feed es una tarjeta DESTACADA a todo lo ancho
+    // (hf-cell-velada, grid-column 1/-1): el mock B es una carta ancha,
+    // no una tile 3/4. Halo dorado que respira (hf-carta-halo), 7
+    // destellos ✦, contenido centrado (píldora «El próximo», cuenta en
+    // dorado, chip «Mañana · 17:00») y Posty asomando (su cara en
+    // círculo con anillo dorado a caballo del borde inferior, con
+    // «Posty lo está cuidando ✨» debajo). La celda entera abre el
+    // ritual (data-pz-abrir-ritual en la celda, el handler usa
+    // closest): tocar la carta o a Posty revela las opciones.
+    return `<span class="hf-cell hf-cell-velada" data-hf-filtro="pendientes" data-pz-abrir-ritual="1"><span class="hf-carta-halo"><span class="hf-tile hf-carta-oculta hf-carta-magia hf-carta-respira" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pz-abrir-ritual="1" role="button" tabindex="0" aria-label="${phEn ? 'Next post, hidden. Tap to see the options' : 'Próximo posteo, oculto. Tocá para ver las opciones'}"><span class="hf-carta-velo" aria-hidden="true"></span>${hoyBadge}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-carta-contenido"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${cuentaHtml}${ocChip}</span></span></span><span class="hf-carta-posty" aria-hidden="true"><img src="ai-avatar.png" alt=""></span><span class="hf-carta-leyenda">${phEn ? 'Posty is looking after it ✨' : 'Posty lo está cuidando ✨'}</span></span>`;
   }
   return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${hoyBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span></span>`;
 }
@@ -21281,11 +21297,30 @@ function pzRitualCuentaTick() {
     el.innerHTML = '<span class="pz-ritual-cuenta-hm">' + cuenta.hm + '</span><span class="pz-ritual-cuenta-ss">' + cuenta.ss + '</span>';
     const sub = document.getElementById('pzRitualCuentaSub');
     if (sub) {
-      const hora = sub.getAttribute('data-pz-cuenta-hora') || '9:00';
       const en = sub.getAttribute('data-pz-cuenta-en') === '1';
-      sub.innerHTML = en ? `only <b>${cuenta.faltan}</b> left until ${hora}` : `faltan <b>${cuenta.faltan}</b> para las ${hora}`;
+      sub.innerHTML = en ? `<b>${cuenta.faltan}</b> left to see your next post` : `faltan <b>${cuenta.faltan}</b> para ver tu próximo posteo`;
     }
   } catch (e) {}
+}
+
+// (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c) Fecha de apertura («mañana
+// 7/11») si abre_a cae al día siguiente de hoyKey. abre_a es ISO UTC;
+// para la medianoche en la zona de la cuenta (oeste de UTC) la fecha UTC
+// ES la fecha de apertura. Devuelve {es: '7/11', en: '11/7'} o null.
+// Fail-closed: cualquier duda → null (la línea queda «Se abre a las H»).
+function pzRitualAbreFecha(abre_a, hoyKey) {
+  try {
+    const a = new Date(abre_a);
+    if (!a || isNaN(a)) return null;
+    const fa = a.toISOString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(hoyKey || ''))) return null;
+    const d0 = new Date(String(hoyKey).slice(0, 10) + 'T12:00:00Z');
+    const d1 = new Date(fa + 'T12:00:00Z');
+    if (isNaN(d0) || isNaN(d1)) return null;
+    if (d1.getTime() - d0.getTime() !== 86400000) return null;
+    const dd = d1.getUTCDate(), mm = d1.getUTCMonth() + 1;
+    return { es: dd + '/' + mm, en: mm + '/' + dd };
+  } catch (e) { return null; }
 }
 
 function pzRitualCardHTML(c, d, en) {
@@ -21302,38 +21337,73 @@ function pzRitualCardHTML(c, d, en) {
 }
 
 function pzRitualHTML(d, en, selId) {
+  // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c) Día de referencia del
+  // álbum: d.hoy, o (tardecita, hoy null) el día de la casilla marcada
+  // hoy en el álbum. Sin él, los candados de días pasados no se marcan
+  // (fail-closed: sin fecha, sin candado).
+  const hoyKeyAlb = (/^\d{4}-\d{2}-\d{2}$/.test(String(d.hoy || '')) ? String(d.hoy) : ((d.album && d.album.slots ? d.album.slots : []).find((s) => s && s.hoy) || {}).dia || '');
+  const rachaTx = d.racha > 0
+    ? (en ? `Streak: ${d.racha} day${d.racha === 1 ? '' : 's'}` : `Racha: ${d.racha} día${d.racha === 1 ? '' : 's'}`)
+    : (en ? 'Your streak starts today' : 'Hoy empieza tu racha');
+  // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c, elegida Valentino 17:32)
+  // El álbum muestra el DÍA SOBRE cada casilla (Lun…Dom en dorado, sobre
+  // el candado mismo) — ya no debajo. La casilla de hoy lleva su día de
+  // semana (no «Hoy»); hoy se marca con el borde azul (.hoy). Candado
+  // SOLO en días que pasaron sin salir; hoy (pendiente) y los futuros
+  // llevan ✦ (silueta a la espera, no un hueco vacío).
+  const album = (d.album && d.album.slots ? d.album.slots : []).map((s) => {
+    const diaTx = s.etiqueta ? String(s.etiqueta).charAt(0).toUpperCase() + String(s.etiqueta).slice(1) : '';
+    const esFecha = /^\d{4}-\d{2}-\d{2}$/.test(String(hoyKeyAlb || ''));
+    const pasoSinSalir = !s.jugado && !s.hoy && esFecha && String(s.dia || '') < String(hoyKeyAlb || '');
+    const diaEn = diaTx ? `<span class="pz-ritual-dia-en">${esc(diaTx)}</span>` : '';
+    const inner = s.imagen
+      ? `<div class="pz-ritual-slot${s.hoy ? ' hoy' : ''}${s.dorada ? ' gold' : ''}" title="${esc(s.etiqueta)}">${diaEn}<img src="${esc(mv(s.imagen, 200))}" onerror="__imgFb(this)" alt=""></div>`
+      : `<div class="pz-ritual-slot sil${s.hoy ? ' hoy' : ''}" title="${esc(s.etiqueta)}">${diaEn}<span>${pasoSinSalir ? '🔒' : '✦'}</span></div>`;
+    return `<div class="pz-ritual-slotcol">${inner}</div>`;
+  }).join('');
+  const head = `<div class="pz-ritual-head"><img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty"><div><b>${en ? 'good morning' : 'buen día'}</b><span>${en ? 'I brought your pack for today' : 'te traje tu paquete de hoy'}</span></div></div>
+  <p class="pz-ritual-racha">${esc(rachaTx)}</p>`;
+  // (LOTE POST-OCULTO-RESPIRA · 6/11 · corrección Valentino 17:32, misma
+  // que el destapado) La pantalla velada se ve de tarde a noche, no a la
+  // mañana: SIN saludo de hora del día — solo «te traje tu paquete de
+  // hoy». El saludo de la mañana queda solo en el ritual de la mañana
+  // (revelada / elegida). Sin saludo nuevo.
+  const headSinSaludo = `<div class="pz-ritual-head"><img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty"><div><span>${en ? 'I brought your pack for today' : 'te traje tu paquete de hoy'}</span></div></div>
+  <p class="pz-ritual-racha">${esc(rachaTx)}</p>`;
+  // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c, estado tardecita
+  // 17:00–00:00) Hoy ya salió y hay un próximo: el ritual muestra el
+  // paquete velado con la cuenta hasta las 00:00 (abre_a/abre_hora
+  // vienen del servidor en d.proximo), no el vacío. Sin próximo, el
+  // vacío honesto de siempre. El tick (pzRitualCuentaTick) recarga a
+  // las 00:00 y aparece el paquete del día nuevo.
+  if (!d.hoy && d.proximo && d.proximo.abre_a) {
+    const sesgoP = d.ahora ? (Date.parse(d.ahora) - Date.now()) : 0;
+    const faltaP = Date.parse(d.proximo.abre_a) - (Date.now() + sesgoP);
+    if (Number.isFinite(faltaP) && faltaP > 0) {
+      const cuentaP = pzRitualCuentaTxt(faltaP);
+      const horaTxtP = String(d.proximo.abre_hora || '00:00');
+      const abreFechaP = (typeof pzRitualAbreFecha === 'function') ? pzRitualAbreFecha(d.proximo.abre_a, hoyKeyAlb) : null;
+      return `<div class="pz-ritual-wrap-in">${headSinSaludo}
+  <div class="pz-ritual-cuenta">
+  <span class="pz-ritual-pack-chip">hoy · ${esc(horaTxtP)}</span>
+  <p class="pz-ritual-cuenta-tit">${en ? 'your pack opens in' : 'tu paquete se abre en'}</p>
+  <p class="pz-ritual-cuenta-num" id="pzRitualCuenta" data-pz-cuenta-abre="${esc(d.proximo.abre_a)}" data-pz-cuenta-sesgo="${sesgoP}"><span class="pz-ritual-cuenta-hm">${cuentaP.hm}</span><span class="pz-ritual-cuenta-ss">${cuentaP.ss}</span></p>
+  <p class="pz-ritual-cuenta-sub" id="pzRitualCuentaSub"${en ? ' data-pz-cuenta-en="1"' : ''}>${en ? `<b>${esc(cuentaP.faltan)}</b> left to see your next post` : `faltan <b>${esc(cuentaP.faltan)}</b> para ver tu próximo posteo`}</p>
+  <div class="pz-ritual-pack-velo pz-respira" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
+  <h2>${en ? 'your post for today' : 'tu posteo de hoy'}</h2>
+  <p>${en ? '1 card inside' : '1 carta adentro'}</p>
+  <p class="pz-ritual-ver-hint">${en ? `It opens ${abreFechaP ? 'tomorrow ' + abreFechaP.en + ' ' : ''}at ${esc(horaTxtP)}` : `Se abre ${abreFechaP ? 'mañana ' + abreFechaP.es + ' ' : ''}a las ${esc(horaTxtP)}`}</p></div>
+  <p class="pz-ritual-nota">${en ? `At ${esc(horaTxtP)} it opens on its own, <b>or the push lets you know</b><br>Come in whenever you like: the pack is waiting for you.` : `A las ${esc(horaTxtP)} se abre solo, <b>o te llega la push</b><br>Entrá cuando quieras: el paquete te espera.`}</p>
+  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'Each day a post goes out, its sticker unlocks.' : 'Cada día que sale, se desbloquea su figurita.'}</p><div class="pz-ritual-slots">${album}</div></div>
+  <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
+    }
+  }
   if (!d.hoy) {
     return `<div class="pz-ritual-vacio">
   <img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty">
   <p>${d.publicado_hoy ? (en ? 'Today’s post already went out — tomorrow there’s another pack.' : 'El posteo de hoy ya salió, mañana hay otro paquete.') : (en ? 'You have no post scheduled for today.' : 'Hoy no tenés posteo programado.')}</p>
   <button type="button" class="bb-btn" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
   }
-  const rachaTx = d.racha > 0
-    ? (en ? `Streak: ${d.racha} day${d.racha === 1 ? '' : 's'}` : `Racha: ${d.racha} día${d.racha === 1 ? '' : 's'}`)
-    : (en ? 'Your streak starts today' : 'Hoy empieza tu racha');
-  // (LOTE RITUAL-1-OPCION · 6/11) El álbum muestra el DÍA bajo cada
-  // casilla (Lun…Dom, «Hoy» en el día de hoy) + candado SOLO en días
-  // que pasaron sin salir: hoy (pendiente) y los futuros no llevan
-  // candado — todavía no salieron, no fallaron. La casilla pendiente
-  // lleva ✦ (silueta a la espera, no un hueco vacío).
-  const album = (d.album && d.album.slots ? d.album.slots : []).map((s) => {
-    const diaTx = s.hoy ? (en ? 'Today' : 'Hoy') : (s.etiqueta ? String(s.etiqueta).charAt(0).toUpperCase() + String(s.etiqueta).slice(1) : '');
-    const esFecha = /^\d{4}-\d{2}-\d{2}$/.test(String(d.hoy || ''));
-    const pasoSinSalir = !s.jugado && !s.hoy && esFecha && String(s.dia || '') < String(d.hoy || '');
-    const inner = s.imagen
-      ? `<div class="pz-ritual-slot${s.hoy ? ' hoy' : ''}${s.dorada ? ' gold' : ''}" title="${esc(s.etiqueta)}"><img src="${esc(mv(s.imagen, 200))}" onerror="__imgFb(this)" alt=""></div>`
-      : `<div class="pz-ritual-slot sil${s.hoy ? ' hoy' : ''}" title="${esc(s.etiqueta)}">${pasoSinSalir ? '<span>🔒</span>' : '<span>✦</span>'}</div>`;
-    return `<div class="pz-ritual-slotcol">${inner}<span class="pz-ritual-dia">${esc(diaTx)}</span></div>`;
-  }).join('');
-  const head = `<div class="pz-ritual-head"><img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty"><div><b>${en ? 'good morning' : 'buen día'}</b><span>${en ? 'I brought your pack for today' : 'te traje tu paquete de hoy'}</span></div></div>
-  <p class="pz-ritual-racha">${esc(rachaTx)}</p>`;
-  // (LOTE PROXIMO-DESTAPADO · corrección Valentino 6/11 17:32) La
-  // pantalla velada se ve de tarde a noche (17:00–00:00), no a la
-  // mañana: SIN saludo de hora del día — solo «te traje tu paquete
-  // de hoy». El saludo («buen día» / «good morning») queda solo en
-  // el ritual de la mañana (revelada / elegida). Sin saludo nuevo.
-  const headSinSaludo = `<div class="pz-ritual-head"><img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty"><div><span>${en ? 'I brought your pack for today' : 'te traje tu paquete de hoy'}</span></div></div>
-  <p class="pz-ritual-racha">${esc(rachaTx)}</p>`;
   if (d.elegida) {
     const picked = (d.cartas || []).find((c) => Number(c.id) === Number(d.elegida)) || d.cartas[0];
     return `<div class="pz-ritual-wrap-in">${head}
@@ -21407,8 +21477,8 @@ function pzRitualHTML(d, en, selId) {
   <span class="pz-ritual-pack-chip">hoy · ${esc(horaTxt)}</span>
   <p class="pz-ritual-cuenta-tit">${en ? 'your pack opens in' : 'tu paquete se abre en'}</p>
   <p class="pz-ritual-cuenta-num" id="pzRitualCuenta" data-pz-cuenta-abre="${esc(d.abre_a)}" data-pz-cuenta-sesgo="${sesgo}"><span class="pz-ritual-cuenta-hm">${cuenta.hm}</span><span class="pz-ritual-cuenta-ss">${cuenta.ss}</span></p>
-  <p class="pz-ritual-cuenta-sub" id="pzRitualCuentaSub" data-pz-cuenta-hora="${esc(horaTxt)}"${en ? ' data-pz-cuenta-en="1"' : ''}>${en ? `only <b>${esc(cuenta.faltan)}</b> left until ${esc(horaTxt)}` : `faltan <b>${esc(cuenta.faltan)}</b> para las ${esc(horaTxt)}`}</p>
-  <div class="pz-ritual-pack-velo" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
+  <p class="pz-ritual-cuenta-sub" id="pzRitualCuentaSub"${en ? ' data-pz-cuenta-en="1"' : ''}>${en ? `<b>${esc(cuenta.faltan)}</b> left to see your next post` : `faltan <b>${esc(cuenta.faltan)}</b> para ver tu próximo posteo`}</p>
+  <div class="pz-ritual-pack-velo pz-respira" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
   <h2>${en ? 'your post for today' : 'tu posteo de hoy'}</h2>
   <p>${en ? '1 card inside' : '1 carta adentro'}</p>
   <p class="pz-ritual-ver-hint">${en ? `It opens at ${esc(horaTxt)}` : `Se abre a las ${esc(horaTxt)}`}</p></div>
@@ -21421,7 +21491,7 @@ function pzRitualHTML(d, en, selId) {
   return `<div class="pz-ritual-wrap-in">${headSinSaludo}
   <div class="pz-ritual-pack${d.dorada ? ' gold' : ''} pz-ritual-velado" id="pzRitualPack" data-pz-ritual-ver="1" data-pz-ritual-rec="${recId}" role="button" tabindex="0" aria-label="${en ? 'Your post for today, hidden. Tap to see it' : 'Tu posteo de hoy, oculto. Tocá para verlo'}">
   <span class="pz-ritual-pack-chip">hoy · 9:00</span>
-  <div class="pz-ritual-pack-velo" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
+  <div class="pz-ritual-pack-velo pz-respira" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
   <h2>${en ? 'your post for today' : 'tu posteo de hoy'}</h2>
   <p>${en ? '1 card inside' : '1 carta adentro'}</p>
   <p class="pz-ritual-ver-hint">${en ? 'Tap to see it' : 'Tocá para verla'}</p></div>
@@ -23486,13 +23556,14 @@ function hfLiveBusy() {
   } catch (e) {}
   return false;
 }
-let HF_CUENTA_T = 0; // LOTE PROXIMO-DESTAPADO: intervalo del tick de 1 s de la cuenta hasta las 00:00
-// Tick de 1 s de la cuenta de la tardecita (carta velada del feed, día
-// futuro): actualiza el texto en vivo; a 0 fuerza el tick vivo para
-// que la carta se abra sola, sin re-cargar. Sin carta velada no hace
-// nada (el intervalo sigue, una query por segundo). Si la app está
-// oculta, no cuenta (el tick vivo de 50 s + visibilitychange se
+// (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c + LOTE PROXIMO-DESTAPADO
+// «a las 00:00») Tick de 1 s de la cuenta de la tardecita en la carta
+// velada (día futuro): actualiza el texto en vivo; a 0 fuerza el tick
+// vivo para que la carta se abra sola, sin re-cargar. Sin carta velada
+// no hace nada (el intervalo sigue, una query por segundo). Si la app
+// está oculta, no cuenta (el tick vivo de 50 s + visibilitychange se
 // encargan al volver).
+let HF_CUENTA_T = 0; // LOTE POST-OCULTO-RESPIRA: intervalo del tick de 1 s de la cuenta hasta las 00:00
 function hfCuentaAbreTick() {
   try {
     if (typeof document === 'undefined' || document.hidden) return;
@@ -23504,7 +23575,10 @@ function hfCuentaAbreTick() {
     if (typeof pzRitualCuentaTxt !== 'function') return;
     const cu = pzRitualCuentaTxt(falta);
     const en = (typeof hfIsEn === 'function') ? hfIsEn() : false;
-    el.innerHTML = en ? `only <b>${esc(cu.faltan)}</b> left until 00:00` : `faltan <b>${esc(cu.faltan)}</b> para las 00:00`;
+    // (VARIANTE B · 6/11) La cuenta vive en 3 líneas (ES) / 2 (EN),
+    // con el número en dorado y grande: el tick reescribe la misma
+    // estructura que el render inicial (cuentaHtml).
+    el.innerHTML = en ? `<b>${esc(cu.faltan)}</b><br>left to see your next post` : `faltan<br><b>${esc(cu.faltan)}</b><br>para ver tu próximo posteo`;
   } catch (e) {}
 }
 function hfLiveStart() {

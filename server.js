@@ -12958,7 +12958,25 @@ app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
     const album = ritualManana.albumWeek(db, uid, hoy, lang);
     const publicadoHoy = ritualPublicadoHoy(uid, tz, hoy);
     const racha = ritualManana.rachaVigente(db, uid, hoy);
-    if (!rec) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy });
+    // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c, estado tardecita
+    // 17:00–00:00) Hoy ya salió y no hay posteo para hoy: el cliente
+    // muestra el paquete velado con la cuenta hasta las 00:00 (no el
+    // vacío) si hay un próximo programado DESPUÉS de la medianoche de
+    // esta noche. La medianoche es la pared 00:00 del día siguiente en
+    // la zona de la cuenta (zonedWallToUtc, sin sumar 24 h: en días
+    // DST la pared es la correcta). Sin próximo tras la medianoche,
+    // el vacío honesto de siempre (sin campo proximo).
+    let proximo = null;
+    if (publicadoHoy) {
+      try {
+        const hoyMediodia = new Date(hoy + 'T12:00:00Z');
+        const manana = new Date(hoyMediodia.getTime() + 86400000).toISOString().slice(0, 10);
+        const medianoche = zonedWallToUtc(manana + ' 00:00', tz);
+        const proxRow = db.prepare(`SELECT MIN(scheduled_at) AS prox FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at > ? AND scheduled_at > ?`).get(uid, new Date().toISOString(), medianoche);
+        if (proxRow && proxRow.prox) proximo = { abre_a: medianoche, abre_hora: '00:00' };
+      } catch (e) { proximo = null; }
+    }
+    if (!rec) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy, proximo });
     let row = ritualManana.getRow(db, uid, hoy);
     if (!row) {
       ritualManana.upsertRow(db, uid, hoy, rec.id);
@@ -31044,7 +31062,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v733';
+const BUILD_ID = '20261105-v734';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

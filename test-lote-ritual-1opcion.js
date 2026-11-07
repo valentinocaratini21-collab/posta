@@ -193,7 +193,10 @@ async function api(sid, method, p, body) {
     ] },
   };
   const htmlV = String(pzRitualHTML(dRit, false));
-  t('B2-album: cada casilla lleva su día (Lun Mar Mié Jue Hoy Sáb Dom)', ['Lun', 'Mar', 'Mié', 'Jue', 'Hoy', 'Sáb', 'Dom'].every((d) => htmlV.includes('>' + d + '<') || htmlV.includes('>' + d + '</span>')));
+  // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c) El día de hoy es su día
+  // de semana («Vie»), no «Hoy»: el álbum muestra el DÍA sobre cada
+  // casilla (Lun…Dom en dorado) y hoy se marca con el borde azul.
+  t('B2-album: cada casilla lleva su día (Lun Mar Mié Jue Vie Sáb Dom)', ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].every((d) => htmlV.includes('>' + d + '<') || htmlV.includes('>' + d + '</span>')));
   t('B2-album: candado SOLO en el día pasado sin salir (1 solo 🔒)', (htmlV.match(/🔒/g) || []).length === 1);
   t('B2-album: la línea de la figurita', htmlV.includes('Cada día que sale, se desbloquea su figurita.'));
   t('B2-paquete: 1 carta adentro, sin abanico', htmlV.includes('1 carta adentro') && htmlV.includes('data-pz-ritual-rec="201"') && !htmlV.includes('id="pzRitualCartas"'));

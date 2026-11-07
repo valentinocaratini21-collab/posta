@@ -155,7 +155,7 @@ function payloadBase(over) {
   const htmlCuenta = String(pzRitualHTML(dCuenta, false));
   t('C1a: antes de las 9:00 renderiza la cuenta regresiva (id pzRitualCuenta)', htmlCuenta.includes('id="pzRitualCuenta"'));
   t('C1b: el conteo muestra 07:17 grande y :24 chico (segundos incluidos)', htmlCuenta.includes('<span class="pz-ritual-cuenta-hm">07:17</span><span class="pz-ritual-cuenta-ss">:24</span>'), htmlCuenta.slice(0, 400));
-  t('C1c: la línea «faltan 7 h 17 min para las 9:00»', htmlCuenta.includes('faltan <b>7 h 17 min</b> para las 9:00'));
+  t('C1c: la línea «faltan 7 h 17 min para ver tu próximo posteo» (corrección Valentino 19:26: la cuenta es para VER el posteo, no «para las 9:00»)', htmlCuenta.includes('faltan <b>7 h 17 min</b> para ver tu próximo posteo'));
   t('C1d: el paquete velado detrás: 3 dorsos navy con ✦', (htmlCuenta.match(/pz-dorso/g) || []).length >= 3);
   t('C1e: nada tocable en la cuenta: sin data-pz-ritual-elegir ni data-pz-ritual-ver', !htmlCuenta.includes('data-pz-ritual-elegir') && !htmlCuenta.includes('data-pz-ritual-ver'));
   t('C1f: sin botón de los 3 ni «Tocá para ver» antes de las 9:00', !htmlCuenta.includes('data-pz-ritual-tres') && !htmlCuenta.includes('Tocá para ver'));
@@ -179,10 +179,10 @@ function payloadBase(over) {
   // --- C8) tick de la cuenta regresiva ---
   const abreTick = new Date(Date.now() + (3600 + 5) * 1000).toISOString();
   els.pzRitualCuenta = { textContent: '01:00:05', innerHTML: '', getAttribute: (k) => (k === 'data-pz-cuenta-abre' ? abreTick : (k === 'data-pz-cuenta-sesgo' ? '0' : null)) };
-  els.pzRitualCuentaSub = { innerHTML: '', getAttribute: (k) => (k === 'data-pz-cuenta-hora' ? '9:00' : null) };
+  els.pzRitualCuentaSub = { innerHTML: '', getAttribute: () => null };
   pzRitualCuentaTick();
   t('C8a: el tick actualiza el conteo en vivo (01:00:0X, segundos chicos)', /^<span class="pz-ritual-cuenta-hm">01:00<\/span><span class="pz-ritual-cuenta-ss">:0[3-5]<\/span>$/.test(els.pzRitualCuenta.innerHTML), 'innerHTML=' + els.pzRitualCuenta.innerHTML);
-  t('C8b: el tick actualiza la línea «faltan»', els.pzRitualCuentaSub.innerHTML.includes('faltan <b>1 h 00 min</b> para las 9:00'), els.pzRitualCuentaSub.innerHTML);
+  t('C8b: el tick actualiza la línea «faltan … para ver tu próximo posteo»', els.pzRitualCuentaSub.innerHTML.includes('faltan <b>1 h 00 min</b> para ver tu próximo posteo'), els.pzRitualCuentaSub.innerHTML);
 
   // --- C9) tick a cero → recarga y aparece el paquete (sin navegar) ---
   els.pzRitual = { isConnected: true, innerHTML: '' };

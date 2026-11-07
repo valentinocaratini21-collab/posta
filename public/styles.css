@@ -4109,9 +4109,52 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-tile.hf-carta-magia .hf-cuenta-abre{font-size:11px;line-height:1.3;color:#FEC14D;text-shadow:0 1px 4px rgba(10,30,51,.6)}
 .hf-tile.hf-carta-magia .hf-cuenta-abre b{font-weight:800}
 .hf-carta-proximo{display:inline-flex;align-items:center;background:linear-gradient(135deg,#FEC14D,#FFD97A);color:#0A1E33;font-size:10.5px;font-weight:800;line-height:1;padding:5px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 1px 4px rgba(10,30,51,.25)}
+/* (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c) La carta del feed respira:
+   halo dorado en los bordes (inset 0: la carta tiene overflow hidden,
+   un halo que sobresalga se recorta) que crece y afloja en 2,4 s. La
+   cuenta de la tardecita vive en la franja, bajo la chapita. */
+.hf-tile.hf-carta-respira::before{content:'';position:absolute;inset:0;border-radius:10px;background:radial-gradient(120% 120% at 50% 50%,transparent 55%,rgba(254,193,77,.28) 78%,rgba(254,193,77,.45) 100%);animation:hfRespira 2.4s ease-in-out infinite;pointer-events:none;z-index:1}
+.hf-cuenta-abre{display:block;font-size:11px;line-height:1.35;color:#FEC14D;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hf-cuenta-abre b{color:#fff}
+/* ============ VARIANTE B — CARTA VELADA «MÁS MAGIA» · 6/11 · elección Valentino 19:31 ============ */
+/* La carta velada del feed es una tarjeta DESTACADA a todo lo ancho
+   (hf-cell-velada, grid-column 1/-1): el mock B es una carta ancha, no
+   una tile 3/4. Halo dorado que respira MÁS presente (resplandor grande
+   + anillo + brillo interior), 7 destellos ✦ de varios tamaños, Posty
+   asomando (su cara en círculo con anillo dorado a caballo del borde
+   inferior, «Posty lo está cuidando ✨»), cuenta en dorado «faltan 4 hs
+   y 34 min para ver tu próximo posteo», chip «Mañana · 17:00», píldora
+   «✦ El próximo», fondo navy con rombos sutiles. Colores Posty exactos.
+   El ✦ grande centrado del velo se apaga en esta carta (los 7 destellos
+   son la magia); el halo de la tile (hf-carta-respira::before) se apaga
+   y el latido vive en el halo exterior (hf-carta-halo::before). */
+.hf-cell-velada{grid-column:1/-1;position:relative}
+.hf-carta-halo{position:relative;display:block;border-radius:30px;padding:14px}
+.hf-carta-halo::before{content:'';position:absolute;inset:0;border-radius:30px;background:radial-gradient(ellipse at center,rgba(254,193,77,.55) 0%,rgba(254,193,77,.22) 55%,rgba(254,193,77,0) 80%);animation:hfRespira 2.4s ease-in-out infinite;pointer-events:none}
+.hf-cell-velada .hf-tile.hf-carta-oculta{aspect-ratio:auto;border:0;border-radius:20px;box-shadow:0 0 0 1px rgba(254,193,77,.55),0 0 42px 4px rgba(254,193,77,.35),0 10px 34px rgba(10,30,51,.35)}
+.hf-cell-velada .hf-tile.hf-carta-oculta .hf-carta-velo{background-color:#0A1E33;background-image:radial-gradient(ellipse 90% 55% at 50% 38%,rgba(254,193,77,.16) 0%,rgba(254,193,77,0) 70%),repeating-linear-gradient(45deg,rgba(255,255,255,.05) 0 1px,transparent 1px 26px),repeating-linear-gradient(-45deg,rgba(255,255,255,.05) 0 1px,transparent 1px 26px)}
+.hf-cell-velada .hf-tile.hf-carta-oculta .hf-carta-velo::after{display:none}
+.hf-cell-velada .hf-tile.hf-carta-respira::before{display:none}
+.hf-carta-contenido{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;padding:26px 20px 44px;gap:20px}
+.hf-cell-velada .hf-carta-proximo{background:#FEC14D;font-size:15px;padding:8px 18px;box-shadow:none}
+.hf-cell-velada .hf-cuenta-abre{font-size:19px;line-height:1.5;font-weight:600;color:#fff;white-space:normal}
+.hf-cell-velada .hf-cuenta-abre b{color:#FEC14D;font-size:26px;font-weight:800}
+.hf-cell-velada .hf-carta-contenido .hf-chip{position:static;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:15px;font-weight:700;padding:9px 16px;border-radius:999px}
+.hf-cell-velada .hf-carta-destellos i:nth-child(1){top:16px;left:20px;font-size:15px;color:#FEC14D}
+.hf-cell-velada .hf-carta-destellos i:nth-child(2){top:34px;right:30px;font-size:12px;color:#2793C8;animation-delay:.5s}
+.hf-cell-velada .hf-carta-destellos i:nth-child(3){top:96px;left:14px;font-size:10px;color:rgba(254,193,77,.55);animation-delay:1s}
+.hf-cell-velada .hf-carta-destellos i:nth-child(4){top:88px;right:16px;font-size:18px;color:#FEC14D;animation-delay:1.5s}
+.hf-cell-velada .hf-carta-destellos i:nth-child(5){bottom:110px;left:26px;font-size:13px;color:#2793C8;animation-delay:.3s}
+.hf-cell-velada .hf-carta-destellos i:nth-child(6){bottom:88px;right:28px;font-size:10px;color:rgba(254,193,77,.55);animation-delay:.8s}
+.hf-cell-velada .hf-carta-destellos i:nth-child(7){bottom:140px;right:44px;font-size:11px;color:#FEC14D;animation-delay:1.3s}
+.hf-carta-posty{display:block;width:72px;height:72px;border-radius:50%;overflow:hidden;border:3px solid #FEC14D;box-shadow:0 0 22px rgba(254,193,77,.7),0 6px 16px rgba(10,30,51,.35);margin:-36px auto 0;position:relative;z-index:2;background:#fff}
+.hf-carta-posty img{width:100%;height:100%;object-fit:cover;object-position:center 18%;display:block}
+.hf-carta-leyenda{display:block;text-align:center;font-size:13px;font-weight:700;color:#5A7488;margin-top:10px}
 @media (prefers-reduced-motion: reduce){
   .hf-tile.hf-carta-magia{box-shadow:0 0 12px rgba(39,147,200,.35)}
   .hf-carta-destellos i{animation:none;opacity:.85}
+  .hf-tile.hf-carta-respira::before{animation:none;opacity:.7}
+  .hf-carta-halo::before{animation:none;opacity:.7}
 }
 /* Ítem 3 — racha de constancia debajo del perfil. */
 .hf-racha{font-size:13px;font-weight:700;color:#0A1E33;margin-top:8px;display:flex;align-items:center;gap:8px}
@@ -5401,6 +5444,12 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ritual-sparkrow span:nth-child(2){color:#2793C8;animation:pzRitualSpark .9s .15s ease both}
 .pz-ritual-sparkrow span:nth-child(3){color:#FEC14D;animation:pzRitualSpark .9s .3s ease both}
 @keyframes pzRitualSpark{from{opacity:0;transform:scale(0) rotate(-30deg)}to{opacity:1;transform:scale(1) rotate(0deg)}}
+/* (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c, elegida Valentino 17:32)
+   La carta respira: el halo dorado crece y afloja en 2,4 s (inhalar /
+   exhalar, como el mock). El brillo del borde acompaña, más suave. */
+@keyframes pzRespira{0%,100%{opacity:.55;transform:scale(.97)}50%{opacity:1;transform:scale(1.03)}}
+@keyframes pzRespiraBrillo{0%,100%{box-shadow:0 8px 20px rgba(10,30,51,.28),0 0 0 rgba(254,193,77,0)}50%{box-shadow:0 8px 20px rgba(10,30,51,.28),0 0 28px rgba(254,193,77,.55)}}
+@keyframes hfRespira{0%,100%{opacity:.55}50%{opacity:1}}
 .pz-ritual-dots{display:flex;justify-content:center;gap:8px;margin-top:14px}
 .pz-ritual-dots span{width:14px;height:14px;border-radius:50%}
 .pz-ritual-dots span:nth-child(1){background:#2793C8}
@@ -5441,6 +5490,16 @@ body.pz-postchat-open{overflow:hidden}
 .pz-dorso b{font-style:normal;font-size:34px;color:#FEC14D;text-shadow:0 0 8px rgba(254,193,77,.8)}
 .pz-dorso-spark{position:absolute;font-size:20px;color:#2793C8;top:4px;left:14px;animation:pzRitualSpark .9s ease both}
 .pz-dorso-spark.b{top:auto;bottom:2px;left:auto;right:16px;color:#FEC14D;animation-delay:.2s}
+/* (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c + regla 6/11 17:12) El
+   paquete velado es UNA SOLA carta: el dorso único va centrado, sin
+   rotación ni solape (las reglas nth-child de arriba son para el
+   abanico de 3; :only-of-type solo dispara con un solo dorso, así que
+   no toca nada más). El halo dorado que respira vive en ::before del
+   velo (detrás de la carta, no encima) y el brillo acompaña en el
+   borde del dorso. Con reduced-motion, todo queda fijo (abajo). */
+.pz-dorso:only-of-type{margin:0;transform:none}
+.pz-ritual-pack-velo.pz-respira::before{content:'';position:absolute;left:50%;top:50%;width:220px;height:220px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(254,193,77,.38) 0%,rgba(254,193,77,.16) 45%,rgba(254,193,77,0) 70%);animation:pzRespira 2.4s ease-in-out infinite;pointer-events:none}
+.pz-ritual-pack-velo.pz-respira .pz-dorso{animation:pzRespiraBrillo 2.4s ease-in-out infinite}
 .pz-ritual-pack p.pz-ritual-ver-hint{font-size:15px;font-weight:700;margin:0;color:#0A1E33}
 .pz-ritual-revelada{animation:pzRitualIn .5s ease both}
 .pz-ritual-revelada h2{text-align:center;font-size:21px;color:#0A1E33;margin:14px 0 10px}
@@ -5467,8 +5526,13 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ritual-album p{text-align:center;font-size:13px;color:#47617A;margin:0 0 10px}
 .pz-ritual-slots{display:flex;gap:6px;justify-content:center}
 .pz-ritual-slotcol{flex:1;max-width:64px;text-align:center}
-.pz-ritual-dia{display:block;font-size:11px;line-height:1.2;color:#5B7186;margin-top:4px;font-weight:600}
-.pz-ritual-slot{width:100%;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#0A1E33;display:flex;align-items:center;justify-content:center}
+/* (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c + regla 6/11 17:12) El DÍA
+   va SOBRE la casilla (en dorado, sobre el candado mismo) — ya no
+   debajo. La casilla de hoy se marca con el borde azul (.hoy), no con
+   la palabra «Hoy». El día lleva una pastilla oscura semitransparente
+   para que se lea también sobre foto. */
+.pz-ritual-dia-en{position:absolute;top:4px;left:50%;transform:translateX(-50%);z-index:2;font-size:11px;line-height:1;font-weight:700;color:#FEC14D;text-transform:capitalize;text-shadow:0 1px 3px rgba(10,30,51,.9);background:rgba(10,30,51,.5);padding:3px 7px;border-radius:999px;pointer-events:none;white-space:nowrap}
+.pz-ritual-slot{position:relative;width:100%;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#0A1E33;display:flex;align-items:center;justify-content:center}
 .pz-ritual-slot img{width:100%;height:100%;object-fit:cover;display:block}
 .pz-ritual-slot.sil span{font-size:20px;color:#FEC14D}
 .pz-ritual-slot.hoy{outline:2px solid #2793C8;outline-offset:2px}
@@ -5488,5 +5552,5 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ritual-cuenta h2{margin:0 0 4px;font-size:22px;color:#0A1E33}
 .pz-ritual-cuenta p.pz-ritual-ver-hint{font-size:15px;font-weight:700;margin:0;color:#0A1E33}
 @media (prefers-reduced-motion:reduce){
-.pz-ritual-sparkrow span,.pz-ritual-reveal .pz-ritual-carta,.pz-ritual-revelada,.pz-dorso-spark{animation:none}
+.pz-ritual-sparkrow span,.pz-ritual-reveal .pz-ritual-carta,.pz-ritual-revelada,.pz-dorso-spark,.pz-ritual-pack-velo.pz-respira,.pz-ritual-pack-velo.pz-respira .pz-dorso{animation:none}
 }
