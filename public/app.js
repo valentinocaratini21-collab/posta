@@ -4513,7 +4513,7 @@ function lpWeekToForm() {
 function lpAnalisisHTML() {
   return `
   <div class="section" id="analisis" style="background:var(--bg2)"><div class="wrap">
-    <h2>Posty analiza tu Instagram y tu competencia <span class="hl">antes de escribir una palabra</span></h2>
+    <h2>Posty analiza tu Instagram <span class="hl">antes de escribir una palabra</span></h2>
     <p class="lede">Nada de publicar por publicar. Primero miro tu cuenta y tu mercado, dato por dato — y cada posteo de tu semana nace de algo que vi. En tu prueba ya lo ves: el diagnóstico de tu Instagram viene incluido.</p>
     <div class="lp-cm-cards">
       <div class="lp-cm-card"><div class="lp-cm-i">🔍</div><h3>Tu cuenta, medida</h3><p class="lp-cm-tag">Qué mejorar, qué subir, qué bajar</p><p>Tu ritmo, tus formatos, tus horarios y tus textos, leídos de tu perfil real. Sin humo: cada punto viene con tu número de hoy y con lo que Posty mueve esta semana.</p></div>
@@ -4566,12 +4566,10 @@ function lpAnalisisHTML() {
 function lpAtencionHTML() {
   return `
   <div class="section" id="atencion" style="background:var(--bg2)"><div class="wrap">
-    <h2>Posty también <span class="hl">atiende y vende por vos</span></h2>
-    <p class="lede">El posteo trae la consulta. ¿Y después? Si nadie responde rápido, esa venta se enfría. Con Atención al cliente, Posty está atento las 24 horas: prepara cada respuesta al instante — con tus precios reales y tu forma de atender — y vos la aprobás con un toque antes de que salga. Nada se manda sin tu OK.</p>
+    <h2>Posty también <span class="hl">atiende por vos</span></h2>
+    <p class="lede">El posteo trae la consulta. ¿Y después? Si nadie responde rápido, esa venta se enfría. Con Atención al cliente, Posty prepara cada respuesta — con tus precios reales y tu forma de atender — y vos la aprobás con un toque antes de que salga. Nada se manda sin tu OK.</p>
     <div class="lp-cm-cards">
-      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>La respuesta lista al instante, 24/7</h3><p class="lp-cm-tag">Mensajes y comentarios de Instagram</p><p>Tus precios, tus servicios, tus horarios: preparo cada respuesta con los datos reales de tu negocio, en tu tono, y te la dejo lista para aprobar con un toque. Nada de respuestas genéricas ni precios inventados — y nada sale sin tu OK.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">📅</div><h3>Agendo y confirmo tus turnos</h3><p class="lp-cm-tag">Tu agenda, siempre con tu OK</p><p>Ofrezco tus horarios libres y dejo la reserva y la confirmación listas para tu toque. Y si alguien cancela, ese lugar se vuelve a ofrecer.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">🎯</div><h3>Sigo cada consulta hasta el cierre</h3><p class="lp-cm-tag">Ningún interesado se enfría</p><p>Si alguien preguntó y no cerró, te preparo el seguimiento a tiempo para que salga con tu toque. Cuando está listo para comprar, el cierre va con link de pago o seña — y después de la venta, la reseña de Google también te queda lista para aprobar.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>La respuesta lista para tu OK</h3><p class="lp-cm-tag">Mensajes y comentarios de Instagram</p><p>Tus precios, tus servicios, tus horarios: preparo cada respuesta con los datos reales de tu negocio, en tu tono, y te la dejo lista para aprobar con un toque. Nada de respuestas genéricas ni precios inventados — y nada sale sin tu OK.</p></div>
     </div>
     <p class="lp-cm-close">🤝 Vos ves todo: cada conversación queda en tu cuenta, nada sale sin tu OK, y lo sensible — quejas, descuentos, plata — te lo derivo a vos. <b>Posty atiende; vos mandás.</b></p>
     <div style="text-align:center"><a class="btn btn-primary btn-lg" href="#planes">Ver el plan →</a></div>
@@ -4682,7 +4680,7 @@ function lpCapSectionsHTML() {
     <div class="cap-copy">
       <div class="cap-kick">Growth</div>
       <h2>Lo que funciona, <span class="hl">se potencia</span></h2>
-      <p class="cap-exp">Posty detecta el posteo que mejor te está andando y te propone potenciarlo con pauta. Vos fijás el tope de gasto y nada se mueve sin tu OK. Y cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.</p>
+      <p class="cap-exp">Posty detecta el posteo que mejor te está andando y te dice por qué rinde. Y cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.</p>
       <ul class="cap-list">
         <li>Tu mejor posteo, detectado solo</li>
         <li>Pauta con tu tope, siempre con tu OK</li>
@@ -4703,9 +4701,9 @@ function lpCapSectionsHTML() {
     <div class="cap-copy">
       <div class="cap-kick">Ideas semanales</div>
       <h2>Nunca te quedás <span class="hl">sin qué publicar</span></h2>
-      <p class="cap-exp">Cada semana Posty mira tu competencia, el posteo que mejor te anduvo y las fechas que se vienen — y te propone ideas concretas para tu negocio. La que te gusta se convierte en posteo con un toque.</p>
+      <p class="cap-exp">Cada semana Posty mira el posteo que mejor te anduvo y las fechas que se vienen — y te propone ideas concretas para tu negocio. La que te gusta se convierte en posteo con un toque.</p>
       <ul class="cap-list">
-        <li>Desde tu competencia, tus ganadores y el calendario</li>
+        <li>Desde tus ganadores y el calendario</li>
         <li>Un toque en "Hacelo" y la idea se vuelve posteo</li>
         <li>Sin relleno: si no hay nada concreto, no te molesta</li>
       </ul>
@@ -5002,7 +5000,7 @@ function landingView(cfg) {
       <div class="gj-seg" aria-hidden="true"><i></i></div>
       <div class="gj-node" role="listitem"><span class="gj-dot">🏠</span><div><b>De la casa</b><small>Conozco tu paleta, tu tono y tus días fuertes: acierto de primera.</small></div></div>
       <div class="gj-seg" aria-hidden="true"><i></i></div>
-      <div class="gj-node" role="listitem"><span class="gj-dot">🤝</span><div><b>Mano derecha de tu Instagram</b><small>Anticipo: ideas desde tu competencia, tus posteos ganadores y tu calendario.</small></div></div>
+      <div class="gj-node" role="listitem"><span class="gj-dot">🤝</span><div><b>Mano derecha de tu Instagram</b><small>Anticipo: ideas desde tus posteos ganadores y tu calendario.</small></div></div>
       <div class="gj-seg" aria-hidden="true"><i></i></div>
       <div class="gj-node" role="listitem"><span class="gj-dot">⭐</span><div><b>Tu socio de contenido</b><small>Tu semana entera sale sola, en tu línea: vos solo aceptás.</small></div></div>
     </div>
@@ -5139,16 +5137,16 @@ function landingView(cfg) {
     <h2>Un community manager hace mucho más que publicar</h2>
     <p class="lede">Un Instagram que vende no se mantiene solo: hay que publicar seguido, conversar con la gente, responder todo y promocionar lo que funciona. Eso es lo que hace un community manager. Y cobra <b>desde $1.000.000 por mes</b>. <b>Posty hace ese mismo trabajo, todos los días.</b></p>
     <div class="lp-cm-cards">
-      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>Comunidad</h3><p class="lp-cm-tag">Que nadie quede sin respuesta</p><p>Responde comentarios y mensajes (con tu OK en un toque), contesta tus reseñas de Google, y arma historias que hacen participar a tu audiencia: encuestas, preguntas y cuentas regresivas. Una comunidad se construye conversando, no solo publicando.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">📈</div><h3>Crecimiento</h3><p class="lp-cm-tag">Que te descubra gente nueva</p><p>Detecta tus posteos que mejor andan y los potencia con pauta (vos fijás el tope), te da tu página pública lista para compartir con botón de WhatsApp, y cada mes trabaja con un foco de crecimiento que vos elegís.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>Comunidad</h3><p class="lp-cm-tag">Que nadie quede sin respuesta</p><p>Responde comentarios y mensajes (con tu OK en un toque), y arma historias que hacen participar a tu audiencia: encuestas, preguntas y cuentas regresivas. Una comunidad se construye conversando, no solo publicando.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">📈</div><h3>Crecimiento</h3><p class="lp-cm-tag">Que te descubra gente nueva</p><p>Detecta tus posteos que mejor andan y te dice cuáles rinden más, te da tu página pública lista para compartir con botón de WhatsApp, y cada mes trabaja con un foco de crecimiento que vos elegís.</p></div>
       <div class="lp-cm-card"><div class="lp-cm-i">🛒</div><h3>Ventas</h3><p class="lp-cm-tag">Que el seguidor se vuelva cliente</p><p>Posteos pensados para vender: tu producto, tus promos. Te avisa ANTES de cada fecha que vende (Día de la Madre, Hot Sale, Navidad…) para llegar listo, y cada perfil termina en un toque: WhatsApp directo a tu negocio.</p></div>
     </div>
     <div class="lp-cm-cmp" role="table" aria-label="Comparación entre un community manager tradicional y Posty">
       <div class="lp-cm-row lp-cm-head" role="row"><div>El trabajo</div><div>Community manager</div><div class="win">Posty</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Publica posteos, reels e historias</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>✓</div><div class="win">✓</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Cuida tus reseñas</div><div>✓</div><div class="win">✓</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Potencia lo que anda con pauta</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Cuida tus reseñas</div><div>✓</div><div class="win">—</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Potencia lo que anda con pauta</div><div>✓</div><div class="win">—</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Piensa el foco de cada mes</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Está disponible</div><div>En su horario</div><div class="win">Todos los días, a toda hora</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>Desde $1.000.000 por mes</div><div class="win">USD 6,63 por día</div></div>
@@ -5224,8 +5222,8 @@ function landingView(cfg) {
       <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>Horas, cada semana</div><div>Días</div><div>1 a 2 semanas</div><div class="win">1 minuto</div></div>
       <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>—</div><div>Coordinación y aprobaciones</div><div>Varias por mes</div><div class="win">Cero</div></div>
       <div class="cmp-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>Vos, cuando podés</div><div>A veces está incluido</div><div>Si está en el contrato</div><div class="win">Respuestas listas para tu OK en un toque</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Reseñas de Google</div><div>A mano, una por una</div><div>No suele incluirlas</div><div>Se cobra aparte</div><div class="win">Gestionadas, con tu OK</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Pauta publicitaria</div><div>La armás y la seguís vos</div><div>Honorarios aparte</div><div>Honorarios aparte</div><div class="win">Potencia tu mejor posteo desde la app</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Reseñas de Google</div><div>A mano, una por una</div><div>No suele incluirlas</div><div>Se cobra aparte</div><div class="win">—</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Pauta publicitaria</div><div>La armás y la seguís vos</div><div>Honorarios aparte</div><div>Honorarios aparte</div><div class="win">—</div></div>
       <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>—</div><div>Rara vez</div><div>No existe</div><div class="win">3 días gratis, sin tarjeta</div></div>
       <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>—</div><div>Mes a mes, informal</div><div>3 a 6 meses</div><div class="win">Mensual, cancelás cuando querés</div></div>
     </div></div>
@@ -5295,14 +5293,14 @@ function landingView(cfg) {
       <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
       <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Lo frenás antes de que salga, en un toque. ¿No te gusta la imagen? La rehacés con otro estilo o volvés a la anterior, gratis. Y aprendo de lo que te gusta para que cada semana salga mejor.</p></details>
-      <details><summary>¿Posty también atiende a mis clientes?</summary><p>Sí: Posty está atento a tus mensajes de Instagram las 24 horas y prepara cada respuesta al instante, con tus precios y servicios reales. También te deja listos los turnos y reservas para confirmar, el seguimiento a quien preguntó y no cerró, y el cierre con link de pago o seña. Vos aprobás cada mensaje con un toque antes de que salga — nada se manda sin tu OK — y lo sensible te lo derivo a vos.</p></details>
+      <details><summary>¿Posty también atiende a mis clientes?</summary><p>Sí: Posty prepara las respuestas a tus mensajes y comentarios de Instagram, con tus precios y servicios reales. Vos aprobás cada mensaje con un toque antes de que salga — nada se manda sin tu OK — y lo sensible te lo derivo a vos.</p></details>
       <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca veo ni guardo tu contraseña.</p></details>
       <details><summary>¿Los posteos se publican solos?</summary><p>Sí, esa es la idea: tu semana sale sola en los mejores horarios, sin que toques nada. Antes de cada publicación te aviso, y si algo no te cierra lo frenás con un toque. ¿Preferís aprobar todo a mano? También podés: apagás la publicación automática en Ajustes y nada sale sin tu OK.</p></details>
       <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: mirá tu semana armada en 1 minuto y decidí. Si no te sirve, no pagás nada.</p></details>
       <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis la ves armada en 1 minuto, y al crear tu cuenta ya queda publicándose sola (con aviso previo, por si querés frenar algo).</p></details>
       <details><summary>¿Posty responde los comentarios y los mensajes de mi Instagram?</summary><p>Sí. Por cada comentario o mensaje que llega, Posty te prepara la respuesta en el tono de tu negocio: la mandás con un toque, la editás o la descartás. Nada se responde sin que lo apruebes vos.</p></details>
       <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar, responder, promocionar y cuidar tu perfil — con tu aprobación en un toque cuando hace falta criterio humano. Si tu marca necesita producción de fotos o video presencial, o campañas a medida, eso sigue siendo trabajo de un equipo humano.</p></details>
-      <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo con pauta. Cargás crédito en la app, fijás cuánto querés gastar y listo: tu mejor contenido llega a mucha más gente.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo. Posty es un producto completo por sí mismo: pienso las ideas, diseño, publico, respondo y promociono — todo dentro de tu plan, sin que contrates a nadie más ni sumes otros servicios. Con Posty alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
+      <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Todavía no: la publicidad con Meta todavía no está conectada. Posty ya te marca cuáles son tus mejores posteos, y cuando la publicidad esté disponible vas a poder potenciarlos desde la app.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo. Posty es un producto completo por sí mismo: pienso las ideas, diseño, publico, respondo y promociono — todo dentro de tu plan, sin que contrates a nadie más ni sumes otros servicios. Con Posty alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
     </div>
     <p style="text-align:center;margin-top:28px;font-size:15.5px;color:var(--dim)">¿Otra duda? <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);font-weight:700;cursor:pointer">Hablá con Posty <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
     <div style="text-align:center;margin-top:44px">

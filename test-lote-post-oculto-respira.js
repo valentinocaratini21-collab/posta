@@ -250,7 +250,7 @@ const countDorso = (html) => (html.match(/<i class="pz-dorso">/g) || []).length;
   // --- C8) M78 + estática ---
   const fns = ['pzTzOffsetMs', 'pzDiaInicioMs', 'pzRitualAbreFecha', 'hfCuentaAbreTick'];
   t('C8a: M78 — las 4 funciones nuevas existen definidas en el bundle', fns.every((f) => typeof S[f] === 'function'), fns.filter((f) => typeof S[f] !== 'function').join(','));
-  t('C8b: M78 — ?v= bumpeado SOLO en ES (493) y EN sin app.js', IDX_ES.includes('app.js?v=493') && !IDX_ES.includes('app.js?v=489') && !IDX_EN.includes('app.js?v='));
+  t('C8b: M78 — ?v= bumpeado SOLO en ES (494) y EN sin app.js', IDX_ES.includes('app.js?v=494') && !IDX_ES.includes('app.js?v=489') && !IDX_EN.includes('app.js?v='));
   t('C8c: CSS — halo + cuenta + día-en existen; keyframes pzRespira/hfRespira existen; VARIANTE B (celda ancha, halo, 7 destellos, Posty, cuenta dorada)',
     CSS.includes('.pz-ritual-pack-velo.pz-respira') && CSS.includes('@keyframes pzRespira') && CSS.includes('@keyframes hfRespira')
     && CSS.includes('.hf-tile.hf-carta-respira') && CSS.includes('.hf-cuenta-abre') && CSS.includes('.pz-ritual-dia-en')
