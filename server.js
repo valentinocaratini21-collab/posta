@@ -28881,6 +28881,22 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
     const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialComments, offerSheet: trialOfferSheet });
+    // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Esta ruta no pasa el feed al digest
+    // (feed: null): sin captions, la voz quedaba vacía aunque el @ las
+    // tenga. Se reponen SOLO los marcadores de voz (best-effort, carrera
+    // 2,5s, mismo patrón que el perfil): el resto del digest queda como
+    // hoy. Sin @ o sin embed, la voz sigue siendo la de sus respuestas.
+    if (ig && trialDigest) {
+      try {
+        const _htmlVoz = await Promise.race([demo.fetchIgEmbedHtml(ig), new Promise((r) => setTimeout(() => r(null), 2500))]);
+        if (_htmlVoz) {
+          const _capsVoz = (feedAudit.parseEmbedPosts(_htmlVoz) || []).map((p) => p.caption).filter(Boolean).slice(0, 12);
+          if (_capsVoz.length) {
+            trialDigest.voz_marcadores = personalizacion.extraerMarcadoresVoz(_capsVoz, [ocAns.producto_estrella, ocAns.diferencial, ocAns.audiencia].filter((x) => x));
+          }
+        }
+      } catch (e) { /* sin voz del feed: la de sus respuestas ya está en el digest */ }
+    }
     // (rubro-literal) PUERTA FAIL-CLOSED: sin producto evidenciado no hay
     // semana. 'todo' sin servicios, sin catálogo y sin detectados = el
     // caso del primo (Q1 vacía): 400 con falta_producto para que el front
@@ -29161,6 +29177,11 @@ try { styleIg = await feedAudit.trialStyleProfile(embedPosts, { bio: bio || '', 
     const firmaIg = await feedAudit.trialStyleSignature(embedPosts, { vision: (it) => classifyFeedPostStyles(it, prefillLang), source: 'tu feed' });
     if (firmaIg) { if (styleIg) styleIg.firma = firmaIg; else styleIg = { firma: firmaIg }; }
   } catch (e) { /* sin firma: el estudio sigue con lo demás */ }
+  // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Sus frases que se repiten, del mismo
+  // embed (cero fetches nuevos): el front las muestra en «Lo que ya sé
+  // de vos» y la generación las usa en los captions.
+  let vozMarcadores = [];
+  try { vozMarcadores = personalizacion.extraerMarcadoresVoz(captions, []); } catch (e) { vozMarcadores = []; }
   res.json({
     ok: true,
     ig,
@@ -29184,6 +29205,8 @@ try { styleIg = await feedAudit.trialStyleProfile(embedPosts, { bio: bio || '', 
       const saved = trialOfferSavedSheet(trialOfferKey({ ig }));
       return saved ? studyOffer.mergeOfferSheet(s, saved, new Date()) : s;
     } catch (e) { return null; } })(),
+    // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Sus frases que se repiten.
+    voz_marcadores: vozMarcadores,
   });
 });
 
@@ -30014,7 +30037,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
     const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo });
-    const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
+    const { specPosts, videoIdx, count: n, goalLine, topics, voiceMarkers } = spec;
     const week = buildTrialWeek(n, lang); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(effCategory) ? effCategory : 'otro';
     const withPhotos = specPosts.map((p) => (
@@ -30026,6 +30049,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const made = topics.map((t, i) => {
       const r = demo.resolveTrialCaption(topics, cat, {
         business, tone, country: effCountry, idx: i, goalLine, lang, prevCaptions: prevCaps,
+        // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Igual que en demo.generateDemo:
+        // cada caption cierra con una frase real del cliente.
+        voiceLine: demo.trialVoiceEcho(voiceMarkers, i, lang),
       });
       // (v209) Pieza LIMPIA (dosificación): el caption cierra con el CTA.
       // 🧠 (v232) Y el cierre es el de la INTENCIÓN DE VENTA del topic.
@@ -30672,7 +30698,15 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Si dice que no, no insistas. Objeciones: "es caro" → Posty sale $6.63 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
     // El visitante no tiene cuenta (no hay perfil de estilo): el checklist anti-genérico sí aplica.
     (CAPTION_CHECKLIST ? '\n\n' + CAPTION_CHECKLIST : '');
-  const sys = en ? sysEn : sysEs;
+  let sys = en ? sysEn : sysEs;
+  // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) La línea de voz del fundamento (mismo
+  // mecanismo que la semana del cliente: personalizacion.lineaVoz): el
+  // chat edita los captions con sus palabras reales. Sin marcadores, el
+  // prompt queda como hoy.
+  try {
+    const lv = personalizacion.lineaVoz(out.digest && out.digest.voz_marcadores, en ? 'en' : 'es');
+    if (lv) sys = sys + '\n\n' + lv;
+  } catch (e) {}
   try {
     const ai = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -32335,7 +32369,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v764';
+const BUILD_ID = '20261105-v765';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

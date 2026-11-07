@@ -1447,11 +1447,14 @@ function topicDna(t) {
   };
 }
 
-// Caption final: reemplaza {BIZ}, suma la línea de objetivo y convierte el tono.
-function buildFinalCaption(t, { business, tone, goalLine }) {
+// Caption final: reemplaza {BIZ}, suma la línea de objetivo y la línea
+// de voz, y convierte el tono. La línea de voz se suma DESPUÉS de toTu:
+// son sus palabras exactas entre comillas, no se reescriben.
+function buildFinalCaption(t, { business, tone, goalLine, voiceLine }) {
   let caption = String((t && t.caption) || '').split('{BIZ}').join(business);
   if (goalLine) caption += goalLine;
   if (tone === 'tu') caption = toTu(caption);
+  if (voiceLine) caption += voiceLine;
   return caption;
 }
 
@@ -1509,7 +1512,7 @@ function anchorsMatch348(a, b) {
 //    generator también los recibe por primera vez en la prueba).
 //  · Las piezas SIN ancla (relleno de pool) conservan el préstamo
 //    histórico entre temas del rubro.
-function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLine, lang, prevCaptions }) {
+function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLine, lang, prevCaptions, voiceLine }) {
   const en = lang === 'en';
   const list = Array.isArray(topics) ? topics : [];
   const piece = list[idx] || {};
@@ -1523,12 +1526,20 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   // caption propio + goalLine + hashtags pasaba los 320 caracteres del
   // gate, el tema propio se rechazaba por largo y la pieza salía con
   // el caption de otro — el mismatch titular↔caption en su forma pura.
+  // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) La línea de voz entra en la MISMA
+  // escalera, solo en los intentos del tema PROPIO (un caption prestado
+  // queda limpio, como el goalLine): pieza 0 prueba goal+voz, goal,
+  // voz y nada; las demás, voz y nada. El gate decide en cada intento:
+  // si la voz no entra por largo, la pieza sale con su caption propio
+  // sin eco — nunca se fuerza ni se inventa voz.
   const attempts = [];
   if (list[idx]) {
-    if (idx === 0 && goalLine) attempts.push({ i: idx, gl: goalLine });
-    attempts.push({ i: idx, gl: '' });
+    if (idx === 0 && goalLine && voiceLine) attempts.push({ i: idx, gl: goalLine, vl: voiceLine });
+    if (idx === 0 && goalLine) attempts.push({ i: idx, gl: goalLine, vl: '' });
+    if (voiceLine) attempts.push({ i: idx, gl: '', vl: voiceLine });
+    attempts.push({ i: idx, gl: '', vl: '' });
   }
-  for (let i = 0; i < list.length; i++) if (i !== idx) attempts.push({ i, gl: '' });
+  for (let i = 0; i < list.length; i++) if (i !== idx) attempts.push({ i, gl: '', vl: '' });
   for (const at of attempts) {
     const i = at.i;
     const t = list[i];
@@ -1536,7 +1547,7 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
       const candAnchor = String((t && t.digest_anchor) || '').trim();
       if (!candAnchor || !anchorsMatch348(pieceAnchor, candAnchor)) continue;
     }
-    const caption = buildFinalCaption(t, { business, tone, goalLine: at.gl });
+    const caption = buildFinalCaption(t, { business, tone, goalLine: at.gl, voiceLine: at.vl });
     if (usedBodies.has(bodyKey(caption))) continue;
     const hashtags = demoHashtags(cat, country, tone, lang);
     const gateInput = { business, dna: topicDna(t), prevCaptions: Array.isArray(prevCaptions) ? prevCaptions : [] };
@@ -1550,9 +1561,14 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   }
   const kind = (list[idx] && list[idx].kind) || 'novedad';
   const fbTable = en ? SAFE_FALLBACK_CAPTIONS_EN : SAFE_FALLBACK_CAPTIONS;
+  // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) El fallback también es su posteo: la
+  // frase del cliente va igual. El eco son solo sus palabras limpias
+  // (letras y espacios, del extractor) + un prefijo fijo: no trae frase
+  // quemada, no agrega bloque (un solo \n) ni emoji — no puede romper
+  // lo que el fallback ya garantiza. Sin voiceLine, queda como hoy.
   let caption = buildFinalCaption(
     { caption: fbTable[kind] || fbTable.novedad },
-    { business, tone, goalLine: '' }
+    { business, tone, goalLine: '', voiceLine }
   );
   // (v348 · D1) El fallback tampoco se duplica en la semana: si el
   // cuerpo genérico de SU kind ya salió en otra pieza, rota al primer
@@ -1560,7 +1576,7 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   if (usedBodies.has(bodyKey(caption))) {
     for (const k of [kind, 'social', 'novedad', 'tip', 'reserva', 'promo', 'sorteo']) {
       if (!fbTable[k]) continue;
-      const alt = buildFinalCaption({ caption: fbTable[k] }, { business, tone, goalLine: '' });
+      const alt = buildFinalCaption({ caption: fbTable[k] }, { business, tone, goalLine: '', voiceLine });
       if (!usedBodies.has(bodyKey(alt))) { caption = alt; break; }
     }
   }

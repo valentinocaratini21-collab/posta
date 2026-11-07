@@ -16,6 +16,7 @@ const captions = require('./demo-captions');
 const draftMod = require('./draft-onboarding'); // DRAFT-ONBOARDING (4/11): gusto del draft sobre el spec
 const clientDigest = require('./client-digest');
 const studyOffer = require('./study-offer'); // (M3 FICHA-OFERTA) puerta de fecha en la generación
+const personalizacion = require('./personalizacion'); // (LOTE VOZ-PROPIA) marcadores de voz del digest
 const rubroId = require('./rubro-id'); // (v235) subrubros canónicos del clasificador
 const demoAi = require('./demo-ai'); // (v231) subject_scale por familia de arte
 
@@ -1323,6 +1324,54 @@ function dropTemplateVarTopics(list) {
   return out;
 }
 
+// (LOTE VOZ-PROPIA-EN-LA-PRUEBA · 7/11) La voz del cliente en la semana
+// de la prueba: sus frases reales que se repiten (digest.voz_marcadores,
+// extraídas de SUS captions + sus respuestas por
+// personalizacion.extraerMarcadoresVoz). Solo frases extraídas — nunca
+// se inventa voz, nunca se inventan frases.
+// trialVoiceEcho: la línea corta que cierra el caption de la pieza idx —
+// un marcador por pieza, rotando (pieza 0 → marcador 0, pieza 1 →
+// marcador 1...). Sin marcadores, '' (la prueba sigue como hoy).
+function trialVoiceEcho(markers, idx, lang) {
+  const ms = (Array.isArray(markers) ? markers : []).map((m) => String(m || '').trim()).filter(Boolean);
+  if (!ms.length) return '';
+  const m = ms[(((idx | 0) % ms.length) + ms.length) % ms.length];
+  return '\n' + (lang === 'en' ? 'In your words: ' : 'En tus palabras: ') + '«' + m + '»';
+}
+// applyVoiceToTopics: el titular de UNA pieza lleva su frase (espejo de
+// applyGoal: solo el primer match). Una frase-marcador de 2 palabras se
+// usa como titular de la primera pieza cuyo ancla de digest (o su
+// titular+caption) comparte una palabra de contenido con la frase — la
+// frase describe ese producto, no otro. Solo frases (una palabra suelta
+// nunca es titular). No muta el pool (los objetos son compartidos):
+// devuelve un array nuevo con el tema reemplazado por clon.
+function applyVoiceToTopics(topics, markers) {
+  const list = Array.isArray(topics) ? topics : [];
+  const ms = (Array.isArray(markers) ? markers : []).map((m) => String(m || '').trim()).filter(Boolean);
+  if (!list.length || !ms.length) return list;
+  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const wordMatch = (a, b) => {
+    if (!a || !b) return false;
+    if (a === b) return a.length >= 3;
+    if (a.length < 4 || b.length < 4) return false;
+    return a.startsWith(b) || b.startsWith(a);
+  };
+  for (const m of ms) {
+    const words = norm(m).split(' ').filter((w) => w.length >= 3);
+    if (words.length < 2) continue; // solo frases
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      if (!t) continue;
+      const hay = norm(`${t.digest_anchor || ''} ${t.headline || ''} ${t.caption || ''}`).split(' ');
+      if (!words.some((w) => hay.some((h) => wordMatch(w, h)))) continue;
+      const out = list.slice();
+      out[i] = { ...t, headline: m.charAt(0).toUpperCase() + m.slice(1) };
+      return out;
+    }
+  }
+  return list;
+}
+
 // count: cantidad de posteos a generar (3 = demo clásica 2+1; 5 = semana de prueba Pro)
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
@@ -1610,6 +1659,18 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       });
     }
   } catch (e) { /* el filtro nunca frena la prueba */ }
+  // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) La línea de voz (mismo helper que la
+  // semana del cliente: personalizacion.lineaVoz) y los marcadores
+  // viajan en el spec para la generación y el chat de la prueba; el
+  // titular de una pieza lleva su frase (primer match, como applyGoal).
+  // Sin marcadores, todo queda como hoy (rama honesta).
+  let voiceMarkers = [];
+  let voiceLine = '';
+  try {
+    voiceMarkers = (digest && Array.isArray(digest.voz_marcadores)) ? digest.voz_marcadores.map((m) => String(m || '').trim()).filter(Boolean).slice(0, 8) : [];
+    voiceLine = personalizacion.lineaVoz(voiceMarkers, lang);
+  } catch (e) { voiceMarkers = []; voiceLine = ''; }
+  try { topics = applyVoiceToTopics(topics, voiceMarkers); } catch (e) { /* la voz nunca frena la prueba */ }
   const specPosts = topics.map((t, i) => {
     let headline = t.headline;
     let subline = t.subline;
@@ -1787,7 +1848,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     if (specPosts[vIdx]) specPosts[vIdx].muestra_neutra = true;
   }
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
+  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -1907,7 +1968,7 @@ function appendOfferTerms(caption, topic, lang) {
 
 async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang, trialNoStock, draft, firmaStyle, firmaSinVideo });
-  const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
+  const { specPosts, videoIdx, count: n, goalLine, topics, voiceMarkers } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 
   // Las fotos del spec guardado usan marcador para la subida del usuario
@@ -1936,6 +1997,9 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     const made = topics.map((t, i) => {
       const r = captions.resolveTrialCaption(topics, cat, {
         business, tone, country, idx: i, goalLine, lang, prevCaptions: prevCaps,
+        // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Cada caption cierra con una
+        // frase real del cliente (un marcador por pieza, rotando).
+        voiceLine: trialVoiceEcho(voiceMarkers, i, lang),
       });
       // (v209) Pieza LIMPIA: sin titular ni botón en la imagen, el
       // caption carga la idea y CIERRA con el CTA — garantizado acá.
@@ -2739,6 +2803,9 @@ module.exports = {
   renderVideoB64,
   DEMO_TOPICS: captions.DEMO_TOPICS,
   resolveTrialCaption: captions.resolveTrialCaption,
+  // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Eco de voz por pieza + titular con su frase.
+  trialVoiceEcho,
+  applyVoiceToTopics,
   capHeadlineWords: captions.capHeadlineWords,
   assignTextModes: captions.assignTextModes,
   captionEndsWithCta: captions.captionEndsWithCta,

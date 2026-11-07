@@ -4923,6 +4923,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     knownRubro: 'Tu rubro',
     knownCiudad: 'Dónde estás',
     knownProducto: 'Tu producto estrella',
+    knownVoz: 'Hablás así',
     honestTitle: 'Lo que no pude ver 🙈',
     honestSub: 'Te lo digo de frente: prefiero preguntarte a inventar que leí todo.',
     honestFoot: 'Con tus respuestas armo la semana igual — nada se pierde 👇',
@@ -5311,7 +5312,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   }
 
   // Estado de la sesión. plan = preguntas en orden; ans = respuestas.
-  var S = { source: null, email: null, ig: null, web: null, biz: null, cat: null, products: [], rubroOptions: null, plan: [], qi: 0, ans: {}, mode: 'both', busy: false, noWeb: false, facts: null, webFacts: null, igFacts: null, igStage: null, style: null, studyPending: false, studyPromise: null };
+  var S = { source: null, email: null, ig: null, web: null, biz: null, cat: null, products: [], rubroOptions: null, plan: [], qi: 0, ans: {}, mode: 'both', busy: false, noWeb: false, facts: null, webFacts: null, igFacts: null, igStage: null, style: null, studyPending: false, studyPromise: null, voice: null };
   var reduced = false;
   try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
 
@@ -5883,6 +5884,11 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var stLine = '';
     try { stLine = chatStyleLine(); } catch (e) { stLine = ''; }
     if (stLine) rows.push({ e: '✦', l: T.knownEstilo, v: stLine });
+    // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Sus frases que se repiten, con
+    // procedencia (son sus palabras exactas, del prefill de su IG).
+    // Solo cuando existen marcadores: sin ellos, la fila no existe.
+    var voice = S.voice || [];
+    if (voice.length) rows.push({ e: '🗣️', l: T.knownVoz, v: voice.slice(0, 3).map(function (m) { return '«' + m + '»'; }).join(' · ') });
     return rows;
   }
   function chatHonestNeeded() {
@@ -6819,7 +6825,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   function opResumeSave(stage) {
     try {
       var payload = { v: 1, ts: Date.now(), stage: stage,
-        S: { source: S.source, email: S.email, ig: S.ig, web: S.web, biz: S.biz, cat: S.cat, products: S.products || [], rubroOptions: (S.rubroOptions === undefined) ? null : S.rubroOptions, plan: S.plan || [], qi: S.qi || 0, ans: S.ans || {}, noWeb: S.noWeb, facts: S.facts || null, webFacts: S.webFacts || null, igFacts: S.igFacts || null, igStage: S.igStage || null, style: S.style || null, igTried: !!S.igTried, igOk: !!S.igOk, webTried: !!S.webTried, webOk: !!S.webOk,
+        S: { source: S.source, email: S.email, ig: S.ig, web: S.web, biz: S.biz, cat: S.cat, products: S.products || [], rubroOptions: (S.rubroOptions === undefined) ? null : S.rubroOptions, plan: S.plan || [], qi: S.qi || 0, ans: S.ans || {}, noWeb: S.noWeb, facts: S.facts || null, webFacts: S.webFacts || null, igFacts: S.igFacts || null, igStage: S.igStage || null, style: S.style || null, voice: S.voice || null, igTried: !!S.igTried, igOk: !!S.igOk, webTried: !!S.webTried, webOk: !!S.webOk,
           chatLog: (S.chatLog || []).slice(-100), chatPostedQ: S.chatPostedQ || {}, chatPushedQ: S.chatPushedQ || {}, chatJoined: !!S.chatJoined, chatGuest: S.chatGuest || null, chatLastId: S.chatLastId || 0, chatPaused: !!S.chatPaused, chatSeen: Object.keys(S.chatSeen || {}).slice(-50) },
         FL: { productos: FL_E.productos || [], vetos: FL_E.vetos || [] },
         DR: (typeof DR !== 'undefined' && DR) ? { dims: DR.dims, picks: DR.picks, champ: DR.champ } : null };
@@ -6868,7 +6874,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.source = s.source; S.email = s.email; S.ig = s.ig; S.web = s.web; S.biz = s.biz; S.cat = s.cat;
       S.products = s.products || []; S.rubroOptions = (s.rubroOptions === undefined) ? null : s.rubroOptions;
       S.plan = s.plan || []; S.qi = s.qi || 0; S.ans = s.ans || {};
-      S.noWeb = !!s.noWeb; S.facts = s.facts || null; S.webFacts = s.webFacts || null; S.igFacts = s.igFacts || null; S.igStage = s.igStage || null; S.style = s.style || null; S.igTried = !!s.igTried; S.igOk = !!s.igOk; S.webTried = !!s.webTried; S.webOk = !!s.webOk;
+      S.noWeb = !!s.noWeb; S.facts = s.facts || null; S.webFacts = s.webFacts || null; S.igFacts = s.igFacts || null; S.igStage = s.igStage || null; S.style = s.style || null; S.voice = s.voice || null; S.igTried = !!s.igTried; S.igOk = !!s.igOk; S.webTried = !!s.webTried; S.webOk = !!s.webOk;
       // (LOTE PRUEBA-CHAT) El chat se reanuda donde quedó (hilo + pausa).
       S.chatLog = s.chatLog || []; S.chatPostedQ = s.chatPostedQ || {}; S.chatPushedQ = s.chatPushedQ || {}; S.chatJoined = !!s.chatJoined; S.chatGuest = s.chatGuest || null; S.chatLastId = s.chatLastId || 0; S.chatPaused = !!s.chatPaused;
       S.chatSeen = {}; (s.chatSeen || []).forEach(function (id) { S.chatSeen[id] = 1; });
@@ -7268,6 +7274,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       if (d.offer_sheet) S.offerSheet = d.offer_sheet;
       S.igOk = true;
       if (d.style) S.style = mergeStyle(S.style, d.style);
+      // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Sus frases que se repiten, del prefill.
+      S.voice = Array.isArray(d.voz_marcadores) ? d.voz_marcadores.filter(function (m) { return String(m || '').trim(); }).slice(0, 8) : null;
       // (LOTE ETAPA-INSTAGRAM) Señal de etapa del prefill (ig_stage).
       S.igStage = d.ig_stage || null;
       try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + ig; } catch (e) {}
