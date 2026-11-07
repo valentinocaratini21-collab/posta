@@ -2376,6 +2376,7 @@ function buildGenFormData() {
     fd.append('voz', OC_ANS.voz || '');
     fd.append('precios', OC_ANS.precios || '');
     fd.append('donde', OC_ANS.donde || '');
+    fd.append('etapa', OC_ANS.etapa || '');
   }
   // (FUNDAMENTO-LITERAL · pieza 1) El espejo aprobado viaja con la generación.
   if (window.OC_ESPEJO) { fd.append('espejo_flujo', '1'); fd.append('espejo_aprobado', String(window.OC_ESPEJO.aprobado || '')); fd.append('espejo_productos', JSON.stringify(window.OC_ESPEJO.productos || [])); fd.append('espejo_vetos', JSON.stringify(window.OC_ESPEJO.vetos || [])); }
@@ -4398,6 +4399,12 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     ubicOnline: 'Online',
     ubicLibrePh: 'Ej: Palermo, Buenos Aires',
     ubicLibre: 'Escribí el barrio o la ciudad donde te encuentran.',
+    // (LOTE ETAPA-INSTAGRAM) La etapa del IG: se detecta en el estudio
+    // y se propone para confirmar con un toque (hueco 'etapa', no q9 fija).
+    chatEtapa: 'vi tu instagram y está vacío — arrancamos de cero, ¿no?',
+    qEtapa: '¿En qué etapa está tu Instagram?',
+    etapaChip: '✦ así lo veo yo',
+    etapaNota: 'La opción dorada es lo que vi en tu Instagram. Tocá para confirmar o elegí otra.',
     q1: '¿Qué es lo que más vendés?',
     q2: '¿Qué querés que haga la gente cuando ve el posteo?',
     q3: '¿Tenés alguna promo esta semana?',
@@ -4691,6 +4698,36 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   var Q4 = [{ v: 'cercano', l: 'Cercano' }, { v: 'profesional', l: 'Profesional' }, { v: 'divertido', l: 'Divertido' }, { v: 'elegante', l: 'Elegante' }];
   var Q5 = [{ v: 'si', l: 'Sí' }, { v: 'ofertas', l: 'Solo en ofertas' }, { v: 'no', l: 'No' }];
   var DONDE = [{ v: 'whatsapp', l: 'WhatsApp' }, { v: 'instagram', l: 'Instagram' }, { v: 'local', l: 'En el local' }, { v: 'web', l: 'En mi web' }];
+  var ETAPA_OPTS = [
+    { v: 'lanzamiento', l: 'Recién arranco', sub: 'mi Instagram está vacío o casi' },
+    { v: 'irregular', l: 'Posteo cuando me acuerdo', sub: 'tengo posteos pero sin constancia' },
+    { v: 'activo', l: 'Posteo seguido', sub: 'quiero vender más' }
+  ];
+  // (LOTE ETAPA-INSTAGRAM) Detección de la etapa del IG desde la señal
+  // del estudio (S.igStage, del prefill: posts_count total + fecha del
+  // último posteo + posteos en los últimos 30 días). 0–2 posteos →
+  // 'lanzamiento' (mismo umbral que isColdStart). 3+ con último posteo
+  // hace más de 30 días → 'irregular'. 3+ con último posteo reciente y
+  // al menos 3 posteos en los últimos 30 días → 'activo'. Sin dato (sin
+  // IG estudiado, sin fecha) → null: se pregunta sin propuesta, nunca
+  // se adivina.
+  function etapaDetectada() {
+    var s = S.igStage || {};
+    var total = (typeof s.posts_count === 'number' && Number.isFinite(s.posts_count)) ? s.posts_count : null;
+    if (total === null) return null;
+    if (total < 3) return 'lanzamiento';
+    var last = (typeof s.last_post_at === 'number' && s.last_post_at > 0) ? s.last_post_at * 1000 : null;
+    if (!last) return null;
+    var days = (Date.now() - last) / 86400000;
+    if (days > 30) return 'irregular';
+    var recent = (typeof s.recent_30d === 'number' && Number.isFinite(s.recent_30d)) ? s.recent_30d : 0;
+    if (recent >= 3) return 'activo';
+    return null;
+  }
+  function etapaLabel(v) {
+    var o = ETAPA_OPTS.filter(function (x) { return x.v === v; })[0];
+    return o ? o.l : (v || '');
+  }
   // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: opciones genéricas (el dueño elige,
   // nunca se inventa) + las extraídas de web/IG, que van primero.
   var Q6_GEN = [{ v: 'Mujeres', l: 'Mujeres' }, { v: 'Hombres', l: 'Hombres' }, { v: 'Familias', l: 'Familias' }, { v: 'Jóvenes', l: 'Jóvenes' }, { v: 'Empresas', l: 'Empresas' }];
@@ -4721,7 +4758,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   }
 
   // Estado de la sesión. plan = preguntas en orden; ans = respuestas.
-  var S = { source: null, email: null, ig: null, web: null, biz: null, cat: null, products: [], rubroOptions: null, plan: [], qi: 0, ans: {}, mode: 'both', busy: false, noWeb: false, facts: null, webFacts: null, igFacts: null };
+  var S = { source: null, email: null, ig: null, web: null, biz: null, cat: null, products: [], rubroOptions: null, plan: [], qi: 0, ans: {}, mode: 'both', busy: false, noWeb: false, facts: null, webFacts: null, igFacts: null, igStage: null };
   var reduced = false;
   try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
 
@@ -4822,6 +4859,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   function screenFor(key) {
     if (key === 'rubro') return screenRubro;
     if (key === 'donde') return screenDonde;
+    if (key === 'etapa') return screenEtapa;
     if (key === 'q1') return screenQ1;
     if (key === 'q2') return function () { renderScreen(T.chatQ2, T.q2, q2Options(), { onPick: function (v) { S.ans.q2 = v; advance(); }, onBack: goBack }); };
     if (key === 'q3') return function () { renderScreen(T.chatQ3, T.q3, Q3, { onPick: function (v) { S.ans.q3 = v; advance(); }, onBack: goBack }); };
@@ -4888,6 +4926,18 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
           }, goEntry);
         }
       },
+      onBack: goBack
+    });
+  }
+
+  // (LOTE ETAPA-INSTAGRAM) Pantalla de la etapa (paridad con el chat:
+  // el flujo vivo pregunta por chat — chatQText/chatOptionsFor/chatPick
+  // — y screenFor queda como vía alternativa, como screenDonde).
+  function screenEtapa() {
+    var det = etapaDetectada();
+    var opts = ETAPA_OPTS.map(function (o) { return { v: o.v, l: o.l, sub: o.sub, estrella: det === o.v }; });
+    renderScreen(det === 'lanzamiento' ? T.chatEtapa : '', T.qEtapa, opts, {
+      onPick: function (v) { S.ans.etapa = v; advance(); },
       onBack: goBack
     });
   }
@@ -5144,6 +5194,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (key === 'rubro') return { chat: T.chatRubro, title: T.qRubro };
     if (key === 'donde') return { chat: T.chatDonde, title: T.qDonde };
     if (key === 'ubicacion') return { chat: T.chatUbicacion, title: T.qUbicacion };
+    if (key === 'etapa') return { chat: etapaDetectada() === 'lanzamiento' ? T.chatEtapa : '', title: T.qEtapa };
     if (key === 'q1') return { chat: ((S.products || []).length ? T.chatQ1 : T.chatQ1Empty), title: T.q1 };
     if (key === 'q2') return { chat: T.chatQ2, title: T.q2 };
     if (key === 'q3') return { chat: T.chatQ3, title: T.q3 };
@@ -5159,6 +5210,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (key === 'rubro') return a.rubro || '';
     if (key === 'donde') { var d = DONDE.filter(function (o) { return o.v === a.donde; })[0]; return d ? d.l : (a.donde || ''); }
     if (key === 'ubicacion') return a.ubicacion || '';
+    if (key === 'etapa') return etapaLabel(a.etapa);
     if (key === 'q1') {
       if (a.q1mix === 'todo') return T.todo;
       if (a.q1mix === 'sin_oferta') return T.sinOferta;
@@ -5254,6 +5306,11 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var opts = catalog ? Object.keys(CATS).map(function (k) { return { v: k, l: CATS[k] }; }) : chatOptionsFor(key);
     var gridCls = opts.length <= 2 ? 'oc-grid oc-one' : 'oc-grid';
     host.innerHTML = '<div class="' + gridCls + '">' + opts.map(function (o) { return cardHTML(o); }).join('') + '</div>';
+    // (LOTE ETAPA-INSTAGRAM) Propuesta en dorado: chip + nota, solo
+    // cuando la detección trajo una etapa (sin detección, nada).
+    if (key === 'etapa' && etapaDetectada()) {
+      host.innerHTML += '<p class="oc-chat" style="margin-top:10px">' + esc(T.etapaChip) + '<br>' + esc(T.etapaNota) + '</p>';
+    }
     var cards = host.querySelectorAll('.oc-card');
     cards.forEach(function (c) {
       c.addEventListener('click', function () {
@@ -5283,6 +5340,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       pushU(T.ubicOnline);
       oU.push({ v: '__libre__', l: T.libre, sub: T.libreSub });
       return oU;
+    }
+    if (key === 'etapa') {
+      var det = etapaDetectada();
+      return ETAPA_OPTS.map(function (o) { return { v: o.v, l: o.l, sub: o.sub, estrella: det === o.v }; });
     }
     if (key === 'q1') {
       var o = (S.products || []).map(function (p, i) { return { v: p.nombre, l: p.nombre, foto: p.foto || null, estrella: i === 0 }; });
@@ -5339,6 +5400,12 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       if (v === '__libre__') { chatLibre('ubicacion', 'libre'); return; }
       S.ans.ubicacion = v;
       chatPost('answer', { question: T.qUbicacion, value: v });
+      chatNext();
+      return;
+    }
+    if (key === 'etapa') {
+      S.ans.etapa = v;
+      chatPost('answer', { question: T.qEtapa, value: etapaLabel(v) });
       chatNext();
       return;
     }
@@ -5537,10 +5604,16 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     // nada que aprender: el flujo email pregunta 'donde' y el estudio viene
     // después; buildPlan se reconstruye tras cada estudio y el hueco aparece
     // ahí). Va justo después de rubro/donde, antes de las q — el plan se
-    // arma como [rubro?, donde?, ubicacion?, q1..q8]. Aprendido = dirección
+    // arma como [rubro?, donde?, ubicacion?, etapa?, q1..q8]. Aprendido = dirección
     // concreta o local detectado (la bio o la web trae un lugar); la ciudad
     // sola es un candidato, no una certeza.
     if (studied && !dondeAprendido(S.facts) && plan.indexOf('ubicacion') < 0) { plan.push('ubicacion'); }
+    // (LOTE ETAPA-INSTAGRAM) La etapa se pregunta SIEMPRE (es un hueco,
+    // no una q9 fija: la respuesta nunca se sabe de antemano — la
+    // detección solo trae una PROPUESTA en dorado para confirmar con
+    // un toque; sin IG estudiado se pregunta sin propuesta, sin
+    // adivinar). Va justo después de ubicacion, antes de las q.
+    if (plan.indexOf('etapa') < 0) { plan.push('etapa'); }
     keys.forEach(function (k) { if (plan.indexOf(k) < 0) plan.push(k); });
     S.plan = plan;
     S.qi = 0;
@@ -5559,6 +5632,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       precios: S.ans.q5 || '',
       // (LOTE PREGUNTA-DONDE) La ubicación respondida manda sobre el canal.
       donde: S.ans.ubicacion || S.ans.donde || '',
+      // (LOTE ETAPA-INSTAGRAM) La etapa confirmada viaja al fundamento.
+      etapa: S.ans.etapa || '',
       // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: audiencia, diferencial y líneas
       // rojas viajan al fundamento con su mix, como la Q1.
       audiencia: S.ans.q6 || '',
@@ -5611,6 +5686,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     dondeEdit: 'Corregir',
     dondeSave: 'Guardar',
     dondePh: 'Ej: Palermo, Buenos Aires',
+    etapaLbl: 'En qué etapa está',
+    etapaVacio: 'Sin definir',
+    etapaEdit: 'Corregir',
+    etapaSave: 'Guardar',
     ev: 'Vi que vendés',
     evIn: { bio: 'en tu bio', web: 'en tu web', foto: 'en tu foto' }
   };
@@ -5647,6 +5726,25 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       + '<div id="flDondeBox" style="display:none;margin-bottom:8px"><div style="display:flex;gap:8px"><input id="flDondeIn" class="oc-field" style="margin:0" placeholder="' + esc(FL.dondePh) + '">'
       + '<button type="button" id="flDondeSave" class="oc-btn" style="width:auto;margin:0;padding:0 18px">' + esc(FL.dondeSave) + '</button></div></div>';
   }
+  // (LOTE ETAPA-INSTAGRAM) La etapa que el espejo muestra y deja
+  // corregir: la respuesta del chat manda; vacío = sin definir. La
+  // corrección es con un toque entre las 3 opciones (no texto libre:
+  // la etapa solo vale lanzamiento | irregular | activo).
+  function flEtapaVal() {
+    return etapaLabel(S.ans.etapa || '');
+  }
+  function flEtapaRowHTML() {
+    var v = flEtapaVal();
+    var opts = ETAPA_OPTS.map(function (o) {
+      var sel = (S.ans.etapa || '') === o.v;
+      return '<button type="button" class="fl-etapa-opt" data-v="' + esc(o.v) + '" style="border:2px solid ' + (sel ? '#FEC14D' : '#DCEFFF') + ';background:' + (sel ? '#FFF7E0' : '#fff') + ';color:#0A1E33;border-radius:10px;padding:8px 10px;font-size:14px;font-weight:700;cursor:pointer">' + esc(o.l) + '</button>';
+    }).join('');
+    return '<div style="display:flex;gap:8px;align-items:center;padding:10px 12px;background:#fff;border:2px solid #DCEFFF;border-radius:12px;margin-bottom:8px">'
+      + '<div style="flex:1;font-size:16px;font-weight:700;color:#0A1E33">' + esc(FL.etapaLbl)
+      + '<small style="display:block;font-size:12px;font-weight:500;color:#5A7488">' + esc(v || FL.etapaVacio) + '</small></div>'
+      + '<button type="button" id="flEtapaEdit" style="border:0;background:none;color:#2793C8;font-size:15px;font-weight:700;cursor:pointer">' + esc(FL.etapaEdit) + '</button></div>'
+      + '<div id="flEtapaBox" style="display:none;margin-bottom:8px"><div style="display:flex;gap:8px;flex-wrap:wrap">' + opts + '</div></div>';
+  }
 
   function flRender() {
     var box = ocq();
@@ -5665,6 +5763,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       + '<p class="oc-chat">' + esc(FL.sub) + '</p>'
       + opEvidenceHTML()
       + flDondeRowHTML()
+      + flEtapaRowHTML()
       + (FL_E.productos.length ? rows : '<p class="oc-chat">' + esc(emptyTxt) + '</p>')
       + '<div style="margin-top:14px"><label style="font-size:15px;font-weight:700;color:#0A1E33">' + esc(FL.photoLbl) + '</label>'
       + '<input id="flFoto" type="file" accept="image/*" multiple style="display:block;margin-top:8px;font-size:15px">'
@@ -5763,6 +5862,20 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       window.OC_ANS.donde = S.ans.ubicacion || S.ans.donde || '';
       try { opResumeSave('espejo'); } catch (e) {}
       flRender();
+    });
+    var fee = box.querySelector('#flEtapaEdit');
+    if (fee) fee.addEventListener('click', function () {
+      var eb = box.querySelector('#flEtapaBox');
+      if (eb) eb.style.display = eb.style.display === 'none' ? 'block' : 'none';
+    });
+    box.querySelectorAll('.fl-etapa-opt').forEach(function (b) {
+      b.addEventListener('click', function () {
+        S.ans.etapa = b.getAttribute('data-v');
+        window.OC_ANS = window.OC_ANS || {};
+        window.OC_ANS.etapa = S.ans.etapa || '';
+        try { opResumeSave('espejo'); } catch (e) {}
+        flRender();
+      });
     });
     box.querySelector('#flOk').addEventListener('click', function () {
       window.OC_ESPEJO = { aprobado: 1, productos: FL_E.productos, vetos: FL_E.vetos };
@@ -5913,7 +6026,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   function opResumeSave(stage) {
     try {
       var payload = { v: 1, ts: Date.now(), stage: stage,
-        S: { source: S.source, email: S.email, ig: S.ig, web: S.web, biz: S.biz, cat: S.cat, products: S.products || [], rubroOptions: (S.rubroOptions === undefined) ? null : S.rubroOptions, plan: S.plan || [], qi: S.qi || 0, ans: S.ans || {}, noWeb: S.noWeb, facts: S.facts || null, webFacts: S.webFacts || null, igFacts: S.igFacts || null,
+        S: { source: S.source, email: S.email, ig: S.ig, web: S.web, biz: S.biz, cat: S.cat, products: S.products || [], rubroOptions: (S.rubroOptions === undefined) ? null : S.rubroOptions, plan: S.plan || [], qi: S.qi || 0, ans: S.ans || {}, noWeb: S.noWeb, facts: S.facts || null, webFacts: S.webFacts || null, igFacts: S.igFacts || null, igStage: S.igStage || null,
           chatLog: (S.chatLog || []).slice(-100), chatPostedQ: S.chatPostedQ || {}, chatJoined: !!S.chatJoined, chatGuest: S.chatGuest || null, chatLastId: S.chatLastId || 0, chatPaused: !!S.chatPaused, chatSeen: Object.keys(S.chatSeen || {}).slice(-50) },
         FL: { productos: FL_E.productos || [], vetos: FL_E.vetos || [] },
         DR: (typeof DR !== 'undefined' && DR) ? { dims: DR.dims, picks: DR.picks, champ: DR.champ } : null };
@@ -5962,13 +6075,13 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.source = s.source; S.email = s.email; S.ig = s.ig; S.web = s.web; S.biz = s.biz; S.cat = s.cat;
       S.products = s.products || []; S.rubroOptions = (s.rubroOptions === undefined) ? null : s.rubroOptions;
       S.plan = s.plan || []; S.qi = s.qi || 0; S.ans = s.ans || {};
-      S.noWeb = !!s.noWeb; S.facts = s.facts || null; S.webFacts = s.webFacts || null; S.igFacts = s.igFacts || null;
+      S.noWeb = !!s.noWeb; S.facts = s.facts || null; S.webFacts = s.webFacts || null; S.igFacts = s.igFacts || null; S.igStage = s.igStage || null;
       // (LOTE PRUEBA-CHAT) El chat se reanuda donde quedó (hilo + pausa).
       S.chatLog = s.chatLog || []; S.chatPostedQ = s.chatPostedQ || {}; S.chatJoined = !!s.chatJoined; S.chatGuest = s.chatGuest || null; S.chatLastId = s.chatLastId || 0; S.chatPaused = !!s.chatPaused;
       S.chatSeen = {}; (s.chatSeen || []).forEach(function (id) { S.chatSeen[id] = 1; });
       if (s.biz) { try { TRIAL_BIZ = s.biz; } catch (e) {} }
       if (s.ig) { try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + s.ig; } catch (e) {} }
-      window.OC_ANS = { producto_estrella: S.ans.q1 || '', producto_mix: S.ans.q1mix || 'uno', cta: S.ans.q2 || '', promo: S.ans.q3 || '', voz: S.ans.q4 || '', precios: S.ans.q5 || '', donde: S.ans.ubicacion || S.ans.donde || '', audiencia: S.ans.q6 || '', audiencia_mix: S.ans.q6mix || 'todos', diferencial: S.ans.q7 || '', diferencial_mix: S.ans.q7mix || 'nose', lineas_rojas: S.ans.q8 || '', lineas_rojas_mix: S.ans.q8mix || 'nada', promo_semana: true };
+      window.OC_ANS = { producto_estrella: S.ans.q1 || '', producto_mix: S.ans.q1mix || 'uno', cta: S.ans.q2 || '', promo: S.ans.q3 || '', voz: S.ans.q4 || '', precios: S.ans.q5 || '', donde: S.ans.ubicacion || S.ans.donde || '', etapa: S.ans.etapa || '', audiencia: S.ans.q6 || '', audiencia_mix: S.ans.q6mix || 'todos', diferencial: S.ans.q7 || '', diferencial_mix: S.ans.q7mix || 'nose', lineas_rojas: S.ans.q8 || '', lineas_rojas_mix: S.ans.q8mix || 'nada', promo_semana: true };
       window.OC_CAT = S.ans.rubro || S.cat || window.OC_CAT || null;
       window.OC_DETECTADOS = (S.products || []).map(function (p) { return p.nombre; }).filter(Boolean).slice(0, 4);
       window.OC_REASK_Q1 = reaskQ1;
@@ -6202,6 +6315,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       S.biz = d.name || S.biz || '';
       TRIAL_BIZ = S.biz;
       S.igFacts = d.facts || null; S.facts = mergeFacts(S.webFacts, S.igFacts);
+      // (LOTE ETAPA-INSTAGRAM) Señal de etapa del prefill (ig_stage).
+      S.igStage = d.ig_stage || null;
       try { var fi = document.getElementById('f_ig'); if (fi) fi.value = '@' + ig; } catch (e) {}
       // El rubro confirmado por el dueño manda sobre lo detectado.
       if (!S.ans.rubro) { S.cat = d.category || null; if (S.cat) window.OC_CAT = S.cat; }

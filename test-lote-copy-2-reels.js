@@ -169,8 +169,8 @@ t(APP.includes("/api/reels/armar"), 'app.js: el builder de reels a pedido sigue'
 t(APP.includes('cap-kick">Historias'), 'ES landing: la sección Historias sigue (capacidad; su «todos los días» es seguimiento aparte)');
 t(EN.includes('cap-kick">Stories'), 'EN landing: la sección Stories sigue');
 
-// ---------- 9. Bumps M78 / BUILD (re-pin v739: el BUILD y el ?v= avanzaron) ----------
-t(SRV.includes("const BUILD_ID = '20261105-v739'"), 'BUILD v739');
+// ---------- 9. Bumps M78 / BUILD (re-pin v740: el BUILD y el ?v= avanzaron) ----------
+t(SRV.includes("const BUILD_ID = '20261105-v740'"), 'BUILD v740');
 t(IDX.includes('/app.js?v=495'), 'index ES: app.js?v=495');
 t(!EN.includes('/app.js?v='), 'index EN: sin app.js?v= (la EN no carga app.js)');
 t(APP.includes("const CHUNK_V = '20261105-v732'"), 'CHUNK_V 20261105-v732 (se mantiene)');

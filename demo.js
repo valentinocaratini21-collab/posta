@@ -1610,6 +1610,12 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       subject_scale: subjectScale,
       poster: isPoster || undefined,
       kind: t.kind,
+      // (LOTE ETAPA-INSTAGRAM) 'listing' = el Día 2 del arco de
+      // lanzamiento: el render debe componer la card COMPLETA del
+      // listing (marca + foto + precio + vendedor), nunca la foto
+      // recortada como héroe. El render que lo honre es trabajo
+      // siguiente; acá solo viaja la señal.
+      visual: t.visual || undefined,
       // (v232) Intención de venta + ángulo declarados de la pieza.
       sales_intent: t.intent || 'autoridad',
       sales_angle: t.angle || 'directo',

@@ -2440,6 +2440,31 @@ function sigWords(s) {
 /* (v274 · MODO EN) Gemela en inglés de templateIdeas: mismos esqueletos,
  * misma regla (sin datos reales no se fabrica: devuelve [] y el llamador
  * aplica su gate), títulos y ángulos en inglés US comercial. */
+/* (LOTE ETAPA-INSTAGRAM) Arco de lanzamiento: con etapa 'lanzamiento'
+ * (IG vacío o casi, confirmada por el dueño), los 3 posteos de la prueba
+ * NO son producto suelto: presentan el negocio en 3 días, 1 por día,
+ * con SUS fotos reales del fundamento. Día 1 presenta el negocio · Día 2
+ * la prenda/producto estrella COMO AVISO COMPLETO (visual: 'listing' —
+ * card del listing con marca + foto + precio + vendedor; la foto NUNCA
+ * se recorta como héroe: el producto nunca sale cortado) · Día 3 cómo
+ * funciona (comprar/vender). Titulares de 6 palabras o menos (guarda
+ * cap6). Genérico para cualquier negocio: solo usa business y la estrella
+ * real (r1); sin estrella, el Día 2 presenta el negocio. El reel de
+ * muestra sigue a pedido, no cambia. */
+function launchArcIdeas({ business, lang, star }) {
+  const biz = business || (lang === 'en' ? 'your business' : 'tu negocio');
+  const cap6 = (h) => String(h || '').split(/\s+/).slice(0, 6).join(' ');
+  const en = lang === 'en';
+  const d2 = star
+    ? (en ? `our star: ${star}` : `nuestra estrella: ${star}`)
+    : (en ? `meet ${biz}` : `conocé ${biz}`);
+  return [
+    { formato: en ? 'Launch' : 'Lanzamiento', tipo: 'novedad', titulo: cap6(en ? 'it all starts here' : 'todo empieza acá'), angulo: en ? `Present ${biz}: who you are and what you do, in one post.` : `Presentamos ${biz}: quiénes somos y qué hacemos, en un solo posteo.` },
+    { formato: en ? 'Launch' : 'Lanzamiento', tipo: 'novedad', titulo: cap6(en ? 'the star of the house' : 'la estrella de la casa'), angulo: d2, visual: 'listing' },
+    { formato: en ? 'Launch' : 'Lanzamiento', tipo: 'tip', titulo: cap6(en ? 'that easy' : 'así de fácil'), angulo: en ? 'How it works: pick it, order it, done — buying made simple.' : 'Así funciona: elegís, pedís y listo — comprar, así de fácil.' },
+  ];
+}
+
 function templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa, productos }) {
   const biz = business || 'your business';
   const vs = competitors
@@ -2508,6 +2533,13 @@ function templateIdeasEn({ business, category, competitors, goal, recentTopics, 
   if (Array.isArray(productos) && productos.length) {
     const f = rubroGarantias.filtrarGenericos(pool, productos);
     if (f.length >= 4) pool = f;
+  }
+  // (LOTE ETAPA-INSTAGRAM) Arco de lanzamiento: las 3 ideas del arco
+  // van primero (la prueba toma las 3 primeras); el resto del pool
+  // sigue detrás como ideas de apoyo. Sin ephemeris en el arco: los
+  // 3 días son fijos.
+  if (etapa === 'lanzamiento') {
+    return launchArcIdeas({ business, lang: 'en', star: r1 }).concat(pool.slice(0, 4));
   }
   if (ephemeris && pool.length) {
     // (v348 · D2) Ephemeris + pre-launch: presentation, not a deal.
@@ -2623,6 +2655,12 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   if (Array.isArray(productos) && productos.length) {
     const f = rubroGarantias.filtrarGenericos(pool, productos);
     if (f.length >= 4) pool = f;
+  }
+  // (LOTE ETAPA-INSTAGRAM) Arco de lanzamiento: las 3 ideas del arco
+  // van primero (la prueba toma las 3 primeras); el resto del pool
+  // sigue detrás como ideas de apoyo.
+  if (etapa === 'lanzamiento') {
+    return withEphemeris(launchArcIdeas({ business, lang: 'es', star: r1 }).concat(pool.slice(0, 4)));
   }
   return withEphemeris(pool);
   // La efeméride va primera y marcada, también en el fallback sin IA

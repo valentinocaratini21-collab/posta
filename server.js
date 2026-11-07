@@ -27392,6 +27392,7 @@ const OC_PROMO = ['ninguna', 'porcentaje', '2x1', 'envio'];
 const OC_VOZ = ['cercano', 'profesional', 'divertido', 'elegante'];
 const OC_PRECIOS = ['si', 'ofertas', 'no'];
 const OC_DONDE = ['whatsapp', 'instagram', 'local', 'web'];
+const OC_ETAPA = ['lanzamiento', 'irregular', 'activo'];
 function onboardingAnswersFrom(fields) {
   const f = fields || {};
   const clean = (v, n) => String(v || '').trim().slice(0, n);
@@ -27405,6 +27406,9 @@ function onboardingAnswersFrom(fields) {
     // (LOTE PREGUNTA-DONDE) La respuesta puede ser un lugar (barrio/ciudad),
     // no solo un canal: 60 caracteres como la estrella, no 20.
     donde: clean(f.donde, 60),
+    // (LOTE ETAPA-INSTAGRAM) Etapa del IG confirmada por el dueño en
+    // el chat (hueco 'etapa'): solo los 3 valores, resto → ''.
+    etapa: OC_ETAPA.includes(clean(f.etapa, 20)) ? clean(f.etapa, 20) : '',
     // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: audiencia, diferencial y líneas
     // rojas. Viajan al fundamento (digest.onboarding) y a la semana.
     audiencia: clean(f.audiencia, 60),
@@ -27429,6 +27433,9 @@ function onboardingAnswersOk(a, opts) {
   if (!OC_VOZ.includes(a.voz)) return false;
   if (!OC_PRECIOS.includes(a.precios)) return false;
   if (!opts.ig && !opts.web && !OC_DONDE.includes(a.donde)) return false;
+  // (LOTE ETAPA-INSTAGRAM) La etapa es opcional en el gate (ausente =
+  // prueba como hoy), pero si viene tiene que ser uno de los 3 valores.
+  if (a.etapa && !OC_ETAPA.includes(a.etapa)) return false;
   // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: cada una tiene un fallback honesto
   // ('todos' / 'nose' / 'nada') que pasa sin valor; cualquier otro mix
   // exige el valor escrito o elegido. Nadie inventa una respuesta.
@@ -27461,6 +27468,8 @@ function onboardingGoalLines(a, lang, detectados) {
   if (a.voz) lines.push((en ? 'Voice: ' : 'Voz: ') + a.voz);
   if (a.precios) lines.push((en ? 'Prices in posts: ' : 'Precios en posteos: ') + ({ si: en ? 'yes' : 'sí', ofertas: en ? 'only on offers' : 'solo en ofertas', no: 'no' }[a.precios] || a.precios));
   if (a.donde) lines.push((en ? 'Where to find them: ' : 'Dónde lo encuentran: ') + ({ whatsapp: 'WhatsApp', instagram: 'Instagram', local: en ? 'at the store' : 'en el local', web: en ? 'on their website' : 'en su web' }[a.donde] || a.donde));
+  // (LOTE ETAPA-INSTAGRAM) La etapa viaja al digest como línea propia.
+  if (a.etapa) lines.push((en ? 'Instagram stage: ' : 'Etapa del Instagram: ') + ({ lanzamiento: en ? 'just starting' : 'recién arranca', irregular: en ? 'posts when they remember' : 'postea cuando se acuerda', activo: en ? 'posts often' : 'postea seguido' }[a.etapa] || a.etapa));
   // (LOTE ONBOARDING-Q1) Q6/Q7/Q8: audiencia, diferencial y líneas rojas.
   if (a.audiencia_mix === 'todos') lines.push(en ? 'Audience: everyone' : 'Audiencia: todo el mundo');
   else if (a.audiencia) lines.push((en ? 'Audience: ' : 'Audiencia: ') + a.audiencia + (en ? ' — the content speaks to them, not to everyone' : ' — el contenido le habla a esa persona, no a todos'));
@@ -27899,7 +27908,12 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // (v348 · D2) Etapa del negocio vía el detector exportado: si
     // todavía no lanzó, las ideas de plantilla salen en clave de
     // presentación/lista de espera (nada de promos ni testimonios).
-    const etapaTrial = (() => { try { return clientDigest.detectEtapa({ description: richGoal, diferencial: (webData && webData.description) || '' }).etapa; } catch (e) { return ''; } })();
+    // (LOTE ETAPA-INSTAGRAM) 'lanzamiento' aquí es la etapa del IG
+    // confirmada por el dueño en el chat (ocAns.etapa): manda sobre la
+    // detección por texto de detectEtapa, que solo detecta el NEGOCIO
+    // pre-lanzamiento (que todavía no abrió). Sin etapa confirmada,
+    // sigue la detección de siempre.
+    const etapaTrial = ocAns.etapa === 'lanzamiento' ? 'lanzamiento' : (() => { try { return clientDigest.detectEtapa({ description: richGoal, diferencial: (webData && webData.description) || '' }).etapa; } catch (e) { return ''; } })();
     // (RUBRO-GARANTÍAS ×6 · pieza 1) En la prueba, la puerta corre con
     // los productos del espejo aprobado (espejoFromFields): una idea sin
     // calce queda anotada _rgSinProducto y la semana de la prueba no la
@@ -28100,6 +28114,19 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
   let embedPosts = [];
   try { embedPosts = feedAudit.parseEmbedPosts(html) || []; } catch (e) { embedPosts = []; }
   const captions = embedPosts.map((p) => p.caption).filter(Boolean).slice(0, 12);
+  // (LOTE ETAPA-INSTAGRAM) Señal de la etapa del IG para el front:
+  // total de posteos (del embed, con fallback al conteo de los tops
+  // vistos), fecha del último posteo y posteos en los últimos 30 días.
+  // El front decide la propuesta con etapaDetectada(); nunca se
+  // adivina nada en el servidor. last_post_at en segundos UNIX.
+  const igStage = (() => {
+    const postsCount = (typeof prof.posts_count === 'number' && prof.posts_count >= 0)
+      ? prof.posts_count : embedPosts.length;
+    const taken = embedPosts.map((p) => (typeof p.taken_at === 'number' && p.taken_at > 0) ? p.taken_at : null).filter(Boolean);
+    const last = taken.length ? Math.max.apply(null, taken) : null;
+    const recent30d = taken.filter((t) => Date.now() - t * 1000 <= 30 * 86400000).length;
+    return { posts_count: postsCount, last_post_at: last, recent_30d: recent30d };
+  })();
   const signals = {
     bio: bio || '', fullName: name, handle: ig, captions,
     igCategory: (prof && prof.category) || '',
@@ -28145,6 +28172,7 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
     // (LOTE ONBOARDING-Q1) Hechos del negocio (bio + captions): la Q2 y
     // las Q6/Q7 se adaptan a esto. La web manda si también se estudió.
     facts: trialIgFacts(bio, captions, (prof && prof.category) || ''),
+    ig_stage: igStage,
   });
 });
 
@@ -28597,7 +28625,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     send('status', { step: 'empezando', text: lang === 'en' ? "OK, I'm building your trial…" : 'Dale, estoy armando tu prueba…' });
     send('status', { step: 'ideas', text: lang === 'en' ? `I'm thinking up ideas for ${business}…` : `Estoy pensando ideas para ${business}…` });
     // (v348 · D2) Etapa vía el detector exportado (ver endpoint clásico).
-    const etapaTrial = (() => { try { return clientDigest.detectEtapa({ description: richGoal, diferencial: (webData && webData.description) || '' }).etapa; } catch (e) { return ''; } })();
+    // (LOTE ETAPA-INSTAGRAM) 'lanzamiento' aquí es la etapa del IG
+    // confirmada por el dueño en el chat (ocAns.etapa): manda sobre la
+    // detección por texto de detectEtapa, que solo detecta el NEGOCIO
+    // pre-lanzamiento (que todavía no abrió). Sin etapa confirmada,
+    // sigue la detección de siempre.
+    const etapaTrial = ocAns.etapa === 'lanzamiento' ? 'lanzamiento' : (() => { try { return clientDigest.detectEtapa({ description: richGoal, diferencial: (webData && webData.description) || '' }).etapa; } catch (e) { return ''; } })();
     // (RUBRO-GARANTÍAS ×6 · pieza 1) Igual que en el endpoint clásico:
     // la puerta corre con los productos del espejo aprobado.
     const espTrialS = (() => { try { return fundamentoLiteral.espejoFromFields(fields); } catch (e) { return null; } })();
@@ -31094,7 +31127,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v739';
+const BUILD_ID = '20261105-v740';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

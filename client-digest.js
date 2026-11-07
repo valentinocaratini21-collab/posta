@@ -1413,6 +1413,42 @@ function deriveTopics(digest, opts) {
     const last = norm(String(phrase || '')).split(' ').filter(Boolean).pop() || '';
     return last.length > 2 && last.endsWith('s') && !S_SINGULARS.has(last) ? 'tus' : 'tu';
   };
+  // (LOTE ETAPA-INSTAGRAM) ARCO DE LANZAMIENTO: con la etapa del IG
+  // confirmada como 'lanzamiento' (digest.onboarding.etapa — el dueño
+  // la confirmó con un toque en el chat), los 3 primeros topics NO son
+  // producto suelto: presentan el negocio en 3 días. Día 1 presenta
+  // el negocio · Día 2 la estrella COMO AVISO COMPLETO (visual:
+  // 'listing': card del listing con marca + foto + precio + vendedor;
+  // la foto NUNCA se recorta como héroe) · Día 3 cómo funciona. Los
+  // topics del arco llevan marcador _launch: 1/2/3; el Día 2 ancla la
+  // estrella (pickItem(0)) para que la rotación de abajo no la repita.
+  // Con etapa 'irregular' o 'activo', nada cambia: sigue la rotación
+  // de siempre. El demo genera la semana de 5 pero la prueba importa
+  // solo los 3 primeros (importTrialWeek limit: 3) = el arco entero.
+  const igEtapa = digest.onboarding && digest.onboarding.etapa;
+  if (igEtapa === 'lanzamiento') {
+    const bizName = String(digest.business || '').trim();
+    const starItem = pickItem(0);
+    const starA = starItem ? name(starItem) : '';
+    const t1 = mk('novedad', bizName || 'nuestro negocio', {
+      tag: en ? 'launch' : 'lanzamiento',
+      headline: () => (en ? 'it all starts here' : 'todo empieza acá'),
+      caption: (A) => (en ? `Meet ${A}: this is who we are.` : `Te presentamos ${A}: esto somos.`),
+    });
+    if (t1) { t1._launch = 1; topics.push(t1); }
+    const t2 = mk('novedad', starA || bizName || 'nuestro negocio', {
+      tag: en ? 'launch' : 'lanzamiento',
+      headline: () => (en ? 'the star of the house' : 'la estrella de la casa'),
+      caption: (A) => (en ? `Our star: ${A}.` : `Nuestra estrella: ${A}.`),
+    });
+    if (t2) { t2._launch = 2; t2.visual = 'listing'; topics.push(t2); }
+    const t3 = mk('tip', bizName || 'nuestro negocio', {
+      tag: en ? 'how it works' : 'cómo funciona',
+      headline: () => (en ? 'that easy' : 'así de fácil'),
+      caption: (A) => (en ? `How it works at ${A}: pick it, order it, done.` : `Así funciona en ${A}: elegís, pedís y listo.`),
+    });
+    if (t3) { t3._launch = 3; topics.push(t3); }
+  }
   // 1) NOVEDAD — el ítem real N.º 1.
   const it1 = pickItem(0);
   if (it1) {
