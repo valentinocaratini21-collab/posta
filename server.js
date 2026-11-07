@@ -1175,24 +1175,92 @@ function resolveTrialRubro({ fields, webData, feed, formText, catalogItems, lang
   return res;
 }
 
-/* (v235) Desempate por VISIÓN — la ÚNICA llamada paga posible de la
- * identificación, y solo cuando el voto determinístico quedó cerca
- * (rubroId.needsVisionTiebreak). Una llamada batch gpt-4o-mini sobre
- * 3-4 fotos (mismo patrón que deep-read.classifyDigestPhotos), atrás
- * del tope diario del demo y con carrera de 6 s; cualquier falla deja
- * el voto determinístico. Devuelve la clasificación re-votada con la
- * familia 'vision', o null si no hubo desempate. */
-async function classifyWithVision(signals, photoUrls, lang) {
+/* (LOTE RUBRO-50-50) /p/<shortcode>/media/?size=m: Instagram sirve la
+ * foto del feed por instagram.com mismo (no por el CDN scontent, que
+ * da 403 a cualquier servidor). size=m ≈ 15-24 KB, suficiente para
+ * visión con detail 'low'. La foto de perfil NO tiene shortcode y su
+ * URL scontent da 403 al bajarla: no se usa para visión. UA de
+ * navegador móvil, el mismo que demo.js usa para el embed. */
+const RUBRO_VISION_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+function rubroMediaUrlForShortcode(sc, size) {
+  const s = String(sc || '').replace(/[^A-Za-z0-9_-]/g, '');
+  if (!s) return null;
+  return 'https://www.instagram.com/p/' + s + '/media/?size=' + (size || 'm');
+}
+async function downloadPhotosForVision(shortcodes, max) {
+  const out = [];
+  for (const sc of (shortcodes || []).slice(0, max || 4)) {
+    try {
+      const url = rubroMediaUrlForShortcode(sc, 'm');
+      if (!url) continue;
+      const r = await fetch(url, { headers: { 'User-Agent': RUBRO_VISION_UA, 'Accept-Language': 'es-AR,es;q=0.9' }, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const ct = String(r.headers.get('content-type') || '');
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (ct.startsWith('image/') && buf.length > 1000) {
+        out.push('data:image/jpeg;base64,' + buf.toString('base64'));
+      }
+    } catch (e) { /* foto que no baja: se saltea, sin romper la llamada */ }
+  }
+  return out;
+}
+
+/* (v235 + LOTE RUBRO-50-50) Visión — la ÚNICA llamada paga posible de
+ * la identificación, y solo cuando el texto no resolvió. Dos vías:
+ *   (a) DESEMPATE: el voto determinístico quedó cerca
+ *       (rubroId.needsVisionTiebreak: margen ≤5, sin duda de subrubro)
+ *       y la visión elige entre las candidatas (questionOptions).
+ *   (b) SIN SEÑALES: el texto no dio NINGUNA candidata
+ *       (rubroId.needsVisionWhenNoSignals) y la visión elige entre
+ *       TODA la lista de rubros + 'otro' explícito, con confianza 0-100.
+ * Guarda estructural (la visión desempata, NO vota): su elección solo
+ * se aplica si CONFIRMA al líder del texto (margen >0) o RESUELVE un
+ * empate FUERTE (margen 0 con ≥4 puntos por lado); en sin-señales solo
+ * si no es 'otro' y la confianza declarada es ≥70. El modelo se
+ * equivoca con confianza alta (85-90) en fotos ambiguas (pastelería
+ * con eventos → 'eventos', restaurante georgiano → 'cafeteria',
+ * joyería → 'moda'), así que la confianza NO sirve de guarda en el
+ * desempate. Una llamada batch gpt-4o-mini sobre 3-4 fotos, atrás
+ * del tope diario del demo y con carrera de 20 s (la descarga base64
+ * necesita tiempo: la vieja carrera de 6 s mataba este camino);
+ * cualquier falla deja el voto determinístico. Devuelve la
+ * clasificación re-votada con la familia 'vision', o el voto de texto
+ * si no hubo desempate. */
+async function classifyWithVision(signals, photoUrls, lang, photoShortcodes) {
   const cls = rubroId.classifyBusiness(signals);
   try {
-    if (!rubroId.needsVisionTiebreak(cls)) return cls;
+    const noSignals = rubroId.needsVisionWhenNoSignals(cls);
+    const tiebreak = !noSignals && rubroId.needsVisionTiebreak(cls);
+    if (!noSignals && !tiebreak) return cls;
     const apiKey = process.env.OPENAI_API_KEY || '';
     if (!apiKey || !costs.demoAiCapOk()) return cls;
-    const options = rubroId.questionOptions(cls, lang);
+    let options; let askConfidence = false;
+    if (noSignals) {
+      options = [...rubroId.visionOptionsAll(lang), { rubro: 'otro', subrubro: '', label: lang === 'en' ? 'Other / none of these (e.g. bookstore)' : 'Otro / ninguno de estos (ej. librería)' }];
+      askConfidence = true;
+    } else {
+      options = rubroId.questionOptions(cls, lang);
+    }
     if (options.length < 2) return cls;
-    const urls = (photoUrls || []).filter((u) => typeof u === 'string' && /^https:\/\//.test(u)).slice(0, 4);
-    if (urls.length < 2) return cls;
+    // Fotos: de IG por shortcode (descarga + base64); de web por URL.
+    // Las URLs scontent/fbcdn se excluyen: dan 403 a cualquier servidor.
+    let imageParts = [];
+    const dataUrls = await downloadPhotosForVision(photoShortcodes, 4);
+    if (dataUrls.length >= 2) {
+      imageParts = dataUrls.map((u) => ({ type: 'image_url', image_url: { url: u, detail: 'low' } }));
+    } else {
+      const urls = (photoUrls || []).filter((u) => typeof u === 'string' && /^https:\/\//.test(u) && !/cdninstagram\.com|fbcdn\.net/i.test(u)).slice(0, 4);
+      if (urls.length < 2) return cls;
+      imageParts = urls.map((u) => ({ type: 'image_url', image_url: { url: u, detail: 'low' } }));
+    }
     const list = options.map((o, i) => `${i + 1}. ${o.label}`).join('\n');
+    const promptText = askConfidence
+      ? (lang === 'en'
+        ? `These photos are from ONE business. Which of these options does it match?\n${list}\nReply ONLY with a JSON {"i": N, "c": C} with the option number (1 to ${options.length}) and C = your confidence from 0 to 100. If none fits, choose the Other option.`
+        : `Estas fotos son de UN negocio. ¿A cuál de estas opciones corresponde?\n${list}\nRespondé SOLO un JSON {"i": N, "c": C} con el número de la opción (1 a ${options.length}) y C = tu confianza de 0 a 100. Si ninguna encaja, elegí la opción Otro.`)
+      : (lang === 'en'
+        ? `These photos are from ONE business. Which of these options does it match?\n${list}\nReply ONLY with a JSON {"i": N} with the option number (1 to ${options.length}). If none fits, {"i": 0}.`
+        : `Estas fotos son de UN negocio. ¿A cuál de estas opciones corresponde?\n${list}\nRespondé SOLO un JSON {"i": N} con el número de la opción (1 a ${options.length}). Si ninguna encaja, {"i": 0}.`);
     const resp = await Promise.race([
       fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -1200,23 +1268,38 @@ async function classifyWithVision(signals, photoUrls, lang) {
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: [
-            { type: 'text', text: lang === 'en'
-              ? `These photos are from ONE business. Which of these options does it match?\n${list}\nReply ONLY with a JSON {"i": N} with the option number (1 to ${options.length}). If none fits, {"i": 0}.`
-              : `Estas fotos son de UN negocio. ¿A cuál de estas opciones corresponde?\n${list}\nRespondé SOLO un JSON {"i": N} con el número de la opción (1 a ${options.length}). Si ninguna encaja, {"i": 0}.` },
-            ...urls.map((u) => ({ type: 'image_url', image_url: { url: u, detail: 'low' } })),
+            { type: 'text', text: promptText },
+            ...imageParts,
           ] }],
-          response_format: { type: 'json_object' }, max_tokens: 20, temperature: 0,
+          response_format: { type: 'json_object' }, max_tokens: askConfidence ? 30 : 20, temperature: 0,
         }),
       }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('vision-timeout')), 6000)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('vision-timeout')), 20000)),
     ]).catch(() => null);
     if (!resp || !resp.ok) return cls;
     const data = await resp.json().catch(() => null);
     try { costs.trackUsage(data && data.usage, 'rubro-vision', null); } catch (e) {}
     const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    const idx = parseInt((JSON.parse(String(txt || '{}')) || {}).i, 10);
+    let parsed = null;
+    try { parsed = JSON.parse(String(txt || '{}')) || {}; } catch (e) { parsed = null; }
+    if (!parsed) return cls;
+    const idx = parseInt(parsed.i, 10);
     if (!idx || !options[idx - 1]) return cls;
     const win = options[idx - 1];
+    // Sin señales: no se adivina. Solo se aplica si no es 'otro' y la
+    // confianza declarada es ≥70; si no, el caso queda en 'otro' como hoy.
+    if (askConfidence) {
+      const conf = parseInt(parsed.c, 10);
+      if (win.rubro === 'otro' || !(conf >= 70)) return cls;
+    } else {
+      // Desempate: LA VISIÓN DESEMPATA, NO VOTA (ver cabecera).
+      const c = cls.candidatas || [];
+      const margin = c.length >= 2 ? (c[0].score - c[1].score) : 0;
+      const topScore = c.length ? c[0].score : 0;
+      const confirmsLeader = margin > 0 && win.rubro === c[0].rubro;
+      const resolvesStrongTie = margin === 0 && topScore >= 4;
+      if (!confirmsLeader && !resolvesStrongTie) return cls;
+    }
     return rubroId.classifyBusiness({ ...signals, visionKey: win.rubro + (win.subrubro ? '/' + win.subrubro : '') });
   } catch (e) { return cls; }
 }
@@ -28407,7 +28490,7 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
   // (v274 · MODO EN) El prefill del funnel EN pide lang='en': las opciones
   // de la pregunta de rubro salen con rótulos en inglés.
   const prefillLang = String((req.body || {}).lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
-  const cls = await classifyWithVision(signals, embedPosts.map((p) => p.thumb).filter(Boolean), prefillLang);
+  const cls = await classifyWithVision(signals, embedPosts.map((p) => p.thumb).filter(Boolean), prefillLang, embedPosts.map((p) => p.shortcode).filter(Boolean));
   const resolved = rubroId.resolveRubro({ cls, lang: prefillLang });
   const legacyCat = demo.categoryFromText((bio ? bio + ' ' : '') + name);
   const hasVotes = (cls.candidatas || []).length > 0;
@@ -31400,7 +31483,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v751';
+const BUILD_ID = '20261105-v752';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

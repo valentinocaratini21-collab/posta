@@ -206,11 +206,25 @@ function parseEmbedPosts(html) {
         // posteo. analysis-engine.signalsFromPosts ya consume p.likes.
         likes: f(/"edge_liked_by":\{"count":(\d+)/) ? parseInt(f(/"edge_liked_by":\{"count":(\d+)/), 10) : null,
         pinned: (() => { const pm = /"pinned_for_users":\[([^\]]{0,200})\]/.exec(seg); return pm ? (pm[1].trim() ? true : false) : null; })(), // (v360) fijado según el embed; sin marca -> null
-        thumb: thumbRaw ? thumbRaw.replace(/\\\//g, '/') : null,
+        thumb: thumbRaw ? cleanThumbUrl(thumbRaw) : null,
       });
     }
   } catch (_) {}
   return posts;
+}
+
+/* (LOTE RUBRO-50-50) Limpieza COMPLETA de la URL del thumb: el embed
+ * trae doble escape (https:\\/\\/scontent…, con \\u0025/\\u0026 en los
+ * query params) y el viejo replace solo quitaba \/, dejando una
+ * barra invertida suelta: la URL no pasaba el filtro /^https:\/\//"
+ * de classifyWithVision y la visión recibía 0 fotos (0 llamadas
+ * en la corrida 7/11). Iterar hasta 3 veces cubre cualquier nivel de
+ * escape y es idempotente una vez limpia (verificado en thumb-test.js). */
+function cleanThumbUrl(u) {
+  let s = String(u || '');
+  for (let i = 0; i < 3; i++) s = s.replace(/\\\\/g, '\\').replace(/\\\//g, '/');
+  s = s.replace(/\\u0025/g, '%').replace(/\\u0026/g, '&');
+  return s;
 }
 
 // ---------------------------------------------------------------------------

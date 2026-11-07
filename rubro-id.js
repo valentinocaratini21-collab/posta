@@ -182,38 +182,69 @@ function jsonldVote(typeRaw) {
 const TEXT_VOTES = [
   // --- belleza y sus oficios ---
   [/\bmaquillaje\b|\bmake\s?-?\s?up\b|\bmakeup\b|\bmaquilladora\b|\bmakeup artist\b/i, 'belleza', 'makeup', 3, 'maquillaje/makeup'],
-  [/\bpeluquer[ií]a\b(?!\s+canina)|\bpeluquer[oa]\b|\bbalayage\b|\bmechas\b|\balisado\b|\bkeratina\b|\bbrushing\b|\bpeinados?\b|\btintura\b|\bcolorista\b|\bcorte de pelo\b/i, 'belleza', 'peluqueria', 3, 'peluquería'],
-  [/\bu[ñn]as\b|\bpesta[ñn]as\b|\bnails?\b|\bmanicur\w*\b|\besmaltado\b|\besculpidas\b|\bsemipermanente\b/i, 'belleza', 'unas', 3, 'uñas'],
-  [/\best[eé]tica\b|\bspa\b|\bfaciales?\b|\bdepilaci[oó]n\b|\bmasajes?\b|\bskincare\b|\bcosmetolog\w*\b|\btratamientos? (corporales|faciales)\b|\blifting\b|\bmicropigmentaci[oó]n\b|\bcejas\b/i, 'belleza', 'estetica', 2, 'estética/spa'],
-  [/\bbelleza\b|\bbeauty\b|\bsal[oó]n de belleza\b/i, 'belleza', '', 2, 'belleza'],
+  [/\bpeluquer[ií]a\b(?!\s+canina)|\bpeluquer[oa]\b|\bbalayage\b|\bmechas\b|\balisado\b|\bkeratina\b|\bbrushing\b|\bpeinados?\b|\btintura\b|\bcolorista\b|\bcorte de pelo\b|\bhairstylist\b|\bhair\s?salon\b|\bhair\s?color\b|\bhair\s?stylist\b/i, 'belleza', 'peluqueria', 3, 'peluquería'],
+  [/\bu[ñn]as\b|\bpesta[ñn]as\b|\bnails?\b|\bmanicur\w*\b|\besmaltado\b|\besculpidas\b|\bsemipermanente\b|\bnail art\b|\bgel-?x\b|\bacrylics?\b|\bbiab\b/i, 'belleza', 'unas', 3, 'uñas'],
+  [/\best[eé]tica\b|\bspa\b|\bfaciales?\b|\bdepilaci[oó]n\b|\bmasajes?\b|\bskincare\b|\bcosmetolog\w*\b|\btratamientos? (corporales|faciales)\b|\blifting\b|\bmicropigmentaci[oó]n\b|\bcejas\b|\blash(es)?\b/i, 'belleza', 'estetica', 2, 'estética/spa'],
+  // (LOTE RUBRO-50-50) 'beauty' sola NO vota cuando es «the beauty of…»
+  // (frase hecha: «the beauty of building something» de una panadería
+  // votaba belleza). «Beauty Bag» / «clean beauty» sí votan: ahí beauty
+  // ES el oficio. El lookahead solo excluye el «beauty of» metafórico.
+  [/\bbelleza\b|\bbeauty\b(?!\s+of\b)|\bsal[oó]n de belleza\b/i, 'belleza', '', 2, 'belleza'],
   [/\bbarber[ií]a\b|\bbarber\w*\b|\bbarba\b|\bfade\b|\bnavaja\b|\bcorte masculino\b|\bbarbershop\b/i, 'barberia', '', 3, 'barbería'],
   // --- mascotas: veterinaria ≠ petshop ---
   [/\bveterinari\w*\b|\bvacunas?\b|\bcastraci[oó]n\b|\bcirug[ií]as?\b|\bcl[ií]nica veterinaria\b|\burgencias 24\s?h\b/i, 'mascotas', 'veterinaria', 3, 'veterinaria'],
   [/\bpet\s?shop\b|\bpetshop\b|\bpeluquer[ií]a canina\b|\bba[ñn]o canino\b|\balimento balanceado\b|\bguarder[ií]a canina\b|\bjuguetes para (perros|gatos|mascotas)\b/i, 'mascotas', 'petshop', 3, 'pet shop'],
   [/\bmascotas?\b|\bperros?\b|\bgatos?\b|\bcanino\b|\bfelino\b/i, 'mascotas', '', 1, 'mascotas'],
   // --- gastronomía y sus cocinas ---
-  [/\bsushi\b|\bnikkei\b|\brolls?\b|\bnigiris?\b|\bomakase\b|\bsashimi\b|\bmakis?\b|\btiradito\b/i, 'gastronomia', 'sushi', 3, 'sushi/nikkei'],
+  // (LOTE RUBRO-50-50) 'roll' solo NO vota sushi: «roll into the weekend»
+  // de una veterinaria votaba sushi. Solo el roll COMESTIBLE (spring,
+  // salmon, california…) vota; el resto de la lista sigue igual.
+  [/\bsushi\b|\bnikkei\b|\bnigiris?\b|\bomakase\b|\bsashimi\b|\bmakis?\b|\btiradito\b|\b(california|spicy|salmon|tuna|dragon|rainbow|philadelphia|eel|shrimp|avocado|crunchy|tempura|yellowtail|hamachi|crab|lobster|vegetable|tofu|mango|unagi|spring)\s+rolls?\b/i, 'gastronomia', 'sushi', 3, 'sushi/nikkei'],
   [/\bparrilla\w*\b|\basado\b|\bachuras\b|\bvac[ií]o\b|\bbife\b|\bbodeg[oó]n\b/i, 'gastronomia', 'parrilla', 3, 'parrilla'],
-  [/\bpizzer[ií]a\b|\bpizzas?\b|\bmuzzarella\b|\bfugazzeta\b/i, 'gastronomia', 'pizzeria', 3, 'pizza'],
-  [/\bhelader[ií]a\b|\bhelados artesanales\b/i, 'gastronomia', '', 2, 'heladería'],
+  // (LOTE RUBRO-50-50) La palabra «gastronomía» misma no votaba
+  // (Don Julio: «industria gastronómica» no daba señal). Steak/Michelin
+  // son de restaurante, no de bar.
+  [/\bsteakhouse\b|\bsteak\b|\bgastronom\w*\b|\bmichelin[-\s]?(star|guide)/i, 'gastronomia', '', 2, 'gastronomía/steak'],
+  [/\bpizzer[ií]a\b|\bpizzas?\b|\bmuzzarella\b|\bfugazzeta\b|\bmargherita\b|\bwood-?fired\b|\bneapolitan\b|\bcalzones?\b/i, 'gastronomia', 'pizzeria', 3, 'pizza'],
+  [/\bhelader[ií]a\b|\bhelados artesanales\b|\bice\s?cream\b|\bgelato\b|\bfro-?yo\b|\bscoops?\b|\bsundae\b/i, 'gastronomia', '', 2, 'heladería'],
   [/\brestaurante?\b|\brestaurant\b|\brotiser[ií]a\b|\bhamburgues\w*\b/i, 'gastronomia', '', 2, 'restaurante'],
-  [/\bcocina\b|\bchef\b|\bmen[uú]\b|\bempanadas\b|\bpastas\b|\bmilanesas?\b|\bcomida\b/i, 'gastronomia', '', 1, 'cocina/comida'],
+  // (LOTE RUBRO-50-50) Cocinas por nombre propio (griego, caribeño,
+  // tailandés, italiano, vegano, ramen): en NYC el negocio se presenta
+  // por su cocina, no por «restaurante». 'thai' no vota si es masaje.
+  [/\bgreek\w*\b|\bgyro\b|\bmezedes?\b|\bestiatorio\b|\bsouvlaki\b/i, 'gastronomia', '', 3, 'cocina griega'],
+  [/\bcaribbean\w*\b|\bjamaican\w*\b|\bjerk\b|\boxtail\b/i, 'gastronomia', '', 3, 'cocina caribeña'],
+  [/\bthai\b(?!\s+massage\b)|\bvegan\b|\bitalian\b|\btrattoria\b|\bosteria\b|\bramen\b/i, 'gastronomia', '', 2, 'cocina por nombre'],
+  [/\btacos?\b|\btostones\b|\bplantain\b/i, 'gastronomia', '', 3, 'cocina latina'],
+  [/\bcocina\b|\bchef\b|\bmen[uú]\b|\bempanadas\b|\bpastas\b|\bmilanesas?\b|\bcomida\b|\bcatering\b/i, 'gastronomia', '', 1, 'cocina/comida'],
+  // (LOTE RUBRO-50-50) Reservar mesa es de restaurante: Resy y «reserve
+  // your table» votan gastronomía. 'dinner'/'lunch' NO: un petshop también
+  // habla de «dinner» (la cena del perro) y votaba gastronomía.
+  [/\bresy\b|\breserve (a|your|our|the) table\b|\bbook a table\b/i, 'gastronomia', '', 2, 'reserva de mesa'],
   // --- cafetería: café de especialidad ≠ panadería ---
   [/\bcafeter[ií]a\b|\bcoffee shop\b|\btostadur[ií]a\b|\bcaf[eé] de especialidad\b/i, 'cafeteria', 'cafe', 3, 'cafetería'],
   [/\bespresso\b|\bbarista\b|\blatte\b|\bcappuccino\b|\bflat white\b|\bspecialty coffee\b/i, 'cafeteria', 'cafe', 2, 'café de especialidad'],
-  [/\bpanader[ií]a\b|\bpasteler[ií]a\b|\bfacturas\b|\bmedialunas\b|\bpanader\w*\b|\bbudines\b|\bpan dulce\b|\btortas por encargo\b/i, 'cafeteria', 'panaderia', 3, 'panadería/pastelería'],
-  [/\bbrunch\b|\bdesayunos?\b|\bmeriendas?\b/i, 'cafeteria', '', 1, 'brunch/merienda'],
+  // (LOTE RUBRO-50-50) 'coffee' solo, peso 1: «morning coffee» de una
+  // joyería o «coffee tahini» (ingrediente) no pueden pesar como un café;
+  // el café real suma por nombre + captions + hashtags. 'coffee table'
+  // (mueble) no vota. '#tbilicafe' vota vía \w*cafe (hashtag pegado).
+  [/\bcoffee\b(?!\s+table\b)|\b\w*caf[eé]\b/i, 'cafeteria', 'cafe', 1, 'coffee/café'],
+  [/\bpanader[ií]a\b|\bpasteler[ií]a\b|\bfacturas\b|\bmedialunas\b|\bpanader\w*\b|\bbudines\b|\bpan dulce\b|\btortas por encargo\b|\bpatisserie\b|\bpastry\b|\bmacarons?\b|\bcroissants?\b|\bpanettone\b|\bbakery\b/i, 'cafeteria', 'panaderia', 3, 'panadería/pastelería'],
+  // (LOTE RUBRO-50-50) El brunch es comida de restaurante en NYC
+  // (Kokomo, Sunday in Brooklyn): vota gastronomía, no cafetería.
+  // Desayuno/merienda quedan en cafetería (café argentino).
+  [/\bbrunch\b/i, 'gastronomia', '', 1, 'brunch'],
+  [/\bdesayunos?\b|\bmeriendas?\b/i, 'cafeteria', '', 1, 'desayuno/merienda'],
   // --- fitness: gimnasio ≠ entrenador ---
   [/\bgimnasio\b|\bgym\b|\bcrossfit\b|\bmusculaci[oó]n\b/i, 'fitness', 'gimnasio', 3, 'gimnasio'],
   [/\bfuncional\b|\bpilates\b|\byoga\b|\bspinning\b/i, 'fitness', 'gimnasio', 2, 'clases/gimnasio'],
   [/\bentrenador personal\b|\bpersonal trainer\b|\bpreparador f[ií]sico\b|\bentrenamiento personalizado\b|\bcoach personal\b|\bentrenador online\b|\bentrenamiento online\b|\bplanes de entrenamiento\b/i, 'fitness', 'entrenador', 3, 'entrenador personal'],
   [/\bfitness\b|\bentrenamiento\b|\bentrenar\b|\brutinas\b/i, 'fitness', '', 1, 'fitness'],
   // --- inmobiliaria: vender ≠ construir ---
-  [/\binmobiliaria\b|\bpropiedades\b|\btasaciones\b|\breal estate\b|\balquiler de (departamentos|propiedades|inmuebles)\b|\bventa de (departamentos|propiedades|inmuebles|casas)\b/i, 'inmobiliaria', 'inmobiliaria', 3, 'inmobiliaria'],
-  [/\bconstructora\b|\bconstrucci[oó]n\b|\breformas integrales\b|\bremodelaciones\b|\bedificaci[oó]n\b|\bdesarrollos inmobiliarios\b/i, 'inmobiliaria', 'constructora', 3, 'constructora'],
+  [/\binmobiliaria\b|\bpropiedades\b|\btasaciones\b|\breal estate\b|\balquiler de (departamentos|propiedades|inmuebles)\b|\bventa de (departamentos|propiedades|inmuebles|casas)\b|\breal\s?estate\b|\b\w*real\s?estate\b|\blistings?\b|\bmortgage\b|\bpenthouse\b|\bopen house\b|\bnew to market\b|\bjust listed\b/i, 'inmobiliaria', 'inmobiliaria', 3, 'inmobiliaria'],
+  [/\bconstructora\b|\bconstrucci[oó]n\b|\breformas integrales\b|\bremodelaciones\b|\bedificaci[oó]n\b|\bdesarrollos inmobiliarios\b|\bcontractor\b|\b(?<!garment\s)construction\b|\bremodel\w*\b|\brenovation\b|\broofing\b|\bdrywall\b|\bhome\s?renovation\b|\bnew construction\b/i, 'inmobiliaria', 'constructora', 3, 'constructora'],
   [/\bobras\b|\breformas\b/i, 'inmobiliaria', 'constructora', 1, 'obras/reformas'],
   // --- autos: reparar ≠ vender repuestos ---
-  [/\btaller mec[aá]nico\b|\bmec[aá]nica automotriz\b|\bservice y mantenimiento\b|\bfrenos\b|\balineaci[oó]n y balanceo\b|\bgomer[ií]a\b|\breparamos\b/i, 'autos', 'taller', 3, 'taller mecánico'],
+  [/\btaller mec[aá]nico\b|\bmec[aá]nica automotriz\b|\bservice y mantenimiento\b|\bfrenos\b|\balineaci[oó]n y balanceo\b|\bgomer[ií]a\b|\breparamos\b|\boil change\b|\bauto repair\b|\bcar repair\b|\bmechanic\b|\btires?\b|\bwheel alignment\b/i, 'autos', 'taller', 3, 'taller mecánico'],
   [/\brepuestos\b|\bautopartes\b|\bneum[aá]ticos\b|\bbater[ií]as para autos\b/i, 'autos', 'repuestos', 3, 'repuestos'],
   [/\bconcesionaria\b|\bveh[ií]culos\b|\btaller\b|\bmotos?\b/i, 'autos', '', 1, 'autos'],
   // --- flores: florería ≠ vivero ---
@@ -221,12 +252,16 @@ const TEXT_VOTES = [
   [/\bvivero\b|\bmacetas\b|\bsuculentas\b|\bjardiner[ií]a\b|\bplantines\b/i, 'flores', 'vivero', 3, 'vivero'],
   [/\bplantas\b|\bflores\b/i, 'flores', '', 1, 'flores/plantas'],
   // --- rubros de un nivel ---
-  [/\bmoda\b|\bindumentaria\b|\bboutique\b|\bstreetwear\b|\btienda de ropa\b|\bcalzado\b|\bzapatillas\b|\bprendas\b|\bropa\b/i, 'moda', '', 2, 'moda/ropa'],
-  [/\bodontolog\w*\b|\bdentista\b|\bkinesiolog\w*\b|\bnutricionista\b|\bpsic[oó]log\w*\b|\b[oó]ptica\b|\bfisioterapia\b|\bsalud\b/i, 'salud', '', 2, 'salud'],
-  [/\bcl[ií]nica\b/i, 'salud', '', 1, 'clínica'],
-  [/\bmuebles?\b|\bmuebler[ií]a\b|\bcolchones\b|\bblanquer[ií]a\b|\bferreter[ií]a\b|\bherramientas\b|\bpinturer[ií]a\b/i, 'hogar', '', 2, 'hogar/muebles'],
+  [/\bmoda\b|\bindumentaria\b|\bboutique\b|\bstreetwear\b|\btienda de ropa\b|\bcalzado\b|\bzapatillas\b|\bprendas\b|\bropa\b|\bfashion\b|\bvintage\b|\bthrift\b|\bclothing\b|\bapparel\b|\boutfits?\b|\bdresses?\b|\bjeans\b|\bskirts?\b|\bjackets?\b|\bdenim\b|\bnew collection\b|\bnew arrivals\b/i, 'moda', '', 2, 'moda/ropa'],
+  [/\bodontolog\w*\b|\bdentista\b|\bkinesiolog\w*\b|\bnutricionista\b|\bpsic[oó]log\w*\b|\b[oó]ptica\b|\bfisioterapia\b|\bsalud\b|\bpharmacy\b|\bdrugstore\b|\bprescription\b|\bvitamins?\b|\bphysical therap\w*\b|\bphysiotherap\w*\b/i, 'salud', '', 2, 'salud'],
+  [/\bcl[ií]nic\w*\b/i, 'salud', '', 1, 'clínica'],
+  [/\bmuebles?\b|\bmuebler[ií]a\b|\bcolchones\b|\bblanquer[ií]a\b|\bferreter[ií]a\b|\bherramientas\b|\bpinturer[ií]a\b|\bhome\s?goods\b|\bhome\s?decor\b|\bornaments?\b|\bcandles?\b|\bthrow pillows?\b|\bbedding\b|\btableware\b|\bfurniture\b/i, 'hogar', '', 2, 'hogar/muebles'],
   [/\binteriorismo\b|\bdise[ñn]o de interiores\b|\bdecoraci[oó]n de interiores\b|\bdeco\b/i, 'deco', '', 2, 'deco/interiorismo'],
-  [/\bjoyer[ií]a\b|\bjoyas\b|\brelojer[ií]a\b|\bplater[ií]a\b|\banillos\b/i, 'joyeria', '', 2, 'joyería'],
+  // (LOTE RUBRO-50-50) Joyería en dos regex para que acumule: una joyería
+  // real dice «jewelry» Y «ring/diamonds» en el mismo feed; un solo voto
+  // de 2 no alcanzaba para separarse del ruido («morning coffee»).
+  [/\bjoyer[ií]a\b|\bjoyas\b|\bjewelry\b|\bjewellery\b/i, 'joyeria', '', 2, 'joyería'],
+  [/\brings?\b|\bnecklaces?\b|\bearrings?\b|\bdiamonds?\b|\bengagement ring\b|\brelojer[ií]a\b|\bplater[ií]a\b|\banillos\b/i, 'joyeria', '', 2, 'joyas/anillos'],
   [/\bfotograf\w*\b|\bphotography\b|\bsesiones de fotos\b|\bestudio fotogr[aá]fico\b/i, 'fotografia', '', 2, 'fotografía'],
   [/\bcommunity manager\b|\bagencia de (marketing|contenido|publicidad|redes)\b|\bmarketing digital\b|\bmanejo de redes\b|\bcreaci[oó]n de contenido\b/i, 'profesionales', '', 3, 'contenido/CM'],
   // (v343) Gestión/administración: el vocabulario de una oficina que
@@ -236,16 +271,28 @@ const TEXT_VOTES = [
   [/\boffice manager\b|\bgesti[oó]n administrativa\b|\badministraci[oó]n de (empresas|negocios|pymes|consorcios)\b|\bgestor[ií]a\b|\bback\s?office\b/i, 'profesionales', '', 3, 'gestión/administración'],
   [/\bfacturaci[oó]n\b|\bcobranzas\b|\bliquidaci[oó]n de sueldos\b|\btr[aá]mites impositivos\b|\basistencia administrativa\b|\bsecretar[ií]a administrativa\b/i, 'profesionales', '', 2, 'facturación/cobranzas'],
   [/\babogad\w*\b|\bcontad\w*\b|\bescriban\w*\b|\bestudio jur[ií]dico\b|\bestudio contable\b|\bconsultora\b|\barquitecto\b|\bingeniero\b/i, 'profesionales', '', 2, 'profesionales'],
-  [/\bbar\b|\bpub\b|\bcervecer[ií]a\b|\bcocteler[ií]a\b|\bcocktails?\b|\btragos\b|\bvinoteca\b|\bbirra\b|\bvinos?\b/i, 'bar', '', 2, 'bar'],
+  // (LOTE RUBRO-50-50) El \bbar\b solo NO vota: «open bar» de una
+  // peluquería y «taco bar» de un restaurante votaban bar. Un bar de
+  // verdad dice cocktails, beer, brewery, pub o happy hour. 'vinos' solo
+  // tampoco: el sommelier de una parrilla habla del vino y no es un bar
+  // (queda 'vinoteca' y 'wine bar' para el que vende vino).
+  [/\bpub\b|\bcervecer[ií]a\b|\bcocteler[ií]a\b|\bcocktails?\b|\btragos\b|\bvinoteca\b|\bbirra\b|\bwine bar\b|\bbrew\w*\b|\bbeer\b|\bipa\b|\btaproom\b|\bcraft beer\b|\bhappy hour\b/i, 'bar', '', 2, 'bar'],
   // --- boliche / vida nocturna: el local que ABRE de noche y vende la
   // fiesta misma (flyers, DJs, anticipadas). Distinto de bar (tomar algo)
   // y de eventos (salones/planners que venden el espacio para TERCEROS).
-  [/\bboliche\b|\bdiscoteca\b|\bnight\s?club\b|\bclub nocturno\b|\bantro\b/i, 'boliche', '', 3, 'boliche'],
+  // (LOTE RUBRO-50-50) «nightclub» NO vota boliche cuando es la sala de
+  // una mansión en venta («private nightclub floor» de una inmobiliaria
+  // votaba boliche). El lookbehind excluye solo ese caso.
+  [/\bboliche\b|\bdiscoteca\b|\b(?<!private\s)night\s?club\b|\bclub nocturno\b|\bantro\b/i, 'boliche', '', 3, 'boliche'],
   [/\bpista de baile\b|\bdj residente\b|\bcabina de dj\b|\bboliche bailable\b/i, 'boliche', '', 2, 'pista/dj residente'],
   [/\bentradas anticipadas\b|\banticipadas\b/i, 'boliche', '', 1, 'anticipadas'],
   [/\bhotel\b|\bhostel\b|\bposada\b|\bcaba[ñn]as\b|\bapart hotel\b|\bturismo\b|\bexcursiones\b/i, 'turismo', '', 2, 'turismo/hotel'],
   [/\bagencia de viajes\b|\bviajes\b|\bpasajes\b|\baerol[ií]nea\b/i, 'viajes', '', 2, 'viajes'],
-  [/\beventos\b|\bcasamientos?\b|\bbodas?\b|\bquince\w*\b|\bsal[oó]n de (fiestas|eventos)\b|\bcatering\b|\bdj\b|\bnovias?\b/i, 'eventos', '', 1, 'eventos'],
+  // (LOTE RUBRO-50-50) 'catering' NO vota eventos: el catering es comida,
+  // no una empresa de eventos (una pastelería que hace la torta de una
+  // boda sale listada junto al caterer y votaba eventos). El catering
+  // vota gastronomía (regex cocina/comida).
+  [/\beventos\b|\bcasamientos?\b|\bbodas?\b|\bquince\w*\b|\bsal[oó]n de (fiestas|eventos)\b|\bnovias?\b|\bwedding (venue|planner|planning)\b/i, 'eventos', '', 1, 'eventos'],
   [/\bescuela\b|\bcolegio\b|\binstituto\b|\bacademia\b|\bcursos\b|\buniversidad\b|\beducaci[oó]n\b/i, 'educacion', '', 2, 'educación'],
   [/\bcelulares\b|\bsmartphones?\b|\biphone\b|\binform[aá]tica\b|\bcomputaci[oó]n\b|\bdesarrollo web\b|\bprogramaci[oó]n\b|\bsoftware\b/i, 'tecnologia', '', 2, 'tecnología'],
   [/\bplomero\b|\belectricista\b|\bfumigaci[oó]n\b|\bservicio t[eé]cnico\b|\binstalaciones\b|\blimpieza\b|\breparaciones\b/i, 'servicios', '', 1, 'servicios/oficios'],
@@ -275,6 +322,16 @@ const HANDLE_TERMS = [
   ['odonto', 'salud', '', 3], ['deco', 'deco', '', 2], ['spa', 'belleza', 'estetica', 2],
   ['estetica', 'belleza', 'estetica', 2], ['heladeria', 'gastronomia', '', 2],
   ['moda', 'moda', '', 2], ['indumentaria', 'moda', '', 2], ['eventos', 'eventos', '', 2],
+  // (LOTE RUBRO-50-50) Vocabulario inglés del handle, mismo criterio que
+  // el resto: el @ es la identidad del negocio. OJO 'hair': es substring
+  // y también casa con 'chair' — en el dataset no hay ningún @ con chair;
+  // si aparece un caso así, el voto de handle se revisa.
+  ['brewery', 'bar', '', 2], ['icecream', 'gastronomia', '', 2],
+  ['pharmacy', 'salud', '', 3], ['thrift', 'moda', '', 3], ['vintage', 'moda', '', 3],
+  ['clothes', 'moda', '', 2], ['hair', 'belleza', 'peluqueria', 2],
+  ['contractor', 'inmobiliaria', 'constructora', 3], ['jewelry', 'joyeria', '', 3],
+  ['patisserie', 'cafeteria', 'panaderia', 3], ['bakery', 'cafeteria', 'panaderia', 3],
+  ['furniture', 'hogar', '', 2],
 ];
 
 // Categoría declarada por la cuenta de IG (etiquetas en inglés de Meta),
@@ -405,6 +462,20 @@ function classifyBusiness(signals) {
     })
     .sort((a, b) => b.score - a.score);
 
+  // (LOTE RUBRO-50-50 · COMIDA > EVENTOS) Un negocio que cocina no es
+  // una empresa de eventos porque un caption mencione la boda, el DJ o
+  // el catering del sábado: si el ganador es 'eventos' y un rubro de
+  // comida (gastronomía/cafetería/bar) está a 1 punto o empatado, la
+  // comida va primera. Solo desempata cuasi-empates: un salón de fiestas
+  // con eventos 3 vs gastronomía 1 (catering) no se toca.
+  const FOOD_RUBROS = ['gastronomia', 'cafeteria', 'bar'];
+  if (candidatas.length >= 2 && candidatas[0].rubro === 'eventos'
+      && FOOD_RUBROS.includes(candidatas[1].rubro)
+      && candidatas[0].score - candidatas[1].score <= 1) {
+    const ev = candidatas.shift();
+    candidatas.splice(1, 0, ev);
+  }
+
   const top = candidatas[0] || null;
   const second = candidatas[1] || null;
   let rubro = 'otro'; let subrubro = ''; let segura = false; let nivel_duda = 'rubro';
@@ -428,7 +499,13 @@ function classifyBusiness(signals) {
     const subClaro = !!subTop && subTop[1] >= 3 && (subTop[1] - (subSegundo ? subSegundo[1] : 0)) >= 2;
     const tieneSubrubros = (SUBRUBROS[top.rubro] || []).length > 0;
     if (subClaro) subrubro = subTop[0];
-    if (seguraRubro && (!tieneSubrubros || subClaro)) {
+    // (LOTE RUBRO-50-50) Si NINGÚN subrubro votó, no hay pregunta que
+    // hacer: las opciones (sushi/parrilla/pizzería) no incluyen la verdad
+    // (un griego, una heladería) y preguntar eso es peor que no preguntar.
+    // El rubro queda firme con subrubro vacío. La pregunta de subrubro
+    // solo sale cuando hay ≥2 subrubros con votos y no hay ganador claro.
+    const hayVotosSubrubro = subsOrdenados.length > 0;
+    if (seguraRubro && (!tieneSubrubros || subClaro || !hayVotosSubrubro)) {
       segura = true; nivel_duda = null;
     } else if (seguraRubro) {
       nivel_duda = 'subrubro';
@@ -457,12 +534,42 @@ function classifyBusiness(signals) {
 }
 
 /* needsVisionTiebreak(result) — el desempate por visión SOLO se gasta
- * cuando el voto determinístico quedó cerca (nunca como primera vía). */
+ * cuando el voto determinístico quedó cerca (nunca como primera vía).
+ * Margen ≤5 (LOTE RUBRO-50-50): un 6-1 también es «cerca» cuando el
+ * líder tiene UNA sola familia (ej. una pastelería que solo se declara
+ * por nombre+@): el texto ya decidió el rubro, pero le falta la segunda
+ * familia que exige la vara de segura, y la foto es esa segunda familia.
+ * NO dispara con duda de subrubro: ahí el rubro ya está firme y la
+ * visión no puede ayudar sin arriesgar el rubro (un negocio multi-rubro
+ * como barbería+salón tiene fotos de los dos oficios). */
 function needsVisionTiebreak(result) {
   if (!result || result.segura) return false;
+  if (result.nivel_duda === 'subrubro') return false;
   const c = result.candidatas || [];
   if (c.length < 2) return false;
-  return (c[0].score - c[1].score) <= 3;
+  return (c[0].score - c[1].score) <= 5;
+}
+
+/* needsVisionWhenNoSignals(result) — (LOTE RUBRO-50-50) cuando el texto
+ * no dio NINGUNA señal (candidatas vacías: la bio viene vacía y los
+ * captions son genéricos), el texto no puede decidir y la única evidencia
+ * que queda son las fotos. Sin esto, esos casos caen siempre en 'otro'
+ * sin siquiera preguntar (la pregunta necesita opciones y no hay ninguna).
+ * La visión elige entre TODA la lista de rubros; si ninguna encaja
+ * responde {"i": 0} y el caso queda en 'otro' como hoy. */
+function needsVisionWhenNoSignals(result) {
+  if (!result || result.segura) return false;
+  const c = result.candidatas || [];
+  return c.length === 0;
+}
+
+/* visionOptionsAll(lang) — las opciones de la visión sin señales: todos
+ * los rubros canónicos salvo 'otro' (que es la respuesta «ninguna
+ * encaja», ya cubierta por {"i": 0}). El llamador inyecta la elección
+ * vía signals.visionKey como siempre. */
+function visionOptionsAll(lang) {
+  return RUBROS.filter((r) => r !== 'otro')
+    .map((rubro) => ({ rubro, subrubro: '', label: labelFor(rubro, '', lang) }));
 }
 
 /* questionOptions(result) — las 2-4 opciones de un toque para la
@@ -535,5 +642,6 @@ function resolveRubro(input) {
 module.exports = {
   RUBROS, SUBRUBROS, RUBRO_LABELS, SUBRUBRO_LABELS, RUBRO_LABELS_EN, SUBRUBRO_LABELS_EN, labelFor,
   JSONLD_MAP, jsonldVote, classifyBusiness, needsVisionTiebreak,
+  needsVisionWhenNoSignals, visionOptionsAll,
   questionOptions, resolveRubro,
 };
