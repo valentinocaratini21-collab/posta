@@ -17,6 +17,9 @@
 //    salió y hay un próximo tras la medianoche.
 // Uso: node test-lote-post-oculto-respira.js (desde el scratch)
 // M121: el boot del servidor real en DB temporal ES la prueba de carga.
+// FIX POSTY-DENTRO 6/11 ~21:00 (Valentino «Posty deberia estar dentro de la cartita»):
+// la cara va DENTRO del tile (C7i/C7i2/C7m) + styles?v=20261171 en ambos index (C8i)
+// + app.js?v=495 solo ES (C8b). Ahora 61 asserts (58 + 3 nuevas).
 'use strict';
 const fs = require('fs');
 const vm = require('vm');
@@ -242,15 +245,17 @@ const countDorso = (html) => (html.match(/<i class="pz-dorso">/g) || []).length;
   t('C7f: VARIANTE B — la carta es DESTACADA a todo lo ancho (hf-cell-velada)', htmlFeed.includes('hf-cell hf-cell-velada'), htmlFeed.slice(0, 200));
   t('C7g: VARIANTE B — halo dorado que respira (hf-carta-halo envuelve la carta)', htmlFeed.includes('hf-carta-halo'), htmlFeed.slice(0, 300));
   t('C7h: VARIANTE B — 7 destellos ✦ (no 4)', (htmlFeed.match(/<i>✦<\/i>/g) || []).length === 7, 'destellos=' + (htmlFeed.match(/<i>✦<\/i>/g) || []).length);
-  t('C7i: VARIANTE B — Posty asomando (hf-carta-posty con ai-avatar.png) + «Posty lo está cuidando ✨»', htmlFeed.includes('hf-carta-posty') && htmlFeed.includes('ai-avatar.png') && htmlFeed.includes('Posty lo está cuidando ✨'), htmlFeed.slice(-400));
+  t('C7i: POSTY DENTRO — la cara va DENTRO de la carta (hf-carta-posty con ai-avatar.png) + «Posty lo está cuidando ✨» debajo', htmlFeed.includes('hf-carta-posty') && htmlFeed.includes('ai-avatar.png') && htmlFeed.includes('Posty lo está cuidando ✨'), htmlFeed.slice(-400));
+  t('C7i2: POSTY DENTRO — Posty está dentro del tile (después del chip, antes de la leyenda; 4 cierres </span> entre Posty y la leyenda: posty + contenido + tile + halo; NO como hermano fuera de la carta)', htmlFeed.indexOf('hf-carta-posty') > htmlFeed.indexOf('hf-chip') && htmlFeed.indexOf('hf-carta-posty') < htmlFeed.indexOf('hf-carta-leyenda') && (htmlFeed.slice(htmlFeed.indexOf('hf-carta-posty'), htmlFeed.indexOf('hf-carta-leyenda')).match(/<\/span>/g) || []).length === 4, htmlFeed.slice(-500));
   t('C7j: VARIANTE B — contenido centrado (hf-carta-contenido: píldora, cuenta, chip en ese orden)', htmlFeed.includes('hf-carta-contenido') && htmlFeed.indexOf('hf-carta-proximo') < htmlFeed.indexOf('hf-cuenta-abre') && htmlFeed.indexOf('hf-cuenta-abre') < htmlFeed.indexOf('hf-chip'), htmlFeed.slice(0, 600));
   t('C7k: VARIANTE B — la cuenta es la protagonista en 3 líneas (faltan / número en <b> / para ver…)', htmlFeed.includes('faltan<br><b>') && htmlFeed.includes('</b><br>para ver tu próximo posteo'), htmlFeed.slice(0, 600));
   t('C7l: VARIANTE B — la celda entera abre el ritual (data-pz-abrir-ritual en la celda, tocar Posty también)', htmlFeed.includes('hf-cell hf-cell-velada" data-hf-filtro="pendientes" data-pz-abrir-ritual="1"'), htmlFeed.slice(0, 200));
+  t('C7m: POSTY DENTRO — CSS cierra el tamaño (72px fijo + max, sin margen negativo; la cara no puede salir gigante)', CSS.includes('.hf-carta-posty{display:block;width:72px;height:72px;max-width:72px;max-height:72px') && !CSS.includes('margin:-36px') && CSS.includes('.hf-carta-posty img{width:100%;height:100%;max-width:72px;max-height:72px') && CSS.includes('.hf-cell-velada .hf-carta-contenido{padding:26px 20px 28px}'));
 
   // --- C8) M78 + estática ---
   const fns = ['pzTzOffsetMs', 'pzDiaInicioMs', 'pzRitualAbreFecha', 'hfCuentaAbreTick'];
   t('C8a: M78 — las 4 funciones nuevas existen definidas en el bundle', fns.every((f) => typeof S[f] === 'function'), fns.filter((f) => typeof S[f] !== 'function').join(','));
-  t('C8b: M78 — ?v= bumpeado SOLO en ES (494) y EN sin app.js', IDX_ES.includes('app.js?v=494') && !IDX_ES.includes('app.js?v=489') && !IDX_EN.includes('app.js?v='));
+  t('C8b: M78 — ?v= bumpeado SOLO en ES (495) y EN sin app.js', IDX_ES.includes('app.js?v=495') && !IDX_ES.includes('app.js?v=494') && !IDX_EN.includes('app.js?v='));
   t('C8c: CSS — halo + cuenta + día-en existen; keyframes pzRespira/hfRespira existen; VARIANTE B (celda ancha, halo, 7 destellos, Posty, cuenta dorada)',
     CSS.includes('.pz-ritual-pack-velo.pz-respira') && CSS.includes('@keyframes pzRespira') && CSS.includes('@keyframes hfRespira')
     && CSS.includes('.hf-tile.hf-carta-respira') && CSS.includes('.hf-cuenta-abre') && CSS.includes('.pz-ritual-dia-en')
@@ -262,6 +267,7 @@ const countDorso = (html) => (html.match(/<i class="pz-dorso">/g) || []).length;
   t('C8f: el servidor calcula `proximo` en /api/ritual/hoy (medianoche + próximo programado)', SRV.includes('const medianoche = zonedWallToUtc(manana + \' 00:00\', tz)') && SRV.includes('proximo = { abre_a: medianoche, abre_hora: \'00:00\' }') && SRV.includes('publicado_hoy: publicadoHoy, proximo'));
   t('C8g: sin próximo, el vacío honesto sigue (hoy null sin proximo cuando no hay publicado)', SRV.includes('if (!rec) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy, proximo })'));
   t('C8h: VARIANTE B — el tick de 1 s reescribe la cuenta en 3 líneas (mismo formato que el render)', String(S.hfCuentaAbreTick).includes('faltan<br><b>') && String(S.hfCuentaAbreTick).includes('</b><br>para ver tu próximo posteo') && String(S.hfCuentaAbreTick).includes('<b>${esc(cu.faltan)}</b><br>left to see your next post'));
+  t('C8i: CACHÉ — styles?v= bumpeado en AMBOS index (20261171; el CSS nuevo llega a todos los teléfonos)', IDX_ES.includes('styles.css?v=20261171') && IDX_EN.includes('styles.css?v=20261171') && !IDX_ES.includes('styles.css?v=20261170') && !IDX_EN.includes('styles.css?v=20261170'));
 
   // ===== H) HTTP: servidor real en DB temporal (M121: boot en copia aislada) =====
   const PORT = 34573;

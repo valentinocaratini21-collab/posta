@@ -50,7 +50,7 @@ t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
 t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
 t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
 t(app.includes("const CHUNK_V = '20261105-v723'"), 'CHUNK_V v723 (sin cambio: este lote no toca chunks)');
-t(md5(css) === '29b5d77064ccdd0425586f93650e7da4', 'styles.css: md5 con respira v734 (re-pin)');
+t(md5(css) === '8d16705e3a63aa3aedb926274f9d0664', 'styles.css: md5 con posty-dentro (re-pin)');
 
 // ---------- 2. VM: homeGridCompose + homeTileHTML ----------
 const TZ = 'America/New_York';
