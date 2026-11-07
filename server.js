@@ -64,6 +64,7 @@ const fotoGrounding = require('./foto-grounding'); // (CONTENIDO-FOTO) gate foto
 const mediaCliente = require('./media-cliente.js');
 const vozDueno = require('./voz-dueno.js'); // VOZ DEL DUENO -> POSTEO (29/10/2026, local)
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
+const { normalizeIgQuery, isValidIgQuery, lookupIgProfile } = require('./ig-search'); // LOTE IG-CON-BUSCADOR: búsqueda pública por @
 const { startScheduler, publishSinglePost } = require('./scheduler');
 const modoEvento = require('./modo-evento'); // MODO EVENTO (2026-10-30): mini-campaña anticipación + día + cierre.
 const approval = require('./approval');
@@ -16010,6 +16011,37 @@ app.get('/api/ig/avatar', requireAuth, async (req, res) => {
   } catch (e) { res.json({ username: u, pic_url: null }); }
 });
 
+// ---------- Instagram: búsqueda pública por @ (LOTE IG-CON-BUSCADOR) ----------
+// GET /api/ig/search?q=<@> — PÚBLICO (el visitante de la prueba no tiene
+// sesión). Devuelve los datos PÚBLICOS de la cuenta para que el visitante
+// confirme «es esta» tocando la sugerencia. Solo lectura pública: nunca
+// pide contraseña, nunca entra a la cuenta del visitante, no guarda nada
+// sensible (caché en memoria de 10 min en ig-search.js, sin DB). Fuente:
+// la página pública de embed de Instagram (contextJSON), mismo dominio
+// que /api/ig/avatar. La API de Meta no ofrece búsqueda de usuarios por
+// nombre y el CLI de Instagram del entorno no existe en producción (ver
+// ig-search.js). Sin coincidencia exacta no hay sugerencias: Instagram no
+// expone búsqueda por prefijo sin login. Si IG no responde, error honesto
+// y el visitante sigue escribiendo a mano — la búsqueda nunca bloquea.
+app.get('/api/ig/search', async (req, res) => {
+  const lang = req.query.lang === 'en' ? 'en' : 'es';
+  const q = normalizeIgQuery(req.query.q);
+  if (!q || !isValidIgQuery(q)) return res.status(400).json({ ok: false, error: 'invalid', message: lang === 'en' ? 'Tell me a valid @ (letters, numbers, dots and _).' : 'Decime un @ válido (letras, números, puntos y _).' });
+  if (q.length < 3) return res.status(400).json({ ok: false, error: 'too_short', message: lang === 'en' ? 'Type at least 3 characters.' : 'Escribí al menos 3 caracteres.' });
+  const ip = String(req.ip || '');
+  if (authHitCount('ig-search|' + ip, 60 * 1000) >= 20) return res.status(429).json({ ok: false, error: 'rate_limited', message: lang === 'en' ? 'Too many searches 😅 Wait a minute and try again.' : 'Demasiadas búsquedas 😅 Esperá un minuto y probá de nuevo.' });
+  authHitRecord('ig-search|' + ip);
+  try {
+    const r = await lookupIgProfile(q);
+    if (!r.found) return res.json({ ok: true, found: false });
+    return res.json({ ok: true, found: true, profile: r.profile });
+  } catch (e) {
+    if (e && e.code === 'invalid') return res.status(400).json({ ok: false, error: 'invalid' });
+    console.error('[ig/search] lookup falló:', e && e.message);
+    return res.json({ ok: false, error: 'ig_unavailable', message: lang === 'en' ? "Instagram didn't answer — you can keep typing your @ by hand 🙂" : 'Instagram no respondió — podés seguir escribiendo tu @ a mano 🙂' });
+  }
+});
+
 // ---------- 🏠 HOME (v331): el perfil literal del cliente ----------
 // La home de la app es el perfil de Instagram del cliente TAL CUAL es:
 // encabezado fiel (foto, @, nombre, bio, link, conteos) + sus posteos
@@ -31062,7 +31094,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v737';
+const BUILD_ID = '20261105-v738';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

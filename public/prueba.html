@@ -40,6 +40,17 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:28px;box-shadow:0 12px 40px rgba(10,30,51,.07)}
 .form-card{max-width:640px;margin:28px auto 60px}
 .field{margin-bottom:18px}
+/* (LOTE IG-CON-BUSCADOR) Tarjeta de confirmación del @: la cuenta pública
+   que Posty encontró, para tocarla y confirmar «es esta». */
+.ig-sug{margin:-8px 0 14px}
+.ig-sug-card{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#F2F9FD;border:2px solid var(--cel);border-radius:14px;padding:10px 12px;cursor:pointer;font-family:inherit}
+.ig-sug-card img{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none}
+.ig-sug-ava{width:40px;height:40px;border-radius:50%;background:var(--cel);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;flex:none}
+.ig-sug-txt{display:flex;flex-direction:column;min-width:0;flex:1}
+.ig-sug-txt b{color:var(--navy);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ig-sug-txt span{color:var(--mut);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ig-sug-ok{color:var(--cel);font-weight:800;font-size:13px;white-space:nowrap}
+.ig-sug-note{font-size:13px;color:var(--mut);padding:2px 4px}
 .hero-lockup{display:flex;align-items:center;justify-content:center;gap:12px}
 .hero-ava{width:54px;height:54px;border-radius:50%;box-shadow:0 6px 18px rgba(39,147,200,.4)}
 .audit-hook{text-align:center;font-size:16px;font-weight:700;color:var(--navy);max-width:560px;margin:26px auto 0;line-height:1.5}
@@ -1047,6 +1058,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
       <!-- Paso 1: el @ de Instagram y, pegada abajo, la web del negocio -->
       <div id="stepIg">
         <div class="field"><label>Tu Instagram</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty trae tu nombre, tu rubro y tu foto de perfil.</div></div>
+        <div id="f_ig_sug" class="ig-sug" style="display:none"></div>
         <button class="btn btn-primary btn-block" id="btnGo">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-eye"/></svg></button>
         <p class="form-micro">Tu semana lista en ~2 minutos · Gratis · Sin tarjeta · Sin tu contraseña de Instagram</p>
         <div class="form-or"><span>o</span></div>
@@ -1835,6 +1847,7 @@ function show(id) {
   if (bpc) bpc.onclick = () => { trk('prueba_step', { step: 'photos_card' }); openRegTrial(); };
   $('#btnRetryStream').onclick = () => { $('#rStreamErr').style.display = 'none'; STREAM_ERRORED = false; runGeneration(); };
   $('#f_ig').addEventListener('keydown', (e) => { if (e.key === 'Enter') onIgSubmit(); });
+  try { igSuggestWire($('#f_ig'), $('#f_ig_sug'), IG_SUG_ES); } catch (e) {} // (LOTE IG-CON-BUSCADOR) buscador del @ en el campo principal
   $('#pf_name').addEventListener('keydown', (e) => { if (e.key === 'Enter') startTrialPrefill(); });
   $('#pfBack').onclick = () => { PREFILL = null; GEN_PREFILL = false; $('#prefillCard').style.display = 'none'; $('#stepIg').style.display = 'block'; };
   // Foto opcional: link discreto que revela el input
@@ -1954,6 +1967,52 @@ let PENDING_RUBRO = null; // rubro_check vigente {needed, options, detected}
 let RUBRO_FROM = null;    // tarjeta de origen: 'prefill' | 'web'
 let RUBRO_ANS = null;     // respuesta del visitante (null = sin responder)
 const cleanIg = (v) => String(v || '').trim().replace(/^@+/, '');
+// (LOTE IG-CON-BUSCADOR) Autocompletado del @: al escribir, Posty busca la
+// cuenta pública (GET /api/ig/search) y muestra la tarjeta para tocarla y
+// confirmar «es esta». La búsqueda solo AYUDA: escribir a mano sigue
+// funcionando siempre — el envío lee el valor del campo, nunca la tarjeta.
+// Si no se encuentra el @ o Instagram no responde, se muestra el aviso
+// honesto y el campo sigue como siempre.
+function igSuggestWire(input, box, L) {
+  if (!input || !box || input.dataset.igWired) return;
+  input.dataset.igWired = '1';
+  var timer = null, seq = 0;
+  function hide() { box.style.display = 'none'; box.innerHTML = ''; }
+  function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function note(msg) { box.innerHTML = '<div class="ig-sug-note">' + escHtml(msg) + '</div>'; box.style.display = 'block'; }
+  input.addEventListener('input', function () {
+    input.removeAttribute('data-ig-confirmed');
+    var q = cleanIg(input.value);
+    if (timer) clearTimeout(timer);
+    if (q.length < 3) { hide(); return; }
+    timer = setTimeout(function () {
+      var my = ++seq;
+      fetch('/api/ig/search?q=' + encodeURIComponent(q))
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function (j) {
+          if (my !== seq) return;
+          if (!j || j.ok !== true) { note(L.unavailable); return; }
+          if (!j.found || !j.profile) { note(L.notFound); return; }
+          var p = j.profile;
+          var meta = (p.followers != null ? p.followers + ' ' + L.followers : '') + (p.posts != null ? (p.followers != null ? ' · ' : '') + p.posts + ' ' + L.posts : '');
+          box.innerHTML = '<button type="button" class="ig-sug-card">' +
+            (p.pic_url ? '<img src="' + escHtml(p.pic_url) + '" alt="">' : '<span class="ig-sug-ava">' + escHtml((p.name || p.username || '?').slice(0, 1)) + '</span>') +
+            '<span class="ig-sug-txt"><b>' + escHtml(p.name || p.username) + '</b><span>@' + escHtml(p.username) + (meta ? ' · ' + escHtml(meta) : '') + '</span></span>' +
+            '<span class="ig-sug-ok">✓ ' + escHtml(L.confirm) + '</span></button>';
+          box.style.display = 'block';
+          var btn = box.querySelector('.ig-sug-card');
+          if (btn) btn.addEventListener('click', function () {
+            input.value = '@' + p.username;
+            input.setAttribute('data-ig-confirmed', p.username);
+            hide();
+            try { input.focus(); } catch (e) {}
+          });
+        })
+        .catch(function () { if (my === seq) note(L.unavailable); });
+    }, 600);
+  });
+}
+const IG_SUG_ES = { confirm: 'Es esta', notFound: 'No encontramos ese @ — revisá que esté bien escrito, o seguí a mano.', unavailable: 'Instagram no respondió — podés seguir escribiendo tu @ a mano.', followers: 'seguidores', posts: 'posteos' };
 
 async function onIgSubmit() {
   const ig = cleanIg($('#f_ig').value);
@@ -6284,6 +6343,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     box.innerHTML = '<p class="oc-chat">' + esc(T.entryChat) + '</p>' +
       '<div id="oc_both">' +
       '<input id="oc_ig" class="oc-field" placeholder="' + esc(T.entryIgPh) + '" autocomplete="off" inputmode="text">' +
+      '<div id="oc_ig_sug" class="ig-sug" style="display:none"></div>' +
       '<input id="oc_web" class="oc-field" placeholder="' + esc(T.entryWebPh) + '" autocomplete="off" inputmode="url" style="margin-top:8px">' +
       '<p style="margin:6px 0 0;text-align:right"><button type="button" class="oc-link" id="oc_noweb">' + esc(T.noWeb) + '</button></p>' +
       '<p class="oc-chat" id="oc_noweb_note" style="display:none;margin-top:6px">' + esc(T.noWebNote) + '</p>' +
@@ -6299,6 +6359,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     fc.insertBefore(box, fc.firstChild);
     document.getElementById('oc_go').addEventListener('click', startFromField);
     document.getElementById('oc_ig').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField(); } });
+    try { igSuggestWire(document.getElementById('oc_ig'), document.getElementById('oc_ig_sug'), IG_SUG_ES); } catch (e) {} // (LOTE IG-CON-BUSCADOR) buscador del @ en el chat de onboarding
     document.getElementById('oc_web').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField(); } });
     document.getElementById('oc_field').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); startFromField(); } });
     document.getElementById('oc_noweb').addEventListener('click', function () {
