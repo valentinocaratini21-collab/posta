@@ -606,7 +606,15 @@ async function localizeTrialPhotos(profile, mediaDir, fetchImpl) {
   const handle = sanitizeHandle(profile.handle) || 'ig';
   try { fs.mkdirSync(mediaDir, { recursive: true }); } catch (e) {}
   const get = fetchImpl || ((u) => fetchImageBuf(u, 2000));
-  profile.photos = await Promise.all(profile.photos.slice(0, 9).map(async (rawUrl) => {
+  // (FEED-POSTEO-ABAJO · 6/11) SIN CAP: antes `.slice(0, 9)` — el 9 era la
+  // tira 3×3 de la prueba, pero el home (homeProfileFromRead) reutiliza esta
+  // función para TODOS los recents y el corte tiraba en silencio cada posteo
+  // a partir del 10º (en vivo: los 4 más viejos de @posty.communitymanager
+  // — 30/10, 29/10, 28/10 y 20/10 — no aparecían en el feed aunque siguen
+  // en IG). La tira de la prueba sigue capada en su propio sitio
+  // (trialProfileFromAudit: photos .slice(0, 9)); acá se localiza todo lo
+  // que llega, sin ventana que corte: TODOS los posteos tienen que aparecer.
+  profile.photos = await Promise.all(profile.photos.map(async (rawUrl) => {
     try {
       if (!rawUrl || typeof rawUrl !== 'string') return null;
       // Las URLs del embed vienen con escapes residuales (\/ por nivel de
