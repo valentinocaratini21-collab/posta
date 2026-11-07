@@ -363,6 +363,34 @@ function captionOpenIsGarbled(caption, negocio) {
     const mi = masked.match(/\b[Dd]espu[eé]s de prob(?:ar|arlo|arla|arlos|arlas|ando)\b\s+([A-ZÁÉÍÓÚÑ][a-záéíóúüñ]*)\s+\S+\s+\S+/);
     if (mi && new RegExp('^(?:' + ROT + ')$', 'i').test(mi[1])) return true;
   }
+  // (j) LINT v9 (Juli, 2026-11-07) — el empalme h37 con tema-ORACIÓN:
+  // id 565 real (cuenta 85, generado 6/11): «Probamos 12 versiones de
+  // Presentamos nuestro café especial del mes ☕ hasta dar con esta» —
+  // el tema cosido en el slot de h37 («Probamos 12 versiones de {tema}»)
+  // es una ORACIÓN que arranca con verbo conjugado en 1ª del plural
+  // («Presentamos…»), no un sustantivo. Las firmas (g)/(h)/(i) no lo
+  // cazan: (g)/(i) miran solo tras «probar», (h) solo imperativos.
+  // Firma angosta: tras «de / en / con / para / por / sobre», un verbo
+  // conjugado en 1ª del plural CON MAYÚSCULA inicial. Un tema sano tras
+  // preposición va en minúscula («de la casa», «con el café») o es
+  // nombre propio («en Palermo», «para Halloween»): ningún verbo
+  // conjugado capitalizado aparece ahí en español sano. Se evalúa sobre
+  // `masked` para que un negocio llamado como un verbo no dispare.
+  // Lista local por la regla de autocontención (ver (e)).
+  {
+    const V1PL_J = 'presentamos|ofrecemos|traemos|tenemos|hacemos|queremos|buscamos|preparamos|lanzamos|creamos|sumamos|vendemos|contamos|mostramos|invitamos|esperamos|trabajamos|armamos|probamos|elegimos|servimos|recibimos|abrimos|empezamos|seguimos|celebramos|organizamos|diseñamos|fabricamos|cocinamos|tostamos|horneamos|brindamos|elaboramos|producimos|enseñamos|cortamos';
+    for (const mm of masked.matchAll(/\b(?:de|en|con|para|por|sobre)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúüñ]*)/g)) {
+      if (new RegExp('^(?:' + V1PL_J + ')$', 'i').test(mm[1])) return true;
+    }
+  }
+  // (k) LINT v9 (Juli, 2026-11-07) — la barra en la apertura: id 579
+  // real (cuenta 89, generado 7/11): «Country/region and currency, otro
+  // favorito de Ladyee Boutique» — el rótulo de la tienda trae su «/»
+  // pegado a la apertura. Ninguna apertura sana en español lleva «/»:
+  // ni precios («$12.500»), ni promos («2x1»), ni fechas van con barra
+  // en la primera línea. Si el rótulo vuelve a colarse como tema, el
+  // lint lo frena aunque la puerta de ítems no lo haya visto.
+  if (first.includes('/')) return true;
   // v8: el conteo de duplicado usa el nombre YA normalizado (sin punto
   // final): con biz='posty.' el 518 real contaba un solo hit y pasaba.
   const biz = bizRaw.toLowerCase();

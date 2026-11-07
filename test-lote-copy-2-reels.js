@@ -170,7 +170,7 @@ t(APP.includes('cap-kick">Historias'), 'ES landing: la sección Historias sigue 
 t(EN.includes('cap-kick">Stories'), 'EN landing: la sección Stories sigue');
 
 // ---------- 9. Bumps M78 / BUILD (re-pin v741: el BUILD y el ?v= avanzaron) ----------
-t(SRV.includes("const BUILD_ID = '20261105-v754'"), 'BUILD v754');
+t(SRV.includes("const BUILD_ID = '20261105-v755'"), 'BUILD v755');
 t(IDX.includes('/app.js?v=498'), 'index ES: app.js?v=498');
 t(!EN.includes('/app.js?v='), 'index EN: sin app.js?v= (la EN no carga app.js)');
 t(APP.includes("const CHUNK_V = '20261105-v754'"), 'CHUNK_V 20261105-v754 (conserje-revision)');

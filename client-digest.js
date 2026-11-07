@@ -354,6 +354,17 @@ const OFFER_SECOND_PERSON = new Set(['tu', 'tus', 'vos', 'te', 'ti', 'contigo', 
  * título del reel y a los captions («3 claves de your bag»). Se
  * chequea sobre el nombre normalizado (sin acentos, minúsculas). */
 const OFFER_STORE_CHROME = ['country/region', 'country region', 'your bag', 'shopping bag', 'shopping cart', 'my cart', 'my account', 'my wishlist', 'new arrivals', 'shop all', 'shop now', 'wishlist', 'track your order', 'track order', 'join our tribe', 'sign in', 'log in', 'sign up', 'filter by', 'sort by'];
+/* (JULI · 2026-11-07 — ids 571/573, Portrait Coffee, generados 7/11
+ * DESPUÉS de v751) Rótulos en inglés de colección/menú que NO son
+ * chrome de tienda y por eso pasaban la puerta: «Best Sellers» es el
+ * nombre de una colección, «single origin coffees» el rótulo en inglés
+ * del menú — en los captions en español salen «Best Sellers, otro
+ * favorito de Portrait Coffee» y «3 claves para elegir bien en single
+ * origin coffees». Se rechazan por FRASE, no por palabra suelta: un
+ * «Single malt» real sigue pasando. Préstamos reales del rubro
+ * («latte», «flat white», «espresso», «barista», «brunch», «makeup»)
+ * no están en la lista y siguen pasando. */
+const OFFER_ENGLISH_LABELS = ['best sellers', 'best seller', 'single origin', 'origin coffees'];
 const OFFER_2P_VERBS = new Set(['aprende', 'aprendes', 'aprobas', 'aproba', 'descubre', 'descubri', 'empeza', 'empezas', 'mira', 'miras', 'suma', 'sumas', 'sumate', 'uni', 'unis', 'unite', 'gana', 'ganas', 'ahorra', 'ahorras', 'crece', 'creces', 'ordena', 'ordenas', 'organiza', 'organizas', 'delega', 'delegas', 'vende', 'vendes', 'elegi', 'elegis', 'elegilo', 'hace', 'haces', 'hacelo', 'tene', 'tenes', 'pode', 'podes', 'quere', 'queres', 'senti', 'sentis', 'pensa', 'pensas', 'cree', 'crees', 'segui', 'seguis', 'veni', 'venis', 'abri', 'abris', 'cerra', 'cerras', 'entra', 'entras', 'sali', 'salis', 'dormi', 'dormis', 'rei', 'reis']);
 function cleanOfferName(raw) {
   const v = (raw && typeof raw === 'object') ? (raw.nombre || raw.titulo || raw.name || '') : raw;
@@ -394,6 +405,11 @@ function isPlausibleOfferItem(raw) {
   // sección no es algo que el negocio venda.
   const ns = norm(s);
   if (OFFER_STORE_CHROME.some((p) => ns.includes(p))) return false;
+  // (JULI · 2026-11-07 — ids 571/573) Rótulos en inglés de colección/
+  // menú (ver OFFER_ENGLISH_LABELS) + el plural «coffees»: en español
+  // no son nombres de producto y anclan captions rotos.
+  if (OFFER_ENGLISH_LABELS.some((p) => ns.includes(p))) return false;
+  if (nw.includes('coffees')) return false;
   // (LOTE PLACEHOLDER-COPY) Slogan de dos oraciones («Timeless style.
   // Effortless you.»): es el hero de la tienda, no un producto. La
   // guarda de abreviatura (primer segmento de UNA palabra: «Dr.»,
