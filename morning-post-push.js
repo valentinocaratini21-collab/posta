@@ -72,6 +72,12 @@ function pickTodayPost(posts, tz, now) {
     if (!hoy) return null;
     const cands = (Array.isArray(posts) ? posts : []).filter((p) => {
       if (!p || p.status !== 'scheduled' || !p.scheduled_at) return false;
+      // (LOTE CONSERJE-REVISION · 7/11) Un posteo rechazado en la
+      // revisión de la noche NO se vuelve a ofrecer: el pick del cliente
+      // lo re-aprobaría y el "no sale" del dueño quedaría en nada.
+      // needs_review=1 NO se filtra: es el caso sin revisar, y ahí el
+      // que decide es el cliente a las 9:00 (diseño del lote, ver STATUS).
+      if ((p.approval || 'pending') === 'rejected') return false;
       const d = new Date(String(p.scheduled_at).replace(' ', 'T'));
       if (isNaN(d)) return false;
       return dayKeyInTz(d, tz) === hoy;

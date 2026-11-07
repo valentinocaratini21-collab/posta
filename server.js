@@ -26,6 +26,7 @@ const morningPostPush = require('./morning-post-push');
 // abren casos, casos con cierre solo con confirmación del cliente, y
 // acciones del equipo con registro. La consola NUNCA publica.
 const supportCases = require('./support-cases');
+const conserjeRevision = require('./conserje-revision'); // (LOTE CONSERJE-REVISION, base v748) revisión de la noche 19:00–00:00 + ficha del cliente
 const dogfood = require('./dogfood');
 dogfood.initDogfood(db); // Posty dogfood: columna kind + tabla dogfood_state
 // Observabilidad dogfood (2026-10-05): los errores de imagen del dogfood van
@@ -8609,6 +8610,64 @@ app.post('/api/admin/support/:userId/conserje', requireAdminToken, (req, res) =>
   const r = supportCases.setConcierge(db, Number(req.params.userId), on, 'equipo');
   if (!r.ok) return res.status(r.error === 'sin_usuario' ? 404 : 400).json({ ok: false, error: r.error });
   res.json({ ok: true, user_id: r.user_id, concierge: r.concierge });
+});
+// ---------- REVISIÓN DE LA NOCHE DEL CONSERJE (lote conserje-revision, base v748) ----------
+// Valentino + Posty revisan juntos, DE NOCHE (19:00–00:00 hora del dueño),
+// los posteos DEL DÍA SIGUIENTE y deciden qué posteo va en cada perfil.
+// La revisión es una capa extra del dueño: nunca publica por sí sola y
+// nunca veta el ritual del cliente de las 9:00 (lo limpio sin revisar lo
+// decide el cliente; lo que necesita atención y queda sin revisar a las
+// 00:00 queda retenido). La ficha del cliente viaja con cada ítem de la
+// cola para decidir con contexto. NINGUNA ruta de acá genera de noche:
+// 'pedir' solo registra; la pipeline de la mañana genera el reemplazo.
+app.get('/api/admin/support/conserje/revision', requireAdminToken, (req, res) => {
+  try {
+    const r = conserjeRevision.colaRevision(db, { fecha: req.query.fecha, absImageUrl });
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/support/conserje/revision/decidir', requireAdminToken, (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = conserjeRevision.decidirRevision(db, {
+      user_id: b.user_id, fecha_posteo: b.fecha_posteo || b.fecha,
+      post_id: b.post_id, decision: b.decision, nota: b.nota, absImageUrl,
+    });
+    if (!r.ok) return res.status(r.error === 'sin_usuario' || r.error === 'no_encontrado' ? 404 : 400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/support/conserje/revision/armar', requireAdminToken, (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = conserjeRevision.decidirRevision(db, {
+      user_id: b.user_id, fecha_posteo: b.fecha_posteo || b.fecha,
+      decision: 'pedir', nota: b.nota, absImageUrl,
+    });
+    if (!r.ok) return res.status(r.error === 'sin_usuario' ? 404 : 400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+// Ficha de un cliente (adenda 7/11 ~02:40): lo que Posty ya sabe de él.
+// Sin fuente, el campo sale como "sin registrar" (ver `faltantes`).
+app.get('/api/admin/support/conserje/ficha', requireAdminToken, (req, res) => {
+  try {
+    if (!/^\d+$/.test(String(req.query.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+    const r = conserjeRevision.fichaCliente(db, Number(req.query.user_id), { fecha: req.query.fecha });
+    if (!r.ok) return res.status(404).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+// Nota de Valentino sobre un cliente: una línea opcional, algo que solo
+// él sabe. Vacía = borra la nota. La escribe solo el dueño (admin token).
+app.post('/api/admin/support/conserje/nota', requireAdminToken, (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!/^\d+$/.test(String(b.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+    const u = db.prepare('SELECT id FROM users WHERE id = ?').get(Number(b.user_id));
+    if (!u) return res.status(404).json({ ok: false, error: 'sin_usuario' });
+    res.json(conserjeRevision.guardarNota(db, Number(b.user_id), b.nota || ''));
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
 app.get('/api/admin/support/:userId/manana', requireAdminToken, (req, res) => {
   if (!/^\d+$/.test(String(req.params.userId || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
@@ -31483,7 +31542,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v753';
+const BUILD_ID = '20261105-v754';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

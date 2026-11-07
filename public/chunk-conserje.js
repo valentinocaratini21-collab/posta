@@ -1,0 +1,284 @@
+/* chunk-conserje.js — Lazy chunk de Posty.
+ * Se carga bajo demanda vía loadChunk('conserje') desde app.js (NO va con <script> en index.html).
+ * Es un <script> clásico: comparte el scope global con app.js; las funciones declaradas
+ * acá quedan disponibles como globales una vez cargado el chunk.
+ * REGLA: no agregar top-level let/const/var con nombres que ya existan en app.js u otro chunk
+ * (duplicar un let/const entre scripts clásicos es SyntaxError).
+ * Versión del archivo: ?v=PLACEHOLDER — la reemplaza el coordinador al armar el zip.
+ */
+
+/* ---------- 🧑‍💼 Conserje — la revisión de la noche (solo el dueño) ---------- */
+// Ruta #/app/conserje. Gate: token de admin (el mismo ADMIN_TOKEN del servidor).
+// Valentino + Posty revisan juntos, DE NOCHE (19:00–00:00), los posteos DEL
+// DÍA SIGUIENTE y deciden qué posteo va en cada perfil. La revisión es una
+// capa extra del dueño: nunca publica por sí sola y nunca veta el ritual
+// del cliente de las 9:00. La ficha de cada cliente está en su detalle,
+// ahí mismo donde se decide.
+var conserjeEstado = { datos: null, vistaId: null };
+
+function conserjeFechaLinda(fecha) {
+  try {
+    const d = new Date(String(fecha || '') + 'T12:00:00');
+    if (isNaN(d)) return String(fecha || '');
+    const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    return dias[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1);
+  } catch (e) { return String(fecha || ''); }
+}
+
+function conserjeEtapaDot(etapa) {
+  const e = etapa || {};
+  const color = e.color === 'rojo' ? '#d64545' : (e.color === 'amarillo' ? '#e8a100' : '#22a06b');
+  const label = e.etiqueta || '';
+  return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--mut)">'
+    + '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block"></span>'
+    + esc(label) + '</span>';
+}
+
+function conserjeFotoHTML(it, grande) {
+  const url = it && it.post && it.post.image_url ? it.post.image_url : '';
+  const h = grande ? 220 : 120;
+  if (url) {
+    return '<div style="border-radius:14px;overflow:hidden;background:#0A1E33"><img src="' + esc(url) + '" alt="" style="width:100%;height:' + h + 'px;object-fit:cover;display:block"></div>';
+  }
+  const ini = String((it && it.business_name) || '?').trim().charAt(0).toUpperCase() || '?';
+  return '<div style="border-radius:14px;background:#2793C8;display:flex;align-items:center;justify-content:center;height:' + h + 'px;color:#fff;font-size:44px;font-weight:800">' + esc(ini) + '</div>';
+}
+
+function conserjeFichaHTML(f) {
+  if (!f || !f.ok) return '';
+  const v = f.vende || {};
+  const g = f.gusta || {};
+  const et = f.etapa || {};
+  const est = f.estrategia || {};
+  const pp = f.proximo_paso || {};
+  const nota = f.nota || {};
+  const falta = (f.faltantes || []).length ? '<p style="color:var(--mut);font-size:12px;margin:8px 0 0">Sin registrar todavía: ' + esc(f.faltantes.join(', ').replace(/_/g, ' ')) + '.</p>' : '';
+  const paleta = (f.paleta || []).map((p) => '<span title="' + esc(p.hex) + '" style="display:inline-block;width:22px;height:22px;border-radius:7px;background:' + esc(p.hex) + ';border:1px solid var(--line);margin-right:6px"></span>').join('');
+  const hist = (f.historial || []).map((h) => '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span>' + esc(h.etiqueta) + (h.nota ? ' — ' + esc(h.nota) : '') + '</span><span style="color:var(--mut);white-space:nowrap">' + esc(String(h.fecha_posteo || '').slice(5)) + '</span></div>').join('');
+  return '<div class="card" style="padding:16px;margin-top:12px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-size:16px;font-weight:800">Ficha de ' + esc(f.business_name || '') + '</div>' + conserjeEtapaDot(et) + '</div>'
+    + '<div style="font-size:13.5px;line-height:1.55;margin-top:8px">'
+    + '<div><b>Lo que vende:</b> ' + esc(v.estrella || 'Sin estrella registrada') + (v.rubro ? ' · ' + esc(v.rubro) : '') + '</div>'
+    + ((v.productos || []).length ? '<div style="color:var(--mut)">También: ' + esc(v.productos.join(' · ')) + '</div>' : '')
+    + (v.diferencial ? '<div style="color:var(--mut)">Diferencial: ' + esc(v.diferencial) + '</div>' : '')
+    + (v.objetivo ? '<div style="color:var(--mut)">Quiere: ' + esc(v.objetivo) + '</div>' : '')
+    + '<div style="margin-top:8px"><b>Le gusta:</b> ' + esc(g.tono || 'Sin tono registrado') + '</div>'
+    + ((g.gustos || []).length ? '<div style="color:var(--mut)">' + esc(g.gustos.join(' · ')) + '</div>' : '')
+    + ((g.pidio_cambiar || []).length ? '<div style="color:var(--mut)">Pidió cambiar: ' + esc(g.pidio_cambiar.join(' · ')) + '</div>' : '')
+    + '<div style="margin-top:8px"><b>Líneas rojas:</b> ' + ((f.lineas_rojas || []).length ? esc(f.lineas_rojas.join(' · ')) : 'Sin líneas rojas registradas') + '</div>'
+    + (paleta ? '<div style="margin-top:8px"><b>Paleta:</b><br>' + paleta + '</div>' : '')
+    + '<div style="margin-top:8px"><b>Plan:</b> ' + esc((f.plan && f.plan.plan) || '') + ' · ' + esc((f.plan && f.plan.plan_status) || '') + ' · cliente desde ' + esc((f.plan && f.plan.desde) || '') + '</div>'
+    + '<div style="margin-top:8px"><b>Estrategia:</b> ' + (est.linea ? esc(est.linea) : 'Sin estrategia registrada todavía') + '</div>'
+    + '<div style="margin-top:4px"><b>Próximo paso:</b> ' + esc(pp.texto || '') + '</div>'
+    + '</div>'
+    + (hist ? '<div style="margin-top:12px"><div style="font-weight:800;font-size:13.5px">Decisiones de cada noche</div>' + hist + '</div>'
+      : '<p style="color:var(--mut);font-size:12.5px;margin:10px 0 0">Todavía no hay decisiones de noche registradas para este cliente.</p>')
+    + '<div style="margin-top:12px"><label style="font-size:13px;font-weight:700" for="cjNota">Tu nota (solo vos la ves, una línea)</label>'
+    + '<div style="display:flex;gap:8px;margin-top:6px"><input id="cjNota" type="text" maxlength="200" placeholder="Algo que solo vos sabés de este cliente…" value="' + esc(nota.texto || '') + '" style="flex:1;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font-size:14px">'
+    + '<button class="btn btn-secondary" data-cj="nota-guardar" data-user="' + esc(String(f.user_id)) + '">Guardar</button></div>'
+    + '<div id="cjNotaMsg" style="font-size:12.5px;color:var(--mut);margin-top:4px"></div></div>'
+    + falta
+    + '</div>';
+}
+
+function conserjeCardHTML(it) {
+  const p = it.post;
+  const dec = it.decision;
+  const pill = dec
+    ? '<span class="pill" style="background:#2793C8;color:#fff">' + esc(dec.etiqueta || dec.decision) + '</span>'
+    : (it.necesita_atencion
+      ? '<span class="pill" style="background:#FEC14D;color:#0A1E33">⚠ Necesita atención</span>'
+      : '<span class="pill" style="background:#e7f6ee;color:#14743f">✓ Listo</span>');
+  return '<div class="card" style="padding:14px;cursor:pointer" data-cj="ver" data-user="' + esc(String(it.user_id)) + '">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:15px">' + esc(it.business_name || '') + '</div>' + conserjeEtapaDot(it.ficha && it.ficha.etapa) + '</div>'
+    + '<div style="margin-top:10px">' + conserjeFotoHTML(it, false) + '</div>'
+    + '<div style="font-size:14px;font-weight:700;margin-top:10px;line-height:1.35">' + esc(p ? p.titulo : 'Sin posteo para mañana') + '</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px"><span style="font-size:12.5px;color:var(--mut)">' + esc(p && p.cuando ? p.cuando : 'Mañana · 17:00') + '</span>' + pill + '</div>'
+    + (it.necesita_atencion && it.motivo_atencion ? '<div style="font-size:12.5px;color:#8a6d00;margin-top:6px">' + esc(it.motivo_atencion) + '</div>' : '')
+    + '</div>';
+}
+
+function conserjeDetalleHTML(it, d) {
+  const p = it.post;
+  const dec = it.decision;
+  const f = it.ficha || {};
+  const ig = it.ig_username ? '<a href="https://instagram.com/' + esc(it.ig_username) + '" target="_blank" rel="noopener" style="font-size:13.5px">Ver el feed de ' + esc(it.business_name) + ' →</a>' : '';
+  const sig = it.siguiente ? '<div class="card" style="padding:14px;margin-top:12px"><div style="font-size:13px;color:var(--mut)">Siguiente posteo</div><div style="font-weight:700;margin-top:2px">' + esc(it.siguiente.titulo) + '</div><div style="font-size:12.5px;color:var(--mut)">' + esc(it.siguiente.scheduled_at || '') + '</div></div>' : '';
+  let botones = '';
+  if (p) {
+    botones = '<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">'
+      + '<button class="btn btn-primary" data-cj="decidir" data-decision="sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(d.fecha) + '">✓ Sale así</button>'
+      + '<button class="btn btn-secondary" data-cj="arreglar" data-user="' + esc(String(it.user_id)) + '">Pedir que lo arregle</button>'
+      + '<button class="btn btn-secondary" data-cj="decidir" data-decision="no_sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(d.fecha) + '">✕ No sale</button>'
+      + '</div>'
+      + '<div id="cjArreglo" style="display:none;margin-top:12px"><label style="font-size:13px;font-weight:700" for="cjArregloNota">Qué hay que arreglar</label>'
+      + '<textarea id="cjArregloNota" rows="2" placeholder="Ej.: que no hable del precio, que el producto se vea entero" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font-size:14px;margin-top:6px"></textarea>'
+      + '<button class="btn btn-primary" style="margin-top:8px" data-cj="decidir" data-decision="arreglar" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(d.fecha) + '" data-nota="1">Enviar arreglo</button></div>';
+  } else {
+    botones = '<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">'
+      + '<button class="btn btn-primary" data-cj="armar" data-user="' + esc(String(it.user_id)) + '" data-fecha="' + esc(d.fecha) + '">Posty lo arma</button></div>';
+  }
+  return '<button class="btn btn-secondary" data-cj="volver" style="margin-bottom:12px">← Volver a la revisión</button>'
+    + '<div style="font-size:20px;font-weight:800">' + esc(it.business_name || '') + '</div>'
+    + '<div style="margin-top:4px">' + conserjeEtapaDot(f.etapa) + '</div>'
+    + '<div style="margin-top:12px">' + conserjeFotoHTML(it, true) + '</div>'
+    + (p ? '<div style="font-size:17px;font-weight:800;margin-top:12px;line-height:1.35">' + esc(p.titulo) + '</div>'
+      + '<div style="font-size:13px;color:var(--mut);margin-top:4px">' + esc(p.cuando || '') + (p.tipo ? ' · ' + esc(p.tipo) : '') + '</div>' : '')
+    + (it.necesita_atencion && it.motivo_atencion ? '<div class="card" style="padding:14px;margin-top:12px;background:#FFF6D6;border:1px solid #FEC14D"><div style="font-weight:800;font-size:14px">⚠ Qué pasó</div><div style="font-size:13.5px;line-height:1.55;margin-top:4px">' + esc(it.motivo_atencion) + '</div><div style="font-size:12.5px;color:var(--mut);margin-top:6px">No sale hasta que lo revises.</div></div>' : '')
+    + (dec ? '<div class="card" style="padding:14px;margin-top:12px"><div style="font-size:13.5px">Ya decidiste: <b>' + esc(dec.etiqueta || dec.decision) + '</b>' + (dec.nota ? ' — ' + esc(dec.nota) : '') + '</div><div style="font-size:12.5px;color:var(--mut)">Podés cambiarlo: elegí de nuevo abajo.</div></div>' : '')
+    + botones
+    + '<div style="margin-top:12px">' + ig + '</div>'
+    + conserjeFichaHTML(f)
+    + sig;
+}
+
+function conserjeRender() {
+  const card = $('#conserjeCard');
+  if (!card) return;
+  const d = conserjeEstado.datos;
+  if (!d || !d.ok) {
+    card.innerHTML = '<div class="d">No se pudo cargar la revisión. Probá de nuevo.</div>';
+    return;
+  }
+  const r = d.resumen || {};
+  const ventana = d.ventana || {};
+  const fechaTxt = conserjeFechaLinda(d.fecha);
+  if (conserjeEstado.vistaId) {
+    const it = (d.items || []).concat(d.sin_posteo || []).find((x) => String(x.user_id) === String(conserjeEstado.vistaId));
+    if (it) { card.innerHTML = conserjeDetalleHTML(it, d); return; }
+    conserjeEstado.vistaId = null;
+  }
+  const atencion = (d.items || []).filter((i) => i.necesita_atencion);
+  const resto = (d.items || []).filter((i) => !i.necesita_atencion);
+  const sinPosteo = d.sin_posteo || [];
+  const estadoVentana = ventana.estado === 'abierta' ? 'Abierta ahora · ' + esc(ventana.ahora || '') : 'Abre a las 19:00';
+  let html = '<div class="card" style="padding:16px"><div style="font-size:15px;font-weight:800">Revisión de la noche · ' + esc(fechaTxt) + '</div>'
+    + '<div style="font-size:13.5px;color:var(--mut);margin-top:4px">19:00–00:00 · ' + estadoVentana + ' · ' + esc(String(r.decididos || 0)) + ' de ' + esc(String(r.total || 0)) + ' revisados</div>'
+    + '<div style="font-size:13.5px;margin-top:8px">Mañana salen ' + esc(String(r.total || 0)) + ' posteos' + (r.necesitan_atencion ? ' · ' + esc(String(r.necesitan_atencion)) + ' necesitan atención' : ' · ninguno necesita atención') + '</div>'
+    + (r.todo_decidido ? '<div style="font-size:13.5px;font-weight:700;color:#14743f;margin-top:6px">✓ Todo decidido</div>' : '')
+    + '</div>';
+  if (!d.items.length && !sinPosteo.length) {
+    html += '<div class="card" style="padding:18px;margin-top:12px"><p style="font-size:14px;line-height:1.6">Nada para revisar esta noche: no hay clientes con posteo para mañana.</p></div>';
+  }
+  if (atencion.length) {
+    html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">⚠ Necesitan atención primero</div><div class="cj-lista">' + atencion.map(conserjeCardHTML).join('') + '</div>';
+  }
+  if (resto.length) {
+    html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">Listos</div><div class="cj-lista">' + resto.map(conserjeCardHTML).join('') + '</div>';
+  }
+  if (sinPosteo.length) {
+    html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">Sin posteo para mañana</div><div class="cj-lista">'
+      + sinPosteo.map((it) => '<div class="card" style="padding:14px;cursor:pointer" data-cj="ver" data-user="' + esc(String(it.user_id)) + '">'
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:15px">' + esc(it.business_name || '') + '</div>' + conserjeEtapaDot(it.ficha && it.ficha.etapa) + '</div>'
+        + '<div style="font-size:13.5px;color:var(--mut);margin-top:8px">No tiene posteo programado para mañana.</div>'
+        + '<div style="font-size:13.5px;margin-top:8px;font-weight:700">Posty lo arma →</div></div>').join('') + '</div>';
+  }
+  html += '<style>@media (min-width:720px){.cj-lista{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cj-lista .card{margin:0}}</style>';
+  card.innerHTML = html;
+}
+
+async function conserjeCargar() {
+  const card = $('#conserjeCard');
+  if (card) card.innerHTML = '<div class="d">⏳ Cargando…</div>';
+  if (typeof adminApi !== 'function') {
+    if (card) card.innerHTML = '<div class="d">No se pudo cargar el conserje. Probá de nuevo.</div>';
+    return;
+  }
+  try {
+    const d = await adminApi('support/conserje/revision', 'GET');
+    conserjeEstado.datos = d;
+    conserjeRender();
+  } catch (e) {
+    if (e && e.adminAuthFailed) return;
+    if (card) card.innerHTML = '<div class="d">No se pudo cargar la revisión. Probá de nuevo.</div>';
+  }
+}
+
+async function conserjeView() {
+  return `<div class="page-head"><div class="ph-ico">${pzIc('concierge', 26) || pzIc('users', 26)}</div><div class="ph-txt"><h1>Conserje</h1><p class="sub">La revisión de la noche · para mañana</p></div></div>
+  <div id="conserjeCard"><div class="d">⏳ Cargando…</div></div>`;
+}
+
+async function bindConserje() {
+  const card = $('#conserjeCard');
+  if (!card) return;
+  // adminToken/adminApi viven en chunk-admin.js: si se entra directo a
+  // #/app/conserje, ese chunk todavía no cargó — se trae antes de usarlos.
+  try { await loadChunk('admin'); } catch (e) {}
+  if (typeof adminToken !== 'function' || typeof adminApi !== 'function') {
+    card.innerHTML = '<div class="d">No se pudo cargar el conserje. Probá de nuevo.</div>';
+    return;
+  }
+  if (!adminToken()) {
+    let gateMsg = '';
+    try { gateMsg = sessionStorage.getItem('posta_admin_msg') || ''; sessionStorage.removeItem('posta_admin_msg'); } catch (e) {}
+    card.innerHTML = `<h3 style="margin:0 0 8px">${pzIc('lock', 16)} Acceso restringido</h3>
+      <p style="color:var(--mut);font-size:13.5px;line-height:1.6">El conserje es solo para el dueño. Pegá el token de admin para entrar.</p>
+      ${gateMsg ? `<p style="color:var(--mut);font-size:13px">${esc(gateMsg)}</p>` : ''}
+      <div style="display:flex;gap:8px;margin-top:12px"><input id="cjToken" type="password" placeholder="Token de admin" autocomplete="off" style="flex:1;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font-size:14px"><button class="btn btn-primary" id="cjTokenBtn">Entrar</button></div>`;
+    const btn = $('#cjTokenBtn');
+    if (btn) btn.onclick = () => {
+      const v = ($('#cjToken') || {}).value || '';
+      if (!v.trim()) return;
+      try { localStorage.setItem('posta_admin_token', v.trim()); } catch (e) {}
+      conserjeCargar();
+    };
+    return;
+  }
+  if (card.__cjBound) return;
+  card.__cjBound = true;
+  card.addEventListener('click', async (ev) => {
+    const t = ev.target.closest('[data-cj]');
+    if (!t) return;
+    const acc = t.getAttribute('data-cj');
+    const uid = t.getAttribute('data-user');
+    const d = conserjeEstado.datos || {};
+    if (acc === 'ver') { conserjeEstado.vistaId = uid; conserjeRender(); window.scrollTo(0, 0); return; }
+    if (acc === 'volver') { conserjeEstado.vistaId = null; conserjeRender(); window.scrollTo(0, 0); return; }
+    if (acc === 'arreglar') {
+      const box = $('#cjArreglo');
+      if (box) { box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
+      return;
+    }
+    if (acc === 'nota-guardar') {
+      const inp = $('#cjNota');
+      const msg = $('#cjNotaMsg');
+      const nota = inp ? inp.value : '';
+      try {
+        await adminApi('support/conserje/nota', 'POST', { user_id: Number(uid), nota });
+        if (msg) msg.textContent = 'Guardada ✓';
+        await conserjeCargar();
+      } catch (e) { if (msg) msg.textContent = 'No se pudo guardar. Probá de nuevo.'; }
+      return;
+    }
+    if (acc === 'decidir' || acc === 'armar') {
+      const decision = acc === 'armar' ? 'pedir' : t.getAttribute('data-decision');
+      let nota = '';
+      if (t.getAttribute('data-nota') === '1') {
+        const ta = $('#cjArregloNota');
+        nota = ta ? ta.value : '';
+      }
+      t.disabled = true;
+      try {
+        const body = { user_id: Number(uid), fecha_posteo: t.getAttribute('data-fecha'), decision, nota };
+        if (acc === 'decidir') body.post_id = Number(t.getAttribute('data-post'));
+        const r = acc === 'armar'
+          ? await adminApi('support/conserje/revision/armar', 'POST', body)
+          : await adminApi('support/conserje/revision/decidir', 'POST', body);
+        if (!r || !r.ok) throw new Error((r && r.error) || 'error');
+        await conserjeCargar();
+      } catch (e) {
+        t.disabled = false;
+        if (card) {
+          const warn = document.createElement('div');
+          warn.className = 'card';
+          warn.style.cssText = 'padding:12px;margin-top:12px;background:#FFF6D6;border:1px solid #FEC14D;font-size:13.5px';
+          warn.textContent = 'No se pudo guardar la decisión. Probá de nuevo.';
+          card.prepend(warn);
+        }
+      }
+      return;
+    }
+  });
+  await conserjeCargar();
+}

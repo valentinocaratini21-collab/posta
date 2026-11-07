@@ -894,7 +894,7 @@ function bbShell(tab, content) {
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
   const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}${k === 'jardin' ? '<span class="bb-badge pz-premios-badge off"></span>' : ''}</button>`;
-  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin') ? ' bb-glass-pantallas' : ''}">
+  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
     ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads')) + pzDockMasBtn('bb') + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + '</nav>' + pzDockMasHTML()}
@@ -2422,7 +2422,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v750'; // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
+const CHUNK_V = '20261105-v754'; // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -17760,6 +17760,7 @@ function pzPrefetchKick() {
   else if (tab === 'historial') { location.hash = '#/app/schedule'; return; } // Historial fusionado en Schedule
   else if (tab === 'ads') { content = await adsView(); } // 🚀 Potenciar: billetera + boost (web y nativa: la recarga es cobro por API a la tarjeta guardada, sin checkout web)
   else if (tab === 'admin') { pzPaintSkeleton(tab); let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
+  else if (tab === 'conserje') { pzPaintSkeleton(tab); let __okC = true; try { await loadChunk('conserje'); } catch (e) { __okC = false; } content = __okC ? await conserjeView() : chunkFailHTML(); } // 🧑‍💼 Conserje — revisión de la noche (solo el dueño)
   else if (tab === 'post') { pzPaintSkeleton(tab); content = await approvalPostView(postId); } // 🔔 Posty te avisa: aprobar por notificación
   else if (tab === 'dogfood') { pzPaintSkeleton(tab); content = await dogfoodView(postId); } // 🤖 Posty dogfood: propuesta del día
   else if (tab === 'ajustes') { pzPaintSkeleton(tab); let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
@@ -25967,6 +25968,7 @@ function bindApp(tab) {
   try { pzPhStart(); } catch (e) {}
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
   if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
+  if (tab === 'conserje' && typeof bindConserje === 'function') bindConserje(); // el chunk ya lo cargó render()
   if (tab === 'analisis' && typeof bindAnalisis === 'function') bindAnalisis(); // 🧠 la carta se pinta al cargar el chunk
   if (tab === 'chat') bindChatFull(); // (LOTE CHATPANTALLA) El chat principal es pantalla completa
   if (tab === 'schedule') bindSchedule();

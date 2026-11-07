@@ -10,6 +10,7 @@ const publishWatchdog = require('./publish-watchdog');
 // 🛟 CONSOLA DE SOPORTE (lote consola-soporte, base v697): las alertas que
 // abren casos solas corren junto al vigía (mismo barrido + pasada al boot).
 const supportCases = require('./support-cases');
+const conserjeRevision = require('./conserje-revision'); // (LOTE CONSERJE-REVISION, base v748) cierre de la noche 00:00
 const { activationNudge } = require('./activation-nudge');
 const { firstPublishNudge } = require('./first-publish-nudge');
 const magiaMod = require('./magia-postpago'); // (2026-10-25 · MAGIA POST-PAGO) celebración del primer posteo pago + mes 30
@@ -641,6 +642,15 @@ function startScheduler(db) {
     processApprovalNotifications(db).catch((e) => console.error('[notif]', e.message));
     // Aviso pre-autopiloto (2026-10-02): push 30 min antes de publicar solo.
     autopilotPreNotify(db).catch((e) => console.error('[autopilot-notify]', e.message));
+    // (LOTE CONSERJE-REVISION · 7/11) Cierre de la noche: a las 00:00
+    // hora del dueño, lo que quedó sin revisar Y necesita atención queda
+    // retenido (no sale); lo limpio sin revisar lo decide el cliente a
+    // las 9:00 con su ritual. Fuera de la hora 00 no hace nada; es
+    // idempotente (con decisión ya puesta, no toca nada).
+    try {
+      const cierre = conserjeRevision.cierreNoche(db, {});
+      if (cierre && cierre.corridos) console.log('[conserje] cierre 00:00: ' + cierre.corridos + ' retenido(s) sin revisión (' + (cierre.fecha || '') + ')');
+    } catch (e) { console.error('[conserje] cierre:', e.message); }
   });
   console.log('[posta] Scheduler activo (cada 1 minuto)');
   // Chequeo inicial a los 10 segundos
