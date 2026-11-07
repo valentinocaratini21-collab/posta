@@ -238,7 +238,10 @@ console.log('— S) estático estilo (análisis en paralelo) —');
   ok('E0 trialStyleProfile: mejores por likes, paleta con tope de tiempo', has(fa, 'b.likes - a.likes') && has(fa, '1500'));
   ok('E0 trialStyleProfile: sin posts ni paleta web devuelve null', has(fa, 'if (!list.length && !(opts && Array.isArray(opts.webPalette)'));
   ok('SRV prefill devuelve el estilo de IG', has(srv, 'style: styleIg,') && has(srv, 'trialStyleProfile('));
-  ok('SRV web-prefill devuelve el estilo de la paleta web', has(srv, 'style: feedAudit.paletteProfileFromHexes(data.palette || []),'));
+  // (LOTE ESTILO-PROPIO · 7/11) El web-prefill devuelve el estilo de la
+  // paleta web + la firma de estilo de sus imágenes (antes solo la
+  // paleta): la aserción vieja pedía la línea literal, que ya no existe.
+  ok('SRV web-prefill devuelve el estilo de la paleta web', has(srv, 'paletteProfileFromHexes(data.palette || [])') && has(srv, 'webStyle.firma = firmaWeb') && has(srv, 'style: Object.keys(webStyle).length ? webStyle : null,'));
   ok('SRV parseTrialStyle + styleGoalLines definidos', has(srv, 'function parseTrialStyle(') && has(srv, 'function styleGoalLines('));
   ok('SRV styleGoalLines se suma al fundamento en las dos generaciones', count(srv, 'styleGoalLines(estilo, lang)') === 2);
   ok('SRV estilo se parsea en las dos generaciones', count(srv, 'parseTrialStyle(fields && fields.estilo)') === 2);

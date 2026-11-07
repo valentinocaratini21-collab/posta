@@ -1206,6 +1206,93 @@ async function downloadPhotosForVision(shortcodes, max) {
   return out;
 }
 
+// (LOTE ESTILO-PROPIO · 7/11) Descarga de fotos para la visión de la
+// firma, como downloadPhotosForVision pero con el índice del shortcode
+// original: si una foto no baja, las demás no se desalinean (una
+// clasificación atribuida a la foto equivocada inventaría un estilo).
+async function downloadPhotosForVisionIndexed(shortcodes, max) {
+  const out = [];
+  const scs = (shortcodes || []).slice(0, max || 12);
+  for (let i = 0; i < scs.length; i++) {
+    try {
+      const url = rubroMediaUrlForShortcode(scs[i], 'm');
+      if (!url) continue;
+      const r = await fetch(url, { headers: { 'User-Agent': RUBRO_VISION_UA, 'Accept-Language': 'es-AR,es;q=0.9' }, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const ct = String(r.headers.get('content-type') || '');
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (ct.startsWith('image/') && buf.length > 1000) out.push({ index: i, shortcode: scs[i], dataUrl: 'data:image/jpeg;base64,' + buf.toString('base64') });
+    } catch (e) { /* foto que no baja: se saltea, sin romper la llamada */ }
+  }
+  return out;
+}
+
+// (LOTE ESTILO-PROPIO · 7/11) Visión por posteo para la firma de estilo:
+// UNA llamada batch gpt-4o-mini sobre hasta 12 fotos del feed (o de la
+// web), que clasifica cada foto con el vocabulario cerrado de la firma
+// (qué se muestra / encuadre / ángulo / luz / texto en la imagen).
+// Best-effort y detrás del mismo tope del demo: sin clave o sin tope,
+// devuelve null y la firma queda solo con lo determinista (nunca se
+// inventa un estilo). Con menos de 2 fotos no hay patrón que leer:
+// también null. Devuelve un array alineado con los ítems recibidos
+// (null por foto no clasificada).
+async function classifyFeedPostStyles(items, lang) {
+  try {
+    const list = (Array.isArray(items) ? items : []).filter((x) => x && typeof x === 'object');
+    if (list.length < 2) return null;
+    const apiKey = process.env.OPENAI_API_KEY || '';
+    if (!apiKey || !costs.demoAiCapOk()) return null;
+    const out = new Array(list.length).fill(null);
+    // Fotos: de IG por shortcode (descarga + base64, como la visión de
+    // rubro); de web por URL directa (son del propio negocio).
+    let imageParts = [];
+    let imgIdx = [];
+    const scItems = list.map((x, i) => ({ x, i })).filter((o) => typeof o.x.shortcode === 'string' && o.x.shortcode);
+    if (scItems.length >= 2) {
+      const got = await downloadPhotosForVisionIndexed(scItems.map((o) => o.x.shortcode), 12);
+      if (got.length < 2) return null;
+      imageParts = got.map((g) => ({ type: 'image_url', image_url: { url: g.dataUrl, detail: 'low' } }));
+      imgIdx = got.map((g) => scItems[g.index].i);
+    } else {
+      const urls = list.map((x, i) => ({ u: x.thumb, i })).filter((o) => typeof o.u === 'string' && /^https:\/\//.test(o.u) && !/cdninstagram\.com|fbcdn\.net/i.test(o.u)).slice(0, 12);
+      if (urls.length < 2) return null;
+      imageParts = urls.map((o) => ({ type: 'image_url', image_url: { url: o.u, detail: 'low' } }));
+      imgIdx = urls.map((o) => o.i);
+    }
+    const promptText = lang === 'en'
+      ? `These photos are the latest posts of ONE business on Instagram, in order. For EACH photo tell me: what it shows (producto_primer_plano | producto_accion | persona_camara | local | texto | otro), the framing (primer_plano | plano_medio | plano_general | cenital | otro), the angle (frontal | picado | contrapicado | otro), the light (natural | calida | estudio | noche | otro) and whether there is text in the image (true/false). Reply ONLY with JSON {"posts": [...]} with ONE entry per photo, in the same order. If a photo is unclear, use "otro" and texto null.`
+      : `Estas fotos son los últimos posteos de UN negocio en Instagram, en orden. Para CADA foto decime: qué se muestra (producto_primer_plano | producto_accion | persona_camara | local | texto | otro), el encuadre (primer_plano | plano_medio | plano_general | cenital | otro), el ángulo (frontal | picado | contrapicado | otro), la luz (natural | calida | estudio | noche | otro) y si hay texto en la imagen (true/false). Respondé SOLO un JSON {"posts": [...]} con UNA entrada por foto, en el mismo orden. Si una foto no se distingue, usá "otro" y texto null.`;
+    const resp = await Promise.race([
+      fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: [{ type: 'text', text: promptText }, ...imageParts] }],
+          response_format: { type: 'json_object' }, max_tokens: 700, temperature: 0,
+        }),
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('vision-timeout')), 20000)),
+    ]).catch(() => null);
+    if (!resp || !resp.ok) return null;
+    const data = await resp.json().catch(() => null);
+    try { costs.trackUsage(data && data.usage, 'firma-estilo', null); } catch (e) {}
+    const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    let parsed = null;
+    try { parsed = JSON.parse(String(txt || '{}')) || {}; } catch (e) { parsed = null; }
+    if (!parsed || !Array.isArray(parsed.posts)) return null;
+    const valid = (v) => v && typeof v === 'object'
+      && feedAudit.FIRMA_QUE.includes(v.que) && feedAudit.FIRMA_ENCUADRE.includes(v.encuadre)
+      && feedAudit.FIRMA_ANGULO.includes(v.angulo) && feedAudit.FIRMA_LUZ.includes(v.luz)
+      && (v.texto === true || v.texto === false || v.texto == null);
+    parsed.posts.slice(0, imgIdx.length).forEach((v, k) => {
+      if (!valid(v)) return;
+      out[imgIdx[k]] = { que: v.que, encuadre: v.encuadre, angulo: v.angulo, luz: v.luz, texto: v.texto == null ? null : !!v.texto };
+    });
+    return out;
+  } catch (_) { return null; }
+}
+
 /* (v235 + LOTE RUBRO-50-50) Visión — la ÚNICA llamada paga posible de
  * la identificación, y solo cuando el texto no resolvió. Dos vías:
  *   (a) DESEMPATE: el voto determinístico quedó cerca
@@ -28022,6 +28109,33 @@ function parseTrialStyle(v) {
       const bp = s.best_posts.slice(0, 3).filter((b) => b && typeof b === 'object' && typeof b.shortcode === 'string' && typeof b.likes === 'number').map((b) => ({ shortcode: b.shortcode.slice(0, 40), likes: b.likes, caption_head: typeof b.caption_head === 'string' ? b.caption_head.slice(0, 80) : '' }));
       if (bp.length) out.best_posts = bp;
     }
+    // (LOTE ESTILO-PROPIO · 7/11) La firma de estilo: solo valores del
+    // vocabulario cerrado y conteos 0..12. Cualquier cosa fuera de eso
+    // se tira — una firma inventada en el request no constriñe nada.
+    if (s.firma && typeof s.firma === 'object' && !Array.isArray(s.firma)) {
+      const fm = {};
+      const fn = num(s.firma.n, 12); if (fn != null) fm.n = fn;
+      if (s.firma.procedencia === 'tu feed' || s.firma.procedencia === 'tu web' || s.firma.procedencia === 'tu feed + tu web') fm.procedencia = s.firma.procedencia;
+      if (s.firma.sin_video === true || s.firma.sin_video === false) fm.sin_video = s.firma.sin_video;
+      if (s.firma.tipos && typeof s.firma.tipos === 'object') {
+        const tp = {};
+        ['foto', 'video', 'carrusel'].forEach((k) => { const v = num(s.firma.tipos[k], 12); if (v != null) tp[k] = v; });
+        if (Object.keys(tp).length) fm.tipos = tp;
+      }
+      if (s.firma.que && typeof s.firma.que === 'object') {
+        const qc = {};
+        Object.keys(s.firma.que).forEach((k) => { if (feedAudit.FIRMA_QUE.includes(k)) { const v = num(s.firma.que[k], 12); if (v != null) qc[k] = v; } });
+        if (Object.keys(qc).length) fm.que = qc;
+      }
+      if (s.firma.dominante && typeof s.firma.dominante === 'object') {
+        const dm = {};
+        if (feedAudit.FIRMA_QUE.includes(s.firma.dominante.que)) dm.que = s.firma.dominante.que;
+        if (feedAudit.FIRMA_ENCUADRE.includes(s.firma.dominante.encuadre)) dm.encuadre = s.firma.dominante.encuadre;
+        const dc = num(s.firma.dominante.count, 12); if (dc != null) dm.count = dc;
+        if (dm.que) fm.dominante = dm;
+      }
+      if (Object.keys(fm).length) out.firma = fm;
+    }
     return Object.keys(out).length ? out : null;
   } catch (e) { return null; }
 }
@@ -28043,6 +28157,9 @@ function styleGoalLines(style, lang) {
   if (style.tone === 'vos') lines.push(en ? 'Their tone is close and informal (voseo) — write like they write.' : 'Su tono es cercano, con voseo — escribí como escriben ellos.');
   if (style.tone === 'usted') lines.push(en ? 'Their tone is formal (usted) — write like they write.' : 'Su tono es formal, con usted — escribí como escriben ellos.');
   if (style.best_posts && style.best_posts.length) lines.push(en ? ('Their best post starts with «' + (style.best_posts[0].caption_head || '').slice(0, 60) + '» — learn from what worked.') : ('Su mejor posteo empieza con «' + (style.best_posts[0].caption_head || '').slice(0, 60) + '» — aprendé de lo que funcionó.'));
+  // (LOTE ESTILO-PROPIO · 7/11) La firma, con conteos y procedencia:
+  // solo lo observado; sin dominante, cero líneas.
+  if (style.firma) lines.push(...feedAudit.firmaGoalLines(style.firma, lang));
   return lines;
 }
 // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Encuadre en palabras
@@ -28360,6 +28477,12 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // queda intacto: esto solo cierra la creación sin respuestas.
   const ocAns = onboardingAnswersFrom(fields);
   const estilo = parseTrialStyle(fields && fields.estilo);
+  // (LOTE ESTILO-PROPIO · 7/11) La firma del cliente constriñe los
+  // primeros posteos de la prueba: mismo tipo, mismo encuadre, misma
+  // manera de mostrar el producto. Sin firma válida, la generación sigue
+  // su camino de siempre.
+  const firmaCode = feedAudit.firmaStyleCode(estilo && estilo.firma);
+  const firmaSinVideo = !!(estilo && estilo.firma && estilo.firma.sin_video);
   const estiloPaletteNames = estilo ? (((lang === 'en' ? estilo.palette_names_en : estilo.palette_names) || estilo.palette_names) || []) : [];
   const ocDetectados = trialParseDetectados(fields.productos_detectados);
   // (DRAFT-ONBOARDING · 4/11) Gusto del draft: se valida estricto; si
@@ -28585,7 +28708,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados })) {
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
     }
-    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft });
+    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo });
     // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Cada posteo lleva
     // su prompt en palabras simples, desde lo realmente usado para esa pieza.
     (posts || []).forEach((pp, _i) => {
@@ -28808,6 +28931,14 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
   const factsIg = trialIgFacts(bio, captions, (prof && prof.category) || '');
   let styleIg = null;
   try { styleIg = await feedAudit.trialStyleProfile(embedPosts, { bio: bio || '', followers: (prof && prof.followers) || null, posts_count: igStage.posts_count }, { tone: factsIg.tone, lang: prefillLang }); } catch (e) { styleIg = null; }
+  // (LOTE ESTILO-PROPIO · 7/11) Firma de estilo del feed: qué tipo de
+  // posteo hace, qué muestra y cómo lo muestra — con conteos y
+  // procedencia. La visión corre en UNA llamada, best-effort; sin ella,
+  // la firma lleva solo lo determinista (nunca se inventa un estilo).
+  try {
+    const firmaIg = await feedAudit.trialStyleSignature(embedPosts, { vision: (it) => classifyFeedPostStyles(it, prefillLang), source: 'tu feed' });
+    if (firmaIg) { if (styleIg) styleIg.firma = firmaIg; else styleIg = { firma: firmaIg }; }
+  } catch (e) { /* sin firma: el estudio sigue con lo demás */ }
   res.json({
     ok: true,
     ig,
@@ -28942,6 +29073,16 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
   const wresolved = rubroId.resolveRubro({ cls: wcls, lang: webPrefillLang });
   const wLegacy = demo.categoryFromText([data.name, data.description, ...(data.services || [])].join(' '));
   const wHasVotes = (wcls.candidatas || []).length > 0;
+  // (LOTE ESTILO-PROPIO · 7/11) Firma de estilo desde las imágenes de la
+  // web (cuando el IG es flaco o no hay IG): mismo vocabulario, misma
+  // visión por imagen, procedencia «tu web».
+  let firmaWeb = null;
+  try {
+    const webItems = (data.photos || []).slice(0, 12).map((p) => ({ type: 'GraphImage', thumb: p.url || null, caption: p.alt || '' }));
+    firmaWeb = await feedAudit.trialStyleSignature(webItems, { vision: (it) => classifyFeedPostStyles(it, webPrefillLang), source: 'tu web' });
+  } catch (e) { firmaWeb = null; }
+  const webStyle = feedAudit.paletteProfileFromHexes(data.palette || []) || {};
+  if (firmaWeb) webStyle.firma = firmaWeb;
   // (onboarding un clic) Productos reales para la pregunta 1: servicios
   // de la web + fotos del sitio mapeadas por producto (alt/nombre).
   // Las fotos del sitio se hotlinkean directo (son del propio negocio);
@@ -28961,7 +29102,7 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
     subcat: wHasVotes ? (wresolved.subcat || '') : '',
     rubro_check: wHasVotes ? wresolved.rubroCheck : { needed: false, options: [], detected: null },
     palette: data.palette || [],
-    style: feedAudit.paletteProfileFromHexes(data.palette || []),
+    style: Object.keys(webStyle).length ? webStyle : null,
     photos: (data.photos || []).map((p) => p.url),
     photoCount: (data.photos || []).length,
     productos: ocProductos,
@@ -29061,6 +29202,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // (onboarding un clic) SIN ATAJO, igual que en /api/trial/generate.
   const ocAns = onboardingAnswersFrom(fields);
   const estilo = parseTrialStyle(fields && fields.estilo);
+  // (LOTE ESTILO-PROPIO · 7/11) La firma del cliente constriñe los
+  // primeros posteos de la prueba (igual que en /api/trial/generate).
+  const firmaCode = feedAudit.firmaStyleCode(estilo && estilo.firma);
+  const firmaSinVideo = !!(estilo && estilo.firma && estilo.firma.sin_video);
   const estiloPaletteNames = estilo ? (((lang === 'en' ? estilo.palette_names_en : estilo.palette_names) || estilo.palette_names) || []) : [];
   const ocDetectados = trialParseDetectados(fields.productos_detectados);
   // (DRAFT-ONBOARDING · 4/11) Gusto del draft: se valida estricto; si
@@ -29485,7 +29630,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     let uploadProduct = { classified: false };
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft });
+    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo });
     const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
     const week = buildTrialWeek(n, lang); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(effCategory) ? effCategory : 'otro';
@@ -31789,7 +31934,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v761';
+const BUILD_ID = '20261105-v762';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

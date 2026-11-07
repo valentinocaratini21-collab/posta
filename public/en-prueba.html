@@ -4808,6 +4808,8 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     styleTags: 'you use {tags}',
     styleVos: 'you speak informally (vos)',
     styleUsted: 'you speak formally (usted)',
+    styleFirma: 'Your style: {label} — {c} of {n} posts',
+    draftFirmaChip: '★ Your style',
     promptFotoMarca: 'your logo big front and center, over your photo of {prod}',
     promptPalette: 'with your palette of {names}',
     promptToneVos: 'with your close tone',
@@ -6938,6 +6940,15 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (sfx) { try { sfx.play(); } catch (e) {} }
     var i, opt, card;
     if (dim === 'foto') {
+      // (LOTE ESTILO-PROPIO · 7/11) El default es el estilo propio del
+      // cliente: su opción va primera y lleva el chip «Tu estilo». El
+      // visitante sigue pudiendo elegir cualquiera de las 3.
+      var firmaFoto = draftFirmaFotoOpt();
+      if (firmaFoto) {
+        var fi = -1;
+        for (var fk = 0; fk < opts.length; fk++) { if (opts[fk].v === firmaFoto) { fi = fk; break; } }
+        if (fi > 0) opts = [opts[fi]].concat(opts.slice(0, fi), opts.slice(fi + 1));
+      }
       var sel = draftFotoDefaultSel(dim, opts);
       var prev = draftFotoPreviewData(dim, opts[sel], sel);
       html += '<div class="oc-draft-head"><span class="oc-draft-pill">✦ ' + esc(DRAFT_T.pack) + '</span><span class="oc-draft-count">' + (round + 1) + ' de ' + DR.dims.length + '</span></div>';
@@ -6953,6 +6964,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
         opt = opts[i]; card = draftCardPhoto(dim, opt, i);
         html += '<div class="oc-draft-card' + (i === sel ? ' oc-picked' : '') + '" data-i="' + i + '" data-v="' + esc(opt.v) + '">';
         if (i === sel) html += '<span class="oc-pick-tick">✓</span>';
+        if (firmaFoto && i === sel && opt.v === firmaFoto) html += '<span class="oc-draft-chip">' + esc(T.draftFirmaChip) + '</span>';
         if (card.src) html += '<span class="oc-draft-img"><img src="' + esc(card.src) + '" alt="">' + (card.logo ? '<span class="oc-draft-logo-over"><img src="' + esc(card.logo) + '" alt=""></span>' : '') + '</span>';
         else html += '<span class="oc-draft-nophoto">📷 ' + esc(T.draftNoPhoto) + '</span>';
         html += '<b>' + esc(opt.l) + '</b><small>' + esc(card.desc) + '</small></div>';
@@ -7218,6 +7230,13 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     var fmt = a.formats || b.formats || null;
     out.formats = fmt ? { images: fmt.images || 0, videos: fmt.videos || 0, carousels: fmt.carousels || 0 } : null;
     out.tone = (a.tone && a.tone !== 'neutral') ? a.tone : (b.tone || a.tone || null);
+    // (LOTE ESTILO-PROPIO · 7/11) La firma: el estudio de IG manda si
+    // vio 4 posteos o más; si el IG es flaco, manda la firma de la web
+    // (o la de IG si es la única que hay). Sin firmas, nada.
+    var fa = a.firma, fb = b.firma;
+    if (fb && typeof fb.n === 'number' && fb.n >= 4) out.firma = fb;
+    else if (fa) out.firma = fa;
+    else if (fb) out.firma = fb;
     return out;
   }
   // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El estudio
@@ -7249,6 +7268,28 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
       opResumeSave('preguntas');
     }
   }
+  // (LOTE ESTILO-PROPIO · 7/11) El qué de la firma, en palabras simples
+  // para la tarjeta «Lo que ya sé de vos» y el chip del mock.
+  var FIRMA_QUE_L = {
+    producto_primer_plano: 'close-up photos of your product',
+    producto_accion: 'photos of your product in action',
+    persona_camara: 'posts with you on camera',
+    local: 'photos of your place',
+    texto: 'posts with text on the image',
+    otro: 'other kinds of posts',
+  };
+  // (LOTE ESTILO-PROPIO · 7/11) La opción de foto del mock v2 que
+  // corresponde a la firma del cliente: su estilo es el default (va
+  // primero y lleva el chip). Sin firma, null: el mock queda como hoy.
+  function draftFirmaFotoOpt() {
+    var f = S && S.style && S.style.firma;
+    if (!f || !f.dominante || !f.dominante.que) return null;
+    var q = f.dominante.que;
+    if (q === 'producto_primer_plano') return 'producto';
+    if (q === 'producto_accion' || q === 'persona_camara' || q === 'local') return 'accion';
+    if (q === 'texto') return 'marca';
+    return null;
+  }
   // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El estilo
   // observado, en palabras simples, solo con lo que el estudio vio de verdad.
   function chatStyleLine() {
@@ -7263,6 +7304,12 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     if (st.hashtags_top && st.hashtags_top.length) parts.push(T.styleTags.replace('{tags}', st.hashtags_top.slice(0, 3).join(', ')));
     if (st.tone === 'vos') parts.push(T.styleVos);
     if (st.tone === 'usted') parts.push(T.styleUsted);
+    // (LOTE ESTILO-PROPIO · 7/11) La firma, con conteos: solo lo
+    // observado. Sin dominante, no se inventa ninguna línea.
+    var fm = st.firma;
+    if (fm && fm.dominante && fm.dominante.que && FIRMA_QUE_L[fm.dominante.que]) {
+      parts.push(T.styleFirma.replace('{label}', FIRMA_QUE_L[fm.dominante.que]).replace('{c}', String(fm.dominante.count || fm.n || '')).replace('{n}', String(fm.n || '')));
+    }
     return parts.join(' · ');
   }
   // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) El prompt de la

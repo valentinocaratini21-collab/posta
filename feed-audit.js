@@ -207,6 +207,11 @@ function parseEmbedPosts(html) {
         likes: f(/"edge_liked_by":\{"count":(\d+)/) ? parseInt(f(/"edge_liked_by":\{"count":(\d+)/), 10) : null,
         pinned: (() => { const pm = /"pinned_for_users":\[([^\]]{0,200})\]/.exec(seg); return pm ? (pm[1].trim() ? true : false) : null; })(), // (v360) fijado según el embed; sin marca -> null
         thumb: thumbRaw ? cleanThumbUrl(thumbRaw) : null,
+        // (LOTE ESTILO-PROPIO · 7/11) Duración del video, best-effort
+        // (del nodo propio, como el resto de la identidad): la firma de
+        // estilo la usa para saber si el cliente postea video y de qué
+        // largo. Sin dato → null, nunca inventada.
+        video_duration: fId(/"video_duration":([\d.]+)/) ? parseFloat(fId(/"video_duration":([\d.]+)/)) : null,
       });
     }
   } catch (_) {}
@@ -893,6 +898,161 @@ async function trialStyleProfile(posts, profile, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// (LOTE ESTILO-PROPIO · 7/11) Firma de estilo: de los últimos 12 posteos
+// del cliente, QUÉ TIPO / QUÉ SE MUESTRA / CÓMO SE MUESTRA — con conteos
+// y procedencia en el fundamento. Lo determinista (tipo, duración de video)
+// sale del embed sin IA; el qué/cómo sale de UNA pasada de visión por
+// posteo (inyectada por el llamador: opts.vision). Si la visión falta o
+// falla, la firma lleva solo lo determinista y el dominante queda nulo:
+// nunca se inventa un estilo. La firma NUNCA pasa por encima de la puerta
+// de rubro: cada posteo sigue siendo de un producto real del fundamento.
+// Límite con ESTUDIO-PROFUNDO (coordinador, mismo día): esta firma NO
+// construye rankeo por respuesta, ni mapa de huecos del feed, ni minería
+// de comentarios, ni ficha de oferta, ni competencia, ni re-estudio
+// semanal — esos ítems viven en el lote del coordinador, no acá.
+// ---------------------------------------------------------------------------
+const FIRMA_QUE = ['producto_primer_plano', 'producto_accion', 'persona_camara', 'local', 'texto', 'otro'];
+const FIRMA_ENCUADRE = ['primer_plano', 'plano_medio', 'plano_general', 'cenital', 'otro'];
+const FIRMA_ANGULO = ['frontal', 'picado', 'contrapicado', 'otro'];
+const FIRMA_LUZ = ['natural', 'calida', 'estudio', 'noche', 'otro'];
+const FIRMA_PROCEDENCIA = ['tu feed', 'tu web', 'tu feed + tu web'];
+
+function firmaCount(values) {
+  const c = {};
+  (values || []).forEach((v) => { if (v != null) c[v] = (c[v] || 0) + 1; });
+  return c;
+}
+// Modo con desempate determinista: el primero del vocabulario en orden.
+function firmaMode(counts, order) {
+  let best = null, bestN = 0;
+  for (const v of order) {
+    const n = (counts && counts[v]) || 0;
+    if (n > bestN) { best = v; bestN = n; }
+  }
+  return bestN > 0 ? { value: best, count: bestN } : null;
+}
+function firmaMedian(nums) {
+  if (!nums || !nums.length) return null;
+  const s = nums.slice().sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// posts: salida de parseEmbedPosts (o ítems de web con type/thumb).
+// opts: { vision: async (items) => [{que, encuadre, angulo, luz, texto}...],
+//         visionTimeoutMs (default 8000), source: 'tu feed' | 'tu web' }.
+// Devuelve la firma o null (sin posteos no hay firma: rama honesta).
+async function trialStyleSignature(posts, opts = {}) {
+  try {
+    const list = (Array.isArray(posts) ? posts : []).filter((p) => p && typeof p === 'object').slice(0, 12);
+    if (!list.length) return null;
+    const n = list.length;
+    const tipos = { foto: 0, video: 0, carrusel: 0 };
+    list.forEach((p) => {
+      if (p.type === 'GraphVideo') tipos.video++;
+      else if (p.type === 'GraphSidecar') tipos.carrusel++;
+      else tipos.foto++;
+    });
+    const durs = list.filter((p) => p.type === 'GraphVideo' && Number.isFinite(p.video_duration) && p.video_duration > 0).map((p) => p.video_duration);
+    const med = firmaMedian(durs);
+    const procedencia = FIRMA_PROCEDENCIA.includes(opts.source) ? opts.source : 'tu feed';
+    // Visión por posteo (inyectada por el llamador): una pasada,
+    // best-effort, con tope. Si falla o no clasifica nada, lo
+    // determinista sobrevive y el dominante queda nulo.
+    let vis = null;
+    if (typeof opts.vision === 'function') {
+      try {
+        const items = list.map((p) => ({ thumb: p.thumb || null, shortcode: p.shortcode || null, type: p.type || null }));
+        const r = await Promise.race([
+          opts.vision(items),
+          new Promise((res) => setTimeout(() => res(null), (opts.visionTimeoutMs || 8000))),
+        ]);
+        if (Array.isArray(r) && r.length) vis = r;
+      } catch (_) { vis = null; }
+    }
+    const validVis = (v) => v && typeof v === 'object' && FIRMA_QUE.includes(v.que) && FIRMA_ENCUADRE.includes(v.encuadre) && FIRMA_ANGULO.includes(v.angulo) && FIRMA_LUZ.includes(v.luz) && (v.texto === true || v.texto === false || v.texto == null);
+    const seen = (vis || []).filter(validVis);
+    const que = firmaCount(seen.map((v) => v.que));
+    const encuadre = firmaCount(seen.map((v) => v.encuadre));
+    const angulo = firmaCount(seen.map((v) => v.angulo));
+    const luz = firmaCount(seen.map((v) => v.luz));
+    const textoEnImagen = { si: 0, no: 0 };
+    seen.forEach((v) => { if (v.texto === true) textoEnImagen.si++; else if (v.texto === false) textoEnImagen.no++; });
+    const qMode = firmaMode(que, FIRMA_QUE);
+    const eMode = firmaMode(encuadre, FIRMA_ENCUADRE);
+    const lMode = firmaMode(luz, FIRMA_LUZ);
+    const tMode = firmaMode(tipos, ['foto', 'video', 'carrusel']);
+    const dominante = qMode ? {
+      tipo: (tMode && tMode.value) || null,
+      que: qMode.value,
+      encuadre: (eMode && eMode.value) || null,
+      luz: (lMode && lMode.value) || null,
+      count: qMode.count,
+    } : null;
+    return {
+      n, tipos, que, encuadre, angulo, luz, texto_en_imagen: textoEnImagen,
+      duraciones: { n: durs.length, mediana_seg: med == null ? null : Math.round(med * 10) / 10 },
+      dominante, procedencia,
+      sin_video: tipos.video === 0,
+      vision_ok: seen.length > 0,
+      observado: true,
+    };
+  } catch (_) { return null; }
+}
+
+// El dominante de la firma → código de estilo del catálogo (image-styles).
+// null cuando no hay dominante o el qué no tiene estilo propio: la
+// generación sigue su camino de siempre (sin forzar nada).
+function firmaStyleCode(firma) {
+  try {
+    const d = firma && firma.dominante;
+    if (!d || !FIRMA_QUE.includes(d.que)) return null;
+    if (d.que === 'producto_primer_plano') return d.encuadre === 'cenital' ? '/flatlay' : '/product';
+    if (d.que === 'producto_accion' || d.que === 'persona_camara') return '/lifestyle';
+    if (d.que === 'local') return '/workspace';
+    if (d.que === 'texto') return '/quote';
+    return null;
+  } catch (_) { return null; }
+}
+
+const FIRMA_QUE_ES = {
+  producto_primer_plano: 'fotos de su producto en primer plano',
+  producto_accion: 'fotos de su producto en acción',
+  persona_camara: 'posteos con persona a cámara',
+  local: 'fotos de su local',
+  texto: 'posteos con texto en la imagen',
+  otro: 'posteos de otro tipo',
+};
+const FIRMA_QUE_EN = {
+  producto_primer_plano: 'close-up photos of their product',
+  producto_accion: 'photos of their product in action',
+  persona_camara: 'posts with a person on camera',
+  local: 'photos of their place',
+  texto: 'posts with text on the image',
+  otro: 'other kinds of posts',
+};
+const FIRMA_PROC_EN = { 'tu feed': 'seen on their feed', 'tu web': 'seen on their website', 'tu feed + tu web': 'seen on their feed and website' };
+
+// La firma, como líneas del fundamento: solo lo observado, con conteos y
+// procedencia. Sin dominante, cero líneas (nunca se inventa un estilo).
+function firmaGoalLines(firma, lang) {
+  try {
+    const d = firma && firma.dominante;
+    if (!d || !FIRMA_QUE.includes(d.que)) return [];
+    const en = lang === 'en';
+    const label = (en ? FIRMA_QUE_EN : FIRMA_QUE_ES)[d.que] || d.que;
+    const proc = en ? (FIRMA_PROC_EN[firma.procedencia] || 'seen on their feed') : (firma.procedencia || 'tu feed');
+    const lines = [en
+      ? `Their style: ${d.count} of ${firma.n || '?'} posts are ${label} (${proc}) — the first posts are made like that.`
+      : `Su estilo: ${d.count} de ${firma.n || '?'} posteos son ${label} (${proc}) — los primeros posteos se hacen así.`];
+    if (firma.sin_video) lines.push(en
+      ? 'No video on their feed: the sample reel is shown as a sample, not as their style.'
+      : 'No postea video: el reel de muestra sale como muestra, no como su estilo.');
+    return lines;
+  } catch (_) { return []; }
+}
+
+// ---------------------------------------------------------------------------
 // Prompt para gpt-4o-mini (con checklist ANTI-GENERICO)
 // ---------------------------------------------------------------------------
 const CLICHES = [
@@ -1162,6 +1322,13 @@ module.exports = {
   hueName,
   paletteProfileFromHexes,
   trialStyleProfile,
+  FIRMA_QUE,
+  FIRMA_ENCUADRE,
+  FIRMA_ANGULO,
+  FIRMA_LUZ,
+  trialStyleSignature,
+  firmaStyleCode,
+  firmaGoalLines,
   localizeTrialPhotos,
   localizeTrialPic,
   AUDIT_LIMIT_PER_DAY,

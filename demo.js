@@ -636,7 +636,7 @@ function dishOf(text) {
 // Elige UN estilo del catálogo por posteo: todos distintos, intención del
 // posteo primero (misma tabla INTENT_STYLES del producto), diversidad de
 // composición garantizada (≥3 esqueletos si hay 3+ posteos).
-function pickDemoStyles({ topics, category, subcat, business, feedProfile = null, offerProfile = null }) {
+function pickDemoStyles({ topics, category, subcat, business, feedProfile = null, offerProfile = null, firmaStyle = null, firmaSinVideo = false }) {
   const IS = imageStyles();
   if (!IS) return topics.map(() => null);
   let pool = demoStylePool(category, business);
@@ -656,14 +656,34 @@ function pickDemoStyles({ topics, category, subcat, business, feedProfile = null
       if (gate.kept && gate.kept.length) pool = gate.kept;
     } catch (e) { /* sin dataset: pool como hasta v233 */ }
   }
+  // (LOTE ESTILO-PROPIO · 7/11) La firma del cliente es un candidato
+  // aunque el pool del rubro no la traiga: el primer posteo de la prueba
+  // tiene que verse como los posteos del cliente, no como la casa.
+  // Se agrega DESPUÉS del filtro del dataset: el feed del propio cliente
+  // es la verdad de base sobre su feed — si el dataset la marcara
+  // incompatible, el dataset se equivoca para este cliente, no la firma.
+  let firmaObj = null, firmaSkeleton = null;
+  if (firmaStyle && typeof firmaStyle === 'string') {
+    try { firmaObj = IS.getStyle(firmaStyle) || null; } catch (_) { firmaObj = null; }
+    if (firmaObj) {
+      if (!pool.some((s) => s.code === firmaObj.code)) pool = [firmaObj].concat(pool);
+      try { firmaSkeleton = (treatmentForStyle(firmaObj) || {}).skeleton || null; } catch (_) { firmaSkeleton = null; }
+    }
+  }
+  // La pieza de video de la prueba (índice 2, o la última si hay menos):
+  // sin video en el feed del cliente, esa pieza lleva el estilo propio.
+  const videoTopicIdx = Math.min(2, Math.max(0, topics.length - 1));
   const used = new Set();
   const usedSkeletons = new Set();
-  const picks = topics.map((t) => {
+  const picks = topics.map((t, ti) => {
     const intent = KIND_INTENT[t.kind] || 'producto';
     const intentList = (IS.INTENT_STYLES && IS.INTENT_STYLES[intent]) || [];
     let best = null, bestScore = -Infinity;
     for (const s of pool) {
-      if (used.has(s.code)) continue;
+      // La firma puede repetirse en la pieza de video (sin video en el
+      // feed, esa pieza también lleva el estilo propio): el resto de las
+      // piezas sigue sin repetir estilo.
+      if (used.has(s.code) && !(firmaObj && firmaSinVideo && ti === videoTopicIdx && s.code === firmaObj.code)) continue;
       const tr = treatmentForStyle(s);
       let score = Math.random() * 9;
       // (v234) Términos del dataset (la escala de pickStyle dada
@@ -684,6 +704,19 @@ function pickDemoStyles({ topics, category, subcat, business, feedProfile = null
       const sd = dishOf(`${s.code} ${s.name}`);
       if (sd && dishOf(`${t.headline} ${t.sub} ${t.tag}`) !== sd) score -= 200;
       if (!usedSkeletons.has(tr.skeleton)) score += 40;
+      // (LOTE ESTILO-PROPIO · 7/11) La firma manda en el primer posteo
+      // y en la pieza de video cuando el cliente no postea video: +2000,
+      // por encima de cualquier bono del dataset (un estilo que encaja
+      // con el perfil puede sumar ~450 del dataset + intención +
+      // esqueleto; la firma es el estilo OBSERVADO del cliente, no una
+      // inferencia, y no pierde contra una). El resto de la semana
+      // hereda el mismo esqueleto (+60) sin repetir el código.
+      if (firmaObj) {
+        if (s.code === firmaObj.code) {
+          score += (ti === 0 ? 2000 : 80);
+          if (firmaSinVideo && ti === videoTopicIdx) score += 2000;
+        } else if (firmaSkeleton && tr.skeleton === firmaSkeleton) score += 60;
+      }
       if (subcat === 'makeup' && /makeup|beauty|cosmet|glow|skin|lipstick|editorial/i.test(s.code + ' ' + s.name + ' ' + (s.prompt || ''))) score += 15;
       // (v192) Contenido/CM: primero los estilos "de marca" — esqueletos
       // gráficos (cita central, luminoso de estudio) y vocabulario de
@@ -704,6 +737,10 @@ function pickDemoStyles({ topics, category, subcat, business, feedProfile = null
     const skels = new Set(picks.filter(Boolean).map((s) => treatmentForStyle(s).skeleton));
     if (skels.size < 3) {
       for (let i = picks.length - 1; i >= 0 && skels.size < 3; i--) {
+        // (LOTE ESTILO-PROPIO · 7/11) Las piezas de la firma (la primera
+        // y la de video sin video en el feed) no se «reparan»: son el
+        // estilo del cliente, no un relleno a cambiar por variedad.
+        if (firmaObj && (i === 0 || (firmaSinVideo && i === videoTopicIdx))) continue;
         const alt = pool.find((s) => !used.has(s.code) && !skels.has(treatmentForStyle(s).skeleton)
           && ((IS.INTENT_STYLES[KIND_INTENT[topics[i].kind] || 'producto'] || []).includes(s.code) || true));
         if (!alt) break;
@@ -1289,7 +1326,7 @@ function dropTemplateVarTopics(list) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang, trialNoStock = false, draft = null }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false }) {
   // (v274 · MODO EN) lang 'en': catálogo de temas EN, frames del digest EN,
   // goalLine "As you asked:" y caps de titular con hang-words EN. Sin lang
   // (o 'es') el comportamiento es idéntico al histórico.
@@ -1401,7 +1438,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     photos = base.photos.slice(0, n);
   } else if (photoPath) {
     // Estilos REALES del catálogo del producto: uno distinto por posteo.
-    styleObjs = pickDemoStyles({ topics, category: cat, subcat, business, feedProfile: demoFeedProfile, offerProfile: demoOfferProfile });
+    styleObjs = pickDemoStyles({ topics, category: cat, subcat, business, feedProfile: demoFeedProfile, offerProfile: demoOfferProfile, firmaStyle, firmaSinVideo });
     photos = topics.map(() => ({ userPhoto: true }));
   } else {
     // (v196) SELECCIÓN CON GATE DURO: se recorren los temas del pool desde
@@ -1469,7 +1506,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     // (La variedad de esqueletos la garantiza enforceSkeletonVariety más
     // abajo, para todas las ramas — el remiendo puntual de v196 que solo
     // miraba los dos primeros posteos con foto quedó subsumido.)
-    styleObjs = pickDemoStyles({ topics, category: cat, subcat, business, feedProfile: demoFeedProfile, offerProfile: demoOfferProfile });
+    styleObjs = pickDemoStyles({ topics, category: cat, subcat, business, feedProfile: demoFeedProfile, offerProfile: demoOfferProfile, firmaStyle, firmaSinVideo });
     // Fotos con el gate, en dos pasadas: primero los temas CON tema (las
     // fotos exactas son pocas y son para ellos), después los genéricos — si
     // no, un posteo sin tema se queda con la única foto de pelo y los de
@@ -1724,6 +1761,15 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       specPosts[wi].pic_path = profilePicPath;
     }
   }
+  // (LOTE ESTILO-PROPIO · 7/11) Cliente sin video: el reel de muestra
+  // sale como muestra en estilo neutro — etiquetado, no inventado. La
+  // marca viaja en el spec (y en el posteo generado) para que el front
+  // la presente como muestra; el estilo de esa pieza ya lo puso
+  // pickDemoStyles (la firma propia, no un estilo de video inventado).
+  if (firmaSinVideo && specPosts.length) {
+    const vIdx = Math.min(2, Math.max(0, specPosts.length - 1));
+    if (specPosts[vIdx]) specPosts[vIdx].muestra_neutra = true;
+  }
   const stylesN = specPosts.map((p) => p.style);
   return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
@@ -1819,9 +1865,9 @@ function closeTrialCaption(caption, topic, tone, lang) {
   return captions.ensureCaptionCtaClose(caption, t.kind, tone, lang);
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null }) {
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang, trialNoStock, draft });
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang, trialNoStock, draft, firmaStyle, firmaSinVideo });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 
@@ -1877,7 +1923,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
 
     const posts = made.map((m, i) => (
       i === videoIdx && videoB64
-        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode }
+        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, ...(specPosts[i].muestra_neutra ? { muestra_neutra: true } : {}) }
         : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode }
     ));
     return { posts, spec: savedSpec };
