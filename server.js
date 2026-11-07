@@ -9278,12 +9278,14 @@ app.post('/api/ads/billetera/auto', requireAuth, express.json(), async (req, res
 // posteos publicados con ig_media_id (REGLA DURA 6/11), sin límite de
 // antigüedad ni de cantidad, con ya_impulsado. La compuerta bloquea
 // GASTAR, no mostrar (igual que /elegibles).
+// (LOTE ADS-FEED-STORIES · 7/11) Sin stories: la grilla es del FEED, no
+// de historias — media_type 'story' fuera en el SQL y en feedParaAds.
 app.get('/api/ads/billetera/feed', requireAuth, async (req, res) => {
   try {
     const uid = req.session.userId;
     let rows = [];
     try {
-      rows = db.prepare(`SELECT p.id, p.image_path, p.caption, p.status, p.published_at, p.ig_media_id FROM posts p WHERE p.user_id = ? AND p.status = 'published' AND p.ig_media_id IS NOT NULL AND p.ig_media_id != '' ORDER BY p.published_at DESC`).all(uid);
+      rows = db.prepare(`SELECT p.id, p.image_path, p.caption, p.status, p.published_at, p.ig_media_id, p.media_type FROM posts p WHERE p.user_id = ? AND p.status = 'published' AND p.ig_media_id IS NOT NULL AND p.ig_media_id != '' AND p.media_type != 'story' ORDER BY p.published_at DESC`).all(uid);
     } catch (e) { rows = []; }
     let impulsados = new Set();
     try {
@@ -9313,12 +9315,13 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
     let rows = [];
     try {
       rows = db.prepare(`
-        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key,
+        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key, p.media_type,
                COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
                COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
         FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
         WHERE p.user_id = ? AND p.status = 'published'
           AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
+          AND p.media_type != 'story'
         ORDER BY p.published_at DESC LIMIT 20`).all(uid);
     } catch (e) { rows = []; }
     const wk = mondayKeyOf(tzToday(userTz(uid)));
@@ -9344,12 +9347,13 @@ app.get('/api/ads/billetera/buscar', requireAuth, async (req, res) => {
     let rows = [];
     try {
       rows = db.prepare(`
-        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key,
+        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key, p.media_type,
                COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
                COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
         FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
         WHERE p.user_id = ? AND p.status = 'published'
           AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
+          AND p.media_type != 'story'
           AND p.caption LIKE '%' || ? || '%' ESCAPE '\\'
         ORDER BY p.published_at DESC LIMIT 20`).all(uid, escLike);
     } catch (e) { rows = []; }
@@ -31934,7 +31938,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v762';
+const BUILD_ID = '20261105-v763';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

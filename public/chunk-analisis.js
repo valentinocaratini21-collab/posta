@@ -1707,7 +1707,7 @@ function anaAdsDirectoHTML() {
   const destacado = selPost
     ? `<div style="position:relative;background:#fff;border:2px solid #FEC14D;border-radius:16px;overflow:hidden;margin-bottom:14px">
       <span style="position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;z-index:1">✓</span>
-      ${selPost.image_path ? `<img src="${esc(selPost.image_path)}" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block">` : ''}
+      ${selPost.image_path ? `<img src="${esc(selPost.image_path)}" alt="" style="width:100%;aspect-ratio:1/1;object-fit:contain;display:block;background:#E8F1F8">` : ''}
       <div style="padding:12px 14px"><div style="font-size:14px;font-weight:700;color:#0A1E33;line-height:1.4">${esc(anaCortarCaption(selPost.caption || '', 90))}</div>${chipDestacado}</div>
     </div>`
     : `<p class="ana-boostrec-nota">${esc(anaT('Todavía no tenés posteos para impulsar.', "You don't have posts to boost yet."))}</p>`;
@@ -1731,6 +1731,11 @@ function anaAdsDirectoHTML() {
 // (el sangrado -14px cancela el padding de .bb-main), scroll nativo.
 // La elegida lleva borde amarillo + tilde verde; la que ya tiene ads
 // lleva su marca y no se puede volver a elegir.
+// (LOTE ADS-FEED-STORIES · 7/11) La grilla muestra la imagen ENTERA:
+// object-fit:contain sobre fondo neutro — con cover el recorte cuadrado
+// cortaba los titulares de las imágenes 4:5 (viven en las bandas
+// superior/inferior). La celda sigue 1/1 para que la grilla no se
+// descuadre; lo mismo vale para el destacado de la vista principal.
 function anaAdsFeedHTML() {
   const d = anaBilleteraDatos || {};
   const feed = Array.isArray(d.feed) ? d.feed : [];
@@ -1745,7 +1750,7 @@ function anaAdsFeedHTML() {
     const chip = esHoyCelda && hoy.hora
       ? `<span style="position:absolute;left:6px;bottom:6px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:11px;font-weight:800;color:#0A1E33">${esc(anaT('Sale hoy · ' + hoy.hora, 'Goes live today · ' + hoy.hora))}</span>`
       : (p.ya_impulsado ? `<span style="position:absolute;left:6px;bottom:6px;padding:2px 8px;background:rgba(10,30,51,.75);border-radius:999px;font-size:11px;font-weight:800;color:#fff">${esc(anaT('Con ads', 'With ads'))}</span>` : '');
-    return `<button type="button" onclick="anaAdsElegirFeed(${p.post_id}, this)" style="position:relative;padding:0;border:0;background:#E8F1F8;cursor:pointer;aspect-ratio:1/1;overflow:hidden;${esElegida ? 'box-shadow:inset 0 0 0 3px #FEC14D;' : ''}">${p.image_path ? `<img src="${esc(p.image_path)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">` : ''}${esElegida ? '<span style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900">✓</span>' : ''}${chip}</button>`;
+    return `<button type="button" onclick="anaAdsElegirFeed(${p.post_id}, this)" style="position:relative;padding:0;border:0;background:#E8F1F8;cursor:pointer;aspect-ratio:1/1;overflow:hidden;${esElegida ? 'box-shadow:inset 0 0 0 3px #FEC14D;' : ''}">${p.image_path ? `<img src="${esc(p.image_path)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:contain;display:block">` : ''}${esElegida ? '<span style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900">✓</span>' : ''}${chip}</button>`;
   }).join('');
   const grid = lista.length
     ? `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-left:-14px;margin-right:-14px">${celdas}</div>`

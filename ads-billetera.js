@@ -224,7 +224,7 @@ async function impulsarConSaldo(input) {
 function elegiblesParaAds(rows, mejorPostId, yaImpulsados) {
   const impulsados = yaImpulsados instanceof Set ? yaImpulsados : new Set(yaImpulsados || []);
   return (Array.isArray(rows) ? rows : [])
-    .filter((r) => r && r.status === 'published' && r.ig_media_id && !impulsados.has(r.id))
+    .filter((r) => r && r.status === 'published' && r.ig_media_id && r.media_type !== 'story' && !impulsados.has(r.id))
     .map((r) => ({
       post_id: r.id,
       image_path: r.image_path || '',
@@ -247,10 +247,14 @@ function elegiblesParaAds(rows, mejorPostId, yaImpulsados) {
 // (pauta activa o pendiente). `rows` = filas de posts, `yaImpulsados` =
 // Set de post_id con pauta activa/pendiente. Puro: la consulta vive en
 // el endpoint.
+// (LOTE ADS-FEED-STORIES · 7/11) Sin stories: la grilla es del FEED —
+// una story publicada con ig_media_id NO es un posteo para impulsar
+// (media_type 'story' fuera, acá y en el SQL; filas sin media_type
+// —legado— siguen entrando, nunca se las supone story).
 function feedParaAds(rows, yaImpulsados) {
   const impulsados = yaImpulsados instanceof Set ? yaImpulsados : new Set(yaImpulsados || []);
   return (Array.isArray(rows) ? rows : [])
-    .filter((r) => r && r.status === 'published' && r.ig_media_id)
+    .filter((r) => r && r.status === 'published' && r.ig_media_id && r.media_type !== 'story')
     .map((r) => ({
       post_id: r.id,
       image_path: r.image_path || '',
