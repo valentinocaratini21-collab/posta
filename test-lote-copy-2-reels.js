@@ -6,9 +6,11 @@
  * v732 copy-sin-reels (que había sacado la promesa falsa de «5 reels»):
  * el copy vuelve a prometer reels, pero 2/semana (martes y jueves), no 5.
  *
- * La prueba promete solo lo que entrega: la semana de prueba son 5 posteos
+ * La prueba promete solo lo que entrega: la semana de prueba son 3 posteos
  * + 1 reel DE MUESTRA a pedido (/api/trial/sample-reel, 1 por IG, cacheado)
- * — no una cadencia semanal. El plan (tras la prueba) es 7 posteos + 2 reels
+ * — no una cadencia semanal. (v736: la prueba son 3 posteos, no 5 — corrección
+ * de Valentino 6/11 «la prueba son 3 posteos, porque son 3 dias!»; la sección 7
+ * se actualizó de 5 a 3.) El plan (tras la prueba) es 7 posteos + 2 reels
  * por semana, martes y jueves. La corrección de las HISTORIAS del v732 se
  * mantiene: ninguna superficie promete historias con cantidad.
  *
@@ -139,16 +141,16 @@ t(!AJ.includes('7 posteos + 5 reels'), 'chunk-ajustes: sin «7 posteos + 5 reels
 t(APP.includes('ME.reels_per_week'), 'app.js: la tarjeta autopilot lee ME.reels_per_week (el campo del plan)');
 t(APP.includes('Textos, diseños y reels con tus fotos'), 'app.js: autopilot dice «Textos, diseños y reels»');
 
-// ---------- 7. La prueba: 5 posteos + 1 reel DE MUESTRA; el plan, 7 + 2 (martes y jueves) ----------
+// ---------- 7. La prueba: 3 posteos + 1 reel DE MUESTRA; el plan, 7 + 2 (martes y jueves) ----------
 // La prueba genera 1 reel (el de muestra, a pedido, /api/trial/sample-reel, 1 por IG):
-t(PR.includes('5 posteos + 1 reel de muestra'), 'prueba ES: el paso dice 5 posteos + 1 reel de muestra');
-t(EPR.includes('5 posts + 1 sample reel'), 'prueba EN: el paso dice 5 posts + 1 sample reel');
-t(PR.includes('Tus 5 posteos + 1 reel, ya creados'), 'prueba ES: la semana de prueba es 5 posteos + 1 reel');
-t(EPR.includes('Your 5 posts + 1 reel, already created'), 'prueba EN: la semana de prueba es 5 posts + 1 reel');
-t(PR.includes('Tu semana · 5 posteos + 1 reel'), 'prueba ES: la semana dice 5 posteos + 1 reel');
-t(EPR.includes('Your week · 5 posts + 1 reel'), 'prueba EN: la semana dice 5 posts + 1 reel');
-t(PR.includes('tus 5 posteos + 1 reel ya están creados'), 'prueba ES: el chat dice 5 posteos + 1 reel');
-t(EPR.includes('your 5 posts + 1 reel are already created'), 'prueba EN: el chat dice 5 posts + 1 reel');
+t(PR.includes('3 posteos + 1 reel de muestra'), 'prueba ES: el paso dice 3 posteos + 1 reel de muestra');
+t(EPR.includes('3 posts + 1 sample reel'), 'prueba EN: el paso dice 3 posts + 1 sample reel');
+t(PR.includes('Tus 3 posteos + 1 reel, ya creados'), 'prueba ES: la semana de prueba es 3 posteos + 1 reel');
+t(EPR.includes('Your 3 posts + 1 reel, already created'), 'prueba EN: la semana de prueba es 3 posts + 1 reel');
+t(PR.includes('Tu semana · 3 posteos + 1 reel'), 'prueba ES: la semana dice 3 posteos + 1 reel');
+t(EPR.includes('Your week · 3 posts + 1 reel'), 'prueba EN: la semana dice 3 posts + 1 reel');
+t(PR.includes('tus 3 posteos + 1 reel ya están creados'), 'prueba ES: el chat dice 3 posteos + 1 reel');
+t(EPR.includes('your 3 posts + 1 reel are already created'), 'prueba EN: el chat dice 3 posts + 1 reel');
 // El beneficio es la promesa del PLAN (tras la prueba): 7 + 2, martes y jueves:
 t(PR.includes('7 posteos y 2 reels por semana, martes y jueves'), 'prueba ES: el beneficio promete 7 posteos y 2 reels por semana, martes y jueves');
 t(EPR.includes('7 posts and 2 reels every week, on Tuesdays and Thursdays'), 'prueba EN: el beneficio promete 7 posts and 2 reels every week, on Tuesdays and Thursdays');
@@ -167,9 +169,9 @@ t(APP.includes("/api/reels/armar"), 'app.js: el builder de reels a pedido sigue'
 t(APP.includes('cap-kick">Historias'), 'ES landing: la sección Historias sigue (capacidad; su «todos los días» es seguimiento aparte)');
 t(EN.includes('cap-kick">Stories'), 'EN landing: la sección Stories sigue');
 
-// ---------- 9. Bumps M78 / BUILD (se mantienen: mismo lote, v732) ----------
-t(SRV.includes("const BUILD_ID = '20261105-v732'"), 'BUILD v732 (se mantiene)');
-t(IDX.includes('/app.js?v=491'), 'index ES: app.js?v=491 (se mantiene)');
+// ---------- 9. Bumps M78 / BUILD (re-pin v736: el BUILD y el ?v= avanzaron) ----------
+t(SRV.includes("const BUILD_ID = '20261105-v736'"), 'BUILD v736');
+t(IDX.includes('/app.js?v=493'), 'index ES: app.js?v=493');
 t(!EN.includes('/app.js?v='), 'index EN: sin app.js?v= (la EN no carga app.js)');
 t(APP.includes("const CHUNK_V = '20261105-v732'"), 'CHUNK_V 20261105-v732 (se mantiene)');
 

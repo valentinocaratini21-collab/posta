@@ -1143,7 +1143,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
     <p class="lede">Tres pasos y tu Instagram anda solo.</p>
     <div class="steps3">
       <div class="step3"><div class="n">1</div><div><b>Pasame tu @ o tu web</b><p>10 segundos: tu Instagram o el link de tu sitio, nada más.</p></div></div>
-      <div class="step3"><div class="n">2</div><div><b>Armo tu semana</b><p>5 posteos + 1 reel de muestra: diseño, caption y hashtags con tu onda y tus colores.</p></div></div>
+      <div class="step3"><div class="n">2</div><div><b>Armo tu semana</b><p>3 posteos + 1 reel de muestra: diseño, caption y hashtags con tu onda y tus colores.</p></div></div>
       <div class="step3"><div class="n">3</div><div><b>Vos aprobás, yo publico</b><p>Nada sale sin tu OK.</p></div></div>
     </div>
   </div>
@@ -1385,14 +1385,14 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 
     <div class="sec">
       <h3>Así se ve en tu feed 📱</h3>
-      <p class="lede">Tus 5 posteos + 1 reel, ya creados: diseño + caption + hashtags. Tocá cada uno para verlo completo.</p>
+      <p class="lede">Tus 3 posteos + 1 reel, ya creados: diseño + caption + hashtags. Tocá cada uno para verlo completo.</p>
       <p class="lede" id="weekStartLine" style="display:none;font-weight:700;color:#0A1E33"></p>
       <p class="lede" id="provLine" style="display:none"></p>
       <div class="phone">
         <div class="phone-notch"></div>
         <div class="phone-head">
           <img id="phPic" src="ai-avatar.png" alt="Foto de perfil" onerror="this.onerror=null;this.src='ai-avatar.png'">
-          <div><b id="phIg">@tuinstagram</b><small>Tu semana · 5 posteos + 1 reel</small></div>
+          <div><b id="phIg">@tuinstagram</b><small>Tu semana · 3 posteos + 1 reel</small></div>
         </div>
         <div class="phone-feed" id="rWeek"></div>
       </div>
@@ -3147,7 +3147,7 @@ function renderResults() {
   } else rt.style.display = 'none';
   const firstDay = t.week[0], lastDay = t.week[t.week.length - 1];
   const colBadge = t.color_source === 'instagram' ? ' · 🎨 <b>con los colores de tu perfil</b>' : '';
-  $('#rSub').innerHTML = (t.ig ? `<a href="https://www.instagram.com/${encodeURIComponent(t.ig)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700;text-decoration:none">@${esc(t.ig)}</a> · ` : '') + 'Semana del ' + esc(firstDay.date) + ' al ' + esc(lastDay.date) + ' · 5 posteos + 1 reel: diseño, textos y hashtags, listos para publicar' + colBadge;
+  $('#rSub').innerHTML = (t.ig ? `<a href="https://www.instagram.com/${encodeURIComponent(t.ig)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700;text-decoration:none">@${esc(t.ig)}</a> · ` : '') + 'Semana del ' + esc(firstDay.date) + ' al ' + esc(lastDay.date) + ' · 3 posteos + 1 reel: diseño, textos y hashtags, listos para publicar' + colBadge;
   document.title = 'Tu semana está lista 🎉 | Posta';
 
   // Semana (extraída a función para re-renderizar cuando el chat edita textos)
@@ -3470,7 +3470,7 @@ function initTrialChat() {
   }
   if (chatInit || !TRIAL) return;
   chatInit = true;
-  chatAddMsg('hola! soy tu editor 👋 tus 5 posteos + 1 reel ya están creados. si algo no te convence, decime qué cambiar — por ejemplo: "el del miércoles, más divertido".', 'bot');
+  chatAddMsg('hola! soy tu editor 👋 tus 3 posteos + 1 reel ya están creados. si algo no te convence, decime qué cambiar — por ejemplo: "el del miércoles, más divertido".', 'bot');
   const send = () => {
     const inp = $('#chatIn');
     const v = inp.value.trim();
@@ -3538,7 +3538,7 @@ function initTrialChat() {
     b.disabled = true; b.textContent = 'Aplicando colores exactos…';
     try {
       await trialRedesign({ colors: { accent, btn } });
-      toast('Colores actualizados en tus 5 posteos ✓');
+      toast('Colores actualizados en tus 3 posteos ✓');
       $('#colorPanel').classList.remove('open');
     } catch (e) { toast(e.message || 'No se pudo aplicar'); }
     b.disabled = false; b.textContent = 'Aplicar colores';
@@ -4175,7 +4175,7 @@ function openRegTrial() {
   // fricción cero, sin volver a escribirlo.
   try { if (window.OC_EMAIL && document.getElementById('rg_email') && !document.getElementById('rg_email').value) document.getElementById('rg_email').value = window.OC_EMAIL; } catch (e) {}
   trk('prueba_register');
-  $('#rgSub').innerHTML = `Tus 5 posteos quedan guardados en tu cuenta, listos para revisar.`;
+  $('#rgSub').innerHTML = `Tus 3 posteos quedan guardados en tu cuenta, listos para revisar.`;
   $('#rgErr').style.display = 'none';
   $('#ovReg').classList.add('open');
   pzTrialSocialMount();

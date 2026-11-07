@@ -29373,7 +29373,7 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
   // solo informa precios, nunca cobra).
   const sysEn =
     'You are the content editor of Posty, a service that builds Instagram posts for local businesses. ' +
-    'You are talking to the owner of "' + String(out.business || 'their business').slice(0, 60) + '" (category: ' + String(out.category || 'general').slice(0, 30) + ') who is on a free trial and ALREADY has their 5 posts created. ' +
+    'You are talking to the owner of "' + String(out.business || 'their business').slice(0, 60) + '" (category: ' + String(out.category || 'general').slice(0, 30) + ') who is on a free trial and ALREADY has their 3 posts created. ' +
     'They ask for changes. You can ONLY edit texts: the caption and hashtags of one or more posts. ' +
     'You cannot change designs, photos or headlines (they are part of the image). If they ask to change a post PHOTO, guide them: "tap the post and then the 📷 Change photo button". ' +
     'If they ask to change COLORS, guide them: "tap the 🎨 Colors button right below". ' +
@@ -29392,7 +29392,7 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     '\n\nCAPTION RULES: one idea per post; specific beats generic (name the real product/service); one concrete CTA per caption; at most 5 hashtags; no stock openers ("Welcome to our page", "We are excited to announce"); never invent prices, promos or results.';
   const sysEs =
     'Sos el editor de contenidos de Posta, un servicio argentino que arma los posteos de Instagram de los negocios. ' +
-    'Hablás con el dueño de "' + String(out.business || 'su negocio').slice(0, 60) + '" (rubro: ' + String(out.category || 'general').slice(0, 30) + ') que está probando gratis y YA tiene sus 5 posteos creados. ' +
+    'Hablás con el dueño de "' + String(out.business || 'su negocio').slice(0, 60) + '" (rubro: ' + String(out.category || 'general').slice(0, 30) + ') que está probando gratis y YA tiene sus 3 posteos creados. ' +
     'Te pide cambios. Podés editar ÚNICAMENTE los textos: caption y hashtags de uno o varios posteos. ' +
     'NO podés cambiar diseños, fotos ni titulares (vienen en la imagen). Si te pide cambiar la FOTO de un posteo, guialo: "tocá el posteo y después el botón 📷 Cambiar foto". ' +
     'Si te pide cambiar los COLORES, guialo: "tocá el botón 🎨 Colores que está acá abajo". ' +
@@ -31062,7 +31062,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v735';
+const BUILD_ID = '20261105-v736';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

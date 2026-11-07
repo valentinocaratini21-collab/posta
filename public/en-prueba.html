@@ -1136,7 +1136,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
     <p class="lede">Three steps and your Instagram runs itself.</p>
     <div class="steps3">
       <div class="step3"><div class="n">1</div><div><b>Give me your @ or your website</b><p>10 seconds: your Instagram or your site's link, nothing else.</p></div></div>
-      <div class="step3"><div class="n">2</div><div><b>I build your week</b><p>5 posts + 1 sample reel: design, caption and hashtags with your vibe and your colors.</p></div></div>
+      <div class="step3"><div class="n">2</div><div><b>I build your week</b><p>3 posts + 1 sample reel: design, caption and hashtags with your vibe and your colors.</p></div></div>
       <div class="step3"><div class="n">3</div><div><b>You approve, I post</b><p>Nothing goes out without your OK.</p></div></div>
     </div>
   </div>
@@ -1378,14 +1378,14 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 
     <div class="sec">
       <h3>This is how it looks in your feed 📱</h3>
-      <p class="lede">Your 5 posts + 1 reel, already created: design + caption + hashtags. Tap each one to see it in full.</p>
+      <p class="lede">Your 3 posts + 1 reel, already created: design + caption + hashtags. Tap each one to see it in full.</p>
       <p class="lede" id="weekStartLine" style="display:none;font-weight:700;color:#0A1E33"></p>
       <p class="lede" id="provLine" style="display:none"></p>
       <div class="phone">
         <div class="phone-notch"></div>
         <div class="phone-head">
           <img id="phPic" src="ai-avatar.png" alt="Profile photo" onerror="this.onerror=null;this.src='ai-avatar.png'">
-          <div><b id="phIg">@yourinstagram</b><small>Your week · 5 posts + 1 reel</small></div>
+          <div><b id="phIg">@yourinstagram</b><small>Your week · 3 posts + 1 reel</small></div>
         </div>
         <div class="phone-feed" id="rWeek"></div>
       </div>
@@ -3133,7 +3133,7 @@ function renderResults() {
   } else rt.style.display = 'none';
   const firstDay = t.week[0], lastDay = t.week[t.week.length - 1];
   const colBadge = t.color_source === 'instagram' ? ' · 🎨 <b>with the colors of your profile</b>' : '';
-  $('#rSub').innerHTML = (t.ig ? `<a href="https://www.instagram.com/${encodeURIComponent(t.ig)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700;text-decoration:none">@${esc(t.ig)}</a> · ` : '') + 'Week of ' + esc(firstDay.date) + ' to ' + esc(lastDay.date) + ' · 5 posts + 1 reel: design, copy and hashtags, ready to post' + colBadge;
+  $('#rSub').innerHTML = (t.ig ? `<a href="https://www.instagram.com/${encodeURIComponent(t.ig)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700;text-decoration:none">@${esc(t.ig)}</a> · ` : '') + 'Week of ' + esc(firstDay.date) + ' to ' + esc(lastDay.date) + ' · 3 posts + 1 reel: design, copy and hashtags, ready to post' + colBadge;
   document.title = 'Your week is ready 🎉 | Posty';
 
   // Semana (extraída a función para re-renderizar cuando el chat edita textos)
@@ -3457,7 +3457,7 @@ function initTrialChat() {
   }
   if (chatInit || !TRIAL) return;
   chatInit = true;
-  chatAddMsg('hi! i am your editor 👋 your 5 posts + 1 reel are already created. if something does not convince you, tell me what to change — for example: "the Wednesday one, but funnier".', 'bot');
+  chatAddMsg('hi! i am your editor 👋 your 3 posts + 1 reel are already created. if something does not convince you, tell me what to change — for example: "the Wednesday one, but funnier".', 'bot');
   const send = () => {
     const inp = $('#chatIn');
     const v = inp.value.trim();
@@ -3525,7 +3525,7 @@ function initTrialChat() {
     b.disabled = true; b.textContent = 'Applying exact colors…';
     try {
       await trialRedesign({ colors: { accent, btn } });
-      toast('Colors updated on your 5 posts ✓');
+      toast('Colors updated on your 3 posts ✓');
       $('#colorPanel').classList.remove('open');
     } catch (e) { toast(e.message || 'It could not be applied'); }
     b.disabled = false; b.textContent = 'Apply colors';
@@ -4160,7 +4160,7 @@ function openRegTrial() {
   // fricción cero, sin volver a escribirlo.
   try { if (window.OC_EMAIL && document.getElementById('rg_email') && !document.getElementById('rg_email').value) document.getElementById('rg_email').value = window.OC_EMAIL; } catch (e) {}
   trk('prueba_register');
-  $('#rgSub').innerHTML = `Your 5 posts stay saved in your account, ready to review.`;
+  $('#rgSub').innerHTML = `Your 3 posts stay saved in your account, ready to review.`;
   $('#rgErr').style.display = 'none';
   $('#ovReg').classList.add('open');
   pzTrialSocialMount();
