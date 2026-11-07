@@ -127,6 +127,7 @@ function conserjeDetalleHTML(it, d) {
     + (it.necesita_atencion && it.motivo_atencion ? '<div class="card" style="padding:14px;margin-top:12px;background:#FFF6D6;border:1px solid #FEC14D"><div style="font-weight:800;font-size:14px">⚠ Qué pasó</div><div style="font-size:13.5px;line-height:1.55;margin-top:4px">' + esc(it.motivo_atencion) + '</div><div style="font-size:12.5px;color:var(--mut);margin-top:6px">No sale hasta que lo revises.</div></div>' : '')
     + (dec ? '<div class="card" style="padding:14px;margin-top:12px"><div style="font-size:13.5px">Ya decidiste: <b>' + esc(dec.etiqueta || dec.decision) + '</b>' + (dec.nota ? ' — ' + esc(dec.nota) : '') + '</div><div style="font-size:12.5px;color:var(--mut)">Podés cambiarlo: elegí de nuevo abajo.</div></div>' : '')
     + botones
+    + '<div style="margin-top:12px"><button class="btn btn-secondary" data-cj="chat" data-user="' + esc(String(it.user_id)) + '">💬 Ver el chat con Posty</button><div id="cjChat" style="margin-top:12px"></div></div>'
     + '<div style="margin-top:12px">' + ig + '</div>'
     + conserjeFichaHTML(f)
     + sig;
@@ -249,6 +250,28 @@ async function bindConserje() {
         if (msg) msg.textContent = 'Guardada ✓';
         await conserjeCargar();
       } catch (e) { if (msg) msg.textContent = 'No se pudo guardar. Probá de nuevo.'; }
+      return;
+    }
+    if (acc === 'chat') {
+      // (CHAT-FOTO) El conserje lee el hilo del cliente: el pedido de cambio
+      // de una foto vive en el chat, y sin leerlo el cambio no se puede hacer.
+      const box = $('#cjChat');
+      if (box) box.innerHTML = '<div class="d">⏳ Cargando el chat…</div>';
+      try {
+        const j = await adminApi('support/' + Number(uid) + '/journey', 'GET');
+        if (!j || !j.ok) throw new Error('sin journey');
+        const msgs = (j.chat || []).map((m) => {
+          let t = String(m.text || '');
+          const fm = t.match(/\[foto:([^\]]+)\]/);
+          const img = fm ? '<img src="' + esc((fm[1] || '').trim()) + '" alt="" style="width:100%;border-radius:12px;display:block;margin-top:6px" onerror="this.style.display=\'none\'">' : '';
+          t = t.replace(/\[foto:[^\]]+\]/g, '').trim();
+          return '<div style="padding:8px 10px;border-radius:12px;margin-bottom:6px;background:' + (m.role === 'user' ? '#E8F4FB' : '#fff') + ';border:1px solid var(--line);font-size:13.5px;line-height:1.5"><b style="font-size:12px;color:var(--mut)">' + (m.role === 'user' ? 'Cliente' : 'Posty') + '</b><div>' + esc(t) + '</div>' + img + '</div>';
+        }).join('');
+        const fotos = (j.fotos_recientes || []).map((f) => '<img src="' + esc(f.file_path || '') + '" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:10px" onerror="this.style.display=\'none\'">').join('');
+        if (box) box.innerHTML = '<div style="font-weight:800;font-size:14px;margin-bottom:8px">Chat con Posty (últimos ' + (j.chat || []).length + ' mensajes)</div>'
+          + (fotos ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">' + fotos + '</div><div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">Fotos recientes del cliente, las que el chat menciona.</div>' : '')
+          + (msgs || '<div class="d">Sin mensajes todavía.</div>');
+      } catch (e) { if (box) box.innerHTML = '<div class="d">No se pudo cargar el chat. Probá de nuevo.</div>'; }
       return;
     }
     if (acc === 'decidir' || acc === 'armar') {

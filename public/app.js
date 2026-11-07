@@ -2422,7 +2422,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v754'; // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
+const CHUNK_V = '20261105-v757'; // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -9513,6 +9513,8 @@ let CHAT_LOADED = false; // historial ya cargado del servidor en esta sesión
 // El servidor guarda el mensaje con el marcador [logo-candidate:/media/xxx.jpg];
 // el frontend lo renderiza como banner con la foto + 2 botones táctiles (≥44px).
 const LC_MARKER_RE = /\[logo-candidate(?::([^\]]+))?\]/;
+// (CHAT-FOTO) Marcador de foto dentro de un mensaje: [foto:/media/x.jpg]
+const FOTO_MARKER_RE = /\[foto:([^\]]+)\]/;
 function chatStripLcMarker(t) { return String(t || '').replace(/\[logo-candidate(?::[^\]]+)?\]/g, '').trim(); }
 
 // ---- Nudge "¿publicamos tu primero?": banner con botón de 1 tap ----
@@ -9601,6 +9603,16 @@ function chatMsgHtml(role, text) {
       + `</div>`;
   }
   const m = String(text || '').match(LC_MARKER_RE);
+  // (CHAT-FOTO) Foto dentro de la burbuja (p. ej. el posteo con la imagen
+  // cambiada): el marcador se quita del texto y la foto se muestra.
+  if (!m && role !== 'user' && FOTO_MARKER_RE.test(String(text || ''))) {
+    const fm = String(text || '').match(FOTO_MARKER_RE);
+    const imgPath = (fm[1] || '').trim();
+    const clean = String(text || '').replace(FOTO_MARKER_RE, '').trim();
+    return `<div class="chat-msg ai"><div>${linkifyEsc(clean)}</div>`
+      + (imgPath ? `<img src="${esc(imgPath)}" alt="" style="width:100%;border-radius:12px;display:block;margin-top:8px" onerror="this.style.display='none'">` : '')
+      + `</div>`;
+  }
   if (!m || role === 'user') return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}">${linkifyEsc(text)}</div>`;
   const imgPath = (m[1] || '').trim();
   const img = imgPath
@@ -10802,9 +10814,11 @@ async function pzSubirCompletar() {
   const displayText = pzSubirResumen(f);
   let r = null;
   try {
+    // (CHAT-FOTO) El servidor genera caption + imágenes: tarda más de 30 s.
+    // Timeout largo y el error real se guarda y se muestra, nunca se traga.
     r = await api.post('/api/subir-foto/programar', { assetPath: f.photo.file_path, media: f.media,
-      answers: { when: f.ans.when, intent: f.ans.intent, text: f.ans.text || 'sin-texto', change: f.ans.change || 'ninguno', promo: f.ans.promo || 'sin-promo' }, displayText });
-  } catch (e) { r = null; }
+      answers: { when: f.ans.when, intent: f.ans.intent, text: f.ans.text || 'sin-texto', change: f.ans.change || 'ninguno', promo: f.ans.promo || 'sin-promo' }, displayText }, { timeout: 300000 });
+  } catch (e) { console.error('[pzSubirCompletar]', e && (e.message || e)); r = { ok: false, _error: e }; }
   const photo = f.photo;
   const textoGuardado = f.textoGuardado;
   pzSubirCerrar(false);
@@ -10820,7 +10834,11 @@ async function pzSubirCompletar() {
     renderChatPhotos(); chatUpdateSendBtn();
     try { render(); } catch (e) {}
   } else {
-    const msg = (r && r.message) ? r.message : (en ? 'I could not schedule it, try again 🙏' : 'no pude programarlo, probá de nuevo 🙏');
+    // (CHAT-FOTO) Si el servidor respondió, su mensaje dice el motivo real
+    // (p. ej. el cambio pedido no se pudo hacer: nada quedó programado).
+    // Si no hubo respuesta (timeout), se dice que nada quedó programado.
+    const errTxt = r && r._error ? String(((r._error && r._error.name) || '') + ' ' + ((r._error && r._error.message) || '')) : '';
+    const msg = (r && r.message) ? r.message : (/abort|timeout/i.test(errTxt) ? (en ? 'It took too long and nothing was scheduled, try again 🙏' : 'tardó demasiado y no se programó nada, probá de nuevo 🙏') : (en ? 'I could not schedule it, try again 🙏' : 'no pude programarlo, probá de nuevo 🙏'));
     if (box) { box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(msg)}</div>`); chatScroll(); }
     const inp = $('#chatInput');
     if (inp && textoGuardado) inp.value = textoGuardado;
@@ -27520,10 +27538,46 @@ async function pzSftPedirCambio() {
   try {
     const r = await api.post("/api/album/" + it.assetId + "/propuesta", { vision: it.vision || "", feedback: fb });
     if (r && r.gated) { PZ_SFT.msg = r.reason === "sin-vision" ? pzSftT("Esta foto no me dice nada claro todavía, así que no armo un texto sobre ella. Probá con otra foto o contame qué muestra.", "This photo doesn't tell me anything clear yet, so I won't write text about it. Try another photo or tell me what it shows.") : pzSftT("Esta foto no muestra tu producto, tu local ni tu equipo, así que no armo un texto promocional sobre ella. Podés guardarla como material o escribir vos el texto.", "This photo doesn't show your product, place or team, so I won't write a promotional text about it. You can keep it as material or write the text yourself."); }
-    else if (r && r.ok) { PZ_SFT.variantes.push({ headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "" }); PZ_SFT.varSel = PZ_SFT.variantes.length - 1; if (inp) inp.value = ""; }
+    else if (r && r.ok) { PZ_SFT.variantes.push({ headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "" }); PZ_SFT.varSel = PZ_SFT.variantes.length - 1; if (inp) inp.value = "";
+      // (CHAT-FOTO) El pedido de cambio y la propuesta nueva quedan en el
+      // hilo del chat: el cliente los ve al volver y el conserje los lee.
+      try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: 'Quiero cambiar: ' + fb }] }).catch(() => {}); } catch (e) {}
+      try { chatSay(pzSftT("Te propongo:", "My proposal:") + "\n" + (r.caption || "") + (r.hashtags ? "\n" + r.hashtags : "")); } catch (e) {} }
     else PZ_SFT.msg = (r && r.error) || pzSftT("No pude armar la propuesta nueva.", "I could not build the new proposal.");
   } catch (e) { PZ_SFT.msg = pzSftT("No pude armar la propuesta nueva.", "I could not build the new proposal."); }
   pzSftRender();
+}
+// (CHAT-FOTO) Cambiar la IMAGEN con el pedido escrito en «¿qué querés
+// distinto?…»: la foto cambiada pasa a ser la foto del posteo y se muestra
+// en el chat; si no se pudo cambiar, no se cambia nada y se dice qué falta.
+// Nada se programa acá: programar sigue pidiendo la confirmación del cliente.
+async function pzSftCambiarImagen() {
+  if (!PZ_SFT || !PZ_SFT.itemPropuesta) return;
+  const inp = document.getElementById("pzSftCambio");
+  const fb = inp ? inp.value.trim() : "";
+  if (!fb) return;
+  const it = PZ_SFT.itemPropuesta;
+  PZ_SFT.msg = pzSftT("Cambiando la foto…", "Changing the photo…");
+  pzSftRender();
+  try {
+    const r = await api.post("/api/album/" + it.assetId + "/cambiar-imagen", { cambio: fb }, { timeout: 300000 });
+    if (r && r.ok && r.url) {
+      it.url = r.url; it.assetId = r.assetId;
+      if (inp) inp.value = "";
+      PZ_SFT.msg = "";
+      try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: 'Cambiame la foto: ' + fb }] }).catch(() => {}); } catch (e) {}
+      const v = PZ_SFT.variantes[PZ_SFT.varSel] || {};
+      try { chatSay(pzSftT("Te muestro el posteo con la foto cambiada: ", "Here is the post with the changed photo: ") + "[foto:" + r.url + "]\n" + (v.caption || "")); } catch (e) {}
+      pzSftRender();
+    } else {
+      PZ_SFT.msg = (r && r.message) || pzSftT("No pude cambiar la foto.", "I could not change the photo.");
+      pzSftRender();
+    }
+  } catch (e) {
+    console.error('[pzSftCambiarImagen]', e && (e.message || e));
+    PZ_SFT.msg = pzSftT("No pude cambiar la foto, probá de nuevo en un rato 🙏", "I could not change the photo, try again in a bit 🙏");
+    pzSftRender();
+  }
 }
 function pzSftHTMLPropuesta() {
   const st = PZ_SFT;
@@ -27547,6 +27601,9 @@ function pzSftHTMLPropuesta() {
     + (v ? "<div style=\"margin:4px 16px 0;\">" + variantesHTML + "</div>" : "<div style=\"margin:14px 16px 0;font-size:14px;color:#47617A;\">⏳ " + (en ? "Posty is writing your proposal…" : "Posty está escribiendo tu propuesta…") + "</div>")
     + "<div style=\"display:flex;gap:8px;margin:12px 16px 0;flex-wrap:wrap;\"><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftOtraVersion()\">" + (en ? "See another version" : "Ver otra versión") + "</button><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftVerFeedToggle()\">" + (en ? "See it in the feed" : "Verlo en el feed") + "</button><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftPropioToggle()\">" + (en ? "I write the text" : "Yo escribo el texto") + "</button></div>"
     + "<div style=\"display:flex;gap:8px;margin:12px 16px 0;\"><input id=\"pzSftCambio\" placeholder=\"" + (en ? "what do you want different?…" : "¿qué querés distinto?…") + "\" style=\"flex:1;min-width:0;font-size:17px;border:none;border-radius:999px;padding:12px 16px;box-shadow:0 8px 24px rgba(10,30,51,.12);color:#0A1E33;\"><button type=\"button\" class=\"pz-sft-soft\" onclick=\"pzSftPedirCambio()\">" + (en ? "Ask" : "Pedir") + "</button></div>"
+    // (CHAT-FOTO) «Pedir» cambia el TEXTO; este botón cambia la FOTO con
+    // el mismo pedido escrito arriba.
+    + "<div style=\"margin:8px 16px 0;\"><button type=\"button\" class=\"pz-sft-soft\" style=\"width:100%\" onclick=\"pzSftCambiarImagen()\">" + (en ? "🖼 Change the photo" : "🖼 Cambiar la imagen") + "</button></div>"
     + propioHTML + videoHTML + caraHTML + gateHTML + feedHTML
     + "<div style=\"margin:16px;\"><button type=\"button\" onclick=\"pzSftAprobar()\" style=\"width:100%;border:none;border-radius:999px;padding:15px;font-size:16px;font-weight:800;background:#2793C8;color:#fff;cursor:pointer;box-shadow:0 10px 26px rgba(39,147,200,.4);\">" + (en ? "Approve and build the draft" : "Aprobar y armar el borrador") + "</button></div>"
     + (st.msg ? "<div style=\"margin:0 16px;font-size:13.5px;color:#7A1F1F;background:rgba(255,255,255,.7);border-radius:12px;padding:10px 12px;\">" + esc(st.msg) + "</div>" : "")
@@ -28039,11 +28096,12 @@ async function pzSftChatProponer() {
     const rec = pzSftRecomendar(it, "preguntar");
     const mejor = pzSftChatMejorUso(rec);
     const tagTxt = pzSftTagTexto(it.tag);
-    const visionNote = (r && typeof r.visionNote === 'string') ? r.visionNote.trim() : '';
-    const ve = it.vision ? esc(it.vision) : (visionNote ? (en ? 'veo ' : 'veo ') + esc(visionNote) : (tagTxt ? (en ? "Posty sees: " + tagTxt : "Posty ve: " + tagTxt) : (en ? "Posty has not classified this photo yet." : "Posty todavía no clasificó esta foto.")));
+    // (CHAT-FOTO) La burbuja muestra SOLO la propuesta: nunca la nota de
+    // visión («✦ veo ...» era contexto interno y salía con doble escape)
+    // y nunca el titular separado — el caption ya abre con el gancho, así
+    // que el titular salía duplicado y cortado.
     pend.propuesta = { assetId: it.assetId, headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "", choice: mejor.choice, hard: r.hard || (it.issues.indexOf("cortada") >= 0 ? ["cortada"] : []) };
-    const texto = "✦ " + ve + "\n" + (en ? "My proposal: " : "Te propongo: ") + pzSftEtiqueta(mejor.choice) + " — " + mejor.why
-      + (pend.propuesta.headline ? "\n" + pend.propuesta.headline : "")
+    const texto = (en ? "My proposal: " : "Te propongo: ") + pzSftEtiqueta(mejor.choice) + " — " + mejor.why
       + (pend.propuesta.caption ? "\n" + pend.propuesta.caption : "")
       + (pend.propuesta.hashtags ? "\n" + pend.propuesta.hashtags : "")
       + "\n" + (en ? "Nothing goes to the feed until you approve." : "Nada va al feed hasta que apruebes.");

@@ -612,6 +612,12 @@ function buildJourney(db, userId, deps) {
   const chat = safe(() => db.prepare(
     `SELECT id, role, text, created_at FROM chat_messages WHERE user_id = ? ORDER BY id DESC LIMIT 30`).all(uid), []).reverse();
 
+  // (CHAT-FOTO) Las fotos recientes del cliente, junto al hilo: el chat
+  // habla de fotos («te mando una foto», «cambiame esto») y el conserje
+  // tiene que VER de qué foto se habla, no solo leer el texto.
+  const fotos = safe(() => db.prepare(
+    `SELECT id, file_path, thumb_path, album_tag, album_vision, created_at FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY id DESC LIMIT 10`).all(uid), []);
+
   const failedEvents = safe(() => db.prepare(
     `SELECT id, name, created_at, props FROM events WHERE user_id = ? AND name = 'post_failed'
      AND datetime(created_at) >= datetime('now', '-30 days') ORDER BY id DESC LIMIT 10`).all(uid), []);
@@ -733,6 +739,7 @@ function buildJourney(db, userId, deps) {
     casos_abiertos: openCases.map((c) => ({ ...c, numero: c.id })),
     stages,
     chat: chat.map((m) => ({ id: m.id, role: m.role, text: m.text, created_at: m.created_at })),
+    fotos_recientes: fotos.map((f) => ({ id: f.id, file_path: f.file_path, thumb_path: f.thumb_path || '', album_tag: f.album_tag || '', album_vision: f.album_vision || '', created_at: f.created_at })),
   };
 }
 

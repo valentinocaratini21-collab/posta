@@ -11120,7 +11120,10 @@ async function albumPropuesta(uid, assetId, feedback, vision) {
       }
       if (!fotoGate.ok) { console.log(`[album-propuesta] usuario ${uid}: foto ${assetId} NO genera propuesta — gate foto↔texto: ${fotoGate.reason}`); return { gated: true, reason: fotoGate.reason }; }
     }
-    return { headline, caption, hashtags, tag: asset.album_tag || '', issues, hard, visionNote: fotoVis.note || '' };
+    // (CHAT-FOTO) La nota de visión es contexto interno del gate y del
+    // generador: NUNCA viaja al cliente. El cliente la renderizaba cruda
+    // en el chat («✦ veo ...» con entidades sin decodificar).
+    return { headline, caption, hashtags, tag: asset.album_tag || '', issues, hard };
   } catch (e) {
     if (e && e.name === 'AiCapExceeded') return { capped: true, error: e.message };
     console.error('[album-propuesta]', e.message);
@@ -11585,6 +11588,36 @@ app.post('/api/album/:id/propuesta', requireAuth, express.json(), async (req, re
     try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
     res.json({ ok: true, ...out });
   } catch (e) { console.error('[album-propuesta-ep]', e.message); res.status(500).json({ ok: false, error: 'No pude armar la propuesta' }); }
+});
+app.post('/api/album/:id/cambiar-imagen', requireAuth, express.json(), async (req, res) => {
+  // (CHAT-FOTO) Cambiar la IMAGEN desde el chat / la pantalla de propuesta:
+  // el cliente pide un cambio («sacá el logo», «más cerca el producto») y
+  // Posty edita la foto real con ese pedido. La foto cambiada se guarda
+  // como asset nuevo y pasa a ser la foto del posteo; si el cambio no se
+  // puede hacer, NO se devuelve ninguna imagen y NO se programa nada.
+  try {
+    const uid = req.session.userId;
+    const asset = sftAssetPropio(uid, req.params.id);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    if (asset.kind === 'video') return res.status(400).json({ ok: false, error: 'cambio_fallo', message: 'Ese cambio es solo para fotos, no para video 🙏' });
+    const cambio = String((req.body && req.body.cambio) || '').trim().slice(0, 300);
+    if (!cambio) return res.status(400).json({ ok: false, error: 'cambio_vacio', message: 'Decime qué querés cambiar de la foto 🙏' });
+    try { costs.assertAiOk(uid); }
+    catch (e) { if (e && e.name === 'AiCapExceeded') return res.status(402).json({ ok: false, error: 'cambio_fallo', message: e.message }); throw e; }
+    if (!costs.checkRate(uid, 'regen', aiLimitsFor(uid).regensPerDay).ok) return res.status(429).json({ ok: false, error: 'cambio_fallo', message: 'Ya hiciste muchos cambios hoy, probá mañana 🙏' });
+    const prompt = `Edit this photo exactly as its owner asked: "${cambio}". Keep the same product, subjects, framing and colors unless the request explicitly asks otherwise. The result must remain recognizably the SAME photo. Do not add text, logos, watermarks or captions.`;
+    let gen = null;
+    try { gen = await enhancePhotoGenerate(uid, { image_path: asset.file_path }, prompt); }
+    catch (e) {
+      console.error('[album-cambiar-imagen]', e.message);
+      const why = e.message === 'NO_PHOTO' ? 'no encontré la foto original' : e.message === 'NO_KEY' ? 'no tengo IA disponible ahora' : 'no pude editarla';
+      return res.status(500).json({ ok: false, error: 'cambio_fallo', message: `No pude cambiar la foto (${why}). Probá con otras palabras o subí otra foto 🙏` });
+    }
+    if (!gen || !gen.proposalPath) return res.status(500).json({ ok: false, error: 'cambio_fallo', message: 'No pude cambiar la foto. Probá con otras palabras o subí otra foto 🙏' });
+    const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind, thumb_path) VALUES (?,?,?,?)').run(uid, String(gen.proposalPath), 'photo', '');
+    console.log(`[album-cambiar-imagen] usuario ${uid}: foto ${asset.id} → asset ${ins.lastInsertRowid} («${cambio.slice(0, 60)}»)`);
+    res.json({ ok: true, assetId: ins.lastInsertRowid, url: String(gen.proposalPath) });
+  } catch (e) { console.error('[album-cambiar-imagen]', e.message); res.status(500).json({ ok: false, error: 'cambio_fallo', message: 'No pude cambiar la foto, probá de nuevo en un rato 🙏' }); }
 });
 app.post('/api/album/:id/crear', requireAuth, express.json(), async (req, res) => {
   try {
@@ -21984,10 +22017,14 @@ app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.js
       hashtags = out.hashtags || '';
     } catch (e) { console.error('[subir-foto] caption:', e.message); }
     if (!caption) return fail('caption_fallo', en ? 'I could not write the text for this photo, try again in a bit 🙏' : 'no pude armar el texto para esta foto, probá de nuevo en un rato 🙏');
-    // 6. Programado directo: elegir las opciones YA es aprobarlo.
+    // 6. Borrador primero: elegir las opciones YA es aprobarlo, pero el
+    //    posteo solo pasa a 'scheduled' al final, cuando todo lo pedido
+    //    se aplicó. Si algo falla después del INSERT, queda borrador y
+    //    NADA se publica (lote chat-con-foto: el cambio pedido que falla
+    //    nunca deja un posteo programado).
     const needsReview = trainingWheelsActive(uid) ? 1 : 0;
     const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review, approval, approved_at, intent, source_topic, foto_asset_id) VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),?,?,?)`)
-      .run(uid, assetPath, caption, hashtags, iso, 'scheduled', mediaType, needsReview, 'approved', intent, 'subir-foto-preguntas', own.id);
+      .run(uid, assetPath, caption, hashtags, iso, 'draft', mediaType, needsReview, 'approved', intent, 'subir-foto-preguntas', own.id);
     const postId = r.lastInsertRowid;
     let post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
     const applied = [], notes = [];
@@ -22005,7 +22042,8 @@ app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.js
       } catch (e) { console.error('[subir-foto] mejora:', e.message); }
       // b. Cambio elegido: otra versión (restyle) o recorte distinto (pad
       //    4:5, foto entera con fondo difuminado, CERO corte del producto).
-      //    Best-effort con línea honesta si no sale; nunca bloquea.
+      //    Si el cambio pedido FALLA, no se programa nada (guarda de abajo):
+      //    el posteo queda borrador y el cliente recibe el motivo.
       if (changeOpt === 'otra-version') {
         try {
           let st = null;
@@ -22051,8 +22089,20 @@ app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.js
         } catch (e) { console.error('[subir-foto] titular:', e.message); notes.push('titular'); }
       }
     }
+    // (CHAT-FOTO) Guarda: un cambio pedido que no se pudo aplicar no deja
+    // un posteo programado con la versión sin cambiar. El posteo queda
+    // borrador y el cliente recibe qué falló; la mejora automática de luz
+    // y color sigue siendo best-effort (no es un cambio pedido).
+    const cambioFallo = notes.find((n) => n === 'otra-version' || n === 'recorte' || n === 'titular');
+    if (cambioFallo) {
+      const queFallo = { 'otra-version': en ? 'another version of the photo' : 'otra versión de la foto', 'recorte': en ? 'the different crop' : 'el recorte distinto', 'titular': en ? 'the headline on the photo' : 'el titular en la foto' }[cambioFallo];
+      return fail('cambio_fallo', en ? `I could not make ${queFallo}, so nothing was scheduled. Try again or pick the original photo 🙏` : `no pude hacer ${queFallo}, así que no se programó nada. Probá de nuevo o elegí la foto original 🙏`);
+    }
     try { scheduleLintForPost(uid, postId); } catch (e) {}
-    // 7. Recibo: programado + título + líneas honestas de lo que no salió.
+    // 7. El posteo pasa a 'scheduled' AHORA, con todo lo pedido aplicado.
+    db.prepare(`UPDATE posts SET status = 'scheduled' WHERE id = ?`).run(postId);
+    post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
+    // 8. Recibo: programado + título + líneas honestas de lo que no salió.
     const whenLabel = subirFotoWhenLabel(when, lang);
     const title = String(caption).split('\n')[0].slice(0, 60);
     let reply = en ? `done, scheduled for ${whenLabel} ✅` : `listo, programado para ${whenLabel} ✅`;
@@ -22068,7 +22118,7 @@ app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.js
     res.json({ ok: true, postId, when, whenLabel, applied, notes, reply });
   } catch (e) {
     console.error('[subir-foto] programar:', e.message);
-    res.status(500).json({ ok: false, error: 'programar_fallo', message: en ? 'Something went wrong, try again 🙏' : 'algo falló, probá de nuevo 🙏' });
+    res.status(500).json({ ok: false, error: 'programar_fallo', message: en ? 'Something went wrong, nothing was scheduled, try again 🙏' : 'algo falló, no se programó nada, probá de nuevo 🙏' });
   }
 });
 
@@ -31553,7 +31603,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v756';
+const BUILD_ID = '20261105-v757';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
