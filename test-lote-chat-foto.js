@@ -113,7 +113,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v760', ver.status === 200 && ver.json && ver.json.build === '20261105-v760', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v761', ver.status === 200 && ver.json && ver.json.build === '20261105-v761', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 

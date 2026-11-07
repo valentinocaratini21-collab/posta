@@ -42,15 +42,15 @@ const DETAIL_ES = {
     'Cada semana te llega tu reporte de resultados: qué funcionó y qué sigue.',
     DETAIL_ES_COMUN.control,
   ],
+  // (v761-detail · Valentino 7/11 «Alinealo en el v761») El detalle ya no promete
+  // reels, respuestas a comentarios ni precios: la entrega real es 7 posteos/semana.
+  // reelsPerWeek sigue 2 (capacidad de generación, no promesa).
   total: [
     DETAIL_ES_COMUN.semana,
-    'Te produzco 2 reels por semana, martes y jueves, con el guión pensado para tu negocio.',
     DETAIL_ES_COMUN.captions,
     DETAIL_ES_COMUN.publicacion,
     'Te armo la estrategia de cada semana, con el porqué de cada posteo.',
     'Cada semana te llega tu reporte de resultados: qué funcionó y qué sigue.',
-    'Te preparo las respuestas a los comentarios y mensajes de Instagram, y vos las aprobás con un toque antes de que salgan — nada sale sin tu OK.',
-    'Respondo con tus precios y servicios reales, no con frases genéricas.',
     DETAIL_ES_COMUN.control,
   ],
 };
@@ -72,15 +72,14 @@ const DETAIL_EN = {
     'I give you a full breakdown of your competition, so you know exactly where you stand.',
     'You just keep an eye on things: pause anything in one tap, or ask me for the change in the chat.',
   ],
+  // (v761-detail · Valentino 7/11 «Alinealo en el v761») Same as ES: no reels,
+  // comment replies or prices promised; the real delivery is 7 posts/week.
   total: [
     'I build your whole week: 7 posts with your photos, your colors and your exact product — no cookie-cutter templates.',
-    'I produce 2 reels per week, on Tuesdays and Thursdays, scripted for your business.',
     'I write every caption in your voice, with its selling angle and its hashtags.',
     'I post everything on its own, at the best time — and I give you a heads-up 30 minutes before, in case you want to pause anything.',
     'I build your strategy for each week, with the why behind every post.',
     'Every week you get your results report: what worked and what\'s next.',
-    'I draft the replies to your Instagram comments and messages, and you approve each one with one tap before it goes out — nothing goes out without your OK.',
-    'I reply with your real prices and services, never generic lines.',
     'You just keep an eye on things: pause anything in one tap, or ask me for the change in the chat.',
   ],
 };
@@ -212,16 +211,13 @@ const PLANS_AR = {
     ai: AI_LIMITS.total,
     features: [
       '7 posteos por semana, automáticos',
-      '2 reels por semana (martes y jueves)',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
       'Análisis completo de tu cuenta, semana a semana',
       'Estrategia semanal para tu negocio',
       'Reporte semanal de resultados',
-      'Atención al cliente en Instagram: Posty prepara y vos aprobás con un toque',
-      'Responde con tus precios y servicios reales',
-      'Comentarios respondidos (cada uno lo aprobás con un toque)',
+      'Ads: tu billetera aparte — cargás lo que querés gastar y Posty impulsa tus mejores posteos.',
     ],
   },
 };
@@ -311,16 +307,13 @@ const PLANS_UY = {
     ai: AI_LIMITS.total,
     features: [
       '7 posteos por semana, automáticos',
-      '2 reels por semana (martes y jueves)',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
       'Análisis completo de tu cuenta, semana a semana',
       'Estrategia semanal para tu negocio',
       'Reporte semanal de resultados',
-      'Atención al cliente en Instagram: Posty prepara y vos aprobás con un toque',
-      'Responde con tus precios y servicios reales',
-      'Comentarios respondidos (cada uno lo aprobás con un toque)',
+      'Ads: tu billetera aparte — cargás lo que querés gastar y Posty impulsa tus mejores posteos.',
     ],
   },
 };
@@ -396,17 +389,14 @@ const PLANS_US = {
     detail: DETAIL_EN.total,
     ai: AI_LIMITS.total,
     features: [
-      '7 posts per week, automatic',
-      '2 reels per week (Tuesdays and Thursdays)',
+      '7 posts a week, automatic',
       'Strategic ideas for your business',
       'Designs + captions + hashtags',
-      'Scheduled automatic posting',
+      'Automatic scheduled posting',
       'Full analysis of your account, week by week',
       'Weekly strategy for your business',
       'Weekly results report',
-      'Customer care on Instagram: Posty drafts, you approve with one tap',
-      'Replies with your real prices and services',
-      'Comments answered (you approve each one with one tap)',
+      'Ads: your separate wallet — you load what you want to spend and Posty boosts your best posts.',
     ],
   },
 };

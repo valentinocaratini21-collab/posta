@@ -2822,15 +2822,6 @@ function pzPerDayHTML(p) {
   const txt = val.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
   return `<div class="pz-perday">≈ ${pzSimbolo(p)}${txt} por día</div>`;
 }
-function planDetailHTML(p) {
-  const lines = (p && p.detail) || [];
-  if (!lines.length) return '';
-  return `<div class="plan-detail" hidden>
-      <div class="pd-title">Todo lo que el plan ${esc(p.name)} hace por vos</div>
-      <ul class="pd-list">${lines.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-      <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="/prueba">Probar gratis</a>
-    </div>`;
-}
 function planCardsHTML(plans) {
   return (plans || []).map(p => `
     <div class="price-card${p.highlighted ? ' hot' : ''}" data-plan-card="${esc(p.id)}">
@@ -2840,42 +2831,10 @@ function planCardsHTML(plans) {
       ${pzPerDayHTML(p)}
       <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">${esc(p.tagline)}</p>
       <ul>${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-      ${planDetailHTML(p)}
-      ${(p.detail && p.detail.length) ? '<button type="button" class="plan-more" data-plan-more aria-expanded="false">Ver todo lo que hace por vos <span class="pm-chev"><svg class="wb-ic" aria-hidden="true"><use href="#wb-chev-d"/></svg></span></button>' : ''}
       <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="/prueba">Probar gratis</a>
+      <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px 0 0">🔒 <b>Nunca vemos tu contraseña.</b></p>
     </div>`).join('');
 }
-// (v401) Toque en la tarjeta de un plan (sin tocar su botón): despliega el
-// detalle «por vos» EN EL LUGAR — sin navegar ni perder el scroll. El toque
-// en un enlace conserva su comportamiento (Probar gratis sigue a un toque).
-// Acordeón dentro de la fila: al abrir una tarjeta se cierran las demás.
-// Delegado en document porque la landing se re-renderiza (toggle de país).
-function togglePlanDetail(card) {
-  if (!card) return;
-  const det = card.querySelector('.plan-detail');
-  const btn = card.querySelector('[data-plan-more]');
-  if (!det) return;
-  const open = det.hidden;
-  const row = card.closest('.plans-row') || card.parentElement;
-  if (row) row.querySelectorAll('[data-plan-card]').forEach(c => {
-    if (c === card) return;
-    const d = c.querySelector('.plan-detail');
-    const b = c.querySelector('[data-plan-more]');
-    if (d && !d.hidden) { d.hidden = true; c.classList.remove('open'); if (b) { b.setAttribute('aria-expanded', 'false'); b.firstChild.textContent = 'Ver todo lo que hace por vos '; } }
-  });
-  det.hidden = !open;
-  card.classList.toggle('open', open);
-  if (btn) { btn.setAttribute('aria-expanded', open ? 'true' : 'false'); btn.firstChild.textContent = open ? 'Ver menos ' : 'Ver todo lo que hace por vos '; }
-  if (open) { try { track('plan_detail_open', { plan: card.getAttribute('data-plan-card') || '' }); } catch (e) {} }
-}
-document.addEventListener('click', function (e) {
-  const t = e.target;
-  if (!t || !t.closest) return;
-  const card = t.closest('[data-plan-card]');
-  if (!card) return;
-  if (t.closest('a')) return; // los enlaces (Probar gratis) navegan como siempre
-  togglePlanDetail(card);
-});
 
 function anchorHTML(anchor) {
   if (!anchor) return '';
@@ -3572,7 +3531,7 @@ function lpInitHero() {
      captions auditados; la grilla inicial (mixto) se re-renderiza con visor */
   lpWeekFilterChips();
   if (document.getElementById('lpWeekGrid') && !LP_WEEK_CUR.length) lpWeekSet('mixto', document.querySelector('.lp-wchip.on'));
-  // — (v344) Medición del mini-bloque del fundador en Planes: una impresión
+  // — (v344) Medición del bloque del fundador en Equipo: una impresión
   // por visita cuando entra en pantalla (pipeline track() → /api/track).
   const fc = document.getElementById('homeFounderCard');
   if (fc && !fc.dataset.viewWired) {
@@ -3587,9 +3546,9 @@ function lpInitHero() {
   if (line) {
     const items = [
       '🐾 <b>Posty</b> publicó el posteo del martes <span>· hace 2 h</span>',
-      '💬 <b>Posty</b> dejó listas 3 respuestas a comentarios <span>· hace 5 h</span>',
-      '🎬 Los reels de la semana ya están listos <span>· ayer</span>',
-      '📸 Historia de la promo programada <span>· hoy 9:00</span>',
+      '💡 <b>Posty</b> propuso 3 ideas para la semana <span>· hace 5 h</span>',
+      '📈 <b>Posty</b> marcó el posteo que más rindió <span>· ayer</span>',
+      '📸 <b>Posty</b> dejó lista la promo de hoy <span>· hoy 9:00</span>',
       '📊 Tu reporte de la semana está listo <span>· el lunes</span>'
     ];
     let i = 0;
@@ -3954,19 +3913,6 @@ function lpInitCarousel() {
   } else lpFillGrid(track.children[0]);
 }
 /* ---------- v176: auditoría + calculadora ---------- */
-function lpGoAudit(e) {
-  if (e) e.preventDefault();
-  const inp = document.getElementById('lpAuditIg');
-  const ig = String((inp && inp.value) || '').replace(/^@/, '').trim().toLowerCase();
-  location.href = ig ? '/auditoria?ig=' + encodeURIComponent(ig) : '/auditoria';
-  return false;
-}
-let LP_CALC_RATE = 5000;
-/* v377: calculadora del costo de no estar — dos controles (horas × valor de
-   la hora) y el contraste contra el plan real de /api/billing/plans. */
-let LP_CALC_PLAN = { label: 'USD 199', perDay: 7, sym: 'USD ' };
-let LP_CALC_CFG = { sym: '$', min: 1000, max: 30000, step: 250 };
-let LP_ESENCIAL_OBJ = null;
 function lpCalcMoney(n) { return LP_CALC_CFG.sym + Math.round(n).toLocaleString('es-AR'); }
 function lpCalcPlanMoney(n) { return LP_CALC_PLAN.sym + Math.round(n).toLocaleString('es-AR'); }
 function lpCalcSetPlan(p) {
@@ -4510,194 +4456,36 @@ function lpWeekToForm() {
  * que el sistema construido hace: radiografía con datos reales de su perfil,
  * competencia pública de su rubro/zona, plan de nacimiento sin diagnóstico
  * inventado, y el porqué en cada posteo. */
-function lpAnalisisHTML() {
+function lpAdsHTML() {
   return `
-  <div class="section" id="analisis" style="background:var(--bg2)"><div class="wrap">
-    <h2>Posty analiza tu Instagram <span class="hl">antes de escribir una palabra</span></h2>
-    <p class="lede">Nada de publicar por publicar. Primero miro tu cuenta y tu mercado, dato por dato — y cada posteo de tu semana nace de algo que vi. En tu prueba ya lo ves: el diagnóstico de tu Instagram viene incluido.</p>
-    <div class="lp-cm-cards">
-      <div class="lp-cm-card"><div class="lp-cm-i">🔍</div><h3>Tu cuenta, medida</h3><p class="lp-cm-tag">Qué mejorar, qué subir, qué bajar</p><p>Tu ritmo, tus formatos, tus horarios y tus textos, leídos de tu perfil real. Sin humo: cada punto viene con tu número de hoy y con lo que Posty mueve esta semana.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">🗺️</div><h3>Tu competencia, en un mapa</h3><p class="lp-cm-tag">Dónde estás parado en tu rubro</p><p>Las cuentas de tu rubro y tu zona: cuánto publican, qué formatos les funcionan y qué huecos dejan. Tu semana se arma para ese mapa, no en el vacío. El mapa completo es parte de Growth.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">🌱</div><h3>¿Recién arrancás?</h3><p class="lp-cm-tag">Tu cuenta nace con plan</p><p>Sin historial no hay diagnóstico inventado: tu cuenta nace con posicionamiento, el kit de perfil completo y una primera vidriera de 9 piezas pensada desde tu mercado.</p></div>
-    </div>
-    <h3 style="text-align:center;margin:36px 0 4px">Así se ve tu análisis 👇</h3>
-    <p style="text-align:center;color:var(--mut,#5A7186);font-size:13.5px;margin:0 0 18px">Ejemplo con una cafetería de barrio — el tuyo sale de TU cuenta real, y te llega como una carta de Posty.</p>
-    <style>
-    .lp-letter{max-width:520px;margin:0 auto;background:#fff;border:1.5px solid #E3EDF4;border-radius:22px;box-shadow:0 12px 40px rgba(10,30,51,.08);padding:22px 20px 18px;text-align:left}
-    .lp-letter-head{display:flex;align-items:center;gap:12px}
-    .lp-letter-head img{width:54px;height:54px;border-radius:50%;border:2.5px solid #FEC14D;background:#fff}
-    .lp-letter-head b{display:block;font-size:19px;font-weight:900;color:#0A1E33}
-    .lp-letter-head span{font-size:12.5px;font-weight:700;color:#2793C8}
-    .lp-letter-verdict{background:#2793C8;border-radius:16px;padding:14px 16px;margin-top:14px;color:#fff}
-    .lp-letter-verdict span{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1.1px;opacity:.85}
-    .lp-letter-verdict p{font-size:15px;font-weight:800;line-height:1.45;margin:5px 0 0;color:#fff}
-    .lp-letter-f{font-size:13.5px;line-height:1.55;color:#33566B;margin:14px 0 0}
-    .lp-letter-f b{color:#0A1E33}
-    .lp-letter-f span{color:#2793C8;font-weight:700}
-    .lp-letter-plan{background:#0A1E33;border-radius:16px;padding:15px 17px;margin-top:14px}
-    .lp-letter-plan .lp-lp-t{font-size:14.5px;font-weight:900;color:#fff;margin:0 0 8px}
-    .lp-letter-plan p{font-size:13px;line-height:1.55;color:#D7E6EF;margin:6px 0 0}
-    .lp-letter-plan p b{color:#FEC14D}
-    .lp-letter-banner{background:#FEC14D;color:#0A1E33;border-radius:12px;padding:11px 14px;font-size:13.5px;font-weight:800;text-align:center;margin-top:14px}
-    .lp-letter-sign{display:flex;align-items:center;gap:11px;margin-top:16px;padding-top:14px;border-top:2px dashed #C9E2EF}
-    .lp-letter-sign img{width:40px;height:40px;border-radius:50%;border:2px solid #FEC14D;background:#fff}
-    .lp-letter-sign p{margin:0;line-height:1.15}
-    .lp-letter-sign i{font-size:24px;font-weight:900;font-style:italic;color:#0A1E33;letter-spacing:-.5px}
-    .lp-letter-sign i b{color:#FEC14D;font-style:italic}
-    .lp-letter-sign span{display:block;font-size:10px;font-weight:800;color:#2793C8;text-transform:uppercase;letter-spacing:1.1px;margin-top:1px}
-    </style>
-    <div class="lp-letter">
-      <div class="lp-letter-head"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span><div><b>Tu análisis</b><span>Cafetería de barrio · ejemplo</span></div></div>
-      <div class="lp-letter-verdict"><span>Mi veredicto</span><p>“Tenés buen café y buena gente. Hoy tu ritmo es de 2 posteos por semana — y la constancia no depende de tu tiempo: la pongo yo.”</p></div>
-      <p class="lp-letter-f">📈 <b>Tu ritmo de publicación tiene mucho para crecer</b> — hoy: 2 posteos por semana.<br><span>${pzIc('arrowRight', 13)} Con Posty: tu semana completa, armada y programada.</span></p>
-      <div class="lp-letter-plan">
-        <p class="lp-lp-t">🚀 Mi plan para mejorar todo esto</p>
-        <p><b>① Esta semana:</b> tu semana completa, sin un solo hueco — cada posteo programado en tu franja.</p>
-        <p><b>② La que viene:</b> tu vidriera queda trabajando sola — nombre buscable, bio que vende y destacadas completas.</p>
-        <p><b>③ De acá en más:</b> te re-mido cada semana y ajusto: lo que funciona, se repite.</p>
+  <div class="section" id="ads"><div class="wrap">
+    <div class="cap-grid">
+      <div class="cap-copy">
+        <div class="cap-kick">Ads</div>
+        <h2><span class="hl">Posty impulsa tus mejores posteos</span></h2>
+        <p class="cap-exp">Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo. Cargás crédito en tu billetera —aparte de la suscripción— y Posty elige el posteo, el público y lo gestiona. Podés dejar la carga en automático desde tu banco.</p>
+        <ul class="cap-list">
+          <li><b>Tu mejor posteo, detectado solo.</b> Posty marca el posteo que más rindió y te dice por qué funciona.</li>
+          <li><b>Vos ponés el monto, nada más.</b> $20, $50 o $100. La plata es tu billetera, aparte de los $199.</li>
+          <li><b>Posty hace el resto.</b> Público, pauta y gestión. Siempre con tu OK en un toque.</li>
+        </ul>
+        <a class="cap-cta" href="/prueba">Probalo 3 días gratis →</a>
       </div>
-      <p class="lp-letter-banner">Tenés el negocio. La constancia la pongo yo.</p>
-      <div class="lp-letter-sign"><span class="pz-mg pz-mg--sm"><img src="ai-avatar.png" alt="Posty"></span><p><i>Posty<b>.</b></i><span>Tu community manager</span></p></div>
+      <div class="cap-side">
+        <div class="cap-sample"><div class="cap-grow">
+          <div class="cap-grow-best"><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de una cafetería hecho por Posty"><div><h4>Tu posteo con más llegada</h4><div class="cap-grow-metric">2× tu promedio</div><div class="cap-grow-sub">Billetera $20 · Automática ON</div></div></div>
+          <div class="cap-prop">🚀 <b>Impulsar con $20 · 7 días</b> — Posty elige el público y lo gestiona.</div>
+          <div class="cap-sendrow"><span class="cap-send">Impulsar ✓</span><span class="cap-alt">Ahora no</span></div>
+        </div></div>
+        <p class="cap-note">La plata es tu billetera, aparte de la suscripción. Nada se gasta sin tu OK.</p>
+      </div>
     </div>
-    <p class="lp-cm-close">💡 Y cada posteo te dice su <b>porqué</b>: qué vi, qué decidí y para qué sale. Así de simple.</p>
-    <div style="text-align:center"><a class="btn btn-primary btn-lg" href="/prueba">Ver el análisis de mi cuenta →</a></div>
   </div></div>`;
 }
-function lpAtencionHTML() {
+
+function lpIdeasGrowthHTML() {
   return `
-  <div class="section" id="atencion" style="background:var(--bg2)"><div class="wrap">
-    <h2>Posty también <span class="hl">atiende por vos</span></h2>
-    <p class="lede">El posteo trae la consulta. ¿Y después? Si nadie responde rápido, esa venta se enfría. Con Atención al cliente, Posty prepara cada respuesta — con tus precios reales y tu forma de atender — y vos la aprobás con un toque antes de que salga. Nada se manda sin tu OK.</p>
-    <div class="lp-cm-cards">
-      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>La respuesta lista para tu OK</h3><p class="lp-cm-tag">Mensajes y comentarios de Instagram</p><p>Tus precios, tus servicios, tus horarios: preparo cada respuesta con los datos reales de tu negocio, en tu tono, y te la dejo lista para aprobar con un toque. Nada de respuestas genéricas ni precios inventados — y nada sale sin tu OK.</p></div>
-    </div>
-    <p class="lp-cm-close">🤝 Vos ves todo: cada conversación queda en tu cuenta, nada sale sin tu OK, y lo sensible — quejas, descuentos, plata — te lo derivo a vos. <b>Posty atiende; vos mandás.</b></p>
-    <div style="text-align:center"><a class="btn btn-primary btn-lg" href="#planes">Ver el plan →</a></div>
-  </div></div>`;
-}
-/* 🧩 Secciones por capacidad (2026-10-20): cada utilidad de Posty con su
- * PROPIA sección completa — kicker, titular de beneficio, explicación,
- * 3 ✓, MUESTRA real del producto y CTA — estilo Predis, con el sistema
- * visual del sitio. Posteos y Análisis ya tienen su sección completa
- * arriba (#analisis y la semana); acá van las que faltaban:
- * Historias, Comentarios, Growth, Ideas y Tienda, más el detalle de
- * pieza de Posteos. Solo se afirma lo que el producto hace hoy. */
-function lpCapSectionsHTML() {
-  return `
-  <div class="section" id="capacidades" style="padding-bottom:6px"><div class="wrap">
-    <h2>Todo lo que Posty hace, parte por parte</h2>
-    <p class="lede">Esto no es "una app para programar posteos". Es el trabajo completo de un community manager — y cada parte tiene su propia herramienta. Miralas una por una:</p>
-  </div></div>
-  <div class="section cap-sec"><div class="wrap"><div class="cap-grid">
-    <div class="cap-copy">
-      <div class="cap-kick">Posteos de Instagram</div>
-      <h2>Tu semana entera, <span class="hl">publicada sola</span></h2>
-      <p class="cap-exp">Posty estudia tu negocio y arma tu semana completa: 7 posteos + 2 reels (martes y jueves) con tus productos, tus colores y tu protagonista. Se publica a tu mejor hora. Vos solo mirás — y frenás si algo no te cierra.</p>
-      <ul class="cap-list">
-        <li>De tu producto exacto, nunca genérico</li>
-        <li>La línea visual de TU feed, heredada</li>
-        <li>Aviso 30 minutos antes de cada posteo</li>
-      </ul>
-      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
-    </div>
-    <div class="cap-side">
-      <div class="cap-sample">
-        <div class="cap-ig-head"><span class="pz-mg pz-mg--sm"><img src="ai-avatar.png" alt="Posty"></span><b>posty.communitymanager</b><span>•••</span></div>
-        <img class="cap-ig-img" loading="lazy" src="lp-pieza.jpg" alt="Pieza real hecha por Posty: el robot celeste saludando, con el titular SOY POSTY.">
-        <div class="cap-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><svg class="save" viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></div>
-        <p class="cap-ig-cap"><b>posty.communitymanager</b> ¡Hola! Soy Posty. 👋 Soy tu community manager: analizo tu Instagram a fondo — tu ritmo, tus mejores posteos, tu vidriera y hasta tu competencia — y con ese análisis armo tu plan…</p>
-      </div>
-      <p class="cap-note">Una pieza real de Posty. Las tuyas salen con TU producto, tus fotos y tus colores.</p>
-    </div>
-  </div></div></div>
-  <div class="section cap-sec tint"><div class="wrap"><div class="cap-grid cap-flip">
-    <div class="cap-copy">
-      <div class="cap-kick">Reels</div>
-      <h2>Reels que muestran tu negocio <span class="hl">en movimiento</span></h2>
-      <p class="cap-exp">El video es lo que más gente nueva trae, y es lo que menos tiempo tenés de hacer. Posty arma tus reels con tu material y tu marca, con el gancho primero y el cierre que empuja a escribirte. Salen publicados solos, martes y jueves.</p>
-      <ul class="cap-list">
-        <li>2 por semana, martes y jueves</li>
-        <li>Con tus fotos y videos, o creados desde cero</li>
-        <li>Se publican solos, a tu mejor hora</li>
-      </ul>
-      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
-    </div>
-    <div class="cap-side">
-      <div class="cap-phone">
-        <img src="posty-rubros-poster.jpg?v=2" alt="Reel real armado por Posty para un café">
-        <span class="cap-ph-chip">🎬 REEL</span>
-        <div class="cap-ph-bot"><b>@tu.negocio</b><span>Tus reels, listos y publicados solos.</span><div class="cap-ph-bar"><i></i></div></div>
-      </div>
-      <p class="cap-note">Un reel real de Posty trabajando: así sale uno tuyo.</p>
-    </div>
-  </div></div></div>
-  <div class="section cap-sec"><div class="wrap"><div class="cap-grid">
-    <div class="cap-copy">
-      <div class="cap-kick">Historias</div>
-      <h2>Tu negocio, presente <span class="hl">todos los días</span></h2>
-      <p class="cap-exp">Cada posteo sale también como historia, y Posty suma historias que hacen participar a tu audiencia: encuestas, preguntas y cuentas regresivas para tus fechas fuertes. Tu cuenta se mueve todos los días, aunque vos no abras la app.</p>
-      <ul class="cap-list">
-        <li>Cada posteo, también en historias</li>
-        <li>Encuestas y preguntas que hacen participar</li>
-        <li>Todos los días</li>
-      </ul>
-      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
-    </div>
-    <div class="cap-side">
-      <div class="cap-phone">
-        <img loading="lazy" src="g-tazas.jpg" alt="Historia de Instagram de una cafetería hecha por Posty">
-        <div class="cap-ph-top"><i class="on"></i><i></i><i></i></div>
-        <div class="cap-ph-head"><img src="ai-avatar.png" alt="Posty"><span>tu.negocio</span><span style="opacity:.75;font-weight:600">2 h</span></div>
-        <div class="cap-ph-bot"><b>Mañana te esperamos desde temprano ☀️</b>
-          <div class="cap-poll"><b>📊 ¿A qué hora abrimos?</b><div class="cap-poll-row"><span>A las 8</span><span>68%</span></div><div class="cap-poll-row"><span>A las 9</span><span>32%</span></div></div>
-        </div>
-      </div>
-      <p class="cap-note">Una historia de las que arma Posty: tu posteo, con encuesta incluida.</p>
-    </div>
-  </div></div></div>
-  <div class="section cap-sec tint"><div class="wrap"><div class="cap-grid cap-flip">
-    <div class="cap-copy">
-      <div class="cap-kick">Comentarios y respuestas</div>
-      <h2>Ningún comentario queda <span class="hl">sin respuesta</span></h2>
-      <p class="cap-exp">Posty lee cada comentario y cada mensaje que te llega, prepara la respuesta en tu tono y te la deja lista. Vos la mandás con un toque. Tu bandeja queda en cero sin vivir pegado al teléfono — y si algo es delicado, te lo pasa a vos.</p>
-      <ul class="cap-list">
-        <li>Respuestas en tu tono, nunca robóticas</li>
-        <li>Nada sale sin tu OK en un toque</li>
-        <li>Quejas y temas sensibles, directo a vos</li>
-      </ul>
-      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
-    </div>
-    <div class="cap-side">
-      <div class="cap-sample"><div class="cap-thread">
-        <div class="cap-msg"><div class="cap-ava" style="background:#B08968">M</div><div class="cap-bub"><span class="who">marina.g · comentario en tu posteo</span><br>¿Hacen envíos a Córdoba? ¿Cuánto tarda?</div></div>
-        <div class="cap-msg"><div class="cap-ava" style="background:#2793C8">P</div><div class="cap-bub reply"><span class="who">Respuesta de Posty · lista para enviar</span><br>¡Sí, Marina! Enviamos a todo el país 🚚 A Córdoba llega en 2 a 4 días hábiles. ¿Querés que te pase el link del producto?</div></div>
-        <div class="cap-sendrow"><span class="cap-send">Enviar ✓</span><span class="cap-alt">Editar</span><span class="cap-tag">Tu tono: amable y directo</span></div>
-      </div></div>
-      <p class="cap-note">Así te llega cada respuesta: lista, en tu tono, a un toque de salir.</p>
-    </div>
-  </div></div></div>
-  <div class="section cap-sec navy"><div class="wrap"><div class="cap-grid">
-    <div class="cap-copy">
-      <div class="cap-kick">Growth</div>
-      <h2>Lo que funciona, <span class="hl">se potencia</span></h2>
-      <p class="cap-exp">Posty detecta el posteo que mejor te está andando y te dice por qué rinde. Y cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.</p>
-      <ul class="cap-list">
-        <li>Tu mejor posteo, detectado solo</li>
-        <li>Pauta con tu tope, siempre con tu OK</li>
-        <li>Tu página pública lista, con WhatsApp directo</li>
-      </ul>
-      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
-    </div>
-    <div class="cap-side">
-      <div class="cap-sample"><div class="cap-grow">
-        <div class="cap-grow-best"><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de una cafetería hecho por Posty"><div><h4>Tu posteo que más rindió</h4><div class="cap-grow-metric">▲ El doble de interacciones que tu promedio</div><div class="cap-grow-sub">Hace 3 días · Posteo de producto</div></div></div>
-        <div class="cap-prop">🚀 <b>Propuesta de Posty:</b> potenciarlo con <b>$15.000</b> por 5 días (tu tope: $20.000). Llega a gente de tu zona que todavía no te sigue.</div>
-        <div class="cap-sendrow"><span class="cap-send">Potenciar ✓</span><span class="cap-alt">Ahora no</span></div>
-      </div></div>
-      <p class="cap-note">La propuesta llega sola cuando un posteo la rompe. Vos decidís.</p>
-    </div>
-  </div></div></div>
-  <div class="section cap-sec"><div class="wrap"><div class="cap-grid cap-flip">
+  <div class="section cap-sec" id="ideas"><div class="wrap"><div class="cap-grid cap-flip">
     <div class="cap-copy">
       <div class="cap-kick">Ideas semanales</div>
       <h2>Nunca te quedás <span class="hl">sin qué publicar</span></h2>
@@ -4724,70 +4512,28 @@ function lpCapSectionsHTML() {
       <p class="cap-note">Así te llegan las ideas cada semana, listas para aprobar.</p>
     </div>
   </div></div></div>
-  <div class="section cap-sec tint"><div class="wrap"><div class="cap-grid">
+  <div class="section cap-sec navy" id="crecimiento"><div class="wrap"><div class="cap-grid">
     <div class="cap-copy">
-      <div class="cap-kick">Posty conectado · Nuevo</div>
-      <h2>Tu tienda le habla <span class="hl">a tu Instagram</span></h2>
-      <p class="cap-exp">Conectás tu Tiendanube en un toque y Posty pasa a postear lo que tu negocio tiene de verdad: tu producto estrella deja de ser el de más likes y pasa a ser el que más vende. Y lo que está sin stock, no se promociona jamás.</p>
+      <div class="cap-kick">Growth</div>
+      <h2>Lo que funciona, <span class="hl">se potencia</span></h2>
+      <p class="cap-exp">Posty detecta el posteo que mejor te está andando y te dice por qué rinde. Y cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.</p>
       <ul class="cap-list">
-        <li>Estrella por ventas reales, no por likes</li>
-        <li>Sin stock = fuera de los posteos, automático</li>
-        <li>Los productos quietos se empujan a propósito</li>
+        <li>Tu mejor posteo, detectado solo</li>
+        <li>Pauta con tu tope, siempre con tu OK</li>
+        <li>Tu página pública lista, con WhatsApp directo</li>
       </ul>
       <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
     </div>
     <div class="cap-side">
-      <div class="cap-sample"><div class="cap-shop">
-        <div class="row"><span>🛍️</span><span><b>Tu tienda, conectada</b></span><span class="pill">Tiendanube ✓</span></div>
-        <div class="row"><span>⭐</span><span>Estrella por ventas: <b>Campera Urbana</b> (38 ventas en 30 días)</span></div>
-        <div class="row"><span>🚫</span><span>Remera Logo — sin stock</span><span class="pill out">Fuera de los posteos</span></div>
-        <div class="row"><span>💤</span><span>Buzo Oversize — quieto hace 26 días</span><span class="pill warn">Se empuja esta semana</span></div>
+      <div class="cap-sample"><div class="cap-grow">
+        <div class="cap-grow-best"><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de una cafetería hecho por Posty"><div><h4>Tu posteo que más rindió</h4><div class="cap-grow-metric">▲ El doble de interacciones que tu promedio</div><div class="cap-grow-sub">Hace 3 días · Posteo de producto</div></div></div>
+        <div class="cap-prop">🚀 <b>Propuesta de Posty:</b> potenciarlo con <b>$15.000</b> por 5 días (tu tope: $20.000). Llega a gente de tu zona que todavía no te sigue.</div>
+        <div class="cap-sendrow"><span class="cap-send">Potenciar ✓</span><span class="cap-alt">Ahora no</span></div>
       </div></div>
-      <p class="cap-note">Tu tienda real, conectada en un toque desde Ajustes.</p>
+      <p class="cap-note">La propuesta llega sola cuando un posteo la rompe. Vos decidís.</p>
     </div>
-  </div></div></div>`;
-}
-
-/* 📋 Grilla resumen (2026-10-20): las 12 cosas que Posty hace, como cierre
- * del tour de capacidades, justo antes de planes. Espeja la grilla de
- * /prueba ("Todo lo que Posty hace por vos"). */
-function gjSistemaHTML() {
-  return `<div class="gj-sistema" data-gj-sistema style="margin:36px auto 0;max-width:1020px;text-align:left">
-    <p class="gj-eyebrow">🎮 EL SISTEMA DE NIVELES</p>
-    <h3 style="font-size:24px;line-height:1.25;color:#0A1E33;margin:8px 0 10px">Un nivel no es un premio: es cuánto te conoce Posty</h3>
-    <p style="background:#F2F9FD;border:1.5px solid #E3EDF4;border-left:5px solid #2793C8;border-radius:14px;padding:13px 16px;font-size:15px;line-height:1.55;color:#0A1E33;margin:0 0 22px"><b>Esto es el sistema, no tu nivel:</b> tu nivel real aparece en la app cuando Posty empieza a trabajar con vos.</p>
-    <h4 style="font-size:18px;color:#0A1E33;margin:0 0 6px">Cómo se sube de nivel</h4>
-    <p style="font-size:15px;line-height:1.55;color:#33566B;margin:0 0 12px">Solo con hechos reales. Cada cosa que Posty aprende de tu negocio queda registrada — y el nivel mide exactamente eso.</p>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">Lee tus fuentes</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Web, Instagram, catálogo y lista de precios.</span></div>
-      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">Tus respuestas</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Cada respuesta suma, y no se vuelve a preguntar.</span></div>
-      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">Tu material real</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Fotos, documentos y conexiones.</span></div>
-      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">Tus decisiones</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Cada Aceptar o cambio en la Bandeja le enseña tu gusto.</span></div>
-      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">El trabajo que salió bien</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Piezas aceptadas sin cambios.</span></div>
-      <div style="flex:1 1 280px;background:#fff;border:1.5px solid #E3EDF4;border-radius:14px;padding:12px 14px"><b style="display:block;font-size:14.5px;color:#0A1E33">La continuidad</b><span style="font-size:13.5px;line-height:1.5;color:#5A7186">Semanas trabajando sobre el mismo mundo.</span></div>
-    </div>
-    <p style="font-size:15px;line-height:1.55;color:#0A1E33;margin:0 0 22px"><b>Nunca se sube por pagar más:</b> pagar compra el poder, usarlo lo hace crecer. Nunca solo por el paso del tiempo.</p>
-    <h4 style="font-size:18px;color:#0A1E33;margin:0 0 6px">Qué cambia cuando sube</h4>
-    <ul style="font-size:15px;line-height:1.6;color:#33566B;margin:0 0 16px;padding-left:20px">
-      <li><b style="color:#0A1E33">Pregunta menos</b> — lo que ya sabe, no lo vuelve a pedir. Jamás.</li>
-      <li><b style="color:#0A1E33">Acierta más de primera</b> — menos cambios por pieza.</li>
-      <li><b style="color:#0A1E33">Hace más solo</b> — dentro de los límites que fijaste una vez.</li>
-      <li><b style="color:#0A1E33">Desde Mano derecha, anticipa</b> — propone antes de que le pidas.</li>
-    </ul>
-    <p style="font-size:14px;line-height:1.6;color:#5A7186;margin:0 0 8px"><b style="color:#0A1E33">Las reglas:</b> nunca baja — lo aprendido no se pierde. Sin comparación entre clientes — tu progreso es con vos mismo. No bloquea lo esencial — el producto funciona completo desde el día 1. Lo sensible no se gamifica.</p>
-    <p style="font-size:15px;line-height:1.55;color:#0A1E33;margin:0 0 22px"><b>Y Socio no es un techo:</b> es un título que se acumula con tu trabajo real — y el juego pasa a ser toda la oficina socia.</p>
-    <h4 style="font-size:18px;color:#0A1E33;margin:0 0 6px">Cuando subís, pasan 7 cosas</h4>
-    <ol style="font-size:15px;line-height:1.6;color:#33566B;margin:0;padding-left:20px">
-      <li><b style="color:#0A1E33">La colección de lo aprendido</b> — lo que Posty sabe de vos, en fichas que podés corregir de un toque.</li>
-      <li><b style="color:#0A1E33">«Subí — y ya te traje esto»</b> — en 24 h te demuestra el desbloqueo con su primera idea anticipada, sin que la pidas.</li>
-      <li><b style="color:#0A1E33">Semanas creciendo juntos</b> — un contador que solo suma.</li>
-      <li><b style="color:#0A1E33">El mes de tu oficina</b> — el resumen mensual de qué aprendieron y qué subió.</li>
-      <li><b style="color:#0A1E33">La subida se comparte</b> — la celebración sale como historia lista, solo si querés.</li>
-      <li><b style="color:#0A1E33">La familia festeja</b> — los demás poderes reaccionan a cada subida.</li>
-      <li><b style="color:#0A1E33">Tu jardín, antes y hoy</b> — tu feed de hace 3 meses junto al de hoy.</li>
-    </ol>
-  </div>`;
-}
+  </div></div></div>
+`;}
 function landingView(cfg) {
   const plansRaw = (cfg && cfg.plans) || [];
   const plans = plansRaw.map(pp => ({ ...pp, price_label: pzFmtPrecioES(pp) }));
@@ -4814,13 +4560,13 @@ function landingView(cfg) {
   ${pzRefBandHTML()}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="wb-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h16"/><path d="M14 5l7 7-7 7"/><path d="M9 9.5v5"/></symbol><symbol id="wb-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12H6"/><path d="M10 5l-7 7 7 7"/><path d="M15 9.5v5"/></symbol><symbol id="wb-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v16"/><path d="M5 14l7 7 7-7"/><path d="M9.5 9h5"/></symbol><symbol id="wb-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-7 8 7 8"/><circle cx="8" cy="12" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l7 8-7 8"/><circle cx="16" cy="12" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l8 7 8-7"/><circle cx="12" cy="16" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="wb-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3" fill="#DFA856" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="#0A1E33" stroke="none"/></symbol><symbol id="wb-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c-2.6 2.7-2.6 15.3 0 18"/><path d="M12 3c2.6 2.7 2.6 15.3 0 18"/></symbol><symbol id="wb-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h2.5L9 6h6l2.5 2.5H20a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/><circle cx="17.8" cy="9.8" r="1.1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="5.5" r="2.6"/><circle cx="18" cy="18.5" r="2.6"/><path d="M8.4 10.6l7.2-3.7M8.4 13.4l7.2 3.7"/></symbol><symbol id="wb-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v9H9l-5 4v-4H4Z"/><circle cx="12" cy="10.5" r="1.4" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-clapper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16v10H4Z"/><path d="M4 10l1.8-4h16L20 10"/><path d="M9 6l2 4M14 6l2 4"/></symbol><symbol id="wb-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-3.6 10.8c.9.8 1.6 1.5 1.6 2.7h4c0-1.2.7-1.9 1.6-2.7A6 6 0 0 0 12 3Z"/><path d="M10 18.5h4M10.5 21h3"/><circle cx="12" cy="10" r="1.4" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l1.2-4.2L16.5 4.5a2.1 2.1 0 0 1 3 3L8.7 18.3Z"/><path d="M14.5 6.5l3 3"/></symbol><symbol id="wb-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3.5 8l8.5 6 8.5-6"/></symbol><symbol id="wb-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7Z" fill="#DFA856" stroke="none"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a6.5 6.5 0 0 1-6.5-6.5c0-3.2 2.2-5.2 3.4-7.2.6 1.4 1.6 2 2.4 2-.4-2.8.8-5 2.7-6.8.5 2.6 3 4.3 3 7.5A6.5 6.5 0 0 1 12 21Z"/><path d="M12 21a3 3 0 0 1-3-3c0-1.6 1.2-2.6 1.8-3.6.3.8.8 1.1 1.2 1.1.4-1.4 1-2.3 1.8-3-.2 2.2 1.2 3.2 1.2 5.5a3 3 0 0 1-3 3Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-laugh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 10.5c.7-1 1.8-1 2.5 0M13.5 10.5c.7-1 1.8-1 2.5 0"/><path d="M8 14.5c1.2 1.8 2.6 2.5 4 2.5s2.8-.7 4-2.5"/><circle cx="4.5" cy="12.5" r="1" fill="#DFA856" stroke="none"/><circle cx="19.5" cy="12.5" r="1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h9.5L21 11.5a1.8 1.8 0 0 1 0 2.6l-6.9 6.9a1.8 1.8 0 0 1-2.6 0L4 13.5Z"/><circle cx="9.5" cy="9.5" r="1.6" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-brief" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="11" rx="2"/><path d="M9 8V6.5A2.5 2.5 0 0 1 11.5 4h1A2.5 2.5 0 0 1 15 6.5V8"/><path d="M3 13.5h18"/><circle cx="12" cy="13.5" r="1.3" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-scissors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6.5" r="2.6"/><circle cx="6" cy="17.5" r="2.6"/><path d="M8.2 8.2L20 19M8.2 15.8L20 5"/></symbol><symbol id="wb-mega" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5v2.5l12 5V6.5Z"/><path d="M20 9.5a4.5 4.5 0 0 1 0 5"/><path d="M8 19.5V21"/></symbol><symbol id="wb-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20S4.5 15.5 4.5 10a4.6 4.6 0 0 1 7.5-3.2A4.6 4.6 0 0 1 19.5 10C19.5 15.5 12 20 12 20Z"/></symbol><symbol id="wb-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.6 0 2.2-.9 2.2-2 0-1.6-1.7-1.5-1.7-3.1 0-1.5 1.3-2.4 2.9-2.4h1.4a4.7 4.7 0 0 0 4.7-4.7C21.5 5.4 17.5 3 12 3Z"/><circle cx="8" cy="10" r="1.4" fill="#2793C8" stroke="none"/><circle cx="12.5" cy="8" r="1.4" fill="#DFA856" stroke="none"/><circle cx="16.5" cy="11" r="1.4" fill="#0A1E33" stroke="none"/></symbol><symbol id="wb-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol><symbol id="wb-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></symbol><symbol id="wb-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 1.5 5.5 5 5 9l-2 2-3-3-3 3-2-2c-1-4 1-7.5 5-9Z"/><circle cx="12" cy="9" r="1.8" fill="#DFA856" stroke="none"/><path d="M8.5 13.5L5 19M15.5 13.5L19 19"/></symbol><symbol id="wb-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h2l2.5 11h10L21 8H7"/><circle cx="10" cy="20" r="1.6"/><circle cx="17.5" cy="20" r="1.6"/></symbol><symbol id="wb-glasses" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="7" height="5" rx="2"/><rect x="14" y="9" width="7" height="5" rx="2"/><path d="M10 11h4M3 10L1.5 8M21 10l1.5-2"/></symbol><symbol id="wb-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></symbol><symbol id="wb-cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h12v4.5A4.5 4.5 0 0 1 12.5 19h-3A4.5 4.5 0 0 1 5 14.5Z"/><path d="M17 11h1a2.5 2.5 0 0 1 0 5h-1"/><path d="M8 7c0-1.2 1-1.2 1-2.4M12 7c0-1.2 1-1.2 1-2.4"/></symbol><symbol id="wb-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 16.5 5 12a2 2 0 0 1 2-1.5h10a2 2 0 0 1 2 1.5l1.5 4.5"/><path d="M3.5 16.5H21"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/><path d="M12 3.5l.6 1.6 1.6.6-1.6.6L12 8l-.6-1.7-1.6-.6 1.6-.6Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v10h12V10"/><path d="M10.5 20v-5.5h3V20"/></symbol><symbol id="wb-tooth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3.5C9 3.5 10 4.5 12 4.5s3-1 4.5-1c1.8 0 2.6 1.6 2.2 4-.4 3-1.2 9-3.2 12.5-.7 1.2-2.3 1.2-3 0-.8-1.4-.5-4.5-1.5-4.5s-.7 3.1-1.5 4.5c-.7 1.2-2.3 1.2-3 0C4.5 16.5 3.7 10.5 3.3 7.5 2.9 5.1 5.7 3.5 7.5 3.5Z"/></symbol><symbol id="wb-pole" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="3" width="7" height="18" rx="3.5"/><path d="M8.5 8.5 15.5 6M8.5 13.5 15.5 11M8.5 18.5 15.5 16"/><path d="M8.5 3h7M8.5 21h7" stroke="#DFA856"/></symbol><symbol id="wb-shirt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 4 4 6.5 6 10l2-1v11h8V9l2 1 2-3.5L15.5 4a3.5 3.5 0 0 1-7 0Z"/></symbol><symbol id="wb-beauty" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.2" fill="#DFA856" stroke="none"/><path d="M12 3.5v3.5M12 17v3.5M3.5 12H7M17 12h3.5M6 6l2.4 2.4M15.6 15.6 18 18M18 6l-2.4 2.4M8.4 15.6 6 18"/></symbol><symbol id="wb-paw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="16" rx="3.6" ry="3" fill="#DFA856" stroke="none"/><circle cx="6.8" cy="11.5" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="9" r="1.9" fill="currentColor" stroke="none"/><circle cx="17.2" cy="11.5" r="1.9" fill="currentColor" stroke="none"/></symbol><symbol id="wb-steth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3v6.5a5.5 5.5 0 0 0 11 0V3"/><path d="M17.5 14.5c0 3 1.5 4 3.5 4"/><circle cx="21" cy="18.5" r="1.5"/></symbol><symbol id="wb-dumbbell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5v5M7 7v10M17 7v10M20.5 9.5v5M7 12h10"/></symbol><symbol id="wb-disco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7"/><path d="M9.5 6.5V4h5v2.5"/><path d="M5.5 13.5h13M7.5 10c1.8 1.2 3.6-1.2 4.5 0 .9 1.2 2.7-1.2 4.5 0M7.5 17c1.8-1.2 3.6 1.2 4.5 0 .9-1.2 2.7 1.2 4.5 0"/><circle cx="12" cy="4" r="1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-flower" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3.2"/><path d="M12 10.7V21"/><path d="M12 15c-3.2 0-4.5-1.8-4.5-4M12 17.5c3.2 0 4.5-1.8 4.5-4"/><circle cx="12" cy="7.5" r="1.2" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-lipstick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 21h4M10.5 21v-8h3v8"/><path d="M11 13V8l4-2.5V13" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-sushi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="9" rx="4.5"/><circle cx="12" cy="14.5" r="2.2" fill="#DFA856" stroke="none"/><path d="M4 6.5 20 4"/></symbol><symbol id="wb-croissant" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 13.5c2.5 4.5 5.5 6 8.5 4.5 3 1.5 6 0 8.5-4.5-.8 4.5-4 7-8.5 7s-7.7-2.5-8.5-7Z"/><path d="M8 13.5c.8 2 2 3 4 3s3.2-1 4-3"/></symbol><symbol id="wb-bean" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="6" ry="8.5" transform="rotate(18 12 12)"/><path d="M9 5.5c2.5 3 2.5 10 0 13"/></symbol></defs></svg>
   <div class="nav nav-landing"><div class="wrap">
-    <a class="logo logo-posty" href="#/"><img class="sello-cabecera" src="/logo-bambooty.png" width="34" height="34" alt="Bambooty">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="#/"><img class="logo-img" src="/posty-logo.png" width="226" height="62" alt="Posty"></a>
     <div class="nav-links">
-      <a href="#analisis">Análisis</a>
-      <a href="#capacidades">Todo lo que hace</a>
-      <a href="#como-funciona">Cómo funciona</a>
-      <a href="#ejemplos">Ejemplos</a>
-      <a href="#planes">Planes</a>
+      <a href="#prueba">La prueba</a>
+      <a href="#como-funciona">Cómo trabaja</a>
+      <a href="#equipo">Equipo</a>
+      <a href="#ads">Ads</a>
+      <a href="#planes">Plan</a>
       <a href="#faq">Preguntas</a>
       <a data-posty-chat role="button" tabindex="0" style="cursor:pointer">Ayuda</a>
       <a href="/en" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a>
@@ -4831,11 +4577,11 @@ function landingView(cfg) {
     <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Abrir menú"><span></span><span></span><span></span></button>
   </div>
   <div class="mobile-menu" id="mobileMenu">
-    <a href="#analisis">Análisis</a>
-    <a href="#capacidades">Todo lo que hace</a>
-    <a href="#como-funciona">Cómo funciona</a>
-    <a href="#ejemplos">Ejemplos</a>
-    <a href="#planes">Planes</a>
+    <a href="#prueba">La prueba</a>
+    <a href="#como-funciona">Cómo trabaja</a>
+    <a href="#equipo">Equipo</a>
+    <a href="#ads">Ads</a>
+    <a href="#planes">Plan</a>
     <a href="#faq">Preguntas</a>
     <a data-posty-chat role="button" tabindex="0" style="cursor:pointer" onclick="toggleMobileMenu()">Ayuda</a>
     <a href="/en" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a>
@@ -4922,6 +4668,7 @@ function landingView(cfg) {
         <button class="btn btn-ghost" type="submit">Usar mi web <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </div>
     </form>
+<p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
     <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
     <div class="lp-show" id="ejemplos">
       <p class="lp-show-eyebrow">✨ Así queda tu Instagram con Posty</p>
@@ -4970,90 +4717,7 @@ function landingView(cfg) {
     </div>
     <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷 · Publicamos con la API oficial de Meta · Nunca te pedimos tu contraseña</div>
   </div></div>
-  ${lpAnalisisHTML()}
-  <div class="section" id="como-funciona"><div class="wrap">
-    <h2>Así trabajo yo 👇</h2>
-    <p class="lede">Vos seguí atendiendo tu negocio. Del resto me ocupo yo.</p>
-    <div class="steps">
-      <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pido más nada.</p></div>
-      <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
-      <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Tu semana sale en los mejores horarios sin que toques nada. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
-    </div>
-    <h2>Y trabajo con tres reglas, siempre</h2>
-    <p class="lede">Son mi forma de trabajar, con cada negocio.</p>
-    <div class="steps">
-      <div class="step"><div class="num">🔍</div><h3>Entiendo tu rubro</h3><p>Leo tu Instagram y tu web antes de crear: tus productos reales, tus precios, tus colores y tu forma de hablar. Nada genérico — si una pieza podría salir igual en otra cuenta, no sale.</p></div>
-      <div class="step"><div class="num">🔌</div><h3>Me conecto a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
-      <div class="step"><div class="num">💬</div><h3>Pregunto solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estoy seguro de tu rubro, te pregunto antes de generar — nunca adivino. Y tu respuesta queda guardada: no te la vuelvo a hacer.</p></div>
-    </div>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Posty trabaja completo por sí solo.</b> Todo lo que tu Instagram necesita lo hago yo, dentro de tu plan — no necesitás contratar a nadie más ni sumar ningún otro servicio.</p>     <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
-    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
-  </div></div>
-  <div class="section gj-levels" data-gj-levels><div class="wrap">
-    <p class="gj-eyebrow">🌱 ASÍ APRENDE POSTY</p>
-    <h2>Cuanto más te conozco, <span class="hl">mejor trabajo</span></h2>
-    <p class="gj-lede">Posty no usa plantillas: aprende tu negocio de verdad — tu rubro, tus colores, tu producto estrella y tu forma de hablar — y cada semana sabe más de vos.</p>
-    <div class="gj-stem" role="list" aria-label="Cómo crece lo que Posty sabe de tu negocio">
-      <div class="gj-node" role="listitem"><span class="gj-dot">🌱</span><div><b>Nuevo en tu feed</b><small>Leo tu Instagram y tu web: tu rubro, tus colores y tu onda.</small></div></div>
-      <div class="gj-seg" aria-hidden="true"><i></i></div>
-      <div class="gj-node" role="listitem"><span class="gj-dot">🔍</span><div><b>Leyendo tu mundo</b><small>Confirmo tu oferta real y tu producto estrella: posteo lo que vendés, nunca relleno.</small></div></div>
-      <div class="gj-seg" aria-hidden="true"><i></i></div>
-      <div class="gj-node" role="listitem"><span class="gj-dot">🏠</span><div><b>De la casa</b><small>Conozco tu paleta, tu tono y tus días fuertes: acierto de primera.</small></div></div>
-      <div class="gj-seg" aria-hidden="true"><i></i></div>
-      <div class="gj-node" role="listitem"><span class="gj-dot">🤝</span><div><b>Mano derecha de tu Instagram</b><small>Anticipo: ideas desde tus posteos ganadores y tu calendario.</small></div></div>
-      <div class="gj-seg" aria-hidden="true"><i></i></div>
-      <div class="gj-node" role="listitem"><span class="gj-dot">⭐</span><div><b>Tu socio de contenido</b><small>Tu semana entera sale sola, en tu línea: vos solo aceptás.</small></div></div>
-    </div>
-    <div class="gj-cta-row"><a class="btn btn-primary" href="/prueba">Empezá tu viaje <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></div>
-    <p class="gj-note">Así aprende Posty: trabajando con vos, semana a semana.</p>
-    ${gjSistemaHTML()}
-  </div></div>
-  <div class="section gj-office" data-gj-office><div class="wrap">
-    <p class="gj-eyebrow">☀️ UN DÍA EN LA OFICINA</p>
-    <h2>Entrá a la oficina: <span class="hl">Posty ya está trabajando</span></h2>
-    <p class="gj-lede">Bajá despacio y mirá su sector: su pared de posteos, su calendario y su escritorio, con la luz celeste de su rincón y la placa de la casa en su pared. Así pasa su día, todos los días, por tu negocio.</p>
-  </div>
-  <div class="gj-stage-wrap"><div class="gj-stage">
-    <div class="gj-room" role="img" aria-label="El sector de Posty en la oficina: su pared de posteos, su calendario y su escritorio">
-      <div class="gj-sectors" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-      <div class="gj-sectorlight" aria-hidden="true"></div>
-      <div class="gj-wallp">
-        <div class="gj-wallhead">
-          <img class="gj-plaque" src="/bambooty-placa.webp" alt="Bambooty" loading="lazy" decoding="async">
-          <div class="gj-cal" aria-hidden="true"><span class="gj-cal-t">Tu semana</span><span class="gj-days"><i>L</i><i>M</i><i>M</i><i>J</i><i>V</i><i>S</i><i>D</i></span></div>
-        </div>
-        <div class="gj-feedwall" aria-hidden="true">
-          <figure class="gj-op"><img src="g-latte.jpg" alt="" loading="lazy" decoding="async"></figure>
-          <figure class="gj-op"><img src="g-pasta.jpg" alt="" loading="lazy" decoding="async"></figure>
-          <figure class="gj-op"><img src="g-tazas.jpg" alt="" loading="lazy" decoding="async"></figure>
-          <figure class="gj-op"><img src="g-vaso.jpg" alt="" loading="lazy" decoding="async"></figure>
-          <figure class="gj-op"><img src="g-tres.jpg" alt="" loading="lazy" decoding="async"></figure>
-          <figure class="gj-op"><img src="g-gourmet.jpg" alt="" loading="lazy" decoding="async"></figure>
-        </div>
-      </div>
-      <div class="gj-deskp">
-        <span class="pz-mg pz-mg--gj"><img class="gj-posty" src="posty-disenando-hero.jpg" alt="Posty, con su lápiz y sus posteos, trabajando en su escritorio" loading="lazy" decoding="async"></span>
-        <div class="gj-comment" aria-hidden="true">
-          <div class="gj-cin">¿Siguen con la promo del jueves? 🙏</div>
-          <div class="gj-cout"><img src="ai-avatar.png" alt="">¡Sí! Este jueves sigue 💛 ¿Te reservo?</div>
-        </div>
-      </div>
-      <div class="gj-glow" aria-hidden="true"></div>
-    </div>
-    <p class="gj-cap" data-gj-cap>Posty llega a su sector y piensa tu semana.</p>
-  </div></div>
-  <p class="gj-note">Un día típico de Posty en su oficina, con posteos de ejemplo de la vidriera.</p>
-  </div>
-  <div class="section lp-audit" id="auditoria"><div class="wrap" style="max-width:760px">
-    <h2>¿Tu Instagram está vendiendo?</h2>
-    <p class="lede">Posty analiza tu perfil <b>gratis</b> y te dice qué está frenando tus ventas: qué publicar, qué responder, qué mejorar.</p>
-    <form class="lp-igform lp-audit-form" onsubmit="return lpGoAudit(event)">
-      <input id="lpAuditIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
-      <button class="btn btn-primary" type="submit">Auditar mi Instagram gratis</button>
-    </form>
-    <p class="lp-audit-note">Sin registrarte · El resultado llega en menos de un minuto</p>
-  </div></div>
-  <div class="section lp-week-sec"><div class="wrap">
+  <div class="section lp-week-sec" id="prueba"><div class="wrap">
     <div class="lp-week" aria-label="Ejemplo de una semana armada por Posty">
       <div class="lp-week-head"><span class="lp-week-title">📅 Tu semana de Instagram en Posty</span><span class="lp-week-badge">Se publica sola ✨</span></div>
       <div class="lp-wchips" role="group" aria-label="Ver la semana de un rubro">
@@ -5079,6 +4743,12 @@ function landingView(cfg) {
       </div>
       <p class="lp-week-note">Así se ve tu semana: ideas, diseños y textos con tu marca, que se publican solos en los mejores horarios.</p>
       <p class="lp-week-bridge" id="lpWeekBridge">Esto es un ejemplo con negocios de varios rubros. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en 1 minuto <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
+      <form class="lp-igform" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
+        <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
+        <button class="btn btn-primary" type="submit">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+      </form>
+<p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
+      <p style="text-align:center;color:var(--mut);font-size:13.5px;margin-top:8px">3 días gratis · sin tarjeta · cancelás cuando querés</p>
     </div>
   </div></div>
   <div class="lp-view" id="lpView" role="dialog" aria-modal="true" aria-label="Posteo de la semana de muestra" onclick="if(event.target===this)lpWeekClose()">
@@ -5090,102 +4760,36 @@ function landingView(cfg) {
       <div class="lp-view-body"><span class="lp-view-tag" id="lpViewTag"></span><div class="lp-view-cap" id="lpViewCap"></div><div class="lp-view-why" id="lpViewWhy"></div></div>
     </div>
   </div>
-  <div class="section lp-feed-sec" id="feed"><div class="wrap">
-    <h2>El feed se arma solo</h2>
-    <p class="lede">Mirá cómo nace tu semana: las tarjetas sueltas son las ideas; el acomodo, el diseño; y la grilla perfecta, lo que sale publicado.</p>
-    <div class="lp-feed-chaps" id="lpFeedChaps" aria-hidden="true">
-      <span class="lp-feed-chap on">✍️ Pienso</span>
-      <span class="lp-feed-chap">🎨 Diseño</span>
-      <span class="lp-feed-chap">📮 Publico</span>
+  <div class="section" id="como-funciona"><div class="wrap">
+    <h2>Así trabajo yo 👇</h2>
+    <p class="lede">Vos seguí atendiendo tu negocio. Del resto me ocupo yo.</p>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pido más nada.</p></div>
+      <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
+      <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Tu semana sale en los mejores horarios sin que toques nada. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
     </div>
-    <div class="lp-feed-scene" id="lpFeedScene">
-      <div class="lp-feed-grid" id="lpFeedGrid">
-        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-cafe.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"></div>
-        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-barber.jpg" alt="Posteo de Instagram de una barbería hecho por Posty"></div>
-        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-moda.jpg" alt="Posteo de Instagram de una tienda de ropa hecho por Posty"></div>
-        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-fitness.jpg" alt="Posteo de Instagram de un gimnasio hecho por Posty"></div>
-        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-belleza.jpg" alt="Posteo de Instagram de una estética hecho por Posty"></div>
-        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-gastro.jpg" alt="Posteo de Instagram de un restaurante hecho por Posty"></div>
-        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="ig-mascotas.jpg" alt="Posteo de Instagram de un pet shop hecho por Posty"></div>
-        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="g-latte.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"></div>
-        <div class="lp-feed-card"><img loading="lazy" decoding="async" src="g-tazas.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"></div>
-      </div>
-      <span class="pz-mg pz-mg--feed"><img class="lp-feed-posty" id="lpFeedPosty" loading="lazy" decoding="async" src="posty-disenando-hero.jpg" alt="Posty diseñando los posteos de tu semana"></span>
+    <h2>Y trabajo con tres reglas, siempre</h2>
+    <p class="lede">Son mi forma de trabajar, con cada negocio.</p>
+    <div class="steps">
+      <div class="step"><div class="num">🔍</div><h3>Entiendo tu rubro</h3><p>Leo tu Instagram y tu web antes de crear: tus productos reales, tus precios, tus colores y tu forma de hablar. Nada genérico — si una pieza podría salir igual en otra cuenta, no sale.</p></div>
+      <div class="step"><div class="num">🔌</div><h3>Me conecto a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
+      <div class="step"><div class="num">💬</div><h3>Pregunto solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estoy seguro de tu rubro, te pregunto antes de generar — nunca adivino. Y tu respuesta queda guardada: no te la vuelvo a hacer.</p></div>
     </div>
-    <p class="lp-feed-line" id="lpFeedLine">Primero pienso las ideas de tu semana.</p>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Posty trabaja completo por sí solo.</b> Todo lo que tu Instagram necesita lo hago yo, dentro de tu plan — no necesitás contratar a nadie más ni sumar ningún otro servicio.</p>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">🕘 <b>Tu ritmo de cada día:</b> a la mañana ves el posteo, lo aprobás con un toque y a las 17:00 sale solo.</p>
+    <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
-  <div class="section"><div class="wrap">
-    <h2>Un video premium cada semana 🎬</h2>
-    <p class="lede">Posty crea un video cinematográfico de tu producto, listo para publicar — incluido en todos los planes.</p>
-    <style>
-    .vp-row{display:flex;gap:16px;overflow-x:auto;padding:24px 2px 10px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
-    .vp-card{flex:0 0 auto;width:216px;margin:0;scroll-snap-align:start}
-    .vp-card video{display:block;width:216px;height:384px;object-fit:cover;border-radius:20px;border:1.5px solid #E3EDF4;box-shadow:0 14px 34px rgba(10,30,51,.12);background:#EAF6FC}
-    .vp-tag{text-align:center;font-weight:800;color:#0A1E33;font-size:14.5px;margin-top:10px}
-    @media(max-width:560px){.vp-card{width:170px}.vp-card video{width:170px;height:302px}}
-    </style>
-    <div class="vp-row" aria-label="Videos premium hechos por Posty">
-      <figure class="vp-card"><video src="/videos/video-premium-cafe.mp4" poster="/videos/poster-cafe.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una cafetería, hecho por Posty"></video><figcaption class="vp-tag"><svg class="wb-ic" aria-hidden="true"><use href="#wb-cup"/></svg> Cafetería</figcaption></figure>
-      <figure class="vp-card"><video src="/videos/video-premium-perfume.mp4" poster="/videos/poster-perfume.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una perfumería, hecho por Posty"></video><figcaption class="vp-tag">🧴 Perfumería</figcaption></figure>
-      <figure class="vp-card"><video src="/videos/video-premium-sneaker.mp4" poster="/videos/poster-sneaker.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una marca de zapatillas, hecho por Posty"></video><figcaption class="vp-tag">👟 Zapatillas</figcaption></figure>
-      <figure class="vp-card"><video src="/videos/video-premium-pasteleria.mp4" poster="/videos/poster-pasteleria.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una pastelería, hecho por Posty"></video><figcaption class="vp-tag">🧁 Pastelería</figcaption></figure>
-      <figure class="vp-card"><video src="/videos/video-premium-unas.mp4" poster="/videos/poster-unas.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de un estudio de uñas, hecho por Posty"></video><figcaption class="vp-tag">💅 Uñas</figcaption></figure>
+  <div class="section" id="equipo"><div class="wrap" style="max-width:760px">
+    <h2><span class="hl">Somos un equipo, Posty y yo</span></h2>
+    <div class="founder-card" id="homeFounderCard" aria-label="El equipo de Posty">
+      <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
+      <h3 style="margin-top:18px">Valentino Caratini</h3>
+      <p class="fc-eye" style="margin-top:2px">Founder de Posty</p>
+      <p class="fc-body">Creé Posty porque identifiqué un problema en cada negocio que conozco: gente talentosa ocupándose de Instagram en vez de ocuparse de su negocio. Y pensé: esto no lo tiene que hacer el dueño. Lo tiene que hacer alguien por él. Ese alguien es Posty. Somos un equipo, Posty y yo: él arma tu semana y yo reviso que cada posteo salga perfecto. Vos solo mirás, y si algo no te gusta, lo ajustamos juntos.</p>
     </div>
-    <script>(function(){var vs=document.querySelectorAll('.vp-card video,.hero-video');if(!vs.length||!('IntersectionObserver' in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.play().catch(function(){})}else{e.target.pause()}})},{threshold:.3});vs.forEach(function(v){io.observe(v)});})();</script>
   </div></div>
-  <div class="section" id="cm"><div class="wrap">
-    <h2>Un community manager hace mucho más que publicar</h2>
-    <p class="lede">Un Instagram que vende no se mantiene solo: hay que publicar seguido, conversar con la gente, responder todo y promocionar lo que funciona. Eso es lo que hace un community manager. Y cobra <b>desde $1.000.000 por mes</b>. <b>Posty hace ese mismo trabajo, todos los días.</b></p>
-    <div class="lp-cm-cards">
-      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>Comunidad</h3><p class="lp-cm-tag">Que nadie quede sin respuesta</p><p>Responde comentarios y mensajes (con tu OK en un toque), y arma historias que hacen participar a tu audiencia: encuestas, preguntas y cuentas regresivas. Una comunidad se construye conversando, no solo publicando.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">📈</div><h3>Crecimiento</h3><p class="lp-cm-tag">Que te descubra gente nueva</p><p>Detecta tus posteos que mejor andan y te dice cuáles rinden más, te da tu página pública lista para compartir con botón de WhatsApp, y cada mes trabaja con un foco de crecimiento que vos elegís.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">🛒</div><h3>Ventas</h3><p class="lp-cm-tag">Que el seguidor se vuelva cliente</p><p>Posteos pensados para vender: tu producto, tus promos. Te avisa ANTES de cada fecha que vende (Día de la Madre, Hot Sale, Navidad…) para llegar listo, y cada perfil termina en un toque: WhatsApp directo a tu negocio.</p></div>
-    </div>
-    <div class="lp-cm-cmp" role="table" aria-label="Comparación entre un community manager tradicional y Posty">
-      <div class="lp-cm-row lp-cm-head" role="row"><div>El trabajo</div><div>Community manager</div><div class="win">Posty</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Publica posteos, reels e historias</div><div>✓</div><div class="win">✓</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>✓</div><div class="win">✓</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Cuida tus reseñas</div><div>✓</div><div class="win">—</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Potencia lo que anda con pauta</div><div>✓</div><div class="win">—</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Piensa el foco de cada mes</div><div>✓</div><div class="win">✓</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Está disponible</div><div>En su horario</div><div class="win">Todos los días, a toda hora</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>Desde $1.000.000 por mes</div><div class="win">USD 6,63 por día</div></div>
-    </div>
-    <p class="lp-cm-close">El mismo trabajo. Sin sueldos, sin cargas sociales, sin vacaciones.</p>
-    <div style="text-align:center"><a class="btn btn-primary btn-lg" href="/prueba">Quiero mi community manager <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></div>
-  </div></div>
-  ${lpCapSectionsHTML()}
-  <div class="section" id="fotos"><div class="wrap">
-    <h2>Con tus fotos, es tu negocio de verdad. Sin fotos, Posty lo crea igual.</h2>
-    <p class="lede">Los posteos que ves arriba salen por dos caminos — y los dos funcionan:</p>
-    <div class="lp-foto-grid">
-      <div class="lp-foto-card">
-        <div class="lp-foto-i">📸</div>
-        <h3>Nos pasás fotos y videos de tu negocio</h3>
-        <p>Tus productos, tu local, tu equipo: nada vende como lo real. Posty usa <b>tu</b> material en los posteos, y cuanto más nos pasás, mejores y más tuyos salen.</p>
-        <div class="lp-foto-check">✅ Sale tu negocio de verdad, no uno parecido</div>
-      </div>
-      <div class="lp-foto-card">
-        <div class="lp-foto-i">🤖</div>
-        <h3>¿No tenés material? Lo creamos nosotros</h3>
-        <p>Posty diseña las imágenes desde cero con tu marca, tus colores y tu estilo. Nunca te quedás sin publicar por no tener fotos.</p>
-        <div class="lp-foto-check">✅ Tu semana sale igual, siempre</div>
-      </div>
-    </div>
-    <p class="lp-foto-cta"><a href="/prueba">En la prueba gratuita podés subir una foto tuya y ver la diferencia <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
-    <div style="text-align:center;margin-top:26px"><a class="btn btn-primary btn-lg" href="/prueba">Probá gratis 3 días</a></div>
-  </div></div>
-  <div class="section lp-ctl" id="control"><div class="wrap" style="max-width:920px">
-    <h2>Tranqui: vos siempre tenés el freno de mano</h2>
-    <p class="lede">Posty trabaja solo, pero nada sale sin que puedas frenarlo. Así de simple:</p>
-    <div class="lp-ctl-grid">
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">🔔</div><b>Te avisa antes</b><p>30 minutos antes de publicar cada posteo te llega el aviso. Lo ves venir, siempre.</p></div>
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">⏸</div><b>Frenás con un toque</b><p>El botón Frenar lo vuelve a borrador al instante. Sin explicaciones, sin vueltas.</p></div>
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">🎨</div><b>¿No te cierra la imagen?</b><p>Tenés 1 rehacer con otro estilo por posteo, gratis. Posty la arma de nuevo.</p></div>
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">↩️</div><b>Volvés a la anterior</b><p>Si el rehacer no te gusta, volvés a la imagen anterior cuando quieras.</p></div>
-    </div>
-    <p class="lp-ctl-close">Posty trabaja solo. <b>Vos mandás.</b></p>
-  </div></div>
+  ${lpAdsHTML()}
   <div class="section" id="planes"><div class="wrap">
     <h2>Un solo plan. Todo incluido.</h2>
     <p class="lede">Probá gratis 3 días. Si te gusta tu semana, este es tu plan.</p>
@@ -5202,88 +4806,8 @@ function landingView(cfg) {
     <p class="lp-plans-note">Si tu primera semana no te convence, te la rehacemos entera, gratis.</p>
     <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque el precio suba.</p>
 
-    <!-- (v344) Mini-bloque del fundador en Planes: foto entera,
-         textos aprobados del módulo (el mismo de /prueba v341). -->
-    <div class="founder-card mini" id="homeFounderCard" aria-label="El fundador de Posty">
-      <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
-      <h3 style="margin-top:18px">Valentino Caratini</h3>
-      <p class="fc-eye" style="margin-top:2px">Founder de Posty</p>
-      <p class="fc-body">Creé Posty porque identifiqué un problema en cada negocio que conozco: gente talentosa ocupándose de Instagram en vez de ocuparse de su negocio. Y pensé: esto no lo tiene que hacer el dueño. Lo tiene que hacer alguien por él. Ese alguien es Posty. Vos solo monitoreás, y si algo no te gusta, lo ajustamos juntos.</p>
-    </div>
   </div></div>
-  ${lpAtencionHTML()}
-  <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
-    <h2>El único que hace todo por vos</h2>
-    <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen desde $1.000.000 por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
-    <div class="cmp-scroll"><div class="cmp-table cmp4" role="table" aria-label="Comparación: hacerlo vos, un community manager freelance, una agencia o Posty">
-      <div class="cmp-row cmp-head" role="row"><div></div><div>Lo hacés vos</div><div>CM freelance</div><div>Agencia</div><div class="win">Posty</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>$0 de bolsillo — pero es tu tiempo</div><div>Desde $1.000.000 *</div><div>Más que un CM freelance *</div><div class="win" id="cmpPostyPrice">Desde ${esc(lpPlanLabel)}</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Qué incluye</div><div>Lo que llegues a hacer</div><div>Posteos; reels e historias, según acuerdo</div><div>Posteos y estrategia</div><div class="win">7 posteos por semana · 2 reels (martes y jueves)</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>Horas, cada semana</div><div>Días</div><div>1 a 2 semanas</div><div class="win">1 minuto</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>—</div><div>Coordinación y aprobaciones</div><div>Varias por mes</div><div class="win">Cero</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>Vos, cuando podés</div><div>A veces está incluido</div><div>Si está en el contrato</div><div class="win">Respuestas listas para tu OK en un toque</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Reseñas de Google</div><div>A mano, una por una</div><div>No suele incluirlas</div><div>Se cobra aparte</div><div class="win">—</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Pauta publicitaria</div><div>La armás y la seguís vos</div><div>Honorarios aparte</div><div>Honorarios aparte</div><div class="win">—</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>—</div><div>Rara vez</div><div>No existe</div><div class="win">3 días gratis, sin tarjeta</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>—</div><div>Mes a mes, informal</div><div>3 a 6 meses</div><div class="win">Mensual, cancelás cuando querés</div></div>
-    </div></div>
-    <p class="cmp-note">* Precios de referencia de mercado para un servicio equivalente. El precio de Posty es el real: el de los planes de acá abajo.</p>
-    <p class="unico-line" id="unicoLine">Un community manager cuesta <b>desde $1.000.000 por mes</b>. Posty cuesta <b>USD 199 por mes</b>.</p>
-    <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Podés frenar cualquier posteo antes de que salga</p>
-    <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
-  </div></div>
-  <div class="section" id="herramienta" style="background:var(--bg2)"><div class="wrap" style="max-width:920px">
-    <h2>Una herramienta te da trabajo. Posty te lo saca.</h2>
-    <p class="lede">Las apps de IA para redes son lindas… hasta que te sentás a usarlas: hay que pensar, escribir, diseñar, programar y publicar. Eso es un trabajo. Posty <b>es</b> el que lo hace.</p>
-    <div class="lp-vs">
-      <div class="lp-vs-col lp-vs-tool">
-        <h3>Con una herramienta de IA, vos…</h3>
-        <ul>
-          <li>✗ Pensás qué postear cada semana</li>
-          <li>✗ Escribís las instrucciones y los textos</li>
-          <li>✗ Editás los diseños hasta que queden bien</li>
-          <li>✗ Programás y publicás uno por uno</li>
-          <li>✗ Aprendés un panel nuevo y complicado</li>
-          <li>✗ Te acordás solo de las fechas importantes</li>
-        </ul>
-      </div>
-      <div class="lp-vs-col lp-vs-posty">
-        <h3>Con Posty, vos…</h3>
-        <ul>
-          <li>✓ <b>Nada.</b> La semana llega armada y se publica sola</li>
-          <li>✓ <b>Nada.</b> Escribe en tu tono, con tu marca</li>
-          <li>✓ <b>Nada.</b> Sale listo — y si algo no te gusta, lo frenás en un toque</li>
-          <li>✓ <b>Nada.</b> Sale a la mejor hora, siempre</li>
-          <li>✓ <b>Nada.</b> No hay panel que aprender: es tener el community manager</li>
-          <li>✓ <b>Nada.</b> Posty caza las fechas que venden por vos</li>
-        </ul>
-      </div>
-    </div>
-    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Quiero no hacer nada <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-glasses"/></svg></a></div>
-  </div></div>
-  <div class="section lp-calc" id="calculadora"><div class="wrap" style="max-width:820px">
-    <h2>¿Cuánto te cuesta hoy tu Instagram?</h2>
-    <p class="lede">Mové el control y hacé la cuenta con tus números reales.</p>
-    <div class="lp-calc-box">
-      <label class="lp-calc-lab" for="lpCalcH">Horas que le dedicás por semana: <b id="lpCalcHVal">6 h</b></label>
-      <input type="range" id="lpCalcH" min="1" max="20" step="1" value="6" oninput="lpCalcUpdate()" aria-label="Horas por semana que le dedicás a tu Instagram">
-      <label class="lp-calc-lab" for="lpCalcR" style="margin-top:16px">¿Cuánto vale tu hora? <b id="lpCalcRVal">${lpFmt(lpDefRate)}</b></label>
-      <input type="range" id="lpCalcR" min="${(lpCur === 'UYU') ? 100 : 1000}" max="${(lpCur === 'UYU') ? 2500 : 30000}" step="${(lpCur === 'UYU') ? 50 : 250}" value="${lpDefRate}" oninput="lpCalcRateSlider()" aria-label="Cuánto vale tu hora">
-      <div class="lp-calc-rates">
-        ${lpChips.map((v) => `<button type="button" class="lp-crate${v === lpDefRate ? ' on' : ''}" data-rate="${v}" onclick="lpCalcRate(this)">${lpFmt(v)}</button>`).join('')}
-      </div>
-      <div class="lp-calc-out" id="lpCalcOut">Tu Instagram hoy te cuesta ≈ <b>${lpFmt(lpDefCost)}</b> por mes (<b>${lpHorasMes} horas</b> tuyas).<br>Con Posty: <b>${esc(lpPlanLabel)} por mes</b> (≈ ${lpPerDaySym}${lpPerDay.toLocaleString('es-AR')} por día) y <b>0 horas tuyas</b> — te quedan <b>${lpHorasMes} horas por mes</b> para tu negocio.</div>
-    </div>
-    <p class="lp-calc-cm">Y si lo tercerizás: un community manager que lo haga por vos cuesta <b>desde $1.000.000 por mes</b>.</p>
-  </div></div>
-  <div class="lp-stats"><div class="wrap">
-    <div class="lp-stats-grid">
-      <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">7 posteos + 2 reels</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">USD 6,63<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta desde $1.000.000 por mes</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
-    </div>
-  </div></div>
+  ${lpIdeasGrowthHTML()}
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Preguntas frecuentes</h2>
     <p class="lede">Lo que todos preguntan antes de empezar.</p>
@@ -5293,14 +4817,12 @@ function landingView(cfg) {
       <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
       <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Lo frenás antes de que salga, en un toque. ¿No te gusta la imagen? La rehacés con otro estilo o volvés a la anterior, gratis. Y aprendo de lo que te gusta para que cada semana salga mejor.</p></details>
-      <details><summary>¿Posty también atiende a mis clientes?</summary><p>Sí: Posty prepara las respuestas a tus mensajes y comentarios de Instagram, con tus precios y servicios reales. Vos aprobás cada mensaje con un toque antes de que salga — nada se manda sin tu OK — y lo sensible te lo derivo a vos.</p></details>
-      <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca veo ni guardo tu contraseña.</p></details>
+      <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos tu contraseña: ni la pedimos ni la guardamos.</p></details>
       <details><summary>¿Los posteos se publican solos?</summary><p>Sí, esa es la idea: tu semana sale sola en los mejores horarios, sin que toques nada. Antes de cada publicación te aviso, y si algo no te cierra lo frenás con un toque. ¿Preferís aprobar todo a mano? También podés: apagás la publicación automática en Ajustes y nada sale sin tu OK.</p></details>
       <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: mirá tu semana armada en 1 minuto y decidí. Si no te sirve, no pagás nada.</p></details>
       <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis la ves armada en 1 minuto, y al crear tu cuenta ya queda publicándose sola (con aviso previo, por si querés frenar algo).</p></details>
-      <details><summary>¿Posty responde los comentarios y los mensajes de mi Instagram?</summary><p>Sí. Por cada comentario o mensaje que llega, Posty te prepara la respuesta en el tono de tu negocio: la mandás con un toque, la editás o la descartás. Nada se responde sin que lo apruebes vos.</p></details>
-      <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar, responder, promocionar y cuidar tu perfil — con tu aprobación en un toque cuando hace falta criterio humano. Si tu marca necesita producción de fotos o video presencial, o campañas a medida, eso sigue siendo trabajo de un equipo humano.</p></details>
-      <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Todavía no: la publicidad con Meta todavía no está conectada. Posty ya te marca cuáles son tus mejores posteos, y cuando la publicidad esté disponible vas a poder potenciarlos desde la app.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo. Posty es un producto completo por sí mismo: pienso las ideas, diseño, publico, respondo y promociono — todo dentro de tu plan, sin que contrates a nadie más ni sumes otros servicios. Con Posty alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
+      <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar, promocionar y cuidar tu perfil — con tu aprobación en un toque cuando hace falta criterio humano. Si tu marca necesita producción de fotos o video presencial, o campañas a medida, eso sigue siendo trabajo de un equipo humano.</p></details>
+      <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo: cargás crédito en tu billetera —aparte de la suscripción— y Posty elige el posteo, el público y lo gestiona, siempre con tu OK en un toque.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo. Posty es un producto completo por sí mismo: pienso las ideas, diseño, publico y promociono — todo dentro de tu plan, sin que contrates a nadie más ni sumes otros servicios. Con Posty alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
     </div>
     <p style="text-align:center;margin-top:28px;font-size:15.5px;color:var(--dim)">¿Otra duda? <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);font-weight:700;cursor:pointer">Hablá con Posty <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
     <div style="text-align:center;margin-top:44px">
@@ -5315,7 +4837,7 @@ function landingView(cfg) {
     <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
   </div></div>
   <div class="footer"><div class="wrap">
-    <span class="logo logo-posty" style="font-size:17.5px"><img class="sello-pie" src="/logo-bambooty.png" width="56" height="56" alt="Sello de Bambooty">posty<span class="pdot">.</span></span>
+    <span class="logo logo-posty" style="font-size:17.5px"><img class="logo-img-foot" src="/posty-logo.png" width="226" height="62" alt="Posty"></span>
     <span>Posty, tu community manager con IA · © 2026</span>
     <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a> · <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);cursor:pointer">Soporte</a></span>
   </div></div>
@@ -18238,11 +17760,6 @@ async function showExpiredModal() {
         <span>${p.highlighted ? '<span class="pz-exp-tag">EL M\u00c1S ELEGIDO</span>' : ''}<b>${esc(p.name)}</b><small>${esc(p.price_label)}/mes \u00b7 ${perDay(p)}</small>${expMix(p)}</span>
         <span class="pz-exp-go">Elegir \u2192</span>
       </button>
-      ${(p.detail && p.detail.length) ? `<button type="button" class="pz-exp-more" data-exp-more="${p.id}" aria-expanded="false">Ver todo lo que hace por vos <span class="pm-chev">${pzIc('chevDown', 14)}</span></button>
-      <div class="pz-exp-detail" hidden>
-        <ul>${p.detail.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-        <button class="btn btn-primary btn-block" data-exp-plan="${p.id}">Elegir el plan ${esc(p.name)}</button>
-      </div>` : ''}
     </div>`).join('');
   const ov = document.createElement('div');
   ov.id = 'pzExpOverlay';
@@ -18265,18 +17782,6 @@ async function showExpiredModal() {
   const goBtn = ov.querySelector('#pzExpGo');
   if (goBtn) goBtn.onclick = () => goPlan('');
   ov.querySelectorAll('[data-exp-plan]').forEach(b => b.onclick = () => goPlan(b.dataset.expPlan));
-  // (v401) Detalle «por vos» dentro del paywall: se despliega en el lugar,
-  // sin salir del modal; el botón Elegir del detalle va al mismo flujo.
-  ov.querySelectorAll('[data-exp-more]').forEach(b => b.onclick = () => {
-    const row = b.closest('.pz-exp-row');
-    const det = row && row.querySelector('.pz-exp-detail');
-    if (!det) return;
-    const open = det.hidden;
-    det.hidden = !open;
-    b.setAttribute('aria-expanded', open ? 'true' : 'false');
-    b.firstChild.textContent = open ? 'Ver menos ' : 'Ver todo lo que hace por vos ';
-    row.classList.toggle('open', open);
-  });
 }
 
 /* ---------- Banner persistente: trial vencido (tab Schedule / Mi semana) ---------- */

@@ -48,9 +48,9 @@ button{font-family:inherit}
    aterriza con aire bajo la nav (alto medido: 73px desktop / 65px mobile, +17px de aire).
    Va con scroll-margin en los destinos y NO con scroll-padding en html porque esta misma
    CSS sirve a la app: el padding global correría los scrollIntoView internos del producto. */
-#como-funciona,#capacidades,#analisis,#ejemplos,#planes,#faq,#feed{scroll-margin-top:90px}
+#como-funciona,#capacidades,#analisis,#ejemplos,#planes,#faq,#feed,#prueba,#equipo,#ads,#ideas,#crecimiento{scroll-margin-top:90px}
 @media(max-width:760px){
-  #como-funciona,#capacidades,#analisis,#ejemplos,#planes,#faq,#feed{scroll-margin-top:82px}
+  #como-funciona,#capacidades,#analisis,#ejemplos,#planes,#faq,#feed,#prueba,#equipo,#ads,#ideas,#crecimiento{scroll-margin-top:82px}
 }
 
 /* ---------- buttons ---------- */
@@ -3879,6 +3879,12 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 /* Sello Bambooty plano (sin anillo) — mismo sistema que los demás sitios: cabecera 34px + footer 56px, mismo asset. */
 .sello-cabecera{width:34px;height:34px;border-radius:50%;flex:none;margin-right:9px}
 .sello-pie{width:56px;height:56px;border-radius:50%;flex:none;margin-right:10px}
+/* (v760) Logo Posty (robot + «posty.», 226x62): el sello redondo no sirve
+   para un rectángulo ancho — altura fija, ancho automático. Fuente chica:
+   si llega una versión más grande se cambia el archivo sin tocar el código. */
+.logo-img{height:34px;width:auto;display:block}
+.logo-img-foot{height:40px;width:auto;display:block}
+@media(max-width:760px){.logo-img{height:28px}.logo-img-foot{height:34px}}
 @media(max-width:760px){.sello-cabecera{width:28px;height:28px}}
 
 /* ===== BOTONES DISEÑADOS DEL WEBSITE — sistema wb (2026-10-25) =====

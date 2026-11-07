@@ -35,7 +35,7 @@ const sliceFn = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + base v718 ----------
-  t(srv.includes("const BUILD_ID = '20261105-v759'"), 'server: BUILD v759');
+  t(srv.includes("const BUILD_ID = '20261105-v761'"), 'server: BUILD v761');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -45,8 +45,8 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-  t(app.includes("const CHUNK_V = '20261105-v759'"), 'CHUNK_V v759');
-  t(md5(css) === '8d16705e3a63aa3aedb926274f9d0664', 'styles.css md5 (v748, sin cambio en este lote)');
+  t(app.includes("const CHUNK_V = '20261105-v760'"), 'CHUNK_V v760');
+  t(md5(css) === 'c69a88250b099b7552da6a16ac5266af', 'styles.css md5 v761 (reglas .logo-img)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
 
   // ---------- 2. El router ya no rebot a semana ----------

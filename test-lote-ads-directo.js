@@ -48,9 +48,9 @@ const sliceFn = (src, from, to) => {
 
 // ---------- 0. Censo base v756 (sin cambio) ----------
 console.log('— 0) censo base v759 —');
-check('server: BUILD v759', srv.includes("const BUILD_ID = '20261105-v759'"));
-check('app: CHUNK_V v759', app.includes("const CHUNK_V = '20261105-v759'"));
-check('styles.css md5 v748 (sin cambio: todo el diseño nuevo va inline en el chunk)', md5(css) === '8d16705e3a63aa3aedb926274f9d0664');
+check('server: BUILD v761', srv.includes("const BUILD_ID = '20261105-v761'"));
+check('app: CHUNK_V v760', app.includes("const CHUNK_V = '20261105-v760'"));
+check('styles.css md5 v761 (reglas .logo-img del lote website-copy)', md5(css) === 'c69a88250b099b7552da6a16ac5266af');
 check('censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 check('censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
 check('censo server: first_week 3', cnt(srv, 'first_week') === 3);
@@ -157,7 +157,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v759', ver.status === 200 && ver.json && ver.json.build === '20261105-v759', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v761', ver.status === 200 && ver.json && ver.json.build === '20261105-v761', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 
