@@ -2419,13 +2419,27 @@ function buildGenFormData() {
     fd.append('precios', OC_ANS.precios || '');
     fd.append('donde', OC_ANS.donde || '');
     fd.append('etapa', OC_ANS.etapa || '');
+    // (LOTE PRUEBA-CHAT-GATE-FIX2) Q6/Q7/Q8 viajan al servidor: sin estos
+    // 6 campos el gate onboardingAnswersOk da false SIEMPRE (ausente =
+    // '') y la generación devuelve 400 «Respondé las preguntas rápidas
+    // primero…» aunque el chat esté completo. El bug de v746 era este:
+    // sprout() SÍ los tenía en OC_ANS, pero el FormData no los mandaba.
+    fd.append('audiencia', OC_ANS.audiencia || '');
+    fd.append('audiencia_mix', OC_ANS.audiencia_mix || '');
+    fd.append('diferencial', OC_ANS.diferencial || '');
+    fd.append('diferencial_mix', OC_ANS.diferencial_mix || '');
+    fd.append('lineas_rojas', OC_ANS.lineas_rojas || '');
+    fd.append('lineas_rojas_mix', OC_ANS.lineas_rojas_mix || '');
   }
   // (FUNDAMENTO-LITERAL · pieza 1) El espejo aprobado viaja con la generación.
   if (window.OC_ESPEJO) { fd.append('espejo_flujo', '1'); fd.append('espejo_aprobado', String(window.OC_ESPEJO.aprobado || '')); fd.append('espejo_productos', JSON.stringify(window.OC_ESPEJO.productos || [])); fd.append('espejo_vetos', JSON.stringify(window.OC_ESPEJO.vetos || [])); }
   // DRAFT-ONBOARDING (4/11): el gusto del draft viaja con la generación; el servidor lo valida estricto y lo ignora si viene roto.
   if (window.OC_DRAFT) { fd.append('draft_gusto', JSON.stringify(window.OC_DRAFT)); }
   fd.append('producto', TRIAL_ANS.producto || '');
-  fd.append('diferencial', TRIAL_ANS.diferencial || '');
+  // (LOTE PRUEBA-CHAT-GATE-FIX2) El 'diferencial' viejo (TRIAL_ANS) solo
+  // se manda si NO hay OC_ANS: parseMultipart se queda con el ÚLTIMO
+  // valor repetido y un '' acá pisaría el diferencial del chat.
+  if (!window.OC_ANS) fd.append('diferencial', TRIAL_ANS.diferencial || '');
   // Foto opcional del negocio (campo 'photo' del multipart)
   if (OPT_PHOTO) fd.append('photo', OPT_PHOTO, OPT_PHOTO.name || 'foto.jpg');
   return fd;

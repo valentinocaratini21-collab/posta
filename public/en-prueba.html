@@ -2404,13 +2404,27 @@ function buildGenFormData() {
     fd.append('precios', OC_ANS.precios || '');
     fd.append('donde', OC_ANS.donde || '');
     fd.append('etapa', OC_ANS.etapa || '');
+    // (LOTE PRUEBA-CHAT-GATE-FIX2) Q6/Q7/Q8 travel to the server: without
+    // these 6 fields onboardingAnswersOk is false ALWAYS (missing =
+    // '') and generation returns 400 even with the chat complete. That
+    // was the v746 bug: sprout() DID have them in OC_ANS, but the
+    // FormData never sent them.
+    fd.append('audiencia', OC_ANS.audiencia || '');
+    fd.append('audiencia_mix', OC_ANS.audiencia_mix || '');
+    fd.append('diferencial', OC_ANS.diferencial || '');
+    fd.append('diferencial_mix', OC_ANS.diferencial_mix || '');
+    fd.append('lineas_rojas', OC_ANS.lineas_rojas || '');
+    fd.append('lineas_rojas_mix', OC_ANS.lineas_rojas_mix || '');
   }
   // (FUNDAMENTO-LITERAL · pieza 1) El espejo aprobado viaja con la generación.
   if (window.OC_ESPEJO) { fd.append('espejo_flujo', '1'); fd.append('espejo_aprobado', String(window.OC_ESPEJO.aprobado || '')); fd.append('espejo_productos', JSON.stringify(window.OC_ESPEJO.productos || [])); fd.append('espejo_vetos', JSON.stringify(window.OC_ESPEJO.vetos || [])); }
   // DRAFT-ONBOARDING (4/11): the draft taste travels with generation; the server validates strictly and ignores it if broken.
   if (window.OC_DRAFT) { fd.append('draft_gusto', JSON.stringify(window.OC_DRAFT)); }
   fd.append('producto', TRIAL_ANS.producto || '');
-  fd.append('diferencial', TRIAL_ANS.diferencial || '');
+  // (LOTE PRUEBA-CHAT-GATE-FIX2) The old 'diferencial' (TRIAL_ANS) is
+  // only sent when there is NO OC_ANS: parseMultipart keeps the LAST
+  // repeated value and an '' here would overwrite the chat's diferencial.
+  if (!window.OC_ANS) fd.append('diferencial', TRIAL_ANS.diferencial || '');
   // Foto opcional del negocio (campo 'photo' del multipart)
   if (OPT_PHOTO) fd.append('photo', OPT_PHOTO, OPT_PHOTO.name || 'foto.jpg');
   return fd;

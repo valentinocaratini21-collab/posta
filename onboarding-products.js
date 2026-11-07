@@ -51,8 +51,28 @@ function isMinableOfferItem(s) {
   // oferta: «Walk-ins welcome», «Book your chair», «New arrivals» se
   // minaban como «productos» en bios/captions de negocios solo-IG.
   if (/\b(walk-?ins?|welcome|book (your|now|a|an)|new arrivals?|just landed|link in bio|follow (us|me)|dm (us|me)|now open|grand opening|sale ends|free shipping)\b/i.test(s)) return false;
+  // (LOTE PRUEBA-CHAT-GATE-FIX2) Fragmentos de caption en inglés: un
+  // segmento que EMPIEZA con un verbo de llamado/evento («RSVP at the»,
+  // «Based on true events.», «Join us Saturday») o TERMINA en palabra
+  // débil («at the», «on the») es un recorte de prosa, nunca un
+  // producto. Solo pega al minado de prosa (bio/descripción/captions):
+  // los servicios listados no pasan por acá.
+  const w = normStr(s).split(/[^a-z0-9]+/).filter(Boolean);
+  if (w.length) {
+    if (OFFER_EN_CTA_START.has(w[0])) return false;
+    if (OFFER_DANGLING_END.has(w[w.length - 1])) return false;
+  }
   return true;
 }
+// (LOTE PRUEBA-CHAT-GATE-FIX2) Verbos de llamado/evento en inglés como
+// primera palabra de un segmento minado: RSVP, join, come, visit, shop,
+// book, grab, try, check, follow, click, tap, swipe, save, share, tag,
+// celebrate, win, enter, sign, subscribe, watch, listen, download +
+// aperturas de cláusula («Based on…», «Made with…», «Live music…»).
+const OFFER_EN_CTA_START = new Set(['rsvp', 'join', 'come', 'visit', 'shop', 'book', 'grab', 'try', 'check', 'follow', 'click', 'tap', 'swipe', 'save', 'share', 'tag', 'celebrate', 'win', 'enter', 'sign', 'subscribe', 'watch', 'listen', 'download', 'based', 'inspired', 'made', 'crafted', 'designed', 'built', 'created', 'powered', 'brought', 'featuring', 'introducing', 'announcing', 'happening', 'live', 'tonight', 'today', 'tomorrow', 'dont', 'never']);
+// Palabra débil al final del segmento: el recorte quedó cortado a la
+// mitad («Rsvp at the», «Café de») — un producto no termina así.
+const OFFER_DANGLING_END = new Set(['the', 'a', 'an', 'at', 'on', 'in', 'to', 'for', 'of', 'with', 'from', 'by', 'and', 'or', 'el', 'la', 'los', 'las', 'un', 'una', 'de', 'en', 'con', 'para', 'por', 'y', 'o', 'su', 'al', 'del']);
 
 function detectProducts({ bio, captions, services, description, excludeNames } = {}) {
   let names = [];

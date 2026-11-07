@@ -340,6 +340,33 @@ function isJunkServiceHeading(v) {
   return false;
 }
 
+// (LOTE PRUEBA-CHAT-GATE-FIX2) Nombres de producto desde links a
+// /products/<handle> (e-commerce tipo Shopify; también /product/
+// singular, WooCommerce y similares): el texto del link ES el nombre
+// del producto. Textos de acción («View options», «Add to cart») y
+// chrome de tienda no son nombres: se descartan acá.
+const PRODUCT_LINK_JUNK = /^(view options|choose options|select options|add to cart|quick view|buy now|learn more|shop now|view all|ver opciones|agregar al carrito|vista r[aá]pida|comprar ahora|ver todo)$/i;
+function productNamesFromHtml(html) {
+  const out = [];
+  const seen = new Set();
+  for (const m of String(html || '').matchAll(/<a\b[^>]*href\s*=\s*["']([^"']*\/products?\/[a-z0-9\-_]+[^"']*)["'][^>]*>([\s\S]{1,120}?)<\/a>/gi)) {
+    let v = cleanText(m[2]);
+    // Un botón («Get Nano Challa») enlaza al producto pero su texto es
+    // un llamado, no el nombre: se pela el verbo inicial y queda el
+    // producto («Nano Challa»). Sin esto el espejo mostraba el botón.
+    v = v.replace(/^(get|shop|buy|try)\s+/i, '').trim();
+    if (!v || v.length < 3 || v.length > 60 || v.split(' ').length > 8) continue;
+    if (PRODUCT_LINK_JUNK.test(v)) continue;
+    if (isJunkServiceHeading(v)) continue;
+    const k = v.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(v);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 async function fetchBusinessSite(rawUrl) {
   const url = normalizeSiteUrl(rawUrl);
   if (!url) return null;
@@ -403,6 +430,11 @@ async function fetchBusinessSite(rawUrl) {
       items.slice(0, 10).forEach(pushService);
     } catch (e) { /* se sigue con encabezados */ }
   }
+  // (LOTE PRUEBA-CHAT-GATE-FIX2) Productos reales primero (ver
+  // productNamesFromHtml): los encabezados son secciones («Best
+  // Sellers», «Join the Club»), no productos. Sin esto el espejo
+  // mostraba secciones como si fueran la oferta del negocio.
+  for (const p of productNamesFromHtml(html)) pushService(p);
   // (LOTE PRUEBA-CHAT-GATE-FIX) El filtro de encabezados basura vive en
   // isJunkServiceHeading (módulo, testeable).
   for (const m of html.matchAll(/<h[123][^>]*>([\s\S]{1,140})<\/h[123]>/gi)) {
@@ -570,5 +602,6 @@ module.exports = {
   pickName,
   isNameLike,
   isJunkServiceHeading,
+  productNamesFromHtml,
   extractBusinessFacts,
 };
