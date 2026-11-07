@@ -39,7 +39,7 @@ const sliceFn = (src, from, to) => {
 };
 
 // ---------- 1. Censo (sin cambio) + base v728 (BUILD v729 en el árbol final) ----------
-t(srv.includes("const BUILD_ID = '20261105-v761'"), 'server: BUILD v761 (re-pin v761; re-base marca-hoy sobre v728; v725 transición, v726 ritual, v727 iconos, v728 mas-arriba preservados)');
+t(srv.includes("const BUILD_ID = '20261105-v766'"), 'server: BUILD v766 (re-pin ritual-siguiente a v766; antes re-pin v765; antes re-pin v763; antes re-pin v761; re-base marca-hoy sobre v728; v725 transición, v726 ritual, v727 iconos, v728 mas-arriba preservados)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -49,8 +49,8 @@ t(cnt(app, 'pz-detalle-setup') === 1, 'censo app: pz-detalle-setup 1');
 t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
 t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
 t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-t(app.includes("const CHUNK_V = '20261105-v760'"), 'CHUNK_V v760 (sin cambio: este lote no toca chunks)');
-t(md5(css) === 'c69a88250b099b7552da6a16ac5266af', 'styles.css: md5 v761 con .logo-img (re-pin)');
+t(app.includes("const CHUNK_V = '20261105-v764'"), 'CHUNK_V v764 (re-pin ritual-siguiente a v764; el lote no toca chunks, el cambio viene de la base v764)');
+t(md5(css) === 'bac587ad5c5d6ef443ee577d78c16fe4', 'styles.css: md5 (re-pin ritual-siguiente: .hf-carta-destapa; antes v761 .logo-img)');
 
 // ---------- 2. VM: homeGridCompose + homeTileHTML ----------
 const TZ = 'America/New_York';

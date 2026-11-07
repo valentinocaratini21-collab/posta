@@ -4146,6 +4146,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-cell-velada .hf-carta-proximo{background:#FEC14D;font-size:15px;padding:8px 18px;box-shadow:none}
 .hf-cell-velada .hf-cuenta-abre{font-size:19px;line-height:1.5;font-weight:600;color:#fff;white-space:normal}
 .hf-cell-velada .hf-cuenta-abre b{color:#FEC14D;font-size:26px;font-weight:800}
+/* (LOTE RITUAL-SIGUIENTE · 7/11 · «Se destapa a las 00:00») La hora
+   del destape, explícita bajo la cuenta: blanca, con la hora en dorado. */
+.hf-carta-destapa{display:block;font-size:14px;line-height:1.4;color:#fff;font-weight:600}
+.hf-carta-destapa b{color:#FEC14D;font-weight:800}
 .hf-cell-velada .hf-carta-contenido .hf-chip{position:static;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:15px;font-weight:700;padding:9px 16px;border-radius:999px}
 .hf-cell-velada .hf-carta-contenido{padding:26px 20px 28px}
 .hf-cell-velada .hf-carta-destellos i:nth-child(1){top:16px;left:20px;font-size:15px;color:#FEC14D}

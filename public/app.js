@@ -18542,6 +18542,45 @@ function homeGridCompose(input) {
   // tiles kind 'post': la carta es kind 'oculta' y no lo recibe; el
   // segundo próximo tampoco, porque su id no es el del próximo
   // real). Sin próximo, nada se agrega.
+  // (LOTE RITUAL-SIGUIENTE · 7/11 · decisión Valentino «apenas sale el
+  // posteo del día, ya tiene que aparecer el próximo posteo oculto»)
+  // El loop avanza con la PUBLICACIÓN, no con el reloj: la carta del
+  // próximo de un día FUTURO solo aparece cuando el posteo de HOY ya
+  // salió. Si hoy hay un posteo pendiente (programado con la hora ya
+  // vencida, en publicación o fallido), la carta NO avanza: sin este
+  // freno, al vencer la hora de hoy sin publicar, la selección por
+  // reloj (próximo futuro mínimo) saltaba a mañana aunque hoy no
+  // salió nada. Si hoy no hay nada pendiente (salió, o no había
+  // posteo hoy), la carta avanza como siempre. La carta del posteo de
+  // HOY no se toca: si el próximo es hoy, es la entrada al ritual.
+  // La fuente es la lista completa (input.all; sin ella, upcoming):
+  // 'publishing'/'failed' no viven en upcoming y sin la lista
+  // completa el freno no los vería. Sin fecha o sin zona, fail-open
+  // (la carta avanza: el freno nunca esconde por duda).
+  if (nextPost && hoyKey) {
+    try {
+      const tzG = (typeof pcTz === 'function') ? pcTz() : undefined;
+      const srcG = (typeof o !== 'undefined' && o && Array.isArray(o.all)) ? o.all : upcoming;
+      let dN = null;
+      if (typeof pcParseDate === 'function') dN = pcParseDate(nextPost.scheduled_at);
+      if (!dN) { const sN = String(nextPost.scheduled_at || '').replace(' ', 'T'); dN = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(sN) ? sN : sN + 'Z'); }
+      const keyN = (dN && !isNaN(dN) && typeof schedDayKeyOf === 'function') ? schedDayKeyOf(dN, tzG) : '';
+      if (keyN && keyN !== hoyKey) {
+        let pendienteHoy = false;
+        for (const it of srcG) {
+          // srcG es la lista completa (posteos crudos) o upcoming
+          // (envoltorios {p, ymd}): se desenvuelve en ambos casos.
+          const q = (it && it.p) ? it.p : it;
+          if (!q || (q.status !== 'scheduled' && q.status !== 'publishing' && q.status !== 'failed') || !q.scheduled_at) continue;
+          let dQ = null;
+          if (typeof pcParseDate === 'function') dQ = pcParseDate(q.scheduled_at);
+          if (!dQ) { const sQ = String(q.scheduled_at).replace(' ', 'T'); dQ = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(sQ) ? sQ : sQ + 'Z'); }
+          if (dQ && !isNaN(dQ) && typeof schedDayKeyOf === 'function' && schedDayKeyOf(dQ, tzG) === hoyKey) { pendienteHoy = true; break; }
+        }
+        if (pendienteHoy) nextPost = null;
+      }
+    } catch (e) {}
+  }
   const finalTiles = head.concat(rest6);
   if (nextPost) {
     // (LOTE PROXIMO-VELO · corrección Valentino 5/11 09:04 — SUPERSEDE
@@ -19458,6 +19497,25 @@ function homeTileHTML(t, i) {
         }
       }
     } catch (e) { cuentaHtml = ''; }
+    // (LOTE RITUAL-SIGUIENTE · 7/11 · decisión Valentino «que lo
+    // pueden ver a las 00:00») La carta velada dice EXPLÍCITO a qué
+    // hora se destapa: «Se destapa a las 00:00». La cuenta dice
+    // cuánto falta, pero no a qué hora; sin la hora, tocarla antes
+    // se siente roto. La medianoche es la 00:00 del día del posteo
+    // (pzDiaInicioMs, la misma que usa la cuenta): si no se puede
+    // calcular o ya pasó, sin línea (nunca una hora inventada).
+    // Solo en la carta velada; la abierta ya muestra la foto.
+    let destapaHtml = '';
+    try {
+      const tzD = (typeof pcTz === 'function') ? pcTz() : undefined;
+      let dD = null;
+      if (typeof pcParseDate === 'function') dD = pcParseDate(p.scheduled_at);
+      if (!dD) { const sD = String(p.scheduled_at || '').replace(' ', 'T'); dD = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(sD) ? sD : sD + 'Z'); }
+      const abreD = (dD && !isNaN(dD) && typeof pzDiaInicioMs === 'function') ? pzDiaInicioMs(dD, tzD) : NaN;
+      if (Number.isFinite(abreD) && abreD > Date.now()) {
+        destapaHtml = `<span class="hf-carta-destapa">${phEn ? 'It opens at <b>00:00</b>' : 'Se destapa a las <b>00:00</b>'}</span>`;
+      }
+    } catch (e) { destapaHtml = ''; }
     if (t.openHoy) {
       return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
     }
@@ -19471,7 +19529,7 @@ function homeTileHTML(t, i) {
     // «Posty lo está cuidando ✨» debajo). La celda entera abre el
     // ritual (data-pz-abrir-ritual en la celda, el handler usa
     // closest): tocar la carta o a Posty revela las opciones.
-    return `<span class="hf-cell hf-cell-velada" data-hf-filtro="pendientes" data-pz-abrir-ritual="1"><span class="hf-carta-halo"><span class="hf-tile hf-carta-oculta hf-carta-magia hf-carta-respira" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pz-abrir-ritual="1" role="button" tabindex="0" aria-label="${phEn ? 'Next post, hidden. Tap to see the options' : 'Próximo posteo, oculto. Tocá para ver las opciones'}"><span class="hf-carta-velo" aria-hidden="true"></span>${hoyBadge}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-carta-contenido"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${cuentaHtml}${ocChip}<span class="hf-carta-posty" aria-hidden="true"><img src="ai-avatar.png" alt=""></span></span></span></span><span class="hf-carta-leyenda">${phEn ? 'Posty is looking after it ✨' : 'Posty lo está cuidando ✨'}</span></span>`;
+    return `<span class="hf-cell hf-cell-velada" data-hf-filtro="pendientes" data-pz-abrir-ritual="1"><span class="hf-carta-halo"><span class="hf-tile hf-carta-oculta hf-carta-magia hf-carta-respira" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pz-abrir-ritual="1" role="button" tabindex="0" aria-label="${phEn ? 'Next post, hidden. Tap to see the options' : 'Próximo posteo, oculto. Tocá para ver las opciones'}"><span class="hf-carta-velo" aria-hidden="true"></span>${hoyBadge}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-carta-contenido"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${cuentaHtml}${destapaHtml}${ocChip}<span class="hf-carta-posty" aria-hidden="true"><img src="ai-avatar.png" alt=""></span></span></span></span><span class="hf-carta-leyenda">${phEn ? 'Posty is looking after it ✨' : 'Posty lo está cuidando ✨'}</span></span>`;
   }
   return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${hoyBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span></span>`;
 }
@@ -20463,7 +20521,7 @@ async function inicioView() {
   const pl = schedPlacements(allPosts, tz);
   const upcoming = hfFeedUpcoming(allPosts, tz);
   const published = allPosts.filter(p => p.status === 'published');
-  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null) });
+  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all: allPosts });
   for (const t of tiles) {
     if (t.kind === 'post' && !t.day) {
       const dt = pcParseDate(t.post.published_at || t.post.scheduled_at);
@@ -23055,7 +23113,7 @@ function hfLiveCompose(allPosts, prof) {
   const pl = schedPlacements(allPosts, tz);
   const upcoming = hfFeedUpcoming(allPosts, tz);
   const published = allPosts.filter((p) => p.status === 'published');
-  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null) });
+  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all: allPosts });
   const props = {};
   for (const t of tiles) {
     if (t.kind !== 'post' || !t.post) continue;
@@ -26246,7 +26304,7 @@ function f3HomeTilesFrom(all, tz) {
   const pl = schedPlacements(all, tz);
   const upcoming = hfFeedUpcoming(all, tz);
   const published = all.filter(p => p.status === 'published');
-  const tiles = homeGridCompose({ upcoming, published, recents: (typeof HOME_PROF !== 'undefined' && HOME_PROF && HOME_PROF.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null) });
+  const tiles = homeGridCompose({ upcoming, published, recents: (typeof HOME_PROF !== 'undefined' && HOME_PROF && HOME_PROF.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all });
   for (const t of tiles) {
     if (t.kind === 'post' && !t.day) {
       const dt = pcParseDate(t.post.published_at || t.post.scheduled_at);
