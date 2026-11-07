@@ -37,6 +37,51 @@ function norm(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9# ]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
+// (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) Las líneas rojas (q8) son una
+// RESTRICCIÓN, nunca contenido. Su etiqueta («LÍNEAS ROJAS — NUNCA
+// PUBLICAR: ...») viajaba en el richGoal al form del digest y el
+// minador la partía en «LÍNEAS ROJAS» como si fuera un servicio;
+// deriveTopics la convertía en titular («LÍNEAS ROJAS», lunes de
+// Top Class, grabación 7/11). Estas ayudas detectan la etiqueta en
+// cualquier forma (ES/EN, con o sin acento) y los términos del dueño.
+function isVetoLabelText(s) {
+  const n = norm(s || '');
+  if (!n) return false;
+  if (n.includes('lineas rojas') || n.includes('red lines')) return true;
+  if (/^(nunca publicar|never post)\b/.test(n)) return true;
+  return false;
+}
+function vetoTermsFromOnboarding(onboarding) {
+  const raw = (onboarding && onboarding.lineas_rojas) || '';
+  return String(raw).split(/[,;]+/).map((t) => norm(t)).filter((t) => t.length >= 3);
+}
+function isVetoText(s, onboarding) {
+  const n = norm(s || '');
+  if (!n) return false;
+  if (isVetoLabelText(s)) return true;
+  for (const t of vetoTermsFromOnboarding(onboarding)) {
+    if (!t) continue;
+    if (n.includes(t)) return true;
+    if (n.length >= 8 && t.includes(n)) return true;
+  }
+  return false;
+}
+// Saca del texto las líneas de vetos («LÍNEAS ROJAS — NUNCA PUBLICAR:
+// ...»): el goal no ordena temas con ellas ni las cita en captions.
+function stripVetoLines(text) {
+  return String(text || '').split(/\r?\n/).filter((l) => !isVetoLabelText(l)).join('\n');
+}
+// Última puerta sobre temas ya derivados: saca cualquier tema cuyo
+// titular, tema o ancla sea la etiqueta o un término vetado del dueño.
+// Cubre digest ya envenenados (sembrados antes del fix).
+function dropVetoTopics(topics, onboarding) {
+  if (!Array.isArray(topics)) return topics;
+  return topics.filter((t) => {
+    if (!t) return false;
+    const hay = [t.headline, t.tema, t.digest_anchor].map((x) => String(x || ''));
+    return !hay.some((x) => isVetoText(x, onboarding));
+  });
+}
 const STOP = new Set(('de del la el los las un una unos unas en a y o con sin por para que tu su al mas muy '
   + 'nuestro nuestra nuestros nuestras este esta esto como cuando donde desde hasta sobre entre vos '
   + 'the and for with from this that').split(' '));
@@ -356,6 +401,11 @@ function offeringsFromText(text) {
   for (const seg0 of segments) {
     let s = cleanSegment(seg0);
     if (!s) continue;
+    // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) La etiqueta de las líneas
+    // rojas no es una oferta: «LÍNEAS ROJAS — NUNCA PUBLICAR: ...»
+    // se partía en «LÍNEAS ROJAS» y entraba como servicio — de ahí
+    // salía el titular del lunes de Top Class.
+    if (isVetoLabelText(s)) continue;
     // (LOTE PRUEBA-PRODUCTO-REAL) Las líneas del espejo son texto del
     // sistema («Productos confirmados por el dueño en el espejo (usar
     // EXACTAMENTE estos…)»): minarlas convertía la ETIQUETA en un
@@ -1328,6 +1378,10 @@ function deriveTopics(digest, opts) {
   let items = [...(digest.productos || []), ...(digest.servicios || [])]
     .filter((x) => x && (x.nombre || x));
   const name = (x) => String((x && (x.nombre || x)) || '').trim();
+  // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) Un digest ya envenenado
+  // (sembrado desde una prueba anterior al fix) trae la etiqueta o el
+  // término vetado como servicio: se saca acá, antes de anclar temas.
+  items = items.filter((x) => !isVetoText(name(x), digest.onboarding));
   // (Posty conectado) Lo que su Tiendanube marca SIN STOCK no entra a la
   // rotación de temas: ninguna pieza nace sobre un producto agotado.
   const oosNames = tnOutOfStockNames(digest);
@@ -1376,7 +1430,7 @@ function deriveTopics(digest, opts) {
     if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
     if (si >= 0) starName = name(items[0]);
   }
-  const temasFeed = (digest.temas_feed || []).filter((t) => String(t).length >= 3);
+  const temasFeed = (digest.temas_feed || []).filter((t) => String(t).length >= 3 && !isVetoText(t, digest.onboarding));
   const used = new Set();
   const topics = [];
   // 🧠 (v232) CEREBRO COMERCIAL: cada tema derivado nace con intención
@@ -1746,9 +1800,12 @@ function ensureTable(db) {
 function scrubDigestItems(digest) {
   const d = (digest && typeof digest === 'object') ? digest : {};
   try {
-    if (Array.isArray(d.productos)) d.productos = d.productos.filter((x) => isPlausibleOfferItem(x));
-    if (Array.isArray(d.servicios)) d.servicios = d.servicios.filter((x) => isPlausibleOfferItem(x));
-    if (Array.isArray(d.promos)) d.promos = d.promos.filter((x) => isPlausibleOfferItem(x && (x.titulo || x.nombre || x)));
+    // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) Al guardar, un digest ya
+    // envenenado se limpia: la etiqueta o el término vetado no quedan
+    // como producto/servicio/promo para la próxima semana.
+    if (Array.isArray(d.productos)) d.productos = d.productos.filter((x) => isPlausibleOfferItem(x) && !isVetoText(x && (x.nombre || x), d.onboarding));
+    if (Array.isArray(d.servicios)) d.servicios = d.servicios.filter((x) => isPlausibleOfferItem(x) && !isVetoText(x && (x.nombre || x), d.onboarding));
+    if (Array.isArray(d.promos)) d.promos = d.promos.filter((x) => isPlausibleOfferItem(x && (x.titulo || x.nombre || x)) && !isVetoText(x && (x.titulo || x.nombre || x), d.onboarding));
     if (d.inferred_star && d.inferred_star.item && !isPlausibleOfferItem(d.inferred_star.item)) d.inferred_star = null;
   } catch (e) { /* el scrub jamás rompe un guardado */ }
   return d;
@@ -1836,6 +1893,8 @@ module.exports = {
   DIGEST_VERSION,
   norm, distinctiveWords, wordForms, textWordSet, anchorsOf, anchorsFromTexts, pieceAnchored,
   offeringsFromText, isPlausibleOfferItem, scrubDigestItems, temasFromFreeText, temaForText,
+  // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) Las líneas rojas son veto, nunca tema.
+  isVetoLabelText, isVetoText, vetoTermsFromOnboarding, stripVetoLines, dropVetoTopics,
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,
   deriveTopics, ensureTable, saveDigest, getStoredDigest, getDigest,
   // (v348) Etapa pre-lanzamiento + remediación admin del fundamento

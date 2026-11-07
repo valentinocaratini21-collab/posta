@@ -10113,6 +10113,11 @@ function ideasInputFor(uid, weekKey) {
     if (onb.audiencia) ideasInput.audiencia = String(onb.audiencia).slice(0, 60);
     if (onb.diferencial) ideasInput.diferencial = String(onb.diferencial).slice(0, 120);
     if (onb.lineas_rojas) ideasInput.lineasRojas = fundamentoLiteral.normalizarVetos(String(onb.lineas_rojas).split(/[,;]+/));
+    // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) La ETIQUETA también veta: un
+    // digest ya envenenado trae «LÍNEAS ROJAS» como producto y la idea
+    // titulada así no casa con los valores del veto — con la etiqueta
+    // en la lista, el post-filtro de generateIdeas la descarta.
+    if (ideasInput.lineasRojas && ideasInput.lineasRojas.length) ideasInput.lineasRojas = fundamentoLiteral.normalizarVetos([...ideasInput.lineasRojas, 'LÍNEAS ROJAS', 'RED LINES']);
   } catch (e) {}
   // (RUBRO-GARANTÍAS ×6 · piezas 1, 4 y 6) Los productos literales del
   // fundamento viajan en el input para la puerta final de generateIdeas
@@ -31344,7 +31349,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v748';
+const BUILD_ID = '20261105-v749';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

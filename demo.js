@@ -1140,7 +1140,10 @@ function applyGoal(topics, goal, goal_key, hasPhoto, lang) {
   const en = lang === 'en';
   const RULES = en ? GOAL_RULES_EN : GOAL_RULES;
   const KEY_KWS = en ? GOAL_KEY_KWS_EN : GOAL_KEY_KWS;
-  const clean = sanitizeGoal(goal);
+  // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) La línea de vetos del goal no
+  // ordena temas ni se cita en el caption («Tal como pediste: LÍNEAS
+  // ROJAS…»): se saca antes de limpiar y de buscar palabras clave.
+  const clean = sanitizeGoal(clientDigest.stripVetoLines(goal));
   const keyKws = (goal_key && KEY_KWS[goal_key]) ? KEY_KWS[goal_key] + ' ' : '';
   if (!clean && !keyKws) return { topics, goalLine: '' };
   const g = (keyKws + clean).toLowerCase();
@@ -1339,7 +1342,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // {{...}}, ${...}) NUNCA llega a la semana — se saca del pool antes de
   // elegir la ventana y el hueco lo cubre el siguiente tema limpio. Un
   // posteo con una variable sin reemplazar no se muestra ni se sirve.
-  const allTopics = dropTemplateVarTopics(digestTopics.length ? [...digestTopics, ...goalTopics] : goalTopics);
+  const allTopics = clientDigest.dropVetoTopics(dropTemplateVarTopics(digestTopics.length ? [...digestTopics, ...goalTopics] : goalTopics), digest && digest.onboarding);
   // topicOffset (v187): temas desde una posición del pool — lo usan los
   // visuales extra de la grilla CON Posty para NO repetir los temas (ni las
   // fotos, vía excludePhotos) de la semana ya generada.

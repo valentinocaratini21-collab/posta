@@ -2867,6 +2867,16 @@ async function generateIdeas(input, apiKey, opts = {}) {
       });
     }
   }
+  // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) El reemplazo de arriba corre
+  // DESPUÉS de los post-filtros e inyecta productos[0] en el título
+  // («cómo estamos preparando LÍNEAS ROJAS» con un digest envenenado):
+  // los vetos se vuelven a aplicar acá, antes de devolver.
+  if (input && Array.isArray(input.vetos) && input.vetos.length) {
+    ideas = fundamentoLiteral.filtrarIdeasVetadas(ideas, input.vetos);
+  }
+  if (input && Array.isArray(input.lineasRojas) && input.lineasRojas.length) {
+    ideas = fundamentoLiteral.filtrarIdeasVetadas(ideas, input.lineasRojas);
+  }
   // Garantía de variedad: nunca dos ideas seguidas del mismo tipo.
   return fixTipos(ideas);
 }
