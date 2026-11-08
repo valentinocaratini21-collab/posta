@@ -311,11 +311,20 @@ const cardSinFoto = sb.pzHoyCardHTML({ id: 621, status: 'scheduled', media_type:
 t(!cardSinFoto.includes('<img') && cardSinFoto.includes('Dale, publicalo'),
   '§4: sin foto no hay bloque de color ni <img> (y la tarjeta sigue funcionando)');
 const speech = sb.pzHoySpeechHTML({ hoyPost: HOY_POST, en: false, tz: 'America/New_York' });
-t(speech.includes('El de hoy sale a las 19:30') && speech.includes('Sin tu OK, no sale nada') && speech.includes('«Dale»') && !speech.includes('¿Lo largamos?') && !speech.includes('pz-hoy-nota') && speech.includes('data-pz-hoy-chat'),
-  '§4: mensaje con el posteo de hoy: hora real 19:30, texto fusionado (Dale + sin tu OK) y entrada al chat');
+t(speech.includes('Te armé el posteo de hoy.') && speech.includes('El de hoy sale a las 19:30') && speech.includes('miralo y dale «Dale» si te gusta') && speech.includes('Sin tu OK, no sale nada') && !speech.includes('¿Lo largamos?') && !speech.includes('pz-hoy-nota') && !speech.includes('posteos de esta semana') && speech.includes('data-pz-hoy-chat'),
+  '§4: mensaje con el posteo de hoy: HONESTO en singular, hora real 19:30, Dale + sin tu OK, entrada al chat');
 const speechSin = sb.pzHoySpeechHTML({ hoyPost: null, en: false, tz: 'America/New_York' });
 t(!speechSin.includes('19:30') && speechSin.includes('¿Armamos tu semana?'),
   '§4: sin posteo de hoy no se inventa hora (el mensaje no miente)');
+const speechP2 = sb.pzHoySpeechHTML({ hoyPost: null, pendientes: 2, en: false, tz: 'America/New_York' });
+t(speechP2.includes('Tenés 2 posteos para revisar') && speechP2.includes('miralos y dale «Dale» a los que te gusten') && speechP2.includes('Sin tu OK, no sale nada') && !speechP2.includes('posteos de esta semana'),
+  '§4: pendientes=2: número real «Tenés 2 posteos para revisar» (sin prometer la semana)');
+const speechP1 = sb.pzHoySpeechHTML({ hoyPost: null, pendientes: 1, en: false, tz: 'America/New_York' });
+t(speechP1.includes('Tenés 1 posteo para revisar') && speechP1.includes('miralo y dale «Dale» si te gusta') && !speechP1.includes('2 posteos'),
+  '§4: pendientes=1: singular «Tenés 1 posteo para revisar»');
+const speechP2en = sb.pzHoySpeechHTML({ hoyPost: null, pendientes: 2, en: true, tz: 'America/New_York' });
+t(speechP2en.includes("You've got 2 posts to review") && speechP2en.includes('give a «Publish it» to the ones you like') && speechP2en.includes('Without your OK, nothing goes out'),
+  '§4: pendientes=2 EN: «You\'ve got 2 posts to review»');
 const upHtml = sb.pzHoyUploadHTML([{ id: 1, path: '/m/1.jpg' }, { id: 2, path: '/m/2.jpg' }], false);
 t(upHtml.includes('Subir foto o video') && upHtml.includes('data-pz-hoy-subir') && upHtml.includes('/m/1.jpg')
   && upHtml.includes('pz-hoy-album') && upHtml.includes('TU ÁLBUM'),
@@ -398,8 +407,8 @@ t(APP.includes('CHAT_FOTOS_MAX = 10') && APP.includes('pzSftPartirMedios'),
 
 // ---------- §8: huellas del lote (server.js NO cambia en R1) ----------
 console.log('— §8: huellas');
-t(md5(SRV) === '1cd72dcead0ae8c040adc5728e36572f', '§8: server.js = v805 estampado (BUILD v805; server.js SOLO línea BUILD + DELETE del álbum)');
-t(md5(APP) === 'aaae05c2ddcc444b71c203daea11ff98', '§8: public/app.js = lote chat-mejora v804 (tarjeta inline del borrar)');
+t(md5(SRV) === '3a100a8e27643cc7e0c24db6fefd297a', '§8: server.js = v806 estampado (BUILD v806; server.js SOLO línea BUILD + DELETE del álbum)');
+t(md5(APP) === '67721bed6b8e051c14a619f1e394a8f5', '§8: public/app.js = lote saludo-hoy-honesto v806 (saludo singular + pendientes con número real)');
 t(md5(CSS) === 'e1261ef04f791cec22e85513a95bd8fb', '§8: public/styles.css = lote chat-mejora v804 (CSS tarjeta inline)');
 t(APP.includes('CHUNK_V'), '§8: CHUNK_V presente en app.js');
 
@@ -474,9 +483,9 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v805',
-      '§9: /api/version trae el BUILD v805 (estampado)', JSON.stringify(ver.json));
-    const appJs = await apiText('/app.js?v=537');
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v806',
+      '§9: /api/version trae el BUILD v806 (estampado)', JSON.stringify(ver.json));
+    const appJs = await apiText('/app.js?v=541');
     t(appJs.status === 200 && appJs.text.includes('pzHoyCardHTML')
       && appJs.text.includes('data-pz-cuenta-sale') && appJs.text.includes('pzHoyPendientes'),
       '§9: el app.js servido trae el bloque HOY-R1');

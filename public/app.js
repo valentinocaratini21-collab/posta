@@ -20819,11 +20819,21 @@ function pzHoySpeechHTML(o) {
     const hh = pzHoyHoraCorta(hoyPost.scheduled_at, tz, en);
     // (LOTE CHAT-MEJORA) Un solo mensaje: la instrucción «Dale» +
     // «sin tu OK no sale nada» vive acá; la nota ya no se renderiza.
+    // (LOTE SALUDO-HOY-HONESTO) Singular: solo está armado el
+    // posteo de hoy — «los posteos de esta semana» prometía de más.
     cuerpo = en
-      ? `I put together this week's posts for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b> — look at them and give a «Publish it» to the ones you like. Without your OK, nothing goes out.`
-      : `Te armé los posteos de esta semana. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b> — miralos y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.`;
+      ? `I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b> — take a look and give it a «Publish it» if you like it. Without your OK, nothing goes out.`
+      : `Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b> — miralo y dale «Dale» si te gusta. Sin tu OK, no sale nada.`;
   } else if (pendientes > 0) {
-    cuerpo = en ? `I put together this week's posts for you — look at them and give a «Publish it» to the ones you like. Without your OK, nothing goes out.` : `Te armé los posteos de esta semana — miralos y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.`;
+    // (LOTE SALUDO-HOY-HONESTO) Número real de pendientes
+    // (pendientes = total por aprobar, cartita + resto).
+    cuerpo = en
+      ? (pendientes === 1
+        ? `You've got 1 post to review — take a look and give it a «Publish it» if you like it. Without your OK, nothing goes out.`
+        : `You've got ${pendientes} posts to review — look at them and give a «Publish it» to the ones you like. Without your OK, nothing goes out.`)
+      : (pendientes === 1
+        ? `Tenés 1 posteo para revisar — miralo y dale «Dale» si te gusta. Sin tu OK, no sale nada.`
+        : `Tenés ${pendientes} posteos para revisar — miralos y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.`);
   } else if (haySemana) {
     cuerpo = en ? `Your week is approved. Posty takes care of publishing it.` : `Tu semana ya está aprobada. Posty se ocupa de publicarla.`;
   } else {

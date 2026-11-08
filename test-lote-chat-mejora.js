@@ -55,8 +55,8 @@ const srv = fs.readFileSync(path.join(TREE, 'server.js'), 'utf8');
 console.log('— 0) pines —');
 check('0a app.js cambió vs base v803', md5(app) !== 'bc53ff30fa777f87d03b8d83d224939c', md5(app));
 check('0b styles.css cambió vs base v803', md5(css) !== '5293bc2a7c2756ae9a37c55f9ee459f7', md5(css));
-check('0c server.js cambió vs base v803 SOLO por el DELETE del álbum (BUILD v805 estampado)',
-  md5(srv) !== '71971cd1a019881088d59b19d158d9f0' && srv.includes("app.delete('/api/album/:id'") && srv.includes("const BUILD_ID = '20261105-v805'"), md5(srv));
+check('0c server.js cambió vs base v803 SOLO por el DELETE del álbum (BUILD v806 estampado)',
+  md5(srv) !== '71971cd1a019881088d59b19d158d9f0' && srv.includes("app.delete('/api/album/:id'") && srv.includes("const BUILD_ID = '20261105-v806'"), md5(srv));
 
 // ---------- Parte 1: estática — fix 1 (placeholder) ----------
 console.log('— 1) estática: placeholder —');
@@ -119,13 +119,17 @@ check('2q CSS: envoltorio relativo + × circular superpuesta en la esquina + tar
 // ---------- Parte 3: estática — fix 4 (saludo Hoy) ----------
 console.log('— 3) estática: saludo de Hoy —');
 check('3a la nota pz-hoy-nota no se renderiza', cnt(app, 'pz-hoy-nota') === 0);
-check('3b cuerpo hoyPost fusionado ES (hora real + Dale + sin tu OK)',
-  app.includes('miralos y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.'));
-check('3c cuerpo hoyPost fusionado EN', app.includes('give a «Publish it» to the ones you like. Without your OK, nothing goes out.'));
+check('3b cuerpo hoyPost HONESTO ES (singular: solo el posteo de hoy)',
+  app.includes('Te armé el posteo de hoy.') && app.includes('miralo y dale «Dale» si te gusta. Sin tu OK, no sale nada.'));
+check('3c cuerpo hoyPost HONESTO EN (singular)', app.includes("I put together today's post for you.") && app.includes('give it a «Publish it» if you like it. Without your OK, nothing goes out.'));
 check('3d sin el texto viejo duplicado (fuera de comentarios)',
   !app.includes('¿Lo largamos?') && !app.includes('¿Los miramos?') && !app.includes('Your posts are ready!')
-  && !sliceOk(app, 'function pzHoySpeechHTML', 'function pzHoyUploadHTML').includes('¡Ya te dejé los posteos listos!'));
+  && !sliceOk(app, 'function pzHoySpeechHTML', 'function pzHoyUploadHTML').includes('¡Ya te dejé los posteos listos!')
+  && !app.includes('Te armé los posteos de esta semana') && !app.includes("I put together this week's posts"));
 check('3e rama haySemana SIN cambio', app.includes('Tu semana ya está aprobada. Posty se ocupa de publicarla.'));
+check('3f rama pendientes: número real (N=1 singular, N>1 plural, ES + EN)',
+  app.includes('Tenés 1 posteo para revisar') && app.includes('Tenés ${pendientes} posteos para revisar')
+  && app.includes("You've got 1 post to review") && app.includes("You've got ${pendientes} posts to review"));
 
 // ---------- Parte 4: VM — fix 1 (placeholder) ----------
 console.log('— 4) VM: placeholder —');
@@ -344,16 +348,25 @@ if (SP) {
   const speech = sb.__sp;
   const HOY_POST = { id: 610, status: 'scheduled', media_type: 'image', image_path: '/m/610.jpg', caption: 'El posteo de hoy', scheduled_at: '2026-11-09T00:30:00.000Z', pinned: 0, approval: 'pending' };
   const s1 = speech({ hoyPost: HOY_POST, pendientes: 3, en: false, tz: 'America/New_York' });
-  check('6a hoyPost + pendientes: UN solo mensaje con el texto fusionado',
-    s1.includes('El de hoy sale a las 19:30') && s1.includes('Sin tu OK, no sale nada') && s1.includes('«Dale»') && s1.includes('data-pz-hoy-chat')
-    && !s1.includes('pz-hoy-nota') && !s1.includes('¿Lo largamos?') && !s1.includes('¡Ya te dejé los posteos listos!'), s1.slice(0, 300));
+  check('6a hoyPost: UN solo mensaje, HONESTO en singular (el posteo de hoy, no la semana)',
+    s1.includes('Te armé el posteo de hoy.') && s1.includes('El de hoy sale a las 19:30') && s1.includes('miralo y dale «Dale» si te gusta') && s1.includes('Sin tu OK, no sale nada') && s1.includes('data-pz-hoy-chat')
+    && !s1.includes('pz-hoy-nota') && !s1.includes('¿Lo largamos?') && !s1.includes('¡Ya te dejé los posteos listos!') && !s1.includes('posteos de esta semana'), s1.slice(0, 300));
   const s1en = speech({ hoyPost: HOY_POST, pendientes: 3, en: true, tz: 'America/New_York' });
-  check('6b hoyPost + pendientes EN: mismo merge en inglés',
-    s1en.includes('goes out at') && s1en.includes('Without your OK, nothing goes out') && s1en.includes('Publish it')
-    && !s1en.includes('pz-hoy-nota') && !s1en.includes('Shall we launch it?'), s1en.slice(0, 300));
+  check('6b hoyPost EN: mismo mensaje en singular',
+    s1en.includes("I put together today's post for you.") && s1en.includes('goes out at') && s1en.includes('give it a «Publish it» if you like it') && s1en.includes('Without your OK, nothing goes out') && s1en.includes('Publish it')
+    && !s1en.includes('pz-hoy-nota') && !s1en.includes('Shall we launch it?') && !s1en.includes("this week's posts"), s1en.slice(0, 300));
   const s2 = speech({ hoyPost: null, pendientes: 2, en: false, tz: 'America/New_York' });
-  check('6c pendientes sin hoyPost: UN solo mensaje fusionado',
-    s2.includes('Sin tu OK, no sale nada') && s2.includes('«Dale»') && !s2.includes('¿Los miramos?') && !s2.includes('pz-hoy-nota'), s2.slice(0, 300));
+  check('6c pendientes=2 sin hoyPost: número real «Tenés 2 posteos para revisar»',
+    s2.includes('Tenés 2 posteos para revisar') && s2.includes('miralos y dale «Dale» a los que te gusten') && s2.includes('Sin tu OK, no sale nada') && !s2.includes('¿Los miramos?') && !s2.includes('pz-hoy-nota') && !s2.includes('posteos de esta semana'), s2.slice(0, 300));
+  const s2b = speech({ hoyPost: null, pendientes: 1, en: false, tz: 'America/New_York' });
+  check('6c2 pendientes=1 ES: singular «Tenés 1 posteo para revisar»',
+    s2b.includes('Tenés 1 posteo para revisar') && s2b.includes('miralo y dale «Dale» si te gusta') && !s2b.includes('2 posteos') && !s2b.includes('pz-hoy-nota'), s2b.slice(0, 300));
+  const s2en = speech({ hoyPost: null, pendientes: 2, en: true, tz: 'America/New_York' });
+  check('6c3 pendientes=2 EN: «You\'ve got 2 posts to review»',
+    s2en.includes("You've got 2 posts to review") && s2en.includes('give a «Publish it» to the ones you like') && s2en.includes('Without your OK, nothing goes out') && !s2en.includes("this week's posts"), s2en.slice(0, 300));
+  const s2ben = speech({ hoyPost: null, pendientes: 1, en: true, tz: 'America/New_York' });
+  check('6c4 pendientes=1 EN: singular «You\'ve got 1 post to review»',
+    s2ben.includes("You've got 1 post to review") && s2ben.includes('give it a «Publish it» if you like it') && !s2ben.includes('2 posts'), s2ben.slice(0, 300));
   const s3 = speech({ hoyPost: null, pendientes: 0, haySemana: true, en: false, tz: 'America/New_York' });
   check('6d haySemana SIN cambio (sin instrucción Dale, sin nota)',
     s3.includes('Tu semana ya está aprobada') && !s3.includes('Sin tu OK') && !s3.includes('pz-hoy-nota'), s3.slice(0, 300));
@@ -515,8 +528,8 @@ async function parteBoot() {
     check('7a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('7b /api/version = v805 (estampado)', ver && ver.build === '20261105-v805', JSON.stringify(ver));
-    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=540`)).text();
+    check('7b /api/version = v806 (estampado)', ver && ver.build === '20261105-v806', JSON.stringify(ver));
+    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=541`)).text();
     check('7c el app.js servido trae el lote (colapsar + sin fundido + tarjeta inline del borrar)',
       appJs.includes('function pzTemaColapsar') && appJs.includes('function pzTemaMiniHTML') && !appJs.includes("classList.add('pz-ph-fading')")
       && appJs.includes('pz-hoy-album-confirm') && appJs.includes('pz-hoy-album-confirm-del'), 'len ' + appJs.length);
