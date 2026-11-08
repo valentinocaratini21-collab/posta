@@ -55,9 +55,9 @@ check('0b styles.css del lote (md5 distinto de base v793)', !hasBase || md5(css)
 check('0c server.js del lote (md5 distinto de base v793)', !hasBase || md5(srv) !== '54df4f468dddf78b66e7ad6a8fc3321d', md5(srv));
 if (hasBase) {
   check('0d chunk-conserje.js SIN tocar (diseño v778 intacto)', md5(fs.readFileSync(path.join(TREE, 'public/chunk-conserje.js'), 'utf8')) === md5(fs.readFileSync(path.join(base, 'public/chunk-conserje.js'), 'utf8')));
-  check('0e index.html ES/EN estampados v815 (?v=549, styles?v=20261201 en AMBOS)', idx.includes('/app.js?v=549') && idx.includes('/styles.css?v=20261201') && idxEn.includes('/styles.css?v=20261201'));
+  check('0e index.html ES/EN estampados v816 (?v=549, styles?v=20261203 en AMBOS)', idx.includes('/app.js?v=551') && idx.includes('/styles.css?v=20261203') && idxEn.includes('/styles.css?v=20261203'));
 }
-check('0f BUILD_ID estampado v815', srv.includes("const BUILD_ID = '20261105-v815'"));
+check('0f BUILD_ID estampado v816', srv.includes("const BUILD_ID = '20261105-v816'"));
 check('0g CHUNK_V sigue v792 (ningún chunk tocado)', app.includes("const CHUNK_V = '20261105-v792'"));
 check('0h censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 check('0i censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
@@ -384,7 +384,7 @@ async function parteBoot() {
     check('5a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await reqJson('GET', '/api/version');
-    check('5b /api/version = v815', ver.json && ver.json.build === '20261105-v815', JSON.stringify(ver.json));
+    check('5b /api/version = v816', ver.json && ver.json.build === '20261105-v816', JSON.stringify(ver.json));
     const join = await reqJson('POST', '/api/trial/chat-onboarding?test_key=' + TEST_KEY, { kind: 'join', ig: 'r6-test', device: 'test-device-r6' });
     check('5c join del invitado ok', join.status === 200 && join.json && join.json.ok === true && join.json.user_id > 0, JSON.stringify(join.json));
     if (!join.json || !join.json.user_id) throw new Error('sin join');

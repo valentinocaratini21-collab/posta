@@ -55,8 +55,8 @@ const srv = fs.readFileSync(path.join(TREE, 'server.js'), 'utf8');
 console.log('— 0) pines —');
 check('0a app.js cambió vs base v803', md5(app) !== 'bc53ff30fa777f87d03b8d83d224939c', md5(app));
 check('0b styles.css cambió vs base v803', md5(css) !== '5293bc2a7c2756ae9a37c55f9ee459f7', md5(css));
-check('0c server.js cambió vs base v803 SOLO por el DELETE del álbum (BUILD v815 estampado)',
-  md5(srv) !== '71971cd1a019881088d59b19d158d9f0' && srv.includes("app.delete('/api/album/:id'") && srv.includes("const BUILD_ID = '20261105-v815'"), md5(srv));
+check('0c server.js cambió vs base v803 SOLO por el DELETE del álbum (BUILD v816 estampado)',
+  md5(srv) !== '71971cd1a019881088d59b19d158d9f0' && srv.includes("app.delete('/api/album/:id'") && srv.includes("const BUILD_ID = '20261105-v816'"), md5(srv));
 
 // ---------- Parte 1: estática — fix 1 (placeholder) ----------
 console.log('— 1) estática: placeholder —');
@@ -528,12 +528,12 @@ async function parteBoot() {
     check('7a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('7b /api/version = v815 (estampado)', ver && ver.build === '20261105-v815', JSON.stringify(ver));
-    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=549`)).text();
+    check('7b /api/version = v816 (estampado)', ver && ver.build === '20261105-v816', JSON.stringify(ver));
+    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=551`)).text();
     check('7c el app.js servido trae el lote (colapsar + sin fundido + tarjeta inline del borrar)',
       appJs.includes('function pzTemaColapsar') && appJs.includes('function pzTemaMiniHTML') && !appJs.includes("classList.add('pz-ph-fading')")
       && appJs.includes('pz-hoy-album-confirm') && appJs.includes('pz-hoy-album-confirm-del'), 'len ' + appJs.length);
-    const cssTxt = await (await fetch(`http://127.0.0.1:${PORT}/styles.css?v=20261201`)).text();
+    const cssTxt = await (await fetch(`http://127.0.0.1:${PORT}/styles.css?v=20261203`)).text();
     check('7d el styles.css servido trae la tira colapsada', cssTxt.includes('.pz-tema-mini{') && cssTxt.includes('.pz-tema-ok{'), 'len ' + cssTxt.length);
     check('7e el styles.css servido trae la cantidad del álbum + la tarjeta inline', cssTxt.includes('.pz-hoy-album-label small{') && cssTxt.includes('.pz-hoy-album-confirm{'), 'len ' + cssTxt.length);
     check('7f el app.js servido trae el dedupe del álbum', appJs.includes('unicas.slice(0, 4)') && appJs.includes("a.thumb || a.thumb_path || a.path"), 'len ' + appJs.length);

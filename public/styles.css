@@ -4826,10 +4826,10 @@ body.pz-postchat-open{overflow:hidden}
 .pz-shell-ident{display:flex;align-items:center;gap:10px;background:none;border:0;padding:0;cursor:pointer;text-align:left;min-width:0;flex:1}
 .pz-shell-ava{width:38px;height:38px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.85),0 4px 14px rgba(10,30,51,.18)}
 .pz-shell-who{display:flex;flex-direction:column;line-height:1.2;min-width:0}
-.pz-shell-who b{font-size:17px;color:#0A1E33;white-space:normal;overflow-wrap:break-word}
+.pz-shell-who b{font-size:17px;color:#0A1E33;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pz-shell-who b.typing::after{content:"▍";color:#2793C8;animation:pzShellBlink 1s steps(1) infinite}
 @keyframes pzShellBlink{50%{opacity:0}}
-.pz-shell-who small{font-size:12px;color:#33506B}
+.pz-shell-who small{display:block;font-size:12px;color:#33506B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pz-shell-racha{flex:none;background:linear-gradient(150deg,rgba(254,193,77,.82),rgba(254,193,77,.6));border:1.5px solid rgba(255,255,255,.85);box-shadow:0 8px 32px rgba(10,30,51,.14),inset 0 1px 0 rgba(255,255,255,.75);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:800;color:#0A1E33;white-space:nowrap}
 .pz-shell-acts{display:flex;gap:6px;flex:none}
 .pz-shell-ic{width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.72);background:rgba(255,255,255,.52);-webkit-backdrop-filter:blur(16px) saturate(165%);backdrop-filter:blur(16px) saturate(165%);color:#0A1E33;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 32px rgba(10,30,51,.14),inset 0 1px 0 rgba(255,255,255,.75)}
