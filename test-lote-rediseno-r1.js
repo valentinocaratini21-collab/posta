@@ -311,8 +311,8 @@ const cardSinFoto = sb.pzHoyCardHTML({ id: 621, status: 'scheduled', media_type:
 t(!cardSinFoto.includes('<img') && cardSinFoto.includes('Dale, publicalo'),
   '§4: sin foto no hay bloque de color ni <img> (y la tarjeta sigue funcionando)');
 const speech = sb.pzHoySpeechHTML({ hoyPost: HOY_POST, en: false, tz: 'America/New_York' });
-t(speech.includes('El de hoy sale a las 19:30') && speech.includes('¿Lo largamos?') && speech.includes('data-pz-hoy-chat'),
-  '§4: mensaje con el posteo de hoy: hora real 19:30 y entrada al chat');
+t(speech.includes('El de hoy sale a las 19:30') && speech.includes('Sin tu OK, no sale nada') && speech.includes('«Dale»') && !speech.includes('¿Lo largamos?') && !speech.includes('pz-hoy-nota') && speech.includes('data-pz-hoy-chat'),
+  '§4: mensaje con el posteo de hoy: hora real 19:30, texto fusionado (Dale + sin tu OK) y entrada al chat');
 const speechSin = sb.pzHoySpeechHTML({ hoyPost: null, en: false, tz: 'America/New_York' });
 t(!speechSin.includes('19:30') && speechSin.includes('¿Armamos tu semana?'),
   '§4: sin posteo de hoy no se inventa hora (el mensaje no miente)');
@@ -398,9 +398,9 @@ t(APP.includes('CHAT_FOTOS_MAX = 10') && APP.includes('pzSftPartirMedios'),
 
 // ---------- §8: huellas del lote (server.js NO cambia en R1) ----------
 console.log('— §8: huellas');
-t(md5(SRV) === 'ecee1b385be4755f9220f9bb13296a14', '§8: server.js intacto (md5 estampado v801; server.js SOLO línea BUILD)');
-t(md5(APP) === '633242798e3e6407d1350471957ea92a', '§8: public/app.js = build R1 re-basado sobre v800 (merge R4+R1)');
-t(md5(CSS) === '5e8e7446258ef39d4651b9fa24900292', '§8: public/styles.css = build R1 re-basado sobre v799');
+t(md5(SRV) === '3bd6c5b6130c29922045079e92292988', '§8: server.js = v804 estampado (BUILD v804; server.js SOLO línea BUILD + DELETE del álbum)');
+t(md5(APP) === 'aaae05c2ddcc444b71c203daea11ff98', '§8: public/app.js = lote chat-mejora v804 (tarjeta inline del borrar)');
+t(md5(CSS) === 'e1261ef04f791cec22e85513a95bd8fb', '§8: public/styles.css = lote chat-mejora v804 (CSS tarjeta inline)');
 t(APP.includes('CHUNK_V'), '§8: CHUNK_V presente en app.js');
 
 // ---------- §9: boot M121 — endpoints reales con datos reales ----------
@@ -474,8 +474,8 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v801',
-      '§9: /api/version trae el BUILD v801 (estampado; base v799)', JSON.stringify(ver.json));
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v804',
+      '§9: /api/version trae el BUILD v804 (estampado)', JSON.stringify(ver.json));
     const appJs = await apiText('/app.js?v=537');
     t(appJs.status === 200 && appJs.text.includes('pzHoyCardHTML')
       && appJs.text.includes('data-pz-cuenta-sale') && appJs.text.includes('pzHoyPendientes'),

@@ -5745,7 +5745,16 @@ body.pz-postchat-open{overflow:hidden}
 .pz-hoy-upload-btn svg{width:21px;height:21px;flex:none}
 .pz-hoy-album-row{display:flex;align-items:center;gap:8px;margin-top:13px}
 .pz-hoy-album-label{font-size:12px;font-weight:900;color:#0A1E33;letter-spacing:.04em;margin-right:2px}
+.pz-hoy-album-label small{display:block;font-size:11px;font-weight:700;color:var(--mut);letter-spacing:0;margin-top:2px}
 .pz-hoy-album-thumb{width:44px;height:44px;border-radius:12px;overflow:hidden;border:1.5px solid var(--line);padding:0;flex:none;cursor:pointer;background:#EAF5FB}
+.pz-hoy-album-thumb-wrap{position:relative;flex:none}
+.pz-hoy-album-del{position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;background:#fff;color:#0A1E33;border:1.5px solid var(--line);font-size:15px;font-weight:900;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(10,30,51,.18);padding:0;font-family:inherit;z-index:2}
+.pz-hoy-album-confirm{margin-top:12px;background:#fff;border:1.5px solid #F5C344;border-radius:16px;padding:13px 15px;box-shadow:0 6px 18px rgba(10,30,51,.12)}
+.pz-hoy-album-confirm p{font-size:14.5px;line-height:1.4;color:#1D3A52}
+.pz-hoy-album-confirm p b{color:#0A1E33}
+.pz-hoy-album-confirm-row{margin-top:10px;display:flex;gap:8px}
+.pz-hoy-album-confirm-del{background:#D64545;color:#fff;border:0;border-radius:999px;padding:8px 16px;font-size:13.5px;font-weight:800;cursor:pointer;font-family:inherit}
+.pz-hoy-album-confirm-no{background:#EEF3F7;color:#33506B;border:0;border-radius:999px;padding:8px 16px;font-size:13.5px;font-weight:800;cursor:pointer;font-family:inherit}
 .pz-hoy-album-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .pz-hoy-album-add{width:44px;height:44px;border-radius:12px;border:2px dashed var(--cel);background:var(--cel-soft);color:#1B6FA0;font-size:22px;font-weight:900;line-height:1;flex:none;cursor:pointer;font-family:inherit}
 .pz-hoy-album-note{font-size:12px;color:var(--mut);font-weight:600;margin-top:9px;line-height:1.45}
@@ -5805,6 +5814,10 @@ body.pz-postchat-open{overflow:hidden}
    ============================================================ */
 #pzTemaWrap{flex:none;margin:0 0 8px}
 .pz-tema{display:flex;flex-direction:column;gap:2px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 8px 24px rgba(10,30,51,.10);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);padding:11px 13px}
+.pz-tema-mini{flex-direction:row;align-items:center;gap:8px;border-radius:14px;padding:9px 13px;font-size:13px;font-weight:700;color:#33506B}
+.pz-tema-mini > span{font-size:13px}
+.pz-tema-mini span b{color:#0A1E33}
+.pz-tema-ok{width:20px;height:20px;border-radius:50%;background:#2FA36B;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;flex:none}
 .pz-tema small{font-size:10px;font-weight:900;letter-spacing:.08em;color:#0D4E73}
 .pz-tema > b{font-size:14.5px;color:#0A1E33;line-height:1.25}
 .pz-tema > span{font-size:12px;font-weight:700;color:#33506B;line-height:1.4}

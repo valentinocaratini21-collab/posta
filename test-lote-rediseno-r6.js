@@ -55,9 +55,9 @@ check('0b styles.css del lote (md5 distinto de base v793)', !hasBase || md5(css)
 check('0c server.js del lote (md5 distinto de base v793)', !hasBase || md5(srv) !== '54df4f468dddf78b66e7ad6a8fc3321d', md5(srv));
 if (hasBase) {
   check('0d chunk-conserje.js SIN tocar (diseño v778 intacto)', md5(fs.readFileSync(path.join(TREE, 'public/chunk-conserje.js'), 'utf8')) === md5(fs.readFileSync(path.join(base, 'public/chunk-conserje.js'), 'utf8')));
-  check('0e index.html ES/EN estampados por el preparador (?v=538, styles?v=20261190, provisionales)', idx.includes('/app.js?v=538') && idx.includes('/styles.css?v=20261190') && idxEn.includes('/styles.css?v=20261190'));
+  check('0e index.html ES/EN estampados v804 (?v=540, styles?v=20261192)', idx.includes('/app.js?v=540') && idx.includes('/styles.css?v=20261192') && idxEn.includes('/styles.css?v=20261192'));
 }
-check('0f BUILD_ID estampado v802', srv.includes("const BUILD_ID = '20261105-v802'"));
+check('0f BUILD_ID estampado v804', srv.includes("const BUILD_ID = '20261105-v804'"));
 check('0g CHUNK_V sigue v792 (ningún chunk tocado)', app.includes("const CHUNK_V = '20261105-v792'"));
 check('0h censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 check('0i censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
@@ -79,7 +79,7 @@ check('1d lunes: 4 rangos exactos del mock', R6.includes("'Sin consultas'") || R
 check('1d2 lunes: opciones Sin/1 a 5/6 a 15/Más de 15', app.includes("id: 'lunes-0'") && app.includes("id: 'lunes-1-5'") && app.includes("id: 'lunes-6-15'") && app.includes("id: 'lunes-15+'"));
 check('1e cambialo: foto/texto/hora + dejarlo para después', app.includes("id: 'ch-foto'") && app.includes("id: 'ch-texto'") && app.includes("id: 'ch-hora'") && app.includes("id: 'ch-despues'"));
 check('1f confirmación: Queda así + Otro cambio', app.includes("id: 'ch-confirmar'") && app.includes("id: 'ch-otro'") && R6.includes('Queda así'));
-check('1g fin: Nada pendiente + Ir a Hoy/Nivel', R6.includes('Nada pendiente') && app.includes("id: 'fin-hoy'") && app.includes("id: 'fin-nivel'"));
+check('1g fin: Nada pendiente compacto (tira pz-tema-mini, sin Ir a Hoy/Nivel — LOTE CHAT-MEJORA)', R6.includes('Nada pendiente') && app.includes('function pzTemaMiniHTML') && !app.includes("id: 'fin-hoy'") && !app.includes("id: 'fin-nivel'"));
 check('1h aprobar: POST /approve en manual, PATCH like en piloto', R6.includes("/api/posts/' + encodeURIComponent(p.id) + '/approve'") && R6.includes("{ action: 'like' }") && R6.includes('f3ApprovalMode()'));
 check('1i cambiar: PATCH save-draft foto/texto, PATCH hora', R6.includes("{ action: 'save-draft', image_path:") && R6.includes("{ action: 'save-draft', caption:") && R6.includes('{ scheduled_at: cb.scheduled_at }'));
 check('1j retocar: POST /api/album/:id/cambiar-imagen (v757)', R6.includes("/api/album/' + encodeURIComponent(assetId) + '/cambiar-imagen'"));
@@ -252,7 +252,7 @@ if (r6SliceOk) {
   // Pintado fin: Nada pendiente + destinos reales.
   sandbox.PZ_TEMA = { temas: [], idx: 0, stage: 'topic', cambio: null };
   R.pzTemaPintar();
-  check('4f pinta fin: Nada pendiente + Ir a Hoy/Nivel', wrap.innerHTML.includes('Nada pendiente') && wrap.innerHTML.includes("data-tema-op=\"fin-hoy\"") && wrap.innerHTML.includes("data-tema-op=\"fin-nivel\""));
+  check('4f pinta fin: Nada pendiente compacto (tira, sin botones — LOTE CHAT-MEJORA)', wrap.innerHTML.includes('Nada pendiente') && wrap.innerHTML.includes('pz-tema-mini') && !wrap.innerHTML.includes('data-tema-op='));
   // onSend: un número en el lunes guarda el rango y consume el envío.
   sandbox.PZ_TEMA = { temas: [{ kind: 'lunes', week_key: '2026-11-02' }], idx: 0, stage: 'topic', cambio: null };
   input.value = '8';
@@ -384,7 +384,7 @@ async function parteBoot() {
     check('5a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await reqJson('GET', '/api/version');
-    check('5b /api/version = v802', ver.json && ver.json.build === '20261105-v802', JSON.stringify(ver.json));
+    check('5b /api/version = v804', ver.json && ver.json.build === '20261105-v804', JSON.stringify(ver.json));
     const join = await reqJson('POST', '/api/trial/chat-onboarding?test_key=' + TEST_KEY, { kind: 'join', ig: 'r6-test', device: 'test-device-r6' });
     check('5c join del invitado ok', join.status === 200 && join.json && join.json.ok === true && join.json.user_id > 0, JSON.stringify(join.json));
     if (!join.json || !join.json.user_id) throw new Error('sin join');

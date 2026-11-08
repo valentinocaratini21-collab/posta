@@ -13106,31 +13106,18 @@ function pzPhReduced() {
 function pzPhAdvanceOne(el, list) {
   try {
     if (!el || el.value) return false;
+    // (LOTE CHAT-MEJORA) Sin foco, sin fundido: la rotación solo
+    // avanza con el campo vacío Y sin foco, y el cambio es
+    // instantáneo. El fundido de 360 ms dejaba las dos frases
+    // pintadas a la vez en iOS (captura del chat: «¿tenés un
+    // video…» encima de «¿qué idea tenés…»). La clase
+    // pz-ph-fading ya no se usa para el swap.
+    try { if (typeof document !== 'undefined' && document.activeElement === el) return false; } catch (e) {}
     let i = parseInt((el.dataset && el.dataset.phI) || '0', 10);
     if (isNaN(i)) i = 0;
     i = (i + 1) % list.length;
     if (el.dataset) el.dataset.phI = String(i);
-    const next = list[i];
-    // (LOTE CHAT4S) Fundido ~360 ms: apaga, cambia en el medio
-    // (180 ms) y enciende (380 ms). El campo está vacío por la
-    // guarda de arriba, así que el fundido solo afecta al
-    // placeholder, nunca a texto escrito. Si el usuario escribe
-    // durante el fundido, el timeout quita la clase sin cambiar el
-    // placeholder (nunca pisar lo escrito). Con
-    // prefers-reduced-motion el cambio es instantáneo (sin
-    // fundido); sin setTimeout disponible (tests) también es
-    // instantáneo.
-    if (pzPhReduced() || typeof setTimeout !== 'function') { el.placeholder = next; return true; }
-    try {
-      if (el.classList) el.classList.add('pz-ph-fading');
-      setTimeout(() => {
-        try {
-          if (!el.value) el.placeholder = next;
-          else if (el.classList) el.classList.remove('pz-ph-fading');
-        } catch (e) {}
-      }, 180);
-      setTimeout(() => { try { if (el.classList) el.classList.remove('pz-ph-fading'); } catch (e) {} }, 380);
-    } catch (e) { el.placeholder = next; }
+    el.placeholder = list[i];
     return true;
   } catch (e) { return false; }
 }
@@ -13179,17 +13166,13 @@ function pzDockPhNext() {
 function pzPhAdvanceDock(el, list) {
   try {
     if (!el) return false;
+    // (LOTE CHAT-MEJORA) Cambio instantáneo, sin fundido: mismo
+    // motivo que pzPhAdvanceOne (dos frases pintadas a la vez).
     let i = parseInt((el.dataset && el.dataset.phI) || '0', 10);
     if (isNaN(i)) i = 0;
     i = (i + 1) % list.length;
     if (el.dataset) el.dataset.phI = String(i);
-    const next = list[i];
-    if (pzPhReduced() || typeof setTimeout !== 'function') { el.textContent = next; return true; }
-    try {
-      if (el.classList) el.classList.add('pz-ph-fading');
-      setTimeout(() => { try { el.textContent = next; } catch (e) {} }, 180);
-      setTimeout(() => { try { if (el.classList) el.classList.remove('pz-ph-fading'); } catch (e) {} }, 380);
-    } catch (e) { el.textContent = next; }
+    el.textContent = list[i];
     return true;
   } catch (e) { return false; }
 }
@@ -20818,8 +20801,10 @@ function pzHoyCardHTML(p, o) {
   } catch (e) { return ''; }
 }
 
-// Mensaje de Posty en Hoy (botón → chat) + nota «¡Ya te dejé los
-// posteos listos!» cuando hay pendientes. Solo datos reales: la hora
+// Mensaje de Posty en Hoy (botón → chat). Un solo mensaje: la
+// instrucción «Dale» + «sin tu OK no sale nada» vive en el cuerpo
+// (LOTE CHAT-MEJORA: la nota «¡Ya te dejé los posteos listos!»
+// repetía lo mismo y ya no se renderiza). Solo datos reales: la hora
 // del posteo de hoy sale de su scheduled_at; sin posteo hoy no se
 // inventa una hora.
 function pzHoySpeechHTML(o) {
@@ -20832,42 +20817,119 @@ function pzHoySpeechHTML(o) {
   let cuerpo = '';
   if (hoyPost) {
     const hh = pzHoyHoraCorta(hoyPost.scheduled_at, tz, en);
+    // (LOTE CHAT-MEJORA) Un solo mensaje: la instrucción «Dale» +
+    // «sin tu OK no sale nada» vive acá; la nota ya no se renderiza.
     cuerpo = en
-      ? `I put together this week's posts for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b>. <span class="pz-hoy-blue">Shall we launch it?</span>`
-      : `Te armé los posteos de esta semana. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b>. <span class="pz-hoy-blue">¿Lo largamos?</span>`;
+      ? `I put together this week's posts for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b> — look at them and give a «Publish it» to the ones you like. Without your OK, nothing goes out.`
+      : `Te armé los posteos de esta semana. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b> — miralos y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.`;
   } else if (pendientes > 0) {
-    cuerpo = en ? `I put together this week's posts for you. Shall we look at them?` : `Te armé los posteos de esta semana. ¿Los miramos?`;
+    cuerpo = en ? `I put together this week's posts for you — look at them and give a «Publish it» to the ones you like. Without your OK, nothing goes out.` : `Te armé los posteos de esta semana — miralos y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.`;
   } else if (haySemana) {
     cuerpo = en ? `Your week is approved. Posty takes care of publishing it.` : `Tu semana ya está aprobada. Posty se ocupa de publicarla.`;
   } else {
     cuerpo = en ? `Shall we build your week? Tell me what you have to show.` : `¿Armamos tu semana? Contame qué tenés para mostrar.`;
   }
-  const nota = pendientes > 0
-    ? `<div class="pz-hoy-nota"><img src="ai-avatar.png" alt=""><p><b>${en ? 'Your posts are ready!' : '¡Ya te dejé los posteos listos!'}</b> ${en ? 'These are the ones I made for you — look at them, and give a «Publish it» to the ones you like. Without your OK, nothing goes out. 👇' : 'Estos son los que armé para vos — miralos, y a los que te gusten dales «Dale». Sin tu OK, no sale nada. 👇'}</p></div>` : '';
-  return `<button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span></button>${nota}`;
+  return `<button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span></button>`;
 }
 
 // Tarjeta «Subir foto o video» (mock): botón + fila del álbum real
 // (hasta 4 fotos, de /api/album) + nota de la racha. Cada miniatura y
 // el «+» abren la hoja de subida.
 function pzHoyUploadHTML(album, en) {
-  const fotos = (Array.isArray(album) ? album : []).filter((a) => a && (a.path || a.thumb)).slice(0, 4);
+  // (LOTE CHAT-MEJORA) Dedupe por la miniatura resuelta ANTES del
+  // slice: /api/album devuelve filas repetidas y la fila mostraba la
+  // misma foto dos veces. El video entra por su miniatura (thumb).
+  // Nunca se rellena con repetidas: si hay menos de 4 únicas, solo
+  // esas + el «+». La cantidad es de únicas en el álbum.
+  const vistas = {};
+  const unicas = (Array.isArray(album) ? album : []).filter((a) => {
+    if (!a) return false;
+    const src = a.thumb || a.thumb_path || a.path;
+    if (!src) return false;
+    if (vistas[src]) return false;
+    vistas[src] = 1;
+    return true;
+  });
+  const fotos = unicas.slice(0, 4);
+  const cuenta = unicas.length === 0 ? ''
+    : unicas.length === 1 ? (en ? '1 photo' : '1 foto')
+    : (en ? unicas.length + ' photos' : unicas.length + ' fotos');
   const thumbs = fotos.map((a) => {
-    const src = a.thumb || a.path;
+    const src = a.thumb || a.thumb_path || a.path;
     const alt = en ? 'Photo saved in your album' : 'Foto guardada en tu álbum';
-    return `<button type="button" class="pz-hoy-album-thumb" data-pz-hoy-subir="1" aria-label="${en ? 'Open your album to upload material' : 'Abrir tu álbum para subir material'}"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy" onerror="this.remove()"></button>`;
+    const del = (a && Number(a.id) > 0)
+      ? `<button type="button" class="pz-hoy-album-del" data-album-del="${a.id}" aria-label="${en ? 'Delete this photo from the album' : 'Borrar esta foto del álbum'}">×</button>` : '';
+    return `<span class="pz-hoy-album-thumb-wrap"><button type="button" class="pz-hoy-album-thumb" data-pz-hoy-subir="1" aria-label="${en ? 'Open your album to upload material' : 'Abrir tu álbum para subir material'}"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy" onerror="this.remove()"></button>${del}</span>`;
   }).join('');
   return `<div class="card pz-hoy-upload">`
     + `<h4>${en ? 'Anything new to show?' : '¿Tenés algo nuevo para mostrar?'}</h4>`
     + `<p class="sub">${en ? 'Upload the photo or video just as it comes out of your phone. Posty turns it into a post with text, price and best time — you edit nothing.' : 'Subí la foto o el video tal cual sale de tu teléfono. Posty lo convierte en posteo con texto, precio y mejor horario — vos no editás nada.'}</p>`
     + `<button type="button" class="pz-hoy-upload-btn" data-pz-hoy-subir="1">${pzIc('camera', 20)} ${en ? 'Upload photo or video' : 'Subir foto o video'}</button>`
-    + `<div class="pz-hoy-album-row"><span class="pz-hoy-album-label">${en ? 'YOUR ALBUM' : 'TU ÁLBUM'}</span>${thumbs}<button type="button" class="pz-hoy-album-add" data-pz-hoy-subir="1" aria-label="${en ? 'Add a photo or video to the album' : 'Agregar una foto o video al álbum'}">+</button></div>`
+    + `<div class="pz-hoy-album-row"><span class="pz-hoy-album-label">${en ? 'YOUR ALBUM' : 'TU ÁLBUM'}${cuenta ? `<small>${esc(cuenta)}</small>` : ''}</span>${thumbs}<button type="button" class="pz-hoy-album-add" data-pz-hoy-subir="1" aria-label="${en ? 'Add a photo or video to the album' : 'Agregar una foto o video al álbum'}">+</button></div>`
     + `<p class="pz-hoy-album-note">${en ? 'If one day you upload nothing, Posty builds the post with material from your album and the streak does not break.' : 'Si un día no subís nada, Posty arma el posteo con material de tu álbum y la racha no se corta.'}</p>`
     + `</div>`;
 }
 
 // Semana de un vistazo: anillo N/7 (días con publicado) + tira
 // LUN–DOM. Circunferencia del mock: 201 (r=32).
+// (LOTE CHAT-MEJORA) Borrar una foto del álbum desde la tarjeta de
+// Hoy. Confirmación con el texto del mock y el patrón confirm() que ya
+// usan los demás borrados de la app (bindAlbumRow, borrador, posteo).
+// Al salir bien, la miniatura sale de la fila y la cantidad se
+// actualiza; si el servidor rechaza (foto en un posteo), la foto sigue
+// y se muestra su mensaje.
+async function pzHoyAlbumBorrar(btn) {
+  // (LOTE CHAT-MEJORA v804 · TARJETA INLINE, decisión del tablero)
+  // La confirmación es una tarjeta inline en la tarjeta «Subir foto o
+  // video» (mock v2), NO el diálogo nativo del navegador: la × abre la tarjeta, [Borrar]
+  // borra y [Cancelar] la cierra sin tocar nada. Una sola tarjeta a la vez.
+  if (!btn) return;
+  const id = btn.getAttribute ? btn.getAttribute('data-album-del') : null;
+  if (!id) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const row = btn.closest ? btn.closest('.pz-hoy-album-row') : null;
+  const card = btn.closest ? btn.closest('.pz-hoy-upload') : null;
+  if (typeof document === 'undefined' || !document.createElement || !row) return;
+  try { const old = card ? card.querySelector('.pz-hoy-album-confirm') : null; if (old && old.remove) old.remove(); } catch (e) {}
+  const el = document.createElement('div');
+  el.className = 'pz-hoy-album-confirm';
+  el.innerHTML = '<p><b>' + esc(en ? 'Delete this photo from the album?' : '¿Borrar esta foto del álbum?') + '</b> ' + esc(en ? "Posty won't use it anymore." : 'Posty no la va a usar más.') + '</p>'
+    + '<div class="pz-hoy-album-confirm-row"><button type="button" class="pz-hoy-album-confirm-del">' + esc(en ? 'Delete' : 'Borrar') + '</button><button type="button" class="pz-hoy-album-confirm-no">' + esc(en ? 'Cancel' : 'Cancelar') + '</button></div>';
+  let delBtn = null, noBtn = null;
+  try { delBtn = el.querySelector('.pz-hoy-album-confirm-del'); noBtn = el.querySelector('.pz-hoy-album-confirm-no'); } catch (e) {}
+  if (!delBtn || !noBtn) return;
+  noBtn.onclick = () => { try { el.remove(); } catch (e) {} };
+  delBtn.onclick = async () => {
+    try { delBtn.disabled = true; noBtn.disabled = true; } catch (e) {}
+    try {
+      const r = await api.delete('/api/album/' + encodeURIComponent(id));
+      if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
+      try {
+        const wrap = btn.closest ? btn.closest('.pz-hoy-album-thumb-wrap') : null;
+        if (wrap) wrap.remove();
+        if (row) pzHoyAlbumCuenta(row);
+      } catch (e) {}
+      try { el.remove(); } catch (e) {}
+    } catch (e) {
+      try { delBtn.disabled = false; noBtn.disabled = false; } catch (e2) {}
+      try { toast('No se pudo borrar: ' + esc((e && e.message) || 'probá de nuevo')); } catch (e2) {}
+    }
+  };
+  try {
+    if (row.after) row.after(el);
+    else if (row.parentNode && row.parentNode.insertBefore) row.parentNode.insertBefore(el, row.nextSibling || null);
+  } catch (e) {}
+}
+function pzHoyAlbumCuenta(row) {
+  try {
+    const n = row.querySelectorAll('.pz-hoy-album-thumb').length;
+    const small = row.querySelector('.pz-hoy-album-label small');
+    if (!small) return;
+    if (n === 0) { small.remove(); return; }
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    small.textContent = n === 1 ? (en ? '1 photo' : '1 foto') : (en ? n + ' photos' : n + ' fotos');
+  } catch (e) {}
+}
 function pzHoySemanaHTML(sem, en) {
   const n = (sem && typeof sem.n === 'number') ? sem.n : 0;
   const dias = (sem && Array.isArray(sem.dias)) ? sem.dias : [];
@@ -21056,6 +21118,7 @@ function pzHoyBind(root) {
     el.onkeydown = (ev) => { if (ev && (ev.key === 'Enter' || ev.key === ' ')) { try { ev.preventDefault(); } catch (e) {} go(); } };
   });
   root.querySelectorAll('[data-pz-hoy-subir]').forEach((b) => { b.onclick = () => pzHoySubirAbrir(); });
+  root.querySelectorAll('[data-album-del]').forEach((b) => { b.onclick = (ev) => { try { if (ev && ev.stopPropagation) ev.stopPropagation(); } catch (e) {} pzHoyAlbumBorrar(b); }; });
   const sh = document.getElementById('pzHoySubirSheet');
   if (sh) {
     sh.querySelectorAll('[data-pz-hoy-subir-op]').forEach((b) => {
@@ -22948,6 +23011,21 @@ function pzTemaQuickHTML(ops) {
     + ops.map((o) => '<button type="button" data-tema-op="' + esc(o.id) + '" class="' + (o.primary ? 'primary' : '') + '"' + (o.hora ? ' data-tema-hora="' + esc(o.hora) + '"' : '') + (o.foto ? ' data-tema-foto="' + esc(o.foto) + '"' : '') + '>' + esc(o.text) + '</button>').join('')
     + '</div>';
 }
+// (LOTE CHAT-MEJORA) Tira colapsada de una línea: cuando el tema ya
+// se respondió, la tarjeta grande se achica a esto (mismo vidrio, sin
+// chips ni descripción) para que la conversación respire. También es
+// el estado «Nada pendiente».
+function pzTemaMiniHTML(titulo, sub) {
+  return '<div class="pz-tema pz-tema-mini"><span class="pz-tema-ok">✓</span><span><b>'
+    + esc(titulo) + '</b>' + (sub ? ' · ' + esc(sub) : '') + '</span></div>';
+}
+function pzTemaColapsar(titulo, sub) {
+  const wrap = document.getElementById('pzTemaWrap');
+  if (!wrap) return;
+  wrap.innerHTML = pzTemaMiniHTML(titulo, sub);
+  // El colapso cambia la altura: el scroll a abajo corre DESPUÉS.
+  try { chatScroll(true); } catch (e) {}
+}
 function pzTemaPintar() {
   const wrap = document.getElementById('pzTemaWrap');
   if (!wrap || !PZ_TEMA) return;
@@ -22956,15 +23034,10 @@ function pzTemaPintar() {
   const n = temas.length;
   let html = '';
   if (!tema) {
-    // Nada pendiente: el chat libre sigue abajo, sin temas.
-    html = '<div class="pz-tema"><small>' + esc(pzTemaT('SOBRE · TODO AL DÍA', 'ABOUT · ALL CAUGHT UP')) + '</small>'
-      + '<b>' + esc(pzTemaT('Nada pendiente ✓', 'Nothing pending ✓')) + '</b>'
-      + '<span>' + esc(pzTemaT('No queda ningún tema puntual abierto. Cuando haya un posteo, una pregunta o una misión, Posty lo trae acá — siempre de a uno.', 'No open topic right now. When there is a post, a question or a mission, Posty brings it here — always one at a time.')) + '</span>'
-      + pzTemaQuickHTML([
-        { id: 'fin-hoy', text: pzTemaT('Ir a Hoy', 'Go to Today'), primary: true },
-        { id: 'fin-nivel', text: pzTemaT('Ir a Nivel', 'Go to Level') },
-      ])
-      + '</div>';
+    // Nada pendiente: una línea compacta, no la tarjeta grande
+    // (LOTE CHAT-MEJORA: la tarjeta tapaba el primer mensaje).
+    // «Ir a Hoy» / «Ir a Nivel» viven en la barra de pestañas.
+    html = pzTemaMiniHTML(pzTemaT('Nada pendiente ✓', 'Nothing pending ✓'), pzTemaT('Todo al día', 'All caught up'));
   } else if (tema.kind === 'hoy') {
     const p = tema.post;
     const titulo = (p.caption_corta || p.caption || '').trim() || pzTemaT('El posteo de hoy', "Today's post");
@@ -22978,7 +23051,6 @@ function pzTemaPintar() {
         { id: 'hoy-cambialo', text: pzTemaT('Cambialo', 'Change it') },
         { id: 'hoy-despues', text: pzTemaT('Lo miro después', "I'll check it later") },
       ])
-      + '<p class="pz-tema-hint">' + esc(pzTemaT('¿Algo puntual sobre este tema?', 'Anything specific about this topic?')) + ' <span>' + esc(pzTemaT('Escribí una frase corta acá abajo ↓', 'Write a short phrase below ↓')) + '</span></p>'
       + '</div>';
   } else if (tema.kind === 'lunes') {
     html = '<div class="pz-tema"><small>' + esc(pzTemaT('SOBRE · TEMA ' + (idx + 1) + ' DE ' + n, 'ABOUT · TOPIC ' + (idx + 1) + ' OF ' + n)) + '</small>'
@@ -22990,7 +23062,6 @@ function pzTemaPintar() {
         { id: 'lunes-6-15', text: pzTemaT('6 a 15', '6 to 15') },
         { id: 'lunes-15+', text: pzTemaT('Más de 15 🎉', 'More than 15 🎉') },
       ])
-      + '<p class="pz-tema-hint">' + esc(pzTemaT('¿Algo puntual sobre este tema?', 'Anything specific about this topic?')) + ' <span>' + esc(pzTemaT('Escribí una frase corta acá abajo ↓', 'Write a short phrase below ↓')) + '</span></p>'
       + '</div>';
   } else if (tema.kind === 'comentario') {
     const c = tema.c;
@@ -23003,7 +23074,6 @@ function pzTemaPintar() {
         { id: 'com-ver', text: pzTemaT('Verla primero', 'See it first') },
         { id: 'com-despues', text: pzTemaT('Dejarla para después', 'Leave it for later') },
       ])
-      + '<p class="pz-tema-hint">' + esc(pzTemaT('¿Algo puntual sobre este tema?', 'Anything specific about this topic?')) + ' <span>' + esc(pzTemaT('Escribí una frase corta acá abajo ↓', 'Write a short phrase below ↓')) + '</span></p>'
       + '</div>';
   }
   wrap.innerHTML = html;
@@ -23134,6 +23204,11 @@ async function pzTemaGuardarLunes(rango, etiqueta) {
       : rango === '6-15' ? pzTemaT('anotado: 6 a 15 consultas 🎉 queda guardado en tu análisis.', 'noted: 6 to 15 inquiries 🎉 saved in your analysis.')
       : pzTemaT('anotado: más de 15 🎉 semana récord. queda guardado en tu análisis.', 'noted: more than 15 🎉 record week. saved in your analysis.');
     chatSay(ack);
+    // (LOTE CHAT-MEJORA) Al responder, la tarjeta colapsa a una
+    // línea y lo puntual lo dice Posty como mensaje del chat (la
+    // línea «¿Algo puntual…?» ya no vive en la tarjeta).
+    try { pzTemaColapsar(pzTemaT('La pregunta de los lunes', "Monday's question"), pzTemaT('Anotado en Análisis', 'Saved in Analysis')); } catch (e) {}
+    try { chatSay(pzTemaT('¿Algo puntual sobre este tema? Escribímelo acá abajo.', 'Anything specific about this topic? Write it to me below.')); } catch (e) {}
     setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
   } catch (e) { chatSay(pzTemaT('no pude guardarlo 😕 probá de nuevo', "i could not save it 😕 try again")); pzTemaReactivar(); }
 }

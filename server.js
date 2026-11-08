@@ -11821,6 +11821,37 @@ app.post('/api/album/carrusel', requireAuth, express.json(), async (req, res) =>
     res.json({ ok: true, post_id: ins.lastInsertRowid });
   } catch (e) { console.error('[album-carrusel]', e.message); res.status(500).json({ ok: false, error: 'No pude armar el carrusel' }); }
 });
+// (LOTE CHAT-MEJORA) DELETE: borrar una foto del álbum desde la
+// tarjeta de Hoy. Guard honesto: si la foto ya está en un posteo
+// (draft/scheduled/published, por foto_asset_id, image_path o
+// carousel_paths), NO se borra — nunca romper un posteo programado.
+// Borra la FOTO, no solo la fila clickeada: el álbum puede tener la
+// misma foto duplicada (el fix 5 la muestra una sola vez) y «borrar
+// esta foto» tiene que sacarla del todo — si queda una fila, Posty la
+// seguiría usando. El guard cubre todas las filas duplicadas (el
+// foto_asset_id se resuelve por subconsulta sobre el file_path).
+app.delete('/api/album/:id', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const asset = sftAssetPropio(uid, req.params.id);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    let usado = null;
+    try {
+      usado = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status IN ('draft','scheduled','published') AND (foto_asset_id IN (SELECT id FROM assets WHERE user_id = ? AND file_path = ?) OR image_path = ? OR carousel_paths LIKE ?)`).get(uid, uid, asset.file_path, asset.file_path, `%${asset.file_path}%`);
+    } catch (e) {}
+    if (usado) return res.status(409).json({ ok: false, error: 'Esa foto ya está en un posteo' });
+    let filas = [];
+    try { filas = db.prepare('SELECT id, thumb_path FROM assets WHERE user_id = ? AND file_path = ?').all(uid, asset.file_path); } catch (e) {}
+    db.prepare('DELETE FROM assets WHERE user_id = ? AND file_path = ?').run(uid, asset.file_path);
+    const archivos = [asset.file_path];
+    for (const f of filas) { if (f && f.thumb_path) archivos.push(f.thumb_path); }
+    for (const f of archivos) {
+      if (!f) continue;
+      try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(f))); } catch (_) {}
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No pude borrar la foto' }); }
+});
 app.post('/api/album/:id/choice', requireAuth, express.json(), (req, res) => {
   try {
     const uid = req.session.userId;
@@ -32449,7 +32480,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v803';
+const BUILD_ID = '20261105-v804';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
