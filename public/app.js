@@ -19647,8 +19647,8 @@ function homeHeadHTML(prof, bizName, opts) {
   const infoBtnHTML = `<button type="button" class="hf-info-btn" onclick="pzPubInfoOpen()" aria-label="${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}">i</button>`;
   const infoRowHTML = `<button type="button" class="hf-info-row" onclick="pzPubInfoOpen()" aria-label="${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}"><span class="hf-info-btn" aria-hidden="true">i</span><span class="hf-info-row-txt">${en ? 'How does Posty publish?' : '¿Cómo publica Posty?'}</span></button>`;
   const rachaTxt = (opts && Number(opts.racha) >= 2) ? `<span class="hf-racha-txt">${pzIc('flame', 14)} ${en ? `${Math.floor(opts.racha)} weeks in a row posting` : `${Math.floor(opts.racha)} semanas seguidas publicando`}</span>` : '';
-  // (LOTE ICONOS-LINEA-INFO · 6/11, decisión Valentino) Los 3 íconos
-  // (Editar/Compartir/Ajustes) viven en la misma línea que
+  // (LOTE ICONOS-LINEA-INFO · 6/11, decisión Valentino) Los íconos
+  // (Compartir/Ajustes) viven en la misma línea que
   // «¿Cómo publica Posty?» (fila .hf-racha), a la derecha: la info a
   // la izquierda y los íconos a la derecha. Antes vivían en .hf-prow
   // (fila del avatar, después de las stats) y dejaban un blanco
@@ -19658,7 +19658,10 @@ function homeHeadHTML(prof, bizName, opts) {
   // mismos handlers (hfProfileBind), mismos aria-labels y mismo
   // tamaño/estilo (.hf-head-ic). Con racha >= 2 siguen en la misma
   // línea (texto de racha + (i) + íconos).
-  const headIconsHTML = (opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="edit" aria-label="${en ? 'Edit profile' : 'Editar perfil'}">${pzIc('pencil', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Share my profile' : 'Compartir mi perfil'}">${pzIc('share', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="settings" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button></span>` : '';
+  // (LOTE SACAR-LÁPIZ-PERFIL · 7/11, decisión Valentino) El tercer
+  // ícono (lápiz, Editar perfil) SALE: nadie edita su perfil desde
+  // Posty, lo hace por Instagram; la lámina guardaba solo en Posty.
+  const headIconsHTML = (opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Share my profile' : 'Compartir mi perfil'}">${pzIc('share', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="settings" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button></span>` : '';
   const rachaHTML = user ? `<div class="hf-racha">${rachaTxt ? rachaTxt + infoBtnHTML : infoRowHTML}${headIconsHTML}</div>` : '';
   return `<div class="hf-head">
     ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}
@@ -20142,11 +20145,13 @@ function hfShareSheetHTML(prof, en) {
 function hfProfileActionsHTML(en, acceptHTML) {
   // (LOTE INICIO-3 · 3/11, decisión de Valentino) La fila de acciones
   // del encabezado ya NO lleva «Editar perfil» ni «Compartir mi
-  // perfil»: esos dos viven como SOLO ÍCONOS (lápiz y compartir, con
-  // los mismos data-hf-pact y handlers de siempre, vía hfProfileBind)
-  // a la derecha de la fila «¿Cómo publica Posty?» (opts.headIcons
-  // en homeHeadHTML; antes vivían a la derecha de los contadores,
-  // LOTE ICONOS-LINEA-INFO 6/11).
+  // perfil»: Compartir vive como SOLO ÍCONO (con el mismo
+  // data-hf-pact y handler de siempre, vía hfProfileBind) a la
+  // derecha de la fila «¿Cómo publica Posty?» (opts.headIcons en
+  // homeHeadHTML; antes vivía a la derecha de los contadores, LOTE
+  // ICONOS-LINEA-INFO 6/11). El lápiz (Editar perfil) SE SACÓ el
+  // 7/11 (decisión Valentino, lote sacar-lápiz-perfil): nadie edita
+  // su perfil desde Posty, lo hace por Instagram.
   // El espacio libre lo ocupa «Aceptar todo» REUBICADO (mismo
   // acceptBarHTML, mismo handler pzAcceptAllWeek, mismo alcance:
   // solo programados de la semana nueva pendientes, un toque sin
@@ -20238,31 +20243,10 @@ function hfCoversSheetHTML(prof, en) {
     + '<button type="button" class="hf-ps-alt" data-hf-ps-close>' + (en ? 'Close' : 'Cerrar') + '</button></div>'
     + '<div class="hf-ps-msg" data-hf-cov-msg></div></div>';
 }
-/* — Ítem 13: editar perfil (preview = el mismo homeHeadHTML) — */
-function hfEditPreviewProf(prof, vals) {
-  const v = vals || {};
-  const out = Object.assign({}, prof || {});
-  if (v.name !== undefined) out.name = v.name;
-  if (v.bio !== undefined) { out.bio = v.bio; out.bio_unread = false; }
-  if (v.link !== undefined) out.link = v.link;
-  return out;
-}
-function hfEditProfileHTML(prof, disp, en) {
-  const d = disp || {};
-  const f = (key, label, inner) => '<div class="hf-ed-field"><label>' + label + '</label><div class="hf-ed-row">' + inner
-    + '<button type="button" class="hf-ed-copy" data-hf-ed-copy="' + key + '">' + HF_COPY_ICON + (en ? 'Copy' : 'Copiar') + '</button></div></div>';
-  return '<div class="hf-ps-card hf-ed-card hf-ps-glass" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Edit profile' : 'Editar perfil') + '</div>'
-    + '<div class="hf-ed-preview" data-hf-ed-preview></div>'
-    + f('name', en ? 'Name' : 'Nombre', '<input type="text" data-hf-ed="name" maxlength="30" value="' + esc(d.name || '') + '" autocomplete="off">')
-    + '<div class="hf-ed-field"><label>' + (en ? 'Bio' : 'Bio') + '</label><textarea data-hf-ed="bio" maxlength="150" rows="3">' + esc(d.bio || '') + '</textarea>'
-    + '<div class="hf-ed-count"><span data-hf-ed-count>' + String(d.bio || '').length + '</span>/150</div>'
-    + '<div class="hf-ed-row" style="margin-top:6px;justify-content:flex-end"><button type="button" class="hf-ed-copy" data-hf-ed-copy="bio">' + HF_COPY_ICON + (en ? 'Copy' : 'Copiar') + '</button></div></div>'
-    + f('link', en ? 'Link' : 'Link', '<input type="text" data-hf-ed="link" value="' + esc(d.link || '') + '" placeholder="tunegocio.com" autocomplete="off" autocapitalize="off">')
-    + '<p class="hf-ps-note">' + (en ? 'This is saved in Posty. Instagram does not let anyone change your profile from outside: copy each field and paste it in Instagram, in Edit profile.' : 'Esto queda guardado en Posty. Instagram no deja cambiar tu perfil desde afuera: copiá cada campo y pegalo en Editar perfil de Instagram.') + '</p>'
-    + '<div class="hf-ps-acts"><button type="button" class="hf-ps-btn hf-ps-primary" data-hf-ed-save>' + (en ? 'Save in Posty' : 'Guardar en Posty') + '</button>'
-    + '<button type="button" class="hf-ps-alt" data-hf-ps-close>' + (en ? 'Close' : 'Cerrar') + '</button></div>'
-    + '<div class="hf-ps-msg" data-hf-ed-msg></div></div>';
-}
+/* — Ítem 13: editar perfil — SACADO 7/11 (lote sacar-lápiz-perfil,
+   decisión Valentino): el lápiz y su lámina (hfEditProfileHTML +
+   hfEditPreviewProf + hfEditOpen) salen; el perfil se edita en
+   Instagram, no desde Posty. Ver STATUS del lote. — */
 /* — Ítem 14: tu archivo — */
 function hfArchDate(v, en) {
   try {
@@ -22603,56 +22587,6 @@ function hfCoversOpen() {
     for (let i = 0; i < n; i++) setTimeout(() => hfCoverDownloadAt(prof, i, msg, en), i * 450);
   });
 }
-function hfEditOpen() {
-  const en = hfIsEn();
-  const prof = (typeof HF_CUR_PROF !== 'undefined' && HF_CUR_PROF) || (typeof HOME_PROF !== 'undefined' && HOME_PROF) || {};
-  const disp = (prof && prof.profile_display) || {};
-  const vals = {
-    name: disp.name || String((prof && prof.name) || ''),
-    bio: disp.bio || ((prof && !prof.bio_unread) ? String(prof.bio || '') : ''),
-    link: disp.link || String((prof && prof.link) || ''),
-  };
-  const ov = hfSheetShow(hfEditProfileHTML(prof, vals, en));
-  const prev = ov.querySelector('[data-hf-ed-preview]');
-  const msg = ov.querySelector('[data-hf-ed-msg]');
-  const inp = (k) => ov.querySelector('[data-hf-ed="' + k + '"]');
-  const read = () => ({ name: inp('name') ? inp('name').value : '', bio: inp('bio') ? inp('bio').value : '', link: inp('link') ? inp('link').value : '' });
-  const paint = () => {
-    const v = read();
-    const cnt = ov.querySelector('[data-hf-ed-count]');
-    if (cnt) cnt.textContent = String(v.bio.length);
-    if (prev) {
-      const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name) || '';
-      try { prev.innerHTML = homeHeadHTML(hfEditPreviewProf(prof, v), bizName, { en, tab: 'posts' }); } catch (e) {}
-    }
-  };
-  ['name', 'bio', 'link'].forEach((k) => { const el = inp(k); if (el) el.addEventListener('input', paint); });
-  paint();
-  ov.querySelectorAll('[data-hf-ed-copy]').forEach((b) => b.addEventListener('click', async () => {
-    const v = read();
-    const okCopy = await hfClipboard(v[b.dataset.hfEdCopy] || '');
-    if (msg) msg.innerHTML = okCopy ? pzIc('checkCircle', 13) + ' ' + (en ? 'Copied' : 'Copiado') : (en ? 'Could not copy' : 'No se pudo copiar');
-  }));
-  const save = ov.querySelector('[data-hf-ed-save]');
-  if (save) save.addEventListener('click', async () => {
-    const v = read();
-    try {
-      await api.put('/api/profile', { profile_name: v.name.trim(), profile_bio: v.bio, profile_link: v.link.trim() });
-    } catch (e) {
-      if (msg) msg.textContent = (e && e.message) || (en ? 'Could not save' : 'No se pudo guardar');
-      return;
-    }
-    try {
-      if (typeof PROFILE !== 'undefined' && PROFILE) { PROFILE.profile_name = v.name.trim(); PROFILE.profile_bio = v.bio; PROFILE.profile_link = v.link.trim(); }
-      const np = hfEditPreviewProf(prof, { name: v.name.trim(), bio: v.bio, link: v.link.trim() });
-      if (typeof HOME_PROF !== 'undefined' && HOME_PROF) { HOME_PROF.name = np.name; HOME_PROF.bio = np.bio; HOME_PROF.bio_unread = false; HOME_PROF.link = np.link; HOME_PROF.profile_display = { name: v.name.trim(), bio: v.bio, link: v.link.trim() }; }
-      HF_CUR_PROF = (typeof HOME_PROF !== 'undefined' && HOME_PROF) || np;
-    } catch (e) {}
-    hfSheetClose();
-    toast('✅ ' + (en ? 'Profile saved in Posty' : 'Perfil guardado en Posty'));
-    try { render(); } catch (e) {}
-  });
-}
 async function hfArchiveOpen() {
   const en = hfIsEn();
   const ov = hfSheetShow('<div class="hf-ps-card" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Your archive' : 'Tu archivo') + '</div><p class="hf-ps-note">' + (en ? 'Loading…' : 'Cargando…') + '</p></div>');
@@ -22696,7 +22630,6 @@ function hfProfileBind(root) {
     el.onclick = () => {
       const act = el.dataset.hfPact;
       if (act === 'share') hfShareOpen();
-      else if (act === 'edit') hfEditOpen();
       else if (act === 'settings') { location.hash = '#/app/ajustes'; }
       else if (act === 'covers') hfCoversOpen();
       else if (act === 'archive') hfArchiveOpen();

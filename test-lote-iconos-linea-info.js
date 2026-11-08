@@ -1,6 +1,8 @@
-// test-lote-iconos-linea-info.js — LOTE ICONOS-LINEA-INFO: los 3 botones
-// del perfil (Editar/Compartir/Ajustes) viven en la misma línea que
+// test-lote-iconos-linea-info.js — LOTE ICONOS-LINEA-INFO: los 2 botones
+// del perfil (Compartir/Ajustes) viven en la misma línea que
 // «¿Cómo publica Posty?» (fila .hf-racha), a la derecha.
+// (LOTE SACAR-LÁPIZ-PERFIL · 7/11, decisión Valentino: el lápiz
+// —Editar perfil— SALE; eran 3 íconos, ahora son 2.)
 // Decisión de Valentino 6/11: donde estaban (fila del avatar, después
 // de las stats) quedaba un espacio en blanco enorme a la izquierda.
 // La fila de info es un <button>: NO se anidan botones — la línea es
@@ -43,8 +45,8 @@ ok(prowBlock.length > 0 && !prowBlock.includes('hf-head-icons'), '.hf-prow ya NO
 ok(prowBlock.includes('hf-ava') && prowBlock.includes('hf-stats'), '.hf-prow queda con avatar + stats');
 ok(hh.includes('const headIconsHTML'), 'los íconos viven en headIconsHTML');
 ok(hh.includes('`<div class="hf-racha">${rachaTxt ? rachaTxt + infoBtnHTML : infoRowHTML}${headIconsHTML}</div>`'), 'la fila .hf-racha rinde info + íconos');
-ok(hh.includes("data-hf-pact=\"edit\"") && hh.includes("data-hf-pact=\"share\"") && hh.includes("data-hf-pact=\"settings\""), 'los 3 data-hf-pact siguen (edit/share/settings)');
-ok(hh.indexOf("data-hf-pact=\"edit\"") < hh.indexOf("data-hf-pact=\"share\"") && hh.indexOf("data-hf-pact=\"share\"") < hh.indexOf("data-hf-pact=\"settings\""), 'orden: lápiz, compartir, Ajustes');
+ok(!hh.includes("data-hf-pact=\"edit\"") && hh.includes("data-hf-pact=\"share\"") && hh.includes("data-hf-pact=\"settings\""), 'los 2 data-hf-pact siguen (share/settings); el lápiz ya no existe (sacar-lápiz-perfil 7/11)');
+ok(hh.indexOf("data-hf-pact=\"share\"") < hh.indexOf("data-hf-pact=\"settings\""), 'orden: compartir, Ajustes');
 ok(hh.includes("pzIc('gear', 20)"), 'Ajustes con ícono gear 20');
 ok(hh.includes("aria-label=\"${en ? 'Settings' : 'Ajustes'}\""), 'Ajustes con aria-label ES/EN');
 ok(app.includes('headIcons: !HF_VISITOR'), 'Inicio pide los íconos solo si no es visitante');
@@ -66,7 +68,7 @@ const rachaRow = (html) => {
   return html.slice(a, html.indexOf('</div>', a) + 6);
 };
 
-// R1: sin racha + íconos -> info + 3 íconos en la misma línea.
+// R1: sin racha + íconos -> info + 2 íconos en la misma línea.
 const r1 = H(Object.assign({}, base), '', { splitHead: true, headIcons: true });
 const row1 = rachaRow(r1);
 ok(!!row1, 'R1 fila hf-racha presente');
@@ -74,14 +76,15 @@ ok(row1.includes('<button type="button" class="hf-info-row"'), 'R1 botón de inf
 ok(row1.includes('¿Cómo publica Posty?'), 'R1 etiqueta «¿Cómo publica Posty?»');
 ok(row1.includes('hf-head-icons'), 'R1 los íconos están en la fila');
 ok(row1.indexOf('hf-info-row') < row1.indexOf('hf-head-icons'), 'R1 la info va a la izquierda, los íconos a la derecha');
-for (const p of ['edit', 'share', 'settings']) ok(row1.includes('data-hf-pact="' + p + '"'), 'R1 ícono ' + p + ' en la fila');
-ok(row1.indexOf('data-hf-pact="edit"') < row1.indexOf('data-hf-pact="share"') && row1.indexOf('data-hf-pact="share"') < row1.indexOf('data-hf-pact="settings"'), 'R1 orden lápiz, compartir, Ajustes');
+for (const p of ['share', 'settings']) ok(row1.includes('data-hf-pact="' + p + '"'), 'R1 ícono ' + p + ' en la fila');
+ok(!row1.includes('data-hf-pact="edit"'), 'R1 sin lápiz en la fila (sacar-lápiz-perfil 7/11)');
+ok(row1.indexOf('data-hf-pact="share"') < row1.indexOf('data-hf-pact="settings"'), 'R1 orden compartir, Ajustes');
 ok(maxButtonDepth(row1) === 1, 'R1 sin botones anidados (profundidad máx 1)');
 ok(row1.indexOf('</button>') < row1.indexOf('<span class="hf-head-icons">'), 'R1 el botón de info cierra antes de abrir el span de íconos');
 ok(r1.indexOf('hf-head-icons') > r1.indexOf('<div class="hf-name">'), 'R1 los íconos NO están en .hf-prow (aparecen después del nombre)');
 ok((r1.match(/hf-info-btn/g) || []).length === 1, 'R1 un solo «i» en la cabecera');
 
-// R2: con racha 3 + íconos -> texto + (i) + 3 íconos en la misma línea.
+// R2: con racha 3 + íconos -> texto + (i) + 2 íconos en la misma línea.
 const r2 = H(Object.assign({}, base), '', { splitHead: true, racha: 3, headIcons: true });
 const row2 = rachaRow(r2);
 ok(!!row2, 'R2 fila hf-racha presente con racha 3');
@@ -104,17 +107,18 @@ ok(typeof r4 === 'string' && !r4.includes('hf-racha') && !r4.includes('hf-head-i
 const r5 = H(Object.assign({}, base), '', { splitHead: true, headIcons: true, en: true });
 const row5 = rachaRow(r5);
 ok(row5.includes('How does Posty publish?'), 'R5 EN «How does Posty publish?»');
-ok(row5.includes('aria-label="Edit profile"') && row5.includes('aria-label="Share my profile"') && row5.includes('aria-label="Settings"'), 'R5 EN aria-labels de los 3 íconos');
+ok(row5.includes('aria-label="Share my profile"') && row5.includes('aria-label="Settings"'), 'R5 EN aria-labels de los 2 íconos');
+ok(!row5.includes('aria-label="Edit profile"'), 'R5 EN sin «Edit profile» (sacar-lápiz-perfil 7/11)');
 
 /* ---------- 3. Handlers intactos (los botones hacen lo mismo) ---------- */
 console.log('— handlers: hfProfileBind sigue bindeando por atributo —');
 const bind = extractFn(app, 'function hfProfileBind');
 ok(bind.includes("root.querySelectorAll('[data-hf-pact]')"), 'hfProfileBind bindea por [data-hf-pact] en todo el root');
 ok(bind.includes("if (act === 'share') hfShareOpen();"), 'share -> hfShareOpen');
-ok(bind.includes("else if (act === 'edit') hfEditOpen();"), 'edit -> hfEditOpen');
+ok(!bind.includes("hfEditOpen") && !bind.includes("act === 'edit'"), 'sin rama edit en hfProfileBind (el lápiz se sacó 7/11)');
 ok(bind.includes("else if (act === 'settings') { location.hash = '#/app/ajustes'; }"), 'settings -> #/app/ajustes');
 ok((app.match(/function hfShareOpen\(/g) || []).length === 1, 'hfShareOpen definida');
-ok((app.match(/function hfEditOpen\(/g) || []).length === 1, 'hfEditOpen definida');
+ok(!app.includes('function hfEditOpen('), 'hfEditOpen ya no existe (sacar-lápiz-perfil 7/11)');
 ok((app.match(/function pzPubInfoOpen\(/g) || []).length === 1, 'pzPubInfoOpen definida');
 
 /* ---------- 4. CSS ---------- */

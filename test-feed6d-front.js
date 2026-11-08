@@ -9,10 +9,10 @@ global.pzIc = (name, px) => '<span class="pz-ic"></span>'; // stub: en producci�
  *    genérico ES/EN), iconos honestos, hfCoverSVG determinístico con
  *    la paleta de la cuenta, SIN texto en la imagen y tinta con
  *    contraste; el nombre va como rótulo en la lámina, no impreso.
- *  · ítem 13: hfEditProfileHTML (bio con maxlength 150 + contador
- *    x/150 + Copiar por campo + copy honesto de aplicación a IG) y
- *    hfEditPreviewProf (el preview es el perfil mergeado que pinta
- *    homeHeadHTML).
+ *  · ítem 13: editar perfil SACADO (lote sacar-lápiz-perfil · 7/11,
+ *    decisión Valentino: el lápiz sale; la lámina hfEditProfileHTML y
+ *    su preview hfEditPreviewProf ya no existen; el test fija que no
+ *    queda ningún data-hf-pact="edit" ni llamada a hfEditOpen).
  *  · ítem 14: hfArchiveHTML con las tres fuentes: versión de borrador
  *    con botón de intercambio, versión de publicado SIN botón,
  *    republicado con «Ver el borrador», descartado con restaurar,
@@ -44,9 +44,27 @@ vm.createContext(sb);
 // El QR vendoreado REAL, como lo carga el navegador a demanda.
 vm.runInContext(fs.readFileSync(path.join(__dirname, 'public', 'qr-vendor.js'), 'utf8'), sb);
 vm.runInContext(APP.slice(a, b), sb);
+// (LOTE SACAR-LÁPIZ-PERFIL · 7/11) pzDecEnt vive en app.js:11, FUERA
+// del bloque HOME_FEED: el sandbox no lo tenía y homeHeadHTML reventaba
+// con ReferenceError (el crash pre-existente de la base en :116).
+// Se extrae la función real y se carga tal cual, como hace
+// test-loteglassperfil.js — sin stub inventado.
+const pzDecEntSrc = (() => {
+  const i = APP.indexOf('function pzDecEnt');
+  if (i < 0) return '';
+  let depth = 0, j = i, q = null, esc = false;
+  for (; j < APP.length; j++) {
+    const c = APP[j];
+    if (q) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === q) q = null; }
+    else { if (c === '"' || c === "'" || c === '`') q = c; else if (c === '{') depth++; else if (c === '}') { depth--; if (depth === 0) break; } }
+  }
+  return APP.slice(i, j + 1);
+})();
+if (pzDecEntSrc) vm.runInContext(pzDecEntSrc, sb);
+ok(typeof sb.pzDecEnt === 'function', 'pzDecEnt real cargado en el sandbox (fuera del bloque HOME_FEED)');
 ok(typeof sb.hfShareSheetHTML === 'function' && typeof sb.hfCoverSVG === 'function'
-  && typeof sb.hfEditProfileHTML === 'function' && typeof sb.hfArchiveHTML === 'function',
-  'piezas puras 6D cargan en el sandbox');
+  && typeof sb.hfEditProfileHTML === 'undefined' && typeof sb.hfArchiveHTML === 'function',
+  'piezas puras 6D cargan en el sandbox (la lámina de edición ya no existe: sacar-lápiz-perfil 7/11)');
 
 // — Ítem 11: URL, WhatsApp y QR —
 const prof = { username: 'cafesol', name: 'Café Sol', bio: 'Café de especialidad', highlights: [], palette: ['#3B2314', '#FEC14D'] };
@@ -101,21 +119,18 @@ ok(covSheet.includes('Instagram no deja que Posty las aplique por vos'),
 ok(sb.hfCoversSheetHTML(profHl, true).includes('Instagram does not let Posty apply them for you'),
   'lámina de cubiertas EN: copy honesto gemelo');
 
-// — Ítem 13: editar perfil —
-const ed = sb.hfEditProfileHTML(prof, { name: 'Café Sol', bio: 'Café de especialidad', link: '' }, false);
-ok(ed.includes('maxlength="150"') && ed.includes('data-hf-ed-count') && ed.includes('/150'),
-  'editar: bio con tope 150 y contador x/150');
-ok((ed.match(/data-hf-ed-copy=/g) || []).length === 3, 'editar: botón Copiar por campo (nombre, bio, link)');
-ok(ed.includes('data-hf-ed-preview') && ed.includes('Guardar en Posty')
-  && ed.includes('Instagram no deja cambiar tu perfil desde afuera'),
-  'editar: preview + guardar + copy honesto (sin botón que finja aplicar)');
-ok(sb.hfEditProfileHTML(prof, {}, true).includes('Save in Posty'), 'editar EN: gemelo «Save in Posty»');
-const merged = sb.hfEditPreviewProf(prof, { name: 'Nuevo Nombre', bio: 'Bio nueva', link: 'https://x.co' });
-ok(merged.name === 'Nuevo Nombre' && merged.bio === 'Bio nueva' && merged.link === 'https://x.co' && merged.username === 'cafesol',
-  'hfEditPreviewProf: el preview mergea sin tocar el resto del perfil');
-const headPrev = sb.homeHeadHTML(merged, 'Café Sol', { en: false });
-ok(headPrev.includes('Nuevo Nombre') && headPrev.includes('Bio nueva'),
-  'el preview ES homeHeadHTML con los valores que se escriben');
+// — Ítem 13: editar perfil SACADO (lote sacar-lápiz-perfil · 7/11,
+//   decisión Valentino: el lápiz sale) — las piezas ya no existen; se
+//   fija a nivel de fuente que no queda ningún botón ni llamada.
+ok(!APP.includes('function hfEditProfileHTML(') && !APP.includes('function hfEditPreviewProf(')
+  && !APP.includes('function hfEditOpen(') && !APP.includes('hfEditOpen()'),
+  'editar: la lámina + su preview + el abridor ya no existen');
+ok(!APP.includes('data-hf-pact="edit"') && !APP.includes('data-hf-ed-'),
+  'editar: ningún botón lápiz ni campo de edición en app.js');
+ok(APP.includes('data-hf-pact="share"') && APP.includes('data-hf-pact="settings"'),
+  'editar: compartir y Ajustes siguen (solo salió el lápiz)');
+ok(!APP.includes('Guardar en Posty') && !APP.includes('Save in Posty'),
+  'editar: sin «Guardar en Posty» (la promesa que no se podía cumplir)');
 
 // — Ítem 14: archivo —
 const archData = {
@@ -141,15 +156,20 @@ const archEmpty = sb.hfArchiveHTML({ versions: [], recycled: [], cancelled: [], 
 ok(archEmpty.includes('Tu archivo está vacío por ahora') && archEmpty.includes('Todavía no hay versiones anteriores'),
   'archivo vacío: estados honestos por sección');
 ok(sb.hfArchiveHTML(archData, true).includes('Back to this version'), 'archivo EN: gemelo «Back to this version»');
-ok(sb.hfProfileActionsHTML(false).includes('Compartir mi perfil') && sb.hfProfileActionsHTML(false).includes('Editar perfil')
-  && sb.hfProfileActionsHTML(false).includes('Ver como visitante') && sb.hfProfileActionsHTML(false).includes('Tu archivo')
-  && !sb.hfProfileActionsHTML(false).includes('Crear mis cubiertas')
-  && sb.hfProfileActionsHTML(true).includes('Share my profile') && sb.hfProfileActionsHTML(true).includes('Edit profile')
-  && sb.hfProfileActionsHTML(true).includes('View as visitor') && sb.hfProfileActionsHTML(true).includes('Archive'),
-  'cabecera v462: UNA sola pastilla (Compartir) + resto en texto plano; cubiertas ya no vive en la fila');
-ok(sb.hfProfileActionsHTML(false).includes('class="hf-pmain"') && sb.hfProfileActionsHTML(false).includes('class="hf-psec"')
-  && !sb.hfProfileActionsHTML(false).includes('class="hf-pact"'),
-  'cabecera v462: una clase de pastilla principal + secundarias en texto, sin pastillas viejas');
+// (LOTE SACAR-LÁPIZ-PERFIL · 7/11) Las aserciones v462 de abajo estaban
+// rotas desde INICIO-3 (3/11): hfProfileActionsHTML ya NO rinde botones
+// de texto («Editar perfil», «Compartir mi perfil», «Ver como visitante»,
+// «Tu archivo») — sin acceptHTML devuelve '' y con acceptHTML rinde SOLO
+// la fila de Aceptar todo. Estaban tapadas por el crash de :116; al
+// arreglar el sandbox salieron a la luz. Se fijan al comportamiento real.
+ok(sb.hfProfileActionsHTML(false) === '' && sb.hfProfileActionsHTML(true) === '',
+  'cabecera: sin candidatos no hay fila (los botones de texto salieron en INICIO-3)');
+ok(sb.hfProfileActionsHTML(false, '<b>X</b>').includes('class="hf-pacts hf-pacts-accept"')
+  && sb.hfProfileActionsHTML(false, '<b>X</b>').includes('<b>X</b>')
+  && !sb.hfProfileActionsHTML(false, '<b>X</b>').includes('Editar perfil')
+  && !sb.hfProfileActionsHTML(false, '<b>X</b>').includes('Compartir mi perfil')
+  && !sb.hfProfileActionsHTML(false, '<b>X</b>').includes('class="hf-pact"'),
+  'cabecera: con candidatos rinde SOLO la fila de Aceptar todo, sin botones de texto ni pastillas viejas');
 const headPlus = sb.homeHeadHTML({ username: 'u', name: 'N', bio: '', bio_unread: false, link: '', pic: null, followers: null, posts_count: null, following: null, highlights: [{ title: 'Menú', cover: '' }] }, 'X', { en: false, coversPlus: true });
 ok(headPlus.includes('data-hf-pact="covers"') && headPlus.includes('Crear cubierta') && !headPlus.includes('Cubiertas') && headPlus.indexOf('hf-hl-plus') < headPlus.indexOf('Menú'),
   'cabecera v462: cubiertas como primer tile «+» de la tira (vista del dueño)');

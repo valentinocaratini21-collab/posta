@@ -46,7 +46,7 @@ const orderOk = (s, keys) => {
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v723'"), 'CHUNK_V v723 (ajustes-simple; sin cambio en este lote)');
   t(md5(css) === '1ab1e38c5985f589df399bca8fea4c53', 'styles.css md5 (re-pin iconos-linea-info v727: íconos en la línea de info)');
-  t(md5(app) === 'fb6d3f801b555a0f343f1448c335cab9', 'app.js md5 (re-pin iconos-linea-info v727: headIconsHTML en la línea de info)');
+  t(md5(app) === 'c54665ee2ac59c8407990105667709f2', 'app.js md5 (re-pin sacar-lápiz-perfil: sale el lápiz + hfEditOpen + lámina; antes v774 ads-solo-publicados)');
 
   // ---------- 2. Dock de 5 en las dos shells ----------
   const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');
@@ -61,10 +61,10 @@ const orderOk = (s, keys) => {
 
   // ---------- 3. Ajustes vive en el perfil ----------
   const head = sliceFn(app, 'hf-head-icons', '</span>');
-  t(head.includes('data-hf-pact="edit"'), 'perfil: ícono Editar perfil presente');
+  t(!head.includes('data-hf-pact="edit"'), 'perfil: el lápiz ya no está (sacar-lápiz-perfil 7/11)');
   t(head.includes('data-hf-pact="share"'), 'perfil: ícono Compartir presente');
   t(head.includes('data-hf-pact="settings"'), 'perfil: ícono Ajustes (settings) presente');
-  t(orderOk(head, ['data-hf-pact="edit"', 'data-hf-pact="share"', 'data-hf-pact="settings"']), 'perfil: Ajustes después de Editar perfil y Compartir');
+  t(orderOk(head, ['data-hf-pact="share"', 'data-hf-pact="settings"']), 'perfil: Ajustes después de Compartir');
   t(head.includes("pzIc('gear', 20)"), 'perfil: Ajustes con ícono gear');
   t(head.includes("aria-label=\"${en ? 'Settings' : 'Ajustes'}\""), 'perfil: Ajustes con aria-label ES/EN');
   const bind = sliceFn(app, 'function hfProfileBind(root) {', '\n}\n');

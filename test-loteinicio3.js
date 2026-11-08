@@ -49,9 +49,9 @@ t('1: mz-tabs: + entre Estrategia y Premios, orden intacto', mzNav.indexOf("t('a
 
 // ---------- 2. Íconos en contadores + Aceptar todo en el encabezado ----------
 const headRow = blockOf('function homeHeadHTML', 'function pzPubInfoHTML');
-t('2: íconos lápiz y compartir en la línea de info (hf-head-icons)', headRow.includes('hf-head-icons') && headRow.includes('data-hf-pact="edit"') && headRow.includes('data-hf-pact="share"'));
-t('2: íconos: aria-labels ES/EN, sin texto', headRow.includes('aria-label="${en ? \'Edit profile\' : \'Editar perfil\'}"') && headRow.includes('aria-label="${en ? \'Share my profile\' : \'Compartir mi perfil\'}"'));
-t('2: íconos: mismos handlers (data-hf-pact, bind por atributo)', app.includes("root.querySelectorAll('[data-hf-pact]')") && app.includes("if (act === 'share') hfShareOpen();") && app.includes("else if (act === 'edit') hfEditOpen();"));
+t('2: íconos compartir y Ajustes en la línea de info (hf-head-icons) — el lápiz se sacó (decisión Valentino 7/11)', headRow.includes('hf-head-icons') && !headRow.includes('data-hf-pact="edit"') && headRow.includes('data-hf-pact="share"') && headRow.includes('data-hf-pact="settings"'));
+t('2: íconos: aria-labels ES/EN, sin texto', !headRow.includes('aria-label="${en ? \'Edit profile\' : \'Editar perfil\'}"') && headRow.includes('aria-label="${en ? \'Share my profile\' : \'Compartir mi perfil\'}"') && headRow.includes('aria-label="${en ? \'Settings\' : \'Ajustes\'}"'));
+t('2: íconos: mismos handlers (data-hf-pact, bind por atributo)', app.includes("root.querySelectorAll('[data-hf-pact]')") && app.includes("if (act === 'share') hfShareOpen();") && !app.includes("hfEditOpen()") && !app.includes("function hfEditOpen(")); 
 t('2: Inicio pide los íconos (headIcons, no visitante)', app.includes('headIcons: !HF_VISITOR'));
 const outEs = hfProfileActionsHTML(false, acceptBarHTML(3));
 t('2: encabezado ES: Aprobar todo SIN nota, sin botones de texto', outEs.includes('hfAcceptAllWeek') && outEs.includes('Aprobar todo') && outEs.includes('accept-count') && !outEs.includes('Tocá el corazón') && !outEs.includes('hf-pmain') && !outEs.includes('Editar perfil') && !outEs.includes('Compartir mi perfil'));
