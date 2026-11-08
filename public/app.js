@@ -905,8 +905,21 @@ function pzShellHeadHTML(tab) {
   // línea): sin segundo encabezado y sin robar alto con el teclado.
   if (tab === 'chat') return '';
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const neg = (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.negocio) ? String(BB.estado.negocio) : '';
-  const saludo = neg ? (en ? 'Hi, ' + esc(neg) : 'Hola, ' + esc(neg)) : (en ? 'Hi!' : '¡Hola!');
+  const neg = (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.negocio) ? String(BB.estado.negocio).trim() : '';
+  // (LOTE SALUDO-UNICO · 8/11: el encabezado es la IDENTIDAD, no un saludo.
+  // El saludo vive solo en el mensaje de Posty en Hoy. El @ sale de la
+  // misma fuente que el perfil (HOME_PROF.username, la réplica de
+  // /api/home/profile que usa homeHeadHTML); si todavía no cargó, de
+  // PROFILE.ig_username (lo trae refreshSession al arrancar). Cadena:
+  // nombre → @handle → «¡Hola!» solo si no hay ni nombre ni handle.)
+  const handle = (() => { try {
+    const h1 = (typeof HOME_PROF !== 'undefined' && HOME_PROF && HOME_PROF.username) ? String(HOME_PROF.username) : '';
+    if (h1.trim()) return h1.replace(/^@/, '').trim();
+    const h2 = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_username) ? String(PROFILE.ig_username) : '';
+    return h2.replace(/^@/, '').trim();
+  } catch (e) { return ''; } })();
+  const titulo = neg ? esc(neg) : (handle ? '@' + esc(handle) : (en ? 'Hi!' : '¡Hola!'));
+  const sub = (neg && handle) ? '@' + esc(handle) : '';
   // La píldora de racha se llena async (pzShellDatosHoy, UN fetch por
   // carga): se cachea para que un re-render del shell no la vacíe
   // (el header se re-crea en cada navegación y el fill no se repite).
@@ -919,7 +932,7 @@ function pzShellHeadHTML(tab) {
   return `<header class="pz-shell-head">
     <button type="button" class="pz-shell-ident" onclick="bbGo('#/app/chat')" aria-label="${en ? 'Open the chat with Posty' : 'Abrir el chat con Posty'}">
       <img src="ai-avatar.png" alt="Posty" class="pz-shell-ava">
-      <span class="pz-shell-who"><b id="pzShellSaludo">${saludo}</b><small>${en ? 'Posty is working now' : 'Posty está trabajando ahora'}</small></span>
+      <span class="pz-shell-who"><b id="pzShellSaludo">${titulo}</b>${sub ? `<small>${sub}</small>` : ''}</span>
     </button>
     <span class="pz-shell-racha" id="pzHeadRacha"${rachaCache ? '' : ' hidden'}${rachaTitle ? ` title="${esc(rachaTitle)}"` : ''}>${rachaCache ? esc(rachaCache) : ''}</span>
     <span class="pz-shell-acts">
@@ -985,10 +998,11 @@ function pzAperturaCerrar() {
   try { pzSaludoEscribir(); } catch (e) {}
 }
 function pzSaludoEscribir() {
-  // Máquina de escribir sobre el «Hola, {negocio}» del encabezado, ~1 s,
+  // Máquina de escribir sobre la IDENTIDAD del encabezado (nombre del
+  // negocio o @handle; «¡Hola!» solo si no hay ni nombre ni handle), ~1 s,
   // solo una vez por carga, después de la apertura. El saludo según la
   // hora («¡Buen día! ☀️» etc.) vive en la burbuja de Posty en Hoy (R1);
-  // el encabezado queda en «Hola» (neutro en hora, nunca fijo en «buen día»).
+  // el encabezado ya no saluda (LOTE SALUDO-UNICO).
   try {
     if (typeof window !== 'undefined' && window.__pzSaludoEscrito) return;
     if (typeof window !== 'undefined') window.__pzSaludoEscrito = true;

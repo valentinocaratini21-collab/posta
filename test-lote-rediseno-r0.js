@@ -36,14 +36,14 @@ const orderOk = (s, keys) => {
   return true;
 };
 // RE-PIN tras implementar (md5s de work-v1; en base fallan a propósito).
-const MD5_APP_WORK = 'bc53ff30fa777f87d03b8d83d224939c';
-const MD5_CSS_WORK = '5293bc2a7c2756ae9a37c55f9ee459f7';
+const MD5_APP_WORK = 'ecb5cd68ebf77727e82fc1b915a5c3d3';
+const MD5_CSS_WORK = '7625ab0eb461dcdff09e13c644cd719d';
 // El woff2 es copia byte a byte del mock (no generado).
 const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins ----------
-  t(srv.includes("const BUILD_ID = '20261105-v803'"), 'server: BUILD v799 (R0 no toca server.js)');
+  t(srv.includes("const BUILD_ID = '20261105-v813'"), 'server: BUILD v813 (R0 no toca server.js; re-pin saludo-unico)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -141,8 +141,10 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(headSrc.includes("if (tab === 'chat') return '';"), 'encabezado: NO va en chat (el chat tiene su propia cabecera)');
   t(headSrc.includes('ai-avatar.png'), 'encabezado: avatar canónico ai-avatar.png');
   t(headSrc.includes('pzShellSaludo'), 'encabezado: saludo con id pzShellSaludo (máquina de escribir)');
-  t(headSrc.includes('Hola'), 'encabezado: «Hola, {negocio}»');
-  t(headSrc.includes('Posty está trabajando ahora'), 'encabezado: «Posty está trabajando ahora»');
+  t(headSrc.includes('¡Hola!'), 'encabezado: fallback «¡Hola!» solo sin nombre ni handle (saludo-unico)');
+  t(!headSrc.includes('Hola, '), 'encabezado: sin «Hola, {negocio}» (el encabezado es la identidad, saludo-unico)');
+  t(!headSrc.includes('Posty está trabajando ahora'), 'encabezado: «Posty está trabajando ahora» salió (saludo-unico)');
+  t(headSrc.includes('@') && headSrc.includes('handle'), 'encabezado: línea chica = @handle (saludo-unico)');
   t(headSrc.includes('pzHeadRacha'), 'encabezado: píldora de racha con id pzHeadRacha');
   t(headSrc.includes('__pzHeadRachaTxt'), 'encabezado: la racha se cachea (un re-render del shell no la vacía)');
   t(headSrc.includes('BB.estado') && headSrc.includes('negocio'), 'encabezado: nombre desde BB.estado.negocio');
@@ -161,12 +163,15 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
       esc: (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
       BB: { estado: { negocio: 'Café Aroma', bandeja_count: 0 } },
       ME: { lang: 'es' },
+      HOME_PROF: { username: 'cafearoma' },
+      PROFILE: { ig_username: 'cafearoma' },
     };
     vm.createContext(ctx);
     vm.runInContext(headSrc, ctx);
     const h = vm.runInContext("pzShellHeadHTML('inicio')", ctx);
     t(h.includes('ai-avatar.png'), 'VM encabezado(inicio): avatar presente');
-    t(h.includes('Hola, Café Aroma'), 'VM encabezado(inicio): «Hola, Café Aroma»');
+    t(h.includes('Café Aroma') && !h.includes('Hola'), 'VM encabezado(inicio): título = nombre, sin saludo (saludo-unico)');
+    t(h.includes('@cafearoma'), 'VM encabezado(inicio): chica = @handle (saludo-unico)');
     t(h.includes('pzHeadRacha'), 'VM encabezado(inicio): píldora de racha presente');
     t(h.includes("bbGo('#/app/chat')"), 'VM encabezado(inicio): identidad → Chat');
     t(h.includes("bbGo('#/app/ajustes?referidos=1')"), 'VM encabezado(inicio): compartir → Referidos');
@@ -443,7 +448,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v803', `boot: /api/version 20261105-v803 (vino ${ver.build})`);
+      t(ver.build === '20261105-v813', `boot: /api/version 20261105-v813 (vino ${ver.build})`);
       const appTxt = await (await fetch(`${BASE}/app.js?v=539`)).text();
       t(md5(appTxt) === md5(app), 'boot: app.js?v=539 servido = árbol');
       const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261183`)).text();
