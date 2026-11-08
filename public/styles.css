@@ -4010,6 +4010,45 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-nivel-misiones{display:flex;flex-direction:column;gap:8px}
 .pz-nivel-misiones h2{font-size:17px;color:#0A1E33;margin:4px 0 0}
 .pz-nivel-misiones-sub{font-size:13px;color:#5A7A8C;margin:0;line-height:1.4}
+/* R5 (8/11): pantalla Nivel como el mock — cabecera XP, racha, misiones,
+   automático del día, logros y escalera. */
+.pz-nivel{display:flex;flex-direction:column;gap:14px;max-width:520px;margin:0 auto}
+.pz-nivel-head{background:#FFFFFF;border:1.5px solid #D8ECF7;border-radius:20px;padding:16px}
+.pz-nivel-badge{font-size:13px;font-weight:800;letter-spacing:.08em;color:#2793C8;margin:0 0 4px}
+.pz-nivel-num{font-size:20px}
+.pz-nivel-head h2{font-size:22px;color:#0A1E33;margin:0 0 4px}
+.pz-nivel-hito-desc{font-size:14px;color:#47617A;line-height:1.45;margin:0 0 12px}
+.pz-nivel-xpbar{height:10px;border-radius:999px;background:#C2E3F8;overflow:hidden}
+.pz-nivel-xpbar i{display:block;height:100%;background:linear-gradient(90deg,#2793C8,#FEC14D);border-radius:999px}
+.pz-nivel-xp-txt{font-size:13px;font-weight:700;color:#0A1E33;margin:8px 0 0}
+.pz-nivel-total{font-size:13px;color:#47617A;margin:4px 0 0}
+.pz-nivel-regla{font-size:12.5px;color:#5A7A8C;margin:8px 0 0}
+.pz-nivel-mision{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;background:#FFFFFF;border:1.5px solid #DCEEF7;border-radius:16px;padding:12px}
+.pz-nivel-mision.hecho{background:#E7F6EC;border-color:#BFE6CC}
+.pz-mision-comentario{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;border-top:1px solid #DCEEF7;padding-top:10px}
+.pz-mision-original{font-size:13.5px;color:#47617A;margin:0;font-style:italic}
+.pz-mision-borrador{font-size:13.5px;color:#0A1E33;margin:0;line-height:1.45;background:#F4FAFE;border-radius:12px;padding:10px}
+.pz-nivel-auto{background:#FFFFFF;border:1.5px solid #D8ECF7;border-radius:16px;padding:12px 14px}
+.pz-nivel-auto h2{font-size:15px;color:#0A1E33;margin:0 0 6px}
+.pz-nivel-auto-fila{display:flex;align-items:center;gap:10px;font-size:13.5px;color:#47617A}
+.pz-nivel-auto-fila b{flex:none;font-size:13px;font-weight:800;color:#0A1E33;background:#FEC14D;border-radius:999px;padding:5px 9px}
+.pz-nivel-logros{display:flex;flex-direction:column;gap:8px}
+.pz-nivel-logros h2,.pz-nivel-logros h3{font-size:17px;color:#0A1E33;margin:4px 0 0}
+.pz-nivel-logros h3{font-size:15px}
+.pz-nivel-logro{display:flex;align-items:center;gap:10px;background:#FFFFFF;border:1.5px solid #DCEEF7;border-radius:14px;padding:10px 12px}
+.pz-nivel-logro.hecho{border-color:#FEC14D;background:#FFF7E0}
+.pz-nivel-logro b{flex:1;font-size:14.5px;color:#0A1E33}
+.pz-nivel-logro span{font-size:12.5px;color:#47617A;white-space:nowrap}
+.pz-nivel-escalera{display:flex;flex-direction:column;gap:8px}
+.pz-nivel-escalera h2{font-size:17px;color:#0A1E33;margin:4px 0 0}
+.pz-nivel-hito{display:flex;flex-direction:column;gap:2px;background:#FFFFFF;border:1.5px solid #DCEEF7;border-radius:14px;padding:10px 12px}
+.pz-nivel-hito.actual{border-color:#2793C8;box-shadow:0 0 0 1px #2793C8 inset}
+.pz-nivel-hito b{font-size:15px;color:#0A1E33}
+.pz-nivel-hito span{font-size:12.5px;color:#5A7A8C;line-height:1.4}
+.pz-nivel-hito-crit{font-weight:700;color:#47617A}
+.pz-nivel-hito-marca{font-weight:800;color:#2793C8}
+.pz-nivel-pie{font-size:13px;color:#5A7A8C;line-height:1.5;margin:0;text-align:center}
+
 .pz-mision{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;background:#FFFFFF;border:1.5px solid #DCEEF7;border-radius:16px;padding:12px}
 .pz-mision.hecho{background:#E7F6EC;border-color:#BFE6CC}
 .pz-mision-ic{font-size:24px;line-height:1;grid-row:1}
@@ -4778,32 +4817,6 @@ body.pz-postchat-open{overflow:hidden}
 .ajmas-row span{color:var(--mut);font-size:18px}
 
 /* (LOTE JARDÍN-ROPA · guardarropa — decisión Valentino 2/11: pantalla limpia, sin mosaico/slider/siluetas) */
-.bb-app.bb-glass-pantallas .mx-jardin-posty .pz-ropa-panel{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
-.pz-ropa-panel{border-radius:20px;padding:16px;max-width:520px;margin:0 auto}
-.pz-ropa-avatar{position:relative;width:min(280px,72vw);aspect-ratio:1;margin:2px auto 12px}
-.pz-ropa-cara{width:100%;height:100%;object-fit:cover;border-radius:28%;border:3px solid #fff;box-shadow:0 8px 24px rgba(10,30,51,.14);display:block;background:#fff}
-.pz-ropa-capa-img{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.pz-ropa-spark{position:absolute;color:#FEC14D;font-size:22px;animation:pz-ropa-tw 2.6s ease-in-out infinite;pointer-events:none}
-@keyframes pz-ropa-tw{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.15)}}
-.pz-ropa-nivel{text-align:center;font-size:20px;margin:4px 0 10px;color:#0A1E33}
-.pz-ropa-barra-wrap{margin:0 4px 10px}
-.pz-ropa-barra{height:10px;border-radius:999px;background:#C2E3F8;overflow:hidden}
-.pz-ropa-barra i{display:block;height:100%;background:linear-gradient(90deg,#2793C8,#FEC14D);border-radius:999px}
-.pz-ropa-barra-txt{text-align:center;font-size:13px;color:#47617A;margin:6px 0 0}
-.pz-ropa-msg{text-align:center;font-size:16px;line-height:1.45;color:#0A1E33;margin:12px 6px 16px}
-.pz-ropa-lista{display:flex;flex-direction:column;gap:8px}
-.pz-ropa-fila{display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,255,255,.6);border:1px solid #D8ECF7;border-radius:14px}
-.pz-ropa-fila.puesto{border-color:#FEC14D;box-shadow:0 0 0 1px #FEC14D inset}
-.pz-ropa-mini{position:relative;width:44px;height:44px;flex:none;background:#fff;border:1px solid #D8ECF7;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:20px}
-.pz-ropa-mini img{width:100%;height:100%;object-fit:contain}
-.pz-ropa-nom{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.pz-ropa-nom b{font-size:15px;color:#0A1E33}
-.pz-ropa-nom span{font-size:12px;color:#47617A}
-.pz-ropa-nuevo{color:#B98A1E;font-weight:700}
-.pz-ropa-btn{flex:none;border:0;border-radius:999px;padding:9px 14px;font-size:14px;font-weight:700;background:#2793C8;color:#fff;cursor:pointer}
-.pz-ropa-btn.puesto{background:#FEC14D;color:#0A1E33}
-.pz-ropa-fila.lock{opacity:.82}
-@media (prefers-reduced-motion: reduce){.pz-ropa-spark{animation:none}}
 
 /* (LOTE CHAT-WEBSITE) Dock del chat en la home pública: el mismo dock de la app
    (cara + texto), fijo abajo a la derecha en todos los tamaños. La hoja reusa
@@ -4898,7 +4911,6 @@ body.pz-postchat-open{overflow:hidden}
 .hf-d-accept,
 .hf-redo-btn,
 #lightbox .lb-edit,
-.pz-ropa-btn:not(.puesto),
 #inicioView .btn-primary,
 #schedView .btn-primary,
 .ana-wrap .btn-primary,
@@ -5135,17 +5147,6 @@ body.pz-postchat-open{overflow:hidden}
 
 #inicioView .hf-cell.pz-dia-futura { display: none; }
 
-/* LOTE OFICINA ×50: escena por capas en Premios. */
-.pz-oficina{margin-top:18px}
-.pz-oficina-escena svg{width:100%;height:auto;display:block;border-radius:16px}
-.pz-oficina-fila{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(10,30,51,.08)}
-.pz-oficina-mini{width:44px;height:44px;flex:0 0 44px}
-.pz-oficina-mini svg{width:100%;height:100%}
-.pz-oficina-mini.lock{display:flex;align-items:center;justify-content:center;font-size:22px}
-.pz-oficina-nom b{display:block}
-.pz-oficina-nom span{font-size:13px;opacity:.75}
-.pz-oficina-nuevo{font-weight:700}
-.pz-oficina-fila.lock{opacity:.7}
 
 /* (LOTE GLASS-CIMA · Valentino 2/11: arriba del feed y fondo en vidrio
    como la barra de abajo; también Jardín, Estrategia y Ajustes)

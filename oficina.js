@@ -302,9 +302,27 @@ function estadoPoder(db, uid, poder) {
   const def = niveles.PODERES[poder];
   const m = metricas(db, uid);
   let nivel = niveles.computarNivel(db, uid, poder, m);
-  // Prestigio (v498): la tarjeta de Posty en LA OFICINA usa el mismo nivel
-  // extendido que la tirita; si no, ambas vistas discreparían en 6+.
-  if (poder === 'posty') { try { nivel = require('./posty-nivel50').nivelPosty(db, uid, m); } catch (e) {} }
+  // R5 (8/11): la tarjeta de Posty en LA OFICINA usa el mismo nivel XP
+  // que la pantalla Nivel (una sola fuente: xp-nivel.js). Se conservan
+  // los hitos/gate del cómputo base (estado «leyendo tu mundo»); el
+  // nivel, el nombre, el avance y el próximo paso son XP.
+  if (poder === 'posty') {
+    try {
+      const xp = require('./xp-nivel');
+      const d = xp.avatarLevelData(db, uid);
+      if (d) {
+        const xpEnNivel = d.xp - (d.level - 1) * xp.XP_NIVEL;
+        nivel = Object.assign({}, nivel, {
+          nivel: d.level, nombre_nivel: d.levelName, nombre_siguiente: d.nextName,
+          etiqueta_tirita: 'Nivel ' + d.level + ' · ' + d.levelName,
+          avance: d.level >= xp.XP_MAX_NIVEL ? null : { hechos: xpEnNivel, total: xp.XP_NIVEL },
+          proximo_paso: d.level >= xp.XP_MAX_NIVEL ? null : ('Te faltan ' + (xp.XP_NIVEL - xpEnNivel) + ' XP para el Nv ' + (d.level + 1)),
+          premio_actual: null, desbloqueo_actual: null, siguiente_premio: null, siguiente_desbloqueo: null,
+          meta_final: null, prestigio: 0, nombre_prestigio: null, insignia: null,
+        });
+      }
+    } catch (e) {}
+  }
   const ultima = db.prepare('SELECT * FROM oficina_registros WHERE user_id = ? AND poder = ? ORDER BY ts DESC LIMIT 1').get(uid, poder);
   const salidas = db.prepare('SELECT COUNT(*) AS n FROM oficina_registros WHERE user_id = ? AND poder = ? AND salida = 1').get(uid, poder);
   let estado = 'todavia_no_corre';

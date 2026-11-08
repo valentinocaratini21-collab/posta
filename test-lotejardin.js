@@ -139,15 +139,13 @@ for (const f of ['jardin-joven.webp', 'jardin-crece-1.webp', 'jardin-crece-2.web
   t(!m2.includes('mx-foto-nivel'), 'mosaico: ya no hay un hero de una sola foto (nunca solo tierra)');
 }
 
-// ---------- Pantalla Jardín: hero + slider cableados ----------
+// ---------- Pantalla Nivel (R5 8/11, decisión Valentino 01:54: el jardín visible sale; Nivel es XP + racha + misiones + logros + escalera) ----------
 {
-  const rama = sliceFn(app, "if (tipo === 'posty') {", 'function mxJardinErrorHTML');
-  t(rama.includes('pz-ropa-panel') && rama.includes('pzRopaAvatarHTML') && rama.includes('pzRopaListaHTML'), 'jardín-ropa: avatar + guardarropa en la pantalla'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): mosaico fuera de la pantalla
-  t(rama.includes('pzRopaAvatarHTML()') && rama.includes('pz-ropa-avatar'), 'jardín-ropa: avatar canónico con capas en la pantalla'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): el visual ya no sale de mxHeroJardin
-  t(rama.includes('cuanto más subís de nivel, mejores posteos y más conozco lo que buscás'), 'jardín-ropa: mensaje exacto ES'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): slider fuera de la pantalla
-  t(rama.includes('pzRopaAvance(nvP)') && rama.includes('pz-ropa-barra'), 'jardín-ropa: barrita con avance real, sin % en texto'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): vivo + orbes fuera; la barrita entra por decisión expresa
-  t(!rama.includes('const brote = nvNum <= 2'), 'jardín: fuera el brote que tapaba la tierra (el hero ya no es tierra sola)');
-  t(!rama.includes('mxHeroMosaicoHTML') && !rama.includes('mxSliderJardinHTML') && !rama.includes('mxJardinMapaHTML') && rama.includes("bbGo('#/app/inicio')") && rama.includes('mx-chat-cabecera'), 'jardín-ropa: fuera mosaico/slider/mapa, atrás propio intacto'); // LOTE JARDÍN-ROPA (decisión Valentino 2/11): la regla sin-barras queda SUPERSEDED solo en esta pantalla
+  const rama = extractFn(app, 'pzNivelPantallaHTML');
+  t(rama.length > 0 && rama.includes('pz-nivel-head') && rama.includes('pz-nivel-xpbar') && !rama.includes('pzRopaAvatarHTML') && !rama.includes('pzRopaListaHTML'), 'R5 Nivel: cabecera XP, sin guardarropa');
+  t(rama.includes('pzNivelHitoActual') && rama.includes('pz-nivel-hito-desc'), 'R5 Nivel: hito vigente con su descripción');
+  t(rama.includes('/ 500 XP') && rama.includes('width:'), 'R5 Nivel: barrita XP con avance real');
+  t(!rama.includes('mxHeroMosaicoHTML') && !rama.includes('mxSliderJardinHTML') && !rama.includes('mxJardinMapaHTML') && rama.includes("bbGo(") && rama.includes('#/app/inicio'), 'R5 Nivel: fuera mosaico/slider/mapa, atrás propio intacto');
 }
 
 // ---------- Tira: miniatura = bambusal completo en chico ----------

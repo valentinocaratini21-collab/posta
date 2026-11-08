@@ -4879,16 +4879,11 @@ function nivelHistorial(db, uid, def) {
     const rows = db.prepare(`SELECT registro_ref, ts FROM oficina_registros WHERE user_id = ? AND poder = 'posty' AND tipo = 'subida_nivel' ORDER BY ts ASC`).all(uid);
     let firstTs = null;
     try { const f = db.prepare(`SELECT MIN(ts) AS ts FROM oficina_nivel_eventos WHERE user_id = ? AND poder = 'posty'`).get(uid); if (f && f.ts) firstTs = f.ts; } catch (e) {}
-    // Lote 3: nombres 1–50 (base 1–5 + prestigio 6–50) y premio/desbloqueo
-    // por nivel. niveles.js no requiere prestigio (evita ciclo): se pasan
-    // como datos desde acá.
-    let nombres = def.niveles, extra = null;
-    try {
-      const pr = require('./prestigio');
-      nombres = def.niveles.concat(pr.NOMBRES_50.slice(5));
-      extra = { premioEn: (n) => pr.premioEn(n), desbloqueoEn: (n) => pr.desbloqueoEn(n) };
-    } catch (e) {}
-    return oficina.niveles.historialNiveles(rows, firstTs, nombres, extra);
+    // R5: nombres 1–50 del mock (5 hitos por banda) y sin premios ni
+    // desbloqueos: la vitrina muestra solo nivel + nombre + fecha real.
+    const nombres = [];
+    for (let i = 1; i <= 50; i++) nombres.push(avatarNivelNombre(i));
+    return oficina.niveles.historialNiveles(rows, firstTs, nombres, null);
   } catch (e) { return []; }
 }
 function nivelDesafioAceptado(db, uid) {
@@ -4906,20 +4901,34 @@ app.get('/api/oficina/nivel', requireAuthOrWebToken, (req, res) => {
     const def = oficina.niveles.PODERES[oficina.niveles.resolverPoder(poder)];
     if (!def) return res.status(400).json({ ok: false, error: 'poder_desconocido' });
     const uid = (req.session && req.session.userId) || req.webUserId;
+    // R5 (8/11): Posty ya no se mide por posteos acumulados (el módulo
+    // posty-nivel50) sino por la regla XP de /api/avatar-level (500 por
+    // nivel, 1–50). Una sola fuente de verdad: avatarLevelData. Sin
+    // premios, sin desbloqueos, sin prestigio. Los demás poderes,
+    // intactos con su cómputo de 5 niveles.
+    const esPosty = oficina.niveles.resolverPoder(poder) === 'posty';
+    const xpD = esPosty ? avatarLevelData(db, uid) : null;
+    const xpEnNivel = xpD ? (xpD.xp - (xpD.level - 1) * XP_NIVEL) : 0;
+    const nivXp = xpD ? {
+      poder: 'posty', nivel: xpD.level, nombre_nivel: xpD.levelName,
+      etiqueta_tirita: 'Nivel ' + xpD.level + ' · ' + xpD.levelName,
+      nombre_siguiente: xpD.nextName,
+      avance: xpD.level >= XP_MAX_NIVEL ? null : { hechos: xpEnNivel, total: XP_NIVEL },
+      proximo_paso: xpD.level >= XP_MAX_NIVEL ? null : ('Te faltan ' + (XP_NIVEL - xpEnNivel) + ' XP para el Nv ' + (xpD.level + 1)),
+      gate: { nivel_objetivo: Math.min(xpD.level + 1, XP_MAX_NIVEL), progreso_pct: xpD.level >= XP_MAX_NIVEL ? 100 : Math.round(100 * xpEnNivel / XP_NIVEL), pendientes: [] },
+      hitos: [], hitos_cumplidos: 0, hitos_total: 0, eventos: {},
+      premio_actual: null, desbloqueo_actual: null, siguiente_premio: null, siguiente_desbloqueo: null,
+      meta_final: null, prestigio: 0, nombre_prestigio: null, insignia: null, color: '#2793C8',
+    } : null;
     // Nivel ANTES del puente: la subida durante una ausencia no cuenta el
     // puente (es un backfill, no progreso de esos días).
     let nivelPre = null;
-    try { nivelPre = oficina.niveles.computarNivel(db, uid, poder, oficina.metricas(db, uid)); } catch (e) {}
-    // Prestigio (v498): Posty se resuelve en extendido (6–50 + premios);
-    // ante cualquier error queda el cómputo base intacto.
-    if (oficina.niveles.resolverPoder(poder) === 'posty') {
-      try { const np = require('./posty-nivel50'); const npe = np.nivelPosty(db, uid, oficina.metricas(db, uid)); if (npe) nivelPre = npe; } catch (e) {}
-    }
+    try { nivelPre = esPosty ? nivXp : oficina.niveles.computarNivel(db, uid, poder, oficina.metricas(db, uid)); } catch (e) {}
     // (1) PRIMERA SUBIDA EN LA PRIMERA SEMANA: si el digest ya tiene
     // fundamento real (la prueba leyó su mundo) y todavía no existe el
     // evento, Posty ya terminó de leer: el primer nudo se completa solo.
     // Una sola vez por cuenta (dedupe por evento existente).
-    if (oficina.niveles.resolverPoder(poder) === 'posty') {
+    if (esPosty) {
       try {
         const ya = db.prepare(`SELECT 1 FROM oficina_nivel_eventos WHERE user_id = ? AND poder = 'posty' AND evento = 'fundamento_leido' LIMIT 1`).get(uid);
         if (!ya) {
@@ -4931,10 +4940,7 @@ app.get('/api/oficina/nivel', requireAuthOrWebToken, (req, res) => {
         }
       } catch (e) {}
     }
-    let niv = oficina.niveles.computarNivel(db, uid, poder, oficina.metricas(db, uid));
-    if (oficina.niveles.resolverPoder(poder) === 'posty') {
-      try { const np = require('./posty-nivel50'); niv = np.nivelPosty(db, uid, oficina.metricas(db, uid)); } catch (e) {}
-    }
+    let niv = esPosty ? nivXp : oficina.niveles.computarNivel(db, uid, poder, oficina.metricas(db, uid));
     let celebrado = false;
     try { celebrado = db.prepare('SELECT COUNT(*) AS n FROM nivel_celebraciones WHERE user_id = ? AND poder = ? AND nivel = ?').get(uid, niv.poder, niv.nivel).n > 0; } catch (e) {}
     // (v459 · evolución, preservado en el re-base) Socio desde: mes REAL
@@ -4961,15 +4967,11 @@ app.get('/api/oficina/nivel', requireAuthOrWebToken, (req, res) => {
       }
       db.prepare('INSERT INTO nivel_visitas (user_id, last_ts, last_nivel) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET last_ts = excluded.last_ts, last_nivel = excluded.last_nivel').run(uid, ahora, niv.nivel);
     } catch (e) {}
-    // (v461 · tira simple) Avance del gate en curso, en requisitos
-    // completados vs. total — el cliente pinta la barrita con esto, sin
-    // mostrar ningún número. L5: sin gate en curso, avance null (llena).
-    // SOLO-POSTEOS (4/11): para posty el avance lo trae nivelPosty en
-    // posteos (hechos vs. umbral del próximo nivel) y se usa tal cual;
-    // la derivación por hitos quedaría null porque posty ya no tiene
-    // hitos de gate. Otros poderes, intactos.
+    // (v461 · tira simple) Avance del nivel en curso, en XP hechos vs.
+    // 500 del nivel — el cliente pinta la barrita con esto, sin mostrar
+    // ningún número. Nv 50: avance null (llena). Otros poderes, intactos.
     const gateHitos = (niv.hitos || []).filter((h) => h.nivel_objetivo === niv.nivel + 1);
-    const avance = (oficina.niveles.resolverPoder(poder) === 'posty' && niv.avance)
+    const avance = (esPosty && niv.avance)
       ? niv.avance
       : (niv.nivel >= 5 || !gateHitos.length ? null : { hechos: gateHitos.filter((h) => h.cumplido).length, total: gateHitos.length });
     res.json({
@@ -5040,34 +5042,6 @@ app.post('/api/oficina/nivel/desafio-aceptado', requireAuth, (req, res) => {
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-// ---------- PREMIOS-NOTIF (4/11): aviso de premio nuevo ----------
-// La tira salió de Inicio (v653): un premio nuevo avisa por dos vías —
-// push al desbloquearse (la dispara el publish, ver scheduler.js) y badge
-// en el tab Premios del dock hasta que se vea (cliente, ver public/app.js).
-// Nivel nuevo = premio no visto. El conteo de niveles (v637) NO se toca:
-// estos endpoints solo leen el nivel y registran qué falta ver.
-app.get('/api/oficina/premios-no-vistos', requireAuth, (req, res) => {
-  try {
-    const pn = require('./premios-notif');
-    const uid = req.session.userId;
-    // Red de seguridad SILENCIOSA (sin push): si el publish no procesó la
-    // subida, el badge igual la muestra al abrir la app. El usuario está
-    // en la app en este momento: la push la dispara solo el publish.
-    try {
-      const np = require('./posty-nivel50');
-      const niv = np.nivelPosty(db, uid, oficina.metricas(db, uid));
-      if (niv && niv.nivel) pn.procesarNivel(db, uid, niv.nivel);
-    } catch (e) {}
-    res.json({ ok: true, niveles: pn.noVistos(db, uid) });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-app.post('/api/oficina/premios-vistos', requireAuth, (req, res) => {
-  try {
-    const pn = require('./premios-notif');
-    const n = pn.marcarVistos(db, req.session.userId);
-    res.json({ ok: true, limpiados: n });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
 app.get('/api/oficina/jardin', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
@@ -5085,59 +5059,6 @@ app.get('/api/informe-mensual', requireAuth, (req, res) => {
     if (e.message === 'mes_invalido' || e.message === 'mes_futuro') return res.status(400).json({ ok: false, error: e.message });
     res.status(500).json({ ok: false, error: e.message });
   }
-});
-
-// LOTE 4 — Jardín Posty después del nivel 50 + historia real de meses.
-// Solo Posty. Las 4 post-jardín solo con nivel 50 (el módulo devuelve
-// null/[] si no); la historia sirve en cualquier nivel. Fail-closed:
-// ante cualquier error, ok:false y el cliente no pinta nada nuevo.
-// No es ruta de aprobación (censo intacto).
-app.get('/api/oficina/jardin-post50', requireAuth, (req, res) => {
-  try {
-    const uid = req.session.userId;
-    const pj = require('./postjardin');
-    const est = pj.estadoPost50(db, uid, oficina.metricas(db, uid), userTz(uid), Date.now());
-    if (!est) return res.status(500).json({ ok: false, error: 'jardin_post50_failed' });
-    res.json(Object.assign({ ok: true }, est));
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-
-// LOTE 4 — Regalar una semilla de Maestro (solo nivel 50, solo Posty).
-// Registra el regalo real con su código único canjeable. Sin nivel 50
-// no hay semilla: 403, nunca inventada.
-// LOTE SEMILLAS — Canje por un negocio nuevo: el jardín del negocio
-// arranca de la semilla del Maestro (procedencia, nunca niveles ni
-// descuentos). Un código, un canje; la propia no se canjea; un negocio
-// canjea una sola semilla.
-app.post('/api/oficina/jardin-semilla-regalo', requireAuth, (req, res) => {
-  try {
-    const uid = req.session.userId;
-    const pj = require('./postjardin');
-    const est = pj.estadoPost50(db, uid, oficina.metricas(db, uid), userTz(uid), Date.now());
-    if (!est || !est.completo) return res.status(403).json({ ok: false, error: 'jardin_no_completo' });
-    const reg = pj.semillaRegalar(db, uid, Date.now());
-    res.json({ ok: true, ts: reg.ts, codigo: pj.semillaMostrar(reg.codigo) });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-app.post('/api/oficina/jardin-semilla-canjear', requireAuth, (req, res) => {
-  try {
-    const uid = req.session.userId;
-    const pj = require('./postjardin');
-    const codigo = (req.body && req.body.codigo) || '';
-    if (!String(codigo).trim()) return res.status(400).json({ ok: false, error: 'semilla_sin_codigo' });
-    const r = pj.semillaCanjear(db, uid, codigo, Date.now());
-    if (!r.ok) {
-      const status = r.error === 'semilla_no_existe' ? 404 : r.error === 'semilla_propia' ? 403 : 409;
-      return res.status(status).json({ ok: false, error: r.error });
-    }
-    res.json({ ok: true, giver_negocio: r.giver_negocio || null, ts: r.ts });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-app.get('/api/oficina/jardin-semilla-mia', requireAuth, (req, res) => {
-  try {
-    const pj = require('./postjardin');
-    res.json({ ok: true, miSemilla: pj.miSemilla(db, req.session.userId) });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // Vaciado periódico de la cola agrupable de push (buenas noticias): Bambooty
@@ -6571,15 +6492,14 @@ app.post('/api/ideas/chat', async (req, res) => {
       needMediaAsk = lastAsk < Date.now() - 7 * 24 * 3600 * 1000 && freshCount === 0;
     } catch (e) {}
     let out;
-    // (CHAT-TODO) Nivel y premios en el contexto: el chat responde con datos reales,
-    // no con "no sé en qué nivel vas". Mismo cómputo que /api/oficina/nivel.
+    // (CHAT-TODO) Nivel en el contexto: el chat responde con datos reales,
+    // no con "no sé en qué nivel vas". Mismo cómputo que /api/avatar-level.
     let levelLine = '';
     try {
-      const np = require('./posty-nivel50');
-      const niv = np.nivelPosty(db, uid0, oficina.metricas(db, uid0));
-      if (niv) {
-        const sigPremio = (typeof niv.siguiente_premio === 'string' && niv.siguiente_premio) ? ` · próximo premio: ${niv.siguiente_premio}` : '';
-        levelLine = `Nv ${niv.nivel} · ${niv.nombre_nivel || ''}${niv.proximo_paso ? ` · ${niv.proximo_paso}` : ''}${sigPremio}`.trim();
+      const d = avatarLevelData(db, uid0);
+      if (d) {
+        const falta = d.level >= XP_MAX_NIVEL ? null : ('Te faltan ' + (XP_NIVEL - (d.xp - (d.level - 1) * XP_NIVEL)) + ' XP para el Nv ' + (d.level + 1));
+        levelLine = `Nv ${d.level} · ${d.levelName || ''}${falta ? ` · ${falta}` : ''}`.trim();
       }
     } catch (e) { levelLine = ''; }
     try { out = await chatIdea(
@@ -18878,64 +18798,21 @@ app.post('/api/milestones/seen', requireAuth, (req, res) => {
 // lo mismo que muestran las misiones de Nivel). Cada comentario respondido
 // +25 (queda registrado: replyComment pone status='replied'). Primera
 // semana completa (7 días seguidos eligiendo en el ritual) +100; racha de
-// 30 días +150 y de 100 días +300 (misma fuente que la racha visible del
-// jardín: pz_ritual, la racha máxima, no la vigente); 100 consultas
+// 30 días +150 y de 100 días +300 (misma fuente que la racha visible
+// de Nivel: pz_ritual, la racha máxima, no la vigente); 100 consultas
 // respondidas +150. La primera venta por anuncio (+200) NO se suma acá:
 // Posty no ve las ventas; solo se registra cuando el cliente la reporta
 // (pregunta semanal) — lote aparte, nunca inventada.
 // Todo derivado de datos reales (posts, pz_ritual, comment_queue): sin
 // tabla nueva, sin escrituras en el GET. El guard "visto una vez por nivel"
 // usa milestones_seen con milestone 900+nivel.
-const XP_NIVEL = 500, XP_MAX_NIVEL = 50;
-const XP_POST_BASE = 15, XP_POST_FOTO = 25, XP_POST_VIDEO = 45; // foto 40, video 60
-const XP_RESPUESTA = 25;
-const XP_PRIMERA_SEMANA = 100, XP_RACHA_30 = 150, XP_RACHA_100 = 300, XP_100_RESPUESTAS = 150;
-function avatarNivelNombre(nivel) {
-  try { return require('./prestigio').nombreNivel(nivel); } catch (e) { return 'Nivel ' + nivel; }
-}
-// Marcos del logo: misma proporción que antes (bronce 30%, plata 50%, oro
-// 70% del recorrido), reescalada a 50 niveles: 15 / 25 / 35.
-function avatarTier(lvl) { return lvl >= 35 ? 'gold' : lvl >= 25 ? 'silver' : lvl >= 15 ? 'bronze' : 'none'; }
-// Racha máxima de días consecutivos eligiendo en el ritual (pz_ritual).
-// Derivado, sin escrituras; ante cualquier error, 0 (nunca inventado).
-function rachaMaximaRitual(db, uid) {
-  try {
-    const rows = db.prepare(`SELECT day_key FROM pz_ritual WHERE user_id = ? AND picked_post_id IS NOT NULL ORDER BY day_key`).all(uid);
-    let max = 0, cur = 0, prev = null;
-    for (const r of rows) {
-      const d = String(r.day_key || '');
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
-      if (prev) {
-        const diff = (new Date(d + 'T00:00:00Z').getTime() - new Date(prev + 'T00:00:00Z').getTime()) / 86400000;
-        cur = (diff === 1) ? cur + 1 : 1;
-      } else cur = 1;
-      prev = d;
-      if (cur > max) max = cur;
-    }
-    return max;
-  } catch (e) { return 0; }
-}
+// R5 (8/11): la regla XP vive en xp-nivel.js (una sola fuente de
+// verdad para /api/avatar-level, /api/oficina/nivel, el chat, el
+// río de subidas y la tarjeta de la oficina).
+const { XP_NIVEL, XP_MAX_NIVEL, avatarNivelNombre, avatarLevelData } = require('./xp-nivel');
 app.get('/api/avatar-level', requireAuth, (req, res) => {
   try {
-    const rows = db.prepare(`SELECT media_type, COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'published' AND media_type != 'story' GROUP BY media_type`).all(req.session.userId);
-    let xp = 0, published = 0;
-    for (const r of rows) { const n = r.c || 0; published += n; xp += n * (XP_POST_BASE + (r.media_type === 'video' ? XP_POST_VIDEO : XP_POST_FOTO)); }
-    let respuestas = 0;
-    try { respuestas = db.prepare(`SELECT COUNT(*) AS c FROM comment_queue WHERE user_id = ? AND status = 'replied'`).get(req.session.userId).c || 0; } catch (e) {}
-    xp += respuestas * XP_RESPUESTA;
-    const rachaMax = rachaMaximaRitual(db, req.session.userId);
-    if (rachaMax >= 7) xp += XP_PRIMERA_SEMANA;
-    if (rachaMax >= 30) xp += XP_RACHA_30;
-    if (rachaMax >= 100) xp += XP_RACHA_100;
-    if (respuestas >= 100) xp += XP_100_RESPUESTAS;
-    const level = Math.min(XP_MAX_NIVEL, Math.floor(xp / XP_NIVEL) + 1);
-    const levelName = avatarNivelNombre(level);
-    const nextXp = level < XP_MAX_NIVEL ? level * XP_NIVEL : null;
-    const nextName = level < XP_MAX_NIVEL ? avatarNivelNombre(level + 1) : null;
-    const seen = db.prepare('SELECT milestone FROM milestones_seen WHERE user_id = ? AND milestone >= 900').all(req.session.userId).map(r => r.milestone - 900);
-    const unseen = [];
-    for (let l = 2; l <= level; l++) if (!seen.includes(l)) unseen.push(l);
-    res.json({ ok: true, xp, level, levelName, tier: avatarTier(level), published, nextXp, nextName, unseenLevels: unseen });
+    res.json(Object.assign({ ok: true }, avatarLevelData(db, req.session.userId)));
   } catch (e) { res.json({ ok: false }); }
 });
 app.post('/api/avatar-level/seen', requireAuth, (req, res) => {
@@ -32541,7 +32418,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v797';
+const BUILD_ID = '20261105-v799';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

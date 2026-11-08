@@ -270,21 +270,19 @@ function computarNivel(db, uid, poder, metrics) {
 function registrarEvento(db, uid, { poder, evento, hecho, registro_ref }, metrics) {
   poder = resolverPoder(poder); // el pliegue: el evento nace bajo su anfitrión
   const antes = computarNivel(db, uid, poder, metrics);
-  // Posty SOLO-POSTEOS (4/11): la subida NO se detecta comparando el
-  // nivel antes/después del evento, porque el posteo ya existe en posts
-  // cuando se registra el evento (el pre-evento ya lo contaría y nunca
-  // se detectaría la subida). Se compara contra el último nivel
-  // registrado en el río (refs 'nivel:posty:N:ts'), en la rama de abajo.
-  // Require perezoso: posty-nivel50 requiere niveles solo dentro de
-  // nivelPosty, así que no hay ciclo.
+  // Posty R5 (8/11): la subida NO se detecta comparando el nivel
+  // antes/después del evento, porque el posteo ya existe en posts cuando
+  // se registra el evento (el pre-evento ya lo contaría y nunca se
+  // detectaría la subida). Se compara contra el último nivel registrado
+  // en el río (refs 'nivel:posty:N:ts'), en la rama de abajo.
   db.prepare('INSERT INTO oficina_nivel_eventos (user_id, poder, evento, hecho, registro_ref, ts) VALUES (?, ?, ?, ?, ?, ?)')
     .run(uid, poder, evento, hecho || '', registro_ref || '', Date.now());
   const despues = computarNivel(db, uid, poder, metrics);
   let subida = null;
-  // SOLO-POSTEOS (4/11): para posty el nivel ya no sale de los gates, así
+  // R5 (8/11): para posty el nivel es la regla XP, no los gates, así
   // que la subida del cómputo base NO se registra (sería una subida por
-  // fundamento/Bandeja/semana, no por posteos). La subida real de posty
-  // la registra la rama de abajo, comparando nivelPosty antes/después.
+  // fundamento/Bandeja/semana, no por XP). La subida real de posty la
+  // registra la rama de abajo, comparando el nivel XP con el río.
   if (poder !== 'posty' && antes && despues && despues.nivel > antes.nivel) {
     subida = {
       poder,
@@ -300,20 +298,14 @@ function registrarEvento(db, uid, { poder, evento, hecho, registro_ref }, metric
         .run(uid, poder, 'subida_nivel', `${PODERES[poder].nombre} subió a ${despues.nombre_nivel}`, `nivel:${poder}:${despues.nivel}:${Date.now()}`, null, 'registrado', Date.now());
     } catch (e) { /* el río es derivado: si falla, la subida igual ocurrió */ }
   }
-  // Posty SOLO-POSTEOS (4/11): si el nivel por posteos supera al último
-  // registrado en el río (CUALQUIER salto, no solo 6+), la subida queda
-  // en el río y se devuelve como subida principal. El piso 6+ del Lote 3
-  // ya no aplica: con el motor viejo los niveles 1–5 los registraba la
-  // rama base, y esa rama ya no registra para posty (ver arriba), así
-  // que sin este registro los saltos 1→2, 2→3, 3→4 y 4→5 quedarían sin
-  // historia. Efecto migración (una sola vez): un usuario que ya está
-  // en L4 por posteos pero cuyo río quedó en L2 de la era de gates
-  // registra su L4 actual en el próximo evento posty; después, solo
-  // subidas reales. Idempotente: mismo nivel, sin duplicados.
+  // Posty R5 (8/11): el nivel es la regla XP (xp-nivel.js), no el conteo
+  // por posteos. Si el nivel XP supera al último registrado en el río
+  // (CUALQUIER salto), la subida queda en el río y se devuelve como
+  // subida principal. Idempotente: mismo nivel, sin duplicados.
   if (poder === 'posty') {
     try {
-      const np = require('./posty-nivel50');
-      const despuesExt = np.nivelPosty(db, uid, metrics);
+      const xp = require('./xp-nivel');
+      const d = xp.avatarLevelData(db, uid);
       let ultimo = 1;
       try {
         const rows = db.prepare(`SELECT registro_ref FROM oficina_registros WHERE user_id = ? AND poder = 'posty' AND tipo = 'subida_nivel'`).all(uid);
@@ -322,18 +314,18 @@ function registrarEvento(db, uid, { poder, evento, hecho, registro_ref }, metric
           if (m) ultimo = Math.max(ultimo, parseInt(m[1], 10));
         }
       } catch (e) {}
-      if (despuesExt && despuesExt.nivel > ultimo) {
+      if (d && d.level > ultimo) {
         const subExt = {
           poder,
           nombre: PODERES[poder].nombre,
-          nivel: despuesExt.nivel,
-          nombre_nivel: despuesExt.nombre_nivel,
+          nivel: d.level,
+          nombre_nivel: d.levelName,
           color: PODERES[poder].color,
           avatar: PODERES[poder].avatar,
         };
         try {
           db.prepare('INSERT INTO oficina_registros (user_id, poder, tipo, resumen, registro_ref, recibo_json, estado, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-            .run(uid, poder, 'subida_nivel', `${PODERES[poder].nombre} subió a ${despuesExt.nombre_nivel}`, `nivel:${poder}:${despuesExt.nivel}:${Date.now()}`, null, 'registrado', Date.now());
+            .run(uid, poder, 'subida_nivel', `${PODERES[poder].nombre} subió a ${d.levelName}`, `nivel:${poder}:${d.level}:${Date.now()}`, null, 'registrado', Date.now());
         } catch (e) { /* el río es derivado: si falla, la subida igual ocurrió */ }
         subida = subExt;
       }

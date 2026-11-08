@@ -190,7 +190,7 @@ async function main() {
   has('7 chunk texto pendiente ES', chunk.includes('Tu token quedó guardado: se manda solo la próxima vez que abras la app con sesión'));
   has('7 chunk texto pendiente EN', chunk.includes('Your token is saved: it will be sent next time you open the app signed in'));
   has('7 chunk textos viejos intactos', chunk.includes('El iPhone no entregó el token de notificaciones') && chunk.includes('No se pudo activar, probá de nuevo'));
-  has('7 scheduler hook premios-notif intacto', sched.includes("require('./premios-notif')") && sched.includes("require('./push').sendPush"));
+  has('7 R5: hook premios-notif fuera (la subida se celebra en el chat por /api/avatar-level)', !sched.includes("require('./premios-notif')") && sched.includes("require('./push')") && sched.includes('sendPush'));
   has('7 push matutina texto INTOCABLE', morning.includes('Tu posteo de hoy ya está 👇'));
   has('7 logout limpia pendiente', src.includes("localStorage.removeItem('pz-native-token-pendiente')"));
 

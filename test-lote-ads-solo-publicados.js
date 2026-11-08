@@ -56,7 +56,7 @@ const sliceFn = (src, from, to) => {
 
 // ---------- 0. Censo base v766 (sin cambio) ----------
 console.log('— 0) censo base v766 —');
-check('server: BUILD v789', srv.includes("const BUILD_ID = '20261105-v794'"));
+check('server: BUILD v789', srv.includes("const BUILD_ID = '20261105-v799'"));
 check('app: CHUNK_V v786', app.includes("const CHUNK_V = '20261105-v792'"));
 check('styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes v789 subir-foto-directa)', md5(css) === '2589972e11db8b2b393d0eae06e18cf9');
 check('index: /app.js?v=527', idx.includes('/app.js?v=527'));
@@ -145,7 +145,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v789', ver.status === 200 && ver.json && ver.json.build === '20261105-v794', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v789', ver.status === 200 && ver.json && ver.json.build === '20261105-v799', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 

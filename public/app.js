@@ -900,7 +900,7 @@ function bbShell(tab, content) {
     semana: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
-  const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}${k === 'jardin' ? '<span class="bb-badge pz-premios-badge off"></span>' : ''}</button>`;
+  const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'feed' || tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
@@ -1498,9 +1498,6 @@ function mxJardinIr(ruta, origen) {
   try { BB.mxJardinVuelta = location.hash || '#/app/oficina'; BB.mxJardinOrigen = origen; } catch (e) {}
   bbGo(ruta);
 }
-function mxJardinVolver() {
-  try { bbGo((typeof BB !== 'undefined' && BB && BB.mxJardinVuelta) || '#/app/oficina'); } catch (e) { bbGo('#/app/oficina'); }
-}
 function mxJardinHito(btn) {
   try {
     const root = btn.closest('.mx-jardin'); if (!root) return;
@@ -1509,24 +1506,8 @@ function mxJardinHito(btn) {
     root.querySelectorAll('.mx-vista').forEach((v) => { v.hidden = (v.getAttribute('data-mx-vista') !== vista); });
   } catch (e) {}
 }
-function mxFaltaTxt(nv) {
-  const falt = Array.isArray(nv.faltantes) ? nv.faltantes : [];
-  const n = falt.length;
-  if (!n) return '';
-  return n === 1 ? gzT('te falta 1 cosa', '1 thing left') : gzT('te faltan ' + n + ' cosas', n + ' things left');
-}
 async function mxNivel(poder) {
   try { const r = await api.get('/api/oficina/nivel?poder=' + poder); return (r && r.ok) ? r : null; } catch (e) { return null; }
-}
-async function mxJardinFotos() {
-  try { const r = await api.get('/api/oficina/jardin'); return (r && r.ok) ? r : null; } catch (e) { return null; }
-}
-function mxFotoJardin(j) {
-  if (!j) return '';
-  const src = (j.hoy && j.hoy[0]) || (j.antes && j.antes[0]) || '';
-  if (!src) return '';
-  try { if (typeof mv === 'function') return mv(src, 640); } catch (e) {}
-  return src;
 }
 function mxNvNum(nv) { return (nv && typeof nv.nivel === 'number') ? nv.nivel : 1; }
 // (LOTE 17) La barrita de la tira pasa a degradado celeste → dorado: el
@@ -1542,46 +1523,26 @@ function mxSwitcherHTML(modo) {
     + `<button type="button" class="mx-chip-agente${modo === 'posty' ? ' mx-activo-posty' : ''}" onclick="mxCambiarAgente('posty')"><span class="mx-chip-cara"><img src="ai-avatar.png" alt="Posty"></span><span>Posty · ${gzT('Contenido', 'Content')}</span></button>`
     + `</div>`;
 }
-// (LOTE PRÓXIMO-PREMIO · decisión Valentino 2/11) La tira de Inicio dice
-// en palabras el próximo premio: primer nivel NO desbloqueado por encima
-// del nivel real, con su nombre exacto de PZ_ROPA. Sin nivel real (no
-// número) no se dibuja nada inventado; en 50, todos desbloqueados.
-// Solo Inicio (origen 'posty'): la misma tira en la vista oficina no cambia.
+// R5 (8/11): la tira dice en palabras el próximo nivel en XP (la misma
+// unidad que la barrita: avance.hechos/total del servidor). Sin XP real
+// no se dibuja nada inventado; en 50, nivel máximo. Solo Inicio
+// (origen 'posty'): la misma tira en la vista oficina no cambia.
 function pzProximoPremioTira(nvP, origen) {
   if (origen !== 'posty') return '';
   const n0 = (nvP && typeof nvP.nivel === 'number' && isFinite(nvP.nivel)) ? Math.floor(nvP.nivel) : null;
   if (n0 === null) return '';
   const n = Math.max(0, n0);
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  if (n >= 50) return `<span class="mx-tira-proximo">${esc(en ? 'all rewards unlocked' : 'todos los premios desbloqueados')}</span>`;
-  const sig = pzRopaPorNivel(n + 1);
-  if (!sig) return '';
-  const nom = en ? sig.en : sig.es;
-  // (LOTE PREMIOS-TIRA · decisión Valentino 4/11) El premio se VE: su
-  // mini real (ropa/ropa-NN-mini.png, el mismo archivo que la pantalla
-  // de Nivel usa para la prenda) + copy simple «Nivel N: Nombre».
-  // Sin imagen generada ni bloque de color.
-  const img = `<img src="ropa/ropa-${String(n + 1).padStart(2, '0')}-mini.png" alt="" aria-hidden="true">`;
-  const premio = `<span class="mx-tira-premio">${img}<span>${esc(en ? ('Level ' + (n + 1) + ': ' + nom) : ('Nivel ' + (n + 1) + ': ' + nom))}</span></span>`;
-  // Cuánto falta, en la unidad real de la barrita: POSTEOS hechos a través
-  // de Posty (decisión Valentino 4/11: el nivel sube solo con posteos).
-  // Fuente: avance.hechos/total del servidor (la misma que la barrita) o,
-  // en su defecto, los campos explícitos posteos_posty/proximo_umbral.
-  // Sin avance ni campos (Nv 50: todo desbloqueado), no se dice nada:
-  // nunca un número inventado.
+  if (n >= 50) return `<span class="mx-tira-proximo">${esc(en ? 'max level' : 'nivel máximo')}</span>`;
   let falta = '';
   try {
-    let faltan = null;
     if (nvP && nvP.avance && Number(nvP.avance.total) > 0) {
-      faltan = Math.max(0, Math.round(Number(nvP.avance.total) - Number(nvP.avance.hechos)));
-    } else if (nvP && typeof nvP.posteos_posty === 'number' && typeof nvP.proximo_umbral === 'number') {
-      faltan = Math.max(0, nvP.proximo_umbral - nvP.posteos_posty);
-    }
-    if (faltan !== null && faltan > 0) {
-      falta = `<span class="mx-tira-falta">${esc(faltan === 1 ? (en ? '1 post left' : 'te falta 1 posteo') : (en ? (faltan + ' posts left') : ('te faltan ' + faltan + ' posteos')))}</span>`;
+      const faltan = Math.max(0, Math.round(Number(nvP.avance.total) - Number(nvP.avance.hechos)));
+      if (faltan > 0) falta = `<span class="mx-tira-falta">${esc(faltan === 1 ? (en ? '1 XP to Level ' + (n + 1) : 'te falta 1 XP para el Nv ' + (n + 1)) : (en ? (faltan + ' XP to Level ' + (n + 1)) : ('te faltan ' + faltan + ' XP para el Nv ' + (n + 1))))}</span>`;
     }
   } catch (e) {}
-  return premio + falta;
+  const nom = (nvP && nvP.nombre_siguiente) ? nvP.nombre_siguiente : '';
+  return `<span class="mx-tira-premio"><span>${esc(en ? ('Level ' + (n + 1) + (nom ? ': ' + nom : '')) : ('Nivel ' + (n + 1) + (nom ? ': ' + nom : '')))}</span></span>` + falta;
 }
 function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   const ambos = pod.posty && pod.gesty;
@@ -1594,7 +1555,7 @@ function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   // jardín: la miniatura sale de la tirita (el archivo queda en el
   // árbol porque las etapas viejas del jardín lo referencian en
   // otras pantallas; acá simplemente no se usa). La tirita queda
-  // con nivel + barrita + próximo premio, mismo layout y mismo
+  // con nivel + barrita + próximo nivel en XP, mismo layout y mismo
   // destino (hoy Nivel).
   if (pod.posty && nvP) {
     return `<button type="button" class="mx-tira-jardin mx-tira-posty" onclick="mxJardinIr('#/app/jardin-posty', '${origen}')">`
@@ -1614,31 +1575,15 @@ async function mxPortTop(poderesRaw, nvPre, origen) {
   const jobs = [];
   if (pod.posty && !nvP) jobs.push(mxNivel('posty').then((r) => { nvP = r; }));
   if (pod.gesty) jobs.push(mxNivel('gesty').then((r) => { nvG = r; }));
-  if (pod.posty) jobs.push(mxJardinFotos().then((r) => { jardin = r; }));
   await Promise.all(jobs);
   const sw = ''; // POSTY SOLO: sin switcher
   const tira = mxTiraHTML(pod, nvP, nvG, jardin, origen);
   if (!sw && !tira) return '';
   return `<div class="mx-port-top">${sw}${tira}</div>`;
 }
-function mxPremioPostyHTML(nv) {
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  // Lote 3 — vista previa del próximo nivel (datos reales del servidor, sin
-  // barras ni % dentro del jardín): premio si abre prestigio, si no el
-  // desbloqueo chico. En 50, la meta final. En 1–4, el camino viejo intacto.
-  if (nv.nivel >= 50) return `<p class="mx-dato"><b>${gzT('Meta final:', 'Final goal:')}</b> <span>${esc(nv.meta_final || gzT('Copa completa 🌳', 'Full canopy 🌳'))}</span></p>`;
-  if (nv.nivel >= 5) {
-    if (!nv.nombre_siguiente) return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${gzT('Copa completa 🌳', 'Full canopy 🌳')}</span></p>`;
-    const rec = nv.siguiente_premio || nv.siguiente_desbloqueo;
-    const lab = nv.siguiente_premio ? gzT('Próximo premio:', 'Next reward:') : gzT('Próximo desbloqueo:', 'Next unlock:');
-    return `<p class="mx-dato"><b>${lab}</b> <span>${esc(gzT('Nv ', 'Lv ') + (nv.nivel + 1) + ' · ' + nv.nombre_siguiente)}${rec ? ' — ' + esc(rec) : ''}</span></p>`;
-  }
-  if (!nv.nombre_siguiente) return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${gzT('Copa completa 🌳', 'Full canopy 🌳')}</span></p>`;
-  return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${esc(pzNivelUnlock(nv.nivel + 1, en))}</span></p>`;
-}
 function mxPremioGestyHTML(nv) {
-  if (nv.nivel >= 5 || !nv.nombre_siguiente) return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${gzT('Copa completa 🌳', 'Full canopy 🌳')}</span></p>`;
-  return `<p class="mx-dato"><b>${gzT('Próximo premio:', 'Next reward:')}</b> <span>${esc(nv.nombre_siguiente)}</span></p>`;
+  if (nv.nivel >= 5 || !nv.nombre_siguiente) return `<p class="mx-dato"><b>${gzT('Próximo nivel:', 'Next level:')}</b> <span>${gzT('Copa completa 🌳', 'Full canopy 🌳')}</span></p>`;
+  return `<p class="mx-dato"><b>${gzT('Próximo nivel:', 'Next level:')}</b> <span>${esc(nv.nombre_siguiente)}</span></p>`;
 }
 function mxCardAgenteHTML(agente, nv, premioHTML, semanaHTML) {
   const titulo = agente ? esc(agente) + ' · ' + esc(nv.nombre_nivel || '') : esc(nv.nombre_nivel || '');
@@ -1655,17 +1600,6 @@ function mxVitrina(nv) {
 // cualquier hero de solo tierra (Nv 1–2): glifo SVG compuesto, nunca
 // foto ni cara regenerada.
 const MX_BROTE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#3E9B4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="M12 14Q8 14 5.5 10.5Q9 9.5 12 14Z"/><path d="M12 11Q16 11 18.5 7.5Q15 6.5 12 11Z"/></svg>';
-// (LOTE 15 · premio cerca) Misma fuente que el Lote 10B (vista previa
-// del Lote 3 + tabla pzNivelUnlock en 1–5), pero junto al hero y en
-// palabras: «Próximo premio · Raíz firme en el Nivel 6».
-function mxPremioCercaHTML(nv) {
-  if (!nv || nv.nivel >= 50 || !nv.nombre_siguiente) return '';
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const rec = nv.siguiente_premio || nv.siguiente_desbloqueo || ((nv.nivel < 5 && typeof pzNivelUnlock === 'function') ? pzNivelUnlock(nv.nivel + 1, en) : null);
-  const lab = nv.siguiente_premio ? gzT('Próximo premio', 'Next reward') : gzT('Próximo desbloqueo', 'Next unlock');
-  const que = rec || nv.nombre_siguiente;
-  return `<p class="mx-dato mx-premio-cerca"><b>${lab} · ${esc(que)}</b> ${gzT('en el Nivel', 'at Level')} ${mxNvNum(nv) + 1}</p>`;
-}
 // (LOTE 15 · mapa completo) Zonas premio P1–P9 de la tabla real
 // SPEC-PRESTIGIO (nombre = premio del nivel; detalle = sorpresa que
 // solo se muestra al desbloquear). Lo bloqueado va en silueta con
@@ -1683,34 +1617,6 @@ const MX_ZONAS_PREMIO = [
   { nv: 41, es: 'Leyenda del barrio', en: 'Neighborhood legend', detEs: 'La placa dorada en la entrada', detEn: 'The golden plaque at the entrance' },
   { nv: 46, es: 'Maestro del jardín', en: 'Garden master', detEs: 'El jardín maestro y su corona', detEn: 'The master garden and its crown' },
 ];
-function mxZonaToggle(btn) {
-  if (!btn) return;
-  const det = btn.querySelector('.mx-zona-det');
-  if (!det) return;
-  det.hidden = !det.hidden;
-  btn.setAttribute('aria-expanded', det.hidden ? 'false' : 'true');
-}
-function mxJardinMapaHTML(nvP, post50) {
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const nvNum = mxNvNum(nvP);
-  let vivaIdx = -1;
-  MX_ZONAS_PREMIO.forEach((z, i) => { if (nvNum >= z.nv) vivaIdx = i; });
-  let h = `<div class="mx-mapa"><h3>${gzT('Todo tu jardín', 'Your whole garden')}</h3><p class="mx-mapa-sub">${gzT('Lo desbloqueado está a todo color; lo demás espera su nivel.', 'Unlocked areas are in full color; the rest await their level.')}</p><div class="mx-mapa-grid">`;
-  MX_ZONAS_PREMIO.forEach((z, i) => {
-    const ok = nvNum >= z.nv;
-    const nombre = en ? z.en : z.es;
-    const det = en ? z.detEn : z.detEs;
-    const desbloqueo = ok ? det : (en ? `Unlocks at Level ${z.nv}` : `Se desbloquea en el Nivel ${z.nv}`);
-    h += `<button type="button" class="mx-zona${ok ? ' ok' : ' lock'}${i === vivaIdx ? ' mx-zona-viva' : ''}" onclick="mxZonaToggle(this)" aria-expanded="${ok ? 'true' : 'false'}"><span class="mx-zona-ic" aria-hidden="true">${ok ? '✦' : '🔒'}</span><b>${esc(nombre)}</b><span class="mx-zona-nv">${gzT('Nivel', 'Level')} ${z.nv}</span><span class="mx-zona-det" ${ok ? '' : 'hidden'}>${esc(desbloqueo)}</span></button>`;
-  });
-  const tienePost50 = !!(post50 && Array.isArray(post50.zonas) && post50.zonas.length);
-  if (!tienePost50) {
-    h += `<button type="button" class="mx-zona lock" onclick="mxZonaToggle(this)" aria-expanded="false"><span class="mx-zona-ic" aria-hidden="true">🔒</span><b>${gzT('Después del Nivel 50', 'After Level 50')}</b><span class="mx-zona-nv">${gzT('Nivel 50', 'Level 50')}</span><span class="mx-zona-det" hidden>${gzT('Al llegar al Nivel 50 se abren nuevas zonas', 'When you reach Level 50, new areas open')}</span></button>`;
-  }
-  return h + '</div></div>';
-}
-
-
 // (LOTE JARDÍN · slider + hero completo) Las 5 etapas reales del jardín
 // (mismo mapeo que mxHeroJardin): cada etapa es un render aprobado, nunca
 // uno inventado. El hero ya no es una sola foto (en Nv 1–2 era tierra):
@@ -1894,8 +1800,8 @@ function mxVistasUnAgenteHTML(nv, premioHTML, semanaHTML) {
       + (recSig ? `<p class="mx-dato">${esc(recSig)}</p>` : '')
       + (nv.proximo_paso ? `<p class="mx-dato">${esc(nv.proximo_paso)}</p>` : '') + `</div></div>`);
   }
-  // (LOTE 15) El premio del próximo nivel ya no vive acá: lo rinde
-  // mxPremioCercaHTML junto al hero (visible sin bajar, en palabras).
+  // (R5) El próximo nivel en XP ya no vive acá: lo rinde la tira de
+  // Inicio (pzProximoPremioTira), en palabras y con su barrita.
   const histBtn = hist.length ? `<button type="button" class="mx-historia-btn" onclick="mxIrHistoria()">${gzT('Mi historia', 'My history')}</button>` : '';
   return `<div class="mx-pasos-nivel">${botones.join('')}</div>${histBtn}${vistas.join('')}`;
 }
@@ -1975,310 +1881,21 @@ function mxIrHistoria() {
 // ai-avatar.png tiene los mismos bytes que posty-cara.png, nunca se
 // regenera; la ropa son capas SVG locales encima. Nada comprable, nada
 // que toque el precio: todo se gana publicando semanas.)
-const PZ_ROPA = [
-  { nv: 1, cat: 'sombrero', es: 'Gorra celeste', en: 'Light blue cap', svg: '<path d="M150 128Q150 52 256 52Q362 52 362 128Z" fill="#2793C8"/><ellipse cx="256" cy="128" rx="118" ry="16" fill="#0A1E33"/><circle cx="256" cy="52" r="10" fill="#FEC14D"/>' },
-  { nv: 2, cat: 'anteojos', es: 'Anteojos redondos', en: 'Round glasses', svg: '<circle cx="205" cy="250" r="50" fill="rgba(255,255,255,.18)" stroke="#0A1E33" stroke-width="8"/><circle cx="315" cy="250" r="50" fill="rgba(255,255,255,.18)" stroke="#0A1E33" stroke-width="8"/><path d="M255 240Q260 228 265 240" fill="none" stroke="#0A1E33" stroke-width="8"/><path d="M155 242L130 232M365 242L390 232" stroke="#0A1E33" stroke-width="8"/>' },
-  { nv: 3, cat: 'cuello', es: 'Bufanda celeste', en: 'Light blue scarf', svg: '<path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#2793C8"/><rect x="292" y="442" width="42" height="58" rx="10" fill="#2793C8"/><path d="M300 500v-12M312 500v-12M324 500v-12" stroke="#FEC14D" stroke-width="5"/>' },
-  { nv: 4, cat: 'extra', es: 'Flor en la oreja', en: 'Flower on the ear', svg: '<circle cx="388" cy="272" r="14" fill="#FF9EBB"/><circle cx="406" cy="292" r="14" fill="#FF9EBB"/><circle cx="388" cy="312" r="14" fill="#FF9EBB"/><circle cx="370" cy="292" r="14" fill="#FF9EBB"/><circle cx="388" cy="292" r="12" fill="#FEC14D"/>' },
-  { nv: 5, cat: 'extra', es: 'Hoja en el pelo', en: 'Leaf in the hair', svg: '<path d="M170 118Q140 88 168 62Q196 88 170 118Z" fill="#3E9B4F"/><path d="M170 112L168 70" stroke="#2E7D32" stroke-width="4"/>' },
-  { nv: 6, cat: 'conjunto', es: 'Conjunto Brote dorado', en: 'Golden sprout set', svg: '<path d="M256 118V78" stroke="#3E9B4F" stroke-width="8" stroke-linecap="round"/><path d="M256 96Q226 96 212 72Q244 66 256 96Z" fill="#FEC14D"/><path d="M256 88Q286 88 300 64Q268 58 256 88Z" fill="#FEC14D"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#FEC14D"/>' },
-  { nv: 7, cat: 'sombrero', es: 'Sombrero de paja', en: 'Straw hat', svg: '<ellipse cx="256" cy="122" rx="132" ry="20" fill="#E8C48A"/><path d="M196 122Q196 58 256 58Q316 58 316 122Z" fill="#E8C48A"/><rect x="196" y="96" width="120" height="14" fill="#B98A4E"/>' },
-  { nv: 8, cat: 'anteojos', es: 'Anteojos de sol', en: 'Sunglasses', svg: '<ellipse cx="205" cy="250" rx="54" ry="46" fill="#0A1E33"/><ellipse cx="315" cy="250" rx="54" ry="46" fill="#0A1E33"/><path d="M259 242Q264 232 269 242" fill="none" stroke="#FEC14D" stroke-width="7"/><path d="M151 242L130 232M369 242L390 232" stroke="#FEC14D" stroke-width="7"/>' },
-  { nv: 9, cat: 'cuello', es: 'Moño dorado', en: 'Golden bow tie', svg: '<path d="M256 428L206 406Q196 428 206 450Z" fill="#FEC14D"/><path d="M256 428L306 406Q316 428 306 450Z" fill="#FEC14D"/><circle cx="256" cy="428" r="14" fill="#DBA453"/>' },
-  { nv: 10, cat: 'extra', es: 'Audífonos', en: 'Headphones', svg: '<path d="M132 300Q132 138 256 138Q380 138 380 300" fill="none" stroke="#0A1E33" stroke-width="16"/><rect x="112" y="272" width="44" height="72" rx="18" fill="#0A1E33"/><rect x="356" y="272" width="44" height="72" rx="18" fill="#0A1E33"/><circle cx="134" cy="308" r="8" fill="#FEC14D"/><circle cx="378" cy="308" r="8" fill="#FEC14D"/>' },
-  { nv: 11, cat: 'conjunto', es: 'Conjunto Raíz firme', en: 'Strong root set', svg: '<path d="M150 128Q150 52 256 52Q362 52 362 128Z" fill="#8A5A3B"/><ellipse cx="256" cy="128" rx="118" ry="16" fill="#5B3A24"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#5B8C5A"/>' },
-  { nv: 12, cat: 'sombrero', es: 'Gorra dorada', en: 'Golden cap', svg: '<path d="M150 128Q150 52 256 52Q362 52 362 128Z" fill="#FEC14D"/><ellipse cx="256" cy="128" rx="118" ry="16" fill="#0A1E33"/><circle cx="256" cy="52" r="10" fill="#2793C8"/>' },
-  { nv: 13, cat: 'anteojos', es: 'Anteojos estrella', en: 'Star glasses', svg: '<polygon points="205,198 217.9,232.2 254.5,234 225.9,256.8 235.6,292 205,272 174.4,292 184.1,256.8 155.5,234 192.1,232.2" fill="#FEC14D" opacity=".92"/><polygon points="315,198 327.9,232.2 364.5,234 335.9,256.8 345.6,292 315,272 284.4,292 294.1,256.8 265.5,234 302.1,232.2" fill="#FEC14D" opacity=".92"/>' },
-  { nv: 14, cat: 'cuello', es: 'Pañuelo verde', en: 'Green bandana', svg: '<path d="M196 408h120l-60 66Z" fill="#5B8C5A"/><circle cx="256" cy="408" r="12" fill="#3E7A48"/>' },
-  { nv: 15, cat: 'extra', es: 'Vincha deportiva', en: 'Sport headband', svg: '<rect x="164" y="148" width="184" height="26" rx="13" fill="#2793C8"/><rect x="164" y="158" width="184" height="6" fill="#FEC14D"/>' },
-  { nv: 16, cat: 'conjunto', es: 'Conjunto Tallo alto', en: 'Tall stem set', svg: '<rect x="216" y="28" width="80" height="100" rx="12" fill="#3E9B4F"/><ellipse cx="256" cy="128" rx="110" ry="14" fill="#2E7D32"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#2793C8"/>' },
-  { nv: 17, cat: 'sombrero', es: 'Boina verde', en: 'Green beret', svg: '<ellipse cx="256" cy="98" rx="108" ry="30" fill="#5B8C5A"/><path d="M150 108Q256 128 362 108" fill="none" stroke="#3E7A48" stroke-width="6"/><circle cx="256" cy="66" r="8" fill="#2E7D32"/>' },
-  { nv: 18, cat: 'anteojos', es: 'Anteojos corazón', en: 'Heart glasses', svg: '<path d="M205 292C160 258 158 214 188 208C200 205 205 216 205 224C205 216 210 205 222 208C252 214 250 258 205 292Z" fill="#FF7A9E"/><path d="M315 292C270 258 268 214 298 208C310 205 315 216 315 224C315 216 320 205 332 208C362 214 360 258 315 292Z" fill="#FF7A9E"/>' },
-  { nv: 19, cat: 'cuello', es: 'Collar de flores', en: 'Flower necklace', svg: '<path d="M196 440Q256 470 316 440" fill="none" stroke="#3E9B4F" stroke-width="4"/><circle cx="196" cy="440" r="11" fill="#FF9EBB"/><circle cx="196" cy="440" r="5" fill="#FEC14D"/><circle cx="226" cy="452" r="11" fill="#FF9EBB"/><circle cx="226" cy="452" r="5" fill="#FEC14D"/><circle cx="256" cy="456" r="11" fill="#FF9EBB"/><circle cx="256" cy="456" r="5" fill="#FEC14D"/><circle cx="286" cy="452" r="11" fill="#FF9EBB"/><circle cx="286" cy="452" r="5" fill="#FEC14D"/><circle cx="316" cy="440" r="11" fill="#FF9EBB"/><circle cx="316" cy="440" r="5" fill="#FEC14D"/>' },
-  { nv: 20, cat: 'extra', es: 'Aros dorados', en: 'Golden earrings', svg: '<circle cx="134" cy="362" r="10" fill="#FEC14D"/><circle cx="134" cy="382" r="6" fill="#DBA453"/><circle cx="378" cy="362" r="10" fill="#FEC14D"/><circle cx="378" cy="382" r="6" fill="#DBA453"/>' },
-  { nv: 21, cat: 'conjunto', es: 'Conjunto Copa verde', en: 'Green canopy set', svg: '<path d="M170 118Q150 84 178 66Q196 92 170 118Z" fill="#3E9B4F"/><path d="M214 100Q202 66 230 50Q244 80 214 100Z" fill="#5B8C5A"/><path d="M256 94Q250 60 278 46Q288 78 256 94Z" fill="#3E9B4F"/><path d="M298 100Q312 66 340 50Q346 82 298 100Z" fill="#5B8C5A"/><path d="M342 118Q362 84 334 66Q316 92 342 118Z" fill="#3E9B4F"/><path d="M150 420Q256 400 362 420L350 470Q256 452 162 470Z" fill="#5B8C5A" opacity=".9"/>' },
-  { nv: 22, cat: 'sombrero', es: 'Galera celeste', en: 'Light blue top hat', svg: '<rect x="196" y="30" width="120" height="96" rx="10" fill="#2793C8"/><rect x="196" y="100" width="120" height="16" fill="#FEC14D"/><ellipse cx="256" cy="128" rx="136" ry="18" fill="#0A1E33"/>' },
-  { nv: 23, cat: 'anteojos', es: 'Monóculo dorado', en: 'Golden monocle', svg: '<circle cx="315" cy="250" r="52" fill="rgba(255,255,255,.15)" stroke="#DBA453" stroke-width="8"/><path d="M360 290Q390 340 372 400" fill="none" stroke="#DBA453" stroke-width="4"/>' },
-  { nv: 24, cat: 'cuello', es: 'Bufanda rayada', en: 'Striped scarf', svg: '<rect x="168" y="408" width="176" height="38" rx="17" fill="#2793C8"/><rect x="196" y="408" width="18" height="38" fill="#fff"/><rect x="240" y="408" width="18" height="38" fill="#fff"/><rect x="284" y="408" width="18" height="38" fill="#fff"/><rect x="292" y="442" width="42" height="56" rx="10" fill="#2793C8"/>' },
-  { nv: 25, cat: 'extra', es: 'Estrellita en la mejilla', en: 'Little star on the cheek', svg: '<text x="162" y="344" font-size="36" fill="#FEC14D">✦</text>' },
-  { nv: 26, cat: 'conjunto', es: 'Conjunto Flor del local', en: 'Shop flower set', svg: '<circle cx="180" cy="105" r="13" fill="#FF9EBB"/><circle cx="180" cy="105" r="5" fill="#FEC14D"/><circle cx="218" cy="88" r="13" fill="#FF9EBB"/><circle cx="218" cy="88" r="5" fill="#FEC14D"/><circle cx="256" cy="82" r="13" fill="#FF9EBB"/><circle cx="256" cy="82" r="5" fill="#FEC14D"/><circle cx="294" cy="88" r="13" fill="#FF9EBB"/><circle cx="294" cy="88" r="5" fill="#FEC14D"/><circle cx="332" cy="105" r="13" fill="#FF9EBB"/><circle cx="332" cy="105" r="5" fill="#FEC14D"/><path d="M196 440Q256 470 316 440" fill="none" stroke="#3E9B4F" stroke-width="4"/><circle cx="226" cy="452" r="11" fill="#FF9EBB"/><circle cx="226" cy="452" r="5" fill="#FEC14D"/><circle cx="256" cy="456" r="11" fill="#FF9EBB"/><circle cx="256" cy="456" r="5" fill="#FEC14D"/><circle cx="286" cy="452" r="11" fill="#FF9EBB"/><circle cx="286" cy="452" r="5" fill="#FEC14D"/>' },
-  { nv: 27, cat: 'sombrero', es: 'Gorro de lana', en: 'Wool beanie', svg: '<path d="M168 128Q168 52 256 52Q344 52 344 128Z" fill="#0A1E33"/><circle cx="256" cy="46" r="20" fill="#fff" stroke="#D8ECF7" stroke-width="3"/><rect x="168" y="104" width="176" height="16" fill="#2793C8"/>' },
-  { nv: 28, cat: 'anteojos', es: 'Anteojos de lectura', en: 'Reading glasses', svg: '<rect x="152" y="212" width="106" height="76" rx="14" fill="rgba(255,255,255,.18)" stroke="#0A1E33" stroke-width="7"/><rect x="262" y="212" width="106" height="76" rx="14" fill="rgba(255,255,255,.18)" stroke="#0A1E33" stroke-width="7"/><path d="M258 246H262" stroke="#0A1E33" stroke-width="7"/>' },
-  { nv: 29, cat: 'cuello', es: 'Corbata celeste', en: 'Light blue tie', svg: '<path d="M244 404h24l-12 14Z" fill="#0A1E33"/><path d="M244 418h24l10 52-22 22-22-22Z" fill="#2793C8"/>' },
-  { nv: 30, cat: 'extra', es: 'Mariposa', en: 'Butterfly', svg: '<ellipse cx="332" cy="132" rx="20" ry="13" fill="#C9A7EB" transform="rotate(-24 332 132)"/><ellipse cx="368" cy="132" rx="20" ry="13" fill="#FF9EBB" transform="rotate(24 368 132)"/><ellipse cx="350" cy="134" rx="5" ry="12" fill="#0A1E33"/>' },
-  { nv: 31, cat: 'conjunto', es: 'Conjunto Fruto de la casa', en: 'House fruit set', svg: '<circle cx="256" cy="86" r="42" fill="#FF8A3D"/><path d="M256 44Q256 28 272 22" stroke="#3E9B4F" stroke-width="7" fill="none"/><ellipse cx="282" cy="72" rx="18" ry="9" fill="#3E9B4F" transform="rotate(-20 282 72)"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#FEC14D"/>' },
-  { nv: 32, cat: 'sombrero', es: 'Sombrero explorador', en: 'Explorer hat', svg: '<ellipse cx="256" cy="122" rx="134" ry="20" fill="#C9B189"/><path d="M198 122Q198 62 256 62Q314 62 314 122Z" fill="#C9B189"/><rect x="198" y="96" width="116" height="12" fill="#8A7A5C"/>' },
-  { nv: 33, cat: 'anteojos', es: 'Antiparras', en: 'Goggles', svg: '<rect x="148" y="210" width="112" height="80" rx="24" fill="rgba(39,147,200,.35)" stroke="#2793C8" stroke-width="8"/><rect x="260" y="210" width="112" height="80" rx="24" fill="rgba(39,147,200,.35)" stroke="#2793C8" stroke-width="8"/><path d="M148 250L128 244M372 250L392 244" stroke="#2793C8" stroke-width="8"/>' },
-  { nv: 34, cat: 'cuello', es: 'Chal dorado', en: 'Golden shawl', svg: '<path d="M150 420Q256 398 362 420L348 472Q256 452 164 472Z" fill="#FEC14D" opacity=".92"/>' },
-  { nv: 35, cat: 'extra', es: 'Cintillo de bambú', en: 'Bamboo headband', svg: '<rect x="164" y="150" width="184" height="24" rx="12" fill="#3E9B4F"/><path d="M210 150v24M256 150v24M302 150v24" stroke="#2E7D32" stroke-width="4"/>' },
-  { nv: 36, cat: 'conjunto', es: 'Conjunto Claro del bosque', en: 'Forest clearing set', svg: '<rect x="170" y="146" width="172" height="22" rx="11" fill="#8A5A3B"/><rect x="244" y="136" width="24" height="30" rx="6" fill="#FEC14D"/><path d="M256 136v-10" stroke="#8A5A3B" stroke-width="4"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#5B8C5A"/>' },
-  { nv: 37, cat: 'sombrero', es: 'Sombrero de fiesta', en: 'Party hat', svg: '<path d="M256 18L200 126H312Z" fill="#2793C8"/><path d="M256 18L228 126H256Z" fill="#FEC14D"/><circle cx="256" cy="18" r="12" fill="#FEC14D"/>' },
-  { nv: 38, cat: 'anteojos', es: 'Anteojos de fiesta', en: 'Party glasses', svg: '<circle cx="205" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#FF7A9E" stroke-width="8"/><circle cx="315" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#FF7A9E" stroke-width="8"/><circle cx="205" cy="192" r="7" fill="#FEC14D"/><circle cx="315" cy="192" r="7" fill="#2793C8"/><circle cx="150" cy="250" r="7" fill="#3E9B4F"/><circle cx="370" cy="250" r="7" fill="#FEC14D"/>' },
-  { nv: 39, cat: 'cuello', es: 'Pañuelo de estrellas', en: 'Star bandana', svg: '<path d="M196 408h120l-60 66Z" fill="#0A1E33"/><text x="238" y="448" font-size="20" fill="#fff">✦</text><text x="262" y="436" font-size="14" fill="#FEC14D">✦</text>' },
-  { nv: 40, cat: 'extra', es: 'Abeja dorada', en: 'Golden bee', svg: '<ellipse cx="160" cy="182" rx="20" ry="14" fill="#FEC14D"/><path d="M152 170v24M168 170v24" stroke="#0A1E33" stroke-width="4"/><ellipse cx="144" cy="168" rx="12" ry="7" fill="#fff" opacity=".8" transform="rotate(-24 144 168)"/><ellipse cx="176" cy="168" rx="12" ry="7" fill="#fff" opacity=".8" transform="rotate(24 176 168)"/>' },
-  { nv: 41, cat: 'conjunto', es: 'Conjunto Leyenda del barrio', en: 'Neighborhood legend set', svg: '<path d="M150 128Q150 52 256 52Q362 52 362 128Z" fill="#0A1E33"/><rect x="232" y="66" width="48" height="34" rx="8" fill="#FEC14D"/><text x="256" y="90" font-size="20" text-anchor="middle" fill="#0A1E33">✦</text><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#0A1E33"/><rect x="168" y="420" width="176" height="6" fill="#FEC14D"/>' },
-  { nv: 42, cat: 'sombrero', es: 'Sombrero vaquero', en: 'Cowboy hat', svg: '<ellipse cx="256" cy="122" rx="132" ry="20" fill="#8A5A3B"/><path d="M200 122Q200 66 256 66Q312 66 312 122Z" fill="#8A5A3B"/><rect x="200" y="98" width="112" height="12" fill="#5B3A24"/>' },
-  { nv: 43, cat: 'anteojos', es: 'Anteojos con brillo', en: 'Sparkle glasses', svg: '<circle cx="205" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#0A1E33" stroke-width="8"/><circle cx="315" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#0A1E33" stroke-width="8"/><text x="150" y="200" font-size="26" fill="#FEC14D">✦</text><text x="352" y="200" font-size="26" fill="#FEC14D">✦</text><text x="256" y="180" font-size="20" fill="#2793C8">✦</text>' },
-  { nv: 44, cat: 'cuello', es: 'Collar de hojas', en: 'Leaf necklace', svg: '<path d="M196 440Q256 470 316 440" fill="none" stroke="#3E9B4F" stroke-width="4"/><ellipse cx="206" cy="442" rx="12" ry="7" fill="#5B8C5A" transform="rotate(-30 206 442)"/><ellipse cx="236" cy="454" rx="12" ry="7" fill="#3E9B4F" transform="rotate(-10 236 454)"/><ellipse cx="256" cy="458" rx="12" ry="7" fill="#5B8C5A"/><ellipse cx="276" cy="454" rx="12" ry="7" fill="#3E9B4F" transform="rotate(10 276 454)"/><ellipse cx="306" cy="442" rx="12" ry="7" fill="#5B8C5A" transform="rotate(30 306 442)"/>' },
-  { nv: 45, cat: 'extra', es: 'Broche de flor', en: 'Flower brooch', svg: '<circle cx="315" cy="432" r="10" fill="#FF9EBB"/><circle cx="328" cy="445" r="10" fill="#FF9EBB"/><circle cx="315" cy="458" r="10" fill="#FF9EBB"/><circle cx="302" cy="445" r="10" fill="#FF9EBB"/><circle cx="315" cy="445" r="8" fill="#FEC14D"/>' },
-  { nv: 46, cat: 'conjunto', es: 'Conjunto Maestro del jardín', en: 'Garden master set', svg: '<path d="M196 118L206 66L236 100L256 58L276 100L306 66L316 118Z" fill="#FEC14D"/><rect x="196" y="112" width="120" height="12" fill="#DBA453"/><path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#FEC14D"/><rect x="168" y="436" width="176" height="6" fill="#0A1E33"/>' },
-  { nv: 47, cat: 'sombrero', es: 'Gorra marinera', en: 'Sailor cap', svg: '<path d="M158 128Q158 62 256 62Q354 62 354 128Z" fill="#fff" stroke="#D8ECF7" stroke-width="2"/><ellipse cx="256" cy="128" rx="118" ry="14" fill="#0A1E33"/><circle cx="256" cy="80" r="9" fill="#FEC14D"/>' },
-  { nv: 48, cat: 'anteojos', es: 'Anteojos de maestro', en: 'Master glasses', svg: '<circle cx="205" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#DBA453" stroke-width="5"/><circle cx="315" cy="250" r="50" fill="rgba(255,255,255,.15)" stroke="#DBA453" stroke-width="5"/><path d="M360 290Q390 340 372 400" fill="none" stroke="#DBA453" stroke-width="3"/>' },
-  { nv: 49, cat: 'cuello', es: 'Bufanda del maestro', en: 'Master scarf', svg: '<path d="M168 408h176v34a17 17 0 0 1-17 17H185a17 17 0 0 1-17-17Z" fill="#FEC14D"/><rect x="292" y="442" width="42" height="58" rx="10" fill="#0A1E33"/><text x="313" y="478" font-size="20" text-anchor="middle" fill="#FEC14D">✦</text>' },
-  { nv: 50, cat: 'corona', es: 'Corona del maestro', en: 'Master crown', svg: '<path d="M186 118L198 56L232 96L256 48L280 96L314 56L326 118Z" fill="#FEC14D"/><rect x="186" y="112" width="140" height="12" fill="#DBA453"/><text x="256" y="42" font-size="26" text-anchor="middle" fill="#FEC14D">✦</text><text x="206" y="52" font-size="18" text-anchor="middle" fill="#FEC14D">✦</text><text x="306" y="52" font-size="18" text-anchor="middle" fill="#FEC14D">✦</text>' },
-];
-let PZ_ROPA_NIVEL = 1;
-function pzRopaPorNivel(n) { for (let i = 0; i < PZ_ROPA.length; i++) if (PZ_ROPA[i].nv === n) return PZ_ROPA[i]; return null; }
-function pzRopaPorId(id) { return pzRopaPorNivel(Number(id) || 0); }
-function pzRopaNombre(nivel, en) { const e = pzRopaPorNivel(Math.max(1, Math.min(50, Number(nivel) || 1))); return e ? (en ? e.en : e.es) : ''; }
-function pzRopaClave() { try { const uid = (typeof ME !== 'undefined' && ME && ME.id) ? String(ME.id) : ''; return 'posta-guardarropa' + (uid ? '_' + uid : ''); } catch (err) { return 'posta-guardarropa'; } }
-function pzRopaSelVacio() { return { sombrero: null, anteojos: null, cuello: null, extra: null, conjunto: null, corona: null }; }
-function pzRopaSel() {
-  const v = pzRopaSelVacio();
-  try {
-    if (typeof localStorage === 'undefined') return v;
-    const raw = localStorage.getItem(pzRopaClave());
-    if (!raw) return v;
-    const p = JSON.parse(raw);
-    for (const k of Object.keys(v)) if (p && typeof p[k] === 'number') v[k] = p[k];
-  } catch (err) {}
-  return v;
-}
-function pzRopaGuardar(sel) { try { if (typeof localStorage !== 'undefined') localStorage.setItem(pzRopaClave(), JSON.stringify(sel)); } catch (err) {} }
-// Transición pura (sin DOM): un conjunto tapa las prendas; la corona y el
-// sombrero comparten la cabeza; cualquier prenda destapa el conjunto.
-function pzRopaSelToggle(sel, e) {
-  const s = { sombrero: sel.sombrero || null, anteojos: sel.anteojos || null, cuello: sel.cuello || null, extra: sel.extra || null, conjunto: sel.conjunto || null, corona: sel.corona || null };
-  if (e.cat === 'conjunto') { s.conjunto = (s.conjunto === e.nv ? null : e.nv); return s; }
-  if (s.conjunto) s.conjunto = null;
-  if (e.cat === 'corona') { if (s.corona === e.nv) s.corona = null; else { s.corona = e.nv; s.sombrero = null; } return s; }
-  if (e.cat === 'sombrero') s.corona = null;
-  s[e.cat] = (s[e.cat] === e.nv ? null : e.nv);
-  return s;
-}
-// Avance REAL al próximo nivel, sin número inventado: gate 1–4 del endpoint
-// (avance.hechos/total) o progreso del gate extendido 5–49 (gate.progreso_pct
-// del servidor, conteos reales + racha). Sin dato, null: la pantalla muestra
-// solo el nivel, nunca una barra falsa. En 50, llena (nivel máximo).
-function pzRopaAvance(nv) {
-  try {
-    if (!nv) return null;
-    const n = mxNvNum(nv);
-    if (n >= 50) return 100;
-    if (nv.avance && nv.avance.total > 0) return Math.max(0, Math.min(100, Math.round(100 * nv.avance.hechos / nv.avance.total)));
-    if (nv.gate && typeof nv.gate.progreso_pct === 'number' && isFinite(nv.gate.progreso_pct)) return Math.max(0, Math.min(100, Math.round(nv.gate.progreso_pct)));
-    return null;
-  } catch (err) { return null; }
-}
-// El momento del avance nombra la prenda desbloqueada; sin prenda (fuera de
-// 1–50), cae al premio/desbloqueo del servidor o al texto vigente.
-function pzRopaUnlock(nv, en) {
-  const n = (nv && typeof nv.nivel === 'number') ? nv.nivel : 0;
-  const nom = (n >= 1 && n <= 50) ? pzRopaNombre(n, en) : '';
-  if (nom) return (en ? 'Unlocked: ' : 'Desbloqueaste: ') + nom;
-  return (nv.premio_actual || nv.desbloqueo_actual || pzNivelUnlock(nv.nivel, en));
-}
-function pzRopaAvatarHTML() {
-  const sel = pzRopaSel();
-  let capas = '';
-  const img = (e) => `<img class="pz-ropa-capa-img" src="ropa/ropa-${String(e.nv).padStart(2, '0')}.png" alt="" aria-hidden="true">`;
-  if (sel.conjunto) { const e = pzRopaPorId(sel.conjunto); if (e) capas = img(e); }
-  else {
-    const orden = ['cuello', 'anteojos', 'sombrero', 'corona', 'extra'];
-    for (const k of orden) { if (sel[k]) { const e = pzRopaPorId(sel[k]); if (e) capas += img(e); } }
-  }
-  return `<img class="pz-ropa-cara" src="ai-avatar.png" alt="Posty">${capas}<span class="pz-ropa-spark" style="left:6%;top:8%">✦</span><span class="pz-ropa-spark" style="left:86%;top:16%;animation-delay:1.1s">✦</span><span class="pz-ropa-spark" style="left:90%;top:64%;animation-delay:2s">✦</span><span class="pz-ropa-spark" style="left:4%;top:70%;animation-delay:.6s">✦</span>`;
-}
-// ---------- PREMIOS-NOTIF (4/11): aviso de premio nuevo ----------
-// La tira salió de Inicio (v653): el premio nuevo avisa en el tab Nivel
-// del dock (badge con la cantidad) hasta que se abra Nivel, donde los
-// premios nuevos se marcan con «¡Nuevo!» y el aviso se limpia.
-// PZ_PREMIOS_NUEVOS = niveles no vistos según el servidor (badge).
-// PZ_PREMIOS_NUEVOS_MARCA = niveles a marcar ¡Nuevo! en ESTA visita a
-// Nivel (foto tomada al construir la vista; sobrevive al limpiado para
-// que las marcas no se borren al re-pintar la lista en la misma visita).
-let PZ_PREMIOS_NUEVOS = [];
-let PZ_PREMIOS_NUEVOS_MARCA = [];
-let PZ_PREMIOS_SYNC_VUELO = false;
-async function pzPremiosNuevosSync() {
-  if (PZ_PREMIOS_SYNC_VUELO) return;
-  PZ_PREMIOS_SYNC_VUELO = true;
-  try {
-    const r = await api.get('/api/oficina/premios-no-vistos');
-    if (r && r.ok && Array.isArray(r.niveles)) PZ_PREMIOS_NUEVOS = r.niveles;
-  } catch (e) {}
-  PZ_PREMIOS_SYNC_VUELO = false;
-  try {
-    const n = PZ_PREMIOS_NUEVOS.length;
-    document.querySelectorAll('.pz-premios-badge').forEach((el) => {
-      el.textContent = n > 0 ? String(n) : '';
-      el.classList.toggle('off', n === 0);
-    });
-  } catch (e) {}
-}
-// Al abrir Nivel: el servidor limpia los no vistos y el badge se apaga.
-// Solo se apaga si el POST tuvo éxito: si falló (sin red), el badge queda
-// y el próximo sync lo vuelve a mostrar.
-async function pzPremiosNuevosLimpiar() {
-  let ok = false;
-  try { const r = await api.post('/api/oficina/premios-vistos', {}); ok = !!(r && r.ok); } catch (e) {}
-  if (!ok) return;
-  PZ_PREMIOS_NUEVOS = [];
-  try {
-    document.querySelectorAll('.pz-premios-badge').forEach((el) => { el.textContent = ''; el.classList.add('off'); });
-  } catch (e) {}
-}
-function pzRopaListaHTML(nivel) {
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const nv = Math.max(1, Math.min(50, Number(nivel) || 1));
-  PZ_ROPA_NIVEL = nv;
-  const sel = pzRopaSel();
-  const puesto = (e) => (e.cat === 'conjunto' ? sel.conjunto === e.nv : sel[e.cat] === e.nv);
-  return PZ_ROPA.map((e) => {
-    const nom = en ? e.en : e.es;
-    if (e.nv > nv) return `<div class="pz-ropa-fila lock"><span class="pz-ropa-mini lock" aria-hidden="true">${pzIc('lock', 20)}</span><span class="pz-ropa-nom"><b>${esc(nom)}</b><span>${esc(en ? ('Unlocks at Level ' + e.nv) : ('Se desbloquea en el Nivel ' + e.nv))}</span></span></div>`;
-    const on = puesto(e);
-    const nuevo = (PZ_PREMIOS_NUEVOS_MARCA.indexOf(e.nv) >= 0) ? `<span class="pz-ropa-nuevo">✦ ${esc(en ? 'New!' : '¡Nuevo!')}</span>` : '';
-    const btn = on
-      ? `<button type="button" class="pz-ropa-btn puesto" onclick="pzRopaToggle(${e.nv})" aria-pressed="true">${esc(en ? 'Worn ✓' : 'Puesto ✓')}</button>`
-      : `<button type="button" class="pz-ropa-btn" onclick="pzRopaToggle(${e.nv})" aria-pressed="false">${esc(en ? 'Wear' : 'Ponerse')}</button>`;
-    return `<div class="pz-ropa-fila${on ? ' puesto' : ''}"><span class="pz-ropa-mini"><img src="ropa/ropa-${String(e.nv).padStart(2, '0')}-mini.png" alt="" aria-hidden="true"></span><span class="pz-ropa-nom"><b>${esc(nom)}</b><span>${esc(en ? ('Level ' + e.nv) : ('Nivel ' + e.nv))}</span>${nuevo}</span>${btn}</div>`;
-  }).join('');
-}
-function pzRopaPintar() {
-  try {
-    if (typeof document === 'undefined') return;
-    const av = document.getElementById('pzRopaAvatar');
-    if (av) av.innerHTML = pzRopaAvatarHTML();
-    const li = document.getElementById('pzRopaLista');
-    if (li) { const nv = Number(li.getAttribute('data-nivel') || PZ_ROPA_NIVEL || 1); li.innerHTML = pzRopaListaHTML(nv); }
-  } catch (err) {}
-}
-function pzRopaToggle(id) {
-  try {
-    const e = pzRopaPorId(id);
-    if (!e) return;
-    const nv = (typeof PZ_ROPA_NIVEL === 'number') ? PZ_ROPA_NIVEL : 1;
-    if (e.nv > nv) return;
-    pzRopaGuardar(pzRopaSelToggle(pzRopaSel(), e));
-    pzRopaPintar();
-  } catch (err) {}
-}
+let PZ_MOMENTO_REPLAY = {}; // nivel → {nombre_nivel} (render de historia; sin llamadores hoy)
 
-// (LOTE OFICINA ×50 · decisión Valentino 3/11 «arma todo»: cada nivel da
-// DOS cosas — 1 cosa para la oficina + 1 prenda de Posty (el guardarropa
-// vigente, PZ_ROPA, no se toca). La oficina se compone por capas SVG
-// locales en la pantalla Nivel, en el mismo lenguaje plano de las capas
-// del guardarropa: solo se dibujan los ítems desbloqueados (nv <= nivel
-// actual); lo bloqueado NO se dibuja (sin siluetas ni placeholders).
-// Escena 400×320: pared 0–200, piso 200–320. Cada ítem trae su rectángulo
-// (x,y,w,h) y su arte en caja local 100×100, salvo los de aire (full:1)
-// que traen arte en coordenadas de escena. z = orden de pintado.
-// Nada comprable, nada que toque precio, niveles ni guardarropa.)
-const PZ_OFICINA = [
-  { nv: 1, zona: 'base', es: 'Escritorio', en: 'Desk', z: 3, x: 104, y: 206, w: 192, h: 58, svg: '<rect x="0" y="0" width="100" height="14" rx="4" fill="#C98A4B"/><rect x="8" y="14" width="10" height="86" fill="#8A5A3B"/><rect x="82" y="14" width="10" height="86" fill="#8A5A3B"/>' },
-  { nv: 2, zona: 'base', es: 'Silla', en: 'Chair', z: 6, x: 168, y: 244, w: 64, h: 64, svg: '<rect x="18" y="0" width="64" height="46" rx="10" fill="#2793C8"/><rect x="8" y="46" width="84" height="12" rx="6" fill="#0A1E33"/><rect x="16" y="58" width="8" height="42" fill="#0A1E33"/><rect x="76" y="58" width="8" height="42" fill="#0A1E33"/>' },
-  { nv: 3, zona: 'base', es: 'Alfombra', en: 'Rug', z: 5, x: 96, y: 268, w: 208, h: 48, svg: '<ellipse cx="50" cy="50" rx="48" ry="22" fill="#7FB8D9"/><ellipse cx="50" cy="50" rx="36" ry="15" fill="none" stroke="#FEC14D" stroke-width="3"/>' },
-  { nv: 4, zona: 'base', es: 'Lámpara', en: 'Lamp', z: 2, x: 58, y: 116, w: 32, h: 84, svg: '<path d="M20 0h60l10 26H10Z" fill="#FEC14D"/><rect x="48" y="26" width="4" height="64" fill="#0A1E33"/><ellipse cx="50" cy="94" rx="20" ry="5" fill="#0A1E33"/>' },
-  { nv: 5, zona: 'base', es: 'Plantita', en: 'Little plant', z: 3, x: 116, y: 176, w: 32, h: 30, svg: '<path d="M30 55h40l-6 40H36Z" fill="#E8C48A"/><path d="M50 55Q50 25 32 18Q40 40 50 55Z" fill="#3E9B4F"/><path d="M50 55Q50 25 68 18Q60 40 50 55Z" fill="#5B8C5A"/>' },
-  { nv: 6, zona: 'base', es: 'Taza', en: 'Mug', z: 3, x: 242, y: 176, w: 40, h: 30, svg: '<rect x="20" y="30" width="52" height="52" rx="10" fill="#fff"/><path d="M72 40q20 6 0 28" fill="none" stroke="#fff" stroke-width="8"/><path d="M30 22q6-8 10 0M46 22q6-8 10 0" stroke="#B9D6E8" stroke-width="4" fill="none"/>' },
-  { nv: 7, zona: 'base', es: 'Laptop', en: 'Laptop', z: 3, x: 170, y: 168, w: 64, h: 38, svg: '<rect x="8" y="6" width="84" height="60" rx="6" fill="#0A1E33"/><rect x="16" y="14" width="68" height="44" fill="#BFE3F5"/><rect x="0" y="66" width="100" height="10" rx="5" fill="#8A97A3"/>' },
-  { nv: 8, zona: 'base', es: 'Cuaderno', en: 'Notebook', z: 3, x: 238, y: 224, w: 44, h: 30, svg: '<rect x="18" y="8" width="64" height="84" rx="6" fill="#FEC14D"/><rect x="28" y="20" width="44" height="6" fill="#fff" opacity=".8"/><rect x="28" y="36" width="44" height="6" fill="#fff" opacity=".6"/><rect x="28" y="52" width="44" height="6" fill="#fff" opacity=".6"/><circle cx="18" cy="24" r="4" fill="#0A1E33"/><circle cx="18" cy="44" r="4" fill="#0A1E33"/><circle cx="18" cy="64" r="4" fill="#0A1E33"/>' },
-  { nv: 9, zona: 'base', es: 'Pila de libros', en: 'Stack of books', z: 3, x: 118, y: 224, w: 44, h: 30, svg: '<rect x="10" y="66" width="80" height="14" rx="3" fill="#2793C8"/><rect x="14" y="50" width="72" height="14" rx="3" fill="#FEC14D"/><rect x="18" y="34" width="64" height="14" rx="3" fill="#3E9B4F"/>' },
-  { nv: 10, zona: 'base', es: 'Estante', en: 'Shelf', z: 2, x: 4, y: 100, w: 44, h: 100, svg: '<rect x="6" y="6" width="88" height="88" rx="6" fill="#C98A4B"/><rect x="12" y="46" width="76" height="6" fill="#8A5A3B"/><rect x="16" y="14" width="12" height="32" fill="#2793C8"/><rect x="32" y="18" width="12" height="28" fill="#FEC14D"/><rect x="48" y="12" width="12" height="34" fill="#3E9B4F"/><rect x="16" y="56" width="12" height="32" fill="#FF9EBB"/><rect x="32" y="60" width="12" height="28" fill="#fff"/>' },
-  { nv: 11, zona: 'creativo', es: 'Mood board', en: 'Mood board', z: 1, x: 168, y: 10, w: 104, h: 76, svg: '<rect x="4" y="4" width="92" height="92" rx="4" fill="#C9A06A"/><rect x="12" y="12" width="34" height="30" fill="#BFE3F5"/><rect x="52" y="12" width="34" height="30" fill="#FDEEC2"/><rect x="12" y="50" width="34" height="30" fill="#FFD9E4"/><rect x="52" y="50" width="34" height="30" fill="#D8ECF7"/><circle cx="29" cy="12" r="4" fill="#FEC14D"/><circle cx="69" cy="12" r="4" fill="#2793C8"/>' },
-  { nv: 12, zona: 'creativo', es: 'Fotos con chinches', en: 'Pinned photos', z: 1, x: 16, y: 12, w: 64, h: 72, svg: '<rect x="8" y="8" width="38" height="44" fill="#fff" transform="rotate(-6 27 30)"/><rect x="12" y="12" width="30" height="26" fill="#7FB8D9" transform="rotate(-6 27 30)"/><rect x="50" y="20" width="38" height="44" fill="#fff" transform="rotate(5 69 42)"/><rect x="54" y="24" width="30" height="26" fill="#FEC14D" transform="rotate(5 69 42)"/><rect x="28" y="60" width="38" height="30" fill="#fff"/><rect x="32" y="64" width="30" height="18" fill="#5B8C5A"/>' },
-  { nv: 13, zona: 'creativo', es: 'Paleta de colores', en: 'Color palette', z: 1, x: 92, y: 12, w: 64, h: 72, svg: '<rect x="8" y="8" width="28" height="28" fill="#2793C8"/><rect x="36" y="8" width="28" height="28" fill="#FEC14D"/><rect x="64" y="8" width="28" height="28" fill="#0A1E33"/><rect x="8" y="36" width="28" height="28" fill="#3E9B4F"/><rect x="36" y="36" width="28" height="28" fill="#FF9EBB"/><rect x="64" y="36" width="28" height="28" fill="#7FB8D9"/><rect x="8" y="64" width="28" height="28" fill="#FDEEC2"/><rect x="36" y="64" width="28" height="28" fill="#5B8C5A"/><rect x="64" y="64" width="28" height="28" fill="#fff"/>' },
-  { nv: 14, zona: 'creativo', es: 'Calendario de contenido', en: 'Content calendar', z: 1, x: 92, y: 94, w: 64, h: 64, svg: '<rect x="8" y="8" width="84" height="84" rx="6" fill="#fff"/><rect x="8" y="8" width="84" height="20" rx="6" fill="#2793C8"/><rect x="16" y="36" width="18" height="14" fill="#BFE3F5"/><rect x="40" y="36" width="18" height="14" fill="#FDEEC2"/><rect x="64" y="36" width="18" height="14" fill="#BFE3F5"/><rect x="16" y="56" width="18" height="14" fill="#FDEEC2"/><rect x="40" y="56" width="18" height="14" fill="#FEC14D"/><rect x="64" y="56" width="18" height="14" fill="#BFE3F5"/><rect x="16" y="74" width="18" height="12" fill="#BFE3F5"/><rect x="40" y="74" width="18" height="12" fill="#BFE3F5"/><rect x="64" y="74" width="18" height="12" fill="#FDEEC2"/>' },
-  { nv: 15, zona: 'creativo', es: 'Aro de luz', en: 'Ring light', z: 4, x: 8, y: 208, w: 52, h: 52, svg: '<circle cx="50" cy="38" r="30" fill="none" stroke="#fff" stroke-width="10"/><circle cx="50" cy="38" r="30" fill="none" stroke="#FEC14D" stroke-width="3" opacity=".6"/><rect x="47" y="68" width="6" height="28" fill="#0A1E33"/><ellipse cx="50" cy="97" rx="14" ry="3" fill="#0A1E33"/>' },
-  { nv: 16, zona: 'creativo', es: 'Cámara', en: 'Camera', z: 4, x: 60, y: 200, w: 40, h: 30, svg: '<rect x="8" y="28" width="84" height="48" rx="10" fill="#0A1E33"/><circle cx="50" cy="52" r="18" fill="#2793C8"/><circle cx="50" cy="52" r="9" fill="#0A1E33"/><rect x="34" y="18" width="32" height="10" rx="3" fill="#0A1E33"/>' },
-  { nv: 17, zona: 'creativo', es: 'Trípode', en: 'Tripod', z: 4, x: 56, y: 228, w: 48, h: 36, svg: '<rect x="38" y="0" width="24" height="12" rx="3" fill="#0A1E33"/><path d="M50 12L22 96M50 12L78 96M50 12L50 96" stroke="#0A1E33" stroke-width="7" stroke-linecap="round"/>' },
-  { nv: 18, zona: 'creativo', es: 'Micrófono', en: 'Microphone', z: 4, x: 296, y: 210, w: 30, h: 54, svg: '<rect x="34" y="4" width="32" height="44" rx="16" fill="#0A1E33"/><path d="M26 48Q50 66 74 48" fill="none" stroke="#0A1E33" stroke-width="5"/><rect x="47" y="64" width="6" height="30" fill="#0A1E33"/><ellipse cx="50" cy="96" rx="14" ry="3" fill="#0A1E33"/>' },
-  { nv: 19, zona: 'creativo', es: 'Auriculares', en: 'Headphones', z: 7, x: 248, y: 244, w: 32, h: 22, svg: '<path d="M14 62Q14 8 50 8Q86 8 86 62" fill="none" stroke="#0A1E33" stroke-width="10"/><rect x="6" y="56" width="22" height="34" rx="10" fill="#2793C8"/><rect x="72" y="56" width="22" height="34" rx="10" fill="#2793C8"/>' },
-  { nv: 20, zona: 'creativo', es: 'Vinilo', en: 'Vinyl', z: 7, x: 296, y: 268, w: 44, h: 44, svg: '<circle cx="50" cy="50" r="46" fill="#141414"/><circle cx="50" cy="50" r="18" fill="#FEC14D"/><circle cx="50" cy="50" r="4" fill="#fff"/>' },
-  { nv: 21, zona: 'estudio', es: 'Parlante', en: 'Speaker', z: 4, x: 340, y: 214, w: 48, h: 48, svg: '<rect x="22" y="4" width="56" height="92" rx="10" fill="#0A1E33"/><circle cx="50" cy="30" r="12" fill="#2793C8"/><circle cx="50" cy="66" r="18" fill="#2793C8"/><circle cx="50" cy="66" r="7" fill="#0A1E33"/>' },
-  { nv: 22, zona: 'estudio', es: 'Cafetera', en: 'Coffee maker', z: 7, x: 8, y: 268, w: 44, h: 44, svg: '<rect x="22" y="8" width="44" height="60" rx="8" fill="#fff" stroke="#D8ECF7" stroke-width="3"/><rect x="30" y="68" width="40" height="22" rx="6" fill="#8A5A3B"/><path d="M66 22q18 6 0 26" fill="none" stroke="#0A1E33" stroke-width="6"/>' },
-  { nv: 23, zona: 'estudio', es: 'Reloj', en: 'Clock', z: 1, x: 284, y: 94, w: 48, h: 64, svg: '<circle cx="50" cy="50" r="44" fill="#fff" stroke="#0A1E33" stroke-width="6"/><path d="M50 50L50 22M50 50L70 60" stroke="#0A1E33" stroke-width="6" stroke-linecap="round"/><circle cx="50" cy="50" r="5" fill="#FEC14D"/>' },
-  { nv: 24, zona: 'estudio', es: 'Póster', en: 'Poster', z: 1, x: 16, y: 94, w: 64, h: 64, svg: '<rect x="10" y="4" width="80" height="92" rx="4" fill="#2793C8"/><text x="50" y="52" font-size="30" text-anchor="middle" fill="#FEC14D">✦</text><rect x="24" y="66" width="52" height="6" fill="#fff" opacity=".8"/><rect x="32" y="78" width="36" height="6" fill="#fff" opacity=".6"/>' },
-  { nv: 25, zona: 'estudio', es: 'Guirnalda de luces', en: 'String lights', z: 8, full: 1, svg: '<path d="M0 6Q100 34 200 6Q300 34 400 6" fill="none" stroke="#8A5A3B" stroke-width="2"/><circle cx="50" cy="18" r="5" fill="#FEC14D"/><circle cx="150" cy="18" r="5" fill="#2793C8"/><circle cx="250" cy="18" r="5" fill="#FEC14D"/><circle cx="350" cy="18" r="5" fill="#2793C8"/>', mini: '<path d="M0 20Q50 44 100 20" fill="none" stroke="#8A5A3B" stroke-width="3"/><circle cx="25" cy="30" r="7" fill="#FEC14D"/><circle cx="75" cy="30" r="7" fill="#2793C8"/>' },
-  { nv: 26, zona: 'estudio', es: 'Monstera', en: 'Monstera', z: 2, x: 96, y: 160, w: 44, h: 40, svg: '<path d="M30 62h40l-6 34H36Z" fill="#E8C48A"/><path d="M50 62Q30 40 22 18Q44 26 50 62Z" fill="#3E9B4F"/><path d="M50 62Q70 40 78 18Q56 26 50 62Z" fill="#5B8C5A"/><path d="M50 62Q50 34 50 10" stroke="#2E7D32" stroke-width="4"/>' },
-  { nv: 27, zona: 'estudio', es: 'Bambú', en: 'Bamboo', z: 2, x: 292, y: 158, w: 30, h: 42, svg: '<path d="M32 62h36l-5 34H37Z" fill="#E8C48A"/><rect x="44" y="8" width="6" height="54" fill="#5B8C5A"/><rect x="56" y="16" width="6" height="46" fill="#3E9B4F"/><path d="M47 20l-16-8M59 28l16-8" stroke="#3E9B4F" stroke-width="4"/>' },
-  { nv: 28, zona: 'estudio', es: 'Segundo estante', en: 'Second shelf', z: 2, x: 64, y: 96, w: 36, h: 12, svg: '<rect x="4" y="70" width="92" height="8" rx="3" fill="#8A5A3B"/><rect x="14" y="30" width="14" height="40" fill="#2793C8"/><rect x="32" y="36" width="14" height="34" fill="#FEC14D"/><rect x="50" y="26" width="14" height="44" fill="#3E9B4F"/><rect x="68" y="40" width="14" height="30" fill="#FF9EBB"/>' },
-  { nv: 29, zona: 'estudio', es: 'Cojines', en: 'Cushions', z: 6, x: 176, y: 252, w: 48, h: 30, svg: '<rect x="4" y="30" width="42" height="42" rx="12" fill="#FEC14D"/><rect x="52" y="22" width="42" height="42" rx="12" fill="#2793C8"/>' },
-  { nv: 30, zona: 'estudio', es: 'Muro de plantas', en: 'Plant wall', z: 1, x: 16, y: 164, w: 64, h: 28, svg: '<rect x="2" y="60" width="96" height="12" rx="4" fill="#8A5A3B"/><path d="M20 60Q14 34 24 22Q30 44 20 60Z" fill="#3E9B4F"/><path d="M50 60Q44 30 54 18Q60 44 50 60Z" fill="#5B8C5A"/><path d="M80 60Q74 34 84 22Q90 44 80 60Z" fill="#3E9B4F"/>' },
-  { nv: 31, zona: 'pro', es: 'Biblioteca', en: 'Bookcase', z: 2, x: 348, y: 100, w: 44, h: 100, svg: '<rect x="4" y="2" width="92" height="96" rx="4" fill="#8A5A3B"/><rect x="10" y="30" width="80" height="5" fill="#5B3A24"/><rect x="10" y="62" width="80" height="5" fill="#5B3A24"/><rect x="14" y="8" width="10" height="22" fill="#2793C8"/><rect x="28" y="12" width="10" height="18" fill="#FEC14D"/><rect x="42" y="8" width="10" height="22" fill="#3E9B4F"/><rect x="14" y="38" width="10" height="24" fill="#FF9EBB"/><rect x="28" y="42" width="10" height="20" fill="#fff"/><rect x="42" y="36" width="10" height="26" fill="#2793C8"/><rect x="14" y="70" width="10" height="24" fill="#5B8C5A"/><rect x="28" y="70" width="10" height="24" fill="#FEC14D"/>' },
-  { nv: 32, zona: 'pro', es: 'Silla de director', en: 'Director chair', z: 6, x: 240, y: 246, w: 48, h: 62, svg: '<rect x="16" y="0" width="68" height="52" rx="8" fill="#0A1E33"/><text x="50" y="34" font-size="24" text-anchor="middle" fill="#FEC14D">✦</text><rect x="8" y="52" width="84" height="10" rx="5" fill="#8A5A3B"/><rect x="16" y="62" width="8" height="38" fill="#0A1E33"/><rect x="76" y="62" width="8" height="38" fill="#0A1E33"/>' },
-  { nv: 33, zona: 'pro', es: 'Cartel de estrella neón', en: 'Neon star sign', z: 1, x: 168, y: 94, w: 104, h: 56, svg: '<text x="50" y="58" font-size="44" text-anchor="middle" fill="#FEC14D">✦</text><circle cx="50" cy="44" r="40" fill="none" stroke="#FEC14D" stroke-width="2" opacity=".35"/>' },
-  { nv: 34, zona: 'pro', es: 'Pared de discos', en: 'Record wall', z: 7, x: 348, y: 268, w: 44, h: 44, svg: '<circle cx="26" cy="62" r="30" fill="#141414"/><circle cx="26" cy="62" r="10" fill="#2793C8"/><circle cx="56" cy="62" r="30" fill="#141414"/><circle cx="56" cy="62" r="10" fill="#FEC14D"/><circle cx="82" cy="62" r="26" fill="#141414"/><circle cx="82" cy="62" r="9" fill="#fff"/>' },
-  { nv: 35, zona: 'pro', es: 'Segunda cámara', en: 'Second camera', z: 4, x: 348, y: 200, w: 32, h: 14, svg: '<rect x="10" y="24" width="80" height="52" rx="10" fill="#5B8C5A"/><circle cx="50" cy="50" r="16" fill="#0A1E33"/><circle cx="50" cy="50" r="7" fill="#BFE3F5"/><circle cx="82" cy="30" r="5" fill="#FEC14D"/>' },
-  { nv: 36, zona: 'pro', es: 'Caja de luz', en: 'Lightbox', z: 3, x: 150, y: 172, w: 18, h: 34, svg: '<rect x="22" y="4" width="56" height="92" rx="6" fill="#fff" stroke="#D8ECF7" stroke-width="3"/><text x="50" y="56" font-size="30" text-anchor="middle" fill="#FEC14D">✦</text><rect x="32" y="68" width="36" height="6" fill="#BFE3F5"/>' },
-  { nv: 37, zona: 'pro', es: 'Pared de bocetos', en: 'Sketch wall', z: 1, x: 168, y: 164, w: 104, h: 28, svg: '<rect x="4" y="10" width="28" height="80" fill="#fff" transform="rotate(-4 18 50)"/><rect x="36" y="10" width="28" height="80" fill="#fff" transform="rotate(3 50 50)"/><rect x="68" y="10" width="28" height="80" fill="#fff" transform="rotate(-2 82 50)"/><circle cx="18" cy="10" r="3" fill="#FEC14D"/><circle cx="50" cy="10" r="3" fill="#2793C8"/><circle cx="82" cy="10" r="3" fill="#FEC14D"/>' },
-  { nv: 38, zona: 'pro', es: 'Trofeo chico', en: 'Little trophy', z: 2, x: 292, y: 76, w: 16, h: 18, svg: '<path d="M30 14h40v18q0 16-20 16Q30 48 30 32Z" fill="#FEC14D"/><path d="M30 18q-12 2-8 16M70 18q12 2 8 16" fill="none" stroke="#DBA453" stroke-width="5"/><rect x="38" y="56" width="24" height="8" fill="#8A5A3B"/><rect x="30" y="64" width="40" height="10" rx="3" fill="#8A5A3B"/><rect x="44" y="48" width="12" height="8" fill="#DBA453"/>' },
-  { nv: 39, zona: 'pro', es: 'Árbol en maceta grande', en: 'Big potted tree', z: 7, x: 60, y: 268, w: 44, h: 44, svg: '<path d="M28 66h44l-6 30H34Z" fill="#E8C48A"/><circle cx="50" cy="30" r="28" fill="#3E9B4F"/><circle cx="32" cy="42" r="16" fill="#5B8C5A"/><circle cx="68" cy="42" r="16" fill="#5B8C5A"/>' },
-  { nv: 40, zona: 'pro', es: 'Cortina + ventana con sol', en: 'Curtain + sunny window', z: 1, x: 284, y: 8, w: 100, h: 86, svg: '<rect x="6" y="2" width="88" height="96" rx="4" fill="#BFE3F5"/><circle cx="70" cy="26" r="14" fill="#FEC14D"/><path d="M6 50h88M50 2v96" stroke="#fff" stroke-width="6"/><path d="M0 0h14v98H0Z" fill="#FDF3DC"/><path d="M86 0h14v98H86Z" fill="#FDF3DC"/>' },
-  { nv: 41, zona: 'maestro', es: 'Lámpara dorada', en: 'Golden lamp', z: 2, x: 340, y: 84, w: 36, h: 16, svg: '<path d="M20 20h60l8 22H12Z" fill="#FEC14D"/><rect x="47" y="42" width="6" height="30" fill="#DBA453"/><ellipse cx="50" cy="76" rx="22" ry="6" fill="#DBA453"/><text x="50" y="38" font-size="16" text-anchor="middle" fill="#fff">✦</text>' },
-  { nv: 42, zona: 'maestro', es: 'Libros dorados', en: 'Golden books', z: 2, x: 378, y: 88, w: 18, h: 12, svg: '<rect x="6" y="64" width="88" height="14" rx="3" fill="#FEC14D"/><rect x="10" y="48" width="80" height="14" rx="3" fill="#DBA453"/><rect x="14" y="32" width="72" height="14" rx="3" fill="#FEC14D"/>' },
-  { nv: 43, zona: 'maestro', es: 'Marco dorado', en: 'Golden frame', z: 1, x: 92, y: 164, w: 64, h: 28, svg: '<rect x="18" y="6" width="64" height="88" rx="4" fill="#FEC14D"/><rect x="26" y="14" width="48" height="72" fill="#FDF3DC"/><text x="50" y="56" font-size="26" text-anchor="middle" fill="#DBA453">✦</text>' },
-  { nv: 44, zona: 'maestro', es: 'Bambú dorado', en: 'Golden bamboo', z: 2, x: 324, y: 158, w: 24, h: 42, svg: '<path d="M32 62h36l-5 34H37Z" fill="#DBA453"/><rect x="44" y="8" width="6" height="54" fill="#FEC14D"/><rect x="56" y="16" width="6" height="46" fill="#DBA453"/><path d="M47 20l-16-8M59 28l16-8" stroke="#FEC14D" stroke-width="4"/>' },
-  { nv: 45, zona: 'maestro', es: 'Globos dorados', en: 'Golden balloons', z: 8, full: 1, svg: '<ellipse cx="40" cy="26" rx="18" ry="22" fill="#FEC14D"/><ellipse cx="66" cy="20" rx="16" ry="20" fill="#DBA453"/><ellipse cx="330" cy="24" rx="18" ry="22" fill="#FEC14D"/><ellipse cx="358" cy="18" rx="16" ry="20" fill="#DBA453"/><path d="M40 48Q40 60 40 66M330 46Q330 58 330 64" stroke="#8A97A3" stroke-width="1.5"/>', mini: '<ellipse cx="36" cy="40" rx="26" ry="32" fill="#FEC14D"/><ellipse cx="66" cy="34" rx="22" ry="28" fill="#DBA453"/>' },
-  { nv: 46, zona: 'maestro', es: 'Confeti', en: 'Confetti', z: 8, full: 1, svg: '<text x="20" y="140" font-size="14" fill="#FEC14D">✦</text><text x="120" y="60" font-size="12" fill="#2793C8">✦</text><text x="210" y="180" font-size="14" fill="#FEC14D">✦</text><text x="300" y="120" font-size="12" fill="#2793C8">✦</text><text x="370" y="220" font-size="14" fill="#FEC14D">✦</text><rect x="60" y="200" width="8" height="4" fill="#FEC14D" transform="rotate(24 64 202)"/><rect x="180" y="40" width="8" height="4" fill="#2793C8" transform="rotate(-18 184 42)"/><rect x="260" y="260" width="8" height="4" fill="#FEC14D" transform="rotate(30 264 262)"/>', mini: '<text x="30" y="50" font-size="26" fill="#FEC14D">✦</text><text x="60" y="70" font-size="20" fill="#2793C8">✦</text><rect x="20" y="70" width="10" height="5" fill="#FEC14D"/>' },
-  { nv: 47, zona: 'maestro', es: 'Silla Maestro', en: 'Master chair', z: 6, x: 108, y: 246, w: 52, h: 62, svg: '<rect x="16" y="0" width="68" height="52" rx="8" fill="#FEC14D"/><text x="50" y="36" font-size="26" text-anchor="middle" fill="#fff">✦</text><rect x="8" y="52" width="84" height="10" rx="5" fill="#DBA453"/><rect x="16" y="62" width="8" height="38" fill="#8A5A3B"/><rect x="76" y="62" width="8" height="38" fill="#8A5A3B"/>' },
-  { nv: 48, zona: 'maestro', es: 'Diploma enmarcado en dorado', en: 'Gold-framed diploma', z: 1, x: 284, y: 164, w: 60, h: 28, svg: '<rect x="4" y="14" width="92" height="72" rx="4" fill="#DBA453"/><rect x="10" y="20" width="80" height="60" fill="#FDF3DC"/><text x="50" y="50" font-size="20" text-anchor="middle" fill="#DBA453">✦</text><rect x="32" y="60" width="36" height="5" fill="#DBA453" opacity=".6"/><rect x="38" y="70" width="24" height="4" fill="#DBA453" opacity=".4"/>' },
-  { nv: 49, zona: 'maestro', es: 'Trofeo dorado grande', en: 'Big golden trophy', z: 2, x: 380, y: 78, w: 16, h: 22, svg: '<path d="M26 8h48v20q0 22-24 22Q26 50 26 28Z" fill="#FEC14D"/><path d="M26 14q-14 2-10 20M74 14q14 2 10 20" fill="none" stroke="#DBA453" stroke-width="6"/><rect x="38" y="62" width="24" height="10" fill="#DBA453"/><rect x="28" y="72" width="44" height="12" rx="3" fill="#DBA453"/><rect x="42" y="50" width="16" height="12" fill="#DBA453"/><text x="50" y="32" font-size="18" text-anchor="middle" fill="#fff">✦</text>' },
-  { nv: 50, zona: 'maestro', es: 'Corona dorada en exhibición', en: 'Golden crown on display', z: 7, x: 196, y: 294, w: 28, h: 22, svg: '<path d="M10 62L20 8L40 40L50 12L60 40L80 8L90 62Z" fill="#FEC14D"/><rect x="10" y="62" width="80" height="12" fill="#DBA453"/><text x="50" y="40" font-size="18" text-anchor="middle" fill="#fff">✦</text><ellipse cx="50" cy="88" rx="48" ry="8" fill="#7FB8D9"/>' },
-];
-const PZ_OFICINA_MAESTRO = '<g><rect x="0" y="100" width="10" height="220" fill="#FEC14D"/><rect x="4" y="100" width="3" height="220" fill="#DBA453"/><rect x="390" y="100" width="10" height="220" fill="#FEC14D"/><rect x="393" y="100" width="3" height="220" fill="#DBA453"/><text x="22" y="130" font-size="16" fill="#FEC14D">✦</text><text x="372" y="150" font-size="16" fill="#FEC14D">✦</text></g>';
-function pzOficinaPorNivel(n) { for (let i = 0; i < PZ_OFICINA.length; i++) if (PZ_OFICINA[i].nv === n) return PZ_OFICINA[i]; return null; }
-function pzOficinaNombre(nivel, en) { const e = pzOficinaPorNivel(Math.max(1, Math.min(50, Number(nivel) || 1))); return e ? (en ? e.en : e.es) : ''; }
-function pzOficinaDesbloqueados(nivel) { const nv = Math.max(0, Math.min(50, Number(nivel) || 0)); return PZ_OFICINA.filter((e) => e.nv <= nv); }
-function pzOficinaEscenaHTML(nivel) {
-  const nv = Math.max(0, Math.min(50, Number(nivel) || 0));
-  const items = pzOficinaDesbloqueados(nv).slice().sort((a, b) => (a.z - b.z) || (a.nv - b.nv));
-  let capas = '';
-  for (const e of items) { if (e.full) capas += e.svg; else capas += '<g transform="translate(' + e.x + ' ' + e.y + ') scale(' + (e.w / 100) + ' ' + (e.h / 100) + ')">' + e.svg + '</g>'; }
-  const base = '<rect x="0" y="0" width="400" height="200" fill="#FDF3DC"/><rect x="0" y="196" width="400" height="4" fill="#fff" opacity=".6"/><rect x="0" y="200" width="400" height="120" fill="#D9A066"/><path d="M0 230h400M0 260h400M0 290h400" stroke="#B97A3E" stroke-width="1" opacity=".5"/>';
-  const maestro = (nv >= 50) ? PZ_OFICINA_MAESTRO : '';
-  return '<div class="pz-oficina-escena"><svg viewBox="0 0 400 320" role="img" aria-label="office">' + base + capas + maestro + '</svg></div>';
-}
-function pzOficinaListaHTML(nivel) {
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const nv = Math.max(0, Math.min(50, Number(nivel) || 0));
-  return PZ_OFICINA.map((e) => {
-    const nom = en ? e.en : e.es;
-    if (e.nv > nv) return '<div class="pz-oficina-fila lock"><span class="pz-oficina-mini lock" aria-hidden="true">' + pzIc('lock', 22) + '</span><span class="pz-oficina-nom"><b>' + esc(nom) + '</b><span>' + esc(en ? ('Unlocks at Level ' + e.nv) : ('Se desbloquea en el Nivel ' + e.nv)) + '</span></span></div>';
-    const nuevo = (PZ_PREMIOS_NUEVOS_MARCA.indexOf(e.nv) >= 0) ? '<span class="pz-oficina-nuevo">✦ ' + esc(en ? 'New!' : '¡Nuevo!') + '</span>' : '';
-    const mini = e.full ? (e.mini || '') : e.svg;
-    return '<div class="pz-oficina-fila"><span class="pz-oficina-mini"><svg viewBox="0 0 100 100" aria-hidden="true">' + mini + '</svg></span><span class="pz-oficina-nom"><b>' + esc(nom) + '</b><span>' + esc(en ? ('Level ' + e.nv) : ('Nivel ' + e.nv)) + '</span>' + nuevo + '</span></div>';
-  }).join('');
-}
-function pzOficinaSeccionHTML(nivel) {
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const nv = Math.max(0, Math.min(50, Number(nivel) || 0));
-  const of = pzOficinaPorNivel(nv);
-  const rp = (typeof pzRopaPorNivel === 'function') ? pzRopaPorNivel(nv) : null;
-  const nomOf = of ? (en ? of.en : of.es) : '';
-  const nomRp = rp ? (en ? rp.en : rp.es) : '';
-  let nuevo = '';
-  if (nv >= 50) { nuevo = '<p class="pz-oficina-nuevo">' + esc(en ? 'Master office: 50 office items + 50 garments.' : 'Oficina Maestro: 50 cosas + 50 prendas.') + '</p>'; }
-  else if (nv >= 1 && (nomOf || nomRp)) { nuevo = '<p class="pz-oficina-nuevo">' + esc(en ? 'This level: ' : 'En este nivel: ') + esc(nomOf) + (nomRp ? ' + ' + esc(nomRp) : '') + '</p>'; }
-  return '<section class="pz-oficina"><h2>' + esc(en ? 'Your office' : 'Tu oficina') + '</h2>' + nuevo + pzOficinaEscenaHTML(nv) + '<div class="pz-oficina-lista">' + pzOficinaListaHTML(nv) + '</div></section>';
-}
-// FIN LOTE OFICINA ×50
-
-// (LOTE NIVEL-MISIONES-RACHA · decisión Valentino 7/11: la gamificación se
-// llama Nivel, con misiones diarias y la racha visible. La racha es la REAL
-// del ritual (días seguidos eligiendo el posteo, /api/ritual/hoy). Las
-// misiones salen de datos REALES del servidor — la misión de foto de la
-// semana (/api/photo-mission), el reel programado de la semana (/api/posts)
-// y los videos ya subidos (/api/assets) — y cada una vale el XP REAL que su
-// posteo gana al publicarse (100 post / 150 reel, la misma regla de
-// /api/avatar-level). Sin dato, no hay misión ni racha: nunca un número
-// inventado. Las misiones alimentan LA MISMA progresión del jardín (el
-// nivel sube solo con posteos, decisión 4/11): no hay XP paralelo.
-// La misión de responder un comentario NO vive acá a propósito: /api/comments
-// no nombra el posteo ni suma XP (responder no publica), así que no se puede
-// prometer una XP ni un posteo concreto sin inventar; sigue donde ya vive
-// (el aviso del chat + la vista de comentarios).
+// (LOTE NIVEL-MISIONES-RACHA · decisión Valentino 7/11 + R5 8/11: la
+// gamificación se llama Nivel, con misiones diarias y la racha visible.
+// La racha es la REAL del ritual (días seguidos eligiendo el posteo,
+// /api/ritual/hoy). Las misiones salen de datos REALES del servidor —
+// la misión de foto de la semana (/api/photo-mission), el reel
+// programado de la semana (/api/posts), los videos ya subidos
+// (/api/assets) y los comentarios pendientes con borrador
+// (/api/comments) — y cada una vale el XP REAL de su acción (foto 40,
+// video 60, respuesta 25, la misma regla de /api/avatar-level). Sin
+// dato, no hay misión ni racha: nunca un número inventado. Ninguna
+// misión suma XP sin la acción real (foto/video solo al mandarse,
+// comentario solo al responderse de verdad): la XP la da el servidor
+// por el hecho, nunca el cliente.
 function pzNivelDiaSemana(fecha, en, tz) {
   // Día de semana de una fecha, en la zona de la cuenta. El formato local
   // del Schedule (YYYY-MM-DD HH:MM, 16) ya trae la fecha de la cuenta:
@@ -2353,28 +1970,29 @@ function pzNivelNeedEn(need) {
   if (m) return 'a photo of your ' + m[1];
   return n;
 }
-function pzNivelRachaHTML(ritualHoy) {
-  // Racha REAL del ritual (días seguidos eligiendo el posteo). Sin dato,
+function pzNivelRachaCardHTML(ritualHoy, en) {
+  // Racha REAL del ritual (días seguidos eligiendo el posteo) + sus dos
+  // metas de una sola vez (30 días +150 XP, 100 días +300 XP). Sin dato,
   // nada: nunca un número inventado.
   try {
     if (!ritualHoy || typeof ritualHoy.racha !== 'number') return '';
-    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
     const n = Math.max(0, Math.floor(ritualHoy.racha));
-    const txt = n > 0
-      ? (en ? (n + ' day' + (n === 1 ? '' : 's') + ' in a row') : (n + ' día' + (n === 1 ? '' : 's') + ' seguidos'))
-      : (en ? 'Your streak starts today' : 'Hoy empieza tu racha');
-    const sub = n > 0
-      ? (en ? 'Picking your post every morning keeps it alive.' : 'Elegir tu posteo cada mañana la mantiene viva.')
-      : (en ? 'Pick today’s post and the streak begins.' : 'Elegí el posteo de hoy y la racha empieza.');
-    return '<div class="pz-nivel-racha"><span class="pz-nivel-racha-num" aria-hidden="true">🔥</span><div class="pz-nivel-racha-tx"><b>' + esc(txt) + '</b><span>' + esc(sub) + '</span></div></div>';
+    const tit = n === 0
+      ? (en ? 'Your streak starts today' : 'Hoy empieza tu racha')
+      : (en ? (n + ' day' + (n === 1 ? '' : 's') + ' posting in a row') : ('Racha de ' + n + ' días publicando'));
+    const meta30 = en ? '30 days in a row: +150 XP' : '30 días seguidos: +150 XP';
+    const meta100 = en ? '100 days in a row: +300 XP' : '100 días seguidos: +300 XP';
+    return '<section class="pz-nivel-racha"><span class="pz-nivel-racha-num" aria-hidden="true">🔥</span><div class="pz-nivel-racha-tx"><b>' + esc(tit) + '</b><span>' + esc(meta30) + '</span><span>' + esc(meta100) + '</span></div></section>';
   } catch (e) { return ''; }
 }
 function pzNivelMisionesHTML(d) {
-  // Misiones de hoy, solo de datos reales. 1–2 como mucho: la foto de la
-  // semana (si falta) y el video para el reel de la semana (si hay reel y
-  // falta video). Cada una vale el XP REAL que su posteo gana al
-  // publicarse (100 post / 150 reel, /api/avatar-level). Sin dato, no
-  // hay misión. El botón lleva al chat, donde vive el álbum para subir.
+  // Misiones de hoy, solo de datos reales. La foto de la semana (si
+  // falta), el video para el reel de la semana (si hay reel y falta
+  // video) y responder un comentario pendiente con borrador (si hay
+  // uno). Cada una vale el XP REAL que su acción gana al hacerse de
+  // verdad (foto 40, video 60, respuesta 25). Sin dato, no hay misión.
+  // Los botones abren el picker real del chat (foto/video) o mandan la
+  // respuesta de verdad (comentario): nunca un aviso solo.
   try {
     const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
     const items = [];
@@ -2388,11 +2006,11 @@ function pzNivelMisionesHTML(d) {
       const det = hecho
         ? (en ? 'Posty turns it into a post this week.' : 'Posty la convierte en un posteo de tu semana.')
         : (en ? 'How: from your album in the chat — Posty turns it into a post this week.' : 'Cómo: desde tu álbum en el chat — Posty la convierte en un posteo de tu semana.');
-      items.push('<div class="pz-mision' + (hecho ? ' hecho' : '') + '">'
+      items.push('<div class="pz-nivel-mision' + (hecho ? ' hecho' : '') + '">'
         + '<span class="pz-mision-ic" aria-hidden="true">📸</span>'
         + '<div class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></div>'
         + '<div class="pz-mision-accion"><span class="pz-mision-xp">+40 XP</span>'
-        + (hecho ? '<span class="pz-mision-ok" aria-hidden="true">✓</span>' : '<button type="button" class="pz-mision-btn" onclick="bbGo(\'#/app/chat\')">' + esc(en ? 'Upload' : 'Subir') + '</button>')
+        + (hecho ? '<span class="pz-mision-ok" aria-hidden="true">✓</span>' : '<button type="button" class="pz-mision-btn" onclick="pzSftFotoAlChat()">' + esc(en ? 'Upload' : 'Subir') + '</button>')
         + '</div></div>');
     }
     const reel = pzNivelReelSemana(d && d.posts);
@@ -2402,84 +2020,200 @@ function pzNivelMisionesHTML(d) {
       const para = dia ? (en ? 'the ' + dia + ' reel' : 'el reel del ' + dia) : (en ? 'this week’s reel' : 'tu reel de esta semana');
       const tit = hecho
         ? (en ? 'Video uploaded!' : '¡Video subido!')
-        : (en ? 'Record 15 seconds at your shop' : 'Grabá 15 segundos en tu local');
+        : (en ? 'Record 15 seconds' : 'Grabá 15 segundos');
       const det = hecho
         ? (en ? 'It goes to your reel.' : 'Va para tu reel.')
         : (en ? 'How: record it on your phone — Posty turns it into ' + para + '.' : 'Cómo: grabalo con el celu — Posty lo convierte en ' + para + '.');
-      items.push('<div class="pz-mision' + (hecho ? ' hecho' : '') + '">'
+      items.push('<div class="pz-nivel-mision' + (hecho ? ' hecho' : '') + '">'
         + '<span class="pz-mision-ic" aria-hidden="true">🎬</span>'
         + '<div class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></div>'
         + '<div class="pz-mision-accion"><span class="pz-mision-xp">+60 XP</span>'
-        + (hecho ? '<span class="pz-mision-ok" aria-hidden="true">✓</span>' : '<button type="button" class="pz-mision-btn" onclick="bbGo(\'#/app/chat\')">' + esc(en ? 'Record' : 'Grabar') + '</button>')
+        + (hecho ? '<span class="pz-mision-ok" aria-hidden="true">✓</span>' : '<button type="button" class="pz-mision-btn" onclick="pzDockMasVideo()">' + esc(en ? 'Record' : 'Grabar') + '</button>')
+        + '</div></div>');
+    }
+    const lista = Array.isArray(d && d.comments) ? d.comments : [];
+    let pendiente = null;
+    for (const c of lista) {
+      if (c && c.status === 'pending' && c.suggested) { pendiente = c; break; }
+    }
+    if (pendiente) {
+      const tit = en ? 'Answer a comment' : 'Respondé un comentario';
+      const de = (en ? 'From ' : 'De ') + (pendiente.username || '');
+      items.push('<div class="pz-nivel-mision">'
+        + '<span class="pz-mision-ic" aria-hidden="true">💬</span>'
+        + '<div class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(de) + '</span></div>'
+        + '<div class="pz-mision-accion"><span class="pz-mision-xp">+25 XP</span></div>'
+        + '<div class="pz-mision-comentario"><p class="pz-mision-original">«' + esc(pendiente.text || '') + '»</p>'
+        + '<p class="pz-mision-borrador">' + esc(pendiente.suggested || '') + '</p>'
+        + '<button type="button" class="pz-mision-btn" data-pz-draft="' + esc(pendiente.suggested || '') + '" onclick="pzNivelEnviarRespuesta(' + pendiente.id + ', this)">' + esc(en ? 'Send the reply' : 'Enviar la respuesta') + '</button>'
         + '</div></div>');
     }
     if (!items.length) return '';
     const tit = en ? 'Today’s missions' : 'Misiones de hoy';
-    const sub = en ? 'Only you can do these — each one earns XP when its post goes live.' : 'Solo vos podés hacer estas — cada una suma XP cuando su posteo sale.';
+    const sub = en ? 'Each one counts when it really happens.' : 'Cada una suma cuando se hace de verdad.';
     return '<section class="pz-nivel-misiones"><h2>' + esc(tit) + '</h2><p class="pz-nivel-misiones-sub">' + esc(sub) + '</p>' + items.join('') + '</section>';
   } catch (e) { return ''; }
 }
-// FIN LOTE NIVEL-MISIONES-RACHA
-
-function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML, extra) {
-  const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">${pzIc('arrowLeft', 16)} ${gzT('Volver', 'Back')}</button>`;
-  if (tipo === 'posty') {
-    const nvNum = mxNvNum(nvP);
-    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-    const pct = pzRopaAvance(nvP);
-    const sig = (nvP && nvP.nombre_siguiente) ? esc(nvP.nombre_siguiente) : '';
-    const barra = pct === null ? '' : `<div class="pz-ropa-barra-wrap"><div class="pz-ropa-barra"><i style="width:${pct}%"></i></div><p class="pz-ropa-barra-txt">${nvNum >= 50 ? gzT('Nivel máximo', 'Max level') : (gzT('Próximo: Nv ', 'Next: Lv ') + (nvNum + 1) + (sig ? ' · ' + sig : ''))}</p></div>`;
-    const msg = gzT('cuanto más subís de nivel, mejores posteos y más conozco lo que buscás', 'the higher your level, the better your posts and the more I know what you are looking for');
-    // (LOTE NIVEL-MISIONES-RACHA) Racha real del ritual + misiones de hoy,
-    // justo bajo el nivel y la barra, antes de la lista de 50 prendas.
-    const rachaHTML = pzNivelRachaHTML(extra && extra.ritualHoy);
-    const misionesHTML = pzNivelMisionesHTML(extra || null);
-    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head"><h1>${gzT('Nivel', 'Level')}</h1></header><div class="mx-bloque"><div class="pz-ropa-panel"><div class="pz-ropa-avatar" id="pzRopaAvatar">${pzRopaAvatarHTML()}</div><h2 class="pz-ropa-nivel">${gzT('Nv', 'Lv')} ${nvNum}${(nvP && nvP.nombre_nivel) ? ' · ' + esc(nvP.nombre_nivel) : ''}</h2>${barra}<p class="pz-ropa-msg">${msg}</p>${rachaHTML}${misionesHTML}<div class="pz-ropa-lista" id="pzRopaLista" data-nivel="${nvNum}">${pzRopaListaHTML(nvNum)}</div>${pzOficinaSeccionHTML(nvNum)}</div></div></div>`;
-  }
-  return mxJardinErrorHTML(); // POSTY SOLO: sin jardín Gesty
-}
-function mxJardinErrorHTML() {
-  return `<div class="bb-error"><p>${gzT('No pude abrir tu jardín.', "I couldn't open your garden.")}</p><button class="bb-btn" onclick="render()">${gzT('Reintentar', 'Retry')}</button></div>`;
-}
-async function bbJardinCombinadoContent() {
-  const res = await Promise.all([mxNivel('posty'), mxNivel('gesty'), mxJardinFotos()]);
-  if (!res[0] || !res[1]) return mxJardinErrorHTML();
-  return mxJardinHTML('combinado', res[0], res[1], res[2]);
-}
-async function mxJardinPost50() {
-  try { const r = await api.get('/api/oficina/jardin-post50'); return (r && r.ok) ? r : null; } catch (e) { return null; }
-}
-async function bbJardinPostyContent() {
-  const nvP = await mxNivel('posty');
-  if (!nvP) return mxJardinErrorHTML();
-  // (PREMIOS-NOTIF) Foto de premios no vistos ANTES de pintar: las marcas
-  // ¡Nuevo! de esta visita salen de acá, no del nivel actual (que marcaría
-  // siempre el último nivel aunque ya se haya visto).
+function pzNivelAutoCardHTML(ritualHoy, en) {
+  // Todos los días, automático: el posteo del día suma 15 XP cuando se
+  // publica. No es una misión que se haga a mano: pasa solo.
   try {
-    const r = await api.get('/api/oficina/premios-no-vistos');
-    PZ_PREMIOS_NUEVOS_MARCA = (r && r.ok && Array.isArray(r.niveles)) ? r.niveles : [];
-    PZ_PREMIOS_NUEVOS = PZ_PREMIOS_NUEVOS_MARCA.slice();
-  } catch (e) { PZ_PREMIOS_NUEVOS_MARCA = []; }
-  // (LOTE NIVEL-MISIONES-RACHA) La racha y las misiones se componen en el
-  // cliente desde endpoints que ya existen. Cada fetch con su propio catch:
-  // si uno falla, esa sección no se dibuja; la pantalla nunca se rompe.
-  let extra = null;
+    const hecho = !!(ritualHoy && ritualHoy.publicadoHoy);
+    const estado = hecho ? (en ? '✓ Published today' : '✓ Publicado hoy') : (en ? 'Automatic' : 'Automático');
+    return '<section class="pz-nivel-auto"><h2>' + esc(en ? 'Every day · Automatic' : 'Todos los días · Automático') + '</h2><div class="pz-nivel-auto-fila"><span>' + esc(en ? 'Your post of the day was published' : 'Se publicó tu posteo del día') + '</span><b>+15 XP</b><span>' + esc(estado) + '</span></div></section>';
+  } catch (e) { return ''; }
+}
+function pzNivelHitoActual(d) {
+  // El hito vigente: el más alto alcanzado (nivel 50, nivel 4, 5
+  // respuestas, racha 14 días). Los 5 hitos son los del mock.
+  const nivel = (d && typeof d.level === 'number') ? d.level : 1;
+  const resp = (d && typeof d.respuestas === 'number') ? d.respuestas : 0;
+  const racha = (d && typeof d.rachaMax === 'number') ? d.rachaMax : 0;
+  if (nivel >= 50) return { nombre: 'Referente del rubro', desc: 'Informe mensual con comparación contra tu competencia, estrategia que se autoajusta.', descEn: 'Monthly report vs. your competition, strategy that adjusts itself.', criterio: 'Nv 50', criterioEn: 'Lv 50' };
+  if (nivel >= 4) return { nombre: 'Negocio Visible', desc: 'Tu feed ya se ve profesional todos los días, se detecta tu mejor hora.', descEn: 'Your feed already looks professional every day, your best hour is detected.', criterio: 'Nv 4', criterioEn: 'Lv 4' };
+  if (resp >= 5) return { nombre: 'Conocido en el barrio', desc: 'Primeras consultas sostenidas por semana, anuncios con foto real del local.', descEn: 'First steady queries every week, ads with a real photo of your shop.', criterio: '5 respuestas', criterioEn: '5 replies' };
+  if (racha >= 14) return { nombre: 'Constante', desc: '14 días seguidos: se desbloquean las historias automáticas.', descEn: '14 days in a row: automatic stories unlock.', criterio: 'Racha 14 días', criterioEn: '14-day streak' };
+  return { nombre: 'Recién arranca', desc: 'Perfil ordenado, primera semana armada.', descEn: 'Profile in order, first week built.', criterio: 'Nv 1', criterioEn: 'Lv 1' };
+}
+function pzNivelLogrosHTML(nivel, en) {
+  // Logros de una sola vez, con datos reales: primera semana completa
+  // (racha máxima 7 días, la misma regla que suma los +100 del
+  // servidor), 100 consultas respondidas, primera venta por anuncio
+  // (siempre bloqueada: Posty no ve las ventas) y las dos metas de
+  // racha (30 y 100 días, por racha máxima).
+  try {
+    const resp = (nivel && typeof nivel.respuestas === 'number') ? nivel.respuestas : 0;
+    const racha = (nivel && typeof nivel.rachaMax === 'number') ? nivel.rachaMax : 0;
+    const fila = (tit, xp, estado, hecho) => '<div class="pz-nivel-logro' + (hecho ? ' hecho' : '') + '"><b>' + esc(tit) + '</b><span>+' + xp + ' XP</span><span>' + esc(estado) + '</span></div>';
+    const okTxt = en ? '✓ Achieved' : '✓ Conseguido';
+    const semanaOk = racha >= 7;
+    const semanaEstado = semanaOk ? okTxt : (en ? ('You’re ' + racha + ' of 7 days') : ('Vas ' + racha + ' de 7'));
+    const respOk = resp >= 100;
+    const respEstado = respOk ? okTxt : (en ? ('You’re ' + resp + ' of 100') : ('Vas ' + resp + ' de 100'));
+    const r30Ok = racha >= 30;
+    const r30Estado = r30Ok ? okTxt : (en ? ('You’re ' + racha + ' of 30') : ('Vas ' + racha + ' de 30'));
+    const r100Ok = racha >= 100;
+    const r100Estado = r100Ok ? okTxt : (en ? ('You’re ' + racha + ' of 100') : ('Vas ' + racha + ' de 100'));
+    let h = '<section class="pz-nivel-logros"><h2>' + esc(en ? 'Achievements · Once only' : 'Logros · Una sola vez') + '</h2>';
+    h += fila(en ? 'First full week' : 'Primera semana completa', 100, semanaEstado, semanaOk);
+    h += fila(en ? '100 queries answered' : '100 consultas respondidas', 150, respEstado, respOk);
+    h += fila(en ? 'First ad sale' : 'Primera venta por anuncio', 200, en ? 'Not yet' : 'Todavía no', false);
+    h += '<h3>' + esc(en ? 'Streak · When you get there, once only' : 'Racha · Al llegar, una sola vez') + '</h3>';
+    h += fila(en ? '30 days in a row' : '30 días seguidos', 150, r30Estado, r30Ok);
+    h += fila(en ? '100 days in a row' : '100 días seguidos', 300, r100Estado, r100Ok);
+    h += '</section>';
+    return h;
+  } catch (e) { return ''; }
+}
+function pzNivelEscaleraHTML(nivel, en) {
+  // La escalera del mock: los 5 hitos con su criterio real y «Estás acá»
+  // en el vigente. Los ya alcanzados llevan ✓; los que faltan muestran
+  // su criterio (nunca un número inventado).
+  try {
+    const lv = (nivel && typeof nivel.level === 'number') ? nivel.level : 1;
+    const resp = (nivel && typeof nivel.respuestas === 'number') ? nivel.respuestas : 0;
+    const racha = (nivel && typeof nivel.rachaMax === 'number') ? nivel.rachaMax : 0;
+    const actual = pzNivelHitoActual({ level: lv, respuestas: resp, rachaMax: racha });
+    const hitos = [
+      { nombre: 'Recién arranca', desc: 'Perfil ordenado, primera semana armada.', descEn: 'Profile in order, first week built.', crit: 'Nv 1', critEn: 'Lv 1', ok: true },
+      { nombre: 'Constante', desc: '14 días seguidos: se desbloquean las historias automáticas.', descEn: '14 days in a row: automatic stories unlock.', crit: 'Racha 14 días', critEn: '14-day streak', ok: racha >= 14 },
+      { nombre: 'Conocido en el barrio', desc: 'Primeras consultas sostenidas por semana, anuncios con foto real del local.', descEn: 'First steady queries every week, ads with a real photo of your shop.', crit: '5 respuestas', critEn: '5 replies', ok: resp >= 5 },
+      { nombre: 'Negocio Visible', desc: 'Tu feed ya se ve profesional todos los días, se detecta tu mejor hora.', descEn: 'Your feed already looks professional every day, your best hour is detected.', crit: 'Nv 4', critEn: 'Lv 4', ok: lv >= 4 },
+      { nombre: 'Referente del rubro', desc: 'Informe mensual con comparación contra tu competencia, estrategia que se autoajusta.', descEn: 'Monthly report vs. your competition, strategy that adjusts itself.', crit: 'Nv 50', critEn: 'Lv 50', ok: lv >= 50 }
+    ];
+    let filas = '';
+    for (const h of hitos) {
+      const esActual = h.nombre === actual.nombre;
+      const marca = esActual ? (en ? 'You’re here' : 'Estás acá') : (h.ok ? '✓' : '');
+      filas += '<div class="pz-nivel-hito' + (esActual ? ' actual' : '') + '"><b>' + esc(h.nombre) + '</b><span>' + esc(en ? h.descEn : h.desc) + '</span><span class="pz-nivel-hito-crit">' + esc(en ? h.critEn : h.crit) + '</span>' + (marca ? '<span class="pz-nivel-hito-marca">' + esc(marca) + '</span>' : '') + '</div>';
+    }
+    return '<section class="pz-nivel-escalera"><h2>' + esc(en ? 'Your levels' : 'Tus niveles') + '</h2>' + filas + '</section>';
+  } catch (e) { return ''; }
+}
+function pzNivelPantallaHTML(d) {
+  // La pantalla Nivel, exactamente como el mock: cabecera con hito y
+  // barra de XP (500 por nivel, 1–50), racha, misiones de hoy, lo
+  // automático del día, logros y escalera. Todo de datos reales del
+  // servidor; sin dato, la sección no se dibuja.
+  try {
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const nv = (d && d.nivel) || {};
+    const level = (typeof nv.level === 'number' && nv.level >= 1) ? Math.min(50, Math.floor(nv.level)) : 1;
+    const xp = (typeof nv.xp === 'number' && nv.xp >= 0) ? Math.floor(nv.xp) : 0;
+    const fmt = (n) => { let s = String(Math.max(0, Math.floor(Number(n) || 0))); let out = ''; while (s.length > 3) { out = (en ? ',' : '.') + s.slice(-3) + out; s = s.slice(0, -3); } return s + out; };
+    const hito = pzNivelHitoActual({ level: level, respuestas: nv.respuestas || 0, rachaMax: nv.rachaMax || 0 });
+    const xpNivel = (level >= 50) ? 500 : Math.max(0, xp - (level - 1) * 500);
+    const pct = (level >= 50) ? 100 : Math.max(0, Math.min(100, Math.round(xpNivel / 500 * 100)));
+    const faltan = (typeof nv.nextXp === 'number') ? Math.max(0, nv.nextXp - xp) : Math.max(0, level * 500 - xp);
+    const badge = (en ? 'Level ' : 'NIVEL ') + '<span class="pz-nivel-num">' + level + '</span>';
+    let head = '<section class="pz-nivel-head"><button type="button" class="mx-volver" onclick="bbGo(\'#/app/inicio\')" aria-label="' + esc(en ? 'Back' : 'Volver') + '">' + pzIc('arrowLeft', 16) + ' ' + esc(en ? 'Back' : 'Volver') + '</button>'
+      + '<p class="pz-nivel-badge">' + badge + '</p>'
+      + '<h2>' + esc(hito.nombre) + '</h2>'
+      + '<p class="pz-nivel-hito-desc">' + esc(en ? hito.descEn : hito.desc) + '</p>'
+      + '<div class="pz-nivel-xpbar"><i style="width:' + pct + '%"></i></div>';
+    if (level >= 50) head += '<p class="pz-nivel-xp-txt">' + esc(en ? 'Max level' : 'Nivel máximo') + '</p>';
+    else head += '<p class="pz-nivel-xp-txt">' + fmt(xpNivel) + ' / 500 XP ' + esc(en ? ('for Level ' + (level + 1)) : ('para el Nivel ' + (level + 1))) + ' · ' + esc(en ? ('You need ' + fmt(faltan) + ' XP') : ('Te faltan ' + fmt(faltan) + ' XP')) + '</p>';
+    head += '<p class="pz-nivel-total">' + esc(en ? ('You have ' + fmt(xp) + ' total XP') : ('Llevás ' + fmt(xp) + ' XP acumulados en total')) + '</p>'
+      + '<p class="pz-nivel-regla">' + esc(en ? 'Each level is 500 XP, from 1 to 50.' : 'Cada nivel son 500 XP, del 1 al 50.') + '</p></section>';
+    let h = '<div class="pz-nivel">' + head;
+    h += pzNivelRachaCardHTML(d && d.ritualHoy, en);
+    h += pzNivelMisionesHTML({ mission: d && d.mission, posts: d && d.posts, assets: d && d.assets, comments: d && d.comments });
+    h += pzNivelAutoCardHTML(d && d.ritualHoy, en);
+    h += pzNivelLogrosHTML(nv, en);
+    h += pzNivelEscaleraHTML(nv, en);
+    h += '<p class="pz-nivel-pie">' + esc(en ? 'The math is simple: the 3 missions (125 XP) + the post of the day (15 XP) add up to 140 XP a day.' : 'La cuenta es simple: las 3 misiones (125 XP) + el posteo del día (15 XP) suman 140 XP por día.') + '</p></div>';
+    return h;
+  } catch (e) { return ''; }
+}
+async function pzNivelEnviarRespuesta(id, btn) {
+  // Manda la respuesta de verdad (POST /api/comments/:id/reply, con el
+  // borrador de Posty). La XP +25 la da el servidor al confirmar el
+  // envío, nunca el cliente. Si falla, el botón vuelve a intentarlo:
+  // nada se marca como hecho sin el envío real.
+  try {
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const b = btn || null;
+    if (b) { b.disabled = true; b.textContent = en ? 'Sending…' : 'Enviando…'; }
+    const msg = (b && b.getAttribute) ? (b.getAttribute('data-pz-draft') || '') : '';
+    const r = await api.post('/api/comments/' + id + '/reply', { message: msg });
+    if (r && r.ok) { pzNivelRecargar(); return; }
+    throw new Error((r && (r.error || r.message)) || 'reply falló');
+  } catch (e) {
+    try { if (typeof bbToast === 'function') bbToast('No se pudo enviar la respuesta. Probá de nuevo.'); } catch (e2) {}
+    const en2 = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const b2 = btn || null;
+    if (b2) { b2.disabled = false; b2.textContent = en2 ? 'Send the reply' : 'Enviar la respuesta'; }
+  }
+}
+function pzNivelRecargar() {
+  // Vuelve a pintar la pantalla Nivel con datos frescos del servidor.
+  try { render(); } catch (e) {}
+}
+async function bbNivelContent() {
+  // Pantalla Nivel: nivel XP + ritual + misiones + posteos + álbum +
+  // comentarios, cada fetch con su propio catch. Si el nivel no llega,
+  // error con reintento: la pantalla nunca se rompe por una sección.
+  let nivel = null;
+  try { nivel = await api.get('/api/avatar-level'); } catch (e) { nivel = null; }
+  if (!nivel || !nivel.ok) return '<div class="bb-error"><p>No pude abrir tu Nivel.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>';
+  let pm = null, ritualHoy = null, pr = null, al = null, cm = null;
   try {
     const r = await Promise.all([
       api.get('/api/photo-mission').catch(() => null),
       api.get('/api/ritual/hoy').catch(() => null),
       api.get('/api/posts').catch(() => null),
-      api.get('/api/assets').catch(() => null)
+      api.get('/api/assets').catch(() => null),
+      api.get('/api/comments').catch(() => null)
     ]);
-    extra = { mission: r[0], ritualHoy: r[1], posts: r[2], assets: r[3] };
+    pm = r[0]; ritualHoy = r[1]; pr = r[2]; al = r[3]; cm = r[4];
   } catch (e) {}
-  return mxJardinHTML('posty', nvP, null, null, null, null, extra);
+  const mission = (pm && pm.mission) ? pm.mission : pm;
+  const posts = (pr && Array.isArray(pr.posts)) ? pr.posts : (Array.isArray(pr) ? pr : []);
+  const assets = (al && Array.isArray(al.assets)) ? al.assets : (Array.isArray(al) ? al : []);
+  const comments = (cm && Array.isArray(cm.comments)) ? cm.comments : [];
+  return pzNivelPantallaHTML({ nivel: nivel, ritualHoy: ritualHoy, mission: mission, posts: posts, assets: assets, comments: comments });
 }
-async function bbJardinGestyContent() {
-  const nvG = await mxNivel('gesty');
-  if (!nvG) return mxJardinErrorHTML();
-  return mxJardinHTML('gesty', null, nvG, null);
-}
+
 // (LOTE AJUSTES-LIMPIO) La tarjeta «Cómo te avisa tu oficina» se eliminó
 // de Ajustes: esta función ya no renderiza nada. Las preferencias en
 // servidor quedan intactas; la vista Mi negocio conserva su propio bloque.
@@ -6152,7 +5886,7 @@ function mzTabsHTML(tab) {
     : tab === 'jardin-posty' ? 'jardin'
     : tab === 'analisis' ? 'analisis'
     : tab === 'ads' ? 'ads' : '';
-  const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}${key === 'jardin' ? '<span class="mz-badge pz-premios-badge off"></span>' : ''}</button>`;
+  const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
   return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${pzDockMasBtn('mz')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))}</nav>${pzDockMasHTML()}`;
 }
 
@@ -14522,9 +14256,17 @@ async function showCommentInsights() {
 }
 
 /* ---------- NIVEL DE LA MARCA DEL CLIENTE ---------- */
-// El que sube de nivel es el LOGO DEL CLIENTE (100 XP por post publicado, 150 si es reel).
-// Posty es el guía que festeja, no el protagonista: su avatar queda limpio, sin marcos ni badges.
-const POSTA_LVL_NAMES = { 1: 'Recién llegado', 2: 'Aprendiz del feed', 3: 'Ritmo agarrado', 4: 'Contenido serio', 5: 'Máquina de contenido', 6: 'Cara visible', 7: 'Referente del rubro', 8: 'Imparable', 9: 'Ídolo local', 10: 'Leyenda del barrio' };
+// El que sube de nivel es el LOGO DEL CLIENTE (500 XP por nivel: 40 foto,
+// 60 video, 25 respuesta). Posty es el guía que festeja, no el
+// protagonista: su avatar queda limpio, sin marcos ni badges.
+// Nombres de nivel del mock (R5): 1–3 Recién arranca, 4–49 Negocio
+// Visible, 50 Referente del rubro.
+function pzNivelNombre(nivel) {
+  const n = Math.max(1, Math.min(50, Number(nivel) || 1));
+  if (n >= 50) return 'Referente del rubro';
+  if (n >= 4) return 'Negocio Visible';
+  return 'Recién arranca';
+}
 
 async function chatAvatarLevel() {
   let lv = null;
@@ -14538,7 +14280,7 @@ async function chatAvatarLevel() {
     const tierMsg = lv.tier === 'gold' ? ' Tu logo ahora tiene marco de oro 🥇'
       : lv.tier === 'silver' ? ' Tu logo ahora tiene marco de plata 🥈'
       : lv.tier === 'bronze' ? ' Tu logo ahora tiene marco de bronce 🥉' : '';
-    chatSayLocal(`¡Tu marca subió al nivel ${top}: ${POSTA_LVL_NAMES[top] || lv.levelName || ''}! 🎉${tierMsg}`);
+    chatSayLocal(`¡Tu marca subió al nivel ${top}: ${lv.levelName || pzNivelNombre(top)}! 🎉${tierMsg}`);
     try { track('brand_levelup', { level: top }); } catch (e) {}
     try { api.post('/api/avatar-level/seen', { levels: unseen }); } catch (e) {}
   }
@@ -14559,7 +14301,7 @@ async function paintChatLevel() {
 }
 function postyLevelModal(lv) {
   const lvl = (lv && lv.level) || 1;
-  const name = (lv && (lv.levelName || POSTA_LVL_NAMES[lvl])) || POSTA_LVL_NAMES[1] || '';
+  const name = (lv && (lv.levelName || pzNivelNombre(lvl))) || pzNivelNombre(1);
   const xp = (lv && lv.xp) || 0;
   let pct = 100, nextTxt = '👑 ¡Nivel máximo!';
   if (lv && lv.nextXp) {
@@ -14573,7 +14315,7 @@ function postyLevelModal(lv) {
       <div class="xp-bar" style="margin:12px auto;max-width:260px"><span style="width:${pct}%"></span></div>
       <p class="stk-next">${esc(nextTxt)}</p>
     </div>
-    <p class="d" style="text-align:center">Cada posteo publicado suma: 100 pts por post, 150 por reel.</p>
+    <p class="d" style="text-align:center">Cada posteo publicado suma 15 de base: 40 con foto, 60 con video. Responder un comentario suma 25.</p>
     <button class="btn btn-ghost btn-block" id="lvlCloseBtn" style="margin-top:10px">Cerrar</button>`);
   const c = document.getElementById('lvlCloseBtn');
   if (c) c.onclick = () => closeStreakModal();
@@ -17507,8 +17249,8 @@ function pzPrefetchKick() {
   else if (tab === 'post') { pzPaintSkeleton(tab); content = await approvalPostView(postId); } // 🔔 Posty te avisa: aprobar por notificación
   else if (tab === 'dogfood') { pzPaintSkeleton(tab); content = await dogfoodView(postId); } // 🤖 Posty dogfood: propuesta del día
   else if (tab === 'ajustes') { pzPaintSkeleton(tab); let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
-  else if (tab === 'jardin-combinado' || tab === 'jardin-gesty') { location.hash = '#/app/jardin-posty'; return; } // POSTY SOLO: solo jardín Posty
-  else if (tab === 'jardin-posty') { pzPaintSkeleton(tab); content = await bbJardinPostyContent(); }
+  else if (tab === 'jardin-combinado' || tab === 'jardin-gesty') { location.hash = '#/app/jardin-posty'; return; } // POSTY SOLO: solo Nivel de Posty
+  else if (tab === 'jardin-posty') { pzPaintSkeleton(tab); content = await bbNivelContent(); }
   else if (tab === 'bandeja') { pzPaintSkeleton(tab); content = await bbBandejaContent(); } // (LOTE 10B · 2-1) La Bandeja: decidir en un toque
   else if (tab === 'ritual') { pzPaintSkeleton(tab); content = await ritualView(); } // (RITUAL · lote 5/8) El paquete de la mañana
   else { location.hash = mzHomeHash(); return; } // tab desconocida: a la home (antes caía en Ajustes sin avisar)
@@ -17517,11 +17259,6 @@ function pzPrefetchKick() {
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
-  // (PREMIOS-NOTIF · 4/11) Badge de premio nuevo en el dock (tras pintar:
-  // el dock se re-crea en cada render) y, si esta pantalla ES Nivel, el
-  // aviso se limpia: las marcas ¡Nuevo! ya quedaron pintadas arriba.
-  setTimeout(() => { try { pzPremiosNuevosSync(); } catch (e) {} }, 0);
-  if (tab === 'jardin-posty') setTimeout(() => { try { pzPremiosNuevosLimpiar(); } catch (e) {} }, 0);
   // LOTE VELOCIDAD: los fills que render() lanzaba a 60-90 ms (antes de la
   // pintura final) se re-disparan tras pintar: con esqueleto, la primera
   // pasada no encontraba los slots. Son idempotentes (dataset.done).
@@ -21554,16 +21291,6 @@ function pzNivelChip(clave, en) {
   const d = M[clave] || ['#/app/negocio', 'Ver lo que sabe de vos', 'See what it knows'];
   return { hash: d[0], label: en ? d[2] : d[1] };
 }
-function pzNivelUnlock(nivel, en) {
-  const M = {
-    2: ['Ya terminé de leer tu mundo: tu semana nace de tu fundamento.', 'I finished reading your world: your week is born from your fundamento.'],
-    3: ['Ya armé tu primera semana y aprendí tu primera decisión: conozco tu gusto.', 'I built your first week and learned your first decision: I know your taste.'],
-    4: ['Tus semanas salen aceptadas: acierto de primera.', 'Your weeks come out accepted: right the first time.'],
-    5: ['Soy tu socio de contenido: propongo con tu gusto afinado.', "I'm your content partner: I propose with your taste dialed in."],
-  };
-  const d = M[nivel] || M[2];
-  return en ? d[1] : d[0];
-}
 function pzNivelStemHTML(nivel, color, celeb) {
   let h = '';
   for (let i = 1; i <= 5; i++) {
@@ -21591,10 +21318,11 @@ function pzNivelStripHTML(nv, en) {
   const falt = Array.isArray(nv.faltantes) ? nv.faltantes : [];
   const n = falt.length;
   const pct = pzNivelAvance(nv);
-  const paso = (nv.nivel >= 5)
-    ? { hash: '#/app/negocio', label: en ? 'See your garden' : 'Ver tu jardín' }
-    : { hash: pzNivelChip(falt[0] ? falt[0].clave : '', en).hash,
-        label: n === 1 ? (en ? '1 thing left' : 'te falta 1 cosa') : (en ? `${n} things left` : `te faltan ${n} cosas`) };
+  const xpFaltan = (nv.avance && Number(nv.avance.total) > 0) ? Math.max(0, Math.round(Number(nv.avance.total) - Number(nv.avance.hechos))) : null;
+  const paso = (nv.nivel >= 50)
+    ? { hash: '#/app/jardin-posty', label: en ? 'Max level' : 'Nivel máximo' }
+    : { hash: '#/app/jardin-posty',
+        label: xpFaltan === null ? (en ? 'See your level' : 'Ver tu nivel') : (en ? `${xpFaltan} XP to Level ${nv.nivel + 1}` : `Te faltan ${xpFaltan} XP para el Nv ${nv.nivel + 1}`) };
   return `<div id="pzNivelStrip" role="button" tabindex="0" aria-expanded="false" aria-label="${esc(en ? `Your level with Posty: ${etiqueta}` : `Tu nivel con Posty: ${etiqueta}`)}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#F4FAFE;border:1px solid #D8ECF7;border-radius:16px;cursor:pointer;box-sizing:border-box">
     <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:52px;height:52px;flex:none;border-radius:50%;object-fit:cover"></span>
     <span data-pz-col style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
@@ -21712,11 +21440,10 @@ function pzVitrinaHTML(hist, en, etiqueta) {
   const MES_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const MES_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const mes = (ts) => { const d = new Date(Number(ts)); if (isNaN(d)) return ''; return `${(en ? MES_EN : MES_ES)[d.getMonth()]} ${d.getFullYear()}`; };
-  // Lote 3: 6+ trae premio (entrada de prestigio) o desbloqueo; 2–5 no traen
-  // ninguno y el badge queda exactamente como antes.
+  // R5 (8/11): sin premios ni desbloqueos — la vitrina muestra solo el
+  // nivel, su nombre y su fecha real del río.
   const badges = hist.map((h) => {
-    const rec = h.premio || h.desbloqueo || '';
-    return `<span class="pz-vit-badge"><strong>${esc(h.nombre_nivel)}</strong><span>${esc(mes(h.ts))}</span>${rec ? `<span>${esc(rec)}</span>` : ''}</span>`;
+    return `<span class="pz-vit-badge"><strong>${esc(h.nombre_nivel)}</strong><span>${esc(mes(h.ts))}</span></span>`;
   }).join('');
   return `<section class="bb-bloque"><h2>${en ? 'Your level showcase' : 'La vitrina de tus niveles'}</h2>
     <p class="bb-sub">${en ? 'Every level you reached, with its real date.' : 'Cada nivel que alcanzaste, con su fecha real.'}</p>
@@ -21790,15 +21517,15 @@ function pzMomentoAvanceShow(o) {
   const div = document.getElementById('pzCelebFondo');
   if (!div) { if (o.onListo) o.onListo(); return; }
   const reducido = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const antesTxt = o.antes ? ((en ? 'Level ' : 'Nivel ') + o.antes.nivel + ' — ' + (o.antes.premio || o.antes.desbloqueo || '')) : null;
+  const antesTxt = o.antes ? ((en ? 'Level ' : 'Nivel ') + o.antes.nivel + ' — ' + (o.antes.nombre_nivel || '')) : null;
   const ahoraTxt = (en ? 'Level ' : 'Nivel ') + o.nivel + ' — ' + o.unlock;
-  div.innerHTML = `<div class="pz-momento" role="dialog" aria-modal="true" aria-label="${esc(en ? 'Your garden grows' : 'Tu jardín avanza')}">
+  div.innerHTML = `<div class="pz-momento" role="dialog" aria-modal="true" aria-label="${esc(en ? 'You leveled up' : 'Subiste de nivel')}">
     <button type="button" class="pz-celeb-x" data-pz-momento-x aria-label="${en ? 'Continue' : 'Seguir'}">${pzIc("x", 16)}</button>
     <span class="pz-momento-magia" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
     <span class="pz-momento-posty pz-mg"><img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;object-fit:cover"></span>
     <div class="pz-momento-candado" data-pz-momento-candado>${pzIc('lock', 34)}</div>
     <div class="pz-momento-premio" data-pz-momento-premio>✦ ${esc(o.unlock)}</div>
-    <p class="pz-momento-msg">${esc(en ? 'Posty brought your prize and placed it in the garden.' : 'Posty trajo tu premio y lo puso en el jardín.')}</p>
+    <p class="pz-momento-msg">${esc(en ? 'You leveled up with Posty.' : 'Subiste de nivel con Posty.')}</p>
     ${o.siguiente ? `<p class="pz-momento-sigue">${esc(o.siguiente)}${o.siguientePremio ? ' — ' + esc(o.siguientePremio) : ''}</p>` : ''}
     <div class="pz-momento-ad">
       ${antesTxt ? `<div class="pz-momento-antes"><span>${esc(en ? 'Before' : 'Antes')}</span>${esc(antesTxt)}</div>` : ''}
@@ -21860,8 +21587,7 @@ function pzCelebTarjetaShow(div, nv, en, unlock) {
     if (ev.target === div) { try { div.remove(); } catch (e) {} }
   });
 }
-let PZ_MOMENTO_REPLAY = {}; // nivel → {premio, desbloqueo} (render de historia)
-// LOTE 4 — Revisitar un momento pasado desde la historia del jardín:
+// LOTE 4 — Revisitar un momento pasado desde la vitrina de niveles:
 // misma secuencia, sin POST celebrar y sin dedupe (es a pedido).
 function pzMomentoReplayShow(nivel) {
   const datos = PZ_MOMENTO_REPLAY[nivel] || {};
@@ -21873,7 +21599,7 @@ function pzMomentoReplayShow(nivel) {
   div.className = 'pz-celeb-fondo';
   document.body.appendChild(div);
   pzMomentoAvanceShow({
-    en: en, unlock: datos.premio || datos.desbloqueo || '',
+    en: en, unlock: datos.nombre_nivel ? ((en ? 'Level ' : 'Nivel ') + nivel + ': ' + datos.nombre_nivel) : '',
     nivel: nivel, siguiente: null, siguientePremio: null, antes: null,
     onListo: () => { try { div.remove(); } catch (e) {} },
   });
@@ -21883,52 +21609,6 @@ function pzMesNombre(mes) {
   const EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const arr = gzT(ES, EN);
   return arr[((mes - 1) % 12 + 12) % 12] || '';
-}
-// LOTE 4 — Secciones post-jardín + historia. Solo con nivel 50 se pintan
-// las 4; la historia se pinta en cualquier nivel con meses reales.
-// Sin datos, cadena vacía: nunca se inventa nada.
-function mxJardinPost50HTML(post50) {
-  if (!post50 || !post50.ok) return '';
-  let html = '';
-  if (post50.completo) {
-    const est = post50.estacion;
-    html += `<section class="pz-post50"><h3>${gzT('Después del jardín completo', 'After the full garden')}</h3>`;
-    if (est) html += `<div class="pz-post50-est"><span aria-hidden="true">🌿</span><div><b>${esc(est.estacion)}</b> — ${esc(est.estado)}<br><small>${gzT('Flor de la estación: ', 'Season flower: ')}${esc(est.flor)}</small></div></div>`;
-    if (Array.isArray(post50.zonas) && post50.zonas.length) {
-      html += `<div class="pz-post50-zonas"><h4>${gzT('Nuevas zonas', 'New areas')}</h4>`;
-      for (const z of post50.zonas) {
-        if (z.desbloqueada) html += `<div class="pz-post50-zona ok">✦ ${esc(z.nombre)} — ${esc(z.descripcion)}</div>`;
-        else {
-          const faltan = Math.max(1, z.umbral - (post50.semanas_post50 || 0));
-          html += `<div class="pz-post50-zona lock">${pzIc('lock', 16)} ${esc(z.nombre)} — ${gzT('Se abre en ', 'Opens in ')}${faltan}${gzT(' semanas publicadas más', ' more published weeks')}</div>`;
-        }
-      }
-      html += `</div>`;
-    }
-    const pv = post50.postyVive;
-    const saludo = (post50.hora >= 6 && post50.hora < 12) ? gzT('¡Buenos días! Posty te espera en el jardín.', 'Good morning! Posty waits for you in the garden.') : gzT('Posty vive acá ahora, esperándote en el jardín.', 'Posty lives here now, waiting for you in the garden.');
-    html += `<div class="pz-post50-vive"><h4>${gzT('Posty vive ahí', 'Posty lives here')}</h4><p>${esc(saludo)}</p>`;
-    if (pv && pv.anios > 0) html += `<p>✦ ${pv.anios} ${gzT(pv.anios === 1 ? 'año con Posty: una flor especial en tu jardín' : 'años con Posty: una flor especial en tu jardín', pv.anios === 1 ? 'year with Posty: a special flower in your garden' : 'years with Posty: a special flower in your garden')}</p>`;
-    else html += `<p>${gzT('Tu primera flor especial llega cuando cumplas un año con Posty.', 'Your first special flower arrives when you complete a year with Posty.')}</p>`;
-    html += `</div>`;
-    html += `</section>`;
-  }
-  if (Array.isArray(post50.historia) && post50.historia.length) {
-    const meses = [...post50.historia].reverse();
-    html += `<section class="pz-post50-hist"><h3>${gzT('La historia de tu jardín', 'The story of your garden')}</h3><p class="pz-post50-hist-sub">${gzT('Posty te la cuenta, mes a mes.', 'Posty tells it to you, month by month.')}</p>`;
-    for (const m of meses) {
-      const partes = String(m.mes).split('-');
-      const nombreMes = pzMesNombre(Number(partes[1])) + ' ' + partes[0];
-      html += `<div class="pz-post50-mes"><b>${esc(nombreMes)}</b> — ${m.semanas_publicadas} ${gzT('semanas publicadas', 'published weeks')}`;
-      for (const s of (m.subidas || [])) {
-        PZ_MOMENTO_REPLAY[s.nivel] = { premio: s.premio || '', desbloqueo: s.desbloqueo || '' };
-        html += `<div class="pz-post50-subida">${pzIc('arrowUp', 14)} ${gzT('Nivel ', 'Level ')}${s.nivel}${s.premio ? ' — ' + esc(s.premio) : ''}${(s.desbloqueo && s.desbloqueo !== s.premio) ? ' · ' + esc(s.desbloqueo) : ''} <button type="button" class="pz-post50-replay" onclick="pzMomentoReplayShow(${s.nivel})">${gzT('Volver a ver la magia', 'See the magic again')}</button></div>`;
-      }
-      html += `</div>`;
-    }
-    html += `</section>`;
-  }
-  return html;
 }
 // Informe mensual real (2026-10-26, ítem 5): solo números reales del mes.
 // La tarjeta solo existe si el mes tiene al menos un hecho real; en navegación
@@ -21975,7 +21655,7 @@ async function bbInformeNav(dir) {
 function pzNivelCelebShow(nv, en) {
   const prev = document.getElementById('pzCelebFondo');
   if (prev) { try { prev.remove(); } catch (e) {} }
-  const unlock = pzRopaUnlock(nv, en);
+  const unlock = (en ? 'Level ' : 'Nivel ') + nv.nivel + ': ' + (nv.nombre_nivel || '');
   const div = document.createElement('div');
   div.id = 'pzCelebFondo';
   div.className = 'pz-celeb-fondo';
@@ -21987,7 +21667,7 @@ function pzNivelCelebShow(nv, en) {
   pzMomentoAvanceShow({
     en: en, unlock: unlock, nivel: nv.nivel,
     siguiente: nv.nombre_siguiente ? (en ? 'Next: ' + nv.nombre_siguiente : 'Sigue: ' + nv.nombre_siguiente) : null,
-    siguientePremio: nv.siguiente_premio || nv.siguiente_desbloqueo || null,
+    siguientePremio: null,
     antes: antes,
     onListo: () => { pzCelebTarjetaShow(div, nv, en, unlock); },
   });
@@ -21995,7 +21675,7 @@ function pzNivelCelebShow(nv, en) {
 function pzNivelStoryShow(nv, en) {
   const prev = document.getElementById('pzStoryFondo');
   if (prev) { try { prev.remove(); } catch (e) {} }
-  const unlock = pzRopaUnlock(nv, en);
+  const unlock = (en ? 'Level ' : 'Nivel ') + nv.nivel + ': ' + (nv.nombre_nivel || '');
   const texto = en ? `I leveled up to ${nv.nombre_nivel} with Posty! ${unlock}` : `¡Subí a ${nv.nombre_nivel} con Posty! ${unlock}`;
   const div = document.createElement('div');
   div.id = 'pzStoryFondo';

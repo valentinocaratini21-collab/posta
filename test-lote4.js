@@ -1,16 +1,20 @@
-/* LOTE 4 — checks: después del jardín completo (las 4) + momento del avance (las 5).
-   Uso: node test-lote4.js (desde la raíz del árbol). Sin dependencias (node:sqlite).
-   «Ahora» fijo: lunes 2026-11-02 (como test-lote3) para determinismo.
-   SOLO-POSTEOS (4/11): el nivel ya no viene de semanas sino de posteos:
-   usuarioL50 suma 210 posteos (L50) y el caso L5 suma 10 (L5). */
+/* LOTE 4 — R5 (8/11, decisión Valentino 01:54): después del jardín
+   completo (postjardin.js: estaciones, zonas, años, historia, semillas,
+   estadoPost50, mxJardinPost50HTML, /api/oficina/jardin-post50) SALE con
+   el resto de la gamificación vieja. El Nivel nuevo es XP 1–50
+   (xp-nivel.js) y la pantalla Nivel; el momento del avance QUEDA, con el
+   copy reescrito a XP (sin premio ni jardín). Los pins de versión
+   (BUILD v533, index ?v=355) eran rancios ya en base v793 y se retiran;
+   el BUILD lo cubre la suite R5 (no se bumpea en R5).
+   Uso: node test-lote4.js (desde la raíz del árbol). Sin dependencias
+   (node:sqlite). «Ahora» fijo: lunes 2026-11-02 (como test-lote3) para
+   determinismo. */
 'use strict';
 const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs');
 const path = require('path');
 
-const PJ = require('./postjardin');
-const PRE = require('./prestigio');
-const NP = require('./posty-nivel50');
+const XP = require('./xp-nivel');
 
 let ok = 0, fail = 0, fails = [];
 function check(name, cond, extra) {
@@ -21,136 +25,87 @@ function read(f) { return fs.readFileSync(path.join(__dirname, f), 'utf8'); }
 function count(s, sub) { return s.split(sub).length - 1; }
 
 const UID = 7;
-const NOW = Date.UTC(2026, 10, 2); // lunes 2026-11-02
-const DAY = 86400000;
-const MONDAY = (y, m, d) => Date.UTC(y, m - 1, d);
 function freshDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('CREATE TABLE oficina_nivel_eventos (user_id INTEGER, poder TEXT, evento TEXT, hecho TEXT, registro_ref TEXT, ts INTEGER)');
   db.exec("CREATE TABLE oficina_registros (user_id INTEGER, poder TEXT, tipo TEXT, resumen TEXT, registro_ref TEXT, recibo_json TEXT, estado TEXT, ts INTEGER, salida INTEGER DEFAULT 0)");
   db.exec('CREATE TABLE posts (user_id INTEGER, status TEXT, media_type TEXT, ig_permalink TEXT, published_at INTEGER)');
+  db.exec('CREATE TABLE comment_queue (user_id INTEGER, status TEXT)');
+  db.exec('CREATE TABLE pz_ritual (user_id INTEGER, day_key TEXT, picked_post_id TEXT)');
+  db.exec('CREATE TABLE milestones_seen (user_id INTEGER, milestone INTEGER)');
   return db;
 }
-// SOLO-POSTEOS (4/11): n posteos publicados por Posty (feed real).
-function posts(db, n) {
-  const ins = db.prepare('INSERT INTO posts (user_id, status, media_type, ig_permalink) VALUES (?,?,?,?)');
-  for (let i = 0; i < n; i++) ins.run(UID, 'published', 'image', 'https://www.instagram.com/p/L4_' + i + '/');
-}
-function ev(db, evento, ts) {
-  db.prepare('INSERT INTO oficina_nivel_eventos VALUES (?,?,?,?,?,?)').run(UID, 'posty', evento, evento, 'ev:' + evento + ':' + ts, ts);
-}
-function semanasRecientes(db, n) {
-  for (let i = 0; i < n; i++) ev(db, 'semana_publicada', NOW - i * 7 * DAY);
-}
-function baseL5(db) {
-  ev(db, 'fundamento_leido', MONDAY(2026, 8, 31));
-  ev(db, 'semana_generada', MONDAY(2026, 8, 31));
-  ev(db, 'decision_bandeja', MONDAY(2026, 8, 31));
-  ev(db, 'semana_aceptada', MONDAY(2026, 8, 31));
-  for (let i = 0; i < 3; i++) ev(db, 'pieza_aceptada_primera', MONDAY(2026, 8, 31) + i);
-  for (let i = 0; i < 4; i++) ev(db, 'semana_publicada', MONDAY(2026, 9, 7) + i * 7 * DAY);
-  ev(db, 'pregunta_respondida', MONDAY(2026, 9, 7));
-  ev(db, 'pregunta_respondida', MONDAY(2026, 9, 14));
-}
-function usuarioL50(db) {
-  baseL5(db);
-  semanasRecientes(db, 30);
-  for (let i = 0; i < 30; i++) ev(db, 'decision_bandeja', MONDAY(2026, 8, 31) + i);
-  for (let i = 0; i < 16; i++) ev(db, 'pieza_aceptada_primera', MONDAY(2026, 8, 31) + i);
-  posts(db, 210); // SOLO-POSTEOS: el L50 viene de 210 posteos, no de semanas.
-}
-function subida(db, nivel, ts) {
-  db.prepare('INSERT INTO oficina_registros (user_id, poder, tipo, resumen, registro_ref, recibo_json, estado, ts) VALUES (?,?,?,?,?,?,?,?)')
-    .run(UID, 'posty', 'subida_nivel', 'subida', 'nivel:posty:' + nivel + ':test', '{}', 'ok', ts);
+function ritual(db, dayKey, picked) {
+  db.prepare('INSERT INTO pz_ritual (user_id, day_key, picked_post_id) VALUES (?,?,?)').run(UID, dayKey, picked === undefined ? 'post-x' : picked);
 }
 
-console.log('== 1. Puras: hemisferio / estaciones / zonas / años / meses ==');
-check('hemisferio sur AR', PJ.hemisferioDe('America/Argentina/Buenos_Aires') === 'sur');
-check('hemisferio sur Santiago', PJ.hemisferioDe('America/Santiago') === 'sur');
-check('hemisferio sur Australia', PJ.hemisferioDe('Australia/Sydney') === 'sur');
-check('hemisferio norte NY', PJ.hemisferioDe('America/New_York') === 'norte');
-check('hemisferio norte vacío', PJ.hemisferioDe('') === 'norte');
-check('noviembre sur = Primavera', PJ.estacionPara(NOW, 'America/Argentina/Buenos_Aires').estacion === 'Primavera');
-check('noviembre norte = Otoño', PJ.estacionPara(NOW, 'America/New_York').estacion === 'Otoño');
-check('enero norte = Invierno', PJ.estacionPara(Date.UTC(2026, 0, 15), 'America/New_York').estacion === 'Invierno');
-check('enero sur = Verano', PJ.estacionPara(Date.UTC(2026, 0, 15), 'America/Argentina/Buenos_Aires').estacion === 'Verano');
-check('estación trae estado y flor', !!PJ.estacionPara(NOW, 'America/New_York').estado && !!PJ.estacionPara(NOW, 'America/New_York').flor);
-const z0 = PJ.zonasPara(0);
-check('zonas 0: solo estanque', z0[0].desbloqueada && !z0[1].desbloqueada && !z0[2].desbloqueada && !z0[3].desbloqueada, JSON.stringify(z0.map((z) => z.desbloqueada)));
-check('zonas 2: estanque+arroyo', PJ.zonasPara(2)[1].desbloqueada && !PJ.zonasPara(2)[2].desbloqueada);
-check('zonas 5: +sendero', PJ.zonasPara(5)[2].desbloqueada && !PJ.zonasPara(5)[3].desbloqueada);
-check('zonas 9: las 4', PJ.zonasPara(9).every((z) => z.desbloqueada));
-check('zonas negativas = 0', PJ.zonasPara(-3)[0].desbloqueada && !PJ.zonasPara(-3)[1].desbloqueada);
-check('años: 1 año exacto', PJ.aniosConPosty(Date.UTC(2025, 10, 2), Date.UTC(2026, 10, 2), 'America/Argentina/Buenos_Aires') === 1);
-check('años: sin año cumplido', PJ.aniosConPosty(Date.UTC(2024, 10, 3), Date.UTC(2026, 10, 2), 'America/Argentina/Buenos_Aires') === 1);
-check('años: sin primer hecho = 0', PJ.aniosConPosty(null, NOW, 'America/Argentina/Buenos_Aires') === 0);
-check('años: 0 si no cumplió', PJ.aniosConPosty(Date.UTC(2026, 5, 1), NOW, 'America/Argentina/Buenos_Aires') === 0);
-(function () {
-  const rows = [
-    { tipo: 'semana_publicada', ts: MONDAY(2026, 9, 7) },
-    { tipo: 'semana_publicada', ts: MONDAY(2026, 9, 14) },
-    { tipo: 'subida_nivel', ts: MONDAY(2026, 10, 5), nivel: 11 },
-    { tipo: 'semilla_regalo', ts: MONDAY(2026, 10, 12) },
-    { tipo: 'semana_publicada', ts: null },
-  ];
-  const m = PJ.historiaMesesPara(rows, 'America/Argentina/Buenos_Aires', (n) => ({ premio: 'P' + n, desbloqueo: 'D' + n }));
-  check('meses ordenados', m.map((x) => x.mes).join(',') === '2026-09,2026-10', m.map((x) => x.mes).join(','));
-  check('septiembre: 2 semanas', m[0].semanas_publicadas === 2 && m[0].subidas.length === 0);
-  check('octubre: subida 11 + 1 regalo', m[1].subidas.length === 1 && m[1].subidas[0].nivel === 11 && m[1].subidas[0].premio === 'P11' && m[1].regalos === 1);
-  check('meses vacíos = []', PJ.historiaMesesPara([], 'America/New_York', null).length === 0);
-})();
-
-console.log('== 2. estadoPost50 con DB (nivel 50 vs nivel 5) ==');
+console.log('== 1. Puras: regla XP + racha máxima del ritual ==');
+check('500 por nivel, tope 50', XP.XP_NIVEL === 500 && XP.XP_MAX_NIVEL === 50);
+check('foto 40 / video 60', XP.XP_POST_BASE + XP.XP_POST_FOTO === 40 && XP.XP_POST_BASE + XP.XP_POST_VIDEO === 60);
+check('nombres por banda', XP.avatarNivelNombre(1) === 'Recién arranca' && XP.avatarNivelNombre(4) === 'Negocio Visible' && XP.avatarNivelNombre(50) === 'Referente del rubro' && XP.avatarNivelNombre(99) === 'Referente del rubro');
+check('tiers 15/25/35', XP.avatarTier(14) === 'none' && XP.avatarTier(15) === 'bronze' && XP.avatarTier(25) === 'silver' && XP.avatarTier(35) === 'gold');
 (function () {
   const db = freshDb();
-  usuarioL50(db);
-  subida(db, 6, MONDAY(2026, 9, 7));
-  subida(db, 11, MONDAY(2026, 10, 5));
-  db.exec('CREATE TABLE IF NOT EXISTS jardin_semillas_regalo (user_id INTEGER NOT NULL, ts INTEGER NOT NULL)');
-  db.prepare('INSERT INTO jardin_semillas_regalo VALUES (?,?)').run(UID, MONDAY(2026, 10, 12));
-  const est = PJ.estadoPost50(db, UID, undefined, 'America/Argentina/Buenos_Aires', NOW);
-  check('L50: nivel 50', est && est.nivel === 50, est && est.nivel);
-  check('L50: completo', est && est.completo === true);
-  check('L50: 34 semanas, 4 post-50', est && est.semanas_publicadas === 34 && est.semanas_post50 === 4, est && est.semanas_publicadas + '/' + est.semanas_post50);
-  check('L50: estación Primavera sur', est && est.estacion && est.estacion.estacion === 'Primavera', est && est.estacion && est.estacion.estacion);
-  check('L50: hora en zona (21 ART)', est && est.hora === 21, est && est.hora);
-  check('L50: zonas 2 abiertas, 2 con candado', est && est.zonas[0].desbloqueada && est.zonas[1].desbloqueada && !est.zonas[2].desbloqueada && !est.zonas[3].desbloqueada);
-  check('L50: posty vive, 0 años', est && est.postyVive && est.postyVive.anios === 0 && est.postyVive.flores_especiales === 0);
-  check('L50: 1 semilla real', est && est.semillas.length === 1);
-  const sep = est && est.historia.find((x) => x.mes === '2026-09');
-  const oct = est && est.historia.find((x) => x.mes === '2026-10');
-  check('L50: historia trae septiembre', !!sep);
-  check('L50: subida 6 con premio real', sep && sep.subidas.some((s) => s.nivel === 6 && s.premio && s.premio.indexOf('Brote dorado') >= 0), sep && JSON.stringify(sep.subidas));
-  check('L50: subida 6 con desbloqueo real', sep && sep.subidas.some((s) => s.nivel === 6 && s.desbloqueo === 'Hoja dorada pequeña'));
-  check('L50: octubre trae regalo', oct && oct.regalos === 1);
-})();
-(function () {
-  const db = freshDb();
-  baseL5(db);
-  posts(db, 10); // SOLO-POSTEOS: el L5 viene de 10 posteos.
-  const r = NP.nivelPosty(db, UID, undefined, NOW);
-  const est = PJ.estadoPost50(db, UID, undefined, 'America/Argentina/Buenos_Aires', NOW);
-  check('L5: no completo', est && est.completo === false && r.nivel === 5, 'nivelPosty=' + r.nivel);
-  check('L5: sin estación ni zonas ni vive', est && est.estacion === null && est.zonas.length === 0 && est.postyVive === null);
-  check('L5: sin semillas', est && est.semillas.length === 0);
-  check('L5: historia igual sirve', est && est.historia.length > 0);
-})();
-(function () {
-  const db = new DatabaseSync(':memory:'); // sin tablas de verdad: fail-closed
-  const est = PJ.estadoPost50(db, UID, undefined, 'America/Argentina/Buenos_Aires', NOW);
-  check('fail-closed sin tablas = null', est === null);
+  check('racha vacía = 0', XP.rachaMaximaRitual(db, UID) === 0);
+  ritual(db, '2026-10-26'); ritual(db, '2026-10-28'); ritual(db, '2026-10-29');
+  check('racha no consecutiva: máx 2', XP.rachaMaximaRitual(db, UID) === 2);
+  ritual(db, 'nope');
+  check('day_key inválido se ignora', XP.rachaMaximaRitual(db, UID) === 2);
+  ritual(db, '2026-10-30', null);
+  check('sin picked_post_id no cuenta', XP.rachaMaximaRitual(db, UID) === 2);
+  ritual(db, '2026-10-30'); ritual(db, '2026-10-31'); ritual(db, '2026-11-01'); ritual(db, '2026-11-02');
+  check('6 seguidos = 6 (28, 29, 30, 31, 01, 02)', XP.rachaMaximaRitual(db, UID) === 6);
 })();
 
-console.log('== 3. Bundle: momento + secciones + rutas (estático) ==');
+console.log('== 2. R5: postjardin fuera; el Nivel 50 es la pantalla Nivel ==');
+check('postjardin.js fuera del árbol', !fs.existsSync(path.join(__dirname, 'postjardin.js')));
+check('posty-nivel50.js fuera del árbol', !fs.existsSync(path.join(__dirname, 'posty-nivel50.js')));
+check('xp-nivel.js exporta la regla', typeof XP.avatarLevelData === 'function' && typeof XP.rachaMaximaRitual === 'function' && typeof XP.avatarNivelNombre === 'function');
+{
+  const app = read('public/app.js');
+  const fnSrc = (name) => {
+    const m = app.match(new RegExp('function ' + name + '\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));
+    return m ? m[0] : '';
+  };
+  const vm = require('vm');
+  const sb = {
+    console, Intl, Date, Map, Set,
+    ME: { lang: 'es' },
+    esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+    pzIc: () => '',
+    bbGo: () => {},
+    albumMondayKey: () => '2026-11-09',
+    pcTz: () => 'America/Argentina/Buenos_Aires',
+    pzSftFotoAlChat: () => {},
+    pzDockMasFoto: () => {},
+    pzDockMasVideo: () => {},
+    document: { getElementById: () => null, querySelector: () => null },
+    api: { get: async () => null, post: async () => ({ ok: true }) },
+    location: { hash: '' },
+  };
+  sb.gzT = (es, en) => (sb.ME && sb.ME.lang === 'en') ? en : es;
+  vm.createContext(sb);
+  for (const f of ['pzNivelNombre', 'pzNivelHitoActual', 'pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelRachaCardHTML', 'pzNivelAutoCardHTML', 'pzNivelMisionesHTML', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelPantallaHTML']) {
+    const src = fnSrc(f);
+    if (src) vm.runInContext(src + '\nthis.__' + f + ' = ' + f + ';', sb);
+  }
+  const D50 = { nivel: { ok: true, xp: 24500, level: 50, levelName: 'Referente del rubro', nextXp: null, nextName: null, respuestas: 120, rachaMax: 100 }, ritualHoy: { racha: 100, publicadoHoy: true }, mission: null, posts: [], assets: [], comments: [] };
+  const h50 = vm.runInContext('__pzNivelPantallaHTML(' + JSON.stringify(D50) + ')', sb);
+  check('Nivel 50 renderiza', typeof h50 === 'string' && h50.length > 0);
+  check('Nivel 50: Referente + Nivel máximo', h50.includes('Referente del rubro') && h50.includes('Nivel máximo'));
+  check('Nivel 50: sin post50, corona, semillas ni jardín', !/post50|corona|semilla|jard[ií]n|garden|premio|prize/i.test(h50));
+  check('Nivel 50: escalera con los 5 hitos', (h50.match(/pz-nivel-hito/g) || []).length >= 5);
+}
+
+console.log('== 3. Bundle: momento queda (copy XP), post50 fuera (estático) ==');
 const app = read('public/app.js');
 const css = read('public/styles.css');
 const srv = read('server.js');
-const idx = read('public/index.html');
-const enIdx = read('public/en/index.html');
-const pjSrc = read('postjardin.js');
-for (const fn of ['pzMomentoAvanceShow', 'pzMomentoSonido', 'pzMomentoVibrar', 'pzCelebTarjetaShow', 'pzMomentoReplayShow', 'mxJardinPost50HTML', 'mxJardinPost50', 'pzMesNombre']) {
-  // Con paréntesis: 'mxJardinPost50' es prefijo de 'mxJardinPost50HTML'.
+for (const fn of ['pzMomentoAvanceShow', 'pzMomentoSonido', 'pzMomentoVibrar', 'pzCelebTarjetaShow', 'pzMomentoReplayShow', 'pzMesNombre']) {
   check('definida 1 vez: ' + fn, count(app, 'function ' + fn + '(') === 1, count(app, 'function ' + fn + '('));
+}
+for (const fn of ['mxJardinPost50HTML', 'mxJardinPost50']) {
+  check('R5 fuera: ' + fn, count(app, 'function ' + fn + '(') === 0, count(app, 'function ' + fn + '('));
 }
 check('momento primero en celebración', app.indexOf('pzMomentoAvanceShow') < app.indexOf('function pzNivelStoryShow') && /function pzNivelCelebShow[\s\S]{0,1200}pzMomentoAvanceShow/.test(app));
 check('momento auto-play (setTimeout avanzar)', app.indexOf('setTimeout(avanzar') >= 0);
@@ -158,32 +113,30 @@ check('momento con candado + premio dorado', app.indexOf('pz-momento-candado') >
 check('momento con antes/después', app.indexOf('pz-momento-antes') >= 0 && app.indexOf('pz-momento-ahora') >= 0);
 check('momento con sonido WebAudio + vibrar', app.indexOf('AudioContext') >= 0 && app.indexOf('navigator.vibrate') >= 0);
 check('compartir momento vía tarjeta existente', app.indexOf('pzCelebTarjetaShow') >= 0 && app.indexOf('data-pz-celeb-share') >= 0);
-check('replay desde historia (onclick por nivel)', app.indexOf('pzMomentoReplayShow(${s.nivel})') >= 0);
+check('R5: momento sin copy de premio ni jardín', app.indexOf('Posty trajo tu premio') < 0 && app.indexOf('Tu jardín avanza') < 0 && app.indexOf('Subiste de nivel con Posty.') >= 0);
+check('replay ya no se llama desde la historia (post50 fuera)', app.indexOf('pzMomentoReplayShow(${s.nivel})') < 0);
 check('semilla: sin botón ni POST en cliente (fuera de Premios 7/11)', app.indexOf('pzSemillaRegalar()') < 0 && app.indexOf("'/api/oficina/jardin-semilla-regalo'") < 0);
-check('jardín pide post50', app.indexOf("'/api/oficina/jardin-post50'") >= 0 && app.indexOf('mxJardinPost50HTML(post50)') >= 0);
+check('R5: jardín-post50 fuera del cliente', app.indexOf("'/api/oficina/jardin-post50'") < 0 && app.indexOf('mxJardinPost50HTML(post50)') < 0);
 check('CSS momento + magia', css.indexOf('.pz-momento') >= 0 && css.indexOf('.pz-momento-magia') >= 0 && css.indexOf('.pz-momento-premio.brilla') >= 0);
-check('CSS post50 + historia', css.indexOf('.pz-post50') >= 0 && css.indexOf('.pz-post50-hist') >= 0);
+check('CSS post50 remanente (reglas muertas, fuera de alcance R5)', css.indexOf('.pz-post50') >= 0 && css.indexOf('.pz-post50-hist') >= 0);
 check('CSS reduced-motion quieto', css.indexOf('.pz-momento,.pz-momento-magia i{animation:none}') >= 0);
-const fnPost50 = app.slice(app.indexOf('function mxJardinPost50HTML'), app.indexOf('\n}\n', app.indexOf('function mxJardinPost50HTML')));
-check('sin barra de juego en post50', fnPost50.indexOf('pz-barra') < 0 && fnPost50.indexOf('progress') < 0 && fnPost50.indexOf('%') < 0);
-check('rutas nuevas en server', srv.indexOf("'/api/oficina/jardin-post50'") >= 0 && srv.indexOf("'/api/oficina/jardin-semilla-regalo'") >= 0);
-check('semilla solo con nivel 50 (403)', srv.indexOf('jardin_no_completo') >= 0);
-check('BUILD v522', srv.indexOf("BUILD_ID = '20261101-v533'") >= 0);
-check('bumps index', idx.indexOf('app.js?v=355') >= 0 && idx.indexOf('styles.css?v=20261074') >= 0);
-check('en index: styles 20261064, sin app.js', enIdx.indexOf('styles.css?v=20261074') >= 0 && enIdx.indexOf('app.js?v=') < 0);
-check('postjardin exporta puras', pjSrc.indexOf('zonasPara') >= 0 && pjSrc.indexOf('estacionPara') >= 0 && pjSrc.indexOf('historiaMesesPara') >= 0 && pjSrc.indexOf('estadoPost50') >= 0);
+const pantalla = app.slice(app.indexOf('function pzNivelPantallaHTML'), app.indexOf('\n}\n', app.indexOf('function pzNivelPantallaHTML')));
+check('pantalla Nivel: sin barra de juego', pantalla.indexOf('pz-barra') < 0 && pantalla.indexOf('progress') < 0);
+check('R5: rutas post50/semilla fuera del servidor', srv.indexOf("'/api/oficina/jardin-post50'") < 0 && srv.indexOf("'/api/oficina/jardin-semilla-regalo'") < 0);
+check('R5: sin jardin_no_completo en servidor', srv.indexOf('jardin_no_completo') < 0);
+check('BUILD estampado preparador R5 (v799)', srv.indexOf("BUILD_ID = '20261105-v799'") >= 0);
 
-console.log('== 4. Censo (pre = post; rutas nuevas no son /aprobar) ==');
+console.log('== 4. Censo (pre = post; R5 no toca /aprobar) ==');
 check('server catsMatch 3', count(srv, 'catsMatch') === 3, count(srv, 'catsMatch'));
 check('server week-redo 16', count(srv, 'week-redo') === 16, count(srv, 'week-redo'));
 check('server first_week 3', count(srv, 'first_week') === 3, count(srv, 'first_week'));
-check('server /aprobar 16 (lote 7: WhatsApp Sunday-letter reusa /aprobar/:token, sin ruta nueva)', count(srv, '/aprobar') === 16, count(srv, '/aprobar'));
+check('server /aprobar 17 (base v793 también 17; el 16 del lote era rancio)', count(srv, '/aprobar') === 17, count(srv, '/aprobar'));
 check('app catsMatch 0', count(app, 'catsMatch') === 0);
 check('app week-redo 0', count(app, 'week-redo') === 0);
 check('app first_week 4', count(app, 'first_week') === 4, count(app, 'first_week'));
 check('app /aprobar 1', count(app, '/aprobar') === 1, count(app, '/aprobar'));
 check('autofetch 0', count(srv, 'autofetch') + count(app, 'autofetch') === 0);
-check('completo exige nivel >= 50, nunca 51', pjSrc.indexOf('nivel >= 50') >= 0 && pjSrc.indexOf('nivel === 51') < 0 && pjSrc.indexOf('nivel: 51') < 0);
+check('tope XP en 50, nunca 51', XP.XP_MAX_NIVEL === 50 && XP.avatarNivelNombre(99) === 'Referente del rubro');
 
 console.log('\nLOTE4: ' + ok + ' OK, ' + fail + ' FAIL' + (fail ? ' :: ' + fails.join(' | ') : ''));
 process.exit(fail ? 1 : 0);

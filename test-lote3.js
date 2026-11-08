@@ -1,11 +1,17 @@
-/* LOTE 3 — checks: vista previa próximo nivel + historial 6–50 + reescalado 7 meses.
-   Uso: node test-lote3.js (desde la raíz del árbol). Sin dependencias (node:sqlite).
-   La racha se mide con un "ahora" fijo (lunes 2026-11-02) para que el test sea
-   determinista; solo el check de registrarEvento usa Date.now() real, por diseño
-   (el evento insertado cae siempre en la semana en curso → racha ≥ 1).
-   SOLO-POSTEOS (4/11): las secciones 3 y 5 (nivelPosty / registrarEvento)
-   ya no se alimentan de semanas sino de posteos; las secciones 1, 2, 4 y 6
-   (helpers puros de prestigio, reescalado, historial, estáticos) no cambian. */
+/* LOTE 3 — R5 (8/11, decisión Valentino 01:54): el motor de nivel 1–50
+   por posteos (posty-nivel50.js, prestigio, premios, desbloqueos) SALE.
+   El Nivel nuevo es la regla XP de xp-nivel.js (500 por nivel, 1–50;
+   foto 40, video 60, respuesta +25, semana +100, racha 30 +150, racha
+   100 +300, 100 respuestas +150; venta por anuncio nunca por proyección).
+   Las secciones 1 y 2 (helpers puros de prestigio.js) quedan intactas:
+   prestigio.js sigue en el árbol como código muerto (sin llamadores en
+   producción; su borrado es de R7). Las secciones 3, 4, 5, 6 y 7 pasan
+   al motor XP.
+   Uso: node test-lote3.js (desde la raíz del árbol). Sin dependencias
+   (node:sqlite). La racha se mide con un "ahora" fijo (lunes 2026-11-02)
+   para que el test sea determinista; solo el check de registrarEvento
+   usa Date.now() real, por diseño (el evento insertado cae siempre en
+   la semana en curso → racha ≥ 1). */
 'use strict';
 const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs');
@@ -13,7 +19,7 @@ const path = require('path');
 
 const PRE = require('./prestigio');
 const NIV = require('./niveles');
-const NP = require('./posty-nivel50');
+const XP = require('./xp-nivel');
 
 let ok = 0, fail = 0, fails = [];
 function check(name, cond, extra) {
@@ -31,12 +37,33 @@ function freshDb() {
   db.exec('CREATE TABLE oficina_nivel_eventos (user_id INTEGER, poder TEXT, evento TEXT, hecho TEXT, registro_ref TEXT, ts INTEGER)');
   db.exec("CREATE TABLE oficina_registros (user_id INTEGER, poder TEXT, tipo TEXT, resumen TEXT, registro_ref TEXT, recibo_json TEXT, estado TEXT, ts INTEGER, salida INTEGER DEFAULT 0)");
   db.exec('CREATE TABLE posts (user_id INTEGER, status TEXT, media_type TEXT, ig_permalink TEXT, published_at INTEGER)');
+  db.exec('CREATE TABLE comment_queue (user_id INTEGER, status TEXT)');
+  db.exec('CREATE TABLE pz_ritual (user_id INTEGER, day_key TEXT, picked_post_id TEXT)');
+  db.exec('CREATE TABLE milestones_seen (user_id INTEGER, milestone INTEGER)');
   return db;
 }
-// SOLO-POSTEOS (4/11): n posteos publicados por Posty (feed real).
+// R5: n posteos publicados por Posty (foto = 40 XP c/u).
 function posts(db, n) {
   const ins = db.prepare('INSERT INTO posts (user_id, status, media_type, ig_permalink) VALUES (?,?,?,?)');
   for (let i = 0; i < n; i++) ins.run(UID, 'published', 'image', 'https://www.instagram.com/p/L3_' + i + '/');
+}
+// R5: n videos publicados (video = 60 XP c/u).
+function postsVideo(db, n) {
+  const ins = db.prepare('INSERT INTO posts (user_id, status, media_type, ig_permalink) VALUES (?,?,?,?)');
+  for (let i = 0; i < n; i++) ins.run(UID, 'published', 'video', 'https://www.instagram.com/reel/L3v_' + i + '/');
+}
+// R5: n consultas respondidas (+25 XP c/u).
+function respuestas(db, n) {
+  const ins = db.prepare('INSERT INTO comment_queue (user_id, status) VALUES (?,?)');
+  for (let i = 0; i < n; i++) ins.run(UID, 'replied');
+}
+// R5: n días seguidos eligiendo en el ritual (terminan el 2026-11-02).
+function ritualDias(db, n) {
+  const ins = db.prepare('INSERT INTO pz_ritual (user_id, day_key, picked_post_id) VALUES (?,?,?)');
+  for (let i = 0; i < n; i++) {
+    const d = new Date(Date.UTC(2026, 10, 2) - (n - 1 - i) * 86400000);
+    ins.run(UID, d.toISOString().slice(0, 10), 'post-' + i);
+  }
 }
 function subidaRec(db, nivel) {
   db.prepare("INSERT INTO oficina_registros (user_id, poder, tipo, resumen, registro_ref, recibo_json, estado, ts) VALUES (?,?,?,?,?,?,?,?)")
@@ -159,38 +186,65 @@ console.log('== 2. Guard no-baja + meta 7 meses (db real) ==');
   check('usuario quieto no sube solo: sigue 5', r.nivel === 5, r.nivel);
 })();
 
-console.log('== 3. Vista previa: próximo nivel (nivelPosty, SOLO-POSTEOS) ==');
+console.log('== 3. R5: la regla XP (xp-nivel.js, única fuente de verdad) ==');
+check('constantes XP', XP.XP_NIVEL === 500 && XP.XP_MAX_NIVEL === 50 && XP.XP_POST_BASE === 15 && XP.XP_POST_FOTO === 25 && XP.XP_POST_VIDEO === 45 && XP.XP_RESPUESTA === 25 && XP.XP_PRIMERA_SEMANA === 100 && XP.XP_RACHA_30 === 150 && XP.XP_RACHA_100 === 300 && XP.XP_100_RESPUESTAS === 150);
+check('nombres por banda', XP.avatarNivelNombre(1) === 'Recién arranca' && XP.avatarNivelNombre(3) === 'Recién arranca' && XP.avatarNivelNombre(4) === 'Negocio Visible' && XP.avatarNivelNombre(49) === 'Negocio Visible' && XP.avatarNivelNombre(50) === 'Referente del rubro');
+check('tiers del marco', XP.avatarTier(1) === 'none' && XP.avatarTier(15) === 'bronze' && XP.avatarTier(25) === 'silver' && XP.avatarTier(35) === 'gold');
 (function () {
   const db = freshDb();
-  posts(db, 10); // L5 = 10 posteos
-  const r = NP.nivelPosty(db, UID, undefined, NOW);
-  check('en L5: siguiente es 6', r.nivel === 5 && r.nombre_siguiente === 'Primer brote dorado', r.nivel + '/' + r.nombre_siguiente);
-  check('en L5: premio P1', !!r.siguiente_premio && r.siguiente_premio.indexOf('Brote dorado') >= 0, r.siguiente_premio);
-  check('en L5: desbloqueo 6', r.siguiente_desbloqueo === 'Hoja dorada pequeña', r.siguiente_desbloqueo);
+  posts(db, 10); // 10 fotos × 40 = 400 XP
+  const d = XP.avatarLevelData(db, UID);
+  check('10 fotos → 400 XP, Nv 1', d.xp === 400 && d.level === 1 && d.published === 10, d.xp + '/' + d.level);
+  check('10 fotos: siguiente 500', d.nextXp === 500 && d.nextName === 'Recién arranca');
 })();
 (function () {
   const db = freshDb();
-  posts(db, 14); // L6 = 14 posteos
-  const r = NP.nivelPosty(db, UID, undefined, NOW);
-  check('con 14 posteos → L6', r.nivel === 6, r.nivel);
-  check('en L6: siguiente es 7', r.nombre_siguiente === 'Hojas doradas', r.nombre_siguiente);
-  check('en L6: sin premio (7 no abre)', r.siguiente_premio === null, r.siguiente_premio);
-  check('en L6: desbloqueo 7', r.siguiente_desbloqueo === 'Piedra del sendero', r.siguiente_desbloqueo);
+  posts(db, 13); // 13 fotos × 40 = 520 XP
+  const d = XP.avatarLevelData(db, UID);
+  check('13 fotos → 520 XP, Nv 2', d.xp === 520 && d.level === 2, d.xp + '/' + d.level);
+  check('13 fotos: siguiente 1000', d.nextXp === 1000 && d.levelName === 'Recién arranca');
 })();
 (function () {
   const db = freshDb();
-  posts(db, 30); // L10 = 30 posteos
-  const r = NP.nivelPosty(db, UID, undefined, NOW);
-  check('con 30 posteos → L10', r.nivel === 10, r.nivel);
-  check('en L10: siguiente es 11', r.nombre_siguiente === 'Raíz profunda', r.nombre_siguiente);
-  check('en L10: premio P2', !!r.siguiente_premio && r.siguiente_premio.indexOf('Raíz firme') >= 0, r.siguiente_premio);
-  check('en L10: desbloqueo 11', r.siguiente_desbloqueo === 'Raíz visible', r.siguiente_desbloqueo);
+  postsVideo(db, 1); // 1 video = 60 XP
+  const d = XP.avatarLevelData(db, UID);
+  check('1 video → 60 XP, Nv 1', d.xp === 60 && d.level === 1, d.xp);
+})();
+(function () {
+  const db = freshDb();
+  posts(db, 12); postsVideo(db, 1); // 480 + 60 = 540 XP
+  const d = XP.avatarLevelData(db, UID);
+  check('12 fotos + 1 video → 540 XP, Nv 2', d.xp === 540 && d.level === 2, d.xp + '/' + d.level);
+})();
+(function () {
+  const db = freshDb();
+  respuestas(db, 100); // 100 × 25 + 150 (logro) = 2650 XP
+  const d = XP.avatarLevelData(db, UID);
+  check('100 respuestas → 2650 XP, Nv 6', d.xp === 2650 && d.level === 6 && d.respuestas === 100, d.xp + '/' + d.level);
+})();
+(function () {
+  const db = freshDb();
+  ritualDias(db, 7); // primera semana completa +100
+  const d = XP.avatarLevelData(db, UID);
+  check('racha 7 días → +100, rachaMax 7', d.xp === 100 && d.rachaMax === 7, d.xp + '/' + d.rachaMax);
+})();
+(function () {
+  const db = freshDb();
+  ritualDias(db, 30); // +100 (semana) +150 (racha 30) = 250
+  const d = XP.avatarLevelData(db, UID);
+  check('racha 30 días → +250, rachaMax 30', d.xp === 250 && d.rachaMax === 30, d.xp + '/' + d.rachaMax);
+})();
+(function () {
+  const db = freshDb();
+  posts(db, 1250); // 50000 XP → tope Nv 50
+  const d = XP.avatarLevelData(db, UID);
+  check('tope: 50000 XP → Nv 50, sin siguiente', d.level === 50 && d.nextXp === null && d.nextName === null && d.levelName === 'Referente del rubro', d.level);
 })();
 
-console.log('== 4. Historial 6–50 ==');
+console.log('== 4. Historial 6–50 con nombres XP (sin premios) ==');
 (function () {
-  const nombres = NIV.PODERES.posty.niveles.concat(PRE.NOMBRES_50.slice(5));
-  const extra = { premioEn: (n) => PRE.premioEn(n), desbloqueoEn: (n) => PRE.desbloqueoEn(n) };
+  const nombres = [];
+  for (let i = 1; i <= 50; i++) nombres.push(XP.avatarNivelNombre(i));
   const rows = [
     { registro_ref: 'nivel:posty:2:100', ts: 100 },
     { registro_ref: 'nivel:posty:3:200', ts: 200 },
@@ -200,14 +254,14 @@ console.log('== 4. Historial 6–50 ==');
     { registro_ref: 'basura', ts: 600 },
     { registro_ref: 'nivel:posty:6:700', ts: 700 },
   ];
-  const h = NIV.historialNiveles(rows, 50, nombres, extra);
+  const h = NIV.historialNiveles(rows, 50, nombres, null);
   const por = (n) => h.find((x) => x.nivel === n);
   check('historial ordenado 1–11', h.map((x) => x.nivel).join(',') === '1,2,3,5,6,11', h.map((x) => x.nivel).join(','));
   check('nivel 1 por primer evento', por(1).ts === 50);
   check('2–5 sin premio ni desbloqueo', por(2).premio === null && por(2).desbloqueo === null && por(5).premio === null && por(5).desbloqueo === null);
-  check('6 con nombre y premio P1', por(6).nombre_nivel === 'Primer brote dorado' && por(6).premio.indexOf('Brote dorado') >= 0);
-  check('6 con desbloqueo', por(6).desbloqueo === 'Hoja dorada pequeña');
-  check('11 con premio P2', por(11).nombre_nivel === 'Raíz profunda' && por(11).premio.indexOf('Raíz firme') >= 0);
+  check('6 con nombre XP, sin premio', por(6).nombre_nivel === 'Negocio Visible' && por(6).premio === null);
+  check('6 sin desbloqueo', por(6).desbloqueo === null);
+  check('11 con nombre XP', por(11).nombre_nivel === 'Negocio Visible' && por(11).premio === null);
   check('duplicado 6 conserva primer ts', por(6).ts === 400);
   check('sin extra: forma vieja intacta', (() => {
     const h2 = NIV.historialNiveles(rows.slice(0, 3), 50, NIV.PODERES.posty.niveles);
@@ -215,31 +269,50 @@ console.log('== 4. Historial 6–50 ==');
   })());
 })();
 
-console.log('== 5. registrarEvento escribe subidas SOLO-POSTEOS ==');
+console.log('== 5. registrarEvento escribe subidas SOLO por XP ==');
 (function () {
   const db = freshDb();
-  subidaRec(db, 5); // río al día en L5
-  posts(db, 10); // L5 = 10 posteos
-  const antes = NP.nivelPosty(db, UID, undefined, Date.now());
-  check('antes del evento: 5', antes.nivel === 5, antes.nivel);
-  posts(db, 4); // 14 posteos → L6 (el posteo ya existe al registrar el evento)
+  posts(db, 13); // 520 XP → Nv 2, río vacío (último = 1)
   const r = NIV.registrarEvento(db, UID, { poder: 'posty', evento: 'semana_publicada', hecho: 'Semana publicada', registro_ref: 'test:lote3' }, undefined);
-  check('subida devuelta es 6', !!r.subida && r.subida.nivel === 6, r.subida && r.subida.nivel);
-  check('subida con nombre 6', !!r.subida && r.subida.nombre_nivel === 'Primer brote dorado');
-  const row = db.prepare("SELECT * FROM oficina_registros WHERE tipo = 'subida_nivel' AND registro_ref LIKE 'nivel:posty:6:%'").get();
-  check('río tiene subida 6', !!row, row);
+  check('subida devuelta es 2 (XP)', !!r.subida && r.subida.nivel === 2, r.subida && r.subida.nivel);
+  check('subida con nombre XP 2', !!r.subida && r.subida.nombre_nivel === 'Recién arranca');
+  const row = db.prepare("SELECT * FROM oficina_registros WHERE tipo = 'subida_nivel' AND registro_ref LIKE 'nivel:posty:2:%'").get();
+  check('río tiene subida 2', !!row, row);
 })();
 (function () {
-  // Una subida por posteos: un solo registro (el 5), nada de 6.
+  // Idempotente: mismo nivel XP, sin duplicados.
   const db = freshDb();
-  posts(db, 10); // L5 = 10 posteos, río vacío (último = 1)
-  const r = NIV.registrarEvento(db, UID, { poder: 'posty', evento: 'semana_publicada', hecho: 'Semana publicada', registro_ref: 'test:lote3' }, undefined);
-  check('subida a 5', !!r.subida && r.subida.nivel === 5, r.subida && r.subida.nivel);
+  posts(db, 13);
+  const r1 = NIV.registrarEvento(db, UID, { poder: 'posty', evento: 'semana_publicada', hecho: 'Semana publicada', registro_ref: 'test:lote3' }, undefined);
+  const r2 = NIV.registrarEvento(db, UID, { poder: 'posty', evento: 'semana_publicada', hecho: 'Semana publicada', registro_ref: 'test:lote3' }, undefined);
+  check('segunda vez: sin subida', !r2.subida, r2.subida);
   const rows = db.prepare("SELECT registro_ref FROM oficina_registros WHERE tipo = 'subida_nivel'").all();
-  check('subida a 5: un solo registro', rows.length === 1 && rows[0].registro_ref.indexOf('nivel:posty:5:') === 0, rows.length);
+  check('un solo registro en el río', rows.length === 1 && rows[0].registro_ref.indexOf('nivel:posty:2:') === 0, rows.length);
+})();
+(function () {
+  // Sin XP no hay subida: Nv 1 no supera al último (1).
+  const db = freshDb();
+  const r = NIV.registrarEvento(db, UID, { poder: 'posty', evento: 'semana_publicada', hecho: 'Semana publicada', registro_ref: 'test:lote3' }, undefined);
+  check('sin XP: sin subida', !r.subida, r.subida);
+})();
+(function () {
+  // Semana + Bandeja sin nada publicado: NO sube el Nivel (es XP).
+  const db = freshDb();
+  const r = NIV.registrarEvento(db, UID, { poder: 'posty', evento: 'semana_generada', hecho: 'Semana generada', registro_ref: 'test:lote3' }, undefined);
+  check('semana sin posteo: sin subida', !r.subida, r.subida);
+})();
+(function () {
+  // El río manda: si el último registrado es 5, el Nv 2 XP no sube.
+  const db = freshDb();
+  subidaRec(db, 5);
+  posts(db, 13);
+  const r = NIV.registrarEvento(db, UID, { poder: 'posty', evento: 'semana_publicada', hecho: 'Semana publicada', registro_ref: 'test:lote3' }, undefined);
+  check('río en 5: Nv 2 XP no sube', !r.subida, r.subida);
+  const rows = db.prepare("SELECT registro_ref FROM oficina_registros WHERE tipo = 'subida_nivel'").all();
+  check('río sigue con 1 solo registro', rows.length === 1, rows.length);
 })();
 
-console.log('== 6. Cliente: vista previa + vitrina (estáticos) ==');
+console.log('== 6. Cliente: pantalla Nivel + servidor XP (estáticos) ==');
 const app = read('public/app.js');
 const srv = read('server.js');
 function fnBody(src, name, nextName) {
@@ -248,30 +321,34 @@ function fnBody(src, name, nextName) {
   const b = nextName ? src.indexOf('function ' + nextName, a + 1) : src.length;
   return src.slice(a, b < 0 ? src.length : b);
 }
-const premioBody = fnBody(app, 'mxPremioPostyHTML', 'mxPremioGestyHTML');
-check('preview: usa siguiente_premio', premioBody.indexOf('siguiente_premio') >= 0);
-check('preview: usa siguiente_desbloqueo', premioBody.indexOf('siguiente_desbloqueo') >= 0);
-check('preview: meta final en 50', premioBody.indexOf('nv.nivel >= 50') >= 0 && premioBody.indexOf('meta_final') >= 0);
-check('preview: sin % ni barras en jardín', premioBody.indexOf('progreso_pct') < 0 && premioBody.indexOf('width:') < 0);
-check('paso siguiente hasta 49', app.indexOf('nv.nivel < 50 && nv.nombre_siguiente') >= 0);
-check('paso siguiente muestra recompensa', app.indexOf('recSig') >= 0);
-check('vitrina: badge con premio/desbloqueo', app.indexOf('h.premio || h.desbloqueo') >= 0);
+check('mxPremioPostyHTML fuera', app.indexOf('function mxPremioPostyHTML') < 0);
+const pantalla = fnBody(app, 'pzNivelPantallaHTML', 'pzNivelEnviarRespuesta');
+check('pantalla Nivel: barra XP', pantalla.indexOf('pz-nivel-xpbar') >= 0);
+check('pantalla Nivel: 500 XP por nivel', pantalla.indexOf('/ 500 XP') >= 0);
+check('pantalla Nivel: sin jardín ni premios', pantalla.indexOf('jardín') < 0 && pantalla.indexOf('premio') < 0);
+check('dispatch: jardin-posty → bbNivelContent', /else if \(tab === 'jardin-posty'\)[^\n]*bbNivelContent\(\)/.test(app));
+check('paso siguiente en XP', app.indexOf('XP para el Nv') >= 0);
+check('vitrina: sin badge de premio', app.indexOf('h.premio || h.desbloqueo') < 0);
 check('Gesty intacto (Copa en 5)', fnBody(app, 'mxPremioGestyHTML', 'mxCardAgenteHTML').indexOf('nv.nivel >= 5') >= 0);
-check('servidor: siguiente_premio', srv.indexOf('siguiente_premio: niv.siguiente_premio') >= 0);
-check('servidor: siguiente_desbloqueo', srv.indexOf('siguiente_desbloqueo: niv.siguiente_desbloqueo') >= 0);
-check('servidor: meta_final', srv.indexOf('meta_final: niv.meta_final') >= 0);
-check('servidor: nombres 1–50 en historial', srv.indexOf('NOMBRES_50.slice(5)') >= 0);
+check('servidor: /api/avatar-level', srv.indexOf("'/api/avatar-level'") >= 0);
+check('servidor: nivXp (rama Posty XP)', srv.indexOf('const nivXp = xpD ? {') >= 0);
+check('servidor: Posty sin siguiente_premio', srv.indexOf('siguiente_premio: null') >= 0);
+check('servidor: historial con nombres XP', srv.indexOf('avatarNivelNombre(i)') >= 0);
+check('servidor: sin NOMBRES_50 en historial', srv.indexOf('NOMBRES_50.slice(5)') < 0);
+check('servidor: sin require posty-nivel50', srv.indexOf("require('./posty-nivel50')") < 0);
 
 console.log('== 7. M78: funciones auditadas ==');
-const fns = ['mxPremioPostyHTML', 'mxVistasUnAgenteHTML', 'pzVitrinaHTML', 'mxCardAgenteHTML', 'mxVitrina', 'mxNvNum', 'pzNivelUnlock'];
+const fns = ['pzNivelPantallaHTML', 'pzNivelRachaCardHTML', 'pzNivelMisionesHTML', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelEnviarRespuesta', 'pzNivelRecargar'];
 let auditadas = 0;
 for (const f of fns) {
   const n = count(app, 'function ' + f + '(');
   check('definida 1 vez: ' + f, n === 1, n);
   if (n === 1) auditadas++;
 }
+check('definida 1 vez: bbNivelContent (async)', count(app, 'async function bbNivelContent(') === 1, count(app, 'async function bbNivelContent('));
+if (count(app, 'async function bbNivelContent(') === 1) auditadas++;
 check('helpers presentes (esc, gzT)', app.indexOf('const esc =') >= 0 && app.indexOf('function gzT(') >= 0);
-console.log('  -> funciones auditadas: ' + auditadas + '/' + fns.length);
+console.log('  -> funciones auditadas: ' + auditadas + '/' + (fns.length + 1));
 
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL' + (fails.length ? ' — ' + fails.join(', ') : ''));
 process.exit(fail ? 1 : 0);

@@ -34,6 +34,13 @@ function dbMemoria() {
   db.exec(`CREATE TABLE profiles (user_id INTEGER PRIMARY KEY, business_name TEXT DEFAULT '', category TEXT DEFAULT 'otro', tone TEXT DEFAULT 'canchero', description TEXT DEFAULT '', ig_username TEXT DEFAULT '', ig_connected INTEGER DEFAULT 0, updated_at TEXT NOT NULL DEFAULT (datetime('now')));`);
   db.exec(`CREATE TABLE settings (user_id INTEGER PRIMARY KEY, brand_colors TEXT DEFAULT '', updated_at TEXT NOT NULL DEFAULT (datetime('now')));`);
   oficina.init(db);
+  // R5 (8/11): el Nivel de Posty es XP (xp-nivel.js) y lee posts,
+  // comment_queue, pz_ritual y milestones_seen — en producción las crea
+  // db.js al arrancar; el fixture en memoria las necesita también.
+  db.exec(`CREATE TABLE posts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, image_path TEXT NOT NULL, caption TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'draft', media_type TEXT DEFAULT '', published_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));`);
+  db.exec(`CREATE TABLE comment_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending');`);
+  db.exec(`CREATE TABLE pz_ritual (user_id INTEGER NOT NULL, day_key TEXT NOT NULL, picked_post_id INTEGER, PRIMARY KEY (user_id, day_key));`);
+  db.exec(`CREATE TABLE milestones_seen (user_id INTEGER NOT NULL, milestone INTEGER NOT NULL, PRIMARY KEY (user_id, milestone));`);
   return db;
 }
 
@@ -94,7 +101,8 @@ function dbMemoria() {
   ok(resuelto && resuelto.resumen.includes('semana de Café Aroma'), 'el registro_ref RESUELVE a su registro');
   const itemP = await oficina.crearBandejaItem(db, uid, { poder: 'posty', que: 'Tu semana está lista para publicar', propuesta: '5 posteos desde tu fundamento.', push: false });
   const accP = oficina.accionarBandeja(db, uid, itemP.id, 'aceptar');
-  ok(accP.subida && accP.subida.poder === 'posty' && accP.subida.nivel === 3 && accP.subida.nombre_nivel === 'De la casa', 'Posty sube a L3 con la semana + la decisión del dueño');
+  ok(!accP.subida, 'R5: la semana + la decisión NO suben el Nivel de Posty (es XP y nada se publicó todavía)');
+  ok(nv('posty').nivel === 3, 'el motor interno de la oficina sí llega a L3 para Posty (gates 1–5, no es el Nivel XP)');
   ok(nv('oficina').nivel === 3, 'la oficina sube a L3: decisión del dueño + primer poder con salida');
   const parte = oficina.parteDePoder(db, uid, 'posty');
   ok(parte && Array.isArray(parte.salidas) && parte.salidas.length === 1 && parte.salidas[0].registro_ref === sal.registro_ref, 'el parte de Posty trae su salida con recibo resoluble');

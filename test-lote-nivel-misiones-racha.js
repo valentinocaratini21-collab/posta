@@ -47,6 +47,7 @@ function check(name, cond, detail) {
 const appSrc = fs.readFileSync(path.join(TREE, 'public', 'app.js'), 'utf8');
 const cssSrc = fs.readFileSync(path.join(TREE, 'public', 'styles.css'), 'utf8');
 const serverSrc = fs.readFileSync(path.join(TREE, 'server.js'), 'utf8');
+const xpSrc = fs.readFileSync(path.join(TREE, 'xp-nivel.js'), 'utf8');
 const slice = (from, to) => {
   const a = appSrc.indexOf(from);
   const b = to ? appSrc.indexOf(to, a) : appSrc.length;
@@ -63,14 +64,14 @@ const bb = slice('function bbShell(tab, content)', 'async function bbLoadEstado'
 const mz = slice('function mzTabsHTML(tab)', 'function appShell');
 const dr = slice('<aside class="drawer"', '</aside>');
 const tira = slice('function mxTiraHTML', 'async function mxPortTop');
-const jardinFn = slice('function mxJardinHTML', 'function mxJardinErrorHTML');
+const jardinFn = fnSrc('pzNivelPantallaHTML');
 check('A1 bb-bar: dice Nivel', bb.includes("gzT('Nivel', 'Level')"));
 check('A2 bb-bar: cero Premios', !bb.includes('Premios') && !bb.includes('Prizes'));
 check('A3 mz-tabs: dice Nivel', mz.includes("gzT('Nivel', 'Level')"));
 check('A4 mz-tabs: cero Premios', !mz.includes('Premios') && !mz.includes('Prizes'));
 check('A5 drawer: ternario Level/Nivel', dr.includes("? 'Level' : 'Nivel'"));
 check('A6 drawer: cero Prizes/Premios', !dr.includes('Prizes') && !dr.includes('Premios'));
-check('A7 header jardín: <h1> Nivel', jardinFn.includes("<h1>${gzT('Nivel', 'Level')}</h1>"));
+check('A7 cabecera Nivel: badge + barra XP', jardinFn.includes('pz-nivel-badge') && jardinFn.includes('pz-nivel-xpbar'));
 check('A8 header jardín: cero Premios', !jardinFn.includes('Premios') && !jardinFn.includes('Prizes'));
 check('A9 tira: dice «Nivel N»', tira.includes("gzT('Nivel', 'Level')") && tira.includes('mxNvNum(nvP)'));
 check('A10 tira: cero «Premios · Nv»', !tira.includes("gzT('Premios'") && !tira.includes('Premios ·'));
@@ -78,45 +79,45 @@ check('A11 título de ruta: Level/Nivel', appSrc.includes("(en ? 'Level' : 'Nive
 check('A12 cero gzT(Premios en todo app.js', !appSrc.includes("gzT('Premios'"));
 check('A13 cero Prizes en todo app.js', !appSrc.includes('Prizes'));
 check('A14 cero >Premios< en todo app.js', !appSrc.includes('>Premios<'));
-check('A15 los premios en sí se quedan: «Próximo premio»', appSrc.includes('Próximo premio') || appSrc.includes('próximo premio'));
+check('A15 R5: los premios viejos salen («Próximo premio» fuera)', !appSrc.includes('Próximo premio') && !appSrc.includes('próximo premio'));
 check('A16 semilla de maestro sigue fuera', !appSrc.includes('Semillas de Maestro') && !appSrc.includes('mxSemillaCanjeHTML'));
-check('A17 jardín intacto: ropa, oficina, zonas', appSrc.includes('PZ_ROPA') && appSrc.includes('PZ_OFICINA') && appSrc.includes('MX_ZONAS_PREMIO'));
+check('A17 R5: ropa y oficina fuera; zonas del hero se quedan', !appSrc.includes('PZ_ROPA') && !appSrc.includes('PZ_OFICINA') && appSrc.includes('MX_ZONAS_PREMIO'));
 check('A18 jardín intacto: nivel 1–50', appSrc.includes('mxNvNum') && appSrc.includes('Nivel máximo'));
-check('A19 badge de premio nuevo intacto', appSrc.includes('pzPremiosNuevosSync') && appSrc.includes('pzPremiosNuevosLimpiar') && appSrc.includes('/api/oficina/premios-no-vistos'));
-check('A20 identificadores internos se quedan', appSrc.includes('PZ_PREMIOS_NUEVOS') && appSrc.includes('/api/oficina/premios'));
+check('A19 R5: badge de premio nuevo fuera', !appSrc.includes('pzPremiosNuevosSync') && !appSrc.includes('pzPremiosNuevosLimpiar') && !appSrc.includes('/api/oficina/premios-no-vistos'));
+check('A20 R5: identificadores de premios fuera', !appSrc.includes('PZ_PREMIOS_NUEVOS') && !appSrc.includes('/api/oficina/premios'));
 
 // ---------- Parte A: estático — misiones y racha ----------
 console.log('== Parte A: estático — misiones y racha ==');
-const NIVEL_FNS = ['pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelRachaHTML', 'pzNivelMisionesHTML'];
+const NIVEL_FNS = ['pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelRachaCardHTML', 'pzNivelMisionesHTML', 'pzNivelNombre', 'pzNivelHitoActual', 'pzNivelAutoCardHTML', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelPantallaHTML'];
 for (const f of NIVEL_FNS) check('A21 función existe: ' + f, appSrc.includes('function ' + f + '('));
-const bbJardin = slice('async function bbJardinPostyContent', 'async function bbJardinGestyContent');
+const bbJardin = fnSrc('bbNivelContent');
 check('A22 Nivel pide /api/photo-mission', bbJardin.includes("api.get('/api/photo-mission')"));
 check('A23 Nivel pide /api/ritual/hoy', bbJardin.includes("api.get('/api/ritual/hoy')"));
 check('A24 Nivel pide /api/posts', bbJardin.includes("api.get('/api/posts')"));
 check('A25 Nivel pide /api/assets', bbJardin.includes("api.get('/api/assets')"));
 check('A26 cada fetch con su propio catch', (bbJardin.match(/\.catch\(\(\) => null\)/g) || []).length >= 4);
-check('A27 mxJardinHTML recibe extra', appSrc.includes('function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML, extra)'));
-check('A28 Nivel pinta racha+misiones bajo la barra', jardinFn.includes('${rachaHTML}${misionesHTML}'));
+check('A27 R5: bbNivelContent compone la pantalla con los datos', fnSrc('bbNivelContent').includes('pzNivelPantallaHTML({ nivel'));
+check('A28 R5: Nivel pinta racha+misiones', jardinFn.includes('pzNivelRachaCardHTML') && jardinFn.includes('pzNivelMisionesHTML'));
 check('A29 misión foto vale +40 XP', fnSrc('pzNivelMisionesHTML').includes("'+40 XP'") || fnSrc('pzNivelMisionesHTML').includes('+40 XP'));
 check('A30 misión video vale +60 XP', fnSrc('pzNivelMisionesHTML').includes('+60 XP'));
-check('A31 la XP coincide con la regla real del servidor (foto 40 / video 60)', serverSrc.includes('XP_POST_BASE = 15') && serverSrc.includes('XP_POST_FOTO = 25') && serverSrc.includes('XP_POST_VIDEO = 45'));
-check('A32 la misión de comentarios NO se inventa', !fnSrc('pzNivelMisionesHTML').includes('comment') && !fnSrc('pzNivelMisionesHTML').includes('/api/comments'));
+check('A31 la XP coincide con la regla real del servidor (foto 40 / video 60)', xpSrc.includes('XP_POST_BASE = 15') && xpSrc.includes('XP_POST_FOTO = 25') && xpSrc.includes('XP_POST_VIDEO = 45'));
+check('A32 R5: misión comentario con envío real (no inventada)', fnSrc('pzNivelMisionesHTML').includes('pzNivelEnviarRespuesta') && fnSrc('pzNivelEnviarRespuesta').includes('/reply') && fnSrc('pzNivelEnviarRespuesta').includes('pzNivelRecargar'));
 check('A33 sin server.js nuevo', !serverSrc.includes('pzNivel') && !serverSrc.includes('/api/nivel-misiones'));
-check('A34 botones llevan al chat (álbum)', fnSrc('pzNivelMisionesHTML').split("bbGo(\\'#/app/chat\\')").length - 1 === 2);
+check('A34 R5: botones abren el picker real del chat', fnSrc('pzNivelMisionesHTML').includes('pzSftFotoAlChat') && fnSrc('pzNivelMisionesHTML').includes('pzDockMasVideo'));
 for (const c of ['.pz-nivel-racha', '.pz-nivel-racha-num', '.pz-nivel-racha-tx', '.pz-nivel-misiones', '.pz-nivel-misiones-sub', '.pz-mision', '.pz-mision-accion', '.pz-mision-xp', '.pz-mision-btn', '.pz-mision-ok'])
   check('A35 estilo existe: ' + c, cssSrc.includes(c + '{') || cssSrc.includes(c + ' '));
-const CALLED = ['pzNivelRachaHTML', 'pzNivelMisionesHTML', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelDiaSemana', 'pzNivelNeedEn', 'albumMondayKey', 'pcTz', 'bbGo', 'esc', 'gzT'];
+const CALLED = ['pzNivelRachaCardHTML', 'pzNivelMisionesHTML', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelDiaSemana', 'pzNivelNeedEn', 'albumMondayKey', 'pcTz', 'bbGo', 'esc', 'gzT'];
 for (const f of CALLED) check('A36 función auditada: ' + f + ' definida', appSrc.includes('function ' + f + '(') || appSrc.includes('const ' + f + ' ='));
-check('A37 escala: 500 puntos por nivel, 1–50', serverSrc.includes('XP_NIVEL = 500') && serverSrc.includes('XP_MAX_NIVEL = 50') && serverSrc.includes('Math.floor(xp / XP_NIVEL) + 1'));
-check('A38 respuestas: +25 por comentario respondido (status replied)', serverSrc.includes("status = 'replied'") && serverSrc.includes('XP_RESPUESTA = 25'));
-check('A39 racha: bonos de la racha máxima del ritual', serverSrc.includes('rachaMaximaRitual') && serverSrc.includes('XP_PRIMERA_SEMANA = 100') && serverSrc.includes('XP_RACHA_30 = 150') && serverSrc.includes('XP_RACHA_100 = 300'));
-check('A40 100 respuestas: +150', serverSrc.includes('XP_100_RESPUESTAS = 150'));
+check('A37 escala: 500 puntos por nivel, 1–50', xpSrc.includes('XP_NIVEL = 500') && xpSrc.includes('XP_MAX_NIVEL = 50') && xpSrc.includes('Math.floor(xp / XP_NIVEL) + 1'));
+check('A38 respuestas: +25 por comentario respondido (status replied)', xpSrc.includes("status = 'replied'") && xpSrc.includes('XP_RESPUESTA = 25'));
+check('A39 racha: bonos de la racha máxima del ritual', xpSrc.includes('rachaMaximaRitual') && xpSrc.includes('XP_PRIMERA_SEMANA = 100') && xpSrc.includes('XP_RACHA_30 = 150') && xpSrc.includes('XP_RACHA_100 = 300'));
+check('A40 100 respuestas: +150', xpSrc.includes('XP_100_RESPUESTAS = 150'));
 const avBlock = serverSrc.slice(serverSrc.indexOf('// ---------- Niveles'), serverSrc.indexOf('// Sugerencias proactivas'));
 const avCode = avBlock.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
 check('A41 primera venta por anuncio NO suma XP (sin dato de ventas)', !avCode.toLowerCase().includes('venta'));
 check('A42 seen: niveles 2..50', serverSrc.includes('n <= 50'));
-check('A43 marcos reescalados a 50 niveles (15/25/35)', serverSrc.includes("lvl >= 35 ? 'gold'") && serverSrc.includes("lvl >= 25 ? 'silver'") && serverSrc.includes("lvl >= 15 ? 'bronze'"));
-check('A44 funciones nuevas del servidor definidas', serverSrc.includes('function rachaMaximaRitual(') && serverSrc.includes('function avatarNivelNombre(') && serverSrc.includes('function avatarTier('));
+check('A43 marcos reescalados a 50 niveles (15/25/35)', xpSrc.includes("lvl >= 35 ? 'gold'") && xpSrc.includes("lvl >= 25 ? 'silver'") && xpSrc.includes("lvl >= 15 ? 'bronze'"));
+check('A44 funciones nuevas del servidor definidas', xpSrc.includes('function rachaMaximaRitual(') && xpSrc.includes('function avatarNivelNombre(') && xpSrc.includes('function avatarTier('));
 check('A45 el festejo usa el nombre del servidor para niveles >10', slice('async function chatAvatarLevel', '// El nivel se ve en el logo del chat').includes('lv.levelName'));
 
 // ---------- Parte B: VM — helpers puros ----------
@@ -131,12 +132,6 @@ function makeCtx(lang) {
     bbGo: () => {},
     albumMondayKey: () => '2026-11-09',
     pcTz: () => 'America/Argentina/Buenos_Aires',
-    mxNvNum: () => 2,
-    pzRopaAvance: () => 40,
-    pzRopaAvatarHTML: () => '',
-    pzRopaListaHTML: () => '<div class="pz-ropa-lista"></div>',
-    pzOficinaSeccionHTML: () => '',
-    mxJardinErrorHTML: () => '<div class="bb-error"></div>',
   };
   vm.createContext(sandbox);
   for (const f of NIVEL_FNS) {
@@ -146,9 +141,6 @@ function makeCtx(lang) {
     if (!src) { sandbox['__' + f] = () => ''; continue; }
     vm.runInContext(src + '\nthis.__' + f + ' = ' + f + ';', sandbox);
   }
-  const jSrc = fnSrc('mxJardinHTML');
-  if (!jSrc) { sandbox.__mxJardinHTML = () => ''; }
-  else vm.runInContext(jSrc + '\nthis.__mxJardinHTML = mxJardinHTML;', sandbox);
   return sandbox;
 }
 function call(ctx, expr) { try { return vm.runInContext(expr, ctx); } catch (e) { return ''; } }
@@ -174,12 +166,12 @@ check('B11 need EN: plato más pedido', call(ctxEn, "__pzNivelNeedEn('una foto d
 check('B12 need EN: vidriera', call(ctxEn, "__pzNivelNeedEn('una foto de tu vidriera')") === 'a photo of your storefront');
 check('B13 need EN: producto estrella (texto libre, tal cual)', call(ctxEn, "__pzNivelNeedEn('una foto de tu torta de chocolate')") === 'a photo of your torta de chocolate');
 check('B14 need EN: producto o servicio', call(ctxEn, "__pzNivelNeedEn('una foto de tu producto o servicio')") === 'a photo of your product or service');
-check('B15 racha 12 días ES', (() => { const h = call(ctxEs, "__pzNivelRachaHTML({racha:12})"); return h.includes('12 días seguidos') && h.includes('🔥'); })());
-check('B16 racha 0 → hoy empieza', call(ctxEs, "__pzNivelRachaHTML({racha:0})").includes('Hoy empieza tu racha'));
-check('B17 racha 1 día EN', call(ctxEn, "__pzNivelRachaHTML({racha:1})").includes('1 day in a row'));
-check('B18 racha sin dato → nada', call(ctxEs, '__pzNivelRachaHTML(null)') === '' && call(ctxEs, '__pzNivelRachaHTML({})') === '');
+check('B15 racha 12 días ES', (() => { const h = call(ctxEs, "__pzNivelRachaCardHTML({racha:12}, false)"); return h.includes('Racha de 12 días publicando') && h.includes('🔥'); })());
+check('B16 racha 0 → hoy empieza', call(ctxEs, "__pzNivelRachaCardHTML({racha:0}, false)").includes('Hoy empieza tu racha'));
+check('B17 racha 1 día EN', call(ctxEn, "__pzNivelRachaCardHTML({racha:1}, true)").includes('1 day posting in a row'));
+check('B18 racha sin dato → nada', call(ctxEs, '__pzNivelRachaCardHTML(null, false)') === '' && call(ctxEs, '__pzNivelRachaCardHTML({}, false)') === '');
 const mFoto = { mission: { need: 'una foto de tu plato más pedido', done: false }, ritualHoy: null, posts: [], assets: [] };
-check('B19 misión foto pendiente: QUÉ + CÓMO + XP', (() => { const h = call(ctxEs, '__pzNivelMisionesHTML(' + JSON.stringify(mFoto) + ')'); return h.includes('Subí una foto de tu plato más pedido') && h.includes('Cómo:') && h.includes('+40 XP') && h.includes('>Subir<') && h.includes('onclick="bbGo(\'#/app/chat\')"'); })());
+check('B19 misión foto pendiente: QUÉ + CÓMO + XP', (() => { const h = call(ctxEs, '__pzNivelMisionesHTML(' + JSON.stringify(mFoto) + ')'); return h.includes('Subí una foto de tu plato más pedido') && h.includes('Cómo:') && h.includes('+40 XP') && h.includes('>Subir<') && h.includes('onclick="pzSftFotoAlChat()"'); })());
 check('B20 misión foto hecha: ¡Foto subida! + ✓ sin botón', (() => { const h = call(ctxEs, "__pzNivelMisionesHTML({mission:{need:'una foto de tu plato más pedido',done:true},posts:[],assets:[]})"); return h.includes('¡Foto subida!') && h.includes('✓') && !h.includes('>Subir<'); })());
 const mReel = { mission: { need: 'una foto de tu plato más pedido', done: false }, ritualHoy: null, posts: [{ status: 'scheduled', media_type: 'video', scheduled_at: '2026-11-12 19:00' }], assets: [] };
 check('B21 misión video: 15 s + el reel del jueves + 60 XP', (() => { const h = call(ctxEs, '__pzNivelMisionesHTML(' + JSON.stringify(mReel) + ')'); return h.includes('Grabá 15 segundos') && h.includes('Posty lo convierte en el reel del jueves') && h.includes('+60 XP') && h.includes('>Grabar<'); })());
@@ -187,11 +179,10 @@ check('B22 misión video hecha: ¡Video subido!', (() => { const h = call(ctxEs,
 check('B23 sin misión ni reel → nada', call(ctxEs, '__pzNivelMisionesHTML({mission:null,posts:[],assets:[]})') === '');
 check('B24 misión foto EN', (() => { const h = call(ctxEn, '__pzNivelMisionesHTML(' + JSON.stringify(mFoto) + ')'); return h.includes('Upload a photo of your most-ordered dish') && h.includes('+40 XP'); })());
 check('B25 misión video EN: the Thursday reel', (() => { const h = call(ctxEn, '__pzNivelMisionesHTML(' + JSON.stringify(mReel) + ')'); return h.includes('Posty turns it into the Thursday reel') && h.includes('Record 15 seconds'); })());
-const nvP = { nombre_nivel: 'Aprendiz', nombre_siguiente: 'Bufanda' };
-const extra = { mission: { need: 'una foto de tu plato más pedido', done: false }, ritualHoy: { racha: 12 }, posts: [{ status: 'scheduled', media_type: 'video', scheduled_at: '2026-11-12 19:00' }], assets: [] };
-check('B26 jardín con extra: racha + misiones bajo el nivel', (() => { const h = call(ctxEs, '__mxJardinHTML("posty",' + JSON.stringify(nvP) + ',null,null,null,null,' + JSON.stringify(extra) + ')'); return h.includes('pz-nivel-racha') && h.includes('12 días seguidos') && h.includes('pz-nivel-misiones') && h.includes('Misiones de hoy'); })());
-check('B27 jardín sin extra: sin racha ni misiones, resto intacto', (() => { const h = call(ctxEs, '__mxJardinHTML("posty",' + JSON.stringify(nvP) + ',null,null,null,null,null)'); return !h.includes('pz-nivel-racha') && !h.includes('pz-nivel-misiones') && h.includes('pz-ropa-lista'); })());
-check('B28 jardín EN: título Level + Today’s missions', (() => { const h = call(ctxEn, '__mxJardinHTML("posty",' + JSON.stringify(nvP) + ',null,null,null,null,' + JSON.stringify(extra) + ')'); return h.includes('<h1>Level</h1>') && h.includes('Today’s missions'); })());
+const nivelD = { nivel: { ok: true, xp: 1620, level: 4, levelName: 'Negocio Visible', nextXp: 2000, nextName: 'Negocio Visible', respuestas: 3, rachaMax: 12 }, ritualHoy: { racha: 12 }, mission: { need: 'una foto de tu plato más pedido', done: false }, posts: [{ status: 'scheduled', media_type: 'video', scheduled_at: '2026-11-12 19:00' }], assets: [], comments: [] };
+check('B26 Nivel con datos: racha + misiones en la pantalla', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify(nivelD) + ')'); return h.includes('pz-nivel-racha') && h.includes('Racha de 12 días') && h.includes('pz-nivel-misiones') && h.includes('Misiones de hoy'); })());
+check('B27 Nivel sin datos: sin racha ni misiones, cabecera intacta', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify({ nivel: { ok: true, xp: 0, level: 1, levelName: 'Recién arranca', nextXp: 500, nextName: 'Recién arranca', respuestas: 0, rachaMax: 0 }, ritualHoy: null, mission: null, posts: [], assets: [], comments: [] }) + ')'); return !h.includes('pz-nivel-racha') && !h.includes('pz-nivel-misiones') && h.includes('NIVEL') && h.includes('Recién arranca'); })());
+check('B28 Nivel EN: Level + Today’s missions', (() => { const h = call(ctxEn, '__pzNivelPantallaHTML(' + JSON.stringify(nivelD) + ')'); return h.includes('Level') && h.includes('Today’s missions'); })());
 
 // ---------- Parte C: boot real ----------
 function req(method, p, body, ctype, cookie) {

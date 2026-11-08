@@ -57,9 +57,10 @@ const iStrip = tpl.indexOf('${nivelStripHTML}');
 const iHead = tpl.indexOf('homeHeadHTML(prof');
 const iGrid = tpl.indexOf('${gridHTML}');
 t(iSetup > 0 && iStrip > iSetup && iHead > iStrip && iGrid > iHead, 'orden 2026-10-25: píldora activación, TIRA, perfil, grilla (tira arriba del perfil, no arriba de los feeds)');
-for (const f of ['pzNivelStripHTML', 'pzNivelMount', 'pzNivelCelebShow', 'pzNivelStoryShow', 'pzNivelChip', 'pzNivelUnlock', 'pzNivelStemHTML', 'pzNivelAvance']) {
+for (const f of ['pzNivelStripHTML', 'pzNivelMount', 'pzNivelCelebShow', 'pzNivelStoryShow', 'pzNivelChip', 'pzNivelStemHTML', 'pzNivelAvance']) {
   t(new RegExp('function ' + f + '\\(').test(app), 'definida ' + f);
 }
+t(!app.includes('function pzNivelUnlock(') && app.includes('Te faltan') && app.includes('XP para el Nv'), 'R5: pzNivelUnlock fuera; el paso de la tira es XP, no premio');
 for (const clave of ['fundamento_leido', 'semana_generada', 'decision_bandeja', 'semana_aceptada', 'pieza_aceptada_primera', 'semana_publicada', 'pregunta_respondida']) {
   t(app.includes(clave), 'chip para ' + clave);
 }
@@ -73,7 +74,7 @@ const blockRaw = app.slice(app.indexOf('TIRA DE NIVEL POSTY'), app.indexOf('func
 const block = blockRaw.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
 t(/display:flex;align-items:center;gap:12px/.test(block), 'la tira lleva su layout inline (no depende de styles.css)');
 t(!/puntos|racha|fracaso|perdiste/i.test(block), 'la tira no tiene puntajes, rachas ni lenguaje de fracaso');
-t(/te falta 1 cosa/.test(block) && /te faltan/.test(block) && !/para ser \$\{/.test(block), 'paso corto «te falta 1 cosa» (sin "para ser X")');
+t(block.includes('Te faltan') && block.includes('XP para el Nv') && block.includes('Nivel máximo'), 'R5: paso en XP («Te faltan N XP para el Nv N+1», Nivel máximo en 50)');
 t(!/pzEvo|pz-evo|fantasma/.test(block), 'sin fantasma ni decor de evolución en la tira');
 t(/width:52px;height:52px/.test(block), 'avatar chico 52 px con tamaño inline');
 t(/height:7px/.test(block), 'barrita fina 7 px');

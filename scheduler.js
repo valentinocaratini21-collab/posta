@@ -216,29 +216,9 @@ async function publishSinglePost(db, post, opts = {}) {
         }
       }
     } catch (e) { /* el nivel nunca bloquea una publicación lograda */ }
-    // (PREMIOS-NOTIF · 4/11) Premio nuevo: si este posteo subió el nivel,
-    // el premio queda no visto (badge en el tab Premios hasta que se vea)
-    // y sale UNA push con su nombre. Un aviso por subida, no por posteo:
-    // si el salto es de 2 niveles, la push cubre ambos. Solo publicación
-    // real (nunca demo: los posteos demo no cuentan para el nivel). Nunca
-    // bloquea la publicación: si no hay token, no hay entrega, pero el
-    // badge igual avisa al abrir la app (red de seguridad en el GET).
-    try {
-      if (!result.demo) {
-        const pn = require('./premios-notif');
-        const np = require('./posty-nivel50');
-        const niv = np.nivelPosty(db, post.user_id, {});
-        if (niv && niv.nivel) {
-          const r = pn.procesarNivel(db, post.user_id, niv.nivel);
-          if (r.nuevos && r.nuevos.length) {
-            const pr = require('./prestigio');
-            const top = r.nuevos[r.nuevos.length - 1];
-            const txt = pn.textoPush(top, pr.nombreNivel(top), pr.desbloqueoEn(top), r.nuevos);
-            require('./push').sendPush(post.user_id, { title: txt.title, body: txt.body, url: '/#/app/jardin-posty' }).catch(() => {});
-          }
-        }
-      }
-    } catch (e) { console.error('[premios-notif]', e.message); }
+    // R5 (8/11): sin premios ni badge: la subida de nivel se festeja en
+    // el chat (chatAvatarLevel, desde /api/avatar-level, una vez por
+    // nivel). Acá no se dispara ninguna push de nivel.
     // Ledger: la publicación real queda asentada (fuente del presupuesto).
     if (post.__guardAttempt) {
       try {

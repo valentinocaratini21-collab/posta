@@ -1,11 +1,16 @@
-// test-prestigio-cableado.js — CABLEADO PRESTIGIO POSTY v498.
+// test-prestigio-cableado.js — R5 (8/11, decisión Valentino 01:54): el
+// cableado de prestigio (posty-nivel50.js: nivelPosty con entradas P1–P9,
+// premios, desbloqueos, etiquetas «Prestigio N · Nivel M») SALE. El Nivel
+// nuevo es la regla XP de xp-nivel.js (500 por nivel, 1–50; sin prestigio,
+// sin premios, sin desbloqueos). prestigio.js QUEDA en el árbol como
+// código muerto (sin llamadores en producción; su borrado es de R7) con
+// su md5 actual pineado (el v498 era rancio ya en base v793).
 // Uso: node test-prestigio-cableado.js (desde la raíz del repo).
 // DB real en memoria (node:sqlite). Nada de stubs de SQL.
-// Cubre: helper nivelPosty (L3 P0, L6 entrada, L7 no-entrada, L50 techo,
-// SOLO-POSTEOS (4/11): los niveles se alimentan con posteos, no semanas;
-// fallback sin prestigio.js, nunca baja), estáticos del cableado en
-// server.js / oficina.js / app.js, vetos (sin dinero ni compra ni nivel 51)
-// y módulo prestigio.js intacto (md5).
+// Cubre: helper avatarLevelData (Nv 1, Nv 2, Nv 3, techo Nv 50; sin
+// prestigio.js, nunca baja), estáticos del cableado XP en server.js /
+// oficina.js / app.js, vetos (sin dinero ni compra ni nivel 51) y módulo
+// prestigio.js intacto (md5).
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -16,7 +21,7 @@ const { DatabaseSync } = require('node:sqlite');
 const DIR = __dirname;
 const NIV = require(path.join(DIR, 'niveles.js'));
 const PRE = require(path.join(DIR, 'prestigio.js'));
-const HP = require(path.join(DIR, 'posty-nivel50.js'));
+const XP = require(path.join(DIR, 'xp-nivel.js'));
 
 let ok = 0, fail = 0;
 function t(cond, msg) {
@@ -28,138 +33,95 @@ function freshDb() {
   db.exec('CREATE TABLE oficina_nivel_eventos (user_id INTEGER, poder TEXT, evento TEXT, hecho TEXT, registro_ref TEXT, ts INTEGER)');
   db.exec("CREATE TABLE oficina_registros (user_id INTEGER, poder TEXT, tipo TEXT, resumen TEXT, registro_ref TEXT, recibo_json TEXT, estado TEXT, ts INTEGER, salida INTEGER DEFAULT 0)");
   db.exec('CREATE TABLE posts (user_id INTEGER, status TEXT, media_type TEXT, ig_permalink TEXT, published_at INTEGER)');
+  db.exec('CREATE TABLE comment_queue (user_id INTEGER, status TEXT)');
+  db.exec('CREATE TABLE pz_ritual (user_id INTEGER, day_key TEXT, picked_post_id TEXT)');
+  db.exec('CREATE TABLE milestones_seen (user_id INTEGER, milestone INTEGER)');
   return db;
 }
-// SOLO-POSTEOS (4/11): n posteos publicados por Posty (feed real).
+// R5: n posteos publicados por Posty (foto = 40 XP c/u).
 function posts(db, n) {
   const ins = db.prepare('INSERT INTO posts (user_id, status, media_type, ig_permalink) VALUES (?,?,?,?)');
   for (let i = 0; i < n; i++) ins.run(UID, 'published', 'image', 'https://www.instagram.com/p/PC_' + i + '/');
 }
 const UID = 7;
-const MONDAY = (y, m, d) => new Date(Date.UTC(y, m - 1, d)).getTime();
-function ev(db, evento, ts) {
-  db.prepare('INSERT INTO oficina_nivel_eventos VALUES (?,?,?,?,?,?)').run(UID, 'posty', evento, evento, 'ev:' + evento + ':' + ts, ts);
-}
-function semanas(db, n, desde) {
-  const base = desde || MONDAY(2026, 9, 7);
-  for (let i = 0; i < n; i++) ev(db, 'semana_publicada', base + i * 7 * 86400000);
-}
-function baseL5(db) {
-  ev(db, 'fundamento_leido', MONDAY(2026, 8, 31));
-  ev(db, 'semana_generada', MONDAY(2026, 8, 31));
-  ev(db, 'decision_bandeja', MONDAY(2026, 8, 31));
-  ev(db, 'semana_aceptada', MONDAY(2026, 8, 31));
-  for (let i = 0; i < 3; i++) ev(db, 'pieza_aceptada_primera', MONDAY(2026, 8, 31) + i);
-  semanas(db, 4, MONDAY(2026, 9, 7));
-  ev(db, 'pregunta_respondida', MONDAY(2026, 9, 7));
-  ev(db, 'pregunta_respondida', MONDAY(2026, 9, 14));
-}
-function semillaL6(db) {
-  baseL5(db);
-  semanas(db, 2, MONDAY(2026, 10, 5));
-  ev(db, 'pieza_aceptada_primera', MONDAY(2026, 10, 5));
-}
 
-console.log('— Helper: P0 con 3 posteos + etiqueta formato viejo —');
+console.log('— Helper: Nv 1 con 3 fotos (sin prestigio, sin premios) —');
 {
   const db = freshDb();
-  posts(db, 3); // SOLO-POSTEOS: L3 = 3 posteos
-  const r = HP.nivelPosty(db, UID, {}, MONDAY(2026, 8, 31));
-  t(r.nivel === 3, 'L3 con 3 posteos (got ' + r.nivel + ')');
-  t(r.prestigio === 0 && r.nombre_prestigio === null && r.insignia === null, 'P0 sin prestigio ni insignia');
-  t(r.etiqueta_tirita === 'Nivel 3 · De la casa', 'etiqueta P0: «Nivel 3 · De la casa» (got ' + r.etiqueta_tirita + ')');
-  t(r.nombre_siguiente === 'Mano derecha de tu Instagram', 'nombre_siguiente L4 (got ' + r.nombre_siguiente + ')');
-  t(r.premio_actual === null && r.desbloqueo_actual === null, 'sin premio ni desbloqueo actual en P0');
-  t(r.premios.length === 0 && r.desbloqueos.length === 0 && r.meta_final === null, 'sin premios ni meta en P0');
-  t(r.color === '#2793C8' && r.nombre === 'Posty', 'color y nombre del poder intactos');
-  t(r.gate && r.gate.pendientes.length === 0, 'sin requisitos de gate (solo posteos)');
-  t(r.avance && r.avance.hechos === 3 && r.avance.total === 6, 'avance en posteos 3/6 (got ' + JSON.stringify(r.avance) + ')');
+  posts(db, 3); // 3 fotos × 40 = 120 XP
+  const d = XP.avatarLevelData(db, UID);
+  t(d.level === 1 && d.xp === 120, 'Nv 1 con 120 XP (got ' + d.level + '/' + d.xp + ')');
+  t(d.levelName === 'Recién arranca', 'nombre Nv 1: Recién arranca (got ' + d.levelName + ')');
+  t(!('prestigio' in d) && !('premio' in d) && !('meta_final' in d), 'sin prestigio, premio ni meta en el objeto XP');
+  t(d.tier === 'none' && d.nextXp === 500, 'tier none, siguiente 500');
+  t(d.published === 3, '3 publicados contados');
 }
 
-console.log('— Helper: entrada a prestigio 1 (L6) —');
+console.log('— Helper: Nv 2 con 13 fotos —');
 {
   const db = freshDb();
-  semillaL6(db);
-  posts(db, 14); // SOLO-POSTEOS: L6 = 14 posteos
-  const r = HP.nivelPosty(db, UID, {}, MONDAY(2026, 10, 12));
-  t(r.nivel === 6, 'L6 con 14 posteos (got ' + r.nivel + ')');
-  t(r.etiqueta_tirita === 'Prestigio 1 · Nivel 6', 'etiqueta: «Prestigio 1 · Nivel 6» (got ' + r.etiqueta_tirita + ')');
-  t(r.prestigio === 1 && r.nombre_prestigio === 'Brote dorado' && r.insignia === 'Brote dorado', 'P1 Brote dorado con insignia');
-  t(r.premios.length === 1 && r.premios[0].premio.includes('Brote dorado'), 'un premio: el de P1');
-  t(r.desbloqueos.length === 1 && r.desbloqueos[0].desbloqueo === 'Hoja dorada pequeña', 'un desbloqueo: el de L6');
-  t(r.nombre_siguiente === PRE.nombreNivel(7), 'nombre_siguiente = nombre de L7 (got ' + r.nombre_siguiente + ')');
-  t(r.gate && r.gate.nivel_objetivo === 7, 'gate en curso apunta a L7');
-  t(typeof r.proximo_paso === 'string' && r.proximo_paso.includes('posteos') && !r.proximo_paso.includes('semana_publicada'), 'proximo_paso es frase en posteos, no clave cruda (got ' + r.proximo_paso + ')');
-  t(r.premio_actual && r.premio_actual.includes('Brote dorado'), 'premio_actual = premio de entrada P1');
-  t(r.desbloqueo_actual === 'Hoja dorada pequeña', 'desbloqueo_actual = desbloqueo de L6');
-  t(r.avance && r.avance.hechos === 14 && r.avance.total === 18 && r.posteos_posty === 14, 'avance en posteos 14/18 (got ' + JSON.stringify(r.avance) + ')');
-  t(r.nivel >= NIV.computarNivel(db, UID, 'posty', {}).nivel, 'el extendido nunca baja del base');
+  posts(db, 13); // 520 XP
+  const d = XP.avatarLevelData(db, UID);
+  t(d.level === 2, 'Nv 2 con 520 XP (got ' + d.level + ')');
+  t(d.levelName === 'Recién arranca' && d.nextName === 'Recién arranca', 'Nv 2 sigue Recién arranca');
+  t(d.nextXp === 1000, 'siguiente 1000');
+  t(d.xp - (d.level - 1) * 500 === 20, 'avance en XP 20/500');
 }
 
-console.log('— Helper: nivel sin entrada (L7) —');
+console.log('— Helper: Nv 3 con 25 fotos + 1 video —');
 {
   const db = freshDb();
-  semillaL6(db);
-  semanas(db, 2, MONDAY(2026, 10, 19)); // total 8 semanas
-  for (let i = 0; i < 7; i++) ev(db, 'decision_bandeja', MONDAY(2026, 10, 19) + i); // total 8
-  posts(db, 18); // SOLO-POSTEOS: L7 = 18 posteos
-  const r = HP.nivelPosty(db, UID, {}, MONDAY(2026, 10, 26));
-  t(r.nivel === 7, 'L7 con 18 posteos (got ' + r.nivel + ')');
-  t(r.etiqueta_tirita === 'Prestigio 1 · Nivel 7', 'etiqueta L7 (got ' + r.etiqueta_tirita + ')');
-  t(r.premio_actual === null, 'sin premio_actual en nivel sin entrada');
-  t(r.desbloqueo_actual === 'Piedra del sendero', 'desbloqueo_actual = desbloqueo de L7');
+  posts(db, 25);
+  db.prepare('INSERT INTO posts (user_id, status, media_type, ig_permalink) VALUES (?,?,?,?)').run(UID, 'published', 'video', 'https://www.instagram.com/reel/PCv/');
+  const d = XP.avatarLevelData(db, UID); // 1000 + 60 = 1060 XP
+  t(d.level === 3 && d.xp === 1060, 'Nv 3 con 1060 XP (got ' + d.level + '/' + d.xp + ')');
+  t(d.levelName === 'Recién arranca', 'Nv 3 Recién arranca');
 }
 
-console.log('— Helper: techo L50 —');
+console.log('— Helper: techo Nv 50 —');
 {
   const db = freshDb();
-  baseL5(db);
-  semanas(db, 90, MONDAY(2026, 10, 5)); // 94 semanas consecutivas en total
-  for (let i = 0; i < 45; i++) ev(db, 'pieza_aceptada_primera', MONDAY(2026, 10, 5) + i);
-  for (let i = 0; i < 91; i++) ev(db, 'decision_bandeja', MONDAY(2026, 10, 5) + i);
-  posts(db, 210); // SOLO-POSTEOS: L50 = 210 posteos
-  const fin = MONDAY(2026, 10, 5) + 89 * 7 * 86400000;
-  const r = HP.nivelPosty(db, UID, {}, fin);
-  t(r.nivel === 50, 'L50 con 210 posteos (got ' + r.nivel + ')');
-  t(r.etiqueta_tirita === 'Prestigio 9 · Nivel 50', 'etiqueta L50 (got ' + r.etiqueta_tirita + ')');
-  t(r.nombre_siguiente === null, 'en L50 no hay siguiente');
-  t(r.meta_final !== null && r.premios.length === 9, 'meta final + 9 premios');
-  t(r.proximo_paso === null, 'en L50 no hay próximo paso');
-  t(r.desbloqueo_actual === 'Corona del maestro' && r.premio_actual === null, 'L50 celebra su desbloqueo, no un premio de entrada');
+  posts(db, 613); // 24520 XP
+  const d = XP.avatarLevelData(db, UID);
+  t(d.level === 50, 'Nv 50 con 613 fotos (got ' + d.level + ')');
+  t(d.levelName === 'Referente del rubro', 'nombre Nv 50: Referente del rubro');
+  t(d.nextXp === null && d.nextName === null, 'en Nv 50 no hay siguiente');
+  t(d.xp === 24520, 'XP exacto 24520, sin bonus inventado');
 }
 
-console.log('— Helper: fallback sin prestigio.js (base intacto) —');
+console.log('— Helper: sin prestigio.js (el XP no lo requiere) —');
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pz-cableado-'));
-  fs.copyFileSync(path.join(DIR, 'niveles.js'), path.join(tmp, 'niveles.js'));
-  fs.copyFileSync(path.join(DIR, 'posty-nivel50.js'), path.join(tmp, 'posty-nivel50.js'));
+  fs.copyFileSync(path.join(DIR, 'xp-nivel.js'), path.join(tmp, 'xp-nivel.js'));
   const db = freshDb();
-  semillaL6(db);
-  const HP2 = require(path.join(tmp, 'posty-nivel50.js'));
-  const r = HP2.nivelPosty(db, UID, {}, MONDAY(2026, 10, 12));
-  t(r.nivel === 5, 'sin prestigio.js el nivel queda en el tope base 5 (got ' + r.nivel + ')');
-  t(r.prestigio === 0 && r.premios.length === 0 && r.etiqueta_tirita === 'Nivel 5 · Tu socio de contenido', 'fallback P0 con etiqueta base');
+  posts(db, 13);
+  const XP2 = require(path.join(tmp, 'xp-nivel.js'));
+  const d = XP2.avatarLevelData(db, UID);
+  t(d.level === 2 && d.xp === 520, 'xp-nivel.js solo, sin prestigio.js: Nv 2 (got ' + d.level + ')');
+  t(typeof XP2.avatarNivelNombre === 'function' && typeof XP2.rachaMaximaRitual === 'function', 'exporta nombres y racha sin dependencias');
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-console.log('— Estáticos: cableado en server.js / oficina.js / app.js —');
+console.log('— Estáticos: cableado XP en server.js / oficina.js / app.js —');
 {
   const srv = fs.readFileSync(path.join(DIR, 'server.js'), 'utf8');
   const ofi = fs.readFileSync(path.join(DIR, 'oficina.js'), 'utf8');
   const app = fs.readFileSync(path.join(DIR, 'public', 'app.js'), 'utf8');
-  t(srv.includes("require('./posty-nivel50')") && srv.includes('nivelPosty(db, uid'), 'server.js usa el helper en /nivel');
+  t(!srv.includes("require('./posty-nivel50')") && srv.includes("require('./xp-nivel')"), 'server.js usa xp-nivel, no posty-nivel50');
+  t(srv.includes("'/api/avatar-level'") && srv.includes('avatarLevelData(db, uid'), 'server.js sirve /api/avatar-level con avatarLevelData');
   t(srv.includes("resolverPoder(poder) === 'posty' ? 50 : 5"), 'celebrar: tope 50 solo para posty');
-  t(srv.includes('etiqueta_tirita: niv.etiqueta_tirita') && srv.includes('premio_actual: niv.premio_actual'), 'respuesta /nivel expone etiqueta y premio actual');
+  t(srv.includes('etiqueta_tirita: niv.etiqueta_tirita') && srv.includes('premio_actual: niv.premio_actual'), 'respuesta /nivel expone etiqueta y premio actual (null en Posty)');
   t(srv.includes("nombre_siguiente: niv.nombre_siguiente !== undefined"), 'nombre_siguiente extendido con fallback viejo');
-  t(srv.includes("BUILD_ID = '20261031-v498'"), 'BUILD v498');
-  t(ofi.includes("require('./posty-nivel50')") && ofi.includes("if (poder === 'posty')"), 'estadoPoder usa el helper solo para posty');
+  t(srv.includes("BUILD_ID = '20261105-v799'"), 'BUILD v799 (estampado preparador R5)');
+  t(ofi.includes("require('./xp-nivel')") && ofi.includes("if (poder === 'posty')"), 'estadoPoder usa xp-nivel solo para posty');
+  t(!ofi.includes("require('./posty-nivel50')"), 'oficina.js sin posty-nivel50');
   t(app.includes('nv.etiqueta_tirita') && app.includes('const etiqueta = (nv && nv.etiqueta_tirita)'), 'tirita usa etiqueta_tirita con fallback');
-  t(app.includes('nv.premio_actual || nv.desbloqueo_actual || pzNivelUnlock'), 'celebración prefiere premio/desbloqueo del servidor');
+  t(app.includes("(en ? 'Level ' : 'Nivel ') + nv.nivel + ': ' + (nv.nombre_nivel || '')"), 'celebración XP: «Nivel N: nombre», sin premio');
   t(app.includes('function pzVitrinaHTML(hist, en, etiqueta)') && app.includes('Nivel actual: '), 'vitrina acepta etiqueta actual');
   t(app.includes('nivJ.etiqueta_tirita'), 'Mi negocio pasa la etiqueta a la vitrina');
   t(app.includes('p.nivel.etiqueta_tirita ? esc(p.nivel.etiqueta_tirita)'), 'tarjeta de LA OFICINA usa la etiqueta');
   const idx = fs.readFileSync(path.join(DIR, 'public', 'index.html'), 'utf8');
-  t(idx.includes('app.js?v=324'), 'index.html bumpeado a app.js?v=324');
+  t(idx.includes('app.js?v=534'), 'index.html en app.js?v=534 (estampado preparador R5)');
 }
 
 console.log('— Vetos: sin dinero, sin compra, sin nivel 51 —');
@@ -167,9 +129,10 @@ console.log('— Vetos: sin dinero, sin compra, sin nivel 51 —');
   // Las líneas de guarda («nunca descuentos», «ningún premio es descuento»)
   // enuncian la prohibición: se excluyen del grep; lo que se veta es OFRECER.
   const sinGuardas = (s) => s.split('\n').filter((l) => !/nunca|ningún/i.test(l)).join('\n');
-  const hp = sinGuardas(fs.readFileSync(path.join(DIR, 'posty-nivel50.js'), 'utf8'));
+  const xp = sinGuardas(fs.readFileSync(path.join(DIR, 'xp-nivel.js'), 'utf8'));
   const pre = sinGuardas(fs.readFileSync(path.join(DIR, 'prestigio.js'), 'utf8'));
-  t(!/descuento|comprar|nivel 51/i.test(hp), 'helper sin descuento, compra ni nivel 51 ofrecidos');
+  t(!fs.existsSync(path.join(DIR, 'posty-nivel50.js')), 'posty-nivel50.js fuera del árbol');
+  t(!/descuento|comprar|nivel 51/i.test(xp), 'módulo XP sin descuento, compra ni nivel 51 ofrecidos');
   t(!/descuento|comprar/i.test(pre), 'módulo prestigio sin descuento ni compra ofrecidos');
   t(!/descuento|comprar|nivel 51/i.test(PRE.PRESTIGIOS.map((p) => p.premio || '').join(' ')), 'premios sin dinero');
 }
@@ -177,7 +140,7 @@ console.log('— Vetos: sin dinero, sin compra, sin nivel 51 —');
 console.log('— Módulo prestigio.js intacto —');
 {
   const md5 = crypto.createHash('md5').update(fs.readFileSync(path.join(DIR, 'prestigio.js'))).digest('hex');
-  t(md5 === '38df92fe90a2fc9e6bd414a5eb6ef831', 'md5 prestigio.js = 38df92fe (got ' + md5 + ')');
+  t(md5 === '9e7d3c512732fdb529c270604295972d', 'md5 prestigio.js = 9e7d3c51 (got ' + md5 + ')');
 }
 
 console.log(`\nCABLEADO: ${ok} ok, ${fail} fail`);
