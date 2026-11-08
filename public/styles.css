@@ -57,6 +57,14 @@ button{font-family:inherit}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;font-weight:800;font-size:14px;border-radius:999px;padding:12px 26px;transition:transform .14s ease,box-shadow .14s ease,background .14s ease,border-color .14s ease,filter .14s ease;font-family:inherit;letter-spacing:.01em}
 .btn:active{transform:scale(.97)}
 .btn-primary{background:var(--cel);color:#fff;box-shadow:0 6px 16px rgba(39,147,200,.42),inset 0 1px 0 rgba(255,255,255,.55)}
+/* (LOTE SUBIR-FOTO-DIRECTA) pzIc dibuja en celeste fijo (#2793C8): sobre
+   el fondo celeste del botón era invisible (celeste sobre celeste) — el
+   botón de enviar del chat se veía como un círculo sólido sin ícono.
+   El CSS manda sobre el atributo de presentación del svg, así que el
+   ícono queda BLANCO en todos los botones celestes con ícono pzIc
+   (btn-primary, igmock-accept, accept-pill, ag-upload-btn, pcard-approve,
+   pcard-accept). .hf-ask-send y .apv-accept ya tenían su propia regla. */
+.btn-primary .pz-ic svg, .igmock-accept .pz-ic svg, .igmock-accept-fixed .pz-ic svg, .accept-pill .pz-ic svg, .ag-upload-btn .pz-ic svg, .pcard-approve .pz-ic svg, .pcard-accept .pz-ic svg{stroke:#fff}
 .btn-primary:hover{filter:brightness(.97);transform:translateY(-1px);box-shadow:0 10px 24px rgba(39,147,200,.5),inset 0 1px 0 rgba(255,255,255,.55)}
 .btn-soft{background:transparent;color:var(--cel);border:none;box-shadow:none}
 .btn-soft:hover{background:rgba(39,147,200,.08);border-color:transparent;box-shadow:none}

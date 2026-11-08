@@ -261,7 +261,7 @@ async function parteB() {
   {
     const sb = buildSandbox('es');
     await uploadWith(sb, makeFiles(10, 'video'));
-    check('B4 9 fotos y 1 video → 10 subidas, el video va a /api/assets?kind=video', sb.fetched.length === 10 && sb.fetched.some((f) => String(f.url).includes('/api/assets?kind=video')) && sb.fetched.filter((f) => String(f.url) === '/api/media').length === 9, JSON.stringify(sb.fetched.map((f) => f.url)));
+    check('B4 9 fotos y 1 video → 10 subidas, el video va a /api/assets?kind=video', sb.fetched.length === 10 && sb.fetched.some((f) => String(f.url).includes('/api/assets?kind=video')) && sb.fetched.filter((f) => String(f.url) === '/api/media?from=chat').length === 9, JSON.stringify(sb.fetched.map((f) => f.url)));
     check('B4b el conteo dice "9 fotos y 1 video"', sb._els['#chatMsg'] && sb._els['#chatMsg'].writes.some((w) => w.includes('9 fotos y 1 video')), JSON.stringify(sb._els['#chatMsg'] ? sb._els['#chatMsg'].writes : []));
   }
   // B5: HEIC con type vacío → se acepta y se manda como image/heic.

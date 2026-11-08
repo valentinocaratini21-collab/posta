@@ -9683,7 +9683,9 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     try {
       const card = (b.closest && b.closest('#chatCard')) || document;
       const picker = (card.querySelector ? card.querySelector('#chatFile') : null) || document.getElementById('chatFile');
-      if (picker) picker.click();
+      // (LOTE SUBIR-FOTO-DIRECTA) accept SOLO image/* ANTES del click:
+      // la camarita es foto, no video (ver pzSftFotoAlChat).
+      if (picker) { picker.accept = 'image/*'; picker.click(); }
     } catch (err) {}
   });
 })();
@@ -24609,7 +24611,7 @@ function pzPcChipAction(kind) {
     var pb = card ? card.querySelector('#chatPhotoBtn') : document.getElementById('chatPhotoBtn');
     if (pb) { try { pb.click(); return; } catch (e) {} }
     var fl = card ? card.querySelector('#chatFile') : document.getElementById('chatFile');
-    if (fl) { try { fl.click(); return; } catch (e2) {} }
+    if (fl) { try { fl.accept = 'image/*'; fl.click(); return; } catch (e2) {} }
     pzPcSendAnchored(en ? 'I want to change the photo of this post' : 'Quiero cambiar la foto de este posteo');
     return;
   }
@@ -27424,7 +27426,13 @@ function pzSftFotoAlChat() {
     intentos++;
     try {
       const cf = document.getElementById("chatFile");
-      if (cf) { clearInterval(t); cf.click(); }
+      // (LOTE SUBIR-FOTO-DIRECTA) accept SOLO image/* ANTES del click:
+      // iOS Safari con accept combinado (image/*,video/*) muestra el
+      // menú del sistema (Photo Library / Take Photo or Video / Choose
+      // Files) en vez de abrir la galería directo. El camino de video
+      // fija 'video/*' cada vez y nunca lo restaura, así que el accept
+      // se fija EXPLÍCITO en cada disparo (foto y video).
+      if (cf) { clearInterval(t); cf.accept = 'image/*'; cf.click(); }
       else if (intentos >= 8) { clearInterval(t); try { chatSay(pzSftT('No pude abrir el selector de fotos. Entrá al chat y tocá el botón de la cámara 📷.', 'I could not open the photo picker. Open the chat and tap the camera button 📷.')); } catch (e2) {} }
     } catch (e) { clearInterval(t); }
   }, 150);
