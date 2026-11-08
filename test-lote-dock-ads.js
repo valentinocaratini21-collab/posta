@@ -55,14 +55,14 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v764'"), 'CHUNK_V v764');
-  t(md5(css) === '2589972e11db8b2b393d0eae06e18cf9', 'styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes ritual-siguiente: .hf-carta-destapa)');
+  t(md5(css) === 'b06c24e9abcdebbb11e0ce3a47ea6778', 'styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes ritual-siguiente: .hf-carta-destapa)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
 
   // ---------- 2. Dock v2: Inicio, Ads, +, Estrategia, Nivel (las dos shells; DOCK-5 6/11: Ajustes sale del dock y vive en el perfil) ----------
   const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');
   const bbOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin']
     .map((k) => bbNav.indexOf(k === 'pzDockMasBtn' ? 'pzDockMasBtn' : `tabBtn('${k}'`));
-  t(bbNav.includes("tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))"), 'bbShell: tab Ads en el dock');
+  t(bbNav.includes("tabBtn('ads', '#/app/ads', gzT('Impulsar', 'Boost'))"), 'bbShell: tab Impulsar en el dock');
   t(bbNav.includes("tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level'))"), 'bbShell: Nivel en el dock');
   t(cnt(bbNav, 'tabBtn(') === 4 && cnt(bbNav, 'pzDockMasBtn') === 1, 'bbShell: dock en 5 (4 tabs + Agregar centro)');
   t(bbOrd.every((v) => v !== -1) && bbOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'bbShell: orden Inicio, Ads, +, Estrategia, Nivel');
@@ -70,7 +70,7 @@ const sliceFn = (src, from, to) => {
   const mzNav = (app.split('\n').find((l) => l.includes('<nav class="mz-tabs"')) || '');
   const mzOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin']
     .map((k) => mzNav.indexOf(k === 'pzDockMasBtn' ? 'pzDockMasBtn' : `t('${k}'`));
-  t(mzNav.includes("t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))"), 'mzTabsHTML: tab Ads con megáfono');
+  t(mzNav.includes("t('ads', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))"), 'mzTabsHTML: tab Impulsar con megáfono');
   t(mzNav.includes("t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))"), 'mzTabsHTML: Nivel en el dock');
   t(cnt(mzNav, "t('") === 4 && cnt(mzNav, 'pzDockMasBtn') === 1, 'mzTabsHTML: dock en 5 (4 tabs + Agregar centro)');
   t(mzOrd.every((v) => v !== -1) && mzOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'mzTabsHTML: orden Inicio, Ads, +, Estrategia, Nivel');

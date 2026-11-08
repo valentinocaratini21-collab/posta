@@ -106,7 +106,10 @@ function extractFn(src, name) {
   t(m.anaAdsCargarMsg.scrolled === true, 'anaCargarDecir: lleva el mensaje a la vista (scrollIntoView)');
 
   // ---------- 3. Colocación: el dedicado vive PEGADO al botón ----------
-  for (const n of ['anaBoostRecPartes', 'anaBilleteraHTML', 'anaBilleteraPickerRow', 'anaBilleteraBusqResHTML', 'anaCortarCaption', 'anaAdsDirectoHTML', 'anaBilleteraHistorialHTML', 'anaAdsFeedHTML', 'anaAdsTabHTML', 'anaTarjetaBtnHTML']) {
+  for (const n of ['anaBoostRecPartes', 'anaBilleteraHTML', 'anaBilleteraPickerRow', 'anaBilleteraBusqResHTML', 'anaCortarCaption', 'anaAdsDirectoHTML', 'anaBilleteraHistorialHTML', 'anaAdsFeedHTML', 'anaAdsTabHTML', 'anaTarjetaBtnHTML',
+    // (LOTE R4 REDISEÑO) La vista principal llama a las tarjetas nuevas:
+    // el render en VM las necesita cargadas o aborta con ReferenceError.
+    'anaSimEstimar', 'anaSimMontoValido', 'anaSimCtaTxt', 'anaSimProjHTML', 'anaSimCardHTML', 'anaCampanaActivaHTML', 'anaRecomendacionHTML']) {
     const c = extractFn(chunk, n);
     t(c.length > 0, 'existe ' + n);
     if (c) vm.runInContext(c.replace('function ' + n, 'globalThis.' + n + ' = function'), sb);

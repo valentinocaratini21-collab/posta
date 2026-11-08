@@ -904,7 +904,7 @@ function bbShell(tab, content) {
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'feed' || tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
-    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads')) + pzDockMasBtn('bb') + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level')) + '</nav>' + pzDockMasHTML()}
+    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('ads', '#/app/ads', gzT('Impulsar', 'Boost')) + pzDockMasBtn('bb') + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level')) + '</nav>' + pzDockMasHTML()}
   </div>`;
 }
 async function bbLoadEstado(force) {
@@ -5887,7 +5887,7 @@ function mzTabsHTML(tab) {
     : tab === 'analisis' ? 'analisis'
     : tab === 'ads' ? 'ads' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${pzDockMasBtn('mz')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))}</nav>${pzDockMasHTML()}`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('ads', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))}${pzDockMasBtn('mz')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))}</nav>${pzDockMasHTML()}`;
 }
 
 /* (LOTE DOCK-MAS) */

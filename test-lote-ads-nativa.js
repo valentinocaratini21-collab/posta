@@ -79,8 +79,8 @@ const sliceFn = (src, from, to) => {
   // ---------- 5. Dock: Ads 2º y marcado activo ----------
   t(app.includes("|| tab === 'ads') return tab;"), "mxTabKey: 'ads' resuelve a 'ads' (bbShell nativa: tab activo)");
   t(app.includes("tab === 'ads' ? 'ads'"), "mzTabsHTML: el mapa 'on' incluye ads (dock web: tab activo)");
-  t(app.includes("tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))"), 'bbShell: tab Ads 2º en el dock');
-  t(app.includes("t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))"), 'mzTabsHTML: tab Ads 2º en el dock');
+  t(app.includes("tabBtn('ads', '#/app/ads', gzT('Impulsar', 'Boost'))"), 'bbShell: tab Impulsar 2º en el dock');
+  t(app.includes("t('ads', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))"), 'mzTabsHTML: tab Impulsar 2º en el dock');
 
   // ---------- 6. VM: adsAbrirCheckout con IS_NATIVE true y false ----------
   const helperSrc = sliceFn(app, 'function adsAbrirCheckout(url) {', 'function bindAdsRecCards');

@@ -46,8 +46,8 @@ const orderOk = (s, keys) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v723'"), 'CHUNK_V v723 (ajustes-simple; sin cambio en este lote)');
-  t(md5(css) === '2589972e11db8b2b393d0eae06e18cf9', 'styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes iconos-linea-info v727)');
-  t(md5(app) === 'c3337c90429d31b7e2dd593567552023', 'app.js md5 (re-pin nivel-misiones-racha re-base v792: corrección XP 40/60/25; antes ajustes v792)');
+  t(md5(css) === 'b06c24e9abcdebbb11e0ce3a47ea6778', 'styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes iconos-linea-info v727)');
+  t(md5(app) === 'adecfe1d66a09091a6f7bd1295ef1c0b', 'app.js md5 (re-pin R4 rediseño: etiqueta Impulsar en el dock; antes nivel-misiones-racha v793)');
 
   // ---------- 2. Dock de 5 en las dos shells ----------
   const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');
@@ -75,7 +75,7 @@ const orderOk = (s, keys) => {
   t(app.includes("else if (tab === 'ajustes') { pzPaintSkeleton(tab);"), 'router: tab ajustes sigue renderizando ajustesView()');
   t(app.includes("if (BB_SHELL_ON() && tab === 'ajustes') { try { bbAvisosEnAjustes(); }"), 'router: bbAvisosEnAjustes sigue en ajustes');
   t(app.includes('data-tab="ajustes"'), 'drawer: conserva su link a Ajustes');
-  t(app.includes("(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes'"), 'bbShell: Ajustes sigue con fondo glass-pantallas');
+  t(app.includes("(tab === 'feed' || tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes'"), 'bbShell: Ajustes sigue con fondo glass-pantallas');
 
   // ---------- 5. «Agregar» del mismo color (y peso) que las inactivas ----------
   t(/\.bb-tab\{[^}]*color:#47617A/.test(css), 'bb: etiquetas inactivas #47617A');
@@ -121,8 +121,8 @@ const orderOk = (s, keys) => {
   t(navTabs(navInicio) === 5, 'VM mzTabsHTML(inicio): 5 botones en el dock');
   t(!navInicio.includes('Ajustes'), 'VM mzTabsHTML(inicio): sin Ajustes en el dock');
   t(navInicio.includes('Agregar'), 'VM mzTabsHTML(inicio): Agregar presente');
-  t(orderOk(navInicio, ['>Inicio<', '>Ads<', '>Agregar<', '>Estrategia<', '>Nivel<']), 'VM mzTabsHTML(inicio): orden Inicio, Ads, Agregar, Estrategia, Nivel');
-  t(navAds.includes('mz-tab on') && navAds.indexOf('mz-tab on') < navAds.indexOf('>Ads<'), 'VM mzTabsHTML(ads): tab Ads activo');
+  t(orderOk(navInicio, ['>Inicio<', '>Impulsar<', '>Agregar<', '>Estrategia<', '>Nivel<']), 'VM mzTabsHTML(inicio): orden Inicio, Impulsar, Agregar, Estrategia, Nivel');
+  t(navAds.includes('mz-tab on') && navAds.indexOf('mz-tab on') < navAds.indexOf('>Impulsar<'), 'VM mzTabsHTML(ads): tab Impulsar activo');
   t(!navAjustes.includes('mz-tab on'), 'VM mzTabsHTML(ajustes): ningún tab activo en la pantalla Ajustes');
   t(navTabs(navAjustes) === 5, 'VM mzTabsHTML(ajustes): el dock sigue con 5 aunque se esté en Ajustes');
 

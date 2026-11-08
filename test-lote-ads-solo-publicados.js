@@ -56,9 +56,9 @@ const sliceFn = (src, from, to) => {
 
 // ---------- 0. Censo base v766 (sin cambio) ----------
 console.log('— 0) censo base v766 —');
-check('server: BUILD v789', srv.includes("const BUILD_ID = '20261105-v799'"));
+check('server: BUILD v789', srv.includes("const BUILD_ID = '20261105-v800'"));
 check('app: CHUNK_V v786', app.includes("const CHUNK_V = '20261105-v792'"));
-check('styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes v789 subir-foto-directa)', md5(css) === '2589972e11db8b2b393d0eae06e18cf9');
+check('styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes v789 subir-foto-directa)', md5(css) === 'b06c24e9abcdebbb11e0ce3a47ea6778');
 check('index: /app.js?v=527', idx.includes('/app.js?v=527'));
 check('server: 14 rutas /api/ads (8 get + 6 post)', cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14);
 check('server: GET /api/ads/billetera/hoy sigue (no se toca)', srv.includes("app.get('/api/ads/billetera/hoy'"));
@@ -145,7 +145,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v789', ver.status === 200 && ver.json && ver.json.build === '20261105-v799', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v789', ver.status === 200 && ver.json && ver.json.build === '20261105-v800', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 
@@ -235,6 +235,7 @@ function parteB() {
   const runVm = (prelude, code) => {
     const ctx = vm.createContext({
       console,
+      anaLang: 'es',
       anaT: (es) => es,
       esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
       document: { getElementById: () => null },
@@ -253,8 +254,21 @@ function parteB() {
   // (LOTE AGREGAR-TARJETA) La vista principal llama a anaTarjetaBtnHTML:
   // el render en VM la necesita cargada o aborta con ReferenceError.
   const srcTarjeta = sliceFn(ana, 'function anaTarjetaBtnHTML(', 'function anaCargarSinTarjeta(');
-  check('B0 funciones extraídas del chunk', srcCortar.length > 50 && srcConstruir.length > 100 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100 && srcHistorial.length > 100 && srcElegir.length > 100 && srcTarjeta.length > 100,
-    [srcCortar.length, srcConstruir.length, srcDirecto.length, srcFeed.length, srcRuta.length, srcHistorial.length, srcElegir.length, srcTarjeta.length].join('/'));
+  // (LOTE R4 REDISEÑO) La vista principal llama a las tarjetas nuevas
+  // (simulador, campaña, recomendación): el render en VM las necesita
+  // cargadas o aborta con ReferenceError, igual que anaTarjetaBtnHTML.
+  const srcR4 = [
+    sliceFn(ana, 'function anaSimEstimar(', 'function anaSimMontoValido('),
+    sliceFn(ana, 'function anaSimMontoValido(', 'function anaSimCtaTxt('),
+    sliceFn(ana, 'function anaSimCtaTxt(', 'function anaSimProjHTML('),
+    sliceFn(ana, 'function anaSimProjHTML(', 'function anaSimCardHTML('),
+    sliceFn(ana, 'function anaSimCardHTML(', 'function anaSimSliderInput('),
+    sliceFn(ana, 'function anaCampanaActivaHTML(', 'function anaRecomendacionHTML('),
+    sliceFn(ana, 'function anaRecomendacionHTML(', 'function anaRecAplicar('),
+    sliceFn(ana, 'function anaBoostRecPartes(', 'function anaBoostRecMotivo('),
+  ].join('\n');
+  check('B0 funciones extraídas del chunk', srcCortar.length > 50 && srcConstruir.length > 100 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100 && srcHistorial.length > 100 && srcElegir.length > 100 && srcTarjeta.length > 100 && srcR4.length > 500,
+    [srcCortar.length, srcConstruir.length, srcDirecto.length, srcFeed.length, srcRuta.length, srcHistorial.length, srcElegir.length, srcTarjeta.length, srcR4.length].join('/'));
   if (!(srcCortar.length > 50 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100)) {
     console.log('  (B1–B9 se saltan: falta código nuevo en el chunk)');
     return;
@@ -309,7 +323,7 @@ function parteB() {
 
   // B7: vista principal con el destacado publicado (519, que es el mejor):
   // foto + caption + chip «el que más rindió», SIN «Sale hoy».
-  const preMain = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
+  const preMain = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n' + srcR4 + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fakeF(feed4, elig3, { post_id: 519 }, hoy521)) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hMain = runVm(preMain, '__out = anaAdsDirectoHTML();');
@@ -322,14 +336,14 @@ function parteB() {
   // (LOTE AGREGAR-TARJETA) Sin tarjeta, la vista muestra el botón para agregarla.
   check('B7h sin tarjeta guardada la vista muestra «Agregar tarjeta»', typeof hMain === 'string' && hMain.includes('Agregar tarjeta'));
   // B7g: destacado NO-mejor (518): sin chip de mejor y sin «Sale hoy».
-  const preMain2 = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
+  const preMain2 = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n' + srcR4 + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fakeF(feed2, [{ post_id: 518, caption: 'El más reciente', image_path: '/518.jpg' }, { post_id: 519, caption: 'El mejor', image_path: '/519.jpg' }], { post_id: 519 }, hoy521)) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hMain2 = runVm(preMain2, '__out = anaAdsDirectoHTML();');
   check('B7g destacado no-mejor (518): foto 518, sin chip de mejor, sin «Sale hoy»', typeof hMain2 === 'string' && hMain2.includes('/518.jpg') && !hMain2.includes('✦ el que más rindió') && !hMain2.includes('Sale hoy'), String(hMain2 && hMain2.length));
 
   // B8: vista principal sin publicados: estado honesto.
-  const preMainVacio = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
+  const preMainVacio = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n' + srcR4 + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fakeF([], [], null, hoy521)) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hVacio = runVm(preMainVacio, '__out = anaAdsDirectoHTML();');

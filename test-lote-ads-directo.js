@@ -53,7 +53,7 @@ const sliceFn = (src, from, to) => {
 console.log('— 0) censo base v766 —');
 check('server: BUILD v773', srv.includes("const BUILD_ID = '20261105-v774'"));
 check('app: CHUNK_V v764', app.includes("const CHUNK_V = '20261105-v764'"));
-check('styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes v789 subir-foto-directa)', md5(css) === '2589972e11db8b2b393d0eae06e18cf9');
+check('styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes v789 subir-foto-directa)', md5(css) === 'b06c24e9abcdebbb11e0ce3a47ea6778');
 check('censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 check('censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
 check('censo server: first_week 3', cnt(srv, 'first_week') === 3);
@@ -86,7 +86,7 @@ check('chunk: la vista principal tiene el botón Cargar', sliceFn(ana, 'function
 check('chunk: la vista principal tiene la fila de carga automática', sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()').includes('Carga automática'));
 check('chunk: la regla de la automática es visible', sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()').includes('cuando se acaba, carga $'));
 check('chunk: la vista principal tiene el botón Feed', sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()').includes('Elegí qué foto del feed impulsar'));
-check('chunk: la vista principal tiene Impulsar con monto y días (se compone en runtime; el render se verifica en C3h)', sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()').includes('Impulsar con $') && sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()').includes('días'));
+check('chunk: la vista principal tiene Impulsar con monto y días en la tarjeta del simulador (R4: el CTA vive ahí y su texto se compone en anaSimCtaTxt; el render se verifica en C3h)', sliceFn(ana, 'function anaSimCtaTxt(', 'function anaSimProjHTML(').includes('Impulsar con $') && sliceFn(ana, 'function anaSimCtaTxt(', 'function anaSimProjHTML(').includes('días') && sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()').includes('anaSimCardHTML()'));
 check('chunk: la tirita de pasos 1 Posteo · 2 Monto · 3 Impulsar', sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()').includes('Posteo') && sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()').includes('Monto') && sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()').includes('Impulsar'));
 check('chunk: la grilla es de 3 columnas borde a borde (repeat(3,1fr) + sangrado -14px)', sliceFn(ana, 'function anaAdsFeedHTML()', 'function anaAdsTabHTML()').includes('repeat(3,1fr)') && sliceFn(ana, 'function anaAdsFeedHTML()', 'function anaAdsTabHTML()').includes('margin-left:-14px'));
 check('chunk: el tab ya no pinta #adsBilleteraBox', cnt(ana, "getElementById('adsBilleteraBox')") === 0);
@@ -301,6 +301,7 @@ function parteC() {
   const runVm = (prelude, code) => {
     const ctx = vm.createContext({
       console,
+      anaLang: 'es',
       anaT: (es) => es,
       esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
       document: { getElementById: () => null },
@@ -318,8 +319,21 @@ function parteC() {
   const srcDirecto = sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()');
   const srcFeed = sliceFn(ana, 'function anaAdsFeedHTML()', 'function anaAdsTabHTML()');
   const srcRuta = sliceFn(ana, 'function anaAdsRutaImpulsar(', 'async function anaBilleteraImpulsar(');
-  check('C0 funciones extraídas del chunk', srcCortar.length > 50 && srcConstruir.length > 100 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100 && srcHistorial.length > 100 && srcTarjeta.length > 100,
-    [srcCortar.length, srcConstruir.length, srcDirecto.length, srcFeed.length, srcRuta.length, srcHistorial.length, srcTarjeta.length].join('/'));
+  // (LOTE R4 REDISEÑO) La vista principal llama a las tarjetas nuevas
+  // (simulador, campaña, recomendación): el render en VM las necesita
+  // cargadas o aborta con ReferenceError, igual que anaTarjetaBtnHTML.
+  const srcR4 = [
+    sliceFn(ana, 'function anaSimEstimar(', 'function anaSimMontoValido('),
+    sliceFn(ana, 'function anaSimMontoValido(', 'function anaSimCtaTxt('),
+    sliceFn(ana, 'function anaSimCtaTxt(', 'function anaSimProjHTML('),
+    sliceFn(ana, 'function anaSimProjHTML(', 'function anaSimCardHTML('),
+    sliceFn(ana, 'function anaSimCardHTML(', 'function anaSimSliderInput('),
+    sliceFn(ana, 'function anaCampanaActivaHTML(', 'function anaRecomendacionHTML('),
+    sliceFn(ana, 'function anaRecomendacionHTML(', 'function anaRecAplicar('),
+    sliceFn(ana, 'function anaBoostRecPartes(', 'function anaBoostRecMotivo('),
+  ].join('\n');
+  check('C0 funciones extraídas del chunk', srcCortar.length > 50 && srcConstruir.length > 100 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100 && srcHistorial.length > 100 && srcTarjeta.length > 100 && srcR4.length > 500,
+    [srcCortar.length, srcConstruir.length, srcDirecto.length, srcFeed.length, srcRuta.length, srcHistorial.length, srcTarjeta.length, srcR4.length].join('/'));
   if (!(srcCortar.length > 50 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100 && srcTarjeta.length > 100)) {
     console.log('  (C1–C5 se saltan: falta código nuevo en el chunk)');
     return;
@@ -362,7 +376,7 @@ function parteC() {
     f.bil.boostHabilitado = false;
     return f;
   };
-  const preMain = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
+  const preMain = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n' + srcR4 + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(datosMain(true)) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hMain = runVm(preMain, '__out = anaAdsDirectoHTML();');
@@ -378,7 +392,7 @@ function parteC() {
   check('C3j sin buscador en la vista principal (la grilla lo reemplaza)', !hMain.includes('anaBilleteraBuscar') && !hMain.includes('anaBoostRecBusq') && !hMain.includes('type="search"'));
   check('C3k sin «?» de placeholder en la vista principal', !hMain.includes('>?</') && !hMain.includes('> ? <'));
   check('C3l el micro honesto «Posty elige el público y lo gestiona»', hMain.includes('Posty elige el público y lo gestiona'));
-  const preMainOff = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
+  const preMainOff = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n' + srcR4 + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(datosMain(false)) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hMainOff = runVm(preMainOff, '__out = anaAdsDirectoHTML();');
@@ -387,7 +401,7 @@ function parteC() {
   // agregarla; con tarjeta guardada, dice cuál es y es para cambiarla.
   check('C3n sin tarjeta guardada la billetera muestra «Agregar tarjeta»', typeof hMainOff === 'string' && hMainOff.includes('Agregar tarjeta'));
   const fTarj = datosMain(false); fTarj.bil.tarjeta = { tiene: true, brand: 'visa', last4: '4242' };
-  const preTarj = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
+  const preTarj = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n' + srcR4 + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fTarj) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hTarj = runVm(preTarj, '__out = anaAdsDirectoHTML();');

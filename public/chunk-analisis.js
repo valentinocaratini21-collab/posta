@@ -1783,6 +1783,241 @@ function anaBilleteraPintar() {
   const b = document.getElementById('adsTabRoot'); if (b) b.innerHTML = anaAdsTabHTML();
 }
 
+// ---------- LOTE R4 REDISEÑO (Impulsar) ----------
+// Ads pasa a ser Impulsar con el diseño del mock (pane Ads): campaña activa
+// con números reales, simulador con proyección ESTIMACIÓN, recomendación
+// del mejor posteo como única fuente. La recomendación ya no se monta en
+// Estrategia en v793 (#anaBoostRec no existe en la carta: el bloque de la
+// carta es código dormido); la fuente viva es este tab, que lee el mejor
+// posteo una sola vez en anaBilleteraTabDatos.
+// Reglas duras: solo posteos ya publicados (v774); sin tasa USD→ARS ni
+// política de reembolsos NO hay gasto real (§5.4 abierto: el botón
+// Impulsar muestra el aviso y el servidor lo frena con
+// conversion_pendiente antes de gastar); "Ventas cerradas" solo con
+// reporte del cliente — sin fuente durable en v793 la línea NO se muestra
+// nunca, ni un cero inventado; la proyección es ESTIMACIÓN, nunca promesa.
+
+// Espejo en el cliente de simulador-impulsar.js (misma fórmula, mismos
+// motivos; el módulo node es la referencia y la suite compara ambos).
+function anaSimEstimar(input) {
+  const presupuesto = Number((input && input.presupuestoUSD) || 0);
+  if (!(presupuesto > 0) || !Number.isFinite(presupuesto)) return { ok: false, motivo: 'sin_presupuesto' };
+  let gastoCents = 0, alcanceBase = 0, nBoosts = 0;
+  for (const b of (input && Array.isArray(input.boosts) ? input.boosts : [])) {
+    const alcance = Number((b && b.last_reach) || 0);
+    const gasto = Number((b && b.last_spend_cents) || 0);
+    if (alcance > 0 && gasto > 0) { gastoCents += gasto; alcanceBase += alcance; nBoosts++; }
+  }
+  if (!(alcanceBase > 0) || !(gastoCents > 0)) return { ok: false, motivo: 'sin_datos_pauta' };
+  let comentarios = 0, alcancePosts = 0, nPosts = 0;
+  for (const p of (input && Array.isArray(input.posts) ? input.posts : [])) {
+    const alcance = Number((p && p.reach) || 0);
+    if (alcance > 0) { alcancePosts += alcance; comentarios += Number((p && p.comments) || 0); nPosts++; }
+  }
+  if (!(alcancePosts > 0)) return { ok: false, motivo: 'sin_datos_cuenta' };
+  const costo = (gastoCents / 100) / alcanceBase;
+  const tasa = comentarios / alcancePosts;
+  const alcance = presupuesto / costo;
+  return { ok: true, consultas: Math.round(alcance * tasa), alcance: Math.round(alcance), costoPorAlcanceUSD: costo, tasaRespuesta: tasa, nBoosts, nPosts };
+}
+
+// Snap del deslizante al monto válido más cercano ($20/$50/$100, los de
+// la billetera); en empate, al menor — nunca se gasta de más por redondeo.
+function anaSimMontoValido(v) {
+  const n = Number(v) || 0;
+  let mejor = 20, dist = Infinity;
+  for (const m of [20, 50, 100]) { const dd = Math.abs(n - m); if (dd < dist) { dist = dd; mejor = m; } }
+  return mejor;
+}
+
+function anaSimCtaTxt(monto, dias) {
+  return '🚀 ' + anaT('Impulsar con $' + monto + ' · ' + dias + ' días', 'Boost with $' + monto + ' · ' + dias + ' days');
+}
+
+// Línea de proyección del simulador: número solo con datos reales;
+// sin datos, el motivo honesto (nunca un número inventado).
+function anaSimProjHTML(presupuestoUSD) {
+  const d = anaBilleteraDatos || {};
+  const loc = anaLang === 'en' ? 'en-US' : 'es-AR';
+  const est = anaSimEstimar({ presupuestoUSD: Number(presupuestoUSD) || 20, boosts: d.boosts || [], posts: d.elegibles || [] });
+  if (!est.ok) {
+    const txt = est.motivo === 'sin_datos_pauta'
+      ? anaT('Todavía no hay datos de pauta en tu cuenta: el primer impulso con $20 nos da el costo real por consulta, y a partir de ahí esta estimación es tuya.', 'No ad data on your account yet: the first $20 boost gives us the real cost per inquiry, and from then on this estimate is yours.')
+      : anaT('Todavía no hay datos suficientes en tu cuenta para estimar.', 'Not enough data on your account to estimate yet.');
+    return `<div class="proj" id="impSimProj" style="font-size:13.5px;line-height:1.55;font-weight:600;color:#33506B">${esc(txt)}</div>`;
+  }
+  const porDolar = Math.max(1, Math.round(1 / est.costoPorAlcanceUSD));
+  const tasaPct = (est.tasaRespuesta * 100).toLocaleString(loc, { maximumFractionDigits: 1 });
+  const baseTxt = anaT(
+    'Sale de tus números de Instagram: tus anuncios anteriores llegaron a ≈ ' + porDolar.toLocaleString(loc) + ' personas por $1, y el ' + tasaPct + '% te escribió.',
+    'From your own Instagram numbers: your past ads reached ≈ ' + porDolar.toLocaleString(loc) + ' people per $1, and ' + tasaPct + '% wrote to you.');
+  const lineaTxt = anaT(
+    'Con <b>$' + (Number(presupuestoUSD) || 20) + '</b> Posty estima <b>≈ ' + est.consultas.toLocaleString(loc) + ' consultas</b> en la semana, apuntando a gente cerca de tu local.',
+    'With <b>$' + (Number(presupuestoUSD) || 20) + '</b> Posty estimates <b>≈ ' + est.consultas.toLocaleString(loc) + ' inquiries</b> this week, targeting people near your business.');
+  return `<div class="proj" id="impSimProj" style="font-size:14px;line-height:1.55;color:#0A1E33">${lineaTxt} <span style="display:inline-block;margin-top:6px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:11.5px;font-weight:900;color:#0A1E33">${esc(anaT('ESTIMACIÓN', 'ESTIMATE'))}</span><span style="display:block;margin-top:6px;font-size:12.5px;font-weight:600;color:#33506B">${esc(baseTxt)} ${esc(anaT('No es una promesa: es lo que dicen tus datos.', 'Not a promise: it is what your data says.'))}</span></div>`;
+}
+
+// Tarjeta del simulador (mock: "Probá el presupuesto antes de gastarlo").
+// El deslizante mueve la proyección en vivo sin repintar (el repintado
+// entero destruiría el deslizante a mitad del arrastre); al soltar se
+// ajusta al monto válido y ahí sí se repinta. El botón Impulsar vive
+// acá y usa el flujo real (anaBilleteraImpulsar): con conversión
+// pendiente el servidor lo frena antes de gastar y el aviso ya está
+// visible debajo del botón ANTES del toque.
+function anaSimCardHTML() {
+  const d = anaBilleteraDatos || {};
+  const bil = d.billetera || {};
+  const selMonto = Number(d.selMonto) || 20;
+  const dias = Number(bil.dias) || 7;
+  const notaConv = d.conversion_pendiente === true
+    ? `<p style="margin:8px 0 0;text-align:center;font-size:12.5px;line-height:1.45;color:#5A4A6B">${esc(anaT('Queda armado por 7 días. Todavía no se puede gastar porque falta definir la conversión USD→ARS. No se gasta nada todavía.', 'Armed for 7 days. It can’t be spent yet because the USD→ARS conversion isn’t set. Nothing is spent yet.'))}</p>`
+    : '';
+  return `<div class="card" id="impSimCard">
+    <h4 style="margin:0 0 4px">${esc(anaT('Probá el presupuesto antes de gastarlo', 'Try the budget before spending it'))}</h4>
+    <p class="sub" style="margin:0 0 12px">${esc(anaT('Mové el control y Posty estima el resultado con los números de tu propia cuenta, no con promedios de internet.', 'Move the slider and Posty estimates the result with your own account’s numbers, not internet averages.'))}</p>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px"><span style="font-size:13.5px;font-weight:800;color:#0A1E33">${esc(anaT('Presupuesto por 7 días', 'Budget for 7 days'))}</span><span id="impSimVal" style="font-size:15px;font-weight:900;color:#0A1E33">$${selMonto}</span></div>
+    <input type="range" id="impSimRange" min="20" max="100" step="10" value="${selMonto}" oninput="anaSimSliderInput(this)" onchange="anaSimSliderChange(this)" aria-label="${esc(anaT('Presupuesto por 7 días', 'Budget for 7 days'))}" style="width:100%;margin:8px 0 10px">
+    ${anaSimProjHTML(selMonto)}
+    <button type="button" id="impSimCta" onclick="anaBilleteraImpulsar(this)" style="width:100%;padding:14px;border:0;border-radius:14px;background:#FEC14D;color:#0A1E33;font-size:16px;font-weight:900;cursor:pointer;margin:12px 0 6px">${esc(anaSimCtaTxt(selMonto, dias))}</button>
+    <p style="margin:0;text-align:center;font-size:12.5px;color:#5A4A6B">${esc(anaT('Posty elige el público y lo gestiona.', 'Posty picks the audience and runs it.'))}</p>
+    ${notaConv}
+    <div class="ana-boostrec-msg" id="anaBoostRecMsg"></div>
+  </div>`;
+}
+
+function anaSimSliderInput(el) {
+  if (!el || !anaBilleteraDatos) return;
+  const v = Number(el.value) || 20;
+  const val = document.getElementById('impSimVal');
+  if (val) val.textContent = '$' + v;
+  const proj = document.getElementById('impSimProj');
+  if (proj) proj.outerHTML = anaSimProjHTML(v);
+  const cta = document.getElementById('impSimCta');
+  if (cta) cta.textContent = anaSimCtaTxt(anaSimMontoValido(v), Number(((anaBilleteraDatos.billetera) || {}).dias) || 7);
+}
+
+function anaSimSliderChange(el) {
+  if (!el || !anaBilleteraDatos) return;
+  anaBilleteraDatos.selMonto = anaSimMontoValido(Number(el.value) || 20);
+  anaBilleteraPintar();
+}
+
+// Ir al simulador / al destacado: scroll real a la sección (nunca un
+// botón que solo avisa).
+function anaImpIrSimulador() {
+  const el = document.getElementById('impSimCard');
+  if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function anaImpIrDestacado() {
+  const el = document.getElementById('impDestacado');
+  if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Tarjeta de campaña (mock: titular = resultado, dinero abajo, chico).
+// Solo números reales de Meta (alcance y gasto reportados) y del
+// presupuesto. "Ventas cerradas" NO se muestra: sin reporte del cliente
+// no hay fuente — ni un cero inventado. Sin campaña activa, estado
+// honesto con botón que lleva al simulador.
+function anaCampanaActivaHTML() {
+  const d = anaBilleteraDatos || {};
+  const loc = anaLang === 'en' ? 'en-US' : 'es-AR';
+  const boosts = Array.isArray(d.boosts) ? d.boosts : [];
+  const activa = boosts.find((b) => b && b.status === 'active') || boosts.find((b) => b && b.status === 'pending') || null;
+  if (!activa) {
+    return `<div class="card" id="impCampanaCard">
+    <h4 style="margin:0 0 4px">${esc(anaT('Sin campaña activa', 'No active campaign'))}</h4>
+    <p class="sub" style="margin:0 0 10px">${esc(anaT('Todavía no impulsaste ningún posteo. Probá un presupuesto y Posty se ocupa del resto.', "You haven't boosted any post yet. Try a budget and Posty handles the rest."))}</p>
+    <button type="button" onclick="anaImpIrSimulador()" style="padding:10px 14px;border:2px solid #DCEFFF;border-radius:12px;background:#fff;font-size:14px;font-weight:800;color:#2793C8;cursor:pointer">${esc(anaT('Probar un presupuesto →', 'Try a budget →'))}</button>
+  </div>`;
+  }
+  const post = (d.feed || []).find((p) => Number(p.post_id) === Number(activa.post_id)) || (d.elegibles || []).find((e) => Number(e.post_id) === Number(activa.post_id)) || null;
+  const titulo = post && post.caption ? anaCortarCaption(post.caption, 60) : anaT('Tu campaña activa', 'Your active campaign');
+  const alcance = Number(activa.last_reach || 0);
+  const gastado = Math.floor(Number(activa.last_spend_cents || 0) / 100);
+  const presupuesto = Math.floor(Number(activa.budget_cents || 0) / 100);
+  const moneda = (activa.currency && activa.currency !== 'USD') ? ' ' + activa.currency : '';
+  const pill = activa.status === 'active'
+    ? `<span style="display:inline-flex;align-items:center;gap:6px;background:#E6F7EE;color:#0E6B4C;font-size:11.5px;font-weight:900;padding:4px 10px;border-radius:999px">● ${esc(anaT('ACTIVA', 'ACTIVE'))}</span>`
+    : `<span style="display:inline-flex;align-items:center;gap:6px;background:#FFF3D6;color:#8A6D00;font-size:11.5px;font-weight:900;padding:4px 10px;border-radius:999px">● ${esc(anaT('PENDIENTE', 'PENDING'))}</span>`;
+  let diasTxt = '';
+  try {
+    const ini = new Date(String(activa.created_at || '').replace(' ', 'T'));
+    const fin = new Date(ini.getTime() + (Number(activa.duration_days) || 7) * 86400000);
+    const restan = Math.ceil((fin.getTime() - Date.now()) / 86400000);
+    diasTxt = restan > 0
+      ? anaT('quedan ' + restan + (restan === 1 ? ' día' : ' días'), restan + (restan === 1 ? ' day left' : ' days left'))
+      : anaT('terminó el ', 'ended ') + fin.toLocaleDateString(loc, { day: 'numeric', month: 'short' });
+  } catch (e) { diasTxt = ''; }
+  const grande = alcance > 0
+    ? `<div style="font-size:32px;font-weight:900;color:#0A1E33;line-height:1;margin:8px 0 2px">${alcance.toLocaleString(loc)} <span style="font-size:18px">${esc(anaT('personas alcanzadas', 'people reached'))}</span></div>`
+    : `<div style="font-size:20px;font-weight:900;color:#0A1E33;line-height:1.2;margin:8px 0 2px">${esc(anaT('Todavía sin alcance reportado de Meta', 'No reach reported by Meta yet'))}</div>`;
+  const sub = gastado > 0
+    ? esc(anaT('Gastados $' + gastado.toLocaleString(loc) + moneda + ' de $' + presupuesto.toLocaleString(loc) + moneda, 'Spent $' + gastado.toLocaleString(loc) + moneda + ' of $' + presupuesto.toLocaleString(loc) + moneda)) + (diasTxt ? ' · ' + esc(diasTxt) : '')
+    : esc(anaT('Presupuesto $' + presupuesto.toLocaleString(loc) + moneda + ' · gasto todavía sin reportar de Meta', 'Budget $' + presupuesto.toLocaleString(loc) + moneda + ' · spend not reported by Meta yet')) + (diasTxt ? ' · ' + esc(diasTxt) : '');
+  return `<div class="card" id="impCampanaCard">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <h4 style="margin:0">${esc(titulo)}</h4>
+      ${pill}
+    </div>
+    ${grande}
+    <p class="sub" style="margin:0">${sub}</p>
+  </div>`;
+}
+
+// Tarjeta de recomendación (mock: "Recomendación de Posty" + "Aplicar →").
+// Única fuente: el mejor posteo de la semana (GET /api/estrategia/
+// mejor-posteo, ya cargado en anaBilleteraDatos). Sin mejor, no hay
+// tarjeta — nunca un recomendado inventado.
+function anaRecomendacionHTML() {
+  const d = anaBilleteraDatos || {};
+  const mejor = d.mejor || null;
+  if (!mejor) return '';
+  const partes = anaBoostRecPartes(mejor);
+  const porque = partes.length
+    ? anaT('Fue tu posteo con más interacción esta semana: ', 'Your highest-engagement post this week: ') + partes.join(', ') + '.'
+    : anaT('Fue tu posteo con más interacción esta semana.', 'Your highest-engagement post this week.');
+  const img = mejor.image_path ? `<img src="${esc(mejor.image_path)}" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:10px;flex-shrink:0">` : '';
+  const cap = mejor.caption ? `<p style="margin:0;font-size:13px;font-weight:700;color:#0A1E33;line-height:1.4">${esc(anaCortarCaption(mejor.caption, 90))}</p>` : '';
+  const yaElegido = Number(d.selId || 0) === Number(mejor.post_id);
+  const enFeed = (d.feed || []).find((p) => Number(p.post_id) === Number(mejor.post_id)) || null;
+  const yaImpulsado = !!(enFeed && enFeed.ya_impulsado);
+  const accion = yaElegido
+    ? `<p style="margin:10px 0 0;font-size:13px;font-weight:800;color:#1FA855">✓ ${esc(anaT('Este es el posteo elegido para impulsar.', 'This is the post chosen to boost.'))}</p>`
+    : yaImpulsado
+      ? `<p style="margin:10px 0 0;font-size:13px;font-weight:800;color:#47617A">${esc(anaT('Este posteo ya tiene ads activos.', 'This post already has active ads.'))}</p>`
+      : `<button type="button" onclick="anaRecAplicar()" style="margin-top:10px;padding:10px 14px;border:2px solid #DCEFFF;border-radius:12px;background:#fff;font-size:14px;font-weight:800;color:#2793C8;cursor:pointer">${esc(anaT('Aplicar →', 'Apply →'))}</button>`;
+  return `<div class="card" id="impRecCard">
+    <div style="display:flex;gap:10px;align-items:flex-start">
+      <span style="font-size:20px;line-height:1">💡</span>
+      <div style="flex:1;min-width:0">
+        <p style="margin:0;font-size:14px;line-height:1.55;color:#0A1E33"><b>${esc(anaT('Recomendación de Posty:', 'Posty recommends:'))}</b> ${esc(porque)}</p>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:10px">${img}<div style="flex:1;min-width:0">${cap}</div></div>
+        ${accion}
+        <div class="ana-boostrec-msg" id="anaRecMsg"></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// "Aplicar →": el recomendado pasa a ser el posteo elegido (si se puede
+// impulsar: publicado y sin pauta activa). Repinta y baja al destacado,
+// donde se ve el cambio de verdad. Nunca elige un posteo no elegible.
+function anaRecAplicar() {
+  const d = anaBilleteraDatos;
+  if (!d || !d.mejor) return;
+  const id = Number(d.mejor.post_id) || 0;
+  if (!id) return;
+  const decir = (t) => { const m = document.getElementById('anaRecMsg'); if (m) m.textContent = t; };
+  const enFeed = (d.feed || []).find((p) => Number(p.post_id) === id) || null;
+  if (enFeed && enFeed.ya_impulsado) { decir(anaT('Este posteo ya tiene ads activos.', 'This post already has active ads.')); return; }
+  const eleg = (d.elegibles || []).find((e) => Number(e.post_id) === id) || null;
+  if (!eleg) { decir(anaT('Este posteo todavía no se puede impulsar.', 'This post can’t be boosted yet.')); return; }
+  d.selId = id;
+  d.selPost = eleg;
+  anaBilleteraPintar();
+  anaImpIrDestacado();
+}
+
 // ---------- TAB ADS DIRECTO (LOTE ADS-DIRECTO v759 · mock v4 aprobado) ----------
 // La pantalla Ads directa: billetera visible con Cargar + carga
 // automática con regla visible, montos en UNA fila, publicado más
@@ -1842,16 +2077,23 @@ function anaAdsDirectoHTML() {
       <div style="padding:12px 14px"><div style="font-size:14px;font-weight:700;color:#0A1E33;line-height:1.4">${esc(anaCortarCaption(selPost.caption || '', 90))}</div>${chipDestacado}</div>
     </div>`
     : `<p class="ana-boostrec-nota">${esc(anaT('Todavía no tenés posteos para impulsar.', "You don't have posts to boost yet."))}</p>`;
-  const cta = `<button type="button" onclick="anaBilleteraImpulsar(this)" style="width:100%;padding:14px;border:0;border-radius:14px;background:#FEC14D;color:#0A1E33;font-size:16px;font-weight:900;cursor:pointer;margin-bottom:6px">${esc(anaT('Impulsar con $' + selMonto + ' · ' + dias + ' días', 'Boost with $' + selMonto + ' · ' + dias + ' days'))}</button>
-  <p style="margin:0 0 14px;text-align:center;font-size:12.5px;color:#5A4A6B">${esc(anaT('Posty elige el público y lo gestiona.', 'Posty picks the audience and runs it.'))}</p>`;
+  // (LOTE R4 REDISEÑO) El botón Impulsar vive en la tarjeta del
+  // simulador (anaSimCardHTML), junto a la proyección y al aviso de
+  // sin-tasa; el mensaje #anaBoostRecMsg vive ahí también.
   const feedBtn = `<button type="button" onclick="anaAdsAbrirFeed()" style="width:100%;padding:12px;border:2px solid #DCEFFF;border-radius:14px;background:#fff;font-size:14.5px;font-weight:800;color:#0A1E33;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="1" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="6.7" y="1" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="12.4" y="1" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="1" y="6.7" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="6.7" y="6.7" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="12.4" y="6.7" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="1" y="12.4" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="6.7" y="12.4" width="4.6" height="4.6" rx="1" fill="#2793C8"/><rect x="12.4" y="12.4" width="4.6" height="4.6" rx="1" fill="#2793C8"/></svg>${esc(anaT('Elegí qué foto del feed impulsar', 'Choose which feed photo to boost'))}</button>`;
   const hist = `<div class="card"><h3 style="margin:0 0 6px">${esc(anaT('Últimos impulsos', 'Recent boosts'))}</h3><div id="adsHistorial">${anaBilleteraHistorialHTML()}</div></div>`;
-  return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">${backBtn}<div style="flex:1;min-width:0"><div style="font-size:20px;font-weight:900;color:#0A1E33;line-height:1.2">Ads</div><div style="font-size:13.5px;color:#5A4A6B;line-height:1.4">${esc(anaT('Impulsá tus posteos y que te vean más clientes.', 'Boost your posts so more customers see you.'))}</div></div></div>
+  // (LOTE R4 REDISEÑO) La pantalla es Impulsar (mock: pane Ads):
+  // mensaje de Posty, campaña activa con números reales, billetera,
+  // destacado, simulador con el botón Impulsar, recomendación, Feed,
+  // historial. La ruta sigue siendo #/app/ads.
+  return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">${backBtn}<div style="flex:1;min-width:0"><div style="font-size:20px;font-weight:900;color:#0A1E33;line-height:1.2">${esc(anaT('Impulsar', 'Boost'))}</div><div style="font-size:13.5px;color:#5A4A6B;line-height:1.4">${esc(anaT('Impulsá tus posteos y que te vean más clientes.', 'Boost your posts so more customers see you.'))}</div></div></div>
+  <p style="margin:0 0 14px;font-size:15px;font-weight:600;line-height:1.5;color:#0A1E33">${esc(anaT('Tus anuncios, traducidos a resultados: nada de CPC ni CPM. Solo cuánta gente te escribió y cuánto te costó cada una. 🎯', 'Your ads, translated into results: no CPC or CPM. Just how many people wrote to you and what each one cost. 🎯'))}</p>
   ${pasos}
+  ${anaCampanaActivaHTML()}
   ${walletCard}
-  ${destacado}
-  ${cta}
-  <div class="ana-boostrec-msg" id="anaBoostRecMsg"></div>
+  <div id="impDestacado">${destacado}</div>
+  ${anaSimCardHTML()}
+  ${anaRecomendacionHTML()}
   ${feedBtn}
   ${hist}`;
 }
@@ -1888,6 +2130,11 @@ function anaAdsFeedHTML() {
 
 // Despachador del tab Ads: grilla o vista principal.
 function anaAdsTabHTML() {
+  // (R4) El tab Ads nunca llamaba a anaSetLang: anaLang quedaba en su
+  // 'es' por defecto y TODO el tab — incluido el Impulsar nuevo — salía
+  // en español aunque la cuenta fuera EN. Sin argumento, anaSetLang toma
+  // el idioma de la cuenta (ME.lang); en VM sin ME, 'es' como antes.
+  try { anaSetLang(); } catch (e) {}
   return (anaBilleteraDatos && anaBilleteraDatos.vistaFeed) ? anaAdsFeedHTML() : anaAdsDirectoHTML();
 }
 
