@@ -1,14 +1,17 @@
 // test-lote-ads-directo.js — LOTE ADS-DIRECTO v759 (mock v4 APROBADO por
 // Valentino 7/11 «si. va asi. subilo»). Pantalla Ads directa: billetera
 // visible con «↓ Cargar $20» + carga automática con regla visible, montos
-// $20/$50/$100 en UNA fila sin cortes a mitad de palabra, posteo de hoy
-// destacado y pre-seleccionado, botón «Feed» con grilla de TODOS los
-// posteos del feed, «Impulsar con $20 · 7 días» en 1 toque cuando todo
-// está pre-seleccionado. El buscador de v750 queda reemplazado por la
-// grilla. Sin gastar nada real (Meta sin conectar): la automática solo se
+// $20/$50/$100 en UNA fila sin cortes a mitad de palabra, posteo
+// PUBLICADO más reciente destacado y pre-seleccionado, botón «Feed» con
+// grilla de los posteos publicados del feed, «Impulsar con $20 · 7 días»
+// en 1 toque cuando todo está pre-seleccionado. El buscador de v750 queda
+// reemplazado por la grilla. (LOTE ADS-SOLO-PUBLICADOS: el posteo de hoy
+// programado ya no es el destacado ni entra en la grilla — solo
+// publicados; la carta de Estrategia sigue con su recomendación.)
+// Sin gastar nada real (Meta sin conectar): la automática solo se
 // prende con tarjeta guardada verificada, y la ruta auto NUNCA cobra.
-// Base v756, re-base del preparador: BUILD_ID → v759, CHUNK_V → v759,
-// app.js?v=501 (este lote toca chunk-analisis.js y app.js).
+// Base v766 (BUILD v766, CHUNK_V v764, app.js?v=505; este lote toca
+// chunk-analisis.js y app.js).
 // Parte A: boot real de server.js en DATA_DIR temporal + HTTP (registro
 // + cookie de sesión) + siembra directa en posta.db. Parte B: módulos
 // reales (ads-billetera.js con better-sqlite3 en memoria). Parte C: VM
@@ -46,11 +49,11 @@ const sliceFn = (src, from, to) => {
   return src.slice(a, b === -1 ? src.length : b);
 };
 
-// ---------- 0. Censo base v756 (sin cambio) ----------
-console.log('— 0) censo base v759 —');
-check('server: BUILD v766', srv.includes("const BUILD_ID = '20261105-v766'"));
+// ---------- 0. Censo base v766 (sin cambio) ----------
+console.log('— 0) censo base v766 —');
+check('server: BUILD v773', srv.includes("const BUILD_ID = '20261105-v774'"));
 check('app: CHUNK_V v764', app.includes("const CHUNK_V = '20261105-v764'"));
-check('styles.css md5 (re-pin ritual-siguiente: .hf-carta-destapa; antes v761 .logo-img)', md5(css) === 'bac587ad5c5d6ef443ee577d78c16fe4');
+check('styles.css md5 v772 (re-pin entrada-logo-ig; antes v768 plan-alinear)', md5(css) === '4020c97403bca8e338a7e281d0935b75');
 check('censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 check('censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
 check('censo server: first_week 3', cnt(srv, 'first_week') === 3);
@@ -157,7 +160,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v766', ver.status === 200 && ver.json && ver.json.build === '20261105-v766', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v773', ver.status === 200 && ver.json && ver.json.build === '20261105-v774', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 
@@ -323,7 +326,9 @@ function parteC() {
   const c1 = runVm(srcCortar, "__out = [anaCortarCaption('cappuccino con leche espumada y arte latte', 20), anaCortarCaption('hola', 90), anaCortarCaption('supercalifragilistico', 10)];");
   check('C1 cortarCaption corta por palabra en el cliente', Array.isArray(c1) && c1[0] === 'cappuccino con leche…' && c1[1] === 'hola' && c1[2] === 'supercalif…', JSON.stringify(c1));
 
-  // C2: el destacado por defecto es el posteo de hoy (521), no el mejor.
+  // C2: el destacado por defecto es el publicado más reciente (519),
+  // aunque haya posteo de hoy (521). El hoy programado nunca es el
+  // destacado (LOTE ADS-SOLO-PUBLICADOS).
   const fakeF = (hoy, mejor) => ({
     d: { ok: true, mejor: mejor || null, boostHabilitado: false, ads_permiso: null, conversion_pendiente: true },
     bil: { ok: true, saldo: 0, moneda: 'USD', montos: [20, 50, 100], dias: 7, movimientos: [], boostHabilitado: false, ads_permiso: null, conversion_pendiente: true, auto_topup: 0, tiene_tarjeta: false, balance_cents: 0, currency: 'USD', montos_usd: [20, 50, 100] },
@@ -338,9 +343,9 @@ function parteC() {
     ] },
   });
   const c2a = runVm(srcConstruir, "__out = anaBilleteraConstruirDatos(" + JSON.stringify(fakeF(true, { post_id: 519 })) + ", null, true);");
-  check('C2 con posteo de hoy, el destacado es el de hoy (521)', c2a && c2a.selId === 521 && c2a.selPost && c2a.selPost.post_id === 521, JSON.stringify(c2a && c2a.selId));
+  check('C2 con posteo de hoy, el destacado es el publicado más reciente (519), no el de hoy (521)', c2a && c2a.selId === 519 && c2a.selPost && c2a.selPost.post_id === 519, JSON.stringify(c2a && c2a.selId));
   const c2b = runVm(srcConstruir, "__out = anaBilleteraConstruirDatos(" + JSON.stringify(fakeF(false, { post_id: 519 })) + ", null, true);");
-  check('C2b sin posteo de hoy, el destacado es el mejor (519)', c2b && c2b.selId === 519, JSON.stringify(c2b && c2b.selId));
+  check('C2b sin posteo de hoy, el destacado sigue siendo el más reciente (519)', c2b && c2b.selId === 519, JSON.stringify(c2b && c2b.selId));
   const c2c = runVm(srcConstruir, "__out = anaBilleteraConstruirDatos(" + JSON.stringify(fakeF(true, { post_id: 519 })) + ", { selId: 518, selMonto: 50, selPost: { post_id: 518, caption: 'Otro posteo', image_path: '/518.jpg' } }, true);");
   check('C2c con selección previa, se respeta (518, $50)', c2c && c2c.selId === 518 && c2c.selMonto === 50, JSON.stringify(c2c && [c2c.selId, c2c.selMonto]));
   const c2d = runVm(srcConstruir, "__out = anaBilleteraConstruirDatos(" + JSON.stringify(fakeF(true, { post_id: 519 })) + ", null, true);");
@@ -363,8 +368,8 @@ function parteC() {
   check('C3c montos $20/$50/$100 dentro de UNA fila', (() => { const a = hMain.indexOf('ana-ads-montos'); if (a === -1) return false; const seg = hMain.slice(a, a + 1200); return seg.includes('$20') && seg.includes('$50') && seg.includes('$100'); })());
   check('C3d fila de carga automática con regla visible', hMain.includes('Carga automática') && hMain.includes('cuando se acaba, carga $20 desde tu banco'));
   check('C3e automática prendida se ve prendida (toggle ON)', hMain.includes('data-auto="on"'));
-  check('C3f posteo de hoy destacado con su foto y su caption', hMain.includes('/hoy.jpg') && hMain.includes('El posteo de hoy'));
-  check('C3g chip «Sale hoy · 17:00» en el destacado', hMain.includes('Sale hoy · 17:00'));
+  check('C3f publicado más reciente destacado con su foto y su caption', hMain.includes('/519.jpg') && hMain.includes('El mejor de la semana'));
+  check('C3g chip «✦ el que más rindió» en el destacado (519 es el mejor) y cero «Sale hoy»', hMain.includes('✦ el que más rindió') && !hMain.includes('Sale hoy'));
   check('C3h botón Impulsar con monto y 7 días', hMain.includes('Impulsar con $20') && hMain.includes('7 días'));
   check('C3i botón Feed a la grilla', hMain.includes('Elegí qué foto del feed impulsar'));
   check('C3j sin buscador en la vista principal (la grilla lo reemplaza)', !hMain.includes('anaBilleteraBuscar') && !hMain.includes('anaBoostRecBusq') && !hMain.includes('type="search"'));
@@ -382,16 +387,16 @@ function parteC() {
   const preFeed = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcFeed + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(datosMain(true)) + ', null, true);\n'
     + 'anaBilleteraDatos.feed = ' + JSON.stringify(feed13) + ';\n'
-    + 'anaBilleteraDatos.selId = 521; anaBilleteraDatos.selPost = { post_id: 521, caption: "El posteo de hoy", image_path: "/hoy.jpg" };\n'
+    + 'anaBilleteraDatos.selId = 501; anaBilleteraDatos.selPost = { post_id: 501, caption: "Posteo 1", image_path: "/feed-1.jpg" };\n'
     + 'anaBilleteraDatos.vistaFeed = true;\n';
   const hFeed = runVm(preFeed, '__out = anaAdsFeedHTML();');
   check('C4 la grilla renderiza', typeof hFeed === 'string' && hFeed.length > 500, String(hFeed && hFeed.length));
   check('C4b las 13 fotos están en la grilla', feed13.every((p) => hFeed.includes(p.image_path)));
   check('C4c cada foto aparece UNA sola vez (sin repetir celda exacta)', feed13.every((p) => hFeed.split(p.image_path).length - 1 === 1));
-  check('C4d el contador dice 14 posteos (13 del feed + el de hoy)', hFeed.includes('14 posteos'));
-  check('C4e la elegida (521, el de hoy) lleva borde amarillo + tilde verde', hFeed.includes('/hoy.jpg') && hFeed.includes('#FEC14D') && hFeed.includes('✓'));
+  check('C4d el contador dice 13 posteos (solo publicados, sin el de hoy)', hFeed.includes('13 posteos'));
+  check('C4e la elegida (501, publicado) lleva borde amarillo + tilde verde', hFeed.includes('/feed-1.jpg') && hFeed.includes('#FEC14D') && hFeed.includes('✓'));
   check('C4f el posteo con ads lleva su marca (ya_impulsado)', hFeed.includes('/feed-3.jpg') && hFeed.includes('Con ads'));
-  check('C4f2 el posteo de hoy abre la grilla con su chip «Sale hoy · 17:00»', hFeed.includes('/hoy.jpg') && hFeed.includes('Sale hoy · 17:00'));
+  check('C4f2 el posteo de hoy NO está en la grilla (ni foto ni chip)', !hFeed.includes('/hoy.jpg') && !hFeed.includes('Sale hoy'));
   check('C4g sin «?» de placeholder en la grilla', !hFeed.includes('>?</') && !hFeed.includes('> ? <'));
 
   // C5: ruta de impulsar — 1 toque con todo pre-seleccionado, chat si no se puede.

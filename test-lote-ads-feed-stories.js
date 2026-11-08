@@ -11,8 +11,10 @@
 //    titulares de las imágenes 4:5 en la grilla y en el destacado.
 // La grilla muestra la imagen ENTERA (contain, fondo neutro), solo posteos
 // del feed (sin stories), y el contador cuenta solo lo que se muestra.
-// NO se toca: billetera, carga automática, flujo impulsar, destacado de hoy.
-// Base v762. Uso: NODE_PATH=/home/hatch/workspace/posta/node_modules node test-lote-ads-feed-stories.js — sale 0 si todo pasa.
+// (LOTE ADS-SOLO-PUBLICADOS · 7/11) El posteo de hoy programado ya no
+// entra en la grilla ni es el destacado: solo posteos publicados.
+// NO se toca: billetera, carga automática, flujo impulsar.
+// Base v762, re-pin base v766 (BUILD v766, CHUNK_V v764). Uso: NODE_PATH=/home/hatch/workspace/posta/node_modules node test-lote-ads-feed-stories.js — sale 0 si todo pasa.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -48,10 +50,10 @@ const runVm = (prelude, code) => {
   return ctx.__out;
 };
 
-// ---------- 0. Base v763 ----------
-console.log('— 0) base v763 —');
-check('base: BUILD v763', srv.includes("const BUILD_ID = '20261105-v763'"));
-check('base: CHUNK_V v760 (este lote no toca app.js)', fs.readFileSync(path.join(DIR, 'public/app.js'), 'utf8').includes("const CHUNK_V = '20261105-v760'"));
+// ---------- 0. Base v766 ----------
+console.log('— 0) base v766 —');
+check('base: BUILD v773', srv.includes("const BUILD_ID = '20261105-v774'"));
+check('base: CHUNK_V v764 (el lote ads-solo-publicados toca app.js por el atrás fijo)', fs.readFileSync(path.join(DIR, 'public/app.js'), 'utf8').includes("const CHUNK_V = '20261105-v764'"));
 
 // ---------- A. Módulo: feedParaAds / elegiblesParaAds sin stories ----------
 console.log('— A) módulo: stories fuera, feed entero dentro —');
@@ -93,7 +95,7 @@ check('B4 /feed SELECT trae p.media_type (defensa en profundidad del módulo)', 
 check('B5 /elegibles y /buscar SELECT traen p.media_type', blkElig.includes('p.media_type') && blkBusc.includes('p.media_type'));
 check('B6 feedParaAds filtra media_type en el módulo', sliceFn(abSrc, 'function feedParaAds(', 'function getAutoTopup(').includes("media_type !== 'story'"));
 check('B7 elegiblesParaAds filtra media_type en el módulo', sliceFn(abSrc, 'function elegiblesParaAds(', 'function feedParaAds(').includes("media_type !== 'story'"));
-check('B8 /hoy intacto (el destacado de hoy no se toca)', srv.includes("app.get('/api/ads/billetera/hoy'") && blkBusc.includes("app.get('/api/ads/billetera/hoy'") === false);
+check('B8 /hoy intacto (el endpoint no se toca; el tab ya no lo pre-selecciona)', srv.includes("app.get('/api/ads/billetera/hoy'") && blkBusc.includes("app.get('/api/ads/billetera/hoy'") === false);
 
 // ---------- C. VM: la grilla muestra la imagen entera ----------
 console.log('— C) VM: grilla con imagen entera + contador correcto —');
@@ -112,15 +114,15 @@ const datosFeed = {
     { post_id: 516, caption: 'Posteo viejo', image_path: '/516.jpg', ya_impulsado: false },
   ],
   hoy: { post_id: 521, caption: 'El posteo de hoy', image_path: '/hoy.jpg', hora: '17:00' },
-  selId: 521,
+  selId: 519,
 };
 const hFeed = runVm(srcFeed + '\nlet anaBilleteraDatos = ' + JSON.stringify(datosFeed) + ';\n', '__out = anaAdsFeedHTML();');
-check('C1 la grilla renderiza (5 tiles: hoy + 4 del feed)', typeof hFeed === 'string' && hFeed.length > 500, String(hFeed && hFeed.length));
+check('C1 la grilla renderiza (4 tiles: solo publicados, el de hoy fuera)', typeof hFeed === 'string' && hFeed.length > 500, String(hFeed && hFeed.length));
 check('C2 la grilla muestra la imagen ENTERA (object-fit:contain)', hFeed.includes('object-fit:contain'));
 check('C3 la grilla NO recorta (cero object-fit:cover en las celdas)', !hFeed.includes('object-fit:cover'), (hFeed.match(/object-fit:cover/g) || []).length + ' cover');
-check('C4 el contador cuenta solo lo que se muestra (5 posteos)', hFeed.includes('5 posteos'), (hFeed.match(/\d+ posteos/) || ['?'])[0]);
-check('C5 la elegida (hoy 521) lleva borde amarillo + tilde verde', hFeed.includes('box-shadow:inset 0 0 0 3px #FEC14D') && hFeed.includes('>✓<'));
-check('C6 chip «Sale hoy · 17:00» en la elegida', hFeed.includes('Sale hoy · 17:00'));
+check('C4 el contador cuenta solo lo que se muestra (4 posteos)', hFeed.includes('4 posteos'), (hFeed.match(/\d+ posteos/) || ['?'])[0]);
+check('C5 la elegida (519, publicado) lleva borde amarillo + tilde verde', hFeed.includes('box-shadow:inset 0 0 0 3px #FEC14D') && hFeed.includes('>✓<'));
+check('C6 el posteo de hoy NO está en la grilla (ni foto ni chip)', !hFeed.includes('/hoy.jpg') && !hFeed.includes('Sale hoy'));
 check('C7 el ya impulsado lleva chip «Con ads»', hFeed.includes('Con ads'));
 check('C8 las 4 fotos del feed están en la grilla', ['/519.jpg', '/518.jpg', '/517.jpg', '/516.jpg'].every((u) => hFeed.includes(u)));
 check('C9 la grilla sigue siendo de 3 columnas', srcFeed.includes('repeat(3,1fr)'));

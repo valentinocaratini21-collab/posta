@@ -35,7 +35,7 @@ const sliceFn = (src, from, to) => {
   // ---------- 1. Censo (sin cambio) + base v756, re-base v759 ----------
   // (LOTE ADS-DIRECTO v759: pins del preparador — BUILD v759, CHUNK_V v759,
   // 14 rutas /api/ads (12 + feed + auto); el picker usa anaCortarCaption.)
-  t(srv.includes("const BUILD_ID = '20261105-v766'"), 'server: BUILD v766');
+  t(srv.includes("const BUILD_ID = '20261105-v774'"), 'server: BUILD v773');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -46,8 +46,8 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v764'"), 'CHUNK_V v764');
-  t(md5(app) === 'bcc3492ff7569a2a215ccf991135c65f', 'app.js md5 (re-pin ritual-siguiente a v764: CHUNK_V v764; antes v763)');
-  t(md5(css) === 'bac587ad5c5d6ef443ee577d78c16fe4', 'styles.css md5 (re-pin ritual-siguiente: .hf-carta-destapa; antes v761 .logo-img)');
+  t(md5(app) === '1c31d7ea74a7f105878520b106261c26', 'app.js md5 v773 + ads-solo-publicados (atrás fijo fuera de Ads)');
+  t(md5(css) === '4020c97403bca8e338a7e281d0935b75', 'styles.css md5 v772 (re-pin entrada-logo-ig; antes v768 plan-alinear)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
 
   // ---------- 2. Server: elegibles sin gate de listado, buscar, hoy ----------
@@ -291,7 +291,7 @@ const sliceFn = (src, from, to) => {
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v766', `boot: /api/version 20261105-v766 (vino ${ver.build})`);
+      t(ver.build === '20261105-v774', `boot: /api/version 20261105-v774 (vino ${ver.build})`);
       // Sin sesión: 401 en los endpoints nuevos.
       const s1 = await api('', 'GET', '/api/ads/billetera/buscar?q=cafe');
       t(s1.status === 401, 'boot: sin sesión, buscar → 401');

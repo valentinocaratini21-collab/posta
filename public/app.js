@@ -806,6 +806,10 @@ function pzBackHTML(tab) {
   // dogfood tienen su propio atrás («← Semana»): el círculo fijo
   // tapaba la palabra (se leía «...mana»). Sin segundo control.
   if (tab === 'post' || tab === 'dogfood') return '';
+  // (LOTE ADS-SOLO-PUBLICADOS) El tab Ads tiene su propio atrás en la
+  // cabecera (y la grilla el suyo): el círculo fijo se superponía al
+  // título «Billetera» de la tarjeta al hacer scroll. Sin segundo control.
+  if (tab === 'ads') return '';
   return `<button type="button" class="pz-back pz-back-fixed" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function pzBackMtopHTML(tab) {
@@ -824,6 +828,9 @@ function pzBackDesktopHTML(tab) {
   if (tab === 'jardin-posty') return '';
   // (LOTE 17) Igual que pzBackHTML: post y dogfood tienen su propio atrás.
   if (tab === 'post' || tab === 'dogfood') return '';
+  // (LOTE ADS-SOLO-PUBLICADOS) Igual que pzBackHTML: en Ads manda su
+  // propio atrás (el fijo tapaba «Billetera»).
+  if (tab === 'ads') return '';
   return `<button type="button" class="pz-back pz-back-fixed pz-back-desktop" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function bbHace(ts) {

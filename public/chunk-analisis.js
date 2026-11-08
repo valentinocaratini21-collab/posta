@@ -1562,14 +1562,17 @@ async function anaBilleteraFetchDatos() {
 // pre-seleccionado; si había selección, se conserva si el posteo sigue
 // elegible. Sin mejor, se pre-selecciona el primer elegible (antes quedaba
 // sin selección y el botón Impulsar deshabilitado hasta tocar uno).
-// (LOTE ADS-DIRECTO v759) `preferHoy`: en el tab Ads el destacado por
-// defecto es el posteo de hoy (si lo hay); la carta sigue con el mejor.
+// (LOTE ADS-SOLO-PUBLICADOS) `preferReciente`: en el tab Ads el
+// destacado por defecto es el posteo PUBLICADO más reciente (el primero
+// del feed que sigue elegible); el posteo de hoy programado NUNCA es el
+// destacado — todavía no existe en Instagram y Meta no lo puede pautar.
+// La carta sigue con el mejor (sin 3er argumento).
 // El feed entero y la automática viajan en los datos para la grilla y la
 // fila de carga automática del tab.
 // (FIX DOCK-ADS: los elegibles traen `post_id`, no `id` — el conjunto viejo
 // era de undefined y la selección se perdía tras cada carga o impulso; el
 // comentario de anaBilleteraHTML ya lo decía.)
-function anaBilleteraConstruirDatos(f, prevSel, preferHoy) {
+function anaBilleteraConstruirDatos(f, prevSel, preferReciente) {
   const d = f && f.d, bil = f && f.bil, elig = f && f.elig;
   const tieneMejor = !!(d && d.ok && d.mejor);
   const elegibles = (elig && elig.ok && Array.isArray(elig.elegibles)) ? elig.elegibles : [];
@@ -1593,8 +1596,13 @@ function anaBilleteraConstruirDatos(f, prevSel, preferHoy) {
     busq: { q: '', resultados: [], buscando: false, hecho: false },
   };
   const ids = new Set(elegibles.map((e) => e.post_id));
-  const defectoHoy = (preferHoy && hoy) ? hoy.post_id : 0;
-  const defecto = defectoHoy || (tieneMejor ? d.mejor.post_id : (elegibles[0] ? elegibles[0].post_id : 0));
+  // El feed viene ordenado por publicado desc (el servidor): el primero
+  // que sigue elegible es el publicado más reciente que se puede impulsar.
+  // Si el más reciente ya tiene pauta, salta al siguiente elegible; si no
+  // hay ninguno elegible, no hay destacado (vacío honesto, nunca el hoy).
+  const feedOrden = Array.isArray(datos.feed) ? datos.feed : [];
+  const reciente = (preferReciente ? feedOrden.find((p) => ids.has(p.post_id)) : null) || null;
+  const defecto = reciente ? reciente.post_id : (tieneMejor ? d.mejor.post_id : (elegibles[0] ? elegibles[0].post_id : 0));
   // (LOTE ADS-PANTALLA) La selección sobrevive a la recarga si el posteo
   // sigue elegible; si venía del buscador (fuera de los 20), sobrevive
   // con su objeto guardado (selPost) y se vuelve a mostrar como fila.
@@ -1604,7 +1612,7 @@ function anaBilleteraConstruirDatos(f, prevSel, preferHoy) {
     datos.selPost = elegibles.find((e) => e.post_id === prevSel.selId) || prevPost;
   } else {
     datos.selId = defecto;
-    datos.selPost = elegibles.find((e) => e.post_id === defecto) || ((defectoHoy && hoy && Number(hoy.post_id) === Number(defecto)) ? hoy : null);
+    datos.selPost = elegibles.find((e) => e.post_id === defecto) || null;
   }
   datos.selMonto = (prevSel && prevSel.selMonto) ? prevSel.selMonto : 20;
   return datos;
@@ -1627,10 +1635,12 @@ async function anaBoostRecLoad(keepSel) {
 // ---------- TAB ADS (LOTE DOCK-ADS + LOTE ADS-DIRECTO v759) ----------
 // El tab Ads del dock usa los mismos datos que la carta, pero con su
 // propia vista directa (anaAdsTabHTML): billetera + carga automática +
-// posteo de hoy destacado + grilla del feed. Si las lecturas fallan,
-// devuelve null y adsView muestra la nota honesta (nunca el bloque de
-// «no habilitado», que sería mentira). /api/ads/boosts ya existe (la
-// usaba el tab viejo).
+// publicado más reciente destacado + grilla de solo publicados. Si las
+// lecturas fallan, devuelve null y adsView muestra la nota honesta
+// (nunca el bloque de «no habilitado», que sería mentira).
+// (LOTE ADS-SOLO-PUBLICADOS) El posteo de hoy programado no es el
+// destacado ni entra en la grilla: todavía no está publicado.
+// /api/ads/boosts ya existe (la usaba el tab viejo).
 async function anaBilleteraTabDatos() {
   const prevSel = anaBilleteraDatos ? { selId: anaBilleteraDatos.selId, selMonto: anaBilleteraDatos.selMonto, selPost: anaBilleteraDatos.selPost || null } : null;
   const prevVista = anaBilleteraDatos ? !!anaBilleteraDatos.vistaFeed : false;
@@ -1638,7 +1648,7 @@ async function anaBilleteraTabDatos() {
   if (!f.d && !f.bil && !f.elig && !f.hoy && !f.feed) return null;
   let boosts = null;
   try { boosts = await api.get('/api/ads/boosts'); } catch (e) { boosts = null; }
-  const datos = anaBilleteraConstruirDatos(f, prevSel, true);
+  const datos = anaBilleteraConstruirDatos(f, prevSel, true); // preferReciente: destacado = publicado más reciente
   datos.vistaFeed = prevVista;
   datos.boosts = (boosts && boosts.ok && Array.isArray(boosts.boosts)) ? boosts.boosts : [];
   anaBilleteraDatos = datos;
@@ -1667,10 +1677,12 @@ function anaBilleteraPintar() {
 
 // ---------- TAB ADS DIRECTO (LOTE ADS-DIRECTO v759 · mock v4 aprobado) ----------
 // La pantalla Ads directa: billetera visible con Cargar + carga
-// automática con regla visible, montos en UNA fila, posteo de hoy
-// destacado y pre-seleccionado, botón Feed con la grilla del feed,
-// Impulsar en 1 toque cuando todo está pre-seleccionado. La carta de
-// Estrategia (anaBilleteraHTML) no se toca.
+// automática con regla visible, montos en UNA fila, publicado más
+// reciente destacado y pre-seleccionado, botón Feed con la grilla de
+// solo publicados, Impulsar en 1 toque cuando todo está
+// pre-seleccionado. La carta de Estrategia (anaBilleteraHTML) no se toca.
+// (LOTE ADS-SOLO-PUBLICADOS) El posteo de hoy programado no es el
+// destacado ni entra en la grilla.
 function anaAdsDirectoHTML() {
   const d = anaBilleteraDatos || {};
   const bil = d.billetera || {};
@@ -1679,10 +1691,8 @@ function anaAdsDirectoHTML() {
   const selMonto = Number(d.selMonto) || 20;
   const dias = Number(bil.dias) || 7;
   const selPost = d.selPost || null;
-  const hoy = d.hoy || null;
   const mejor = d.mejor || null;
   const autoOn = !!d.auto_topup;
-  const esHoy = !!(selPost && hoy && Number(selPost.post_id) === Number(hoy.post_id));
   const esMejor = !!(selPost && mejor && Number(selPost.post_id) === Number(mejor.post_id));
   const backBtn = `<a href="#/app/inicio" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:1.5px solid #DCEFFF;background:#fff;color:#0A1E33;font-size:18px;text-decoration:none;flex:0 0 auto">←</a>`;
   // Tirita de pasos: 1 Posteo · 2 Monto · 3 Impulsar. El 1 se tilda
@@ -1709,11 +1719,12 @@ function anaAdsDirectoHTML() {
       ${toggle}
     </div>
   </div>`;
-  // Posteo destacado: el elegido (por defecto, el de hoy), con borde
-  // amarillo + tilde verde, y su chip (Sale hoy / el que más rindió).
-  const chipDestacado = esHoy && hoy.hora
-    ? `<span style="display:inline-block;margin-top:8px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${esc(anaT('Sale hoy · ' + hoy.hora, 'Goes live today · ' + hoy.hora))}</span>`
-    : (esMejor ? `<span style="display:inline-block;margin-top:8px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${esc(anaT('✦ el que más rindió', '✦ top performer'))}</span>` : '');
+  // Posteo destacado: el elegido (por defecto, el publicado más
+  // reciente), con borde amarillo + tilde verde, y su chip (el que más
+  // rindió, cuando el elegido es el mejor de la semana). El posteo de hoy
+  // programado nunca es el destacado: todavía no está publicado.
+  const chipDestacado = esMejor
+    ? `<span style="display:inline-block;margin-top:8px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:12px;font-weight:800;color:#0A1E33">${esc(anaT('✦ el que más rindió', '✦ top performer'))}</span>` : '';
   const destacado = selPost
     ? `<div style="position:relative;background:#fff;border:2px solid #FEC14D;border-radius:16px;overflow:hidden;margin-bottom:14px">
       <span style="position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;z-index:1">✓</span>
@@ -1735,10 +1746,10 @@ function anaAdsDirectoHTML() {
   ${hist}`;
 }
 
-// Grilla del feed: TODOS los posteos publicados + el de hoy primero (si
-// lo hay y todavía no está publicado: es el elegido por defecto del mock
-// y tiene que verse con su borde + tilde). 3 columnas, borde a borde
-// (el sangrado -14px cancela el padding de .bb-main), scroll nativo.
+// Grilla del feed: SOLO los posteos publicados (el de hoy programado no
+// entra hasta que se publique: todavía no existe en Instagram). 3
+// columnas, borde a borde (el sangrado -14px cancela el padding de
+// .bb-main), scroll nativo.
 // La elegida lleva borde amarillo + tilde verde; la que ya tiene ads
 // lleva su marca y no se puede volver a elegir.
 // (LOTE ADS-FEED-STORIES · 7/11) La grilla muestra la imagen ENTERA:
@@ -1749,17 +1760,12 @@ function anaAdsDirectoHTML() {
 function anaAdsFeedHTML() {
   const d = anaBilleteraDatos || {};
   const feed = Array.isArray(d.feed) ? d.feed : [];
-  const hoy = d.hoy || null;
-  const lista = [];
-  if (hoy && hoy.post_id && !feed.some((p) => Number(p.post_id) === Number(hoy.post_id))) lista.push(hoy);
-  feed.forEach((p) => lista.push(p));
+  const lista = feed.slice();
   const backBtn = `<button type="button" onclick="anaAdsCerrarFeed()" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:1.5px solid #DCEFFF;background:#fff;color:#0A1E33;font-size:18px;cursor:pointer;flex:0 0 auto;padding:0">←</button>`;
   const celdas = lista.map((p) => {
     const esElegida = Number(p.post_id) === Number(d.selId || 0);
-    const esHoyCelda = !!(hoy && Number(p.post_id) === Number(hoy.post_id));
-    const chip = esHoyCelda && hoy.hora
-      ? `<span style="position:absolute;left:6px;bottom:6px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:11px;font-weight:800;color:#0A1E33">${esc(anaT('Sale hoy · ' + hoy.hora, 'Goes live today · ' + hoy.hora))}</span>`
-      : (p.ya_impulsado ? `<span style="position:absolute;left:6px;bottom:6px;padding:2px 8px;background:rgba(10,30,51,.75);border-radius:999px;font-size:11px;font-weight:800;color:#fff">${esc(anaT('Con ads', 'With ads'))}</span>` : '');
+    const chip = p.ya_impulsado
+      ? `<span style="position:absolute;left:6px;bottom:6px;padding:2px 8px;background:rgba(10,30,51,.75);border-radius:999px;font-size:11px;font-weight:800;color:#fff">${esc(anaT('Con ads', 'With ads'))}</span>` : '';
     return `<button type="button" onclick="anaAdsElegirFeed(${p.post_id}, this)" style="position:relative;padding:0;border:0;background:#E8F1F8;cursor:pointer;aspect-ratio:1/1;overflow:hidden;${esElegida ? 'box-shadow:inset 0 0 0 3px #FEC14D;' : ''}">${p.image_path ? `<img src="${esc(p.image_path)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:contain;display:block">` : ''}${esElegida ? '<span style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:#1FA855;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900">✓</span>' : ''}${chip}</button>`;
   }).join('');
   const grid = lista.length
@@ -1800,9 +1806,10 @@ function anaAdsElegirFeed(id, btn) {
     return;
   }
   const enEleg = (d.elegibles || []).find((e) => Number(e.post_id) === nid) || null;
-  const esHoy = (d.hoy && Number(d.hoy.post_id) === nid) ? d.hoy : null;
   d.selId = nid;
-  d.selPost = enFeed || enEleg || esHoy || ((d.selPost && Number(d.selPost.post_id) === nid) ? d.selPost : null);
+  // Sin fallback al hoy: el programado no se puede elegir (no está en la
+  // grilla); si el id no es un publicado, el destacado queda vacío.
+  d.selPost = enFeed || enEleg || ((d.selPost && Number(d.selPost.post_id) === nid) ? d.selPost : null);
   d.vistaFeed = false;
   anaBilleteraPintar();
 }

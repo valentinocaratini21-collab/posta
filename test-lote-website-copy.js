@@ -428,7 +428,7 @@ t(has(stylesSrc, '@media(max-width:760px){.logo-img{height:28px}'), 'logo: style
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(BASE + '/api/version')).json();
-      t(ver.build === '20261105-v771', 'boot: /api/version 20261105-v771 (vino ' + ver.build + ', con bump a v771)');
+      t(ver.build === '20261105-v774', 'boot: /api/version 20261105-v774 (vino ' + ver.build + ', con bump a v773)');
       const plansRes = await (await fetch(BASE + '/api/billing/plans?unico=1')).json();
       const apiFeats = ((plansRes.plans || [])[0] && (plansRes.plans || [])[0].features) ||
         (plansRes.unico && plansRes.unico.features) || [];
