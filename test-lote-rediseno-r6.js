@@ -57,7 +57,7 @@ if (hasBase) {
   check('0d chunk-conserje.js SIN tocar (diseño v778 intacto)', md5(fs.readFileSync(path.join(TREE, 'public/chunk-conserje.js'), 'utf8')) === md5(fs.readFileSync(path.join(base, 'public/chunk-conserje.js'), 'utf8')));
   check('0e index.html ES/EN estampados v804 (?v=540, styles?v=20261192)', idx.includes('/app.js?v=540') && idx.includes('/styles.css?v=20261192') && idxEn.includes('/styles.css?v=20261192'));
 }
-check('0f BUILD_ID estampado v804', srv.includes("const BUILD_ID = '20261105-v804'"));
+check('0f BUILD_ID estampado v805', srv.includes("const BUILD_ID = '20261105-v805'"));
 check('0g CHUNK_V sigue v792 (ningún chunk tocado)', app.includes("const CHUNK_V = '20261105-v792'"));
 check('0h censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 check('0i censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
@@ -384,7 +384,7 @@ async function parteBoot() {
     check('5a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await reqJson('GET', '/api/version');
-    check('5b /api/version = v804', ver.json && ver.json.build === '20261105-v804', JSON.stringify(ver.json));
+    check('5b /api/version = v805', ver.json && ver.json.build === '20261105-v805', JSON.stringify(ver.json));
     const join = await reqJson('POST', '/api/trial/chat-onboarding?test_key=' + TEST_KEY, { kind: 'join', ig: 'r6-test', device: 'test-device-r6' });
     check('5c join del invitado ok', join.status === 200 && join.json && join.json.ok === true && join.json.user_id > 0, JSON.stringify(join.json));
     if (!join.json || !join.json.user_id) throw new Error('sin join');

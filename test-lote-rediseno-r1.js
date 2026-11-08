@@ -398,7 +398,7 @@ t(APP.includes('CHAT_FOTOS_MAX = 10') && APP.includes('pzSftPartirMedios'),
 
 // ---------- §8: huellas del lote (server.js NO cambia en R1) ----------
 console.log('— §8: huellas');
-t(md5(SRV) === '3bd6c5b6130c29922045079e92292988', '§8: server.js = v804 estampado (BUILD v804; server.js SOLO línea BUILD + DELETE del álbum)');
+t(md5(SRV) === '1cd72dcead0ae8c040adc5728e36572f', '§8: server.js = v805 estampado (BUILD v805; server.js SOLO línea BUILD + DELETE del álbum)');
 t(md5(APP) === 'aaae05c2ddcc444b71c203daea11ff98', '§8: public/app.js = lote chat-mejora v804 (tarjeta inline del borrar)');
 t(md5(CSS) === 'e1261ef04f791cec22e85513a95bd8fb', '§8: public/styles.css = lote chat-mejora v804 (CSS tarjeta inline)');
 t(APP.includes('CHUNK_V'), '§8: CHUNK_V presente en app.js');
@@ -474,8 +474,8 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v804',
-      '§9: /api/version trae el BUILD v804 (estampado)', JSON.stringify(ver.json));
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v805',
+      '§9: /api/version trae el BUILD v805 (estampado)', JSON.stringify(ver.json));
     const appJs = await apiText('/app.js?v=537');
     t(appJs.status === 200 && appJs.text.includes('pzHoyCardHTML')
       && appJs.text.includes('data-pz-cuenta-sale') && appJs.text.includes('pzHoyPendientes'),

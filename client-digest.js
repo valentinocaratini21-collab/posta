@@ -425,6 +425,27 @@ function isPlausibleOfferItem(raw) {
   if (_segs.length > 1 && _segs[0].split(' ').filter(Boolean).length >= 2) return false;
   return true;
 }
+/* (JULI · 2026-11-08 — id 576, Top Class Barber Squad, 7/11)
+ * El frame del tip («3 claves para elegir bien en X») exige que X sea
+ * algo ELEGIBLE: una cosa con variantes entre las que el seguidor
+ * elige (café, vestido, corte, anillo). Una cualidad del servicio
+ * («atención personalizada») no se elige: el frame sale en español
+ * roto («elegir bien en atención personalizada») y el cuerpo se vuelve
+ * tautología («así trabajamos atención personalizada»). Un ítem es
+ * elegible cuando su primera palabra de contenido NO es un sustantivo
+ * abstracto de servicio: la lista es corta y conservadora — si la
+ * primera palabra no está en ella, el ítem se considera elegible. La
+ * regla mira solo la primera palabra: «corte de pelo» pasa (corte),
+ * «asesoría de imagen» no (asesoría). */
+const TIP_ABSTRACT_FIRST = new Set(['atencion', 'servicio', 'servicios', 'experiencia', 'calidad', 'asesoria', 'consultoria', 'trato', 'calidez', 'compromiso', 'confianza', 'puntualidad', 'dedicacion', 'pasion', 'excelencia', 'profesionalismo', 'eficiencia', 'responsabilidad', 'belleza', 'estetica']);
+const TIP_STOPWORDS = new Set(['de', 'la', 'el', 'los', 'las', 'en', 'y', 'con', 'para', 'tu', 'su', 'un', 'una', 'del']);
+function isChoosableTipItem(raw) {
+  const s = cleanOfferName(raw);
+  if (!s) return false;
+  const words = norm(s).split(' ').filter(Boolean).filter((w) => !TIP_STOPWORDS.has(w));
+  if (!words.length) return false;
+  return !TIP_ABSTRACT_FIRST.has(words[0]);
+}
 function cleanOfferRaw(x) {
   if (x && typeof x === 'object') {
     const n = cleanOfferName(x);
@@ -1454,7 +1475,15 @@ function deriveTopics(digest, opts) {
   // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) Un digest ya envenenado
   // (sembrado desde una prueba anterior al fix) trae la etiqueta o el
   // término vetado como servicio: se saca acá, antes de anclar temas.
-  items = items.filter((x) => !isVetoText(name(x), digest.onboarding));
+  // (JULI · 2026-11-08 — ids 571/573/577/578/579, cuentas 87/88/89)
+  // La misma puerta de admisión que la ingesta (isPlausibleOfferItem)
+  // se aplica acá: un digest sembrado ANTES del fix v755 sigue
+  // trayendo rótulos EN («Best Sellers», «single origin coffees»,
+  // «your bag»), barras («Country/region…») y slogans («Timeless
+  // style. Effortless you.») como ítems, y sin este filtro anclan
+  // temas aunque la ingesta nueva ya los rechace. Para un digest sano
+  // es un no-op (la ingesta y el scrub al guardar ya los filtran).
+  items = items.filter((x) => !isVetoText(name(x), digest.onboarding) && isPlausibleOfferItem(name(x)));
   // (Posty conectado) Lo que su Tiendanube marca SIN STOCK no entra a la
   // rotación de temas: ninguna pieza nace sobre un producto agotado.
   const oosNames = tnOutOfStockNames(digest);
@@ -1757,7 +1786,23 @@ function deriveTopics(digest, opts) {
     }
   }
   // 3) TIP — un servicio (u otro ítem no usado).
-  const tipItem = pickItem(0) || it1;
+  // (JULI · 2026-11-08 — id 576) El tip solo ancla un ítem ELEGIBLE:
+  // se busca el primer ítem no usado que pase isChoosableTipItem. Si
+  // no queda ninguno libre, se reutiliza la estrella (it1) SI es
+  // elegible — el fallback histórico (pickItem(0) || it1) existe para
+  // que la semana no quede con un hueco que el demo rellena con un
+  // tema genérico del rubro («Los viernes se pide milanesa» en un
+  // sushi: test-digest-foundation E2). Si NI la estrella es elegible,
+  // el tip NO sale: mejor una semana sin tip que un tip en español
+  // roto («elegir bien en atención personalizada»).
+  const pickChoosableTipItem = () => {
+    for (let i = 0; i < items.length; i++) {
+      if (!used.has(norm(name(items[i]))) && isChoosableTipItem(name(items[i]))) return items[i];
+    }
+    if (it1 && isChoosableTipItem(name(it1))) return it1;
+    return null;
+  };
+  const tipItem = pickChoosableTipItem();
   if (tipItem) {
     const A = name(tipItem);
     const short = capWords(A, 3);
@@ -1987,7 +2032,7 @@ function dnaFragmentFromDigest(digest) {
 module.exports = {
   DIGEST_VERSION,
   norm, distinctiveWords, wordForms, textWordSet, anchorsOf, anchorsFromTexts, pieceAnchored,
-  offeringsFromText, isPlausibleOfferItem, scrubDigestItems, temasFromFreeText, temaForText,
+  offeringsFromText, isPlausibleOfferItem, isChoosableTipItem, scrubDigestItems, temasFromFreeText, temaForText,
   // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) Las líneas rojas son veto, nunca tema.
   isVetoLabelText, isVetoText, vetoTermsFromOnboarding, stripVetoLines, dropVetoTopics,
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,

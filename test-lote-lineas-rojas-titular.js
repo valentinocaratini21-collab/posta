@@ -103,7 +103,7 @@ ok('D3 isVetoLabelText: falso para textos legítimos', typeof cd.isVetoLabelText
 
 // ---------- E) Estático: el fix está cableado en los 4 archivos ----------
 ok('E1 offeringsFromText salta segmentos de veto', /isVetoLabelText\(s\)\) continue/.test(cdSrc), 'E1');
-ok('E2 deriveTopics filtra ítems vetados', /items\.filter\(\(x\) => !isVetoText\(name\(x\), digest\.onboarding\)\)/.test(cdSrc), 'E2');
+ok('E2 deriveTopics filtra ítems vetados', /items\.filter\(\(x\) => !isVetoText\(name\(x\), digest\.onboarding\)/.test(cdSrc), 'E2');
 ok('E3 generateDemo pasa allTopics por dropVetoTopics', /dropVetoTopics\(dropTemplateVarTopics/.test(demoSrc), 'E3');
 ok('E4 applyGoal saca las líneas de vetos del goal', /stripVetoLines\(goal\)/.test(demoSrc), 'E4');
 ok('E5 ideasInputFor suma las etiquetas a lineasRojas', /'LÍNEAS ROJAS', 'RED LINES'/.test(srvSrc), 'E5');
