@@ -377,12 +377,12 @@ function parteC() {
   const app = fs.readFileSync(path.join(DIR, 'public/app.js'), 'utf8');
   const escSrc = reFrom(app, /const esc = \(s\) =>[^\n]+/);
   const parts = [escSrc];
-  for (const sig of ['function conserjeFotoHTML(', 'function conserjeEtapaDot(', 'function conserjeFichaHTML(', 'function conserjeDetalleHTML(']) {
+  for (const sig of ['function conserjeFotoHTML(', 'function conserjeEtapaDot(', 'function conserjeFichaHTML(', 'function conserjeEtiquetaCorta(', 'function conserjeConteo(', 'function conserjeDetalleHTML(']) {
     const s = fnFrom(chunk, sig);
     if (!s) { check('C0 se extraen las funciones del conserje', false, 'falta ' + sig); return; }
     parts.push(s);
   }
-  const ctx = { console, pzIc: () => '' };
+  const ctx = { console, pzIc: () => '', conserjeEstado: { notaGuardada: null } };
   vm.createContext(ctx);
   vm.runInContext(parts.join('\n'), ctx);
   const html = vm.runInContext(`conserjeDetalleHTML({ user_id: 12, business_name: 'Test', post: { id: 1, titulo: 'Posteo', cuando: 'Mañana · 17:00' }, ficha: {}, decision: null }, { fecha: '2026-11-08' })`, ctx);
