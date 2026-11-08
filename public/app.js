@@ -6677,9 +6677,14 @@ function bindMediaCard() {
   if (!add || !inp) return;
   add.onclick = () => inp.click();
   inp.onchange = async () => {
-    const files = [...inp.files].filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
-    if (!files.length) return;
     const msg = $('#mediaMsg');
+    // (LOTE SUBIR-10-FOTOS) Mismo filtro que el chat (con respaldo por
+    // extensión): un HEIC de iPhone con type vacío ya no se tira en
+    // silencio. El álbum es librería: sin tope por tanda (el servidor
+    // ya pone su tope de 20 fotos con su propio mensaje).
+    const partes = pzSftPartirMedios(inp.files);
+    const files = partes.items;
+    if (!files.length) { if (msg) msg.innerHTML = `<div class="err">${esc(pzSftT('No pude usar esos archivos: fijate que sean fotos o videos.', 'I could not use those files: make sure they are photos or videos.'))}</div>`; return; }
     add.disabled = true;
     try {
       let ok = 0;
@@ -6687,8 +6692,8 @@ function bindMediaCard() {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         msg.innerHTML = `<div class="hint">${pzIc('clock', 14)} Subiendo ${i + 1} de ${files.length}…</div>`;
-        const r = await fetch('/api/assets?kind=' + (f.type.startsWith('video/') ? 'video' : 'photo'), { signal: AbortSignal.timeout(120000),
-          method: 'POST', headers: { 'Content-Type': f.type || 'application/octet-stream' }, body: f });
+        const r = await fetch('/api/assets?kind=' + (pzSftKind(f).kind === 'video' ? 'video' : 'photo'), { signal: AbortSignal.timeout(120000),
+          method: 'POST', headers: { 'Content-Type': pzSftKind(f).mime }, body: f });
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data.error || 'No pude subirlo. Probá de nuevo');
         ok++;
@@ -6698,6 +6703,7 @@ function bindMediaCard() {
         }
       }
       msg.innerHTML = `<div class="okmsg">${pzIc('checkCircle', 14)} ${ok === 1 ? 'Agregado' : ok + ' agregados'} — ya los usamos en tus posteos.</div>`;
+      if (partes.descartadas > 0) msg.innerHTML += `<div class="hint">${pzIc('alert', 14)} ${esc(pzSftT(partes.descartadas === 1 ? '1 archivo no era foto ni video, no lo subí.' : partes.descartadas + ' archivos no eran fotos ni videos, no los subí.', partes.descartadas === 1 ? '1 file was not a photo or video, I did not upload it.' : partes.descartadas + ' files were not photos or videos, I did not upload them.'))}</div>`;
       if (warns.length) msg.innerHTML += `<div class="hint">${pzIc('alert', 14)} ${warns.join('<br>')}</div>`;
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       render();
@@ -9896,14 +9902,32 @@ function fileToVideoThumb(file, maxSize = 512) {
     } catch (e) { resolve(null); }
   });
 }
+/* (LOTE SUBIR-10-FOTOS) El tope es 10: el máximo de un carrusel de
+   Instagram. Partir lo elegido en el picker en usable / sobra /
+   descartado: nada se tira en silencio, lo que no entra se avisa claro
+   en el chat (o en el álbum). max vacío = sin tope (librería). */
+const CHAT_FOTOS_MAX = 10;
+function pzSftPartirMedios(files, max) {
+  const todas = [...(files || [])];
+  const validas = todas.filter((f) => pzSftEsArchivoMedio(f));
+  const items = typeof max === 'number' ? validas.slice(0, max) : validas;
+  return { items, sobran: validas.length - items.length, descartadas: todas.length - validas.length, elegidas: validas.length };
+}
+function pzSftAvisoSubida(p) {
+  const partes = [];
+  if (p.sobran > 0) partes.push(pzSftT(`elegiste ${p.elegidas}, subo las primeras 10 — las otras ${p.sobran} no entraron.`, `you picked ${p.elegidas}, I'm uploading the first 10 — the other ${p.sobran} didn't come in.`));
+  if (p.descartadas > 0) partes.push(pzSftT(p.descartadas === 1 ? '1 archivo no era foto ni video, no lo subí.' : `${p.descartadas} archivos no eran fotos ni videos, no los subí.`, p.descartadas === 1 ? '1 file was not a photo or video, I did not upload it.' : `${p.descartadas} files were not photos or videos, I did not upload them.`));
+  return partes.join(' ');
+}
 async function chatUploadPhotos(files) {
   const m = $('#chatMsg');
-  const items = [...(files || [])].filter(f => pzSftEsArchivoMedio(f)).slice(0, 4);
+  const partes = pzSftPartirMedios(files, CHAT_FOTOS_MAX);
+  const items = partes.items;
   if (!items.length) { if (m) m.innerHTML = `<div class="err">${esc(pzSftT('No pude usar esos archivos: fijate que sean fotos o videos.', 'I could not use those files: make sure they are photos or videos.'))}</div>`; return; }
   try {
     const nImgs = items.filter(f => pzSftKind(f).kind === 'photo').length;
     const nVids = items.length - nImgs;
-    const what = [nImgs ? (nImgs > 1 ? nImgs + ' fotos' : 'foto') : '', nVids ? (nVids > 1 ? nVids + ' videos' : 'video') : ''].filter(Boolean).join(' y ');
+    const what = [nImgs ? (nImgs + (nImgs > 1 ? ' fotos' : ' foto')) : '', nVids ? (nVids + (nVids > 1 ? ' videos' : ' video')) : ''].filter(Boolean).join(' y ');
     if (m) m.innerHTML = `<div class="okmsg">⏳ Subiendo ${what}…</div>`;
     PZ_SFT_CHAT_START = CHAT_PHOTOS.length;
     for (const f of items) {
@@ -9925,6 +9949,9 @@ async function chatUploadPhotos(files) {
     } else {
       chatSay('📸 agregado! la IA también lo puede ver 👇');
     }
+    // (LOTE SUBIR-10-FOTOS) Si sobraron o hubo descartados, avisar
+    // CLARO en el chat: nunca en silencio.
+    if (partes.sobran > 0 || partes.descartadas > 0) chatSay(pzSftAvisoSubida(partes));
     // AJUSTE ENTRADA DIRECTA: lo subido por el chat ya NO abre la
     // pantalla de opciones; la foto queda en el chat y la propuesta
     // llega sola como mensaje (pzSftDespuesDeSubirChat redefinido).
