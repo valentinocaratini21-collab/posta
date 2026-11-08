@@ -300,6 +300,9 @@ t(cardMan.includes('Se postea mañana · 19:00') && cardMan.includes('data-pz-cu
   && !cardMan.includes('Se destapa a las'), '§4: cartita abierta: pill, cuenta de salida, Dale/Cambialo, sin velo ni destape');
 t(cardMan.includes('data-pz-hoy-aprobar="611"') && cardMan.includes('data-pz-hoy-cambiar="611"')
   && cardMan.includes('data-pz-hoy-detalle="611"'), '§4: la cartita lleva sus data attrs (aprobar, cambiar, detalle)');
+t(cardMan.includes('class="btn btn-primary btn-publish" data-pz-hoy-aprobar="611"')
+  && cardMan.includes('class="btn btn-ghost" data-pz-hoy-cambiar="611"'),
+  '§4: «Dale, publicalo ✓» lleva la clase btn-publish (verde) y «Cambialo» sigue fantasma');
 const cardAprob = sb.pzHoyCardHTML(MANANA_APROB, { cartita: true, en: false, tz: 'America/New_York' });
 t(cardAprob.includes('Posty también lo sube como historia') && !cardAprob.includes('data-pz-hoy-aprobar'),
   '§4: cartita aprobada muestra la nota «✓ … Posty también lo sube como historia» y no repite el botón Dale');
@@ -331,6 +334,8 @@ t(upHtml.includes('Subir foto o video') && upHtml.includes('data-pz-hoy-subir') 
   '§4: subida: botón + fila del álbum real (fotos del /api/album)');
 t(sb.pzHoyUploadHTML([], false).includes('TU ÁLBUM') && !sb.pzHoyUploadHTML([], false).includes('<img'),
   '§4: álbum vacío: fila con «+» y sin fotos inventadas');
+t(!upHtml.includes('btn-publish') && upHtml.includes('pz-hoy-upload-btn'),
+  '§4: «Subir foto o video» sigue azul (sin btn-publish): solo «Dale, publicalo ✓» es verde');
 const conHtml = sb.pzHoyConserjeHTML(2, 3, false);
 t(conHtml.includes('2 de 3 revisados') && conHtml.includes('data-pz-hoy-conserje'),
   '§4: conserje: contador «2 de 3 revisados» + entrada real');
@@ -367,20 +372,33 @@ const ivStart = APP.indexOf('async function inicioView() {');
 const ivNext = APP.slice(ivStart + 10).match(/\n(?:async )?function [a-zA-Z0-9_]+\(/);
 const ivEnd = ivStart + 10 + (ivNext ? ivNext.index : APP.length);
 const ivSrc = APP.slice(ivStart, ivEnd);
-t(ivSrc.includes("api.get('/api/album')") && ivSrc.includes('hoyAprobarHTML') && ivSrc.includes('hoySegHTML') && ivSrc.includes('#/app/feed')
-  && ivSrc.includes('pzHoySubirSheet') && ivSrc.includes('data-pz-hoy-view') && ivSrc.includes('pzHoyConserjeHTML'),
-  '§6: inicioView trae /api/album + secciones Hoy (seg + aprobar + hoja + conserje; «Mi feed» del seg es enlace a #/app/feed, RE-BASE v794)');
+t(ivSrc.includes("api.get('/api/album')") && ivSrc.includes('hoyAprobarHTML')
+  && ivSrc.includes('pzHoySubirSheet') && ivSrc.includes('pzHoyConserjeHTML')
+  && !ivSrc.includes('pz-hoy-seg') && !ivSrc.includes('data-pz-hoy-view'),
+  '§6: inicioView trae /api/album + secciones Hoy (aprobar + hoja + conserje) SIN segmentador (LOTE HOY-SEGMENTER-Y-BOTON: «Mi feed» salió, Hoy queda en «Por aprobar»)');
+t(APP.includes("name === 'verfeed'") && APP.includes("location.hash = '#/app/feed'"),
+  '§6: #/app/feed sigue vivo y reachable por «Ver en el feed» desde el detalle del posteo');
 t(APP.includes('pzHoyBind(document.getElementById(\'inicioView\'))'),
   '§6: bindInicio cablea pzHoyBind en #inicioView');
 t(APP.includes("if (t.openHoy && t.futuro)") && APP.includes('esFuturoR1'),
   '§6: homeGridCompose/homeTileHTML tienen la rama futura (esFuturoR1)');
 t(APP.includes('data-pz-cuenta-sale') && APP.includes("document.querySelectorAll('[data-pz-cuenta-sale]')"),
   '§6: el tick de 1 s actualiza las cuentas de salida (hfCuentaAbreTick)');
-['.pz-hoy-seg', '.pz-hoy-speech', '.pz-hoy-upload', '.pz-hoy-ring', '.pz-hoy-card', '.pz-hoy-sheet', '.pz-hoy-cuenta', '.pz-hoy-conserje'].forEach((c) => {
+['.btn-publish', '.pz-hoy-speech', '.pz-hoy-upload', '.pz-hoy-ring', '.pz-hoy-card', '.pz-hoy-sheet', '.pz-hoy-cuenta', '.pz-hoy-conserje'].forEach((c) => {
   t(CSS.includes(c), '§6: styles.css trae ' + c);
 });
 t(CSS.includes('#pzHoyAprobar[hidden]')
   && CSS.includes('#pzHoySubirSheet[hidden]'), '§6: CSS esconde las secciones/hoja con [hidden]');
+t(CSS.includes('#inicioView .pz-hoy-actions .btn-publish{background:#22C55E;color:#fff'),
+  '§6: «Dale, publicalo ✓» en verde #22C55E con texto blanco (solo ese botón)');
+t(CSS.includes('.apv-wrap .apv-accept{background:#22C55E;color:#fff'),
+  '§6: «Aceptar» del detalle de aprobación en verde #22C55E');
+t(CSS.includes('.hf-dcard .hf-d-accept{background:#22C55E;color:#fff'),
+  '§6: «Aceptar» del detalle del feed en verde #22C55E');
+t(CSS.indexOf('#inicioView .pz-hoy-actions .btn-publish') > CSS.indexOf('LOTE BOTONES-GLASS'),
+  '§6: las reglas verdes van DESPUÉS del vidrio celeste (ganan por orden + especificidad)');
+t(!APP.includes('pz-hoy-seg'),
+  '§6: el bundle ya no trae el segmentador (clase pz-hoy-seg ×0 en app.js; el CSS muerto queda)');
 
 // ---------- §7: auditoría M78 ----------
 console.log('— §7: M78 funciones auditadas');
@@ -407,9 +425,9 @@ t(APP.includes('CHAT_FOTOS_MAX = 10') && APP.includes('pzSftPartirMedios'),
 
 // ---------- §8: huellas del lote (server.js NO cambia en R1) ----------
 console.log('— §8: huellas');
-t(md5(SRV) === '3a100a8e27643cc7e0c24db6fefd297a', '§8: server.js = v806 estampado (BUILD v806; server.js SOLO línea BUILD + DELETE del álbum)');
-t(md5(APP) === '67721bed6b8e051c14a619f1e394a8f5', '§8: public/app.js = lote saludo-hoy-honesto v806 (saludo singular + pendientes con número real)');
-t(md5(CSS) === 'e1261ef04f791cec22e85513a95bd8fb', '§8: public/styles.css = lote chat-mejora v804 (CSS tarjeta inline)');
+t(md5(SRV) === '9fa8ff53e7e35b8f55a6ca61e091f53c', '§8: server.js = v807 estampado (BUILD v807; server.js SOLO línea BUILD + DELETE del álbum)');
+t(md5(APP) === '4a7727296b14d01cc3e0dda8feb133cf', '§8: public/app.js = lote saludo-hoy-honesto v806 + hoy-segmenter-y-boton (sin segmentador, Dale btn-publish)');
+t(md5(CSS) === '0ec66315a18685cd645ae1d9e97ec86f', '§8: public/styles.css = lote hoy-segmenter-y-boton (bloque verde #22C55E al final)');
 t(APP.includes('CHUNK_V'), '§8: CHUNK_V presente en app.js');
 
 // ---------- §9: boot M121 — endpoints reales con datos reales ----------
@@ -483,9 +501,9 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v806',
-      '§9: /api/version trae el BUILD v806 (estampado)', JSON.stringify(ver.json));
-    const appJs = await apiText('/app.js?v=541');
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v807',
+      '§9: /api/version trae el BUILD v807 (estampado)', JSON.stringify(ver.json));
+    const appJs = await apiText('/app.js?v=542');
     t(appJs.status === 200 && appJs.text.includes('pzHoyCardHTML')
       && appJs.text.includes('data-pz-cuenta-sale') && appJs.text.includes('pzHoyPendientes'),
       '§9: el app.js servido trae el bloque HOY-R1');

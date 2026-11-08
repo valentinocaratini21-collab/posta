@@ -20790,7 +20790,7 @@ function pzHoyCardHTML(p, o) {
     const caption = String((p && p.caption) || '').trim();
     const whenAttr = (prop && prop.iso) ? prop.iso : (p.scheduled_at || '');
     const acciones = pendiente
-      ? `<div class="pz-hoy-actions"><button type="button" class="btn btn-primary" data-pz-hoy-aprobar="${esc(String(p.id))}" data-pz-hoy-status="${esc(st)}" data-pz-hoy-when="${esc(String(whenAttr))}">${en ? 'Publish it ✓' : 'Dale, publicalo ✓'}</button><button type="button" class="btn btn-ghost" data-pz-hoy-cambiar="${esc(String(p.id))}">${en ? 'Change it' : 'Cambialo'}</button></div>`
+      ? `<div class="pz-hoy-actions"><button type="button" class="btn btn-primary btn-publish" data-pz-hoy-aprobar="${esc(String(p.id))}" data-pz-hoy-status="${esc(st)}" data-pz-hoy-when="${esc(String(whenAttr))}">${en ? 'Publish it ✓' : 'Dale, publicalo ✓'}</button><button type="button" class="btn btn-ghost" data-pz-hoy-cambiar="${esc(String(p.id))}">${en ? 'Change it' : 'Cambialo'}</button></div>`
       : '';
     const notaOk = (!pendiente && st === 'scheduled')
       ? `<div class="pz-hoy-ok">✓ ${esc(pill || cuando || (en ? 'Scheduled' : 'Agendado'))}. ${en ? 'Posty also shares it as a story.' : 'Posty también lo sube como historia.'}</div>` : '';
@@ -21442,10 +21442,11 @@ async function inicioView() {
       + (hayAdminR1 ? pzHoyConserjeHTML(null, null, enHome) : '')
       + `</div>`;
   })() : '';
-  // (RE-BASE R1 SOBRE v794 · R2: el seg «Mi feed» es un enlace real a #/app/feed, pantalla propia.)
-  const hoySegHTML = (!HF_VISITOR)
-    ? `<div class="pz-hoy-seg" role="tablist" aria-label="${enHome ? 'Today view: to approve or my feed' : 'Vista de Hoy: por aprobar o mi feed'}"><button type="button" class="${PZ_HOY_VIEW === 'aprobar' ? 'active' : ''}" data-pz-hoy-view="aprobar" role="tab">${enHome ? 'To approve' : 'Por aprobar'}${pendR1.total ? ` <span class="pz-hoy-seg-n">${pendR1.total}</span>` : ''}</button><a href="#/app/feed" class="${PZ_HOY_VIEW === 'feed' ? 'active' : ''}" data-pz-hoy-view="feed" role="tab">${enHome ? 'My feed' : 'Mi feed'}</a></div>`
-    : '';
+  // (LOTE HOY-SEGMENTER-Y-BOTON · decisión Valentino: el segmentador «Por aprobar / Mi feed»
+  // salió — era una falsa elección (vista + enlace de navegación) y scrolleando Hoy ya se ven
+  // los posteos de la semana. Hoy queda siempre en «Por aprobar». #/app/feed sigue vivo y
+  // reachable por «Ver en el feed» desde el detalle del posteo.)
+  const hoySegHTML = '';
   const hoySheetHTML = (!HF_VISITOR)
     ? `<div class="pz-hoy-sheet-ov" id="pzHoySubirOv" hidden></div><div class="pz-hoy-sheet" id="pzHoySubirSheet" hidden role="dialog" aria-label="${enHome ? 'Upload photo or video' : 'Subir foto o video'}"><div class="sheet-handle"></div><h4>${enHome ? 'Upload photo or video' : 'Subir foto o video'}</h4><p class="sheet-sub">${enHome ? 'Choose where it comes from. Posty takes care of everything else: text, design and timing.' : 'Elegí de dónde sale. Posty se encarga de todo lo demás: texto, diseño y horario.'}</p><button type="button" class="pz-hoy-sheet-opt" data-pz-hoy-subir-op="camara"><span class="so-ic">📷</span><span><b>${enHome ? 'Camera' : 'Cámara'}</b><small>${enHome ? 'Take a photo or record a video now' : 'Sacar una foto o grabar un video ahora'}</small></span></button><button type="button" class="pz-hoy-sheet-opt" data-pz-hoy-subir-op="galeria"><span class="so-ic">🖼️</span><span><b>${enHome ? 'Gallery' : 'Galería'}</b><small>${enHome ? 'Choose a photo or video you already have' : 'Elegir una foto o video que ya tenés'}</small></span></button><button type="button" class="sheet-cancel" data-pz-hoy-subir-op="cancelar">${enHome ? 'Cancel' : 'Cancelar'}</button></div>`
     : '';

@@ -5871,3 +5871,19 @@ body.pz-postchat-open{overflow:hidden}
 .pz-conserje-hoy-txt b{font-size:14.5px;color:#0A1E33}
 .pz-conserje-hoy-txt small{font-size:12px;color:#33506B}
 .pz-conserje-hoy-ir{font-size:13.5px;font-weight:900;color:#0D4E73;white-space:nowrap}
+
+/* (LOTE HOY-SEGMENTER-Y-BOTON · decisión Valentino: la acción de aprobar — «Dale, publicalo ✓»
+   en las tarjetas de Hoy y «Aceptar» en el detalle del posteo — es EL call to action y va en
+   verde sólido #22C55E con texto blanco. OJO: el LOTE BOTONES-GLASS pinta todos los primarios
+   con vidrio celeste + texto navy (reglas con #inicioView / .apv-accept / .hf-d-accept más
+   arriba), así que estas reglas van AL FINAL y con más especificidad para ganarles. Solo
+   estos tres botones cambian: el resto de btn-primary sigue azul/vidrio y «Cambialo» fantasma
+   no se toca. */
+#inicioView .pz-hoy-actions .btn-publish{background:#22C55E;color:#fff;border:none;box-shadow:0 6px 16px rgba(34,197,94,.42),inset 0 1px 0 rgba(255,255,255,.55);-webkit-backdrop-filter:none;backdrop-filter:none}
+#inicioView .pz-hoy-actions .btn-publish:hover{filter:brightness(.97);transform:translateY(-1px);box-shadow:0 10px 24px rgba(34,197,94,.5),inset 0 1px 0 rgba(255,255,255,.55)}
+.apv-wrap .apv-accept{background:#22C55E;color:#fff;border:none;box-shadow:0 6px 16px rgba(34,197,94,.42),inset 0 1px 0 rgba(255,255,255,.55);-webkit-backdrop-filter:none;backdrop-filter:none}
+.apv-wrap .apv-accept:hover{filter:brightness(.97);transform:translateY(-1px);box-shadow:0 10px 24px rgba(34,197,94,.5),inset 0 1px 0 rgba(255,255,255,.55)}
+.apv-wrap .apv-accept .pz-ic svg{stroke:#fff}
+.hf-dcard .hf-d-accept{background:#22C55E;color:#fff;border:none;box-shadow:0 8px 24px rgba(34,197,94,.45);-webkit-backdrop-filter:none;backdrop-filter:none}
+.hf-dcard .hf-d-accept:hover{filter:brightness(.97);box-shadow:0 10px 28px rgba(34,197,94,.5)}
+.hf-dcard .hf-d-accept .pz-ic svg{stroke:#fff}
