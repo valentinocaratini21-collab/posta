@@ -905,21 +905,8 @@ function pzShellHeadHTML(tab) {
   // línea): sin segundo encabezado y sin robar alto con el teclado.
   if (tab === 'chat') return '';
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const neg = (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.negocio) ? String(BB.estado.negocio).trim() : '';
-  // (LOTE SALUDO-UNICO · 8/11: el encabezado es la IDENTIDAD, no un saludo.
-  // El saludo vive solo en el mensaje de Posty en Hoy. El @ sale de la
-  // misma fuente que el perfil (HOME_PROF.username, la réplica de
-  // /api/home/profile que usa homeHeadHTML); si todavía no cargó, de
-  // PROFILE.ig_username (lo trae refreshSession al arrancar). Cadena:
-  // nombre → @handle → «¡Hola!» solo si no hay ni nombre ni handle.)
-  const handle = (() => { try {
-    const h1 = (typeof HOME_PROF !== 'undefined' && HOME_PROF && HOME_PROF.username) ? String(HOME_PROF.username) : '';
-    if (h1.trim()) return h1.replace(/^@/, '').trim();
-    const h2 = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_username) ? String(PROFILE.ig_username) : '';
-    return h2.replace(/^@/, '').trim();
-  } catch (e) { return ''; } })();
-  const titulo = neg ? esc(neg) : (handle ? '@' + esc(handle) : (en ? 'Hi!' : '¡Hola!'));
-  const sub = (neg && handle) ? '@' + esc(handle) : '';
+  const neg = (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.negocio) ? String(BB.estado.negocio) : '';
+  const saludo = neg ? (en ? 'Hi, ' + esc(neg) : 'Hola, ' + esc(neg)) : (en ? 'Hi!' : '¡Hola!');
   // La píldora de racha se llena async (pzShellDatosHoy, UN fetch por
   // carga): se cachea para que un re-render del shell no la vacíe
   // (el header se re-crea en cada navegación y el fill no se repite).
@@ -927,12 +914,12 @@ function pzShellHeadHTML(tab) {
   // texto cacheado con el idioma del momento del fetch (antes de que ME
   // cargue) saldría en español en un usuario EN.
   const rachaN = (typeof window !== 'undefined' && typeof window.__pzHeadRachaN === 'number') ? window.__pzHeadRachaN : null;
-  const rachaCache = rachaN !== null ? ('🔥 ' + rachaN + (en ? ' days' : ' días')) : ((typeof window !== 'undefined' && window.__pzHeadRachaTxt) ? String(window.__pzHeadRachaTxt) : '');
-  const rachaTitle = rachaN !== null ? (en ? ('Streak: ' + rachaN + ' days posting') : ('Racha de ' + rachaN + ' días publicando')) : ((typeof window !== 'undefined' && window.__pzHeadRachaTitle) ? String(window.__pzHeadRachaTitle) : '');
+  const rachaCache = rachaN !== null ? ('🔥 ' + (rachaN === 1 ? (en ? '1 day' : '1 día') : rachaN + (en ? ' days' : ' días'))) : ((typeof window !== 'undefined' && window.__pzHeadRachaTxt) ? String(window.__pzHeadRachaTxt) : '');
+  const rachaTitle = rachaN !== null ? (en ? ('Streak: ' + (rachaN === 1 ? '1 day' : rachaN + ' days') + ' posting') : ('Racha de ' + (rachaN === 1 ? '1 día' : rachaN + ' días') + ' publicando')) : ((typeof window !== 'undefined' && window.__pzHeadRachaTitle) ? String(window.__pzHeadRachaTitle) : '');
   return `<header class="pz-shell-head">
     <button type="button" class="pz-shell-ident" onclick="bbGo('#/app/chat')" aria-label="${en ? 'Open the chat with Posty' : 'Abrir el chat con Posty'}">
       <img src="ai-avatar.png" alt="Posty" class="pz-shell-ava">
-      <span class="pz-shell-who"><b id="pzShellSaludo">${titulo}</b>${sub ? `<small>${sub}</small>` : ''}</span>
+      <span class="pz-shell-who"><b id="pzShellSaludo">${saludo}</b><small>${en ? 'Posty is working now' : 'Posty está trabajando ahora'}</small></span>
     </button>
     <span class="pz-shell-racha" id="pzHeadRacha"${rachaCache ? '' : ' hidden'}${rachaTitle ? ` title="${esc(rachaTitle)}"` : ''}>${rachaCache ? esc(rachaCache) : ''}</span>
     <span class="pz-shell-acts">
@@ -998,11 +985,10 @@ function pzAperturaCerrar() {
   try { pzSaludoEscribir(); } catch (e) {}
 }
 function pzSaludoEscribir() {
-  // Máquina de escribir sobre la IDENTIDAD del encabezado (nombre del
-  // negocio o @handle; «¡Hola!» solo si no hay ni nombre ni handle), ~1 s,
+  // Máquina de escribir sobre el «Hola, {negocio}» del encabezado, ~1 s,
   // solo una vez por carga, después de la apertura. El saludo según la
   // hora («¡Buen día! ☀️» etc.) vive en la burbuja de Posty en Hoy (R1);
-  // el encabezado ya no saluda (LOTE SALUDO-UNICO).
+  // el encabezado queda en «Hola» (neutro en hora, nunca fijo en «buen día»).
   try {
     if (typeof window !== 'undefined' && window.__pzSaludoEscrito) return;
     if (typeof window !== 'undefined') window.__pzSaludoEscrito = true;
@@ -1056,8 +1042,8 @@ function pzShellDatosHoy() {
         // y cada template localiza con el ME vigente al pintar.
         if (r && typeof r.racha === 'number') {
           if (typeof window !== 'undefined') window.__pzHeadRachaN = r.racha;
-          const rachaTxt = '🔥 ' + r.racha + (en ? ' days' : ' días');
-          const rachaTit = en ? ('Streak: ' + r.racha + ' days posting') : ('Racha de ' + r.racha + ' días publicando');
+          const rachaTxt = '🔥 ' + (r.racha === 1 ? (en ? '1 day' : '1 día') : r.racha + (en ? ' days' : ' días'));
+          const rachaTit = en ? ('Streak: ' + (r.racha === 1 ? '1 day' : r.racha + ' days') + ' posting') : ('Racha de ' + (r.racha === 1 ? '1 día' : r.racha + ' días') + ' publicando');
           if (typeof window !== 'undefined') { window.__pzHeadRachaTxt = rachaTxt; window.__pzHeadRachaTitle = rachaTit; }
           const pill = (typeof document !== 'undefined') ? document.getElementById('pzHeadRacha') : null;
           if (pill) { pill.textContent = rachaTxt; pill.title = rachaTit; pill.hidden = false; }
@@ -2191,7 +2177,7 @@ function pzNivelRachaCardHTML(ritualHoy, en) {
     const n = Math.max(0, Math.floor(ritualHoy.racha));
     const tit = n === 0
       ? (en ? 'Your streak starts today' : 'Hoy empieza tu racha')
-      : (en ? (n + ' day' + (n === 1 ? '' : 's') + ' posting in a row') : ('Racha de ' + n + ' días publicando'));
+      : (en ? ((n === 1 ? '1 day' : n + ' days') + ' posting in a row') : ('Racha de ' + (n === 1 ? '1 día' : n + ' días') + ' publicando'));
     const meta30 = en ? '30 days in a row: +150 XP' : '30 días seguidos: +150 XP';
     const meta100 = en ? '100 days in a row: +300 XP' : '100 días seguidos: +300 XP';
     return '<section class="pz-nivel-racha"><span class="pz-nivel-racha-num" aria-hidden="true">🔥</span><div class="pz-nivel-racha-tx"><b>' + esc(tit) + '</b><span>' + esc(meta30) + '</span><span>' + esc(meta100) + '</span></div></section>';
@@ -15767,12 +15753,42 @@ function sigBtns(p) {
   const r = p.signal === 'rejected' ? ' on' : '';
   return `<button class="sig-btn${a}" data-sig="approved" data-id="${p.id}" title="Me gustó, así">${pzIc('checkCircle', 18)}</button><button class="sig-btn${r}" data-sig="rejected" data-id="${p.id}" title="No me gustó">${pzIc('reject', 18)}</button>`;
 }
+// «Ya salió»: el rating se actualiza EN SU LUGAR (sin render() ni
+// navegación): se llenan las estrellas 1..N, se deshabilitan las 5 y
+// queda un gracias corto en la fila. El posteo rateado sale del filtro
+// en la próxima visita (ya tiene señal), eso está bien. Si el POST
+// falla: se re-habilitan los botones + toast, sin tocar nada más.
+// Las señales no-rating (👍/👎, si algún día se vuelven a cablear)
+// conservan el camino viejo (POST + render()).
 function bindSignalBtns() {
   $$('[data-sig]').forEach(b => b.onclick = async () => {
-    b.disabled = true;
-    try { await api.post(`/api/posts/${b.dataset.id}/signal`, { signal: b.dataset.sig }); }
-    catch (e) { b.disabled = false; return; }
-    render();
+    const sig = String(b.dataset.sig || '');
+    const isRating = sig.indexOf('rating_') === 0;
+    const n = isRating ? (Number(sig.replace('rating_', '')) || 0) : 0;
+    const row = (typeof b.closest === 'function') ? b.closest('.st-rate-row') : null;
+    const stars = (isRating && row) ? Array.from(row.querySelectorAll('.star-btn')) : [b];
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    stars.forEach(s => { s.disabled = true; });
+    try { await api.post(`/api/posts/${b.dataset.id}/signal`, { signal: sig }); }
+    catch (e) {
+      stars.forEach(s => { s.disabled = false; });
+      if (isRating) { try { toast(en ? 'It didn\'t save \u2014 try again' : 'No se guardó, probá de nuevo'); } catch (e2) {} }
+      return;
+    }
+    if (!isRating) { render(); return; }
+    stars.forEach((s, i) => {
+      if (i < n) { try { s.innerHTML = pzIc('starFill', 18); } catch (e) {} try { s.classList.add('on'); } catch (e) {} }
+      s.disabled = true;
+    });
+    try {
+      const body = row ? row.querySelector('.st-rate-body') : null;
+      if (body && !body.querySelector('.st-rate-gracias')) {
+        const g = document.createElement('div');
+        g.className = 'st-rate-gracias';
+        g.textContent = en ? 'Thanks! Noted.' : '¡Gracias! Lo tengo en cuenta';
+        body.appendChild(g);
+      }
+    } catch (e) {}
   });
 }
 
@@ -18043,7 +18059,7 @@ function salioCardHTML(publishedList) {
       <div class="st-rate-body">
         <div class="st-rate-cap">${esc(String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 90))}</div>
         <div class="st-rate-stars">
-          ${[1, 2, 3, 4, 5].map(n => `<button class="btn btn-soft btn-sm star-btn" data-sig="rating_${n}" data-id="${p.id}" aria-label="${n} de 5">${pzIc('star', 18)}</button>`).join('')}
+          ${[1, 2, 3, 4, 5].map(n => `<button type="button" class="btn btn-soft btn-sm star-btn" data-sig="rating_${n}" data-id="${p.id}" aria-label="${n} de 5">${pzIc('star', 18)}</button>`).join('')}
         </div>
       </div>
     </div>`).join('')}
@@ -22319,7 +22335,7 @@ function pzNivelExtraHTML(nv, en) {
   if (nv.brote) h += `<div class="pz-brote" id="pzNivelBrote"><span>${pzIc('sprout', 18)} ${esc(en ? 'Surprise sprout: ' : 'Brote sorpresa: ')}${esc(nv.brote.texto)}</span><button type="button" class="pz-brote-x" data-pz-brote-x data-pz-brote-fuente="${esc(nv.brote.fuente)}" data-pz-brote-id="${esc(String(nv.brote.id || 0))}" aria-label="${en ? 'Close' : 'Cerrar'}">${pzIc("x", 16)}</button></div>`;
   if (nv.ausencia) {
     const lines = (nv.ausencia.aprendido || []).map((x) => `<div>· ${esc(x)}</div>`).join('');
-    h += `<div class="pz-ausencia" id="pzNivelAusencia"><button type="button" class="pz-brote-x" data-pz-ausencia-x aria-label="${en ? 'Close' : 'Cerrar'}">${pzIc("x", 16)}</button><strong>${esc(en ? `While you were away (${nv.ausencia.dias} days)` : `Mientras no estabas (${nv.ausencia.dias} días)`)}</strong>${nv.ausencia.subio ? `<div>${esc(en ? 'Posty leveled up while you were gone.' : 'Posty subió de nivel mientras no mirabas.')}</div>` : ''}${lines}</div>`;
+    h += `<div class="pz-ausencia" id="pzNivelAusencia"><button type="button" class="pz-brote-x" data-pz-ausencia-x aria-label="${en ? 'Close' : 'Cerrar'}">${pzIc("x", 16)}</button><strong>${esc(en ? `While you were away (${nv.ausencia.dias === 1 ? '1 day' : nv.ausencia.dias + ' days'})` : `Mientras no estabas (${nv.ausencia.dias === 1 ? '1 día' : nv.ausencia.dias + ' días'})`)}</strong>${nv.ausencia.subio ? `<div>${esc(en ? 'Posty leveled up while you were gone.' : 'Posty subió de nivel mientras no mirabas.')}</div>` : ''}${lines}</div>`;
   }
   return h;
 }

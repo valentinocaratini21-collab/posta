@@ -425,9 +425,9 @@ t(APP.includes('CHAT_FOTOS_MAX = 10') && APP.includes('pzSftPartirMedios'),
 
 // ---------- §8: huellas del lote (server.js NO cambia en R1) ----------
 console.log('— §8: huellas');
-t(md5(SRV) === 'f47e912619d7a000602efcc18956cca3', '§8: server.js = v813 estampado (BUILD v813; server.js SOLO línea BUILD + DELETE del álbum)');
-t(md5(APP) === 'ecb5cd68ebf77727e82fc1b915a5c3d3', '§8: public/app.js = v810 + saludo-unico v813 (identidad en el encabezado, sin saludo)');
-t(md5(CSS) === '7625ab0eb461dcdff09e13c644cd719d', '§8: public/styles.css = v810 + saludo-unico v813 (ellipsis en .pz-shell-who b/small)');
+t(md5(SRV) === '8f73dde5aad2edcca2196ba1bad04d63', '§8: server.js = v815 estampado (BUILD v815; server.js SOLO línea BUILD + DELETE del álbum)');
+t(md5(APP) === '3ef4d09e37b42417ab4152bb769937a7', '§8: public/app.js = v810 + analisis-estrellas v815 (perfil fino, saludo mensaje, fondo único + gracias y 1 día inline)');
+t(md5(CSS) === '26ae93dfd9b602285484aa58a966cdb5', '§8: public/styles.css = v810 + analisis-estrellas v815 (fondo transparente #inicioView al final + .st-rate-gracias)');
 t(APP.includes('CHUNK_V'), '§8: CHUNK_V presente en app.js');
 
 // ---------- §9: boot M121 — endpoints reales con datos reales ----------
@@ -501,9 +501,9 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v813',
-      '§9: /api/version trae el BUILD v810 (estampado)', JSON.stringify(ver.json));
-    const appJs = await apiText('/app.js?v=548');
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v815',
+      '§9: /api/version trae el BUILD v815 (estampado)', JSON.stringify(ver.json));
+    const appJs = await apiText('/app.js?v=549');
     t(appJs.status === 200 && appJs.text.includes('pzHoyCardHTML')
       && appJs.text.includes('data-pz-cuenta-sale') && appJs.text.includes('pzHoyPendientes'),
       '§9: el app.js servido trae el bloque HOY-R1');

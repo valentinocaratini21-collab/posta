@@ -6,7 +6,9 @@
 // (replyComment pone status='replied'). Primera semana completa (7 días
 // seguidos eligiendo en el ritual) +100; racha de 30 días +150 y de 100
 // días +300 (racha máxima de pz_ritual, no la vigente); 100 consultas
-// respondidas +150. La primera venta por anuncio (+200) NO se suma acá:
+// respondidas +150. Cada posteo rateado con estrellas en «Ya salió» +10
+// (una sola vez por posteo: post_signals tiene una fila por (usuario,
+// posteo); re-ratear no suma). La primera venta por anuncio (+200) NO se suma acá:
 // Posty no ve las ventas; solo se registra cuando el cliente la reporta
 // (pregunta semanal) — nunca inventada. Todo derivado de datos reales
 // (posts, pz_ritual, comment_queue): sin tabla nueva, sin escrituras.
@@ -21,6 +23,7 @@ const XP_NIVEL = 500, XP_MAX_NIVEL = 50;
 const XP_POST_BASE = 15, XP_POST_FOTO = 25, XP_POST_VIDEO = 45; // foto 40, video 60
 const XP_RESPUESTA = 25;
 const XP_PRIMERA_SEMANA = 100, XP_RACHA_30 = 150, XP_RACHA_100 = 300, XP_100_RESPUESTAS = 150;
+const XP_RATING = 10; // «Ya salió»: un posteo rateado con estrellas, una sola vez por posteo.
 
 function avatarNivelNombre(nivel) {
   const n = Math.max(1, Math.min(50, Number(nivel) || 1));
@@ -60,6 +63,9 @@ function avatarLevelData(db, uid) {
   let respuestas = 0;
   try { respuestas = db.prepare(`SELECT COUNT(*) AS c FROM comment_queue WHERE user_id = ? AND status = 'replied'`).get(uid).c || 0; } catch (e) {}
   xp += respuestas * XP_RESPUESTA;
+  let ratings = 0;
+  try { ratings = db.prepare(`SELECT COUNT(*) AS c FROM post_signals WHERE user_id = ? AND client_signal LIKE 'rating_%'`).get(uid).c || 0; } catch (e) {}
+  xp += ratings * XP_RATING;
   const rachaMax = rachaMaximaRitual(db, uid);
   if (rachaMax >= 7) xp += XP_PRIMERA_SEMANA;
   if (rachaMax >= 30) xp += XP_RACHA_30;
@@ -72,7 +78,7 @@ function avatarLevelData(db, uid) {
   const seen = db.prepare('SELECT milestone FROM milestones_seen WHERE user_id = ? AND milestone >= 900').all(uid).map(r => r.milestone - 900);
   const unseen = [];
   for (let l = 2; l <= level; l++) if (!seen.includes(l)) unseen.push(l);
-  return { xp, level, levelName, tier: avatarTier(level), published, nextXp, nextName, respuestas, rachaMax, unseenLevels: unseen };
+  return { xp, level, levelName, tier: avatarTier(level), published, nextXp, nextName, respuestas, rachaMax, ratings, unseenLevels: unseen };
 }
 
-module.exports = { XP_NIVEL, XP_MAX_NIVEL, XP_POST_BASE, XP_POST_FOTO, XP_POST_VIDEO, XP_RESPUESTA, XP_PRIMERA_SEMANA, XP_RACHA_30, XP_RACHA_100, XP_100_RESPUESTAS, avatarNivelNombre, avatarTier, rachaMaximaRitual, avatarLevelData };
+module.exports = { XP_NIVEL, XP_MAX_NIVEL, XP_POST_BASE, XP_POST_FOTO, XP_POST_VIDEO, XP_RESPUESTA, XP_PRIMERA_SEMANA, XP_RACHA_30, XP_RACHA_100, XP_100_RESPUESTAS, XP_RATING, avatarNivelNombre, avatarTier, rachaMaximaRitual, avatarLevelData };
