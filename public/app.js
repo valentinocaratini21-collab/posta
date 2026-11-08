@@ -4515,27 +4515,22 @@ function lpIdeasGrowthHTML() {
   <div class="section cap-sec navy" id="crecimiento"><div class="wrap"><div class="cap-grid">
     <div class="cap-copy">
       <div class="cap-kick">Growth</div>
-      <h2>Cada mes, <span class="hl">un foco</span></h2>
-      <p class="cap-exp">Cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.</p>
+      <h2>Lo que funciona, <span class="hl">se potencia</span></h2>
+      <p class="cap-exp">Posty detecta el posteo que mejor te está andando y te dice por qué rinde. Y cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.</p>
       <ul class="cap-list">
+        <li>Tu mejor posteo, detectado solo</li>
+        <li>Pauta con tu tope, siempre con tu OK</li>
         <li>Tu página pública lista, con WhatsApp directo</li>
       </ul>
       <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
     </div>
     <div class="cap-side">
-      <div class="cap-sample cap-idea-wrap">
-        <div class="idea-card">
-          <div class="idea-top"><span class="idea-fmt">🎯 Foco de este mes</span></div>
-          <div class="idea-title">Más reservas</div>
-          <div class="idea-why">Elegís el foco y Posty apunta tus posteos y tus ideas a eso, todo el mes.</div>
-          <div class="idea-actions">
-            <span class="btn btn-primary btn-sm">Más reservas ✓</span>
-            <span class="btn btn-ghost btn-sm">Más consultas</span>
-            <span class="btn btn-ghost btn-sm">Más ventas</span>
-          </div>
-        </div>
-      </div>
-      <p class="cap-note">El foco se elige una vez por mes, con un toque.</p>
+      <div class="cap-sample"><div class="cap-grow">
+        <div class="cap-grow-best"><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de una cafetería hecho por Posty"><div><h4>Tu posteo que más rindió</h4><div class="cap-grow-metric">▲ El doble de interacciones que tu promedio</div><div class="cap-grow-sub">Hace 3 días · Posteo de producto</div></div></div>
+        <div class="cap-prop">🚀 <b>Propuesta de Posty:</b> potenciarlo con <b>$15.000</b> por 5 días (tu tope: $20.000). Llega a gente de tu zona que todavía no te sigue.</div>
+        <div class="cap-sendrow"><span class="cap-send">Potenciar ✓</span><span class="cap-alt">Ahora no</span></div>
+      </div></div>
+      <p class="cap-note">La propuesta llega sola cuando un posteo la rompe. Vos decidís.</p>
     </div>
   </div></div></div>
 `;}
@@ -4662,7 +4657,7 @@ function landingView(cfg) {
       </div>
     </div>
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
-      <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
+      <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad1)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
       <button class="btn btn-primary" type="submit">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
     </form>
     <p class="lp-igform-note">Pegá tu Instagram y mirá <b>tu</b> semana real, con tu marca 👆</p>
@@ -4670,7 +4665,7 @@ function landingView(cfg) {
       <label for="lpWebInput">¿Preferís? Pegá la web de tu negocio</label>
       <div class="lp-webform-row">
         <input id="lpWebInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="www.tunegocio.com.ar" aria-label="La web de tu negocio">
-        <button class="btn btn-ghost" type="submit">Usar mi web <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+        <button class="btn btn-primary" type="submit">Usar mi web <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </div>
     </form>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
@@ -4688,7 +4683,7 @@ function landingView(cfg) {
       <div class="lp-gal-morewrap"><button type="button" class="lp-gal-btn" id="lpGalMoreBtn" onclick="lpGalToggle(this)">Ver más ejemplos</button><div class="lp-gal-more" id="lpGalMore">${lpGalMoreHTML()}</div></div>
       <div class="lp-show-cta">
         <form class="lp-igform lp-show-form" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
-          <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
+          <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad2" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad2)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
           <button class="btn btn-primary" type="submit">Quiero mi perfil así <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
         </form>
         <p class="lp-show-cert">3 días gratis · sin tarjeta · cancelás cuando querés</p>
@@ -4749,10 +4744,11 @@ function landingView(cfg) {
       <p class="lp-week-note">Así se ve tu semana: ideas, diseños y textos con tu marca, que se publican solos en los mejores horarios.</p>
       <p class="lp-week-bridge" id="lpWeekBridge">Esto es un ejemplo con negocios de varios rubros. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en 1 minuto <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
       <form class="lp-igform" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
-        <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
+        <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad3" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad3)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
         <button class="btn btn-primary" type="submit">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </form>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
+      <p style="text-align:center;color:var(--mut);font-size:13.5px;margin-top:8px">3 días gratis · sin tarjeta · cancelás cuando querés</p>
     </div>
   </div></div>
   <div class="lp-view" id="lpView" role="dialog" aria-modal="true" aria-label="Posteo de la semana de muestra" onclick="if(event.target===this)lpWeekClose()">

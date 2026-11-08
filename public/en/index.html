@@ -81,7 +81,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Gochi+Hand&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261173">
+<link rel="stylesheet" href="/styles.css?v=20261175">
 <link rel="stylesheet" href="/gj.css?v=4">
 <script type="application/ld+json">
 {
@@ -326,7 +326,7 @@
     </div>
     <script>(function(){var ms=document.querySelectorAll('.pp-mirror');ms.forEach(function(m){var ans=[null,null,null];var pats=[[0,7],[0,3,5,8],[0,1,3,4,6,8]];var tpl=m.getAttribute('data-pp-echo')||'';m.querySelectorAll('.pp-q').forEach(function(q,qi){var chips=q.querySelectorAll('.pp-chip');chips.forEach(function(c){c.addEventListener('click',function(){chips.forEach(function(x){x.setAttribute('aria-pressed','false')});c.setAttribute('aria-pressed','true');ans[qi]={k:parseInt(c.getAttribute('data-pp-k'),10),v:c.getAttribute('data-pp-v')};if(ans[0]&&ans[1]&&ans[2]){var res=m.querySelector('.pp-result');res.hidden=false;var slots=m.querySelector('[data-pp-grid="hoy"]').querySelectorAll('.pp-slot');slots.forEach(function(s){s.classList.remove('pp-on')});pats[ans[0].k].forEach(function(i){if(slots[i])slots[i].classList.add('pp-on')});m.querySelector('.pp-echo').textContent=tpl.split('{0}').join(ans[0].v).split('{1}').join(ans[1].v).split('{2}').join(ans[2].v);}})})})})})();</script>
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
-      <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram">
+      <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad4" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad4)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram"></span>
       <button class="btn btn-primary" type="submit">See my week <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
     </form>
     <p class="lp-igform-note">Drop your Instagram handle and see <b>your</b> real week, with your brand 👆</p>
@@ -543,7 +543,7 @@
       <div class="lp-gal-morewrap"><button type="button" class="lp-gal-btn" id="lpGalMoreBtn" onclick="lpGalToggle(this)">More examples</button><div class="lp-gal-more" id="lpGalMore"><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/estudio-ferrer">Estudio Ferrer 📊 · Accounting</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/el-tornillo">Ferretería El Tornillo 🔩 · Hardware store</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/petshop-huella">Pet Shop Huella 🐶 · Pets</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/splash">Splash Lavadero 🚗 · Car wash</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/miogelato">Mío Gelato 🍦 · Ice cream</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/cafe-martinez">Café Martínez ☕ · Coffee shop</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/nonnarosa">Nonna Rosa 🍝 · Food</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/brillo">Brillo Peluquería ✂️ · Beauty</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/navajaclub">Navaja Club 🪒 · Barbershop</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/elvestidor">El Vestidor 👗 · Fashion</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/box360">Box 360 🏋️ · Fitness</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/farmacia-vidal">Farmacia Vida 💊 · Pharmacy</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/libreria-umbral">Librería Umbral 📚 · Bookstore</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/mercado-fresco">Mercado Fresco 🥬 · Fresh market</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/optica-prisma">Óptica Prisma 👓 · Optician</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/shade-tattoo">Shade Tattoo Studio 🖤 · Tattoo studio</a><a class="lp-gal-chip" href="https://postycommunitymanager.com/p/flow-pilates">Flow Pilates Studio 🧘 · Pilates studio</a></div></div>
       <div class="lp-show-cta">
         <form class="lp-igform lp-show-form" onsubmit="var v=lpCleanIg(this.querySelector('input').value);location.href=v?'/en/prueba?ig='+encodeURIComponent(v):'/en/prueba';return false">
-          <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram">
+          <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad5" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad5)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram"></span>
           <button class="btn btn-primary" type="submit">I want my profile like this <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
         </form>
         <p class="lp-show-cert">3 days free · no card · cancel anytime</p>
@@ -602,10 +602,11 @@
       </div>
       <p class="lp-week-note">This is what your week looks like: ideas, designs and copy with your brand, posted automatically at the best times.</p>
       <form class="lp-igform" onsubmit="var v=lpCleanIg(this.querySelector('input').value);location.href='/en/prueba'+(v?'?ig='+encodeURIComponent(v):'');return false">
-        <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram">
+        <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad6" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad6)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram"></span>
         <button class="btn btn-primary" type="submit">See my week <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </form>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>We never see your password.</b> You sign in with Meta's official login.</p>
+      <p style="text-align:center;color:var(--mut);font-size:13.5px;margin-top:8px">3 days free · no card · cancel anytime</p>
     </div>
   </div></div>
   <div class="lp-view" id="lpView" role="dialog" aria-modal="true" aria-label="Sample week post" onclick="if(event.target===this)lpWeekClose()">
@@ -694,7 +695,7 @@
       <div class="price">$199<small>/mo</small></div>
       <div class="pz-perday">≈ $6.63 per day</div>
       <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">Your business looked after and selling — with your one-tap OK</p>
-      <ul><li>7 posts a week, automatic</li><li>Strategic ideas for your business</li><li>Designs + captions + hashtags</li><li>Automatic scheduled posting</li><li>Full analysis of your account, week by week</li><li>Weekly strategy for your business</li><li>Weekly results report</li></ul>
+      <ul><li>7 posts a week, automatic</li><li>Strategic ideas for your business</li><li>Designs + captions + hashtags</li><li>Automatic scheduled posting</li><li>Full analysis of your account, week by week</li><li>Weekly strategy for your business</li><li>Weekly results report</li><li>Ads: your separate wallet — you load what you want to spend and Posty boosts your best posts.</li></ul>
       <a class="btn btn-primary btn-block" href="/en/prueba">Try it free</a>
       <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px 0 0">🔒 <b>We never see your password.</b></p>
     </div>
@@ -735,27 +736,22 @@
   <div class="section cap-sec navy" id="crecimiento"><div class="wrap"><div class="cap-grid">
     <div class="cap-copy">
       <div class="cap-kick">Growth</div>
-      <h2>Every month, <span class="hl">one focus</span></h2>
-      <p class="cap-exp">Every month you pick a growth focus: more inquiries, more bookings or more sales.</p>
+      <h2>What works, <span class="hl">gets boosted</span></h2>
+      <p class="cap-exp">Posty spots the post that's performing best for you and tells you why it works. And every month you pick a growth focus: more inquiries, more bookings or more sales.</p>
       <ul class="cap-list">
+        <li>Your best post, spotted automatically</li>
+        <li>Ads with your cap, always with your OK</li>
         <li>Your public page, ready, with direct WhatsApp</li>
       </ul>
       <a class="cap-cta" href="/en/prueba">Try it free for 3 days <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a>
     </div>
     <div class="cap-side">
-      <div class="cap-sample cap-idea-wrap">
-        <div class="idea-card">
-          <div class="idea-top"><span class="idea-fmt">🎯 This month's focus</span></div>
-          <div class="idea-title">More bookings</div>
-          <div class="idea-why">You pick the focus and Posty aims your posts and ideas at it, all month.</div>
-          <div class="idea-actions">
-            <span class="btn btn-primary btn-sm">More bookings ✓</span>
-            <span class="btn btn-ghost btn-sm">More inquiries</span>
-            <span class="btn btn-ghost btn-sm">More sales</span>
-          </div>
-        </div>
-      </div>
-      <p class="cap-note">You pick the focus once a month, in one tap.</p>
+      <div class="cap-sample"><div class="cap-grow">
+        <div class="cap-grow-best"><img loading="lazy" src="ig-cafe.jpg" alt="Post of a coffee shop made by Posty"><div><h4>Your top-performing post</h4><div class="cap-grow-metric">▲ Twice the engagement of your average</div><div class="cap-grow-sub">3 days ago · Product post</div></div></div>
+        <div class="cap-prop">🚀 <b>Posty's proposal:</b> boost it with <b>$45</b> for 5 days (your cap: $60). It reaches people in your area who don't follow you yet.</div>
+        <div class="cap-sendrow"><span class="cap-send">Boost ✓</span><span class="cap-alt">Not now</span></div>
+      </div></div>
+      <p class="cap-note">The proposal shows up on its own when a post takes off. You decide.</p>
     </div>
   </div></div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">

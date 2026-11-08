@@ -2371,6 +2371,20 @@ body.hf-sv-open{overflow:hidden}
 .lp-igform input:focus{border-color:#2793C8}
 .lp-igform button{border-radius:999px;font-size:16px;padding:15px 26px;cursor:pointer}
 .lp-igform-note{margin-top:10px;color:var(--mut,#5A7186);font-size:14.5px}
+/* (LOTE ENTRADA-LOGO-IG) Logo de Instagram a la izquierda del @ + web igual que IG: mismo alto, fuente, padding, radio y botón. */
+.lp-ig-wrap{position:relative;flex:1;min-width:210px;display:flex}
+.lp-igform .lp-ig-wrap input{flex:1;width:100%;min-width:0;padding-left:46px}
+.lp-ig-ic{position:absolute;left:16px;top:50%;transform:translateY(-50%);width:22px;height:22px;pointer-events:none;flex:none}
+.lp-webform{max-width:520px;margin:18px auto 0;text-align:center}
+.lp-webform label{display:block;font-size:14px;color:var(--mut,#5A7186);margin-bottom:8px;font-weight:600}
+.lp-webform-row{display:flex;gap:10px;justify-content:center;align-items:stretch;flex-wrap:wrap}
+.lp-webform input{flex:1;min-width:210px;font-size:17px;padding:15px 18px;border:2px solid #D7E5EE;border-radius:999px;font-family:inherit;color:#0A1E33;background:#fff;outline:none}
+.lp-webform input:focus{border-color:#2793C8}
+.lp-webform button{border-radius:999px;font-size:16px;padding:15px 26px;cursor:pointer;white-space:nowrap}
+@media (max-width:760px){
+  .lp-webform-row{flex-direction:column}
+  .lp-webform button{width:100%}
+}
 .lp-chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:6px 0 24px}
 .lp-chip{font-family:inherit;font-size:14.5px;font-weight:700;padding:9px 16px;border-radius:999px;border:2px solid #D7E5EE;background:#fff;color:#0A1E33;cursor:pointer}
 .lp-chip.on{border-color:#2793C8;background:#2793C8;color:#fff}
