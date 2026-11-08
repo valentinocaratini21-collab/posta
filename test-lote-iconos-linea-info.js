@@ -11,7 +11,8 @@
 // mismos aria-labels y mismo tamaño/estilo (.hf-head-ic).
 // Estado colapsado (OBLIGATORIO): la fila .hf-racha ya no se oculta
 // entera — se muestra como 4ª pieza con SOLO los íconos; la info
-// queda oculta. El visitante no ve los íconos (headIcons: !HF_VISITOR).
+// queda oculta. (HOY-REDISEÑO v810: el perfil ya no pide los íconos
+// —headIcons: false—; viven solo en el encabezado del shell.)
 // Uso: node test-lote-iconos-linea-info.js (desde la raíz del árbol)
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -40,16 +41,20 @@ const cnt = (s, re) => (s.match(re) || []).length;
 console.log('— estructura: íconos en la línea de info, fuera de .hf-prow —');
 const hh = extractFn(app, 'function homeHeadHTML');
 ok(!!hh, 'extrae homeHeadHTML');
-const prowBlock = hh.slice(hh.indexOf('<div class="hf-prow">'), hh.indexOf('${name ?'));
+const prowBlock = hh.slice(hh.indexOf('<div class="hf-prow">'), hh.indexOf('${stats.length'));
 ok(prowBlock.length > 0 && !prowBlock.includes('hf-head-icons'), '.hf-prow ya NO contiene los íconos');
-ok(prowBlock.includes('hf-ava') && prowBlock.includes('hf-stats'), '.hf-prow queda con avatar + stats');
+ok(prowBlock.includes('hf-ava') && prowBlock.includes('hf-who'), '.hf-prow queda con avatar + nombre/handle (HOY-REDISEÑO v810)');
+ok(hh.includes('</div>\n    ${stats.length'), 'las stats rinden DESPUÉS del cierre del prow (su propia fila debajo)');
+const headRet = hh.slice(hh.indexOf('return `<div class="hf-head">'));
+ok(headRet.indexOf('<div class="hf-prow">') < headRet.indexOf('<div class="hf-stats">') && headRet.indexOf('<div class="hf-stats">') < headRet.indexOf('${rachaHTML}'), 'orden del head: prow (avatar+nombre) → stats → racha/info');
 ok(hh.includes('const headIconsHTML'), 'los íconos viven en headIconsHTML');
 ok(hh.includes('`<div class="hf-racha">${rachaTxt ? rachaTxt + infoBtnHTML : infoRowHTML}${headIconsHTML}</div>`'), 'la fila .hf-racha rinde info + íconos');
 ok(!hh.includes("data-hf-pact=\"edit\"") && hh.includes("data-hf-pact=\"share\"") && hh.includes("data-hf-pact=\"settings\""), 'los 2 data-hf-pact siguen (share/settings); el lápiz ya no existe (sacar-lápiz-perfil 7/11)');
 ok(hh.indexOf("data-hf-pact=\"share\"") < hh.indexOf("data-hf-pact=\"settings\""), 'orden: compartir, Ajustes');
 ok(hh.includes("pzIc('gear', 20)"), 'Ajustes con ícono gear 20');
 ok(hh.includes("aria-label=\"${en ? 'Settings' : 'Ajustes'}\""), 'Ajustes con aria-label ES/EN');
-ok(app.includes('headIcons: !HF_VISITOR'), 'Inicio pide los íconos solo si no es visitante');
+ok(app.includes('headIcons: false'), 'Inicio ya NO pide los íconos en el perfil (HOY-REDISEÑO v810: viven solo en el encabezado del shell)');
+ok(!app.includes('headIcons: !HF_VISITOR'), 'el viejo headIcons: !HF_VISITOR no queda');
 
 /* ---------- 2. Render real de homeHeadHTML ---------- */
 console.log('— render: misma línea, sin botones anidados —');
@@ -82,6 +87,7 @@ ok(row1.indexOf('data-hf-pact="share"') < row1.indexOf('data-hf-pact="settings"'
 ok(maxButtonDepth(row1) === 1, 'R1 sin botones anidados (profundidad máx 1)');
 ok(row1.indexOf('</button>') < row1.indexOf('<span class="hf-head-icons">'), 'R1 el botón de info cierra antes de abrir el span de íconos');
 ok(r1.indexOf('hf-head-icons') > r1.indexOf('<div class="hf-name">'), 'R1 los íconos NO están en .hf-prow (aparecen después del nombre)');
+ok(r1.indexOf('<div class="hf-stats">') > r1.indexOf('<div class="hf-name">'), 'R1 las stats rinden DESPUÉS del nombre (su propia fila, HOY-REDISEÑO v810)');
 ok((r1.match(/hf-info-btn/g) || []).length === 1, 'R1 un solo «i» en la cabecera');
 
 // R2: con racha 3 + íconos -> texto + (i) + 2 íconos en la misma línea.

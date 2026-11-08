@@ -19851,13 +19851,25 @@ function homeHeadHTML(prof, bizName, opts) {
   // Posty, lo hace por Instagram; la lámina guardaba solo en Posty.
   const headIconsHTML = (opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Referrals' : 'Referidos'}">${pzIc('share', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="settings" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button></span>` : '';
   const rachaHTML = user ? `<div class="hf-racha">${rachaTxt ? rachaTxt + infoBtnHTML : infoRowHTML}${headIconsHTML}</div>` : '';
+  // (LOTE HOY-REDISEÑO v810 · mock aprobado 8/11) La tarjeta de perfil
+  // es FINA: avatar + nombre + handle en una fila (.hf-prow con
+  // .hf-who), y las stats en su propia fila debajo, en línea
+  // («14 publicaciones · 8 seguidores · 1 seguido»). Antes el título
+  // era el handle arriba del prow, el nombre debajo y las stats
+  // apiladas (número sobre etiqueta) junto al avatar. El título pasa
+  // a ser el nombre visible (el handle baja a sublínea con @); sin
+  // nombre, el título sigue siendo el handle; sin usuario, la línea
+  // no existe (loteperfil C6). El tic de verificado y Threads quedan
+  // con el título; la fila .hf-racha (info + íconos) no se mueve.
+  const titleTxt = name || user;
+  const handleTxt = (user && name && name.toLowerCase() !== user.toLowerCase()) ? '@' + user : '';
+  const nameLineTxt = user ? handleTxt : name;
   return `<div class="hf-head">
-    ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
-      ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
+      <div class="hf-who">${user ? `<div class="hf-user">${esc(titleTxt)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}${nameLineTxt ? `<div class="hf-name">${esc(nameLineTxt)}</div>` : ''}</div>
     </div>
-    ${name ? `<div class="hf-name">${esc(name)}</div>` : ''}
+    ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
     ${catHTML}
     ${bioHTML}
     ${linkHTML}
@@ -20839,7 +20851,11 @@ function pzHoySpeechHTML(o) {
   } else {
     cuerpo = en ? `Shall we build your week? Tell me what you have to show.` : `¿Armamos tu semana? Contame qué tenés para mostrar.`;
   }
-  return `<button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span></button>`;
+  // (LOTE HOY-REDISEÑO v810) El saludo se rinde como mensaje de Posty:
+  // carita a la izquierda + burbuja (sin borde oscuro de tarjeta). El
+  // TEXTO no cambia (lo fija el lote SALUDO-HOY-HONESTO v806): solo la
+  // presentación. El botón conserva data-pz-hoy-chat (abre el chat).
+  return `<div class="pz-hoy-speech-row"><img class="pz-hoy-speech-ava" src="ai-avatar.png" alt="" aria-hidden="true"><button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span></button></div>`;
 }
 
 // Tarjeta «Subir foto o video» (mock): botón + fila del álbum real
@@ -21502,7 +21518,7 @@ async function inicioView() {
   // (LOTE PROXIMO-RITUAL · 5/11) Sin banner del ritual: la carta velada
   // del próximo es la entrada (ver el fetch retirado arriba).
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
-  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: !HF_VISITOR })}
+  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: false /* (LOTE HOY-REDISEÑO v810) Los íconos de compartir/ajustes viven SOLO en el encabezado del shell: la tarjeta de perfil ya no los duplica. */ })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
   ${hoySegHTML}
   ${hoyAprobarHTML}
