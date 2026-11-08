@@ -53,8 +53,7 @@ const sliceFn = (src, from, to) => {
 console.log('— 0) censo base v766 —');
 check('server: BUILD v773', srv.includes("const BUILD_ID = '20261105-v774'"));
 check('app: CHUNK_V v764', app.includes("const CHUNK_V = '20261105-v764'"));
-check('styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes v789 subir-foto-directa)', md5(css) === 'b06c24e9abcdebbb11e0ce3a47ea6778');
-check('censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
+check('styles.css md5 (re-pin R1 8/11 (antes nivel-misiones-racha v792): styles del lote; antes v789 subir-foto-directa)', md5(css) === '5e8e7446258ef39d4651b9fa24900292');check('censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 check('censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
 check('censo server: first_week 3', cnt(srv, 'first_week') === 3);
 check('censo server: /aprobar 17', cnt(srv, '/aprobar') === 17);

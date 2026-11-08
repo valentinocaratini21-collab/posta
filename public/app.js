@@ -18542,6 +18542,7 @@ function homeGridCompose(input) {
     // calendario que hoy en la zona de la cuenta (pcTz, default
     // Buenos Aires). Sin fecha o sin zona, fail-closed (velada).
     let cardHoy = false;
+    let esFuturoR1 = false; // (LOTE REDISEÑO R1 · cartita SIN velo) día futuro con fecha válida
     try {
       const tzV = (typeof pcTz === 'function') ? pcTz() : undefined;
       const zoV = tzV ? { timeZone: tzV } : {};
@@ -18549,8 +18550,8 @@ function homeGridCompose(input) {
       let dV = null;
       if (typeof pcParseDate === 'function') dV = pcParseDate(nextPost.scheduled_at);
       if (!dV) { const sV = String(nextPost.scheduled_at).replace(' ', 'T'); dV = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(sV) ? sV : sV + 'Z'); }
-      if (dV && !isNaN(dV)) cardHoy = keyV(dV) === keyV(new Date());
-    } catch (e) { cardHoy = false; }
+      if (dV && !isNaN(dV)) { cardHoy = keyV(dV) === keyV(new Date()); esFuturoR1 = !cardHoy; }
+    } catch (e) { cardHoy = false; esFuturoR1 = false; }
     // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11) La carta de HOY
     // queda velada hasta elegir; abierta solo si ya se eligió o si hoy
     // no hay ritual (sin paquete: día co-creado). Sin estado conocido
@@ -18572,14 +18573,22 @@ function homeGridCompose(input) {
     try { const tzA = (typeof pcTz === 'function') ? pcTz() : undefined; abiertoYa = (typeof pzProximoYaAbierto === 'function') ? pzProximoYaAbierto(nextPost, Date.now(), tzA) : false; } catch (e) { abiertoYa = false; }
     let selAbierto = false;
     try { selAbierto = (typeof pzRitualSelLeer === 'function') ? pzRitualSelLeer() === Number(nextPost.id) : false; } catch (e) { selAbierto = false; }
-    const openHoy = openHoyRit || abiertoYa || selAbierto;
+    // (LOTE REDISEÑO R1 · cartita SIN VELO · decisión Valentino 8/11
+    // 00:05, SUPERSEDE el destape «a las 00:00» del 6/11 SOLO para el
+    // posteo de un día FUTURO) El próximo de mañana (o más adelante)
+    // rinde ABIERTO siempre: el cliente lo ve entero apenas existe,
+    // sin esperar a las 00:00, con su pill «Se postea mañana · HH:MM»
+    // y la cuenta hasta que SALE. El de HOY sigue velado hasta elegir
+    // en el ritual (openHoyRit/abiertoYa/selAbierto no se tocan: el
+    // aviso de las 9:00 para confirmar se mantiene).
+    const openHoy = openHoyRit || abiertoYa || selAbierto || esFuturoR1;
     // (LOTE PROXIMO-RITUAL · ajuste posición 5/11 · decisión Valentino
     // 13:26) La carta va PRIMERA (idx 0): splice en 0, sin ancla. El
     // resto de la grilla no cambia de orden (el trío entero queda
     // debajo). El ancla FIFA (idxPub + avance por día) se retira: en
     // idx 0 no hay nada que partir y el fix v1 queda SUPERSEDED por
     // decisión (ver STATUS.md §0c y §4).
-    finalTiles.splice(0, 0, { kind: 'oculta', post: nextPost, openHoy, hoy: cardHoy });
+    finalTiles.splice(0, 0, { kind: 'oculta', post: nextPost, openHoy, hoy: cardHoy, futuro: esFuturoR1 });
   }
   return finalTiles;
 }
@@ -19464,6 +19473,17 @@ function homeTileHTML(t, i) {
         destapaHtml = `<span class="hf-carta-destapa">${phEn ? 'It opens at <b>00:00</b>' : 'Se destapa a las <b>00:00</b>'}</span>`;
       }
     } catch (e) { destapaHtml = ''; }
+    if (t.openHoy && t.futuro) {
+      // (LOTE REDISEÑO R1 · cartita SIN velo) El próximo de un día
+      // futuro va ABIERTO en la grilla también: foto visible + pill
+      // «Se postea mañana · HH:MM» + cuenta hasta que SALE. Sin
+      // «Se destapa a las 00:00» ni cuenta para verlo.
+      const pillR1 = (typeof pzHoyPillSalida === 'function') ? pzHoyPillSalida(p, (typeof pcTz === 'function') ? pcTz() : undefined, phEn) : '';
+      const cuentaR1 = (typeof pzHoyCuentaSaleTxt === 'function') ? pzHoyCuentaSaleTxt(p.scheduled_at, phEn) : '';
+      const cuentaHtmlR1 = cuentaR1 ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at || ''))}">${esc(cuentaR1)}</span>` : '';
+      const stripR1 = pillR1 ? `<span class="hf-carta-proximo">✦ ${esc(pillR1)}</span>${cuentaHtmlR1}` : `<span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}`;
+      return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip">${stripR1}</span></span></span>`;
+    }
     if (t.openHoy) {
       return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
     }
@@ -20307,6 +20327,505 @@ async function hfLiveRevalidateFeed() {
   } catch (e) {}
   finally { HF_LIVE_BUSY = false; }
 }
+/* ===== LOTE REDISEÑO R1 · HOY (decisión Valentino 8/11 00:07; tablero §5.5) ===== */
+// Hoy como en el mock posty-app-design: mensaje de Posty (entrada al
+// chat) + segmentador «Por aprobar / Mi feed» + tarjeta «Subir foto o
+// video» + semana de un vistazo (anillo + tira LUN–DOM con posteos
+// PUBLICADOS reales de la semana, de la DB) + tarjetas por aprobar con
+// aprobación de un toque + cartita SIN VELO (el posteo de mañana
+// visible, pill «Se postea mañana · HH:MM», cuenta hasta que SALE) +
+// entrada al conserje con contador «X de N revisados» (solo con token
+// de admin). El feed literal NO se toca: vive en la pantalla propia
+// «Mi feed» (#/app/feed, R2) — el seg «Mi feed» es un enlace real ahí
+// (RE-BASE sobre v794). BLOQUE HOY-R1 — extraíble en tests (test-lote-rediseno-r1.js).
+var PZ_HOY_VIEW = 'aprobar'; // vista vigente de Hoy en esta sesión
+var PZ_HOY_POSTS = {}; // id → post (para «Cambialo» → chat con el posteo)
+
+// Saludo según la hora (como el mock): 06–12 mañana, 12–20 tarde,
+// 20–06 noche. Puro (fecha + idioma), testeable en VM.
+function pzHoySaludoTxt(fecha, en) {
+  try {
+    const h = (fecha instanceof Date) ? fecha.getHours() : new Date(fecha).getHours();
+    if (h >= 6 && h < 12) return en ? 'Good morning! ☀️' : '¡Buen día! ☀️';
+    if (h >= 12 && h < 20) return en ? 'Good afternoon! 🌤️' : '¡Buenas tardes! 🌤️';
+    return en ? 'Good evening! 🌙' : '¡Buenas noches! 🌙';
+  } catch (e) { return en ? 'Hi! 👋' : '¡Hola! 👋'; }
+}
+
+// Clave 'YYYY-MM-DD' de una fecha en la zona tz (sin sumar 24 h).
+function pzHoyDiaKey(fecha, tz) {
+  try {
+    const d = (fecha instanceof Date) ? fecha : new Date(fecha);
+    if (!d || isNaN(d)) return '';
+    return d.toLocaleDateString('en-CA', tz ? { timeZone: tz } : {});
+  } catch (e) { return ''; }
+}
+
+// Desplazar una clave 'YYYY-MM-DD' n días (por fecha UTC, sin DST).
+function pzHoyMoverKey(key, n) {
+  try {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key || ''))) return '';
+    const d = new Date(String(key) + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + (Number(n) || 0));
+    return d.toISOString().slice(0, 10);
+  } catch (e) { return ''; }
+}
+
+// Día de semana (0=dom..6=sáb) de una clave, por fecha UTC.
+function pzHoyDowKey(key) {
+  try { return new Date(String(key) + 'T12:00:00Z').getUTCDay(); } catch (e) { return NaN; }
+}
+
+// Día calendario de un posteo (scheduled_at / published_at) en la zona.
+// Derivación pura; sin fecha legible → '' (fail-closed).
+function pzHoyPostDiaKey(p, tz) {
+  try {
+    if (!p) return '';
+    const iso = p.scheduled_at || p.published_at || '';
+    if (!iso) return '';
+    let d = null;
+    if (typeof pcParseDate === 'function') d = pcParseDate(iso);
+    if (!d || isNaN(d)) { const s = String(iso).replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }
+    if (!d || isNaN(d) || typeof schedDayKeyOf !== 'function') return '';
+    return schedDayKeyOf(d, tz) || '';
+  } catch (e) { return ''; }
+}
+
+// Semana de un vistazo: posteos PUBLICADOS de la semana corriente
+// (lunes–domingo en la zona). n = días distintos con al menos un
+// publicado. La tira marca cada día: pub (salió), hoy (hoy sin salir),
+// fut (falta), vacio (pasó sin salir). Nunca inventa días.
+function pzHoySemana(publicados, tz, ahora) {
+  const dias = [];
+  try {
+    const hoy = pzHoyDiaKey(ahora || new Date(), tz);
+    if (!hoy) return { n: 0, lunes: '', dias };
+    const lunes = pzHoyMoverKey(hoy, -((pzHoyDowKey(hoy) + 6) % 7));
+    const pubDias = {};
+    for (const p of (Array.isArray(publicados) ? publicados : [])) {
+      if (!p || String(p.status || '') !== 'published') continue;
+      const k = pzHoyPostDiaKey(p, tz);
+      if (k) pubDias[k] = true;
+    }
+    let n = 0;
+    for (let i = 0; i < 7; i++) {
+      const k = pzHoyMoverKey(lunes, i);
+      let estado = 'vacio';
+      if (pubDias[k]) { estado = 'pub'; n++; }
+      else if (k === hoy) estado = 'hoy';
+      else if (k > hoy) estado = 'fut';
+      dias.push({ key: k, estado });
+    }
+    return { n, lunes, dias };
+  } catch (e) { return { n: 0, lunes: '', dias }; }
+}
+
+// Pendientes de «Por aprobar» + cartita (el posteo de mañana).
+// cartita: el programado de mañana más cercano (visible aunque ya esté
+// aprobado: es la cartita, no un pendiente; los fijados no son cartita,
+// igual que en la grilla). resto: borradores de la semana corriente +
+// programados pendientes (approval pendiente) de hoy en adelante, sin
+// la cartita, ordenados por salida. Las historias no son posteos del
+// feed y quedan fuera, como en la grilla.
+function pzHoyPendientes(todos, hoyKey, mananaKey, lunesKey, tz) {
+  const out = { cartita: null, resto: [], total: 0 };
+  try {
+    const lista = Array.isArray(todos) ? todos : [];
+    const esHistoria = (p) => String((p && p.media_type) || '') === 'story';
+    let mejorT = Infinity;
+    for (const p of lista) {
+      if (!p || esHistoria(p) || p.pinned) continue;
+      if (String(p.status || '') !== 'scheduled' || !p.scheduled_at) continue;
+      if (pzHoyPostDiaKey(p, tz) !== mananaKey) continue;
+      const t = Date.parse(String(p.scheduled_at).replace(' ', 'T'));
+      const tt = Number.isFinite(t) ? t : Infinity;
+      if (tt < mejorT) { mejorT = tt; out.cartita = p; }
+    }
+    const resto = [];
+    for (const p of lista) {
+      if (!p || esHistoria(p)) continue;
+      if (out.cartita && String(p.id) === String(out.cartita.id)) continue;
+      const st = String(p.status || '');
+      if (st === 'draft') {
+        if (lunesKey && String(p.week_key || '') !== lunesKey) continue;
+        resto.push(p);
+      } else if (st === 'scheduled') {
+        if (String(p.approval || 'pending') !== 'pending') continue;
+        const k = pzHoyPostDiaKey(p, tz);
+        if (k && hoyKey && k < hoyKey) continue;
+        resto.push(p);
+      }
+    }
+    resto.sort((a, b) => {
+      const ka = a.scheduled_at ? String(a.scheduled_at) : '9999';
+      const kb = b.scheduled_at ? String(b.scheduled_at) : '9999';
+      if (ka !== kb) return ka < kb ? -1 : 1;
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
+    out.resto = resto;
+    out.total = resto.length + ((out.cartita && String(out.cartita.status || '') === 'scheduled' && String(out.cartita.approval || 'pending') === 'pending') ? 1 : 0);
+  } catch (e) {}
+  return out;
+}
+
+// Hora corta HH:MM de un ISO en la zona (ES 24 h; EN 12 h con AM/PM).
+function pzHoyHoraCorta(iso, tz, en) {
+  try {
+    let d = null;
+    if (typeof pcParseDate === 'function') d = pcParseDate(iso);
+    if (!d || isNaN(d)) { const s = String(iso || '').replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }
+    if (!d || isNaN(d)) return '';
+    return d.toLocaleTimeString(en ? 'en-US' : 'es-AR', { hour: '2-digit', minute: '2-digit', hour12: !!en, timeZone: tz });
+  } catch (e) { return ''; }
+}
+
+// Día relativo corto («Hoy HH:MM» / «Mañana HH:MM» / «vie 31 · 19:00»).
+// Sin fecha real → '' (nunca una fecha inventada).
+function pzHoyCuandoCorto(p, tz, en) {
+  try {
+    if (!p || !p.scheduled_at) return '';
+    let d = null;
+    if (typeof pcParseDate === 'function') d = pcParseDate(p.scheduled_at);
+    if (!d || isNaN(d)) return '';
+    const rel = (typeof pzWhenRelDay === 'function') ? pzWhenRelDay(d, tz, en) : '';
+    const hh = pzHoyHoraCorta(p.scheduled_at, tz, en);
+    if (!hh) return '';
+    if (rel === 'hoy' || rel === 'today') return (en ? 'Today ' : 'Hoy ') + hh;
+    if (rel === 'mañana' || rel === 'tomorrow') return (en ? 'Tomorrow ' : 'Mañana ') + hh;
+    if (typeof hfChipText === 'function') { const c = hfChipText(p.scheduled_at); if (c) return c; }
+    return hh;
+  } catch (e) { return ''; }
+}
+
+// Píldora de la cartita SIN velo: «Se postea mañana · 19:00» desde el
+// scheduled_at REAL (el pill del lote v777, que este lote trae a Hoy).
+// Sin fecha → ''.
+function pzHoyPillSalida(p, tz, en) {
+  try {
+    if (!p || !p.scheduled_at) return '';
+    let d = null;
+    if (typeof pcParseDate === 'function') d = pcParseDate(p.scheduled_at);
+    if (!d || isNaN(d)) return '';
+    const rel = (typeof pzWhenRelDay === 'function') ? pzWhenRelDay(d, tz, en) : '';
+    const hh = pzHoyHoraCorta(p.scheduled_at, tz, en);
+    if (!hh) return '';
+    if (rel === 'hoy' || rel === 'today') return en ? ('Goes out today · ' + hh) : ('Se postea hoy · ' + hh);
+    if (rel === 'mañana' || rel === 'tomorrow') return en ? ('Goes out tomorrow · ' + hh) : ('Se postea mañana · ' + hh);
+    if (rel) return en ? ('Goes out ' + rel + ' · ' + hh) : ('Se postea ' + rel + ' · ' + hh);
+    if (typeof hfChipText === 'function') { const c = hfChipText(p.scheduled_at); if (c) return en ? ('Goes out ' + c) : ('Se postea ' + c); }
+    return '';
+  } catch (e) { return ''; }
+}
+
+// Texto inicial de la cuenta hasta que el posteo SALE (no hasta un
+// destape): «sale en 5 h 12 min». Sin fecha o ya en hora → '' (el tick
+// lo repone al refrescar).
+function pzHoyCuentaSaleTxt(iso, en) {
+  try {
+    let d = null;
+    if (typeof pcParseDate === 'function') d = pcParseDate(iso);
+    if (!d || isNaN(d)) { const s = String(iso || '').replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }
+    if (!d || isNaN(d) || typeof pzRitualCuentaTxt !== 'function') return '';
+    const falta = d.getTime() - Date.now();
+    if (!Number.isFinite(falta) || falta <= 0) return '';
+    const cu = pzRitualCuentaTxt(falta);
+    return en ? ('goes out in ' + cu.faltan) : ('sale en ' + cu.faltan);
+  } catch (e) { return ''; }
+}
+
+// Tarjeta de «Por aprobar» (estructura del mock: foto + formato + día/
+// hora + título + texto + «Dale, publicalo ✓» / «Cambialo»). La cartita
+// lleva la píldora «Se postea mañana · HH:MM» y la cuenta en vivo hasta
+// que SALE (data-pz-cuenta-sale). Aprobada: nota «✓ Agendado…» sin
+// botones. Sin imagen no hay foto (nunca un bloque de color).
+function pzHoyCardHTML(p, o) {
+  try {
+    const en = !!(o && o.en);
+    const tz = (o && o.tz) || undefined;
+    const cartita = !!(o && o.cartita);
+    const prop = (o && o.prop) || null;
+    const st = String((p && p.status) || '');
+    const pendiente = st === 'draft' || (st === 'scheduled' && String((p && p.approval) || 'pending') === 'pending');
+    const fmt = String((p && p.media_type) || '') === 'video' ? '🎬 Reel'
+      : String((p && p.media_type) || '') === 'carousel' ? '🖼️ Carrusel'
+      : String((p && p.media_type) || '') === 'story' ? '📸 Historia' : '📸 Post';
+    const img = (p && p.image_path)
+      ? `<img class="pz-hoy-thumb-img" src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';
+    const cap1 = String((p && p.caption) || '').split('\n')[0].trim().slice(0, 90);
+    const pill = cartita ? pzHoyPillSalida(p, tz, en) : '';
+    const cuando = cartita ? '' : pzHoyCuandoCorto(p, tz, en);
+    const cuenta = (cartita && p.scheduled_at) ? pzHoyCuentaSaleTxt(p.scheduled_at, en) : '';
+    const cuentaHtml = cuenta
+      ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at))}">${esc(cuenta)}</span>` : '';
+    const caption = String((p && p.caption) || '').trim();
+    const whenAttr = (prop && prop.iso) ? prop.iso : (p.scheduled_at || '');
+    const acciones = pendiente
+      ? `<div class="pz-hoy-actions"><button type="button" class="btn btn-primary" data-pz-hoy-aprobar="${esc(String(p.id))}" data-pz-hoy-status="${esc(st)}" data-pz-hoy-when="${esc(String(whenAttr))}">${en ? 'Publish it ✓' : 'Dale, publicalo ✓'}</button><button type="button" class="btn btn-ghost" data-pz-hoy-cambiar="${esc(String(p.id))}">${en ? 'Change it' : 'Cambialo'}</button></div>`
+      : '';
+    const notaOk = (!pendiente && st === 'scheduled')
+      ? `<div class="pz-hoy-ok">✓ ${esc(pill || cuando || (en ? 'Scheduled' : 'Agendado'))}. ${en ? 'Posty also shares it as a story.' : 'Posty también lo sube como historia.'}</div>` : '';
+    return `<article class="card pz-hoy-card" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
+      + `<div class="pz-hoy-thumb" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${img}<span class="pz-hoy-fmt">${fmt}</span>${pill ? `<span class="pz-hoy-pill">${esc(pill)}</span>` : ''}${cuando ? `<span class="pz-hoy-when">${esc(cuando)}</span>` : ''}${cap1 ? `<span class="pz-hoy-cap">${esc(cap1)}</span>` : ''}</div>`
+      + `<div class="pz-hoy-body">${cuentaHtml}${caption ? `<p>${esc(caption)}</p>` : ''}${acciones}${notaOk}</div>`
+      + `</article>`;
+  } catch (e) { return ''; }
+}
+
+// Mensaje de Posty en Hoy (botón → chat) + nota «¡Ya te dejé los
+// posteos listos!» cuando hay pendientes. Solo datos reales: la hora
+// del posteo de hoy sale de su scheduled_at; sin posteo hoy no se
+// inventa una hora.
+function pzHoySpeechHTML(o) {
+  const en = !!(o && o.en);
+  const tz = (o && o.tz) || undefined;
+  const hoyPost = (o && o.hoyPost) || null;
+  const pendientes = (o && typeof o.pendientes === 'number') ? o.pendientes : 0;
+  const haySemana = !!(o && o.haySemana);
+  const saludo = pzHoySaludoTxt(new Date(), en);
+  let cuerpo = '';
+  if (hoyPost) {
+    const hh = pzHoyHoraCorta(hoyPost.scheduled_at, tz, en);
+    cuerpo = en
+      ? `I put together this week's posts for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b>. <span class="pz-hoy-blue">Shall we launch it?</span>`
+      : `Te armé los posteos de esta semana. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b>. <span class="pz-hoy-blue">¿Lo largamos?</span>`;
+  } else if (pendientes > 0) {
+    cuerpo = en ? `I put together this week's posts for you. Shall we look at them?` : `Te armé los posteos de esta semana. ¿Los miramos?`;
+  } else if (haySemana) {
+    cuerpo = en ? `Your week is approved. Posty takes care of publishing it.` : `Tu semana ya está aprobada. Posty se ocupa de publicarla.`;
+  } else {
+    cuerpo = en ? `Shall we build your week? Tell me what you have to show.` : `¿Armamos tu semana? Contame qué tenés para mostrar.`;
+  }
+  const nota = pendientes > 0
+    ? `<div class="pz-hoy-nota"><img src="ai-avatar.png" alt=""><p><b>${en ? 'Your posts are ready!' : '¡Ya te dejé los posteos listos!'}</b> ${en ? 'These are the ones I made for you — look at them, and give a «Publish it» to the ones you like. Without your OK, nothing goes out. 👇' : 'Estos son los que armé para vos — miralos, y a los que te gusten dales «Dale». Sin tu OK, no sale nada. 👇'}</p></div>` : '';
+  return `<button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span></button>${nota}`;
+}
+
+// Tarjeta «Subir foto o video» (mock): botón + fila del álbum real
+// (hasta 4 fotos, de /api/album) + nota de la racha. Cada miniatura y
+// el «+» abren la hoja de subida.
+function pzHoyUploadHTML(album, en) {
+  const fotos = (Array.isArray(album) ? album : []).filter((a) => a && (a.path || a.thumb)).slice(0, 4);
+  const thumbs = fotos.map((a) => {
+    const src = a.thumb || a.path;
+    const alt = en ? 'Photo saved in your album' : 'Foto guardada en tu álbum';
+    return `<button type="button" class="pz-hoy-album-thumb" data-pz-hoy-subir="1" aria-label="${en ? 'Open your album to upload material' : 'Abrir tu álbum para subir material'}"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy" onerror="this.remove()"></button>`;
+  }).join('');
+  return `<div class="card pz-hoy-upload">`
+    + `<h4>${en ? 'Anything new to show?' : '¿Tenés algo nuevo para mostrar?'}</h4>`
+    + `<p class="sub">${en ? 'Upload the photo or video just as it comes out of your phone. Posty turns it into a post with text, price and best time — you edit nothing.' : 'Subí la foto o el video tal cual sale de tu teléfono. Posty lo convierte en posteo con texto, precio y mejor horario — vos no editás nada.'}</p>`
+    + `<button type="button" class="pz-hoy-upload-btn" data-pz-hoy-subir="1">${pzIc('camera', 20)} ${en ? 'Upload photo or video' : 'Subir foto o video'}</button>`
+    + `<div class="pz-hoy-album-row"><span class="pz-hoy-album-label">${en ? 'YOUR ALBUM' : 'TU ÁLBUM'}</span>${thumbs}<button type="button" class="pz-hoy-album-add" data-pz-hoy-subir="1" aria-label="${en ? 'Add a photo or video to the album' : 'Agregar una foto o video al álbum'}">+</button></div>`
+    + `<p class="pz-hoy-album-note">${en ? 'If one day you upload nothing, Posty builds the post with material from your album and the streak does not break.' : 'Si un día no subís nada, Posty arma el posteo con material de tu álbum y la racha no se corta.'}</p>`
+    + `</div>`;
+}
+
+// Semana de un vistazo: anillo N/7 (días con publicado) + tira
+// LUN–DOM. Circunferencia del mock: 201 (r=32).
+function pzHoySemanaHTML(sem, en) {
+  const n = (sem && typeof sem.n === 'number') ? sem.n : 0;
+  const dias = (sem && Array.isArray(sem.dias)) ? sem.dias : [];
+  const off = Math.max(0, Math.round(201 * (1 - n / 7)));
+  const labels = en ? ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] : ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+  const tira = dias.map((d, i) => {
+    const cls = d.estado === 'pub' ? 'done' : (d.estado === 'hoy' ? 'today' : '');
+    return `<span class="${cls}">${labels[i] || ''}</span>`;
+  }).join('');
+  const titulo = n >= 7 ? (en ? 'Your week is complete' : 'Tu semana viene completa')
+    : n > 0 ? (en ? 'Your week is on its way' : 'Tu semana viene en camino')
+    : (en ? 'Your week is just starting' : 'Tu semana recién arranca');
+  const sub = n === 0
+    ? (en ? 'Nothing went out yet this week. When the first one goes out, the ring fills up.' : 'Todavía no salió nada esta semana. Cuando salga el primero, el anillo se llena.')
+    : (en ? `${n} of 7 days already have published content.` : `${n} de 7 días ya tienen contenido publicado.`);
+  return `<div class="card pz-hoy-semana">`
+    + `<div class="pz-hoy-ring"><div class="pz-hoy-ring-svg"><svg width="76" height="76" viewBox="0 0 76 76"><circle cx="38" cy="38" r="32" fill="none" stroke="#EAF5FB" stroke-width="9"/><circle cx="38" cy="38" r="32" fill="none" stroke="#2793C8" stroke-width="9" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="${off}"/></svg><div class="pz-hoy-ring-num"><b>${n}/7</b><small>${en ? 'POSTS' : 'POSTEOS'}</small></div></div>`
+    + `<div><h4>${titulo}</h4><p class="sub">${sub}</p></div></div>`
+    + `<div class="pz-hoy-dias">${tira}</div>`
+    + `</div>`;
+}
+
+// Entrada al conserje (nace oculta; pzHoyConserjeFill la llena con el
+// contador real «X de N revisados» o la quita si no hay revisión).
+function pzHoyConserjeHTML(decididos, total, en) {
+  const txt = (decididos === null || decididos === undefined || total === null || total === undefined)
+    ? '…'
+    : `${esc(String(decididos))} ${en ? 'of' : 'de'} ${esc(String(total))} ${en ? 'reviewed' : 'revisados'}`;
+  return `<button type="button" class="card pz-hoy-conserje" id="pzHoyConserje" data-pz-hoy-conserje="1" hidden><span class="pz-hoy-conserje-ico">🧑‍💼</span><span class="pz-hoy-conserje-tx"><b>${en ? 'Concierge · nightly review' : 'Conserje · revisión de la noche'}</b><small data-pz-hoy-conserje-n>${txt}</small></span><span class="pz-hoy-conserje-go">→</span></button>`;
+}
+
+// Cambiar la vista de Hoy (segmentador «Por aprobar / Mi feed»).
+// (RE-BASE R1 SOBRE v794 · R2: «Mi feed» es pantalla propia #/app/feed —
+// el seg «Mi feed» es un enlace real ahí; pzHoySetView('feed') navega,
+// nunca monta el feed dentro de Hoy.)
+function pzHoySetView(nombre) {
+  if (nombre === 'feed') { try { location.hash = '#/app/feed'; } catch (e) {} return; }
+  try {
+    PZ_HOY_VIEW = 'aprobar';
+    const a = document.getElementById('pzHoyAprobar');
+    if (a) a.hidden = false;
+    document.querySelectorAll('#inicioView [data-pz-hoy-view]').forEach((b) => {
+      try { b.classList.toggle('active', b.getAttribute('data-pz-hoy-view') === 'aprobar'); } catch (e) {}
+    });
+    try { window.scrollTo(0, 0); } catch (e) {}
+  } catch (e) {}
+}
+
+// Hoja «Subir foto o video» (mock, 2 pasos: el paso 1 es esta hoja —
+// Cámara / Galería / Cancelar — y el paso 2 es el selector del sistema,
+// que cae en el chat con la subida de siempre, v784).
+function pzHoySubirAbrir() {
+  try {
+    const sh = document.getElementById('pzHoySubirSheet');
+    const ov = document.getElementById('pzHoySubirOv');
+    if (sh) sh.hidden = false;
+    if (ov) ov.hidden = false;
+  } catch (e) {}
+}
+function pzHoySubirCerrar() {
+  try {
+    const sh = document.getElementById('pzHoySubirSheet');
+    const ov = document.getElementById('pzHoySubirOv');
+    if (sh) sh.hidden = true;
+    if (ov) ov.hidden = true;
+  } catch (e) {}
+}
+// Abre el chat y dispara el selector DEL CHAT (#chatFile) con el
+// accept explícito de cada vez (lote subir-foto-directa): Cámara =
+// foto ahora (image/* + capture), Galería = foto o video de la
+// biblioteca (image/*,video/*). La subida es la del chat (v784: hasta
+// 10 por tanda, HEIC nunca descartado en silencio, una foto = un lugar
+// en el álbum con tope 20).
+function pzHoySubirPicker(accept, capture) {
+  try { pzHoySubirCerrar(); } catch (e) {}
+  try { if (typeof pzSftChatAbrirYEnfocar === 'function') pzSftChatAbrirYEnfocar(); } catch (e) {}
+  let n = 0;
+  const t = setInterval(() => {
+    n++;
+    try {
+      const cf = document.getElementById('chatFile');
+      if (cf) {
+        clearInterval(t);
+        cf.accept = accept;
+        if (capture) {
+          try { cf.setAttribute('capture', capture); } catch (e) {}
+          setTimeout(() => { try { cf.removeAttribute('capture'); } catch (e2) {} }, 1000);
+        }
+        cf.click();
+      } else if (n >= 8) clearInterval(t);
+    } catch (e) { clearInterval(t); }
+  }, 150);
+}
+function pzHoySubirCamara() { pzHoySubirPicker('image/*', 'environment'); }
+function pzHoySubirGaleria() { pzHoySubirPicker('image/*,video/*', null); }
+
+// «Dale, publicalo ✓» de UNA tarjeta: mismo camino vigente que
+// «Aprobar todo» (pzAcceptAllWeek) para programados — manual: POST
+// /api/posts/:id/approve; piloto: PATCH like (constancia) — y mismo
+// camino que el Aceptar de borrador (bindReview) para drafts: PATCH
+// scheduled_at + señal approved. Sin Instagram conectado, el gate de
+// siempre (igGateFeedback). Al salir bien, render() reordena Hoy.
+async function pzHoyAprobarUno(btn) {
+  if (!btn || btn.disabled) return;
+  const id = btn.getAttribute('data-pz-hoy-aprobar');
+  const st = btn.getAttribute('data-pz-hoy-status') || '';
+  const when = btn.getAttribute('data-pz-hoy-when') || '';
+  if (!id) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (typeof pzIsGuest === 'function' && pzIsGuest()) { try { pzGuestAccountSheet(() => pzHoyAprobarUno(btn)); } catch (e) {} return; }
+  if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) { try { igGateFeedback(btn); } catch (e) {} return; }
+  btn.disabled = true;
+  try {
+    if (st === 'draft') {
+      const w = when ? new Date(when).toISOString() : null;
+      await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: w });
+      try { await api.post('/api/posts/' + encodeURIComponent(id) + '/signal', { signal: 'approved' }); } catch (e) {}
+      try { if (typeof track === 'function') track('draft_accept', { id: Number(id) }); } catch (e) {}
+    } else {
+      let manual = true;
+      try {
+        const mode = (typeof f3ApprovalMode === 'function') ? await f3ApprovalMode() : null;
+        if (mode && mode.known === false) throw new Error(en ? 'Could not check the mode — try again' : 'No pude verificar el modo — probá de nuevo');
+        manual = !!(mode && mode.manual);
+      } catch (e) { throw e; }
+      if (manual) {
+        const r = await api.post('/api/posts/' + encodeURIComponent(id) + '/approve', {});
+        if (!r || !r.ok) throw new Error(en ? 'Could not approve' : 'No se pudo aprobar');
+      } else {
+        const r = await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'like' });
+        if (!r || !r.ok) throw new Error(en ? 'Could not approve' : 'No se pudo aprobar');
+      }
+    }
+    toast('✅ ' + (en ? 'Scheduled — it goes out on its own' : 'Programado — sale solo'));
+    try { render(); } catch (e) {}
+  } catch (e) {
+    btn.disabled = false;
+    toast('😅 ' + esc((e && e.message) || (en ? 'Try again' : 'Probá de nuevo')));
+  }
+}
+
+// «Cambialo»: abre el chat con Posty sobre ESE posteo (mismo flujo que
+// «Pedir que lo arregle» del conserje + hfOpenChatForPost).
+function pzHoyCambiar(id) {
+  const p = (typeof PZ_HOY_POSTS !== 'undefined' && PZ_HOY_POSTS) ? PZ_HOY_POSTS[String(id)] : null;
+  if (!p) return;
+  try { hfOpenChatForPost(p); } catch (e) {}
+}
+
+// Contador del conserje: solo con token de admin guardado (el dueño).
+// Sin token, sin revisión o sin clientes que revisar, la entrada se
+// quita (fail-closed: nunca un botón que no lleva a ningún lado). El
+// conteo es el del conserje (conserjeConteo: TODOS cuentan, también
+// los sin posteo). Un 401/403 quita la entrada sin recargar la página
+// (a diferencia de adminApi, que recarga).
+async function pzHoyConserjeFill() {
+  const slot = document.getElementById('pzHoyConserje');
+  if (!slot) return;
+  let t = '';
+  try { t = localStorage.getItem('posta_admin_token') || ''; } catch (e) {}
+  if (!t) { try { slot.remove(); } catch (e) {} return; }
+  try {
+    const d = await api.get('/api/admin/support/conserje/revision?token=' + encodeURIComponent(t));
+    if (!d || !d.ok) throw new Error('sin revision');
+    const todos = (d.items || []).concat(d.sin_posteo || []);
+    if (!todos.length) { try { slot.remove(); } catch (e) {} return; }
+    const dec = todos.filter((i) => i && i.decision).length;
+    const small = slot.querySelector('[data-pz-hoy-conserje-n]');
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    if (small) small.textContent = dec + (en ? ' of ' : ' de ') + todos.length + (en ? ' reviewed' : ' revisados');
+    slot.hidden = false;
+  } catch (e) { try { slot.remove(); } catch (e2) {} }
+}
+
+// Cableado de Hoy (lo llama bindInicio): segmentador, mensaje→chat,
+// aprobar/cambiar/detalle por tarjeta, hoja de subida, conserje.
+function pzHoyBind(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-pz-hoy-view]').forEach((b) => { b.onclick = () => pzHoySetView(b.getAttribute('data-pz-hoy-view')); });
+  root.querySelectorAll('[data-pz-hoy-chat]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/chat'); else location.hash = '#/app/chat'; } catch (e) {} }; });
+  root.querySelectorAll('[data-pz-hoy-aprobar]').forEach((b) => { b.onclick = () => pzHoyAprobarUno(b); });
+  root.querySelectorAll('[data-pz-hoy-cambiar]').forEach((b) => { b.onclick = () => pzHoyCambiar(b.getAttribute('data-pz-hoy-cambiar')); });
+  root.querySelectorAll('[data-pz-hoy-detalle]').forEach((el) => {
+    const go = () => { const id = el.getAttribute('data-pz-hoy-detalle'); if (id) location.hash = '#/app/post/' + encodeURIComponent(id); };
+    el.onclick = go;
+    el.onkeydown = (ev) => { if (ev && (ev.key === 'Enter' || ev.key === ' ')) { try { ev.preventDefault(); } catch (e) {} go(); } };
+  });
+  root.querySelectorAll('[data-pz-hoy-subir]').forEach((b) => { b.onclick = () => pzHoySubirAbrir(); });
+  const sh = document.getElementById('pzHoySubirSheet');
+  if (sh) {
+    sh.querySelectorAll('[data-pz-hoy-subir-op]').forEach((b) => {
+      b.onclick = () => {
+        const op = b.getAttribute('data-pz-hoy-subir-op');
+        if (op === 'camara') pzHoySubirCamara();
+        else if (op === 'galeria') pzHoySubirGaleria();
+        else pzHoySubirCerrar();
+      };
+    });
+  }
+  const ov = document.getElementById('pzHoySubirOv');
+  if (ov) ov.onclick = () => pzHoySubirCerrar();
+  root.querySelectorAll('[data-pz-hoy-conserje]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/conserje'); else location.hash = '#/app/conserje'; } catch (e) {} }; });
+  try { pzHoyConserjeFill(); } catch (e) {}
+}
+
 async function inicioView() {
   const tz = pcTz();
   // LOTE VELOCIDAD: posts y ensure son independientes: un solo viaje en
@@ -20371,11 +20890,16 @@ async function inicioView() {
   } catch (e) {}
   // LOTE VELOCIDAD: cuota, perfil y nivel son independientes: un solo
   // viaje en paralelo en vez de tres en serie.
-  const [quotaRes, hpRes, nvRes] = await Promise.all([
+  const [quotaRes, hpRes, nvRes, albumRes] = await Promise.all([
     api.get('/api/quota').catch(() => null),
     api.get('/api/home/profile').catch(() => null),
     (!HF_VISITOR ? api.get('/api/oficina/nivel?poder=posty').catch(() => null) : Promise.resolve(null)),
+    (!HF_VISITOR ? api.get('/api/album').catch(() => null) : Promise.resolve(null)),
   ]);
+  // (LOTE REDISEÑO R1 · HOY) Fotos del álbum para la fila de la tarjeta
+  // «Subir foto o video» (mock: TU ÁLBUM). Sin álbum, la fila queda con
+  // solo el «+» (fail-closed: nunca una miniatura inventada).
+  const albumR1 = (albumRes && Array.isArray(albumRes.photos)) ? albumRes.photos : [];
   let quota = quotaRes;
   // 🏠 (v331) El perfil literal: réplica desde la lectura guardada de su
   // Instagram (o el kit de nacimiento si la cuenta es nueva/vacía). El
@@ -20529,6 +21053,59 @@ async function inicioView() {
   // menos un aprobado). Visitante nunca lo ve.
   const pzSemanaOk = (!HF_VISITOR) ? pzSemanaAprobadaState(tiles, (typeof albumMondayKey === 'function') ? albumMondayKey() : '').show : false;
   const pzSemanaOkHTML = pzSemanaOk ? pzSemanaAprobadaHTML(enHome) : '';
+  // (LOTE REDISEÑO R1 · HOY) Datos de la vista «Por aprobar»: semana
+  // de un vistazo (publicados reales), pendientes + cartita (mañana),
+  // posteo de hoy. PZ_HOY_POSTS alimenta «Cambialo» (chat con el posteo).
+  const hoyKeyR1 = pzHoyDiaKey(new Date(), tz);
+  const mananaKeyR1 = hoyKeyR1 ? pzHoyMoverKey(hoyKeyR1, 1) : '';
+  const lunesKeyR1 = (typeof albumMondayKey === 'function') ? albumMondayKey() : '';
+  const semR1 = (!HF_VISITOR) ? pzHoySemana(published, tz, new Date()) : { n: 0, lunes: '', dias: [] };
+  const pendR1 = (!HF_VISITOR) ? pzHoyPendientes(allPosts, hoyKeyR1, mananaKeyR1, lunesKeyR1, tz) : { cartita: null, resto: [], total: 0 };
+  let hoyPostR1 = null;
+  try {
+    let btR1 = Infinity;
+    for (const p of schedPosts) {
+      if (!p || String(p.media_type || '') === 'story' || !p.scheduled_at) continue;
+      if (pzHoyPostDiaKey(p, tz) !== hoyKeyR1) continue;
+      const tR1 = Date.parse(String(p.scheduled_at).replace(' ', 'T'));
+      if (Number.isFinite(tR1) && tR1 < btR1) { btR1 = tR1; hoyPostR1 = p; }
+    }
+  } catch (e) { hoyPostR1 = null; }
+  const haySemanaR1 = allPosts.length > 0;
+  PZ_HOY_POSTS = {};
+  try {
+    if (pendR1.cartita && pendR1.cartita.id != null) PZ_HOY_POSTS[String(pendR1.cartita.id)] = pendR1.cartita;
+    for (const p of pendR1.resto) { if (p && p.id != null) PZ_HOY_POSTS[String(p.id)] = p; }
+    if (hoyPostR1 && hoyPostR1.id != null) PZ_HOY_POSTS[String(hoyPostR1.id)] = hoyPostR1;
+  } catch (e) {}
+  // Vista «Por aprobar» (mock): mensaje + subida + semana + tarjetas.
+  // La cartita (mañana) va PRIMERA, visible, con su pill y su cuenta.
+  const hoyAprobarHTML = (!HF_VISITOR) ? (() => {
+    const cardsR1 = [];
+    if (pendR1.cartita) cardsR1.push(pzHoyCardHTML(pendR1.cartita, { cartita: true, en: enHome, tz, prop: HF_PROPS[pendR1.cartita.id] || proposedLabelFor(pendR1.cartita, pl.proposals, tz) }));
+    for (const p of pendR1.resto) cardsR1.push(pzHoyCardHTML(p, { cartita: false, en: enHome, tz, prop: HF_PROPS[p.id] || proposedLabelFor(p, pl.proposals, tz) }));
+    const vacioR1 = (!pendR1.cartita && !pendR1.resto.length)
+      ? (haySemanaR1
+        ? `<div class="card pz-hoy-vacio"><p>${enHome ? 'Nothing to approve — your week is already set. ✅' : 'Nada por aprobar — tu semana ya está lista. ✅'}</p></div>`
+        : `<div class="card pz-hoy-vacio"><p>${enHome ? 'No posts yet. Tell Posty what you have to show and it will build your week.' : 'Todavía no hay posteos. Contale a Posty qué tenés para mostrar y arma tu semana.'}</p><button type="button" class="btn btn-primary" data-pz-hoy-chat="1">${enHome ? 'Open the chat' : 'Abrir el chat'}</button></div>`)
+      : '';
+    const hayAdminR1 = (() => { try { return !!(localStorage.getItem('posta_admin_token') || ''); } catch (e) { return false; } })();
+    return `<div id="pzHoyAprobar"${PZ_HOY_VIEW === 'aprobar' ? '' : ' hidden'}>`
+      + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: pendR1.total, haySemana: haySemanaR1, en: enHome, tz })
+      + pzHoyUploadHTML(albumR1, enHome)
+      + pzHoySemanaHTML(semR1, enHome)
+      + cardsR1.join('')
+      + vacioR1
+      + (hayAdminR1 ? pzHoyConserjeHTML(null, null, enHome) : '')
+      + `</div>`;
+  })() : '';
+  // (RE-BASE R1 SOBRE v794 · R2: el seg «Mi feed» es un enlace real a #/app/feed, pantalla propia.)
+  const hoySegHTML = (!HF_VISITOR)
+    ? `<div class="pz-hoy-seg" role="tablist" aria-label="${enHome ? 'Today view: to approve or my feed' : 'Vista de Hoy: por aprobar o mi feed'}"><button type="button" class="${PZ_HOY_VIEW === 'aprobar' ? 'active' : ''}" data-pz-hoy-view="aprobar" role="tab">${enHome ? 'To approve' : 'Por aprobar'}${pendR1.total ? ` <span class="pz-hoy-seg-n">${pendR1.total}</span>` : ''}</button><a href="#/app/feed" class="${PZ_HOY_VIEW === 'feed' ? 'active' : ''}" data-pz-hoy-view="feed" role="tab">${enHome ? 'My feed' : 'Mi feed'}</a></div>`
+    : '';
+  const hoySheetHTML = (!HF_VISITOR)
+    ? `<div class="pz-hoy-sheet-ov" id="pzHoySubirOv" hidden></div><div class="pz-hoy-sheet" id="pzHoySubirSheet" hidden role="dialog" aria-label="${enHome ? 'Upload photo or video' : 'Subir foto o video'}"><div class="sheet-handle"></div><h4>${enHome ? 'Upload photo or video' : 'Subir foto o video'}</h4><p class="sheet-sub">${enHome ? 'Choose where it comes from. Posty takes care of everything else: text, design and timing.' : 'Elegí de dónde sale. Posty se encarga de todo lo demás: texto, diseño y horario.'}</p><button type="button" class="pz-hoy-sheet-opt" data-pz-hoy-subir-op="camara"><span class="so-ic">📷</span><span><b>${enHome ? 'Camera' : 'Cámara'}</b><small>${enHome ? 'Take a photo or record a video now' : 'Sacar una foto o grabar un video ahora'}</small></span></button><button type="button" class="pz-hoy-sheet-opt" data-pz-hoy-subir-op="galeria"><span class="so-ic">🖼️</span><span><b>${enHome ? 'Gallery' : 'Galería'}</b><small>${enHome ? 'Choose a photo or video you already have' : 'Elegir una foto o video que ya tenés'}</small></span></button><button type="button" class="sheet-cancel" data-pz-hoy-subir-op="cancelar">${enHome ? 'Cancel' : 'Cancelar'}</button></div>`
+    : '';
   // (v440 · SOLO FEED) La nota del kit de nacimiento (hf-kitnote) SALIÓ
   // del flujo principal de Inicio: con perfil kit, el encabezado y la
   // grilla ya muestran la propuesta; la nota competía con el feed.
@@ -20583,11 +21160,13 @@ async function inicioView() {
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: !HF_VISITOR })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
+  ${hoySegHTML}
+  ${hoyAprobarHTML}
   ${hfTabsHTML(HF_TAB, enHome)}
-  ${pzFeedEntryHTML(enHome)}
   ${pzSemanaOkHTML}
   ${gridHTML}
   ${visitorPillHTML}
+  ${hoySheetHTML}
   <!-- (LOTE SACAR-CHATBAR-INICIO · decisión Valentino 5/11) La caja de chat sale de Inicio: sin campo, sin mic, sin +. La entrada de subida es el tab Agregar del dock (hoja «Subir foto / Subir video» → chat con la foto). La hoja del chat (mzSheet) queda: es la superficie del cambio del posteo (hfOpenChatForPost). -->
   <div class="mz-sheet" id="mzSheet" hidden>
     <div class="mz-sheet-card">
@@ -20642,7 +21221,7 @@ function pzFeedAlDia(allPosts, tz) { // sello AL DÍA solo si el feed está al d
   } catch (e) {}
   return false;
 }
-function pzFeedEntryHTML(en) { // puerta en Hoy: un enlace real a #/app/feed, sin JS. R1 la reemplaza por el segmentador del mock cuando reconstruya Hoy.
+function pzFeedEntryHTML(en) { // puerta en Hoy (RE-BASE R1 SOBRE v794: el segmentador la reemplaza en inicioView; queda definida, sin uso).
   return `<a class="pz-feed-entry" href="#/app/feed">${pzIc('grid', 16)} <span>${en ? 'My feed' : 'Mi feed'}</span><span class="pz-feed-entry-ar">›</span></a>`;
 }
 async function feedView() {
@@ -23003,6 +23582,26 @@ let HF_CUENTA_T = 0; // LOTE POST-OCULTO-RESPIRA: intervalo del tick de 1 s de l
 function hfCuentaAbreTick() {
   try {
     if (typeof document === 'undefined' || document.hidden) return;
+    // (LOTE REDISEÑO R1 · cartita SIN velo) Cuenta hasta que el posteo
+    // SALE: cada [data-pz-cuenta-sale] muestra «sale en X» en vivo. Al
+    // llegar a 0, la pantalla se reordena (render(): el posteo salió y
+    // la cartita pasa a ser la de mañana); el flag evita re-render en
+    // bucle si el render falla.
+    try {
+      const sales = document.querySelectorAll('[data-pz-cuenta-sale]');
+      let vencida = false;
+      sales.forEach((elS) => {
+        if (!elS || elS.dataset.pzSaleDone === '1') return;
+        const faltaS = Date.parse(elS.getAttribute('data-pz-cuenta-sale')) - Date.now();
+        if (!Number.isFinite(faltaS)) return;
+        if (faltaS <= 0) { try { elS.dataset.pzSaleDone = '1'; } catch (e) {} try { elS.textContent = ''; } catch (e) {} vencida = true; return; }
+        if (typeof pzRitualCuentaTxt !== 'function') return;
+        const cuS = pzRitualCuentaTxt(faltaS);
+        const enS = (typeof hfIsEn === 'function') ? hfIsEn() : false;
+        elS.textContent = enS ? ('goes out in ' + cuS.faltan) : ('sale en ' + cuS.faltan);
+      });
+      if (vencida) { try { if (typeof render === 'function') render(); } catch (e) {} }
+    } catch (e) {}
     const el = document.querySelector('[data-pz-cuenta-abre]');
     if (!el) return;
     const abre = el.getAttribute('data-pz-cuenta-abre');
@@ -24935,6 +25534,9 @@ function bindInicio() {
   if (hsA) hsA.onclick = () => doAcceptAll(hsA);
   const haw = $('#hfAcceptAllWeek');
   if (haw) haw.onclick = () => pzAcceptAllWeek(haw);
+  // (LOTE REDISEÑO R1 · HOY) Segmentador, mensaje→chat, tarjetas por
+  // aprobar, hoja de subida, entrada al conserje.
+  try { pzHoyBind(document.getElementById('inicioView')); } catch (e) {}
   // Bloque de respaldo (sin piezas todavía): flechas del carrusel, el
   // mismo cableado que hace bindSchedule en su vista.
   const wl = document.querySelector('#inicioView #hsWeekList');

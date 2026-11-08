@@ -46,9 +46,8 @@ const orderOk = (s, keys) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v723'"), 'CHUNK_V v723 (ajustes-simple; sin cambio en este lote)');
-  t(md5(css) === 'b06c24e9abcdebbb11e0ce3a47ea6778', 'styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes iconos-linea-info v727)');
-  t(md5(app) === 'adecfe1d66a09091a6f7bd1295ef1c0b', 'app.js md5 (re-pin R4 rediseño: etiqueta Impulsar en el dock; antes nivel-misiones-racha v793)');
-
+  t(md5(css) === '5e8e7446258ef39d4651b9fa24900292', 'styles.css md5 (re-pin R1 8/11 (antes nivel-misiones-racha v792): styles del lote; antes iconos-linea-info v727)');
+  t(md5(app) === '633242798e3e6407d1350471957ea92a', 'app.js md5 (re-pin merge R4+R1 v800 (Impulsar + Hoy); antes ajustes v792)');
   // ---------- 2. Dock de 5 en las dos shells ----------
   const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');
   t(orderOk(bbNav, ["tabBtn('inicio'", "tabBtn('ads'", "pzDockMasBtn('bb')", "tabBtn('analisis'", "tabBtn('jardin'"]), 'bb-bar: orden Inicio, Ads, +, Estrategia, Nivel');

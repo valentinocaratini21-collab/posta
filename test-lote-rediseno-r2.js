@@ -88,7 +88,7 @@ check('A19 detalle: el video sigue con play/pausa (no lo rompe el lightbox)', fn
 check('A20 «Ver en el inicio» (vista de seguidor) intacto', fnSrc('hfDetailHTML').includes("data-hfd-act=\"followers\"") && appSrc.includes("if (name === 'followers') { hfFollowerOpen(post); return; }"));
 check('A21 revalidación IG cubre #/app/feed además de Inicio', fnSrc('hfLiveRevalidateFeed').includes("#/app/feed"));
 check('A22 espejo vivo parchea #feedView cuando está montada', fnSrc('hfLiveApply').includes("document.getElementById('feedView')"));
-check('A23 puerta en Hoy: enlace real a #/app/feed', appSrc.includes('pzFeedEntryHTML(enHome)') && fnSrc('pzFeedEntryHTML').includes('href="#/app/feed"'));
+check('A23 puerta en Hoy: el seg «Mi feed» es un enlace real a #/app/feed (RE-BASE R1 sobre v794: reemplaza la puerta pzFeedEntryHTML)', appSrc.includes('data-pz-hoy-view="feed"') && appSrc.includes('href="#/app/feed"'));
 check('A24 sin server.js nuevo (cero endpoints de Feed)', !serverSrc.includes('feedView') && !serverSrc.includes('pzFeed') && !serverSrc.includes('/api/feed'));
 check('A24b appShell: Feed abre sin checklist arriba (como el mock)', appSrc.includes("tab === 'feed') ? '' : setupChecklistHtml(undefined)"));
 
@@ -224,7 +224,7 @@ async function main() {
     check('C6 /api/stats/ig: responde con followers numérico', !!st && typeof st.followers === 'number', st ? JSON.stringify(st).slice(0, 120) : 'sin respuesta');
     const servedApp = (await req('GET', '/app.js')).txt;
     check('C7 servido: app.js trae feedView + verfeed', servedApp.includes('async function feedView()') && servedApp.includes('data-hfd-act="verfeed"'));
-    check('C8 servido: app.js trae la puerta «Mi feed» en Hoy', servedApp.includes('pzFeedEntryHTML(enHome)'));
+    check('C8 servido: app.js trae la puerta «Mi feed» en Hoy', servedApp.includes('data-pz-hoy-view="feed"') && servedApp.includes('href="#/app/feed"'));
     const servedCss = (await req('GET', '/styles.css')).txt;
     check('C9 servido: styles.css trae pz-feed-flash', servedCss.includes('pz-feed-flash') && servedCss.includes('@keyframes pz-feed-flash'));
     const idx = (await req('GET', '/')).txt;

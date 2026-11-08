@@ -200,6 +200,13 @@ const a = APP.indexOf('const HOME_FEED_CAP');
 const b = APP.indexOf('/* ===== /HOME_FEED ===== */', a);
 t(a > 0 && b > a, 'bloque HOME_FEED delimitado en app.js');
 vm.runInContext(APP.slice(a, b), sb);
+// Bloque HOY-R1 real (R1 · 8/11): la rama futura de homeTileHTML llama a
+// pzHoyPillSalida / pzHoyCuentaSaleTxt — sin este bloque la cartita
+// abierta caería al strip viejo («El próximo» + chip).
+const h1 = APP.indexOf('/* ===== LOTE REDISEÑO R1 · HOY');
+const h2 = APP.indexOf('async function inicioView() {', h1);
+t(h1 > 0 && h2 > h1, 'bloque HOY-R1 delimitado en app.js');
+vm.runInContext(APP.slice(h1, h2), sb);
 t(typeof sb.homeGridCompose === 'function' && typeof sb.homeTileHTML === 'function'
   && typeof sb.hfLiveSnapshot === 'function' && typeof sb.hfLiveDiff === 'function'
   && typeof sb.pzProximoYaAbierto === 'function' && typeof sb.pzDiaInicioMs === 'function',
@@ -255,7 +262,7 @@ function setNow(iso) { NOW_MS = Date.parse(iso); }
 function setLang(lang) { sb.ME.lang = lang; }
 
 // ---------- A: al publicar hoy, aparece la próxima con fecha+hora y «Se destapa a las 00:00» ----------
-console.log('— A: 519 sale a las 17:00, aparece la carta velada 521 con fecha+hora y destape');
+console.log('— A: 519 sale a las 17:00, aparece la carta 521 ABIERTA con pill y cuenta de salida (R1)');
 setNow('2026-11-06T22:30:00.000Z'); // 17:30 EST
 setLang('es');
 ritFlag.pendiente = true; selFlag.id = 0;
@@ -265,16 +272,20 @@ t(tilesA.length === 3 && tilesA[0].kind === 'oculta' && tilesA[0].post.id === 52
   && tilesA[1].kind === 'post' && tilesA[1].post.id === 519,
   'A: tras publicar, la composición es [oculta 521, publicado 519, publicado 518]');
 const htmlA = sb.homeTileHTML(tilesA[0], 0);
-t(htmlA.includes('hf-carta-oculta') && !htmlA.includes('data-post-id'),
-  'A: la carta 521 es velada y sin data-post-id (no publica nada)');
-t(htmlA.includes('Mañana') && htmlA.includes('17:00'),
-  'A: la chapita dice la fecha y la hora («Mañana · 17:00»)');
-t(htmlA.includes('hf-carta-destapa') && htmlA.includes('Se destapa a las <b>00:00</b>'),
-  'A: la carta dice EXPLÍCITO «Se destapa a las 00:00»');
-t(htmlA.includes('faltan') && htmlA.includes('para ver tu próximo posteo'),
-  'A: la cuenta sigue viva («faltan X para ver tu próximo posteo»)');
-t(htmlA.includes('data-pz-abrir-ritual') && htmlA.includes('Posty lo está cuidando'),
-  'A: la carta abre el ritual y Posty la cuida (leyenda intacta)');
+// (LOTE REDISEÑO R1 · 8/11) La decisión 8/11 00:05 (cartita SIN velo) SUPERSEDE
+// el destape «a las 00:00» del 6/11 SOLO para el posteo de un día futuro:
+// la carta de mañana va ABIERTA (foto, pill, cuenta de salida). La carta de
+// HOY sin elegir sigue velada (eso lo cubre el caso C del atascado).
+t(htmlA.includes('data-post-id="521"') && htmlA.includes('<img') && !htmlA.includes('hf-carta-oculta') && !htmlA.includes('hf-carta-velo'),
+  'A: la carta 521 es ABIERTA (R1: foto, data-post-id, sin velo)');
+t(htmlA.includes('Se postea mañana') && htmlA.includes('17:00'),
+  'A: la pill dice «Se postea mañana · 17:00»');
+t(!htmlA.includes('Se destapa') && htmlA.includes('data-pz-cuenta-sale="2026-11-07T22:00:00.000Z"'),
+  'A: sin «Se destapa a las 00:00»; la cuenta es hasta que SALE');
+t(htmlA.includes('sale en') && !htmlA.includes('para ver tu próximo posteo'),
+  'A: la cuenta dice «sale en …» (no «faltan X para ver tu próximo posteo»)');
+t(!htmlA.includes('data-pz-abrir-ritual'),
+  'A: la carta abierta NO abre el ritual (va al detalle del posteo)');
 
 // El vivo aplica el cambio en el mismo tick que celebra la publicación.
 // El «antes» se compone a las 16:30 EST (519 todavía programado, futuro).
@@ -291,10 +302,10 @@ renderIntoGrid(tilesPrevA);
 appended.length = 0;
 sb.hfLiveApply({ tiles: tilesA, props: {}, prof: PROF, diff: diffA });
 const liveA = grid.live();
-t(liveA.length === 3 && liveA[0].hasOculta() && liveA[0].schedAt() === '2026-11-07T22:00:00.000Z'
-  && liveA[0].html.includes('Se destapa a las <b>00:00</b>') && liveA[0].html.includes('Mañana'),
-  'A: tras aplicar, idx 0 es la carta 521 con la línea de destape');
-t(liveA.filter((c) => c.hasOculta()).length === 1, 'A: hay UNA sola carta oculta en la grilla');
+t(liveA.length === 3 && !liveA[0].hasOculta() && liveA[0].postId() === '521' && liveA[0].schedAt() === '2026-11-07T22:00:00.000Z'
+  && liveA[0].html.includes('Se postea mañana'),
+  'A: tras aplicar, idx 0 es la carta 521 ABIERTA (R1)');
+t(liveA.filter((c) => c.hasOculta()).length === 0, 'A: CERO cartas veladas en la grilla (la de mañana ya va abierta)');
 t(appended.length === 1 && appended[0].innerHTML.includes('¡Tu posteo salió!'),
   'A: la celebración al publicar sigue viva en el mismo tick');
 
@@ -422,15 +433,17 @@ t(tilesK.every((tl) => tl.kind !== 'oculta'),
   'K: solo una story y un fijado mañana → no hay carta (ni story ni fijado)');
 
 // ---------- L: EN ----------
-console.log('— L: EN — la carta dice «It opens at 00:00» y «Tomorrow · 5:00 PM»');
+// (LOTE REDISEÑO R1 · 8/11) Igual que A, en inglés: pill «Goes out tomorrow»
+// y cuenta de salida; sin «It opens at 00:00».
+console.log('— L: EN — la carta dice «Goes out tomorrow · 05:00 PM» (R1)');
 setNow('2026-11-06T22:30:00.000Z');
 setLang('en');
 const tilesL = compose([{ p: P521, ymd: '2026-11-07' }], [P519p, P518], [P519p, P521, P518]);
 t(tilesL[0].kind === 'oculta' && tilesL[0].post.id === 521, 'L: en EN la carta sigue siendo la 521');
 const htmlL = sb.homeTileHTML(tilesL[0], 0);
-t(htmlL.includes('It opens at <b>00:00</b>'), 'L: EN dice «It opens at 00:00»');
-t(htmlL.includes('Tomorrow') && htmlL.includes('5:00 PM'),
-  'L: EN la chapita dice «Tomorrow · 5:00 PM»');
+t(!htmlL.includes('It opens at') && htmlL.includes('data-pz-cuenta-sale="2026-11-07T22:00:00.000Z"'), 'L: EN sin «It opens at 00:00»; cuenta de salida');
+t(htmlL.includes('Goes out tomorrow') && htmlL.includes('05:00 PM'),
+  'L: EN la pill dice «Goes out tomorrow · 05:00 PM»');
 setLang('es');
 
 // ---------- Resumen ----------

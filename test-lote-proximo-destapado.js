@@ -214,6 +214,14 @@ const ra = APP.indexOf('/* ===== RITUAL DE LA MAÑANA');
 const rb = APP.indexOf('/* ===== TIRA DE NIVEL POSTY', ra);
 t(ra > 0 && rb > ra, 'bloque RITUAL delimitado en app.js');
 vm.runInContext(APP.slice(ra, rb), sb);
+// Bloque HOY-R1 real (cartita SIN velo: pill + cuenta de salida).
+// (LOTE REDISEÑO R1 · 8/11) La rama futura de homeTileHTML llama a
+// pzHoyPillSalida / pzHoyCuentaSaleTxt con guarda typeof — sin este bloque
+// la cartita abierta caería al strip viejo («El próximo» + chip).
+const h1 = APP.indexOf('/* ===== LOTE REDISEÑO R1 · HOY');
+const h2 = APP.indexOf('async function inicioView() {', h1);
+t(h1 > 0 && h2 > h1, 'bloque HOY-R1 delimitado en app.js');
+vm.runInContext(APP.slice(h1, h2), sb);
 t(typeof sb.homeGridCompose === 'function' && typeof sb.homeTileHTML === 'function'
   && typeof sb.hfLiveSnapshot === 'function' && typeof sb.hfLiveDiff === 'function'
   && typeof sb.pzRitualHTML === 'function' && typeof sb.pzRitualCuentaTxt === 'function'
@@ -297,19 +305,24 @@ const htmlT1b = sb.homeTileHTML(tilesT1b[0], 0);
 t(htmlT1b.includes('data-post-id="519"') && !htmlT1b.includes('hf-carta-oculta') && htmlT1b.includes('<img'),
   'T1b: la carta se ve abierta (foto visible, data-post-id, sin velo)');
 
-// ---------- T2: 17:01, próximo = mañana, TAPADO con cuenta hasta las 00:00 ----------
-console.log('— T2: 17:01, próximo de mañana tapado con cuenta hasta las 00:00');
+// ---------- T2: 17:01, próximo = mañana, ABIERTO (R1; SUPERSEDE el destape 6/11) ----------
+// (LOTE REDISEÑO R1 · 8/11) La decisión 8/11 00:05 (cartita SIN velo) reemplaza
+// el destape «a las 00:00» del 6/11 SOLO para el posteo de un día futuro:
+// la cartita de mañana va ABIERTA en la grilla, con pill «Se postea mañana»
+// y cuenta hasta que SALE. La carta de HOY sin elegir sigue velada (T1).
+console.log('— T2: 17:01, próximo de mañana ABIERTO con pill y cuenta de salida (R1)');
 setNow('2026-11-06T22:01:00.000Z');
 const tilesT2 = compose([{ p: P521, ymd: '2026-11-07' }], [P519p, P518], RIT_PEND);
-t(tilesT2.length === 3 && tilesT2[0].kind === 'oculta' && tilesT2[0].post.id === 521 && tilesT2[0].openHoy === false,
-  'T2: después de las 17:00 la grilla es [oculta 521, publicado 519, publicado 518]');
+t(tilesT2.length === 3 && tilesT2[0].kind === 'oculta' && tilesT2[0].post.id === 521 && tilesT2[0].openHoy === true && tilesT2[0].futuro === true,
+  'T2: después de las 17:00 la grilla es [oculta 521 ABIERTA, publicado 519, publicado 518]');
 const htmlT2 = sb.homeTileHTML(tilesT2[0], 0);
-t(htmlT2.includes('hf-carta-oculta') && !htmlT2.includes('data-post-id') && htmlT2.includes('Mañana') && htmlT2.includes('17:00'),
-  'T2: la carta de mañana es velada, sin data-post-id, chapita «Mañana · 17:00»');
-t(htmlT2.includes('data-pz-cuenta-abre="2026-11-07T05:00:00.000Z"'),
-  'T2: la cuenta apunta a la medianoche (2026-11-07T05:00:00.000Z)');
-t(htmlT2.includes('faltan') && htmlT2.includes('6 h 59 min') && htmlT2.includes('para las 00:00'),
-  'T2: la cuenta dice «faltan 6 h 59 min para las 00:00»');
+t(htmlT2.includes('data-post-id="521"') && htmlT2.includes('<img') && htmlT2.includes('Se postea mañana') && htmlT2.includes('17:00')
+  && !htmlT2.includes('hf-carta-oculta') && !htmlT2.includes('hf-carta-velo'),
+  'T2: la carta de mañana es ABIERTA (foto, data-post-id, pill «Se postea mañana · 17:00», sin velo)');
+t(htmlT2.includes('data-pz-cuenta-sale="2026-11-07T22:00:00.000Z"') && !htmlT2.includes('data-pz-cuenta-abre'),
+  'T2: la cuenta apunta a la SALIDA del posteo (no a la medianoche)');
+t(htmlT2.includes('sale en') && !htmlT2.includes('Se destapa'),
+  'T2: la cuenta dice «sale en …» (no «Se destapa a las 00:00»)');
 
 // ---------- T3: 00:30 día siguiente → ABIERTO ----------
 console.log('— T3: 00:30, el próximo se abrió solo');
@@ -345,15 +358,18 @@ t((htmlT4b.match(/<i class="pz-dorso">/g) || []).length === 1,
 t(!htmlT4b.includes('buen día') && !htmlT4b.includes('good morning') && htmlT4b.includes('te traje tu paquete de hoy'),
   'T4b: la pantalla velada NO dice «buen día» — solo «te traje tu paquete de hoy»');
 
-// ---------- T5: 17:00 día siguiente → el siguiente queda tapado hasta las 00:00 ----------
-console.log('— T5: 17:01 del 7/11, el próximo (8/11) tapado hasta las 00:00');
+// ---------- T5: 17:01 del 7/11, el próximo (8/11) va ABIERTO (R1; SUPERSEDE el destape 6/11) ----------
+// (LOTE REDISEÑO R1 · 8/11) Igual que T2: el posteo de un día futuro ya no
+// espera a la medianoche — se ve desde que existe.
+console.log('— T5: 17:01 del 7/11, el próximo (8/11) ABIERTO (R1)');
 setNow('2026-11-07T22:01:00.000Z');
 const tilesT5 = compose([{ p: P522, ymd: '2026-11-08' }], [P521p, P519p, P518], RIT_PEND);
-t(tilesT5[0].kind === 'oculta' && tilesT5[0].post.id === 522 && tilesT5[0].openHoy === false,
-  'T5: el próximo del 8/11 va velado a las 17:01 del 7/11');
+t(tilesT5[0].kind === 'oculta' && tilesT5[0].post.id === 522 && tilesT5[0].openHoy === true && tilesT5[0].futuro === true,
+  'T5: el próximo del 8/11 va ABIERTO a las 17:01 del 7/11');
 const htmlT5 = sb.homeTileHTML(tilesT5[0], 0);
-t(htmlT5.includes('data-pz-cuenta-abre="2026-11-08T05:00:00.000Z"') && htmlT5.includes('para las 00:00'),
-  'T5: la cuenta apunta a la medianoche del 8/11');
+t(htmlT5.includes('data-post-id="522"') && htmlT5.includes('Se postea mañana') && htmlT5.includes('data-pz-cuenta-sale="2026-11-08T22:00:00.000Z"')
+  && !htmlT5.includes('hf-carta-velo') && !htmlT5.includes('data-pz-cuenta-abre'),
+  'T5: la cartita del 8/11 se ve (foto, pill «Se postea mañana», cuenta de salida)');
 
 // ---------- T6: sin próximo futuro no hay carta ----------
 console.log('— T6: sin próximo futuro no hay carta');
@@ -406,7 +422,10 @@ if (typeof sb.hfCuentaAbreTick === 'function') {
   cuentaEl = mkEl('2026-11-07T05:00:00.000Z');
   liveTickCalls.length = 0;
   sb.hfCuentaAbreTick();
-  t(cuentaEl.innerHTML.includes('6 h 59 min') && cuentaEl.innerHTML.includes('para las 00:00') && liveTickCalls.length === 0,
+  // (R1 · 8/11, corrección de la expectativa: el tick escribe
+  // «faltan … para ver tu próximo posteo», no «para las 00:00» — la
+  // expectativa vieja ya fallaba en la base v793; el tick en sí no cambia.)
+  t(cuentaEl.innerHTML.includes('6 h 59 min') && cuentaEl.innerHTML.includes('para ver tu próximo posteo') && liveTickCalls.length === 0,
     'T9a: el tick actualiza el texto en vivo («6 h 59 min») sin forzar el vivo');
   setNow('2026-11-07T05:00:30.000Z'); // 7/11 00:00:30 EST (medianoche pasada)
   cuentaEl = mkEl('2026-11-07T05:00:00.000Z');
@@ -422,11 +441,14 @@ if (typeof sb.hfCuentaAbreTick === 'function') {
     'T9c: sin carta velada el tick no hace nada (ni tira ni fuerza)');
 }
 
-// ---------- T8: el vivo refleja velada→abierta a las 00:00 sin re-cargar ----------
-// Requiere el fix del próximo atascado (hfLiveSnapshot registra la carta
-// como 'oculta:<id>'). En este árbol el fix NO está (lo fusiona el
-// preparador): T8 SALTA con mensaje. En el overlay fusionado corre en serio.
-console.log('— T8: el vivo refleja el flip velada→abierta a medianoche');
+// ---------- T8: a medianoche NO hay flip — la cartita ya estaba abierta (R1) ----------
+// (LOTE REDISEÑO R1 · 8/11) La decisión 8/11 00:05 (cartita SIN velo) quita
+// el flip de medianoche para el posteo futuro: a las 17:01 del día anterior
+// la cartita YA va abierta, así que al cruzar las 00:00 el vivo no cambia
+// nada (la carta sigue abierta en el mismo lugar). Requiere el fix del
+// próximo atascado (hfLiveSnapshot registra la carta como 'oculta:<id>').
+// En el overlay fusionado corre en serio con DESTAPADO_RUN_T8=1.
+console.log('— T8: a medianoche no hay flip (la cartita ya estaba abierta)');
 setNow('2026-11-06T22:01:00.000Z');
 const tilesT8a = compose([{ p: P521, ymd: '2026-11-07' }], [P519p, P518], RIT_PEND);
 const snapT8a = sb.hfLiveSnapshot(tilesT8a, PROF);
@@ -439,15 +461,15 @@ if (!snapT8a.posts || !snapT8a.posts['oculta:521']) {
   const tilesT8b = compose([{ p: P521, ymd: '2026-11-07' }], [P519p, P518], RIT_PEND);
   const snapT8b = sb.hfLiveSnapshot(tilesT8b, PROF);
   const diffT8 = sb.hfLiveDiff(snapT8a, snapT8b);
-  t(diffT8.changed.length === 1 && diffT8.changed[0] === 'oculta:521' && diffT8.justPublished.length === 0,
-    'T8: el flip a medianoche se ve como changed de la carta (sin celebrar nada)');
+  t(diffT8.changed.length === 0 && diffT8.justPublished.length === 0,
+    'T8: a medianoche no hay flip (la cartita de mañana ya estaba abierta)');
   renderIntoGrid(tilesT8a);
   const nBefore = grid.live().length;
   sb.hfLiveApply({ tiles: tilesT8b, props: {}, prof: PROF, diff: diffT8 });
   t(grid.live().length === nBefore && grid.live()[0].postId() === '521'
     && !grid.live()[0].hasOculta() && grid.live()[0].html.includes('<img')
     && !grid.live()[0].html.includes('data-pz-cuenta-abre'),
-    'T8: el vivo reemplaza la velada por la abierta en el mismo lugar (idx 0, sin duplicar, sin cuenta)');
+    'T8: la cartita sigue abierta en el mismo lugar (idx 0, sin duplicar, sin cuenta)');
 }
 
 // ---------- Auditoría M78: funciones llamadas desde los caminos nuevos ----------

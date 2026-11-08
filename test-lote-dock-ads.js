@@ -55,8 +55,7 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v764'"), 'CHUNK_V v764');
-  t(md5(css) === 'b06c24e9abcdebbb11e0ce3a47ea6778', 'styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes ritual-siguiente: .hf-carta-destapa)');
-  t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
+  t(md5(css) === '5e8e7446258ef39d4651b9fa24900292', 'styles.css md5 (re-pin R1 8/11 (antes nivel-misiones-racha v792): styles del lote; antes ritual-siguiente: .hf-carta-destapa)');  t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
 
   // ---------- 2. Dock v2: Inicio, Ads, +, Estrategia, Nivel (las dos shells; DOCK-5 6/11: Ajustes sale del dock y vive en el perfil) ----------
   const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');

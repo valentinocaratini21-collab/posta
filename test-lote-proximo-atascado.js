@@ -11,6 +11,12 @@
  * public/app.js (bloque HOME_FEED + hfLiveApply) y un DOM falso mínimo.
  * Reloj fijo: 6/11 16:30 EST (21:30Z), antes de las 17:00.
  * Uso: node test-lote-proximo-atascado.js
+ * NOTA R1 (8/11): la decisión 8/11 00:05 (cartita SIN velo) SUPERSEDE el
+ * destape «a las 00:00» del 6/11 SOLO para el posteo de un día futuro: la
+ * carta de mañana va ABIERTA (casos A y E actualizados a la carta abierta);
+ * la carta de HOY sin elegir sigue velada (casos C y D intactos). El bug
+ * que caza esta suite (el vivo no veía la carta) no cambia: el diff y el
+ * snapshot siguen iguales.
  */
 const fs = require('fs');
 const path = require('path');
@@ -171,6 +177,13 @@ const a = APP.indexOf('const HOME_FEED_CAP');
 const b = APP.indexOf('/* ===== /HOME_FEED ===== */', a);
 t(a > 0 && b > a, 'bloque HOME_FEED delimitado en app.js');
 vm.runInContext(APP.slice(a, b), sb);
+// Bloque HOY-R1 real (R1 · 8/11): la rama futura de homeTileHTML llama a
+// pzHoyPillSalida / pzHoyCuentaSaleTxt — sin este bloque la cartita
+// abierta caería al strip viejo («El próximo» + chip).
+const h1 = APP.indexOf('/* ===== LOTE REDISEÑO R1 · HOY');
+const h2 = APP.indexOf('async function inicioView() {', h1);
+t(h1 > 0 && h2 > h1, 'bloque HOY-R1 delimitado en app.js');
+vm.runInContext(APP.slice(h1, h2), sb);
 t(typeof sb.homeGridCompose === 'function' && typeof sb.homeTileHTML === 'function'
   && typeof sb.hfLiveSnapshot === 'function' && typeof sb.hfLiveDiff === 'function',
   'HOME_FEED carga en el sandbox');
@@ -237,10 +250,10 @@ const cell518Before = grid.cells[1];
 sb.hfLiveApply({ tiles: tilesNext, props: {}, prof: PROF, diff });
 const live = grid.live();
 t(live.length === 3, 'A: la grilla final tiene 3 celdas');
-t(live[0].hasOculta() && live[0].schedAt() === '2026-11-07T22:00:00.000Z'
-  && live[0].html.includes('Mañana') && live[0].html.includes('17:00') && !live[0].html.includes('data-post-id'),
-  'A: idx 0 es la carta oculta 521 «Mañana · 17:00», sin data-post-id');
-t(live.filter((c) => c.hasOculta()).length === 1, 'A: hay UNA sola carta oculta en la grilla');
+t(live[0].postId() === '521' && !live[0].hasOculta() && live[0].schedAt() === '2026-11-07T22:00:00.000Z'
+  && live[0].html.includes('Se postea mañana') && live[0].html.includes('17:00') && live[0].html.includes('<img'),
+  'A: idx 0 es la carta 521 ABIERTA (R1: «Se postea mañana · 17:00», foto, data-post-id)');
+t(live.filter((c) => c.hasOculta()).length === 0, 'A: CERO cartas veladas en la grilla (la de mañana ya va abierta)');
 t(!live.some((c) => c.hasOculta() && c.schedAt() === '2026-11-06T22:00:00.000Z'),
   'A: CERO carta oculta 519 (ni rastro de la vieja)');
 t(live[1].postId() === '519' && live[1].tileClasses().includes('hf-justpub')
@@ -303,9 +316,9 @@ t(diffE.changed.length === 1 && diffE.changed[0] === 'oculta:521',
   'E: reprogramar el próximo se ve como changed de su carta');
 renderIntoGrid(tilesE1);
 sb.hfLiveApply({ tiles: tilesE2, props: {}, prof: PROF, diff: diffE });
-t(grid.live().length === 2 && grid.live()[0].hasOculta()
+t(grid.live().length === 2 && !grid.live()[0].hasOculta() && grid.live()[0].postId() === '521'
   && grid.live()[0].html.includes('19:00') && grid.live()[0].schedAt() === '2026-11-08T00:00:00.000Z',
-  'E: la carta sigue en idx 0 con la hora nueva (19:00), sin duplicar');
+  'E: la carta sigue en idx 0 con la hora nueva (19:00), sin duplicar (R1: abierta, con data-post-id)');
 
 // ---------- Resumen ----------
 console.log(`\nproximo-atascado: ${okN} ok, ${badN} mal`);

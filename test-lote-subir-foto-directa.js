@@ -200,14 +200,19 @@ function parteB() {
   check('B6 pzIc sigue dibujando en celeste fijo por defecto (mic en btn-soft intacto)', /stroke=\\?"' \+ PZ_IC_CEL \+ '"/.test(appSrc) || appSrc.includes("stroke=\"' + PZ_IC_CEL + '\""));
   check('B7 chatUploadPhotos sigue ruteando por tipo (foto→/api/media?from=chat, video→/api/assets?kind=video)', /isVid \? '\/api\/assets\?kind=video' : '\/api\/media\?from=chat'/.test(appSrc));
   // B8: auditoría de llamadores — cada click sobre #chatFile fija accept antes.
+  // (LOTE REDISEÑO R1 · 8/11) La hoja «Subir foto o video» de Hoy suma UN
+  // click más (pzHoySubirPicker → cf.click()): 4→5. El sitio nuevo fija el
+  // accept ANTES del click (cf.accept = accept, parámetro: 'image/*' en
+  // Cámara, 'image/*,video/*' en Galería) — el regex de B8b no lo ve porque
+  // el accept es parámetro, no literal; la regla se cumple igual.
   const clickSites = (appSrc.match(/(cf|picker|fl)\.click\(\)/g) || []).length;
-  check('B8a solo hay 4 clicks sobre el input del chat (foto dock, video dock, camarita, fallback)', clickSites === 4, 'clicks=' + clickSites);
+  check('B8a solo hay 5 clicks sobre el input del chat (foto dock, video dock, camarita, fallback + hoja Hoy R1)', clickSites === 5, 'clicks=' + clickSites);
   const imgSets = (appSrc.match(/(cf|picker|fl)\.accept = 'image\/\*'/g) || []).length;
   const vidSets = (appSrc.match(/cf\.accept = 'video\/\*'/g) || []).length;
   check('B8b 3 sitios fijan image/* y 1 fija video/*', imgSets === 3 && vidSets === 1, `image=${imgSets} video=${vidSets}`);
   const getFile = (appSrc.match(/getElementById\(["']chatFile["']\)/g) || []).length;
   const queryFile = (appSrc.match(/querySelector\(['"]#chatFile['"]\)/g) || []).length;
-  check('B8c sin llamadores nuevos de #chatFile (4 getElementById + 2 querySelector)', getFile === 4 && queryFile === 2, `get=${getFile} query=${queryFile}`);
+  check('B8c sin llamadores nuevos de #chatFile (5 getElementById + 2 querySelector; el 5º es pzHoySubirPicker de la hoja Hoy R1)', getFile === 5 && queryFile === 2, `get=${getFile} query=${queryFile}`);
   const albumTag = (appSrc.match(/<input[^>]*id="albumFile"[^>]*>/) || [''])[0];
   check('B9 el flujo del Álbum (#albumFile) NO se tocó (sigue image/*,video/*)', albumTag.includes('accept="image/*,video/*"'), albumTag);
 }
