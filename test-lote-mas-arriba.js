@@ -68,8 +68,8 @@ const has = (body, prop) => new RegExp(prop + '\\s*:').test(body);
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v723'"), 'CHUNK_V v723 (sin cambio)');
-  t(md5(app) === 'fb6d3f801b555a0f343f1448c335cab9', 'app.js md5 v727 (sin tocar)');
-  t(md5(css) === '1ab1e38c5985f589df399bca8fea4c53', 'styles.css md5 (lote mas-arriba, re-base v728 sobre v727)');
+  t(md5(app) === 'bc53ff30fa777f87d03b8d83d224939c', 'app.js md5 (re-pin R0)');
+  t(md5(css) === '5293bc2a7c2756ae9a37c55f9ee459f7', 'styles.css md5 (re-pin R0)');
 
   // ---------- 2. Causa A: .bb-tab-ic es caja flex de 24px, como .mz-tab-ic ----------
   const bbIc = rules('bb-tab-ic');
@@ -159,11 +159,11 @@ const has = (body, prop) => new RegExp(prop + '\\s*:').test(body);
     for (const k of keys) { const i = s.indexOf(k, prev + 1); if (i === -1 || i < prev) return false; prev = i; }
     return true;
   };
-  const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');
-  t(orderOk(bbNav, ["tabBtn('inicio'", "tabBtn('ads'", "pzDockMasBtn('bb')", "tabBtn('analisis'", "tabBtn('jardin'"]), 'bb-bar: orden Inicio, Ads, +, Estrategia, Premios (sin cambio)');
+  const bbNav = (app.split('\n').find((l) => l.includes('<nav class="bb-bar">')) || '');
+  t(orderOk(bbNav, ["tabBtn('inicio'", "tabBtn('analisis'", "tabBtn('impulsar'", "tabBtn('estrategia'", "tabBtn('jardin'", "tabBtn('chat'"]), 'bb-bar: orden Hoy, Análisis, Impulsar, Estrategia, Nivel, Chat (R0)');
   t(!bbNav.includes("tabBtn('ajustes'"), 'bb-bar: sin tab Ajustes (sin cambio)');
   const mzFn = app.slice(app.indexOf('function mzTabsHTML(tab) {'), app.indexOf('\n/* (LOTE DOCK-MAS) */'));
-  t(orderOk(mzFn, ["t('inicio'", "t('ads'", "pzDockMasBtn('mz')", "t('analisis'", "t('jardin'"]), 'mz-tabs: orden Inicio, Ads, +, Estrategia, Premios (sin cambio)');
+  t(orderOk(mzFn, ["t('inicio'", "t('analisis'", "t('impulsar'", "t('estrategia'", "t('jardin'", "t('chat'"]), 'mz-tabs: orden Hoy, Análisis, Impulsar, Estrategia, Nivel, Chat (R0)');
 
   console.log(`\ntest-lote-mas-arriba: ${ok} ok, ${bad} mal`);
   process.exit(bad ? 1 : 0);

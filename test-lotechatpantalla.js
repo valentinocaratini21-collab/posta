@@ -68,8 +68,8 @@ for (const fn of ['pzBackHTML', 'pzBackMtopHTML', 'pzBackDesktopHTML']) {
   const body = sliceFn(app, 'function ' + fn, '\n}');
   t(body.includes("if (tab === 'chat') return '';"), fn + ': sin control atrás para chat');
 }
-t(app.includes("tab === 'chat' ? '' : '<nav class=\"bb-bar\">'"), 'bbShell: sin barra de tabs en chat');
-t(app.includes("if (tab === 'chat') return ''; // el chat es pantalla completa"), 'mzTabsHTML: sin pestañas en chat (preexistente)');
+t(!app.includes("tab === 'chat' ? '' : '<nav class=\"bb-bar\">'"), 'bbShell: sin exclusión del chat (R0: el dock está también en chat)');
+t(!sliceFn(app, 'function mzTabsHTML(tab) {', '\n/* (LOTE DOCK-MAS) */').includes("if (tab === 'chat') return '';"), 'mzTabsHTML: el dock SÍ está en chat (R0)');
 
 // ---------- Hoja retirada de Inicio; dock navega ----------
 // SUPERSEDED con causa (lote chat-website v555, posterior a v531): la

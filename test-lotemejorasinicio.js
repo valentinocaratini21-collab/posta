@@ -82,7 +82,7 @@ t(app.includes('pzSemanaOkHTML') && css.includes('.hf-semana-ok'), 'P2: la tira 
   t(btn.includes("gzT('Agregar', 'Add')"), 'P3: palabra Agregar/Add abajo del +');
   t(btn.includes('pzDockMasToggle()'), 'P3: el + sigue abriendo la misma hoja');
   t(btn.includes('mz-tab-mas-ic') && btn.includes('bb-tab-mas-ic') && btn.includes('mz-tab-mas-lb') && btn.includes('bb-tab-mas-lb'), 'P3: icono + etiqueta en ambas variantes (bb y mz)');
-  t(cnt(app, 'pzDockMasBtn(') === 3, 'P3: 1 definición + 2 llamadas (orden del dock sin cambiar)');
+  t(cnt(app, 'pzDockMasBtn(') === 1, 'P3: 1 definición, 0 llamadas (R0: el + salió del dock)');
   t(css.includes('.mz-tab-mas-ic{') && css.includes('.bb-tab-mas-ic{') && css.includes('.mz-tab-mas-lb,.bb-tab-mas-lb{'), 'P3: CSS icono 24px + etiqueta 11px');
   t(css.includes('.mz-tab-mas{display:block') && css.includes('.bb-tab-mas{display:flex') && css.includes('flex-direction:column'), 'P3: geometría de pestaña por variante');
   t(!/\.bb-tab-mas, .mz-tab-mas\{[^}]*width:52px/.test(css), 'P3: fuera el círculo 52px (documentado: 52px + etiqueta rompería los offsets del dock)');

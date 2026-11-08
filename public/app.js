@@ -810,6 +810,13 @@ function pzBackHTML(tab) {
   // cabecera (y la grilla el suyo): el círculo fijo se superponía al
   // título «Billetera» de la tarjeta al hacer scroll. Sin segundo control.
   if (tab === 'ads') return '';
+  // (LOTE REDISEÑO R0 · 8/11) El encabezado común del shell vive arriba
+  // a la izquierda (avatar + saludo): el círculo fijo (top:10px,
+  // left:10px) caía ENCIMA del avatar en Análisis y Estrategia y le
+  // robaba el toque a la identidad (que abre el chat). En las pestañas
+  // del dock manda el dock (Hoy está a un toque); el atrás fijo queda
+  // para las pantallas sin pestaña (Ajustes, etc.).
+  if (tab === 'numeros' || tab === 'analisis') return '';
   return `<button type="button" class="pz-back pz-back-fixed" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function pzBackMtopHTML(tab) {
@@ -885,6 +892,187 @@ function bbBarraHTML(nivel, color) {
     : (nivel.nivel >= 5 ? 100 : (nivel.gate ? nivel.gate.progreso_pct : 0));
   return `<div class="bb-barra" style="--bbc:${color}"><span style="width:${pct}%"></span></div>`;
 }
+// ===== LOTE REDISEÑO R0 · 8/11 =====
+// Shell de 6 pestañas + glass total + apertura 3 s + saludo que escribe +
+// fuente autocontenida. Mock posty-app-design (fuente de verdad visual).
+// VARA CERO BOTONES MUERTOS (tablero 01:57; directiva Valentino 01:56):
+// cada botón del shell lleva a su destino — las 6 pestañas a sus
+// pantallas, la identidad del encabezado al Chat, compartir a Referidos,
+// la ruedita a Ajustes. Verificado en test-lote-rediseno-r0.js §10 (VM
+// sobre el HTML real) y en el repro Playwright (navegación de verdad).
+function pzShellHeadHTML(tab) {
+  // En el chat manda su propia cabecera (atrás + avatar + «Posty.» + en
+  // línea): sin segundo encabezado y sin robar alto con el teclado.
+  if (tab === 'chat') return '';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const neg = (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.negocio) ? String(BB.estado.negocio) : '';
+  const saludo = neg ? (en ? 'Hi, ' + esc(neg) : 'Hola, ' + esc(neg)) : (en ? 'Hi!' : '¡Hola!');
+  // La píldora de racha se llena async (pzShellDatosHoy, UN fetch por
+  // carga): se cachea para que un re-render del shell no la vacíe
+  // (el header se re-crea en cada navegación y el fill no se repite).
+  // Se cachea el NÚMERO y el template localiza con el ME vigente: el
+  // texto cacheado con el idioma del momento del fetch (antes de que ME
+  // cargue) saldría en español en un usuario EN.
+  const rachaN = (typeof window !== 'undefined' && typeof window.__pzHeadRachaN === 'number') ? window.__pzHeadRachaN : null;
+  const rachaCache = rachaN !== null ? ('🔥 ' + rachaN + (en ? ' days' : ' días')) : ((typeof window !== 'undefined' && window.__pzHeadRachaTxt) ? String(window.__pzHeadRachaTxt) : '');
+  const rachaTitle = rachaN !== null ? (en ? ('Streak: ' + rachaN + ' days posting') : ('Racha de ' + rachaN + ' días publicando')) : ((typeof window !== 'undefined' && window.__pzHeadRachaTitle) ? String(window.__pzHeadRachaTitle) : '');
+  return `<header class="pz-shell-head">
+    <button type="button" class="pz-shell-ident" onclick="bbGo('#/app/chat')" aria-label="${en ? 'Open the chat with Posty' : 'Abrir el chat con Posty'}">
+      <img src="ai-avatar.png" alt="Posty" class="pz-shell-ava">
+      <span class="pz-shell-who"><b id="pzShellSaludo">${saludo}</b><small>${en ? 'Posty is working now' : 'Posty está trabajando ahora'}</small></span>
+    </button>
+    <span class="pz-shell-racha" id="pzHeadRacha"${rachaCache ? '' : ' hidden'}${rachaTitle ? ` title="${esc(rachaTitle)}"` : ''}>${rachaCache ? esc(rachaCache) : ''}</span>
+    <span class="pz-shell-acts">
+      <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes?referidos=1')" aria-label="${en ? 'Referrals' : 'Referidos'}">${pzIc('share', 20)}</button>
+      <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes')" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button>
+    </span>
+  </header>`;
+}
+function pzAperturaHTML() {
+  // La apertura vive hasta que se cierra (tap o 3 s): sobrevive a los
+  // re-renders de la carga. El primer render la pinta y un segundo
+  // render — al llegar los datos — la borraba porque el flag era
+  // «pintada una vez»; ahora el flag es «cerrada». La tarjeta y el
+  // texto de la burbuja se cachean para que un re-render no los vacíe.
+  try {
+    if (typeof window !== 'undefined' && window.__pzAperturaCerrada) return '';
+  } catch (e) {}
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  // La tarjeta se cachea como DATOS (título/hora/imagen): el fetch arranca
+  // antes de que ME cargue y el HTML cacheado con el idioma de ese momento
+  // saldría en español en un usuario EN. El template localiza con el ME
+  // vigente; el HTML cacheado queda como respaldo.
+  let cardHTML = (typeof window !== 'undefined' && window.__pzAperturaCardHTML) || '';
+  let bubTxt = (typeof window !== 'undefined' && window.__pzAperturaBurbujaTxt) || (en ? 'Hi! 👋' : '¡Hola! 👋');
+  const cartaD = (typeof window !== 'undefined' && window.__pzHoyCarta) || null;
+  if (cartaD && cartaD.imagen) {
+    const tituloD = String(cartaD.titulo || '').trim();
+    const horaD = String(cartaD.hora || '').trim();
+    const mediaD = cartaD.media_type === 'video'
+      ? `<video src="${esc(cartaD.imagen)}" muted playsinline preload="metadata" class="pz-apertura-img"></video>`
+      : `<img src="${esc(mv(cartaD.imagen, 640))}" data-full="${esc(cartaD.imagen)}" onerror="__imgFb(this)" alt="" class="pz-apertura-img">`;
+    cardHTML = `${mediaD}<div class="pz-apertura-meta"><b>${en ? "Today's post" : 'El posteo de hoy'}</b>${tituloD ? `<span>${esc(tituloD)}</span>` : ''}${horaD ? `<small>${en ? 'Goes out today at ' : 'Sale hoy a las '}${esc(horaD)}</small>` : ''}</div><span class="pz-apertura-check">✓</span>`;
+    bubTxt = en ? "Hi! 👋 I brought today's post" : '¡Hola! 👋 Te traje el posteo de hoy';
+  }
+  return `<div class="pz-apertura" id="pzApertura" onclick="pzAperturaCerrar()" role="dialog" aria-label="${en ? 'Opening' : 'Apertura'}">
+    <div class="pz-apertura-burbuja" id="pzAperturaBurbuja"><img src="ai-avatar.png" alt="Posty" class="pz-apertura-ava"><span class="pz-apertura-txt">${esc(bubTxt)}</span></div>
+    <div class="pz-apertura-card" id="pzAperturaCard">${cardHTML}</div>
+    <div class="pz-apertura-skip">${en ? 'Tap to skip' : 'Tocá para saltar'}</div>
+  </div>`;
+}
+function pzAperturaArranque() {
+  try {
+    // Los datos (racha del encabezado + tarjeta) se piden SIEMPRE: la
+    // apertura puede ya haber cerrado (el timer de 3 s se arma en la
+    // pintura y en cargas lentas cierra antes de que este hook corra),
+    // pero la píldora de racha sigue necesitando el dato.
+    pzShellDatosHoy();
+    const ov = (typeof document !== 'undefined') ? document.getElementById('pzApertura') : null;
+    if (!ov) return;
+    const reducido = (typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (reducido) { pzAperturaCerrar(); return; }
+    if (typeof window !== 'undefined' && window.__pzAperturaTimer) return;
+    if (typeof window !== 'undefined') window.__pzAperturaTimer = true;
+    setTimeout(() => { try { pzAperturaCerrar(); } catch (e) {} }, 3000);
+  } catch (e) {}
+}
+function pzAperturaCerrar() {
+  try {
+    if (typeof window !== 'undefined') window.__pzAperturaCerrada = true;
+    const ov = (typeof document !== 'undefined') ? document.getElementById('pzApertura') : null;
+    if (ov && ov.remove) ov.remove();
+  } catch (e) {}
+  try { pzSaludoEscribir(); } catch (e) {}
+}
+function pzSaludoEscribir() {
+  // Máquina de escribir sobre el «Hola, {negocio}» del encabezado, ~1 s,
+  // solo una vez por carga, después de la apertura. El saludo según la
+  // hora («¡Buen día! ☀️» etc.) vive en la burbuja de Posty en Hoy (R1);
+  // el encabezado queda en «Hola» (neutro en hora, nunca fijo en «buen día»).
+  try {
+    if (typeof window !== 'undefined' && window.__pzSaludoEscrito) return;
+    if (typeof window !== 'undefined') window.__pzSaludoEscrito = true;
+    const el = (typeof document !== 'undefined') ? document.getElementById('pzShellSaludo') : null;
+    if (!el) return;
+    const txt = String(el.textContent || '');
+    if (!txt) return;
+    const reducido = (typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (reducido) return;
+    el.classList.add('typing');
+    let i = 0;
+    const step = Math.max(24, Math.floor(1000 / txt.length));
+    const tick = () => {
+      const nodo = (typeof document !== 'undefined') ? document.getElementById('pzShellSaludo') : null;
+      if (!nodo) return;
+      i++;
+      nodo.textContent = txt.slice(0, i);
+      if (i < txt.length) setTimeout(tick, step);
+      else { try { nodo.classList.remove('typing'); } catch (e) {} }
+    };
+    el.textContent = '';
+    setTimeout(tick, step);
+  } catch (e) {}
+}
+function pzShellDatosHoy() {
+  // UN fetch por carga: /api/ritual/hoy trae la racha (píldora del
+  // encabezado) y la carta del posteo de hoy (tarjeta de la apertura).
+  // Sin número real no hay píldora; sin posteo hoy la apertura es solo
+  // el saludo — nunca se inventa título, hora ni foto.
+  // Reintento: el fetch se marca «pendiente» al salir y «hecho» solo
+  // cuando vuelve bien; si falla (401 sin sesión, red), el pendiente se
+  // limpia y el próximo arranque lo reintenta (si no, un 401 en la
+  // pantalla de login dejaría la apertura sin datos toda la sesión).
+  try {
+    if (typeof window !== 'undefined' && (window.__pzShellHoyDone || window.__pzShellHoyPendiente)) return;
+    if (typeof window !== 'undefined') window.__pzShellHoyPendiente = true;
+    if (typeof api === 'undefined' || !api || typeof api.get !== 'function') { if (typeof window !== 'undefined') window.__pzShellHoyPendiente = false; return; }
+    api.get('/api/ritual/hoy').then((r) => {
+      try {
+        if (!r || r.ok === false) { if (typeof window !== 'undefined') window.__pzShellHoyPendiente = false; return; }
+        if (typeof window !== 'undefined') { window.__pzShellHoyDone = true; window.__pzShellHoyPendiente = false; }
+        const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+        // La racha y la tarjeta se CACHEAN siempre, aunque los nodos
+        // todavía no existan: el fetch arranca con el render y puede
+        // resolver ANTES de la primera pintura. Los templates (encabezado
+        // y apertura) pintan desde el caché; si el nodo vivo ya existe,
+        // se llena además en el momento.
+        // El idioma NO se congela en el caché: el fetch arranca antes de
+        // que ME cargue, y el texto con el idioma de ese momento saldría
+        // en español en un usuario EN. Se cachea el DATO (número + carta)
+        // y cada template localiza con el ME vigente al pintar.
+        if (r && typeof r.racha === 'number') {
+          if (typeof window !== 'undefined') window.__pzHeadRachaN = r.racha;
+          const rachaTxt = '🔥 ' + r.racha + (en ? ' days' : ' días');
+          const rachaTit = en ? ('Streak: ' + r.racha + ' days posting') : ('Racha de ' + r.racha + ' días publicando');
+          if (typeof window !== 'undefined') { window.__pzHeadRachaTxt = rachaTxt; window.__pzHeadRachaTitle = rachaTit; }
+          const pill = (typeof document !== 'undefined') ? document.getElementById('pzHeadRacha') : null;
+          if (pill) { pill.textContent = rachaTxt; pill.title = rachaTit; pill.hidden = false; }
+        }
+        const carta = (r && r.cartas && r.cartas[0]) || (r && r.recomendada) || null;
+        if (!carta || !carta.imagen) return;
+        if (typeof window !== 'undefined') window.__pzHoyCarta = { titulo: String(carta.caption_corta || carta.caption || '').trim(), hora: String(carta.hora_salida || '').trim(), imagen: carta.imagen, media_type: carta.media_type || 'image' };
+        const titulo = String(carta.caption_corta || carta.caption || '').trim();
+        const hora = String(carta.hora_salida || '').trim();
+        const media = carta.media_type === 'video'
+          ? `<video src="${esc(carta.imagen)}" muted playsinline preload="metadata" class="pz-apertura-img"></video>`
+          : `<img src="${esc(mv(carta.imagen, 640))}" data-full="${esc(carta.imagen)}" onerror="__imgFb(this)" alt="" class="pz-apertura-img">`;
+        const cardHTML = `${media}<div class="pz-apertura-meta"><b>${en ? "Today's post" : 'El posteo de hoy'}</b>${titulo ? `<span>${esc(titulo)}</span>` : ''}${hora ? `<small>${en ? 'Goes out today at ' : 'Sale hoy a las '}${esc(hora)}</small>` : ''}</div><span class="pz-apertura-check">✓</span>`;
+        if (typeof window !== 'undefined') window.__pzAperturaCardHTML = cardHTML;
+        const card = (typeof document !== 'undefined') ? document.getElementById('pzAperturaCard') : null;
+        if (card) card.innerHTML = cardHTML;
+        const bubTxt = en ? "Hi! 👋 I brought today's post" : '¡Hola! 👋 Te traje el posteo de hoy';
+        if (typeof window !== 'undefined') window.__pzAperturaBurbujaTxt = bubTxt;
+        const bub = (typeof document !== 'undefined') ? document.getElementById('pzAperturaBurbuja') : null;
+        if (bub) {
+          const txt = bub.querySelector('.pz-apertura-txt');
+          if (txt) txt.textContent = bubTxt;
+        }
+      } catch (e) {}
+    }).catch(() => { try { if (typeof window !== 'undefined') window.__pzShellHoyPendiente = false; } catch (e2) {} });
+  } catch (e) {}
+}
+// ===== /LOTE REDISEÑO R0 =====
+
 function bbShell(tab, content) {
   const key = mxTabKey(tab);
   const modo = mxModoActual(tab);
@@ -892,7 +1080,9 @@ function bbShell(tab, content) {
   const ic = {
     oficina: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
     jardin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
-    ads: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v3a1 1 0 0 0 1 1h1.5v-5H5a1 1 0 0 0-1 1z"/><path d="M6.5 10 20 5.5v13L6.5 14"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/></svg>',
+    impulsar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v3a1 1 0 0 0 1 1h1.5v-5H5a1 1 0 0 0-1 1z"/><path d="M6.5 10 20 5.5v13L6.5 14"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/></svg>',
+    estrategia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01"/></svg>',
+    chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>',
     bandeja: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-5l2-7z"/></svg>',
     negocio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M2.5 6.5 4 3h16l1.5 3.5a3.2 3.2 0 0 1-6.1 1.4 3.4 3.4 0 0 1-6.8 0 3.2 3.2 0 0 1-6.1-1.4z"/><path d="M9.5 20v-6h5v6"/></svg>',
     ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.9 10.4L21.9 13.6L18.5 16.7L20.1 17.9L17.9 20.1L13.3 19.9L13.6 21.9L10.4 21.9L7.3 18.5L6.1 20.1L3.9 17.9L4.1 13.3L2.1 13.6L2.1 10.4L5.5 7.3L3.9 6.1L6.1 3.9L10.7 4.1L10.4 2.1L13.6 2.1L16.7 5.5L17.9 3.9L20.1 6.1L19.9 10.7Z"/><circle cx="12" cy="12" r="3.2"/></svg>',
@@ -903,8 +1093,10 @@ function bbShell(tab, content) {
   const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'feed' || tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
+    ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('ads', '#/app/ads', gzT('Impulsar', 'Boost')) + pzDockMasBtn('bb') + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level')) + '</nav>' + pzDockMasHTML()}
+    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Hoy', 'Home'))}${tabBtn('analisis', '#/app/numeros', gzT('Análisis', 'Analysis'))}${tabBtn('impulsar', '#/app/ads', gzT('Impulsar', 'Boost'))}${tabBtn('estrategia', '#/app/analisis', gzT('Estrategia', 'Strategy'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
+    ${pzAperturaHTML()}
   </div>`;
 }
 async function bbLoadEstado(force) {
@@ -1465,12 +1657,18 @@ function mxPoderesDe(p) {
 function mxPoderesBB() {
   try { return (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.poderes) ? mxPoderesDe(BB.estado.poderes) : null; } catch (e) { return null; }
 }
+// (LOTE REDISEÑO R0 · 8/11) El dock es de 6: Hoy, Análisis, Impulsar,
+// Estrategia, Nivel, Chat. Las claves ya no son el nombre de la ruta:
+// numeros → analisis (la vista de números, que R3 reconstruye como la
+// pantalla Análisis), analisis → estrategia, ads → impulsar.
 function mxTabKey(tab) {
-  if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat' || tab === 'ads') return tab;
+  if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat') return tab;
   if (tab === 'inicio') return 'inicio';
   if (tab === 'schedule' || tab === 'post') return 'semana';
   if (tab === 'jardin-posty') return 'jardin';
-  if (tab === 'analisis') return 'analisis';
+  if (tab === 'numeros') return 'analisis';
+  if (tab === 'analisis') return 'estrategia';
+  if (tab === 'ads') return 'impulsar';
   return '';
 }
 function mxModoActual(tab) {
@@ -5879,15 +6077,21 @@ function mzIsMobile() {
   try { return !!(window.matchMedia && window.matchMedia('(max-width: 820px)').matches); } catch (e) { return false; }
 }
 function mzHomeHash() { return '#/app/inicio'; } // POSTY SOLO // (v331 addendum 22/10) decisión de Valentino: la home es el feed literal EN TODOS los tamaños — el aterrizaje por defecto es Inicio también en desktop; la Agenda queda a un toque (tab Jardín).
+// (LOTE REDISEÑO R0 · 8/11) Dock de 6, igual que el móvil: Hoy, Análisis,
+// Impulsar, Estrategia, Nivel, Chat. El chat YA NO es pantalla completa
+// sin pestañas: el dock también está en chat (el input del chat lleva
+// offset inferior = altura del dock, ver styles.css). El + sale del dock
+// (su hoja pzDockMasHTML queda sin abridor hasta R1; la función se conserva).
 function mzTabsHTML(tab) {
-  if (tab === 'chat') return ''; // el chat es pantalla completa con su input fijo: sin pestañas
   const on = tab === 'inicio' ? 'inicio'
     : (tab === 'schedule' || tab === 'post') ? 'semana'
     : tab === 'jardin-posty' ? 'jardin'
-    : tab === 'analisis' ? 'analisis'
-    : tab === 'ads' ? 'ads' : '';
+    : tab === 'numeros' ? 'analisis'
+    : tab === 'analisis' ? 'estrategia'
+    : tab === 'ads' ? 'impulsar'
+    : tab === 'chat' ? 'chat' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('ads', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))}${pzDockMasBtn('mz')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))}</nav>${pzDockMasHTML()}`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Hoy', 'Home'))}${t('analisis', 'numeros', pzIc('navBarras'), gzT('Análisis', 'Analysis'))}${t('impulsar', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))}${t('estrategia', 'analisis', pzIc('target'), gzT('Estrategia', 'Strategy'))}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -5969,9 +6173,12 @@ function appShell(tab, content) {
       <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" class="side-posty-ava"></span>
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
-    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
-    <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('navBarras')}</span>Estrategia</button>
+    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Hoy'}</button>
+    <button class="drawer-link ${tab === 'numeros' ? 'on' : ''}" data-tab="numeros"><span class="di">${pzIc('navBarras')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Analysis' : 'Análisis'}</button>
+    <button class="drawer-link ${tab === 'ads' ? 'on' : ''}" data-tab="ads"><span class="di">${pzIc('megaphone')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Boost' : 'Impulsar'}</button>
+    <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('target')}</span>Estrategia</button>
     <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('navBambu')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Level' : 'Nivel'}</button>
+    <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">${pzIc('chat')}</span>Chat</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">${pzIc('logout')}</span>Salir</button>
@@ -5980,9 +6187,11 @@ function appShell(tab, content) {
   ${(tab === 'chat' || tab === 'inicio' || tab === 'schedule' || tab === 'feed') ? '' : setupChecklistHtml(undefined)}
   <div class="app-shell">
     ${pzBackDesktopHTML(tab)}
+    ${pzShellHeadHTML(tab)}
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>
-  ${mzTabsHTML(tab)}`;
+  ${mzTabsHTML(tab)}
+  ${pzAperturaHTML()}`;
 }
 
 /* Drawer mobile: hamburguesa ≡ con todo lo demás (reemplaza la bottom nav) */
@@ -16977,6 +17186,13 @@ function pzPrefetchKick() {
  }
   async function render() {
   const mySeq = ++RENDER_SEQ;
+  // (LOTE REDISEÑO R0 · 8/11) Los datos de hoy (racha + tarjeta de la
+  // apertura) se piden AL ARRANCAR el render, no tras la pintura: la
+  // primera pintura tarda ~2 s (el contenido espera datos) y el fetch
+  // otros ~2 s; si esperara a la pintura, la tarjeta llegaría después
+  // de que la apertura de 3 s ya cerró. Solo en rutas #/app (la landing
+  // y el login vuelven antes del hook y no tienen sesión que pedir).
+  try { if ((location.hash || '').startsWith('#/app')) pzShellDatosHoy(); } catch (e) {}
    try {
      const _k = (location.hash || '#/').split('?')[0];
      if (_k !== PZ_VIEW_KEY) {
@@ -17280,6 +17496,12 @@ function pzPrefetchKick() {
   bootSplashOff();
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
+  // (LOTE REDISEÑO R0 · 8/11) La apertura dura 3 s desde que APARECE
+  // (la pintura): el timer se arma aquí, antes de bindApp, para que el
+  // tiempo de bind no alargue la apertura en cargas lentas. El hook de
+  // abajo (pzAperturaArranque) sigue trayendo los datos y tiene el guard
+  // __pzAperturaTimer, así que nunca hay dos timers.
+  try { if (typeof document !== 'undefined' && document.getElementById('pzApertura') && typeof window !== 'undefined' && !window.__pzAperturaTimer) { window.__pzAperturaTimer = true; setTimeout(() => { try { pzAperturaCerrar(); } catch (e) {} }, 3000); } } catch (e) {}
   bindApp(tab);
   // LOTE VELOCIDAD: los fills que render() lanzaba a 60-90 ms (antes de la
   // pintura final) se re-disparan tras pintar: con esqueleto, la primera
@@ -17287,6 +17509,9 @@ function pzPrefetchKick() {
   setTimeout(() => { try { enhanceWeekReport(); } catch (e) {} }, 0);
   setTimeout(() => { try { pzFillRelacion(); } catch (e) {} }, 0);
   setTimeout(() => { try { ttEnhance(); } catch (e) {} }, 0);
+  // (LOTE REDISEÑO R0 · 8/11) Apertura de 3 s al abrir la app: solo si el
+  // overlay existe (una vez por carga; al navegar no vuelve).
+  setTimeout(() => { try { pzAperturaArranque(); } catch (e) {} }, 0);
   // LOTE VELOCIDAD: precarga en idle (una vez por carga).
   try { pzPrefetchKick(); } catch (e) {}
   if (BB_SHELL_ON() && tab === 'ajustes') { try { bbAvisosEnAjustes(); } catch (e) {} }
@@ -22482,7 +22707,20 @@ function pzChatKbSync() {
   try {
     const vv = window.visualViewport;
     const h = vv ? vv.height : window.innerHeight;
-    if (h && h > 0) root.style.height = Math.round(h) + 'px';
+    // (LOTE REDISEÑO R0 · 8/11) El dock de 6 pestañas también está en el
+    // chat: el chat termina SOBRE el dock, no lo tapa. Se resta la altura
+    // REAL del dock medida en el momento (65–99px según el safe-area:
+    // ningún número fijo sirve). Con el teclado abierto el dock queda
+    // detrás del teclado y no se resta nada (viewport visible < ventana).
+    const kbAbierto = !!(vv && window.innerHeight && (window.innerHeight - vv.height) > 100);
+    let dockH = 0;
+    if (!kbAbierto) {
+      try {
+        const dockEl = document.querySelector('.bb-bar') || document.querySelector('.mz-tabs');
+        if (dockEl) dockH = Math.ceil(dockEl.getBoundingClientRect().height) || 0;
+      } catch (e) {}
+    }
+    if (h && h > 0) root.style.height = Math.round(h - dockH) + 'px';
     root.style.top = (vv ? Math.round(vv.offsetTop) : 0) + 'px';
   } catch (e) {}
 }

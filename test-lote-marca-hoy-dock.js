@@ -39,7 +39,7 @@ const sliceFn = (src, from, to) => {
 };
 
 // ---------- 1. Censo (sin cambio) + base v728 (BUILD v729 en el árbol final) ----------
-t(srv.includes("const BUILD_ID = '20261105-v766'"), 'server: BUILD v766 (re-pin ritual-siguiente a v766; antes re-pin v765; antes re-pin v763; antes re-pin v761; re-base marca-hoy sobre v728; v725 transición, v726 ritual, v727 iconos, v728 mas-arriba preservados)');
+t(srv.includes("const BUILD_ID = '20261105-v803'"), 'server: BUILD v794 (re-pin R0)');
 t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -49,8 +49,8 @@ t(cnt(app, 'pz-detalle-setup') === 1, 'censo app: pz-detalle-setup 1');
 t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
 t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
 t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-t(app.includes("const CHUNK_V = '20261105-v764'"), 'CHUNK_V v764 (re-pin ritual-siguiente a v764; el lote no toca chunks, el cambio viene de la base v764)');
-t(md5(css) === 'bac587ad5c5d6ef443ee577d78c16fe4', 'styles.css: md5 (re-pin ritual-siguiente: .hf-carta-destapa; antes v761 .logo-img)');
+t(app.includes("const CHUNK_V = '20261105-v792'"), 'CHUNK_V v792 (re-pin R0)');
+t(md5(css) === '5293bc2a7c2756ae9a37c55f9ee459f7', 'styles.css: md5 (re-pin R0)');
 
 // ---------- 2. VM: homeGridCompose + homeTileHTML ----------
 const TZ = 'America/New_York';
@@ -193,13 +193,13 @@ t(css.includes('.mz-tab-mas-ic{') && css.includes('width:24px;height:24px'), 'cs
 // Dock-5 (v722, en vivo): Inicio, Ads, +, Estrategia, Premios (las dos
 // shells). Ajustes vive en el perfil, no en el dock.
 const mzNav = (app.split('\n').find((l) => l.includes('<nav class="mz-tabs"')) || '');
-t(cnt(mzNav, "t('") === 4 && cnt(mzNav, 'pzDockMasBtn') === 1, 'mzTabsHTML: dock en 5 (4 tabs + Agregar centro)');
-const mzOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin']
-  .map((k) => mzNav.indexOf(k === 'pzDockMasBtn' ? 'pzDockMasBtn' : `t('${k}'`));
-t(mzOrd.every((v) => v !== -1) && mzOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'mzTabsHTML: orden intacto Inicio, Ads, +, Estrategia, Premios');
+t(cnt(mzNav, "t('") === 6 && cnt(mzNav, 'pzDockMasBtn') === 0, 'mzTabsHTML: dock en 6 (sin +)');
+const mzOrd = ['inicio', 'analisis', 'impulsar', 'estrategia', 'jardin', 'chat']
+  .map((k) => mzNav.indexOf(`t('${k}'`));
+t(mzOrd.every((v) => v !== -1) && mzOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'mzTabsHTML: orden Hoy, Análisis, Impulsar, Estrategia, Nivel, Chat (R0)');
 t(!mzNav.includes("t('ajustes'"), 'mzTabsHTML: Ajustes NO está en el dock (vive en el perfil, v722)');
 const bbNav = (app.split('\n').find((l) => l.includes('<nav class="bb-bar"')) || '');
-t(bbNav.includes("tabBtn('inicio'") && bbNav.includes("tabBtn('ads'") && bbNav.includes("pzDockMasBtn('bb')") && bbNav.includes("tabBtn('analisis'") && bbNav.includes("tabBtn('jardin'"), 'bbBar: dock en 5 en la shell nativa (mismo orden)');
+t(bbNav.includes("tabBtn('inicio'") && bbNav.includes("tabBtn('analisis'") && bbNav.includes("tabBtn('impulsar'") && bbNav.includes("tabBtn('estrategia'") && bbNav.includes("tabBtn('jardin'") && bbNav.includes("tabBtn('chat'") && !bbNav.includes("pzDockMasBtn"), 'bbBar: dock en 6 en la shell nativa (mismo orden)');
 // Sin números inventados ni cambios de contenido del feed.
 t(cnt(app, 'hf-hoy-badge') === 1, 'app: literal hf-hoy-badge en 1 punto (la const; los 3 renders usan ${hoyBadge})');
 

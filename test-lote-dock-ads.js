@@ -44,7 +44,7 @@ const sliceFn = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + base v756, re-base v759 ----------
-  t(srv.includes("const BUILD_ID = '20261105-v766'"), 'server: BUILD v766');
+  t(srv.includes("const BUILD_ID = '20261105-v803'"), 'server: BUILD v794 (re-pin R0)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -54,28 +54,29 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-  t(app.includes("const CHUNK_V = '20261105-v764'"), 'CHUNK_V v764');
-  t(md5(css) === '4e450bcdac2b120b0df0c86627b8cc6a', 'styles.css md5 (re-pin R1 8/11 (antes nivel-misiones-racha v792): styles del lote; antes ritual-siguiente: .hf-carta-destapa)');  t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
+  t(app.includes("const CHUNK_V = '20261105-v792'"), 'CHUNK_V v792 (re-pin R0)');
+  t(md5(css) === '5293bc2a7c2756ae9a37c55f9ee459f7', 'styles.css md5 (re-pin R0)');
+  t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
 
-  // ---------- 2. Dock v2: Inicio, Ads, +, Estrategia, Nivel (las dos shells; DOCK-5 6/11: Ajustes sale del dock y vive en el perfil) ----------
-  const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');
-  const bbOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin']
-    .map((k) => bbNav.indexOf(k === 'pzDockMasBtn' ? 'pzDockMasBtn' : `tabBtn('${k}'`));
-  t(bbNav.includes("tabBtn('ads', '#/app/ads', gzT('Impulsar', 'Boost'))"), 'bbShell: tab Impulsar en el dock');
+  // ---------- 2. Dock R0: Hoy, Análisis, Impulsar, Estrategia, Nivel, Chat (las dos shells; el + SALE del dock) ----------
+  const bbNav = (app.split('\n').find((l) => l.includes('<nav class="bb-bar">')) || '');
+  const bbOrd = ['inicio', 'analisis', 'impulsar', 'estrategia', 'jardin', 'chat']
+    .map((k) => bbNav.indexOf(`tabBtn('${k}'`));
+  t(bbNav.includes("tabBtn('impulsar', '#/app/ads', gzT('Impulsar', 'Boost'))"), 'bbShell: tab Impulsar en el dock (ruta #/app/ads sin cambiar)');
   t(bbNav.includes("tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level'))"), 'bbShell: Nivel en el dock');
-  t(cnt(bbNav, 'tabBtn(') === 4 && cnt(bbNav, 'pzDockMasBtn') === 1, 'bbShell: dock en 5 (4 tabs + Agregar centro)');
-  t(bbOrd.every((v) => v !== -1) && bbOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'bbShell: orden Inicio, Ads, +, Estrategia, Nivel');
+  t(cnt(bbNav, 'tabBtn(') === 6 && cnt(bbNav, 'pzDockMasBtn') === 0, 'bbShell: dock en 6 (sin +)');
+  t(bbOrd.every((v) => v !== -1) && bbOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'bbShell: orden Hoy, Análisis, Impulsar, Estrategia, Nivel, Chat');
   t(!bbNav.includes("tabBtn('ajustes'"), 'bbShell: sin tab Ajustes (vive en el perfil)');
   const mzNav = (app.split('\n').find((l) => l.includes('<nav class="mz-tabs"')) || '');
-  const mzOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin']
-    .map((k) => mzNav.indexOf(k === 'pzDockMasBtn' ? 'pzDockMasBtn' : `t('${k}'`));
-  t(mzNav.includes("t('ads', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))"), 'mzTabsHTML: tab Impulsar con megáfono');
+  const mzOrd = ['inicio', 'analisis', 'impulsar', 'estrategia', 'jardin', 'chat']
+    .map((k) => mzNav.indexOf(`t('${k}'`));
+  t(mzNav.includes("t('impulsar', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))"), 'mzTabsHTML: tab Impulsar con megáfono');
   t(mzNav.includes("t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))"), 'mzTabsHTML: Nivel en el dock');
-  t(cnt(mzNav, "t('") === 4 && cnt(mzNav, 'pzDockMasBtn') === 1, 'mzTabsHTML: dock en 5 (4 tabs + Agregar centro)');
-  t(mzOrd.every((v) => v !== -1) && mzOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'mzTabsHTML: orden Inicio, Ads, +, Estrategia, Nivel');
+  t(cnt(mzNav, "t('") === 6 && cnt(mzNav, 'pzDockMasBtn') === 0, 'mzTabsHTML: dock en 6 (sin +)');
+  t(mzOrd.every((v) => v !== -1) && mzOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'mzTabsHTML: orden Hoy, Análisis, Impulsar, Estrategia, Nivel, Chat');
   t(!mzNav.includes("t('ajustes'"), 'mzTabsHTML: sin tab Ajustes (vive en el perfil)');
-  t(app.includes("    ads: '<svg"), 'bbShell: icono megáfono en el mapa ic');
-  t(app.includes("|| tab === 'ads') return tab;"), "mxTabKey: 'ads' resuelve a 'ads' (tab activo)");
+  t(app.includes("    impulsar: '<svg"), 'bbShell: icono megáfono en el mapa ic (clave impulsar)');
+  t(app.includes("if (tab === 'ads') return 'impulsar';"), "mxTabKey: 'ads' resuelve a 'impulsar' (tab activo)");
   t(app.includes("else if (tab === 'ads')") && app.includes('content = await adsView()'), "router: tab 'ads' → adsView()");
   t(cnt(app, '12.400') === 0 && cnt(app, '1.840') === 0, 'app.js: cero números del mock (12.400 / 1.840)');
 

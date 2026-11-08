@@ -45,14 +45,14 @@ const bbNav = app.slice(app.indexOf('<nav class="bb-bar">'), app.indexOf('<nav c
 t('bb-bar: Inicio antes que Estrategia', bbNav.indexOf("tabBtn('inicio'") < bbNav.indexOf("tabBtn('analisis'"));
 t('bb-bar: + entre Estrategia y Nivel', bbNav.indexOf("tabBtn('analisis'") < bbNav.indexOf("pzDockMasBtn('bb')") && bbNav.indexOf("pzDockMasBtn('bb')") < bbNav.indexOf("tabBtn('jardin'"));
 t('bb-bar: Nivel antes que Ajustes', bbNav.indexOf("tabBtn('jardin'") < bbNav.indexOf("tabBtn('ajustes'"));
-t('bb-bar: 4 pestanas intactas', (bbNav.match(/tabBtn\(/g) || []).length === 4);
+t('bb-bar: 6 pestanas (R0, sin +)', (bbNav.match(/tabBtn\(/g) || []).length === 6);
 t('bb-bar: etiqueta Nivel (no Jardin)', bbNav.includes("gzT('Nivel', 'Level')"));
 
 // ---------- 2. orden mz-tabs v573 ----------
 const mzNav = app.slice(app.indexOf('function mzTabsHTML'), app.indexOf('function appShell('));
 t('mz-tabs: + entre Estrategia y Nivel', mzNav.indexOf("t('analisis'") < mzNav.indexOf("pzDockMasBtn('mz')") && mzNav.indexOf("pzDockMasBtn('mz')") < mzNav.indexOf("t('jardin'"));
-t('mz-tabs: 4 pestanas intactas', (mzNav.match(/t\('(inicio|jardin|analisis|ajustes)'/g) || []).length === 4);
-t('mz-tabs: sin dock en pantalla chat', mzNav.includes("if (tab === 'chat') return '';"));
+t('mz-tabs: 6 pestanas (R0, sin +)', (mzNav.match(/t\('(inicio|analisis|impulsar|estrategia|jardin|chat)'/g) || []).length === 6);
+t('mz-tabs: el dock SÍ está en pantalla chat (R0)', !mzNav.includes("if (tab === 'chat') return '';"));
 t('mz-tabs: etiqueta Nivel', mzNav.includes("gzT('Nivel', 'Level')"));
 
 // ---------- 3. boton +: sin ruta, con toggle ----------
@@ -81,8 +81,8 @@ t('hoja EN: What do you want to add?', sheet.includes('What do you want to add?'
 ME.lang = 'es';
 
 // ---------- 5. hoja insertada en ambos docks ----------
-t('hoja: en bb-bar (concatenacion, no texto literal)', bbNav.includes("pzDockMasHTML()") && !bbNav.includes('${pzDockMasHTML()}'));
-t('hoja: en mz-tabs (interpolacion)', mzNav.includes('${pzDockMasHTML()}'));
+t('hoja: YA NO en bb-bar (R0: el + salió del dock)', !bbNav.includes("pzDockMasHTML()"));
+t('hoja: YA NO en mz-tabs (R0: el + salió del dock)', !mzNav.includes('${pzDockMasHTML()}'));
 t('hoja: drawer lateral intacto (sin +)', !app.slice(app.indexOf('drawer-link'), app.indexOf('drawer-link') + 2000).includes('pzDockMas'));
 
 // ---------- 6. toggle / close funcionales ----------
@@ -130,8 +130,8 @@ t('CSS: reduced-motion anula elevacion', css.includes('prefers-reduced-motion') 
 ['pzDockMasBtn', 'pzDockMasHTML', 'pzDockMasToggle', 'pzDockMasClose', 'pzDockMasFoto', 'pzDockMasVideo'].forEach((f) => {
   t('M78: definida ' + f, app.includes('function ' + f));
 });
-t('M78: Btn llamado en ambos docks', cnt(app, "pzDockMasBtn('bb')") >= 1 && cnt(app, "pzDockMasBtn('mz')") >= 1);
-t('M78: HTML llamado en ambos docks', cnt(app, 'pzDockMasHTML()') >= 3); // def + 2 inserciones
+t('M78: Btn YA NO llamado en los docks (R0)', cnt(app, "pzDockMasBtn('bb')") === 0 && cnt(app, "pzDockMasBtn('mz')") === 0);
+t('M78: HTML solo la definición (R0: sin inserciones en los docks)', cnt(app, 'pzDockMasHTML()') === 1); // def, sin inserciones
 t('M78: Toggle llamado por el boton +', btnBb.includes('pzDockMasToggle()'));
 t('M78: Close llamado por backdrop y x', (sheet.match(/pzDockMasClose\(\)/g) || []).length >= 2);
 t('M78: Foto y Video llamados por las filas (CHATBAR-MAS)', sheet.includes('pzDockMasFoto()') && sheet.includes('pzDockMasVideo()'));

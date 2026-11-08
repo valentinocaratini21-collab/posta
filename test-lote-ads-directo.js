@@ -51,9 +51,10 @@ const sliceFn = (src, from, to) => {
 
 // ---------- 0. Censo base v766 (sin cambio) ----------
 console.log('— 0) censo base v766 —');
-check('server: BUILD v773', srv.includes("const BUILD_ID = '20261105-v774'"));
-check('app: CHUNK_V v764', app.includes("const CHUNK_V = '20261105-v764'"));
-check('styles.css md5 (re-pin lote-rediseno-r6 re-base v801 (antes R1 v801): styles del lote; antes v789 subir-foto-directa)', md5(css) === '4e450bcdac2b120b0df0c86627b8cc6a');check('censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
+check('server: BUILD v794', srv.includes("const BUILD_ID = '20261105-v803'"));
+check('app: CHUNK_V v792', app.includes("const CHUNK_V = '20261105-v792'"));
+check('styles.css md5 (re-pin R0)', md5(css) === '5293bc2a7c2756ae9a37c55f9ee459f7');
+check('censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 check('censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
 check('censo server: first_week 3', cnt(srv, 'first_week') === 3);
 check('censo server: /aprobar 17', cnt(srv, '/aprobar') === 17);
@@ -159,7 +160,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v773', ver.status === 200 && ver.json && ver.json.build === '20261105-v774', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v794', ver.status === 200 && ver.json && ver.json.build === '20261105-v803', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 

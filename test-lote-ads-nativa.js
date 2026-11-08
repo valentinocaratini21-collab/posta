@@ -35,7 +35,7 @@ const sliceFn = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + base v718 ----------
-  t(srv.includes("const BUILD_ID = '20261105-v766'"), 'server: BUILD v766');
+  t(srv.includes("const BUILD_ID = '20261105-v803'"), 'server: BUILD v794 (re-pin R0)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -45,8 +45,8 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-  t(app.includes("const CHUNK_V = '20261105-v764'"), 'CHUNK_V v764');
-  t(md5(css) === 'bac587ad5c5d6ef443ee577d78c16fe4', 'styles.css md5 (re-pin ritual-siguiente: .hf-carta-destapa; antes v761 .logo-img)');
+  t(app.includes("const CHUNK_V = '20261105-v792'"), 'CHUNK_V v792 (re-pin R0)');
+  t(md5(css) === '5293bc2a7c2756ae9a37c55f9ee459f7', 'styles.css md5 (re-pin R0)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
 
   // ---------- 2. El router ya no rebot a semana ----------
@@ -77,10 +77,10 @@ const sliceFn = (src, from, to) => {
     'adsAbrirCheckout: en nativa abre en el navegador del sistema');
 
   // ---------- 5. Dock: Ads 2º y marcado activo ----------
-  t(app.includes("|| tab === 'ads') return tab;"), "mxTabKey: 'ads' resuelve a 'ads' (bbShell nativa: tab activo)");
-  t(app.includes("tab === 'ads' ? 'ads'"), "mzTabsHTML: el mapa 'on' incluye ads (dock web: tab activo)");
-  t(app.includes("tabBtn('ads', '#/app/ads', gzT('Impulsar', 'Boost'))"), 'bbShell: tab Impulsar 2º en el dock');
-  t(app.includes("t('ads', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))"), 'mzTabsHTML: tab Impulsar 2º en el dock');
+  t(app.includes("if (tab === 'ads') return 'impulsar';"), "mxTabKey: 'ads' resuelve a 'impulsar' (bbShell nativa: tab activo)");
+  t(app.includes("tab === 'ads' ? 'impulsar'"), "mzTabsHTML: el mapa 'on' incluye impulsar (dock web: tab activo)");
+  t(app.includes("tabBtn('impulsar', '#/app/ads', gzT('Impulsar', 'Boost'))"), 'bbShell: tab Impulsar 3º en el dock');
+  t(app.includes("t('impulsar', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))"), 'mzTabsHTML: tab Impulsar 3º en el dock');
 
   // ---------- 6. VM: adsAbrirCheckout con IS_NATIVE true y false ----------
   const helperSrc = sliceFn(app, 'function adsAbrirCheckout(url) {', 'function bindAdsRecCards');
