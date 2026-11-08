@@ -42,7 +42,7 @@ function extractFn(src, name) {
     document: { getElementById: () => null },
   };
   vm.createContext(sb);
-  for (const n of ['anaBoostRecMotivo', 'anaCargarMotivo', 'anaCargarMsgEl', 'anaCargarDecir']) {
+  for (const n of ['anaBoostRecMotivo', 'anaCargarMotivo', 'anaCargarMsgEl', 'anaCargarDecir', 'anaCargarSinTarjeta', 'anaAgregarTarjetaBtn']) {
     const c = extractFn(chunk, n);
     t(c.length > 0, 'existe ' + n);
     if (c) vm.runInContext(c.replace('function ' + n, 'globalThis.' + n + ' = function'), sb);
@@ -106,7 +106,7 @@ function extractFn(src, name) {
   t(m.anaAdsCargarMsg.scrolled === true, 'anaCargarDecir: lleva el mensaje a la vista (scrollIntoView)');
 
   // ---------- 3. Colocación: el dedicado vive PEGADO al botón ----------
-  for (const n of ['anaBoostRecPartes', 'anaBilleteraHTML', 'anaBilleteraPickerRow', 'anaBilleteraBusqResHTML', 'anaCortarCaption', 'anaAdsDirectoHTML', 'anaBilleteraHistorialHTML', 'anaAdsFeedHTML', 'anaAdsTabHTML']) {
+  for (const n of ['anaBoostRecPartes', 'anaBilleteraHTML', 'anaBilleteraPickerRow', 'anaBilleteraBusqResHTML', 'anaCortarCaption', 'anaAdsDirectoHTML', 'anaBilleteraHistorialHTML', 'anaAdsFeedHTML', 'anaAdsTabHTML', 'anaTarjetaBtnHTML']) {
     const c = extractFn(chunk, n);
     t(c.length > 0, 'existe ' + n);
     if (c) vm.runInContext(c.replace('function ' + n, 'globalThis.' + n + ' = function'), sb);
@@ -125,6 +125,8 @@ function extractFn(src, name) {
   t(hTab.includes('id="anaAdsCargarMsg"'), 'tab Ads: existe #anaAdsCargarMsg');
   t(hTab.indexOf('anaAdsCargarMsg') > hTab.indexOf('anaAdsCargar(this)') && hTab.indexOf('anaAdsCargarMsg') < hTab.indexOf('La primera carga es en USD'), 'tab Ads: el dedicado está pegado al botón Cargar (después del botón, antes de la nota)');
   t(hTab.indexOf('anaAdsCargarMsg') < hTab.indexOf('id="anaBoostRecMsg"'), 'tab Ads: el dedicado está ANTES del compartido (el compartido queda lejos, para Impulsar)');
+  // (LOTE AGREGAR-TARJETA) Sin tarjeta, el tab Ads muestra el botón para agregarla.
+  t(hTab.includes('Agregar tarjeta'), 'tab Ads: botón «Agregar tarjeta» visible sin tarjeta');
   // (RE-BASE v786 sobre v784) La carta ya no monta la billetera: carta
   // v782 quitó los dos <div id="anaBoostRec"> y anaBilleteraHTML() no se
   // renderiza en la carta. El dedicado de la carta no existe; el mensaje

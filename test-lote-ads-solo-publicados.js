@@ -56,10 +56,10 @@ const sliceFn = (src, from, to) => {
 
 // ---------- 0. Censo base v766 (sin cambio) ----------
 console.log('— 0) censo base v766 —');
-check('server: BUILD v773', srv.includes("const BUILD_ID = '20261105-v774'"));
-check('app: CHUNK_V v764', app.includes("const CHUNK_V = '20261105-v764'"));
-check('styles.css md5 v772 (entrada-logo-ig: .lp-webform en styles.css)', md5(css) === '4020c97403bca8e338a7e281d0935b75');
-check('index: /app.js?v=510', idx.includes('/app.js?v=510'));
+check('server: BUILD v789', srv.includes("const BUILD_ID = '20261105-v791'"));
+check('app: CHUNK_V v786', app.includes("const CHUNK_V = '20261105-v791'"));
+check('styles.css md5 v789 (subir-foto-directa: stroke:#fff; antes 4020c974 v772)', md5(css) === 'ac345bb8908b2a430517a8aa05ea9c2d');
+check('index: /app.js?v=527', idx.includes('/app.js?v=527'));
 check('server: 14 rutas /api/ads (8 get + 6 post)', cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14);
 check('server: GET /api/ads/billetera/hoy sigue (no se toca)', srv.includes("app.get('/api/ads/billetera/hoy'"));
 check('server: gate impulsar 409 sin_publicar sigue (respaldo)', srv.includes("motivo: 'sin_publicar'"));
@@ -145,7 +145,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v773', ver.status === 200 && ver.json && ver.json.build === '20261105-v774', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v789', ver.status === 200 && ver.json && ver.json.build === '20261105-v791', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 
@@ -250,8 +250,11 @@ function parteB() {
   const srcFeed = sliceFn(ana, 'function anaAdsFeedHTML()', 'function anaAdsTabHTML()');
   const srcRuta = sliceFn(ana, 'function anaAdsRutaImpulsar(', 'async function anaBilleteraImpulsar(');
   const srcElegir = sliceFn(ana, 'function anaAdsElegirFeed(', 'async function anaBilleteraAutoToggle(');
-  check('B0 funciones extraídas del chunk', srcCortar.length > 50 && srcConstruir.length > 100 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100 && srcHistorial.length > 100 && srcElegir.length > 100,
-    [srcCortar.length, srcConstruir.length, srcDirecto.length, srcFeed.length, srcRuta.length, srcHistorial.length, srcElegir.length].join('/'));
+  // (LOTE AGREGAR-TARJETA) La vista principal llama a anaTarjetaBtnHTML:
+  // el render en VM la necesita cargada o aborta con ReferenceError.
+  const srcTarjeta = sliceFn(ana, 'function anaTarjetaBtnHTML(', 'function anaCargarSinTarjeta(');
+  check('B0 funciones extraídas del chunk', srcCortar.length > 50 && srcConstruir.length > 100 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100 && srcHistorial.length > 100 && srcElegir.length > 100 && srcTarjeta.length > 100,
+    [srcCortar.length, srcConstruir.length, srcDirecto.length, srcFeed.length, srcRuta.length, srcHistorial.length, srcElegir.length, srcTarjeta.length].join('/'));
   if (!(srcCortar.length > 50 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100)) {
     console.log('  (B1–B9 se saltan: falta código nuevo en el chunk)');
     return;
@@ -306,7 +309,7 @@ function parteB() {
 
   // B7: vista principal con el destacado publicado (519, que es el mejor):
   // foto + caption + chip «el que más rindió», SIN «Sale hoy».
-  const preMain = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n'
+  const preMain = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fakeF(feed4, elig3, { post_id: 519 }, hoy521)) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hMain = runVm(preMain, '__out = anaAdsDirectoHTML();');
@@ -316,15 +319,17 @@ function parteB() {
   check('B7d el destacado NO trae «Sale hoy»', !hMain.includes('Sale hoy'));
   check('B7e el destacado trae el chip «✦ el que más rindió» (519 es el mejor)', hMain.includes('✦ el que más rindió'));
   check('B7f el botón Impulsar sigue con monto y 7 días', hMain.includes('Impulsar con $20') && hMain.includes('7 días'));
+  // (LOTE AGREGAR-TARJETA) Sin tarjeta, la vista muestra el botón para agregarla.
+  check('B7h sin tarjeta guardada la vista muestra «Agregar tarjeta»', typeof hMain === 'string' && hMain.includes('Agregar tarjeta'));
   // B7g: destacado NO-mejor (518): sin chip de mejor y sin «Sale hoy».
-  const preMain2 = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n'
+  const preMain2 = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fakeF(feed2, [{ post_id: 518, caption: 'El más reciente', image_path: '/518.jpg' }, { post_id: 519, caption: 'El mejor', image_path: '/519.jpg' }], { post_id: 519 }, hoy521)) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hMain2 = runVm(preMain2, '__out = anaAdsDirectoHTML();');
   check('B7g destacado no-mejor (518): foto 518, sin chip de mejor, sin «Sale hoy»', typeof hMain2 === 'string' && hMain2.includes('/518.jpg') && !hMain2.includes('✦ el que más rindió') && !hMain2.includes('Sale hoy'), String(hMain2 && hMain2.length));
 
   // B8: vista principal sin publicados: estado honesto.
-  const preMainVacio = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n'
+  const preMainVacio = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fakeF([], [], null, hoy521)) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hVacio = runVm(preMainVacio, '__out = anaAdsDirectoHTML();');
@@ -332,7 +337,7 @@ function parteB() {
   check('B8b sin publicados, no aparece la foto del de hoy', typeof hVacio === 'string' && !hVacio.includes('/hoy.jpg'));
 
   // B9: grilla con los 4 publicados (hoy fuera): contador, marcas, sin hoy.
-  const preFeed = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcFeed + '\n'
+  const preFeed = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcFeed + '\n' + srcTarjeta + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fakeF(feed4, elig3, { post_id: 519 }, hoy521)) + ', null, true);\n'
     + 'anaBilleteraDatos.vistaFeed = true;\n';
   const hFeed = runVm(preFeed, '__out = anaAdsFeedHTML();');
@@ -344,14 +349,14 @@ function parteB() {
   check('B9f el posteo con ads lleva su marca (ya_impulsado)', hFeed.includes('/516.jpg') && hFeed.includes('Con ads'));
   check('B9g sin «Sale hoy» en la grilla', !hFeed.includes('Sale hoy'));
   // B9h: grilla vacía: estado honesto.
-  const preFeedVacio = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcFeed + '\n'
+  const preFeedVacio = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcFeed + '\n' + srcTarjeta + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fakeF([], [], null, hoy521)) + ', null, true);\n'
     + 'anaBilleteraDatos.vistaFeed = true;\n';
   const hFeedVacio = runVm(preFeedVacio, '__out = anaAdsFeedHTML();');
   check('B9h grilla vacía: «Todavía no tenés posteos publicados en tu feed.»', typeof hFeedVacio === 'string' && hFeedVacio.includes('Todavía no tenés posteos publicados en tu feed.'), String(hFeedVacio && hFeedVacio.slice(0, 200)));
 
   // B10: elegir el hoy desde la grilla ya no lo convierte en destacado.
-  const preElegir = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcFeed + '\n' + srcElegir + '\n'
+  const preElegir = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcFeed + '\n' + srcElegir + '\n' + srcTarjeta + '\n'
     + 'function anaBilleteraPintar() {}\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fakeF(feed4, elig3, { post_id: 519 }, hoy521)) + ', null, true);\n'
     + 'anaBilleteraDatos.vistaFeed = true;\n'

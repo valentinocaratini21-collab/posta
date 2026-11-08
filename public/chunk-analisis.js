@@ -1509,6 +1509,9 @@ async function anaBilleteraCargar(monto, btn) {
     anaCargarDecir(anaT('Listo, cargaste $' + monto + '. Tu billetera tiene $' + nuevoSaldo + '.', 'Done, you topped up $' + monto + '. Your wallet now has $' + nuevoSaldo + '.'));
   } else {
     anaCargarDecir(anaCargarMotivo((j && j.motivo) || '', monto, j && j.cobroId));
+    // (LOTE AGREGAR-TARJETA) Sin tarjeta, el mensaje lleva al flujo:
+    // el botón queda pegado al mensaje (hermano, no hijo).
+    if (anaCargarSinTarjeta((j && j.motivo) || '')) anaAgregarTarjetaBtn(anaCargarMsgEl());
   }
 }
 
@@ -1588,6 +1591,62 @@ async function anaAdsCargar(btn) {
   await anaBilleteraCargar(Number(d.selMonto) || 20, btn);
 }
 
+// (LOTE AGREGAR-TARJETA) Guardar/cambiar la tarjeta para Ads sin cobrar
+// nada: un toque abre la página alojada por Stripe (Checkout modo
+// setup); al volver a Ads la tarjeta ya está guardada y el siguiente
+// Cargar sale con un toque. Siempre disponible: agregar otra tarjeta
+// la deja como la activa. Sin Stripe.js ni formulario propio en la app.
+function anaTarjetaMsgEl() {
+  try { if (typeof anaCargarMsgEl === 'function') { const m = anaCargarMsgEl(); if (m) return m; } } catch (e) {}
+  return document.getElementById('anaBoostRecMsg');
+}
+async function anaAgregarTarjeta(btn) {
+  if (btn) btn.disabled = true;
+  let j = null;
+  try { j = await api.post('/api/billing/stripe/setup', {}); } catch (e) { j = (e && e.data) || null; }
+  if (j && j.url) { location.href = j.url; return; }
+  if (btn) btn.disabled = false;
+  const m = anaTarjetaMsgEl();
+  if (m) m.textContent = anaT('No se pudo abrir el pago seguro. Probá de nuevo en un momento.', "The secure payment page couldn't be opened. Try again in a moment.");
+}
+// Botón «Agregar tarjeta» / «Cambiar tarjeta» de la billetera: si ya hay
+// una guardada se muestra cuál es (•••• últimos 4) y el botón es para
+// cambiarla; si no hay, es para agregarla. Siempre visible: cambiar de
+// tarjeta no es de una sola vez.
+function anaTarjetaBtnHTML(d) {
+  const t = (d && d.tarjeta) || null;
+  const label = (t && t.tiene)
+    ? anaT('Cambiar tarjeta' + (t.last4 ? ' •••• ' + t.last4 : ''), 'Change card' + (t.last4 ? ' •••• ' + t.last4 : ''))
+    : anaT('Agregar tarjeta', 'Add a card');
+  return `<button type="button" onclick="anaAgregarTarjeta(this)" style="width:100%;padding:11px;border:2px solid #DCEFFF;border-radius:12px;background:#fff;font-size:14px;font-weight:800;color:#2793C8;cursor:pointer;margin-top:10px">${esc(label)}</button>`;
+}
+// Sin tarjeta, el mensaje de Cargar lleva al flujo: el botón queda pegado
+// al mensaje (hermano, no hijo: el texto del mensaje no cambia y lo que
+// lo lee sigue viendo el mismo texto).
+function anaCargarSinTarjeta(motivo) { return motivo === 'sin_cliente_stripe' || motivo === 'sin_tarjeta_guardada'; }
+function anaAgregarTarjetaBtn(m) {
+  if (!m || !m.parentNode) return;
+  const prev = m.parentNode.querySelector('.ana-agregar-tarjeta-btn');
+  if (prev) prev.remove();
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'ana-agregar-tarjeta-btn';
+  b.textContent = anaT('Agregar tarjeta', 'Add a card');
+  b.setAttribute('style', 'margin-top:8px;padding:10px 14px;border:2px solid #DCEFFF;border-radius:12px;background:#fff;font-size:14px;font-weight:800;color:#2793C8;cursor:pointer');
+  b.onclick = function () { anaAgregarTarjeta(b); };
+  m.insertAdjacentElement('afterend', b);
+}
+// Vuelta de Stripe tras guardar la tarjeta (?tarjeta=ok en el hash):
+// se confirma una sola vez y se limpia el parámetro para no repetirla.
+function anaTarjetaRetorno() {
+  let q = null;
+  try { q = new URLSearchParams(((location.hash || '').split('?')[1] || '')); } catch (e) { return; }
+  if (!q || q.get('tarjeta') !== 'ok') return;
+  const m = anaTarjetaMsgEl();
+  if (m) m.textContent = anaT('Tarjeta guardada. Ya podés cargar con un toque.', 'Card saved. You can top up with one tap now.');
+  try { history.replaceState(null, '', location.pathname + '#/app/ads'); } catch (e) {}
+}
+
 // (LOTE DOCK-ADS) Las lecturas de la billetera, compartidas por la carta
 // y por el tab Ads: mejor posteo, billetera y elegibles. Ninguna tira si
 // falla: cada una cae a null y el constructor decide qué mostrar.
@@ -1633,6 +1692,10 @@ function anaBilleteraConstruirDatos(f, prevSel, preferReciente) {
     feed: (f && f.feed && f.feed.ok && Array.isArray(f.feed.posts)) ? f.feed.posts : [],
     auto_topup: (bil && bil.ok && bil.auto_topup) ? 1 : 0,
     tiene_tarjeta: !!(bil && bil.ok && bil.tiene_tarjeta),
+    // (LOTE AGREGAR-TARJETA) Tarjeta activa para Cargar/Impulsar (la
+    // default del cliente, si no la más reciente): marca + últimos 4
+    // para mostrarla en la billetera. null si no hay o no se pudo leer.
+    tarjeta: (bil && bil.ok && bil.tarjeta) || null,
     vistaFeed: false,
     movimientos: (bil && bil.ok && Array.isArray(bil.movimientos)) ? bil.movimientos : [],
     boosts: [],
@@ -1756,6 +1819,7 @@ function anaAdsDirectoHTML() {
     <button type="button" onclick="anaAdsCargar(this)" style="width:100%;padding:12px;border:0;border-radius:12px;background:#2793C8;color:#fff;font-size:15px;font-weight:900;cursor:pointer">↓ ${esc(anaT('Cargar $' + selMonto, 'Top up $' + selMonto))}</button>
     <div class="ana-boostrec-msg" id="anaAdsCargarMsg"></div>
     <p style="margin:8px 0 0;text-align:center;font-size:12px;color:#5A4A6B">${esc(anaT('La primera carga es en USD', 'Your first top-up is in USD'))}</p>
+    ${anaTarjetaBtnHTML(d)}
     <div style="display:flex;align-items:center;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid #E8F1F8">
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:800;color:#0A1E33">${esc(anaT('Carga automática', 'Auto top-up'))}</div>

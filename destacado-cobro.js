@@ -41,6 +41,23 @@ async function resolverTarjetaGuardada(client, customerId) {
   return null;
 }
 
+// (LOTE AGREGAR-TARJETA) Info de la tarjeta activa para mostrarla en la
+// billetera: la default del cliente, si no la más reciente listada
+// (misma regla que el cobro: lo que se muestra es lo que se cobra).
+// Sin tarjeta → { tiene: false }. Si el retrieve de la marca falla,
+// igual se reporta que hay tarjeta (el cobro no depende de la marca).
+async function tarjetaGuardadaInfo(client, customerId) {
+  if (!client || !customerId) return { tiene: false };
+  let pmId = null;
+  try { pmId = await resolverTarjetaGuardada(client, customerId); } catch (e) { return { tiene: false }; }
+  if (!pmId) return { tiene: false };
+  try {
+    const pm = await client.paymentMethods.retrieve(pmId);
+    const card = (pm && pm.card) || {};
+    return { tiene: true, id: pmId, brand: card.brand || '', last4: card.last4 || '' };
+  } catch (e) { return { tiene: true, id: pmId, brand: '', last4: '' }; }
+}
+
 // cobrarImpulso({ client, customerId, montoUSD, posteoId, weekKey, dias })
 //   → { ok: true, cobroId } ó { ok: false, motivo [, detalle] }.
 // Nunca cobra sin tarjeta guardada ni sin confirmación.
@@ -75,7 +92,7 @@ async function cobrarImpulso(input) {
   return { ok: false, motivo: 'cobro_no_confirmado', piStatus: pi.status || null };
 }
 
-module.exports = { MONTOS_USD, validarMontoUSD, resolverTarjetaGuardada, cobrarImpulso, cobrarCargaBilletera };
+module.exports = { MONTOS_USD, validarMontoUSD, resolverTarjetaGuardada, tarjetaGuardadaInfo, cobrarImpulso, cobrarCargaBilletera };
 
 // cobrarCargaBilletera({ client, customerId, montoUSD, ref })
 //   → { ok: true, cobroId } ó { ok: false, motivo [, detalle] }.

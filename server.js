@@ -9254,6 +9254,24 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
         adsPermiso = perm && perm.ok ? !!perm.hasAdsManagement : null;
       }
     } catch (e) { adsPermiso = null; }
+    // (LOTE AGREGAR-TARJETA) Tarjeta activa para Cargar/Impulsar (la
+    // default del cliente, si no la más reciente): marca + últimos 4
+    // para mostrarla en la billetera. Best-effort con carrera de 3 s
+    // (espejo del chequeo de Meta): si Stripe no está o la lectura
+    // falla, tarjeta: null y el endpoint sigue andando. tiene_tarjeta
+    // no cambia de semántica (solo dice que existe un customer).
+    let tarjeta = null;
+    try {
+      const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid);
+      const cid = (u && u.stripe_customer_id) || '';
+      const client = cid && stripeBilling.stripeConfigured() ? stripeBilling.stripeClient() : null;
+      if (client) {
+        tarjeta = await Promise.race([
+          destacadoCobro.tarjetaGuardadaInfo(client, cid),
+          new Promise((r) => setTimeout(() => r(null), 3000)),
+        ]);
+      }
+    } catch (e) { tarjeta = null; }
     res.json({ ok: true, balance_cents: w.balance_cents, currency: w.currency,
       montos_usd: adsBilletera.MONTOS_CARGA_USD, dias: adsBilletera.DIAS_BILLETERA,
       boostHabilitado: destacadoSemana.boostHabilitado(process.env),
@@ -9261,6 +9279,7 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
       // (LOTE ADS-DIRECTO v758) Carga automática + si hay con qué cobrarla.
       auto_topup: adsBilletera.getAutoTopup(db, uid),
       tiene_tarjeta: (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return !!(u && u.stripe_customer_id); } catch (e) { return false; } })(),
+      tarjeta,
       movimientos: movs });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar tu billetera' }); }
 });
@@ -18702,6 +18721,29 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('[stripe] Error creando checkout:', e.message);
     res.status(500).json({ error: 'Could not start the payment: ' + e.message });
+  }
+});
+
+// (LOTE AGREGAR-TARJETA) Guardar una tarjeta para Ads sin cobrar nada:
+// Checkout en modo setup. Un toque desde la billetera (o desde el
+// mensaje de Cargar sin tarjeta) abre la página alojada por Stripe;
+// al volver a Ads la tarjeta ya está guardada y el siguiente Cargar
+// sale con un toque. Siempre disponible (no es de una sola vez): al
+// agregar otra tarjeta, esa pasa a ser la activa (el webhook la deja
+// como default del cliente). Sin Stripe configurado → 400, fail-closed.
+app.post('/api/billing/stripe/setup', requireAuth, async (req, res) => {
+  if (!stripeBilling.stripeConfigured()) {
+    return res.status(400).json({ error: 'Payments are not configured yet.' });
+  }
+  try {
+    const user = db.prepare('SELECT id, email, stripe_customer_id FROM users WHERE id = ?').get(req.session.userId);
+    if (!user) return res.status(400).json({ error: 'Stripe setup is only available for registered accounts.' });
+    const host = req.get('host') || ''; const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
+    const out = await stripeBilling.createSetupSession(db, null, { user, baseUrl });
+    res.json({ url: out.url });
+  } catch (e) {
+    console.error('[stripe] Error creando setup:', e.message);
+    res.status(500).json({ error: 'Could not start adding a card: ' + e.message });
   }
 });
 
@@ -32418,7 +32460,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v790';
+const BUILD_ID = '20261105-v791';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

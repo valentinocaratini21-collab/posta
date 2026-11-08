@@ -53,7 +53,7 @@ const sliceFn = (src, from, to) => {
 console.log('— 0) censo base v766 —');
 check('server: BUILD v773', srv.includes("const BUILD_ID = '20261105-v774'"));
 check('app: CHUNK_V v764', app.includes("const CHUNK_V = '20261105-v764'"));
-check('styles.css md5 v772 (re-pin entrada-logo-ig; antes v768 plan-alinear)', md5(css) === '4020c97403bca8e338a7e281d0935b75');
+check('styles.css md5 v789 (subir-foto-directa: stroke:#fff; antes 4020c974 v772)', md5(css) === 'ac345bb8908b2a430517a8aa05ea9c2d');
 check('censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 check('censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
 check('censo server: first_week 3', cnt(srv, 'first_week') === 3);
@@ -311,13 +311,16 @@ function parteC() {
   };
   const srcCortar = sliceFn(ana, 'function anaCortarCaption(', 'function anaBilleteraPickerRow(');
   const srcConstruir = sliceFn(ana, 'function anaBilleteraConstruirDatos(', 'async function anaBilleteraTabDatos(');
+  // (LOTE AGREGAR-TARJETA) La vista principal llama a anaTarjetaBtnHTML:
+  // el render en VM la necesita cargada o aborta con ReferenceError.
+  const srcTarjeta = sliceFn(ana, 'function anaTarjetaBtnHTML(', 'function anaCargarSinTarjeta(');
   const srcHistorial = sliceFn(ana, 'function anaBilleteraHistorialHTML()', 'function anaBilleteraHistorialPintar()');
   const srcDirecto = sliceFn(ana, 'function anaAdsDirectoHTML()', 'function anaAdsFeedHTML()');
   const srcFeed = sliceFn(ana, 'function anaAdsFeedHTML()', 'function anaAdsTabHTML()');
   const srcRuta = sliceFn(ana, 'function anaAdsRutaImpulsar(', 'async function anaBilleteraImpulsar(');
-  check('C0 funciones extraídas del chunk', srcCortar.length > 50 && srcConstruir.length > 100 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100 && srcHistorial.length > 100,
-    [srcCortar.length, srcConstruir.length, srcDirecto.length, srcFeed.length, srcRuta.length, srcHistorial.length].join('/'));
-  if (!(srcCortar.length > 50 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100)) {
+  check('C0 funciones extraídas del chunk', srcCortar.length > 50 && srcConstruir.length > 100 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100 && srcHistorial.length > 100 && srcTarjeta.length > 100,
+    [srcCortar.length, srcConstruir.length, srcDirecto.length, srcFeed.length, srcRuta.length, srcHistorial.length, srcTarjeta.length].join('/'));
+  if (!(srcCortar.length > 50 && srcDirecto.length > 500 && srcFeed.length > 300 && srcRuta.length > 100 && srcTarjeta.length > 100)) {
     console.log('  (C1–C5 se saltan: falta código nuevo en el chunk)');
     return;
   }
@@ -359,7 +362,7 @@ function parteC() {
     f.bil.boostHabilitado = false;
     return f;
   };
-  const preMain = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n'
+  const preMain = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(datosMain(true)) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hMain = runVm(preMain, '__out = anaAdsDirectoHTML();');
@@ -375,11 +378,20 @@ function parteC() {
   check('C3j sin buscador en la vista principal (la grilla lo reemplaza)', !hMain.includes('anaBilleteraBuscar') && !hMain.includes('anaBoostRecBusq') && !hMain.includes('type="search"'));
   check('C3k sin «?» de placeholder en la vista principal', !hMain.includes('>?</') && !hMain.includes('> ? <'));
   check('C3l el micro honesto «Posty elige el público y lo gestiona»', hMain.includes('Posty elige el público y lo gestiona'));
-  const preMainOff = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n'
+  const preMainOff = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
     + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(datosMain(false)) + ', null, true);\n'
     + 'anaBilleteraDatos.boosts = [];\n';
   const hMainOff = runVm(preMainOff, '__out = anaAdsDirectoHTML();');
   check('C3m con automática apagada el toggle se ve apagado', typeof hMainOff === 'string' && hMainOff.includes('data-auto="off"'));
+  // (LOTE AGREGAR-TARJETA) Sin tarjeta, la billetera muestra el botón para
+  // agregarla; con tarjeta guardada, dice cuál es y es para cambiarla.
+  check('C3n sin tarjeta guardada la billetera muestra «Agregar tarjeta»', typeof hMainOff === 'string' && hMainOff.includes('Agregar tarjeta'));
+  const fTarj = datosMain(false); fTarj.bil.tarjeta = { tiene: true, brand: 'visa', last4: '4242' };
+  const preTarj = srcCortar + '\n' + srcConstruir + '\n' + srcHistorial + '\n' + srcDirecto + '\n' + srcTarjeta + '\n'
+    + 'let anaBilleteraDatos = anaBilleteraConstruirDatos(' + JSON.stringify(fTarj) + ', null, true);\n'
+    + 'anaBilleteraDatos.boosts = [];\n';
+  const hTarj = runVm(preTarj, '__out = anaAdsDirectoHTML();');
+  check('C3n2 con tarjeta guardada el botón dice «Cambiar tarjeta •••• 4242»', typeof hTarj === 'string' && hTarj.includes('Cambiar tarjeta') && hTarj.includes('4242'));
 
   // C4: grilla del feed con TODOS los posteos, sin repetir, con marca.
   const feed13 = [];

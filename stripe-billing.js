@@ -134,6 +134,14 @@ function buildCheckoutParams({ priceId, plan, user, baseUrl, trialEndSec }) {
     // vive la bienvenida post-pago de app.js. El abandono vuelve a Ajustes.
     success_url: `${baseUrl}/#/app/schedule?plan=ok`,
     cancel_url: `${baseUrl}/#/app/ajustes?plan=error`,
+    // (LOTE AGREGAR-TARJETA) La tarjeta de la suscripción queda guardada
+    // como la de pago por defecto: así sirve para Ads (Cargar/Impulsar
+    // off-session) sin agregarla de nuevo. En modo subscription Stripe
+    // ya guarda la tarjeta en el cliente; este parámetro lo deja
+    // explícito como default de la suscripción. El webhook además la fija
+    // como default del cliente (ver processEvent), que es lo que lee el
+    // cobro de la billetera.
+    payment_settings: { save_default_payment_method: 'on_subscription' },
   };
   if (user.stripe_customer_id) params.customer = user.stripe_customer_id;
   else if (user.email) params.customer_email = user.email;
@@ -199,6 +207,50 @@ async function createCheckout(db, client, { user, plan, baseUrl, trialEndSec, pr
   return { url: session.url, session_id: session.id };
 }
 
+// ---------- Agregar tarjeta (LOTE AGREGAR-TARJETA) ----------
+// Checkout en modo setup: guarda la tarjeta sin cobrar nada. La sesión
+// se crea con el customer (getOrCreateCustomer lo guarda en la BD), y
+// el webhook la deja como la de pago por defecto del cliente — la que
+// usa Cargar/Impulsar off-session. Solo tarjetas: el cobro de la
+// billetera solo cobra tarjetas (type: 'card'). En modo setup Stripe
+// exige currency con los métodos de pago dinámicos.
+// Pura y testeable: no llama a Stripe.
+function buildSetupParams({ user, baseUrl }) {
+  const customerId = (user && user.stripe_customer_id) || '';
+  return {
+    mode: 'setup',
+    customer: customerId,
+    currency: 'usd',
+    payment_method_types: ['card'],
+    client_reference_id: String(user.id),
+    metadata: { user_id: String(user.id), flujo: 'agregar_tarjeta' },
+    success_url: `${baseUrl}/#/app/ads?tarjeta=ok`,
+    cancel_url: `${baseUrl}/#/app/ads?tarjeta=cancel`,
+  };
+}
+async function createSetupSession(db, client, { user, baseUrl }) {
+  client = client || stripeClient();
+  if (!client) throw new Error('Stripe no configurado');
+  const customerId = await getOrCreateCustomer(db, client, user);
+  const params = buildSetupParams({ user: { ...user, stripe_customer_id: customerId }, baseUrl });
+  const session = await client.checkout.sessions.create(params);
+  return { url: session.url, session_id: session.id };
+}
+// Deja la tarjeta como la de pago por defecto del cliente (la que lee
+// el cobro de la billetera). Idempotente: fijar la misma dos veces no
+// cambia nada. Nunca tira: un fallo se loguea y se devuelve false para
+// no entrar en reintentos de Stripe.
+async function fijarTarjetaPorDefecto(client, customerId, pmId) {
+  if (!client || !customerId || !pmId) return false;
+  try {
+    await client.customers.update(String(customerId), { invoice_settings: { default_payment_method: String(pmId) } });
+    return true;
+  } catch (e) {
+    console.error('[stripe] fijarTarjetaPorDefecto:', e.message);
+    return false;
+  }
+}
+
 // ---------- Billing Portal (gestionar / cancelar) ----------
 async function createPortalSession(client, { customerId, returnUrl }) {
   client = client || stripeClient();
@@ -256,6 +308,29 @@ async function processEvent(db, client, event, hooks = {}) {
   const obj = (event.data && event.data.object) || {};
   switch (event.type) {
     case 'checkout.session.completed': {
+      // (LOTE AGREGAR-TARJETA) Modo setup: guardar la tarjeta sin cobrar.
+      // El webhook es la fuente de verdad (no el redirect, que se puede
+      // saltear): guarda el customer y deja la tarjeta nueva como la de
+      // pago por defecto del cliente — la que usa Cargar/Impulsar
+      // off-session. Otros modos que no son subscription ni setup se
+      // ignoran (se registran abajo como procesados, sin aplicar nada).
+      // Nada de esto tira: un fallo al fijar la default se loguea y el
+      // evento se registra igual (la tarjeta ya quedó attachada al
+      // cliente y el cobro la encuentra por listado más-reciente-primero).
+      if (obj.mode === 'setup') {
+        const setupUserId = Number((obj.metadata && obj.metadata.user_id) || obj.client_reference_id) || null;
+        if (setupUserId && obj.customer) {
+          try { db.prepare('UPDATE users SET stripe_customer_id=? WHERE id=?').run(String(obj.customer), setupUserId); } catch (e) {}
+        }
+        if (obj.customer && obj.setup_intent && client && client.setupIntents) {
+          try {
+            const si = await client.setupIntents.retrieve(String(obj.setup_intent));
+            const pmId = si && si.payment_method;
+            if (pmId) await fijarTarjetaPorDefecto(client, String(obj.customer), String(pmId));
+          } catch (e) { console.error('[stripe] setup: no se pudo fijar la tarjeta por defecto:', e.message); }
+        }
+        break;
+      }
       if (obj.mode && obj.mode !== 'subscription') break;
       const userId = Number((obj.metadata && obj.metadata.user_id) || obj.client_reference_id) || null;
       const planId = (obj.metadata && obj.metadata.plan_id) || null;
@@ -265,6 +340,13 @@ async function processEvent(db, client, event, hooks = {}) {
       if (obj.subscription && client && client.subscriptions) {
         const sub = await client.subscriptions.retrieve(String(obj.subscription));
         applySubscription(db, sub, hooks, { userIdHint: userId, planHint: planId });
+        // (LOTE AGREGAR-TARJETA) La tarjeta de la suscripción queda como
+        // la de pago por defecto del cliente: así sirve para Ads (Cargar/
+        // Impulsar off-session) sin agregarla de nuevo. El webhook es la
+        // fuente de verdad (el redirect se puede saltear).
+        const subPm = sub && sub.default_payment_method;
+        const subPmId = typeof subPm === 'string' ? subPm : (subPm && subPm.id);
+        if (subPmId && sub.customer) await fijarTarjetaPorDefecto(client, String(sub.customer), String(subPmId));
       } else if (userId && planId && PLANS_US[planId]) {
         db.prepare(`UPDATE users SET plan=?, plan_status='active', stripe_subscription_id=? WHERE id=?`)
           .run(planId, String(obj.subscription || ''), userId);
@@ -313,6 +395,7 @@ module.exports = {
   stripeConfigured, webhookConfigured, stripeClient, _setClient,
   constructEvent, ensureCatalog, ensureFounderPrice, founderLookupKeyFor, _clearPriceCache, getOrCreateCustomer,
   buildCheckoutParams, createCheckout, createPortalSession,
+  buildSetupParams, createSetupSession, fijarTarjetaPorDefecto,
   processEvent, applySubscription,
   lookupKeyFor, planIdFromLookupKey, planIdFromSubscription,
 };
