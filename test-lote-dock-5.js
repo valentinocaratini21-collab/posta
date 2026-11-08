@@ -46,7 +46,7 @@ const orderOk = (s, keys) => {
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v723'"), 'CHUNK_V v723 (ajustes-simple; sin cambio en este lote)');
   t(md5(css) === '1ab1e38c5985f589df399bca8fea4c53', 'styles.css md5 (re-pin iconos-linea-info v727: íconos en la línea de info)');
-  t(md5(app) === '64db90ed9e7c60d131a272a3752563bb', 'app.js md5 (re-pin carta-sin-estrategia-ni-ads v782: CHUNK_V v778→v782; antes v780 sacar-lápiz-perfil)');
+  t(md5(app) === 'f9dc722a36586226d2c8d0ca9817cb9e', 'app.js md5 (re-pin carta-sin-estrategia-ni-ads v782: CHUNK_V v778→v782; antes v780 sacar-lápiz-perfil)');
 
   // ---------- 2. Dock de 5 en las dos shells ----------
   const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');

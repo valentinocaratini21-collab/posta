@@ -2231,24 +2231,15 @@ const PZ_OFICINA_MAESTRO = '<g><rect x="0" y="100" width="10" height="220" fill=
 function pzOficinaPorNivel(n) { for (let i = 0; i < PZ_OFICINA.length; i++) if (PZ_OFICINA[i].nv === n) return PZ_OFICINA[i]; return null; }
 function pzOficinaNombre(nivel, en) { const e = pzOficinaPorNivel(Math.max(1, Math.min(50, Number(nivel) || 1))); return e ? (en ? e.en : e.es) : ''; }
 function pzOficinaDesbloqueados(nivel) { const nv = Math.max(0, Math.min(50, Number(nivel) || 0)); return PZ_OFICINA.filter((e) => e.nv <= nv); }
-function pzOficinaEscenaHTML(nivel, semillas) {
+function pzOficinaEscenaHTML(nivel) {
   const nv = Math.max(0, Math.min(50, Number(nivel) || 0));
   const items = pzOficinaDesbloqueados(nv).slice().sort((a, b) => (a.z - b.z) || (a.nv - b.nv));
   let capas = '';
   for (const e of items) { if (e.full) capas += e.svg; else capas += '<g transform="translate(' + e.x + ' ' + e.y + ') scale(' + (e.w / 100) + ' ' + (e.h / 100) + ')">' + e.svg + '</g>'; }
   const base = '<rect x="0" y="0" width="400" height="200" fill="#FDF3DC"/><rect x="0" y="196" width="400" height="4" fill="#fff" opacity=".6"/><rect x="0" y="200" width="400" height="120" fill="#D9A066"/><path d="M0 230h400M0 260h400M0 290h400" stroke="#B97A3E" stroke-width="1" opacity=".5"/>';
   const maestro = (nv >= 50) ? PZ_OFICINA_MAESTRO : '';
-  return '<div class="pz-oficina-escena"><svg viewBox="0 0 400 320" role="img" aria-label="office">' + base + capas + maestro + '</svg>' + pzOficinaSemillasHTML(semillas) + '</div>';
+  return '<div class="pz-oficina-escena"><svg viewBox="0 0 400 320" role="img" aria-label="office">' + base + capas + maestro + '</svg></div>';
 }
-function pzOficinaSemillasClave() { try { const uid = (typeof ME !== 'undefined' && ME && ME.id) ? String(ME.id) : ''; return 'posta-oficina-semillas' + (uid ? '_' + uid : ''); } catch (err) { return 'posta-oficina-semillas'; } }
-function pzOficinaSemillasGet() { try { if (typeof localStorage === 'undefined') return 0; const v = Number(localStorage.getItem(pzOficinaSemillasClave())); return (isFinite(v) && v > 0) ? Math.floor(v) : 0; } catch (err) { return 0; } }
-// PENDIENTE EXPLÍCITO (decisión de Valentino): pzOficinaSemillaDar existe
-// y persiste, pero NO se llama desde ningún flujo: qué da una semilla
-// (propuesta: una por semana completa) todavía no está decidido y NO hay
-// otorgamiento automático conectado.
-function pzOficinaSemillaDar() { try { const n = pzOficinaSemillasGet() + 1; if (typeof localStorage !== 'undefined') localStorage.setItem(pzOficinaSemillasClave(), String(n)); return n; } catch (err) { return pzOficinaSemillasGet(); } }
-function pzOficinaBroteSVG(i) { const s = [0.85, 1, 1.15][i % 3]; return '<svg class="pz-oficina-brote" style="height:' + Math.round(22 * s) + 'px" viewBox="0 0 22 22" aria-hidden="true"><path d="M11 20Q11 10 11 4" stroke="#DBA453" stroke-width="2"/><path d="M11 12Q4 12 2 5Q9 5 11 12Z" fill="#FEC14D"/><path d="M11 10Q18 10 20 3Q13 3 11 10Z" fill="#DBA453"/></svg>'; }
-function pzOficinaSemillasHTML(n) { const c = Math.max(0, Math.min(999, Number(n) || 0)); if (!c) return ''; let s = ''; for (let i = 0; i < c; i++) s += pzOficinaBroteSVG(i); return '<div class="pz-oficina-semillas">' + s + '</div>'; }
 function pzOficinaListaHTML(nivel) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const nv = Math.max(0, Math.min(50, Number(nivel) || 0));
@@ -2263,19 +2254,18 @@ function pzOficinaListaHTML(nivel) {
 function pzOficinaSeccionHTML(nivel) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const nv = Math.max(0, Math.min(50, Number(nivel) || 0));
-  const semillas = pzOficinaSemillasGet();
   const of = pzOficinaPorNivel(nv);
   const rp = (typeof pzRopaPorNivel === 'function') ? pzRopaPorNivel(nv) : null;
   const nomOf = of ? (en ? of.en : of.es) : '';
   const nomRp = rp ? (en ? rp.en : rp.es) : '';
   let nuevo = '';
-  if (nv >= 50) { nuevo = '<p class="pz-oficina-nuevo">' + esc(en ? 'Master office: 50 office items + 50 garments.' : 'Oficina Maestro: 50 cosas + 50 prendas.') + (semillas ? ' ' + esc(en ? ('Master seeds: ' + semillas) : ('Semillas de Maestro: ' + semillas)) : '') + '</p>'; }
+  if (nv >= 50) { nuevo = '<p class="pz-oficina-nuevo">' + esc(en ? 'Master office: 50 office items + 50 garments.' : 'Oficina Maestro: 50 cosas + 50 prendas.') + '</p>'; }
   else if (nv >= 1 && (nomOf || nomRp)) { nuevo = '<p class="pz-oficina-nuevo">' + esc(en ? 'This level: ' : 'En este nivel: ') + esc(nomOf) + (nomRp ? ' + ' + esc(nomRp) : '') + '</p>'; }
-  return '<section class="pz-oficina"><h2>' + esc(en ? 'Your office' : 'Tu oficina') + '</h2>' + nuevo + pzOficinaEscenaHTML(nv, semillas) + '<div class="pz-oficina-lista">' + pzOficinaListaHTML(nv) + '</div></section>';
+  return '<section class="pz-oficina"><h2>' + esc(en ? 'Your office' : 'Tu oficina') + '</h2>' + nuevo + pzOficinaEscenaHTML(nv) + '<div class="pz-oficina-lista">' + pzOficinaListaHTML(nv) + '</div></section>';
 }
 // FIN LOTE OFICINA ×50
 
-function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML, miSemilla) {
+function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML) {
   const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">${pzIc('arrowLeft', 16)} ${gzT('Volver', 'Back')}</button>`;
   if (tipo === 'posty') {
     const nvNum = mxNvNum(nvP);
@@ -2284,7 +2274,7 @@ function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML, miSemilla) {
     const sig = (nvP && nvP.nombre_siguiente) ? esc(nvP.nombre_siguiente) : '';
     const barra = pct === null ? '' : `<div class="pz-ropa-barra-wrap"><div class="pz-ropa-barra"><i style="width:${pct}%"></i></div><p class="pz-ropa-barra-txt">${nvNum >= 50 ? gzT('Nivel máximo', 'Max level') : (gzT('Próximo: Nv ', 'Next: Lv ') + (nvNum + 1) + (sig ? ' · ' + sig : ''))}</p></div>`;
     const msg = gzT('cuanto más subís de nivel, mejores posteos y más conozco lo que buscás', 'the higher your level, the better your posts and the more I know what you are looking for');
-    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head"><h1>${gzT('Premios', 'Prizes')}</h1></header><div class="mx-bloque"><div class="pz-ropa-panel"><div class="pz-ropa-avatar" id="pzRopaAvatar">${pzRopaAvatarHTML()}</div><h2 class="pz-ropa-nivel">${gzT('Nv', 'Lv')} ${nvNum}${(nvP && nvP.nombre_nivel) ? ' · ' + esc(nvP.nombre_nivel) : ''}</h2>${barra}<p class="pz-ropa-msg">${msg}</p><div class="pz-ropa-lista" id="pzRopaLista" data-nivel="${nvNum}">${pzRopaListaHTML(nvNum)}</div>${pzOficinaSeccionHTML(nvNum)}${mxSemillaCanjeHTML(miSemilla)}</div></div></div>`;
+    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head"><h1>${gzT('Premios', 'Prizes')}</h1></header><div class="mx-bloque"><div class="pz-ropa-panel"><div class="pz-ropa-avatar" id="pzRopaAvatar">${pzRopaAvatarHTML()}</div><h2 class="pz-ropa-nivel">${gzT('Nv', 'Lv')} ${nvNum}${(nvP && nvP.nombre_nivel) ? ' · ' + esc(nvP.nombre_nivel) : ''}</h2>${barra}<p class="pz-ropa-msg">${msg}</p><div class="pz-ropa-lista" id="pzRopaLista" data-nivel="${nvNum}">${pzRopaListaHTML(nvNum)}</div>${pzOficinaSeccionHTML(nvNum)}</div></div></div>`;
   }
   return mxJardinErrorHTML(); // POSTY SOLO: sin jardín Gesty
 }
@@ -2302,8 +2292,6 @@ async function mxJardinPost50() {
 async function bbJardinPostyContent() {
   const nvP = await mxNivel('posty');
   if (!nvP) return mxJardinErrorHTML();
-  let miSemilla = null;
-  try { const r = await api.get('/api/oficina/jardin-semilla-mia'); miSemilla = (r && r.miSemilla) || null; } catch (e) {}
   // (PREMIOS-NOTIF) Foto de premios no vistos ANTES de pintar: las marcas
   // ¡Nuevo! de esta visita salen de acá, no del nivel actual (que marcaría
   // siempre el último nivel aunque ya se haya visto).
@@ -2312,7 +2300,7 @@ async function bbJardinPostyContent() {
     PZ_PREMIOS_NUEVOS_MARCA = (r && r.ok && Array.isArray(r.niveles)) ? r.niveles : [];
     PZ_PREMIOS_NUEVOS = PZ_PREMIOS_NUEVOS_MARCA.slice();
   } catch (e) { PZ_PREMIOS_NUEVOS_MARCA = []; }
-  return mxJardinHTML('posty', nvP, null, null, null, null, miSemilla);
+  return mxJardinHTML('posty', nvP, null, null, null, null);
 }
 async function bbJardinGestyContent() {
   const nvG = await mxNivel('gesty');
@@ -21544,17 +21532,6 @@ function mxJardinPost50HTML(post50) {
     if (pv && pv.anios > 0) html += `<p>✦ ${pv.anios} ${gzT(pv.anios === 1 ? 'año con Posty: una flor especial en tu jardín' : 'años con Posty: una flor especial en tu jardín', pv.anios === 1 ? 'year with Posty: a special flower in your garden' : 'years with Posty: a special flower in your garden')}</p>`;
     else html += `<p>${gzT('Tu primera flor especial llega cuando cumplas un año con Posty.', 'Your first special flower arrives when you complete a year with Posty.')}</p>`;
     html += `</div>`;
-    const sems = Array.isArray(post50.semillas) ? post50.semillas : [];
-    html += `<div class="pz-post50-semillas"><h4>${gzT('Semillas de Maestro', 'Master seeds')}</h4><p>${gzT('Un Maestro del jardín puede regalar una semilla de su jardín a un negocio nuevo. Ese jardín arranca de tu jardín.', 'A garden Master can gift a seed of their garden to a new business. That garden starts from yours.')}</p>`;
-    if (sems.length) {
-      html += `<p>${gzT('Semillas regaladas: ', 'Seeds gifted: ')}${sems.length}</p>`;
-      for (const s of sems) {
-        const cod = s.codigo ? esc(s.codigo) : '';
-        const est = s.canjeada ? `${gzT('canjeada por ', 'redeemed by ')}${esc(s.canje_negocio || gzT('un negocio', 'a business'))}` : gzT('sin canjear', 'not redeemed yet');
-        html += `<p class="pz-post50-semilla">🌱 ${cod ? cod + ' · ' : ''}${est}</p>`;
-      }
-    }
-    html += `<button type="button" class="pz-post50-btn" onclick="pzSemillaRegalar()">${gzT('Regalar una semilla', 'Gift a seed')}</button></div>`;
     html += `</section>`;
   }
   if (Array.isArray(post50.historia) && post50.historia.length) {
@@ -21563,7 +21540,7 @@ function mxJardinPost50HTML(post50) {
     for (const m of meses) {
       const partes = String(m.mes).split('-');
       const nombreMes = pzMesNombre(Number(partes[1])) + ' ' + partes[0];
-      html += `<div class="pz-post50-mes"><b>${esc(nombreMes)}</b> — ${m.semanas_publicadas} ${gzT('semanas publicadas', 'published weeks')}${m.regalos ? ' · ' + m.regalos + ' ' + gzT('semillas regaladas', 'seeds gifted') : ''}`;
+      html += `<div class="pz-post50-mes"><b>${esc(nombreMes)}</b> — ${m.semanas_publicadas} ${gzT('semanas publicadas', 'published weeks')}`;
       for (const s of (m.subidas || [])) {
         PZ_MOMENTO_REPLAY[s.nivel] = { premio: s.premio || '', desbloqueo: s.desbloqueo || '' };
         html += `<div class="pz-post50-subida">${pzIc('arrowUp', 14)} ${gzT('Nivel ', 'Level ')}${s.nivel}${s.premio ? ' — ' + esc(s.premio) : ''}${(s.desbloqueo && s.desbloqueo !== s.premio) ? ' · ' + esc(s.desbloqueo) : ''} <button type="button" class="pz-post50-replay" onclick="pzMomentoReplayShow(${s.nivel})">${gzT('Volver a ver la magia', 'See the magic again')}</button></div>`;
@@ -21573,53 +21550,6 @@ function mxJardinPost50HTML(post50) {
     html += `</section>`;
   }
   return html;
-}
-// LOTE 4 — Regalar una semilla de Maestro: registra el regalo real y
-// abre el share nativo (o copia el texto si no hay share). La redención
-// por un negocio nuevo es follow-up aparte, no viaja acá.
-async function pzSemillaRegalar() {
-  let r = null;
-  try { r = await api.post('/api/oficina/jardin-semilla-regalo', {}); } catch (e) { r = null; }
-  if (!r || !r.ok) { bbToast(gzT('No se pudo regalar la semilla. Probá de nuevo.', 'Could not gift the seed. Try again.')); return; }
-  const cod = (r && r.codigo) ? String(r.codigo) : '';
-  const texto = cod
-    ? gzT('Te regalo una semilla de mi jardín 🌱 — Posty. Canjeala con el código: ' + cod, 'I gift you a seed from my garden 🌱 — Posty. Redeem it with code: ' + cod)
-    : gzT('Te regalo una semilla de mi jardín 🌱 — Posty', 'I gift you a seed from my garden 🌱 — Posty');
-  try {
-    if (navigator.share) await navigator.share({ text: texto });
-    else if (navigator.clipboard) { await navigator.clipboard.writeText(texto); bbToast(gzT('Texto copiado ✓', 'Text copied ✓')); }
-  } catch (e) {}
-  bbToast(gzT('Semilla regalada', 'Seed gifted'));
-  try { render(); } catch (e) {}
-}
-// LOTE SEMILLAS — Canjear una semilla / procedencia del jardín.
-// La caja vive en el jardín (no en onboarding: el onboarding aprobado
-// es de un clic con 5 preguntas exactas y no crece). El servidor es la
-// única fuente de verdad: sin canje no hay procedencia pintada.
-function mxSemillaCanjeHTML(miSemilla) {
-  if (miSemilla) {
-    const neg = miSemilla.giver_negocio ? esc(String(miSemilla.giver_negocio)) : gzT('un Maestro del jardín', 'a garden Master');
-    return `<section class="pz-semilla"><h3>${gzT('Tu semilla', 'Your seed')}</h3><p>🌱 ${gzT('Tu jardín nació de la semilla de ', 'Your garden grew from the seed of ')}${neg}.</p></section>`;
-  }
-  return `<section class="pz-semilla"><h3>${gzT('¿Tenés una semilla de Maestro?', 'Have a Master seed?')}</h3><p>${gzT('Si un Maestro te regaló una semilla, canjeala acá y tu jardín arranca del suyo.', 'If a Master gifted you a seed, redeem it here and your garden starts from theirs.')}</p><div class="pz-semilla-row"><input type="text" id="pzSemillaCod" inputmode="text" autocomplete="off" placeholder="POSTY-ABCD-EFGH"><button type="button" class="pz-post50-btn" onclick="pzSemillaCanjear()">${gzT('Canjear', 'Redeem')}</button></div></section>`;
-}
-async function pzSemillaCanjear() {
-  const el = document.getElementById('pzSemillaCod');
-  const codigo = el ? el.value.trim() : '';
-  if (!codigo) { bbToast(gzT('Escribí el código de la semilla.', 'Enter the seed code.')); return; }
-  let r = null;
-  try { r = await api.post('/api/oficina/jardin-semilla-canjear', { codigo }); } catch (e) { r = null; }
-  if (!r || !r.ok) {
-    const err = (r && r.error) || '';
-    const msg = err === 'semilla_no_existe' ? gzT('Ese código no existe. Revisalo y probá de nuevo.', 'That code does not exist. Check it and try again.')
-      : err === 'semilla_ya_canjeada' ? gzT('Esa semilla ya fue canjeada.', 'That seed was already redeemed.')
-      : err === 'semilla_propia' ? gzT('No podés canjear tu propia semilla.', 'You cannot redeem your own seed.')
-      : err === 'semilla_ya_tiene' ? gzT('Tu jardín ya nació de una semilla.', 'Your garden already grew from a seed.')
-      : gzT('No se pudo canjear. Probá de nuevo.', 'Could not redeem. Try again.');
-    bbToast(msg); return;
-  }
-  bbToast(gzT('¡Semilla canjeada! Tu jardín arranca de ese jardín 🌱', 'Seed redeemed! Your garden grows from that garden 🌱'));
-  try { render(); } catch (e) {}
 }
 // Informe mensual real (2026-10-26, ítem 5): solo números reales del mes.
 // La tarjeta solo existe si el mes tiene al menos un hecho real; en navegación

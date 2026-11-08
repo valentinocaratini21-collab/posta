@@ -148,7 +148,7 @@ const srv = read('server.js');
 const idx = read('public/index.html');
 const enIdx = read('public/en/index.html');
 const pjSrc = read('postjardin.js');
-for (const fn of ['pzMomentoAvanceShow', 'pzMomentoSonido', 'pzMomentoVibrar', 'pzCelebTarjetaShow', 'pzMomentoReplayShow', 'mxJardinPost50HTML', 'pzSemillaRegalar', 'mxJardinPost50', 'pzMesNombre']) {
+for (const fn of ['pzMomentoAvanceShow', 'pzMomentoSonido', 'pzMomentoVibrar', 'pzCelebTarjetaShow', 'pzMomentoReplayShow', 'mxJardinPost50HTML', 'mxJardinPost50', 'pzMesNombre']) {
   // Con paréntesis: 'mxJardinPost50' es prefijo de 'mxJardinPost50HTML'.
   check('definida 1 vez: ' + fn, count(app, 'function ' + fn + '(') === 1, count(app, 'function ' + fn + '('));
 }
@@ -159,7 +159,7 @@ check('momento con antes/después', app.indexOf('pz-momento-antes') >= 0 && app.
 check('momento con sonido WebAudio + vibrar', app.indexOf('AudioContext') >= 0 && app.indexOf('navigator.vibrate') >= 0);
 check('compartir momento vía tarjeta existente', app.indexOf('pzCelebTarjetaShow') >= 0 && app.indexOf('data-pz-celeb-share') >= 0);
 check('replay desde historia (onclick por nivel)', app.indexOf('pzMomentoReplayShow(${s.nivel})') >= 0);
-check('semilla: botón + POST', app.indexOf('pzSemillaRegalar()') >= 0 && app.indexOf("'/api/oficina/jardin-semilla-regalo'") >= 0);
+check('semilla: sin botón ni POST en cliente (fuera de Premios 7/11)', app.indexOf('pzSemillaRegalar()') < 0 && app.indexOf("'/api/oficina/jardin-semilla-regalo'") < 0);
 check('jardín pide post50', app.indexOf("'/api/oficina/jardin-post50'") >= 0 && app.indexOf('mxJardinPost50HTML(post50)') >= 0);
 check('CSS momento + magia', css.indexOf('.pz-momento') >= 0 && css.indexOf('.pz-momento-magia') >= 0 && css.indexOf('.pz-momento-premio.brilla') >= 0);
 check('CSS post50 + historia', css.indexOf('.pz-post50') >= 0 && css.indexOf('.pz-post50-hist') >= 0);

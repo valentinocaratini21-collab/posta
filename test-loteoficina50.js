@@ -2,8 +2,9 @@
 // «arma todo»): cada nivel da DOS cosas — 1 cosa para la oficina + 1
 // prenda de Posty (PZ_ROPA vigente, no se toca). La oficina se compone
 // por capas SVG en Premios: solo se dibujan los ítems desbloqueados;
-// al 50, versión Maestro; después, Semillas de Maestro persistidas SIN
-// disparador automático (pendiente su decisión).
+// al 50, versión Maestro. Las Semillas de Maestro salieron de Premios
+// (decisión Valentino 7/11): sin contador, sin tira de brotes, sin
+// funciones de semillas en el cliente.
 // Node puro, lee el árbol. Uso: node test-loteoficina50.js
 'use strict';
 const fs = require('fs');
@@ -25,7 +26,9 @@ const store = {};
 const sb = {
   console, Intl, Date, Map, Set,
   ME: { lang: 'es', id: '12' },
+  PZ_PREMIOS_NUEVOS_MARCA: [1], // visita en que el Nv 1 es nuevo: la lista lo marca ¡Nuevo!
   esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+  pzIc: () => '',
   document: { getElementById: () => null },
   localStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, _store: store },
 };
@@ -58,24 +61,25 @@ t(sb.pzOficinaDesbloqueados(99).length === 50, 'nivel >50: sigue en 50 (sin nive
 t(sb.pzOficinaNombre(1, false) === 'Escritorio' && sb.pzOficinaNombre(50, false) === 'Corona dorada en exhibición', 'nombres por nivel 1 y 50');
 t(sb.pzOficinaNombre(50, true) === 'Golden crown on display', 'nombre EN nivel 50');
 // 4) Escena: solo desbloqueados, Maestro solo al 50.
-const esc1 = sb.pzOficinaEscenaHTML(1, 0);
+const esc1 = sb.pzOficinaEscenaHTML(1);
 t(esc1.includes('viewBox="0 0 400 320"'), 'escena con viewBox 400×320');
 t(esc1.includes('C98A4B'), 'escena nivel 1 trae el escritorio');
 t(!esc1.includes('Golden crown') && !esc1.includes('M10 62L20 8'), 'escena nivel 1 NO trae la corona del 50');
 t(!esc1.includes('PZ_OFICINA_MAESTRO') && !esc1.includes('390" y="100'), 'escena nivel 1 sin marco Maestro');
-const esc50 = sb.pzOficinaEscenaHTML(50, 0);
+const esc50 = sb.pzOficinaEscenaHTML(50);
 t(esc50.includes('M10 62L20 8'), 'escena nivel 50 trae la corona en exhibición');
 t(esc50.includes('390" y="100'), 'escena nivel 50 trae el marco Maestro (bambú dorado lateral)');
 t(!esc50.includes('pz-oficina-semillas'), 'sin semillas, sin tira de semillas');
-// 5) Semillas: persistencia con el patrón del guardarropa, sin auto-otorgar.
-t(sb.pzOficinaSemillasGet() === 0, 'semillas iniciales 0');
-t(sb.pzOficinaSemillaDar() === 1 && sb.pzOficinaSemillasGet() === 1, 'dar semilla persiste 1');
-t(sb.pzOficinaSemillaDar() === 2 && sb.pzOficinaSemillasGet() === 2, 'dar semilla persiste 2');
-t(sb.pzOficinaSemillasClave() === 'posta-oficina-semillas_12', 'clave de semillas por usuario (patrón guardarropa)');
-t(sb.pzOficinaSemillasHTML(0) === '', 'tira de 0 semillas vacía');
-t((sb.pzOficinaSemillasHTML(3).match(/pz-oficina-brote/g) || []).length === 3, 'tira de 3 semillas con 3 brotes');
-t(sb.pzOficinaEscenaHTML(50, 2).includes('pz-oficina-semillas'), 'escena Maestro con semillas trae la tira');
-t(cnt(app, 'pzOficinaSemillaDar(') === 1, 'pzOficinaSemillaDar SOLO definida, nunca llamada (sin otorgamiento automático)');
+// 5) Semillas fuera de Premios (decisión Valentino 7/11): ni contador,
+// ni tira de brotes, ni funciones de semillas en el cliente.
+t(typeof sb.pzOficinaSemillasGet !== 'function', 'sin pzOficinaSemillasGet');
+t(typeof sb.pzOficinaSemillaDar !== 'function', 'sin pzOficinaSemillaDar');
+t(typeof sb.pzOficinaSemillasClave !== 'function', 'sin pzOficinaSemillasClave');
+t(typeof sb.pzOficinaSemillasHTML !== 'function', 'sin pzOficinaSemillasHTML');
+t(typeof sb.pzOficinaBroteSVG !== 'function', 'sin pzOficinaBroteSVG');
+t(!sb.pzOficinaEscenaHTML(50).includes('pz-oficina-semillas'), 'escena Maestro sin tira de semillas');
+t(cnt(app, 'pzOficinaSemillaDar(') === 0, 'pzOficinaSemillaDar ya no existe');
+t(cnt(app, 'Semillas de Maestro') === 0, 'sin texto «Semillas de Maestro» en app.js');
 // 6) Lista y sección en Premios.
 const li1 = sb.pzOficinaListaHTML(1);
 t((li1.match(/pz-oficina-fila lock/g) || []).length === 49, 'lista nivel 1: 49 bloqueados');
@@ -90,7 +94,7 @@ sb.ME.lang = 'es';
 // 7) Cableado en Premios + CSS + no tocar servidor.
 t(app.includes('${pzOficinaSeccionHTML(nvNum)}'), 'mxJardinHTML posty inserta la sección de oficina');
 t(!app.includes("gzT('El jardín de Posty', \"Posty's garden\")") || app.includes('${pzOficinaSeccionHTML(nvNum)}'), 'h1 de Premios intacto (lo renombra inicio-3, no este lote)');
-t(css.includes('.pz-oficina-escena') && css.includes('.pz-oficina-semillas') && css.includes('.pz-oficina-fila'), 'CSS de oficina presente');
+t(css.includes('.pz-oficina-escena') && css.includes('.pz-oficina-fila') && !css.includes('.pz-oficina-semillas') && !css.includes('.pz-oficina-brote'), 'CSS de oficina presente, sin reglas de semillas');
 t(!srv.includes('PZ_OFICINA'), 'server.js sin cambios de este lote');
 t(cnt(app, 'onclick="pzOficina') === 0, 'M78: ninguna función nueva llamada desde UI (filas sin botones)');
 console.log(ok + ' ok / ' + bad + ' fallas');

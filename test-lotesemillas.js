@@ -1,7 +1,10 @@
 /* LOTE SEMILLAS-MAESTRO-REDENCION — checks: canje de una semilla de
    Maestro por un negocio nuevo, con registro durable y sin beneficio
    inventado (SPEC: el canje es reconocimiento/procedencia, NUNCA
-   niveles, descuentos ni meses gratis).
+   niveles, descuentos ni meses gratis). Desde 7/11 la UI de semillas
+   salió de Premios (decisión Valentino): el servidor conserva los
+   endpoints y postjardin (muertos, lote aparte), pero el cliente ya
+   no muestra ni llama nada de semillas. La §7 lo verifica así.
    Uso: node test-lotesemillas.js (desde la raíz del árbol). Sin
    dependencias (node:sqlite). «Ahora» fijo: lunes 2026-11-02. */
 'use strict';
@@ -159,15 +162,15 @@ console.log('== 7. Estáticos: rutas, UI, M78, censo ==');
   const srv = read('server.js');
   const css = read('public/styles.css');
   const pjSrc = read('postjardin.js');
-  check('app: caja + función de canje', app.indexOf('mxSemillaCanjeHTML') >= 0 && app.indexOf('pzSemillaCanjear()') >= 0);
-  check('app: endpoint canjear', app.indexOf("'/api/oficina/jardin-semilla-canjear'") >= 0);
-  check('app: endpoint mi semilla', app.indexOf("'/api/oficina/jardin-semilla-mia'") >= 0);
-  check('app: compartir lleva el código', app.indexOf('Canjeala con el código') >= 0);
-  check('app: un solo input de código', count(app, 'id="pzSemillaCod"') === 1);
-  check('M78: pzSemillaCanjear llamada desde botón', count(app, 'onclick="pzSemillaCanjear()"') === 1);
+  check('app: sin caja ni función de canje (fuera de Premios 7/11)', app.indexOf('mxSemillaCanjeHTML') < 0 && app.indexOf('pzSemillaCanjear()') < 0);
+  check('app: sin endpoint canjear', app.indexOf("'/api/oficina/jardin-semilla-canjear'") < 0);
+  check('app: sin endpoint mi semilla', app.indexOf("'/api/oficina/jardin-semilla-mia'") < 0);
+  check('app: sin compartir con código', app.indexOf('Canjeala con el código') < 0);
+  check('app: sin input de código', count(app, 'id="pzSemillaCod"') === 0);
+  check('M78: pzSemillaCanjear ya no llamada desde botón', count(app, 'onclick="pzSemillaCanjear()"') === 0);
   check('server: rutas nuevas', srv.indexOf("'/api/oficina/jardin-semilla-canjear'") >= 0 && srv.indexOf("'/api/oficina/jardin-semilla-mia'") >= 0);
   check('server: regalo devuelve código', srv.indexOf('semillaRegalar') >= 0 && srv.indexOf('codigo: pj.semillaMostrar') >= 0);
-  check('css: caja semilla', css.indexOf('.pz-semilla') >= 0);
+  check('css: sin caja semilla', css.indexOf('.pz-semilla') < 0);
   check('postjardin exporta lo nuevo', pjSrc.indexOf('semillaCanjear') >= 0 && pjSrc.indexOf('miSemilla') >= 0 && pjSrc.indexOf('semillaRegalar') >= 0);
   check('censo server intacto', count(srv, 'catsMatch') === 3 && count(srv, 'week-redo') === 16 && count(srv, 'first_week') === 3 && count(srv, '/aprobar') === 17);
   check('censo app intacto', count(app, 'pzGoBack') === 6 && count(app, 'pz-detalle-setup') === 1 && count(app, '/aprobar') === 1 && count(app, 'autofetch') === 0);
