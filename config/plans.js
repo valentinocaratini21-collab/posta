@@ -217,7 +217,6 @@ const PLANS_AR = {
       'Análisis completo de tu cuenta, semana a semana',
       'Estrategia semanal para tu negocio',
       'Reporte semanal de resultados',
-      'Ads: tu billetera aparte — cargás lo que querés gastar y Posty impulsa tus mejores posteos.',
     ],
   },
 };
@@ -313,7 +312,6 @@ const PLANS_UY = {
       'Análisis completo de tu cuenta, semana a semana',
       'Estrategia semanal para tu negocio',
       'Reporte semanal de resultados',
-      'Ads: tu billetera aparte — cargás lo que querés gastar y Posty impulsa tus mejores posteos.',
     ],
   },
 };
@@ -396,7 +394,6 @@ const PLANS_US = {
       'Full analysis of your account, week by week',
       'Weekly strategy for your business',
       'Weekly results report',
-      'Ads: your separate wallet — you load what you want to spend and Posty boosts your best posts.',
     ],
   },
 };

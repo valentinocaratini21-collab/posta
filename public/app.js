@@ -4515,22 +4515,27 @@ function lpIdeasGrowthHTML() {
   <div class="section cap-sec navy" id="crecimiento"><div class="wrap"><div class="cap-grid">
     <div class="cap-copy">
       <div class="cap-kick">Growth</div>
-      <h2>Lo que funciona, <span class="hl">se potencia</span></h2>
-      <p class="cap-exp">Posty detecta el posteo que mejor te está andando y te dice por qué rinde. Y cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.</p>
+      <h2>Cada mes, <span class="hl">un foco</span></h2>
+      <p class="cap-exp">Cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.</p>
       <ul class="cap-list">
-        <li>Tu mejor posteo, detectado solo</li>
-        <li>Pauta con tu tope, siempre con tu OK</li>
         <li>Tu página pública lista, con WhatsApp directo</li>
       </ul>
       <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
     </div>
     <div class="cap-side">
-      <div class="cap-sample"><div class="cap-grow">
-        <div class="cap-grow-best"><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de una cafetería hecho por Posty"><div><h4>Tu posteo que más rindió</h4><div class="cap-grow-metric">▲ El doble de interacciones que tu promedio</div><div class="cap-grow-sub">Hace 3 días · Posteo de producto</div></div></div>
-        <div class="cap-prop">🚀 <b>Propuesta de Posty:</b> potenciarlo con <b>$15.000</b> por 5 días (tu tope: $20.000). Llega a gente de tu zona que todavía no te sigue.</div>
-        <div class="cap-sendrow"><span class="cap-send">Potenciar ✓</span><span class="cap-alt">Ahora no</span></div>
-      </div></div>
-      <p class="cap-note">La propuesta llega sola cuando un posteo la rompe. Vos decidís.</p>
+      <div class="cap-sample cap-idea-wrap">
+        <div class="idea-card">
+          <div class="idea-top"><span class="idea-fmt">🎯 Foco de este mes</span></div>
+          <div class="idea-title">Más reservas</div>
+          <div class="idea-why">Elegís el foco y Posty apunta tus posteos y tus ideas a eso, todo el mes.</div>
+          <div class="idea-actions">
+            <span class="btn btn-primary btn-sm">Más reservas ✓</span>
+            <span class="btn btn-ghost btn-sm">Más consultas</span>
+            <span class="btn btn-ghost btn-sm">Más ventas</span>
+          </div>
+        </div>
+      </div>
+      <p class="cap-note">El foco se elige una vez por mes, con un toque.</p>
     </div>
   </div></div></div>
 `;}
@@ -4748,7 +4753,6 @@ function landingView(cfg) {
         <button class="btn btn-primary" type="submit">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </form>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
-      <p style="text-align:center;color:var(--mut);font-size:13.5px;margin-top:8px">3 días gratis · sin tarjeta · cancelás cuando querés</p>
     </div>
   </div></div>
   <div class="lp-view" id="lpView" role="dialog" aria-modal="true" aria-label="Posteo de la semana de muestra" onclick="if(event.target===this)lpWeekClose()">

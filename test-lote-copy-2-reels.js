@@ -201,10 +201,10 @@ t(!EPR.includes('On your plan, 2 like this come out every week'), 'prueba EN: el
 // (renderBenefits, sin condición por tier):
 t(!PR.includes('Respuestas a comentarios y mensajes con tu aprobación'), 'prueba ES: el beneficio ✉️ de comentarios fuera (v761-detail-2)');
 t(!EPR.includes('Replies to comments and messages, with your approval'), 'prueba EN: el beneficio ✉️ de comentarios fuera (v761-detail-2)');
-t((PR.match(/class="benefit"/g) || []).length === 10, 'prueba ES: la tarjeta tiene 10 beneficios (11 − ✉️) (v761-detail-2)');
-t((EPR.match(/class="benefit"/g) || []).length === 10, 'prueba EN: la tarjeta tiene 10 beneficios (11 − ✉️) (v761-detail-2)');
-t(PR.includes('Todo esto viene con tu cuenta') && PR.includes('Pauta sin tocar Ads Manager') && PR.includes('Sin permanencia: cancelás cuando quieras'), 'prueba ES: la tarjeta sigue intacta sin el ✉️ (v761-detail-2)');
-t(EPR.includes('All of this comes with your account') && EPR.includes('Boosting without touching Ads Manager') && EPR.includes('No lock-in: cancel anytime'), 'prueba EN: la tarjeta sigue intacta sin el ✉️ (v761-detail-2)');
+t((PR.match(/class="benefit"/g) || []).length === 5, 'prueba ES: la tarjeta tiene 5 beneficios (10 − 5 solapados con «Todo lo que Posty hace por vos», sin-repetidos)');
+t((EPR.match(/class="benefit"/g) || []).length === 5, 'prueba EN: la tarjeta tiene 5 beneficios (10 − 5 solapados, sin-repetidos)');
+t(PR.includes('Todo esto viene con tu cuenta') && PR.includes('Chat con Posty') && PR.includes('Sin permanencia: cancelás cuando quieras'), 'prueba ES: la tarjeta sigue intacta con lo no solapado (sin-repetidos)');
+t(EPR.includes('All of this comes with your account') && EPR.includes('Chat with Posty') && EPR.includes('No lock-in: cancel anytime'), 'prueba EN: la tarjeta sigue intacta con lo no solapado (sin-repetidos)');
 t(APP.includes("/api/reels/armar"), 'app.js: el builder de reels a pedido sigue');
 
 // ---------- 8. v761: la sección Historias SALE entera (ES y EN) ----------

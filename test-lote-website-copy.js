@@ -61,11 +61,13 @@ const AUDIT_ES = [
   'Análisis completo de tu cuenta, semana a semana',
   'Estrategia semanal para tu negocio',
   'Reporte semanal de resultados',
-  'Ads: tu billetera aparte — cargás lo que querés gastar y Posty impulsa tus mejores posteos.',
 ];
 const feats = (plans.PLANS_AR && plans.PLANS_AR.total && plans.PLANS_AR.total.features) || [];
-t(Array.isArray(feats) && feats.length === 8, 'plan: 8 líneas auditadas (vinieron ' + feats.length + ')');
+t(Array.isArray(feats) && feats.length === 7, 'plan: 7 líneas auditadas (vinieron ' + feats.length + ')');
 AUDIT_ES.forEach((f) => t(feats.indexOf(f) !== -1, 'plan: línea presente «' + f + '»'));
+// (sin-repetidos · Valentino 7/11 «nada se repita dos veces»): Ads es billetera
+// aparte, NO parte del plan — no va en features en ningún lado.
+t(!feats.some((f) => /ads|billetera/i.test(f)), 'plan: Ads fuera de features (billetera aparte, no incluido)');
 ['reels', 'Reels', 'Atención al cliente', 'Responde con tus precios', 'Comentarios respondidos'].forEach((bad) => {
   t(!feats.some((f) => f.indexOf(bad) !== -1), 'plan: fuera «' + bad + '»');
 });
@@ -177,6 +179,13 @@ t(has(weekES, 'Ver mi semana') && has(weekES, 'Nunca vemos tu contraseña'),
   'ES prueba: entrada «Ver mi semana» + contraseña en la sección');
 // Ideas + Crecimiento quedan (los dos cap sections).
 t(has(ideasES, 'Ideas semanales') && has(ideasES, 'Growth'), 'ES ideas+crecimiento: las dos secciones quedan');
+// (sin-repetidos · Valentino 7/11 «nada se repita dos veces»): Crecimiento ya no
+// re-vende Ads ni Ideas — ni el bullet detectado (verbo de Ads), ni la pauta con
+// tope, ni el mock de propuesta de impulso; su visual es el foco mensual.
+t(!has(ideasES, 'detectado solo') && !has(ideasES, 'Pauta con tu tope') && !has(ideasES, 'Propuesta de Posty'),
+  'ES crecimiento: sin re-pitch de Ads (ni bullet, ni pauta, ni mock de propuesta)');
+t(has(ideasES, 'Cada mes, ') && has(ideasES, 'Foco de este mes') && has(ideasES, 'Tu página pública lista, con WhatsApp directo'),
+  'ES crecimiento: foco mensual + página pública');
 // ---------- 2f. ES index.html: shell (meta + JSON-LD + nav + hero estático) ----------
 t(count(indexSrc, 'Posty es tu community manager: publica todos los días con tu producto real e impulsa tus mejores posteos. Probalo 3 días gratis, sin tarjeta.') === 4,
   'ES index meta: descripción nueva ×4 (vinieron ' + count(indexSrc, 'Posty es tu community manager: publica todos los días con tu producto real e impulsa tus mejores posteos. Probalo 3 días gratis, sin tarjeta.') + ')');
@@ -240,7 +249,6 @@ const AUDIT_EN = [
   'Full analysis of your account, week by week',
   'Weekly strategy for your business',
   'Weekly results report',
-  'Ads: your separate wallet — you load what you want to spend and Posty boosts your best posts.',
 ];
 AUDIT_EN.forEach((f) => t(has(enSrc, f), 'EN plan: línea presente «' + f + '»'));
 
@@ -261,6 +269,12 @@ AUDIT_EN.forEach((f) => t(has(enSrc, f), 'EN plan: línea presente «' + f + '»
 t(enSrc.indexOf('id="equipo"') < enSrc.indexOf('id="ads"') &&
   enSrc.indexOf('id="ads"') < enSrc.indexOf('id="planes"'),
   'EN Ads: entre Equipo y Plan (arriba del precio)');
+// (sin-repetidos): Growth EN sin re-pitch de Ads ni de Ideas — su visual es
+// el foco mensual, no la propuesta de impulso.
+t(!has(enSrc, 'spotted automatically') && !has(enSrc, 'Ads with your cap') && !has(enSrc, "Posty's proposal:"),
+  'EN crecimiento: sin re-pitch de Ads (ni bullet, ni pauta, ni mock de propuesta)');
+t(has(enSrc, 'Every month, ') && has(enSrc, "This month's focus") && has(enSrc, 'Your public page, ready, with direct WhatsApp'),
+  'EN crecimiento: foco mensual + página pública');
 
 // ---------- 3d. EN: Equipo ----------
 ["We're a team, Posty and I", 'Valentino Caratini', 'Founder of Posty',
@@ -414,11 +428,11 @@ t(has(stylesSrc, '@media(max-width:760px){.logo-img{height:28px}'), 'logo: style
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(BASE + '/api/version')).json();
-      t(ver.build === '20261105-v761', 'boot: /api/version 20261105-v761 (vino ' + ver.build + ', con bump a v761)');
+      t(ver.build === '20261105-v771', 'boot: /api/version 20261105-v771 (vino ' + ver.build + ', con bump a v771)');
       const plansRes = await (await fetch(BASE + '/api/billing/plans?unico=1')).json();
       const apiFeats = ((plansRes.plans || [])[0] && (plansRes.plans || [])[0].features) ||
         (plansRes.unico && plansRes.unico.features) || [];
-      t(apiFeats.length === 8, 'boot: /api/billing/plans trae 8 features (vinieron ' + apiFeats.length + ')');
+      t(apiFeats.length === 7, 'boot: /api/billing/plans trae 7 features (vinieron ' + apiFeats.length + ')');
       const apiDetail = ((plansRes.plans || [])[0] && (plansRes.plans || [])[0].detail) ||
         (plansRes.unico && plansRes.unico.detail) || [];
       t(apiDetail.length === 6, 'boot: /api/billing/plans trae detail con 6 ítems (vinieron ' + apiDetail.length + ')');

@@ -163,7 +163,7 @@ for (const f of APP_FALSAS) {
 }
 t(APP.includes('Posty también <span class="hl">atiende por vos</span>'), 'landing ES: título Atención «atiende por vos»');
 t(APP.includes('La respuesta lista para tu OK'), 'landing ES: tarjeta 1 «La respuesta lista para tu OK»');
-t(APP.includes('Posty detecta el posteo que mejor te está andando y te dice por qué rinde'), 'landing ES: cap Growth sin pauta');
+t(APP.includes('Cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.'), 'landing ES: cap Growth foco mensual (sin-repetidos, sin re-pitch de Ads)');
 t(APP.includes('Detecta tus posteos que mejor andan y te dice cuáles rinden más'), 'landing ES: tarjeta Crecimiento sin pauta');
 t(APP.includes('Responde comentarios y mensajes (con tu OK en un toque), y arma historias'), 'landing ES: tarjeta Comunidad sin reseñas');
 t(APP.includes('<div class="crit">Reseñas de Google</div><div>A mano, una por una</div><div>No suele incluirlas</div><div>Se cobra aparte</div><div class="win">—</div>'), 'landing ES: cmp4 Reseñas Posty «—»');
@@ -200,7 +200,7 @@ for (const f of EN_FALSAS) {
 }
 t(EN.includes('Posty also <span class="hl">serves you</span>'), 'landing EN: título Atención «serves you»');
 t(EN.includes('<h3>Replies ready for your OK</h3>'), 'landing EN: tarjeta 1 «Replies ready for your OK»');
-t(EN.includes('Posty spots the post that\'s performing best for you and tells you why it works'), 'landing EN: cap Growth sin ads');
+t(EN.includes('Every month you pick a growth focus: more inquiries, more bookings or more sales.'), 'landing EN: cap Growth foco mensual (sin-repetidos, sin re-pitch de Ads)');
 t(EN.includes('It spots your best-performing posts and tells you which ones work best'), 'landing EN: tarjeta Growth sin ads');
 t(EN.includes('It answers comments and messages (with your OK in one tap), and creates stories'), 'landing EN: tarjeta Community sin Google reviews');
 t(EN.includes('<div class="crit">Google reviews</div><div>By hand, one by one</div><div>Usually not included</div><div>Charged separately</div><div class="win">—</div>'), 'landing EN: cmp4 Google reviews Posty «—»');
