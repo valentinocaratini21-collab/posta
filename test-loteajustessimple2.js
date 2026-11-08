@@ -13,32 +13,41 @@ function t(name, cond) {
 const aj = fs.readFileSync(path.join(base, 'public/chunk-ajustes.js'), 'utf8');
 const app = fs.readFileSync(path.join(base, 'public/app.js'), 'utf8');
 
-// 1) Orden final del template: referidos primero, notif, negocio, plan, mas2,
-// wrap, salir, gz. (ACTUALIZADO lote ajustes-simple 6/11: Referidos arriba de
-// todo; «Compartir mi semana» y el pie Posty eliminados.)
-const order = ['ajsec-referidos', 'ajsec-notif', 'ajsec-negocio', 'ajsec-plan', 'ajsec-mas2',
-  'ajsec-mas2-wrap', 'ajsec-auto', 'ajsec-conex', 'ajsec-marca',
-  'ajsec-pagina', 'int-advanced', 'btnLogoutAj',
+// 1) Orden final del template: filas del menú (data-ajnav) en orden, Salir
+// como fila del menú, detalle (#ajDetail) con las 9 secciones en orden, gz.
+// (ACTUALIZADO lote ajustes-carpetas 7/11: el botón «Más ajustes» y su
+// desplegable salen; cada sección abre su propia pantalla de detalle.)
+const order = ['data-ajnav="referidos"', 'data-ajnav="notif"', 'data-ajnav="negocio"',
+  'data-ajnav="plan"', 'data-ajnav="auto"', 'data-ajnav="conex"', 'data-ajnav="marca"',
+  'data-ajnav="pagina"', 'data-ajnav="avanzado"', 'btnLogoutAj', 'id="ajDetail"',
+  'ajsec-referidos', 'ajsec-notif', 'ajsec-negocio', 'ajsec-plan', 'ajsec-auto',
+  'ajsec-conex', 'ajsec-marca', 'ajsec-pagina', 'ajsec-avanzado',
   'gzAjustesBox'];
 const pos = order.map((id) => aj.indexOf(id));
 t('todas las marcas presentes', pos.every((p) => p >= 0));
 t('orden final correcto', pos.every((p, k) => k === 0 || p > pos[k - 1]));
 
-// 2) El wrap contiene el resto y NADA de lo visible ni de Salir/Posty.
-const wrap = aj.slice(aj.indexOf('id="ajsec-mas2-wrap"'), aj.indexOf('btnLogoutAj'));
-for (const id of ['ajsec-auto', 'ajsec-conex', 'ajsec-marca', 'ajsec-pagina',
-  'int-advanced'])
-  t('wrap contiene ' + id, wrap.includes(id));
-for (const id of ['ajsec-referidos', 'ajsec-notif', 'ajsec-negocio', 'ajsec-plan', 'btnLogoutAj',
-  'gzAjustesBox'])
-  t('wrap NO contiene ' + id, !wrap.includes(id));
-t('wrap nace oculto', aj.includes('id="ajsec-mas2-wrap" hidden'));
+// 2) El detalle contiene las 9 secciones y el botón ‹; el menú, las 9 filas
+// y Salir. (ACTUALIZADO lote ajustes-carpetas 7/11: el wrap sale; el detalle
+// es #ajDetail y el menú es #ajMenu.)
+const det = aj.slice(aj.indexOf('id="ajDetail"'), aj.indexOf('id="gzAjustesBox"'));
+for (const id of ['ajsec-referidos', 'ajsec-notif', 'ajsec-negocio', 'ajsec-plan',
+  'ajsec-auto', 'ajsec-conex', 'ajsec-marca', 'ajsec-pagina', 'ajsec-avanzado'])
+  t('detalle contiene ' + id, det.includes('id="' + id + '"'));
+t('detalle contiene el botón ‹', det.includes('id="ajBackBtn"'));
+const menu = aj.slice(aj.indexOf('id="ajMenu"'), aj.indexOf('id="ajDetail"'));
+for (const id of ['referidos', 'notif', 'negocio', 'plan', 'auto', 'conex', 'marca',
+  'pagina', 'avanzado'])
+  t('menú contiene fila ' + id, menu.includes('data-ajnav="' + id + '"'));
+t('menú contiene Salir', menu.includes('id="btnLogoutAj"'));
+t('detalle nace oculto salvo deep-link', aj.includes("id=\"ajDetail\"${ajInitSec ? '' : ' hidden'}"));
 t('menú Más viejo eliminado', !aj.includes('id="ajsec-mas"'));
+t('avanzado conserva su clase', aj.includes('class="card int-advanced"'));
 
-// 3) ES/EN espejo. (ACTUALIZADO lote ajustes-simple 6/11: el pie
-// «Posty · Community Manager — Tu agente» sale de Ajustes.)
-for (const s of ['Más ajustes', 'Menos ajustes', 'More settings',
-  'Fewer settings']) t('texto presente: ' + s, aj.includes(s));
+// 3) ES/EN espejo. (ACTUALIZADO lote ajustes-carpetas 7/11: «Más ajustes»
+// sale con el botón; el espejo vive ahora en las filas del menú.)
+for (const s of ['Referidos · 50% off', 'Notifications', 'My plan',
+  'Posty on autopilot', 'Advanced settings', 'Log out']) t('texto presente: ' + s, aj.includes(s));
 
 // 4) Upsell eliminado de app.js.
 for (const s of ['Sumar un agente', 'Probar Gesty gratis', 'Gesty · Recepción',
@@ -87,8 +96,10 @@ async function runGz(con, blo, hoy, tipo, pr) {
   t('trial: sin upsell ni conexiones', !trial.includes('Sumar un agente')
     && !trial.includes('Conexiones de Gesty'));
 
-  // 6) Helpers del toggle, reales, con DOM falso.
-  const hStart = aj.indexOf('function pzAjMas2Mostrar()');
+  // 6) Navegación ajNav, real, con DOM falso.
+  // (ACTUALIZADO lote ajustes-carpetas 7/11: el toggle de «Más ajustes» sale
+  // con el desplegable; la navegación es ajNav sobre #ajMenu/#ajDetail.)
+  const hStart = aj.indexOf('const AJ_SECCIONES');
   const hEnd = aj.indexOf('function bindSettings()');
   t('helpers extraíbles', hStart >= 0 && hEnd > hStart);
   if (hStart < 0 || hEnd <= hStart) {
@@ -97,29 +108,42 @@ async function runGz(con, blo, hoy, tipo, pr) {
     process.exit(1);
   }
   const hSrc = aj.slice(hStart, hEnd);
-  for (const lang of ['es', 'en']) {
-    const wrapEl = { hidden: true };
-    const btn = { innerHTML: '' };
+  const mkNav = () => {
+    const els = {};
+    const mkEl = (id) => (els[id] = { hidden: false, open: false });
+    const menuEl = mkEl('ajMenu'); const detEl = mkEl('ajDetail');
+    const cards = {};
+    for (const s of ['referidos', 'notif', 'negocio', 'plan', 'auto', 'conex', 'marca', 'pagina', 'avanzado']) cards[s] = mkEl('ajsec-' + s);
     const sandbox = {
-      document: { getElementById: (id) =>
-        (id === 'ajsec-mas2-wrap' ? wrapEl : id === 'btnAjMas2' ? btn : null) },
-      ME: { lang },
+      document: { getElementById: (id) => els[id] || null },
+      window: { scrollTo: () => {} },
     };
-    const mk = new Function('document', 'ME', hSrc + '; return { pzAjMas2Mostrar, pzAjMas2Toggle };');
-    const f = mk(sandbox.document, sandbox.ME);
-    f.pzAjMas2Toggle();
-    t(`toggle ${lang}: abre`, wrapEl.hidden === false);
-    t(`toggle ${lang}: etiqueta menos`, btn.innerHTML.includes(lang === 'en' ? 'Fewer settings' : 'Menos ajustes'));
-    f.pzAjMas2Toggle();
-    t(`toggle ${lang}: cierra`, wrapEl.hidden === true);
-    t(`toggle ${lang}: etiqueta más`, btn.innerHTML.includes(lang === 'en' ? 'More settings' : 'Más ajustes'));
-  }
+    const mk = new Function('document', 'window', hSrc + '; return { ajNav, ajFoldAbrir };');
+    return { f: mk(sandbox.document, sandbox.window), menuEl, detEl, cards };
+  };
+  const n1 = mkNav();
+  n1.f.ajNav('plan');
+  t('ajNav plan: menú oculto', n1.menuEl.hidden === true);
+  t('ajNav plan: detalle visible', n1.detEl.hidden === false);
+  t('ajNav plan: solo plan visible', n1.cards.plan.hidden === false
+    && ['referidos', 'notif', 'negocio', 'auto', 'conex', 'marca', 'pagina', 'avanzado'].every((s) => n1.cards[s].hidden === true));
+  const n2 = mkNav();
+  n2.f.ajNav('avanzado');
+  t('ajNav avanzado: abre el details', n2.cards.avanzado.open === true);
+  const n3 = mkNav();
+  n3.f.ajNav('noexiste');
+  t('ajNav desconocido: no toca nada', n3.menuEl.hidden === false && n3.detEl.hidden === false);
+  const n4 = mkNav();
+  n4.f.ajFoldAbrir('plan');
+  t('ajFoldAbrir plan: abre como ajNav', n4.menuEl.hidden === true && n4.cards.plan.hidden === false);
 
   // 7) M78: cada helper definido 1 vez, con llamador real.
-  t('pzAjMas2Mostrar definida 1 vez', (aj.match(/function pzAjMas2Mostrar\(\)/g) || []).length === 1);
-  t('pzAjMas2Toggle definida 1 vez', (aj.match(/function pzAjMas2Toggle\(\)/g) || []).length === 1);
-  t('toggle con binding real', (aj.match(/pzAjMas2Toggle\(\);/g) || []).length === 1);
-  t('mostrar con llamadores reales', (aj.match(/pzAjMas2Mostrar\(\);/g) || []).length >= 2);
+  t('ajNav definida 1 vez', (aj.match(/function ajNav\(/g) || []).length === 1);
+  t('ajFoldAbrir definida 1 vez', (aj.match(/function ajFoldAbrir\(/g) || []).length === 1);
+  t('ajNav con llamador real (ajFoldAbrir)', (aj.match(/ajNav\(id\);/g) || []).length === 1);
+  t('pzAjMas2Mostrar eliminada', (aj.match(/pzAjMas2Mostrar/g) || []).length === 0);
+  t('pzAjMas2Toggle eliminada', (aj.match(/pzAjMas2Toggle/g) || []).length === 0);
+  t('ajsec-mas2-wrap eliminado', (aj.match(/ajsec-mas2-wrap/g) || []).length === 0);
 
   console.log(`AJUSTES-SIMPLE-2: ${ok} ok, ${bad} mal`);
   process.exit(bad ? 1 : 0);

@@ -28,7 +28,7 @@ function num(re, src, msg) {
 // ---------- 1. Bloque compacto presente ----------
 ok(css.indexOf('LOTE AJUSTES-COMPACTO') !== -1, 'bloque CSS compacto presente');
 ok(chunk.indexOf('page-head aj-head') !== -1, 'encabezado Ajustes con clase aj-head');
-ok(chunk.indexOf('card aj-salir') !== -1, 'tarjeta Salir con clase aj-salir');
+ok(chunk.indexOf('ajmenu-danger') !== -1 && chunk.indexOf('id="btnLogoutAj"') !== -1, 'Salir como fila del menú (ajmenu-danger)');
 
 // ---------- 2. Nada eliminado: 29 ids de ajustes-simple ----------
 const IDS29 = ['btnPushEnable', 'btnPreNotifyToggle', 'btnLetterToggle', 'btnFailToggle',
@@ -46,27 +46,42 @@ for (const id of IDS29) ok(chunk.indexOf('id="' + id + '"') !== -1, 'id presente
 for (const c of ['ajsec-conex', 'ajsec-pagina', 'ajsec-marca', 'ajsec-referidos'])
   ok(chunk.indexOf('id="' + c + '"') !== -1, 'destino Más como tarjeta: ' + c);
 ok(chunk.indexOf('data-ajmas="preview"') === -1, 'fila Más preview eliminada (6/11)');
-ok(chunk.indexOf('id="btnAjMas2"') !== -1 && chunk.indexOf('id="ajsec-mas2-wrap" hidden') !== -1, 'botón y desplegable «Más ajustes» presentes');
+// (ACTUALIZADO lote ajustes-carpetas 7/11: el botón «Más ajustes» y su
+// desplegable salen; el menú (#ajMenu) y la pantalla de detalle (#ajDetail)
+// los reemplazan. Ninguna sección se pierde: siguen las 9 tarjetas.)
+ok(chunk.indexOf('id="btnAjMas2"') === -1 && chunk.indexOf('id="ajsec-mas2-wrap"') === -1 && chunk.indexOf('id="ajMenu"') !== -1 && chunk.indexOf('id="ajDetail"') !== -1, 'botón y desplegable «Más ajustes» eliminados; menú y detalle presentes');
 ok(chunk.indexOf('Configuración avanzada') !== -1, 'Configuración avanzada intacta');
 ok(chunk.indexOf('id="gzAjustesBox"') !== -1, 'caja Gesty intacta');
 
-// ---------- 3. Orden: Referidos primera, botón adentro ----------
-// Re-base v598 (ajustes-simple-2 v590): Automático vive DENTRO del desplegable «Más ajustes», después de Mi plan.
-// ACTUALIZADO (lote ajustes-simple 6/11): Referidos es la primera tarjeta; el pie Posty sale.
+// ---------- 3. Orden: Referidos primera, detalle en orden, Salir en el menú ----------
+// (ACTUALIZADO lote ajustes-carpetas 7/11: las tarjetas viven en la pantalla
+// de detalle (#ajDetail) en el mismo orden; Salir es fila del menú.)
 const oRef = chunk.indexOf('id="ajsec-referidos"');
 const oNotif = chunk.indexOf('id="ajsec-notif"');
 const oNeg = chunk.indexOf('id="ajsec-negocio"');
 const oPlan = chunk.indexOf('id="ajsec-plan"');
-const oMas = chunk.indexOf('id="ajsec-mas2"');
+const oAuto = chunk.indexOf('id="ajsec-auto"');
+const oConex = chunk.indexOf('id="ajsec-conex"');
+const oMarca = chunk.indexOf('id="ajsec-marca"');
+const oPag = chunk.indexOf('id="ajsec-pagina"');
+const oMenu = chunk.indexOf('id="ajMenu"');
+const oDetail = chunk.indexOf('id="ajDetail"');
 const oSalir = chunk.indexOf('id="btnLogoutAj"');
-ok(oRef !== -1 && oRef < oNotif && oNotif < oNeg && oNeg < oPlan && oPlan < oMas && oMas < oSalir,
-  'orden: Referidos > Notificaciones > Negocio > Plan > Más ajustes > Salir');
+ok(oRef !== -1 && oRef < oNotif && oNotif < oNeg && oNeg < oPlan && oPlan < oAuto && oAuto < oConex && oConex < oMarca && oMarca < oPag,
+  'orden de detalle: Referidos > Notificaciones > Negocio > Plan > Automático > Conexiones > Marca > Página');
+ok(oMenu !== -1 && oDetail !== -1 && oMenu < oDetail && oSalir !== -1 && oSalir > oMenu && oSalir < oDetail,
+  'menú antes que el detalle; Salir es fila del menú');
 ok(chunk.indexOf('id="btnPushEnable"') > oNotif && chunk.indexOf('id="btnPushEnable"') < oNeg,
   'botón push dentro de Notificaciones (arriba)');
 
 // ---------- 4. Primario intacto: sin regla que lo achique ----------
 ok(chunk.indexOf('class="btn btn-primary" id="btnPushEnable"') !== -1, 'botón push sigue btn-primary');
-const block = css.slice(css.indexOf('LOTE AJUSTES-COMPACTO'));
+// (ACTUALIZADO lote ajustes-carpetas 7/11: el bloque se acota a su propia
+// sección — el slice hasta fin de archivo ya incluía el CSS de lotes
+// posteriores con fondos/colores y el assert fallaba en PRE desde v786.)
+const __c0 = css.indexOf('LOTE AJUSTES-COMPACTO');
+const __c1 = css.indexOf('\n/* ============', __c0 + 1);
+const block = __c1 === -1 ? css.slice(__c0) : css.slice(__c0, __c1);
 ok(block.indexOf('btnPushEnable') === -1 && block.indexOf('btn-primary') === -1,
   'bloque compacto NO toca el botón primario (sigue 13px 24px en 480px)');
 ok(block.indexOf('background') === -1 && block.indexOf('color:') === -1,
@@ -142,7 +157,9 @@ ok(chunk.indexOf('function ajPushNativeOn(r)') !== -1, 'ajPushNativeOn intacto')
 ok(chunk.indexOf('loadNotifyPrefs') !== -1, 'loadNotifyPrefs intacto');
 const nFn = (chunk.match(/^function |^async function /gm) || []).length;
 console.log('funciones chunk: ' + nFn);
-ok(nFn === 14, 'funciones chunk 14 = base v598 (sin nuevas; delta cero vs base)');
+// (ACTUALIZADO lote ajustes-carpetas 7/11: base v786 trae 20 — otros lotes
+// sumaron 6 desde v598 — y este lote quita 7 (pliegue/Más) y suma 1 (ajNav).)
+ok(nFn === 14, 'funciones chunk 14 = base v786 20 − 7 (pliegue/Más) + 1 (ajNav)');
 ok(app.indexOf('LOTE AJUSTES-COMPACTO') === -1, 'app.js sin tocar por este lote');
 
 // ---------- 9. Censo (debe coincidir con prístino; se compara en el reporte) ----------

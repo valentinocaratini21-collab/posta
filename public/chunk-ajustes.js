@@ -12,11 +12,11 @@
 function ajustesView() {
   const p = PROFILE, s = SETTINGS;
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  // (LOTE AJUSTES-LIMPIO) Ajustes en carpetas: las secciones plegables
-  // nacen cerradas en la primera apertura (estado en localStorage) salvo
-  // Notificaciones y Referidos, siempre visibles; los deep-links
-  // (?plan, ?ig, ...) abren la carpeta destino en bindSettings (ajDeepSec
-  // + ajFoldAbrir) y scrollean a su tarjeta.
+  // (AJUSTES-CARPETAS) Ajustes es un menú estilo Instagram: una lista de
+  // filas agrupadas por tema; cada fila abre su sección en su propia
+  // pantalla (#ajDetail) con botón ‹ para volver. Los deep-links
+  // (?plan, ?ig, ...) abren la pantalla destino en bindSettings (ajDeepSec
+  // + ajFoldAbrir); ajustesView ya nace en esa pantalla si la URL la trae.
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">${pzIc('reject', 15)} ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">${pzIc('checkCircle', 15)} ¡TikTok conectado! Ya podés compartir tus posteos</div>`
@@ -41,6 +41,28 @@ function ajustesView() {
   try { if (p.business_name && String(p.business_name).trim()) stBiz = `<span class="ajsec-st">${esc(p.business_name)}</span>`; } catch (e) {}
   try { stBrand = `<span class="ajsec-st">${assetLogo() ? 'Logo cargado' : 'Sin logo'}</span>`; } catch (e) {}
   try { if (p.page_slug) stPage = `<span class="ajsec-st">${esc(p.page_slug)}</span>`; } catch (e) {}
+  // (AJUSTES-CARPETAS) Si la URL trae un deep-link (?referidos=1, ?plan=1,
+  // ...), la pantalla de detalle de esa sección nace abierta y el menú
+  // nace oculto, sin flash: ajHid esconde las demás tarjetas desde el
+  // primer render; bindSettings solo re-abre la misma vía ajFoldAbrir.
+  const ajInitSec = q.get('plan') || q.get('plan_sel') ? 'plan'
+    : (q.get('ig') || q.get('tiktok') || q.get('google') || q.get('tn') || q.get('conex')) ? 'conex'
+    : q.get('auto') ? 'auto'
+    : (q.get('avisos') || q.get('notif')) ? 'notif'
+    : q.get('pagina') ? 'pagina'
+    : (q.get('estilos') || q.get('marca')) ? 'marca'
+    : q.get('referidos') ? 'referidos'
+    : q.get('negocio') ? 'negocio'
+    : q.get('avanzado') ? 'avanzado' : '';
+  const ajHid = (s) => (ajInitSec && ajInitSec !== s) ? ' hidden' : '';
+  // Resúmenes de una línea para las filas del menú (texto plano, sin HTML).
+  let stIgTx = '', stPlanTx = '', stBizTx = '', stBrandTx = '', stPageTx = '';
+  try { stIgTx = p.ig_connected ? (p.ig_username ? 'Conectada · @' + p.ig_username : 'Conectada') : 'Sin conectar'; } catch (e) {}
+  try { if (typeof ME !== 'undefined' && ME && ME.plan) { const __pn = String(ME.plan); stPlanTx = __pn.charAt(0).toUpperCase() + __pn.slice(1) + ((ME.is_trial && ME.trial_days_left) ? ` · quedan ${ME.trial_days_left} día${ME.trial_days_left === 1 ? '' : 's'}` : ''); } } catch (e) {}
+  try { stBizTx = (p.business_name && String(p.business_name).trim()) || ''; } catch (e) {}
+  try { stBrandTx = assetLogo() ? 'Logo cargado' : 'Sin logo'; } catch (e) {}
+  try { stPageTx = p.page_slug || ''; } catch (e) {}
+  const ajEn = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   // --- Bloque Instagram (vive dentro de "🔌 Conexiones") ---
   // Conectado y sano (con @ y sin aviso de token): colapsa a la fila de estado
   // + el botón de actualizar lo que Posty sabe. Con cualquier problema (o sin conectar) vuelve
@@ -100,10 +122,41 @@ function ajustesView() {
     <div id="igMsg"></div>`;
   return `<div class="page-head aj-head"><div class="ph-ico">${pzIc('gear', 26)}</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu Instagram, tu plan y tu marca.</p></div></div>
   ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
-  <div class="card ajsec ajflat" id="ajsec-referidos"><div class="ajsec-h"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3></div><div class="ajsec-b">
+  <div id="ajMenu"${ajInitSec ? ' hidden' : ''}>
+    <div class="ajmenu-group">
+      <div class="ajmenu-h">${ajEn ? 'Main' : 'Principal'}</div>
+      <button type="button" class="ajmenu-row" data-ajnav="referidos"><span class="ajmenu-ico">${pzIc('gift', 20)}</span><span class="ajmenu-tx"><span class="ajmenu-t">${ajEn ? 'Referrals · 50% off' : 'Referidos · 50% off'}</span><span class="ajmenu-s">${ajEn ? 'Invite friends and pay half' : 'Invitá amigos y pagá la mitad'}</span></span><span class="ajmenu-chev">›</span></button>
+      <button type="button" class="ajmenu-row" data-ajnav="notif"><span class="ajmenu-ico">${pzIc('bell', 20)}</span><span class="ajmenu-tx"><span class="ajmenu-t">${ajEn ? 'Notifications' : 'Notificaciones'}</span><span class="ajmenu-s" id="ajStAvisosMenu"></span></span><span class="ajmenu-chev">›</span></button>
+    </div>
+    <div class="ajmenu-group">
+      <div class="ajmenu-h">${ajEn ? 'Your business' : 'Tu negocio'}</div>
+      <button type="button" class="ajmenu-row" data-ajnav="negocio"><span class="ajmenu-ico">${pzIc('store', 20)}</span><span class="ajmenu-tx"><span class="ajmenu-t">${ajEn ? 'Your business' : 'Tu negocio'}</span><span class="ajmenu-s">${esc(stBizTx) || (ajEn ? 'Name, category and details' : 'Nombre, rubro y datos')}</span></span><span class="ajmenu-chev">›</span></button>
+      <button type="button" class="ajmenu-row" data-ajnav="plan"><span class="ajmenu-ico">${pzIc('card', 20)}</span><span class="ajmenu-tx"><span class="ajmenu-t">${ajEn ? 'My plan' : 'Mi plan'}</span><span class="ajmenu-s">${esc(stPlanTx) || (ajEn ? 'Plan and payments' : 'Plan y pagos')}</span></span><span class="ajmenu-chev">›</span></button>
+    </div>
+    <div class="ajmenu-group">
+      <div class="ajmenu-h">Posty</div>
+      <button type="button" class="ajmenu-row" data-ajnav="auto"><span class="ajmenu-ico">${pzIc('bolt', 20)}</span><span class="ajmenu-tx"><span class="ajmenu-t">${ajEn ? 'Posty on autopilot' : 'Posty en automático'}</span><span class="ajmenu-s" id="ajStAutoMenu"></span></span><span class="ajmenu-chev">›</span></button>
+      <button type="button" class="ajmenu-row" data-ajnav="conex"><span class="ajmenu-ico">${pzIc('plug', 20)}</span><span class="ajmenu-tx"><span class="ajmenu-t">${ajEn ? 'Connections' : 'Conexiones'}</span><span class="ajmenu-s">${esc(stIgTx)}</span></span><span class="ajmenu-chev">›</span></button>
+    </div>
+    <div class="ajmenu-group">
+      <div class="ajmenu-h">${ajEn ? 'Your brand' : 'Tu marca'}</div>
+      <button type="button" class="ajmenu-row" data-ajnav="marca"><span class="ajmenu-ico">${pzIc('palette', 20)}</span><span class="ajmenu-tx"><span class="ajmenu-t">${ajEn ? 'Your brand' : 'Tu marca'}</span><span class="ajmenu-s">${esc(stBrandTx)}</span></span><span class="ajmenu-chev">›</span></button>
+      <button type="button" class="ajmenu-row" data-ajnav="pagina"><span class="ajmenu-ico">${pzIc('globe', 20)}</span><span class="ajmenu-tx"><span class="ajmenu-t">${ajEn ? 'Your page' : 'Tu página'}</span><span class="ajmenu-s">${esc(stPageTx) || (ajEn ? 'Your link in bio' : 'Tu link en la bio')}</span></span><span class="ajmenu-chev">›</span></button>
+    </div>
+    <div class="ajmenu-group">
+      <div class="ajmenu-h">${ajEn ? 'More' : 'Más'}</div>
+      <button type="button" class="ajmenu-row" data-ajnav="avanzado"><span class="ajmenu-ico">${pzIc('gear', 20)}</span><span class="ajmenu-tx"><span class="ajmenu-t">${ajEn ? 'Advanced settings' : 'Configuración avanzada'}</span><span class="ajmenu-s">${ajEn ? 'Meta embed URL' : 'Dirección de embed de Meta'}</span></span><span class="ajmenu-chev">›</span></button>
+    </div>
+    <div class="ajmenu-group">
+      <button type="button" class="ajmenu-row ajmenu-danger" id="btnLogoutAj"><span class="ajmenu-ico">${pzIc('logout', 20)}</span><span class="ajmenu-tx"><span class="ajmenu-t">${ajEn ? 'Log out' : 'Salir'}</span></span></button>
+    </div>
+  </div>
+  <div id="ajDetail"${ajInitSec ? '' : ' hidden'}>
+    <button type="button" class="ajback" id="ajBackBtn">‹ ${ajEn ? 'Settings' : 'Ajustes'}</button>
+  <div class="card ajsec ajflat"${ajHid('referidos')} id="ajsec-referidos"><div class="ajsec-h"><h3>${pzIc('gift', 20)} Referidos · 50% off</h3></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>
-  <div class="card ajsec ajflat" id="ajsec-notif"><div class="ajsec-h"><h3>${pzIc('bell', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications' : 'Notificaciones'}</h3><span class="ajsec-st" id="ajStAvisos"></span></div><div class="ajsec-b">
+  <div class="card ajsec ajflat"${ajHid('notif')} id="ajsec-notif"><div class="ajsec-h"><h3>${pzIc('bell', 20)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Notifications' : 'Notificaciones'}</h3><span class="ajsec-st" id="ajStAvisos"></span></div><div class="ajsec-b">
     <div id="avisosPushHint" style="margin-bottom:12px">
       <div id="ajPushOff">
         <p id="ajPushOffTxt" style="color:var(--mut);font-size:11.5px;margin-bottom:10px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You have not turned on notifications on your phone yet: your alerts are on, but they have nowhere to go.' : 'Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar.'}</p>
@@ -138,7 +191,7 @@ function ajustesView() {
     </div>
     <div class="hint" id="waNotifyGateHint" style="display:none;margin-top:10px">WhatsApp todavía no está encendido del lado de Posty: podés dejar tu número y tu permiso guardados, y te llega apenas se encienda. Mientras tanto, tu carta llega por notificación y en Estrategia.</div>
   </div></div>
-  <div class="card ajsec ajflat" id="ajsec-negocio"><div class="ajsec-h"><h3>${pzIc('store', 20)} Tu negocio</h3>${stBiz}</div><div class="ajsec-b">
+  <div class="card ajsec ajflat"${ajHid('negocio')} id="ajsec-negocio"><div class="ajsec-h"><h3>${pzIc('store', 20)} Tu negocio</h3>${stBiz}</div><div class="ajsec-b">
   <p style="color:var(--mut);font-size:11.5px;margin:-6px 0 14px">${pzIc('bot', 16)} Uso estos datos para crear tus posteos.</p>
     <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
     <div class="row2">
@@ -205,14 +258,12 @@ function ajustesView() {
       <p class="hint" style="margin:6px 0 0 4px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'For your Instagram highlights — download each cover and set it in Instagram.' : 'Para tus destacadas de Instagram: descargá cada cubierta y ponela en Instagram.'}</p>
     </div>
   </div></div>
-  <div class="card ajsec ajflat" id="ajsec-plan"><div class="ajsec-h"><h3>${pzIc('card', 20)} Mi plan</h3>${stPlan}</div><div class="ajsec-b">
+  <div class="card ajsec ajflat"${ajHid('plan')} id="ajsec-plan"><div class="ajsec-h"><h3>${pzIc('card', 20)} Mi plan</h3>${stPlan}</div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
     <p style="font-size:11.5px;color:var(--mut);margin-top:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "If your first week doesn't convince you, we'll redo the whole week for you, free." : 'Si tu primera semana no te convence, te la rehacemos entera, gratis.'}</p>
     <div id="founderZone"></div>
   </div></div>
-  <div class="card ajsec ajflat" id="ajsec-mas2"><div class="ajsec-b"><button type="button" class="btn btn-ghost btn-block" id="btnAjMas2">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'More settings' : 'Más ajustes'} <span>›</span></button></div></div>
-  <div id="ajsec-mas2-wrap" hidden>
-  <div class="card ajsec ajflat" id="ajsec-auto"><div class="ajsec-h"><h3>${pzIc('bolt', 20)} Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span></div><div class="ajsec-b">
+<div class="card ajsec ajflat"${ajHid('auto')} id="ajsec-auto"><div class="ajsec-h"><h3>${pzIc('bolt', 20)} Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">⏸ Pausar todo</div>
     <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Lo programado vuelve a borrador y nada sale hasta que reanudes.</p>
     <div style="display:flex;align-items:center;gap:12px">
@@ -248,7 +299,7 @@ function ajustesView() {
       <span id="bilingualWeekStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
   </div></div>
-<div class="card ajsec ajflat" id="ajsec-conex"><div class="ajsec-h"><h3>${pzIc('plug', 20)} Conexiones</h3>${stIg}</div><div class="ajsec-b">
+<div class="card ajsec ajflat"${ajHid('conex')} id="ajsec-conex"><div class="ajsec-h"><h3>${pzIc('plug', 20)} Conexiones</h3>${stIg}</div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">${pzIc('camera', 16)} Instagram</div>
     ${igBody}
     <div id="pzBioSealSlot"></div>
@@ -265,7 +316,7 @@ function ajustesView() {
     <div id="tnZone"><p class="hint">Cargando…</p></div>
     <div id="tnMsg"></div>
   </div></div>
-  <div class="card ajsec ajflat" id="ajsec-marca"><div class="ajsec-h"><h3>${pzIc('palette', 20)} Tu marca</h3>${stBrand}</div><div class="ajsec-b">
+  <div class="card ajsec ajflat"${ajHid('marca')} id="ajsec-marca"><div class="ajsec-h"><h3>${pzIc('palette', 20)} Tu marca</h3>${stBrand}</div><div class="ajsec-b">
         <div class="row2">
       <div class="field"><label>Logo</label>
         <div style="display:flex;gap:10px;align-items:center">
@@ -313,7 +364,7 @@ function ajustesView() {
     </div>
     <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:11.5px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
   </div></div>
-  <div class="card ajsec ajflat" id="ajsec-pagina"><div class="ajsec-h"><h3>${pzIc('globe', 20)} Tu página</h3>${stPage}</div><div class="ajsec-b">
+  <div class="card ajsec ajflat"${ajHid('pagina')} id="ajsec-pagina"><div class="ajsec-h"><h3>${pzIc('globe', 20)} Tu página</h3>${stPage}</div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: tu negocio y tus posteos ya publicados, con botón a tu WhatsApp.</p>
     <div class="field"><label>Tu dirección</label>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -330,7 +381,7 @@ function ajustesView() {
       <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página ${pzIc('arrowRight', 13)}</a>
     </div>
   </div></div>
-  <details class="card int-advanced"><summary>${pzIc('gear', 16)} Configuración avanzada</summary>
+  <details class="card int-advanced"${ajHid('avanzado')} id="ajsec-avanzado"${ajInitSec === 'avanzado' ? ' open' : ''}><summary>${pzIc('gear', 16)} Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás pegar la dirección de embed que Meta genera para tu Instagram. La mayoría no tiene que tocar nada acá.</p>
     <div class="int-block"><h4>Instagram Embed URL</h4>
       <div class="field"><label>Instagram Embed URL</label>
@@ -340,7 +391,6 @@ function ajustesView() {
     <button class="btn btn-primary" id="btnSaveSettings">Guardar</button> <span id="setMsg"></span>
   </details>
   </div>
-  <div class="card aj-salir" style="margin-top:10px"><button class="btn btn-danger btn-block" id="btnLogoutAj">${pzIc('logout', 18)} Salir</button></div>
   <div id="gzAjustesBox"></div>`;
 }
 
@@ -594,92 +644,32 @@ function ajPushNativeOn(r) {
   return false;
 }
 
-function pzAjMas2Mostrar() {
-  const w = document.getElementById('ajsec-mas2-wrap');
-  if (w) w.hidden = false;
-  const b = document.getElementById('btnAjMas2');
-  if (b) b.innerHTML = ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Fewer settings' : 'Menos ajustes') + ' <span>‹</span>';
+// (AJUSTES-CARPETAS) Menú estilo Instagram: cada sección vive en su propia
+// pantalla de detalle dentro de #ajDetail; ajNav muestra una y oculta el
+// menú, y el botón ‹ vuelve al menú navegando por hash (#/app/ajustes).
+// Las filas del menú navegan por hash
+// (#/app/ajustes?plan=1, ...) y ajustesView ya nace en la pantalla destino
+// cuando la URL trae el deep-link, sin flash.
+const AJ_SECCIONES = ['referidos', 'notif', 'negocio', 'plan', 'auto', 'conex', 'marca', 'pagina', 'avanzado'];
+function ajNav(id) {
+  if (!id || AJ_SECCIONES.indexOf(id) === -1) return;
+  const menu = document.getElementById('ajMenu');
+  const det = document.getElementById('ajDetail');
+  if (!menu || !det) return;
+  menu.hidden = true; det.hidden = false;
+  AJ_SECCIONES.forEach((s) => { const c = document.getElementById('ajsec-' + s); if (c) c.hidden = (s !== id); });
+  const av = document.getElementById('ajsec-avanzado');
+  if (av && id === 'avanzado') av.open = true;
+  try { window.scrollTo(0, 0); } catch (e) {}
 }
-function pzAjMas2Toggle() {
-  const w = document.getElementById('ajsec-mas2-wrap');
-  if (!w) return;
-  if (w.hidden) { pzAjMas2Mostrar(); return; }
-  w.hidden = true;
-  const b = document.getElementById('btnAjMas2');
-  if (b) b.innerHTML = ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'More settings' : 'Más ajustes') + ' <span>›</span>';
-}
-// (LOTE AJUSTES-LIMPIO) Carpetas: en la primera apertura, las secciones
-// plegables nacen CERRADAS; Notificaciones y Referidos (lo principal) no se
-// pliegan nunca: su contenido queda siempre visible. Tocar el encabezado de
-// una carpeta la abre o la cierra; el estado persiste en localStorage.
-// Los deep-links (?plan, ?ig, ...) abren la carpeta destino vía ajFoldAbrir.
+// Compat: antes las secciones se plegaban en la misma página (AJ_FOLDABLE);
+// ahora cada una abre su pantalla de detalle. ajFoldAbrir sigue siendo la
+// puerta que usan los deep-links de bindSettings y app.js (tras pagar, abre
+// Mi plan). ajFoldInit ya no pliega nada: queda como no-op para no romper
+// a quien la llama.
 const AJ_FOLDABLE = ['negocio', 'plan', 'auto', 'conex', 'marca', 'pagina'];
-function ajFoldKey() {
-  try {
-    const uid = (typeof ME !== 'undefined' && ME && ME.id) ? String(ME.id) : '';
-    return 'posta-ajustes-carpetas' + (uid ? '_' + uid : '');
-  } catch (e) { return 'posta-ajustes-carpetas'; }
-}
-function ajFoldLoad() {
-  let raw = null;
-  try { raw = localStorage.getItem(ajFoldKey()); } catch (e) { return null; }
-  if (!raw) return undefined;
-  try { const o = JSON.parse(raw); if (o && Array.isArray(o.open)) return o.open; } catch (e) {}
-  return null;
-}
-function ajFoldSave(open) {
-  try { localStorage.setItem(ajFoldKey(), JSON.stringify({ v: 1, open: open })); } catch (e) {}
-}
-function ajFoldSet(id, open) {
-  const card = document.getElementById('ajsec-' + id);
-  if (!card) return;
-  card.classList.toggle('ajfold', true);
-  card.classList.toggle('ajfold-open', !!open);
-  card.classList.toggle('ajfold-closed', !open);
-}
-function ajFoldCurrentOpen() {
-  const out = [];
-  AJ_FOLDABLE.forEach((id) => {
-    const card = document.getElementById('ajsec-' + id);
-    if (card && card.classList.contains('ajfold-open')) out.push(id);
-  });
-  return out;
-}
-function ajFoldAbrir(id) {
-  if (AJ_FOLDABLE.indexOf(id) === -1) return;
-  const card = document.getElementById('ajsec-' + id);
-  if (!card) return;
-  const w = document.getElementById('ajsec-mas2-wrap');
-  if (w && w.contains(card)) pzAjMas2Mostrar();
-  ajFoldSet(id, true);
-  ajFoldSave(ajFoldCurrentOpen());
-}
-function ajFoldInit() {
-  const stored = ajFoldLoad();
-  let open;
-  if (stored === undefined) { open = []; ajFoldSave([]); }
-  else if (stored === null) { open = AJ_FOLDABLE.slice(); }
-  else open = stored;
-  AJ_FOLDABLE.forEach((id) => {
-    const card = document.getElementById('ajsec-' + id);
-    if (!card) return;
-    const head = card.querySelector('.ajsec-h');
-    if (head) {
-      if (!head.querySelector('.ajfold-chev')) {
-        const chev = document.createElement('span');
-        chev.className = 'ajfold-chev';
-        chev.textContent = '›';
-        head.appendChild(chev);
-      }
-      head.onclick = () => {
-        const isOpen = card.classList.contains('ajfold-open');
-        ajFoldSet(id, !isOpen);
-        ajFoldSave(ajFoldCurrentOpen());
-      };
-    }
-    ajFoldSet(id, open.indexOf(id) !== -1);
-  });
-}
+function ajFoldAbrir(id) { ajNav(id); }
+function ajFoldInit() {}
 
 function bindSettings() {
   // (ARMA TODO ítem 1) plan=error ya se mostró en ajustesView: limpiamos el
@@ -690,27 +680,33 @@ function bindSettings() {
     const _pqErr = new URLSearchParams(location.hash.split('?')[1] || '');
     if (_pqErr.get('plan') === 'error') setTimeout(() => { try { if ((location.hash || '').indexOf('plan=error') > -1) history.replaceState(null, '', location.pathname + '#/app/ajustes'); } catch (e) {} }, 400);
   } catch (e) {}
-  // (LOTE AJUSTES-LIMPIO) Las tarjetas plegables nacen como carpetas
-  // (ajFoldInit, arriba): cerradas en la primera apertura, estado en
-  // localStorage. Los deep-links abren la carpeta destino antes de scrollear.
+  // Los deep-links (?plan, ?ig, ...) abren la pantalla de detalle destino
+  // vía ajFoldAbrir. (?plan_sel= también aterriza en Mi plan; la zona del
+  // plan sigue leyendo plan_sel para preseleccionar el tier.)
   const ajDeepSec = () => {
     try {
       const pq = new URLSearchParams(location.hash.split('?')[1] || '');
       if (pq.get('plan')) return 'plan';
+      if (pq.get('plan_sel')) return 'plan';
       if (pq.get('ig') || pq.get('tiktok') || pq.get('google') || pq.get('tn')) return 'conex';
+      if (pq.get('conex')) return 'conex';
       if (pq.get('auto')) return 'auto';
       if (pq.get('avisos')) return 'notif';
+      if (pq.get('notif')) return 'notif';
       if (pq.get('pagina')) return 'pagina';
       if (pq.get('estilos') || pq.get('marca')) return 'marca';
       if (pq.get('referidos')) return 'referidos';
+      if (pq.get('negocio')) return 'negocio';
+      if (pq.get('avanzado')) return 'avanzado';
     } catch (e) {}
     return '';
   };
   try { ajFoldInit(); } catch (e) {}
   const ajDeep = ajDeepSec();
-  if (ajDeep) setTimeout(() => { try { const el = document.getElementById('ajsec-' + ajDeep); if (el) { const w = document.getElementById('ajsec-mas2-wrap'); if (w && w.contains(el)) pzAjMas2Mostrar(); try { ajFoldAbrir(ajDeep); } catch (e) {} el.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' }); } } catch (e) {} }, 120);
-  const btnAjMas2 = document.getElementById('btnAjMas2');
-  if (btnAjMas2) btnAjMas2.onclick = () => pzAjMas2Toggle();
+  if (ajDeep) setTimeout(() => { try { ajFoldAbrir(ajDeep); } catch (e) {} }, 120);
+  const ajBack = document.getElementById('ajBackBtn');
+  if (ajBack) ajBack.onclick = () => { location.hash = '#/app/ajustes'; };
+  document.querySelectorAll('[data-ajnav]').forEach((b) => { b.onclick = () => { location.hash = '#/app/ajustes?' + b.dataset.ajnav + '=1'; }; });
   try { ttZoneLoad(); } catch (e) {}
   try { ggZoneLoad(); } catch (e) {}
   try { tnZoneLoad(); } catch (e) {}
@@ -754,7 +750,7 @@ function bindSettings() {
   let __apOn = null, __awOn = null;
   let __pausedAll = false;
   const fmtPauseAt = (iso) => { try { let s = String(iso || '').trim().replace(' ', 'T'); if (!s) return ''; if (!/[zZ]$/.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z'; const d = new Date(s); return isNaN(d) ? '' : d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
-  const paintAjStAuto = () => { try { const el = $('#ajStAuto'); if (!el || __apOn === null || __awOn === null) return; el.textContent = (__apOn && __awOn) ? 'Activado' : (!__apOn && !__awOn) ? 'Desactivado' : 'Parcial'; } catch (e) {} };
+  const paintAjStAuto = () => { try { const el = $('#ajStAuto'); if (!el || __apOn === null || __awOn === null) return; el.textContent = (__apOn && __awOn) ? 'Activado' : (!__apOn && !__awOn) ? 'Desactivado' : 'Parcial'; const em = $('#ajStAutoMenu'); if (em) em.textContent = el.textContent; } catch (e) {} };
   // --- Autopiloto (4 puntos, 2026-10-02) ---
   const btnAp = $('#btnAutopilotToggle');
   if (btnAp) {
@@ -984,6 +980,8 @@ function bindSettings() {
           if (!el) return;
           const n = (r.pre_notify ? 1 : 0) + (letterOn ? 1 : 0) + (failOn ? 1 : 0);
           el.textContent = n === 3 ? 'Todos activos' : n === 0 ? 'Silenciados' : `${n} de 3 activos`;
+          const em = $('#ajStAvisosMenu');
+          if (em) em.textContent = el.textContent;
         } catch (e) {}
       };
       paintSum();

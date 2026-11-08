@@ -37,19 +37,21 @@ function countLines(src, sub) {
 // ACTUALIZADO (lote ajustes-simple 6/11, decisión Valentino «Referidos arriba
 // de todo»): Referidos es la PRIMERA tarjeta, siempre visible (web y nativa);
 // «Compartir mi semana» y el pie Posty salen de Ajustes.
+// ACTUALIZADO (lote ajustes-carpetas 7/11, pedido Valentino: Ajustes como los
+// de Instagram): el botón «Más ajustes» y su desplegable salen; las tarjetas
+// viven en la pantalla de detalle (#ajDetail) en el mismo orden, y el menú
+// (#ajMenu) las lista como filas. Nada se elimina.
 const oNotif = idx(chunkSrc, 'id="ajsec-notif"');
 const oNeg = idx(chunkSrc, 'id="ajsec-negocio"');
 const oAuto = idx(chunkSrc, 'id="ajsec-auto"');
 const oPlan = idx(chunkSrc, 'id="ajsec-plan"');
-const oMas2 = idx(chunkSrc, 'id="ajsec-mas2"');
-const oWrap = idx(chunkSrc, 'id="ajsec-mas2-wrap"');
 const oConex = idx(chunkSrc, 'id="ajsec-conex"');
 const oMarca = idx(chunkSrc, 'id="ajsec-marca"');
 const oPag = idx(chunkSrc, 'id="ajsec-pagina"');
 const oRef = idx(chunkSrc, 'id="ajsec-referidos"');
 ok(oRef < oNotif && oNotif < oNeg && oNeg < oPlan, 'orden visible: Referidos primero, Notificaciones, Negocio, Plan');
-ok(oPlan < oMas2 && oMas2 < oWrap && oWrap < oAuto, 'Más ajustes tras Mi plan; resto detrás del bloque');
-ok(oAuto < oConex && oConex < oMarca && oMarca < oPag, 'secundarias en orden: Automático, Conexiones, Marca, Página');
+ok(oPlan < oAuto && oAuto < oConex && oConex < oMarca && oMarca < oPag, 'detalle en orden: Automático, Conexiones, Marca, Página');
+ok(chunkSrc.indexOf('id="ajsec-mas2"') === -1 && chunkSrc.indexOf('id="ajsec-mas2-wrap"') === -1, 'sin botón ni bloque «Más ajustes»: el menú los reemplaza');
 ok(chunkSrc.indexOf('id="ajsec-notif"') !== -1, 'tarjeta Notificaciones existe');
 
 // ---------- 2. Sin acordeones ----------
@@ -69,8 +71,9 @@ ok(cssSrc.indexOf('.card.ajsec.ajflat>.ajsec-h{cursor:default') !== -1, 'CSS: he
 ok(chunkSrc.indexOf('data-ajmas=') === -1, 'sin filas Más: preview eliminado');
 ok(chunkSrc.indexOf("$$('.ajmas-row')") === -1, 'sin handler de filas Más');
 ok(chunkSrc.indexOf("getElementById('btnPreview')") === -1, 'sin atajo IA a Vista previa');
-ok(chunkSrc.indexOf('id="btnAjMas2"') !== -1, 'botón único Más ajustes');
-ok(chunkSrc.indexOf('id="ajsec-mas2-wrap" hidden') !== -1, 'bloque Más nace oculto');
+ok(chunkSrc.indexOf('id="btnAjMas2"') === -1, 'botón Más ajustes eliminado (el menú lo reemplaza)');
+ok(chunkSrc.indexOf('id="ajsec-mas2-wrap"') === -1, 'bloque Más eliminado (el detalle lo reemplaza)');
+ok(chunkSrc.indexOf('id="ajMenu"') !== -1 && chunkSrc.indexOf('id="ajDetail"') !== -1, 'menú (#ajMenu) y detalle (#ajDetail) presentes');
 ok(chunkSrc.indexOf('ajDeepSec') !== -1, 'deep-link scrollea (ajDeepSec)');
 ok(chunkSrc.indexOf("pq.get('avisos')) return 'notif'") !== -1, 'deep-link avisos -> notif');
 
@@ -102,7 +105,9 @@ ok(serverSrc.indexOf('has_native_push_sub: nativeSubs > 0') !== -1, 'servidor de
 ok(serverSrc.indexOf('has_push_sub: subs > 0') !== -1, 'servidor conserva has_push_sub');
 
 // ---------- 7. Espejo EN ----------
-for (const s of ["'Notifications'", "'Activate notifications'", "'More settings'", "'Notifications on in your phone.'"]) {
+// (ACTUALIZADO lote ajustes-carpetas 7/11: 'More settings' sale con el botón
+// «Más ajustes»; el espejo EN vive ahora en las filas del menú.)
+for (const s of ["'Notifications'", "'Activate notifications'", "'Advanced settings'", "'Notifications on in your phone.'"]) {
   ok(chunkSrc.indexOf(s) !== -1, 'EN presente: ' + s);
 }
 

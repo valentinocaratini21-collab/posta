@@ -5174,15 +5174,6 @@ body.pz-postchat-open{overflow:hidden}
 .card.int-advanced{padding:13px 14px;margin-bottom:11px}
 .card.aj-salir{padding:13px 14px}
 
-/* (LOTE AJUSTES-LIMPIO) Carpetas de Ajustes: encabezado clickeable con
-   flecha; cerrada esconde el cuerpo. Especificidad mayor que la regla
-   ajflat para que el plegado gane. */
-.card.ajsec.ajflat.ajfold > .ajsec-h{cursor:pointer}
-.card.ajsec.ajflat.ajfold-closed > .ajsec-h{margin-bottom:0}
-.card.ajsec.ajflat.ajfold-closed > .ajsec-b{display:none}
-.ajfold-chev{display:inline-block;font-size:19.5px;line-height:1;transition:transform .18s;margin-left:10px}
-.ajfold-open .ajfold-chev{transform:rotate(90deg)}
-
 /* ============ LOTE INICIO-DOCK-ZOOM (3/11) ============ */
 /* Pieza 1 — OVERFLOW / ZOOM. Causa raíz medida en la captura de
    Valentino (ver STATUS): la fila del encabezado (.hf-prow: avatar
@@ -5585,3 +5576,19 @@ body.pz-postchat-open{overflow:hidden}
 @media (prefers-reduced-motion:reduce){
 .pz-ritual-sparkrow span,.pz-ritual-reveal .pz-ritual-carta,.pz-ritual-revelada,.pz-dorso-spark,.pz-ritual-pack-velo.pz-respira,.pz-ritual-pack-velo.pz-respira .pz-dorso{animation:none}
 }
+
+/* (AJUSTES-CARPETAS) Menú de Ajustes estilo Instagram: filas con ícono,
+   título y una línea de resumen, agrupadas por tema; cada fila abre su
+   sección en su propia pantalla (#ajDetail) con botón ‹ para volver. */
+.ajmenu-group{margin:0 0 18px}
+.ajmenu-h{font-size:11.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);margin:0 6px 8px}
+.ajmenu-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;font:inherit;color:inherit}
+.ajmenu-row + .ajmenu-row{margin-top:8px}
+.ajmenu-ico{flex:0 0 auto;width:36px;height:36px;border-radius:10px;background:#E8F4FB;display:flex;align-items:center;justify-content:center}
+.ajmenu-tx{flex:1 1 auto;min-width:0}
+.ajmenu-t{display:block;font-weight:800;font-size:14.5px}
+.ajmenu-s{display:block;font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ajmenu-chev{flex:0 0 auto;color:var(--dim);font-size:19px;line-height:1}
+.ajmenu-danger{color:#D64545}
+.ajmenu-danger .ajmenu-ico{background:#FDECEC}
+.ajback{display:inline-flex;align-items:center;gap:6px;background:none;border:none;padding:6px 2px;margin-bottom:10px;cursor:pointer;font:inherit;font-weight:800;color:var(--cel)}

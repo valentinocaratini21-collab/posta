@@ -12,27 +12,35 @@ const css = fs.readFileSync(path.join(__dirname, 'public/styles.css'), 'utf8');
 const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 const idx = (s, sub) => s.indexOf(sub);
 
-// ---------- PIEZA 1 + 5: carpetas + orden principal ----------
-// Orden en el template: referidos → notif → negocio → plan → botón Más → wrap → Salir → caja Gesty.
-// ACTUALIZADO (lote ajustes-simple 6/11): Referidos primero, arriba de todo;
-// «Compartir mi semana» y el pie Posty salen de Ajustes.
+// ---------- PIEZA 1 + 5: menú + detalle + orden principal ----------
+// Orden en el template: menú (#ajMenu, filas data-ajnav en orden) → detalle
+// (#ajDetail: referidos → notif → negocio → plan → auto → conex → marca →
+// pagina → avanzado) → caja Gesty. Salir es fila del menú.
+// ACTUALIZADO (lote ajustes-carpetas 7/11): el botón «Más ajustes» y su
+// desplegable salen; cada sección abre su propia pantalla de detalle.
 const iNotif = idx(chk, 'id="ajsec-notif"');
 const iRef = idx(chk, 'id="ajsec-referidos"');
 const iNeg = idx(chk, 'id="ajsec-negocio"');
 const iPlan = idx(chk, 'id="ajsec-plan"');
-const iMas2 = idx(chk, 'id="ajsec-mas2"');
-const iWrap = idx(chk, 'id="ajsec-mas2-wrap"');
+const iAuto = idx(chk, 'id="ajsec-auto"');
+const iConex = idx(chk, 'id="ajsec-conex"');
+const iMarca = idx(chk, 'id="ajsec-marca"');
+const iPag = idx(chk, 'id="ajsec-pagina"');
+const iAv = idx(chk, 'id="ajsec-avanzado"');
+const iMenu = idx(chk, 'id="ajMenu"');
+const iDetail = idx(chk, 'id="ajDetail"');
 const iSalir = idx(chk, 'id="btnLogoutAj"');
 const iGz = idx(chk, 'id="gzAjustesBox"');
-t(iRef > 0 && iNotif > 0 && iNeg > 0 && iPlan > 0 && iMas2 > 0 && iWrap > 0 && iSalir > 0, 'todas las tarjetas existen');
-t(iRef < iNotif && iNotif < iNeg && iNeg < iPlan && iPlan < iMas2 && iMas2 < iWrap, 'orden: referidos → notif → negocio → plan → Más ajustes → wrap');
-t(iRef < iWrap, 'referidos FUERA de Más ajustes (antes del wrap)');
+t(iRef > 0 && iNotif > 0 && iNeg > 0 && iPlan > 0 && iAuto > 0 && iConex > 0 && iMarca > 0 && iPag > 0 && iAv > 0 && iMenu > 0 && iDetail > 0 && iSalir > 0, 'todas las tarjetas existen');
+t(iRef < iNotif && iNotif < iNeg && iNeg < iPlan && iPlan < iAuto && iAuto < iConex && iConex < iMarca && iMarca < iPag && iPag < iAv, 'orden de detalle: referidos → notif → negocio → plan → auto → conex → marca → pagina → avanzado');
+t(iMenu < iDetail && iSalir > iMenu && iSalir < iDetail, 'menú antes que el detalle; Salir es fila del menú');
 t(cnt(chk, 'id="ajsec-referidos"') === 1, 'referidos NO duplicado (1 sola tarjeta)');
-t(iWrap < iSalir && iSalir < iGz, 'Salir sigue visible al final, después del wrap; caja Gesty después');
-// Dentro del wrap siguen: auto, conex, marca, pagina.
-for (const id of ['auto', 'conex', 'marca', 'pagina']) {
+t(iDetail < iGz, 'caja Gesty después del detalle');
+t(chk.indexOf('id="ajsec-mas2"') === -1 && chk.indexOf('id="ajsec-mas2-wrap"') === -1, 'sin botón ni bloque «Más ajustes»');
+// En la pantalla de detalle siguen: auto, conex, marca, pagina, avanzado.
+for (const id of ['auto', 'conex', 'marca', 'pagina', 'avanzado']) {
   const i = idx(chk, 'id="ajsec-' + id + '"');
-  t(i > iWrap, 'ajsec-' + id + ' sigue dentro de Más ajustes');
+  t(i > iDetail && i < iGz, 'ajsec-' + id + ' sigue en la pantalla de detalle');
 }
 // Carpetas: lista exacta de plegables; notif y referidos NO se pliegan.
 const mFold = chk.match(/const AJ_FOLDABLE = \[([^\]]*)\]/);
@@ -44,21 +52,22 @@ if (mFold) {
 }
 t(chk.includes('function ajFoldInit()'), 'existe ajFoldInit');
 t(chk.includes('function ajFoldAbrir('), 'existe ajFoldAbrir');
-t(chk.includes('posta-ajustes-carpetas'), 'estado persiste en localStorage (posta-ajustes-carpetas)');
+t(chk.includes("location.hash = '#/app/ajustes'") && chk.includes('data-ajnav'), 'navegación por hash: filas del menú y botón ‹ (sin estado en localStorage)');
 t(chk.includes('ajFoldInit()'), 'bindSettings llama a ajFoldInit');
-t(chk.includes('ajFoldAbrir(ajDeep)'), 'deep-link abre la carpeta destino');
-t(app.includes("ajFoldAbrir('plan')"), 'scroll ?plan=1 abre la carpeta Mi plan');
+t(chk.includes('ajFoldAbrir(ajDeep)'), 'deep-link abre la pantalla destino');
+t(app.includes("ajFoldAbrir('plan')"), 'scroll ?plan=1 abre Mi plan');
 // Notificaciones: botón Activar + cartel de error intactos, dentro de notif.
 const notifSec = chk.slice(iNotif, iNeg);
 t(notifSec.includes('id="btnPushEnable"'), 'botón Activar notificaciones sigue en notif');
 t(notifSec.includes('id="pzPushErr"'), 'cartel #pzPushErr sigue junto al botón');
-// Más ajustes y su desplegable intactos.
-t(chk.includes('id="btnAjMas2"') && chk.includes('function pzAjMas2Toggle()') && chk.includes('function pzAjMas2Mostrar()'), 'botón y funciones Más ajustes intactos');
+// Menú y su navegación intactos.
+t(chk.includes('id="ajMenu"') && chk.includes('id="ajDetail"') && chk.includes('function ajNav(') && chk.includes('id="ajBackBtn"'), 'menú, detalle, navegación y botón ‹ intactos');
 t(!chk.includes('id="ajsec-mas2-preview"'), 'fila Cómo me ve la IA eliminada (6/11: vive en Tu negocio)');
-// CSS de carpetas con especificidad mayor que ajflat.
-t(css.includes('.card.ajsec.ajflat.ajfold-closed > .ajsec-b{display:none}'), 'CSS: carpeta cerrada esconde el cuerpo');
-t(css.includes('.card.ajsec.ajflat.ajfold > .ajsec-h{cursor:pointer}'), 'CSS: encabezado de carpeta con cursor pointer');
-t(css.includes('.ajfold-open .ajfold-chev{transform:rotate(90deg)}'), 'CSS: flecha gira al abrir');
+// CSS del menú (ACTUALIZADO lote ajustes-carpetas 7/11: el CSS de carpetas
+// plegables sale con el pliegue; el menú trae sus propias reglas).
+t(css.includes('.ajmenu-row{display:flex;align-items:center;gap:12px'), 'CSS: fila del menú con ícono, título y resumen');
+t(css.includes('.ajmenu-h{font-size:11.5px;font-weight:800'), 'CSS: encabezado chico de grupo del menú');
+t(css.includes('.ajback{display:inline-flex;align-items:center'), 'CSS: botón ‹ para volver al menú');
 
 // ---------- PIEZA 2: iconos + días ----------
 t(cnt(chk, '${esc(title)}') === 0, '0 ocurrencias de esc(title) en Datos de otras fuentes');
