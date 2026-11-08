@@ -206,13 +206,13 @@ function parteB() {
   // Cámara, 'image/*,video/*' en Galería) — el regex de B8b no lo ve porque
   // el accept es parámetro, no literal; la regla se cumple igual.
   const clickSites = (appSrc.match(/(cf|picker|fl)\.click\(\)/g) || []).length;
-  check('B8a solo hay 5 clicks sobre el input del chat (foto dock, video dock, camarita, fallback + hoja Hoy R1)', clickSites === 5, 'clicks=' + clickSites);
+  check('B8a hay 7 clicks sobre el input del chat (foto dock, video dock, camarita, fallback + hoja Hoy R1 + video R6 + subir-foto Cambialo)', clickSites === 7, 'clicks=' + clickSites);
   const imgSets = (appSrc.match(/(cf|picker|fl)\.accept = 'image\/\*'/g) || []).length;
-  const vidSets = (appSrc.match(/cf\.accept = 'video\/\*'/g) || []).length;
-  check('B8b 3 sitios fijan image/* y 1 fija video/*', imgSets === 3 && vidSets === 1, `image=${imgSets} video=${vidSets}`);
+  const vidSets = (appSrc.match(/(cf|picker)\.accept = 'video\/\*'/g) || []).length;
+  check('B8b 4 sitios fijan image/* y 2 fijan video/*', imgSets === 4 && vidSets === 2, `image=${imgSets} video=${vidSets}`);
   const getFile = (appSrc.match(/getElementById\(["']chatFile["']\)/g) || []).length;
   const queryFile = (appSrc.match(/querySelector\(['"]#chatFile['"]\)/g) || []).length;
-  check('B8c sin llamadores nuevos de #chatFile (5 getElementById + 2 querySelector; el 5º es pzHoySubirPicker de la hoja Hoy R1)', getFile === 5 && queryFile === 2, `get=${getFile} query=${queryFile}`);
+  check('B8c llamadores de #chatFile (7 getElementById + 2 querySelector; +2 R6: video y subir-foto Cambialo)', getFile === 7 && queryFile === 2, `get=${getFile} query=${queryFile}`);
   const albumTag = (appSrc.match(/<input[^>]*id="albumFile"[^>]*>/) || [''])[0];
   check('B9 el flujo del Álbum (#albumFile) NO se tocó (sigue image/*,video/*)', albumTag.includes('accept="image/*,video/*"'), albumTag);
 }

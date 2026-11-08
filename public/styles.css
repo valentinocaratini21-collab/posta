@@ -5715,3 +5715,65 @@ body.pz-postchat-open{overflow:hidden}
 .pz-hoy-sheet-opt b{display:block;font-size:15px;color:#0A1E33}
 .pz-hoy-sheet-opt small{font-size:12.5px;color:var(--mut);font-weight:700}
 .pz-hoy-sheet .sheet-cancel{width:100%;background:none;border:none;font-weight:800;color:var(--mut);font-size:14px;padding:9px;cursor:pointer;font-family:inherit}
+
+/* ============================================================
+   LOTE REDISENO-R6 · CHAT POR TEMAS (estilo Desy, mock
+   posty-app-design: pane Chat, .chat-topic/.chat-quick/
+   .chat-input-bar/.chat-send). Un tema puntual por vez, respuestas
+   cortas para tocar, escribir solo como frase corta de excepción.
+   ============================================================ */
+#pzTemaWrap{flex:none;margin:0 0 8px}
+.pz-tema{display:flex;flex-direction:column;gap:2px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 8px 24px rgba(10,30,51,.10);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);padding:11px 13px}
+.pz-tema small{font-size:10px;font-weight:900;letter-spacing:.08em;color:#0D4E73}
+.pz-tema > b{font-size:14.5px;color:#0A1E33;line-height:1.25}
+.pz-tema > span{font-size:12px;font-weight:700;color:#33506B;line-height:1.4}
+.pz-tema-sub{font-size:12.5px;font-weight:700;color:#33506B}
+.pz-tema-thumb{display:flex;gap:10px;align-items:center;margin-top:9px;background:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.7);border-radius:12px;padding:7px 9px}
+.pz-tema-thumb img{width:42px;height:42px;border-radius:9px;object-fit:cover;flex:none}
+.pz-tema-thumb div{flex:1;min-width:0}
+.pz-tema-thumb div b{font-size:12.5px;display:block;color:#0A1E33}
+.pz-tema-thumb div span{font-size:11.5px;color:#33506B}
+.pz-tema-cuerpo{margin-top:9px}
+.pz-tema-album{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pz-tema-foto{border:1px solid rgba(255,255,255,.85);border-radius:12px;padding:0;overflow:hidden;cursor:pointer;background:rgba(255,255,255,.5)}
+.pz-tema-foto img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.pz-tema-quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}
+.pz-tema-quick button{border:1px solid rgba(255,255,255,.85);background:rgba(255,255,255,.58);color:#0A1E33;border-radius:999px;font-family:inherit;font-weight:900;font-size:13px;padding:10px 13px;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 4px 12px rgba(10,30,51,.08);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);cursor:pointer}
+.pz-tema-quick button:active{transform:scale(.97)}
+.pz-tema-quick button.primary{background:linear-gradient(135deg,rgba(62,166,219,.82),rgba(27,111,160,.78));color:#fff;border-color:rgba(255,255,255,.6);text-shadow:0 1px 2px rgba(10,30,51,.25)}
+.pz-tema-quick button.picked{background:linear-gradient(135deg,rgba(62,166,219,.82),rgba(27,111,160,.78));color:#fff;border-color:rgba(255,255,255,.6)}
+.pz-tema-quick button:disabled{opacity:.55;cursor:default}
+.pz-tema-hint{font-size:12.5px;font-weight:800;color:#0D4E73;margin:13px 2px 0}
+.pz-tema-hint span{color:#33506B;font-weight:700}
+/* Barra del chat completo: Enviar propio siempre visible (ícono blanco
+   sobre el círculo azul + texto, como el mock) y sin avatar repetido
+   (la cabecera ya muestra a Posty). */
+.pz-chatfull .chat-input-row .chat-face{display:none}
+.pz-chat-send{flex:none;height:44px;padding:0 14px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13.5px;font-weight:900}
+.pz-chat-send svg{width:16px;height:16px}
+.pz-chat-send:disabled{opacity:.55}
+/* La fila del chat completo lleva 5 controles (input + cámara + video +
+   mic + Enviar). Sin esto, `.chat-input-row .btn` (40px, padding 0, del
+   pulido móvil) aplasta la píldora Enviar a un círculo de 40px y el
+   texto «Enviar» se desborda fuera de la pantalla a 390px (visto en la
+   repro real con Chromium: el botón quedaba medio fuera). Regla con
+   mayor especificidad, solo en #pzChatFull: la píldora mide su
+   contenido y los redondos quedan en 40px, como el resto del chat. */
+#pzChatFull .chat-input-row .pz-chat-send{width:auto;min-width:0;height:40px;padding:0 13px;font-size:13px;flex:none;border-radius:999px}
+#pzChatFull .chat-input-row .btn:not(.pz-chat-send){width:40px;height:40px}
+#pzChatFull .chat-input-row .in{min-width:0}
+/* Offset del input cuando el dock de 6 pestañas está presente (R0 lo
+   muestra también en chat). Guardado con :has: en la base el dock se
+   oculta en chat y no hay offset; cuando R0 aterrice, el input sube
+   72px y no queda tapado. NOTA: R0 planea `bottom:` sobre esta fila,
+   pero la fila es hija flex (no posicionada): lo que la mueve es el
+   margin-bottom, no `bottom`. Ver STATUS R6. */
+.bb-app:has(.bb-bar) .pz-chatfull .chat-input-row,.app-shell:has(.mz-tabs) .pz-chatfull .chat-input-row{margin-bottom:calc(72px + 10px + env(safe-area-inset-bottom))}
+/* Entrada al conserje desde Hoy (solo ventana 19:00–00:00, solo con
+   token de admin en el dispositivo). */
+.pz-conserje-hoy{display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit;margin:0 0 12px;padding:12px 14px}
+.pz-conserje-hoy-ico{font-size:22px;line-height:1}
+.pz-conserje-hoy-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.pz-conserje-hoy-txt b{font-size:14.5px;color:#0A1E33}
+.pz-conserje-hoy-txt small{font-size:12px;color:#33506B}
+.pz-conserje-hoy-ir{font-size:13.5px;font-weight:900;color:#0D4E73;white-space:nowrap}

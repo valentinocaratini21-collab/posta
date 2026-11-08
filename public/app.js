@@ -10317,6 +10317,11 @@ async function chatSend() {
   // Las fotos se pueden mandar solas, sin texto: antes el botón no hacía nada en ese caso.
   const unsent = CHAT_PHOTOS.filter(p => p.aiUrl && !p.sent);
   if (!text && !unsent.length) return;
+  // (LOTE REDISENO-R6) El chat por temas se come el envío cuando el tema
+  // abierto lo entiende (cambialo, dale, después, un número de consultas,
+  // el texto nuevo, la foto nueva): el resto sigue al chat normal. El
+  // hook limpia el input cuando consume; si no consume, no toca nada.
+  try { if (typeof pzTemaOnSend === 'function' && pzTemaOnSend(text, unsent)) return; } catch (e) {}
   const sendText = text || (unsent.length === 1 ? '📷 Te mando una foto' : `📷 Te mando ${unsent.length} fotos`);
   // (SUBIR-FOTO-PREGUNTAS) UNA foto/video sin instrucción clara → preguntas
   // con un toque, no envío directo. Multi-foto, ancla, IDEA abierta o texto
@@ -11243,6 +11248,17 @@ async function voiceSend() {
 
 // Barra estilo Muse: a la derecha va 🎙 si no hay nada para enviar, ➤ si hay texto o fotos.
 // Durante grabación/vista previa/envío, la barra de voz manda: no tocar el botón.
+// (LOTE REDISENO-R6) El micrófono en reposo, con sus handlers de nota
+// de voz. Extraído de chatUpdateSendBtn sin cambiar comportamiento: lo
+// usan la rama sin texto y el chat completo (ahí el Enviar es un botón
+// propio y el micrófono nunca se convierte en enviar).
+function pzChatMicIdle(b) {
+  b.innerHTML = pzIc('mic', 18); b.className = 'btn btn-soft'; b.title = 'Mantener para hablar'; b.onclick = null;
+  b.onpointerdown = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_START_X = e.clientX; VOICE_START_Y = e.clientY; voiceToggle(); };
+  b.onpointermove = (e) => { if (VOICE_STATE !== 'rec') return; if ((VOICE_START_X - e.clientX) > 60) { VOICE_CANCEL = true; const hm = document.getElementById('vozCancelMsg'); if (hm) hm.style.display = ''; const ht = document.getElementById('vozHintTx'); if (ht) ht.style.display = 'none'; } };
+  b.onpointerup = (e) => { if (VOICE_STATE !== 'rec') { VOICE_EARLY_UP = true; return; } if (VOICE_CANCEL) { VOICE_CANCEL = false; voiceDiscard(); } else voiceStop(); };
+  b.onpointercancel = (e) => { if (VOICE_STATE !== 'rec') { VOICE_ABORTED = true; return; } VOICE_CANCEL = false; voiceDiscard(); };
+}
 function chatUpdateSendBtn() {
   const b = $('#chatMicSend'), inp = $('#chatInput');
   if (!b) return;
@@ -11255,12 +11271,18 @@ function chatUpdateSendBtn() {
   }
   const unsent = (typeof CHAT_PHOTOS !== 'undefined' && CHAT_PHOTOS.some(p => !p.sent));
   const ready = (inp && inp.value.trim().length > 0) || unsent;
+  // (LOTE REDISENO-R6) Con botón Enviar propio (chat completo), el
+  // micrófono queda como micrófono siempre: solo se habilita/deshabilita
+  // el Enviar propio según haya algo para mandar. La presencia del botón
+  // es la condición: sin él (otras superficies), el morph de siempre.
+  const sbPropio = (typeof document !== 'undefined' && document.getElementById) ? document.getElementById('pzChatSendBtn') : null;
+  if (sbPropio) {
+    sbPropio.disabled = !ready;
+    pzChatMicIdle(b);
+    return;
+  }
   if (ready) { b.innerHTML = pzIc('send', 16); b.className = 'btn btn-primary'; b.title = 'Enviar'; b.onclick = () => chatSend(); b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null; }
-  else { b.innerHTML = pzIc('mic', 18); b.className = 'btn btn-soft'; b.title = 'Mantener para hablar'; b.onclick = null;
-    b.onpointerdown = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_START_X = e.clientX; VOICE_START_Y = e.clientY; voiceToggle(); };
-    b.onpointermove = (e) => { if (VOICE_STATE !== 'rec') return; if ((VOICE_START_X - e.clientX) > 60) { VOICE_CANCEL = true; const hm = document.getElementById('vozCancelMsg'); if (hm) hm.style.display = ''; const ht = document.getElementById('vozHintTx'); if (ht) ht.style.display = 'none'; } };
-    b.onpointerup = (e) => { if (VOICE_STATE !== 'rec') { VOICE_EARLY_UP = true; return; } if (VOICE_CANCEL) { VOICE_CANCEL = false; voiceDiscard(); } else voiceStop(); };
-    b.onpointercancel = (e) => { if (VOICE_STATE !== 'rec') { VOICE_ABORTED = true; return; } VOICE_CANCEL = false; voiceDiscard(); }; }
+  else pzChatMicIdle(b);
 }
 
 function bindChat() {
@@ -20826,6 +20848,29 @@ function pzHoyBind(root) {
   try { pzHoyConserjeFill(); } catch (e) {}
 }
 
+// (LOTE REDISENO-R6) Entrada al conserje desde Hoy, solo en ventana
+// 19:00–00:00 y solo si el token de admin ya está en este dispositivo.
+// La primera vez el gate pide el token DENTRO de la ruta #/app/conserje
+// (v778); sin token guardado la entrada no se muestra, para no llevar
+// a ningún cliente a un callejón sin salida. La ventana es una guía,
+// no un candado (conserje-revision.js): fuera de hora no hay entrada,
+// pero la ruta directa sigue funcionando. La hora es la del dispositivo.
+function pzConserjeHoyHTML() {
+  try {
+    if (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) return '';
+    let tok = '';
+    try { tok = localStorage.getItem('posta_admin_token') || ''; } catch (e) {}
+    if (!tok) return '';
+    const h = new Date().getHours();
+    if (h < 19) return '';
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    return '<a class="card pz-conserje-hoy" href="#/app/conserje">'
+      + '<span class="pz-conserje-hoy-ico">🧑‍💼</span>'
+      + '<span class="pz-conserje-hoy-txt"><b>' + esc(en ? 'Night review' : 'Revisión de la noche') + '</b>'
+      + '<small>' + esc(en ? 'Open now · 7:00–12:00 PM' : 'Abierta ahora · 19:00–00:00') + '</small></span>'
+      + '<span class="pz-conserje-hoy-ir">' + esc(en ? 'Review →' : 'Revisar →') + '</span></a>';
+  } catch (e) { return ''; }
+}
 async function inicioView() {
   const tz = pcTz();
   // LOTE VELOCIDAD: posts y ensure son independientes: un solo viaje en
@@ -21163,6 +21208,7 @@ async function inicioView() {
   ${hoySegHTML}
   ${hoyAprobarHTML}
   ${hfTabsHTML(HF_TAB, enHome)}
+  ${pzConserjeHoyHTML()}
   ${pzSemanaOkHTML}
   ${gridHTML}
   ${visitorPillHTML}
@@ -22482,8 +22528,14 @@ function pzVoicePendingDeliver() {
   });
 }
 function bindChatFull() {
+  // (LOTE REDISENO-R6) Barra por temas ANTES de bindChat: el botón
+  // Enviar propio + video + maxlength 120 tienen que existir cuando
+  // bindChat corre chatUpdateSendBtn; y el prefill todavía no se leyó
+  // (si viene un prefill de Editar, el chat por temas no se activa).
+  try { pzTemaBarraInit(); } catch (e) {}
   try { bindChat(); } catch (e) {}
   try { bindSchedUpload(); } catch (e) {}
+  try { pzTemaInit(); } catch (e) {}
   // SACAR-IDEAS (Valentino 3/11): sin píldora Ideas, sin salto a Semana desde ella.
   // Prefill pendiente: mismo contrato que usaba la hoja (Editar de #/app/post/:id).
   try {
@@ -22514,6 +22566,644 @@ function bindChatFull() {
   try { pzPhStart(); } catch (e) {}
   const ci = document.getElementById('chatInput');
   if (ci) setTimeout(() => { try { ci.focus({ preventScroll: true }); } catch (e) { try { ci.focus(); } catch (e2) {} } }, 60);
+}
+
+/* ===== LOTE REDISENO-R6 · CHAT POR TEMAS, ESTILO DESY =====
+   El mock (fuente de verdad del diseño) trae el chat como 6ª pestaña
+   con UN tema puntual por vez y respuestas cortas para tocar; escribir
+   es la excepción (frase corta, sobre el tema abierto). El motor real
+   cablea esos temas a datos y endpoints reales, nunca al JS demo del
+   mock. Orden: (1) el posteo de hoy por aprobar, (2) la pregunta de
+   los lunes — solo consultas —, (3) un comentario pendiente con su
+   respuesta ya escrita; al final, «Nada pendiente ✓».
+   - «Cambialo» NO cierra el tema: pregunta qué cambiar (foto/texto/
+     hora), muestra la versión nueva en el chat y avanza solo al
+     confirmar («Queda así») o dejarlo para después.
+   - La barra de escribir queda siempre visible al pie, con su botón
+     «Enviar» propio a la vista y maxlength 120 (solo en #/app/chat).
+   - No se activa con ancla hablar-posteo ni con prefill de Editar: ahí
+     manda el flujo que ya traía al usuario (el chat único de siempre).
+   - Sin tema abierto, chatSend sigue exactamente como siempre: el chat
+     libre no se pierde, solo espera a que no haya temas pendientes. */
+var PZ_TEMA = null; // { temas: [...], idx: 0, stage: 'topic', cambio: null }
+var PZ_TEMA_DESPUES = {}; // temas dejados para después en ESTA sesión
+function pzTemaEn() { try { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); } catch (e) { return false; } }
+function pzTemaT(es, en) { return pzTemaEn() ? en : es; }
+function pzTemaNorm(s) {
+  try { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch (e) { return String(s || '').toLowerCase(); }
+}
+function pzTemaHora(scheduledAt) {
+  try {
+    const tz = (typeof pcTz === 'function') ? pcTz() : undefined;
+    return new Intl.DateTimeFormat(pzTemaEn() ? 'en' : 'es', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }).format(new Date(String(scheduledAt || '')));
+  } catch (e) { try { return String(scheduledAt || '').slice(11, 16); } catch (e2) { return ''; } }
+}
+// Barra del chat completo: Enviar propio + video + frase corta.
+// Solo #/app/chat (bindChatFull): las demás superficies conservan su
+// barra de siempre (mic que se convierte en enviar, maxlength 2000).
+function pzTemaBarraInit() {
+  const row = document.querySelector('#pzChatFull .chat-input-row');
+  if (!row || document.getElementById('pzChatSendBtn')) return;
+  const inp = document.getElementById('chatInput');
+  if (inp) {
+    try { inp.maxLength = 120; } catch (e) {}
+    try { inp.placeholder = pzTemaT('una frase corta, sobre este tema…', 'a short phrase, about this topic…'); } catch (e) {}
+  }
+  const mic = document.getElementById('chatMicSend');
+  // «Subir video»: picker de video, accept explícito CADA VEZ (regla
+  // subir-foto-directa: el accept se fija antes del click, nunca se
+  // hereda del camino anterior).
+  const vid = document.createElement('button');
+  vid.type = 'button'; vid.className = 'btn btn-soft'; vid.id = 'pzChatVideoBtn';
+  vid.title = pzTemaT('Subir video', 'Upload video');
+  vid.setAttribute('aria-label', pzTemaT('Subir video', 'Upload video'));
+  vid.innerHTML = pzIc('reel', 18);
+  vid.onclick = () => {
+    try {
+      const picker = document.getElementById('chatFile');
+      if (picker) { picker.accept = 'video/*'; picker.click(); }
+    } catch (e) {}
+  };
+  // Botón «Enviar» propio, siempre visible: ícono blanco sobre el
+  // círculo azul + texto (como el mock). Llama al chatSend de siempre.
+  const send = document.createElement('button');
+  send.type = 'button'; send.className = 'btn btn-primary pz-chat-send'; send.id = 'pzChatSendBtn';
+  send.title = pzTemaT('Enviar', 'Send');
+  send.setAttribute('aria-label', pzTemaT('Enviar', 'Send'));
+  send.innerHTML = pzIc('send', 16) + '<span>' + esc(pzTemaT('Enviar', 'Send')) + '</span>';
+  send.onclick = () => { try { chatSend(); } catch (e) {} };
+  send.disabled = true;
+  if (mic && mic.parentNode === row) { row.insertBefore(vid, mic); row.insertBefore(send, mic.nextSibling); }
+  else { row.appendChild(vid); row.appendChild(send); }
+  try { chatUpdateSendBtn(); } catch (e) {}
+}
+function pzTemaInit() {
+  const root = document.getElementById('pzChatFull');
+  if (!root) return;
+  // Ancla hablar-posteo o prefill de Editar: manda ese flujo, no temas.
+  try {
+    if (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id) return;
+    if (sessionStorage.getItem('posty-chat-prefill')) return;
+  } catch (e) {}
+  const card = document.getElementById('chatCard');
+  if (!card || document.getElementById('pzTemaWrap')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'pzTemaWrap';
+  wrap.setAttribute('aria-live', 'polite');
+  root.insertBefore(wrap, card);
+  pzTemaCargar();
+}
+async function pzTemaCargar() {
+  const wrap = document.getElementById('pzTemaWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="pz-tema"><div class="pz-tema-sub">' + esc(pzTemaT('cargando tus temas…', 'loading your topics…')) + '</div></div>';
+  let hoy = null, consultas = null, comentarios = [];
+  try { hoy = await api.get('/api/ritual/hoy'); } catch (e) { hoy = null; }
+  try { consultas = await api.get('/api/weekly-consultas'); } catch (e) { consultas = null; }
+  try { const r = await api.get('/api/comments'); comentarios = (r && r.comments) || []; } catch (e) { comentarios = []; }
+  const temas = [];
+  // (1) El posteo de hoy, si todavía no está aprobado ni publicado.
+  try {
+    const card = (hoy && hoy.cartas && hoy.cartas[0]) || (hoy && hoy.recomendada) || null;
+    if (card && card.id && !hoy.publicado_hoy && card.approval !== 'approved' && card.approval !== 'auto' && !PZ_TEMA_DESPUES['hoy:' + card.id]) {
+      temas.push({ kind: 'hoy', post: card, hora: card.hora_salida || pzTemaHora(card.scheduled_at) });
+    }
+  } catch (e) {}
+  // (2) La pregunta de los lunes: solo si esta semana sigue sin respuesta.
+  try {
+    if (consultas && consultas.rango == null && consultas.week_key && !PZ_TEMA_DESPUES['lunes:' + consultas.week_key]) {
+      temas.push({ kind: 'lunes', week_key: consultas.week_key });
+    }
+  } catch (e) {}
+  // (3) Un comentario pendiente con su respuesta ya escrita.
+  try {
+    const c = (comentarios || []).find((x) => x && x.id && (x.suggested || '').trim());
+    if (c && !PZ_TEMA_DESPUES['comentario:' + c.id]) temas.push({ kind: 'comentario', c });
+  } catch (e) {}
+  PZ_TEMA = { temas, idx: 0, stage: 'topic', cambio: null };
+  pzTemaPintar();
+}
+function pzTemaActual() {
+  if (!PZ_TEMA || !Array.isArray(PZ_TEMA.temas)) return null;
+  return PZ_TEMA.temas[PZ_TEMA.idx] || null;
+}
+function pzTemaBurbujaUsuario(text) {
+  try {
+    if (typeof CHAT !== 'undefined') CHAT.push({ role: 'user', text });
+    const box = document.getElementById('chatBox');
+    if (box) box.insertAdjacentHTML('beforeend', '<div class="chat-msg u msg-in">' + esc(String(text)) + '</div>');
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text }] }).catch(() => {}); } catch (e) {}
+    try { chatScroll(); } catch (e) {}
+  } catch (e) {}
+}
+function pzTemaBurbujaPostyHTML(html, textoPlano) {
+  try {
+    if (typeof CHAT !== 'undefined') CHAT.push({ role: 'assistant', text: textoPlano || '' });
+    const box = document.getElementById('chatBox');
+    if (box) box.insertAdjacentHTML('beforeend', '<div class="chat-msg ai">' + html + '</div>');
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: textoPlano || '' }] }).catch(() => {}); } catch (e) {}
+    try { chatScroll(); } catch (e) {}
+  } catch (e) {}
+}
+function pzTemaQuickHTML(ops) {
+  return '<div class="pz-tema-quick" role="group" aria-label="' + esc(pzTemaT('Respuestas para tocar', 'Tap answers')) + '">'
+    + ops.map((o) => '<button type="button" data-tema-op="' + esc(o.id) + '" class="' + (o.primary ? 'primary' : '') + '"' + (o.hora ? ' data-tema-hora="' + esc(o.hora) + '"' : '') + (o.foto ? ' data-tema-foto="' + esc(o.foto) + '"' : '') + '>' + esc(o.text) + '</button>').join('')
+    + '</div>';
+}
+function pzTemaPintar() {
+  const wrap = document.getElementById('pzTemaWrap');
+  if (!wrap || !PZ_TEMA) return;
+  const temas = PZ_TEMA.temas, idx = PZ_TEMA.idx;
+  const tema = temas[idx] || null;
+  const n = temas.length;
+  let html = '';
+  if (!tema) {
+    // Nada pendiente: el chat libre sigue abajo, sin temas.
+    html = '<div class="pz-tema"><small>' + esc(pzTemaT('SOBRE · TODO AL DÍA', 'ABOUT · ALL CAUGHT UP')) + '</small>'
+      + '<b>' + esc(pzTemaT('Nada pendiente ✓', 'Nothing pending ✓')) + '</b>'
+      + '<span>' + esc(pzTemaT('No queda ningún tema puntual abierto. Cuando haya un posteo, una pregunta o una misión, Posty lo trae acá — siempre de a uno.', 'No open topic right now. When there is a post, a question or a mission, Posty brings it here — always one at a time.')) + '</span>'
+      + pzTemaQuickHTML([
+        { id: 'fin-hoy', text: pzTemaT('Ir a Hoy', 'Go to Today'), primary: true },
+        { id: 'fin-nivel', text: pzTemaT('Ir a Nivel', 'Go to Level') },
+      ])
+      + '</div>';
+  } else if (tema.kind === 'hoy') {
+    const p = tema.post;
+    const titulo = (p.caption_corta || p.caption || '').trim() || pzTemaT('El posteo de hoy', "Today's post");
+    const meta = pzTemaT('Hoy', 'Today') + (tema.hora ? ' · ' + tema.hora : '') + ' · ' + pzTemaT('Por aprobar', 'To approve');
+    html = '<div class="pz-tema"><small>' + esc(pzTemaT('SOBRE · TEMA ' + (idx + 1) + ' DE ' + n, 'ABOUT · TOPIC ' + (idx + 1) + ' OF ' + n)) + '</small>'
+      + '<b>' + esc(pzTemaT('El posteo de hoy', "Today's post")) + '</b>'
+      + '<span>' + esc(pzTemaT('Estamos hablando solo de esto. Tocá una respuesta y seguimos con el próximo tema.', 'Only this for now. Tap an answer and we move to the next topic.')) + '</span>'
+      + (p.imagen ? '<div class="pz-tema-thumb"><img src="' + esc(p.imagen) + '" alt=""><div><b>' + esc(titulo) + '</b><span>' + esc(meta) + '</span></div></div>' : '')
+      + pzTemaQuickHTML([
+        { id: 'hoy-aprobar', text: pzTemaT('Dale, publicalo ✓', 'Go ahead, publish it ✓'), primary: true },
+        { id: 'hoy-cambialo', text: pzTemaT('Cambialo', 'Change it') },
+        { id: 'hoy-despues', text: pzTemaT('Lo miro después', "I'll check it later") },
+      ])
+      + '<p class="pz-tema-hint">' + esc(pzTemaT('¿Algo puntual sobre este tema?', 'Anything specific about this topic?')) + ' <span>' + esc(pzTemaT('Escribí una frase corta acá abajo ↓', 'Write a short phrase below ↓')) + '</span></p>'
+      + '</div>';
+  } else if (tema.kind === 'lunes') {
+    html = '<div class="pz-tema"><small>' + esc(pzTemaT('SOBRE · TEMA ' + (idx + 1) + ' DE ' + n, 'ABOUT · TOPIC ' + (idx + 1) + ' OF ' + n)) + '</small>'
+      + '<b>' + esc(pzTemaT('La pregunta de los lunes', "Monday's question")) + '</b>'
+      + '<span>' + esc(pzTemaT('Solo esto: cuántas consultas entraron esta semana. Una respuesta y queda anotado en Análisis.', 'Just this: how many inquiries came in this week. One answer and it is saved in Analysis.')) + '</span>'
+      + pzTemaQuickHTML([
+        { id: 'lunes-0', text: pzTemaT('Sin consultas', 'No inquiries') },
+        { id: 'lunes-1-5', text: pzTemaT('1 a 5', '1 to 5') },
+        { id: 'lunes-6-15', text: pzTemaT('6 a 15', '6 to 15') },
+        { id: 'lunes-15+', text: pzTemaT('Más de 15 🎉', 'More than 15 🎉') },
+      ])
+      + '<p class="pz-tema-hint">' + esc(pzTemaT('¿Algo puntual sobre este tema?', 'Anything specific about this topic?')) + ' <span>' + esc(pzTemaT('Escribí una frase corta acá abajo ↓', 'Write a short phrase below ↓')) + '</span></p>'
+      + '</div>';
+  } else if (tema.kind === 'comentario') {
+    const c = tema.c;
+    html = '<div class="pz-tema"><small>' + esc(pzTemaT('SOBRE · TEMA ' + (idx + 1) + ' DE ' + n, 'ABOUT · TOPIC ' + (idx + 1) + ' OF ' + n)) + '</small>'
+      + '<b>' + esc(pzTemaT('La misión de hoy · Responder un comentario', "Today's mission · Reply to a comment")) + '</b>'
+      + '<span>' + esc(pzTemaT('Solo este comentario. La respuesta ya está escrita: se manda, se ve primero o queda para después.', 'Just this comment. The reply is already written: send it, see it first, or leave it for later.')) + '</span>'
+      + '<div class="pz-tema-thumb"><div><b>@' + esc(c.username || '') + '</b><span>' + esc(String(c.text || '').slice(0, 120)) + '</span></div></div>'
+      + pzTemaQuickHTML([
+        { id: 'com-mandar', text: pzTemaT('Mandar la respuesta ✓', 'Send the reply ✓'), primary: true },
+        { id: 'com-ver', text: pzTemaT('Verla primero', 'See it first') },
+        { id: 'com-despues', text: pzTemaT('Dejarla para después', 'Leave it for later') },
+      ])
+      + '<p class="pz-tema-hint">' + esc(pzTemaT('¿Algo puntual sobre este tema?', 'Anything specific about this topic?')) + ' <span>' + esc(pzTemaT('Escribí una frase corta acá abajo ↓', 'Write a short phrase below ↓')) + '</span></p>'
+      + '</div>';
+  }
+  wrap.innerHTML = html;
+  try {
+    wrap.querySelectorAll('[data-tema-op]').forEach((b) => {
+      if (b.dataset.temaBound) return; b.dataset.temaBound = '1';
+      b.onclick = () => { try { pzTemaElegir(b.dataset.temaOp, b); } catch (e) {} };
+    });
+  } catch (e) {}
+}
+function pzTemaAvanzar() {
+  if (!PZ_TEMA) return;
+  PZ_TEMA.stage = 'topic'; PZ_TEMA.cambio = null;
+  PZ_TEMA.idx++;
+  if (PZ_TEMA.idx >= PZ_TEMA.temas.length) { pzTemaPintar(); return; }
+  const sig = PZ_TEMA.temas[PZ_TEMA.idx];
+  const puente = sig.kind === 'lunes'
+    ? pzTemaT('ahora mi pregunta de los lunes: ¿cuántas consultas te entraron esta semana? es el único dato que no puedo ver — instagram no muestra tus ventas — y conecta mi trabajo con tu caja.', "now my monday question: how many inquiries came in this week? it is the one thing i cannot see — instagram does not show your sales — and it connects my work to your cash.")
+    : sig.kind === 'comentario'
+      ? pzTemaT('queda un tema solo: hay un comentario nuevo y ya te dejé la respuesta armada. ¿la mandamos?', 'one topic left: there is a new comment and i already drafted the reply. shall we send it?')
+      : '';
+  setTimeout(() => {
+    try { if (puente) chatSay(puente); } catch (e) {}
+    pzTemaPintar();
+  }, puente ? 550 : 200);
+}
+function pzTemaBindQuick() {
+  const wrap = document.getElementById('pzTemaWrap');
+  if (!wrap) return;
+  try {
+    wrap.querySelectorAll('[data-tema-op]').forEach((b) => {
+      if (b.dataset.temaBound) return; b.dataset.temaBound = '1';
+      b.onclick = () => { try { pzTemaElegir(b.dataset.temaOp, b); } catch (e) {} };
+    });
+  } catch (e) {}
+}
+function pzTemaSetQuick(ops) {
+  const wrap = document.getElementById('pzTemaWrap');
+  if (!wrap) return;
+  const q = wrap.querySelector('.pz-tema-quick');
+  if (!q) return;
+  q.outerHTML = pzTemaQuickHTML(ops);
+  pzTemaBindQuick();
+}
+// Al tocar una respuesta, pzTemaElegir deshabilita TODOS los botones del
+// tema (anti doble-toque). Si la acción async falla, hay que reactivarlos:
+// si no, el usuario queda con el tema abierto y ningún botón que tocar
+// (callejón sin salida visto en la repro real: «Mandar la respuesta»
+// sin IG dejaba «Dejarla para después» deshabilitado). Se llama en cada
+// rama de error de aprobar/guardar/mandar/confirmar/retocar.
+function pzTemaReactivar() {
+  try {
+    const wrap = document.getElementById('pzTemaWrap');
+    if (!wrap) return;
+    wrap.querySelectorAll('[data-tema-op]').forEach((b) => { b.disabled = false; b.classList.remove('picked'); });
+  } catch (e) {}
+}
+function pzTemaSetSub(text) {
+  const wrap = document.getElementById('pzTemaWrap');
+  if (!wrap) return;
+  try { const s = wrap.querySelector('.pz-tema > span'); if (s) s.textContent = text; } catch (e) {}
+}
+function pzTemaSetCuerpo(html) {
+  const wrap = document.getElementById('pzTemaWrap');
+  if (!wrap) return;
+  try {
+    let c = wrap.querySelector('.pz-tema-cuerpo');
+    if (!c) {
+      c = document.createElement('div');
+      c.className = 'pz-tema-cuerpo';
+      const q = wrap.querySelector('.pz-tema-quick');
+      if (q) wrap.querySelector('.pz-tema').insertBefore(c, q);
+      else wrap.querySelector('.pz-tema').appendChild(c);
+    }
+    c.innerHTML = html;
+  } catch (e) {}
+}
+function pzTemaTituloTema(tema) {
+  if (!tema) return '';
+  return tema.kind === 'hoy' ? pzTemaT('el posteo de hoy', "today's post")
+    : tema.kind === 'lunes' ? pzTemaT('la pregunta de los lunes', "monday's question")
+    : pzTemaT('el comentario', 'the comment');
+}
+function pzTemaPosponerCambio() {
+  const tema = pzTemaActual();
+  try {
+    if (tema && tema.kind === 'hoy' && tema.post && tema.post.id) PZ_TEMA_DESPUES['hoy:' + tema.post.id] = 1;
+    if (tema && tema.kind === 'comentario' && tema.c && tema.c.id) PZ_TEMA_DESPUES['comentario:' + tema.c.id] = 1;
+  } catch (e) {}
+  try { chatSay(pzTemaT('queda por aprobar en hoy, tal como estaba, sin cambios. recién ahora cerramos este tema.', 'it stays to approve in today, just as it was, with no changes. only now we close this topic.')); } catch (e) {}
+  setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
+}
+function pzTemaConfirmQuick() {
+  return [
+    { id: 'ch-confirmar', text: pzTemaT('Queda así ✓', 'Keep it like this ✓'), primary: true },
+    { id: 'ch-otro', text: pzTemaT('Otro cambio', 'Another change') },
+    { id: 'ch-despues2', text: pzTemaT('Dejarlo para después', 'Leave it for later') },
+  ];
+}
+async function pzTemaAprobarHoy() {
+  const tema = pzTemaActual();
+  if (!tema || tema.kind !== 'hoy') return;
+  const p = tema.post;
+  try {
+    const mode = await f3ApprovalMode();
+    if (!mode || mode.known === false) { chatSay(pzTemaT('no pude verificar el modo — probá de nuevo', "i could not check the mode — try again")); pzTemaReactivar(); return; }
+    let r = null;
+    if (p.status === 'draft') r = await api.patch('/api/posts/' + encodeURIComponent(p.id), { scheduled_at: p.scheduled_at });
+    else if (mode.manual) r = await api.post('/api/posts/' + encodeURIComponent(p.id) + '/approve', {});
+    else r = await api.patch('/api/posts/' + encodeURIComponent(p.id), { action: 'like' });
+    if (r && r.ok) {
+      chatSay(pzTemaT('listo ✓ queda programado para hoy' + (tema.hora ? ' ' + tema.hora : '') + '.', 'done ✓ it stays scheduled for today' + (tema.hora ? ' ' + tema.hora : '') + '.'));
+      setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
+    } else {
+      chatSay(pzTemaT('no se pudo 😕 ', "it did not work 😕 ") + ((r && (r.message || r.error)) || pzTemaT('probá de nuevo', 'try again')));
+      pzTemaReactivar();
+    }
+  } catch (e) { chatSay(pzTemaT('no se pudo 😕 probá de nuevo', "it did not work 😕 try again")); pzTemaReactivar(); }
+}
+async function pzTemaGuardarLunes(rango, etiqueta) {
+  const tema = pzTemaActual();
+  if (!tema || tema.kind !== 'lunes') return;
+  try {
+    const r = await api.post('/api/weekly-consultas', { rango });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
+    const ack = rango === '0' ? pzTemaT('anotado: semana sin consultas. queda guardado en tu análisis.', 'noted: a week with no inquiries. saved in your analysis.')
+      : rango === '1-5' ? pzTemaT('anotado: 1 a 5 consultas. queda guardado en tu análisis.', 'noted: 1 to 5 inquiries. saved in your analysis.')
+      : rango === '6-15' ? pzTemaT('anotado: 6 a 15 consultas 🎉 queda guardado en tu análisis.', 'noted: 6 to 15 inquiries 🎉 saved in your analysis.')
+      : pzTemaT('anotado: más de 15 🎉 semana récord. queda guardado en tu análisis.', 'noted: more than 15 🎉 record week. saved in your analysis.');
+    chatSay(ack);
+    setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
+  } catch (e) { chatSay(pzTemaT('no pude guardarlo 😕 probá de nuevo', "i could not save it 😕 try again")); pzTemaReactivar(); }
+}
+async function pzTemaMandarComentario() {
+  const tema = pzTemaActual();
+  if (!tema || tema.kind !== 'comentario') return;
+  const c = tema.c;
+  try {
+    const r = await api.post('/api/comments/' + encodeURIComponent(c.id) + '/reply', { message: c.suggested });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
+    chatSay(pzTemaT('mandada ✓ la respuesta ya está en instagram.', 'sent ✓ the reply is on instagram now.'));
+    setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
+  } catch (e) { chatSay(pzTemaT('no se pudo mandar 😕 ', "it did not send 😕 ") + (e && e.message ? String(e.message).slice(0, 120) : pzTemaT('probá de nuevo', 'try again'))); pzTemaReactivar(); }
+}
+async function pzTemaConfirmar() {
+  const tema = pzTemaActual();
+  if (!tema || tema.kind !== 'hoy' || !PZ_TEMA.cambio) return;
+  const p = tema.post, cb = PZ_TEMA.cambio;
+  try {
+    let r = null;
+    if (cb.tipo === 'foto') r = await api.patch('/api/posts/' + encodeURIComponent(p.id), { action: 'save-draft', image_path: cb.image_path });
+    else if (cb.tipo === 'texto') r = await api.patch('/api/posts/' + encodeURIComponent(p.id), { action: 'save-draft', caption: cb.caption });
+    else if (cb.tipo === 'hora') r = await api.patch('/api/posts/' + encodeURIComponent(p.id), { scheduled_at: cb.scheduled_at });
+    if (!r || !r.ok) throw new Error((r && (r.message || r.error)) || 'fail');
+    const que = cb.tipo === 'foto' ? pzTemaT('la foto nueva', 'the new photo')
+      : cb.tipo === 'texto' ? pzTemaT('el texto nuevo', 'the new text')
+      : pzTemaT('la hora nueva' + (r.scheduled_at ? ' (' + pzTemaHora(r.scheduled_at) + ')' : ''), 'the new time' + (r.scheduled_at ? ' (' + pzTemaHora(r.scheduled_at) + ')' : ''));
+    chatSay(pzTemaT('listo ✓ queda programado con ', 'done ✓ it stays scheduled with ') + que + pzTemaT(' para hoy. recién ahora cerramos este tema.', ' for today. only now we close this topic.'));
+    setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
+  } catch (e) { chatSay(pzTemaT('no se pudo guardar el cambio 😕 ', "the change did not save 😕 ") + (e && e.message ? String(e.message).slice(0, 120) : pzTemaT('probá de nuevo', 'try again'))); pzTemaReactivar(); }
+}
+async function pzTemaRetocar(instruccion) {
+  const tema = pzTemaActual();
+  if (!tema || tema.kind !== 'hoy') return;
+  const assetId = tema.post && tema.post.asset_id;
+  if (!assetId) {
+    chatSay(pzTemaT('esta foto no tiene original en tu álbum para retocar — probá con otra foto.', 'this photo has no original in your album to retouch — try another photo.'));
+    return;
+  }
+  chatSay(pzTemaT('cambiando la foto…', 'changing the photo…'));
+  try {
+    const r = await api.post('/api/album/' + encodeURIComponent(assetId) + '/cambiar-imagen', { cambio: instruccion }, { timeout: 300000 });
+    if (r && r.ok && r.url) {
+      PZ_TEMA.cambio = { tipo: 'foto', image_path: r.url };
+      pzTemaBurbujaPostyHTML('<div>' + esc(pzTemaT('acá está la versión nueva. la foto y la hora quedan igual. ¿queda así?', 'here is the new version. the photo and the time stay the same. keep it like this?')) + '</div><img src="' + esc(r.url) + '" alt="" style="width:100%;border-radius:12px;display:block;margin-top:8px" onerror="this.style.display=\'none\'">', pzTemaT('acá está la versión nueva de la foto. ¿queda así?', 'here is the new version of the photo. keep it like this?'));
+      PZ_TEMA.stage = 'change-confirm';
+      pzTemaSetQuick(pzTemaConfirmQuick());
+    } else {
+      chatSay(pzTemaT('no pude cambiar la foto 😕 ', "i could not change the photo 😕 ") + ((r && r.message) || pzTemaT('probá con otras palabras', 'try different words')));
+      pzTemaReactivar();
+    }
+  } catch (e) { chatSay(pzTemaT('no pude cambiar la foto, probá de nuevo en un rato 🙏', 'i could not change the photo, try again in a bit 🙏')); pzTemaReactivar(); }
+}
+async function pzTemaAlbumPintar() {
+  const tema = pzTemaActual();
+  if (!tema || tema.kind !== 'hoy') return;
+  let fotos = [];
+  try {
+    if (typeof ASSETS === 'undefined' || !ASSETS.length) { try { ASSETS = await api.get('/api/assets'); } catch (e) {} }
+    fotos = assetPhotos().filter((a) => a && a.file_path && a.file_path !== tema.post.imagen).slice(0, 12);
+  } catch (e) { fotos = []; }
+  if (!fotos.length) {
+    chatSay(pzTemaT('no hay otra foto en tu álbum todavía — subí una y la usamos.', 'there is no other photo in your album yet — upload one and we use it.'));
+    pzTemaSetQuick([
+      { id: 'ch-foto-subir', text: pzTemaT('Subir una foto', 'Upload a photo'), primary: true },
+      { id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') },
+    ]);
+    return;
+  }
+  pzTemaSetCuerpo('<div class="pz-tema-album">' + fotos.map((f) => '<button type="button" class="pz-tema-foto" data-tema-foto="' + esc(f.file_path) + '" aria-label="' + esc(pzTemaT('Usar esta foto', 'Use this photo')) + '"><img src="' + esc(f.file_path) + '" alt="" loading="lazy"></button>').join('') + '</div>');
+  const wrap = document.getElementById('pzTemaWrap');
+  try {
+    wrap.querySelectorAll('[data-tema-foto]').forEach((b) => {
+      if (b.dataset.temaBound) return; b.dataset.temaBound = '1';
+      b.onclick = () => {
+        PZ_TEMA.cambio = { tipo: 'foto', image_path: b.dataset.temaFoto };
+        pzTemaBurbujaPostyHTML('<div>' + esc(pzTemaT('acá está la versión nueva con esta foto. el texto y la hora quedan igual. ¿queda así?', 'here is the new version with this photo. the text and the time stay the same. keep it like this?')) + '</div><img src="' + esc(b.dataset.temaFoto) + '" alt="" style="width:100%;border-radius:12px;display:block;margin-top:8px" onerror="this.style.display=\'none\'">', pzTemaT('acá está la versión nueva con otra foto. ¿queda así?', 'here is the new version with another photo. keep it like this?'));
+        PZ_TEMA.stage = 'change-confirm';
+        pzTemaSetQuick(pzTemaConfirmQuick());
+      };
+    });
+  } catch (e) {}
+}
+function pzTemaHoraChips() {
+  const tema = pzTemaActual();
+  if (!tema || tema.kind !== 'hoy') return [];
+  try {
+    const base = new Date(String(tema.post.scheduled_at || ''));
+    if (isNaN(base)) return [];
+    const tz = (typeof pcTz === 'function') ? pcTz() : undefined;
+    const dia = (d) => { try { return d.toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return d.toISOString().slice(0, 10); } };
+    const out = [];
+    [1, 2].forEach((h) => {
+      const d2 = new Date(base.getTime() + h * 3600 * 1000);
+      if (dia(d2) !== dia(base)) return;
+      const hh = new Intl.DateTimeFormat(pzTemaEn() ? 'en' : 'es', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }).format(d2);
+      out.push({ id: 'ch-hora', text: hh, hora: d2.toISOString() });
+    });
+    return out;
+  } catch (e) { return []; }
+}
+function pzTemaElegir(op, btn, textoLibre) {
+  const wrap = document.getElementById('pzTemaWrap');
+  if (!wrap || !PZ_TEMA) return;
+  // Ir a otra pantalla: navegación directa, sin burbuja. Va ANTES del
+  // chequeo de tema actual: en el fin no hay tema (idx pasó el último)
+  // y el guarda lo frenaba — los dos botones de fin quedaban muertos
+  // (visto en la repro real: «Ir a Nivel» no navegaba).
+  if (op === 'fin-hoy') { try { location.hash = '#/app/inicio'; } catch (e) {} return; }
+  if (op === 'fin-nivel') { try { location.hash = '#/app/jardin-posty'; } catch (e) {} return; }
+  const tema = pzTemaActual();
+  if (!tema) return;
+  const label = textoLibre || (btn ? String(btn.textContent || '').trim() : op);
+  try {
+    wrap.querySelectorAll('[data-tema-op]').forEach((b) => { b.disabled = true; if (b === btn) b.classList.add('picked'); });
+  } catch (e) {}
+  pzTemaBurbujaUsuario(label);
+  if (op === 'hoy-aprobar') { pzTemaAprobarHoy(); return; }
+  if (op === 'hoy-despues') {
+    try { if (tema.post && tema.post.id) PZ_TEMA_DESPUES['hoy:' + tema.post.id] = 1; } catch (e) {}
+    chatSay(pzTemaT('queda por aprobar en hoy, sin salir. posty te lo recuerda a la tarde — no se publica solo.', 'it stays to approve in today, without leaving. posty reminds you in the afternoon — it does not publish itself.'));
+    setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
+    return;
+  }
+  if (op === 'hoy-cambialo') {
+    PZ_TEMA.stage = 'change-what';
+    pzTemaSetSub(pzTemaT('Seguimos en el mismo tema: el cambio de este posteo. No pasamos a otra pregunta hasta resolverlo.', 'Same topic: changing this post. We do not move to another question until it is solved.'));
+    setTimeout(() => {
+      try { chatSay(pzTemaT('dale, lo cambiamos acá mismo, sobre este posteo — no salimos de esta conversación. ¿qué querés cambiar: la foto, el texto o la hora?', 'ok, we change it right here, on this same post — we do not leave this conversation. what do you want to change: the photo, the text or the time?')); } catch (e) {}
+      pzTemaSetQuick([
+        { id: 'ch-foto', text: pzTemaT('La foto 📸', 'The photo 📸') },
+        { id: 'ch-texto', text: pzTemaT('El texto ✍️', 'The text ✍️') },
+        { id: 'ch-hora', text: pzTemaT('La hora 🕖', 'The time 🕖') },
+        { id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') },
+      ]);
+    }, 420);
+    return;
+  }
+  if (op === 'ch-foto') {
+    PZ_TEMA.stage = 'change-foto';
+    const ops = [{ id: 'ch-foto-album', text: pzTemaT('Otra foto del álbum', 'Another photo from the album'), primary: true }];
+    if (tema.post && tema.post.asset_id) ops.push({ id: 'ch-foto-retocar', text: pzTemaT('Retocar esta foto', 'Retouch this photo') });
+    ops.push({ id: 'ch-volver', text: pzTemaT('Volver', 'Back') });
+    setTimeout(() => {
+      try { chatSay(pzTemaT('¿otra foto de tu álbum o retoco esta?', 'another photo from your album, or shall i retouch this one?')); } catch (e) {}
+      pzTemaSetQuick(ops);
+    }, 420);
+    return;
+  }
+  if (op === 'ch-foto-album') { PZ_TEMA.stage = 'change-foto-album'; pzTemaAlbumPintar(); return; }
+  if (op === 'ch-foto-retocar') {
+    PZ_TEMA.stage = 'change-foto-retocar';
+    setTimeout(() => { try { chatSay(pzTemaT('decime en una frase qué le cambio a la foto', 'tell me in one phrase what to change in the photo')); } catch (e) {} }, 420);
+    pzTemaSetQuick([{ id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') }]);
+    return;
+  }
+  if (op === 'ch-foto-subir') {
+    PZ_TEMA.stage = 'change-foto-espera';
+    setTimeout(() => { try { chatSay(pzTemaT('elegí la foto y tocá enviar', 'pick the photo and tap send')); } catch (e) {} }, 200);
+    try { const picker = document.getElementById('chatFile'); if (picker) { picker.accept = 'image/*'; picker.click(); } } catch (e) {}
+    pzTemaSetQuick([{ id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') }]);
+    return;
+  }
+  if (op === 'ch-texto') {
+    PZ_TEMA.stage = 'change-texto';
+    setTimeout(() => { try { chatSay(pzTemaT('escribí el texto nuevo, cortito', 'write the new text, short')); } catch (e) {} }, 420);
+    pzTemaSetQuick([{ id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') }]);
+    return;
+  }
+  if (op === 'ch-hora') {
+    // Chip de hora (con data-tema-hora): vista previa + confirmación.
+    if (btn && btn.dataset && btn.dataset.temaHora) {
+      PZ_TEMA.cambio = { tipo: 'hora', scheduled_at: btn.dataset.temaHora };
+      pzTemaBurbujaPostyHTML('<div>' + esc(pzTemaT('acá está la versión nueva: sale hoy ', 'here is the new version: it goes out today ')) + '<b>' + esc(label) + '</b>' + esc(pzTemaT(' en vez de ', ' instead of ')) + '<b>' + esc(tema.hora || '') + '</b>' + esc(pzTemaT(' — la foto y el texto quedan igual. ¿queda así?', ' — the photo and the text stay the same. keep it like this?')) + '</div>', pzTemaT('acá está la versión nueva: sale hoy ' + label + '. ¿queda así?', 'here is the new version: it goes out today ' + label + '. keep it like this?'));
+      PZ_TEMA.stage = 'change-confirm';
+      pzTemaSetQuick(pzTemaConfirmQuick());
+      return;
+    }
+    PZ_TEMA.stage = 'change-hora';
+    const chips = pzTemaHoraChips();
+    if (!chips.length) {
+      chatSay(pzTemaT('ya es tarde para moverlo hoy — queda como está.', "it is too late to move it today — it stays as it is."));
+      pzTemaSetQuick([{ id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') }]);
+      return;
+    }
+    setTimeout(() => { try { chatSay(pzTemaT('¿a qué hora lo movemos? sale hoy, solo cambia la hora.', 'what time shall we move it to? it still goes out today, only the time changes.')); } catch (e) {} }, 420);
+    pzTemaSetQuick(chips.concat([{ id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') }]));
+    return;
+  }
+  if (op === 'ch-volver' || op === 'ch-otro') {
+    PZ_TEMA.stage = 'change-what';
+    pzTemaSetQuick([
+      { id: 'ch-foto', text: pzTemaT('La foto 📸', 'The photo 📸') },
+      { id: 'ch-texto', text: pzTemaT('El texto ✍️', 'The text ✍️') },
+      { id: 'ch-hora', text: pzTemaT('La hora 🕖', 'The time 🕖') },
+      { id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') },
+    ]);
+    return;
+  }
+  if (op === 'ch-despues' || op === 'ch-despues2') { pzTemaPosponerCambio(); return; }
+  if (op === 'ch-confirmar') { pzTemaConfirmar(); return; }
+  if (op && op.indexOf('lunes-') === 0) { pzTemaGuardarLunes(op.slice(6), label); return; }
+  if (op === 'com-mandar') { pzTemaMandarComentario(); return; }
+  if (op === 'com-ver') {
+    setTimeout(() => {
+      try { chatSay(pzTemaT('la respuesta lista es: «' + String(tema.c.suggested || '') + '»', 'the ready reply is: «' + String(tema.c.suggested || '') + '»')); } catch (e) {}
+      pzTemaSetQuick([
+        { id: 'com-mandar', text: pzTemaT('Mandar la respuesta ✓', 'Send the reply ✓'), primary: true },
+        { id: 'com-despues', text: pzTemaT('Dejarla para después', 'Leave it for later') },
+      ]);
+    }, 420);
+    return;
+  }
+  if (op === 'com-despues') {
+    try { if (tema.c && tema.c.id) PZ_TEMA_DESPUES['comentario:' + tema.c.id] = 1; } catch (e) {}
+    chatSay(pzTemaT('queda pendiente, sin apuro. no suma nada hasta que la respuesta se mande de verdad.', 'it stays pending, no rush. it counts for nothing until the reply is really sent.'));
+    setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
+    return;
+  }
+}
+// El envío escrito bajo un tema abierto: lo entiende el tema o no se
+// consume (false → sigue el chatSend normal). Limpia el input cuando
+// consume; nunca inventa una respuesta de Posty.
+function pzTemaOnSend(text, unsent) {
+  if (!PZ_TEMA) return false;
+  const tema = pzTemaActual();
+  if (!tema) return false; // «Nada pendiente»: chat libre de siempre.
+  const inp = document.getElementById('chatInput');
+  const limpiar = () => { try { if (inp) inp.value = ''; } catch (e) {} try { chatUpdateSendBtn(); } catch (e) {} };
+  const norm = pzTemaNorm(text);
+  const despues = /\bdespues\b|\bluego\b|\bmas tarde\b/.test(norm);
+  // Foto subida esperando cambio: la foto ES el cambio.
+  if (PZ_TEMA.stage === 'change-foto-espera' && unsent && unsent.length) {
+    const f = unsent[unsent.length - 1];
+    pzTemaBurbujaUsuario(text || '📷 Te mando una foto');
+    limpiar();
+    PZ_TEMA.cambio = { tipo: 'foto', image_path: f.file_path };
+    pzTemaBurbujaPostyHTML('<div>' + esc(pzTemaT('acá está la versión nueva con esta foto. el texto y la hora quedan igual. ¿queda así?', 'here is the new version with this photo. the text and the time stay the same. keep it like this?')) + '</div><img src="' + esc(f.aiUrl || '') + '" alt="" style="width:100%;border-radius:12px;display:block;margin-top:8px" onerror="this.style.display=\'none\'">', pzTemaT('acá está la versión nueva con la foto que subiste. ¿queda así?', 'here is the new version with the photo you uploaded. keep it like this?'));
+    PZ_TEMA.stage = 'change-confirm';
+    pzTemaSetQuick(pzTemaConfirmQuick());
+    return true;
+  }
+  if (!text) return false;
+  if (PZ_TEMA.stage === 'change-what') {
+    if (despues) { pzTemaBurbujaUsuario(text); limpiar(); pzTemaPosponerCambio(); return true; }
+    if (/foto|imagen/.test(norm)) { limpiar(); pzTemaElegir('ch-foto', null, text); return true; }
+    if (/texto|titulo|caption/.test(norm)) { limpiar(); pzTemaElegir('ch-texto', null, text); return true; }
+    if (/hora|horario/.test(norm)) { limpiar(); pzTemaElegir('ch-hora', null, text); return true; }
+    pzTemaBurbujaUsuario(text); limpiar();
+    chatSay(pzTemaT('anotado sobre este posteo ✓ para cambiarlo, elegí qué cambiar abajo: la foto, el texto o la hora.', 'noted about this post ✓ to change it, pick what to change below: the photo, the text or the time.'));
+    return true;
+  }
+  if (PZ_TEMA.stage === 'change-texto') {
+    pzTemaBurbujaUsuario(text); limpiar();
+    if (despues) { pzTemaPosponerCambio(); return true; }
+    PZ_TEMA.cambio = { tipo: 'texto', caption: text };
+    const p = tema.post || {};
+    pzTemaBurbujaPostyHTML('<div>' + esc(pzTemaT('acá está la versión nueva del texto: «', 'here is the new version of the text: «') + text + '»' + pzTemaT('. la foto y la hora quedan igual. ¿queda así?', '. the photo and the time stay the same. keep it like this?')) + '</div>' + (p.imagen ? '<img src="' + esc(p.imagen) + '" alt="" style="width:100%;border-radius:12px;display:block;margin-top:8px" onerror="this.style.display=\'none\'">' : ''), pzTemaT('acá está la versión nueva del texto. ¿queda así?', 'here is the new version of the text. keep it like this?'));
+    PZ_TEMA.stage = 'change-confirm';
+    pzTemaSetQuick(pzTemaConfirmQuick());
+    return true;
+  }
+  if (PZ_TEMA.stage === 'change-foto-retocar') {
+    pzTemaBurbujaUsuario(text); limpiar();
+    if (despues) { pzTemaPosponerCambio(); return true; }
+    pzTemaRetocar(text);
+    return true;
+  }
+  if (PZ_TEMA.stage === 'change-confirm') {
+    pzTemaBurbujaUsuario(text); limpiar();
+    if (despues) { pzTemaPosponerCambio(); return true; }
+    if (/\botro\b/.test(norm)) { pzTemaElegir('ch-otro'); return true; }
+    if (/\bsi\b|\bdale\b|\bqueda\b|\bok\b|\bconfirm/.test(norm)) { pzTemaConfirmar(); return true; }
+    const cb = PZ_TEMA.cambio;
+    if (cb && cb.tipo === 'texto') {
+      PZ_TEMA.cambio = { tipo: 'texto', caption: text };
+      const p = tema.post || {};
+      pzTemaBurbujaPostyHTML('<div>' + esc(pzTemaT('acá está la versión nueva del texto: «', 'here is the new version of the text: «') + text + '»' + pzTemaT('. ¿queda así?', '. keep it like this?')) + '</div>' + (p.imagen ? '<img src="' + esc(p.imagen) + '" alt="" style="width:100%;border-radius:12px;display:block;margin-top:8px" onerror="this.style.display=\'none\'">' : ''), pzTemaT('acá está la versión nueva del texto. ¿queda así?', 'here is the new version of the text. keep it like this?'));
+      return true;
+    }
+    if (cb && cb.tipo === 'foto' && tema.post && tema.post.asset_id) { pzTemaRetocar(text); return true; }
+    chatSay(pzTemaT('anotado ✓ para cerrar, elegí una de las respuestas de abajo.', 'noted ✓ to close this, pick one of the answers below.'));
+    return true;
+  }
+  // stage 'topic': la frase se lee contra el tema abierto.
+  if (tema.kind === 'hoy') {
+    if (/cambia/.test(norm)) { limpiar(); pzTemaElegir('hoy-cambialo', null, text); return true; }
+    if (/publica|dale|aprob/.test(norm)) { limpiar(); pzTemaElegir('hoy-aprobar', null, text); return true; }
+    if (despues || /lo miro/.test(norm)) { limpiar(); pzTemaElegir('hoy-despues', null, text); return true; }
+  } else if (tema.kind === 'lunes') {
+    const m = norm.match(/(\d+)/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      const rango = n === 0 ? '0' : n <= 5 ? '1-5' : n <= 15 ? '6-15' : '15+';
+      pzTemaBurbujaUsuario(text); limpiar();
+      pzTemaGuardarLunes(rango, text);
+      return true;
+    }
+    if (/sin consultas/.test(norm)) { pzTemaBurbujaUsuario(text); limpiar(); pzTemaGuardarLunes('0', text); return true; }
+    if (/mas de 15/.test(norm)) { pzTemaBurbujaUsuario(text); limpiar(); pzTemaGuardarLunes('15+', text); return true; }
+  } else if (tema.kind === 'comentario') {
+    if (/manda|envia|respond/.test(norm)) { limpiar(); pzTemaElegir('com-mandar', null, text); return true; }
+    if (despues) { limpiar(); pzTemaElegir('com-despues', null, text); return true; }
+    if (/ver/.test(norm)) { limpiar(); pzTemaElegir('com-ver', null, text); return true; }
+  }
+  pzTemaBurbujaUsuario(text); limpiar();
+  chatSay(pzTemaT('anotado sobre «' + pzTemaTituloTema(tema) + '» ✓ lo sumo a este tema. para cerrarlo, elegí una de las respuestas de abajo.', 'noted about «' + pzTemaTituloTema(tema) + '» ✓ i add it to this topic. to close it, pick one of the answers below.'));
+  return true;
 }
 /* ===== (LOTE CHAT-INICIO-DESLIZAR · 2/11) Deslizar abajo en #/app/chat vuelve =====
    Pedido de Valentino 2/11 («Lo mismo en el inicio!»): tocar el chat en

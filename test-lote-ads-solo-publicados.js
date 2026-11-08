@@ -56,10 +56,10 @@ const sliceFn = (src, from, to) => {
 
 // ---------- 0. Censo base v766 (sin cambio) ----------
 console.log('— 0) censo base v766 —');
-check('server: BUILD v789', srv.includes("const BUILD_ID = '20261105-v801'"));
+check('server: BUILD v789', srv.includes("const BUILD_ID = '20261105-v802'"));
 check('app: CHUNK_V v786', app.includes("const CHUNK_V = '20261105-v792'"));
-check('styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes v789 subir-foto-directa)', md5(css) === '5e8e7446258ef39d4651b9fa24900292');
-check('index: /app.js?v=527', idx.includes('/app.js?v=537'));check('server: 14 rutas /api/ads (8 get + 6 post)', cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14);
+check('styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes v789 subir-foto-directa)', md5(css) === '4e450bcdac2b120b0df0c86627b8cc6a');
+check('index: /app.js?v=527', idx.includes('/app.js?v=538'));check('server: 14 rutas /api/ads (8 get + 6 post)', cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14);
 check('server: GET /api/ads/billetera/hoy sigue (no se toca)', srv.includes("app.get('/api/ads/billetera/hoy'"));
 check('server: gate impulsar 409 sin_publicar sigue (respaldo)', srv.includes("motivo: 'sin_publicar'"));
 
@@ -144,7 +144,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v789', ver.status === 200 && ver.json && ver.json.build === '20261105-v801', JSON.stringify(ver.json));    const dbPath = path.join(tmpDir, 'posta.db');
+    check('A0b /api/version trae el BUILD v789', ver.status === 200 && ver.json && ver.json.build === '20261105-v802', JSON.stringify(ver.json));    const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 
     const reg = await reqJson('POST', '/api/auth/register', { email: 'ads-solo-pub@test.local', password: 'secreta123' });

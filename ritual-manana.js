@@ -211,6 +211,11 @@ function cardOf(post, recomendada) {
     scheduled_at: String(post.scheduled_at || ''),
     recomendada: !!recomendada,
     rubro: rubroDeCarta(post),
+    // (LOTE REDISENO-R6) El tema del chat necesita decidir sobre el
+    // posteo de hoy: sin approval/status no sabe si ya está aprobado
+    // ni si es borrador (programar) o programado (aprobar).
+    approval: String(post.approval || ''),
+    status: String(post.status || ''),
   };
 }
 

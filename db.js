@@ -1062,6 +1062,16 @@ CREATE TABLE IF NOT EXISTS proactive_asks (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (user_id, kind)
 );
+-- LOTE REDISENO-R6: pregunta de los lunes, solo consultas. Un rango por
+-- semana (lunes): '0' | '1-5' | '6-15' | '15+'. La lee Análisis (R3);
+-- el chat solo pregunta y guarda. Sin respuesta no hay cero inventado.
+CREATE TABLE IF NOT EXISTS weekly_consultas (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  week_key TEXT NOT NULL,
+  rango TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, week_key)
+);
 CREATE TABLE IF NOT EXISTS chat_state (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   idea_json TEXT NOT NULL DEFAULT '{}',
