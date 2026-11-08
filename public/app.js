@@ -19688,7 +19688,7 @@ function homeHeadHTML(prof, bizName, opts) {
   // (LOTE SACAR-LÁPIZ-PERFIL · 7/11, decisión Valentino) El tercer
   // ícono (lápiz, Editar perfil) SALE: nadie edita su perfil desde
   // Posty, lo hace por Instagram; la lámina guardaba solo en Posty.
-  const headIconsHTML = (opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Share my profile' : 'Compartir mi perfil'}">${pzIc('share', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="settings" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button></span>` : '';
+  const headIconsHTML = (opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Referrals' : 'Referidos'}">${pzIc('share', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="settings" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button></span>` : '';
   const rachaHTML = user ? `<div class="hf-racha">${rachaTxt ? rachaTxt + infoBtnHTML : infoRowHTML}${headIconsHTML}</div>` : '';
   return `<div class="hf-head">
     ${user ? `<div class="hf-user">${esc(user)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}
@@ -20101,77 +20101,16 @@ function hfDetailHTML(p, opts) {
     ${accept}
   </div>`;
 }
-/* ===== (Tanda feed 6D · ítems 11–14) COMPARTIR · CUBIERTAS · EDITAR · ARCHIVO =====
+/* ===== (Tanda feed 6D · ítems 11–14) CUBIERTAS · EDITAR · ARCHIVO =====
    Piezas puras del bloque: solo usan esc/mv y homeHeadHTML (del mismo
-   bloque). Regla de verdad de la tanda: sin handle no hay QR ni links;
+   bloque). Las cubiertas nacen de la paleta REAL de la cuenta con el nombre
    las cubiertas nacen de la paleta REAL de la cuenta con el nombre
    FUERA de la imagen (rótulo en la lista, nunca texto en el medio);
    el Archivo pinta solo lo que /api/archive trae de sus fuentes. */
-function hfIgUrl(prof) {
-  const user = String((prof && prof.username) || '').replace(/^@+/, '').trim();
-  return user ? 'https://www.instagram.com/' + user + '/' : '';
-}
-function hfShareText(prof, en) {
-  const name = String((prof && (prof.name || prof.username)) || '').trim();
-  if (en) return 'Check out ' + (name ? name + ' ' : '') + 'on Instagram';
-  return 'Mirá ' + (name ? name + ' ' : '') + 'en Instagram';
-}
-function hfWaUrl(prof, en) {
-  const url = hfIgUrl(prof);
-  return url ? 'https://wa.me/?text=' + encodeURIComponent(hfShareText(prof, en) + ': ' + url) : '';
-}
-function hfQrMatrix(text) {
-  // Matriz del QR con el generador vendoreado (public/qr-vendor.js,
-  // qrcode-generator MIT, cargado a demanda). Sin librería o sin texto:
-  // null — la lámina lo muestra honesto, jamás un QR falso.
-  try {
-    if (typeof qrcode !== 'function' || !text) return null;
-    const qr = qrcode(0, 'M');
-    qr.addData(String(text));
-    qr.make();
-    const n = qr.getModuleCount();
-    const rows = [];
-    for (let r = 0; r < n; r++) { const row = []; for (let c = 0; c < n; c++) row.push(!!qr.isDark(r, c)); rows.push(row); }
-    return rows;
-  } catch (e) { return null; }
-}
-function hfQrSVG(text, size) {
-  const m = hfQrMatrix(text);
-  if (!m) return '';
-  const n = m.length, q = 4, tot = n + q * 2;
-  let d = '';
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (m[r][c]) d += 'M' + (c + q) + ' ' + (r + q) + 'h1v1h-1z';
-  const px = size || 232;
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + tot + ' ' + tot + '" width="' + px + '" height="' + px + '" role="img" aria-label="QR"><rect width="' + tot + '" height="' + tot + '" fill="#fff"/><path d="' + d + '" fill="#0A1E33"/></svg>';
-}
-/* (LOTE HOJAS-DISENO · 5/11, mock v1 aprobado) Glifos de las hojas de
-   perfil: los mismos SVG del mock. El QR lo sigue generando hfQrSVG. */
-const HF_WA_GLYPH = '<span class="hf-ps-wa-glyph"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#25D366"/><g fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5.2c-3.7 0-6.8 3-6.8 6.8 0 1.4.4 2.7 1.2 3.8L5.5 19l3.3-.9c1 .6 2.2.9 3.2.9 3.7 0 6.8-3 6.8-6.8S15.7 5.2 12 5.2z"/><path d="M9 9.2c.3 1.8 1.4 3.4 2.9 4.3l1.5 1c.5.2 1-.1 1.1-.6l.4-1c.1-.4-.1-.8-.5-1l-1-.7c-.3-.2-.7-.1-.9.2l-.4.5c-.8-.5-1.5-1.2-2-2l.5-.4c.3-.2.4-.6.2-.9l-.7-1c-.2-.4-.6-.6-1-.5l-1 .4c-.4.2-.6.7-.5 1.1.1.4.2.8.4 1.1z" fill="#fff" stroke="none"/></g></svg></span>';
 const HF_COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-const HF_SHARE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.7l6.8-4.4M8.6 13.3l6.8 4.4"/></svg>';
-function hfShareSheetHTML(prof, en) {
-  const url = hfIgUrl(prof);
-  const user = String((prof && prof.username) || '').replace(/^@+/, '');
-  const close = '<button type="button" class="hf-ps-alt" data-hf-ps-close>' + (en ? 'Close' : 'Cerrar') + '</button>';
-  if (!url) {
-    return '<div class="hf-ps-card hf-ps-glass" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</div>'
-      + '<p class="hf-ps-note">' + (en ? 'We do not have your Instagram handle yet, so there is nothing to share. Add it in Settings and this sheet will show your QR and your link.' : 'Todavía no tenemos tu usuario de Instagram, así que no hay nada para compartir. Cargalo en Ajustes y esta lámina va a mostrar tu QR y tu link.') + '</p>'
-      + '<div class="hf-ps-acts">' + close + '</div></div>';
-  }
-  return '<div class="hf-ps-card hf-ps-glass" role="dialog" aria-modal="true"><div class="hf-ps-title">' + (en ? 'Share my profile' : 'Compartir mi perfil') + '</div>'
-    + '<div class="hf-ps-qr" data-hf-qr>' + hfQrSVG(url) + '</div>'
-    + '<div class="hf-ps-user">@' + esc(user) + '</div>'
-    + '<div class="hf-ps-link">' + esc(url) + '</div>'
-    + '<div class="hf-ps-acts">'
-    + '<a class="hf-ps-wa hf-ps-primary" href="' + esc(hfWaUrl(prof, en)) + '" target="_blank" rel="noopener">' + HF_WA_GLYPH + (en ? 'Send by WhatsApp' : 'Enviar por WhatsApp') + '</a>'
-    + '<button type="button" class="hf-ps-btn" data-hf-ps-act="copy">' + HF_COPY_ICON + (en ? 'Copy link' : 'Copiar link') + '</button>'
-    + '<button type="button" class="hf-ps-btn" data-hf-ps-act="native">' + HF_SHARE_ICON + (en ? 'Share…' : 'Compartir…') + '</button>'
-    + close
-    + '</div><div class="hf-ps-msg" data-hf-ps-msg></div></div>';
-}
 function hfProfileActionsHTML(en, acceptHTML) {
   // (LOTE INICIO-3 · 3/11, decisión de Valentino) La fila de acciones
-  // del encabezado ya NO lleva «Editar perfil» ni «Compartir mi
+  // del encabezado ya NO lleva «Editar perfil» ni «Referidos»:
   // perfil»: Compartir vive como SOLO ÍCONO (con el mismo
   // data-hf-pact y handler de siempre, vía hfProfileBind) a la
   // derecha de la fila «¿Cómo publica Posty?» (opts.headIcons en
@@ -20179,6 +20118,9 @@ function hfProfileActionsHTML(en, acceptHTML) {
   // ICONOS-LINEA-INFO 6/11). El lápiz (Editar perfil) SE SACÓ el
   // 7/11 (decisión Valentino, lote sacar-lápiz-perfil): nadie edita
   // su perfil desde Posty, lo hace por Instagram.
+  // (LOTE BOTÓN-COMPARTIR-REFERIDOS · 7/11, decisión de Valentino)
+  // El ícono de compartir ya NO abre la lámina «Compartir mi perfil»:
+  // lleva a Ajustes > Referidos, donde vive el link con el descuento.
   // El espacio libre lo ocupa «Aceptar todo» REUBICADO (mismo
   // acceptBarHTML, mismo handler pzAcceptAllWeek, mismo alcance:
   // solo programados de la semana nueva pendientes, un toque sin
@@ -22519,58 +22461,6 @@ async function hfClipboard(text) {
     return !!okCopy;
   } catch (e) { return false; }
 }
-let HF_QR_LOADING = null;
-function hfLoadQrVendor() {
-  if (typeof qrcode === 'function') return Promise.resolve(true);
-  if (HF_QR_LOADING) return HF_QR_LOADING;
-  HF_QR_LOADING = new Promise((resolve) => {
-    try {
-      const sc = document.createElement('script');
-      sc.src = '/qr-vendor.js';
-      sc.onload = () => resolve(typeof qrcode === 'function');
-      sc.onerror = () => resolve(false);
-      document.head.appendChild(sc);
-    } catch (e) { resolve(false); }
-  });
-  return HF_QR_LOADING;
-}
-function hfShareOpen() {
-  const en = hfIsEn();
-  const prof = (typeof HF_CUR_PROF !== 'undefined' && HF_CUR_PROF) || (typeof HOME_PROF !== 'undefined' && HOME_PROF) || {};
-  const url = hfIgUrl(prof);
-  const ov = hfSheetShow(hfShareSheetHTML(prof, en));
-  const msg = ov.querySelector('[data-hf-ps-msg]');
-  const say = (t) => { if (msg) msg.textContent = t; };
-  if (url && !hfQrSVG(url)) {
-    // La librería llega a demanda: mientras tanto, la lámina ya sirve
-    // (link y acciones); el QR se pinta apenas carga.
-    const box = ov.querySelector('[data-hf-qr]');
-    if (box) box.innerHTML = '<span class="hf-ps-note">' + (en ? 'Loading your QR…' : 'Cargando tu QR…') + '</span>';
-    hfLoadQrVendor().then((okLoad) => {
-      const b2 = ov.querySelector('[data-hf-qr]');
-      if (!b2) return;
-      const svg = okLoad ? hfQrSVG(url) : '';
-      b2.innerHTML = svg || '<span class="hf-ps-note">' + (en ? 'The QR could not be drawn here — the link below works the same.' : 'El QR no se pudo dibujar acá — el link de abajo funciona igual.') + '</span>';
-    });
-  }
-  ov.querySelectorAll('[data-hf-ps-act]').forEach((b) => b.addEventListener('click', async () => {
-    if (b.dataset.hfPsAct === 'copy') {
-      const okCopy = await hfClipboard(url);
-      say(okCopy ? '✅ ' + (en ? 'Copied' : 'Copiado') : (en ? 'Could not copy — long-press the link' : 'No se pudo copiar — mantené apretado el link'));
-      return;
-    }
-    if (b.dataset.hfPsAct === 'native') {
-      let shared = false;
-      try {
-        if (navigator.share) { await navigator.share({ title: document.title, text: hfShareText(prof, en), url }); shared = true; }
-      } catch (e) { shared = false; }
-      if (!shared) {
-        const okCopy = await hfClipboard(url);
-        say(okCopy ? '✅ ' + (en ? 'Copied' : 'Copiado') : (en ? 'Sharing is not available here' : 'Compartir no está disponible acá'));
-      }
-    }
-  }));
-}
 function hfCoverDownloadAt(prof, idx, msgEl, en) {
   try {
     const plan = hfCoverPlan(prof, en);
@@ -22656,7 +22546,7 @@ function hfProfileBind(root) {
   root.querySelectorAll('[data-hf-pact]').forEach((el) => {
     el.onclick = () => {
       const act = el.dataset.hfPact;
-      if (act === 'share') hfShareOpen();
+      if (act === 'share') { location.hash = '#/app/ajustes?referidos=1'; }
       else if (act === 'settings') { location.hash = '#/app/ajustes'; }
       else if (act === 'covers') hfCoversOpen();
       else if (act === 'archive') hfArchiveOpen();

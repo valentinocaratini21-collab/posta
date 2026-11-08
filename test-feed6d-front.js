@@ -2,9 +2,12 @@
 global.pzIc = (name, px) => '<span class="pz-ic"></span>'; // stub: en producción pzIc es global de app.js (sistema de íconos 2026-10-25)
 /* test-feed6d-front.js — Tanda feed 6D · ítems 11–14 (frente): piezas
  * puras del bloque HOME_FEED real + el QR vendoreado real:
- *  · ítem 11: hfIgUrl/hfWaUrl y la lámina de compartir — con handle,
- *    QR (SVG de la matriz real), link en texto y las tres acciones;
- *    sin handle, lámina honesta sin QR ni links falsos.
+ *  · ítem 11 (LOTE BOTÓN-COMPARTIR-REFERIDOS · 7/11, decisión de
+ *    Valentino): el ícono de compartir del header ya NO abre la lámina
+ *    «Compartir mi perfil» (link de Instagram, sin descuento): lleva a
+ *    Ajustes > Referidos (#/app/ajustes?referidos=1). La lámina y sus
+ *    helpers (hfShareSheetHTML/hfIgUrl/hfWaUrl/hfQrMatrix/hfQrSVG/
+ *    hfLoadQrVendor) se borraron; el header dice Referidos/Referrals.
  *  · ítem 12: hfCoverPlan (desde las destacadas reales o el set
  *    genérico ES/EN), iconos honestos, hfCoverSVG determinístico con
  *    la paleta de la cuenta, SIN texto en la imagen y tinta con
@@ -62,37 +65,26 @@ const pzDecEntSrc = (() => {
 })();
 if (pzDecEntSrc) vm.runInContext(pzDecEntSrc, sb);
 ok(typeof sb.pzDecEnt === 'function', 'pzDecEnt real cargado en el sandbox (fuera del bloque HOME_FEED)');
-ok(typeof sb.hfShareSheetHTML === 'function' && typeof sb.hfCoverSVG === 'function'
+ok(typeof sb.hfCoverSVG === 'function'
   && typeof sb.hfEditProfileHTML === 'undefined' && typeof sb.hfArchiveHTML === 'function',
   'piezas puras 6D cargan en el sandbox (la lámina de edición ya no existe: sacar-lápiz-perfil 7/11)');
 
-// — Ítem 11: URL, WhatsApp y QR —
+// — Ítem 11 (LOTE BOTÓN-COMPARTIR-REFERIDOS · 7/11): la lámina de
+// compartir ya no existe; el ícono del header lleva a Referidos. —
+ok(typeof sb.hfShareSheetHTML === 'undefined' && typeof sb.hfIgUrl === 'undefined'
+  && typeof sb.hfWaUrl === 'undefined' && typeof sb.hfQrMatrix === 'undefined'
+  && typeof sb.hfQrSVG === 'undefined',
+  'lámina de compartir borrada: sin hfShareSheetHTML/hfIgUrl/hfWaUrl/hfQrMatrix/hfQrSVG');
 const prof = { username: 'cafesol', name: 'Café Sol', bio: 'Café de especialidad', highlights: [], palette: ['#3B2314', '#FEC14D'] };
-ok(sb.hfIgUrl(prof) === 'https://www.instagram.com/cafesol/', 'hfIgUrl: URL pública con el handle real');
-ok(sb.hfIgUrl({}) === '' && sb.hfIgUrl(null) === '', 'hfIgUrl: sin handle, sin URL');
-ok(sb.hfWaUrl(prof, false).indexOf('https://wa.me/?text=') === 0
-  && decodeURIComponent(sb.hfWaUrl(prof, false)).includes('https://www.instagram.com/cafesol/'),
-  'hfWaUrl: wa.me con texto + link');
-ok(sb.hfWaUrl({}, false) === '', 'hfWaUrl: sin handle, sin link de WhatsApp');
-const m = sb.hfQrMatrix('https://www.instagram.com/cafesol/');
-ok(Array.isArray(m) && m.length >= 21 && m.length === m[0].length, 'hfQrMatrix: matriz cuadrada de la librería real');
-ok(m[0][0] === true && m[0][6] === true && m[0][7] === false && m[7][0] === false,
-  'hfQrMatrix: patrón buscador + separador en la esquina');
-const qrSvg = sb.hfQrSVG('https://www.instagram.com/cafesol/');
-ok(qrSvg.includes('<svg') && qrSvg.includes('<path') && qrSvg === sb.hfQrSVG('https://www.instagram.com/cafesol/'),
-  'hfQrSVG: SVG determinístico de la matriz');
-const sheet = sb.hfShareSheetHTML(prof, false);
-ok(sheet.includes('data-hf-qr') && sheet.includes('<svg'), 'lámina de compartir: QR renderizado');
-ok(sheet.includes('https://www.instagram.com/cafesol/') && sheet.includes('@cafesol'), 'lámina: link en texto + @');
-ok(sheet.includes('data-hf-ps-act="copy"') && sheet.includes('Copiar link')
-  && sheet.includes('data-hf-ps-act="native"') && sheet.includes('Enviar por WhatsApp'),
-  'lámina: Copiar link + Compartir del sistema + WhatsApp');
-const sheetEn = sb.hfShareSheetHTML(prof, true);
-ok(sheetEn.includes('Share my profile') && sheetEn.includes('Copy link'), 'lámina EN: gemelos «Share my profile»/«Copy link»');
-const sheetNo = sb.hfShareSheetHTML({}, false);
-ok(!sheetNo.includes('data-hf-qr') && !sheetNo.includes('wa.me') && !sheetNo.includes('<svg')
-  && sheetNo.includes('Todavía no tenemos tu usuario'),
-  'sin handle: lámina honesta, sin QR ni links falsos');
+const headRef = sb.homeHeadHTML(prof, 'Café Sol', { en: false, headIcons: true });
+ok(headRef.includes('data-hf-pact="share"') && headRef.includes('aria-label="Referidos"')
+  && !headRef.includes('Compartir mi perfil'),
+  'header ES: el ícono de compartir dice Referidos (no «Compartir mi perfil»)');
+const headRefEn = sb.homeHeadHTML(prof, 'Café Sol', { en: true, headIcons: true });
+ok(headRefEn.includes('aria-label="Referrals"') && !headRefEn.includes('Share my profile'),
+  'header EN: el ícono de compartir dice Referrals');
+ok(!sb.homeHeadHTML(prof, 'Café Sol', { en: false }).includes('data-hf-pact="share"'),
+  'sin headIcons no hay botón de compartir en el header');
 
 // — Ítem 12: cubiertas —
 const profHl = Object.assign({}, prof, { highlights: [{ title: 'Promos' }, { title: 'Catálogo' }, { title: 'Opiniones' }, { title: 'Nuestro rincón' }] });
@@ -156,29 +148,38 @@ const archEmpty = sb.hfArchiveHTML({ versions: [], recycled: [], cancelled: [], 
 ok(archEmpty.includes('Tu archivo está vacío por ahora') && archEmpty.includes('Todavía no hay versiones anteriores'),
   'archivo vacío: estados honestos por sección');
 ok(sb.hfArchiveHTML(archData, true).includes('Back to this version'), 'archivo EN: gemelo «Back to this version»');
-// (LOTE SACAR-LÁPIZ-PERFIL · 7/11) Las aserciones v462 de abajo estaban
-// rotas desde INICIO-3 (3/11): hfProfileActionsHTML ya NO rinde botones
-// de texto («Editar perfil», «Compartir mi perfil», «Ver como visitante»,
-// «Tu archivo») — sin acceptHTML devuelve '' y con acceptHTML rinde SOLO
-// la fila de Aceptar todo. Estaban tapadas por el crash de :116; al
-// arreglar el sandbox salieron a la luz. Se fijan al comportamiento real.
+// (LOTE SACAR-LÁPIZ-PERFIL · 7/11 + LOTE BOTÓN-COMPARTIR-REFERIDOS · 7/11)
+// Las aserciones v462 de abajo estaban rotas desde INICIO-3 (3/11):
+// hfProfileActionsHTML ya NO rinde botones de texto («Editar perfil»,
+// «Compartir mi perfil», «Ver como visitante», «Tu archivo») — sin
+// acceptHTML devuelve '' y con acceptHTML rinde SOLO la fila de
+// Aceptar todo. Se fijan al comportamiento real.
 ok(sb.hfProfileActionsHTML(false) === '' && sb.hfProfileActionsHTML(true) === '',
   'cabecera: sin candidatos no hay fila (los botones de texto salieron en INICIO-3)');
 ok(sb.hfProfileActionsHTML(false, '<b>X</b>').includes('class="hf-pacts hf-pacts-accept"')
   && sb.hfProfileActionsHTML(false, '<b>X</b>').includes('<b>X</b>')
   && !sb.hfProfileActionsHTML(false, '<b>X</b>').includes('Editar perfil')
   && !sb.hfProfileActionsHTML(false, '<b>X</b>').includes('Compartir mi perfil')
+  && !sb.hfProfileActionsHTML(false, '<b>X</b>').includes('class="hf-pmain"')
   && !sb.hfProfileActionsHTML(false, '<b>X</b>').includes('class="hf-pact"'),
   'cabecera: con candidatos rinde SOLO la fila de Aceptar todo, sin botones de texto ni pastillas viejas');
 const headPlus = sb.homeHeadHTML({ username: 'u', name: 'N', bio: '', bio_unread: false, link: '', pic: null, followers: null, posts_count: null, following: null, highlights: [{ title: 'Menú', cover: '' }] }, 'X', { en: false, coversPlus: true });
-ok(headPlus.includes('data-hf-pact="covers"') && headPlus.includes('Crear cubierta') && !headPlus.includes('Cubiertas') && headPlus.indexOf('hf-hl-plus') < headPlus.indexOf('Menú'),
-  'cabecera v462: cubiertas como primer tile «+» de la tira (vista del dueño)');
+// (LOTE BOTÓN-COMPARTIR-REFERIDOS) Los dos checks v462 de abajo
+// describían el tile «+ Crear cubierta» como primer tile de la tira:
+// ese tile SE SACÓ el 25/10 por orden de Valentino (hfHighlightsTrayHTML:
+// «la tira es para mostrar destacadas»; la entrada vive en Ajustes).
+// En la base v774 el output ya no lo trae (verificado byte-idéntico
+// base vs work). Se corrigen al comportamiento actual.
+ok(!headPlus.includes('hf-hl-plus') && !headPlus.includes('Crear cubierta')
+  && headPlus.includes('Menú'),
+  'tira: sin tile «+ Crear cubierta» (sacado 25/10); solo las destacadas');
 const headNoPlus = sb.homeHeadHTML({ username: 'u', name: 'N', bio: '', bio_unread: false, link: '', pic: null, followers: null, posts_count: null, following: null, highlights: [{ title: 'Menú', cover: '' }] }, 'X', { en: false });
 ok(!headNoPlus.includes('hf-hl-plus') && headNoPlus.includes('Menú'),
   'cabecera v462: sin coversPlus no hay tile «+» (preview de edición intacto)');
 const headPlusEmpty = sb.homeHeadHTML({ username: 'u', name: 'N', bio: '', bio_unread: false, link: '', pic: null, followers: null, posts_count: null, following: null, highlights: [] }, 'X', { en: true, coversPlus: true });
-ok(headPlusEmpty.includes('data-hf-pact="covers"') && headPlusEmpty.includes('Create cover') && !headPlusEmpty.includes('>Covers<'),
-  'cabecera v462: con coversPlus la tira existe aunque no haya destacadas');
+ok(!headPlusEmpty.includes('hf-hl-plus') && !headPlusEmpty.includes('Create cover')
+  && !headPlusEmpty.includes('>Covers<'),
+  'tira EN vacía: sin tile «+» aunque no haya destacadas');
 
 console.log(`\nfeed6d-front: ${total - fails}/${total}`);
 process.exit(fails ? 1 : 0);

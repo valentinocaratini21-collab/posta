@@ -107,17 +107,17 @@ ok(typeof r4 === 'string' && !r4.includes('hf-racha') && !r4.includes('hf-head-i
 const r5 = H(Object.assign({}, base), '', { splitHead: true, headIcons: true, en: true });
 const row5 = rachaRow(r5);
 ok(row5.includes('How does Posty publish?'), 'R5 EN «How does Posty publish?»');
-ok(row5.includes('aria-label="Share my profile"') && row5.includes('aria-label="Settings"'), 'R5 EN aria-labels de los 2 íconos');
+ok(row5.includes('aria-label="Referrals"') && row5.includes('aria-label="Settings"'), 'R5 EN aria-labels de los 2 íconos (share = Referrals)');
 ok(!row5.includes('aria-label="Edit profile"'), 'R5 EN sin «Edit profile» (sacar-lápiz-perfil 7/11)');
 
 /* ---------- 3. Handlers intactos (los botones hacen lo mismo) ---------- */
 console.log('— handlers: hfProfileBind sigue bindeando por atributo —');
 const bind = extractFn(app, 'function hfProfileBind');
 ok(bind.includes("root.querySelectorAll('[data-hf-pact]')"), 'hfProfileBind bindea por [data-hf-pact] en todo el root');
-ok(bind.includes("if (act === 'share') hfShareOpen();"), 'share -> hfShareOpen');
+ok(bind.includes("if (act === 'share') { location.hash = '#/app/ajustes?referidos=1'; }"), 'share -> hfShareOpen');
 ok(!bind.includes("hfEditOpen") && !bind.includes("act === 'edit'"), 'sin rama edit en hfProfileBind (el lápiz se sacó 7/11)');
 ok(bind.includes("else if (act === 'settings') { location.hash = '#/app/ajustes'; }"), 'settings -> #/app/ajustes');
-ok((app.match(/function hfShareOpen\(/g) || []).length === 1, 'hfShareOpen definida');
+ok(!app.includes('function hfShareOpen('), 'hfShareOpen borrada (la lámina ya no existe; el botón va a Referidos)');
 ok(!app.includes('function hfEditOpen('), 'hfEditOpen ya no existe (sacar-lápiz-perfil 7/11)');
 ok((app.match(/function pzPubInfoOpen\(/g) || []).length === 1, 'pzPubInfoOpen definida');
 
