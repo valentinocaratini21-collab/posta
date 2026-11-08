@@ -198,15 +198,24 @@ function construirEmailNegocio(opts) {
   const ctaUrl = String(o.ctaUrl || '').slice(0, 500);
   const bajaUrl = String(o.bajaUrl || '').slice(0, 500);
   const remitente = String(o.remitente || nombre).slice(0, 80);
+  // Estilo opcional (SLICE 2 Fitswapp): sin él, cabecera en color principal
+  // con texto blanco y CTA en acento con texto blanco (comportamiento v721,
+  // sin cambios). Con él, el negocio fija fondo/texto de cabecera y de CTA
+  // (Fitswapp: cabecera negra con texto crema, CTA naranja con texto negro).
+  const estilo = o.estilo || {};
+  const fondoHeader = String(estilo.fondoHeader || pal.principal);
+  const colorHeader = String(estilo.colorHeader || '#fff');
+  const fondoCta = String(estilo.fondoCta || pal.acento);
+  const colorCta = String(estilo.colorCta || '#fff');
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#1F2A33">
-  <div style="background:${pal.principal};padding:20px 28px;border-radius:14px 14px 0 0">
-    <span style="font-size:17px;font-weight:800;color:#fff">${esc(nombre)}</span>
+  <div style="background:${fondoHeader};padding:20px 28px;border-radius:14px 14px 0 0">
+    <span style="font-size:17px;font-weight:800;color:${colorHeader}">${esc(nombre)}</span>
   </div>
   <div style="background:#F7F8F8;padding:28px;border-radius:0 0 14px 14px">
     ${titulo ? `<h1 style="font-size:20px;line-height:1.35;margin:0 0 12px">${esc(titulo)}</h1>` : ''}
     ${cuerpo ? `<p style="font-size:15px;line-height:1.65;margin:0 0 16px">${esc(cuerpo)}</p>` : ''}
-    ${ctaTexto && ctaUrl ? `<p style="margin:20px 0"><a href="${esc(ctaUrl)}" style="display:inline-block;background:${pal.acento};color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">${esc(ctaTexto)}</a></p>` : ''}
+    ${ctaTexto && ctaUrl ? `<p style="margin:20px 0"><a href="${esc(ctaUrl)}" style="display:inline-block;background:${fondoCta};color:${colorCta};text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">${esc(ctaTexto)}</a></p>` : ''}
     <p style="font-size:12px;line-height:1.6;color:#6B7A86;margin:20px 0 0">te escribe ${esc(remitente)}.<br>
     ${bajaUrl ? `si no querés recibir estos emails, <a href="${esc(bajaUrl)}" style="color:${pal.principal}">darte de baja</a>.` : ''}</p>
   </div>
@@ -254,10 +263,14 @@ async function enviarEmail(db, userId, opts) {
   const emailMod = o.emailMod || require('./email');
   let r;
   try {
+    // from / replyTo opcionales (SLICE 2 Fitswapp): el piloto pasa su
+    // remitente Fitswapp <hola@<dominio>>; sin override, email.js usa su
+    // remitente canónico (comportamiento v721, sin cambios).
     r = await emailMod.sendEmail({
       to: para,
       subject: String(propuesta.titulo || o.asunto || 'te escribo de ' + ((fundamento && fundamento.negocio) || 'tu negocio')).slice(0, 120),
       html: pieza.html, text: pieza.text,
+      from: o.from || undefined, replyTo: o.replyTo || undefined,
     });
   } catch (e) {
     gobernador.devolverConsumo(db, userId, 'email', 1, 'sendEmail lanzó');

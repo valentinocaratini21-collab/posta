@@ -164,7 +164,16 @@ async function enviarDM(db, userId, opts) {
     await insights.sendDM(db, userId, recipientIgId, texto.slice(0, 1000));
   } catch (e) {
     gobernador.devolverConsumo(db, userId, 'instagram', 1, 'sendDM falló');
-    return { ok: false, error: String((e && e.message) || 'send_dm_fallo').slice(0, 300) };
+    const msg = String((e && e.message) || 'send_dm_fallo');
+    // SLICE 2 Fitswapp: error de permiso de Meta (sin app review de
+    // instagram_manage_messages) → el DM vuelve a la Bandeja como
+    // «falta el permiso»: la jugada aceptada vuelve a pendiente con el
+    // motivo, nunca se promete un envío que no salió.
+    if (/permission|manage_messages|OAuthException|\(#10\)|\(#200\)|\(#190\)/i.test(msg)) {
+      try { marcarFaltaPermiso(db, userId, jugadaId, 'falta el permiso instagram_manage_messages (app review de Meta pendiente): el DM quedó en Bandeja, no se prometió el envío'); } catch (_) {}
+      return { ok: false, error: 'falta_permiso_instagram', detalle: msg.slice(0, 300) };
+    }
+    return { ok: false, error: msg.slice(0, 300) };
   }
   const hilo = db.prepare('SELECT * FROM venty_ig_hilos WHERE user_id = ? AND ig_sender_id = ?').get(userId, recipientIgId);
   if (hilo) {
@@ -176,7 +185,21 @@ async function enviarDM(db, userId, opts) {
   return { ok: true, hilo_id: hilo ? hilo.id : null };
 }
 
+// La jugada aceptada vuelve a pendiente cuando Meta niega el permiso:
+// el DM queda en Bandeja con el motivo, nunca se promete lo que no salió.
+// (SLICE 2 Fitswapp: sin app review de instagram_manage_messages.)
+function marcarFaltaPermiso(db, userId, jugadaId, motivo) {
+  ensureSchema(db);
+  const venty = require('./venty');
+  const j = db.prepare('SELECT * FROM venty_jugadas WHERE id = ? AND user_id = ?').get(jugadaId, userId);
+  if (!j) return { ok: false, error: 'jugada_no_encontrada' };
+  db.prepare(`UPDATE venty_jugadas SET estado='pendiente', resuelto_at='', resuelto_por='', nota_dueno=? WHERE id=?`)
+    .run(String(motivo || 'falta el permiso').slice(0, 300), jugadaId);
+  try { venty.registrarEvento(db, userId, 'ig_dm_falta_permiso', j.partida_id, { jugada_id: jugadaId, motivo: String(motivo || '').slice(0, 300) }); } catch (e) {}
+  return { ok: true, jugada_id: jugadaId };
+}
+
 module.exports = {
   ensureSchema, verifyWebhookGet, verifySignature, handleWebhook,
-  listarHilos, enviarDM,
+  listarHilos, enviarDM, marcarFaltaPermiso,
 };

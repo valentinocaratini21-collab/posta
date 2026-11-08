@@ -60,7 +60,7 @@ async function rawReq(method, p, opts = {}) {
   try {
     ok(await waitBoot(), 'boot: server levanta');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261105-v721', `/api/version ${ver.build} (BUILD provisional v721; el número definitivo lo asigna el tablero)`);
+    ok(ver.build === '20261105-v797', `/api/version ${ver.build} (re-pin a v797; número asignado por el tablero)`);
     // Registro + canje (patrón test-lote-venty-web1-api.js).
     const rr = await fetch(`${BASE}/api/auth/register`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

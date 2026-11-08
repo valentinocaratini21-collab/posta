@@ -41,12 +41,14 @@ async function refrescarDesdeWeb(db, userId, websiteUrl, opts) {
   }
   const cambios = {};
   if (sitio.city) cambios.ciudad = String(sitio.city).slice(0, 80);
-  if (Array.isArray(sitio.palette) && sitio.palette.length) {
+  // Rubro y paleta: solo si el fundamento todavía no tiene (la web propone,
+  // no impone: si el dueño ya definió su rubro o su paleta, manda el dueño).
+  // (SLICE 2 Fitswapp: la paleta canónica del borrador nunca la pisa lo que
+  // extraiga la landing.)
+  const f = venty.leerFundamento(db, userId);
+  if ((!f || !(f.paleta && f.paleta.length)) && Array.isArray(sitio.palette) && sitio.palette.length) {
     cambios.paleta = sitio.palette.slice(0, 2).map((hex, i) => ({ hex: String(hex).toUpperCase(), rol: i === 0 ? 'principal' : 'acento' }));
   }
-  // Rubro: solo si el fundamento todavía no tiene uno (la web propone, no
-  // impone: si el dueño ya definió su rubro, manda el dueño).
-  const f = venty.leerFundamento(db, userId);
   if ((!f || !f.rubro) && sitio.categoryHint) cambios.rubro = String(sitio.categoryHint).slice(0, 80);
   cambios.website_url = sitio.url || url;
   try {

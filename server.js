@@ -85,6 +85,7 @@ const ventyWhatsapp = require('./venty-whatsapp'); // VENTY-CONECTAR-4: WhatsApp
 const ventyInstagram = require('./venty-instagram'); // VENTY-CONECTAR-4: webhook de Instagram + DM con remitente por zona.
 const ventyEmail = require('./venty-email'); // VENTY-CONECTAR-4: dirección de reenvío + plantilla con paleta del negocio + supresión.
 const ventyWeb = require('./venty-web'); // VENTY-CONECTAR-4: el sitio del negocio como fuente conectada del fundamento.
+const ventyFitswapp = require('./venty-fitswapp'); // SLICE 2 FITSWAPP: piloto / cliente cero de Venty (fuente web fitswapp.com, email con paleta Fitswapp, IG @fit.swapp; WhatsApp fuera del piloto).
 const informeMensual = require('./informe-mensual'); // INFORME MENSUAL REAL (ítem 5, 2026-10-26): números reales del mes, sin ROI inventado.
 try { oficina.init(db); } catch (e) { console.error('[oficina] init:', e.message); }
 try { venty.init(db); } catch (e) { console.error('[venty] init:', e.message); }
@@ -93,6 +94,7 @@ try { ventyGobernador.ensureSchema(db); } catch (e) { console.error('[venty-gobe
 try { ventyWhatsapp.ensureSchema(db); } catch (e) { console.error('[venty-whatsapp] init:', e.message); }
 try { ventyInstagram.ensureSchema(db); } catch (e) { console.error('[venty-instagram] init:', e.message); }
 try { ventyEmail.ensureSchema(db); } catch (e) { console.error('[venty-email] init:', e.message); }
+try { ventyFitswapp.ensureSchema(db); } catch (e) { console.error('[venty-fitswapp] init:', e.message); }
 const postyOficina = require('./posty-oficina'); // POSTY en la oficina: su semana real entra al río y a la Bandeja.
 try { postyOficina.init(db); } catch (e) { console.error('[posty-oficina] init:', e.message); }
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
@@ -4688,6 +4690,52 @@ app.post('/api/venty/instagram/dm', requireAuthOrWebToken, async (req, res) => {
     const uid = ventyUid(req);
     const r = await ventyInstagram.enviarDM(db, uid, req.body || {});
     if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// ---------- Piloto Fitswapp (SLICE 2, cliente cero de Venty) ----------
+// El fundamento de Fitswapp es BORRADOR sin aprobar: nada acá lo da por
+// aprobado ni escribe nada real fuera de Posta. Web: único canal que se
+// conecta sin decisión previa (la URL va fijada en el servidor, nunca la
+// trae el cliente). Instagram: solo se registra @fit.swapp en falta_accion
+// (falta la cuenta de Meta + el app review). Email: el dominio de envío se
+// registra cuando Valentino lo decida; sin él, el envío piloto no sale.
+// WhatsApp: fuera del piloto (no se crea ruta ni registro).
+app.get('/api/venty/piloto/fitswapp', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    res.json({ ok: true, modo: 'prueba', ...ventyFitswapp.estadoPiloto(db, uid) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/piloto/fitswapp/web/conectar', requireAuthOrWebToken, async (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = await ventyFitswapp.conectarFuenteWeb(db, uid, {});
+    if (!r.ok) return res.status(502).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/piloto/fitswapp/instagram/conectar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const c = ventyFitswapp.conectarInstagram(db, uid, {});
+    res.json({ ok: true, modo: 'prueba', conexion: c });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/piloto/fitswapp/dominio-envio', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = ventyFitswapp.fijarDominioEnvio(db, uid, String(((req.body || {}).dominio || '')));
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/piloto/fitswapp/email/enviar', requireAuthOrWebToken, async (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const base = (req.protocol + '://' + req.get('host'));
+    const r = await ventyFitswapp.enviarEmailPiloto(db, uid, { ...(req.body || {}), bajaUrlBase: base });
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, detalle: r.detalle || '' });
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -32493,7 +32541,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v794';
+const BUILD_ID = '20261105-v797';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
