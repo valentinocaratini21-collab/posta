@@ -57,8 +57,8 @@ const bindSlice = sliceOk(app, 'function bindSignalBtns()', '// Calendario comer
 console.log('— 0) pines —');
 check('0a app.js cambió vs base v805', md5(app) !== 'aaae05c2ddcc444b71c203daea11ff98', md5(app));
 check('0b styles.css cambió vs base v805', md5(css) !== 'e1261ef04f791cec22e85513a95bd8fb', md5(css));
-check('0c server.js = v818 estampado (SOLO línea BUILD; el XP vive en xp-nivel.js, no acá)',
-  md5(srv) === '5d51100ed9214944e110d8774d8953fb', md5(srv));
+check('0c server.js = v819 estampado (SOLO línea BUILD; el XP vive en xp-nivel.js, no acá)',
+  md5(srv) === 'b27f33b611820e7bc4716407a2f71beb', md5(srv));
 check('0d xp-nivel.js cambió vs base v805', md5(xpn) !== 'e28ccb63b0685d3f37210ef6186bb877', md5(xpn));
 
 // ---------- Parte 1: estática — estrellitas ----------
@@ -239,7 +239,7 @@ async function parteBoot() {
     check('5a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('5b /api/version = v818 (estampado)', ver && ver.build === '20261105-v818', JSON.stringify(ver));
+    check('5b /api/version = v819 (estampado)', ver && ver.build === '20261105-v819', JSON.stringify(ver));
     const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=540`)).text();
     check('5c el app.js servido trae el lote (starFill + gracias)',
       appJs.includes("pzIc('starFill', 18)") && appJs.includes('st-rate-gracias'), 'len ' + appJs.length);

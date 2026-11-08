@@ -5920,3 +5920,21 @@ body.pz-postchat-open{overflow:hidden}
 #inicioView .pz-hoy-speech-ava{width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none;border:2px solid #fff;box-shadow:0 2px 6px rgba(10,30,51,.14);margin-top:2px}
 #inicioView .pz-hoy-speech{flex:1;min-width:0;width:auto;margin-bottom:0;border:1px solid rgba(255,255,255,.75);box-shadow:0 6px 18px rgba(10,30,51,.10)}
 #inicioView .pz-hoy-upload,#inicioView .pz-hoy-semana,#inicioView .pz-hoy-card,#inicioView .pz-hoy-vacio,#inicioView .pz-hoy-conserje{margin-bottom:14px}
+
+/* ============ LOTE ANÁLISIS-GLASS v811 (PROVISIONAL) ============
+   Solo color: todo glass transparente DENTRO de .st-wrap (pantalla
+   «Tus números»). Mock aprobado por Valentino 8/11 (v2, del código vivo).
+   Las tarjetas ya eran glass por el bloque LOTE GLASS (.st-card y
+   .st-wrap .card); quedaban sólidos: el ícono del encabezado (.ph-ico,
+   global azul), los tags del estado vacío, las píldoras de delta y los
+   fondos de reserva detrás de las fotos. Alcance .st-wrap SOLO: nada
+   global tocado (.card/.ph-ico/.st-card/.btn-soft siguen como están
+   fuera de Análisis). Estrellas y .btn-primary sin cambio. Valores
+   glass = los del bloque LOTE GLASS vivo (fondo rgba .55 / borde .75 /
+   blur 16px saturate 1.4 / sombra 0 8px 24px rgba(10,30,51,.10)). */
+.st-wrap .ph-ico{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.st-wrap .st-empty-tags span{background:rgba(255,255,255,.55);border:1px dashed rgba(255,255,255,.85)}
+.st-wrap .st-delta.up{background:rgba(226,245,234,.55)}
+.st-wrap .st-delta.down{background:rgba(251,233,231,.55)}
+.st-wrap .st-rate-thumb{background:rgba(255,255,255,.55)}
+.st-wrap .st-best-row img{background:rgba(255,255,255,.55)}
