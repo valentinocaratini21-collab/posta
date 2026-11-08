@@ -87,7 +87,7 @@ t('prevWeekKey sin weekKey → null', sa.prevWeekKey('') === null);
   const eventos = [
     { name: 'Día de la Madre', date: '2026-10-18' }, // semana anterior (domingo previo al lunes 19: cae fuera de [19,26)? 18 < 19 → fuera)
     { name: 'Halloween', date: '2026-10-31' },       // semana destino
-    { name: 'CyberMonday', date: '2026-11-02' },      // fuera de la destino
+    { name: 'Black Friday', date: '2026-11-27' },    // fuera de la destino
   ];
   const ap = sa.aprendizajeSemanaAnterior(db, 1, '2026-10-26', eventos);
   t('semana N tiene=true', ap.tiene === true, ap);
@@ -99,7 +99,7 @@ t('prevWeekKey sin weekKey → null', sa.prevWeekKey('') === null);
   t('pregunta textual exacta, no inventada', ap.preguntas.some((p) => p.texto === '¿tienen opciones sin TACC?'));
   t('IG medido: turnos 3 guardados 4 comentarios', ap.ig.length === 1 && ap.ig[0].saves === 3 && ap.ig[0].comments === 4, ap.ig);
   t('fechas pendientes: Halloween en destino', ap.fechasPendientes.some((f) => f.nombre === 'Halloween'), ap.fechasPendientes);
-  t('CyberMonday fuera de destino no entra', !ap.fechasPendientes.some((f) => f.nombre === 'CyberMonday'));
+  t('Black Friday fuera de destino no entra', !ap.fechasPendientes.some((f) => f.nombre === 'Black Friday'));
 
   const brief = sa.textoParaBrief(ap);
   t('brief cita semana aceptada', /se aceptó entera/.test(brief), brief);

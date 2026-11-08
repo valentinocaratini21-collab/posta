@@ -5,7 +5,7 @@
  * Regla: un posteo solo puede mencionar un precio o una promo si existe
  * una oferta CON FECHA en el fundamento; una promo sin fecha de fin nunca
  * se presenta como vigente. Mata la clase de fallo del posteo 531 (tease
- * de Cyber sin términos).
+ * de promo sin términos).
  *
  * Uso: node test-lote-estudio-fichaoferta.js            (árbol actual)
  *      BASE=/ruta/al/arbol node test-lote-estudio-fichaoferta.js
@@ -38,27 +38,27 @@ if (!so) {
 }
 
 // ---------- 1. Extracción estructurada (web + IG) ----------
-const WEB_CYBER = [
+const WEB_BF = [
   'Café Luna — café de especialidad en Palermo.',
-  'CyberMonday: 20% OFF en todo el café, hasta el 30/11/2026.',
+  'Black Friday: 20% OFF en todo el café, hasta el 30/11/2026.',
   'Café de especialidad $ 12.500 el kilo. Medialunas caseras $ 3.200 la docena.',
   'Horarios: lunes a viernes de 8 a 18 hs. Estamos en Gorriti 1234, Palermo.',
 ].join('\n');
-const sheetCyber = so.extractOfferSheet({
-  webText: WEB_CYBER, webUrl: 'https://cafeluna.com', items: ['Café de especialidad', 'Medialunas caseras'], now: NOW,
+const sheetBF = so.extractOfferSheet({
+  webText: WEB_BF, webUrl: 'https://cafeluna.com', items: ['Café de especialidad', 'Medialunas caseras'], now: NOW,
 });
-t(sheetCyber && sheetCyber.v === 1, '1.1 ficha con versión 1');
-t(Array.isArray(sheetCyber.promos) && sheetCyber.promos.length === 1, '1.2 una promo extraída', JSON.stringify(sheetCyber.promos));
-const pCyber = (sheetCyber.promos || [])[0] || {};
-t(pCyber.ends_at === '2026-11-30', '1.3 promo con fecha de fin 2026-11-30', 'vino ' + pCyber.ends_at);
-t(pCyber.vigente === true && pCyber.status === 'vigente', '1.4 promo vigente', pCyber.status);
-t(/20\s?%/.test(pCyber.titulo || '') || /20\s?%/.test(pCyber.descuento || ''), '1.5 promo conserva el % OFF', pCyber.titulo);
-t(pCyber.fuente === 'web' && typeof pCyber.evidencia === 'string' && pCyber.evidencia.length > 5, '1.6 promo con procedencia + evidencia');
-const prodCafe = (sheetCyber.productos || []).find((x) => /especialidad/i.test(x.nombre || ''));
+t(sheetBF && sheetBF.v === 1, '1.1 ficha con versión 1');
+t(Array.isArray(sheetBF.promos) && sheetBF.promos.length === 1, '1.2 una promo extraída', JSON.stringify(sheetBF.promos));
+const pBF = (sheetBF.promos || [])[0] || {};
+t(pBF.ends_at === '2026-11-30', '1.3 promo con fecha de fin 2026-11-30', 'vino ' + pBF.ends_at);
+t(pBF.vigente === true && pBF.status === 'vigente', '1.4 promo vigente', pBF.status);
+t(/20\s?%/.test(pBF.titulo || '') || /20\s?%/.test(pBF.descuento || ''), '1.5 promo conserva el % OFF', pBF.titulo);
+t(pBF.fuente === 'web' && typeof pBF.evidencia === 'string' && pBF.evidencia.length > 5, '1.6 promo con procedencia + evidencia');
+const prodCafe = (sheetBF.productos || []).find((x) => /especialidad/i.test(x.nombre || ''));
 t(!!prodCafe && /12.?500/.test(String(prodCafe.precio || '')), '1.7 producto con precio y fuente', JSON.stringify(prodCafe));
-t(sheetCyber.horarios && /8 a 18/.test(sheetCyber.horarios.texto || ''), '1.8 horarios extraídos', JSON.stringify(sheetCyber.horarios));
-t(sheetCyber.ubicacion && /Gorriti 1234/.test(sheetCyber.ubicacion.texto || ''), '1.9 ubicación extraída', JSON.stringify(sheetCyber.ubicacion));
-t(sheetCyber.compra && sheetCyber.compra.vende_online !== undefined, '1.10 bloque compra presente');
+t(sheetBF.horarios && /8 a 18/.test(sheetBF.horarios.texto || ''), '1.8 horarios extraídos', JSON.stringify(sheetBF.horarios));
+t(sheetBF.ubicacion && /Gorriti 1234/.test(sheetBF.ubicacion.texto || ''), '1.9 ubicación extraída', JSON.stringify(sheetBF.ubicacion));
+t(sheetBF.compra && sheetBF.compra.vende_online !== undefined, '1.10 bloque compra presente');
 
 const WEB_SIN_FECHA = 'Promo: 2x1 en cafés todos los días. Vení a probar nuestro café de especialidad.';
 const sheetSinFecha = so.extractOfferSheet({ webText: WEB_SIN_FECHA, now: NOW });
@@ -87,7 +87,7 @@ t(so.parseOfferDate('hasta el 4 de noviembre', NOW) == null, '1.20 fecha sin añ
 t(so.parseOfferDate('sin ninguna fecha acá', NOW) == null, '1.21 sin fecha: null');
 
 // ---------- 2. Puerta: qué puede presentarse como vigente ----------
-const vigente = so.currentOffer(sheetCyber, NOW);
+const vigente = so.currentOffer(sheetBF, NOW);
 t(!!vigente && vigente.ends_at === '2026-11-30', '2.1 currentOffer: la vigente');
 t(so.currentOffer(sheetSinFecha, NOW) == null, '2.2 currentOffer: sin fecha → null');
 t(so.currentOffer(sheetVencida, NOW) == null, '2.3 currentOffer: vencida → null');
@@ -101,12 +101,12 @@ function mkDigest(offerSheet) {
     category: 'cafeteria',
     web: { name: 'Café Luna', description: 'Café de especialidad en Palermo.', services: ['Café de especialidad', 'Medialunas caseras'], city: 'Palermo', palette: [], url: 'https://cafeluna.com' },
     feed: { bio: 'Cafetería en Palermo', captions: ['Nuestro café de especialidad'], name: 'Café Luna', handle: 'cafeluna', pic: '' },
-    dna: { promos_activas: [{ nombre: 'CyberMonday 20% OFF' }] },
+    dna: { promos_activas: [{ nombre: 'Black Friday 20% OFF' }] },
     offerSheet: offerSheet || null,
   });
   return d;
 }
-const dVigente = mkDigest(sheetCyber);
+const dVigente = mkDigest(sheetBF);
 t(dVigente.offerSheet && dVigente.offerSheet.v === 1, '3.1 digest lleva fundamento.offerSheet');
 const topicsVigente = cd.deriveTopics(dVigente, { count: 5, category: 'cafeteria', lang: 'es' });
 const promoTopic = topicsVigente.find((x) => x && x.kind === 'promo');
@@ -135,8 +135,8 @@ t(so.priceMentionAllowed(dVigente, '$ 99.999') === false, '3.10 precio sin fuent
 // Puerta en demo.js (camino real de generación, defensa en profundidad):
 // un specPost promo sin oferta vigente se reescribe, nunca sale como promo.
 const demo = req('demo.js');
-const fakeSp = { kind: 'promo', headline: 'CyberMonday 20% OFF', subline: 'Hasta agotar stock', cta: 'Quiero aprovecharla', pill: 'PROMO', text_mode: 'text' };
-const fakeTopic = { kind: 'promo', caption: 'CyberMonday en Café Luna 🔥\n\nEs por tiempo limitado: cuando se termina, se termina.\n\nEscribinos y te lo reservamos 📩' };
+const fakeSp = { kind: 'promo', headline: 'Black Friday 20% OFF', subline: 'Hasta agotar stock', cta: 'Quiero aprovecharla', pill: 'PROMO', text_mode: 'text' };
+const fakeTopic = { kind: 'promo', caption: 'Black Friday en Café Luna 🔥\n\nEs por tiempo limitado: cuando se termina, se termina.\n\nEscribinos y te lo reservamos 📩' };
 const sanit = so.sanitizePromoPost(fakeSp, fakeTopic, dSinFecha, NOW);
 t(sanit.post.kind !== 'promo', '3.11 demo-gate: promo sin fecha → el posteo deja de ser promo', sanit.post.kind);
 t(!/tiempo limitado/i.test(String(sanit.topic.caption || '')), '3.12 demo-gate: el caption pierde la urgencia');
@@ -152,7 +152,7 @@ t(specVig.specPosts.some((p) => p && p.kind === 'promo'), '3.16 buildDemoSpec co
 
 // Los términos sobreviven al gate de captions: appendOfferTerms repone
 // la fecha DESPUÉS del caption gateado, sin duplicarla.
-const capConFecha = demo.appendOfferTerms('CyberMonday en Café Luna 🔥\n\nEscribinos 📩', { kind: 'promo', offer_ends_at: '2026-11-30' }, 'es');
+const capConFecha = demo.appendOfferTerms('Black Friday en Café Luna 🔥\n\nEscribinos 📩', { kind: 'promo', offer_ends_at: '2026-11-30' }, 'es');
 t(/30\/11\/2026/.test(capConFecha), '3.17 appendOfferTerms: la fecha vuelve al caption final');
 t(demo.appendOfferTerms(capConFecha, { kind: 'promo', offer_ends_at: '2026-11-30' }, 'es') === capConFecha, '3.18 appendOfferTerms: no duplica la fecha');
 t(demo.appendOfferTerms('Hola', { kind: 'novedad', offer_ends_at: '2026-11-30' }, 'es') === 'Hola', '3.19 appendOfferTerms: solo piezas promo');

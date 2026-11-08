@@ -28,8 +28,7 @@ ok(findEph(ar26, 'Día de la Madre', '2026-10-18'), 'AR 2026: Madre 18/10 (3er d
 ok(findEph(ar26, 'Día del Padre', '2026-06-21'), 'AR 2026: Padre 21/6 (3er dom jun)');
 ok(findEph(ar26, 'Día del Niño', '2026-08-16'), 'AR 2026: Niño 16/8 (3er dom ago)');
 ok(findEph(ar26, 'Día de la Independencia', '2026-07-09'), 'AR 2026: Independencia 9/7');
-ok(findEph(ar26, 'CyberMonday', '2026-11-02'), 'AR 2026: CyberMonday 2/11');
-ok(findEph(ar26, 'CyberMonday', '2026-11-02').angle.includes('2–4/11'), 'AR 2026: ángulo CyberMonday conserva 2–4/11');
+ok(JSON.stringify(ar26.filter((e) => e.date.slice(5, 7) === '11').map((e) => e.name)) === JSON.stringify(['Black Friday']), 'AR 2026 noviembre: solo Black Friday (sin campaña nueva)');
 ok(findEph(ar26, 'Hot Sale', '2026-05-11'), 'AR 2026: Hot Sale 11/5 (2º lun may, CACE)');
 ok(findEph(ar26, 'Día del Amigo', '2026-07-20'), 'AR 2026: Amigo 20/7');
 ok(findEph(ar26, 'Carnaval', '2026-02-16') && findEph(ar26, 'Carnaval', '2026-02-17'), 'AR 2026: Carnaval 16–17/2');
@@ -41,8 +40,7 @@ const ar27 = allForYear(2027, 'AR');
 ok(findEph(ar27, 'Día de la Madre', '2027-10-17'), 'AR 2027: Madre 17/10');
 ok(findEph(ar27, 'Día del Padre', '2027-06-20'), 'AR 2027: Padre 20/6');
 ok(findEph(ar27, 'Día del Niño', '2027-08-15'), 'AR 2027: Niño 15/8');
-ok(findEph(ar27, 'CyberMonday', '2027-11-01'), 'AR 2027: CyberMonday 1/11 (regla, no 2/11 fijo)');
-ok(findEph(ar27, 'CyberMonday', '2027-11-01').angle.includes('1–3/11'), 'AR 2027: ángulo CyberMonday 1–3/11');
+ok(JSON.stringify(ar27.filter((e) => e.date.slice(5, 7) === '11').map((e) => e.name)) === JSON.stringify(['Black Friday']), 'AR 2027 noviembre: solo Black Friday (sin campaña nueva)');
 ok(findEph(ar27, 'Hot Sale', '2027-05-10'), 'AR 2027: Hot Sale 10/5 (patrón CACE)');
 ok(findEph(ar27, 'Carnaval', '2027-02-08') && findEph(ar27, 'Carnaval', '2027-02-09'), 'AR 2027: Carnaval 8–9/2');
 ok(findEph(ar27, 'Black Friday', '2027-11-26'), 'AR 2027: Black Friday 26/11');
@@ -54,7 +52,6 @@ ok(findEph(uy26, 'Día del Padre', '2026-07-12'), 'UY 2026: Padre 12/7 (2º dom 
 ok(findEph(uy26, 'Día del Niño', '2026-08-16'), 'UY 2026: Niño 16/8 (coincide con AR)');
 ok(findEph(uy26, 'Día de la Independencia', '2026-08-25'), 'UY 2026: Independencia 25/8');
 ok(!findEph(uy26, 'Día de la Independencia', '2026-07-09'), 'UY 2026: SIN 9/7 (no hay orgullo argentino)');
-ok(!uy26.some((e) => e.name === 'CyberMonday'), 'UY 2026: SIN CyberMonday CACE (no inventado)');
 ok(!uy26.some((e) => e.name === 'Hot Sale'), 'UY 2026: SIN Hot Sale AR');
 ok(!uy26.some((e) => e.name === 'Día de la Primavera'), 'UY 2026: SIN Primavera');
 ok(findEph(uy26, 'Día del Amigo', '2026-07-20'), 'UY 2026: Amigo 20/7 (ambos mercados)');
@@ -69,15 +66,13 @@ const wUy = upcomingEphemeris(400, 'UY');
 const wAr = upcomingEphemeris(400, 'AR');
 ok(wUy.filter((e) => e.name === 'Día de la Madre').every((e) => e.date.slice(5, 7) === '05'), 'Ventana UY: toda Madre en mayo');
 ok(wAr.filter((e) => e.name === 'Día de la Madre').every((e) => e.date.slice(5, 7) === '10'), 'Ventana AR: toda Madre en octubre');
-ok(!wUy.some((e) => e.name === 'CyberMonday'), 'Ventana UY 400 días: ningún CyberMonday');
-ok(wAr.some((e) => e.name === 'CyberMonday'), 'Ventana AR 400 días: hay CyberMonday');
+ok(wAr.some((e) => e.name === 'Black Friday'), 'Ventana AR 400 días: hay Black Friday');
 
 /* ---------- 3. calendar.js por país ---------- */
 const calAr26 = entriesForYear(2026, 'AR');
 ok(findCal(calAr26, 'Día del Padre', '2026-06-21'), 'Cal AR 2026: Padre 21/6 (no 15/6 fijo)');
 ok(findCal(calAr26, 'Día del Niño', '2026-08-16'), 'Cal AR 2026: Niño 16/8 (no 17/8)');
 ok(findCal(calAr26, 'Black Friday', '2026-11-27'), 'Cal AR 2026: Black Friday 27/11 (no 28/11)');
-ok(!calAr26.some((e) => e.title === 'Cyber Monday'), 'Cal AR 2026: SIN Cyber Monday 1/12');
 ok(findCal(calAr26, 'Día del Amigo', '2026-07-20'), 'Cal AR 2026: Amigo 20/7');
 ok(findCal(calAr26, 'Carnaval', '2026-02-16') && findCal(calAr26, 'Carnaval', '2026-02-17'), 'Cal AR 2026: Carnaval 16–17/2');
 ok(findCal(calAr26, 'Día de la Primavera', '2026-09-21'), 'Cal AR 2026: Primavera 21/9');
@@ -99,7 +94,6 @@ ok(findCal(calUy26, 'Día de los Difuntos', '2026-11-02'), 'Cal UY 2026: Difunto
 for (const [t, d] of [['Día de la Independencia', '2026-07-09'], ['Día de la Memoria', '2026-03-24'], ['Revolución de Mayo', '2026-05-25'], ['Día de la Bandera', '2026-06-20'], ['Día de la Diversidad', '2026-10-12'], ['Día de la Soberanía', '2026-11-20'], ['Día de la Virgen', '2026-12-08']]) {
   ok(!findCal(calUy26, t, d), `Cal UY 2026: SIN feriado AR ${t} ${d}`);
 }
-ok(!calUy26.some((e) => e.title === 'Cyber Monday'), 'Cal UY 2026: SIN Cyber Monday');
 const hwUy = findCal(calUy26, 'Halloween', '2026-10-31');
 ok(hwUy && JSON.stringify(hwUy.rubros) === JSON.stringify(['gastronomia', 'belleza', 'fiestas']), 'Cal UY: Halloween con criterio acotado');
 
@@ -107,11 +101,11 @@ ok(JSON.stringify(easterSunday(2026)) === JSON.stringify({ m: 4, d: 5 }), 'Compu
 ok(JSON.stringify(easterSunday(2027)) === JSON.stringify({ m: 3, d: 28 }), 'Computus: Pascua 2027 = 28/3');
 ok(JSON.stringify(easterSunday(2030)) === JSON.stringify({ m: 4, d: 21 }), 'Computus: Pascua 2030 = 21/4 (igual tabla)');
 const calUs27 = entriesForYear(2027, 'US');
-for (const [t, d] of [['Easter', '2027-03-28'], ["Mother's Day", '2027-05-09'], ['Memorial Day', '2027-05-31'], ["Father's Day", '2027-06-20'], ['Labor Day', '2027-09-06'], ['Thanksgiving', '2027-11-25'], ['Black Friday', '2027-11-26'], ['Cyber Monday', '2027-11-29'], ['Martin Luther King Jr. Day', '2027-01-18'], ["Presidents' Day", '2027-02-15']]) {
+for (const [t, d] of [['Easter', '2027-03-28'], ["Mother's Day", '2027-05-09'], ['Memorial Day', '2027-05-31'], ["Father's Day", '2027-06-20'], ['Labor Day', '2027-09-06'], ['Thanksgiving', '2027-11-25'], ['Black Friday', '2027-11-26'], ['Martin Luther King Jr. Day', '2027-01-18'], ["Presidents' Day", '2027-02-15']]) {
   ok(findCal(calUs27, t, d), `Cal US 2027: ${t} ${d} (regla, no fijo 2026)`);
 }
 const calUs26 = entriesForYear(2026, 'US');
-for (const [t, d] of [['Easter', '2026-04-05'], ["Mother's Day", '2026-05-10'], ['Memorial Day', '2026-05-25'], ["Father's Day", '2026-06-21'], ['Labor Day', '2026-09-07'], ['Thanksgiving', '2026-11-26'], ['Black Friday', '2026-11-27'], ['Cyber Monday', '2026-11-30'], ['Small Business Saturday', '2026-11-28']]) {
+for (const [t, d] of [['Easter', '2026-04-05'], ["Mother's Day", '2026-05-10'], ['Memorial Day', '2026-05-25'], ["Father's Day", '2026-06-21'], ['Labor Day', '2026-09-07'], ['Thanksgiving', '2026-11-26'], ['Black Friday', '2026-11-27'], ['Small Business Saturday', '2026-11-28']]) {
   ok(findCal(calUs26, t, d), `Cal US 2026: ${t} ${d} (sin cambio vs fijos viejos)`);
 }
 ok(Array.isArray(getUpcoming(14, 'es', 'UY')) && Array.isArray(getRelevant('gastronomia', 14, 'es', 'UY')), 'getUpcoming/getRelevant aceptan pais sin romper');
@@ -125,10 +119,10 @@ ok(!!md26 && md26.start === '2026-10-11' && md26.end === '2026-10-18', 'Existe m
 const aHs = activeCampaign(D('2026-05-11'));
 ok(aHs && aHs.id === 'hot-sale-ar-2026', '2026-05-11: Hot Sale activo');
 ok(campaignThemeLine('2026-05-11', 'moda') !== '' && campaignThemeLine('2026-05-11', 'barberia') === '', 'Hot Sale: moda entra, barberia fuera');
-ok(activeCampaign(D('2026-11-02')) && activeCampaign(D('2026-11-02')).id === 'cybermonday-ar-2026', '2026-11-02: fechada gana (sin duplicar anual)');
+ok(activeCampaign(D('2026-11-02')) === null, '2026-11-02: ninguna campaña (CyberMonday: baja 7/11 por directiva de Valentino)');
 ok(activeCampaign(D('2026-11-05')) === null, '2026-11-05: ninguna campaña (anual no rige en 2026)');
 ok(activeCampaign(D('2027-05-11')) && activeCampaign(D('2027-05-11')).id === 'hot-sale-ar-2027', '2027-05-11: Hot Sale anual');
-ok(activeCampaign(D('2027-11-02')) && activeCampaign(D('2027-11-02')).id === 'cybermonday-ar-2027', '2027-11-02: CyberMonday anual');
+ok(activeCampaign(D('2027-11-02')) === null, '2027-11-02: ninguna campaña (sin campaña anual en noviembre)');
 ok(activeCampaign(D('2027-10-15')) && activeCampaign(D('2027-10-15')).id === 'madre-ar-2027', '2027-10-15: Madre anual (capa de octubre)');
 ok(activeCampaign(D('2027-11-26')) && activeCampaign(D('2027-11-26')).id === 'black-friday-2027', '2027-11-26: Black Friday anual');
 ok(activeCampaign(D('2027-12-15')) && activeCampaign(D('2027-12-15')).id === 'fiestas-2027', '2027-12-15: Fiestas anual (horizonte roto)');
@@ -141,11 +135,10 @@ ok(activeCampaign(D('2027-06-01')) === null, '2027-06-01: sin campaña inventada
 ok(campaignThemeLine('2027-10-15', 'moda', 'es', 'UY') === '', 'Madre anual: UY no la recibe');
 ok(campaignThemeLine('2027-10-15', 'moda', 'es', 'AR') !== '', 'Madre anual: AR sí la recibe');
 ok(campaignThemeLine('2027-10-15', 'moda', 'es') !== '', 'Madre anual: sin país no se filtra (histórico)');
-ok(campaignThemeLine('2027-11-02', 'moda', 'es', 'UY') === '', 'CyberMonday anual: UY no lo recibe');
 ok(currentCampaign('2027-10-15', 'es', 'UY') === null, 'currentCampaign octubre 2027 UY: null (sin capa AR)');
 const bf26 = CAMPAIGNS.find((c) => c.id === 'black-friday-2026');
 ok(bf26 && !bf26.angle.es.includes('30/11'), 'Ángulo ES Black Friday: sin cita US 30/11');
-ok(bf26 && bf26.angle.en.includes('Nov 30'), 'Ángulo EN Black Friday: conserva Nov 30 (US real)');
+ok(bf26 && !bf26.angle.en.includes('Nov 30'), 'Ángulo EN Black Friday: sin cita US 30/11 (7/11, directiva Valentino)');
 const ver27 = CAMPAIGNS.find((c) => c.id === 'verano-2027');
 ok(ver27 && !ver27.angle.es.includes('US:'), 'Ángulo ES verano: sin mezcla US');
 ok(ver27 && !ver27.angle.en.includes('southern'), 'Ángulo EN verano: sin mezcla sur');

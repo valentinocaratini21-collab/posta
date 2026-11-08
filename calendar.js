@@ -8,11 +8,10 @@
 // Formato de entrada: tupla fija [mes, día, título, ángulo, rubros] o regla
 // { rule, title, angle, rubros } donde rule(año) devuelve { m, d } o una
 // lista de { m, d } (Carnaval devuelve dos días). Las fechas fijas erróneas
-// viejas (Padre 15/6, Niño 17/8, Black Friday 28/11, Cyber Monday 1/12 en
-// AR) pasaron a reglas o se eliminaron: el 15/6 no es el Día del Padre
-// ningún año, el 17/8 es el día después del Día del Niño (y San Martín),
-// el 28/11/2026 es sábado, y un Cyber Monday el 1/12 no existe en ningún
-// mercado. Halloween queda con el criterio acotado de ephemeris (M108
+// viejas (Padre 15/6, Niño 17/8, Black Friday 28/11) pasaron a reglas o se
+// eliminaron: el 15/6 no es el Día del Padre ningún año, el 17/8 es el día
+// después del Día del Niño (y San Martín) y el 28/11/2026 es sábado.
+// Halloween queda con el criterio acotado de ephemeris (M108
 // corrección 7): gastronomía, belleza y fiestas — ya no moda amplia.
 
 function nthWeekdayOfMonth(year, month, weekday, n) {
@@ -82,14 +81,12 @@ const EFEMERIDES = [
   [12, 24, 'Nochebuena', 'Saludo navideño', []],
   [12, 25, 'Navidad', 'Promo navideña', []],
   [12, 31, 'Fin de Año', 'Balance del año, agradecimiento', []],
-  // Sin Cyber Monday: el 1/12 fijo anterior no existe en ningún mercado.
 ];
 
 // Tabla UY (M108 corrección 5): feriados propios + fechas comerciales.
 // Madre 2º domingo de mayo, Padre 2º domingo de julio, Independencia 25/8.
 // NO lleva feriados patrios AR (24/3, 2/4, 25/5, 20/6, 12/10, 20/11, 8/12),
-// ni 9/7, ni Cyber Monday (el e-commerce uruguayo propio no está sourciado:
-// se omite, no se inventa), ni Primavera (sin equivalente fuerte).
+// ni 9/7, ni Primavera (sin equivalente fuerte).
 const EFEMERIDES_UY = [
   [1, 1, 'Año Nuevo', 'Empezar el año con tu negocio', []],
   [1, 6, 'Día de Reyes', 'Última oportunidad de regalos', []],
@@ -136,7 +133,6 @@ const EFEMERIDES_US = [
   { rule: (y) => nthWeekdayOfMonth(y, 11, 4, 4), title: 'Thanksgiving', angle: 'Gratitude post, no hard selling', rubros: [] },
   { rule: (y) => nthWeekdayOfMonth(y, 11, 5, 4), title: 'Black Friday', angle: 'The biggest offers of the year', rubros: [] },
   { rule: (y) => nthWeekdayOfMonth(y, 11, 6, 4), title: 'Small Business Saturday', angle: 'Shop local: the day of local businesses', rubros: [] },
-  { rule: (y) => { const th = nthWeekdayOfMonth(y, 11, 4, 4); return th ? { m: 11, d: th.d + 4 } : null; }, title: 'Cyber Monday', angle: 'Online offers', rubros: ['tecnologia', 'moda'] },
   [12, 24, 'Christmas Eve', 'Holiday greeting', []],
   [12, 25, 'Christmas', 'Holiday promo', []],
   [12, 31, "New Year's Eve", 'Year recap and thanks', []],

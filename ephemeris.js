@@ -10,9 +10,9 @@
 // - Padre: AR 3er domingo de junio; UY 2º domingo de julio.
 // - Niño: coincide, 3er domingo de agosto.
 // - Independencia: AR 9/7; UY 25/8. UY NO recibe el 9/7.
-// - Solo AR: Primavera/Estudiante (21/9), Hot Sale, CyberMonday (CACE).
-// - UY NO recibe CyberMonday CACE ni Hot Sale: el calendario e-commerce
-//   uruguayo propio no está sourciado — se omite, no se inventa.
+// - Solo AR: Primavera/Estudiante (21/9), Hot Sale.
+// - UY NO recibe Hot Sale: el calendario e-commerce uruguayo propio no está
+//   sourciado — se omite, no se inventa.
 // Sin país explícito, el comportamiento es el histórico (AR).
 function nthWeekdayOfMonth(year, month, weekday, n) {
   const d = new Date(Date.UTC(year, month - 1, 1));
@@ -54,7 +54,7 @@ const FIXED_SHARED = [
   { m: 12, d: 31, name: 'Fin de año', emoji: '🥂', angle: 'balance del año y gracias a los clientes' },
 ];
 
-// Conjunto e-commerce (el mismo de CyberMonday): rubros que venden online.
+// Conjunto e-commerce: rubros que venden online.
 const ECOM_CATS = 'retail|moda|indumentaria|ropa|deco|hogar|muebl|joyeria|electro|tecnologia|mascotas|pet|belleza|estetica';
 
 function allForYear(year, pais) {
@@ -89,14 +89,6 @@ function allForYear(year, pais) {
     // fechas oficiales cada año — re-verificar cuando se publiquen.
     const hs = nthWeekdayOfMonth(year, 5, 1, 2);
     if (hs) out.push({ name: 'Hot Sale', emoji: '🛒', angle: 'Hot Sale: descuentos online con fecha límite', cats: ECOM_CATS, date: iso(hs) });
-    // CyberMonday AR: 1er lunes de noviembre (regla, no fecha fija: el 2/11
-    // fijo era correcto en 2026 pero no en 2027, que cae 1/11). El ángulo
-    // lleva la ventana real del año: 2026 = 2–4/11, idéntico al anterior.
-    const cm = nthWeekdayOfMonth(year, 11, 1, 1);
-    if (cm) {
-      const fin = new Date(cm.getTime() + 2 * 86400000);
-      out.push({ name: 'CyberMonday', emoji: '🛒', angle: `descuentos online con fecha límite (${cm.getUTCDate()}–${fin.getUTCDate()}/11)`, cats: ECOM_CATS, date: iso(cm) });
-    }
   }
   pushNth(8, 3, 'Día del Niño', '🧸', 'promo / contenido para chicos');
   const bf = lastWeekdayOfMonth(year, 11, 5);

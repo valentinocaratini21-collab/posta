@@ -591,7 +591,7 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   // ESTACIONAL (M53): efeméride comercial + precio o fecha → esa oración gana
   // sobre cualquier familia de rubro.
   let seed = sentences.find(c => hasWords(c) &&
-    /día de la madre|día del padre|día del niño|día del amigo|navidad|año nuevo|reyes|san valentín|hot sale|cyber monday|black friday/i.test(c) &&
+    /día de la madre|día del padre|día del niño|día del amigo|navidad|año nuevo|reyes|san valentín|hot sale|black friday/i.test(c) &&
     (/\$\s?\d/.test(c) || /\b(hasta el|el|este)\s+\d{1,2}\b/i.test(c) || /\b(domingo|lunes|martes|miércoles|jueves|viernes|sábado)\b/i.test(c)));
   if (!seed && rubro) {
     const r = String(rubro).toLowerCase();
@@ -28901,7 +28901,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // semana. 'todo' sin servicios, sin catálogo y sin detectados = el
     // caso del primo (Q1 vacía): 400 con falta_producto para que el front
     // vuelva a pedir el dato con un toque, en vez de armar una semana con
-    // temas genéricos. La estacionalidad (CyberMonday y demás) solo viste
+    // temas genéricos. La estacionalidad solo viste
     // semanas que existen: sin semana, no viste nada.
     if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados })) {
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
@@ -32369,7 +32369,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v766';
+const BUILD_ID = '20261105-v767';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

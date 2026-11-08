@@ -4,7 +4,7 @@
  * 18776, express 4.22.3 PIN (nunca 5; las deps viven en
  * /home/hatch/workspace/posta/node_modules vía NODE_PATH — el árbol no trae
  * node_modules) y verifica por HTTP:
- *  - /api/version trae 20261105-v764 (BUILD de la base v763; este lote no re-estampa)
+ *  - /api/version trae 20261105-v767 (BUILD re-estampado por la baja de la campaña)
  *  - /prueba.html y /en-prueba.html sirven la tarjeta de la ficha
  *  - POST /api/trial/offer-correct guarda correcciones (promo sin fecha
  *    → vigente=false; con fecha → vigente=true; fecha inválida → 400)
@@ -76,7 +76,7 @@ function trialForm(ig, business) {
   try {
     ok(await waitBoot(), 'boot: server levanta en 18776');
     const ver = await (await fetch(`${URL}/api/version`)).json();
-    ok(ver.build === '20261105-v764', '/api/version 20261105-v764', 'vino ' + ver.build);
+    ok(ver.build === '20261105-v767', '/api/version 20261105-v767', 'vino ' + ver.build);
     const pr = await (await fetch(`${URL}/prueba.html`)).text();
     ok(pr.includes('offerSheetCard') && pr.includes('renderOfferSheet'), '/prueba.html sirve la tarjeta de la ficha');
     const en = await (await fetch(`${URL}/en-prueba.html`)).text();
@@ -86,17 +86,17 @@ function trialForm(ig, business) {
     const noId = await jpost('/api/trial/offer-correct', { correccion: { campo: 'promo_nueva', valor: 'X' } });
     ok(noId.status === 400, 'offer-correct sin identidad → 400');
     const igA = 'testig-m3-boot';
-    const nueva = await jpost('/api/trial/offer-correct', { ig: igA, correccion: { campo: 'promo_nueva', valor: 'CyberMonday 20% OFF' } });
+    const nueva = await jpost('/api/trial/offer-correct', { ig: igA, correccion: { campo: 'promo_nueva', valor: 'Black Friday 20% OFF' } });
     ok(nueva.status === 200 && nueva.j && nueva.j.ok, 'offer-correct promo_nueva sin fecha → 200', JSON.stringify(nueva.j || {}).slice(0, 120));
     const p0 = (nueva.j && nueva.j.offer_sheet && nueva.j.offer_sheet.promos || [])[0] || {};
     ok(p0.vigente === false && p0.status === 'sin_fecha', 'promo sin fecha guardada como sin_fecha/vigente=false');
-    const conFecha = await jpost('/api/trial/offer-correct', { ig: igA, correccion: { campo: 'promo_ends_at', titulo: 'CyberMonday 20% OFF', ends_at: '2026-11-30' } });
+    const conFecha = await jpost('/api/trial/offer-correct', { ig: igA, correccion: { campo: 'promo_ends_at', titulo: 'Black Friday 20% OFF', ends_at: '2026-11-30' } });
     ok(conFecha.status === 200 && conFecha.j && conFecha.j.ok, 'offer-correct promo_ends_at → 200');
     const p1 = (conFecha.j && conFecha.j.offer_sheet && conFecha.j.offer_sheet.promos || [])[0] || {};
     ok(p1.ends_at === '2026-11-30' && p1.vigente === true, 'corrección pone fecha: vigente=true', p1.ends_at + '/' + p1.status);
     const corr1 = (conFecha.j && conFecha.j.offer_sheet && conFecha.j.offer_sheet.correcciones_cliente || []);
     ok(corr1.length >= 1 && corr1[corr1.length - 1].origen === 'dueno', 'corrección registrada con origen dueno');
-    const mala = await jpost('/api/trial/offer-correct', { ig: igA, correccion: { campo: 'promo_ends_at', titulo: 'CyberMonday 20% OFF', ends_at: 'no-una-fecha' } });
+    const mala = await jpost('/api/trial/offer-correct', { ig: igA, correccion: { campo: 'promo_ends_at', titulo: 'Black Friday 20% OFF', ends_at: 'no-una-fecha' } });
     ok(mala.status === 400, 'offer-correct fecha inválida → 400');
 
     // Generación con la promo vigente corregida: la pieza promo existe

@@ -9,16 +9,15 @@
 // M108 — DOS CAMBIOS:
 // 1. La tabla fechada MORÍA el 28/3/2027 (desde abril 2027 no había capa para
 //    nada). Ahora hay REGLAS ANUALES recurrentes desde 2027 (ANNUAL): Hot
-//    Sale, CyberMonday, Madre AR, Black Friday, Fiestas y la recurrencia de
+//    Sale, Madre AR, Black Friday, Fiestas y la recurrencia de
 //    las demás. Una entrada fechada cubre su año y su clave; la regla anual
 //    de esa clave no duplica ese año.
 // 2. Las campañas con mercado único llevan `paises: ['AR']` y se filtran por
 //    país (activeCampaign/currentCampaign/campaignThemeLine aceptan `pais`
 //    opcional). Sin `pais`, el comportamiento es el histórico (sin filtro):
 //    los tests viejos y la prueba pública sin país no cambian.
-// Las fechas CACE (Hot Sale, CyberMonday) van por PATRÓN: Hot Sale 2º lunes
-// de mayo (CACE 2025: 12–14/5; 2026: 11–13/5 + Hot Week 14–17/5) y CyberMonday
-// 1er lunes de noviembre (2025: 3–5/11; 2026: 2–4/11). CACE publica las
+// Las fechas CACE (Hot Sale) van por PATRÓN: Hot Sale 2º lunes de mayo
+// (CACE 2025: 12–14/5; 2026: 11–13/5 + Hot Week 14–17/5). CACE publica las
 // oficiales cada año: re-verificar cuando se publiquen. Las demás reglas
 // son calendario cierto (n-ésimo domingo/viernes, Pascua por Computus).
 
@@ -47,24 +46,13 @@ const CAMPAIGNS = [
     angle: { es: 'Día de la Madre AR (18/10): la fecha que más vende del año — regalos con el producto estrella del negocio, anticipación y reserva, nunca descuento berreta.', en: 'AR Mother’s Day (Oct 18): the biggest selling date of the year — gifts with the business’s star product, early booking, never a cheap discount angle.' },
   },
   {
-    id: 'cybermonday-ar-2026', emoji: '🛒',
-    name: { es: 'CyberMonday', en: 'Cyber Monday' },
-    start: '2026-10-26', end: '2026-11-04',
-    frame: { es: 'la semana de tu negocio para CyberMonday', en: 'your business’s week for Cyber Monday' },
-    cats: ECOM_CATS,
-    paises: ['AR'],
-    angle: { es: 'CyberMonday AR (2–4/11, CACE): la palabra-dinero es % OFF real + fecha límite + canal (solo web / link en bio) + cuotas si el negocio las ofrece de verdad. La pieza es el producto estrella PUESTO/en uso con tercio limpio para el % — nunca flyer tipográfico puro. Servicios de turnos (barbería, fitness, estética de agenda) quedan FUERA salvo pase/pack vendible online declarado en el ADN.', en: 'AR Cyber Monday (Nov 2–4, CACE): the money-word is a real % OFF + deadline + channel (online only / link in bio). Star product worn/in use with a clean third for the % — never a pure type flyer.' },
-  },
-  {
     id: 'black-friday-2026', emoji: '🛍️',
     name: { es: 'Black Friday', en: 'Black Friday' },
     start: '2026-11-23', end: '2026-11-30',
     frame: { es: 'la semana de tu negocio para Black Friday', en: 'your business’s week for Black Friday' },
     cats: ['retail', 'moda', 'indumentaria', 'ropa', 'belleza', 'estetica', 'peluquer', 'barber', 'gastronom', 'comida', 'restaur', 'cafe', 'fitness', 'gimnasio', 'gym', 'mascotas', 'pet', 'deco', 'hogar', 'muebl', 'electro', 'tecnologia'],
-    // (M108 corrección 8) El ángulo ES citaba «Cyber Monday (30/11)»: esa
-    // es la fecha US, no AR. Se elimina la cita; el EN la conserva porque
-    // para el mercado US el 30/11/2026 sí es el Cyber Monday real.
-    angle: { es: 'Black Friday (27/11): la vidriera y los turnos/pases de diciembre se venden esta semana.', en: 'Black Friday (Nov 27) and Cyber Monday (Nov 30): December bookings and gift cards sell this week.' },
+    // (7/11, directiva Valentino: la cita US del 30/11 también se elimina.)
+    angle: { es: 'Black Friday (27/11): la vidriera y los turnos/pases de diciembre se venden esta semana.', en: 'Black Friday (Nov 27): December bookings and gift cards sell this week.' },
   },
   {
     id: 'fiestas-2026', emoji: '🎄',
@@ -236,11 +224,6 @@ const ANNUAL = [
     cats: MADRE_CATS, paises: ['AR'],
     angle: { es: 'Día de la Madre AR: la fecha que más vende del año — regalos con el producto estrella del negocio, anticipación y reserva, nunca descuento berreta.', en: 'AR Mother’s Day: the biggest selling date of the year — gifts with the business’s star product, early booking, never a cheap discount angle.' },
     window: (y) => winOf(nthWeekday(y, 10, 0, 3), -7, 0) },
-  { key: 'cybermonday-ar', emoji: '🛒',
-    name: { es: 'CyberMonday', en: 'Cyber Monday' },
-    cats: ECOM_CATS, paises: ['AR'],
-    angle: { es: 'CyberMonday AR: la palabra-dinero es % OFF real + fecha límite + canal (solo web / link en bio) + cuotas si el negocio las ofrece de verdad. La pieza es el producto estrella PUESTO/en uso con tercio limpio para el % — nunca flyer tipográfico puro. Servicios de turnos (barbería, fitness, estética de agenda) quedan FUERA salvo pase/pack vendible online declarado en el ADN.', en: 'AR Cyber Monday: the money-word is a real % OFF + deadline + channel (online only / link in bio). Star product worn/in use with a clean third for the % — never a pure type flyer.' },
-    window: (y) => winOf(nthWeekday(y, 11, 1, 1), -7, 2) },
   { key: 'black-friday', emoji: '🛍️',
     name: { es: 'Black Friday', en: 'Black Friday' },
     cats: ['retail', 'moda', 'indumentaria', 'ropa', 'belleza', 'estetica', 'peluquer', 'barber', 'gastronom', 'comida', 'restaur', 'cafe', 'fitness', 'gimnasio', 'gym', 'mascotas', 'pet', 'deco', 'hogar', 'muebl', 'electro', 'tecnologia'],
@@ -255,7 +238,7 @@ const ANNUAL = [
 // Clave anual que cubre cada entrada fechada (para no duplicar su año).
 const DATED_KEY = {
   'hot-sale-ar-2026': 'hot-sale-ar', 'madre-ar-2026': 'madre-ar',
-  'cybermonday-ar-2026': 'cybermonday-ar', 'black-friday-2026': 'black-friday',
+'black-friday-2026': 'black-friday',
   'fiestas-2026': 'fiestas', 'lanzamiento-2027': 'lanzamiento',
   'verano-2027': 'verano', 'san-valentin-2027': 'san-valentin',
   'vuelta-a-clases-2027': 'vuelta-a-clases', 'dia-mujer-2027': 'dia-mujer',

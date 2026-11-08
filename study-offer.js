@@ -8,7 +8,7 @@
 // procedencia (fuente + evidencia); si falta un dato, rama honesta:
 // nunca se inventa.
 //
-// PUERTA (mata la clase de fallo del posteo 531, tease de Cyber sin
+// PUERTA (mata la clase de fallo del posteo 531, tease de promo sin
 // términos): un posteo solo puede presentar una promo como vigente si
 // existe una oferta con fecha de fin vigente en el fundamento. Una promo
 // sin fecha de fin o vencida NUNCA se presenta como vigente: la pieza

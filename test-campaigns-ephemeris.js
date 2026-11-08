@@ -1,8 +1,10 @@
 'use strict';
-/* ÍTEM 2 «ARMA TODO» (P25+P26, paquete de Uma 2026-10-24) — CyberMonday AR
-   como campaña + efeméride con lista propia por fecha (catsMatch): la fecha
-   decide por categoría/nombre/descripción del negocio y, sin lista propia,
-   manda el gate de regalo de siempre. Unidad + estáticos sobre server.js. */
+/* ÍTEM 2 «ARMA TODO» (P25+P26, paquete de Uma 2026-10-24) — Black Friday AR
+   como campaña + Hot Sale como efeméride con lista propia por fecha
+   (catsMatch): la fecha decide por categoría/nombre/descripción del negocio
+   y, sin lista propia, manda el gate de regalo de siempre. Unidad +
+   estáticos sobre server.js. (7/11: P25 se reorienta a Black Friday por
+   directiva de Valentino.) */
 
 const fs = require('fs');
 const path = require('path');
@@ -18,29 +20,29 @@ const serverJs = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 // zona horaria de quien corre el test.
 const D = (s) => s + 'T12:00:00';
 
-/* ---------- P25: CyberMonday AR en campaigns.js ---------- */
-const cyber = CAMPAIGNS.find((c) => c.id === 'cybermonday-ar-2026');
-ok(!!cyber, 'existe la campaña cybermonday-ar-2026');
-ok(cyber && cyber.start === '2026-10-26' && cyber.end === '2026-11-04', 'ventana CyberMonday 2026-10-26 → 2026-11-04');
-ok(CAMPAIGNS.indexOf(cyber) < CAMPAIGNS.findIndex((c) => c.id === 'black-friday-2026'), 'CyberMonday va antes de Black Friday');
+/* ---------- P25: Black Friday AR en campaigns.js ---------- */
+const bf = CAMPAIGNS.find((c) => c.id === 'black-friday-2026');
+ok(!!bf, 'existe la campaña black-friday-2026');
+ok(bf && bf.start === '2026-11-23' && bf.end === '2026-11-30', 'ventana Black Friday 2026-11-23 → 2026-11-30');
+ok(CAMPAIGNS.indexOf(bf) < CAMPAIGNS.findIndex((c) => c.id === 'fiestas-2026'), 'Black Friday va antes de Fiestas');
 
-const curEs = currentCampaign(new Date('2026-11-02'), 'es');
-ok(curEs && curEs.id === 'cybermonday-ar-2026', 'currentCampaign(2026-11-02, es) es CyberMonday');
-ok(curEs && curEs.name === 'CyberMonday', 'currentCampaign es: name CyberMonday');
-const curEn = currentCampaign(new Date('2026-11-02'), 'en');
-ok(curEn && curEn.id === 'cybermonday-ar-2026' && curEn.name === 'Cyber Monday', 'currentCampaign(2026-11-02, en) name Cyber Monday');
+const curEs = currentCampaign(new Date('2026-11-27'), 'es');
+ok(curEs && curEs.id === 'black-friday-2026', 'currentCampaign(2026-11-27, es) es Black Friday');
+ok(curEs && curEs.name === 'Black Friday', 'currentCampaign es: name Black Friday');
+const curEn = currentCampaign(new Date('2026-11-27'), 'en');
+ok(curEn && curEn.id === 'black-friday-2026' && curEn.name === 'Black Friday', 'currentCampaign(2026-11-27, en) name Black Friday');
 
-ok(campaignThemeLine('2026-10-28', 'moda') !== '', 'themeLine 2026-10-28 moda entra en CyberMonday');
-ok(campaignThemeLine('2026-10-28', 'barberia') === '', 'themeLine 2026-10-28 barberia queda fuera (turnos)');
-ok(campaignThemeLine('2026-10-28', 'peluqueria') === '', 'themeLine 2026-10-28 peluqueria queda fuera (turnos)');
+ok(campaignThemeLine('2026-11-27', 'moda') !== '', 'themeLine 2026-11-27 moda entra en Black Friday');
+ok(campaignThemeLine('2026-11-27', 'barberia') !== '', 'themeLine 2026-11-27 barberia entra (pase/pack vendible online)');
+ok(campaignThemeLine('2026-11-27', 'peluqueria') !== '', 'themeLine 2026-11-27 peluqueria entra (peluquer incluye peluquería)');
 
 /* ---------- ventana de la campaña (sin regresión) ---------- */
-ok(activeCampaign(D('2026-10-25')) === null, '2026-10-25: ninguna campaña activa');
-const a26 = activeCampaign(D('2026-10-26'));
-ok(a26 && a26.id === 'cybermonday-ar-2026', '2026-10-26: abre CyberMonday');
-const a04 = activeCampaign(D('2026-11-04'));
-ok(a04 && a04.id === 'cybermonday-ar-2026', '2026-11-04: último día de CyberMonday');
-ok(activeCampaign(D('2026-11-05')) === null, '2026-11-05: CyberMonday ya cerró');
+ok(activeCampaign(D('2026-11-22')) === null, '2026-11-22: ninguna campaña activa');
+const a26 = activeCampaign(D('2026-11-23'));
+ok(a26 && a26.id === 'black-friday-2026', '2026-11-23: abre Black Friday');
+const a04 = activeCampaign(D('2026-11-30'));
+ok(a04 && a04.id === 'black-friday-2026', '2026-11-30: último día de Black Friday');
+ok(activeCampaign(D('2026-12-01')) === null, '2026-12-01: Black Friday ya cerró');
 const a27 = activeCampaign(D('2026-11-27'));
 ok(a27 && a27.id === 'black-friday-2026', '2026-11-27: Black Friday intacto (sin regresión)');
 
@@ -54,11 +56,11 @@ ok(halloween && typeof halloween.cats === 'string' && halloween.cats.length > 0,
 ok(halloween && catsMatch(halloween, 'pasteleria') === true, 'Halloween matchea pasteleria');
 ok(halloween && catsMatch(halloween, 'peluqueria') === false, 'Halloween NO matchea peluqueria');
 
-const cyberEph = ephs.find((e) => e.name === 'CyberMonday');
-ok(!!cyberEph, 'hay CyberMonday en las efemérides');
-ok(cyberEph && cyberEph.date.endsWith('11-02'), 'CyberMonday cae el 2/11');
-ok(cyberEph && catsMatch(cyberEph, 'moda') === true, 'CyberMonday matchea moda');
-ok(cyberEph && catsMatch(cyberEph, 'barberia') === false, 'CyberMonday NO matchea barberia');
+const hsEph = ephs.find((e) => e.name === 'Hot Sale');
+ok(!!hsEph, 'hay Hot Sale en las efemérides');
+ok(hsEph && hsEph.date.slice(5, 7) === '05', 'Hot Sale cae en mayo');
+ok(hsEph && catsMatch(hsEph, 'moda') === true, 'Hot Sale matchea moda');
+ok(hsEph && catsMatch(hsEph, 'barberia') === false, 'Hot Sale NO matchea barberia');
 
 /* ---------- catsMatch: con cats decide, sin cats no opina ---------- */
 ok(typeof catsMatch === 'function', 'ephemeris exporta catsMatch');

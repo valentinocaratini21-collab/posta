@@ -6169,7 +6169,6 @@ function arFechas() {
     push('Día del Padre', t(5), 'Promo por el Día del Padre');
     push('Día del Niño', t(7), 'Promo por el Día del Niño');
     push('Día de la Madre', t(9), 'Promo por el Día de la Madre');
-    push('CyberMonday', new Date(yy, 10, 2), 'Ofertas para el CyberMonday', true);
     push('Navidad', new Date(yy, 11, 25), 'Promo de Navidad y fiestas');
     push('Fin de año', new Date(yy, 11, 31), 'Cierre de año: balance y agradecimiento');
   }
