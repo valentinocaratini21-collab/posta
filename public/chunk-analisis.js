@@ -1447,6 +1447,56 @@ function anaBilleteraElegirMonto(monto, btn) {
 // Cargar plata: un toque cobra con la tarjeta guardada y acredita en la
 // billetera. El mensaje se pone DESPUÉS del refresh (el re-render borra
 // el msg viejo).
+// (LOTE CARGAR-ADS) Motivos de Cargar con su texto propio. Los de
+// anaBoostRecMotivo hablan de «impulsar» o de «carga automática» y el
+// usuario acaba de tocar «Cargar» — un texto así no le dice qué pasó con
+// SU carga. Los motivos que ya son de la billetera (demo, saldo viejo en
+// pesos, cobro sin acreditar, monto inválido) se reutilizan tal cual.
+// Sin motivo (500 del servidor, red caída) también hay texto: nunca un
+// toque sin respuesta visible.
+function anaCargarMotivo(motivo, monto, cobroId) {
+  switch (motivo) {
+    case 'sin_cliente_stripe':
+    case 'sin_tarjeta_guardada':
+      return anaT('No tenés una tarjeta guardada, así que no se pudo cargar. Para cargar plata, primero hay que agregar una tarjeta. No se cobró nada.', "You don't have a saved card, so the top-up couldn't go through. To top up, a card has to be added first. Nothing was charged.");
+    case 'stripe_no_configurado':
+      return anaT('La carga todavía no está disponible en tu cuenta. Probá de nuevo más tarde. No se cobró nada.', "Top-up isn't available on your account yet. Try again later. Nothing was charged.");
+    case 'cobro_fallido':
+      return anaT('No se pudo cobrar con tu tarjeta. Probá de nuevo en un momento. No se cobró nada.', "The charge didn't go through. Try again in a moment. Nothing was charged.");
+    case 'cobro_requiere_accion':
+      return anaT('El cobro necesita una confirmación tuya y no se puede hacer solo. No se cobró nada.', "The charge needs your confirmation and can't run on its own. Nothing was charged.");
+    case 'cobro_no_confirmado':
+      return anaT('El cobro no se confirmó. Probá de nuevo. No se cobró nada.', "The charge wasn't confirmed. Try again. Nothing was charged.");
+    case 'sin_proveedores':
+      return anaT('La carga no está disponible ahora. Probá de nuevo en un momento. No se cobró nada.', "Top-up isn't available right now. Try again in a moment. Nothing was charged.");
+    case '':
+    case null:
+    case undefined:
+      return anaT('No se pudo cargar ahora. Probá de nuevo en un momento. No se cobró nada.', "The top-up didn't go through right now. Try again in a moment. Nothing was charged.");
+    default:
+      return anaBoostRecMotivo(motivo, monto, cobroId);
+  }
+}
+
+// (LOTE CARGAR-ADS) El mensaje de Cargar va PEGADO al botón que se tocó.
+// El #anaBoostRecMsg compartido quedaba, en el tab Ads, 679 px más abajo
+// del botón (después de la foto grande y del botón Impulsar), fuera de la
+// pantalla: el toque parecía no hacer nada (repro con Playwright 390px).
+// Solo una vista está montada a la vez, así que el dedicado que existe es
+// el de esta vista; si no hay dedicado, cae al compartido. Después de
+// escribir, se lleva a la vista para que se vea sin tener que buscarlo.
+function anaCargarMsgEl() {
+  return document.getElementById('anaAdsCargarMsg')
+    || document.getElementById('anaBilleteraCargarMsg')
+    || document.getElementById('anaBoostRecMsg');
+}
+function anaCargarDecir(t) {
+  const m = anaCargarMsgEl();
+  if (!m) return;
+  m.textContent = t;
+  try { m.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+}
+
 async function anaBilleteraCargar(monto, btn) {
   if (btn) btn.disabled = true;
   let j = null;
@@ -1456,11 +1506,9 @@ async function anaBilleteraCargar(monto, btn) {
     const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
     await anaBoostRecLoad(true);
     await anaBilleteraTabLoad();
-    const msg = document.getElementById('anaBoostRecMsg');
-    if (msg) msg.textContent = anaT('Listo, cargaste $' + monto + '. Tu billetera tiene $' + nuevoSaldo + '.', 'Done, you topped up $' + monto + '. Your wallet now has $' + nuevoSaldo + '.');
+    anaCargarDecir(anaT('Listo, cargaste $' + monto + '. Tu billetera tiene $' + nuevoSaldo + '.', 'Done, you topped up $' + monto + '. Your wallet now has $' + nuevoSaldo + '.'));
   } else {
-    const msg = document.getElementById('anaBoostRecMsg');
-    if (msg) msg.textContent = anaBoostRecMotivo((j && j.motivo) || '', monto, j && j.cobroId);
+    anaCargarDecir(anaCargarMotivo((j && j.motivo) || '', monto, j && j.cobroId));
   }
 }
 
@@ -1706,6 +1754,7 @@ function anaAdsDirectoHTML() {
     </div>
     ${montos}
     <button type="button" onclick="anaAdsCargar(this)" style="width:100%;padding:12px;border:0;border-radius:12px;background:#2793C8;color:#fff;font-size:15px;font-weight:900;cursor:pointer">↓ ${esc(anaT('Cargar $' + selMonto, 'Top up $' + selMonto))}</button>
+    <div class="ana-boostrec-msg" id="anaAdsCargarMsg"></div>
     <p style="margin:8px 0 0;text-align:center;font-size:12px;color:#5A4A6B">${esc(anaT('La primera carga es en USD', 'Your first top-up is in USD'))}</p>
     <div style="display:flex;align-items:center;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid #E8F1F8">
       <div style="flex:1;min-width:0">

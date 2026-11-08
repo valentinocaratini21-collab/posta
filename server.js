@@ -9303,7 +9303,7 @@ app.post('/api/ads/billetera/cargar', requireAuth, express.json(), async (req, r
     }
     const w = getAdWallet(uid);
     res.json({ ok: true, cobroId: r.cobroId, montoUSD: r.montoUSD, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w.balance_cents, currency: w.currency, ...(r.ya_cargado ? { ya_cargado: true } : {}) });
-  } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar la billetera' }); }
+  } catch (e) { res.status(500).json({ ok: false, motivo: 'cobro_fallido', error: 'No se pudo cargar la billetera' }); }
 });
 
 // (LOTE ADS-DIRECTO v758) Carga automática: prenderla exige permiso
@@ -32369,7 +32369,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v785';
+const BUILD_ID = '20261105-v786';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
