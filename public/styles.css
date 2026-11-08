@@ -5612,3 +5612,32 @@ body.pz-postchat-open{overflow:hidden}
 .ajmenu-danger{color:#D64545}
 .ajmenu-danger .ajmenu-ico{background:#FDECEC}
 .ajback{display:inline-flex;align-items:center;gap:6px;background:none;border:none;padding:6px 2px;margin-bottom:10px;cursor:pointer;font:inherit;font-weight:800;color:var(--cel)}
+
+/* ===== LOTE REDISENO-R2 · FEED (8/11) =====
+   Pantalla propia «Mi feed» (#/app/feed): cabecera + stats del mock
+   (posty-app-design: .feed-head / .feed-stats) sobre el feed literal
+   (.hf-grid / .hf-tile, las mismas clases de Inicio). La grilla NO se
+   re-estila acá: producto entero, nunca cortado, paleta del feed del
+   cliente. El destacado «Ver en el feed» es SOLO brillo (box-shadow),
+   sin escala — igual que .hf-justpub. */
+.pz-feed-wrap{padding:2px 0 12px}
+#feedView .hf-grid{background:transparent}
+.pz-feed-head{display:flex;align-items:center;gap:11px;margin:6px 14px 12px}
+.pz-feed-ava{width:42px;height:42px;border-radius:50%;background:#EAF6FD;object-fit:cover;object-position:top;border:2px solid #BFE3F5;flex:none}
+.pz-feed-who{flex:1;min-width:0}
+.pz-feed-who b{display:block;font-size:15.5px;color:#0A1E33;line-height:1.2;overflow-wrap:break-word}
+.pz-feed-who small{font-size:12px;color:var(--mut);font-weight:700}
+.pz-feed-aldia{display:inline-flex;align-items:center;gap:6px;flex:none;background:#E7F6E9;border:1.5px solid #BFE6C6;color:#1E7A34;font-size:11px;font-weight:900;letter-spacing:.04em;padding:5px 10px;border-radius:999px}
+.pz-feed-aldia i{width:7px;height:7px;border-radius:50%;background:#2FA84F;flex:none}
+.pz-feed-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 14px 12px}
+.pz-feed-stats div{background:#fff;border:1.5px solid var(--line);border-radius:14px;text-align:center;padding:9px 2px}
+.pz-feed-stats b{display:block;font-size:16px;color:#0A1E33;line-height:1.15}
+.pz-feed-stats small{display:block;font-size:10.5px;color:var(--mut);font-weight:800}
+.pz-feed-src{display:block;font-size:9.5px;color:var(--mut);font-weight:700;margin-top:2px}
+.pz-feed-note{margin:12px 16px 0;font-size:12.5px;color:var(--mut);font-weight:600;text-align:center}
+.pz-feed-entry{display:flex;align-items:center;gap:8px;justify-content:center;width:100%;box-sizing:border-box;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:11px 14px;margin:0 0 12px;font:inherit;font-size:14px;font-weight:800;color:#0A1E33;text-decoration:none;cursor:pointer}
+.pz-feed-entry svg{width:16px;height:16px;color:var(--cel);flex:none}
+.pz-feed-entry-ar{margin-left:auto;color:var(--mut);font-size:17px;line-height:1}
+#feedView .hf-tile.pz-feed-flash{animation:pz-feed-flash 2.4s ease-out both}
+@keyframes pz-feed-flash{0%{box-shadow:inset 0 0 0 3px #FEC14D}100%{box-shadow:inset 0 0 0 0 rgba(254,193,77,0)}}
+@media (prefers-reduced-motion:reduce){#feedView .hf-tile.pz-feed-flash{animation:none}}

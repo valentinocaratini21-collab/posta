@@ -901,7 +901,7 @@ function bbShell(tab, content) {
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
   const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}${k === 'jardin' ? '<span class="bb-badge pz-premios-badge off"></span>' : ''}</button>`;
-  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
+  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'feed' || tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
     ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads')) + pzDockMasBtn('bb') + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level')) + '</nav>' + pzDockMasHTML()}
@@ -6242,7 +6242,8 @@ function appShell(tab, content) {
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">${pzIc('logout')}</span>Salir</button>
   </aside>
-  ${(tab === 'chat' || tab === 'inicio' || tab === 'schedule') ? '' : setupChecklistHtml(undefined)}
+  <!-- R2 · Feed abre con su cabecera como el mock: sin checklist arriba (vive en Hoy). -->
+  ${(tab === 'chat' || tab === 'inicio' || tab === 'schedule' || tab === 'feed') ? '' : setupChecklistHtml(undefined)}
   <div class="app-shell">
     ${pzBackDesktopHTML(tab)}
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
@@ -17488,6 +17489,7 @@ function pzPrefetchKick() {
   if (tab === 'oficina' || tab === 'negocio') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: sin pantallas Gesty (la Bandeja vive: ahí se decide)
   else if (tab === 'chat') { pzPaintSkeleton(tab); content = await chatFullView(); } // (LOTE CHATPANTALLA) El chat principal es pantalla completa en vidrio, no hoja
   else if (tab === 'inicio') { pzPaintSkeleton(tab); content = await inicioView(); } // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
+  else if (tab === 'feed') { pzPaintSkeleton(tab); content = await feedView(); } // (LOTE REDISENO-R2 · FEED) «Mi feed» como pantalla propia: el feed literal + stats
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') { pzPaintSkeleton(tab); content = await scheduleView(); }
   else if (tab === 'analisis') { pzPaintSkeleton(tab); let __okAn = true; try { await loadChunk('analisis'); } catch (e) { __okAn = false; } content = __okAn ? analisisView() : chunkFailHTML(); } // 🧠 Análisis: LA CARTA v3 (chunk-analisis.js)
@@ -20229,6 +20231,7 @@ function hfDetailHTML(p, opts) {
       ${(String(p.status) === 'draft' || String(p.status) === 'scheduled') && p.image_path ? `<button type="button" class="hf-d-act" data-hfd-act="talk" aria-label="${en ? 'Talk about this post' : 'Hablar de este posteo'}">${pzIc('chat', 18)}<span class="hf-d-lbl">${en ? 'Talk about this post' : 'Hablar de este posteo'}</span></button>` : ''}
       <button type="button" class="hf-d-act" data-hfd-act="share" aria-label="${en ? 'Share' : 'Compartir'}">${HF_D_SHARE}<span class="hf-d-lbl">${en ? 'Share' : 'Compartir'}</span></button>
       <button type="button" class="hf-d-act hf-d-eye" data-hfd-act="followers" aria-label="${en ? 'See it in the feed' : 'Ver en el inicio'}">${pzIc('eye', 18)}<span class="hf-d-lbl">${en ? 'See in feed' : 'Ver en el inicio'}</span></button>
+      ${String(p.status) === 'published' ? `<button type="button" class="hf-d-act" data-hfd-act="verfeed" aria-label="${en ? 'See it in the feed' : 'Ver en el feed'}">${pzIc('grid', 18)}<span class="hf-d-lbl">${en ? 'See it in the feed' : 'Ver en el feed'}</span></button>` : ''}
       <span class="hf-d-sp"></span>
       <button type="button" class="hf-d-act${p.owner_saved ? ' on' : ''}" data-hfd-act="save" aria-label="${en ? 'Save' : 'Guardar'}">${p.owner_saved ? HF_D_SAVE_FULL : HF_D_SAVE}<span class="hf-d-lbl">${en ? 'Save' : 'Guardar'}</span></button>
     </div>`;
@@ -20521,7 +20524,8 @@ function hfLiveDropTile(t, liveSet, cutoffMs) {
 }
 async function hfLiveRevalidateFeed() {
   if (HF_LIVE_BUSY) return;
-  try { if (!(location.hash || '').startsWith('#/app/inicio')) return; } catch (e) { return; }
+  // (LOTE REDISENO-R2 · FEED) La revalidación cubre Inicio Y Feed: ambas pantallas pintan el mismo feed literal (HF_TILES) y un posteo borrado en IG tiene que desaparecer al abrir/refrescar en las dos.
+  try { const _h = location.hash || ''; if (!(_h.startsWith('#/app/inicio') || _h.startsWith('#/app/feed'))) return; } catch (e) { return; }
   HF_LIVE_BUSY = true;
   try {
     const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
@@ -20538,7 +20542,7 @@ async function hfLiveRevalidateFeed() {
     if (!r || !r.complete || !Array.isArray(r.shortcodes) || !r.window_oldest) return;
     const cutoffMs = Date.parse(r.window_oldest);
     if (!Number.isFinite(cutoffMs)) return;
-    try { if (!(location.hash || '').startsWith('#/app/inicio')) return; } catch (e) { return; }
+    try { const _h2 = location.hash || ''; if (!(_h2.startsWith('#/app/inicio') || _h2.startsWith('#/app/feed'))) return; } catch (e) { return; }
     const live = new Set(r.shortcodes.map((x) => String(x)));
     const tiles = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES : [];
     const dropPostIds = new Set();
@@ -20554,7 +20558,7 @@ async function hfLiveRevalidateFeed() {
     }
     if (!dropPostIds.size && !dropIg.size) return;
     HF_TILES = kept;
-    const grid = document.querySelector('#inicioView .hf-grid');
+    const grid = document.querySelector('#inicioView .hf-grid, #feedView .hf-grid'); // (LOTE REDISENO-R2 · FEED) misma grilla, dos pantallas
     if (grid) {
       for (const id of dropPostIds) {
         grid.querySelectorAll('[data-post-id="' + id + '"]').forEach((el) => { try { const c = el.closest('.hf-cell'); (c || el).remove(); } catch (e) {} });
@@ -20843,6 +20847,7 @@ async function inicioView() {
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: !HF_VISITOR })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
   ${hfTabsHTML(HF_TAB, enHome)}
+  ${pzFeedEntryHTML(enHome)}
   ${pzSemanaOkHTML}
   ${gridHTML}
   ${visitorPillHTML}
@@ -20855,6 +20860,201 @@ async function inicioView() {
   </div>
 
 </div>`;
+}
+/* ===== LOTE REDISENO-R2 · FEED (8/11 · decisión Valentino 00:07: el mock
+   posty-app-design es el nuevo diseño del TestFlight, con el motor real
+   adentro; tablero §5.5: paralelo con re-base por lote) =====
+   «Mi feed» pasa de vista dentro de Hoy a pantalla propia (#/app/feed):
+   el feed LITERAL — la misma composición de inicioView (homeGridCompose:
+   fijados primero, no publicados por fecha DESC, ya salidos por fecha
+   DESC; la carta del próximo va primera con magia + latido SOLO brillo,
+   sin escala: .hf-carta-magia) — + cabecera de stats con datos reales +
+   detalle del posteo (el vigente) + imagen en grande (el lightbox de
+   siempre) + «Ver en el feed» (el posteo en su posición final y
+   destacado). Sin server.js: todo se compone en el cliente desde
+   endpoints existentes (/api/posts, /api/posts?status=published,
+   /api/home/profile, /api/weekly-report, /api/stats/ig, /api/ritual/estado,
+   /api/home/live-grid vía hfLiveRevalidateFeed). Solapes (mínimo + flag,
+   el preparador reconcilia): v775 post-detalle-top (el detalle es el
+   vigente; R2 solo le suma el botón «Ver en el feed» y la foto en
+   grande) · imagen-grande-y-feed (la foto en grande del detalle y el
+   «Ver en el feed» son SU lote; R2 implementa solo lo mínimo que Feed
+   necesita) · R1 Hoy (el segmentador «Por aprobar / Mi feed» del mock
+   tiene que apuntar a #/app/feed; la puerta pzFeedEntryHTML es el
+   mínimo hasta que R1 lo reconstruya). */
+let HF_FEED_HIGHLIGHT = null; // id de posteo a destacar al pintar #/app/feed (lo pone «Ver en el feed»)
+function pzFeedFmtN(n, en) { // mismo formato que homeHeadHTML: completo hasta 9.999, abreviado desde 10 mil
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '';
+  if (v < 10000) return v.toLocaleString(en ? 'en-US' : 'es-AR');
+  const trim1 = (x) => x.toFixed(1).replace(/\.0$/, '');
+  if (v < 1000000) return en ? trim1(v / 1000) + 'K' : trim1(v / 1000).replace('.', ',') + ' mil';
+  return en ? trim1(v / 1000000) + 'M' : trim1(v / 1000000).replace('.', ',') + ' M';
+}
+function pzFeedAlDia(allPosts, tz) { // sello AL DÍA solo si el feed está al día DE VERDAD: un posteo publicado hoy (zona de la cuenta). Sin registro durable, no hay promesa: se deriva en vivo de los posteos.
+  try {
+    const hoyKey = new Date().toLocaleDateString('en-CA', tz ? { timeZone: tz } : {});
+    for (const p of (Array.isArray(allPosts) ? allPosts : [])) {
+      if (!p || p.status !== 'published' || !p.published_at) continue;
+      let d = null;
+      try { d = (typeof pcParseDate === 'function') ? pcParseDate(p.published_at) : new Date(String(p.published_at).replace(' ', 'T')); } catch (e) { d = null; }
+      if (!d || isNaN(d)) continue;
+      const k = (typeof schedDayKeyOf === 'function') ? schedDayKeyOf(d, tz) : '';
+      if (k && k === hoyKey) return true;
+    }
+  } catch (e) {}
+  return false;
+}
+function pzFeedEntryHTML(en) { // puerta en Hoy: un enlace real a #/app/feed, sin JS. R1 la reemplaza por el segmentador del mock cuando reconstruya Hoy.
+  return `<a class="pz-feed-entry" href="#/app/feed">${pzIc('grid', 16)} <span>${en ? 'My feed' : 'Mi feed'}</span><span class="pz-feed-entry-ar">›</span></a>`;
+}
+async function feedView() {
+  const tz = pcTz();
+  const en = hfIsEn();
+  let allPosts = [];
+  let weekEr = null;
+  let ritEstado = null;
+  const ritEstadoP = (typeof api !== 'undefined' && api && typeof api.get === 'function')
+    ? api.get('/api/ritual/estado').catch(() => null)
+    : Promise.resolve(null);
+  try {
+    const [postsRes, erRes, pubRes] = await Promise.all([
+      api.get('/api/posts').catch(() => []),
+      api.post('/api/week/ensure', {}).catch(() => null),
+      api.get('/api/posts?status=published').catch(() => []),
+    ]);
+    allPosts = hfMergePostsAll(postsRes, pubRes); weekEr = erRes;
+  } catch (e) { allPosts = []; }
+  try { ritEstado = await ritEstadoP; } catch (e) { ritEstado = null; }
+  try {
+    if (ritEstado && ritEstado.ok) {
+      PZ_RITUAL_ESTADO = { tieneHoy: !!ritEstado.tiene_hoy, yaElegido: !!ritEstado.ya_elegido };
+    }
+  } catch (e) {}
+  if (!Array.isArray(allPosts)) allPosts = [];
+  const [quotaRes, hpRes, wrRes, stRes] = await Promise.all([
+    api.get('/api/quota').catch(() => null),
+    api.get('/api/home/profile').catch(() => null),
+    api.get('/api/weekly-report').catch(() => null),
+    api.get('/api/stats/ig').catch(() => null),
+  ]);
+  let quota = quotaRes;
+  let prof = HOME_PROF;
+  try { if (hpRes && hpRes.ok) { prof = hpRes; HOME_PROF = hpRes; } } catch (e) {}
+  const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
+  // Composición del feed literal: EXACTAMENTE la de inicioView (mismos
+  // inputs, mismo homeGridCompose, mismo orden). Nada se reordena acá.
+  const pl = schedPlacements(allPosts, tz);
+  const upcoming = hfFeedUpcoming(allPosts, tz);
+  const published = allPosts.filter(p => p.status === 'published');
+  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all: allPosts });
+  for (const t of tiles) {
+    if (t.kind === 'post' && !t.day) {
+      const dt = pcParseDate(t.post.published_at || t.post.scheduled_at);
+      if (dt) t.day = schedDayKeyOf(dt, tz);
+    }
+  }
+  try { hfFallMark(tiles); } catch (e) {}
+  // Cofre con las tarjetas completas (igual que inicioView: el detalle
+  // de escritorio — la capa de ampliación — lee las tarjetas del cofre).
+  const vaultCards = [];
+  const seenIds = new Set();
+  HF_PROPS = {};
+  for (const t of tiles) {
+    if (t.kind !== 'post' || !t.post || seenIds.has(t.post.id)) continue;
+    seenIds.add(t.post.id);
+    const p = t.post;
+    const prop = p.status === 'published'
+      ? { label: pzIc('checkCircle', 14) + ' ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
+      : proposedLabelFor(p, pl.proposals, tz);
+    HF_PROPS[p.id] = prop;
+    vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null, simple: true, user: (prof && prof.username) || '', pic: (prof && prof.pic) || '' }));
+  }
+  HF_TILES = tiles;
+  HF_CUR_PROF = prof;
+  // (LOTE BORRADO-IG-SYNC) La revalidación corre en segundo plano y NO
+  // bloquea la pintura: si un posteo se eliminó en IG, desaparece del
+  // feed al abrir/refrescar (hfLiveRevalidateFeed, generalizada a Feed).
+  try { setTimeout(() => { try { hfLiveRevalidateFeed(); } catch (e) {} }, 0); } catch (e) {}
+  try { HF_LIVE.snap = hfLiveSnapshot(tiles, prof); HF_LIVE.pending = null; } catch (e) {}
+  // Marcas de la grilla (igual que inicioView): despegue y próximo.
+  try {
+    const pzPostsF = tiles.filter((t) => t.kind === 'post' && t.post).map((t) => t.post);
+    const pzDespF = pzDespegueIds(pzPostsF);
+    const pzNextF = pzNextScheduledId(pzPostsF, new Date());
+    for (const t of tiles) {
+      if (t.kind !== 'post' || !t.post) continue;
+      if (pzDespF.has(t.post.id)) t.pzDespegue = true;
+      if (pzNextF !== null && String(t.post.id) === String(pzNextF)) t.pzNext = true;
+    }
+  } catch (e) {}
+  const baseTiles = HF_VISITOR ? hfVisitorTiles(tiles) : tiles.filter((t) => t && !t.archivedExt);
+  const drafts = allPosts.filter(p => p.status === 'draft');
+  const schedPosts = allPosts.filter(p => p.status === 'scheduled');
+  const weekNoDna = !!(weekEr && weekEr.reason === 'no_dna' && !drafts.length && !schedPosts.length);
+  const gridHTML = tiles.length
+    ? `<div class="hf-grid">${baseTiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
+    : homeWeekHTML(allPosts, quota, !!(weekEr && weekEr.generating), weekNoDna);
+  // Stats de cabecera — SOLO datos reales, con el origen etiquetado:
+  // posteos = conteo real de Instagram (posts_count del perfil; sin
+  // perfil, los publicados de la DB) · consultas de la semana = lo que
+  // Posty contó (comentarios en posteos publicados de los últimos 7
+  // días, /api/weekly-report); lo reportado por el cliente en la
+  // pregunta semanal NO existe guardado en v793 (ver STATUS.md) y NO
+  // se suma nada inventado · seguidores = últimos (perfil, si no
+  // /api/stats/ig), nunca titular.
+  const postsCount = (prof && typeof prof.posts_count === 'number') ? prof.posts_count : published.length;
+  let consultas = null;
+  try { if (wrRes && wrRes.totals && typeof wrRes.totals.comments === 'number') consultas = wrRes.totals.comments; } catch (e) {}
+  const followers = (prof && typeof prof.followers === 'number') ? prof.followers : ((stRes && typeof stRes.followers === 'number') ? stRes.followers : null);
+  const alDia = pzFeedAlDia(allPosts, tz);
+  const user = String((prof && prof.username) || '').replace(/^@/, '');
+  const headName = user ? '@' + user : bizName;
+  const picSrc = (prof && prof.pic) || '';
+  const picHTML = picSrc ? `<img class="pz-feed-ava" src="${esc(picSrc)}" alt="" onerror="this.remove()">` : '';
+  const sealHTML = alDia ? `<span class="pz-feed-aldia"><i></i> ${en ? 'UP TO DATE' : 'AL DÍA'}</span>` : '';
+  const statsHTML = `<div class="pz-feed-stats">
+    <div><b>${pzFeedFmtN(postsCount, en)}</b><small>${en ? (postsCount === 1 ? 'post' : 'posts') : (postsCount === 1 ? 'posteo' : 'posteos')}</small></div>
+    ${consultas === null ? '' : `<div><b>${pzFeedFmtN(consultas, en)}</b><small>${en ? 'inquiries this week' : 'consultas esta semana'}</small><span class="pz-feed-src">${en ? 'counted by Posty' : 'contadas por Posty'}</span></div>`}
+    ${followers === null ? '' : `<div><b>${pzFeedFmtN(followers, en)}</b><small>${en ? (followers === 1 ? 'follower' : 'followers') : (followers === 1 ? 'seguidor' : 'seguidores')}</small></div>`}
+  </div>`;
+  return `<div id="feedView" class="pz-feed-wrap">
+  <div class="pz-feed-head">
+    ${picHTML}
+    <div class="pz-feed-who"><b>${esc(headName)}</b><small>${en ? 'This is what your customers see on Instagram today' : 'Esto ven hoy tus clientes en Instagram'}</small></div>
+    ${sealHTML}
+  </div>
+  ${statsHTML}
+  ${gridHTML}
+  <p class="pz-feed-note">${en ? 'Tap any post to see how it performed.' : 'Tocá cualquier posteo para ver cómo rindió.'}</p>
+</div>`;
+}
+function bindFeed() {
+  const root = document.getElementById('feedView');
+  if (!root) return;
+  // El mismo cableado de la grilla de Inicio: capa de ampliación de
+  // escritorio, gestos (peek/acciones), detalle táctil, duración de reels
+  // y lightbox de las piezas leídas de IG.
+  try { bindScfMinis(root); } catch (e) {}
+  try { hfFeedGesturesBind(root); } catch (e) {}
+  try { hfDetailBind(root); } catch (e) {}
+  try { hfDurBind(root); } catch (e) {}
+  try {
+    root.querySelectorAll('[data-lightbox]').forEach((el) => { el.onclick = () => { try { lbOpenFrom(el); } catch (e) {} }; });
+  } catch (e) {}
+  try { hfFeedHighlightApply(); } catch (e) {}
+}
+function hfFeedHighlightApply() { // «Ver en el feed»: el posteo en su posición final y destacado (brillo que se apaga, sin escala, como hf-justpub).
+  if (!HF_FEED_HIGHLIGHT) return;
+  const id = String(HF_FEED_HIGHLIGHT);
+  HF_FEED_HIGHLIGHT = null;
+  try {
+    const el = document.querySelector('#feedView .hf-tile[data-post-id="' + id + '"]');
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.add('pz-feed-flash');
+    setTimeout(() => { try { el.classList.remove('pz-feed-flash'); } catch (e) {} }, 2600);
+  } catch (e) {}
 }
 /* ===== RITUAL DE LA MAÑANA (lote 5/8, aprobado Valentino 5/11 «Arma todo»;
    LOTE RITUAL-1-OPCION · 6/11 · «una sola opción + editar») ===== */
@@ -23221,7 +23421,7 @@ function pzPubCelebShow(post) {
 }
 
 function hfLiveApply(job) {
-  const root = document.getElementById('inicioView');
+  const root = document.getElementById('feedView') || document.getElementById('inicioView'); // (LOTE REDISENO-R2 · FEED) el espejo vivo parchea la pantalla de feed que esté montada
   if (!root) return;
   const { tiles, props, prof, diff } = job;
   try { pzPubCelebMaybe(job); } catch (e) {}
@@ -23563,6 +23763,15 @@ function hfDetailWire(ov, post, tile) {
   // Reel: tocar el video lo pausa o lo sigue (como IG), sin cerrar.
   const vid = q('.hf-d-media video');
   if (vid) vid.addEventListener('click', () => { try { if (vid.paused) vid.play(); else vid.pause(); } catch (e) {} });
+  // (LOTE REDISENO-R2 · FEED) Imagen en grande: tocar la foto del detalle abre el lightbox de siempre (openLightbox), con su pie y sus hashtags. Solape con imagen-grande-y-feed (mínimo: solo lo que Feed necesita).
+  try {
+    q('.hf-d-media') && q('.hf-d-media').querySelectorAll('img').forEach((im) => {
+      im.style.cursor = 'zoom-in';
+      im.addEventListener('click', () => {
+        try { openLightbox(im.currentSrc || im.src, false, String(post.caption || ''), String(post.hashtags || ''), String(post.id), hfIsEn() ? 'Edit this post' : 'Editar este posteo'); } catch (e) {}
+      });
+    });
+  } catch (e) {}
   // ✅ Aceptar (borradores): el camino vigente (data-revaccept). Si
   // bindReview no lo cableó en esta superficie, réplica mínima del
   // núcleo (gate IG + PATCH con la propuesta + señal + render).
@@ -23655,6 +23864,13 @@ function hfDetailWire(ov, post, tile) {
     }
     if (name === 'share') { hfDetailShare(post); return; }
     if (name === 'followers') { hfFollowerOpen(post); return; } // (6B · ítem 8) lámina sobre el detalle
+    if (name === 'verfeed') { // (LOTE REDISENO-R2 · FEED) «Ver en el feed»: cierra el detalle, abre #/app/feed y destaca el posteo en su posición final (hfFeedHighlightApply).
+      hfDetailClose();
+      try { HF_FEED_HIGHLIGHT = String(post.id); } catch (e) {}
+      if ((location.hash || '') === '#/app/feed') { try { render(); } catch (e) {} }
+      else location.hash = '#/app/feed';
+      return;
+    }
     if (name === 'menu') {
       const t = tile;
       hfDetailClose();
@@ -25520,6 +25736,7 @@ function bindApp(tab) {
   if (tab === 'chat') bindChatFull(); // (LOTE CHATPANTALLA) El chat principal es pantalla completa
   if (tab === 'schedule') bindSchedule();
   if (tab === 'inicio') bindInicio();
+  if (tab === 'feed') bindFeed(); // (LOTE REDISENO-R2 · FEED)
   if (tab === 'onboarding') bindOnboarding(); // FASE 4: cablea form directo o entrevista (antes dead code: nunca se llamaba)
   if (tab === 'dogfood') { try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {} }
   if (tab === 'numeros') bindStats(); // 📊 Tus números

@@ -35,7 +35,7 @@ const sliceFn = (src, from, to) => {
   // ---------- 1. Censo (sin cambio) + base v756, re-base v759 ----------
   // (LOTE ADS-DIRECTO v759: pins del preparador — BUILD v759, CHUNK_V v759,
   // 14 rutas /api/ads (12 + feed + auto); el picker usa anaCortarCaption.)
-  t(srv.includes("const BUILD_ID = '20261105-v793'"), 'server: BUILD v786 (re-pin cargar-ads v786)');
+  t(srv.includes("const BUILD_ID = '20261105-v794'"), 'server: BUILD v786 (re-pin cargar-ads v786)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -291,7 +291,7 @@ const sliceFn = (src, from, to) => {
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v793', `boot: /api/version 20261105-v790 (vino ${ver.build})`);
+      t(ver.build === '20261105-v794', `boot: /api/version 20261105-v790 (vino ${ver.build})`);
       // Sin sesión: 401 en los endpoints nuevos.
       const s1 = await api('', 'GET', '/api/ads/billetera/buscar?q=cafe');
       t(s1.status === 401, 'boot: sin sesión, buscar → 401');
