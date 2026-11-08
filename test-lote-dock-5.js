@@ -1,7 +1,8 @@
 // test-lote-dock-5.js — LOTE DOCK-5 (base v721).
 // Decisión Valentino 6/11 ~15:28 (3 mensajes): 1) Ajustes sale del dock
 // y vive en el perfil (tercer ícono junto a Editar perfil y Compartir);
-// el dock queda en 5: Inicio, Ads, +, Estrategia, Premios. 2) «Agregar»
+// el dock queda en 5: Inicio, Ads, +, Estrategia, Nivel (antes Premios;
+// renombre 7/11). 2) «Agregar»
 // del mismo color que las demás etiquetas inactivas (en el shell bb la
 // etiqueta iba en 700 mientras las inactivas van en 400: se veía
 // oscura/negrita). 3) Círculo alrededor del + (vuelve el círculo de
@@ -45,16 +46,16 @@ const orderOk = (s, keys) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v723'"), 'CHUNK_V v723 (ajustes-simple; sin cambio en este lote)');
-  t(md5(css) === '1ab1e38c5985f589df399bca8fea4c53', 'styles.css md5 (re-pin iconos-linea-info v727: íconos en la línea de info)');
-  t(md5(app) === '9f8a9aac853606b59ba0e4ab4ab82177', 'app.js md5 (re-pin carta-sin-estrategia-ni-ads v782: CHUNK_V v778→v782; antes v780 sacar-lápiz-perfil)');
+  t(md5(css) === '2589972e11db8b2b393d0eae06e18cf9', 'styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes iconos-linea-info v727)');
+  t(md5(app) === 'c3337c90429d31b7e2dd593567552023', 'app.js md5 (re-pin nivel-misiones-racha re-base v792: corrección XP 40/60/25; antes ajustes v792)');
 
   // ---------- 2. Dock de 5 en las dos shells ----------
   const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');
-  t(orderOk(bbNav, ["tabBtn('inicio'", "tabBtn('ads'", "pzDockMasBtn('bb')", "tabBtn('analisis'", "tabBtn('jardin'"]), 'bb-bar: orden Inicio, Ads, +, Estrategia, Premios');
+  t(orderOk(bbNav, ["tabBtn('inicio'", "tabBtn('ads'", "pzDockMasBtn('bb')", "tabBtn('analisis'", "tabBtn('jardin'"]), 'bb-bar: orden Inicio, Ads, +, Estrategia, Nivel');
   t(!bbNav.includes("tabBtn('ajustes'"), 'bb-bar: sin tab Ajustes');
   t(bbNav.includes("pzDockMasBtn('bb')"), 'bb-bar: el + sigue en el centro');
   const mzFn = sliceFn(app, 'function mzTabsHTML(tab) {', '\n/* (LOTE DOCK-MAS) */');
-  t(orderOk(mzFn, ["t('inicio'", "t('ads'", "pzDockMasBtn('mz')", "t('analisis'", "t('jardin'"]), 'mz-tabs: orden Inicio, Ads, +, Estrategia, Premios');
+  t(orderOk(mzFn, ["t('inicio'", "t('ads'", "pzDockMasBtn('mz')", "t('analisis'", "t('jardin'"]), 'mz-tabs: orden Inicio, Ads, +, Estrategia, Nivel');
   t(!mzFn.includes("t('ajustes'"), 'mz-tabs: sin tab Ajustes');
   t(!mzFn.includes("tab === 'ajustes'"), 'mzTabsHTML: sin caso ajustes en el mapa on (en Ajustes ningún tab queda activo)');
   t(mzFn.includes("pzDockMasBtn('mz')"), 'mz-tabs: el + sigue en el centro');
@@ -120,7 +121,7 @@ const orderOk = (s, keys) => {
   t(navTabs(navInicio) === 5, 'VM mzTabsHTML(inicio): 5 botones en el dock');
   t(!navInicio.includes('Ajustes'), 'VM mzTabsHTML(inicio): sin Ajustes en el dock');
   t(navInicio.includes('Agregar'), 'VM mzTabsHTML(inicio): Agregar presente');
-  t(orderOk(navInicio, ['>Inicio<', '>Ads<', '>Agregar<', '>Estrategia<', '>Premios<']), 'VM mzTabsHTML(inicio): orden Inicio, Ads, Agregar, Estrategia, Premios');
+  t(orderOk(navInicio, ['>Inicio<', '>Ads<', '>Agregar<', '>Estrategia<', '>Nivel<']), 'VM mzTabsHTML(inicio): orden Inicio, Ads, Agregar, Estrategia, Nivel');
   t(navAds.includes('mz-tab on') && navAds.indexOf('mz-tab on') < navAds.indexOf('>Ads<'), 'VM mzTabsHTML(ads): tab Ads activo');
   t(!navAjustes.includes('mz-tab on'), 'VM mzTabsHTML(ajustes): ningún tab activo en la pantalla Ajustes');
   t(navTabs(navAjustes) === 5, 'VM mzTabsHTML(ajustes): el dock sigue con 5 aunque se esté en Ajustes');

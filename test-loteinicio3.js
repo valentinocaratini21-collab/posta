@@ -43,9 +43,9 @@ ME.lang = 'en';
 t('1: botón EN: aria Create', pzDockMasBtn('bb').includes('aria-label="Create"'));
 ME.lang = 'es';
 const bbNav = app.slice(app.indexOf('<nav class="bb-bar">'), app.indexOf('<nav class="bb-bar">') + 700);
-t('1: bb-bar: + entre Estrategia y Premios, orden intacto', bbNav.indexOf("tabBtn('analisis'") < bbNav.indexOf("pzDockMasBtn('bb')") && bbNav.indexOf("pzDockMasBtn('bb')") < bbNav.indexOf("tabBtn('jardin'"));
+t('1: bb-bar: + entre Estrategia y Nivel, orden intacto', bbNav.indexOf("tabBtn('analisis'") < bbNav.indexOf("pzDockMasBtn('bb')") && bbNav.indexOf("pzDockMasBtn('bb')") < bbNav.indexOf("tabBtn('jardin'"));
 const mzNav = blockOf('function mzTabsHTML', 'function appShell');
-t('1: mz-tabs: + entre Estrategia y Premios, orden intacto', mzNav.indexOf("t('analisis'") < mzNav.indexOf("pzDockMasBtn('mz')") && mzNav.indexOf("pzDockMasBtn('mz')") < mzNav.indexOf("t('jardin'"));
+t('1: mz-tabs: + entre Estrategia y Nivel, orden intacto', mzNav.indexOf("t('analisis'") < mzNav.indexOf("pzDockMasBtn('mz')") && mzNav.indexOf("pzDockMasBtn('mz')") < mzNav.indexOf("t('jardin'"));
 
 // ---------- 2. Íconos en contadores + Aceptar todo en el encabezado ----------
 const headRow = blockOf('function homeHeadHTML', 'function pzPubInfoHTML');
@@ -69,17 +69,17 @@ t('2: encabezado recibe el HTML de Aceptar todo', app.includes('hfProfileActions
 t('2: nota AUSENTE en app.js (SACAR-CORAZÓN 6/11: 0 ocurrencias ES y EN)', cnt(app, 'Tocá el corazón para aprobar.') === 0 && cnt(app, 'Tap the heart to approve.') === 0 && cnt(app, 'Tocá el corazón en los posteos para aprobar.') === 0 && cnt(app, 'Tap the heart on the posts to approve.') === 0);
 t('2: CSS: ícono 40px + botón compacto, sin regla de nota', css.includes('.hf-head-ic{width:40px;height:40px') && css.includes('.hf-pacts-accept .hf-accept-bar{width:auto') && !css.includes('.hf-accept-note'));
 
-// ---------- 3. Tirita Premios + título Premios ----------
+// ---------- 3. Tirita Nivel + título Nivel ----------
 const tira = blockOf('function mxTiraHTML', 'async function mxPortTop');
 t('3: tirita: sin miniatura vieja ni candadito', !tira.includes('mx-tira-thumb') && !tira.includes('nvTira'));
 t('3: tirita: sin imagen vieja del jardín', !tira.includes('jardin-bambu.webp'));
-t('3: tirita: dice Premios, no Mi jardín', tira.includes("gzT('Premios', 'Prizes')") && !tira.includes("gzT('Mi jardín'"));
+t('3: tirita: dice Nivel, no Mi jardín', tira.includes("gzT('Nivel', 'Level')") && !tira.includes("gzT('Mi jardín'"));
 t('3: tirita: barrita + próximo + mismo destino intactos', tira.includes('mxBarra(') && tira.includes('pzProximoPremioTira(') && tira.includes("mxJardinIr('#/app/jardin-posty'"));
 const jardinFn = blockOf('function mxJardinHTML', 'function mxJardinErrorHTML');
-t('3: pantalla: título Premios en el header', jardinFn.includes("<h1>${gzT('Premios', 'Prizes')}</h1>"));
+t('3: pantalla: título Nivel en el header', jardinFn.includes("<h1>${gzT('Nivel', 'Level')}</h1>"));
 t('3: app.js: cero título viejo El jardín de Posty', !app.includes("gzT('El jardín de Posty'"));
 t('3: app.js: cero Mi jardín como gzT', !app.includes("gzT('Mi jardín'"));
-t('3: atrás de aprobación: Prizes/Premios', app.includes("(en ? 'Prizes' : 'Premios')"));
+t('3: atrás de aprobación: Level/Nivel', app.includes("(en ? 'Level' : 'Nivel')"));
 t('3: layout tira intacto (flex + radio + chev)', css.includes('.mx-tira-jardin{display:flex') && css.includes('.mx-tira-jardin{box-shadow:0 4px 14px') && tira.includes('mx-chev'));
 
 // ---------- versiones / censo ----------

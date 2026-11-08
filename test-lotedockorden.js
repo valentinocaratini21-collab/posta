@@ -1,8 +1,9 @@
 // LOTE DOCK-ORDEN — decisión Valentino 2/11 ~12:40 (botón):
-// barra inferior Inicio → Estrategia → Premios → Ajustes.
-// La pestaña Jardín pasa a llamarse Premios (ES) / Prizes (EN), misma ruta
-// #/app/jardin-posty, mismo icono sprout. El título interno de la pantalla
-// («El jardín de Posty») NO cambia en esta pasada.
+// barra inferior Inicio → Estrategia → Nivel → Ajustes.
+// La pestaña Jardín pasó a llamarse Nivel (ES) / Level (EN) el 7/11
+// (antes Premios/Prizes, 2/11), misma ruta #/app/jardin-posty, mismo icono
+// sprout. El título interno de la pantalla («El jardín de Posty») NO cambia
+// en esta pasada.
 // Uso: node test-lotedockorden.js [dir] (dir = raíz del árbol; default: __dirname).
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -23,12 +24,12 @@ const mz = slice('function mzTabsHTML(tab)', 'function appShell');
 const dr = slice('<aside class="drawer"', '</aside>');
 
 // ---------- 1. bb-bar (bbShell) ----------
-check('bb-bar: Inicio < Estrategia < Premios < Ajustes',
+check('bb-bar: Inicio < Estrategia < Nivel < Ajustes',
   bb.indexOf("tabBtn('inicio'") < bb.indexOf("tabBtn('analisis'")
   && bb.indexOf("tabBtn('analisis'") < bb.indexOf("tabBtn('jardin'")
   && bb.indexOf("tabBtn('jardin'") < bb.indexOf("tabBtn('ajustes'"));
-check("bb-bar: etiqueta gzT('Premios', 'Prizes')",
-  bb.includes("gzT('Premios', 'Prizes')"));
+check("bb-bar: etiqueta gzT('Nivel', 'Level')",
+  bb.includes("gzT('Nivel', 'Level')"));
 check('bb-bar: sin etiqueta Jardín en la barra',
   !bb.includes("gzT('Jardín'"));
 check("bb-bar: clave y ruta intactas tabBtn('jardin', '#/app/jardin-posty')",
@@ -37,12 +38,12 @@ check('bb-bar: orden viejo ausente',
   !bb.includes("tabBtn('jardin', '#/app/jardin-posty', gzT('Jardín', 'Garden'))}${tabBtn('analisis'"));
 
 // ---------- 2. mz-tabs (móvil) ----------
-check('mz-tabs: Inicio < Estrategia < Premios < Ajustes',
+check('mz-tabs: Inicio < Estrategia < Nivel < Ajustes',
   mz.indexOf("t('inicio'") < mz.indexOf("t('analisis'")
   && mz.indexOf("t('analisis'") < mz.indexOf("t('jardin'")
   && mz.indexOf("t('jardin'") < mz.indexOf("t('ajustes'"));
-check("mz-tabs: etiqueta gzT('Premios', 'Prizes')",
-  mz.includes("gzT('Premios', 'Prizes')"));
+check("mz-tabs: etiqueta gzT('Nivel', 'Level')",
+  mz.includes("gzT('Nivel', 'Level')"));
 check('mz-tabs: sin Jardín en la barra',
   !mz.includes("'Jardín'"));
 check("mz-tabs: ruta y clave intactas t('jardin', 'jardin-posty', sprout)",
@@ -50,7 +51,7 @@ check("mz-tabs: ruta y clave intactas t('jardin', 'jardin-posty', sprout)",
 
 // VM: render real de mzTabsHTML en ES y EN.
 // (LOTE DOCK-MAS · adaptación con causa: mzTabsHTML ahora llama a
-// pzDockMasBtn/pzDockMasHTML — el + entre Estrategia y Premios — y el
+// pzDockMasBtn/pzDockMasHTML — el + entre Estrategia y Nivel — y el
 // sandbox necesita esos stubs; el orden de las 4 pestañas no cambia.)
 function renderMz(lang) {
   const m = app.match(/function mzTabsHTML\(tab\) \{[\s\S]*?\n\}/);
@@ -64,28 +65,28 @@ function renderMz(lang) {
   return vm.runInContext('__mz("inicio")', sandbox);
 }
 const mzEs = renderMz('es'), mzEn = renderMz('en');
-check('mz-tabs VM ES: orden Inicio, Estrategia, Premios, Ajustes',
+check('mz-tabs VM ES: orden Inicio, Estrategia, Nivel, Ajustes',
   mzEs.indexOf('Inicio') < mzEs.indexOf('Estrategia')
-  && mzEs.indexOf('Estrategia') < mzEs.indexOf('Premios')
-  && mzEs.indexOf('Premios') < mzEs.indexOf('Ajustes'));
-check('mz-tabs VM EN: orden Inicio, Estrategia, Prizes, Ajustes',
+  && mzEs.indexOf('Estrategia') < mzEs.indexOf('Nivel')
+  && mzEs.indexOf('Nivel') < mzEs.indexOf('Ajustes'));
+check('mz-tabs VM EN: orden Inicio, Estrategia, Level, Ajustes',
   mzEn.indexOf('Inicio') < mzEn.indexOf('Estrategia')
-  && mzEn.indexOf('Estrategia') < mzEn.indexOf('Prizes')
-  && mzEn.indexOf('Prizes') < mzEn.indexOf('Ajustes'));
-check('mz-tabs VM: Premios apunta a data-tab jardin-posty',
-  /data-tab="jardin-posty"[^>]*>.*Premios|Premios/.test(mzEs) && mzEs.includes('data-tab="jardin-posty"'));
-check('mz-tabs VM ES: + entre Estrategia y Premios (dock-mas)',
-  mzEs.indexOf('Estrategia') < mzEs.indexOf('mz-tab-mas') && mzEs.indexOf('mz-tab-mas') < mzEs.indexOf('Premios'));
-check('mz-tabs VM EN: + entre Estrategia y Prizes (dock-mas)',
-  mzEn.indexOf('Estrategia') < mzEn.indexOf('mz-tab-mas') && mzEn.indexOf('mz-tab-mas') < mzEn.indexOf('Prizes'));
+  && mzEn.indexOf('Estrategia') < mzEn.indexOf('Level')
+  && mzEn.indexOf('Level') < mzEn.indexOf('Ajustes'));
+check('mz-tabs VM: Nivel apunta a data-tab jardin-posty',
+  /data-tab="jardin-posty"[^>]*>.*Nivel|Nivel/.test(mzEs) && mzEs.includes('data-tab="jardin-posty"'));
+check('mz-tabs VM ES: + entre Estrategia y Nivel (dock-mas)',
+  mzEs.indexOf('Estrategia') < mzEs.indexOf('mz-tab-mas') && mzEs.indexOf('mz-tab-mas') < mzEs.indexOf('Nivel'));
+check('mz-tabs VM EN: + entre Estrategia y Level (dock-mas)',
+  mzEn.indexOf('Estrategia') < mzEn.indexOf('mz-tab-mas') && mzEn.indexOf('mz-tab-mas') < mzEn.indexOf('Level'));
 
 // ---------- 3. Drawer ----------
-check('drawer: Inicio < Estrategia < Premios < Ajustes',
+check('drawer: Inicio < Estrategia < Nivel < Ajustes',
   dr.indexOf('data-tab="inicio"') < dr.indexOf('data-tab="analisis"')
   && dr.indexOf('data-tab="analisis"') < dr.indexOf('data-tab="jardin-posty"')
   && dr.indexOf('data-tab="jardin-posty"') < dr.indexOf('data-tab="ajustes"'));
-check('drawer: etiqueta Premios/Prizes con ternario EN',
-  dr.includes("? 'Prizes' : 'Premios'"));
+check('drawer: etiqueta Nivel/Level con ternario EN',
+  dr.includes("? 'Level' : 'Nivel'"));
 check('drawer: icono sprout sigue en el botón jardin-posty',
   dr.includes('data-tab="jardin-posty"><span class="di">${pzIc(\'sprout\')}'));
 check('drawer: sin botón Jardín',

@@ -904,7 +904,7 @@ function bbShell(tab, content) {
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     <main class="bb-main">${content}</main>
-    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads')) + pzDockMasBtn('bb') + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes')) + '</nav>' + pzDockMasHTML()}
+    ${tab === 'chat' ? '' : '<nav class="bb-bar">' + tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads')) + pzDockMasBtn('bb') + tabBtn('analisis', '#/app/analisis', gzT('Estrategia', 'Strategy')) + tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level')) + '</nav>' + pzDockMasHTML()}
   </div>`;
 }
 async function bbLoadEstado(force) {
@@ -1559,7 +1559,7 @@ function pzProximoPremioTira(nvP, origen) {
   const nom = en ? sig.en : sig.es;
   // (LOTE PREMIOS-TIRA · decisión Valentino 4/11) El premio se VE: su
   // mini real (ropa/ropa-NN-mini.png, el mismo archivo que la pantalla
-  // de Premios usa para la prenda) + copy simple «Nivel N: Nombre».
+  // de Nivel usa para la prenda) + copy simple «Nivel N: Nombre».
   // Sin imagen generada ni bloque de color.
   const img = `<img src="ropa/ropa-${String(n + 1).padStart(2, '0')}-mini.png" alt="" aria-hidden="true">`;
   const premio = `<span class="mx-tira-premio">${img}<span>${esc(en ? ('Level ' + (n + 1) + ': ' + nom) : ('Nivel ' + (n + 1) + ': ' + nom))}</span></span>`;
@@ -1589,16 +1589,16 @@ function mxTiraHTML(pod, nvP, nvG, jardin, origen) {
   // no es el brote (Lote 15/16) ni el visual de la etapa: es el bambusal
   // completo en chico; si todavía no llegaste al Nv 6 lleva candadito.
   // (LOTE INICIO-3 · 3/11, decisión de Valentino) La tirita de Inicio
-  // ya NO dice el nombre viejo del jardín (dice «Premios», el
-  // renombre decidido el 3/11) y ya NO muestra la imagen vieja del
+  // ya NO dice el nombre viejo del jardín (dice «Nivel», el
+  // renombre decidido el 7/11; antes «Premios») y ya NO muestra la imagen vieja del
   // jardín: la miniatura sale de la tirita (el archivo queda en el
   // árbol porque las etapas viejas del jardín lo referencian en
   // otras pantallas; acá simplemente no se usa). La tirita queda
   // con nivel + barrita + próximo premio, mismo layout y mismo
-  // destino (hoy Premios).
+  // destino (hoy Nivel).
   if (pod.posty && nvP) {
     return `<button type="button" class="mx-tira-jardin mx-tira-posty" onclick="mxJardinIr('#/app/jardin-posty', '${origen}')">`
-      + `<span style="flex:1;min-width:0"><b>${gzT('Premios', 'Prizes')} · ${gzT('Nv', 'Lv')} ${mxNvNum(nvP)}</b>`
+      + `<span style="flex:1;min-width:0"><b>${gzT('Nivel', 'Level')} ${mxNvNum(nvP)}</b>`
       + `<span>${gzT('El bambusal', 'The bamboo grove')}</span>${mxBarra(pzNivelAvance(nvP))}${pzProximoPremioTira(nvP, origen)}</span>`
       + `<span class="mx-chev">›</span></button>`;
   }
@@ -2090,12 +2090,12 @@ function pzRopaAvatarHTML() {
   return `<img class="pz-ropa-cara" src="ai-avatar.png" alt="Posty">${capas}<span class="pz-ropa-spark" style="left:6%;top:8%">✦</span><span class="pz-ropa-spark" style="left:86%;top:16%;animation-delay:1.1s">✦</span><span class="pz-ropa-spark" style="left:90%;top:64%;animation-delay:2s">✦</span><span class="pz-ropa-spark" style="left:4%;top:70%;animation-delay:.6s">✦</span>`;
 }
 // ---------- PREMIOS-NOTIF (4/11): aviso de premio nuevo ----------
-// La tira salió de Inicio (v653): el premio nuevo avisa en el tab Premios
-// del dock (badge con la cantidad) hasta que se abra Premios, donde los
+// La tira salió de Inicio (v653): el premio nuevo avisa en el tab Nivel
+// del dock (badge con la cantidad) hasta que se abra Nivel, donde los
 // premios nuevos se marcan con «¡Nuevo!» y el aviso se limpia.
 // PZ_PREMIOS_NUEVOS = niveles no vistos según el servidor (badge).
 // PZ_PREMIOS_NUEVOS_MARCA = niveles a marcar ¡Nuevo! en ESTA visita a
-// Premios (foto tomada al construir la vista; sobrevive al limpiado para
+// Nivel (foto tomada al construir la vista; sobrevive al limpiado para
 // que las marcas no se borren al re-pintar la lista en la misma visita).
 let PZ_PREMIOS_NUEVOS = [];
 let PZ_PREMIOS_NUEVOS_MARCA = [];
@@ -2116,7 +2116,7 @@ async function pzPremiosNuevosSync() {
     });
   } catch (e) {}
 }
-// Al abrir Premios: el servidor limpia los no vistos y el badge se apaga.
+// Al abrir Nivel: el servidor limpia los no vistos y el badge se apaga.
 // Solo se apaga si el POST tuvo éxito: si falló (sin red), el badge queda
 // y el próximo sync lo vuelve a mostrar.
 async function pzPremiosNuevosLimpiar() {
@@ -2168,7 +2168,7 @@ function pzRopaToggle(id) {
 // (LOTE OFICINA ×50 · decisión Valentino 3/11 «arma todo»: cada nivel da
 // DOS cosas — 1 cosa para la oficina + 1 prenda de Posty (el guardarropa
 // vigente, PZ_ROPA, no se toca). La oficina se compone por capas SVG
-// locales en la pantalla Premios, en el mismo lenguaje plano de las capas
+// locales en la pantalla Nivel, en el mismo lenguaje plano de las capas
 // del guardarropa: solo se dibujan los ítems desbloqueados (nv <= nivel
 // actual); lo bloqueado NO se dibuja (sin siluetas ni placeholders).
 // Escena 400×320: pared 0–200, piso 200–320. Cada ítem trae su rectángulo
@@ -2265,7 +2265,163 @@ function pzOficinaSeccionHTML(nivel) {
 }
 // FIN LOTE OFICINA ×50
 
-function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML) {
+// (LOTE NIVEL-MISIONES-RACHA · decisión Valentino 7/11: la gamificación se
+// llama Nivel, con misiones diarias y la racha visible. La racha es la REAL
+// del ritual (días seguidos eligiendo el posteo, /api/ritual/hoy). Las
+// misiones salen de datos REALES del servidor — la misión de foto de la
+// semana (/api/photo-mission), el reel programado de la semana (/api/posts)
+// y los videos ya subidos (/api/assets) — y cada una vale el XP REAL que su
+// posteo gana al publicarse (100 post / 150 reel, la misma regla de
+// /api/avatar-level). Sin dato, no hay misión ni racha: nunca un número
+// inventado. Las misiones alimentan LA MISMA progresión del jardín (el
+// nivel sube solo con posteos, decisión 4/11): no hay XP paralelo.
+// La misión de responder un comentario NO vive acá a propósito: /api/comments
+// no nombra el posteo ni suma XP (responder no publica), así que no se puede
+// prometer una XP ni un posteo concreto sin inventar; sigue donde ya vive
+// (el aviso del chat + la vista de comentarios).
+function pzNivelDiaSemana(fecha, en, tz) {
+  // Día de semana de una fecha, en la zona de la cuenta. El formato local
+  // del Schedule (YYYY-MM-DD HH:MM, 16) ya trae la fecha de la cuenta:
+  // se toma la fecha tal cual, sin convertir por el huso del dispositivo.
+  try {
+    const s = String(fecha || '');
+    if (!s) return '';
+    const diasEs = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    const diasEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    if (/^\d{4}-\d{2}-\d{2}/.test(s) && s.length <= 16) {
+      const d = new Date(s.slice(0, 10) + 'T12:00:00Z');
+      if (isNaN(d.getTime())) return '';
+      return (en ? diasEn : diasEs)[d.getUTCDay()] || '';
+    }
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return '';
+    const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz || 'America/Argentina/Buenos_Aires', weekday: 'long' });
+    const n = fmt.format(d);
+    if (en) return n;
+    const mapa = { Monday: 'lunes', Tuesday: 'martes', Wednesday: 'miércoles', Thursday: 'jueves', Friday: 'viernes', Saturday: 'sábado', Sunday: 'domingo' };
+    return mapa[n] || n.toLowerCase();
+  } catch (e) { return ''; }
+}
+function pzNivelReelSemana(posts) {
+  // Próximo reel (video) programado ESTA semana (lun–dom en la zona de la
+  // cuenta). Sin reel programado, null: no hay misión de video.
+  try {
+    const all = Array.isArray(posts) ? posts : ((posts && Array.isArray(posts.posts)) ? posts.posts : []);
+    const lun = (typeof albumMondayKey === 'function') ? albumMondayKey() : '';
+    if (!lun) return null;
+    const fin = new Date(lun + 'T12:00:00Z'); fin.setUTCDate(fin.getUTCDate() + 7);
+    const finStr = fin.toISOString().slice(0, 10);
+    let mejor = null;
+    for (const p of all) {
+      if (!p || p.status !== 'scheduled' || p.media_type !== 'video') continue;
+      const f = String(p.scheduled_at || '').slice(0, 10);
+      if (!f || f < lun || f >= finStr) continue;
+      if (!mejor || f < String(mejor.scheduled_at || '').slice(0, 10)) mejor = p;
+    }
+    return mejor;
+  } catch (e) { return null; }
+}
+function pzNivelVideoSemana(assets) {
+  // ¿El cliente ya subió un video ESTA semana? (mismo corte que la misión
+  // de foto del servidor: fecha de creación >= lunes).
+  try {
+    const all = Array.isArray(assets) ? assets : [];
+    const lun = (typeof albumMondayKey === 'function') ? albumMondayKey() : '';
+    if (!lun) return false;
+    for (const a of all) {
+      if (!a || a.kind !== 'video') continue;
+      if (String(a.created_at || '').slice(0, 10) >= lun) return true;
+    }
+    return false;
+  } catch (e) { return false; }
+}
+function pzNivelNeedEn(need) {
+  // Traducción del vocabulario CERRADO de /api/photo-mission
+  // (photo-mission.js). El producto estrella es texto libre del cliente y
+  // se muestra tal cual, dentro de la frase en inglés.
+  const mapa = {
+    'una foto de tu producto o servicio': 'a photo of your product or service',
+    'una foto de tu plato más pedido': 'a photo of your most-ordered dish',
+    'una foto de tu vidriera': 'a photo of your storefront',
+    'una foto de un trabajo terminado': 'a photo of a finished job',
+    'una foto entrenando a un cliente': 'a photo of you training a client',
+    'una foto tuya trabajando': 'a photo of you at work'
+  };
+  const n = String(need || '');
+  if (mapa[n]) return mapa[n];
+  const m = n.match(/^una foto de tu (.+)$/);
+  if (m) return 'a photo of your ' + m[1];
+  return n;
+}
+function pzNivelRachaHTML(ritualHoy) {
+  // Racha REAL del ritual (días seguidos eligiendo el posteo). Sin dato,
+  // nada: nunca un número inventado.
+  try {
+    if (!ritualHoy || typeof ritualHoy.racha !== 'number') return '';
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const n = Math.max(0, Math.floor(ritualHoy.racha));
+    const txt = n > 0
+      ? (en ? (n + ' day' + (n === 1 ? '' : 's') + ' in a row') : (n + ' día' + (n === 1 ? '' : 's') + ' seguidos'))
+      : (en ? 'Your streak starts today' : 'Hoy empieza tu racha');
+    const sub = n > 0
+      ? (en ? 'Picking your post every morning keeps it alive.' : 'Elegir tu posteo cada mañana la mantiene viva.')
+      : (en ? 'Pick today’s post and the streak begins.' : 'Elegí el posteo de hoy y la racha empieza.');
+    return '<div class="pz-nivel-racha"><span class="pz-nivel-racha-num" aria-hidden="true">🔥</span><div class="pz-nivel-racha-tx"><b>' + esc(txt) + '</b><span>' + esc(sub) + '</span></div></div>';
+  } catch (e) { return ''; }
+}
+function pzNivelMisionesHTML(d) {
+  // Misiones de hoy, solo de datos reales. 1–2 como mucho: la foto de la
+  // semana (si falta) y el video para el reel de la semana (si hay reel y
+  // falta video). Cada una vale el XP REAL que su posteo gana al
+  // publicarse (100 post / 150 reel, /api/avatar-level). Sin dato, no
+  // hay misión. El botón lleva al chat, donde vive el álbum para subir.
+  try {
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const items = [];
+    const m = (d && d.mission) || null;
+    if (m && m.need) {
+      const hecho = !!m.done;
+      const que = en ? pzNivelNeedEn(m.need) : m.need;
+      const tit = hecho
+        ? (en ? 'Photo uploaded!' : '¡Foto subida!')
+        : (en ? 'Upload ' + que : 'Subí ' + que);
+      const det = hecho
+        ? (en ? 'Posty turns it into a post this week.' : 'Posty la convierte en un posteo de tu semana.')
+        : (en ? 'How: from your album in the chat — Posty turns it into a post this week.' : 'Cómo: desde tu álbum en el chat — Posty la convierte en un posteo de tu semana.');
+      items.push('<div class="pz-mision' + (hecho ? ' hecho' : '') + '">'
+        + '<span class="pz-mision-ic" aria-hidden="true">📸</span>'
+        + '<div class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></div>'
+        + '<div class="pz-mision-accion"><span class="pz-mision-xp">+40 XP</span>'
+        + (hecho ? '<span class="pz-mision-ok" aria-hidden="true">✓</span>' : '<button type="button" class="pz-mision-btn" onclick="bbGo(\'#/app/chat\')">' + esc(en ? 'Upload' : 'Subir') + '</button>')
+        + '</div></div>');
+    }
+    const reel = pzNivelReelSemana(d && d.posts);
+    if (reel) {
+      const hecho = pzNivelVideoSemana(d && d.assets);
+      const dia = pzNivelDiaSemana(reel.scheduled_at, en, (typeof pcTz === 'function') ? pcTz() : undefined);
+      const para = dia ? (en ? 'the ' + dia + ' reel' : 'el reel del ' + dia) : (en ? 'this week’s reel' : 'tu reel de esta semana');
+      const tit = hecho
+        ? (en ? 'Video uploaded!' : '¡Video subido!')
+        : (en ? 'Record 15 seconds at your shop' : 'Grabá 15 segundos en tu local');
+      const det = hecho
+        ? (en ? 'It goes to your reel.' : 'Va para tu reel.')
+        : (en ? 'How: record it on your phone — Posty turns it into ' + para + '.' : 'Cómo: grabalo con el celu — Posty lo convierte en ' + para + '.');
+      items.push('<div class="pz-mision' + (hecho ? ' hecho' : '') + '">'
+        + '<span class="pz-mision-ic" aria-hidden="true">🎬</span>'
+        + '<div class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></div>'
+        + '<div class="pz-mision-accion"><span class="pz-mision-xp">+60 XP</span>'
+        + (hecho ? '<span class="pz-mision-ok" aria-hidden="true">✓</span>' : '<button type="button" class="pz-mision-btn" onclick="bbGo(\'#/app/chat\')">' + esc(en ? 'Record' : 'Grabar') + '</button>')
+        + '</div></div>');
+    }
+    if (!items.length) return '';
+    const tit = en ? 'Today’s missions' : 'Misiones de hoy';
+    const sub = en ? 'Only you can do these — each one earns XP when its post goes live.' : 'Solo vos podés hacer estas — cada una suma XP cuando su posteo sale.';
+    return '<section class="pz-nivel-misiones"><h2>' + esc(tit) + '</h2><p class="pz-nivel-misiones-sub">' + esc(sub) + '</p>' + items.join('') + '</section>';
+  } catch (e) { return ''; }
+}
+// FIN LOTE NIVEL-MISIONES-RACHA
+
+function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML, extra) {
   const volverBtn = (onclick) => `<button type="button" class="mx-volver" onclick="${onclick}" aria-label="${gzT('Volver', 'Back')}">${pzIc('arrowLeft', 16)} ${gzT('Volver', 'Back')}</button>`;
   if (tipo === 'posty') {
     const nvNum = mxNvNum(nvP);
@@ -2274,7 +2430,11 @@ function mxJardinHTML(tipo, nvP, nvG, jardin, post50, semanaHTML) {
     const sig = (nvP && nvP.nombre_siguiente) ? esc(nvP.nombre_siguiente) : '';
     const barra = pct === null ? '' : `<div class="pz-ropa-barra-wrap"><div class="pz-ropa-barra"><i style="width:${pct}%"></i></div><p class="pz-ropa-barra-txt">${nvNum >= 50 ? gzT('Nivel máximo', 'Max level') : (gzT('Próximo: Nv ', 'Next: Lv ') + (nvNum + 1) + (sig ? ' · ' + sig : ''))}</p></div>`;
     const msg = gzT('cuanto más subís de nivel, mejores posteos y más conozco lo que buscás', 'the higher your level, the better your posts and the more I know what you are looking for');
-    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head"><h1>${gzT('Premios', 'Prizes')}</h1></header><div class="mx-bloque"><div class="pz-ropa-panel"><div class="pz-ropa-avatar" id="pzRopaAvatar">${pzRopaAvatarHTML()}</div><h2 class="pz-ropa-nivel">${gzT('Nv', 'Lv')} ${nvNum}${(nvP && nvP.nombre_nivel) ? ' · ' + esc(nvP.nombre_nivel) : ''}</h2>${barra}<p class="pz-ropa-msg">${msg}</p><div class="pz-ropa-lista" id="pzRopaLista" data-nivel="${nvNum}">${pzRopaListaHTML(nvNum)}</div>${pzOficinaSeccionHTML(nvNum)}</div></div></div>`;
+    // (LOTE NIVEL-MISIONES-RACHA) Racha real del ritual + misiones de hoy,
+    // justo bajo el nivel y la barra, antes de la lista de 50 prendas.
+    const rachaHTML = pzNivelRachaHTML(extra && extra.ritualHoy);
+    const misionesHTML = pzNivelMisionesHTML(extra || null);
+    return `<div class="mx-jardin mx-jardin-posty"><div class="mx-chat-cabecera">${volverBtn("bbGo('#/app/inicio')")}</div><header class="mx-jardin-head"><h1>${gzT('Nivel', 'Level')}</h1></header><div class="mx-bloque"><div class="pz-ropa-panel"><div class="pz-ropa-avatar" id="pzRopaAvatar">${pzRopaAvatarHTML()}</div><h2 class="pz-ropa-nivel">${gzT('Nv', 'Lv')} ${nvNum}${(nvP && nvP.nombre_nivel) ? ' · ' + esc(nvP.nombre_nivel) : ''}</h2>${barra}<p class="pz-ropa-msg">${msg}</p>${rachaHTML}${misionesHTML}<div class="pz-ropa-lista" id="pzRopaLista" data-nivel="${nvNum}">${pzRopaListaHTML(nvNum)}</div>${pzOficinaSeccionHTML(nvNum)}</div></div></div>`;
   }
   return mxJardinErrorHTML(); // POSTY SOLO: sin jardín Gesty
 }
@@ -2300,7 +2460,20 @@ async function bbJardinPostyContent() {
     PZ_PREMIOS_NUEVOS_MARCA = (r && r.ok && Array.isArray(r.niveles)) ? r.niveles : [];
     PZ_PREMIOS_NUEVOS = PZ_PREMIOS_NUEVOS_MARCA.slice();
   } catch (e) { PZ_PREMIOS_NUEVOS_MARCA = []; }
-  return mxJardinHTML('posty', nvP, null, null, null, null);
+  // (LOTE NIVEL-MISIONES-RACHA) La racha y las misiones se componen en el
+  // cliente desde endpoints que ya existen. Cada fetch con su propio catch:
+  // si uno falla, esa sección no se dibuja; la pantalla nunca se rompe.
+  let extra = null;
+  try {
+    const r = await Promise.all([
+      api.get('/api/photo-mission').catch(() => null),
+      api.get('/api/ritual/hoy').catch(() => null),
+      api.get('/api/posts').catch(() => null),
+      api.get('/api/assets').catch(() => null)
+    ]);
+    extra = { mission: r[0], ritualHoy: r[1], posts: r[2], assets: r[3] };
+  } catch (e) {}
+  return mxJardinHTML('posty', nvP, null, null, null, null, extra);
 }
 async function bbJardinGestyContent() {
   const nvG = await mxNivel('gesty');
@@ -5980,7 +6153,7 @@ function mzTabsHTML(tab) {
     : tab === 'analisis' ? 'analisis'
     : tab === 'ads' ? 'ads' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}${key === 'jardin' ? '<span class="mz-badge pz-premios-badge off"></span>' : ''}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${pzDockMasBtn('mz')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))}</nav>${pzDockMasHTML()}`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), 'Inicio')}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${pzDockMasBtn('mz')}${t('analisis', 'analisis', pzIc('navBarras'), 'Estrategia')}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))}</nav>${pzDockMasHTML()}`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -6064,7 +6237,7 @@ function appShell(tab, content) {
     </div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
     <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('navBarras')}</span>Estrategia</button>
-    <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('navBambu')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Prizes' : 'Premios'}</button>
+    <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('navBambu')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Level' : 'Nivel'}</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">${pzIc('logout')}</span>Salir</button>
@@ -14364,7 +14537,7 @@ async function chatAvatarLevel() {
     const tierMsg = lv.tier === 'gold' ? ' Tu logo ahora tiene marco de oro 🥇'
       : lv.tier === 'silver' ? ' Tu logo ahora tiene marco de plata 🥈'
       : lv.tier === 'bronze' ? ' Tu logo ahora tiene marco de bronce 🥉' : '';
-    chatSayLocal(`¡Tu marca subió al nivel ${top}: ${POSTA_LVL_NAMES[top] || ''}! 🎉${tierMsg}`);
+    chatSayLocal(`¡Tu marca subió al nivel ${top}: ${POSTA_LVL_NAMES[top] || lv.levelName || ''}! 🎉${tierMsg}`);
     try { track('brand_levelup', { level: top }); } catch (e) {}
     try { api.post('/api/avatar-level/seen', { levels: unseen }); } catch (e) {}
   }
@@ -17022,7 +17195,7 @@ function pzPrefetchKick() {
    const key = href.split('?')[0];
    const label = key === '#/app/inicio' ? (en ? 'Home' : 'Inicio')
      : key === '#/app/schedule' ? (en ? 'Week' : 'Semana')
-     : key === '#/app/jardin-posty' ? (en ? 'Prizes' : 'Premios')
+     : key === '#/app/jardin-posty' ? (en ? 'Level' : 'Nivel')
      : key === '#/app/analisis' ? (en ? 'Strategy' : 'Estrategia')
      : key === '#/app/ajustes' ? (en ? 'Settings' : 'Ajustes')
      : (en ? 'Back' : 'Volver');
@@ -17343,7 +17516,7 @@ function pzPrefetchKick() {
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
   // (PREMIOS-NOTIF · 4/11) Badge de premio nuevo en el dock (tras pintar:
-  // el dock se re-crea en cada render) y, si esta pantalla ES Premios, el
+  // el dock se re-crea en cada render) y, si esta pantalla ES Nivel, el
   // aviso se limpia: las marcas ¡Nuevo! ya quedaron pintadas arriba.
   setTimeout(() => { try { pzPremiosNuevosSync(); } catch (e) {} }, 0);
   if (tab === 'jardin-posty') setTimeout(() => { try { pzPremiosNuevosLimpiar(); } catch (e) {} }, 0);
@@ -20658,10 +20831,10 @@ async function inicioView() {
   // prólogo). El
   // botón-anuncio de Ideas y la burbuja de relación salieron de la
   // pantalla principal (v442).
-  // (SACAR-PREMIOS-INICIO · orden Valentino 4/11) La tira «Premios · Nv N»
-  // ya NO se monta en Inicio: ni fetch de mxPortTop ni interpolación.
+  // (SACAR-PREMIOS-INICIO · orden Valentino 4/11) La tira «Nivel N»
+  // (antes «Premios · Nv N»; renombre 7/11) ya NO se monta en Inicio: ni fetch de mxPortTop ni interpolación.
   // La tira sigue viva en Oficina (mxPortTop 'gesty') y la pestaña
-  // Premios sigue intacta; el nivel (nivelPosty/HF_NIVEL) se sigue
+  // Nivel sigue intacta; el nivel (nivelPosty/HF_NIVEL) se sigue
   // calculando para chat y Estrategia.
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
   // (LOTE PROXIMO-RITUAL · 5/11) Sin banner del ritual: la carta velada

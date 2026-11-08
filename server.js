@@ -18823,38 +18823,71 @@ app.post('/api/milestones/seen', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- Niveles (los sube la marca del cliente; endpoint legacy /api/avatar-level): XP por posteo publicado ----------
-// 100 XP por post, 150 por reel. Niveles 1-10 con nombres en rioplatense.
-// El guard "visto una vez por nivel" usa milestones_seen con milestone 900+nivel.
-const POSTA_LEVELS = [
-  { lvl: 1, name: 'Recién llegado', xp: 0 },
-  { lvl: 2, name: 'Aprendiz del feed', xp: 100 },
-  { lvl: 3, name: 'Ritmo agarrado', xp: 300 },
-  { lvl: 4, name: 'Contenido serio', xp: 550 },
-  { lvl: 5, name: 'Máquina de contenido', xp: 850 },
-  { lvl: 6, name: 'Cara visible', xp: 1200 },
-  { lvl: 7, name: 'Referente del rubro', xp: 1600 },
-  { lvl: 8, name: 'Imparable', xp: 2100 },
-  { lvl: 9, name: 'Ídolo local', xp: 2650 },
-  { lvl: 10, name: 'Leyenda del barrio', xp: 3300 },
-];
-function postaLevelFor(xp) {
-  let cur = POSTA_LEVELS[0];
-  for (const l of POSTA_LEVELS) if (xp >= l.xp) cur = l;
-  return cur;
+// ---------- Niveles (los sube la marca del cliente; endpoint legacy /api/avatar-level): XP por acción real ----------
+// Regla aprobada por Valentino 8/11 00:26 (reemplaza 100 post / 150 reel):
+// cada nivel son 500 puntos (1–50). Cada posteo publicado suma 15 de base
+// + 25 si es foto/carrusel o +45 si es video (foto 40, video 60 en total:
+// lo mismo que muestran las misiones de Nivel). Cada comentario respondido
+// +25 (queda registrado: replyComment pone status='replied'). Primera
+// semana completa (7 días seguidos eligiendo en el ritual) +100; racha de
+// 30 días +150 y de 100 días +300 (misma fuente que la racha visible del
+// jardín: pz_ritual, la racha máxima, no la vigente); 100 consultas
+// respondidas +150. La primera venta por anuncio (+200) NO se suma acá:
+// Posty no ve las ventas; solo se registra cuando el cliente la reporta
+// (pregunta semanal) — lote aparte, nunca inventada.
+// Todo derivado de datos reales (posts, pz_ritual, comment_queue): sin
+// tabla nueva, sin escrituras en el GET. El guard "visto una vez por nivel"
+// usa milestones_seen con milestone 900+nivel.
+const XP_NIVEL = 500, XP_MAX_NIVEL = 50;
+const XP_POST_BASE = 15, XP_POST_FOTO = 25, XP_POST_VIDEO = 45; // foto 40, video 60
+const XP_RESPUESTA = 25;
+const XP_PRIMERA_SEMANA = 100, XP_RACHA_30 = 150, XP_RACHA_100 = 300, XP_100_RESPUESTAS = 150;
+function avatarNivelNombre(nivel) {
+  try { return require('./prestigio').nombreNivel(nivel); } catch (e) { return 'Nivel ' + nivel; }
 }
-function postaTier(lvl) { return lvl >= 7 ? 'gold' : lvl >= 5 ? 'silver' : lvl >= 3 ? 'bronze' : 'none'; }
+// Marcos del logo: misma proporción que antes (bronce 30%, plata 50%, oro
+// 70% del recorrido), reescalada a 50 niveles: 15 / 25 / 35.
+function avatarTier(lvl) { return lvl >= 35 ? 'gold' : lvl >= 25 ? 'silver' : lvl >= 15 ? 'bronze' : 'none'; }
+// Racha máxima de días consecutivos eligiendo en el ritual (pz_ritual).
+// Derivado, sin escrituras; ante cualquier error, 0 (nunca inventado).
+function rachaMaximaRitual(db, uid) {
+  try {
+    const rows = db.prepare(`SELECT day_key FROM pz_ritual WHERE user_id = ? AND picked_post_id IS NOT NULL ORDER BY day_key`).all(uid);
+    let max = 0, cur = 0, prev = null;
+    for (const r of rows) {
+      const d = String(r.day_key || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+      if (prev) {
+        const diff = (new Date(d + 'T00:00:00Z').getTime() - new Date(prev + 'T00:00:00Z').getTime()) / 86400000;
+        cur = (diff === 1) ? cur + 1 : 1;
+      } else cur = 1;
+      prev = d;
+      if (cur > max) max = cur;
+    }
+    return max;
+  } catch (e) { return 0; }
+}
 app.get('/api/avatar-level', requireAuth, (req, res) => {
   try {
     const rows = db.prepare(`SELECT media_type, COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'published' AND media_type != 'story' GROUP BY media_type`).all(req.session.userId);
     let xp = 0, published = 0;
-    for (const r of rows) { const n = r.c || 0; published += n; xp += n * (r.media_type === 'video' ? 150 : 100); }
-    const cur = postaLevelFor(xp);
-    const idx = POSTA_LEVELS.indexOf(cur);
-    const next = POSTA_LEVELS[idx + 1] || null;
+    for (const r of rows) { const n = r.c || 0; published += n; xp += n * (XP_POST_BASE + (r.media_type === 'video' ? XP_POST_VIDEO : XP_POST_FOTO)); }
+    let respuestas = 0;
+    try { respuestas = db.prepare(`SELECT COUNT(*) AS c FROM comment_queue WHERE user_id = ? AND status = 'replied'`).get(req.session.userId).c || 0; } catch (e) {}
+    xp += respuestas * XP_RESPUESTA;
+    const rachaMax = rachaMaximaRitual(db, req.session.userId);
+    if (rachaMax >= 7) xp += XP_PRIMERA_SEMANA;
+    if (rachaMax >= 30) xp += XP_RACHA_30;
+    if (rachaMax >= 100) xp += XP_RACHA_100;
+    if (respuestas >= 100) xp += XP_100_RESPUESTAS;
+    const level = Math.min(XP_MAX_NIVEL, Math.floor(xp / XP_NIVEL) + 1);
+    const levelName = avatarNivelNombre(level);
+    const nextXp = level < XP_MAX_NIVEL ? level * XP_NIVEL : null;
+    const nextName = level < XP_MAX_NIVEL ? avatarNivelNombre(level + 1) : null;
     const seen = db.prepare('SELECT milestone FROM milestones_seen WHERE user_id = ? AND milestone >= 900').all(req.session.userId).map(r => r.milestone - 900);
-    const unseen = POSTA_LEVELS.filter(l => l.lvl > 1 && l.lvl <= cur.lvl && !seen.includes(l.lvl)).map(l => l.lvl);
-    res.json({ ok: true, xp, level: cur.lvl, levelName: cur.name, tier: postaTier(cur.lvl), published, nextXp: next ? next.xp : null, nextName: next ? next.name : null, unseenLevels: unseen });
+    const unseen = [];
+    for (let l = 2; l <= level; l++) if (!seen.includes(l)) unseen.push(l);
+    res.json({ ok: true, xp, level, levelName, tier: avatarTier(level), published, nextXp, nextName, unseenLevels: unseen });
   } catch (e) { res.json({ ok: false }); }
 });
 app.post('/api/avatar-level/seen', requireAuth, (req, res) => {
@@ -18862,7 +18895,7 @@ app.post('/api/avatar-level/seen', requireAuth, (req, res) => {
     const lvls = Array.isArray(req.body && req.body.levels) ? req.body.levels : [];
     for (const l of lvls) {
       const n = Number(l);
-      if (n >= 2 && n <= 10) db.prepare('INSERT OR IGNORE INTO milestones_seen (user_id, milestone) VALUES (?, ?)').run(req.session.userId, 900 + n);
+      if (n >= 2 && n <= 50) db.prepare('INSERT OR IGNORE INTO milestones_seen (user_id, milestone) VALUES (?, ?)').run(req.session.userId, 900 + n);
     }
   } catch (e) {}
   res.json({ ok: true });
@@ -32460,7 +32493,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v792';
+const BUILD_ID = '20261105-v793';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

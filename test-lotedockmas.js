@@ -40,20 +40,20 @@ if (start < 0 || end < 0) { console.log('FALLA: bloque dock-mas no encontrado');
 const block = app.slice(start, end);
 eval(block.replace('window.__pzChatVoice', 'windowStub.__pzChatVoice'));
 
-// ---------- 1. orden bb-bar v573: Inicio, Estrategia, +, Premios, Ajustes ----------
+// ---------- 1. orden bb-bar v573: Inicio, Estrategia, +, Nivel, Ajustes ----------
 const bbNav = app.slice(app.indexOf('<nav class="bb-bar">'), app.indexOf('<nav class="bb-bar">') + 700);
 t('bb-bar: Inicio antes que Estrategia', bbNav.indexOf("tabBtn('inicio'") < bbNav.indexOf("tabBtn('analisis'"));
-t('bb-bar: + entre Estrategia y Premios', bbNav.indexOf("tabBtn('analisis'") < bbNav.indexOf("pzDockMasBtn('bb')") && bbNav.indexOf("pzDockMasBtn('bb')") < bbNav.indexOf("tabBtn('jardin'"));
-t('bb-bar: Premios antes que Ajustes', bbNav.indexOf("tabBtn('jardin'") < bbNav.indexOf("tabBtn('ajustes'"));
+t('bb-bar: + entre Estrategia y Nivel', bbNav.indexOf("tabBtn('analisis'") < bbNav.indexOf("pzDockMasBtn('bb')") && bbNav.indexOf("pzDockMasBtn('bb')") < bbNav.indexOf("tabBtn('jardin'"));
+t('bb-bar: Nivel antes que Ajustes', bbNav.indexOf("tabBtn('jardin'") < bbNav.indexOf("tabBtn('ajustes'"));
 t('bb-bar: 4 pestanas intactas', (bbNav.match(/tabBtn\(/g) || []).length === 4);
-t('bb-bar: etiqueta Premios (no Jardin)', bbNav.includes("gzT('Premios', 'Prizes')"));
+t('bb-bar: etiqueta Nivel (no Jardin)', bbNav.includes("gzT('Nivel', 'Level')"));
 
 // ---------- 2. orden mz-tabs v573 ----------
 const mzNav = app.slice(app.indexOf('function mzTabsHTML'), app.indexOf('function appShell('));
-t('mz-tabs: + entre Estrategia y Premios', mzNav.indexOf("t('analisis'") < mzNav.indexOf("pzDockMasBtn('mz')") && mzNav.indexOf("pzDockMasBtn('mz')") < mzNav.indexOf("t('jardin'"));
+t('mz-tabs: + entre Estrategia y Nivel', mzNav.indexOf("t('analisis'") < mzNav.indexOf("pzDockMasBtn('mz')") && mzNav.indexOf("pzDockMasBtn('mz')") < mzNav.indexOf("t('jardin'"));
 t('mz-tabs: 4 pestanas intactas', (mzNav.match(/t\('(inicio|jardin|analisis|ajustes)'/g) || []).length === 4);
 t('mz-tabs: sin dock en pantalla chat', mzNav.includes("if (tab === 'chat') return '';"));
-t('mz-tabs: etiqueta Premios', mzNav.includes("gzT('Premios', 'Prizes')"));
+t('mz-tabs: etiqueta Nivel', mzNav.includes("gzT('Nivel', 'Level')"));
 
 // ---------- 3. boton +: sin ruta, con toggle ----------
 const btnBb = pzDockMasBtn('bb'), btnMz = pzDockMasBtn('mz');

@@ -55,36 +55,36 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v764'"), 'CHUNK_V v764');
-  t(md5(css) === 'bac587ad5c5d6ef443ee577d78c16fe4', 'styles.css md5 (re-pin ritual-siguiente: .hf-carta-destapa; antes v761 .logo-img)');
+  t(md5(css) === '2589972e11db8b2b393d0eae06e18cf9', 'styles.css md5 (re-pin nivel-misiones-racha re-base v792: styles del lote; antes ritual-siguiente: .hf-carta-destapa)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
 
-  // ---------- 2. Dock v2: Inicio, Ads, +, Estrategia, Premios (las dos shells; DOCK-5 6/11: Ajustes sale del dock y vive en el perfil) ----------
+  // ---------- 2. Dock v2: Inicio, Ads, +, Estrategia, Nivel (las dos shells; DOCK-5 6/11: Ajustes sale del dock y vive en el perfil) ----------
   const bbNav = (app.split('\n').find((l) => l.includes("'<nav class=\"bb-bar\">'")) || '');
   const bbOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin']
     .map((k) => bbNav.indexOf(k === 'pzDockMasBtn' ? 'pzDockMasBtn' : `tabBtn('${k}'`));
   t(bbNav.includes("tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))"), 'bbShell: tab Ads en el dock');
-  t(bbNav.includes("tabBtn('jardin', '#/app/jardin-posty', gzT('Premios', 'Prizes'))"), 'bbShell: Premios vuelve al dock');
+  t(bbNav.includes("tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level'))"), 'bbShell: Nivel en el dock');
   t(cnt(bbNav, 'tabBtn(') === 4 && cnt(bbNav, 'pzDockMasBtn') === 1, 'bbShell: dock en 5 (4 tabs + Agregar centro)');
-  t(bbOrd.every((v) => v !== -1) && bbOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'bbShell: orden Inicio, Ads, +, Estrategia, Premios');
+  t(bbOrd.every((v) => v !== -1) && bbOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'bbShell: orden Inicio, Ads, +, Estrategia, Nivel');
   t(!bbNav.includes("tabBtn('ajustes'"), 'bbShell: sin tab Ajustes (vive en el perfil)');
   const mzNav = (app.split('\n').find((l) => l.includes('<nav class="mz-tabs"')) || '');
   const mzOrd = ['inicio', 'ads', 'pzDockMasBtn', 'analisis', 'jardin']
     .map((k) => mzNav.indexOf(k === 'pzDockMasBtn' ? 'pzDockMasBtn' : `t('${k}'`));
   t(mzNav.includes("t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))"), 'mzTabsHTML: tab Ads con megáfono');
-  t(mzNav.includes("t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Premios', 'Prizes'))"), 'mzTabsHTML: Premios vuelve al dock');
+  t(mzNav.includes("t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))"), 'mzTabsHTML: Nivel en el dock');
   t(cnt(mzNav, "t('") === 4 && cnt(mzNav, 'pzDockMasBtn') === 1, 'mzTabsHTML: dock en 5 (4 tabs + Agregar centro)');
-  t(mzOrd.every((v) => v !== -1) && mzOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'mzTabsHTML: orden Inicio, Ads, +, Estrategia, Premios');
+  t(mzOrd.every((v) => v !== -1) && mzOrd.every((v, i, a) => i === 0 || v > a[i - 1]), 'mzTabsHTML: orden Inicio, Ads, +, Estrategia, Nivel');
   t(!mzNav.includes("t('ajustes'"), 'mzTabsHTML: sin tab Ajustes (vive en el perfil)');
   t(app.includes("    ads: '<svg"), 'bbShell: icono megáfono en el mapa ic');
   t(app.includes("|| tab === 'ads') return tab;"), "mxTabKey: 'ads' resuelve a 'ads' (tab activo)");
   t(app.includes("else if (tab === 'ads')") && app.includes('content = await adsView()'), "router: tab 'ads' → adsView()");
   t(cnt(app, '12.400') === 0 && cnt(app, '1.840') === 0, 'app.js: cero números del mock (12.400 / 1.840)');
 
-  // Premios sigue vivo: ruta, drawer y vista de Premios intactos
-  t(app.includes("tab === 'jardin-posty'"), 'Premios: la ruta #/app/jardin-posty sigue viva');
-  t(app.includes('data-tab="jardin-posty"'), 'Premios: sigue en el drawer (menú ≡)');
-  t(app.includes('function mxJardinHTML'), 'Premios: la vista de Premios sigue intacta');
-  t(!app.includes('ajsec-premios') && !app.includes('ajPremiosNivel'), 'Premios: sin fila en Ajustes (ya está en el dock)');
+  // Nivel sigue vivo: ruta, drawer y vista de Nivel intactos
+  t(app.includes("tab === 'jardin-posty'"), 'Nivel: la ruta #/app/jardin-posty sigue viva');
+  t(app.includes('data-tab="jardin-posty"'), 'Nivel: sigue en el drawer (menú ≡)');
+  t(app.includes('function mxJardinHTML'), 'Nivel: la vista de Nivel sigue intacta');
+  t(!app.includes('ajsec-premios') && !app.includes('ajPremiosNivel'), 'Nivel: sin fila en Ajustes (ya está en el dock)');
 
   // ---------- 3. adsView (VM): cáscara con la vista directa del tab ----------
   // (LOTE ADS-DIRECTO v759) adsView ya no pinta la carta: monta #adsTabRoot
@@ -283,11 +283,11 @@ const sliceFn = (src, from, to) => {
     t(fakeEl('adsTabRoot').innerHTML.includes('$30 USD'), 'impulsar: el tab muestra el saldo nuevo $30');
   }
 
-  // ---------- 5. chunk-ajustes: SIN fila de Premios (vuelve al dock; Ajustes = v710) ----------
+  // ---------- 5. chunk-ajustes: SIN fila de Nivel (vive en el dock; Ajustes = v710) ----------
   t(!aju.includes('id="ajsec-premios"'), 'ajustes: sin tarjeta #ajsec-premios (el v1 la agregaba)');
-  t(!aju.includes('id="ajPremiosNivel"'), 'ajustes: sin span de nivel de Premios');
+  t(!aju.includes('id="ajPremiosNivel"'), 'ajustes: sin span de nivel (Nivel vive en el dock)');
   t(!aju.includes("api.get('/api/oficina/nivel?poder=posty')"), 'ajustes: sin lectura de /api/oficina/nivel (era solo para la fila)');
-  t(md5(aju) === 'a872d9babb32f29548cde30a0cfa6e48', 'ajustes: chunk-ajustes.js intacto (md5 v748, re-pin ads-pantalla: el pin v723 quedó rancio en v732)');
+  t(md5(aju) === 'f0a3fa96bb55fa449c34395ec2f020a5', 'ajustes: chunk-ajustes.js intacto (md5 v792, re-pin nivel-misiones-racha re-base v792: chunk de ajustes v792; antes v748)');
 
   // ---------- 6. Contratos: nada de lo vigente se rompe ----------
   t(ana.includes('anaBoostRecLoad') && ana.includes("getElementById('anaBoostRec')"), 'contrato: la billetera de la carta sigue viva');
