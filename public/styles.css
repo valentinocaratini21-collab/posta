@@ -4012,20 +4012,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .mx-jardin-posty .mx-jardin-head h1{color:#0A1E33}
 .mx-jardin-posty .mx-jardin-head p{color:#5A7A8C}
 .mx-jardin-posty .mx-volver{color:#0A1E33}
-/* (LOTE NIVEL-MISIONES-RACHA · 7/11) Racha y misiones de la pantalla Nivel:
-   tarjeta blanca como el resto del jardín, llama grande, XP en amarillo. */
-.pz-nivel-racha{display:flex;align-items:center;gap:12px;background:#FFF7E0;border:1.5px solid #FEC14D;border-radius:16px;padding:12px 14px}
-.pz-nivel-racha-num{font-size:28px;line-height:1;flex:none}
-.pz-nivel-racha-tx{display:flex;flex-direction:column;gap:2px;min-width:0}
-.pz-nivel-racha-tx b{font-size:16px;color:#0A1E33}
-.pz-nivel-racha-tx span{font-size:13px;color:#5A7A8C;line-height:1.35}
-.pz-nivel-misiones{display:flex;flex-direction:column;gap:8px}
-.pz-nivel-misiones h2{font-size:17px;color:#0A1E33;margin:4px 0 0}
-.pz-nivel-misiones-sub{font-size:13px;color:#5A7A8C;margin:0;line-height:1.4}
-/* R5 (8/11): pantalla Nivel como el mock — cabecera XP, racha, misiones,
-   automático del día, logros y escalera. */
+/* (LOTE NIVEL-REDISENO · 8/11) Pantalla Nivel como el mock v1 aprobado:
+   héroe XP, Hoy checklist, camino de niveles, logros con barras. */
 .pz-nivel{display:flex;flex-direction:column;gap:14px;max-width:520px;margin:0 auto}
-.pz-nivel-head{background:#FFFFFF;border:1.5px solid #D8ECF7;border-radius:20px;padding:16px}
+.pz-nivel-head{background:#FFFFFF;border:2px solid #2793C8;border-radius:20px;padding:16px}
 .pz-nivel-badge{font-size:13px;font-weight:800;letter-spacing:.08em;color:#2793C8;margin:0 0 4px}
 .pz-nivel-num{font-size:20px}
 .pz-nivel-head h2{font-size:22px;color:#0A1E33;margin:0 0 4px}
@@ -4034,31 +4024,50 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-nivel-xpbar i{display:block;height:100%;background:linear-gradient(90deg,#2793C8,#FEC14D);border-radius:999px}
 .pz-nivel-xp-txt{font-size:13px;font-weight:700;color:#0A1E33;margin:8px 0 0}
 .pz-nivel-total{font-size:13px;color:#47617A;margin:4px 0 0}
-.pz-nivel-regla{font-size:12.5px;color:#5A7A8C;margin:8px 0 0}
-.pz-nivel-mision{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;background:#FFFFFF;border:1.5px solid #DCEEF7;border-radius:16px;padding:12px}
-.pz-nivel-mision.hecho{background:#E7F6EC;border-color:#BFE6CC}
+.pz-nivel-hoy{background:#FFF6DB;border:1.5px solid #F5D98B;border-radius:18px;padding:14px 16px}
+.pz-nivel-hoy h2{font-size:16px;color:#0A1E33;margin:0 0 2px}
+.pz-nivel-hoy-sub{font-size:13px;color:#47617A;margin:0 0 4px;line-height:1.4}
+.pz-nivel-hoy-fila{display:flex;align-items:center;gap:10px;width:100%;background:transparent;border:0;border-top:1px solid rgba(10,30,51,.07);padding:9px 0;font:inherit;text-align:left;color:#0A1E33;cursor:pointer}
+.pz-nivel-hoy-fila.primero{border-top:0}
+.pz-nivel-hoy-fila.hecho{cursor:default}
+.pz-nivel-hoy-fila.hecho .pz-mision-tx b{color:#47617A}
+.pz-nivel-hoy-fila .pz-mision-ic{flex:none}
+.pz-nivel-hoy-fila .pz-mision-tx{flex:1;min-width:0}
+.pz-nivel-hoy-vacio{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid #B9CBD8}
+.pz-nivel-hoy-check{flex:none;width:24px;height:24px;border-radius:50%;background:#22C55E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800}
+.pz-mision-xp.hecho{background:#22C55E;color:#fff}
 .pz-mision-comentario{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;border-top:1px solid #DCEEF7;padding-top:10px}
+.pz-mision-comentario[hidden]{display:none}
 .pz-mision-original{font-size:13.5px;color:#47617A;margin:0;font-style:italic}
 .pz-mision-borrador{font-size:13.5px;color:#0A1E33;margin:0;line-height:1.45;background:#F4FAFE;border-radius:12px;padding:10px}
-.pz-nivel-auto{background:#FFFFFF;border:1.5px solid #D8ECF7;border-radius:16px;padding:12px 14px}
-.pz-nivel-auto h2{font-size:15px;color:#0A1E33;margin:0 0 6px}
-.pz-nivel-auto-fila{display:flex;align-items:center;gap:10px;font-size:13.5px;color:#47617A}
-.pz-nivel-auto-fila b{flex:none;font-size:13px;font-weight:800;color:#0A1E33;background:#FEC14D;border-radius:999px;padding:5px 9px}
 .pz-nivel-logros{display:flex;flex-direction:column;gap:8px}
-.pz-nivel-logros h2,.pz-nivel-logros h3{font-size:17px;color:#0A1E33;margin:4px 0 0}
-.pz-nivel-logros h3{font-size:15px}
-.pz-nivel-logro{display:flex;align-items:center;gap:10px;background:#FFFFFF;border:1.5px solid #DCEEF7;border-radius:14px;padding:10px 12px}
+.pz-nivel-logros h2{font-size:17px;color:#0A1E33;margin:4px 0 0}
+.pz-nivel-logro{display:flex;flex-direction:column;gap:6px;background:#FFFFFF;border:1.5px solid #DCEEF7;border-radius:14px;padding:12px}
 .pz-nivel-logro.hecho{border-color:#FEC14D;background:#FFF7E0}
-.pz-nivel-logro b{flex:1;font-size:14.5px;color:#0A1E33}
-.pz-nivel-logro span{font-size:12.5px;color:#47617A;white-space:nowrap}
+.pz-nivel-logro-top{display:flex;align-items:center;gap:8px}
+.pz-nivel-logro-top b{flex:1;font-size:14.5px;color:#0A1E33}
+.pz-nivel-logro-bar{height:7px;border-radius:999px;background:#EAF1F5;overflow:hidden}
+.pz-nivel-logro-bar i{display:block;height:100%;background:#2793C8;border-radius:999px}
+.pz-nivel-logro-estado{font-size:12.5px;color:#47617A;font-weight:600}
 .pz-nivel-escalera{display:flex;flex-direction:column;gap:8px}
 .pz-nivel-escalera h2{font-size:17px;color:#0A1E33;margin:4px 0 0}
-.pz-nivel-hito{display:flex;flex-direction:column;gap:2px;background:#FFFFFF;border:1.5px solid #DCEEF7;border-radius:14px;padding:10px 12px}
-.pz-nivel-hito.actual{border-color:#2793C8;box-shadow:0 0 0 1px #2793C8 inset}
-.pz-nivel-hito b{font-size:15px;color:#0A1E33}
-.pz-nivel-hito span{font-size:12.5px;color:#5A7A8C;line-height:1.4}
-.pz-nivel-hito-crit{font-weight:700;color:#47617A}
-.pz-nivel-hito-marca{font-weight:800;color:#2793C8}
+.pz-nivel-camino{position:relative;margin:0 0 0 8px;padding-left:26px}
+.pz-nivel-camino:before{content:"";position:absolute;left:9px;top:14px;bottom:14px;width:2px;background:#B9D9EA}
+.pz-nivel-hito{position:relative;display:flex;flex-direction:column;gap:2px;background:#FFFFFF;border:1.5px solid #DCEEF7;border-radius:14px;padding:12px;margin-bottom:10px}
+.pz-nivel-hito:last-child{margin-bottom:0}
+.pz-nivel-hito:before{content:"";position:absolute;left:-24px;top:16px;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #B9D9EA}
+.pz-nivel-hito.actual{border:2px solid #2793C8;box-shadow:0 8px 22px rgba(39,147,200,.20)}
+.pz-nivel-hito.actual:before{background:#2793C8;border-color:#2793C8}
+.pz-nivel-hito.bloqueado{opacity:.62}
+.pz-nivel-hito.bloqueado:before{background:#EAF1F5}
+.pz-nivel-hito b{font-size:16px;color:#0A1E33}
+.pz-nivel-hito span{font-size:13px;color:#47617A;line-height:1.45}
+.pz-nivel-hito b .pz-nivel-camino-you{background:#2793C8;color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:2px 8px;vertical-align:2px;margin-left:6px;white-space:nowrap}
+.pz-nivel-hito b .pz-nivel-camino-ok{color:#3E9B4F;font-weight:800}
+.pz-nivel-camino-prog{font-size:12.5px;font-weight:700;color:#0A1E33;margin-top:8px}
+.pz-nivel-camino-bar{height:7px;border-radius:999px;background:#EAF1F5;margin:6px 0 0;overflow:hidden}
+.pz-nivel-camino-bar i{display:block;height:100%;background:#2793C8;border-radius:999px}
+.pz-nivel-camino-lock{font-size:13px;color:#47617A;margin-top:4px}
 .pz-nivel-pie{font-size:13px;color:#5A7A8C;line-height:1.5;margin:0;text-align:center}
 
 .pz-mision{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;background:#FFFFFF;border:1.5px solid #DCEEF7;border-radius:16px;padding:12px}

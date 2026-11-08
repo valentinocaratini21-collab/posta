@@ -85,7 +85,7 @@ check('xp-nivel.js exporta la regla', typeof XP.avatarLevelData === 'function' &
   };
   sb.gzT = (es, en) => (sb.ME && sb.ME.lang === 'en') ? en : es;
   vm.createContext(sb);
-  for (const f of ['pzNivelNombre', 'pzNivelHitoActual', 'pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelRachaCardHTML', 'pzNivelAutoCardHTML', 'pzNivelMisionesHTML', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelPantallaHTML']) {
+  for (const f of ['pzNivelNombre', 'pzNivelHitoActual', 'pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelHoyHTML', 'pzNivelHoyToggleComentario', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelPantallaHTML']) {
     const src = fnSrc(f);
     if (src) vm.runInContext(src + '\nthis.__' + f + ' = ' + f + ';', sb);
   }

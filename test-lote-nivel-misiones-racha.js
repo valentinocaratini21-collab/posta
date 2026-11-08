@@ -88,7 +88,7 @@ check('A20 R5: identificadores de premios fuera', !appSrc.includes('PZ_PREMIOS_N
 
 // ---------- Parte A: estático — misiones y racha ----------
 console.log('== Parte A: estático — misiones y racha ==');
-const NIVEL_FNS = ['pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelRachaCardHTML', 'pzNivelMisionesHTML', 'pzNivelNombre', 'pzNivelHitoActual', 'pzNivelAutoCardHTML', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelPantallaHTML'];
+const NIVEL_FNS = ['pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelHoyHTML', 'pzNivelHoyToggleComentario', 'pzNivelNombre', 'pzNivelHitoActual', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelPantallaHTML'];
 for (const f of NIVEL_FNS) check('A21 función existe: ' + f, appSrc.includes('function ' + f + '('));
 const bbJardin = fnSrc('bbNivelContent');
 check('A22 Nivel pide /api/photo-mission', bbJardin.includes("api.get('/api/photo-mission')"));
@@ -97,16 +97,16 @@ check('A24 Nivel pide /api/posts', bbJardin.includes("api.get('/api/posts')"));
 check('A25 Nivel pide /api/assets', bbJardin.includes("api.get('/api/assets')"));
 check('A26 cada fetch con su propio catch', (bbJardin.match(/\.catch\(\(\) => null\)/g) || []).length >= 4);
 check('A27 R5: bbNivelContent compone la pantalla con los datos', fnSrc('bbNivelContent').includes('pzNivelPantallaHTML({ nivel'));
-check('A28 R5: Nivel pinta racha+misiones', jardinFn.includes('pzNivelRachaCardHTML') && jardinFn.includes('pzNivelMisionesHTML'));
-check('A29 misión foto vale +40 XP', fnSrc('pzNivelMisionesHTML').includes("'+40 XP'") || fnSrc('pzNivelMisionesHTML').includes('+40 XP'));
-check('A30 misión video vale +60 XP', fnSrc('pzNivelMisionesHTML').includes('+60 XP'));
+check('A28 REDISEÑO: Nivel pinta Hoy+logros+escalera (sin tarjeta de racha)', jardinFn.includes('pzNivelHoyHTML') && jardinFn.includes('pzNivelLogrosHTML') && jardinFn.includes('pzNivelEscaleraHTML') && !jardinFn.includes('pzNivelRachaCardHTML'));
+check('A29 misión foto vale +40 XP', fnSrc('pzNivelHoyHTML').includes("'+40 XP'") || fnSrc('pzNivelHoyHTML').includes('+40 XP'));
+check('A30 misión video vale +60 XP', fnSrc('pzNivelHoyHTML').includes('+60 XP'));
 check('A31 la XP coincide con la regla real del servidor (foto 40 / video 60)', xpSrc.includes('XP_POST_BASE = 15') && xpSrc.includes('XP_POST_FOTO = 25') && xpSrc.includes('XP_POST_VIDEO = 45'));
-check('A32 R5: misión comentario con envío real (no inventada)', fnSrc('pzNivelMisionesHTML').includes('pzNivelEnviarRespuesta') && fnSrc('pzNivelEnviarRespuesta').includes('/reply') && fnSrc('pzNivelEnviarRespuesta').includes('pzNivelRecargar'));
+check('A32 R5: misión comentario con envío real (no inventada)', fnSrc('pzNivelHoyHTML').includes('pzNivelEnviarRespuesta') && fnSrc('pzNivelEnviarRespuesta').includes('/reply') && fnSrc('pzNivelEnviarRespuesta').includes('pzNivelRecargar'));
 check('A33 sin server.js nuevo', !serverSrc.includes('pzNivel') && !serverSrc.includes('/api/nivel-misiones'));
-check('A34 R5: botones abren el picker real del chat', fnSrc('pzNivelMisionesHTML').includes('pzSftFotoAlChat') && fnSrc('pzNivelMisionesHTML').includes('pzDockMasVideo'));
-for (const c of ['.pz-nivel-racha', '.pz-nivel-racha-num', '.pz-nivel-racha-tx', '.pz-nivel-misiones', '.pz-nivel-misiones-sub', '.pz-mision', '.pz-mision-accion', '.pz-mision-xp', '.pz-mision-btn', '.pz-mision-ok'])
+check('A34 R5: las filas abren el picker real del chat', fnSrc('pzNivelHoyHTML').includes('pzSftFotoAlChat') && fnSrc('pzNivelHoyHTML').includes('pzDockMasVideo'));
+for (const c of ['.pz-nivel-hoy', '.pz-nivel-hoy-fila', '.pz-nivel-hoy-check', '.pz-nivel-hoy-vacio', '.pz-mision-xp', '.pz-mision-btn', '.pz-mision-comentario', '.pz-mision-original', '.pz-mision-borrador', '.pz-nivel-logro-bar', '.pz-nivel-camino', '.pz-nivel-camino-bar'])
   check('A35 estilo existe: ' + c, cssSrc.includes(c + '{') || cssSrc.includes(c + ' '));
-const CALLED = ['pzNivelRachaCardHTML', 'pzNivelMisionesHTML', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelDiaSemana', 'pzNivelNeedEn', 'albumMondayKey', 'pcTz', 'bbGo', 'esc', 'gzT'];
+const CALLED = ['pzNivelHoyHTML', 'pzNivelHoyToggleComentario', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelDiaSemana', 'pzNivelNeedEn', 'albumMondayKey', 'pcTz', 'bbGo', 'esc', 'gzT'];
 for (const f of CALLED) check('A36 función auditada: ' + f + ' definida', appSrc.includes('function ' + f + '(') || appSrc.includes('const ' + f + ' ='));
 check('A37 escala: 500 puntos por nivel, 1–50', xpSrc.includes('XP_NIVEL = 500') && xpSrc.includes('XP_MAX_NIVEL = 50') && xpSrc.includes('Math.floor(xp / XP_NIVEL) + 1'));
 check('A38 respuestas: +25 por comentario respondido (status replied)', xpSrc.includes("status = 'replied'") && xpSrc.includes('XP_RESPUESTA = 25'));
@@ -166,23 +166,25 @@ check('B11 need EN: plato más pedido', call(ctxEn, "__pzNivelNeedEn('una foto d
 check('B12 need EN: vidriera', call(ctxEn, "__pzNivelNeedEn('una foto de tu vidriera')") === 'a photo of your storefront');
 check('B13 need EN: producto estrella (texto libre, tal cual)', call(ctxEn, "__pzNivelNeedEn('una foto de tu torta de chocolate')") === 'a photo of your torta de chocolate');
 check('B14 need EN: producto o servicio', call(ctxEn, "__pzNivelNeedEn('una foto de tu producto o servicio')") === 'a photo of your product or service');
-check('B15 racha 12 días ES', (() => { const h = call(ctxEs, "__pzNivelRachaCardHTML({racha:12}, false)"); return h.includes('Racha de 12 días publicando') && h.includes('🔥'); })());
-check('B16 racha 0 → hoy empieza', call(ctxEs, "__pzNivelRachaCardHTML({racha:0}, false)").includes('Hoy empieza tu racha'));
-check('B17 racha 1 día EN', call(ctxEn, "__pzNivelRachaCardHTML({racha:1}, true)").includes('1 day posting in a row'));
-check('B18 racha sin dato → nada', call(ctxEs, '__pzNivelRachaCardHTML(null, false)') === '' && call(ctxEs, '__pzNivelRachaCardHTML({}, false)') === '');
+check('B15 racha 12 días ES (vive en el camino)', (() => { const h = call(ctxEs, "__pzNivelEscaleraHTML({level:4,respuestas:3,rachaMax:12}, false)"); return h.includes('Racha 12 de 14 días') && h.includes('🔥'); })());
+check('B16 racha 0 → camino con 0 de 14', call(ctxEs, "__pzNivelEscaleraHTML({level:1,respuestas:0,rachaMax:0}, false)").includes('Racha 0 de 14 días'));
+check('B17 racha 1 día EN (camino)', call(ctxEn, "__pzNivelEscaleraHTML({level:2,respuestas:0,rachaMax:1}, true)").includes('Streak 1 of 14 days'));
+check('B18 cero tarjeta de racha en la pantalla', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify({ nivel: { ok: true, xp: 1620, level: 4, levelName: 'Negocio Visible', nextXp: 2000, nextName: 'Negocio Visible', respuestas: 3, rachaMax: 12 }, ritualHoy: { racha: 12 }, mission: { need: 'una foto de tu plato más pedido', done: false }, posts: [{ status: 'scheduled', media_type: 'video', scheduled_at: '2026-11-12 19:00' }], assets: [], comments: [] }) + ')'); return !h.includes('pz-nivel-racha') && !h.includes('Racha de 12 días publicando'); })());
 const mFoto = { mission: { need: 'una foto de tu plato más pedido', done: false }, ritualHoy: null, posts: [], assets: [] };
-check('B19 misión foto pendiente: QUÉ + CÓMO + XP', (() => { const h = call(ctxEs, '__pzNivelMisionesHTML(' + JSON.stringify(mFoto) + ')'); return h.includes('Subí una foto de tu plato más pedido') && h.includes('Cómo:') && h.includes('+40 XP') && h.includes('>Subir<') && h.includes('onclick="pzSftFotoAlChat()"'); })());
-check('B20 misión foto hecha: ¡Foto subida! + ✓ sin botón', (() => { const h = call(ctxEs, "__pzNivelMisionesHTML({mission:{need:'una foto de tu plato más pedido',done:true},posts:[],assets:[]})"); return h.includes('¡Foto subida!') && h.includes('✓') && !h.includes('>Subir<'); })());
+check('B19 misión foto pendiente: QUÉ + CÓMO + XP (la fila ES el botón)', (() => { const h = call(ctxEs, '__pzNivelHoyHTML(' + JSON.stringify(mFoto) + ')'); return h.includes('Subí una foto de tu plato más pedido') && h.includes('Cómo:') && h.includes('+40 XP') && h.includes('onclick="pzSftFotoAlChat()"'); })());
+check('B20 misión foto hecha: ¡Foto subida! + ✓ sin botón', (() => { const h = call(ctxEs, "__pzNivelHoyHTML({mission:{need:'una foto de tu plato más pedido',done:true},posts:[],assets:[],ritualHoy:null})"); return h.includes('¡Foto subida!') && h.includes('✓') && !h.includes('pzSftFotoAlChat()'); })());
 const mReel = { mission: { need: 'una foto de tu plato más pedido', done: false }, ritualHoy: null, posts: [{ status: 'scheduled', media_type: 'video', scheduled_at: '2026-11-12 19:00' }], assets: [] };
-check('B21 misión video: 15 s + el reel del jueves + 60 XP', (() => { const h = call(ctxEs, '__pzNivelMisionesHTML(' + JSON.stringify(mReel) + ')'); return h.includes('Grabá 15 segundos') && h.includes('Posty lo convierte en el reel del jueves') && h.includes('+60 XP') && h.includes('>Grabar<'); })());
-check('B22 misión video hecha: ¡Video subido!', (() => { const h = call(ctxEs, "__pzNivelMisionesHTML({mission:null,posts:[{status:'scheduled',media_type:'video',scheduled_at:'2026-11-12 19:00'}],assets:[{kind:'video',created_at:'2026-11-10 10:00:00'}]})"); return h.includes('¡Video subido!') && h.includes('✓') && !h.includes('>Grabar<'); })());
-check('B23 sin misión ni reel → nada', call(ctxEs, '__pzNivelMisionesHTML({mission:null,posts:[],assets:[]})') === '');
-check('B24 misión foto EN', (() => { const h = call(ctxEn, '__pzNivelMisionesHTML(' + JSON.stringify(mFoto) + ')'); return h.includes('Upload a photo of your most-ordered dish') && h.includes('+40 XP'); })());
-check('B25 misión video EN: the Thursday reel', (() => { const h = call(ctxEn, '__pzNivelMisionesHTML(' + JSON.stringify(mReel) + ')'); return h.includes('Posty turns it into the Thursday reel') && h.includes('Record 15 seconds'); })());
-const nivelD = { nivel: { ok: true, xp: 1620, level: 4, levelName: 'Negocio Visible', nextXp: 2000, nextName: 'Negocio Visible', respuestas: 3, rachaMax: 12 }, ritualHoy: { racha: 12 }, mission: { need: 'una foto de tu plato más pedido', done: false }, posts: [{ status: 'scheduled', media_type: 'video', scheduled_at: '2026-11-12 19:00' }], assets: [], comments: [] };
-check('B26 Nivel con datos: racha + misiones en la pantalla', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify(nivelD) + ')'); return h.includes('pz-nivel-racha') && h.includes('Racha de 12 días') && h.includes('pz-nivel-misiones') && h.includes('Misiones de hoy'); })());
-check('B27 Nivel sin datos: sin racha ni misiones, cabecera intacta', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify({ nivel: { ok: true, xp: 0, level: 1, levelName: 'Recién arranca', nextXp: 500, nextName: 'Recién arranca', respuestas: 0, rachaMax: 0 }, ritualHoy: null, mission: null, posts: [], assets: [], comments: [] }) + ')'); return !h.includes('pz-nivel-racha') && !h.includes('pz-nivel-misiones') && h.includes('NIVEL') && h.includes('Recién arranca'); })());
-check('B28 Nivel EN: Level + Today’s missions', (() => { const h = call(ctxEn, '__pzNivelPantallaHTML(' + JSON.stringify(nivelD) + ')'); return h.includes('Level') && h.includes('Today’s missions'); })());
+check('B21 misión video: 15 s + el reel del jueves + 60 XP (la fila ES el botón)', (() => { const h = call(ctxEs, '__pzNivelHoyHTML(' + JSON.stringify(mReel) + ')'); return h.includes('Grabá 15 segundos') && h.includes('Posty lo convierte en el reel del jueves') && h.includes('+60 XP') && h.includes('onclick="pzDockMasVideo()"'); })());
+check('B22 misión video hecha: ¡Video subido!', (() => { const h = call(ctxEs, "__pzNivelHoyHTML({mission:null,posts:[{status:'scheduled',media_type:'video',scheduled_at:'2026-11-12 19:00'}],assets:[{kind:'video',created_at:'2026-11-10 10:00:00'}],ritualHoy:null})"); return h.includes('¡Video subido!') && h.includes('✓') && !h.includes('pzDockMasVideo()'); })());
+check('B23 sin misión ni reel: solo el posteo del día en Hoy (15 XP)', (() => { const h = call(ctxEs, '__pzNivelHoyHTML({mission:null,posts:[],assets:[],comments:[],ritualHoy:null})'); return h.includes('Posteo del día') && h.includes('Hoy podés sumar 15 XP') && !h.includes('Subí') && !h.includes('Grabá'); })());
+check('B24 misión foto EN', (() => { const h = call(ctxEn, '__pzNivelHoyHTML(' + JSON.stringify(mFoto) + ')'); return h.includes('Upload a photo of your most-ordered dish') && h.includes('+40 XP'); })());
+check('B25 misión video EN: the Thursday reel', (() => { const h = call(ctxEn, '__pzNivelHoyHTML(' + JSON.stringify(mReel) + ')'); return h.includes('Posty turns it into the Thursday reel') && h.includes('Record 15 seconds'); })());
+const nivelD = { nivel: { ok: true, xp: 1620, level: 4, levelName: 'Negocio Visible', nextXp: 2000, nextName: 'Negocio Visible', respuestas: 3, rachaMax: 12 }, ritualHoy: { racha: 12 }, mission: { need: 'una foto de tu plato más pedido', done: false }, posts: [{ status: 'scheduled', media_type: 'video', scheduled_at: '2026-11-12 19:00' }], assets: [], comments: [{ id: 7, username: 'Marta', text: '¿Tienen el taladro en oferta todavía?', suggested: '¡Hola, Marta! Sí, sigue en oferta hasta el sábado.', status: 'pending', created_at: '2026-11-08 10:00:00' }] };
+check('B26 Nivel con datos: Hoy 140 XP + camino + logros', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify(nivelD) + ')'); return h.includes('Hoy podés sumar 140 XP') && h.includes('pz-nivel-hoy') && h.includes('Racha 12 de 14 días') && h.includes('Vas 12 de 30'); })());
+check('B27 Nivel sin datos: solo el posteo del día en Hoy, cabecera intacta', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify({ nivel: { ok: true, xp: 0, level: 1, levelName: 'Recién arranca', nextXp: 500, nextName: 'Recién arranca', respuestas: 0, rachaMax: 0 }, ritualHoy: null, mission: null, posts: [], assets: [], comments: [] }) + ')'); return !h.includes('pz-nivel-racha') && !h.includes('Subí') && !h.includes('Grabá') && !h.includes('Respondé') && h.includes('NIVEL') && h.includes('Recién arranca') && h.includes('Hoy podés sumar 15 XP'); })());
+check('B28 Nivel EN: Level + earn 140 XP today', (() => { const h = call(ctxEn, '__pzNivelPantallaHTML(' + JSON.stringify(nivelD) + ')'); return h.includes('Level') && h.includes('You can earn 140 XP today'); })());
+check('B29 posteo del día: publicado_hoy (campo real de la API) marca la fila hecha', (() => { const h = call(ctxEs, "__pzNivelHoyHTML({mission:null,posts:[],assets:[],comments:[],ritualHoy:{racha:1,publicado_hoy:true}})"); return h.includes('Se publicó solo') && h.includes('✓') && !h.includes('Se publica solo hoy'); })());
+check('B30 orden del mock: héroe, Hoy, camino, logros, pie', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify(nivelD) + ')'); const iH = h.indexOf('Hoy podés sumar'); const iC = h.indexOf('Tus niveles'); const iL = h.indexOf('Logros'); const iP = h.indexOf('Cada nivel son 500 XP'); return iH > 0 && iH < iC && iC < iL && iL < iP; })());
 
 // ---------- Parte C: boot real ----------
 function req(method, p, body, ctype, cookie) {
@@ -262,7 +264,7 @@ async function main() {
     const cm = j((await req('GET', '/api/comments', null, null, u1.cookie)).txt);
     check('C9 /api/comments responde (la misión NO se construye desde acá)', !!cm && (Array.isArray(cm.comment_queue) || typeof cm.error === 'string'));
     const servedApp = (await req('GET', '/app.js')).txt;
-    check('C10 servido: app.js trae pzNivelMisionesHTML', servedApp.includes('pzNivelMisionesHTML'));
+    check('C10 servido: app.js trae pzNivelHoyHTML (sin misiones/racha viejas)', servedApp.includes('pzNivelHoyHTML') && !servedApp.includes('pzNivelMisionesHTML') && !servedApp.includes('pzNivelRachaCardHTML'));
     check('C11 servido: el dock dice Nivel', servedApp.includes("tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level'))"));
     check('C12 servido: app.js cero Premios en UI', !servedApp.includes("gzT('Premios'"));
     // C13–C16: la regla XP con datos sembrados (DB directa, mismo patrón

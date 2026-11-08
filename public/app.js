@@ -2182,32 +2182,23 @@ function pzNivelNeedEn(need) {
   if (m) return 'a photo of your ' + m[1];
   return n;
 }
-function pzNivelRachaCardHTML(ritualHoy, en) {
-  // Racha REAL del ritual (días seguidos eligiendo el posteo) + sus dos
-  // metas de una sola vez (30 días +150 XP, 100 días +300 XP). Sin dato,
-  // nada: nunca un número inventado.
-  try {
-    if (!ritualHoy || typeof ritualHoy.racha !== 'number') return '';
-    const n = Math.max(0, Math.floor(ritualHoy.racha));
-    const tit = n === 0
-      ? (en ? 'Your streak starts today' : 'Hoy empieza tu racha')
-      : (en ? ((n === 1 ? '1 day' : n + ' days') + ' posting in a row') : ('Racha de ' + (n === 1 ? '1 día' : n + ' días') + ' publicando'));
-    const meta30 = en ? '30 days in a row: +150 XP' : '30 días seguidos: +150 XP';
-    const meta100 = en ? '100 days in a row: +300 XP' : '100 días seguidos: +300 XP';
-    return '<section class="pz-nivel-racha"><span class="pz-nivel-racha-num" aria-hidden="true">🔥</span><div class="pz-nivel-racha-tx"><b>' + esc(tit) + '</b><span>' + esc(meta30) + '</span><span>' + esc(meta100) + '</span></div></section>';
-  } catch (e) { return ''; }
-}
-function pzNivelMisionesHTML(d) {
-  // Misiones de hoy, solo de datos reales. La foto de la semana (si
-  // falta), el video para el reel de la semana (si hay reel y falta
-  // video) y responder un comentario pendiente con borrador (si hay
-  // uno). Cada una vale el XP REAL que su acción gana al hacerse de
-  // verdad (foto 40, video 60, respuesta 25). Sin dato, no hay misión.
-  // Los botones abren el picker real del chat (foto/video) o mandan la
-  // respuesta de verdad (comentario): nunca un aviso solo.
+function pzNivelHoyHTML(d) {
+  // «Hoy podés sumar N XP»: las 3 misiones + el posteo del día en UNA
+  // checklist (mock Nivel v1, decisión Valentino 8/11). Cada fila: icono,
+  // nombre, subtítulo corto, píldora de XP (verde hecha, amarilla falta)
+  // y check verde / círculo vacío. Las filas pendientes de foto y video
+  // SON el botón: tocan el picker real del chat. La de comentario
+  // despliega el borrador y el envío real (nunca un aviso solo). El total
+  // es la suma de las filas que se muestran (140 con las 4): nunca un
+  // número inventado. Reemplaza a las secciones separadas de misiones y
+  // del posteo automático del día.
   try {
     const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-    const items = [];
+    const ritualHoy = (d && d.ritualHoy) || null;
+    const rows = [];
+    let total = 0;
+    let primero = true;
+    const clsFila = (hecho) => { const c = primero ? 'pz-nivel-hoy-fila primero' : 'pz-nivel-hoy-fila'; primero = false; return hecho ? c + ' hecho' : c; };
     const m = (d && d.mission) || null;
     if (m && m.need) {
       const hecho = !!m.done;
@@ -2218,12 +2209,10 @@ function pzNivelMisionesHTML(d) {
       const det = hecho
         ? (en ? 'Posty turns it into a post this week.' : 'Posty la convierte en un posteo de tu semana.')
         : (en ? 'How: from your album in the chat — Posty turns it into a post this week.' : 'Cómo: desde tu álbum en el chat — Posty la convierte en un posteo de tu semana.');
-      items.push('<div class="pz-nivel-mision' + (hecho ? ' hecho' : '') + '">'
-        + '<span class="pz-mision-ic" aria-hidden="true">📸</span>'
-        + '<div class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></div>'
-        + '<div class="pz-mision-accion"><span class="pz-mision-xp">+40 XP</span>'
-        + (hecho ? '<span class="pz-mision-ok" aria-hidden="true">✓</span>' : '<button type="button" class="pz-mision-btn" onclick="pzSftFotoAlChat()">' + esc(en ? 'Upload' : 'Subir') + '</button>')
-        + '</div></div>');
+      total += 40;
+      rows.push(hecho
+        ? '<div class="' + clsFila(true) + '"><span class="pz-mision-ic" aria-hidden="true">📸</span><span class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></span><span class="pz-mision-xp hecho">+40 XP</span><span class="pz-nivel-hoy-check" aria-hidden="true">✓</span></div>'
+        : '<button type="button" class="' + clsFila(false) + '" onclick="pzSftFotoAlChat()"><span class="pz-mision-ic" aria-hidden="true">📸</span><span class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></span><span class="pz-mision-xp">+40 XP</span><span class="pz-nivel-hoy-vacio" aria-hidden="true"></span></button>');
     }
     const reel = pzNivelReelSemana(d && d.posts);
     if (reel) {
@@ -2236,12 +2225,10 @@ function pzNivelMisionesHTML(d) {
       const det = hecho
         ? (en ? 'It goes to your reel.' : 'Va para tu reel.')
         : (en ? 'How: record it on your phone — Posty turns it into ' + para + '.' : 'Cómo: grabalo con el celu — Posty lo convierte en ' + para + '.');
-      items.push('<div class="pz-nivel-mision' + (hecho ? ' hecho' : '') + '">'
-        + '<span class="pz-mision-ic" aria-hidden="true">🎬</span>'
-        + '<div class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></div>'
-        + '<div class="pz-mision-accion"><span class="pz-mision-xp">+60 XP</span>'
-        + (hecho ? '<span class="pz-mision-ok" aria-hidden="true">✓</span>' : '<button type="button" class="pz-mision-btn" onclick="pzDockMasVideo()">' + esc(en ? 'Record' : 'Grabar') + '</button>')
-        + '</div></div>');
+      total += 60;
+      rows.push(hecho
+        ? '<div class="' + clsFila(true) + '"><span class="pz-mision-ic" aria-hidden="true">🎬</span><span class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></span><span class="pz-mision-xp hecho">+60 XP</span><span class="pz-nivel-hoy-check" aria-hidden="true">✓</span></div>'
+        : '<button type="button" class="' + clsFila(false) + '" onclick="pzDockMasVideo()"><span class="pz-mision-ic" aria-hidden="true">🎬</span><span class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></span><span class="pz-mision-xp">+60 XP</span><span class="pz-nivel-hoy-vacio" aria-hidden="true"></span></button>');
     }
     const lista = Array.isArray(d && d.comments) ? d.comments : [];
     let pendiente = null;
@@ -2251,29 +2238,35 @@ function pzNivelMisionesHTML(d) {
     if (pendiente) {
       const tit = en ? 'Answer a comment' : 'Respondé un comentario';
       const de = (en ? 'From ' : 'De ') + (pendiente.username || '');
-      items.push('<div class="pz-nivel-mision">'
-        + '<span class="pz-mision-ic" aria-hidden="true">💬</span>'
-        + '<div class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(de) + '</span></div>'
-        + '<div class="pz-mision-accion"><span class="pz-mision-xp">+25 XP</span></div>'
-        + '<div class="pz-mision-comentario"><p class="pz-mision-original">«' + esc(pendiente.text || '') + '»</p>'
+      total += 25;
+      rows.push('<button type="button" class="' + clsFila(false) + '" onclick="pzNivelHoyToggleComentario(this)"><span class="pz-mision-ic" aria-hidden="true">💬</span><span class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(de) + '</span></span><span class="pz-mision-xp">+25 XP</span><span class="pz-nivel-hoy-vacio" aria-hidden="true"></span></button>'
+        + '<div class="pz-mision-comentario" hidden><p class="pz-mision-original">«' + esc(pendiente.text || '') + '»</p>'
         + '<p class="pz-mision-borrador">' + esc(pendiente.suggested || '') + '</p>'
-        + '<button type="button" class="pz-mision-btn" data-pz-draft="' + esc(pendiente.suggested || '') + '" onclick="pzNivelEnviarRespuesta(' + pendiente.id + ', this)">' + esc(en ? 'Send the reply' : 'Enviar la respuesta') + '</button>'
-        + '</div></div>');
+        + '<button type="button" class="pz-mision-btn" data-pz-draft="' + esc(pendiente.suggested || '') + '" onclick="pzNivelEnviarRespuesta(' + pendiente.id + ', this)">' + esc(en ? 'Send the reply' : 'Enviar la respuesta') + '</button></div>');
     }
-    if (!items.length) return '';
-    const tit = en ? 'Today’s missions' : 'Misiones de hoy';
-    const sub = en ? 'Each one counts when it really happens.' : 'Cada una suma cuando se hace de verdad.';
-    return '<section class="pz-nivel-misiones"><h2>' + esc(tit) + '</h2><p class="pz-nivel-misiones-sub">' + esc(sub) + '</p>' + items.join('') + '</section>';
+    // La API /api/ritual/hoy devuelve publicado_hoy (snake_case); el
+    // camelCase es el de los fixtures viejos. La tarjeta automática
+    // vieja leía solo publicadoHoy y la fila nunca se marcaba hecha
+    // en vivo (bug latente de v805): se leen los dos.
+    const hechoDia = !!(ritualHoy && (ritualHoy.publicadoHoy || ritualHoy.publicado_hoy));
+    total += 15;
+    rows.push(hechoDia
+      ? '<div class="' + clsFila(true) + '"><span class="pz-mision-ic" aria-hidden="true">📮</span><span class="pz-mision-tx"><b>' + esc(en ? 'Post of the day' : 'Posteo del día') + '</b><span>' + esc(en ? 'Published on its own. Automatic.' : 'Se publicó solo. Automático.') + '</span></span><span class="pz-mision-xp hecho">+15 XP</span><span class="pz-nivel-hoy-check" aria-hidden="true">✓</span></div>'
+      : '<div class="' + clsFila(false) + '"><span class="pz-mision-ic" aria-hidden="true">📮</span><span class="pz-mision-tx"><b>' + esc(en ? 'Post of the day' : 'Posteo del día') + '</b><span>' + esc(en ? 'It goes out on its own today. Automatic.' : 'Se publica solo hoy. Automático.') + '</span></span><span class="pz-mision-xp">+15 XP</span><span class="pz-nivel-hoy-vacio" aria-hidden="true"></span></div>');
+    const tit = en ? ('You can earn ' + total + ' XP today') : ('Hoy podés sumar ' + total + ' XP');
+    const sub = (rows.length >= 4)
+      ? (en ? 'The 3 missions + the post of the day.' : 'Las 3 misiones + el posteo del día.')
+      : (en ? 'Each one counts when it really happens.' : 'Cada una suma cuando se hace de verdad.');
+    return '<section class="pz-nivel-hoy"><h2>' + esc(tit) + '</h2><p class="pz-nivel-hoy-sub">' + esc(sub) + '</p>' + rows.join('') + '</section>';
   } catch (e) { return ''; }
 }
-function pzNivelAutoCardHTML(ritualHoy, en) {
-  // Todos los días, automático: el posteo del día suma 15 XP cuando se
-  // publica. No es una misión que se haga a mano: pasa solo.
+function pzNivelHoyToggleComentario(btn) {
+  // Despliega el borrador y el envío real de la misión comentario.
   try {
-    const hecho = !!(ritualHoy && ritualHoy.publicadoHoy);
-    const estado = hecho ? (en ? '✓ Published today' : '✓ Publicado hoy') : (en ? 'Automatic' : 'Automático');
-    return '<section class="pz-nivel-auto"><h2>' + esc(en ? 'Every day · Automatic' : 'Todos los días · Automático') + '</h2><div class="pz-nivel-auto-fila"><span>' + esc(en ? 'Your post of the day was published' : 'Se publicó tu posteo del día') + '</span><b>+15 XP</b><span>' + esc(estado) + '</span></div></section>';
-  } catch (e) { return ''; }
+    const det = btn && btn.parentNode ? btn.parentNode.querySelector('.pz-mision-comentario') : null;
+    if (!det) return;
+    det.hidden = !det.hidden;
+  } catch (e) {}
 }
 function pzNivelHitoActual(d) {
   // El hito vigente: el más alto alcanzado (nivel 50, nivel 4, 5
@@ -2288,58 +2281,76 @@ function pzNivelHitoActual(d) {
   return { nombre: 'Recién arranca', desc: 'Perfil ordenado, primera semana armada.', descEn: 'Profile in order, first week built.', criterio: 'Nv 1', criterioEn: 'Lv 1' };
 }
 function pzNivelLogrosHTML(nivel, en) {
-  // Logros de una sola vez, con datos reales: primera semana completa
-  // (racha máxima 7 días, la misma regla que suma los +100 del
-  // servidor), 100 consultas respondidas, primera venta por anuncio
-  // (siempre bloqueada: Posty no ve las ventas) y las dos metas de
-  // racha (30 y 100 días, por racha máxima).
+  // Logros de una sola vez, UNIDOS (mock Nivel v1, decisión Valentino
+  // 8/11): la lista de «Logros» y la de «Racha» eran lo mismo y se
+  // fusionan en UNA sola lista «Logros». Cada fila: nombre, píldora +XP,
+  // BARRA de progreso y «Vas X de Y» (o «✓ Conseguido»). La primera venta
+  // por anuncio sigue bloqueada (Posty no ve las ventas): en vez del
+  // texto muerto, dice qué hacer para lograrla. Todo de datos reales.
   try {
     const resp = (nivel && typeof nivel.respuestas === 'number') ? nivel.respuestas : 0;
     const racha = (nivel && typeof nivel.rachaMax === 'number') ? nivel.rachaMax : 0;
-    const fila = (tit, xp, estado, hecho) => '<div class="pz-nivel-logro' + (hecho ? ' hecho' : '') + '"><b>' + esc(tit) + '</b><span>+' + xp + ' XP</span><span>' + esc(estado) + '</span></div>';
-    const okTxt = en ? '✓ Achieved' : '✓ Conseguido';
-    const semanaOk = racha >= 7;
-    const semanaEstado = semanaOk ? okTxt : (en ? ('You’re ' + racha + ' of 7 days') : ('Vas ' + racha + ' de 7'));
-    const respOk = resp >= 100;
-    const respEstado = respOk ? okTxt : (en ? ('You’re ' + resp + ' of 100') : ('Vas ' + resp + ' de 100'));
-    const r30Ok = racha >= 30;
-    const r30Estado = r30Ok ? okTxt : (en ? ('You’re ' + racha + ' of 30') : ('Vas ' + racha + ' de 30'));
-    const r100Ok = racha >= 100;
-    const r100Estado = r100Ok ? okTxt : (en ? ('You’re ' + racha + ' of 100') : ('Vas ' + racha + ' de 100'));
-    let h = '<section class="pz-nivel-logros"><h2>' + esc(en ? 'Achievements · Once only' : 'Logros · Una sola vez') + '</h2>';
-    h += fila(en ? 'First full week' : 'Primera semana completa', 100, semanaEstado, semanaOk);
-    h += fila(en ? '100 queries answered' : '100 consultas respondidas', 150, respEstado, respOk);
-    h += fila(en ? 'First ad sale' : 'Primera venta por anuncio', 200, en ? 'Not yet' : 'Todavía no', false);
-    h += '<h3>' + esc(en ? 'Streak · When you get there, once only' : 'Racha · Al llegar, una sola vez') + '</h3>';
-    h += fila(en ? '30 days in a row' : '30 días seguidos', 150, r30Estado, r30Ok);
-    h += fila(en ? '100 days in a row' : '100 días seguidos', 300, r100Estado, r100Ok);
+    const fila = (tit, xp, cur, meta, hint) => {
+      const hecho = cur >= meta;
+      const pct = meta > 0 ? Math.max(0, Math.min(100, Math.round(cur / meta * 100))) : 0;
+      const estado = hecho
+        ? (en ? '✓ Achieved' : '✓ Conseguido')
+        : (hint || (en ? ('You’re ' + cur + ' of ' + meta) : ('Vas ' + cur + ' de ' + meta)));
+      return '<div class="pz-nivel-logro' + (hecho ? ' hecho' : '') + '"><div class="pz-nivel-logro-top"><b>' + esc(tit) + '</b><span class="pz-mision-xp' + (hecho ? ' hecho' : '') + '">+' + xp + ' XP</span></div><div class="pz-nivel-logro-bar"><i style="width:' + pct + '%"></i></div><span class="pz-nivel-logro-estado">' + esc(estado) + '</span></div>';
+    };
+    let h = '<section class="pz-nivel-logros"><h2>' + esc(en ? 'Achievements' : 'Logros') + '</h2>';
+    h += fila(en ? 'First full week' : 'Primera semana completa', 100, racha, 7);
+    h += fila(en ? '30 days in a row' : '30 días seguidos', 150, racha, 30);
+    h += fila(en ? '100 days in a row' : '100 días seguidos', 300, racha, 100);
+    h += fila(en ? '100 queries answered' : '100 consultas respondidas', 150, resp, 100);
+    h += fila(en ? 'First ad sale' : 'Primera venta por anuncio', 200, 0, 1, en ? 'Boost a post to earn it' : 'Impulsá un posteo para lograrlo');
     h += '</section>';
     return h;
   } catch (e) { return ''; }
 }
 function pzNivelEscaleraHTML(nivel, en) {
-  // La escalera del mock: los 5 hitos con su criterio real y «Estás acá»
-  // en el vigente. Los ya alcanzados llevan ✓; los que faltan muestran
-  // su criterio (nunca un número inventado).
+  // El camino del mock (Nivel v1, decisión Valentino 8/11): los 5 hitos en
+  // vertical, unidos por una línea. El vigente lleva borde azul +
+  // «ESTÁS ACÁ»; el siguiente (el primer hito sin alcanzar, en el orden
+  // del camino) muestra su progreso real con barra; los bloqueados van
+  // apagados con 🔒 y su requisito honesto en una línea (nunca un número
+  // inventado). El «Nv 1» de la tarjeta vieja NO se muestra como si fuera
+  // el nivel del usuario: el nivel real está en la cabecera.
   try {
     const lv = (nivel && typeof nivel.level === 'number') ? nivel.level : 1;
     const resp = (nivel && typeof nivel.respuestas === 'number') ? nivel.respuestas : 0;
     const racha = (nivel && typeof nivel.rachaMax === 'number') ? nivel.rachaMax : 0;
     const actual = pzNivelHitoActual({ level: lv, respuestas: resp, rachaMax: racha });
+    const faltaTxt = (n) => en
+      ? ('You need ' + n + ' more level' + (n === 1 ? '' : 's'))
+      : (n === 1 ? 'Te falta 1 nivel' : ('Te faltan ' + n + ' niveles'));
     const hitos = [
-      { nombre: 'Recién arranca', desc: 'Perfil ordenado, primera semana armada.', descEn: 'Profile in order, first week built.', crit: 'Nv 1', critEn: 'Lv 1', ok: true },
-      { nombre: 'Constante', desc: '14 días seguidos: se desbloquean las historias automáticas.', descEn: '14 days in a row: automatic stories unlock.', crit: 'Racha 14 días', critEn: '14-day streak', ok: racha >= 14 },
-      { nombre: 'Conocido en el barrio', desc: 'Primeras consultas sostenidas por semana, anuncios con foto real del local.', descEn: 'First steady queries every week, ads with a real photo of your shop.', crit: '5 respuestas', critEn: '5 replies', ok: resp >= 5 },
-      { nombre: 'Negocio Visible', desc: 'Tu feed ya se ve profesional todos los días, se detecta tu mejor hora.', descEn: 'Your feed already looks professional every day, your best hour is detected.', crit: 'Nv 4', critEn: 'Lv 4', ok: lv >= 4 },
-      { nombre: 'Referente del rubro', desc: 'Informe mensual con comparación contra tu competencia, estrategia que se autoajusta.', descEn: 'Monthly report vs. your competition, strategy that adjusts itself.', crit: 'Nv 50', critEn: 'Lv 50', ok: lv >= 50 }
+      { nombre: 'Recién arranca', desc: 'Perfil ordenado, primera semana armada.', descEn: 'Profile in order, first week built.', icono: '🌱', ok: true, prog: null, lock: '' },
+      { nombre: 'Constante', desc: '14 días seguidos: se desbloquean las historias automáticas.', descEn: '14 days in a row: automatic stories unlock.', icono: '🔥', ok: racha >= 14, prog: { cur: racha, meta: 14, txt: en ? ('Streak ' + racha + ' of 14 days') : ('Racha ' + racha + ' de 14 días') }, lock: en ? '14-day streak to unlock it' : 'Racha 14 días para desbloquearlo' },
+      { nombre: 'Conocido en el barrio', desc: 'Primeras consultas sostenidas por semana, anuncios con foto real del local.', descEn: 'First steady queries every week, ads with a real photo of your shop.', icono: '🏘️', ok: resp >= 5, prog: { cur: resp, meta: 5, txt: en ? (resp + ' of 5 replies') : (resp + ' de 5 respuestas') }, lock: en ? '5 replies to unlock it' : '5 respuestas para desbloquearlo' },
+      { nombre: 'Negocio Visible', desc: 'Tu feed ya se ve profesional todos los días, se detecta tu mejor hora.', descEn: 'Your feed already looks professional every day, your best hour is detected.', icono: '👀', ok: lv >= 4, prog: { cur: Math.min(lv, 4), meta: 4, txt: en ? ('Level ' + lv + ' of 4') : ('Nv ' + lv + ' de 4') }, lock: faltaTxt(4 - lv) },
+      { nombre: 'Referente del rubro', desc: 'Informe mensual con comparación contra tu competencia, estrategia que se autoajusta.', descEn: 'Monthly report vs. your competition, strategy that adjusts itself.', icono: '👑', ok: lv >= 50, prog: { cur: Math.min(lv, 50), meta: 50, txt: en ? ('Level ' + lv + ' of 50') : ('Nv ' + lv + ' de 50') }, lock: faltaTxt(50 - lv) }
     ];
+    let nextIdx = -1;
+    for (let i = 0; i < hitos.length; i++) { if (!hitos[i].ok) { nextIdx = i; break; } }
     let filas = '';
-    for (const h of hitos) {
+    for (let i = 0; i < hitos.length; i++) {
+      const h = hitos[i];
       const esActual = h.nombre === actual.nombre;
-      const marca = esActual ? (en ? 'You’re here' : 'Estás acá') : (h.ok ? '✓' : '');
-      filas += '<div class="pz-nivel-hito' + (esActual ? ' actual' : '') + '"><b>' + esc(h.nombre) + '</b><span>' + esc(en ? h.descEn : h.desc) + '</span><span class="pz-nivel-hito-crit">' + esc(en ? h.critEn : h.crit) + '</span>' + (marca ? '<span class="pz-nivel-hito-marca">' + esc(marca) + '</span>' : '') + '</div>';
+      const esNext = i === nextIdx;
+      let extra = '';
+      if (!esActual && esNext && h.prog) {
+        const pct = Math.max(0, Math.min(100, Math.round(h.prog.cur / h.prog.meta * 100)));
+        extra = '<div class="pz-nivel-camino-prog">' + esc(h.prog.txt) + '</div><div class="pz-nivel-camino-bar"><i style="width:' + pct + '%"></i></div>';
+      } else if (!h.ok && !esActual) {
+        extra = '<div class="pz-nivel-camino-lock">🔒 ' + esc(h.lock) + '</div>';
+      }
+      const marca = esActual
+        ? '<span class="pz-nivel-camino-you">' + esc(en ? 'YOU’RE HERE' : 'ESTÁS ACÁ') + '</span>'
+        : (h.ok ? '<span class="pz-nivel-camino-ok" aria-hidden="true">✓</span>' : '');
+      filas += '<div class="pz-nivel-hito' + (esActual ? ' actual' : '') + ((!h.ok && !esActual) ? ' bloqueado' : '') + '"><b>' + esc(h.icono + ' ' + h.nombre) + ' ' + marca + '</b><span>' + esc(en ? h.descEn : h.desc) + '</span>' + extra + '</div>';
     }
-    return '<section class="pz-nivel-escalera"><h2>' + esc(en ? 'Your levels' : 'Tus niveles') + '</h2>' + filas + '</section>';
+    return '<section class="pz-nivel-escalera"><h2>' + esc(en ? 'Your levels' : 'Tus niveles') + '</h2><div class="pz-nivel-camino">' + filas + '</div></section>';
   } catch (e) { return ''; }
 }
 function pzNivelPantallaHTML(d) {
@@ -2366,14 +2377,12 @@ function pzNivelPantallaHTML(d) {
     if (level >= 50) head += '<p class="pz-nivel-xp-txt">' + esc(en ? 'Max level' : 'Nivel máximo') + '</p>';
     else head += '<p class="pz-nivel-xp-txt">' + fmt(xpNivel) + ' / 500 XP ' + esc(en ? ('for Level ' + (level + 1)) : ('para el Nivel ' + (level + 1))) + ' · ' + esc(en ? ('You need ' + fmt(faltan) + ' XP') : ('Te faltan ' + fmt(faltan) + ' XP')) + '</p>';
     head += '<p class="pz-nivel-total">' + esc(en ? ('You have ' + fmt(xp) + ' total XP') : ('Llevás ' + fmt(xp) + ' XP acumulados en total')) + '</p>'
-      + '<p class="pz-nivel-regla">' + esc(en ? 'Each level is 500 XP, from 1 to 50.' : 'Cada nivel son 500 XP, del 1 al 50.') + '</p></section>';
+      + '</section>';
     let h = '<div class="pz-nivel">' + head;
-    h += pzNivelRachaCardHTML(d && d.ritualHoy, en);
-    h += pzNivelMisionesHTML({ mission: d && d.mission, posts: d && d.posts, assets: d && d.assets, comments: d && d.comments });
-    h += pzNivelAutoCardHTML(d && d.ritualHoy, en);
-    h += pzNivelLogrosHTML(nv, en);
+    h += pzNivelHoyHTML({ mission: d && d.mission, ritualHoy: d && d.ritualHoy, posts: d && d.posts, assets: d && d.assets, comments: d && d.comments });
     h += pzNivelEscaleraHTML(nv, en);
-    h += '<p class="pz-nivel-pie">' + esc(en ? 'The math is simple: the 3 missions (125 XP) + the post of the day (15 XP) add up to 140 XP a day.' : 'La cuenta es simple: las 3 misiones (125 XP) + el posteo del día (15 XP) suman 140 XP por día.') + '</p></div>';
+    h += pzNivelLogrosHTML(nv, en);
+    h += '<p class="pz-nivel-pie">' + esc(en ? 'Each level is 500 XP, from 1 to 50.' : 'Cada nivel son 500 XP, del 1 al 50.') + '</p></div>';
     return h;
   } catch (e) { return ''; }
 }

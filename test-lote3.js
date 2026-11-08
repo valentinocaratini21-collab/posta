@@ -338,7 +338,7 @@ check('servidor: sin NOMBRES_50 en historial', srv.indexOf('NOMBRES_50.slice(5)'
 check('servidor: sin require posty-nivel50', srv.indexOf("require('./posty-nivel50')") < 0);
 
 console.log('== 7. M78: funciones auditadas ==');
-const fns = ['pzNivelPantallaHTML', 'pzNivelRachaCardHTML', 'pzNivelMisionesHTML', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelEnviarRespuesta', 'pzNivelRecargar'];
+const fns = ['pzNivelPantallaHTML', 'pzNivelHoyHTML', 'pzNivelHoyToggleComentario', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelEnviarRespuesta', 'pzNivelRecargar'];
 let auditadas = 0;
 for (const f of fns) {
   const n = count(app, 'function ' + f + '(');

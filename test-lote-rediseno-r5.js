@@ -80,22 +80,22 @@ check('A23 la tira ya no usa ropa: pzProximoPremioTira sin pzRopaPorNivel', !fnS
 
 // ---------- Parte A: estático — la pantalla nueva existe ----------
 console.log('== Parte A: estático — la pantalla nueva existe ==');
-const NIVEL_FNS = ['pzNivelPantallaHTML', 'pzNivelRachaCardHTML', 'pzNivelMisionesHTML', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelHitoActual', 'pzNivelNombre', 'pzNivelAutoCardHTML', 'pzNivelEnviarRespuesta', 'pzNivelRecargar', 'bbNivelContent'];
+const NIVEL_FNS = ['pzNivelPantallaHTML', 'pzNivelHoyHTML', 'pzNivelHoyToggleComentario', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelHitoActual', 'pzNivelNombre', 'pzNivelEnviarRespuesta', 'pzNivelRecargar', 'bbNivelContent'];
 for (const f of NIVEL_FNS) check('A24 función existe: ' + f, appSrc.includes('function ' + f + '('));
 check('A25 dispatch jardin-posty → bbNivelContent', /else if \(tab === 'jardin-posty'\)[^\n]*bbNivelContent\(\)/.test(appSrc));
 check('A26 Nivel pide /api/avatar-level', fnSrc('bbNivelContent').includes("api.get('/api/avatar-level')"));
 check('A27 Nivel pide /api/comments (misión comentario)', fnSrc('bbNivelContent').includes("api.get('/api/comments')"));
 check('A28 Nivel pide /api/photo-mission + /api/ritual/hoy + /api/posts + /api/assets', ['/api/photo-mission', '/api/ritual/hoy', '/api/posts', '/api/assets'].every((e) => fnSrc('bbNivelContent').includes("api.get('" + e + "')")));
-check('A29 misión comentario: panel con original + borrador + Enviar', fnSrc('pzNivelMisionesHTML').includes('Enviar la respuesta') && fnSrc('pzNivelMisionesHTML').includes('pzNivelEnviarRespuesta'));
+check('A29 misión comentario: panel con original + borrador + Enviar (desplegable)', fnSrc('pzNivelHoyHTML').includes('Enviar la respuesta') && fnSrc('pzNivelHoyHTML').includes('pzNivelEnviarRespuesta') && fnSrc('pzNivelHoyHTML').includes('pzNivelHoyToggleComentario'));
 check('A30 enviar respuesta: POST /api/comments/:id/reply + recarga', fnSrc('pzNivelEnviarRespuesta').includes('/reply') && fnSrc('pzNivelEnviarRespuesta').includes('pzNivelRecargar'));
-check('A31 misión foto/video: abren el picker real del chat', fnSrc('pzNivelMisionesHTML').includes('pzSftFotoAlChat') || fnSrc('pzNivelMisionesHTML').includes('pzDockMasFoto'));
-check('A32 el trofeo venta existe y NO se desbloquea solo', fnSrc('pzNivelLogrosHTML').includes('Primera venta por anuncio') && !fnSrc('pzNivelLogrosHTML').includes('ventaPorAnuncio'));
+check('A31 misión foto/video: la fila ES el botón (picker real del chat)', fnSrc('pzNivelHoyHTML').includes('pzSftFotoAlChat') && fnSrc('pzNivelHoyHTML').includes('pzDockMasVideo'));
+check('A32 el trofeo venta existe y NO se desbloquea solo (dice qué hacer)', fnSrc('pzNivelLogrosHTML').includes('Primera venta por anuncio') && fnSrc('pzNivelLogrosHTML').includes('Impulsá un posteo para lograrlo') && !fnSrc('pzNivelLogrosHTML').includes('ventaPorAnuncio') && !fnSrc('pzNivelLogrosHTML').includes('Todavía no'));
 check('A33 postyLevelModal: regla XP real (40/60), no 100/150', !appSrc.includes('100 pts por post, 150 por reel') && slice('function postyLevelModal', 'function streakModalShell').includes('40'));
 check('A34 nombres de nivel del mock en xp-nivel.js', xpSrc.includes('Recién arranca') && xpSrc.includes('Negocio Visible') && xpSrc.includes('Referente del rubro'));
 check('A35 xp-nivel.js: nombres del mock, cero prestigio', fs.readFileSync(path.join(TREE, 'xp-nivel.js'), 'utf8').includes('Referente del rubro') && !fs.readFileSync(path.join(TREE, 'xp-nivel.js'), 'utf8').includes('prestigio'));
 check('A35b server.js usa xp-nivel.js', serverSrc.includes("require('./xp-nivel')"));
 check('A36 /api/avatar-level devuelve respuestas + rachaMax', fs.readFileSync(path.join(TREE, 'xp-nivel.js'), 'utf8').includes('respuestas, rachaMax'));
-for (const c of ['.pz-nivel-head', '.pz-nivel-xpbar', '.pz-nivel-racha', '.pz-nivel-mision', '.pz-nivel-logro', '.pz-nivel-escalera', '.pz-nivel-auto'])
+for (const c of ['.pz-nivel-head', '.pz-nivel-xpbar', '.pz-nivel-hoy', '.pz-nivel-hoy-fila', '.pz-nivel-hoy-check', '.pz-nivel-hoy-vacio', '.pz-nivel-logro', '.pz-nivel-logro-bar', '.pz-nivel-escalera', '.pz-nivel-camino', '.pz-nivel-camino-bar', '.pz-nivel-camino-lock'])
   check('A37 estilo existe: ' + c, cssSrc.includes(c));
 check('A38 styles.css: cero reglas .pz-ropa- / .pz-oficina-', !cssSrc.includes('.pz-ropa-') && !cssSrc.includes('.pz-oficina-'));
 
@@ -106,7 +106,7 @@ check('A40 foto 40 / video 60', xpSrc.includes('XP_POST_BASE = 15') && xpSrc.inc
 check('A41 respuesta +25', xpSrc.includes('XP_RESPUESTA = 25'));
 check('A42 bonos: semana 100, racha 150/300, 100 respuestas 150', xpSrc.includes('XP_PRIMERA_SEMANA = 100') && xpSrc.includes('XP_RACHA_30 = 150') && xpSrc.includes('XP_RACHA_100 = 300') && xpSrc.includes('XP_100_RESPUESTAS = 150'));
 check('A43 primera venta por anuncio NO suma XP (sin dato de ventas)', !xpSrc.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n').toLowerCase().includes('venta'));
-const CALLED = ['pzNivelPantallaHTML', 'pzNivelRachaCardHTML', 'pzNivelMisionesHTML', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelHitoActual', 'pzNivelNombre', 'pzNivelAutoCardHTML', 'pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'albumMondayKey', 'pcTz', 'bbGo', 'esc', 'gzT'];
+const CALLED = ['pzNivelPantallaHTML', 'pzNivelHoyHTML', 'pzNivelHoyToggleComentario', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelHitoActual', 'pzNivelNombre', 'pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'albumMondayKey', 'pcTz', 'bbGo', 'esc', 'gzT'];
 for (const f of CALLED) check('A44 función auditada: ' + f + ' definida', appSrc.includes('function ' + f + '(') || appSrc.includes('const ' + f + ' ='));
 
 // ---------- Parte B: VM — la pantalla como el mock ----------
@@ -129,7 +129,7 @@ function makeCtx(lang) {
     location: { hash: '' },
   };
   vm.createContext(sandbox);
-  const FNS = ['pzNivelNombre', 'pzNivelHitoActual', 'pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelRachaCardHTML', 'pzNivelAutoCardHTML', 'pzNivelMisionesHTML', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelPantallaHTML'];
+  const FNS = ['pzNivelNombre', 'pzNivelHitoActual', 'pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelHoyHTML', 'pzNivelHoyToggleComentario', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelPantallaHTML'];
   for (const f of FNS) {
     const src = fnSrc(f);
     if (!src) { sandbox['__' + f] = () => ''; continue; }
@@ -155,17 +155,17 @@ check('B2 XP: 120 / 500 para el Nivel 5, faltan 380', H.includes('120') && H.inc
 check('B3 XP total: 1.620 acumulados', H.includes('1.620'));
 check('B4 barra XP: 24%', H.includes('width:24%'));
 check('B5 regla 500 XP del 1 al 50', H.includes('500 XP') && H.includes('del 1 al 50'));
-check('B6 racha: 12 días publicando + metas 30/100', H.includes('12 días') && H.includes('30 días') && H.includes('+150 XP') && H.includes('100 días') && H.includes('+300 XP'));
-check('B7 misiones: video 60 + foto 40 + comentario 25', H.includes('Grabá 15 segundos') && H.includes('+60 XP') && H.includes('Subí una foto') && H.includes('+40 XP') && H.includes('Respondé un comentario') && H.includes('+25 XP'));
-check('B8 misión comentario: original + borrador + Enviar', H.includes('Marta') && H.includes('taladro en oferta') && H.includes('sigue en oferta hasta el sábado') && H.includes('Enviar la respuesta'));
-check('B9 auto +15: posteo del día + Automático', H.includes('Se publicó tu posteo del día') && H.includes('+15 XP') && H.includes('Automático'));
-check('B10 logros: semana ✓, 100 respuestas «Vas 3 de 100»', H.includes('Primera semana completa') && H.includes('✓ Conseguido') && H.includes('100 consultas respondidas') && H.includes('Vas 3 de 100'));
-check('B11 trofeo venta bloqueado: «Todavía no»', H.includes('Primera venta por anuncio') && H.includes('Todavía no') && H.includes('+200 XP'));
-check('B12 trofeos racha: «Vas 12 de 30» y «Vas 12 de 100»', H.includes('30 días seguidos') && H.includes('Vas 12 de 30') && H.includes('100 días seguidos') && H.includes('Vas 12 de 100'));
-check('B13 escalera: 5 hitos + «Estás acá» en Negocio Visible', H.includes('Recién arranca') && H.includes('Constante') && H.includes('Conocido en el barrio') && H.includes('Negocio Visible') && H.includes('Referente del rubro') && H.includes('Estás acá'));
-check('B14 footer: 140 XP por día', H.includes('140 XP por día'));
-check('B15 EN: Level 4 + streak + missions', (() => { const h = call(ctxEn, '__pzNivelPantallaHTML(' + JSON.stringify(D) + ')'); return h.includes('Level') && h.includes('12 days') && /missions/i.test(h) && h.includes('Upload a photo') && h.includes('Record 15 seconds') && h.includes('Answer a comment'); })());
-check('B16 sin datos: sin racha ni misiones, cabecera intacta', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify({ nivel: { ok: true, xp: 0, level: 1, levelName: 'Recién arranca', nextXp: 500, nextName: 'Recién arranca', respuestas: 0, rachaMax: 0 }, ritualHoy: null, mission: null, posts: [], assets: [], comments: [] }) + ')'); return h.includes('NIVEL') && h.includes('Recién arranca') && !h.includes('pz-nivel-racha') && !h.includes('Subí una foto'); })());
+check('B6 racha vive en el camino + logros (sin tarjeta amarilla)', H.includes('Racha 12 de 14 días') && H.includes('Vas 12 de 30') && H.includes('Vas 12 de 100') && !H.includes('pz-nivel-racha') && !H.includes('Racha de 12 días publicando'));
+check('B7 Hoy: 140 XP con las 3 misiones + posteo del día', H.includes('Hoy podés sumar 140 XP') && H.includes('Grabá 15 segundos') && H.includes('+60 XP') && H.includes('Subí una foto') && H.includes('+40 XP') && H.includes('Respondé un comentario') && H.includes('+25 XP') && H.includes('Posteo del día') && H.includes('+15 XP'));
+check('B8 misión comentario: original + borrador + Enviar (detalle desplegable)', H.includes('Marta') && H.includes('taladro en oferta') && H.includes('sigue en oferta hasta el sábado') && H.includes('Enviar la respuesta') && H.includes('pzNivelHoyToggleComentario'));
+check('B9 posteo del día +15: fila en Hoy, pendiente = se publica solo', H.includes('Posteo del día') && H.includes('+15 XP') && H.includes('Se publica solo hoy') && H.includes('Automático'));
+check('B10 logros: semana ✓ con barra llena, 100 respuestas «Vas 3 de 100» con barra 3%', H.includes('Primera semana completa') && H.includes('✓ Conseguido') && H.includes('width:100%') && H.includes('100 consultas respondidas') && H.includes('Vas 3 de 100') && H.includes('width:3%'));
+check('B11 trofeo venta bloqueado: dice qué hacer (cero «Todavía no»)', H.includes('Primera venta por anuncio') && H.includes('Impulsá un posteo para lograrlo') && H.includes('+200 XP') && !H.includes('Todavía no'));
+check('B12 trofeos racha: «Vas 12 de 30» y «Vas 12 de 100» con barras 40% y 12%', H.includes('30 días seguidos') && H.includes('Vas 12 de 30') && H.includes('width:40%') && H.includes('100 días seguidos') && H.includes('Vas 12 de 100') && H.includes('width:12%'));
+check('B13 camino: 5 hitos + «ESTÁS ACÁ» en Negocio Visible + siguiente y bloqueados', H.includes('Recién arranca') && H.includes('Constante') && H.includes('Conocido en el barrio') && H.includes('Negocio Visible') && H.includes('Referente del rubro') && H.includes('ESTÁS ACÁ') && H.includes('Racha 12 de 14 días') && H.includes('width:86%') && H.includes('5 respuestas para desbloquearlo') && H.includes('Te faltan 46 niveles'));
+check('B14 cero «La cuenta es simple»: el 140 vive en Hoy', H.includes('Hoy podés sumar 140 XP') && !H.includes('La cuenta es simple') && !H.includes('The math is simple'));
+check('B15 EN: Level 4 + streak path + earn 140 XP today', (() => { const h = call(ctxEn, '__pzNivelPantallaHTML(' + JSON.stringify(D) + ')'); return h.includes('Level') && h.includes('Streak 12 of 14 days') && h.includes('You can earn 140 XP today') && h.includes('Upload a photo') && h.includes('Record 15 seconds') && h.includes('Answer a comment'); })());
+check('B16 sin datos: solo el posteo del día en Hoy (15 XP), cabecera intacta', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify({ nivel: { ok: true, xp: 0, level: 1, levelName: 'Recién arranca', nextXp: 500, nextName: 'Recién arranca', respuestas: 0, rachaMax: 0 }, ritualHoy: null, mission: null, posts: [], assets: [], comments: [] }) + ')'); return h.includes('NIVEL') && h.includes('Recién arranca') && !h.includes('pz-nivel-racha') && !h.includes('Subí una foto') && h.includes('Hoy podés sumar 15 XP') && h.includes('Posteo del día'); })());
 check('B17 nivel 50: Nivel máximo', (() => { const h = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify({ nivel: { ok: true, xp: 24500, level: 50, levelName: 'Referente del rubro', nextXp: null, nextName: null, respuestas: 120, rachaMax: 100 }, ritualHoy: { racha: 100, publicadoHoy: true }, mission: null, posts: [], assets: [], comments: [] }) + ')'); return h.includes('Nivel máximo') && h.includes('Referente del rubro') && h.includes('✓ Conseguido'); })());
 check('B18 hito actual: racha 14 → Constante', call(ctxEs, "__pzNivelHitoActual({level:2,respuestas:0,rachaMax:14}).nombre") === 'Constante');
 check('B19 hito actual: 5 respuestas → Conocido en el barrio', call(ctxEs, "__pzNivelHitoActual({level:2,respuestas:5,rachaMax:3}).nombre") === 'Conocido en el barrio');
@@ -173,6 +173,15 @@ check('B20 hito actual: nivel 1 → Recién arranca', call(ctxEs, "__pzNivelHito
 check('B21 nombre por nivel: 1–3 Recién arranca, 4–49 Negocio Visible, 50 Referente', call(ctxEs, '__pzNivelNombre(1)') === 'Recién arranca' && call(ctxEs, '__pzNivelNombre(3)') === 'Recién arranca' && call(ctxEs, '__pzNivelNombre(4)') === 'Negocio Visible' && call(ctxEs, '__pzNivelNombre(49)') === 'Negocio Visible' && call(ctxEs, '__pzNivelNombre(50)') === 'Referente del rubro');
 check('B22 cero botones muertos: todo botón tiene onclick', (() => { const btns = H.match(/<button[^>]*>/g) || []; return btns.length >= 3 && btns.every((b) => /onclick=/.test(b)); })());
 check('B23 cero «jardín» / «garden» / «premio» en la pantalla', !/jard[ií]n|garden|premio|prize/i.test(H));
+const D2 = { nivel: { ok: true, xp: 520, level: 2, levelName: 'Recién arranca', nextXp: 1000, nextName: 'Recién arranca', respuestas: 0, rachaMax: 1 }, ritualHoy: { racha: 1, publicado_hoy: true }, mission: { need: 'una foto de tu plato más pedido', done: true }, posts: [{ status: 'scheduled', media_type: 'video', scheduled_at: '2026-11-12 19:00' }], assets: [], comments: [{ id: 7, username: 'Marta', text: '¿Tienen el taladro en oferta todavía?', suggested: '¡Hola, Marta! Sí, sigue en oferta hasta el sábado.', status: 'pending', created_at: '2026-11-08 10:00:00' }] };
+const H2 = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify(D2) + ')');
+check('B24 mock Valentino: héroe NIVEL 2, 20/500, faltan 480, 520 total, barra 4%', H2.includes('NIVEL') && H2.includes('>2<') && H2.includes('Recién arranca') && H2.includes('20 / 500 XP') && H2.includes('480') && H2.includes('520') && H2.includes('width:4%'));
+check('B25 mock Valentino: Hoy 140 XP con foto ✓, video y comentario pendientes, posteo ✓', H2.includes('Hoy podés sumar 140 XP') && H2.includes('¡Foto subida!') && H2.includes('Grabá 15 segundos') && H2.includes('Respondé un comentario') && H2.includes('Posteo del día'));
+check('B26 mock Valentino: camino actual/siguiente/bloqueados', H2.includes('ESTÁS ACÁ') && H2.includes('Racha 1 de 14 días') && H2.includes('width:7%') && H2.includes('5 respuestas para desbloquearlo') && H2.includes('Te faltan 2 niveles') && H2.includes('Te faltan 48 niveles'));
+check('B27 mock Valentino: logros con barras + cero «Todavía no» + cero tarjeta de racha', H2.includes('Vas 1 de 7') && H2.includes('width:14%') && H2.includes('Vas 1 de 30') && H2.includes('Vas 0 de 100') && H2.includes('Impulsá un posteo para lograrlo') && !H2.includes('Todavía no') && !H2.includes('Racha de 1 días publicando') && !H2.includes('pz-nivel-racha'));
+check('B28 mock Valentino EN: Level 2 + earn 140 XP today + streak path', (() => { const h = call(ctxEn, '__pzNivelPantallaHTML(' + JSON.stringify(D2) + ')'); return h.includes('Level') && h.includes('You can earn 140 XP today') && h.includes('Streak 1 of 14 days') && h.includes('5 replies to unlock it') && h.includes('You need 2 more levels') && h.includes('Boost a post to earn it'); })());
+check('B29 posteo del día: el campo REAL publicado_hoy (snake_case) marca la fila hecha; el camelCase viejo también', (() => { const hSnake = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify(Object.assign({}, D2, { ritualHoy: { racha: 1, publicado_hoy: true } })) + ')'); const hCamel = call(ctxEs, '__pzNivelPantallaHTML(' + JSON.stringify(Object.assign({}, D2, { ritualHoy: { racha: 1, publicadoHoy: true } })) + ')'); return hSnake.includes('Se publicó solo') && !hSnake.includes('Se publica solo hoy') && hCamel.includes('Se publicó solo'); })());
+check('B30 orden del mock: héroe, Hoy, camino, logros, pie', (() => { const iH = H2.indexOf('Hoy podés sumar'); const iC = H2.indexOf('Tus niveles'); const iL = H2.indexOf('Logros'); const iP = H2.indexOf('Cada nivel son 500 XP'); return iH > 0 && iH < iC && iC < iL && iL < iP; })());
 
 // ---------- Parte C: boot real ----------
 function req(method, p, body, ctype, cookie) {

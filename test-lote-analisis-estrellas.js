@@ -57,8 +57,8 @@ const bindSlice = sliceOk(app, 'function bindSignalBtns()', '// Calendario comer
 console.log('— 0) pines —');
 check('0a app.js cambió vs base v805', md5(app) !== 'aaae05c2ddcc444b71c203daea11ff98', md5(app));
 check('0b styles.css cambió vs base v805', md5(css) !== 'e1261ef04f791cec22e85513a95bd8fb', md5(css));
-check('0c server.js = v817 estampado (SOLO línea BUILD; el XP vive en xp-nivel.js, no acá)',
-  md5(srv) === '34104ab6825bb23d3af6b43129496082', md5(srv));
+check('0c server.js = v818 estampado (SOLO línea BUILD; el XP vive en xp-nivel.js, no acá)',
+  md5(srv) === '5d51100ed9214944e110d8774d8953fb', md5(srv));
 check('0d xp-nivel.js cambió vs base v805', md5(xpn) !== 'e28ccb63b0685d3f37210ef6186bb877', md5(xpn));
 
 // ---------- Parte 1: estática — estrellitas ----------
@@ -95,8 +95,6 @@ check('3b título de la píldora (cache) con singular inline',
 check('3c píldora del encabezado (fill async) con singular inline', app.includes("const rachaTxt = '🔥 ' + (r.racha === 1 ? (en ? '1 day' : '1 día')"));
 check('3d título de la píldora (fill async) con singular inline',
   app.includes("('Streak: ' + (r.racha === 1 ? '1 day' : r.racha + ' days') + ' posting')") && app.includes("('Racha de ' + (r.racha === 1 ? '1 día' : r.racha + ' días') + ' publicando')"));
-check('3e tarjeta de racha de Nivel con singular inline (ES + EN)',
-  app.includes("((n === 1 ? '1 day' : n + ' days') + ' posting in a row')") && app.includes("('Racha de ' + (n === 1 ? '1 día' : n + ' días') + ' publicando')"));
 check('3f banner de ausencia de Nivel con singular inline (ES + EN)',
   app.includes("While you were away (${nv.ausencia.dias === 1 ? '1 day'") && app.includes("Mientras no estabas (${nv.ausencia.dias === 1 ? '1 día'"));
 check('3g cero restos del plural sin singular',
@@ -113,10 +111,7 @@ let vmAsync = Promise.resolve();
 {
   let bindSrc = '';
   try { bindSrc = sliceFn(app, 'function bindSignalBtns()', '// Calendario comercial argentino'); } catch (e) {}
-  // La tarjeta de racha se extrae como función suelta (igual que las suites vecinas).
-  const rachaRe = /function pzNivelRachaCardHTML\([^)]*\) \{[\s\S]*?\n\}/;
-  const rachaM = app.match(rachaRe);
-  if (!bindSrc || !rachaM) {
+  if (!bindSrc) {
     // Árbol sin parche (rojo-primero): los checks de VM no pueden correr; se reportan como fallos en vez de romper la suite.
     const names = ['4a click estrella 4: POST /api/posts/42/signal rating_4, UNA sola vez',
       '4b estrellas 1–4 llenas (starFill + .on), la 5ª queda vacía',
@@ -125,13 +120,7 @@ let vmAsync = Promise.resolve();
       '4e click estrella 1: solo la 1ª llena, resto vacío',
       '4f POST fallido: botones re-habilitados + toast «No se guardó, probá de nuevo»',
       '4g POST fallido: ninguna estrella se llena ni hay gracias',
-      '4h EN: gracias «Thanks! Noted.»',
-      '4i tarjeta de racha extraíble del app.js',
-      '4j racha 1 ES: «1 día» (no «1 días»)',
-      '4k racha 1 EN: «1 day posting in a row»',
-      '4l racha 2 ES: «2 días»',
-      '4m racha 2 EN: «2 days posting in a row»',
-      '4n racha 12 ES + racha 0 ES (plural intacto, «Hoy empieza tu racha»)'];
+      '4h EN: gracias «Thanks! Noted.»'];
     for (const n of names) check(n, false, 'árbol sin parche (bindSignalBtns/pzNivelRachaCardHTML ausente)');
   } else {
   function makeSandbox(failPost) {
@@ -208,32 +197,6 @@ let vmAsync = Promise.resolve();
     check('4h EN: gracias «Thanks! Noted.»',
       t4.thanksEls.length === 1 && t4.thanksEls[0].textContent === 'Thanks! Noted.',
       JSON.stringify(t4.thanksEls.map((e) => e.textContent)));
-    // Tarjeta de racha en VM (función suelta, stubs como las vecinas).
-    const mkRachaCtx = (lang) => {
-      const sb2 = { ME: { lang }, console,
-        gzT: (es, en) => (lang === 'en' ? en : es),
-        esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
-        pzIc: () => '', bbGo: () => {}, albumMondayKey: () => '2026-11-09', pcTz: () => 'America/Argentina/Buenos_Aires' };
-      vm.createContext(sb2);
-      vm.runInContext(rachaM[0] + '\nthis.__racha = pzNivelRachaCardHTML;', sb2);
-      return sb2;
-    };
-    const callRacha = (ctx, expr) => { try { return vm.runInContext(expr, ctx); } catch (e) { return 'VMERR:' + e.message; } };
-    const ctxEs = mkRachaCtx('es'), ctxEn = mkRachaCtx('en');
-    check('4i tarjeta de racha extraíble del app.js', !!rachaM);
-    const h1es = callRacha(ctxEs, "__racha({racha:1}, false)");
-    check('4j racha 1 ES: «1 día» (no «1 días»)', typeof h1es === 'string' && h1es.includes('1 día') && !h1es.includes('1 días'), String(h1es).slice(0, 200));
-    const h1en = callRacha(ctxEn, "__racha({racha:1}, true)");
-    check('4k racha 1 EN: «1 day posting in a row»', typeof h1en === 'string' && h1en.includes('1 day posting in a row'), String(h1en).slice(0, 200));
-    const h2es = callRacha(ctxEs, "__racha({racha:2}, false)");
-    check('4l racha 2 ES: «2 días»', typeof h2es === 'string' && h2es.includes('2 días'), String(h2es).slice(0, 200));
-    const h2en = callRacha(ctxEn, "__racha({racha:2}, true)");
-    check('4m racha 2 EN: «2 days posting in a row»', typeof h2en === 'string' && h2en.includes('2 days posting in a row'), String(h2en).slice(0, 200));
-    const h12 = callRacha(ctxEs, "__racha({racha:12}, false)");
-    const h0 = callRacha(ctxEs, "__racha({racha:0}, false)");
-    check('4n racha 12 ES + racha 0 ES (plural intacto, «Hoy empieza tu racha»)',
-      typeof h12 === 'string' && h12.includes('Racha de 12 días publicando') && typeof h0 === 'string' && h0.includes('Hoy empieza tu racha'),
-      String(h12).slice(0, 120) + ' | ' + String(h0).slice(0, 120));
   });
   }
 }
@@ -276,10 +239,10 @@ async function parteBoot() {
     check('5a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('5b /api/version = v817 (estampado)', ver && ver.build === '20261105-v817', JSON.stringify(ver));
+    check('5b /api/version = v818 (estampado)', ver && ver.build === '20261105-v818', JSON.stringify(ver));
     const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=540`)).text();
-    check('5c el app.js servido trae el lote (starFill + gracias + singular inline)',
-      appJs.includes("pzIc('starFill', 18)") && appJs.includes('st-rate-gracias') && appJs.includes("(n === 1 ? '1 día'"), 'len ' + appJs.length);
+    check('5c el app.js servido trae el lote (starFill + gracias)',
+      appJs.includes("pzIc('starFill', 18)") && appJs.includes('st-rate-gracias'), 'len ' + appJs.length);
     const join = await reqJson('POST', '/api/trial/chat-onboarding?test_key=' + TEST_KEY, { kind: 'join', ig: 'ae-test', device: 'test-device-ae' });
     check('5d join del invitado ok', join.status === 200 && join.json && join.json.ok === true && join.json.user_id > 0, JSON.stringify(join.json));
     if (!join.json || !join.json.user_id) throw new Error('sin join');

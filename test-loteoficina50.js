@@ -61,7 +61,7 @@ t(!srv.includes("'/api/oficina/jardin-semilla-regalo'") && !srv.includes("'/api/
   };
   sb.gzT = (es, en) => (sb.ME && sb.ME.lang === 'en') ? en : es;
   vm.createContext(sb);
-  for (const f of ['pzNivelNombre', 'pzNivelHitoActual', 'pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelRachaCardHTML', 'pzNivelAutoCardHTML', 'pzNivelMisionesHTML', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelPantallaHTML']) {
+  for (const f of ['pzNivelNombre', 'pzNivelHitoActual', 'pzNivelDiaSemana', 'pzNivelReelSemana', 'pzNivelVideoSemana', 'pzNivelNeedEn', 'pzNivelHoyHTML', 'pzNivelHoyToggleComentario', 'pzNivelLogrosHTML', 'pzNivelEscaleraHTML', 'pzNivelPantallaHTML']) {
     const src = fnSrc(f);
     t(src.length > 0, 'vm carga ' + f);
     if (src) vm.runInContext(src + '\nthis.__' + f + ' = ' + f + ';', sb);
