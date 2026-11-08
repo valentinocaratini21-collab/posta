@@ -35,7 +35,7 @@ const sliceFn = (src, from, to) => {
   // ---------- 1. Censo (sin cambio) + base v756, re-base v759 ----------
   // (LOTE ADS-DIRECTO v759: pins del preparador — BUILD v759, CHUNK_V v759,
   // 14 rutas /api/ads (12 + feed + auto); el picker usa anaCortarCaption.)
-  t(srv.includes("const BUILD_ID = '20261105-v780'"), 'server: BUILD v780');
+  t(srv.includes("const BUILD_ID = '20261105-v782'"), 'server: BUILD v782');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -45,8 +45,8 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-  t(app.includes("const CHUNK_V = '20261105-v778'"), 'CHUNK_V v778');
-  t(md5(app) === 'c54665ee2ac59c8407990105667709f2', 'app.js md5 (re-pin sacar-lápiz-perfil: sale el lápiz + hfEditOpen + lámina; antes v774 ads-solo-publicados)');
+  t(app.includes("const CHUNK_V = '20261105-v782'"), 'CHUNK_V v782');
+  t(md5(app) === 'e2f757aa5830d3c189c520cbdeaa3734', 'app.js md5 (re-pin carta-sin-estrategia-ni-ads v782: CHUNK_V v778→v782; antes v780 sacar-lápiz-perfil)');
   t(md5(css) === '4020c97403bca8e338a7e281d0935b75', 'styles.css md5 v772 (re-pin entrada-logo-ig; antes v768 plan-alinear)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
 
@@ -291,7 +291,7 @@ const sliceFn = (src, from, to) => {
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v780', `boot: /api/version 20261105-v780 (vino ${ver.build})`);
+      t(ver.build === '20261105-v782', `boot: /api/version 20261105-v782 (vino ${ver.build})`);
       // Sin sesión: 401 en los endpoints nuevos.
       const s1 = await api('', 'GET', '/api/ads/billetera/buscar?q=cafe');
       t(s1.status === 401, 'boot: sin sesión, buscar → 401');

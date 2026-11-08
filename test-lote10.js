@@ -119,13 +119,13 @@ ok(!/gzT\('Análisis'/.test(APP), '5: sin tab Análisis en app.js');
 ok(CH.includes('domingo 20:00') || CH.includes('20:00–22:59'),
   '5: la ventana domingo 20:00–22:59 sigue documentada (lógica intacta)');
 
-// ---------- 6) Carta Estrategia: simple + primera línea exacta ----------
-ok(CH.includes("anaT('la estrategia para esta semana', 'the strategy for this week')") && CH.includes('ana-ltr-first'),
-  '6: primera línea exacta ES/EN con clase ana-ltr-first');
-ok(CH.includes('if (a) h += `<p class="ana-ltr-first"'),
-  // (LOTE 15 · cambio intencional) La primera línea ya no exige carta
-  // guardada: va en ambos caminos cuando hay análisis.
-  '6b: primera línea en ambos caminos con análisis');
+// ---------- 6) Carta Estrategia: simple, sin primera línea de rótulo ----------
+// (7/11, decisión Valentino — CARTA-SIN-ESTRATEGIA-NI-ADS: la línea del
+// rótulo salió; la carta YA ES la estrategia, no hace falta aclararlo.)
+ok(!CH.includes("anaT('la estrategia para esta semana', 'the strategy for this week')"),
+  '6: primera línea fuera (sin el rótulo ES/EN)');
+ok(!CH.includes('if (a) h += `<p class="ana-ltr-first"'),
+  '6b: primera línea fuera de ambos caminos');
 ok(MOT.includes("'. Sostenerlo y afinarlo es mi trabajo.'") && !MOT.includes('para eso estoy.'),
   '6: festejo sin cola larga (fuerte)');
 ok(MOT.includes("'. Sobre eso construimos.'") && !MOT.includes('no partimos de cero.'),

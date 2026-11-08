@@ -132,7 +132,7 @@ const ds = require(path.join(__dirname, 'destacado-semana.js'));
     const hOff = sb2.anaBoostRecHTML({ mejor: { post_id: 9, image_path: '', caption: '', reach: 10, likes: 2, comments: 0, saved: 0 }, boostHabilitado: false });
     t(!hOff.includes('$20') && hOff.includes('todavía no está habilitado'), 'flag off: sin botones muertos, nota honesta');
   }
-  t(cnt(chunk, 'id="anaBoostRec"') === 2, 'placeholder en ambas ramas de la carta');
+  t(cnt(chunk, 'id="anaBoostRec"') === 0, 'placeholder fuera de ambas ramas de la carta (decisión 7/11: ads vive en el tab Ads)');
   t(chunk.includes('anaBoostRecLoad()') && chunk.includes('async function anaBoostRecLoad'), 'loader conectado al render (anaLoad + anaBackCurrent)');
   t(chunk.includes("api.get('/api/estrategia/mejor-posteo')"), 'loader: pide mejor-posteo');
   t(chunk.includes("api.post('/api/destacado/impulsar'"), 'confirmar: postea impulsar con posteoId');

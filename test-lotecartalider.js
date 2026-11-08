@@ -254,7 +254,7 @@ if (aEN && aEN.letter) {
 
 /* ---------- No se tocó lo demás ---------- */
 ok(!chunk.includes('ana-fl-confirm'), 'confirmación semanal ana-fl-confirm FUERA de la carta (decisión 6/11: la carta termina en Compartir)');
-ok(chunk.includes('<div id="anaBoostRec">'), 'superficie Impulsar (anaBoostRec) intacta en la carta');
+ok(!chunk.includes('<div id="anaBoostRec">'), 'superficie Impulsar (anaBoostRec) FUERA de la carta (decisión 7/11)');
 ok(chunk.includes('anaBanner') && chunk.includes('anaSignHTML'), 'banner de cierre y firma intactos en la carta');
 ok(chunk.includes('ana-carta-mano'), 'carta-mano intacta');
 ok(chunk.includes('function anaSaludoTop'), 'saludo con nombre del negocio (anaSaludoTop) intacto');

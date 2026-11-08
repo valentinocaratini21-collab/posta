@@ -131,7 +131,7 @@ ok(html.indexOf('De tu lado') < html.indexOf('Gracias por trabajar con Posty.'),
 ok(html.includes('anaFullBtn'), 'botón Ver mi estrategia completa intacto');
 ok(!html.includes('ana-fl-confirm'), 'ana-fl-confirm FUERA de la carta (decisión 6/11: la carta termina en Compartir)');
 ok(!html.includes('ana-refresh'), 'nota de actualización FUERA de la carta (decisión 6/11)');
-ok(html.includes('anaBoostRec'), 'anaBoostRec (Impulsar) intacto');
+ok(!html.includes('anaBoostRec'), 'anaBoostRec (Impulsar) FUERA de la carta (decisión 7/11: ads vive en el tab Ads)');
 ok(html.includes('ana-carta-mano'), 'carta-mano intacta');
 ok(chunk.includes('function anaAprendeHTML'), 'anaAprendeHTML sigue en el chunk');
 ok(chunk.includes('function anaBoostRecHTML'), 'anaBoostRecHTML sigue en el chunk');

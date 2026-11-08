@@ -1006,10 +1006,10 @@ function anaCartaHTML(d) {
   // ana-ltr-first, del week_summary y de los 3 bloques de carta-corta.
   // Sin nombre, nada.
   if (saludoTop) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(saludoTop)}</p>`;
-  // (LOTE 15 · carta Estrategia) Primera línea SIEMPRE que haya un
-  // análisis (con carta guardada y sin ella): la frase exacta, en el
-  // idioma de la carta, una sola vez. Sin análisis no hay línea.
-  if (a) h += `<p class="ana-ltr-first">${anaT('la estrategia para esta semana', 'the strategy for this week')}</p>`;
+  // (CARTA-SIN-ESTRATEGIA-NI-ADS 7/11, decisión Valentino) La línea
+  // del rótulo (la frase que anunciaba la estrategia de la semana)
+  // salió: la carta YA ES la estrategia, no hace falta aclararlo.
+  // Sin línea.
   // (LOTE CEREBRO-CM) Tema de la semana actual, solo en la carta actual
   // (nunca en cartas viejas) y solo si hay semana guardada. Sin tema,
   // la carta sale como siempre.
@@ -1050,12 +1050,10 @@ function anaCartaHTML(d) {
     // se rinde en la carta (ni v1 ni mínima v2): la frase «Esta semana
     // miré tu cuenta y vi que…» repetía lo que el cuerpo ya dice. El
     // dato sigue en el payload y en la vista sin carta.
-    // (LOTE ADS-BILLETERA · base IMPULSAR-UN-CLIC) El bloque de ads vive
-    // DENTRO de la carta, justo después del cuerpo (las 3 partes) y antes
-    // del resto: muy a la vista en la carta del domingo, no después de
-    // ella. La carta sigue recomendando qué posteo rindió más; la
-    // billetera + el picker dejan la elección en el cliente.
-    h += `<div id="anaBoostRec"></div>`;
+    // (CARTA-SIN-ESTRATEGIA-NI-ADS 7/11, decisión Valentino) El bloque
+    // de ads salió de la carta: ads ya tiene su lugar (tab Ads). La
+    // carta sigue recomendando qué posteo rindió más en su cuerpo; la
+    // billetera + el picker + Cargar viven en el tab Ads.
     // (ESTUDIO-PROFUNDO · M6 RE-ESTUDIO SEMANAL) La tarjeta «qué cambió»
     // vive DENTRO de la carta, después del cuerpo y antes de «Compartir
     // mi semana»: el cliente ve qué cambió su negocio esta semana sin
@@ -1104,10 +1102,9 @@ function anaCartaHTML(d) {
   }
   h += `<div class="ana-banner">${esc(anaBanner(stage, ctx))}</div>`;
   h += anaSignHTML(birth);
-  // (LOTE ADS-BILLETERA · base IMPULSAR-UN-CLIC) Sin carta guardada no hay
-  // carta del domingo, pero el bloque sigue DENTRO de la tarjeta, no
-  // después de ella.
-  h += `<div id="anaBoostRec"></div>`;
+  // (CARTA-SIN-ESTRATEGIA-NI-ADS 7/11, decisión Valentino) Sin carta
+  // guardada tampoco hay bloque de ads en la tarjeta: ads vive en el
+  // tab Ads.
   // (ESTUDIO-PROFUNDO · M6 RE-ESTUDIO SEMANAL) Vista sin carta: la
   // tarjeta «qué cambió» va junto a la nota de actualización semanal.
   h += `<div id="anaRestudioBox"></div>`;

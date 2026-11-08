@@ -176,7 +176,7 @@ if (v1Src) {
     && !v1Html.includes('ana-ltr-sec'),
     'v1: forma plana con fases y efecto, sin secciones — las cartas viejas conservan su forma');
 }
-ok(chunk.includes('<div id="anaBoostRec">'), 'superficie Impulsar (anaBoostRec) intacta en la carta');
+ok(!chunk.includes('<div id="anaBoostRec">'), 'superficie Impulsar (anaBoostRec) FUERA de la carta (decisión 7/11)');
 ok(chunk.includes('anaBanner') && chunk.includes('anaSignHTML'), 'banner de cierre y firma intactos en la carta');
 ok(serverJs.includes("app.get('/carta/:token'"), 'página firmada /carta/:token intacta en server.js');
 ok(serverJs.includes('Escuchá tu carta') && serverJs.includes('Listen to your letter'), 'botón del email ES + EN intacto en server.js');

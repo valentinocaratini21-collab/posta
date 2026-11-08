@@ -11,6 +11,10 @@
    3) Fuera todo lo que está debajo de «Compartir mi semana» en la
       carta: nota de actualización, «¿Qué vendés esta semana?» y Aprende.
       Impulsar (#anaBoostRec) queda: vive ANTES del botón.
+   (7/11, decisión Valentino — CARTA-SIN-ESTRATEGIA-NI-ADS: la línea
+   «la estrategia para esta semana» sale (la carta YA ES la estrategia)
+   y el Impulsar (#anaBoostRec) sale de la carta (ads vive en el tab
+   Ads). Las checks de §2 y §5 quedaron invertidas a «sin».)
    Corre con: node test-lote-carta-estrategia.js (desde la raíz del árbol). */
 const fs = require('fs');
 const path = require('path');
@@ -131,10 +135,10 @@ global.anaLang = 'es';
 const html = global.anaCartaHTML(carta3());
 const txt = stripTags(html);
 ok(html.includes('class="ana-ltr-p ana-ltr-greet"'), 'render: saludo con clase ana-ltr-greet');
-ok(html.includes('class="ana-ltr-first"'), 'render: línea con clase ana-ltr-first');
+ok(!html.includes('class="ana-ltr-first"'), 'render: sin línea ana-ltr-first (decisión 7/11)');
 ok(html.includes('Hola, Posty:'), 'render: saludo «Hola, Posty:»');
-ok(html.includes('la estrategia para esta semana'), 'render: línea «la estrategia para esta semana»');
-ok(html.indexOf('Hola, Posty:') < html.indexOf('la estrategia para esta semana'), 'render: saludo arriba, línea después');
+ok(!html.includes('la estrategia para esta semana'), 'render: sin la línea «la estrategia para esta semana» (decisión 7/11)');
+ok(html.indexOf('Hola, Posty:') < html.indexOf('Primero festejemos'), 'render: saludo arriba, cuerpo después');
 
 // ---------- 3. «miré tu cuenta» fuera de TODAS las ramas de la carta ----------
 ok(!txt.includes('miré tu cuenta'), 'v2 mínima ES: sin «miré tu cuenta»');
@@ -171,9 +175,10 @@ ok(afterReturn.includes('ana-refresh'), 'vista sin carta conserva el refresh');
 ok(afterReturn.includes('anaAprendeHTML(d)'), 'vista sin carta conserva Aprende');
 ok((chunk.match(/h \+= anaAprendeHTML\(d\);/g) || []).length === 1, 'anaAprendeHTML llamada solo 1 vez en todo el chunk (rama sin carta)');
 
-// ---------- 5. Lo que queda: Impulsar, Ver completa, cuerpo ----------
-ok(html.includes('anaBoostRec'), 'Impulsar (#anaBoostRec) sigue en la carta');
-ok(html.indexOf('anaBoostRec') > html.indexOf('Qué mejoramos'), 'Impulsar después del cuerpo');
+// ---------- 5. Lo que queda: Ver completa, cuerpo (sin Impulsar) ----------
+// (7/11, decisión Valentino) Impulsar (#anaBoostRec) salió de la carta:
+// ads vive en el tab Ads. La carta queda como carta de estrategia.
+ok(!html.includes('anaBoostRec'), 'carta: sin Impulsar (#anaBoostRec) (decisión 7/11)');
 ok(html.includes('anaFullBtn'), 'botón Ver mi estrategia completa intacto');
 ok(html.includes('Primero festejemos'), 'cuerpo intacto (festejo)');
 ok(count(html, 'la semana suma reels') === 1, 'mejora sigue 1 vez');
@@ -186,6 +191,7 @@ ok(serverJs.includes('week_summary: analysisEngine.weekSummary(analysis)'), 'wee
 // Vista sin carta: el week_summary SÍ se rinde (apertura).
 const htmlNoCarta = global.anaCartaHTML({ analysis: null, week_summary: WS_DUP, temaSemana: null });
 ok(stripTags(htmlNoCarta).includes('miré tu cuenta'), 'vista sin carta: el week_summary sigue abriendo la ventana');
+ok(!htmlNoCarta.includes('anaBoostRec'), 'vista sin carta: sin Impulsar (#anaBoostRec) (decisión 7/11)');
 
 console.log(`\nLOTE CARTA-ESTRATEGIA: ${okN} OK, ${failN} FALLIDOS`);
 process.exit(failN ? 1 : 0);
