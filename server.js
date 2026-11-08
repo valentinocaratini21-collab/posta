@@ -10658,6 +10658,22 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
   // Cualquier valor distinto de 'design' cae a 'photo'.
   const qk = req.query.kind;
   const kind = qk === 'design' ? 'design' : 'photo';
+  // TOPE-ALBUM-20: una foto = un lugar en el álbum. Esta puerta no tenía
+  // tope y cada foto del chat sumaba acá + otra vez en /api/album/photo:
+  // 10 fotos llenaban el álbum (20 filas) y la segunda tanda no armaba
+  // propuesta. El tope es el mismo del álbum (fotos+videos, 20) con el
+  // mismo mensaje honesto — pero SOLO para las fotos del chat
+  // (?from=chat, lo que manda chatUploadPhotos). /api/media tiene otros
+  // llamadores que NO son fotos del usuario: imágenes generadas (Hacerlo
+  // posteo, historias, creator) que suben un PNG sin ?kind=design y hoy
+  // quedan kind='photo' — toparlas rompería la generación de posteos e
+  // historias con el álbum lleno. Esos llamadores no mandan from=chat y
+  // quedan como hoy (sin tope); el chat es la puerta que llenaba el
+  // álbum en una tanda. Los diseños (kind='design') tampoco se topan.
+  if (req.query.from === 'chat' && kind === 'photo') {
+    const nAlb = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind IN ('photo','video')`).get(req.session.userId).c;
+    if (nAlb >= 20) return res.status(400).json({ error: 'tu álbum llegó a 20 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
+  }
   // (Gap 10, 2026-10-25) La foto real del cliente se normaliza al entrar
   // (EXIF + JPEG, HEIC incluido); los diseños generados por la app quedan
   // con el guardado histórico. (La declaración de `kind` subió sobre su
@@ -10668,10 +10684,13 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
   if (!savedMedia) fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
   const filePath = `/media/${name}`;
   if (kind !== 'video') makeVariantsAsync(path.join(MEDIA_DIR, name));
+  // TOPE-ALBUM-20: se devuelve el id de la fila para que el álbum la
+  // ADOPTE (?adopt=id) en vez de insertar otra — una foto, una fila.
+  let mediaId = 0;
   try {
-    db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(req.session.userId, filePath, kind);
+    mediaId = db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(req.session.userId, filePath, kind).lastInsertRowid;
   } catch (e) { console.error('[media] assets insert:', e.message); }
-  res.json({ path: filePath });
+  res.json({ path: filePath, id: mediaId });
 });
 
 // ---------- Librería de medios del cliente (fotos + logo) ----------
@@ -11670,6 +11689,36 @@ app.post('/api/assets/:id/formatos', requireAuth, express.json(), async (req, re
 app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req, res) => {
   try {
     const uid = req.session.userId;
+    // TOPE-ALBUM-20: ADOPTAR una fila ya creada por /api/media (chat) o
+    // /api/assets (video). El chat sube la foto dos veces (media + álbum)
+    // y cada una insertaba su fila: 10 fotos = 20 filas = álbum lleno.
+    // Con ?adopt=<id de assets> se reusa esa fila (misión + tag + calidad
+    // sobre ella) sin guardar otro archivo ni insertar otra fila. El tope
+    // no se re-chequea: la fila ya está contada. Si el adopt no resuelve
+    // (fila borrada, de otro usuario, archivo ausente), se sigue con el
+    // flujo normal con los bytes del body.
+    const adoptId = parseInt(String(req.query.adopt || ''), 10);
+    if (adoptId > 0) {
+      const row = db.prepare(`SELECT id, file_path, kind, thumb_path FROM assets WHERE id = ? AND user_id = ?`).get(adoptId, uid);
+      if (row && (row.kind === 'photo' || row.kind === 'video') && row.file_path) {
+        const fullAdopt = path.join(MEDIA_DIR, path.basename(row.file_path));
+        if (fs.existsSync(fullAdopt)) {
+          if (row.kind === 'video') {
+            return res.json({ ok: true, id: row.id, path: row.file_path, kind: 'video', thumb: row.thumb_path || '', mission_done: false, quality_issues: [] });
+          }
+          const missionAdopt = albumMission(uid);
+          let missionDoneAdopt = !!missionAdopt.done_at;
+          if (!missionDoneAdopt) {
+            try { db.prepare(`UPDATE album_missions SET done_at = datetime('now'), photo_id = ? WHERE user_id = ? AND week_key = ?`).run(row.id, uid, missionAdopt.week_key); missionDoneAdopt = true; } catch (e) {}
+          }
+          let detIssuesAdopt = [];
+          try { const mAdopt = await measurePhotoQuality(fullAdopt).catch(() => null); detIssuesAdopt = qualityIssuesFromMetrics(mAdopt); } catch (e) {}
+          res.json({ ok: true, id: row.id, path: row.file_path, kind: 'photo', mission_done: missionDoneAdopt, quality_issues: detIssuesAdopt });
+          tagAlbumPhoto(uid, row.id, row.file_path, langOfUser(uid));
+          return;
+        }
+      }
+    }
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Archivo vacío' });
     const ct = req.get('Content-Type') || '';
     const isVideo = ct.startsWith('video/');
@@ -32369,7 +32418,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v786';
+const BUILD_ID = '20261105-v788';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

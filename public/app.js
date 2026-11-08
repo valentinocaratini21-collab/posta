@@ -9932,12 +9932,15 @@ async function chatUploadPhotos(files) {
     PZ_SFT_CHAT_START = CHAT_PHOTOS.length;
     for (const f of items) {
       const isVid = pzSftKind(f).kind === 'video';
-      const url = isVid ? '/api/assets?kind=video' : '/api/media';
+      const url = isVid ? '/api/assets?kind=video' : '/api/media?from=chat'; // TOPE-ALBUM-20: from=chat → /api/media aplica el tope del álbum (20) a la foto del chat y devuelve su id para adoptarla en el álbum sin duplicar fila
       const res = await fetch(url, { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': pzSftKind(f).mime }, body: f });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo subir el archivo');
       const aiUrl = isVid ? await fileToVideoThumb(f) : await fileToThumb(f);
-      CHAT_PHOTOS.push({ file_path: data.path, aiUrl, sent: false, kind: isVid ? 'video' : 'photo', file: f });
+      // TOPE-ALBUM-20: se guarda el id de la fila de assets para que el
+      // álbum la ADOPTE (?adopt=id) en vez de insertar otra — una foto,
+      // una fila. Fotos: /api/media lo devuelve; videos: /api/assets.
+      CHAT_PHOTOS.push({ file_path: data.path, mediaId: data.id || 0, aiUrl, sent: false, kind: isVid ? 'video' : 'photo', file: f });
     }
     if (m) m.innerHTML = '';
     renderChatPhotos();
@@ -27347,7 +27350,12 @@ async function pzSftAsegurarAssetTmp(it) {
   if (!it.file) return false;
   try {
     const k = pzSftKind(it.file);
-    const r = await fetch("/api/album/photo", { method: "POST", headers: { "Content-Type": k.mime }, body: it.file });
+    // TOPE-ALBUM-20: la foto ya está en assets por /api/media (chat) o
+    // /api/assets (video): el álbum ADOPTA esa fila (?adopt=id) en vez de
+    // insertar otra — una foto = un lugar en el álbum. Sin mediaId, el
+    // flujo de siempre (sube los bytes y el álbum inserta su fila).
+    const albumUrl = (it.mediaId > 0) ? ("/api/album/photo?adopt=" + it.mediaId) : "/api/album/photo";
+    const r = await fetch(albumUrl, { method: "POST", headers: { "Content-Type": k.mime }, body: it.file });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.ok) return false;
     it.assetId = d.id;
