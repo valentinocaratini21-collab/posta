@@ -21562,13 +21562,14 @@ async function inicioView() {
   // (LOTE PROXIMO-RITUAL · 5/11) Sin banner del ritual: la carta velada
   // del próximo es la entrada (ver el fetch retirado arriba).
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
-  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: false /* (LOTE HOY-REDISEÑO v810) Los íconos de compartir/ajustes viven SOLO en el encabezado del shell: la tarjeta de perfil ya no los duplica. */ })}
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
   ${hoySegHTML}
   ${hoyAprobarHTML}
   ${hfTabsHTML(HF_TAB, enHome)}
   ${pzConserjeHoyHTML()}
   ${pzSemanaOkHTML}
+  <!-- (LOTE PERFIL-JUNTO-AL-FEED · 8/11 · decisión Valentino: el perfil baja a encabezar la grilla del feed — nombre, números y «¿Cómo publica Posty?» son el encabezado del feed, no de Hoy; arriba Inicio arranca con el saludo de Posty. Solo se mueve la llamada a homeHeadHTML.) -->
+  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: false /* (LOTE HOY-REDISEÑO v810) Los íconos de compartir/ajustes viven SOLO en el encabezado del shell: la tarjeta de perfil ya no los duplica. */ })}
   ${gridHTML}
   ${visitorPillHTML}
   ${hoySheetHTML}
