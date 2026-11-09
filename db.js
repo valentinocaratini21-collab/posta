@@ -1065,6 +1065,27 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chatmsg_user ON chat_messages(user_id, id);
+-- TRABAJOS ASÍNCRONOS DEL CHAT (LOTE v847 · imagen pedida que nunca llegó):
+-- registro mínimo del trabajo creado por el SERVIDOR cuando arranca (no por
+-- el texto de la IA): el estado visible en el hilo nace de acá y se salda
+-- siempre (lista | fallo). Sin esta tabla, una promesa de imagen no tenía
+-- ningún mecanismo detrás y quedaba en silencio.
+CREATE TABLE IF NOT EXISTS trabajos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL DEFAULT 'chat_imagen',
+  estado TEXT NOT NULL DEFAULT 'creando',
+  post_id INTEGER,
+  mensaje_id INTEGER,
+  mensaje_final_id INTEGER,
+  titulo TEXT NOT NULL DEFAULT '',
+  caption TEXT NOT NULL DEFAULT '',
+  estimado_seg INTEGER NOT NULL DEFAULT 60,
+  error TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_trabajos_user_estado ON trabajos(user_id, estado);
 -- SUPERVISIÓN DEL CHAT (bamboo detrás de Posty — SIEMPRE, PARA TODOS):
 -- un ítem abierto por usuario. La puerta (POST /api/ideas/chat) abre/adjunta;
 -- el dictado (POST /api/admin/supervision/dictar) lo cierra como 'respondido'.

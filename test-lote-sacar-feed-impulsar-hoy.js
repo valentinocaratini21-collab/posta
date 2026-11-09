@@ -11,9 +11,9 @@
 // Node puro: asserts estáticos + VM + boot real por HTTP con DATA_DIR
 // aislada (puerto 18971). Uso: node test-lote-sacar-feed-impulsar-hoy.js
 // (desde la raíz del árbol).
-// Pins provisorios v846 (el re-estampador estampa BUILD/?v=/styles?v=
-// y re-pinea): BUILD 20261105-v846 · app.js?v=578 · styles?v=20261223
-// (styles.css cambió en este lote: el re-estampador bumpea styles?v=).
+// Pins v847 (re-pineado por el re-estampador de v847): BUILD 20261105-v847 ·
+// app.js?v=579 · styles?v=20261225 (heredado de v846: styles.css no cambia
+// en este lote). La firma fusionada es chatMsgHtml(role, text, ts, id).
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -119,7 +119,7 @@ const sliceFn = (src, from, to) => {
   t(!!vid && vid.viejo === true, '§5: el reciente de otra semana marca viejo por week_key');
   const sinCreds = await ins.fetchUserMedia({ prepare: () => ({ get: () => null }) }, 999);
   t(Array.isArray(sinCreds) && sinCreds.length === 0, '§5: sin IG conectado, fetchUserMedia → [] (fail-closed)');
-  t(srv.includes("const BUILD_ID = '20261105-v846'"), '§5: server.js con BUILD v846 estampado (preparador)');
+  t(srv.includes("const BUILD_ID = '20261105-v847'"), '§5: server.js con BUILD v847 estampado (preparador)');
 
   // ---------- 6. VM: sección Impulsar, picker, burbuja, encabezado ----------
   const escFn = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -209,14 +209,14 @@ const sliceFn = (src, from, to) => {
     try {
       t(await waitBoot(), '§7: boot levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v846', `§7: /api/version v846 (vino ${ver.build})`);
-      const appTxt = await (await fetch(`${BASE}/app.js?v=578`)).text();
-      t(md5(appTxt) === md5(app), '§7: app.js?v=578 servido = árbol');
+      t(ver.build === '20261105-v847', `§7: /api/version v847 (vino ${ver.build})`);
+      const appTxt = await (await fetch(`${BASE}/app.js?v=579`)).text();
+      t(md5(appTxt) === md5(app), '§7: app.js?v=579 servido = árbol');
       t(!appTxt.includes('pzHoySaludoTxt') && !appTxt.includes('pzSaludoEscribir'), '§7: servido sin las funciones borradas');
       t(appTxt.includes('pzHoyImpulsarHTML') && appTxt.includes('hfHoyHighlightApply'), '§7: servido con la sección Impulsar y el destacado de Hoy');
       t(!appTxt.includes("tabBtn('feed'"), '§7: servido sin pestaña Feed en la barra');
-      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261223`)).text();
-      t(md5(cssTxt) === md5(css), '§7: styles.css?v=20261223 servido = árbol');
+      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261225`)).text();
+      t(md5(cssTxt) === md5(css), '§7: styles.css?v=20261225 servido = árbol');
       t(cssTxt.includes('.pz-shell-dot') && cssTxt.includes('.pz-hoy-impulsar'), '§7: servido con el punto verde y la sección Impulsar');
       const rMejor = await fetch(`${BASE}/api/estrategia/mejor-posteo`);
       t(rMejor.status === 401, `§7: sin sesión, /api/estrategia/mejor-posteo → 401 (vino ${rMejor.status})`);
@@ -261,7 +261,7 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'chat-input-row pz-write-row') === 1, '§8a: la landing inyecta su propio campo (único #chatInput de la app)');
   t(app.includes("send.onclick = () => { try { const li = document.getElementById('chatInput');"), '§8a: #pzLpSend manda el valor del campo');
   // Hora en cada mensaje + orden por ts.
-  t(app.includes('function pzChatHoraFmt(ts)') && app.includes('function chatHoraHtml(ts)') && app.includes('function chatAppendMsg(box, html, ts)') && app.includes('function chatMsgHtml(role, text, ts)'), '§8a: pzChatHoraFmt + chatHoraHtml + chatAppendMsg + chatMsgHtml(ts) definidas');
+  t(app.includes('function pzChatHoraFmt(ts)') && app.includes('function chatHoraHtml(ts)') && app.includes('function chatAppendMsg(box, html, ts)') && app.includes('function chatMsgHtml(role, text, ts, id)'), '§8a: pzChatHoraFmt + chatHoraHtml + chatAppendMsg + chatMsgHtml(ts, id) definidas');
   t(app.includes('.sort((a, b) => (a.ts - b.ts) || (a.id - b.id))'), '§8a: chatLoadHistory ordena por (ts, id)');
   t(app.includes('¿me lo repetís con un audio?'), '§8a: si la respuesta falla, Posty pide repetir por voz');
   t(app.includes('VOICE_BUBBLE_TS') && app.includes('function vozBubbleSending'), '§8a: burbuja de voz con ts (VOICE_BUBBLE_TS)');
@@ -284,7 +284,7 @@ const sliceFn = (src, from, to) => {
   vm.createContext(ctx2);
   vm.runInContext(sliceFn(app, 'function pzChatHoraFmt(ts) {', 'function chatAppendMsg(box, html, ts) {'), ctx2);
   vm.runInContext(sliceFn(app, 'function chatAppendMsg(box, html, ts) {', '// HTML de un mensaje del chat'), ctx2);
-  vm.runInContext(sliceFn(app, 'function chatMsgHtml(role, text, ts) {', '// Confirma o rechaza el logo candidato'), ctx2);
+  vm.runInContext(sliceFn(app, 'function chatMsgHtml(role, text, ts, id) {', '// Confirma o rechaza el logo candidato'), ctx2);
   vm.runInContext(sliceFn(app, 'function hfAskChangeBtnHTML(p) {', 'function hfAskChange(post) {'), ctx2);
   const ts19 = Date.parse('2026-11-09T19:00:00-05:00');
   t(vm.runInContext(`pzChatHoraFmt(${ts19})`, ctx2) === '19:00', '§8b: pzChatHoraFmt(19:00 EST) = 19:00');

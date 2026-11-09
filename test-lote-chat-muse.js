@@ -77,10 +77,10 @@ check('1c chatCardHTML: la fila del input NO lleva cara (queda 1 sola cara: la d
 const barraW = sliceOk(app, 'function pzTemaBarraInit() {', 'function pzTemaInit() {');
 check('1d input: SIN botón de video/reel (pzChatVideoBtn ×0) y SIN su ícono en la barra',
   cnt(barraW, 'pzChatVideoBtn') === 0 && cnt(barraW, "pzIc('reel'") === 0 && cnt(app, 'pzChatVideoBtn') === 0);
-check('1e input: Enviar es solo el avión (sin <span> con texto) y sigue llamando a chatSend()',
-  barraW.includes("send.innerHTML = pzIc('send', 16);") && !barraW.includes("pzIc('send', 16) + '<span>'") && barraW.includes('send.onclick = () => { try { chatSend(); } catch (e) {} };'));
-check('1f input: la camarita (foto) y el mic siguen en la barra',
-  barraW.includes("document.getElementById('chatMicSend')") && barraW.includes('chatPhotoDelegar') && app.includes('id="chatPhotoBtn"'));
+check('1e input (v846 · solo voz): SIN botón Enviar — el mic grande es el que manda',
+  !app.includes("send.innerHTML = pzIc('send'") && app.includes('id="chatMicSend"') && app.includes('title="Hablarle a Posty"'));
+check('1f input (v846 · solo voz): camarita + mic en la barra de voz (camarita a la izquierda, mic a la derecha)',
+  app.includes('id="chatPhotoBtn"') && app.includes('id="chatMicSend"') && app.includes('chatPhotoDelegar') && app.includes('pz-voice-primary') && app.indexOf('id="chatPhotoBtn"') < app.indexOf('id="chatMicSend"'));
 
 // ---------- Parte 2: estática app.js — sin píldora + filtro «…» + watchdog ----------
 console.log('— 2) estática: sin píldora, filtro «…», watchdog —');
@@ -95,7 +95,7 @@ check('2c pzTemaColapsar: al responder un tema la tira se va sin dejar línea de
 check('2d pzTemaMiniHTML queda definida (sin llamadores en el chat) — no se borra el helper',
   app.includes('function pzTemaMiniHTML(titulo, sub) {') && cnt(app, 'pzTemaMiniHTML(') === 1);
 check('2e chatMsgHtml: una fila con texto «…» nunca se rinde',
-  windowOf(app, 'function chatMsgHtml(role, text) {', 400).includes("if (String(text || '').trim() === '…') return '';"));
+  windowOf(app, 'function chatMsgHtml(role, text, ts, id) {', 400).includes("if (String(text || '').trim() === '…') return '';"));
 check('2f chatLoadHistory: el «…» no entra al historial en memoria',
   sliceOk(app, 'async function chatLoadHistory() {', 'async function draftFromPreview(').includes("String(m.text).trim() !== '…'"));
 const xchg = sliceOk(app, 'async function chatExchange(', '// Posty parpadea como un humano');

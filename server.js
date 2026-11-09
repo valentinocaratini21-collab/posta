@@ -6250,6 +6250,212 @@ function pzChatSaveReply(db, uid, reply) {
   return true;
 }
 
+// ---------- TRABAJOS ASÍNCRONOS DEL CHAT (LOTE v847 · imagen pedida que nunca llegó) ----------
+// Incidente 9/11 12:13: el cerebro prometió «te mando la imagen» en texto y el
+// turno cerró sin ningún bloque de acción, sin trabajo y sin seguimiento. La red
+// de abajo es la garantía anti-silencio: si el cliente pide la imagen explícita
+// y el turno no produjo ninguna, el SERVIDOR crea el trabajo, el mensaje de
+// estado en el hilo y lo ejecuta en segundo plano. Nunca silencio.
+// Invariante: el trabajo se salda SIEMPRE (lista | fallo). El runner tiene
+// timeout propio (4 min); el barrido de arranque salda los 'creando' de >10 min
+// (reinicio a mitad de generación); el reintento solo actúa sobre fallo o
+// creando-vencido. Ningún camino deja un trabajo 'creando' para siempre.
+const PZ_CHAT_IMG_REQ_ES = /\b(m[aá]ndame|mandame|enviame|env[ií]ame|mostrame|mu[eé]strame|pasame|compartime|quiero ver|arm[aá]|gener[aá]|cre[aá]|haceme)\b[^.\n]{0,50}\b(imagen|foto)\b/i;
+const PZ_CHAT_IMG_REQ_EN = /\b(send me|show me|give me|make|generate|create)\b[^.\n]{0,50}\b(image|picture|photo)\b/i;
+function pzChatPideImagen(text) {
+  const t = String(text || '');
+  return PZ_CHAT_IMG_REQ_ES.test(t) || PZ_CHAT_IMG_REQ_EN.test(t);
+}
+// Texto amable del fallo (nunca jerga técnica: nada de 429/timeout/quota).
+function pzTrabajoFalloAmable(kind, en) {
+  if (kind === 'revision') return en ? 'the image didn\'t come out right, I left it for review — shall I redo it?' : 'la imagen no quedó bien y la dejé en revisión — ¿la rehago?';
+  if (kind === 'tope') return en ? 'we hit today\'s AI limit 😅 try again tomorrow' : 'por hoy llegamos al tope de IA 😅 probá mañana';
+  if (kind === 'sin_clave') return en ? 'I couldn\'t generate the image — write me and we\'ll check it' : 'no pude generar la imagen, falta la clave — avisame y lo revisamos';
+  if (kind === 'tiempo_agotado') return en ? 'it took too long and I stopped it so you wouldn\'t wait forever' : 'tardó demasiado y lo corté para no dejarte esperando';
+  return en ? 'I couldn\'t generate the image — tap retry and I\'ll make it again' : 'no pude generar la imagen — tocá reintentar y la armo de nuevo';
+}
+function pzTrabajoPublico(t) {
+  if (!t) return null;
+  return { id: t.id, estado: t.estado, estimado_seg: t.estimado_seg || 60, post_id: t.post_id || null, mensaje_id: t.mensaje_id || null, mensaje_final_id: t.mensaje_final_id || null, error: t.error || '', creado_en: t.created_at || '' };
+}
+// Barrido de arranque: un reinicio a mitad de generación no puede dejar un
+// trabajo 'creando' para siempre. Solo salda los de >10 min (el runner vivo
+// tiene timeout propio de 4 min, así que no hay solape). El UPDATE con guarda
+// (estado='creando') hace que el mensaje de fallo solo se inserte si el trabajo
+// seguía realmente creando.
+function pzTrabajoMarcarVencidos(db) {
+  try {
+    const viejos = db.prepare(`SELECT * FROM trabajos WHERE estado = 'creando' AND datetime(created_at) < datetime('now', '-10 minutes')`).all();
+    let n = 0;
+    for (const j of viejos) {
+      const up = db.prepare("UPDATE trabajos SET estado='fallo', error='tiempo_agotado', updated_at=datetime('now') WHERE id=? AND estado='creando'").run(j.id);
+      if (!up || !up.changes) continue;
+      const en = langOfUser(j.user_id) === 'en';
+      const msg = `[trabajo-fallo:${j.id}] ${pzTrabajoFalloAmable('tiempo_agotado', en)}`;
+      const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(j.user_id, 'assistant', msg.slice(0, 3000));
+      db.prepare('UPDATE trabajos SET mensaje_final_id = ? WHERE id = ?').run(Number(ins.lastInsertRowid), j.id);
+      n++;
+    }
+    if (n) console.log(`[trabajo] barrido: ${n} trabajo(s) vencido(s) → fallo`);
+  } catch (e) { console.error('[trabajo] sweep:', e.message); }
+}
+// Ejecuta un trabajo 'chat_imagen' en segundo plano. Se llama con setImmediate
+// (el POST responde rápido con el estado); el settle es único: el runner es el
+// único escritor mientras corre (el barrido solo toca >10 min y el reintento
+// solo fallo o creando-vencido).
+async function pzTrabajoChatImagenRun(jobId) {
+  const job = db.prepare('SELECT * FROM trabajos WHERE id = ?').get(jobId);
+  if (!job || job.estado !== 'creando') return;
+  const uid = job.user_id;
+  const en = langOfUser(uid) === 'en';
+  const settleFallo = (kind) => {
+    try {
+      const msg = `[trabajo-fallo:${job.id}] ${pzTrabajoFalloAmable(kind, en)}`;
+      const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', msg.slice(0, 3000));
+      db.prepare("UPDATE trabajos SET estado='fallo', error=?, mensaje_final_id=?, updated_at=datetime('now') WHERE id=?").run(kind, Number(ins.lastInsertRowid), job.id);
+    } catch (e) { console.error('[trabajo] settle fallo:', e.message); }
+  };
+  try {
+    const caption = String(job.caption || '');
+    if (!caption.trim()) { settleFallo('fallo'); return; }
+    const headline = makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(caption, 5, 70, rubroOf(uid));
+    const gate = {};
+    const genP = conceptShotGenerateQueued({ uid, idea: caption, tipo: '', headline, refs: [], resultOut: gate });
+    const timeoutP = new Promise((_, rej) => setTimeout(() => rej(new Error('tiempo_agotado')), 4 * 60 * 1000));
+    const newPath = await Promise.race([genP, timeoutP]);
+    if (!newPath) { settleFallo('fallo'); return; }
+    // QA gate / personaje: la imagen no se entrega como buena (doctrina MORA:
+    // ningún sub-check en false se entrega). Queda guardada en el borrador con
+    // needs_review, como ```create```; en el chat se dice honesto + reintentar.
+    if ((gate.qaGate && gate.qaGate.outcome === 'bandeja') || characterBlocksDelivery(gate)) {
+      let postId = job.post_id ? Number(job.post_id) : null;
+      if (postId) {
+        const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+        if (post && (post.status === 'draft' || post.status === 'scheduled')) {
+          db.prepare('UPDATE posts SET image_path = ?, needs_review = 1 WHERE id = ?').run(String(newPath), postId);
+        } else postId = null;
+      }
+      if (!postId) {
+        const r = db.prepare('INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review) VALUES (?,?,?,?,?,?,?,?)')
+          .run(uid, String(newPath), caption, '', null, 'draft', 'image', 1);
+        postId = r && r.lastInsertRowid ? Number(r.lastInsertRowid) : null;
+      }
+      db.prepare('UPDATE trabajos SET post_id = ? WHERE id = ?').run(postId, job.id);
+      settleFallo('revision');
+      return;
+    }
+    // Guardar en el posteo (borrador/programado) o crear el borrador.
+    let postId = job.post_id ? Number(job.post_id) : null;
+    if (postId) {
+      const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+      if (post && (post.status === 'draft' || post.status === 'scheduled')) {
+        db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), postId);
+      } else postId = null; // publicado u otro estado: no se toca, se crea borrador nuevo
+    }
+    if (!postId) {
+      const r = db.prepare('INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review) VALUES (?,?,?,?,?,?,?,?)')
+        .run(uid, String(newPath), caption, '', null, 'draft', 'image', trainingWheelsActive(uid) ? 1 : 0);
+      postId = r && r.lastInsertRowid ? Number(r.lastInsertRowid) : null;
+    }
+    // Mensaje final con la imagen (marcador [foto:] — el cliente ya lo rinde
+    // como burbuja con foto, app.js FOTO_MARKER_RE).
+    const titulo = String(job.titulo || caption.split('\n')[0] || 'tu posteo').slice(0, 80);
+    const textoFinal = (en ? 'Here is the image for your post 💪' : 'Acá está la imagen de tu posteo 💪') + ` [foto:${String(newPath)}]`;
+    const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', textoFinal.slice(0, 3000));
+    const finalId = Number(ins.lastInsertRowid);
+    db.prepare("UPDATE trabajos SET estado='lista', post_id=?, mensaje_final_id=?, updated_at=datetime('now') WHERE id=?").run(postId, finalId, job.id);
+    // Push al completar (el SO la muestra solo en segundo plano; en primer
+    // plano el hilo ya muestra la imagen). Mismo patrón que los precedentes.
+    try {
+      const imgUrl = absImageUrl(uid, String(newPath));
+      const pr = await push.sendPush(uid, {
+        title: en ? 'The image you asked for is ready' : 'La imagen que pediste está lista',
+        body: titulo,
+        url: '/#/app/chat?msg=' + finalId,
+        image: imgUrl,
+        data: { trabajo_id: job.id, msg_id: finalId },
+      });
+      console.log('[trabajo] push:', JSON.stringify({ job: job.id, ok: !!(pr && pr.ok), sent: (pr && pr.sent) || 0, reason: (pr && pr.reason) || '' }));
+    } catch (e) { console.error('[trabajo] push:', e.message); }
+  } catch (e) {
+    const msg = String((e && e.message) || '');
+    if (/tiempo_agotado/.test(msg)) settleFallo('tiempo_agotado');
+    else if (/AiCapExceeded|tope/i.test(msg)) settleFallo('tope');
+    else if (/Sin clave de OpenAI/i.test(msg)) settleFallo('sin_clave');
+    else { console.error('[trabajo] run:', msg); settleFallo('fallo'); }
+  }
+}
+// Red anti-silencio: corre DESPUÉS de aplicar los bloques, ANTES del res.json.
+// Si el cliente pidió la imagen explícita y el turno no produjo ninguna, el
+// SERVIDOR crea el trabajo + el estado en el hilo y lo ejecuta en segundo
+// plano. No depende de lo que el modelo haya escrito.
+function pzChatImagenSiFalta({ uid, clean, out, createdApplied, editApplied, anchorId }) {
+  try {
+    const lastUser = (Array.isArray(clean) ? clean : []).filter(m => m && m.role === 'user').pop();
+    const lastText = lastUser ? String(lastUser.text || '') : '';
+    if (!pzChatPideImagen(lastText)) return null;
+    // El turno ya produjo una imagen por otro camino: no se duplica el trabajo.
+    // - out.idea: la pregen de la idea la cubre (tarjeta inmediata, ESPERA-42).
+    // - idea abierta en chat_state: la tarjeta de esa idea la cubre (pregen +
+    //   on-demand del cliente).
+    // - created con imagen / edit con regeneración: ya hay imagen.
+    if (out && out.idea && (out.idea.titulo || out.idea.title)) return null;
+    let ideaAbierta = null;
+    try { const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid); ideaAbierta = st ? JSON.parse(st.idea_json) : null; } catch (e) { ideaAbierta = null; }
+    if (ideaAbierta && (ideaAbierta.titulo || ideaAbierta.title)) return null;
+    if (createdApplied && Array.isArray(createdApplied.ok) && createdApplied.ok.length) return null;
+    if (editApplied && editApplied.imageRegen > 0) return null;
+    // Dedupe: un trabajo creando reciente del usuario (doble envío / reintento
+    // tras timeout del cliente): se devuelve el mismo, no se crea otro.
+    const reciente = db.prepare(`SELECT * FROM trabajos WHERE user_id = ? AND tipo = 'chat_imagen' AND estado = 'creando' AND datetime(created_at) > datetime('now', '-3 minutes') ORDER BY id DESC LIMIT 1`).get(uid);
+    if (reciente) return pzTrabajoPublico(reciente);
+    // Resolver el posteo. Solo con evidencia EXPLÍCITA se ata a un posteo
+    // existente (ancla desde la tile, o texto citado que matchea un posteo):
+    // atarlo al borrador más nuevo sin evidencia sería imaginar el posteo
+    // equivocado (en el incidente, el de hoy 19:00 no era el de fitness).
+    let postId = null, titulo = '', caption = '';
+    const anc = Number(anchorId || 0);
+    if (anc > 0) {
+      const p = db.prepare('SELECT id, caption, status, media_type FROM posts WHERE id = ? AND user_id = ?').get(anc, uid);
+      if (p && (p.status === 'draft' || p.status === 'scheduled') && (p.media_type || 'image') === 'image' && String(p.caption || '').trim()) {
+        postId = Number(p.id); caption = String(p.caption); titulo = caption.split('\n')[0].slice(0, 80);
+      }
+    }
+    if (!caption) {
+      try {
+        const hit = chatQuotedPostMatch(db, uid, lastText);
+        if (hit && (hit.status === 'draft' || hit.status === 'scheduled') && String(hit.caption || '').trim()) {
+          postId = Number(hit.id); caption = String(hit.caption); titulo = caption.split('\n')[0].slice(0, 80);
+        }
+      } catch (e) {}
+    }
+    if (!caption) {
+      // La propuesta del posteo vive en el hilo: el último mensaje del
+      // asistente con cuerpo de posteo (el incidente: la 551 con el caption de
+      // fitness). Sin propuesta, la respuesta de este turno; sin eso, el pedido.
+      const asists = (Array.isArray(clean) ? clean : []).filter(m => m && m.role === 'assistant').map(m => String(m.text || ''));
+      for (let i = asists.length - 1; i >= Math.max(0, asists.length - 3); i--) {
+        if (asists[i].trim().length > 120) { caption = asists[i]; break; }
+      }
+      if (!caption) caption = String((out && out.reply) || lastText || '').slice(0, 2000);
+      titulo = caption.split('\n')[0].slice(0, 80);
+    }
+    if (!caption.trim()) return null;
+    const en = langOfUser(uid) === 'en';
+    const ins = db.prepare(`INSERT INTO trabajos (user_id, tipo, estado, post_id, titulo, caption, estimado_seg) VALUES (?,?,?,?,?,?,?)`)
+      .run(uid, 'chat_imagen', 'creando', postId, titulo, caption.slice(0, 2000), 60);
+    const jobId = Number(ins.lastInsertRowid);
+    const estadoTxt = en
+      ? `[creando-imagen:${jobId}] Creating your image… usually takes ~1 minute`
+      : `[creando-imagen:${jobId}] Creando tu imagen… suele tardar ~1 minuto`;
+    const mIns = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', estadoTxt.slice(0, 3000));
+    db.prepare('UPDATE trabajos SET mensaje_id = ? WHERE id = ?').run(Number(mIns.lastInsertRowid), jobId);
+    setImmediate(() => { pzTrabajoChatImagenRun(jobId).catch(e => console.error('[trabajo] run:', e.message)); });
+    const row = db.prepare('SELECT * FROM trabajos WHERE id = ?').get(jobId);
+    return pzTrabajoPublico(row);
+  } catch (e) { console.error('[chat-imagen] net:', e.message); return null; }
+}
+
 app.post('/api/ideas/chat', async (req, res) => {
   if (!req.session.userId) return pzChatPublic(req, res);
   let _lpNx = false; requireTrialValid(req, res, () => { _lpNx = true; });
@@ -7337,11 +7543,52 @@ app.post('/api/ideas/chat', async (req, res) => {
     // Las opciones solo viven cuando falta un dato o una elección cambia el
     // resultado (el prompt las emite solo en ese caso; esto lo refuerza).
     if (editApplied || publishApplied || revertApplied || approveApplied || approveAllApplied !== null || rejectApplied || duplicateApplied || createdApplied || redoneApplied) out.options = null;
-    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, approve: approveApplied, approveAll: approveAllApplied, reject: rejectApplied, duplicate: duplicateApplied, create: createdApplied, redo: redoneApplied, dna: dnaSaved, options: out.options || null, showDrafts, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
+    // (LOTE v847 · imagen pedida que nunca llegó) Red anti-silencio: si el
+    // cliente pidió la imagen y el turno no produjo ninguna, el servidor crea
+    // el trabajo + el estado en el hilo. Nunca silencio.
+    let trabajoImagen = null;
+    try { trabajoImagen = pzChatImagenSiFalta({ uid, clean, out, createdApplied, editApplied, anchorId: Number(anchor_post_id || 0) }); } catch (e) { console.error('[chat-imagen] net:', e.message); }
+    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, approve: approveApplied, approveAll: approveAllApplied, reject: rejectApplied, duplicate: duplicateApplied, create: createdApplied, redo: redoneApplied, dna: dnaSaved, options: out.options || null, showDrafts, trabajo: trabajoImagen, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
   } catch (e) {
     console.error('[chat]', e.message);
     res.status(500).json({ error: 'Uh, me trabé un segundo 😅 Dame otro intento que esta sale' });
   }
+});
+
+// ---------- TRABAJOS ASÍNCRONOS DEL CHAT (LOTE v847) ----------
+// GET /api/trabajos/:id — estado de un trabajo (lo usa el poller del cliente
+// mientras el estado «Creando tu imagen…» está visible). Solo el dueño.
+app.get('/api/trabajos/:id', requireAuth, (req, res) => {
+  try {
+    const t = db.prepare('SELECT * FROM trabajos WHERE id = ?').get(Number(req.params.id) || 0);
+    if (!t) return res.status(404).json({ ok: false, error: 'sin_trabajo' });
+    if (Number(t.user_id) !== Number(req.session.userId)) return res.status(403).json({ ok: false, error: 'no_tuyo' });
+    return res.json({ ok: true, trabajo: pzTrabajoPublico(t) });
+  } catch (e) { return res.status(500).json({ ok: false, error: 'error' }); }
+});
+// POST /api/trabajos/:id/reintentar — reintentar un trabajo fallido (o uno
+// creando-vencido: >5 min sin saldar). Vuelve a 'creando' con un mensaje de
+// estado nuevo y re-ejecuta. Nunca duplica un trabajo en curso.
+app.post('/api/trabajos/:id/reintentar', requireAuth, express.json(), (req, res) => {
+  try {
+    const t = db.prepare('SELECT * FROM trabajos WHERE id = ?').get(Number(req.params.id) || 0);
+    if (!t) return res.status(404).json({ ok: false, error: 'sin_trabajo' });
+    if (Number(t.user_id) !== Number(req.session.userId)) return res.status(403).json({ ok: false, error: 'no_tuyo' });
+    const vencido = t.estado === 'creando' && t.created_at && (Date.now() - new Date(String(t.created_at).replace(' ', 'T')).getTime() > 5 * 60 * 1000);
+    if (t.estado !== 'fallo' && !vencido) return res.status(409).json({ ok: false, error: 'no_reintentable', estado: t.estado });
+    const uid = Number(t.user_id);
+    const en = langOfUser(uid) === 'en';
+    const up = db.prepare("UPDATE trabajos SET estado='creando', error='', mensaje_final_id=NULL, updated_at=datetime('now') WHERE id=? AND estado IN ('fallo','creando')").run(t.id);
+    if (!up || !up.changes) return res.status(409).json({ ok: false, error: 'no_reintentable', estado: t.estado });
+    const estadoTxt = en
+      ? `[creando-imagen:${t.id}] Creating your image again… usually takes ~1 minute`
+      : `[creando-imagen:${t.id}] Creando tu imagen de nuevo… suele tardar ~1 minuto`;
+    const mIns = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', estadoTxt.slice(0, 3000));
+    db.prepare('UPDATE trabajos SET mensaje_id = ? WHERE id = ?').run(Number(mIns.lastInsertRowid), t.id);
+    setImmediate(() => { pzTrabajoChatImagenRun(t.id).catch(e => console.error('[trabajo] run:', e.message)); });
+    const row = db.prepare('SELECT * FROM trabajos WHERE id = ?').get(t.id);
+    return res.json({ ok: true, trabajo: pzTrabajoPublico(row) });
+  } catch (e) { console.error('[trabajo] reintentar:', e.message); return res.status(500).json({ ok: false, error: 'error' }); }
 });
 
 // (LOTE VOZ-EJECUTA · 3/11) Transcribir una nota de voz SIN correr el chat:
@@ -33646,7 +33893,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v846';
+const BUILD_ID = '20261105-v847';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -34008,6 +34255,8 @@ app.listen(PORT, () => {
   console.log(`[posta] Mercado Pago: ${mp.mpConfigured() ? 'configurado ✅' : 'no configurado (pagos desactivados)'}`);
   startScheduler(db);
   startTokenRefresh();
+  // (LOTE v847) Un reinicio a mitad de generación no deja trabajos colgados.
+  try { pzTrabajoMarcarVencidos(db); } catch (e) { console.error('[trabajo] sweep:', e.message); }
 });
 
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require

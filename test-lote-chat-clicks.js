@@ -57,7 +57,7 @@ function reFrom(src, re) {
 // ---------- Parte A: estática ----------
 function parteA() {
   console.log('— A) estática: pins y marcadores del lote —');
-  check('A0 BUILD v846 en server.js', srvSrc.includes("const BUILD_ID = '20261105-v846';"));
+  check('A0 BUILD v847 en server.js', srvSrc.includes("const BUILD_ID = '20261105-v847';"));
   check('A0b app.js del lote (28+ marcadores chat-clicks)', (appSrc.match(/LOTE CHAT-CLICKS/g) || []).length >= 10, `marcadores=${(appSrc.match(/LOTE CHAT-CLICKS/g) || []).length}`);
   // §1 app.js — funciones nuevas
   for (const f of ['async function pzSftChatArmarUno(', 'async function pzSftChatAprobarTodas(', 'async function pzSftChatAprobarUno(', 'function pzSftChatMarcarAprobada(', 'function pzSftHoyYmd(', 'function pzSftChatPregunta(', 'async function pzSftChatPreguntaResponder(', 'async function pzSftChatCambiarDia(', 'async function pzSftChatMoverDia(', 'async function pzSftChatOtraFoto(', 'function chatIdeaPhotoPool(', 'var PZ_SFT_ARMADOS = {};', 'var PZ_OTRAFOTO_IDX = {};', 'var PZ_SFT_PREGUNTA_ACTIVA = null;']) {
@@ -627,7 +627,7 @@ async function parteD() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('D0b /api/version trae el BUILD v846', ver.status === 200 && ver.json && ver.json.build === '20261105-v846', JSON.stringify(ver.json));
+    check('D0b /api/version trae el BUILD v847', ver.status === 200 && ver.json && ver.json.build === '20261105-v847', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('D0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 

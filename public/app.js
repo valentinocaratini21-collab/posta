@@ -8871,14 +8871,25 @@ function chatAppendMsg(box, html, ts) {
 
 // HTML de un mensaje del chat: si trae el marcador de logo candidato,
 // renderiza el banner confirmable; si no, la burbuja normal.
-function chatMsgHtml(role, text, ts) {
+function chatMsgHtml(role, text, ts, id) {
   text = chatStripCelebrate(text); // el marcador [celebrate] jamás se ve
   // (LOTE CHAT-MUSE · «…») Una fila guardada con texto «…» es el artefacto
   // del tipeo viejo: nunca se rinde.
   if (String(text || '').trim() === '…') return '';
+  // (LOTE v847 · imagen pedida) Marcadores de trabajo: el estado
+  // «Creando tu imagen…» y el fallo con reintentar. Los crea el SERVIDOR.
+  // Viven ACÁ DENTRO (no afuera con los otros marcadores): subir-foto-cambio
+  // extrae chatMsgHtml SOLA y la referencia quedaba sin definir (B3).
+  // Solo se usan en esta función.
+  const TRABAJO_MARKER_RE = /\[creando-imagen:(\d+)\]/;
+  const TRABAJO_FALLO_MARKER_RE = /\[trabajo-fallo:(\d+)\]/;
+  function chatStripTrabajoMarker(t) { return String(t || '').replace(/\[creando-imagen:\d+\]/g, '').replace(/\[trabajo-fallo:\d+\]/g, '').trim(); }
+  // (LOTE v847) Ancla al mensaje: el id del mensaje viaja como data-msg-id
+  // (deep link de la push ?msg=). Sin id, la burbuja rinde igual que antes.
+  const mid = (id !== undefined && id !== null && String(id) !== '') ? ` data-msg-id="${esc(String(id))}"` : '';
   // Banner "¿publicamos tu primero?": texto + botón táctil de 1 tap.
   if (role !== 'user' && FP_MARKER_RE.test(String(text || ''))) {
-    return `<div class="chat-msg ai fp-banner" data-ts="${Number(ts) || ''}">`
+    return `<div class="chat-msg ai fp-banner"${mid} data-ts="${Number(ts) || ''}">`
       + `<div>${esc(chatStripFpMarker(text))}</div>`
       + `<button type="button" class="btn btn-primary btn-block" data-fp-pub style="margin-top:10px;min-height:48px;touch-action:manipulation">${pzIc('bolt', 18)} Publicar mi primero</button>`
       + chatHoraHtml(ts)
@@ -8891,17 +8902,33 @@ function chatMsgHtml(role, text, ts) {
     const fm = String(text || '').match(FOTO_MARKER_RE);
     const imgPath = (fm[1] || '').trim();
     const clean = String(text || '').replace(FOTO_MARKER_RE, '').trim();
-    return `<div class="chat-msg ai" data-ts="${Number(ts) || ''}"><div>${linkifyEsc(clean)}</div>`
+    return `<div class="chat-msg ai"${mid} data-ts="${Number(ts) || ''}"><div>${linkifyEsc(clean)}</div>`
       + (imgPath ? `<img src="${esc(imgPath)}" alt="" style="width:100%;border-radius:12px;display:block;margin-top:8px" onerror="this.style.display='none'">` : '')
       + chatHoraHtml(ts)
       + `</div>`;
   }
-  if (!m || role === 'user') return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}" data-ts="${Number(ts) || ''}">${linkifyEsc(text)}${chatHoraHtml(ts)}</div>`;
+  // (LOTE v847 · imagen pedida) Estado de un trabajo en curso: burbuja viva
+  // con spinner + ETA; el poller la actualiza y la reemplaza al terminar.
+  const tm = String(text || '').match(TRABAJO_MARKER_RE);
+  if (tm && role !== 'user') {
+    const tid = tm[1];
+    const cleanT = chatStripTrabajoMarker(text);
+    return `<div class="chat-msg ai pz-trabajo-estado" data-trabajo-id="${esc(tid)}"${mid} data-ts="${Number(ts) || ''}"><div>${pzIc('clock', 14)} ${linkifyEsc(cleanT)}</div><div class="pz-trabajo-eta" style="font-size:12px;color:var(--mut);margin-top:4px"></div>${chatHoraHtml(ts)}</div>`;
+  }
+  // (LOTE v847 · imagen pedida) Trabajo fallido: Posty dice qué pasó y el
+  // botón reintenta con un toque (sin teclado, sin volver a pedir la imagen).
+  const tf = String(text || '').match(TRABAJO_FALLO_MARKER_RE);
+  if (tf && role !== 'user') {
+    const tid = tf[1];
+    const cleanT = chatStripTrabajoMarker(text);
+    return `<div class="chat-msg ai pz-trabajo-fallo" data-trabajo-id="${esc(tid)}"${mid} data-ts="${Number(ts) || ''}"><div>${linkifyEsc(cleanT)}</div><div style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" data-trabajo-retry="${esc(tid)}">${pzIc('refresh', 14)} ${esc(gzT('Reintentar', 'Retry'))}</button></div>${chatHoraHtml(ts)}</div>`;
+  }
+  if (!m || role === 'user') return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}"${mid} data-ts="${Number(ts) || ''}">${linkifyEsc(text)}${chatHoraHtml(ts)}</div>`;
   const imgPath = (m[1] || '').trim();
   const img = imgPath
     ? `<img src="${esc(imgPath)}" alt="Posible logo de tu marca" loading="lazy" style="width:96px;height:96px;object-fit:cover;border-radius:16px;display:block;margin:8px auto" onerror="this.closest('.lc-banner').remove()">`
     : '';
-  return `<div class="chat-msg ai lc-banner" data-lc="${esc(imgPath)}" data-ts="${Number(ts) || ''}" style="touch-action:manipulation">`
+  return `<div class="chat-msg ai lc-banner"${mid} data-lc="${esc(imgPath)}" data-ts="${Number(ts) || ''}" style="touch-action:manipulation">`
     + `<div>${esc(chatStripLcMarker(text))}</div>${img}`
     + `<div style="display:flex;gap:8px;margin-top:8px">`
     + `<button class="lc-yes" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:999px;background:#2793C8;color:#fff;font-size:15px;font-weight:700">Sí, ese es ${pzIc('checkCircle', 18)}</button>`
@@ -9024,7 +9051,7 @@ async function chatLoadHistory() {
         .sort((a, b) => (a.ts - b.ts) || (a.id - b.id));
       const box = $('#chatBox');
       if (box) {
-        box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts)).join('');
+        box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts, m.id)).join('');
         // (v846 · ÚLTIMO ABAJO) El re-render no se come la burbuja de voz
         // optimista en vuelo: si sigue enviando, vuelve en su lugar por ts.
         try {
@@ -9084,8 +9111,110 @@ async function chatLoadHistory() {
     // (RS-5) Recomendación de Impulsar en el chat: se re-pinta tras cada
     // carga del historial (el innerHTML de arriba la borraría).
     try { pzBoostRecPintar(); } catch (e) {}
+    // (LOTE v847) Si hay un trabajo creando, el poller retoma; si la URL trae
+    // ?msg=, bajar al mensaje (deep link de la push).
+    try { pzTrabajoPollerRetomar(); } catch (_) {}
+    try { pzChatAplicarAncla(); } catch (_) {}
   } catch (e) { /* sin historial: se empieza de cero */ }
 }
+// ---------- TRABAJOS DEL CHAT (LOTE v847 · imagen pedida que nunca llegó) ----------
+// Poller del estado «Creando tu imagen…»: cada 5 s pregunta por el trabajo.
+// Al terminar, recarga el historial (la imagen cae en el lugar del estado) y
+// baja al mensaje. Si se pasa del estimado, la burbuja lo dice con el tiempo
+// REAL transcurrido — nunca un contador falso ni porcentaje inventado.
+let PZ_TRABAJO_POLL = null;
+let PZ_TRABAJO_POLL_ID = null;
+function pzTrabajoPollStop() { try { if (PZ_TRABAJO_POLL) clearInterval(PZ_TRABAJO_POLL); } catch (_) {} PZ_TRABAJO_POLL = null; PZ_TRABAJO_POLL_ID = null; }
+function pzTrabajoPoller(jobId) {
+  try { if (PZ_TRABAJO_POLL) clearInterval(PZ_TRABAJO_POLL); } catch (_) {}
+  PZ_TRABAJO_POLL_ID = jobId;
+  const tick = async () => {
+    const el = document.querySelector(`[data-trabajo-id="${jobId}"]`);
+    if (!el || !document.getElementById('chatBox')) { pzTrabajoPollStop(); return; }
+    let r = null;
+    try { r = await api.get('/api/trabajos/' + jobId); } catch (e) { return; }
+    const t = r && r.trabajo;
+    if (!t) { pzTrabajoPollStop(); return; }
+    // ETA honesta: tiempo real desde que el servidor creó el trabajo.
+    try {
+      const etaEl = el.querySelector('.pz-trabajo-eta');
+      if (etaEl && t.creado_en) {
+        const ini = Date.parse(String(t.creado_en).replace(' ', 'T') + 'Z');
+        const secs = Math.floor((Date.now() - ini) / 1000);
+        if (secs > (t.estimado_seg || 60)) etaEl.textContent = (typeof ME !== 'undefined' && ME && ME.lang === 'en' ? `taking longer than usual, still on it… (${secs}s)` : `está tardando más de lo normal, sigo… (${secs}s)`);
+        else etaEl.textContent = '';
+      }
+    } catch (_) {}
+    if (t.estado === 'lista') {
+      pzTrabajoPollStop();
+      try { await chatLoadHistory(); } catch (_) {}
+      try { pzChatIrAlMensaje(t.mensaje_final_id); } catch (_) {}
+    } else if (t.estado === 'fallo') {
+      pzTrabajoPollStop();
+      try { await chatLoadHistory(); } catch (_) {}
+      try { chatScroll(); } catch (_) {}
+    } else {
+      // Sin noticias en 5 min: se deja de preguntar y la burbuja queda con el
+      // reintento (el servidor ya saldó el trabajo como fallo al vencer).
+      try {
+        const ini = t.creado_en ? Date.parse(String(t.creado_en).replace(' ', 'T') + 'Z') : 0;
+        if (ini && Date.now() - ini > 5 * 60 * 1000) { pzTrabajoPollStop(); try { await chatLoadHistory(); } catch (_) {} }
+      } catch (_) {}
+    }
+  };
+  tick();
+  PZ_TRABAJO_POLL = setInterval(tick, 5000);
+}
+// Si al cargar el historial hay un trabajo creando, el poller retoma.
+function pzTrabajoPollerRetomar() {
+  try {
+    const el = document.querySelector('[data-trabajo-id].pz-trabajo-estado');
+    if (!el) return;
+    const id = Number(el.getAttribute('data-trabajo-id') || 0);
+    if (id && id !== PZ_TRABAJO_POLL_ID) pzTrabajoPoller(id);
+  } catch (_) {}
+}
+// Deep link al mensaje: #/app/chat?msg=<id> → scroll + destacado.
+function pzChatIrAlMensaje(msgId) {
+  try {
+    const id = Number(msgId || 0);
+    if (!id) return false;
+    const el = document.querySelector(`[data-msg-id="${id}"]`);
+    if (!el) return false;
+    try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) { try { el.scrollIntoView(); } catch (_) {} }
+    try {
+      const prev = el.style.boxShadow;
+      el.style.boxShadow = '0 0 0 2px #2793C8';
+      setTimeout(() => { try { el.style.boxShadow = prev || ''; } catch (_) {} }, 2500);
+    } catch (_) {}
+    return true;
+  } catch (_) { return false; }
+}
+function pzChatAplicarAncla() {
+  try {
+    if (!document.getElementById('chatBox')) return;
+    if (!((location.hash || '').split('?')[0] === '#/app/chat')) return;
+    const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+    const msg = Number(q.get('msg') || 0);
+    if (msg) pzChatIrAlMensaje(msg);
+  } catch (_) {}
+}
+// Reintentar un trabajo fallido (botón de la burbuja de fallo, un toque).
+document.addEventListener('click', (e) => {
+  const t = e.target && e.target.closest ? e.target.closest('[data-trabajo-retry]') : null;
+  if (!t) return;
+  try { e.preventDefault(); } catch (_) {}
+  const jobId = Number(t.getAttribute('data-trabajo-retry') || 0);
+  if (!jobId) return;
+  t.disabled = true;
+  api.post('/api/trabajos/' + jobId + '/reintentar', {}).then((r) => {
+    if (r && r.ok && r.trabajo) {
+      chatLoadHistory().then(() => { try { pzTrabajoPoller(r.trabajo.id); } catch (_) {} }).catch(() => {});
+    } else {
+      t.disabled = false;
+    }
+  }).catch(() => { t.disabled = false; });
+});
 // Llegada en vivo: cuando la app vuelve a primer plano y la vista chat está activa,
 // se recarga el historial para que el festejo de una publicación llegue sin recargar
 // (el backend inserta el mensaje con [celebrate]; el scan de chatLoadHistory lo dispara).
@@ -9403,7 +9532,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
   // explica qué se le puede pedir al chat («hola! soy Posty. decime qué
   // necesitás...»). Sin historial abre con ese saludo; con historial, directo
   // en el chat: historial + input.
-  const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts)).join('');
+  const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts, m.id)).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
@@ -10855,6 +10984,23 @@ async function chatExchange({ text, display, extra, pushed }) {
       chatAppendMsg(boxNow, chatMsgHtml('assistant', noReply, nts), nts);
       chatScroll(true);
     }
+    // (LOTE v847) El servidor creó un trabajo (imagen pedida sin bloque): el
+    // estado nace en el hilo en el acto y el poller lo sigue hasta que cae la
+    // imagen en su lugar. Sin doble burbuja si ya se pintó por otro camino.
+    if (r && r.trabajo && r.trabajo.estado === 'creando' && r.trabajo.id) {
+      try {
+        const tid = Number(r.trabajo.id);
+        if (!document.querySelector(`[data-trabajo-id="${tid}"]`)) {
+          const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+          const txt = en ? 'Creating your image… usually takes ~1 minute' : 'Creando tu imagen… suele tardar ~1 minuto';
+          const mid2 = r.trabajo.mensaje_id ? ` data-msg-id="${esc(String(r.trabajo.mensaje_id))}"` : '';
+          const tts = Date.now();
+          chatAppendMsg(boxNow, `<div class="chat-msg ai pz-trabajo-estado" data-trabajo-id="${tid}"${mid2} data-ts="${tts}"><div>${pzIc('clock', 14)} ${esc(txt)}</div><div class="pz-trabajo-eta" style="font-size:12px;color:var(--mut);margin-top:4px"></div>${chatHoraHtml(tts)}</div>`, tts);
+        }
+        pzTrabajoPoller(tid);
+        chatScroll(true);
+      } catch (_) {}
+    }
     // El ADN se completó en esta respuesta (bloque ```dna): invitar a generar de nuevo.
     // Nunca auto-disparar la generación: el cliente toca "⚡ Armemos tu semana" cuando quiere.
     if (r.dna) chatSay('ya sé lo esencial de tu negocio! 🎉 ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
@@ -10943,8 +11089,8 @@ async function pzSupervisionPoll() {
         for (const m of nuevos) {
           if (m.role !== 'assistant' || !String(m.text || '').trim()) continue;
           const mts = Date.parse(String(m.created_at || '')) || Date.now();
-          CHAT.push({ role: 'assistant', text: String(m.text), ts: mts });
-          if (boxNow) chatAppendMsg(boxNow, chatMsgHtml('assistant', String(m.text), mts), mts);
+          CHAT.push({ id: m.id, role: 'assistant', text: String(m.text), ts: mts });
+          if (boxNow) chatAppendMsg(boxNow, chatMsgHtml('assistant', String(m.text), mts, m.id), mts);
           try { postyNotify('Posty', String(m.text)); } catch (e) {}
           pinto = true;
         }
