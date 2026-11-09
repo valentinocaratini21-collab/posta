@@ -265,7 +265,7 @@ try { require.resolve('express', { paths: [__dirname] }); expressOk = true; } ca
     ok(up, 'boot levanta (PID ' + pid + ')');
     if (up) {
       const ver = JSON.parse((await get('/api/version')).body);
-      ok(ver.build === '20261105-v830', '/api/version 20261105-v830 (estampado)');
+      ok(ver.build === '20261105-v831', '/api/version 20261105-v830 (estampado)');
       const appS = await get('/app.js?v=560');
       ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=559 servido = árbol');
       ok(!appS.body.includes('pz-hoy-speech-ava'), 'servido: sin carita en el saludo');
@@ -275,7 +275,7 @@ try { require.resolve('express', { paths: [__dirname] }); expressOk = true; } ca
       ok(stS.body.includes('.pz-shell-head{position:sticky;top:0;z-index:50'), 'servido: encabezado sticky');
       ok(!stS.body.includes('pz-hoy-speech-ava'), 'servido: sin regla de carita en el CSS');
       const idx = await get('/?cb=lote-hoy-avatar-feed');
-      ok(idx.body.includes('app.js?v=564') && idx.body.includes('styles.css?v=20261215'), 'index ES servido ?v=564 + styles?v=20261215');
+      ok(idx.body.includes('app.js?v=565') && idx.body.includes('styles.css?v=20261215'), 'index ES servido ?v=565 + styles?v=20261215');
       const idxEn = await get('/en/?cb=lote-hoy-avatar-feed');
       ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261215'), 'index EN servido styles?v=20261215');
       const del = await new Promise((res) => { const q = http.request({ host: '127.0.0.1', port: PORT, path: '/api/album/1', method: 'DELETE' }, (r) => res(r.statusCode)); q.on('error', () => res(0)); q.end(); });

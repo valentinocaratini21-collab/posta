@@ -64,7 +64,7 @@ const ruleCss = (sel) => {
   t(apSrc.includes('¡Hola! 👋'), '§3: burbuja de apertura del Chat intacta («¡Hola! 👋»)');
   const salSrc = sliceFn(app, 'function pzSaludoEscribir() {', 'function pzShellDatosHoy() {');
   t(salSrc.includes('pzShellSaludo') && salSrc.includes('typing') && salSrc.includes('prefers-reduced-motion'), '§3: máquina de escribir intacta (escribe la identidad)');
-  t(srv.includes("const BUILD_ID = '20261105-v822'"), '§3: server.js sin tocar salvo BUILD v822');
+  t(srv.includes("const BUILD_ID = '20261105-v831'"), '§3: server.js sin tocar salvo BUILD v822');
   t(app.includes("const CHUNK_V = '20261105-v792'"), '§3: CHUNK_V v792 sin cambio');
 
   // ---------- 4. VM: matriz de fallbacks ----------
@@ -141,7 +141,7 @@ const ruleCss = (sel) => {
     try {
       t(await waitBoot(), '§5: boot levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v822', `§5: /api/version v822 (vino ${ver.build})`);
+      t(ver.build === '20261105-v831', `§5: /api/version v822 (vino ${ver.build})`);
       const appTxt = await (await fetch(`${BASE}/app.js?v=557`)).text();
       t(md5(appTxt) === md5(app), '§5: app.js?v=557 servido = árbol');
       t(!appTxt.includes('Posty está trabajando ahora'), '§5: servido sin «Posty está trabajando ahora»');

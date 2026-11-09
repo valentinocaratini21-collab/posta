@@ -1059,6 +1059,27 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chatmsg_user ON chat_messages(user_id, id);
+-- SUPERVISIÓN DEL CHAT (bamboo detrás de Posty — SIEMPRE, PARA TODOS):
+-- un ítem abierto por usuario. La puerta (POST /api/ideas/chat) abre/adjunta;
+-- el dictado (POST /api/admin/supervision/dictar) lo cierra como 'respondido'.
+CREATE TABLE IF NOT EXISTS supervision_pendientes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_msg_id INTEGER,
+  texto TEXT NOT NULL DEFAULT '',
+  mensajes INTEGER NOT NULL DEFAULT 1,
+  estado TEXT NOT NULL DEFAULT 'pendiente',
+  draft_text TEXT,
+  draft_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  dictado_por TEXT,
+  dictado_at TEXT,
+  reply_msg_id INTEGER,
+  caso_id INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_supervision_estado ON supervision_pendientes(estado, created_at);
+CREATE INDEX IF NOT EXISTS idx_supervision_usuario ON supervision_pendientes(user_id, estado);
 -- Mensajes proactivos de la IA (pedidos por chat, no tarjetas): 1 por tipo cada 7 días
 CREATE TABLE IF NOT EXISTS proactive_asks (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -63,8 +63,8 @@ check('0b server.js cambió vs base v821', md5(srv) !== '93af15859939642a99af27b
 check('0c db.js cambió vs base v821', md5(dbs) !== '27909018edb1d5e0a017c4f3df183e6e', md5(dbs));
 check('0d styles.css cambió vs base v821', md5(css) !== '82a97f57c75b03ae8880ad80e7a86c4d', md5(css));
 check('0e generator.js = LOTE A (chat-muse no lo toca)', md5(gen) === 'd3be4f32b446c0451fb75f9bd47ccf81', md5(gen));
-check('0f index ES/EN = v822 estampado (?v=557, styles?v=20261209)', md5(idxEs) === '912470a1f8b1d47e0adfa8f09f105a6a' && md5(idxEn) === '504157821517c6f19d632cc7893275a5', md5(idxEs) + ' / ' + md5(idxEn));
-check('0g BUILD v822 (A estampado; lo re-estampa el re-estampador a v823)', srv.includes("const BUILD_ID = '20261105-v824'"));
+check('0f index ES/EN = v822 estampado (?v=557, styles?v=20261209)', md5(idxEs) === 'a7b9bcc3457324bfd5cabecccf772fab' && md5(idxEn) === 'f496a504f1cbf2109fdddcebe75356fc', md5(idxEs) + ' / ' + md5(idxEn));
+check('0g BUILD v822 (A estampado; lo re-estampa el re-estampador a v823)', srv.includes("const BUILD_ID = '20261105-v831'"));
 
 // ---------- Parte 1: estática app.js — encabezado fino + input ----------
 console.log('— 1) estática: encabezado e input —');
@@ -285,7 +285,7 @@ async function parteBoot() {
     check('8a el servidor levanta con el lote', up);
     if (!up) { console.log(s1.out().split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('8b /api/version = v822 (estampado)', ver && ver.build === '20261105-v824', JSON.stringify(ver));
+    check('8b /api/version = v822 (estampado)', ver && ver.build === '20261105-v831', JSON.stringify(ver));
     const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=556`)).text();
     check('8c el app.js servido trae el lote (chevron + watchdog + saludo; sin video ni píldora)',
       appJs.includes("pzIc('chevronLeft'") && appJs.includes('CHAT_X_WATCHDOG_MS') && appJs.includes('hola! soy Posty. decime qué necesitás')

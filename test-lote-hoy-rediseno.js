@@ -57,10 +57,11 @@ ok(css.includes('#inicioView .hf-stat b{display:inline;font-size:15px}'), 'CSS: 
 // Render real de homeHeadHTML (como el perfil de Valentino).
 const escLine = app.split('\n').find((l) => l.startsWith('const esc = '));
 const pzDecEnt = extractFn(app, 'function pzDecEnt');
-ok(!!escLine && !!pzDecEnt, 'extrae esc + pzDecEnt');
+const pzIsIgTitleBio = extractFn(app, 'function pzIsIgTitleBio');
+ok(!!escLine && !!pzDecEnt && !!pzIsIgTitleBio, 'extrae esc + pzDecEnt + pzIsIgTitleBio');
 const ctx = { console, pzIc: (n) => '<i data-ic="' + n + '"></i>' };
 vm.createContext(ctx);
-vm.runInContext(escLine + '\n' + pzDecEnt + '\n' + hh, ctx);
+vm.runInContext(escLine + '\n' + pzDecEnt + '\n' + pzIsIgTitleBio + '\n' + hh, ctx);
 const H = ctx.homeHeadHTML;
 const val = { username: 'posty.communitymanager', name: 'Posty', pic: 'x.jpg',
   posts_count: 14, followers: 8, following: 1, is_verified: true };
@@ -127,7 +128,7 @@ ok(!card.includes('22C55E'), 'la tarjeta del posteo no trae verde');
 const lotCss = css.slice(css.indexOf('LOTE HOY-REDISEÑO v810'));
 ok(!lotCss.includes('22C55E'), 'el bloque del lote no pone verde en ningún lado (eso es v807)');
 ok(app.includes("('🔥 ' + (rachaN === 1 ? (en ? '1 day' : '1 día') : rachaN + (en ? ' days' : ' días')))"), 'la píldora de racha no se toca (eso es v808; forma v815 con «1 día» en singular)');
-ok(srv.includes("const BUILD_ID = '20261105-v822'"), 'server.js solo BUILD v822 estampado');
+ok(srv.includes("const BUILD_ID = '20261105-v831'"), 'server.js solo BUILD v822 estampado');
 
 /* ---------- 5. Censo ---------- */
 console.log('— 5. censo —');

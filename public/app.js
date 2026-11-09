@@ -11071,6 +11071,11 @@ async function chatExchange({ text, display, extra, pushed }) {
       new Promise((_, rej) => setTimeout(() => rej(new Error('chat-timeout-95s')), CHAT_X_WATCHDOG_MS)),
     ]);
     dropTyping();
+    // (SUPERVISIÓN · bamboo detrás de Posty) El intercambio quedó pendiente:
+    // Posty recibió el mensaje y bamboo lo está leyendo; la respuesta llega
+    // por dictado. No es un fallo: el poll espera la respuesta dictada.
+    // Nada en la superficie delata a bamboo.
+    if (r && r.pending) { try { pzSupervisionPoll(); } catch (e) {} }
     // Releer el box: un re-render en medio del intercambio deja el `box`
     // viejo desconectado y la respuesta no se veía nunca.
     const boxNow = $('#chatBox') || box;
@@ -11080,7 +11085,7 @@ async function chatExchange({ text, display, extra, pushed }) {
     // honesto en el mismo mensaje. Si trajo tarjeta/borradores, la burbuja
     // vacía no se pinta (la tarjeta ya es la respuesta).
     const replyText = String((r && r.reply) || '').trim();
-    const hasPayload = !!((r && r.idea) || (Array.isArray(r.ideas) && r.ideas.length) || (Array.isArray(r.showDrafts) && r.showDrafts.length) || (r.edit && r.edit.ok) || (r && r.voz_post) || (Array.isArray(r.options) && r.options.length) || (r && r.dna));
+    const hasPayload = !!((r && r.idea) || (Array.isArray(r.ideas) && r.ideas.length) || (Array.isArray(r.showDrafts) && r.showDrafts.length) || (r.edit && r.edit.ok) || (r && r.voz_post) || (Array.isArray(r.options) && r.options.length) || (r && r.dna) || (r && r.pending));
     if (replyText) {
       CHAT.push({ role: 'assistant', text: replyText });
       boxNow.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', replyText));
@@ -11138,6 +11143,47 @@ async function chatExchange({ text, display, extra, pushed }) {
   }
   });
   CHAT_X_QUEUE = run.catch(() => {});
+
+// (SUPERVISIÓN · bamboo detrás de Posty) Espera la respuesta dictada: re-lee
+// el historial cada 15 s y pinta la fila `assistant` nueva como burbuja
+// normal de Posty (misma voz, misma cara; nada delata a bamboo). Se frena
+// cuando llega la respuesta o a los 10 minutos (la respuesta aparece igual al
+// reabrir el chat); si el cliente escribe de nuevo, el próximo r.pending lo
+// vuelve a arrancar.
+let PZ_SUP_POLL = null;
+let PZ_SUP_SEEN = 0;
+async function pzSupervisionPoll() {
+  if (PZ_SUP_POLL) return;
+  try {
+    const h = await api.get('/api/ideas/chat');
+    const msgs0 = (h && h.messages) || [];
+    PZ_SUP_SEEN = msgs0.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0);
+  } catch (e) {}
+  let n = 0;
+  PZ_SUP_POLL = setInterval(async () => {
+    try {
+      const h = await api.get('/api/ideas/chat');
+      const msgs = (h && h.messages) || [];
+      const nuevos = msgs.filter((m) => Number(m.id) > PZ_SUP_SEEN);
+      if (nuevos.length) {
+        PZ_SUP_SEEN = Math.max(PZ_SUP_SEEN, ...nuevos.map((m) => Number(m.id) || 0));
+        const boxNow = $('#chatBox');
+        let pinto = false;
+        for (const m of nuevos) {
+          if (m.role !== 'assistant' || !String(m.text || '').trim()) continue;
+          CHAT.push({ role: 'assistant', text: String(m.text) });
+          if (boxNow) boxNow.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', String(m.text)));
+          try { postyNotify('Posty', String(m.text)); } catch (e) {}
+          pinto = true;
+        }
+        if (pinto) { try { chatScroll(); } catch (e) {} }
+        clearInterval(PZ_SUP_POLL); PZ_SUP_POLL = null;
+        return;
+      }
+      if (++n >= 40) { clearInterval(PZ_SUP_POLL); PZ_SUP_POLL = null; }
+    } catch (e) {}
+  }, 15000);
+}
   return run;
 }
 

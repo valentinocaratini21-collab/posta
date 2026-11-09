@@ -64,8 +64,8 @@ ok(css.includes('.st-rate-thumb{width:76px;height:76px;border-radius:12px;object
 
 /* ---------- 3. Nada global tocado + CSS-only + estrellas/botones sin cambio ---------- */
 console.log('— 3. límites (nada global, CSS-only, estrellas y botones sin cambio) —');
-ok(md5(app) === 'ed09a73f7b3d3e57193d300976454191', 'app.js = fusionado (A + CHAT-MUSE; glass no lo toca)');
-ok(md5(srv) === '01201d9c349e664739e572dd49a62897', 'server.js = fusionado (BUILD v822 + A + CHAT-MUSE)');
+ok(md5(app) === '8a16054810d1e29b6e3c55b3359759fc', 'app.js = fusionado (A + CHAT-MUSE; glass no lo toca)');
+ok(md5(srv) === '15940e071d5e99c0858cafaac6b3a8db', 'server.js = fusionado (BUILD v822 + A + CHAT-MUSE)');
 ok(css.includes('.ph-ico{width:52px;height:52px;flex:none;border-radius:16px;background:linear-gradient(135deg,rgba(39,147,200,.16),rgba(39,147,200,.05));border:1px solid rgba(39,147,200,.22);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 12px rgba(39,147,200,.10)}'), 'la regla global .ph-ico sigue intacta (azul, fuera de Análisis)');
 ok(css.includes('.card{background:linear-gradient(180deg,#FFFFFF 0%,#FCFEFF 100%);border:1px solid var(--line);border-radius:var(--r);padding:28px;margin-bottom:22px;box-shadow:var(--shadow)}'), 'la regla global .card sigue intacta');
 ok(css.includes('.st-card{background:linear-gradient(180deg,#FFFFFF 0%,#FCFEFF 100%);border:1px solid var(--line);border-radius:18px;padding:18px 16px;box-shadow:var(--shadow);min-height:104px;display:flex;flex-direction:column;justify-content:center}'), 'la regla .st-card sigue intacta (el vidrio lo pone el bloque LOTE GLASS, no este lote)');
@@ -100,12 +100,12 @@ ok(app.includes('<div class="card st-empty">') && app.includes('<div class="st-e
 
 /* ---------- 5. ?v=/styles?v= finales en AMBOS index ---------- */
 console.log('— 5. ?v=/styles?v= finales (v822: ?v=557 / styles?v=20261209) —');
-ok(idxEs.includes('app.js?v=560') && cnt(idxEs, /app\.js\?v=/g) === 1, 'index ES: app.js?v=557');
-ok(idxEs.includes('styles.css?v=20261212') && cnt(idxEs, /styles\.css\?v=/g) === 1, 'index ES: styles?v=20261209 (también sube, regla 14:12)');
+ok(idxEs.includes('app.js?v=565') && cnt(idxEs, /app\.js\?v=/g) === 1, 'index ES: app.js?v=557');
+ok(idxEs.includes('styles.css?v=20261215') && cnt(idxEs, /styles\.css\?v=/g) === 1, 'index ES: styles?v=20261209 (también sube, regla 14:12)');
 ok(!idxEs.includes('app.js?v=556') && !idxEs.includes('20261208'), 'index ES: cero restos de los valores viejos (?v=556 / 20261208)');
-ok(idxEn.includes('styles.css?v=20261212') && cnt(idxEn, /styles\.css\?v=/g) === 1, 'index EN: styles?v=20261209 (mismo valor que el ES)');
+ok(idxEn.includes('styles.css?v=20261215') && cnt(idxEn, /styles\.css\?v=/g) === 1, 'index EN: styles?v=20261209 (mismo valor que el ES)');
 ok(!idxEn.includes('20261208'), 'index EN: cero restos del valor viejo (20261208)');
-ok(srv.includes("const BUILD_ID = '20261105-v826'"), 'server.js estampado en BUILD v822 por el re-estampador');
+ok(srv.includes("const BUILD_ID = '20261105-v831'"), 'server.js estampado en BUILD v822 por el re-estampador');
 
 /* ---------- 6. Censo ---------- */
 console.log('— 6. censo —');

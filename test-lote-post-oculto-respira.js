@@ -19,11 +19,11 @@
 // M121: el boot del servidor real en DB temporal ES la prueba de carga.
 // FIX POSTY-DENTRO 6/11 ~21:00 (Valentino «Posty deberia estar dentro de la cartita»):
 // la cara va DENTRO del tile (C7i/C7i2/C7m) + styles?v=20261215 en ambos index (C8i)
-// + app.js?v=564 solo ES (C8b). Ahora 61 asserts (58 + 3 nuevas).
+// + app.js?v=565 solo ES (C8b). Ahora 61 asserts (58 + 3 nuevas).
 // (LOTE SACAR-CARTA-VELADA · 9/11 · orden Valentino 00:49 «Esto esta mal. Sacalo»:
 // la carta del FEED ya NO es velada: la C7 entera pasa a la carta ABIERTA
 // (foto + pill de salida + cuenta hasta que SALE); el paquete velado SIGUE
-// en el RITUAL (tardecita 17:00–00:00, cuenta hasta las 00:00). C8b/C8i re-pineados por el re-estampador v830 (564/20261215).)
+// en el RITUAL (tardecita 17:00–00:00, cuenta hasta las 00:00). C8b/C8i re-pineados por el re-estampador v831 (565/20261215).)
 'use strict';
 const fs = require('fs');
 const vm = require('vm');
@@ -259,7 +259,7 @@ const countDorso = (html) => (html.match(/<i class="pz-dorso">/g) || []).length;
   // --- C8) M78 + estática ---
   const fns = ['pzTzOffsetMs', 'pzDiaInicioMs', 'pzRitualAbreFecha', 'hfCuentaAbreTick'];
   t('C8a: M78 — las 4 funciones nuevas existen definidas en el bundle', fns.every((f) => typeof S[f] === 'function'), fns.filter((f) => typeof S[f] !== 'function').join(','));
-  t('C8b: M78 — ?v= bumpeado SOLO en ES (564) y EN sin app.js', IDX_ES.includes('app.js?v=564') && !IDX_ES.includes('app.js?v=563') && !IDX_EN.includes('app.js?v='));
+  t('C8b: M78 — ?v= bumpeado SOLO en ES (565) y EN sin app.js', IDX_ES.includes('app.js?v=565') && !IDX_ES.includes('app.js?v=564') && !IDX_EN.includes('app.js?v='));
   t('C8c (LOTE SACAR-CARTA-VELADA): CSS — el ritual conserva su velo (pz-ritual-pack-velo, pz-dorso, día-en, keyframes pzRespira) y la carta conserva su magia (hf-carta-magia, destellos); la Variante B se fue del CSS',
     CSS.includes('.pz-ritual-pack-velo.pz-respira') && CSS.includes('@keyframes pzRespira')
     && CSS.includes('.pz-dorso:only-of-type') && CSS.includes('.pz-ritual-dia-en')

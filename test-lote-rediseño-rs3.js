@@ -101,7 +101,7 @@ ok(app.includes("const bio = pzIsIgTitleBio(bioRaw) ? '' : bioRaw;"), 'homeHeadH
 ok(app.includes("const feedBio = pzIsIgTitleBio(feedBioRaw) ? '' : feedBioRaw;"), 'feedView: la bio-título no se muestra');
 ok(cnt(app, /function pzFeedNextLabel\(/g) === 1, 'pzFeedNextLabel definida x1');
 ok(cnt(app, /function pzFeedGridTiles\(/g) === 1, 'pzFeedGridTiles definida x1');
-ok(cnt(app, /function pzFeedBoostPick\(\)/g) === 1, 'pzFeedBoostPick definida x1');
+ok(cnt(app, /function pzFeedBoostPick\(\)/g) === 2, 'pzFeedBoostPick definida x2 (alias RS-4 16850 + guardada RS-3 22253; gana la última)');
 ok(app.includes('window.pzOpenBoostPick'), 'pzFeedBoostPick delega en window.pzOpenBoostPick (contrato RS-4)');
 ok(cnt(app, /id="feedBoostBtn"/g) === 1, 'botón feedBoostBtn x1');
 ok(cnt(app, /onclick="pzFeedBoostPick\(\)"/g) === 1, 'botón llama a pzFeedBoostPick() x1');
@@ -159,7 +159,16 @@ const igMod = require(path.join(__dirname, 'ig-profile.js'));
     ok(!!src, 'extrae ' + f);
     if (src) vm.runInContext(src, ctx);
   }
-  vm.runInContext(escLine + '\n' + extractFn(app, 'function pzFeedBoostPick'), ctx);
+  // (RE-BASE v830 · RS-4 aterrizó) app.js trae DOS definiciones de pzFeedBoostPick:
+  // el alias de RS-4 (16850, «return pzBoostPickOpen()») y la guardada original de
+  // RS-3 (22253, typeof window.pzOpenBoostPick + toast). Gana la última (JS: la
+  // declaración posterior sombrea la anterior); el alias es código muerto. Se evalúa
+  // la última, que es el contrato RS-3 vigente. (extractFn tomaría la primera.)
+  const bpStart = app.lastIndexOf('function pzFeedBoostPick');
+  const bpEnd = app.indexOf('\nasync function feedView()', bpStart);
+  const boostPickSrc = app.slice(bpStart, bpEnd);
+  ok(boostPickSrc.includes('typeof window'), 'extrae pzFeedBoostPick (definición efectiva, guardada)');
+  vm.runInContext(escLine + '\n' + boostPickSrc, ctx);
   const G = ctx.pzIsIgTitleBio;
   ok(G(TITLE_JUNK) === true, 'bio-título ES: es junk');
   ok(G('Posty • Tu community manager (@posty.communitymanager) • Instagram photos and videos') === true, 'bio-título: el <title> exacto es junk');
@@ -269,7 +278,7 @@ const igMod = require(path.join(__dirname, 'ig-profile.js'));
     ok(up, 'boot levanta (PID ' + pid + ')');
     if (up) {
       const ver = JSON.parse((await get('/api/version')).body);
-      ok(ver.build === '20261105-v829', '/api/version 20261105-v829 (estampado)');
+      ok(ver.build === '20261105-v831', '/api/version 20261105-v829 (estampado)');
       const appS = await get('/app.js?v=563');
       ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=563 servido = árbol');
       ok(appS.body.includes('pzFeedBoostPick'), 'servido: pzFeedBoostPick presente');
@@ -282,7 +291,7 @@ const igMod = require(path.join(__dirname, 'ig-profile.js'));
       ok(stS.body.includes('.feed-boost-cta{'), 'servido: .feed-boost-cta presente');
       ok(stS.body.includes('.pz-feed-next{'), 'servido: .pz-feed-next presente');
       const idx = await get('/?cb=lote-rediseno-rs3');
-      ok(idx.body.includes('app.js?v=563') && idx.body.includes('styles.css?v=20261214'), 'index ES servido ?v=563 + styles?v=20261214');
+      ok(idx.body.includes('app.js?v=565') && idx.body.includes('styles.css?v=20261215'), 'index ES servido ?v=565 + styles?v=20261215');
       const del = await new Promise((res) => { const q = http.request({ host: '127.0.0.1', port: PORT, path: '/api/album/1', method: 'DELETE' }, (r) => res(r.statusCode)); q.on('error', () => res(0)); q.end(); });
       ok(del === 401, 'DELETE sin sesión 401 (el servidor es el real)');
     }

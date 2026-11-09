@@ -392,7 +392,7 @@ try { require.resolve('express', { paths: [__dirname] }); expressOk = true; } ca
     ok(up, 'boot levanta (PID ' + pid + ')');
     if (up) {
       const ver = JSON.parse((await getText('/api/version')).body);
-      ok(ver.build === '20261105-v825', '/api/version 20261105-v825 (estampado por el re-estampador)');
+      ok(ver.build === '20261105-v831', '/api/version 20261105-v825 (estampado por el re-estampador)');
       const appS = await getText('/app.js?v=559');
       ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=559 servido = árbol');
       ok(appS.body.includes('pz-hoy-hoy') && appS.body.includes('pzUsarFotoAbrir'), 'servido: posteo de hoy + usar-foto presentes');
@@ -401,9 +401,9 @@ try { require.resolve('express', { paths: [__dirname] }); expressOk = true; } ca
       ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261211 servido = árbol');
       ok(stS.body.includes('.pz-hoy-hoy{') && stS.body.includes('.pz-nivel-posty{'), 'servido: clases nuevas del lote en el CSS');
       const idx = await getText('/?cb=lote-a-mejoras-inicio');
-      ok(idx.body.includes('app.js?v=559') && idx.body.includes('styles.css?v=20261211'), 'index ES servido ?v=557 + styles?v=20261211');
+      ok(idx.body.includes('app.js?v=565') && idx.body.includes('styles.css?v=20261215'), 'index ES servido ?v=565 + styles?v=20261215');
       const idxEn = await getText('/en/?cb=lote-a-mejoras-inicio');
-      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261211'), 'index EN servido styles?v=20261211');
+      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261215'), 'index EN servido styles?v=20261215');
       // Sin sesión: 401 en los endpoints nuevos.
       ok((await api('', 'GET', '/api/album')).status === 401, 'sin sesión: GET /api/album → 401');
       ok((await api('', 'GET', '/api/album/libres')).status === 401, 'sin sesión: GET /api/album/libres → 401');

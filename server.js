@@ -26,6 +26,7 @@ const morningPostPush = require('./morning-post-push');
 // abren casos, casos con cierre solo con confirmación del cliente, y
 // acciones del equipo con registro. La consola NUNCA publica.
 const supportCases = require('./support-cases');
+const supervisionChat = require('./supervision-chat'); // (SUPERVISIÓN) bamboo detrás de Posty
 const conserjeRevision = require('./conserje-revision'); // (LOTE CONSERJE-REVISION, base v748) revisión de la noche 19:00–00:00 + ficha del cliente
 const dogfood = require('./dogfood');
 dogfood.initDogfood(db); // Posty dogfood: columna kind + tabla dogfood_state
@@ -6245,11 +6246,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   // no gasta IA — no se le aplica el tope ni el rate de chat.
   let conciergeMode = false;
   try { conciergeMode = supportCases.isConcierge(db, uidChat); } catch (e) { conciergeMode = false; }
-  // Kill-switch de gasto diario: mensaje amable de Posty, nunca un error robótico.
-  try { if (!conciergeMode) costs.assertAiOk(uidChat); }
-  catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ reply: e.message, idea: null }); throw e; }
-  // Rate limit por plan: 40/80/150 mensajes/día (Esencial/Pro/Total). Anti-abuso.
-  if (!conciergeMode && !costs.checkRate(uidChat, 'chat', aiLimitsFor(uidChat).chatPerDay).ok) return res.json({ reply: costs.MSG_CHAT_RATE, idea: null });
+
   if (!Array.isArray(messages) || !messages.length) {
     if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.status(400).json({ error: 'Contanos tu idea' });
   }
@@ -6276,6 +6273,47 @@ app.post('/api/ideas/chat', async (req, res) => {
     try { vozPost = await armarBorradorVozChat(uidChat, heard, audio, Array.isArray(photoPaths) ? photoPaths : []); } catch (e) { console.error('[voz-dueno] chat:', e.message); vozPost = null; }
   }
   if (!clean.length) return res.status(400).json({ error: 'Contanos tu idea' });
+  // (SUPERVISIÓN · bamboo detrás de Posty — SIEMPRE, PARA TODOS) La puerta:
+  // el mensaje del cliente se guarda, abre/adjunta el ítem de supervisión y
+  // el cliente recibe el acuse fijo. El cerebro NO responde solo: la respuesta
+  // sale solo por dictado (POST /api/admin/supervision/dictar). FAIL-SAFE: si
+  // la puerta falla, se registra y el flujo sigue con el cerebro como hoy.
+  // SUPERVISION_OFF=1 saltea la puerta (SOLO suites que prueban el cerebro).
+  // (EXENCIÓN ADN · decisión de bamboo — registrada en STATUS y en la línea
+  // M36; Valentino puede vetarla) Los turnos de la entrevista de ADN
+  // (onboarding) NO pasan por la puerta: la entrevista es un flujo guionado
+  // con preguntas fijas y toques, y si cada turno esperara dictado, la
+  // prueba de un clic («menos de un minuto») se rompería. Condición precisa:
+  // ADN incompleto (dnaMissingFields > 0, el mismo chequeo que usa el
+  // cerebro para arrancar la entrevista) → turno de entrevista → el cerebro
+  // corre como hoy. Solo eso se exime; nada más. Si la lectura falla, la
+  // puerta aplica (la exención no se presume).
+  let dnaEntrevista = false;
+  try {
+    const dnaRow0 = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uidChat);
+    let dna0 = null;
+    if (dnaRow0 && dnaRow0.dna_json) { try { dna0 = JSON.parse(dnaRow0.dna_json); } catch (e) { dna0 = null; } }
+    dnaEntrevista = dnaMissingFields(dna0).length > 0;
+  } catch (e) { dnaEntrevista = false; }
+  if (process.env.SUPERVISION_OFF !== '1' && !dnaEntrevista) {
+    try {
+      const sup = supervisionChat.puerta(db, uidChat, clean);
+      if (sup && sup.ok) {
+        if (conciergeMode) {
+          try {
+            const dv0 = supportCases.divertToConcierge(db, uidChat, sup.texto);
+            if (dv0 && dv0.ok && dv0.caso_id) supervisionChat.setCaso(db, sup.exchange_id, dv0.caso_id);
+          } catch (e) {}
+        }
+        return res.json({ reply: sup.ack, idea: null, pending: true, supervision: { exchange_id: sup.exchange_id, estado: 'pendiente' } });
+      }
+    } catch (e) { console.error('[supervision] puerta falló, sigue la IA:', e.message); }
+  }
+  // (SUPERVISIÓN) Costos/rate: solo corren si la puerta falla o está apagada
+  // (fail-open) — el mensaje supervisado no gasta IA ni consume cupo de chat.
+  try { if (!conciergeMode) costs.assertAiOk(uidChat); }
+  catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ reply: e.message, idea: null }); throw e; }
+  if (!conciergeMode && !costs.checkRate(uidChat, 'chat', aiLimitsFor(uidChat).chatPerDay).ok) return res.json({ reply: costs.MSG_CHAT_RATE, idea: null });
   // (MODO CONSERJE) El cerebro no responde solo: el mensaje se guarda,
   // abre/actualiza el caso conserje y el cliente recibe un acuse honesto
   // de Posty. FAIL-SAFE: cualquier fallo del desvío sigue con la IA —
@@ -8801,8 +8839,40 @@ app.get('/api/admin/support/conserje/pendientes', requireAdminToken, (req, res) 
   catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
 app.get('/api/admin/support/conserje/panel', requireAdminToken, (req, res) => {
-  try { res.json(supportCases.buildOwnerPanel(db, { limit: req.query.limit || 100, absImageUrl })); }
+  try {
+    const panel = supportCases.buildOwnerPanel(db, { limit: req.query.limit || 100, absImageUrl });
+    try { panel.supervision_pendientes = supervisionChat.listarPendientes(db); } catch (e) { panel.supervision_pendientes = { ok: true, pendientes: [], total: 0 }; }
+    res.json(panel);
+  }
   catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+// ---------- SUPERVISIÓN DEL CHAT (bamboo detrás de Posty) ----------
+// El cliente piensa que chatea con Posty; la cabeza es bamboo. La lectura
+// (chat), la cola (pendientes) y el dictado (dictar/borrador) viven acá.
+// El dictado manda TEXTO como Posty (replyAsPosty); nunca ejecuta acciones.
+app.get('/api/admin/supervision/chat', requireAdminToken, (req, res) => {
+  if (!/^\d+$/.test(String(req.query.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+  const r = supervisionChat.leerHilo(db, Number(req.query.user_id));
+  if (!r.ok) return res.status(404).json({ ok: false, error: r.error });
+  res.json(r);
+});
+app.get('/api/admin/supervision/pendientes', requireAdminToken, (req, res) => {
+  try { res.json(supervisionChat.listarPendientes(db)); }
+  catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/supervision/dictar', requireAdminToken, (req, res) => {
+  const b = req.body || {};
+  if (!/^\d+$/.test(String(b.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+  const r = supervisionChat.dictar(db, Number(b.user_id), b.texto, { usar_borrador: !!b.usar_borrador });
+  if (!r.ok) return res.status(r.error === 'sin_pendiente' ? 404 : 400).json({ ok: false, error: r.error });
+  res.json({ ok: true, exchange_id: r.exchange_id, reply_msg_id: r.reply_msg_id, case_id: r.case_id });
+});
+app.post('/api/admin/supervision/borrador', requireAdminToken, (req, res) => {
+  const b = req.body || {};
+  if (!/^\d+$/.test(String(b.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+  const r = supervisionChat.guardarBorrador(db, Number(b.user_id), b.texto);
+  if (!r.ok) return res.status(r.error === 'sin_pendiente' ? 404 : 400).json({ ok: false, error: r.error });
+  res.json({ ok: true, exchange_id: r.exchange_id });
 });
 app.post('/api/admin/support/:userId/conserje', requireAdminToken, (req, res) => {
   if (!/^\d+$/.test(String(req.params.userId || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
@@ -10188,7 +10258,7 @@ app.post('/api/voz-dueno/reel', requireAuth, async (req, res) => {
 app.get('/api/ideas/chat', (req, res) => {
   if (!req.session.userId) return res.json({ messages: [], welcome: req.query.lang === 'en' ? "hi! i'm posty 🤖 how can i help? you can ask me what i do, how much it costs or how the free trial works." : 'hola! soy posty 🤖 en qué te ayudo? podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
   const uid = req.session.userId;
-  const msgs = db.prepare(`SELECT role, text FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-7 days') ORDER BY id DESC LIMIT 60`).all(uid).reverse();
+  const msgs = db.prepare(`SELECT id, role, text, created_at FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-7 days') ORDER BY id DESC LIMIT 60`).all(uid).reverse();
   const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid);
   let idea = null;
   try { idea = st ? JSON.parse(st.idea_json) : null; } catch (e) { idea = null; }
@@ -33081,7 +33151,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v830';
+const BUILD_ID = '20261105-v831';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

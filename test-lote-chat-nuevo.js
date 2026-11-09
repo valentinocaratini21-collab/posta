@@ -52,7 +52,7 @@ check('0a app.js cambió vs base v820', md5(app) !== '5f38503c070cf80d91282f5fdf
 check('0b server.js cambió vs base v820', md5(srv) !== '0de3dc6d3d261e183bc431ce89fcae95', md5(srv));
 check('0c generator.js cambió vs base v820', md5(gen) !== '7e5edc801f1a618533e8183487db01c8', md5(gen));
 check('0d styles.css cambió vs base v820', md5(css) !== 'a856a7b75db749865b06c06e418caf1e', md5(css));
-check('0e BUILD v822 (estampado por el re-estampador)', srv.includes("const BUILD_ID = '20261105-v824'"), md5(srv));
+check('0e BUILD v822 (estampado por el re-estampador)', srv.includes("const BUILD_ID = '20261105-v831'"), md5(srv));
 
 // ---------- Parte 1: estática — apertura nueva ----------
 console.log('— 1) estática: apertura —');
@@ -257,7 +257,7 @@ async function parteBoot() {
     check('9a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('9b /api/version = v822 (estampado)', ver && ver.build === '20261105-v824', JSON.stringify(ver));
+    check('9b /api/version = v822 (estampado)', ver && ver.build === '20261105-v831', JSON.stringify(ver));
     const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=557`)).text();
     check('9c el app.js servido trae el lote (saludo nuevo + comando corto + dropTyping)',
       appJs.includes('hola! soy Posty. decime qué necesitás') && appJs.includes('function chatIsShortCommand') && appJs.includes('dropTyping()') && !appJs.includes('qué hacemos hoy'), 'len ' + appJs.length);
