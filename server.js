@@ -6201,6 +6201,27 @@ function chatPublishedEditBackstop(reply, skipped) {
   return text ? text.replace(/\s*$/, '\n\n' + honest) : honest;
 }
 
+// (LOTE C · CHAT-NUEVO · CASO 1) Tema pedido al mostrar posteos: "mostrame
+// el posteo de fitness" → ["fitness"]. Los borradores que matcheen el tema
+// van primero; si ninguno matchea, `topic` trae el tema para decirlo honesto
+// en el mismo mensaje. Sin tema pedido, la lista sale tal cual.
+function pzChatShowDraftsTopic(drafts, lastUserText) {
+  const stop = new Set(['mostrame', 'mostrá', 'mostrar', 'mostrarme', 'ver', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del', 'en', 'mi', 'mis', 'que', 'posteos', 'posteo', 'post', 'borradores', 'borrador', 'fotos', 'foto', 'imagenes', 'tengo', 'tenes', 'hay', 'por', 'para', 'con', 'sin', 'favor', 'quiero', 'me', 'ya', 'armados', 'armado', 'armaste', 'hiciste', 'hechos', 'hecho', 'este', 'esta', 'estos', 'estas', 'ese', 'esa', 'son', 'sus', 'fue', 'era']);
+  const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const words = fold(lastUserText).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length >= 3 && !stop.has(w));
+  if (!words.length) return { list: drafts, topic: '' };
+  const hit = (d) => {
+    const c = fold(d.caption || '');
+    if (words.some((w) => c.includes(w))) return true;
+    if (words.includes('reel') && d.media_type === 'video') return true;
+    if (words.includes('historia') && d.media_type === 'story') return true;
+    return false;
+  };
+  const yes = drafts.filter(hit);
+  const no = drafts.filter((d) => !hit(d));
+  return { list: yes.concat(no), topic: yes.length ? '' : words.join(' ') };
+}
+
 app.post('/api/ideas/chat', async (req, res) => {
   if (!req.session.userId) return pzChatPublic(req, res);
   let _lpNx = false; requireTrialValid(req, res, () => { _lpNx = true; });
@@ -6221,8 +6242,8 @@ app.post('/api/ideas/chat', async (req, res) => {
     if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.status(400).json({ error: 'Contanos tu idea' });
   }
   const clean = (Array.isArray(messages) ? messages : [])
-    .slice(-10)
-    .map(m => ({ role: m && m.role === 'assistant' ? 'assistant' : 'user', text: String((m && m.text) || '').slice(0, 2000) }))
+    .slice(-20)
+    .map(m => ({ role: m && m.role === 'assistant' ? 'assistant' : 'user', text: String((m && m.text) || '').slice(0, 3000) }))
     .filter(m => m.text.trim());
   // Nota de voz: transcribir con Whisper y usar el texto como mensaje del usuario.
   let chatNote = '';
@@ -6235,8 +6256,8 @@ app.post('/api/ideas/chat', async (req, res) => {
     try { heard = await transcribeAudio(audio, akey, langOfUser(uidChat)); } catch (e) { console.error('[chat] whisper:', e.message); }
     if (!heard) return res.json(noAudio);
     const lastUser = [...clean].reverse().find(m => m.role === 'user');
-    if (lastUser) lastUser.text = heard.slice(0, 2000);
-    else clean.push({ role: 'user', text: heard.slice(0, 2000) });
+    if (lastUser) lastUser.text = heard.slice(0, 3000);
+    else clean.push({ role: 'user', text: heard.slice(0, 3000) });
     chatNote = 'El cliente mandó una NOTA DE VOZ. El texto siguiente es EXACTAMENTE lo que dijo (transcripción literal, no un resumen). Ejecutalo como si lo hubiera escrito: si pide aprobar, publicar, cambiar foto/texto/día/hora, rechazar, crear, rehacer o cualquier otra acción sobre sus posteos, hacela de verdad con los mecanismos disponibles (bloques edit, publish, create, redo, rule) y confirmá qué hiciste con el resultado real. Solo si no es accionable, respondé. Nunca finjas haber hecho algo que no hiciste.';
     // (voz-dueno) Si el audio es un reporte del dia, armar el borrador voz->posteo.
     // Nunca rompe el flujo normal: cualquier error deja vozPost en null.
@@ -6252,7 +6273,7 @@ app.post('/api/ideas/chat', async (req, res) => {
       const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
       const dv = supportCases.divertToConcierge(db, uidChat, lastUserText);
       if (dv && dv.ok) {
-        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', dv.ack);
         return res.json({ reply: dv.ack, idea: null, concierge: true });
       }
@@ -6265,7 +6286,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     if (greetRe.test(lastUserText.trim()) || pzIsPureGreeting(lastUserText)) {
       const reply = 'hola! 😄 con qué te ayudo hoy?';
       try {
-        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
       } catch (e) {}
       return res.json({ reply, idea: null });
@@ -6285,7 +6306,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     const tmLang = langOfUser(uidChat);
     const tmPersist = (reply) => {
       try {
-        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
       } catch (e) {}
     };
@@ -6337,7 +6358,7 @@ app.post('/api/ideas/chat', async (req, res) => {
         db.prepare('UPDATE users SET client_name = ? WHERE id = ?').run(cname, uidChat);
         const reply = `dale, ${cname}! \uD83D\uDE04 ya me lo anoto.`;
         try {
-          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
+          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
           db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
         } catch (e) {}
         return res.json({ reply, idea: null });
@@ -6359,7 +6380,7 @@ app.post('/api/ideas/chat', async (req, res) => {
           ? `listo, pauso ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} por un tiempo 👍`
           : `dale, vuelvo a proponerte ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} 👍`;
         try {
-          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', lastUserText.slice(0, 2000));
+          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', lastUserText.slice(0, 3000));
           db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', reply);
         } catch (e) {}
         return res.json({ reply, idea: null });
@@ -6572,7 +6593,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     } catch (e) { console.error('[chat-coherencia] guard error:', e.message); }
     const uid = req.session.userId;
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', clean[clean.length - 1].text);
-    db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', String(out.reply || '').slice(0, 2000));
+    db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', String(out.reply || '').slice(0, 3000));
     if (out.idea) {
       db.prepare('INSERT INTO chat_state (user_id, idea_json, updated_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET idea_json=excluded.idea_json, updated_at=excluded.updated_at').run(uid, JSON.stringify(out.idea), Date.now());
       // Pedido de fotos/video (1 vez por semana): registrar cuándo se pidió
@@ -7171,6 +7192,14 @@ app.post('/api/ideas/chat', async (req, res) => {
       if (!showDrafts || !showDrafts.length) {
         showDrafts = [];
         out.reply = 'todavía no armé nada — la armamos? 🚀';
+      } else {
+        // (LOTE C · CASO 1) Si pidió UN posteo concreto ("el posteo de
+        // fitness"), los que matcheen van primero; si ninguno matchea, se
+        // dice honesto en el mismo mensaje en vez de prometer ese posteo.
+        const lastUserShow = (clean.filter((m) => m.role === 'user').pop() || {}).text || '';
+        const ranked = pzChatShowDraftsTopic(showDrafts, lastUserShow);
+        showDrafts = ranked.list;
+        if (ranked.topic) out.reply = 'de ' + ranked.topic + ' no tengo ningún posteo armado — estos son los que tengo 👇';
       }
     }
     // FM #5: si el publish quedó en revisión o falló, el festejo del modelo
@@ -10115,7 +10144,7 @@ app.post('/api/voz-dueno/reel', requireAuth, async (req, res) => {
 app.get('/api/ideas/chat', (req, res) => {
   if (!req.session.userId) return res.json({ messages: [], welcome: req.query.lang === 'en' ? "hi! i'm posty 🤖 how can i help? you can ask me what i do, how much it costs or how the free trial works." : 'hola! soy posty 🤖 en qué te ayudo? podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
   const uid = req.session.userId;
-  const msgs = db.prepare(`SELECT role, text FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-24 hours') ORDER BY id DESC LIMIT 30`).all(uid).reverse();
+  const msgs = db.prepare(`SELECT role, text FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-7 days') ORDER BY id DESC LIMIT 60`).all(uid).reverse();
   const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid);
   let idea = null;
   try { idea = st ? JSON.parse(st.idea_json) : null; } catch (e) { idea = null; }
@@ -32480,7 +32509,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v820';
+const BUILD_ID = '20261105-v821';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

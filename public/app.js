@@ -9365,19 +9365,15 @@ async function chatLoadHistory() {
     if (r && Array.isArray(r.messages) && r.messages.length) {
       CHAT = r.messages
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text)
-        .map(m => ({ role: m.role, text: String(m.text).slice(0, 2000) }));
+        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000) }));
       const box = $('#chatBox');
       if (box) box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
       // Auto-trigger por marcador: mensajes NUEVOS con [celebrate] festejan una sola vez.
       chatCelebrateScan(CHAT);
-      const chips = $('#chatChips');
-      if (chips) chips.remove(); // con historial, los ejemplos ya no hacen falta
     }
     if (r && typeof r.welcome === 'string' && r.welcome.trim()) {
       const box = $('#chatBox');
       if (box) box.insertAdjacentHTML('afterbegin', `<div class="chat-msg ai">${esc(r.welcome.trim().slice(0, 600))}</div>`);
-      const chips = $('#chatChips');
-      if (chips) chips.remove();
     }
     // Fix auditoría #2: si la importación de /prueba trajo 0, el welcome honesto
     // viene con 1 tap para rearmar la semana (POST /api/trial/rebuild-import).
@@ -9722,13 +9718,14 @@ function chatNextWeekHTML() {
   return `<div class="chat-msg ai">${en ? `✨ <b>${shown} of ${w.total}</b> posts for next week are already lined up` : `✨ ya están armados <b>${shown} de ${w.total}</b> de la semana que viene`}${more}</div>`;
 }
 function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetChips, noUpRow) {
-  // (v442 · Corrección de Valentino 02:20) En la pantalla principal
-  // (mainScr: Inicio y Semana) el chat va SIN prólogo: sin saludo
-  // («hola! qué hacemos hoy?»), sin la línea de estado de la semana
-  // (chatNextWeekHTML — esa data ya vive en la grilla) y sin el título
-  // «¿Cambiamos algo?» (los call sites ya no lo pintan). Abre directo
-  // en el chat: historial + input. Las demás superficies conservan su
-  // saludo de siempre.
+  // (v442 · Corrección de Valentino 02:20, actualizada LOTE C · CHAT-NUEVO)
+  // En la pantalla principal (mainScr: Inicio y Semana) el chat va SIN
+  // prólogo: sin la línea de estado de la semana (chatNextWeekHTML — esa
+  // data ya vive en la grilla) y sin el título «¿Cambiamos algo?» (los call
+  // sites ya no lo pintan). El SALUDO nuevo sí va en todas las superficies:
+  // explica qué se le puede pedir al chat («hola! soy Posty. decime qué
+  // necesitás...»). Sin historial abre con ese saludo; con historial, directo
+  // en el chat: historial + input.
   const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
@@ -9744,11 +9741,14 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
   // ÚNICO botón de subida de la pantalla vive acá: fijo, inmediatamente
   // debajo del saludo (la caja de mensajes scrollea; esta fila no), con
   // su #albumFile y su #albumMsg (el festejo/clasificación de siempre).
-  const chips = (!msgs && !schedMode) ? `
+  // (LOTE C · CHAT-NUEVO) Los chips van SIEMPRE visibles (mock v1 aprobado):
+  // son la puerta de entrada al chat, no solo ejemplos para la primera vez.
+  // (chatLoadHistory ya no los saca cuando hay historial.)
+  const chips = (!schedMode) ? `
     <div class="chat-chips" id="chatChips">
-      <button data-chip="Haceme un posteo de promo para esta semana">${pzIc('sparkle', 18)} Haceme un posteo</button>
-      ${noEditChip ? '' : `<button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">${pzIc('pencil', 13)} Editá un borrador</button>`}
-      <button data-chip="Dame una idea para vender más esta semana">${pzIc('idea', 18)} Dame una idea</button>
+      <button data-chip="Haceme un posteo de promo para esta semana">haceme un posteo</button>
+      ${noEditChip ? '' : `<button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">cambiá el texto</button>`}
+      <button data-chip="Dame una idea para vender más esta semana">idea para vender más</button>
     </div>` : '';
   // SACAR-IDEAS (decisión Valentino 3/11: «No quiero que aparezca mas»):
   // la píldora «Ideas» salió de la fila de subida por completo (botón,
@@ -9769,7 +9769,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
   ${wrap}
     ${title}${desc}
     <div class="chat-box" id="chatBox">
-      ${mainScr ? msgs : (msgs ? chatNextWeekHTML() + msgs : `<div class="chat-msg ai">hola! 👋 qué hacemos hoy?</div>` + chatNextWeekHTML())}
+      ${msgs ? (mainScr ? msgs : chatNextWeekHTML() + msgs) : `<div class="chat-msg ai">hola! soy Posty. decime qué necesitás y lo armo con tus fotos reales — yo pongo las palabras, nunca la foto.</div>` + (mainScr ? '' : chatNextWeekHTML())}
     </div><div id="chatAnchor"></div>${upRow}${chips}
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
@@ -10520,7 +10520,8 @@ async function pzSubirCompletar() {
     if (box) {
       const thumb = photo.aiUrl ? `<img src="${esc(photo.aiUrl)}" style="width:100%;border-radius:10px;margin-bottom:6px;display:block" alt="">` : '';
       box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${thumb}<div>${esc(displayText)}</div></div>`);
-      box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', r.reply || '…'));
+      // (LOTE C · CASO 1) Nunca una burbuja «…» pelada: sin respuesta, no se pinta.
+      if (String(r.reply || '').trim()) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', r.reply));
       chatScroll();
     }
     const i = CHAT_PHOTOS.indexOf(photo); if (i >= 0) CHAT_PHOTOS.splice(i, 1);
@@ -10536,6 +10537,15 @@ async function pzSubirCompletar() {
     const inp = $('#chatInput');
     if (inp && textoGuardado) inp.value = textoGuardado;
   }
+}
+
+// (LOTE C · CHAT-NUEVO) Los atajos de vista (semana, DMs, comentarios,
+// reseñas) solo corren cuando el mensaje ES el comando corto ("esta
+// semana", "mis comentarios"): una pregunta que CONTIENE la palabra
+// ("¿qué comentarios me dejaron en el posteo de fitness?") va al cerebro.
+function chatIsShortCommand(t) {
+  const w = String(t || '').replace(/[¿?¡!.,;:()"“”«»]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  return w.length > 0 && w.length <= 6;
 }
 
 async function chatSend() {
@@ -10680,31 +10690,31 @@ async function chatSend() {
     return;
   }
   // "¿qué preguntan en mis comentarios?" → insights del análisis (antes que el flujo de responder comentarios).
-  if (/\bcomentarios?\b/i.test(sendText) && /(pregunt|duda|objeci|quieren|frena|dicen)/i.test(sendText)) {
+  if (chatIsShortCommand(sendText) && /\bcomentarios?\b/i.test(sendText) && /(pregunt|duda|objeci|quieren|frena|dicen)/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
     showCommentInsights();
     return;
   }
   // "¿qué sale esta semana?" → la agenda, adentro del chat.
-  if (/qu[eé] sale|esta semana|mi semana|\bagenda\b|programados/i.test(sendText) && !/arma/i.test(sendText)) {
+  if (chatIsShortCommand(sendText) && /qu[eé] sale|esta semana|mi semana|\bagenda\b|programados/i.test(sendText) && !/arma/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
     showWeekInChat();
     return;
   }
   // "reseñas" → la IA trae las reseñas de Google sin responder y deja la respuesta lista, acá en el chat
-  if (/\b(reseñas?|resenas?|opiniones|reviews?)\b/i.test(sendText)) {
+  if (chatIsShortCommand(sendText) && /\b(reseñas?|resenas?|opiniones|reviews?)\b/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
     showReviewsInChat();
     return;
   }
   // "mensajes" → la IA trae los DMs pendientes de Instagram y deja la respuesta lista, acá en el chat
-  if (/\b(mensajes?|dms?|directos?|privados?|bandeja)\b/i.test(sendText)) {
+  if (chatIsShortCommand(sendText) && /\b(mensajes?|dms?|directos?|privados?|bandeja)\b/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
     showDMsInChat();
     return;
   }
   // "comentarios" → la IA trae los pendientes de Instagram y deja la respuesta lista, acá en el chat
-  if (/\bcomentarios?\b/i.test(sendText) && !/sin comentarios/i.test(sendText)) {
+  if (chatIsShortCommand(sendText) && /\bcomentarios?\b/i.test(sendText) && !/sin comentarios/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
     showCommentsInChat();
     return;
@@ -10978,8 +10988,17 @@ async function chatExchange({ text, display, extra, pushed }) {
   }
   if (btn) btn.disabled = true;
   CHAT_IDEA = null; CUSTOM_PAL = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
-  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping"></div>`);
-  postyTyping(document.getElementById('chatTyping'));
+  // (LOTE C · CHAT-NUEVO · CASO 1) Cada intercambio tiene su propia burbuja
+  // de «escribiendo», con id único: nunca queda una «...» colgada por ids
+  // duplicados ni por un re-render en medio del intercambio.
+  const typingId = 'chatTyping-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1000);
+  const dropTyping = () => {
+    const n = document.getElementById(typingId);
+    if (n) { try { stopPostyThinking(n); } catch (e) {} n.remove(); }
+    try { document.querySelectorAll('#chatTyping').forEach((x) => x.remove()); } catch (e) {}
+  };
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="${typingId}"></div>`);
+  postyTyping(document.getElementById(typingId));
   chatScroll();
   postyWorking(true);
   const run = CHAT_X_QUEUE.then(async () => {
@@ -10993,12 +11012,27 @@ async function chatExchange({ text, display, extra, pushed }) {
     const r = await api.post('/api/ideas/chat', Object.assign(
       { messages: CHAT.map(m => ({ role: m.role, text: chatStripMcMarker(m.text) })), photos: unsentPhotos, library: libThumbs, drafts: chatDraftsCtx(),
         photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean),
-        anchor_post_id: (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id) ? HF_CHAT_ANCHOR.id : undefined }, extra || {}));
-    const t = $('#chatTyping'); if (t) { stopPostyThinking(t); t.remove(); }
+        anchor_post_id: (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id) ? HF_CHAT_ANCHOR.id : undefined }, extra || {}), { timeout: 90000 });
+    dropTyping();
+    // Releer el box: un re-render en medio del intercambio deja el `box`
+    // viejo desconectado y la respuesta no se veía nunca.
+    const boxNow = $('#chatBox') || box;
     CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
-    CHAT.push({ role: 'assistant', text: r.reply || '…' });
-    box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', r.reply || '…'));
-    postyNotify('Posty', r.reply || '…');
+    // (LOTE C · CASO 1) Nunca una burbuja «…» pelada: si la respuesta viene
+    // vacía y no trajo nada (ni idea, ni borradores, ni edición), se dice
+    // honesto en el mismo mensaje. Si trajo tarjeta/borradores, la burbuja
+    // vacía no se pinta (la tarjeta ya es la respuesta).
+    const replyText = String((r && r.reply) || '').trim();
+    const hasPayload = !!((r && r.idea) || (Array.isArray(r.ideas) && r.ideas.length) || (Array.isArray(r.showDrafts) && r.showDrafts.length) || (r.edit && r.edit.ok) || (r && r.voz_post) || (Array.isArray(r.options) && r.options.length) || (r && r.dna));
+    if (replyText) {
+      CHAT.push({ role: 'assistant', text: replyText });
+      boxNow.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', replyText));
+      postyNotify('Posty', replyText);
+    } else if (!hasPayload) {
+      const noReply = 'no me salió la respuesta, ¿me lo repetís en una línea? 🙏';
+      CHAT.push({ role: 'assistant', text: noReply });
+      boxNow.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', noReply));
+    }
     // El ADN se completó en esta respuesta (bloque ```dna): invitar a generar de nuevo.
     // Nunca auto-disparar la generación: el cliente toca "⚡ Armemos tu semana" cuando quiere.
     if (r.dna) chatSay('ya sé lo esencial de tu negocio! 🎉 ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
@@ -11010,11 +11044,11 @@ async function chatExchange({ text, display, extra, pushed }) {
     if (r.edit && r.edit.ok) {
       try { render(); } catch (e) {}
       if (r.edit.photoFailed) {
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">no pude cambiar la foto 😅 me la mandás de nuevo?</div>`);
+        boxNow.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">no pude cambiar la foto 😅 me la mandás de nuevo?</div>`);
         chatScroll();
       }
       if (Array.isArray(r.edit.images) && r.edit.images.length) {
-        box.insertAdjacentHTML('beforeend', r.edit.images.map(u =>
+        boxNow.insertAdjacentHTML('beforeend', r.edit.images.map(u =>
           `<div class="chat-msg ai" style="max-width:100%;padding:8px"><img src="${esc(u)}" style="width:100%;border-radius:12px;display:block" alt="Borrador editado" loading="lazy"></div>`
         ).join(''));
       }
@@ -11030,11 +11064,19 @@ async function chatExchange({ text, display, extra, pushed }) {
     if (Array.isArray(r.showDrafts) && r.showDrafts.length) renderChatShowDrafts(r.showDrafts);
     if (r.voz_post) renderVozPostCard(r.voz_post);
   } catch (e) {
-    const t = $('#chatTyping'); if (t) { stopPostyThinking(t); t.remove(); }
-    if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
+    dropTyping();
+    // (LOTE C · CASO 1) El error también es una burbuja del chat, no solo
+    // una línea chica bajo el input: si no se pudo responder, se dice acá.
+    const boxNow = $('#chatBox') || box;
+    const errText = 'no pude responder, probá de nuevo en un rato 🙏';
+    CHAT.push({ role: 'assistant', text: errText });
+    if (boxNow) boxNow.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', errText));
+    const mNow = $('#chatMsg') || m;
+    if (mNow) mNow.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
   } finally {
     postyWorking(false);
-    if (btn) { btn.disabled = false; chatUpdateSendBtn(); }
+    const btnNow = $('#chatMicSend') || btn;
+    if (btnNow) { btnNow.disabled = false; chatUpdateSendBtn(); }
     chatScroll();
   }
   });
@@ -12732,18 +12774,21 @@ async function chatView() {
       setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 8000);
     }
   } catch (e) {}
+  // (LOTE C · CHAT-NUEVO) El chat va PRIMERO: encabezado propio con cara +
+  // estado, y la tarjeta del chat arriba. La revisión de la semana (grilla +
+  // álbum + Activar) queda debajo, con su rótulo.
   return `
   <div class="chat-home hs-home">
     <div class="hs-top">
       <span class="pz-mg"><img src="ai-avatar.png" class="hs-ava" alt="Posty"></span>
-      <div><b>Posty<span class="pdot">.</span></b><div class="hs-sub">Tu semana, lista. Si querés cambiar algo, decime ${pzIc('arrowDown', 13)}</div></div>
+      <div><b>Posty<span class="pdot">.</span></b><div class="hs-sub"><span class="chat-online-dot"></span> en línea · responde al toque</div></div>
     </div>
+    ${chatCardHTML(true, true, true)}
     <div id="revMsg"></div>
+    <div class="hs-chat-label"><b>Tu semana, lista.</b></div>
     ${homeWeekHTML(posts, quota, weekGenerating, weekNoDna)}
     <div id="albumCard"></div>
     ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">${pzIc('bolt', 18)} Activar mi semana (${nDrafts})</button>` : ''}
-    <div class="hs-chat-label"><b>${pzIc('chat', 14)} ¿Cambiamos algo?</b></div>
-    ${chatCardHTML(true, true, true)}
   </div>`;
 }
 

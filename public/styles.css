@@ -1122,6 +1122,7 @@ textarea.in{resize:vertical;min-height:96px}
 /* ---------- Chat consultor de ideas 💬 ---------- */
 .chat-box{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;padding:4px 2px;margin-bottom:10px}
 .chat-chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.chat-online-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22C55E;margin-right:2px;vertical-align:1px}
 .chat-chips button{border:none;background:rgba(39,147,200,.10);color:var(--cel);font-size:11.5px;font-weight:700;border-radius:999px;padding:8px 14px;cursor:pointer;font-family:inherit}
 .chat-chips button:active{transform:scale(.96);border-color:var(--cel)}
 /* Chips de quick-reply contextuales: fila scrolleable sobre el input, un tap = enviar */
