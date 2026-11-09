@@ -3,38 +3,46 @@
 // 11:51 + confirmación 2 opciones 11:53 «perfecto»)
 // + LOTE RITUAL-1-OPCION (6/11 · decisión Valentino «una sola opción +
 // editar» + «un posteo por día»): el paquete trae UNA sola carta (la
-// recomendada); tocarlo la REVELA directo (sin paso de elegir entre 3);
-// la revelada tiene 3 acciones: [Sale así] / [Editar texto] /
+// recomendada); la hoja la muestra REVELADA directo (sin paso de
+// revelar); la revelada tiene 3 acciones: [Sale así] / [Editar texto] /
 // [Cambiar algo] (que pide otra versión en el chat). La grilla del feed
 // muestra SOLO el posteo de hoy + publicados (borradores y programados
 // futuros fuera, viven en Semana).
 // RITUAL DE LA MAÑANA: cada mañana el cliente se levanta con el posteo
 // del día armado. Entrada a pantalla completa (puerta matutina en
-// Inicio + push 9:00) → paquete velado → tocarlo REVELA el posteo
-// (foto + texto) → confirmación: [Sale así] (aprueba, toast con la
-// hora, vuelve al feed) / [Editar texto] (corrige el texto ahí mismo)
-// / [Cambiar algo] (abre el chat CON ese posteo y Posty ofrece enseguida
-// una versión nueva). Sin elección, publica la recomendada (v687 intacto).
-// La carta de hoy en el feed queda VELADA hasta elegir; después de
-// elegir se abre como el posteo elegido (v691 post-elección). Día con
-// posteo co-creado acordado: sin ritual esa mañana (el servidor no
-// devuelve paquete; la puerta es feed normal, sin error).
+// Inicio + push 9:00) → hoja REVELADA con el posteo (foto + texto) →
+// confirmación: [Sale así] (aprueba, toast con la hora, vuelve al
+// feed) / [Editar texto] (corrige el texto ahí mismo) / [Cambiar algo]
+// (abre el chat CON ese posteo y Posty ofrece enseguida una versión
+// nueva). Sin elección, publica la recomendada (v687 intacto). Ver ≠
+// elegir: ver la hoja NO guarda selección ni confirma (LOTE
+// RITUAL-SIN-VELO · 9/11 · orden Valentino «el ritual solo confirma,
+// no revela»: el paquete velado y la cuenta regresiva para VER
+// murieron; el posteo ya se ve en Hoy, sin velo, desde v826).
+// La carta de hoy en el feed va SIEMPRE ABIERTA (foto visible + abre
+// el detalle), pre y post elección. Día con posteo co-creado acordado:
+// sin ritual esa mañana (el servidor no devuelve paquete; la puerta es
+// feed normal, sin error).
 // 1) POSICIÓN: carta PRIMERA (idx 0, arriba a la izquierda — decisión
 //    Valentino 5/11 ~13:26, SUPERSEDE v1: tras el último publicado del día).
 //    La carta es el programado futuro más cercano (fecha-relativa: el
 //    fixture es del 5/11; corrido otro día la carta es otro posteo).
-// 2) VELO DE HOY: pre-elección velada, post-elección abierta, día
-//    co-creado abierta (sin ritual).
+// 2) CARTA DE HOY SIEMPRE ABIERTA (v826 + RITUAL-SIN-VELO 9/11): pre y
+//    post elección, día co-creado y día futuro — foto visible, abre el
+//    detalle, nunca el ritual, nunca velada.
 // 3) PUERTA MATUTINA: una sola vez por mañana, solo con estado
 //    positivo; sin paquete hoy = feed normal.
-// 4) HOJA: V (paquete velado) → R (revelada, 3 acciones). Sin auto-open,
-//    sin «Abrir mi paquete», sin abanico de opciones.
-// 5) REVELAR no aprueba (sin POST); OK aprueba (POST + toast + feed).
-//    [Cambiar algo] manda el pedido de otra versión al chat.
-// 6) HELPERS: puerta/velo/selección puros + M78 21/21.
+// 4) HOJA: nace REVELADA (foto + texto + 3 acciones). Sin paquete
+//    velado, sin gesto de revelar, sin auto-open, sin «Abrir mi
+//    paquete», sin abanico de opciones.
+// 5) VER no aprueba ni guarda (sin POST, sin selección); OK aprueba
+//    (POST + toast + feed). [Cambiar algo] manda el pedido de otra
+//    versión al chat.
+// 6) HELPERS: puerta puros + M78 17/17 (la selección y el revelar se
+//    retiraron con el velo).
 // 7) RUBRO: cardOf (servidor, intacto) + caption completo para editar.
 // 8) ESTÁTICA: banner ausente, fetch de estado VUELVE (propio, fuera
-//    del Promise.all), push 9:00 intacta.
+//    del Promise.all), push 9:00 rica con foto.
 // Carga el bundle entero en vm (patrón repro-grid.js) + ritual-manana.js.
 // Uso: node test-lote-proximoritual.js (desde el scratch)
 'use strict';
@@ -53,6 +61,7 @@ const SRV = fs.readFileSync(path.join(__dirname, 'work', 'server.js'), 'utf8');
 const CSS = fs.readFileSync(path.join(__dirname, 'work', 'public', 'styles.css'), 'utf8');
 const MPP = fs.readFileSync(path.join(__dirname, 'work', 'morning-post-push.js'), 'utf8');
 const M = require('./work/ritual-manana.js');
+const { dayKeyInTz } = require('./work/morning-post-push.js');
 
 // --- fixture real user 12 (admin) con el 554 CANCELADO (estado vigente) ---
 const rawAdmin = fs.readFileSync(path.join(__dirname, 'valentino-posts-12.json'), 'utf8');
@@ -218,36 +227,50 @@ const idxOf = (tiles, kind, id) => tiles.findIndex((x) => x.kind === kind && (!i
   t('pos: el trío de perfume está junto en idx 1-3 (entero, debajo de la carta)', idxPerfume[0] === 1 && idxPerfume[1] === 2 && idxPerfume[2] === 3, kinds(tiles));
   t('pos: el trío de perfume empieza justo debajo de la carta (foto perfume idx 3)',
     cardIdx === 0 && tiles[3].shortcode === 'DfVDDFAjKeG');
-  t('pos: sin estado conocido la carta de hoy va VELADA (fail-closed)', tiles[cardIdx].openHoy === false);
+  t('pos: sin estado conocido la carta de hoy va ABIERTA (v826: el velo murió, la carta siempre rinde abierta)', tiles[cardIdx].openHoy === true);
   const idxCafe = ['DfRrm2Vj8Qa', 'DfRsxGrSssF', 'DfRt0axD0G0'].map((s) => tiles.findIndex((x) => x.shortcode === s));
   t('pos: el trío de café sigue en idx 4-6 (el resto no cambia de orden)', idxCafe[0] === 4 && idxCafe[1] === 5 && idxCafe[2] === 6);
   t('pos: ningún tile es borrador (un posteo por día: los borradores futuros no se renderizan)',
     !tiles.some((x) => x.post && x.post.status === 'draft'));
-  t('pos: ningún tile es programado de otro día (521, 523-548 fuera del feed, viven en Semana)',
-    !tiles.some((x) => x.post && [521, 523, 524, 544, 545, 546, 547, 548].includes(x.post.id)));
+  // (LOTE RITUAL-SIN-VELO · 9/11 · re-pin) Los IDs de «otro día» se
+  // calculan, no se hardcodean: el fixture es del 5/11 y corrido otro
+  // día algunos IDs caen en hoy (y rinden como «en publicación»).
+  // Otro día = día en la zona de la cuenta distinto de hoy.
+  const hoyKey = dayKeyInTz(new Date(), TZ);
+  // La carta (CARD_ID, el programado futuro más cercano) SÍ rinde:
+  // es el posteo de hoy en el feed. El resto de los programados de
+  // otro día vive en Semana.
+  const otrosDias = adminPosts
+    .filter((p) => p.status === 'scheduled' && p.scheduled_at && dayKeyInTz(new Date(p.scheduled_at), TZ) !== hoyKey && p.id !== CARD_ID)
+    .map((p) => p.id);
+  t('pos: ningún tile es programado de otro día (viven en Semana)', !tiles.some((x) => x.post && otrosDias.includes(x.post.id)), 'otrosDias=' + otrosDias.join(','));
 
-  // ===== 2) VELO DE HOY: pre-elección, post-elección y día co-creado =====
+  // ===== 2) CARTA DE HOY SIEMPRE ABIERTA (v826 + RITUAL-SIN-VELO 9/11) =====
+  // Pre-elección, post-elección, día co-creado y día futuro: la carta
+  // rinde ABIERTA (foto visible + abre el detalle), nunca velada y
+  // nunca abre el ritual. El velo murió en v826; el ritual solo
+  // confirma, no revela.
   const tilesPre = homeGridCompose({ upcoming, published, recents: realRecents(), ritual: { tieneHoy: true, yaElegido: false } });
   const idxPre = idxOf(tilesPre, 'oculta', CARD_ID);
-  t('velo-hoy: pre-elección la carta de hoy va velada (openHoy false)', tilesPre[idxPre].openHoy === false);
+  t('carta-hoy: pre-elección la carta de hoy va ABIERTA (openHoy true)', tilesPre[idxPre].openHoy === true);
   const htmlPre = homeTileHTML(tilesPre[idxPre], idxPre);
-  t('velo-hoy: pre-elección la carta lleva data-pz-abrir-ritual="1"', String(htmlPre).includes('data-pz-abrir-ritual="1"'));
-  t('velo-hoy: pre-elección la carta NO lleva data-post-id (no revela el posteo)', !String(htmlPre).includes('data-post-id'));
-  t('velo-hoy: pre-elección la carta NO tiene <img> (sin foto)', !/<img/.test(String(htmlPre)));
-  t('velo-hoy: pre-elección la carta sigue con velo + destellos + chapita', String(htmlPre).includes('hf-carta-velo') && String(htmlPre).includes('hf-carta-destellos') && String(htmlPre).includes('El próximo'));
+  t('carta-hoy: pre-elección la carta abre el detalle (data-post-id ' + CARD_ID + ')', String(htmlPre).includes('data-post-id="' + CARD_ID + '"'));
+  t('carta-hoy: pre-elección la carta tiene foto visible', /<img/.test(String(htmlPre)));
+  t('carta-hoy: pre-elección la carta NO abre el ritual', !String(htmlPre).includes('data-pz-abrir-ritual'));
+  t('carta-hoy: pre-elección la carta NO tiene velo (sin hf-carta-velo, con destellos de magia)', !String(htmlPre).includes('hf-carta-velo') && String(htmlPre).includes('hf-carta-destellos'));
   const tilesPost = homeGridCompose({ upcoming, published, recents: realRecents(), ritual: { tieneHoy: true, yaElegido: true } });
   const idxPost = idxOf(tilesPost, 'oculta', CARD_ID);
-  t('velo-hoy: post-elección la carta de hoy va ABIERTA (openHoy true)', tilesPost[idxPost].openHoy === true);
+  t('carta-hoy: post-elección la carta de hoy va ABIERTA (openHoy true)', tilesPost[idxPost].openHoy === true);
   const htmlPost = homeTileHTML(tilesPost[idxPost], idxPost);
-  t('velo-hoy: post-elección la carta tiene foto visible', /<img/.test(String(htmlPost)));
-  t('velo-hoy: post-elección la carta abre el detalle (data-post-id ' + CARD_ID + ')', String(htmlPost).includes('data-post-id="' + CARD_ID + '"'));
-  t('velo-hoy: post-elección la carta NO abre el ritual', !String(htmlPost).includes('data-pz-abrir-ritual'));
+  t('carta-hoy: post-elección la carta tiene foto visible', /<img/.test(String(htmlPost)));
+  t('carta-hoy: post-elección la carta abre el detalle (data-post-id ' + CARD_ID + ')', String(htmlPost).includes('data-post-id="' + CARD_ID + '"'));
+  t('carta-hoy: post-elección la carta NO abre el ritual', !String(htmlPost).includes('data-pz-abrir-ritual'));
   const tilesCo = homeGridCompose({ upcoming, published, recents: realRecents(), ritual: { tieneHoy: false, yaElegido: false } });
   const idxCo = idxOf(tilesCo, 'oculta', CARD_ID);
   t('co-creado: sin paquete hoy la carta de hoy va ABIERTA (v691, posteo acordado)', tilesCo[idxCo].openHoy === true);
   const htmlCo = homeTileHTML(tilesCo[idxCo], idxCo);
   t('co-creado: sin paquete hoy la carta abre el detalle, no el ritual', String(htmlCo).includes('data-post-id="' + CARD_ID + '"') && !String(htmlCo).includes('data-pz-abrir-ritual'));
-  // Carta de mañana (día futuro): velada como siempre.
+  // Carta de mañana (día futuro): ABIERTA como siempre (v826).
   const NEXT_FUT = { id: 519, status: 'scheduled', scheduled_at: new Date(Date.now() + 86400000).toISOString(), pinned: false, media_type: 'image', image_path: '/media/fut.jpg', caption: 'Mañana' };
   const PUB_A = { id: 551, status: 'published', published_at: '2026-11-04T20:00:00Z', scheduled_at: '2026-11-04T20:00:00Z', media_type: 'image', ig_permalink: 'https://instagram.com/p/a', ig_state: 'live', image_path: '/media/a.jpg' };
   const PUB_B = { id: 550, status: 'published', published_at: '2026-11-04T19:00:00Z', scheduled_at: '2026-11-04T19:00:00Z', media_type: 'image', ig_permalink: 'https://instagram.com/p/b', ig_state: 'live', image_path: '/media/b.jpg' };
@@ -257,16 +280,16 @@ const idxOf = (tiles, kind, id) => tiles.findIndex((x) => x.kind === kind && (!i
     published: [PUB_A, PUB_B, PUB_C], recents: [],
   });
   const futCardIdx = idxOf(fut, 'oculta', 519);
-  t('velo: la carta de mañana va PRIMERA (idx 0) aunque haya 3 publicados', futCardIdx === 0, kinds(fut));
-  t('velo: la carta de mañana va velada (openHoy false)', fut[futCardIdx].openHoy === false);
-  const htmlVelo = homeTileHTML(fut[futCardIdx], futCardIdx);
-  t('velo: la carta velada lleva data-pz-abrir-ritual="1"', String(htmlVelo).includes('data-pz-abrir-ritual="1"'), String(htmlVelo).slice(0, 400));
-  t('velo: la carta velada es role=button (táctil + teclado)', String(htmlVelo).includes('role="button"'));
-  t('velo: la carta velada NO lleva data-post-id (no revela el posteo)', !String(htmlVelo).includes('data-post-id'));
-  t('velo: la carta velada NO tiene <img> (sin foto)', !/<img/.test(String(htmlVelo)));
+  t('carta-manana: la carta de mañana va PRIMERA (idx 0) aunque haya 3 publicados', futCardIdx === 0, kinds(fut));
+  t('carta-manana: la carta de mañana va ABIERTA (openHoy true)', fut[futCardIdx].openHoy === true);
+  const htmlFut = homeTileHTML(fut[futCardIdx], futCardIdx);
+  t('carta-manana: la carta abre el detalle (data-post-id 519)', String(htmlFut).includes('data-post-id="519"'), String(htmlFut).slice(0, 400));
+  t('carta-manana: la carta es role=button (táctil + teclado)', String(htmlFut).includes('role="button"'));
+  t('carta-manana: la carta tiene foto visible', /<img/.test(String(htmlFut)));
+  t('carta-manana: la carta NO abre el ritual ni lleva velo', !String(htmlFut).includes('data-pz-abrir-ritual') && !String(htmlFut).includes('hf-carta-velo'));
 
   // ===== 3) PUERTA MATUTINA: helpers puros =====
-  const { pzRitualPendiente, pzRitualPuertaManana, pzRitualMananaVistaHoy, pzRitualMananaMarcarVista, pzRitualSelLeer, pzRitualSelGuardar, pzRitualSelLimpiar } = sandbox;
+  const { pzRitualPendiente, pzRitualPuertaManana, pzRitualMananaVistaHoy, pzRitualMananaMarcarVista, pzRitualSelLeer } = sandbox;
   t('puerta: sin estado conocido hay ritual pendiente (fail-closed)', pzRitualPendiente() === true);
   t('puerta: con paquete hoy sin elegir hay pendiente', pzRitualPendiente({ tieneHoy: true, yaElegido: false }) === true);
   t('puerta: ya elegido → no pendiente', pzRitualPendiente({ tieneHoy: true, yaElegido: true }) === false);
@@ -278,12 +301,17 @@ const idxOf = (tiles, kind, id) => tiles.findIndex((x) => x.kind === kind && (!i
   t('puerta: estado no-ok → no dispara', pzRitualPuertaManana({ ok: false, tiene_hoy: true, ya_elegido: false }, false) === false);
   t('puerta: sin estado → no dispara', pzRitualPuertaManana(null, false) === false);
   t('puerta: marcar vista hoy persiste por día', (() => { pzRitualMananaMarcarVista(); return pzRitualMananaVistaHoy() === true; })());
-  t('sel: guardar/leer/limpiar por día', (() => { pzRitualSelGuardar(202); const a = pzRitualSelLeer(); pzRitualSelLimpiar(); const b = pzRitualSelLeer(); return a === 202 && b === 0; })());
-  t('sel: la clave es por día (pz-ritual-sel-YYYY-MM-DD)', (() => { pzRitualSelGuardar(203); const ks = sandbox.localStorage._keys().filter((k) => String(k).startsWith('pz-ritual-sel-')); pzRitualSelLimpiar(); return ks.length === 1 && /^pz-ritual-sel-\d{4}-\d{2}-\d{2}$/.test(ks[0]); })());
+  // (LOTE RITUAL-SIN-VELO · 9/11) La selección ya no existe: ver ≠
+  // elegir. No hay escritura (SelGuardar/SelLimpiar murieron con el
+  // gesto de revelar); SelLeer queda solo como lectura de Hoy y
+  // siempre da 0 (nada vuelve a guardarse).
+  t('sel: ya no hay escritura de selección (pzRitualSelGuardar/pzRitualSelLimpiar no existen)', typeof sandbox.pzRitualSelGuardar === 'undefined' && typeof sandbox.pzRitualSelLimpiar === 'undefined');
+  t('sel: leer sin nada guardado da 0', pzRitualSelLeer() === 0);
 
-  // ===== 4) HOJA: V (velado) → R (revelada, 3 acciones) =====
-  // (LOTE RITUAL-1-OPCION · 6/11) UNA sola carta (la recomendada); el
-  // paquete la REVELA directo al tocarlo. 2026-11-06 es viernes.
+  // ===== 4) HOJA: nace REVELADA (foto + texto + 3 acciones) =====
+  // (LOTE RITUAL-SIN-VELO · 9/11) UNA sola carta (la recomendada);
+  // la hoja la muestra revelada directo, a cualquier hora.
+  // 2026-11-06 es viernes.
   const dRit = {
     hoy: '2026-11-06', racha: 3, dorada: false, elegida: 0,
     recomendada: { id: 201, imagen: '/media/a.jpg', caption: 'Café de la casa, hecho con amor', caption_corta: 'Café de la casa', tipo: 'imagen', media_type: 'image', recomendada: true, rubro: 'café', hora_salida: '17:00' },
@@ -301,19 +329,18 @@ const idxOf = (tiles, kind, id) => tiles.findIndex((x) => x.kind === kind && (!i
     ] },
   };
   const htmlV = pzRitualHTML(dRit, false);
-  t('hoja-V: el paquete nace VELADO a pantalla completa (data-pz-ritual-ver)', String(htmlV).includes('data-pz-ritual-ver="1"') && String(htmlV).includes('pz-ritual-velado'));
-  t('hoja-V: sin botón «Abrir mi paquete» (el paquete ES la pantalla)', !String(htmlV).includes('Abrir mi paquete'));
-  t('hoja-V: sin auto-open en el código (ni flag ni clase abierto)', !SRC.includes('__pzRitualAutoOpen') && !String(htmlV).includes('pz-ritual-pack abierto'));
-  t('hoja-V: NO hay abanico de opciones (sin #pzRitualCartas, sin fan, sin «elegí tu favorita»)',
+  t('hoja: nace REVELADA a pantalla completa (foto + [Sale así] + [Editar] + [Cambiar algo])', String(htmlV).includes('/media/a.jpg') && String(htmlV).includes('Sale así') && String(htmlV).includes('data-pz-ritual-ok="201"') && String(htmlV).includes('data-pc-act="edit-cap"') && String(htmlV).includes('data-pz-ritual-cambio="201"'));
+  t('hoja: sin paquete velado (ni data-pz-ritual-ver, ni pz-ritual-velado, ni «1 carta adentro», ni «Tocá para verla»)', !String(htmlV).includes('data-pz-ritual-ver') && !String(htmlV).includes('pz-ritual-velado') && !String(htmlV).includes('1 carta adentro') && !String(htmlV).includes('Tocá para verla'));
+  t('hoja: sin botón «Abrir mi paquete» (el posteo ES la pantalla)', !String(htmlV).includes('Abrir mi paquete'));
+  t('hoja: sin auto-open en el código (ni flag ni clase abierto)', !SRC.includes('__pzRitualAutoOpen') && !String(htmlV).includes('pz-ritual-pack abierto'));
+  t('hoja: NO hay abanico de opciones (sin #pzRitualCartas, sin fan, sin «elegí tu favorita»)',
     !String(htmlV).includes('id="pzRitualCartas"') && !String(htmlV).includes('pz-ritual-fan') && !String(htmlV).includes('elegí tu favorita'));
-  t('hoja-V: el velo dice 1 carta adentro («1 carta adentro» + «Tocá para verla»)', String(htmlV).includes('1 carta adentro') && String(htmlV).includes('Tocá para verla'));
-  t('hoja-V: el paquete lleva la recomendada (data-pz-ritual-rec=201)', String(htmlV).includes('data-pz-ritual-rec="201"'));
   const htmlO = String(htmlV);
-  t('hoja-album: cada casilla lleva su día (Lun Mar Mié Jue Hoy Sáb Dom — hoy es viernes, «Hoy» reemplaza a «Vie»)', ['Lun', 'Mar', 'Mié', 'Jue', 'Hoy', 'Sáb', 'Dom'].every((d) => htmlO.includes('>' + d + '<') || htmlO.includes('>' + d + '</span>')) && !htmlO.includes('>Vie<'));
+  t('hoja-album: cada casilla lleva su día de semana (Lun Mar Mié Jue Vie Sáb Dom — hoy es viernes y lleva «Vie», no «Hoy»)', ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].every((d) => htmlO.includes('>' + d + '<') || htmlO.includes('>' + d + '</span>')));
   t('hoja-album: candado SOLO en el día pasado sin salir (1 solo 🔒: el mar)', (htmlO.match(/🔒/g) || []).length === 1, htmlO.slice(0, 600));
   t('hoja-album: la línea de la figurita («Cada día que sale, se desbloquea su figurita.»)', String(htmlO).includes('Cada día que sale, se desbloquea su figurita.'));
   t('hoja-album: las casillas usan la columna con día (slotcol + pz-ritual-dia)', String(htmlO).includes('pz-ritual-slotcol') && String(htmlO).includes('pz-ritual-dia'));
-  const htmlR = pzRitualHTML(dRit, false, 201);
+  const htmlR = pzRitualHTML(dRit, false);
   t('hoja-R: la revelada muestra LA foto del posteo', String(htmlR).includes('/media/a.jpg'));
   t('hoja-R: la revelada muestra SU texto', String(htmlR).includes('Café de la casa'));
   t('hoja-R: la confirmación es [Sale así] (único botón grande)', String(htmlR).includes('Sale así') && String(htmlR).includes('data-pz-ritual-ok="201"'));
@@ -331,22 +358,20 @@ const idxOf = (tiles, kind, id) => tiles.findIndex((x) => x.kind === kind && (!i
   t('abrir: tocar la carta navega a #/app/ritual', bbGoCalls.length === 1 && bbGoCalls[0] === '#/app/ritual', JSON.stringify(bbGoCalls));
   t('abrir: tocar la carta NO marca auto-open (ya no existe)', sandbox.window.__pzRitualAutoOpen === undefined);
 
-  // ===== 5) REVELAR no aprueba; OK aprueba (POST + toast + feed) =====
+  // ===== 5) VER no guarda ni aprueba; OK aprueba (POST + toast + feed) =====
+  // (LOTE RITUAL-SIN-VELO · 9/11) Ya no hay revelar: la hoja nace
+  // revelada. Ver no postea, no guarda selección, no existe función
+  // de revelar. La confirmación vive solo en [Sale así].
   fetchCalls.length = 0;
   sandbox.localStorage.clear();
-  let errElegir = null;
-  try { sandbox.pzRitualElegir('201'); } catch (e) { errElegir = e; }
-  t('revelar: no tira', errElegir === null, errElegir && errElegir.message);
-  t('revelar: NO postea al servidor (revelar selecciona, no aprueba)', !fetchCalls.some((c) => String(c.url).includes('/api/ritual/elegir')), JSON.stringify(fetchCalls.map((c) => c.url)));
-  t('revelar: guarda la selección en localStorage (sobrevive al chat)', sandbox.pzRitualSelLeer() === 201);
-  // pzRitualRevelar es el alias de revelar (el handler del paquete lo usa).
-  sandbox.pzRitualSelLimpiar();
-  let errRevelar = null;
-  try { sandbox.pzRitualRevelar('201'); } catch (e) { errRevelar = e; }
-  t('revelar-alias: pzRitualRevelar existe y guarda la selección', errRevelar === null && sandbox.pzRitualSelLeer() === 201);
-  // La hoja con la selección guardada muestra la revelada (ida y vuelta al chat).
-  const htmlSel = pzRitualHTML(dRit, false, sandbox.pzRitualSelLeer());
-  t('revelar: al volver del chat la hoja muestra el posteo revelado', String(htmlSel).includes('/media/a.jpg') && String(htmlSel).includes('Sale así'));
+  t('ver: no existe función de revelar (ni pzRitualElegir ni pzRitualRevelar)', typeof sandbox.pzRitualElegir === 'undefined' && typeof sandbox.pzRitualRevelar === 'undefined');
+  const htmlVer = pzRitualHTML(dRit, false);
+  t('ver: la hoja rinde revelada sin llamar al servidor', String(htmlVer).includes('/media/a.jpg') && String(htmlVer).includes('Sale así') && !fetchCalls.some((c) => String(c.url).includes('/api/ritual/elegir')), JSON.stringify(fetchCalls.map((c) => c.url)));
+  t('ver: ver NO guarda selección (SelLeer sigue en 0)', sandbox.pzRitualSelLeer() === 0);
+  // Al volver del chat la hoja sigue mostrando el posteo revelado
+  // (nunca dependió de una selección guardada).
+  const htmlSel = pzRitualHTML(dRit, false);
+  t('ver: al volver del chat la hoja muestra el posteo revelado', String(htmlSel).includes('/media/a.jpg') && String(htmlSel).includes('Sale así'));
   // [Cambiar algo]: manda el pedido de otra versión al chat, con el
   // posteo adjunto (pzHablarClick). Sin eso sería un callejón sin salida.
   const hablarCalls = [];
@@ -366,11 +391,9 @@ const idxOf = (tiles, kind, id) => tiles.findIndex((x) => x.kind === kind && (!i
   t('ok: POSTea /api/ritual/elegir con el post_id elegido', fetchCalls.some((c) => String(c.url).includes('/api/ritual/elegir') && c.opts && String(c.opts.body || '').includes('201')), JSON.stringify(fetchCalls));
   t('ok: toast «Listo, sale hoy a las 17:00» (usa la hora de la respuesta)', toastCalls.some((m) => String(m).includes('Listo, sale hoy a las 17:00')), JSON.stringify(toastCalls));
   t('ok: vuelve al feed (#/app/inicio) sin pantalla intermedia', bbGoCalls.some((h) => h === '#/app/inicio'), JSON.stringify(bbGoCalls));
-  t('ok: tras confirmar se limpia la selección', sandbox.pzRitualSelLeer() === 0);
-  // Estática: revelar no tiene POST; OK tiene toast + feed y no FIFA.
-  const srcElegir = SRC.slice(SRC.indexOf('function pzRitualElegir(id)'));
-  const srcElegirFn = srcElegir.slice(0, srcElegir.indexOf('\nasync function pzRitualConfirmar'));
-  t('revelar: el código de revelar NO postea (sin api.post ni /api/ritual/elegir)', !srcElegirFn.includes('api.post') && !srcElegirFn.includes('/api/ritual/elegir'));
+  t('ok: tras confirmar no queda selección guardada', sandbox.pzRitualSelLeer() === 0);
+  // Estática: no hay código de revelar; OK tiene toast + feed y no FIFA.
+  t('ver: no hay código de revelar en el bundle (ni función ni handler del paquete velado)', !SRC.includes('function pzRitualElegir') && !SRC.includes('function pzRitualRevelar') && !SRC.includes('data-pz-ritual-ver') && !SRC.includes('pz-ritual-velado'));
   const srcOk = SRC.slice(SRC.indexOf('async function pzRitualConfirmar(id)'));
   const srcOkFn = srcOk.slice(0, srcOk.indexOf('\ndocument.addEventListener'));
   t('ok: el código de OK postea /api/ritual/elegir', srcOkFn.includes("api.post('/api/ritual/elegir'"));
@@ -380,16 +403,17 @@ const idxOf = (tiles, kind, id) => tiles.findIndex((x) => x.kind === kind && (!i
   const srcCambioFn = srcCambio.slice(0, srcCambio.indexOf('\nasync function pzRitualConfirmar'));
   t('cambio: el código de Pedir cambio fija el texto del pedido y abre el chat', srcCambioFn.includes('haceme otra versión de este posteo') && srcCambioFn.includes('pzHablarClick(id)'));
 
-  // ===== 6) M78 21/21: cada función llamada desde los caminos nuevos existe =====
+  // ===== 6) M78 17/17: cada función llamada desde los caminos nuevos existe =====
+  // (LOTE RITUAL-SIN-VELO · 9/11) La selección y el revelar se
+  // retiraron con el velo: 21 − 4 = 17.
   const audit = [
     'pzRitualPendiente', 'pzRitualPuertaManana', 'pzRitualMananaKey', 'pzRitualMananaVistaHoy',
-    'pzRitualMananaMarcarVista', 'pzRitualSelKey', 'pzRitualSelLeer', 'pzRitualSelGuardar',
-    'pzRitualSelLimpiar', 'pzRitualConfirmar', 'pzRitualElegir', 'pzRitualRevelar',
-    'pzRitualPedirCambio', 'pzRitualCargar', 'pzRitualHTML', 'pzRitualCardHTML', 'pzRitualAbrirDesdeCarta',
+    'pzRitualMananaMarcarVista', 'pzRitualSelKey', 'pzRitualSelLeer',
+    'pzRitualConfirmar', 'pzRitualPedirCambio', 'pzRitualCargar', 'pzRitualHTML', 'pzRitualCardHTML', 'pzRitualAbrirDesdeCarta',
     'pzHablarClick', 'bbGo', 'render', 'ritualView',
   ];
   const missing = audit.filter((f) => !new RegExp(`function ${f}\\s*\\(`).test(SRC));
-  t('M78: 21/21 funciones auditadas definidas en el bundle', missing.length === 0, 'faltan: ' + missing.join(', '));
+  t('M78: 17/17 funciones auditadas definidas en el bundle', missing.length === 0, 'faltan: ' + missing.join(', '));
   t('M78: rubroDeCarta + cardOf viven en ritual-manana.js', typeof M.rubroDeCarta === 'function' && typeof M.cardOf === 'function');
   t('M78: pzPackFifaOpen NO se llama en el bundle (la rama FIFA se retiró; solo queda una mención en el comentario)', !SRC.includes('pzPackFifaOpen(') && !SRC.includes('function pzPackFifaOpen'));
   t('M78: pzRitualOpcionHTML NO existe (el abanico de 3 opciones se retiró)', !SRC.includes('pzRitualOpcionHTML'));
@@ -417,11 +441,11 @@ const idxOf = (tiles, kind, id) => tiles.findIndex((x) => x.kind === kind && (!i
   })());
   t('static: el fetch de estado tiene .catch propio (fail-closed)', SRC.includes("api.get('/api/ritual/estado').catch(() => null)"));
   t('static: el Promise.all de Inicio sigue con 3 fetches (sin ritual)', SRC.includes('const [postsRes, erRes, pubRes] = await Promise.all'));
-  t('static: la vista del ritual y elegir siguen', SRC.includes('async function ritualView()') && SRC.includes('pzRitualElegir') && SRC.includes('/api/ritual/hoy') && SRC.includes('/api/ritual/elegir'));
-  t('static: el handler de la carta velada existe', SRC.includes('pzRitualAbrirDesdeCarta') && SRC.includes('data-pz-abrir-ritual'));
-  t('static: la push 9:00 sigue a #/app/ritual con texto INTOCABLE', MPP.includes("url: '/#/app/ritual'") && MPP.includes('Tu posteo de hoy ya está 👇'));
+  t('static: la vista del ritual y confirmar siguen (sin revelar)', SRC.includes('async function ritualView()') && SRC.includes('pzRitualConfirmar') && SRC.includes('/api/ritual/hoy') && SRC.includes('/api/ritual/elegir') && !SRC.includes('pzRitualElegir') && !SRC.includes('pzRitualRevelar'));
+  t('static: el handler de abrir el ritual existe', SRC.includes('pzRitualAbrirDesdeCarta') && SRC.includes('data-pz-abrir-ritual'));
+  t('static: la push 9:00 sigue a #/app/ritual con el texto nuevo + foto (push rica)', MPP.includes("url: '/#/app/ritual'") && MPP.includes('Hoy sale este — sale a las 19:00') && MPP.includes('payload.image'));
   t('static: el chip de rubro tiene estilo propio', CSS.includes('.pz-ritual-badge.rubro'));
-  t('static: los estilos nuevos existen (velado, revelada, ok, cambio, álbum con días)', ['.pz-ritual-velado', '.pz-ritual-revelada', '.pz-ritual-ok', '.pz-ritual-cambio', '.pz-ritual-slotcol', '.pz-ritual-dia'].every((c) => CSS.includes(c)));
+  t('static: los estilos nuevos existen (revelada, ok, cambio, álbum con días; la regla del velado murió)', ['.pz-ritual-revelada', '.pz-ritual-ok', '.pz-ritual-cambio', '.pz-ritual-slotcol', '.pz-ritual-dia'].every((c) => CSS.includes(c)) && !CSS.includes('.pz-ritual-velado{'));
   t('static: sin estilos muertos del abanico (ni .pz-ritual-opcion ni .pz-ritual-fan)', !CSS.includes('.pz-ritual-opcion') && !CSS.includes('.pz-ritual-fan'));
   t('static: sin auto-open ni botón Abrir en app.js (clase pz-ritual-abrir fuera del JS)', !SRC.includes('__pzRitualAutoOpen') && !SRC.includes('pz-ritual-abrir'));
 

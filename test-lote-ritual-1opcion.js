@@ -9,9 +9,10 @@
 //     inventado); /api/week/ensure ya no genera la semana.
 //  B) Bundle real (vm): el feed muestra SOLO hoy + publicados (borradores
 //     y programados futuros fuera); álbum con días + 1 solo candado;
-//     revelar guarda selección; [Cambiar algo] manda el pedido al chat;
-//     [Sale así] toastea con la hora y vuelve al feed; [Editar] con
-//     data-full.
+//     la hoja nace REVELADA (sin paquete velado ni gesto de revelar);
+//     ver no guarda selección ni postea; [Cambiar algo] manda el pedido
+//     al chat; [Sale así] toastea con la hora y vuelve al feed; [Editar]
+//     con data-full.
 //  C) Estáticas: deep link push→paquete; crons (domingo solo graduación
 //     nivel 2, sin tanda); exports; sin código muerto de 3 opciones.
 // Uso: node test-lote-ritual-1opcion.js (desde el scratch; corre contra
@@ -153,7 +154,7 @@ async function api(sid, method, p, body) {
   // El bundle define toast/bbGo: los stubs se ponen DESPUÉS de cargar.
   sandbox.toast = (m) => { toastCalls.push(m); };
   sandbox.bbGo = (h) => { bbGoCalls.push(h); };
-  const { homeGridCompose, pzRitualHTML, pzRitualRevelar, pzRitualPedirCambio, pzRitualConfirmar, pzRitualSelLeer } = sandbox;
+  const { homeGridCompose, pzRitualHTML, pzRitualPedirCambio, pzRitualConfirmar, pzRitualSelLeer } = sandbox;
 
   // ----- B1: feed, un posteo por día -----
   const schedHoy = { id: 519, status: 'scheduled', scheduled_at: at2200Z(TODAY), media_type: 'image', image_path: '/media/519.jpg', caption: 'Hoy' };
@@ -199,18 +200,21 @@ async function api(sid, method, p, body) {
   t('B2-album: cada casilla lleva su día (Lun Mar Mié Jue Vie Sáb Dom)', ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].every((d) => htmlV.includes('>' + d + '<') || htmlV.includes('>' + d + '</span>')));
   t('B2-album: candado SOLO en el día pasado sin salir (1 solo 🔒)', (htmlV.match(/🔒/g) || []).length === 1);
   t('B2-album: la línea de la figurita', htmlV.includes('Cada día que sale, se desbloquea su figurita.'));
-  t('B2-paquete: 1 carta adentro, sin abanico', htmlV.includes('1 carta adentro') && htmlV.includes('data-pz-ritual-rec="201"') && !htmlV.includes('id="pzRitualCartas"'));
-  const htmlR = String(pzRitualHTML(dRit, false, 201));
+  // (LOTE RITUAL-SIN-VELO · 9/11) La hoja nace REVELADA: sin paquete
+  // velado («1 carta adentro»), sin gesto de revelar, sin abanico.
+  t('B2-revelada: nace revelada (foto + [Sale así] + [Editar] + [Cambiar algo], sin paquete velado)', htmlV.includes('/media/a.jpg') && htmlV.includes('data-pz-ritual-ok="201"') && htmlV.includes('data-pc-act="edit-cap"') && htmlV.includes('data-pz-ritual-cambio="201"') && !htmlV.includes('1 carta adentro') && !htmlV.includes('data-pz-ritual-ver') && !htmlV.includes('id="pzRitualCartas"'));
+  const htmlR = String(pzRitualHTML(dRit, false));
   t('B2-revelada: foto + [Sale así] + [Editar texto] + [Cambiar algo]',
     htmlR.includes('/media/a.jpg') && htmlR.includes('data-pz-ritual-ok="201"')
     && htmlR.includes('data-pc-act="edit-cap"') && htmlR.includes('data-full="Café de la casa, hecho con amor"')
     && htmlR.includes('data-pz-ritual-cambio="201"'));
 
-  // ----- B3/B4/B5: revelar / pedir cambio / confirmar -----
+  // ----- B3/B4/B5: ver / pedir cambio / confirmar -----
+  // (LOTE RITUAL-SIN-VELO · 9/11) Ya no hay revelar: la hoja nace
+  // revelada. Ver no postea al servidor ni guarda selección.
   sandbox.localStorage.clear();
-  let errRev = null;
-  try { pzRitualRevelar('201'); } catch (e) { errRev = e; }
-  t('B3-revelar: un toque revela (guarda selección, sin POST)', errRev === null && pzRitualSelLeer() === 201 && !fetchCalls.some((c) => String(c.url).includes('/api/ritual/elegir')));
+  t('B3-ver: no existe función de revelar (ni pzRitualElegir ni pzRitualRevelar)', typeof sandbox.pzRitualElegir === 'undefined' && typeof sandbox.pzRitualRevelar === 'undefined');
+  t('B3-ver: ver no postea al servidor ni guarda selección', String(pzRitualHTML(dRit, false)).includes('/media/a.jpg') && !fetchCalls.some((c) => String(c.url).includes('/api/ritual/elegir')) && pzRitualSelLeer() === 0);
   sandbox.pzHablarClick = (id) => { hablarCalls.push(id); };
   let errCam = null;
   try { pzRitualPedirCambio('201'); } catch (e) { errCam = e; }
@@ -224,7 +228,7 @@ async function api(sid, method, p, body) {
   t('B5-confirmar: vuelve al feed (#/app/inicio) sin pantalla intermedia', bbGoCalls.some((h) => h === '#/app/inicio'), JSON.stringify(bbGoCalls));
 
   // ----- C: estáticas (deep link, crons, exports, sin código muerto) -----
-  t('C1-deep-link: la push matutina lleva url /#/app/ritual', MPP.includes("url: '/#/app/ritual'") && MPP.includes('Tu posteo de hoy ya está 👇'));
+  t('C1-deep-link: la push matutina lleva url /#/app/ritual + texto nuevo + foto (push rica)', MPP.includes("url: '/#/app/ritual'") && MPP.includes('Hoy sale este — sale a las 19:00') && MPP.includes('payload.image'));
   t('C1-deep-link: el transporte pasa la url (webpush data.url + APNs url)', PUSH.includes('data: { url: msg.url') && PUSH.includes('url: msg.url'));
   t('C1-deep-link: el service worker abre la url de la notificación', SW.includes('ndata.url') && SW.includes('openPushUrl(url)'));
   t('C1-deep-link: el router abre el ritual directo (tab ritual → ritualView)', SRC.includes("else if (tab === 'ritual')") && SRC.includes('content = await ritualView()'));

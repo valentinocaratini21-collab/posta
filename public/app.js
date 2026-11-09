@@ -22118,11 +22118,12 @@ function hfFeedHighlightApply() { // «Ver en el feed»: el posteo en su posici�
 }
 /* ===== RITUAL DE LA MAÑANA (lote 5/8, aprobado Valentino 5/11 «Arma todo»;
    LOTE RITUAL-1-OPCION · 6/11 · «una sola opción + editar») ===== */
-// La push de las 9:00 abre acá: el paquete del día se devela con magia y
-// trae UNA sola carta (la recomendada). El dueño la revela con un toque
-// y la confirma con [Sale así] o pide otra versión desde el chat. Sin
-// elección, sale la recomendada (el scheduler vigente; esta vista no
-// programa nada nuevo).
+// La push de las 9:00 abre acá: la recomendada rinde REVELADA
+// directo (foto + texto), sin paquete velado ni toque para revelar
+// (LOTE RITUAL-SIN-VELO · 9/11 · orden Valentino «el ritual solo
+// confirma, no revela»). El dueño la confirma con [Sale así] o pide
+// otra versión desde el chat. Sin elección, sale la recomendada (el
+// scheduler vigente; esta vista no programa nada nuevo).
 // La vista pinta primero el estado «conjurando» y después el paquete:
 // la generación de alternas (si hace falta) corre en el fetch de hoy.
 // Magia solo Posty, solo entrada, liviana, sin tapar contenido (las
@@ -22130,15 +22131,14 @@ function hfFeedHighlightApply() { // «Ver en el feed»: el posteo en su posici�
 // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11 · decisión Valentino 11:31)
 // RITUAL DE LA MAÑANA: el cliente se levanta con el posteo del día
 // armado. La puerta de entrada (Inicio a la mañana + push 9:00) abre
-// el paquete velado A PANTALLA COMPLETA; tocarlo muestra las 3
-// opciones; elegir REVELA el posteo (foto + texto) con cambio + OK;
-// OK aprueba y publica hoy. Sin elección, publica la recomendada
-// (v687 intacto). La puerta lee /api/ritual/estado (tiene_hoy +
-// ya_elegido): sin paquete hoy (p. ej. día con posteo co-creado
-// acordado, REGLA 5/11 ~11:39 — el servidor no devuelve paquete ese
-// día) la puerta NO dispara y el feed es normal, sin error.
+// la hoja, que rinde la recomendada REVELADA a pantalla completa con
+// [Sale así] / [Editar] / [Cambiar algo]; [Sale así] aprueba y
+// publica hoy. Sin elección, publica la recomendada (v687 intacto).
+// La puerta lee /api/ritual/estado (tiene_hoy + ya_elegido): sin
+// paquete hoy (p. ej. día con posteo co-creado acordado, REGLA 5/11
+// ~11:39 — el servidor no devuelve paquete ese día) la puerta NO
+// dispara y el feed es normal, sin error.
 let PZ_RITUAL_ESTADO = null; // { tieneHoy, yaElegido } (cache de inicioView)
-let PZ_RITUAL_SEL = 0; // posteo elegido (selección, todavía sin aprobar)
 let PZ_RITUAL_CUENTA_T = 0; // LOTE CUENTA-REGRESIVA: intervalo del tick de 1 s
 function pzRitualPendiente(rit) {
   // ¿Hay un ritual pendiente (paquete hoy, sin elegir)? Sin estado
@@ -22173,15 +22173,15 @@ function pzRitualMananaVistaHoy() {
 function pzRitualMananaMarcarVista() {
   try { localStorage.setItem('pz-ritual-manana-' + pzRitualMananaKey(), '1'); } catch (e) {}
 }
+// (LOTE RITUAL-SIN-VELO · 9/11) La selección ya no se escribe: ver
+// ≠ elegir. SelGuardar/SelLimpiar murieron con el gesto de revelar.
+// SelLeer queda solo porque Hoy (v826, lecturas muertas) todavía lo
+// llama para selAbierto — su valor ya no vela nada (openHoy = true);
+// la limpieza de esas lecturas y de pzProximoYaAbierto es un lote
+// aparte, no este.
 function pzRitualSelKey() { try { return 'pz-ritual-sel-' + pzRitualMananaKey(); } catch (e) { return 'pz-ritual-sel'; } }
 function pzRitualSelLeer() {
   try { const v = localStorage.getItem(pzRitualSelKey()); const n = v ? Number(v) : 0; return n > 0 ? n : 0; } catch (e) { return 0; }
-}
-function pzRitualSelGuardar(id) {
-  try { if (id) localStorage.setItem(pzRitualSelKey(), String(Number(id))); } catch (e) {}
-}
-function pzRitualSelLimpiar() {
-  try { localStorage.removeItem(pzRitualSelKey()); } catch (e) {}
 }
 async function ritualView() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
@@ -22215,19 +22215,10 @@ async function pzRitualCargar() {
     try { if (typeof bbGo === 'function') bbGo('#/app/inicio'); else location.hash = '#/app/inicio'; } catch (e) {}
     return;
   }
-  // (LOTE RITUAL-1-OPCION · 6/11) La selección vive en localStorage
-  // (clave por día): si el cliente pidió un cambio en el chat y
-  // vuelve, la hoja muestra el posteo revelado, no el velo. Ya no hay
-  // auto-open ni botón «Abrir mi paquete»: la hoja SIEMPRE nace en el
-  // paquete velado a pantalla completa y tocarlo revela directo la
-  // recomendada (una sola opción).
-  let selId = 0;
-  try { selId = (typeof pzRitualSelLeer === 'function') ? pzRitualSelLeer() : 0; } catch (e) { selId = 0; }
-  if (selId && !(d.cartas || []).some((c) => Number(c.id) === Number(selId))) {
-    try { if (typeof pzRitualSelLimpiar === 'function') pzRitualSelLimpiar(); } catch (e) {}
-    selId = 0;
-  }
-  box.innerHTML = pzRitualHTML(d, en, selId);
+  // (LOTE RITUAL-SIN-VELO · 9/11) Sin selección: la hoja rinde la
+  // recomendada revelada directo desde el servidor. Ver ≠ elegir:
+  // ver no guarda nada. La confirmación vive solo en [Sale así].
+  box.innerHTML = pzRitualHTML(d, en);
   // LOTE CUENTA-REGRESIVA: arrancar el tick si se renderizó la cuenta.
   try {
     if (document.getElementById('pzRitualCuenta')) {
@@ -22309,11 +22300,10 @@ function pzRitualCardHTML(c, d, en) {
   ${img}
   <div class="pz-ritual-carta-tx">${c.recomendada ? `<span class="pz-ritual-badge rec">${en ? 'Recommended' : 'Recomendada'}</span>` : ''}${d.dorada && picked ? `<span class="pz-ritual-badge gold">✦ ${en ? 'Golden' : 'Dorada'}</span>` : ''}${c.rubro ? `<span class="pz-ritual-badge rubro">${esc(c.rubro)}</span>` : ''}
   <p>${esc(c.caption_corta || '')}</p></div>
-  ${d.elegida ? '' : `<button type="button" class="pz-ritual-elegir" data-pz-ritual-elegir="${c.id}">${en ? 'Goes out today' : 'Sale hoy'}</button>`}
 </div>`;
 }
 
-function pzRitualHTML(d, en, selId) {
+function pzRitualHTML(d, en) {
   // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c) Día de referencia del
   // álbum: d.hoy, o (tardecita, hoy null) el día de la casilla marcada
   // hoy en el álbum. Sin él, los candados de días pasados no se marcan
@@ -22390,107 +22380,65 @@ function pzRitualHTML(d, en, selId) {
   <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'Each day a post goes out, its sticker unlocks.' : 'Cada día que sale, se desbloquea su figurita.'}</p><div class="pz-ritual-slots">${album}</div></div>
   <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
   }
-  // (LOTE RITUAL-1-OPCION · 6/11 · decisión Valentino 11:31) Flujo de
-  // la mañana: (V) paquete VELADO a pantalla completa → tocarlo
-  // REVELA directo la recomendada (R) con foto + texto + [Sale así] /
-  // [Editar] / [Cambiar algo]. Una sola opción: no hay paso de elegir
-  // entre 3. La aprobación vive en OK (pzRitualConfirmar), no en
-  // revelar. Sin OK, el servidor sigue publicando la recomendada
-  // (v687 intacto).
-  let sel = (selId && (d.cartas || []).find((c) => Number(c.id) === Number(selId))) || null;
-  // (LOTE PROXIMO-DESTAPADO · 6/11 · «a las 00:00») Si el posteo de
-  // hoy ya se veía desde anoche (creado antes de medianoche, ya
-  // abierto), el ritual NO muestra un paquete velado falso ni una
-  // cuenta atrás falsa: rinde la carta revelada, lista para
-  // confirmar ([Sale así] / [Editar] / [Cambiar algo]). Las 9:00
-  // son la confirmación, no la revelación. Sin created_at legible,
-  // fail-closed (velo + cuenta, comportamiento v726 intacto).
-  if (!sel && !d.elegida) {
-    try {
-      const rec0 = d.recomendada || ((d.cartas && d.cartas[0]) || null);
-      if (rec0 && typeof pzProximoYaAbierto === 'function') {
-        const tzR = (typeof pcTz === 'function') ? pcTz() : undefined;
-        if (pzProximoYaAbierto(rec0, Date.now(), tzR)) sel = rec0;
-      }
-    } catch (e) {}
-  }
-  if (sel) {
-    const img = sel.media_type === 'video'
-      ? `<video src="${esc(sel.imagen)}" muted playsinline controls preload="metadata" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block"></video>`
-      : `<img src="${esc(mv(sel.imagen, 640))}" data-full="${esc(sel.imagen)}" onerror="__imgFb(this)" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block" alt="">`;
+  // (LOTE RITUAL-SIN-VELO · 9/11 · orden Valentino «el ritual solo
+  // confirma, no revela») La hoja SIEMPRE rinde la recomendada
+  // revelada (foto + texto + [Sale así] / [Editar] / [Cambiar
+  // algo]), a cualquier hora: el paquete velado y la cuenta
+  // regresiva para VER murieron — el posteo ya se ve en Hoy (sin
+  // velo, v826). Ver ≠ elegir: rendir revelada no guarda selección
+  // ni confirma. La aprobación vive solo en [Sale así]
+  // (pzRitualConfirmar). Sin confirmación, el servidor sigue
+  // publicando la recomendada (v687 intacto). Antes de las 9:00 se
+  // suma el aviso de las 9:00 para confirmar.
+  const rec = d.recomendada || ((d.cartas && d.cartas[0]) || null);
+  // Antes de las 9:00 (abre_a en el futuro): el posteo ya se ve en
+  // Hoy, así que la hoja rinde revelada igual, con el aviso de las
+  // 9:00. `abre_a`/`ahora` vienen del servidor (la zona es la de la
+  // cuenta); si faltan, no hay aviso (la hoja sigue revelada).
+  let preAviso = false;
+  try {
+    if (d.abre_a) {
+      const sesgo = d.ahora ? (Date.parse(d.ahora) - Date.now()) : 0;
+      const falta = Date.parse(d.abre_a) - (Date.now() + sesgo);
+      preAviso = Number.isFinite(falta) && falta > 0;
+    }
+  } catch (e) { preAviso = false; }
+  if (rec) {
+    const img = rec.media_type === 'video'
+      ? `<video src="${esc(rec.imagen)}" muted playsinline controls preload="metadata" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block"></video>`
+      : `<img src="${esc(mv(rec.imagen, 640))}" data-full="${esc(rec.imagen)}" onerror="__imgFb(this)" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block" alt="">`;
+    const avisoPre = preAviso ? (en
+      ? 'It goes out today at ' + esc(rec.hora_salida || '7:00 PM') + ' — we’ll let you know at 9:00 AM to confirm.'
+      : 'Sale hoy a las ' + esc(rec.hora_salida || '19:00') + ' — te avisamos a las 9:00 para confirmar.') : '';
     return `<div class="pz-ritual-wrap-in">${head}
-  <div class="pz-ritual-revelada pz-ritual-reveal" data-pz-ritual-revelada="1" data-post-id="${sel.id}">
+  <div class="pz-ritual-revelada pz-ritual-reveal" data-pz-ritual-revelada="1" data-post-id="${rec.id}">
   <div class="pz-ritual-sparkrow"><span>✦</span><span>✦</span><span>✦</span></div>
   <h2>${en ? 'This one goes out today' : 'Hoy sale este'}</h2>
+  ${avisoPre ? `<p class="pz-ritual-nota">${avisoPre}</p>` : ''}
   ${img}
-  <div class="pz-ritual-carta-tx">${sel.recomendada ? `<span class="pz-ritual-badge rec">${en ? 'Recommended' : 'Recomendada'}</span>` : ''}${sel.rubro ? `<span class="pz-ritual-badge rubro">${esc(sel.rubro)}</span>` : ''}
-  <p class="pcard-cap" data-full="${esc(sel.caption || sel.caption_corta || '')}">${esc(sel.caption_corta || '')}</p></div>
-  <button type="button" class="pz-ritual-ok" data-pz-ritual-ok="${sel.id}">${en ? 'Post it like this' : 'Sale así'}</button>
+  <div class="pz-ritual-carta-tx">${rec.recomendada ? `<span class="pz-ritual-badge rec">${en ? 'Recommended' : 'Recomendada'}</span>` : ''}${rec.rubro ? `<span class="pz-ritual-badge rubro">${esc(rec.rubro)}</span>` : ''}
+  <p class="pcard-cap" data-full="${esc(rec.caption || rec.caption_corta || '')}">${esc(rec.caption_corta || '')}</p></div>
+  <button type="button" class="pz-ritual-ok" data-pz-ritual-ok="${rec.id}">${en ? 'Post it like this' : 'Sale así'}</button>
   <button type="button" class="pz-ritual-cambio" data-pc-act="edit-cap">${en ? 'Edit text' : 'Editar texto'}</button>
-  <button type="button" class="pz-ritual-cambio" data-pz-ritual-cambio="${sel.id}">${en ? 'Change something' : 'Cambiar algo'}</button>
+  <button type="button" class="pz-ritual-cambio" data-pz-ritual-cambio="${rec.id}">${en ? 'Change something' : 'Cambiar algo'}</button>
   <p class="pz-ritual-nota">${en ? 'The one you confirm goes out today and into your album.' : 'La que confirmes sale hoy y va al álbum.'}</p>
   <div id="pzRitualErr" class="pz-ritual-err" hidden></div></div>
   <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'Each day a post goes out, its sticker unlocks.' : 'Cada día que sale, se desbloquea su figurita.'}</p><div class="pz-ritual-slots">${album}</div></div>
   <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
   }
-  // LOTE CUENTA-REGRESIVA (mock aprobado Valentino 6/11 01:53; solo la
-  // cuenta — los-3 quedó fuera por decisión Valentino 6/11 16:16): si hay
-  // paquete hoy y todavía no son las 9:00 de la cuenta, la pantalla es
-  // la cuenta regresiva en vivo con el paquete velado detrás (nada
-  // tocable ni revelado). A las 9:00 el tick recarga y aparece el
-  // paquete, sin navegar. `abre_a`/`ahora` vienen del servidor (la zona
-  // es la de la cuenta); si faltan, se muestra el paquete de siempre.
-  // Si ya hay una selección (sel), la revelada manda sobre la cuenta:
-  // la elección solo pudo hacerse con el paquete abierto (después de
-  // las 9:00), así que esconderla detrás de la cuenta sería un error.
-  if (!d.elegida && !sel && d.abre_a) {
-    const sesgo = d.ahora ? (Date.parse(d.ahora) - Date.now()) : 0;
-    const falta = Date.parse(d.abre_a) - (Date.now() + sesgo);
-    if (Number.isFinite(falta) && falta > 0) {
-      const cuenta = pzRitualCuentaTxt(falta);
-      const horaTxt = String(d.abre_hora || '9:00').replace(/^0/, '');
-      return `<div class="pz-ritual-wrap-in">${headSinSaludo}
-  <div class="pz-ritual-cuenta">
-  <span class="pz-ritual-pack-chip">hoy · ${esc(horaTxt)}</span>
-  <p class="pz-ritual-cuenta-tit">${en ? 'your pack opens in' : 'tu paquete se abre en'}</p>
-  <p class="pz-ritual-cuenta-num" id="pzRitualCuenta" data-pz-cuenta-abre="${esc(d.abre_a)}" data-pz-cuenta-sesgo="${sesgo}"><span class="pz-ritual-cuenta-hm">${cuenta.hm}</span><span class="pz-ritual-cuenta-ss">${cuenta.ss}</span></p>
-  <p class="pz-ritual-cuenta-sub" id="pzRitualCuentaSub"${en ? ' data-pz-cuenta-en="1"' : ''}>${en ? `<b>${esc(cuenta.faltan)}</b> left to see your next post` : `faltan <b>${esc(cuenta.faltan)}</b> para ver tu próximo posteo`}</p>
-  <div class="pz-ritual-pack-velo pz-respira" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
-  <h2>${en ? 'your post for today' : 'tu posteo de hoy'}</h2>
-  <p>${en ? '1 card inside' : '1 carta adentro'}</p>
-  <p class="pz-ritual-ver-hint">${en ? `It opens at ${esc(horaTxt)}` : `Se abre a las ${esc(horaTxt)}`}</p></div>
-  <p class="pz-ritual-nota">${en ? `At ${esc(horaTxt)} it opens on its own, <b>or the push lets you know</b><br>Come in whenever you like: the pack is waiting for you.` : `A las ${esc(horaTxt)} se abre solo, <b>o te llega la push</b><br>Entrá cuando quieras: el paquete te espera.`}</p>
-  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'Each day a post goes out, its sticker unlocks.' : 'Cada día que sale, se desbloquea su figurita.'}</p><div class="pz-ritual-slots">${album}</div></div>
-  <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
-    }
-  }
-  const recId = (d.recomendada && d.recomendada.id) || ((d.cartas && d.cartas[0] && d.cartas[0].id) || '');
+  // (LOTE RITUAL-SIN-VELO · 9/11) La cuenta regresiva para VER murió
+  // con el paquete velado: antes de las 9:00 la hoja ya rinde
+  // revelada (con el aviso de las 9:00, arriba). El tick y la cuenta
+  // sobreviven SOLO para la rama de la tarde (el paquete de mañana,
+  // que abre a las 00:00).
+  // (LOTE RITUAL-SIN-VELO · 9/11) Sin recomendada ni cartas no hay
+  // nada que revelar: el vacío honesto (el servidor nunca devuelve
+  // hoy con cartas vacías — responde hoy: null —, esto es defensa).
   return `<div class="pz-ritual-wrap-in">${headSinSaludo}
-  <div class="pz-ritual-pack${d.dorada ? ' gold' : ''} pz-ritual-velado" id="pzRitualPack" data-pz-ritual-ver="1" data-pz-ritual-rec="${recId}" role="button" tabindex="0" aria-label="${en ? 'Your post for today, hidden. Tap to see it' : 'Tu posteo de hoy, oculto. Tocá para verlo'}">
-  <span class="pz-ritual-pack-chip">hoy · 9:00</span>
-  <div class="pz-ritual-pack-velo pz-respira" aria-hidden="true"><i class="pz-dorso"><b>✦</b></i><span class="pz-dorso-spark">✦</span><span class="pz-dorso-spark b">✦</span></div>
-  <h2>${en ? 'your post for today' : 'tu posteo de hoy'}</h2>
-  <p>${en ? '1 card inside' : '1 carta adentro'}</p>
-  <p class="pz-ritual-ver-hint">${en ? 'Tap to see it' : 'Tocá para verla'}</p></div>
-  <div id="pzRitualErr" class="pz-ritual-err" hidden></div>
-  <div class="pz-ritual-album"><h3>${en ? 'your album' : 'tu álbum'}</h3><p>${en ? 'Each day a post goes out, its sticker unlocks.' : 'Cada día que sale, se desbloquea su figurita.'}</p><div class="pz-ritual-slots">${album}</div></div>
-  <button type="button" class="bb-btn bb-btn-ghost" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div>`;
-}function pzRitualElegir(id) {
-  // (LOTE RITUAL-1-OPCION · 6/11) Revelar SELECCIONA, no aprueba:
-  // guarda la selección y re-carga la hoja, que muestra el posteo
-  // REVELADO (foto + texto) con [Sale así] / [Editar] / [Cambiar
-  // algo]. La aprobación vive en OK (pzRitualConfirmar). Sin OK, el
-  // servidor sigue publicando la recomendada (v687 intacto). Sin POST
-  // acá: revelar no toca el servidor.
-  try { if (typeof pzRitualSelGuardar === 'function') pzRitualSelGuardar(id); } catch (e) {}
-  try { PZ_RITUAL_SEL = Number(id) || 0; } catch (e) {}
-  try { if (typeof pzRitualCargar === 'function') pzRitualCargar(); } catch (e) {}
-}
-// (LOTE RITUAL-1-OPCION · 6/11) Tocar el paquete REVELA directo la
-// recomendada: es el mismo gesto que elegir, con el nombre del flujo
-// nuevo (una sola opción, sin paso de elegir entre 3).
-function pzRitualRevelar(id) {
-  try { if (typeof pzRitualElegir === 'function') pzRitualElegir(id); } catch (e) {}
+  <div class="pz-ritual-vacio">
+  <img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty">
+  <p>${en ? 'You have no post scheduled for today.' : 'Hoy no tenés posteo programado.'}</p>
+  <button type="button" class="bb-btn" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div></div>`;
 }
 // (LOTE RITUAL-1-OPCION · 6/11) [Cambiar algo] = pedir otra versión:
 // el tap mismo manda el pedido al chat (el cliente no tiene que
@@ -22514,8 +22462,8 @@ async function pzRitualConfirmar(id) {
   try {
     const r = await api.post('/api/ritual/elegir', { post_id: Number(id) });
     if (r && r.ok) {
-      try { if (typeof pzRitualSelLimpiar === 'function') pzRitualSelLimpiar(); } catch (e) {}
-      try { PZ_RITUAL_SEL = 0; } catch (e) {}
+      // (LOTE RITUAL-SIN-VELO · 9/11) Ya no hay selección que limpiar:
+      // ver nunca guardó nada (la confirmación es el único POST).
       // (LOTE RITUAL-1-OPCION · 6/11 · fricción cero) Confirmar es UN
       // toque: toast con la hora + vuelta al feed. La apertura FIFA
       // (pzPackFifaOpen) NO existe en este bundle y la pantalla
@@ -22539,17 +22487,15 @@ async function pzRitualConfirmar(id) {
     if (err) { err.hidden = false; err.textContent = (e && e.message) || 'No se pudo guardar tu elección 😅'; }
   }
 }
-// (LOTE RITUAL-1-OPCION · 6/11) La carta velada del próximo abre la
-// hoja del ritual, que SIEMPRE nace en el paquete velado a pantalla
-// completa: tocarlo revela directo la recomendada. La push de las 9:00
-// abre la misma hoja. El velo no revela el posteo: la hoja es el
-// ritual, no el detalle.
+// (LOTE RITUAL-SIN-VELO · 9/11) La carta de hoy abre la hoja del
+// ritual, que rinde la recomendada REVELADA (foto + texto + [Sale
+// así] / [Editar] / [Cambiar algo]). La push de las 9:00 abre la
+// misma hoja. Ver ≠ elegir: ver la hoja no guarda selección ni
+// confirma; la confirmación vive solo en [Sale así].
 function pzRitualAbrirDesdeCarta() {
-  // (LOTE RITUAL-1-OPCION · 6/11) La carta (velada o de hoy sin
-  // elegir) abre la hoja del ritual, que SIEMPRE nace en el paquete
-  // velado a pantalla completa (ya no hay auto-open ni botón «Abrir mi
-  // paquete»: el paquete ES la pantalla y tocarlo revela la
-  // recomendada).
+  // (LOTE RITUAL-SIN-VELO · 9/11) La carta (de hoy, sin elegir) abre
+  // la hoja del ritual, que rinde la recomendada revelada (ya no hay
+  // paquete velado ni gesto de revelar: el posteo ya se ve en Hoy).
   if (typeof bbGo === 'function') bbGo('#/app/ritual');
   else location.hash = '#/app/ritual';
 }
@@ -22563,35 +22509,13 @@ document.addEventListener('keydown', (e) => {
   if (b) { e.preventDefault(); pzRitualAbrirDesdeCarta(); }
 });
 document.addEventListener('click', (e) => {
-  // (LOTE RITUAL-1-OPCION · 6/11) Tocar el paquete velado REVELA
-  // directo la recomendada (una sola opción): guarda la selección y
-  // re-carga la hoja, que muestra el posteo revelado. Sin paso de
-  // elegir entre 3 (el abanico #pzRitualCartas se retiró).
-  const v = e.target && e.target.closest ? e.target.closest('[data-pz-ritual-ver]') : null;
-  if (v) {
-    e.preventDefault();
-    try {
-      const recId = (v.dataset && v.dataset.pzRitualRec) || 0;
-      if (recId && typeof pzRitualRevelar === 'function') pzRitualRevelar(recId);
-    } catch (err) {}
-    return;
-  }
+  // (LOTE RITUAL-SIN-VELO · 9/11) La hoja rinde revelada: ya no hay
+  // paquete velado que tocar. Quedan [Sale así] (confirma) y
+  // [Cambiar algo] (pide otra versión en el chat).
   const o = e.target && e.target.closest ? e.target.closest('[data-pz-ritual-ok]') : null;
   if (o) { e.preventDefault(); pzRitualConfirmar(o.dataset.pzRitualOk); return; }
   const c = e.target && e.target.closest ? e.target.closest('[data-pz-ritual-cambio]') : null;
   if (c) { e.preventDefault(); try { if (typeof pzRitualPedirCambio === 'function') pzRitualPedirCambio(c.dataset.pzRitualCambio); } catch (err) {} return; }
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter' && e.key !== ' ') return;
-  const v = e.target && e.target.closest ? e.target.closest('[data-pz-ritual-ver]') : null;
-  if (v) {
-    e.preventDefault();
-    try {
-      const recId = (v.dataset && v.dataset.pzRitualRec) || 0;
-      if (recId && typeof pzRitualRevelar === 'function') pzRitualRevelar(recId);
-    } catch (err) {}
-    return;
-  }
 });
 /* ===== TIRA DE NIVEL POSTY — tallo vivo en Inicio (v457) ===== */
 // La tira vive debajo del perfil literal (bio y destacadas) y arriba de la

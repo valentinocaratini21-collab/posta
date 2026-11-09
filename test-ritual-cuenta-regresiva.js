@@ -1,9 +1,14 @@
 // test-ritual-cuenta-regresiva.js — LOTE RITUAL-CUENTA-REGRESIVA, SOLO LA
 // CUENTA (mock aprobado Valentino 6/11 01:53, «Si, perfecto»; los-3 quedó
 // fuera por decisión Valentino 6/11 16:16 «Solo la cuenta regresiva»).
-// 1) CUENTA REGRESIVA: antes de las 9:00 (hora de la cuenta) la pantalla
-//    del ritual es el conteo en vivo con el paquete velado detrás; a las
-//    9:00 se convierte en el paquete sin navegar.
+// + LOTE RITUAL-SIN-VELO (9/11 · orden Valentino «el ritual solo
+// confirma, no revela»): la cuenta regresiva para VER murió — antes de
+// las 9:00 la hoja rinde revelada con el aviso de las 9:00. La cuenta
+// sobrevive SOLO para la rama de la tarde (el paquete de mañana, que
+// abre a las 00:00) y sus helpers (pzRitualCuentaTxt/Tick) siguen
+// vivos para esa rama.
+// 1) ANTES DE LAS 9:00: la pantalla es la revelada + aviso de las 9:00
+//    (nunca la cuenta, nunca el paquete velado).
 // 2) EL VACÍO NUNCA APARECE: sin posteo hoy, #/app/ritual redirige a
 //    Inicio sin pantalla intermedia.
 // 3) SIN LOS-3: no hay endpoint elegir-tres, ni botón dorado, ni
@@ -143,28 +148,26 @@ function payloadBase(over) {
   const S = sandbox;
   const { pzRitualHTML, pzRitualCuentaTxt, pzRitualCuentaTick } = S;
 
-  // --- C1) cuenta regresiva con payload fabricado (determinista) ---
-  // C1b determinista (re-base v726): UN solo instante `ahoraMs` para
-  // `abre_a` y `ahora` — si se toman dos Date.now() distintos, el floor
-  // de pzRitualCuentaTxt da :23 en vez de :24 salvo mismo milisegundo
-  // (flaky 1/5 corridas). El render calcula falta = abre_a − ahora, así
-  // que con un solo instante falta es exactamente 7h17m24s.
+  // --- C1) antes de las 9:00: la hoja rinde revelada + aviso (sin cuenta) ---
+  // (LOTE RITUAL-SIN-VELO · 9/11) La cuenta regresiva para VER murió:
+  // el posteo ya se ve en Hoy. El payload fabricado sigue siendo
+  // determinista (un solo instante `ahoraMs` para `abre_a` y `ahora`).
   const ahoraMs = Date.now();
   const abreFuturo = new Date(ahoraMs + (7 * 3600 + 17 * 60 + 24) * 1000).toISOString();
   const dCuenta = payloadBase({ abre_a: abreFuturo, ahora: new Date(ahoraMs).toISOString() });
   const htmlCuenta = String(pzRitualHTML(dCuenta, false));
-  t('C1a: antes de las 9:00 renderiza la cuenta regresiva (id pzRitualCuenta)', htmlCuenta.includes('id="pzRitualCuenta"'));
-  t('C1b: el conteo muestra 07:17 grande y :24 chico (segundos incluidos)', htmlCuenta.includes('<span class="pz-ritual-cuenta-hm">07:17</span><span class="pz-ritual-cuenta-ss">:24</span>'), htmlCuenta.slice(0, 400));
-  t('C1c: la línea «faltan 7 h 17 min para ver tu próximo posteo» (corrección Valentino 19:26: la cuenta es para VER el posteo, no «para las 9:00»)', htmlCuenta.includes('faltan <b>7 h 17 min</b> para ver tu próximo posteo'));
-  t('C1d: el paquete velado detrás: 3 dorsos navy con ✦', (htmlCuenta.match(/pz-dorso/g) || []).length >= 3);
-  t('C1e: nada tocable en la cuenta: sin data-pz-ritual-elegir ni data-pz-ritual-ver', !htmlCuenta.includes('data-pz-ritual-elegir') && !htmlCuenta.includes('data-pz-ritual-ver'));
-  t('C1f: sin botón de los 3 ni «Tocá para ver» antes de las 9:00', !htmlCuenta.includes('data-pz-ritual-tres') && !htmlCuenta.includes('Tocá para ver'));
-  t('C1g: la cuenta dice «Se abre a las 9:00» + nota de la push', htmlCuenta.includes('Se abre a las 9:00') && htmlCuenta.includes('te llega la push'));
+  t('C1a: antes de las 9:00 la hoja rinde REVELADA (foto + [Sale así] + [Editar] + [Cambiar algo])', htmlCuenta.includes('/media/518.jpg') && htmlCuenta.includes('Sale así') && htmlCuenta.includes('data-pz-ritual-ok="518"') && htmlCuenta.includes('data-pc-act="edit-cap"') && htmlCuenta.includes('data-pz-ritual-cambio="518"'));
+  t('C1b: antes de las 9:00 NO hay cuenta regresiva (sin id pzRitualCuenta)', !htmlCuenta.includes('id="pzRitualCuenta"'));
+  t('C1c: antes de las 9:00 el aviso dice «Sale hoy a las 19:00 — te avisamos a las 9:00 para confirmar»', htmlCuenta.includes('Sale hoy a las 19:00') && htmlCuenta.includes('te avisamos a las 9:00 para confirmar'));
+  t('C1d: antes de las 9:00 NO hay paquete velado detrás (sin dorsos, sin «1 carta adentro»)', !htmlCuenta.includes('pz-dorso') && !htmlCuenta.includes('1 carta adentro'));
+  t('C1e: nada velado en la hoja: sin data-pz-ritual-ver ni «Tocá para ver»', !htmlCuenta.includes('data-pz-ritual-ver') && !htmlCuenta.includes('Tocá para ver'));
+  t('C1f: sin botón de los 3 antes de las 9:00', !htmlCuenta.includes('data-pz-ritual-tres'));
+  t('C1g: la hoja trae el álbum (la cuenta ya no es la pantalla)', htmlCuenta.includes('tu álbum'));
 
-  // --- C2) paquete después de las 9:00 (abre_a pasado) ---
+  // --- C2) pasada las 9:00 (abre_a pasado): la revelada sin aviso ---
   const dPaquete = payloadBase({ abre_a: new Date(Date.now() - 3600 * 1000).toISOString() });
   const htmlPaquete = String(pzRitualHTML(dPaquete, false));
-  t('C2a: pasada las 9:00 NO hay cuenta regresiva, hay paquete velado', !htmlPaquete.includes('id="pzRitualCuenta"') && htmlPaquete.includes('data-pz-ritual-ver="1"'));
+  t('C2a: pasada las 9:00 NO hay cuenta regresiva ni paquete velado: la revelada sin aviso', !htmlPaquete.includes('id="pzRitualCuenta"') && !htmlPaquete.includes('data-pz-ritual-ver') && htmlPaquete.includes('data-pz-ritual-revelada="1"') && !htmlPaquete.includes('te avisamos a las 9:00 para confirmar'));
 
   // --- C6) elegido con UNA sola sigue igual que antes ---
   const dElegUna = payloadBase({ abre_a: new Date(Date.now() - 3600 * 1000).toISOString(), elegida: 518 });
@@ -184,14 +187,14 @@ function payloadBase(over) {
   t('C8a: el tick actualiza el conteo en vivo (01:00:0X, segundos chicos)', /^<span class="pz-ritual-cuenta-hm">01:00<\/span><span class="pz-ritual-cuenta-ss">:0[3-5]<\/span>$/.test(els.pzRitualCuenta.innerHTML), 'innerHTML=' + els.pzRitualCuenta.innerHTML);
   t('C8b: el tick actualiza la línea «faltan … para ver tu próximo posteo»', els.pzRitualCuentaSub.innerHTML.includes('faltan <b>1 h 00 min</b> para ver tu próximo posteo'), els.pzRitualCuentaSub.innerHTML);
 
-  // --- C9) tick a cero → recarga y aparece el paquete (sin navegar) ---
+  // --- C9) tick a cero → recarga y aparece la revelada (sin navegar) ---
   els.pzRitual = { isConnected: true, innerHTML: '' };
   hoyPayload = payloadBase({ abre_a: new Date(Date.now() - 1000).toISOString() });
   els.pzRitualCuenta = { textContent: '00:00:00', getAttribute: (k) => (k === 'data-pz-cuenta-abre' ? new Date(Date.now() - 1000).toISOString() : '0') };
   delete els.pzRitualCuentaSub;
   pzRitualCuentaTick();
   await new Promise((r) => setTimeout(r, 100));
-  t('C9: al llegar a 0 el tick recarga y la pantalla es el paquete (no la cuenta)', els.pzRitual.innerHTML.includes('data-pz-ritual-ver="1"') && !els.pzRitual.innerHTML.includes('id="pzRitualCuenta"'), els.pzRitual.innerHTML.slice(0, 200));
+  t('C9: al llegar a 0 el tick recarga y la pantalla es la revelada (no la cuenta, no el paquete velado)', els.pzRitual.innerHTML.includes('data-pz-ritual-revelada="1"') && !els.pzRitual.innerHTML.includes('id="pzRitualCuenta"') && !els.pzRitual.innerHTML.includes('data-pz-ritual-ver'), els.pzRitual.innerHTML.slice(0, 200));
 
   // --- C10) redirección del vacío + publicado_hoy ---
   S.bbGo = (h) => { bbGoCalls.push(h); };
@@ -308,13 +311,15 @@ function payloadBase(over) {
     t('H1e: CONTRATO — la respuesta NO trae clave `tres` (los-3 fuera)', !('tres' in d12), 'claves=' + Object.keys(d12).join(','));
     t('H1f: el éxito trae UNA sola carta (la recomendada)', Array.isArray(d12.cartas) && d12.cartas.length === 1 && d12.cartas[0].id === 518, 'cartas=' + JSON.stringify((d12.cartas || []).map((c) => c.id)));
 
-    // La cuenta regresiva real por HTTP: si ahora < 9:00 NY, el render real
-    // es la cuenta; si ya pasó, es el paquete. En ambos casos, nunca el vacío.
+    // La hoja real por HTTP: antes o después de las 9:00 NY, el render
+    // real es la revelada (con aviso antes de las 9:00). Nunca el
+    // vacío, nunca el paquete velado, nunca la cuenta para VER.
     const htmlReal = String(pzRitualHTML(d12, false));
     const antes9 = Date.parse(d12.abre_a) > Date.now();
-    t('H1g: con la respuesta REAL, el render es cuenta (antes 9:00) o paquete (después), nunca vacío',
+    t('H1g: con la respuesta REAL, el render es la revelada (con aviso antes de las 9:00), nunca vacío',
       !htmlReal.includes('Hoy no tenés posteo programado')
-      && (antes9 ? htmlReal.includes('id="pzRitualCuenta"') : htmlReal.includes('data-pz-ritual-ver="1"')),
+      && htmlReal.includes('data-pz-ritual-revelada="1"') && !htmlReal.includes('data-pz-ritual-ver') && !htmlReal.includes('id="pzRitualCuenta"')
+      && (antes9 ? htmlReal.includes('te avisamos a las 9:00 para confirmar') : !htmlReal.includes('te avisamos a las 9:00 para confirmar')),
       'antes9=' + antes9 + ' html=' + htmlReal.slice(0, 150));
 
     // --- H4) elegir UNA sola sigue andando (v687 intacto) ---

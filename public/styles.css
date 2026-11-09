@@ -5546,9 +5546,9 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ritual-badge.rec{background:rgba(39,147,200,.16);color:#1F7FB4}
 .pz-ritual-badge.gold{background:#FEC14D;color:#0A1E33}
 .pz-ritual-badge.rubro{background:rgba(10,30,51,.08);color:#47617A}
-/* (LOTE RITUAL-1-OPCION · 6/11) Paquete velado a pantalla completa y
-   revelación directa con OK. El abanico de 3 opciones se retiró. */
-.pz-ritual-velado{min-height:58vh;display:flex;flex-direction:column;justify-content:center;cursor:pointer}
+/* (LOTE RITUAL-SIN-VELO · 9/11) El dorso del paquete (rama de la
+   tarde: el paquete de mañana, que abre a las 00:00). La regla
+   .pz-ritual-velado murió con el paquete velado de la mañana. */
 .pz-ritual-pack-velo{position:relative;height:196px;margin:4px 0 16px;display:flex;align-items:center;justify-content:center}
 .pz-dorso{flex:none;width:106px;height:150px;border-radius:12px;background-color:#0A1E33;background-image:repeating-linear-gradient(45deg,rgba(254,193,77,.16) 0 2px,transparent 2px 16px),repeating-linear-gradient(-45deg,rgba(254,193,77,.16) 0 2px,transparent 2px 16px);border:1.5px solid #FEC14D;box-shadow:0 8px 20px rgba(10,30,51,.28);display:flex;align-items:center;justify-content:center;margin:0 -14px}
 .pz-dorso:nth-child(1){transform:rotate(-9deg) translateY(8px)}

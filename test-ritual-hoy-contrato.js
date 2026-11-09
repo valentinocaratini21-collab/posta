@@ -1,7 +1,9 @@
 // test-ritual-hoy-contrato.js — LOTE RITUAL-HOY-FIX (bug en vivo 6/11 ~01:20)
 // + LOTE RITUAL-1-OPCION (6/11 · decisión Valentino «una sola opción +
 // editar»: el éxito trae UNA sola carta — la recomendada —, sin
-// alternas; el paquete velado revela directo la recomendada).
+// alternas; la hoja la muestra revelada directo)
+// + LOTE RITUAL-SIN-VELO (9/11 · orden Valentino «el ritual solo
+// confirma, no revela»: sin paquete velado ni cuenta para VER).
 // CONTRATO entre GET /api/ritual/hoy (servidor) y pzRitualHTML (cliente):
 // el servidor responde el éxito con la clave `hoy` (día "YYYY-MM-DD") y el
 // cliente renderiza el paquete solo si `d.hoy` es truthy.
@@ -220,25 +222,26 @@ async function getHoy(sid) {
     const html = String(pzRitualHTML(d, false));
     t('A5: el cliente renderiza EL PAQUETE con la respuesta real (sin «Hoy no tenés posteo programado»)',
       !html.includes('Hoy no tenés posteo programado'), html.slice(0, 200));
-    // El paquete nace VELADO (sin foto a propósito): la foto aparece al
-    // ELEGIR. Con la respuesta real, elegir la recomendada revela su foto.
-    const htmlR = String(pzRitualHTML(d, false, d.recomendada && d.recomendada.id));
-    t('A6: al revelar la recomendada (respuesta real) se muestra SU foto (518)',
+    // (LOTE RITUAL-SIN-VELO · 9/11) La hoja nace REVELADA: con la
+    // respuesta real, la recomendada muestra SU foto + [Sale así] /
+    // [Editar] / [Cambiar algo] sin gesto de revelar.
+    const htmlR = String(pzRitualHTML(d, false));
+    t('A6: la recomendada (respuesta real) se muestra revelada con SU foto (518)',
       htmlR.includes('/media/518.jpg') && htmlR.includes('Sale así'),
       htmlR.slice(0, 300));
     t('A6b: la revelada trae [Editar texto] (data-pc-act=edit-cap) y el caption con data-full',
       htmlR.includes('data-pc-act="edit-cap"') && htmlR.includes('pcard-cap') && htmlR.includes('data-full='),
       htmlR.slice(0, 400));
     t('A6c: la revelada trae [Cambiar algo] con el posteo', htmlR.includes('Cambiar algo') && htmlR.includes('data-pz-ritual-cambio="518"'));
-    // LOTE CUENTA-REGRESIVA (mock aprobado Valentino 6/11 01:53): antes de
-    // las 9:00 de la cuenta el render real es la cuenta regresiva, no el
-    // paquete; después de las 9:00, el paquete velado. En ambos casos,
-    // nunca el vacío (A5 ya lo afirma).
+    // (LOTE RITUAL-SIN-VELO · 9/11) Antes de las 9:00 de la cuenta el
+    // render real es la revelada CON el aviso de las 9:00 para
+    // confirmar; después de las 9:00, la revelada sin aviso. En ambos
+    // casos, nunca el vacío (A5 ya lo afirma) ni el paquete velado ni
+    // la cuenta regresiva para VER.
     const antes9 = d.abre_a ? (Date.parse(d.abre_a) > Date.now()) : false;
-    t('A7: el paquete es el velado (data-pz-ritual-ver) con UNA carta adentro — o la cuenta regresiva si todavía no son las 9:00',
-      antes9
-        ? (html.includes('id="pzRitualCuenta"') && !html.includes('data-pz-ritual-ver="1"'))
-        : (html.includes('data-pz-ritual-ver="1"') && html.includes('1 carta adentro') && !html.includes('id="pzRitualCartas"') && !html.includes('pzRitualOpcionHTML') && !html.includes('3 opciones')),
+    t('A7: el render real es la revelada (con aviso de las 9:00 antes de las 9:00, sin aviso después)',
+      html.includes('data-pz-ritual-revelada="1"') && !html.includes('data-pz-ritual-ver') && !html.includes('1 carta adentro') && !html.includes('id="pzRitualCuenta"')
+      && (antes9 ? html.includes('te avisamos a las 9:00 para confirmar') : !html.includes('te avisamos a las 9:00 para confirmar')),
       'antes9=' + antes9 + ' abre_a=' + d.abre_a);
 
     // ===== B) VACÍO REAL: sin posteo hoy el estado vacío sigue andando =====

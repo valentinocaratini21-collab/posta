@@ -1,11 +1,17 @@
 'use strict';
-// morning-post-push.js — PUSH MATUTINA «Tu posteo de hoy ya está»
+// morning-post-push.js — PUSH MATUTINA «Hoy sale este — sale a las 19:00»
 // (LOTE POSTEO-DEL-DIA, corrección Valentino 2/11 ~20:57; ventana
-// movida a las 9:00 por decisión Valentino 2/11 ~21:09.)
+// movida a las 9:00 por decisión Valentino 2/11 ~21:09; LOTE
+// RITUAL-SIN-VELO · 9/11 · orden Valentino «el ritual solo confirma,
+// no revela»: el cuerpo viejo «Tu posteo de hoy ya está 👇» murió —
+// implicaba algo escondido por abrir. La push es RICA: lleva la foto
+// del posteo adjunta (mutable-content + attachment en APNs, image en
+// FCM/webpush) y la hora real de salida.)
 //
 // Cada mañana, en la ZONA DE LA CUENTA, al usuario con posteo programado
 // para hoy le llega un mensajito push que al tocarlo abre la app en
-// el ritual (#/app/ritual, lote 5/8), donde vive el paquete del día.
+// el ritual (#/app/ritual, lote 5/8), donde vive el posteo del día,
+// REVELADO (foto + texto + [Sale así] / [Editar] / [Cambiar algo]).
 //
 // Reglas duras (fail-closed, nunca push sin posteo real):
 // · Ventana: la hora 9:00 en la zona de la cuenta (settings.timezone,
@@ -27,9 +33,15 @@
 //   publicar: anunciar sería mentir).
 // · Idioma: users.lang (en → EN, resto ES). URL '/#/app/ritual': el
 //   ritual vive ahí desde el lote 5/8 (antes '/#/app/inicio': el hero
-//   vivía en Inicio; ahora la push abre el paquete del día y el posteo
-//   del día se elige ahí). El tap nativo rutea por url (push.js la
+//   vivía en Inicio; ahora la push abre el posteo del día y el posteo
+//   del día se confirma ahí). El tap nativo rutea por url (push.js la
 //   incluye en el payload APNs y web).
+// · La push lleva la FOTO del posteo (payload.image): solo imagen o
+//   carrusel (la primera foto); el video no lleva adjunto. La URL es
+//   absoluta con fallback canónico (postImageUrl). DEPENDENCIA:
+//   APNs está roto hoy (keyParseable false) — el adjunto se construye
+//   para que funcione cuando se arregle la clave (mano de Valentino
+//   10/11); la push NO se declara probada E2E hasta entonces.
 // · Esto NO reemplaza el aviso de 30 min ni la carta: es solo el
 //   anuncio matutino del hero. No publica nada, no aprueba nada, no
 //   reprograma nada.
@@ -88,9 +100,51 @@ function pickTodayPost(posts, tz, now) {
   } catch (e) { return null; }
 }
 
-function morningText(lang) {
-  if (lang === 'en') return { title: 'Posty', body: 'Your post for today is ready 👇' };
-  return { title: 'Posty', body: 'Tu posteo de hoy ya está 👇' };
+function morningText(lang, saleHour) {
+  // (LOTE RITUAL-SIN-VELO · 9/11) La push ya no anuncia algo escondido
+  // («ya está 👇» implicaba un paquete por abrir): muestra el posteo
+  // con su foto adjunta y la hora de salida. La hora sale del
+  // scheduled_at real del posteo (saleHourInTz); sin ella, el default
+  // 19:00 / 7:00 PM. Textos de Valentino 9/11 ~09:04.
+  const hora = String(saleHour || '').trim() || (lang === 'en' ? '7:00 PM' : '19:00');
+  if (lang === 'en') return { title: 'Posty', body: `Today's post is ready — goes out at ${hora}` };
+  return { title: 'Posty', body: `Hoy sale este — sale a las ${hora}` };
+}
+
+// Hora de salida del posteo en la zona de la cuenta, localizada
+// (ES 24 h, EN 12 h) — mismo formato que server.js horaSalidaEnTz.
+function saleHourInTz(iso, tz, lang) {
+  try {
+    const d = new Date(String(iso || '').replace(' ', 'T'));
+    if (isNaN(d)) return '';
+    return new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'es-ES', {
+      timeZone: tz || DEFAULT_TZ, hour: 'numeric', minute: '2-digit', hour12: lang === 'en',
+    }).format(d);
+  } catch (e) { return ''; }
+}
+
+// URL absoluta de la foto del posteo para el adjunto de la push rica.
+// Misma guarda de base muerta que server.js absImageUrl (fix v405):
+// dominio viejo o localhost caen al canónico. Sin base configurada,
+// el canónico (una push necesita URL absoluta: la relativa no
+// resuelve en APNs/FCM).
+function postImageUrl(imagePath) {
+  const p = String(imagePath || '');
+  if (!p) return null;
+  if (/^https?:\/\//i.test(p)) return p.replace(/https?:\/\/(www\.)?(postahacetodo|postyhacetodo)\.com/i, 'https://postycommunitymanager.com');
+  let base = String(process.env.IMAGE_BASE_URL || process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/+$/, '');
+  if (/postahacetodo\.com/i.test(base) || /localhost|127\.0\.0\.1/i.test(base)) base = 'https://postycommunitymanager.com';
+  return base + (p.startsWith('/') ? p : '/' + p);
+}
+
+// ¿Lleva foto la push de este posteo? Solo imagen o carrusel (la
+// primera foto, que vive en image_path). El video no lleva adjunto
+// (APNs no lo muestra como imagen) y sin image_path no hay nada.
+function postImageForPush(post) {
+  if (!post || !post.image_path) return null;
+  const mt = String(post.media_type || '');
+  if (mt && mt !== 'image' && mt !== 'carousel') return null;
+  return postImageUrl(post.image_path);
 }
 
 function ensureMorningTable(db) {
@@ -141,13 +195,18 @@ async function sendMorningPostPush(db, opts) {
       }
       let posts = [];
       try {
-        posts = db.prepare(`SELECT id, scheduled_at, status FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+        // (LOTE RITUAL-SIN-VELO · 9/11) image_path + media_type: la
+        // push rica adjunta la foto del posteo (postImageForPush).
+        posts = db.prepare(`SELECT id, scheduled_at, status, image_path, media_type FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
       } catch (e) { res.errors.push('posts:' + uid + ':' + e.message); continue; }
       const post = pickTodayPost(posts, tz, now);
       if (!post) { res.skipped++; continue; }
-      const t = morningText(lang);
+      const t = morningText(lang, saleHourInTz(post.scheduled_at, tz, lang));
+      const image = postImageForPush(post);
+      const payload = { title: t.title, body: t.body, url: '/#/app/ritual', data: { postId: String(post.id) } };
+      if (image) payload.image = image;
       let r = null;
-      try { r = await pushFn(uid, { title: t.title, body: t.body, url: '/#/app/ritual', data: { postId: String(post.id) } }); }
+      try { r = await pushFn(uid, payload); }
       catch (e) { r = { ok: false, reason: 'throw:' + e.message }; }
       if (r && (r.ok || Number(r.sent) > 0)) {
         try {
@@ -162,5 +221,6 @@ async function sendMorningPostPush(db, opts) {
 
 module.exports = {
   sendMorningPostPush, pickTodayPost, dayKeyInTz, hourInTz, inMorningWindow,
-  morningText, ensureMorningTable, MORNING_START_HOUR, MORNING_END_HOUR,
+  morningText, saleHourInTz, postImageUrl, postImageForPush, ensureMorningTable,
+  MORNING_START_HOUR, MORNING_END_HOUR,
 };
