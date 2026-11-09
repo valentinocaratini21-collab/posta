@@ -41,19 +41,18 @@ const ruleCss = (sel) => {
   t(headSrc.includes('ai-avatar.png'), '§1: carita de Posty intacta');
   t(headSrc.includes("bbGo('#/app/chat')"), '§1: identidad abre el Chat');
   t(headSrc.includes('BB.estado') && headSrc.includes('negocio'), '§1: nombre desde BB.estado.negocio');
-  t(headSrc.includes('HOME_PROF') && headSrc.includes('username'), '§1: @handle desde HOME_PROF.username (misma fuente que homeHeadHTML)');
-  t(headSrc.includes('PROFILE') && headSrc.includes('ig_username'), '§1: @handle de respaldo desde PROFILE.ig_username');
-  t(headSrc.includes('¡Hola!'), '§1: fallback «¡Hola!» solo sin nombre ni handle');
+  t(!headSrc.includes('HOME_PROF'), '§1: sin HOME_PROF en el encabezado (el @ no sale, simplificar-app p5)');
+  t(headSrc.includes('PROFILE.business_name') && !headSrc.includes('ig_username'), '§1: nombre de respaldo desde PROFILE.business_name, sin ig_username (simplificar-app p5)');
+  t(headSrc.includes('¡Hola!'), '§1: fallback «¡Hola!» solo sin nombre (simplificar-app p5)');
   t(headSrc.includes("'Hi!'"), '§1: fallback EN «Hi!»');
-  t(headSrc.includes('<small>${sub}</small>'), '§1: línea chica condicional (solo con nombre + handle)');
+  t(!headSrc.includes('<small>'), '§1: sin línea chica (el @ no sale en el encabezado, simplificar-app p5)');
   t(headSrc.includes("if (tab === 'chat') return '';"), '§1: sin encabezado en Chat');
 
   // ---------- 2. Estático: ellipsis en ambas líneas ----------
   const bRule = ruleCss('.pz-shell-who b{');
   t(bRule.includes('white-space:nowrap') && bRule.includes('overflow:hidden') && bRule.includes('text-overflow:ellipsis'), '§2: línea grande con ellipsis');
   t(!bRule.includes('white-space:normal'), '§2: línea grande ya no envuelve');
-  const sRule = ruleCss('.pz-shell-who small{');
-  t(sRule.includes('white-space:nowrap') && sRule.includes('overflow:hidden') && sRule.includes('text-overflow:ellipsis'), '§2: línea chica con ellipsis');
+  t(!css.includes('.pz-shell-who small'), '§2: sin regla para la línea chica (el @ no sale en el encabezado, simplificar-app p5)');
 
   // ---------- 3. Estático: lo que NO se toca ----------
   const saludoHoraSrc = sliceFn(app, 'function pzHoySaludoTxt(', 'function pzHoyDiaKey(');
@@ -64,7 +63,7 @@ const ruleCss = (sel) => {
   t(apSrc.includes('¡Hola! 👋'), '§3: burbuja de apertura del Chat intacta («¡Hola! 👋»)');
   const salSrc = sliceFn(app, 'function pzSaludoEscribir() {', 'function pzShellDatosHoy() {');
   t(salSrc.includes('pzShellSaludo') && salSrc.includes('typing') && salSrc.includes('prefers-reduced-motion'), '§3: máquina de escribir intacta (escribe la identidad)');
-  t(srv.includes("const BUILD_ID = '20261105-v831'"), '§3: server.js sin tocar salvo BUILD v822');
+  t(srv.includes("const BUILD_ID = '20261105-v833'"), '§3: server.js sin tocar salvo BUILD v824');
   t(app.includes("const CHUNK_V = '20261105-v792'"), '§3: CHUNK_V v792 sin cambio');
 
   // ---------- 4. VM: matriz de fallbacks ----------
@@ -82,14 +81,14 @@ const ruleCss = (sel) => {
   // (a) nombre + handle: título = nombre, chica = @handle, sin saludo.
   let h = run('inicio');
   t(h.includes('Café Aroma') && !h.includes('Hola'), '§4a: con negocio, título = nombre sin saludo');
-  t(h.includes('@cafearoma'), '§4a: con negocio + handle, chica = @handle');
-  t(h.includes('ai-avatar.png') && h.includes("bbGo('#/app/chat')") && h.includes('pzHeadRacha'), '§4a: carita + Chat + píldora presentes');
-  // (b) sin nombre, con handle: título = @handle, sin duplicar la chica.
+  t(!h.includes('@'), '§4a: con negocio + handle, sin @ en el encabezado (simplificar-app p5)');
+  t(h.includes('ai-avatar.png') && h.includes("bbGo('#/app/chat')") && !h.includes('pzHeadRacha'), '§4a: carita + Chat presentes, píldora fuera (simplificar-app p5)');
+  // (b) sin nombre, con handle: el @ NO sale en el encabezado (p5): fallback «¡Hola!», sin chica, sin @.
   ctx.BB.estado.negocio = '';
   h = run('inicio');
-  t(h.includes('@cafearoma') && cnt(h, '@cafearoma') === 1, '§4b: sin nombre, título = @handle (una sola vez, sin chica duplicada)');
+  t(h.includes('¡Hola!'), '§4b: sin nombre, fallback «¡Hola!» (el @ no sale en el encabezado)');
   t(!h.includes('<small'), '§4b: sin nombre, no hay línea chica');
-  t(!h.includes('Hola'), '§4b: sin nombre, sin saludo');
+  t(!h.includes('@'), '§4b: sin nombre, sin @ en el encabezado');
   // (c) sin nombre ni handle: fallback «¡Hola!».
   ctx.HOME_PROF = null; ctx.PROFILE = null;
   h = run('inicio');
@@ -103,19 +102,19 @@ const ruleCss = (sel) => {
   ctx.ME.lang = 'es'; ctx.BB.estado.negocio = 'Café Aroma';
   h = run('inicio');
   t(h.includes('Café Aroma') && !h.includes('<small'), '§4e: nombre sin handle, título = nombre sin chica');
-  // (f) handle con @ inicial: un solo @.
+  // (f) handle con @ inicial: ya no se muestra (p5: el @ no sale en el encabezado).
   ctx.BB.estado.negocio = ''; ctx.HOME_PROF = { username: '@cafearoma' };
   h = run('inicio');
-  t(h.includes('@cafearoma') && !h.includes('@@'), '§4f: handle con @ inicial no duplica el @');
-  // (g) respaldo PROFILE cuando HOME_PROF todavía no cargó.
-  ctx.HOME_PROF = null; ctx.PROFILE = { ig_username: 'cafearoma' };
+  t(h.includes('¡Hola!') && !h.includes('@'), '§4f: handle con @ inicial no se muestra (sin @ en el encabezado)');
+  // (g) respaldo PROFILE.business_name cuando BB todavía no cargó (p5).
+  ctx.HOME_PROF = null; ctx.PROFILE = { ig_username: 'cafearoma', business_name: 'Café Aroma' };
   h = run('inicio');
-  t(h.includes('@cafearoma'), '§4g: sin HOME_PROF, @handle sale de PROFILE.ig_username');
+  t(h.includes('Café Aroma') && !h.includes('@'), '§4g: sin BB, el nombre sale de PROFILE.business_name (sin @)');
   // (h) Chat no lleva encabezado.
   ctx.BB.estado.negocio = 'Café Aroma'; ctx.HOME_PROF = { username: 'cafearoma' };
   t(run('chat') === '', '§4h: Chat sin encabezado');
   // (i) Análisis lleva el mismo encabezado (el shell es de toda la app).
-  t(run('numeros').includes('Café Aroma') && run('numeros').includes('@cafearoma'), '§4i: Análisis con el mismo encabezado de identidad');
+  t(run('numeros').includes('Café Aroma') && !run('numeros').includes('@'), '§4i: Análisis con el mismo encabezado de identidad (sin @)');
 
   // ---------- 5. Boot aislado ----------
   let booted = false;
@@ -141,13 +140,13 @@ const ruleCss = (sel) => {
     try {
       t(await waitBoot(), '§5: boot levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v831', `§5: /api/version v822 (vino ${ver.build})`);
-      const appTxt = await (await fetch(`${BASE}/app.js?v=557`)).text();
-      t(md5(appTxt) === md5(app), '§5: app.js?v=557 servido = árbol');
+      t(ver.build === '20261105-v833', `§5: /api/version v824 (vino ${ver.build})`);
+      const appTxt = await (await fetch(`${BASE}/app.js?v=567`)).text();
+      t(md5(appTxt) === md5(app), '§5: app.js?v=567 servido = árbol');
       t(!appTxt.includes('Posty está trabajando ahora'), '§5: servido sin «Posty está trabajando ahora»');
       t(appTxt.includes('pzShellSaludo'), '§5: servido con #pzShellSaludo');
-      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261197`)).text();
-      t(md5(cssTxt) === md5(css), '§5: styles.css?v=20261197 servido = árbol');
+      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261218`)).text();
+      t(md5(cssTxt) === md5(css), '§5: styles.css?v=20261218 servido = árbol');
       t(cssTxt.includes('text-overflow:ellipsis'), '§5: servido con ellipsis en el encabezado');
       const rHoy = await fetch(`${BASE}/api/ritual/hoy`);
       t(rHoy.status === 401, `§5: sin sesión, /api/ritual/hoy → 401 (vino ${rHoy.status})`);

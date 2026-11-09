@@ -58,7 +58,7 @@ console.log('— 0) pines —');
 check('0a app.js cambió vs base v805', md5(app) !== 'aaae05c2ddcc444b71c203daea11ff98', md5(app));
 check('0b styles.css cambió vs base v805', md5(css) !== 'e1261ef04f791cec22e85513a95bd8fb', md5(css));
 check('0c server.js = fusionado (BUILD v822 + A + CHAT-MUSE; el XP vive en xp-nivel.js, no acá)',
-  md5(srv) === '15940e071d5e99c0858cafaac6b3a8db', md5(srv));
+  md5(srv) === '1e0e70dcc918ee2b1f235586de3e2a40', md5(srv));
 check('0d xp-nivel.js cambió vs base v805', md5(xpn) !== 'e28ccb63b0685d3f37210ef6186bb877', md5(xpn));
 
 // ---------- Parte 1: estática — estrellitas ----------
@@ -89,12 +89,10 @@ check('2e el endpoint /api/posts/:id/signal acepta rating_1..5 (sin cambio)',
 
 // ---------- Parte 3: estática — «1 día» ----------
 console.log('— 3) estática: «1 día» —');
-check('3a píldora del encabezado (cache) con singular inline', app.includes("(rachaN === 1 ? (en ? '1 day' : '1 día')"));
-check('3b título de la píldora (cache) con singular inline',
-  app.includes("('Streak: ' + (rachaN === 1 ? '1 day' : rachaN + ' days') + ' posting')") && app.includes("('Racha de ' + (rachaN === 1 ? '1 día' : rachaN + ' días') + ' publicando')"));
-check('3c píldora del encabezado (fill async) con singular inline', app.includes("const rachaTxt = '🔥 ' + (r.racha === 1 ? (en ? '1 day' : '1 día')"));
-check('3d título de la píldora (fill async) con singular inline',
-  app.includes("('Streak: ' + (r.racha === 1 ? '1 day' : r.racha + ' days') + ' posting')") && app.includes("('Racha de ' + (r.racha === 1 ? '1 día' : r.racha + ' días') + ' publicando')"));
+check('3a píldora del encabezado salió (PARTE 5): sin singular inline del cache', !app.includes("(rachaN === 1 ? (en ? '1 day' : '1 día')"));
+check('3b título de la píldora salió (PARTE 5): sin título del cache', !app.includes("('Streak: ' + (rachaN === 1 ? '1 day' : rachaN + ' days') + ' posting')") && !app.includes("('Racha de ' + (rachaN === 1 ? '1 día' : rachaN + ' días') + ' publicando')"));
+check('3c píldora del encabezado salió (PARTE 5): sin fill async de la píldora', !app.includes("const rachaTxt = '🔥 ' + (r.racha === 1 ? (en ? '1 day' : '1 día')"));
+check('3d título de la píldora salió (PARTE 5): sin título del fill async', !app.includes("('Streak: ' + (r.racha === 1 ? '1 day' : r.racha + ' days') + ' posting')") && !app.includes("('Racha de ' + (r.racha === 1 ? '1 día' : r.racha + ' días') + ' publicando')"));
 check('3f banner de ausencia de Nivel con singular inline (ES + EN)',
   app.includes("While you were away (${nv.ausencia.dias === 1 ? '1 day'") && app.includes("Mientras no estabas (${nv.ausencia.dias === 1 ? '1 día'"));
 check('3g cero restos del plural sin singular',
@@ -239,8 +237,8 @@ async function parteBoot() {
     check('5a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('5b /api/version = v822 (estampado)', ver && ver.build === '20261105-v831', JSON.stringify(ver));
-    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=540`)).text();
+    check('5b /api/version = v822 (estampado)', ver && ver.build === '20261105-v833', JSON.stringify(ver));
+    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=567`)).text();
     check('5c el app.js servido trae el lote (starFill + gracias)',
       appJs.includes("pzIc('starFill', 18)") && appJs.includes('st-rate-gracias'), 'len ' + appJs.length);
     const join = await reqJson('POST', '/api/trial/chat-onboarding?test_key=' + TEST_KEY, { kind: 'join', ig: 'ae-test', device: 'test-device-ae' });

@@ -98,7 +98,7 @@ const spRule = css.slice(css.indexOf('#inicioView .pz-hoy-speech{'), css.indexOf
 ok(css.includes('#inicioView .pz-hoy-speech-row{margin-bottom:16px}'), 'CSS: fila del mensaje sin flex (solo la burbuja)');
 ok(!css.includes('pz-hoy-speech-ava'), 'CSS: sin regla de carita (HOY-AVATAR-FEED)');
 ok(spRule.length > 0 && !spRule.includes('2px solid #0A1E33') && spRule.includes('border:1px solid rgba(255,255,255,.75)'), 'CSS: la burbuja ya NO tiene borde oscuro 2px navy (borde blanco suave)');
-ok(css.includes('#inicioView .pz-hoy-upload,#inicioView .pz-hoy-semana,#inicioView .pz-hoy-card,#inicioView .pz-hoy-vacio,#inicioView .pz-hoy-conserje{margin-bottom:14px}'), 'CSS: ritmo de espaciado de las secciones Hoy');
+ok(css.includes('#inicioView .pz-hoy-card,#inicioView .pz-hoy-conserje{margin-bottom:14px}'), 'CSS: ritmo de espaciado de las secciones Hoy (PARTES 1/2: upload/semana/vacio salieron de la regla)');
 
 // Render real de pzHoySpeechHTML (texto intacto, solo presentación).
 const saludo = extractFn(app, 'function pzHoySaludoTxt');
@@ -127,8 +127,8 @@ ok(card.includes('btn-publish') && card.includes('data-pz-hoy-aprobar') && card.
 ok(!card.includes('22C55E'), 'la tarjeta del posteo no trae verde');
 const lotCss = css.slice(css.indexOf('LOTE HOY-REDISEÑO v810'));
 ok(!lotCss.includes('22C55E'), 'el bloque del lote no pone verde en ningún lado (eso es v807)');
-ok(app.includes("('🔥 ' + (rachaN === 1 ? (en ? '1 day' : '1 día') : rachaN + (en ? ' days' : ' días')))"), 'la píldora de racha no se toca (eso es v808; forma v815 con «1 día» en singular)');
-ok(srv.includes("const BUILD_ID = '20261105-v831'"), 'server.js solo BUILD v822 estampado');
+ok(!app.includes("('🔥 ' + (rachaN === 1 ? (en ? '1 day' : '1 día') : rachaN + (en ? ' days' : ' días')))"), 'la píldora de racha salió (PARTE 5; era v808/v815)');
+ok(srv.includes("const BUILD_ID = '20261105-v833'"), 'server.js solo BUILD v824 estampado');
 
 /* ---------- 5. Censo ---------- */
 console.log('— 5. censo —');

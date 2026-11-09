@@ -56,7 +56,7 @@ console.log('— 0) pines —');
 check('0a app.js cambió vs base v803', md5(app) !== 'bc53ff30fa777f87d03b8d83d224939c', md5(app));
 check('0b styles.css cambió vs base v803', md5(css) !== '5293bc2a7c2756ae9a37c55f9ee459f7', md5(css));
 check('0c server.js cambió vs base v803 SOLO por el DELETE del álbum (BUILD v822 estampado)',
-  md5(srv) !== '34104ab6825bb23d3af6b43129496082' && srv.includes("app.delete('/api/album/:id'") && srv.includes("const BUILD_ID = '20261105-v831'"), md5(srv));
+  md5(srv) !== '34104ab6825bb23d3af6b43129496082' && srv.includes("app.delete('/api/album/:id'") && srv.includes("const BUILD_ID = '20261105-v833'"), md5(srv));
 
 // ---------- Parte 1: estática — fix 1 (placeholder) ----------
 console.log('— 1) estática: placeholder —');
@@ -82,14 +82,16 @@ check('2f CSS: tira .pz-tema-mini + check .pz-tema-ok (vidrio, radio 14px)',
   css.includes('.pz-tema-mini{') && css.includes('border-radius:14px') && css.includes('.pz-tema-ok{'));
 
 // ---------- Parte 2b: estática — fix 5 (álbum sin repetidas) ----------
+// (LOTE SIMPLIFICAR-APP · PARTE 1 · 9/11: la tarjeta de subida de Inicio
+// salió — la subida es SOLO por chat. El dedupe y la cantidad del álbum
+// ya no existen en Inicio: los checks pasan a ser de AUSENCIA.)
 console.log('— 2b) estática: álbum —');
-check('2g dedupe del álbum por miniatura resuelta ANTES del slice',
-  app.includes('const unicas = (Array.isArray(album)') && app.includes('a.thumb || a.thumb_path || a.path') && app.includes('unicas.slice(0, 4)'));
-check('2h cantidad de únicas bajo TU ÁLBUM (ES/EN, singular/plural)',
-  app.includes("(en ? '1 photo' : '1 foto')") && app.includes("(en ? unicas.length + ' photos' : unicas.length + ' fotos')") && app.includes('<small>${esc(cuenta)}</small>'));
-check('2i CSS: la cantidad va debajo de la etiqueta (.pz-hoy-album-label small)',
-  css.includes('.pz-hoy-album-label small{'));
-
+check('2g la tarjeta de subida salió: sin dedupe del álbum en Inicio (unicas ×0)',
+  !app.includes('unicas.slice(0, 4)') && !app.includes('const unicas = (Array.isArray(album)'));
+check('2h la tarjeta de subida salió: sin cantidad de únicas (pzHoyAlbumCuenta ×0)',
+  !app.includes('pzHoyAlbumCuenta') && !app.includes("<small>${esc(cuenta)}</small>"));
+check('2i CSS: sin cantidad del álbum (.pz-hoy-album-label small ×0)',
+  !css.includes('.pz-hoy-album-label small{'));
 // ---------- Parte 2c: estática — fix 6 (borrar foto del álbum) ----------
 console.log('— 2c) estática: borrar foto del álbum —');
 check('2j DELETE /api/album/:id con requireAuth + propiedad (sftAssetPropio)',
@@ -99,25 +101,20 @@ check('2k guard honesto: si está en un posteo (draft/scheduled/published, por f
   && srv.includes("res.status(409).json({ ok: false, error: 'Esa foto ya está en un posteo' })"));
 check('2l si solo está en el álbum: borra la FOTO (todas las filas con ese file_path, por si está duplicada) y los archivos (foto + miniaturas)',
   srv.includes("db.prepare('DELETE FROM assets WHERE user_id = ? AND file_path = ?').run(uid, asset.file_path)") && srv.includes("DELETE FROM assets WHERE user_id = ? AND content_hash = ? AND kind = ?") && srv.includes('fs.unlinkSync(path.join(MEDIA_DIR, path.basename(f.file_path || asset.file_path)))'));
-// (LOTE A · re-base v821) 2l actualizado: el DELETE ahora borra también por huella
-// (content_hash) para que salga la gemela de distinto path; el unlink itera las
-// filas por borrar (f.file_path), no la ruta suelta. Comportamiento superconjunto.
-check('2m × en cada miniatura de TU ÁLBUM (hermana del botón, no anidada; solo con id)',
-  app.includes('class="pz-hoy-album-thumb-wrap"') && app.includes('class="pz-hoy-album-del"') && app.includes('data-album-del="${a.id}"') && app.includes('Number(a.id) > 0'));
-check('2n tarjeta inline en pzHoyAlbumBorrar (texto del mock ES/EN, [Borrar]/[Cancelar]); cero window.confirm() en el flujo (los otros 2 borrados intactos)',
-  app.includes('async function pzHoyAlbumBorrar') && app.includes('function pzHoyAlbumCuenta')
-  && app.includes("className = 'pz-hoy-album-confirm'") && app.includes('pz-hoy-album-confirm-del') && app.includes('pz-hoy-album-confirm-no')
-  && app.includes('¿Borrar esta foto del álbum?') && app.includes('Posty no la va a usar más.') && app.includes('Delete this photo from the album?') && app.includes("Posty won't use it anymore.")
-  && app.includes("await api.delete('/api/album/' + encodeURIComponent(id))")
-  && (() => { const f = sliceOk(app, 'async function pzHoyAlbumBorrar', 'function pzHoySemanaHTML'); return !f.includes('window.confirm('); })()
-  && cnt(app, 'window.confirm(') === 2);
-check('2o al salir bien saca la miniatura y actualiza la cantidad; si rechaza, muestra el mensaje y la foto sigue',
-  app.includes('wrap.remove()') && app.includes('pzHoyAlbumCuenta(row)') && app.includes("toast('No se pudo borrar: ' + esc((e && e.message)"));
-check('2p pzHoyBind cablea la × con stopPropagation (no abre la subida)',
-  app.includes("root.querySelectorAll('[data-album-del]')") && app.includes('ev.stopPropagation'));
-check('2q CSS: envoltorio relativo + × circular superpuesta en la esquina + tarjeta inline (borde dorado, [Borrar] rojo, [Cancelar])',
-  css.includes('.pz-hoy-album-thumb-wrap{position:relative;flex:none}') && css.includes('.pz-hoy-album-del{position:absolute;top:-7px;right:-7px')
-  && css.includes('.pz-hoy-album-confirm{') && css.includes('border:1.5px solid #F5C344') && css.includes('.pz-hoy-album-confirm-del{background:#D64545') && css.includes('.pz-hoy-album-confirm-no{background:#EEF3F7'));
+// (LOTE SIMPLIFICAR-APP · PARTE 1 · 9/11: el borrar de la tarjeta de
+// subida salió con la tarjeta. El endpoint DELETE /api/album/:id queda
+// (2j/2k/2l) — lo usa el álbum completo, no la tarjeta de Inicio.)
+check('2m la tarjeta salió: sin × en miniaturas de TU ÁLBUM (pz-hoy-album-del ×0)',
+  !app.includes('pz-hoy-album-del') && !app.includes('data-album-del='));
+check('2n la tarjeta salió: sin tarjeta inline de borrar (pzHoyAlbumBorrar ×0)',
+  !app.includes('pzHoyAlbumBorrar') && !app.includes('pz-hoy-album-confirm'));
+check('2o la tarjeta salió: sin flujo de borrar de la tarjeta (pzHoyAlbumBorrar ×0)',
+  !app.includes('async function pzHoyAlbumBorrar'));
+check('2p la tarjeta salió: sin cableado de la × (data-album-del ×0)',
+  !app.includes("root.querySelectorAll('[data-album-del]')"));
+check('2q CSS: sin estilos del álbum de la tarjeta (thumb-wrap/del/confirm ×0)',
+  !css.includes('.pz-hoy-album-thumb-wrap{') && !css.includes('.pz-hoy-album-del{')
+  && !css.includes('.pz-hoy-album-confirm{'));
 
 // ---------- Parte 3: estática — fix 4 (saludo Hoy) ----------
 console.log('— 3) estática: saludo de Hoy —');
@@ -127,12 +124,12 @@ check('3b cuerpo hoyPost HONESTO ES (singular: solo el posteo de hoy)',
 check('3c cuerpo hoyPost HONESTO EN (singular)', app.includes("I put together today's post for you.") && app.includes('give it a «Publish it» if you like it. Without your OK, nothing goes out.'));
 check('3d sin el texto viejo duplicado (fuera de comentarios)',
   !app.includes('¿Lo largamos?') && !app.includes('¿Los miramos?') && !app.includes('Your posts are ready!')
-  && !sliceOk(app, 'function pzHoySpeechHTML', 'function pzHoyUploadHTML').includes('¡Ya te dejé los posteos listos!')
+  && !sliceOk(app, 'function pzHoySpeechHTML', 'function pzHoyConserjeHTML').includes('¡Ya te dejé los posteos listos!')
   && !app.includes('Te armé los posteos de esta semana') && !app.includes("I put together this week's posts"));
 check('3e rama haySemana SIN cambio', app.includes('Tu semana ya está aprobada. Posty se ocupa de publicarla.'));
-check('3f rama pendientes: número real (N=1 singular, N>1 plural, ES + EN)',
-  app.includes('Tenés 1 posteo para revisar') && app.includes('Tenés ${pendientes} posteos para revisar')
-  && app.includes("You've got 1 post to review") && app.includes("You've got ${pendientes} posts to review"));
+check('3f rama pendientes: número real needOK (N=1 singular, N>1 plural, ES + EN) + en tu feed (PARTES 6/7)',
+  app.includes('Tenés 1 posteo para revisar — miralo en tu feed') && app.includes('Tenés ${needOK} posteos para revisar — miralos en tu feed')
+  && app.includes("You've got 1 post to review — check it in your feed") && app.includes("You've got ${needOK} posts to review — check them in your feed"));
 
 // ---------- Parte 4: VM — fix 1 (placeholder) ----------
 console.log('— 4) VM: placeholder —');
@@ -341,7 +338,7 @@ let SP = '';
 try {
   SP = sliceFn(app, 'function pzHoySaludoTxt', 'function pzHoyDiaKey')
     + '\n' + sliceFn(app, 'function pzHoyHoraCorta', 'function pzHoyCuandoCorto')
-    + '\n' + sliceFn(app, 'function pzHoySpeechHTML', 'function pzHoyUploadHTML');
+    + '\n' + sliceFn(app, 'function pzHoySpeechHTML', 'function pzHoyConserjeHTML');
 } catch (e) { check('6x funciones del saludo presentes', false, e.message); }
 if (SP) {
   const sb = { console, Date, Intl, Math, JSON };
@@ -351,25 +348,28 @@ if (SP) {
   const speech = sb.__sp;
   const HOY_POST = { id: 610, status: 'scheduled', media_type: 'image', image_path: '/m/610.jpg', caption: 'El posteo de hoy', scheduled_at: '2026-11-09T00:30:00.000Z', pinned: 0, approval: 'pending' };
   const s1 = speech({ hoyPost: HOY_POST, pendientes: 3, en: false, tz: 'America/New_York' });
-  check('6a hoyPost: UN solo mensaje, HONESTO en singular (el posteo de hoy, no la semana)',
-    s1.includes('Te armé el posteo de hoy.') && s1.includes('El de hoy sale a las 19:30') && s1.includes('miralo y dale «Dale» si te gusta') && s1.includes('Sin tu OK, no sale nada') && s1.includes('data-pz-hoy-chat')
-    && !s1.includes('pz-hoy-nota') && !s1.includes('¿Lo largamos?') && !s1.includes('¡Ya te dejé los posteos listos!') && !s1.includes('posteos de esta semana'), s1.slice(0, 300));
+  check('6a hoyPost autopilot: sale solo a las 19:30 + aviso 30 min + aviso al salir (PARTE 6: sin OK)',
+    s1.includes('Te armé el posteo de hoy.') && s1.includes('El de hoy sale a las 19:30 solo') && s1.includes('miralo si querés') && s1.includes('te aviso 30 min antes por si querés frenarlo') && s1.includes('te aviso cuando salga') && s1.includes('data-pz-hoy-chat')
+    && !s1.includes('Sin tu OK') && !s1.includes('pz-hoy-nota') && !s1.includes('¿Lo largamos?') && !s1.includes('¡Ya te dejé los posteos listos!') && !s1.includes('posteos de esta semana'), s1.slice(0, 300));
+  const s1man = speech({ hoyPost: HOY_POST, pendientes: 3, en: false, tz: 'America/New_York', manual: true, needOK: 3, schedSolo: 0 });
+  check('6a2 hoyPost manual pendiente: necesita OK («Sin tu OK, no sale nada»)',
+    s1man.includes('Te armé el posteo de hoy.') && s1man.includes('El de hoy sale a las 19:30') && s1man.includes('miralo y dale «Dale» si te gusta') && s1man.includes('Sin tu OK, no sale nada'), s1man.slice(0, 300));
   const s1en = speech({ hoyPost: HOY_POST, pendientes: 3, en: true, tz: 'America/New_York' });
-  check('6b hoyPost EN: mismo mensaje en singular',
-    s1en.includes("I put together today's post for you.") && s1en.includes('goes out at') && s1en.includes('give it a «Publish it» if you like it') && s1en.includes('Without your OK, nothing goes out') && s1en.includes('Publish it')
-    && !s1en.includes('pz-hoy-nota') && !s1en.includes('Shall we launch it?') && !s1en.includes("this week's posts"), s1en.slice(0, 300));
+  check('6b hoyPost EN autopilot: goes out on its own + 30 min notice (PARTE 6)',
+    s1en.includes("I put together today's post for you.") && s1en.includes("Today's goes out at 07:30 PM on its own") && s1en.includes('take a look if you want') && s1en.includes("I'll let you know 30 min before") && s1en.includes("and when it's out")
+    && !s1en.includes('Without your OK') && !s1en.includes('pz-hoy-nota') && !s1en.includes('Shall we launch it?') && !s1en.includes("this week's posts"), s1en.slice(0, 300));
   const s2 = speech({ hoyPost: null, pendientes: 2, en: false, tz: 'America/New_York' });
   check('6c pendientes=2 sin hoyPost: número real «Tenés 2 posteos para revisar»',
-    s2.includes('Tenés 2 posteos para revisar') && s2.includes('miralos y dale «Dale» a los que te gusten') && s2.includes('Sin tu OK, no sale nada') && !s2.includes('¿Los miramos?') && !s2.includes('pz-hoy-nota') && !s2.includes('posteos de esta semana'), s2.slice(0, 300));
+    s2.includes('Tenés 2 posteos para revisar') && s2.includes('miralos en tu feed y dale «Dale» a los que te gusten') && s2.includes('Sin tu OK, no sale nada') && !s2.includes('¿Los miramos?') && !s2.includes('pz-hoy-nota') && !s2.includes('posteos de esta semana'), s2.slice(0, 300));
   const s2b = speech({ hoyPost: null, pendientes: 1, en: false, tz: 'America/New_York' });
   check('6c2 pendientes=1 ES: singular «Tenés 1 posteo para revisar»',
-    s2b.includes('Tenés 1 posteo para revisar') && s2b.includes('miralo y dale «Dale» si te gusta') && !s2b.includes('2 posteos') && !s2b.includes('pz-hoy-nota'), s2b.slice(0, 300));
+    s2b.includes('Tenés 1 posteo para revisar') && s2b.includes('miralo en tu feed y dale «Dale» si te gusta') && !s2b.includes('2 posteos') && !s2b.includes('pz-hoy-nota'), s2b.slice(0, 300));
   const s2en = speech({ hoyPost: null, pendientes: 2, en: true, tz: 'America/New_York' });
   check('6c3 pendientes=2 EN: «You\'ve got 2 posts to review»',
-    s2en.includes("You've got 2 posts to review") && s2en.includes('give a «Publish it» to the ones you like') && s2en.includes('Without your OK, nothing goes out') && !s2en.includes("this week's posts"), s2en.slice(0, 300));
+    s2en.includes("You've got 2 posts to review") && s2en.includes('check them in your feed and give a «Publish it» to the ones you like') && s2en.includes('Without your OK, nothing goes out') && !s2en.includes("this week's posts"), s2en.slice(0, 300));
   const s2ben = speech({ hoyPost: null, pendientes: 1, en: true, tz: 'America/New_York' });
   check('6c4 pendientes=1 EN: singular «You\'ve got 1 post to review»',
-    s2ben.includes("You've got 1 post to review") && s2ben.includes('give it a «Publish it» if you like it') && !s2ben.includes('2 posts'), s2ben.slice(0, 300));
+    s2ben.includes("You've got 1 post to review") && s2ben.includes('check it in your feed and give it a «Publish it» if you like it') && !s2ben.includes('2 posts'), s2ben.slice(0, 300));
   const s3 = speech({ hoyPost: null, pendientes: 0, haySemana: true, en: false, tz: 'America/New_York' });
   check('6d haySemana SIN cambio (sin instrucción Dale, sin nota)',
     s3.includes('Tu semana ya está aprobada') && !s3.includes('Sin tu OK') && !s3.includes('pz-hoy-nota'), s3.slice(0, 300));
@@ -378,124 +378,20 @@ if (SP) {
 }
 
 // ---------- Parte 6b: VM — fix 5 (álbum sin repetidas) ----------
+// (LOTE SIMPLIFICAR-APP · PARTE 1 · 9/11: pzHoyUploadHTML salió — la
+// subida es SOLO por chat. La VM del álbum pasa a ser de AUSENCIA.)
 console.log('— 6b) VM: álbum —');
-let UP = '';
-try { UP = sliceFn(app, 'function pzHoyUploadHTML', 'function pzHoySemanaHTML'); }
-catch (e) { check('6bx pzHoyUploadHTML presente', false, e.message); }
-if (UP) {
-  const sb = { console, esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'), pzIc: () => '' };
-  sb.window = sb;
-  vm.createContext(sb);
-  vm.runInContext(UP + '\nthis.__up = pzHoyUploadHTML;', sb);
-  const up = sb.__up;
-  const dup = [{ id: 1, path: '/m/a.jpg' }, { id: 2, path: '/m/b.jpg' }, { id: 3, path: '/m/a.jpg' }, { id: 4, path: '/m/b.jpg' }];
-  const hDup = up(dup, false);
-  check('6f álbum duplicado: cada foto UNA sola vez (2 thumbs, no 4)',
-    cnt(hDup, 'class="pz-hoy-album-thumb"') === 2 && cnt(hDup, '/m/a.jpg') === 1 && cnt(hDup, '/m/b.jpg') === 1, hDup.slice(0, 300));
-  check('6g álbum duplicado: cantidad correcta «2 fotos»', hDup.includes('2 fotos'));
-  const hDupEn = up(dup, true);
-  check('6h álbum duplicado EN: «2 photos»', hDupEn.includes('2 photos'));
-  const hVacio = up([], false);
-  check('6i álbum vacío: solo el «+» (sin thumbs, sin cantidad, como hoy)',
-    cnt(hVacio, 'class="pz-hoy-album-thumb"') === 0 && !hVacio.includes('fotos') && hVacio.includes('TU ÁLBUM'));
-  const cinco = [1, 2, 3, 4, 5].map((n) => ({ id: n, path: '/m/f' + n + '.jpg' }));
-  const h5 = up(cinco, false);
-  check('6j 5 únicas: 4 distintas en la fila + «5 fotos»',
-    cnt(h5, 'class="pz-hoy-album-thumb"') === 4 && h5.includes('5 fotos'));
-  const vid = [{ id: 1, kind: 'video', path: '/v/1.mp4', thumb_path: '/t/1.jpg' }, { id: 2, kind: 'video', path: '/v/1.mp4', thumb_path: '/t/1.jpg' }];
-  const hVid = up(vid, false);
-  check('6k video repetido: se dedupe por su miniatura (1 thumb, «1 foto»)',
-    cnt(hVid, 'class="pz-hoy-album-thumb"') === 1 && cnt(hVid, '/t/1.jpg') === 1 && hVid.includes('1 foto'));
-  const conId = up([{ id: 11, path: '/m/c.jpg' }, { id: 12, path: '/m/d.jpg' }], false);
-  check('6l miniaturas con id: × con data-album-del y envoltorio (una por foto)',
-    cnt(conId, 'pz-hoy-album-del') === 2 && conId.includes('data-album-del="11"') && conId.includes('data-album-del="12"') && cnt(conId, 'pz-hoy-album-thumb-wrap') === 2, conId.slice(0, 300));
-  const sinId = up([{ path: '/m/e.jpg' }], false);
-  check('6m sin id: no hay × (nunca data-album-del="undefined")',
-    cnt(sinId, 'pz-hoy-album-del') === 0 && !sinId.includes('undefined'), sinId.slice(0, 300));
-}
-
+check('6bx pzHoyUploadHTML ausente (la tarjeta de subida salió)', !app.includes('function pzHoyUploadHTML'), 'queda');
+check('6f álbum: sin dedupe en Inicio (unicas ×0)', !app.includes('unicas.slice(0, 4)') && !app.includes('const unicas = (Array.isArray(album)'));
+check('6g álbum: sin cantidad de únicas (pzHoyAlbumCuenta ×0)', !app.includes('pzHoyAlbumCuenta'));
+check('6h álbum: sin «TU ÁLBUM» en Inicio', !app.includes('TU ÁLBUM'));
 // ---------- Parte 6c: VM — fix 6 (borrar foto del álbum) ----------
+// (LOTE SIMPLIFICAR-APP · PARTE 1 · 9/11: pzHoyAlbumBorrar salió con la
+// tarjeta. El endpoint DELETE /api/album/:id queda y se verifica en §7.)
 console.log('— 6c) VM: borrar foto del álbum —');
-let BORRAR = '';
-try { BORRAR = sliceFn(app, 'async function pzHoyAlbumBorrar', 'function pzHoySemanaHTML'); }
-catch (e) { check('6cx funciones de borrar presentes', false, e.message); }
-if (BORRAR) {
-  function makeBorrarSandbox() {
-    let thumbsLeft = 2;
-    const wrapRemoved = { v: false };
-    const wrap = { remove() { wrapRemoved.v = true; thumbsLeft = Math.max(0, thumbsLeft - 1); } };
-    const small = { textContent: '2 fotos', removed: false, remove() { this.removed = true; } };
-    const inserted = { el: null };
-    const delBtn = { disabled: false, onclick: null };
-    const noBtn = { disabled: false, onclick: null };
-    const elStub = {
-      className: '', innerHTML: '', removed: false,
-      querySelector: (sel) => (sel === '.pz-hoy-album-confirm-del' ? delBtn : (sel === '.pz-hoy-album-confirm-no' ? noBtn : null)),
-      remove() { this.removed = true; },
-    };
-    const row = {
-      querySelectorAll: (sel) => (sel === '.pz-hoy-album-thumb' ? Array.from({ length: thumbsLeft }, () => ({})) : []),
-      querySelector: (sel) => (sel === '.pz-hoy-album-label small' ? small : null),
-      after: (el) => { inserted.el = el; },
-    };
-    const card = { querySelector: () => null };
-    const btn = {
-      disabled: false,
-      getAttribute: (k) => (k === 'data-album-del' ? '7' : null),
-      closest: (sel) => (sel === '.pz-hoy-album-thumb-wrap' ? wrap : (sel === '.pz-hoy-album-row' ? row : (sel === '.pz-hoy-upload' ? card : null))),
-    };
-    const apiCalls = [];
-    const toasts = [];
-    const sb = {
-      console, setTimeout, clearTimeout,
-      ME: { lang: 'es' },
-      toast: (t) => { toasts.push(t); },
-      api: { delete: async (u) => { apiCalls.push(u); return { ok: true }; } },
-      document: { createElement: () => elStub },
-      window: {},
-    };
-    sb.window = sb;
-    vm.createContext(sb);
-    vm.runInContext(escFn(app) + '\n' + BORRAR + '\nthis.__borrar = { pzHoyAlbumBorrar, pzHoyAlbumCuenta };', sb);
-    return { sb, btn, wrap, wrapRemoved, small, row, apiCalls, toasts, inserted, elStub, delBtn, noBtn, setThumbs: (n) => { thumbsLeft = n; } };
-  }
-  vmAsync = vmAsync.then(async () => {
-    const t1 = makeBorrarSandbox();
-    await t1.sb.__borrar.pzHoyAlbumBorrar(t1.btn);
-    const cardOk = t1.inserted.el === t1.elStub && t1.elStub.className === 'pz-hoy-album-confirm'
-      && t1.elStub.innerHTML.includes('¿Borrar esta foto del álbum?') && t1.elStub.innerHTML.includes('Posty no la va a usar más.')
-      && t1.elStub.innerHTML.includes('Borrar') && t1.elStub.innerHTML.includes('Cancelar')
-      && typeof t1.delBtn.onclick === 'function' && typeof t1.noBtn.onclick === 'function'
-      && t1.apiCalls.length === 0;
-    await t1.delBtn.onclick();
-    check('6n × abre la tarjeta inline (texto del mock, [Borrar]/[Cancelar]) y [Borrar] borra: DELETE /api/album/7, miniatura fuera, cantidad «1 foto», tarjeta quitada',
-      cardOk && t1.apiCalls.includes('/api/album/7') && t1.wrapRemoved.v === true && t1.small.textContent === '1 foto' && t1.elStub.removed === true,
-      JSON.stringify(t1.apiCalls) + ' ' + t1.small.textContent);
-    const t2 = makeBorrarSandbox();
-    await t2.sb.__borrar.pzHoyAlbumBorrar(t2.btn);
-    await t2.noBtn.onclick();
-    check('6o [Cancelar] cierra la tarjeta: no llama a DELETE y la foto sigue', t2.apiCalls.length === 0 && t2.wrapRemoved.v === false && t2.elStub.removed === true);
-    const t3 = makeBorrarSandbox();
-    t3.sb.api.delete = async (u) => { t3.apiCalls.push(u); const e = new Error('Esa foto ya está en un posteo'); e.status = 409; throw e; };
-    await t3.sb.__borrar.pzHoyAlbumBorrar(t3.btn);
-    await t3.delBtn.onclick();
-    check('6p foto en posteo: rechazo honesto, la foto sigue, botones reactivados, la tarjeta sigue para cancelar/reintentar',
-      t3.wrapRemoved.v === false && t3.delBtn.disabled === false && t3.noBtn.disabled === false && t3.elStub.removed === false && t3.toasts.some((x) => String(x).includes('Esa foto ya está en un posteo')), JSON.stringify(t3.toasts));
-    const t4 = makeBorrarSandbox();
-    t4.setThumbs(0);
-    t4.sb.__borrar.pzHoyAlbumCuenta(t4.row);
-    check('6q cuenta 0: el «N fotos» desaparece', t4.small.removed === true);
-    const t5 = makeBorrarSandbox();
-    t5.setThumbs(1);
-    t5.sb.__borrar.pzHoyAlbumCuenta(t5.row);
-    check('6r cuenta 1: «1 foto» (singular)', t5.small.textContent === '1 foto', t5.small.textContent);
-    const t6 = makeBorrarSandbox();
-    t6.setThumbs(3);
-    t6.sb.__borrar.pzHoyAlbumCuenta(t6.row);
-    check('6s cuenta 3: «3 fotos»', t6.small.textContent === '3 fotos', t6.small.textContent);
-  });
-}
-
+check('6cx pzHoyAlbumBorrar ausente (la tarjeta de subida salió)', !app.includes('pzHoyAlbumBorrar'), 'queda');
+check('6cy sin tarjeta inline de confirmar el borrado (pz-hoy-album-confirm ×0)', !app.includes('pz-hoy-album-confirm'));
+check('6cz el endpoint DELETE sigue (lo usa el álbum completo)', srv.includes("app.delete('/api/album/:id', requireAuth"));
 // ---------- Parte 7: boot real ----------
 console.log('— 7) boot real —');
 const PORT = 34572;
@@ -531,15 +427,15 @@ async function parteBoot() {
     check('7a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('7b /api/version = v822 (estampado)', ver && ver.build === '20261105-v831', JSON.stringify(ver));
-    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=557`)).text();
-    check('7c el app.js servido trae el lote (colapsar + sin fundido + tarjeta inline del borrar)',
+    check('7b /api/version = v822 (estampado)', ver && ver.build === '20261105-v833', JSON.stringify(ver));
+    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=567`)).text();
+    check('7c el app.js servido trae el lote (colapsar + sin fundido; la tarjeta del álbum salió)',
       appJs.includes('function pzTemaColapsar') && appJs.includes('function pzTemaMiniHTML') && !appJs.includes("classList.add('pz-ph-fading')")
-      && appJs.includes('pz-hoy-album-confirm') && appJs.includes('pz-hoy-album-confirm-del'), 'len ' + appJs.length);
-    const cssTxt = await (await fetch(`http://127.0.0.1:${PORT}/styles.css?v=20261204`)).text();
+      && !appJs.includes('pz-hoy-album-confirm') && !appJs.includes('pzHoyUploadHTML'), 'len ' + appJs.length);
+    const cssTxt = await (await fetch(`http://127.0.0.1:${PORT}/styles.css?v=20261218`)).text();
     check('7d el styles.css servido trae la tira colapsada', cssTxt.includes('.pz-tema-mini{') && cssTxt.includes('.pz-tema-ok{'), 'len ' + cssTxt.length);
-    check('7e el styles.css servido trae la cantidad del álbum + la tarjeta inline', cssTxt.includes('.pz-hoy-album-label small{') && cssTxt.includes('.pz-hoy-album-confirm{'), 'len ' + cssTxt.length);
-    check('7f el app.js servido trae el dedupe del álbum', appJs.includes('unicas.slice(0, 4)') && appJs.includes("a.thumb || a.thumb_path || a.path"), 'len ' + appJs.length);
+    check('7e el styles.css servido ya no trae el álbum de la tarjeta (cantidad + confirm ×0)', !cssTxt.includes('.pz-hoy-album-label small{') && !cssTxt.includes('.pz-hoy-album-confirm{'), 'len ' + cssTxt.length);
+    check('7f el app.js servido ya no trae el dedupe del álbum (unicas ×0)', !appJs.includes('unicas.slice(0, 4)') && !appJs.includes('const unicas = (Array.isArray(album)'), 'len ' + appJs.length);
     // Fix 6: DELETE /api/album/:id contra el servidor real.
     const join = await reqJson('POST', '/api/trial/chat-onboarding?test_key=' + TEST_KEY, { kind: 'join', ig: 'cm-test', device: 'test-device-cm' });
     check('7g join del invitado ok', join.status === 200 && join.json && join.json.ok === true && join.json.user_id > 0, JSON.stringify(join.json));

@@ -84,17 +84,21 @@ const hoyApr = sliceFn(app, 'const hoyAprobarHTML = ', '  ${hoyAprobarHTML}');
 ok(!!hoyApr, 'extrae hoyAprobarHTML');
 ok(hoyApr.includes('pzHoyHoyHTML'), 'hoyAprobarHTML rinde pzHoyHoyHTML (el posteo de hoy)');
 ok(hoyApr.indexOf('pzHoySpeechHTML') < hoyApr.indexOf('pzHoyHoyHTML'), 'orden: saludo ANTES que el posteo de hoy');
-ok(hoyApr.indexOf('pzHoyHoyHTML') < hoyApr.indexOf('pzHoyUploadHTML'), 'orden: posteo de hoy ANTES que la subida');
-ok(hoyApr.indexOf('pzHoyUploadHTML') < hoyApr.indexOf('pzHoySemanaHTML'), 'orden: subida ANTES que la semana');
+ok(!hoyApr.includes('pzHoyUploadHTML'), 'PARTE 1: la subida salió de Inicio (pzHoyUploadHTML ×0)');
+ok(!hoyApr.includes('pzHoySemanaHTML'), 'PARTE 2: la semana salió de Inicio (pzHoySemanaHTML ×0)');
 ok(hoyApr.includes('hoyPostR1'), 'hoyAprobarHTML considera hoyPostR1 (borrador armado de hoy)');
 ok(!!extractFn(app, 'function pzHoyHoyHTML'), 'existe pzHoyHoyHTML');
 ok(extractFn(app, 'function pzHoyHoyHTML').includes('EL POSTEO DE HOY'), 'pzHoyHoyHTML: cabecera EL POSTEO DE HOY');
-const semSrc = extractFn(app, 'function pzHoySemanaHTML');
-ok(!!semSrc, 'extrae pzHoySemanaHTML');
+// (LOTE SIMPLIFICAR-APP · PARTES 2/3 revisadas · 9/11 · REDISEÑO SIMPLE:
+// pzHoySemanaHTML salió de Inicio; la 5/7 queda en Hoy como fila mini +
+// insight (pzHoySemanaMiniHTML). La sub «hoy es domingo» ya no existe
+// como texto (la mini no lleva sub): el domingo se verifica en el render
+// de §6.)
+const semSrc = extractFn(app, 'function pzHoySemanaMiniHTML');
+ok(!!semSrc, 'extrae pzHoySemanaMiniHTML (la 5/7 vive en Hoy como mini)');
 ok(semSrc.includes('tu semana viene en camino'), 'copy lun–sáb: «X/7 posteos, tu semana viene en camino»');
 ok(semSrc.includes('esta semana cumplimos'), 'copy domingo: «esta semana cumplimos X/7 posteos»');
 ok(semSrc.includes('¡Semana completa!'), 'copy domingo 7/7: festejo «¡Semana completa!»');
-ok(semSrc.includes('hoy es domingo'), 'sub domingo: «hoy es domingo — N de 7 días…»');
 ok(semSrc.includes('hoyIdx === 6'), 'la lógica de domingo es hoyIdx===6 (el 7º día de la tira)');
 ok(semSrc.includes('This week we hit'), 'copy EN domingo presente');
 ok(semSrc.includes('Week complete!'), 'festejo EN presente');
@@ -102,13 +106,12 @@ ok(semSrc.includes('Week complete!'), 'festejo EN presente');
 /* ---------- 3. Estático: subida — 2 botones directos, sin hoja ---------- */
 console.log('— 3. subida: Galería/Cámara directas, sin hoja —');
 ok(!app.includes('function pzHoySubirAbrir') && !app.includes('function pzHoySubirCerrar'), 'pzHoySubirAbrir/Cerrar ELIMINADAS (no hay hoja intermedia)');
-const upSrc = extractFn(app, 'function pzHoyUploadHTML');
-ok(!!upSrc, 'extrae pzHoyUploadHTML');
-ok(upSrc.includes('data-pz-hoy-subir="galeria"') && upSrc.includes('data-pz-hoy-subir="camara"'), 'subida: 2 botones directos Galería + Cámara');
-ok(upSrc.includes('Galería') && upSrc.includes('Cámara'), 'subida: rótulos Galería/Cámara');
-ok(!upSrc.includes('data-pz-hoy-subir="1"'), 'subida: sin el botón único viejo (data-pz-hoy-subir="1")');
-ok(upSrc.includes("pz-hoy-album-est"), 'álbum: píldora de estado por foto');
-ok(upSrc.includes("sale el '") && upSrc.includes("ya salió") && upSrc.includes('esperando lugar'), 'álbum: estados «sale el [día]» / «ya salió» / «esperando lugar»');
+// (LOTE SIMPLIFICAR-APP · PARTE 1 · 9/11: la tarjeta de subida de Inicio
+// salió — la subida es SOLO por chat. Los checks pasan a ser de AUSENCIA.)
+ok(!app.includes('function pzHoyUploadHTML'), 'subida: pzHoyUploadHTML ELIMINADA (la tarjeta salió)');
+ok(!app.includes('¿Tenés algo nuevo para mostrar?'), 'subida: sin tarjeta «¿Tenés algo nuevo para mostrar?»');
+ok(!app.includes('pz-hoy-album-est'), 'álbum: sin píldora de estado de la tarjeta');
+ok(app.includes('#chatFile') && app.includes('function chatUploadPhotos'), 'subida: la puerta del chat sigue (la única: #chatFile + chatUploadPhotos)');
 const iniView = extractFn(app, 'function inicioView');
 ok(!!iniView && !iniView.includes('hoySheetHTML'), 'inicioView: sin hoySheetHTML en el render');
 
@@ -224,9 +227,12 @@ ok(gen.includes('libraryMeta'), 'chat (a): generator recibe libraryMeta');
 ok(gen.includes('nunca uses la cara de Posty para ilustrar otro tema'), 'chat: regla dura — la cara de Posty nunca ilustra otro tema');
 ok(gen.includes('FOTO-OLVIDADA: photo_index por tema'), 'chat (b): el índice ahora se elige por tema');
 // CSS nuevo.
-for (const cls of ['.pz-hoy-hoy{', '.pz-hoy-hoy-head{', '.pz-hoy-upload-btns{', '.pz-hoy-album-est{', '.pz-nivel-posty{', '.hf-d-usarfoto{', '.pz-usarfoto-sheet{', '.pz-usarfoto-opt{']) {
+for (const cls of ['.pz-hoy-hoy{', '.pz-hoy-hoy-head{', '.pz-nivel-posty{', '.hf-d-usarfoto{', '.pz-usarfoto-sheet{', '.pz-usarfoto-opt{']) {
   ok(css.includes(cls), 'CSS: clase ' + cls + ' presente');
 }
+// (LOTE SIMPLIFICAR-APP · PARTE 1 · 9/11: las clases de la tarjeta de
+// subida salieron con la tarjeta.)
+ok(!css.includes('.pz-hoy-upload-btns{') && !css.includes('.pz-hoy-album-est{'), 'CSS: .pz-hoy-upload-btns{ y .pz-hoy-album-est{ salieron (PARTE 1)');
 
 /* ---------- 6. VM: renders (semana, posteo de hoy, subida) ---------- */
 console.log('— 6. VM: renders —');
@@ -236,22 +242,24 @@ const diasMie = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ estado: i === 2 ? 'hoy' : (i
 const diasDom = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ estado: i === 6 ? 'hoy' : (i < 6 ? 'pub' : '') }));
 const vmCtx = { console, ME: { lang: 'es' }, window: {}, pzIc: () => '[ic]' };
 vm.createContext(vmCtx);
-vm.runInContext(escLine + '\n' + extractFn(app, 'function pzHoySemanaHTML') + '\n'
+vm.runInContext(escLine + '\n' + extractFn(app, 'function pzHoySemanaMiniHTML') + '\n'
   + extractFn(app, 'function pzHoyHoraCorta') + '\n' + extractFn(app, 'function pzHoyCuandoCorto') + '\n'
   + extractFn(app, 'function mv') + '\n' + extractFn(app, 'function pzHoyCardHTML') + '\n'
-  + extractFn(app, 'function pzHoyHoyHTML') + '\n' + extractFn(app, 'function pzHoyUploadHTML'), vmCtx);
-const Sem = vmCtx.pzHoySemanaHTML;
-const sMie = Sem({ n: 5, dias: diasMie }, false);
+  + extractFn(app, 'function pzHoyHoyHTML'), vmCtx);
+// (LOTE SIMPLIFICAR-APP · PARTES 2/3 revisadas: la 5/7 vive en Hoy como
+// fila mini + insight. Firma: pzHoySemanaMiniHTML(sem, en, pendProg).)
+const Sem = vmCtx.pzHoySemanaMiniHTML;
+const sMie = Sem({ n: 5, dias: diasMie }, false, 1);
 ok(sMie.includes('5/7 posteos, tu semana viene en camino'), 'render semana miércoles n=5: «5/7 posteos, tu semana viene en camino»');
-ok(sMie.includes('<b>5/7</b>'), 'render semana miércoles: anillo 5/7');
-const sDom = Sem({ n: 5, dias: diasDom }, false);
+ok(sMie.includes('pz-semana-mini') && (sMie.match(/pz-semana-dia done/g) || []).length === 2, 'render semana miércoles: mini con 2 hecho (lun/mar)');
+const sDom = Sem({ n: 5, dias: diasDom }, false, 2);
 ok(sDom.includes('esta semana cumplimos 5/7 posteos'), 'render semana domingo n=5: «esta semana cumplimos 5/7 posteos»');
-ok(sDom.includes('hoy es domingo'), 'render semana domingo: sub «hoy es domingo…»');
-const sDom7 = Sem({ n: 7, dias: diasDom.map((d) => ({ estado: 'pub' })) }, false);
+ok(sDom.includes('Los próximos están en tu feed, con su día y su hora.'), 'render semana domingo: acción «están en tu feed» (hay programados)');
+const sDom7 = Sem({ n: 7, dias: diasDom.map((d) => ({ estado: 'pub' })) }, false, 0);
 ok(sDom7.includes('¡Semana completa! 🎉'), 'render semana domingo n=7: festejo «¡Semana completa! 🎉»');
-const sCero = Sem({ n: 0, dias: diasMie.map(() => ({ estado: '' })) }, false);
+const sCero = Sem({ n: 0, dias: diasMie.map(() => ({ estado: '' })) }, false, 0);
 ok(sCero.includes('Tu semana recién arranca'), 'render semana n=0: «Tu semana recién arranca» (sin inventar)');
-const sMieEn = Sem({ n: 5, dias: diasMie }, true);
+const sMieEn = Sem({ n: 5, dias: diasMie }, true, 1);
 ok(sMieEn.includes('5/7 posts, your week is on its way'), 'render semana EN miércoles: copy en inglés');
 const Hoy = vmCtx.pzHoyHoyHTML;
 const hHoy = Hoy(postHoy, { en: false, tz: TZ });
@@ -263,19 +271,9 @@ ok(hHoy.includes('Cambialo'), 'render posteo de hoy: botón Cambialo');
 ok(hHoy.includes('En Posty, manejo tu Instagram'), 'render posteo de hoy: caption visible');
 const hHoyEn = Hoy(postHoy, { en: true, tz: TZ });
 ok(hHoyEn.includes('TODAY’S POST') && hHoyEn.includes('today · 07:00 PM'), 'render posteo de hoy EN: cabecera + pill en inglés');
-const Up = vmCtx.pzHoyUploadHTML;
-const albumVm = [
-  { id: 1, path: '/media/f1.jpg', thumb: '/media/f1.jpg', estado: 'sale', dia_label: 'miércoles 11/11' },
-  { id: 2, path: '/media/f2.jpg', thumb: '/media/f2.jpg', estado: 'salio', dia_label: '' },
-  { id: 3, path: '/media/f3.jpg', thumb: '/media/f3.jpg', estado: 'esperando', dia_label: '' },
-];
-const uHtml = Up(albumVm, false);
-ok(uHtml.includes('Galería') && uHtml.includes('Cámara'), 'render subida: botones Galería + Cámara');
-ok(uHtml.includes('sale el miércoles 11/11'), 'render álbum: «sale el miércoles 11/11»');
-ok(uHtml.includes('ya salió'), 'render álbum: «ya salió»');
-ok(uHtml.includes('esperando lugar'), 'render álbum: «esperando lugar»');
-ok(uHtml.includes('3 fotos'), 'render álbum: contador «3 fotos»');
-ok(!uHtml.includes('data-pz-hoy-subir="1"'), 'render subida: sin botón único viejo');
+// (LOTE SIMPLIFICAR-APP · PARTE 1: la tarjeta de subida salió; la VM
+// de la subida pasa a AUSENCIA.)
+ok(typeof vmCtx.pzHoyUploadHTML !== 'function', 'render subida: pzHoyUploadHTML ya no existe (PARTE 1)');
 
 /* ---------- 7. VM: slots reales con DB (better-sqlite3 del árbol) ---------- */
 console.log('— 7. VM: slots con DB real —');
@@ -392,18 +390,18 @@ try { require.resolve('express', { paths: [__dirname] }); expressOk = true; } ca
     ok(up, 'boot levanta (PID ' + pid + ')');
     if (up) {
       const ver = JSON.parse((await getText('/api/version')).body);
-      ok(ver.build === '20261105-v831', '/api/version 20261105-v825 (estampado por el re-estampador)');
-      const appS = await getText('/app.js?v=559');
-      ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=559 servido = árbol');
+      ok(ver.build === '20261105-v833', '/api/version 20261105-v825 (estampado por el re-estampador)');
+      const appS = await getText('/app.js?v=567');
+      ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=567 servido = árbol');
       ok(appS.body.includes('pz-hoy-hoy') && appS.body.includes('pzUsarFotoAbrir'), 'servido: posteo de hoy + usar-foto presentes');
       ok(!appS.body.includes('data-tab="estrategia"'), 'servido: sin pestaña Estrategia');
-      const stS = await getText('/styles.css?v=20261211');
+      const stS = await getText('/styles.css?v=20261218');
       ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261211 servido = árbol');
       ok(stS.body.includes('.pz-hoy-hoy{') && stS.body.includes('.pz-nivel-posty{'), 'servido: clases nuevas del lote en el CSS');
       const idx = await getText('/?cb=lote-a-mejoras-inicio');
-      ok(idx.body.includes('app.js?v=565') && idx.body.includes('styles.css?v=20261215'), 'index ES servido ?v=565 + styles?v=20261215');
+      ok(idx.body.includes('app.js?v=567') && idx.body.includes('styles.css?v=20261218'), 'index ES servido ?v=557 + styles?v=20261211');
       const idxEn = await getText('/en/?cb=lote-a-mejoras-inicio');
-      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261215'), 'index EN servido styles?v=20261215');
+      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261218'), 'index EN servido styles?v=20261211');
       // Sin sesión: 401 en los endpoints nuevos.
       ok((await api('', 'GET', '/api/album')).status === 401, 'sin sesión: GET /api/album → 401');
       ok((await api('', 'GET', '/api/album/libres')).status === 401, 'sin sesión: GET /api/album/libres → 401');

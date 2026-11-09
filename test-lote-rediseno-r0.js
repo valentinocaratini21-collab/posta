@@ -38,14 +38,14 @@ const orderOk = (s, keys) => {
 // RE-PIN tras implementar (md5s de work-v1; en base fallan a propósito).
 // (LOTE HOY-AVATAR-FEED · 8/11) Re-pin: app.js/styles.css del lote.
 // (LOTE CHAT-NUEVO v821 · 8/11) Re-pin: app.js/styles.css del lote + BUILD v821.
-const MD5_APP_WORK = 'b2ee67095f027276db73ee7fdee16962'; // (RS-1 re-estampador) re-pin: app.js v831+RS-1
-const MD5_CSS_WORK = '83d096e005ab0e7ba290abc12a93ce32'; // (RS-1 re-estampador) re-pin: styles.css v831+RS-1
+const MD5_APP_WORK = 'd72d8b932b27f70fc51867d6a236c1d2';
+const MD5_CSS_WORK = 'a6ef1f0f0bdd52079f0af7b7d781d690';
 // El woff2 es copia byte a byte del mock (no generado).
 const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins ----------
-  t(srv.includes("const BUILD_ID = '20261105-v832'"), 'server: BUILD v832 (re-pin RS-1)');
+  t(srv.includes("const BUILD_ID = '20261105-v833'"), 'server: BUILD v822 (R0 no toca server.js; re-pin lote A)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -143,13 +143,13 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(headSrc.includes("if (tab === 'chat') return '';"), 'encabezado: NO va en chat (el chat tiene su propia cabecera)');
   t(headSrc.includes('ai-avatar.png'), 'encabezado: avatar canónico ai-avatar.png');
   t(headSrc.includes('pzShellSaludo'), 'encabezado: saludo con id pzShellSaludo (máquina de escribir)');
-  t(headSrc.includes('¡Hola!'), 'encabezado: fallback «¡Hola!» solo sin nombre ni handle (saludo-unico)');
+  t(headSrc.includes('¡Hola!'), 'encabezado: fallback «¡Hola!» solo sin nombre (simplificar-app p5: el @ no sale en el encabezado)');
   t(!headSrc.includes('Hola, '), 'encabezado: sin «Hola, {negocio}» (el encabezado es la identidad, saludo-unico)');
   t(!headSrc.includes('Posty está trabajando ahora'), 'encabezado: «Posty está trabajando ahora» salió (saludo-unico)');
-  t(headSrc.includes('@') && headSrc.includes('handle'), 'encabezado: línea chica = @handle (saludo-unico)');
-  t(headSrc.includes('pzHeadRacha'), 'encabezado: píldora de racha con id pzHeadRacha');
-  t(headSrc.includes('__pzHeadRachaTxt'), 'encabezado: la racha se cachea (un re-render del shell no la vacía)');
-  t(headSrc.includes('BB.estado') && headSrc.includes('negocio'), 'encabezado: nombre desde BB.estado.negocio');
+  t(!headSrc.includes('<small>'), 'encabezado: sin línea chica (el @ no sale en el encabezado, simplificar-app p5)');
+  t(!headSrc.includes('pzHeadRacha'), 'encabezado: píldora de racha fuera (simplificar-app p5)');
+  t(!headSrc.includes('__pzHeadRacha'), 'encabezado: sin caché de racha (simplificar-app p5)');
+  t((headSrc.includes('BB.estado') && headSrc.includes('negocio')) && headSrc.includes('PROFILE.business_name'), 'encabezado: nombre desde BB.estado.negocio o PROFILE.business_name (simplificar-app p5)');
   t(!headSrc.includes('data-hf-pact'), 'encabezado: sin botones del perfil (son de Hoy, no del shell)');
   // Botones del encabezado con destino (vara cero botones muertos):
   t(headSrc.includes("bbGo('#/app/chat')"), 'encabezado: identidad (avatar+saludo) abre el Chat');
@@ -173,8 +173,8 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     const h = vm.runInContext("pzShellHeadHTML('inicio')", ctx);
     t(h.includes('ai-avatar.png'), 'VM encabezado(inicio): avatar presente');
     t(h.includes('Café Aroma') && !h.includes('Hola'), 'VM encabezado(inicio): título = nombre, sin saludo (saludo-unico)');
-    t(h.includes('@cafearoma'), 'VM encabezado(inicio): chica = @handle (saludo-unico)');
-    t(h.includes('pzHeadRacha'), 'VM encabezado(inicio): píldora de racha presente');
+    t(!h.includes('@'), 'VM encabezado(inicio): sin @ en el encabezado (simplificar-app p5)');
+    t(!h.includes('pzHeadRacha'), 'VM encabezado(inicio): píldora de racha fuera (simplificar-app p5)');
     t(h.includes("bbGo('#/app/chat')"), 'VM encabezado(inicio): identidad → Chat');
     t(h.includes('rsShareOpen()'), 'VM encabezado(inicio): compartir → hoja (RS-1)');
     t(h.includes("bbGo('#/app/ajustes')"), 'VM encabezado(inicio): ruedita → Ajustes');
@@ -209,10 +209,10 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(salSrc.includes('prefers-reduced-motion'), 'saludo: reduced-motion → instantáneo');
   t(salSrc.includes('typing'), 'saludo: clase typing con cursor');
   const hoySrc = sliceFn(app, 'function pzShellDatosHoy() {', '// ===== /LOTE REDISEÑO R0');
-  t(hoySrc.includes("/api/ritual/hoy"), 'datos-hoy: UN fetch a /api/ritual/hoy (racha + tarjeta)');
-  t(hoySrc.includes('pzHeadRacha'), 'datos-hoy: llena la píldora de racha');
-  t(hoySrc.includes('__pzHeadRachaTxt'), 'datos-hoy: la racha llenada se cachea para el próximo render');
-  t(hoySrc.includes("typeof") && hoySrc.includes('racha') && hoySrc.includes('number'), 'datos-hoy: la racha solo se muestra con número real');
+  t(hoySrc.includes("/api/ritual/hoy"), 'datos-hoy: UN fetch a /api/ritual/hoy (tarjeta de la apertura)');
+  t(!hoySrc.includes('pzHeadRacha'), 'datos-hoy: ya no llena píldora de racha (simplificar-app p5)');
+  t(!hoySrc.includes('__pzHeadRacha'), 'datos-hoy: sin caché de racha (simplificar-app p5)');
+  t(!hoySrc.includes('r.racha'), 'datos-hoy: el fetch ya no lee r.racha (simplificar-app p5)');
   t(hoySrc.includes('cartas[0]'), 'datos-hoy: la tarjeta sale de cartas[0] (o recomendada)');
   t(hoySrc.includes('!carta.imagen') || hoySrc.includes('carta.imagen'), 'datos-hoy: sin imagen no hay tarjeta (nunca inventar)');
   t(hoySrc.includes('caption_corta') || hoySrc.includes('caption'), 'datos-hoy: título de la tarjeta desde el caption real');
@@ -225,16 +225,16 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(hoySrc.includes('.catch(') && hoySrc.includes('__pzShellHoyPendiente = false'), 'datos-hoy: si el fetch falla, el pendiente se limpia (reintenta)');
   t(hoySrc.includes('r.ok === false'), 'datos-hoy: una respuesta sin ok no marca «hecho»');
   // El fetch arranca con el render y puede resolver ANTES de la
-  // primera pintura: la racha y la tarjeta se cachean SIEMPRE (no solo
-  // si el nodo vivo existe), y los templates pintan desde el caché.
-  t(hoySrc.indexOf('__pzHeadRachaTxt = rachaTxt') > -1 && hoySrc.indexOf('__pzHeadRachaTxt = rachaTxt') < hoySrc.indexOf("getElementById('pzHeadRacha')"), 'datos-hoy: la racha se cachea antes de buscar el nodo vivo (el fetch puede resolver antes de pintar)');
+  // primera pintura: la tarjeta se cachea SIEMPRE (no solo
+  // si el nodo vivo existe), y el template pinta desde el caché.
+  t(!hoySrc.includes('__pzHeadRachaTxt'), 'datos-hoy: sin caché de racha antes del nodo (simplificar-app p5)');
   t(hoySrc.indexOf('__pzAperturaCardHTML = cardHTML') > -1 && hoySrc.indexOf('__pzAperturaCardHTML = cardHTML') < hoySrc.indexOf("getElementById('pzAperturaCard')"), 'datos-hoy: la tarjeta se cachea antes de buscar el nodo vivo (el fetch puede resolver antes de pintar)');
   // El idioma no se congela en el caché: el fetch arranca antes de que ME
   // cargue y el texto con el idioma de ese momento saldría en español en
   // un usuario EN. Se cachea el DATO y cada template localiza al pintar.
-  t(hoySrc.includes('__pzHeadRachaN = r.racha'), 'datos-hoy: la racha se cachea como NÚMERO (el template localiza)');
+  t(!hoySrc.includes('__pzHeadRachaN'), 'datos-hoy: sin caché de racha como número (simplificar-app p5)');
   t(hoySrc.includes('__pzHoyCarta = {'), 'datos-hoy: la carta se cachea como DATOS (el template localiza)');
-  t(headSrc.includes('__pzHeadRachaN'), 'encabezado: la píldora se arma desde el número cacheado (localiza con el ME vigente)');
+  t(!headSrc.includes('__pzHeadRachaN'), 'encabezado: sin número de racha cacheado (simplificar-app p5)');
   t(apSrc.includes('__pzHoyCarta'), 'apertura: la tarjeta se arma desde los datos cacheados (localiza con el ME vigente)');
   { const rendIdx = app.indexOf('async function render() {');
     const paintIdx2 = app.indexOf('root.innerHTML = appShell(tab, content);', rendIdx);
@@ -244,7 +244,8 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   // El chat es un overlay fijo a pantalla completa (z-300): sin este
   // ajuste taparía el dock. R0 acorta el chat hasta sobre el dock
   // (midiendo el dock real); con el teclado abierto no se resta nada.
-  const kbSrc = sliceFn(app, 'function pzChatKbSync() {', 'function pzChatKbBind() {');
+  const kbSrc = sliceFn(app, 'function pzChatKbSync(', 'function pzChatKbBind() {');
+  t(kbSrc.length > 100, 'chat: pzChatKbSync delimitada (la firma cambió en SIMPLIFICAR-APP p4: esAsentado)');
   t(kbSrc.includes('getBoundingClientRect'), 'chat: pzChatKbSync mide el dock real (no un número fijo)');
   t(kbSrc.includes("'.bb-bar'") && kbSrc.includes("'.mz-tabs'"), 'chat: pzChatKbSync busca el dock en ambas shells');
   t(kbSrc.includes('dockH'), 'chat: pzChatKbSync resta la altura del dock a la altura del chat');
@@ -303,7 +304,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(/\.bb-app \.bb-btn[^{]*\{[^}]*rgba\(255,255,255,\.52\)/.test(css), 'glass: botones .bb-btn en vidrio dentro de la app');
   t(css.includes('.pz-shell-head'), 'glass: CSS del encabezado presente');
   t(css.includes('.pz-apertura'), 'glass: CSS de la apertura presente');
-  t(css.includes('.pz-shell-racha'), 'glass: CSS de la píldora de racha presente');
+  t(!css.includes('.pz-shell-racha'), 'glass: CSS de la píldora de racha fuera (simplificar-app p5)');
   t(/\.pz-chatfull\{[^}]*height:calc\(100dvh - 72px - env\(safe-area-inset-bottom\)\)/.test(css), 'chat: la pantalla termina sobre el dock (altura 100dvh - 72px - safe-area)');
 
   // ---------- 8. Fuente autocontenida ----------
@@ -452,11 +453,11 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v832', `boot: /api/version 20261105-v832 (vino ${ver.build})`);
-      const appTxt = await (await fetch(`${BASE}/app.js?v=566`)).text();
-      t(md5(appTxt) === md5(app), 'boot: app.js?v=566 servido = árbol');
-      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261217`)).text();
-      t(md5(cssTxt) === md5(css), 'boot: styles.css?v=20261217 servido = árbol');
+      t(ver.build === '20261105-v833', `boot: /api/version 20261105-v825 (vino ${ver.build})`);
+      const appTxt = await (await fetch(`${BASE}/app.js?v=567`)).text();
+      t(md5(appTxt) === md5(app), 'boot: app.js?v=567 servido = árbol');
+      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261218`)).text();
+      t(md5(cssTxt) === md5(css), 'boot: styles.css?v=20261218 servido = árbol');
       const woff = await fetch(`${BASE}/fonts/nunito-var.woff2`);
       t(woff.ok, 'boot: /fonts/nunito-var.woff2 se sirve (200)');
       if (woff.ok) {

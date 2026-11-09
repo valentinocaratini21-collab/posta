@@ -13,7 +13,7 @@
 // v778 ya no la compone (B11 lo verifica) — no es fuga viva.
 // Parte A: servidor real (contrato HEIC). Parte B: chatUploadPhotos +
 // helper + handler del álbum en vm con stubs. Parte C: auditoría de
-// funciones. Parte D: checks estáticos (tope, filtro álbum, triggers
+// funciones. Parte D: checks estáticos (tope, sin puerta de subida en el álbum, triggers
 // del picker en escritorio, sin «✦ veo»).
 // Uso: node test-lote-subir-10-fotos.js [dir-del-arbol] — sale 0 si todo pasa.
 'use strict';
@@ -311,38 +311,9 @@ async function parteB() {
     await uploadWith(sb, makeFiles(12, 'photo'));
     check('B11 ningún mensaje del flujo trae «✦ veo»', !said(sb).some((t) => t.includes('✦ veo')), JSON.stringify(said(sb)));
   }
-  // B12: el handler del álbum usa el mismo filtro (dinámica con vm).
-  {
-    const appSrc2 = fs.readFileSync(path.join(DIR, 'public', 'app.js'), 'utf8');
-    const bindSrc = sliceFn(appSrc2, 'function bindMediaCard() {', 'function mcAlbumToolsBind()');
-    const sb = buildSandbox('es');
-    // Stubs propios del álbum dentro del mismo sandbox.
-    sb.$ = (sel) => sb._els[sel] || (sb._els[sel] = new FakeEl(sel));
-    sb.$$ = () => [];
-    vm.runInContext(bindSrc, sb, { filename: 'bind-media-vm.js' });
-    vm.runInContext('bindMediaCard()', sb);
-    const inp = sb._els['#mediaFiles'];
-    const add = sb._els['#btnMediaAdd'];
-    // #mediaMsg se crea perezoso dentro del onchange: leerlo al momento.
-    const msgEl = () => sb._els['#mediaMsg'];
-    // Caso 1: 2 HEIC con type vacío → se suben (antes se tiraban en silencio).
-    inp.files = makeFiles(2, 'heic');
-    await inp.onchange();
-    const subidosAlbum = () => sb.fetched.filter((f) => String(f.url).startsWith('/api/assets'));
-    const msgHtml = () => (msgEl() && msgEl().innerHTML) || '';
-    check('B12 álbum: 2 HEIC con type vacío → se suben (no se tiran)', subidosAlbum().length === 2, JSON.stringify(sb.fetched.map((f) => f.url + ' ' + JSON.stringify(f.headers))));
-    check('B12b álbum: el HEIC va con Content-Type image/heic (no octet-stream)', subidosAlbum().length === 2 && subidosAlbum().every((f) => f.headers['Content-Type'] === 'image/heic'), JSON.stringify(sb.fetched.map((f) => f.headers)));
-    check('B12c álbum: mensaje de éxito "2 agregados"', msgHtml().includes('2 agregados'), msgHtml());
-    // Caso 2: solo un pdf → mensaje claro, 0 subidas.
-    const before = sb.fetched.length;
-    inp.files = makeFiles(1, 'pdf');
-    await inp.onchange();
-    check('B12d álbum: solo un pdf → 0 subidas y mensaje claro', sb.fetched.length === before && /No pude usar esos archivos/.test(msgHtml()), msgHtml());
-    // Caso 3: 2 fotos + 1 pdf → suben 2 y se avisa del pdf.
-    inp.files = [...makeFiles(2, 'photo'), { name: 'doc.pdf', type: 'application/pdf', size: 10 }];
-    await inp.onchange();
-    check('B12e álbum: 2 fotos + 1 pdf → suben 2 y se avisa del pdf', subidosAlbum().length === 4 && /no era foto ni video/.test(msgHtml()), msgHtml());
-  }
+  // (LOTE SIMPLIFICAR-APP · PARTE 1 · 9/11: el handler del álbum (bindMediaCard)
+  // salió — la única subida es por el chat. El helper pzSftPartirMedios se
+  // sigue verificando por el chat (B10/B10b) y por D5'.
 }
 
 // ---------- Parte C: auditoría de funciones ----------
@@ -352,14 +323,14 @@ function parteC() {
   const needed = ['pzSftEsArchivoMedio', 'pzSftKind', 'pzSftT', 'pzSftPartirMedios', 'pzSftAvisoSubida', 'pzSftEn',
     'esc', 'renderChatPhotos', 'renderChatPreviews', 'renderChatStoryboard', 'chatSay',
     'pzSftDespuesDeSubirChat', 'fileToThumb', 'fileToVideoThumb', 'chatUploadPhotos',
-    'bindMediaCard', 'mcEn', 'pzIc'];
+    'mcEn', 'pzIc'];
   const missing = needed.filter((n) => !new RegExp(`function ${n}\\s*\\(|(?:var|const|let) ${n}\\s*=`).test(appSrc));
   check(`C1 funciones auditadas: ${needed.length - missing.length}/${needed.length}`, missing.length === 0, 'faltan: ' + missing.join(', '));
 }
 
 // ---------- Parte D: checks estáticos ----------
 function parteD() {
-  console.log('— D) estáticos: tope, filtro álbum, picker escritorio, sin visión —');
+  console.log('— D) estáticos: tope, sin puerta de subida en el álbum, picker escritorio, sin visión —');
   const appSrc = fs.readFileSync(path.join(DIR, 'public', 'app.js'), 'utf8');
   const chatUp = sliceFn(appSrc, 'async function chatUploadPhotos(files) {', '// Estilos disponibles para los ejemplos');
   check('D1 chatUploadPhotos ya no corta a 4 en silencio', !/slice\(0, 4\)/.test(chatUp), chatUp.slice(0, 200));
@@ -367,10 +338,9 @@ function parteD() {
   check('D3 chatUploadPhotos llama a pzSftAvisoSubida y el aviso dice "primeras 10"', /pzSftAvisoSubida\(partes\)/.test(chatUp) && /primeras 10/.test(appSrc), '');
   const sinComent = (t) => t.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
   check('D4 pzSftChatProponer no compone «✦ veo» (código, sin comentarios)', !/✦ veo/.test(sinComent(sliceFn(appSrc, 'async function pzSftChatProponer() {', '/* Un toque aprueba'))), '');
-  const bind = sliceFn(appSrc, 'function bindMediaCard() {', 'function mcAlbumToolsBind()');
-  check('D5 el álbum usa el helper pzSftPartirMedios (no f.type.startsWith)', /pzSftPartirMedios\(inp\.files\)/.test(bind) && !/f\.type\.startsWith\('image\/'\)/.test(bind), '');
-  check('D6 el álbum manda el mime de pzSftKind (no octet-stream)', /pzSftKind\(f\)\.mime/.test(bind) && !/application\/octet-stream/.test(bind), '');
-  check('D7 el álbum avisa cuando nada es usable', /No pude usar esos archivos/.test(bind), '');
+  // (LOTE SIMPLIFICAR-APP · PARTE 1 · 9/11: la puerta de subida del álbum
+  // (bindMediaCard/#mediaFiles) salió — la única subida es por el chat.)
+  check('D5 sin puerta de subida fuera del chat (bindMediaCard/mediaCardHTML/pzHoyUpload/wireAlbumUpload/#albumFile/#mediaFiles/data-uploadphoto ×0)', !/bindMediaCard|mediaCardHTML|wireAlbumUpload|pzHoyUploadHTML|pzHoySubirPicker|pzHoyAlbumBorrar|pzHoyAlbumCuenta|id="albumFile"|id="mediaFiles"|data-uploadphoto|data-uploadvideo|pzSftDespuesDeSubir\(/.test(appSrc), '');
   const input = appSrc.match(/<input type="file" id="chatFile"[^>]*>/);
   check('D8 #chatFile tiene multiple + accept image/*,video/*', !!input && /multiple/.test(input[0]) && /image\/\*,video\/\*/.test(input[0]), input ? input[0] : 'sin input');
   const triggers = [

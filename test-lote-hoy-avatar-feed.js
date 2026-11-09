@@ -70,12 +70,14 @@ ok(css.includes('#inicioView .pz-hoy-speech-row{margin-bottom:16px}'), 'CSS: fil
 ok(css.includes('#inicioView .pz-hoy-speech{flex:1;min-width:0;width:auto;margin-bottom:0;'), 'CSS: la burbuja intacta (flex:1, sin borde oscuro)');
 
 // El texto del saludo queda byte-idéntico (lote saludo-hoy-honesto v806).
-ok(speechSrc.includes("`Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b> — miralo y dale «Dale» si te gusta. Sin tu OK, no sale nada.`"), 'texto ES hoyPost byte-idéntico');
-ok(speechSrc.includes("`Tenés 1 posteo para revisar — miralo y dale «Dale» si te gusta. Sin tu OK, no sale nada.`"), 'texto ES pendientes=1 byte-idéntico');
-ok(speechSrc.includes("`Tenés ${pendientes} posteos para revisar — miralos y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.`"), 'texto ES pendientes=N byte-idéntico');
+ok(speechSrc.includes("`Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b> — miralo y dale «Dale» si te gusta. Sin tu OK, no sale nada.`"), 'texto ES hoyPost (rama draft/manual) byte-idéntico');
+ok(speechSrc.includes("`Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''} solo</b> — miralo si querés, te aviso 30 min antes por si querés frenarlo y te aviso cuando salga.`"), 'texto ES hoyPost (rama autopilot: sale solo) byte-idéntico (PARTE 6)');
+ok(speechSrc.includes("`Tenés 1 posteo para revisar — miralo en tu feed y dale «Dale» si te gusta. Sin tu OK, no sale nada.${extraSolo}`"), 'texto ES pendientes=1 byte-idéntico (needOK + en tu feed, PARTES 6/7)');
+ok(speechSrc.includes("`Tenés ${needOK} posteos para revisar — miralos en tu feed y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.${extraSolo}`"), 'texto ES pendientes=N byte-idéntico (needOK + en tu feed, PARTES 6/7)');
 ok(speechSrc.includes("`Tu semana ya está aprobada. Posty se ocupa de publicarla.`"), 'texto ES haySemana byte-idéntico');
 ok(speechSrc.includes("`¿Armamos tu semana? Contame qué tenés para mostrar.`"), 'texto ES vacío byte-idéntico');
-ok(speechSrc.includes("`I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b> — take a look and give it a «Publish it» if you like it. Without your OK, nothing goes out.`"), 'texto EN hoyPost byte-idéntico');
+ok(speechSrc.includes("`I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b> — take a look and give it a «Publish it» if you like it. Without your OK, nothing goes out.`"), 'texto EN hoyPost (rama draft/manual) byte-idéntico');
+ok(speechSrc.includes("`I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''} on its own</b> — take a look if you want, I'll let you know 30 min before in case you want to stop it, and when it's out.`"), 'texto EN hoyPost (rama autopilot: on its own) byte-idéntico (PARTE 6)');
 
 /* ---------- 2. Estático: la banda fuera de .hf-tile ---------- */
 console.log('— 2. FIX 2 estático: banda .hf-tile-cap —');
@@ -130,7 +132,9 @@ ok(cnt(sHoy, /<img/g) === 0, 'render saludo: 0 imgs de avatar en la fila');
 ok(sHoy.startsWith('<div class="pz-hoy-speech-row">'), 'render saludo: empieza por la fila');
 ok(sHoy.includes('Te armé el posteo de hoy. <b>El de hoy sale a las 19:00</b> — miralo y dale «Dale» si te gusta. Sin tu OK, no sale nada.'), 'render saludo ES hoyPost: texto completo byte-idéntico (19:00)');
 const sPend = S({ hoyPost: null, pendientes: 2, haySemana: true, en: false, tz: TZ });
-ok(sPend.includes('Tenés 2 posteos para revisar — miralos y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.'), 'render saludo ES pendientes=2: texto completo');
+ok(sPend.includes('Tenés 2 posteos para revisar — miralos en tu feed y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.'), 'render saludo ES pendientes=2: texto completo (en tu feed, PARTE 7)');
+const sHoyAuto = S({ hoyPost: { status: 'scheduled', approval: 'pending', scheduled_at: isoHoy19 }, pendientes: 1, haySemana: true, en: false, tz: TZ });
+ok(sHoyAuto.includes('Te armé el posteo de hoy. <b>El de hoy sale a las 19:00 solo</b> — miralo si querés, te aviso 30 min antes por si querés frenarlo y te aviso cuando salga.'), 'render saludo ES hoyPost autopilot: sale solo (PARTE 6)');
 const sSem = S({ hoyPost: null, pendientes: 0, haySemana: true, en: false, tz: TZ });
 ok(sSem.includes('Tu semana ya está aprobada. Posty se ocupa de publicarla.'), 'render saludo ES haySemana: texto completo');
 const sHoyEn = S({ hoyPost: { scheduled_at: isoHoy19 }, pendientes: 1, haySemana: true, en: true, tz: TZ });
@@ -138,7 +142,7 @@ ok(sHoyEn.includes("I put together today's post for you. <b>Today's goes out at 
 const H = ctx.pzShellHeadHTML;
 const hInicio = H('inicio');
 ok(cnt(hInicio, /ai-avatar.png/g) === 1, 'render encabezado(inicio): EXACTAMENTE 1 avatar');
-ok(hInicio.includes('Café Aroma') && hInicio.includes('@cafearoma'), 'render encabezado(inicio): identidad intacta (nombre + @)');
+ok(hInicio.includes('Café Aroma') && !hInicio.includes('@cafearoma'), 'render encabezado(inicio): nombre del negocio, SIN @ (PARTE 5)');
 ok(H('chat') === '', 'render encabezado(chat): vacío (el chat no se afecta)');
 
 /* ---------- 5. VM: tiles del próximo (ES y EN) ---------- */
@@ -265,19 +269,19 @@ try { require.resolve('express', { paths: [__dirname] }); expressOk = true; } ca
     ok(up, 'boot levanta (PID ' + pid + ')');
     if (up) {
       const ver = JSON.parse((await get('/api/version')).body);
-      ok(ver.build === '20261105-v831', '/api/version 20261105-v830 (estampado)');
-      const appS = await get('/app.js?v=560');
+      ok(ver.build === '20261105-v833', '/api/version 20261105-v825 (estampado)');
+      const appS = await get('/app.js?v=567');
       ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=559 servido = árbol');
       ok(!appS.body.includes('pz-hoy-speech-ava'), 'servido: sin carita en el saludo');
       ok(appS.body.includes('hf-tile-cap'), 'servido: banda hf-tile-cap presente');
-      const stS = await get('/styles.css?v=20261212');
+      const stS = await get('/styles.css?v=20261218');
       ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261211 servido = árbol');
       ok(stS.body.includes('.pz-shell-head{position:sticky;top:0;z-index:50'), 'servido: encabezado sticky');
       ok(!stS.body.includes('pz-hoy-speech-ava'), 'servido: sin regla de carita en el CSS');
       const idx = await get('/?cb=lote-hoy-avatar-feed');
-      ok(idx.body.includes('app.js?v=565') && idx.body.includes('styles.css?v=20261215'), 'index ES servido ?v=565 + styles?v=20261215');
+      ok(idx.body.includes('app.js?v=567') && idx.body.includes('styles.css?v=20261218'), 'index ES servido ?v=557 + styles?v=20261211');
       const idxEn = await get('/en/?cb=lote-hoy-avatar-feed');
-      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261215'), 'index EN servido styles?v=20261215');
+      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261218'), 'index EN servido styles?v=20261211');
       const del = await new Promise((res) => { const q = http.request({ host: '127.0.0.1', port: PORT, path: '/api/album/1', method: 'DELETE' }, (r) => res(r.statusCode)); q.on('error', () => res(0)); q.end(); });
       ok(del === 401, 'DELETE sin sesión 401 (el servidor es el real)');
     }

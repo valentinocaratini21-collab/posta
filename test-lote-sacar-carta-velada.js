@@ -168,7 +168,7 @@ t(!CSS.includes('hf-cell-velada') && !CSS.includes('hf-carta-velo') && !CSS.incl
   '§0b: styles.css ya no trae el CSS de la carta velada (×0 en las 12 clases + hfRespira)');
 t(CSS.includes('.hf-tile.hf-carta-magia') && CSS.includes('.hf-carta-destellos'),
   '§0b: el CSS de la magia (borde + destellos) sigue para la carta abierta');
-t(md5(SRV) === '15940e071d5e99c0858cafaac6b3a8db', '§0b: server.js = v824 (sin tocar, BUILD v824)');
+t(md5(SRV) === '1e0e70dcc918ee2b1f235586de3e2a40', '§0b: server.js = v829 (sin tocar salvo BUILD v833)');
 
 // ---------- Fixtures (mismos que r1 §5) ----------
 const pub = (id, ymd) => ({ id, status: 'published', media_type: 'image', image_path: '/m/' + id + '.jpg', caption: 'Publicado ' + id, published_at: ymd + 'T22:00:00.000Z', scheduled_at: ymd + 'T22:00:00.000Z', pinned: 0, approval: 'approved' });
@@ -329,9 +329,9 @@ OPENAI_API_KEY: '',
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v831',
-      '§6: /api/version trae el BUILD v824 (sin estampar todavía)', JSON.stringify(ver.json));
-    const appJs = await apiText('/app.js?v=560');
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v833',
+      '§6: /api/version trae el BUILD v833', JSON.stringify(ver.json));
+    const appJs = await apiText('/app.js?v=567');
     t(appJs.status === 200 && md5(appJs.text) === md5(APP),
       '§6: el app.js servido es el del árbol (md5 igual)');
     t(!appJs.text.includes('hf-cell-velada') && !appJs.text.includes('hf-carta-velo')

@@ -73,9 +73,9 @@ button{font-family:inherit}
    botón de enviar del chat se veía como un círculo sólido sin ícono.
    El CSS manda sobre el atributo de presentación del svg, así que el
    ícono queda BLANCO en todos los botones celestes con ícono pzIc
-   (btn-primary, igmock-accept, accept-pill, ag-upload-btn, pcard-approve,
+   (btn-primary, igmock-accept, accept-pill, pcard-approve,
    pcard-accept). .hf-ask-send y .apv-accept ya tenían su propia regla. */
-.btn-primary .pz-ic svg, .igmock-accept .pz-ic svg, .igmock-accept-fixed .pz-ic svg, .accept-pill .pz-ic svg, .ag-upload-btn .pz-ic svg, .pcard-approve .pz-ic svg, .pcard-accept .pz-ic svg{stroke:#fff}
+.btn-primary .pz-ic svg, .igmock-accept .pz-ic svg, .igmock-accept-fixed .pz-ic svg, .accept-pill .pz-ic svg, .pcard-approve .pz-ic svg, .pcard-accept .pz-ic svg{stroke:#fff}
 .btn-primary:hover{filter:brightness(.97);transform:translateY(-1px);box-shadow:0 10px 24px rgba(39,147,200,.5),inset 0 1px 0 rgba(255,255,255,.55)}
 .btn-soft{background:transparent;color:var(--cel);border:none;box-shadow:none}
 .btn-soft:hover{background:rgba(39,147,200,.08);border-color:transparent;box-shadow:none}
@@ -411,11 +411,6 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .mission-shot.done .mission-n{background:#2E9E5B}
 .mission-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .mission-prog{font-weight:800;font-size:12.5px}
-/* Tarjeta "Mis fotos y videos" */
-.media-strip{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 14px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch}
-.media-thumb{position:relative;flex-shrink:0;width:88px;height:112px;scroll-snap-align:start}
-.media-thumb img,.media-thumb video{width:88px;height:112px;object-fit:cover;border-radius:12px;border:1px solid var(--line);display:block;background:#0A1E33}
-.media-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:21px;text-shadow:0 1px 6px rgba(0,0,0,.6);pointer-events:none}
 .media-del{position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;background:#fff;border:1.5px solid var(--line);color:#C0392B;font-size:14px;font-weight:800;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.18);padding:0}
 @media(max-width:760px){
   .rev-media{width:104px;height:144px}
@@ -1446,13 +1441,6 @@ textarea.in{resize:vertical;min-height:96px}
 .head-pencil{height:42px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line);background:#fff;font-size:13px;font-weight:700;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:6px;flex-shrink:0;box-shadow:0 1px 4px rgba(10,30,51,.08);white-space:nowrap}
 .head-pencil:active{transform:scale(.95)}
 
-/* Tira finita de fotos/videos en Mi semana */
-.media-stripbar{display:flex;gap:10px;align-items:center;background:#fff;border:1.5px solid var(--cel);border-radius:14px;padding:8px 12px;margin-bottom:14px}
-.media-strip-ico{font-size:17.5px;flex-shrink:0}
-.media-stripbar .media-strip{flex:1;padding:2px;gap:8px;min-width:0}
-.media-thumb.sm{width:52px;height:52px}
-.media-thumb.sm img,.media-thumb.sm video{width:52px;height:52px}
-.media-thumb.sm .media-play{font-size:13px}
 
 /* Tira finita de progreso semanal */
 .sem-strip{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--mut)}
@@ -2768,11 +2756,6 @@ body.hf-sv-open{overflow:hidden}
 .ag-stale-t{font-size:13px;font-weight:800;color:var(--mut);margin-bottom:8px}
 .ag-stale .pcard{margin-bottom:8px}
 .ag-stale .pcard:last-child{margin-bottom:0}
-/* Botón de subida SIEMPRE a mano dentro de la agenda (sticky abajo). El
-   contenedor no captura toques; solo el botón. */
-.ag-uploadbar{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:45;display:flex;justify-content:center;margin:16px 0 6px;pointer-events:none}
-.ag-upload-btn{pointer-events:auto;border:none;cursor:pointer;font-family:inherit;background:var(--cel);color:#fff;font-size:15px;font-weight:800;border-radius:999px;padding:13px 24px;box-shadow:0 8px 24px rgba(39,147,200,.42);touch-action:manipulation}
-.ag-upload-btn:active{transform:scale(.97)}
 /* La forma de Instagram dentro de la tarjeta grande: fila de íconos
    sociales (corazón, comentario, repost, enviar + guardar a la derecha)
    y la línea de "Me gusta", entre la imagen y el caption. */
@@ -2780,14 +2763,12 @@ body.hf-sv-open{overflow:hidden}
 .igmock-acts svg{width:23px;height:23px;fill:none;stroke:#262626;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}
 .igmock-acts .ig-save{margin-left:auto}
 .igmock-likes{font-size:13px;font-weight:700;color:var(--txt);margin-top:7px}
-/* Fila fina del álbum en Schedule (v215): reemplaza la tarjeta grande —
-   un solo botón de subida a la vista (el sticky); el álbum se abre acá. */
+/* Fila fina del álbum en Schedule (v215): el álbum se abre acá. */
 .album-row{margin:2px 0 14px}
 .album-row-btn{display:flex;align-items:center;gap:8px;width:100%;border:1.5px dashed var(--line);background:#fff;color:var(--mut);border-radius:12px;padding:11px 14px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;touch-action:manipulation;text-align:left}
 .album-row-btn:active{transform:scale(.99)}
 .album-row-panel{margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
 .album-row-panel.album-focus{outline:2.5px solid var(--cel);outline-offset:1px}
-.album-row-msg{font-size:12.5px;color:var(--mut);margin-top:8px;min-height:16px}
 
 /* ===== v217: SCHEDULE CON FILTRO DÍA · SEMANA · MES =====
    El filtro segmentado arriba de la agenda y las tres vistas. La
@@ -2918,12 +2899,6 @@ body.hf-sv-open{overflow:hidden}
 .scf-dayempty{flex:1 1 auto;width:100%;min-height:380px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;text-align:center;font-size:14px;color:var(--mut);background:#fff;border:1.5px dashed var(--line);border-radius:18px;padding:26px 18px}
 .scf-dayempty b{color:var(--txt);font-size:15px}
 .scf-pop.pinned{box-shadow:0 26px 80px rgba(10,30,51,.5),0 0 0 2.5px var(--cel)}
-/* (v236) La fila de subida lleva DOS controles lado a lado: el botón
-   de subida y el chip de ideas a su derecha; el mensaje del álbum
-   ocupa su propia línea debajo (flex-basis completa). */
-.sched-up-row{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}
-.sched-up-row .album-row-msg{flex:1 1 100%;margin-top:2px}
-.sched-up-row .album-row-msg:empty{min-height:0;margin-top:0}
 #hs-ideas.ideas-closed{display:none}
 .idea-comp-warn{flex:1 1 100%;margin-top:8px;font-size:12.5px;font-weight:700;color:#B3261E}
 
@@ -4614,9 +4589,6 @@ body.pz-postchat-open{overflow:hidden}
 .mz-sheet #chatCard{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}
 .mz-sheet .chat-box{flex:1 1 auto;max-height:none;min-height:0;overflow-y:auto;}
 .mz-sheet .chat-input-row{flex:none;}
-/* Chips chicos SOLO en la hoja (Schedule conserva sus botones grandes). */
-.mz-sheet .sched-chips-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 2px;}
-.mz-sheet .sched-chips-row .ag-upload-btn{padding:8px 14px;font-size:13px;box-shadow:none;background:#fff;color:#0A1E33;border:1.5px solid var(--line);}
 
 /* LOTE JARDÍN · hero mosaico + slider (renders aprobados, nunca inventados) */
 .mx-hero-mosaico{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:6px}
@@ -4672,7 +4644,7 @@ body.pz-postchat-open{overflow:hidden}
    campo y chips van en vidrio; las fotos quedan sin vidrio, como siempre.
    La altura la fija JS con el viewport visible real (ver pzChatKbSync):
    el 100dvh de acá es solo el arranque antes del primer sync. */
-.pz-chatfull{position:fixed;left:0;right:0;top:0;height:100dvh;z-index:300;display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.22),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(39,147,200,.12),rgba(39,147,200,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%)}
+.pz-chatfull{position:fixed;left:0;right:0;top:0;height:100dvh;z-index:300;display:flex;flex-direction:column;overflow:hidden;transition:height .28s ease,top .28s ease;background:radial-gradient(260px 260px at 85% -60px,rgba(39,147,200,.22),rgba(39,147,200,0) 70%),radial-gradient(240px 240px at -90px 300px,rgba(39,147,200,.12),rgba(39,147,200,0) 70%),linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%)}
 .pz-chatfull-head{display:flex;align-items:center;gap:10px;padding:calc(8px + env(safe-area-inset-top)) 12px 8px;margin:0;background:transparent;border:none;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;flex:none}
 .pz-chatfull-back{width:28px;height:36px;border:none;background:transparent;color:var(--cel);font-family:inherit;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}
 .pz-chatfull-head .chat-face{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);object-fit:cover;flex:none}
@@ -4686,7 +4658,6 @@ body.pz-postchat-open{overflow:hidden}
 .pz-chatfull .chat-input-row .in:focus{border:none;box-shadow:none}
 .pz-chatfull .chat-input-row .btn:not(.pz-chat-send){background:#fff;border:1px solid var(--line)}
 .pz-chatfull .chat-plus-menu{background:rgba(255,255,255,.85);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
-.pz-chatfull .sched-chips-row .ag-upload-btn{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75)}
 @media(min-width:761px){.pz-chatfull{left:50%;right:auto;width:640px;margin-left:-320px}}
 
 /* (LOTE CHAT4S) Fundido del placeholder que rota: 360 ms (apaga,
@@ -4779,8 +4750,6 @@ body.pz-postchat-open{overflow:hidden}
 .pz-shell-who b{font-size:17px;color:#0A1E33;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pz-shell-who b.typing::after{content:"▍";color:#2793C8;animation:pzShellBlink 1s steps(1) infinite}
 @keyframes pzShellBlink{50%{opacity:0}}
-.pz-shell-who small{display:block;font-size:12px;color:#33506B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pz-shell-racha{flex:none;background:linear-gradient(150deg,rgba(254,193,77,.82),rgba(254,193,77,.6));border:1.5px solid rgba(255,255,255,.85);box-shadow:0 8px 32px rgba(10,30,51,.14),inset 0 1px 0 rgba(255,255,255,.75);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:800;color:#0A1E33;white-space:nowrap}
 .pz-shell-acts{display:flex;gap:6px;flex:none}
 .pz-shell-ic{width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.72);background:rgba(255,255,255,.52);-webkit-backdrop-filter:blur(16px) saturate(165%);backdrop-filter:blur(16px) saturate(165%);color:#0A1E33;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 32px rgba(10,30,51,.14),inset 0 1px 0 rgba(255,255,255,.75)}
 .pz-shell-ic svg{width:20px;height:20px}
@@ -4998,8 +4967,7 @@ body.pz-postchat-open{overflow:hidden}
    sobre fondo oscuro con el degradado solo; el velo .82 lo garantiza en
    cualquier fondo sin cambiar el look celeste). */
 .accept-pill,
-.hf-accept-bar,
-.ag-upload-btn {
+.hf-accept-bar {
   background: linear-gradient(135deg, rgba(39,147,200,.28), rgba(39,147,200,.12)), linear-gradient(rgba(255,255,255,.82), rgba(255,255,255,.82));
   -webkit-backdrop-filter: blur(18px) saturate(1.6);
   backdrop-filter: blur(18px) saturate(1.6);
@@ -5742,40 +5710,7 @@ body.pz-postchat-open{overflow:hidden}
 .pz-hoy-nota{display:flex;gap:10px;align-items:flex-start;margin-bottom:16px}
 .pz-hoy-nota img{width:32px;height:32px;border-radius:50%;background:#EAF5FB;object-fit:cover;object-position:top;border:2px solid #CDEAF7;flex:none;margin-top:1px}
 .pz-hoy-nota p{flex:1;font-size:14px;line-height:1.5;font-weight:600;color:var(--txt)}
-.pz-hoy-upload,.pz-hoy-semana,.pz-hoy-card,.pz-hoy-vacio,.pz-hoy-conserje{margin-bottom:12px}
-.pz-hoy-upload{background:linear-gradient(160deg,#FFF7E0,#fff 72%);border-color:#FEC14D}
-.pz-hoy-upload h4{font-size:16px;font-weight:800;color:#0A1E33;margin:0 0 4px}
-.pz-hoy-upload .sub{font-size:13px;line-height:1.5}
-.pz-hoy-upload-btn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;margin-top:11px;background:var(--cel);color:#fff;border:none;border-radius:14px;font-weight:900;font-size:15.5px;padding:14px;cursor:pointer;font-family:inherit}
-.pz-hoy-upload-btn:hover{background:#1B6FA0}
-.pz-hoy-upload-btn:active{transform:scale(.98)}
-.pz-hoy-upload-btn svg{width:21px;height:21px;flex:none}
-.pz-hoy-album-row{display:flex;align-items:center;gap:8px;margin-top:13px}
-.pz-hoy-album-label{font-size:12px;font-weight:900;color:#0A1E33;letter-spacing:.04em;margin-right:2px}
-.pz-hoy-album-label small{display:block;font-size:11px;font-weight:700;color:var(--mut);letter-spacing:0;margin-top:2px}
-.pz-hoy-album-thumb{width:44px;height:44px;border-radius:12px;overflow:hidden;border:1.5px solid var(--line);padding:0;flex:none;cursor:pointer;background:#EAF5FB}
-.pz-hoy-album-thumb-wrap{position:relative;flex:none}
-.pz-hoy-album-del{position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;background:#fff;color:#0A1E33;border:1.5px solid var(--line);font-size:15px;font-weight:900;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(10,30,51,.18);padding:0;font-family:inherit;z-index:2}
-.pz-hoy-album-confirm{margin-top:12px;background:#fff;border:1.5px solid #F5C344;border-radius:16px;padding:13px 15px;box-shadow:0 6px 18px rgba(10,30,51,.12)}
-.pz-hoy-album-confirm p{font-size:14.5px;line-height:1.4;color:#1D3A52}
-.pz-hoy-album-confirm p b{color:#0A1E33}
-.pz-hoy-album-confirm-row{margin-top:10px;display:flex;gap:8px}
-.pz-hoy-album-confirm-del{background:#D64545;color:#fff;border:0;border-radius:999px;padding:8px 16px;font-size:13.5px;font-weight:800;cursor:pointer;font-family:inherit}
-.pz-hoy-album-confirm-no{background:#EEF3F7;color:#33506B;border:0;border-radius:999px;padding:8px 16px;font-size:13.5px;font-weight:800;cursor:pointer;font-family:inherit}
-.pz-hoy-album-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.pz-hoy-album-add{width:44px;height:44px;border-radius:12px;border:2px dashed var(--cel);background:var(--cel-soft);color:#1B6FA0;font-size:22px;font-weight:900;line-height:1;flex:none;cursor:pointer;font-family:inherit}
-.pz-hoy-album-note{font-size:12px;color:var(--mut);font-weight:600;margin-top:9px;line-height:1.45}
-.pz-hoy-ring{display:flex;align-items:center;gap:15px}
-.pz-hoy-ring-svg{position:relative;width:76px;height:76px;flex:none}
-.pz-hoy-ring-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.pz-hoy-ring-num b{font-size:17px;color:#0A1E33;line-height:1.1}
-.pz-hoy-ring-num small{font-size:9px;font-weight:800;letter-spacing:.06em;color:var(--mut)}
-.pz-hoy-semana h4{font-size:16px;font-weight:800;color:#0A1E33;margin:0 0 4px}
-.pz-hoy-semana .sub{font-size:13px;line-height:1.5}
-.pz-hoy-dias{display:flex;gap:5px;margin-top:10px}
-.pz-hoy-dias span{flex:1;text-align:center;font-size:11px;font-weight:800;padding:6px 0;border-radius:999px;background:#EDF4FA;color:var(--mut)}
-.pz-hoy-dias span.done{background:var(--cel);color:#fff}
-.pz-hoy-dias span.today{background:#FEC14D;color:#0A1E33;outline:2px solid #0A1E33;outline-offset:-2px}
+.pz-hoy-card,.pz-hoy-conserje{margin-bottom:12px}
 .pz-hoy-card{padding:0;overflow:hidden}
 .pz-hoy-thumb{height:132px;position:relative;display:flex;align-items:flex-end;padding:10px 12px;overflow:hidden;cursor:pointer;background:#0A1E33}
 .pz-hoy-thumb-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -5792,8 +5727,6 @@ body.pz-postchat-open{overflow:hidden}
 .pz-hoy-actions{display:flex;gap:8px;margin-top:12px}
 .pz-hoy-actions .btn{flex:1;padding:12px 10px}
 .pz-hoy-ok{display:block;margin-top:10px;background:#E3F6EE;color:#0E6B4C;font-size:12.5px;font-weight:800;border-radius:10px;padding:8px 11px}
-.pz-hoy-vacio p{font-size:14px;line-height:1.6;font-weight:600}
-.pz-hoy-vacio .btn{margin-top:10px}
 .pz-hoy-conserje{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:14px 16px;cursor:pointer;font-family:inherit}
 .pz-hoy-conserje-ico{font-size:24px;line-height:1;flex:none}
 .pz-hoy-conserje-tx{flex:1;min-width:0}
@@ -5913,7 +5846,21 @@ body.pz-postchat-open{overflow:hidden}
 #inicioView .hf-stat b{display:inline;font-size:15px}
 /* (LOTE HOY-AVATAR-FEED · 8/11) Sin carita en el saludo: la fila lleva solo la burbuja. */#inicioView .pz-hoy-speech-row{margin-bottom:16px}
 #inicioView .pz-hoy-speech{flex:1;min-width:0;width:auto;margin-bottom:0;border:1px solid rgba(255,255,255,.75);box-shadow:0 6px 18px rgba(10,30,51,.10)}
-#inicioView .pz-hoy-upload,#inicioView .pz-hoy-semana,#inicioView .pz-hoy-card,#inicioView .pz-hoy-vacio,#inicioView .pz-hoy-conserje{margin-bottom:14px}
+#inicioView .pz-hoy-card,#inicioView .pz-hoy-conserje{margin-bottom:14px}
+/* (LOTE SIMPLIFICAR-APP · PARTE 2 · 9/11 · REDISEÑO SIMPLE: la semana en Hoy
+   como fila mini (bolas por día) + línea de insight. Estructura del mock
+   posty-app-simple (.week-mini/.day/.ball/.insight); vidrio de la app.) */
+.pz-semana-mini{background:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.75);border-radius:18px;padding:13px 10px;display:flex;justify-content:space-between;box-shadow:0 6px 18px rgba(10,30,51,.10);margin-bottom:14px}
+.pz-semana-dia{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;font-weight:900;color:var(--dim);width:40px}
+.pz-semana-bola{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;background:#EDF4FA;border:1.5px solid rgba(10,30,51,.08);color:var(--txt)}
+.pz-semana-dia.done .pz-semana-bola{background:#DDF5E3;border-color:transparent;color:var(--green)}
+.pz-semana-dia.today .pz-semana-bola{background:var(--yl);border-color:transparent}
+.pz-semana-dia.wait .pz-semana-bola{border-style:dashed;color:var(--dim)}
+.pz-semana-insight{display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.75);border-radius:18px;padding:14px 16px;margin-bottom:14px;font-size:14px;line-height:1.5;font-weight:700;color:var(--txt);box-shadow:0 6px 18px rgba(10,30,51,.10)}
+.pz-semana-insight svg{flex:0 0 20px;width:20px;height:20px;color:var(--cel);margin-top:1px}
+.pz-semana-insight p{margin:0}
+.pz-semana-insight b{font-weight:900}
+.pz-semana-insight .btn{margin-top:10px}
 
 /* ============ LOTE ANÁLISIS-GLASS v811 (PROVISIONAL) ============
    Solo color: todo glass transparente DENTRO de .st-wrap (pantalla
@@ -5938,10 +5885,6 @@ body.pz-postchat-open{overflow:hidden}
 .pz-hoy-hoy-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 2px 8px}
 .pz-hoy-hoy-head h3{font-size:12px;letter-spacing:.12em;color:#0A1E33;margin:0}
 .pz-hoy-hoy-pill{font-size:12px;font-weight:800;color:#2793C8;background:#EAF5FB;border-radius:999px;padding:4px 10px;white-space:nowrap}
-.pz-hoy-upload-btns{display:flex;gap:8px;margin-top:11px}
-.pz-hoy-upload-btns .pz-hoy-upload-btn{margin-top:0;flex:1;width:auto}
-.pz-hoy-album-est{display:block;font-size:10.5px;font-weight:700;color:#1B6FA0;margin-top:3px;max-width:64px;line-height:1.25}
-.pz-hoy-album-est-espera{color:var(--mut);font-weight:600}
 .pz-nivel-posty{display:flex;align-items:center;gap:12px;margin:4px 0 12px}
 .pz-nivel-ava{width:56px;height:56px;border-radius:50%;object-fit:cover;flex:none;border:2px solid #2793C8}
 .pz-nivel-why{font-size:14px;line-height:1.45;color:#0A1E33;margin:0}
