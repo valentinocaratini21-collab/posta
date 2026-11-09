@@ -16964,7 +16964,7 @@ async function autoArmWeek(uid, tag) {
       const weekKey = mondayKeyOf(tzToday(tz));
       const feedDrafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND media_type = 'image'
         AND status IN ('draft','scheduled') AND created_at > datetime('now', '-3 days')
-        ORDER BY created_at ASC`).all(uid, weekKey);
+        ORDER BY created_at ASC`).all(uid);
       if (feedDrafts.length) {
         let needRev = 0;
         try { needRev = trainingWheelsActive(uid) ? 1 : 0; } catch (e) {}
@@ -33164,7 +33164,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v834';
+const BUILD_ID = '20261105-v835';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
