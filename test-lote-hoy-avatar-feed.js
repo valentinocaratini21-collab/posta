@@ -5,8 +5,10 @@
 //    de caption DEBAJO de la imagen, dentro de la .hf-cell; 3) el
 //    encabezado .pz-shell-head queda fijo al scrollear.
 // Mock aprobado por Valentino 8/11 20:16 («Si, armalo asi»).
-// Paridad ES+EN. La carta velada (Variante B) y las demás tiles NO se
-// tocan. El texto del saludo queda byte-idéntico (lote saludo-hoy-honesto).
+// Paridad ES+EN. La carta velada (Variante B) la SACÓ el lote
+// SACAR-CARTA-VELADA (9/11, orden Valentino 00:49): el próximo SIEMPRE
+// rinde abierto. Las demás tiles NO se tocan. El texto del saludo queda
+// byte-idéntico (lote saludo-hoy-honesto).
 // Uso: node test-lote-hoy-avatar-feed.js (desde la raíz del árbol)
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -81,10 +83,10 @@ const tileSrc = extractFn(app, 'function homeTileHTML');
 ok(!!tileSrc, 'extrae homeTileHTML');
 ok(!tileSrc.includes('stripR1'), 'fuente: stripR1 desapareció (era el strip dentro de la tile)');
 ok(tileSrc.includes('capR1'), 'fuente: capR1 presente (la banda)');
-ok(cnt(tileSrc, /hf-tile-cap/g) === 3, 'fuente: hf-tile-cap x3 (def capR1 + uso ${capR1} + rama B)');
+ok(cnt(tileSrc, /hf-tile-cap/g) === 2, 'fuente (LOTE SACAR-CARTA-VELADA): hf-tile-cap x2 (def capR1: pill + fallback; la rama B velada se fue)');
 ok(cnt(tileSrc, /<span class="hf-strip">/g) === 1, 'fuente: UN solo <span class="hf-strip"> en homeTileHTML (el retorno normal; las 2 ramas abiertas ya no lo tienen)');
-ok(tileSrc.includes('hf-cell-velada'), 'fuente: la carta velada sigue (hf-cell-velada)');
-ok(tileSrc.includes('<span class="hf-carta-contenido"><span class="hf-carta-proximo">'), 'fuente: la velada conserva su píldora dentro del contenido');
+ok(!tileSrc.includes('hf-cell-velada'), 'fuente (LOTE SACAR-CARTA-VELADA): la carta velada se fue (hf-cell-velada ×0)');
+ok(!tileSrc.includes('hf-carta-contenido') && !tileSrc.includes('hf-carta-proximo'), 'fuente (LOTE SACAR-CARTA-VELADA): sin contenido ni píldora de la velada');
 ok(tileSrc.includes('data-pz-cuenta-sale'), 'fuente: la cuenta (data-pz-cuenta-sale) sigue en las ramas abiertas');
 ok(css.includes('.hf-tile-cap{display:block;padding:6px 2px 2px}'), 'CSS: .hf-tile-cap base presente');
 ok(css.includes('.hf-tile-cap .hf-chip{position:static;'), 'CSS: el chip dentro de la banda es estático (no absoluto sobre la foto)');
@@ -140,7 +142,7 @@ ok(hInicio.includes('Café Aroma') && hInicio.includes('@cafearoma'), 'render en
 ok(H('chat') === '', 'render encabezado(chat): vacío (el chat no se afecta)');
 
 /* ---------- 5. VM: tiles del próximo (ES y EN) ---------- */
-console.log('— 5. VM: tiles del próximo, velada y demás tiles —');
+console.log('— 5. VM: tiles del próximo, abierta y demás tiles —');
 const tileCtx = {
   console,
   ME: { lang: 'es' },
@@ -181,14 +183,17 @@ ok(tA.includes('hf-carta-destellos'), 'rama A ES: los destellos siguen');
 ok(tA.includes('data-post-id="902"'), 'rama A ES: data-post-id + handlers intactos');
 ok(tA.includes('<img src="foto-man.jpg"'), 'rama A ES: la imagen sigue siendo la foto real del posteo');
 
-// (b) Rama B — el próximo de HOY, ABIERTO (ES).
+// (b) Rama B — el próximo de HOY (ES): la misma rama única,
+// pill de salida + cuenta (LOTE SACAR-CARTA-VELADA 9/11: el chip
+// «Hoy · 19:00» y la píldora «✦ El próximo» se fueron con la velada).
 const tB = T({ kind: 'oculta', openHoy: true, hoy: true, post: postHoy }, 0);
 ok(!!tB, 'rama B ES: rinde HTML');
 ok(!tB.includes('hf-strip'), 'rama B ES: ningún .hf-strip');
 ok(tB.includes('hf-tile-cap'), 'rama B ES: banda .hf-tile-cap presente');
-ok(tB.includes('✦ El próximo'), 'rama B ES: la banda trae la píldora «✦ El próximo»');
-ok(tB.includes('<span class="hf-chip-day">Hoy</span>'), 'rama B ES: el chip de la banda dice «Hoy»');
-ok(tB.includes('<span class="hf-chip-hm"> · 19:00</span>'), 'rama B ES: el chip de la banda dice «· 19:00»');
+ok(tB.includes('✦ Se postea hoy · 19:00'), 'rama B ES: la banda trae la píldora «✦ Se postea hoy · 19:00»');
+ok(tB.includes('data-pz-cuenta-sale'), 'rama B ES: la cuenta viaja con la banda (data-pz-cuenta-sale)');
+ok(tB.includes('sale en'), 'rama B ES: la cuenta dice «sale en …»');
+ok(!tB.includes('hf-chip-day'), 'rama B ES: sin chip «Hoy» en la banda (la pill ya dice el día y la hora)');
 ok(tB.includes('hf-hoy-badge'), 'rama B ES: la píldora azul HOY sigue arriba a la izquierda');
 ok(tB.includes('hf-carta-destellos'), 'rama B ES: los destellos siguen');
 
@@ -200,20 +205,25 @@ ok(tAEn.includes('✦ Goes out tomorrow · 07:00 PM'), 'rama A EN: la banda trae
 ok(tAEn.includes('goes out in'), 'rama A EN: la cuenta dice «goes out in …»');
 const tBEn = T({ kind: 'oculta', openHoy: true, hoy: true, post: postHoy }, 0);
 ok(!tBEn.includes('hf-strip') && tBEn.includes('hf-tile-cap'), 'rama B EN: sin strip, con banda');
-ok(tBEn.includes('✦ Next up'), 'rama B EN: la banda trae «✦ Next up»');
-ok(tBEn.includes('<span class="hf-chip-day">Today</span>'), 'rama B EN: el chip dice «Today»');
-ok(tBEn.includes('7:00 PM'), 'rama B EN: el chip dice «7:00 PM»');
+ok(tBEn.includes('✦ Goes out today · 07:00 PM'), 'rama B EN: la banda trae «✦ Goes out today · 07:00 PM»');
+ok(tBEn.includes('goes out in'), 'rama B EN: la cuenta dice «goes out in …»');
+ok(!tBEn.includes('hf-chip-day'), 'rama B EN: sin chip «Today» en la banda');
 tileCtx.ME.lang = 'es';
 
-// (d) La carta velada NO se toca (Variante B).
+// (d) La carta antes velada AHORA rinde ABIERTA (Variante B eliminada).
+// (LOTE SACAR-CARTA-VELADA · 9/11 · orden Valentino 00:49: sin velo, nunca.)
 const tV = T({ kind: 'oculta', post: postMan }, 0);
-ok(!!tV, 'velada ES: rinde HTML');
-ok(tV.includes('hf-cell-velada'), 'velada ES: sigue siendo hf-cell-velada');
-ok(tV.includes('<span class="hf-carta-proximo">✦ El próximo</span>'), 'velada ES: su píldora «✦ El próximo» intacta');
-ok(tV.includes('hf-cuenta-abre') && tV.includes('faltan'), 'velada ES: su cuenta «faltan …» intacta');
-ok(tV.includes('Se destapa a las <b>00:00</b>'), 'velada ES: «Se destapa a las 00:00» intacto');
-ok(!tV.includes('hf-tile-cap'), 'velada ES: SIN banda (la banda es solo de las abiertas)');
-ok(!tV.includes('hf-strip'), 'velada ES: sin strip (nunca lo tuvo)');
+ok(!!tV, 'abierta ES: rinde HTML');
+ok(!tV.includes('hf-cell-velada'), 'abierta ES: sin celda velada');
+ok(tV.includes('<img src="foto-man.jpg"'), 'abierta ES: la foto SE VE');
+ok(tV.includes('✦ Se postea mañana · 19:00'), 'abierta ES: la banda trae la píldora «✦ Se postea mañana · 19:00»');
+ok(tV.includes('data-pz-cuenta-sale'), 'abierta ES: la cuenta es hasta que SALE');
+ok(tV.includes('sale en'), 'abierta ES: la cuenta dice «sale en …»');
+ok(!tV.includes('Se destapa'), 'abierta ES: sin «Se destapa»');
+ok(!tV.includes('Posty lo está cuidando'), 'abierta ES: sin leyenda');
+ok(tV.includes('hf-tile-cap'), 'abierta ES: CON banda (la banda es de las abiertas, y ahora todas lo son)');
+ok(!tV.includes('hf-strip'), 'abierta ES: sin strip (nunca lo tuvo)');
+ok(tV.includes('data-post-id="902"'), 'abierta ES: data-post-id (abre el detalle, no el ritual)');
 
 // (e) Ningún otro tipo de tile cambió.
 const tN = T({ kind: 'post', post: postHoy }, 1);
@@ -255,19 +265,19 @@ try { require.resolve('express', { paths: [__dirname] }); expressOk = true; } ca
     ok(up, 'boot levanta (PID ' + pid + ')');
     if (up) {
       const ver = JSON.parse((await get('/api/version')).body);
-      ok(ver.build === '20261105-v825', '/api/version 20261105-v825 (estampado)');
-      const appS = await get('/app.js?v=559');
+      ok(ver.build === '20261105-v826', '/api/version 20261105-v825 (estampado)');
+      const appS = await get('/app.js?v=560');
       ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=559 servido = árbol');
       ok(!appS.body.includes('pz-hoy-speech-ava'), 'servido: sin carita en el saludo');
       ok(appS.body.includes('hf-tile-cap'), 'servido: banda hf-tile-cap presente');
-      const stS = await get('/styles.css?v=20261211');
+      const stS = await get('/styles.css?v=20261212');
       ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261211 servido = árbol');
       ok(stS.body.includes('.pz-shell-head{position:sticky;top:0;z-index:50'), 'servido: encabezado sticky');
       ok(!stS.body.includes('pz-hoy-speech-ava'), 'servido: sin regla de carita en el CSS');
       const idx = await get('/?cb=lote-hoy-avatar-feed');
-      ok(idx.body.includes('app.js?v=559') && idx.body.includes('styles.css?v=20261211'), 'index ES servido ?v=557 + styles?v=20261211');
+      ok(idx.body.includes('app.js?v=560') && idx.body.includes('styles.css?v=20261212'), 'index ES servido ?v=557 + styles?v=20261211');
       const idxEn = await get('/en/?cb=lote-hoy-avatar-feed');
-      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261211'), 'index EN servido styles?v=20261211');
+      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261212'), 'index EN servido styles?v=20261211');
       const del = await new Promise((res) => { const q = http.request({ host: '127.0.0.1', port: PORT, path: '/api/album/1', method: 'DELETE' }, (r) => res(r.statusCode)); q.on('error', () => res(0)); q.end(); });
       ok(del === 401, 'DELETE sin sesión 401 (el servidor es el real)');
     }

@@ -1,5 +1,9 @@
 'use strict';
 /* test-lote-ritual-siguiente.js — LOTE RITUAL-SIGUIENTE · 7/11
+ * (LOTE SACAR-CARTA-VELADA · 9/11 · orden Valentino 00:49: la carta
+ * velada y la línea de destape se fueron; el próximo SIEMPRE rinde
+ * abierto. Este lote queda como registro del destape por reloj, ya
+ * retirado; el ritual en sí — aviso 9:00, confirmar/cambiar — sigue.)
  * Directiva Valentino 7/11 ~17:07 (captura del home): «Apenas sale el
  * posteo del día, ya tiene que aparecer el próximo posteo oculto, y que
  * lo pueden ver a las 00:00». Concreción de RITUAL FECHA+HORA+MÁGICA.
@@ -230,10 +234,10 @@ t(typeof sb.pzRitualCuentaTxt === 'function' && typeof sb.hfCuentaAbreTick === '
 
 // ---------- Marcadores del lote ----------
 t(APP.includes('LOTE RITUAL-SIGUIENTE'), 'app.js lleva el marcador LOTE RITUAL-SIGUIENTE');
-t(APP.includes('hf-carta-destapa') && APP.includes('Se destapa a las <b>00:00</b>')
-  && APP.includes('It opens at <b>00:00</b>'), 'app.js lleva la línea de destape ES+EN');
+t(!APP.includes('hf-carta-destapa') && !APP.includes('Se destapa a las <b>00:00</b>')
+  && !APP.includes('It opens at <b>00:00</b>'), 'app.js YA NO lleva la línea de destape ES+EN (LOTE SACAR-CARTA-VELADA)');
 t(APP.includes('pendienteHoy'), 'app.js lleva el freno pendienteHoy');
-t(CSS.includes('.hf-carta-destapa'), 'styles.css lleva la regla .hf-carta-destapa');
+t(!CSS.includes('.hf-carta-destapa'), 'styles.css YA NO lleva la regla .hf-carta-destapa (LOTE SACAR-CARTA-VELADA)');
 t(SRV.includes("if (publicadoHoy)") && SRV.includes("abre_hora: '00:00'"),
   'server.js intacto: el próximo del ritual sigue gateado por publicadoHoy (00:00)');
 
@@ -274,8 +278,9 @@ t(tilesA.length === 3 && tilesA[0].kind === 'oculta' && tilesA[0].post.id === 52
 const htmlA = sb.homeTileHTML(tilesA[0], 0);
 // (LOTE REDISEÑO R1 · 8/11) La decisión 8/11 00:05 (cartita SIN velo) SUPERSEDE
 // el destape «a las 00:00» del 6/11 SOLO para el posteo de un día futuro:
-// la carta de mañana va ABIERTA (foto, pill, cuenta de salida). La carta de
-// HOY sin elegir sigue velada (eso lo cubre el caso C del atascado).
+// la carta de mañana va ABIERTA (foto, pill, cuenta de salida).
+// (LOTE SACAR-CARTA-VELADA · 9/11 · orden Valentino 00:49) SUPERSEDE R1 en
+// lo de hoy: la carta de HOY sin elegir TAMBIÉN va ABIERTA. Sin velo, nunca.
 t(htmlA.includes('data-post-id="521"') && htmlA.includes('<img') && !htmlA.includes('hf-carta-oculta') && !htmlA.includes('hf-carta-velo'),
   'A: la carta 521 es ABIERTA (R1: foto, data-post-id, sin velo)');
 t(htmlA.includes('Se postea mañana') && htmlA.includes('17:00'),
@@ -350,15 +355,16 @@ console.log('— E: 519 programado para las 17:00, la carta sigue siendo la de h
 setNow('2026-11-06T21:30:00.000Z'); // 16:30 EST
 const P519hoy = Object.assign({}, P519s, { created_at: '2026-11-06T12:00:00.000Z' }); // creado hoy: no destapado
 const tilesE = compose([{ p: P519hoy, ymd: '2026-11-06' }, { p: P521, ymd: '2026-11-07' }], [P518], [P519hoy, P521, P518]);
-t(tilesE[0].kind === 'oculta' && tilesE[0].post.id === 519 && tilesE[0].openHoy === false,
-  'E: antes de las 17:00 la carta es la de hoy, velada (openHoy false)');
+t(tilesE[0].kind === 'oculta' && tilesE[0].post.id === 519 && tilesE[0].openHoy === true,
+  'E: antes de las 17:00 la carta es la de hoy, ABIERTA (openHoy true — LOTE SACAR-CARTA-VELADA)');
 const htmlE = sb.homeTileHTML(tilesE[0], 0);
-t(htmlE.includes('hf-carta-oculta') && htmlE.includes('Hoy') && htmlE.includes('17:00'),
-  'E: la carta de hoy dice «Hoy · 17:00»');
+t(htmlE.includes('Se postea hoy · 17:00') && htmlE.includes('<img') && htmlE.includes('data-post-id="519"')
+  && !htmlE.includes('hf-carta-oculta') && !htmlE.includes('hf-carta-velo'),
+  'E: la carta de hoy dice «Se postea hoy · 17:00» (foto + pill de salida, sin velo)');
 t(!htmlE.includes('hf-carta-destapa'),
   'E: la carta de hoy NO lleva línea de destape (su 00:00 ya pasó: no se inventa)');
-t(htmlE.includes('data-pz-abrir-ritual'),
-  'E: la carta de hoy abre el ritual (entrada intacta)');
+t(htmlE.includes('data-post-id="519"') && !htmlE.includes('data-pz-abrir-ritual'),
+  'E (LOTE SACAR-CARTA-VELADA): la carta de hoy YA NO abre el ritual (abre el detalle del posteo; el ritual sigue por el aviso de las 9:00 y #/app/ritual)');
 
 // ---------- F: sin posteo hoy, la carta del próximo aparece igual ----------
 console.log('— F: sin posteo hoy, el próximo aparece (nada que esperar)');
@@ -379,7 +385,7 @@ t(htmlG.includes('data-post-id="521"') && htmlG.includes('<img') && !htmlG.inclu
 t(!htmlG.includes('hf-carta-destapa'),
   'G: la carta abierta NO lleva línea de destape (ya se destapó)');
 t(sb.pzProximoYaAbierto(P521old, Date.parse('2026-11-07T04:59:00.000Z'), 'America/New_York') === false,
-  'G: un minuto antes de las 00:00 sigue velado (el destape es a las 00:00, no antes)');
+  'G: un minuto antes de las 00:00 el ritual todavía no lo marca abierto (pzProximoYaAbierto false; el destape del ritual es a las 00:00, no antes)');
 // El tick de 1 s fuerza el vivo al llegar a 0.
 liveTickCalls.length = 0;
 const cuentaEl = {
@@ -409,7 +415,7 @@ t(tilesH.every((tl) => tl.kind !== 'oculta'),
 console.log('— I: la carta es una tarjeta, no un posteo');
 t(!htmlA.includes('<button') && !htmlA.includes('Sale así') && !htmlA.includes('data-pz-ritual-ok')
   && !htmlA.includes('aprobar') && !htmlA.includes('publicar'),
-  'I: la carta velada no tiene botón, ni «Sale así», ni publicar (jamás publica sola)');
+  'I: la carta no tiene botón, ni «Sale así», ni publicar (jamás publica sola)');
 t(tilesA[0].kind === 'oculta' && !('publish' in tilesA[0]),
   'I: el tile oculta no lleva acción de publicar en su estructura');
 

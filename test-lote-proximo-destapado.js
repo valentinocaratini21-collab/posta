@@ -283,16 +283,16 @@ t(typeof sb.pzProximoYaAbierto === 'function'
   && sb.pzProximoYaAbierto(P519ayer, Date.parse('2026-11-06T21:59:00.000Z'), 'America/New_York') === true,
   'H: fail-closed sin created_at o creado hoy; abierto si creado antes de medianoche');
 
-// ---------- T1: 16:59, próximo = hoy, creado hoy → velado con cuenta de las 9:00 (v726 intacto) ----------
-console.log('— T1: 16:59, próximo de hoy sin elegir sigue velado');
+// ---------- T1: 16:59, próximo = hoy, creado hoy → ABIERTO (LOTE SACAR-CARTA-VELADA 9/11: sin velo, nunca) ----------
+console.log('— T1: 16:59, próximo de hoy sin elegir YA VA ABIERTO');
 setNow('2026-11-06T21:59:00.000Z');
 lsStore.clear();
 const tilesT1 = compose([{ p: P519hoy, ymd: '2026-11-06' }, { p: P521, ymd: '2026-11-07' }], [P518], RIT_PEND);
-t(tilesT1.length === 2 && tilesT1[0].kind === 'oculta' && tilesT1[0].post.id === 519 && tilesT1[0].openHoy === false,
-  'T1: a las 16:59 la grilla es [oculta 519, publicado 518], carta de hoy velada');
+t(tilesT1.length === 2 && tilesT1[0].kind === 'oculta' && tilesT1[0].post.id === 519 && tilesT1[0].openHoy === true,
+  'T1: a las 16:59 la grilla es [oculta 519, publicado 518], carta de hoy ABIERTA');
 const htmlT1 = sb.homeTileHTML(tilesT1[0], 0);
-t(htmlT1.includes('hf-carta-oculta') && !htmlT1.includes('data-post-id') && htmlT1.includes('Hoy'),
-  'T1: la carta de hoy es velada, sin data-post-id, chapita «Hoy»');
+t(htmlT1.includes('Se postea hoy · 17:00') && htmlT1.includes('data-post-id="519"') && htmlT1.includes('<img') && !htmlT1.includes('hf-carta-oculta'),
+  'T1: la carta de hoy es ABIERTA (foto + pill de salida + data-post-id, sin velo)');
 t(!htmlT1.includes('data-pz-cuenta-abre'),
   'T1: la carta de HOY no lleva cuenta hasta las 00:00 (la medianoche de hoy ya pasó)');
 
@@ -401,8 +401,8 @@ t(!htmlT10.includes('buen día') && !htmlT10.includes('good morning') && htmlT10
   'T10: la pantalla velada NO dice «buen día» — solo «te traje tu paquete de hoy»');
 t((APP.match(/'buen día'/g) || []).length === 1 && (APP.match(/'good morning'/g) || []).length === 1,
   'T10: «buen día» / «good morning» quedan UNA sola vez en app.js (el saludo del ritual revelado)');
-t(CSS.includes('.pz-dorso:only-of-type') && CSS.includes('.hf-cuenta-abre'),
-  'T10: CSS con regla del dorso único y estilo de la cuenta');
+t(CSS.includes('.pz-dorso:only-of-type') && !CSS.includes('.hf-cuenta-abre'),
+  'T10 (LOTE SACAR-CARTA-VELADA): CSS con regla del dorso único; la cuenta del feed ya no es .hf-cuenta-abre (es data-pz-cuenta-sale)');
 t(RM.includes('created_at: String(post.created_at') && RM.includes('scheduled_at: String(post.scheduled_at'),
   'T10: cardOf (ritual-manana.js) devuelve created_at + scheduled_at');
 t(SRV.includes('cardOf(shownPost || rec'),

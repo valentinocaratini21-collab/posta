@@ -18,8 +18,12 @@
 // Uso: node test-lote-post-oculto-respira.js (desde el scratch)
 // M121: el boot del servidor real en DB temporal ES la prueba de carga.
 // FIX POSTY-DENTRO 6/11 ~21:00 (Valentino «Posty deberia estar dentro de la cartita»):
-// la cara va DENTRO del tile (C7i/C7i2/C7m) + styles?v=20261172 en ambos index (C8i)
-// + app.js?v=503 solo ES (C8b). Ahora 61 asserts (58 + 3 nuevas).
+// la cara va DENTRO del tile (C7i/C7i2/C7m) + styles?v=20261212 en ambos index (C8i)
+// + app.js?v=560 solo ES (C8b). Ahora 61 asserts (58 + 3 nuevas).
+// (LOTE SACAR-CARTA-VELADA · 9/11 · orden Valentino 00:49 «Esto esta mal. Sacalo»:
+// la carta del FEED ya NO es velada: la C7 entera pasa a la carta ABIERTA
+// (foto + pill de salida + cuenta hasta que SALE); el paquete velado SIGUE
+// en el RITUAL (tardecita 17:00–00:00, cuenta hasta las 00:00). C8b/C8i re-pineados por el re-estampador v826 (560/20261212).)
 'use strict';
 const fs = require('fs');
 const vm = require('vm');
@@ -237,37 +241,37 @@ const countDorso = (html) => (html.match(/<i class="pz-dorso">/g) || []).length;
   };
   let htmlFeed = '';
   try { htmlFeed = String(homeTileHTML(tileFut, 0)); } catch (e) { htmlFeed = 'ERROR ' + (e && e.message); }
-  t('C7a: la carta del feed es velada (hf-carta-oculta + velo)', htmlFeed.includes('hf-carta-oculta') && htmlFeed.includes('hf-carta-velo'), htmlFeed.slice(0, 200));
-  t('C7b: la carta del feed RESPIRA (clase hf-carta-respira)', htmlFeed.includes('hf-carta-respira'), htmlFeed.slice(0, 300));
-  t('C7c: la carta del feed lleva la cuenta «para ver tu próximo posteo» (.hf-cuenta-abre, sin «para las 00:00»)', htmlFeed.includes('hf-cuenta-abre') && htmlFeed.includes('para ver tu próximo posteo') && !htmlFeed.includes('para las 00:00'), htmlFeed.slice(0, 500));
-  t('C7d: la cuenta del feed apunta a la medianoche (data-pz-cuenta-abre)', htmlFeed.includes('data-pz-cuenta-abre="' + medianocheManana + '"'), htmlFeed.slice(0, 500));
+  t('C7a (LOTE SACAR-CARTA-VELADA): la carta del feed es ABIERTA (foto visible + data-post-id + borde dorado, sin velo)', htmlFeed.includes('data-post-id="521"') && htmlFeed.includes('<img') && htmlFeed.includes('hf-carta-magia') && !htmlFeed.includes('hf-carta-oculta') && !htmlFeed.includes('hf-carta-velo'), htmlFeed.slice(0, 200));
+  t('C7b (LOTE SACAR-CARTA-VELADA): la carta del feed YA NO respira (hf-carta-respira ×0; el latido quedó solo en el ritual)', !htmlFeed.includes('hf-carta-respira'), htmlFeed.slice(0, 300));
+  t('C7c (LOTE SACAR-CARTA-VELADA): la carta lleva la cuenta hasta que SALE («sale en …», data-pz-cuenta-sale; sin «para ver tu próximo posteo»)', htmlFeed.includes('data-pz-cuenta-sale="2026-11-10T22:00:00.000Z"') && htmlFeed.includes('sale en') && !htmlFeed.includes('para ver tu próximo posteo') && !htmlFeed.includes('hf-cuenta-abre'), htmlFeed.slice(0, 500));
+  t('C7d (LOTE SACAR-CARTA-VELADA): la cuenta apunta a la hora REAL de salida (data-pz-cuenta-sale 22:00, no a la medianoche)', htmlFeed.includes('data-pz-cuenta-sale="2026-11-10T22:00:00.000Z"') && !htmlFeed.includes('data-pz-cuenta-abre'), htmlFeed.slice(0, 500));
   t('C7e: la carta del feed NO abre a las 9:00 (sin «a las 9:00» ni «para las 9:00»; la chapita con la hora real 17:00 sí va)', !/(^|[^0-9])9:00/.test(htmlFeed), htmlFeed.slice(0, 400));
-  t('C7f: VARIANTE B — la carta es DESTACADA a todo lo ancho (hf-cell-velada)', htmlFeed.includes('hf-cell hf-cell-velada'), htmlFeed.slice(0, 200));
-  t('C7g: VARIANTE B — halo dorado que respira (hf-carta-halo envuelve la carta)', htmlFeed.includes('hf-carta-halo'), htmlFeed.slice(0, 300));
-  t('C7h: VARIANTE B — 7 destellos ✦ (no 4)', (htmlFeed.match(/<i>✦<\/i>/g) || []).length === 7, 'destellos=' + (htmlFeed.match(/<i>✦<\/i>/g) || []).length);
-  t('C7i: POSTY DENTRO — la cara va DENTRO de la carta (hf-carta-posty con ai-avatar.png) + «Posty lo está cuidando ✨» debajo', htmlFeed.includes('hf-carta-posty') && htmlFeed.includes('ai-avatar.png') && htmlFeed.includes('Posty lo está cuidando ✨'), htmlFeed.slice(-400));
-  t('C7i2: POSTY DENTRO — Posty está dentro del tile (después del chip, antes de la leyenda; 4 cierres </span> entre Posty y la leyenda: posty + contenido + tile + halo; NO como hermano fuera de la carta)', htmlFeed.indexOf('hf-carta-posty') > htmlFeed.indexOf('hf-chip') && htmlFeed.indexOf('hf-carta-posty') < htmlFeed.indexOf('hf-carta-leyenda') && (htmlFeed.slice(htmlFeed.indexOf('hf-carta-posty'), htmlFeed.indexOf('hf-carta-leyenda')).match(/<\/span>/g) || []).length === 4, htmlFeed.slice(-500));
-  t('C7j: VARIANTE B — contenido centrado (hf-carta-contenido: píldora, cuenta, chip en ese orden)', htmlFeed.includes('hf-carta-contenido') && htmlFeed.indexOf('hf-carta-proximo') < htmlFeed.indexOf('hf-cuenta-abre') && htmlFeed.indexOf('hf-cuenta-abre') < htmlFeed.indexOf('hf-chip'), htmlFeed.slice(0, 600));
-  t('C7k: VARIANTE B — la cuenta es la protagonista en 3 líneas (faltan / número en <b> / para ver…)', htmlFeed.includes('faltan<br><b>') && htmlFeed.includes('</b><br>para ver tu próximo posteo'), htmlFeed.slice(0, 600));
-  t('C7l: VARIANTE B — la celda entera abre el ritual (data-pz-abrir-ritual en la celda, tocar Posty también)', htmlFeed.includes('hf-cell hf-cell-velada" data-hf-filtro="pendientes" data-pz-abrir-ritual="1"'), htmlFeed.slice(0, 200));
-  t('C7m: POSTY DENTRO — CSS cierra el tamaño (72px fijo + max, sin margen negativo; la cara no puede salir gigante)', CSS.includes('.hf-carta-posty{display:block;width:72px;height:72px;max-width:72px;max-height:72px') && !CSS.includes('margin:-36px') && CSS.includes('.hf-carta-posty img{width:100%;height:100%;max-width:72px;max-height:72px') && CSS.includes('.hf-cell-velada .hf-carta-contenido{padding:26px 20px 28px}'));
+  t('C7f (LOTE SACAR-CARTA-VELADA): la celda YA NO es destacada ancha (hf-cell-velada ×0)', !htmlFeed.includes('hf-cell-velada'), htmlFeed.slice(0, 200));
+  t('C7g (LOTE SACAR-CARTA-VELADA): sin halo (hf-carta-halo ×0)', !htmlFeed.includes('hf-carta-halo'), htmlFeed.slice(0, 300));
+  t('C7h (LOTE SACAR-CARTA-VELADA): 4 destellos ✦ (los de la magia del borde, no 7)', (htmlFeed.match(/<i>✦<\/i>/g) || []).length === 4, 'destellos=' + (htmlFeed.match(/<i>✦<\/i>/g) || []).length);
+  t('C7i (LOTE SACAR-CARTA-VELADA): sin Posty dentro ni leyenda (sin hf-carta-posty, sin ai-avatar.png, sin «Posty lo está cuidando»)', !htmlFeed.includes('hf-carta-posty') && !htmlFeed.includes('ai-avatar.png') && !htmlFeed.includes('Posty lo está cuidando ✨'), htmlFeed.slice(-400));
+  t('C7i2 (LOTE SACAR-CARTA-VELADA): la cara ya no va dentro del tile (hf-carta-posty ×0, hf-carta-leyenda ×0)', !htmlFeed.includes('hf-carta-posty') && !htmlFeed.includes('hf-carta-leyenda'), htmlFeed.slice(-500));
+  t('C7j (LOTE SACAR-CARTA-VELADA): la banda trae pill + cuenta de salida (hf-tile-cap: «Se postea mañana · 17:00» + «sale en …»)', htmlFeed.includes('hf-tile-cap') && htmlFeed.indexOf('Se postea mañana · 17:00') < htmlFeed.indexOf('sale en'), htmlFeed.slice(0, 600));
+  t('C7k (LOTE SACAR-CARTA-VELADA): la cuenta es «sale en …» en la banda (no «faltan / número / para ver…»)', htmlFeed.includes('sale en') && !htmlFeed.includes('faltan<br><b>') && !htmlFeed.includes('para ver tu próximo posteo'), htmlFeed.slice(0, 600));
+  t('C7l (LOTE SACAR-CARTA-VELADA): la celda YA NO abre el ritual (sin data-pz-abrir-ritual; abre el detalle del posteo)', !htmlFeed.includes('data-pz-abrir-ritual') && htmlFeed.includes('data-post-id="521"'), htmlFeed.slice(0, 200));
+  t('C7m (LOTE SACAR-CARTA-VELADA): CSS sin regla de Posty dentro (hf-carta-posty ×0, hf-carta-leyenda ×0; la cara ya no va dentro de la carta)', !CSS.includes('.hf-carta-posty') && !CSS.includes('.hf-carta-leyenda'));
 
   // --- C8) M78 + estática ---
   const fns = ['pzTzOffsetMs', 'pzDiaInicioMs', 'pzRitualAbreFecha', 'hfCuentaAbreTick'];
   t('C8a: M78 — las 4 funciones nuevas existen definidas en el bundle', fns.every((f) => typeof S[f] === 'function'), fns.filter((f) => typeof S[f] !== 'function').join(','));
-  t('C8b: M78 — ?v= bumpeado SOLO en ES (503) y EN sin app.js', IDX_ES.includes('app.js?v=503') && !IDX_ES.includes('app.js?v=502') && !IDX_EN.includes('app.js?v='));
-  t('C8c: CSS — halo + cuenta + día-en existen; keyframes pzRespira/hfRespira existen; VARIANTE B (celda ancha, halo, 7 destellos, Posty, cuenta dorada)',
-    CSS.includes('.pz-ritual-pack-velo.pz-respira') && CSS.includes('@keyframes pzRespira') && CSS.includes('@keyframes hfRespira')
-    && CSS.includes('.hf-tile.hf-carta-respira') && CSS.includes('.hf-cuenta-abre') && CSS.includes('.pz-ritual-dia-en')
-    && CSS.includes('.pz-dorso:only-of-type')
-    && CSS.includes('.hf-cell-velada{grid-column:1/-1') && CSS.includes('.hf-carta-halo::before') && CSS.includes('.hf-carta-posty') && CSS.includes('.hf-carta-leyenda') && CSS.includes('.hf-carta-contenido')
-    && CSS.includes('.hf-cell-velada .hf-carta-destellos i:nth-child(7)') && CSS.includes('.hf-cell-velada .hf-cuenta-abre b{color:#FEC14D'));  
-  t('C8d: CSS — reduced-motion apaga el latido (ritual + feed)', CSS.includes('.pz-ritual-pack-velo.pz-respira,.pz-ritual-pack-velo.pz-respira .pz-dorso{animation:none}') && CSS.includes('.hf-tile.hf-carta-respira::before{animation:none'));
+  t('C8b: M78 — ?v= bumpeado SOLO en ES (560) y EN sin app.js', IDX_ES.includes('app.js?v=560') && !IDX_ES.includes('app.js?v=559') && !IDX_EN.includes('app.js?v='));
+  t('C8c (LOTE SACAR-CARTA-VELADA): CSS — el ritual conserva su velo (pz-ritual-pack-velo, pz-dorso, día-en, keyframes pzRespira) y la carta conserva su magia (hf-carta-magia, destellos); la Variante B se fue del CSS',
+    CSS.includes('.pz-ritual-pack-velo.pz-respira') && CSS.includes('@keyframes pzRespira')
+    && CSS.includes('.pz-dorso:only-of-type') && CSS.includes('.pz-ritual-dia-en')
+    && CSS.includes('.hf-carta-magia') && CSS.includes('.hf-carta-destellos')
+    && !CSS.includes('@keyframes hfRespira') && !CSS.includes('.hf-tile.hf-carta-respira') && !CSS.includes('.hf-cuenta-abre')
+    && !CSS.includes('.hf-cell-velada') && !CSS.includes('.hf-carta-halo') && !CSS.includes('.hf-carta-posty') && !CSS.includes('.hf-carta-leyenda') && !CSS.includes('.hf-carta-contenido'));
+  t('C8d (LOTE SACAR-CARTA-VELADA): CSS — reduced-motion global apaga todo latido (regla *,*::before,*::after; el feed ya no tiene latido que apagar)', CSS.includes('@media(prefers-reduced-motion:reduce)') && CSS.includes('animation-duration:.01ms !important') && !CSS.includes('.hf-tile.hf-carta-respira::before{animation:none'));
   t('C8e: «buen día» queda UNA sola vez en app.js (el saludo del ritual revelado)', (SRC.match(/buen día/g) || []).length === 1 && (SRC.match(/good morning/g) || []).length === 1, 'buen día=' + (SRC.match(/buen día/g) || []).length);
   t('C8f: el servidor calcula `proximo` en /api/ritual/hoy (medianoche + próximo programado)', SRV.includes('const medianoche = zonedWallToUtc(manana + \' 00:00\', tz)') && SRV.includes('proximo = { abre_a: medianoche, abre_hora: \'00:00\' }') && SRV.includes('publicado_hoy: publicadoHoy, proximo'));
   t('C8g: sin próximo, el vacío honesto sigue (hoy null sin proximo cuando no hay publicado)', SRV.includes('if (!rec) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy, proximo })'));
   t('C8h: VARIANTE B — el tick de 1 s reescribe la cuenta en 3 líneas (mismo formato que el render)', String(S.hfCuentaAbreTick).includes('faltan<br><b>') && String(S.hfCuentaAbreTick).includes('</b><br>para ver tu próximo posteo') && String(S.hfCuentaAbreTick).includes('<b>${esc(cu.faltan)}</b><br>left to see your next post'));
-  t('C8i: CACHÉ — styles?v= bumpeado en AMBOS index (20261171; el CSS nuevo llega a todos los teléfonos)', IDX_ES.includes('styles.css?v=20261172') && IDX_EN.includes('styles.css?v=20261172') && !IDX_ES.includes('styles.css?v=20261171') && !IDX_EN.includes('styles.css?v=20261171'));
+  t('C8i: CACHÉ — styles?v= bumpeado en AMBOS index (20261212; el CSS nuevo llega a todos los teléfonos)', IDX_ES.includes('styles.css?v=20261212') && IDX_EN.includes('styles.css?v=20261212') && !IDX_ES.includes('styles.css?v=20261211') && !IDX_EN.includes('styles.css?v=20261211'));
 
   // ===== H) HTTP: servidor real en DB temporal (M121: boot en copia aislada) =====
   const PORT = 34573;

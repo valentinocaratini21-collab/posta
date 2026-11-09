@@ -171,7 +171,7 @@ async function api(sid, method, p, body) {
     published: [publicado], recents: [],
   });
   const tileIds = tiles.map((x) => (x.post ? x.post.id : x.shortcode));
-  t('B1-feed: la carta de hoy va PRIMERA (idx 0, velada)', tiles[0].kind === 'oculta' && tiles[0].post.id === 519 && tiles[0].openHoy === false, JSON.stringify(tileIds));
+  t('B1-feed: la carta de hoy va PRIMERA (idx 0, ABIERTA — LOTE SACAR-CARTA-VELADA)', tiles[0].kind === 'oculta' && tiles[0].post.id === 519 && tiles[0].openHoy === true, JSON.stringify(tileIds));
   t('B1-feed: ningún tile es borrador (558 fuera del feed)', !tileIds.includes(558));
   t('B1-feed: ningún tile es programado de otro día (521 fuera, vive en Semana)', !tileIds.includes(521));
   t('B1-feed: el programado de hoy que NO es la carta SÍ rinde (520, en publicación)', tileIds.includes(520));

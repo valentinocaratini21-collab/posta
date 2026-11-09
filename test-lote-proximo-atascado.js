@@ -17,6 +17,10 @@
  * la carta de HOY sin elegir sigue velada (casos C y D intactos). El bug
  * que caza esta suite (el vivo no veía la carta) no cambia: el diff y el
  * snapshot siguen iguales.
+ * NOTA SACAR-CARTA-VELADA (9/11 · orden Valentino 00:49): SUPERSEDE lo de
+ * HOY también — la carta de hoy sin elegir VA ABIERTA (casos A y C); elegir
+ * en el ritual ya no cambia la carta (caso D: sin changed). El bug que caza
+ * la suite (el vivo ve la carta por su clave oculta:<id>) no cambia.
  */
 const fs = require('fs');
 const path = require('path');
@@ -223,15 +227,15 @@ const tilesPrev = compose([{ p: P519s, ymd: '2026-11-06' }, { p: P521, ymd: '202
 t(tilesPrev.length === 2 && tilesPrev[0].kind === 'oculta' && tilesPrev[0].post.id === 519
   && tilesPrev[1].kind === 'post' && tilesPrev[1].post.id === 518,
   'A: antes de las 17:00 la grilla es [oculta 519, publicado 518]');
-t(tilesPrev[0].openHoy === false, 'A: la carta de hoy sin elegir va velada (openHoy false)');
+t(tilesPrev[0].openHoy === true, 'A: la carta de hoy sin elegir VA ABIERTA (openHoy true — LOTE SACAR-CARTA-VELADA)');
 const htmlPrev = sb.homeTileHTML(tilesPrev[0], 0);
-t(htmlPrev.includes('hf-carta-oculta') && !htmlPrev.includes('data-post-id') && htmlPrev.includes('Hoy'),
-  'A: la carta velada no lleva data-post-id y su chapita dice Hoy');
+t(htmlPrev.includes('Se postea hoy · 17:00') && htmlPrev.includes('data-post-id="519"') && htmlPrev.includes('<img') && !htmlPrev.includes('hf-carta-oculta'),
+  'A: la carta ABIERTA lleva data-post-id y pill «Se postea hoy · 17:00»');
 const snapPrev = sb.hfLiveSnapshot(tilesPrev, PROF);
 t(snapPrev.posts['oculta:519'] && snapPrev.posts['oculta:519'].status === 'oculta'
   && snapPrev.posts['oculta:519'].scheduled_at === '2026-11-06T22:00:00.000Z'
-  && snapPrev.posts['oculta:519'].openHoy === 0,
-  'A: el snapshot registra la carta oculta 519 (status oculta, scheduled_at real, openHoy 0)');
+  && snapPrev.posts['oculta:519'].openHoy === 1,
+  'A: el snapshot registra la carta oculta 519 (status oculta, scheduled_at real, openHoy 1)');
 const tilesNext = compose([{ p: P521, ymd: '2026-11-07' }], [P519p, P518]);
 t(tilesNext.length === 3 && tilesNext[0].kind === 'oculta' && tilesNext[0].post.id === 521
   && tilesNext[1].kind === 'post' && tilesNext[1].post.id === 519,
@@ -277,13 +281,13 @@ sb.hfLiveApply({ tiles: tilesB, props: {}, prof: PROF, diff: diffB });
 t(grid.live().filter((c) => c.hasMagia()).length === 0, 'B: tras aplicar, la grilla no tiene carta del próximo');
 
 // ---------- Caso C: próximo de hoy sin elegir sigue velado ----------
-console.log('— C: próximo de hoy sin elegir sigue velado');
+console.log('— C: próximo de hoy sin elegir VA ABIERTO (LOTE SACAR-CARTA-VELADA)');
 ritFlag.pendiente = true;
 const tilesC = compose([{ p: P519s, ymd: '2026-11-06' }], [P518]);
-t(tilesC[0].kind === 'oculta' && tilesC[0].openHoy === false, 'C: hoy sin elegir → openHoy false');
+t(tilesC[0].kind === 'oculta' && tilesC[0].openHoy === true, 'C: hoy sin elegir → openHoy true (LOTE SACAR-CARTA-VELADA)');
 const htmlC = sb.homeTileHTML(tilesC[0], 0);
-t(htmlC.includes('hf-carta-oculta') && !htmlC.includes('data-post-id') && htmlC.includes('data-pz-abrir-ritual'),
-  'C: la carta de hoy sin elegir es velada, sin data-post-id, abre el ritual');
+t(htmlC.includes('data-post-id="519"') && !htmlC.includes('hf-carta-oculta') && !htmlC.includes('data-pz-abrir-ritual'),
+  'C: la carta de hoy sin elegir es ABIERTA, con data-post-id, ya no abre el ritual');
 
 // ---------- Caso D: próximo de hoy elegido sigue abierto (y el vivo refleja el cambio) ----------
 console.log('— D: próximo de hoy elegido sigue abierto');
@@ -296,14 +300,14 @@ t(htmlD.includes('data-post-id="519"') && !htmlD.includes('hf-carta-oculta') && 
 const snapC = sb.hfLiveSnapshot(tilesC, PROF);
 const snapD = sb.hfLiveSnapshot(tilesD, PROF);
 const diffD = sb.hfLiveDiff(snapC, snapD);
-t(diffD.changed.length === 1 && diffD.changed[0] === 'oculta:519' && diffD.justPublished.length === 0,
-  'D: elegir en el ritual se ve como changed de la carta (sin celebrar nada)');
+t(diffD.changed.length === 0 && diffD.justPublished.length === 0,
+  'D (LOTE SACAR-CARTA-VELADA): elegir en el ritual YA NO cambia la carta (ya estaba abierta; sin changed, sin celebrar nada)');
 renderIntoGrid(tilesC);
 const cellsBeforeD = grid.live().length;
 sb.hfLiveApply({ tiles: tilesD, props: {}, prof: PROF, diff: diffD });
 t(grid.live().length === cellsBeforeD && grid.live()[0].postId() === '519'
   && !grid.live()[0].hasOculta() && grid.live()[0].html.includes('<img'),
-  'D: el vivo reemplaza la velada por la abierta en el mismo lugar (idx 0, sin duplicar)');
+  'D: el vivo deja la carta abierta en el mismo lugar (idx 0, sin duplicar; ya no hay reemplazo velada→abierta)');
 
 // ---------- Caso E: reprogramar el próximo cambia su chapita en el lugar ----------
 console.log('— E: el próximo reprogramado cambia su chapita en el lugar');

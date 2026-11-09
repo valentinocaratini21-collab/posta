@@ -150,11 +150,11 @@ t(!!ocultaMan && ocultaMan.hoy === false, 'compose: carta de MAÑANA lleva hoy=f
 
 // ---------- 3. Render ES: badge solo en el posteo del día ----------
 ME.lang = 'es';
-ritualPendiente = true; // carta velada
+ritualPendiente = true; // carta de hoy (antes velada; LOTE SACAR-CARTA-VELADA 9/11: ahora abierta siempre)
 const htmlVelada = tileHTML(oculta, 0);
-t(htmlVelada.includes('hf-hoy-badge') && htmlVelada.includes('>HOY<'), 'tile ES: carta velada de hoy lleva HOY');
-t(!htmlVelada.includes('>TODAY<'), 'tile ES: carta velada no lleva TODAY');
-t(cnt(htmlVelada, 'hf-hoy-badge') === 1, 'tile ES: carta velada lleva UNA sola marca HOY');
+t(htmlVelada.includes('hf-hoy-badge') && htmlVelada.includes('>HOY<'), 'tile ES: carta de hoy (abierta) lleva HOY');
+t(!htmlVelada.includes('>TODAY<'), 'tile ES: carta de hoy no lleva TODAY');
+t(cnt(htmlVelada, 'hf-hoy-badge') === 1, 'tile ES: carta de hoy lleva UNA sola marca HOY');
 ritualPendiente = false; // carta abierta (ya se eligió)
 const ocultaAbierta = Object.assign({}, oculta, { openHoy: true });
 const htmlAbierta = tileHTML(ocultaAbierta, 0);

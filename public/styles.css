@@ -4181,17 +4181,6 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-despegue-chip{position:absolute;top:6px;left:6px;z-index:3;background:rgba(255,255,255,.94);color:#0A1E33;border:1.5px solid #FEC14D;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;pointer-events:none;white-space:nowrap}
 /* Ítem 6 — el próximo en salir: marco dorado exacto #FEC14D. */
 .hf-tile.hf-tile-next{outline:2px solid #FEC14D;outline-offset:-2px}
-/* ============ LOTE POSTEO-DIA-2 · 4/11 · corrección Valentino 18:23 ============ */
-/* Carta oculta del próximo por salir (SUPERSEDE la magia de v645, que
-   se retira: el publicado de hoy ya no lleva marca especial). La carta
-   es una tile normal de la grilla (mismo tamaño, misma celda) con
-   superficie velada: velo neutro sin foto, sin magia (sin degradado
-   dorado-celeste, sin destellos) y chapita con la fecha y hora reales.
-   No es interactiva (cursor default) y no anima: nada que respetar en
-   reduced-motion. */
-.hf-tile.hf-carta-oculta{cursor:default;background:#0A1E33;border:1px solid rgba(10,30,51,.12)}
-.hf-tile.hf-carta-oculta .hf-carta-velo{position:absolute;inset:0;background-color:#0A1E33;background-image:repeating-linear-gradient(45deg,rgba(254,193,77,.16) 0 2px,transparent 2px 16px),repeating-linear-gradient(-45deg,rgba(254,193,77,.16) 0 2px,transparent 2px 16px);pointer-events:none}
-.hf-tile.hf-carta-oculta .hf-carta-velo::after{content:'✦';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:#FEC14D;text-shadow:0 0 10px rgba(254,193,77,.8)}
 /* ============ LOTE MAGIA-PROXIMO · 4/11 · orden Valentino 19:37, corrección 19:45 ============ */
 /* La tarjeta del próximo SÍ lleva magia, pero SOLO en el borde:
    destellos ✦ de 4 puntas (dorado #FEC14D / celeste #2793C8, nunca
@@ -4209,66 +4198,9 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-carta-destellos i:nth-child(3){top:52%;right:7px;font-size:14px;color:#FEC14D;animation-delay:1s}
 .hf-carta-destellos i:nth-child(4){top:12%;left:26%;font-size:11px;color:#2793C8;animation-delay:1.5s}
 @keyframes hf-carta-destello{0%,100%{opacity:.25;transform:scale(.7) rotate(0deg)}50%{opacity:1;transform:scale(1.15) rotate(20deg)}}
-.hf-tile.hf-carta-magia > .hf-strip{flex-direction:column;align-items:flex-start;gap:5px}
-.hf-tile.hf-carta-magia > .hf-strip .hf-chip{flex:0 0 auto}
-/* (LOTE PROXIMO-DESTAPADO · 6/11 · «a las 00:00») La cuenta de la
-   tardecita en la carta velada: segunda fila de la franja (columna),
-   dorado sobre el velo navy. */
-.hf-tile.hf-carta-magia .hf-cuenta-abre{font-size:11px;line-height:1.3;color:#FEC14D;text-shadow:0 1px 4px rgba(10,30,51,.6)}
-.hf-tile.hf-carta-magia .hf-cuenta-abre b{font-weight:800}
-.hf-carta-proximo{display:inline-flex;align-items:center;background:linear-gradient(135deg,#FEC14D,#FFD97A);color:#0A1E33;font-size:10.5px;font-weight:800;line-height:1;padding:5px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 1px 4px rgba(10,30,51,.25)}
-/* (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c) La carta del feed respira:
-   halo dorado en los bordes (inset 0: la carta tiene overflow hidden,
-   un halo que sobresalga se recorta) que crece y afloja en 2,4 s. La
-   cuenta de la tardecita vive en la franja, bajo la chapita. */
-.hf-tile.hf-carta-respira::before{content:'';position:absolute;inset:0;border-radius:10px;background:radial-gradient(120% 120% at 50% 50%,transparent 55%,rgba(254,193,77,.28) 78%,rgba(254,193,77,.45) 100%);animation:hfRespira 2.4s ease-in-out infinite;pointer-events:none;z-index:1}
-.hf-cuenta-abre{display:block;font-size:11px;line-height:1.35;color:#FEC14D;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
-.hf-cuenta-abre b{color:#fff}
-/* ============ VARIANTE B — CARTA VELADA «MÁS MAGIA» · 6/11 · elección Valentino 19:31 ============ */
-/* La carta velada del feed es una tarjeta DESTACADA a todo lo ancho
-   (hf-cell-velada, grid-column 1/-1): el mock B es una carta ancha, no
-   una tile 3/4. Halo dorado que respira MÁS presente (resplandor grande
-   + anillo + brillo interior), 7 destellos ✦ de varios tamaños, Posty
-   DENTRO de la carta (su cara en círculo de 72px con anillo dorado,
-   abajo al centro dentro del área azul, «Posty lo está cuidando ✨»
-   debajo de la carta), cuenta en dorado «faltan 4 hs
-   y 34 min para ver tu próximo posteo», chip «Mañana · 17:00», píldora
-   «✦ El próximo», fondo navy con rombos sutiles. Colores Posty exactos.
-   El ✦ grande centrado del velo se apaga en esta carta (los 7 destellos
-   son la magia); el halo de la tile (hf-carta-respira::before) se apaga
-   y el latido vive en el halo exterior (hf-carta-halo::before). */
-.hf-cell-velada{grid-column:1/-1;position:relative}
-.hf-carta-halo{position:relative;display:block;border-radius:30px;padding:14px}
-.hf-carta-halo::before{content:'';position:absolute;inset:0;border-radius:30px;background:radial-gradient(ellipse at center,rgba(254,193,77,.55) 0%,rgba(254,193,77,.22) 55%,rgba(254,193,77,0) 80%);animation:hfRespira 2.4s ease-in-out infinite;pointer-events:none}
-.hf-cell-velada .hf-tile.hf-carta-oculta{aspect-ratio:auto;border:0;border-radius:20px;box-shadow:0 0 0 1px rgba(254,193,77,.55),0 0 42px 4px rgba(254,193,77,.35),0 10px 34px rgba(10,30,51,.35)}
-.hf-cell-velada .hf-tile.hf-carta-oculta .hf-carta-velo{background-color:#0A1E33;background-image:radial-gradient(ellipse 90% 55% at 50% 38%,rgba(254,193,77,.16) 0%,rgba(254,193,77,0) 70%),repeating-linear-gradient(45deg,rgba(255,255,255,.05) 0 1px,transparent 1px 26px),repeating-linear-gradient(-45deg,rgba(255,255,255,.05) 0 1px,transparent 1px 26px)}
-.hf-cell-velada .hf-tile.hf-carta-oculta .hf-carta-velo::after{display:none}
-.hf-cell-velada .hf-tile.hf-carta-respira::before{display:none}
-.hf-carta-contenido{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;padding:26px 20px 44px;gap:20px}
-.hf-cell-velada .hf-carta-proximo{background:#FEC14D;font-size:15px;padding:8px 18px;box-shadow:none}
-.hf-cell-velada .hf-cuenta-abre{font-size:19px;line-height:1.5;font-weight:600;color:#fff;white-space:normal}
-.hf-cell-velada .hf-cuenta-abre b{color:#FEC14D;font-size:26px;font-weight:800}
-/* (LOTE RITUAL-SIGUIENTE · 7/11 · «Se destapa a las 00:00») La hora
-   del destape, explícita bajo la cuenta: blanca, con la hora en dorado. */
-.hf-carta-destapa{display:block;font-size:14px;line-height:1.4;color:#fff;font-weight:600}
-.hf-carta-destapa b{color:#FEC14D;font-weight:800}
-.hf-cell-velada .hf-carta-contenido .hf-chip{position:static;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:15px;font-weight:700;padding:9px 16px;border-radius:999px}
-.hf-cell-velada .hf-carta-contenido{padding:26px 20px 28px}
-.hf-cell-velada .hf-carta-destellos i:nth-child(1){top:16px;left:20px;font-size:15px;color:#FEC14D}
-.hf-cell-velada .hf-carta-destellos i:nth-child(2){top:34px;right:30px;font-size:12px;color:#2793C8;animation-delay:.5s}
-.hf-cell-velada .hf-carta-destellos i:nth-child(3){top:96px;left:14px;font-size:10px;color:rgba(254,193,77,.55);animation-delay:1s}
-.hf-cell-velada .hf-carta-destellos i:nth-child(4){top:88px;right:16px;font-size:18px;color:#FEC14D;animation-delay:1.5s}
-.hf-cell-velada .hf-carta-destellos i:nth-child(5){bottom:110px;left:26px;font-size:13px;color:#2793C8;animation-delay:.3s}
-.hf-cell-velada .hf-carta-destellos i:nth-child(6){bottom:88px;right:28px;font-size:10px;color:rgba(254,193,77,.55);animation-delay:.8s}
-.hf-cell-velada .hf-carta-destellos i:nth-child(7){bottom:140px;right:44px;font-size:11px;color:#FEC14D;animation-delay:1.3s}
-.hf-carta-posty{display:block;width:72px;height:72px;max-width:72px;max-height:72px;flex:none;border-radius:50%;overflow:hidden;border:3px solid #FEC14D;box-shadow:0 0 22px rgba(254,193,77,.7),0 6px 16px rgba(10,30,51,.35);margin:2px auto 0;position:relative;z-index:2;background:#fff}
-.hf-carta-posty img{width:100%;height:100%;max-width:72px;max-height:72px;object-fit:cover;object-position:center 18%;display:block}
-.hf-carta-leyenda{display:block;text-align:center;font-size:13px;font-weight:700;color:#5A7488;margin-top:10px}
 @media (prefers-reduced-motion: reduce){
   .hf-tile.hf-carta-magia{box-shadow:0 0 12px rgba(39,147,200,.35)}
   .hf-carta-destellos i{animation:none;opacity:.85}
-  .hf-tile.hf-carta-respira::before{animation:none;opacity:.7}
-  .hf-carta-halo::before{animation:none;opacity:.7}
 }
 /* Ítem 3 — racha de constancia debajo del perfil. */
 .hf-racha{font-size:13px;font-weight:700;color:#0A1E33;margin-top:8px;display:flex;align-items:center;gap:8px}
@@ -5592,7 +5524,6 @@ body.pz-postchat-open{overflow:hidden}
    exhalar, como el mock). El brillo del borde acompaña, más suave. */
 @keyframes pzRespira{0%,100%{opacity:.55;transform:scale(.97)}50%{opacity:1;transform:scale(1.03)}}
 @keyframes pzRespiraBrillo{0%,100%{box-shadow:0 8px 20px rgba(10,30,51,.28),0 0 0 rgba(254,193,77,0)}50%{box-shadow:0 8px 20px rgba(10,30,51,.28),0 0 28px rgba(254,193,77,.55)}}
-@keyframes hfRespira{0%,100%{opacity:.55}50%{opacity:1}}
 .pz-ritual-dots{display:flex;justify-content:center;gap:8px;margin-top:14px}
 .pz-ritual-dots span{width:14px;height:14px;border-radius:50%}
 .pz-ritual-dots span:nth-child(1){background:#2793C8}

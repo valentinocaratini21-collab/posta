@@ -15,7 +15,7 @@
  *     «a las 00:00» del 6/11 SOLO para el posteo de un día futuro):
  *     el posteo de mañana visible, pill «Se postea mañana · HH:MM»,
  *     cuenta hasta que SALE (no hasta un destape); el de HOY sigue
- *     velado hasta elegir en el ritual (no-regresión);
+ *     ABIERTO también (LOTE SACAR-CARTA-VELADA 9/11: la carta velada se fue);
  *  D) hoja «Subir foto o video» (Cámara/Galería → selector del chat,
  *     misma subida v784) con fila del álbum real;
  *  E) mensaje de Posty → chat; entrada al conserje con contador
@@ -341,7 +341,9 @@ const conHtml = sb.pzHoyConserjeHTML(2, 3, false);
 t(conHtml.includes('2 de 3 revisados') && conHtml.includes('data-pz-hoy-conserje'),
   '§4: conserje: contador «2 de 3 revisados» + entrada real');
 
-// ---------- §5: grilla — cartita de mañana ABIERTA, la de hoy velada ----------
+// ---------- §5: grilla — cartita de mañana ABIERTA, la de hoy ABIERTA también ----------
+// (LOTE SACAR-CARTA-VELADA · 9/11 · orden Valentino 00:49, SUPERSEDE R1
+// en lo de hoy: la carta velada se fue; el próximo SIEMPRE rinde abierto.)
 console.log('— §5: grilla');
 setNow('2026-11-08T15:00:00.000Z'); // dom 8/11 10:00 EST (antes de las 17:00)
 const tilesFut = compose([{ p: MANANA_POST, ymd: '2026-11-09' }], [PUBL[3], PUBL[2]], RIT_PEND);
@@ -355,12 +357,14 @@ t(htmlFut.includes('Se postea mañana') && htmlFut.includes('data-pz-cuenta-sale
   && !htmlFut.includes('data-pz-cuenta-abre'),
   '§5: la cartita de mañana se VE (foto, pill, cuenta de salida) — sin velo, sin destape, sin cuenta de apertura');
 const tilesHoy = compose([{ p: HOY_POST, ymd: '2026-11-08' }, { p: MANANA_POST, ymd: '2026-11-09' }], PUBL, RIT_PEND);
-t(tilesHoy[0].kind === 'oculta' && tilesHoy[0].post.id === 610 && tilesHoy[0].openHoy === false,
-  '§5 (no-regresión): el posteo de HOY sin elegir sigue velado (ritual intacto)');
+t(tilesHoy[0].kind === 'oculta' && tilesHoy[0].post.id === 610 && tilesHoy[0].openHoy === true,
+  '§5 (LOTE SACAR-CARTA-VELADA): el posteo de HOY sin elegir YA NO se vela: compone ABIERTO (openHoy true)');
 const htmlHoy = sb.homeTileHTML(tilesHoy[0], 0);
-t(htmlHoy.includes('hf-carta-velo') && htmlHoy.includes('Posty lo está cuidando')
-  && !htmlHoy.includes('data-post-id') && !htmlHoy.includes('data-pz-cuenta-sale'),
-  '§5 (no-regresión): la carta de hoy sigue velada (velo + «Posty lo está cuidando», sin foto ni cuenta de salida)');
+t(htmlHoy.includes('Se postea hoy · 19:30') && htmlHoy.includes('data-pz-cuenta-sale="2026-11-09T00:30:00.000Z"')
+  && htmlHoy.includes('sale en') && htmlHoy.includes('<img') && htmlHoy.includes('data-post-id="610"')
+  && !htmlHoy.includes('hf-carta-velo') && !htmlHoy.includes('Se destapa')
+  && !htmlHoy.includes('Posty lo está cuidando') && !htmlHoy.includes('data-pz-cuenta-abre'),
+  '§5 (LOTE SACAR-CARTA-VELADA): la carta de hoy se VE (foto, pill, cuenta de salida) — sin velo, sin destape, sin leyenda');
 const tilesEleg = compose([{ p: HOY_POST, ymd: '2026-11-08' }, { p: MANANA_POST, ymd: '2026-11-09' }], PUBL, RIT_ELEG);
 t(tilesEleg[0].kind === 'oculta' && tilesEleg[0].post.id === 610 && tilesEleg[0].openHoy === true,
   '§5: con el ritual elegido, la carta de hoy se abre (la puerta de las 9:00 intacta)');
@@ -381,8 +385,9 @@ t(APP.includes("name === 'verfeed'") && APP.includes("location.hash = '#/app/fee
   '§6: #/app/feed sigue vivo y reachable por «Ver en el feed» desde el detalle del posteo');
 t(APP.includes('pzHoyBind(document.getElementById(\'inicioView\'))'),
   '§6: bindInicio cablea pzHoyBind en #inicioView');
-t(APP.includes("if (t.openHoy && t.futuro)") && APP.includes('esFuturoR1'),
-  '§6: homeGridCompose/homeTileHTML tienen la rama futura (esFuturoR1)');
+t(APP.includes('const openHoy = true') && APP.includes('esFuturoR1')
+  && !APP.includes("if (t.openHoy && t.futuro)") && !APP.includes('hf-cell-velada'),
+  '§6 (LOTE SACAR-CARTA-VELADA): la carta siempre va abierta (openHoy = true, sin rama velada ni rama futura separada)');
 t(APP.includes('data-pz-cuenta-sale') && APP.includes("document.querySelectorAll('[data-pz-cuenta-sale]')"),
   '§6: el tick de 1 s actualiza las cuentas de salida (hfCuentaAbreTick)');
 ['.btn-publish', '.pz-hoy-speech', '.pz-hoy-upload', '.pz-hoy-ring', '.pz-hoy-card', '.pz-hoy-sheet', '.pz-hoy-cuenta', '.pz-hoy-conserje'].forEach((c) => {
@@ -416,8 +421,8 @@ const llamadas = ['pzHoySetView', 'pzHoyAprobarUno', 'pzHoyCambiar', 'pzHoySubir
   'schedDayKeyOf', 'albumMondayKey', 'pzProximoYaAbierto', 'pzDiaInicioMs'];
 t(llamadas.every((f) => APP.includes('function ' + f)),
   '§7: toda función llamada desde los caminos nuevos de Hoy existe definida (22/22 — el Lote A eliminó pzHoySubirAbrir/Cerrar con la hoja de subida)');
-t(APP.split('Se destapa a las <b>00:00</b>').length === 2,
-  '§7: «Se destapa a las 00:00» queda UNA sola vez en el bundle (rama velada de futuro, hoy inalcanzable)');
+t(APP.split('Se destapa a las <b>00:00</b>').length === 1,
+  '§7 (LOTE SACAR-CARTA-VELADA): «Se destapa a las 00:00» ×0 en el bundle (la rama velada se fue)');
 t(SRV.includes("app.post('/api/posts/:id/approve'") && SRV.includes("app.post('/api/posts/accept-all'")
   && SRV.includes("app.get('/api/admin/support/conserje/revision'"),
   '§7: server.js expone /approve, /accept-all y la revisión del conserje (sin cambios de servidor)');
@@ -426,9 +431,9 @@ t(APP.includes('CHAT_FOTOS_MAX = 10') && APP.includes('pzSftPartirMedios'),
 
 // ---------- §8: huellas del lote (server.js NO cambia en R1) ----------
 console.log('— §8: huellas');
-t(md5(SRV) === 'a794b626ff39c6ae774c3d146aedc7a7', '§8: server.js = FUSIONADO (A + CHAT-MUSE, BUILD v822)');
-t(md5(APP) === '55175c23d4ee48404b2cd8cf52328f55', '§8: public/app.js = FUSIONADO (A + CHAT-MUSE)');
-t(md5(CSS) === 'cadafccac8af119275c9c799668a0c61', '§8: public/styles.css = FUSIONADO (A + CHAT-MUSE)');
+t(md5(SRV) === '01201d9c349e664739e572dd49a62897', '§8: server.js = FUSIONADO (A + CHAT-MUSE, BUILD v822)');
+t(md5(APP) === 'ed09a73f7b3d3e57193d300976454191', '§8: public/app.js = FUSIONADO (A + CHAT-MUSE)');
+t(md5(CSS) === 'ac5cce38c92ad0c2936f7d1a1a36996d', '§8: public/styles.css = FUSIONADO (A + CHAT-MUSE)');
 t(APP.includes('CHUNK_V'), '§8: CHUNK_V presente en app.js');
 
 // ---------- §9: boot M121 — endpoints reales con datos reales ----------
@@ -502,7 +507,7 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v825',
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v826',
       '§9: /api/version trae el BUILD v822 (estampado)', JSON.stringify(ver.json));
     const appJs = await apiText('/app.js?v=557');
     t(appJs.status === 200 && appJs.text.includes('pzHoyCardHTML')

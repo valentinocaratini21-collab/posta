@@ -81,8 +81,8 @@ ok(css.indexOf('LOTE B MEJORAS-INICIO') > css.indexOf('LOTE ANÁLISIS-GLASS v811
 ok((css.match(/{/g) || []).length === (css.match(/}/g) || []).length, 'llaves balanceadas en styles.css');
 
 console.log('— 5. Solo styles.css (app.js y server.js intactos, base v822) —');
-ok(md5(app) === '55175c23d4ee48404b2cd8cf52328f55', 'app.js = v822 (sin tocar)');
-ok(md5(srv) === 'a794b626ff39c6ae774c3d146aedc7a7', 'server.js = v822 (sin tocar, solo BUILD)');
+ok(md5(app) === 'ed09a73f7b3d3e57193d300976454191', 'app.js = v822 (sin tocar)');
+ok(md5(srv) === '01201d9c349e664739e572dd49a62897', 'server.js = v822 (sin tocar, solo BUILD)');
 ok(!/ai-avatar\.png/.test(lotRules), 'la cara canónica no se toca en este lote');
 ok(!lotCss.includes('#2793C8') || lotCss.includes('borde de marca #2793C8'), 'sin azules de marca nuevos en el bloque (solo el comentario)');
 

@@ -18753,12 +18753,12 @@ function homeGridCompose(input) {
     const p = it && it.p;
     if (!p || isStory(p) || p.status === 'failed') continue;
     if (p.status !== 'draft' && p.status !== 'scheduled') continue;
-    if (p === nextPost) continue; // (LOTE POSTEO-DIA-2) El próximo sale del grupo: su tile va primera (idx 0), velada.
+    if (p === nextPost) continue; // (LOTE POSTEO-DIA-2) El próximo sale del grupo: su tile va primera (idx 0), abierta.
     // (LOTE RITUAL-1-OPCION · 6/11 · «un posteo por día») La grilla
     // muestra SOLO el posteo de hoy + los ya publicados. Los borradores
     // (futuros, sin programar) y los programados de días futuros NO
     // rinden acá: viven en la vista Semana. El posteo de hoy rinde como
-    // carta velada (nextPost, idx 0), no como tile. Un programado de hoy
+    // carta abierta (nextPost, idx 0), no como tile. Un programado de hoy
     // que no es nextPost (p. ej. ya vencido, en publicación) sí rinde:
     // es de hoy.
     if (p.status === 'draft') continue;
@@ -18856,7 +18856,7 @@ function homeGridCompose(input) {
   // renombres que choquen con la fusión de posteo-dia-2); ya no
   // corta nada. Programadas/borradores siguen intactos y sin tope;
   // los fijados (head) siguen primeros por elección del dueño. La
-  // carta oculta del próximo se inserta PRIMERA en la grilla (idx 0,
+  // carta del próximo se inserta PRIMERA en la grilla (idx 0,
   // arriba a la izquierda; decisión Valentino 5/11 ~13:26, reemplaza
   // v688 y el fix FIFA v1).
   const rest6 = rest;
@@ -18915,16 +18915,12 @@ function homeGridCompose(input) {
   }
   const finalTiles = head.concat(rest6);
   if (nextPost) {
-    // (LOTE PROXIMO-VELO · corrección Valentino 5/11 09:04 — SUPERSEDE
-    // el ajuste de la mañana 5/11 · decisión Valentino 11:31) El velo
-    // cubre el próximo de día FUTURO y TAMBIÉN el de HOY hasta elegir:
-    // si sale HOY y todavía no se eligió, la carta se muestra VELADA
-    // (si no, el cliente vería el recomendado antes de elegir y el
-    // velo sería mentira). Solo se muestra ABIERTA (foto visible +
-    // abre el detalle) si ya se eligió hoy o si hoy no hay ritual
-    // (día co-creado, REGLA 5/11 ~11:39). «Hoy» = mismo día
-    // calendario que hoy en la zona de la cuenta (pcTz, default
-    // Buenos Aires). Sin fecha o sin zona, fail-closed (velada).
+    // (LOTE SACAR-CARTA-VELADA · 9/11 · orden Valentino 00:49 «Esto
+    // está mal. Sacalo», SUPERSEDE PROXIMO-VELO 5/11) El velo se fue:
+    // el próximo rinde ABIERTO siempre (foto visible + abre el
+    // detalle), también el de HOY antes de elegir en el ritual. «Hoy»
+    // = mismo día calendario que hoy en la zona de la cuenta (pcTz,
+    // default Buenos Aires).
     let cardHoy = false;
     let esFuturoR1 = false; // (LOTE REDISEÑO R1 · cartita SIN velo) día futuro con fecha válida
     try {
@@ -18936,36 +18932,34 @@ function homeGridCompose(input) {
       if (!dV) { const sV = String(nextPost.scheduled_at).replace(' ', 'T'); dV = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(sV) ? sV : sV + 'Z'); }
       if (dV && !isNaN(dV)) { cardHoy = keyV(dV) === keyV(new Date()); esFuturoR1 = !cardHoy; }
     } catch (e) { cardHoy = false; esFuturoR1 = false; }
-    // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11) La carta de HOY
-    // queda velada hasta elegir; abierta solo si ya se eligió o si hoy
-    // no hay ritual (sin paquete: día co-creado). Sin estado conocido
-    // → pendiente (velo; la carta abre el ritual, que lee su propio
-    // estado). El guard typeof protege la extracción standalone del
-    // bloque HOME_FEED en tests (sin el resto del bundle).
+    // (LOTE SACAR-CARTA-VELADA · 9/11) La carta de HOY ya no se vela
+    // hasta elegir: rinde abierta y abre el detalle (aprobar/cambiar).
+    // El ritual sigue vivo en #/app/ritual (puerta matutina + aviso
+    // 9:00), que lee su propio estado. El guard typeof protege la
+    // extracción standalone del bloque HOME_FEED en tests (sin el
+    // resto del bundle).
     const ritArg = (typeof input !== 'undefined' && input && ('ritual' in input)) ? input.ritual : undefined;
     const ritPend = (typeof pzRitualPendiente === 'function') ? pzRitualPendiente(ritArg) : true;
     const openHoyRit = cardHoy && !ritPend;
-    // (LOTE PROXIMO-DESTAPADO · 6/11 · «a las 00:00») El posteo de un
-    // día futuro (o de hoy, creado antes de medianoche) rinde ABIERTO
-    // desde las 00:00 de su día: el cliente lo ve entero para
-    // editarlo o pedir un cambio. Y si ya lo reveló en el ritual
-    // (sel local), el feed no lo vuelve a velar. Sin created_at o
-    // sin zona, fail-closed (velado): pzProximoYaAbierto devuelve
-    // false. Los guards typeof protegen la extracción standalone
-    // del bloque HOME_FEED en tests (sin el resto del bundle).
+    // (LOTE SACAR-CARTA-VELADA · 9/11, SUPERSEDE PROXIMO-DESTAPADO
+    // 6/11 «a las 00:00») Ya no hay destape: el posteo rinde ABIERTO
+    // apenas existe, sin esperar a las 00:00. pzProximoYaAbierto se
+    // mantiene porque la hoja del ritual lo usa. Los guards typeof
+    // protegen la extracción standalone del bloque HOME_FEED en tests
+    // (sin el resto del bundle).
     let abiertoYa = false;
     try { const tzA = (typeof pcTz === 'function') ? pcTz() : undefined; abiertoYa = (typeof pzProximoYaAbierto === 'function') ? pzProximoYaAbierto(nextPost, Date.now(), tzA) : false; } catch (e) { abiertoYa = false; }
     let selAbierto = false;
     try { selAbierto = (typeof pzRitualSelLeer === 'function') ? pzRitualSelLeer() === Number(nextPost.id) : false; } catch (e) { selAbierto = false; }
-    // (LOTE REDISEÑO R1 · cartita SIN VELO · decisión Valentino 8/11
-    // 00:05, SUPERSEDE el destape «a las 00:00» del 6/11 SOLO para el
-    // posteo de un día FUTURO) El próximo de mañana (o más adelante)
-    // rinde ABIERTO siempre: el cliente lo ve entero apenas existe,
-    // sin esperar a las 00:00, con su pill «Se postea mañana · HH:MM»
-    // y la cuenta hasta que SALE. El de HOY sigue velado hasta elegir
-    // en el ritual (openHoyRit/abiertoYa/selAbierto no se tocan: el
-    // aviso de las 9:00 para confirmar se mantiene).
-    const openHoy = openHoyRit || abiertoYa || selAbierto || esFuturoR1;
+    // (LOTE SACAR-CARTA-VELADA · 9/11 · orden Valentino 00:49,
+    // SUPERSEDE R1 SOLO en lo de HOY: el futuro ya era abierto) El
+    // próximo SIEMPRE rinde ABIERTO, también el de hoy pendiente: el
+    // cliente lo ve entero apenas existe, con su pill de salida y la
+    // cuenta hasta que SALE. openHoyRit/abiertoYa/selAbierto se
+    // mantienen como lecturas del estado del ritual (la hoja
+    // #/app/ritual los lee por su cuenta; el aviso de las 9:00 para
+    // confirmar se mantiene), pero ya no velan la carta.
+    const openHoy = true;
     // (LOTE PROXIMO-RITUAL · ajuste posición 5/11 · decisión Valentino
     // 13:26) La carta va PRIMERA (idx 0): splice en 0, sin ancla. El
     // resto de la grilla no cambia de orden (el trío entero queda
@@ -19199,12 +19193,13 @@ function hfLiveSnapshot(tiles, prof) {
       };
     } else if (t.kind === 'oculta' && t.post && t.post.id !== null && t.post.id !== undefined) {
       // (LOTE PROXIMO-ATASCADO · 6/11 · reporte Valentino 17:06) La carta
-      // velada del próximo TAMBIÉN se registra, por su post id, para que
+      // del próximo TAMBIÉN se registra, por su post id, para que
       // el diff vivo la siga: sin ella, al salir el posteo de hoy la
       // carta vieja quedaba clavada en idx 0 y la nueva nunca entraba.
       // La clave 'oculta:<id>' no se cruza con ningún post id real. Lo
-      // que vigila el diff es lo que define la carta: scheduled_at y si
-      // hoy ya se eligió (openHoy: velada → abierta).
+      // que vigila el diff es lo que define la carta: scheduled_at (y
+      // openHoy, siempre 1 desde SACAR-CARTA-VELADA: la carta ya no
+      // se vela).
       const p = t.post;
       posts['oculta:' + String(p.id)] = {
         id: 'oculta:' + String(p.id), status: 'oculta', scheduled_at: String(p.scheduled_at || ''),
@@ -19777,15 +19772,12 @@ function homeTileHTML(t, i) {
       if (pzDiaEsFutura(p, hoyDia, lunDia)) diaFuturaCls = ' pz-dia-futura';
     }
   } catch (e) {}
-  // (LOTE POSTEO-DIA-2 · 4/11 · corrección Valentino 18:23) Carta
-  // oculta del próximo por salir: sin foto, sin caption, sin corazón,
-  // sin tik y SIN detalle (no lleva data-post-id ni role=button:
-  // abrirla revelaría el posteo). Solo velo + chapita con la fecha y
-  // hora REALES del scheduled_at, en el mismo formato de las chapitas
-  // de la grilla (chapita ya calculada arriba; respaldo con el
-  // formato absoluto si la relativa viene vacía). La carta no es
-  // gestionable desde la grilla (sin corazón): el posteo se sigue
-  // aprobando desde Semana/Agenda o con Aprobar todo.
+  // (LOTE SACAR-CARTA-VELADA · 9/11, SUPERSEDE POSTEO-DIA-2 en lo del
+  // velo) Carta del próximo por salir: foto visible + pill de salida
+  // + cuenta hasta que SALE, con chapita de fecha y hora REALES del
+  // scheduled_at (chapita ya calculada arriba; respaldo con el
+  // formato absoluto si la relativa viene vacía). Tocar la carta abre
+  // el detalle (aprobar/cambiar); sin corazón en la grilla.
   if (t.kind === 'oculta') {
     let ocChip = chip;
     if (!ocChip && typeof hfChipText === 'function') {
@@ -19797,96 +19789,22 @@ function homeTileHTML(t, i) {
           : `<span class="hf-chip">${pzIc('clock', 12)} ${esc(ocTxt)}</span>`;
       }
     }
-    // (LOTE MAGIA-PROXIMO · 4/11 · orden Valentino 19:37, SUPERSEDE la
-    // «sin magia» de 18:23 SOLO para esta tarjeta) La magia vive en el
-    // BORDE (destellos ✦, SIN latido desde la corrección 19:45), nunca en el contenido: el velo
-    // sigue sin foto/caption/corazón/tik/detalle, la carta va justo
-    // después del publicado más reciente y con fecha/hora reales; los publicados NO llevan magia.
+    // (LOTE SACAR-CARTA-VELADA · 9/11 · orden Valentino 00:49 «Esto
+    // está mal. Sacalo», SUPERSEDE VARIANTE B 6/11 y R1 SOLO en lo de
+    // hoy) La carta velada se fue: el próximo SIEMPRE rinde ABIERTO
+    // (foto visible + pill de salida + cuenta hasta que SALE, vía
+    // pzHoyCuentaSaleTxt), en todos los estados — hoy pendiente, hoy
+    // ya elegido, futuro. Sin «Se destapa a las 00:00», sin cuenta
+    // para verlo, sin Posty dentro de la carta. La banda de caption
+    // va DEBAJO de la imagen, fuera de .hf-tile (LOTE HOY-AVATAR-FEED).
+    // Tocar la carta abre el detalle (aprobar/cambiar); el ritual
+    // sigue vivo en #/app/ritual (puerta matutina + aviso 9:00).
     const proxLbl = phEn ? 'Next up' : 'El próximo';
-    // (LOTE PROXIMO-VELO · corrección Valentino 5/11 09:04 — SUPERSEDE
-    // el ajuste de la mañana 5/11 · decisión Valentino 11:31) El
-    // próximo que sale HOY se muestra ABIERTO solo si ya se eligió
-    // (o si hoy no hay ritual, día co-creado): antes de elegir va
-    // VELADO, con data-pz-abrir-ritual, y tocarlo abre la hoja del
-    // ritual, que revela directo la recomendada. El velo (hf-carta-velo +
-    // hf-carta-oculta) cubre el próximo de día FUTURO y el de HOY
-    // hasta elegir. t.openHoy lo pone homeGridCompose.
-    // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c + LOTE PROXIMO-DESTAPADO
-    // «a las 00:00» + corrección Valentino 19:26) La cuenta de la
-    // tardecita vive EN la carta velada (día futuro): cuenta en vivo
-    // hasta ver el próximo posteo («faltan 4 h 37 min para ver tu próximo
-    // posteo» — la cuenta es para VER el posteo, no «para las 00:00»).
-    // Solo si la medianoche está en el futuro y a menos de 24 h (si no,
-    // la chapita con día+hora reales ya alcanza). Reutiliza
-    // pzRitualCuentaTxt; el tick de 1 s vive en hfCuentaAbreTick. Sin
-    // fecha o sin zona, sin cuenta (nunca una fecha inventada).
-    let cuentaHtml = '';
-    try {
-      if (!t.openHoy && typeof pzDiaInicioMs === 'function' && typeof pzRitualCuentaTxt === 'function') {
-        const tzC = (typeof pcTz === 'function') ? pcTz() : undefined;
-        let dC = null;
-        if (typeof pcParseDate === 'function') dC = pcParseDate(p.scheduled_at);
-        if (!dC) { const sC = String(p.scheduled_at || '').replace(' ', 'T'); dC = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(sC) ? sC : sC + 'Z'); }
-        const abreMs = (dC && !isNaN(dC)) ? pzDiaInicioMs(dC, tzC) : NaN;
-        const faltaC = Number.isFinite(abreMs) ? abreMs - Date.now() : NaN;
-        if (Number.isFinite(faltaC) && faltaC > 0 && faltaC <= 24 * 3600000) {
-          const cuC = pzRitualCuentaTxt(faltaC);
-          // (VARIANTE B · 6/11 · elección Valentino 19:31) La cuenta
-          // es la protagonista en dorado, en 3 líneas (ES) / 2 (EN):
-          // «faltan» / «4 h 37 min» / «para ver tu próximo posteo».
-          cuentaHtml = `<span class="hf-cuenta-abre" data-pz-cuenta-abre="${new Date(abreMs).toISOString()}">${phEn ? `<b>${esc(cuC.faltan)}</b><br>left to see your next post` : `faltan<br><b>${esc(cuC.faltan)}</b><br>para ver tu próximo posteo`}</span>`;
-        }
-      }
-    } catch (e) { cuentaHtml = ''; }
-    // (LOTE RITUAL-SIGUIENTE · 7/11 · decisión Valentino «que lo
-    // pueden ver a las 00:00») La carta velada dice EXPLÍCITO a qué
-    // hora se destapa: «Se destapa a las 00:00». La cuenta dice
-    // cuánto falta, pero no a qué hora; sin la hora, tocarla antes
-    // se siente roto. La medianoche es la 00:00 del día del posteo
-    // (pzDiaInicioMs, la misma que usa la cuenta): si no se puede
-    // calcular o ya pasó, sin línea (nunca una hora inventada).
-    // Solo en la carta velada; la abierta ya muestra la foto.
-    let destapaHtml = '';
-    try {
-      const tzD = (typeof pcTz === 'function') ? pcTz() : undefined;
-      let dD = null;
-      if (typeof pcParseDate === 'function') dD = pcParseDate(p.scheduled_at);
-      if (!dD) { const sD = String(p.scheduled_at || '').replace(' ', 'T'); dD = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(sD) ? sD : sD + 'Z'); }
-      const abreD = (dD && !isNaN(dD) && typeof pzDiaInicioMs === 'function') ? pzDiaInicioMs(dD, tzD) : NaN;
-      if (Number.isFinite(abreD) && abreD > Date.now()) {
-        destapaHtml = `<span class="hf-carta-destapa">${phEn ? 'It opens at <b>00:00</b>' : 'Se destapa a las <b>00:00</b>'}</span>`;
-      }
-    } catch (e) { destapaHtml = ''; }
-    if (t.openHoy && t.futuro) {
-      // (LOTE REDISEÑO R1 · cartita SIN velo) El próximo de un día
-      // futuro va ABIERTO en la grilla también: foto visible + pill
-      // «Se postea mañana · HH:MM» + cuenta hasta que SALE. Sin
-      // «Se destapa a las 00:00» ni cuenta para verlo.
-      const pillR1 = (typeof pzHoyPillSalida === 'function') ? pzHoyPillSalida(p, (typeof pcTz === 'function') ? pcTz() : undefined, phEn) : '';
-      const cuentaR1 = (typeof pzHoyCuentaSaleTxt === 'function') ? pzHoyCuentaSaleTxt(p.scheduled_at, phEn) : '';
-      const cuentaHtmlR1 = cuentaR1 ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at || ''))}">${esc(cuentaR1)}</span>` : '';
-      // (LOTE HOY-AVATAR-FEED · 8/11 · mock aprobado por Valentino) La banda
-      // de caption va DEBAJO de la imagen, fuera de .hf-tile: nada de texto
-      // pegado sobre la foto. La cuenta (data-pz-cuenta-sale) viaja con la banda.
-      const capR1 = pillR1 ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${cuentaHtmlR1}</span>` : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
-      return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
-    }
-    if (t.openHoy) {
-      // (LOTE HOY-AVATAR-FEED · 8/11) Igual que la rama futura: la banda
-      // de caption va debajo de la imagen, fuera de .hf-tile.
-      return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span><span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span></span>`;
-    }
-    // (VARIANTE B · 6/11 · elección Valentino 19:31 «MÁS MAGIA») La
-    // carta velada del feed es una tarjeta DESTACADA a todo lo ancho
-    // (hf-cell-velada, grid-column 1/-1): el mock B es una carta ancha,
-    // no una tile 3/4. Halo dorado que respira (hf-carta-halo), 7
-    // destellos ✦, contenido centrado (píldora «El próximo», cuenta en
-    // dorado, chip «Mañana · 17:00») y Posty DENTRO de la carta (su cara en
-    // círculo de 72px con anillo dorado, abajo al centro dentro del área azul, con
-    // «Posty lo está cuidando ✨» debajo). La celda entera abre el
-    // ritual (data-pz-abrir-ritual en la celda, el handler usa
-    // closest): tocar la carta o a Posty revela las opciones.
-    return `<span class="hf-cell hf-cell-velada" data-hf-filtro="pendientes" data-pz-abrir-ritual="1"><span class="hf-carta-halo"><span class="hf-tile hf-carta-oculta hf-carta-magia hf-carta-respira" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pz-abrir-ritual="1" role="button" tabindex="0" aria-label="${phEn ? 'Next post, hidden. Tap to see the options' : 'Próximo posteo, oculto. Tocá para ver las opciones'}"><span class="hf-carta-velo" aria-hidden="true"></span>${hoyBadge}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-carta-contenido"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${cuentaHtml}${destapaHtml}${ocChip}<span class="hf-carta-posty" aria-hidden="true"><img src="ai-avatar.png" alt=""></span></span></span></span><span class="hf-carta-leyenda">${phEn ? 'Posty is looking after it ✨' : 'Posty lo está cuidando ✨'}</span></span>`;
+    const pillR1 = (typeof pzHoyPillSalida === 'function') ? pzHoyPillSalida(p, (typeof pcTz === 'function') ? pcTz() : undefined, phEn) : '';
+    const cuentaR1 = (typeof pzHoyCuentaSaleTxt === 'function') ? pzHoyCuentaSaleTxt(p.scheduled_at, phEn) : '';
+    const cuentaHtmlR1 = cuentaR1 ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at || ''))}">${esc(cuentaR1)}</span>` : '';
+    const capR1 = pillR1 ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${cuentaHtmlR1}</span>` : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
+    return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
   }
   return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${hoyBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span></span>`;
 }
