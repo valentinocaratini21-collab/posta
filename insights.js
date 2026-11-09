@@ -269,4 +269,24 @@ async function fetchFollowers(igUserId, accessToken) {
   }
 }
 
-module.exports = { getCreds, fetchMediaInsights, fetchBestHour, syncComments, replyComment, syncDMs, sendDM, fetchFollowers };
+// Lista de medios del IG conectado (LOTE SACAR-FEED-IMPULSAR-HOY ·
+// v846): id (= ig_media_id real, lo único que Meta puede pautar),
+// caption, tipo, URLs, fecha, conteos y permalink (de ahí sale el
+// shortcode para casar con el snapshot localizado). Fail-closed: sin
+// credenciales o con la API caída, devuelve [] y el llamador sigue
+// solo con la tabla local, nunca se cuelga ni inventa nada.
+async function fetchUserMedia(db, userId) {
+  const creds = getCreds(db, userId);
+  if (!creds) return [];
+  try {
+    const data = await igGet(`/${creds.igUserId}/media`, creds.accessToken, {
+      fields: 'id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink',
+      limit: '25',
+    });
+    return Array.isArray(data.data) ? data.data : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+module.exports = { getCreds, fetchMediaInsights, fetchBestHour, syncComments, replyComment, syncDMs, sendDM, fetchFollowers, fetchUserMedia };

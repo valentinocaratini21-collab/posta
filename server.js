@@ -9655,6 +9655,98 @@ app.get('/api/ads/billetera/feed', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar tu feed' }); }
 });
 
+// (LOTE SACAR-FEED-IMPULSAR-HOY · v846) El picker lista el FEED
+// ENTERO, no solo la tabla local: los posteos reales de Instagram
+// (recents) no tienen fila local y el picker no los veía. La lista de
+// medios viene de la API de IG (ig_media_id real = lo único que Meta
+// puede pautar); la foto sale del snapshot localizado cuando el
+// shortcode coincide, si no de la URL de la API. Fail-closed: sin IG
+// conectado o con la API lenta/caída (carrera de 3 s), el picker sigue
+// solo con la tabla local, nunca se cuelga ni inventa nada. Las filas
+// que devuelve tienen la forma de posts (id null = sin fila local) y
+// pasan por adsBilletera.elegiblesParaAds igual que las locales.
+function igShortcodeDePermalink(url) {
+  const m = String(url || '').match(/\/(p|reel|tv)\/([^/?#]+)/);
+  return m ? m[2] : '';
+}
+async function igMediaParaPicker(db, uid) {
+  let media = [];
+  try {
+    const { fetchUserMedia } = require('./insights');
+    media = await Promise.race([
+      fetchUserMedia(db, uid),
+      new Promise((res) => setTimeout(() => res([]), 3000)),
+    ]);
+  } catch (e) { media = []; }
+  if (!Array.isArray(media)) media = [];
+  // Foto localizada del snapshot (estable) por shortcode; si no hay,
+  // la URL de la API (transitoria, pero el picker la muestra igual).
+  let snapImg = {};
+  try {
+    const snap = homeSnapshotGet(uid);
+    const recents = (snap && snap.payload && Array.isArray(snap.payload.recents)) ? snap.payload.recents : [];
+    for (const r of recents) { if (r && r.shortcode && r.img) snapImg[String(r.shortcode)] = r.img; }
+  } catch (e) {}
+  const tz = userTz(uid);
+  return media.filter((m) => m && m.id && !String(m.id).startsWith('demo_')).map((m) => {
+    const tipo = String(m.media_type || '').toLowerCase();
+    const sc = igShortcodeDePermalink(m.permalink || '');
+    const ymd = ymdInTz(m.timestamp, tz);
+    return {
+      id: null, // sin fila local: se adopta al impulsar
+      image_path: (sc && snapImg[sc]) || (tipo === 'video' ? (m.thumbnail_url || m.media_url || '') : (m.media_url || m.thumbnail_url || '')),
+      caption: String(m.caption || ''),
+      ig_media_id: String(m.id),
+      status: 'published',
+      week_key: ymd ? mondayKeyOf(ymd) : null,
+      media_type: tipo === 'video' ? 'video' : (tipo === 'carousel_album' ? 'carousel' : 'image'),
+      published_at: m.timestamp || '',
+      reach: 0, likes: Number(m.like_count || 0), comments: Number(m.comments_count || 0), saved: 0,
+      solo_ig: true,
+    };
+  }).filter((r) => r.image_path || r.caption);
+}
+// Adoptar un reciente de IG sin fila local (v846): se verifica que el
+// medio sea del usuario (lista fresca de la API) y se crea la fila
+// local publicada con su permalink (la grilla lo deduplica por
+// shortcode: no rinde dos veces). Después el impulso sigue el flujo de
+// siempre. Si ya existe fila con ese ig_media_id, se adopta la
+// existente (idempotente).
+async function adoptarRecienteIg(db, uid, igMediaId) {
+  try {
+    const ex = db.prepare('SELECT id FROM posts WHERE user_id = ? AND ig_media_id = ?').get(uid, igMediaId);
+    if (ex) return { ok: true, post_id: ex.id, ya_existia: true };
+  } catch (e) {}
+  let media = [];
+  try {
+    const { fetchUserMedia } = require('./insights');
+    media = await Promise.race([
+      fetchUserMedia(db, uid),
+      new Promise((res) => setTimeout(() => res([]), 3000)),
+    ]);
+  } catch (e) { media = []; }
+  const m = (Array.isArray(media) ? media : []).find((x) => x && String(x.id) === String(igMediaId));
+  if (!m) return { ok: false, status: 404, motivo: 'posteo_no_encontrado' };
+  let img = '';
+  const sc = igShortcodeDePermalink(m.permalink || '');
+  try {
+    const snap = homeSnapshotGet(uid);
+    const recents = (snap && snap.payload && Array.isArray(snap.payload.recents)) ? snap.payload.recents : [];
+    const hit = recents.find((r) => r && r.shortcode && String(r.shortcode) === sc && r.img);
+    if (hit) img = hit.img;
+  } catch (e) {}
+  if (!img) { const tipo = String(m.media_type || '').toLowerCase(); img = tipo === 'video' ? (m.thumbnail_url || m.media_url || '') : (m.media_url || m.thumbnail_url || ''); }
+  if (!img) return { ok: false, status: 503, motivo: 'sin_datos' };
+  const tz = userTz(uid);
+  const ymd = ymdInTz(m.timestamp, tz);
+  const tipo = String(m.media_type || '').toLowerCase();
+  try {
+    const info = db.prepare(`INSERT INTO posts (user_id, image_path, caption, status, published_at, ig_media_id, ig_permalink, week_key, media_type)
+      VALUES (?,?,?,?,?,?,?,?,?)`).run(uid, img, String(m.caption || ''), 'published', m.timestamp || new Date().toISOString(), String(m.id), String(m.permalink || ''), ymd ? mondayKeyOf(ymd) : null, tipo === 'video' ? 'video' : (tipo === 'carousel_album' ? 'carousel' : 'image'));
+    return { ok: true, post_id: Number(info.lastInsertRowid) };
+  } catch (e) { return { ok: false, status: 500, motivo: 'sin_datos' }; }
+}
+
 // Elegibles para el picker: posteos publicados con ig_media_id (los únicos
 // que Meta puede pautar), sin los que ya tienen pauta activa o pendiente.
 // El mejor posteo de la semana (el de la carta) va marcado como
@@ -9686,6 +9778,15 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
     } catch (e) { rows = []; }
     const wk = mondayKeyOf(tzToday(userTz(uid)));
     const mejor = elegirMejorPosteoSemana(rows.filter((r) => r.week_key === wk));
+    // (v846) El feed entero: los medios de IG sin fila local se suman
+    // (dedup por ig_media_id: la fila local manda, con sus métricas).
+    // El recomendado sigue saliendo solo de las filas locales con
+    // métricas (la misma fuente de la carta).
+    let soloIg = [];
+    try { soloIg = await igMediaParaPicker(db, uid); } catch (e) { soloIg = []; }
+    const idsLocales = new Set(rows.map((r) => String(r.ig_media_id || '')));
+    const extra = soloIg.filter((r) => r.ig_media_id && !idsLocales.has(String(r.ig_media_id)));
+    const todos = rows.concat(extra).sort((a, b) => String(b.published_at || '').localeCompare(String(a.published_at || '')));
     let impulsados = new Set();
     try { impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id)); } catch (e) { impulsados = new Set(); }
     // (LOTE REDISEÑO SIMPLE RS-4 · 9/11) ?incluir_impulsados=1: la hoja
@@ -9693,7 +9794,7 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
     // ausentes) + el día de publicación. Sin el flag, la respuesta es
     // byte-idéntica a la de antes (el picker del tab Ads no los ve).
     const incluirImp = String(req.query.incluir_impulsados || '') === '1';
-    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? {} : { motivo: gate.code || 'page_not_authorized' }), elegibles: adsBilletera.elegiblesParaAds(rows, mejor ? mejor.id : null, impulsados, { incluirImpulsados: incluirImp, semanaActual: wk }) });
+    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? {} : { motivo: gate.code || 'page_not_authorized' }), elegibles: adsBilletera.elegiblesParaAds(todos, mejor ? mejor.id : null, impulsados, { incluirImpulsados: incluirImp, semanaActual: wk }) });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron cargar tus posteos' }); }
 });
 
@@ -9725,7 +9826,17 @@ app.get('/api/ads/billetera/buscar', requireAuth, async (req, res) => {
     } catch (e) { rows = []; }
     let impulsados = new Set();
     try { impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id)); } catch (e) { impulsados = new Set(); }
-    res.json({ ok: true, resultados: adsBilletera.elegiblesParaAds(rows, null, impulsados) });
+    // (v846) El buscador también ve el feed entero: los medios de IG
+    // sin fila local cuya caption trae la palabra se suman (mismo dedup
+    // por ig_media_id que el picker).
+    let extraBuscar = [];
+    try {
+      const soloIg = await igMediaParaPicker(db, uid);
+      const idsLocales = new Set(rows.map((r) => String(r.ig_media_id || '')));
+      const ql = q.toLowerCase();
+      extraBuscar = soloIg.filter((r) => r.ig_media_id && !idsLocales.has(String(r.ig_media_id)) && String(r.caption || '').toLowerCase().includes(ql));
+    } catch (e) { extraBuscar = []; }
+    res.json({ ok: true, resultados: adsBilletera.elegiblesParaAds(rows.concat(extraBuscar), null, impulsados) });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo buscar tus posteos' }); }
 });
 
@@ -9758,10 +9869,21 @@ app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req,
   try {
     const uid = req.session.userId;
     if (!destacadoSemana.boostHabilitado(process.env)) return res.status(403).json({ ok: false, motivo: 'boost_deshabilitado' });
-    const posteoId = Number(req.body.posteoId) || 0;
+    const posteoIdReq = Number(req.body.posteoId) || 0;
+    const igMediaIdReq = String(req.body.igMediaId || '').trim();
     const montoUSD = Number(req.body.montoUSD);
     if (!adsBilletera.validarMontoUSD(montoUSD)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
-    if (!posteoId) return res.status(400).json({ ok: false, motivo: 'sin_posteo' });
+    if (!posteoIdReq && !igMediaIdReq) return res.status(400).json({ ok: false, motivo: 'sin_posteo' });
+    // (v846) Impulsar un reciente de IG sin fila local: se adopta (se
+    // verifica que el medio sea del usuario y se crea la fila) y el
+    // flujo sigue igual con el id adoptado.
+    let posteoId = posteoIdReq;
+    if (!posteoId && igMediaIdReq) {
+      let ad = null;
+      try { ad = await adoptarRecienteIg(db, uid, igMediaIdReq); } catch (e) { ad = null; }
+      if (!ad || !ad.ok) return res.status((ad && ad.status) || 503).json({ ok: false, motivo: (ad && ad.motivo) || 'sin_datos' });
+      posteoId = ad.post_id;
+    }
     const cand = db.prepare('SELECT id, status, ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(posteoId, uid);
     if (!cand) return res.status(404).json({ ok: false, motivo: 'posteo_no_encontrado' });
     if (cand.status !== 'published' || !cand.ig_media_id) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
@@ -33524,7 +33646,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v848';
+const BUILD_ID = '20261105-v846';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

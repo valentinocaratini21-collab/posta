@@ -113,7 +113,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v844 (estampado)', ver.status === 200 && ver.json && ver.json.build === '20261105-v844', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v846 (estampado)', ver.status === 200 && ver.json && ver.json.build === '20261105-v846', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 
@@ -233,7 +233,7 @@ function extractClient() {
     if (!s) return { error: 'falta ' + name };
     parts.push(s);
   }
-  for (const sig of ['function chatStripCelebrate(', 'function linkifyEsc(', 'function chatMsgHtml(',
+  for (const sig of ['function chatStripCelebrate(', 'function linkifyEsc(', 'function pzChatHoraFmt(', 'function chatHoraHtml(', 'function chatAppendMsg(', 'function chatMsgHtml(',
     'function pzSftT(', 'function pzSftEn(', 'async function pzSftChatArmarUno(', 'async function pzSftChatProponer() {',
     'function pzSftChatTarjetaArmada(', 'async function pzSftPedirCambio() {', 'async function pzSftCambiarImagen() {', 'function pzSubirFases(', 'async function pzSubirCompletar() {']) {
     const s = fnFrom(app, sig);

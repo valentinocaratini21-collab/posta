@@ -91,7 +91,7 @@ ok(!!speech, 'extrae pzHoySpeechHTML');
 ok(speech.includes('<div class="pz-hoy-speech-row">'), 'el saludo se envuelve en .pz-hoy-speech-row');
 ok(!speech.includes('pz-hoy-speech-ava'), 'sin carita en el saludo (HOY-AVATAR-FEED: la cara vive solo en el encabezado)');
 ok(speech.includes('data-pz-hoy-chat="1"'), 'el botón conserva data-pz-hoy-chat (abre el chat)');
-ok(speech.includes('<span class="pz-hoy-saludo">'), 'el saludo sigue en su span');
+ok(!speech.includes('<span class="pz-hoy-saludo">'), 'el saludo YA NO está en su span (murió en v846)');
 ok(!speech.includes('pz-hoy-nota'), 'sin nota (chat-mejora)');
 ok(speech.includes('if (hoyPost)') && speech.includes('else if (pendientes > 0)') && speech.includes('else if (haySemana)'), 'las 4 ramas del cuerpo siguen (hoyPost / pendientes / haySemana / else)');
 const spRule = css.slice(css.indexOf('#inicioView .pz-hoy-speech{'), css.indexOf('}', css.indexOf('#inicioView .pz-hoy-speech{')) + 1);
@@ -101,10 +101,11 @@ ok(spRule.length > 0 && !spRule.includes('2px solid #0A1E33') && spRule.includes
 ok(css.includes('#inicioView .pz-hoy-card,#inicioView .pz-hoy-conserje{margin-bottom:14px}'), 'CSS: ritmo de espaciado de las secciones Hoy (PARTES 1/2: upload/semana/vacio salieron de la regla)');
 
 // Render real de pzHoySpeechHTML (texto intacto, solo presentación).
-const saludo = extractFn(app, 'function pzHoySaludoTxt');
+// (v846) pzHoySaludoTxt murió: la burbuja ya no saluda por hora.
 const hora = extractFn(app, 'function pzHoyHoraCorta');
-ok(!!saludo && !!hora, 'extrae pzHoySaludoTxt + pzHoyHoraCorta');
-vm.runInContext(saludo + '\n' + hora + '\n' + speech, ctx);
+ok(!app.includes('function pzHoySaludoTxt'), 'pzHoySaludoTxt murió en v846');
+ok(!!hora, 'extrae pzHoyHoraCorta');
+vm.runInContext(hora + '\n' + speech, ctx);
 const S = ctx.pzHoySpeechHTML;
 const hoyPost = { scheduled_at: new Date(Date.now() + 3600 * 1000).toISOString() };
 const sHoy = S({ hoyPost, pendientes: 1, haySemana: true, en: false, tz: 'America/New_York' });
@@ -115,6 +116,7 @@ ok(sHoy.startsWith('<div class="pz-hoy-speech-row">'), 'render: el mensaje empie
 ok(!sHoy.includes('<img'), 'render: sin carita (0 imgs en la fila del saludo)');
 ok(sHoy.includes('data-pz-hoy-chat="1"') && sHoy.includes('<b>'), 'render hoyPost: botón + hora en negrita');
 ok(sHoy !== sPend && sPend !== sSem && sSem !== sVacio, 'las 4 ramas rinden textos distintos (el texto sigue variando por estado)');
+ok(!sHoy.includes('¡Buen día!') && !sHoy.includes('¡Buenas tardes!') && !sHoy.includes('¡Buenas noches!'), 'render: la burbuja ya no saluda (v846)');
 const sHoyEn = S({ hoyPost, pendientes: 1, haySemana: true, en: true, tz: 'America/New_York' });
 ok(sHoyEn !== sHoy, 'EN rinde distinto de ES');
 ok(!sHoy.includes('pz-hoy-nota') && !sHoyEn.includes('pz-hoy-nota'), 'render: sin nota en ES ni EN');
@@ -128,7 +130,7 @@ ok(!card.includes('22C55E'), 'la tarjeta del posteo no trae verde');
 const lotCss = css.slice(css.indexOf('LOTE HOY-REDISEÑO v810'));
 ok(!lotCss.includes('22C55E'), 'el bloque del lote no pone verde en ningún lado (eso es v807)');
 ok(!app.includes("('🔥 ' + (rachaN === 1 ? (en ? '1 day' : '1 día') : rachaN + (en ? ' days' : ' días')))"), 'la píldora de racha salió (PARTE 5; era v808/v815)');
-ok(srv.includes("const BUILD_ID = '20261105-v848'"), 'server.js solo BUILD v848 estampado (re-pin v848)');
+ok(srv.includes("const BUILD_ID = '20261105-v846'"), 'server.js con BUILD v846 estampado (preparador)');
 
 /* ---------- 5. Censo ---------- */
 console.log('— 5. censo —');

@@ -3,7 +3,8 @@
 // (1) la foto arma el posteo sola y se muestra como TARJETA con la frase
 // fija, nunca una pregunta abierta antes; (2) debajo de la tarjeta SOLO
 // botones: «Sale así» / «Cambiar día» (píldoras de días libres) /
-// «Cambiar texto» (ahí mismo) / «Otra foto» (cicla las fotos libres);
+// «Otra foto» (cicla las fotos libres); (v846: «Cambiar texto» murió;
+// el cambio se pide por voz con [Cambiar algo])
 // (3) varias fotos → huecos consecutivos + «Aprobar todas»; (4) semana
 // completa → la tarjeta dice que sale el lunes que viene; (5) «Otra foto»
 // en el modo-propuesta cicla las fotos del cliente (GAP del Lote A: solo
@@ -56,16 +57,16 @@ function reFrom(src, re) {
 // ---------- Parte A: estática ----------
 function parteA() {
   console.log('— A) estática: pins y marcadores del lote —');
-  check('A0 BUILD v844 en server.js', srvSrc.includes("const BUILD_ID = '20261105-v844';"));
+  check('A0 BUILD v846 en server.js', srvSrc.includes("const BUILD_ID = '20261105-v846';"));
   check('A0b app.js del lote (28+ marcadores chat-clicks)', (appSrc.match(/LOTE CHAT-CLICKS/g) || []).length >= 10, `marcadores=${(appSrc.match(/LOTE CHAT-CLICKS/g) || []).length}`);
   // §1 app.js — funciones nuevas
-  for (const f of ['async function pzSftChatArmarUno(', 'async function pzSftChatAprobarTodas(', 'async function pzSftChatAprobarUno(', 'function pzSftChatMarcarAprobada(', 'function pzSftHoyYmd(', 'function pzSftChatPregunta(', 'async function pzSftChatPreguntaResponder(', 'async function pzSftChatCambiarDia(', 'async function pzSftChatMoverDia(', 'async function pzSftChatGuardarTexto(', 'async function pzSftChatOtraFoto(', 'function chatIdeaPhotoPool(', 'var PZ_SFT_ARMADOS = {};', 'var PZ_OTRAFOTO_IDX = {};', 'var PZ_SFT_PREGUNTA_ACTIVA = null;']) {
+  for (const f of ['async function pzSftChatArmarUno(', 'async function pzSftChatAprobarTodas(', 'async function pzSftChatAprobarUno(', 'function pzSftChatMarcarAprobada(', 'function pzSftHoyYmd(', 'function pzSftChatPregunta(', 'async function pzSftChatPreguntaResponder(', 'async function pzSftChatCambiarDia(', 'async function pzSftChatMoverDia(', 'async function pzSftChatOtraFoto(', 'function chatIdeaPhotoPool(', 'var PZ_SFT_ARMADOS = {};', 'var PZ_OTRAFOTO_IDX = {};', 'var PZ_SFT_PREGUNTA_ACTIVA = null;']) {
     check('A1 existe ' + f.replace('async function ', '').replace('function ', '').replace('(', ''), appSrc.includes(f), f);
   }
   // §1 la tarjeta: botones por postId, frase y renombre
   check('A2 la tarjeta pasa postId a Aprobar', appSrc.includes('onclick="pzSftChatAprobar(this, ${pid})"'));
   check('A2b la tarjeta tiene «Aprobar todas»', appSrc.includes('onclick="pzSftChatAprobarTodas()"'));
-  check('A2c la tarjeta tiene «Cambiar texto» por postId', appSrc.includes('onclick="pzSftChatCambiarTexto(${pid})"'));
+  check('A2c la tarjeta YA NO tiene «Cambiar texto» (murió en v846; el cambio es por voz)', !appSrc.includes('onclick="pzSftChatCambiarTexto(${pid})"') && !appSrc.includes('pzSftChatGuardarTexto('));
   check('A2d la tarjeta tiene «Cambiar día» por postId', appSrc.includes('onclick="pzSftChatCambiarDia(${pid})"'));
   check('A2e la tarjeta tiene «Otra foto» por postId', appSrc.includes('onclick="pzSftChatOtraFoto(${pid})"'));
   check('A2f «Aprobar ✓» ya no existe en app.js (ahora «Sale así»)', !appSrc.includes('Aprobar ✓'));
@@ -107,7 +108,6 @@ function extractClient() {
     'async function pzSftChatAprobar(', 'async function pzSftChatAprobarUno(',
     'async function pzSftChatAprobarTodas(', 'function pzSftChatMarcarAprobada(',
     'function pzSftHoyYmd(', 'function pzSftChatTarjetaArmada(',
-    'function pzSftChatCambiarTexto(', 'async function pzSftChatGuardarTexto(',
     'async function pzSftChatCambiarDia(', 'async function pzSftChatMoverDia(',
     'async function pzSftChatOtraFoto(', 'function pzSftChatBotones(',
     'function pzSftChatQuitarBotones(',
@@ -203,7 +203,7 @@ async function parteB() {
     const card = ctx._dom.cards.join('\n');
     check('B1b la tarjeta trae foto + fecha + caption', card.includes('pz-sft-img') && card.includes('Sale el martes 10/11 a las 19:00') && card.includes('Caption del posteo.'), card.slice(0, 300));
     check('B1c la tarjeta tiene «Sale así» (no «Aprobar ✓»)', card.includes('Sale así') && !card.includes('Aprobar ✓'), card.slice(0, 300));
-    check('B1d la tarjeta tiene Cambiar texto / Cambiar día / Otra foto / Usar la foto', card.includes('Cambiar texto') && card.includes('Cambiar día') && card.includes('Otra foto') && card.includes('Usar la foto que envié'), card.slice(0, 300));
+    check('B1d la tarjeta tiene Cambiar día / Otra foto / Usar la foto, sin Cambiar texto (v846)', !card.includes('Cambiar texto') && card.includes('Cambiar día') && card.includes('Otra foto') && card.includes('Usar la foto que envié'), card.slice(0, 300));
     check('B1e con UNA foto no hay «Aprobar todas»', !card.includes('Aprobar todas'), card.slice(0, 300));
     check('B1f la tarjeta tiene id por postId', card.includes('id="pzSftCard-101"') && card.includes('id="pzSftCardBtns-101"'), card.slice(0, 300));
   }
@@ -407,27 +407,18 @@ async function parteB() {
     check('B10c la línea «Sale el…» se actualiza en el lugar', cu && String(cu.innerHTML).includes('Sale el miércoles 11/11 a las 19:00'), cu ? cu.innerHTML : 'sin cuando');
   }
 
-  // B11: «Cambiar texto» edita inline y guarda por save-draft.
+  // B11 (v846): «Cambiar texto» murió con su editor. La tarjeta trae
+  // [Cambiar algo] (por voz) y ningún camino abre el teclado.
   {
-    const patched = [];
     const ctx = mkChatCtx(async (url) => ARM_OK(101));
-    ctx.api.patch = async (url, body) => { patched.push(body); return { ok: true }; };
-    const cardEl = ctx._dom.mkEl('pzSftCard-101');
-    const slotEl = ctx._dom.mkEl('pzSftEdit-101');
-    const taEl = ctx._dom.mkEl('pzSftEditTa-101');
-    taEl.value = 'Caption nueva, editada en el chat.';
-    ctx._dom.els['pzSftCard-101'] = cardEl;
-    ctx._dom.els['pzSftEdit-101'] = slotEl;
-    ctx._dom.els['pzSftEditTa-101'] = taEl;
     vm.createContext(ctx);
     vm.runInContext(loaded.code, ctx);
     await vm.runInContext('pzSftChatProponer()', ctx);
-    await vm.runInContext('pzSftChatCambiarTexto(101)', ctx);
-    check('B11 el editor inline se abre con la caption', String(slotEl.innerHTML).includes('textarea') && String(slotEl.innerHTML).includes('Caption del posteo.'), String(slotEl.innerHTML).slice(0, 200));
-    await vm.runInContext('pzSftChatGuardarTexto(101)', ctx);
-    check('B11b guardar usa save-draft con la caption nueva', patched.length === 1 && patched[0].action === 'save-draft' && patched[0].caption === 'Caption nueva, editada en el chat.', JSON.stringify(patched));
-    const cap = cardEl.querySelector('.pz-sft-cap');
-    check('B11c la caption de la tarjeta se actualiza en el lugar', cap && cap.textContent === 'Caption nueva, editada en el chat.', cap ? cap.textContent : 'sin cap');
+    const card = ctx._dom.cards.join('\n');
+    check('B11 la tarjeta ya no trae «Cambiar texto» (murió en v846)', !card.includes('Cambiar texto'), card.slice(0, 300));
+    check('B11b la tarjeta trae [Cambiar algo] por voz en su lugar', card.includes('Cambiar algo') && card.includes('onclick="pzCambioVoz(101)"'), card.slice(0, 300));
+    check('B11c pzSftChatCambiarTexto ya no existe en el cliente', vm.runInContext("typeof pzSftChatCambiarTexto", ctx) === 'undefined');
+    check('B11d pzSftChatGuardarTexto ya no existe en el cliente', vm.runInContext("typeof pzSftChatGuardarTexto", ctx) === 'undefined');
   }
 }
 
@@ -636,7 +627,7 @@ async function parteD() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('D0b /api/version trae el BUILD v844', ver.status === 200 && ver.json && ver.json.build === '20261105-v844', JSON.stringify(ver.json));
+    check('D0b /api/version trae el BUILD v846', ver.status === 200 && ver.json && ver.json.build === '20261105-v846', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('D0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 

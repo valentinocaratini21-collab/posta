@@ -926,60 +926,24 @@ function pzShellHeadHTML(tab) {
   // línea): sin segundo encabezado y sin robar alto con el teclado.
   if (tab === 'chat') return '';
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const neg = (() => { try {
-    const b1 = (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.negocio) ? String(BB.estado.negocio).trim() : '';
-    if (b1) return b1;
-    const b2 = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name) ? String(PROFILE.business_name).trim() : '';
-    return b2;
-  } catch (e) { return ''; } })();
-  // (LOTE SIMPLIFICAR-APP · PARTE 5 · 9/11: el encabezado es la IDENTIDAD
-  // y muestra el NOMBRE DEL NEGOCIO, nunca el @ — ni como título ni como
-  // subtítulo. Cadena: BB.estado.negocio (oficina, cargado lazy) →
-  // PROFILE.business_name (lo trae refreshSession al arrancar; la misma
-  // fuente que el resto de la app usa para el nombre del negocio) →
-  // «¡Hola!» solo si no hay nombre. El saludo vive solo en el mensaje de
-  // Posty en Hoy (LOTE SALUDO-UNICO).)
-  const titulo = neg ? esc(neg) : (en ? 'Hi!' : '¡Hola!');
+  // (v846 · decisión Valentino 12:04: el encabezado es con quién
+  // hablás, no quién sos. Título fijo «Posty.» para TODAS las cuentas,
+  // subtítulo fijo «tu community manager» / «your community manager»,
+  // punto verde permanente sobre el avatar (Posty atiende día y noche).
+  // SUPERSEDE simplificar-app Parte 5 (mostraba el nombre del negocio):
+  // el nombre del negocio sigue en el perfil que encabeza la grilla
+  // del feed (homeHeadHTML). La máquina de escribir murió con el título
+  // fijo: el título ya no varía.)
   return `<header class="pz-shell-head">
     <button type="button" class="pz-shell-ident" onclick="bbGo('#/app/chat')" aria-label="${en ? 'Open the chat with Posty' : 'Abrir el chat con Posty'}">
-      <img src="ai-avatar.png" alt="Posty" class="pz-shell-ava">
-      <span class="pz-shell-who"><b id="pzShellSaludo">${titulo}</b></span>
+      <span class="pz-shell-ava-wrap"><img src="ai-avatar.png" alt="Posty" class="pz-shell-ava"><span class="pz-shell-dot" aria-hidden="true"></span></span>
+      <span class="pz-shell-who"><b>Posty<span class="pdot">.</span></b><small>${en ? 'your community manager' : 'tu community manager'}</small></span>
     </button>
     <span class="pz-shell-acts">
       <button type="button" class="pz-shell-ic" onclick="rsShareOpen()" aria-label="${en ? 'Share Posty' : 'Compartir Posty'}">${pzIc('shareUp', 20)}</button>
       <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes')" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button>
     </span>
   </header>`;
-}
-function pzSaludoEscribir() {
-  // Máquina de escribir sobre la IDENTIDAD del encabezado (nombre del
-  // negocio; «¡Hola!» solo si no hay nombre), ~1 s,
-  // solo una vez por carga, al pintar. El saludo según la
-  // hora («¡Buen día! ☀️» etc.) vive en la burbuja de Posty en Hoy (R1);
-  // el encabezado ya no saluda (LOTE SALUDO-UNICO).
-  try {
-    if (typeof window !== 'undefined' && window.__pzSaludoEscrito) return;
-    if (typeof window !== 'undefined') window.__pzSaludoEscrito = true;
-    const el = (typeof document !== 'undefined') ? document.getElementById('pzShellSaludo') : null;
-    if (!el) return;
-    const txt = String(el.textContent || '');
-    if (!txt) return;
-    const reducido = (typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-    if (reducido) return;
-    el.classList.add('typing');
-    let i = 0;
-    const step = Math.max(24, Math.floor(1000 / txt.length));
-    const tick = () => {
-      const nodo = (typeof document !== 'undefined') ? document.getElementById('pzShellSaludo') : null;
-      if (!nodo) return;
-      i++;
-      nodo.textContent = txt.slice(0, i);
-      if (i < txt.length) setTimeout(tick, step);
-      else { try { nodo.classList.remove('typing'); } catch (e) {} }
-    };
-    el.textContent = '';
-    setTimeout(tick, step);
-  } catch (e) {}
 }
 function pzShellDatosHoy() {
   // UN fetch por carga: /api/ritual/hoy. La tarjeta del posteo de hoy
@@ -1028,11 +992,11 @@ function bbShell(tab, content) {
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
   const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
-  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'feed' || tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
+  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Hoy', 'Today'))}${tabBtn('feed', '#/app/feed', 'Feed')}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
+    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Hoy', 'Today'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
     ${rsShareSheetHTML()}
   </div>`;
 }
@@ -1249,7 +1213,7 @@ async function bbChatContent() {
   try {
     const r = await api.get('/api/ideas/chat');
     if (r && Array.isArray(r.messages) && r.messages.length) {
-      CHAT = r.messages.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.text).map((m) => ({ role: m.role, text: String(m.text).slice(0, 2000) }));
+      CHAT = r.messages.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.text).map((m) => ({ role: m.role, text: String(m.text).slice(0, 2000), ts: Date.parse(String(m.created_at || '')) || 0, id: Number(m.id) || 0 }));
     }
   } catch (e) {}
   return `
@@ -1594,13 +1558,13 @@ function mxPoderesDe(p) {
 function mxPoderesBB() {
   try { return (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.poderes) ? mxPoderesDe(BB.estado.poderes) : null; } catch (e) { return null; }
 }
-// (RS-5 · REDISEÑO SIMPLE · mock v10) La barra es de 3: Hoy, Feed,
-// Chat. Las rutas viejas (numeros, ads, jardin-posty) siguen vivas por
-// URL pero no tienen pestaña: devuelven '' (ninguna pestaña activa).
+// (RS-5 · REDISEÑO SIMPLE · mock v10 · v846: la barra es de 2: Hoy,
+// Chat. La pestaña Feed salió: el feed ya vive en Hoy. Las rutas
+// viejas (numeros, ads, jardin-posty) siguen vivas por URL pero no
+// tienen pestaña: devuelven '' (ninguna pestaña activa).
 function mxTabKey(tab) {
   if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat') return tab;
   if (tab === 'inicio') return 'inicio';
-  if (tab === 'feed') return 'feed';
   if (tab === 'schedule' || tab === 'post') return 'semana';
   return '';
 }
@@ -6102,8 +6066,10 @@ function mzIsMobile() {
 }
 function mzHomeHash() { return '#/app/inicio'; } // POSTY SOLO // (v331 addendum 22/10) decisión de Valentino: la home es el feed literal EN TODOS los tamaños — el aterrizaje por defecto es Inicio también en desktop; la Agenda queda a un toque (tab Jardín).
 // (RS-5 · REDISEÑO SIMPLE · mock v10) Barra de 3 pestañas y nada más:
-// Hoy · Feed · Chat. Sin Análisis (vive como una línea en Hoy, RS-2),
-// sin Impulsar (vive en el Feed por RS-4: botón «Impulsar posteo»),
+// Hoy · Chat. Sin Análisis (vive como una línea en Hoy, RS-2),
+// sin Impulsar (vive en Hoy como sección, v846: la pestaña Feed
+// salió y el feed ya vive en Hoy; el botón «Impulsar posteo» arriba
+// del Feed murió con la pestaña),
 // sin Nivel (el jardín no tiene lugar en el rediseño; dónde vive Nivel
 // es decisión pendiente de Valentino — el motor queda, sin pestaña).
 // El chat YA NO es pantalla completa sin pestañas: el dock también está
@@ -6112,10 +6078,9 @@ function mzHomeHash() { return '#/app/inicio'; } // POSTY SOLO // (v331 addendum
 // abridor hasta R1; la función se conserva).
 function mzTabsHTML(tab) {
   const on = tab === 'inicio' ? 'inicio'
-    : tab === 'feed' ? 'feed'
     : tab === 'chat' ? 'chat' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Hoy', 'Today'))}${t('feed', 'feed', pzIc('grid'), 'Feed')}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Hoy', 'Today'))}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -6198,14 +6163,13 @@ function appShell(tab, content) {
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Today' : 'Hoy'}</button>
-    <button class="drawer-link ${tab === 'feed' ? 'on' : ''}" data-tab="feed"><span class="di">${pzIc('grid')}</span>Feed</button>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">${pzIc('chat')}</span>Chat</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">${pzIc('logout')}</span>Salir</button>
   </aside>
   <!-- R2 · Feed abre con su cabecera como el mock: sin checklist arriba (vive en Hoy). -->
-  ${(tab === 'chat' || tab === 'inicio' || tab === 'schedule' || tab === 'feed') ? '' : setupChecklistHtml(undefined)}
+  ${(tab === 'chat' || tab === 'inicio' || tab === 'schedule') ? '' : setupChecklistHtml(undefined)}
   <div class="app-shell">
     ${pzBackDesktopHTML(tab)}
     ${pzShellHeadHTML(tab)}
@@ -8395,6 +8359,7 @@ let CHAT_STYLE_IDX = 0;
 let CHAT_CAPTION = null; // {caption, hashtags} generados al cerrar la idea
 let CHAT_CAPTIONS = []; // 3 opciones de texto para elegir
 let CHAT_CAP_SEL = 0;
+let CHAT_CAPTION_TOUCHED = false; // el caption lo dictó el cliente: no se regenera (v846)
 
 function proposalHTML() {
   if (!CHAT_IDEA) return '';
@@ -8420,12 +8385,6 @@ function proposalHTML() {
         <button class="cp-link" id="chatMoreImg" type="button">↻ Otra imagen</button>
         <span class="cp-dot">·</span>
         <button class="cp-link" id="chatMoreCaps" type="button">↻ Otros textos</button>
-        <span class="cp-dot">·</span>
-        <button class="cp-link" id="chatEditTx" type="button">${pzIc('pencil', 13)} Editar</button>
-      </div>
-      <div id="chatEditBox" hidden>
-        <textarea class="in" id="chatCaption" rows="3" placeholder="Tu texto…" oninput="this.dataset.touched='1'">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
-        <input class="in" id="chatHashtags" placeholder="#hashtags…" oninput="this.dataset.touched='1'" value="${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}" style="margin-top:6px">
       </div>
       <div class="chat-proposal-btns">
         <button class="btn btn-primary" id="chatMkPost">Hacerlo posteo</button>
@@ -8434,13 +8393,9 @@ function proposalHTML() {
     </div>`;
 }
 
-// "✎ Editar": muestra/oculta el editor de texto
-document.addEventListener('click', (e) => {
-  const t = e.target && e.target.closest ? e.target.closest('#chatEditTx') : null;
-  if (!t) return;
-  const box = document.getElementById('chatEditBox');
-  if (box) box.hidden = !box.hidden;
-});
+// (v846 · CHAT SOLO POR AUDIO) «✎ Editar» murió con el editor de texto:
+// el caption se elige tocando una de las 3 opciones, o se dicta por voz
+// (chatAcceptIdea lo guarda en CHAT_CAPTION con CHAT_CAPTION_TOUCHED).
 
 // Genera (o regenera) 3 opciones de texto para la idea cerrada
 async function refreshChatCaption() {
@@ -8452,12 +8407,11 @@ async function refreshChatCaption() {
     const caps = (out.captions && out.captions.length ? out.captions : [out.caption]).map(String).filter(Boolean);
     CHAT_CAPTIONS = caps.slice(0, 3);
     CHAT_CAP_SEL = 0;
-    CHAT_CAPTION = { caption: CHAT_CAPTIONS[0] || '', hashtags: out.hashtags || '' };
+    // (v846) Sin editor de texto: el caption dictado por el cliente no se
+    // pisa; si no hay dictado, se toma la primera opción generada.
+    if (!CHAT_CAPTION_TOUCHED) CHAT_CAPTION = { caption: CHAT_CAPTIONS[0] || '', hashtags: out.hashtags || '' };
+    else if (CHAT_CAPTION && !CHAT_CAPTION.hashtags) CHAT_CAPTION.hashtags = out.hashtags || '';
     renderChatCaps();
-    const ta = $('#chatCaption');
-    if (ta && !ta.dataset.touched) ta.value = CHAT_CAPTION.caption;
-    const hg = $('#chatHashtags');
-    if (hg && !hg.dataset.touched) hg.value = CHAT_CAPTION.hashtags;
   } catch (e) { /* se genera al crear el borrador */ }
 }
 
@@ -8475,11 +8429,8 @@ async function chatMoreCaptions() {
       CHAT_CAPTIONS = caps.slice(0, 3);
       CHAT_CAP_SEL = 0;
       CHAT_CAPTION = { caption: CHAT_CAPTIONS[0], hashtags: out.hashtags || (CHAT_CAPTION && CHAT_CAPTION.hashtags) || '' };
+      CHAT_CAPTION_TOUCHED = false;
       renderChatCaps();
-      const ta = $('#chatCaption');
-      if (ta) { ta.value = CHAT_CAPTION.caption; delete ta.dataset.touched; }
-      const hg = $('#chatHashtags');
-      if (hg && !hg.dataset.touched) hg.value = CHAT_CAPTION.hashtags;
     }
   } catch (e) { /* quedan las opciones anteriores */ }
   const b2 = $('#chatMoreCaps');
@@ -8545,8 +8496,7 @@ function renderChatCaps() {
     b.onclick = () => {
       CHAT_CAP_SEL = i;
       CHAT_CAPTION = { caption: c, hashtags: (CHAT_CAPTION && CHAT_CAPTION.hashtags) || '' };
-      const ta = $('#chatCaption');
-      if (ta) { ta.value = c; ta.dataset.touched = '1'; }
+      CHAT_CAPTION_TOUCHED = true;
       box.querySelectorAll('.chat-cap-opt').forEach((el, j) => el.classList.toggle('sel', j === i));
     };
     box.appendChild(b);
@@ -8883,18 +8833,55 @@ function linkifyEsc(text) {
   }).join('');
 }
 
+// (v846 · HORA EN CADA MENSAJE) Hora corta de envío en la zona de la
+// cuenta (misma convención que pzTemaHora: pcTz + Intl 24 h). Sin ts,
+// no hay hora: nunca se inventa.
+function pzChatHoraFmt(ts) {
+  if (!ts) return '';
+  try {
+    const tz = (typeof pcTz === 'function') ? pcTz() : undefined;
+    return new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }).format(new Date(Number(ts)));
+  } catch (e) { try { const d = new Date(Number(ts)); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); } catch (e2) { return ''; } }
+}
+function chatHoraHtml(ts) {
+  const h = pzChatHoraFmt(ts);
+  return h ? `<span class="chat-msg-hora">${esc(h)}</span>` : '';
+}
+// (v846 · ÚLTIMO ABAJO) Inserción ordenada por hora de envío: el mensaje
+// nuevo va antes del primer .chat-msg con data-ts mayor, o al final.
+// Así ningún camino (re-render, poll, cola de intercambios) deja un
+// mensaje viejo debajo de uno nuevo. Los nodos que no son .chat-msg
+// (chips, tarjetas) no ordenan: el mensaje nuevo cae después del
+// último .chat-msg, como siempre.
+function chatAppendMsg(box, html, ts) {
+  if (!box) return null;
+  const t = Number(ts) || 0;
+  let ref = null;
+  try {
+    const kids = box.querySelectorAll(':scope > .chat-msg[data-ts]');
+    for (let i = 0; i < kids.length; i++) {
+      const k = Number(kids[i].dataset.ts) || 0;
+      if (t && k && k > t) { ref = kids[i]; break; }
+    }
+  } catch (e) {}
+  if (ref) ref.insertAdjacentHTML('beforebegin', html);
+  else box.insertAdjacentHTML('beforeend', html);
+  return ref ? ref.previousElementSibling : box.lastElementChild;
+}
+
 // HTML de un mensaje del chat: si trae el marcador de logo candidato,
 // renderiza el banner confirmable; si no, la burbuja normal.
-function chatMsgHtml(role, text) {
+function chatMsgHtml(role, text, ts) {
   text = chatStripCelebrate(text); // el marcador [celebrate] jamás se ve
   // (LOTE CHAT-MUSE · «…») Una fila guardada con texto «…» es el artefacto
   // del tipeo viejo: nunca se rinde.
   if (String(text || '').trim() === '…') return '';
   // Banner "¿publicamos tu primero?": texto + botón táctil de 1 tap.
   if (role !== 'user' && FP_MARKER_RE.test(String(text || ''))) {
-    return `<div class="chat-msg ai fp-banner">`
+    return `<div class="chat-msg ai fp-banner" data-ts="${Number(ts) || ''}">`
       + `<div>${esc(chatStripFpMarker(text))}</div>`
       + `<button type="button" class="btn btn-primary btn-block" data-fp-pub style="margin-top:10px;min-height:48px;touch-action:manipulation">${pzIc('bolt', 18)} Publicar mi primero</button>`
+      + chatHoraHtml(ts)
       + `</div>`;
   }
   const m = String(text || '').match(LC_MARKER_RE);
@@ -8904,21 +8891,22 @@ function chatMsgHtml(role, text) {
     const fm = String(text || '').match(FOTO_MARKER_RE);
     const imgPath = (fm[1] || '').trim();
     const clean = String(text || '').replace(FOTO_MARKER_RE, '').trim();
-    return `<div class="chat-msg ai"><div>${linkifyEsc(clean)}</div>`
+    return `<div class="chat-msg ai" data-ts="${Number(ts) || ''}"><div>${linkifyEsc(clean)}</div>`
       + (imgPath ? `<img src="${esc(imgPath)}" alt="" style="width:100%;border-radius:12px;display:block;margin-top:8px" onerror="this.style.display='none'">` : '')
+      + chatHoraHtml(ts)
       + `</div>`;
   }
-  if (!m || role === 'user') return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}">${linkifyEsc(text)}</div>`;
+  if (!m || role === 'user') return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}" data-ts="${Number(ts) || ''}">${linkifyEsc(text)}${chatHoraHtml(ts)}</div>`;
   const imgPath = (m[1] || '').trim();
   const img = imgPath
     ? `<img src="${esc(imgPath)}" alt="Posible logo de tu marca" loading="lazy" style="width:96px;height:96px;object-fit:cover;border-radius:16px;display:block;margin:8px auto" onerror="this.closest('.lc-banner').remove()">`
     : '';
-  return `<div class="chat-msg ai lc-banner" data-lc="${esc(imgPath)}" style="touch-action:manipulation">`
+  return `<div class="chat-msg ai lc-banner" data-lc="${esc(imgPath)}" data-ts="${Number(ts) || ''}" style="touch-action:manipulation">`
     + `<div>${esc(chatStripLcMarker(text))}</div>${img}`
     + `<div style="display:flex;gap:8px;margin-top:8px">`
     + `<button class="lc-yes" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:999px;background:#2793C8;color:#fff;font-size:15px;font-weight:700">Sí, ese es ${pzIc('checkCircle', 18)}</button>`
     + `<button class="lc-no" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:999px;background:transparent;color:#2793C8;font-size:15px;font-weight:700">No ${pzIc('reject', 18)}</button>`
-    + `</div></div>`;
+    + `</div>` + chatHoraHtml(ts) + `</div>`;
 }
 
 // Confirma o rechaza el logo candidato y reemplaza el banner por texto chico.
@@ -8971,8 +8959,9 @@ async function trialRebuildWeek() {
       say('✅ ¡En marcha! Te aviso cuando esté ✨', true);
       const box = $('#chatBox');
       if (box) {
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc('Dale, la estoy rearmando ⏳ Te aviso acá mismo cuando tu semana esté lista ✨')}</div>`);
-        chatScroll();
+        const rts = Date.now();
+        chatAppendMsg(box, chatMsgHtml('assistant', 'Dale, la estoy rearmando ⏳ Te aviso acá mismo cuando tu semana esté lista ✨', rts), rts);
+        chatScroll(true);
       }
     } else if (r && r.reason === 'has_drafts') {
       say('✅ Ya tenés borradores ✨', true);
@@ -9031,9 +9020,20 @@ async function chatLoadHistory() {
     if (r && Array.isArray(r.messages) && r.messages.length) {
       CHAT = r.messages
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text && String(m.text).trim() !== '…')
-        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000) }));
+        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: Date.parse(String(m.created_at || '')) || 0, id: Number(m.id) || 0 }))
+        .sort((a, b) => (a.ts - b.ts) || (a.id - b.id));
       const box = $('#chatBox');
-      if (box) box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
+      if (box) {
+        box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts)).join('');
+        // (v846 · ÚLTIMO ABAJO) El re-render no se come la burbuja de voz
+        // optimista en vuelo: si sigue enviando, vuelve en su lugar por ts.
+        try {
+          if (typeof VOICE_BUBBLE_EL !== 'undefined' && VOICE_BUBBLE_EL && typeof VOICE_STATE !== 'undefined' && VOICE_STATE === 'sending' && VOICE_BUBBLE_URL && VOICE_BUBBLE_TS) {
+            if (!box.querySelector('.chat-msg.vb-voice[data-ts="' + VOICE_BUBBLE_TS + '"]')) chatAppendMsg(box, pzVoiceBubbleHTML(VOICE_BUBBLE_URL, VOICE_DUR, 'sending', VOICE_BUBBLE_TS), VOICE_BUBBLE_TS);
+            VOICE_BUBBLE_EL = box.querySelector('.chat-msg.vb-voice[data-ts="' + VOICE_BUBBLE_TS + '"]') || VOICE_BUBBLE_EL;
+          }
+        } catch (e) {}
+      }
       // Auto-trigger por marcador: mensajes NUEVOS con [celebrate] festejan una sola vez.
       chatCelebrateScan(CHAT);
     }
@@ -9070,8 +9070,10 @@ async function chatLoadHistory() {
       CHAT_STYLE_USED = [];
       applyChatOrder(r.idea);
       chatRenderProposal();
-      const ta0 = $('#chatCaption');
-      if (ta0 && r.idea.caption) { ta0.value = r.idea.caption; ta0.dataset.touched = '1'; }
+      // Texto dictado por el cliente: va tal cual a CHAT_CAPTION y se
+      // respeta (CHAT_CAPTION_TOUCHED); refreshChatCaption solo rellena
+      // hashtags/opciones.
+      if (r.idea.caption) { CHAT_CAPTION = { caption: r.idea.caption, hashtags: (CHAT_CAPTION && CHAT_CAPTION.hashtags) || '' }; CHAT_CAPTION_TOUCHED = true; }
       refreshChatCaption();
     }
     // (LOTE CHAT-SCROLL) El historial recién pintado arranca abajo y el
@@ -9099,10 +9101,8 @@ document.addEventListener('visibilitychange', () => {
 // Crea el borrador usando el ejemplo elegido.
 // Si se eligió "solo foto", se usa la foto directo sin diseño.
 async function draftFromPreview(idea, prev) {
-  const ta = $('#chatCaption');
-  let caption = ta ? ta.value.trim() : '';
-  const hg = $('#chatHashtags');
-  let hashtags = hg ? hg.value.trim() : ((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '');
+  let caption = (CHAT_CAPTION && CHAT_CAPTION.caption) || '';
+  let hashtags = (CHAT_CAPTION && CHAT_CAPTION.hashtags) || '';
   if (!caption) {
     const out = await api.post('/api/generate', { topic: idea.titulo, tipo: idea.tipo });
     caption = out.caption || '';
@@ -9403,7 +9403,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
   // explica qué se le puede pedir al chat («hola! soy Posty. decime qué
   // necesitás...»). Sin historial abre con ese saludo; con historial, directo
   // en el chat: historial + input.
-  const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
+  const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts)).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
@@ -9439,16 +9439,12 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="pz-voicebar">
       <div class="pz-voice-primary">
-        <button class="pz-mic-big" id="chatMicSend" type="button" title="Hablarle a Posty" aria-label="Hablarle a Posty: tocá para grabar">${pzIc('mic', 26)}</button>
+        <button class="pz-cam-btn" id="chatPhotoBtn" type="button" title="Mandar una foto o video" aria-label="Mandar una foto o video">${pzIc('camera', 20)}</button>
         <div class="pz-voice-txt"><b>${gzT('Hablarle a Posty', 'Talk to Posty')}</b><small>${gzT('Tocá el micrófono grande y decile lo que sea, como en WhatsApp.', 'Tap the big microphone and tell it anything, like on WhatsApp.')}</small></div>
-        <button class="pz-write-toggle" id="pzWriteToggle" type="button">${gzT('Escribir', 'Write')}</button>
+        <button class="pz-mic-big" id="chatMicSend" type="button" title="Hablarle a Posty" aria-label="Hablarle a Posty: tocá para grabar">${pzIc('mic', 26)}</button>
       </div>
-      <div class="chat-input-row pz-write-row" id="pzWriteRow" style="display:none">
-        <input id="chatInput" class="in" placeholder="escribile a posty…" maxlength="2000" autocomplete="off">
-        <button class="btn btn-soft" id="chatPhotoBtn" title="Mandar una foto">${pzIc('camera', 18)}</button>
-        <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
-      </div>
-      <p class="pz-voice-hint">${gzT('Todo se responde tocando. Escribir es solo la excepción.', 'Everything is answered by tapping. Writing is only the exception.')}</p>
+      <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
+      <p class="pz-voice-hint">${gzT('Todo se responde tocando o hablando.', 'Everything is answered by tapping or talking.')}</p>
     </div>
     <div id="chatMsg"></div>
     <div id="mcFaltan"></div>
@@ -9468,10 +9464,15 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     vozAccion(Number(b.dataset.vozId), b.dataset.vozAccion, b.dataset.vozValor || undefined);
   });
 })();
-// (LOTE CHAT-PERFECTO) El botón 📷 abre el picker de fotos de su propia
+// (LOTE CHAT-PERFECTO) El botón 📷 abre el picker de su propia
 // tarjeta de chat (no el primero del documento): así anda en el chat
 // principal, en pantalla completa, en el chat del posteo y en la
 // landing con sesión. Delegado una sola vez, no por vista.
+// (v846 · CARRIL EXPRÉS) La camarita vive en la barra de voz, visible
+// siempre: abre el picker del sistema (foto o video) y arranca el
+// exprés. El accept se fija acá a foto+video en cada tap, para que
+// ningún otro camino (p. ej. el de video, que lo deja en video/*)
+// le cambie el picker a la camarita.
 (function chatPhotoDelegar() {
   if (window.__chatPhotoDelegado) return;
   window.__chatPhotoDelegado = true;
@@ -9481,29 +9482,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     try {
       const card = (b.closest && b.closest('#chatCard')) || document;
       const picker = (card.querySelector ? card.querySelector('#chatFile') : null) || document.getElementById('chatFile');
-      // (LOTE SUBIR-FOTO-DIRECTA) accept SOLO image/* ANTES del click:
-      // la camarita es foto, no video (ver pzSftFotoAlChat).
-      if (picker) { picker.accept = 'image/*'; picker.click(); }
-    } catch (err) {}
-  });
-})();
-// (RS-5 · VOZ PRIMERO) «Escribir» abre el teclado: el input del chat
-// vive detrás del toggle en todas las superficies que usan chatCardHTML.
-// Delegado una sola vez (como chatPhotoDelegar), no por vista.
-(function pzWriteToggleDelegar() {
-  if (window.__pzWriteToggleDelegado) return;
-  window.__pzWriteToggleDelegado = true;
-  document.addEventListener('click', (e) => {
-    const b = e.target && e.target.closest ? e.target.closest('#pzWriteToggle') : null;
-    if (!b) return;
-    try {
-      const card = (b.closest && b.closest('#chatCard')) || document;
-      const row = (card.querySelector ? card.querySelector('#pzWriteRow') : null) || document.getElementById('pzWriteRow');
-      if (!row) return;
-      const open = row.style.display !== 'none';
-      row.style.display = open ? 'none' : 'flex';
-      try { b.textContent = open ? gzT('Escribir', 'Write') : gzT('Cerrar', 'Close'); } catch (err) { b.textContent = open ? 'Escribir' : 'Cerrar'; }
-      if (!open) setTimeout(() => { try { const ci = (card.querySelector ? card.querySelector('#chatInput') : null) || document.getElementById('chatInput'); if (ci) ci.focus(); } catch (err) {} }, 60);
+      if (picker) { picker.accept = 'image/*,video/*'; picker.click(); }
     } catch (err) {}
   });
 })();
@@ -9584,10 +9563,11 @@ async function vozAccion(id, accion, valor) {
 }
 
 function chatSay(text) {
-  CHAT.push({ role: 'assistant', text });
+  const ts = Date.now();
+  CHAT.push({ role: 'assistant', text, ts });
   const box = $('#chatBox');
-  if (box) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', text));
-  chatScroll();
+  if (box) chatAppendMsg(box, chatMsgHtml('assistant', text, ts), ts);
+  chatScroll(true);
   postyNotify('Posty', text);
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text }] }).catch(() => {}); } catch (e) {}
 }
@@ -9609,9 +9589,7 @@ function renderChatOptions(options) {
     b.textContent = label;
     b.onclick = () => {
       wrap.remove();
-      const inp = $('#chatInput');
-      if (inp) inp.value = label;
-      chatSend();
+      chatSend(label);
     };
     wrap.appendChild(b);
   });
@@ -9978,7 +9956,7 @@ function chatRenderProposal() {
 function chatDismissProposal() {
   CHAT_IDEA = null; CUSTOM_PAL = null;
   CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
-  CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
+  CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0; CHAT_CAPTION_TOUCHED = false;
   chatRenderProposal();
   chatSay('dale, la dejamos por acá 👍 qué más hacemos?');
   try { api.post('/api/ideas/chat/log', { clearIdea: true }).catch(() => {}); } catch (e) {}
@@ -10082,13 +10060,14 @@ function pzSubirPreguntasArmar(prop, media) {
 
 let pzSubirFlujo = null;
 
-function pzSubirCerrar(escribir) {
+// (v846 · CHAT SOLO POR AUDIO) Cerrar la hoja ya no enfoca ningún
+// input: si se cierra para hablar, arranca el mic; si se cierra con
+// la X, el fondo o al completar, solo se cierra (el mic no se
+// auto-dispara).
+function pzSubirCerrar(aVoz) {
   const f = pzSubirFlujo; pzSubirFlujo = null;
   const el = document.getElementById('pzSfpBack'); if (el) el.remove();
-  if (escribir && f) {
-    const inp = $('#chatInput');
-    if (inp) { inp.value = f.textoGuardado || ''; try { inp.focus(); } catch (e) {} }
-  }
+  if (aVoz) { try { if (typeof voiceToggle === 'function') voiceToggle(); } catch (e) {} }
 }
 
 // (LOTE SUBIR-FOTO-CAMBIO · v844) La hoja de subir-foto, compartida
@@ -10101,8 +10080,8 @@ function pzSubirSheetCrear(cuerpoHtml) {
     <div class="pz-sfp-head"><img src="/ai-avatar.png" alt="Posty"><b>Posty</b><button type="button" class="pz-sfp-x" aria-label="Cerrar">✕</button></div>
     <div class="pz-sfp-body">${cuerpoHtml}</div>
   </div>`;
-  back.querySelector('.pz-sfp-x').onclick = () => pzSubirCerrar(true);
-  back.addEventListener('click', (e) => { if (e.target === back) pzSubirCerrar(true); });
+  back.querySelector('.pz-sfp-x').onclick = () => pzSubirCerrar();
+  back.addEventListener('click', (e) => { if (e.target === back) pzSubirCerrar(); });
   document.body.appendChild(back);
   return back;
 }
@@ -10111,7 +10090,6 @@ function pzSubirFotoAbrir(photo, textoGuardado) {
   if (pzSubirFlujo) return;
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   pzSubirFlujo = { photo, media: photo.kind === 'video' ? 'video' : 'photo', textoGuardado: textoGuardado || '', prop: null, qs: [], idx: 0, ans: {}, mode: 'qs' };
-  const inp = $('#chatInput'); if (inp) { inp.value = ''; try { inp.blur(); } catch (e) {} }
   pzSubirSheetCrear(`<div class="pz-sfp-cargando">${esc(en ? 'Putting your options together…' : 'Armando tus opciones…')}</div>`);
   api.get('/api/subir-foto/propuesta').then(prop => {
     if (!pzSubirFlujo || !prop || !prop.ok) { pzSubirFallo(); return; }
@@ -10125,8 +10103,8 @@ function pzSubirFallo() {
   const f = pzSubirFlujo; if (!f) return;
   const body = document.querySelector('#pzSfpBack .pz-sfp-body');
   const en = f.prop && f.prop.lang === 'en';
-  if (body) body.innerHTML = `<div class="pz-sfp-q">${esc(en ? 'I could not put your options together, write me what you want for this photo 👇' : 'no pude armar tus opciones, escribime qué querés para esta foto 👇')}</div>
-    <button type="button" class="pz-sfp-escribir">${esc(en ? 'Write to Posty' : 'Escribirle a Posty')}</button>`;
+  if (body) body.innerHTML = `<div class="pz-sfp-q">${esc(en ? 'I could not put your options together, tell me with your voice what you want for this photo 👇' : 'no pude armar tus opciones, decímelo con tu voz 👇')}</div>
+    <button type="button" class="pz-sfp-escribir">${esc(en ? 'Tell me with your voice' : 'Decímelo con tu voz')}</button>`;
   const b = document.querySelector('#pzSfpBack .pz-sfp-escribir');
   if (b) b.onclick = () => pzSubirCerrar(true);
 }
@@ -10165,7 +10143,7 @@ function pzSubirRender() {
     <div class="pz-sfp-q">${esc(q.q)}</div>
     <div class="pz-sfp-opts">${opts}</div>
     ${pzSubirAceleradorHtml(en)}
-    <button type="button" class="pz-sfp-escribir">${esc(en ? 'Write to Posty instead' : 'Escribirle a Posty')}</button>`;
+    <button type="button" class="pz-sfp-escribir">${esc(en ? 'Tell me with your voice instead' : 'Decímelo con tu voz')}</button>`;
   body.querySelectorAll('.pz-sfp-opt').forEach(b => b.onclick = () => {
     const v = b.dataset.v;
     if (q.id === 'when' && v === '__otro') { f.mode = 'days'; pzSubirRender(); return; }
@@ -10255,16 +10233,13 @@ async function pzSubirCompletar() {
   } catch (e) { console.error('[pzSubirCompletar]', e && (e.message || e)); r = { ok: false, _error: e }; }
   if (faseTimer) clearInterval(faseTimer);
   const photo = f.photo;
-  const textoGuardado = f.textoGuardado;
   const fueCancelado = !!(r && r._error && r._error.name === 'AbortError' && /cancelado/i.test(String(r._error.message || '')));
-  pzSubirCerrar(false);
+  pzSubirCerrar();
   const box = $('#chatBox');
   if (fueCancelado) {
     // Cancelar = nada se programó (el borrador, si el servidor llegó a
     // crearlo, queda borrador y nunca sale solo). La foto queda para reintentar.
-    if (box) { box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(en ? 'Cancelled — nothing was scheduled. Send the photo again whenever you want 🙏' : 'cancelado, no se programó nada. Mandá la foto de nuevo cuando quieras 🙏')}</div>`); chatScroll(); }
-    const inp = $('#chatInput');
-    if (inp && textoGuardado) inp.value = textoGuardado;
+    if (box) { const cts = Date.now(); chatAppendMsg(box, chatMsgHtml('assistant', en ? 'Cancelled — nothing was scheduled. Send the photo again whenever you want 🙏' : 'cancelado, no se programó nada. Mandá la foto de nuevo cuando quieras 🙏', cts), cts); chatScroll(true); }
     return;
   }
   if (r && r.ok) {
@@ -10283,21 +10258,18 @@ async function pzSubirCompletar() {
   // Si no hubo respuesta (timeout), se dice que nada quedó programado.
   const errTxt = r && r._error ? String(((r._error && r._error.name) || '') + ' ' + ((r._error && r._error.message) || '')) : '';
   const msg = (r && r.message) ? r.message : (/abort|timeout/i.test(errTxt) ? (en ? 'It took too long and nothing was scheduled, try again 🙏' : 'tardó demasiado y no se programó nada, probá de nuevo 🙏') : (en ? 'I could not schedule it, try again 🙏' : 'no pude programarlo, probá de nuevo 🙏'));
-  if (box) { box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(msg)}</div>`); chatScroll(); }
-  const inp = $('#chatInput');
-  if (inp && textoGuardado) inp.value = textoGuardado;
+  if (box) { const ets = Date.now(); chatAppendMsg(box, chatMsgHtml('assistant', msg, ets), ets); chatScroll(true); }
 }
 
 // Tarjeta de vista previa de subir-foto en el chat (doctrina 7/11):
-// foto + caption + [Sale así] / [Cambiar algo] / [Editar texto].
-// Nada se programa desde acá salvo [Sale así]. Misma forma que la
-// tarjeta revelada del ritual y que la tarjeta del carril exprés.
+// foto + caption + [Sale así] / [Cambiar algo] (por voz). Nada se
+// programa desde acá salvo [Sale así]. Misma forma que la tarjeta
+// revelada del ritual y que la tarjeta del carril exprés.
 var PZ_SUBIR_PREVIA = {}; // postId → { image_path, caption, hashtags, when, whenLabel, displayText, photo }
 var PZ_SUBIR_ULTIMO = null; // últimas respuestas, para [Probar de nuevo]
 function pzSubirPreviaBotones(pid, en) {
   return `<button type="button" class="btn btn-primary btn-sm" onclick="pzSubirPreviaProgramar(${pid})">${en ? 'Post it like this' : 'Sale así'}</button>`
-    + `<button type="button" class="btn btn-soft btn-sm" onclick="pzCambioVoz(${pid})">${en ? 'Change something' : 'Cambiar algo'}</button>`
-    + `<button type="button" class="btn btn-soft btn-sm" onclick="pzSubirPreviaEditarTexto(${pid})">${en ? 'Edit text' : 'Editar texto'}</button>`;
+    + `<button type="button" class="btn btn-soft btn-sm" onclick="pzCambioVoz(${pid})">${en ? 'Change something' : 'Cambiar algo'}</button>`;
 }
 function pzSubirTarjetaPrevia(prev) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
@@ -10307,7 +10279,7 @@ function pzSubirTarjetaPrevia(prev) {
   PZ_SUBIR_PREVIA[pid] = prev;
   const img = prev.image_path ? `<img class="pz-sfp-img" src="${esc(prev.image_path)}" alt="" style="width:100%;border-radius:12px;display:block" loading="lazy">` : '';
   const cuando = prev.whenLabel ? (en ? `Goes out ${prev.whenLabel}` : `Sale ${prev.whenLabel}`) : '';
-  const card = `<div class="chat-msg ai" id="pzSubirCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Here is how it looks — check it before it goes out' : 'Así queda — miralo antes de que salga'}</div>${img}<div style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-subir-cap" style="font-size:13px;white-space:pre-wrap">${esc(prev.caption || '')}</div>${prev.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prev.hashtags)}</div>` : ''}${prev.displayText ? `<div style="font-size:12px;color:var(--mut);margin-top:4px">${esc(prev.displayText)}</div>` : ''}<div id="pzSubirBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${pzSubirPreviaBotones(pid, en)}</div><div id="pzSubirEdit-${pid}"></div><div id="pzSubirErr-${pid}" style="font-size:12.5px;color:#7A1F1F;margin-top:6px"></div></div>`;
+  const card = `<div class="chat-msg ai" id="pzSubirCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Here is how it looks — check it before it goes out' : 'Así queda — miralo antes de que salga'}</div>${img}<div style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-subir-cap" style="font-size:13px;white-space:pre-wrap">${esc(prev.caption || '')}</div>${prev.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prev.hashtags)}</div>` : ''}${prev.displayText ? `<div style="font-size:12px;color:var(--mut);margin-top:4px">${esc(prev.displayText)}</div>` : ''}<div id="pzSubirBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${pzSubirPreviaBotones(pid, en)}</div><div id="pzSubirErr-${pid}" style="font-size:12.5px;color:#7A1F1F;margin-top:6px"></div></div>`;
   box.insertAdjacentHTML('beforeend', card);
   try { chatScroll(); } catch (e) {}
 }
@@ -10340,40 +10312,8 @@ async function pzSubirPreviaProgramar(postId) {
   if (photo) { const i = CHAT_PHOTOS.indexOf(photo); if (i >= 0) CHAT_PHOTOS.splice(i, 1); renderChatPhotos(); chatUpdateSendBtn(); }
   try { render(); } catch (e) {}
 }
-// (LOTE CHAT-CLICKS · punto 2, mismo patrón que «Cambiar texto» de la
-// tarjeta del chat) «Editar texto»: edita la caption AHÍ MISMO, sin
-// salir del chat.
-function pzSubirPreviaEditarTexto(postId) {
-  const prev = PZ_SUBIR_PREVIA[Number(postId)];
-  if (!prev || !prev.postId) return;
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const slot = document.getElementById('pzSubirEdit-' + Number(prev.postId));
-  if (!slot) return;
-  if (slot.dataset.open === '1') { slot.innerHTML = ''; slot.dataset.open = ''; return; }
-  slot.dataset.open = '1';
-  slot.innerHTML = '<div style="margin-top:8px"><textarea id="pzSubirEditTa-' + Number(prev.postId) + '" rows="3" style="width:100%;box-sizing:border-box;border-radius:10px;padding:8px;font:inherit;font-size:13px">' + esc(prev.caption || '') + '</textarea><div style="display:flex;gap:8px;margin-top:6px"><button type="button" class="btn btn-primary btn-sm" onclick="pzSubirPreviaGuardarTexto(' + Number(prev.postId) + ')">' + esc(en ? 'Save' : 'Guardar') + '</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSubirPreviaEditarTexto(' + Number(prev.postId) + ')">' + esc(en ? 'Cancel' : 'Cancelar') + '</button></div></div>';
-  try { const ta = document.getElementById('pzSubirEditTa-' + Number(prev.postId)); if (ta) ta.focus(); } catch (e) {}
-}
-async function pzSubirPreviaGuardarTexto(postId) {
-  const prev = PZ_SUBIR_PREVIA[Number(postId)];
-  if (!prev || !prev.postId) return;
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const ta = document.getElementById('pzSubirEditTa-' + Number(prev.postId));
-  if (!ta) return;
-  const txt = String(ta.value || '').trim();
-  try {
-    const d = await api.patch('/api/posts/' + encodeURIComponent(prev.postId), { action: 'save-draft', caption: txt });
-    if (!d || !d.ok) throw new Error((d && d.message) || (d && d.error) || 'fail');
-    prev.caption = txt;
-    const card = document.getElementById('pzSubirCard-' + Number(prev.postId));
-    if (card) { const cap = card.querySelector('.pz-subir-cap'); if (cap) cap.textContent = txt; }
-    const slot = document.getElementById('pzSubirEdit-' + Number(prev.postId));
-    if (slot) { slot.innerHTML = ''; slot.dataset.open = ''; }
-    toast('✅ ' + (en ? 'Text updated' : 'Texto actualizado'));
-  } catch (e) {
-    toast('😅 ' + esc((e && e.message) || (en ? 'Try again' : 'Probá de nuevo')));
-  }
-}
+// (v846 · CHAT SOLO POR AUDIO) «Editar texto» murió: la caption se
+// cambia con [Cambiar algo] por nota de voz, nunca con teclado.
 // Tarjeta de la foto ORIGINAL cuando el cambio pedido no se pudo hacer
 // (cambio_fallo): el motivo honesto + [Programar la original] /
 // [Probar de nuevo]. Nada quedó programado.
@@ -10383,7 +10323,7 @@ function pzSubirTarjetaOriginal(o) {
   if (!box || !o || !o.postId) return;
   const pid = Number(o.postId);
   PZ_SUBIR_PREVIA[pid] = { postId: pid, image_path: o.image_path, caption: o.caption, when: o.when, whenLabel: o.whenLabel, displayText: o.displayText, photo: o.photo };
-  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(o.message || (en ? 'I could not make the change you asked for.' : 'no pude hacer el cambio que pediste.'))}</div>`);
+  { const mts = Date.now(); chatAppendMsg(box, chatMsgHtml('assistant', o.message || (en ? 'I could not make the change you asked for.' : 'no pude hacer el cambio que pediste.'), mts), mts); }
   const img = o.image_path ? `<img class="pz-sfp-img" src="${esc(o.image_path)}" alt="" style="width:100%;border-radius:12px;display:block" loading="lazy">` : '';
   const cuando = o.whenLabel ? (en ? `Goes out ${o.whenLabel}` : `Sale ${o.whenLabel}`) : '';
   const card = `<div class="chat-msg ai" id="pzSubirCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'This is the original photo, without the change' : 'Esta es la foto original, sin el cambio'}</div>${img}<div style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-subir-cap" style="font-size:13px;white-space:pre-wrap">${esc(o.caption || '')}</div><div id="pzSubirBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-primary btn-sm" onclick="pzSubirPreviaProgramar(${pid})">${en ? 'Schedule the original' : 'Programar la original'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSubirReintentar()">${en ? 'Try the change again' : 'Probar el cambio de nuevo'}</button></div><div id="pzSubirErr-${pid}" style="font-size:12.5px;color:#7A1F1F;margin-top:6px"></div></div>`;
@@ -10409,21 +10349,22 @@ function chatIsShortCommand(t) {
   return w.length > 0 && w.length <= 6;
 }
 
-async function chatSend() {
+async function chatSend(textArg) {
   // (LOTE PRUEBA-ENTRADA-DIRECTA) Cuenta al primer toque: el invitado
-  // escribe pero todavía no manda — primero la hoja de crear cuenta; al
-  // crearla, este mismo chatSend se reintenta con el texto intacto (el
-  // input no se limpió porque salimos antes de mandar).
-  if (pzIsGuest()) { pzGuestAccountSheet(() => chatSend()); return; }
-  const inp = $('#chatInput');
-  const text = (inp.value || '').trim();
+  // todavía no manda — primero la hoja de crear cuenta; al crearla,
+  // este mismo chatSend se reintenta con el texto intacto (viaja en el
+  // argumento: ya no hay input que limpiar).
+  // (v846 · CHAT SOLO POR AUDIO) El texto llega como argumento (toque
+  // en una opción, transcripción de voz o envío programado): el chat
+  // ya no tiene campo de texto.
+  if (pzIsGuest()) { pzGuestAccountSheet(() => chatSend(textArg)); return; }
+  const text = String(textArg || '').trim();
   // Las fotos se pueden mandar solas, sin texto: antes el botón no hacía nada en ese caso.
   const unsent = CHAT_PHOTOS.filter(p => p.aiUrl && !p.sent);
   if (!text && !unsent.length) return;
   // (LOTE REDISENO-R6) El chat por temas se come el envío cuando el tema
   // abierto lo entiende (cambialo, dale, después, un número de consultas,
-  // el texto nuevo, la foto nueva): el resto sigue al chat normal. El
-  // hook limpia el input cuando consume; si no consume, no toca nada.
+  // el texto nuevo, la foto nueva): el resto sigue al chat normal.
   try { if (typeof pzTemaOnSend === 'function' && pzTemaOnSend(text, unsent)) return; } catch (e) {}
   const sendText = text || (unsent.length === 1 ? '📷 Te mando una foto' : `📷 Te mando ${unsent.length} fotos`);
   // (SUBIR-FOTO-PREGUNTAS) UNA foto/video sin instrucción clara → preguntas
@@ -10444,10 +10385,10 @@ async function chatSend() {
   // Las opciones tocables se usan una sola vez: al responder se descartan
   const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
   const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
-  CHAT.push({ role: 'user', text: sendText });
+  const sts = Date.now();
+  CHAT.push({ role: 'user', text: sendText, ts: sts });
   track('chat_message', { len: sendText.length });
-  box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(sendText)}</div>`);
-  inp.value = '';
+  if (box) chatAppendMsg(box, chatMsgHtml('user', sendText, sts), sts);
   chatUpdateSendBtn();
   // (LOTE CHAT-SCROLL) Enviar te deja abajo.
   chatScroll(true);
@@ -10455,15 +10396,16 @@ async function chatSend() {
   if (/diagn[oó]stico imagen/i.test(sendText)) {
     (async () => {
       try {
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(sendText)}</div>`);
-        inp.value = ''; chatUpdateSendBtn(); chatScroll();
-        const sayId = 'diagSay' + Date.now();
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a" id="${sayId}">Probando la generación de imagen…</div>`);
+        { const dts = Date.now(); chatAppendMsg(box, chatMsgHtml('user', sendText, dts), dts); }
+        chatUpdateSendBtn(); chatScroll();
+        const sayTs = Date.now();
+        const sayId = 'diagSay' + sayTs;
+        chatAppendMsg(box, `<div class="chat-msg ai" id="${sayId}" data-ts="${sayTs}">Probando la generación de imagen…${chatHoraHtml(sayTs)}</div>`, sayTs);
         chatScroll();
         const r = await api.post('/api/diag/image-test', {}, { timeout: 90000 });
         const el = document.getElementById(sayId);
         if (r && r.ok) {
-          if (el) el.innerHTML = pzIc('checkCircle', 14) + ' La generación de imagen funciona. El problema está en otro lado.';
+          if (el) el.innerHTML = pzIc('checkCircle', 14) + ' La generación de imagen funciona. El problema está en otro lado.' + chatHoraHtml(sayTs);
         } else {
           const d = r && r.diag ? r.diag : {};
           let msg = pzIc('reject', 13) + ' Encontré el problema:<br><br>';
@@ -10471,11 +10413,11 @@ async function chatSend() {
           if (d.httpStatus) msg += `<b>HTTP:</b> ${d.httpStatus}<br>`;
           if (d.hasKey === false) msg += '<b>Key:</b> no hay API key en el servidor<br>';
           if (d.bodyPreview) msg += `<b>Respuesta:</b> <small>${esc(d.bodyPreview.slice(0, 150))}</small>`;
-          if (el) el.innerHTML = msg;
+          if (el) el.innerHTML = msg + chatHoraHtml(sayTs);
         }
         chatScroll();
       } catch (e) {
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a">No pude correr el diagnóstico: ${esc(e.message || '')}</div>`);
+        { const ets = Date.now(); chatAppendMsg(box, chatMsgHtml('assistant', 'No pude correr el diagnóstico: ' + (e.message || ''), ets), ets); }
         chatScroll();
       }
     })();
@@ -10485,8 +10427,9 @@ async function chatSend() {
   if (/diagn[oó]stico semana/i.test(sendText)) {
     (async () => {
       try {
-        const sayId = 'diagWeekSay' + Date.now();
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a" id="${sayId}">Revisando por qué no se genera tu semana…</div>`);
+        const sayTs = Date.now();
+        const sayId = 'diagWeekSay' + sayTs;
+        chatAppendMsg(box, `<div class="chat-msg ai" id="${sayId}" data-ts="${sayTs}">Revisando por qué no se genera tu semana…${chatHoraHtml(sayTs)}</div>`, sayTs);
         chatScroll();
         const r = await api.post('/api/diag/week-test', {}, { timeout: 90000 });
         const el = document.getElementById(sayId);
@@ -10507,11 +10450,11 @@ async function chatSend() {
           else msg += '<br>' + pzIc('checkCircle', 13) + ' Todo ok — la generación debería estar corriendo.';
           if (el) el.innerHTML = msg;
         } else {
-          if (el) el.innerHTML = `${pzIc('reject', 13)} No se pudo diagnosticar: ${esc((r && r.error) || 'error desconocido')}`;
+          if (el) el.innerHTML = `${pzIc('reject', 13)} No se pudo diagnosticar: ${esc((r && r.error) || 'error desconocido')}` + chatHoraHtml(sayTs);
         }
         chatScroll();
       } catch (e) {
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a">No pude correr el diagnóstico: ${esc(e.message || '')}</div>`);
+        { const ets = Date.now(); chatAppendMsg(box, chatMsgHtml('assistant', 'No pude correr el diagnóstico: ' + (e.message || ''), ets), ets); }
         chatScroll();
       }
     })();
@@ -10521,23 +10464,24 @@ async function chatSend() {
   if (/generar semana que viene/i.test(sendText)) {
     (async () => {
       try {
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(sendText)}</div>`);
-        inp.value = ''; chatUpdateSendBtn(); chatScroll();
-        const sayId = 'sweepSay' + Date.now();
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a" id="${sayId}">Generando tu semana entrante… ⏳</div>`);
+        { const dts = Date.now(); chatAppendMsg(box, chatMsgHtml('user', sendText, dts), dts); }
+        chatUpdateSendBtn(); chatScroll();
+        const sayTs = Date.now();
+        const sayId = 'sweepSay' + sayTs;
+        chatAppendMsg(box, `<div class="chat-msg ai" id="${sayId}" data-ts="${sayTs}">Generando tu semana entrante… ⏳${chatHoraHtml(sayTs)}</div>`, sayTs);
         chatScroll();
         const r = await api.post('/api/diag/run-sweep', {}, { timeout: 300000 });
         const el = document.getElementById(sayId);
         if (r && r.ok) {
           const res = r.result || {};
-          if (el) el.innerHTML = `${pzIc('checkCircle', 14)} Listo: ${res.generated || 0} semanas generadas. Recargá para verla ${pzIc('arrowUp', 13)}`;
+          if (el) el.innerHTML = `${pzIc('checkCircle', 14)} Listo: ${res.generated || 0} semanas generadas. Recargá para verla ${pzIc('arrowUp', 13)}` + chatHoraHtml(sayTs);
           try { if (typeof refreshWeekPill === 'function') refreshWeekPill(); } catch (e) {}
         } else {
-          if (el) el.innerHTML = `${pzIc('reject', 13)} No se pudo: ${esc(r.error || 'error desconocido')}`;
+          if (el) el.innerHTML = `${pzIc('reject', 13)} No se pudo: ${esc(r.error || 'error desconocido')}` + chatHoraHtml(sayTs);
         }
         chatScroll();
       } catch (e) {
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a">Error: ${esc(e.message || '')}</div>`);
+        { const ets = Date.now(); chatAppendMsg(box, chatMsgHtml('assistant', 'Error: ' + (e.message || ''), ets), ets); }
         chatScroll();
       }
     })();
@@ -10618,7 +10562,7 @@ async function showCommentsInChat() {
     : `<div class="chat-msg ai">💬 no tenés comentarios pendientes — todo respondido 👌</div>`;
   box.insertAdjacentHTML('beforeend', html);
   const say = list.length ? `te muestro los ${list.length} comentarios para responder 👆` : 'no tenés comentarios pendientes.';
-  CHAT.push({ role: 'assistant', text: say });
+  CHAT.push({ role: 'assistant', text: say, ts: Date.now() });
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: say }] }).catch(() => {}); } catch (e) {}
   bindChatComments();
   chatScroll();
@@ -10681,7 +10625,7 @@ async function showDMsInChat() {
     : `<div class="chat-msg ai">📩 no tenés mensajes pendientes — bandeja al día 👌</div>`;
   box.insertAdjacentHTML('beforeend', html);
   const say = list.length ? `te muestro los ${list.length} mensajes para responder 👆` : 'no tenés mensajes pendientes.';
-  CHAT.push({ role: 'assistant', text: say });
+  CHAT.push({ role: 'assistant', text: say, ts: Date.now() });
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: say }] }).catch(() => {}); } catch (e) {}
   bindChatDMs();
   chatScroll();
@@ -10746,7 +10690,7 @@ async function showReviewsInChat() {
     : `<div class="chat-msg ai">⭐ no tenés reseñas pendientes — todo respondido 👏</div>`;
   box.insertAdjacentHTML('beforeend', html);
   const say = list.length ? `te muestro las ${list.length} reseñas para responder 👇` : 'no tenés reseñas pendientes.';
-  CHAT.push({ role: 'assistant', text: say });
+  CHAT.push({ role: 'assistant', text: say, ts: Date.now() });
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: say }] }).catch(() => {}); } catch (e) {}
   bindChatReviews();
   chatScroll();
@@ -10781,13 +10725,12 @@ function bindChatReviews() {
 
 // Acepta la idea elegida: es el flujo EXACTO del de una sola idea (no se duplica lógica).
 function chatAcceptIdea(idea) {
-  CHAT_IDEA = idea; CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
+  CHAT_IDEA = idea; CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0; CHAT_CAPTION_TOUCHED = false;
   CHAT_STYLE_USED = [];
   applyChatOrder(idea); // foto elegida + colores del pedido
   chatRenderProposal();
-  // Texto dictado por el cliente: va tal cual al textarea y se respeta (touched)
-  const ta = $('#chatCaption');
-  if (ta && idea.caption) { ta.value = idea.caption; ta.dataset.touched = '1'; }
+  // Texto dictado por el cliente: va tal cual a CHAT_CAPTION y se respeta
+  if (idea.caption) { CHAT_CAPTION = { caption: idea.caption, hashtags: '' }; CHAT_CAPTION_TOUCHED = true; }
   refreshChatCaption(); // solo rellena hashtags/opciones; el texto dictado no se toca
 }
 
@@ -10847,8 +10790,9 @@ async function chatExchange({ text, display, extra, pushed }) {
   if (!pushed) {
     const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
     const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
-    CHAT.push({ role: 'user', text });
-    box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(display || text)}</div>`);
+    const uts = Date.now();
+    CHAT.push({ role: 'user', text, ts: uts });
+    chatAppendMsg(box, chatMsgHtml('user', display || text, uts), uts);
     // (LOTE CHAT-SCROLL) La burbuja del usuario es un envío: abajo.
     chatScroll(true);
   }
@@ -10899,13 +10843,17 @@ async function chatExchange({ text, display, extra, pushed }) {
     const replyText = String((r && r.reply) || '').trim();
     const hasPayload = !!((r && r.idea) || (Array.isArray(r.ideas) && r.ideas.length) || (Array.isArray(r.showDrafts) && r.showDrafts.length) || (r.edit && r.edit.ok) || (r && r.voz_post) || (Array.isArray(r.options) && r.options.length) || (r && r.dna) || (r && r.pending));
     if (replyText) {
-      CHAT.push({ role: 'assistant', text: replyText });
-      boxNow.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', replyText));
+      const rts = Date.now();
+      CHAT.push({ role: 'assistant', text: replyText, ts: rts });
+      chatAppendMsg(boxNow, chatMsgHtml('assistant', replyText, rts), rts);
       postyNotify('Posty', replyText);
+      chatScroll(true);
     } else if (!hasPayload) {
-      const noReply = 'no me salió la respuesta, ¿me lo repetís en una línea? 🙏';
-      CHAT.push({ role: 'assistant', text: noReply });
-      boxNow.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', noReply));
+      const noReply = 'no me salió la respuesta, ¿me lo repetís con un audio? 🙏';
+      const nts = Date.now();
+      CHAT.push({ role: 'assistant', text: noReply, ts: nts });
+      chatAppendMsg(boxNow, chatMsgHtml('assistant', noReply, nts), nts);
+      chatScroll(true);
     }
     // El ADN se completó en esta respuesta (bloque ```dna): invitar a generar de nuevo.
     // Nunca auto-disparar la generación: el cliente toca "⚡ Armemos tu semana" cuando quiere.
@@ -10917,14 +10865,19 @@ async function chatExchange({ text, display, extra, pushed }) {
     // La IA editó un borrador directo → refrescar la revisión y mostrar la imagen en el chat
     if (r.edit && r.edit.ok) {
       try { render(); } catch (e) {}
+      // (v846) El render de arriba desconecta el box viejo: se re-lee
+      // antes de pintar, si no los avisos caen en un nodo muerto.
+      const boxEdit = $('#chatBox') || boxNow;
       if (r.edit.photoFailed) {
-        boxNow.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">no pude cambiar la foto 😅 me la mandás de nuevo?</div>`);
-        chatScroll();
+        const pts = Date.now();
+        chatAppendMsg(boxEdit, chatMsgHtml('assistant', 'no pude cambiar la foto 😅 me la mandás de nuevo?', pts), pts);
+        chatScroll(true);
       }
       if (Array.isArray(r.edit.images) && r.edit.images.length) {
-        boxNow.insertAdjacentHTML('beforeend', r.edit.images.map(u =>
-          `<div class="chat-msg ai" style="max-width:100%;padding:8px"><img src="${esc(u)}" style="width:100%;border-radius:12px;display:block" alt="Borrador editado" loading="lazy"></div>`
-        ).join(''));
+        const its = Date.now();
+        chatAppendMsg(boxEdit, r.edit.images.map(u =>
+          `<div class="chat-msg ai" data-ts="${its}" style="max-width:100%;padding:8px"><img src="${esc(u)}" style="width:100%;border-radius:12px;display:block" alt="Borrador editado" loading="lazy"></div>`
+        ).join(''), its);
       }
       // (LOTE SUBIR-FOTO-CAMBIO · v844) La tarjeta de vista previa o la
       // del carril exprés vuelve con la versión nueva (si no, el cambio
@@ -10947,10 +10900,12 @@ async function chatExchange({ text, display, extra, pushed }) {
     // una línea chica bajo el input: si no se pudo responder, se dice acá.
     const boxNow = $('#chatBox') || box;
     const errText = 'no pude responder, probá de nuevo en un rato 🙏';
-    CHAT.push({ role: 'assistant', text: errText });
-    if (boxNow) boxNow.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', errText));
+    const ets = Date.now();
+    CHAT.push({ role: 'assistant', text: errText, ts: ets });
+    if (boxNow) chatAppendMsg(boxNow, chatMsgHtml('assistant', errText, ets), ets);
     const mNow = $('#chatMsg') || m;
     if (mNow) mNow.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
+    chatScroll(true);
   } finally {
     postyWorking(false);
     const btnNow = $('#chatMicSend') || btn;
@@ -10987,12 +10942,13 @@ async function pzSupervisionPoll() {
         let pinto = false;
         for (const m of nuevos) {
           if (m.role !== 'assistant' || !String(m.text || '').trim()) continue;
-          CHAT.push({ role: 'assistant', text: String(m.text) });
-          if (boxNow) boxNow.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', String(m.text)));
+          const mts = Date.parse(String(m.created_at || '')) || Date.now();
+          CHAT.push({ role: 'assistant', text: String(m.text), ts: mts });
+          if (boxNow) chatAppendMsg(boxNow, chatMsgHtml('assistant', String(m.text), mts), mts);
           try { postyNotify('Posty', String(m.text)); } catch (e) {}
           pinto = true;
         }
-        if (pinto) { try { chatScroll(); } catch (e) {} }
+        if (pinto) { try { chatScroll(true); } catch (e) {} }
         clearInterval(PZ_SUP_POLL); PZ_SUP_POLL = null;
         return;
       }
@@ -11069,10 +11025,10 @@ async function chatMakePost(asVideo) {
     CUSTOM_PAL = null;
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
     CHAT_PHOTOS = []; CHAT_PHOTO_IDX = 0; CHAT_STYLE_IDX = 0;
-    CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
+    CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0; CHAT_CAPTION_TOUCHED = false;
     const doneText = 'listo! te lo dejé en revisión acá arriba 👆 nada se programa hasta que vos lo apruebes.';
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
-    CHAT.push({ role: 'assistant', text: doneText });
+    CHAT.push({ role: 'assistant', text: doneText, ts: Date.now() });
     render();
     try { const mount = document.getElementById('chatQuickChips'); if (mount) { paintChatQuota(mount); } } catch (e) {}
     try { if (typeof refreshWeekPill === 'function') refreshWeekPill(); } catch (e) {}
@@ -11136,34 +11092,47 @@ function pzVoicePlayerHTML(audioUrl, durMs, state) {
   if (state === 'sending') row += '<div class="vb-sending-tx">' + (vozEn() ? 'Sending…' : 'Enviando…') + '</div>';
   return row;
 }
-function pzVoiceBubbleHTML(audioUrl, durMs, state) {
-  return '<div class="chat-msg u vb-voice' + (state === 'sending' ? ' vb-sending' : '') + ' msg-in">' + pzVoicePlayerHTML(audioUrl, durMs, state) + '</div>';
+function pzVoiceBubbleHTML(audioUrl, durMs, state, ts) {
+  return '<div class="chat-msg u vb-voice' + (state === 'sending' ? ' vb-sending' : '') + ' msg-in" data-ts="' + (Number(ts) || '') + '">' + pzVoicePlayerHTML(audioUrl, durMs, state) + chatHoraHtml(ts) + '</div>';
 }
-var VOICE_BUBBLE_EL = null, VOICE_BUBBLE_URL = '';
+var VOICE_BUBBLE_EL = null, VOICE_BUBBLE_URL = '', VOICE_BUBBLE_TS = 0;
 function vozBubbleSending() {
   try {
-    if (!document.getElementById('pzChatFull')) return;
     if (VOICE_BUBBLE_EL && VOICE_BUBBLE_EL.isConnected) return;
     const box = document.getElementById('chatBox');
     if (!box) return;
     VOICE_BUBBLE_URL = VOICE_URL || '';
-    box.insertAdjacentHTML('beforeend', pzVoiceBubbleHTML(VOICE_BUBBLE_URL, VOICE_DUR, 'sending'));
-    VOICE_BUBBLE_EL = box.lastElementChild;
-    try { chatScroll(); } catch (e) {}
+    VOICE_BUBBLE_TS = Date.now();
+    chatAppendMsg(box, pzVoiceBubbleHTML(VOICE_BUBBLE_URL, VOICE_DUR, 'sending', VOICE_BUBBLE_TS), VOICE_BUBBLE_TS);
+    VOICE_BUBBLE_EL = box.querySelector('.chat-msg.vb-voice[data-ts="' + VOICE_BUBBLE_TS + '"]');
+    try { chatScroll(true); } catch (e) {}
   } catch (e) {}
 }
 function vozBubbleQuitar() {
   try { if (VOICE_BUBBLE_EL && VOICE_BUBBLE_EL.remove) VOICE_BUBBLE_EL.remove(); } catch (e) {}
-  VOICE_BUBBLE_EL = null; VOICE_BUBBLE_URL = '';
+  VOICE_BUBBLE_EL = null; VOICE_BUBBLE_URL = ''; VOICE_BUBBLE_TS = 0;
 }
 function vozBubbleEnviada(durMs) {
   try {
     const el = VOICE_BUBBLE_EL;
-    if (!el || !el.isConnected) return;
+    const ts = VOICE_BUBBLE_TS || Date.now();
+    if (!el || !el.isConnected) {
+      // (v846 · ÚLTIMO ABAJO) Un re-render en medio del envío desconectó
+      // la burbuja optimista: la confirmada vuelve en SU lugar por ts,
+      // nunca al final ni duplicada.
+      const box = document.getElementById('chatBox');
+      if (box && VOICE_BUBBLE_URL && !box.querySelector('.chat-msg.vb-voice[data-ts="' + ts + '"]')) {
+        chatAppendMsg(box, pzVoiceBubbleHTML(VOICE_BUBBLE_URL, durMs || VOICE_DUR, 'sent', ts), ts);
+        const nb = box.querySelector('.chat-msg.vb-voice[data-ts="' + ts + '"]');
+        if (nb) { VOICE_BUBBLE_EL = nb; pzVoiceBubbleInit(nb, VOICE_BUBBLE_URL, durMs || VOICE_DUR); }
+      }
+      try { chatScroll(true); } catch (e) {}
+      return;
+    }
     el.classList.remove('vb-sending');
-    el.innerHTML = pzVoicePlayerHTML(VOICE_BUBBLE_URL, durMs || VOICE_DUR, 'sent');
+    el.innerHTML = pzVoicePlayerHTML(VOICE_BUBBLE_URL, durMs || VOICE_DUR, 'sent') + chatHoraHtml(ts);
     pzVoiceBubbleInit(el, VOICE_BUBBLE_URL, durMs || VOICE_DUR);
-    try { chatScroll(); } catch (e) {}
+    try { chatScroll(true); } catch (e) {}
   } catch (e) {}
 }
 function pzVoiceBubbleInit(el, audioUrl, durMs) {
@@ -11431,7 +11400,7 @@ async function voiceSend() {
   // reproductor (sin transcripto en la burbuja). El texto exacto sigue
   // yendo al pipeline (CHAT + chatExchange) como siempre.
   vozBubbleEnviada(VOICE_DUR);
-  CHAT.push({ role: 'user', text: transcript });
+  CHAT.push({ role: 'user', text: transcript, ts: (typeof VOICE_BUBBLE_TS !== 'undefined' && VOICE_BUBBLE_TS) || Date.now() });
   VOICE_URL = ''; VOICE_BLOB = null; VOICE_STATE = 'idle';
   voiceRenderBar();
   try { chatUpdateSendBtn(); } catch (e) {}
@@ -11446,14 +11415,18 @@ async function voiceSend() {
 // usan la rama sin texto y el chat completo (ahí el Enviar es un botón
 // propio y el micrófono nunca se convierte en enviar).
 function pzChatMicIdle(b) {
-  b.innerHTML = pzIc('mic', 18); b.className = 'btn btn-soft'; b.title = 'Mantener para hablar'; b.onclick = null;
+  b.innerHTML = pzIc('mic', 26); b.className = 'pz-mic-big'; b.title = 'Mantener para hablar'; b.onclick = null;
   b.onpointerdown = (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_START_X = e.clientX; VOICE_START_Y = e.clientY; voiceToggle(); };
   b.onpointermove = (e) => { if (VOICE_STATE !== 'rec') return; if ((VOICE_START_X - e.clientX) > 60) { VOICE_CANCEL = true; const hm = document.getElementById('vozCancelMsg'); if (hm) hm.style.display = ''; const ht = document.getElementById('vozHintTx'); if (ht) ht.style.display = 'none'; } };
   b.onpointerup = (e) => { if (VOICE_STATE !== 'rec') { VOICE_EARLY_UP = true; return; } if (VOICE_CANCEL) { VOICE_CANCEL = false; voiceDiscard(); } else voiceStop(); };
   b.onpointercancel = (e) => { if (VOICE_STATE !== 'rec') { VOICE_ABORTED = true; return; } VOICE_CANCEL = false; voiceDiscard(); };
 }
+// (v846 · CHAT SOLO POR AUDIO) El micrófono es siempre micrófono
+// grande: ya no se convierte en Enviar (no hay texto que mandar ni
+// botón Enviar propio). Durante grabación/vista previa/envío/fallo,
+// la barra de voz manda: el mic queda neutro y no arranca otra nota.
 function chatUpdateSendBtn() {
-  const b = $('#chatMicSend'), inp = $('#chatInput');
+  const b = $('#chatMicSend');
   if (!b) return;
   if (typeof VOICE_STATE !== 'undefined' && VOICE_STATE !== 'idle') {
     if (VOICE_STATE === 'rec') return; // grabando: el botón no se toca (la píldora lleva el timer)
@@ -11462,31 +11435,15 @@ function chatUpdateSendBtn() {
     b.onclick = null; b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null;
     return;
   }
-  const unsent = (typeof CHAT_PHOTOS !== 'undefined' && CHAT_PHOTOS.some(p => !p.sent));
-  const ready = (inp && inp.value.trim().length > 0) || unsent;
-  // (LOTE REDISENO-R6) Con botón Enviar propio (chat completo), el
-  // micrófono queda como micrófono siempre: solo se habilita/deshabilita
-  // el Enviar propio según haya algo para mandar. La presencia del botón
-  // es la condición: sin él (otras superficies), el morph de siempre.
-  const sbPropio = (typeof document !== 'undefined' && document.getElementById) ? document.getElementById('pzChatSendBtn') : null;
-  if (sbPropio) {
-    sbPropio.disabled = !ready;
-    pzChatMicIdle(b);
-    return;
-  }
-  if (ready) { b.innerHTML = pzIc('send', 16); b.className = 'btn btn-primary'; b.title = 'Enviar'; b.onclick = () => chatSend(); b.onpointerdown = null; b.onpointerup = null; b.onpointercancel = null; }
-  else pzChatMicIdle(b);
+  pzChatMicIdle(b);
 }
 
 function bindChat() {
-  const inp = $('#chatInput');
-  if (!inp) return;
   if (!window.__chatOpenT) { window.__chatOpenT = true; track('chat_open'); }
-  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); chatSend(); } });
-  inp.addEventListener('input', chatUpdateSendBtn);
-  // (LOTE CHATBAR-MAS · decisión Valentino 3/11) El + de la barra del
-  // chat salió: foto/video entran solo por el + del dock (pzDockMas),
-  // que dispara el picker #chatFile de abajo. El menú viejo no existe.
+  // (v846 · CHAT SOLO POR AUDIO) Sin campo de texto: no hay Enter ni
+  // input que cablear. La camarita vive en la barra de voz y dispara
+  // el picker #chatFile (ver chatPhotoDelegar): la foto/video se sube
+  // y el exprés propone solo.
   // (LOTE CHAT-SCROLL) Al cablear el chat, el fondo es el punto de
   // partida (como siempre) y el pin queda prendido hasta que el
   // usuario suba a leer.
@@ -11503,10 +11460,10 @@ function bindChat() {
   const file = $('#chatFile');
   if (file) file.onchange = () => { chatUploadPhotos(file.files); file.value = ''; chatUpdateSendBtn(); };
   chatUpdateSendBtn();
-  // Chips de ejemplo: un toque y el ejemplo cae en el input (no se envía solo)
+  // Chips de ejemplo: un toque lo manda directo (antes caía en el input sin enviarse)
   $$('#chatChips [data-chip]').forEach(b => b.onclick = () => {
-    const i = $('#chatInput');
-    if (i) { i.value = b.dataset.chip; i.focus(); }
+    const t = b.dataset.chip;
+    if (t) chatSend(t);
   });
   renderChatPhotos();
   renderChatPreviews();
@@ -12973,7 +12930,7 @@ async function maybePhotoWeekReminder(data) {
     try { await (window.__chatHistP || Promise.resolve()); } catch (e) {}
     const box = document.getElementById('chatBox');
     if (!box || document.getElementById('chatPhotoRem')) return;
-    box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatPhotoRem">esta semana todavía no me pasaste fotos 📸</div>`);
+    { const ets = Date.now(); chatAppendMsg(box, `<div class="chat-msg ai" id="chatPhotoRem" data-ts="${ets}">esta semana todavía no me pasaste fotos 📸${chatHoraHtml(ets)}</div>`, ets); }
     try { localStorage.setItem(key, '1'); } catch (e) {}
     // v222: sin handler de botón — la burbuja ya no tiene botón propio
     // (un solo botón de subida a la vista: el principal de Schedule).
@@ -12981,19 +12938,17 @@ async function maybePhotoWeekReminder(data) {
   } catch (e) {}
 }
 
-// (LOTE CHATTEXTO · rotación unificada) Todos los campos de chat rotan
-// entre las mismas 9 preguntas en minúscula (Valentino 3/11): #chatInput (principal,
-// fijo de Inicio y hoja — chatCardHTML repite ese id) y .hf-ask-input
-// (mini-chat de aprobación). Un solo intervalo; cada campo rota con su
-// propio índice (dataset.phI), así ninguno queda fijo por ser «el
-// segundo». Guarda única: campo con texto no rota (nunca pisar lo que
-// escribe el usuario). El foco NO bloquea: la hoja abre con el campo
-// activo (v521) y con la guarda vieja la rotación quedaba bloqueada
-// para siempre en el celular. El intervalo consulta el DOM en cada
-// tick y un observador suma los campos nuevos: re-renders y abrir/
-// cerrar la hoja no matan la rotación, y al abrirla arranca de nuevo.
-// Con prefers-reduced-motion la frase queda fija en la primera. Lista
-// por idioma según ME.lang en cada tick.
+// (LOTE CHATTEXTO · rotación unificada) Los textos de invitación rotan
+// entre las mismas 9 preguntas en minúscula (Valentino 3/11): el texto
+// del dock (.mz-ph-tx) y el placeholder del único campo que queda
+// (#chatInput, solo landing sin sesión). (v846 · CHAT SOLO POR AUDIO)
+// El campo principal del chat y el input del mini-chat murieron, así
+// que la rotación ya no toca ningún campo del chat. Un solo intervalo;
+// cada elemento rota con su propio índice (dataset.phI). Guarda única:
+// campo con texto no rota (nunca pisar lo que escribe el usuario).
+// El intervalo consulta el DOM en cada tick y un observador suma los
+// campos nuevos. Con prefers-reduced-motion la frase queda fija en la
+// primera. Lista por idioma según ME.lang en cada tick.
 const PZ_CHAT_PH = {
   es: ['¿qué idea tenés para el próximo post?', '¿tenés fotos para mandarme?', '¿alguna promo esta semana?', 'pedime exactamente lo que querés', '¿qué querés vender esta semana?', '¿hay algo nuevo en tu negocio?', '¿qué te gustaría cambiar de tu feed?', 'contame qué vendiste hoy', '¿tenés un video para armar un reel?'],
   en: ['got an idea for the next post?', 'got photos to send me?', 'any promo this week?', 'ask me for exactly what you want', 'what do you want to sell this week?', 'anything new in your business?', 'what would you like to change about your feed?', 'tell me what you sold today', 'got a video to turn into a reel?']
@@ -13051,20 +13006,10 @@ function pzPhMark(el) {
 }
 function pzChatPhNext() {
   try {
-    if (typeof PZ_PC_OPEN !== 'undefined' && PZ_PC_OPEN) {
-      var _en = false;
-      try { _en = pzPostChatIsEn(); } catch (e) {}
-      pzPhEls('#chatInput').forEach(function (el) { if (!el.value) el.placeholder = PZ_PC_EDIT_PH[_en ? 'en' : 'es']; });
-      return;
-    }
+    // (v846) Solo queda el campo de la landing sin sesión; en el chat
+    // con sesión no hay #chatInput y el selector no pinta nada.
     const list = pzChatPhList();
     pzPhEls('#chatInput').forEach(el => pzPhAdvanceOne(el, list));
-  } catch (e) {}
-}
-function pzAskPhNext() {
-  try {
-    const list = pzChatPhList();
-    pzPhEls('.hf-ask-input').forEach(el => pzPhAdvanceOne(el, list));
   } catch (e) {}
 }
 function pzDockPhNext() {
@@ -13093,7 +13038,7 @@ function pzPhAdvanceDock(el, list) {
   } catch (e) { return false; }
 }
 function pzPhTick() {
-  try { pzChatPhNext(); pzAskPhNext(); pzDockPhNext(); } catch (e) {}
+  try { pzChatPhNext(); pzDockPhNext(); } catch (e) {}
 }
 function pzPhInstallObs() {
   try {
@@ -13107,7 +13052,7 @@ function pzPhInstallObs() {
 function pzPhEnsure() {
   try {
     const list = pzChatPhList();
-    pzPhEls('#chatInput').concat(pzPhEls('.hf-ask-input')).forEach(el => {
+    pzPhEls('#chatInput').forEach(el => {
       if (!pzPhKnown(el)) { pzPhMark(el); pzPhAdvanceOne(el, list); }
     });
     pzPhEls('.mz-ph-tx').forEach(el => {
@@ -13191,8 +13136,11 @@ async function bindChatView() {
     const pre = sessionStorage.getItem('posty-chat-prefill');
     if (pre) {
       sessionStorage.removeItem('posty-chat-prefill');
-      const ci = document.getElementById('chatInput');
-      if (ci) { ci.value = pre; ci.focus({ preventScroll: true }); }
+      // (v846) Sin campo de texto: el prefill se manda directo como
+      // mensaje del cliente si el chat está pintado; si no, queda
+      // pendiente para el próximo bind.
+      if (document.getElementById('chatBox')) { try { chatSend(pre); } catch (e) {} }
+      else sessionStorage.setItem('posty-chat-prefill', pre);
     }
   } catch (e) {}
   try { pzChatPhStart(); } catch (e) {}
@@ -13372,9 +13320,10 @@ function paintTasteProposal(p) {
 
 // Mensaje del asistente solo local: no se loguea al servidor (no ensucia el contexto de la IA).
 function chatSayLocal(text) {
-  try { CHAT.push({ role: 'assistant', text }); } catch (e) {}
+  const ets = Date.now();
+  try { CHAT.push({ role: 'assistant', text, ts: ets }); } catch (e) {}
   const box = document.getElementById('chatBox');
-  if (box) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', text));
+  if (box) chatAppendMsg(box, chatMsgHtml('assistant', text, ets), ets);
   if (typeof chatScroll === 'function') chatScroll();
   if (typeof postyNotify === 'function') postyNotify('Posty', text);
 }
@@ -14235,14 +14184,16 @@ async function paintUpcoming(mount) {
 // mensaje), {go} (navega) o {do:'schedule'} (programa la semana sin salir del chat).
 function renderQuickChips(drafts, scheduled, running) {
   const card = document.getElementById('chatCard');
-  const inputRow = card ? card.querySelector('.chat-input-row') : null;
-  if (!inputRow) return;
+  // (v846) La fila de escritura murió: los chips se anclan a la barra
+  // de voz, en el mismo lugar (justo arriba del compositor).
+  const anchor = card ? card.querySelector('.pz-voicebar') : null;
+  if (!anchor) return;
   let mount = document.getElementById('chatQuickChips');
   if (!mount) {
     mount = document.createElement('div');
     mount.id = 'chatQuickChips';
     mount.className = 'chat-quick';
-    inputRow.parentNode.insertBefore(mount, inputRow);
+    anchor.parentNode.insertBefore(mount, anchor);
   }
   const dN = (drafts || []).length, sN = (scheduled || []).length;
   let chips;
@@ -14265,10 +14216,8 @@ function renderQuickChips(drafts, scheduled, running) {
     if (c && typeof c !== 'string' && c.go) { location.hash = c.go; return; }
     if (c && typeof c !== 'string' && c.do === 'schedule') { doScheduleAll(b); return; }
     const t = typeof c === 'string' ? c : (c && (c.send || c.t));
-    const i = document.getElementById('chatInput');
-    if (!i || !t) return;
-    i.value = t;
-    chatSend();
+    if (!t) return;
+    chatSend(t);
   });
   paintChatQuota(mount);
 }
@@ -14675,11 +14624,9 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false, onProg
   const handle = (PROFILE || {}).ig_username || '';
   const tpl = pickTpl(idx, useChatText, idea.titulo);
   const out = await api.post('/api/generate', { topic: idea.titulo, tipo: idea.tipo });
-  // Si viene del chat, se respeta el texto que el cliente eligió/editó (no se regenera)
-  const chatTa = useChatText ? $('#chatCaption') : null;
-  const chatHg = useChatText ? $('#chatHashtags') : null;
-  const caption = (chatTa && chatTa.value.trim()) || out.caption || '';
-  const hashtags = (chatHg && chatHg.value.trim()) || out.hashtags || '';
+  // Si viene del chat, se respeta el texto que el cliente eligió/dictó (no se regenera)
+  const caption = (useChatText && CHAT_CAPTION && CHAT_CAPTION.caption) || out.caption || '';
+  const hashtags = (useChatText && CHAT_CAPTION && CHAT_CAPTION.hashtags) || out.hashtags || '';
   let imagePath = null, mediaType = 'image';
   if (asVideo) {
     // Si el cliente subió sus propios videos, el reel ES su video (con nuestro texto).
@@ -16294,10 +16241,10 @@ async function adsView() {
    toca la barra de pestañas, Inicio/Hoy, el feed, el chat ni Ajustes.
    ============================================================ */
 let pzBoostState = null; // { elegibles, billetera, adsReady, motivoGate, boostHabilitado, adsPermiso, conversionPendiente, selId, selMonto, selPost, montosAbierto }
-let pzBoostImpulsados = new Set(); // post_id impulsados en esta sesión (además de ya_impulsado del servidor)
+let pzBoostImpulsados = new Set(); // claves pzBoostKey impulsadas en esta sesión (además de ya_impulsado del servidor)
 
 function pzBoostNewState() {
-  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: 0, selMonto: 50, selPost: null, montosAbierto: false };
+  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: '', selMonto: 50, selPost: null, montosAbierto: false };
 }
 
 function pzBoostSaldoUSD() {
@@ -16382,9 +16329,14 @@ function pzBoostNormPost(p) {
   if (!p) return null;
   if (typeof p === 'number') return { post_id: p };
   const id = Number(p.post_id != null ? p.post_id : p.id) || 0;
-  if (!id) return null;
+  const ig = String(p.ig_media_id || '').trim();
+  // (v846) Reciente de IG sin fila local: post_id 0 + solo_ig, con su
+  // ig_media_id real. Sin id local ni ig_media_id no hay nada que impulsar.
+  if (!id && !ig) return null;
   return {
     post_id: id,
+    ig_media_id: ig,
+    solo_ig: !!p.solo_ig && !id,
     image_path: p.image_path || '',
     caption: String(p.caption || ''),
     reach: Number(p.reach || 0),
@@ -16396,6 +16348,16 @@ function pzBoostNormPost(p) {
     viejo: !!p.viejo,
     publicado_en: p.publicado_en || '',
   };
+}
+// Clave de selección del picker (v846): el posteo local por su id; el
+// reciente de IG sin fila por su ig_media_id (post_id 0 colisionaría
+// entre todos los recientes sin fila).
+function pzBoostKey(p) {
+  if (!p) return '';
+  const id = Number(p.post_id) || 0;
+  if (id > 0) return 'p' + id;
+  const ig = String(p.ig_media_id || '').trim();
+  return ig ? 'ig:' + ig : '';
 }
 
 function pzBoostNumeros(p) {
@@ -16465,15 +16427,17 @@ async function pzBoostLoad() {
   s.conversionPendiente = (bil && bil.ok) ? !!bil.conversion_pendiente : undefined;
   // Pre-selección: el recomendado; si está impulsado, el primer elegible
   // no impulsado; si el anterior sigue elegible, se conserva.
-  const prev = s.selId;
-  const sigue = s.elegibles.some((e) => Number(e.post_id) === Number(prev) && !e.ya_impulsado && !pzBoostImpulsados.has(Number(e.post_id)));
+  // (v846) La selección es por clave (pzBoostKey): el reciente de IG
+  // sin fila se identifica por su ig_media_id, no por post_id 0.
+  const prev = s.selId || '';
+  const sigue = s.elegibles.some((e) => pzBoostKey(e) === prev && pzBoostKey(e) && !e.ya_impulsado && !pzBoostImpulsados.has(pzBoostKey(e)));
   if (sigue) { s.selId = prev; }
   else {
-    const rec = s.elegibles.find((e) => e.recomendado && !e.ya_impulsado && !pzBoostImpulsados.has(Number(e.post_id)));
-    const primero = s.elegibles.find((e) => !e.ya_impulsado && !pzBoostImpulsados.has(Number(e.post_id)));
-    s.selId = rec ? Number(rec.post_id) : (primero ? Number(primero.post_id) : 0);
+    const rec = s.elegibles.find((e) => e.recomendado && !e.ya_impulsado && !pzBoostImpulsados.has(pzBoostKey(e)));
+    const primero = s.elegibles.find((e) => !e.ya_impulsado && !pzBoostImpulsados.has(pzBoostKey(e)));
+    s.selId = rec ? pzBoostKey(rec) : (primero ? pzBoostKey(primero) : '');
   }
-  s.selPost = s.elegibles.find((e) => Number(e.post_id) === Number(s.selId)) || s.selPost;
+  s.selPost = s.elegibles.find((e) => pzBoostKey(e) === s.selId) || s.selPost;
   return s;
 }
 
@@ -16525,15 +16489,16 @@ function pzBoostPintarPick() {
     return;
   }
   body.innerHTML = `<div class="pz-boost-list" role="radiogroup" aria-label="${esc(gzT('Posteos para impulsar', 'Posts to boost'))}">` + list.map((p) => {
-    const sel = Number(p.post_id) === Number(s.selId);
-    const ya = !!p.ya_impulsado || pzBoostImpulsados.has(Number(p.post_id));
+    const key = pzBoostKey(p);
+    const sel = !!key && key === s.selId;
+    const ya = !!p.ya_impulsado || pzBoostImpulsados.has(key);
     const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
     const badge = p.recomendado ? `<span class="pz-boost-badge">RECOMENDADO</span>` : '';
     const check = `<span class="pz-boost-check">${(sel && !ya) || ya ? '✓' : ''}</span>`;
-    return `<button type="button" role="radio" aria-checked="${sel && !ya ? 'true' : 'false'}" class="pz-boost-opt${sel && !ya ? ' on' : ''}" ${ya ? 'disabled' : ''} onclick="pzBoostElegirPick(${Number(p.post_id)}, this)">
+    return `<button type="button" role="radio" aria-checked="${sel && !ya ? 'true' : 'false'}" class="pz-boost-opt${sel && !ya ? ' on' : ''}" ${ya ? 'disabled' : ''} onclick="pzBoostElegirPick('${key}', this)">
       ${img}<span class="pz-boost-t"><b>${esc(pzBoostTitulo(p))}${badge}</b><small>${esc(pzBoostNumeros(p))}</small></span>${check}</button>`;
   }).join('') + `</div>`;
-  if (go) go.disabled = !(s.selId > 0);
+  if (go) go.disabled = !s.selId;
 }
 
 function pzBoostPintarBoost() {
@@ -16546,7 +16511,7 @@ function pzBoostPintarBoost() {
     <p class="pz-boost-note" style="margin:14px 0">${esc(gzT('Elegí primero el posteo al que le querés meter ads.', 'First pick the post you want to boost.'))}</p>`;
     return;
   }
-  const ya = !!p.ya_impulsado || pzBoostImpulsados.has(Number(p.post_id));
+  const ya = !!p.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(p));
   const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
   const head = `<div class="pz-boost-head"><b>${esc(gzT('Impulsar posteo', 'Boost post'))}</b><button type="button" class="pz-boost-x" onclick="pzBoostCerrar()" aria-label="${esc(gzT('Cerrar', 'Close'))}">×</button></div>
   <div class="pz-boost-post">${img}<div><b>${esc(pzBoostTitulo(p))}</b><small>${esc(gzT('Publicado · impulso por 7 días', 'Published · 7-day boost'))}</small></div></div>
@@ -16612,7 +16577,7 @@ async function pzBoostOpen(post) {
   pzBoostEnsureSheets();
   if (!pzBoostState) pzBoostState = pzBoostNewState();
   pzBoostState.selPost = p;
-  pzBoostState.selId = Number(p.post_id);
+  pzBoostState.selId = pzBoostKey(p);
   pzBoostState.selMonto = 50;
   pzBoostMostrar('boost');
   pzBoostPintarBoost();
@@ -16622,9 +16587,9 @@ async function pzBoostOpen(post) {
     try {
       await pzBoostLoad();
       if (!pzBoostState) return;
-      const enEleg = (pzBoostState.elegibles || []).find((e) => Number(e.post_id) === Number(p.post_id));
+      const enEleg = (pzBoostState.elegibles || []).find((e) => pzBoostKey(e) === pzBoostKey(p));
       pzBoostState.selPost = enEleg || p;
-      pzBoostState.selId = Number(p.post_id);
+      pzBoostState.selId = pzBoostKey(p);
       pzBoostPintarBoost();
     } catch (e) {}
   }
@@ -16639,19 +16604,19 @@ async function pzBoostOpenById(id) {
   pzBoostOpen(p);
 }
 
-function pzBoostElegirPick(id, btn) {
+function pzBoostElegirPick(key, btn) {
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
-  const nid = Number(id) || 0;
-  const p = (s.elegibles || []).find((e) => Number(e.post_id) === nid);
-  if (!p || p.ya_impulsado || pzBoostImpulsados.has(nid)) return;
-  s.selId = nid;
+  const k = String(key || '');
+  const p = (s.elegibles || []).find((e) => pzBoostKey(e) === k);
+  if (!p || p.ya_impulsado || pzBoostImpulsados.has(k)) return;
+  s.selId = k;
   s.selPost = p;
   pzBoostPintarPick();
 }
 
 function pzBoostPickConfirmar() {
   const s = pzBoostState || {};
-  const p = s.selPost || (s.elegibles || []).find((e) => Number(e.post_id) === Number(s.selId)) || null;
+  const p = s.selPost || (s.elegibles || []).find((e) => pzBoostKey(e) === s.selId) || null;
   if (!p) return;
   pzBoostOpen(p);
 }
@@ -16696,19 +16661,27 @@ async function pzBoostConfirmar(btn) {
   const monto = Number(s.selMonto) || 50;
   const msgEl = document.getElementById('pzBoostMsg');
   const decir = (t) => { if (msgEl) msgEl.textContent = t; };
-  if (!p || !p.post_id) { decir(pzBoostMotivo('sin_posteo', monto)); return; }
+  if (!p || (!p.post_id && !p.ig_media_id)) { decir(pzBoostMotivo('sin_posteo', monto)); return; }
   if (btn) btn.disabled = true;
   let j = null;
-  try { j = await api.post('/api/ads/billetera/impulsar', { posteoId: Number(p.post_id), montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
+  // (v846) El reciente sin fila se impulsa por ig_media_id: el servidor
+  // lo adopta y devuelve el posteoId nuevo.
+  const body = (p.solo_ig && p.ig_media_id) ? { igMediaId: String(p.ig_media_id), montoUSD: monto } : { posteoId: Number(p.post_id), montoUSD: monto };
+  try { j = await api.post('/api/ads/billetera/impulsar', body); } catch (e) { j = (e && e.data) || null; }
   if (btn) btn.disabled = false;
   if (j && j.ok) {
-    pzBoostImpulsados.add(Number(p.post_id));
+    const key = pzBoostKey(p);
+    pzBoostImpulsados.add(key);
     if (pzBoostState) {
-      const enEleg = (pzBoostState.elegibles || []).find((e) => Number(e.post_id) === Number(p.post_id));
-      if (enEleg) enEleg.ya_impulsado = true;
+      const enEleg = (pzBoostState.elegibles || []).find((e) => pzBoostKey(e) === key);
+      if (enEleg) {
+        enEleg.ya_impulsado = true;
+        // Adoptado: ya tiene fila local; la próxima vez es un posteo normal.
+        if (p.solo_ig && j.posteoId) { enEleg.post_id = Number(j.posteoId); enEleg.solo_ig = false; }
+      }
       if (pzBoostState.billetera && j.balance_cents != null) pzBoostState.billetera.balance_cents = j.balance_cents;
     }
-    pzBoostMarcarImpulsado(Number(p.post_id));
+    pzBoostMarcarImpulsado((p.solo_ig && j.posteoId) ? Number(j.posteoId) : Number(p.post_id));
     pzBoostPintarExito(p, monto);
     try { toast(gzT('✓ Posteo impulsado por 7 días', '✓ Post boosted for 7 days')); } catch (e) {}
   } else {
@@ -17874,7 +17847,7 @@ function pzPrefetchKick() {
   if (tab === 'oficina' || tab === 'negocio') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: sin pantallas Gesty (la Bandeja vive: ahí se decide)
   else if (tab === 'chat') { pzPaintSkeleton(tab); content = await chatFullView(); } // (LOTE CHATPANTALLA) El chat principal es pantalla completa en vidrio, no hoja
   else if (tab === 'inicio') { pzPaintSkeleton(tab); content = await inicioView(); } // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
-  else if (tab === 'feed') { pzPaintSkeleton(tab); content = await feedView(); } // (LOTE REDISENO-R2 · FEED) «Mi feed» como pantalla propia: el feed literal + stats
+  else if (tab === 'feed') { location.hash = '#/app/inicio'; return; } // (v846) La pestaña Feed salió: el feed ya vive en Hoy. #/app/feed redirige a Hoy.
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') { pzPaintSkeleton(tab); content = await scheduleView(); }
   else if (tab === 'analisis') { location.hash = '#/app/ads'; return; } // (LOTE A · 8/11: Estrategia eliminada — la recomendación del mejor posteo vive en Impulsar como una línea. analisisView() queda como código muerto sin llamadores.)
@@ -17911,10 +17884,9 @@ function pzPrefetchKick() {
   setTimeout(() => { try { ttEnhance(); } catch (e) {} }, 0);
   // (PANTALLA-APERTURA · 9/11) Sin pantalla de apertura: la app abre
   // directo en Hoy. Los datos de hoy (racha del encabezado) se piden
-  // igual y el saludo que escribe arranca al pintar (antes lo hacía
-  // el cierre de la apertura).
+  // igual. (v846: la máquina de escribir del encabezado murió con el
+  // título fijo «Posty.».)
   setTimeout(() => { try { pzShellDatosHoy(); } catch (e) {} }, 0);
-  setTimeout(() => { try { pzSaludoEscribir(); } catch (e) {} }, 0);
   // LOTE VELOCIDAD: precarga en idle (una vez por carga).
   try { pzPrefetchKick(); } catch (e) {}
   if (BB_SHELL_ON() && tab === 'ajustes') { try { bbAvisosEnAjustes(); } catch (e) {} }
@@ -20892,8 +20864,11 @@ function hfLiveDropTile(t, liveSet, cutoffMs) {
 }
 async function hfLiveRevalidateFeed() {
   if (HF_LIVE_BUSY) return;
-  // (LOTE REDISENO-R2 · FEED) La revalidación cubre Inicio Y Feed: ambas pantallas pintan el mismo feed literal (HF_TILES) y un posteo borrado en IG tiene que desaparecer al abrir/refrescar en las dos.
-  try { const _h = location.hash || ''; if (!(_h.startsWith('#/app/inicio') || _h.startsWith('#/app/feed'))) return; } catch (e) { return; }
+  // (LOTE REDISENO-R2 · FEED · v846: la revalidación cubre Inicio — el
+  // feed vive en Hoy y #/app/feed redirige ahí. Ambas pantallas pintan
+  // el mismo feed literal (HF_TILES) y un posteo borrado en IG tiene
+  // que desaparecer al abrir/refrescar.)
+  try { const _h = location.hash || ''; if (!(_h.startsWith('#/app/inicio'))) return; } catch (e) { return; }
   HF_LIVE_BUSY = true;
   try {
     const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
@@ -20910,7 +20885,7 @@ async function hfLiveRevalidateFeed() {
     if (!r || !r.complete || !Array.isArray(r.shortcodes) || !r.window_oldest) return;
     const cutoffMs = Date.parse(r.window_oldest);
     if (!Number.isFinite(cutoffMs)) return;
-    try { const _h2 = location.hash || ''; if (!(_h2.startsWith('#/app/inicio') || _h2.startsWith('#/app/feed'))) return; } catch (e) { return; }
+    try { const _h2 = location.hash || ''; if (!(_h2.startsWith('#/app/inicio'))) return; } catch (e) { return; }
     const live = new Set(r.shortcodes.map((x) => String(x)));
     const tiles = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES : [];
     const dropPostIds = new Set();
@@ -20946,23 +20921,15 @@ async function hfLiveRevalidateFeed() {
 // aprobación de un toque + cartita SIN VELO (el posteo de mañana
 // visible, pill «Se postea mañana · HH:MM», cuenta hasta que SALE) +
 // entrada al conserje con contador «X de N revisados» (solo con token
-// de admin). El feed literal NO se toca: vive en la pantalla propia
-// «Mi feed» (#/app/feed, R2) — el seg «Mi feed» es un enlace real ahí
-// (RE-BASE sobre v794). BLOQUE HOY-R1 — extraíble en tests (test-lote-rediseno-r1.js).
+// de admin). El feed literal NO se toca: vive en Hoy (v846: la pantalla
+// propia «Mi feed» salió; el feed ya vive en Hoy, con la misma
+// composición). BLOQUE HOY-R1 — extraíble en tests (test-lote-rediseno-r1.js).
 var PZ_HOY_VIEW = 'aprobar'; // vista vigente de Hoy en esta sesión
 var PZ_HOY_POSTS = {}; // id → post (para «Cambialo» → chat con el posteo)
+var PZ_HOY_MEJOR = null; // (v846) recomendado de la sección Impulsar de Hoy: el mejor posteo de la semana (mismo de la carta)
 
 // Saludo según la hora (como el mock): 06–12 mañana, 12–20 tarde,
 // 20–06 noche. Puro (fecha + idioma), testeable en VM.
-function pzHoySaludoTxt(fecha, en) {
-  try {
-    const h = (fecha instanceof Date) ? fecha.getHours() : new Date(fecha).getHours();
-    if (h >= 6 && h < 12) return en ? 'Good morning! ☀️' : '¡Buen día! ☀️';
-    if (h >= 12 && h < 20) return en ? 'Good afternoon! 🌤️' : '¡Buenas tardes! 🌤️';
-    return en ? 'Good evening! 🌙' : '¡Buenas noches! 🌙';
-  } catch (e) { return en ? 'Hi! 👋' : '¡Hola! 👋'; }
-}
-
 // Clave 'YYYY-MM-DD' de una fecha en la zona tz (sin sumar 24 h).
 function pzHoyDiaKey(fecha, tz) {
   try {
@@ -21256,29 +21223,40 @@ function pzHoyParaAprobarHTML(n, en) {
   } catch (e) { return ''; }
 }
 
-// Línea de insight de Hoy (regla 8 del mock: sin Análisis — el
-// número, qué significa y qué ya hizo Posty con eso). Misma lógica
-// que la mini de simplificar-app: título por estado de la semana +
-// acción honesta. La acción es honesta: si hay programados, están en
-// el feed con su día y su hora; si no hay nada, el chat arma la semana.
-function pzHoySemanaInsightHTML(sem, en, pendProg) {
+// Sección Impulsar de Hoy (v846 · decisión Valentino 9/11 11:56:
+// reemplaza la línea de insight «Tu semana recién arranca»). El
+// recomendado es el mismo de la carta y del chat (el mejor posteo de
+// la semana por dato real, /api/estrategia/mejor-posteo): foto +
+// caption corto + números reales + botón con el flujo existente
+// ($50/7 días). Debajo, «Elegir otro posteo» abre la hoja de elegir.
+// Sin recomendado (sin datos), la sección lo dice con honestidad en
+// vez de inventar uno — pero el enlace a elegir queda: el picker
+// puede tener posteos aunque ninguno tenga datos para recomendar.
+function pzHoyImpulsarHTML(mejor, en) {
   try {
-    const n = (sem && typeof sem.n === 'number') ? sem.n : 0;
-    const dias = (sem && Array.isArray(sem.dias)) ? sem.dias : [];
-    const hoyIdx = dias.findIndex((d) => d && d.estado === 'hoy');
-    const esDomingo = hoyIdx === 6;
-    const titulo = n >= 7 ? (en ? 'Week complete! 🎉' : '¡Semana completa! 🎉')
-      : n === 0 ? (en ? 'Your week is just starting' : 'Tu semana recién arranca')
-      : esDomingo ? (en ? `This week we hit ${n}/7 posts` : `esta semana cumplimos ${n}/7 posteos`)
-      : (en ? `${n}/7 posts, your week is on its way` : `${n}/7 posteos, tu semana viene en camino`);
-    const accion = n >= 7
-      ? (en ? 'We hit 7/7 — tomorrow a new week starts.' : 'cumplimos 7/7 — mañana arranca una nueva semana.')
-      : (Number(pendProg || 0) > 0)
-        ? (en ? 'The next ones are in your feed, with their day and time.' : 'Los próximos están en tu feed, con su día y su hora.')
-        : (en ? 'Nothing scheduled yet — tell Posty in the chat what you have to show.' : 'Todavía no hay nada programado — contale a Posty en el chat qué tenés para mostrar.');
-    const btnChat = (Number(pendProg || 0) > 0 || n >= 7) ? '' : `<button type="button" class="btn btn-primary btn-sm" data-pz-hoy-chat="1">${en ? 'Open the chat' : 'Abrir el chat'}</button>`;
-    return `<div class="pz-semana-insight">${pzIc('chartUp', 20)}<div><p><b>${titulo}</b> — ${accion}</p>${btnChat}</div></div>`;
+    const m = (mejor && mejor.post_id) ? mejor : null;
+    const ok = m && ((Number(m.likes || 0) + Number(m.comments || 0) + Number(m.saved || 0)) > 0);
+    const otro = `<button type="button" class="pz-hoy-impulsar-otro" onclick="if(window.pzOpenBoostPick)window.pzOpenBoostPick()">${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button>`;
+    if (!ok) {
+      return `<div class="pz-hoy-impulsar"><h2>${esc(en ? 'Boost a post' : 'Impulsar posteo')}</h2><p class="pz-hoy-impulsar-vacio">${esc(en ? 'No post has real results to recommend yet. When a post this week picks up, Posty will point it out here.' : 'Todavía no hay un posteo con resultados reales para recomendar. Cuando un posteo de esta semana sume, Posty te lo señala acá.')}</p>${otro}</div>`;
+    }
+    const rec = (typeof pzBoostRecTexto === 'function') ? pzBoostRecTexto({ reach: m.reach, likes: m.likes, comments: m.comments, recomendado: true }) : '';
+    const cap = String(m.caption || '').trim();
+    const img = m.image_path ? `<img src="${esc(String(m.image_path))}" alt="" onerror="this.style.display='none'">` : '';
+    return `<div class="pz-hoy-impulsar"><h2>${esc(en ? 'Boost a post' : 'Impulsar posteo')}</h2><div class="pz-boost-rec-card"><div class="pz-boost-rec-tag">${esc(en ? 'POSTY RECOMMENDS · BOOST' : 'POSTY RECOMIENDA · IMPULSAR')}</div>${img}<b>${esc(cap ? cap.slice(0, 90) : (en ? 'Your best post this week' : 'Tu mejor posteo de la semana'))}</b><p>${esc(rec)}</p><button type="button" class="btn btn-primary pz-boost-rec-cta" onclick="pzHoyImpulsarRec()">${esc(en ? 'Boost this post →' : 'Impulsar este posteo →')}</button></div>${otro}</div>`;
   } catch (e) { return ''; }
+}
+// CTA de la sección Impulsar de Hoy: abre la hoja de impulso con el
+// recomendado que inicioView ya cargó (mismo objeto de la carta). Se
+// pasa el objeto entero (no solo el id): si el posteo no está entre
+// los elegibles cargados, la hoja igual lo muestra.
+function pzHoyImpulsarRec() {
+  try {
+    const m = (typeof PZ_HOY_MEJOR !== 'undefined' && PZ_HOY_MEJOR) ? PZ_HOY_MEJOR : null;
+    if (!m || !m.post_id) return;
+    if (typeof pzBoostOpen === 'function') pzBoostOpen(m);
+    else if (typeof window.pzOpenBoostPick === 'function') window.pzOpenBoostPick();
+  } catch (e) {}
 }
 
 
@@ -21492,7 +21470,6 @@ function pzHoySpeechHTML(o) {
   const manual = !!(o && o.manual);
   const needOK = (o && typeof o.needOK === 'number') ? o.needOK : pendientes;
   const schedSolo = (o && typeof o.schedSolo === 'number') ? o.schedSolo : 0;
-  const saludo = pzHoySaludoTxt(new Date(), en);
   let cuerpo = '';
   if (hoyPost) {
     const hh = pzHoyHoraCorta(hoyPost.scheduled_at, tz, en);
@@ -21556,7 +21533,9 @@ function pzHoySpeechHTML(o) {
   // (LOTE HOY-REDISEÑO v810 + HOY-AVATAR-FEED 8/11) El saludo se rinde
   // como mensaje de Posty: SOLO la burbuja, sin carita (la cara vive en
   // el encabezado). El botón conserva data-pz-hoy-chat (abre el chat).
-  return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span>${insight ? `<span class="pz-hoy-insight">${esc(insight)}</span>` : ''}</button></div>`;
+  // (v846 · decisión Valentino 12:01: el saludo por hora («¡Buen día!»)
+  // salió — era innecesario. La burbuja arranca directo con el cuerpo.)
+  return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span>${cuerpo}</span>${insight ? `<span class="pz-hoy-insight">${esc(insight)}</span>` : ''}</button></div>`;
 }
 
 // Entrada al conserje (nace oculta; pzHoyConserjeFill la llena con el
@@ -21572,8 +21551,9 @@ function pzHoyConserjeHTML(decididos, total, en) {
 // (RE-BASE R1 SOBRE v794 · R2: «Mi feed» es pantalla propia #/app/feed —
 // el seg «Mi feed» es un enlace real ahí; pzHoySetView('feed') navega,
 // nunca monta el feed dentro de Hoy.)
+// (v846) La pestaña Feed salió: «Mi feed» es Hoy (el feed vive ahí).
 function pzHoySetView(nombre) {
-  if (nombre === 'feed') { try { location.hash = '#/app/feed'; } catch (e) {} return; }
+  if (nombre === 'feed') { try { location.hash = '#/app/inicio'; } catch (e) {} return; }
   try {
     PZ_HOY_VIEW = 'aprobar';
     const a = document.getElementById('pzHoyAprobar');
@@ -21769,12 +21749,20 @@ async function inicioView() {
   } catch (e) {}
   // LOTE VELOCIDAD: cuota, perfil y nivel son independientes: un solo
   // viaje en paralelo en vez de tres en serie.
-  const [quotaRes, hpRes, nvRes] = await Promise.all([
+  const [quotaRes, hpRes, nvRes, mejorRes] = await Promise.all([
     api.get('/api/quota').catch(() => null),
     api.get('/api/home/profile').catch(() => null),
     (!HF_VISITOR ? api.get('/api/oficina/nivel?poder=posty').catch(() => null) : Promise.resolve(null)),
+    // (v846) El recomendado de la sección Impulsar: el mismo mejor
+    // posteo de la semana de la carta (sin fetch nuevo por render).
+    (!HF_VISITOR ? api.get('/api/estrategia/mejor-posteo').catch(() => null) : Promise.resolve(null)),
   ]);
   let quota = quotaRes;
+  // (v846) Recomendado de la sección Impulsar (null = sin datos: la
+  // sección lo dice con honestidad, nunca inventa uno).
+  let mejorHoy = null;
+  try { if (mejorRes && mejorRes.ok && mejorRes.mejor) mejorHoy = mejorRes.mejor; } catch (e) { mejorHoy = null; }
+  PZ_HOY_MEJOR = mejorHoy;
   // 🏠 (v331) El perfil literal: réplica desde la lectura guardada de su
   // Instagram (o el kit de nacimiento si la cuenta es nueva/vacía). El
   // servidor nunca inventa: lo que no leyó, el encabezado lo omite.
@@ -21949,12 +21937,11 @@ async function inicioView() {
   const needOKR1 = draftsR1 + (modoR1.manual ? (schedPendR1 + cartitaPendR1) : 0);
   const schedSoloR1 = modoR1.manual ? 0 : (schedPendR1 + cartitaPendR1);
   // (LOTE SIMPLIFICAR-APP · PARTE 2 · REDISEÑO SIMPLE · 9/11: la semana
-  // queda en Hoy como fila mini + insight. semR1 = publicados reales de
-  // la semana (pzHoySemana); pendProgR1 = programados pendientes
-  // (cartita + resto), para la acción del insight.)
+  // queda en Hoy como fila mini. semR1 = publicados reales de la semana
+  // (pzHoySemana); la línea de insight murió en v846 (la reemplaza la
+  // sección Impulsar, pzHoyImpulsarHTML).)
   let semR1 = { n: 0, lunes: '', dias: [] };
   try { semR1 = pzHoySemana(published, tz, new Date()); } catch (e) {}
-  const pendProgR1 = schedPendR1 + cartitaPendR1;
   PZ_HOY_POSTS = {};
   try {
     if (pendR1.cartita && pendR1.cartita.id != null) PZ_HOY_POSTS[String(pendR1.cartita.id)] = pendR1.cartita;
@@ -21963,7 +21950,9 @@ async function inicioView() {
   } catch (e) {}
   // Vista «Por aprobar» (RS-2 · HOY DEL MOCK v10): saludo autopilot +
   // «Para aprobar · N» + posteo de hoy + tira de 7 días una por una +
-  // detalle del día + línea de insight + «Pedir un cambio en el chat».
+  // detalle del día + sección Impulsar (v846). El botón fantasma
+  // «Pedir un cambio en el chat» salió en v846 (con 2 pestañas es
+  // obvio que los cambios se piden por el chat).
   // La tarjeta de subida salió (la subida es solo por chat); la
   // semana grande salió (la tira + insight); las tarjetas de
   // pendientes (cartita + resto) ya NO se rinden en Inicio: se revisan
@@ -21986,7 +21975,6 @@ async function inicioView() {
   const hoyAprobarHTML = (!HF_VISITOR) ? (() => {
     const hoyPendienteR1 = !!(hoyPostR1 && (String(hoyPostR1.status || '') === 'draft' || (String(hoyPostR1.status || '') === 'scheduled' && String(hoyPostR1.approval || 'pending') === 'pending')));
     const tiraDiasR1 = pzHoyTiraDias(semR1, allPosts, hoyKeyR1, tz);
-    const pendProgR1 = schedPendR1 + cartitaPendR1;
     PZ_HOY_TIRA_DIAS = tiraDiasR1;
     PZ_HOY_POST_ID = hoyPostR1 ? String(hoyPostR1.id) : '';
     if (!PZ_HOY_TIRA_SEL) { try { const h = tiraDiasR1.find((d) => d && d.esHoy); if (h) PZ_HOY_TIRA_SEL = h.key; } catch (e) {} }
@@ -21996,15 +21984,14 @@ async function inicioView() {
       + (hoyPendienteR1 ? pzHoyParaAprobarHTML(1, enHome) : '')
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
       + `<div id="pzHoyTira">` + pzHoyTiraHTML(tiraDiasR1, { en: enHome, tz, hoyKey: hoyKeyR1, sel: PZ_HOY_TIRA_SEL }) + `</div>`
-      + pzHoySemanaInsightHTML(semR1, enHome, pendProgR1)
-      + `<button type="button" class="pz-hoy-chatghost" data-pz-hoy-chat="1">${enHome ? 'Ask for a change in the chat →' : 'Pedir un cambio en el chat →'}</button>`
+      + pzHoyImpulsarHTML(mejorHoy, enHome)
       + (hayAdminR1 ? pzHoyConserjeHTML(null, null, enHome) : '')
       + `</div>`;
   })() : '';
   // (LOTE HOY-SEGMENTER-Y-BOTON · decisión Valentino: el segmentador «Por aprobar / Mi feed»
   // salió — era una falsa elección (vista + enlace de navegación) y scrolleando Hoy ya se ven
-  // los posteos de la semana. Hoy queda siempre en «Por aprobar». #/app/feed sigue vivo y
-  // reachable por «Ver en el feed» desde el detalle del posteo.)
+  // los posteos de la semana. Hoy queda siempre en «Por aprobar». #/app/feed redirige a Hoy
+  // (v846); «Ver en el feed» desde el detalle del posteo lleva a Hoy con scroll + destacado.)
   const hoySegHTML = '';
   // (LOTE A · ítem 4) La hoja de subida salió: los botones van directo.
   // (v440 · SOLO FEED) La nota del kit de nacimiento (hf-kitnote) SALIÓ
@@ -22122,8 +22109,8 @@ function pzFeedAlDia(allPosts, tz) { // sello AL DÍA solo si el feed está al d
   } catch (e) {}
   return false;
 }
-function pzFeedEntryHTML(en) { // puerta en Hoy (RE-BASE R1 SOBRE v794: el segmentador la reemplaza en inicioView; queda definida, sin uso).
-  return `<a class="pz-feed-entry" href="#/app/feed">${pzIc('grid', 16)} <span>${en ? 'My feed' : 'Mi feed'}</span><span class="pz-feed-entry-ar">›</span></a>`;
+function pzFeedEntryHTML(en) { // puerta en Hoy (RE-BASE R1 SOBRE v794: el segmentador la reemplaza en inicioView; queda definida, sin uso). (v846: la pestaña Feed salió; la puerta apunta a Hoy.)
+  return `<a class="pz-feed-entry" href="#/app/inicio">${pzIc('grid', 16)} <span>${en ? 'My feed' : 'Mi feed'}</span><span class="pz-feed-entry-ar">›</span></a>`;
 }
 // (REDISEÑO RS-3 · FEED REAL) Etiqueta del día del próximo posteo para la
 // banda del Feed: «Mañana» si cae mañana, «Hoy» si cae hoy, si no el día
@@ -22344,6 +22331,19 @@ function hfFeedHighlightApply() { // «Ver en el feed»: el posteo en su posici�
   HF_FEED_HIGHLIGHT = null;
   try {
     const el = document.querySelector('#feedView .hf-tile[data-post-id="' + id + '"]');
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.add('pz-feed-flash');
+    setTimeout(() => { try { el.classList.remove('pz-feed-flash'); } catch (e) {} }, 2600);
+  } catch (e) {}
+}
+let HF_HOY_HIGHLIGHT = null; // (v846) id de posteo a destacar al pintar Hoy (lo pone «Ver en el feed», que ahora lleva a Hoy)
+function hfHoyHighlightApply() { // «Ver en el feed» en Hoy: el posteo en su posición final y destacado (brillo que se apaga, sin escala, como hfFeedHighlightApply).
+  if (!HF_HOY_HIGHLIGHT) return;
+  const id = String(HF_HOY_HIGHLIGHT);
+  HF_HOY_HIGHLIGHT = null;
+  try {
+    const el = document.querySelector('#inicioView .hf-tile[data-post-id="' + id + '"]');
     if (!el) return;
     el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     el.classList.add('pz-feed-flash');
@@ -22668,7 +22668,6 @@ function pzRitualHTML(d, en) {
   <div class="pz-ritual-carta-tx">${rec.recomendada ? `<span class="pz-ritual-badge rec">${en ? 'Recommended' : 'Recomendada'}</span>` : ''}${rec.rubro ? `<span class="pz-ritual-badge rubro">${esc(rec.rubro)}</span>` : ''}
   <p class="pcard-cap" data-full="${esc(rec.caption || rec.caption_corta || '')}">${esc(rec.caption_corta || '')}</p></div>
   <button type="button" class="pz-ritual-ok" data-pz-ritual-ok="${rec.id}">${en ? 'Post it like this' : 'Sale así'}</button>
-  <button type="button" class="pz-ritual-cambio" data-pc-act="edit-cap">${en ? 'Edit text' : 'Editar texto'}</button>
   <button type="button" class="pz-ritual-cambio" data-pz-ritual-cambio="${rec.id}">${en ? 'Change something' : 'Cambiar algo'}</button>
   <p class="pz-ritual-nota">${en ? 'The one you confirm goes out today and into your album.' : 'La que confirmes sale hoy y va al álbum.'}</p>
   <div id="pzRitualErr" class="pz-ritual-err" hidden></div></div>
@@ -22691,8 +22690,8 @@ function pzRitualHTML(d, en) {
 }
 // (LOTE SUBIR-FOTO-CAMBIO · v844) [Cambiar algo] con la VOZ primero:
 // la nota de voz ES la instrucción del cambio (se transcribe y entra
-// por el mismo pipeline que el texto, con el posteo anclado). El texto
-// queda como alternativa detrás de «Escribir». Reutiliza VOZ-EJECUTA
+// por el mismo pipeline que el texto, con el posteo anclado). Ya no hay
+// alternativa de texto (v846 · CHAT SOLO POR AUDIO). Reutiliza VOZ-EJECUTA
 // (voiceToggle + __pzChatVoice en bindInicio) y el ancla del chat
 // (hfSetAnchor / pzHablarClick / hfAnchorForId). Vale para las tres
 // superficies: la tarjeta de vista previa de subir-foto, [Cambiar algo]
@@ -22711,7 +22710,7 @@ function pzCambioVoz(postId) {
   }
   // El chat no está abierto: abrirlo con el posteo anclado; el prompt y
   // la grabación se entregan en bindInicio (mismo patrón que
-  // HF_ASK_TEXT_PENDING y __pzChatVoice del mic del dock).
+  // __pzChatVoice del mic del dock).
   PZ_CAMBIO_VOZ_PENDING = pid;
   try { window.__pzChatVoice = true; } catch (e) {}
   try { if (typeof pzHablarClick === 'function') pzHablarClick(pid); } catch (e) {}
@@ -22725,12 +22724,9 @@ function pzCambioVozPrompt(postId) {
   const wrap = document.createElement('div');
   wrap.className = 'chat-msg ai'; wrap.id = 'pzCambioVozPrompt'; wrap.style.maxWidth = '100%';
   wrap.innerHTML = `<div style="font-size:13px;margin-bottom:8px">${esc(en ? 'Tell me with your voice what to change 👇' : 'Decime con tu voz qué le cambio 👇')}</div>`
-    + `<div class="chat-chips"><button type="button" data-voz-grabar="1">🎙️ ${esc(en ? 'Record a voice note' : 'Grabar nota de voz')}</button>`
-    + `<button type="button" data-voz-escribir="1">${esc(en ? 'Write it' : 'Escribir')}</button></div>`;
+    + `<div class="chat-chips"><button type="button" data-voz-grabar="1">🎙️ ${esc(en ? 'Record a voice note' : 'Grabar nota de voz')}</button></div>`;
   const g = wrap.querySelector('[data-voz-grabar]');
   if (g) g.onclick = () => { if (typeof VOICE_STATE !== 'undefined' && VOICE_STATE === 'idle') { try { voiceToggle(); } catch (e) {} } };
-  const w = wrap.querySelector('[data-voz-escribir]');
-  if (w) w.onclick = () => { try { wrap.remove(); } catch (e) {} const inp = document.getElementById('chatInput'); if (inp) { try { inp.focus(); } catch (e2) {} } };
   box.appendChild(wrap);
   try { chatScroll(); } catch (e) {}
 }
@@ -22777,19 +22773,17 @@ async function pzCambioRefrescarTarjeta() {
 }
 
 // (LOTE RITUAL-1-OPCION · 6/11) [Cambiar algo] = pedir otra versión:
-// el tap mismo manda el pedido al chat (el cliente no tiene que
-// explicar qué cambiar). El texto pendiente se entrega al abrir el
-// chat con el posteo anclado (hfDeliverAskText → chatSend → el
-// servidor regenera el posteo anclado en su lugar, gasta 1 rehacer).
-// El cliente puede escribir qué no le gustó, o pedir otra: el pedido
-// ya está en camino. La entrega vive en bindInicio (HF_CHAT_OPEN_PENDING),
-// el mismo camino que el mini-chat del detalle desde una vista sin chat.
+// el tap mismo abre el chat con el posteo anclado y muestra el prompt
+// de voz; la nota de voz transcrita ES la instrucción del cambio
+// (el servidor regenera el posteo anclado en su lugar, gasta 1 rehacer).
+// La entrega vive en bindInicio (HF_CHAT_OPEN_PENDING), el mismo camino
+// que el mini-chat del detalle desde una vista sin chat.
 function pzRitualPedirCambio(id) {
   // (LOTE SUBIR-FOTO-CAMBIO · v844) [Cambiar algo] = pedir el cambio CON
   // LA VOZ primero: abre el chat con el posteo anclado y muestra el
   // prompt de voz; la nota de voz transcrita ES la instrucción del
-  // cambio (el texto queda como alternativa detrás de «Escribir»).
-  // Antes mandaba solo el texto «haceme otra versión de este posteo».
+  // cambio (v846: ya no hay alternativa de texto). Antes mandaba
+  // solo el texto «haceme otra versión de este posteo».
   try { if (typeof pzCambioVoz === 'function') pzCambioVoz(id); } catch (e) {}
 }
 async function pzRitualConfirmar(id) {
@@ -22826,8 +22820,9 @@ async function pzRitualConfirmar(id) {
 }
 // (LOTE RITUAL-SIN-VELO · 9/11) La carta de hoy abre la hoja del
 // ritual, que rinde la recomendada REVELADA (foto + texto + [Sale
-// así] / [Editar] / [Cambiar algo]). La push de las 9:00 abre la
-// misma hoja. Ver ≠ elegir: ver la hoja no guarda selección ni
+// así] / [Cambiar algo]). La push de las 9:00 abre la misma hoja.
+// (v846) [Editar texto] murió: el cambio se pide por voz con
+// [Cambiar algo]. Ver ≠ elegir: ver la hoja no guarda selección ni
 // confirma; la confirmación vive solo en [Sale así].
 function pzRitualAbrirDesdeCarta() {
   // (LOTE RITUAL-SIN-VELO · 9/11) La carta (de hoy, sin elegir) abre
@@ -23388,8 +23383,7 @@ function mzOpenSheet(focus) {
   // su pantalla. Si ya estamos en ella, foco como siempre.
   if ((location.hash || '').split('?')[0] !== '#/app/chat') { location.hash = '#/app/chat'; return; }
   if (!focus) return;
-  const ci = document.getElementById('chatInput');
-  if (ci) setTimeout(() => { try { ci.focus({ preventScroll: true }); } catch (e) { try { ci.focus(); } catch (e2) {} } }, 60);
+  // (v846) Sin campo de texto: no hay foco que poner; solo scroll.
   try { chatUpdateSendBtn(); } catch (e) {}
   try { chatScroll(); } catch (e) {}
   try { pzPhStart(); } catch (e) {}
@@ -23509,9 +23503,10 @@ function pzVoicePendingDeliver() {
     try {
       const box = document.getElementById('chatBox');
       const lastUser = (typeof CHAT !== 'undefined' && CHAT.length) ? CHAT[CHAT.length - 1] : null;
+      const pts = Date.now();
       if (!lastUser || lastUser.role !== 'user' || lastUser.text !== p.text) {
-        CHAT.push({ role: 'user', text: p.text });
-        if (box) { box.insertAdjacentHTML('beforeend', p.audio ? pzVoiceBubbleHTML(p.audio, 0, 'sent') : '<div class="chat-msg u msg-in">' + esc(p.text) + '</div>'); const nb = box.lastElementChild; if (nb && p.audio) pzVoiceBubbleInit(nb, p.audio, 0); }
+        CHAT.push({ role: 'user', text: p.text, ts: pts });
+        if (box) { const nb = chatAppendMsg(box, p.audio ? pzVoiceBubbleHTML(p.audio, 0, 'sent', pts) : chatMsgHtml('user', p.text, pts), pts); if (nb && p.audio) pzVoiceBubbleInit(nb, p.audio, 0); }
       } else if (box && p.audio) {
         const bubbles = box.querySelectorAll('.chat-msg.u, .msg-in');
         const lb = bubbles && bubbles.length ? bubbles[bubbles.length - 1] : null;
@@ -23524,22 +23519,21 @@ function pzVoicePendingDeliver() {
   });
 }
 function bindChatFull() {
-  // (LOTE REDISENO-R6) Barra por temas ANTES de bindChat: el botón
-  // Enviar propio + video + maxlength 120 tienen que existir cuando
-  // bindChat corre chatUpdateSendBtn; y el prefill todavía no se leyó
-  // (si viene un prefill de Editar, el chat por temas no se activa).
-  try { pzTemaBarraInit(); } catch (e) {}
+  // (v846 · CHAT SOLO POR AUDIO) Sin botón Enviar propio ni input: el
+  // prefill todavía no se leyó (si viene un prefill, el chat por temas
+  // no se activa).
   try { bindChat(); } catch (e) {}
   try { bindSchedUpload(); } catch (e) {}
   try { pzTemaInit(); } catch (e) {}
   // SACAR-IDEAS (Valentino 3/11): sin píldora Ideas, sin salto a Semana desde ella.
-  // Prefill pendiente: mismo contrato que usaba la hoja (Editar de #/app/post/:id).
+  // Prefill pendiente («Armar otro» desde Semana): el texto lo genera la
+  // app, no el cliente — se manda directo, sin campo que rellenar.
   try {
     const pre = sessionStorage.getItem('posty-chat-prefill');
     if (pre) {
       sessionStorage.removeItem('posty-chat-prefill');
-      const ci = document.getElementById('chatInput');
-      if (ci) ci.value = pre;
+      if (document.getElementById('chatBox')) chatSend(pre);
+      else { try { sessionStorage.setItem('posty-chat-prefill', pre); } catch (e2) {} }
     }
   } catch (e) {}
   try { chatUpdateSendBtn(); } catch (e) {}
@@ -23555,20 +23549,19 @@ function bindChatFull() {
   try { pzVoicePendingDeliver(); } catch (e) {}
   try { hfPaintAnchor(); } catch (e) {}
   try { hfAnchorRefresh(); } catch (e) {}
-  try { hfDeliverAskText(); } catch (e) {}
   try { pzCambioVozPromptDeliver(); } catch (e) {}
   pzChatKbBind();
   pzChatKbSync();
   pzChatSwipeBind();
   try { pzPhStart(); } catch (e) {}
-  const ci = document.getElementById('chatInput');
-  if (ci) setTimeout(() => { try { ci.focus({ preventScroll: true }); } catch (e) { try { ci.focus(); } catch (e2) {} } }, 60);
+  // (v846) Sin foco automático al abrir: no hay campo que enfocar; el
+  // teclado no se abre solo y el mic queda listo.
 }
 
 /* ===== LOTE REDISENO-R6 · CHAT POR TEMAS, ESTILO DESY =====
    El mock (fuente de verdad del diseño) trae el chat como 6ª pestaña
    con UN tema puntual por vez y respuestas cortas para tocar; escribir
-   es la excepción (frase corta, sobre el tema abierto). El motor real
+   no existe: todo se responde tocando o hablando (v846). El motor real
    cablea esos temas a datos y endpoints reales, nunca al JS demo del
    mock. Orden: (1) el posteo de hoy por aprobar, (2) la pregunta de
    los lunes — solo consultas —, (3) un comentario pendiente con su
@@ -23576,8 +23569,8 @@ function bindChatFull() {
    - «Cambialo» NO cierra el tema: pregunta qué cambiar (foto/texto/
      hora), muestra la versión nueva en el chat y avanza solo al
      confirmar («Queda así») o dejarlo para después.
-   - La barra de escribir queda siempre visible al pie, con su botón
-     «Enviar» propio a la vista y maxlength 120 (solo en #/app/chat).
+   - La barra de voz queda siempre visible al pie, con la camarita a la
+     izquierda y el mic grande a la derecha (solo en #/app/chat).
    - No se activa con ancla hablar-posteo ni con prefill de Editar: ahí
      manda el flujo que ya traía al usuario (el chat único de siempre).
    - Sin tema abierto, chatSend sigue exactamente como siempre: el chat
@@ -23598,31 +23591,10 @@ function pzTemaHora(scheduledAt) {
 // Barra del chat completo: Enviar propio + video + frase corta.
 // Solo #/app/chat (bindChatFull): las demás superficies conservan su
 // barra de siempre (mic que se convierte en enviar, maxlength 2000).
-function pzTemaBarraInit() {
-  const row = document.querySelector('#pzChatFull .chat-input-row');
-  if (!row || document.getElementById('pzChatSendBtn')) return;
-  // (RS-5 · CHAT SIN TEMAS) Sin placeholder de tema ni maxlength 120:
-  // el input es el de siempre («escribile a posty…»), detrás de
-  // «Escribir» (la voz es la entrada principal). El botón Enviar propio
-  // se sigue agregando abajo (lo necesita la fila de escritura).
-  const mic = document.getElementById('chatMicSend');
-  // (LOTE CHAT-MUSE) El botón de video/reel sale del input del chat
-  // (su ícono se leía como calendario): la programación y la subida de
-  // video viven en la vista de semana, no en la barra del chat. La
-  // camarita sigue siendo foto (accept image/*, ver chatPhotoDelegar).
-  // Botón «Enviar» propio, siempre visible: círculo azul con el avión
-  // solo, sin texto (como el mock). Llama al chatSend de siempre.
-  const send = document.createElement('button');
-  send.type = 'button'; send.className = 'btn btn-primary pz-chat-send'; send.id = 'pzChatSendBtn';
-  send.title = pzTemaT('Enviar', 'Send');
-  send.setAttribute('aria-label', pzTemaT('Enviar', 'Send'));
-  send.innerHTML = pzIc('send', 16);
-  send.onclick = () => { try { chatSend(); } catch (e) {} };
-  send.disabled = true;
-  if (mic && mic.parentNode === row) { row.insertBefore(send, mic.nextSibling); }
-  else { row.appendChild(send); }
-  try { chatUpdateSendBtn(); } catch (e) {}
-}
+// (v846 · CHAT SOLO POR AUDIO) pzTemaBarraInit murió con la fila de
+// escritura: ya no hay botón Enviar propio ni input en el chat
+// completo. El mic es siempre mic y los temas se responden
+// tocando o hablando.
 function pzTemaInit() {
   const root = document.getElementById('pzChatFull');
   if (!root) return;
@@ -23675,18 +23647,20 @@ function pzTemaActual() {
 }
 function pzTemaBurbujaUsuario(text) {
   try {
-    if (typeof CHAT !== 'undefined') CHAT.push({ role: 'user', text });
+    const ets = Date.now();
+    if (typeof CHAT !== 'undefined') CHAT.push({ role: 'user', text, ts: ets });
     const box = document.getElementById('chatBox');
-    if (box) box.insertAdjacentHTML('beforeend', '<div class="chat-msg u msg-in">' + esc(String(text)) + '</div>');
+    if (box) chatAppendMsg(box, chatMsgHtml('user', text, ets), ets);
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text }] }).catch(() => {}); } catch (e) {}
     try { chatScroll(); } catch (e) {}
   } catch (e) {}
 }
 function pzTemaBurbujaPostyHTML(html, textoPlano) {
   try {
-    if (typeof CHAT !== 'undefined') CHAT.push({ role: 'assistant', text: textoPlano || '' });
+    const ets = Date.now();
+    if (typeof CHAT !== 'undefined') CHAT.push({ role: 'assistant', text: textoPlano || '', ts: ets });
     const box = document.getElementById('chatBox');
-    if (box) box.insertAdjacentHTML('beforeend', '<div class="chat-msg ai">' + html + '</div>');
+    if (box) chatAppendMsg(box, '<div class="chat-msg ai" data-ts="' + ets + '">' + html + chatHoraHtml(ets) + '</div>', ets);
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: textoPlano || '' }] }).catch(() => {}); } catch (e) {}
     try { chatScroll(); } catch (e) {}
   } catch (e) {}
@@ -24199,8 +24173,7 @@ function pzTemaOnSend(text, unsent) {
   if (!PZ_TEMA) return false;
   const tema = pzTemaActual();
   if (!tema) return false; // «Nada pendiente»: chat libre de siempre.
-  const inp = document.getElementById('chatInput');
-  const limpiar = () => { try { if (inp) inp.value = ''; } catch (e) {} try { chatUpdateSendBtn(); } catch (e) {} };
+  const limpiar = () => { try { chatUpdateSendBtn(); } catch (e) {} };
   const norm = pzTemaNorm(text);
   const despues = /\bdespues\b|\bluego\b|\bmas tarde\b/.test(norm);
   // Foto subida esperando cambio: la foto ES el cambio.
@@ -24396,8 +24369,16 @@ function pzLpChatBind() {
     if (mic) {
       const send = document.createElement('button');
       send.type = 'button'; send.className = 'btn btn-primary'; send.id = 'pzLpSend'; send.textContent = 'Enviar';
-      send.onclick = () => { try { chatSend(); } catch (e) {} };
+      send.onclick = () => { try { const li = document.getElementById('chatInput'); const v = li ? li.value.trim() : ''; if (!v) return; if (li) li.value = ''; chatSend(v); } catch (e) {} };
       mic.replaceWith(send);
+    }
+    // (v846 · CHAT SOLO POR AUDIO) El chat con sesión ya no tiene campo
+    // de texto, así que la landing sin sesión inyecta el suyo propio
+    // en la barra de voz: sin cuenta no hay voz; el chat público es
+    // por texto. Es el ÚNICO #chatInput que queda en la app.
+    const vb = document.querySelector('#pzLpSheetBody .pz-voicebar');
+    if (vb && !document.getElementById('chatInput')) {
+      vb.insertAdjacentHTML('beforeend', '<div class="chat-input-row pz-write-row" id="pzWriteRow"><input id="chatInput" class="in" placeholder="escribile a posty…" maxlength="2000" autocomplete="off"></div>');
     }
     const chips = document.getElementById('chatChips'); if (chips) chips.remove();
     const card = document.getElementById('chatCard');
@@ -24411,7 +24392,7 @@ function pzLpChatBind() {
   if (sh) sh.addEventListener('click', (e) => { if (e.target === sh) { try { pzLpClose(); } catch (e2) {} } });
   const inp = document.getElementById('chatInput');
   if (inp) {
-    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); try { chatSend(); } catch (err) {} } });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); try { const v = inp.value.trim(); if (v) { inp.value = ''; chatSend(v); } } catch (err) {} } });
     inp.addEventListener('input', () => { try { chatUpdateSendBtn(); } catch (err) {} });
   }
   // Puertas de la landing (Ayuda / Hablá con Posty / Soporte): abren este mismo chat.
@@ -25331,10 +25312,8 @@ function hfLiveBusy() {
     if (typeof HF_DRAG !== 'undefined' && HF_DRAG) return true; // (6C · ítem 9) el arrastre difiere el parcheo
     if (HF_GESTURE_ACTIVE) return true;
     if (typeof HF_MOVE !== 'undefined' && HF_MOVE) return true;
-    const ci = document.getElementById('chatInput');
-    if (ci && document.activeElement === ci) return true;
-    const sheet = document.getElementById('mzSheet');
-    if (sheet && !sheet.hidden && ci && String(ci.value || '').trim()) return true;
+    // (v846) Ya no hay campo de texto en el chat con sesión: el guard
+    // de «usuario escribiendo» muere con el teclado.
   } catch (e) {}
   return false;
 }
@@ -25910,11 +25889,11 @@ function hfDetailWire(ov, post, tile) {
     }
     if (name === 'share') { hfDetailShare(post); return; }
     if (name === 'followers') { hfFollowerOpen(post); return; } // (6B · ítem 8) lámina sobre el detalle
-    if (name === 'verfeed') { // (LOTE REDISENO-R2 · FEED) «Ver en el feed»: cierra el detalle, abre #/app/feed y destaca el posteo en su posición final (hfFeedHighlightApply).
+    if (name === 'verfeed') { // (LOTE REDISENO-R2 · FEED · v846: la pestaña Feed salió) «Ver en el feed»: cierra el detalle, abre Hoy y destaca el posteo en su posición final (hfHoyHighlightApply).
       hfDetailClose();
-      try { HF_FEED_HIGHLIGHT = String(post.id); } catch (e) {}
-      if ((location.hash || '') === '#/app/feed') { try { render(); } catch (e) {} }
-      else location.hash = '#/app/feed';
+      try { HF_HOY_HIGHLIGHT = String(post.id); } catch (e) {}
+      if ((location.hash || '') === '#/app/inicio') { try { render(); } catch (e) {} }
+      else location.hash = '#/app/inicio';
       return;
     }
     if (name === 'menu') {
@@ -26493,14 +26472,12 @@ function hfAnchorChip(kind) {
   if (texts[kind]) hfAnchorSend(texts[kind]);
 }
 // (EDITAR-POSTEO · 4/11) Un toque = se manda: las opciones no solo
-// rellenan el campo, ejecutan. Sin campo (otra superficie), no hace nada.
+// se muestran, ejecutan. (v846) Sin campo: el texto se manda directo
+// con chatSend.
 function hfAnchorSend(text) {
   try {
-    const inp = document.getElementById('chatInput');
-    if (!inp) return;
-    inp.value = text;
-    try { chatUpdateSendBtn(); } catch (e) {}
-    if (typeof chatSend === 'function') chatSend();
+    if (!text) return;
+    if (typeof chatSend === 'function') chatSend(text);
   } catch (e) {}
 }
 async function hfRedoPost(id) {
@@ -26646,11 +26623,11 @@ function hfOpenChatForPost(post) {
    del cliente. tiene que ser muy simple») En el detalle del posteo
    (weekCardHTML y approvalPostView) ya no hay un botón «Pedir un
    cambio»: hay un MINI-CHAT inline — una línea de Posty (su voz del
-   chat: minúscula, corta) + un input de una línea del cliente. Al
-   enviar, se abre EL chat único de siempre con el posteo anclado
-   (hfAskChange → hfOpenChatForPost/hfSetAnchor) y el mensaje ya
-   entregado en ese chat (hfDeliverAskText → chatSend, el camino de
-   envío de siempre). NO es un segundo chat: es el único asomando en
+   chat: minúscula, corta) + un botón «Decímelo con tu voz». Al
+   tocarlo, se abre EL chat único de siempre con el posteo anclado
+   (hfAskChange → hfOpenChatForPost/hfSetAnchor) y el prompt de
+   voz (pzCambioVozPrompt): el cambio se dicta por nota de voz.
+   (v846 · CHAT SOLO POR AUDIO) El input de texto murió. NO es un segundo chat: es el único asomando en
    el detalle. Misma elegibilidad de siempre (borrador/programado con
    imagen; un publicado no se edita pidiendo un cambio). El objeto del
    posteo queda registrado por id para que el handler delegado
@@ -26658,7 +26635,6 @@ function hfOpenChatForPost(post) {
    ancla) sin importar en qué superficie vive la tarjeta. */
 var HF_ASK_POSTS = {};
 var HF_CHAT_OPEN_PENDING = false;
-var HF_ASK_TEXT_PENDING = '';
 function hfAskChangeBtnHTML(p) {
   if (!p || p.id == null) return '';
   const stA = String(p.status || '');
@@ -26674,28 +26650,11 @@ function hfAskChangeBtnHTML(p) {
   const enA = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   return `<div class="hf-ask-mini" data-hf-ask-mini="${esc(String(p.id))}">
     <div class="hf-ask-posty"><img src="ai-avatar.png" alt="Posty" class="hf-ask-ava"><span>${enA ? 'what do we change on this post?' : 'qué le cambiamos a este posteo?'}</span></div>
-    <form class="hf-ask-form" data-hf-ask-form="${esc(String(p.id))}">
-      <input type="text" class="hf-ask-input" data-hf-ask-input maxlength="2000" autocomplete="off" placeholder="${enA ? 'write to posty…' : 'escribile a posty…'}">
-      <button type="submit" class="hf-ask-send" aria-label="${enA ? 'Send' : 'Enviar'}">${pzIc('send', 16)}</button>
-    </form>
+    <button type="button" class="hf-ask-voice" data-hf-ask-voice="${esc(String(p.id))}">🎙️ ${enA ? 'Tell me with your voice' : 'Decímelo con tu voz'}</button>
   </div>`;
 }
-// Entrega el mensaje escrito en el mini-chat DENTRO del chat único:
-// lo deja en #chatInput y lo manda por chatSend — el camino de envío
-// de siempre (mismo estado CHAT, mismo hilo del servidor con
-// anchor_post_id). Si el chat todavía no existe en el DOM (detalle
-// standalone → navegación a Inicio), el texto queda pendiente y lo
-// entrega bindInicio al abrir la hoja (HF_CHAT_OPEN_PENDING).
-function hfDeliverAskText() {
-  if (!HF_ASK_TEXT_PENDING) return;
-  const inp = document.getElementById('chatInput');
-  const box = document.getElementById('chatBox');
-  if (!inp || !box || typeof chatSend !== 'function') return;
-  const text = HF_ASK_TEXT_PENDING;
-  HF_ASK_TEXT_PENDING = '';
-  inp.value = text;
-  try { chatSend(); } catch (e) { HF_ASK_TEXT_PENDING = text; }
-}
+// (v846 · CHAT SOLO POR AUDIO) hfDeliverAskText murió con el input
+// del mini-chat: el cambio se dicta por voz (pzCambioVozPrompt).
 // Cierra el detalle que contenga al botón por su mecanismo propio
 // (la ampliación scf-pop de Semana/Inicio, el detalle IG o una hoja
 // pcsheet) y lleva al chat principal con el ancla fijada, reutilizando
@@ -26716,26 +26675,22 @@ function hfAskChange(post) {
   hfOpenChatForPost(post);
   if (!hadChat) HF_CHAT_OPEN_PENDING = true;
 }
-// Delegado global en captura (una sola vez): el submit del mini-chat
-// del detalle. Guarda el texto como pendiente, abre el chat único con
-// el posteo anclado (hfAskChange, el flujo de siempre) y lo entrega
-// ahí mismo (hfDeliverAskText). Sin texto, el envío solo abre el chat
-// anclado — la affordance que tenía el botón.
+// Delegado global en captura (una sola vez): el botón de voz del
+// mini-chat del detalle. Abre el chat único con el posteo anclado
+// (hfAskChange, el flujo de siempre) y muestra el prompt de voz
+// (pzCambioVozPromptDeliver); el cambio se dicta, nunca se escribe.
 function hfAskChangeBind() {
   if (window.__hfAskBound) return;
   window.__hfAskBound = true;
-  document.addEventListener('submit', (e) => {
-    const f = e.target;
-    if (!f || !f.dataset || !f.dataset.hfAskForm) return;
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('[data-hf-ask-voice]') : null;
+    if (!b) return;
     e.preventDefault();
-    e.stopPropagation();
-    const id = f.dataset.hfAskForm;
-    const inp = f.querySelector('[data-hf-ask-input]');
-    const text = inp ? String(inp.value || '').trim() : '';
+    const id = b.dataset.hfAskVoice;
     const post = (typeof HF_ASK_POSTS !== 'undefined' && HF_ASK_POSTS[String(id)]) || { id };
-    if (text) HF_ASK_TEXT_PENDING = text;
     hfAskChange(post);
-    try { hfDeliverAskText(); } catch (e2) {}
+    try { pzCambioVoz(Number(id)); } catch (e2) {}
+    try { pzCambioVozPromptDeliver(); } catch (e3) {}
   }, true);
 }
 /* ===== (LOTE CHAT-POSTEO-PANTALLA · 2/11) El chat de un posteo es PANTALLA COMPLETA =====
@@ -26841,12 +26796,6 @@ function pzPostChatEnsureLayer() {
       if (!touch) return;
       var dy = touch.clientY - sy, dx = touch.clientX - sx;
       if (dy <= 0 || Math.abs(dx) > Math.abs(dy)) { tracking = false; l.style.transform = ''; return; }
-      var ae = document.activeElement;
-      if (ae && ae.id === 'chatInput') {
-        // Primer desliz con teclado abierto: solo cierra el teclado.
-        try { ae.blur(); } catch (e2) {}
-        tracking = false; l.style.transform = ''; return;
-      }
       if (!pzReducedMotion()) { try { l.style.transform = 'translateY(' + Math.min(dy, 120) + 'px)'; } catch (e2) {} }
       l.dataset.pzSwipeDy = String(dy);
     }, { passive: true });
@@ -26872,7 +26821,6 @@ function pzPostChatEnsureLayer() {
 var PZ_PC_OPEN = false;
 var PZ_PC_POST = null;
 var PZ_PC_DIRTY = false;
-var PZ_PC_EDIT_PH = { es: 'qué le cambio a este posteo?', en: 'what do I change on this post?' };
 function pzPcStatusChip(p, en) {
   try {
     var st = String((p && p.status) || '');
@@ -26946,7 +26894,7 @@ function pzPcRenderHero(post) {
     var anchor = card ? card.querySelector('#chatAnchor') : null;
     if (card && anchor) anchor.insertAdjacentHTML('afterend', pzPcChipRowHTML(post, pzPostChatIsEn()));
     else if (card) {
-      var row = card.querySelector('.chat-input-row');
+      var row = card.querySelector('.pz-voicebar');
       if (row) row.insertAdjacentHTML('beforebegin', pzPcChipRowHTML(post, pzPostChatIsEn()));
     }
   } catch (e) {}
@@ -26991,11 +26939,8 @@ function pzPcChipAction(kind) {
   }
 }
 function pzPcSendAnchored(text) {
-  var inp = document.getElementById('chatInput');
-  if (!inp) return;
-  inp.value = text;
-  try { chatUpdateSendBtn(); } catch (e) {}
-  try { chatSend(); } catch (e2) {}
+  if (!text) return;
+  try { chatSend(text); } catch (e2) {}
 }
 async function pzPcRedo() {
   var post = PZ_PC_POST || HF_CHAT_ANCHOR;
@@ -27125,7 +27070,7 @@ function pzPostChatOpen(post) {
   PZ_PC_OPEN = true;
   try { pzPcRenderHero(post); } catch (e) {}
   try {
-    var _row = card.querySelector('.chat-input-row');
+    var _row = card.querySelector('.pz-voicebar');
     if (_row && !card.querySelector('.pz-pc-note')) _row.insertAdjacentHTML('afterend', pzPcNoteHTML(pzPostChatIsEn()));
   } catch (e) {}
   layer.hidden = false;
@@ -27137,12 +27082,10 @@ function pzPostChatOpen(post) {
   try { pzChatPinArm(); } catch (e) {}
   pzPostChatKbBind();
   pzPostChatKbSync();
-  var inp = document.getElementById('chatInput');
-  if (inp && !inp.value) { try { inp.placeholder = PZ_PC_EDIT_PH[pzPostChatIsEn() ? 'en' : 'es']; } catch (e) {} }
   // (LOTE CHAT-PERFECTO · pieza 4) Sin foco automático al abrir: el
   // teclado se abría solo y colapsaba el hero antes de ver la foto y
-  // los atajos. El teclado abre al tocar el campo; un cambio pendiente
-  // se manda solo vía hfDeliverAskText.
+  // los atajos. (v846) Ya no hay campo de texto: el cambio se pide
+  // por nota de voz con el prompt (pzCambioVozPrompt).
   return true;
 }
 function pzPostChatReturn() {
@@ -27172,7 +27115,6 @@ function pzPostChatReturn() {
 function pzPostChatClose() {
   var layer = document.getElementById('pzPostChat');
   if (!layer || layer.hidden) return;
-  try { var inp = document.getElementById('chatInput'); if (inp) inp.blur(); } catch (e) {}
   layer.hidden = true;
   PZ_PC_OPEN = false;
   PZ_PC_POST = null;
@@ -27218,12 +27160,12 @@ function bindInicio() {
       var _pp = PZ_POSTCHAT_PENDING_POST; PZ_POSTCHAT_PENDING_POST = null;
       try { pzPostChatOpen(_pp); } catch (e) {}
       try { hfPaintAnchor(); } catch (e) {}
-      try { hfDeliverAskText(); } catch (e) {}
+      try { pzCambioVozPromptDeliver(); } catch (e) {}
     } else {
       // (LOTE CHATPANTALLA) La hoja se retiró: el pendiente se entrega
       // en la pantalla de chat (bindChatFull pinta el ancla y entrega).
       if ((location.hash || '').split('?')[0] !== '#/app/chat') { location.hash = '#/app/chat'; }
-      else { try { hfPaintAnchor(); } catch (e) {} try { hfDeliverAskText(); } catch (e) {} }
+      else { try { hfPaintAnchor(); } catch (e) {} try { pzCambioVozPromptDeliver(); } catch (e) {} }
     }
   }
   // (Frente 3 · suma 2) Gestos del feed vivo (preview de reels con
@@ -27297,7 +27239,7 @@ function bindInicio() {
   // (LOTE CHATPANTALLA) El chat ya no vive en una hoja sobre Inicio:
   // es pantalla completa (#/app/chat). El cableado de siempre corre
   // en la pantalla (bindChatFull). OJO: bindChat() SÍ corre acá — la
-  // tarjeta de chat de Inicio tiene #chatInput — y carga el historial
+  // tarjeta de chat de Inicio — y carga el historial
   // (chatLoadHistory); el scan de [celebrate] de esa carga NO festeja
   // en la primera carga de página (semilla, lote avatar-festejo).
   try { bindChat(); } catch (e) {}
@@ -27338,6 +27280,10 @@ function bindInicio() {
       if (r && r.ok) IDEAS_PENDING_COUNT = (r.ideas || []).length;
     }).catch(() => {});
   }
+  // (v846) «Ver en el feed» desde el detalle: Hoy ya pintó, destacar
+  // el posteo en su posición final (una sola vez: la función limpia el
+  // global al correr).
+  try { hfHoyHighlightApply(); } catch (e) {}
 }
 /* ---------- 🧠 ANÁLISIS (2026-10-19): la casa del cerebro de Posty ---------- */
 // Arriba: la radiografía de SU cuenta (todos los planes). Abajo: "Tu mercado"
@@ -27616,13 +27562,12 @@ function bindSchedule() {
   })();
   // Días libres: el fantasma "+" lleva al chat a pedirle algo a Posty para ese día.
   // v221: el chat vive EN esta misma pantalla, abajo — el fantasma baja
-  // hasta el chat de Schedule y enfoca el input (antes saltaba a la
-  // vista del chat: otra pantalla, lo que Valentino marcó).
+  // hasta el chat de Schedule (antes saltaba a la vista del chat:
+  // otra pantalla, lo que Valentino marcó). (v846) Sin focus: ya no
+  // hay campo de texto; solo baja hasta la tarjeta del chat.
   $$('#schedView [data-sched-day]').forEach(b => b.onclick = () => {
     const card = document.getElementById('chatCard');
     if (card) { try { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }
-    const inp = document.getElementById('chatInput');
-    if (inp) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} } }, 480);
   });
   $$('#schedView [data-lightbox]').forEach(el => el.onclick = () => {
     lbOpenFrom(el);
@@ -27742,7 +27687,6 @@ function bindApp(tab) {
   if (tab === 'chat') bindChatFull(); // (LOTE CHATPANTALLA) El chat principal es pantalla completa
   if (tab === 'schedule') bindSchedule();
   if (tab === 'inicio') bindInicio();
-  if (tab === 'feed') bindFeed(); // (LOTE REDISENO-R2 · FEED)
   if (tab === 'onboarding') bindOnboarding(); // FASE 4: cablea form directo o entrevista (antes dead code: nunca se llamaba)
   if (tab === 'dogfood') { try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {} }
   if (tab === 'numeros') bindStats(); // 📊 Tus números
@@ -29728,15 +29672,9 @@ async function pzSftIrAPropuestaCarrusel() {
 var PZ_SFT_CHAT_PENDIENTE = null;
 function pzSftChatEn() { return pzSftEn(); }
 function pzSftChatAbrirYEnfocar() {
+  // (v846) Abre el chat; ya no hay campo que enfocar. La propuesta de
+  // la foto llega sola como mensaje (pzSftChatProponer).
   try { if (typeof mzOpenSheet === "function") mzOpenSheet(true); } catch (e) {}
-  try {
-    setTimeout(() => {
-      try {
-        const ci = document.getElementById("chatInput");
-        if (ci) { try { ci.focus({ preventScroll: true }); } catch (e2) { try { ci.focus(); } catch (e3) {} } }
-      } catch (e) {}
-    }, 120);
-  } catch (e) {}
 }
 /* Entrada del dock + y de cualquier picker que quiera «foto al chat»:
    abre el chat y dispara el picker de fotos DEL CHAT (#chatFile), no el
@@ -30218,44 +30156,12 @@ function pzSftChatTarjetaArmada(prop) {
   // no hay nada que aprobar en semana: la pieza exprés no lo muestra).
   const hoyBtn = `<button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatPublicarHoy(${pid})">${en ? 'Publish today' : 'Publicar hoy'}</button>`;
   const saleAsiBtn = prop.expres ? '' : `<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatAprobar(this, ${pid})">${en ? 'Post it' : 'Sale así'}</button>`;
-  const card = `<div class="chat-msg ai" id="pzSftCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Your post is ready' : 'Tu posteo está armado'}</div>${img}<div class="pz-sft-cuando" style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-sft-cap" style="font-size:13px;white-space:pre-wrap">${esc(prop.caption || '')}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div id="pzSftCardBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${hoyBtn}${saleAsiBtn}${todas}<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarTexto(${pid})">${en ? 'Change text' : 'Cambiar texto'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzCambioVoz(${pid})">${en ? 'Change something' : 'Cambiar algo'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarDia(${pid})">${en ? 'Change day' : 'Cambiar día'}</button>${otraFoto}<button type="button" class="btn btn-soft btn-sm" onclick="pzUsarFotoAbrir(${pid})">${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button></div><div id="pzSftDias-${pid}"></div><div id="pzSftEdit-${pid}"></div></div>`;
+  const card = `<div class="chat-msg ai" id="pzSftCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Your post is ready' : 'Tu posteo está armado'}</div>${img}<div class="pz-sft-cuando" style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-sft-cap" style="font-size:13px;white-space:pre-wrap">${esc(prop.caption || '')}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div id="pzSftCardBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${hoyBtn}${saleAsiBtn}${todas}<button type="button" class="btn btn-soft btn-sm" onclick="pzCambioVoz(${pid})">${en ? 'Change something' : 'Cambiar algo'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarDia(${pid})">${en ? 'Change day' : 'Cambiar día'}</button>${otraFoto}<button type="button" class="btn btn-soft btn-sm" onclick="pzUsarFotoAbrir(${pid})">${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button></div><div id="pzSftDias-${pid}"></div></div>`;
   box.insertAdjacentHTML('beforeend', card);
   try { chatScroll(); } catch (e) {}
 }
-/* (LOTE CHAT-CLICKS · punto 2) «Cambiar texto»: edita la caption AHÍ
-   MISMO, sin salir del chat (antes navegaba al detalle). */
-function pzSftChatCambiarTexto(postId) {
-  const prop = (postId && PZ_SFT_ARMADOS[Number(postId)]) || PZ_SFT_ARMADO_ACTUAL;
-  if (!prop || !prop.postId) return;
-  const en = pzSftEn();
-  const slot = document.getElementById('pzSftEdit-' + Number(prop.postId));
-  if (!slot) return;
-  if (slot.dataset.open === '1') { slot.innerHTML = ''; slot.dataset.open = ''; return; }
-  slot.dataset.open = '1';
-  slot.innerHTML = '<div style="margin-top:8px"><textarea id="pzSftEditTa-' + Number(prop.postId) + '" rows="3" style="width:100%;box-sizing:border-box;border-radius:10px;padding:8px;font:inherit;font-size:13px">' + esc(prop.caption || '') + '</textarea><div style="display:flex;gap:8px;margin-top:6px"><button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatGuardarTexto(' + Number(prop.postId) + ')">' + esc(en ? 'Save' : 'Guardar') + '</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarTexto(' + Number(prop.postId) + ')">' + esc(en ? 'Cancel' : 'Cancelar') + '</button></div></div>';
-  try { const ta = document.getElementById('pzSftEditTa-' + Number(prop.postId)); if (ta) ta.focus(); } catch (e) {}
-}
-async function pzSftChatGuardarTexto(postId) {
-  const prop = (postId && PZ_SFT_ARMADOS[Number(postId)]) || PZ_SFT_ARMADO_ACTUAL;
-  if (!prop || !prop.postId) return;
-  const en = pzSftEn();
-  const ta = document.getElementById('pzSftEditTa-' + Number(postId));
-  if (!ta) return;
-  const txt = String(ta.value || '').trim();
-  try {
-    const d = await api.patch('/api/posts/' + encodeURIComponent(prop.postId), { action: 'save-draft', caption: txt });
-    if (!d || !d.ok) throw new Error((d && d.message) || (d && d.error) || 'fail');
-    prop.caption = txt;
-    const card = document.getElementById('pzSftCard-' + Number(prop.postId));
-    if (card) { const cap = card.querySelector('.pz-sft-cap'); if (cap) cap.textContent = txt; }
-    const slot = document.getElementById('pzSftEdit-' + Number(prop.postId));
-    if (slot) { slot.innerHTML = ''; slot.dataset.open = ''; }
-    toast('✅ ' + (en ? 'Text updated' : 'Texto actualizado'));
-    try { render(); } catch (e) {}
-  } catch (e) {
-    toast('😅 ' + esc((e && e.message) || (en ? 'Try again' : 'Probá de nuevo')));
-  }
-}
+// (v846 · CHAT SOLO POR AUDIO) «Cambiar texto» murió con su editor:
+// el cambio se pide por voz con [Cambiar algo] (pzCambioVoz).
 /* (LOTE CHAT-CLICKS · punto 2) «Cambiar día»: píldoras de días libres
    SIN salir del chat (antes navegaba al detalle del posteo). */
 async function pzSftChatCambiarDia(postId) {

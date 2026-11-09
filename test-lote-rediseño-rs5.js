@@ -8,7 +8,7 @@
 // pregunta de los lunes va ADENTRO de ese mensaje); (c) recomendación
 // de Impulsar en el chat (mismo recomendado y mismo texto que RS-4);
 // (e) copy «jardín» fuera (el jardín no tiene lugar en el rediseño).
-// Servidor: SIN CAMBIO salvo el BUILD v841 (base v831; la recomendación usa el endpoint
+// Servidor: SIN CAMBIO salvo el BUILD (re-pin v846; base v831; la recomendación usa el endpoint
 // existente /api/estrategia/mejor-posteo y la pregunta de los lunes el
 // existente /api/weekly-consultas).
 // Node puro: asserts estáticos + VM con DOM falso sobre las secciones
@@ -36,48 +36,48 @@ const sliceBetween = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo + pins del árbol RS-5 (base v831) ----------
-  t(srv.includes("const BUILD_ID = '20261105-v841'"), 'server: BUILD v841 (RS-5 no toca server.js salvo el BUILD)');
-  t(md5(srv) === 'c05e2251eff2bcea74c83d8e83f9c8cb', 'server.js md5 (v841, solo BUILD)');
-  t(md5(app) === '6b2c61a2c421f75e53cfb76197e7f29b', 'app.js md5 (RS-5)');
-  t(md5(css) === 'd66887135d9586086b4175ae686f06fa', 'styles.css md5 (RS-5)');
-  t(app.split('\n').length - 1 === 30232, 'app.js 30232 líneas (v840 30095 + 137)');
-  t(css.split('\n').length - 1 === 6054, 'styles.css 6054 líneas (v840 6014 + 40)');
+  t(srv.includes("const BUILD_ID = '20261105-v846'"), 'server: BUILD v846 en el árbol (estampado por el preparador)');
+  t(md5(srv) === '60011803ff43888371b4049514d7d64d', 'server.js md5 (v846 fusionado: Juli + lote)');
+  t(md5(app) === '6c0faedd9bd3e7304b40a18ca765bc9b', 'app.js md5 (v846)');
+  t(md5(css) === '64d34e3d4550385ae46b127b766927e1', 'styles.css md5 (v846)');
+  t(app.split('\n').length - 1 === 30400, 'app.js 30400 líneas (v846)');
+  t(css.split('\n').length - 1 === 6067, 'styles.css 6067 líneas (v846)');
   t(cnt(app, 'LOTE REDISEÑO SIMPLE RS-5') === 0 && cnt(app, 'RS-5') >= 10, 'app: marcadores RS-5 presentes');
   t(cnt(css, 'RS-5') === 1, 'styles: bloque RS-5 ×1');
   // Censo de los frentes ajenos (no se pisan).
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
-  t(cnt(app, 'pzBoost') === 173, 'censo app: pzBoost ×173 (161 v840 + 12 RS-5: pzBoostRecPintar ×2, pzBoostRecTexto +3, pzBoostOpenById +2, pzBoostRecCard ×2, pzBoostRecOff ×3)');
+  t(cnt(app, 'pzBoost') === 198, 'censo app: pzBoost ×198 (v846: refactor del picker por clave)');
   t(app.includes('function pzOpenBoostPick() { return pzBoostPickOpen(); }'), 'contrato RS-4: pzOpenBoostPick intacto');
   t(app.includes("function adsView() {") && app.includes("function bindAds() {"), 'app: adsView/bindAds intactos (la ruta Ads sigue viva por URL, sin pestaña)');
 
   // ---------- 2. (a) Barra de 3 pestañas ----------
   const mzSrc = sliceBetween(app, 'function mzTabsHTML(tab) {', '\n}\n');
   t(mzSrc.length > 200, 'barra: mzTabsHTML extraída (' + mzSrc.length + ' caracteres)');
-  t(mzSrc.includes("gzT('Hoy', 'Today')") && mzSrc.includes("pzIc('grid')") && mzSrc.includes("gzT('Chat', 'Chat')"),
-    'barra: mzTabsHTML = Hoy · Feed · Chat');
+  t(mzSrc.includes("gzT('Hoy', 'Today')") && mzSrc.includes("pzIc('navCasa')") && mzSrc.includes("gzT('Chat', 'Chat')") && !mzSrc.includes('Feed'),
+    'barra: mzTabsHTML = Hoy · Chat (v846: sin Feed)');
   t(!mzSrc.includes('Análisis') && !mzSrc.includes('Impulsar') && !mzSrc.includes('Nivel') && !mzSrc.includes('numeros') && !mzSrc.includes("'ads'"),
     'barra: mzTabsHTML sin Análisis / Impulsar / Nivel / numeros / ads');
-  t(cnt(mzSrc, "t('") === 3, 'barra: mzTabsHTML tiene exactamente 3 pestañas');
+  t(cnt(mzSrc, "t('") === 2, 'barra: mzTabsHTML tiene exactamente 2 pestañas (v846)');
   const bbBar = sliceBetween(app, '<nav class="bb-bar">', '</nav>');
-  t(bbBar.includes("tabBtn('inicio'") && bbBar.includes("tabBtn('feed'") && bbBar.includes("tabBtn('chat'"),
-    'barra: bb-bar = inicio · feed · chat');
+  t(bbBar.includes("tabBtn('inicio'") && !bbBar.includes("tabBtn('feed'") && bbBar.includes("tabBtn('chat'"),
+    'barra: bb-bar = inicio · chat (v846: sin Feed)');
   t(!bbBar.includes('analisis') && !bbBar.includes('impulsar') && !bbBar.includes('jardin'),
     'barra: bb-bar sin analisis / impulsar / jardin');
-  t(cnt(bbBar, 'tabBtn(') === 3, 'barra: bb-bar tiene exactamente 3 botones');
+  t(cnt(bbBar, 'tabBtn(') === 2, 'barra: bb-bar tiene exactamente 2 botones (v846)');
   // El drawer vive dentro de appShell (no hay función drawerHTML): 3
   // enlaces de navegación (Hoy / Feed / Chat) + Ajustes + Salir.
   const drawer = sliceBetween(app, 'function appShell(tab, content) {', 'function openDrawer(){');
-  t(cnt(drawer, 'data-tab="inicio"') === 1 && cnt(drawer, 'data-tab="feed"') === 1 && cnt(drawer, 'data-tab="chat"') === 1,
-    'barra: drawer tiene Hoy / Feed / Chat (1 cada uno)');
+  t(cnt(drawer, 'data-tab="inicio"') === 1 && cnt(drawer, 'data-tab="feed"') === 0 && cnt(drawer, 'data-tab="chat"') === 1,
+    'barra: drawer tiene Hoy / Chat (1 cada uno, v846: sin Feed)');
   t(!drawer.includes('data-tab="numeros"') && !drawer.includes('data-tab="ads"') && !drawer.includes('data-tab="jardin-posty"'),
     'barra: drawer sin numeros / ads / jardin-posty');
   t(drawer.includes('data-tab="ajustes"') && drawer.includes('drawerLogout'),
     'barra: drawer conserva Ajustes y Salir');
   const mxSrc = sliceBetween(app, 'function mxTabKey(tab) {', '\n}\n');
-  t(mxSrc.includes("tab === 'feed'") && !mxSrc.includes("jardin-posty") && !mxSrc.includes("numeros") && !mxSrc.includes("'ads'"),
-    'barra: mxTabKey conoce feed y ya no mapea numeros / ads / jardin-posty');
+  t(!mxSrc.includes("tab === 'feed'") && !mxSrc.includes("jardin-posty") && !mxSrc.includes("numeros") && !mxSrc.includes("'ads'"),
+    'barra: mxTabKey ya NO conoce feed (v846) ni mapea numeros / ads / jardin-posty');
   t(app.includes("feed: '<svg viewBox=\"0 0 24 24\""), 'barra: icono feed (grid 2x2) en el mapa ic del bb-bar');
   // VM: mzTabsHTML con stubs de pzIc/gzT. (El slice excluye la llave de
   // cierre; se repone al evaluar.)
@@ -89,68 +89,59 @@ const sliceBetween = (src, from, to) => {
   vm.runInContext(mzSrc + '\n}', barCtx);
   const barHTML = (tab) => { barCtx.__h = ''; vm.runInContext('__h = mzTabsHTML(' + JSON.stringify(tab) + ');', barCtx); return barCtx.__h; };
   const hInicio = barHTML('inicio');
-  t((hInicio.match(/data-tab="/g) || []).length === 3, 'VM barra: 3 botones en el dock');
-  t(hInicio.includes('data-tab="inicio"') && hInicio.includes('data-tab="feed"') && hInicio.includes('data-tab="chat"'), 'VM barra: rutas inicio / feed / chat');
-  t(hInicio.includes('Hoy') && hInicio.includes('Feed') && hInicio.includes('Chat'), 'VM barra: rótulos Hoy / Feed / Chat');
-  t(hInicio.includes('mz-tab on') && hInicio.indexOf('mz-tab on') < hInicio.indexOf('data-tab="feed"'), 'VM barra: en inicio, la pestaña activa es Hoy');
+  t((hInicio.match(/data-tab="/g) || []).length === 2, 'VM barra: 2 botones en el dock (v846)');
+  t(hInicio.includes('data-tab="inicio"') && !hInicio.includes('data-tab="feed"') && hInicio.includes('data-tab="chat"'), 'VM barra: rutas inicio / chat (v846)');
+  t(hInicio.includes('Hoy') && !hInicio.includes('Feed') && hInicio.includes('Chat'), 'VM barra: rótulos Hoy / Chat (v846)');
+  t(hInicio.includes('mz-tab on') && hInicio.indexOf('mz-tab on') < hInicio.indexOf('data-tab="chat"'), 'VM barra: en inicio, la pestaña activa es Hoy');
   const hFeed = barHTML('feed');
-  t(hFeed.includes('mz-tab on') && hFeed.indexOf('mz-tab on') > hFeed.indexOf('data-tab="inicio"') && hFeed.indexOf('mz-tab on') < hFeed.indexOf('data-tab="chat"'), 'VM barra: en feed, la pestaña activa es Feed');
+  t(!hFeed.includes('mz-tab on'), 'VM barra: en feed (ruta vieja) ninguna pestaña activa (v846: redirige a Hoy)');
   const hChat = barHTML('chat');
-  t(hChat.includes('mz-tab on') && hChat.indexOf('mz-tab on') > hChat.indexOf('data-tab="feed"'), 'VM barra: en chat, la pestaña activa es Chat');
+  t(hChat.includes('mz-tab on') && hChat.indexOf('mz-tab on') > hChat.indexOf('data-tab="inicio"'), 'VM barra: en chat, la pestaña activa es Chat');
   const hNumeros = barHTML('numeros');
   t(!hNumeros.includes('mz-tab on'), 'VM barra: en numeros (ruta vieja sin pestaña) ninguna pestaña activa');
   const hAds = barHTML('ads');
   t(!hAds.includes('mz-tab on'), 'VM barra: en ads (ruta vieja sin pestaña) ninguna pestaña activa');
 
   // ---------- 3. (b) Chat voz primero (regla 12) ----------
-  const chatCard = sliceBetween(app, 'function chatCardHTML', 'function chatTopHTML');
+  const chatCard = sliceBetween(app, 'function chatCardHTML', 'function renderVozPostCard'); // (v846) chatTopHTML ya no existe; el slice iba hasta EOF
   t(chatCard.includes('class="pz-voicebar"'), 'voz: chatCardHTML tiene .pz-voicebar');
   t(chatCard.includes('class="pz-mic-big" id="chatMicSend"'), 'voz: micrófono GRANDE con el mismo id #chatMicSend (hereda el binding de voz)');
   t(chatCard.includes("pzIc('mic', 26)"), 'voz: el mic grande usa el icono mic a 26px');
   t(chatCard.includes('Hablarle a Posty') && chatCard.includes('Tocá el micrófono grande'), 'voz: texto «Hablarle a Posty» + pista de WhatsApp');
-  t(chatCard.includes('id="pzWriteToggle"'), 'voz: toggle «Escribir» presente');
-  t(chatCard.includes('class="chat-input-row pz-write-row" id="pzWriteRow" style="display:none"'), 'voz: la fila de escritura arranca OCULTA');
-  t(chatCard.includes('id="chatInput"') && chatCard.indexOf('id="chatInput"') > chatCard.indexOf('pzWriteRow'), 'voz: el input vive DENTRO de la fila de escritura');
-  t(chatCard.includes('id="chatPhotoBtn"') && chatCard.indexOf('id="chatPhotoBtn"') > chatCard.indexOf('pzWriteRow'), 'voz: la camarita vive dentro de la fila de escritura');
+  t(!chatCard.includes('id="pzWriteToggle"'), 'voz: el toggle «Escribir» YA NO está (v846: chat solo por audio)');
+  t(!chatCard.includes('id="pzWriteRow"'), 'voz: la fila de escritura YA NO está (v846)');
+  t(!chatCard.includes('id="chatInput"'), 'voz: no hay input de texto en la tarjeta (v846: solo audio)');
+  t(chatCard.includes('id="chatPhotoBtn"') && chatCard.indexOf('id="chatPhotoBtn"') < chatCard.indexOf('id="chatMicSend"'), 'voz: la camarita vive en la barra, ANTES del mic (v846: izquierda, visible siempre)');
   t(chatCard.includes('id="chatFile"'), 'voz: el picker de archivo sigue en la tarjeta');
-  t(chatCard.includes('Todo se responde tocando. Escribir es solo la excepción.'), 'voz: pista «Todo se responde tocando»');
+  t(chatCard.includes('Todo se responde tocando o hablando.'), 'voz: pista «Todo se responde tocando o hablando.» (v846)');
   t(!chatCard.includes('id="chatMicSend" title="Pedir con nota de voz"'), 'voz: el mic chico con título viejo ya no existe');
-  t(app.includes('(function pzWriteToggleDelegar() {'), 'voz: IIFE pzWriteToggleDelegar (delegado una vez, como chatPhotoDelegar)');
-  t(app.includes("window.__pzWriteToggleDelegado"), 'voz: guarda de una sola vez para el toggle');
-  t(css.includes('.pz-mic-big') && css.includes('.pz-voicebar') && css.includes('.pz-write-toggle') && css.includes('.pz-voice-hint'),
-    'voz: estilos RS-5 (mic grande, voicebar, toggle, hint)');
+  t(!app.includes('(function pzWriteToggleDelegar() {'), 'voz: pzWriteToggleDelegar murió (v846)');
+  t(!app.includes("window.__pzWriteToggleDelegado"), 'voz: la guarda del toggle murió con él (v846)');
+  t(css.includes('.pz-mic-big') && css.includes('.pz-voicebar') && !css.includes('.pz-write-toggle') && css.includes('.pz-voice-hint') && css.includes('.pz-cam-btn'),
+    'voz: estilos (mic grande, voicebar, hint, camarita; sin toggle, v846)');
   t(css.includes('width:58px;height:58px'), 'voz: el mic grande mide 58px');
   t(css.includes('.pz-mic-big svg{width:26px;height:26px;stroke:#fff}'),
     'voz: el icono del mic es BLANCO sobre el fondo celeste (pzIc pinta en celeste; sin esto el mic no se ve)');
-  // VM: el toggle abre/cierra la fila de escritura.
-  const togSrc = sliceBetween(app, '(function pzWriteToggleDelegar() {', '})();');
-  t(togSrc.length > 200, 'VM voz: IIFE del toggle extraída (' + togSrc.length + ' caracteres)');
-  const togCtx = vm.createContext({
-    console,
-    window: {},
-    gzT: (es, en) => es,
-    setTimeout: (fn) => { fn(); return 0; },
-  });
-  const togHandlers = [];
-  const togRow = { style: { display: 'none' } };
-  const togInput = { focus: () => { togInput.__focused = true; } };
-  const togCard = {
-    querySelector: (sel) => (sel === '#pzWriteRow' ? togRow : sel === '#chatInput' ? togInput : null),
+  // VM (v846): la camarita abre el picker, sin teclado. chatPhotoDelegar
+  // es una IIFE con listener de click en document: el tap en #chatPhotoBtn
+  // fija accept foto+video y hace click() en #chatFile (carril exprés).
+  const camSrc = sliceBetween(app, '(function chatPhotoDelegar() {', '})();');
+  t(camSrc.length > 200, 'VM voz: IIFE chatPhotoDelegar extraída (' + camSrc.length + ' caracteres)');
+  const camCtx = vm.createContext({ console, window: {} });
+  const camHandlers = [];
+  const camPicker = { accept: '', __clicked: 0, click() { this.__clicked++; } };
+  const camBtn = { closest: (sel) => (sel === '#chatPhotoBtn' ? camBtn : null) };
+  camCtx.document = {
+    addEventListener: (ev, fn) => { if (ev === 'click') camHandlers.push(fn); },
+    getElementById: (id) => (id === 'chatFile' ? camPicker : null),
+    querySelector: () => null,
   };
-  const togBtn = {
-    textContent: 'Escribir',
-    closest: (sel) => (sel === '#pzWriteToggle' ? togBtn : sel === '#chatCard' ? togCard : null),
-  };
-  togCtx.document = { addEventListener: (ev, fn) => { if (ev === 'click') togHandlers.push(fn); } };
-  vm.runInContext(togSrc + '})();', togCtx);
-  t(togHandlers.length === 1, 'VM voz: el toggle registra un solo listener de click');
-  togHandlers[0]({ target: togBtn });
-  t(togRow.style.display === 'flex' && togBtn.textContent === 'Cerrar', 'VM voz: primer toque abre la fila de escritura y el toggle dice «Cerrar»');
-  t(togInput.__focused === true, 'VM voz: al abrir, el input toma el foco');
-  togHandlers[0]({ target: togBtn });
-  t(togRow.style.display === 'none' && togBtn.textContent === 'Escribir', 'VM voz: segundo toque cierra la fila y el toggle vuelve a «Escribir»');
-  togHandlers[0]({ target: { closest: () => null } });
-  t(togRow.style.display === 'none', 'VM voz: un click fuera del toggle no toca la fila');
+  vm.runInContext(camSrc + '})();', camCtx);
+  t(camHandlers.length === 1, 'VM voz: chatPhotoDelegar registra un solo listener de click');
+  camHandlers[0]({ target: camBtn });
+  t(camPicker.accept === 'image/*,video/*' && camPicker.__clicked === 1, 'VM voz: tocar la camarita abre el picker (foto o video)');
+  camHandlers[0]({ target: { closest: () => null } });
+  t(camPicker.__clicked === 1, 'VM voz: un click fuera de la camarita no abre el picker');
 
   // ---------- 4. (b) Chat sin temas + un mensaje por día (reglas 10 y 13) ----------
   t(cnt(app, 'SOBRE · TEMA') === 0, 'temas: el rótulo «SOBRE · TEMA X DE N» ya no existe (×0)');
@@ -374,7 +365,7 @@ const sliceBetween = (src, from, to) => {
     'pzTemaQuickHTML', 'pzTemaT', 'pzIc', 'gzT', 'esc', 'api',
   ]);
   // onclick del toggle y de la tarjeta de boost (delegación + onclick).
-  ['pzWriteToggleDelegar', 'chatPhotoDelegar'].forEach((f) => called.add(f));
+  ['chatPhotoDelegar'].forEach((f) => called.add(f)); // (v846) pzWriteToggleDelegar murió
   const defined = new Set([...app.matchAll(/function (pz[A-Za-z0-9]+|chat[A-Za-z0-9]+|gzT|esc)\s*\(/g)].map((m) => m[1]));
   // Definidas como const/let/var (esc es const arrow; api es const objeto).
   for (const m of app.matchAll(/(?:const|let|var)\s+(esc|api|gzT|pzIc)\s*=/g)) defined.add(m[1]);
@@ -385,8 +376,8 @@ const sliceBetween = (src, from, to) => {
   t(cnt(app, 'pzTemaLunesBoxHTML(') >= 2, 'auditoría: pzTemaLunesBoxHTML se llama (def + uso en la tarjeta del día)');
   t(cnt(app, 'pzTemaGuardarLunesDesdeHoy(') >= 2, 'auditoría: pzTemaGuardarLunesDesdeHoy se llama (def + binding)');
   t(cnt(app, 'pzBoostRecPintar(') >= 2, 'auditoría: pzBoostRecPintar se llama (def + hook en chatLoadHistory)');
-  t(app.includes('(function pzWriteToggleDelegar() {') && app.includes('window.__pzWriteToggleDelegado'),
-    'auditoría: pzWriteToggleDelegar es IIFE con guarda de una sola vez');
+  t(app.includes('(function chatPhotoDelegar() {') && app.includes('window.__chatPhotoDelegado'),
+    'auditoría: chatPhotoDelegar es IIFE con guarda de una sola vez (v846: la camarita queda)');
 
   // ---------- 9. Boot real por HTTP (solo si express resuelve) ----------
   let booted = false;
@@ -415,14 +406,14 @@ const sliceBetween = (src, from, to) => {
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v841', `boot: /api/version 20261105-v841 (vino ${ver.build})`);
+      t(ver.build === '20261105-v846', `boot: /api/version 20261105-v846 (vino ${ver.build})`);
       const bundle = await (await fetch(`${BASE}/app.js`)).text();
       t(md5(bundle) === md5(app), 'boot: /app.js servido = árbol RS-5 (md5)');
       t(bundle.includes('pz-mic-big') && bundle.includes('pz-daily-msg') && bundle.includes('pz-boost-rec-card'),
         'boot: el bundle servido trae las marcas RS-5 (mic grande, daily-msg, boost-rec)');
       const index = await (await fetch(`${BASE}/`)).text();
-      t(index.includes('?v=573'), 'boot: el index ES en ?v=573 (estampado v841)');
-      t(index.includes('styles.css?v=20261221'), 'boot: el index ES en styles?v=20261221 (estampado v841)');
+      t(index.includes('?v=578'), 'boot: el index ES en ?v=578 (estampado v846)');
+      t(index.includes('styles.css?v=20261225'), 'boot: el index ES en styles?v=20261225 (estampado v846)');
     } catch (e) {
       t(false, 'boot: excepción ' + (e && e.message));
       if (srvLog) console.log('--- server log ---\n' + srvLog.slice(-3000));

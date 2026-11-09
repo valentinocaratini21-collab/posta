@@ -224,13 +224,13 @@ async function getHoy(sid) {
       !html.includes('Hoy no tenés posteo programado'), html.slice(0, 200));
     // (LOTE RITUAL-SIN-VELO · 9/11) La hoja nace REVELADA: con la
     // respuesta real, la recomendada muestra SU foto + [Sale así] /
-    // [Editar] / [Cambiar algo] sin gesto de revelar.
+    // [Cambiar algo] sin gesto de revelar (v846: [Editar texto] murió).
     const htmlR = String(pzRitualHTML(d, false));
     t('A6: la recomendada (respuesta real) se muestra revelada con SU foto (518)',
       htmlR.includes('/media/518.jpg') && htmlR.includes('Sale así'),
       htmlR.slice(0, 300));
-    t('A6b: la revelada trae [Editar texto] (data-pc-act=edit-cap) y el caption con data-full',
-      htmlR.includes('data-pc-act="edit-cap"') && htmlR.includes('pcard-cap') && htmlR.includes('data-full='),
+    t('A6b: la revelada YA NO trae [Editar texto] (murió en v846); el caption sigue con data-full',
+      !htmlR.includes('data-pc-act="edit-cap"') && !htmlR.includes('Editar texto') && htmlR.includes('pcard-cap') && htmlR.includes('data-full='),
       htmlR.slice(0, 400));
     t('A6c: la revelada trae [Cambiar algo] con el posteo', htmlR.includes('Cambiar algo') && htmlR.includes('data-pz-ritual-cambio="518"'));
     // (LOTE RITUAL-SIN-VELO · 9/11) Antes de las 9:00 de la cuenta el

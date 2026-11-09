@@ -37,7 +37,7 @@ const sliceFn = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins del árbol RS-4 ----------
-  t(srv.includes("const BUILD_ID = '20261105-v841'"), 'server: BUILD v841 (RS-5)');
+  t(srv.includes("const BUILD_ID = '20261105-v846'"), 'server: BUILD v846 en el árbol (estampado por el preparador)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -48,17 +48,17 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v793'"), 'CHUNK_V v793 (bump T&C)');
-  t(md5(app) === '6b2c61a2c421f75e53cfb76197e7f29b', 'app.js md5 (RS-4 + RS-5 v841)');
-  t(md5(css) === 'd66887135d9586086b4175ae686f06fa', 'styles.css md5 (RS-4 + RS-5 v841)');
-  t(md5(srv) === 'c05e2251eff2bcea74c83d8e83f9c8cb', 'server.js md5 (RS-5 v841, solo BUILD)');
-  t(md5(abSrc) === '04c90ac71c59335d9785aaee959c1260', 'ads-billetera.js md5 (RS-4)');
+  t(md5(app) === '6c0faedd9bd3e7304b40a18ca765bc9b', 'app.js md5 (v846)');
+  t(md5(css) === '64d34e3d4550385ae46b127b766927e1', 'styles.css md5 (v846)');
+  t(md5(srv) === '60011803ff43888371b4049514d7d64d', 'server.js md5 (v846 fusionado: Juli + lote)');
+  t(md5(abSrc) === 'a16b3ed17c40158fc850c372ed4b0a6c', 'ads-billetera.js md5 (v846: solo_ig en elegibles)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (sin ruta nueva)');
-  t(cnt(app, 'pzBoost') === 173, 'app: pzBoost ×173 (161 v840 + 12 RS-5: RecPintar ×2, RecTexto +3, RecCard ×2, RecOff ×3, OpenById +2)');
+  t(cnt(app, 'pzBoost') === 198, 'app: pzBoost ×198 (v846: refactor del picker por clave)');
   t(cnt(app, 'LOTE REDISEÑO SIMPLE RS-4') === 1, 'app: marcador RS-4 ×1');
   t(cnt(srv, 'LOTE REDISEÑO SIMPLE RS-4') === 1, 'server: marcador RS-4 ×1');
   t(cnt(abSrc, 'LOTE REDISEÑO SIMPLE RS-4') === 1, 'ads-billetera: marcador RS-4 ×1');
   t(cnt(css, 'LOTE REDISEÑO SIMPLE RS-4') === 1, 'styles: marcador RS-4 ×1');
-  t(cnt(css, 'pz-boost-') === 53, 'styles: clases pz-boost- ×53 (46 RS-4 + 7 RS-5: rec-card ×4, rec-cta, rec-tag, rec-x)');
+  t(cnt(css, 'pz-boost-') === 55, 'styles: clases pz-boost- ×55 (v846: +2 por la sección Impulsar en Hoy)');
   t(cnt(srv, 'incluir_impulsados') === 2, 'server: ?incluir_impulsados=1 (flag + lectura)');
   t(cnt(abSrc, 'incluirImpulsados') === 2, 'ads-billetera: opts.incluirImpulsados ×2');
   t(cnt(abSrc, 'publicado_en') === 5, 'ads-billetera: publicado_en ×5');
@@ -69,8 +69,8 @@ const sliceFn = (src, from, to) => {
   t(app.includes('function pzOpenBoostPick() { return pzBoostPickOpen(); }'), 'contrato RS-3: pzOpenBoostPick es alias de pzBoostPickOpen');
   t(app.includes('window.pzOpenBoostPick = pzOpenBoostPick'), 'contrato RS-3: window.pzOpenBoostPick expuesto explícitamente');
   // RE-BASE v829: +3 de RS-3 (comentario + typeof + llamada en pzFeedBoostPick).
-  t(cnt(app, 'pzOpenBoostPick') === 12, 'contrato RS-3: pzOpenBoostPick ×12 (7 RS-4 + 3 RS-3 + 2 RS-5)');
-  t(cnt(app, 'window.pzOpenBoostPick') === 9, 'contrato RS-3: window.pzOpenBoostPick ×9 (4 RS-4 + 3 RS-3 + 2 RS-5)');
+  t(cnt(app, 'pzOpenBoostPick') === 16, 'contrato RS-3: pzOpenBoostPick ×16 (v846: +4 por la sección Impulsar en Hoy)');
+  t(cnt(app, 'window.pzOpenBoostPick') === 13, 'contrato RS-3: window.pzOpenBoostPick ×13 (v846: +4 por la sección Impulsar en Hoy)');
   // La pestaña Ads SE QUEDA hasta el corte (RS-5): la sección RS-4 no
   // toca la barra de pestañas ni el router de Ads.
   t(app.includes("function adsView() {") && app.includes("function bindAds() {"), 'app: adsView/bindAds intactos (la pestaña Ads se queda)');
@@ -257,18 +257,18 @@ const sliceFn = (src, from, to) => {
   t((pickHTML.match(/disabled/g) || []).length === 1, 'VM B: solo el ya impulsado va deshabilitado (1× disabled)');
   t(pickHTML.includes('pz-boost-opt on'), 'VM B: el recomendado viene pre-seleccionado (clase on)');
   t(ctxA.__pickGo.disabled === false, 'VM B: «Impulsar este posteo →» habilitado con selección');
-  t(stateOf(ctxA).selId === 101, 'VM B: la pre-selección es el recomendado (101)');
+  t(stateOf(ctxA).selId === 'p101', 'VM B: la pre-selección es el recomendado (clave p101, v846)');
   // Elegir otro: la selección se mueve; el impulsado no se puede elegir.
-  vm.runInContext('pzBoostElegirPick(102, null);', ctxA);
-  t(stateOf(ctxA).selId === 102, 'VM B: elegir el 102 mueve la selección');
+  vm.runInContext("pzBoostElegirPick('p102', null);", ctxA);
+  t(stateOf(ctxA).selId === 'p102', 'VM B: elegir el 102 mueve la selección (clave p102, v846)');
   t(ctxA.__pickBody.innerHTML.includes('Torta de chocolate para el finde'), 'VM B: la lista sigue tras elegir');
-  vm.runInContext('pzBoostElegirPick(103, null);', ctxA);
-  t(stateOf(ctxA).selId === 102, 'VM B: elegir el impulsado (103) es un no-op');
+  vm.runInContext("pzBoostElegirPick('p103', null);", ctxA);
+  t(stateOf(ctxA).selId === 'p102', 'VM B: elegir el impulsado (103) es un no-op');
   // Recomendado impulsado: la selección salta al primer no impulsado.
   const behB = { adsReady: false, boostHabilitado: false, adsPermiso: null, balance_cents: 0, elegibles: ELEG_VM.map((e) => (e.post_id === 101 ? { ...e, ya_impulsado: true } : e)) };
   const ctxB = makeCtx('es', behB);
   await vm.runInContext('pzBoostPickOpen()', ctxB);
-  t(stateOf(ctxB).selId === 102, 'VM B2: recomendado impulsado → la selección salta al primer no impulsado (102)');
+  t(stateOf(ctxB).selId === 'p102', 'VM B2: recomendado impulsado → la selección salta al primer no impulsado (p102, v846)');
   t((ctxB.__pickBody.innerHTML.match(/disabled/g) || []).length === 2, 'VM B2: dos deshabilitados (101 recomendado impulsado + 103)');
   // Sin elegibles: nota honesta y botón deshabilitado.
   const behC = { adsReady: false, boostHabilitado: false, adsPermiso: null, balance_cents: 0, elegibles: [] };
@@ -372,7 +372,7 @@ const sliceFn = (src, from, to) => {
   t(typeof ctxK.__window.pzOpenBoostPick === 'function', 'VM K: window.pzOpenBoostPick es una función (expuesta al cargar la sección)');
   await vm.runInContext('window.pzOpenBoostPick()', ctxK);
   t(ctxK.__pickBody.innerHTML.includes('RECOMENDADO'), 'VM K: window.pzOpenBoostPick() abre la hoja ELEGIR (insignia RECOMENDADO)');
-  t(stateOf(ctxK).selId === 101, 'VM K: la hoja ELEGIR abierta desde el Feed trae el recomendado pre-seleccionado (101)');
+  t(stateOf(ctxK).selId === 'p101', 'VM K: la hoja ELEGIR abierta desde el Feed trae el recomendado pre-seleccionado (p101, v846)');
   t(ctxK.__pickBody.innerHTML.includes('Café de especialidad recién tostado'), 'VM K: la hoja ELEGIR muestra los posteos');
 
   // ---------- 4. Auditoría de funciones (gate M69.1) ----------
@@ -429,7 +429,7 @@ const sliceFn = (src, from, to) => {
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v841', `boot: /api/version 20261105-v841 (vino ${ver.build})`);
+      t(ver.build === '20261105-v846', `boot: /api/version 20261105-v846 (vino ${ver.build})`);
       const s1 = await api('', 'GET', '/api/ads/billetera/elegibles');
       t(s1.status === 401, 'boot: sin sesión, elegibles → 401');
       // Registro + sesión.

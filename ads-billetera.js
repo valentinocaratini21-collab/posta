@@ -241,6 +241,9 @@ function elegiblesParaAds(rows, mejorPostId, yaImpulsados, opts) {
       image_path: r.image_path || '',
       caption: cortarCaption(String(r.caption || ''), 90),
       ig_media_id: r.ig_media_id,
+      // (v846) Reciente de IG sin fila local: post_id null + solo_ig.
+      // El cliente lo impulsa por ig_media_id y el servidor lo adopta.
+      solo_ig: !!r.solo_ig,
       reach: Number(r.reach || 0),
       likes: Number(r.likes || 0),
       comments: Number(r.comments || 0),

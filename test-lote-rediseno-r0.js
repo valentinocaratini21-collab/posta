@@ -38,14 +38,14 @@ const orderOk = (s, keys) => {
 // RE-PIN tras implementar (md5s de work-v1; en base fallan a propósito).
 // (LOTE HOY-AVATAR-FEED · 8/11) Re-pin: app.js/styles.css del lote.
 // (LOTE CHAT-NUEVO v821 · 8/11) Re-pin: app.js/styles.css del lote + BUILD v821.
-const MD5_APP_WORK = '5ebbb559c0797563c7aa4b7c5cf0d623'; // (LOTE HOY-SIN-DUPLICADO v844) re-pin al árbol final.
-const MD5_CSS_WORK = '7caf5a3cbec3e331e380defc53a38f9f'; // (LOTE HOY-SIN-DUPLICADO v844) re-pin al árbol final.
+const MD5_APP_WORK = '6c0faedd9bd3e7304b40a18ca765bc9b'; // (LOTE SACAR-FEED v846) re-pin al árbol final.
+const MD5_CSS_WORK = '64d34e3d4550385ae46b127b766927e1'; // (LOTE SACAR-FEED v846) re-pin al árbol final.
 // El woff2 es copia byte a byte del mock (no generado).
 const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins ----------
-  t(srv.includes("const BUILD_ID = '20261105-v848'"), 'server: BUILD v848 (re-pin v848)');
+  t(srv.includes("const BUILD_ID = '20261105-v846'"), 'server: BUILD v846 en el árbol (estampado por el preparador)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -63,8 +63,8 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   const bbFn = sliceFn(app, 'function bbShell(tab, content) {', '\nasync function bbLoadEstado');
   const bbNav = (bbFn.split('\n').find((l) => l.includes('<nav class="bb-bar">')) || '');
   t(bbNav.length > 0, 'bbShell: la línea del nav existe');
-  t(orderOk(bbNav, ["tabBtn('inicio'", "tabBtn('feed'", "tabBtn('chat'"]), 'bb-bar: orden Hoy, Feed, Chat (3 pestañas, RS-5)');
-  t(bbNav.includes("'#/app/feed'"), 'bb-bar: Feed apunta a #/app/feed');
+  t(orderOk(bbNav, ["tabBtn('inicio'", "tabBtn('chat'"]) && !bbNav.includes("tabBtn('feed'"), 'bb-bar: orden Hoy, Chat (2 pestañas, v846: Feed fuera)');
+  t(!bbNav.includes("'#/app/feed'"), 'bb-bar: sin Feed en la barra (v846)');
   t(!bbNav.includes("tabBtn('analisis'"), 'bb-bar: sin pestaña Análisis (vive como línea en Hoy, RS-2)');
   t(!bbNav.includes("tabBtn('impulsar'"), 'bb-bar: sin pestaña Impulsar (vive en el Feed, RS-4)');
   t(!bbNav.includes("tabBtn('jardin'"), 'bb-bar: sin pestaña Nivel (sin hogar, RS-5)');
@@ -79,9 +79,9 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(!app.includes('function pzAperturaHTML()'), 'sin pzAperturaHTML (9/11)');
   t(!app.includes('function pzAperturaArranque()'), 'sin pzAperturaArranque (9/11)');
   t(!app.includes('function pzAperturaCerrar()'), 'sin pzAperturaCerrar (9/11)');
-  t(app.includes('function pzSaludoEscribir()'), 'existe pzSaludoEscribir');
+  t(!app.includes('function pzSaludoEscribir()'), 'pzSaludoEscribir murió en v846 (título fijo Posty., sin máquina de escribir)');
   t(app.includes('function pzShellDatosHoy()'), 'existe pzShellDatosHoy');
-  t(app.includes('setTimeout(() => { try { pzSaludoEscribir(); } catch (e) {} }, 0);'), 'render: el saludo que escribe arranca al pintar');
+  t(!app.includes('pzSaludoEscribir'), 'render: la máquina de escribir no arranca (v846)');
   { const paintIdx = app.indexOf('root.innerHTML = appShell(tab, content);');
     const bindIdx = app.indexOf('bindApp(tab);', paintIdx);
     t(paintIdx > 0 && bindIdx > paintIdx && !app.slice(paintIdx, bindIdx).includes('__pzAperturaTimer'), 'render: sin timer de apertura entre pintar y bindApp (9/11)'); }
@@ -101,23 +101,23 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     const navFeed = vm.runInContext("mzTabsHTML('feed')", ctx);
     const navChat = vm.runInContext("mzTabsHTML('chat')", ctx);
     const navAjustes = vm.runInContext("mzTabsHTML('ajustes')", ctx);
-    t(navTabs(navInicio) === 3, 'VM mzTabsHTML(inicio): 3 botones en el dock (RS-5)');
+    t(navTabs(navInicio) === 2, 'VM mzTabsHTML(inicio): 2 botones en el dock (v846: Hoy, Chat)');
     t(!navInicio.includes('Agregar'), 'VM mzTabsHTML(inicio): sin Agregar');
     t(!navInicio.includes('Ajustes'), 'VM mzTabsHTML(inicio): sin Ajustes en el dock');
-    t(orderOk(navInicio, ['>Hoy<', '>Feed<', '>Chat<']), 'VM mzTabsHTML(inicio): orden Hoy, Feed, Chat (RS-5)');
-    t(navInicio.includes('data-tab="feed"'), 'VM mzTabsHTML: Feed lleva data-tab feed');
+    t(orderOk(navInicio, ['>Hoy<', '>Chat<']) && !navInicio.includes('>Feed<'), 'VM mzTabsHTML(inicio): orden Hoy, Chat (v846: sin Feed)');
+    t(!navInicio.includes('data-tab="feed"'), 'VM mzTabsHTML: sin data-tab feed (v846)');
     t(!navInicio.includes('data-tab="numeros"'), 'VM mzTabsHTML: sin data-tab numeros (RS-5)');
     t(!navInicio.includes('data-tab="ads"'), 'VM mzTabsHTML: sin data-tab ads (RS-5)');
     t(!navInicio.includes('data-tab="jardin-posty"'), 'VM mzTabsHTML: sin data-tab jardin-posty (RS-5)');
     t(!navInicio.includes('data-tab="analisis"'), 'VM mzTabsHTML: sin data-tab analisis (sin Estrategia)');
     t(navInicio.includes('data-tab="chat"'), 'VM mzTabsHTML: Chat lleva data-tab chat');
-    t(navFeed.includes('mz-tab on') && navFeed.indexOf('mz-tab on') < navFeed.indexOf('>Feed<'), 'VM mzTabsHTML(feed): tab Feed activo');
+    t(!navFeed.includes('>Feed<'), 'VM mzTabsHTML(feed): la ruta feed ya no rinde pestaña (v846: redirige a Hoy)');
     t(navChat.length > 0, 'VM mzTabsHTML(chat): el dock EXISTE en chat (no vacío)');
-    t(navTabs(navChat) === 3, 'VM mzTabsHTML(chat): 3 botones también en chat (RS-5)');
+    t(navTabs(navChat) === 2, 'VM mzTabsHTML(chat): 2 botones también en chat (v846)');
     t(navChat.includes('mz-tab on') && navChat.indexOf('mz-tab on') < navChat.indexOf('>Chat<'), 'VM mzTabsHTML(chat): tab Chat activo');
     t(!navInicio.includes('>Nivel<'), 'VM mzTabsHTML(inicio): sin Nivel en el dock (RS-5)');
     t(!navAjustes.includes('mz-tab on'), 'VM mzTabsHTML(ajustes): ningún tab activo en Ajustes');
-    t(navTabs(navAjustes) === 3, 'VM mzTabsHTML(ajustes): el dock sigue con 3 en Ajustes (RS-5)');
+    t(navTabs(navAjustes) === 2, 'VM mzTabsHTML(ajustes): el dock sigue con 2 en Ajustes (v846)');
   }
 
   // ---------- 4. mxTabKey: remap (VM) ----------
@@ -127,7 +127,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     vm.runInContext(sliceFn(app, 'function mxTabKey(tab) {', 'function mxModoActual(tab) {'), ctx);
     const k = (tab) => vm.runInContext(`mxTabKey('${tab}')`, ctx);
     t(k('inicio') === 'inicio', "mxTabKey: inicio → inicio");
-    t(k('feed') === 'feed', "mxTabKey: feed → feed");
+    t(k('feed') === '', "mxTabKey: feed → '' (v846: sin pestaña Feed)");
     t(k('numeros') === '', "mxTabKey: numeros → '' (sin pestaña; la ruta vive por URL)");
     t(k('analisis') === '', "mxTabKey: analisis → '' (sin pestaña Estrategia; el router manda a #/app/ads)");
     t(k('ads') === '', "mxTabKey: ads → '' (sin pestaña; Impulsar vive en el Feed, RS-4)");
@@ -138,18 +138,18 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   }
 
   // ---------- 5. Encabezado común ----------
-  const headSrc = sliceFn(app, 'function pzShellHeadHTML(tab) {', 'function pzSaludoEscribir() {');
+  const headSrc = sliceFn(app, 'function pzShellHeadHTML(tab) {', 'function pzShellDatosHoy() {'); // (v846) pzSaludoEscribir murió
   t(headSrc.length > 0, 'pzShellHeadHTML: función presente');
   t(headSrc.includes("if (tab === 'chat') return '';"), 'encabezado: NO va en chat (el chat tiene su propia cabecera)');
   t(headSrc.includes('ai-avatar.png'), 'encabezado: avatar canónico ai-avatar.png');
-  t(headSrc.includes('pzShellSaludo'), 'encabezado: saludo con id pzShellSaludo (máquina de escribir)');
-  t(headSrc.includes('¡Hola!'), 'encabezado: fallback «¡Hola!» solo sin nombre (simplificar-app p5: el @ no sale en el encabezado)');
+  t(!headSrc.includes('pzShellSaludo'), 'encabezado: sin máquina de escribir (v846)');
+  t(!headSrc.includes('¡Hola!'), 'encabezado: sin fallback «¡Hola!» (v846: título fijo Posty.)');
   t(!headSrc.includes('Hola, '), 'encabezado: sin «Hola, {negocio}» (el encabezado es la identidad, saludo-unico)');
   t(!headSrc.includes('Posty está trabajando ahora'), 'encabezado: «Posty está trabajando ahora» salió (saludo-unico)');
-  t(!headSrc.includes('<small>'), 'encabezado: sin línea chica (el @ no sale en el encabezado, simplificar-app p5)');
+  t(headSrc.includes('<small>') && headSrc.includes('tu community manager'), 'encabezado: línea chica «tu community manager» (v846)');
   t(!headSrc.includes('pzHeadRacha'), 'encabezado: píldora de racha fuera (simplificar-app p5)');
   t(!headSrc.includes('__pzHeadRacha'), 'encabezado: sin caché de racha (simplificar-app p5)');
-  t((headSrc.includes('BB.estado') && headSrc.includes('negocio')) && headSrc.includes('PROFILE.business_name'), 'encabezado: nombre desde BB.estado.negocio o PROFILE.business_name (simplificar-app p5)');
+  t(!headSrc.includes('BB.estado.negocio') && !headSrc.includes('PROFILE.business_name'), 'encabezado: ya NO lee el nombre del negocio (v846: título fijo Posty.)');
   t(!headSrc.includes('data-hf-pact'), 'encabezado: sin botones del perfil (son de Hoy, no del shell)');
   // Botones del encabezado con destino (vara cero botones muertos):
   t(headSrc.includes("bbGo('#/app/chat')"), 'encabezado: identidad (avatar+saludo) abre el Chat');
@@ -172,8 +172,9 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     vm.runInContext(headSrc, ctx);
     const h = vm.runInContext("pzShellHeadHTML('inicio')", ctx);
     t(h.includes('ai-avatar.png'), 'VM encabezado(inicio): avatar presente');
-    t(h.includes('Café Aroma') && !h.includes('Hola'), 'VM encabezado(inicio): título = nombre, sin saludo (saludo-unico)');
+    t(h.includes('Posty<span class="pdot">.</span>') && h.includes('tu community manager') && !h.includes('Café Aroma'), 'VM encabezado(inicio): título fijo Posty. + subtítulo, nunca el negocio (v846)');
     t(!h.includes('@'), 'VM encabezado(inicio): sin @ en el encabezado (simplificar-app p5)');
+    t(h.includes('pz-shell-dot'), 'VM encabezado(inicio): punto verde de online (v846)');
     t(!h.includes('pzHeadRacha'), 'VM encabezado(inicio): píldora de racha fuera (simplificar-app p5)');
     t(h.includes("bbGo('#/app/chat')"), 'VM encabezado(inicio): identidad → Chat');
     t(h.includes('rsShareOpen()'), 'VM encabezado(inicio): compartir → hoja (RS-1)');
@@ -189,11 +190,11 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(!app.includes('__pzHoyCarta'), 'sin apertura: __pzHoyCarta ×0');
   t(!app.includes('Tocá para saltar'), 'sin apertura: «Tocá para saltar» ×0');
   t(!app.includes('Te traje el posteo de hoy'), 'sin apertura: «Te traje el posteo de hoy» ×0');
-  const salSrc = sliceFn(app, 'function pzSaludoEscribir() {', 'function pzShellDatosHoy() {');
-  t(salSrc.includes('pzShellSaludo'), 'saludo: escribe sobre #pzShellSaludo');
-  t(salSrc.includes('Math.max(24, Math.floor(1000'), 'saludo: ~1 segundo en total (paso = max(24, 1000/largo))');
-  t(salSrc.includes('prefers-reduced-motion'), 'saludo: reduced-motion → instantáneo');
-  t(salSrc.includes('typing'), 'saludo: clase typing con cursor');
+  // (v846) La máquina de escribir se retiró entera con el título fijo:
+  // no hay función que escriba, ni cursor, ni reduced-motion del saludo.
+  t(!app.includes('function pzSaludoEscribir()'), 'saludo: pzSaludoEscribir ausente (v846)');
+  t(!app.includes('pzShellSaludo'), 'saludo: sin #pzShellSaludo (v846)');
+  t(!app.includes('typing::after') || !app.includes('pzShellBlink'), 'saludo: sin cursor de máquina de escribir (v846)');
   const hoySrc = sliceFn(app, 'function pzShellDatosHoy() {', '// ===== /LOTE REDISEÑO R0');
   t(hoySrc.includes("/api/ritual/hoy"), 'datos-hoy: UN fetch a /api/ritual/hoy');
   t(!hoySrc.includes('pzHeadRacha'), 'datos-hoy: ya no llena píldora de racha (simplificar-app p5)');
@@ -303,7 +304,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
   // ---------- 9. Drawer: 6 pestañas + Ajustes ----------
   const shellFn = sliceFn(app, 'function appShell(tab, content) {', '\n/* Drawer mobile');
-  t(orderOk(shellFn, ['data-tab="inicio"', 'data-tab="feed"', 'data-tab="chat"', 'data-tab="ajustes"']), 'drawer: orden Hoy, Feed, Chat, Ajustes (RS-5)');
+  t(orderOk(shellFn, ['data-tab="inicio"', 'data-tab="chat"', 'data-tab="ajustes"']) && !shellFn.includes('data-tab="feed"'), 'drawer: orden Hoy, Chat, Ajustes (v846: sin Feed)');
   t(shellFn.includes('pzShellHeadHTML(tab)'), 'appShell: renderiza el encabezado común');
   t(!shellFn.includes('pzApertura'), 'appShell: sin apertura (9/11)');
   t(app.includes("location.hash = '#/app/' + b.dataset.tab"), 'drawer: bind genérico data-tab → hash (sin cambio)');
@@ -347,11 +348,10 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
       vm.runInContext("bbGo('" + m[1] + "')", ctx); // ejecuta el handler real
       return loc.hash;
     };
-    // bbShell móvil: las 3 pestañas (RS-5; onclick bbGo real).
+    // bbShell móvil: las 2 pestañas (v846; onclick bbGo real).
     const bbInicio = vm.runInContext("bbShell('inicio', '<p>x</p>')", ctx);
     const destinos = [
       ['Hoy', /onclick="bbGo\('(#\/app\/inicio)'\)"/, '#/app/inicio'],
-      ['Feed', /onclick="bbGo\('(#\/app\/feed)'\)"/, '#/app/feed'],
       ['Chat', /onclick="bbGo\('(#\/app\/chat)'\)"/, '#/app/chat'],
     ];
     for (const [nombre, re, esperado] of destinos) {
@@ -359,10 +359,10 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
       const got = clickOnclick(bbInicio, re);
       t(got === esperado, `VM click pestaña ${nombre} (móvil) → ${esperado} (vino ${got})`);
     }
-    // bbShell móvil en chat: el dock existe (3 pestañas, RS-5).
+    // bbShell móvil en chat: el dock existe (2 pestañas, v846).
     const bbChat = vm.runInContext("bbShell('chat', '<p>x</p>')", ctx);
     t(bbChat.includes('bb-bar'), 'VM bbShell(chat): el dock EXISTE en chat');
-    t((bbChat.match(/bb-tab/g) || []).length === 6, 'VM bbShell(chat): 3 pestañas en chat (6 × bb-tab: botón + icono por pestaña)');
+    t((bbChat.match(/bb-tab/g) || []).length === 4, 'VM bbShell(chat): 2 pestañas en chat (4 × bb-tab: botón + icono por pestaña)');
     // Encabezado: identidad → Chat, compartir → hoja (RS-1), ruedita → Ajustes.
     for (const [nombre, re, esperado] of [
       ['identidad → Chat', /onclick="bbGo\('(#\/app\/chat)'\)"[^>]*aria-label="[^"]*(Chat|Posty)[^"]*"/, '#/app/chat'],
@@ -377,7 +377,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     // mzTabsHTML: data-tab → hash por la regla del bind genérico.
     const mzInicio = vm.runInContext("mzTabsHTML('inicio')", ctx);
     const tabsMz = [...mzInicio.matchAll(/data-tab="([^"]+)"/g)].map((m) => m[1]);
-    t(JSON.stringify(tabsMz) === JSON.stringify(['inicio', 'feed', 'chat']), `VM mz data-tab en orden [inicio, feed, chat] (vino ${JSON.stringify(tabsMz)})`);
+    t(JSON.stringify(tabsMz) === JSON.stringify(['inicio', 'chat']), `VM mz data-tab en orden [inicio, chat] (vino ${JSON.stringify(tabsMz)})`);
     for (const route of tabsMz) {
       loc.hash = '';
       vm.runInContext(`location.hash = '#/app/' + '${route}'`, ctx);
@@ -414,11 +414,11 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v848', `boot: /api/version 20261105-v848 (vino ${ver.build})`);
-      const appTxt = await (await fetch(`${BASE}/app.js?v=575`)).text();
-      t(md5(appTxt) === md5(app), 'boot: app.js?v=575 servido = árbol');
-      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261221`)).text();
-      t(md5(cssTxt) === md5(css), 'boot: styles.css?v=20261221 servido = árbol');
+      t(ver.build === '20261105-v846', `boot: /api/version 20261105-v846 (vino ${ver.build})`);
+      const appTxt = await (await fetch(`${BASE}/app.js?v=578`)).text();
+      t(md5(appTxt) === md5(app), 'boot: app.js?v=578 servido = árbol');
+      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261223`)).text();
+      t(md5(cssTxt) === md5(css), 'boot: styles.css?v=20261223 servido = árbol');
       const woff = await fetch(`${BASE}/fonts/nunito-var.woff2`);
       t(woff.ok, 'boot: /fonts/nunito-var.woff2 se sirve (200)');
       if (woff.ok) {

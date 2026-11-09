@@ -2,11 +2,12 @@
 // test-lote-subir-foto-cambio.js — LOTE SUBIR-FOTO-CAMBIO v844 (BUG DE LA MAÑANA).
 // Tres partes del arreglo:
 //   (1) el cambio se MUESTRA antes de programar (tarjeta foto + caption +
-//       [Sale así] / [Cambiar algo] / [Editar texto]; solo [Sale así]
+//       [Sale así] / [Cambiar algo] (v846: [Editar texto] murió; el
+//       cambio se pide por voz); solo [Sale así]
 //       programa; si el cambio falla, se dice qué falló y se ofrece la
 //       original) — en subir-foto, en el ritual y en el carril exprés.
 //   (2) [Cambiar algo] abre la NOTA DE VOZ primero (la nota transcrita es
-//       la instrucción del cambio; el texto queda detrás de «Escribir»).
+//       la instrucción del cambio (v846: ya no hay alternativa de texto).
 //   (3) «Programándolo…» nunca queda colgado: progreso real por fases y
 //       salida honesta en timeout/error/cancelar.
 // El lote reutiliza la doctrina del 7/11 (BUG CHAT CON FOTO: PZ_SFT +
@@ -77,8 +78,8 @@ t(APP.includes('opts.signal') && APP.includes('AbortController'), 'A6: api.req a
 // A7. La tarjeta de vista previa tiene los 3 botones.
 const btnStart = APP.indexOf('function pzSubirPreviaBotones');
 const btnBody = APP.slice(btnStart, btnStart + 2500);
-t(btnBody.includes('Sale así') && btnBody.includes('Cambiar algo') && btnBody.includes('Editar texto'),
-  'A7: la tarjeta previa trae [Sale así] / [Cambiar algo] / [Editar texto]');
+t(btnBody.includes('Sale así') && btnBody.includes('Cambiar algo') && !btnBody.includes('Editar texto'),
+  'A7: la tarjeta previa trae [Sale así] / [Cambiar algo], sin [Editar texto] (v846)');
 t(btnBody.includes('pzCambioVoz('), 'A7b: [Cambiar algo] de la previa abre la voz (pzCambioVoz)');
 // A8. La voz es la instrucción del cambio (las tres superficies).
 t(APP.includes('function pzCambioVoz(') && APP.includes('function pzCambioVozPrompt(') && APP.includes('function pzCambioVozPromptDeliver('),
@@ -168,6 +169,12 @@ const sb = {
   localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {}, clear: () => {} },
   sessionStorage: { getItem: () => null, setItem: () => {} },
   chatSay: (text) => { calls.chatSay.push(text); },
+  pzIc: () => '',
+  pcTz: () => 'America/New_York',
+  chatStripCelebrate: (x) => x,
+  FP_MARKER_RE: /$^/, LC_MARKER_RE: /$^/, FOTO_MARKER_RE: /$^/,
+  chatStripFpMarker: (x) => x, chatStripLcMarker: (x) => x,
+  linkifyEsc: (s) => sb.esc(s),
   chatScroll: () => { calls.chatScroll++; },
   voiceToggle: () => { calls.voiceToggle++; },
   VOICE_STATE: 'idle',
@@ -198,7 +205,7 @@ function extractFunc(name) {
   if (d !== 0) { t(false, 'B0: llaves sin cerrar en ' + name); return ''; }
   return APP.slice(i, k + 1);
 }
-for (const f of ['pzSubirFases', 'pzSubirPreviaBotones', 'pzSubirTarjetaPrevia', 'pzSubirTarjetaOriginal',
+for (const f of ['pzChatHoraFmt', 'chatHoraHtml', 'chatAppendMsg', 'chatMsgHtml', 'pzSubirFases', 'pzSubirPreviaBotones', 'pzSubirTarjetaPrevia', 'pzSubirTarjetaOriginal',
   'pzCambioVoz', 'pzCambioVozPrompt', 'pzCambioVozPromptDeliver', 'pzCambioRefrescarTarjeta',
   'pzRitualPedirCambio', 'pzSftChatTarjetaArmada']) {
   const code = extractFunc(f);
@@ -232,7 +239,7 @@ try {
   t(html.includes('/media/foto-nueva.jpg'), 'B2: la previa muestra la foto NUEVA (la cambiada)');
   t(html.includes('Caption nueva'), 'B2b: la previa muestra el caption nuevo');
   t(html.includes('miércoles 11/11 a las 19:00'), 'B2c: la previa muestra «Sale {whenLabel}»');
-  t(html.includes('Sale así') && html.includes('Cambiar algo') && html.includes('Editar texto'), 'B2d: la previa trae los 3 botones');
+  t(html.includes('Sale así') && html.includes('Cambiar algo') && !html.includes('Editar texto'), 'B2d: la previa trae los 2 botones (v846: sin [Editar texto])');
   t(html.includes('pzSubirPreviaProgramar(99)'), 'B2e: solo [Sale así] programa (pzSubirPreviaProgramar)');
   t(vm.runInContext('!!PZ_SUBIR_PREVIA[99]', sb), 'B2f: la previa queda registrada por postId');
 } catch (e) { t(false, 'B2: pzSubirTarjetaPrevia', e.message); }
@@ -244,22 +251,21 @@ try {
   t(html.includes('/media/foto-orig.jpg'), 'B3b: la tarjeta de la original muestra la foto original');
   t(html.includes('Programar la original') && html.includes('Probar el cambio de nuevo'), 'B3c: la original ofrece [Programar la original] / [Probar el cambio de nuevo]');
 } catch (e) { t(false, 'B3: pzSubirTarjetaOriginal', e.message); }
-// B4. El prompt de voz: [Grabar nota de voz] + [Escribir]; grabar llama a voiceToggle.
+// B4. El prompt de voz: SOLO [Grabar nota de voz] (v846: [Escribir] murió); grabar llama a voiceToggle.
 try {
   vm.runInContext('pzCambioVozPrompt(99)', sb);
   const prompt = REG.get('pzCambioVozPrompt');
   t(!!prompt, 'B4: el prompt de voz se pinta en el chat');
   const html = chatBox.innerHTML;
-  t(html.includes('Grabar nota de voz') && html.includes('Escribir'), 'B4b: el prompt trae [Grabar nota de voz] y [Escribir]');
+  t(html.includes('Grabar nota de voz') && !html.includes('Escribir'), 'B4b: el prompt trae SOLO [Grabar nota de voz] (v846)');
   const g = prompt.querySelector('[data-voz-grabar]');
   t(!!g && typeof g.onclick === 'function', 'B4c: [Grabar nota de voz] tiene su acción');
   const before = calls.voiceToggle;
   if (g) g.click();
   t(calls.voiceToggle === before + 1, 'B4d: tocar [Grabar nota de voz] abre la grabación (voiceToggle)');
   const w = prompt.querySelector('[data-voz-escribir]');
-  t(!!w && typeof w.onclick === 'function', 'B4e: [Escribir] tiene su acción');
-  if (w) w.click();
-  t(chatInput.focused === true, 'B4f: tocar [Escribir] lleva el foco al campo de texto');
+  t(!w, 'B4e: ya no hay botón [Escribir] en el prompt (v846)');
+  t(chatInput.focused !== true, 'B4f: sin [Escribir] no hay foco al campo de texto (v846)');
 } catch (e) { t(false, 'B4: pzCambioVozPrompt', e.message); }
 // B5. pzCambioVoz con el chat abierto: ancla + prompt + graba directo.
 //     (El chat abierto se simula con un #pzChatFull en el registro.)
@@ -284,7 +290,7 @@ try {
   t(html.includes('pzSftCard-55'), 'B7: la tarjeta exprés se pinta');
   t(html.includes('Publicar hoy'), 'B7b: la tarjeta exprés mantiene [Publicar hoy]');
   t(html.includes('Cambiar algo') && html.includes('pzCambioVoz(55)'), 'B7c: la tarjeta exprés tiene [Cambiar algo] con pzCambioVoz');
-  t(html.includes('Cambiar texto'), 'B7d: la tarjeta exprés mantiene [Cambiar texto]');
+  t(!html.includes('Cambiar texto'), 'B7d: la tarjeta exprés YA NO trae [Cambiar texto] (v846)');
 } catch (e) { t(false, 'B7: pzSftChatTarjetaArmada', e.message); }
 
 console.log(`— Resumen A+B: ${okN} ok, ${badN} mal —`);
@@ -384,8 +390,8 @@ async function parteD() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v844',
-      'D0d: /api/version trae el BUILD v844 (estampado)', JSON.stringify(ver.json));
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v846',
+      'D0d: /api/version trae el BUILD v846 (estampado)', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     t(fs.existsSync(dbPath), 'D0e: la DB del boot existe en el DATA_DIR temporal');
 

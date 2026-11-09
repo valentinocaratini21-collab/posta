@@ -1,12 +1,14 @@
-// test-lote-saludo-unico.js — LOTE SALUDO-UNICO (8/11): el encabezado del
-// shell es la IDENTIDAD (nombre del negocio / @handle), no un saludo.
-// Decisión Valentino 8/11 14:06 (mock hoy-saludo-unico-mock-v1): arriba
-// decía «¡Hola!» y abajo «¡Buenas tardes!» — el saludo se repetía dos
-// veces. Ahora el saludo vive SOLO en el mensaje de Posty en Hoy
-// (pzHoySpeechHTML, sin tocar). El «Posty está trabajando ahora» sale;
-// la carita, la píldora de racha y los iconos quedan.
+// test-lote-saludo-unico.js — LOTE SALUDO-UNICO (8/11), REESCRITO EN v846:
+// el encabezado del shell ya NO es la identidad del negocio: es «Posty.»
+// fijo para TODAS las cuentas, con «tu community manager» debajo y un
+// puntito verde de online sobre el avatar (decisión Valentino 9/11 12:04,
+// SUPERSEDE simplificar-app Parte 5). Y el saludo de Hoy («¡Buen día!»)
+// murió en v846 (decisión Valentino 9/11 12:01): la burbuja arranca con
+// el estado del posteo de hoy, sin saludar por hora.
 // Node puro: asserts estáticos + VM + boot real por HTTP con DATA_DIR
 // aislada (puerto 18943). Uso: node test-lote-saludo-unico.js (desde la raíz del árbol).
+// Pins provisorios v846 (el re-estampador estampa BUILD/?v=/styles?v=
+// y re-pinea): BUILD 20261105-v846 · app.js?v=578 · styles?v=20261223.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -31,90 +33,73 @@ const ruleCss = (sel) => {
 };
 
 (async () => {
-  // ---------- 1. Estático: el encabezado ya no saluda ----------
-  const headSrc = sliceFn(app, 'function pzShellHeadHTML(tab) {', 'function pzSaludoEscribir() {'); // (lote 9/11: la apertura se sacó)
+  // ---------- 1. Estático: el encabezado es «Posty.» para todas las cuentas ----------
+  const headSrc = sliceFn(app, 'function pzShellHeadHTML(tab) {', 'function pzShellDatosHoy() {');
   t(headSrc.length > 0, '§1: pzShellHeadHTML presente');
-  t(!headSrc.includes('Hola, '), '§1: sin «Hola, {negocio}» en el encabezado');
+  t(headSrc.includes('Posty<span class="pdot">.</span>'), '§1: título fijo «Posty.»');
+  t(headSrc.includes('tu community manager') && headSrc.includes('your community manager'), '§1: subtítulo ES+EN');
+  t(headSrc.includes('pz-shell-dot') && headSrc.includes('pz-shell-ava-wrap'), '§1: punto verde sobre el avatar');
+  t(!headSrc.includes('BB.estado.negocio') && !headSrc.includes('PROFILE.business_name'), '§1: el encabezado ya no lee el nombre del negocio');
+  t(!headSrc.includes('¡Hola!') && !headSrc.includes("'Hi!'"), '§1: sin fallback «¡Hola!»/«Hi!»');
+  t(!headSrc.includes('HOME_PROF') && !headSrc.includes('ig_username'), '§1: sin @ ni handle en el encabezado');
   t(!app.includes('Posty está trabajando ahora'), '§1: «Posty está trabajando ahora» ×0 en app.js');
   t(!app.includes('Posty is working now'), '§1: «Posty is working now» ×0 en app.js');
-  t(headSrc.includes('pzShellSaludo'), '§1: id pzShellSaludo intacto (máquina de escribir)');
+  t(cnt(app, 'pzShellSaludo') === 0, '§1: pzShellSaludo ×0 (la máquina de escribir murió)');
+  t(cnt(app, 'pzSaludoEscribir') === 0, '§1: pzSaludoEscribir ×0');
   t(headSrc.includes('ai-avatar.png'), '§1: carita de Posty intacta');
   t(headSrc.includes("bbGo('#/app/chat')"), '§1: identidad abre el Chat');
-  t(headSrc.includes('BB.estado') && headSrc.includes('negocio'), '§1: nombre desde BB.estado.negocio');
-  t(!headSrc.includes('HOME_PROF'), '§1: sin HOME_PROF en el encabezado (el @ no sale, simplificar-app p5)');
-  t(headSrc.includes('PROFILE.business_name') && !headSrc.includes('ig_username'), '§1: nombre de respaldo desde PROFILE.business_name, sin ig_username (simplificar-app p5)');
-  t(headSrc.includes('¡Hola!'), '§1: fallback «¡Hola!» solo sin nombre (simplificar-app p5)');
-  t(headSrc.includes("'Hi!'"), '§1: fallback EN «Hi!»');
-  t(!headSrc.includes('<small>'), '§1: sin línea chica (el @ no sale en el encabezado, simplificar-app p5)');
   t(headSrc.includes("if (tab === 'chat') return '';"), '§1: sin encabezado en Chat');
 
-  // ---------- 2. Estático: ellipsis en ambas líneas ----------
+  // ---------- 2. Estático: ellipsis en título y subtítulo ----------
   const bRule = ruleCss('.pz-shell-who b{');
-  t(bRule.includes('white-space:nowrap') && bRule.includes('overflow:hidden') && bRule.includes('text-overflow:ellipsis'), '§2: línea grande con ellipsis');
-  t(!bRule.includes('white-space:normal'), '§2: línea grande ya no envuelve');
-  t(!css.includes('.pz-shell-who small'), '§2: sin regla para la línea chica (el @ no sale en el encabezado, simplificar-app p5)');
+  t(bRule.includes('white-space:nowrap') && bRule.includes('overflow:hidden') && bRule.includes('text-overflow:ellipsis'), '§2: título con ellipsis');
+  const sRule = ruleCss('.pz-shell-who small{');
+  t(sRule.includes('white-space:nowrap') && sRule.includes('overflow:hidden') && sRule.includes('text-overflow:ellipsis'), '§2: subtítulo con ellipsis (regla nueva de v846)');
+  const dotRule = ruleCss('.pz-shell-dot{');
+  t(dotRule.includes('background:#22C55E') && dotRule.includes('border:2px solid #fff'), '§2: punto verde #22C55E con aro blanco');
 
-  // ---------- 3. Estático: lo que NO se toca ----------
-  const saludoHoraSrc = sliceFn(app, 'function pzHoySaludoTxt(', 'function pzHoyDiaKey(');
-  t(saludoHoraSrc.includes('¡Buenas tardes! 🌤️'), '§3: saludo de Hoy intacto («¡Buenas tardes!» sigue en pzHoySaludoTxt)');
-  t(saludoHoraSrc.includes('¡Hola! 👋'), '§3: saludo de Hoy intacto («¡Hola! 👋» sigue como fallback en pzHoySaludoTxt)');
-  const hoySrc = sliceFn(app, 'function pzHoySpeechHTML(', 'function pzHoyUploadHTML(');
-  t(hoySrc.includes('pzHoySaludoTxt('), '§3: el mensaje de Posty sigue saludando por hora (pzHoySpeechHTML → pzHoySaludoTxt)');
-  // (lote 9/11: la burbuja «¡Hola! 👋 Te traje el posteo de hoy» se fue con la apertura; el saludo de Hoy sigue arriba.)
-  const salSrc = sliceFn(app, 'function pzSaludoEscribir() {', 'function pzShellDatosHoy() {');
-  t(salSrc.includes('pzShellSaludo') && salSrc.includes('typing') && salSrc.includes('prefers-reduced-motion'), '§3: máquina de escribir intacta (escribe la identidad)');
-  t(srv.includes("const BUILD_ID = '20261105-v848'"), '§3: server.js sin tocar salvo BUILD v848 (re-pin v848)');
+  // ---------- 3. Estático: el saludo de Hoy murió en v846 ----------
+  t(cnt(app, 'pzHoySaludoTxt') === 0, '§3: pzHoySaludoTxt ×0 (el saludo de Hoy murió)');
+  t(cnt(app, 'pz-hoy-saludo') === 0, '§3: pz-hoy-saludo ×0 en app.js');
+  t(cnt(css, 'pz-hoy-saludo') === 0, '§3: pz-hoy-saludo ×0 en styles.css');
+  const hoySrc = sliceFn(app, 'function pzHoySpeechHTML(', 'function pzHoyConserjeHTML(');
+  t(hoySrc.length > 0 && !hoySrc.includes('pzHoySaludoTxt') && !hoySrc.includes('pz-hoy-saludo'), '§3: la burbuja ya no saluda por hora');
+  t(!css.includes('b.typing::after') && !css.includes('pzShellBlink'), '§3: CSS de la máquina de escribir limpiado');
+  t(srv.includes("const BUILD_ID = '20261105-v846'"), '§3: server.js con BUILD v846 estampado (preparador)');
   t(app.includes("const CHUNK_V = '20261105-v793'"), '§3: CHUNK_V v793 sin cambio (fase 1)');
 
-  // ---------- 4. VM: matriz de fallbacks ----------
+  // ---------- 4. VM: el encabezado es igual para todas las cuentas ----------
   const escFn = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const ctx = {
     console, esc: escFn, pzIc: () => '[ic]',
     BB: { estado: { negocio: 'Café Aroma' } },
     ME: { lang: 'es' },
     HOME_PROF: { username: 'cafearoma' },
-    PROFILE: { ig_username: 'cafearoma' },
+    PROFILE: { ig_username: 'cafearoma', business_name: 'Café Aroma' },
   };
   vm.createContext(ctx);
   vm.runInContext(headSrc, ctx);
   const run = (tab) => vm.runInContext(`pzShellHeadHTML('${tab}')`, ctx);
-  // (a) nombre + handle: título = nombre, chica = @handle, sin saludo.
+  // (a) con negocio: título Posty., subtítulo, punto verde; el negocio NO sale.
   let h = run('inicio');
-  t(h.includes('Café Aroma') && !h.includes('Hola'), '§4a: con negocio, título = nombre sin saludo');
-  t(!h.includes('@'), '§4a: con negocio + handle, sin @ en el encabezado (simplificar-app p5)');
-  t(h.includes('ai-avatar.png') && h.includes("bbGo('#/app/chat')") && !h.includes('pzHeadRacha'), '§4a: carita + Chat presentes, píldora fuera (simplificar-app p5)');
-  // (b) sin nombre, con handle: el @ NO sale en el encabezado (p5): fallback «¡Hola!», sin chica, sin @.
-  ctx.BB.estado.negocio = '';
+  t(h.includes('Posty<span class="pdot">.</span>') && h.includes('tu community manager'), '§4a: con negocio, título Posty. + subtítulo');
+  t(!h.includes('Café Aroma') && !h.includes('@'), '§4a: con negocio, el nombre y el @ NO salen en el encabezado');
+  t(h.includes('pz-shell-dot') && h.includes('ai-avatar.png'), '§4a: punto verde + carita presentes');
+  // (b) sin nombre: lo mismo (el encabezado no depende del negocio).
+  ctx.BB.estado.negocio = ''; ctx.PROFILE.business_name = '';
   h = run('inicio');
-  t(h.includes('¡Hola!'), '§4b: sin nombre, fallback «¡Hola!» (el @ no sale en el encabezado)');
-  t(!h.includes('<small'), '§4b: sin nombre, no hay línea chica');
-  t(!h.includes('@'), '§4b: sin nombre, sin @ en el encabezado');
-  // (c) sin nombre ni handle: fallback «¡Hola!».
-  ctx.HOME_PROF = null; ctx.PROFILE = null;
-  h = run('inicio');
-  t(h.includes('¡Hola!'), '§4c: sin nombre ni handle, fallback «¡Hola!»');
-  t(!h.includes('<small'), '§4c: sin nombre ni handle, no hay línea chica');
-  // (d) EN sin nada: «Hi!».
+  t(h.includes('Posty<span class="pdot">.</span>') && h.includes('tu community manager'), '§4b: sin nombre, mismo encabezado');
+  t(!h.includes('¡Hola!') && !h.includes('<small></small>'), '§4b: sin nombre, sin fallback «¡Hola!»');
+  // (c) EN: subtítulo en inglés, mismo título.
   ctx.ME.lang = 'en';
   h = run('inicio');
-  t(h.includes('Hi!'), '§4d: EN sin nombre ni handle, fallback «Hi!»');
-  // (e) nombre sin handle: título = nombre, sin chica.
+  t(h.includes('Posty<span class="pdot">.</span>') && h.includes('your community manager'), '§4c: EN con your community manager');
+  // (d) Chat no lleva encabezado.
   ctx.ME.lang = 'es'; ctx.BB.estado.negocio = 'Café Aroma';
-  h = run('inicio');
-  t(h.includes('Café Aroma') && !h.includes('<small'), '§4e: nombre sin handle, título = nombre sin chica');
-  // (f) handle con @ inicial: ya no se muestra (p5: el @ no sale en el encabezado).
-  ctx.BB.estado.negocio = ''; ctx.HOME_PROF = { username: '@cafearoma' };
-  h = run('inicio');
-  t(h.includes('¡Hola!') && !h.includes('@'), '§4f: handle con @ inicial no se muestra (sin @ en el encabezado)');
-  // (g) respaldo PROFILE.business_name cuando BB todavía no cargó (p5).
-  ctx.HOME_PROF = null; ctx.PROFILE = { ig_username: 'cafearoma', business_name: 'Café Aroma' };
-  h = run('inicio');
-  t(h.includes('Café Aroma') && !h.includes('@'), '§4g: sin BB, el nombre sale de PROFILE.business_name (sin @)');
-  // (h) Chat no lleva encabezado.
-  ctx.BB.estado.negocio = 'Café Aroma'; ctx.HOME_PROF = { username: 'cafearoma' };
-  t(run('chat') === '', '§4h: Chat sin encabezado');
-  // (i) Análisis lleva el mismo encabezado (el shell es de toda la app).
-  t(run('numeros').includes('Café Aroma') && !run('numeros').includes('@'), '§4i: Análisis con el mismo encabezado de identidad (sin @)');
+  t(run('chat') === '', '§4d: Chat sin encabezado');
+  // (e) Análisis lleva el mismo encabezado.
+  h = run('numeros');
+  t(h.includes('Posty<span class="pdot">.</span>') && !h.includes('Café Aroma'), '§4e: Análisis con el mismo encabezado (sin nombre del negocio)');
 
   // ---------- 5. Boot aislado ----------
   let booted = false;
@@ -140,14 +125,14 @@ const ruleCss = (sel) => {
     try {
       t(await waitBoot(), '§5: boot levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v848', `§5: /api/version v848 (vino ${ver.build})`);
-      const appTxt = await (await fetch(`${BASE}/app.js?v=575`)).text();
-      t(md5(appTxt) === md5(app), '§5: app.js?v=575 servido = árbol');
-      t(!appTxt.includes('Posty está trabajando ahora'), '§5: servido sin «Posty está trabajando ahora»');
-      t(appTxt.includes('pzShellSaludo'), '§5: servido con #pzShellSaludo');
+      t(ver.build === '20261105-v846', `§5: /api/version v846 (vino ${ver.build})`);
+      const appTxt = await (await fetch(`${BASE}/app.js?v=578`)).text();
+      t(md5(appTxt) === md5(app), '§5: app.js?v=578 servido = árbol');
+      t(!appTxt.includes('pzHoySaludoTxt') && !appTxt.includes('pzSaludoEscribir'), '§5: servido sin el saludo ni la máquina de escribir');
+      t(appTxt.includes('Posty<span class="pdot">.</span>') && appTxt.includes('tu community manager'), '§5: servido con el encabezado Posty.');
       const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261223`)).text();
       t(md5(cssTxt) === md5(css), '§5: styles.css?v=20261223 servido = árbol');
-      t(cssTxt.includes('text-overflow:ellipsis'), '§5: servido con ellipsis en el encabezado');
+      t(cssTxt.includes('.pz-shell-dot') && cssTxt.includes('text-overflow:ellipsis'), '§5: servido con punto verde y ellipsis');
       const rHoy = await fetch(`${BASE}/api/ritual/hoy`);
       t(rHoy.status === 401, `§5: sin sesión, /api/ritual/hoy → 401 (vino ${rHoy.status})`);
     } finally {

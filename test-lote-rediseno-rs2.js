@@ -106,6 +106,7 @@ const sb = {
   console, setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
   Date: FakeDate, Math, JSON, Intl, Map, Set,
   esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+  gzT: (es, en) => es, // (v846) la sección Impulsar usa gzT
   mv: (p) => p,
   pzIc: () => '',
   pcTz: () => TZ,
@@ -150,12 +151,12 @@ function extractFunc(name) {
 const FUNCS = [
   'pzHoyDiaKey', 'pzHoyDowKey', 'pzHoyPostDiaKey', 'pzHoyMoverKey',
   'pzHoySemana', 'pzHoyPendientes', 'pzWhenRelDay', 'hfChipText',
-  'pzHoySaludoTxt', 'pzHoyHoraCorta', 'pzHoyCuandoCorto',
+  'pzHoyHoraCorta', 'pzHoyCuandoCorto', // (v846) pzHoySaludoTxt murió
   'pzHoyPillSalida', 'pzRitualCuentaTxt', 'pzHoyCuentaSaleTxt',
   'pzHoySpeechHTML',
   'pzHoyTiraDias', 'pzHoyTiraDetalleHTML', 'pzHoyTiraHTML',
   'pzHoyTiraBindDetalle', 'pzHoyTiraBind',
-  'pzHoyParaAprobarHTML', 'pzHoySemanaInsightHTML',
+  'pzHoyParaAprobarHTML', 'pzHoyImpulsarHTML', 'pzBoostRecTexto', // (v846) el insight murió; lo reemplaza la sección Impulsar
 ];
 console.log('— §0: bloques');
 for (const f of FUNCS) {
@@ -175,8 +176,9 @@ t(!APP.includes('pzHoyUploadHTML') && !APP.includes('pzHoySemanaHTML'),
   '§0: 0 referencias a las funciones muertas (subida / semana grande)');
 t(APP.includes('function pzHoySemanaMiniHTML(sem, en, pendProg)') && !APP.includes('pzHoySemanaMiniHTML(semR1'),
   '§0: la mini de v833 queda definida pero SIN USO en Hoy (su baja es otro lote)');
-t(CSS.includes('.pz-semana-mini') && CSS.includes('.pz-hoy-tira-detalle') && CSS.includes('.pz-hoy-chatghost') && CSS.includes('.pz-hoy-para'),
-  '§0: styles.css trae las clases RS-2 (tira, detalle, chatghost, para)');
+t(CSS.includes('.pz-semana-mini') && CSS.includes('.pz-hoy-tira-detalle') && CSS.includes('.pz-hoy-para'),
+  '§0: styles.css trae las clases RS-2 (tira, detalle, para)');
+t(!CSS.includes('.pz-hoy-chatghost'), '§0: la clase del botón fantasma murió (v846)');
 t(!SRV.includes('pzHoyTira'), '§0: server.js sin tocar por RS-2 (solo BUILD en el re-estampado)');
 
 // ---------- Datos de prueba ----------
@@ -303,21 +305,19 @@ const sEn = sb.pzHoySpeechHTML({ hoyPost: HOY, pendientes: 1, haySemana: true, e
 t(sEn.includes("Today's goes out") && sEn.includes('on its own') && sEn.includes('30 min before'),
   '§3: EN: el saludo autopilot también está en inglés', sEn);
 
-// ---------- §4: insight ----------
-console.log('— §4: insight');
-const ins0 = sb.pzHoySemanaInsightHTML(semVacia, false, 0);
-t(ins0.includes('Tu semana recién arranca') && ins0.includes('Abrir el chat'),
-  '§4: 0/7: recién arranca + botón al chat', ins0);
-const ins3 = sb.pzHoySemanaInsightHTML(semPub, false, 1);
-t(ins3.includes('1/7 posteos, tu semana viene en camino') && ins3.includes('Los próximos están en tu feed, con su día y su hora.'),
-  '§4: 1/7 + programados: la acción es honesta (están en el feed)', ins3);
-const sem7 = { n: 7, lunes: '2026-11-09', dias: semPub.dias.map((d) => Object.assign({}, d, { estado: 'pub' })) };
-const ins7 = sb.pzHoySemanaInsightHTML(sem7, false, 0);
-t(ins7.includes('¡Semana completa!') && ins7.includes('mañana arranca una nueva semana'),
-  '§4: 7/7: semana completa', ins7);
-const semDom7 = { n: 3, lunes: '2026-11-09', dias: semPub.dias.map((d, i) => Object.assign({}, d, { estado: i === 6 ? 'hoy' : (i < 3 ? 'pub' : 'vacio') })) };
-const insDom = sb.pzHoySemanaInsightHTML(semDom7, false, 0);
-t(insDom.includes('esta semana cumplimos 3/7 posteos'), '§4: domingo: «esta semana cumplimos N/7»', insDom);
+// ---------- §4: sección Impulsar (v846: reemplaza al insight) ----------
+console.log('— §4: sección Impulsar');
+const MEJOR = { post_id: 570, image_path: '/media/570.jpg', caption: 'En Posty, manejo tu Instagram como un amigo', reach: 500, likes: 40, comments: 5, saved: 2 };
+const imp = sb.pzHoyImpulsarHTML(MEJOR, false);
+t(imp.includes('Impulsar posteo') && imp.includes('POSTY RECOMIENDA'), '§4: con recomendado: título + tag', imp);
+t(imp.includes('/media/570.jpg') && imp.includes('En Posty, manejo tu Instagram'), '§4: con recomendado: foto + caption');
+t(imp.includes('El mejor de tu semana'), '§4: con recomendado: texto de la carta con números reales');
+t(imp.includes('Impulsar este posteo') && imp.includes('Elegir otro posteo'), '§4: con recomendado: CTA + elegir otro');
+const impVacio = sb.pzHoyImpulsarHTML(null, false);
+t(impVacio.includes('Todavía no hay un posteo con resultados reales') && impVacio.includes('Elegir otro posteo'), '§4: sin recomendado: honestidad, sin inventar');
+t(!impVacio.includes('Impulsar este posteo'), '§4: sin recomendado: sin CTA de impulsar');
+const impEn = sb.pzHoyImpulsarHTML(MEJOR, true);
+t(impEn.includes('Boost a post') && impEn.includes('POSTY RECOMMENDS'), '§4: EN: título y tag en inglés');
 
 // ---------- §5: Para aprobar ----------
 console.log('— §5: Para aprobar');
@@ -329,9 +329,9 @@ t(sb.pzHoyParaAprobarHTML(1, true).includes('To approve'), '§5: EN');
 console.log('— §6: auditoría M78');
 const CALLS = [
   'pzHoyTiraDias', 'pzHoyTiraHTML', 'pzHoyTiraDetalleHTML', 'pzHoyTiraBind',
-  'pzHoyParaAprobarHTML', 'pzHoySemanaInsightHTML', 'pzHoySpeechHTML',
+  'pzHoyParaAprobarHTML', 'pzHoyImpulsarHTML', 'pzHoySpeechHTML', // (v846) insight → Impulsar
   'pzHoyHoyHTML', 'pzHoyPendientes', 'pzHoySemana', 'pzHoyPostDiaKey',
-  'pzHoyMoverKey', 'pzHoySaludoTxt', 'pzHoyHoraCorta', 'pzHoyCuandoCorto',
+  'pzHoyMoverKey', 'pzHoyHoraCorta', 'pzHoyCuandoCorto', // (v846) pzHoySaludoTxt murió
   'pzHoyPillSalida', 'pzHoyCuentaSaleTxt', 'pzIc', 'f3ApprovalMode',
   'pzBoostOpenById', 'pzHoyConserjeHTML', 'pzHoyAprobarUno', 'pzHoyCambiar',
 ];
@@ -341,8 +341,8 @@ for (const f of CALLS) {
 const HOY_HTML = APP.slice(APP.indexOf("const hoyAprobarHTML ="), APP.indexOf("const hoyAprobarHTML =") + 3000);
 t(!HOY_HTML.includes('pzHoyUploadHTML') && !HOY_HTML.includes('pzHoySemanaHTML') && !HOY_HTML.includes('cardsR1') && !HOY_HTML.includes('vacioR1') && !HOY_HTML.includes('pzAcceptWeek'),
   '§6: la composición de Hoy no llama a subida, semana grande, tarjetas ni Aprobar todo');
-t(HOY_HTML.includes('pzHoyTiraHTML') && HOY_HTML.includes('pzHoySemanaInsightHTML') && HOY_HTML.includes('pz-hoy-chatghost'),
-  '§6: la composición de Hoy llama a tira + insight + botón fantasma del chat');
+t(HOY_HTML.includes('pzHoyTiraHTML') && HOY_HTML.includes('pzHoyImpulsarHTML') && !HOY_HTML.includes('pz-hoy-chatghost'),
+  '§6: la composición de Hoy llama a tira + Impulsar, sin botón fantasma (v846)');
 t(!APP.includes("hfProfileActionsHTML(enHome, pzAcceptWeekHTML)"),
   '§6: Inicio ya no pasa la barra «Aprobar todo» al encabezado');
 
@@ -439,12 +439,12 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v848',
-      '§8: /api/version trae el BUILD v848', JSON.stringify(ver.json));
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v846',
+      '§8: /api/version trae el BUILD v846 (estampado; re-pin v846)', JSON.stringify(ver.json));
     const appJs = await apiText('/app.js?v=999');
-    t(appJs.status === 200 && appJs.text.includes('pzHoyTiraHTML') && appJs.text.includes('pzHoySemanaInsightHTML')
+    t(appJs.status === 200 && appJs.text.includes('pzHoyTiraHTML') && appJs.text.includes('pzHoyImpulsarHTML')
       && appJs.text.includes('pzHoyParaAprobarHTML') && appJs.text.includes('PZ_HOY_TIRA_SEL'),
-      '§8: el app.js servido trae el bloque RS-2');
+      '§8: el app.js servido trae el bloque RS-2 (v846: Impulsar en vez de insight)');
     t(appJs.status === 200 && !appJs.text.includes('Sin tu OK, no sale nada'),
       '§8: el app.js servido NO trae el saludo viejo');
     t(appJs.status === 200 && !appJs.text.includes('pzHoyUploadHTML') && !appJs.text.includes('pzHoySemanaHTML'),

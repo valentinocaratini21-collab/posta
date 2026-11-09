@@ -11,8 +11,9 @@
 //     y programados futuros fuera); álbum con días + 1 solo candado;
 //     la hoja nace REVELADA (sin paquete velado ni gesto de revelar);
 //     ver no guarda selección ni postea; [Cambiar algo] manda el pedido
-//     al chat; [Sale así] toastea con la hora y vuelve al feed; [Editar]
-//     con data-full.
+//     al chat; [Sale así] toastea con la hora y vuelve al feed; [Editar
+//     texto] murió en v846 (el cambio es por voz con [Cambiar algo]);
+//     el caption sigue con data-full.
 //  C) Estáticas: deep link push→paquete; crons (domingo solo graduación
 //     nivel 2, sin tanda); exports; sin código muerto de 3 opciones.
 // Uso: node test-lote-ritual-1opcion.js (desde el scratch; corre contra
@@ -202,11 +203,11 @@ async function api(sid, method, p, body) {
   t('B2-album: la línea de la figurita', htmlV.includes('Cada día que sale, se desbloquea su figurita.'));
   // (LOTE RITUAL-SIN-VELO · 9/11) La hoja nace REVELADA: sin paquete
   // velado («1 carta adentro»), sin gesto de revelar, sin abanico.
-  t('B2-revelada: nace revelada (foto + [Sale así] + [Editar] + [Cambiar algo], sin paquete velado)', htmlV.includes('/media/a.jpg') && htmlV.includes('data-pz-ritual-ok="201"') && htmlV.includes('data-pc-act="edit-cap"') && htmlV.includes('data-pz-ritual-cambio="201"') && !htmlV.includes('1 carta adentro') && !htmlV.includes('data-pz-ritual-ver') && !htmlV.includes('id="pzRitualCartas"'));
+  t('B2-revelada: nace revelada (foto + [Sale así] + [Cambiar algo], sin paquete velado, sin [Editar texto] — murió en v846)', htmlV.includes('/media/a.jpg') && htmlV.includes('data-pz-ritual-ok="201"') && !htmlV.includes('data-pc-act="edit-cap"') && !htmlV.includes('Editar texto') && htmlV.includes('data-pz-ritual-cambio="201"') && !htmlV.includes('1 carta adentro') && !htmlV.includes('data-pz-ritual-ver') && !htmlV.includes('id="pzRitualCartas"'));
   const htmlR = String(pzRitualHTML(dRit, false));
-  t('B2-revelada: foto + [Sale así] + [Editar texto] + [Cambiar algo]',
+  t('B2-revelada: foto + [Sale así] + [Cambiar algo], sin [Editar texto] (v846)',
     htmlR.includes('/media/a.jpg') && htmlR.includes('data-pz-ritual-ok="201"')
-    && htmlR.includes('data-pc-act="edit-cap"') && htmlR.includes('data-full="Café de la casa, hecho con amor"')
+    && !htmlR.includes('data-pc-act="edit-cap"') && !htmlR.includes('Editar texto') && htmlR.includes('data-full="Café de la casa, hecho con amor"')
     && htmlR.includes('data-pz-ritual-cambio="201"'));
 
   // ----- B3/B4/B5: ver / pedir cambio / confirmar -----

@@ -278,20 +278,20 @@ const igMod = require(path.join(__dirname, 'ig-profile.js'));
     ok(up, 'boot levanta (PID ' + pid + ')');
     if (up) {
       const ver = JSON.parse((await get('/api/version')).body);
-      ok(ver.build === '20261105-v841', '/api/version 20261105-v841 (estampado)');
-      const appS = await get('/app.js?v=573');
-      ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=573 servido = árbol');
+      ok(ver.build === '20261105-v846', '/api/version 20261105-v846 (estampado; re-pin v846)');
+      const appS = await get('/app.js?v=578');
+      ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=578 servido = árbol');
       ok(appS.body.includes('pzFeedBoostPick'), 'servido: pzFeedBoostPick presente');
       ok(appS.body.includes('pz-feed-next'), 'servido: banda pz-feed-next presente');
       ok(appS.body.includes('feedBoostBtn'), 'servido: botón feedBoostBtn presente');
       ok(appS.body.includes("'/ai-avatar.png'"), 'servido: cara canónica presente');
       ok(appS.body.includes('fetchIgProfileFull') === false, 'servido: app.js no trae el servidor (separación)');
-      const stS = await get('/styles.css?v=20261221');
-      ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261221 servido = árbol');
+      const stS = await get('/styles.css?v=20261225');
+      ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261225 servido = árbol');
       ok(stS.body.includes('.feed-boost-cta{'), 'servido: .feed-boost-cta presente');
       ok(stS.body.includes('.pz-feed-next{'), 'servido: .pz-feed-next presente');
       const idx = await get('/?cb=lote-rediseno-rs3');
-      ok(idx.body.includes('app.js?v=573') && idx.body.includes('styles.css?v=20261221'), 'index ES servido ?v=573 + styles?v=20261221');
+      ok(idx.body.includes('app.js?v=578') && idx.body.includes('styles.css?v=20261225'), 'index ES servido ?v=578 + styles?v=20261225 (re-pin v846)');
       const del = await new Promise((res) => { const q = http.request({ host: '127.0.0.1', port: PORT, path: '/api/album/1', method: 'DELETE' }, (r) => res(r.statusCode)); q.on('error', () => res(0)); q.end(); });
       ok(del === 401, 'DELETE sin sesión 401 (el servidor es el real)');
     }
