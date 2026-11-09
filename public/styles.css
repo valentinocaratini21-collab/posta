@@ -6012,3 +6012,43 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-boost-note{font-size:12.5px;font-weight:700;color:var(--dim);text-align:center;margin-top:10px;line-height:1.45}
 .pz-boost-msg{font-size:13.5px;font-weight:700;color:var(--txt);line-height:1.5;margin-top:10px}
 .pz-boost-load{background:#FEC14D!important;color:#231a02!important}
+
+/* ============ RS-5 · REDISEÑO SIMPLE (mock v10) ============ */
+/* Barra de 3 pestañas: sin CSS nuevo (flex reparte las 3). */
+/* --- Chat: la voz es la entrada principal (regla 12) --- */
+.pz-voicebar{display:flex;flex-direction:column;gap:8px}
+.pz-voice-primary{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:10px 12px;box-shadow:var(--shadow)}
+.pz-mic-big{flex:0 0 58px;width:58px;height:58px;border-radius:50%;border:0;background:var(--cel);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(39,147,200,.35);cursor:pointer;font-family:inherit}
+.pz-mic-big svg{width:26px;height:26px;stroke:#fff}
+.pz-mic-big:active{transform:scale(.94)}
+.pz-mic-big:disabled{opacity:.5;cursor:default}
+.pz-voice-txt{flex:1;min-width:0}
+.pz-voice-txt b{display:block;font-size:15.5px;font-weight:900;line-height:1.25;color:var(--txt)}
+.pz-voice-txt small{display:block;color:var(--mut);font-weight:700;font-size:12.5px;line-height:1.4;margin-top:1px}
+.pz-write-toggle{flex:0 0 auto;border:1.5px solid var(--line);background:var(--bg2);color:var(--mut);border-radius:999px;padding:8px 12px;font-size:12.5px;font-weight:900;cursor:pointer;font-family:inherit}
+.pz-voice-hint{font-size:12px;font-weight:700;color:var(--mut);text-align:center;line-height:1.4;margin:0}
+/* --- Chat: un mensaje de Posty por día (regla 13) --- */
+.pz-daily-msg{gap:7px}
+.pz-daily-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.pz-daily-label{font-size:10.5px;font-weight:900;letter-spacing:.08em;color:var(--cel)}
+.pz-daily-time{font-size:11.5px;font-weight:800;color:var(--mut);flex:none}
+.pz-daily-intro{font-size:13.5px;font-weight:700;color:var(--txt);line-height:1.5;margin:0}
+.pz-one-a-day{font-size:11.5px;font-weight:700;color:var(--mut);text-align:center;line-height:1.45;margin:0}
+/* --- Chat: la pregunta de los lunes adentro del mensaje del día --- */
+.pz-monday-box{display:flex;flex-direction:column;gap:6px;background:rgba(255,255,255,.6);border:1px solid var(--line);border-radius:12px;padding:10px 11px;margin-top:4px}
+.pz-monday-tag{font-size:10px;font-weight:900;letter-spacing:.08em;color:var(--cel)}
+.pz-monday-q{font-size:13.5px;font-weight:900;color:var(--txt);line-height:1.3}
+.pz-monday-sub{font-size:12px;font-weight:700;color:var(--mut);line-height:1.4;margin:0}
+.pz-monday-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px}
+.pz-monday-opt{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:9px 8px;font-size:13px;font-weight:800;color:var(--txt);cursor:pointer;font-family:inherit}
+.pz-monday-opt.on{background:var(--cel);border-color:var(--cel);color:#fff}
+.pz-monday-opt:disabled{opacity:.6;cursor:default}
+.pz-monday-confirm{font-size:12.5px;font-weight:800;color:#2FA36B;line-height:1.4;margin:0}
+/* --- Chat: recomendación de Impulsar en el hilo --- */
+.pz-boost-rec-card{position:relative;display:flex;flex-direction:column;gap:7px;background:var(--card);border:1px solid var(--yl);border-radius:16px;padding:12px 13px;box-shadow:var(--shadow);margin-top:10px}
+.pz-boost-rec-tag{font-size:10px;font-weight:900;letter-spacing:.08em;color:#8A6420}
+.pz-boost-rec-card img{width:100%;border-radius:10px;object-fit:cover;max-height:180px}
+.pz-boost-rec-card b{font-size:13.5px;font-weight:900;color:var(--txt);line-height:1.35}
+.pz-boost-rec-card p{font-size:12.5px;font-weight:700;color:var(--mut);line-height:1.45;margin:0}
+.pz-boost-rec-x{position:absolute;top:8px;right:10px;width:26px;height:26px;border-radius:50%;border:0;background:var(--bg2);color:var(--mut);font-size:17px;line-height:1;cursor:pointer;font-family:inherit}
+.pz-boost-rec-cta{align-self:flex-start}

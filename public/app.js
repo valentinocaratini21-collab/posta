@@ -993,6 +993,7 @@ function bbShell(tab, content) {
     jardin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
     impulsar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v3a1 1 0 0 0 1 1h1.5v-5H5a1 1 0 0 0-1 1z"/><path d="M6.5 10 20 5.5v13L6.5 14"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/></svg>',
     estrategia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01"/></svg>',
+    feed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>',
     chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>',
     bandeja: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-5l2-7z"/></svg>',
     negocio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M2.5 6.5 4 3h16l1.5 3.5a3.2 3.2 0 0 1-6.1 1.4 3.4 3.4 0 0 1-6.8 0 3.2 3.2 0 0 1-6.1-1.4z"/><path d="M9.5 20v-6h5v6"/></svg>',
@@ -1006,7 +1007,7 @@ function bbShell(tab, content) {
     ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('analisis', '#/app/numeros', gzT('Análisis', 'Analysis'))}${tabBtn('impulsar', '#/app/ads', gzT('Impulsar', 'Boost'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
+    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Hoy', 'Today'))}${tabBtn('feed', '#/app/feed', 'Feed')}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
     ${rsShareSheetHTML()}
   </div>`;
 }
@@ -1568,18 +1569,14 @@ function mxPoderesDe(p) {
 function mxPoderesBB() {
   try { return (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.poderes) ? mxPoderesDe(BB.estado.poderes) : null; } catch (e) { return null; }
 }
-// (LOTE REDISEÑO R0 · 8/11) El dock es de 6: Hoy, Análisis, Impulsar,
-// Análisis, Impulsar, Nivel, Chat. Las claves ya no son el nombre de
-// la ruta: numeros → analisis (la vista de números, que R3 reconstruye
-// como la pantalla Análisis), ads → impulsar. (LOTE A: Estrategia
-// eliminada 8/11 — quedan 5 pestañas.)
+// (RS-5 · REDISEÑO SIMPLE · mock v10) La barra es de 3: Hoy, Feed,
+// Chat. Las rutas viejas (numeros, ads, jardin-posty) siguen vivas por
+// URL pero no tienen pestaña: devuelven '' (ninguna pestaña activa).
 function mxTabKey(tab) {
   if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat') return tab;
   if (tab === 'inicio') return 'inicio';
+  if (tab === 'feed') return 'feed';
   if (tab === 'schedule' || tab === 'post') return 'semana';
-  if (tab === 'jardin-posty') return 'jardin';
-  if (tab === 'numeros') return 'analisis';
-  if (tab === 'ads') return 'impulsar';
   return '';
 }
 function mxModoActual(tab) {
@@ -1720,11 +1717,11 @@ const MX_ZONAS_PREMIO = [
   { nv: 11, es: 'Raíz firme', en: 'Strong root', detEs: 'El rincón de la raíz', detEn: 'The root corner' },
   { nv: 16, es: 'Tallo alto', en: 'Tall stem', detEs: 'El tallo dorado', detEn: 'The golden stem' },
   { nv: 21, es: 'Copa verde', en: 'Green canopy', detEs: 'El mirador de la copa', detEn: 'The canopy lookout' },
-  { nv: 26, es: 'Flor del local', en: 'Shop flower', detEs: 'El póster «Jardín en flor»', detEn: 'The “Garden in bloom” poster' },
+  { nv: 26, es: 'Flor del local', en: 'Shop flower', detEs: 'El póster «Nivel en flor»', detEn: 'The “Level in bloom” poster' },
   { nv: 31, es: 'Fruto de la casa', en: 'House fruit', detEs: 'La canasta dorada', detEn: 'The golden basket' },
   { nv: 36, es: 'Claro del bosque', en: 'Forest clearing', detEs: 'El claro y su farol', detEn: 'The clearing and its lantern' },
   { nv: 41, es: 'Leyenda del barrio', en: 'Neighborhood legend', detEs: 'La placa dorada en la entrada', detEn: 'The golden plaque at the entrance' },
-  { nv: 46, es: 'Maestro del jardín', en: 'Garden master', detEs: 'El jardín maestro y su corona', detEn: 'The master garden and its crown' },
+  { nv: 46, es: 'Maestro del nivel', en: 'Level master', detEs: 'El nivel maestro y su corona', detEn: 'The master level and its crown' },
 ];
 // (LOTE JARDÍN · slider + hero completo) Las 5 etapas reales del jardín
 // (mismo mapeo que mxHeroJardin): cada etapa es un render aprobado, nunca
@@ -1788,7 +1785,7 @@ function mxSliderToggle(btn) {
 }
 function mxSliderJardinHTML(nvNum) {
   const a = Math.max(1, Math.min(50, Number(nvNum) || 1));
-  return `<div class="mx-slider" id="mxSlider"><p class="mx-slider-tit">${gzT('Deslizá para ver cómo crece tu jardín', 'Slide to see how your garden grows')}</p><div class="mx-slider-vista" id="mxSliderVista">${mxSliderVistaHTML(a, a)}</div><input class="mx-slider-rango" id="mxSliderRango" type="range" min="1" max="50" step="1" value="${a}" data-actual="${a}" oninput="mxSliderJardin(this)" aria-label="${gzT('Nivel del jardín', 'Garden level')}"><p class="mx-slider-nv" id="mxSliderNv">${gzT('Nv', 'Lv')} ${a}</p></div>`;
+  return `<div class="mx-slider" id="mxSlider"><p class="mx-slider-tit">${gzT('Deslizá para ver cómo crece tu nivel', 'Slide to see how your level grows')}</p><div class="mx-slider-vista" id="mxSliderVista">${mxSliderVistaHTML(a, a)}</div><input class="mx-slider-rango" id="mxSliderRango" type="range" min="1" max="50" step="1" value="${a}" data-actual="${a}" oninput="mxSliderJardin(this)" aria-label="${gzT('Nivel', 'Level')}"><p class="mx-slider-nv" id="mxSliderNv">${gzT('Nv', 'Lv')} ${a}</p></div>`;
 }
 function mxSliderVistaPintar(wrap, sel, actual) {
   // (LOTE SLIDER FIX) Actualización en sitio, sin reemplazar el DOM: al
@@ -1877,7 +1874,7 @@ function mxHeroMosaicoHTML(nvNum, heroActual) {
     const esActual = i === etapaActual;
     const label = gzT('Nv', 'Lv') + ' ' + e.rango;
     const imgTag = `<img class="mx-etapa-img" src="${e.img}" alt="" onerror="this.closest('.mx-etapa').remove()">`;
-    if (esActual) return `<div class="mx-etapa ok actual"><button type="button" class="mx-hero-btn" onclick="openLightbox('${esc(heroActual)}', 0)" aria-label="${gzT('Ver tu jardín en grande', 'See your garden large')}">${imgTag}</button><span class="mx-etapa-nv">${label}</span><span class="mx-etapa-aca">${gzT('Estás acá', "You're here")}</span></div>`;
+    if (esActual) return `<div class="mx-etapa ok actual"><button type="button" class="mx-hero-btn" onclick="openLightbox('${esc(heroActual)}', 0)" aria-label="${gzT('Ver tu nivel en grande', 'See your level large')}">${imgTag}</button><span class="mx-etapa-nv">${label}</span><span class="mx-etapa-aca">${gzT('Estás acá', "You're here")}</span></div>`;
     if (ok) return `<div class="mx-etapa ok"><button type="button" class="mx-etapa-ir" onclick="mxHeroEtapaIr(${e.desde})" aria-label="${label}">${imgTag}</button><span class="mx-etapa-nv">${label}</span></div>`;
     return `<div class="mx-etapa lock"><button type="button" class="mx-etapa-ir" onclick="mxHeroEtapaIr(${e.desde})" aria-label="${gzT('Se desbloquea en el Nivel', 'Unlocks at Level')} ${e.desde}">${imgTag}<span class="mx-etapa-lock" aria-hidden="true">🔒</span></button><span class="mx-etapa-nv">${label}</span></div>`;
   }).join('');
@@ -6079,21 +6076,21 @@ function mzIsMobile() {
   try { return !!(window.matchMedia && window.matchMedia('(max-width: 820px)').matches); } catch (e) { return false; }
 }
 function mzHomeHash() { return '#/app/inicio'; } // POSTY SOLO // (v331 addendum 22/10) decisión de Valentino: la home es el feed literal EN TODOS los tamaños — el aterrizaje por defecto es Inicio también en desktop; la Agenda queda a un toque (tab Jardín).
-// (LOTE REDISEÑO R0 · 8/11) Dock de 5 (LOTE A: Estrategia eliminada),
-// igual que el móvil: Inicio, Análisis, Impulsar, Nivel, Chat. El chat
-// YA NO es pantalla completa
-// sin pestañas: el dock también está en chat (el input del chat lleva
-// offset inferior = altura del dock, ver styles.css). El + sale del dock
-// (su hoja pzDockMasHTML queda sin abridor hasta R1; la función se conserva).
+// (RS-5 · REDISEÑO SIMPLE · mock v10) Barra de 3 pestañas y nada más:
+// Hoy · Feed · Chat. Sin Análisis (vive como una línea en Hoy, RS-2),
+// sin Impulsar (vive en el Feed por RS-4: botón «Impulsar posteo»),
+// sin Nivel (el jardín no tiene lugar en el rediseño; dónde vive Nivel
+// es decisión pendiente de Valentino — el motor queda, sin pestaña).
+// El chat YA NO es pantalla completa sin pestañas: el dock también está
+// en chat (el input del chat lleva offset inferior = altura del dock,
+// ver styles.css). El + sale del dock (su hoja pzDockMasHTML queda sin
+// abridor hasta R1; la función se conserva).
 function mzTabsHTML(tab) {
   const on = tab === 'inicio' ? 'inicio'
-    : (tab === 'schedule' || tab === 'post') ? 'semana'
-    : tab === 'jardin-posty' ? 'jardin'
-    : tab === 'numeros' ? 'analisis'
-    : tab === 'ads' ? 'impulsar'
+    : tab === 'feed' ? 'feed'
     : tab === 'chat' ? 'chat' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Inicio', 'Home'))}${t('analisis', 'numeros', pzIc('navBarras'), gzT('Análisis', 'Analysis'))}${t('impulsar', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Hoy', 'Today'))}${t('feed', 'feed', pzIc('grid'), 'Feed')}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -6175,10 +6172,8 @@ function appShell(tab, content) {
       <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" class="side-posty-ava"></span>
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
-    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
-    <button class="drawer-link ${tab === 'numeros' ? 'on' : ''}" data-tab="numeros"><span class="di">${pzIc('navBarras')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Analysis' : 'Análisis'}</button>
-    <button class="drawer-link ${tab === 'ads' ? 'on' : ''}" data-tab="ads"><span class="di">${pzIc('megaphone')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Boost' : 'Impulsar'}</button>
-    <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('navBambu')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Level' : 'Nivel'}</button>
+    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Today' : 'Hoy'}</button>
+    <button class="drawer-link ${tab === 'feed' ? 'on' : ''}" data-tab="feed"><span class="di">${pzIc('grid')}</span>Feed</button>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">${pzIc('chat')}</span>Chat</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
@@ -8967,6 +8962,44 @@ async function trialRebuildWeek() {
 }
 
 // Trae el historial del chat del servidor (persiste entre sesiones)
+// (RS-5 · RECOMENDACIÓN IMPULSAR EN EL CHAT) Tarjeta en el hilo con el
+// mejor posteo de la semana (mismo recomendado que la hoja de Impulsar
+// de RS-4, mismo texto de pzBoostRecTexto). Se pinta al final del
+// historial y se re-pinta tras cada recarga; una vez por sesión
+// (descartar o impulsar la apagan). No inventa promedios: el endpoint
+// no devuelve promedio.
+async function pzBoostRecPintar() {
+  try {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pzBoostRecOff')) return;
+    const box = document.getElementById('chatBox');
+    if (!box || document.getElementById('pzBoostRecCard')) return;
+    const r = await api.get('/api/estrategia/mejor-posteo');
+    const m = r && r.mejor;
+    if (!m || !m.post_id) return;
+    if (!((Number(m.likes || 0) + Number(m.comments || 0) + Number(m.saved || 0)) > 0)) return;
+    const rec = (typeof pzBoostRecTexto === 'function') ? pzBoostRecTexto({ reach: m.reach, likes: m.likes, comments: m.comments, recomendado: true }) : '';
+    const cap = String(m.caption || '').trim();
+    const img = m.image_path ? String(m.image_path) : '';
+    const card = document.createElement('div');
+    card.className = 'pz-boost-rec-card';
+    card.id = 'pzBoostRecCard';
+    card.innerHTML = '<button type="button" class="pz-boost-rec-x" aria-label="Cerrar">×</button>'
+      + '<div class="pz-boost-rec-tag">' + esc(gzT('POSTY RECOMIENDA · IMPULSAR', 'POSTY RECOMMENDS · BOOST')) + '</div>'
+      + (img ? '<img src="' + esc(img) + '" alt="" onerror="this.style.display=\'none\'">' : '')
+      + '<b>' + esc(cap ? cap.slice(0, 90) : gzT('Tu mejor posteo de la semana', 'Your best post this week')) + '</b>'
+      + '<p>' + esc(rec) + '</p>'
+      + '<button type="button" class="btn btn-primary pz-boost-rec-cta">' + esc(gzT('Impulsar este posteo', 'Boost this post')) + '</button>';
+    box.appendChild(card);
+    // (RS-5) La tarjeta va al final del hilo: bajar el hilo para que se
+    // vea (chatScroll respeta el pin: si el cliente subió a leer, no lo
+    // arrastra al fondo).
+    try { if (typeof chatScroll === 'function') chatScroll(); } catch (e) {}
+    const x = card.querySelector('.pz-boost-rec-x');
+    if (x) x.onclick = () => { try { sessionStorage.setItem('pzBoostRecOff', '1'); } catch (e) {} card.remove(); };
+    const cta = card.querySelector('.pz-boost-rec-cta');
+    if (cta) cta.onclick = () => { try { sessionStorage.setItem('pzBoostRecOff', '1'); } catch (e) {} try { if (typeof pzBoostOpenById === 'function') pzBoostOpenById(Number(m.post_id)); else if (typeof window.pzOpenBoostPick === 'function') window.pzOpenBoostPick(); } catch (e) {} };
+  } catch (e) {}
+}
 async function chatLoadHistory() {
   try {
     const r = await api.get('/api/ideas/chat');
@@ -9021,6 +9054,9 @@ async function chatLoadHistory() {
     try { pzChatPinArm(); } catch (e) {}
     // Banners de logo candidato que ya no existe: se auto-ocultan.
     try { chatLogoBannersVerify(); } catch (_) {}
+    // (RS-5) Recomendación de Impulsar en el chat: se re-pinta tras cada
+    // carga del historial (el innerHTML de arriba la borraría).
+    try { pzBoostRecPintar(); } catch (e) {}
   } catch (e) { /* sin historial: se empieza de cero */ }
 }
 // Llegada en vivo: cuando la app vuelve a primer plano y la vista chat está activa,
@@ -9376,11 +9412,18 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     </div><div id="chatAnchor"></div>${chips}
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
-    <div class="chat-input-row">
-      <input id="chatInput" class="in" placeholder="escribile a posty…" maxlength="2000" autocomplete="off">
-      <button class="btn btn-soft" id="chatPhotoBtn" title="Mandar una foto">${pzIc('camera', 18)}</button>
-      <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">${pzIc('mic', 18)}</button>
-      <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
+    <div class="pz-voicebar">
+      <div class="pz-voice-primary">
+        <button class="pz-mic-big" id="chatMicSend" type="button" title="Hablarle a Posty" aria-label="Hablarle a Posty: tocá para grabar">${pzIc('mic', 26)}</button>
+        <div class="pz-voice-txt"><b>${gzT('Hablarle a Posty', 'Talk to Posty')}</b><small>${gzT('Tocá el micrófono grande y decile lo que sea, como en WhatsApp.', 'Tap the big microphone and tell it anything, like on WhatsApp.')}</small></div>
+        <button class="pz-write-toggle" id="pzWriteToggle" type="button">${gzT('Escribir', 'Write')}</button>
+      </div>
+      <div class="chat-input-row pz-write-row" id="pzWriteRow" style="display:none">
+        <input id="chatInput" class="in" placeholder="escribile a posty…" maxlength="2000" autocomplete="off">
+        <button class="btn btn-soft" id="chatPhotoBtn" title="Mandar una foto">${pzIc('camera', 18)}</button>
+        <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
+      </div>
+      <p class="pz-voice-hint">${gzT('Todo se responde tocando. Escribir es solo la excepción.', 'Everything is answered by tapping. Writing is only the exception.')}</p>
     </div>
     <div id="chatMsg"></div>
     <div id="mcFaltan"></div>
@@ -9416,6 +9459,26 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
       // (LOTE SUBIR-FOTO-DIRECTA) accept SOLO image/* ANTES del click:
       // la camarita es foto, no video (ver pzSftFotoAlChat).
       if (picker) { picker.accept = 'image/*'; picker.click(); }
+    } catch (err) {}
+  });
+})();
+// (RS-5 · VOZ PRIMERO) «Escribir» abre el teclado: el input del chat
+// vive detrás del toggle en todas las superficies que usan chatCardHTML.
+// Delegado una sola vez (como chatPhotoDelegar), no por vista.
+(function pzWriteToggleDelegar() {
+  if (window.__pzWriteToggleDelegado) return;
+  window.__pzWriteToggleDelegado = true;
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('#pzWriteToggle') : null;
+    if (!b) return;
+    try {
+      const card = (b.closest && b.closest('#chatCard')) || document;
+      const row = (card.querySelector ? card.querySelector('#pzWriteRow') : null) || document.getElementById('pzWriteRow');
+      if (!row) return;
+      const open = row.style.display !== 'none';
+      row.style.display = open ? 'none' : 'flex';
+      try { b.textContent = open ? gzT('Escribir', 'Write') : gzT('Cerrar', 'Close'); } catch (err) { b.textContent = open ? 'Escribir' : 'Cerrar'; }
+      if (!open) setTimeout(() => { try { const ci = (card.querySelector ? card.querySelector('#chatInput') : null) || document.getElementById('chatInput'); if (ci) ci.focus(); } catch (err) {} }, 60);
     } catch (err) {}
   });
 })();
@@ -22688,7 +22751,7 @@ async function pzDesafioChatMaybe(box, shell) {
 // reales en ambos lados, la sección no existe.
 function pzJardinHTML(j, en) {
   const img = (src) => `<img src="${esc(mv(src, 640))}" loading="lazy" alt="" onerror="this.remove()">`;
-  return `<section class="bb-bloque"><h2>${en ? 'Your garden, before and today' : 'Tu jardín, antes y hoy'}</h2>
+  return `<section class="bb-bloque"><h2>${en ? 'Your level, before and today' : 'Tu nivel, antes y hoy'}</h2>
     <p class="bb-sub">${en ? 'Your published feed, then and now. Real posts, no mockups.' : 'Tu feed publicado, antes y hoy. Posteos reales, nada de muestra.'}</p>
     <div class="pz-jardin"><div><h3>${en ? 'Before' : 'Antes'}</h3><div class="pz-jardin-fotos">${j.antes.map(img).join('')}</div></div>
     <div><h3>${en ? 'Today' : 'Hoy'}</h3><div class="pz-jardin-fotos">${j.hoy.map(img).join('')}</div></div></div>
@@ -23276,11 +23339,10 @@ function pzTemaHora(scheduledAt) {
 function pzTemaBarraInit() {
   const row = document.querySelector('#pzChatFull .chat-input-row');
   if (!row || document.getElementById('pzChatSendBtn')) return;
-  const inp = document.getElementById('chatInput');
-  if (inp) {
-    try { inp.maxLength = 120; } catch (e) {}
-    try { inp.placeholder = pzTemaT('una frase corta, sobre este tema…', 'a short phrase, about this topic…'); } catch (e) {}
-  }
+  // (RS-5 · CHAT SIN TEMAS) Sin placeholder de tema ni maxlength 120:
+  // el input es el de siempre («escribile a posty…»), detrás de
+  // «Escribir» (la voz es la entrada principal). El botón Enviar propio
+  // se sigue agregando abajo (lo necesita la fila de escritura).
   const mic = document.getElementById('chatMicSend');
   // (LOTE CHAT-MUSE) El botón de video/reel sale del input del chat
   // (su ícono se leía como calendario): la programación y la subida de
@@ -23391,6 +23453,51 @@ function pzTemaColapsar(titulo, sub) {
   // El colapso cambia la altura: el scroll a abajo corre DESPUÉS.
   try { chatScroll(true); } catch (e) {}
 }
+// (RS-5 · REGLA 13) La pregunta de los lunes va ADENTRO del mensaje
+// del día, no como tarjeta propia. Caja con la pregunta + 4 rangos
+// para tocar (mismos rangos que la tarjeta 'lunes').
+function pzTemaLunesBoxHTML(lunesTema) {
+  const wk = (lunesTema && lunesTema.week_key) || '';
+  return '<div class="pz-monday-box" data-week-key="' + esc(wk) + '">'
+    + '<span class="pz-monday-tag">' + esc(pzTemaT('LOS LUNES · ADENTRO DE ESTE MISMO MENSAJE', 'MONDAYS · INSIDE THIS SAME MESSAGE')) + '</span>'
+    + '<b class="pz-monday-q">' + esc(pzTemaT('¿Cuántas consultas te entraron esta semana?', 'How many inquiries came in this week?')) + '</b>'
+    + '<p class="pz-monday-sub">' + esc(pzTemaT('Tocá un rango. Con eso conecto mi trabajo con tu caja — Instagram no muestra tus ventas.', 'Tap a range. That connects my work to your cash — Instagram does not show your sales.')) + '</p>'
+    + '<div class="pz-monday-grid">'
+    + '<button type="button" class="pz-monday-opt" data-lunes-rango="0">' + esc(pzTemaT('Sin consultas', 'No inquiries')) + '</button>'
+    + '<button type="button" class="pz-monday-opt" data-lunes-rango="1-5">' + esc(pzTemaT('1 a 5', '1 to 5')) + '</button>'
+    + '<button type="button" class="pz-monday-opt" data-lunes-rango="6-15">' + esc(pzTemaT('6 a 15', '6 to 15')) + '</button>'
+    + '<button type="button" class="pz-monday-opt" data-lunes-rango="15+">' + esc(pzTemaT('Más de 15 🎉', 'More than 15 🎉')) + '</button>'
+    + '</div>'
+    + '<p class="pz-monday-confirm" style="display:none"></p>'
+    + '</div>';
+}
+// Respuesta a la pregunta de los lunes DESDE el mensaje del día:
+// guarda el rango (mismo endpoint que la tarjeta 'lunes'), muestra
+// la confirmación adentro de la caja y saca el tema 'lunes' de la
+// lista para que no aparezca como tarjeta propia después.
+async function pzTemaGuardarLunesDesdeHoy(rango, btn) {
+  const box = btn ? btn.closest('.pz-monday-box') : null;
+  if (!box) return;
+  try { box.querySelectorAll('[data-lunes-rango]').forEach((b) => { b.disabled = true; if (b === btn) b.classList.add('on'); }); } catch (e) {}
+  try {
+    const r = await api.post('/api/weekly-consultas', { rango });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
+    const ack = rango === '0' ? pzTemaT('✓ Anotado: semana sin consultas.', '✓ Noted: a week with no inquiries.')
+      : rango === '1-5' ? pzTemaT('✓ Anotado: 1 a 5 consultas.', '✓ Noted: 1 to 5 inquiries.')
+      : rango === '6-15' ? pzTemaT('✓ Anotado: 6 a 15 consultas 🎉', '✓ Noted: 6 to 15 inquiries 🎉')
+      : pzTemaT('✓ Anotado: más de 15 🎉 semana récord.', '✓ Noted: more than 15 🎉 record week.');
+    const conf = box.querySelector('.pz-monday-confirm');
+    if (conf) { conf.textContent = ack; conf.style.display = 'block'; }
+    try {
+      if (PZ_TEMA && Array.isArray(PZ_TEMA.temas)) {
+        PZ_TEMA.temas = PZ_TEMA.temas.filter((x) => !(x && x.kind === 'lunes'));
+      }
+    } catch (e) {}
+  } catch (e) {
+    try { box.querySelectorAll('[data-lunes-rango]').forEach((b) => { b.disabled = false; b.classList.remove('on'); }); } catch (e2) {}
+    try { chatSay(pzTemaT('no pude guardarlo 😕 probá de nuevo', 'i could not save it 😕 try again')); } catch (e2) {}
+  }
+}
 function pzTemaPintar() {
   const wrap = document.getElementById('pzTemaWrap');
   if (!wrap || !PZ_TEMA) return;
@@ -23407,20 +23514,28 @@ function pzTemaPintar() {
     const p = tema.post;
     const titulo = (p.caption_corta || p.caption || '').trim() || pzTemaT('El posteo de hoy', "Today's post");
     const meta = pzTemaT('Hoy', 'Today') + (tema.hora ? ' · ' + tema.hora : '') + ' · ' + pzTemaT('Por aprobar', 'To approve');
-    html = '<div class="pz-tema"><small>' + esc(pzTemaT('SOBRE · TEMA ' + (idx + 1) + ' DE ' + n, 'ABOUT · TOPIC ' + (idx + 1) + ' OF ' + n)) + '</small>'
-      + '<b>' + esc(pzTemaT('El posteo de hoy', "Today's post")) + '</b>'
-      + '<span>' + esc(pzTemaT('Estamos hablando solo de esto. Tocá una respuesta y seguimos con el próximo tema.', 'Only this for now. Tap an answer and we move to the next topic.')) + '</span>'
+    // (RS-5 · UN SOLO MENSAJE POR DÍA) El mensaje del día es la tarjeta
+    // misma: sin «TEMA X DE N», sin «seguimos con el próximo tema». La
+    // pregunta de los lunes va ADENTRO de este mensaje (regla 13).
+    const lunesPend = (temas || []).find((x) => x && x.kind === 'lunes');
+    html = '<div class="pz-tema pz-daily-msg"><div class="pz-daily-head"><span class="pz-daily-label">' + esc(pzTemaT('HOY · EL ÚNICO MENSAJE DE POSTY', "TODAY · POSTY'S ONLY MESSAGE")) + '</span><span class="pz-daily-time">' + esc(tema.hora || '') + '</span></div>'
+      + '<p class="pz-daily-intro">' + esc(pzTemaT('Hola, este es tu posteo de hoy. Aprobalo con un toque, o cambialo tocando — sin escribir nada.', "Hi, this is today's post. Approve it with a tap, or change it by tapping — no typing needed.")) + '</p>'
       + (p.imagen ? '<div class="pz-tema-thumb"><img src="' + esc(p.imagen) + '" alt=""><div><b>' + esc(titulo) + '</b><span>' + esc(meta) + '</span></div></div>' : '')
       + pzTemaQuickHTML([
         { id: 'hoy-aprobar', text: pzTemaT('Dale, publicalo ✓', 'Go ahead, publish it ✓'), primary: true },
         { id: 'hoy-cambialo', text: pzTemaT('Cambialo', 'Change it') },
         { id: 'hoy-despues', text: pzTemaT('Lo miro después', "I'll check it later") },
       ])
+      + (lunesPend ? pzTemaLunesBoxHTML(lunesPend) : '')
+      + '<p class="pz-one-a-day">' + esc(pzTemaT('Eso es todo por hoy: un solo mensaje de Posty por día. Mañana llega el de mañana, en este mismo hilo.', "That's all for today: one Posty message a day. Tomorrow's arrives tomorrow, in this same thread.")) + '</p>'
       + '</div>';
   } else if (tema.kind === 'lunes') {
-    html = '<div class="pz-tema"><small>' + esc(pzTemaT('SOBRE · TEMA ' + (idx + 1) + ' DE ' + n, 'ABOUT · TOPIC ' + (idx + 1) + ' OF ' + n)) + '</small>'
+    // (RS-5) Solo se pinta como tarjeta propia cuando NO hay mensaje
+    // del día (el posteo ya se aprobó): si hay 'hoy', la pregunta va
+    // adentro de ese mensaje (regla 13) y este tema no se pinta.
+    html = '<div class="pz-tema">'
       + '<b>' + esc(pzTemaT('La pregunta de los lunes', "Monday's question")) + '</b>'
-      + '<span>' + esc(pzTemaT('Solo esto: cuántas consultas entraron esta semana. Una respuesta y queda anotado en Análisis.', 'Just this: how many inquiries came in this week. One answer and it is saved in Analysis.')) + '</span>'
+      + '<span>' + esc(pzTemaT('Solo esto: cuántas consultas entraron esta semana. Una respuesta y queda anotado.', 'Just this: how many inquiries came in this week. One answer and it is saved.')) + '</span>'
       + pzTemaQuickHTML([
         { id: 'lunes-0', text: pzTemaT('Sin consultas', 'No inquiries') },
         { id: 'lunes-1-5', text: pzTemaT('1 a 5', '1 to 5') },
@@ -23430,7 +23545,7 @@ function pzTemaPintar() {
       + '</div>';
   } else if (tema.kind === 'comentario') {
     const c = tema.c;
-    html = '<div class="pz-tema"><small>' + esc(pzTemaT('SOBRE · TEMA ' + (idx + 1) + ' DE ' + n, 'ABOUT · TOPIC ' + (idx + 1) + ' OF ' + n)) + '</small>'
+    html = '<div class="pz-tema">'
       + '<b>' + esc(pzTemaT('La misión de hoy · Responder un comentario', "Today's mission · Reply to a comment")) + '</b>'
       + '<span>' + esc(pzTemaT('Solo este comentario. La respuesta ya está escrita: se manda, se ve primero o queda para después.', 'Just this comment. The reply is already written: send it, see it first, or leave it for later.')) + '</span>'
       + '<div class="pz-tema-thumb"><div><b>@' + esc(c.username || '') + '</b><span>' + esc(String(c.text || '').slice(0, 120)) + '</span></div></div>'
@@ -23446,6 +23561,14 @@ function pzTemaPintar() {
     wrap.querySelectorAll('[data-tema-op]').forEach((b) => {
       if (b.dataset.temaBound) return; b.dataset.temaBound = '1';
       b.onclick = () => { try { pzTemaElegir(b.dataset.temaOp, b); } catch (e) {} };
+    });
+  } catch (e) {}
+  // (RS-5 · REGLA 13) Rangos de la pregunta de los lunes adentro del
+  // mensaje del día: se guardan desde ahí, sin tarjeta propia.
+  try {
+    wrap.querySelectorAll('[data-lunes-rango]').forEach((b) => {
+      if (b.dataset.lunesBound) return; b.dataset.lunesBound = '1';
+      b.onclick = () => { try { pzTemaGuardarLunesDesdeHoy(b.dataset.lunesRango, b); } catch (e) {} };
     });
   } catch (e) {}
 }
@@ -23564,16 +23687,15 @@ async function pzTemaGuardarLunes(rango, etiqueta) {
   try {
     const r = await api.post('/api/weekly-consultas', { rango });
     if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
-    const ack = rango === '0' ? pzTemaT('anotado: semana sin consultas. queda guardado en tu análisis.', 'noted: a week with no inquiries. saved in your analysis.')
-      : rango === '1-5' ? pzTemaT('anotado: 1 a 5 consultas. queda guardado en tu análisis.', 'noted: 1 to 5 inquiries. saved in your analysis.')
-      : rango === '6-15' ? pzTemaT('anotado: 6 a 15 consultas 🎉 queda guardado en tu análisis.', 'noted: 6 to 15 inquiries 🎉 saved in your analysis.')
-      : pzTemaT('anotado: más de 15 🎉 semana récord. queda guardado en tu análisis.', 'noted: more than 15 🎉 record week. saved in your analysis.');
+    const ack = rango === '0' ? pzTemaT('anotado: semana sin consultas. queda guardado.', 'noted: a week with no inquiries. saved.')
+      : rango === '1-5' ? pzTemaT('anotado: 1 a 5 consultas. queda guardado.', 'noted: 1 to 5 inquiries. saved.')
+      : rango === '6-15' ? pzTemaT('anotado: 6 a 15 consultas 🎉 queda guardado.', 'noted: 6 to 15 inquiries 🎉 saved.')
+      : pzTemaT('anotado: más de 15 🎉 semana récord. queda guardado.', 'noted: more than 15 🎉 record week. saved.');
     chatSay(ack);
     // (LOTE CHAT-MEJORA) Al responder, la tarjeta colapsa a una
     // línea y lo puntual lo dice Posty como mensaje del chat (la
     // línea «¿Algo puntual…?» ya no vive en la tarjeta).
-    try { pzTemaColapsar(pzTemaT('La pregunta de los lunes', "Monday's question"), pzTemaT('Anotado en Análisis', 'Saved in Analysis')); } catch (e) {}
-    try { chatSay(pzTemaT('¿Algo puntual sobre este tema? Escribímelo acá abajo.', 'Anything specific about this topic? Write it to me below.')); } catch (e) {}
+    try { pzTemaColapsar(pzTemaT('La pregunta de los lunes', "Monday's question"), pzTemaT('Anotado', 'Saved')); } catch (e) {}
     setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
   } catch (e) { chatSay(pzTemaT('no pude guardarlo 😕 probá de nuevo', "i could not save it 😕 try again")); pzTemaReactivar(); }
 }
@@ -23700,13 +23822,13 @@ function pzTemaElegir(op, btn, textoLibre) {
   }
   if (op === 'hoy-cambialo') {
     PZ_TEMA.stage = 'change-what';
-    pzTemaSetSub(pzTemaT('Seguimos en el mismo tema: el cambio de este posteo. No pasamos a otra pregunta hasta resolverlo.', 'Same topic: changing this post. We do not move to another question until it is solved.'));
+    pzTemaSetSub(pzTemaT('El cambio de este posteo, acá mismo.', 'Changing this post, right here.'));
     setTimeout(() => {
-      try { chatSay(pzTemaT('dale, lo cambiamos acá mismo, sobre este posteo — no salimos de esta conversación. ¿qué querés cambiar: la foto, el texto o la hora?', 'ok, we change it right here, on this same post — we do not leave this conversation. what do you want to change: the photo, the text or the time?')); } catch (e) {}
+      try { chatSay(pzTemaT('dale, lo cambiamos acá mismo, sobre este posteo — no salimos de esta conversación. ¿qué querés cambiar: otra foto, otro texto u otra idea?', 'ok, we change it right here, on this same post — we do not leave this conversation. what do you want to change: another photo, another text or another idea?')); } catch (e) {}
       pzTemaSetQuick([
-        { id: 'ch-foto', text: pzTemaT('La foto 📸', 'The photo 📸') },
-        { id: 'ch-texto', text: pzTemaT('El texto ✍️', 'The text ✍️') },
-        { id: 'ch-hora', text: pzTemaT('La hora 🕖', 'The time 🕖') },
+        { id: 'ch-foto', text: pzTemaT('Otra foto', 'Another photo') },
+        { id: 'ch-texto', text: pzTemaT('Otro texto', 'Another text') },
+        { id: 'ch-idea', text: pzTemaT('Otra idea', 'Another idea') },
         { id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') },
       ]);
     }, 420);
@@ -23743,6 +23865,20 @@ function pzTemaElegir(op, btn, textoLibre) {
     pzTemaSetQuick([{ id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') }]);
     return;
   }
+  if (op === 'ch-idea') {
+    // (RS-5 · REGLA 11) «Otra idea»: la regeneración la hace el cerebro
+    // (otra idea para el posteo de hoy); la respuesta con el borrador
+    // nuevo llega como mensaje del chat, con su Aprobar/Cambiar.
+    // pushed:true = no duplicar la burbuja (el label «Otra idea» ya se
+    // puso como burbuja del usuario arriba en pzTemaElegir).
+    PZ_TEMA.stage = 'change-idea';
+    setTimeout(() => {
+      try { chatSay(pzTemaT('dale, te armo otra idea para hoy — misma foto real, otro ángulo.', 'ok, i’ll make you another idea for today — same real photo, a different angle.')); } catch (e) {}
+      try { chatExchange({ text: 'otra idea para el posteo de hoy', pushed: true }); } catch (e) {}
+    }, 420);
+    pzTemaSetQuick([{ id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') }]);
+    return;
+  }
   if (op === 'ch-hora') {
     // Chip de hora (con data-tema-hora): vista previa + confirmación.
     if (btn && btn.dataset && btn.dataset.temaHora) {
@@ -23766,9 +23902,9 @@ function pzTemaElegir(op, btn, textoLibre) {
   if (op === 'ch-volver' || op === 'ch-otro') {
     PZ_TEMA.stage = 'change-what';
     pzTemaSetQuick([
-      { id: 'ch-foto', text: pzTemaT('La foto 📸', 'The photo 📸') },
-      { id: 'ch-texto', text: pzTemaT('El texto ✍️', 'The text ✍️') },
-      { id: 'ch-hora', text: pzTemaT('La hora 🕖', 'The time 🕖') },
+      { id: 'ch-foto', text: pzTemaT('Otra foto', 'Another photo') },
+      { id: 'ch-texto', text: pzTemaT('Otro texto', 'Another text') },
+      { id: 'ch-idea', text: pzTemaT('Otra idea', 'Another idea') },
       { id: 'ch-despues', text: pzTemaT('Dejarlo para después', 'Leave it for later') },
     ]);
     return;
@@ -23821,9 +23957,10 @@ function pzTemaOnSend(text, unsent) {
     if (despues) { pzTemaBurbujaUsuario(text); limpiar(); pzTemaPosponerCambio(); return true; }
     if (/foto|imagen/.test(norm)) { limpiar(); pzTemaElegir('ch-foto', null, text); return true; }
     if (/texto|titulo|caption/.test(norm)) { limpiar(); pzTemaElegir('ch-texto', null, text); return true; }
+    if (/idea|otro angulo/.test(norm)) { limpiar(); pzTemaElegir('ch-idea', null, text); return true; }
     if (/hora|horario/.test(norm)) { limpiar(); pzTemaElegir('ch-hora', null, text); return true; }
     pzTemaBurbujaUsuario(text); limpiar();
-    chatSay(pzTemaT('anotado sobre este posteo ✓ para cambiarlo, elegí qué cambiar abajo: la foto, el texto o la hora.', 'noted about this post ✓ to change it, pick what to change below: the photo, the text or the time.'));
+    chatSay(pzTemaT('anotado sobre este posteo ✓ para cambiarlo, elegí qué cambiar abajo: otra foto, otro texto u otra idea.', 'noted about this post ✓ to change it, pick what to change below: another photo, another text or another idea.'));
     return true;
   }
   if (PZ_TEMA.stage === 'change-texto') {

@@ -37,7 +37,7 @@ const sliceFn = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins del árbol RS-4 ----------
-  t(srv.includes("const BUILD_ID = '20261105-v836'"), 'server: BUILD v825 (el re-estampador estampa el final)');
+  t(srv.includes("const BUILD_ID = '20261105-v841'"), 'server: BUILD v841 (RS-5)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -48,33 +48,33 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v793'"), 'CHUNK_V v793 (bump T&C)');
-  t(md5(app) === '4ac21c0543bc34c5cb113ae4b62b9396', 'app.js md5 (RS-4 + T&C v836)');
-  t(md5(css) === 'a6ef1f0f0bdd52079f0af7b7d781d690', 'styles.css md5 (RS-4)');
-  t(md5(srv) === 'e17bfe2920f2098ff38543595539ae74', 'server.js md5 (RS-4 + T&C v836)');
+  t(md5(app) === '6b2c61a2c421f75e53cfb76197e7f29b', 'app.js md5 (RS-4 + RS-5 v841)');
+  t(md5(css) === 'd66887135d9586086b4175ae686f06fa', 'styles.css md5 (RS-4 + RS-5 v841)');
+  t(md5(srv) === 'c05e2251eff2bcea74c83d8e83f9c8cb', 'server.js md5 (RS-5 v841, solo BUILD)');
   t(md5(abSrc) === '04c90ac71c59335d9785aaee959c1260', 'ads-billetera.js md5 (RS-4)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (sin ruta nueva)');
-  t(cnt(app, 'pzBoost') === 158, 'app: pzBoost ×158 (sección RS-4 + alias)');
+  t(cnt(app, 'pzBoost') === 173, 'app: pzBoost ×173 (161 v840 + 12 RS-5: RecPintar ×2, RecTexto +3, RecCard ×2, RecOff ×3, OpenById +2)');
   t(cnt(app, 'LOTE REDISEÑO SIMPLE RS-4') === 1, 'app: marcador RS-4 ×1');
   t(cnt(srv, 'LOTE REDISEÑO SIMPLE RS-4') === 1, 'server: marcador RS-4 ×1');
   t(cnt(abSrc, 'LOTE REDISEÑO SIMPLE RS-4') === 1, 'ads-billetera: marcador RS-4 ×1');
   t(cnt(css, 'LOTE REDISEÑO SIMPLE RS-4') === 1, 'styles: marcador RS-4 ×1');
-  t(cnt(css, 'pz-boost-') === 46, 'styles: clases pz-boost- ×46');
+  t(cnt(css, 'pz-boost-') === 53, 'styles: clases pz-boost- ×53 (46 RS-4 + 7 RS-5: rec-card ×4, rec-cta, rec-tag, rec-x)');
   t(cnt(srv, 'incluir_impulsados') === 2, 'server: ?incluir_impulsados=1 (flag + lectura)');
   t(cnt(abSrc, 'incluirImpulsados') === 2, 'ads-billetera: opts.incluirImpulsados ×2');
   t(cnt(abSrc, 'publicado_en') === 5, 'ads-billetera: publicado_en ×5');
   t(cnt(abSrc, 'viejo') === 5, 'ads-billetera: viejo ×5');
-  t(cnt(app, 'data-pz-boost-post') === 3, 'app: contrato data-pz-boost-post ×3 (RS-2/RS-3/RS-5)');
+  t(cnt(app, 'data-pz-boost-post') === 7, 'app: contrato data-pz-boost-post ×7 (3 comentarios + 4 código: render ×1, querySelectorAll ×2, getAttribute ×1; igual en v840, pin rancio de v836)');
   // CONTRATO RS-3 → RS-4 (spec v10): el botón del Feed (RS-3) llama a
   // window.pzOpenBoostPick(). Alias de pzBoostPickOpen (misma hoja ELEGIR).
   t(app.includes('function pzOpenBoostPick() { return pzBoostPickOpen(); }'), 'contrato RS-3: pzOpenBoostPick es alias de pzBoostPickOpen');
   t(app.includes('window.pzOpenBoostPick = pzOpenBoostPick'), 'contrato RS-3: window.pzOpenBoostPick expuesto explícitamente');
   // RE-BASE v829: +3 de RS-3 (comentario + typeof + llamada en pzFeedBoostPick).
-  t(cnt(app, 'pzOpenBoostPick') === 10, 'contrato RS-3: pzOpenBoostPick ×10 (7 RS-4 + 3 RS-3)');
-  t(cnt(app, 'window.pzOpenBoostPick') === 7, 'contrato RS-3: window.pzOpenBoostPick ×7 (4 RS-4 + 3 RS-3)');
+  t(cnt(app, 'pzOpenBoostPick') === 12, 'contrato RS-3: pzOpenBoostPick ×12 (7 RS-4 + 3 RS-3 + 2 RS-5)');
+  t(cnt(app, 'window.pzOpenBoostPick') === 9, 'contrato RS-3: window.pzOpenBoostPick ×9 (4 RS-4 + 3 RS-3 + 2 RS-5)');
   // La pestaña Ads SE QUEDA hasta el corte (RS-5): la sección RS-4 no
   // toca la barra de pestañas ni el router de Ads.
   t(app.includes("function adsView() {") && app.includes("function bindAds() {"), 'app: adsView/bindAds intactos (la pestaña Ads se queda)');
-  t(!app.includes('pzBoost') || cnt(app, 'pzBoost') === 158, 'app: pzBoost solo vive en la sección RS-4');
+  t(cnt(app, 'pzBoostRecPintar') === 2, 'app: fuera de RS-4, pzBoost solo vive en pzBoostRecPintar (RS-5: def + hook en el chat)');
 
   // ---------- 2. Módulo ads-billetera: elegibles con/sin incluir ----------
   const ab = require('./ads-billetera');
@@ -429,7 +429,7 @@ const sliceFn = (src, from, to) => {
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v836', `boot: /api/version 20261105-v825 (vino ${ver.build})`);
+      t(ver.build === '20261105-v841', `boot: /api/version 20261105-v841 (vino ${ver.build})`);
       const s1 = await api('', 'GET', '/api/ads/billetera/elegibles');
       t(s1.status === 401, 'boot: sin sesión, elegibles → 401');
       // Registro + sesión.

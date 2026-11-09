@@ -62,9 +62,9 @@ check('0a app.js cambió vs base v821', md5(app) !== '5210de8cceb1fc51b63b2403fc
 check('0b server.js cambió vs base v821', md5(srv) !== '93af15859939642a99af27b2f7ffc098', md5(srv));
 check('0c db.js cambió vs base v821', md5(dbs) !== '27909018edb1d5e0a017c4f3df183e6e', md5(dbs));
 check('0d styles.css cambió vs base v821', md5(css) !== '82a97f57c75b03ae8880ad80e7a86c4d', md5(css));
-check('0e generator.js = LOTE A (chat-muse no lo toca)', md5(gen) === 'd3be4f32b446c0451fb75f9bd47ccf81', md5(gen));
-check('0f index ES/EN = v822 estampado (?v=557, styles?v=20261209)', md5(idxEs) === 'a7b9bcc3457324bfd5cabecccf772fab' && md5(idxEn) === 'f496a504f1cbf2109fdddcebe75356fc', md5(idxEs) + ' / ' + md5(idxEn));
-check('0g BUILD v822 (A estampado; lo re-estampa el re-estampador a v823)', srv.includes("const BUILD_ID = '20261105-v831'"));
+check('0e generator.js = v838 carril-exprés (chat-muse no lo toca)', md5(gen) === '2a3951d9fb850c46f1e4b7f01fd22699', md5(gen));
+check('0f index ES/EN = v841 estampado (?v=573, styles?v=20261221)', md5(idxEs) === '9c9bd7921ddc41315130ce52c46c3d70' && md5(idxEn) === '15bc1abbed8f2e4cc2ff894ab3d2fcd6', md5(idxEs) + ' / ' + md5(idxEn));
+check('0g BUILD v841 (RS-5)', srv.includes("const BUILD_ID = '20261105-v841'"));
 
 // ---------- Parte 1: estática app.js — encabezado fino + input ----------
 console.log('— 1) estática: encabezado e input —');
@@ -164,6 +164,7 @@ if (CM) {
     FP_MARKER_RE: /$^/, FOTO_MARKER_RE: /$^/, LC_MARKER_RE: /$^/,
     esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
     pzIc: () => '',
+    gzT: (es, en) => es, // (RS-5) chatCardHTML usa gzT en la voicebar; en la app real está definido (app.js:1369)
     chatStripFpMarker: (t) => String(t || ''),
     chatStripLcMarker: (t) => String(t || ''),
   };
@@ -191,6 +192,7 @@ if (CC && CM) {
     FP_MARKER_RE: /$^/, FOTO_MARKER_RE: /$^/, LC_MARKER_RE: /$^/,
     esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
     pzIc: () => '',
+    gzT: (es, en) => es, // (RS-5) chatCardHTML usa gzT en la voicebar; en la app real está definido (app.js:1369)
     chatStripFpMarker: (t) => String(t || ''),
     chatStripLcMarker: (t) => String(t || ''),
     chatNextWeekHTML: () => '<div class="nw">WEEK</div>',
@@ -285,7 +287,7 @@ async function parteBoot() {
     check('8a el servidor levanta con el lote', up);
     if (!up) { console.log(s1.out().split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('8b /api/version = v822 (estampado)', ver && ver.build === '20261105-v831', JSON.stringify(ver));
+    check('8b /api/version = v841 (estampado)', ver && ver.build === '20261105-v841', JSON.stringify(ver));
     const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=556`)).text();
     check('8c el app.js servido trae el lote (chevron + watchdog + saludo; sin video ni píldora)',
       appJs.includes("pzIc('chevronLeft'") && appJs.includes('CHAT_X_WATCHDOG_MS') && appJs.includes('hola! soy Posty. decime qué necesitás')
