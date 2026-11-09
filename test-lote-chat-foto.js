@@ -113,7 +113,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v824 (estampado por el re-estampador)', ver.status === 200 && ver.json && ver.json.build === '20261105-v833', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v844 (estampado)', ver.status === 200 && ver.json && ver.json.build === '20261105-v844', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 
@@ -235,7 +235,7 @@ function extractClient() {
   }
   for (const sig of ['function chatStripCelebrate(', 'function linkifyEsc(', 'function chatMsgHtml(',
     'function pzSftT(', 'function pzSftEn(', 'async function pzSftChatArmarUno(', 'async function pzSftChatProponer() {',
-    'function pzSftChatTarjetaArmada(', 'async function pzSftPedirCambio() {', 'async function pzSftCambiarImagen() {', 'async function pzSubirCompletar() {']) {
+    'function pzSftChatTarjetaArmada(', 'async function pzSftPedirCambio() {', 'async function pzSftCambiarImagen() {', 'function pzSubirFases(', 'async function pzSubirCompletar() {']) {
     const s = fnFrom(app, sig);
     if (!s) return { error: 'falta ' + sig };
     parts.push(s);
@@ -250,7 +250,7 @@ async function parteB() {
   if (loaded.error) return;
   const appSrc = fs.readFileSync(path.join(DIR, 'public/app.js'), 'utf8');
   check('B0b pzSftChatProponer ya no compone «✦ veo»', !/✦ " \+ ve|\"✦ \" \+ ve/.test(appSrc), '');
-  check('B0c pzSubirCompletar pide timeout 300000', /api\.post\('\/api\/subir-foto\/programar'[\s\S]{0,600}\{ timeout: 300000 \}/.test(appSrc), '');
+  check('B0c pzSubirCompletar pide timeout 300000 en /generar (LOTE SUBIR-FOTO-CAMBIO: generar, no programar)', /api\.post\('\/api\/subir-foto\/generar'[\s\S]{0,600}\{ timeout: 300000, signal: ctl\.signal \}/.test(appSrc), '');
 
   const HOOK_FULL = '¿Cuántas veces te pasó que tenías que estar pendiente de tus redes?';
   const HOOK_CORTADO = '¿Cuántas veces te pasó que tenías…';
@@ -354,12 +354,15 @@ async function parteB() {
   }
 
   // B14: pzSubirCompletar — timeout largo y error real visible.
+  // (LOTE SUBIR-FOTO-CAMBIO: llama a /generar, no a /programar; usa
+  // AbortController + setInterval de fases — el ctx los provee.)
   {
     const inserted = [];
-    let capturedOpts = null;
+    let capturedOpts = null, capturedUrl = null;
     const fakeBox = { insertAdjacentHTML: (pos, html) => { inserted.push(html); } };
     const ctx = {
       console,
+      AbortController, setInterval: () => 0, clearInterval: () => {},
       pzSubirFlujo: { photo: { file_path: '/media/test-foto.png', aiUrl: '' }, media: 'photo', ans: { when: '2026-11-08 19:00', intent: 'conozcan', text: 'sin-texto', change: 'ninguno', promo: 'sin-promo' }, prop: { lang: 'es' }, textoGuardado: '' },
       document: { querySelector: () => ({ innerHTML: '' }) },
       pzSubirResumen: () => 'Programar foto para el sábado',
@@ -368,12 +371,12 @@ async function parteB() {
       chatScroll: () => {},
       CHAT_PHOTOS: [],
       renderChatPhotos: () => {}, chatUpdateSendBtn: () => {}, render: () => {},
-      api: { post: async (url, body, opts) => { capturedOpts = opts; const e = new Error('The operation timed out'); e.name = 'TimeoutError'; throw e; } },
+      api: { post: async (url, body, opts) => { capturedUrl = url; capturedOpts = opts; const e = new Error('The operation timed out'); e.name = 'TimeoutError'; throw e; } },
     };
     vm.createContext(ctx);
     vm.runInContext(loaded.code, ctx);
     await vm.runInContext('pzSubirCompletar()', ctx);
-    check('B14 programar se llama con timeout 300000', capturedOpts && capturedOpts.timeout === 300000, JSON.stringify(capturedOpts));
+    check('B14 generar se llama con timeout 300000', capturedUrl === '/api/subir-foto/generar' && capturedOpts && capturedOpts.timeout === 300000, `url=${capturedUrl} opts=${JSON.stringify(capturedOpts)}`);
     const shown = inserted.join('\n');
     check('B15 ante timeout se dice que nada quedó programado', /no se programó nada/i.test(shown), shown.slice(0, 300));
   }

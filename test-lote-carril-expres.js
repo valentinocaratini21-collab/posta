@@ -54,7 +54,7 @@ function reFrom(src, re) {
 // ---------- Parte A: estática ----------
 function parteA() {
   console.log('— A) estática: pins y marcadores del lote —');
-  check('A0 BUILD v838 en server.js', srvSrc.includes("const BUILD_ID = '20261105-v838';"));
+  check('A0 BUILD v844 en server.js (estampado)', srvSrc.includes("const BUILD_ID = '20261105-v844';"));
   // §1 server.js — los dos endpoints nuevos
   check('A1 existe POST /api/express/armar', srvSrc.includes("app.post('/api/express/armar'"));
   check('A1b existe POST /api/express/:id/publicar', srvSrc.includes("app.post('/api/express/:id/publicar'"));
@@ -314,7 +314,7 @@ async function parteD() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('D0b /api/version trae el BUILD v838', ver.status === 200 && ver.json && ver.json.build === '20261105-v838', JSON.stringify(ver.json));
+    check('D0b /api/version trae el BUILD v844 (estampado)', ver.status === 200 && ver.json && ver.json.build === '20261105-v844', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('D0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
     check('D0d el video de prueba existe para el checklist', fs.existsSync(path.join(mediaDir, 'v1.mp4')));

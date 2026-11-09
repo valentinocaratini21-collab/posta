@@ -345,17 +345,36 @@ function pzCacheClone(data) {
 const api = {
   async req(method, url, body, opts = {}) {
     let r;
+    // (LOTE SUBIR-FOTO-CAMBIO · v844) Cancelación real: si el llamador
+    // pasa opts.signal (AbortController propio), ese signal manda y el
+    // timeout se cuelga del mismo controlador (AbortSignal.any no está
+    // en todos los Safari viejos). Sin signal, como siempre.
+    let _ctl = null, _t = null;
+    const _signal = opts.signal ? (() => {
+      _ctl = new AbortController();
+      if (opts.signal.aborted) _ctl.abort(opts.signal.reason);
+      else opts.signal.addEventListener('abort', () => { try { _ctl.abort(opts.signal.reason); } catch (e) {} }, { once: true });
+      _t = setTimeout(() => { try { _ctl.abort(new Error('timeout')); } catch (e) {} }, opts.timeout || 30000);
+      return _ctl.signal;
+    })() : AbortSignal.timeout(opts.timeout || 30000);
     try {
       r = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(opts.timeout || 30000),
+        signal: _signal,
       });
     } catch (e) {
+      if (opts.signal && e && e.name === 'AbortError') {
+        const ab = new Error(opts.signal.aborted ? 'cancelado' : 'timeout');
+        ab.name = 'AbortError';
+        throw ab;
+      }
       const err = new Error('¡Uh! Me desconecté un segundo. Revisá tu conexión y probá de nuevo.');
       err.networkError = true; // error de red: NO es "sesión cerrada"
       throw err;
+    } finally {
+      if (_t) clearTimeout(_t);
     }
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -10072,20 +10091,28 @@ function pzSubirCerrar(escribir) {
   }
 }
 
+// (LOTE SUBIR-FOTO-CAMBIO · v844) La hoja de subir-foto, compartida
+// por la apertura normal y por [Probar de nuevo] (reintento con las
+// respuestas guardadas).
+function pzSubirSheetCrear(cuerpoHtml) {
+  const back = document.createElement('div');
+  back.className = 'pz-sfp-back'; back.id = 'pzSfpBack';
+  back.innerHTML = `<div class="pz-sfp-sheet" role="dialog" aria-label="Posty">
+    <div class="pz-sfp-head"><img src="/ai-avatar.png" alt="Posty"><b>Posty</b><button type="button" class="pz-sfp-x" aria-label="Cerrar">✕</button></div>
+    <div class="pz-sfp-body">${cuerpoHtml}</div>
+  </div>`;
+  back.querySelector('.pz-sfp-x').onclick = () => pzSubirCerrar(true);
+  back.addEventListener('click', (e) => { if (e.target === back) pzSubirCerrar(true); });
+  document.body.appendChild(back);
+  return back;
+}
+
 function pzSubirFotoAbrir(photo, textoGuardado) {
   if (pzSubirFlujo) return;
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   pzSubirFlujo = { photo, media: photo.kind === 'video' ? 'video' : 'photo', textoGuardado: textoGuardado || '', prop: null, qs: [], idx: 0, ans: {}, mode: 'qs' };
   const inp = $('#chatInput'); if (inp) { inp.value = ''; try { inp.blur(); } catch (e) {} }
-  const back = document.createElement('div');
-  back.className = 'pz-sfp-back'; back.id = 'pzSfpBack';
-  back.innerHTML = `<div class="pz-sfp-sheet" role="dialog" aria-label="Posty">
-    <div class="pz-sfp-head"><img src="/ai-avatar.png" alt="Posty"><b>Posty</b><button type="button" class="pz-sfp-x" aria-label="Cerrar">✕</button></div>
-    <div class="pz-sfp-body"><div class="pz-sfp-cargando">${esc(en ? 'Putting your options together…' : 'Armando tus opciones…')}</div></div>
-  </div>`;
-  back.querySelector('.pz-sfp-x').onclick = () => pzSubirCerrar(true);
-  back.addEventListener('click', (e) => { if (e.target === back) pzSubirCerrar(true); });
-  document.body.appendChild(back);
+  pzSubirSheetCrear(`<div class="pz-sfp-cargando">${esc(en ? 'Putting your options together…' : 'Armando tus opciones…')}</div>`);
   api.get('/api/subir-foto/propuesta').then(prop => {
     if (!pzSubirFlujo || !prop || !prop.ok) { pzSubirFallo(); return; }
     pzSubirFlujo.prop = prop;
@@ -10170,44 +10197,207 @@ function pzSubirResumen(f) {
   return partes.join(' · ');
 }
 
+// (LOTE SUBIR-FOTO-CAMBIO · v844 · doctrina 7/11 BUG CHAT CON FOTO)
+// El flujo NUNCA programa a ciegas: primero GENERA la versión
+// (POST /api/subir-foto/generar) y la muestra en el chat como tarjeta
+// (foto + caption + [Sale así] / [Cambiar algo] / [Editar texto]);
+// solo [Sale así] programa (POST /api/subir-foto/programar {postId}).
+// Mientras genera, progreso real por fases — el servidor trabaja en
+// orden fijo (texto → mejora → cambio → titular) y cada fase tiene un
+// mínimo, así la etiqueta nunca corre por delante del servidor — más
+// [Cancelar], que aborta el llamado: ningún camino queda colgado sin
+// salida (el bug de Valentino 9/11 ~09:45: «Programándolo…» y nada).
+function pzSubirFases(f) {
+  const en = f.prop.lang === 'en';
+  const fases = [{ t: en ? 'writing the text…' : 'escribiendo el texto…', ms: 0 }];
+  fases.push({ t: en ? 'improving the light…' : 'mejorando la luz…', ms: 8000 });
+  if (f.ans.change === 'otra-version') fases.push({ t: en ? 'making the other version…' : 'haciendo la otra versión…', ms: 20000 });
+  else if (f.ans.change === 'recorte') fases.push({ t: en ? 'making the different crop…' : 'haciendo el recorte distinto…', ms: 20000 });
+  if (f.ans.text === 'con-titular') fases.push({ t: en ? 'putting the headline on…' : 'poniendo el titular…', ms: f.ans.change === 'otra-version' ? 120000 : 45000 });
+  fases.push({ t: en ? 'almost there…' : 'casi listo…', ms: f.ans.change === 'otra-version' ? 180000 : 60000 });
+  return fases;
+}
+
 async function pzSubirCompletar() {
   const f = pzSubirFlujo; if (!f) return;
   const body = document.querySelector('#pzSfpBack .pz-sfp-body');
   const en = f.prop.lang === 'en';
-  if (body) body.innerHTML = `<div class="pz-sfp-cargando">${esc(en ? 'Scheduling it…' : 'Programándolo…')}</div>`;
+  // Las respuestas quedan guardadas para [Probar de nuevo] (cambio_fallo).
+  try { PZ_SUBIR_ULTIMO = { photo: f.photo, media: f.media, ans: { ...(f.ans || {}) }, prop: f.prop, qs: f.qs || [], textoGuardado: f.textoGuardado || '' }; } catch (e) {}
+  const ctl = new AbortController();
+  let faseTimer = null;
+  const fases = pzSubirFases(f);
+  const t0 = Date.now();
+  const pintarFase = () => {
+    const el = document.querySelector('#pzSfpFase');
+    if (!el) return;
+    const dt = Date.now() - t0;
+    let cur = fases[0];
+    for (const ph of fases) if (dt >= ph.ms) cur = ph;
+    el.textContent = cur.t;
+  };
+  if (body) {
+    body.innerHTML = `<div class="pz-sfp-cargando"><span id="pzSfpFase">${esc(fases[0].t)}</span></div>
+      <button type="button" class="pz-sfp-escribir" id="pzSfpCancelar">${esc(en ? 'Cancel' : 'Cancelar')}</button>`;
+    const c = document.querySelector('#pzSfpCancelar');
+    if (c) c.onclick = () => { try { ctl.abort(); } catch (e) {} };
+    faseTimer = setInterval(pintarFase, 2000);
+  }
   const displayText = pzSubirResumen(f);
   let r = null;
   try {
     // (CHAT-FOTO) El servidor genera caption + imágenes: tarda más de 30 s.
     // Timeout largo y el error real se guarda y se muestra, nunca se traga.
-    r = await api.post('/api/subir-foto/programar', { assetPath: f.photo.file_path, media: f.media,
-      answers: { when: f.ans.when, intent: f.ans.intent, text: f.ans.text || 'sin-texto', change: f.ans.change || 'ninguno', promo: f.ans.promo || 'sin-promo' }, displayText }, { timeout: 300000 });
+    // (LOTE SUBIR-FOTO-CAMBIO · v844) GENERAR, no programar: la vista
+    // previa se muestra en el chat y solo [Sale así] programa.
+    r = await api.post('/api/subir-foto/generar', { assetPath: f.photo.file_path, media: f.media,
+      answers: { when: f.ans.when, intent: f.ans.intent, text: f.ans.text || 'sin-texto', change: f.ans.change || 'ninguno', promo: f.ans.promo || 'sin-promo' }, displayText }, { timeout: 300000, signal: ctl.signal });
   } catch (e) { console.error('[pzSubirCompletar]', e && (e.message || e)); r = { ok: false, _error: e }; }
+  if (faseTimer) clearInterval(faseTimer);
   const photo = f.photo;
   const textoGuardado = f.textoGuardado;
+  const fueCancelado = !!(r && r._error && r._error.name === 'AbortError' && /cancelado/i.test(String(r._error.message || '')));
   pzSubirCerrar(false);
   const box = $('#chatBox');
-  if (r && r.ok) {
-    if (box) {
-      const thumb = photo.aiUrl ? `<img src="${esc(photo.aiUrl)}" style="width:100%;border-radius:10px;margin-bottom:6px;display:block" alt="">` : '';
-      box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${thumb}<div>${esc(displayText)}</div></div>`);
-      // (LOTE C · CASO 1) Nunca una burbuja «…» pelada: sin respuesta, no se pinta.
-      if (String(r.reply || '').trim()) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', r.reply));
-      chatScroll();
-    }
-    const i = CHAT_PHOTOS.indexOf(photo); if (i >= 0) CHAT_PHOTOS.splice(i, 1);
-    renderChatPhotos(); chatUpdateSendBtn();
-    try { render(); } catch (e) {}
-  } else {
-    // (CHAT-FOTO) Si el servidor respondió, su mensaje dice el motivo real
-    // (p. ej. el cambio pedido no se pudo hacer: nada quedó programado).
-    // Si no hubo respuesta (timeout), se dice que nada quedó programado.
-    const errTxt = r && r._error ? String(((r._error && r._error.name) || '') + ' ' + ((r._error && r._error.message) || '')) : '';
-    const msg = (r && r.message) ? r.message : (/abort|timeout/i.test(errTxt) ? (en ? 'It took too long and nothing was scheduled, try again 🙏' : 'tardó demasiado y no se programó nada, probá de nuevo 🙏') : (en ? 'I could not schedule it, try again 🙏' : 'no pude programarlo, probá de nuevo 🙏'));
-    if (box) { box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(msg)}</div>`); chatScroll(); }
+  if (fueCancelado) {
+    // Cancelar = nada se programó (el borrador, si el servidor llegó a
+    // crearlo, queda borrador y nunca sale solo). La foto queda para reintentar.
+    if (box) { box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(en ? 'Cancelled — nothing was scheduled. Send the photo again whenever you want 🙏' : 'cancelado, no se programó nada. Mandá la foto de nuevo cuando quieras 🙏')}</div>`); chatScroll(); }
     const inp = $('#chatInput');
     if (inp && textoGuardado) inp.value = textoGuardado;
+    return;
   }
+  if (r && r.ok) {
+    // Vista previa en el chat (doctrina 7/11): la versión generada se
+    // muestra ANTES de programar; [Sale así] es la única que programa.
+    try { pzSubirTarjetaPrevia({ postId: r.postId, image_path: r.image_path, caption: r.caption, hashtags: r.hashtags, when: r.when, whenLabel: r.whenLabel, title: r.title, applied: r.applied, notes: r.notes, displayText, photo }); } catch (e) {}
+    return;
+  }
+  if (r && r.error === 'cambio_fallo' && r.postId) {
+    // El cambio pedido no se pudo hacer: nada se programó. Se muestra el
+    // motivo + la foto ORIGINAL como opción (programarla o reintentar).
+    try { pzSubirTarjetaOriginal({ postId: r.postId, image_path: r.image_path, caption: r.caption, when: r.when, whenLabel: r.whenLabel, displayText, photo, message: r.message }); } catch (e) {}
+    return;
+  }
+  // (CHAT-FOTO) Si el servidor respondió, su mensaje dice el motivo real.
+  // Si no hubo respuesta (timeout), se dice que nada quedó programado.
+  const errTxt = r && r._error ? String(((r._error && r._error.name) || '') + ' ' + ((r._error && r._error.message) || '')) : '';
+  const msg = (r && r.message) ? r.message : (/abort|timeout/i.test(errTxt) ? (en ? 'It took too long and nothing was scheduled, try again 🙏' : 'tardó demasiado y no se programó nada, probá de nuevo 🙏') : (en ? 'I could not schedule it, try again 🙏' : 'no pude programarlo, probá de nuevo 🙏'));
+  if (box) { box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(msg)}</div>`); chatScroll(); }
+  const inp = $('#chatInput');
+  if (inp && textoGuardado) inp.value = textoGuardado;
+}
+
+// Tarjeta de vista previa de subir-foto en el chat (doctrina 7/11):
+// foto + caption + [Sale así] / [Cambiar algo] / [Editar texto].
+// Nada se programa desde acá salvo [Sale así]. Misma forma que la
+// tarjeta revelada del ritual y que la tarjeta del carril exprés.
+var PZ_SUBIR_PREVIA = {}; // postId → { image_path, caption, hashtags, when, whenLabel, displayText, photo }
+var PZ_SUBIR_ULTIMO = null; // últimas respuestas, para [Probar de nuevo]
+function pzSubirPreviaBotones(pid, en) {
+  return `<button type="button" class="btn btn-primary btn-sm" onclick="pzSubirPreviaProgramar(${pid})">${en ? 'Post it like this' : 'Sale así'}</button>`
+    + `<button type="button" class="btn btn-soft btn-sm" onclick="pzCambioVoz(${pid})">${en ? 'Change something' : 'Cambiar algo'}</button>`
+    + `<button type="button" class="btn btn-soft btn-sm" onclick="pzSubirPreviaEditarTexto(${pid})">${en ? 'Edit text' : 'Editar texto'}</button>`;
+}
+function pzSubirTarjetaPrevia(prev) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const box = $('#chatBox');
+  if (!box || !prev || !prev.postId) return;
+  const pid = Number(prev.postId);
+  PZ_SUBIR_PREVIA[pid] = prev;
+  const img = prev.image_path ? `<img class="pz-sfp-img" src="${esc(prev.image_path)}" alt="" style="width:100%;border-radius:12px;display:block" loading="lazy">` : '';
+  const cuando = prev.whenLabel ? (en ? `Goes out ${prev.whenLabel}` : `Sale ${prev.whenLabel}`) : '';
+  const card = `<div class="chat-msg ai" id="pzSubirCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Here is how it looks — check it before it goes out' : 'Así queda — miralo antes de que salga'}</div>${img}<div style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-subir-cap" style="font-size:13px;white-space:pre-wrap">${esc(prev.caption || '')}</div>${prev.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prev.hashtags)}</div>` : ''}${prev.displayText ? `<div style="font-size:12px;color:var(--mut);margin-top:4px">${esc(prev.displayText)}</div>` : ''}<div id="pzSubirBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${pzSubirPreviaBotones(pid, en)}</div><div id="pzSubirEdit-${pid}"></div><div id="pzSubirErr-${pid}" style="font-size:12.5px;color:#7A1F1F;margin-top:6px"></div></div>`;
+  box.insertAdjacentHTML('beforeend', card);
+  try { chatScroll(); } catch (e) {}
+}
+async function pzSubirPreviaProgramar(postId) {
+  const prev = PZ_SUBIR_PREVIA[Number(postId)];
+  if (!prev || !prev.postId) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const pid = Number(prev.postId);
+  const row = document.getElementById('pzSubirBtns-' + pid);
+  const errEl = () => document.getElementById('pzSubirErr-' + pid);
+  const reponerBotones = () => { const r2 = document.getElementById('pzSubirBtns-' + pid); if (r2) r2.innerHTML = pzSubirPreviaBotones(pid, en); };
+  if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">⏳ ' + (en ? 'Scheduling…' : 'Programando…') + '</span>';
+  let r;
+  try { r = await api.post('/api/subir-foto/programar', { postId: pid, displayText: prev.displayText || '' }); }
+  catch (e) {
+    const msg = (e && e.data && (e.data.message || e.data.error)) || (e && e.message) || '';
+    const el = errEl(); if (el) el.textContent = msg || (en ? 'I could not schedule it, try again 🙏' : 'no pude programarlo, probá de nuevo 🙏');
+    reponerBotones();
+    return;
+  }
+  if (!r || !r.ok) {
+    const el = errEl(); if (el) el.textContent = (r && r.message) || (en ? 'I could not schedule it, try again 🙏' : 'no pude programarlo, probá de nuevo 🙏');
+    reponerBotones();
+    return;
+  }
+  // Programado: la tarjeta queda marcada y la foto sale de pendientes.
+  if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">✓ ' + (en ? 'Scheduled' : 'Programado') + '</span>';
+  try { if (typeof chatSay === 'function' && r.reply) chatSay(r.reply); } catch (e) {}
+  const photo = prev.photo;
+  if (photo) { const i = CHAT_PHOTOS.indexOf(photo); if (i >= 0) CHAT_PHOTOS.splice(i, 1); renderChatPhotos(); chatUpdateSendBtn(); }
+  try { render(); } catch (e) {}
+}
+// (LOTE CHAT-CLICKS · punto 2, mismo patrón que «Cambiar texto» de la
+// tarjeta del chat) «Editar texto»: edita la caption AHÍ MISMO, sin
+// salir del chat.
+function pzSubirPreviaEditarTexto(postId) {
+  const prev = PZ_SUBIR_PREVIA[Number(postId)];
+  if (!prev || !prev.postId) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const slot = document.getElementById('pzSubirEdit-' + Number(prev.postId));
+  if (!slot) return;
+  if (slot.dataset.open === '1') { slot.innerHTML = ''; slot.dataset.open = ''; return; }
+  slot.dataset.open = '1';
+  slot.innerHTML = '<div style="margin-top:8px"><textarea id="pzSubirEditTa-' + Number(prev.postId) + '" rows="3" style="width:100%;box-sizing:border-box;border-radius:10px;padding:8px;font:inherit;font-size:13px">' + esc(prev.caption || '') + '</textarea><div style="display:flex;gap:8px;margin-top:6px"><button type="button" class="btn btn-primary btn-sm" onclick="pzSubirPreviaGuardarTexto(' + Number(prev.postId) + ')">' + esc(en ? 'Save' : 'Guardar') + '</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSubirPreviaEditarTexto(' + Number(prev.postId) + ')">' + esc(en ? 'Cancel' : 'Cancelar') + '</button></div></div>';
+  try { const ta = document.getElementById('pzSubirEditTa-' + Number(prev.postId)); if (ta) ta.focus(); } catch (e) {}
+}
+async function pzSubirPreviaGuardarTexto(postId) {
+  const prev = PZ_SUBIR_PREVIA[Number(postId)];
+  if (!prev || !prev.postId) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const ta = document.getElementById('pzSubirEditTa-' + Number(prev.postId));
+  if (!ta) return;
+  const txt = String(ta.value || '').trim();
+  try {
+    const d = await api.patch('/api/posts/' + encodeURIComponent(prev.postId), { action: 'save-draft', caption: txt });
+    if (!d || !d.ok) throw new Error((d && d.message) || (d && d.error) || 'fail');
+    prev.caption = txt;
+    const card = document.getElementById('pzSubirCard-' + Number(prev.postId));
+    if (card) { const cap = card.querySelector('.pz-subir-cap'); if (cap) cap.textContent = txt; }
+    const slot = document.getElementById('pzSubirEdit-' + Number(prev.postId));
+    if (slot) { slot.innerHTML = ''; slot.dataset.open = ''; }
+    toast('✅ ' + (en ? 'Text updated' : 'Texto actualizado'));
+  } catch (e) {
+    toast('😅 ' + esc((e && e.message) || (en ? 'Try again' : 'Probá de nuevo')));
+  }
+}
+// Tarjeta de la foto ORIGINAL cuando el cambio pedido no se pudo hacer
+// (cambio_fallo): el motivo honesto + [Programar la original] /
+// [Probar de nuevo]. Nada quedó programado.
+function pzSubirTarjetaOriginal(o) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const box = $('#chatBox');
+  if (!box || !o || !o.postId) return;
+  const pid = Number(o.postId);
+  PZ_SUBIR_PREVIA[pid] = { postId: pid, image_path: o.image_path, caption: o.caption, when: o.when, whenLabel: o.whenLabel, displayText: o.displayText, photo: o.photo };
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(o.message || (en ? 'I could not make the change you asked for.' : 'no pude hacer el cambio que pediste.'))}</div>`);
+  const img = o.image_path ? `<img class="pz-sfp-img" src="${esc(o.image_path)}" alt="" style="width:100%;border-radius:12px;display:block" loading="lazy">` : '';
+  const cuando = o.whenLabel ? (en ? `Goes out ${o.whenLabel}` : `Sale ${o.whenLabel}`) : '';
+  const card = `<div class="chat-msg ai" id="pzSubirCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'This is the original photo, without the change' : 'Esta es la foto original, sin el cambio'}</div>${img}<div style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-subir-cap" style="font-size:13px;white-space:pre-wrap">${esc(o.caption || '')}</div><div id="pzSubirBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-primary btn-sm" onclick="pzSubirPreviaProgramar(${pid})">${en ? 'Schedule the original' : 'Programar la original'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSubirReintentar()">${en ? 'Try the change again' : 'Probar el cambio de nuevo'}</button></div><div id="pzSubirErr-${pid}" style="font-size:12.5px;color:#7A1F1F;margin-top:6px"></div></div>`;
+  box.insertAdjacentHTML('beforeend', card);
+  try { chatScroll(); } catch (e) {}
+}
+// [Probar de nuevo]: re-abre la hoja con las respuestas guardadas y
+// genera de nuevo (sin volver a preguntar).
+async function pzSubirReintentar() {
+  const u = PZ_SUBIR_ULTIMO; if (!u || !u.photo) return;
+  if (pzSubirFlujo) return;
+  pzSubirFlujo = { photo: u.photo, media: u.media, textoGuardado: u.textoGuardado || '', prop: u.prop, qs: u.qs || [], idx: 0, ans: { ...(u.ans || {}) }, mode: 'qs' };
+  pzSubirSheetCrear('');
+  pzSubirCompletar();
 }
 
 // (LOTE C · CHAT-NUEVO) Los atajos de vista (semana, DMs, comentarios,
@@ -10736,6 +10926,10 @@ async function chatExchange({ text, display, extra, pushed }) {
           `<div class="chat-msg ai" style="max-width:100%;padding:8px"><img src="${esc(u)}" style="width:100%;border-radius:12px;display:block" alt="Borrador editado" loading="lazy"></div>`
         ).join(''));
       }
+      // (LOTE SUBIR-FOTO-CAMBIO · v844) La tarjeta de vista previa o la
+      // del carril exprés vuelve con la versión nueva (si no, el cambio
+      // quedaba sin botón para confirmar).
+      try { if (typeof pzCambioRefrescarTarjeta === 'function') pzCambioRefrescarTarjeta(); } catch (e) {}
     }
     if (Array.isArray(r.ideas) && r.ideas.length > 1) {
       // MODO OPCIONES: el cliente elige entre varias ideas tocando su tarjeta
@@ -22476,6 +22670,93 @@ function pzRitualHTML(d, en) {
   <p>${en ? 'You have no post scheduled for today.' : 'Hoy no tenés posteo programado.'}</p>
   <button type="button" class="bb-btn" onclick="bbGo('#/app/inicio')">${en ? 'Home' : 'Inicio'}</button></div></div>`;
 }
+// (LOTE SUBIR-FOTO-CAMBIO · v844) [Cambiar algo] con la VOZ primero:
+// la nota de voz ES la instrucción del cambio (se transcribe y entra
+// por el mismo pipeline que el texto, con el posteo anclado). El texto
+// queda como alternativa detrás de «Escribir». Reutiliza VOZ-EJECUTA
+// (voiceToggle + __pzChatVoice en bindInicio) y el ancla del chat
+// (hfSetAnchor / pzHablarClick / hfAnchorForId). Vale para las tres
+// superficies: la tarjeta de vista previa de subir-foto, [Cambiar algo]
+// de la hoja del ritual y las tarjetas del carril exprés.
+var PZ_CAMBIO_VOZ_PENDING = 0; // postId cuyo prompt de voz falta entregar al abrir el chat
+function pzCambioVoz(postId) {
+  const pid = Number(postId);
+  if (!pid) return;
+  if (document.getElementById('pzChatFull')) {
+    // Ya estamos en el chat: anclar + prompt + grabar directo (el tap
+    // es gesto del usuario, el micrófono se puede abrir acá).
+    try { if (typeof hfAnchorForId === 'function') hfAnchorForId(pid); } catch (e) {}
+    try { pzCambioVozPrompt(pid); } catch (e) {}
+    try { if (typeof voiceToggle === 'function') voiceToggle(); } catch (e) {}
+    return;
+  }
+  // El chat no está abierto: abrirlo con el posteo anclado; el prompt y
+  // la grabación se entregan en bindInicio (mismo patrón que
+  // HF_ASK_TEXT_PENDING y __pzChatVoice del mic del dock).
+  PZ_CAMBIO_VOZ_PENDING = pid;
+  try { window.__pzChatVoice = true; } catch (e) {}
+  try { if (typeof pzHablarClick === 'function') pzHablarClick(pid); } catch (e) {}
+  setTimeout(() => { try { pzCambioVozPromptDeliver(); } catch (e) {} }, 400);
+}
+function pzCambioVozPrompt(postId) {
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  const old = document.getElementById('pzCambioVozPrompt'); if (old) old.remove();
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg ai'; wrap.id = 'pzCambioVozPrompt'; wrap.style.maxWidth = '100%';
+  wrap.innerHTML = `<div style="font-size:13px;margin-bottom:8px">${esc(en ? 'Tell me with your voice what to change 👇' : 'Decime con tu voz qué le cambio 👇')}</div>`
+    + `<div class="chat-chips"><button type="button" data-voz-grabar="1">🎙️ ${esc(en ? 'Record a voice note' : 'Grabar nota de voz')}</button>`
+    + `<button type="button" data-voz-escribir="1">${esc(en ? 'Write it' : 'Escribir')}</button></div>`;
+  const g = wrap.querySelector('[data-voz-grabar]');
+  if (g) g.onclick = () => { if (typeof VOICE_STATE !== 'undefined' && VOICE_STATE === 'idle') { try { voiceToggle(); } catch (e) {} } };
+  const w = wrap.querySelector('[data-voz-escribir]');
+  if (w) w.onclick = () => { try { wrap.remove(); } catch (e) {} const inp = document.getElementById('chatInput'); if (inp) { try { inp.focus(); } catch (e2) {} } };
+  box.appendChild(wrap);
+  try { chatScroll(); } catch (e) {}
+}
+function pzCambioVozPromptDeliver() {
+  if (!PZ_CAMBIO_VOZ_PENDING) return false;
+  const box = document.getElementById('chatBox');
+  if (!box) return false; // el chat todavía no abrió: se reintenta en bindInicio
+  const pid = PZ_CAMBIO_VOZ_PENDING; PZ_CAMBIO_VOZ_PENDING = 0;
+  try { pzCambioVozPrompt(pid); } catch (e) {}
+  return true;
+}
+// El posteo anclado cambió por el chat (r.edit): la tarjeta de vista
+// previa (subir-foto) o la del carril exprés vuelve a rendirse con la
+// versión nueva, para que [Sale así] / [Publicar hoy] sigan
+// disponibles sobre lo cambiado. Solo borradores: lo ya programado o
+// publicado no vuelve a tarjeta.
+async function pzCambioRefrescarTarjeta() {
+  const anchor = (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id) ? Number(HF_CHAT_ANCHOR.id) : 0;
+  if (!anchor) return;
+  const esPrevia = !!(typeof PZ_SUBIR_PREVIA !== 'undefined' && PZ_SUBIR_PREVIA[anchor]);
+  const esSft = !!(typeof PZ_SFT_ARMADOS !== 'undefined' && PZ_SFT_ARMADOS[anchor]);
+  if (!esPrevia && !esSft) return;
+  let post = null;
+  try { const d = await api.get('/api/posts/' + anchor); post = (d && d.post) ? d.post : d; } catch (e) { return; }
+  if (!post || post.id == null || post.status !== 'draft') return;
+  if (esPrevia) {
+    const prev = PZ_SUBIR_PREVIA[anchor];
+    prev.image_path = post.image_path || prev.image_path;
+    prev.caption = post.caption || prev.caption;
+    prev.hashtags = post.hashtags || prev.hashtags;
+    const old = document.getElementById('pzSubirCard-' + anchor);
+    if (old) old.remove();
+    try { pzSubirTarjetaPrevia(prev); } catch (e) {}
+  }
+  if (esSft) {
+    const prop = PZ_SFT_ARMADOS[anchor];
+    prop.image_path = post.image_path || prop.image_path;
+    prop.caption = post.caption || prop.caption;
+    prop.hashtags = post.hashtags || prop.hashtags;
+    const old = document.getElementById('pzSftCard-' + anchor);
+    if (old) old.remove();
+    try { pzSftChatTarjetaArmada(prop); } catch (e) {}
+  }
+}
+
 // (LOTE RITUAL-1-OPCION · 6/11) [Cambiar algo] = pedir otra versión:
 // el tap mismo manda el pedido al chat (el cliente no tiene que
 // explicar qué cambiar). El texto pendiente se entrega al abrir el
@@ -22485,11 +22766,12 @@ function pzRitualHTML(d, en) {
 // ya está en camino. La entrega vive en bindInicio (HF_CHAT_OPEN_PENDING),
 // el mismo camino que el mini-chat del detalle desde una vista sin chat.
 function pzRitualPedirCambio(id) {
-  try {
-    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-    HF_ASK_TEXT_PENDING = en ? 'make me another version of this post' : 'haceme otra versión de este posteo';
-  } catch (e) {}
-  try { if (typeof pzHablarClick === 'function') pzHablarClick(id); } catch (e) {}
+  // (LOTE SUBIR-FOTO-CAMBIO · v844) [Cambiar algo] = pedir el cambio CON
+  // LA VOZ primero: abre el chat con el posteo anclado y muestra el
+  // prompt de voz; la nota de voz transcrita ES la instrucción del
+  // cambio (el texto queda como alternativa detrás de «Escribir»).
+  // Antes mandaba solo el texto «haceme otra versión de este posteo».
+  try { if (typeof pzCambioVoz === 'function') pzCambioVoz(id); } catch (e) {}
 }
 async function pzRitualConfirmar(id) {
   const err = document.getElementById('pzRitualErr');
@@ -23255,6 +23537,7 @@ function bindChatFull() {
   try { hfPaintAnchor(); } catch (e) {}
   try { hfAnchorRefresh(); } catch (e) {}
   try { hfDeliverAskText(); } catch (e) {}
+  try { pzCambioVozPromptDeliver(); } catch (e) {}
   pzChatKbBind();
   pzChatKbSync();
   pzChatSwipeBind();
@@ -29916,7 +30199,7 @@ function pzSftChatTarjetaArmada(prop) {
   // no hay nada que aprobar en semana: la pieza exprés no lo muestra).
   const hoyBtn = `<button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatPublicarHoy(${pid})">${en ? 'Publish today' : 'Publicar hoy'}</button>`;
   const saleAsiBtn = prop.expres ? '' : `<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatAprobar(this, ${pid})">${en ? 'Post it' : 'Sale así'}</button>`;
-  const card = `<div class="chat-msg ai" id="pzSftCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Your post is ready' : 'Tu posteo está armado'}</div>${img}<div class="pz-sft-cuando" style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-sft-cap" style="font-size:13px;white-space:pre-wrap">${esc(prop.caption || '')}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div id="pzSftCardBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${hoyBtn}${saleAsiBtn}${todas}<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarTexto(${pid})">${en ? 'Change text' : 'Cambiar texto'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarDia(${pid})">${en ? 'Change day' : 'Cambiar día'}</button>${otraFoto}<button type="button" class="btn btn-soft btn-sm" onclick="pzUsarFotoAbrir(${pid})">${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button></div><div id="pzSftDias-${pid}"></div><div id="pzSftEdit-${pid}"></div></div>`;
+  const card = `<div class="chat-msg ai" id="pzSftCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Your post is ready' : 'Tu posteo está armado'}</div>${img}<div class="pz-sft-cuando" style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-sft-cap" style="font-size:13px;white-space:pre-wrap">${esc(prop.caption || '')}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div id="pzSftCardBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${hoyBtn}${saleAsiBtn}${todas}<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarTexto(${pid})">${en ? 'Change text' : 'Cambiar texto'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzCambioVoz(${pid})">${en ? 'Change something' : 'Cambiar algo'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarDia(${pid})">${en ? 'Change day' : 'Cambiar día'}</button>${otraFoto}<button type="button" class="btn btn-soft btn-sm" onclick="pzUsarFotoAbrir(${pid})">${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button></div><div id="pzSftDias-${pid}"></div><div id="pzSftEdit-${pid}"></div></div>`;
   box.insertAdjacentHTML('beforeend', card);
   try { chatScroll(); } catch (e) {}
 }

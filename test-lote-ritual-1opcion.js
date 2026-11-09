@@ -218,8 +218,12 @@ async function api(sid, method, p, body) {
   sandbox.pzHablarClick = (id) => { hablarCalls.push(id); };
   let errCam = null;
   try { pzRitualPedirCambio('201'); } catch (e) { errCam = e; }
-  t('B4-cambio: deja el pedido de otra versión para el chat', errCam === null && sandbox.HF_ASK_TEXT_PENDING === 'haceme otra versión de este posteo');
-  t('B4-cambio: abre el chat CON ese posteo (nunca vacío)', hablarCalls.length === 1 && hablarCalls[0] === '201');
+  // (LOTE SUBIR-FOTO-CAMBIO · v844) [Cambiar algo] abre la NOTA DE VOZ
+  // primero: queda pendiente el prompt de voz para ese posteo (la nota
+  // transcrita es la instrucción del cambio) y se abre el chat con el
+  // posteo anclado. Ya no manda solo el texto «haceme otra versión».
+  t('B4-cambio: queda pendiente el prompt de voz para ese posteo', errCam === null && sandbox.PZ_CAMBIO_VOZ_PENDING === 201, 'PZ_CAMBIO_VOZ_PENDING=' + String(sandbox.PZ_CAMBIO_VOZ_PENDING));
+  t('B4-cambio: abre el chat CON ese posteo (nunca vacío)', hablarCalls.length === 1 && Number(hablarCalls[0]) === 201, JSON.stringify(hablarCalls));
   fetchCalls.length = 0;
   let errOk = null;
   try { await pzRitualConfirmar('201'); } catch (e) { errOk = e; }

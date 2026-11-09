@@ -23221,13 +23221,24 @@ app.get('/api/subir-foto/propuesta', requireAuth, (req, res) => {
   res.json({ ok: true, bestHour, slots, days, hasPromo: !!promoTitulo, promoTitulo, lang });
 });
 
-app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
-  const uid = req.session.userId;
-  const lang = langOfUser(uid);
+
+// (LOTE SUBIR-FOTO-CAMBIO · v844 · doctrina 7/11 BUG CHAT CON FOTO)
+// El flujo de subir-foto NUNCA programa a ciegas: primero se GENERA la
+// versión (caption + mejora + el cambio pedido) como borrador y se
+// muestra en el chat; solo cuando el cliente la acepta ([Sale así]) se
+// programa. Si el cambio pedido no se pudo hacer, nada se programa y se
+// dice qué falló, ofreciendo la foto original. Mismo patrón en dos
+// pasos que /api/express/armar → /api/express/:id/publicar y que la
+// propuesta del álbum (PZ_SFT, 7/11): leer el pedido → aplicar el
+// cambio → mostrar el posteo nuevo en el chat → el cliente confirma
+// → recién ahí se programa.
+// subirFotoGenerar: pasos 1-6 del viejo programar (validar, caption,
+// INSERT borrador, mejora, cambio, titular + guarda cambio_fallo).
+// Devuelve el borrador para la vista previa; NUNCA programa.
+async function subirFotoGenerar(uid, body, lang) {
   const en = lang === 'en';
-  const fail = (error, message) => res.json({ ok: false, error, message });
+  const fail = (error, message, extra) => ({ ok: false, error, message, ...(extra || {}) });
   try {
-    const body = req.body || {};
     const media = body.media === 'video' ? 'video' : 'photo';
     const ans = body.answers || {};
     // 1. Foto/video verificable como propio (misma regla que ```create:
@@ -23251,9 +23262,9 @@ app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.js
     const mediaType = media === 'video' ? 'video' : 'image';
     const q = quotaForWeek(uid, mediaType, mondayKeyOf(when.slice(0, 10)));
     if (q && q.left <= 0) {
-      return res.status(403).json({ ok: false, error: 'plan_limit', plan_limit: true, limit: q.limit, used: q.used, plan_name: q.plan_name, week_key: q.week_key,
+      return { ok: false, error: 'plan_limit', status: 403, plan_limit: true, limit: q.limit, used: q.used, plan_name: q.plan_name, week_key: q.week_key,
         message: en ? `You reached your ${q.plan_name} plan limit (${q.limit} ${quotaUnitName(mediaType)} per week). Upgrade your plan to keep posting that week.`
-                   : `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(mediaType)} por semana). Mejorá tu paquete para seguir posteando esa semana.` });
+                   : `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(mediaType)} por semana). Mejorá tu paquete para seguir posteando esa semana.` };
     }
     // 4. Tope de gasto IA + ritmo (mismo que el turno de chat que reemplaza).
     try { costs.assertAiOk(uid); }
@@ -23360,30 +23371,107 @@ app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.js
     const cambioFallo = notes.find((n) => n === 'otra-version' || n === 'recorte' || n === 'titular');
     if (cambioFallo) {
       const queFallo = { 'otra-version': en ? 'another version of the photo' : 'otra versión de la foto', 'recorte': en ? 'the different crop' : 'el recorte distinto', 'titular': en ? 'the headline on the photo' : 'el titular en la foto' }[cambioFallo];
-      return fail('cambio_fallo', en ? `I could not make ${queFallo}, so nothing was scheduled. Try again or pick the original photo 🙏` : `no pude hacer ${queFallo}, así que no se programó nada. Probá de nuevo o elegí la foto original 🙏`);
+      return fail('cambio_fallo', en ? `I could not make ${queFallo}, so nothing was scheduled. Try again or pick the original photo 🙏` : `no pude hacer ${queFallo}, así que no se programó nada. Probá de nuevo o elegí la foto original 🙏`, { postId, image_path: post.image_path, caption: post.caption });
     }
-    try { scheduleLintForPost(uid, postId); } catch (e) {}
-    // 7. El posteo pasa a 'scheduled' AHORA, con todo lo pedido aplicado.
-    db.prepare(`UPDATE posts SET status = 'scheduled' WHERE id = ?`).run(postId);
-    post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
-    // 8. Recibo: programado + título + líneas honestas de lo que no salió.
+    // Vista previa: el borrador queda en 'draft' — programar es otro
+    // llamado (POST /api/subir-foto/programar con postId), solo cuando
+    // el cliente acepta la tarjeta. El lint corre al programar.
     const whenLabel = subirFotoWhenLabel(when, lang);
     const title = String(caption).split('\n')[0].slice(0, 60);
+    return { ok: true, postId, post, when, whenLabel, title, caption, hashtags, applied, notes };
+  } catch (e) {
+    console.error('[subir-foto] generar:', e.message);
+    return { ok: false, error: 'programar_fallo', status: 500, message: en ? 'Something went wrong, nothing was scheduled, try again 🙏' : 'algo falló, no se programó nada, probá de nuevo 🙏' };
+  }
+}
+
+
+// POST /api/subir-foto/generar — genera la versión (borrador) para la
+// vista previa. NUNCA programa: el cliente ve la foto + caption en el
+// chat y solo programa con [Sale así] (POST /api/subir-foto/programar
+// con postId). Si el cambio pedido no se pudo hacer, el borrador queda
+// y la respuesta trae postId + la foto original para ofrecerla.
+app.post('/api/subir-foto/generar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const lang = langOfUser(uid);
+  const g = await subirFotoGenerar(uid, req.body || {}, lang);
+  if (!g.ok) {
+    const out = { ok: false, error: g.error, message: g.message };
+    if (g.postId) { out.postId = g.postId; out.image_path = g.image_path; out.caption = g.caption; }
+    if (g.status) return res.status(g.status).json(out);
+    return res.json(out);
+  }
+  res.json({ ok: true, postId: g.postId, image_path: g.post.image_path, caption: g.post.caption, hashtags: g.post.hashtags, when: g.when, whenLabel: g.whenLabel, title: g.title, applied: g.applied, notes: g.notes });
+});
+
+// POST /api/subir-foto/programar — dos modos:
+//  (a) { postId } — CONFIRMAR la vista previa: el borrador generado por
+//      /generar pasa a 'scheduled'. Es el único camino del cliente nuevo.
+//      Idempotente: si ya está programado, devuelve ok sin duplicar.
+//  (b) { assetPath, answers, ... } — LEGADO: los bundles viejos en caché
+//      (PWA, ?v= anterior) todavía llaman con las respuestas completas.
+//      Hace generar + programar en un solo llamado, como antes. Cuando
+//      todos los clientes tengan el bundle nuevo, este modo se borra.
+app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const lang = langOfUser(uid);
+  const en = lang === 'en';
+  const fail = (error, message) => res.json({ ok: false, error, message });
+  const body = req.body || {};
+  // (a) Confirmar la vista previa.
+  if (body.postId) {
+    const postId = Number(body.postId);
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post) return fail('post_no_encontrado', en ? 'I could not find that post, try again 🙏' : 'no encontré ese posteo, probá de nuevo 🙏');
+    if (post.status === 'scheduled') {
+      const when0 = wallInTz(post.scheduled_at, userTz(uid)) || String(post.scheduled_at || '');
+      const whenLabel0 = subirFotoWhenLabel(when0, lang);
+      return res.json({ ok: true, postId, when: when0, whenLabel: whenLabel0, already: true, reply: en ? `done, scheduled for ${whenLabel0} ✅` : `listo, programado para ${whenLabel0} ✅` });
+    }
+    if (post.status !== 'draft' || post.source_topic !== 'subir-foto-preguntas') return fail('post_no_programable', en ? 'That post cannot be scheduled from here, try again 🙏' : 'ese posteo no se puede programar desde acá, probá de nuevo 🙏');
+    const when = wallInTz(post.scheduled_at, userTz(uid)) || '';
+    if (!when || new Date(post.scheduled_at).getTime() <= Date.now() + 5 * 60 * 1000) return fail('when_pasado', en ? 'That time already passed, pick another 🙏' : 'esa hora ya pasó, elegí otra 🙏');
+    // El cupo de la semana destino se re-chequea: pudo llenarse mientras
+    // el cliente miraba la vista previa.
+    const mediaType = post.media_type === 'video' ? 'video' : 'image';
+    const q = quotaForWeek(uid, mediaType, mondayKeyOf(when.slice(0, 10)));
+    if (q && q.left <= 0) {
+      return res.status(403).json({ ok: false, error: 'plan_limit', plan_limit: true, limit: q.limit, used: q.used, plan_name: q.plan_name, week_key: q.week_key,
+        message: en ? `You reached your ${q.plan_name} plan limit (${q.limit} ${quotaUnitName(mediaType)} per week). Upgrade your plan to keep posting that week.`
+                   : `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(mediaType)} por semana). Mejorá tu paquete para seguir posteando esa semana.` });
+    }
+    try { scheduleLintForPost(uid, postId); } catch (e) {}
+    db.prepare(`UPDATE posts SET status = 'scheduled' WHERE id = ?`).run(postId);
+    const whenLabel = subirFotoWhenLabel(when, lang);
+    const title = String(post.caption || '').split('\n')[0].slice(0, 60);
     let reply = en ? `done, scheduled for ${whenLabel} ✅` : `listo, programado para ${whenLabel} ✅`;
     if (title) reply += `\n"${title}"`;
-    const noteLines = { 'otra-version': en ? 'I could not make another version of the photo, so I scheduled the original.' : 'no pude hacer otra versión de la foto, así que programé la original.',
-      'recorte': en ? 'I could not make the different crop, so I scheduled the full photo.' : 'no pude hacer el recorte distinto, así que programé la foto entera.',
-      'titular': en ? 'I could not burn the headline on the photo, so it goes without text on the image.' : 'no pude quemar el titular en la foto, así que va sin texto en la imagen.' };
-    for (const n of notes) if (noteLines[n]) reply += `\n${noteLines[n]}`;
     try {
       db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', String(body.displayText || '').slice(0, 2000));
       db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', reply);
     } catch (e) {}
-    res.json({ ok: true, postId, when, whenLabel, applied, notes, reply });
-  } catch (e) {
-    console.error('[subir-foto] programar:', e.message);
-    res.status(500).json({ ok: false, error: 'programar_fallo', message: en ? 'Something went wrong, nothing was scheduled, try again 🙏' : 'algo falló, no se programó nada, probá de nuevo 🙏' });
+    return res.json({ ok: true, postId, when, whenLabel, scheduled: true, reply });
   }
+  // (b) Legado: generar + programar en un solo llamado (bundle viejo).
+  const g = await subirFotoGenerar(uid, body, lang);
+  if (!g.ok) {
+    if (g.status) return res.status(g.status).json({ ok: false, error: g.error, message: g.message });
+    return fail(g.error, g.message);
+  }
+  try { scheduleLintForPost(uid, g.postId); } catch (e) {}
+  db.prepare(`UPDATE posts SET status = 'scheduled' WHERE id = ?`).run(g.postId);
+  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(g.postId);
+  let reply = en ? `done, scheduled for ${g.whenLabel} ✅` : `listo, programado para ${g.whenLabel} ✅`;
+  if (g.title) reply += `\n"${g.title}"`;
+  const noteLines = { 'otra-version': en ? 'I could not make another version of the photo, so I scheduled the original.' : 'no pude hacer otra versión de la foto, así que programé la original.',
+    'recorte': en ? 'I could not make the different crop, so I scheduled the full photo.' : 'no pude hacer el recorte distinto, así que programé la foto entera.',
+    'titular': en ? 'I could not burn the headline on the photo, so it goes without text on the image.' : 'no pude quemar el titular en la foto, así que va sin texto en la imagen.' };
+  for (const n of g.notes) if (noteLines[n]) reply += `\n${noteLines[n]}`;
+  try {
+    db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', String(body.displayText || '').slice(0, 2000));
+    db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', reply);
+  } catch (e) {}
+  res.json({ ok: true, postId: g.postId, when: g.when, whenLabel: g.whenLabel, applied: g.applied, notes: g.notes, reply });
 });
 
 // (foto-cliente-experto, 2026-10-26) «Mejorar» genera una PROPUESTA.
@@ -33414,7 +33502,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v843';
+const BUILD_ID = '20261105-v844';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

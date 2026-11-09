@@ -13,8 +13,9 @@
 // Inicio + push 9:00) → hoja REVELADA con el posteo (foto + texto) →
 // confirmación: [Sale así] (aprueba, toast con la hora, vuelve al
 // feed) / [Editar texto] (corrige el texto ahí mismo) / [Cambiar algo]
-// (abre el chat CON ese posteo y Posty ofrece enseguida una versión
-// nueva). Sin elección, publica la recomendada (v687 intacto). Ver ≠
+// (abre la NOTA DE VOZ para ese posteo: la nota transcrita es la
+// instrucción del cambio; Posty ofrece enseguida una versión nueva).
+// Sin elección, publica la recomendada (v687 intacto). Ver ≠
 // elegir: ver la hoja NO guarda selección ni confirma (LOTE
 // RITUAL-SIN-VELO · 9/11 · orden Valentino «el ritual solo confirma,
 // no revela»: el paquete velado y la cuenta regresiva para VER
@@ -36,8 +37,8 @@
 //    velado, sin gesto de revelar, sin auto-open, sin «Abrir mi
 //    paquete», sin abanico de opciones.
 // 5) VER no aprueba ni guarda (sin POST, sin selección); OK aprueba
-//    (POST + toast + feed). [Cambiar algo] manda el pedido de otra
-//    versión al chat.
+//    (POST + toast + feed). [Cambiar algo] abre la nota de voz para
+//    ese posteo (la nota transcrita es la instrucción del cambio).
 // 6) HELPERS: puerta puros + M78 17/17 (la selección y el revelar se
 //    retiraron con el velo).
 // 7) RUBRO: cardOf (servidor, intacto) + caption completo para editar.
@@ -372,15 +373,15 @@ const idxOf = (tiles, kind, id) => tiles.findIndex((x) => x.kind === kind && (!i
   // (nunca dependió de una selección guardada).
   const htmlSel = pzRitualHTML(dRit, false);
   t('ver: al volver del chat la hoja muestra el posteo revelado', String(htmlSel).includes('/media/a.jpg') && String(htmlSel).includes('Sale así'));
-  // [Cambiar algo]: manda el pedido de otra versión al chat, con el
-  // posteo adjunto (pzHablarClick). Sin eso sería un callejón sin salida.
+  // [Cambiar algo]: abre el prompt de voz para ese posteo (la nota
+  // transcrita es la instrucción del cambio). Sin eso sería un callejón sin salida.
   const hablarCalls = [];
   sandbox.pzHablarClick = (id) => { hablarCalls.push(id); };
   let errCambio = null;
   try { sandbox.pzRitualPedirCambio('201'); } catch (e) { errCambio = e; }
   t('cambio: no tira', errCambio === null, errCambio && errCambio.message);
-  t('cambio: deja el texto del pedido para el chat («haceme otra versión de este posteo»)', sandbox.HF_ASK_TEXT_PENDING === 'haceme otra versión de este posteo', String(sandbox.HF_ASK_TEXT_PENDING));
-  t('cambio: abre el chat CON ese posteo (pzHablarClick con el id)', hablarCalls.length === 1 && hablarCalls[0] === '201', JSON.stringify(hablarCalls));
+  t('cambio: queda pendiente el prompt de voz para ese posteo', sandbox.PZ_CAMBIO_VOZ_PENDING === 201, String(sandbox.PZ_CAMBIO_VOZ_PENDING));
+  t('cambio: abre el chat CON ese posteo (pzHablarClick con el id)', hablarCalls.length === 1 && Number(hablarCalls[0]) === 201, JSON.stringify(hablarCalls));
   // OK: POST + toast con la hora + vuelta al feed. Sin FIFA.
   const toastCalls = [];
   sandbox.toast = (m) => { toastCalls.push(m); };
@@ -401,7 +402,7 @@ const idxOf = (tiles, kind, id) => tiles.findIndex((x) => x.kind === kind && (!i
   t('ok: el código de OK NO llama a FIFA (pzPackFifaOpen sin llamadas; solo queda una mención en el comentario)', !SRC.includes('pzPackFifaOpen(') && !SRC.includes('function pzPackFifaOpen'));
   const srcCambio = SRC.slice(SRC.indexOf('function pzRitualPedirCambio(id)'));
   const srcCambioFn = srcCambio.slice(0, srcCambio.indexOf('\nasync function pzRitualConfirmar'));
-  t('cambio: el código de Pedir cambio fija el texto del pedido y abre el chat', srcCambioFn.includes('haceme otra versión de este posteo') && srcCambioFn.includes('pzHablarClick(id)'));
+  t('cambio: el código de Pedir cambio abre la voz (pzCambioVoz) y la voz abre el chat con el posteo', srcCambioFn.includes('pzCambioVoz(id)') && SRC.includes('function pzCambioVoz(') && SRC.includes('pzHablarClick(pid)'));
 
   // ===== 6) M78 17/17: cada función llamada desde los caminos nuevos existe =====
   // (LOTE RITUAL-SIN-VELO · 9/11) La selección y el revelar se
