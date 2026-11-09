@@ -44,7 +44,7 @@ try {
   const r = db.prepare(`UPDATE assets SET kind='design' WHERE kind='photo' AND file_path IN (SELECT image_path FROM posts WHERE image_path LIKE '/media/%')`).run();
   if (r.changes) console.log(`[migracion] kind=design: ${r.changes} diseños reclasificados`);
 } catch (e) { console.error('[migracion] kind=design:', e.message); }
-const { generateContent, generateCaptions, generateIdeas, chatIdea, chatReceiptLines, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionBodyKey } = require('./generator');
+const { generateContent, generateCaptions, generateIdeas, chatIdea, chatReceiptLines, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionBodyKey, captionWeekClash } = require('./generator');
 const { isCasaHandle, casaIdeasBlock, casaCaptionBlock } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: línea editorial solo para la casa
 const { propiaLineaForClient } = require('./posty-cliente-linea'); // LOTE POSTY APRENDE CLIENTES: referencia propia por cliente, sin cruces
 // ---------- ATENCIÓN AL CLIENTE (plan Total) — cableado 2026-10-21 ----------
@@ -15904,7 +15904,11 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       const nText = picks.slice(0, deficit).filter((p) => p._textMode === 'text').length;
       console.log(`[pipeline:${tag}] usuario ${uid}: limpieza — ${nText} con texto / ${Math.max(0, deficit - nText)} limpias en la tanda${tm.carouselIdx >= 0 ? ` (carousel exento: pick ${tm.carouselIdx})` : ''}`);
     } catch (e) { console.error(`[pipeline:${tag}] limpieza (dosificación):`, e.message); }
-    const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
+    // (DEDUP-7D, Juli 2026-11-09: el chequeo de duplicado exacto de 24 h
+    // vivía acá y ya no existe — lo reemplaza el re-chequeo de 7 días
+    // contra la semana viva en la DB, justo antes del INSERT de cada
+    // worker (captionWeekClash). La ventana de 24 h era más corta que
+    // el lapso real entre corridas de la misma semana.)
     // DEDUP-EXACTA (Juli, 2026-10-24): acumulador de captions de la
     // semana para deduplicar EN GENERACIÓN — esta ruta corría sin
     // pasarle prevs a captionPasses en ninguna de sus generaciones y
@@ -16150,8 +16154,26 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               else caption = demo.ensureCaptionCtaClose(caption, kindOfTipo(idea.tipo), (profile && profile.tone) || '');
             } catch (e) {}
           }
-          // Anti-duplicados 24h (mismo criterio que POST /api/posts).
-          if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); noteSlotFail('dup', 'caption duplicado en 24h'); claimed--; continue; }
+          // DEDUP-7D (Juli, 2026-11-09 — ids 580/584/585/586 reales de la
+          // cuenta 12, semana 2026-11-09): el chequeo de 24 h no veía
+          // duplicados entre corridas de días distintos (580 creado 7/11
+          // 19:23 → su copia 584 el 9/11 12:17, 41 h aparte) ni la
+          // colisión de dispositivo entre workers paralelos (585 y 586
+          // abren con «¿Cuántas veces te pasó…?» con 24 s de diferencia:
+          // cada uno fotografió los previos antes de que el otro
+          // insertara). Justo antes del INSERT se re-chequea contra la
+          // semana VIVA en la DB (7 días, sin mirar week_key: los
+          // posteos con week_key vacío también cuentan) y solo frenan
+          // las reglas que dependen de previos (DEDUP exacta, M79,
+          // CUERPO-57, D8 — captionWeekClash, generator.js). El resto
+          // de captionPasses NO se re-chequea acá: su veredicto ya viaja
+          // como motivoCalidad (marca, no freno). Si la lectura falla,
+          // se sigue sin frenar (fail-open, como los demás gates).
+          try {
+            const freshPrevs = db.prepare(`SELECT caption FROM posts WHERE user_id = ? AND status IN ('draft', 'scheduled', 'published') AND COALESCE(caption, '') != '' AND created_at > datetime('now', '-7 days') ORDER BY id DESC LIMIT 20`).all(uid).map((r) => r.caption);
+            const clash = captionWeekClash(caption, freshPrevs, (profile && profile.business_name) || '');
+            if (clash && !clash.ok) { console.log(`[pipeline:${tag}] duplicado 7d, skip: ${idea.titulo} (${clash.reason})`); noteSlotFail('dup', clash.reason); claimed--; continue; }
+          } catch (e) { console.error(`[pipeline:${tag}] chequeo dedup-7d falló (sigo sin frenar):`, e.message); }
           // DEDUP-EXACTA: este caption queda reservado para el resto de
           // la corrida — los workers vecinos lo ven como previo.
           runPrevCaptions.push(caption);
@@ -33502,7 +33524,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v844';
+const BUILD_ID = '20261105-v845';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

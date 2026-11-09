@@ -721,6 +721,38 @@ function exactDupOf(caption, input) {
   return prevs.some((p) => captionBodyKey(p) === key);
 }
 
+// DEDUP-7D (Juli, 2026-11-09 — ids 580/584/585/586 reales, cuenta 12,
+// semana 2026-11-09): captionPasses ya sabe cazar duplicados exactos y
+// dispositivos repetidos, pero SOLO contra los previos que le pasa el
+// llamador — y la semana real se genera en corridas de días distintos
+// con workers en paralelo, así que los previos del llamador llegan
+// viejos o vacíos (580 con week_key vacío era invisible para
+// weekPrevCaptions; 585/586 se fotografiaron antes de insertarse el
+// otro). Este helper es el re-chequeo de último momento ANTES del
+// INSERT: corre captionPasses contra los previos FRESCOS de la DB y
+// solo frena por las reglas que dependen de previos (DEDUP exacta,
+// M79-dispositivo, CUERPO-57-dispositivo-fuera, D8). Cualquier otro
+// fallo de la puerta (sin CTA, largo, empalme, muletilla de cuerpo,
+// tuteo…) NO es un choque de semana: devuelve ok:true y el motivo
+// viaja como marca (motivoCalidad), no como freno — el comportamiento
+// de hoy no cambia para esos casos. La lista PREV_ONLY nombra cada
+// motivo por su texto exacto: (M79) y (CUERPO-57) a secas NO alcanzan,
+// porque esos bloques también tienen reglas de cuerpo sin previos.
+const WEEK_CLASH_REASONS = [
+  'duplicado exacto en la misma semana (DEDUP)',
+  'dispositivo de apertura repetido en la misma semana',
+  'dispositivo repetido fuera de la apertura',
+  '(D8)',
+];
+function captionWeekClash(caption, prevCaptions, business) {
+  const prevs = Array.isArray(prevCaptions) ? prevCaptions : [];
+  if (!prevs.length) return { ok: true };
+  const r = captionPasses(caption, { business: business || '', prevCaptions: prevs });
+  if (r.ok) return { ok: true };
+  if (WEEK_CLASH_REASONS.some((s) => String(r.reason || '').includes(s))) return { ok: false, reason: r.reason };
+  return { ok: true, note: r.reason };
+}
+
 // Puerta de calidad automática: el cliente nunca ve un caption mediocre.
 // Devuelve { ok, reason }.
 // `input` (opcional) aporta { dna, business } para el chequeo de grounding:
@@ -5499,4 +5531,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, captionBodyKey, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, captionBodyKey, captionWeekClash, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
