@@ -39,13 +39,13 @@ const orderOk = (s, keys) => {
 // (LOTE HOY-AVATAR-FEED · 8/11) Re-pin: app.js/styles.css del lote.
 // (LOTE CHAT-NUEVO v821 · 8/11) Re-pin: app.js/styles.css del lote + BUILD v821.
 const MD5_APP_WORK = '14b9335beb4729fa095fd6d5252bb281';
-const MD5_CSS_WORK = '1306102d485019ac59aef9db28f4facb';
+const MD5_CSS_WORK = 'be8639f8497dc21edd17ec595c159a7f';
 // El woff2 es copia byte a byte del mock (no generado).
 const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins ----------
-  t(srv.includes("const BUILD_ID = '20261105-v822'"), 'server: BUILD v822 (R0 no toca server.js; re-pin lote A)');
+  t(srv.includes("const BUILD_ID = '20261105-v823'"), 'server: BUILD v822 (R0 no toca server.js; re-pin lote A)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -449,7 +449,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v822', `boot: /api/version 20261105-v822 (vino ${ver.build})`);
+      t(ver.build === '20261105-v823', `boot: /api/version 20261105-v822 (vino ${ver.build})`);
       const appTxt = await (await fetch(`${BASE}/app.js?v=539`)).text();
       t(md5(appTxt) === md5(app), 'boot: app.js?v=539 servido = árbol');
       const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261183`)).text();

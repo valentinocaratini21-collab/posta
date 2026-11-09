@@ -5970,3 +5970,66 @@ body.pz-postchat-open{overflow:hidden}
 .pz-usarfoto-opt img{width:56px;height:56px;object-fit:cover;border-radius:10px;flex:none}
 .pz-usarfoto-opt span{font-size:13px;font-weight:700;color:#0A1E33}
 .pz-usarfoto-prev p{font-size:13px;margin:8px 0}
+
+/* ============ LOTE B MEJORAS-INICIO · GLASS GLOBAL (ítem 6) ============
+   TODA la app en vidrio, afuera el fondo celeste — mock Inicio-glass
+   aprobado por Valentino 8/11 (21:26, «Me gustan los 3, armalos»).
+   Fondo cálido, cero celeste: el degradado azul saturado de R0 (.bb-app)
+   y el degradado claro de LOTE GLASS TODAS (.app-shell / .hf-dback) pasan
+   a crema cálido (misma estructura: brillos radiales + lineal; el brillo
+   verde se cambia por durazno cálido; el crema es el --bb-fondo propio
+   del código, #FBF7EE). --bg2 dentro de la app pasa de #F2F9FD a crema
+   cálido por variable con alcance (.bb-app / .app-shell): la web pública
+   no se toca. Dos shells: la app rinde en .bb-app (nativo/Capacitor,
+   BB_SHELL_ON) o en .app-shell (navegador); todas las reglas van con
+   los dos alcances, si no el navegador queda sólido. Receta glass exacta de Análisis v819 en paneles: fondo
+   rgba(255,255,255,.55) + blur 16px saturate 1.4 + borde blanco .75 +
+   sombra 0 8px 24px rgba(10,30,51,.10). Fotos y visuales SIN vidrio: el
+   blur actúa sobre lo que hay DETRÁS del panel, nunca sobre la foto. El
+   feed (.hf-wrap / .hf-head / .hf-grid) queda TRANSPARENTE en modo claro,
+   como el mock (perfil y grilla directos sobre el fondo cálido); en modo
+   oscuro sigue navy (guardia light). NO tocado: inputs y selects (sólidos
+   por legibilidad), controles sobre fotos (toggle, flechas de carrusel,
+   .pz-back, #lightbox .lb-cap, .hf-chip, .media-del), .btn-primary
+   (vidrio-azul), .pz-shell-head (v820, blanco .88 + blur), dock y
+   pestañas (ya vidrio), reglas de modo oscuro, web pública, /prueba,
+   /aprobar, /fundadores, lista-espera. Solo styles.css: app.js y
+   server.js intactos. */
+.bb-app,.bb-app.bb-glass-inicio,.bb-app.bb-glass-pantallas,.app-shell,.hf-dback,body:has(.form-card),.pz-apertura{background:radial-gradient(420px 420px at 85% -40px,rgba(254,193,77,.55),rgba(254,193,77,0) 70%),radial-gradient(360px 360px at -60px 30%,rgba(255,255,255,.5),rgba(255,255,255,0) 70%),radial-gradient(300px 300px at 110% 70%,rgba(244,196,150,.30),rgba(244,196,150,0) 70%),linear-gradient(165deg,#FCF8EF 0%,#FBF7EE 50%,#F6EDDA 100%)}
+body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF 0%,#FBF7EE 50%,#F6EDDA 100%)}
+.bb-app,.app-shell{--bg2:#F6EDDA}
+.bb-app .card,.app-shell .card{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.bb-app .pz-nivel-logro,.app-shell .pz-nivel-logro,.bb-app .pz-nivel-hito,.app-shell .pz-nivel-hito,.bb-app .pz-mision,.app-shell .pz-mision,.bb-app .mx-tira-posty,.app-shell .mx-tira-posty,.bb-app .mx-jardin-posty .mx-tarjeta,.app-shell .mx-jardin-posty .mx-tarjeta,.bb-app .mx-jardin-posty .mx-zona:not(.lock),.app-shell .mx-jardin-posty .mx-zona:not(.lock),.bb-app .mx-jardin-posty .mx-zona-viva,.app-shell .mx-jardin-posty .mx-zona-viva,.bb-app .igmock,.app-shell .igmock,.bb-app .post-item,.app-shell .post-item,.bb-app .pp-posty,.app-shell .pp-posty,.bb-app .pz-informe-fila,.app-shell .pz-informe-fila,.bb-app .stk-smart,.app-shell .stk-smart,.bb-app .ana-stat,.app-shell .ana-stat,.bb-app .ana-weeknum,.app-shell .ana-weeknum,.bb-app .ana-ltr-plan,.app-shell .ana-ltr-plan,.bb-app .ig-checklist,.app-shell .ig-checklist,.bb-app .pz-trial-ok,.app-shell .pz-trial-ok,.bb-app .pz-hoy-sheet,.app-shell .pz-hoy-sheet{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.pz-exp-overlay .pz-exp-modal,.drawer{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.pz-chatfull{background:radial-gradient(420px 420px at 85% -40px,rgba(254,193,77,.55),rgba(254,193,77,0) 70%),radial-gradient(360px 360px at -60px 30%,rgba(255,255,255,.5),rgba(255,255,255,0) 70%),radial-gradient(300px 300px at 110% 70%,rgba(244,196,150,.30),rgba(244,196,150,0) 70%),linear-gradient(165deg,#FCF8EF 0%,#FBF7EE 50%,#F6EDDA 100%)}
+.pz-postchat{background:linear-gradient(165deg,#FCF8EF 0%,#FBF7EE 50%,#F6EDDA 100%)}
+/* (LOTE B · ronda 2 — hallazgos del repro visual) .pz-nivel es dos cosas: la
+   tira de Nivel en Inicio (tarjeta → vidrio) y el contenedor de la pestaña
+   Nivel (hijo directo de .main → transparente, si no tapa el cálido con su
+   #F4FAFE heredado de la regla 3742). #pzNivelStrip lleva el fondo en
+   style inline, así que solo !important lo pisa. .pz-nivel-hoy y
+   .ig-gate-note son destaques amarillos deliberados: vidrio con el tinte
+   amarillo propio, no blanco. */
+.bb-app .pz-nivel,.app-shell .pz-nivel,.bb-app .pz-ausencia,.app-shell .pz-ausencia,.bb-app .pz-vit-badge,.app-shell .pz-vit-badge,.bb-app .pz-mision-borrador,.app-shell .pz-mision-borrador,.bb-app .hs-done,.app-shell .hs-done,.bb-app .ads-pill.on,.app-shell .ads-pill.on{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.bb-app .pz-nivel-hoy,.app-shell .pz-nivel-hoy,.bb-app .ig-gate-note,.app-shell .ig-gate-note{background:rgba(255,246,219,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.bb-app .main>.pz-nivel,.app-shell .main>.pz-nivel{background:transparent;border-color:transparent;box-shadow:none;cursor:default}
+.bb-app #pzNivelStrip,.app-shell #pzNivelStrip{background:rgba(255,255,255,.55)!important;-webkit-backdrop-filter:blur(16px) saturate(1.4)!important;backdrop-filter:blur(16px) saturate(1.4)!important;border:1px solid rgba(255,255,255,.75)!important;box-shadow:0 8px 24px rgba(10,30,51,.10)!important}
+/* (LOTE B · ronda 3 — ritual) La ruta Inicio redirige a #/app/ritual cuando el
+   paquete de hoy no está revelado: el ritual es pantalla de la app y va en
+   vidrio también. .pz-ritual-pack es el paquete crema con borde amarillo de
+   marca: vidrio con su tinte crema, borde intacto. .pz-ritual-carta era
+   blanco .88 sin blur. El botón .pz-ritual-ok (navy) y el dorso de la carta
+   (navy + dorado) son diseño deliberado: no se tocan. */
+.bb-app .pz-ritual-carta,.app-shell .pz-ritual-carta{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75)}
+.bb-app .pz-ritual-pack,.app-shell .pz-ritual-pack{background:rgba(253,246,227,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4)}
+.bb-app .pz-nivel-head,.app-shell .pz-nivel-head{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);box-shadow:0 8px 24px rgba(10,30,51,.10)}
+.bb-app .pz-hoy-speech,.app-shell .pz-hoy-speech{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75);box-shadow:0 6px 18px rgba(10,30,51,.10)}
+.bb-app .chat-msg.ai,.app-shell .chat-msg.ai{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.75)}
+.bb-app .chat-msg.u,.app-shell .chat-msg.u{background:rgba(39,147,200,.72);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.5)}
+.chat-home .chat-input-row{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border-color:rgba(255,255,255,.75)}
+.bb-app .pill,.app-shell .pill{background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.75)}
+.bb-app .setup-row:active,.app-shell .setup-row:active,.bb-app .src-re:active,.app-shell .src-re:active{background:rgba(255,255,255,.55)}
+@media (prefers-color-scheme: light){
+.bb-app .hf-wrap,.app-shell .hf-wrap,.bb-app .hf-head,.app-shell .hf-head,.bb-app .hf-grid,.app-shell .hf-grid,.bb-app .fp-head,.app-shell .fp-head,.bb-app .fp-grid,.app-shell .fp-grid{background:transparent}
+.bb-app .fp-head,.app-shell .fp-head{border-color:transparent}
+}
