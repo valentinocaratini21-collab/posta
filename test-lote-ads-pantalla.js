@@ -35,7 +35,7 @@ const sliceFn = (src, from, to) => {
   // ---------- 1. Censo (sin cambio) + base v756, re-base v759 ----------
   // (LOTE ADS-DIRECTO v759: pins del preparador — BUILD v759, CHUNK_V v759,
   // 14 rutas /api/ads (12 + feed + auto); el picker usa anaCortarCaption.)
-  t(srv.includes("const BUILD_ID = '20261105-v826'"), 'server: BUILD v822 (re-pin lote A v822)');  t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
+  t(srv.includes("const BUILD_ID = '20261105-v830'"), 'server: BUILD v822 (re-pin lote A v822)');  t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
   t(cnt(srv, '/aprobar') === 17, 'censo server: /aprobar 17');
@@ -45,8 +45,8 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
   t(app.includes("const CHUNK_V = '20261105-v792'"), 'CHUNK_V v786 (re-pin cargar-ads v786)');
-  t(md5(app) === 'ed09a73f7b3d3e57193d300976454191', 'app.js md5 (re-pin fusionado A + CHAT-MUSE)');
-  t(md5(css) === 'ac5cce38c92ad0c2936f7d1a1a36996d', 'styles.css md5 (re-pin fusionado A + CHAT-MUSE)');
+  t(md5(app) === '0444ec9d15d4f23a346eaccdb6df7dc2', 'app.js md5 (re-pin fusionado A + CHAT-MUSE)');
+  t(md5(css) === '0ae54644158dab6215ee7b8f035c447c', 'styles.css md5 (re-pin fusionado A + CHAT-MUSE)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');
 
   // ---------- 2. Server: elegibles sin gate de listado, buscar, hoy ----------
@@ -290,7 +290,7 @@ const sliceFn = (src, from, to) => {
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v826', `boot: /api/version 20261105-v825 (vino ${ver.build})`);      // Sin sesión: 401 en los endpoints nuevos.
+      t(ver.build === '20261105-v830', `boot: /api/version 20261105-v825 (vino ${ver.build})`);      // Sin sesión: 401 en los endpoints nuevos.
       const s1 = await api('', 'GET', '/api/ads/billetera/buscar?q=cafe');
       t(s1.status === 401, 'boot: sin sesión, buscar → 401');
       const s2 = await api('', 'GET', '/api/ads/billetera/hoy');

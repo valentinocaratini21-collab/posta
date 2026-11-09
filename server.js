@@ -9449,7 +9449,7 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
     let rows = [];
     try {
       rows = db.prepare(`
-        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key, p.media_type,
+        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key, p.media_type, p.published_at,
                COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
                COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
         FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
@@ -9463,7 +9463,12 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
     const mejor = elegirMejorPosteoSemana(rows.filter((r) => r.week_key === wk));
     let impulsados = new Set();
     try { impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id)); } catch (e) { impulsados = new Set(); }
-    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? {} : { motivo: gate.code || 'page_not_authorized' }), elegibles: adsBilletera.elegiblesParaAds(rows, mejor ? mejor.id : null, impulsados) });
+    // (LOTE REDISEÑO SIMPLE RS-4 · 9/11) ?incluir_impulsados=1: la hoja
+    // «¿Cuál querés impulsar?» ve los ya impulsados (deshabilitados, no
+    // ausentes) + el día de publicación. Sin el flag, la respuesta es
+    // byte-idéntica a la de antes (el picker del tab Ads no los ve).
+    const incluirImp = String(req.query.incluir_impulsados || '') === '1';
+    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? {} : { motivo: gate.code || 'page_not_authorized' }), elegibles: adsBilletera.elegiblesParaAds(rows, mejor ? mejor.id : null, impulsados, { incluirImpulsados: incluirImp, semanaActual: wk }) });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron cargar tus posteos' }); }
 });
 
@@ -33076,7 +33081,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v829';
+const BUILD_ID = '20261105-v830';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

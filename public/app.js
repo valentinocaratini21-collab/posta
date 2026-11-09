@@ -16464,6 +16464,481 @@ async function adsView() {
   return `<div class="ads-wrap"><div id="adsTabRoot">${tabHTML}</div></div>`;
 }
 
+/* ============================================================
+   LOTE REDISEÑO SIMPLE RS-4 · IMPULSAR SIN PESTAÑA (mock v7, regla 7)
+   Dos hojas (patrón .pubsheet-ov/.pubsheet, como la hoja de
+   aprobación): «¿Cuál querés impulsar?» (elegir posteo) +
+   «Impulsar posteo» ($50/7 días recomendado, «Cambiar monto»
+   escondido, saldo + Cargar en el mismo lugar).
+   ENTRADAS (para RS-2/RS-3/RS-5 y el preparador):
+   - pzOpenBoostPick() — CONTRATO RS-3 → RS-4 (spec v10): el botón
+     «Impulsar posteo» arriba del Feed (RS-3) llama a
+     window.pzOpenBoostPick(). Alias de pzBoostPickOpen: la misma hoja
+     de elegir, con el recomendado ya pre-seleccionado. Se expone también
+     como window.pzOpenBoostPick (asignación explícita, por si el bundle
+     no deja la función en window por sí solo).
+   - pzFeedBoostPick() — alias anterior (se mantiene por compatibilidad):
+     abre la hoja de elegir.
+   - pzBoostPickOpen() — abre la hoja de elegir (el recomendado ya
+     viene pre-seleccionado; los ya impulsados van deshabilitados).
+   - pzBoostOpen(post) — abre la hoja Impulsar directo con ese posteo
+     (detalle del día en Hoy RS-2, recomendación del chat RS-5).
+     post = { post_id|id, image_path, caption, reach, likes,
+     comments, saves, publicado_en, viejo, ya_impulsado } o un id.
+   - pzBoostOpenById(id) — como pzBoostOpen pero por id (busca en los
+     elegibles cargados; si no están, los carga).
+   - Botones que abren la hoja desde una superficie: onclick con
+     pzBoostOpen(post) o data-pz-boost-post="<id>" + onclick
+     pzBoostOpenById(id). Tras un impulso exitoso,
+     pzBoostMarcarImpulsado(id) los pasa a «Impulsado ✓».
+   Endpoints EXISTENTES (nada nuevo en el servidor salvo el opt-in
+   ?incluir_impulsados=1 en /elegibles): GET /api/ads/billetera,
+   GET /api/ads/billetera/elegibles, POST /api/ads/billetera/cargar,
+   POST /api/ads/billetera/impulsar. La compuerta bloquea GASTAR, no
+   mostrar: sin Meta/permiso la hoja muestra la nota honesta y el
+   botón de confirmar queda deshabilitado (nunca un botón que el
+   servidor va a rechazar). Stripe sigue sin configurar: Cargar usa
+   el flujo existente y muestra el motivo real.
+   La pestaña Ads SE QUEDA (la quita RS-5, el corte). Este lote no
+   toca la barra de pestañas, Inicio/Hoy, el feed, el chat ni Ajustes.
+   ============================================================ */
+let pzBoostState = null; // { elegibles, billetera, adsReady, motivoGate, boostHabilitado, adsPermiso, conversionPendiente, selId, selMonto, selPost, montosAbierto }
+let pzBoostImpulsados = new Set(); // post_id impulsados en esta sesión (además de ya_impulsado del servidor)
+
+function pzBoostNewState() {
+  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: 0, selMonto: 50, selPost: null, montosAbierto: false };
+}
+
+function pzBoostSaldoUSD() {
+  const s = pzBoostState || {};
+  const b = s.billetera || {};
+  if ((b.currency || 'USD') !== 'USD') return 0;
+  return Math.floor(Number(b.balance_cents || 0) / 100);
+}
+
+// Textos de motivo: espejo de anaBoostRecMotivo/anaCargarMotivo del
+// chunk Análisis (estado real del servidor, nunca un genérico).
+function pzBoostMotivo(motivo, monto, cobroId) {
+  const m = monto ? ('$' + monto) : '';
+  switch (motivo) {
+    case 'sin_datos':
+      return gzT('No pudimos cargar los datos para impulsar ahora. Probá de nuevo en un momento. No se gastó nada.', 'We couldn’t load the data to boost right now. Try again in a moment. Nothing was spent.');
+    case 'conversion_pendiente':
+      return gzT('Queda armado: ' + m + ' por 7 días para este posteo. Todavía no se puede cobrar porque falta definir la conversión USD→ARS. No se cobró nada.', 'Armed and waiting: ' + m + ' for 7 days on this post. It can’t be charged yet because the USD→ARS conversion isn’t set. Nothing was charged.');
+    case 'ads_sin_permiso':
+      return gzT('Todavía no podemos crear anuncios en Meta para tu cuenta: falta el permiso de publicidad (ads_management). Cuando esté aprobado, un toque y sale. No se gastó nada.', 'We can’t create Meta ads for your account yet: the advertising permission (ads_management) is missing. Once it’s approved, one tap and it’s live. Nothing was spent.');
+    case 'ads_verificacion_fallida':
+      return gzT('No pudimos verificar el permiso de publicidad con Meta ahora. Probá de nuevo en unos minutos. No se gastó nada.', 'We couldn’t check the advertising permission with Meta right now. Try again in a few minutes. Nothing was spent.');
+    case 'ads_no_configurado':
+      return gzT('La pauta todavía no está configurada para tu cuenta. Te avisamos en cuanto esté lista. No se gastó nada.', 'Ads aren’t set up for your account yet. We’ll let you know as soon as it’s ready. Nothing was spent.');
+    case 'ig_not_connected':
+      return gzT('Conectá tu Instagram para poder potenciar tus posteos.', 'Connect your Instagram to boost your posts.');
+    case 'page_not_authorized':
+    case 'sin_autorizacion_publicitaria':
+      return gzT('Tu Página de Facebook todavía no autorizó la cuenta publicitaria. No se gastó nada.', 'Your Facebook Page hasn’t authorized the ad account yet. Nothing was spent.');
+    case 'sin_publicar':
+      return gzT('Este posteo todavía no está publicado en Instagram.', 'This post isn’t published on Instagram yet.');
+    case 'posteo_no_encontrado':
+      return gzT('Ese posteo ya no está en tu semana.', 'That post is no longer in your week.');
+    case 'monto_invalido':
+      return gzT('Ese monto no es válido. Elegí $20, $50 o $100.', 'That amount isn’t valid. Choose $20, $50 or $100.');
+    case 'saldo_insuficiente':
+      return gzT('No te alcanza el saldo de la billetera para ' + m + '. Cargá plata primero — un toque y listo.', 'Your wallet balance doesn’t cover ' + m + '. Top it up first — one tap and done.');
+    case 'saldo_ars_pendiente':
+      return gzT('Todavía tenés saldo viejo en pesos en la billetera. Gastalo o pedinos que lo revisemos antes de cargar en dólares.', 'You still have old pesos balance in the wallet. Spend it or ask us to review it before topping up in dollars.');
+    case 'boost_deshabilitado':
+      return gzT('El impulso todavía no está habilitado en tu cuenta.', 'Boosting isn’t enabled on your account yet.');
+    case 'ya_impulsado':
+      return gzT('Ese posteo ya tiene una pauta activa. Elegí otro posteo.', 'That post already has an active boost. Pick another post.');
+    case 'sin_posteo':
+      return gzT('Elegí primero el posteo al que le querés meter ads.', 'First pick the post you want to boost.');
+    case 'cobro_sin_acreditar':
+      return gzT('El cobro se hizo pero la plata no entró a tu billetera. Quedó registrado' + (cobroId ? ' (cobro ' + cobroId + ')' : '') + ' para revisión urgente. Escribinos y lo resolvemos.', 'The charge went through but the money didn’t reach your wallet. It was recorded' + (cobroId ? ' (charge ' + cobroId + ')' : '') + ' for urgent review. Write to us and we’ll sort it out.');
+    case 'debito_fallido':
+      return gzT('El anuncio se creó en Meta pero no se pudo debitar de tu billetera. Quedó registrado para revisión manual — no se te cobró dos veces.', 'The ad was created on Meta but couldn’t be debited from your wallet. It was recorded for manual review — you weren’t charged twice.');
+    case 'demo':
+      return gzT('Todavía estás en modo demo: conectá tu Instagram para cargar plata y meterle ads.', 'You’re still in demo mode: connect your Instagram to top up and run ads.');
+    default:
+      return gzT('No se pudo impulsar. No se gastó nada de tu billetera.', 'It couldn’t be boosted. Nothing was spent from your wallet.');
+  }
+}
+
+function pzBoostCargarMotivo(motivo, monto, cobroId) {
+  switch (motivo) {
+    case 'sin_cliente_stripe':
+    case 'sin_tarjeta_guardada':
+      return gzT('No tenés una tarjeta guardada, así que no se pudo cargar. Para cargar plata, primero hay que agregar una tarjeta. No se cobró nada.', 'You don’t have a saved card, so the top-up couldn’t go through. To top up, a card has to be added first. Nothing was charged.');
+    case 'stripe_no_configurado':
+      return gzT('La carga todavía no está disponible en tu cuenta. Probá de nuevo más tarde. No se cobró nada.', 'Top-up isn’t available on your account yet. Try again later. Nothing was charged.');
+    case 'cobro_fallido':
+      return gzT('No se pudo cobrar con tu tarjeta. Probá de nuevo en un momento. No se cobró nada.', 'The charge didn’t go through. Try again in a moment. Nothing was charged.');
+    case 'cobro_requiere_accion':
+      return gzT('El cobro necesita una confirmación tuya y no se puede hacer solo. No se cobró nada.', 'The charge needs your confirmation and can’t run on its own. Nothing was charged.');
+    case 'cobro_no_confirmado':
+      return gzT('El cobro no se confirmó. Probá de nuevo. No se cobró nada.', 'The charge wasn’t confirmed. Try again. Nothing was charged.');
+    case 'sin_proveedores':
+      return gzT('La carga no está disponible ahora. Probá de nuevo en un momento. No se cobró nada.', 'Top-up isn’t available right now. Try again in a moment. Nothing was charged.');
+    case '':
+    case null:
+    case undefined:
+      return gzT('No se pudo cargar ahora. Probá de nuevo en un momento. No se cobró nada.', 'The top-up didn’t go through right now. Try again in a moment. Nothing was charged.');
+    default:
+      return pzBoostMotivo(motivo, monto, cobroId);
+  }
+}
+
+function pzBoostNormPost(p) {
+  if (!p) return null;
+  if (typeof p === 'number') return { post_id: p };
+  const id = Number(p.post_id != null ? p.post_id : p.id) || 0;
+  if (!id) return null;
+  return {
+    post_id: id,
+    image_path: p.image_path || '',
+    caption: String(p.caption || ''),
+    reach: Number(p.reach || 0),
+    likes: Number(p.likes || 0),
+    comments: Number(p.comments || 0),
+    saves: Number(p.saves != null ? p.saves : p.saved || 0),
+    recomendado: !!p.recomendado,
+    ya_impulsado: !!p.ya_impulsado,
+    viejo: !!p.viejo,
+    publicado_en: p.publicado_en || '',
+  };
+}
+
+function pzBoostNumeros(p) {
+  const parts = [];
+  if (Number(p.reach || 0) > 0) parts.push(gzT(Number(p.reach) + ' de alcance', Number(p.reach) + ' reach'));
+  if (Number(p.likes || 0) > 0) parts.push(gzT(Number(p.likes) + ' me gusta', Number(p.likes) + ' likes'));
+  if (Number(p.comments || 0) > 0) parts.push(gzT(Number(p.comments) + ' comentarios', Number(p.comments) + ' comments'));
+  return parts.length ? parts.join(' · ') : gzT('Publicado', 'Published');
+}
+
+function pzBoostRecTexto(p) {
+  const r = Number(p.reach || 0), l = Number(p.likes || 0), c = Number(p.comments || 0);
+  const nums = (r > 0 || l > 0 || c > 0)
+    ? [r > 0 ? gzT(r + ' de alcance', r + ' reach') : '', l > 0 ? gzT(l + ' me gusta', l + ' likes') : '', c > 0 ? gzT(c + ' comentarios', c + ' comments') : ''].filter(Boolean).join(', ')
+    : '';
+  if (p.recomendado && nums) return gzT('El mejor de tu semana: ' + nums + '. Por eso Posty te recomienda este y no otro.', 'Your best post this week: ' + nums + '. That’s why Posty recommends this one.');
+  if (p.viejo && nums) return gzT('Un posteo de la semana pasada que todavía puede rendir: ' + nums + ' en su momento. Impulsarlo lo vuelve a mostrar por 7 días.', 'A post from last week that can still perform: ' + nums + ' back then. Boosting it shows it again for 7 days.');
+  if (nums) return gzT('Ya salió y viene sumando: ' + nums + '.', 'It’s already out and picking up: ' + nums + '.');
+  return gzT('Ya está publicado y se puede impulsar por 7 días.', 'It’s already published and can be boosted for 7 days.');
+}
+
+function pzBoostDia(fechaISO) {
+  if (!fechaISO) return '';
+  try {
+    const d = (typeof pcParseDate === 'function') ? pcParseDate(String(fechaISO)) : new Date(String(fechaISO));
+    if (!d || isNaN(d)) return '';
+    const tz = (typeof pcTz === 'function') ? pcTz() : 'America/New_York';
+    const w = d.toLocaleDateString('es-AR', { weekday: 'long', timeZone: tz });
+    return w ? (w.charAt(0).toUpperCase() + w.slice(1)) : '';
+  } catch (e) { return ''; }
+}
+
+function pzBoostTitulo(p) {
+  const cap = String(p.caption || '').trim();
+  if (!cap) return gzT('Posteo', 'Post');
+  const cut = cap.length > 80 ? cap.slice(0, 80).replace(/\s+\S*$/, '') + '…' : cap;
+  const dia = pzBoostDia(p.publicado_en);
+  return dia ? (dia + ' · ' + cut) : cut;
+}
+
+// La compuerta bloquea GASTAR, no mostrar. Cerrada = el servidor va a
+// rechazar el impulso: la hoja lo dice y el confirmar queda
+// deshabilitado (igual que el tab Ads: nunca un botón que el servidor
+// va a rechazar). adsReady viene de /elegibles (adsReadiness);
+// boostHabilitado + adsPermiso, de /billetera. Ante la duda (sin datos),
+// la compuerta se considera cerrada.
+function pzBoostGate() {
+  const s = pzBoostState || {};
+  if (s.adsReady === false) return { cerrado: true, motivo: (s.motivoGate === 'ig_not_connected' ? 'ig_not_connected' : (s.motivoGate === 'ads_not_configured' ? 'ads_no_configurado' : 'sin_autorizacion_publicitaria')) };
+  if (s.adsReady !== true) return { cerrado: true, motivo: 'sin_datos' };
+  if (s.boostHabilitado === false) return { cerrado: true, motivo: 'boost_deshabilitado' };
+  if (s.adsPermiso === false) return { cerrado: true, motivo: 'ads_sin_permiso' };
+  return { cerrado: false, motivo: '' };
+}
+
+async function pzBoostLoad() {
+  let bil = null, elig = null;
+  try { bil = await api.get('/api/ads/billetera'); } catch (e) { bil = null; }
+  try { elig = await api.get('/api/ads/billetera/elegibles?incluir_impulsados=1'); } catch (e) { elig = null; }
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  s.billetera = (bil && bil.ok) ? bil : { balance_cents: 0, currency: 'USD', montos_usd: [20, 50, 100] };
+  s.elegibles = (elig && elig.ok && Array.isArray(elig.elegibles)) ? elig.elegibles.map((e) => pzBoostNormPost(e)).filter(Boolean) : [];
+  s.adsReady = (elig && elig.ok) ? !!elig.ads_ready : null;
+  s.motivoGate = (elig && elig.ok && !elig.ads_ready) ? String(elig.motivo || 'page_not_authorized') : '';
+  s.boostHabilitado = (bil && bil.ok && bil.boostHabilitado !== undefined) ? bil.boostHabilitado : undefined;
+  s.adsPermiso = (bil && bil.ok && bil.ads_permiso !== undefined) ? bil.ads_permiso : undefined;
+  s.conversionPendiente = (bil && bil.ok) ? !!bil.conversion_pendiente : undefined;
+  // Pre-selección: el recomendado; si está impulsado, el primer elegible
+  // no impulsado; si el anterior sigue elegible, se conserva.
+  const prev = s.selId;
+  const sigue = s.elegibles.some((e) => Number(e.post_id) === Number(prev) && !e.ya_impulsado && !pzBoostImpulsados.has(Number(e.post_id)));
+  if (sigue) { s.selId = prev; }
+  else {
+    const rec = s.elegibles.find((e) => e.recomendado && !e.ya_impulsado && !pzBoostImpulsados.has(Number(e.post_id)));
+    const primero = s.elegibles.find((e) => !e.ya_impulsado && !pzBoostImpulsados.has(Number(e.post_id)));
+    s.selId = rec ? Number(rec.post_id) : (primero ? Number(primero.post_id) : 0);
+  }
+  s.selPost = s.elegibles.find((e) => Number(e.post_id) === Number(s.selId)) || s.selPost;
+  return s;
+}
+
+function pzBoostEnsureSheets() {
+  if (document.getElementById('pzBoostPickOv') && document.getElementById('pzBoostOv')) return;
+  const mk = (id) => {
+    const ov = document.createElement('div');
+    ov.id = id;
+    ov.className = 'pubsheet-ov pz-boost-ov';
+    ov.style.display = 'none';
+    ov.addEventListener('click', (e) => { if (e.target === ov) pzBoostCerrar(); });
+    document.body.appendChild(ov);
+    return ov;
+  };
+  const pickOv = mk('pzBoostPickOv');
+  pickOv.innerHTML = `<div class="pubsheet" role="dialog" aria-modal="true" aria-label="${esc(gzT('Elegir posteo a impulsar', 'Choose a post to boost'))}">
+    <div class="pubsheet-grip"></div>
+    <div class="pz-boost-head"><b>${esc(gzT('¿Cuál querés impulsar?', 'Which post do you want to boost?'))}</b><button type="button" class="pz-boost-x" onclick="pzBoostCerrar()" aria-label="${esc(gzT('Cerrar', 'Close'))}">×</button></div>
+    <p class="pz-boost-rec" style="margin-top:13px">${esc(gzT('Ya viene elegido el que Posty recomienda. La mayoría de las veces no elegís nada: solo seguís y confirmás.', 'The one Posty recommends already comes selected. Most of the time you pick nothing: you just go on and confirm.'))}</p>
+    <div id="pzBoostPickBody"></div>
+    <button type="button" class="btn btn-primary btn-block" id="pzBoostPickGo" onclick="pzBoostPickConfirmar()">${esc(gzT('Impulsar este posteo →', 'Boost this post →'))}</button>
+    <p class="pz-boost-note">${esc(gzT('Elegir otro posteo queda para cuando querés impulsar uno viejo.', 'Picking another post is for when you want to boost an old one.'))}</p>
+  </div>`;
+  const boostOv = mk('pzBoostOv');
+  boostOv.innerHTML = `<div class="pubsheet" role="dialog" aria-modal="true" aria-label="${esc(gzT('Impulsar posteo', 'Boost post'))}">
+    <div class="pubsheet-grip"></div>
+    <div id="pzBoostBody"></div>
+  </div>`;
+}
+
+function pzBoostMostrar(cual) {
+  const pickOv = document.getElementById('pzBoostPickOv');
+  const boostOv = document.getElementById('pzBoostOv');
+  if (pickOv) pickOv.style.display = (cual === 'pick') ? 'flex' : 'none';
+  if (boostOv) boostOv.style.display = (cual === 'boost') ? 'flex' : 'none';
+}
+
+function pzBoostCerrar() { pzBoostMostrar(null); }
+
+function pzBoostPintarPick() {
+  const body = document.getElementById('pzBoostPickBody');
+  const go = document.getElementById('pzBoostPickGo');
+  if (!body) return;
+  const s = pzBoostState || pzBoostNewState();
+  const list = s.elegibles || [];
+  if (!list.length) {
+    body.innerHTML = `<p class="pz-boost-note" style="margin:14px 0">${esc(gzT('Todavía no tenés posteos publicados para impulsar.', 'You don’t have published posts to boost yet.'))}</p>`;
+    if (go) go.disabled = true;
+    return;
+  }
+  body.innerHTML = `<div class="pz-boost-list" role="radiogroup" aria-label="${esc(gzT('Posteos para impulsar', 'Posts to boost'))}">` + list.map((p) => {
+    const sel = Number(p.post_id) === Number(s.selId);
+    const ya = !!p.ya_impulsado || pzBoostImpulsados.has(Number(p.post_id));
+    const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+    const badge = p.recomendado ? `<span class="pz-boost-badge">RECOMENDADO</span>` : '';
+    const check = `<span class="pz-boost-check">${(sel && !ya) || ya ? '✓' : ''}</span>`;
+    return `<button type="button" role="radio" aria-checked="${sel && !ya ? 'true' : 'false'}" class="pz-boost-opt${sel && !ya ? ' on' : ''}" ${ya ? 'disabled' : ''} onclick="pzBoostElegirPick(${Number(p.post_id)}, this)">
+      ${img}<span class="pz-boost-t"><b>${esc(pzBoostTitulo(p))}${badge}</b><small>${esc(pzBoostNumeros(p))}</small></span>${check}</button>`;
+  }).join('') + `</div>`;
+  if (go) go.disabled = !(s.selId > 0);
+}
+
+function pzBoostPintarBoost() {
+  const body = document.getElementById('pzBoostBody');
+  if (!body) return;
+  const s = pzBoostState || pzBoostNewState();
+  const p = s.selPost;
+  if (!p) {
+    body.innerHTML = `<div class="pz-boost-head"><b>${esc(gzT('Impulsar posteo', 'Boost post'))}</b><button type="button" class="pz-boost-x" onclick="pzBoostCerrar()" aria-label="${esc(gzT('Cerrar', 'Close'))}">×</button></div>
+    <p class="pz-boost-note" style="margin:14px 0">${esc(gzT('Elegí primero el posteo al que le querés meter ads.', 'First pick the post you want to boost.'))}</p>`;
+    return;
+  }
+  const ya = !!p.ya_impulsado || pzBoostImpulsados.has(Number(p.post_id));
+  const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+  const head = `<div class="pz-boost-head"><b>${esc(gzT('Impulsar posteo', 'Boost post'))}</b><button type="button" class="pz-boost-x" onclick="pzBoostCerrar()" aria-label="${esc(gzT('Cerrar', 'Close'))}">×</button></div>
+  <div class="pz-boost-post">${img}<div><b>${esc(pzBoostTitulo(p))}</b><small>${esc(gzT('Publicado · impulso por 7 días', 'Published · 7-day boost'))}</small></div></div>
+  <p class="pz-boost-rec">${esc(pzBoostRecTexto(p))}</p>`;
+  if (ya) {
+    body.innerHTML = head + `<div class="pz-boost-done"><div class="pz-boost-tick">✓</div><b>${esc(gzT('Este posteo ya está impulsado', 'This post is already boosted'))}</b><p>${esc(gzT('Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.', 'It has an active 7-day boost. Pick another post to boost.'))}</p><button type="button" class="btn btn-primary btn-block" onclick="pzBoostCerrar()">${esc(gzT('Listo', 'Done'))}</button></div>`;
+    return;
+  }
+  const monto = Number(s.selMonto) || 50;
+  const saldo = pzBoostSaldoUSD();
+  const monedaARS = ((s.billetera && s.billetera.currency) || 'USD') !== 'USD';
+  const gate = pzBoostGate();
+  const conv = !!s.conversionPendiente;
+  const falta = saldo < monto;
+  const puede = !gate.cerrado && !monedaARS && !falta;
+  const warn = monedaARS
+    ? `<p class="pz-boost-warn">${esc(pzBoostMotivo('saldo_ars_pendiente', monto))}</p>`
+    : gate.cerrado
+      ? `<p class="pz-boost-warn">${esc(pzBoostMotivo(gate.motivo, monto))}</p>`
+      : falta
+        ? `<p class="pz-boost-warn">${esc(gzT('Te faltan $' + (monto - saldo) + ' · cargalo acá mismo, sin ir a otra pantalla.', 'You’re $' + (monto - saldo) + ' short · top it up right here, without leaving this screen.'))}</p>`
+        : `<p class="pz-boost-warn ok">${esc(gzT('✓ Alcanza para este impulso.', '✓ Enough for this boost.'))}</p>`;
+  const notaConv = conv ? `<p class="pz-boost-warn">${esc(pzBoostMotivo('conversion_pendiente', monto))}</p>` : '';
+  body.innerHTML = head + `
+  <div class="pz-boost-hero"><span class="pz-boost-hero-amt">$${monto}</span><span class="pz-boost-hero-txt">${esc(gzT('por 7 días', 'for 7 days'))}</span><p>${esc(gzT('Te recomiendo este monto para este posteo. Confirmalo con un toque.', 'I recommend this amount for this post. Confirm it with one tap.'))}</p></div>
+  <button type="button" class="pz-boost-amt-link" id="pzBoostCambiarMonto" onclick="pzBoostToggleMontos()">${esc(s.montosAbierto ? gzT('Ocultar montos', 'Hide amounts') : gzT('Cambiar monto', 'Change amount'))}</button>
+  <div class="pz-boost-amts" id="pzBoostAmts" style="display:${s.montosAbierto ? 'grid' : 'none'}" role="group" aria-label="${esc(gzT('Otro monto del impulso', 'Another boost amount'))}">
+    ${[20, 50, 100].map((x) => `<button type="button" class="pz-boost-amt${x === monto ? ' on' : ''}" onclick="pzBoostElegirMonto(${x})">$${x}<small>${esc(gzT('7 días', '7 days'))}</small></button>`).join('')}
+  </div>
+  <div class="pz-boost-bal"><span>${esc(gzT('Tu saldo', 'Your balance'))}</span><b>$${saldo}</b></div>
+  ${warn}${notaConv}
+  <button type="button" class="btn btn-block pz-boost-load" onclick="pzBoostCargar(this)">${esc(gzT('Cargar $' + monto + ' ahora', 'Top up $' + monto + ' now'))}</button>
+  <button type="button" class="btn btn-primary btn-block" style="margin-top:9px" onclick="pzBoostConfirmar(this)" ${puede ? '' : 'disabled'}>${esc(gzT('Impulsar por $' + monto + ' · 7 días', 'Boost for $' + monto + ' · 7 days'))}</button>
+  <p class="pz-boost-msg" id="pzBoostMsg"></p>`;
+}
+
+function pzBoostPintarExito(p, monto) {
+  const body = document.getElementById('pzBoostBody');
+  if (!body) return;
+  body.innerHTML = `<div class="pz-boost-done"><div class="pz-boost-tick">✓</div><b>${esc(gzT('Posteo impulsado', 'Post boosted'))}</b><p>${esc(pzBoostTitulo(p))} · $${monto} ${esc(gzT('por 7 días, desde hoy. Posty te avisa cómo viene.', 'for 7 days, starting today. Posty will let you know how it goes.'))}</p><button type="button" class="btn btn-primary btn-block" onclick="pzBoostCerrar()">${esc(gzT('Listo', 'Done'))}</button></div>`;
+}
+
+// Entrada principal: el botón «Impulsar posteo» arriba del Feed (RS-3).
+// CONTRATO RS-3 → RS-4 (spec v10): RS-3 llama a window.pzOpenBoostPick().
+function pzOpenBoostPick() { return pzBoostPickOpen(); }
+function pzFeedBoostPick() { return pzBoostPickOpen(); }
+try { window.pzOpenBoostPick = pzOpenBoostPick; } catch (e) {}
+
+async function pzBoostPickOpen() {
+  pzBoostEnsureSheets();
+  pzBoostMostrar('pick');
+  const body = document.getElementById('pzBoostPickBody');
+  if (body && !(pzBoostState && pzBoostState.elegibles && pzBoostState.elegibles.length)) {
+    body.innerHTML = `<p class="pz-boost-note" style="margin:14px 0">${esc(gzT('Cargando tus posteos…', 'Loading your posts…'))}</p>`;
+  }
+  await pzBoostLoad();
+  pzBoostPintarPick();
+}
+
+async function pzBoostOpen(post) {
+  const p = pzBoostNormPost(post);
+  if (!p) { try { toast(gzT('Elegí primero el posteo al que le querés meter ads.', 'First pick the post you want to boost.')); } catch (e) {} return; }
+  pzBoostEnsureSheets();
+  if (!pzBoostState) pzBoostState = pzBoostNewState();
+  pzBoostState.selPost = p;
+  pzBoostState.selId = Number(p.post_id);
+  pzBoostState.selMonto = 50;
+  pzBoostMostrar('boost');
+  pzBoostPintarBoost();
+  // El saldo y el gate llegan en segundo plano (la hoja ya muestra el
+  // posteo); al llegar, se repinta con los datos reales.
+  if (!pzBoostState.billetera) {
+    try {
+      await pzBoostLoad();
+      if (!pzBoostState) return;
+      const enEleg = (pzBoostState.elegibles || []).find((e) => Number(e.post_id) === Number(p.post_id));
+      pzBoostState.selPost = enEleg || p;
+      pzBoostState.selId = Number(p.post_id);
+      pzBoostPintarBoost();
+    } catch (e) {}
+  }
+}
+
+async function pzBoostOpenById(id) {
+  const nid = Number(id) || 0;
+  if (!nid) return;
+  await pzBoostLoad();
+  const p = (pzBoostState.elegibles || []).find((e) => Number(e.post_id) === nid) || null;
+  if (!p) { try { toast(gzT('Ese posteo ya no está disponible para impulsar.', 'That post is no longer available to boost.')); } catch (e) {} return; }
+  pzBoostOpen(p);
+}
+
+function pzBoostElegirPick(id, btn) {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  const nid = Number(id) || 0;
+  const p = (s.elegibles || []).find((e) => Number(e.post_id) === nid);
+  if (!p || p.ya_impulsado || pzBoostImpulsados.has(nid)) return;
+  s.selId = nid;
+  s.selPost = p;
+  pzBoostPintarPick();
+}
+
+function pzBoostPickConfirmar() {
+  const s = pzBoostState || {};
+  const p = s.selPost || (s.elegibles || []).find((e) => Number(e.post_id) === Number(s.selId)) || null;
+  if (!p) return;
+  pzBoostOpen(p);
+}
+
+function pzBoostElegirMonto(monto) {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  const m = Number(monto) || 50;
+  if (![20, 50, 100].includes(m)) return;
+  s.selMonto = m;
+  pzBoostPintarBoost();
+}
+
+function pzBoostToggleMontos() {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  s.montosAbierto = !s.montosAbierto;
+  pzBoostPintarBoost();
+}
+
+async function pzBoostCargar(btn) {
+  const s = pzBoostState || {};
+  const monto = Number(s.selMonto) || 50;
+  const msgEl = document.getElementById('pzBoostMsg');
+  const decir = (t) => { if (msgEl) msgEl.textContent = t; };
+  if (btn) btn.disabled = true;
+  let j = null;
+  try { j = await api.post('/api/ads/billetera/cargar', { montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
+  if (btn) btn.disabled = false;
+  if (j && j.ok) {
+    const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
+    try { await pzBoostLoad(); } catch (e) {}
+    if (pzBoostState && pzBoostState.billetera && j.balance_cents != null) pzBoostState.billetera.balance_cents = j.balance_cents;
+    pzBoostPintarBoost();
+    decir(gzT('Listo, cargaste $' + monto + '. Tu billetera tiene $' + nuevoSaldo + '.', 'Done, you topped up $' + monto + '. Your wallet now has $' + nuevoSaldo + '.'));
+  } else {
+    decir(pzBoostCargarMotivo((j && j.motivo) || '', monto, j && j.cobroId));
+  }
+}
+
+async function pzBoostConfirmar(btn) {
+  const s = pzBoostState || {};
+  const p = s.selPost || null;
+  const monto = Number(s.selMonto) || 50;
+  const msgEl = document.getElementById('pzBoostMsg');
+  const decir = (t) => { if (msgEl) msgEl.textContent = t; };
+  if (!p || !p.post_id) { decir(pzBoostMotivo('sin_posteo', monto)); return; }
+  if (btn) btn.disabled = true;
+  let j = null;
+  try { j = await api.post('/api/ads/billetera/impulsar', { posteoId: Number(p.post_id), montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
+  if (btn) btn.disabled = false;
+  if (j && j.ok) {
+    pzBoostImpulsados.add(Number(p.post_id));
+    if (pzBoostState) {
+      const enEleg = (pzBoostState.elegibles || []).find((e) => Number(e.post_id) === Number(p.post_id));
+      if (enEleg) enEleg.ya_impulsado = true;
+      if (pzBoostState.billetera && j.balance_cents != null) pzBoostState.billetera.balance_cents = j.balance_cents;
+    }
+    pzBoostMarcarImpulsado(Number(p.post_id));
+    pzBoostPintarExito(p, monto);
+    try { toast(gzT('✓ Posteo impulsado por 7 días', '✓ Post boosted for 7 days')); } catch (e) {}
+  } else {
+    decir(pzBoostMotivo((j && j.motivo) || '', monto, j && j.cobroId));
+  }
+}
+
+// Marca «Impulsado ✓» en todos los botones [data-pz-boost-post="<id>"]
+// de la pantalla (detalle del día en Hoy RS-2, Feed RS-3) y repinta la
+// hoja de elegir si está abierta.
+function pzBoostMarcarImpulsado(postId) {
+  try {
+    document.querySelectorAll('[data-pz-boost-post="' + Number(postId) + '"]').forEach((b) => {
+      b.textContent = gzT('Impulsado ✓', 'Boosted ✓');
+      b.classList.add('done');
+      b.disabled = true;
+    });
+  } catch (e) {}
+  try { pzBoostPintarPick(); } catch (e) {}
+}
+
 function bindAds() {
   // Si vuelve de MP con pauta pendiente, la atiende Mi semana
   try {

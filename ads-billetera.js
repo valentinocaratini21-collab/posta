@@ -221,10 +221,21 @@ async function impulsarConSaldo(input) {
 // queda marcado: la recomendación es sugerencia, la elección es del cliente.
 // `mejorPostId` = post_id del mejor posteo de la semana (o null: sin dato
 // no hay recomendado, nunca uno inventado).
-function elegiblesParaAds(rows, mejorPostId, yaImpulsados) {
+// (LOTE REDISEÑO SIMPLE RS-4 · 9/11) La hoja «¿Cuál querés impulsar?»
+// necesita VER los ya impulsados (deshabilitados, no ausentes) + el día de
+// publicación para el título. `opts.incluirImpulsados` (solo cuando el
+// cliente lo pide con ?incluir_impulsados=1): no filtra los ya impulsados
+// y les pone `ya_impulsado: true`. Sin opts, el comportamiento es
+// EXACTAMENTE el de antes (el picker del tab Ads no ve los ya impulsados).
+// `opts.semanaActual` (week_key del lunes actual): marca `viejo` en los de
+// otra semana, para el texto de la recomendación. `publicado_en` viaja
+// siempre (aditivo, el picker viejo lo ignora).
+function elegiblesParaAds(rows, mejorPostId, yaImpulsados, opts) {
   const impulsados = yaImpulsados instanceof Set ? yaImpulsados : new Set(yaImpulsados || []);
+  const incluir = !!(opts && opts.incluirImpulsados);
+  const semanaActual = (opts && opts.semanaActual) ? String(opts.semanaActual) : '';
   return (Array.isArray(rows) ? rows : [])
-    .filter((r) => r && r.status === 'published' && r.ig_media_id && !String(r.ig_media_id || '').startsWith('demo_') && r.media_type !== 'story' && !impulsados.has(r.id))
+    .filter((r) => r && r.status === 'published' && r.ig_media_id && !String(r.ig_media_id || '').startsWith('demo_') && r.media_type !== 'story' && (incluir || !impulsados.has(r.id)))
     .map((r) => ({
       post_id: r.id,
       image_path: r.image_path || '',
@@ -235,6 +246,9 @@ function elegiblesParaAds(rows, mejorPostId, yaImpulsados) {
       comments: Number(r.comments || 0),
       saves: Number(r.saves || r.saved || 0),
       recomendado: mejorPostId != null && Number(r.id) === Number(mejorPostId),
+      publicado_en: r.published_at || '',
+      viejo: !!(semanaActual && r.week_key && String(r.week_key) !== semanaActual),
+      ...(incluir ? { ya_impulsado: impulsados.has(r.id) } : {}),
     }))
     // El recomendado va primero (Impulsar lo sugiere; el picker lo
     // pre-selecciona); el resto conserva el orden de entrada.
