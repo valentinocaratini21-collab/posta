@@ -2,8 +2,9 @@
 // 1) /terminos.html (ES) y /terms.html (EN) reemplazan las páginas viejas con
 //    el documento v1.0 completo (15 secciones + Definiciones), email de
 //    contacto confirmado hola@postycommunitymanager.com en §15 y domicilio
-//    legal marcado como pendiente (no inventado); §13 linkea a la Política
-//    de Privacidad existente; §10.3 como redactada, sin cambiar.
+//    legal publicado (v850): 105 Rogers St NE, Atlanta, GA 30317, Estados
+//    Unidos; §13 linkea a la Política de Privacidad existente; §10.3 como
+//    redactada, sin cambiar.
 // 2) La app muestra los T&C en #/app/terminos (chunk-terminos.js, ES+EN,
 //    paridad con las páginas) y enlaza desde Ajustes (grupo «Más»).
 // 3) El alta (#/registro) exige el tilde de Términos y el servidor guarda
@@ -43,7 +44,7 @@ ok(termES.includes('La prueba dura 3 días'), 'ES: prueba 3 días');
 ok(termES.includes('Silencio = publicación'), 'ES: regla 6.3 Silencio = publicación');
 ok(termES.includes('No se hacen reembolsos parciales por el período en curso'), 'ES: §10.3 como redactada');
 ok(termES.includes('hola@postycommunitymanager.com'), 'ES: email de contacto');
-ok(termES.includes('Domicilio legal: pendiente de publicación.'), 'ES: domicilio legal marcado como pendiente');
+ok(termES.includes('Domicilio legal: 105 Rogers St NE, Atlanta, GA 30317, Estados Unidos.'), 'ES: domicilio legal publicado');
 ok(termES.includes('href="/privacidad.html"'), 'ES: §13 linkea /privacidad.html');
 ok(termES.includes('Fin de los Términos y Condiciones de Posty, versión 1.0'), 'ES: cierre del documento');
 ok(!termES.includes('siempre tenés la última palabra'), 'ES: fuera el texto viejo (última palabra)');
@@ -65,7 +66,7 @@ ok(termEN.includes('The trial lasts 3 days'), 'EN: trial 3 days');
 ok(termEN.includes('Silence = publication'), 'EN: regla 6.3 Silence = publication');
 ok(termEN.includes('There are no partial refunds for the current period'), 'EN: §10.3 como redactada');
 ok(termEN.includes('hola@postycommunitymanager.com'), 'EN: email de contacto');
-ok(termEN.includes('Legal address: pending publication.'), 'EN: domicilio legal marcado como pendiente');
+ok(termEN.includes('Legal address: 105 Rogers St NE, Atlanta, GA 30317, United States.'), 'EN: domicilio legal publicado');
 ok(termEN.includes('href="/privacy.html"'), 'EN: §13 linkea /privacy.html');
 ok(termEN.includes("End of Posty's Terms and Conditions, version 1.0"), 'EN: cierre del documento');
 ok(!termEN.includes('Republic of Argentina'), 'EN: fuera la ley argentina como aplicable');
@@ -81,8 +82,8 @@ ok(tc.includes('function tcLang()'), 'define tcLang');
 ok(tc.includes('function tcToggleLang()'), 'define tcToggleLang');
 ok(tc.includes("const TC_VER = '1.0'"), 'versión 1.0');
 ok(tc.includes('hola@postycommunitymanager.com'), 'chunk: email de contacto');
-ok(tc.includes('Domicilio legal: pendiente de publicación.'), 'chunk ES: domicilio pendiente');
-ok(tc.includes('Legal address: pending publication.'), 'chunk EN: domicilio pendiente');
+ok(tc.includes('Domicilio legal: 105 Rogers St NE, Atlanta, GA 30317, Estados Unidos.'), 'chunk ES: domicilio publicado');
+ok(tc.includes('Legal address: 105 Rogers St NE, Atlanta, GA 30317, United States.'), 'chunk EN: domicilio publicado');
 ok(tc.includes('<h2>Definiciones</h2>'), 'chunk ES: «Definiciones» (en defs)');
 ok(tc.includes('<h2>Definitions</h2>'), 'chunk EN: «Definitions» (en defs)');
 for (const t of TITLES_ES.slice(1)) ok(tc.includes("'" + t + "'"), 'chunk ES: sección «' + t + '»');
@@ -161,7 +162,7 @@ console.log('— 7. VM: terminosView —');
   const vEs = ctx.terminosView();
   for (const t of TITLES_ES) ok(vEs.includes(t), 'VM ES: «' + t + '»');
   ok(vEs.includes('hola@postycommunitymanager.com'), 'VM ES: email');
-  ok(vEs.includes('Domicilio legal: pendiente de publicación.'), 'VM ES: domicilio pendiente');
+  ok(vEs.includes('Domicilio legal: 105 Rogers St NE, Atlanta, GA 30317, Estados Unidos.'), 'VM ES: domicilio publicado');
   ok(vEs.includes('Read in English'), 'VM ES: toggle a EN');
   ctx.render = () => { ctx.__rendered = (ctx.__rendered || 0) + 1; };
   ctx.tcToggleLang();
@@ -169,7 +170,7 @@ console.log('— 7. VM: terminosView —');
   const vEn = ctx.terminosView();
   for (const t of TITLES_EN) ok(vEn.includes(t), 'VM EN: «' + t + '»');
   ok(vEn.includes('hola@postycommunitymanager.com'), 'VM EN: email');
-  ok(vEn.includes('Legal address: pending publication.'), 'VM EN: domicilio pendiente');
+  ok(vEn.includes('Legal address: 105 Rogers St NE, Atlanta, GA 30317, United States.'), 'VM EN: domicilio publicado');
   ok(vEn.includes('Leer en español'), 'VM EN: toggle a ES');
 }
 
@@ -208,7 +209,7 @@ console.log('— 8. boot —');
       const tES = await get('/terminos.html');
       ok(tES.status === 200 && md5(tES.body) === md5(termES), '/terminos.html servido = árbol');
       ok(tES.body.includes('Silencio = publicación'), 'servido ES: regla 6.3');
-      ok(tES.body.includes('Domicilio legal: pendiente de publicación.'), 'servido ES: domicilio pendiente');
+      ok(tES.body.includes('Domicilio legal: 105 Rogers St NE, Atlanta, GA 30317, Estados Unidos.'), 'servido ES: domicilio publicado');
       const tEN = await get('/terms.html');
       ok(tEN.status === 200 && md5(tEN.body) === md5(termEN), '/terms.html servido = árbol');
       ok(tEN.body.includes('Silence = publication'), 'servido EN: regla 6.3');
