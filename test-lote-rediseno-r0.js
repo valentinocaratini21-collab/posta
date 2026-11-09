@@ -38,14 +38,14 @@ const orderOk = (s, keys) => {
 // RE-PIN tras implementar (md5s de work-v1; en base fallan a propósito).
 // (LOTE HOY-AVATAR-FEED · 8/11) Re-pin: app.js/styles.css del lote.
 // (LOTE CHAT-NUEVO v821 · 8/11) Re-pin: app.js/styles.css del lote + BUILD v821.
-const MD5_APP_WORK = '8a16054810d1e29b6e3c55b3359759fc';
-const MD5_CSS_WORK = '0ae54644158dab6215ee7b8f035c447c';
+const MD5_APP_WORK = 'b2ee67095f027276db73ee7fdee16962'; // (RS-1 re-estampador) re-pin: app.js v831+RS-1
+const MD5_CSS_WORK = '83d096e005ab0e7ba290abc12a93ce32'; // (RS-1 re-estampador) re-pin: styles.css v831+RS-1
 // El woff2 es copia byte a byte del mock (no generado).
 const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins ----------
-  t(srv.includes("const BUILD_ID = '20261105-v831'"), 'server: BUILD v829 (re-pin RS-3)');
+  t(srv.includes("const BUILD_ID = '20261105-v832'"), 'server: BUILD v832 (re-pin RS-1)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -153,7 +153,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(!headSrc.includes('data-hf-pact'), 'encabezado: sin botones del perfil (son de Hoy, no del shell)');
   // Botones del encabezado con destino (vara cero botones muertos):
   t(headSrc.includes("bbGo('#/app/chat')"), 'encabezado: identidad (avatar+saludo) abre el Chat');
-  t(headSrc.includes("bbGo('#/app/ajustes?referidos=1')"), 'encabezado: compartir lleva a Referidos');
+  t(headSrc.includes('rsShareOpen()'), 'encabezado: compartir abre la hoja (RS-1)');
   t(headSrc.includes("bbGo('#/app/ajustes')"), 'encabezado: ruedita lleva a Ajustes');
   t(headSrc.includes('pz-shell-head'), 'encabezado: clase pz-shell-head');
   if (headSrc.length === 0) {
@@ -176,7 +176,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     t(h.includes('@cafearoma'), 'VM encabezado(inicio): chica = @handle (saludo-unico)');
     t(h.includes('pzHeadRacha'), 'VM encabezado(inicio): píldora de racha presente');
     t(h.includes("bbGo('#/app/chat')"), 'VM encabezado(inicio): identidad → Chat');
-    t(h.includes("bbGo('#/app/ajustes?referidos=1')"), 'VM encabezado(inicio): compartir → Referidos');
+    t(h.includes('rsShareOpen()'), 'VM encabezado(inicio): compartir → hoja (RS-1)');
     t(h.includes("bbGo('#/app/ajustes')"), 'VM encabezado(inicio): ruedita → Ajustes');
     t(vm.runInContext("pzShellHeadHTML('chat')", ctx) === '', 'VM encabezado(chat): vacío');
   }
@@ -352,6 +352,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
       pzDockMasBtn: () => '',
       pzDockMasHTML: () => '',
       pzSaludoEscribir: () => { saludoLlamado = true; },
+      rsShareSheetHTML: () => '', // (RS-1) la hoja se rinde en bbShell/appShell; en el VM va stubbeada.
     };
     ctx.bbGo = (h) => { loc.hash = h; };
     ctx.window = { matchMedia: () => ({ matches: false }) };
@@ -390,16 +391,17 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     const bbChat = vm.runInContext("bbShell('chat', '<p>x</p>')", ctx);
     t(bbChat.includes('bb-bar'), 'VM bbShell(chat): el dock EXISTE en chat');
     t((bbChat.match(/bb-tab/g) || []).length >= 6, 'VM bbShell(chat): 6 pestañas en chat');
-    // Encabezado: identidad → Chat, compartir → Referidos, ruedita → Ajustes.
+    // Encabezado: identidad → Chat, compartir → hoja (RS-1), ruedita → Ajustes.
     for (const [nombre, re, esperado] of [
       ['identidad → Chat', /onclick="bbGo\('(#\/app\/chat)'\)"[^>]*aria-label="[^"]*(Chat|Posty)[^"]*"/, '#/app/chat'],
-      ['compartir → Referidos', /onclick="bbGo\('(#\/app\/ajustes\?referidos=1)'\)"/, '#/app/ajustes?referidos=1'],
       ['ruedita → Ajustes', /onclick="bbGo\('(#\/app\/ajustes)'\)"/, '#/app/ajustes'],
     ]) {
       loc.hash = '';
       const got = clickOnclick(bbInicio, re);
       t(got === esperado, `VM click encabezado ${nombre} → ${esperado} (vino ${got})`);
     }
+    // (RS-1) Compartir ya no navega a Referidos: abre la hoja (rsShareOpen, sin hash).
+    t(bbInicio.includes('onclick="rsShareOpen()"'), 'VM encabezado: compartir → hoja (RS-1)');
     // mzTabsHTML: data-tab → hash por la regla del bind genérico.
     const mzInicio = vm.runInContext("mzTabsHTML('inicio')", ctx);
     const tabsMz = [...mzInicio.matchAll(/data-tab="([^"]+)"/g)].map((m) => m[1]);
@@ -450,11 +452,11 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v831', `boot: /api/version 20261105-v830 (vino ${ver.build})`);
-      const appTxt = await (await fetch(`${BASE}/app.js?v=539`)).text();
-      t(md5(appTxt) === md5(app), 'boot: app.js?v=539 servido = árbol');
-      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261183`)).text();
-      t(md5(cssTxt) === md5(css), 'boot: styles.css?v=20261183 servido = árbol');
+      t(ver.build === '20261105-v832', `boot: /api/version 20261105-v832 (vino ${ver.build})`);
+      const appTxt = await (await fetch(`${BASE}/app.js?v=566`)).text();
+      t(md5(appTxt) === md5(app), 'boot: app.js?v=566 servido = árbol');
+      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261217`)).text();
+      t(md5(cssTxt) === md5(css), 'boot: styles.css?v=20261217 servido = árbol');
       const woff = await fetch(`${BASE}/fonts/nunito-var.woff2`);
       t(woff.ok, 'boot: /fonts/nunito-var.woff2 se sirve (200)');
       if (woff.ok) {

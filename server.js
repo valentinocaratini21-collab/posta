@@ -5851,6 +5851,19 @@ app.post('/api/settings/notify-prefs', requireAuth, express.json(), (req, res) =
     res.status(500).json({ ok: false, error: 'No pude guardarlo 😅' });
   }
 });
+// (REDISEÑO SIMPLE RS-1 · mock v7) Cambiar el idioma de la cuenta (ES/EN).
+// El idioma vive en users.lang (lo escribe el onboarding; no existía endpoint
+// para cambiarlo). El front recarga tras el POST: toda la UI localiza desde ME.lang.
+app.post('/api/settings/language', requireAuth, express.json(), (req, res) => {
+  try {
+    const lang = String((req.body && req.body.lang) || '').toLowerCase();
+    if (lang !== 'es' && lang !== 'en') return res.status(400).json({ ok: false, error: 'Idioma no válido' });
+    db.prepare(`UPDATE users SET lang = ? WHERE id = ?`).run(lang, req.session.userId);
+    res.json({ ok: true, lang });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'No pude cambiarlo 😅' });
+  }
+});
 // Chequear calidad de un borrador sin publicarlo.
 app.get('/api/posts/:id/quality', requireAuth, (req, res) => {
   try {
@@ -33151,7 +33164,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v831';
+const BUILD_ID = '20261105-v832';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

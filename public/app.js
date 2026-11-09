@@ -38,6 +38,7 @@ const PZ_IC = {
   navBarras: '<path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/>',
   navBambu: '<path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/>',
   share: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6.5" r="2.5"/><circle cx="18" cy="17.5" r="2.5"/><path d="M8.3 10.8 15.6 7.7M8.3 13.2 15.6 16.3"/>',
+  shareUp: '<path d="M12 15V3"/><path d="M6.5 8.5 12 3l5.5 5.5"/><path d="M4 15v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/>',
   pencil: '<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/>',
   eye: '<path d="M2.5 12Q12 5.5 21.5 12Q12 18.5 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
   archive: '<rect x="3" y="4" width="18" height="4.5" rx="1.5"/><path d="M5 8.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.5"/><path d="M9.5 13.5h5"/>',
@@ -937,7 +938,7 @@ function pzShellHeadHTML(tab) {
     </button>
     <span class="pz-shell-racha" id="pzHeadRacha"${rachaCache ? '' : ' hidden'}${rachaTitle ? ` title="${esc(rachaTitle)}"` : ''}>${rachaCache ? esc(rachaCache) : ''}</span>
     <span class="pz-shell-acts">
-      <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes?referidos=1')" aria-label="${en ? 'Referrals' : 'Referidos'}">${pzIc('share', 20)}</button>
+      <button type="button" class="pz-shell-ic" onclick="rsShareOpen()" aria-label="${en ? 'Share Posty' : 'Compartir Posty'}">${pzIc('shareUp', 20)}</button>
       <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes')" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button>
     </span>
   </header>`;
@@ -1111,6 +1112,7 @@ function bbShell(tab, content) {
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
     <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('analisis', '#/app/numeros', gzT('Análisis', 'Analysis'))}${tabBtn('impulsar', '#/app/ads', gzT('Impulsar', 'Boost'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
+    ${rsShareSheetHTML()}
     ${pzAperturaHTML()}
   </div>`;
 }
@@ -2581,6 +2583,77 @@ let PZ_AUTO_PLAN = false;
 async function pzReferral() {
   if (!PZ_REF_PROMISE) PZ_REF_PROMISE = api.get('/api/referrals/mine').catch(() => null);
   return PZ_REF_PROMISE;
+}
+
+// (REDISEÑO SIMPLE RS-1 · mock v7) Hoja de referidos "Compartir Posty".
+// Vive en el shell (bbShell): se abre desde el ícono de Compartir del
+// encabezado (todas las pantallas), desde el feed y desde el deep-link
+// ?referidos=1. El link y la regla (2 amigos = 50% off) los da el mecanismo
+// de referidos existente (GET /api/referrals/mine); el descuento lo aplica
+// el servidor (revalidateReferralDiscount, vía MercadoPago).
+function rsShareSheetHTML() {
+  return `<div class="rs-sheet" id="rsShareSheet" hidden onclick="if(event.target===this)rsShareClose()">
+    <div class="rs-sheet-panel" role="dialog" aria-modal="true" aria-label="Compartir Posty">
+      <div class="rs-sheet-head"><button type="button" class="rs-sheet-x" onclick="rsShareClose()" aria-label="Cerrar">×</button></div>
+      <div class="rs-share-rec">Compartir Posty</div>
+      <h2>Invitá a otros negocios con tu link.</h2>
+      <p class="rs-share-sub">Cuando 2 amigos se suman a Posty con tu invitación, tenés 50% off.</p>
+      <div class="rs-sheet-hero">50% OFF</div>
+      <p class="rs-share-sub">2 amigos = 50% off en tu próxima factura. Se aplica solo, sin códigos raros.</p>
+      <div class="rs-share-link"><span id="rsShareLink">Cargando tu link…</span><button type="button" class="rs-btn-copy" onclick="rsShareCopy()">Copiar</button></div>
+      <div class="rs-share-steps">
+        <div class="rs-share-step"><b>1</b><span>Compartís tu link</span></div>
+        <div class="rs-share-step"><b>2</b><span>Tus amigos se suman</span></div>
+        <div class="rs-share-step"><b>3</b><span>Al segundo amigo, el 50% off queda aplicado</span></div>
+      </div>
+      <button type="button" class="rs-btn-share-main" onclick="rsShareNative()">Compartir mi invitación</button>
+      <div id="rsShareMsg" class="rs-share-msg"></div>
+    </div>
+  </div>`;
+}
+async function rsShareOpen() {
+  const sheet = document.getElementById('rsShareSheet');
+  if (!sheet) return;
+  sheet.hidden = false;
+  const linkEl = document.getElementById('rsShareLink');
+  const msgEl = document.getElementById('rsShareMsg');
+  if (msgEl) msgEl.textContent = '';
+  try {
+    const info = await pzReferral();
+    const link = (info && info.link) || '';
+    if (linkEl) linkEl.textContent = link || 'No se pudo cargar tu link';
+  } catch (e) {
+    if (linkEl) linkEl.textContent = 'No se pudo cargar tu link';
+  }
+}
+function rsShareClose() {
+  const sheet = document.getElementById('rsShareSheet');
+  if (sheet) sheet.hidden = true;
+}
+function rsShareLinkOk() {
+  const linkEl = document.getElementById('rsShareLink');
+  const link = linkEl ? linkEl.textContent : '';
+  return (link && !link.startsWith('No se pudo') && !link.startsWith('Cargando')) ? link : '';
+}
+async function rsShareCopy() {
+  const link = rsShareLinkOk();
+  if (!link) return;
+  try { await navigator.clipboard.writeText(link); } catch (e) {}
+  const msgEl = document.getElementById('rsShareMsg');
+  if (msgEl) msgEl.textContent = '✓ Link copiado · compartilo con 2 amigos';
+  try { toast('✓ Link copiado · compartilo con 2 amigos'); } catch (e) {}
+}
+async function rsShareNative() {
+  const link = rsShareLinkOk();
+  if (!link) return;
+  const text = `Te invito a probar Posty: ${link} — si nos sumamos 2 amigos, tengo 50% off.`;
+  if (navigator.share) {
+    try { await navigator.share({ text }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(link); } catch (e) {}
+  const msgEl = document.getElementById('rsShareMsg');
+  if (msgEl) msgEl.textContent = '✓ Link copiado · compartilo con 2 amigos';
+  try { toast('✓ Link copiado · compartilo con 2 amigos'); } catch (e) {}
 }
 
 // ---------- Capa de visibilidad (2026-10-21): referidos en el pico de emoción ----------
@@ -6221,6 +6294,7 @@ function appShell(tab, content) {
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>
   ${mzTabsHTML(tab)}
+  ${rsShareSheetHTML()}
   ${pzAperturaHTML()}`;
 }
 
@@ -23493,6 +23567,10 @@ function chatFullView() {
     <button type="button" class="pz-chatfull-back" onclick="pzGoBack()" aria-label="${en ? 'Back' : 'Volver'}">${pzIc('chevronLeft', 22)}</button>
     <img class="chat-face" src="ai-avatar.png" alt="Posty">
     <div class="pz-chatfull-tit"><b>Posty<span class="pdot">.</span></b><span class="pz-chatfull-est" id="pzChatEstado">${en ? 'online' : 'en línea'}</span></div>
+    <div class="pz-chatfull-acts">
+      <button type="button" class="pz-shell-ic" onclick="rsShareOpen()" aria-label="${en ? 'Share Posty' : 'Compartir Posty'}">${pzIc('shareUp', 20)}</button>
+      <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes')" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button>
+    </div>
   </header>
   ${chatCardHTML(true, true, true, true, true, true, true)}
 </div>`;
@@ -24850,7 +24928,7 @@ function hfProfileBind(root) {
   root.querySelectorAll('[data-hf-pact]').forEach((el) => {
     el.onclick = () => {
       const act = el.dataset.hfPact;
-      if (act === 'share') { location.hash = '#/app/ajustes?referidos=1'; }
+      if (act === 'share') { rsShareOpen(); }
       else if (act === 'settings') { location.hash = '#/app/ajustes'; }
       else if (act === 'covers') hfCoversOpen();
       else if (act === 'archive') hfArchiveOpen();
