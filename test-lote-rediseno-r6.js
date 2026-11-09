@@ -55,9 +55,9 @@ check('0b styles.css del lote (md5 distinto de base v793)', !hasBase || md5(css)
 check('0c server.js del lote (md5 distinto de base v793)', !hasBase || md5(srv) !== '54df4f468dddf78b66e7ad6a8fc3321d', md5(srv));
 if (hasBase) {
   check('0d chunk-conserje.js SIN tocar (diseño v778 intacto)', md5(fs.readFileSync(path.join(TREE, 'public/chunk-conserje.js'), 'utf8')) === md5(fs.readFileSync(path.join(base, 'public/chunk-conserje.js'), 'utf8')));
-  check('0e index.html ES/EN estampados v822 (?v=557, styles?v=20261209 en AMBOS)', idx.includes('/app.js?v=557') && idx.includes('/styles.css?v=20261209') && idxEn.includes('/styles.css?v=20261209'));
+  check('0e index.html ES/EN estampados v824 (?v=558, styles?v=20261211 en AMBOS)', idx.includes('/app.js?v=558') && idx.includes('/styles.css?v=20261211') && idxEn.includes('/styles.css?v=20261211'));
 }
-check('0f BUILD_ID estampado v822', srv.includes("const BUILD_ID = '20261105-v822'"));
+check('0f BUILD_ID estampado v822', srv.includes("const BUILD_ID = '20261105-v824'"));
 check('0g CHUNK_V sigue v792 (ningún chunk tocado)', app.includes("const CHUNK_V = '20261105-v792'"));
 check('0h censo server: catsMatch 3', cnt(srv, 'catsMatch') === 3);
 check('0i censo server: week-redo 16', cnt(srv, 'week-redo') === 16);
@@ -86,8 +86,8 @@ check('1j retocar: POST /api/album/:id/cambiar-imagen (v757)', R6.includes("/api
 check('1k comentario: POST /api/comments/:id/reply con la sugerida', R6.includes("/api/comments/' + encodeURIComponent(c.id) + '/reply'") && R6.includes('{ message: c.suggested }'));
 check('1l lunes: POST /api/weekly-consultas con el rango', R6.includes("api.post('/api/weekly-consultas', { rango })"));
 check('1m hook en chatSend antes del envío normal', app.includes('pzTemaOnSend(text, unsent)') && app.indexOf('pzTemaOnSend(text, unsent)') < app.indexOf('const sendText = text'));
-check('1n barra: maxlength 120 + Enviar propio + video', R6.includes('inp.maxLength = 120') && R6.includes("id = 'pzChatSendBtn'") && R6.includes("id = 'pzChatVideoBtn'"));
-check('1o video: accept video/* explícito cada vez', R6.includes("picker.accept = 'video/*'"));
+check('1n barra: maxlength 120 + Enviar propio, SIN video (LOTE CHAT-MUSE: el video sale del input)', R6.includes('inp.maxLength = 120') && R6.includes("id = 'pzChatSendBtn'") && !R6.includes("id = 'pzChatVideoBtn'"));
+check('1o video fuera de la barra: sin picker video/* en pzTemaBarraInit (LOTE CHAT-MUSE)', !R6.includes("picker.accept = 'video/*'"));
 check('1p cámara: accept image/* explícito (subir-foto-directa intacto)', app.includes("picker.accept = 'image/*'"));
 check('1q no se activa con ancla ni prefill', R6.includes('HF_CHAT_ANCHOR') && R6.includes("sessionStorage.getItem('posty-chat-prefill')"));
 check('1r mic: no se convierte en enviar con Enviar propio (pzChatMicIdle)', app.includes('function pzChatMicIdle') && app.includes("document.getElementById('pzChatSendBtn')"));
@@ -252,7 +252,7 @@ if (r6SliceOk) {
   // Pintado fin: Nada pendiente + destinos reales.
   sandbox.PZ_TEMA = { temas: [], idx: 0, stage: 'topic', cambio: null };
   R.pzTemaPintar();
-  check('4f pinta fin: Nada pendiente compacto (tira, sin botones — LOTE CHAT-MEJORA)', wrap.innerHTML.includes('Nada pendiente') && wrap.innerHTML.includes('pz-tema-mini') && !wrap.innerHTML.includes('data-tema-op='));
+  check('4f pinta fin: sin temas no pinta nada en el chat (LOTE CHAT-MUSE: sin línea «Nada pendiente»)', wrap.innerHTML === '', wrap.innerHTML.slice(0, 200));
   // onSend: un número en el lunes guarda el rango y consume el envío.
   sandbox.PZ_TEMA = { temas: [{ kind: 'lunes', week_key: '2026-11-02' }], idx: 0, stage: 'topic', cambio: null };
   input.value = '8';
@@ -272,9 +272,9 @@ if (r6SliceOk) {
   vm.runInContext('document = this.__doc2;', sandbox);
   vm.runInContext('this.__barra = pzTemaBarraInit;', sandbox);
   try { sandbox.__barra(); } catch (e) { check('4k barra: pzTemaBarraInit no rompe', false, e.message); }
-  check('4k barra: video + Enviar creados', d2.doc._created.some((e) => e.id === 'pzChatVideoBtn') && d2.doc._created.some((e) => e.id === 'pzChatSendBtn'));
+  check('4k barra: solo Enviar creado, SIN video (LOTE CHAT-MUSE)', !d2.doc._created.some((e) => e.id === 'pzChatVideoBtn') && d2.doc._created.some((e) => e.id === 'pzChatSendBtn'));
   check('4l barra: input maxlength 120', d2.input.maxLength === 120);
-  check('4m barra: video con onclick (picker)', d2.doc._created.some((e) => e.id === 'pzChatVideoBtn' && typeof e.onclick === 'function'));
+  check('4m barra: Enviar con onclick (chatSend)', d2.doc._created.some((e) => e.id === 'pzChatSendBtn' && typeof e.onclick === 'function'));
   // chatUpdateSendBtn: con Enviar propio el mic queda mic; sin él, morph.
   const micSrc = MIC_SRC;
   const sbx = {
@@ -384,7 +384,7 @@ async function parteBoot() {
     check('5a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await reqJson('GET', '/api/version');
-    check('5b /api/version = v822', ver.json && ver.json.build === '20261105-v822', JSON.stringify(ver.json));
+    check('5b /api/version = v822', ver.json && ver.json.build === '20261105-v824', JSON.stringify(ver.json));
     const join = await reqJson('POST', '/api/trial/chat-onboarding?test_key=' + TEST_KEY, { kind: 'join', ig: 'r6-test', device: 'test-device-r6' });
     check('5c join del invitado ok', join.status === 200 && join.json && join.json.ok === true && join.json.user_id > 0, JSON.stringify(join.json));
     if (!join.json || !join.json.user_id) throw new Error('sin join');

@@ -1262,6 +1262,10 @@ CREATE TABLE IF NOT EXISTS chat_seen_photos (
   PRIMARY KEY (user_id, photo_hash)
 );
 `);
+// (LOTE CHAT-MUSE) Limpieza única: filas de assistant con texto «…»
+// (artefacto del tipeo viejo). Idempotente: tras la primera pasada no
+// queda ninguna; la guarda pzChatSaveReply impide que vuelvan a nacer.
+try { db.exec(`DELETE FROM chat_messages WHERE role = 'assistant' AND trim(text) = '…'`); } catch (e) { /* tabla aún no creada */ }
 // (v236) Fecha de la efeméride atada a la idea (solo source='calendar'):
 // es la que manda el vencimiento — una idea de fecha que ya pasó expira
 // sola al leerse y su "why" jamás se muestra mintiendo en presente.

@@ -426,9 +426,9 @@ t(APP.includes('CHAT_FOTOS_MAX = 10') && APP.includes('pzSftPartirMedios'),
 
 // ---------- §8: huellas del lote (server.js NO cambia en R1) ----------
 console.log('— §8: huellas');
-t(md5(SRV) === 'f04139642bb3397b8934be966addc8e2', '§8: server.js = v822 estampado (BUILD v822 + lote A mejoras-inicio)');
-t(md5(APP) === '14b9335beb4729fa095fd6d5252bb281', '§8: public/app.js = LOTE A (mejoras-inicio)');
-t(md5(CSS) === 'be8639f8497dc21edd17ec595c159a7f', '§8: public/styles.css = LOTE A (mejoras-inicio)');
+t(md5(SRV) === 'dc8e268fd900a02be6b71e79024bc1b8', '§8: server.js = FUSIONADO (A + CHAT-MUSE, BUILD v822)');
+t(md5(APP) === '590b2a475ab107b2847a63cd54c88a97', '§8: public/app.js = FUSIONADO (A + CHAT-MUSE)');
+t(md5(CSS) === 'cadafccac8af119275c9c799668a0c61', '§8: public/styles.css = FUSIONADO (A + CHAT-MUSE)');
 t(APP.includes('CHUNK_V'), '§8: CHUNK_V presente en app.js');
 
 // ---------- §9: boot M121 — endpoints reales con datos reales ----------
@@ -502,7 +502,7 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v823',
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v824',
       '§9: /api/version trae el BUILD v822 (estampado)', JSON.stringify(ver.json));
     const appJs = await apiText('/app.js?v=557');
     t(appJs.status === 200 && appJs.text.includes('pzHoyCardHTML')

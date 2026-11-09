@@ -56,7 +56,7 @@ console.log('— 0) pines —');
 check('0a app.js cambió vs base v803', md5(app) !== 'bc53ff30fa777f87d03b8d83d224939c', md5(app));
 check('0b styles.css cambió vs base v803', md5(css) !== '5293bc2a7c2756ae9a37c55f9ee459f7', md5(css));
 check('0c server.js cambió vs base v803 SOLO por el DELETE del álbum (BUILD v822 estampado)',
-  md5(srv) !== '34104ab6825bb23d3af6b43129496082' && srv.includes("app.delete('/api/album/:id'") && srv.includes("const BUILD_ID = '20261105-v822'"), md5(srv));
+  md5(srv) !== '34104ab6825bb23d3af6b43129496082' && srv.includes("app.delete('/api/album/:id'") && srv.includes("const BUILD_ID = '20261105-v824'"), md5(srv));
 
 // ---------- Parte 1: estática — fix 1 (placeholder) ----------
 console.log('— 1) estática: placeholder —');
@@ -72,12 +72,12 @@ check('1e la rotación sigue cada 4 s (PZ_PH_T = setInterval 4000)', app.include
 console.log('— 2) estática: tarjeta colapsada + puntual —');
 check('2a pzTemaMiniHTML y pzTemaColapsar definidas', app.includes('function pzTemaMiniHTML') && app.includes('function pzTemaColapsar'));
 check('2b la línea «¿Algo puntual…?» no existe en ninguna tarjeta', cnt(app, 'pz-tema-hint') === 0);
-check('2c estado !tema usa la tira compacta (sin botones fin-hoy/fin-nivel)',
-  app.includes('pzTemaMiniHTML(pzTemaT(\'Nada pendiente') && !app.includes("id: 'fin-hoy'") && !app.includes("id: 'fin-nivel'"));
+check('2c estado !tema SIN tira en el chat (LOTE CHAT-MUSE: la línea «Nada pendiente» sale del flujo; el estado vive en Inicio)',
+  !app.includes('pzTemaMiniHTML(pzTemaT(\'Nada pendiente') && !app.includes("id: 'fin-hoy'") && !app.includes("id: 'fin-nivel'"));
 check('2d al guardar el lunes colapsa + Posty pregunta lo puntual',
   app.includes('pzTemaColapsar(pzTemaT(\'La pregunta de los lunes\'') && app.includes("chatSay(pzTemaT('¿Algo puntual sobre este tema? Escribímelo acá abajo.'"));
 check('2e el scroll corre DESPUÉS del colapso (chatScroll(true) en pzTemaColapsar)',
-  (() => { const f = sliceOk(app, 'function pzTemaColapsar', 'function pzTemaPintar'); return f.includes('wrap.innerHTML = pzTemaMiniHTML') && f.indexOf('chatScroll(true)') > f.indexOf('wrap.innerHTML'); })());
+  (() => { const f = sliceOk(app, 'function pzTemaColapsar', 'function pzTemaPintar'); return f.includes("wrap.innerHTML = '';") && f.indexOf('chatScroll(true)') > f.indexOf('wrap.innerHTML'); })());
 check('2f CSS: tira .pz-tema-mini + check .pz-tema-ok (vidrio, radio 14px)',
   css.includes('.pz-tema-mini{') && css.includes('border-radius:14px') && css.includes('.pz-tema-ok{'));
 
@@ -297,16 +297,16 @@ if (R6OK) {
   check('5c pinta comentario: SIN la línea puntual', wrap.innerHTML.includes('Responder un comentario') && !wrap.innerHTML.includes('pz-tema-hint'));
   sandbox.PZ_TEMA = { temas: [], idx: 0, stage: 'topic', cambio: null };
   R.pzTemaPintar();
-  check('5d pinta fin: Nada pendiente compacto (una línea, sin botones)',
-    wrap.innerHTML.includes('Nada pendiente') && wrap.innerHTML.includes('pz-tema-mini') && !wrap.innerHTML.includes('data-tema-op='), wrap.innerHTML.slice(0, 200));
+  check('5d pinta fin: sin temas no pinta nada en el chat (LOTE CHAT-MUSE: sin línea «Nada pendiente»)',
+    wrap.innerHTML === '', wrap.innerHTML.slice(0, 200));
   scrollCalls.length = 0;
   if (typeof R.pzTemaColapsar !== 'function') {
     check('5e colapsar: tira de una línea con el título y el estado', false, 'pzTemaColapsar ausente');
     check('5f colapsar: el scroll a abajo corre DESPUÉS (chatScroll(true))', false, 'pzTemaColapsar ausente');
   } else {
     R.pzTemaColapsar('La pregunta de los lunes', 'Anotado en Análisis');
-    check('5e colapsar: tira de una línea con el título y el estado',
-      wrap.innerHTML.includes('pz-tema-mini') && wrap.innerHTML.includes('La pregunta de los lunes') && wrap.innerHTML.includes('Anotado en Análisis'));
+    check('5e colapsar: la tarjeta se va sin dejar línea de estado (LOTE CHAT-MUSE)',
+      wrap.innerHTML === '', wrap.innerHTML.slice(0, 200));
     check('5f colapsar: el scroll a abajo corre DESPUÉS (chatScroll(true))', scrollCalls.includes(true), JSON.stringify(scrollCalls));
   }
   vmAsync = (async () => {
@@ -318,12 +318,12 @@ if (R6OK) {
     await sandbox.__guardar('6-15', '6 a 15');
     await sleep(120);
     check('5g guardar lunes: POST /api/weekly-consultas 6-15', apiCalls.some((c) => c[0] === 'POST' && c[1] === '/api/weekly-consultas' && c[2] && c[2].rango === '6-15'), JSON.stringify(apiCalls));
-    check('5h guardar lunes: la tarjeta colapsa a la tira', wrap.innerHTML.includes('pz-tema-mini') && wrap.innerHTML.includes('Anotado en Análisis'), wrap.innerHTML.slice(0, 200));
+    check('5h guardar lunes: la tarjeta colapsa y no deja línea de estado (LOTE CHAT-MUSE)', wrap.innerHTML === '', wrap.innerHTML.slice(0, 200));
     check('5i guardar lunes: Posty dice lo puntual como mensaje del chat', said.some((t) => String(t).includes('¿Algo puntual sobre este tema?')), JSON.stringify(said));
     check('5j guardar lunes: el scroll forzado corre tras el colapso', scrollCalls.includes(true));
     await sleep(500);
-    check('5k tras avanzar: estado final compacto (Nada pendiente, una línea)',
-      wrap.innerHTML.includes('Nada pendiente') && wrap.innerHTML.includes('pz-tema-mini') && !wrap.innerHTML.includes('data-tema-op='), wrap.innerHTML.slice(0, 200));
+    check('5k tras avanzar: sin temas no queda nada en el chat (LOTE CHAT-MUSE)',
+      wrap.innerHTML === '', wrap.innerHTML.slice(0, 200));
     // Guardar lunes con fallo: NO colapsa, error honesto.
     sandbox.PZ_TEMA = { temas: [{ kind: 'lunes', week_key: '2026-11-02' }], idx: 0, stage: 'topic', cambio: null };
     apiCalls.length = 0; said.length = 0; apiOk = false;
@@ -531,7 +531,7 @@ async function parteBoot() {
     check('7a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('7b /api/version = v822 (estampado)', ver && ver.build === '20261105-v822', JSON.stringify(ver));
+    check('7b /api/version = v822 (estampado)', ver && ver.build === '20261105-v824', JSON.stringify(ver));
     const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=557`)).text();
     check('7c el app.js servido trae el lote (colapsar + sin fundido + tarjeta inline del borrar)',
       appJs.includes('function pzTemaColapsar') && appJs.includes('function pzTemaMiniHTML') && !appJs.includes("classList.add('pz-ph-fading')")

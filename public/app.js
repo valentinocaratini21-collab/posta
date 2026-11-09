@@ -97,6 +97,7 @@ Object.assign(PZ_IC, {
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   arrowRight: '<path d="M4 12h15M13 6l6 6-6 6"/>',
   arrowLeft: '<path d="M20 12H5M11 6l-6 6 6 6"/>',
+  chevronLeft: '<path d="M15 5l-7 7 7 7"/>',
   arrowDown: '<path d="M12 4v15M6 13l6 6 6-6"/>',
   arrowUpRight: '<path d="M7 17L17 7M9 7h8v8"/>',
   send: '<path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9 22 2"/>',
@@ -9278,6 +9279,9 @@ function linkifyEsc(text) {
 // renderiza el banner confirmable; si no, la burbuja normal.
 function chatMsgHtml(role, text) {
   text = chatStripCelebrate(text); // el marcador [celebrate] jamás se ve
+  // (LOTE CHAT-MUSE · «…») Una fila guardada con texto «…» es el artefacto
+  // del tipeo viejo: nunca se rinde.
+  if (String(text || '').trim() === '…') return '';
   // Banner "¿publicamos tu primero?": texto + botón táctil de 1 tap.
   if (role !== 'user' && FP_MARKER_RE.test(String(text || ''))) {
     return `<div class="chat-msg ai fp-banner">`
@@ -9380,7 +9384,7 @@ async function chatLoadHistory() {
     const r = await api.get('/api/ideas/chat');
     if (r && Array.isArray(r.messages) && r.messages.length) {
       CHAT = r.messages
-        .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text)
+        .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text && String(m.text).trim() !== '…')
         .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000) }));
       const box = $('#chatBox');
       if (box) box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
@@ -9389,7 +9393,15 @@ async function chatLoadHistory() {
     }
     if (r && typeof r.welcome === 'string' && r.welcome.trim()) {
       const box = $('#chatBox');
-      if (box) box.insertAdjacentHTML('afterbegin', `<div class="chat-msg ai">${esc(r.welcome.trim().slice(0, 600))}</div>`);
+      if (box) {
+        box.insertAdjacentHTML('afterbegin', `<div class="chat-msg ai">${esc(r.welcome.trim().slice(0, 600))}</div>`);
+        // FIX REPRO CHAT-MUSE (preparador): con welcome proactivo, el saludo
+        // estático del estado vacío sobra — si no, el primer ingreso muestra
+        // DOS saludos seguidos (welcome + «decime qué necesitás…»). El saludo
+        // estático nunca se guarda en DB, así que cualquier burbuja con ese
+        // texto es el placeholder de chatCardHTML, no un mensaje real.
+        try { const st = [...box.querySelectorAll('.chat-msg.ai')].find(d => d.textContent.includes('yo pongo las palabras, nunca la foto')); if (st) st.remove(); } catch (e) {}
+      }
     }
     // Fix auditoría #2: si la importación de /prueba trajo 0, el welcome honesto
     // viene con 1 tap para rearmar la semana (POST /api/trial/rebuild-import).
@@ -9790,7 +9802,6 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
-      <img class="chat-face" src="ai-avatar.png" alt="Posty">
       <input id="chatInput" class="in" placeholder="escribile a posty…" maxlength="2000" autocomplete="off">
       <button class="btn btn-soft" id="chatPhotoBtn" title="Mandar una foto">${pzIc('camera', 18)}</button>
       <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">${pzIc('mic', 18)}</button>
@@ -10992,6 +11003,11 @@ function renderChatIdeaOptions(ideas) {
 // no de envío. La burbuja del usuario sale al instante; solo la ida y vuelta
 // a la IA se encola.
 let CHAT_X_QUEUE = Promise.resolve();
+// (LOTE CHAT-MUSE) Watchdog del intercambio: si la promesa del POST no se
+// resuelve ni rechaza en 95 s, la carrera la corta y el catch pinta la
+// burbuja honesta de error. El indicador «escribiendo» nunca queda colgado
+// y la cola de intercambios no se traba.
+const CHAT_X_WATCHDOG_MS = 95000;
 async function chatExchange({ text, display, extra, pushed }) {
   const box = $('#chatBox'), m = $('#chatMsg'), btn = $('#chatMicSend');
   if (!pushed) {
@@ -11025,10 +11041,13 @@ async function chatExchange({ text, display, extra, pushed }) {
   let libThumbs = [];
   try { libThumbs = await chatLibThumbs(); } catch (e) {}
   try {
-    const r = await api.post('/api/ideas/chat', Object.assign(
-      { messages: CHAT.map(m => ({ role: m.role, text: chatStripMcMarker(m.text) })), photos: unsentPhotos, library: libThumbs, libraryPaths: (libThumbs && libThumbs.paths) || [], drafts: chatDraftsCtx(),
-        photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean),
-        anchor_post_id: (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id) ? HF_CHAT_ANCHOR.id : undefined }, extra || {}), { timeout: 90000 });
+    const r = await Promise.race([
+      api.post('/api/ideas/chat', Object.assign(
+        { messages: CHAT.map(m => ({ role: m.role, text: chatStripMcMarker(m.text) })), photos: unsentPhotos, library: libThumbs, libraryPaths: (libThumbs && libThumbs.paths) || [], drafts: chatDraftsCtx(),
+          photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean),
+          anchor_post_id: (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id) ? HF_CHAT_ANCHOR.id : undefined }, extra || {}), { timeout: 90000 }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('chat-timeout-95s')), CHAT_X_WATCHDOG_MS)),
+    ]);
     dropTyping();
     // Releer el box: un re-render en medio del intercambio deja el `box`
     // viejo desconectado y la respuesta no se veía nunca.
@@ -22925,9 +22944,11 @@ function mzCloseSheet() {
    contenedor. La hoja se retiró de Inicio; abrir el chat navega acá. */
 function chatFullView() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  // (LOTE CHAT-MUSE) Encabezado FINO estilo Muse: chevron + cara +
+  // «Posty.» + punto verde «en línea». Sin tarjeta glass grande.
   return `<div class="pz-chatfull" id="pzChatFull">
   <header class="pz-chatfull-head">
-    <button type="button" class="pz-chatfull-back" onclick="pzGoBack()" aria-label="${en ? 'Back' : 'Volver'}">${pzIc('arrowLeft', 20)}</button>
+    <button type="button" class="pz-chatfull-back" onclick="pzGoBack()" aria-label="${en ? 'Back' : 'Volver'}">${pzIc('chevronLeft', 22)}</button>
     <img class="chat-face" src="ai-avatar.png" alt="Posty">
     <div class="pz-chatfull-tit"><b>Posty<span class="pdot">.</span></b><span class="pz-chatfull-est" id="pzChatEstado">${en ? 'online' : 'en línea'}</span></div>
   </header>
@@ -23082,31 +23103,21 @@ function pzTemaBarraInit() {
     try { inp.placeholder = pzTemaT('una frase corta, sobre este tema…', 'a short phrase, about this topic…'); } catch (e) {}
   }
   const mic = document.getElementById('chatMicSend');
-  // «Subir video»: picker de video, accept explícito CADA VEZ (regla
-  // subir-foto-directa: el accept se fija antes del click, nunca se
-  // hereda del camino anterior).
-  const vid = document.createElement('button');
-  vid.type = 'button'; vid.className = 'btn btn-soft'; vid.id = 'pzChatVideoBtn';
-  vid.title = pzTemaT('Subir video', 'Upload video');
-  vid.setAttribute('aria-label', pzTemaT('Subir video', 'Upload video'));
-  vid.innerHTML = pzIc('reel', 18);
-  vid.onclick = () => {
-    try {
-      const picker = document.getElementById('chatFile');
-      if (picker) { picker.accept = 'video/*'; picker.click(); }
-    } catch (e) {}
-  };
-  // Botón «Enviar» propio, siempre visible: ícono blanco sobre el
-  // círculo azul + texto (como el mock). Llama al chatSend de siempre.
+  // (LOTE CHAT-MUSE) El botón de video/reel sale del input del chat
+  // (su ícono se leía como calendario): la programación y la subida de
+  // video viven en la vista de semana, no en la barra del chat. La
+  // camarita sigue siendo foto (accept image/*, ver chatPhotoDelegar).
+  // Botón «Enviar» propio, siempre visible: círculo azul con el avión
+  // solo, sin texto (como el mock). Llama al chatSend de siempre.
   const send = document.createElement('button');
   send.type = 'button'; send.className = 'btn btn-primary pz-chat-send'; send.id = 'pzChatSendBtn';
   send.title = pzTemaT('Enviar', 'Send');
   send.setAttribute('aria-label', pzTemaT('Enviar', 'Send'));
-  send.innerHTML = pzIc('send', 16) + '<span>' + esc(pzTemaT('Enviar', 'Send')) + '</span>';
+  send.innerHTML = pzIc('send', 16);
   send.onclick = () => { try { chatSend(); } catch (e) {} };
   send.disabled = true;
-  if (mic && mic.parentNode === row) { row.insertBefore(vid, mic); row.insertBefore(send, mic.nextSibling); }
-  else { row.appendChild(vid); row.appendChild(send); }
+  if (mic && mic.parentNode === row) { row.insertBefore(send, mic.nextSibling); }
+  else { row.appendChild(send); }
   try { chatUpdateSendBtn(); } catch (e) {}
 }
 function pzTemaInit() {
@@ -23193,7 +23204,11 @@ function pzTemaMiniHTML(titulo, sub) {
 function pzTemaColapsar(titulo, sub) {
   const wrap = document.getElementById('pzTemaWrap');
   if (!wrap) return;
-  wrap.innerHTML = pzTemaMiniHTML(titulo, sub);
+  // (LOTE CHAT-MUSE) La tira colapsada sale del flujo del chat: al
+  // responder un tema, la tarjeta se va sin dejar línea de estado.
+  // (titulo/sub quedan sin usar; la firma se mantiene para no romper
+  // los llamadores.)
+  wrap.innerHTML = '';
   // El colapso cambia la altura: el scroll a abajo corre DESPUÉS.
   try { chatScroll(true); } catch (e) {}
 }
@@ -23205,10 +23220,10 @@ function pzTemaPintar() {
   const n = temas.length;
   let html = '';
   if (!tema) {
-    // Nada pendiente: una línea compacta, no la tarjeta grande
-    // (LOTE CHAT-MEJORA: la tarjeta tapaba el primer mensaje).
-    // «Ir a Hoy» / «Ir a Nivel» viven en la barra de pestañas.
-    html = pzTemaMiniHTML(pzTemaT('Nada pendiente ✓', 'Nothing pending ✓'), pzTemaT('Todo al día', 'All caught up'));
+    // (LOTE CHAT-MUSE) Sin tema pendiente no hay nada que mostrar en la
+    // conversación: la línea «Nada pendiente ✓ · Todo al día» sale del
+    // flujo del chat — el estado de la semana ya vive en Inicio.
+    html = '';
   } else if (tema.kind === 'hoy') {
     const p = tema.post;
     const titulo = (p.caption_corta || p.caption || '').trim() || pzTemaT('El posteo de hoy', "Today's post");

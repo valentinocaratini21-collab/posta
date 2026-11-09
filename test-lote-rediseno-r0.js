@@ -38,14 +38,14 @@ const orderOk = (s, keys) => {
 // RE-PIN tras implementar (md5s de work-v1; en base fallan a propósito).
 // (LOTE HOY-AVATAR-FEED · 8/11) Re-pin: app.js/styles.css del lote.
 // (LOTE CHAT-NUEVO v821 · 8/11) Re-pin: app.js/styles.css del lote + BUILD v821.
-const MD5_APP_WORK = '14b9335beb4729fa095fd6d5252bb281';
-const MD5_CSS_WORK = 'be8639f8497dc21edd17ec595c159a7f';
+const MD5_APP_WORK = '590b2a475ab107b2847a63cd54c88a97';
+const MD5_CSS_WORK = 'cadafccac8af119275c9c799668a0c61';
 // El woff2 es copia byte a byte del mock (no generado).
 const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins ----------
-  t(srv.includes("const BUILD_ID = '20261105-v823'"), 'server: BUILD v822 (R0 no toca server.js; re-pin lote A)');
+  t(srv.includes("const BUILD_ID = '20261105-v824'"), 'server: BUILD v822 (R0 no toca server.js; re-pin lote A)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -261,7 +261,8 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     // El regex excluye margin-bottom con lookbehind: la regla :has() de
     // R6 (margin-bottom 72px) es el offset correcto, no un bottom.)
     t(!/\.chat-input-row[^{]*\{[^}]*(?<!margin-)\bbottom\s*:/.test(r0css), 'chat: el bloque R0 no pone bottom en la fila del input (su offset es margin-bottom, R6)');
-    t(css.includes('.pz-chatfull .chat-input-row') && /margin:0 0 calc\(10px \+ env\(safe-area-inset-bottom\)\)/.test(css), 'chat: la fila del input conserva su margin-bottom de base'); }
+    t(css.includes('.pz-chatfull .chat-input-row') && /padding:0 12px calc\(10px \+ env\(safe-area-inset-bottom\)\)/.test(css), 'chat: la fila del input conserva su espacio inferior de base (ahora en padding, LOTE CHAT-MUSE: sin píldora glass)');
+    t(css.includes('.bb-app:has(.bb-bar) .pz-chatfull .chat-input-row') && css.includes('margin-bottom:calc(72px + 10px + env(safe-area-inset-bottom))'), 'chat: el offset del dock (margin-bottom 72px, R6) sigue intacto'); }
 
   // ---------- 6 ter. Atrás fijo vs encabezado común + layout escritorio (R0) ----------
   // El círculo fijo (top:10px, left:10px) caía encima del avatar del
@@ -449,7 +450,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v823', `boot: /api/version 20261105-v822 (vino ${ver.build})`);
+      t(ver.build === '20261105-v824', `boot: /api/version 20261105-v822 (vino ${ver.build})`);
       const appTxt = await (await fetch(`${BASE}/app.js?v=539`)).text();
       t(md5(appTxt) === md5(app), 'boot: app.js?v=539 servido = árbol');
       const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261183`)).text();

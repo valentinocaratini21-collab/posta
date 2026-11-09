@@ -6222,6 +6222,17 @@ function pzChatShowDraftsTopic(drafts, lastUserText) {
   return { list: yes.concat(no), topic: yes.length ? '' : words.join(' ') };
 }
 
+// (LOTE CHAT-MUSE · «…») Una fila de assistant sin texto real nunca se
+// guarda: el «…» era el artefacto del tipeo viejo y el acuse («acá va 👇»)
+// no se guarda como fila separada — la respuesta real del intercambio es
+// la única fila que queda. Devuelve true si guardó.
+function pzChatSaveReply(db, uid, reply) {
+  const t = String(reply || '').trim();
+  if (!t || t === '…') return false;
+  db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', t.slice(0, 3000));
+  return true;
+}
+
 app.post('/api/ideas/chat', async (req, res) => {
   if (!req.session.userId) return pzChatPublic(req, res);
   let _lpNx = false; requireTrialValid(req, res, () => { _lpNx = true; });
@@ -6274,7 +6285,7 @@ app.post('/api/ideas/chat', async (req, res) => {
       const dv = supportCases.divertToConcierge(db, uidChat, lastUserText);
       if (dv && dv.ok) {
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
-        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', dv.ack);
+        pzChatSaveReply(db, uidChat, dv.ack);
         return res.json({ reply: dv.ack, idea: null, concierge: true });
       }
     } catch (e) { console.error('[conserje] desvío falló, sigue la IA:', e.message); }
@@ -6287,7 +6298,7 @@ app.post('/api/ideas/chat', async (req, res) => {
       const reply = 'hola! 😄 con qué te ayudo hoy?';
       try {
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
-        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
+        pzChatSaveReply(db, uidChat, reply);
       } catch (e) {}
       return res.json({ reply, idea: null });
     }
@@ -6307,7 +6318,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     const tmPersist = (reply) => {
       try {
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
-        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
+        pzChatSaveReply(db, uidChat, reply);
       } catch (e) {}
     };
     let tmDet = null;
@@ -6359,7 +6370,7 @@ app.post('/api/ideas/chat', async (req, res) => {
         const reply = `dale, ${cname}! \uD83D\uDE04 ya me lo anoto.`;
         try {
           db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
-          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
+          pzChatSaveReply(db, uidChat, reply);
         } catch (e) {}
         return res.json({ reply, idea: null });
       }
@@ -6381,7 +6392,7 @@ app.post('/api/ideas/chat', async (req, res) => {
           : `dale, vuelvo a proponerte ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} 👍`;
         try {
           db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', lastUserText.slice(0, 3000));
-          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', reply);
+          pzChatSaveReply(db, uid, reply);
         } catch (e) {}
         return res.json({ reply, idea: null });
       }
@@ -6616,7 +6627,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     } catch (e) { console.error('[chat-coherencia] guard error:', e.message); }
     const uid = req.session.userId;
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', clean[clean.length - 1].text);
-    db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', String(out.reply || '').slice(0, 3000));
+    pzChatSaveReply(db, uid, out.reply);
     if (out.idea) {
       db.prepare('INSERT INTO chat_state (user_id, idea_json, updated_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET idea_json=excluded.idea_json, updated_at=excluded.updated_at').run(uid, JSON.stringify(out.idea), Date.now());
       // Pedido de fotos/video (1 vez por semana): registrar cuándo se pidió
@@ -32887,7 +32898,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v823';
+const BUILD_ID = '20261105-v824';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
