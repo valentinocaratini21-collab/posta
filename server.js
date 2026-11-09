@@ -6488,7 +6488,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   // después lo que necesita atención (publicando/fallido), después lo ya publicado.
   let cleanDrafts = [];
   try {
-    const rows = db.prepare(`SELECT id, caption, scheduled_for, scheduled_at, status, media_type, needs_review, overlay_text, overlay_zone, redo_left, error FROM posts
+    const rows = db.prepare(`SELECT id, caption, scheduled_for, scheduled_at, status, media_type, needs_review, overlay_text, overlay_zone, redo_left, error, source FROM posts
       WHERE user_id = ? AND status IN ('draft','scheduled','publishing','failed','published')
       ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'publishing' THEN 2 WHEN 'failed' THEN 3 ELSE 4 END,
         COALESCE(scheduled_for, created_at) DESC LIMIT 12`).all(uidChat) || [];
@@ -6508,6 +6508,9 @@ app.post('/api/ideas/chat', async (req, res) => {
       status: r.status,
       media_type: r.media_type || 'image',
       needs_review: !!r.needs_review,
+      // (CARRIL EXPRÉS) El cerebro distingue el posteo exprés (foto/video
+      // del cliente para HOY) del posteo normal de la semana.
+      express: r.source === 'express',
     }));
     // (6A · ítem 2) Posteo anclado desde la tile (botón 💬): pasa a ser el
     // borrador #1 del contexto, así los edits del modelo (que referencian
@@ -6936,7 +6939,8 @@ app.post('/api/ideas/chat', async (req, res) => {
         if (post.status === 'publishing' || post.status === 'published') { pub.ok.push(target.id); pub.okTitles.push(chatTitle(post)); continue; }
         if (!['draft', 'scheduled', 'failed'].includes(post.status)) { pub.failed.push(target.id); pub.failedTitles.push(chatTitle(post)); continue; }
         if (post.needs_review) { pub.inReview.push(target.id); pub.inReviewTitles.push(chatTitle(post)); continue; }
-        if (!['scheduled', 'publishing', 'published'].includes(post.status)) {
+        // (CARRIL EXPRÉS) El posteo exprés no consume cupo: publica hoy sin mirar la semana.
+        if (post.source !== 'express' && !['scheduled', 'publishing', 'published'].includes(post.status)) {
           const q = quotaFor(uid, post.media_type);
           if (q.left <= 0) { pub.failed.push(target.id); pub.failedTitles.push(chatTitle(post)); continue; }
         }
@@ -7374,6 +7378,7 @@ function quotaCounts(userId, monday) {
   // Contar por created_at desfasaba la tira del chat vs el calendario.
   const rows = db.prepare(`SELECT media_type, COUNT(*) AS n FROM posts
     WHERE user_id = ? AND status IN ('scheduled','publishing','published')
+    AND COALESCE(source,'') != 'express'
     AND date(COALESCE(scheduled_at, published_at, created_at)) >= date(?)
     AND date(COALESCE(scheduled_at, published_at, created_at)) < date(?, '+7 days')
     GROUP BY media_type`).all(userId, monday, monday) || [];
@@ -13236,7 +13241,11 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       moveIso = scheduled_at;
     }
     db.prepare(`UPDATE posts SET caption=?, hashtags=?, image_path=?, prev_image_path=?, overlay_text=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, imageNext, prevNext, overlayNext, post.id);
-    if (moveIso) { try { db.prepare(`UPDATE posts SET scheduled_at=? WHERE id=?`).run(moveIso, post.id); } catch (e) {} }
+    if (moveIso) {
+      try { db.prepare(`UPDATE posts SET scheduled_at=? WHERE id=?`).run(moveIso, post.id); } catch (e) {}
+      // (CARRIL EXPRÉS) Al pasar a un día de la semana deja de ser exprés: es un posteo normal de la semana.
+      if (post.source === 'express') { try { db.prepare(`UPDATE posts SET source='' WHERE id=?`).run(post.id); } catch (e) {} }
+    }
     // (media-cliente-2) Herencia por evidencia: foto nueva en un
     // borrador cuyo caption nombra exactamente un producto real.
     if (image_path && image_path !== post.image_path) {
@@ -13298,6 +13307,8 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       post.approval === 'rejected' ? 'pending' : (post.approval || 'pending'),
       post.id
     );
+    // (CARRIL EXPRÉS) Al programarse en la semana deja de ser exprés.
+    if (post.source === 'express') { try { db.prepare(`UPDATE posts SET source='' WHERE id=?`).run(post.id); } catch (e) {} }
     clearPublishingStopped(req.session.userId); // (v275) programar a mano es reanudar la cuenta
     scheduleLintForPost(req.session.userId, post.id); // (v198-A) lint al programar
     // 🎓 Autopiloto graduado (2026-10-02): si programó SIN editar, es un voto
@@ -13891,6 +13902,7 @@ async function ensureTodayPost(uid, tz, now) {
         const cands = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft'
           AND image_path LIKE '/media/%' AND media_type IN ('image','carousel')
           AND COALESCE(approval,'pending') != 'rejected'
+          AND COALESCE(source,'') != 'express'
           AND COALESCE(user_stopped, 0) = 0
           AND created_at >= datetime('now', '-2 days') ORDER BY id DESC`).all(uid);
         for (const c of cands) {
@@ -13941,7 +13953,7 @@ function ritualLang(uid) {
 
 function ritualPublicadoHoy(uid, tz, dayKey) {
   try {
-    const rows = db.prepare(`SELECT published_at, scheduled_at FROM posts WHERE user_id = ? AND status = 'published' AND (published_at IS NOT NULL OR scheduled_at IS NOT NULL)`).all(uid);
+    const rows = db.prepare(`SELECT published_at, scheduled_at FROM posts WHERE user_id = ? AND status = 'published' AND COALESCE(source,'') != 'express' AND (published_at IS NOT NULL OR scheduled_at IS NOT NULL)`).all(uid);
     return rows.some((r) => {
       const raw = r.published_at || r.scheduled_at;
       if (!raw) return false;
@@ -14168,7 +14180,8 @@ app.post('/api/posts/:id/publish-now', requireAuth, requireTrialValid, (req, res
       message: 'Antes de publicar, revisá estos puntos del borrador: ' + clPub.duros.map((d) => d.texto).join(' · ') + '. Podés resolverlos o aceptarlos conociéndolos desde la revisión del borrador.' });
   } catch (e) { return res.status(409).json({ error: 'checklist_bloqueado', items: [], message: 'No se pudo revisar el borrador antes de publicar. Revisá la checklist del borrador e intentá de nuevo.' }); }
   // Publicar ahora SÍ consume cupo (salvo que ya estuviera programado: ya se descontó).
-  if (!['scheduled', 'publishing', 'published'].includes(post.status)) {
+  // (CARRIL EXPRÉS) El posteo exprés no consume cupo: sale hoy sin mirar la semana.
+  if (post.source !== 'express' && !['scheduled', 'publishing', 'published'].includes(post.status)) {
     const q = quotaFor(req.session.userId, post.media_type);
     if (q.left <= 0) {
       return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
@@ -14179,6 +14192,89 @@ app.post('/api/posts/:id/publish-now', requireAuth, requireTrialValid, (req, res
   ensureImageBaseUrl(db, req.session.userId, req);
   // La publicación corre en segundo plano; el frontend consulta GET /api/posts/:id
   publishSinglePost(db, { ...post, status: 'publishing' }).catch((e) => console.error('[posta] publish-now:', e.message));
+  res.json({ ok: true, status: 'publishing' });
+});
+
+// ---------- CARRIL EXPRÉS (decisión Valentino 9/11 ~03:03) ----------
+// La foto/video que el cliente manda por el chat se arma como pieza
+// EXPRÉS: sale HOY si el cliente la acepta con un toque («Publicar
+// hoy» en la tarjeta del chat). NO se programa en la semana (sin slot,
+// sin week_key, sin cupo): es un carril aparte del flujo de la semana.
+// El posteo diario de Posty sigue su curso (los dos pueden salir el
+// mismo día) y el video del cliente no consume el video semanal.
+// POST /api/express/armar — arma la pieza exprés desde un asset del
+// cliente (misma maquinaria de caption que /armar: albumPropuesta; para
+// video, el mismo reel protagonista: buildClientVideoReelPost). Se usa
+// cuando /armar no encuentra hueco libre en la semana — el exprés no
+// necesita slot. La aceptación del cliente ES la revisión: la pieza es
+// su propio material y la ve en la tarjeta antes de aceptar, así que
+// nace sin needs_review (la checklist dura igual frena al publicar).
+app.post('/api/express/armar', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const asset = sftAssetPropio(uid, (req.body || {}).asset_id);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    if (asset.kind !== 'photo' && asset.kind !== 'video') return res.status(400).json({ ok: false, error: 'Solo fotos y videos' });
+    const vision = String(((req.body || {}).vision) || '');
+    // Ya armado como exprés: devolver el existente, nunca duplicar.
+    try {
+      const ya = db.prepare(`SELECT id, status, caption, image_path, cover_path, media_type FROM posts WHERE user_id = ? AND foto_asset_id = ? AND source = 'express' AND status IN ('draft','scheduled','published') ORDER BY id DESC LIMIT 1`).get(uid, asset.id);
+      if (ya) {
+        return res.json({ ok: true, post_id: ya.id, caption: ya.caption || '', kind: ya.media_type === 'video' ? 'video' : 'photo', image_path: ya.image_path || asset.file_path, thumb: ya.cover_path || '', expres: true, ya_armado: true });
+      }
+    } catch (e) {}
+    const prop = await albumPropuesta(uid, asset.id, '', vision);
+    if (prop.capped) return res.status(402).json({ ok: false, error: prop.error });
+    if (prop.error) return res.status(400).json({ ok: false, error: prop.error });
+    if (prop.gated) return res.json({ ok: false, gated: true, reason: prop.reason || 'gated', pregunta: prop.pregunta || null });
+    if (asset.kind === 'video') {
+      const full = db.prepare('SELECT id, file_path, album_quality, thumb_path FROM assets WHERE id = ? AND user_id = ?').get(asset.id, uid);
+      const over = { caption: prop.caption || '', hashtags: prop.hashtags || '', headline: prop.headline || '' };
+      const built = await buildClientVideoReelPost(uid, full, 'express', over);
+      if (built && built.busy) return res.status(409).json({ ok: false, error: 'Ya estoy armando ese reel' });
+      if (built && built.gated) return res.json({ ok: false, gated: true, reason: built.reason || 'gated', pregunta: prop.pregunta || null });
+      if (!built || !built.postId) return res.status(400).json({ ok: false, error: (built && built.error) || 'No pude armar el reel' });
+      // El reel exprés NO pertenece a ninguna semana: fuera de week_key y
+      // fuera del conteo de reels generados (tipo 'expres', no 'reel').
+      try { db.prepare(`UPDATE posts SET source='express', week_key=NULL, tipo='expres', needs_review=0, foto_asset_id=? WHERE id=?`).run(asset.id, built.postId); } catch (e) { console.error('[express-armar] update reel:', e.message); }
+      return res.json({ ok: true, post_id: built.postId, caption: over.caption, headline: over.headline || '', hashtags: over.hashtags || '', kind: 'video', image_path: built.url || asset.file_path, thumb: built.cover || asset.thumb_path || '', expres: true });
+    }
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, tipo, foto_asset_id)
+      VALUES (?,?,?,?, 'draft', 'image', 0, 'express', 1, 'foto', ?)`)
+      .run(uid, asset.file_path, prop.caption || '', prop.hashtags || '', asset.id);
+    return res.json({ ok: true, post_id: ins.lastInsertRowid, caption: prop.caption || '', headline: prop.headline || '', hashtags: prop.hashtags || '', kind: 'photo', image_path: asset.file_path, expres: true });
+  } catch (e) { console.error('[express-armar]', e.message); res.status(500).json({ ok: false, error: 'No pude armar el posteo exprés' }); }
+});
+
+// POST /api/express/:id/publicar — la aceptación de un toque de la
+// tarjeta del chat. Publica EL MISMO DÍA, directo: sin confirmación
+// de las 9:00, sin aviso de 30 min y sin cupo (el exprés no consume el
+// cupo semanal ni el video semanal). Solo posteos de foto/video del
+// cliente (source 'express' o 'album-armado'): un posteo de la semana
+// generado por Posty NO entra por acá (ese sale por su hora). Los
+// resguardos de calidad sí se mantienen: en revisión, checklist dura
+// y trial vencido frenan la salida con mensaje honesto.
+app.post('/api/express/:id/publicar', requireAuth, requireTrialValid, (req, res) => {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  if (post.status === 'publishing') return res.json({ ok: true, status: 'publishing' });
+  if (post.status === 'published') return res.json({ ok: true, status: 'published', permalink: post.ig_permalink });
+  if (!['draft', 'scheduled', 'failed'].includes(post.status)) {
+    return res.status(400).json({ error: 'Este posteo no se puede publicar ahora' });
+  }
+  if (post.source !== 'express' && post.source !== 'album-armado') {
+    return res.status(403).json({ error: 'no_expres', message: 'Solo las fotos y videos que mandás por el chat salen por el carril exprés.' });
+  }
+  if (post.needs_review) return res.status(403).json({ error: 'in_review', message: 'Este posteo está en revisión ✨ Te aviso cuando esté listo.' });
+  try {
+    const clPub = checklist.computeChecklist(db, MEDIA_DIR, req.session.userId, post);
+    if (clPub.bloqueado) return res.status(409).json({ error: 'checklist_bloqueado', items: clPub.duros,
+      message: 'Antes de publicar, revisá estos puntos del borrador: ' + clPub.duros.map((d) => d.texto).join(' · ') + '. Podés resolverlos o aceptarlos conociéndolos desde la revisión del borrador.' });
+  } catch (e) { return res.status(409).json({ error: 'checklist_bloqueado', items: [], message: 'No se pudo revisar el borrador antes de publicar. Revisá la checklist del borrador e intentá de nuevo.' }); }
+  db.prepare(`UPDATE posts SET status='publishing', scheduled_at=datetime('now'), approval='approved', source='express', error='' WHERE id=?`).run(post.id);
+  ensureImageBaseUrl(db, req.session.userId, req);
+  try { recordSignal(req.session.userId, post, 'approved'); } catch (e) {}
+  publishSinglePost(db, { ...post, status: 'publishing' }).catch((e) => console.error('[express-publicar]:', e.message));
   res.json({ ok: true, status: 'publishing' });
 });
 
@@ -33166,7 +33262,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v837';
+const BUILD_ID = '20261105-v838';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

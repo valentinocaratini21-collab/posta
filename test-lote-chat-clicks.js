@@ -56,7 +56,7 @@ function reFrom(src, re) {
 // ---------- Parte A: estática ----------
 function parteA() {
   console.log('— A) estática: pins y marcadores del lote —');
-  check('A0 BUILD v824 en server.js', srvSrc.includes("const BUILD_ID = '20261105-v836';"));
+  check('A0 BUILD v824 en server.js', srvSrc.includes("const BUILD_ID = '20261105-v838';"));
   check('A0b app.js del lote (28+ marcadores chat-clicks)', (appSrc.match(/LOTE CHAT-CLICKS/g) || []).length >= 10, `marcadores=${(appSrc.match(/LOTE CHAT-CLICKS/g) || []).length}`);
   // §1 app.js — funciones nuevas
   for (const f of ['async function pzSftChatArmarUno(', 'async function pzSftChatAprobarTodas(', 'async function pzSftChatAprobarUno(', 'function pzSftChatMarcarAprobada(', 'function pzSftHoyYmd(', 'function pzSftChatPregunta(', 'async function pzSftChatPreguntaResponder(', 'async function pzSftChatCambiarDia(', 'async function pzSftChatMoverDia(', 'async function pzSftChatGuardarTexto(', 'async function pzSftChatOtraFoto(', 'function chatIdeaPhotoPool(', 'var PZ_SFT_ARMADOS = {};', 'var PZ_OTRAFOTO_IDX = {};', 'var PZ_SFT_PREGUNTA_ACTIVA = null;']) {
@@ -81,7 +81,7 @@ function parteA() {
   check('A3b existe diasLibresTomados', srvSrc.includes('function diasLibresTomados(uid, kind, excludePostId) {'));
   check('A3c existe proximosDiasLibres', srvSrc.includes('function proximosDiasLibres(uid, kind, excludePostId, n) {'));
   check('A3d existe GET /api/posts/dias-libres', srvSrc.includes("app.get('/api/posts/dias-libres'"));
-  check('A3e /armar reenvía la pregunta en los 3 gated', (srvSrc.match(/pregunta: prop\.pregunta \|\| null/g) || []).length === 3, `veces=${(srvSrc.match(/pregunta: prop\.pregunta \|\| null/g) || []).length}`);
+  check('A3e /armar reenvía la pregunta en los 5 gated', (srvSrc.match(/pregunta: prop\.pregunta \|\| null/g) || []).length === 5, `veces=${(srvSrc.match(/pregunta: prop\.pregunta \|\| null/g) || []).length}`);
   check('A3f albumPropuesta devuelve la pregunta al gatear', srvSrc.includes('pregunta: armaPreguntaFoto(uid, fotoVis.tag)'));
   check('A3g save-draft acepta scheduled_at y valida el día', srvSrc.includes("if (scheduled_at !== undefined && scheduled_at) {") && srvSrc.includes("error: 'dia_ocupado'") && srvSrc.includes('moveIso = scheduled_at;'));
   check('A3h el move no toca el status (sigue borrador)', srvSrc.includes("UPDATE posts SET scheduled_at=? WHERE id=?"));
@@ -636,7 +636,7 @@ async function parteD() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('D0b /api/version trae el BUILD v824', ver.status === 200 && ver.json && ver.json.build === '20261105-v836', JSON.stringify(ver.json));
+    check('D0b /api/version trae el BUILD v824', ver.status === 200 && ver.json && ver.json.build === '20261105-v838', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('D0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 

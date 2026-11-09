@@ -3024,7 +3024,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, libra
   // nada si esta lista tiene items. Si preguntan "cómo viene la semana", respondé con la posta.
   const stLabel = (s) => s === 'scheduled' ? 'PROGRAMADO' : s === 'published' ? 'publicado' : s === 'publishing' ? 'PUBLICANDO' : s === 'failed' ? 'FALLIDO' : 'borrador';
   const draftList = (Array.isArray(drafts) ? drafts : [])
-    .map((d, i) => `${i + 1}. [${stLabel(d.status)}${d.needs_review ? ' · EN REVISIÓN' : ''} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"${d.overlay ? ` [texto en la foto: "${String(d.overlay).slice(0, 60)}" · ${d.zone === 'bottom' ? 'abajo' : 'arriba'}]` : ''}${(d.redo_left !== null && d.redo_left !== undefined) ? ` [rehaces: ${d.redo_left}]` : ''}${d.error ? ` [error: ${String(d.error).slice(0, 80)}]` : ''}`)
+    .map((d, i) => `${i + 1}. [${stLabel(d.status)}${d.needs_review ? ' · EN REVISIÓN' : ''}${d.express ? ' · EXPRÉS (foto/video del cliente para HOY)' : ''} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"${d.overlay ? ` [texto en la foto: "${String(d.overlay).slice(0, 60)}" · ${d.zone === 'bottom' ? 'abajo' : 'arriba'}]` : ''}${(d.redo_left !== null && d.redo_left !== undefined) ? ` [rehaces: ${d.redo_left}]` : ''}${d.error ? ` [error: ${String(d.error).slice(0, 80)}]` : ''}`)
     .join('\n');
   const draftsGuide = draftList
     ? 'TODO lo del cliente en Instagram (borradores + programados + publicados + fallidos):\n' + draftList + '\n' +
@@ -3049,7 +3049,10 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, libra
       'IMPORTANTE: si el cliente pide cambiar el CONCEPTO del posteo ("cambiá el posteo", "hacelo de nuevo", "otra idea", "con otro ángulo") ' +
       'y no solo el texto, la imagen se REGENERA automáticamente para acompañar el concepto nuevo: avisalo en tu confirmación ("listo, lo rehice con imagen nueva 👇"). ' +
       'Solo cuando pida cambio explícito de texto ("cambiá el caption", "cambiá el texto") la imagen se mantiene. ' +
-      'Si no entendés a cuál se refiere, preguntá corto ("¿el primero o el segundo?") en vez de adivinar.'
+      'Si no entendés a cuál se refiere, preguntá corto ("¿el primero o el segundo?") en vez de adivinar. ' +
+      'Si un borrador dice EXPRÉS: es la foto o el video que el cliente mandó por el chat para publicar HOY — sale con el botón «Publicar hoy» de la tarjeta, NO lo programes en la semana por tu cuenta. ' +
+      'Si el cliente pide cambiarle el texto, editá ese borrador como siempre. Si pide que salga otro día, agregá "when" (al programarlo deja de ser exprés). ' +
+      'Si pide publicarlo ya ("publicalo hoy", "dale, subilo"), emití el bloque ```publish con su número.'
     : '';
   // ADN del negocio: entrevista breve por lo que FALTA (las 4 si no hay nada, solo lo pendiente si es parcial).
   const DNA_MISSING_LABELS = { producto_estrella: 'cuál es su producto o servicio estrella', cliente_ideal: 'quién es su cliente ideal', diferencial: 'qué lo diferencia de la competencia', tono: 'cómo quiere sonar' };

@@ -29289,6 +29289,22 @@ async function pzSftChatArmarUno(it) {
     return { error: en ? 'I could not build the proposal yet. Tap Other options to decide.' : 'No pude armar la propuesta todavía. Tocá Otras opciones para decidir.' };
   }
 }
+/* Arma UNA foto/video pendiente como EXPRÉS (sin slot de semana): la
+   pieza sale HOY si el cliente la acepta con «Publicar hoy». Se usa
+   cuando /armar no encuentra hueco libre — el carril exprés no
+   necesita slot. (CARRIL EXPRÉS) */
+async function pzSftChatArmarExpres(it) {
+  const en = pzSftEn();
+  if (!(await pzSftAsegurarAssetTmp(it))) return { error: en ? 'I could not upload that photo to the album. Try again.' : 'No pude subir esa foto al álbum. Probá de nuevo.' };
+  try {
+    const r = await api.post('/api/express/armar', { asset_id: it.assetId, vision: it.vision || '' });
+    if (!r || (!r.ok && !r.gated)) return { error: en ? 'I could not build the post yet.' : 'No pude armar el posteo todavía.' };
+    if (r.gated) return { gated: true, reason: r.reason || '', pregunta: r.pregunta || null };
+    return { prop: { assetId: it.assetId, postId: r.post_id, scheduled_at: null, dia: '', dia_label: '', hora: '', semana_llena: false, caption: r.caption || '', headline: r.headline || '', hashtags: r.hashtags || '', kind: r.kind || 'photo', image_path: r.image_path || it.url || '', thumb: r.thumb || '', expres: true, ya_armado: !!r.ya_armado } };
+  } catch (e) {
+    return { error: en ? 'I could not build the post yet.' : 'No pude armar el posteo todavía.' };
+  }
+}
 /* (LOTE CHAT-CLICKS · punto 6) UNA sola pregunta con DOS botones cuando
    la foto no muestra el negocio con claridad. La respuesta arma la
    tarjeta (la visión es la opción tocada); nunca dos preguntas seguidas
@@ -29374,6 +29390,40 @@ async function pzSftChatProponer() {
   if (pend.aprobandoTodas) return;
   if (it.choice === 'armar') return; // «Aprobar todas» ya la aprobó mientras se armaba
   if (arm.error) {
+    // (CARRIL EXPRÉS) Sin hueco libre en la semana, la pieza igual se
+    // arma como exprés (sale hoy si la acepta): el carril exprés no
+    // necesita slot. Otros errores (sin IA, etc.) se muestran tal cual.
+    if (/No encontré un (día|hueco) libre/i.test(String(arm.error))) {
+      const ex = await pzSftChatArmarExpres(it);
+      if (PZ_SFT_CHAT_PENDIENTE !== pend) return;
+      if (pend.token !== token) { pzSftChatProponer(); return; }
+      if (ex.prop) {
+        if (!pend.fraseDicha) {
+          pend.fraseDicha = true;
+          pzSftChatDecir(en ? 'I put together the post for you.' : 'Te armé el posteo.', '');
+        }
+        pend.propuesta = ex.prop;
+        ex.prop.itemIdx = pend.idx;
+        PZ_SFT_ARMADO_ACTUAL = ex.prop;
+        pzSftChatTarjetaArmada(ex.prop);
+        if (pend.items[pend.idx] === it) pend.idx++;
+        if (pend.idx < pend.items.length) pzSftChatProponer();
+        return;
+      }
+      if (ex.gated) {
+        if (ex.pregunta && Array.isArray(ex.pregunta.opciones) && ex.pregunta.opciones.length === 2 && pend.preguntadoIdx !== pend.idx) {
+          pend.preguntadoIdx = pend.idx;
+          pzSftChatPregunta(ex.pregunta);
+          return;
+        }
+        pzSftChatDecir(en ? 'This photo does not show your business clearly enough for an honest proposal. Keep it as material, or write me what it shows.' : 'Esta foto no muestra tu negocio con claridad como para armarte una propuesta honesta. Guardala como material, o escribime qué muestra.', pzSftChatBotones());
+        pend.propuesta = null;
+        return;
+      }
+      pzSftChatDecir(ex.error || arm.error, pzSftChatBotones());
+      pend.propuesta = null;
+      return;
+    }
     pzSftChatDecir(arm.error, pzSftChatBotones());
     pend.propuesta = null;
     return;
@@ -29481,9 +29531,9 @@ async function pzSftChatAprobarTodas() {
   let okN = 0;
   // 1) todas las tarjetas ya armadas
   for (const pid of Object.keys(PZ_SFT_ARMADOS)) {
-    const prop = PZ_SFT_ARMADOS[pid];
+    const prop = PZ_SFT_ARMADOS[pid]; // (CARRIL EXPRÉS) lo ya publicado hoy no se re-aprueba en semana
     const it = (typeof prop.itemIdx === 'number') ? pend.items[prop.itemIdx] : pend.items.find((x) => x.assetId === prop.assetId);
-    if (!it || it.choice === 'armar') continue;
+    if (!it || it.choice === 'armar' || it.choice === 'expres') continue;
     if (await pzSftChatAprobarUno(prop, it)) { okN++; pzSftChatMarcarAprobada(prop.postId); }
   }
   pend.propuesta = null;
@@ -29492,7 +29542,7 @@ async function pzSftChatAprobarTodas() {
   while (pend.idx < pend.items.length) {
     const it = pend.items[pend.idx];
     if (!it) break;
-    if (it.choice === 'armar') { pend.idx++; continue; }
+    if (it.choice === 'armar' || it.choice === 'expres') { pend.idx++; continue; } // (CARRIL EXPRÉS) lo ya publicado hoy no se re-aprueba en semana
     pend.preguntadoIdx = -1;
     if (pend.texto) it.vision = pend.texto;
     const arm = await pzSftChatArmarUno(it);
@@ -29525,6 +29575,66 @@ function pzSftChatMarcarAprobada(postId) {
     if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">✓ ' + (pzSftEn() ? 'Scheduled' : 'Programado') + '</span>';
   } catch (e) {}
 }
+/* (CARRIL EXPRÉS) «Publicar hoy»: un toque publica la pieza HOY, directo,
+   sin 9:00 ni aviso de 30 min y sin cupo. El posteo diario sigue su curso
+   y el video del cliente no toca el video semanal. Se consulta el estado
+   hasta verlo publicado (mismo patrón que publishNowFlow). */
+async function pzSftChatPublicarHoy(postId) {
+  const prop = (postId && PZ_SFT_ARMADOS[Number(postId)]) || PZ_SFT_ARMADO_ACTUAL;
+  if (!prop || !prop.postId) return;
+  const en = pzSftEn();
+  const pid = Number(prop.postId);
+  if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) { try { igGateFeedback(document.body); } catch (e) {} return; }
+  const row = document.getElementById('pzSftCardBtns-' + pid);
+  if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">⏳ ' + (en ? 'Publishing today…' : 'Publicando hoy…') + '</span>';
+  let r;
+  try { r = await api.post('/api/express/' + pid + '/publicar', {}); }
+  catch (e) {
+    const msg = (e && e.data && (e.data.message || e.data.error)) || (e && e.message) || '';
+    if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">😅 ' + esc(msg || (en ? 'Try again' : 'Probá de nuevo')) + '</span>';
+    pzSftChatDecir(msg || (en ? 'I could not publish it.' : 'No pude publicarlo.'), '');
+    return;
+  }
+  if (!r || !r.ok) {
+    if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">😅 ' + (en ? 'Try again' : 'Probá de nuevo') + '</span>';
+    return;
+  }
+  const pend = (typeof PZ_SFT_CHAT_PENDIENTE !== 'undefined' && PZ_SFT_CHAT_PENDIENTE) ? PZ_SFT_CHAT_PENDIENTE : null;
+  const it = pend ? ((typeof prop.itemIdx === 'number') ? pend.items[prop.itemIdx] : pend.items.find((x) => x.assetId === prop.assetId)) : null;
+  if (it) it.choice = 'expres';
+  const t0 = Date.now();
+  while (Date.now() - t0 < 3.5 * 60 * 1000) {
+    await new Promise((res2) => setTimeout(res2, 2500));
+    let st;
+    try { st = (await api.get('/api/posts/' + pid)).post; } catch (e) { continue; }
+    if (!st) continue;
+    if (st.status === 'published') {
+      pzSftChatMarcarPublicadoHoy(pid, st.ig_permalink);
+      toast('🎉 ' + (en ? 'Published today!' : '¡Ya salió hoy!'));
+      try { render(); } catch (e) {}
+      if (pend && pend.items.every((x) => x.choice)) PZ_SFT_CHAT_PENDIENTE = null;
+      return;
+    }
+    if (st.status === 'failed' || st.status === 'cancelled') {
+      if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">😅 ' + esc(st.error || (en ? 'It could not be published.' : 'No se pudo publicar.')) + '</span>';
+      return;
+    }
+  }
+  if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">⏳ ' + (en ? 'Still publishing — you will see it in Schedule in a minute.' : 'Sigue publicándose… lo ves en Schedule en un minuto.') + '</span>';
+}
+/* (CARRIL EXPRÉS) Marca la tarjeta publicada HOY en el lugar, con el link a Instagram. */
+function pzSftChatMarcarPublicadoHoy(postId, permalink) {
+  try {
+    const en = pzSftEn();
+    const row = document.getElementById('pzSftCardBtns-' + Number(postId));
+    if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">✓ ' + (en ? 'Published today!' : '¡Publicado hoy!') + '</span>' +
+      (permalink ? ` <a href="${esc(permalink)}" target="_blank" rel="noopener" style="font-size:13px;color:#2793C8">` + (en ? 'View on Instagram' : 'Ver en Instagram') + '</a>' : '');
+    // La línea de «cuándo» queda en pasado: ya salió, no «sale cuando lo aceptes».
+    const card = document.getElementById('pzSftCard-' + Number(postId));
+    const cuando = card && card.querySelector ? card.querySelector('.pz-sft-cuando') : null;
+    if (cuando) cuando.innerHTML = '<b>' + (en ? 'Published today ✓' : 'Salió hoy ✓') + '</b>';
+  } catch (e) {}
+}
 /* Hoy en la zona del cliente (yyyy-mm-dd), para la frase fija. */
 function pzSftHoyYmd() {
   const d = new Date();
@@ -29542,13 +29652,23 @@ function pzSftChatTarjetaArmada(prop) {
   if (!box) { pzSftChatDecir(en ? 'Post ready.' : 'Posteo listo.', pzSftChatBotones()); return; }
   const pid = Number(prop.postId) || 0;
   PZ_SFT_ARMADOS[pid] = prop;
-  const img = prop.image_path ? `<img class="pz-sft-img" src="${esc(prop.image_path)}" alt="" style="width:100%;border-radius:12px;display:block" loading="lazy">` : '';
-  const cuando = (prop.dia_label && prop.hora) ? (en ? `Goes out ${prop.dia_label} at ${prop.hora}` : `Sale el ${prop.dia_label} a las ${prop.hora}`) : '';
+  // (CARRIL EXPRÉS) El video se muestra como video (con su portada), no
+  // como <img> con la URL del mp4: la tarjeta vieja lo dejaba roto.
+  const img = prop.kind === 'video' && prop.image_path
+    ? `<video class="pz-sft-img" src="${esc(prop.image_path)}" ${prop.thumb ? `poster="${esc(prop.thumb)}"` : ''} controls playsinline preload="metadata" style="width:100%;border-radius:12px;display:block"></video>`
+    : (prop.image_path ? `<img class="pz-sft-img" src="${esc(prop.image_path)}" alt="" style="width:100%;border-radius:12px;display:block" loading="lazy">` : '');
+  // (CARRIL EXPRÉS) Sin slot de semana, la pieza es exprés: sale hoy cuando la acepta.
+  const cuando = (prop.dia_label && prop.hora) ? (en ? `Goes out ${prop.dia_label} at ${prop.hora}` : `Sale el ${prop.dia_label} a las ${prop.hora}`) : (prop.expres ? (en ? 'Goes out today when you accept it' : 'Sale hoy cuando lo aceptes') : '');
   const llena = prop.semana_llena ? `<div style="font-size:12px;color:var(--mut);margin-top:4px">${en ? 'This week is full — it goes out next Monday.' : 'Esta semana está completa — sale el lunes que viene.'}</div>` : '';
   const todas = (PZ_SFT_CHAT_PENDIENTE && PZ_SFT_CHAT_PENDIENTE.items && PZ_SFT_CHAT_PENDIENTE.items.length > 1)
     ? `<button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatAprobarTodas()">${en ? 'Approve all' : 'Aprobar todas'}</button>` : '';
   const otraFoto = (prop.kind === 'video') ? '' : `<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatOtraFoto(${pid})">${en ? 'Another photo' : 'Otra foto'}</button>`;
-  const card = `<div class="chat-msg ai" id="pzSftCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Your post is ready' : 'Tu posteo está armado'}</div>${img}<div class="pz-sft-cuando" style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-sft-cap" style="font-size:13px;white-space:pre-wrap">${esc(prop.caption || '')}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div id="pzSftCardBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatAprobar(this, ${pid})">${en ? 'Post it' : 'Sale así'}</button>${todas}<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarTexto(${pid})">${en ? 'Change text' : 'Cambiar texto'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarDia(${pid})">${en ? 'Change day' : 'Cambiar día'}</button>${otraFoto}<button type="button" class="btn btn-soft btn-sm" onclick="pzUsarFotoAbrir(${pid})">${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button></div><div id="pzSftDias-${pid}"></div><div id="pzSftEdit-${pid}"></div></div>`;
+  // (CARRIL EXPRÉS) «Publicar hoy» es la acción principal de la tarjeta: un toque publica
+  // la pieza HOY, sin 9:00 ni aviso de 30 min. «Sale así» queda para la semana (sin slot
+  // no hay nada que aprobar en semana: la pieza exprés no lo muestra).
+  const hoyBtn = `<button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatPublicarHoy(${pid})">${en ? 'Publish today' : 'Publicar hoy'}</button>`;
+  const saleAsiBtn = prop.expres ? '' : `<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatAprobar(this, ${pid})">${en ? 'Post it' : 'Sale así'}</button>`;
+  const card = `<div class="chat-msg ai" id="pzSftCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Your post is ready' : 'Tu posteo está armado'}</div>${img}<div class="pz-sft-cuando" style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-sft-cap" style="font-size:13px;white-space:pre-wrap">${esc(prop.caption || '')}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div id="pzSftCardBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${hoyBtn}${saleAsiBtn}${todas}<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarTexto(${pid})">${en ? 'Change text' : 'Cambiar texto'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarDia(${pid})">${en ? 'Change day' : 'Cambiar día'}</button>${otraFoto}<button type="button" class="btn btn-soft btn-sm" onclick="pzUsarFotoAbrir(${pid})">${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button></div><div id="pzSftDias-${pid}"></div><div id="pzSftEdit-${pid}"></div></div>`;
   box.insertAdjacentHTML('beforeend', card);
   try { chatScroll(); } catch (e) {}
 }
