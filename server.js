@@ -9104,6 +9104,141 @@ app.get('/api/stats/ig', requireAuth, async (req, res) => {
   }
 });
 
+// ---------- Análisis diario del posteo (LOTE ANALISIS-DIARIO · 9/11 · v843) ----------
+// Bamboo lee el posteo de ayer de cada cliente y escribe UNA fila por
+// cliente por día (la línea que el cliente ve + el insight de Hoy + la
+// señal para el generador). El motor de Posty NUNCA escribe esta tabla:
+// ni el generador, ni el scheduler, ni el ritual. Solo bamboo escribe;
+// solo el servidor lee para mostrar. La línea viaja DENTRO del mensaje
+// diario: no crea push ni mensaje de chat nuevo (RS-5).
+function ensureAnalisisDiarioTable(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS analisis_diario (
+    user_id INTEGER NOT NULL, day_key TEXT NOT NULL,
+    linea_es TEXT NOT NULL DEFAULT '', linea_en TEXT NOT NULL DEFAULT '',
+    insight_es TEXT NOT NULL DEFAULT '', insight_en TEXT NOT NULL DEFAULT '',
+    senial TEXT NOT NULL DEFAULT '', numeros_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, day_key))`);
+}
+// Gate de auditoría: cada número que aparece en la línea o el insight
+// tiene que estar respaldado en numeros_json (valor literal, o cociente
+// de dos valores reales — para el multiplicador «3×»). Si un número no
+// tiene respaldo, la fila no se escribe. Nunca un número inventado.
+function analisisNumerosRespaldo(textos, numeros) {
+  const vals = [];
+  const collect = (o) => {
+    if (typeof o === 'number' && Number.isFinite(o)) vals.push(o);
+    else if (o && typeof o === 'object') Object.values(o).forEach(collect);
+  };
+  collect(numeros);
+  const tokens = new Set();
+  for (const t of textos || []) {
+    for (const m of String(t || '').match(/\d+(?:[.,]\d+)?/g) || []) tokens.add(m);
+  }
+  const parseTok = (tok) => {
+    let s = tok;
+    if (/,/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+  const cerca = (a, b) => Math.abs(a - b) <= Math.max(0.02, Math.abs(b) * 0.01);
+  for (const tok of tokens) {
+    const n = parseTok(tok);
+    if (n === null) continue;
+    if (vals.some((v) => cerca(n, v))) continue;
+    let cociente = false;
+    for (const a of vals) for (const b of vals) {
+      if (b > 0 && a > 0 && cerca(n, a / b)) { cociente = true; break; }
+      if (cociente) break;
+    }
+    if (cociente) continue;
+    return { ok: false, numero: tok };
+  }
+  return { ok: true };
+}
+
+// GET /api/admin/analisis-diario/ayer?user_id= — lo que bamboo necesita
+// para escribir la línea de hoy: el posteo publicado ayer en la zona de
+// la cuenta (con ig_media_id real, nunca demo_*) + sus métricas
+// (refrescadas de la API de IG cuando están viejas, con el mismo
+// refreshMetrics de /api/stats/ig) + el contexto de 30 días + los ejes
+// del fundamento. Sin posteo ayer: post null (bamboo no escribe línea).
+app.get('/api/admin/analisis-diario/ayer', requireAdminToken, async (req, res) => {
+  const uid = Number(req.query.user_id);
+  if (!uid) return res.status(400).json({ error: 'sin_usuario' });
+  const u = db.prepare('SELECT id FROM users WHERE id = ?').get(uid);
+  if (!u) return res.status(404).json({ error: 'sin_usuario' });
+  const tz = userTz(uid);
+  const hoy = tzToday(tz);
+  const ayer = shiftDays(hoy, -1);
+  try {
+    ensureAnalisisDiarioTable(db);
+    await statsMod.refreshMetrics(db, uid);
+    let postAyer = null;
+    const cands = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'published' AND COALESCE(ig_media_id, '') != '' AND ig_media_id NOT LIKE 'demo_%' ORDER BY COALESCE(published_at, created_at) DESC LIMIT 20`).all(uid);
+    for (const p of cands) {
+      const at = p.published_at || p.created_at;
+      if (!at) continue;
+      const d = new Date(String(at).replace(' ', 'T'));
+      if (isNaN(d)) continue;
+      if (morningPostPush.dayKeyInTz(d, tz) === ayer) { postAyer = p; break; }
+    }
+    let metricas = null;
+    if (postAyer) {
+      const m = db.prepare('SELECT reach, likes, comments, saved, COALESCE(shares, 0) AS shares, fetched_at FROM post_metrics WHERE post_id = ?').get(postAyer.id);
+      metricas = m ? { reach: m.reach | 0, likes: m.likes | 0, comments: m.comments | 0, saved: m.saved | 0, shares: m.shares | 0, fetched_at: m.fetched_at || null } : { reach: 0, likes: 0, comments: 0, saved: 0, shares: 0, fetched_at: null };
+    }
+    const s = statsMod.buildSummary(db, uid);
+    const contexto = { reach_7d: s.reach_7d, reach_30d: s.reach_30d, interactions_30d: s.interactions_30d, followers: s.followers, reach_prev7d: s.reach_prev7d, posts_7d: s.posts_7d, posts_prev7d: s.posts_prev7d, best_post: s.best_post || null };
+    let ejes = null;
+    try { ejes = oficina.fundamentoCompleto(db, uid); } catch (e) { ejes = null; }
+    res.json({
+      ok: true, user_id: uid, ayer, tz,
+      post: postAyer ? { id: postAyer.id, caption: postAyer.caption || '', image_path: postAyer.image_path || '', media_type: postAyer.media_type || 'image', published_at: postAyer.published_at || postAyer.created_at || null, ig_media_id: postAyer.ig_media_id } : null,
+      metricas, contexto_30d: contexto, ejes,
+    });
+  } catch (e) {
+    console.error('[analisis-diario/ayer]', e.message);
+    res.status(500).json({ error: 'no_pude_leer_ayer' });
+  }
+});
+
+// POST /api/admin/analisis-diario — bamboo escribe la fila del día.
+// Body: { user_id, day_key, linea_es, linea_en, insight_es, insight_en,
+//   senial, numeros }. Upsert por (user_id, day_key). Espejo ES+EN: los
+// cuatro textos son obligatorios (nunca una línea en el idioma que no
+// es). numeros trae los números reales que respaldan la línea
+// (post_id obligatorio); el gate rechaza cualquier número sin respaldo.
+app.post('/api/admin/analisis-diario', requireAdminToken, (req, res) => {
+  const b = req.body || {};
+  const uid = Number(b.user_id);
+  if (!uid) return res.status(400).json({ error: 'sin_usuario' });
+  const dayKey = String(b.day_key || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return res.status(400).json({ error: 'day_key_invalido' });
+  const lineaEs = String(b.linea_es || '').trim();
+  const lineaEn = String(b.linea_en || '').trim();
+  const insightEs = String(b.insight_es || '').trim();
+  const insightEn = String(b.insight_en || '').trim();
+  if (!lineaEs || !lineaEn || !insightEs || !insightEn) return res.status(400).json({ error: 'falta_texto' });
+  const senial = String(b.senial || '').trim();
+  const numeros = (b.numeros && typeof b.numeros === 'object' && !Array.isArray(b.numeros)) ? b.numeros : null;
+  if (!numeros || typeof numeros.post_id !== 'number') return res.status(400).json({ error: 'falta_numeros' });
+  const chk = analisisNumerosRespaldo([lineaEs, lineaEn, insightEs, insightEn], numeros);
+  if (!chk.ok) return res.status(400).json({ error: 'numero_sin_respaldo', numero: chk.numero });
+  try {
+    ensureAnalisisDiarioTable(db);
+    db.prepare(`INSERT INTO analisis_diario (user_id, day_key, linea_es, linea_en, insight_es, insight_en, senial, numeros_json)
+      VALUES (?,?,?,?,?,?,?,?)
+      ON CONFLICT(user_id, day_key) DO UPDATE SET linea_es=excluded.linea_es, linea_en=excluded.linea_en, insight_es=excluded.insight_es, insight_en=excluded.insight_en, senial=excluded.senial, numeros_json=excluded.numeros_json`)
+      .run(uid, dayKey, lineaEs, lineaEn, insightEs, insightEn, senial, JSON.stringify(numeros));
+    res.json({ ok: true, user_id: uid, day_key: dayKey });
+  } catch (e) {
+    console.error('[analisis-diario]', e.message);
+    res.status(500).json({ error: 'no_pude_guardar' });
+  }
+});
+
 // ---------- Publicidad: billetera + boost de posteos ganadores ----------
 // Billetera (helpers)
 function getAdWallet(userId) {
@@ -14004,6 +14139,23 @@ app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
     const album = ritualManana.albumWeek(db, uid, hoy, lang);
     const publicadoHoy = ritualPublicadoHoy(uid, tz, hoy);
     const racha = ritualManana.rachaVigente(db, uid, hoy);
+  // (LOTE ANALISIS-DIARIO · 9/11 · v843) La línea del análisis de ayer
+  // (la escribe bamboo por la API de admin, una fila por cliente por
+  // día): viaja en d.analisis solo si hay fila para HOY. Sin fila, el
+  // campo no viene — nunca un placeholder ni una línea inventada. Se
+  // incluye en TODOS los returns del endpoint (también en los de
+  // hoy:null, para que el insight de Hoy aparezca aunque hoy no haya
+  // posteo). Nunca una línea en el idioma que no es.
+  let analisisOut = null;
+  try {
+    ensureAnalisisDiarioTable(db);
+    const aRow = db.prepare('SELECT linea_es, linea_en, insight_es, insight_en FROM analisis_diario WHERE user_id = ? AND day_key = ?').get(uid, hoy);
+    if (aRow) {
+      const lin = lang === 'en' ? String(aRow.linea_en || '').trim() : String(aRow.linea_es || '').trim();
+      const ins = lang === 'en' ? String(aRow.insight_en || '').trim() : String(aRow.insight_es || '').trim();
+      if (lin || ins) analisisOut = { linea: lin, insight: ins };
+    }
+  } catch (e) { analisisOut = null; }
     // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c, estado tardecita
     // 17:00–00:00) Hoy ya salió y no hay posteo para hoy: el cliente
     // muestra el paquete velado con la cuenta hasta las 00:00 (no el
@@ -14022,7 +14174,7 @@ app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
         if (proxRow && proxRow.prox) proximo = { abre_a: medianoche, abre_hora: '00:00' };
       } catch (e) { proximo = null; }
     }
-    if (!rec) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy, proximo });
+    if (!rec) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy, proximo, ...(analisisOut ? { analisis: analisisOut } : {}) });
     let row = ritualManana.getRow(db, uid, hoy);
     if (!row) {
       ritualManana.upsertRow(db, uid, hoy, rec.id);
@@ -14051,7 +14203,7 @@ app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
       try { const a = db.prepare('SELECT id FROM assets WHERE user_id = ? AND file_path = ?').get(uid, String(recCard.imagen || '')); if (a && a.id) recCard.asset_id = a.id; } catch (e) {}
       cartas.push(recCard);
     }
-    if (!cartas.length) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy });
+    if (!cartas.length) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy, ...(analisisOut ? { analisis: analisisOut } : {}) });
     const dorada = row.picked_post_id ? !!row.gold : ritualManana.esDorada(racha + 1, ritualManana.totalPicks(db, uid) + 1);
     // LOTE CUENTA-REGRESIVA (mock aprobado Valentino 6/11 01:53; solo la
     // cuenta — los-3 quedó fuera por decisión Valentino 6/11 16:16): la
@@ -14060,7 +14212,7 @@ app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
     // dispositivo).
     const horaAperturaTxt = String(morningPostPush.MORNING_START_HOUR).padStart(2, '0') + ':00';
     const abreA = zonedWallToUtc(hoy + ' ' + horaAperturaTxt, tz);
-    res.json({ ok: true, hoy: hoy, recomendada: recCard, cartas, elegida: row.picked_post_id || null, dorada, racha, album, publicado_hoy: publicadoHoy, abre_a: abreA, ahora: new Date().toISOString(), abre_hora: '9:00' });
+    res.json({ ok: true, hoy: hoy, recomendada: recCard, cartas, elegida: row.picked_post_id || null, dorada, racha, album, publicado_hoy: publicadoHoy, abre_a: abreA, ahora: new Date().toISOString(), abre_hora: '9:00', ...(analisisOut ? { analisis: analisisOut } : {}) });
   } catch (e) {
     console.error('[ritual] hoy:', e.message);
     res.status(500).json({ ok: false, error: 'No pude abrir tu paquete 😅 Probá de nuevo' });
@@ -33262,7 +33414,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v842';
+const BUILD_ID = '20261105-v843';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -44,7 +44,7 @@ async function igGet(path, accessToken, params = {}) {
 
 // Métricas de un posteo/reel publicado: alcance, likes, comentarios, guardados.
 async function fetchMediaInsights(igMediaId, accessToken) {
-  const out = { reach: 0, likes: 0, comments: 0, saved: 0 };
+  const out = { reach: 0, likes: 0, comments: 0, saved: 0, shares: 0 };
   try {
     const data = await igGet(`/${igMediaId}/insights`, accessToken, { metric: 'reach,likes,comments,saved' });
     for (const m of data.data || []) {
@@ -62,6 +62,15 @@ async function fetchMediaInsights(igMediaId, accessToken) {
       }
     } catch (e2) { console.error('[insights] métricas:', e2.message); }
   }
+  // (LOTE ANALISIS-DIARIO · 9/11 · v843) `shares` es métrica válida en
+  // v26.0 (feed, reels y stories), pero se pide en una llamada APARTE
+  // con su propio try/catch: si la API no lo devuelve para este medio,
+  // las métricas base ya leídas quedan intactas (nunca se rompe el
+  // refresh por una métrica nueva). shares queda 0 en ese caso.
+  try {
+    const sh = await igGet(`/${igMediaId}/insights`, accessToken, { metric: 'shares' });
+    if (sh && Array.isArray(sh.data) && sh.data.length && Array.isArray(sh.data[0].values) && sh.data[0].values.length && typeof sh.data[0].values[0].value === 'number') out.shares = sh.data[0].values[0].value;
+  } catch (e) { /* shares no disponible para este medio: queda 0 */ }
   return out;
 }
 

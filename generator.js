@@ -1884,13 +1884,28 @@ function performanceBrief(db, userId) {
         AND m.reach > 0
       ORDER BY m.reach DESC LIMIT 3
     `).all(userId);
-    if (!rows.length) return '';
+    // (LOTE ANALISIS-DIARIO · 9/11 · v843) Sin top 3 no se corta acá:
+    // la señal diaria de bamboo puede existir igual (ver abajo).
     const fmtName = t => t === 'carousel' ? 'carrusel' : t === 'video' ? 'reel' : t === 'story' ? 'historia' : 'posteo';
     const lines = rows.map((r, i) => {
       const cap = String(r.caption || '').split('\n')[0].slice(0, 60).trim() || 'Posteo';
       return `${i + 1}. "${cap}" — ${fmtNum(r.reach)} alcance, ${fmtNum(r.saved)} guardados (${fmtName(r.media_type)})`;
     });
-    return `Tus posteos con más alcance (últimos 30 días):\n${lines.join('\n')}`;
+    // (LOTE ANALISIS-DIARIO · 9/11 · v843) La señal diaria de bamboo
+    // (el veredicto: qué formato/ángulo rindió y qué pesar más) se suma
+    // al top 3 como líneas de learnings. Dedupadas (exacto), las más
+    // recientes primero, tope 3, cap 200 caracteres cada una. Sin filas,
+    // los learnings son los de hoy (top 3). La señal suma, nunca
+    // reemplaza ni inventa: el dedup y el top 3 no cambian.
+    let seniales = [];
+    try {
+      seniales = db.prepare(`SELECT senial FROM analisis_diario WHERE user_id = ? AND day_key >= date('now', '-7 days') AND TRIM(COALESCE(senial, '')) != '' ORDER BY day_key DESC LIMIT 7`).all(userId)
+        .map((r) => String(r.senial || '').trim()).filter(Boolean);
+      seniales = [...new Set(seniales)].slice(0, 3);
+    } catch (e) { seniales = []; }
+    const top = rows.length ? `Tus posteos con más alcance (últimos 30 días):\n${lines.join('\n')}` : '';
+    const sen = seniales.length ? `Lo que rindió esta semana (veredicto diario):\n${seniales.map((s) => '- ' + s.slice(0, 200)).join('\n')}` : '';
+    return [top, sen].filter(Boolean).join('\n');
   } catch (e) { return ''; }
 }
 // Voz del cliente: sus 3 captions con más alcance como few-shot de tono y ritmo.

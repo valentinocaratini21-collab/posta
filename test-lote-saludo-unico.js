@@ -63,7 +63,7 @@ const ruleCss = (sel) => {
   // (lote 9/11: la burbuja «¡Hola! 👋 Te traje el posteo de hoy» se fue con la apertura; el saludo de Hoy sigue arriba.)
   const salSrc = sliceFn(app, 'function pzSaludoEscribir() {', 'function pzShellDatosHoy() {');
   t(salSrc.includes('pzShellSaludo') && salSrc.includes('typing') && salSrc.includes('prefers-reduced-motion'), '§3: máquina de escribir intacta (escribe la identidad)');
-  t(srv.includes("const BUILD_ID = '20261105-v840'"), '§3: server.js sin tocar salvo BUILD v840');
+  t(srv.includes("const BUILD_ID = '20261105-v843'"), '§3: server.js sin tocar salvo BUILD v843 (re-pin v843)');
   t(app.includes("const CHUNK_V = '20261105-v793'"), '§3: CHUNK_V v793 sin cambio (fase 1)');
 
   // ---------- 4. VM: matriz de fallbacks ----------
@@ -140,13 +140,13 @@ const ruleCss = (sel) => {
     try {
       t(await waitBoot(), '§5: boot levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v840', `§5: /api/version v840 (vino ${ver.build})`);
-      const appTxt = await (await fetch(`${BASE}/app.js?v=571`)).text();
-      t(md5(appTxt) === md5(app), '§5: app.js?v=571 servido = árbol');
+      t(ver.build === '20261105-v843', `§5: /api/version v843 (vino ${ver.build})`);
+      const appTxt = await (await fetch(`${BASE}/app.js?v=575`)).text();
+      t(md5(appTxt) === md5(app), '§5: app.js?v=575 servido = árbol');
       t(!appTxt.includes('Posty está trabajando ahora'), '§5: servido sin «Posty está trabajando ahora»');
       t(appTxt.includes('pzShellSaludo'), '§5: servido con #pzShellSaludo');
-      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261219`)).text();
-      t(md5(cssTxt) === md5(css), '§5: styles.css?v=20261219 servido = árbol');
+      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261223`)).text();
+      t(md5(cssTxt) === md5(css), '§5: styles.css?v=20261223 servido = árbol');
       t(cssTxt.includes('text-overflow:ellipsis'), '§5: servido con ellipsis en el encabezado');
       const rHoy = await fetch(`${BASE}/api/ritual/hoy`);
       t(rHoy.status === 401, `§5: sin sesión, /api/ritual/hoy → 401 (vino ${rHoy.status})`);

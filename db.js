@@ -398,8 +398,12 @@ db.exec(`CREATE TABLE IF NOT EXISTS post_metrics (
   likes INTEGER DEFAULT 0,
   comments INTEGER DEFAULT 0,
   saved INTEGER DEFAULT 0,
+  shares INTEGER DEFAULT 0,
   fetched_at TEXT DEFAULT (datetime('now'))
 )`);
+// (LOTE ANALISIS-DIARIO · 9/11 · v843) La API v26.0 expone `shares` en
+// media insights (feed, reels y stories); se guarda junto al resto.
+try { db.exec(`ALTER TABLE post_metrics ADD COLUMN shares INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 db.exec(`CREATE TABLE IF NOT EXISTS funnel_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER,

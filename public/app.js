@@ -974,10 +974,16 @@ function pzShellDatosHoy() {
     if (typeof window !== 'undefined' && (window.__pzShellHoyDone || window.__pzShellHoyPendiente)) return;
     if (typeof window !== 'undefined') window.__pzShellHoyPendiente = true;
     if (typeof api === 'undefined' || !api || typeof api.get !== 'function') { if (typeof window !== 'undefined') window.__pzShellHoyPendiente = false; return; }
-    api.get('/api/ritual/hoy').then((r) => {
+    // (LOTE ANALISIS-DIARIO · 9/11 · v843) La promesa se guarda para
+    // que Hoy pueda esperarla (UN fetch por carga, sin uno nuevo por
+    // render) y el análisis de hoy se cachea para el insight del saludo.
+    const prHoy = api.get('/api/ritual/hoy');
+    if (typeof window !== 'undefined') window.__pzShellHoyPromise = prHoy;
+    prHoy.then((r) => {
       try {
         if (!r || r.ok === false) { if (typeof window !== 'undefined') window.__pzShellHoyPendiente = false; return; }
         if (typeof window !== 'undefined') { window.__pzShellHoyDone = true; window.__pzShellHoyPendiente = false; }
+        if (typeof window !== 'undefined') window.__pzHoyAnalisis = (r && r.analisis && (r.analisis.linea || r.analisis.insight)) ? r.analisis : null;
       } catch (e) {}
     }).catch(() => { try { if (typeof window !== 'undefined') window.__pzShellHoyPendiente = false; } catch (e2) {} });
   } catch (e) {}
@@ -21267,6 +21273,7 @@ function pzHoySpeechHTML(o) {
   const hoyPost = (o && o.hoyPost) || null;
   const pendientes = (o && typeof o.pendientes === 'number') ? o.pendientes : 0;
   const haySemana = !!(o && o.haySemana);
+  const insight = (o && o.insight) ? String(o.insight).trim() : '';
   // (RS-2) manual = GET /api/autopilot (f3ApprovalMode, cacheado).
   // needOK = posteos que NO salen sin tu OK; schedSolo = programados
   // pendientes que salen solos (autopilot). Sin datos, needOK = pendientes.
@@ -21337,7 +21344,7 @@ function pzHoySpeechHTML(o) {
   // (LOTE HOY-REDISEÑO v810 + HOY-AVATAR-FEED 8/11) El saludo se rinde
   // como mensaje de Posty: SOLO la burbuja, sin carita (la cara vive en
   // el encabezado). El botón conserva data-pz-hoy-chat (abre el chat).
-  return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span></button></div>`;
+  return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span>${insight ? `<span class="pz-hoy-insight">${esc(insight)}</span>` : ''}</button></div>`;
 }
 
 // Entrada al conserje (nace oculta; pzHoyConserjeFill la llena con el
@@ -21750,6 +21757,20 @@ async function inicioView() {
   // pendientes (cartita + resto) ya NO se rinden en Inicio: se revisan
   // en el feed. pzHoyPendientes sigue (el saludo y la tira la usan) y
   // PZ_HOY_POSTS sigue alimentando «Cambialo».
+  // (LOTE ANALISIS-DIARIO · 9/11 · v843) El insight de Hoy viene del
+  // mismo /api/ritual/hoy que pzShellDatosHoy ya pidió (UN fetch por
+  // carga): se espera la promesa en vuelo (con tope) y se lee del
+  // caché. Sin dato, el saludo se rinde sin insight — nunca un
+  // placeholder. Sin un fetch nuevo por render.
+  let insightHoy = '';
+  try {
+    if (typeof pzShellDatosHoy === 'function') pzShellDatosHoy();
+    if (typeof window !== 'undefined' && window.__pzHoyAnalisis && window.__pzHoyAnalisis.insight) insightHoy = String(window.__pzHoyAnalisis.insight);
+    else if (typeof window !== 'undefined' && window.__pzShellHoyPromise && typeof window.__pzShellHoyPromise.then === 'function') {
+      await Promise.race([window.__pzShellHoyPromise.catch(() => null), new Promise((res) => setTimeout(() => res(null), 1500))]);
+      if (window.__pzHoyAnalisis && window.__pzHoyAnalisis.insight) insightHoy = String(window.__pzHoyAnalisis.insight);
+    }
+  } catch (e) { insightHoy = ''; }
   const hoyAprobarHTML = (!HF_VISITOR) ? (() => {
     const hoyPendienteR1 = !!(hoyPostR1 && (String(hoyPostR1.status || '') === 'draft' || (String(hoyPostR1.status || '') === 'scheduled' && String(hoyPostR1.approval || 'pending') === 'pending')));
     const tiraDiasR1 = pzHoyTiraDias(semR1, allPosts, hoyKeyR1, tz);
@@ -21758,7 +21779,7 @@ async function inicioView() {
     if (!PZ_HOY_TIRA_SEL) { try { const h = tiraDiasR1.find((d) => d && d.esHoy); if (h) PZ_HOY_TIRA_SEL = h.key; } catch (e) {} }
     const hayAdminR1 = (() => { try { return !!(localStorage.getItem('posta_admin_token') || ''); } catch (e) { return false; } })();
     return `<div id="pzHoyAprobar"${PZ_HOY_VIEW === 'aprobar' ? '' : ' hidden'}>`
-      + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: pendR1.total, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1 })
+      + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: pendR1.total, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1, insight: insightHoy })
       + (hoyPendienteR1 ? pzHoyParaAprobarHTML(1, enHome) : '')
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
       + `<div id="pzHoyTira">` + pzHoyTiraHTML(tiraDiasR1, { en: enHome, tz, hoyKey: hoyKeyR1, sel: PZ_HOY_TIRA_SEL }) + `</div>`
@@ -22303,6 +22324,21 @@ function pzRitualCardHTML(c, d, en) {
 </div>`;
 }
 
+// (LOTE ANALISIS-DIARIO · 9/11 · v843) La línea del análisis de ayer:
+// vive arriba del posteo de hoy, en la misma hoja, solo cuando el
+// servidor trae d.analisis (fila de hoy escrita por bamboo). Sin fila,
+// no hay línea — nunca un placeholder ni una línea inventada. La hoja
+// revelada (sel) y la elegida la muestran; el paquete velado y la
+// cuenta regresiva no (ahí no se ve el posteo). DEPENDENCIA: v842
+// (ritual sin velo) quita el velo y el preparador re-basa el punto de
+// render sobre la hoja revelada de v842.
+function pzRitualAnalisisHTML(d) {
+  try {
+    const lin = d && d.analisis && d.analisis.linea ? String(d.analisis.linea).trim() : '';
+    if (!lin) return '';
+    return `<div class="pz-ritual-analisis"><p>${esc(lin)}</p></div>`;
+  } catch (e) { return ''; }
+}
 function pzRitualHTML(d, en) {
   // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c) Día de referencia del
   // álbum: d.hoy, o (tardecita, hoy null) el día de la casilla marcada
@@ -22373,7 +22409,7 @@ function pzRitualHTML(d, en) {
   }
   if (d.elegida) {
     const picked = (d.cartas || []).find((c) => Number(c.id) === Number(d.elegida)) || d.cartas[0];
-    return `<div class="pz-ritual-wrap-in">${head}
+    return `<div class="pz-ritual-wrap-in">${head}${pzRitualAnalisisHTML(d)}
   <div class="pz-ritual-listo"><h2>${en ? 'Done — this one goes out today' : 'Listo, hoy sale esta'}</h2>${d.dorada ? `<p class="pz-ritual-hito">✦ ${en ? 'Golden card: a milestone day' : 'Carta dorada: día de hito'}</p>` : ''}
   ${picked ? pzRitualCardHTML(picked, d, en) : ''}
   <p class="pz-ritual-nota">${(d.recomendada && d.recomendada.hora_salida) ? (en ? 'It goes out today at ' + esc(d.recomendada.hora_salida) : 'Sale hoy a las ' + esc(d.recomendada.hora_salida)) : (en ? 'It goes out today.' : 'Sale hoy.')}</p></div>
@@ -22410,7 +22446,7 @@ function pzRitualHTML(d, en) {
     const avisoPre = preAviso ? (en
       ? 'It goes out today at ' + esc(rec.hora_salida || '7:00 PM') + ' — we’ll let you know at 9:00 AM to confirm.'
       : 'Sale hoy a las ' + esc(rec.hora_salida || '19:00') + ' — te avisamos a las 9:00 para confirmar.') : '';
-    return `<div class="pz-ritual-wrap-in">${head}
+    return `<div class="pz-ritual-wrap-in">${head}${pzRitualAnalisisHTML(d)}
   <div class="pz-ritual-revelada pz-ritual-reveal" data-pz-ritual-revelada="1" data-post-id="${rec.id}">
   <div class="pz-ritual-sparkrow"><span>✦</span><span>✦</span><span>✦</span></div>
   <h2>${en ? 'This one goes out today' : 'Hoy sale este'}</h2>

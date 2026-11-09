@@ -5525,6 +5525,9 @@ body.pz-postchat-open{overflow:hidden}
 .pz-ritual-dots span:nth-child(1){background:#2793C8}
 .pz-ritual-dots span:nth-child(2){background:#FEC14D}
 .pz-ritual-dots span:nth-child(3){background:#0A1E33}
+/* (LOTE ANALISIS-DIARIO · 9/11 · v843) La línea del análisis de ayer, arriba del posteo de hoy. */
+.pz-ritual-analisis{background:#EAF6FD;border-left:3px solid #2793C8;border-radius:10px;padding:10px 12px;margin:10px 0 4px;text-align:left}
+.pz-ritual-analisis p{margin:0;font-size:14px;line-height:1.45;color:#0A1E33}
 .pz-ritual-head{display:flex;align-items:center;gap:12px;margin:6px 0 4px}
 .pz-ritual-ava{width:52px;height:52px;border-radius:50%;object-fit:cover;flex:none}
 .pz-ritual-head b{display:block;font-size:20px;color:#0A1E33;text-transform:lowercase}
@@ -5688,6 +5691,8 @@ body.pz-postchat-open{overflow:hidden}
 .pz-hoy-seg button.active{background:#fff;color:#0A1E33;box-shadow:0 2px 8px rgba(10,30,51,.15)}
 .pz-hoy-seg-n{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;margin-left:4px;border-radius:999px;background:#FEC14D;color:#0A1E33;font-size:11.5px;font-weight:800;line-height:1}
 .pz-hoy-speech{display:block;width:100%;text-align:left;background:#fff;border:2px solid #0A1E33;border-radius:6px 18px 18px 18px;padding:13px 15px;font-size:14.5px;line-height:1.5;font-weight:700;color:var(--txt);box-shadow:3px 3px 0 #CDEAF7;margin-bottom:16px;cursor:pointer;font-family:inherit}
+/* (LOTE ANALISIS-DIARIO · 9/11 · v843) El insight de Hoy: segundo párrafo dentro de la misma burbuja del saludo. */
+.pz-hoy-speech .pz-hoy-insight{display:block;margin-top:8px}
 .pz-hoy-speech .pz-hoy-saludo{font-weight:900}
 .pz-hoy-blue{color:var(--cel)}
 .pz-hoy-nota{display:flex;gap:10px;align-items:flex-start;margin-bottom:16px}

@@ -430,8 +430,8 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v840',
-      '§8: /api/version trae el BUILD v840', JSON.stringify(ver.json));
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v843',
+      '§8: /api/version trae el BUILD v843', JSON.stringify(ver.json));
     const appJs = await apiText('/app.js?v=999');
     t(appJs.status === 200 && appJs.text.includes('pzHoyTiraHTML') && appJs.text.includes('pzHoySemanaInsightHTML')
       && appJs.text.includes('pzHoyParaAprobarHTML') && appJs.text.includes('PZ_HOY_TIRA_SEL'),

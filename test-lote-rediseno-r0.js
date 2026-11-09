@@ -38,14 +38,14 @@ const orderOk = (s, keys) => {
 // RE-PIN tras implementar (md5s de work-v1; en base fallan a propósito).
 // (LOTE HOY-AVATAR-FEED · 8/11) Re-pin: app.js/styles.css del lote.
 // (LOTE CHAT-NUEVO v821 · 8/11) Re-pin: app.js/styles.css del lote + BUILD v821.
-const MD5_APP_WORK = '6b2c61a2c421f75e53cfb76197e7f29b';
-const MD5_CSS_WORK = 'd66887135d9586086b4175ae686f06fa';
+const MD5_APP_WORK = '02543e618fd4ab545a676654cfe22c75'; // (LOTE ANALISIS-DIARIO v843) re-pin al árbol final.
+const MD5_CSS_WORK = '208b6f6451694ae15e6f55996de82e6f'; // (LOTE ANALISIS-DIARIO v843) re-pin al árbol final.
 // El woff2 es copia byte a byte del mock (no generado).
 const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins ----------
-  t(srv.includes("const BUILD_ID = '20261105-v841'"), 'server: BUILD v841');
+  t(srv.includes("const BUILD_ID = '20261105-v843'"), 'server: BUILD v843 (re-pin v843)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -414,9 +414,9 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v841', `boot: /api/version 20261105-v841 (vino ${ver.build})`);
-      const appTxt = await (await fetch(`${BASE}/app.js?v=573`)).text();
-      t(md5(appTxt) === md5(app), 'boot: app.js?v=573 servido = árbol');
+      t(ver.build === '20261105-v843', `boot: /api/version 20261105-v843 (vino ${ver.build})`);
+      const appTxt = await (await fetch(`${BASE}/app.js?v=575`)).text();
+      t(md5(appTxt) === md5(app), 'boot: app.js?v=575 servido = árbol');
       const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261221`)).text();
       t(md5(cssTxt) === md5(css), 'boot: styles.css?v=20261221 servido = árbol');
       const woff = await fetch(`${BASE}/fonts/nunito-var.woff2`);

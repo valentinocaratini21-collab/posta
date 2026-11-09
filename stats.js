@@ -47,11 +47,13 @@ async function refreshMetrics(db, userId) {
   for (const p of posts) {
     try {
       const m = await fetchMediaInsights(p.ig_media_id, creds.accessToken);
-      db.prepare(`INSERT INTO post_metrics (post_id, reach, likes, comments, saved, fetched_at)
-                  VALUES (?,?,?,?,?,datetime('now'))
+      // (LOTE ANALISIS-DIARIO · 9/11 · v843) shares se guarda junto
+      // al resto (viene de fetchMediaInsights; 0 si la API no lo dio).
+      db.prepare(`INSERT INTO post_metrics (post_id, reach, likes, comments, saved, shares, fetched_at)
+                  VALUES (?,?,?,?,?,?,datetime('now'))
                   ON CONFLICT(post_id) DO UPDATE SET reach=excluded.reach, likes=excluded.likes,
-                  comments=excluded.comments, saved=excluded.saved, fetched_at=excluded.fetched_at`)
-        .run(p.id, m.reach | 0, m.likes | 0, m.comments | 0, m.saved | 0);
+                  comments=excluded.comments, saved=excluded.saved, shares=excluded.shares, fetched_at=excluded.fetched_at`)
+        .run(p.id, m.reach | 0, m.likes | 0, m.comments | 0, m.saved | 0, m.shares | 0);
       updated++;
     } catch (e) { /* este posteo falla, el resto sigue */ }
   }
