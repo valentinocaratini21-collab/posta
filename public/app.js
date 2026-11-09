@@ -4558,7 +4558,7 @@ function lpWeekSet(key, btn) {
       grid.innerHTML = LP_WEEK_CUR.map((card, i) => lpWeekCardHTML(card, LP_WEEK_DAYS[i], i)).join('');
       grid.classList.remove('lp-week-swap');
     }
-    if (bridge) bridge.innerHTML = `Esto es un ejemplo ${data.ejemplo}. Tocá cualquier posteo para verlo entero, con su pie de foto tal cual saldría. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en 1 minuto →</a>`;
+    if (bridge) bridge.innerHTML = `Esto es un ejemplo ${data.ejemplo}. Tocá cualquier posteo para verlo entero, con su pie de foto tal cual saldría. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en el chat →</a>`;
   };
   if (grid) { grid.classList.add('lp-week-swap'); setTimeout(apply, 170); } else apply();
 }
@@ -4923,7 +4923,7 @@ function landingView(cfg) {
         <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E2F2E4">H</i></span><b>petshop.huella</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-mascotas.jpg" alt="Posteo de Instagram de un pet shop hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Vie</b><span>Posteo</span></div><div class="lp-day-sched">📮 Programado · vie 12:15</div></div>
       </div>
       <p class="lp-week-note">Así se ve tu semana: ideas, diseños y textos con tu marca, que se publican solos en los mejores horarios.</p>
-      <p class="lp-week-bridge" id="lpWeekBridge">Esto es un ejemplo con negocios de varios rubros. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en 1 minuto <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
+      <p class="lp-week-bridge" id="lpWeekBridge">Esto es un ejemplo con negocios de varios rubros. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en el chat <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
       <form class="lp-igform" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
         <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad3" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad3)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
         <button class="btn btn-primary" type="submit">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
@@ -4946,7 +4946,7 @@ function landingView(cfg) {
     <div class="steps">
       <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pido más nada.</p></div>
       <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
-      <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Tu semana sale en los mejores horarios sin que toques nada. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
+      <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Cada mañana a las 9:00 ves el posteo del día, y 30 minutos antes de que salga te aviso; si no decís nada, sale. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
     </div>
     <h2>Y trabajo con tres reglas, siempre</h2>
     <p class="lede">Son mi forma de trabajar, con cada negocio.</p>
@@ -4955,8 +4955,8 @@ function landingView(cfg) {
       <div class="step"><div class="num">🔌</div><h3>Me conecto a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
       <div class="step"><div class="num">💬</div><h3>Pregunto solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estoy seguro de tu rubro, te pregunto antes de generar — nunca adivino. Y tu respuesta queda guardada: no te la vuelvo a hacer.</p></div>
     </div>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Posty trabaja completo por sí solo.</b> Todo lo que tu Instagram necesita lo hago yo, dentro de tu plan — no necesitás contratar a nadie más ni sumar ningún otro servicio.</p>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">🕘 <b>Tu ritmo de cada día:</b> a la mañana ves el posteo, lo aprobás con un toque y a las 17:00 sale solo.</p>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Posty trabaja completo por sí solo.</b> Todo lo que tu Instagram necesita lo hago yo — no necesitás contratar a nadie más ni sumar ningún otro servicio. Si querés promocionar un posteo, lo impulsás por billetera, aparte del plan.</p>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">🕘 <b>Tu ritmo de cada día:</b> a la mañana ves el posteo, lo aprobás con un toque y a las 19:00 sale solo.</p>
     <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
@@ -4983,7 +4983,6 @@ function landingView(cfg) {
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span></div>
     <p class="lp-plans-note">Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
-    <p class="lp-plans-note">Si tu primera semana no te convence, te la rehacemos entera, gratis.</p>
     <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque el precio suba.</p>
 
   </div></div>
@@ -4994,15 +4993,15 @@ function landingView(cfg) {
     <div class="faq">
       <details><summary>¿Necesito hacer algo?</summary><p>No. Me contás de tu negocio una sola vez y listo. Yo creo las ideas, los diseños, los textos y publico. Si querés, podés revisar todo antes de que salga.</p></details>
       <details><summary>¿Posty publica en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publico directamente en tu perfil con la API oficial de Meta. Y en la prueba gratis ya ves tu semana armada antes de registrarte.</p></details>
-      <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
+      <details><summary>¿Usás mis fotos y mi marca?</summary><p>No hace falta subir nada: Posty estudia tu Instagram o tu web y arma tu identidad desde ahí — tus fotos reales, tus colores. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
-      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Lo frenás antes de que salga, en un toque. ¿No te gusta la imagen? La rehacés con otro estilo o volvés a la anterior, gratis. Y aprendo de lo que te gusta para que cada semana salga mejor.</p></details>
+      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Lo frenás antes de que salga, en un toque. ¿No te gusta algo? Pedí otra foto, otro texto u otra idea, en el chat. Y aprendo de lo que te gusta para que cada semana salga mejor.</p></details>
       <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos tu contraseña: ni la pedimos ni la guardamos.</p></details>
-      <details><summary>¿Los posteos se publican solos?</summary><p>Sí, esa es la idea: tu semana sale sola en los mejores horarios, sin que toques nada. Antes de cada publicación te aviso, y si algo no te cierra lo frenás con un toque. ¿Preferís aprobar todo a mano? También podés: apagás la publicación automática en Ajustes y nada sale sin tu OK.</p></details>
-      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: mirá tu semana armada en 1 minuto y decidí. Si no te sirve, no pagás nada.</p></details>
-      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis la ves armada en 1 minuto, y al crear tu cuenta ya queda publicándose sola (con aviso previo, por si querés frenar algo).</p></details>
-      <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar, promocionar y cuidar tu perfil — con tu aprobación en un toque cuando hace falta criterio humano. Si tu marca necesita producción de fotos o video presencial, o campañas a medida, eso sigue siendo trabajo de un equipo humano.</p></details>
-      <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo: cargás crédito en tu billetera —aparte de la suscripción— y Posty elige el posteo, el público y lo gestiona, siempre con tu OK en un toque.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo. Posty es un producto completo por sí mismo: pienso las ideas, diseño, publico y promociono — todo dentro de tu plan, sin que contrates a nadie más ni sumes otros servicios. Con Posty alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
+      <details><summary>¿Los posteos se publican solos?</summary><p>Sí, esa es la idea: cada mañana a las 9:00 ves el posteo del día, y 30 minutos antes de que salga te aviso; si no decís nada, sale. Si algo no te cierra, lo frenás con un toque.</p></details>
+      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: hablás conmigo en el chat, estudio tu negocio y te pregunto solo lo que falta — 2 o 3 toques — y ves tu semana armada. Si no te sirve, no pagás nada.</p></details>
+      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis hablás conmigo en el chat — 2 o 3 toques — y ves tu semana armada. Al crear tu cuenta, cada mañana a las 9:00 ves el posteo del día y 30 minutos antes de que salga te aviso; si no decís nada, sale.</p></details>
+      <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar — con tu aprobación en un toque cuando hace falta criterio humano. Si querés promocionar un posteo, lo impulsás por billetera, aparte del plan. Si tu marca necesita producción de fotos o video presencial, o campañas a medida, eso sigue siendo trabajo de un equipo humano.</p></details>
+      <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo: cargás crédito en tu billetera —aparte de la suscripción— y Posty elige el posteo, el público y lo gestiona, siempre con tu OK en un toque.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo. Posty es un producto completo por sí mismo: pienso las ideas, diseño y publico — todo dentro de tu plan, sin que contrates a nadie más ni sumes otros servicios. Si querés promocionar un posteo, lo impulsás por billetera, aparte del plan. Con Posty alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
     </div>
     <p style="text-align:center;margin-top:28px;font-size:15.5px;color:var(--dim)">¿Otra duda? <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);font-weight:700;cursor:pointer">Hablá con Posty <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
     <div style="text-align:center;margin-top:44px">
@@ -5012,7 +5011,7 @@ function landingView(cfg) {
   <div class="lp-final"><div class="wrap">
     <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
     <h2>Tu primera semana ya puede estar armada</h2>
-    <p>Contanos de tu negocio y mirala en 1 minuto. Gratis, sin tarjeta.</p>
+    <p>Contanos de tu negocio en el chat y mirá tu semana. Gratis, sin tarjeta.</p>
     <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Sumate a mi equipo</a>
     <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
   </div></div>

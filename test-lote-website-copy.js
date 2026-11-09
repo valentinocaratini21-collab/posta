@@ -171,7 +171,7 @@ t(has(landing, 'Sí. Cuando un posteo anda muy bien, Posty te lo marca y te prop
   'ES FAQ Ads: respuesta nueva honesta');
 t(!has(landing, 'Todavía no: la publicidad'), 'ES FAQ Ads: fuera la respuesta vieja «Todavía no»');
 // Cómo trabaja: ritmo de la mañana plegado acá.
-t(has(landing, 'a la mañana ves el posteo, lo aprobás con un toque y a las 17:00 sale solo'),
+t(has(landing, 'a la mañana ves el posteo, lo aprobás con un toque y a las 19:00 sale solo'),
   'ES cómo trabaja: ritmo de la mañana plegado');
 // La prueba: entrada en la sección de la semana (no solo en el hero).
 const weekES = landing.slice(landing.indexOf('lp-week-sec'), landing.indexOf('lp-view'));
@@ -196,8 +196,8 @@ t(!has(indexSrc, '¿Posty responde los comentarios y los mensajes de mi Instagra
 t(has(indexSrc, 'Nunca vemos tu contraseña: ni la pedimos ni la guardamos.'), 'ES index JSON-LD: contraseña nueva');
 t(has(indexSrc, 'Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo: cargás crédito en tu billetera —aparte de la suscripción— y Posty elige el posteo, el público y lo gestiona, siempre con tu OK en un toque.'), 'ES index JSON-LD: Ads nuevo');
 t(!has(indexSrc, 'llega a mucha más gente'), 'ES index JSON-LD: fuera la promesa de alcance vieja');
-t(has(indexSrc, 'publicar, promocionar y cuidar tu perfil'), 'ES index JSON-LD: CM sin «responder»');
-t(has(indexSrc, 'pienso las ideas, diseño, publico y promociono'), 'ES index JSON-LD: solo sin «respondo»');
+t(has(indexSrc, 'publicar — con tu aprobación en un toque cuando hace falta criterio humano'), 'ES index JSON-LD: CM sin «responder» (re-pin v837: sin «promocionar y cuidar»)');
+t(has(indexSrc, 'pienso las ideas, diseño y publico'), 'ES index JSON-LD: solo sin «respondo» (re-pin v837: sin «promociono»)');
 t(has(indexSrc, 'href="#prueba"') && has(indexSrc, 'href="#equipo"') && has(indexSrc, 'href="#ads"') &&
   !has(indexSrc, 'href="#analisis"') && !has(indexSrc, 'href="#capacidades"'),
   'ES index nav: enlaces nuevos');
@@ -246,7 +246,7 @@ const AUDIT_EN = [
   'Strategic ideas for your business',
   'Designs + captions + hashtags',
   'Automatic scheduled posting',
-  'Full analysis of your account, week by week',
+  'Weekly insight in Today + the Sunday Letter',
   'Weekly strategy for your business',
   'Weekly results report',
 ];
@@ -296,7 +296,7 @@ t(has(enSrc, 'Yes. When a post takes off, Posty flags it and proposes boosting i
 t(count(enSrc, 'Yes. When a post takes off, Posty flags it and proposes boosting it: you load credit into your wallet — separate from the subscription — and Posty picks the post, the audience and runs it, always with your one-tap OK.') >= 2,
   'EN FAQ Ads: en FAQ visible Y en JSON-LD');
 t(!has(enSrc, 'Not yet: advertising with Meta'), 'EN FAQ Ads: fuera la respuesta vieja «Not yet»');
-t(has(enSrc, 'in the morning you see the post, approve it in one tap and at 5:00 PM it goes out on its own'),
+t(has(enSrc, 'in the morning you see the post, approve it in one tap and at 7:00 PM it goes out on its own'),
   'EN cómo trabaja: ritmo de la mañana plegado');
 const weekEN = enSrc.slice(enSrc.indexOf('lp-week-sec'), enSrc.indexOf('lp-view'));
 t(has(weekEN, 'See my week') && has(weekEN, 'We never see your password'),
@@ -428,7 +428,7 @@ t(has(stylesSrc, '@media(max-width:760px){.logo-img{height:28px}'), 'logo: style
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(BASE + '/api/version')).json();
-      t(ver.build === '20261105-v774', 'boot: /api/version 20261105-v774 (vino ' + ver.build + ', con bump a v773)');
+      t(ver.build === '20261105-v837', 'boot: /api/version 20261105-v837 (vino ' + ver.build + ')');
       const plansRes = await (await fetch(BASE + '/api/billing/plans?unico=1')).json();
       const apiFeats = ((plansRes.plans || [])[0] && (plansRes.plans || [])[0].features) ||
         (plansRes.unico && plansRes.unico.features) || [];

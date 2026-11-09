@@ -144,8 +144,8 @@ function partB() {
   const ES = 'Si tu primera semana no te convence, te la rehacemos entera, gratis.';
   const EN = "If your first week doesn't convince you, we'll redo the whole week for you, free.";
   ok(appSrc.includes(ES), 'copy ES en la sección de planes de la landing (app.js)');
-  ok(idxSrc.includes(ES), 'copy ES en public/index.html');
-  ok(enSrc.includes(EN), 'copy EN en public/en/index.html (sección de planes)');
+  ok(!idxSrc.includes(ES), 'copy ES fuera de public/index.html (re-pin v837 ítem 5: la promesa sale del website)');
+  ok(!enSrc.includes(EN), 'copy EN fuera de public/en/index.html (re-pin v837 ítem 5: la promesa sale del website)');
   ok(ajSrc.includes(ES) && ajSrc.includes(EN), 'copy ES+EN en chunk-ajustes (Mi plan, por idioma)');
 
   section('B4 · front de la Agenda: botón, confirmación de un paso y toast');
@@ -159,7 +159,7 @@ function partB() {
   section('B5 · canarios');
   const nInf = (serverSrc.match(/HEADLINE_INFINITIVES/g) || []).length;
   ok(nInf === 3, `canario HEADLINE_INFINITIVES = 3 (hay ${nInf})`);
-  ok(/const BUILD_ID = '20261101-v525';/.test(serverSrc), 'BUILD_ID bumpeado a 20261024-v426');
+  ok(/const BUILD_ID = '20261105-v837';/.test(serverSrc), 'BUILD_ID bumpeado a 20261105-v837');
 }
 
 async function partC() {
