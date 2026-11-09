@@ -6318,8 +6318,10 @@ async function notifyOwnerPostChange({ uid, post, pedido, sendFn }) {
 // y el turno no produjo ninguna, el SERVIDOR crea el trabajo, el mensaje de
 // estado en el hilo y lo ejecuta en segundo plano. Nunca silencio.
 // Invariante: el trabajo se salda SIEMPRE (lista | fallo). El runner tiene
-// timeout propio (4 min); el barrido de arranque salda los 'creando' de >10 min
-// (reinicio a mitad de generación); el reintento solo actúa sobre fallo o
+// (LOTE v851 · REGLA DURA 3 MIN) Techo: ningún posteo nuevo tarda más de 3 min.
+// El runner corta a los 3 min (timeout propio) y el barrido —cada 30 s, no solo
+// al arranque— salda los 'creando' de >3 min (huérfano por reinicio, runner
+// muerto o generación colgada). El reintento solo actúa sobre fallo o
 // creando-vencido. Ningún camino deja un trabajo 'creando' para siempre.
 const PZ_CHAT_IMG_REQ_ES = /\b(m[aá]ndame|mandame|enviame|env[ií]ame|mostrame|mu[eé]strame|pasame|compartime|quiero ver|arm[aá]|gener[aá]|cre[aá]|haceme)\b[^.\n]{0,50}\b(imagen|foto)\b/i;
 const PZ_CHAT_IMG_REQ_EN = /\b(send me|show me|give me|make|generate|create)\b[^.\n]{0,50}\b(image|picture|photo)\b/i;
@@ -6339,14 +6341,16 @@ function pzTrabajoPublico(t) {
   if (!t) return null;
   return { id: t.id, estado: t.estado, estimado_seg: t.estimado_seg || 60, post_id: t.post_id || null, mensaje_id: t.mensaje_id || null, mensaje_final_id: t.mensaje_final_id || null, error: t.error || '', creado_en: t.created_at || '' };
 }
-// Barrido de arranque: un reinicio a mitad de generación no puede dejar un
-// trabajo 'creando' para siempre. Solo salda los de >10 min (el runner vivo
-// tiene timeout propio de 4 min, así que no hay solape). El UPDATE con guarda
-// (estado='creando') hace que el mensaje de fallo solo se inserte si el trabajo
-// seguía realmente creando.
+// Barrido (v851): corre al arranque Y cada 30 s. Un reinicio a mitad de
+// generación no puede dejar un trabajo 'creando' para siempre — y con el
+// techo de 3 min, tampoco un runner muerto ni una generación colgada. Salda
+// los de >3 min (el runner vivo corta a los 3 min, así que el barrido solo
+// alcanza huérfanos). El UPDATE con guarda (estado='creando') hace que el
+// mensaje de fallo solo se inserte si el trabajo seguía realmente creando;
+// el runner usa la misma guarda al saldar (el primero que salda gana).
 function pzTrabajoMarcarVencidos(db) {
   try {
-    const viejos = db.prepare(`SELECT * FROM trabajos WHERE estado = 'creando' AND datetime(created_at) < datetime('now', '-10 minutes')`).all();
+    const viejos = db.prepare(`SELECT * FROM trabajos WHERE estado = 'creando' AND datetime(created_at) < datetime('now', '-3 minutes')`).all();
     let n = 0;
     for (const j of viejos) {
       const up = db.prepare("UPDATE trabajos SET estado='fallo', error='tiempo_agotado', updated_at=datetime('now') WHERE id=? AND estado='creando'").run(j.id);
@@ -6361,19 +6365,27 @@ function pzTrabajoMarcarVencidos(db) {
   } catch (e) { console.error('[trabajo] sweep:', e.message); }
 }
 // Ejecuta un trabajo 'chat_imagen' en segundo plano. Se llama con setImmediate
-// (el POST responde rápido con el estado); el settle es único: el runner es el
-// único escritor mientras corre (el barrido solo toca >10 min y el reintento
-// solo fallo o creando-vencido).
+// (el POST responde rápido con el estado). El settle es único aunque haya dos
+// escritores (runner + barrido cada 30 s): TODAS las transiciones a 'fallo' o
+// 'lista' llevan guarda (estado='creando' y, en el éxito, updated_at igual al
+// de arranque — el reintento reabre el trabajo y el runner viejo no puede
+// saldar la corrida nueva). El primero que salda gana; el otro es no-op.
 async function pzTrabajoChatImagenRun(jobId) {
   const job = db.prepare('SELECT * FROM trabajos WHERE id = ?').get(jobId);
   if (!job || job.estado !== 'creando') return;
   const uid = job.user_id;
   const en = langOfUser(uid) === 'en';
+  // (v851) Token de corrida: updated_at al arrancar. El éxito solo salda si
+  // sigue igual — si el barrido saldó (o el reintento reabrió) la corrida,
+  // el runner viejo no toca nada. El settle de fallo usa la guarda de estado.
+  const runUpdatedAt = job.updated_at || '';
   const settleFallo = (kind) => {
     try {
+      const up = db.prepare("UPDATE trabajos SET estado='fallo', error=?, updated_at=datetime('now') WHERE id=? AND estado='creando'").run(kind, job.id);
+      if (!up || !up.changes) return; // el barrido ya lo saldó: no duplicar el mensaje
       const msg = `[trabajo-fallo:${job.id}] ${pzTrabajoFalloAmable(kind, en)}`;
       const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', msg.slice(0, 3000));
-      db.prepare("UPDATE trabajos SET estado='fallo', error=?, mensaje_final_id=?, updated_at=datetime('now') WHERE id=?").run(kind, Number(ins.lastInsertRowid), job.id);
+      db.prepare('UPDATE trabajos SET mensaje_final_id = ? WHERE id = ?').run(Number(ins.lastInsertRowid), job.id);
     } catch (e) { console.error('[trabajo] settle fallo:', e.message); }
   };
   try {
@@ -6382,7 +6394,7 @@ async function pzTrabajoChatImagenRun(jobId) {
     const headline = makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(caption, 5, 70, rubroOf(uid));
     const gate = {};
     const genP = conceptShotGenerateQueued({ uid, idea: caption, tipo: '', headline, refs: [], resultOut: gate });
-    const timeoutP = new Promise((_, rej) => setTimeout(() => rej(new Error('tiempo_agotado')), 4 * 60 * 1000));
+    const timeoutP = new Promise((_, rej) => setTimeout(() => rej(new Error('tiempo_agotado')), 3 * 60 * 1000));
     const newPath = await Promise.race([genP, timeoutP]);
     if (!newPath) { settleFallo('fallo'); return; }
     // QA gate / personaje: la imagen no se entrega como buena (doctrina MORA:
@@ -6422,9 +6434,15 @@ async function pzTrabajoChatImagenRun(jobId) {
     // como burbuja con foto, app.js FOTO_MARKER_RE).
     const titulo = String(job.titulo || caption.split('\n')[0] || 'tu posteo').slice(0, 80);
     const textoFinal = (en ? 'Here is the image for your post 💪' : 'Acá está la imagen de tu posteo 💪') + ` [foto:${String(newPath)}]`;
+    // (v851) Reclamar la transición a 'lista' con guarda: solo esta corrida
+    // (estado='creando' y updated_at igual al de arranque) puede saldar. Si
+    // el barrido ya saldó o el reintento reabrió la corrida, no se duplica
+    // el mensaje final ni la push (la imagen ya quedó en el borrador).
+    const upOk = db.prepare("UPDATE trabajos SET estado='lista', post_id=?, updated_at=datetime('now') WHERE id=? AND estado='creando' AND updated_at=?").run(postId, job.id, runUpdatedAt);
+    if (!upOk || !upOk.changes) { console.log(`[trabajo] run ${job.id}: ya saldado por barrido/reintento, sin mensaje final`); return; }
     const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', textoFinal.slice(0, 3000));
     const finalId = Number(ins.lastInsertRowid);
-    db.prepare("UPDATE trabajos SET estado='lista', post_id=?, mensaje_final_id=?, updated_at=datetime('now') WHERE id=?").run(postId, finalId, job.id);
+    db.prepare('UPDATE trabajos SET mensaje_final_id=? WHERE id=?').run(finalId, job.id);
     // Push al completar (el SO la muestra solo en segundo plano; en primer
     // plano el hilo ya muestra la imagen). Mismo patrón que los precedentes.
     try {
@@ -33996,7 +34014,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v850';
+const BUILD_ID = '20261105-v851';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -34360,6 +34378,10 @@ app.listen(PORT, () => {
   startTokenRefresh();
   // (LOTE v847) Un reinicio a mitad de generación no deja trabajos colgados.
   try { pzTrabajoMarcarVencidos(db); } catch (e) { console.error('[trabajo] sweep:', e.message); }
+  // (LOTE v851 · REGLA 3 MIN) El barrido corre cada 30 s, no solo al arranque:
+  // un trabajo 'creando' de >3 min se salda como fallo con mensaje honesto +
+  // reintentar, aunque el runner haya muerto o la generación se haya colgado.
+  setInterval(() => { try { pzTrabajoMarcarVencidos(db); } catch (e) { console.error('[trabajo] sweep:', e.message); } }, 30 * 1000);
 });
 
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require

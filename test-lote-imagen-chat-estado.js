@@ -77,8 +77,8 @@ function reFrom(src, re) {
 // ---------- Parte A: estática ----------
 function parteA() {
   console.log('— A) estática: pins y marcadores del lote —');
-  check('A0 BUILD v847 en server.js', srvSrc.includes("const BUILD_ID = '20261105-v847';"));
-  check('A0b index ES con app.js?v=579 y styles?v=20261225 heredado de v846 (este lote no toca styles.css)', idxSrc.includes('app.js?v=579') && idxSrc.includes('styles.css?v=20261225') && !idxSrc.includes('app.js?v=576') && !idxSrc.includes('styles.css?v=20261223'));
+  check('A0 BUILD v851 en server.js', srvSrc.includes("const BUILD_ID = '20261105-v851';"));
+  check('A0b index ES con app.js?v=581 y styles?v=20261225 sin cambio', idxSrc.includes('app.js?v=581') && idxSrc.includes('styles.css?v=20261225') && !idxSrc.includes('app.js?v=576'));
   check('A0c app.js del lote (marcadores LOTE v847)', (appSrc.match(/LOTE v847/g) || []).length >= 7, `marcadores=${(appSrc.match(/LOTE v847/g) || []).length}`);
   // §1 servidor — funciones nuevas
   for (const f of ['function pzChatPideImagen(', 'function pzTrabajoPublico(', 'function pzTrabajoFalloAmable(', 'function pzTrabajoMarcarVencidos(', 'async function pzTrabajoChatImagenRun(', 'function pzChatImagenSiFalta(']) {
@@ -100,8 +100,8 @@ function parteA() {
   check('A5b la push lleva deep link al chat con ancla al mensaje', srvSrc.includes("url: '/#/app/chat?msg=' + finalId") && srvSrc.includes('data: { trabajo_id: job.id, msg_id: finalId }'));
   check('A5c la push lleva la imagen (rica)', srvSrc.includes('image: imgUrl,') && srvSrc.includes('const imgUrl = absImageUrl(uid, String(newPath));'));
   // §1 el runner salda siempre + QA gate
-  check('A6 el runner tiene timeout propio de 4 min', srvSrc.includes('4 * 60 * 1000') && srvSrc.includes("new Error('tiempo_agotado')"));
-  check('A6b el barrido salda los creando de >10 min', srvSrc.includes("datetime('now', '-10 minutes')"));
+  check('A6 el runner tiene timeout propio de 3 min', srvSrc.includes('3 * 60 * 1000') && srvSrc.includes("new Error('tiempo_agotado')"));
+  check('A6b el barrido salda los creando de >3 min', srvSrc.includes("datetime('now', '-3 minutes')"));
   check('A6c el QA gate / personaje manda a revisión, no a entrega', srvSrc.includes("settleFallo('revision')") && srvSrc.includes('needs_review = 1'));
   check('A6d el fallo por tope y sin clave tienen texto propio', srvSrc.includes("settleFallo('tope')") && srvSrc.includes("settleFallo('sin_clave')"));
   // §1 la red NO ata al borrador más nuevo sin evidencia
@@ -315,7 +315,11 @@ function mkStubDb(seed) {
   const db = {
     _jobs: jobs, _msgs: msgs, _posts: posts,
     prepare(sql) {
-      if (sql.includes("estado = 'creando'") && sql.includes('-3 minutes')) {
+      if (sql.includes("estado = 'creando'") && sql.includes("datetime(created_at) > datetime('now', '-3 minutes')")) {
+        // dedupe de la red (pzChatImagenSiFalta): trabajos creando RECIENTES.
+        // El barrido usa la misma ventana pero con '<' (viejos); v851 cambió
+        // el umbral del barrido de 10 min a 3 min y el literal ya no distingue
+        // las dos consultas — la dirección (< vs >) sí.
         return { get: (uid) => jobs.filter((j) => j.user_id === uid && j.estado === 'creando').sort((a, b) => b.id - a.id)[0] || null };
       }
       if (sql.includes('FROM chat_state')) return { get: () => chatState };
@@ -331,7 +335,9 @@ function mkStubDb(seed) {
       }
       if (sql.includes('SET mensaje_id = ?')) return { run: (mid, id) => { const j = jobs.find((x) => x.id === Number(id)); if (j) j.mensaje_id = mid; return { changes: j ? 1 : 0 }; } };
       if (sql.includes('FROM trabajos WHERE id = ?')) return { get: (id) => jobs.find((j) => j.id === Number(id)) || null };
-      if (sql.includes("estado = 'creando'") && sql.includes('-10 minutes')) {
+      if (sql.includes("estado = 'creando'") && sql.includes("datetime(created_at) < datetime('now', '-3 minutes')")) {
+        // barrido (pzTrabajoMarcarVencidos): creando VIEJOS. Antes '-10 minutes';
+        // v851 lo baja a 3 min (regla dura de Valentino).
         return { all: () => jobs.filter((j) => j.estado === 'creando' && j._viejo) };
       }
       if (sql.includes("SET estado='fallo'")) {
@@ -541,7 +547,7 @@ async function parteD() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('D0b /api/version trae el BUILD v847', ver.status === 200 && ver.json && ver.json.build === '20261105-v847', JSON.stringify(ver.json));
+    check('D0b /api/version trae el BUILD v851', ver.status === 200 && ver.json && ver.json.build === '20261105-v851', JSON.stringify(ver.json));
     check('D0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
     check('D0d la tabla trabajos existe en la DB del boot', readDb(dbPath, (db) => { try { db.prepare('SELECT COUNT(*) c FROM trabajos').get(); return true; } catch (e) { return false; } }));
 
