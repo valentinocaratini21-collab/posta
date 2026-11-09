@@ -1109,7 +1109,7 @@ function bbShell(tab, content) {
     ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Hoy', 'Home'))}${tabBtn('analisis', '#/app/numeros', gzT('Análisis', 'Analysis'))}${tabBtn('impulsar', '#/app/ads', gzT('Impulsar', 'Boost'))}${tabBtn('estrategia', '#/app/analisis', gzT('Estrategia', 'Strategy'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
+    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('analisis', '#/app/numeros', gzT('Análisis', 'Analysis'))}${tabBtn('impulsar', '#/app/ads', gzT('Impulsar', 'Boost'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
     ${pzAperturaHTML()}
   </div>`;
 }
@@ -1672,16 +1672,16 @@ function mxPoderesBB() {
   try { return (typeof BB !== 'undefined' && BB && BB.estado && BB.estado.poderes) ? mxPoderesDe(BB.estado.poderes) : null; } catch (e) { return null; }
 }
 // (LOTE REDISEÑO R0 · 8/11) El dock es de 6: Hoy, Análisis, Impulsar,
-// Estrategia, Nivel, Chat. Las claves ya no son el nombre de la ruta:
-// numeros → analisis (la vista de números, que R3 reconstruye como la
-// pantalla Análisis), analisis → estrategia, ads → impulsar.
+// Análisis, Impulsar, Nivel, Chat. Las claves ya no son el nombre de
+// la ruta: numeros → analisis (la vista de números, que R3 reconstruye
+// como la pantalla Análisis), ads → impulsar. (LOTE A: Estrategia
+// eliminada 8/11 — quedan 5 pestañas.)
 function mxTabKey(tab) {
   if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat') return tab;
   if (tab === 'inicio') return 'inicio';
   if (tab === 'schedule' || tab === 'post') return 'semana';
   if (tab === 'jardin-posty') return 'jardin';
   if (tab === 'numeros') return 'analisis';
-  if (tab === 'analisis') return 'estrategia';
   if (tab === 'ads') return 'impulsar';
   return '';
 }
@@ -2370,6 +2370,7 @@ function pzNivelPantallaHTML(d) {
     const faltan = (typeof nv.nextXp === 'number') ? Math.max(0, nv.nextXp - xp) : Math.max(0, level * 500 - xp);
     const badge = (en ? 'Level ' : 'NIVEL ') + '<span class="pz-nivel-num">' + level + '</span>';
     let head = '<section class="pz-nivel-head"><button type="button" class="mx-volver" onclick="bbGo(\'#/app/inicio\')" aria-label="' + esc(en ? 'Back' : 'Volver') + '">' + pzIc('arrowLeft', 16) + ' ' + esc(en ? 'Back' : 'Volver') + '</button>'
+      + '<div class="pz-nivel-posty"><img src="ai-avatar.png" alt="Posty" class="pz-nivel-ava"><p class="pz-nivel-why">' + esc(en ? 'The higher your level, the more I know what you like and the better I know your product — so every post comes out better.' : 'Cuanto más nivel, más sé qué te gusta y mejor conozco tu producto, así los posteos salen cada vez mejores.') + '</p></div>'
       + '<p class="pz-nivel-badge">' + badge + '</p>'
       + '<h2>' + esc(hito.nombre) + '</h2>'
       + '<p class="pz-nivel-hito-desc">' + esc(en ? hito.descEn : hito.desc) + '</p>'
@@ -5414,8 +5415,13 @@ function orderPalette(hexes) {
 }
 // Miniaturas de sus fotos guardadas (las más nuevas primero) para que la IA las vea
 async function chatLibThumbs() {
+  // (LOTE A · guardas del chat · a) Las miniaturas van con sus paths
+  // (out.paths, mismo orden, solo las legibles): el servidor arma los
+  // metadatos de tema (tag + visión) por índice y el modelo elige la
+  // foto POR TEMA, no por novedad.
   const lib = assetPhotos().slice().reverse().slice(0, 6);
   const out = [];
+  out.paths = [];
   for (const p of lib) {
     try {
       const img = await photoImg(p.file_path);
@@ -5425,6 +5431,7 @@ async function chatLibThumbs() {
       cv.height = Math.max(1, Math.round((img.height || 1) * s));
       cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
       out.push(cv.toDataURL('image/jpeg', 0.7));
+      out.paths.push(p.file_path);
     } catch (e) { /* foto ilegible: se saltea */ }
   }
   return out;
@@ -6100,8 +6107,9 @@ function mzIsMobile() {
   try { return !!(window.matchMedia && window.matchMedia('(max-width: 820px)').matches); } catch (e) { return false; }
 }
 function mzHomeHash() { return '#/app/inicio'; } // POSTY SOLO // (v331 addendum 22/10) decisión de Valentino: la home es el feed literal EN TODOS los tamaños — el aterrizaje por defecto es Inicio también en desktop; la Agenda queda a un toque (tab Jardín).
-// (LOTE REDISEÑO R0 · 8/11) Dock de 6, igual que el móvil: Hoy, Análisis,
-// Impulsar, Estrategia, Nivel, Chat. El chat YA NO es pantalla completa
+// (LOTE REDISEÑO R0 · 8/11) Dock de 5 (LOTE A: Estrategia eliminada),
+// igual que el móvil: Inicio, Análisis, Impulsar, Nivel, Chat. El chat
+// YA NO es pantalla completa
 // sin pestañas: el dock también está en chat (el input del chat lleva
 // offset inferior = altura del dock, ver styles.css). El + sale del dock
 // (su hoja pzDockMasHTML queda sin abridor hasta R1; la función se conserva).
@@ -6110,11 +6118,10 @@ function mzTabsHTML(tab) {
     : (tab === 'schedule' || tab === 'post') ? 'semana'
     : tab === 'jardin-posty' ? 'jardin'
     : tab === 'numeros' ? 'analisis'
-    : tab === 'analisis' ? 'estrategia'
     : tab === 'ads' ? 'impulsar'
     : tab === 'chat' ? 'chat' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Hoy', 'Home'))}${t('analisis', 'numeros', pzIc('navBarras'), gzT('Análisis', 'Analysis'))}${t('impulsar', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))}${t('estrategia', 'analisis', pzIc('target'), gzT('Estrategia', 'Strategy'))}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Inicio', 'Home'))}${t('analisis', 'numeros', pzIc('navBarras'), gzT('Análisis', 'Analysis'))}${t('impulsar', 'ads', pzIc('megaphone'), gzT('Impulsar', 'Boost'))}${t('jardin', 'jardin-posty', pzIc('navBambu'), gzT('Nivel', 'Level'))}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -6196,10 +6203,9 @@ function appShell(tab, content) {
       <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" class="side-posty-ava"></span>
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
-    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Hoy'}</button>
+    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
     <button class="drawer-link ${tab === 'numeros' ? 'on' : ''}" data-tab="numeros"><span class="di">${pzIc('navBarras')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Analysis' : 'Análisis'}</button>
     <button class="drawer-link ${tab === 'ads' ? 'on' : ''}" data-tab="ads"><span class="di">${pzIc('megaphone')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Boost' : 'Impulsar'}</button>
-    <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">${pzIc('target')}</span>Estrategia</button>
     <button class="drawer-link ${tab === 'jardin-posty' ? 'on' : ''}" data-tab="jardin-posty"><span class="di">${pzIc('navBambu')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Level' : 'Nivel'}</button>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">${pzIc('chat')}</span>Chat</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
@@ -7790,6 +7796,7 @@ async function runAiEdit(id, kind) {
       }
       body.photoPaths = lib.map(p => p.file_path);
       body.library = await chatLibThumbs();
+      body.libraryPaths = (body.library && body.library.paths) || [];
     }
     const r = await api.post('/api/ideas/chat', body, { timeout: 60000 });
     if (r.edit && r.edit.ok) {
@@ -9058,8 +9065,14 @@ async function renderChatPreviews_OLD(force) {
   const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
   // FOTO-CLIENTE (2026-10-10, pedido de Valentino): si la idea trae photo_index,
   // la foto del cliente ES la imagen — no se genera nada con IA.
-  if (Number.isInteger(idea.photo_index) && CHAT_PHOTOS.length) {
-    const up = CHAT_PHOTOS[0];
+  // (LOTE A · guardas del chat · c) El índice se resuelve en el orden
+  // combinado del prompt (librería, la más nueva primero, después las
+  // adjuntadas): CHAT_PHOTOS[0] ignoraba photo_index y mostraba
+  // siempre la primera adjuntada.
+  if (Number.isInteger(idea.photo_index)) {
+    const lib6 = assetPhotos().slice().reverse().slice(0, 6);
+    const combined = lib6.map((p) => ({ file_path: p.file_path })).concat((CHAT_PHOTOS || []).filter((p) => p && p.file_path));
+    const up = combined[idea.photo_index];
     if (up && up.file_path) {
       RENDER_PREV_FOR = tituloKey; RENDER_PREV_BUSY = null;
       CHAT_PREVIEWS = [{ kind: 'photo', cv: null, path: up.file_path, style: null, styleName: '' }];
@@ -9134,8 +9147,11 @@ async function renderChatPreviews_OLD(force) {
     } catch (e) { /* fallback a generación on-demand */ }
     if (CHAT_IDEA !== idea) return;
     // 2. Sin pre-generada: generar on-demand (comportamiento actual).
-    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
-    const refs = lib.slice(0, 2).map(p => p.file_path || '').filter(Boolean);
+    // (LOTE A · guardas del chat · d) On-demand: las más nuevas primero
+    // (antes eran las 2 más viejas) y nunca la cara de Posty como
+    // referencia de otro tema.
+    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos().slice().reverse();
+    const refs = lib.map(p => p.file_path || '').filter(Boolean).filter((fp) => { const b = String(fp).split('/').pop(); return b !== 'ai-avatar.png' && b !== 'posty-mascot.png'; }).slice(0, 2);
     const gen = await aiConceptShotFull({
       idea: { titulo: idea.titulo, angulo: idea.angulo, porque: idea.porque, tipo: idea.tipo },
       tipo: idea.tipo || tipoFromText(idea.titulo),
@@ -11010,7 +11026,7 @@ async function chatExchange({ text, display, extra, pushed }) {
   try { libThumbs = await chatLibThumbs(); } catch (e) {}
   try {
     const r = await api.post('/api/ideas/chat', Object.assign(
-      { messages: CHAT.map(m => ({ role: m.role, text: chatStripMcMarker(m.text) })), photos: unsentPhotos, library: libThumbs, drafts: chatDraftsCtx(),
+      { messages: CHAT.map(m => ({ role: m.role, text: chatStripMcMarker(m.text) })), photos: unsentPhotos, library: libThumbs, libraryPaths: (libThumbs && libThumbs.paths) || [], drafts: chatDraftsCtx(),
         photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean),
         anchor_post_id: (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id) ? HF_CHAT_ANCHOR.id : undefined }, extra || {}), { timeout: 90000 });
     dropTyping();
@@ -16387,7 +16403,7 @@ async function enhanceAdsBoost() {
 }
 
 // (LOTE DOCK-ADS) El tab Ads del dock: la billetera USD de v707, tal cual
-// vive en la carta de Estrategia (chunk-analisis.js: anaBilleteraHTML +
+// vive en Impulsar (chunk-analisis.js: anaBilleteraHTML +
 // anaBilleteraTabDatos). Datos REALES de los endpoints de billetera;
 // nunca números inventados. Sin el chunk 'analisis' no hay tab (la carta
 // amable de chunkFailHTML). La vuelta de MercadoPago de un topup viejo
@@ -16399,8 +16415,8 @@ async function adsView() {
   let datos = null;
   try { datos = await anaBilleteraTabDatos(); } catch (e) { datos = null; }
   // (LOTE ADS-DIRECTO v758) La vista entera la renderiza el chunk
-  // (anaAdsTabHTML: principal o grilla del feed); la carta de Estrategia
-  // sigue con su propio render.
+  // (anaAdsTabHTML: principal o grilla del feed); la recomendación del
+  // mejor posteo vive en Impulsar como una línea (LOTE A, sin carta).
   const tabHTML = datos
     ? anaAdsTabHTML()
     : `<p class="ana-note">${anaT('No pudimos cargar tu billetera ahora. Probá de nuevo.', 'We could not load your wallet right now. Try again.')}</p>`;
@@ -17251,7 +17267,6 @@ function pzPrefetchKick() {
    const label = key === '#/app/inicio' ? (en ? 'Home' : 'Inicio')
      : key === '#/app/schedule' ? (en ? 'Week' : 'Semana')
      : key === '#/app/jardin-posty' ? (en ? 'Level' : 'Nivel')
-     : key === '#/app/analisis' ? (en ? 'Strategy' : 'Estrategia')
      : key === '#/app/ajustes' ? (en ? 'Settings' : 'Ajustes')
      : (en ? 'Back' : 'Volver');
    return `<a class="apv-back" href="${href}">${pzIc('arrowLeft', 14)} ${label}</a>`;
@@ -17553,7 +17568,7 @@ function pzPrefetchKick() {
   else if (tab === 'feed') { pzPaintSkeleton(tab); content = await feedView(); } // (LOTE REDISENO-R2 · FEED) «Mi feed» como pantalla propia: el feed literal + stats
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') { pzPaintSkeleton(tab); content = await scheduleView(); }
-  else if (tab === 'analisis') { pzPaintSkeleton(tab); let __okAn = true; try { await loadChunk('analisis'); } catch (e) { __okAn = false; } content = __okAn ? analisisView() : chunkFailHTML(); } // 🧠 Análisis: LA CARTA v3 (chunk-analisis.js)
+  else if (tab === 'analisis') { location.hash = '#/app/ads'; return; } // (LOTE A · 8/11: Estrategia eliminada — la recomendación del mejor posteo vive en Impulsar como una línea. analisisView() queda como código muerto sin llamadores.)
   else if (tab === 'numeros') content = statsView(); // 📊 Tus números (stats de IG)
   else if (tab === 'crear') { location.hash = '#/app/schedule'; return; } // Creador manual fusionado en Schedule
   else if (tab === 'ideas') { location.hash = '#/app/schedule'; return; } // Ideas se fusionó en Schedule
@@ -20339,6 +20354,11 @@ function hfDetailHTML(p, opts) {
     </div>`;
   const accept = (!o.visitor && p.status === 'draft')
     ? `<button type="button" class="hf-d-accept" data-revaccept="${esc(String(p.id))}"${o.propIso ? ` data-proposed="${esc(o.propIso)}"` : ''}>${pzIc('checkCircle', 18)} ${en ? 'Accept' : 'Aceptar'}</button>` : '';
+  // (LOTE A · «Usar la foto que envié») En el detalle/aprobación del
+  // posteo: cambia la imagen por una foto enviada por el cliente (con
+  // preview antes de confirmar, nunca en silencio).
+  const usarFoto = (!o.visitor && (p.status === 'draft' || p.status === 'scheduled'))
+    ? `<button type="button" class="hf-d-usarfoto" onclick="pzUsarFotoAbrir(${esc(String(p.id))})">${pzIc('camera', 18)} ${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button>` : '';
   // (Tanda feed 6A · ítem 3) Contador de rehaces en el detalle: línea +
   // botón Rehacer mientras quedan; a 0, el aviso y los caminos gratis
   // (Mi foto · Retocar el texto · Dejarlo así). Solo no publicados
@@ -20376,6 +20396,7 @@ function hfDetailHTML(p, opts) {
     ${whenLine}
     ${redoHTML}
     ${accept}
+    ${usarFoto}
   </div>`;
 }
 /* ===== (Tanda feed 6D · ítems 11–14) CUBIERTAS · EDITAR · ARCHIVO =====
@@ -20916,6 +20937,21 @@ function pzHoyCardHTML(p, o) {
   } catch (e) { return ''; }
 }
 
+// (LOTE A · ítem 2) El posteo de hoy, justo debajo del saludo y antes
+// que todo: cabecera «EL POSTEO DE HOY» + pill «hoy · HH:MM» + la
+// tarjeta de siempre (reutilizada, con sus botones Aprobar/Cambiar).
+function pzHoyHoyHTML(p, o) {
+  try {
+    const en = !!(o && o.en);
+    const tz = (o && o.tz) || undefined;
+    const hh = pzHoyHoraCorta(p.scheduled_at, tz, en);
+    const pill = en ? ('today' + (hh ? ' \u00b7 ' + hh : '')) : ('hoy' + (hh ? ' \u00b7 ' + hh : ''));
+    return `<div class="pz-hoy-hoy"><div class="pz-hoy-hoy-head"><h3>${en ? 'TODAY\u2019S POST' : 'EL POSTEO DE HOY'}</h3><span class="pz-hoy-hoy-pill">${esc(pill)}</span></div>`
+      + pzHoyCardHTML(p, { cartita: false, en, tz, prop: (o && o.prop) || null })
+      + `</div>`;
+  } catch (e) { return ''; }
+}
+
 // Mensaje de Posty en Hoy (botón → chat). Un solo mensaje: la
 // instrucción «Dale» + «sin tu OK no sale nada» vive en el cuerpo
 // (LOTE CHAT-MEJORA: la nota «¡Ya te dejé los posteos listos!»
@@ -20989,13 +21025,16 @@ function pzHoyUploadHTML(album, en) {
     const alt = en ? 'Photo saved in your album' : 'Foto guardada en tu álbum';
     const del = (a && Number(a.id) > 0)
       ? `<button type="button" class="pz-hoy-album-del" data-album-del="${a.id}" aria-label="${en ? 'Delete this photo from the album' : 'Borrar esta foto del álbum'}">×</button>` : '';
-    return `<span class="pz-hoy-album-thumb-wrap"><button type="button" class="pz-hoy-album-thumb" data-pz-hoy-subir="1" aria-label="${en ? 'Open your album to upload material' : 'Abrir tu álbum para subir material'}"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy" onerror="this.remove()"></button>${del}</span>`;
+    const estPill = (a && a.estado === 'sale') ? `<span class="pz-hoy-album-est">${en ? 'goes out ' : 'sale el '}${esc(a.dia_label || '')}</span>`
+      : (a && a.estado === 'salio') ? `<span class="pz-hoy-album-est">${en ? 'already out' : 'ya salió'}</span>`
+      : `<span class="pz-hoy-album-est pz-hoy-album-est-espera">${en ? 'waiting for a slot' : 'esperando lugar'}</span>`;
+    return `<span class="pz-hoy-album-thumb-wrap"><button type="button" class="pz-hoy-album-thumb" data-pz-hoy-subir="galeria" aria-label="${en ? 'Open your album to upload material' : 'Abrir tu álbum para subir material'}"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy" onerror="this.remove()"></button>${del}${estPill}</span>`;
   }).join('');
   return `<div class="card pz-hoy-upload">`
     + `<h4>${en ? 'Anything new to show?' : '¿Tenés algo nuevo para mostrar?'}</h4>`
     + `<p class="sub">${en ? 'Upload the photo or video just as it comes out of your phone. Posty turns it into a post with text, price and best time — you edit nothing.' : 'Subí la foto o el video tal cual sale de tu teléfono. Posty lo convierte en posteo con texto, precio y mejor horario — vos no editás nada.'}</p>`
-    + `<button type="button" class="pz-hoy-upload-btn" data-pz-hoy-subir="1">${pzIc('camera', 20)} ${en ? 'Upload photo or video' : 'Subir foto o video'}</button>`
-    + `<div class="pz-hoy-album-row"><span class="pz-hoy-album-label">${en ? 'YOUR ALBUM' : 'TU ÁLBUM'}${cuenta ? `<small>${esc(cuenta)}</small>` : ''}</span>${thumbs}<button type="button" class="pz-hoy-album-add" data-pz-hoy-subir="1" aria-label="${en ? 'Add a photo or video to the album' : 'Agregar una foto o video al álbum'}">+</button></div>`
+    + `<div class="pz-hoy-upload-btns"><button type="button" class="pz-hoy-upload-btn" data-pz-hoy-subir="galeria">${pzIc('image', 20)} ${en ? 'Gallery' : 'Galería'}</button><button type="button" class="pz-hoy-upload-btn" data-pz-hoy-subir="camara">${pzIc('camera', 20)} ${en ? 'Camera' : 'Cámara'}</button></div>`
+    + `<div class="pz-hoy-album-row"><span class="pz-hoy-album-label">${en ? 'YOUR ALBUM' : 'TU ÁLBUM'}${cuenta ? `<small>${esc(cuenta)}</small>` : ''}</span>${thumbs}<button type="button" class="pz-hoy-album-add" data-pz-hoy-subir="galeria" aria-label="${en ? 'Add a photo or video to the album' : 'Agregar una foto o video al álbum'}">+</button></div>`
     + `<p class="pz-hoy-album-note">${en ? 'If one day you upload nothing, Posty builds the post with material from your album and the streak does not break.' : 'Si un día no subís nada, Posty arma el posteo con material de tu álbum y la racha no se corta.'}</p>`
     + `</div>`;
 }
@@ -21069,11 +21108,19 @@ function pzHoySemanaHTML(sem, en) {
     const cls = d.estado === 'pub' ? 'done' : (d.estado === 'hoy' ? 'today' : '');
     return `<span class="${cls}">${labels[i] || ''}</span>`;
   }).join('');
-  const titulo = n >= 7 ? (en ? 'Your week is complete' : 'Tu semana viene completa')
-    : n > 0 ? (en ? 'Your week is on its way' : 'Tu semana viene en camino')
+  // (LOTE A · ítem 3) Copy por día, con el número real de la semana:
+  // lunes–sábado «X/7 posteos, tu semana viene en camino»; domingo
+  // «esta semana cumplimos X/7 posteos»; domingo con 7/7 → festejo.
+  const hoyIdx = dias.findIndex((d) => d && d.estado === 'hoy');
+  const esDomingo = hoyIdx === 6;
+  const titulo = n >= 7 ? (en ? 'Week complete! \uD83C\uDF89' : '¡Semana completa! \uD83C\uDF89')
+    : esDomingo ? (en ? `This week we hit ${n}/7 posts` : `esta semana cumplimos ${n}/7 posteos`)
+    : n > 0 ? (en ? `${n}/7 posts, your week is on its way` : `${n}/7 posteos, tu semana viene en camino`)
     : (en ? 'Your week is just starting' : 'Tu semana recién arranca');
   const sub = n === 0
     ? (en ? 'Nothing went out yet this week. When the first one goes out, the ring fills up.' : 'Todavía no salió nada esta semana. Cuando salga el primero, el anillo se llena.')
+    : n >= 7 ? (en ? 'We hit 7/7 — tomorrow a new week starts.' : 'cumplimos 7/7 — mañana arranca una nueva semana.')
+    : esDomingo ? (en ? `Sunday today — ${n} of 7 days already have published content.` : `hoy es domingo — ${n} de 7 días ya tienen contenido publicado.`)
     : (en ? `${n} of 7 days already have published content.` : `${n} de 7 días ya tienen contenido publicado.`);
   return `<div class="card pz-hoy-semana">`
     + `<div class="pz-hoy-ring"><div class="pz-hoy-ring-svg"><svg width="76" height="76" viewBox="0 0 76 76"><circle cx="38" cy="38" r="32" fill="none" stroke="#EAF5FB" stroke-width="9"/><circle cx="38" cy="38" r="32" fill="none" stroke="#2793C8" stroke-width="9" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="${off}"/></svg><div class="pz-hoy-ring-num"><b>${n}/7</b><small>${en ? 'POSTS' : 'POSTEOS'}</small></div></div>`
@@ -21111,22 +21158,9 @@ function pzHoySetView(nombre) {
 // Hoja «Subir foto o video» (mock, 2 pasos: el paso 1 es esta hoja —
 // Cámara / Galería / Cancelar — y el paso 2 es el selector del sistema,
 // que cae en el chat con la subida de siempre, v784).
-function pzHoySubirAbrir() {
-  try {
-    const sh = document.getElementById('pzHoySubirSheet');
-    const ov = document.getElementById('pzHoySubirOv');
-    if (sh) sh.hidden = false;
-    if (ov) ov.hidden = false;
-  } catch (e) {}
-}
-function pzHoySubirCerrar() {
-  try {
-    const sh = document.getElementById('pzHoySubirSheet');
-    const ov = document.getElementById('pzHoySubirOv');
-    if (sh) sh.hidden = true;
-    if (ov) ov.hidden = true;
-  } catch (e) {}
-}
+// (LOTE A · ítem 4) pzHoySubirAbrir/Cerrar ELIMINADAS: la hoja de
+// subida («Cámara / Galería / Cancelar») salió — los botones de la
+// tarjeta van directo al selector (pzHoySubirCamara/Galeria).
 // Abre el chat y dispara el selector DEL CHAT (#chatFile) con el
 // accept explícito de cada vez (lote subir-foto-directa): Cámara =
 // foto ahora (image/* + capture), Galería = foto o video de la
@@ -21134,7 +21168,8 @@ function pzHoySubirCerrar() {
 // 10 por tanda, HEIC nunca descartado en silencio, una foto = un lugar
 // en el álbum con tope 20).
 function pzHoySubirPicker(accept, capture) {
-  try { pzHoySubirCerrar(); } catch (e) {}
+  // (LOTE A · ítem 4) Sin hoja en el medio: el botón va directo al
+  // selector del chat con el accept explícito de cada vez.
   try { if (typeof pzSftChatAbrirYEnfocar === 'function') pzSftChatAbrirYEnfocar(); } catch (e) {}
   let n = 0;
   const t = setInterval(() => {
@@ -21247,21 +21282,8 @@ function pzHoyBind(root) {
     el.onclick = go;
     el.onkeydown = (ev) => { if (ev && (ev.key === 'Enter' || ev.key === ' ')) { try { ev.preventDefault(); } catch (e) {} go(); } };
   });
-  root.querySelectorAll('[data-pz-hoy-subir]').forEach((b) => { b.onclick = () => pzHoySubirAbrir(); });
+  root.querySelectorAll('[data-pz-hoy-subir]').forEach((b) => { b.onclick = () => { const v = b.getAttribute('data-pz-hoy-subir'); if (v === 'camara') pzHoySubirCamara(); else pzHoySubirGaleria(); }; });
   root.querySelectorAll('[data-album-del]').forEach((b) => { b.onclick = (ev) => { try { if (ev && ev.stopPropagation) ev.stopPropagation(); } catch (e) {} pzHoyAlbumBorrar(b); }; });
-  const sh = document.getElementById('pzHoySubirSheet');
-  if (sh) {
-    sh.querySelectorAll('[data-pz-hoy-subir-op]').forEach((b) => {
-      b.onclick = () => {
-        const op = b.getAttribute('data-pz-hoy-subir-op');
-        if (op === 'camara') pzHoySubirCamara();
-        else if (op === 'galeria') pzHoySubirGaleria();
-        else pzHoySubirCerrar();
-      };
-    });
-  }
-  const ov = document.getElementById('pzHoySubirOv');
-  if (ov) ov.onclick = () => pzHoySubirCerrar();
   root.querySelectorAll('[data-pz-hoy-conserje]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/conserje'); else location.hash = '#/app/conserje'; } catch (e) {} }; });
   try { pzHoyConserjeFill(); } catch (e) {}
 }
@@ -21527,7 +21549,10 @@ async function inicioView() {
   let hoyPostR1 = null;
   try {
     let btR1 = Infinity;
-    for (const p of schedPosts) {
+    // (LOTE A · ítem 2) El posteo de hoy puede ser un borrador armado
+    // (draft con scheduled_at de hoy, del /armar de la subida), no
+    // solo un programado: se consideran ambos, gana el más temprano.
+    for (const p of schedPosts.concat(allPosts.filter((q) => q && q.status === 'draft' && q.scheduled_at))) {
       if (!p || String(p.media_type || '') === 'story' || !p.scheduled_at) continue;
       if (pzHoyPostDiaKey(p, tz) !== hoyKeyR1) continue;
       const tR1 = Date.parse(String(p.scheduled_at).replace(' ', 'T'));
@@ -21546,8 +21571,8 @@ async function inicioView() {
   const hoyAprobarHTML = (!HF_VISITOR) ? (() => {
     const cardsR1 = [];
     if (pendR1.cartita) cardsR1.push(pzHoyCardHTML(pendR1.cartita, { cartita: true, en: enHome, tz, prop: HF_PROPS[pendR1.cartita.id] || proposedLabelFor(pendR1.cartita, pl.proposals, tz) }));
-    for (const p of pendR1.resto) cardsR1.push(pzHoyCardHTML(p, { cartita: false, en: enHome, tz, prop: HF_PROPS[p.id] || proposedLabelFor(p, pl.proposals, tz) }));
-    const vacioR1 = (!pendR1.cartita && !pendR1.resto.length)
+    for (const p of pendR1.resto) { if (hoyPostR1 && String(p.id) === String(hoyPostR1.id)) continue; cardsR1.push(pzHoyCardHTML(p, { cartita: false, en: enHome, tz, prop: HF_PROPS[p.id] || proposedLabelFor(p, pl.proposals, tz) })); }
+    const vacioR1 = (!pendR1.cartita && !pendR1.resto.length && !hoyPostR1)
       ? (haySemanaR1
         ? `<div class="card pz-hoy-vacio"><p>${enHome ? 'Nothing to approve — your week is already set. ✅' : 'Nada por aprobar — tu semana ya está lista. ✅'}</p></div>`
         : `<div class="card pz-hoy-vacio"><p>${enHome ? 'No posts yet. Tell Posty what you have to show and it will build your week.' : 'Todavía no hay posteos. Contale a Posty qué tenés para mostrar y arma tu semana.'}</p><button type="button" class="btn btn-primary" data-pz-hoy-chat="1">${enHome ? 'Open the chat' : 'Abrir el chat'}</button></div>`)
@@ -21555,6 +21580,7 @@ async function inicioView() {
     const hayAdminR1 = (() => { try { return !!(localStorage.getItem('posta_admin_token') || ''); } catch (e) { return false; } })();
     return `<div id="pzHoyAprobar"${PZ_HOY_VIEW === 'aprobar' ? '' : ' hidden'}>`
       + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: pendR1.total, haySemana: haySemanaR1, en: enHome, tz })
+      + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
       + pzHoyUploadHTML(albumR1, enHome)
       + pzHoySemanaHTML(semR1, enHome)
       + cardsR1.join('')
@@ -21567,9 +21593,7 @@ async function inicioView() {
   // los posteos de la semana. Hoy queda siempre en «Por aprobar». #/app/feed sigue vivo y
   // reachable por «Ver en el feed» desde el detalle del posteo.)
   const hoySegHTML = '';
-  const hoySheetHTML = (!HF_VISITOR)
-    ? `<div class="pz-hoy-sheet-ov" id="pzHoySubirOv" hidden></div><div class="pz-hoy-sheet" id="pzHoySubirSheet" hidden role="dialog" aria-label="${enHome ? 'Upload photo or video' : 'Subir foto o video'}"><div class="sheet-handle"></div><h4>${enHome ? 'Upload photo or video' : 'Subir foto o video'}</h4><p class="sheet-sub">${enHome ? 'Choose where it comes from. Posty takes care of everything else: text, design and timing.' : 'Elegí de dónde sale. Posty se encarga de todo lo demás: texto, diseño y horario.'}</p><button type="button" class="pz-hoy-sheet-opt" data-pz-hoy-subir-op="camara"><span class="so-ic">📷</span><span><b>${enHome ? 'Camera' : 'Cámara'}</b><small>${enHome ? 'Take a photo or record a video now' : 'Sacar una foto o grabar un video ahora'}</small></span></button><button type="button" class="pz-hoy-sheet-opt" data-pz-hoy-subir-op="galeria"><span class="so-ic">🖼️</span><span><b>${enHome ? 'Gallery' : 'Galería'}</b><small>${enHome ? 'Choose a photo or video you already have' : 'Elegir una foto o video que ya tenés'}</small></span></button><button type="button" class="sheet-cancel" data-pz-hoy-subir-op="cancelar">${enHome ? 'Cancel' : 'Cancelar'}</button></div>`
-    : '';
+  // (LOTE A · ítem 4) La hoja de subida salió: los botones van directo.
   // (v440 · SOLO FEED) La nota del kit de nacimiento (hf-kitnote) SALIÓ
   // del flujo principal de Inicio: con perfil kit, el encabezado y la
   // grilla ya muestran la propuesta; la nota competía con el feed.
@@ -21617,7 +21641,7 @@ async function inicioView() {
   // (antes «Premios · Nv N»; renombre 7/11) ya NO se monta en Inicio: ni fetch de mxPortTop ni interpolación.
   // La tira sigue viva en Oficina (mxPortTop 'gesty') y la pestaña
   // Nivel sigue intacta; el nivel (nivelPosty/HF_NIVEL) se sigue
-  // calculando para chat y Estrategia.
+  // calculando para el chat.
   const nivelStripHTML = (!HF_VISITOR && nivelPosty) ? pzNivelStripHTML(nivelPosty, enHome) : '';
   // (LOTE PROXIMO-RITUAL · 5/11) Sin banner del ritual: la carta velada
   // del próximo es la entrada (ver el fetch retirado arriba).
@@ -21625,14 +21649,13 @@ async function inicioView() {
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, pzAcceptWeekHTML)}
   ${hoySegHTML}
   ${hoyAprobarHTML}
-  ${hfTabsHTML(HF_TAB, enHome)}
   ${pzConserjeHoyHTML()}
   ${pzSemanaOkHTML}
   <!-- (LOTE PERFIL-JUNTO-AL-FEED · 8/11 · decisión Valentino: el perfil baja a encabezar la grilla del feed — nombre, números y «¿Cómo publica Posty?» son el encabezado del feed, no de Hoy; arriba Inicio arranca con el saludo de Posty. Solo se mueve la llamada a homeHeadHTML.) -->
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: false /* (LOTE HOY-REDISEÑO v810) Los íconos de compartir/ajustes viven SOLO en el encabezado del shell: la tarjeta de perfil ya no los duplica. */ })}
+  ${hfTabsHTML(HF_TAB, enHome)}
   ${gridHTML}
   ${visitorPillHTML}
-  ${hoySheetHTML}
   <!-- (LOTE SACAR-CHATBAR-INICIO · decisión Valentino 5/11) La caja de chat sale de Inicio: sin campo, sin mic, sin +. La entrada de subida es el tab Agregar del dock (hoja «Subir foto / Subir video» → chat con la foto). La hoja del chat (mzSheet) queda: es la superficie del cambio del posteo (hfOpenChatForPost). -->
   <div class="mz-sheet" id="mzSheet" hidden>
     <div class="mz-sheet-card">
@@ -21771,11 +21794,23 @@ async function feedView() {
     }
   } catch (e) {}
   const baseTiles = HF_VISITOR ? hfVisitorTiles(tiles) : tiles.filter((t) => t && !t.archivedExt);
+  // (LOTE A · ítem 5) Las pestañas filtran la grilla igual que en Inicio.
+  const displayTiles = hfTabTiles(baseTiles, HF_TAB, prof).map((t) => {
+    const c = Object.assign({}, t);
+    if (HF_VISITOR) c.visitor = true;
+    if (HF_TAB === 'reels') c.reelTab = true;
+    return c;
+  });
+  const tabEmptyHTML = HF_TAB === 'tagged' ? hfTaggedEmptyHTML(en)
+    : HF_TAB === 'reels' ? hfReelsEmptyHTML(en)
+    : HF_VISITOR ? hfVisitorEmptyHTML(en) : '';
   const drafts = allPosts.filter(p => p.status === 'draft');
   const schedPosts = allPosts.filter(p => p.status === 'scheduled');
   const weekNoDna = !!(weekEr && weekEr.reason === 'no_dna' && !drafts.length && !schedPosts.length);
   const gridHTML = tiles.length
-    ? `<div class="hf-grid">${baseTiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
+    ? (displayTiles.length
+      ? `<div class="hf-grid">${displayTiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
+      : `${tabEmptyHTML}<div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`)
     : homeWeekHTML(allPosts, quota, !!(weekEr && weekEr.generating), weekNoDna);
   // Stats de cabecera — SOLO datos reales, con el origen etiquetado:
   // posteos = conteo real de Instagram (posts_count del perfil; sin
@@ -21807,6 +21842,7 @@ async function feedView() {
     ${sealHTML}
   </div>
   ${statsHTML}
+  ${hfTabsHTML(HF_TAB, en)}
   ${gridHTML}
   <p class="pz-feed-note">${en ? 'Tap any post to see how it performed.' : 'Tocá cualquier posteo para ver cómo rindió.'}</p>
 </div>`;
@@ -21825,6 +21861,9 @@ function bindFeed() {
     root.querySelectorAll('[data-lightbox]').forEach((el) => { el.onclick = () => { try { lbOpenFrom(el); } catch (e) {} }; });
   } catch (e) {}
   try { hfFeedHighlightApply(); } catch (e) {}
+  // (LOTE A · ítem 5) Pestañas del perfil: filtran la grilla (re-render,
+  // mismo patrón que #inicioView).
+  try { root.querySelectorAll('[data-hf-tab]').forEach((el) => { el.onclick = () => { if (HF_TAB !== el.dataset.hfTab) { HF_TAB = el.dataset.hfTab; try { render(); } catch (e) {} } }; }); } catch (e) {}
 }
 function hfFeedHighlightApply() { // «Ver en el feed»: el posteo en su posición final y destacado (brillo que se apaga, sin escala, como hf-justpub).
   if (!HF_FEED_HIGHLIGHT) return;
@@ -29077,7 +29116,10 @@ async function pzSftDespuesDeSubirChat() {
     const nuevos = (typeof CHAT_PHOTOS !== "undefined" ? CHAT_PHOTOS.slice(PZ_SFT_CHAT_START) : []);
     if (!nuevos.length) return;
     const defVal = await pzSftDefaultActual();
-    const list = nuevos.map((c) => ({ assetId: 0, kind: c.kind || "photo", url: c.aiUrl || c.file_path || "", thumb: c.aiUrl || c.file_path || "", tag: "", issues: [], choice: "", vision: "", origen: "chat", file: c.file || null, duplicada: false }));
+    // (LOTE A · ítem 4 · FIX ÁLBUM) El id de /api/media viaja en el
+    // item: sin mediaId, pzSftAsegurarAssetTmp re-sube los bytes y el
+    // álbum inserta una SEGUNDA fila con distinto file_path (la gemela).
+    const list = nuevos.map((c) => ({ assetId: 0, mediaId: c.mediaId || 0, kind: c.kind || "photo", url: c.aiUrl || c.file_path || "", thumb: c.aiUrl || c.file_path || "", tag: "", issues: [], choice: "", vision: "", origen: "chat", file: c.file || null, duplicada: false }));
     list.forEach((it, i) => { if (it.file) it.duplicada = pzSftDup(pzSftHuella(it.file)); });
     if (defVal === "guardar" || defVal === "semana") {
       for (const it of list) {
@@ -29221,7 +29263,10 @@ async function pzSftDespuesDeSubirChat() {
     const nuevos = (typeof CHAT_PHOTOS !== "undefined" ? CHAT_PHOTOS.slice(PZ_SFT_CHAT_START) : []);
     if (!nuevos.length) return;
     const defVal = await pzSftDefaultActual();
-    const list = nuevos.map((c) => ({ assetId: 0, kind: c.kind || "photo", url: c.aiUrl || c.file_path || "", thumb: c.aiUrl || c.file_path || "", tag: "", issues: [], choice: "", vision: "", origen: "chat", file: c.file || null, duplicada: false }));
+    // (LOTE A · ítem 4 · FIX ÁLBUM) El id de /api/media viaja en el
+    // item: sin mediaId, pzSftAsegurarAssetTmp re-sube los bytes y el
+    // álbum inserta una SEGUNDA fila con distinto file_path (la gemela).
+    const list = nuevos.map((c) => ({ assetId: 0, mediaId: c.mediaId || 0, kind: c.kind || "photo", url: c.aiUrl || c.file_path || "", thumb: c.aiUrl || c.file_path || "", tag: "", issues: [], choice: "", vision: "", origen: "chat", file: c.file || null, duplicada: false }));
     list.forEach((it) => { if (it.file) it.duplicada = pzSftDup(pzSftHuella(it.file)); });
     if (defVal === "guardar" || defVal === "semana") {
       for (const it of list) {
@@ -29253,10 +29298,16 @@ async function pzSftChatProponer() {
       return;
     }
     if (pend.texto) it.vision = pend.texto;
-    const r = await api.post("/api/album/" + it.assetId + "/propuesta", { vision: it.vision || "" });
+    // (LOTE A · ítem 4 · posteo armado + Caso 2 del chat) La subida arma
+    // el borrador con su fecha EN EL MOMENTO (POST /armar): la oferta
+    // llega como TARJETA (foto + «sale el [día]» + caption +
+    // aprobar/cambiar), nunca como texto volcado con hashtags. Si /armar
+    // falla, el motivo se dice en el mismo mensaje (Caso 1: nunca un
+    // «...» colgado ni una promesa sin entrega).
+    const r = await api.post("/api/album/" + it.assetId + "/armar", { vision: it.vision || "" });
     if (pend.token !== token || PZ_SFT_CHAT_PENDIENTE !== pend) { pzSftChatProponer(); return; }
-    if (!r || !r.ok) {
-      pzSftChatDecir(en ? "I could not build the proposal yet. Tap Other options to decide." : "No pude armar la propuesta todavía. Tocá Otras opciones para decidir.", pzSftChatBotones());
+    if (!r || (!r.ok && !r.gated && !r.busy)) {
+      pzSftChatDecir(en ? "I could not build the post yet. Tap Other options to decide." : "No pude armar el posteo todavía. Tocá Otras opciones para decidir.", pzSftChatBotones());
       pend.propuesta = null;
       return;
     }
@@ -29265,21 +29316,14 @@ async function pzSftChatProponer() {
       pend.propuesta = null;
       return;
     }
-    it.tag = r.tag || it.tag || "";
-    it.issues = r.issues || it.issues || [];
-    const rec = pzSftRecomendar(it, "preguntar");
-    const mejor = pzSftChatMejorUso(rec);
-    const tagTxt = pzSftTagTexto(it.tag);
-    // (CHAT-FOTO) La burbuja muestra SOLO la propuesta: nunca la nota de
-    // visión («✦ veo ...» era contexto interno y salía con doble escape)
-    // y nunca el titular separado — el caption ya abre con el gancho, así
-    // que el titular salía duplicado y cortado.
-    pend.propuesta = { assetId: it.assetId, headline: r.headline || "", caption: r.caption || "", hashtags: r.hashtags || "", choice: mejor.choice, hard: r.hard || (it.issues.indexOf("cortada") >= 0 ? ["cortada"] : []) };
-    const texto = (en ? "My proposal: " : "Te propongo: ") + pzSftEtiqueta(mejor.choice) + " — " + mejor.why
-      + (pend.propuesta.caption ? "\n" + pend.propuesta.caption : "")
-      + (pend.propuesta.hashtags ? "\n" + pend.propuesta.hashtags : "")
-      + "\n" + (en ? "Nothing goes to the feed until you approve." : "Nada va al feed hasta que apruebes.");
-    pzSftChatDecir(texto, pzSftChatBotones());
+    if (r.busy) {
+      pzSftChatDecir(en ? "I am already building that reel — one moment." : "Ya estoy armando ese reel, un momento.", pzSftChatBotones());
+      pend.propuesta = null;
+      return;
+    }
+    pend.propuesta = { assetId: it.assetId, postId: r.post_id, scheduled_at: r.scheduled_at, dia_label: r.dia_label || "", hora: r.hora || "", semana_llena: !!r.semana_llena, caption: r.caption || "", headline: r.headline || "", hashtags: r.hashtags || "", kind: r.kind || "photo", image_path: r.image_path || it.url || "", thumb: r.thumb || "", hard: r.hard || [], ya_armado: !!r.ya_armado };
+    PZ_SFT_ARMADO_ACTUAL = pend.propuesta;
+    pzSftChatTarjetaArmada(pend.propuesta);
   } catch (e) {
     if (pend.token !== token || PZ_SFT_CHAT_PENDIENTE !== pend) return;
     pzSftChatDecir(en ? "I could not build the proposal yet. Tap Other options to decide." : "No pude armar la propuesta todavía. Tocá Otras opciones para decidir.", pzSftChatBotones());
@@ -29290,7 +29334,11 @@ async function pzSftChatProponer() {
    defecto (sin silencios/lenta/ánimo); las opciones de video viven en
    la pantalla de propuesta vía Otras opciones. Gate duro (cortada):
    se transfiere a la pantalla de propuesta para resolverlo ahí. */
-async function pzSftChatAprobar() {
+async function pzSftChatAprobar(btn) {
+  // (LOTE A · ítem 4) El posteo YA está armado (POST /armar en la
+  // propuesta): aprobar es la rama draft de siempre — PATCH
+  // scheduled_at + señal approved — con el mismo gate de Instagram que
+  // pzHoyAprobarUno. Sin /crear: el borrador ya existe.
   const pend = PZ_SFT_CHAT_PENDIENTE;
   if (!pend || !pend.propuesta) return;
   const it = pend.items[pend.idx];
@@ -29298,34 +29346,130 @@ async function pzSftChatAprobar() {
   const en = pzSftEn();
   pzSftChatQuitarBotones();
   if ((prop.hard && prop.hard.length)) { pzSftChatOpciones(true); return; }
+  if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) { try { igGateFeedback(btn || document.body); } catch (e) {} return; }
   try {
-    const r = await api.post("/api/album/" + prop.assetId + "/crear", { headline: prop.headline, caption: prop.caption, hashtags: prop.hashtags, acepta: false });
-    if (r && r.ok) {
-      try { await api.post("/api/album/" + prop.assetId + "/choice", { choice: "armar" }); } catch (e) {}
-      pzSftGuardarPost(prop.assetId, r.post_id);
-      it.choice = "armar";
-      pzSftChatDecir((en ? "Draft ready! It is in review, like any post. Nothing is scheduled or published until you approve it." : "¡Borrador listo! Quedó en revisión, como cualquier posteo. Nada se programa ni se publica hasta que lo apruebes."),
-        "<div id=\"pzSftChatBtns2\" style=\"display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px;\"><button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"location.hash='#/app/post/" + r.post_id + "'\">" + (en ? "See draft" : "Ver borrador") + "</button></div>");
-      pend.idx++;
-      pend.propuesta = null;
-      if (pend.idx < pend.items.length) pzSftChatProponer();
-      else PZ_SFT_CHAT_PENDIENTE = null;
-    } else if (r && r.gated) {
-      pzSftChatOpciones(true);
-    } else {
-      pzSftChatDecir(en ? "I could not build the draft." : "No pude armar el borrador.", pzSftChatBotones());
-    }
+    const w = prop.scheduled_at ? new Date(prop.scheduled_at).toISOString() : null;
+    await api.patch('/api/posts/' + encodeURIComponent(prop.postId), { scheduled_at: w });
+    try { await api.post('/api/posts/' + encodeURIComponent(prop.postId) + '/signal', { signal: 'approved' }); } catch (e) {}
+    try { if (typeof track === 'function') track('draft_accept', { id: Number(prop.postId) }); } catch (e) {}
+    try { await api.post("/api/album/" + prop.assetId + "/choice", { choice: "armar" }); } catch (e) {}
+    pzSftGuardarPost(prop.assetId, prop.postId);
+    it.choice = "armar";
+    toast('✅ ' + (en ? 'Scheduled — it goes out on its own' : 'Programado — sale solo'));
+    const cuando = (prop.dia_label && prop.hora) ? (en ? `goes out ${prop.dia_label} at ${prop.hora}` : `sale el ${prop.dia_label} a las ${prop.hora}`) : '';
+    pzSftChatDecir((en ? `Done! The post ${cuando ? cuando : 'is scheduled'} ✓` : `¡Listo! El posteo ${cuando ? cuando : 'quedó programado'} ✓`),
+      "<div id=\"pzSftChatBtns2\" style=\"display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px;\"><button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"location.hash='#/app/post/" + prop.postId + "'\">" + (en ? "See post" : "Ver posteo") + "</button></div>");
+    try { render(); } catch (e) {}
+    pend.idx++;
+    pend.propuesta = null;
+    if (pend.idx < pend.items.length) pzSftChatProponer();
+    else PZ_SFT_CHAT_PENDIENTE = null;
   } catch (e) {
-    pzSftChatDecir(en ? "I could not build the draft." : "No pude armar el borrador.", pzSftChatBotones());
+    pzSftChatDecir(en ? "I could not approve it." : "No pude aprobarlo.", pzSftChatBotones());
   }
 }
+// Tarjeta del posteo armado en el chat (Caso 2: foto + fecha + caption
+// + aprobar/cambiar — nunca texto volcado). El armado vigente queda en
+// PZ_SFT_ARMADO_ACTUAL para «Cambiar texto / Cambiar día».
+var PZ_SFT_ARMADO_ACTUAL = null;
+function pzSftChatTarjetaArmada(prop) {
+  const en = pzSftEn();
+  const box = document.getElementById('chatBox');
+  if (!box) { pzSftChatDecir(en ? 'Post ready.' : 'Posteo listo.', pzSftChatBotones()); return; }
+  const img = prop.image_path ? `<img src="${esc(prop.image_path)}" alt="" style="width:100%;border-radius:12px;display:block" loading="lazy">` : '';
+  const cuando = (prop.dia_label && prop.hora) ? (en ? `Goes out ${prop.dia_label} at ${prop.hora}` : `Sale el ${prop.dia_label} a las ${prop.hora}`) : '';
+  const llena = prop.semana_llena ? `<div style="font-size:12px;color:var(--mut);margin-top:4px">${en ? 'This week is full — it goes out next Monday.' : 'Esta semana está completa — sale el lunes que viene.'}</div>` : '';
+  const card = `<div class="chat-msg ai" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Your post is ready' : 'Tu posteo está armado'}</div>${img}<div style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div style="font-size:13px;white-space:pre-wrap">${esc(prop.caption || '')}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatAprobar(this)">${en ? 'Approve ✓' : 'Aprobar ✓'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarTexto()">${en ? 'Change text' : 'Cambiar texto'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarDia()">${en ? 'Change day' : 'Cambiar día'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzUsarFotoAbrir(${Number(prop.postId) || 0})">${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button></div></div>`;
+  box.insertAdjacentHTML('beforeend', card);
+  try { chatScroll(); } catch (e) {}
+}
+function pzSftChatCambiarTexto() {
+  const prop = PZ_SFT_ARMADO_ACTUAL;
+  if (!prop || !prop.postId) return;
+  try { hfOpenChatForPost({ id: prop.postId, caption: prop.caption || '', image_path: prop.image_path || '' }); } catch (e) {}
+}
+function pzSftChatCambiarDia() {
+  const prop = PZ_SFT_ARMADO_ACTUAL;
+  if (!prop || !prop.postId) return;
+  location.hash = '#/app/post/' + encodeURIComponent(prop.postId);
+}
+
+// (LOTE A · «Usar la foto que envié», Valentino 8/11 21:10) Cuando Posty
+// ofrece un posteo (detalle/aprobación y tarjeta armada del chat), el
+// cliente puede cambiar la imagen por una foto que él ya envió, con un
+// toque. Flujo: libres → candidata (miniatura + cuándo se envió) →
+// preview del posteo con esa foto → Confirmar. Nunca reemplazo en
+// silencio: sin el toque del cliente, la foto del posteo no cambia.
+// «La última foto» = la más reciente todavía libre (sin posteo
+// asignado); si la última ya tiene su posteo, se avisa y se ofrecen
+// las anteriores libres.
+var PZ_USARFOTO_EL = null;
+function pzUsarFotoCerrar() { try { if (PZ_USARFOTO_EL) PZ_USARFOTO_EL.remove(); } catch (e) {} PZ_USARFOTO_EL = null; }
+async function pzUsarFotoAbrir(postId) {
+  if (!postId) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  pzUsarFotoCerrar();
+  const el = document.createElement('div');
+  el.className = 'pz-usarfoto-sheet';
+  el.innerHTML = '<div class="pz-usarfoto-card"><h4>' + esc(en ? 'Use a photo you sent' : 'Usar la foto que envié') + '</h4><p class="pz-usarfoto-sub">' + esc(en ? 'Pick the photo — you will see the post with it before anything changes.' : 'Elegí la foto — vas a ver el posteo con esa foto antes de que cambie nada.') + '</p><div class="pz-usarfoto-list"><p>' + esc(en ? 'Loading your photos…' : 'Buscando tus fotos…') + '</p></div><button type="button" class="btn btn-ghost" onclick="pzUsarFotoCerrar()">' + esc(en ? 'Cancel' : 'Cancelar') + '</button></div>';
+  document.body.appendChild(el);
+  PZ_USARFOTO_EL = el;
+  try {
+    const d = await api.get('/api/album/libres');
+    const list = el.querySelector('.pz-usarfoto-list');
+    if (!list) return;
+    if (!d || !d.ok) { list.innerHTML = '<p>' + esc(en ? 'I could not load your photos.' : 'No pude cargar tus fotos.') + '</p>'; return; }
+    const libres = Array.isArray(d.libres) ? d.libres : [];
+    let html = '';
+    if (d.ultima_ocupada && d.ultima_ocupada.dia_label) html += '<p class="pz-usarfoto-note">' + esc(en ? ('The last photo you sent already has its post for ' + d.ultima_ocupada.dia_label + ' — here are the previous free ones.') : ('La última foto que mandaste ya tiene su posteo para el ' + d.ultima_ocupada.dia_label + ' — estas son las anteriores libres.')) + '</p>';
+    if (!libres.length) { html += '<p>' + esc(en ? 'You have no free photos — upload one first.' : 'No tenés fotos libres — subí una primero.') + '</p>'; }
+    for (const f of libres) {
+      html += '<button type="button" class="pz-usarfoto-opt" onclick="pzUsarFotoPreview(' + Number(postId) + ',' + Number(f.id) + ')"><img src="' + esc(f.thumb || f.path) + '" alt="" loading="lazy"><span>' + esc(en ? ('sent ' + (f.cuando || '')) : ('la mandaste ' + (f.cuando || ''))) + '</span></button>';
+    }
+    list.innerHTML = html;
+  } catch (e) {
+    const list = el.querySelector('.pz-usarfoto-list');
+    if (list) list.innerHTML = '<p>' + esc(en ? 'I could not load your photos.' : 'No pude cargar tus fotos.') + '</p>';
+  }
+}
+async function pzUsarFotoPreview(postId, assetId) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const el = PZ_USARFOTO_EL;
+  if (!el) return;
+  const list = el.querySelector('.pz-usarfoto-list');
+  if (list) list.innerHTML = '<p>' + esc(en ? 'Loading the preview…' : 'Cargando la vista previa…') + '</p>';
+  try {
+    const d = await api.post('/api/posts/' + encodeURIComponent(postId) + '/usar-foto', { asset_id: assetId, preview: true });
+    if (!list) return;
+    if (!d || !d.ok) {
+      if (d && d.error === 'ocupada') { list.innerHTML = '<p>' + esc(en ? ('That photo already has its post for ' + (d.dia_label || '') + '. Pick another one.') : ('Esa foto ya tiene su posteo para el ' + (d.dia_label || '') + '. Elegí otra.')) + '</p>'; return; }
+      throw new Error((d && d.error) || 'fail');
+    }
+    list.innerHTML = '<div class="pz-usarfoto-prev"><img src="' + esc(d.thumb || d.image_path) + '" alt="" style="width:100%;border-radius:12px;display:block"><p>' + esc(en ? ('You sent it ' + (d.cuando || '') + '.') : ('La mandaste ' + (d.cuando || '') + '.')) + '</p>' + (d.caption ? '<p style="font-size:13px">' + esc(d.caption) + '</p>' : '') + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-primary btn-sm" onclick="pzUsarFotoConfirmar(' + Number(postId) + ',' + Number(assetId) + ')">' + esc(en ? 'Confirm change' : 'Confirmar cambio') + '</button><button type="button" class="btn btn-ghost btn-sm" onclick="pzUsarFotoAbrir(' + Number(postId) + ')">' + esc(en ? 'Back' : 'Volver') + '</button></div></div>';
+  } catch (e) {
+    if (list) list.innerHTML = '<p>' + esc(en ? 'I could not load the preview.' : 'No pude cargar la vista previa.') + '</p>';
+  }
+}
+async function pzUsarFotoConfirmar(postId, assetId) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  try {
+    const d = await api.post('/api/posts/' + encodeURIComponent(postId) + '/usar-foto', { asset_id: assetId });
+    if (!d || !d.ok) throw new Error((d && d.error) || 'fail');
+    pzUsarFotoCerrar();
+    toast('✅ ' + (en ? 'Photo changed' : 'Foto cambiada'));
+    try { render(); } catch (e) {}
+  } catch (e) {
+    toast('😅 ' + esc((e && e.message) || (en ? 'Try again' : 'Probá de nuevo')));
+  }
+}
+
 /* Las 3 opciones viejas, accesibles desde la propuesta (y desde el
    Álbum, como antes): abre la pantalla elegir con las fotos pendientes.
    Si hay gate duro, abre directo la propuesta para resolverlo. */
 function pzSftChatOpciones(irAPropuesta) {
   const pend = PZ_SFT_CHAT_PENDIENTE;
   if (!pend) return;
-  const items = pend.items.map((x) => ({ assetId: x.assetId || 0, kind: x.kind, url: x.url, thumb: x.thumb, tag: x.tag || "", issues: x.issues || [], choice: "", vision: x.vision || "", origen: "chat", file: x.file || null, duplicada: !!x.duplicada }));
+  const items = pend.items.map((x) => ({ assetId: x.assetId || 0, mediaId: x.mediaId || 0, kind: x.kind, url: x.url, thumb: x.thumb, tag: x.tag || "", issues: x.issues || [], choice: "", vision: x.vision || "", origen: "chat", file: x.file || null, duplicada: !!x.duplicada }));
   pzSftChatQuitarBotones();
   PZ_SFT_CHAT_PENDIENTE = null;
   pzSftAbrir(items, { origen: "chat", defVal: "preguntar" });

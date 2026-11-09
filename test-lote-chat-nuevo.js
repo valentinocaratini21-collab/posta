@@ -52,7 +52,7 @@ check('0a app.js cambió vs base v820', md5(app) !== '5f38503c070cf80d91282f5fdf
 check('0b server.js cambió vs base v820', md5(srv) !== '0de3dc6d3d261e183bc431ce89fcae95', md5(srv));
 check('0c generator.js cambió vs base v820', md5(gen) !== '7e5edc801f1a618533e8183487db01c8', md5(gen));
 check('0d styles.css cambió vs base v820', md5(css) !== 'a856a7b75db749865b06c06e418caf1e', md5(css));
-check('0e BUILD v821 (estampado por el re-estampador)', srv.includes("const BUILD_ID = '20261105-v821'"), md5(srv));
+check('0e BUILD v822 (estampado por el re-estampador)', srv.includes("const BUILD_ID = '20261105-v822'"), md5(srv));
 
 // ---------- Parte 1: estática — apertura nueva ----------
 console.log('— 1) estática: apertura —');
@@ -132,8 +132,11 @@ check('5d AL GRANO + VOZ DEL CHAT (tarjeta, nunca texto volcado ni pitch con has
   && gen.includes('PROHIBIDO describir el posteo en el mensaje (título, caption, hashtags) cuando ya va en el bloque'));
 check('5e techo de tokens 700→1200 y abort del modelo 25s→60s (cliente 90s)',
   gen.includes('max_tokens: 1200') && gen.includes('AbortSignal.timeout(60000)') && gen.includes('El cliente aborta a los 90s'));
-check('5f MODO PEDIDO sigue (triage original intacto) y FOTO-OLVIDADA no se tocó (es del Lote A)',
-  gen.includes('MODO PEDIDO: muchos clientes no quieren brainstormear') && gen.includes('FOTO-OLVIDADA: photo_index forzado a 0'));
+check('5f MODO PEDIDO sigue (triage original intacto) y FOTO-OLVIDADA reescrita por el Lote A (índice por tema, nunca forzado a 0)',
+  gen.includes('MODO PEDIDO: muchos clientes no quieren brainstormear') && gen.includes('FOTO-OLVIDADA: photo_index por tema') && gen.includes('no se fuerza photo_index') && !gen.includes('FOTO-OLVIDADA: photo_index forzado a 0'));
+// (LOTE A · re-base v821) 5f actualizado: en el árbol fusionado FOTO-OLVIDADA YA es
+// la versión del Lote A (el índice se elige por tema o no se fuerza nada); la
+// versión vieja («forzado a 0») era lo que el Lote C dejó intacto a propósito.
 
 // ---------- Parte 6: VM — chatIsShortCommand ----------
 console.log('— 6) VM: comando corto —');
@@ -251,11 +254,11 @@ async function parteBoot() {
     check('9a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('9b /api/version = v821 (estampado)', ver && ver.build === '20261105-v821', JSON.stringify(ver));
-    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=556`)).text();
+    check('9b /api/version = v822 (estampado)', ver && ver.build === '20261105-v822', JSON.stringify(ver));
+    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=557`)).text();
     check('9c el app.js servido trae el lote (saludo nuevo + comando corto + dropTyping)',
       appJs.includes('hola! soy Posty. decime qué necesitás') && appJs.includes('function chatIsShortCommand') && appJs.includes('dropTyping()') && !appJs.includes('qué hacemos hoy'), 'len ' + appJs.length);
-    const cssTxt = await (await fetch(`http://127.0.0.1:${PORT}/styles.css?v=20261208`)).text();
+    const cssTxt = await (await fetch(`http://127.0.0.1:${PORT}/styles.css?v=20261209`)).text();
     check('9d el styles.css servido trae el punto en línea', cssTxt.includes('.chat-online-dot{') && cssTxt.includes('background:#22C55E'), 'len ' + cssTxt.length);
     const join = await reqJson('POST', '/api/trial/chat-onboarding?test_key=' + TEST_KEY, { kind: 'join', ig: 'cn-test', device: 'test-device-cn' });
     check('9e join del invitado ok', join.status === 200 && join.json && join.json.ok === true && join.json.user_id > 0, JSON.stringify(join.json));

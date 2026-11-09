@@ -5945,3 +5945,28 @@ body.pz-postchat-open{overflow:hidden}
 .st-wrap .st-delta.down{background:rgba(251,233,231,.55)}
 .st-wrap .st-rate-thumb{background:rgba(255,255,255,.55)}
 .st-wrap .st-best-row img{background:rgba(255,255,255,.55)}
+
+/* (LOTE A MEJORAS-INICIO · 8/11) Posteo de hoy, subida directa, Nivel, usar-foto. */
+.pz-hoy-hoy{margin-top:12px}
+.pz-hoy-hoy-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 2px 8px}
+.pz-hoy-hoy-head h3{font-size:12px;letter-spacing:.12em;color:#0A1E33;margin:0}
+.pz-hoy-hoy-pill{font-size:12px;font-weight:800;color:#2793C8;background:#EAF5FB;border-radius:999px;padding:4px 10px;white-space:nowrap}
+.pz-hoy-upload-btns{display:flex;gap:8px;margin-top:11px}
+.pz-hoy-upload-btns .pz-hoy-upload-btn{margin-top:0;flex:1;width:auto}
+.pz-hoy-album-est{display:block;font-size:10.5px;font-weight:700;color:#1B6FA0;margin-top:3px;max-width:64px;line-height:1.25}
+.pz-hoy-album-est-espera{color:var(--mut);font-weight:600}
+.pz-nivel-posty{display:flex;align-items:center;gap:12px;margin:4px 0 12px}
+.pz-nivel-ava{width:56px;height:56px;border-radius:50%;object-fit:cover;flex:none;border:2px solid #2793C8}
+.pz-nivel-why{font-size:14px;line-height:1.45;color:#0A1E33;margin:0}
+.hf-d-usarfoto{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;background:#fff;color:#0A1E33;border:1.5px solid #2793C8;border-radius:999px;padding:12px;font-size:14.5px;font-weight:800;cursor:pointer;font-family:inherit}
+.hf-d-usarfoto svg{width:18px;height:18px}
+.pz-usarfoto-sheet{position:fixed;inset:0;background:rgba(10,30,51,.45);z-index:90;display:flex;align-items:flex-end;justify-content:center;padding:12px}
+.pz-usarfoto-card{background:#fff;border-radius:20px;padding:18px;width:min(480px,100%);max-height:82vh;overflow:auto}
+.pz-usarfoto-card h4{margin:0 0 4px;font-size:17px;color:#0A1E33}
+.pz-usarfoto-sub{font-size:13px;color:var(--mut);margin:0 0 12px}
+.pz-usarfoto-note{font-size:13px;background:#FFF7E0;border-radius:10px;padding:10px;margin:0 0 10px}
+.pz-usarfoto-list{display:grid;gap:8px;margin-bottom:12px}
+.pz-usarfoto-opt{display:flex;align-items:center;gap:10px;text-align:left;background:#F4FAFE;border:1px solid var(--line);border-radius:12px;padding:8px;cursor:pointer;font-family:inherit}
+.pz-usarfoto-opt img{width:56px;height:56px;object-fit:cover;border-radius:10px;flex:none}
+.pz-usarfoto-opt span{font-size:13px;font-weight:700;color:#0A1E33}
+.pz-usarfoto-prev p{font-size:13px;margin:8px 0}

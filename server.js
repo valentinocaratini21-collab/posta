@@ -6227,7 +6227,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   let _lpNx = false; requireTrialValid(req, res, () => { _lpNx = true; });
   if (!_lpNx) return;
   if (guestBackstop(req, res)) return;
-  const { messages, photos, library, drafts, audio, anchor_post_id, photoPaths } = req.body || {};
+  const { messages, photos, library, drafts, audio, anchor_post_id, photoPaths, libraryPaths } = req.body || {};
   const uidChat = req.session.userId;
   // (MODO CONSERJE) Flag por cliente: con el cerebro pausado, el mensaje
   // no gasta IA — no se le aplica el tope ni el rate de chat.
@@ -6393,7 +6393,30 @@ app.post('/api/ideas/chat', async (req, res) => {
     .filter(u => typeof u === 'string' && u.startsWith('data:image/'))
     .filter(u => !costs.photoRecentlySent(uidChat, costs.photoHash(u)));
   const cleanPhotos = freshPhotos(photos).slice(0, 4);
-  const cleanLibrary = freshPhotos(library).slice(0, 6);
+  // (LOTE A · guardas del chat · a) Metadatos de tema de las fotos
+  // guardadas, en el MISMO orden que la librería que ve el modelo
+  // (las 6 más nuevas): tag + nota de visión por índice, para que el
+  // modelo elija la foto POR TEMA y no por novedad. Las parejas
+  // (dataURL, path) pasan por el mismo filtro anti-quemado que
+  // freshPhotos, así los índices de libraryMeta calzan con los de
+  // cleanLibrary. Si el cliente no manda libraryPaths, se resuelve
+  // por las 6 fotos más nuevas de la DB (mismo orden que chatLibThumbs).
+  const libPairs = (Array.isArray(library) ? library : []).map((u, i) => ({ u, p: (Array.isArray(libraryPaths) && libraryPaths[i]) ? String(libraryPaths[i]) : '' }))
+    .filter((x) => typeof x.u === 'string' && x.u.startsWith('data:image/'))
+    .filter((x) => !costs.photoRecentlySent(uidChat, costs.photoHash(x.u)))
+    .slice(0, 6);
+  const cleanLibrary = libPairs.map((x) => x.u);
+  let libraryMeta = [];
+  try {
+    libraryMeta = libPairs.map((x) => {
+      if (!x.p) return { tag: '', vision: '', path: '' };
+      const r = db.prepare(`SELECT file_path, album_tag, album_vision FROM assets WHERE user_id = ? AND file_path = ?`).get(uidChat, x.p);
+      return r ? { tag: String(r.album_tag || ''), vision: String(r.album_vision || '').slice(0, 120), path: String(r.file_path || '') } : { tag: '', vision: '', path: x.p };
+    });
+    if (!libraryMeta.some((m) => m.tag || m.vision)) {
+      libraryMeta = db.prepare(`SELECT file_path, album_tag, album_vision FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 6`).all(uidChat).map((r) => ({ tag: String(r.album_tag || ''), vision: String(r.album_vision || '').slice(0, 120), path: String(r.file_path || '') }));
+    }
+  } catch (e) { libraryMeta = []; }
   // Borradores en revisión: la IA los ve y puede editarlos directo (bloque ```edit)
   // Posty ve TODO: borradores, programados, publicando, fallidos y publicados recientes.
   // Orden: lo que necesita acción primero (borradores), después lo programado,
@@ -6552,7 +6575,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     } catch (e) { levelLine = ''; }
     try { out = await chatIdea(
       // Niveles que se sienten: el nivel cambia REALMENTE el payload del chat.
-      levelBoosted(uid0, 'chat', { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk, captionExtras: captionExtrasFor(uid0), strict: true, levelLine }),
+      levelBoosted(uid0, 'chat', { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, libraryMeta, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk, captionExtras: captionExtrasFor(uid0), strict: true, levelLine }),
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     ); } catch (e) {
       console.error('[chat] IA caída (modo estricto):', e.message);
@@ -6578,7 +6601,7 @@ app.post('/api/ideas/chat', async (req, res) => {
           let regen = null;
           try {
             regen = await chatIdea(
-              levelBoosted(uid0, 'chat', { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: (chatNote ? chatNote + '\n' : '') + 'CORRECCIÓN: el cliente NO mandó fotos en este mensaje ni te pidió usar fotos. Respondé SOLO a su último mensaje, sin mencionar fotos.', tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk, captionExtras: captionExtrasFor(uid0), strict: true, levelLine }),
+              levelBoosted(uid0, 'chat', { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, libraryMeta, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: (chatNote ? chatNote + '\n' : '') + 'CORRECCIÓN: el cliente NO mandó fotos en este mensaje ni te pidió usar fotos. Respondé SOLO a su último mensaje, sin mencionar fotos.', tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk, captionExtras: captionExtrasFor(uid0), strict: true, levelLine }),
               settings.openai_key || process.env.OPENAI_API_KEY || ''
             );
           } catch (e) { regen = null; }
@@ -9201,6 +9224,8 @@ app.get('/api/estrategia/mejor-posteo', requireAuth, async (req, res) => {
       FROM posts p JOIN post_metrics m ON m.post_id = p.id
       WHERE p.user_id = ? AND p.status = 'published'
         AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
+        AND p.ig_media_id NOT LIKE 'demo_%'
+        AND p.media_type != 'story'
         AND p.week_key = ?`).all(uid, wk);
     const mejor = elegirMejorPosteoSemana(rows);
     // Estado del impulso para la carta (LOTE IMPULSAR-UN-CLIC): la carta
@@ -9382,7 +9407,7 @@ app.get('/api/ads/billetera/feed', requireAuth, async (req, res) => {
     const uid = req.session.userId;
     let rows = [];
     try {
-      rows = db.prepare(`SELECT p.id, p.image_path, p.caption, p.status, p.published_at, p.ig_media_id, p.media_type FROM posts p WHERE p.user_id = ? AND p.status = 'published' AND p.ig_media_id IS NOT NULL AND p.ig_media_id != '' AND p.media_type != 'story' ORDER BY p.published_at DESC`).all(uid);
+      rows = db.prepare(`SELECT p.id, p.image_path, p.caption, p.status, p.published_at, p.ig_media_id, p.media_type FROM posts p WHERE p.user_id = ? AND p.status = 'published' AND p.ig_media_id IS NOT NULL AND p.ig_media_id != '' AND p.ig_media_id NOT LIKE 'demo_%' AND p.media_type != 'story' ORDER BY p.published_at DESC`).all(uid);
     } catch (e) { rows = []; }
     let impulsados = new Set();
     try {
@@ -9418,6 +9443,7 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
         FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
         WHERE p.user_id = ? AND p.status = 'published'
           AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
+          AND p.ig_media_id NOT LIKE 'demo_%'
           AND p.media_type != 'story'
         ORDER BY p.published_at DESC LIMIT 20`).all(uid);
     } catch (e) { rows = []; }
@@ -9451,6 +9477,7 @@ app.get('/api/ads/billetera/buscar', requireAuth, async (req, res) => {
         WHERE p.user_id = ? AND p.status = 'published'
           AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
           AND p.media_type != 'story'
+          AND p.ig_media_id NOT LIKE 'demo_%'
           AND p.caption LIKE '%' || ? || '%' ESCAPE '\\'
         ORDER BY p.published_at DESC LIMIT 20`).all(uid, escLike);
     } catch (e) { rows = []; }
@@ -10689,6 +10716,17 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
 });
 
 // ---------- Subida de imagen (PNG del diseñador) ----------
+// Huella de contenido de un archivo (sha256). La usa el dedupe del
+// álbum: dos subidas de la misma foto tienen distinto file_path pero
+// la misma huella, así que la gemela se corta sin mirar el nombre.
+function assetContentHash(absPath) {
+  try {
+    const h = crypto.createHash('sha256');
+    h.update(fs.readFileSync(absPath));
+    return h.digest('hex');
+  } catch (e) { return ''; }
+}
+
 app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb' }), (req, res) => {
   if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
   const ct = req.get('Content-Type') || '';
@@ -10726,12 +10764,31 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
   const name = savedMedia ? savedMedia.name : `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
   if (!savedMedia) fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
   const filePath = `/media/${name}`;
+  // (LOTE A · ítem 4 · FIX ÁLBUM) La misma foto subida dos veces no
+  // genera dos filas: si viene del chat y la huella ya existe para
+  // este usuario, se devuelve la fila existente y el archivo nuevo
+  // (distinto path, misma foto) se borra. Sin esto, el álbum muestra
+  // la foto duplicada y el dedupe del frontend no la colapsa (paths
+  // distintos).
+  let contentHash = '';
+  if (kind === 'photo') {
+    contentHash = assetContentHash(path.join(MEDIA_DIR, name));
+    if (req.query.from === 'chat' && contentHash) {
+      try {
+        const dup = db.prepare(`SELECT id, file_path FROM assets WHERE user_id = ? AND content_hash = ? AND kind = 'photo'`).get(req.session.userId, contentHash);
+        if (dup) {
+          try { fs.unlinkSync(path.join(MEDIA_DIR, name)); } catch (e) {}
+          return res.json({ path: dup.file_path, id: dup.id });
+        }
+      } catch (e) { /* sin columna todavía: seguir con la subida normal */ }
+    }
+  }
   if (kind !== 'video') makeVariantsAsync(path.join(MEDIA_DIR, name));
   // TOPE-ALBUM-20: se devuelve el id de la fila para que el álbum la
   // ADOPTE (?adopt=id) en vez de insertar otra — una foto, una fila.
   let mediaId = 0;
   try {
-    mediaId = db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(req.session.userId, filePath, kind).lastInsertRowid;
+    mediaId = db.prepare('INSERT INTO assets (user_id, file_path, kind, content_hash) VALUES (?,?,?,?)').run(req.session.userId, filePath, kind, contentHash).lastInsertRowid;
   } catch (e) { console.error('[media] assets insert:', e.message); }
   res.json({ path: filePath, id: mediaId });
 });
@@ -11307,9 +11364,9 @@ async function albumCrearFoto(uid, assetId, approved) {
     const fid = genOut.fidelity || 'n/a';
     const isClientPhoto = (fid === 'passed' || fid === 'fallback') ? 1 : 0;
     const why = 'Borrador creado desde la foto real que subió el cliente (texto aprobado en la pantalla de subir fotos)' + ((approved && approved.acepta) ? ' — el cliente aceptó sabiendo que la foto tiene un problema duro (cortada).' : '');
-    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why)
-      VALUES (?,?,?,?, 'draft', 'image', 1, 'album', ?, ?, 'foto', ?)`)
-      .run(uid, imagePath, caption, hashtags, isClientPhoto, weekKey, why);
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why, foto_asset_id)
+      VALUES (?,?,?,?, 'draft', 'image', 1, 'album', ?, ?, 'foto', ?, ?)`)
+      .run(uid, imagePath, caption, hashtags, isClientPhoto, weekKey, why, asset.id);
     try { db.prepare('UPDATE album_missions SET post_id = ? WHERE user_id = ? AND week_key = ?').run(ins.lastInsertRowid, uid, weekKey); } catch (e) {}
     try { push.sendPush(uid, { title: 'Tu borrador está listo ✏️', body: 'Posty armó el borrador con tu foto. Miralo en tu semana y aprobalo cuando quieras 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
     return { postId: ins.lastInsertRowid, imagePath };
@@ -11509,12 +11566,56 @@ app.post('/api/album/video-reel', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'No pude armar el reel 😅 Probá de nuevo en un rato.' });
   }
 });
+// Estado de una foto del álbum por su posteo vinculado (misma
+// resolución que el guard del DELETE): programado → sale el [día];
+// publicado → ya salió; borrador o sin posteo → esperando lugar.
+function albumFotoEstado(uid, filePath, tz) {
+  try {
+    const row = db.prepare(`SELECT id, status, scheduled_at, published_at FROM posts WHERE user_id = ? AND status IN ('draft','scheduled','published') AND (foto_asset_id IN (SELECT id FROM assets WHERE user_id = ? AND file_path = ?) OR image_path = ? OR carousel_paths LIKE ?) ORDER BY CASE status WHEN 'scheduled' THEN 0 WHEN 'published' THEN 1 ELSE 2 END, scheduled_at DESC LIMIT 1`).get(uid, uid, filePath, filePath, `%${filePath}%`);
+    if (!row) return { estado: 'esperando', dia: '', dia_label: '' };
+    // (PREPARADOR LOTE A · 8/11) El borrador armado por /armar nace 'draft'
+    // CON scheduled_at (para no auto-publicar): para el álbum es un posteo
+    // con fecha — «sale el martes» — no «esperando». Verificado en vivo:
+    // antes del fix, GET /api/album devolvía 'esperando' para la foto
+    // recién armada aunque el borrador con su slot ya existía. El draft
+    // SIN fecha sigue 'esperando' (no entra acá: scheduled_at vacío).
+    // El ORDER BY ya pone 'scheduled' antes que 'draft', así que un
+    // programado sigue ganando sobre el borrador para la misma foto.
+    if ((row.status === 'scheduled' || row.status === 'draft') && row.scheduled_at) {
+      const k = ymdInTz(row.scheduled_at, tz) || '';
+      let label = '';
+      try { const d = new Date(k + 'T12:00:00Z'); label = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'numeric', timeZone: 'UTC' }).format(d); } catch (e) {}
+      return { estado: 'sale', dia: k, dia_label: label };
+    }
+    if (row.status === 'published') return { estado: 'salio', dia: '', dia_label: '' };
+    return { estado: 'esperando', dia: '', dia_label: '' };
+  } catch (e) { return { estado: 'esperando', dia: '', dia_label: '' }; }
+}
+
+// ¿Cuándo se envió una foto? «hoy a las 19:20» / «ayer» / «el miércoles» / «el 5/11».
+function albumCuandoLabel(createdAt, tz) {
+  try {
+    const k = ymdInTz(createdAt, tz);
+    if (!k) return '';
+    const hoy = tzToday(tz);
+    if (k === hoy) {
+      const h = (wallInTz(createdAt, tz) || '').slice(11, 16);
+      return h ? `hoy a las ${h}` : 'hoy';
+    }
+    if (k === shiftDays(hoy, -1)) return 'ayer';
+    const d = new Date(k + 'T12:00:00Z');
+    const wd = new Intl.DateTimeFormat('es-AR', { weekday: 'long', timeZone: 'UTC' }).format(d);
+    const dm = k.slice(8, 10) + '/' + k.slice(5, 7);
+    return (new Date(k + 'T12:00:00Z') - new Date(hoy + 'T12:00:00Z') > -7 * 864e5) ? `el ${wd}` : `el ${dm}`;
+  } catch (e) { return ''; }
+}
+
 app.get('/api/album', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
     // v181: el álbum incluye los VIDEOS del cliente (kind='video', con
     // miniatura en thumb_path). Los counts de progreso son solo de fotos.
-    const rows = db.prepare(`SELECT id, file_path, album_tag, album_quality, kind, thumb_path, created_at, upload_choice, album_vision FROM assets WHERE user_id = ? AND kind IN ('photo','video') ORDER BY created_at DESC LIMIT 20`).all(uid);
+    const rows = db.prepare(`SELECT id, file_path, album_tag, album_quality, kind, thumb_path, created_at, upload_choice, album_vision, content_hash FROM assets WHERE user_id = ? AND kind IN ('photo','video') ORDER BY created_at DESC LIMIT 20`).all(uid);
     const photos = rows.filter(r => r.kind === 'photo');
     // Clasificación perezosa: hasta 3 sin clasificar por visita, en 2º plano.
     let lazy = 0;
@@ -11554,9 +11655,35 @@ app.get('/api/album', requireAuth, (req, res) => {
         if (r.nSin >= 1 && r.reachSin) perf.sin = Math.round(r.reachSin);
       }
     } catch (e) {}
+    // (LOTE A · ítem 4) Estado por foto + dedupe por huella: el
+    // álbum muestra «sale el miércoles» / «ya salió» / «esperando
+    // lugar» por foto, y la gemela de distinto path (misma foto
+    // subida dos veces) colapsa en una sola fila. De paso se rellena
+    // la huella de las filas viejas que no la tienen (backfill perezoso
+    // para que el DELETE por huella también las cubra).
+    let fotosAlbum = [];
+    try {
+      const tzA = userTz(uid);
+      const vistos = new Map();
+      for (const ph of rows) {
+        const est = albumFotoEstado(uid, ph.file_path, tzA);
+        let huella = String(ph.content_hash || '');
+        if (ph.kind === 'photo' && !huella) {
+          try { huella = assetContentHash(path.join(MEDIA_DIR, path.basename(ph.file_path))); } catch (e) {}
+          if (huella) { try { db.prepare('UPDATE assets SET content_hash = ? WHERE id = ?').run(huella, ph.id); } catch (e) {} }
+        }
+        const item = { id: ph.id, path: ph.file_path, tag: ph.album_tag || '', quality: ph.album_quality || '', kind: ph.kind || 'photo', thumb: ph.thumb_path || '', estado: est.estado, dia: est.dia || '', dia_label: est.dia_label || '' };
+        if (!huella) { fotosAlbum.push(item); continue; }
+        const prevIdx = vistos.get(huella);
+        if (prevIdx === undefined) { vistos.set(huella, fotosAlbum.length); fotosAlbum.push(item); continue; }
+        const prev = fotosAlbum[prevIdx];
+        const rango = (e2) => (e2 === 'salio' ? 2 : e2 === 'sale' ? 1 : 0);
+        if (rango(item.estado) > rango(prev.estado)) fotosAlbum[prevIdx] = item;
+      }
+    } catch (e) { fotosAlbum = rows.map(ph => ({ id: ph.id, path: ph.file_path, tag: ph.album_tag || '', quality: ph.album_quality || '', kind: ph.kind || 'photo', thumb: ph.thumb_path || '', estado: 'esperando', dia: '', dia_label: '' })); }
     res.json({
       ok: true,
-      photos: rows.map(ph => ({ id: ph.id, path: ph.file_path, tag: ph.album_tag || '', quality: ph.album_quality || '', kind: ph.kind || 'photo', thumb: ph.thumb_path || '' })),
+      photos: fotosAlbum,
       videos: rows.length - photos.length,
       counts, targets: ALBUM_TARGETS,
       week: { photos: weekPhotos, videos: weekVideos, goal_min: 3, goal_max: 5, week_key: weekKeyNow },
@@ -11564,6 +11691,60 @@ app.get('/api/album', requireAuth, (req, res) => {
       perf,
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ---------- LOTE A MEJORAS-INICIO · USAR LA FOTO QUE ENVIÉ ----------
+// GET /api/album/libres — las fotos más recientes todavía LIBRES (sin
+// posteo asignado), con cuándo se enviaron; más la última ocupada más
+// nueva que la primera libre, para avisar «esa ya tiene su posteo
+// para el [día]» y ofrecer la anterior libre. «Libre» = mismo
+// predicado que el guard del DELETE (foto_asset_id / image_path /
+// carousel_paths en draft, scheduled o published).
+app.get('/api/album/libres', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const tz = userTz(uid);
+    const rows = db.prepare(`SELECT id, file_path, thumb_path, created_at FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 10`).all(uid);
+    const libres = [], ocupadas = [];
+    for (const r of rows) {
+      const est = albumFotoEstado(uid, r.file_path, tz);
+      const item = { id: r.id, path: r.file_path, thumb: r.thumb_path || '', cuando: albumCuandoLabel(r.created_at, tz), dia: est.dia || '', dia_label: est.dia_label || '' };
+      if (est.estado === 'esperando') libres.push(item); else ocupadas.push(item);
+    }
+    const top = libres.slice(0, 5);
+    let ultimaOcupada = null;
+    if (ocupadas.length) {
+      const ref = top.length ? top[0] : null;
+      ultimaOcupada = ocupadas.find((o) => !ref || (rows.find((r) => r.id === o.id) || {}).created_at > (rows.find((r) => r.id === ref.id) || {}).created_at) || null;
+      if (!ultimaOcupada && !ref) ultimaOcupada = ocupadas[0];
+    }
+    res.json({ ok: true, libres: top, ultima_ocupada: ultimaOcupada });
+  } catch (e) { res.status(500).json({ ok: false, error: 'No pude ver tus fotos' }); }
+});
+
+// POST /api/posts/:id/usar-foto — reemplazar la imagen de un borrador
+// o programado por una foto enviada por el cliente. Con preview: true
+// solo muestra el posteo con esa foto (miniatura + cuándo se envió)
+// SIN guardar; sin preview, confirma el reemplazo. Si la foto ya
+// tiene su posteo, 409 {error:'ocupada', dia, dia_label}. Nunca se
+// reemplaza en silencio: sin el toque del cliente, la foto no cambia.
+app.post('/api/posts/:id/usar-foto', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const tz = userTz(uid);
+    const post = db.prepare(`SELECT id, status, caption, image_path FROM posts WHERE id = ? AND user_id = ? AND status IN ('draft','scheduled')`).get(req.params.id, uid);
+    if (!post) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
+    const asset = sftAssetPropio(uid, (req.body || {}).asset_id);
+    if (!asset || asset.kind !== 'photo') return res.status(400).json({ ok: false, error: 'Esa foto no es válida' });
+    const est = albumFotoEstado(uid, asset.file_path, tz);
+    if (est.estado !== 'esperando') return res.status(409).json({ ok: false, error: 'ocupada', dia: est.dia || '', dia_label: est.dia_label || '' });
+    const cuando = albumCuandoLabel(asset.created_at, tz);
+    if ((req.body || {}).preview) {
+      return res.json({ ok: true, preview: true, post_id: post.id, image_path: asset.file_path, thumb: asset.thumb_path || '', caption: post.caption || '', cuando });
+    }
+    db.prepare(`UPDATE posts SET image_path = ?, foto_asset_id = ?, client_photo = 1 WHERE id = ?`).run(asset.file_path, asset.id, post.id);
+    res.json({ ok: true, post_id: post.id, image_path: asset.file_path, thumb: asset.thumb_path || '', cuando });
+  } catch (e) { console.error('[usar-foto]', e.message); res.status(500).json({ ok: false, error: 'No pude cambiar la foto' }); }
 });
 // Subida al álbum (v181): fotos como siempre (≤15 MB) y VIDEOS del cliente
 // (mp4/mov, ≤60 MB, ≤90 s validados con ffprobe). El tope de 20 ítems es
@@ -11785,7 +11966,24 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
     const name = savedAlbumPhoto.name;
     const filePath = `/media/${name}`;
     makeVariantsAsync(path.join(MEDIA_DIR, name));
-    const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(uid, filePath, 'photo');
+    // (LOTE A · ítem 4 · FIX ÁLBUM) Misma foto, distinto path: si la
+    // huella ya existe, se adopta la fila existente (con su estado de
+    // misión como si fuera una adopción) y el archivo nuevo se borra.
+    const albumHash = assetContentHash(path.join(MEDIA_DIR, name));
+    if (albumHash) {
+      let dupAlbum = null;
+      try { dupAlbum = db.prepare(`SELECT id, file_path FROM assets WHERE user_id = ? AND content_hash = ? AND kind = 'photo'`).get(uid, albumHash); } catch (e) {}
+      if (dupAlbum) {
+        try { fs.unlinkSync(path.join(MEDIA_DIR, name)); } catch (e) {}
+        const missionsDup = albumMission(uid, req.session.userId);
+        let doneDup = false;
+        if (!missionsDup.photo && !missionsDup.photo_done) {
+          try { db.prepare(`INSERT INTO album_missions_done (user_id, week_key, kind) VALUES (?,?, 'photo')`).run(uid, missionsDup.week_key); doneDup = true; } catch (e) { /* ya hecha */ }
+        }
+        return res.json({ ok: true, id: dupAlbum.id, path: dupAlbum.file_path, kind: 'photo', mission_done: doneDup, quality_issues: [] });
+      }
+    }
+    const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind, content_hash) VALUES (?,?,?,?)').run(uid, filePath, 'photo', albumHash);
     const assetId = ins.lastInsertRowid;
     // Misión: la primera foto de la semana la cumple.
     const mission = albumMission(uid);
@@ -11869,14 +12067,22 @@ app.delete('/api/album/:id', requireAuth, (req, res) => {
       usado = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status IN ('draft','scheduled','published') AND (foto_asset_id IN (SELECT id FROM assets WHERE user_id = ? AND file_path = ?) OR image_path = ? OR carousel_paths LIKE ?)`).get(uid, uid, asset.file_path, asset.file_path, `%${asset.file_path}%`);
     } catch (e) {}
     if (usado) return res.status(409).json({ ok: false, error: 'Esa foto ya está en un posteo' });
-    let filas = [];
-    try { filas = db.prepare('SELECT id, thumb_path FROM assets WHERE user_id = ? AND file_path = ?').all(uid, asset.file_path); } catch (e) {}
+    // (LOTE A · ítem 4) Borrar por huella: si la foto existe dos veces
+    // con distinto path (gemela), sale también la gemela; si no, queda
+    // viva y el álbum la vuelve a mostrar.
+    let hashDel = '';
+    if (asset.kind === 'photo') { try { hashDel = assetContentHash(path.join(MEDIA_DIR, path.basename(asset.file_path))); } catch (e) {} }
+    const filas = db.prepare('SELECT id, thumb_path, file_path FROM assets WHERE user_id = ? AND file_path = ?').all(uid, asset.file_path);
+    let filasHash = [];
+    if (hashDel) { try { filasHash = db.prepare('SELECT id, thumb_path, file_path FROM assets WHERE user_id = ? AND content_hash = ? AND kind = ?').all(uid, hashDel, asset.kind); } catch (e) {} }
     db.prepare('DELETE FROM assets WHERE user_id = ? AND file_path = ?').run(uid, asset.file_path);
-    const archivos = [asset.file_path];
-    for (const f of filas) { if (f && f.thumb_path) archivos.push(f.thumb_path); }
-    for (const f of archivos) {
-      if (!f) continue;
-      try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(f))); } catch (_) {}
+    if (hashDel) { try { db.prepare('DELETE FROM assets WHERE user_id = ? AND content_hash = ? AND kind = ?').run(uid, hashDel, asset.kind); } catch (e) {} }
+    const porBorrar = new Map();
+    for (const f of filas) porBorrar.set(f.id, f);
+    for (const f of filasHash) porBorrar.set(f.id, f);
+    for (const f of porBorrar.values()) {
+      if (f.thumb_path) { try { fs.unlinkSync(path.join(__dirname, 'public', String(f.thumb_path).replace(/^\//, ''))); } catch (e) {} }
+      try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(f.file_path || asset.file_path))); } catch (e) {}
     }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: 'No pude borrar la foto' }); }
@@ -11938,7 +12144,7 @@ app.post('/api/album/:id/cambiar-imagen', requireAuth, express.json(), async (re
       return res.status(500).json({ ok: false, error: 'cambio_fallo', message: `No pude cambiar la foto (${why}). Probá con otras palabras o subí otra foto 🙏` });
     }
     if (!gen || !gen.proposalPath) return res.status(500).json({ ok: false, error: 'cambio_fallo', message: 'No pude cambiar la foto. Probá con otras palabras o subí otra foto 🙏' });
-    const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind, thumb_path) VALUES (?,?,?,?)').run(uid, String(gen.proposalPath), 'photo', '');
+    const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind, thumb_path) VALUES (?,?,?,?)').run(uid, String(gen.proposalPath), 'design', '');
     console.log(`[album-cambiar-imagen] usuario ${uid}: foto ${asset.id} → asset ${ins.lastInsertRowid} («${cambio.slice(0, 60)}»)`);
     res.json({ ok: true, assetId: ins.lastInsertRowid, url: String(gen.proposalPath) });
   } catch (e) { console.error('[album-cambiar-imagen]', e.message); res.status(500).json({ ok: false, error: 'cambio_fallo', message: 'No pude cambiar la foto, probá de nuevo en un rato 🙏' }); }
@@ -11977,6 +12183,69 @@ app.post('/api/album/:id/crear', requireAuth, express.json(), async (req, res) =
     try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
     res.json({ ok: true, post_id: out.postId });
   } catch (e) { console.error('[album-crear]', e.message); res.status(500).json({ ok: false, error: 'No pude armar el borrador' }); }
+});
+
+// ---------- LOTE A MEJORAS-INICIO · POSTEO ARMADO ----------
+// POST /api/album/:id/armar — al subir, la foto/video queda atada a
+// un posteo armado con formato + fecha + caption. La regla vieja
+// «subir nunca crea un posteo solo» queda SUPERSEDED por la orden de
+// Valentino 8/11 («dale, armalo»): la subida arma el borrador y el
+// cliente lo ve con su fecha en el momento. El borrador queda en
+// draft con scheduled_at (no 'scheduled'): con trust_level 1 un
+// scheduled+pending se auto-publica como 'auto' — «sin tu OK, no sale
+// nada» exige draft. El cliente lo aprueba con un toque (rama draft
+// de pzHoyAprobarUno) o lo mueve con Reprogramar.
+app.post('/api/album/:id/armar', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const bArm = req.body || {};
+    const asset = sftAssetPropio(uid, req.params.id);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
+    if (asset.kind !== 'photo' && asset.kind !== 'video') return res.status(400).json({ ok: false, error: 'Solo fotos y videos' });
+    const tz = userTz(uid);
+    // Ya armada: devolver el armado existente en vez de duplicar.
+    try {
+      const ya = db.prepare(`SELECT id, status, scheduled_at, caption, image_path FROM posts WHERE user_id = ? AND foto_asset_id = ? AND status IN ('draft','scheduled','published') ORDER BY scheduled_at DESC LIMIT 1`).get(uid, asset.id);
+      if (ya) {
+        const lab = ya.scheduled_at ? armarSlotLabel(uid, ya.scheduled_at) : { dia: '', dia_label: '', hora: '' };
+        return res.json({ ok: true, post_id: ya.id, scheduled_at: ya.scheduled_at, dia: lab.dia, dia_label: lab.dia_label, hora: lab.hora, semana_llena: false, caption: ya.caption || '', kind: asset.kind, image_path: ya.image_path || asset.file_path, ya_armado: true });
+      }
+    } catch (e) {}
+    if (asset.kind === 'video') {
+      const slot = nextFreeReelSlot(uid);
+      if (!slot) return res.status(400).json({ ok: false, error: 'No encontré un hueco libre de reel esta semana ni la que viene' });
+      const prop = await albumPropuesta(uid, asset.id, '', (bArm.vision || ''));
+      if (prop.capped) return res.status(402).json({ ok: false, error: prop.error });
+      if (prop.error) return res.status(400).json({ ok: false, error: prop.error });
+      if (prop.gated) return res.json({ ok: false, gated: true, reason: prop.reason || 'gated' });
+      const full = db.prepare('SELECT id, file_path, album_quality, thumb_path FROM assets WHERE id = ? AND user_id = ?').get(asset.id, uid);
+      const over = { caption: prop.caption || '', hashtags: prop.hashtags || '', headline: prop.headline || '' };
+      const built = await buildClientVideoReelPost(uid, full, 'album', over);
+      if (built && built.busy) return res.status(409).json({ ok: false, error: 'Ya estoy armando ese reel' });
+      if (built && built.gated) return res.json({ ok: false, gated: true, reason: built.reason || 'gated' });
+      if (!built || !built.postId) return res.status(400).json({ ok: false, error: (built && built.error) || 'No pude armar el reel' });
+      const wk = mondayKeyOf(ymdInTz(slot, tz));
+      try { db.prepare(`UPDATE posts SET scheduled_at = ?, foto_asset_id = ?, week_key = ? WHERE id = ?`).run(slot, asset.id, wk, built.postId); } catch (e) { console.error('[album-armar] update reel:', e.message); }
+      try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
+      const lab = armarSlotLabel(uid, slot);
+      return res.json({ ok: true, post_id: built.postId, scheduled_at: slot, dia: lab.dia, dia_label: lab.dia_label, hora: lab.hora, semana_llena: wk > mondayKeyOf(tzToday(tz)), caption: over.caption, hard: prop.hard || [], kind: 'video', image_path: built.url || asset.file_path, thumb: built.cover || asset.thumb_path || '' });
+    }
+    // Foto: caption por albumPropuesta, slot por la política de
+    // assignScheduleSlots (con el ajuste de armados en draft).
+    const prop = await albumPropuesta(uid, asset.id, '', (bArm.vision || ''));
+    if (prop.capped) return res.status(402).json({ ok: false, error: prop.error });
+    if (prop.error) return res.status(400).json({ ok: false, error: prop.error });
+    if (prop.gated) return res.json({ ok: false, gated: true, reason: prop.reason || 'gated' });
+    const slot = armarNextFeedSlot(uid);
+    if (!slot) return res.status(400).json({ ok: false, error: 'No encontré un día libre para el posteo' });
+    const wk = mondayKeyOf(ymdInTz(slot, tz));
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why, foto_asset_id, scheduled_at)
+      VALUES (?,?,?,?, 'draft', 'image', 0, 'album-armado', 1, ?, 'foto', ?, ?, ?)`)
+      .run(uid, asset.file_path, prop.caption || '', prop.hashtags || '', wk, prop.why || '', asset.id, slot);
+    try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
+    const lab = armarSlotLabel(uid, slot);
+    return res.json({ ok: true, post_id: ins.lastInsertRowid, scheduled_at: slot, dia: lab.dia, dia_label: lab.dia_label, hora: lab.hora, semana_llena: wk > mondayKeyOf(tzToday(tz)), caption: prop.caption || '', headline: prop.headline || '', hashtags: prop.hashtags || '', hard: prop.hard || [], kind: 'photo', image_path: asset.file_path });
+  } catch (e) { console.error('[album-armar]', e.message); res.status(500).json({ ok: false, error: 'No pude armar el posteo' }); }
 });
 app.get('/api/posts/:id/rendimiento', requireAuth, (req, res) => {
   try {
@@ -16161,6 +16430,91 @@ function assignScheduleSlots(uid, drafts) {
     // (Si no hay slot —tz inválida—, se saltea: nunca scheduled_at=NULL.)
   }
   return out;
+}
+
+// ---------- LOTE A MEJORAS-INICIO · POSTEO ARMADO ----------
+// Próximo hueco libre de posteo de FEED para un armado: la misma
+// política de assignScheduleSlots (mañana en adelante, best_hour o
+// 19:00, saltando cierres y días tomados) PERO contando también los
+// borradores ya armados (draft con scheduled_at): assignScheduleSlots
+// solo cuenta programados, así que dos subidas seguidas caerían el
+// mismo día. La regla de Valentino: varias fotos → huecos consecutivos
+// en orden; UN posteo de feed por día en total.
+function armarNextFeedSlot(uid) {
+  const tz = userTz(uid);
+  const slots = assignScheduleSlots(uid, [{ id: -1, media_type: 'image' }]);
+  let iso = slots.get(-1) || null;
+  if (!iso) return null;
+  const closedSet = closedDaysOf(uid);
+  // (LOTE A · fix slot, hallazgo test-lote-a) El avance también tiene
+  // que respetar los días con posteo PROGRAMADO: assignScheduleSlots
+  // devuelve el primer día libre según programados, pero si ese día lo
+  // ocupa un borrador armado, el avance caía en el día siguiente sin
+  // re-chequear si ese ya estaba programado (dos subidas seguidas
+  // colisionaban en el día 2). Sin esto, UN posteo de feed por día no
+  // se cumple.
+  const taken = new Set();
+  try {
+    const sched = db.prepare(`SELECT scheduled_at FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL AND media_type != 'story'`).all(uid);
+    for (const r of sched) { const kk = ymdInTz(r.scheduled_at, tz); if (kk) taken.add(kk); }
+  } catch (e) { /* sin bloqueos: el avance sigue igual */ }
+  for (let guard = 0; iso && guard < 90; guard++) {
+    const k = ymdInTz(iso, tz);
+    if (!k) return iso;
+    const hh = (wallInTz(iso, tz) || '').slice(11, 13) || '19';
+    if (closedSet.has(weekdayOfYmd(k))) { iso = zonedWallToUtc(`${shiftDays(k, 1)} ${hh}:00`, tz); continue; }
+    if (taken.has(k)) { iso = zonedWallToUtc(`${shiftDays(k, 1)} ${hh}:00`, tz); continue; }
+    let clash = false;
+    try {
+      const rows = db.prepare(`SELECT scheduled_at FROM posts WHERE user_id = ? AND status = 'draft' AND scheduled_at IS NOT NULL AND media_type != 'story'`).all(uid);
+      clash = rows.some((r) => ymdInTz(r.scheduled_at, tz) === k);
+    } catch (e) { clash = false; }
+    if (!clash) return iso;
+    iso = zonedWallToUtc(`${shiftDays(k, 1)} ${hh}:00`, tz);
+  }
+  return null;
+}
+
+// Próximo hueco libre de REEL: martes o jueves, desde mañana, sin reel
+// programado ni borrador de video armado ese día, saltando cierres.
+// La semana completa no existe acá: si mar/jue de esta semana están
+// tomados, cae el martes que viene (y el cliente lo ve avisado).
+function nextFreeReelSlot(uid) {
+  const tz = userTz(uid);
+  let bestHour = 19;
+  try {
+    const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid);
+    if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
+  } catch (e) { /* respaldo 19:00 */ }
+  const taken = new Set();
+  try {
+    const rows = db.prepare(`SELECT scheduled_at FROM posts WHERE user_id = ? AND status IN ('scheduled','draft') AND media_type = 'video' AND scheduled_at IS NOT NULL`).all(uid);
+    for (const s of rows) { const k = ymdInTz(s.scheduled_at, tz); if (k) taken.add(k); }
+  } catch (e) { /* sin bloqueos: el slot se busca igual */ }
+  const closedSet = closedDaysOf(uid);
+  for (let i = 1; i <= 60; i++) {
+    const k = shiftDays(tzToday(tz), i);
+    const wd = weekdayOfYmd(k);
+    if (wd !== 2 && wd !== 4) continue;
+    if (closedSet.has(wd)) continue;
+    if (taken.has(k)) continue;
+    return zonedWallToUtc(`${k} ${String(bestHour).padStart(2, '0')}:00`, tz);
+  }
+  return null;
+}
+
+// Etiqueta del slot en la zona del cliente: «miércoles 11/11» + «19:00».
+function armarSlotLabel(uid, iso) {
+  const tz = userTz(uid);
+  const k = ymdInTz(iso, tz) || '';
+  let diaLabel = '';
+  try {
+    const d = new Date(k + 'T12:00:00Z');
+    diaLabel = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'numeric', timeZone: 'UTC' }).format(d);
+  } catch (e) { diaLabel = ''; }
+  let hora = '';
+  try { hora = (wallInTz(iso, tz) || '').slice(11, 16); } catch (e) { hora = ''; }
+  return { dia: k, dia_label: diaLabel, hora };
 }
 
 // ---------- schedule-all POR SEMANA DEL POSTEO (fix 2026-10-18, v216) ----------
@@ -20761,12 +21115,36 @@ function pregenIdeaImage(uid, idea) {
     PREGEN.set(key, { status: 'pending', at: Date.now() });
     const styleOut = {};
     const pregenGate = {};
+    // (LOTE A · guardas del chat · d) El matcher por tema corre también
+    // en el camino del chat: la pre-generación usa una foto REAL del
+    // tema como referencia. Sin foto real del tema (o si la única
+    // candidata es la cara de Posty), NO se pre-genera: la cara de
+    // Posty nunca ilustra otro tema aunque esté en el álbum. El
+    // cliente ve la idea sin imagen generada y el on-demand la arma
+    // cuando la pide (el poll del cliente corta en 'missing').
+    let pregenRefs = [], pregenRoles = [];
+    try {
+      const pTexts = `${idea.titulo || idea.title || ''} ${idea.angulo || ''}`;
+      const pMapped = photoMappedRefsFor(uid, [pTexts]);
+      const pWant = desiredAlbumTag(idea.tipo || '', pTexts);
+      const pRows = db.prepare(`SELECT file_path, album_tag, content_hash FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 12`).all(uid);
+      let pProtaBase = '', pProtaHash = '';
+      try { const pr = protagonistRefFor(uid); if (pr && pr.refAbs) { pProtaBase = path.basename(String(pr.refAbs)); pProtaHash = assetContentHash(pr.refAbs); } } catch (e) {}
+      const pMatch = pRows.find((r) => {
+        if (pProtaBase && path.basename(String(r.file_path || '')) === pProtaBase) return false;
+        if (pProtaHash && r.content_hash && r.content_hash === pProtaHash) return false;
+        return pMapped.includes(r.file_path) || String(r.album_tag || '') === pWant;
+      });
+      if (pMatch) { pregenRefs = [pMatch.file_path]; pregenRoles = [pMapped.includes(pMatch.file_path) ? 'product' : 'photo']; }
+    } catch (e) { pregenRefs = []; pregenRoles = []; }
+    if (!pregenRefs.length) { PREGEN.set(key, { status: 'missing', at: Date.now() }); return; }
      conceptShotGenerateQueued({
       uid,
       idea: { titulo: idea.titulo || idea.title, angulo: idea.angulo || '', porque: idea.porque || '', tipo: idea.tipo || 'novedad' },
       tipo: idea.tipo || 'novedad',
       headline: String(titulo).slice(0, 80),
-      refs: [],
+      refs: pregenRefs,
+      refRoles: pregenRoles,
       usedStyles: [],
       styleOut,
       resultOut: pregenGate,
@@ -32509,7 +32887,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v821';
+const BUILD_ID = '20261105-v822';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -33146,6 +33524,13 @@ function sundayLetterWindow(tzName, now) {
 let __analysisSweepRunning = false;
 async function refreshAnalysesSweep(opts = {}) {
   if (__analysisSweepRunning) return { skipped: 'running' };
+  // (LOTE A MEJORAS-INICIO · 8/11 · decisión Valentino: la pestaña
+  // Estrategia y la carta semanal se eliminan — la recomendación del
+  // mejor posteo vive en Impulsar como una línea. El barrido ya no
+  // construye cartas nuevas ni avisa por push/WhatsApp; las cartas
+  // viejas siguen legibles por GET /api/analysis/:id. El scheduler
+  // sigue llamando (scheduler.js) y recibe este skipped.)
+  return { skipped: 'carta_eliminada' };
   __analysisSweepRunning = true;
   const sundayWindow = !!(opts && opts.sundayWindow);
   if (sundayWindow) { try { analysisEngine.ensureAnalysisTable(db); } catch (e) {} }

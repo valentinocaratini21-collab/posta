@@ -593,6 +593,10 @@ try { db.exec(`ALTER TABLE assets ADD COLUMN album_quality TEXT DEFAULT ''`); } 
 try { db.exec(`ALTER TABLE assets ADD COLUMN upload_choice TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // LOTE SUBIR-FOTO-TODO: corrección del cliente a lo que Posty ve en la foto.
 try { db.exec(`ALTER TABLE assets ADD COLUMN album_vision TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE A MEJORAS-INICIO · ítem 4) Huella sha256 del archivo: dos subidas
+// de la misma foto tienen distinto file_path pero la misma huella; el
+// dedupe del álbum y el DELETE por huella la usan.
+try { db.exec(`ALTER TABLE assets ADD COLUMN content_hash TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (media-cliente-3, reparación DB fresca: estos ALTERs también viven
 // antes del CREATE TABLE assets; acá sí corren siempre.)
 try { db.exec(`ALTER TABLE assets ADD COLUMN producto TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }

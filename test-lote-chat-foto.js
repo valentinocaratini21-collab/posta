@@ -113,7 +113,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v761', ver.status === 200 && ver.json && ver.json.build === '20261105-v761', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v822 (estampado por el re-estampador)', ver.status === 200 && ver.json && ver.json.build === '20261105-v822', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 
@@ -235,7 +235,7 @@ function extractClient() {
   }
   for (const sig of ['function chatStripCelebrate(', 'function linkifyEsc(', 'function chatMsgHtml(',
     'function pzSftT(', 'function pzSftEn(', 'async function pzSftChatProponer() {',
-    'async function pzSftPedirCambio() {', 'async function pzSftCambiarImagen() {', 'async function pzSubirCompletar() {']) {
+    'function pzSftChatTarjetaArmada(', 'async function pzSftPedirCambio() {', 'async function pzSftCambiarImagen() {', 'async function pzSubirCompletar() {']) {
     const s = fnFrom(app, sig);
     if (!s) return { error: 'falta ' + sig };
     parts.push(s);
@@ -255,7 +255,9 @@ async function parteB() {
   const HOOK_FULL = '¿Cuántas veces te pasó que tenías que estar pendiente de tus redes?';
   const HOOK_CORTADO = '¿Cuántas veces te pasó que tenías…';
   const VISION = "Figura de robot azul en primer plano, fondo claro, texto visible: 'Posty lo está cuidando'.";
-  const fakePropuesta = { ok: true, headline: HOOK_CORTADO, caption: HOOK_FULL + '\nEl resto del caption del posteo.', hashtags: '#test', tag: '', issues: [], hard: [], visionNote: VISION };
+  // (LOTE A · re-base v821) La propuesta ya no es texto: POST /armar devuelve
+  // el borrador armado y la oferta llega como TARJETA (pzSftChatTarjetaArmada).
+  const fakePropuesta = { ok: true, post_id: 123, scheduled_at: '2026-11-09T22:00:00.000Z', dia_label: 'mañana', hora: '19:00', semana_llena: false, caption: HOOK_FULL + '\nEl resto del caption del posteo.', headline: HOOK_CORTADO, hashtags: '#test', kind: 'photo', image_path: '/media/test-foto.png', thumb: '', hard: [], tag: '', issues: [], visionNote: VISION };
 
   // B1: la burbuja de propuesta con una respuesta vieja (con visionNote).
   {
@@ -270,16 +272,21 @@ async function parteB() {
       pzSftChatMejorUso: () => ({ choice: 'preguntar', why: 'porque muestra tu producto' }),
       pzSftTagTexto: () => '',
       pzSftEtiqueta: (c) => c,
+      document: { getElementById: (id) => (id === 'chatBox' ? { insertAdjacentHTML: (pos, html) => { captured.card = (captured.card || '') + String(html); } } : null) },
       api: { post: async () => fakePropuesta },
     };
     vm.createContext(ctx);
     vm.runInContext(loaded.code, ctx);
     await vm.runInContext('pzSftChatProponer()', ctx);
-    const b = captured.bubble || '';
-    check('B1 la burbuja no trae la visión cruda', !b.includes('✦ veo') && !b.includes('Figura de robot') && !b.includes('Posty lo está cuidando'), b.slice(0, 300));
-    check('B2 la burbuja no trae entidades sin decodificar', !b.includes('&#39;') && !b.includes('&amp;'), b.slice(0, 300));
+    // (LOTE A · re-base v821) La oferta ya no es una burbuja de texto: es la
+    // TARJETA (foto + «sale el [día]» + caption + aprobar/cambiar). B1–B4
+    // chequean la tarjeta, no la burbuja.
+    const b = captured.card || '';
+    check('B0d la oferta llega como TARJETA en el chat', b.includes('Tu posteo está armado') && b.includes('Aprobar'), b.slice(0, 300));
+    check('B1 la tarjeta no trae la visión cruda', !b.includes('✦ veo') && !b.includes('Figura de robot') && !b.includes('Posty lo está cuidando'), b.slice(0, 300));
+    check('B2 la tarjeta no trae entidades sin decodificar', !b.includes('&#39;') && !b.includes('&amp;'), b.slice(0, 300));
     const countHook = b.split(HOOK_FULL).length - 1;
-    check('B3 el gancho sale una sola vez, entero', countHook === 1, `veces=${countHook} — ${b.slice(0, 300)}`);
+    check('B3 el gancho sale una sola vez, entero, en la tarjeta', countHook === 1, `veces=${countHook} — ${b.slice(0, 300)}`);
     check('B4 el titular cortado no sale duplicado', !b.includes(HOOK_CORTADO), b.slice(0, 300));
     check('B5 el titular sigue guardado para crear el borrador', ctx.PZ_SFT_CHAT_PENDIENTE.propuesta && ctx.PZ_SFT_CHAT_PENDIENTE.propuesta.headline === HOOK_CORTADO, JSON.stringify(ctx.PZ_SFT_CHAT_PENDIENTE.propuesta));
   }

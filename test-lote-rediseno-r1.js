@@ -252,8 +252,8 @@ t(semVacia.n === 0 && semVacia.dias[6].estado === 'hoy' && semVacia.dias[0].esta
   '§1: semana vacía: 0/7, hoy marcado, resto vacío');
 const semHtml = sb.pzHoySemanaHTML(sem, false);
 t(semHtml.includes('4/7') && semHtml.includes('pz-hoy-ring') && semHtml.includes('pz-hoy-dias')
-  && /LUN|MAR|MIÉ/.test(semHtml) && semHtml.includes('Tu semana viene en camino'),
-  '§1: HTML del anillo: 4/7, días LUN–DOM, título honesto con 4 días');
+  && /LUN|MAR|MIÉ/.test(semHtml) && semHtml.includes('esta semana cumplimos 4/7 posteos'),
+  '§1: HTML del anillo: 4/7, días LUN–DOM, título de domingo honesto con 4 días (esta semana cumplimos 4/7)');
 t(sb.pzHoySemanaHTML(semVacia, false).includes('0/7')
   && sb.pzHoySemanaHTML(semVacia, false).includes('Todavía no salió nada esta semana'),
   '§1: semana vacía no inventa logros (copy honesto)');
@@ -329,13 +329,14 @@ const speechP2en = sb.pzHoySpeechHTML({ hoyPost: null, pendientes: 2, en: true, 
 t(speechP2en.includes("You've got 2 posts to review") && speechP2en.includes('give a «Publish it» to the ones you like') && speechP2en.includes('Without your OK, nothing goes out'),
   '§4: pendientes=2 EN: «You\'ve got 2 posts to review»');
 const upHtml = sb.pzHoyUploadHTML([{ id: 1, path: '/m/1.jpg' }, { id: 2, path: '/m/2.jpg' }], false);
-t(upHtml.includes('Subir foto o video') && upHtml.includes('data-pz-hoy-subir') && upHtml.includes('/m/1.jpg')
+t(upHtml.includes('¿Tenés algo nuevo para mostrar?') && upHtml.includes('Galería') && upHtml.includes('Cámara')
+  && upHtml.includes('data-pz-hoy-subir') && upHtml.includes('/m/1.jpg')
   && upHtml.includes('pz-hoy-album') && upHtml.includes('TU ÁLBUM'),
-  '§4: subida: botón + fila del álbum real (fotos del /api/album)');
+  '§4: subida: dos botones directos Galería/Cámara + fila del álbum real (fotos del /api/album)');
 t(sb.pzHoyUploadHTML([], false).includes('TU ÁLBUM') && !sb.pzHoyUploadHTML([], false).includes('<img'),
   '§4: álbum vacío: fila con «+» y sin fotos inventadas');
 t(!upHtml.includes('btn-publish') && upHtml.includes('pz-hoy-upload-btn'),
-  '§4: «Subir foto o video» sigue azul (sin btn-publish): solo «Dale, publicalo ✓» es verde');
+  '§4: «Galería / Cámara» siguen azules (sin btn-publish): solo «Dale, publicalo ✓» es verde');
 const conHtml = sb.pzHoyConserjeHTML(2, 3, false);
 t(conHtml.includes('2 de 3 revisados') && conHtml.includes('data-pz-hoy-conserje'),
   '§4: conserje: contador «2 de 3 revisados» + entrada real');
@@ -373,9 +374,9 @@ const ivNext = APP.slice(ivStart + 10).match(/\n(?:async )?function [a-zA-Z0-9_]
 const ivEnd = ivStart + 10 + (ivNext ? ivNext.index : APP.length);
 const ivSrc = APP.slice(ivStart, ivEnd);
 t(ivSrc.includes("api.get('/api/album')") && ivSrc.includes('hoyAprobarHTML')
-  && ivSrc.includes('pzHoySubirSheet') && ivSrc.includes('pzHoyConserjeHTML')
-  && !ivSrc.includes('pz-hoy-seg') && !ivSrc.includes('data-pz-hoy-view'),
-  '§6: inicioView trae /api/album + secciones Hoy (aprobar + hoja + conserje) SIN segmentador (LOTE HOY-SEGMENTER-Y-BOTON: «Mi feed» salió, Hoy queda en «Por aprobar»)');
+  && ivSrc.includes('pzHoyHoyHTML') && ivSrc.includes('pzHoyUploadHTML') && ivSrc.includes('pzHoyConserjeHTML')
+  && !ivSrc.includes('pzHoySubirSheet') && !ivSrc.includes('pz-hoy-seg') && !ivSrc.includes('data-pz-hoy-view'),
+  '§6: inicioView trae /api/album + posteo del día + secciones Hoy (aprobar + subida directa + conserje) SIN hoja de subida ni segmentador (LOTE A · ítem 4: Galería/Cámara directo; ítem 8: «Mi feed» salió)');
 t(APP.includes("name === 'verfeed'") && APP.includes("location.hash = '#/app/feed'"),
   '§6: #/app/feed sigue vivo y reachable por «Ver en el feed» desde el detalle del posteo');
 t(APP.includes('pzHoyBind(document.getElementById(\'inicioView\'))'),
@@ -404,17 +405,17 @@ t(!APP.includes('pz-hoy-seg'),
 console.log('— §7: M78 funciones auditadas');
 const nuevas = ['pzHoySaludoTxt', 'pzHoySemana', 'pzHoyPendientes', 'pzHoyPillSalida', 'pzHoyCuentaSaleTxt',
   'pzHoyCardHTML', 'pzHoySpeechHTML', 'pzHoyUploadHTML', 'pzHoySemanaHTML', 'pzHoyConserjeHTML',
-  'pzHoySetView', 'pzHoySubirAbrir', 'pzHoySubirCerrar', 'pzHoySubirCamara', 'pzHoySubirGaleria',
+  'pzHoySetView', 'pzHoySubirCamara', 'pzHoySubirGaleria',
   'pzHoyAprobarUno', 'pzHoyCambiar', 'pzHoyConserjeFill', 'pzHoyBind'];
 t(nuevas.every((f) => APP.includes('function ' + f)),
-  '§7: las 19 funciones nuevas de Hoy existen definidas en el bundle');
-const llamadas = ['pzHoySetView', 'pzHoyAprobarUno', 'pzHoyCambiar', 'pzHoySubirAbrir', 'pzHoySubirCamara',
-  'pzHoySubirGaleria', 'pzHoySubirCerrar', 'pzHoyConserjeFill', 'hfOpenChatForPost', 'bbGo',
+  '§7: las 17 funciones nuevas de Hoy existen definidas en el bundle (pzHoySubirAbrir/Cerrar eliminadas por el Lote A con la hoja de subida)');
+const llamadas = ['pzHoySetView', 'pzHoyAprobarUno', 'pzHoyCambiar', 'pzHoySubirCamara',
+  'pzHoySubirGaleria', 'pzHoyConserjeFill', 'hfOpenChatForPost', 'bbGo',
   'f3ApprovalMode', 'igGateFeedback', 'pzSftChatAbrirYEnfocar', 'render', 'toast',
   'proposedLabelFor', 'pzRitualCuentaTxt', 'pzWhenRelDay', 'hfChipText', 'pcParseDate',
   'schedDayKeyOf', 'albumMondayKey', 'pzProximoYaAbierto', 'pzDiaInicioMs'];
 t(llamadas.every((f) => APP.includes('function ' + f)),
-  '§7: toda función llamada desde los caminos nuevos de Hoy existe definida (24/24 — corrección del preparador: el array trae 24, no 25)');
+  '§7: toda función llamada desde los caminos nuevos de Hoy existe definida (22/22 — el Lote A eliminó pzHoySubirAbrir/Cerrar con la hoja de subida)');
 t(APP.split('Se destapa a las <b>00:00</b>').length === 2,
   '§7: «Se destapa a las 00:00» queda UNA sola vez en el bundle (rama velada de futuro, hoy inalcanzable)');
 t(SRV.includes("app.post('/api/posts/:id/approve'") && SRV.includes("app.post('/api/posts/accept-all'")
@@ -425,9 +426,9 @@ t(APP.includes('CHAT_FOTOS_MAX = 10') && APP.includes('pzSftPartirMedios'),
 
 // ---------- §8: huellas del lote (server.js NO cambia en R1) ----------
 console.log('— §8: huellas');
-t(md5(SRV) === '93af15859939642a99af27b2f7ffc098', '§8: server.js = v821 estampado (BUILD v821 + lote chat-nuevo)');
-t(md5(APP) === '5210de8cceb1fc51b63b2403fc671e8c', '§8: public/app.js = CHAT-NUEVO (chat nuevo con encabezado propio + saludo que explica)');
-t(md5(CSS) === '82a97f57c75b03ae8880ad80e7a86c4d', '§8: public/styles.css = CHAT-NUEVO');
+t(md5(SRV) === '8a8825f37dcc5c232f09dcc5924aa9a3', '§8: server.js = v822 estampado (BUILD v822 + lote A mejoras-inicio)');
+t(md5(APP) === '14b9335beb4729fa095fd6d5252bb281', '§8: public/app.js = LOTE A (mejoras-inicio)');
+t(md5(CSS) === '1306102d485019ac59aef9db28f4facb', '§8: public/styles.css = LOTE A (mejoras-inicio)');
 t(APP.includes('CHUNK_V'), '§8: CHUNK_V presente en app.js');
 
 // ---------- §9: boot M121 — endpoints reales con datos reales ----------
@@ -501,9 +502,9 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v821',
-      '§9: /api/version trae el BUILD v821 (estampado)', JSON.stringify(ver.json));
-    const appJs = await apiText('/app.js?v=556');
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v822',
+      '§9: /api/version trae el BUILD v822 (estampado)', JSON.stringify(ver.json));
+    const appJs = await apiText('/app.js?v=557');
     t(appJs.status === 200 && appJs.text.includes('pzHoyCardHTML')
       && appJs.text.includes('data-pz-cuenta-sale') && appJs.text.includes('pzHoyPendientes'),
       '§9: el app.js servido trae el bloque HOY-R1');

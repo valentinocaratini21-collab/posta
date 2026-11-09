@@ -2950,7 +2950,7 @@ async function generatePillars({ business, category, description, performance },
 // Costo (2026-10-02): gpt-4o SOLO cuando el mensaje trae fotos (visión).
 // Todo el texto —incluso largo— va a gpt-4o-mini: 15× más barato y el prompt ya mitiga los rechazos.
 const CHAT_MODEL = 'gpt-4o';
-async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, levelLine }, apiKey) {
+async function openaiChatIdea({ messages, profile, taste, photos, library, libraryMeta, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, levelLine }, apiKey) {
   const p = profile || {};
   const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
   const libPhotos = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6) : [];
@@ -3000,6 +3000,9 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       : '') +
     (libPhotos.length
       ? `El cliente tiene ${libPhotos.length} fotos guardadas. REGLA DE ÍNDICES ÚNICA: índice 0 = la más nueva de TODAS las que ves — primero las guardadas (en orden), después las que adjuntó recién en este chat. Si te pide usar una guardada ("la del asado", "la segunda"), elegí el índice correcto mirándolas. `
+      : '') +
+    (libPhotos.length && Array.isArray(libraryMeta) && libraryMeta.length
+      ? 'De qué es cada foto guardada (por índice): ' + libraryMeta.slice(0, libPhotos.length).map((m, i) => `#${i}: ${m.tag || 'sin clasificar'}${m.vision ? ` — ${m.vision}` : ''}`).join('; ') + '. REGLA DURA: si ninguna foto guardada tiene que ver con lo que pide, decilo en 1 línea y pedí la foto; nunca ilustres un tema con una foto que no es de ese tema (y nunca uses la cara de Posty para ilustrar otro tema). '
       : '') +
     ((cleanPhotos.length)
       ? 'Como director de fotografía: opiná brevemente sobre la calidad de cada foto que ves (luz, foco, encuadre) y recomendá cuál conviene usar como protagonista y por qué. Si alguna está oscura o borrosa, decilo sin vueltas. '
@@ -4923,11 +4926,11 @@ function chatReceiptLines(r) {
   return lines;
 }
 
-async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, strict, levelLine }, apiKey) {
+async function chatIdea({ messages, profile, taste, photos, library, libraryMeta, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, strict, levelLine }, apiKey) {
   let text;
   if (apiKey) {
     try {
-      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, levelLine }, apiKey);
+      text = await openaiChatIdea({ messages, profile, taste, photos, library, libraryMeta, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, levelLine }, apiKey);
     } catch (e) {
       // Modo estricto (chat del cliente): una respuesta de plantilla puede
       // cerrar bloques ```idea que disparan generación REAL de posteos —
@@ -5000,19 +5003,49 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
   const idea = ideas.length ? ideas[0] : null;
   // FOTO-OLVIDADA (2026-10-10, fallo real de Valentino): la IA dijo "voy a usar
   // tu foto" pero cerró el ```idea sin photo_index → se generaba una imagen nueva
-  // en vez de usar la del cliente. Guard: si el texto promete la foto del usuario
-  // y hay fotos en la librería, forzar photo_index: 0 (la más nueva).
+  // en vez de usar la del cliente.
+  // (LOTE A · guardas del chat · b) Ya NO se fuerza photo_index: 0: la más
+  // nueva puede ser la cara de Posty, no la foto del tema pedido (repro
+  // fitness 8/11). El guard ahora elige POR TEMA: si el texto apunta a la
+  // foto que el cliente mandó en este chat, el índice es el primero de las
+  // adjuntadas (tras la librería); si no, busca el tema en los metadatos
+  // de la librería (tag/vision); si no hay match, NO se fuerza nada — la
+  // idea queda sin foto y el chat pide la foto del tema en vez de ilustrar
+  // con una que no corresponde. La cara de Posty nunca ilustra otro tema.
   // Red-team mediodía 2026-10-10: el regex original dejaba huecos ("voy a usar esta
   // foto", "uso tu foto", "elegí tu foto", "la foto que me enviaste", "tu foto va",
   // "me quedo con tu foto"); se amplía con redacciones claramente promisorias y se
   // agrega guarda de negación explícita ("no uso tu foto" = no promete, no fuerza).
-  if (idea && !Number.isInteger(idea.photo_index) && Array.isArray(photos) && photos.length) {
+  if (idea && !Number.isInteger(idea.photo_index) && (Array.isArray(library) || Array.isArray(photos))) {
     const t = String(text || '').toLowerCase();
     const promisesPhoto = /voy a usar (la|tu|esta) foto|\buso (tu|la|esta) foto\b|usar[é ] tu foto|con (la|tu) foto que|la foto que (me |mencionaste|pasaste|mandaste|enviaste)|tu foto (como|va)|foto que subiste|elegí tu foto|me quedo con (tu|la|esta) foto/i.test(t);
     const negated = /(no|nunca|jamás)\s+(voy a usar|uso|usar[ée]|elegí|me quedo)/i.test(t);
     if (promisesPhoto && !negated) {
-      idea.photo_index = 0;
-      console.log('[chatIdea] FOTO-OLVIDADA: photo_index forzado a 0 (la IA prometió la foto pero no lo incluyó)');
+      const libLen = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).length : 0;
+      const lastUser = (Array.isArray(messages) ? messages.filter(m => m.role === 'user').pop() : null) || {};
+      const uText = String(lastUser.text || '').toLowerCase();
+      const attachedPattern = /(mandaste|enviaste|pasaste|subiste|te (pasé|mandé|envié)|esta foto|la foto (que te|de arriba))/i.test(uText);
+      if (attachedPattern && Array.isArray(photos) && photos.length) {
+        idea.photo_index = libLen;
+        console.log('[chatIdea] FOTO-OLVIDADA: photo_index apuntado a la adjuntada (índice', libLen, ')');
+      } else {
+        const meta = Array.isArray(libraryMeta) ? libraryMeta : [];
+        const syn = { fitness: ['fitness', 'gimnasio', 'gym', 'entrenamiento', 'pesas', 'ejercicio', 'deporte'], comida: ['comida', 'plato', 'cocina', 'restaurante', 'menu'], ropa: ['ropa', 'prenda', 'buzo', 'remera', 'vestido'], belleza: ['belleza', 'maquillaje', 'peluqueria', 'unas'], cafe: ['cafe', 'cafeteria', 'barista'] };
+        const topicWords = uText.split(/[^a-záéíóúñ0-9]+/i).filter(w => w.length > 3);
+        const expanded = new Set(topicWords);
+        for (const w of topicWords) { for (const [k, vs] of Object.entries(syn)) { if (k === w || vs.includes(w)) vs.forEach(v => expanded.add(v)); } }
+        let matchIdx = -1;
+        for (let i = 0; i < meta.length && matchIdx < 0; i++) {
+          const hay = `${meta[i].tag || ''} ${meta[i].vision || ''}`.toLowerCase();
+          for (const w of expanded) { if (w.length >= 4 && hay.includes(w.slice(0, 5))) { matchIdx = i; break; } }
+        }
+        if (matchIdx >= 0) {
+          idea.photo_index = matchIdx;
+          console.log('[chatIdea] FOTO-OLVIDADA: photo_index por tema (índice', matchIdx, ')');
+        } else {
+          console.log('[chatIdea] FOTO-OLVIDADA: sin foto del tema en la librería — no se fuerza photo_index (la idea queda sin foto real)');
+        }
+      }
     }
   }
   // Puerta de calidad de captions en el chat (mejora continua 2026-10-05):

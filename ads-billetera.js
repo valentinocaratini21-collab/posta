@@ -217,14 +217,14 @@ async function impulsarConSaldo(input) {
 
 // Elegibles para el picker: posteos publicados con ig_media_id (los únicos
 // que Meta puede pautar), sin los que ya tienen una pauta activa o
-// pendiente. El recomendado de la semana (el mejor posteo de la carta)
+// pendiente. El recomendado de la semana (el mejor posteo de la semana)
 // queda marcado: la recomendación es sugerencia, la elección es del cliente.
 // `mejorPostId` = post_id del mejor posteo de la semana (o null: sin dato
 // no hay recomendado, nunca uno inventado).
 function elegiblesParaAds(rows, mejorPostId, yaImpulsados) {
   const impulsados = yaImpulsados instanceof Set ? yaImpulsados : new Set(yaImpulsados || []);
   return (Array.isArray(rows) ? rows : [])
-    .filter((r) => r && r.status === 'published' && r.ig_media_id && r.media_type !== 'story' && !impulsados.has(r.id))
+    .filter((r) => r && r.status === 'published' && r.ig_media_id && !String(r.ig_media_id || '').startsWith('demo_') && r.media_type !== 'story' && !impulsados.has(r.id))
     .map((r) => ({
       post_id: r.id,
       image_path: r.image_path || '',
@@ -236,7 +236,7 @@ function elegiblesParaAds(rows, mejorPostId, yaImpulsados) {
       saves: Number(r.saves || r.saved || 0),
       recomendado: mejorPostId != null && Number(r.id) === Number(mejorPostId),
     }))
-    // El recomendado va primero (la carta lo sugiere; el picker lo
+    // El recomendado va primero (Impulsar lo sugiere; el picker lo
     // pre-selecciona); el resto conserva el orden de entrada.
     .sort((a, b) => (b.recomendado ? 1 : 0) - (a.recomendado ? 1 : 0));
 }
@@ -254,7 +254,7 @@ function elegiblesParaAds(rows, mejorPostId, yaImpulsados) {
 function feedParaAds(rows, yaImpulsados) {
   const impulsados = yaImpulsados instanceof Set ? yaImpulsados : new Set(yaImpulsados || []);
   return (Array.isArray(rows) ? rows : [])
-    .filter((r) => r && r.status === 'published' && r.ig_media_id && r.media_type !== 'story')
+    .filter((r) => r && r.status === 'published' && r.ig_media_id && !String(r.ig_media_id || '').startsWith('demo_') && r.media_type !== 'story')
     .map((r) => ({
       post_id: r.id,
       image_path: r.image_path || '',

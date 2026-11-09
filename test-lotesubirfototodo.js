@@ -51,7 +51,7 @@ ok('definiciones del festejo quedan sin llamadores en la subida (código muerto 
 ok('db: columna upload_choice', db.includes('ADD COLUMN upload_choice TEXT'));
 ok('db: columna album_vision', db.includes('ADD COLUMN album_vision TEXT'));
 ok('db: columna sft_default', db.includes('ADD COLUMN sft_default TEXT'));
-ok('album GET incluye upload_choice y album_vision', srv.includes('upload_choice, album_vision FROM assets'));
+ok('album GET incluye upload_choice, album_vision y content_hash (LOTE A · re-base v821: el SELECT ganó content_hash para el dedupe)', srv.includes('upload_choice, album_vision, content_hash FROM assets'));
 
 console.log('== servidor: endpoints nuevos ==');
 ok('POST /api/album/carrusel', srv.includes("app.post('/api/album/carrusel'"));

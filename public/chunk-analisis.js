@@ -1786,10 +1786,11 @@ function anaBilleteraPintar() {
 // ---------- LOTE R4 REDISEÑO (Impulsar) ----------
 // Ads pasa a ser Impulsar con el diseño del mock (pane Ads): campaña activa
 // con números reales, simulador con proyección ESTIMACIÓN, recomendación
-// del mejor posteo como única fuente. La recomendación ya no se monta en
-// Estrategia en v793 (#anaBoostRec no existe en la carta: el bloque de la
-// carta es código dormido); la fuente viva es este tab, que lee el mejor
-// posteo una sola vez en anaBilleteraTabDatos.
+// del mejor posteo como única fuente. La recomendación vive en Impulsar
+// como una línea (LOTE A 8/11: Estrategia y la carta semanal eliminadas;
+// el bloque de la carta es código dormido, las cartas viejas siguen
+// legibles); la fuente viva es este tab, que lee el mejor posteo una sola
+// vez en anaBilleteraTabDatos.
 // Reglas duras: solo posteos ya publicados (v774); sin tasa USD→ARS ni
 // política de reembolsos NO hay gasto real (§5.4 abierto: el botón
 // Impulsar muestra el aviso y el servidor lo frena con

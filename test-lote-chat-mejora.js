@@ -55,8 +55,8 @@ const srv = fs.readFileSync(path.join(TREE, 'server.js'), 'utf8');
 console.log('— 0) pines —');
 check('0a app.js cambió vs base v803', md5(app) !== 'bc53ff30fa777f87d03b8d83d224939c', md5(app));
 check('0b styles.css cambió vs base v803', md5(css) !== '5293bc2a7c2756ae9a37c55f9ee459f7', md5(css));
-check('0c server.js cambió vs base v803 SOLO por el DELETE del álbum (BUILD v821 estampado)',
-  md5(srv) !== '34104ab6825bb23d3af6b43129496082' && srv.includes("app.delete('/api/album/:id'") && srv.includes("const BUILD_ID = '20261105-v821'"), md5(srv));
+check('0c server.js cambió vs base v803 SOLO por el DELETE del álbum (BUILD v822 estampado)',
+  md5(srv) !== '34104ab6825bb23d3af6b43129496082' && srv.includes("app.delete('/api/album/:id'") && srv.includes("const BUILD_ID = '20261105-v822'"), md5(srv));
 
 // ---------- Parte 1: estática — fix 1 (placeholder) ----------
 console.log('— 1) estática: placeholder —');
@@ -98,7 +98,10 @@ check('2k guard honesto: si está en un posteo (draft/scheduled/published, por f
   srv.includes("status IN ('draft','scheduled','published')") && srv.includes('foto_asset_id IN (SELECT id FROM assets WHERE user_id = ? AND file_path = ?)') && srv.includes('image_path = ?') && srv.includes('carousel_paths LIKE ?')
   && srv.includes("res.status(409).json({ ok: false, error: 'Esa foto ya está en un posteo' })"));
 check('2l si solo está en el álbum: borra la FOTO (todas las filas con ese file_path, por si está duplicada) y los archivos (foto + miniaturas)',
-  srv.includes("db.prepare('DELETE FROM assets WHERE user_id = ? AND file_path = ?').run(uid, asset.file_path)") && srv.includes('fs.unlinkSync(path.join(MEDIA_DIR, path.basename(f)))'));
+  srv.includes("db.prepare('DELETE FROM assets WHERE user_id = ? AND file_path = ?').run(uid, asset.file_path)") && srv.includes("DELETE FROM assets WHERE user_id = ? AND content_hash = ? AND kind = ?") && srv.includes('fs.unlinkSync(path.join(MEDIA_DIR, path.basename(f.file_path || asset.file_path)))'));
+// (LOTE A · re-base v821) 2l actualizado: el DELETE ahora borra también por huella
+// (content_hash) para que salga la gemela de distinto path; el unlink itera las
+// filas por borrar (f.file_path), no la ruta suelta. Comportamiento superconjunto.
 check('2m × en cada miniatura de TU ÁLBUM (hermana del botón, no anidada; solo con id)',
   app.includes('class="pz-hoy-album-thumb-wrap"') && app.includes('class="pz-hoy-album-del"') && app.includes('data-album-del="${a.id}"') && app.includes('Number(a.id) > 0'));
 check('2n tarjeta inline en pzHoyAlbumBorrar (texto del mock ES/EN, [Borrar]/[Cancelar]); cero window.confirm() en el flujo (los otros 2 borrados intactos)',
@@ -528,8 +531,8 @@ async function parteBoot() {
     check('7a el servidor levanta con el lote', up);
     if (!up) { console.log(out.split('\n').slice(-30).join('\n')); throw new Error('no levanta'); }
     const ver = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-    check('7b /api/version = v821 (estampado)', ver && ver.build === '20261105-v821', JSON.stringify(ver));
-    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=556`)).text();
+    check('7b /api/version = v822 (estampado)', ver && ver.build === '20261105-v822', JSON.stringify(ver));
+    const appJs = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=557`)).text();
     check('7c el app.js servido trae el lote (colapsar + sin fundido + tarjeta inline del borrar)',
       appJs.includes('function pzTemaColapsar') && appJs.includes('function pzTemaMiniHTML') && !appJs.includes("classList.add('pz-ph-fading')")
       && appJs.includes('pz-hoy-album-confirm') && appJs.includes('pz-hoy-album-confirm-del'), 'len ' + appJs.length);

@@ -38,14 +38,14 @@ const orderOk = (s, keys) => {
 // RE-PIN tras implementar (md5s de work-v1; en base fallan a propósito).
 // (LOTE HOY-AVATAR-FEED · 8/11) Re-pin: app.js/styles.css del lote.
 // (LOTE CHAT-NUEVO v821 · 8/11) Re-pin: app.js/styles.css del lote + BUILD v821.
-const MD5_APP_WORK = '5210de8cceb1fc51b63b2403fc671e8c';
-const MD5_CSS_WORK = '82a97f57c75b03ae8880ad80e7a86c4d';
+const MD5_APP_WORK = '14b9335beb4729fa095fd6d5252bb281';
+const MD5_CSS_WORK = '1306102d485019ac59aef9db28f4facb';
 // El woff2 es copia byte a byte del mock (no generado).
 const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins ----------
-  t(srv.includes("const BUILD_ID = '20261105-v821'"), 'server: BUILD v821 (R0 no toca server.js; re-pin chat-nuevo)');
+  t(srv.includes("const BUILD_ID = '20261105-v822'"), 'server: BUILD v822 (R0 no toca server.js; re-pin lote A)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -59,14 +59,14 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(md5(app) === MD5_APP_WORK, 'app.js md5 (re-pin work-v1)');
   t(md5(css) === MD5_CSS_WORK, 'styles.css md5 (re-pin work-v1)');
 
-  // ---------- 2. Dock de 6 en bbShell (estático) ----------
+  // ---------- 2. Dock de 5 en bbShell (estático; ítem 8: sin Estrategia) ----------
   const bbFn = sliceFn(app, 'function bbShell(tab, content) {', '\nasync function bbLoadEstado');
   const bbNav = (bbFn.split('\n').find((l) => l.includes('<nav class="bb-bar">')) || '');
   t(bbNav.length > 0, 'bbShell: la línea del nav existe');
-  t(orderOk(bbNav, ["tabBtn('inicio'", "tabBtn('analisis'", "tabBtn('impulsar'", "tabBtn('estrategia'", "tabBtn('jardin'", "tabBtn('chat'"]), 'bb-bar: orden Hoy, Análisis, Impulsar, Estrategia, Nivel, Chat');
+  t(orderOk(bbNav, ["tabBtn('inicio'", "tabBtn('analisis'", "tabBtn('impulsar'", "tabBtn('jardin'", "tabBtn('chat'"]), 'bb-bar: orden Inicio, Análisis, Impulsar, Nivel, Chat (5 pestañas, sin Estrategia)');
   t(bbNav.includes("'#/app/numeros'"), 'bb-bar: Análisis apunta a #/app/numeros');
   t(bbNav.includes("'#/app/ads'"), 'bb-bar: Impulsar apunta a #/app/ads (ruta sin cambiar)');
-  t(bbNav.includes("'#/app/analisis'"), 'bb-bar: Estrategia apunta a #/app/analisis');
+  t(!bbNav.includes("tabBtn('estrategia'"), 'bb-bar: sin pestaña Estrategia (ítem 8: la recomendación vive en Impulsar)');
   t(bbNav.includes("'#/app/chat'"), 'bb-bar: Chat apunta a #/app/chat');
   t(!bbNav.includes('pzDockMasBtn'), 'bb-bar: el + SALE del dock');
   t(!bbNav.includes("tabBtn('ajustes'"), 'bb-bar: sin tab Ajustes');
@@ -84,7 +84,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     const bindIdx = app.indexOf('bindApp(tab);', paintIdx);
     t(paintIdx > 0 && bindIdx > paintIdx && app.slice(paintIdx, bindIdx).includes('__pzAperturaTimer'), 'render: el timer de 3 s se arma en la pintura, antes de bindApp (no se alarga en cargas lentas)'); }
 
-  // ---------- 3. Dock de 6 en mzTabsHTML (VM) ----------
+  // ---------- 3. Dock de 5 en mzTabsHTML (VM; ítem 8: sin Estrategia) ----------
   const mzSrc = sliceFn(app, 'function mzTabsHTML(tab) {', '\n/* (LOTE DOCK-MAS) */');
   t(!mzSrc.includes("if (tab === 'chat') return '';"), 'mzTabsHTML: sin early-return en chat');
   t(!mzSrc.includes('pzDockMasBtn'), 'mzTabsHTML: el + SALE del dock');
@@ -102,23 +102,23 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     const navChat = vm.runInContext("mzTabsHTML('chat')", ctx);
     const navJardin = vm.runInContext("mzTabsHTML('jardin-posty')", ctx);
     const navAjustes = vm.runInContext("mzTabsHTML('ajustes')", ctx);
-    t(navTabs(navInicio) === 6, 'VM mzTabsHTML(inicio): 6 botones en el dock');
+    t(navTabs(navInicio) === 5, 'VM mzTabsHTML(inicio): 5 botones en el dock (sin Estrategia)');
     t(!navInicio.includes('Agregar'), 'VM mzTabsHTML(inicio): sin Agregar');
     t(!navInicio.includes('Ajustes'), 'VM mzTabsHTML(inicio): sin Ajustes en el dock');
-    t(orderOk(navInicio, ['>Hoy<', '>Análisis<', '>Impulsar<', '>Estrategia<', '>Nivel<', '>Chat<']), 'VM mzTabsHTML(inicio): orden Hoy, Análisis, Impulsar, Estrategia, Nivel, Chat');
+    t(orderOk(navInicio, ['>Inicio<', '>Análisis<', '>Impulsar<', '>Nivel<', '>Chat<']), 'VM mzTabsHTML(inicio): orden Inicio, Análisis, Impulsar, Nivel, Chat');
     t(navInicio.includes('data-tab="numeros"'), 'VM mzTabsHTML: Análisis lleva data-tab numeros');
     t(navInicio.includes('data-tab="ads"'), 'VM mzTabsHTML: Impulsar lleva data-tab ads');
-    t(navInicio.includes('data-tab="analisis"'), 'VM mzTabsHTML: Estrategia lleva data-tab analisis');
+    t(!navInicio.includes('data-tab="analisis"'), 'VM mzTabsHTML: sin data-tab analisis (sin Estrategia)');
     t(navInicio.includes('data-tab="chat"'), 'VM mzTabsHTML: Chat lleva data-tab chat');
     t(navNumeros.includes('mz-tab on') && navNumeros.indexOf('mz-tab on') < navNumeros.indexOf('>Análisis<'), 'VM mzTabsHTML(numeros): tab Análisis activo');
-    t(navAnalisis.includes('mz-tab on') && navAnalisis.indexOf('mz-tab on') < navAnalisis.indexOf('>Estrategia<'), 'VM mzTabsHTML(analisis): tab Estrategia activo');
+    t(!navAnalisis.includes('mz-tab on'), 'VM mzTabsHTML(analisis): ningún tab activo (la ruta analisis redirige a #/app/ads; el dock nunca se pinta con tab=analisis)');
     t(navAds.includes('mz-tab on') && navAds.indexOf('mz-tab on') < navAds.indexOf('>Impulsar<'), 'VM mzTabsHTML(ads): tab Impulsar activo');
     t(navChat.length > 0, 'VM mzTabsHTML(chat): el dock EXISTE en chat (no vacío)');
-    t(navTabs(navChat) === 6, 'VM mzTabsHTML(chat): 6 botones también en chat');
+    t(navTabs(navChat) === 5, 'VM mzTabsHTML(chat): 5 botones también en chat');
     t(navChat.includes('mz-tab on') && navChat.indexOf('mz-tab on') < navChat.indexOf('>Chat<'), 'VM mzTabsHTML(chat): tab Chat activo');
     t(navJardin.includes('mz-tab on') && navJardin.indexOf('mz-tab on') < navJardin.indexOf('>Nivel<'), 'VM mzTabsHTML(jardin-posty): tab Nivel activo');
     t(!navAjustes.includes('mz-tab on'), 'VM mzTabsHTML(ajustes): ningún tab activo en Ajustes');
-    t(navTabs(navAjustes) === 6, 'VM mzTabsHTML(ajustes): el dock sigue con 6 en Ajustes');
+    t(navTabs(navAjustes) === 5, 'VM mzTabsHTML(ajustes): el dock sigue con 5 en Ajustes');
   }
 
   // ---------- 4. mxTabKey: remap (VM) ----------
@@ -129,7 +129,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     const k = (tab) => vm.runInContext(`mxTabKey('${tab}')`, ctx);
     t(k('inicio') === 'inicio', "mxTabKey: inicio → inicio");
     t(k('numeros') === 'analisis', "mxTabKey: numeros → analisis");
-    t(k('analisis') === 'estrategia', "mxTabKey: analisis → estrategia");
+    t(k('analisis') === '', "mxTabKey: analisis → '' (sin pestaña Estrategia; el router manda a #/app/ads)");
     t(k('ads') === 'impulsar', "mxTabKey: ads → impulsar");
     t(k('jardin-posty') === 'jardin', "mxTabKey: jardin-posty → jardin");
     t(k('chat') === 'chat', "mxTabKey: chat → chat");
@@ -321,7 +321,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
   // ---------- 9. Drawer: 6 pestañas + Ajustes ----------
   const shellFn = sliceFn(app, 'function appShell(tab, content) {', '\n/* Drawer mobile');
-  t(orderOk(shellFn, ['data-tab="inicio"', 'data-tab="numeros"', 'data-tab="ads"', 'data-tab="analisis"', 'data-tab="jardin-posty"', 'data-tab="chat"', 'data-tab="ajustes"']), 'drawer: orden Hoy, Análisis, Impulsar, Estrategia, Nivel, Chat, Ajustes');
+  t(orderOk(shellFn, ['data-tab="inicio"', 'data-tab="numeros"', 'data-tab="ads"', 'data-tab="jardin-posty"', 'data-tab="chat"', 'data-tab="ajustes"']), 'drawer: orden Inicio, Análisis, Impulsar, Nivel, Chat, Ajustes (sin Estrategia)');
   t(shellFn.includes('pzShellHeadHTML(tab)'), 'appShell: renderiza el encabezado común');
   t(shellFn.includes('pzAperturaHTML()'), 'appShell: renderiza la apertura');
   t(app.includes("location.hash = '#/app/' + b.dataset.tab"), 'drawer: bind genérico data-tab → hash (sin cambio)');
@@ -371,13 +371,12 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
       vm.runInContext("bbGo('" + m[1] + "')", ctx); // ejecuta el handler real
       return loc.hash;
     };
-    // bbShell móvil: las 6 pestañas (onclick bbGo real).
+    // bbShell móvil: las 5 pestañas (onclick bbGo real).
     const bbInicio = vm.runInContext("bbShell('inicio', '<p>x</p>')", ctx);
     const destinos = [
-      ['Hoy', /onclick="bbGo\('(#\/app\/inicio)'\)"/, '#/app/inicio'],
+      ['Inicio', /onclick="bbGo\('(#\/app\/inicio)'\)"/, '#/app/inicio'],
       ['Análisis', /onclick="bbGo\('(#\/app\/numeros)'\)"/, '#/app/numeros'],
       ['Impulsar', /onclick="bbGo\('(#\/app\/ads)'\)"/, '#/app/ads'],
-      ['Estrategia', /onclick="bbGo\('(#\/app\/analisis)'\)"/, '#/app/analisis'],
       ['Nivel', /onclick="bbGo\('(#\/app\/jardin-posty)'\)"/, '#/app/jardin-posty'],
       ['Chat', /onclick="bbGo\('(#\/app\/chat)'\)"/, '#/app/chat'],
     ];
@@ -403,7 +402,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     // mzTabsHTML: data-tab → hash por la regla del bind genérico.
     const mzInicio = vm.runInContext("mzTabsHTML('inicio')", ctx);
     const tabsMz = [...mzInicio.matchAll(/data-tab="([^"]+)"/g)].map((m) => m[1]);
-    t(JSON.stringify(tabsMz) === JSON.stringify(['inicio', 'numeros', 'ads', 'analisis', 'jardin-posty', 'chat']), `VM mz data-tab en orden [inicio, numeros, ads, analisis, jardin-posty, chat] (vino ${JSON.stringify(tabsMz)})`);
+    t(JSON.stringify(tabsMz) === JSON.stringify(['inicio', 'numeros', 'ads', 'jardin-posty', 'chat']), `VM mz data-tab en orden [inicio, numeros, ads, jardin-posty, chat] (vino ${JSON.stringify(tabsMz)})`);
     for (const route of tabsMz) {
       loc.hash = '';
       vm.runInContext(`location.hash = '#/app/' + '${route}'`, ctx);
@@ -450,7 +449,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v821', `boot: /api/version 20261105-v821 (vino ${ver.build})`);
+      t(ver.build === '20261105-v822', `boot: /api/version 20261105-v822 (vino ${ver.build})`);
       const appTxt = await (await fetch(`${BASE}/app.js?v=539`)).text();
       t(md5(appTxt) === md5(app), 'boot: app.js?v=539 servido = árbol');
       const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261183`)).text();
