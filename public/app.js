@@ -20812,6 +20812,210 @@ function pzHoySemanaMiniHTML(sem, en, pendProg) {
   } catch (e) { return ''; }
 }
 
+// (LOTE REDISEÑO RS-2 · HOY DEL MOCK v10 · 9/11) La semana como tira
+// de 7 días ADENTRO de Hoy, de a una: hoy completo, mañana visible
+// apenas sale el de hoy (cartita sin velo), el resto solo los días.
+// La semana no se congela el domingo: la tira se calcula sobre la
+// semana corriente (lunes–domingo) cada vez que se pinta. Un día se
+// revela si ya salió su posteo (publicado), si es hoy, o si es mañana
+// y el de hoy ya salió (o no hay posteo hoy). El resto queda
+// bloqueado con el mensaje del mock. Puro (datos + fecha), testeable
+// en VM. BLOQUE RS-2 — extraíble en tests (test-lote-rediseno-rs2.js).
+var PZ_HOY_TIRA_SEL = ''; // clave del día seleccionado en la tira (sesión)
+var PZ_HOY_TIRA_DIAS = []; // días de la tira vigente (los pinta inicioView)
+
+// Días de la tira enriquecidos con su posteo: para cada día de la
+// semana corriente, el posteo de ese día (publicado, o el
+// programado/borrador más temprano) o null. `posts` = todos los
+// posteos (sin historias). Devuelve [{ key, idx, estado, post,
+// revelado, esHoy, esManana, esPasado }].
+function pzHoyTiraDias(sem, posts, hoyKey, tz) {
+  const out = [];
+  try {
+    const dias = (sem && Array.isArray(sem.dias)) ? sem.dias : [];
+    const lista = Array.isArray(posts) ? posts : [];
+    const porDia = {};
+    for (const p of lista) {
+      if (!p || String((p && p.media_type) || '') === 'story') continue;
+      const k = pzHoyPostDiaKey(p, tz);
+      if (!k) continue;
+      const cur = porDia[k];
+      if (!cur) { porDia[k] = p; continue; }
+      const curPub = String(cur.status || '') === 'published';
+      const newPub = String(p.status || '') === 'published';
+      if (newPub && !curPub) { porDia[k] = p; continue; }
+      if (newPub === curPub) {
+        const ta = Date.parse(String(cur.scheduled_at || cur.published_at || '').replace(' ', 'T'));
+        const tb = Date.parse(String(p.scheduled_at || p.published_at || '').replace(' ', 'T'));
+        if (Number.isFinite(tb) && (!Number.isFinite(ta) || tb < ta)) porDia[k] = p;
+      }
+    }
+    const hoyPost = hoyKey ? (porDia[hoyKey] || null) : null;
+    const hoySalio = !hoyPost || String(hoyPost.status || '') === 'published';
+    const mananaKey = hoyKey ? pzHoyMoverKey(hoyKey, 1) : '';
+    for (let i = 0; i < dias.length; i++) {
+      const d = dias[i] || {};
+      const k = d.key || '';
+      const post = porDia[k] || null;
+      const esHoy = k === hoyKey;
+      const esManana = !!mananaKey && k === mananaKey;
+      const esPasado = !!hoyKey && k < hoyKey;
+      let revelado = false;
+      if (esHoy) revelado = true;
+      else if (esManana) revelado = hoySalio;
+      else if (esPasado) revelado = !!(post && String(post.status || '') === 'published');
+      else revelado = false;
+      out.push({ key: k, idx: i, estado: d.estado || '', post, revelado, esHoy, esManana, esPasado });
+    }
+  } catch (e) {}
+  return out;
+}
+
+// Detalle del día seleccionado en la tira (estructura del mock:
+// .wrow con foto + texto + estado). Día revelado con posteo: mini
+// fila con foto, título, día/hora y estado; si es publicado, botón
+// Impulsar (contrato RS-4: data-pz-boost-post + pzBoostOpenById); si
+// es hoy, nota «es el posteo de arriba». Día revelado sin posteo
+// (hoy vacío): invitación al chat. Día bloqueado: el mensaje del
+// mock (mañana: «apenas salga el de hoy»; futuro: «uno por uno»).
+function pzHoyTiraDetalleHTML(d, o) {
+  try {
+    if (!d) return '';
+    const en = !!(o && o.en);
+    const tz = (o && o.tz) || undefined;
+    const labelsFull = en ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const nombre = (labelsFull[d.idx] || '') + (d.esHoy ? (en ? ' · today' : ' · hoy') : d.esManana ? (en ? ' · tomorrow' : ' · mañana') : '');
+    if (!d.revelado) {
+      const msg = d.esManana
+        ? (en ? 'You’ll see its post as soon as today’s goes out.' : 'Su posteo se ve apenas salga el de hoy.')
+        : d.esPasado
+          ? (en ? 'Nothing went out that day.' : 'Ese día no salió ningún posteo.')
+          : (en ? 'No post here yet: the week comes out one by one, day by day.' : 'Todavía no hay posteo acá: los de la semana salen uno por uno, día por día.');
+      return `<div class="pz-hoy-tira-detalle locked"><div class="t"><b>${esc(nombre)}</b><small>${esc(msg)}</small></div></div>`;
+    }
+    const p = d.post || null;
+    if (!p) {
+      return `<div class="pz-hoy-tira-detalle"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet — tell Posty in the chat what you have to show.' : 'Hoy todavía no hay posteo — contale a Posty en el chat qué tenés para mostrar.'}</small></div><div class="side"><button type="button" class="btn btn-primary btn-sm" data-pz-hoy-chat="1">${en ? 'Open the chat' : 'Abrir el chat'}</button></div></div>`;
+    }
+    const img = (p && p.image_path)
+      ? `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';
+    const cap1 = String((p && p.caption) || '').split('\n')[0].trim().slice(0, 90);
+    const cuando = pzHoyCuandoCorto(p, tz, en);
+    const st = String(p.status || '');
+    const pill = (st === 'published') ? (en ? 'Published' : 'Publicado')
+      : (st === 'scheduled' && String(p.approval || 'pending') === 'pending') ? pzHoyPillSalida(p, tz, en)
+      : (st === 'draft') ? (en ? 'Draft · to review' : 'Borrador · para revisar')
+      : cuando;
+    const cuenta = (st === 'scheduled' && p.scheduled_at) ? pzHoyCuentaSaleTxt(p.scheduled_at, en) : '';
+    // La nota solo si el posteo de hoy todavía espera tu OK (hay
+    // tarjeta arriba). Si ya salió, no hay nada arriba que aprobar:
+    // el botón Impulsar es la acción.
+    const nota = (d.esHoy && st !== 'published') ? `<span class="note-line">${en ? 'This is the post above: approve it there or from the chat.' : 'Es el posteo de arriba: aprobalo ahí o desde el chat.'}</span>` : '';
+    const imp = (st === 'published')
+      ? `<button type="button" class="btn btn-primary btn-sm" data-pz-boost-post="${esc(String(p.id))}">${en ? 'Boost' : 'Impulsar'}</button>` : '';
+    return `<div class="pz-hoy-tira-detalle">${img}<div class="t"><b>${esc(cap1 || nombre)}</b><small>${esc(cuando || '')}</small>${nota}</div><div class="side">${pill ? `<span class="pz-hoy-hoy-pill">${esc(pill)}</span>` : ''}${cuenta ? `<span class="pz-hoy-cuenta">${esc(cuenta)}</span>` : ''}${imp}</div></div>`;
+  } catch (e) { return ''; }
+}
+
+// Tira de 7 días + detalle del día seleccionado (estructura del mock
+// posty-app-simple: .week-strip + .day-detail). Los días son botones;
+// el seleccionado lleva .sel. La tira ES la mini (mismas clases
+// .pz-semana-mini/.pz-semana-dia/.pz-semana-bola), interactiva.
+function pzHoyTiraHTML(dias, o) {
+  try {
+    const en = !!(o && o.en);
+    const tz = (o && o.tz) || undefined;
+    const hoyKey = (o && o.hoyKey) || '';
+    const sel = (o && o.sel) || (typeof PZ_HOY_TIRA_SEL === 'string' ? PZ_HOY_TIRA_SEL : '');
+    const labels = en ? ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] : ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+    let selDia = null;
+    for (const d of dias) { if (d && d.key === sel) { selDia = d; break; } }
+    if (!selDia) { for (const d of dias) { if (d && d.esHoy) { selDia = d; break; } } }
+    if (!selDia && dias.length) selDia = dias[0];
+    const strip = dias.map((d, i) => {
+      if (!d) return '';
+      const done = d.revelado && d.post && String(d.post.status || '') === 'published';
+      const cls = 'pz-semana-dia' + (done ? ' done' : d.esHoy ? ' today' : (d.revelado || d.esPasado) ? '' : ' wait') + (selDia && d.key === selDia.key ? ' sel' : '');
+      const mark = done ? '✓' : d.esHoy ? '•' : '·';
+      return `<button type="button" class="${cls}" data-pz-hoy-tira-dia="${esc(d.key)}" aria-label="${esc(labels[i] || '')}"><span class="pz-semana-bola">${mark}</span>${labels[i] || ''}</button>`;
+    }).join('');
+    return `<div class="pz-semana-mini" role="group" aria-label="${en ? 'Your week' : 'Tu semana'}">${strip}</div>`
+      + pzHoyTiraDetalleHTML(selDia, { en, tz, hoyKey });
+  } catch (e) { return ''; }
+}
+
+// Cableado de la tira: tocar un día selecciona y re-pinta tira +
+// detalle en su lugar (sin recargar la pantalla); el botón Impulsar
+// del detalle abre la hoja RS-4 por id; el botón del chat abre el
+// chat. Lo llama pzHoyBind.
+function pzHoyTiraBindDetalle(cont) {
+  if (!cont) return;
+  cont.querySelectorAll('[data-pz-hoy-chat]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/chat'); else location.hash = '#/app/chat'; } catch (e) {} }; });
+  cont.querySelectorAll('[data-pz-boost-post]').forEach((b) => { b.onclick = () => { try { if (typeof pzBoostOpenById === 'function') pzBoostOpenById(b.getAttribute('data-pz-boost-post')); } catch (e) {} }; });
+}
+
+function pzHoyTiraBind(root) {
+  if (!root) return;
+  const cont = root.querySelector ? root.querySelector('#pzHoyTira') : null;
+  if (!cont) return;
+  const dias = (typeof PZ_HOY_TIRA_DIAS !== 'undefined' && Array.isArray(PZ_HOY_TIRA_DIAS)) ? PZ_HOY_TIRA_DIAS : [];
+  cont.querySelectorAll('[data-pz-hoy-tira-dia]').forEach((b) => {
+    b.onclick = () => {
+      const k = b.getAttribute('data-pz-hoy-tira-dia') || '';
+      if (!k) return;
+      PZ_HOY_TIRA_SEL = k;
+      try {
+        const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+        const tz = (typeof pcTz === 'function') ? pcTz() : undefined;
+        let hoyK = '';
+        for (const d of dias) { if (d && d.esHoy) { hoyK = d.key; break; } }
+        cont.innerHTML = pzHoyTiraHTML(dias, { en, tz, hoyKey: hoyK, sel: PZ_HOY_TIRA_SEL });
+        pzHoyTiraBind(cont);
+      } catch (e) {}
+    };
+  });
+  pzHoyTiraBindDetalle(cont);
+}
+
+// Cabecera «Para aprobar · N» del mock (la sección de Hoy: solo la
+// tarjeta del posteo de hoy, sin «Aprobar todo»). N = los pendientes
+// visibles en Hoy (la tarjeta de hoy, 0 o 1); el total de pendientes
+// vive en el saludo. Se rinde solo si N > 0.
+function pzHoyParaAprobarHTML(n, en) {
+  try {
+    const num = Number(n) || 0;
+    if (num <= 0) return '';
+    return `<div class="pz-hoy-para"><h2>${en ? 'To approve' : 'Para aprobar'} · <span>${num}</span></h2></div>`;
+  } catch (e) { return ''; }
+}
+
+// Línea de insight de Hoy (regla 8 del mock: sin Análisis — el
+// número, qué significa y qué ya hizo Posty con eso). Misma lógica
+// que la mini de simplificar-app: título por estado de la semana +
+// acción honesta. La acción es honesta: si hay programados, están en
+// el feed con su día y su hora; si no hay nada, el chat arma la semana.
+function pzHoySemanaInsightHTML(sem, en, pendProg) {
+  try {
+    const n = (sem && typeof sem.n === 'number') ? sem.n : 0;
+    const dias = (sem && Array.isArray(sem.dias)) ? sem.dias : [];
+    const hoyIdx = dias.findIndex((d) => d && d.estado === 'hoy');
+    const esDomingo = hoyIdx === 6;
+    const titulo = n >= 7 ? (en ? 'Week complete! 🎉' : '¡Semana completa! 🎉')
+      : n === 0 ? (en ? 'Your week is just starting' : 'Tu semana recién arranca')
+      : esDomingo ? (en ? `This week we hit ${n}/7 posts` : `esta semana cumplimos ${n}/7 posteos`)
+      : (en ? `${n}/7 posts, your week is on its way` : `${n}/7 posteos, tu semana viene en camino`);
+    const accion = n >= 7
+      ? (en ? 'We hit 7/7 — tomorrow a new week starts.' : 'cumplimos 7/7 — mañana arranca una nueva semana.')
+      : (Number(pendProg || 0) > 0)
+        ? (en ? 'The next ones are in your feed, with their day and time.' : 'Los próximos están en tu feed, con su día y su hora.')
+        : (en ? 'Nothing scheduled yet — tell Posty in the chat what you have to show.' : 'Todavía no hay nada programado — contale a Posty en el chat qué tenés para mostrar.');
+    const btnChat = (Number(pendProg || 0) > 0 || n >= 7) ? '' : `<button type="button" class="btn btn-primary btn-sm" data-pz-hoy-chat="1">${en ? 'Open the chat' : 'Abrir el chat'}</button>`;
+    return `<div class="pz-semana-insight">${pzIc('chartUp', 20)}<div><p><b>${titulo}</b> — ${accion}</p>${btnChat}</div></div>`;
+  } catch (e) { return ''; }
+}
+
+
+
 // Pendientes de «Por aprobar» + cartita (el posteo de mañana).
 // cartita: el programado de mañana más cercano (visible aunque ya esté
 // aprobado: es la cartita, no un pendiente; los fijados no son cartita,
@@ -20985,13 +21189,22 @@ function pzHoyHoyHTML(p, o) {
 // (LOTE CHAT-MEJORA: la nota «¡Ya te dejé los posteos listos!» repetía lo
 // mismo y ya no se renderiza). Solo datos reales: la hora del posteo de hoy
 // sale de su scheduled_at; sin posteo hoy no se inventa una hora.
+// Mensaje de Posty en Hoy (botón → chat). Un solo mensaje: dice lo que
+// realmente pasa EN ESTE ESTADO (RS-2 · REGLA 02:40 · autopilot: el
+// posteo sale solo; el aviso de 30 min antes es la chance de frenarlo;
+// al salir, otro aviso. El saludo viejo (el que decía que sin el OK
+// no sale nada) NO se usa en ningún estado: en manual el texto dice
+// que sale cuando vos lo aprobás, sin el absoluto. Solo datos reales: la hora del
+// posteo de hoy sale de su scheduled_at; sin posteo hoy no se inventa
+// una hora. (LOTE CHAT-MEJORA: la nota «¡Ya te dejé los posteos
+// listos!» repetía lo mismo y ya no se renderiza.)
 function pzHoySpeechHTML(o) {
   const en = !!(o && o.en);
   const tz = (o && o.tz) || undefined;
   const hoyPost = (o && o.hoyPost) || null;
   const pendientes = (o && typeof o.pendientes === 'number') ? o.pendientes : 0;
   const haySemana = !!(o && o.haySemana);
-  // (PARTE 6) manual = GET /api/autopilot (f3ApprovalMode, cacheado).
+  // (RS-2) manual = GET /api/autopilot (f3ApprovalMode, cacheado).
   // needOK = posteos que NO salen sin tu OK; schedSolo = programados
   // pendientes que salen solos (autopilot). Sin datos, needOK = pendientes.
   const manual = !!(o && o.manual);
@@ -21003,36 +21216,51 @@ function pzHoySpeechHTML(o) {
     const hh = pzHoyHoraCorta(hoyPost.scheduled_at, tz, en);
     const st = String(hoyPost.status || '');
     const ap = String(hoyPost.approval || 'pending');
-    // (PARTE 6) Programado: en autopiloto sale solo (trust ≥1 publica el
-    // pendiente); en manual sale solo si ya está aprobado ('approved'/'auto').
-    // Programado pendiente en manual NO sale (el scheduler lo marca failed
-    // 'sin aprobación'). Borrador: en los dos estados necesita tu OK.
-    // (LOTE SALUDO-HOY-HONESTO) Singular: solo está armado el posteo de hoy
-    // — «los posteos de esta semana» prometía de más.
+    // Programado: en autopilot sale solo (trust ≥1 publica el
+    // pendiente); en manual sale solo si ya está aprobado
+    // ('approved'/'auto'). Programado pendiente en manual NO sale (el
+    // scheduler lo marca failed 'sin aprobación'). Borrador: en los
+    // dos estados necesita tu OK (al aprobarlo queda programado).
+    // Publicado: ya salió (la hora es la real, published_at).
+    const yaSalio = st === 'published';
+    const esBorrador = st === 'draft';
     const saleSolo = st === 'scheduled' && (!manual || ap === 'approved' || ap === 'auto');
-    if (saleSolo) {
+    if (yaSalio) {
+      const hhPub = pzHoyHoraCorta(hoyPost.published_at || hoyPost.scheduled_at, tz, en);
+      const pendTxt = needOK > 0
+        ? (en ? (needOK === 1 ? ` You've got 1 post to review in your feed.` : ` You've got ${needOK} posts to review in your feed.`)
+              : (needOK === 1 ? ` Tenés 1 posteo para revisar en tu feed.` : ` Tenés ${needOK} posteos para revisar en tu feed.`))
+        : '';
+      cuerpo = en
+        ? `Today's post is already out${hhPub ? ' — it went out at ' + esc(hhPub) : ''}. Take a look at your feed.${pendTxt}`
+        : `El de hoy ya salió${hhPub ? ' — salió a las ' + esc(hhPub) : ''}. Miralo en tu feed.${pendTxt}`;
+    } else if (esBorrador) {
+      cuerpo = en
+        ? `I put together today's post for you. <b>It's ready for${hh ? ' ' + esc(hh) : ''}</b> — take a look and give it a «Publish it» if you like it, and it's scheduled to go out.`
+        : `Te armé el posteo de hoy. <b>Está listo para las${hh ? ' ' + esc(hh) : ''}</b> — miralo y dale «Dale» si te gusta, y queda programado para salir.`;
+    } else if (saleSolo) {
       cuerpo = en
         ? `I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''} on its own</b> — take a look if you want, I'll let you know 30 min before in case you want to stop it, and when it's out.`
         : `Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''} solo</b> — miralo si querés, te aviso 30 min antes por si querés frenarlo y te aviso cuando salga.`;
     } else {
       cuerpo = en
-        ? `I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b> — take a look and give it a «Publish it» if you like it. Without your OK, nothing goes out.`
-        : `Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b> — miralo y dale «Dale» si te gusta. Sin tu OK, no sale nada.`;
+        ? `I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b> — take a look and give it a «Publish it» if you like it. You've got manual mode on: it goes out when you approve it.`
+        : `Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b> — miralo y dale «Dale» si te gusta. Tenés el modo manual: sale cuando vos lo aprobás.`;
     }
   } else if (pendientes > 0) {
-    // (PARTE 6) needOK = los que no salen sin tu OK (el número que se
-    // muestra). Si no hay ninguno (autopilot, solo programados pendientes),
+    // needOK = los que no salen sin tu OK (el número que se muestra).
+    // Si no hay ninguno (autopilot, solo programados pendientes),
     // todos salen solos a su hora.
-    // (LOTE SALUDO-HOY-HONESTO) Número real de pendientes por aprobar.
     if (needOK > 0) {
       const extraSolo = schedSolo ? (en ? ' The ones already scheduled go out on their own.' : ' Los que ya están programados salen solos a su hora.') : '';
+      const manualTxt = manual ? (en ? ' You approve each one.' : ' Vos aprobás cada uno.') : '';
       cuerpo = en
         ? (needOK === 1
-          ? `You've got 1 post to review — check it in your feed and give it a «Publish it» if you like it. Without your OK, nothing goes out.${extraSolo}`
-          : `You've got ${needOK} posts to review — check them in your feed and give a «Publish it» to the ones you like. Without your OK, nothing goes out.${extraSolo}`)
+          ? `You've got 1 post to review — check it in your feed and give it a «Publish it» if you like it.${manualTxt}${extraSolo}`
+          : `You've got ${needOK} posts to review — check them in your feed and give a «Publish it» to the ones you like.${manualTxt}${extraSolo}`)
         : (needOK === 1
-          ? `Tenés 1 posteo para revisar — miralo en tu feed y dale «Dale» si te gusta. Sin tu OK, no sale nada.${extraSolo}`
-          : `Tenés ${needOK} posteos para revisar — miralos en tu feed y dale «Dale» a los que te gusten. Sin tu OK, no sale nada.${extraSolo}`);
+          ? `Tenés 1 posteo para revisar — miralo en tu feed y dale «Dale» si te gusta.${manualTxt}${extraSolo}`
+          : `Tenés ${needOK} posteos para revisar — miralos en tu feed y dale «Dale» a los que te gusten.${manualTxt}${extraSolo}`);
     } else {
       cuerpo = en
         ? `Your week is all set — the posts go out on their own, on time, and you can see them in your feed. I'll let you know 30 min before each one in case you want to stop it.`
@@ -21045,9 +21273,7 @@ function pzHoySpeechHTML(o) {
   }
   // (LOTE HOY-REDISEÑO v810 + HOY-AVATAR-FEED 8/11) El saludo se rinde
   // como mensaje de Posty: SOLO la burbuja, sin carita (la cara vive en
-  // el encabezado). El TEXTO no cambia (lo fija el lote SALUDO-HOY-
-  // HONESTO v806): solo la presentación. El botón conserva
-  // data-pz-hoy-chat (abre el chat).
+  // el encabezado). El botón conserva data-pz-hoy-chat (abre el chat).
   return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span></button></div>`;
 }
 
@@ -21170,6 +21396,7 @@ function pzHoyBind(root) {
     el.onkeydown = (ev) => { if (ev && (ev.key === 'Enter' || ev.key === ' ')) { try { ev.preventDefault(); } catch (e) {} go(); } };
   });
   root.querySelectorAll('[data-pz-hoy-conserje]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/conserje'); else location.hash = '#/app/conserje'; } catch (e) {} }; });
+  try { pzHoyTiraBind(root); } catch (e) {}
   try { pzHoyConserjeFill(); } catch (e) {}
 }
 
@@ -21452,16 +21679,28 @@ async function inicioView() {
     for (const p of pendR1.resto) { if (p && p.id != null) PZ_HOY_POSTS[String(p.id)] = p; }
     if (hoyPostR1 && hoyPostR1.id != null) PZ_HOY_POSTS[String(hoyPostR1.id)] = hoyPostR1;
   } catch (e) {}
-  // Vista «Por aprobar» (PARTE 7 · 9/11): saludo + posteo del día, nada
-  // más. Las tarjetas de pendientes (cartita + resto) ya NO se rinden en
-  // Inicio: se revisan en el feed. pzHoyPendientes sigue (el saludo y el
-  // feed la usan) y PZ_HOY_POSTS sigue alimentando «Cambialo».
+  // Vista «Por aprobar» (RS-2 · HOY DEL MOCK v10): saludo autopilot +
+  // «Para aprobar · N» + posteo de hoy + tira de 7 días una por una +
+  // detalle del día + línea de insight + «Pedir un cambio en el chat».
+  // La tarjeta de subida salió (la subida es solo por chat); la
+  // semana grande salió (la tira + insight); las tarjetas de
+  // pendientes (cartita + resto) ya NO se rinden en Inicio: se revisan
+  // en el feed. pzHoyPendientes sigue (el saludo y la tira la usan) y
+  // PZ_HOY_POSTS sigue alimentando «Cambialo».
   const hoyAprobarHTML = (!HF_VISITOR) ? (() => {
+    const hoyPendienteR1 = !!(hoyPostR1 && (String(hoyPostR1.status || '') === 'draft' || (String(hoyPostR1.status || '') === 'scheduled' && String(hoyPostR1.approval || 'pending') === 'pending')));
+    const tiraDiasR1 = pzHoyTiraDias(semR1, allPosts, hoyKeyR1, tz);
+    const pendProgR1 = schedPendR1 + cartitaPendR1;
+    PZ_HOY_TIRA_DIAS = tiraDiasR1;
+    if (!PZ_HOY_TIRA_SEL) { try { const h = tiraDiasR1.find((d) => d && d.esHoy); if (h) PZ_HOY_TIRA_SEL = h.key; } catch (e) {} }
     const hayAdminR1 = (() => { try { return !!(localStorage.getItem('posta_admin_token') || ''); } catch (e) { return false; } })();
     return `<div id="pzHoyAprobar"${PZ_HOY_VIEW === 'aprobar' ? '' : ' hidden'}>`
       + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: pendR1.total, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1 })
+      + (hoyPendienteR1 ? pzHoyParaAprobarHTML(1, enHome) : '')
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
-      + pzHoySemanaMiniHTML(semR1, enHome, pendProgR1)
+      + `<div id="pzHoyTira">` + pzHoyTiraHTML(tiraDiasR1, { en: enHome, tz, hoyKey: hoyKeyR1, sel: PZ_HOY_TIRA_SEL }) + `</div>`
+      + pzHoySemanaInsightHTML(semR1, enHome, pendProgR1)
+      + `<button type="button" class="pz-hoy-chatghost" data-pz-hoy-chat="1">${enHome ? 'Ask for a change in the chat →' : 'Pedir un cambio en el chat →'}</button>`
       + (hayAdminR1 ? pzHoyConserjeHTML(null, null, enHome) : '')
       + `</div>`;
   })() : '';

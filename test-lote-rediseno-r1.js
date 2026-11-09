@@ -249,18 +249,33 @@ t(semHoy.n === 5 && semHoy.dias[6].estado === 'pub', '§1: publicado hoy suma un
 const semVacia = sb.pzHoySemana([], 'America/New_York', new FakeDate());
 t(semVacia.n === 0 && semVacia.dias[6].estado === 'hoy' && semVacia.dias[0].estado === 'vacio',
   '§1: semana vacía: 0/7, hoy marcado, resto vacío');
-// (LOTE SIMPLIFICAR-APP · PARTES 2/3 revisadas · 9/11 · REDISEÑO SIMPLE:
-// pzHoySemanaHTML salió de Inicio; la 5/7 queda en Hoy como fila mini +
-// insight (pzHoySemanaMiniHTML). El dato (pzHoySemana) sigue; el render
-// se verifica acá, en el sandbox (la función vive en el bloque HOY-R1).)
-t(typeof sb.pzHoySemanaMiniHTML === 'function', '§1: pzHoySemanaMiniHTML cargada en el sandbox');
-const semHtml = sb.pzHoySemanaMiniHTML(sem, false, 2);
-t(semHtml.includes('pz-semana-mini') && semHtml.includes('pz-semana-bola')
-  && /LUN|MAR|MIÉ/.test(semHtml) && semHtml.includes('esta semana cumplimos 4/7 posteos')
-  && (semHtml.match(/pz-semana-dia done/g) || []).length === 4,
-  '§1: HTML de la mini en Hoy: 4/7, bolas LUN–DOM (4 hecho), título de domingo honesto con 4 días (esta semana cumplimos 4/7)');
-t(sb.pzHoySemanaMiniHTML(semVacia, false, 0).includes('Tu semana recién arranca')
-  && sb.pzHoySemanaMiniHTML(semVacia, false, 0).includes('Todavía no hay nada programado'),
+// (LOTE REDISEÑO RS-2 · 9/11: la mini salió de Inicio; la semana queda
+// como tira de 7 días, una por una (pzHoyTiraHTML) + insight
+// (pzHoySemanaInsightHTML). El dato (pzHoySemana) sigue; el render se
+// verifica acá, en el sandbox (las funciones viven en el bloque HOY-R1).)
+t(typeof sb.pzHoyTiraDias === 'function' && typeof sb.pzHoyTiraHTML === 'function'
+  && typeof sb.pzHoySemanaInsightHTML === 'function',
+  '§1: tira + insight cargadas en el sandbox (la mini salió en RS-2)');
+t(APP.includes('function pzHoySemanaMiniHTML(sem, en, pendProg)') && !APP.includes('pzHoySemanaMiniHTML(semR1'),
+  '§1: pzHoySemanaMiniHTML definida pero SIN USO en Hoy (v833 la deja; su baja es otro lote)');
+const tira = sb.pzHoyTiraDias(sem, PUBL.concat([HOY_POST, MANANA_POST]), '2026-11-08', 'America/New_York');
+t(tira.length === 7 && tira[6].esHoy && tira[6].revelado && tira[6].post && tira[6].post.id === 610,
+  '§1: tira LUN–DOM: hoy (dom) revelado con el posteo de hoy (610)');
+t(tira.filter((d) => d.post && d.post.status === 'published').length === 4,
+  '§1: 4 días publicados en la tira (lun/mar/mié/vie)');
+t(!tira.some((d) => d.post && d.post.id === 611),
+  '§1: el posteo de mañana (611, lun 9/11) no está en la tira de esta semana');
+const tiraHtml = sb.pzHoyTiraHTML(tira, { en: false, tz: 'America/New_York', hoyKey: '2026-11-08', sel: '2026-11-08' });
+t((tiraHtml.match(/data-pz-hoy-tira-dia=/g) || []).length === 7,
+  '§1: HTML de la tira en Hoy: 7 botones de día (LUN–DOM)');
+t((tiraHtml.match(/pz-semana-dia done/g) || []).length === 4,
+  '§1: HTML de la tira: 4 días hecho (los publicados)');
+t(tiraHtml.includes('El posteo de hoy sale con todo') && tiraHtml.includes('Hoy 19:30') && tiraHtml.includes('Se postea hoy'),
+  '§1: el detalle de hoy trae título + día/hora + pill');
+t(sb.pzHoySemanaInsightHTML(sem, false, 0).includes('esta semana cumplimos 4/7 posteos'),
+  '§1: insight de domingo honesto con 4 días (esta semana cumplimos 4/7)');
+t(sb.pzHoySemanaInsightHTML(semVacia, false, 0).includes('Tu semana recién arranca')
+  && sb.pzHoySemanaInsightHTML(semVacia, false, 0).includes('Todavía no hay nada programado'),
   '§1: semana vacía no inventa logros (copy honesto)');
 
 // ---------- §2: «Por aprobar» (orden + cartita primera, sin duplicar) ----------
@@ -322,19 +337,19 @@ const speech = sb.pzHoySpeechHTML({ hoyPost: HOY_POST, en: false, tz: 'America/N
 t(speech.includes('Te armé el posteo de hoy.') && speech.includes('El de hoy sale a las 19:30 solo') && speech.includes('miralo si querés') && speech.includes('te aviso 30 min antes por si querés frenarlo') && speech.includes('te aviso cuando salga') && !speech.includes('Sin tu OK') && !speech.includes('¿Lo largamos?') && !speech.includes('pz-hoy-nota') && !speech.includes('posteos de esta semana') && speech.includes('data-pz-hoy-chat'),
   '§4: mensaje con el posteo de hoy (autopilot): HONESTO en singular, hora real 19:30, sale solo + aviso 30 min + aviso al salir (PARTE 6), entrada al chat');
 const speechMan = sb.pzHoySpeechHTML({ hoyPost: HOY_POST, en: false, tz: 'America/New_York', manual: true });
-t(speechMan.includes('Te armé el posteo de hoy.') && speechMan.includes('El de hoy sale a las 19:30') && speechMan.includes('miralo y dale «Dale» si te gusta') && speechMan.includes('Sin tu OK, no sale nada'),
-  '§4: mensaje con el posteo de hoy (manual): necesita OK («Sin tu OK, no sale nada»)');
+t(speechMan.includes('Te armé el posteo de hoy.') && speechMan.includes('El de hoy sale a las 19:30') && speechMan.includes('miralo y dale «Dale» si te gusta') && speechMan.includes('Tenés el modo manual: sale cuando vos lo aprobás') && !speechMan.includes('Sin tu OK, no sale nada'),
+  '§4: mensaje con el posteo de hoy (manual): sale cuando vos lo aprobás (RS-2, sin el absoluto)');
 const speechSin = sb.pzHoySpeechHTML({ hoyPost: null, en: false, tz: 'America/New_York' });
 t(!speechSin.includes('19:30') && speechSin.includes('¿Armamos tu semana?'),
   '§4: sin posteo de hoy no se inventa hora (el mensaje no miente)');
 const speechP2 = sb.pzHoySpeechHTML({ hoyPost: null, pendientes: 2, en: false, tz: 'America/New_York' });
-t(speechP2.includes('Tenés 2 posteos para revisar') && speechP2.includes('miralos en tu feed y dale «Dale» a los que te gusten') && speechP2.includes('Sin tu OK, no sale nada') && !speechP2.includes('posteos de esta semana'),
+t(speechP2.includes('Tenés 2 posteos para revisar') && speechP2.includes('miralos en tu feed y dale «Dale» a los que te gusten') && !speechP2.includes('Sin tu OK') && !speechP2.includes('posteos de esta semana'),
   '§4: pendientes=2: número real «Tenés 2 posteos para revisar» + en tu feed (sin prometer la semana)');
 const speechP1 = sb.pzHoySpeechHTML({ hoyPost: null, pendientes: 1, en: false, tz: 'America/New_York' });
 t(speechP1.includes('Tenés 1 posteo para revisar') && speechP1.includes('miralo en tu feed y dale «Dale» si te gusta') && !speechP1.includes('2 posteos'),
   '§4: pendientes=1: singular «Tenés 1 posteo para revisar» + en tu feed');
 const speechP2en = sb.pzHoySpeechHTML({ hoyPost: null, pendientes: 2, en: true, tz: 'America/New_York' });
-t(speechP2en.includes("You've got 2 posts to review") && speechP2en.includes('check them in your feed and give a «Publish it» to the ones you like') && speechP2en.includes('Without your OK, nothing goes out'),
+t(speechP2en.includes("You've got 2 posts to review") && speechP2en.includes('check them in your feed and give a «Publish it» to the ones you like') && !speechP2en.includes('Without your OK'),
   '§4: pendientes=2 EN: «You\'ve got 2 posts to review» + in your feed');
 // (LOTE SIMPLIFICAR-APP · PARTE 1 · 9/11: la tarjeta de subida de Inicio
 // salió — la subida es SOLO por chat. La VM de la subida pasa a AUSENCIA.)
@@ -385,9 +400,10 @@ const ivNext = APP.slice(ivStart + 10).match(/\n(?:async )?function [a-zA-Z0-9_]
 const ivEnd = ivStart + 10 + (ivNext ? ivNext.index : APP.length);
 const ivSrc = APP.slice(ivStart, ivEnd);
 t(ivSrc.includes('pzHoyHoyHTML') && ivSrc.includes('pzHoySpeechHTML') && ivSrc.includes('pzHoyConserjeHTML')
-  && !ivSrc.includes('pzHoyUploadHTML') && !ivSrc.includes('pzHoySemanaHTML') && !ivSrc.includes("api.get('/api/album')")
+  && ivSrc.includes('pzHoyTiraHTML') && ivSrc.includes('pzHoySemanaInsightHTML') && ivSrc.includes('pzHoyParaAprobarHTML')
+  && !ivSrc.includes('pzHoyUploadHTML') && !ivSrc.includes('pzHoySemanaHTML') && !ivSrc.includes('pzHoySemanaMiniHTML') && !ivSrc.includes("api.get('/api/album')")
   && !ivSrc.includes('cardsR1') && !ivSrc.includes('pzHoySubirSheet') && !ivSrc.includes('pz-hoy-seg') && !ivSrc.includes('data-pz-hoy-view'),
-  '§6: inicioView trae SOLO saludo + posteo del día + conserje (PARTES 1/2/7: sin subida, sin semana, sin cardsR1, sin /api/album)');
+  '§6: inicioView trae SOLO saludo + posteo del día + tira + insight + conserje (RS-2: sin subida, sin semana grande, sin mini, sin cardsR1, sin /api/album)');
 t(APP.includes("name === 'verfeed'") && APP.includes("location.hash = '#/app/feed'"),
   '§6: #/app/feed sigue vivo y reachable por «Ver en el feed» desde el detalle del posteo');
 t(APP.includes('pzHoyBind(document.getElementById(\'inicioView\'))'),
@@ -420,9 +436,11 @@ console.log('— §7: M78 funciones auditadas');
 const nuevas = ['pzHoySaludoTxt', 'pzHoySemana', 'pzHoyPendientes', 'pzHoyPillSalida', 'pzHoyCuentaSaleTxt',
   'pzHoyCardHTML', 'pzHoySpeechHTML', 'pzHoyConserjeHTML',
   'pzHoySetView',
-  'pzHoyAprobarUno', 'pzHoyCambiar', 'pzHoyConserjeFill', 'pzHoyBind'];
+  'pzHoyAprobarUno', 'pzHoyCambiar', 'pzHoyConserjeFill', 'pzHoyBind',
+  'pzHoyTiraDias', 'pzHoyTiraHTML', 'pzHoyTiraDetalleHTML', 'pzHoyTiraBind',
+  'pzHoyParaAprobarHTML', 'pzHoySemanaInsightHTML'];
 t(nuevas.every((f) => APP.includes('function ' + f)),
-  '§7: las 13 funciones nuevas de Hoy existen definidas en el bundle (pzHoyUploadHTML + pzHoySemanaHTML + pzHoySubirCamara/Galeria salieron en SIMPLIFICAR-APP; pzHoySubirAbrir/Cerrar ya las había eliminado el Lote A)');
+  '§7: las 19 funciones de Hoy existen definidas en el bundle (13 de R1 + 6 de RS-2: tira + insight + para-aprobar; pzHoyUploadHTML + pzHoySemanaHTML salieron en SIMPLIFICAR-APP/RS-2)');
 const llamadas = ['pzHoySetView', 'pzHoyAprobarUno', 'pzHoyCambiar',
   'pzHoyConserjeFill', 'hfOpenChatForPost', 'bbGo',
   'f3ApprovalMode', 'igGateFeedback', 'pzSftChatAbrirYEnfocar', 'render', 'toast',
@@ -440,9 +458,9 @@ t(APP.includes('CHAT_FOTOS_MAX = 10') && APP.includes('pzSftPartirMedios'),
 
 // ---------- §8: huellas del lote (server.js NO cambia en R1) ----------
 console.log('— §8: huellas');
-t(md5(SRV) === '2356a326b0999bb2008ab4ea3e6d1f18', '§8: server.js = v839 (solo BUILD)');
-t(md5(APP) === '18105a7f853daf3da3dbdffd3b831824', '§8: public/app.js = v839 fase 1 (sin apertura)');
-t(md5(CSS) === '60a7322e65606285a98f6fe6c4f2de69', '§8: public/styles.css = v839 fase 1 (sin apertura)');
+t(md5(SRV) === 'b78210b5bb79e1d5f7d2d04742173860', '§8: server.js = RS-2 (BUILD v840)');
+t(md5(APP) === 'd2a6b0d4fe26f8b8007f119a0a9e6ba3', '§8: public/app.js = RS-2 (tira + saludo autopilot)');
+t(md5(CSS) === '8fd0c55ff4557ef3f5218de47c2f0551', '§8: public/styles.css = RS-2');
 t(APP.includes('CHUNK_V'), '§8: CHUNK_V presente en app.js');
 
 // ---------- §9: boot M121 — endpoints reales con datos reales ----------
@@ -516,9 +534,9 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v839',
-      '§9: /api/version trae el BUILD v838 (fase 1)', JSON.stringify(ver.json));
-    const appJs = await apiText('/app.js?v=571');
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v840',
+      '§9: /api/version trae el BUILD v840 (estampado)', JSON.stringify(ver.json));
+    const appJs = await apiText('/app.js');
     t(appJs.status === 200 && appJs.text.includes('pzHoyCardHTML')
       && appJs.text.includes('data-pz-cuenta-sale') && appJs.text.includes('pzHoyPendientes'),
       '§9: el app.js servido trae el bloque HOY-R1');
