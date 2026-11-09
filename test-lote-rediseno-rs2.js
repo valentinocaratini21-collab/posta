@@ -166,7 +166,7 @@ for (const f of FUNCS) {
 }
 // Las variables de sesión de la tira (var, no function).
 try {
-  vm.runInContext("var PZ_HOY_TIRA_SEL = ''; var PZ_HOY_TIRA_DIAS = [];", sb);
+  vm.runInContext("var PZ_HOY_TIRA_SEL = ''; var PZ_HOY_TIRA_DIAS = []; var PZ_HOY_POST_ID = '';", sb);
   t(true, '§0: PZ_HOY_TIRA_SEL/DÍAS declaradas');
 } catch (e) { t(false, '§0: vars de tira', e.message); }
 t(APP.includes('pzHoyTiraHTML'), '§0: app.js trae pzHoyTiraHTML');
@@ -241,8 +241,17 @@ t(htmlPub.includes('pz-semana-dia done'), '§2: el día publicado lleva .done');
 t((htmlPub.match(/pz-semana-dia wait/g) || []).length === 5, '§2: 5 días futuros bloqueados llevan .wait (mié–dom)');
 t(htmlPub.includes('El de hoy') && htmlPub.includes('Hoy 19:00'), '§2: el detalle de hoy trae título + día/hora', htmlPub.slice(htmlPub.indexOf('pz-hoy-tira-detalle')));
 t(htmlPub.includes('data-pz-boost-post="701"') && htmlPub.includes('Impulsar'), '§2: el día publicado trae botón Impulsar (contrato RS-4)');
-t(!htmlPub.includes('Es el posteo de arriba'), '§2: el día publicado NO trae la nota «es el posteo de arriba» (ya salió, no hay tarjeta arriba que aprobar)');
-t(htmlPend.includes('Es el posteo de arriba: aprobalo ahí o desde el chat.'), '§2: el día de hoy pendiente SÍ trae la nota (la tarjeta está arriba)');
+t(!APP.includes('Es el posteo de arriba'), '§2: la nota «Es el posteo de arriba» murió en el bundle (lote hoy-sin-duplicado)');
+// (LOTE HOY-SIN-DUPLICADO · 9/11) Con la principal arriba, el detalle
+// de hoy pendiente NO se rinde (la duplicada muere); sin el global, se
+// rinde como antes pero sin la nota.
+vm.runInContext("PZ_HOY_POST_ID = '701';", sb);
+const htmlPendMain = sb.pzHoyTiraHTML(tiraPend, { en: false, tz: TZ, hoyKey: '2026-11-09', sel: '2026-11-09' });
+t(!htmlPendMain.includes('pz-hoy-tira-detalle') && !htmlPendMain.includes('Es el posteo de arriba'),
+  '§2: con la principal arriba, el detalle de hoy pendiente NO se rinde (ni su nota)');
+vm.runInContext("PZ_HOY_POST_ID = '';", sb);
+t(htmlPend.includes('El de hoy') && htmlPend.includes('Hoy 19:00') && !htmlPend.includes('Es el posteo de arriba'),
+  '§2: sin PZ_HOY_POST_ID, el detalle de hoy pendiente se rinde sin la nota');
 t(!htmlPub.includes('data-pz-boost-post="702"'), '§2: el día no publicado NO trae Impulsar');
 const htmlManana = sb.pzHoyTiraHTML(tiraPub, { en: false, tz: TZ, hoyKey: '2026-11-09', sel: '2026-11-10' });
 t(htmlManana.includes('El de mañana') && htmlManana.includes('Mañana 19:00') && htmlManana.includes('Se postea mañana'),
@@ -430,8 +439,8 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v843',
-      '§8: /api/version trae el BUILD v843', JSON.stringify(ver.json));
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v848',
+      '§8: /api/version trae el BUILD v848', JSON.stringify(ver.json));
     const appJs = await apiText('/app.js?v=999');
     t(appJs.status === 200 && appJs.text.includes('pzHoyTiraHTML') && appJs.text.includes('pzHoySemanaInsightHTML')
       && appJs.text.includes('pzHoyParaAprobarHTML') && appJs.text.includes('PZ_HOY_TIRA_SEL'),

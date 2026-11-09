@@ -21144,6 +21144,14 @@ function pzHoyTiraDias(sem, posts, hoyKey, tz) {
 function pzHoyTiraDetalleHTML(d, o) {
   try {
     if (!d) return '';
+    // (LOTE HOY-SIN-DUPLICADO · 9/11 · orden Valentino: un posteo, un
+    // lugar, una hora) Si el día seleccionado es hoy Y el posteo es el
+    // que ya muestra la tarjeta principal de arriba (PZ_HOY_POST_ID,
+    // lo pone inicioView al rendirla), el detalle NO se rinde: sería
+    // el mismo posteo dos veces. Hoy sin posteo (invitación al chat)
+    // y los demás días siguen. Sin PZ_HOY_POST_ID (llamada directa,
+    // sin inicioView) el detalle se rinde como antes.
+    if (d.esHoy && d.post && typeof PZ_HOY_POST_ID !== 'undefined' && PZ_HOY_POST_ID != null && String(PZ_HOY_POST_ID) !== '' && String(d.post.id) === String(PZ_HOY_POST_ID)) return '';
     const en = !!(o && o.en);
     const tz = (o && o.tz) || undefined;
     const labelsFull = en ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -21170,13 +21178,9 @@ function pzHoyTiraDetalleHTML(d, o) {
       : (st === 'draft') ? (en ? 'Draft · to review' : 'Borrador · para revisar')
       : cuando;
     const cuenta = (st === 'scheduled' && p.scheduled_at) ? pzHoyCuentaSaleTxt(p.scheduled_at, en) : '';
-    // La nota solo si el posteo de hoy todavía espera tu OK (hay
-    // tarjeta arriba). Si ya salió, no hay nada arriba que aprobar:
-    // el botón Impulsar es la acción.
-    const nota = (d.esHoy && st !== 'published') ? `<span class="note-line">${en ? 'This is the post above: approve it there or from the chat.' : 'Es el posteo de arriba: aprobalo ahí o desde el chat.'}</span>` : '';
     const imp = (st === 'published')
       ? `<button type="button" class="btn btn-primary btn-sm" data-pz-boost-post="${esc(String(p.id))}">${en ? 'Boost' : 'Impulsar'}</button>` : '';
-    return `<div class="pz-hoy-tira-detalle">${img}<div class="t"><b>${esc(cap1 || nombre)}</b><small>${esc(cuando || '')}</small>${nota}</div><div class="side">${pill ? `<span class="pz-hoy-hoy-pill">${esc(pill)}</span>` : ''}${cuenta ? `<span class="pz-hoy-cuenta">${esc(cuenta)}</span>` : ''}${imp}</div></div>`;
+    return `<div class="pz-hoy-tira-detalle">${img}<div class="t"><b>${esc(cap1 || nombre)}</b><small>${esc(cuando || '')}</small></div><div class="side">${pill ? `<span class="pz-hoy-hoy-pill">${esc(pill)}</span>` : ''}${cuenta ? `<span class="pz-hoy-cuenta">${esc(cuenta)}</span>` : ''}${imp}</div></div>`;
   } catch (e) { return ''; }
 }
 
@@ -21412,7 +21416,10 @@ function pzHoyCardHTML(p, o) {
       ? `<img class="pz-hoy-thumb-img" src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';
     const cap1 = String((p && p.caption) || '').split('\n')[0].trim().slice(0, 90);
     const pill = cartita ? pzHoyPillSalida(p, tz, en) : '';
-    const cuando = cartita ? '' : pzHoyCuandoCorto(p, tz, en);
+    // (LOTE HOY-SIN-DUPLICADO · 9/11) sinCuando: la tarjeta principal
+    // ya lleva la hora en la cabecera («hoy · 19:00»); el badge «Hoy
+    // 19:00» sobre la foto repetiría la hora. Solo la principal lo pide.
+    const cuando = (cartita || (o && o.sinCuando)) ? '' : pzHoyCuandoCorto(p, tz, en);
     const cuenta = (cartita && p.scheduled_at) ? pzHoyCuentaSaleTxt(p.scheduled_at, en) : '';
     const cuentaHtml = cuenta
       ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at))}">${esc(cuenta)}</span>` : '';
@@ -21439,8 +21446,19 @@ function pzHoyHoyHTML(p, o) {
     const tz = (o && o.tz) || undefined;
     const hh = pzHoyHoraCorta(p.scheduled_at, tz, en);
     const pill = en ? ('today' + (hh ? ' \u00b7 ' + hh : '')) : ('hoy' + (hh ? ' \u00b7 ' + hh : ''));
-    return `<div class="pz-hoy-hoy"><div class="pz-hoy-hoy-head"><h3>${en ? 'TODAY\u2019S POST' : 'EL POSTEO DE HOY'}</h3><span class="pz-hoy-hoy-pill">${esc(pill)}</span></div>`
-      + pzHoyCardHTML(p, { cartita: false, en, tz, prop: (o && o.prop) || null })
+    // (LOTE HOY-SIN-DUPLICADO · 9/11 · orden Valentino: un posteo, un
+    // lugar, una hora) La cuenta regresiva vive en la tarjeta
+    // principal, junto a la hora, en una sola línea: span propio con
+    // data-pz-cuenta-sale para que el tick la actualice en vivo (el
+    // tick reescribe el texto del span: nunca va dentro del pill).
+    // Sin scheduled_at o ya en hora, pzHoyCuentaSaleTxt da '' y no
+    // hay span. La hora aparece UNA sola vez: el badge «Hoy 19:00»
+    // sobre la foto se suprime (sinCuando).
+    const cuenta = (p && p.scheduled_at && typeof pzHoyCuentaSaleTxt === 'function') ? pzHoyCuentaSaleTxt(p.scheduled_at, en) : '';
+    const cuentaHtml = cuenta
+      ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at))}">${esc(cuenta)}</span>` : '';
+    return `<div class="pz-hoy-hoy"><div class="pz-hoy-hoy-head"><h3>${en ? 'TODAY\u2019S POST' : 'EL POSTEO DE HOY'}</h3><span class="pz-hoy-hoy-right"><span class="pz-hoy-hoy-pill">${esc(pill)}</span>${cuentaHtml}</span></div>`
+      + pzHoyCardHTML(p, { cartita: false, sinCuando: true, en, tz, prop: (o && o.prop) || null })
       + `</div>`;
   } catch (e) { return ''; }
 }
@@ -21970,6 +21988,7 @@ async function inicioView() {
     const tiraDiasR1 = pzHoyTiraDias(semR1, allPosts, hoyKeyR1, tz);
     const pendProgR1 = schedPendR1 + cartitaPendR1;
     PZ_HOY_TIRA_DIAS = tiraDiasR1;
+    PZ_HOY_POST_ID = hoyPostR1 ? String(hoyPostR1.id) : '';
     if (!PZ_HOY_TIRA_SEL) { try { const h = tiraDiasR1.find((d) => d && d.esHoy); if (h) PZ_HOY_TIRA_SEL = h.key; } catch (e) {} }
     const hayAdminR1 = (() => { try { return !!(localStorage.getItem('posta_admin_token') || ''); } catch (e) { return false; } })();
     return `<div id="pzHoyAprobar"${PZ_HOY_VIEW === 'aprobar' ? '' : ' hidden'}>`

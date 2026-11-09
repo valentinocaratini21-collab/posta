@@ -128,7 +128,7 @@ ok(!card.includes('22C55E'), 'la tarjeta del posteo no trae verde');
 const lotCss = css.slice(css.indexOf('LOTE HOY-REDISEÑO v810'));
 ok(!lotCss.includes('22C55E'), 'el bloque del lote no pone verde en ningún lado (eso es v807)');
 ok(!app.includes("('🔥 ' + (rachaN === 1 ? (en ? '1 day' : '1 día') : rachaN + (en ? ' days' : ' días')))"), 'la píldora de racha salió (PARTE 5; era v808/v815)');
-ok(srv.includes("const BUILD_ID = '20261105-v843'"), 'server.js solo BUILD v843 estampado (re-pin v843)');
+ok(srv.includes("const BUILD_ID = '20261105-v848'"), 'server.js solo BUILD v848 estampado (re-pin v848)');
 
 /* ---------- 5. Censo ---------- */
 console.log('— 5. censo —');
