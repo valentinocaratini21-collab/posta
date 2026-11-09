@@ -114,7 +114,7 @@ console.log('— 4. VM: saludo y encabezado —');
 const escLine = app.split('\n').find((l) => l.startsWith('const esc = '));
 const saludoFn = extractFn(app, 'function pzHoySaludoTxt');
 const horaFn = extractFn(app, 'function pzHoyHoraCorta');
-const headSrc = sliceFn(app, 'function pzShellHeadHTML(tab) {', 'function pzAperturaHTML() {');
+const headSrc = sliceFn(app, 'function pzShellHeadHTML(tab) {', 'function pzSaludoEscribir() {'); // (lote 9/11: la apertura se sacó, el encabezado lo sigue el saludo)
 ok(!!escLine && !!saludoFn && !!horaFn && !!headSrc, 'extrae esc + saludo + hora + pzShellHeadHTML');
 const ctx = {
   console,
@@ -269,19 +269,19 @@ try { require.resolve('express', { paths: [__dirname] }); expressOk = true; } ca
     ok(up, 'boot levanta (PID ' + pid + ')');
     if (up) {
       const ver = JSON.parse((await get('/api/version')).body);
-      ok(ver.build === '20261105-v836', '/api/version 20261105-v836 (estampado)');
-      const appS = await get('/app.js?v=568');
-      ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=568 servido = árbol');
+      ok(ver.build === '20261105-v839', '/api/version 20261105-v839 (fase 1)');
+      const appS = await get('/app.js?v=571');
+      ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=571 servido = árbol');
       ok(!appS.body.includes('pz-hoy-speech-ava'), 'servido: sin carita en el saludo');
       ok(appS.body.includes('hf-tile-cap'), 'servido: banda hf-tile-cap presente');
-      const stS = await get('/styles.css?v=20261218');
+      const stS = await get('/styles.css?v=20261219');
       ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261211 servido = árbol');
       ok(stS.body.includes('.pz-shell-head{position:sticky;top:0;z-index:50'), 'servido: encabezado sticky');
       ok(!stS.body.includes('pz-hoy-speech-ava'), 'servido: sin regla de carita en el CSS');
       const idx = await get('/?cb=lote-hoy-avatar-feed');
-      ok(idx.body.includes('app.js?v=568') && idx.body.includes('styles.css?v=20261218'), 'index ES servido ?v=568 + styles?v=20261218');
+      ok(idx.body.includes('app.js?v=571') && idx.body.includes('styles.css?v=20261219'), 'index ES servido ?v=571 + styles?v=20261219');
       const idxEn = await get('/en/?cb=lote-hoy-avatar-feed');
-      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261218'), 'index EN servido styles?v=20261218');
+      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261219'), 'index EN servido styles?v=20261219');
       const del = await new Promise((res) => { const q = http.request({ host: '127.0.0.1', port: PORT, path: '/api/album/1', method: 'DELETE' }, (r) => res(r.statusCode)); q.on('error', () => res(0)); q.end(); });
       ok(del === 401, 'DELETE sin sesión 401 (el servidor es el real)');
     }

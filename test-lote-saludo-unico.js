@@ -32,7 +32,7 @@ const ruleCss = (sel) => {
 
 (async () => {
   // ---------- 1. Estático: el encabezado ya no saluda ----------
-  const headSrc = sliceFn(app, 'function pzShellHeadHTML(tab) {', 'function pzAperturaHTML() {');
+  const headSrc = sliceFn(app, 'function pzShellHeadHTML(tab) {', 'function pzSaludoEscribir() {'); // (lote 9/11: la apertura se sacó)
   t(headSrc.length > 0, '§1: pzShellHeadHTML presente');
   t(!headSrc.includes('Hola, '), '§1: sin «Hola, {negocio}» en el encabezado');
   t(!app.includes('Posty está trabajando ahora'), '§1: «Posty está trabajando ahora» ×0 en app.js');
@@ -57,14 +57,14 @@ const ruleCss = (sel) => {
   // ---------- 3. Estático: lo que NO se toca ----------
   const saludoHoraSrc = sliceFn(app, 'function pzHoySaludoTxt(', 'function pzHoyDiaKey(');
   t(saludoHoraSrc.includes('¡Buenas tardes! 🌤️'), '§3: saludo de Hoy intacto («¡Buenas tardes!» sigue en pzHoySaludoTxt)');
+  t(saludoHoraSrc.includes('¡Hola! 👋'), '§3: saludo de Hoy intacto («¡Hola! 👋» sigue como fallback en pzHoySaludoTxt)');
   const hoySrc = sliceFn(app, 'function pzHoySpeechHTML(', 'function pzHoyUploadHTML(');
   t(hoySrc.includes('pzHoySaludoTxt('), '§3: el mensaje de Posty sigue saludando por hora (pzHoySpeechHTML → pzHoySaludoTxt)');
-  const apSrc = sliceFn(app, 'function pzAperturaHTML() {', 'function pzAperturaArranque() {');
-  t(apSrc.includes('¡Hola! 👋'), '§3: burbuja de apertura del Chat intacta («¡Hola! 👋»)');
+  // (lote 9/11: la burbuja «¡Hola! 👋 Te traje el posteo de hoy» se fue con la apertura; el saludo de Hoy sigue arriba.)
   const salSrc = sliceFn(app, 'function pzSaludoEscribir() {', 'function pzShellDatosHoy() {');
   t(salSrc.includes('pzShellSaludo') && salSrc.includes('typing') && salSrc.includes('prefers-reduced-motion'), '§3: máquina de escribir intacta (escribe la identidad)');
-  t(srv.includes("const BUILD_ID = '20261105-v833'"), '§3: server.js sin tocar salvo BUILD v824');
-  t(app.includes("const CHUNK_V = '20261105-v792'"), '§3: CHUNK_V v792 sin cambio');
+  t(srv.includes("const BUILD_ID = '20261105-v839'"), '§3: server.js sin tocar salvo BUILD v839 (fase 1)');
+  t(app.includes("const CHUNK_V = '20261105-v793'"), '§3: CHUNK_V v793 sin cambio (fase 1)');
 
   // ---------- 4. VM: matriz de fallbacks ----------
   const escFn = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -140,13 +140,13 @@ const ruleCss = (sel) => {
     try {
       t(await waitBoot(), '§5: boot levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v833', `§5: /api/version v824 (vino ${ver.build})`);
-      const appTxt = await (await fetch(`${BASE}/app.js?v=567`)).text();
-      t(md5(appTxt) === md5(app), '§5: app.js?v=567 servido = árbol');
+      t(ver.build === '20261105-v839', `§5: /api/version v838 (vino ${ver.build})`);
+      const appTxt = await (await fetch(`${BASE}/app.js?v=571`)).text();
+      t(md5(appTxt) === md5(app), '§5: app.js?v=571 servido = árbol');
       t(!appTxt.includes('Posty está trabajando ahora'), '§5: servido sin «Posty está trabajando ahora»');
       t(appTxt.includes('pzShellSaludo'), '§5: servido con #pzShellSaludo');
-      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261218`)).text();
-      t(md5(cssTxt) === md5(css), '§5: styles.css?v=20261218 servido = árbol');
+      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261219`)).text();
+      t(md5(cssTxt) === md5(css), '§5: styles.css?v=20261219 servido = árbol');
       t(cssTxt.includes('text-overflow:ellipsis'), '§5: servido con ellipsis en el encabezado');
       const rHoy = await fetch(`${BASE}/api/ritual/hoy`);
       t(rHoy.status === 401, `§5: sin sesión, /api/ritual/hoy → 401 (vino ${rHoy.status})`);

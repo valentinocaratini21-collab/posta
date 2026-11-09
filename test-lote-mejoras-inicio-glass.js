@@ -35,7 +35,7 @@ console.log('— 1. Bloque LOTE B presente y fondo cálido —');
 ok(lotStart >= 0, 'bloque LOTE B MEJORAS-INICIO presente al final de styles.css');
 ok(lotRules.includes('#FBF7EE') && lotRules.includes('#F6EDDA'), 'fondo cálido crema (#FBF7EE / #F6EDDA) en el bloque');
 ok(lotRules.includes('rgba(244,196,150,.30)'), 'brillo cálido durazno (el verde de R0 no sigue)');
-ok(lotRules.includes('.bb-app,.bb-app.bb-glass-inicio,.bb-app.bb-glass-pantallas,.app-shell,.hf-dback,body:has(.form-card),.pz-apertura{background:radial-gradient(420px 420px at 85% -40px,rgba(254,193,77,.55)'), 'fondo cálido en .bb-app + .app-shell + .hf-dback + form + apertura');
+ok(lotRules.includes('.bb-app,.bb-app.bb-glass-inicio,.bb-app.bb-glass-pantallas,.app-shell,.hf-dback,body:has(.form-card){background:radial-gradient(420px 420px at 85% -40px,rgba(254,193,77,.55)'), 'fondo cálido en .bb-app + .app-shell + .hf-dback + form + apertura');
 ok(!/#F2F9FD|#dff1fa|#eef9fd|#f7fbfe|#9ED6F4|#4FA9DC|#63B8E4|#A8DCF6|#2793C8 55%/.test(lotRules), 'cero celeste en las REGLAS del bloque (el #F2F9FD del comentario no cuenta)');
 ok(lotRules.includes('.bb-app,.app-shell{--bg2:#F6EDDA}'), '--bg2 cálido con alcance app (.bb-app / .app-shell), la web no se toca');
 ok(lotRules.includes('body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF 0%,#FBF7EE 50%,#F6EDDA 100%)}'), 'overscroll (body) también cálido');
@@ -80,9 +80,9 @@ ok(css.includes('.app-shell, .hf-dback, body:has(.form-card){background:radial-g
 ok(css.indexOf('LOTE B MEJORAS-INICIO') > css.indexOf('LOTE ANÁLISIS-GLASS v811'), 'LOTE B va DESPUÉS del bloque v811 (gana por orden)');
 ok((css.match(/{/g) || []).length === (css.match(/}/g) || []).length, 'llaves balanceadas en styles.css');
 
-console.log('— 5. Solo styles.css (app.js y server.js intactos, base v822) —');
-ok(md5(app) === 'd72d8b932b27f70fc51867d6a236c1d2', 'app.js = v822 (sin tocar)');
-ok(md5(srv) === '1e0e70dcc918ee2b1f235586de3e2a40', 'server.js = v822 (sin tocar, solo BUILD)');
+console.log('— 5. Solo styles.css (app.js y server.js intactos, base v839) —');
+ok(md5(app) === '18105a7f853daf3da3dbdffd3b831824', 'app.js = v839 fase 1 (sin apertura)');
+ok(md5(srv) === '2356a326b0999bb2008ab4ea3e6d1f18', 'server.js = v839 (solo BUILD)');
 ok(!/ai-avatar\.png/.test(lotRules), 'la cara canónica no se toca en este lote');
 ok(!lotCss.includes('#2793C8') || lotCss.includes('borde de marca #2793C8'), 'sin azules de marca nuevos en el bloque (solo el comentario)');
 

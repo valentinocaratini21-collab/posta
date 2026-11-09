@@ -932,66 +932,10 @@ function pzShellHeadHTML(tab) {
     </span>
   </header>`;
 }
-function pzAperturaHTML() {
-  // La apertura vive hasta que se cierra (tap o 3 s): sobrevive a los
-  // re-renders de la carga. El primer render la pinta y un segundo
-  // render — al llegar los datos — la borraba porque el flag era
-  // «pintada una vez»; ahora el flag es «cerrada». La tarjeta y el
-  // texto de la burbuja se cachean para que un re-render no los vacíe.
-  try {
-    if (typeof window !== 'undefined' && window.__pzAperturaCerrada) return '';
-  } catch (e) {}
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  // La tarjeta se cachea como DATOS (título/hora/imagen): el fetch arranca
-  // antes de que ME cargue y el HTML cacheado con el idioma de ese momento
-  // saldría en español en un usuario EN. El template localiza con el ME
-  // vigente; el HTML cacheado queda como respaldo.
-  let cardHTML = (typeof window !== 'undefined' && window.__pzAperturaCardHTML) || '';
-  let bubTxt = (typeof window !== 'undefined' && window.__pzAperturaBurbujaTxt) || (en ? 'Hi! 👋' : '¡Hola! 👋');
-  const cartaD = (typeof window !== 'undefined' && window.__pzHoyCarta) || null;
-  if (cartaD && cartaD.imagen) {
-    const tituloD = String(cartaD.titulo || '').trim();
-    const horaD = String(cartaD.hora || '').trim();
-    const mediaD = cartaD.media_type === 'video'
-      ? `<video src="${esc(cartaD.imagen)}" muted playsinline preload="metadata" class="pz-apertura-img"></video>`
-      : `<img src="${esc(mv(cartaD.imagen, 640))}" data-full="${esc(cartaD.imagen)}" onerror="__imgFb(this)" alt="" class="pz-apertura-img">`;
-    cardHTML = `${mediaD}<div class="pz-apertura-meta"><b>${en ? "Today's post" : 'El posteo de hoy'}</b>${tituloD ? `<span>${esc(tituloD)}</span>` : ''}${horaD ? `<small>${en ? 'Goes out today at ' : 'Sale hoy a las '}${esc(horaD)}</small>` : ''}</div><span class="pz-apertura-check">✓</span>`;
-    bubTxt = en ? "Hi! 👋 I brought today's post" : '¡Hola! 👋 Te traje el posteo de hoy';
-  }
-  return `<div class="pz-apertura" id="pzApertura" onclick="pzAperturaCerrar()" role="dialog" aria-label="${en ? 'Opening' : 'Apertura'}">
-    <div class="pz-apertura-burbuja" id="pzAperturaBurbuja"><img src="ai-avatar.png" alt="Posty" class="pz-apertura-ava"><span class="pz-apertura-txt">${esc(bubTxt)}</span></div>
-    <div class="pz-apertura-card" id="pzAperturaCard">${cardHTML}</div>
-    <div class="pz-apertura-skip">${en ? 'Tap to skip' : 'Tocá para saltar'}</div>
-  </div>`;
-}
-function pzAperturaArranque() {
-  try {
-    // Los datos (tarjeta del posteo de hoy) se piden SIEMPRE: la apertura
-    // puede ya haber cerrado (el timer de 3 s se arma en la pintura y en
-    // cargas lentas cierra antes de que este hook corra), pero la tarjeta
-    // sigue necesitando el dato.
-    pzShellDatosHoy();
-    const ov = (typeof document !== 'undefined') ? document.getElementById('pzApertura') : null;
-    if (!ov) return;
-    const reducido = (typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-    if (reducido) { pzAperturaCerrar(); return; }
-    if (typeof window !== 'undefined' && window.__pzAperturaTimer) return;
-    if (typeof window !== 'undefined') window.__pzAperturaTimer = true;
-    setTimeout(() => { try { pzAperturaCerrar(); } catch (e) {} }, 3000);
-  } catch (e) {}
-}
-function pzAperturaCerrar() {
-  try {
-    if (typeof window !== 'undefined') window.__pzAperturaCerrada = true;
-    const ov = (typeof document !== 'undefined') ? document.getElementById('pzApertura') : null;
-    if (ov && ov.remove) ov.remove();
-  } catch (e) {}
-  try { pzSaludoEscribir(); } catch (e) {}
-}
 function pzSaludoEscribir() {
   // Máquina de escribir sobre la IDENTIDAD del encabezado (nombre del
   // negocio; «¡Hola!» solo si no hay nombre), ~1 s,
-  // solo una vez por carga, después de la apertura. El saludo según la
+  // solo una vez por carga, al pintar. El saludo según la
   // hora («¡Buen día! ☀️» etc.) vive en la burbuja de Posty en Hoy (R1);
   // el encabezado ya no saluda (LOTE SALUDO-UNICO).
   try {
@@ -1019,13 +963,13 @@ function pzSaludoEscribir() {
   } catch (e) {}
 }
 function pzShellDatosHoy() {
-  // UN fetch por carga: /api/ritual/hoy trae la carta del posteo de hoy
-  // (tarjeta de la apertura). Sin posteo hoy la apertura es solo el
-  // saludo — nunca se inventa título, hora ni foto.
+  // UN fetch por carga: /api/ritual/hoy. La tarjeta del posteo de hoy
+  // vive en Hoy (pzHoyHoyHTML, con sus propios datos) — este fetch ya
+  // no trae carta: la apertura que la usaba se sacó (9/11).
   // Reintento: el fetch se marca «pendiente» al salir y «hecho» solo
   // cuando vuelve bien; si falla (401 sin sesión, red), el pendiente se
   // limpia y el próximo arranque lo reintenta (si no, un 401 en la
-  // pantalla de login dejaría la apertura sin datos toda la sesión).
+  // pantalla de login dejaría la racha sin datos toda la sesión).
   try {
     if (typeof window !== 'undefined' && (window.__pzShellHoyDone || window.__pzShellHoyPendiente)) return;
     if (typeof window !== 'undefined') window.__pzShellHoyPendiente = true;
@@ -1034,33 +978,6 @@ function pzShellDatosHoy() {
       try {
         if (!r || r.ok === false) { if (typeof window !== 'undefined') window.__pzShellHoyPendiente = false; return; }
         if (typeof window !== 'undefined') { window.__pzShellHoyDone = true; window.__pzShellHoyPendiente = false; }
-        const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-        // La tarjeta se CACHEA siempre, aunque el nodo todavía no exista:
-        // el fetch arranca con el render y puede resolver ANTES de la
-        // primera pintura. El template de la apertura pinta desde el caché.
-        // El idioma NO se congela en el caché: el fetch arranca antes de
-        // que ME cargue, y el texto con el idioma de ese momento saldría
-        // en español en un usuario EN. Se cachea el DATO (carta) y el
-        // template localiza con el ME vigente al pintar.
-        const carta = (r && r.cartas && r.cartas[0]) || (r && r.recomendada) || null;
-        if (!carta || !carta.imagen) return;
-        if (typeof window !== 'undefined') window.__pzHoyCarta = { titulo: String(carta.caption_corta || carta.caption || '').trim(), hora: String(carta.hora_salida || '').trim(), imagen: carta.imagen, media_type: carta.media_type || 'image' };
-        const titulo = String(carta.caption_corta || carta.caption || '').trim();
-        const hora = String(carta.hora_salida || '').trim();
-        const media = carta.media_type === 'video'
-          ? `<video src="${esc(carta.imagen)}" muted playsinline preload="metadata" class="pz-apertura-img"></video>`
-          : `<img src="${esc(mv(carta.imagen, 640))}" data-full="${esc(carta.imagen)}" onerror="__imgFb(this)" alt="" class="pz-apertura-img">`;
-        const cardHTML = `${media}<div class="pz-apertura-meta"><b>${en ? "Today's post" : 'El posteo de hoy'}</b>${titulo ? `<span>${esc(titulo)}</span>` : ''}${hora ? `<small>${en ? 'Goes out today at ' : 'Sale hoy a las '}${esc(hora)}</small>` : ''}</div><span class="pz-apertura-check">✓</span>`;
-        if (typeof window !== 'undefined') window.__pzAperturaCardHTML = cardHTML;
-        const card = (typeof document !== 'undefined') ? document.getElementById('pzAperturaCard') : null;
-        if (card) card.innerHTML = cardHTML;
-        const bubTxt = en ? "Hi! 👋 I brought today's post" : '¡Hola! 👋 Te traje el posteo de hoy';
-        if (typeof window !== 'undefined') window.__pzAperturaBurbujaTxt = bubTxt;
-        const bub = (typeof document !== 'undefined') ? document.getElementById('pzAperturaBurbuja') : null;
-        if (bub) {
-          const txt = bub.querySelector('.pz-apertura-txt');
-          if (txt) txt.textContent = bubTxt;
-        }
       } catch (e) {}
     }).catch(() => { try { if (typeof window !== 'undefined') window.__pzShellHoyPendiente = false; } catch (e2) {} });
   } catch (e) {}
@@ -1091,7 +1008,6 @@ function bbShell(tab, content) {
     <main class="bb-main">${content}</main>
     <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('analisis', '#/app/numeros', gzT('Análisis', 'Analysis'))}${tabBtn('impulsar', '#/app/ads', gzT('Impulsar', 'Boost'))}${tabBtn('jardin', '#/app/jardin-posty', gzT('Nivel', 'Level'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
     ${rsShareSheetHTML()}
-    ${pzAperturaHTML()}
   </div>`;
 }
 async function bbLoadEstado(force) {
@@ -6277,7 +6193,7 @@ function appShell(tab, content) {
   </div>
   ${mzTabsHTML(tab)}
   ${rsShareSheetHTML()}
-  ${pzAperturaHTML()}`;
+`;
 }
 
 /* Drawer mobile: hamburguesa ≡ con todo lo demás (reemplaza la bottom nav) */
@@ -17410,12 +17326,11 @@ function pzPrefetchKick() {
  }
   async function render() {
   const mySeq = ++RENDER_SEQ;
-  // (LOTE REDISEÑO R0 · 8/11) Los datos de hoy (racha + tarjeta de la
-  // apertura) se piden AL ARRANCAR el render, no tras la pintura: la
-  // primera pintura tarda ~2 s (el contenido espera datos) y el fetch
-  // otros ~2 s; si esperara a la pintura, la tarjeta llegaría después
-  // de que la apertura de 3 s ya cerró. Solo en rutas #/app (la landing
-  // y el login vuelven antes del hook y no tienen sesión que pedir).
+  // (LOTE REDISEÑO R0 · 8/11) Los datos de hoy (racha del encabezado)
+  // se piden AL ARRANCAR el render, no tras la pintura: la primera
+  // pintura tarda ~2 s (el contenido espera datos) y el fetch otros
+  // ~2 s. Solo en rutas #/app (la landing y el login vuelven antes del
+  // hook y no tienen sesión que pedir).
   try { if ((location.hash || '').startsWith('#/app')) pzShellDatosHoy(); } catch (e) {}
    try {
      const _k = (location.hash || '#/').split('?')[0];
@@ -17724,12 +17639,6 @@ function pzPrefetchKick() {
   bootSplashOff();
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
-  // (LOTE REDISEÑO R0 · 8/11) La apertura dura 3 s desde que APARECE
-  // (la pintura): el timer se arma aquí, antes de bindApp, para que el
-  // tiempo de bind no alargue la apertura en cargas lentas. El hook de
-  // abajo (pzAperturaArranque) sigue trayendo los datos y tiene el guard
-  // __pzAperturaTimer, así que nunca hay dos timers.
-  try { if (typeof document !== 'undefined' && document.getElementById('pzApertura') && typeof window !== 'undefined' && !window.__pzAperturaTimer) { window.__pzAperturaTimer = true; setTimeout(() => { try { pzAperturaCerrar(); } catch (e) {} }, 3000); } } catch (e) {}
   bindApp(tab);
   // LOTE VELOCIDAD: los fills que render() lanzaba a 60-90 ms (antes de la
   // pintura final) se re-disparan tras pintar: con esqueleto, la primera
@@ -17737,9 +17646,12 @@ function pzPrefetchKick() {
   setTimeout(() => { try { enhanceWeekReport(); } catch (e) {} }, 0);
   setTimeout(() => { try { pzFillRelacion(); } catch (e) {} }, 0);
   setTimeout(() => { try { ttEnhance(); } catch (e) {} }, 0);
-  // (LOTE REDISEÑO R0 · 8/11) Apertura de 3 s al abrir la app: solo si el
-  // overlay existe (una vez por carga; al navegar no vuelve).
-  setTimeout(() => { try { pzAperturaArranque(); } catch (e) {} }, 0);
+  // (PANTALLA-APERTURA · 9/11) Sin pantalla de apertura: la app abre
+  // directo en Hoy. Los datos de hoy (racha del encabezado) se piden
+  // igual y el saludo que escribe arranca al pintar (antes lo hacía
+  // el cierre de la apertura).
+  setTimeout(() => { try { pzShellDatosHoy(); } catch (e) {} }, 0);
+  setTimeout(() => { try { pzSaludoEscribir(); } catch (e) {} }, 0);
   // LOTE VELOCIDAD: precarga en idle (una vez por carga).
   try { pzPrefetchKick(); } catch (e) {}
   if (BB_SHELL_ON() && tab === 'ajustes') { try { bbAvisosEnAjustes(); } catch (e) {} }

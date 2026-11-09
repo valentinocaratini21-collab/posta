@@ -1,5 +1,5 @@
 // test-lote-rediseno-r0.js — LOTE REDISEÑO R0 (8/11): shell de 6 pestañas +
-// glass total + apertura 3 s + saludo que escribe + fuente autocontenida.
+// glass total + saludo que escribe + fuente autocontenida (la apertura de 3 s se sacó el 9/11).
 // Decisión tablero §5.5 (8/11 01:42): el rediseño corre en paralelo con
 // re-base por lote. Decisión Valentino 8/11 00:07: el mock posty-app-design
 // pasa a ser el nuevo diseño del TestFlight, con el motor real adentro.
@@ -38,14 +38,14 @@ const orderOk = (s, keys) => {
 // RE-PIN tras implementar (md5s de work-v1; en base fallan a propósito).
 // (LOTE HOY-AVATAR-FEED · 8/11) Re-pin: app.js/styles.css del lote.
 // (LOTE CHAT-NUEVO v821 · 8/11) Re-pin: app.js/styles.css del lote + BUILD v821.
-const MD5_APP_WORK = '4ac21c0543bc34c5cb113ae4b62b9396';
-const MD5_CSS_WORK = 'a6ef1f0f0bdd52079f0af7b7d781d690';
+const MD5_APP_WORK = '18105a7f853daf3da3dbdffd3b831824';
+const MD5_CSS_WORK = '60a7322e65606285a98f6fe6c4f2de69';
 // El woff2 es copia byte a byte del mock (no generado).
 const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins ----------
-  t(srv.includes("const BUILD_ID = '20261105-v836'"), 'server: BUILD v836 (re-pin T&C)');
+  t(srv.includes("const BUILD_ID = '20261105-v839'"), 'server: BUILD v839');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -55,7 +55,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-  t(app.includes("const CHUNK_V = '20261105-v793'"), 'CHUNK_V v793 (bump T&C: chunk-terminos nuevo)');
+  t(app.includes("const CHUNK_V = '20261105-v793'"), 'CHUNK_V v792 (sin cambio en este lote)');
   t(md5(app) === MD5_APP_WORK, 'app.js md5 (re-pin work-v1)');
   t(md5(css) === MD5_CSS_WORK, 'styles.css md5 (re-pin work-v1)');
 
@@ -72,17 +72,17 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(!bbNav.includes("tabBtn('ajustes'"), 'bb-bar: sin tab Ajustes');
   t(!bbFn.includes("tab === 'chat' ? '' : '<nav"), 'bbShell: sin exclusión del dock en chat');
   t(bbFn.includes('pzShellHeadHTML(tab)'), 'bbShell: renderiza el encabezado común');
-  t(bbFn.includes('pzAperturaHTML()'), 'bbShell: renderiza la apertura');
+  t(!bbFn.includes('pzApertura'), 'bbShell: sin apertura (la app abre directo en Hoy)');
   t(app.includes("function pzShellHeadHTML(tab)"), 'existe pzShellHeadHTML');
-  t(app.includes('function pzAperturaHTML()'), 'existe pzAperturaHTML');
-  t(app.includes('function pzAperturaArranque()'), 'existe pzAperturaArranque');
-  t(app.includes('function pzAperturaCerrar()'), 'existe pzAperturaCerrar');
+  t(!app.includes('function pzAperturaHTML()'), 'sin pzAperturaHTML (9/11)');
+  t(!app.includes('function pzAperturaArranque()'), 'sin pzAperturaArranque (9/11)');
+  t(!app.includes('function pzAperturaCerrar()'), 'sin pzAperturaCerrar (9/11)');
   t(app.includes('function pzSaludoEscribir()'), 'existe pzSaludoEscribir');
   t(app.includes('function pzShellDatosHoy()'), 'existe pzShellDatosHoy');
-  t(app.includes('pzAperturaArranque()'), 'render: arranca la apertura tras pintar');
+  t(app.includes('setTimeout(() => { try { pzSaludoEscribir(); } catch (e) {} }, 0);'), 'render: el saludo que escribe arranca al pintar');
   { const paintIdx = app.indexOf('root.innerHTML = appShell(tab, content);');
     const bindIdx = app.indexOf('bindApp(tab);', paintIdx);
-    t(paintIdx > 0 && bindIdx > paintIdx && app.slice(paintIdx, bindIdx).includes('__pzAperturaTimer'), 'render: el timer de 3 s se arma en la pintura, antes de bindApp (no se alarga en cargas lentas)'); }
+    t(paintIdx > 0 && bindIdx > paintIdx && !app.slice(paintIdx, bindIdx).includes('__pzAperturaTimer'), 'render: sin timer de apertura entre pintar y bindApp (9/11)'); }
 
   // ---------- 3. Dock de 5 en mzTabsHTML (VM; ítem 8: sin Estrategia) ----------
   const mzSrc = sliceFn(app, 'function mzTabsHTML(tab) {', '\n/* (LOTE DOCK-MAS) */');
@@ -138,7 +138,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   }
 
   // ---------- 5. Encabezado común ----------
-  const headSrc = sliceFn(app, 'function pzShellHeadHTML(tab) {', 'function pzAperturaHTML() {');
+  const headSrc = sliceFn(app, 'function pzShellHeadHTML(tab) {', 'function pzSaludoEscribir() {');
   t(headSrc.length > 0, 'pzShellHeadHTML: función presente');
   t(headSrc.includes("if (tab === 'chat') return '';"), 'encabezado: NO va en chat (el chat tiene su propia cabecera)');
   t(headSrc.includes('ai-avatar.png'), 'encabezado: avatar canónico ai-avatar.png');
@@ -181,43 +181,26 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     t(vm.runInContext("pzShellHeadHTML('chat')", ctx) === '', 'VM encabezado(chat): vacío');
   }
 
-  // ---------- 6. Apertura 3 s + saludo que escribe + datos de hoy ----------
-  const apSrc = sliceFn(app, 'function pzAperturaHTML() {', 'function pzAperturaArranque() {');
-  t(apSrc.length > 0, 'pzAperturaHTML: función presente');
-  t(apSrc.includes('pzApertura'), 'apertura: overlay con id pzApertura');
-  t(apSrc.includes('¡Hola!'), 'apertura: burbuja «¡Hola!»');
-  t(!apSrc.split('if (cartaD')[0].includes('Te traje el posteo de hoy'), 'apertura: la burbuja NO promete el posteo sin dato (el texto con el posteo solo aparece cuando el dato existe)');
-  t(apSrc.includes('if (cartaD && cartaD.imagen)'), 'apertura: el texto con el posteo solo se arma con la carta en mano');
-  t(apSrc.includes('pzAperturaCard'), 'apertura: tarjeta del posteo con id pzAperturaCard');
-  t(apSrc.includes('pzAperturaBurbuja'), 'apertura: burbuja con id pzAperturaBurbuja');
-  t(apSrc.includes('__pzAperturaCerrada'), 'apertura: el flag es «cerrada», no «pintada» (sobrevive a los re-renders de la carga)');
-  t(apSrc.includes('__pzAperturaCardHTML'), 'apertura: la tarjeta se cachea (un re-render no la vacía)');
-  t(apSrc.includes('pzAperturaCerrar()'), 'apertura: tap para saltar (onclick → pzAperturaCerrar)');
-  const arrSrc = sliceFn(app, 'function pzAperturaArranque() {', 'function pzAperturaCerrar() {');
-  t(arrSrc.includes('3000'), 'apertura: auto-cierre a los 3000 ms');
-  t(arrSrc.indexOf('pzShellDatosHoy()') > -1 && arrSrc.indexOf('pzShellDatosHoy()') < arrSrc.indexOf("if (!ov) return;"), 'arranque: los datos (racha+tarjeta) se piden aunque la apertura ya cerró');
-  t(arrSrc.includes('prefers-reduced-motion'), 'apertura: reduced-motion salta');
-  t(arrSrc.includes('pzAperturaCerrar'), 'apertura: el arranque cierra por pzAperturaCerrar');
-  t(arrSrc.includes('pzShellDatosHoy'), 'apertura: el arranque llena los datos de hoy');
-  t(arrSrc.includes('__pzAperturaTimer'), 'apertura: el timer de 3 s se pone una sola vez (un re-render no lo duplica)');
-  t(arrSrc.includes('pzApertura') && arrSrc.includes('getElementById'), 'apertura: el arranque solo actúa si el overlay existe');
-  const cerSrc = sliceFn(app, 'function pzAperturaCerrar() {', 'function pzSaludoEscribir() {');
-  t(cerSrc.includes('pzSaludoEscribir'), 'apertura: al cerrar arranca el saludo que escribe');
+  // ---------- 6. Sin apertura + saludo que escribe + datos de hoy ----------
+  // (PANTALLA-APERTURA · 9/11) La apertura de 3 s se sacó entera: la app
+  // abre directo en Hoy. El saludo que escribe y los datos de hoy
+  // (racha) siguen, ahora al pintar.
+  t(!app.includes('pzApertura'), 'sin apertura: pzApertura ×0 en app.js');
+  t(!app.includes('__pzHoyCarta'), 'sin apertura: __pzHoyCarta ×0');
+  t(!app.includes('Tocá para saltar'), 'sin apertura: «Tocá para saltar» ×0');
+  t(!app.includes('Te traje el posteo de hoy'), 'sin apertura: «Te traje el posteo de hoy» ×0');
   const salSrc = sliceFn(app, 'function pzSaludoEscribir() {', 'function pzShellDatosHoy() {');
   t(salSrc.includes('pzShellSaludo'), 'saludo: escribe sobre #pzShellSaludo');
   t(salSrc.includes('Math.max(24, Math.floor(1000'), 'saludo: ~1 segundo en total (paso = max(24, 1000/largo))');
   t(salSrc.includes('prefers-reduced-motion'), 'saludo: reduced-motion → instantáneo');
   t(salSrc.includes('typing'), 'saludo: clase typing con cursor');
   const hoySrc = sliceFn(app, 'function pzShellDatosHoy() {', '// ===== /LOTE REDISEÑO R0');
-  t(hoySrc.includes("/api/ritual/hoy"), 'datos-hoy: UN fetch a /api/ritual/hoy (tarjeta de la apertura)');
+  t(hoySrc.includes("/api/ritual/hoy"), 'datos-hoy: UN fetch a /api/ritual/hoy');
   t(!hoySrc.includes('pzHeadRacha'), 'datos-hoy: ya no llena píldora de racha (simplificar-app p5)');
   t(!hoySrc.includes('__pzHeadRacha'), 'datos-hoy: sin caché de racha (simplificar-app p5)');
   t(!hoySrc.includes('r.racha'), 'datos-hoy: el fetch ya no lee r.racha (simplificar-app p5)');
-  t(hoySrc.includes('cartas[0]'), 'datos-hoy: la tarjeta sale de cartas[0] (o recomendada)');
-  t(hoySrc.includes('!carta.imagen') || hoySrc.includes('carta.imagen'), 'datos-hoy: sin imagen no hay tarjeta (nunca inventar)');
-  t(hoySrc.includes('caption_corta') || hoySrc.includes('caption'), 'datos-hoy: título de la tarjeta desde el caption real');
-  t(hoySrc.includes('hora_salida'), 'datos-hoy: hora de la tarjeta desde hora_salida real');
-  t(hoySrc.includes('pzAperturaBurbuja') && hoySrc.includes('Te traje el posteo de hoy'), 'datos-hoy: «Te traje el posteo de hoy» SOLO cuando la tarjeta existe');
+  t(!hoySrc.includes('cartas'), 'datos-hoy: sin carta (la tarjeta de la apertura se fue con ella)');
+  t(!hoySrc.includes('pzApertura'), 'datos-hoy: sin mención a la apertura');
   // Reintento: el fetch se marca «hecho» solo cuando vuelve bien; si
   // falla, el pendiente se limpia y el próximo arranque lo reintenta
   // (un 401 en la pantalla de login no deja la apertura sin datos).
@@ -228,14 +211,11 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   // primera pintura: la tarjeta se cachea SIEMPRE (no solo
   // si el nodo vivo existe), y el template pinta desde el caché.
   t(!hoySrc.includes('__pzHeadRachaTxt'), 'datos-hoy: sin caché de racha antes del nodo (simplificar-app p5)');
-  t(hoySrc.indexOf('__pzAperturaCardHTML = cardHTML') > -1 && hoySrc.indexOf('__pzAperturaCardHTML = cardHTML') < hoySrc.indexOf("getElementById('pzAperturaCard')"), 'datos-hoy: la tarjeta se cachea antes de buscar el nodo vivo (el fetch puede resolver antes de pintar)');
   // El idioma no se congela en el caché: el fetch arranca antes de que ME
   // cargue y el texto con el idioma de ese momento saldría en español en
   // un usuario EN. Se cachea el DATO y cada template localiza al pintar.
   t(!hoySrc.includes('__pzHeadRachaN'), 'datos-hoy: sin caché de racha como número (simplificar-app p5)');
-  t(hoySrc.includes('__pzHoyCarta = {'), 'datos-hoy: la carta se cachea como DATOS (el template localiza)');
   t(!headSrc.includes('__pzHeadRachaN'), 'encabezado: sin número de racha cacheado (simplificar-app p5)');
-  t(apSrc.includes('__pzHoyCarta'), 'apertura: la tarjeta se arma desde los datos cacheados (localiza con el ME vigente)');
   { const rendIdx = app.indexOf('async function render() {');
     const paintIdx2 = app.indexOf('root.innerHTML = appShell(tab, content);', rendIdx);
     t(rendIdx > 0 && paintIdx2 > rendIdx && app.slice(rendIdx, paintIdx2).includes('pzShellDatosHoy()'), 'render: los datos de hoy se piden al arrancar el render, antes de pintar'); }
@@ -303,7 +283,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(/\.bb-app \.btn[^{]*\{[^}]*rgba\(255,255,255,\.52\)/.test(css), 'glass: botones .btn en vidrio dentro de la app');
   t(/\.bb-app \.bb-btn[^{]*\{[^}]*rgba\(255,255,255,\.52\)/.test(css), 'glass: botones .bb-btn en vidrio dentro de la app');
   t(css.includes('.pz-shell-head'), 'glass: CSS del encabezado presente');
-  t(css.includes('.pz-apertura'), 'glass: CSS de la apertura presente');
+  t(!css.includes('.pz-apertura'), 'glass: CSS de la apertura FUERA (9/11)');
   t(!css.includes('.pz-shell-racha'), 'glass: CSS de la píldora de racha fuera (simplificar-app p5)');
   t(/\.pz-chatfull\{[^}]*height:calc\(100dvh - 72px - env\(safe-area-inset-bottom\)\)/.test(css), 'chat: la pantalla termina sobre el dock (altura 100dvh - 72px - safe-area)');
 
@@ -325,13 +305,13 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   const shellFn = sliceFn(app, 'function appShell(tab, content) {', '\n/* Drawer mobile');
   t(orderOk(shellFn, ['data-tab="inicio"', 'data-tab="numeros"', 'data-tab="ads"', 'data-tab="jardin-posty"', 'data-tab="chat"', 'data-tab="ajustes"']), 'drawer: orden Inicio, Análisis, Impulsar, Nivel, Chat, Ajustes (sin Estrategia)');
   t(shellFn.includes('pzShellHeadHTML(tab)'), 'appShell: renderiza el encabezado común');
-  t(shellFn.includes('pzAperturaHTML()'), 'appShell: renderiza la apertura');
+  t(!shellFn.includes('pzApertura'), 'appShell: sin apertura (9/11)');
   t(app.includes("location.hash = '#/app/' + b.dataset.tab"), 'drawer: bind genérico data-tab → hash (sin cambio)');
 
   // ---------- 10. Navegación de verdad en VM (vara cero botones muertos) ----------
   // Se ejecutan los handlers reales sobre el HTML real del shell: cada
   // botón tiene que dejar location.hash en su destino.
-  if (!headSrc || !apSrc || !app.includes('function pzAperturaCerrar()')) {
+  if (!headSrc) {
     t(false, 'VM navegación: faltan las funciones R0 para evaluar (base)');
   } else {
     const loc = { hash: '' };
@@ -341,7 +321,6 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
       getElementById: (id) => docEls[id] || null,
       querySelector: () => null,
     };
-    let saludoLlamado = false;
     const ctx = {
       gzT: (es) => es, pzIc: () => '[ic]', console,
       esc: (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
@@ -352,7 +331,6 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
       pzBackHTML: () => '',
       pzDockMasBtn: () => '',
       pzDockMasHTML: () => '',
-      pzSaludoEscribir: () => { saludoLlamado = true; },
       rsShareSheetHTML: () => '', // (RS-1) la hoja se rinde en bbShell/appShell; en el VM va stubbeada.
     };
     ctx.bbGo = (h) => { loc.hash = h; };
@@ -361,13 +339,8 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     vm.createContext(ctx);
     vm.runInContext(sliceFn(app, 'function mxTabKey(tab) {', 'function mxModoActual(tab) {'), ctx);
     vm.runInContext(headSrc, ctx);
-    vm.runInContext(apSrc, ctx);
-    vm.runInContext(sliceFn(app, 'function pzAperturaCerrar() {', 'function pzSaludoEscribir() {'), ctx);
     vm.runInContext(mzSrc, ctx);
     vm.runInContext(bbFn, ctx);
-    // La apertura se captura ANTES de renderizar los shells: la primera
-    // llamada fija el flag de una-vez-por-carga.
-    const apHtml = vm.runInContext('pzAperturaHTML()', ctx);
     const clickOnclick = (html, re) => {
       const m = html.match(re);
       if (!m) return null;
@@ -412,21 +385,11 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
       vm.runInContext(`location.hash = '#/app/' + '${route}'`, ctx);
       t(loc.hash === '#/app/' + route, `VM bind mz data-tab ${route} → #/app/${route}`);
     }
-    // Apertura: tap para saltar cierra el overlay y arranca el saludo.
-    docEls.pzApertura = { remove: () => { removed.push('pzApertura'); delete docEls.pzApertura; } };
-    docEls.pzShellSaludo = { textContent: '', classList: { add: () => {} } };
-    t(apHtml.includes('onclick="pzAperturaCerrar()"'), 'VM apertura: el overlay tiene onclick → pzAperturaCerrar');
-    // La apertura sobrevive a un re-render: segunda llamada ANTES de
-    // cerrar devuelve el overlay de nuevo (el flag es «cerrada»).
-    const apHtmlRe = vm.runInContext('pzAperturaHTML()', ctx);
-    t(apHtmlRe.includes('pzApertura'), 'VM apertura: segunda vez SÍ hay overlay (sobrevive al re-render)');
-    saludoLlamado = false;
-    vm.runInContext('pzAperturaCerrar()', ctx);
-    t(removed.includes('pzApertura'), 'VM click apertura: el overlay se remueve');
-    t(saludoLlamado === true, 'VM click apertura: arranca el saludo que escribe');
-    // Después de cerrar, ya no hay overlay.
-    const apHtml2 = vm.runInContext('pzAperturaHTML()', ctx);
-    t(apHtml2 === '', 'VM apertura: después de cerrar no hay overlay');
+    // Sin apertura: los shells rinden directo en Hoy, sin overlay ni
+    // «Tocá para saltar» (9/11).
+    t(!bbInicio.includes('pzApertura'), 'VM bbShell(inicio): sin overlay de apertura');
+    t(!bbInicio.includes('Tocá para saltar'), 'VM bbShell(inicio): sin «Tocá para saltar»');
+    t(!bbChat.includes('pzApertura'), 'VM bbShell(chat): sin overlay de apertura');
   }
 
   // ---------- 11. Boot aislado ----------
@@ -453,11 +416,11 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v836', `boot: /api/version 20261105-v836 (vino ${ver.build})`);
-      const appTxt = await (await fetch(`${BASE}/app.js?v=567`)).text();
-      t(md5(appTxt) === md5(app), 'boot: app.js?v=567 servido = árbol');
-      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261218`)).text();
-      t(md5(cssTxt) === md5(css), 'boot: styles.css?v=20261218 servido = árbol');
+      t(ver.build === '20261105-v839', `boot: /api/version 20261105-v839 (vino ${ver.build})`);
+      const appTxt = await (await fetch(`${BASE}/app.js?v=571`)).text();
+      t(md5(appTxt) === md5(app), 'boot: app.js?v=571 servido = árbol');
+      const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261219`)).text();
+      t(md5(cssTxt) === md5(css), 'boot: styles.css?v=20261219 servido = árbol');
       const woff = await fetch(`${BASE}/fonts/nunito-var.woff2`);
       t(woff.ok, 'boot: /fonts/nunito-var.woff2 se sirve (200)');
       if (woff.ok) {
