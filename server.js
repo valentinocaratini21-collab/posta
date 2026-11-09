@@ -353,6 +353,7 @@ const studyFeedMap = require('./study-feedmap'); // ESTUDIO-PROFUNDO · mejora 4
 const studyCompetitorsMod = require('./study-competitors'); // ESTUDIO-PROFUNDO · M5 COMPETENCIA: 3-5 cuentas mismo rubro/ciudad + hueco, en fundamento.competitors
 const igFollows = require('./ig-follows');
 const igMedia = require('./ig-media');
+const igProfile = require('./ig-profile'); // REDISEÑO RS-3 · FEED REAL: perfil por API (foto/bio/números)
 const feedReconcile = require('./feed-reconcile');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
@@ -5529,7 +5530,7 @@ app.put('/api/profile', requireAuth, (req, res) => {
   if (req.body && (req.body.profile_name !== undefined || req.body.profile_bio !== undefined || req.body.profile_link !== undefined)) {
     const sets = []; const vals = [];
     if (req.body.profile_name !== undefined) { sets.push('profile_name=?'); vals.push(String(req.body.profile_name || '').trim().slice(0, 30)); }
-    if (req.body.profile_bio !== undefined) { sets.push('profile_bio=?'); vals.push(String(req.body.profile_bio || '').slice(0, 150)); }
+    if (req.body.profile_bio !== undefined) { const bioIn = String(req.body.profile_bio || ''); sets.push('profile_bio=?'); vals.push(isIgTitleJunkBio(bioIn) ? '' : bioIn.slice(0, 150)); }
     if (req.body.profile_link !== undefined) {
       let lk = String(req.body.profile_link || '').trim().slice(0, 200);
       if (lk && !/^https?:\/\//i.test(lk)) lk = 'https://' + lk.replace(/^\/+/, '');
@@ -17498,6 +17499,28 @@ async function homeProfileReadAndStore(uid, handle) {
   const payload = await homeProfileFromRead(handle, data).catch(() => null);
   if (payload) {
     payload.verified_source = verifiedSource;
+    // (REDISEÑO RS-3 · FEED REAL) Perfil REAL por API para la cuenta
+    // conectada: la lectura pública (embed) ya no trae foto/bio/números
+    // (IG sirve un shell de login sin datos). La API es la fuente de
+    // verdad del encabezado; el embed sigue mandando en la grilla
+    // (recents) y como respaldo si la API falla. Sin llamada si no hay
+    // token; fallo -> stat oculto, nunca inventado. Corre dentro del
+    // refresh existente (TTL 24 h + pull-to-refresh + primera lectura):
+    // el valor queda cacheado en el snapshot hasta el próximo refresh.
+    try {
+      const s = getSettings(uid);
+      if (payload && s && s.ig_user_id && s.ig_access_token) {
+        const api = await igProfile.fetchIgProfileFull({ igUserId: s.ig_user_id, accessToken: s.ig_access_token, expectedHandle: handle });
+        if (api) {
+          if (api.pic) payload.pic = api.pic;
+          if (api.bio) { payload.bio = api.bio; payload.bio_unread = false; }
+          if (typeof api.followers === 'number') payload.followers = api.followers;
+          if (typeof api.following === 'number') payload.following = api.following;
+          if (typeof api.postsCount === 'number') payload.posts_count = api.postsCount;
+          payload.profile_source = 'api';
+        }
+      }
+    } catch (e) { /* sin perfil por API: queda el embed, como hoy */ }
     // (LOTE SEGUIDOS POR API 1/11) El embed no trae seguidos: si faltan,
     // se completan con follows_count de la API para la cuenta conectada
     // (mismo nodo que websiteFromIgBio; sin llamada si el embed ya los
@@ -17569,11 +17592,34 @@ function homeProfileKit(uid, prof) {
 // lectura de Instagram y sobre el kit — es su perfil guardado. También
 // viaja la paleta real de la cuenta (fundamento; si no, los colores de
 // marca de Ajustes) para las cubiertas de destacadas del ítem 12.
+// (REDISEÑO RS-3 · FEED REAL) Una bio que es el título de la página de IG
+// («Posty • Tu community manager (@posty.communitymanager) • Instagram
+// photos and videos») o la línea de stats del og:description («8
+// seguidores, 1 seguido, 15 posteos») NO es una bio: nunca se guarda
+// como tal ni se muestra. El título llega por el lápiz prellenado (ya
+// sacado, v780) o por un guardado viejo; la guarda vive en la lectura
+// (overlay), en la escritura (PUT /api/profile) y en el render (front).
+function isIgTitleJunkBio(s) {
+  try {
+    const t = String(s || '').trim();
+    if (!t) return false;
+    if (/instagram photos and videos/i.test(t)) return true;
+    if (/^\d+\s+seguidor/i.test(t) && /seguid/i.test(t) && /posteo/i.test(t)) return true;
+    return false;
+  } catch (e) { return false; }
+}
 function homeDisplayOverlay(uid, prof, payload) {
   try {
     const out = Object.assign({}, payload || {});
     const pn = String((prof && prof.profile_name) || '').trim();
-    const pb = String((prof && prof.profile_bio) || '');
+    const pbRaw = String((prof && prof.profile_bio) || '');
+    // (REDISEÑO RS-3) La bio guardada que es el título de IG no es una
+    // bio: se ignora (manda la lectura/API) y se limpia la fila para que
+    // no vuelva a aparecer. Limpieza perezosa e idempotente: una vez
+    // vacía, las lecturas siguientes ya no la ven.
+    const pbJunk = isIgTitleJunkBio(pbRaw);
+    if (pbJunk) { try { db.prepare(`UPDATE profiles SET profile_bio='' WHERE user_id=? AND profile_bio=?`).run(uid, pbRaw); } catch (e) {} }
+    const pb = pbJunk ? '' : pbRaw;
     const pl = String((prof && prof.profile_link) || '').trim();
     if (pn) out.name = pn;
     if (pb.trim()) { out.bio = pb; out.bio_unread = false; }
@@ -33030,7 +33076,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v826';
+const BUILD_ID = '20261105-v829';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

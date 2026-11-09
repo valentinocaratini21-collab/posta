@@ -431,9 +431,9 @@ t(APP.includes('CHAT_FOTOS_MAX = 10') && APP.includes('pzSftPartirMedios'),
 
 // ---------- §8: huellas del lote (server.js NO cambia en R1) ----------
 console.log('— §8: huellas');
-t(md5(SRV) === '01201d9c349e664739e572dd49a62897', '§8: server.js = FUSIONADO (A + CHAT-MUSE, BUILD v822)');
-t(md5(APP) === 'ed09a73f7b3d3e57193d300976454191', '§8: public/app.js = FUSIONADO (A + CHAT-MUSE)');
-t(md5(CSS) === 'ac5cce38c92ad0c2936f7d1a1a36996d', '§8: public/styles.css = FUSIONADO (A + CHAT-MUSE)');
+t(md5(SRV) === '72f49bd75def54f3a19e9863e1ff8697', '§8: server.js = RS-3 (BUILD v829)');
+t(md5(APP) === '398d97977d1f3df1d77b819b0f81aaaf', '§8: public/app.js = RS-3');
+t(md5(CSS) === '4e34b9f2a73ce00c9130f2898404d674', '§8: public/styles.css = RS-3');
 t(APP.includes('CHUNK_V'), '§8: CHUNK_V presente en app.js');
 
 // ---------- §9: boot M121 — endpoints reales con datos reales ----------
@@ -507,8 +507,8 @@ async function apiText(p) {
     };
     const MON = shiftDays(TODAY, -(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1));
     const ver = await api('x', 'GET', '/api/version');
-    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v826',
-      '§9: /api/version trae el BUILD v822 (estampado)', JSON.stringify(ver.json));
+    t(ver.status === 200 && ver.json && ver.json.build === '20261105-v829',
+      '§9: /api/version trae el BUILD v829 (estampado)', JSON.stringify(ver.json));
     const appJs = await apiText('/app.js?v=557');
     t(appJs.status === 200 && appJs.text.includes('pzHoyCardHTML')
       && appJs.text.includes('data-pz-cuenta-sale') && appJs.text.includes('pzHoyPendientes'),

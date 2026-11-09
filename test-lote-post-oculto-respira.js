@@ -18,12 +18,12 @@
 // Uso: node test-lote-post-oculto-respira.js (desde el scratch)
 // M121: el boot del servidor real en DB temporal ES la prueba de carga.
 // FIX POSTY-DENTRO 6/11 ~21:00 (Valentino «Posty deberia estar dentro de la cartita»):
-// la cara va DENTRO del tile (C7i/C7i2/C7m) + styles?v=20261212 en ambos index (C8i)
-// + app.js?v=560 solo ES (C8b). Ahora 61 asserts (58 + 3 nuevas).
+// la cara va DENTRO del tile (C7i/C7i2/C7m) + styles?v=20261214 en ambos index (C8i)
+// + app.js?v=563 solo ES (C8b). Ahora 61 asserts (58 + 3 nuevas).
 // (LOTE SACAR-CARTA-VELADA · 9/11 · orden Valentino 00:49 «Esto esta mal. Sacalo»:
 // la carta del FEED ya NO es velada: la C7 entera pasa a la carta ABIERTA
 // (foto + pill de salida + cuenta hasta que SALE); el paquete velado SIGUE
-// en el RITUAL (tardecita 17:00–00:00, cuenta hasta las 00:00). C8b/C8i re-pineados por el re-estampador v826 (560/20261212).)
+// en el RITUAL (tardecita 17:00–00:00, cuenta hasta las 00:00). C8b/C8i re-pineados por el re-estampador v829 (563/20261214).)
 'use strict';
 const fs = require('fs');
 const vm = require('vm');
@@ -259,7 +259,7 @@ const countDorso = (html) => (html.match(/<i class="pz-dorso">/g) || []).length;
   // --- C8) M78 + estática ---
   const fns = ['pzTzOffsetMs', 'pzDiaInicioMs', 'pzRitualAbreFecha', 'hfCuentaAbreTick'];
   t('C8a: M78 — las 4 funciones nuevas existen definidas en el bundle', fns.every((f) => typeof S[f] === 'function'), fns.filter((f) => typeof S[f] !== 'function').join(','));
-  t('C8b: M78 — ?v= bumpeado SOLO en ES (560) y EN sin app.js', IDX_ES.includes('app.js?v=560') && !IDX_ES.includes('app.js?v=559') && !IDX_EN.includes('app.js?v='));
+  t('C8b: M78 — ?v= bumpeado SOLO en ES (563) y EN sin app.js', IDX_ES.includes('app.js?v=563') && !IDX_ES.includes('app.js?v=560') && !IDX_EN.includes('app.js?v='));
   t('C8c (LOTE SACAR-CARTA-VELADA): CSS — el ritual conserva su velo (pz-ritual-pack-velo, pz-dorso, día-en, keyframes pzRespira) y la carta conserva su magia (hf-carta-magia, destellos); la Variante B se fue del CSS',
     CSS.includes('.pz-ritual-pack-velo.pz-respira') && CSS.includes('@keyframes pzRespira')
     && CSS.includes('.pz-dorso:only-of-type') && CSS.includes('.pz-ritual-dia-en')
@@ -271,7 +271,7 @@ const countDorso = (html) => (html.match(/<i class="pz-dorso">/g) || []).length;
   t('C8f: el servidor calcula `proximo` en /api/ritual/hoy (medianoche + próximo programado)', SRV.includes('const medianoche = zonedWallToUtc(manana + \' 00:00\', tz)') && SRV.includes('proximo = { abre_a: medianoche, abre_hora: \'00:00\' }') && SRV.includes('publicado_hoy: publicadoHoy, proximo'));
   t('C8g: sin próximo, el vacío honesto sigue (hoy null sin proximo cuando no hay publicado)', SRV.includes('if (!rec) return res.json({ ok: true, hoy: null, racha, album, publicado_hoy: publicadoHoy, proximo })'));
   t('C8h: VARIANTE B — el tick de 1 s reescribe la cuenta en 3 líneas (mismo formato que el render)', String(S.hfCuentaAbreTick).includes('faltan<br><b>') && String(S.hfCuentaAbreTick).includes('</b><br>para ver tu próximo posteo') && String(S.hfCuentaAbreTick).includes('<b>${esc(cu.faltan)}</b><br>left to see your next post'));
-  t('C8i: CACHÉ — styles?v= bumpeado en AMBOS index (20261212; el CSS nuevo llega a todos los teléfonos)', IDX_ES.includes('styles.css?v=20261212') && IDX_EN.includes('styles.css?v=20261212') && !IDX_ES.includes('styles.css?v=20261211') && !IDX_EN.includes('styles.css?v=20261211'));
+  t('C8i: CACHÉ — styles?v= bumpeado en AMBOS index (20261214; el CSS nuevo llega a todos los teléfonos)', IDX_ES.includes('styles.css?v=20261214') && IDX_EN.includes('styles.css?v=20261214') && !IDX_ES.includes('styles.css?v=20261212') && !IDX_EN.includes('styles.css?v=20261212'));
 
   // ===== H) HTTP: servidor real en DB temporal (M121: boot en copia aislada) =====
   const PORT = 34573;

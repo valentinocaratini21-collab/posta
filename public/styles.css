@@ -5655,7 +5655,7 @@ body.pz-postchat-open{overflow:hidden}
 .pz-feed-wrap{padding:2px 0 12px}
 #feedView .hf-grid{background:transparent}
 .pz-feed-head{display:flex;align-items:center;gap:11px;margin:6px 14px 12px}
-.pz-feed-ava{width:42px;height:42px;border-radius:50%;background:#EAF6FD;object-fit:cover;object-position:top;border:2px solid #BFE3F5;flex:none}
+.pz-feed-ava{width:42px;height:42px;border-radius:50%;background:#EAF6FD;object-fit:cover;object-position:top;border:3px solid #FEC14D;flex:none}
 .pz-feed-who{flex:1;min-width:0}
 .pz-feed-who b{display:block;font-size:15.5px;color:#0A1E33;line-height:1.2;overflow-wrap:break-word}
 .pz-feed-who small{font-size:12px;color:var(--mut);font-weight:700}
@@ -5667,6 +5667,18 @@ body.pz-postchat-open{overflow:hidden}
 .pz-feed-stats small{display:block;font-size:10.5px;color:var(--mut);font-weight:800}
 .pz-feed-src{display:block;font-size:9.5px;color:var(--mut);font-weight:700;margin-top:2px}
 .pz-feed-note{margin:12px 16px 0;font-size:12.5px;color:var(--mut);font-weight:600;text-align:center}
+/* (REDISEÑO RS-3 · FEED REAL) Botón «Impulsar posteo» arriba del Feed (regla 7 v7 del mock): un solo botón amarillo de marca, con el subtítulo de la recomendación. */
+.feed-boost-cta{width:calc(100% - 28px);margin:4px 14px 16px;border:0;background:linear-gradient(135deg,#FFD97A,#FEC14D);color:#231a02;border-radius:16px;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 8px 18px rgba(217,169,47,.32);text-align:left;cursor:pointer}
+.feed-boost-cta:active{transform:scale(.97)}
+.feed-boost-cta .fbc-main{font-size:16.5px;font-weight:900;white-space:nowrap}
+.feed-boost-cta .fbc-sub{font-size:12px;font-weight:800;opacity:.72;text-align:right;line-height:1.35}
+/* (REDISEÑO RS-3) Banda del próximo posteo (regla 6 v5): a todo lo ancho, antes de la grilla, borde punteado como en el mock. */
+.pz-feed-next{display:flex;gap:12px;align-items:center;margin:0 14px 12px;border:2px dashed #A9C6D4;border-radius:16px;padding:13px 15px;background:#fff}
+.pz-feed-next-plus{font-size:22px;font-weight:900;color:var(--mut);line-height:1;flex:none}
+.pz-feed-next b{display:block;font-size:15px;font-weight:900;color:#0A1E33}
+.pz-feed-next small{display:block;font-size:12.5px;font-weight:700;color:var(--mut);line-height:1.4;margin-top:1px}
+/* (REDISEÑO RS-3) Bio real del perfil en el Feed (regla 6 v5). */
+.pz-feed-bio{margin:0 16px 12px;font-size:14px;line-height:1.5;font-weight:700;color:#0A1E33;white-space:pre-line}
 .pz-feed-entry{display:flex;align-items:center;gap:8px;justify-content:center;width:100%;box-sizing:border-box;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:11px 14px;margin:0 0 12px;font:inherit;font-size:14px;font-weight:800;color:#0A1E33;text-decoration:none;cursor:pointer}
 .pz-feed-entry svg{width:16px;height:16px;color:var(--cel);flex:none}
 .pz-feed-entry-ar{margin-left:auto;color:var(--mut);font-size:17px;line-height:1}

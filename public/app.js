@@ -19830,6 +19830,21 @@ function hfTabsHTML(tab, en) {
   const tabA = (tab === 'reels' || tab === 'tagged') ? tab : 'posts';
   return `<div class="hf-tabs" role="tablist" aria-label="${en ? 'Profile sections' : 'Secciones del perfil'}"><button type="button" role="tab" aria-selected="${tabA === 'posts'}" class="hf-tab${tabA === 'posts' ? ' on' : ''}" data-hf-tab="posts" aria-label="${en ? 'Posts' : 'Publicaciones'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></button><button type="button" role="tab" aria-selected="${tabA === 'reels'}" class="hf-tab${tabA === 'reels' ? ' on' : ''}" data-hf-tab="reels" aria-label="Reels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3.2 9.4h17.6M8.2 3.4l2.1 5.8M13.9 3.4l2.1 5.8" stroke-linecap="round"/><path d="M10.4 12.7v4.6c0 .55.62.9 1.1.64l3.9-2.3c.46-.28.46-1 0-1.28l-3.9-2.3c-.48-.26-1.1.09-1.1.63z" fill="currentColor" stroke="none"/></svg></button><button type="button" role="tab" aria-selected="${tabA === 'tagged'}" class="hf-tab${tabA === 'tagged' ? ' on' : ''}" data-hf-tab="tagged" aria-label="${en ? 'Tagged' : 'Etiquetados'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 19.4c1-2.8 3.2-4.2 5.8-4.2s4.8 1.4 5.8 4.2"/></svg></button></div>`;
 }
+// (REDISEÑO RS-3 · FEED REAL) Una bio que es el título de la página de IG
+// («Posty • Tu community manager (@posty.communitymanager) • Instagram
+// photos and videos») o la línea de stats del og:description («8
+// seguidores, 1 seguido, 15 posteos») NO es una bio: nunca se muestra.
+// Espejo del servidor (isIgTitleJunkBio en server.js): defensa en el
+// render, por si un valor viejo llega igual al front.
+function pzIsIgTitleBio(s) {
+  try {
+    const t = String(s || '').trim();
+    if (!t) return false;
+    if (/instagram photos and videos/i.test(t)) return true;
+    if (/^\d+\s+seguidor/i.test(t) && /seguid/i.test(t) && /posteo/i.test(t)) return true;
+    return false;
+  } catch (e) { return false; }
+}
 function homeHeadHTML(prof, bizName, opts) {
   const P = prof || {};
   const en = !!(opts && opts.en);
@@ -19843,6 +19858,9 @@ function homeHeadHTML(prof, bizName, opts) {
   const letter = esc((name || user || 'P').charAt(0).toUpperCase());
   let picSrc = P.pic || '';
   if (!picSrc) { try { const lg = (typeof assetLogo === 'function') ? assetLogo() : null; if (lg && lg.file_path) picSrc = lg.file_path; } catch (e) {} }
+  // (REDISEÑO RS-3) Sin foto real ni logo, la cara canónica de Posty
+  // (public/ai-avatar.png, jamás regenerada): nunca la letra sola.
+  if (!picSrc) picSrc = '/ai-avatar.png';
   const pic = picSrc ? `<img src="${esc(picSrc)}" alt="" onerror="this.remove()">` : '';
   // (Frente 3b) Conteos como los muestra Instagram: completos con
   // separador local hasta 9.999 (ES 1.234 · EN 1,234) y abreviados
@@ -19866,7 +19884,9 @@ function homeHeadHTML(prof, bizName, opts) {
   const catTxt = en ? String(P.category_en || '') : String(P.category || '');
   const catHTML = catTxt ? `<div class="hf-cat">${esc(catTxt)}</div>` : '';
   const noteHTML = (typeof P.note === 'string' && P.note.trim()) ? `<span class="hf-note">${esc(P.note.trim())}</span>` : '';
-  const bio = pzDecEnt(String(P.bio || '')).trim();
+  const bioRaw = pzDecEnt(String(P.bio || '')).trim();
+  // (REDISEÑO RS-3) La bio que es el título de IG no es una bio: no se muestra.
+  const bio = pzIsIgTitleBio(bioRaw) ? '' : bioRaw;
   const bioHTML = bio && !P.bio_unread ? `<div class="hf-bio">${esc(bio)}</div>` : '';
   const rawLink = String(P.link || '').trim();
   const linkOne = (x) => `<a class="hf-link" href="${esc(x)}" target="_blank" rel="noopener">${esc(x.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a>`;
@@ -21672,6 +21692,49 @@ function pzFeedAlDia(allPosts, tz) { // sello AL DÍA solo si el feed está al d
 function pzFeedEntryHTML(en) { // puerta en Hoy (RE-BASE R1 SOBRE v794: el segmentador la reemplaza en inicioView; queda definida, sin uso).
   return `<a class="pz-feed-entry" href="#/app/feed">${pzIc('grid', 16)} <span>${en ? 'My feed' : 'Mi feed'}</span><span class="pz-feed-entry-ar">›</span></a>`;
 }
+// (REDISEÑO RS-3 · FEED REAL) Etiqueta del día del próximo posteo para la
+// banda del Feed: «Mañana» si cae mañana, «Hoy» si cae hoy, si no el día
+// de la semana (Jueves / Thursday). Función pura; sin fecha válida ''.
+function pzFeedNextLabel(scheduledAt, tz, en) {
+  try {
+    if (!scheduledAt) return '';
+    let d = null;
+    if (typeof pcParseDate === 'function') d = pcParseDate(scheduledAt);
+    if (!d) { const s = String(scheduledAt).replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }
+    if (!d || isNaN(d)) return '';
+    const rel = (typeof pzWhenRelDay === 'function') ? pzWhenRelDay(d, tz, en) : '';
+    if (rel === 'hoy' || rel === 'today') return en ? 'Today' : 'Hoy';
+    if (rel === 'mañana' || rel === 'tomorrow') return en ? 'Tomorrow' : 'Mañana';
+    const loc = en ? 'en-US' : 'es-ES';
+    const zo = tz ? { timeZone: tz } : {};
+    let wd = d.toLocaleDateString(loc, Object.assign({ weekday: 'long' }, zo));
+    wd = String(wd || '').trim();
+    return wd ? wd.charAt(0).toUpperCase() + wd.slice(1) : '';
+  } catch (e) { return ''; }
+}
+// (REDISEÑO RS-3) La carta del próximo NO rinde como tile en el Feed:
+// rinde como banda antes de la grilla. Función pura: filtra las tiles
+// kind 'oculta' (la carta) y deja el resto intacto, en orden.
+function pzFeedGridTiles(tiles) {
+  try {
+    if (!Array.isArray(tiles)) return [];
+    return tiles.filter((t) => !(t && t.kind === 'oculta'));
+  } catch (e) { return Array.isArray(tiles) ? tiles : []; }
+}
+// (REDISEÑO RS-3 · FEED REAL) Punto de entrada del botón «Impulsar
+// posteo» arriba del Feed (regla 7 v7 del mock). CONTRATO con RS-4
+// (hoja ELEGIR posteo): RS-4 expone el abridor de la hoja como
+// window.pzOpenBoostPick() — abre la hoja con el recomendado ya
+// preseleccionado (la mayoría de las veces es tocar el botón y
+// confirmar, sin elegir nada). Si todavía no existe, no rompe nada:
+// avisa y espera. El preparador conecta ambas piezas; este archivo
+// no define la hoja ni elige el posteo.
+function pzFeedBoostPick() {
+  try {
+    if (typeof window !== 'undefined' && typeof window.pzOpenBoostPick === 'function') { window.pzOpenBoostPick(); return; }
+    if (typeof toast === 'function') toast('Elegí el posteo para impulsar');
+  } catch (e) {}
+}
 async function feedView() {
   const tz = pcTz();
   const en = hfIsEn();
@@ -21754,7 +21817,9 @@ async function feedView() {
   } catch (e) {}
   const baseTiles = HF_VISITOR ? hfVisitorTiles(tiles) : tiles.filter((t) => t && !t.archivedExt);
   // (LOTE A · ítem 5) Las pestañas filtran la grilla igual que en Inicio.
-  const displayTiles = hfTabTiles(baseTiles, HF_TAB, prof).map((t) => {
+  // (REDISEÑO RS-3) La carta del próximo NO rinde como tile acá: rinde
+  // como banda antes de la grilla (nextBandHTML abajo).
+  const displayTiles = hfTabTiles(pzFeedGridTiles(baseTiles), HF_TAB, prof).map((t) => {
     const c = Object.assign({}, t);
     if (HF_VISITOR) c.visitor = true;
     if (HF_TAB === 'reels') c.reelTab = true;
@@ -21786,7 +21851,8 @@ async function feedView() {
   const alDia = pzFeedAlDia(allPosts, tz);
   const user = String((prof && prof.username) || '').replace(/^@/, '');
   const headName = user ? '@' + user : bizName;
-  const picSrc = (prof && prof.pic) || '';
+  // (REDISEÑO RS-3) Sin foto real, la cara canónica de Posty: nunca la letra sola.
+  const picSrc = (prof && prof.pic) || '/ai-avatar.png';
   const picHTML = picSrc ? `<img class="pz-feed-ava" src="${esc(picSrc)}" alt="" onerror="this.remove()">` : '';
   const sealHTML = alDia ? `<span class="pz-feed-aldia"><i></i> ${en ? 'UP TO DATE' : 'AL DÍA'}</span>` : '';
   const statsHTML = `<div class="pz-feed-stats">
@@ -21794,14 +21860,29 @@ async function feedView() {
     ${consultas === null ? '' : `<div><b>${pzFeedFmtN(consultas, en)}</b><small>${en ? 'inquiries this week' : 'consultas esta semana'}</small><span class="pz-feed-src">${en ? 'counted by Posty' : 'contadas por Posty'}</span></div>`}
     ${followers === null ? '' : `<div><b>${pzFeedFmtN(followers, en)}</b><small>${en ? (followers === 1 ? 'follower' : 'followers') : (followers === 1 ? 'seguidor' : 'seguidores')}</small></div>`}
   </div>`;
+  // (REDISEÑO RS-3 · FEED REAL) Bio real (la del título de IG no es bio),
+  // banda del próximo posteo (primero, a todo lo ancho, antes de la
+  // grilla) y botón «Impulsar posteo» arriba de todo. Sin próximo no hay
+  // banda (no se inventa una); sin publicados no hay botón (el «mejor
+  // para vos» no existe sin posteos).
+  const feedBioRaw = String((prof && prof.bio) || '').trim();
+  const feedBio = pzIsIgTitleBio(feedBioRaw) ? '' : feedBioRaw;
+  const feedBioHTML = (feedBio && !(prof && prof.bio_unread)) ? `<p class="pz-feed-bio">${esc(feedBio)}</p>` : '';
+  const nextTile = (Array.isArray(tiles) ? tiles : []).find((t) => t && t.kind === 'oculta' && t.post && t.post.scheduled_at);
+  const nextLabel = nextTile ? pzFeedNextLabel(nextTile.post.scheduled_at, tz, en) : '';
+  const nextBandHTML = (nextTile && nextLabel) ? `<div class="pz-feed-next"><span class="pz-feed-next-plus">＋</span><div><b>${esc(nextLabel)} · ${en ? 'already set' : 'ya está armado'}</b><small>${en ? 'It goes out next — you see it here before it publishes.' : 'Es el próximo en salir — lo ves acá, antes de que se publique.'}</small></div></div>` : '';
+  const boostBtnHTML = published.length ? `<button type="button" class="feed-boost-cta" id="feedBoostBtn" onclick="pzFeedBoostPick()"><span class="fbc-main">${en ? 'Boost post' : 'Impulsar posteo'}</span><span class="fbc-sub">${en ? 'Posty already picked the best one for you →' : 'Posty ya eligió el mejor para vos →'}</span></button>` : '';
   return `<div id="feedView" class="pz-feed-wrap">
+  ${boostBtnHTML}
   <div class="pz-feed-head">
     ${picHTML}
     <div class="pz-feed-who"><b>${esc(headName)}</b><small>${en ? 'This is what your customers see on Instagram today' : 'Esto ven hoy tus clientes en Instagram'}</small></div>
     ${sealHTML}
   </div>
   ${statsHTML}
+  ${feedBioHTML}
   ${hfTabsHTML(HF_TAB, en)}
+  ${nextBandHTML}
   ${gridHTML}
   <p class="pz-feed-note">${en ? 'Tap any post to see how it performed.' : 'Tocá cualquier posteo para ver cómo rindió.'}</p>
 </div>`;
