@@ -8904,9 +8904,32 @@ async function chatMoreCaptions() {
 // (los prompts subidos). Cada tap da una opción nueva, sin repetir estilo.
 // "↻ Otra imagen" NO bloquea: dispara la generación en segundo plano y el
 // usuario puede seguir chateando. La imagen aparece sola cuando está lista.
+// (LOTE CHAT-CLICKS · punto 5) El pool de fotos del cliente para el
+// modo-propuesta: las 6 más nuevas del álbum (la más nueva primero) +
+// las adjuntadas en el chat. MISMO orden que renderChatPreviews_OLD.
+function chatIdeaPhotoPool() {
+  const lib6 = assetPhotos().slice().reverse().slice(0, 6);
+  return lib6.map((p) => ({ file_path: p.file_path })).concat((CHAT_PHOTOS || []).filter((p) => p && p.file_path));
+}
 function chatMoreImage() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
+  // (LOTE CHAT-CLICKS · punto 5) Modo-propuesta con foto del cliente:
+  // «Otra imagen» CICLA las fotos del cliente (nunca regenera IA).
+  // El índice se resuelve contra el pool combinado (lib6 + CHAT_PHOTOS).
+  if (Number.isInteger(idea.photo_index)) {
+    const pool = chatIdeaPhotoPool();
+    if (pool.length > 1) {
+      idea.photo_index = (idea.photo_index + 1) % pool.length;
+      renderChatPreviews(true).then(() => {
+        if (CHAT_IDEA !== idea) return;
+        renderChatStoryboard();
+      }).catch(() => {});
+    } else {
+      try { toast(pzSftT('Es la única foto que tenés acá.', "That's the only photo you have here.")); } catch (e) {}
+    }
+    return;
+  }
   const b = $('#chatMoreImg');
   if (b) { b.disabled = true; b.innerHTML = pzIc('palette', 14) + ' Generando…'; }
   // NO borrar el preview anterior: queda visible mientras se genera la nueva.
@@ -9071,8 +9094,7 @@ async function renderChatPreviews_OLD(force) {
   // adjuntadas): CHAT_PHOTOS[0] ignoraba photo_index y mostraba
   // siempre la primera adjuntada.
   if (Number.isInteger(idea.photo_index)) {
-    const lib6 = assetPhotos().slice().reverse().slice(0, 6);
-    const combined = lib6.map((p) => ({ file_path: p.file_path })).concat((CHAT_PHOTOS || []).filter((p) => p && p.file_path));
+    const combined = chatIdeaPhotoPool();
     const up = combined[idea.photo_index];
     if (up && up.file_path) {
       RENDER_PREV_FOR = tituloKey; RENDER_PREV_BUSY = null;
@@ -29290,6 +29312,7 @@ async function pzSftDespuesDeSubirChat() {
       pzSftToast(pzSftT("Listo, según tu Ajuste: ", "Done, per your Settings: ") + pzSftEtiqueta(defVal) + ".");
       return;
     }
+    PZ_SFT_ARMADOS = {};
     PZ_SFT_CHAT_PENDIENTE = { items: list, idx: 0, texto: "", propuesta: null, token: 0 };
     pzSftChatAbrirYEnfocar();
     pzSftChatProponer();
@@ -29299,114 +29322,416 @@ async function pzSftDespuesDeSubirChat() {
    Si el usuario escribió algo mientras tanto, ese texto es la visión
    (no se vuelve a preguntar). Token anti-carrera: si el texto cambió
    en medio del fetch, se descarta el resultado viejo y se regenera. */
-async function pzSftChatProponer() {
+/* Arma UNA foto pendiente (asegura el asset + POST /armar) SIN rendir
+   nada: la tarjeta la rinde pzSftChatProponer y «Aprobar todas» la
+   aprueba en silencio. Devuelve {prop} | {gated, pregunta, reason} |
+   {busy} | {error}. (LOTE CHAT-CLICKS) */
+async function pzSftChatArmarUno(it) {
+  const en = pzSftEn();
+  if (!(await pzSftAsegurarAssetTmp(it))) return { error: en ? 'I could not upload that photo to the album. Try again.' : 'No pude subir esa foto al álbum. Probá de nuevo.' };
+  try {
+    const r = await api.post('/api/album/' + it.assetId + '/armar', { vision: it.vision || '' });
+    if (!r || (!r.ok && !r.gated && !r.busy)) return { error: en ? 'I could not build the post yet. Tap Other options to decide.' : 'No pude armar el posteo todavía. Tocá Otras opciones para decidir.' };
+    if (r.gated) return { gated: true, reason: r.reason || '', pregunta: r.pregunta || null };
+    if (r.busy) return { busy: true };
+    return { prop: { assetId: it.assetId, postId: r.post_id, scheduled_at: r.scheduled_at, dia: r.dia || '', dia_label: r.dia_label || '', hora: r.hora || '', semana_llena: !!r.semana_llena, caption: r.caption || '', headline: r.headline || '', hashtags: r.hashtags || '', kind: r.kind || 'photo', image_path: r.image_path || it.url || '', thumb: r.thumb || '', hard: r.hard || [], ya_armado: !!r.ya_armado } };
+  } catch (e) {
+    return { error: en ? 'I could not build the proposal yet. Tap Other options to decide.' : 'No pude armar la propuesta todavía. Tocá Otras opciones para decidir.' };
+  }
+}
+/* (LOTE CHAT-CLICKS · punto 6) UNA sola pregunta con DOS botones cuando
+   la foto no muestra el negocio con claridad. La respuesta arma la
+   tarjeta (la visión es la opción tocada); nunca dos preguntas seguidas
+   y nunca texto libre. El tap NO es un mensaje del chat: no pasa por
+   renderChatOptions (que envía el texto). */
+var PZ_SFT_PREGUNTA_ACTIVA = null; // {idx} mientras la pregunta está en pantalla
+function pzSftChatPregunta(preg) {
+  const en = pzSftEn();
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  try { const old = document.getElementById('pzSftPregunta'); if (old) old.remove(); } catch (e) {}
+  const texto = en ? (preg.texto_en || preg.texto) : preg.texto;
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg ai';
+  wrap.id = 'pzSftPregunta';
+  wrap.style.maxWidth = '100%';
+  const q = document.createElement('div');
+  q.style.cssText = 'font-size:13px;margin-bottom:8px';
+  q.textContent = texto;
+  wrap.appendChild(q);
+  const chips = document.createElement('div');
+  chips.className = 'chat-chips';
+  preg.opciones.forEach((op) => {
+    const label = (en && op.id === '__material__' && op.label_en) ? op.label_en : op.label;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.onclick = () => pzSftChatPreguntaResponder(op.id, op.label);
+    chips.appendChild(b);
+  });
+  wrap.appendChild(chips);
+  box.appendChild(wrap);
+  PZ_SFT_PREGUNTA_ACTIVA = { idx: (PZ_SFT_CHAT_PENDIENTE || {}).idx };
+  try { chatScroll(); } catch (e) {}
+}
+async function pzSftChatPreguntaResponder(opId, label) {
   const pend = PZ_SFT_CHAT_PENDIENTE;
   if (!pend) return;
   const it = pend.items[pend.idx];
-  if (!it) { PZ_SFT_CHAT_PENDIENTE = null; return; }
+  if (!it) return;
+  const en = pzSftEn();
+  try { const w = document.getElementById('pzSftPregunta'); if (w) w.remove(); } catch (e) {}
+  PZ_SFT_PREGUNTA_ACTIVA = null;
+  if (opId === '__material__') {
+    try {
+      if (!it.assetId && it.file) await pzSftAsegurarAssetTmp(it);
+      if (it.assetId) await api.post('/api/album/' + it.assetId + '/choice', { choice: 'semana' });
+    } catch (e) {}
+    it.choice = 'semana';
+    pzSftToast(en ? 'Saved as material.' : 'Quedó guardada como material.');
+    if (pend.items[pend.idx] === it) pend.idx++;
+    pend.preguntadoIdx = -1;
+    if (pend.idx < pend.items.length) pzSftChatProponer();
+    else if (pend.items.every((x) => x.choice)) PZ_SFT_CHAT_PENDIENTE = null;
+    return;
+  }
+  const vision = 'La foto muestra: ' + label;
+  pend.texto = vision;
+  it.vision = vision;
+  pzSftChatProponer();
+}
+/* Genera la propuesta de la foto pendiente y la muestra EN EL CHAT.
+   Si el usuario escribió algo mientras tanto, ese texto es la visión
+   (no se vuelve a preguntar). Token anti-carrera: si el texto cambió
+   en medio del fetch, se descarta el resultado viejo y se regenera.
+   (LOTE CHAT-CLICKS) La propuesta es una CADENA: arma el ítem actual,
+   rinde su tarjeta y sigue con el siguiente — con varias fotos, las
+   tarjetas se acumulan (una por foto, huecos consecutivos) y «Aprobar
+   todas» las aprueba juntas. La frase fija se dice UNA vez por envío,
+   ANTES de la primera tarjeta. */
+async function pzSftChatProponer() {
+  const pend = PZ_SFT_CHAT_PENDIENTE;
+  if (!pend) return;
+  if (pend.aprobandoTodas) return;
+  const it = pend.items[pend.idx];
+  if (!it) return;
   const token = ++pend.token;
   const en = pzSftEn();
-  try {
-    if (!(await pzSftAsegurarAssetTmp(it))) {
-      if (pend.token !== token || PZ_SFT_CHAT_PENDIENTE !== pend) return;
-      pzSftChatDecir(en ? "I could not upload that photo to the album. Try again." : "No pude subir esa foto al álbum. Probá de nuevo.", "");
-      return;
-    }
-    if (pend.texto) it.vision = pend.texto;
-    // (LOTE A · ítem 4 · posteo armado + Caso 2 del chat) La subida arma
-    // el borrador con su fecha EN EL MOMENTO (POST /armar): la oferta
-    // llega como TARJETA (foto + «sale el [día]» + caption +
-    // aprobar/cambiar), nunca como texto volcado con hashtags. Si /armar
-    // falla, el motivo se dice en el mismo mensaje (Caso 1: nunca un
-    // «...» colgado ni una promesa sin entrega).
-    const r = await api.post("/api/album/" + it.assetId + "/armar", { vision: it.vision || "" });
-    if (pend.token !== token || PZ_SFT_CHAT_PENDIENTE !== pend) { pzSftChatProponer(); return; }
-    if (!r || (!r.ok && !r.gated && !r.busy)) {
-      pzSftChatDecir(en ? "I could not build the post yet. Tap Other options to decide." : "No pude armar el posteo todavía. Tocá Otras opciones para decidir.", pzSftChatBotones());
-      pend.propuesta = null;
-      return;
-    }
-    if (r.gated) {
-      pzSftChatDecir(en ? "This photo does not show your business clearly enough for an honest proposal. Keep it as material, or write me what it shows." : "Esta foto no muestra tu negocio con claridad como para armarte una propuesta honesta. Guardala como material, o escribime qué muestra.", pzSftChatBotones());
-      pend.propuesta = null;
-      return;
-    }
-    if (r.busy) {
-      pzSftChatDecir(en ? "I am already building that reel — one moment." : "Ya estoy armando ese reel, un momento.", pzSftChatBotones());
-      pend.propuesta = null;
-      return;
-    }
-    pend.propuesta = { assetId: it.assetId, postId: r.post_id, scheduled_at: r.scheduled_at, dia_label: r.dia_label || "", hora: r.hora || "", semana_llena: !!r.semana_llena, caption: r.caption || "", headline: r.headline || "", hashtags: r.hashtags || "", kind: r.kind || "photo", image_path: r.image_path || it.url || "", thumb: r.thumb || "", hard: r.hard || [], ya_armado: !!r.ya_armado };
-    PZ_SFT_ARMADO_ACTUAL = pend.propuesta;
-    pzSftChatTarjetaArmada(pend.propuesta);
-  } catch (e) {
-    if (pend.token !== token || PZ_SFT_CHAT_PENDIENTE !== pend) return;
-    pzSftChatDecir(en ? "I could not build the proposal yet. Tap Other options to decide." : "No pude armar la propuesta todavía. Tocá Otras opciones para decidir.", pzSftChatBotones());
+  if (pend.texto) it.vision = pend.texto;
+  const arm = await pzSftChatArmarUno(it);
+  if (PZ_SFT_CHAT_PENDIENTE !== pend) return;
+  if (pend.token !== token) { pzSftChatProponer(); return; }
+  if (pend.aprobandoTodas) return;
+  if (it.choice === 'armar') return; // «Aprobar todas» ya la aprobó mientras se armaba
+  if (arm.error) {
+    pzSftChatDecir(arm.error, pzSftChatBotones());
+    pend.propuesta = null;
+    return;
   }
+  if (arm.busy) {
+    pzSftChatDecir(en ? 'I am already building that reel — one moment.' : 'Ya estoy armando ese reel, un momento.', pzSftChatBotones());
+    pend.propuesta = null;
+    return;
+  }
+  if (arm.gated) {
+    // (LOTE CHAT-CLICKS · punto 6) UNA sola pregunta con DOS botones,
+    // nunca texto libre; en cuanto responde, se arma la tarjeta. Nunca
+    // dos preguntas seguidas: la segunda vez, el mensaje honesto.
+    if (arm.pregunta && Array.isArray(arm.pregunta.opciones) && arm.pregunta.opciones.length === 2 && pend.preguntadoIdx !== pend.idx) {
+      pend.preguntadoIdx = pend.idx;
+      pzSftChatPregunta(arm.pregunta);
+      return;
+    }
+    pzSftChatDecir(en ? 'This photo does not show your business clearly enough for an honest proposal. Keep it as material, or write me what it shows.' : 'Esta foto no muestra tu negocio con claridad como para armarte una propuesta honesta. Guardala como material, o escribime qué muestra.', pzSftChatBotones());
+    pend.propuesta = null;
+    return;
+  }
+  pend.propuesta = arm.prop;
+  arm.prop.itemIdx = pend.idx;
+  PZ_SFT_ARMADO_ACTUAL = arm.prop;
+  // (LOTE CHAT-CLICKS · punto 1) La frase fija, UNA vez por envío,
+  // ANTES de la primera tarjeta. «De hoy» solo si el posteo sale hoy
+  // (el slot nunca es hoy: armarNextFeedSlot arranca mañana).
+  if (!pend.fraseDicha) {
+    pend.fraseDicha = true;
+    const multi = pend.items.length > 1;
+    const hoy = !!(arm.prop.dia && arm.prop.dia === pzSftHoyYmd());
+    const frase = multi
+      ? (en ? 'I put together the posts for you.' : 'Te armé los posteos.')
+      : hoy
+        ? (en ? "I put together today's post for you." : 'Te armé el posteo de hoy.')
+        : (en ? 'I put together the post for you.' : 'Te armé el posteo.');
+    pzSftChatDecir(frase, '');
+  }
+  pzSftChatTarjetaArmada(arm.prop);
+  // La cadena: la siguiente foto se arma sola (hueco libre siguiente).
+  if (pend.items[pend.idx] === it) pend.idx++;
+  if (pend.idx < pend.items.length) pzSftChatProponer();
 }
 /* Un toque aprueba: el texto YA se mostró en el chat, así que crear el
    borrador no es un salto a ciegas. Video: se crea con los valores por
    defecto (sin silencios/lenta/ánimo); las opciones de video viven en
    la pantalla de propuesta vía Otras opciones. Gate duro (cortada):
-   se transfiere a la pantalla de propuesta para resolverlo ahí. */
-async function pzSftChatAprobar(btn) {
+   se transfiere a la pantalla de propuesta para resolverlo ahí.
+   (LOTE CHAT-CLICKS) postId: con varias tarjetas, aprueba ESA tarjeta
+   (sin postId, la última armada). La cadena arma sola: aprobar ya NO
+   avanza la cola. */
+async function pzSftChatAprobar(btn, postId) {
   // (LOTE A · ítem 4) El posteo YA está armado (POST /armar en la
   // propuesta): aprobar es la rama draft de siempre — PATCH
   // scheduled_at + señal approved — con el mismo gate de Instagram que
   // pzHoyAprobarUno. Sin /crear: el borrador ya existe.
   const pend = PZ_SFT_CHAT_PENDIENTE;
-  if (!pend || !pend.propuesta) return;
-  const it = pend.items[pend.idx];
-  const prop = pend.propuesta;
+  const prop = (postId && PZ_SFT_ARMADOS[Number(postId)]) || (pend && pend.propuesta) || PZ_SFT_ARMADO_ACTUAL;
+  if (!prop || !prop.postId) return;
+  const it = pend ? ((typeof prop.itemIdx === 'number') ? pend.items[prop.itemIdx] : pend.items.find((x) => x.assetId === prop.assetId)) : null;
+  if (it && it.choice === 'armar') return; // ya aprobado (doble toque)
   const en = pzSftEn();
   pzSftChatQuitarBotones();
   if ((prop.hard && prop.hard.length)) { pzSftChatOpciones(true); return; }
   if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) { try { igGateFeedback(btn || document.body); } catch (e) {} return; }
+  const okA = await pzSftChatAprobarUno(prop, it);
+  if (!okA) { pzSftChatDecir(en ? 'I could not approve it.' : 'No pude aprobarlo.', pzSftChatBotones()); return; }
+  pzSftChatMarcarAprobada(prop.postId);
+  toast('✅ ' + (en ? 'Scheduled — it goes out on its own' : 'Programado — sale solo'));
+  const cuando = (prop.dia_label && prop.hora) ? (en ? `goes out ${prop.dia_label} at ${prop.hora}` : `sale el ${prop.dia_label} a las ${prop.hora}`) : '';
+  pzSftChatDecir((en ? `Done! The post ${cuando ? cuando : 'is scheduled'} ✓` : `¡Listo! El posteo ${cuando ? cuando : 'quedó programado'} ✓`),
+    "<div id=\"pzSftChatBtns2\" style=\"display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px;\"><button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"location.hash='#/app/post/" + prop.postId + "'\">" + (en ? "See post" : "Ver posteo") + "</button></div>");
+  try { render(); } catch (e) {}
+  if (pend && pend.items.every((x) => x.choice)) PZ_SFT_CHAT_PENDIENTE = null;
+}
+/* (LOTE CHAT-CLICKS) Aprueba UN armado en silencio (sin mensaje):
+   PATCH scheduled_at + señal approved + choice 'armar' +
+   pzSftGuardarPost. El gate de IG lo chequea el LLAMADOR. */
+async function pzSftChatAprobarUno(prop, it) {
+  if (!prop || !prop.postId) return false;
   try {
     const w = prop.scheduled_at ? new Date(prop.scheduled_at).toISOString() : null;
     await api.patch('/api/posts/' + encodeURIComponent(prop.postId), { scheduled_at: w });
     try { await api.post('/api/posts/' + encodeURIComponent(prop.postId) + '/signal', { signal: 'approved' }); } catch (e) {}
     try { if (typeof track === 'function') track('draft_accept', { id: Number(prop.postId) }); } catch (e) {}
-    try { await api.post("/api/album/" + prop.assetId + "/choice", { choice: "armar" }); } catch (e) {}
+    try { await api.post('/api/album/' + prop.assetId + '/choice', { choice: 'armar' }); } catch (e) {}
     pzSftGuardarPost(prop.assetId, prop.postId);
-    it.choice = "armar";
-    toast('✅ ' + (en ? 'Scheduled — it goes out on its own' : 'Programado — sale solo'));
-    const cuando = (prop.dia_label && prop.hora) ? (en ? `goes out ${prop.dia_label} at ${prop.hora}` : `sale el ${prop.dia_label} a las ${prop.hora}`) : '';
-    pzSftChatDecir((en ? `Done! The post ${cuando ? cuando : 'is scheduled'} ✓` : `¡Listo! El posteo ${cuando ? cuando : 'quedó programado'} ✓`),
-      "<div id=\"pzSftChatBtns2\" style=\"display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px;\"><button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"location.hash='#/app/post/" + prop.postId + "'\">" + (en ? "See post" : "Ver posteo") + "</button></div>");
-    try { render(); } catch (e) {}
-    pend.idx++;
-    pend.propuesta = null;
-    if (pend.idx < pend.items.length) pzSftChatProponer();
-    else PZ_SFT_CHAT_PENDIENTE = null;
-  } catch (e) {
-    pzSftChatDecir(en ? "I could not approve it." : "No pude aprobarlo.", pzSftChatBotones());
+    if (it) it.choice = 'armar';
+    return true;
+  } catch (e) { return false; }
+}
+/* (LOTE CHAT-CLICKS · punto 3) UN solo botón aprueba todas las fotos
+   del envío: las tarjetas ya armadas + las que faltan (se arman en
+   orden, en huecos libres consecutivos, y se aprueban). Si una no se
+   puede armar, se frena ahí y se muestra su tarjeta/pregunta como
+   siempre. */
+async function pzSftChatAprobarTodas() {
+  const pend = PZ_SFT_CHAT_PENDIENTE;
+  if (!pend) return;
+  const en = pzSftEn();
+  if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) { try { igGateFeedback(document.body); } catch (e) {} return; }
+  pend.aprobandoTodas = true;
+  const total = pend.items.length;
+  let okN = 0;
+  // 1) todas las tarjetas ya armadas
+  for (const pid of Object.keys(PZ_SFT_ARMADOS)) {
+    const prop = PZ_SFT_ARMADOS[pid];
+    const it = (typeof prop.itemIdx === 'number') ? pend.items[prop.itemIdx] : pend.items.find((x) => x.assetId === prop.assetId);
+    if (!it || it.choice === 'armar') continue;
+    if (await pzSftChatAprobarUno(prop, it)) { okN++; pzSftChatMarcarAprobada(prop.postId); }
   }
+  pend.propuesta = null;
+  // 2) lo que falta armar, en orden
+  let fallo = null;
+  while (pend.idx < pend.items.length) {
+    const it = pend.items[pend.idx];
+    if (!it) break;
+    if (it.choice === 'armar') { pend.idx++; continue; }
+    pend.preguntadoIdx = -1;
+    if (pend.texto) it.vision = pend.texto;
+    const arm = await pzSftChatArmarUno(it);
+    if (arm.prop) {
+      arm.prop.itemIdx = pend.idx;
+      PZ_SFT_ARMADO_ACTUAL = arm.prop;
+      PZ_SFT_ARMADOS[Number(arm.prop.postId)] = arm.prop;
+      if (await pzSftChatAprobarUno(arm.prop, it)) { okN++; pzSftChatMarcarAprobada(arm.prop.postId); pend.idx++; continue; }
+      fallo = { error: true };
+      break;
+    }
+    fallo = arm;
+    break;
+  }
+  pend.aprobandoTodas = false;
+  try { render(); } catch (e) {}
+  if (!fallo && pend.items.every((x) => x.choice === 'armar')) {
+    PZ_SFT_CHAT_PENDIENTE = null;
+    pzSftChatDecir(en ? `Done! All ${okN} posts scheduled ✓` : `¡Listo! Los ${okN} posteos quedaron programados ✓`, '');
+    return;
+  }
+  pzSftChatDecir(en ? `I approved ${okN} of ${total} — this one is still pending:` : `Aprobé ${okN} de ${total} — este quedó pendiente:`, '');
+  pzSftChatProponer();
+}
+/* (LOTE CHAT-CLICKS) Marca la tarjeta aprobada EN EL LUGAR (sin
+   borrarla): la fila de botones pasa a «✓ Programado». */
+function pzSftChatMarcarAprobada(postId) {
+  try {
+    const row = document.getElementById('pzSftCardBtns-' + Number(postId));
+    if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">✓ ' + (pzSftEn() ? 'Scheduled' : 'Programado') + '</span>';
+  } catch (e) {}
+}
+/* Hoy en la zona del cliente (yyyy-mm-dd), para la frase fija. */
+function pzSftHoyYmd() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
 // Tarjeta del posteo armado en el chat (Caso 2: foto + fecha + caption
 // + aprobar/cambiar — nunca texto volcado). El armado vigente queda en
 // PZ_SFT_ARMADO_ACTUAL para «Cambiar texto / Cambiar día».
 var PZ_SFT_ARMADO_ACTUAL = null;
+var PZ_SFT_ARMADOS = {}; // postId → propuesta armada (varias tarjetas en el chat)
 function pzSftChatTarjetaArmada(prop) {
   const en = pzSftEn();
   const box = document.getElementById('chatBox');
   if (!box) { pzSftChatDecir(en ? 'Post ready.' : 'Posteo listo.', pzSftChatBotones()); return; }
-  const img = prop.image_path ? `<img src="${esc(prop.image_path)}" alt="" style="width:100%;border-radius:12px;display:block" loading="lazy">` : '';
+  const pid = Number(prop.postId) || 0;
+  PZ_SFT_ARMADOS[pid] = prop;
+  const img = prop.image_path ? `<img class="pz-sft-img" src="${esc(prop.image_path)}" alt="" style="width:100%;border-radius:12px;display:block" loading="lazy">` : '';
   const cuando = (prop.dia_label && prop.hora) ? (en ? `Goes out ${prop.dia_label} at ${prop.hora}` : `Sale el ${prop.dia_label} a las ${prop.hora}`) : '';
   const llena = prop.semana_llena ? `<div style="font-size:12px;color:var(--mut);margin-top:4px">${en ? 'This week is full — it goes out next Monday.' : 'Esta semana está completa — sale el lunes que viene.'}</div>` : '';
-  const card = `<div class="chat-msg ai" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Your post is ready' : 'Tu posteo está armado'}</div>${img}<div style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div style="font-size:13px;white-space:pre-wrap">${esc(prop.caption || '')}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatAprobar(this)">${en ? 'Approve ✓' : 'Aprobar ✓'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarTexto()">${en ? 'Change text' : 'Cambiar texto'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarDia()">${en ? 'Change day' : 'Cambiar día'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzUsarFotoAbrir(${Number(prop.postId) || 0})">${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button></div></div>`;
+  const todas = (PZ_SFT_CHAT_PENDIENTE && PZ_SFT_CHAT_PENDIENTE.items && PZ_SFT_CHAT_PENDIENTE.items.length > 1)
+    ? `<button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatAprobarTodas()">${en ? 'Approve all' : 'Aprobar todas'}</button>` : '';
+  const otraFoto = (prop.kind === 'video') ? '' : `<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatOtraFoto(${pid})">${en ? 'Another photo' : 'Otra foto'}</button>`;
+  const card = `<div class="chat-msg ai" id="pzSftCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Your post is ready' : 'Tu posteo está armado'}</div>${img}<div class="pz-sft-cuando" style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-sft-cap" style="font-size:13px;white-space:pre-wrap">${esc(prop.caption || '')}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div id="pzSftCardBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatAprobar(this, ${pid})">${en ? 'Post it' : 'Sale así'}</button>${todas}<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarTexto(${pid})">${en ? 'Change text' : 'Cambiar texto'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarDia(${pid})">${en ? 'Change day' : 'Cambiar día'}</button>${otraFoto}<button type="button" class="btn btn-soft btn-sm" onclick="pzUsarFotoAbrir(${pid})">${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button></div><div id="pzSftDias-${pid}"></div><div id="pzSftEdit-${pid}"></div></div>`;
   box.insertAdjacentHTML('beforeend', card);
   try { chatScroll(); } catch (e) {}
 }
-function pzSftChatCambiarTexto() {
-  const prop = PZ_SFT_ARMADO_ACTUAL;
+/* (LOTE CHAT-CLICKS · punto 2) «Cambiar texto»: edita la caption AHÍ
+   MISMO, sin salir del chat (antes navegaba al detalle). */
+function pzSftChatCambiarTexto(postId) {
+  const prop = (postId && PZ_SFT_ARMADOS[Number(postId)]) || PZ_SFT_ARMADO_ACTUAL;
   if (!prop || !prop.postId) return;
-  try { hfOpenChatForPost({ id: prop.postId, caption: prop.caption || '', image_path: prop.image_path || '' }); } catch (e) {}
+  const en = pzSftEn();
+  const slot = document.getElementById('pzSftEdit-' + Number(prop.postId));
+  if (!slot) return;
+  if (slot.dataset.open === '1') { slot.innerHTML = ''; slot.dataset.open = ''; return; }
+  slot.dataset.open = '1';
+  slot.innerHTML = '<div style="margin-top:8px"><textarea id="pzSftEditTa-' + Number(prop.postId) + '" rows="3" style="width:100%;box-sizing:border-box;border-radius:10px;padding:8px;font:inherit;font-size:13px">' + esc(prop.caption || '') + '</textarea><div style="display:flex;gap:8px;margin-top:6px"><button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatGuardarTexto(' + Number(prop.postId) + ')">' + esc(en ? 'Save' : 'Guardar') + '</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarTexto(' + Number(prop.postId) + ')">' + esc(en ? 'Cancel' : 'Cancelar') + '</button></div></div>';
+  try { const ta = document.getElementById('pzSftEditTa-' + Number(prop.postId)); if (ta) ta.focus(); } catch (e) {}
 }
-function pzSftChatCambiarDia() {
-  const prop = PZ_SFT_ARMADO_ACTUAL;
+async function pzSftChatGuardarTexto(postId) {
+  const prop = (postId && PZ_SFT_ARMADOS[Number(postId)]) || PZ_SFT_ARMADO_ACTUAL;
   if (!prop || !prop.postId) return;
-  location.hash = '#/app/post/' + encodeURIComponent(prop.postId);
+  const en = pzSftEn();
+  const ta = document.getElementById('pzSftEditTa-' + Number(postId));
+  if (!ta) return;
+  const txt = String(ta.value || '').trim();
+  try {
+    const d = await api.patch('/api/posts/' + encodeURIComponent(prop.postId), { action: 'save-draft', caption: txt });
+    if (!d || !d.ok) throw new Error((d && d.message) || (d && d.error) || 'fail');
+    prop.caption = txt;
+    const card = document.getElementById('pzSftCard-' + Number(prop.postId));
+    if (card) { const cap = card.querySelector('.pz-sft-cap'); if (cap) cap.textContent = txt; }
+    const slot = document.getElementById('pzSftEdit-' + Number(prop.postId));
+    if (slot) { slot.innerHTML = ''; slot.dataset.open = ''; }
+    toast('✅ ' + (en ? 'Text updated' : 'Texto actualizado'));
+    try { render(); } catch (e) {}
+  } catch (e) {
+    toast('😅 ' + esc((e && e.message) || (en ? 'Try again' : 'Probá de nuevo')));
+  }
+}
+/* (LOTE CHAT-CLICKS · punto 2) «Cambiar día»: píldoras de días libres
+   SIN salir del chat (antes navegaba al detalle del posteo). */
+async function pzSftChatCambiarDia(postId) {
+  const prop = (postId && PZ_SFT_ARMADOS[Number(postId)]) || PZ_SFT_ARMADO_ACTUAL;
+  if (!prop || !prop.postId) return;
+  const en = pzSftEn();
+  const slot = document.getElementById('pzSftDias-' + Number(prop.postId));
+  if (!slot) return;
+  if (slot.dataset.open === '1') { slot.innerHTML = ''; slot.dataset.open = ''; return; }
+  slot.dataset.open = '1';
+  slot.innerHTML = '<div style="font-size:12px;color:var(--mut);padding:6px 2px">' + esc(en ? 'Looking for free days…' : 'Buscando días libres…') + '</div>';
+  try {
+    const d = await api.get('/api/posts/dias-libres?kind=' + encodeURIComponent(prop.kind === 'video' ? 'video' : 'photo') + '&post_id=' + Number(prop.postId) + '&n=7');
+    if (!d || !d.ok || !Array.isArray(d.dias) || !d.dias.length) {
+      slot.innerHTML = '<div style="font-size:12px;color:var(--mut);padding:6px 2px">' + esc(en ? 'No free days right now.' : 'No hay días libres por ahora.') + '</div>';
+      return;
+    }
+    let html = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
+    for (const dia of d.dias) {
+      html += '<button type="button" class="chat-cap-opt" onclick="pzSftChatMoverDia(' + Number(prop.postId) + ', \'' + String(dia.iso).replace(/'/g, '') + '\', \'' + String(dia.dia || '').replace(/'/g, '') + '\', \'' + String(dia.dia_label || '').replace(/'/g, '') + '\', \'' + String(dia.hora || '').replace(/'/g, '') + '\')"><b>' + esc(dia.dia_label || dia.dia) + '</b><span>' + esc(dia.hora || '') + '</span></button>';
+    }
+    html += '<button type="button" class="chat-cap-opt" onclick="pzSftChatCambiarDia(' + Number(prop.postId) + ')"><b>' + esc(en ? 'Cancel' : 'Cancelar') + '</b><span></span></button></div>';
+    slot.innerHTML = html;
+  } catch (e) {
+    slot.innerHTML = '<div style="font-size:12px;color:var(--mut);padding:6px 2px">' + esc(en ? 'I could not load the free days.' : 'No pude cargar los días libres.') + '</div>';
+  }
+}
+async function pzSftChatMoverDia(postId, iso, dia, diaLabel, hora) {
+  const prop = (postId && PZ_SFT_ARMADOS[Number(postId)]) || PZ_SFT_ARMADO_ACTUAL;
+  if (!prop || !prop.postId) return;
+  const en = pzSftEn();
+  try {
+    const d = await api.patch('/api/posts/' + encodeURIComponent(prop.postId), { action: 'save-draft', scheduled_at: iso });
+    if (!d || !d.ok) throw new Error((d && d.message) || (d && d.error) || 'fail');
+    prop.scheduled_at = (d && d.scheduled_at) || iso;
+    prop.dia = dia || prop.dia;
+    prop.dia_label = diaLabel || prop.dia_label;
+    prop.hora = hora || prop.hora;
+    const card = document.getElementById('pzSftCard-' + Number(prop.postId));
+    if (card) { const cu = card.querySelector('.pz-sft-cuando'); if (cu) cu.innerHTML = '<b>' + esc(en ? ('Goes out ' + prop.dia_label + ' at ' + prop.hora) : ('Sale el ' + prop.dia_label + ' a las ' + prop.hora)) + '</b>'; }
+    const slot = document.getElementById('pzSftDias-' + Number(prop.postId));
+    if (slot) { slot.innerHTML = ''; slot.dataset.open = ''; }
+    toast('🗓️ ' + (en ? ('Rescheduled — goes out ' + prop.dia_label + ' at ' + prop.hora) : ('Reprogramado — sale el ' + prop.dia_label + ' a las ' + prop.hora)));
+    try { render(); } catch (e) {}
+  } catch (e) {
+    toast('😅 ' + esc((e && e.message) || (en ? 'Try again' : 'Probá de nuevo')));
+  }
+}
+/* (LOTE CHAT-CLICKS · punto 2) «Otra foto»: cicla las fotos LIBRES del
+   cliente (nunca regenera IA). El fetch es fresco por tap: la foto
+   vieja vuelve a ser libre tras el reemplazo y puede volver en el
+   ciclo. La tarjeta ES la vista previa — nada se publica hasta
+   «Sale así» — así que el cambio es directo, sin sheet de confirmación
+   (el preview con confirmación sigue vigente en «Usar la foto que
+   envié»). */
+var PZ_OTRAFOTO_IDX = {}; // postId → índice del ciclo
+async function pzSftChatOtraFoto(postId) {
+  const prop = (postId && PZ_SFT_ARMADOS[Number(postId)]) || PZ_SFT_ARMADO_ACTUAL;
+  if (!prop || !prop.postId) return;
+  const en = pzSftEn();
+  const pend = PZ_SFT_CHAT_PENDIENTE;
+  const batchIds = new Set((pend && pend.items ? pend.items : []).map((x) => Number(x.assetId) || 0));
+  try {
+    const d = await api.get('/api/album/libres');
+    if (!d || !d.ok) throw new Error('libres');
+    const list = (Array.isArray(d.libres) ? d.libres : []).filter((f) => f && Number(f.id) && !batchIds.has(Number(f.id)) && Number(f.id) !== Number(prop.assetId || 0));
+    if (!list.length) { toast(en ? 'You have no more free photos — upload one first.' : 'No tenés más fotos libres — subí una primero.'); return; }
+    const pid = Number(prop.postId);
+    let idx = PZ_OTRAFOTO_IDX[pid];
+    if (!Number.isInteger(idx)) idx = -1;
+    for (let tries = 0; tries < list.length; tries++) {
+      idx = (idx + 1) % list.length;
+      const cand = list[idx];
+      try {
+        const r = await api.post('/api/posts/' + encodeURIComponent(prop.postId) + '/usar-foto', { asset_id: Number(cand.id) });
+        if (!r || !r.ok) {
+          if (r && r.error === 'ocupada') continue;
+          throw new Error((r && r.error) || 'fail');
+        }
+        PZ_OTRAFOTO_IDX[pid] = idx;
+        prop.image_path = r.image_path || cand.path;
+        prop.assetId = Number(cand.id);
+        const card = document.getElementById('pzSftCard-' + pid);
+        if (card) { const img = card.querySelector('.pz-sft-img'); if (img) img.src = prop.image_path; }
+        toast('✅ ' + (en ? 'Photo changed' : 'Foto cambiada'));
+        try { render(); } catch (e) {}
+        return;
+      } catch (e) {
+        if (String((e && e.message) || '').indexOf('ocupada') >= 0) continue;
+        throw e;
+      }
+    }
+    toast(en ? 'You have no more free photos — upload one first.' : 'No tenés más fotos libres — subí una primero.');
+  } catch (e) {
+    toast('😅 ' + esc((e && e.message) || (en ? 'Try again' : 'Probá de nuevo')));
+  }
 }
 
 // (LOTE A · «Usar la foto que envié», Valentino 8/11 21:10) Cuando Posty
@@ -29524,6 +29849,11 @@ function pzSftChatTexto(sendText) {
   const it = pend.items[pend.idx];
   if (it) it.vision = t;
   if (pend.propuesta) { pzSftChatQuitarBotones(); pend.propuesta = null; pzSftChatProponer(); }
+  else if (PZ_SFT_PREGUNTA_ACTIVA) { // respondió la pregunta escribiendo: la visión es su texto
+    try { const w = document.getElementById('pzSftPregunta'); if (w) w.remove(); } catch (e) {}
+    PZ_SFT_PREGUNTA_ACTIVA = null;
+    pzSftChatProponer();
+  }
 }
 /* REDEFINE el cierre del lote original: además del Álbum, cerrar la
    pantalla sin elegir marca las fotos de origen chat como «despues»

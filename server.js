@@ -11392,6 +11392,36 @@ async function albumCrearFoto(uid, assetId, approved) {
 // Devuelve {headline, caption, hashtags, tag, issues, hard} o {gated} o
 // {error}. El feedback del cliente y su corrección de visión viajan en el
 // tema: el texto sale de lo que la foto muestra de verdad.
+// (LOTE CHAT-CLICKS · punto 6) Cuando la foto no muestra el negocio
+// con claridad (gate foto↔texto), la pregunta que desbloquea el armado:
+// UNA sola pregunta con DOS botones, nunca texto libre. Las opciones son
+// los dos productos/servicios más importantes del fundamento (la estrella
+// primero, ya filtrados por scrubDnaOffers, nunca inventados); si el
+// fundamento tiene un solo producto, la segunda opción es el tag de la
+// foto (lo que el modelo SÍ ve en ella) o, sin tag distinto, guardarla
+// como material. Sin productos, null (el cliente ve el mensaje de
+// siempre). Los textos fijos viajan en ES y EN (los nombres de producto
+// no se traducen: son palabras del cliente).
+function armaPreguntaFoto(uid, fotoTag) {
+  try {
+    const dna = readDna(uid) || {};
+    const nombres = [];
+    const pushN = (arr) => { for (const x of (arr || [])) { const n = String((x && x.nombre) || x || '').trim(); if (n && !nombres.includes(n)) nombres.push(n); } };
+    if (dna.producto_estrella) { const e = String(dna.producto_estrella).trim(); if (e && !nombres.includes(e)) nombres.push(e); }
+    pushN(dna.productos);
+    pushN(dna.servicios);
+    const texto = '¿Qué muestra esta foto?';
+    const texto_en = "What's in this photo?";
+    if (nombres.length >= 2) return { texto, texto_en, opciones: [{ id: nombres[0], label: nombres[0] }, { id: nombres[1], label: nombres[1] }] };
+    if (nombres.length === 1) {
+      const tag = String(fotoTag || '').trim();
+      if (tag && tag.toLowerCase() !== nombres[0].toLowerCase()) return { texto, texto_en, opciones: [{ id: nombres[0], label: nombres[0] }, { id: tag, label: tag }] };
+      return { texto, texto_en, opciones: [{ id: nombres[0], label: nombres[0] }, { id: '__material__', label: 'Guardala como material', label_en: 'Keep it as material' }] };
+    }
+    return null;
+  } catch (e) { return null; }
+}
+
 async function albumPropuesta(uid, assetId, feedback, vision) {
   try {
     const asset = db.prepare('SELECT id, file_path, kind, album_tag, album_quality FROM assets WHERE id = ? AND user_id = ?').get(assetId, uid);
@@ -11449,7 +11479,7 @@ async function albumPropuesta(uid, assetId, feedback, vision) {
           }
         } catch (e) { /* el reintento nunca rompe la propuesta */ }
       }
-      if (!fotoGate.ok) { console.log(`[album-propuesta] usuario ${uid}: foto ${assetId} NO genera propuesta — gate foto↔texto: ${fotoGate.reason}`); return { gated: true, reason: fotoGate.reason }; }
+      if (!fotoGate.ok) { console.log(`[album-propuesta] usuario ${uid}: foto ${assetId} NO genera propuesta — gate foto↔texto: ${fotoGate.reason}`); return { gated: true, reason: fotoGate.reason, pregunta: armaPreguntaFoto(uid, fotoVis.tag) }; }
     }
     // (CHAT-FOTO) La nota de visión es contexto interno del gate y del
     // generador: NUNCA viaja al cliente. El cliente la renderizaba cruda
@@ -12228,12 +12258,12 @@ app.post('/api/album/:id/armar', requireAuth, express.json(), async (req, res) =
       const prop = await albumPropuesta(uid, asset.id, '', (bArm.vision || ''));
       if (prop.capped) return res.status(402).json({ ok: false, error: prop.error });
       if (prop.error) return res.status(400).json({ ok: false, error: prop.error });
-      if (prop.gated) return res.json({ ok: false, gated: true, reason: prop.reason || 'gated' });
+      if (prop.gated) return res.json({ ok: false, gated: true, reason: prop.reason || 'gated', pregunta: prop.pregunta || null });
       const full = db.prepare('SELECT id, file_path, album_quality, thumb_path FROM assets WHERE id = ? AND user_id = ?').get(asset.id, uid);
       const over = { caption: prop.caption || '', hashtags: prop.hashtags || '', headline: prop.headline || '' };
       const built = await buildClientVideoReelPost(uid, full, 'album', over);
       if (built && built.busy) return res.status(409).json({ ok: false, error: 'Ya estoy armando ese reel' });
-      if (built && built.gated) return res.json({ ok: false, gated: true, reason: built.reason || 'gated' });
+      if (built && built.gated) return res.json({ ok: false, gated: true, reason: built.reason || 'gated', pregunta: prop.pregunta || null });
       if (!built || !built.postId) return res.status(400).json({ ok: false, error: (built && built.error) || 'No pude armar el reel' });
       const wk = mondayKeyOf(ymdInTz(slot, tz));
       try { db.prepare(`UPDATE posts SET scheduled_at = ?, foto_asset_id = ?, week_key = ? WHERE id = ?`).run(slot, asset.id, wk, built.postId); } catch (e) { console.error('[album-armar] update reel:', e.message); }
@@ -12246,7 +12276,7 @@ app.post('/api/album/:id/armar', requireAuth, express.json(), async (req, res) =
     const prop = await albumPropuesta(uid, asset.id, '', (bArm.vision || ''));
     if (prop.capped) return res.status(402).json({ ok: false, error: prop.error });
     if (prop.error) return res.status(400).json({ ok: false, error: prop.error });
-    if (prop.gated) return res.json({ ok: false, gated: true, reason: prop.reason || 'gated' });
+    if (prop.gated) return res.json({ ok: false, gated: true, reason: prop.reason || 'gated', pregunta: prop.pregunta || null });
     const slot = armarNextFeedSlot(uid);
     if (!slot) return res.status(400).json({ ok: false, error: 'No encontré un día libre para el posteo' });
     const wk = mondayKeyOf(ymdInTz(slot, tz));
@@ -12257,6 +12287,18 @@ app.post('/api/album/:id/armar', requireAuth, express.json(), async (req, res) =
     const lab = armarSlotLabel(uid, slot);
     return res.json({ ok: true, post_id: ins.lastInsertRowid, scheduled_at: slot, dia: lab.dia, dia_label: lab.dia_label, hora: lab.hora, semana_llena: wk > mondayKeyOf(tzToday(tz)), caption: prop.caption || '', headline: prop.headline || '', hashtags: prop.hashtags || '', hard: prop.hard || [], kind: 'photo', image_path: asset.file_path });
   } catch (e) { console.error('[album-armar]', e.message); res.status(500).json({ ok: false, error: 'No pude armar el posteo' }); }
+});
+// GET /api/posts/dias-libres — (LOTE CHAT-CLICKS · punto 2) días libres
+// para mover un posteo desde el chat (píldoras, sin salir del chat).
+app.get('/api/posts/dias-libres', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const kind = String(req.query.kind || 'photo');
+    const postId = Number(req.query.post_id || 0) || 0;
+    const n = Math.min(14, Math.max(1, Number(req.query.n || 7) || 7));
+    const dias = proximosDiasLibres(uid, kind, postId, n);
+    res.json({ ok: true, dias });
+  } catch (e) { console.error('[dias-libres]', e.message); res.status(500).json({ ok: false, error: 'No pude ver los días libres' }); }
 });
 app.get('/api/posts/:id/rendimiento', requireAuth, (req, res) => {
   try {
@@ -13080,7 +13122,30 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       imageNext = rec.image_path;
       prevNext = post.image_path || '';
     }
+    // (LOTE CHAT-CLICKS · punto 2) Mover un borrador desde el chat: la
+    // fecha cambia pero el estado NO (sigue borrador hasta su OK — sin tu
+    // OK, no sale nada). La fecha se valida contra días tomados y cupo de
+    // la semana destino (misma regla que dias-libres): día ocupado → 409,
+    // sin cupo en otra semana → 403 plan_limit. Solo draft/scheduled.
+    let moveIso = null;
+    if (scheduled_at !== undefined && scheduled_at) {
+      if (post.status !== 'draft' && post.status !== 'scheduled') return res.status(400).json({ error: 'no_movable' });
+      const tz0 = userTz(req.session.userId);
+      const k0 = ymdInTz(scheduled_at, tz0);
+      if (!k0) return res.status(400).json({ error: 'fecha_invalida' });
+      const taken0 = diasLibresTomados(req.session.userId, post.media_type === 'video' ? 'video' : 'photo', post.id);
+      if (taken0.has(k0)) return res.status(409).json({ error: 'dia_ocupado', message: 'Ese día ya tiene un posteo.' });
+      const mon0 = mondayKeyOf(k0);
+      let curMon0 = '';
+      try { if (post.scheduled_at) curMon0 = mondayKeyOf(String(post.scheduled_at).slice(0, 10)); } catch (e) {}
+      if (mon0 !== curMon0) {
+        const q0 = quotaForWeek(req.session.userId, post.media_type, mon0);
+        if (q0.left <= 0) return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q0.limit, used: q0.used, plan_name: q0.plan_name, week_key: mon0, message: `Llegaste al límite de tu plan ${q0.plan_name} (${q0.limit} ${quotaUnitName(post.media_type)} por semana). Mejorá tu paquete para seguir posteando esa semana.` });
+      }
+      moveIso = scheduled_at;
+    }
     db.prepare(`UPDATE posts SET caption=?, hashtags=?, image_path=?, prev_image_path=?, overlay_text=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, imageNext, prevNext, overlayNext, post.id);
+    if (moveIso) { try { db.prepare(`UPDATE posts SET scheduled_at=? WHERE id=?`).run(moveIso, post.id); } catch (e) {} }
     // (media-cliente-2) Herencia por evidencia: foto nueva en un
     // borrador cuyo caption nombra exactamente un producto real.
     if (image_path && image_path !== post.image_path) {
@@ -13104,7 +13169,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       try { setImmediate(() => mcAutoStabilize(req.session.userId, post.id, image_path)); } catch (e) {}
     }
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto en revisión
-    return res.json({ ok: true });
+    return res.json({ ok: true, scheduled_at: moveIso || post.scheduled_at });
   } else {
     const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
     // Integridad de agenda (2026-10-16): jamás un posteo 'scheduled' sin
@@ -16512,6 +16577,73 @@ function nextFreeReelSlot(uid) {
     return zonedWallToUtc(`${k} ${String(bestHour).padStart(2, '0')}:00`, tz);
   }
   return null;
+}
+
+// (LOTE CHAT-CLICKS · punto 2) Días TOMADOS para un posteo: programados
+// o borradores con fecha, excluyendo el posteo que se está moviendo.
+// Foto: media_type != 'story' (IGUAL que armarNextFeedSlot — un reel
+// ocupa el día de feed). Video: solo media_type='video' (IGUAL que
+// nextFreeReelSlot). Compartido por proximosDiasLibres y por la
+// validación del move en save-draft, para que lista y validación
+// acuerden siempre.
+function diasLibresTomados(uid, kind, excludePostId) {
+  const tz = userTz(uid);
+  const taken = new Set();
+  try {
+    const rows = db.prepare(`SELECT scheduled_at, media_type FROM posts WHERE user_id = ? AND status IN ('scheduled','draft') AND scheduled_at IS NOT NULL AND id != ?`).all(uid, excludePostId || 0);
+    for (const r of rows) {
+      const k = ymdInTz(r.scheduled_at, tz);
+      if (!k) continue;
+      if (kind === 'video') { if (r.media_type === 'video') taken.add(k); }
+      else if (r.media_type !== 'story') taken.add(k);
+    }
+  } catch (e) { /* sin bloqueos: la lista se calcula igual */ }
+  return taken;
+}
+
+// (LOTE CHAT-CLICKS · punto 2) Días libres para mover un posteo desde el
+// chat (píldoras, sin salir del chat): la misma política de
+// armarNextFeedSlot/nextFreeReelSlot (mañana en adelante, best_hour o
+// 19:00, saltando cierres y días tomados), pero como LISTA. El cupo se
+// evalúa contra la semana destino (como hfReschedQuotaOk): mover DENTRO
+// de la misma semana del posteo siempre vale; a otra semana solo si
+// queda cupo. El día actual del posteo no se ofrece (no es un cambio).
+// Sin día libre en 90 días, lista vacía.
+function proximosDiasLibres(uid, kind, excludePostId, n) {
+  const tz = userTz(uid);
+  let bestHour = 19;
+  try { const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid); if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour; } catch (e) { /* respaldo 19:00 */ }
+  const closedSet = closedDaysOf(uid);
+  const taken = diasLibresTomados(uid, kind, excludePostId);
+  let curMonday = '';
+  let curDia = '';
+  try {
+    if (excludePostId) {
+      const p = db.prepare('SELECT scheduled_at FROM posts WHERE id = ? AND user_id = ?').get(excludePostId, uid);
+      if (p && p.scheduled_at) { curMonday = mondayKeyOf(String(p.scheduled_at).slice(0, 10)); curDia = ymdInTz(p.scheduled_at, tz) || ''; }
+    }
+  } catch (e) { /* sin semana actual: el cupo se evalúa en todas */ }
+  const mt = kind === 'video' ? 'video' : 'image';
+  const out = [];
+  const today = tzToday(tz);
+  for (let i = 1; i <= 90 && out.length < n; i++) {
+    const k = shiftDays(today, i);
+    const wd = weekdayOfYmd(k);
+    if (k === curDia) continue; // el día actual del posteo no es un cambio
+    if (closedSet.has(wd)) continue;
+    if (kind === 'video' && wd !== 2 && wd !== 4) continue;
+    if (taken.has(k)) continue;
+    const mon = mondayKeyOf(k);
+    if (mon !== curMonday) {
+      let left = 1;
+      try { left = quotaForWeek(uid, mt, mon).left; } catch (e) { /* sin cupo medible: se ofrece */ }
+      if (!(left > 0)) continue;
+    }
+    const iso = zonedWallToUtc(`${k} ${String(bestHour).padStart(2, '0')}:00`, tz);
+    const lab = armarSlotLabel(uid, iso);
+    out.push({ dia: k, dia_label: lab.dia_label, hora: lab.hora, iso });
+  }
+  return out;
 }
 
 // Etiqueta del slot en la zona del cliente: «miércoles 11/11» + «19:00».
@@ -32898,7 +33030,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v824';
+const BUILD_ID = '20261105-v825';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

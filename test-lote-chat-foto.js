@@ -113,7 +113,7 @@ async function parteA() {
       throw new Error('no levanta');
     }
     const ver = await reqJson('GET', '/api/version');
-    check('A0b /api/version trae el BUILD v822 (estampado por el re-estampador)', ver.status === 200 && ver.json && ver.json.build === '20261105-v822', JSON.stringify(ver.json));
+    check('A0b /api/version trae el BUILD v824 (estampado por el re-estampador)', ver.status === 200 && ver.json && ver.json.build === '20261105-v825', JSON.stringify(ver.json));
     const dbPath = path.join(tmpDir, 'posta.db');
     check('A0c la DB del boot existe en el DATA_DIR temporal', fs.existsSync(dbPath));
 
@@ -234,7 +234,7 @@ function extractClient() {
     parts.push(s);
   }
   for (const sig of ['function chatStripCelebrate(', 'function linkifyEsc(', 'function chatMsgHtml(',
-    'function pzSftT(', 'function pzSftEn(', 'async function pzSftChatProponer() {',
+    'function pzSftT(', 'function pzSftEn(', 'async function pzSftChatArmarUno(', 'async function pzSftChatProponer() {',
     'function pzSftChatTarjetaArmada(', 'async function pzSftPedirCambio() {', 'async function pzSftCambiarImagen() {', 'async function pzSubirCompletar() {']) {
     const s = fnFrom(app, sig);
     if (!s) return { error: 'falta ' + sig };
@@ -265,6 +265,7 @@ async function parteB() {
     const ctx = {
       ME: { lang: 'es' }, console,
       PZ_SFT_CHAT_PENDIENTE: { items: [{ id: 7, assetId: 42, url: '/media/test-foto.png', vision: 'mi robot azul', tag: '', issues: [] }], idx: 0, token: 0, texto: 'mi robot azul', propuesta: null },
+      PZ_SFT_ARMADOS: {}, // (LOTE CHAT-CLICKS · re-pin) la tarjeta nueva registra el armado por postId
       pzSftAsegurarAssetTmp: async () => true,
       pzSftChatDecir: (texto) => { captured.bubble = texto; },
       pzSftChatBotones: () => '',
@@ -282,7 +283,8 @@ async function parteB() {
     // TARJETA (foto + «sale el [día]» + caption + aprobar/cambiar). B1–B4
     // chequean la tarjeta, no la burbuja.
     const b = captured.card || '';
-    check('B0d la oferta llega como TARJETA en el chat', b.includes('Tu posteo está armado') && b.includes('Aprobar'), b.slice(0, 300));
+    // (LOTE CHAT-CLICKS · re-pin) El botón de aprobar se llama «Sale así» (ya no «Aprobar ✓»).
+    check('B0d la oferta llega como TARJETA en el chat', b.includes('Tu posteo está armado') && b.includes('Sale así'), b.slice(0, 300));
     check('B1 la tarjeta no trae la visión cruda', !b.includes('✦ veo') && !b.includes('Figura de robot') && !b.includes('Posty lo está cuidando'), b.slice(0, 300));
     check('B2 la tarjeta no trae entidades sin decodificar', !b.includes('&#39;') && !b.includes('&amp;'), b.slice(0, 300));
     const countHook = b.split(HOOK_FULL).length - 1;

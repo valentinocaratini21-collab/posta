@@ -141,11 +141,20 @@ ok(!!detSrc && detSrc.includes('hf-d-usarfoto'), 'detalle: el botón vive en hfD
 ok(app.includes('pzSftChatTarjetaArmada'), 'SFT: la oferta se rinde como tarjeta armada (pzSftChatTarjetaArmada)');
 ok(!app.includes('Te propongo: Que Posty lo arme'), 'SFT: fuera el texto largo volcado (caso 2)');
 const propSrc = extractFn(app, 'function pzSftChatProponer');
-ok(!!propSrc && propSrc.includes('/armar'), 'SFT: chatProponer llama POST /armar (el posteo se arma en la subida)');
+// (LOTE CHAT-CLICKS · re-pin) El POST /armar se factorizó a
+// pzSftChatArmarUno (lo usan la tarjeta y «Aprobar todas»); Proponer lo
+// llama, no lo hace directo.
+const armUnoSrc = extractFn(app, 'function pzSftChatArmarUno');
+ok(!!armUnoSrc && armUnoSrc.includes('/armar'), 'SFT: chatArmarUno llama POST /armar (el posteo se arma en la subida)');
+ok(!!propSrc && propSrc.includes('pzSftChatArmarUno'), 'SFT: chatProponer arma vía pzSftChatArmarUno');
 ok(!!propSrc && propSrc.includes('pzSftChatTarjetaArmada'), 'SFT: chatProponer rinde la tarjeta armada');
 const aprSrc = extractFn(app, 'function pzSftChatAprobar');
 ok(!!aprSrc && !aprSrc.includes("/crear'") && !aprSrc.includes('/crear"'), 'SFT: chatAprobar ya no llama /crear (el borrador ya existe armado)');
-ok(!!aprSrc && aprSrc.includes('choice: "armar"'), 'SFT: chatAprobar marca choice armar');
+// (LOTE CHAT-CLICKS · re-pin) El PATCH + choice 'armar' se factorizó a
+// pzSftChatAprobarUno (lo usan Aprobar y «Aprobar todas»).
+const aprUnoSrc = extractFn(app, 'function pzSftChatAprobarUno');
+ok(!!aprUnoSrc && aprUnoSrc.includes("choice: 'armar'"), 'SFT: chatAprobarUno marca choice armar');
+ok(!!aprSrc && aprSrc.includes('pzSftChatAprobarUno'), 'SFT: chatAprobar aprueba vía pzSftChatAprobarUno');
 // FIX ÁLBUM cliente: mediaId viaja en la lista (la gemela nacía acá).
 const sftDesp = extractFn(app, 'function pzSftDespuesDeSubirChat');
 ok(!!sftDesp && sftDesp.includes('mediaId'), 'FIX ÁLBUM: pzSftDespuesDeSubirChat copia mediaId (ya no re-sube los bytes)');
@@ -383,18 +392,18 @@ try { require.resolve('express', { paths: [__dirname] }); expressOk = true; } ca
     ok(up, 'boot levanta (PID ' + pid + ')');
     if (up) {
       const ver = JSON.parse((await getText('/api/version')).body);
-      ok(ver.build === '20261105-v822', '/api/version 20261105-v822 (estampado por el re-estampador)');
-      const appS = await getText('/app.js?v=557');
-      ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=557 servido = árbol');
+      ok(ver.build === '20261105-v825', '/api/version 20261105-v825 (estampado por el re-estampador)');
+      const appS = await getText('/app.js?v=559');
+      ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=559 servido = árbol');
       ok(appS.body.includes('pz-hoy-hoy') && appS.body.includes('pzUsarFotoAbrir'), 'servido: posteo de hoy + usar-foto presentes');
       ok(!appS.body.includes('data-tab="estrategia"'), 'servido: sin pestaña Estrategia');
-      const stS = await getText('/styles.css?v=20261209');
-      ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261209 servido = árbol');
+      const stS = await getText('/styles.css?v=20261211');
+      ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261211 servido = árbol');
       ok(stS.body.includes('.pz-hoy-hoy{') && stS.body.includes('.pz-nivel-posty{'), 'servido: clases nuevas del lote en el CSS');
       const idx = await getText('/?cb=lote-a-mejoras-inicio');
-      ok(idx.body.includes('app.js?v=557') && idx.body.includes('styles.css?v=20261209'), 'index ES servido ?v=557 + styles?v=20261209');
+      ok(idx.body.includes('app.js?v=559') && idx.body.includes('styles.css?v=20261211'), 'index ES servido ?v=557 + styles?v=20261211');
       const idxEn = await getText('/en/?cb=lote-a-mejoras-inicio');
-      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261209'), 'index EN servido styles?v=20261209');
+      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261211'), 'index EN servido styles?v=20261211');
       // Sin sesión: 401 en los endpoints nuevos.
       ok((await api('', 'GET', '/api/album')).status === 401, 'sin sesión: GET /api/album → 401');
       ok((await api('', 'GET', '/api/album/libres')).status === 401, 'sin sesión: GET /api/album/libres → 401');

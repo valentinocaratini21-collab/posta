@@ -244,26 +244,30 @@ try { require.resolve('express', { paths: [__dirname] }); expressOk = true; } ca
     const srv = spawn(process.execPath, ['server.js'], { cwd: __dirname, env: { ...process.env, DATA_DIR: TMP, PORT: String(PORT), OPENAI_API_KEY: '' }, stdio: 'ignore' });
     const pid = srv.pid;
     console.log('  boot PID: ' + pid);
-    const get = (p) => new Promise((res, rej) => { http.get({ host: '127.0.0.1', port: PORT, path: p, headers: { 'User-Agent': 'lote-hoy-avatar-feed/1.0' } }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => res({ status: r.statusCode, body: b })); }).on('error', rej); });
+    // (LOTE CHAT-CLICKS · re-pin) Concatenar Buffers y decodificar al
+    // final: «b += chunk» parte el UTF-8 multi-byte en los bordes de
+    // chunk (el «á» de «probá de nuevo» quedaba «prob��» y el md5 del
+    // servido difería del archivo aunque el server sirve byte-idéntico).
+    const get = (p) => new Promise((res, rej) => { http.get({ host: '127.0.0.1', port: PORT, path: p, headers: { 'User-Agent': 'lote-hoy-avatar-feed/1.0' } }, (r) => { const chunks = []; r.on('data', (c) => { chunks.push(c); }); r.on('end', () => res({ status: r.statusCode, body: Buffer.concat(chunks).toString('utf8') })); }).on('error', rej); });
     const md5 = (s) => crypto.createHash('md5').update(s).digest('hex');
     let up = false;
     for (let i = 0; i < 40 && !up; i++) { await new Promise((r) => setTimeout(r, 500)); try { const v = await get('/api/version'); up = v.status === 200; } catch (e) {} }
     ok(up, 'boot levanta (PID ' + pid + ')');
     if (up) {
       const ver = JSON.parse((await get('/api/version')).body);
-      ok(ver.build === '20261105-v822', '/api/version 20261105-v822 (estampado)');
-      const appS = await get('/app.js?v=557');
-      ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=557 servido = árbol');
+      ok(ver.build === '20261105-v825', '/api/version 20261105-v825 (estampado)');
+      const appS = await get('/app.js?v=559');
+      ok(appS.status === 200 && md5(appS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8')), 'app.js?v=559 servido = árbol');
       ok(!appS.body.includes('pz-hoy-speech-ava'), 'servido: sin carita en el saludo');
       ok(appS.body.includes('hf-tile-cap'), 'servido: banda hf-tile-cap presente');
-      const stS = await get('/styles.css?v=20261209');
-      ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261209 servido = árbol');
+      const stS = await get('/styles.css?v=20261211');
+      ok(stS.status === 200 && md5(stS.body) === md5(fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8')), 'styles?v=20261211 servido = árbol');
       ok(stS.body.includes('.pz-shell-head{position:sticky;top:0;z-index:50'), 'servido: encabezado sticky');
       ok(!stS.body.includes('pz-hoy-speech-ava'), 'servido: sin regla de carita en el CSS');
       const idx = await get('/?cb=lote-hoy-avatar-feed');
-      ok(idx.body.includes('app.js?v=557') && idx.body.includes('styles.css?v=20261209'), 'index ES servido ?v=557 + styles?v=20261209');
+      ok(idx.body.includes('app.js?v=559') && idx.body.includes('styles.css?v=20261211'), 'index ES servido ?v=557 + styles?v=20261211');
       const idxEn = await get('/en/?cb=lote-hoy-avatar-feed');
-      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261209'), 'index EN servido styles?v=20261209');
+      ok(idxEn.status === 200 && idxEn.body.includes('styles.css?v=20261211'), 'index EN servido styles?v=20261211');
       const del = await new Promise((res) => { const q = http.request({ host: '127.0.0.1', port: PORT, path: '/api/album/1', method: 'DELETE' }, (r) => res(r.statusCode)); q.on('error', () => res(0)); q.end(); });
       ok(del === 401, 'DELETE sin sesión 401 (el servidor es el real)');
     }
