@@ -15,6 +15,20 @@
 // del cliente de las 9:00. La ficha de cada cliente está en su detalle,
 // ahí mismo donde se decide.
 var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null };
+// (v849) Deep link de la push de cambio de posteo: #/app/conserje?user=<uid>
+// abre el detalle de ese cliente. Parser puro: 0 si no hay ?user= válido.
+// Un uid que no está en la revisión de esa noche no abre nada (fail-soft:
+// vistaId se resetea al cargar y el conserje cae en la lista).
+function conserjeUserFromHash(hash) {
+  try {
+    const h = String(hash || '');
+    const q = h.split('?')[1] || '';
+    const m = q.split('&').find((p) => p.split('=')[0] === 'user');
+    if (!m) return 0;
+    const n = Number(decodeURIComponent(m.split('=')[1] || ''));
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  } catch (e) { return 0; }
+}
 
 // Etiqueta corta para mostrar una decisión ya tomada (solo presentación:
 // la decisión guardada sigue siendo 'sale'/'arreglar'/'no_sale'/'pedir').
@@ -389,5 +403,18 @@ async function bindConserje() {
       return;
     }
   });
+  // (v849) Deep link ?user=<uid>: abrir el detalle de ese cliente.
+  // Se fija ANTES de cargar para que conserjeCargar no lo resetee.
+  const cjDeepUser = conserjeUserFromHash(typeof location !== 'undefined' ? location.hash : '');
+  if (cjDeepUser) conserjeEstado.vistaId = String(cjDeepUser);
   await conserjeCargar();
+  // Si el detalle se abrió, ir directo al chat con Posty (el botón
+  // «Ver el chat con Posty»): la push avisa de un cambio y el dueño
+  // quiere verlo en un toque. Fail-soft: si no hay botón, no pasa nada.
+  if (cjDeepUser) {
+    try {
+      const b = card.querySelector('[data-cj="chat"]');
+      if (b) b.click();
+    } catch (e) {}
+  }
 }

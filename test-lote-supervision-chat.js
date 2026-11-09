@@ -62,7 +62,7 @@ const mod = fs.readFileSync(path.join(TREE, 'supervision-chat.js'), 'utf8');
 const lotePresente = srv.includes('supervisionChat.puerta');
 
 // ---- 0 · pines + marcadores del lote ----
-t.check('0a', 'BUILD v831 (estampado)', srv.includes("BUILD_ID = '20261105-v831'"));
+t.check('0a', 'BUILD v849 (estampado)', srv.includes("BUILD_ID = '20261105-v849'"));
 t.check('0b', 'server.js difiere del pin base', PINS.server === '00000000000000000000000000000000' ? (console.log('  (pin server.js sin rellenar)'), true) : md5(path.join(TREE, 'server.js')) !== PINS.server);
 t.check('0c', 'app.js difiere del pin base', PINS.app === '00000000000000000000000000000000' ? (console.log('  (pin app.js sin rellenar)'), true) : md5(path.join(TREE, 'public', 'app.js')) !== PINS.app);
 t.check('0d', 'db.js difiere del pin base', PINS.db === '00000000000000000000000000000000' ? (console.log('  (pin db.js sin rellenar)'), true) : md5(path.join(TREE, 'db.js')) !== PINS.db);
@@ -94,7 +94,7 @@ t.check('1r', 'la exención usa el mismo chequeo del cerebro (dnaMissingFields s
 t.check('2a', 'chatExchange arranca el poll cuando r.pending', app.includes('if (r && r.pending) { try { pzSupervisionPoll(); }'));
 t.check('2b', 'hasPayload cuenta pending (no burbuja de error)', app.includes('|| (r && r.pending)'));
 t.check('2c', 'pzSupervisionPoll existe y lee el historial cada 15 s', app.includes('async function pzSupervisionPoll()') && app.includes('}, 15000);'));
-t.check('2d', 'el poll pinta la fila assistant nueva como burbuja normal', app.includes("chatMsgHtml('assistant', String(m.text))"));
+t.check('2d', 'el poll pinta la fila assistant nueva como burbuja normal', app.includes("chatMsgHtml('assistant', replyText, rts)")); // (FASE 2: fusión v847 chatMsgHtml(role,text,ts,id) — era la llamada de 2 args)
 t.check('2e', 'el poll se frena al llegar la respuesta y tiene tope (10 min)', app.includes('clearInterval(PZ_SUP_POLL); PZ_SUP_POLL = null;') && app.includes('if (++n >= 40)'));
 t.check('2f', 'el poll siembra el visto con el id máximo (no re-pinta el acuse)', app.includes('PZ_SUP_SEEN = msgs0.reduce'));
 t.check('2g', 'el código de supervisión no muestra "bamboo" en la superficie (cada línea con "bamboo" es comentario o el "bamboo grove" preexistente del jardín)', (() => {

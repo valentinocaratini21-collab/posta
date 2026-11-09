@@ -6250,6 +6250,67 @@ function pzChatSaveReply(db, uid, reply) {
   return true;
 }
 
+// (v849) NOTIFICACIÓN AL DUEÑO — un cliente pidió un cambio de posteo.
+// Una push por pedido; nunca tira: el cambio nunca se frena por la push.
+// El dueño es Valentino (user 12). No existe una constante OWNER_USER_ID
+// en el servidor (los «OWNER» que hay son otra cosa: ownerWords, ownerText,
+// supportCases.setOwner), así que el uid del dueño vive acá, documentado.
+const OWNER_USER_ID = 12;
+// Fecha del posteo para el título: 'hoy' si sale hoy en la tz del cliente,
+// 'DD/MM' si tiene otra fecha, '' si es borrador sin fecha.
+function ownerPostChangeFechaTxt(post, tz) {
+  try {
+    const iso = post && post.scheduled_at;
+    if (!iso) return '';
+    const ymd = ymdInTz(iso, tz);
+    if (!ymd) return '';
+    if (ymd === tzToday(tz)) return 'hoy';
+    const parts = ymd.split('-');
+    return `${parts[2]}/${parts[1]}`;
+  } catch (e) { return ''; }
+}
+// El pedido en una línea, con sus palabras: primera línea, sin saltos, tope 140.
+function ownerPostChangePedidoLinea(pedido) {
+  const s = String(pedido || '').replace(/\s+/g, ' ').trim();
+  return s ? s.slice(0, 140) : '';
+}
+// «13/11 19:00» en la tz del cliente, para el cambio de día del PATCH.
+function ownerPostChangeFechaCorta(iso, uid) {
+  try {
+    const w = wallInTz(iso, userTz(uid));
+    if (!w) return '';
+    const sp = w.split(' ');
+    const parts = sp[0].split('-');
+    return `${parts[2]}/${parts[1]} ${sp[1]}`;
+  } catch (e) { return ''; }
+}
+async function notifyOwnerPostChange({ uid, post, pedido, sendFn }) {
+  try {
+    if (!uid || Number(uid) === OWNER_USER_ID) return { ok: false, reason: 'owner_self' };
+    const send = typeof sendFn === 'function' ? sendFn : ((u, p) => push.sendPush(u, p));
+    let biz = '';
+    try {
+      const prof = getProfile(uid);
+      biz = String((prof && (prof.business_name || prof.ig_username)) || '').trim();
+    } catch (e) {}
+    const nombre = biz || 'Un cliente';
+    const tz = userTz(uid);
+    const fecha = ownerPostChangeFechaTxt(post, tz);
+    const title = fecha === 'hoy' ? `${nombre} pidió un cambio en el posteo de hoy`
+      : fecha ? `${nombre} pidió un cambio en el posteo del ${fecha}`
+      : `${nombre} pidió un cambio en el posteo`;
+    const linea = ownerPostChangePedidoLinea(pedido);
+    const body = linea || 'Te pidió un cambio en un posteo.';
+    const url = `/#/app/conserje?user=${Number(uid)}`;
+    const r = await send(OWNER_USER_ID, { title, body, url, data: { kind: 'cambio_posteo', user_id: Number(uid), post_id: post && post.id ? Number(post.id) : null, url } });
+    console.log(`[owner-notify] cambio posteo user=${uid} post=${post && post.id} -> owner ${OWNER_USER_ID}: ${r && r.ok ? 'ok sent=' + r.sent : 'fail ' + (r && r.reason)} | ${title} | ${body} | ${url}`);
+    return r || { ok: false, reason: 'no_result' };
+  } catch (e) {
+    console.error('[owner-notify] falló:', e.message);
+    return { ok: false, reason: 'error' };
+  }
+}
+
 // ---------- TRABAJOS ASÍNCRONOS DEL CHAT (LOTE v847 · imagen pedida que nunca llegó) ----------
 // Incidente 9/11 12:13: el cerebro prometió «te mando la imagen» en texto y el
 // turno cerró sin ningún bloque de acción, sin trabajo y sin seguimiento. La red
@@ -6936,7 +6997,6 @@ app.post('/api/ideas/chat', async (req, res) => {
             if (key) db.prepare('DELETE FROM style_rules WHERE user_id = ? AND rule_key = ?').run(uid, key);
           }
         }
-      const editedTitles = []; // (CHAT-BAMBOO-BAR) títulos para el recibo verificado
       } catch (e) { console.error('[chat] rule save:', e.message); }
     }
     // La IA sugirió una inspiración visual (moodboard) → guardarla en el ADN
@@ -6963,6 +7023,8 @@ app.post('/api/ideas/chat', async (req, res) => {
     // recibo del chat (la regla vive en style_rules + cm_gusto y se
     // consulta en GET /api/aprendizaje).
     const learnedLines = [];
+    // (v849) Posteos cambiados en este turno: el dueño recibe una push por turno.
+    const cambioPostIds = [];
     const chatTitle = (p) => String((p && p.caption) || 'posteo').split('\n')[0].slice(0, 40);
     if (Array.isArray(out.edits) && out.edits.length) {
       // Palanca 7: si el pedido cambia el CONCEPTO (no solo el texto), la imagen se
@@ -6974,6 +7036,7 @@ app.post('/api/ideas/chat', async (req, res) => {
       const textOnlyEdit = /cambi[aá]\s+(el\s+)?(caption|texto|copy|palabras|t[ií]tulo)|cambiame\s+(el\s+)?(texto|caption|t[ií]tulo)|solo\s+(el\s+)?texto|m[aá]s\s+corto|acort[aá]|s[aá]cale|sac[aá]les?|quit[aá](le|les)?|emojis?/i.test(lastUserMsg);
       let n = 0, imgRegen = 0;
       const editedIds = [];
+      const editedTitles = []; // (CHAT-BAMBOO-BAR) títulos para el recibo verificado — (v849) estaba declarado dentro del try de rule-save y el push de abajo tiraba ReferenceError en CADA edit del cerebro (el cambio se aplicaba en DB pero el turno devolvía 500 y el gancho del dueño nunca corría); vive acá, en el scope del procesamiento de edits
       const overlayEdits = []; // (CONTENIDO-FOTO) cambios de texto sobre la foto pedidos por el chat
       const regenJobs = [];
       for (const ed of out.edits) {
@@ -7098,6 +7161,7 @@ app.post('/api/ideas/chat', async (req, res) => {
         recordSignal(uid, post, 'edited'); // lo retocó = señal de gusto
         n++;
         editedIds.push(post.id);
+        cambioPostIds.push(post.id); // (v849) cambio aplicado → avisa al dueño
         editedTitles.push(chatTitle(post));
       }
       // FM #2: correr las regeneraciones en paralelo (no secuencial puro) —
@@ -7186,6 +7250,7 @@ app.post('/api/ideas/chat', async (req, res) => {
         try { recordSignal(uid, post, 'rejected'); } catch (e) {}
         n++;
         revertTitles.push(chatTitle(post));
+        cambioPostIds.push(post.id); // (v849) volver atrás también es un cambio pedido
       }
       if (n) revertApplied = { ok: true, count: n, titles: revertTitles };
     }
@@ -7407,6 +7472,7 @@ app.post('/api/ideas/chat', async (req, res) => {
           try { cmGusto.registrar(db, uid, post, 'cambio'); } catch (e) {}
           try { learnedLines.push(sabeSiempre.lineaAprendi(chatTitle(post), 'cambio')); } catch (e) {}
           redone.push({ title: chatTitle(post), copy: true });
+          cambioPostIds.push(post.id); // (v849) rehacer en copia → avisa al dueño
           continue;
         }
         if (post.status !== 'draft' && post.status !== 'scheduled') continue;
@@ -7462,6 +7528,7 @@ app.post('/api/ideas/chat', async (req, res) => {
         try { cmGusto.registrar(db, uid, post, 'cambio'); } catch (e) {}
         try { learnedLines.push(sabeSiempre.lineaAprendi(chatTitle(post), 'cambio')); } catch (e) {}
         redone.push({ title: chatTitle(post), copy: false, image: media === 'image' ? imageDone : false });
+        cambioPostIds.push(post.id); // (v849) rehacer en su lugar → avisa al dueño
       }
       if (redone.length) redoneApplied = { ok: redone };
     }
@@ -7548,6 +7615,17 @@ app.post('/api/ideas/chat', async (req, res) => {
     // el trabajo + el estado en el hilo. Nunca silencio.
     let trabajoImagen = null;
     try { trabajoImagen = pzChatImagenSiFalta({ uid, clean, out, createdApplied, editApplied, anchorId: Number(anchor_post_id || 0) }); } catch (e) { console.error('[chat-imagen] net:', e.message); }
+    // (v849) NOTIFICACIÓN AL DUEÑO: el cliente pidió un cambio de posteo
+    // (edit, rehacer o volver atrás aplicados en este turno). Una push por
+    // turno, con el primer posteo cambiado; aprobaciones, publicaciones,
+    // rechazos y creaciones NO avisan. Fire-and-forget: nunca frena el chat.
+    if (cambioPostIds.length) {
+      try {
+        const firstPost = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(cambioPostIds[0], uid);
+        const lastUserMsg = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+        notifyOwnerPostChange({ uid, post: firstPost || null, pedido: lastUserMsg }).catch(() => {});
+      } catch (e) { console.error('[owner-notify] chat:', e.message); }
+    }
     res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, approve: approveApplied, approveAll: approveAllApplied, reject: rejectApplied, duplicate: duplicateApplied, create: createdApplied, redo: redoneApplied, dna: dnaSaved, options: out.options || null, showDrafts, trabajo: trabajoImagen, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
   } catch (e) {
     console.error('[chat]', e.message);
@@ -13715,7 +13793,8 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     let overlayNext = post.overlay_text || '';
     let imageNext = image_path || post.image_path;
     let prevNext = (image_path && image_path !== post.image_path) ? (post.image_path || '') : (post.prev_image_path || '');
-    if (req.body && req.body.overlay_text !== undefined && String(req.body.overlay_text) !== String(post.overlay_text || '')) {
+    const overlayChanged = !!(req.body && req.body.overlay_text !== undefined && String(req.body.overlay_text) !== String(post.overlay_text || ''));
+    if (overlayChanged) {
       const rec = recompositePostOverlay(req.session.userId, post, String(req.body.overlay_text));
       if (!rec.ok) return res.status(409).json({ error: 'overlay_rerender_failed', message: 'No se pudo re-renderizar el texto en la foto.' });
       overlayNext = rec.overlay;
@@ -13773,6 +13852,17 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       try { setImmediate(() => mcAutoStabilize(req.session.userId, post.id, image_path)); } catch (e) {}
     }
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto en revisión
+    // (v849) NOTIFICACIÓN AL DUEÑO: el cliente cambió el borrador a mano
+    // ([Editar texto] del ritual, [Cambiar texto] o [Cambiar día] de las
+    // tarjetas). Solo si algo cambió de verdad.
+    if (edited || moveIso || overlayChanged) {
+      try {
+        const pedidoTxt = (caption !== undefined && caption !== post.caption)
+          ? String(caption).split('\n')[0]
+          : (moveIso ? `Lo pasó al ${ownerPostChangeFechaCorta(moveIso, req.session.userId)}` : (overlayChanged ? 'Cambió el texto en la foto' : 'Cambió el posteo'));
+        notifyOwnerPostChange({ uid: req.session.userId, post: { ...post, caption: caption ?? post.caption, scheduled_at: moveIso || post.scheduled_at }, pedido: pedidoTxt }).catch(() => {});
+      } catch (e) { console.error('[owner-notify] patch save-draft:', e.message); }
+    }
     return res.json({ ok: true, scheduled_at: moveIso || post.scheduled_at });
   } else {
     const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
@@ -13787,6 +13877,10 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     if (!finalWhen) {
       db.prepare(`UPDATE posts SET caption=?, hashtags=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, post.id);
       return res.json({ ok: true, warning: 'sin_dia_libre' });
+      // (v849) El caption se guardó aunque no haya día libre: es un cambio pedido.
+      if (edited) {
+        try { notifyOwnerPostChange({ uid: req.session.userId, post, pedido: String(caption ?? '').split('\n')[0] }).catch(() => {}); } catch (e) { console.error('[owner-notify] patch:', e.message); }
+      }
     }
     // Programar SÍ consume cupo (las publicaciones son el límite del plan) —
     // contra la semana DEL POSTEO (fix 2026-10-18): con la semana actual
@@ -13849,6 +13943,15 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     try { tasteMemory.noteCaptionEdit(db, req.session.userId, { oldCaption: post.caption, newCaption: caption, oldHashtags: post.hashtags, newHashtags: hashtags !== undefined ? hashtags : post.hashtags }); } catch (e) {}
   }
   // Al programar, la respuesta confirma la fecha real (el cliente la anuncia al aceptar).
+  // (v849) NOTIFICACIÓN AL DUEÑO: el cliente cambió el texto al programar
+  // ([Editar texto] del ritual). Solo si el texto cambió de verdad; un
+  // programar limpio (aprobación) NO avisa.
+  if ((caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags)) {
+    try {
+      const fechaPost = scheduledInfo ? { ...post, scheduled_at: scheduledInfo.scheduled_at } : post;
+      notifyOwnerPostChange({ uid: req.session.userId, post: fechaPost, pedido: String(caption ?? '').split('\n')[0] }).catch(() => {});
+    } catch (e) { console.error('[owner-notify] patch:', e.message); }
+  }
   res.json(scheduledInfo ? { ok: true, scheduled_at: scheduledInfo.scheduled_at, week_key: scheduledInfo.week_key } : { ok: true });
 });
 
@@ -33893,7 +33996,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v847';
+const BUILD_ID = '20261105-v849';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
