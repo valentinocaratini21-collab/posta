@@ -940,6 +940,8 @@ try { db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''`); } c
 try { db.exec(`ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
 // 50% off por referidos aplicado en MP (1 = la preapproval está al 50%). Idempotencia de revalidateReferralDiscount.
 try { db.exec(`ALTER TABLE users ADD COLUMN referral_discount INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Términos y Condiciones v1.0: cuándo aceptó el Cliente en el alta (ISO). NULL = alta anterior al lote.
+try { db.exec(`ALTER TABLE users ADD COLUMN terms_accepted_at TEXT DEFAULT NULL`); } catch (e) { /* ya existe */ }
 // Nudge "te falta 1": 1 = ya se avisó (se envía una sola vez, idempotente).
 try { db.exec(`ALTER TABLE users ADD COLUMN referral_nudge_sent INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // "Posty festeja tus wins": fecha (YYYY-MM-DD) del último festejo. Tope: 1 por día por usuario.

@@ -2350,7 +2350,7 @@ function recordTrialImport(userId, trialIg, nImp, hadPostsBefore) {
 }
 
 app.post('/api/auth/register', (req, res) => {
-  const { email, password, ref, trial_ig, utm, lang } = req.body || {};
+  const { email, password, ref, trial_ig, utm, lang, terms_accepted } = req.body || {};
   // (v399 · paridad) El alta desde la superficie EN nace lang='en' y sus
   // errores salen en ese idioma; sin lang, el ES histórico exacto.
   const regEn = lang === 'en';
@@ -2383,7 +2383,9 @@ app.post('/api/auth/register', (req, res) => {
     // organico/directo/otro) para que el tablero separe sin adivinar textos.
     const utmS = LA.normalizeSrc(utm && utm.source) || String((utm && utm.source) || '').slice(0, 40);
     const utmC = String((utm && utm.campaign) || '').slice(0, 80);
-    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC, regEn ? 'en' : 'es');
+    // (LOTE TERMINOS-CONDICIONES) Aceptación de los T&C v1.0 en el alta: se guarda cuándo aceptó (ISO). Fail-open: sin el flag queda NULL (app.js cacheado viejo sigue pudiendo registrarse).
+    const termsAt = terms_accepted ? new Date().toISOString() : null;
+    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang, terms_accepted_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC, regEn ? 'en' : 'es', termsAt);
     const newUserId = r.lastInsertRowid;
     // (LOTE PRUEBA-ENTRADA-DIRECTA) Email ya usado → sin prueba fresca
     // (trial_ends_at = ahora). Y el email queda registrado como "usó su
@@ -33164,7 +33166,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v835';
+const BUILD_ID = '20261105-v836';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

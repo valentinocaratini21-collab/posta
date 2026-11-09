@@ -2527,7 +2527,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v792'; // (ESTUDIO-PROFUNDO M6) bump: chunk-analisis suma la tarjeta «qué cambió» // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo // (LOTE CONSERJE-DISENO) bump: chunk-conserje rediseño + flujo un toque
+const CHUNK_V = '20261105-v793'; // (TERMINOS-CONDICIONES v836) bump: chunk-terminos nuevo + chunk-ajustes suma la fila Términos // (ESTUDIO-PROFUNDO M6) bump: chunk-analisis suma la tarjeta «qué cambió» // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo // (LOTE CONSERJE-DISENO) bump: chunk-conserje rediseño + flujo un toque
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -5075,6 +5075,8 @@ const AUTH_STR = {
     btnLogin: 'Entrar', btnReg: 'Crear cuenta',
     rememberLabel: 'Guardar contraseña en este dispositivo',
     socialGoogle: 'Continuar con Google', socialApple: 'Continuar con Apple', socialOrEmail: 'o con tu email',
+    termsAccept: 'Acepto los', termsLink: 'Términos y Condiciones',
+    termsRequired: 'Para crear tu cuenta tenés que aceptar los Términos y Condiciones.',
     socialDenied: 'No diste permiso en Google o Apple. Podés entrar con tu email.',
     socialError: 'No pudimos conectarte. Probá de nuevo o entrá con tu email.',
 
@@ -5099,6 +5101,8 @@ const AUTH_STR = {
     btnLogin: 'Log in', btnReg: 'Create account',
     rememberLabel: 'Save password on this device',
     socialGoogle: 'Continue with Google', socialApple: 'Continue with Apple', socialOrEmail: 'or with your email',
+    termsAccept: 'I accept the', termsLink: 'Terms and Conditions',
+    termsRequired: 'To create your account you need to accept the Terms and Conditions.',
     socialDenied: 'You did not grant permission on Google or Apple. You can sign in with your email.',
     socialError: 'We could not connect you. Try again or sign in with your email.',
 
@@ -5403,6 +5407,7 @@ function authView(mode) {
     <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="${S.emailPh}"${isLogin ? ' autocomplete="email"' : ' autocomplete="off" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
     <div class="field"><label>${S.passLabel}</label><input id="f_pass" type="password" placeholder="${S.passPh}"${isLogin ? ' autocomplete="current-password"' : ' autocomplete="new-password" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
     ${isLogin ? `<label style="display:flex;gap:9px;align-items:flex-start;margin:14px 0 2px;font-size:13.5px;color:var(--dim);cursor:pointer;line-height:1.35"><input type="checkbox" id="f_remember" ${rememberPref() ? 'checked' : ''} style="margin-top:2px;accent-color:var(--cel);width:17px;height:17px;cursor:pointer;flex:none"><span>${S.rememberLabel}</span></label>` : ''}
+    ${isLogin ? '' : `<label style="display:flex;gap:9px;align-items:flex-start;margin:14px 0 2px;font-size:13.5px;color:var(--dim);cursor:pointer;line-height:1.35"><input type="checkbox" id="f_terms" style="margin-top:2px;accent-color:var(--cel);width:17px;height:17px;cursor:pointer;flex:none"><span>${S.termsAccept} <a href="${authLang() === 'en' ? '/terms.html' : '/terminos.html'}" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">${S.termsLink}</a></span></label>`}
     <button class="btn btn-primary btn-block" id="btnAuth">${isLogin ? S.btnLogin : S.btnReg}</button>
     <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
       ${isLogin ? S.footLogin : S.footReg}
@@ -17537,8 +17542,11 @@ function pzPrefetchKick() {
       const email = $('#f_email').value, password = $('#f_pass').value;
       try {
         const isReg = path !== '#/login';
+        // (LOTE TERMINOS-CONDICIONES) Alta: sin el tilde de Términos no se crea la cuenta.
+        if (isReg) { const _tc = document.getElementById('f_terms'); if (!_tc || !_tc.checked) { $('#formErr').innerHTML = '<div class="err">' + authStr().termsRequired + '</div>'; btnAuthEl.disabled = false; return; } }
         const rememberOn = isReg ? true : (remEl ? remEl.checked : true);
         const body = { email, password, lang: authLang() };
+        if (isReg) body.terms_accepted = 1; // (LOTE TERMINOS-CONDICIONES) el servidor guarda terms_accepted_at
         if (!isReg) body.remember = rememberOn ? 1 : 0;
         if (isReg) {
           // Registro viniendo de /prueba: pasamos el @ TAMBIÉN en registro
@@ -17707,6 +17715,7 @@ function pzPrefetchKick() {
   else if (tab === 'post') { pzPaintSkeleton(tab); content = await approvalPostView(postId); } // 🔔 Posty te avisa: aprobar por notificación
   else if (tab === 'dogfood') { pzPaintSkeleton(tab); content = await dogfoodView(postId); } // 🤖 Posty dogfood: propuesta del día
   else if (tab === 'ajustes') { pzPaintSkeleton(tab); let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
+  else if (tab === 'terminos') { pzPaintSkeleton(tab); let __okT = true; try { await loadChunk('terminos'); } catch (e) { __okT = false; } content = __okT ? terminosView() : chunkFailHTML(); } // (LOTE TERMINOS-CONDICIONES) Términos y Condiciones v1.0 en la app
   else if (tab === 'jardin-combinado' || tab === 'jardin-gesty') { location.hash = '#/app/jardin-posty'; return; } // POSTY SOLO: solo Nivel de Posty
   else if (tab === 'jardin-posty') { pzPaintSkeleton(tab); content = await bbNivelContent(); }
   else if (tab === 'bandeja') { pzPaintSkeleton(tab); content = await bbBandejaContent(); } // (LOTE 10B · 2-1) La Bandeja: decidir en un toque

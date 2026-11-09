@@ -37,7 +37,7 @@ const sliceFn = (src, from, to) => {
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins del árbol RS-4 ----------
-  t(srv.includes("const BUILD_ID = '20261105-v831'"), 'server: BUILD v825 (el re-estampador estampa el final)');
+  t(srv.includes("const BUILD_ID = '20261105-v836'"), 'server: BUILD v825 (el re-estampador estampa el final)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -47,10 +47,10 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-  t(app.includes("const CHUNK_V = '20261105-v792'"), 'CHUNK_V v792');
-  t(md5(app) === '8a16054810d1e29b6e3c55b3359759fc', 'app.js md5 (RS-4 + alias window.pzOpenBoostPick)');
-  t(md5(css) === '0ae54644158dab6215ee7b8f035c447c', 'styles.css md5 (RS-4)');
-  t(md5(srv) === '15940e071d5e99c0858cafaac6b3a8db', 'server.js md5 (RS-4)');
+  t(app.includes("const CHUNK_V = '20261105-v793'"), 'CHUNK_V v793 (bump T&C)');
+  t(md5(app) === '4ac21c0543bc34c5cb113ae4b62b9396', 'app.js md5 (RS-4 + T&C v836)');
+  t(md5(css) === 'a6ef1f0f0bdd52079f0af7b7d781d690', 'styles.css md5 (RS-4)');
+  t(md5(srv) === 'e17bfe2920f2098ff38543595539ae74', 'server.js md5 (RS-4 + T&C v836)');
   t(md5(abSrc) === '04c90ac71c59335d9785aaee959c1260', 'ads-billetera.js md5 (RS-4)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (sin ruta nueva)');
   t(cnt(app, 'pzBoost') === 158, 'app: pzBoost ×158 (sección RS-4 + alias)');
@@ -429,7 +429,7 @@ const sliceFn = (src, from, to) => {
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v831', `boot: /api/version 20261105-v825 (vino ${ver.build})`);
+      t(ver.build === '20261105-v836', `boot: /api/version 20261105-v825 (vino ${ver.build})`);
       const s1 = await api('', 'GET', '/api/ads/billetera/elegibles');
       t(s1.status === 401, 'boot: sin sesión, elegibles → 401');
       // Registro + sesión.

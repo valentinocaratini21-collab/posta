@@ -38,14 +38,14 @@ const orderOk = (s, keys) => {
 // RE-PIN tras implementar (md5s de work-v1; en base fallan a propósito).
 // (LOTE HOY-AVATAR-FEED · 8/11) Re-pin: app.js/styles.css del lote.
 // (LOTE CHAT-NUEVO v821 · 8/11) Re-pin: app.js/styles.css del lote + BUILD v821.
-const MD5_APP_WORK = 'd72d8b932b27f70fc51867d6a236c1d2';
+const MD5_APP_WORK = '4ac21c0543bc34c5cb113ae4b62b9396';
 const MD5_CSS_WORK = 'a6ef1f0f0bdd52079f0af7b7d781d690';
 // El woff2 es copia byte a byte del mock (no generado).
 const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
 
 (async () => {
   // ---------- 1. Censo (sin cambio) + pins ----------
-  t(srv.includes("const BUILD_ID = '20261105-v833'"), 'server: BUILD v822 (R0 no toca server.js; re-pin lote A)');
+  t(srv.includes("const BUILD_ID = '20261105-v836'"), 'server: BUILD v836 (re-pin T&C)');
   t(cnt(srv, 'catsMatch') === 3, 'censo server: catsMatch 3');
   t(cnt(srv, 'week-redo') === 16, 'censo server: week-redo 16');
   t(cnt(srv, 'first_week') === 3, 'censo server: first_week 3');
@@ -55,7 +55,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
   t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-  t(app.includes("const CHUNK_V = '20261105-v792'"), 'CHUNK_V v792 (sin cambio en este lote)');
+  t(app.includes("const CHUNK_V = '20261105-v793'"), 'CHUNK_V v793 (bump T&C: chunk-terminos nuevo)');
   t(md5(app) === MD5_APP_WORK, 'app.js md5 (re-pin work-v1)');
   t(md5(css) === MD5_CSS_WORK, 'styles.css md5 (re-pin work-v1)');
 
@@ -453,7 +453,7 @@ const MD5_WOFF2_MOCK = '166202cc391c71a57730bed12cbcb159';
     try {
       t(await waitBoot(), 'boot: server levanta');
       const ver = await (await fetch(`${BASE}/api/version`)).json();
-      t(ver.build === '20261105-v833', `boot: /api/version 20261105-v825 (vino ${ver.build})`);
+      t(ver.build === '20261105-v836', `boot: /api/version 20261105-v836 (vino ${ver.build})`);
       const appTxt = await (await fetch(`${BASE}/app.js?v=567`)).text();
       t(md5(appTxt) === md5(app), 'boot: app.js?v=567 servido = árbol');
       const cssTxt = await (await fetch(`${BASE}/styles.css?v=20261218`)).text();

@@ -151,6 +151,7 @@ function ajustesView() {
       <div class="row" data-ajnav="marca"><span class="k">${ajEn ? 'Your brand' : 'Tu marca'}</span><span class="v">${esc(stBrandTx)}</span><span class="chev">›</span></div>
       <div class="row" data-ajnav="pagina"><span class="k">${ajEn ? 'Your page' : 'Tu página'}</span><span class="v">${esc(stPageTx) || (ajEn ? 'Your link in bio' : 'Tu link en la bio')}</span><span class="chev">›</span></div>
       <div class="row" data-ajnav="avanzado"><span class="k">${ajEn ? 'Advanced settings' : 'Configuración avanzada'}</span><span class="v">${ajEn ? 'Meta embed URL' : 'Dirección de embed de Meta'}</span><span class="chev">›</span></div>
+      <div class="row" onclick="bbGo('#/app/terminos')"><span class="k">${pzIc('shield', 20)} ${ajEn ? 'Terms and Conditions' : 'Términos y Condiciones'}</span><span class="v">${ajEn ? 'Version 1.0 · November 9, 2026' : 'Versión 1.0 · 9 de noviembre de 2026'}</span><span class="chev">›</span></div>
     </div>
     <div class="know" style="margin-top:14px">
       <div class="row" id="btnLogoutAj"><span class="k" style="color:var(--red)">${ajEn ? 'Log out' : 'Salir'}</span><span class="chev">›</span></div>
