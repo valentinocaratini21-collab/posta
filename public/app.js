@@ -19764,11 +19764,16 @@ function homeTileHTML(t, i) {
       const pillR1 = (typeof pzHoyPillSalida === 'function') ? pzHoyPillSalida(p, (typeof pcTz === 'function') ? pcTz() : undefined, phEn) : '';
       const cuentaR1 = (typeof pzHoyCuentaSaleTxt === 'function') ? pzHoyCuentaSaleTxt(p.scheduled_at, phEn) : '';
       const cuentaHtmlR1 = cuentaR1 ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at || ''))}">${esc(cuentaR1)}</span>` : '';
-      const stripR1 = pillR1 ? `<span class="hf-carta-proximo">✦ ${esc(pillR1)}</span>${cuentaHtmlR1}` : `<span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}`;
-      return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip">${stripR1}</span></span></span>`;
+      // (LOTE HOY-AVATAR-FEED · 8/11 · mock aprobado por Valentino) La banda
+      // de caption va DEBAJO de la imagen, fuera de .hf-tile: nada de texto
+      // pegado sobre la foto. La cuenta (data-pz-cuenta-sale) viaja con la banda.
+      const capR1 = pillR1 ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${cuentaHtmlR1}</span>` : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
+      return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
     }
     if (t.openHoy) {
-      return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span><span class="hf-strip"><span class="hf-carta-proximo">✦ ${proxLbl}</span>${ocChip}</span></span></span>`;
+      // (LOTE HOY-AVATAR-FEED · 8/11) Igual que la rama futura: la banda
+      // de caption va debajo de la imagen, fuera de .hf-tile.
+      return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span><span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span></span>`;
     }
     // (VARIANTE B · 6/11 · elección Valentino 19:31 «MÁS MAGIA») La
     // carta velada del feed es una tarjeta DESTACADA a todo lo ancho
@@ -20904,11 +20909,12 @@ function pzHoySpeechHTML(o) {
   } else {
     cuerpo = en ? `Shall we build your week? Tell me what you have to show.` : `¿Armamos tu semana? Contame qué tenés para mostrar.`;
   }
-  // (LOTE HOY-REDISEÑO v810) El saludo se rinde como mensaje de Posty:
-  // carita a la izquierda + burbuja (sin borde oscuro de tarjeta). El
-  // TEXTO no cambia (lo fija el lote SALUDO-HOY-HONESTO v806): solo la
-  // presentación. El botón conserva data-pz-hoy-chat (abre el chat).
-  return `<div class="pz-hoy-speech-row"><img class="pz-hoy-speech-ava" src="ai-avatar.png" alt="" aria-hidden="true"><button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span></button></div>`;
+  // (LOTE HOY-REDISEÑO v810 + HOY-AVATAR-FEED 8/11) El saludo se rinde
+  // como mensaje de Posty: SOLO la burbuja, sin carita (la cara vive en
+  // el encabezado). El TEXTO no cambia (lo fija el lote SALUDO-HOY-
+  // HONESTO v806): solo la presentación. El botón conserva
+  // data-pz-hoy-chat (abre el chat).
+  return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span class="pz-hoy-saludo">${esc(saludo)}</span> <span>${cuerpo}</span></button></div>`;
 }
 
 // Tarjeta «Subir foto o video» (mock): botón + fila del álbum real

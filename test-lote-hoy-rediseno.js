@@ -3,7 +3,9 @@
 // cortado a mitad de pantalla), perfil FINO (avatar + nombre + handle
 // en una fila, stats en su propia fila en línea, sin los íconos de
 // compartir/ajustes duplicados) y el saludo como mensaje de Posty
-// (carita + burbuja). Los datos, textos y acciones NO cambian: solo
+// (burbuja sola desde HOY-AVATAR-FEED · 8/11: la carita salió del saludo;
+// el encabezado ya identifica a Posty). Los datos, textos y acciones NO
+// cambian: solo
 // la presentación. Mock aprobado por Valentino 8/11.
 // Límites: v807 YA aterrizó antes que este lote (segmentador fuera,
 // botón verde btn-publish); el texto del saludo es del v806; la
@@ -82,18 +84,18 @@ const hEn = H(Object.assign({}, val), '', { splitHead: true, en: true });
 ok(hEn.includes('<span>posts</span>') && hEn.includes('<span>followers</span>') && hEn.includes('<span>following</span>'), 'EN: etiquetas de stats en inglés');
 
 /* ---------- 3. El saludo como mensaje de Posty ---------- */
-console.log('— 3. saludo como mensaje (carita + burbuja) —');
+console.log('— 3. saludo como mensaje (burbuja sola — HOY-AVATAR-FEED) —');
 const speech = extractFn(app, 'function pzHoySpeechHTML');
 ok(!!speech, 'extrae pzHoySpeechHTML');
 ok(speech.includes('<div class="pz-hoy-speech-row">'), 'el saludo se envuelve en .pz-hoy-speech-row');
-ok(speech.includes('<img class="pz-hoy-speech-ava" src="ai-avatar.png"'), 'carita de Posty a la izquierda (ai-avatar.png)');
+ok(!speech.includes('pz-hoy-speech-ava'), 'sin carita en el saludo (HOY-AVATAR-FEED: la cara vive solo en el encabezado)');
 ok(speech.includes('data-pz-hoy-chat="1"'), 'el botón conserva data-pz-hoy-chat (abre el chat)');
 ok(speech.includes('<span class="pz-hoy-saludo">'), 'el saludo sigue en su span');
 ok(!speech.includes('pz-hoy-nota'), 'sin nota (chat-mejora)');
 ok(speech.includes('if (hoyPost)') && speech.includes('else if (pendientes > 0)') && speech.includes('else if (haySemana)'), 'las 4 ramas del cuerpo siguen (hoyPost / pendientes / haySemana / else)');
 const spRule = css.slice(css.indexOf('#inicioView .pz-hoy-speech{'), css.indexOf('}', css.indexOf('#inicioView .pz-hoy-speech{')) + 1);
-ok(css.includes('#inicioView .pz-hoy-speech-row{display:flex;gap:9px;align-items:flex-start;margin-bottom:16px}'), 'CSS: fila del mensaje (carita + burbuja)');
-ok(css.includes('#inicioView .pz-hoy-speech-ava{width:34px;height:34px;border-radius:50%'), 'CSS: carita redonda 34px');
+ok(css.includes('#inicioView .pz-hoy-speech-row{margin-bottom:16px}'), 'CSS: fila del mensaje sin flex (solo la burbuja)');
+ok(!css.includes('pz-hoy-speech-ava'), 'CSS: sin regla de carita (HOY-AVATAR-FEED)');
 ok(spRule.length > 0 && !spRule.includes('2px solid #0A1E33') && spRule.includes('border:1px solid rgba(255,255,255,.75)'), 'CSS: la burbuja ya NO tiene borde oscuro 2px navy (borde blanco suave)');
 ok(css.includes('#inicioView .pz-hoy-upload,#inicioView .pz-hoy-semana,#inicioView .pz-hoy-card,#inicioView .pz-hoy-vacio,#inicioView .pz-hoy-conserje{margin-bottom:14px}'), 'CSS: ritmo de espaciado de las secciones Hoy');
 
@@ -109,7 +111,7 @@ const sPend = S({ hoyPost: null, pendientes: 2, haySemana: true, en: false, tz: 
 const sSem = S({ hoyPost: null, pendientes: 0, haySemana: true, en: false, tz: 'America/New_York' });
 const sVacio = S({ hoyPost: null, pendientes: 0, haySemana: false, en: false, tz: 'America/New_York' });
 ok(sHoy.startsWith('<div class="pz-hoy-speech-row">'), 'render: el mensaje empieza por la fila');
-ok(sHoy.includes('<img class="pz-hoy-speech-ava" src="ai-avatar.png"'), 'render: carita presente');
+ok(!sHoy.includes('<img'), 'render: sin carita (0 imgs en la fila del saludo)');
 ok(sHoy.includes('data-pz-hoy-chat="1"') && sHoy.includes('<b>'), 'render hoyPost: botón + hora en negrita');
 ok(sHoy !== sPend && sPend !== sSem && sSem !== sVacio, 'las 4 ramas rinden textos distintos (el texto sigue variando por estado)');
 const sHoyEn = S({ hoyPost, pendientes: 1, haySemana: true, en: true, tz: 'America/New_York' });
@@ -125,7 +127,7 @@ ok(!card.includes('22C55E'), 'la tarjeta del posteo no trae verde');
 const lotCss = css.slice(css.indexOf('LOTE HOY-REDISEÑO v810'));
 ok(!lotCss.includes('22C55E'), 'el bloque del lote no pone verde en ningún lado (eso es v807)');
 ok(app.includes("('🔥 ' + (rachaN === 1 ? (en ? '1 day' : '1 día') : rachaN + (en ? ' days' : ' días')))"), 'la píldora de racha no se toca (eso es v808; forma v815 con «1 día» en singular)');
-ok(srv.includes("const BUILD_ID = '20261105-v819'"), 'server.js solo BUILD v819 estampado');
+ok(srv.includes("const BUILD_ID = '20261105-v820'"), 'server.js solo BUILD v820 estampado');
 
 /* ---------- 5. Censo ---------- */
 console.log('— 5. censo —');

@@ -64,8 +64,8 @@ ok(css.includes('.st-rate-thumb{width:76px;height:76px;border-radius:12px;object
 
 /* ---------- 3. Nada global tocado + CSS-only + estrellas/botones sin cambio ---------- */
 console.log('— 3. límites (nada global, CSS-only, estrellas y botones sin cambio) —');
-ok(md5(app) === '30fec16957eb07cc0171b62000c4c0a7', 'app.js SIN tocar (CSS-only): md5 = v818');
-ok(md5(srv) === 'b27f33b611820e7bc4716407a2f71beb', 'server.js SOLO línea BUILD estampada: md5 = v819');
+ok(md5(app) === '5f38503c070cf80d91282f5fdfdf6603', 'app.js = v820 (hoy-avatar-feed; glass no lo toca)');
+ok(md5(srv) === '0de3dc6d3d261e183bc431ce89fcae95', 'server.js SOLO línea BUILD estampada: md5 = v820');
 ok(css.includes('.ph-ico{width:52px;height:52px;flex:none;border-radius:16px;background:linear-gradient(135deg,rgba(39,147,200,.16),rgba(39,147,200,.05));border:1px solid rgba(39,147,200,.22);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 12px rgba(39,147,200,.10)}'), 'la regla global .ph-ico sigue intacta (azul, fuera de Análisis)');
 ok(css.includes('.card{background:linear-gradient(180deg,#FFFFFF 0%,#FCFEFF 100%);border:1px solid var(--line);border-radius:var(--r);padding:28px;margin-bottom:22px;box-shadow:var(--shadow)}'), 'la regla global .card sigue intacta');
 ok(css.includes('.st-card{background:linear-gradient(180deg,#FFFFFF 0%,#FCFEFF 100%);border:1px solid var(--line);border-radius:18px;padding:18px 16px;box-shadow:var(--shadow);min-height:104px;display:flex;flex-direction:column;justify-content:center}'), 'la regla .st-card sigue intacta (el vidrio lo pone el bloque LOTE GLASS, no este lote)');
@@ -99,13 +99,13 @@ ok(cnt(rate, /star-btn/g) === 5, '«Ya salió» trae 5 estrellitas .star-btn (si
 ok(app.includes('<div class="card st-empty">') && app.includes('<div class="st-empty-tags">'), 'el estado vacío vivo es .card.st-empty con .st-empty-tags (los tags que el lote vuelve glass)');
 
 /* ---------- 5. ?v=/styles?v= finales en AMBOS index ---------- */
-console.log('— 5. ?v=/styles?v= finales (v819: ?v=554 / styles?v=20261206) —');
-ok(idxEs.includes('app.js?v=554') && cnt(idxEs, /app\.js\?v=/g) === 1, 'index ES: app.js?v=554');
-ok(idxEs.includes('styles.css?v=20261206') && cnt(idxEs, /styles\.css\?v=/g) === 1, 'index ES: styles?v=20261206 (también sube, regla 14:12)');
-ok(!idxEs.includes('app.js?v=553') && !idxEs.includes('20261205'), 'index ES: cero restos de los valores viejos (?v=553 / 20261205)');
-ok(idxEn.includes('styles.css?v=20261206') && cnt(idxEn, /styles\.css\?v=/g) === 1, 'index EN: styles?v=20261206 (mismo valor que el ES)');
-ok(!idxEn.includes('20261205'), 'index EN: cero restos del valor viejo (20261205)');
-ok(srv.includes("const BUILD_ID = '20261105-v819'"), 'server.js estampado en BUILD v819 por el re-estampador');
+console.log('— 5. ?v=/styles?v= finales (v820: ?v=555 / styles?v=20261207) —');
+ok(idxEs.includes('app.js?v=555') && cnt(idxEs, /app\.js\?v=/g) === 1, 'index ES: app.js?v=555');
+ok(idxEs.includes('styles.css?v=20261207') && cnt(idxEs, /styles\.css\?v=/g) === 1, 'index ES: styles?v=20261207 (también sube, regla 14:12)');
+ok(!idxEs.includes('app.js?v=554') && !idxEs.includes('20261206'), 'index ES: cero restos de los valores viejos (?v=553 / 20261206)');
+ok(idxEn.includes('styles.css?v=20261207') && cnt(idxEn, /styles\.css\?v=/g) === 1, 'index EN: styles?v=20261207 (mismo valor que el ES)');
+ok(!idxEn.includes('20261206'), 'index EN: cero restos del valor viejo (20261206)');
+ok(srv.includes("const BUILD_ID = '20261105-v820'"), 'server.js estampado en BUILD v820 por el re-estampador');
 
 /* ---------- 6. Censo ---------- */
 console.log('— 6. censo —');
