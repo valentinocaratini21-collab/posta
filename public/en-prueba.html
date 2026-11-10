@@ -1074,6 +1074,34 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 .oc-draft-slot .dk{font-size:11px;font-weight:500;color:#5A7488}
 .oc-draft-pack{font-size:13px;font-weight:800;color:#B8860B;letter-spacing:.04em}
 .oc-draft-card{position:relative;display:flex;flex-direction:column;background:#fff;border:2px solid #DCEFFF;border-radius:16px;overflow:hidden;cursor:pointer;text-align:left;padding:0}
+/* (LOTE ESTILO-ONBOARDING · v855 · 9/11) Picker de estilo dentro del chat — un toque, no una pregunta (mock onboarding-posty v4 aprobado por Valentino). Las 3 opciones usan la MISMA foto real del cliente; los estilos son tratamientos CSS. */
+.oc-stylepick{display:grid;gap:10px;margin-top:9px}
+.oc-styleopt{border:2.5px solid var(--line);background:#fff;border-radius:16px;padding:0;cursor:pointer;font:inherit;text-align:left;overflow:hidden;transition:border-color .15s,transform .12s,box-shadow .15s;width:100%}
+.oc-styleopt:hover{border-color:var(--cel)}
+.oc-styleopt:active{transform:scale(.985)}
+.oc-styleopt.picked{border-color:#3DBE7A;box-shadow:0 0 0 3px rgba(61,190,122,.3)}
+.oc-styleopt.dim{opacity:.45;pointer-events:none}
+.oc-styleopt .art{position:relative;line-height:0;display:block}
+.oc-styleopt img{width:100%;object-fit:cover;display:block}
+.oc-so-clean img{height:175px;object-position:68% 22%}
+.oc-so-banda img{height:165px;object-position:68% 22%}
+.oc-so-banda .band{position:absolute;left:0;right:0;bottom:0;background:var(--navy);color:#fff;padding:9px 12px 10px;line-height:1.05;text-align:left}
+.oc-so-banda .band b{display:block;font-size:19px;font-weight:900;letter-spacing:.01em}
+.oc-so-banda .band span{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--yl)}
+.oc-so-edit{background:#fff;padding:14px 14px 10px}
+.oc-so-edit .frame{display:block;border:1px solid #E4E4E4;padding:7px;background:#fff}
+.oc-so-edit img{height:120px;object-position:68% 22%}
+.oc-so-edit .cap{font-size:11px;font-weight:700;color:#8A97A3;letter-spacing:.18em;text-transform:uppercase;text-align:center;padding:8px 0 3px;line-height:1.3}
+.oc-styleopt .meta{display:flex;align-items:center;gap:8px;padding:9px 12px 11px;line-height:1.25}
+.oc-styleopt .meta b{font-size:14px;display:block;color:var(--navy)}
+.oc-styleopt .meta span{font-size:12px;color:var(--mut);font-weight:600;display:block}
+.oc-styleopt .num{width:24px;height:24px;flex:0 0 24px;border-radius:50%;background:#EAF6FD;color:var(--navy);display:grid;place-items:center;font-size:12.5px;font-weight:900}
+.oc-styleopt .pickck{margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:900;background:#3DBE7A;color:#fff;padding:5px 9px;border-radius:999px;display:none}
+.oc-styleopt.picked .pickck{display:block}
+/* Semana en el estilo elegido (misma piel del mock) */
+#rWeek.wk-editorial .day .db{border:3px solid #fff;box-shadow:0 1px 5px rgba(19,42,58,.28);border-radius:4px}
+#rWeek.wk-banda .day .dcap{text-transform:uppercase;letter-spacing:.015em}
+.oc-styletag{display:inline-block;font-size:10.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--navy);background:#EAF6FD;border-radius:999px;padding:5px 9px;margin-bottom:10px}
 /* (LOTE ONBOARDING-DIVERTIDO v760 · mock v2) La imagen va en su propio marco con overflow:hidden y position:relative (el logo de marca va ENCIMA de la foto): el texto de la tarjeta nunca queda tapado. */
 .oc-draft-img{position:relative;display:block;height:148px;overflow:hidden;background:#F2F9FD}
 .oc-draft-img img{width:100%;height:100%;object-fit:cover;display:block}
@@ -2572,6 +2600,10 @@ function buildGenFormData() {
   if (window.OC_ESPEJO) { fd.append('espejo_flujo', '1'); fd.append('espejo_aprobado', String(window.OC_ESPEJO.aprobado || '')); fd.append('espejo_productos', JSON.stringify(window.OC_ESPEJO.productos || [])); fd.append('espejo_vetos', JSON.stringify(window.OC_ESPEJO.vetos || [])); }
   // DRAFT-ONBOARDING (4/11): the draft taste travels with generation; the server validates strictly and ignores it if broken.
   if (window.OC_DRAFT) { fd.append('draft_gusto', JSON.stringify(window.OC_DRAFT)); }
+  // (LOTE ESTILO-ONBOARDING · v855 · 9/11) El estilo visual elegido
+  // tocando una imagen: viaja con la generación; el servidor lo valida
+  // estricto y lo ignora si viene roto.
+  if (window.OC_ESTILO) { fd.append('estilo_visual', window.OC_ESTILO); }
   // (LOTE ONBOARDING-DIVERTIDO v760 · análisis en paralelo) El perfil de estilo observado viaja con la generación (fundamento).
   if (typeof S !== 'undefined' && S.style) { try { fd.append('estilo', JSON.stringify(S.style)); } catch (e) {} }
   fd.append('producto', TRIAL_ANS.producto || '');
@@ -3618,7 +3650,26 @@ function trialWeekOrdered() {
 function renderWeek() {
   const t = TRIAL;
   if (!t || !t.week) return;
-  $('#rWeek').innerHTML = trialWeekOrdered().map((w) => {
+  // (LOTE ESTILO-ONBOARDING · v855 · 9/11) La semana se presenta en el
+  // estilo elegido: el servidor lo confirma en el payload
+  // (posts[i].estilo_visual); si no vino, manda la elección local.
+  var rwEstilo = null;
+  try {
+    var rwP0 = (t.posts || [])[0];
+    rwEstilo = (rwP0 && rwP0.estilo_visual) || window.OC_ESTILO || null;
+    if (rwEstilo !== 'limpia' && rwEstilo !== 'banda' && rwEstilo !== 'editorial') rwEstilo = null;
+  } catch (e) { rwEstilo = null; }
+  var rwEl = $('#rWeek');
+  if (rwEl) {
+    rwEl.classList.remove('wk-limpia', 'wk-banda', 'wk-editorial');
+    if (rwEstilo) rwEl.classList.add('wk-' + rwEstilo);
+  }
+  var rwTag = '';
+  if (rwEstilo) {
+    var rwNames = { limpia: T.styleNameClean, banda: T.styleNameBanda, editorial: T.styleNameEdit };
+    rwTag = '<span class="oc-styletag">' + esc(T.styleWeekTag + (rwNames[rwEstilo] || '')) + '</span>';
+  }
+  $('#rWeek').innerHTML = rwTag + trialWeekOrdered().map((w) => {
     const p = t.posts[w.post];
     const isV = p.type === 'video';
     const igrow = `<div class="igrow"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0A1E33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0A1E33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.6 8.6 0 0 1-3.8-.9L3 20l1.1-5.4a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 12.5 3h.5a8.4 8.4 0 0 1 8 8.5z"/></svg><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0A1E33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg><svg class="igsave" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0A1E33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div>`;
@@ -4907,6 +4958,18 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     draftNoPhoto: 'No photo of your product yet',
     draftSlotPending: 'Still to pick in this round',
     draftFotoSub: 'Tap a style and see how it looks. Whatever you pick, that is how your product comes out all week.',
+    // (LOTE ESTILO-ONBOARDING · v855 · 9/11) Picker de estilo (mock v4).
+    styleIntro: 'One last touch, and it is not a question in words ✨ While you answered, I made 3 posts with your product, each in a different style. Tap the one you like best — your week comes out like that:',
+    styleIntroNote: 'This did not add any wait: it was prepared while you tapped your answers.',
+    styleClean: 'Clean real photo', styleCleanSub: 'No text. Your work speaks for itself.',
+    styleBanda: 'Big headline in a band', styleBandaSub: 'One message, read in 1 second.',
+    styleEdit: 'Editorial with lots of air', styleEditSub: 'Frame, space, magazine look.',
+    stylePicked: '✓ Your style',
+    styleEcho: 'I will go with {short} 👆',
+    styleConfirm: 'Perfect: {name}. That is the style of all your posts — if you ever want to change it, just tell me here.',
+    styleWeekTag: 'Your week · style: ',
+    styleNameClean: 'Clean real photo', styleNameBanda: 'Headline in a band', styleNameEdit: 'Editorial with air',
+    styleShortClean: 'the clean photo', styleShortBanda: 'the headline in a band', styleShortEdit: 'the editorial',
     draftFotoChoose: 'PICK A STYLE',
     draftFotoGo: 'Continue with this style',
     draftFotoFoot: 'Posty uses your style all week long.',
@@ -5637,6 +5700,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   }
 
   function currentScreen() {
+    // (LOTE ESTILO-ONBOARDING · v855 · 9/11) La foto del picker se
+    // precarga mientras el cliente responde las preguntas, así el paso
+    // no suma espera cuando llegue (best-effort, nunca frena el chat).
+    try { ocPrepareStyle(); } catch (e) {}
     // (LOTE PRUEBA-CHAT) The question screens (screenFor) are replaced
     // by the chat: same worksheet, another skin. screenFor and the
     // screenQ* stay in the file, unused by the question flow
@@ -6414,6 +6481,10 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     window.OC_CAT = S.ans.rubro || S.cat || window.OC_CAT || null;
     window.OC_DETECTADOS = (S.products || []).map(function (p) { return p.nombre; }).filter(Boolean).slice(0, 4);
     window.OC_REASK_Q1 = reaskQ1;
+    // (LOTE ESTILO-ONBOARDING · v855 · 9/11) La foto del picker se
+    // precarga ahora que las respuestas están fijas (el espejo y el
+    // draft vienen después: llega precargada).
+    try { ocPrepareStyle(); } catch (e) {}
     try { trk('prueba_step', { step: 'oc_sprout' }); } catch (e) {}
     screenEspejo();
   }
@@ -7209,6 +7280,82 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     try { trk('prueba_step', { step: 'draft_start' }); } catch (e) {}
     draftShowRound(0);
   }
+  // (LOTE ESTILO-ONBOARDING · v855 · 9/11) Picker de estilo: 3 imágenes
+  // del producto REAL del cliente, cada una en un estilo distinto (mock
+  // onboarding-posty v4, aprobado por Valentino). Se elige TOCANDO una
+  // imagen — sin chips ni pregunta escrita. Las 3 usan la MISMA foto
+  // real; los estilos son tratamientos CSS (banda superpuesta, marco).
+  // Preparación en paralelo: la foto se resuelve y se precarga mientras
+  // el cliente responde las preguntas (currentScreen + sprout), así el
+  // picker no suma espera. Sin foto real usable, el paso se salta sin
+  // romper el flujo (la semana sale con el estilo por defecto).
+  var OC_STYLE = null; // { photo, star, headline, cta, ok }
+  function ocStylePhoto() {
+    // Misma resolución que opEvidenceHTML: producto estrella → su foto;
+    // si no, la primera foto de S.products; si no, PREFILL.photo.
+    var star = '';
+    if (S.ans.q1 && (S.ans.q1mix === 'uno' || S.ans.q1mix === 'libre' || S.ans.q1mix === 'servicio' || S.ans.q1mix === 'marca')) star = S.ans.q1;
+    else if ((FL_E.productos || []).length) star = FL_E.productos[0].nombre;
+    var foto = null;
+    var ps = S.products || [];
+    var i;
+    for (i = 0; i < ps.length; i++) { if (ps[i] && ps[i].nombre === star) { if (ps[i].foto) foto = ps[i].foto; break; } }
+    if (!foto) { for (var j = 0; j < ps.length; j++) { if (ps[j] && ps[j].foto) { foto = ps[j].foto; break; } } }
+    if (!foto) { try { if (typeof PREFILL !== 'undefined' && PREFILL && PREFILL.photo) foto = PREFILL.photo; } catch (e) {} }
+    return { star: star, foto: foto };
+  }
+  function ocPrepareStyle() {
+    try {
+      var r = ocStylePhoto();
+      if (!r.foto) { OC_STYLE = { ok: false }; return; }
+      if (OC_STYLE && OC_STYLE.ok && OC_STYLE.photo === r.foto) return; // ya precargada
+      // Titular de la banda, solo con hechos: producto estrella + CTA de q2.
+      var cta = (window.OC_ANS && OC_ANS.cta) || S.ans.q2 || '';
+      var headline = r.star || (typeof TRIAL_BIZ !== 'undefined' ? TRIAL_BIZ : '') || '';
+      OC_STYLE = { ok: true, photo: r.foto, star: r.star, headline: headline, cta: cta };
+      var im = new Image(); im.src = r.foto; // precarga en paralelo
+    } catch (e) { OC_STYLE = { ok: false }; }
+  }
+  function ocStyleShow() {
+    // Sin foto real usable: el paso se salta, la semana sale con el
+    // estilo por defecto y el cliente lo puede cambiar después.
+    try { ocPrepareStyle(); } catch (e) {}
+    if (!OC_STYLE || !OC_STYLE.ok || !OC_STYLE.photo) { fmShow(); return; }
+    window.OC_ESTILO = null; // picker fresco: un pick anterior no bloquea
+    var box = ocq();
+    var st = OC_STYLE;
+    var img = esc(st.photo);
+    var head = esc(st.headline || '');
+    var cta = esc(st.cta || '');
+    var cap = esc(st.star || st.headline || '');
+    var html = stemHTML()
+      + '<p class="oc-chat">' + esc(T.styleIntro) + '</p>'
+      + '<div class="oc-stylepick" id="ocStylePick">'
+      + '<button type="button" class="oc-styleopt oc-so-clean" data-estilo="limpia" aria-label="' + esc(T.styleClean) + '"><span class="art"><img src="' + img + '" alt=""></span><span class="meta"><span class="num">1</span><span><b>' + esc(T.styleClean) + '</b><span>' + esc(T.styleCleanSub) + '</span></span><span class="pickck">' + esc(T.stylePicked) + '</span></span></button>'
+      + '<button type="button" class="oc-styleopt oc-so-banda" data-estilo="banda" aria-label="' + esc(T.styleBanda) + '"><span class="art"><img src="' + img + '" alt=""><span class="band">' + (cta ? '<span>' + cta + '</span>' : '') + '<b>' + head + '</b></span></span><span class="meta"><span class="num">2</span><span><b>' + esc(T.styleBanda) + '</b><span>' + esc(T.styleBandaSub) + '</span></span><span class="pickck">' + esc(T.stylePicked) + '</span></span></button>'
+      + '<button type="button" class="oc-styleopt oc-so-edit" data-estilo="editorial" aria-label="' + esc(T.styleEdit) + '"><span class="frame"><img src="' + img + '" alt=""><span class="cap">' + cap + '</span></span><span class="meta"><span class="num">3</span><span><b>' + esc(T.styleEdit) + '</b><span>' + esc(T.styleEditSub) + '</span></span><span class="pickck">' + esc(T.stylePicked) + '</span></span></button>'
+      + '</div>'
+      + '<p class="oc-chat" style="margin-top:10px"><small>' + esc(T.styleIntroNote) + '</small></p>';
+    box.innerHTML = html;
+    show('v-ocq');
+    try { trk('prueba_step', { step: 'estilo' }); } catch (e) {}
+    var opts = box.querySelectorAll('.oc-styleopt');
+    opts.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (window.OC_ESTILO) return;
+        var v = btn.getAttribute('data-estilo');
+        window.OC_ESTILO = v;
+        opts.forEach(function (o) { o.classList.toggle('picked', o === btn); o.classList.toggle('dim', o !== btn); o.disabled = true; });
+        var names = { limpia: [T.styleNameClean, T.styleShortClean], banda: [T.styleNameBanda, T.styleShortBanda], editorial: [T.styleNameEdit, T.styleShortEdit] };
+        var nm = names[v] || names.banda;
+        setTimeout(function () {
+          box.innerHTML = stemHTML() + '<p class="oc-chat">' + esc(T.styleEcho.replace('{short}', nm[1])) + '</p><p class="oc-chat">' + esc(T.styleConfirm.replace('{name}', nm[0])) + '</p>';
+          show('v-ocq');
+          setTimeout(function () { fmShow(); }, reduced ? 0 : 650);
+        }, reduced ? 0 : 420);
+      });
+    });
+  }
   function draftFinish() {
     var rondas = DR.dims.map(function (dim, i) {
       var p = DR.picks[i];
@@ -7217,7 +7364,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
     });
     window.OC_DRAFT = { version: 1, dims: DR.dims.slice(), rondas: rondas, campeona: DR.champ ? { dim: DR.champ.dim, v: DR.champ.v } : null };
     DR = null;
-    fmShow();
+    ocStyleShow();
   }
 
 

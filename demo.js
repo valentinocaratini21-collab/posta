@@ -1376,7 +1376,17 @@ function applyVoiceToTopics(topics, markers) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false }) {
+// (LOTE ESTILO-ONBOARDING · v855 · 9/11) El estilo visual de la semana,
+// elegido tocando una imagen en el onboarding: 'limpia' (foto real sin
+// texto), 'banda' (titular grande en banda) o 'editorial' (marco y aire).
+// Validación estricta fail-closed, como draftGustoFrom: cualquier otro
+// valor se ignora y la semana se genera como hoy, nunca se frena.
+function parseEstiloVisual(v) {
+  const s = String(v || '').trim().toLowerCase();
+  return (s === 'limpia' || s === 'banda' || s === 'editorial') ? s : null;
+}
+
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null }) {
   // (v274 · MODO EN) lang 'en': catálogo de temas EN, frames del digest EN,
   // goalLine "As you asked:" y caps de titular con hang-words EN. Sin lang
   // (o 'es') el comportamiento es idéntico al histórico.
@@ -1738,7 +1748,16 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // lo cumple vía paraRender + la vía limpia de render_v2.
   // (DRAFT-ONBOARDING · 4/11) La ronda de texto del draft manda la
   // cantidad (limpia 0 / equilibrada 2 / titulares 3); sin draft, 2.
-  const draftTextN = draftMod.draftTextCount(draft);
+  // (LOTE ESTILO-ONBOARDING · v855 · 9/11) El estilo elegido tocando una
+  // imagen manda sobre la ronda de texto: limpia → 0 piezas con texto
+  // (foto limpia), banda → titular en todas las piezas imagen,
+  // editorial → no toca la dosificación (queda la del draft, 2 por
+  // defecto). El estilo se elige DESPUÉS del draft, así que es la
+  // última palabra sobre el look de la semana. Sin estilo válido, la
+  // semana es exactamente la de hoy.
+  const estiloOK = parseEstiloVisual(estiloVisual);
+  if (estiloOK) specPosts.forEach((sp) => { sp.estilo_visual = estiloOK; });
+  const draftTextN = estiloOK === 'limpia' ? 0 : estiloOK === 'banda' ? specPosts.length : draftMod.draftTextCount(draft);
   const textModes = captions.assignTextModes(topics, Math.min(2, Math.max(0, specPosts.length - 1)), draftTextN);
   // El póster es una pieza tipográfica: sin texto no existe. Si quedó
   // limpio, entra en las 2 y sale la pieza con texto de menor prioridad.
@@ -1760,7 +1779,9 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // principal: titulares → con texto, limpia → limpia. Nunca sobre un
   // póster (tipográfico por naturaleza) ni sobre el slot del video.
   try {
-    const champText = draftMod.draftChampionText(draft);
+    // (v855) Con estilo elegido, la campeona de texto no marca la pieza
+    // principal: el estilo es la última palabra sobre el look.
+    const champText = estiloOK ? null : draftMod.draftChampionText(draft);
     const vIdx0 = Math.min(2, Math.max(0, specPosts.length - 1));
     if (champText && specPosts[0] && !specPosts[0].poster && vIdx0 !== 0) specPosts[0].text_mode = champText;
   } catch (e) { /* el draft nunca frena la prueba */ }
@@ -1848,7 +1869,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     if (specPosts[vIdx]) specPosts[vIdx].muestra_neutra = true;
   }
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
+  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -1966,8 +1987,8 @@ function appendOfferTerms(caption, topic, lang) {
   } catch (e) { return caption; }
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang, trialNoStock, draft, firmaStyle, firmaSinVideo });
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang, trialNoStock, draft, firmaStyle, firmaSinVideo, estiloVisual });
   const { specPosts, videoIdx, count: n, goalLine, topics, voiceMarkers } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 
@@ -2029,8 +2050,8 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
 
     const posts = made.map((m, i) => (
       i === videoIdx && videoB64
-        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, ...(specPosts[i].muestra_neutra ? { muestra_neutra: true } : {}) }
-        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode }
+        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null, ...(specPosts[i].muestra_neutra ? { muestra_neutra: true } : {}) }
+        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null }
     ));
     return { posts, spec: savedSpec };
   } finally {
@@ -2780,6 +2801,7 @@ module.exports = {
   clientIp,
   generateDemo,
   buildDemoSpec,
+  parseEstiloVisual,
   redesignDemo,
   trialPhotoOptions,
   extractColorsFromBuffer,

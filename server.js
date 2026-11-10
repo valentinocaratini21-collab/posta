@@ -30474,6 +30474,10 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // viene roto, se ignora (la semana se genera como hoy, nunca se
   // frena por un draft inválido).
   const ocDraft = draftOnboarding.draftGustoFrom(fields.draft_gusto || '');
+  // (LOTE ESTILO-ONBOARDING · v855 · 9/11) El estilo visual elegido
+  // tocando una imagen: se valida estricto; si viene roto, se ignora
+  // (la semana se genera como hoy, nunca se frena).
+  const ocEstiloVisual = demo.parseEstiloVisual(fields.estilo_visual);
   if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
     return res.status(400).json({ error: lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio' });
   }
@@ -30723,7 +30727,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados })) {
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
     }
-    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo });
+    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
     // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Cada posteo lleva
     // su prompt en palabras simples, desde lo realmente usado para esa pieza.
     (posts || []).forEach((pp, _i) => {
@@ -31390,6 +31394,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // viene roto, se ignora (la semana se genera como hoy, nunca se
   // frena por un draft inválido).
   const ocDraft = draftOnboarding.draftGustoFrom(fields.draft_gusto || '');
+  // (LOTE ESTILO-ONBOARDING · v855 · 9/11) El estilo visual elegido
+  // tocando una imagen: se valida estricto; si viene roto, se ignora
+  // (la semana se genera como hoy, nunca se frena).
+  const ocEstiloVisual = demo.parseEstiloVisual(fields.estilo_visual);
   if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
     fail(lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio');
     return;
@@ -31853,7 +31861,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     let uploadProduct = { classified: false };
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo });
+    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
     const { specPosts, videoIdx, count: n, goalLine, topics, voiceMarkers } = spec;
     const week = buildTrialWeek(n, lang); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(effCategory) ? effCategory : 'otro';
@@ -31899,6 +31907,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         style: specPosts[i].style,
         style_name: specPosts[i].style_name,
         text_mode: specPosts[i].text_mode || 'text',
+        estilo_visual: specPosts[i].estilo_visual || null,
       };
       const _prI = trialPostPrompt({ post: posts[i], specPost: specPosts[i] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
       posts[i].prompt_simple = _prI.prompt_simple; posts[i].prompt_detalle = _prI.prompt_detalle;
@@ -34186,7 +34195,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v854';
+const BUILD_ID = '20261105-v855';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
