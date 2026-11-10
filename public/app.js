@@ -10645,7 +10645,8 @@ async function chatSend(textArg) {
     return;
   }
   // "mensajes" → la IA trae los DMs pendientes de Instagram y deja la respuesta lista, acá en el chat
-  if (chatIsShortCommand(sendText) && /\b(mensajes?|dms?|directos?|privados?|bandeja)\b/i.test(sendText)) {
+  // (M180 · fix «directo») «directo» solo NO dispara DMs: «más directo» es una edición, no la bandeja. La frase de DM sigue entrando por «mensajes»/«dm»/«bandeja».
+  if (chatIsShortCommand(sendText) && /\b(mensajes?|dms?|privados?|bandeja)\b/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
     showDMsInChat();
     return;
