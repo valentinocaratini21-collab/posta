@@ -227,6 +227,13 @@ function mondayKeyOfScheduled(iso, tz) {
 // Se manda tras el auto-arm (signup, regla 24h, semana semanal).
 async function sendWeekReady(db, userId, n) {
   try {
+    // (v864, M185-hold) Cuenta en hold: nunca se le avisa «tu semana está
+    // lista», aunque la semana exista. Va ANTES del chequeo de email para
+    // que la razón 'on_hold' sea observable sin SMTP configurado.
+    try {
+      const h = db.prepare('SELECT hold FROM users WHERE id = ?').get(userId);
+      if (h && Number(h.hold) === 1) return { ok: false, reason: 'on_hold' };
+    } catch (e) { /* sin columna: seguir, como hoy */ }
     if (!emailConfigured()) return { ok: false, reason: 'email no configurado' };
     const user = getUser(db, userId);
     if (!user || !String(user.email || '').trim()) return { ok: false, reason: 'usuario sin email' };

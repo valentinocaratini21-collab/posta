@@ -8381,6 +8381,28 @@ app.post('/api/admin/extend-trial', requireAdminToken, express.json(), (req, res
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Hold a nivel usuario (v864, M185-hold): congela la cuenta para el sweep
+// semanal y los avisos de semana lista, aunque el trial siga vigente.
+// POST /api/admin/hold { user_id, hold: true|false, reason? } — requireAdminToken.
+// NO desprograma posteos existentes ni marca user_stopped: para frenar la
+// publicación está /api/admin/stop-publishing (publishing_stopped). El hold
+// solo frena barrido + avisos. Al quitar el hold, hold_reason se limpia.
+app.post('/api/admin/hold', requireAdminToken, express.json(), (req, res) => {
+  const uid = Number((req.body || {}).user_id) || 0;
+  if (!uid) return res.status(400).json({ error: 'falta user_id' });
+  const raw = (req.body || {}).hold;
+  if (raw !== true && raw !== false && raw !== 1 && raw !== 0 && raw !== '1' && raw !== '0')
+    return res.status(400).json({ error: 'hold inválido (true/false)' });
+  const hold = (raw === true || raw === 1 || raw === '1') ? 1 : 0;
+  const reason = String((req.body || {}).reason || '').trim().slice(0, 200);
+  try {
+    const u = db.prepare('SELECT id, email, hold, hold_reason FROM users WHERE id = ?').get(uid);
+    if (!u) return res.status(404).json({ error: 'usuario no encontrado' });
+    db.prepare('UPDATE users SET hold = ?, hold_reason = ? WHERE id = ?').run(hold, hold ? reason : '', uid);
+    console.log(`[admin] hold uid=${uid}: hold=${hold}${hold && reason ? ' (' + reason + ')' : ''}`);
+    res.json({ ok: true, user_id: uid, email: u.email, hold, hold_reason: hold ? reason : '' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 // ---------- (v322) ANALYTICS DE LANZAMIENTO: tablero único ----------
 // Precio vigente de la cuenta (misma deducción de moneda que stampFounder) y
 // contexto de costo IA para termómetro/alertas. La conversión UYU→USD solo se
@@ -13299,6 +13321,10 @@ async function albumRitualSweep(opts = {}) {
     try {
       let founder = false;
       try { founder = !!(costs.isFounderEmail && costs.isFounderEmail(u.id)); } catch (e) {}
+      // (v864, M185-hold) El push del lunes 10:00 es un aviso: una cuenta en
+      // hold no lo recibe, aunque sea fundadora (el bypass de fundador de
+      // abajo cubre el plan, no el hold).
+      if (userOnHold(u.id)) continue;
       if (!founder && !planOrTrialOk(u.id)) continue;
       const tz = userTz(u.id);
       const wd = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
@@ -15950,8 +15976,22 @@ function nextweekRunningFresh(uid) {
   }
   return true;
 }
+// (v864, M185-hold) Flag de hold a nivel usuario: la cuenta está congelada
+// por el equipo (M83) y no se la barre ni se la avisa aunque su trial siga
+// vigente. Fail-open: si la columna no existe (DB vieja) o la lectura falla,
+// la cuenta NO está en hold — el comportamiento es el actual.
+function userOnHold(uid) {
+  try {
+    const r = db.prepare('SELECT hold FROM users WHERE id = ?').get(uid);
+    return !!(r && Number(r.hold) === 1);
+  } catch (e) { return false; }
+}
 // Gate 1: solo con plan activo O trial vigente. Cada semana cuesta plata real.
 function planOrTrialOk(uid) {
+  // (v864, M185-hold) Una cuenta en hold no pasa el gate aunque tenga plan
+  // activo o trial vigente: el hold es un freno total del pipeline semanal.
+  // La lógica de trial (trialEffectiveEnd) no se toca.
+  if (userOnHold(uid)) return false;
   try {
     const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(uid);
     return !!(u && (u.plan_status === 'active' || trialEffectiveEnd(u) > Date.now()));
@@ -15984,6 +16024,9 @@ function pipelineAliveRecently(uid) {
 }
 // Los 4 gates juntos. Devuelve { ok, reason }.
 function nextWeekEligible(uid, weekKey) {
+  // (v864, M185-hold) Cuenta en hold: se saltea antes que cualquier otro
+  // gate, con razón propia para que el sweep la distinga de 'no_plan'.
+  if (userOnHold(uid)) return { ok: false, reason: 'on_hold' };
   if (!planOrTrialOk(uid)) return { ok: false, reason: 'no_plan' };
   if (!activeRecently(uid, 7)) return { ok: false, reason: 'inactive_7d' };
   // Gate 3: una sola semana de adelanto — si ya hay posteos (borradores o no)
@@ -16398,6 +16441,14 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
   // llamador filtrara. Defensa en profundidad en la entrada del pipeline:
   // genera el fundador, un plan activo o un trial vigente; nadie más. La
   // misma regla que comunica el cartel, ahora también en el servidor.
+  // (v864, M185-hold) El hold no tiene bypass de fundador: es un freno del
+  // equipo, no del plan. Va ANTES del founderGate para que una cuenta en hold
+  // nunca genere, ni siquiera si es fundadora. En retrySweepFailures
+  // 'on_hold' es razón final: la fila se limpia, no se reintenta.
+  if (userOnHold(uid)) {
+    console.log(`[pipeline:${tag}] usuario ${uid}: en hold — no se genera`);
+    return { ok: false, reason: 'on_hold', created: 0 };
+  }
   try {
     let founderGate = false;
     try { founderGate = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
@@ -34277,7 +34328,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v863';
+const BUILD_ID = '20261105-v864';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -34968,4 +35019,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks };

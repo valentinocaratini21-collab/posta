@@ -1572,6 +1572,13 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN user_stopped INTEGER DEFAULT 0`); } 
 // esa cuenta (aunque un posteo puntual no tenga la marca user_stopped)
 // hasta que el dueño mismo reanude programando/aceptando.
 try { db.exec(`ALTER TABLE users ADD COLUMN publishing_stopped INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Flag de hold a nivel usuario (M185-hold, v864): una cuenta en hold NUNCA es
+// barrida por el sweep dominical ni avisada con «tu semana está lista»,
+// aunque su trial siga vigente. Default 0: nadie cambia de comportamiento
+// sin que el equipo lo prenda (mismo patrón que publishing_stopped/concierge).
+// hold_reason documenta el porqué operativo (ej. «M83: caso Mili»).
+try { db.exec(`ALTER TABLE users ADD COLUMN hold INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN hold_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // MODO CONSERJE (lote conserje, base v697): users.concierge=1 pausa el
 // cerebro automático para ese cliente — su mensaje va a la consola y lo
 // responde el equipo como Posty. Default 0: nadie cambia de
