@@ -1165,23 +1165,6 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 <!-- VISTA: onboarding -->
 <div id="v-onboarding">
   <div class="wrap">
-    <section class="oc-workhero" aria-label="Posty working on your posts">
-      <div class="oc-frame">
-        <img class="oc-hero-img" src="posty-disenando.webp" alt="Posty, the blue robot, with a pen in one hand and post cards in the other, designing your posts">
-        <div class="oc-float-cards" aria-hidden="true">
-          <span class="oc-float-card fc1">☕</span>
-          <span class="oc-float-card fc2">🌿</span>
-          <span class="oc-float-card fc3">🌅</span>
-        </div>
-        <span class="oc-live-pill"><span class="oc-live-dot"></span> Posty is working</span>
-        <div class="oc-video-caption">
-          <span class="face" aria-hidden="true"><img src="posty-con-placa.png" alt=""></span>
-          <p>This is how Posty works for you
-            <small>building your posts while we chat <span class="oc-typing" aria-hidden="true"><i></i><i></i><i></i></span></small>
-          </p>
-        </div>
-      </div>
-    </section>
     <div class="hero">
       <div class="pres-video-wrap"><video class="pres-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty introducing himself: this is how I work for your business"></video></div>
       <h1>Hi! I'm Posty</h1>
@@ -1375,6 +1358,11 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 
 <script>
 (function(){
+  var track=document.getElementById('ejTrack');
+  var prev=document.getElementById('ejPrev');
+  var next=document.getElementById('ejNext');
+  var vp=document.getElementById('ejViewport');
+  if(!track||!prev||!next||!vp) return;
   var allCards=Array.prototype.slice.call(track.querySelectorAll('.ej-card'));
   var page=0,pages=track.children.length;
   function upd(){

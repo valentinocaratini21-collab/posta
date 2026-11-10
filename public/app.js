@@ -4826,6 +4826,30 @@ function landingView(cfg) {
       </div>
       <p class="lp-week-note">Así se ve tu semana: ideas, diseños y textos con tu marca, que se publican solos en los mejores horarios.</p>
       <p class="lp-week-bridge" id="lpWeekBridge">Esto es un ejemplo con negocios de varios rubros. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en el chat <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
+      <div class="lp-vp">
+      <style>/* (v866 - videos 2.5 en la home) Fila de videos verticales, misma que /prueba */
+.vp-row{display:flex;gap:12px;overflow-x:auto;padding:14px 2px 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.vp-card{flex:0 0 auto;width:148px;margin:0;scroll-snap-align:start}
+.vp-card video{display:block;width:148px;height:263px;object-fit:cover;border-radius:16px;border:1.5px solid #E3EDF4;box-shadow:0 10px 26px rgba(10,30,51,.10);background:#EAF6FC}
+.vp-tag{text-align:center;font-weight:800;color:#0A1E33;font-size:13px;margin-top:8px}
+.vp-row.vp-top{display:grid;grid-template-columns:repeat(5,1fr);overflow:visible;padding:14px 0 6px;margin:0 20px;scroll-snap-type:none}
+.vp-row.vp-top .vp-card{width:auto}
+.vp-row.vp-top .vp-card video{width:100%;height:auto;aspect-ratio:9/16}
+@media(max-width:760px){
+.vp-row.vp-top{display:flex;overflow-x:auto;padding:14px 0 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.vp-row.vp-top .vp-card{flex:0 0 148px;width:148px}
+.vp-row.vp-top .vp-card video{width:148px;height:263px;aspect-ratio:auto}
+}</style>
+      <h3>Un video premium cada semana 🎬</h3>
+      <p class="lede">Posty crea un video cinematográfico de tu producto, listo para publicar — incluido en todos los planes.</p>
+      <div class="vp-row vp-top" aria-label="Videos premium hechos por Posty">
+        <figure class="vp-card"><video src="/videos/video-premium-cafe.mp4" poster="/videos/poster-cafe.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una cafetería, hecho por Posty"></video><figcaption class="vp-tag"><svg class="wb-ic" aria-hidden="true"><use href="#wb-cup"/></svg> Cafetería</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-perfume.mp4" poster="/videos/poster-perfume.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una perfumería, hecho por Posty"></video><figcaption class="vp-tag">🧴 Perfumería</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-sneaker.mp4" poster="/videos/poster-sneaker.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una marca de zapatillas, hecho por Posty"></video><figcaption class="vp-tag">👟 Zapatillas</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-pasteleria.mp4" poster="/videos/poster-pasteleria.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una pastelería, hecho por Posty"></video><figcaption class="vp-tag">🧁 Pastelería</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-unas.mp4" poster="/videos/poster-unas.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de un estudio de uñas, hecho por Posty"></video><figcaption class="vp-tag">💅 Uñas</figcaption></figure>
+      </div>
+      </div>
       <form class="lp-igform" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
         <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad3" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad3)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
         <button class="btn btn-primary" type="submit">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
