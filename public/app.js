@@ -1213,7 +1213,7 @@ async function bbChatContent() {
   try {
     const r = await api.get('/api/ideas/chat');
     if (r && Array.isArray(r.messages) && r.messages.length) {
-      CHAT = r.messages.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.text).map((m) => ({ role: m.role, text: String(m.text).slice(0, 2000), ts: Date.parse(String(m.created_at || '')) || 0, id: Number(m.id) || 0 }));
+      CHAT = r.messages.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.text).map((m) => ({ role: m.role, text: String(m.text).slice(0, 2000), ts: pzTsUTC(m.created_at), id: Number(m.id) || 0 }));
     }
   } catch (e) {}
   return `
@@ -8964,6 +8964,22 @@ function chatHoraHtml(ts) {
   const h = pzChatHoraFmt(ts);
   return h ? `<span class="chat-msg-hora">${esc(h)}</span>` : '';
 }
+// (LOTE v872 · NOTA DE VOZ ABAJO DE TODO) El servidor guarda created_at
+// en UTC sin zona ("YYYY-MM-DD HH:MM:SS", db.js: datetime('now')) y
+// /api/ideas/chat lo devuelve tal cual. Date.parse pelado lo lee como
+// HORA LOCAL: en America/New_York quedaba ~5 h en el futuro y
+// chatAppendMsg (orden por data-ts) metía la nota nueva ANTES del bloque
+// reciente, nunca abajo de todo — y la hora mostrada también salía +5 h.
+// Se parsea como UTC (mismo idiom que ya usan creado_en en 9145/9163).
+function pzTsUTC(s) {
+  const t = String(s || '').trim();
+  if (!t) return 0;
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(t)) {
+    const v = Date.parse(t.replace(' ', 'T') + 'Z');
+    if (v) return v;
+  }
+  return Date.parse(t) || 0;
+}
 // (v846 · ÚLTIMO ABAJO) Inserción ordenada por hora de envío: el mensaje
 // nuevo va antes del primer .chat-msg con data-ts mayor, o al final.
 // Así ningún camino (re-render, poll, cola de intercambios) deja un
@@ -9164,7 +9180,7 @@ async function chatLoadHistory() {
     if (r && Array.isArray(r.messages) && r.messages.length) {
       CHAT = r.messages
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text && String(m.text).trim() !== '…')
-        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: Date.parse(String(m.created_at || '')) || 0, id: Number(m.id) || 0 }))
+        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: pzTsUTC(m.created_at), id: Number(m.id) || 0 }))
         .sort((a, b) => (a.ts - b.ts) || (a.id - b.id));
       const box = $('#chatBox');
       if (box) {
@@ -11249,7 +11265,7 @@ async function pzSupervisionPoll() {
         let pinto = false;
         for (const m of nuevos) {
           if (m.role !== 'assistant' || !String(m.text || '').trim()) continue;
-          const mts = Date.parse(String(m.created_at || '')) || Date.now();
+          const mts = pzTsUTC(m.created_at) || Date.now();
           CHAT.push({ id: m.id, role: 'assistant', text: String(m.text), ts: mts });
           if (boxNow) chatAppendMsg(boxNow, chatMsgHtml('assistant', String(m.text), mts, m.id), mts);
           try { postyNotify('Posty', String(m.text)); } catch (e) {}
@@ -11404,6 +11420,20 @@ function pzVoiceBubbleHTML(audioUrl, durMs, state, ts) {
   return '<div class="chat-msg u vb-voice' + (state === 'sending' ? ' vb-sending' : '') + ' msg-in" data-ts="' + (Number(ts) || '') + '">' + pzVoicePlayerHTML(audioUrl, durMs, state) + chatHoraHtml(ts) + '</div>';
 }
 var VOICE_BUBBLE_EL = null, VOICE_BUBBLE_URL = '', VOICE_BUBBLE_TS = 0;
+// (LOTE v872) La nota que se está mandando es por definición el mensaje
+// más nuevo: va después del último .chat-msg con data-ts. Sin esto, un
+// historial con data-ts en el futuro (el bug de parseo de arriba, o un
+// reloj desfasado) la dejaba en el medio y el scroll al fondo no la
+// mostraba. La burbuja de «escribiendo» (sin data-ts) queda después.
+function vozBubbleAlFondo(el) {
+  try {
+    const box = document.getElementById('chatBox');
+    if (!box || !el || !el.isConnected) return;
+    const kids = box.querySelectorAll(':scope > .chat-msg[data-ts]');
+    const last = kids.length ? kids[kids.length - 1] : null;
+    if (last && last !== el) last.insertAdjacentElement('afterend', el);
+  } catch (e) {}
+}
 function vozBubbleSending() {
   try {
     if (VOICE_BUBBLE_EL && VOICE_BUBBLE_EL.isConnected) return;
@@ -11413,6 +11443,7 @@ function vozBubbleSending() {
     VOICE_BUBBLE_TS = Date.now();
     chatAppendMsg(box, pzVoiceBubbleHTML(VOICE_BUBBLE_URL, VOICE_DUR, 'sending', VOICE_BUBBLE_TS), VOICE_BUBBLE_TS);
     VOICE_BUBBLE_EL = box.querySelector('.chat-msg.vb-voice[data-ts="' + VOICE_BUBBLE_TS + '"]');
+    vozBubbleAlFondo(VOICE_BUBBLE_EL);
     try { chatScroll(true); } catch (e) {}
   } catch (e) {}
 }
@@ -11432,7 +11463,7 @@ function vozBubbleEnviada(durMs) {
       if (box && VOICE_BUBBLE_URL && !box.querySelector('.chat-msg.vb-voice[data-ts="' + ts + '"]')) {
         chatAppendMsg(box, pzVoiceBubbleHTML(VOICE_BUBBLE_URL, durMs || VOICE_DUR, 'sent', ts), ts);
         const nb = box.querySelector('.chat-msg.vb-voice[data-ts="' + ts + '"]');
-        if (nb) { VOICE_BUBBLE_EL = nb; pzVoiceBubbleInit(nb, VOICE_BUBBLE_URL, durMs || VOICE_DUR); }
+        if (nb) { VOICE_BUBBLE_EL = nb; pzVoiceBubbleInit(nb, VOICE_BUBBLE_URL, durMs || VOICE_DUR); vozBubbleAlFondo(nb); }
       }
       try { chatScroll(true); } catch (e) {}
       return;
@@ -11440,6 +11471,7 @@ function vozBubbleEnviada(durMs) {
     el.classList.remove('vb-sending');
     el.innerHTML = pzVoicePlayerHTML(VOICE_BUBBLE_URL, durMs || VOICE_DUR, 'sent') + chatHoraHtml(ts);
     pzVoiceBubbleInit(el, VOICE_BUBBLE_URL, durMs || VOICE_DUR);
+    vozBubbleAlFondo(el);
     try { chatScroll(true); } catch (e) {}
   } catch (e) {}
 }
