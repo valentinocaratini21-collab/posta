@@ -278,11 +278,11 @@ t(sAuto.includes('El de hoy sale a las 19:00 solo') && sAuto.includes('te aviso 
   '§3: autopilot, programado pendiente: sale solo + aviso 30 min + aviso al salir', sAuto);
 t(!sAuto.includes('Sin tu OK, no sale nada'), '§3: autopilot: 0 saludo viejo');
 const sMan = speech({ hoyPost: HOY, pendientes: 1, haySemana: true, manual: true, needOK: 1, schedSolo: 0 });
-t(sMan.includes('sale cuando vos lo aprobás') && !sMan.includes('Sin tu OK, no sale nada'),
-  '§3: manual, programado pendiente: sale cuando vos lo aprobás (sin el absoluto)', sMan);
+t(sMan === '',
+  '§3: manual, programado pendiente: SIN texto (v879 — queda solo la tarjeta)', sMan);
 const sDraft = speech({ hoyPost: BORRADOR, pendientes: 1, haySemana: true, manual: false, needOK: 1, schedSolo: 0 });
-t(sDraft.includes('Está listo para las') && sDraft.includes('queda programado para salir'),
-  '§3: borrador: está listo para las HH:MM y queda programado al aprobar', sDraft);
+t(sDraft === '',
+  '§3: borrador: SIN texto (v879 — queda solo la tarjeta)', sDraft);
 const sPub = speech({ hoyPost: HOY_PUB, pendientes: 0, haySemana: true, manual: false, needOK: 0, schedSolo: 0 });
 t(sPub.includes('El de hoy ya salió') && sPub.includes('salió a las 19:00') && !sPub.includes('El de hoy sale a las'),
   '§3: publicado: ya salió (no «sale a las»)', sPub);

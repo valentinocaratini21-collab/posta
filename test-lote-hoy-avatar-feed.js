@@ -71,16 +71,17 @@ ok(css.includes('#inicioView .pz-hoy-speech{flex:1;min-width:0;width:auto;margin
 
 // El texto del saludo queda byte-idéntico (RS-2 · REGLA 02:40 · autopilot:
 // el saludo viejo («Sin tu OK, no sale nada») se fue; el de hoy sale solo
-// con aviso 30 min antes, y en manual dice que sale cuando vos lo aprobás).
-ok(speechSrc.includes("`Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b> — miralo y dale «Dale» si te gusta. Tenés el modo manual: sale cuando vos lo aprobás.`"), 'texto ES hoyPost (rama manual) byte-idéntico (RS-2, sin el absoluto)');
-ok(speechSrc.includes("`Te armé el posteo de hoy. <b>Está listo para las${hh ? ' ' + esc(hh) : ''}</b> — miralo y dale «Dale» si te gusta, y queda programado para salir.`"), 'texto ES hoyPost (rama borrador) byte-idéntico (RS-2)');
+// con aviso 30 min antes. (v879 · corrección Valentino 10/11 10:04: las
+// ramas manual y borrador SALIERON enteras — queda solo la tarjeta.)
+ok(!speechSrc.includes('Tenés el modo manual'), 'texto ES hoyPost (rama manual) salió en v879 (queda solo la tarjeta)');
+ok(!speechSrc.includes('Está listo para las'), 'texto ES hoyPost (rama borrador) salió en v879 (queda solo la tarjeta)');
 ok(speechSrc.includes("`Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''} solo</b> — miralo si querés, te aviso 30 min antes por si querés frenarlo y te aviso cuando salga.`"), 'texto ES hoyPost (rama autopilot: sale solo) byte-idéntico (PARTE 6)');
 ok(speechSrc.includes('Tenés 1 posteo para revisar — miralo en tu feed y dale «Dale» si te gusta.'), 'texto ES pendientes=1 byte-idéntico (autopilot: en tu feed)');
 ok(speechSrc.includes('Tenés ${needOK} posteos para revisar — miralos en tu feed y dale «Dale» a los que te gusten.'), 'texto ES pendientes=N byte-idéntico (autopilot: en tu feed)');
 ok(speechSrc.includes("`Tu semana ya está aprobada. Posty se ocupa de publicarla.`"), 'texto ES haySemana byte-idéntico');
 ok(speechSrc.includes("`¿Armamos tu semana? Contame qué tenés para mostrar.`"), 'texto ES vacío byte-idéntico');
-ok(speechSrc.includes("`I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b> — take a look and give it a «Publish it» if you like it. You've got manual mode on: it goes out when you approve it.`"), 'texto EN hoyPost (rama manual) byte-idéntico (RS-2, sin el absoluto)');
-ok(speechSrc.includes("`I put together today's post for you. <b>It's ready for${hh ? ' ' + esc(hh) : ''}</b> — take a look and give it a «Publish it» if you like it, and it's scheduled to go out.`"), 'texto EN hoyPost (rama borrador) byte-idéntico (RS-2)');
+ok(!speechSrc.includes('manual mode on'), 'texto EN hoyPost (rama manual) salió en v879 (queda solo la tarjeta)');
+ok(!speechSrc.includes("It's ready for"), 'texto EN hoyPost (rama borrador) salió en v879 (queda solo la tarjeta)');
 ok(speechSrc.includes("`I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''} on its own</b> — take a look if you want, I'll let you know 30 min before in case you want to stop it, and when it's out.`"), 'texto EN hoyPost (rama autopilot: on its own) byte-idéntico (PARTE 6)');
 
 /* ---------- 2. Estático: la banda fuera de .hf-tile ---------- */

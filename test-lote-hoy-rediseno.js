@@ -102,12 +102,15 @@ ok(css.includes('#inicioView .pz-hoy-card,#inicioView .pz-hoy-conserje{margin-bo
 
 // Render real de pzHoySpeechHTML (texto intacto, solo presentación).
 // (v846) pzHoySaludoTxt murió: la burbuja ya no saluda por hora.
+// (v879) el hoyPost sin estado caía en la rama manual — que ya no rinde
+// texto: para el render de la burbuja se usa un programado en autopilot;
+// el manual pendiente se pincha aparte (rinde '').
 const hora = extractFn(app, 'function pzHoyHoraCorta');
 ok(!app.includes('function pzHoySaludoTxt'), 'pzHoySaludoTxt murió en v846');
 ok(!!hora, 'extrae pzHoyHoraCorta');
 vm.runInContext(hora + '\n' + speech, ctx);
 const S = ctx.pzHoySpeechHTML;
-const hoyPost = { scheduled_at: new Date(Date.now() + 3600 * 1000).toISOString() };
+const hoyPost = { status: 'scheduled', approval: 'pending', scheduled_at: new Date(Date.now() + 3600 * 1000).toISOString() };
 const sHoy = S({ hoyPost, pendientes: 1, haySemana: true, en: false, tz: 'America/New_York' });
 const sPend = S({ hoyPost: null, pendientes: 2, haySemana: true, en: false, tz: 'America/New_York' });
 const sSem = S({ hoyPost: null, pendientes: 0, haySemana: true, en: false, tz: 'America/New_York' });
@@ -120,6 +123,8 @@ ok(!sHoy.includes('¡Buen día!') && !sHoy.includes('¡Buenas tardes!') && !sHoy
 const sHoyEn = S({ hoyPost, pendientes: 1, haySemana: true, en: true, tz: 'America/New_York' });
 ok(sHoyEn !== sHoy, 'EN rinde distinto de ES');
 ok(!sHoy.includes('pz-hoy-nota') && !sHoyEn.includes('pz-hoy-nota'), 'render: sin nota en ES ni EN');
+const sHoyMan = S({ hoyPost, pendientes: 1, haySemana: true, en: false, tz: 'America/New_York', manual: true });
+ok(sHoyMan === '', 'render hoyPost manual pendiente: sin burbuja (v879 — queda solo la tarjeta)');
 
 /* ---------- 4. NO tocado: los lotes en vuelo ---------- */
 console.log('— 4. límites (segmentador, botón verde, saludo, racha) —');

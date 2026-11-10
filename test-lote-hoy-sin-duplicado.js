@@ -312,7 +312,7 @@ t(main10.includes('sale en 9 h 00 min'), '§3: a las 10:00 EST la cuenta dice «
 console.log('— §4: Hoy compuesta');
 sb.PZ_HOY_POST_ID = '583';
 const speechMan = sb.pzHoySpeechHTML({ hoyPost: HOY, pendientes: 1, haySemana: true, manual: true, needOK: 1, schedSolo: 0, en: false, tz: TZ });
-t(speechMan.includes('sale cuando vos lo aprobás'), '§4: el saludo manual sigue (cuenta manual de Valentino)', speechMan);
+t(speechMan === '', '§4: el saludo manual salió (v879 — queda solo la tarjeta)', speechMan);
 const comp = speechMan
   + sb.pzHoyHoyHTML(HOY, { en: false, tz: TZ })
   + sb.pzHoyTiraHTML(tiraPend, tiraOpts('2026-11-09'))
@@ -326,12 +326,11 @@ t((compCards.match(/19:00/g) || []).length === 1, '§4: en la zona de tarjetas, 
 t((compCards.match(/sale en/g) || []).length === 1, '§4: en la zona de tarjetas, «sale en» ×1');
 t(compCards.includes('Tu semana recién arranca') && compCards.includes('Abrir el chat'),
   '§4: «Tu semana recién arranca» sigue después de la tira, con su botón al chat');
-// La prosa del saludo menciona la hora una vez más («El de hoy sale a
-// las 19:00…»): en toda la pantalla compuesta «19:00» ×2. Se pincha
-// aquí para que el número no se esconda: si Valentino quiere ×1
-// literal, el saludo es otro lote, no este.
-t((comp.match(/19:00/g) || []).length === 2 && speechMan.includes('a las 19:00'),
-  '§4: en toda la pantalla, «19:00» ×2 (tarjeta + frase del saludo)', comp.slice(0, 400));
+// (v879 · corrección Valentino 10/11 10:04: el saludo salió entero —
+// la hora vive solo en la tarjeta.) En toda la pantalla compuesta
+// «19:00» ×1 (solo la tarjeta).
+t((comp.match(/19:00/g) || []).length === 1 && speechMan === '',
+  '§4: en toda la pantalla, «19:00» ×1 (solo la tarjeta; el saludo salió en v879)', comp.slice(0, 400));
 sb.PZ_HOY_POST_ID = '';
 
 // ---------- §5: auditoría M78 ----------

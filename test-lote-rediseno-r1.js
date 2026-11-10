@@ -339,8 +339,8 @@ const speech = sb.pzHoySpeechHTML({ hoyPost: HOY_POST, en: false, tz: 'America/N
 t(speech.includes('Te armé el posteo de hoy.') && speech.includes('El de hoy sale a las 19:30 solo') && speech.includes('miralo si querés') && speech.includes('te aviso 30 min antes por si querés frenarlo') && speech.includes('te aviso cuando salga') && !speech.includes('Sin tu OK') && !speech.includes('¿Lo largamos?') && !speech.includes('pz-hoy-nota') && !speech.includes('posteos de esta semana') && speech.includes('data-pz-hoy-chat'),
   '§4: mensaje con el posteo de hoy (autopilot): HONESTO en singular, hora real 19:30, sale solo + aviso 30 min + aviso al salir (PARTE 6), entrada al chat');
 const speechMan = sb.pzHoySpeechHTML({ hoyPost: HOY_POST, en: false, tz: 'America/New_York', manual: true });
-t(speechMan.includes('Te armé el posteo de hoy.') && speechMan.includes('El de hoy sale a las 19:30') && speechMan.includes('miralo y dale «Dale» si te gusta') && speechMan.includes('Tenés el modo manual: sale cuando vos lo aprobás') && !speechMan.includes('Sin tu OK, no sale nada'),
-  '§4: mensaje con el posteo de hoy (manual): sale cuando vos lo aprobás (RS-2, sin el absoluto)');
+t(speechMan === '',
+  '§4: mensaje con el posteo de hoy (manual): SIN texto (v879 — la tarjeta ya muestra hora, cuenta y botones; queda solo la tarjeta)', speechMan);
 const speechSin = sb.pzHoySpeechHTML({ hoyPost: null, en: false, tz: 'America/New_York' });
 t(!speechSin.includes('19:30') && speechSin.includes('¿Armamos tu semana?'),
   '§4: sin posteo de hoy no se inventa hora (el mensaje no miente)');

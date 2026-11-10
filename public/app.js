@@ -21852,10 +21852,12 @@ function pzHoyHoyHTML(p, o) {
 // sale de su scheduled_at; sin posteo hoy no se inventa una hora.
 // Mensaje de Posty en Hoy (botón → chat). Un solo mensaje: dice lo que
 // realmente pasa EN ESTE ESTADO (RS-2 · REGLA 02:40 · autopilot: el
+// (v879 · corrección Valentino 10/11 10:04: en borrador y en manual
+// pendiente NO hay texto — la tarjeta «Por aprobar» ya muestra la hora,
+// la cuenta en vivo y los botones; el mensaje queda solo con la tarjeta.)
 // posteo sale solo; el aviso de 30 min antes es la chance de frenarlo;
 // al salir, otro aviso. El saludo viejo (el que decía que sin el OK
-// no sale nada) NO se usa en ningún estado: en manual el texto dice
-// que sale cuando vos lo aprobás, sin el absoluto. Solo datos reales: la hora del
+// no sale nada) NO se usa en ningún estado. Solo datos reales: la hora del
 // posteo de hoy sale de su scheduled_at; sin posteo hoy no se inventa
 // una hora. (LOTE CHAT-MEJORA: la nota «¡Ya te dejé los posteos
 // listos!» repetía lo mismo y ya no se renderiza.)
@@ -21896,17 +21898,18 @@ function pzHoySpeechHTML(o) {
         ? `Today's post is already out${hhPub ? ' — it went out at ' + esc(hhPub) : ''}. Take a look at your feed.${pendTxt}`
         : `El de hoy ya salió${hhPub ? ' — salió a las ' + esc(hhPub) : ''}. Miralo en tu feed.${pendTxt}`;
     } else if (esBorrador) {
-      cuerpo = en
-        ? `I put together today's post for you. <b>It's ready for${hh ? ' ' + esc(hh) : ''}</b> — take a look and give it a «Publish it» if you like it, and it's scheduled to go out.`
-        : `Te armé el posteo de hoy. <b>Está listo para las${hh ? ' ' + esc(hh) : ''}</b> — miralo y dale «Dale» si te gusta, y queda programado para salir.`;
+      // (v879 · corrección Valentino 10/11 10:04: la tarjeta «Por aprobar»
+      // ya muestra la hora, la cuenta en vivo y los botones — el texto
+      // está de más y se saca entero; el mensaje queda solo con la tarjeta.)
+      cuerpo = '';
     } else if (saleSolo) {
       cuerpo = en
         ? `I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''} on its own</b> — take a look if you want, I'll let you know 30 min before in case you want to stop it, and when it's out.`
         : `Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''} solo</b> — miralo si querés, te aviso 30 min antes por si querés frenarlo y te aviso cuando salga.`;
     } else {
-      cuerpo = en
-        ? `I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''}</b> — take a look and give it a «Publish it» if you like it. You've got manual mode on: it goes out when you approve it.`
-        : `Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''}</b> — miralo y dale «Dale» si te gusta. Tenés el modo manual: sale cuando vos lo aprobás.`;
+      // (v879 · corrección Valentino 10/11 10:04: igual que borrador — el
+      // texto está de más y se saca entero; queda solo la tarjeta.)
+      cuerpo = '';
     }
   } else if (pendientes > 0) {
     // needOK = los que no salen sin tu OK (el número que se muestra).
@@ -21937,6 +21940,12 @@ function pzHoySpeechHTML(o) {
   // el encabezado). El botón conserva data-pz-hoy-chat (abre el chat).
   // (v846 · decisión Valentino 12:01: el saludo por hora («¡Buen día!»)
   // salió — era innecesario. La burbuja arranca directo con el cuerpo.)
+  // (v879 · corrección Valentino 10/11 10:04) Sin cuerpo no hay burbuja:
+  // en borrador y en manual pendiente el mensaje queda solo con la tarjeta
+  // (la burbuja no se rinde vacía). El insight (v843) vive dentro de la
+  // burbuja: en esos dos estados tampoco se rinde en Hoy (sigue en la
+  // hoja del ritual).
+  if (!cuerpo) return '';
   return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span>${cuerpo}</span>${insight ? `<span class="pz-hoy-insight">${esc(insight)}</span>` : ''}</button></div>`;
 }
 
