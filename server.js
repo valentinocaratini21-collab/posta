@@ -10024,7 +10024,7 @@ app.get('/api/estrategia/mejor-posteo', requireAuth, async (req, res) => {
     const uid = req.session.userId;
     const wk = mondayKeyOf(tzToday(userTz(uid)));
     const rows = db.prepare(`
-      SELECT p.id, p.image_path, p.caption, p.ig_media_id,
+      SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.published_at,
              COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
              COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
       FROM posts p JOIN post_metrics m ON m.post_id = p.id
@@ -10033,7 +10033,9 @@ app.get('/api/estrategia/mejor-posteo', requireAuth, async (req, res) => {
         AND p.ig_media_id NOT LIKE 'demo_%'
         AND p.media_type != 'story'
         AND p.week_key = ?`).all(uid, wk);
-    const mejor = elegirMejorPosteoSemana(rows);
+    // (v867) La lectura del feed vivo arranca ya para correr en paralelo
+    // con el chequeo de permiso de abajo (cada una con su carrera de 3 s).
+    const vivoP = idsVivosEnFeed(db, uid);
     // Estado del impulso para la carta (LOTE IMPULSAR-UN-CLIC): la carta
     // muestra el bloque con el estado real ANTES del toque. ads_permiso:
     // true = el token trae ads_management; false = no lo trae (bloqueado
@@ -10051,6 +10053,10 @@ app.get('/api/estrategia/mejor-posteo', requireAuth, async (req, res) => {
       }
     } catch (e) { adsPermiso = null; }
     const conversionPendiente = !destacadoSemana.conversionARSFromEnv(process.env);
+    // (v867) El recomendado sale solo de lo que sigue vivo en el feed:
+    // un archivado o eliminado (caso 583) no se recomienda jamás.
+    const vivo = await vivoP.catch(() => ({ ok: false }));
+    const mejor = elegirMejorPosteoSemana(filtrarPosteosVivos(rows, vivo));
     res.json({ ok: true, week_key: wk, boostHabilitado: destacadoSemana.boostHabilitado(process.env),
       ads_permiso: adsPermiso, conversion_pendiente: conversionPendiente,
       mejor: mejor ? { post_id: mejor.id, image_path: mejor.image_path, caption: (mejor.caption || '').slice(0, 90),
@@ -10215,6 +10221,8 @@ app.get('/api/ads/billetera/feed', requireAuth, async (req, res) => {
     try {
       rows = db.prepare(`SELECT p.id, p.image_path, p.caption, p.status, p.published_at, p.ig_media_id, p.media_type FROM posts p WHERE p.user_id = ? AND p.status = 'published' AND p.ig_media_id IS NOT NULL AND p.ig_media_id != '' AND p.ig_media_id NOT LIKE 'demo_%' AND p.media_type != 'story' ORDER BY p.published_at DESC`).all(uid);
     } catch (e) { rows = []; }
+    // (v867) Solo lo que sigue vivo en el feed (ver idsVivosEnFeed).
+    rows = filtrarPosteosVivos(rows, await idsVivosEnFeed(db, uid));
     let impulsados = new Set();
     try {
       impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id));
@@ -10274,6 +10282,72 @@ async function igMediaParaPicker(db, uid) {
       solo_ig: true,
     };
   }).filter((r) => r.image_path || r.caption);
+}
+// (LOTE IMPULSAR-ARCHIVADO · v867) El feed vivo de IG es la fuente de
+// verdad para impulsar: un posteo archivado o eliminado en IG sigue
+// `status='published'` en la tabla local y el recomendado lo seguía
+// mostrando (caso 583, archivado 10/11, post_id 18139266841731675).
+// La lista de ids vivos se lee de la API de IG (media edge, solo
+// id+timestamp, liviano) con carrera de 3 s — el mismo presupuesto que
+// el picker (v846). Sin credenciales o con la API lenta/caída devuelve
+// { ok:false } y el llamador NO excluye nada (precedente v846: la falla
+// de IG no puede vaciar Impulsar ni colgar la pantalla).
+// ¿Por qué no fail-closed? Un fallo transitorio de Meta no significa
+// que el posteo no esté vivo; vaciar la sección en cada hipo de IG
+// sería un fallo peor y recurrente. La exclusión es exacta cuando la
+// lectura funciona (el caso normal: el picker ya hace este llamado en
+// cada apertura). Sin credenciales tampoco se excluye: no hay feed vivo
+// que consultar y la tabla local es lo único que hay.
+const IG_VIVOS_LIMITE = 100; // ~20 semanas a 5 posteos/semana
+const IG_VIVOS_TIMEOUT_MS = 3000;
+async function idsVivosEnFeed(db, uid) {
+  try {
+    const { getCreds } = require('./insights');
+    const creds = getCreds(db, uid);
+    if (!creds) return { ok: false };
+    const params = new URLSearchParams({
+      fields: 'id,timestamp',
+      limit: String(IG_VIVOS_LIMITE),
+      access_token: creds.accessToken,
+    });
+    const data = await Promise.race([
+      fetch(`https://graph.instagram.com/v26.0/${creds.igUserId}/media?${params}`).then((r) => r.json()),
+      new Promise((res) => setTimeout(() => res(null), IG_VIVOS_TIMEOUT_MS)),
+    ]);
+    if (!data || data.error || !Array.isArray(data.data)) return { ok: false };
+    const ids = new Set(data.data.map((m) => String(m.id)));
+    const completo = data.data.length < IG_VIVOS_LIMITE;
+    let masAntiguo = null;
+    for (const m of data.data) {
+      const ts = String(m.timestamp || '');
+      if (ts && (!masAntiguo || ts < masAntiguo)) masAntiguo = ts;
+    }
+    return { ok: true, ids, completo, masAntiguo };
+  } catch (e) {
+    return { ok: false };
+  }
+}
+
+// Función pura para testear sin servidor: deja solo las filas cuyo
+// posteo sigue vivo en el feed. `vivo` es lo que devuelve
+// idsVivosEnFeed. Sin verificación posible (ok:false) no excluye nada.
+// Con el feed agotado (completo:true) la ausencia es definitiva: el
+// medio no está en el feed = archivado o eliminado. Con página llena,
+// una fila más vieja que el medio más antiguo de la página no se puede
+// juzgar y se conserva (sin published_at tampoco se puede juzgar y se
+// excluye: ante la duda manda la regla, nunca mostrar un archivado).
+function filtrarPosteosVivos(rows, vivo) {
+  if (!Array.isArray(rows)) return [];
+  if (!vivo || vivo.ok !== true || !(vivo.ids instanceof Set)) return rows.slice();
+  return rows.filter((r) => {
+    const mid = String((r && r.ig_media_id) || '');
+    if (!mid || mid.startsWith('demo_')) return true;
+    if (vivo.ids.has(mid)) return true;
+    if (vivo.completo) return false;
+    const pub = String((r && r.published_at) || '');
+    if (pub && vivo.masAntiguo && pub < vivo.masAntiguo) return true;
+    return false;
+  });
 }
 // Adoptar un reciente de IG sin fila local (v846): se verifica que el
 // medio sea del usuario (lista fresca de la API) y se crea la fila
@@ -10345,6 +10419,9 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
           AND p.media_type != 'story'
         ORDER BY p.published_at DESC LIMIT 20`).all(uid);
     } catch (e) { rows = []; }
+    // (v867) Solo lo que sigue vivo en el feed (ver idsVivosEnFeed): el
+    // recomendado de abajo sale de estas filas ya filtradas.
+    rows = filtrarPosteosVivos(rows, await idsVivosEnFeed(db, uid));
     const wk = mondayKeyOf(tzToday(userTz(uid)));
     const mejor = elegirMejorPosteoSemana(rows.filter((r) => r.week_key === wk));
     // (v846) El feed entero: los medios de IG sin fila local se suman
@@ -10382,7 +10459,7 @@ app.get('/api/ads/billetera/buscar', requireAuth, async (req, res) => {
     let rows = [];
     try {
       rows = db.prepare(`
-        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key, p.media_type,
+        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key, p.media_type, p.published_at,
                COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
                COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
         FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
@@ -10393,6 +10470,8 @@ app.get('/api/ads/billetera/buscar', requireAuth, async (req, res) => {
           AND p.caption LIKE '%' || ? || '%' ESCAPE '\\'
         ORDER BY p.published_at DESC LIMIT 20`).all(uid, escLike);
     } catch (e) { rows = []; }
+    // (v867) Solo lo que sigue vivo en el feed (ver idsVivosEnFeed).
+    rows = filtrarPosteosVivos(rows, await idsVivosEnFeed(db, uid));
     let impulsados = new Set();
     try { impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id)); } catch (e) { impulsados = new Set(); }
     // (v846) El buscador también ve el feed entero: los medios de IG
@@ -10627,7 +10706,7 @@ app.get('/api/ads/recommendations', requireAuth, async (req, res) => {
   let rows = [];
   try {
     rows = db.prepare(`
-      SELECT p.id, p.image_path, p.caption, p.ig_media_id,
+      SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.published_at,
              COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
              COALESCE(m.comments,0) AS comments, COALESCE(m.saves,0) AS saves
       FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
@@ -10635,6 +10714,8 @@ app.get('/api/ads/recommendations', requireAuth, async (req, res) => {
         AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
         AND datetime(p.published_at) >= datetime('now', '-30 days')`).all(req.session.userId);
   } catch (e) {}
+  // (v867) Solo lo que sigue vivo en el feed (ver idsVivosEnFeed).
+  rows = filtrarPosteosVivos(rows, await idsVivosEnFeed(db, req.session.userId));
   let boostedIds = [];
   try {
     boostedIds = db.prepare(`SELECT ig_media_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(req.session.userId).map(r => r.ig_media_id);
@@ -34425,7 +34506,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v866';
+const BUILD_ID = '20261105-v867';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
